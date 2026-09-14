@@ -18,6 +18,7 @@ import {
   Download,
   Map as MapIcon,
   Save,
+  Send,
   Trash2,
   Upload,
 } from 'lucide-react'
@@ -36,6 +37,12 @@ import {
   exportFloorplanPdf,
   type FloorplanExportScope,
 } from '../../../../../lib/floorplan/floorplan-export'
+import {
+  LocalAppError,
+  probeLocalApp,
+  sendGlbToLocalApp,
+  waitForLocalImport,
+} from '../../../../../lib/send-to-app'
 import { Button } from './../../../../../components/ui/primitives/button'
 import {
   Dialog,
@@ -83,6 +90,17 @@ const MODEL_EXPORT_FORMATS = [
 ] as const
 
 type ModelExportFormat = (typeof MODEL_EXPORT_FORMATS)[number]['format']
+
+type SendToBlenderStep = 'probing' | 'exporting' | 'sending' | 'importing'
+
+const SEND_TO_BLENDER_STEP_LABEL: Record<SendToBlenderStep, string> = {
+  probing: 'Looking for Blender…',
+  exporting: 'Preparing the scene…',
+  sending: 'Sending to Blender…',
+  importing: 'Blender is importing…',
+}
+
+const BLENDER_ADDON_URL = 'https://github.com/pascalorg/blender-addon#install'
 
 type ExportableNodeType = {
   type: string
@@ -208,6 +226,8 @@ export interface ProjectVisibility {
 
 export interface SettingsPanelProps {
   projectId?: string
+  /** Shown as the scene name in apps the scene is sent to (Blender collection name). */
+  projectName?: string
   projectVisibility?: ProjectVisibility
   onVisibilityChange?: (
     field: 'isPrivate' | 'showScansPublic' | 'showGuidesPublic',
@@ -217,6 +237,7 @@ export interface SettingsPanelProps {
 
 export function SettingsPanel({
   projectId,
+  projectName,
   projectVisibility,
   onVisibilityChange,
 }: SettingsPanelProps = {}) {
@@ -245,6 +266,11 @@ export function SettingsPanel({
   const [activeModelExport, setActiveModelExport] = useState<ModelExportFormat | null>(null)
   const [modelExportError, setModelExportError] = useState<string | null>(null)
   const [modelExportWarning, setModelExportWarning] = useState<string | null>(null)
+  const [sendToBlenderStep, setSendToBlenderStep] = useState<SendToBlenderStep | null>(null)
+  const [sendToBlenderMessage, setSendToBlenderMessage] = useState<{
+    tone: 'info' | 'error'
+    text: string
+  } | null>(null)
   const [activeFloorplanExport, setActiveFloorplanExport] = useState<FloorplanExportScope | null>(
     null,
   )
@@ -494,6 +520,62 @@ export function SettingsPanel({
     }
   }
 
+  const handleSendToBlender = async () => {
+    if (!modelExport || activeModelExport || sendToBlenderStep) return
+
+    setSendToBlenderMessage(null)
+    setSendToBlenderStep('probing')
+    try {
+      const probe = await probeLocalApp()
+      if (probe.status === 'unreachable') {
+        setSendToBlenderMessage({
+          tone: 'error',
+          text: 'Blender isn’t listening. Open Blender with the Pascal add-on installed and enabled, then try again.',
+        })
+        return
+      }
+      if (probe.status === 'refused') {
+        setSendToBlenderMessage({
+          tone: 'error',
+          text: `Blender is open but hasn’t allowed ${window.location.origin} yet. In Blender, open the Pascal tab in the 3D viewport sidebar (N) and click Allow.`,
+        })
+        return
+      }
+
+      setSendToBlenderStep('exporting')
+      const artifact = await modelExport('glb', {
+        onlyVisible: exportOnlyVisible,
+        excludedNodeTypes,
+        includedPresentationIds: includedPresentationIds.filter((id) =>
+          exportablePresentations.some((contribution) => contribution.id === id),
+        ),
+        download: false,
+      })
+      if (!artifact) throw new Error('Model export did not produce a file')
+
+      setSendToBlenderStep('sending')
+      const queued = await sendGlbToLocalApp(probe.base, artifact.blob, {
+        name: projectName,
+        projectId,
+      })
+
+      setSendToBlenderStep('importing')
+      const done = await waitForLocalImport(probe.base, queued.id)
+      setSendToBlenderMessage({
+        tone: 'info',
+        text: done.summary ? `Sent to Blender. ${done.summary}.` : 'Sent to Blender.',
+      })
+    } catch (error) {
+      const text =
+        error instanceof LocalAppError || error instanceof Error
+          ? error.message
+          : 'Couldn’t send the scene to Blender. Try again.'
+      setSendToBlenderMessage({ tone: 'error', text })
+    } finally {
+      setSendToBlenderStep(null)
+    }
+  }
+
   const handleFloorplanExport = async (scope: FloorplanExportScope) => {
     if (activeFloorplanExport) return
 
@@ -722,6 +804,41 @@ export function SettingsPanel({
               </Button>
             )
           })}
+
+          <Button
+            aria-busy={sendToBlenderStep !== null}
+            className="w-full justify-start gap-2"
+            disabled={activeModelExport !== null || sendToBlenderStep !== null || !modelExport}
+            onClick={() => void handleSendToBlender()}
+            variant="outline"
+          >
+            <Send aria-hidden="true" className="size-4" />
+            {sendToBlenderStep ? SEND_TO_BLENDER_STEP_LABEL[sendToBlenderStep] : 'Send to Blender'}
+          </Button>
+          <p className="text-muted-foreground text-xs">
+            Needs the{' '}
+            <a
+              className="underline underline-offset-2"
+              href={BLENDER_ADDON_URL}
+              rel="noreferrer"
+              target="_blank"
+            >
+              Pascal add-on for Blender
+            </a>{' '}
+            running in an open Blender.
+          </p>
+          {sendToBlenderMessage ? (
+            <p
+              className={
+                sendToBlenderMessage.tone === 'error'
+                  ? 'text-destructive text-xs'
+                  : 'text-foreground text-xs'
+              }
+              role={sendToBlenderMessage.tone === 'error' ? 'alert' : 'status'}
+            >
+              {sendToBlenderMessage.text}
+            </p>
+          ) : null}
 
           {activeModelExport ? (
             <p className="text-muted-foreground text-xs" role="status">
