@@ -73,8 +73,14 @@ export type GlbExportOptions = {
   excludedNodeTypes?: readonly string[]
   /** Selected static viewer-presentation contributions; omitted means none. */
   includedPresentationIds?: readonly string[]
-  /** Portable downloads are static; the baked viewer retains internal clips. */
+  /** Portable materials/geometry normalisation vs the baked viewer artifact. */
   purpose?: 'portable' | 'viewer'
+  /**
+   * Door/window open clips. Defaults to `keep` for the viewer bake and for GLB
+   * downloads (Blender turns them into actions); USDZ and print pass `none`
+   * because those formats freeze geometry and cannot play them.
+   */
+  animations?: 'keep' | 'none'
   /** Called for actual lossy portable conversions discovered during preparation. */
   onWarning?: (warning: string) => void
   /** Reject retained node kinds whose export geometry can only be baked asynchronously. */
@@ -150,7 +156,10 @@ export async function exportSceneToGlb(
   options: GlbExportOptions = {},
 ): Promise<ArrayBuffer> {
   const textureMode = options.textures ?? 'embed'
-  const prepared = await preparePortableSceneFromViewer(sceneGroup, nodes, options)
+  const prepared = await preparePortableSceneFromViewer(sceneGroup, nodes, {
+    ...options,
+    animations: options.animations ?? 'keep',
+  })
   for (const warning of prepared.warnings) options.onWarning?.(warning)
   try {
     return await serializePreparedSceneToGlb(prepared, {
@@ -391,10 +400,12 @@ function finishSceneExportPreparation(preparation: SceneExportPreparation): GlbE
   convertMaterials(scene, options.textures ?? 'embed', options.purpose ?? 'viewer')
 
   const retainedCloneByOriginal = retainedClones(scene, cloneByOriginal)
-  const animation =
-    options.purpose === 'viewer'
-      ? bakeAnimationClips(retainedCloneByOriginal, nodes, registryEntries)
-      : { clips: [], clipNamesByNode: new Map<string, string[]>() }
+  const keepClips = options.animations
+    ? options.animations === 'keep'
+    : options.purpose === 'viewer'
+  const animation = keepClips
+    ? bakeAnimationClips(retainedCloneByOriginal, nodes, registryEntries)
+    : { clips: [], clipNamesByNode: new Map<string, string[]>() }
   stampIdentity(scene, retainedCloneByOriginal, nodes, animation.clipNamesByNode, registryEntries)
 
   let disposed = false

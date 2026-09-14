@@ -1869,3 +1869,42 @@ describe('portable glass', () => {
     expect(exportedGlass!.transmission).toBe(1)
   })
 })
+
+describe('portable clips', () => {
+  function swingDoorScene() {
+    const root = new THREE.Group()
+    const doorGroup = new THREE.Group()
+    const leaf = new THREE.Group()
+    leaf.userData.pascalSwingLeaf = { axis: 'y', openRotationY: Math.PI / 2 }
+    leaf.add(meshWithNodeMaterial(nodeMaterial()))
+    doorGroup.add(leaf)
+    root.add(doorGroup)
+    const doorId = 'door_portable'
+    sceneRegistry.nodes.set(doorId, doorGroup)
+    const nodes: Record<string, AnyNode> = {
+      [doorId]: { object: 'node', id: doorId, type: 'door', name: 'Door' } as unknown as AnyNode,
+    }
+    return { root, nodes, doorId }
+  }
+
+  test('GLB downloads keep door clips when asked, USDZ passes none', async () => {
+    const { root, nodes, doorId } = swingDoorScene()
+
+    const glb = await prepareSceneForExportAsync(root, nodes, { animations: 'keep' })
+    expect(glb.animations).toHaveLength(1)
+    expect(glb.animations[0]!.name).toBe(`${doorId}: open`)
+    const track = glb.animations[0]!.tracks[0]!
+    const targetUuid = track.name.split('.')[0]
+    expect(glb.scene.getObjectByProperty('uuid', targetUuid)).toBeDefined()
+    expect(glb.scene.getObjectByProperty('name', doorId)?.userData.clips).toEqual([
+      `${doorId}: open`,
+    ])
+
+    const usdz = await prepareSceneForExportAsync(root, nodes, { animations: 'none' })
+    expect(usdz.animations).toEqual([])
+    expect(usdz.scene.getObjectByProperty('name', doorId)?.userData.clips).toBeUndefined()
+
+    const legacy = await prepareSceneForExportAsync(root, nodes)
+    expect(legacy.animations).toEqual([])
+  })
+})
