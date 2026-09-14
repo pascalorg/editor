@@ -6,8 +6,9 @@ These public skills teach MCP-capable agents to use Pascal for editable building
 
 Status on 2026-09-14. Installable and publicly listed are separate results.
 
-The 0.1.10 Cursor browser sign-in candidate requires the hosted OAuth service to be enabled before
-release. Local desktop verification is complete; production activation and marketplace refresh remain pending.
+The hosted OAuth service is enabled in production, and native Cursor browser sign-in is verified.
+The corrected 0.1.10 Cursor bundle still requires marketplace review and refresh; an existing
+marketplace install may continue to use the older bundle until Cursor publishes the update.
 
 | Channel | Status |
 | --- | --- |
