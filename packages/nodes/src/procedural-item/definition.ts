@@ -1,4 +1,4 @@
-import type { AnyNode, HandleDescriptor, NodeDefinition } from '@pascal-app/core'
+import type { AnyNode, FloorplanGeometry, HandleDescriptor, NodeDefinition } from '@pascal-app/core'
 import { type AnyNodeId, useScene } from '@pascal-app/core'
 import {
   boundsOf,
@@ -84,7 +84,6 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
   category: 'furnish',
   snapProfile: 'item',
   surfaceRole: 'furnishing',
-  dirtyTracking: false,
   defaults: () => ({
     object: 'node',
     parentId: null,
@@ -241,6 +240,39 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
     }
     const q = queryProceduralItem(node, chain),
       b = q.levelBounds
+    const floorPlanUrl = node.metadata.floorPlanUrl
+    if (typeof floorPlanUrl === 'string' && floorPlanUrl.trim()) {
+      const local = q.localBounds
+      const center = transformPoint(
+        q.frame,
+        local.min.map((v, i) => (v + local.max[i]!) / 2) as [number, number, number],
+      )
+      const points = [
+        [local.min[0], local.min[2]],
+        [local.max[0], local.min[2]],
+        [local.max[0], local.max[2]],
+        [local.min[0], local.max[2]],
+      ].map(([x, z]) => {
+        const point = transformPoint(q.frame, [x!, 0, z!])
+        return [point[0], point[2]] as [number, number]
+      })
+      const selected = ctx.viewState?.selected || ctx.viewState?.highlighted
+      const stroke = selected ? (ctx.viewState?.palette?.selectedStroke ?? '#3b82f6') : '#92400e'
+      const strokeWidth = selected ? 0.035 : 0.012
+      const children: FloorplanGeometry[] = [
+        { kind: 'polygon', points, fill: 'transparent', stroke, strokeWidth, opacity: 0.85 },
+        {
+          kind: 'image',
+          url: floorPlanUrl,
+          center: [center[0], center[2]],
+          width: local.dimensions[0],
+          height: local.dimensions[2],
+          rotation: Math.atan2(q.frame.axes[0][2], q.frame.axes[0][0]),
+        },
+      ]
+      if (selected) children.push({ kind: 'polygon', points, fill: 'none', stroke, strokeWidth })
+      return { kind: 'group', children }
+    }
     return {
       kind: 'rect',
       x: b.min[0],
