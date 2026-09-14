@@ -79,12 +79,12 @@ function getSurfacePlacementHeight(surfaceItem: ItemNode, event: ItemEvent, loca
 
 function isDescendantOfItem(
   candidate: ItemNode,
-  ancestor: ItemNode,
+  ancestorId: string,
   nodes: Record<string, AnyNode>,
 ): boolean {
   let parentId = candidate.parentId
   while (parentId) {
-    if (parentId === ancestor.id) return true
+    if (parentId === ancestorId) return true
     const parent = nodes[parentId as AnyNodeId]
     parentId = parent?.parentId ?? null
   }
@@ -881,6 +881,46 @@ export const ceilingStrategy = {
 // ITEM SURFACE STRATEGY
 // ============================================================================
 
+export function resolveItemSurfacePlacement(
+  host: ItemNode,
+  event: ItemEvent,
+  dimensions: [number, number, number],
+  worldYaw: number,
+  movingNodeId?: string,
+  checkFootprint = true,
+): {
+  position: [number, number, number]
+  worldPosition: [number, number, number]
+  rotationY: number
+} | null {
+  if (movingNodeId) {
+    if (host.id === movingNodeId) return null
+    if (isDescendantOfItem(host, movingNodeId, useScene.getState().nodes)) return null
+  }
+  if (checkFootprint) {
+    const hostDimensions = getScaledDimensions(host)
+    if (dimensions[0] > hostDimensions[0] || dimensions[2] > hostDimensions[2]) return null
+  }
+  const mesh = sceneRegistry.nodes.get(host.id)
+  if (!mesh) return null
+  const local = mesh.worldToLocal(new Vector3(...event.position))
+  const height = getSurfacePlacementHeight(host, event, local)
+  if (height === null) return null
+  const position: [number, number, number] = [
+    snapToGrid(local.x, dimensions[0]),
+    height,
+    snapToGrid(local.z, dimensions[2]),
+  ]
+  const world = mesh.localToWorld(new Vector3(...position))
+  const quaternion = mesh.getWorldQuaternion(new Quaternion())
+  const hostYaw = new Euler().setFromQuaternion(quaternion, 'YXZ').y
+  return {
+    position,
+    worldPosition: [world.x, world.y, world.z],
+    rotationY: worldYaw - hostYaw,
+  }
+}
+
 export const itemSurfaceStrategy = {
   /**
    * Handle item:enter — transition from floor to an item surface.
@@ -896,50 +936,29 @@ export const itemSurfaceStrategy = {
     if (ctx.state.surface === 'item-surface' && ctx.state.surfaceItemId === surfaceItem.id) {
       return null
     }
-    const nodes = useScene.getState().nodes
-    if (ctx.draftItem && isDescendantOfItem(surfaceItem, ctx.draftItem, nodes)) return null
-
-    // Size check: our footprint must fit on surface item's footprint
     const ourDims = ctx.draftItem
       ? getScaledDimensions(ctx.draftItem)
       : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS)
-    const surfDims = getScaledDimensions(surfaceItem)
-    if (ourDims[0] > surfDims[0] || ourDims[2] > surfDims[2]) return null
-
-    const surfaceMesh = sceneRegistry.nodes.get(surfaceItem.id)
-    if (!surfaceMesh) return null
-
-    const worldPos = new Vector3(event.position[0], event.position[1], event.position[2])
-    const localPos = surfaceMesh.worldToLocal(worldPos)
-    const surfaceHeight = getSurfacePlacementHeight(surfaceItem, event, localPos)
-    if (surfaceHeight === null) return null
-
-    const x = snapToGrid(localPos.x, ourDims[0])
-    const z = snapToGrid(localPos.z, ourDims[2])
-    const y = surfaceHeight
-
-    const worldSnapped = surfaceMesh.localToWorld(new Vector3(x, y, z))
-
-    // Counter-rotate so the draft's world Y rotation stays continuous when
-    // the user drags onto a rotated surface item. The cursor wireframe
-    // already shows the user's intended world rotation; we just need to
-    // store the right local value relative to the new parent.
-    const surfaceQuat = new Quaternion()
-    surfaceMesh.getWorldQuaternion(surfaceQuat)
-    const surfaceWorldY = new Euler().setFromQuaternion(surfaceQuat, 'YXZ').y
-    const localRotationY = ctx.currentCursorRotationY - surfaceWorldY
+    const pose = resolveItemSurfacePlacement(
+      surfaceItem,
+      event,
+      ourDims,
+      ctx.currentCursorRotationY,
+      ctx.draftItem?.id,
+    )
+    if (!pose) return null
     const draftRotation = ctx.draftItem?.rotation ?? [0, 0, 0]
 
     return {
       stateUpdate: { surface: 'item-surface', surfaceItemId: surfaceItem.id },
       nodeUpdate: {
-        position: [x, y, z],
+        position: pose.position,
         parentId: surfaceItem.id,
-        rotation: [draftRotation[0], localRotationY, draftRotation[2]],
+        rotation: [draftRotation[0], pose.rotationY, draftRotation[2]],
       },
       cursorRotationY: ctx.currentCursorRotationY,
-      gridPosition: [x, y, z],
-      cursorPosition: [worldSnapped.x, worldSnapped.y, worldSnapped.z],
+      gridPosition: pose.position,
+      cursorPosition: pose.worldPosition,
       stopPropagation: true,
     }
   },
@@ -956,26 +975,21 @@ export const itemSurfaceStrategy = {
     const surfaceItem = nodes[ctx.state.surfaceItemId as AnyNodeId] as ItemNode | undefined
     if (!surfaceItem) return null
 
-    const surfaceMesh = sceneRegistry.nodes.get(ctx.state.surfaceItemId)
-    if (!surfaceMesh) return null
-
-    const ourDims = getScaledDimensions(ctx.draftItem)
-    const worldPos = new Vector3(event.position[0], event.position[1], event.position[2])
-    const localPos = surfaceMesh.worldToLocal(worldPos)
-    const surfaceHeight = getSurfacePlacementHeight(surfaceItem, event, localPos)
-    if (surfaceHeight === null) return null
-
-    const x = snapToGrid(localPos.x, ourDims[0])
-    const z = snapToGrid(localPos.z, ourDims[2])
-    const y = surfaceHeight
-
-    const worldSnapped = surfaceMesh.localToWorld(new Vector3(x, y, z))
+    const pose = resolveItemSurfacePlacement(
+      surfaceItem,
+      event,
+      getScaledDimensions(ctx.draftItem),
+      ctx.currentCursorRotationY,
+      undefined,
+      false,
+    )
+    if (!pose) return null
 
     return {
-      gridPosition: [x, y, z],
-      cursorPosition: [worldSnapped.x, worldSnapped.y, worldSnapped.z],
+      gridPosition: pose.position,
+      cursorPosition: pose.worldPosition,
       cursorRotationY: ctx.currentCursorRotationY,
-      nodeUpdate: { position: [x, y, z] },
+      nodeUpdate: { position: pose.position },
       stopPropagation: true,
       dirtyNodeId: null,
     }

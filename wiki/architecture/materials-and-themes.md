@@ -69,6 +69,22 @@ can batch separately. Flat slot defaults share the viewer cache by color, roughn
 and shading; slab legacy cached materials carry `__pascalCachedMaterial` so geometry
 rebuilds leave shared materials alive. Transparent slot overrides draw themselves.
 
+## Procedural item recipe finishes
+
+Recipe slots keep a required authored hex color and may declare `finish: 'glass'`.
+On a generated design's first catalog save, `snapProceduralSlotsToLibrary` selects
+`FINISH_LIBRARY_REFS.glass` (`library:preset-glass`); slots without a finish select
+the nearest flat library color. Explicit overrides, including an Authored hex pick,
+are preserved. Existing recipes and scene instances are not automatically resnapped.
+
+The Studio preview and colored scene renderer resolve the glass library preset:
+blue `#87ceeb`, transparency enabled, opacity 0.3, with Fresnel reflections in
+rendered shading. The recipe hex does not retint that preset. Monochrome scene
+appearance still uses the furnishing theme material. `proceduralSlotColor` uses
+the preset's blue for a glass override in 2D; absent overrides and Authored picks
+use the recipe hex. Studio's Authored option clears a saved slot override (or stores
+the hex on an unsaved draft), so it restores the opaque authored material.
+
 ## Custom-mesh face materials
 
 Blocks use the reusable `MaterialRef` model through stable, user-named object slots. `BlockNode.slots` maps slot IDs to `scene:` or `library:` references, `slotNames` stores their editable labels, and each `BlockFace.materialSlot` stores one slot ID. `body` is the permanent base slot and the fallback for unbound or unresolved slots.

@@ -10,6 +10,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./procedural-item": {
+      "types": "./dist/procedural-item/index.d.ts",
+      "import": "./dist/procedural-item/index.js",
+      "default": "./dist/procedural-item/index.js"
     }
   },
   "files": [

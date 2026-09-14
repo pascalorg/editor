@@ -1,0 +1,244 @@
+import { itemOverlapsPolygon } from '../hooks/spatial-grid/spatial-grid-manager'
+import { getRenderableSlabPolygon } from '../lib/slab-polygon'
+import { levelBaseElevationAt } from '../lib/terrain-support'
+import type { ItemNode } from '../schema/nodes/item'
+import type { SlabNode } from '../schema/nodes/slab'
+import type { WallNode } from '../schema/nodes/wall'
+import type { AnyNode } from '../schema/types'
+import { computeWallSlabSupport, pointInPolygon } from '../systems/slab/slab-support'
+import { getWallThickness } from '../systems/wall/wall-footprint'
+import type { ProceduralItemNode } from './node'
+import { evaluateRecipe, type Surface, type Vec3 } from './recipe'
+import {
+  boundsOf,
+  boxCorners,
+  composeFrames,
+  type Frame,
+  frame,
+  IDENTITY_FRAME,
+  transformPoint,
+} from './spatial'
+
+export type QueryNodes = Readonly<Record<string, AnyNode | ProceduralItemNode>>
+export function isProceduralItem(node: unknown): node is ProceduralItemNode {
+  return Boolean(
+    node && typeof node === 'object' && 'type' in node && node.type === 'procedural-item',
+  )
+}
+function levelSurfaces(nodes: QueryNodes, levelId: string) {
+  const siblings = Object.values(nodes).filter((n) => n.parentId === levelId)
+  return {
+    slabs: siblings.filter((n): n is SlabNode => n.type === 'slab'),
+    walls: siblings.filter((n): n is WallNode => n.type === 'wall'),
+  }
+}
+export function proceduralLocalPose(node: ProceduralItemNode, nodes: QueryNodes) {
+  const position = [...node.position] as Vec3,
+    rotation = [...node.rotation] as Vec3
+  if (!node.wallId) return { position, rotation }
+  const wall = nodes[node.wallId]
+  if (wall?.type !== 'wall') throw new Error('Missing wall host')
+  const reference = evaluateRecipe(node.recipe, node.parameters).surfaces.find(
+    (s) => s.id === node.recipe.mounting?.reference,
+  )
+  if (!reference) throw new Error('Missing mounting reference')
+  const sign = node.side === 'back' ? -1 : 1
+  rotation[1] = sign < 0 ? Math.PI : 0
+  position[0] -= reference.position[0] * sign
+  position[1] -= reference.position[1]
+  position[2] = sign * (getWallThickness(wall) / 2 - reference.position[2] + node.position[2])
+  return { position, rotation }
+}
+export function proceduralFootprint(node: ProceduralItemNode) {
+  const e = evaluateRecipe(node.recipe, node.parameters)
+  const center = e.min.map((v, i) => (v + e.max[i]!) / 2) as Vec3
+  const position = transformPoint(frame(node.position, node.rotation), center)
+  return { position, rotation: node.rotation, dimensions: e.dimensions }
+}
+function floorLift(node: ProceduralItemNode | ItemNode, nodes: QueryNodes): number {
+  if (!node.parentId || nodes[node.parentId]?.type !== 'level') return 0
+  const { slabs, walls } = levelSurfaces(nodes, node.parentId)
+  const ground = levelBaseElevationAt(
+    nodes as Record<string, AnyNode>,
+    node.parentId,
+    node.position[0],
+    node.position[2],
+  )
+  if (node.supportSlabId === 'ground') return ground
+  const footprint = isProceduralItem(node)
+    ? proceduralFootprint(node)
+    : {
+        position: node.position,
+        dimensions: node.asset.dimensions.map((v, i) => v * node.scale[i]!) as Vec3,
+        rotation: node.rotation,
+      }
+  const candidates = slabs.filter((s) => {
+    const polygon = getRenderableSlabPolygon(s, { walls, siblingSlabs: slabs })
+    return (
+      itemOverlapsPolygon(
+        footprint.position,
+        footprint.dimensions,
+        footprint.rotation,
+        polygon,
+        0.005,
+      ) &&
+      !(s.holes ?? []).some((h) => pointInPolygon(footprint.position[0], footprint.position[2], h))
+    )
+  })
+  const pinned = candidates.find((s) => s.id === node.supportSlabId)
+  return pinned
+    ? (pinned.elevation ?? 0.05)
+    : candidates.length
+      ? Math.max(...candidates.map((s) => s.elevation ?? 0.05))
+      : ground
+}
+export function nodeLevelFrame(id: string, nodes: QueryNodes, seen = new Set<string>()): Frame {
+  if (seen.has(id) || seen.size > 32) throw new Error('Cyclic or excessively deep hosting graph')
+  const node = nodes[id]
+  if (!node) throw new Error(`Missing node ${id}`)
+  if (node.type === 'level') return IDENTITY_FRAME
+  seen.add(id)
+  if (node.type === 'wall') {
+    const { slabs, walls } = levelSurfaces(nodes, node.parentId ?? '')
+    const ground = levelBaseElevationAt(
+      nodes as Record<string, AnyNode>,
+      node.parentId ?? '',
+      node.start[0],
+      node.start[1],
+    )
+    const support = computeWallSlabSupport(
+      node,
+      slabs,
+      walls,
+      node.supportSlabId,
+      undefined,
+      ground,
+    )
+    return frame(
+      [node.start[0], support.elevation + (node.supportOffset ?? 0), node.start[1]],
+      [0, -Math.atan2(node.end[1] - node.start[1], node.end[0] - node.start[0]), 0],
+    )
+  }
+  if (!(isProceduralItem(node) || node.type === 'item'))
+    throw new Error(`Unsupported host ${node.type}`)
+  const pose = isProceduralItem(node)
+    ? proceduralLocalPose(node, nodes)
+    : { position: [...node.position] as Vec3, rotation: node.rotation }
+  const parent = node.parentId ? nodes[node.parentId] : undefined
+  if (!node.parentId) return frame(pose.position, pose.rotation)
+  let parentFrame = nodeLevelFrame(node.parentId, nodes, seen)
+  if (isProceduralItem(parent)) {
+    const surface = evaluateRecipe(parent.recipe, parent.parameters).surfaces.find(
+      (s) => s.id === parent.attachments[node.id],
+    )
+    if (!surface) throw new Error('Missing attachment surface')
+    parentFrame = composeFrames(parentFrame, frame(surface.position, surface.rotation))
+  } else if (parent?.type === 'level') pose.position[1] += floorLift(node, nodes)
+  return composeFrames(parentFrame, frame(pose.position, pose.rotation))
+}
+function localBounds(node: ProceduralItemNode | ItemNode) {
+  if (isProceduralItem(node)) return evaluateRecipe(node.recipe, node.parameters)
+  const d = node.asset.dimensions.map((v, i) => v * node.scale[i]!) as Vec3
+  return { min: [-d[0] / 2, 0, -d[2] / 2] as Vec3, max: [d[0] / 2, d[1], d[2] / 2] as Vec3 }
+}
+export function attachmentBounds(child: ProceduralItemNode | ItemNode) {
+  const b = localBounds(child)
+  return boundsOf(
+    boxCorners(b.min, b.max).map((p) => transformPoint(frame(child.position, child.rotation), p)),
+  )
+}
+export function validateProceduralRelations(raw: AnyNode | ProceduralItemNode, nodes: QueryNodes) {
+  if (!isProceduralItem(raw)) return
+  const node = raw,
+    evaluation = evaluateRecipe(node.recipe, node.parameters)
+  const draft = node.metadata as { isNew?: boolean; isTransient?: boolean } | undefined
+  const awaitingHost =
+    (draft?.isNew || draft?.isTransient) &&
+    !node.wallId &&
+    node.parentId &&
+    nodes[node.parentId]?.type === 'level'
+  if (node.recipe.mounting && !awaitingHost) {
+    const wall = node.wallId ? nodes[node.wallId] : undefined
+    if (wall?.type !== 'wall' || node.parentId !== wall.id)
+      throw new Error('This design needs a wall host')
+    if (wall.curveOffset) throw new Error('Curved wall mounting is not supported yet')
+    if (node.rotation.some((v) => Math.abs(v) > 1e-8))
+      throw new Error('Move the item onto a wall face or press R to flip it')
+    const pose = proceduralLocalPose(node, nodes)
+    const b = boundsOf(
+      boxCorners(evaluation.min, evaluation.max).map((p) =>
+        transformPoint(frame(pose.position, pose.rotation), p),
+      ),
+    )
+    const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+    const level = wall.parentId ? nodes[wall.parentId] : undefined
+    const height = wall.height ?? (level?.type === 'level' ? level.height : 2.5) ?? 2.5
+    if (
+      b.min[0] < -1e-6 ||
+      b.max[0] > length + 1e-6 ||
+      b.min[1] < -1e-6 ||
+      b.max[1] > height + 1e-6 ||
+      node.position[2] < 0
+    )
+      throw new Error('The mounted item must fit on the wall')
+  } else if (node.wallId || (node.parentId && nodes[node.parentId]?.type === 'wall'))
+    throw new Error('A floor design cannot be attached to a wall')
+  const regions = new Map<string, ReturnType<typeof attachmentBounds>[]>()
+  for (const childId of node.children) {
+    const child = nodes[childId]
+    if (!child || child.parentId !== node.id) throw new Error('Invalid hosted child link')
+    if (!(isProceduralItem(child) || child.type === 'item'))
+      throw new Error('Unsupported hosted child')
+    const surface = evaluation.surfaces.find((s) => s.id === node.attachments[childId])
+    if (!surface) throw new Error('Choose a named attachment surface for the child')
+    const b = attachmentBounds(child)
+    if (
+      b.min[0] < -surface.size[0] / 2 - 1e-6 ||
+      b.max[0] > surface.size[0] / 2 + 1e-6 ||
+      b.min[2] < -surface.size[1] / 2 - 1e-6 ||
+      b.max[2] > surface.size[1] / 2 + 1e-6 ||
+      Math.abs(b.min[1]) > 1e-6
+    )
+      throw new Error(`The hosted item does not fit on ${surface.label}`)
+    const occupied = regions.get(surface.id) ?? []
+    if (
+      occupied.some(
+        (a) =>
+          a.min[0] < b.max[0] - 1e-6 &&
+          a.max[0] > b.min[0] + 1e-6 &&
+          a.min[2] < b.max[2] - 1e-6 &&
+          a.max[2] > b.min[2] + 1e-6,
+      )
+    )
+      throw new Error(`Another item occupies ${surface.label}`)
+    occupied.push(b)
+    regions.set(surface.id, occupied)
+  }
+}
+export function queryProceduralItem(node: ProceduralItemNode, nodes: QueryNodes) {
+  const e = evaluateRecipe(node.recipe, node.parameters),
+    f = nodeLevelFrame(node.id, nodes[node.id] === node ? nodes : { ...nodes, [node.id]: node })
+  const bounds = boundsOf(boxCorners(e.min, e.max).map((p) => transformPoint(f, p)))
+  return {
+    id: node.id,
+    kind: node.type,
+    classification: node.recipe.classification ?? null,
+    hostId: node.parentId,
+    wallId: node.wallId ?? null,
+    parameters: e.parameters,
+    localBounds: { min: e.min, max: e.max, dimensions: e.dimensions },
+    levelBounds: bounds,
+    frame: f,
+    footprint: [
+      [bounds.min[0], bounds.min[2]],
+      [bounds.max[0], bounds.min[2]],
+      [bounds.max[0], bounds.max[2]],
+      [bounds.min[0], bounds.max[2]],
+    ],
+    surfaces: e.surfaces.map((s: Surface) => ({
+      ...s,
+      frame: composeFrames(f, frame(s.position, s.rotation)),
+    })),
+    children: node.children,
+  }
+}
