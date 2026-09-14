@@ -63,6 +63,7 @@ import {
   HandleArrow,
   NO_RAYCAST,
 } from './handles/handle-arrow'
+import { computeFreezeOffset, resolveLinearHandlePosition } from './handles/handle-placement'
 import { createLinearResizeDragBinding } from './handles/linear-resize-drag'
 import { resolveResizeSnapValue } from './handles/resize-snap'
 import { type HandleDragControls, useHandleDrag } from './handles/use-handle-drag'
@@ -512,39 +513,6 @@ function NodeArrowHandlesForNode({
   )
 }
 
-// Offset, in node-local frame, that compensates for `position` drift on
-// the mesh during an asymmetric resize. Width/length L+R recompute
-// `position` so the anchored edge stays world-fixed — the renderer
-// follows that override, the ride object moves, and every arrow under
-// it would drift along with the mesh center. Subtracting this offset
-// from a non-active arrow's local placement undoes that drift so it
-// stays at its pre-drag world position.
-//
-// Rotation drags don't change `position`, so the offset collapses to
-// zero and non-active arrows naturally rotate with the mesh — which is
-// the desired behaviour (the whole rig rotates as a unit).
-function computeFreezeOffset(liveNode: AnyNode, preDragNode: AnyNode): [number, number, number] {
-  // Not every node in the union carries a `position` field (sites are the
-  // notable holdout — they don't have handles anyway, but TypeScript still
-  // requires us to discriminate). Guarded access keeps the freeze logic
-  // safe for the few node kinds that lack the field.
-  const liveP = (liveNode as { position?: readonly [number, number, number] }).position ?? [0, 0, 0]
-  const preP = (preDragNode as { position?: readonly [number, number, number] }).position ?? [
-    0, 0, 0,
-  ]
-  const deltaWorldX = liveP[0] - preP[0]
-  const deltaWorldY = liveP[1] - preP[1]
-  const deltaWorldZ = liveP[2] - preP[2]
-  const rotY = (preDragNode as { rotation?: number }).rotation ?? 0
-  // World → node-local for Y-axis rotation by rotY (THREE.Object3D
-  // rotation-y convention): inverse is rotation by -rotY around +Y.
-  const cosR = Math.cos(rotY)
-  const sinR = Math.sin(rotY)
-  const deltaLocalX = cosR * deltaWorldX - sinR * deltaWorldZ
-  const deltaLocalZ = sinR * deltaWorldX + cosR * deltaWorldZ
-  return [deltaLocalX, deltaWorldY, deltaLocalZ]
-}
-
 function ArrowHandle({
   descriptor,
   liveNode,
@@ -676,7 +644,7 @@ function LinearArrow({
   // for the edge being resized); cleared when the drag ends.
   const onDrag = descriptor.kind === 'linear-resize' ? descriptor.onDrag : undefined
   const placementSceneApi = useMemo(() => createSceneApi(useScene), [])
-  const basePosition = descriptor.placement.position(node, placementSceneApi)
+  const basePosition = resolveLinearHandlePosition(descriptor, node, placementSceneApi, baseScale)
   // `freezeOffset` (in node-local frame) cancels the mesh's `position`
   // drift while another arrow is being dragged — `basePosition` is
   // computed against the pre-drag snapshot, then we subtract the offset

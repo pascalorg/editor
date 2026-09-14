@@ -19,6 +19,86 @@ import {
 } from '@pascal-app/core/procedural-items'
 import { itemPaint } from '../item/paint'
 import { proceduralFloorplanMoveTarget } from './move-session'
+
+const GIZMO_SIDE_OFFSET = 0.3
+const GIZMO_FRONT_OFFSET = 0.3
+const ROTATE_RING_OFFSET = 0.06
+
+function handleBounds(node: ProceduralItemNode, part?: string) {
+  const e = evaluateRecipe(node.recipe, node.parameters)
+  const shapes = part ? e.shapes.filter((shape) => shape.partId === part) : []
+  return shapes.length
+    ? boundsOf(
+        shapes.flatMap((shape) =>
+          boxCorners(
+            shape.size.map((v) => -v / 2) as [number, number, number],
+            shape.size.map((v) => v / 2) as [number, number, number],
+          ).map((point) => transformPoint(frame(shape.position, shape.rotation), point)),
+        ),
+      )
+    : e
+}
+
+function proceduralRotateHandle(): HandleDescriptor<ProceduralItemNode> {
+  return {
+    kind: 'arc-resize',
+    axis: 'angular',
+    shape: 'rotate',
+    apply: (initial, delta) => {
+      const [rx, ry, rz] = initial.rotation
+      return { rotation: [rx, ry - delta, rz] }
+    },
+    placement: {
+      position: (n) => {
+        const b = evaluateRecipe(n.recipe, n.parameters)
+        return [
+          b.max[0] + GIZMO_SIDE_OFFSET,
+          (b.min[1] + b.max[1]) / 2,
+          b.max[2] + GIZMO_FRONT_OFFSET,
+        ]
+      },
+      rotationY: () => -Math.PI / 4,
+    },
+    decoration: {
+      kind: 'ring',
+      center: (n) => {
+        const b = evaluateRecipe(n.recipe, n.parameters)
+        return b.min.map((v, i) => (v + b.max[i]!) / 2) as [number, number, number]
+      },
+      radius: (n) => {
+        const b = evaluateRecipe(n.recipe, n.parameters)
+        return Math.hypot(b.dimensions[0] / 2, b.dimensions[2] / 2) + ROTATE_RING_OFFSET
+      },
+      y: (n) => {
+        const b = evaluateRecipe(n.recipe, n.parameters)
+        return (b.min[1] + b.max[1]) / 2
+      },
+    },
+  }
+}
+
+function proceduralMoveHandle(wall: boolean): HandleDescriptor<ProceduralItemNode> {
+  return {
+    kind: 'tap-action',
+    shape: 'move-cross',
+    cursor: 'move',
+    visible: () => true,
+    plane: wall ? 'node-normal' : 'horizontal',
+    portal: wall ? 'grandparent' : 'self',
+    onActivate: (node, _scene, editor) => editor.engageMoveDrag(node),
+    placement: {
+      position: (n) => {
+        const b = evaluateRecipe(n.recipe, n.parameters)
+        return [
+          b.min[0] - GIZMO_SIDE_OFFSET,
+          (b.min[1] + b.max[1]) / 2,
+          b.max[2] + (wall ? 0.12 : GIZMO_FRONT_OFFSET),
+        ]
+      },
+    },
+  }
+}
+
 export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode> = {
   kind: 'procedural-item',
   schemaVersion: 1,
@@ -152,19 +232,12 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
           scene.update(n.id as never, { parameters } as never)
         },
         placement: {
+          clearance: {
+            edge: (n) => handleBounds(n, p.part).max[index],
+            distance: 0.4,
+          },
           position: (n) => {
-            const e = evaluateRecipe(n.recipe, n.parameters)
-            const shapes = p.part ? e.shapes.filter((shape) => shape.partId === p.part) : []
-            const b = shapes.length
-              ? boundsOf(
-                  shapes.flatMap((shape) =>
-                    boxCorners(
-                      shape.size.map((v) => -v / 2) as [number, number, number],
-                      shape.size.map((v) => v / 2) as [number, number, number],
-                    ).map((point) => transformPoint(frame(shape.position, shape.rotation), point)),
-                  ),
-                )
-              : e
+            const b = handleBounds(n, p.part)
             const pos = b.max.map((v, i) => (i === index ? v + 0.15 : (b.min[i]! + v) / 2)) as [
               number,
               number,
@@ -175,6 +248,8 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
         },
       })
     }
+    if (!node.recipe.mounting) result.push(proceduralRotateHandle())
+    result.push(proceduralMoveHandle(Boolean(node.recipe.mounting)))
     return result
   },
   floorplan: (node, ctx) => {
