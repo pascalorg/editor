@@ -58,4 +58,19 @@ describe('Cursor marketplace installs from skills/', () => {
       'Cursor local MCP must bootstrap the pinned npm CLI without a global Pascal dependency',
     )
   })
+  test('rejects a legacy API-key header on the browser OAuth server', () => {
+    const target = fixture()
+    for (const name of ['.cursor-plugin/mcp.json', 'skills/.cursor-plugin/mcp.json']) {
+      const path = join(target, name)
+      const config = JSON.parse(readFileSync(path, 'utf8'))
+      config.mcpServers['pascal-hosted'].headers = { Authorization: `Bearer \${PASCAL_API_KEY}` }
+      writeFileSync(path, JSON.stringify(config))
+    }
+    expect(validateCursorPluginPackage(target)).toContain(
+      'Cursor hosted MCP must use managed browser OAuth without an API-key header',
+    )
+    expect(validateCursorPluginPackage(target)).toContain(
+      'Cursor browser sign-in must not require plugin secrets or placeholders',
+    )
+  })
 })

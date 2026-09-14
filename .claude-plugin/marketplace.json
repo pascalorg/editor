@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "pascal",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Public Pascal workflows for MCP-capable agents.",
   "owner": {
     "name": "Pascal"
@@ -16,7 +16,7 @@
         "email": "support@pascal.app",
         "url": "https://pascal.app"
       },
-      "version": "0.1.9",
+      "version": "0.1.10",
       "category": "productivity",
       "skills": ["./pascal-3d", "./furniture-fit"]
     }
