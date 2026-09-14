@@ -9,10 +9,10 @@ import {
 } from '@pascal-app/core'
 import { type ProceduralItemNode, proceduralLocalPose } from '@pascal-app/core/procedural-items'
 import {
-  createDefaultMaterial,
   createSurfaceRoleMaterial,
   NodeRenderer,
   resolveMaterialRef,
+  resolveSlotDefaultMaterial,
   useLibraryMaterialsVersion,
   useNodeEvents,
   useViewer,
@@ -60,7 +60,7 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
         const ref = overrides[s.id]
         const material = textures
           ? (resolveMaterialRef(ref, sceneMaterials, shading) ??
-            createDefaultMaterial(ref?.startsWith('#') ? ref : s.color, 0.75, shading))
+            resolveSlotDefaultMaterial(ref?.startsWith('#') ? ref : s.color, shading, 0.75))
           : createSurfaceRoleMaterial('furnishing', colorPreset, undefined, sceneTheme)
         return [s.id, material] as const
       }),

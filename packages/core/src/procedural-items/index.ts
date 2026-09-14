@@ -1,5 +1,6 @@
 export * from './fixtures'
 export * from './integration'
+export * from './library-colors'
 export * from './materials'
 export * from './node'
 export * from './placement'
