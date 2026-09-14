@@ -1708,6 +1708,21 @@ async function withCanvasCapture(
           putImageData: (image: ImageData) => {
             pixelsByCanvas.set(canvas, new Uint8ClampedArray(image.data))
           },
+          fillRect: (_x: number, _y: number, width: number, height: number) => {
+            pixelsByCanvas.set(canvas, new Uint8ClampedArray(width * height * 4).fill(255))
+          },
+          drawImage: (image: HTMLCanvasElement) => {
+            const pixels = pixelsByCanvas.get(image)
+            if (!pixels) throw new Error('Source canvas has no captured pixels')
+            pixelsByCanvas.set(canvas, new Uint8ClampedArray(pixels))
+          },
+          getImageData: (_x: number, _y: number, width: number, height: number) =>
+            ({
+              colorSpace: 'srgb',
+              data: pixelsByCanvas.get(canvas) ?? new Uint8ClampedArray(width * height * 4),
+              height,
+              width,
+            }) as ImageData,
         }),
       } as unknown as HTMLCanvasElement
       return canvas
@@ -1725,3 +1740,83 @@ async function withCanvasCapture(
     else delete globals.document
   }
 }
+
+describe('normal maps in async export preparation', () => {
+  test('decompresses a compressed normal map through the provided decompressor before baking its scale', async () => {
+    await withCanvasCapture(async () => {
+      const root = new THREE.Group()
+      const compressed = new THREE.CompressedTexture([], 2, 2)
+      compressed.name = 'NormalGL_3a132c5f'
+      const material = nodeMaterial({ normalMap: compressed }) as THREE.MeshStandardMaterial
+      material.normalScale.set(0.5, 0.5)
+      root.add(meshWithNodeMaterial(material))
+      let calls = 0
+
+      const prepared = await prepareSceneForExportAsync(
+        root,
+        {},
+        {
+          decompressTexture: async (texture) => {
+            calls += 1
+            expect(texture.name).toBe('NormalGL_3a132c5f')
+            return new THREE.DataTexture(
+              new Uint8Array(
+                [128, 128, 255, 255].concat(
+                  [128, 128, 255, 255],
+                  [128, 128, 255, 255],
+                  [128, 128, 255, 255],
+                ),
+              ),
+              2,
+              2,
+            )
+          },
+        },
+      )
+
+      const exported = (prepared.scene.children[0] as THREE.Mesh)
+        .material as THREE.MeshStandardMaterial
+      expect(calls).toBe(1)
+      expect((exported.normalMap as { isCanvasTexture?: boolean }).isCanvasTexture).toBe(true)
+      expect(exported.normalScale.toArray()).toEqual([1, 1])
+      expect(material.normalMap).toBe(compressed)
+      expect(material.normalScale.toArray()).toEqual([0.5, 0.5])
+    })
+  })
+
+  test('reference mode keeps a stamped normal-map placeholder and its scale for the packer', async () => {
+    await withCanvasCapture(async () => {
+      const root = new THREE.Group()
+      const stamped = new THREE.CompressedTexture([], 4, 4)
+      stamped.userData.pascalTextureRef = {
+        v: 1,
+        kind: 'library-material',
+        src: `${STORAGE_ORIGIN}/storage/v1/object/public/materials/user/material/oak_normal_512.ktx2`,
+        map: 'normal',
+        colorSpace: 'linear',
+      }
+      const material = nodeMaterial({ normalMap: stamped }) as THREE.MeshStandardMaterial
+      material.normalScale.set(1, -1)
+      root.add(meshWithNodeMaterial(material))
+
+      const prepared = await prepareSceneForExportAsync(
+        root,
+        {},
+        {
+          textures: 'reference',
+          purpose: 'viewer',
+          decompressTexture: async () => {
+            throw new Error('by-reference placeholders must not be decompressed')
+          },
+        },
+      )
+
+      const exported = (prepared.scene.children[0] as THREE.Mesh)
+        .material as THREE.MeshStandardMaterial
+      expect(exported.normalMap?.userData.pascalTextureRef).toEqual(
+        stamped.userData.pascalTextureRef,
+      )
+      expect(exported.normalScale.toArray()).toEqual([1, -1])
+    })
+  })
+})

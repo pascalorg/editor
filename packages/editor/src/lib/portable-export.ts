@@ -672,19 +672,68 @@ function canonicalNormalTexture(source: THREE.Texture, scale: THREE.Vector2): TH
   return texture
 }
 
-function canonicalizeNormalMaps(root: THREE.Object3D): void {
+export type PortableNormalizeOptions = {
+  /**
+   * Leave this normal map and its material's `normalScale` untouched. By-reference
+   * placeholders get their real bytes re-attached later, so baking the scale into
+   * placeholder pixels would drop both the reference and the strength.
+   */
+  preserveNormalMap?: (texture: THREE.Texture) => boolean
+}
+
+export type CompressedTextureDecompressor = (
+  texture: THREE.CompressedTexture,
+) => Promise<THREE.Texture>
+
+function canonicalNormalMaterials(
+  root: THREE.Object3D,
+  options: PortableNormalizeOptions,
+): THREE.MeshStandardMaterial[] {
   const materials = new Set<THREE.Material>()
   root.traverse((object) => {
     if (!(object as THREE.Mesh).isMesh) return
     for (const material of materialsOf(object as THREE.Mesh)) materials.add(material)
   })
-
-  const cache = new Map<THREE.Texture, Map<string, THREE.CanvasTexture>>()
+  const result: THREE.MeshStandardMaterial[] = []
   for (const material of materials) {
     const standard = material as THREE.MeshStandardMaterial
     if (!standard.normalMap || !standard.normalScale) continue
     if (standard.normalScale.x === 1 && standard.normalScale.y === 1) continue
-    const source = standard.normalMap
+    if (options.preserveNormalMap?.(standard.normalMap)) continue
+    result.push(standard)
+  }
+  return result
+}
+
+/**
+ * Canonicalizing a normal map reads its pixels on the CPU, which compressed
+ * (KTX2) textures cannot provide — decompress the ones that will be baked
+ * first. Runs before `normalizePortableScene` / `normalizeViewerArtifactMaterials`.
+ */
+export async function decompressCanonicalNormalMaps(
+  root: THREE.Object3D,
+  decompress: CompressedTextureDecompressor,
+  options: PortableNormalizeOptions = {},
+): Promise<void> {
+  const readable = new Map<THREE.Texture, THREE.Texture>()
+  for (const standard of canonicalNormalMaterials(root, options)) {
+    const source = standard.normalMap as THREE.CompressedTexture
+    if (!source.isCompressedTexture) continue
+    let texture = readable.get(source)
+    if (!texture) {
+      texture = await decompress(source)
+      cloneTextureSettings(source, texture)
+      readable.set(source, texture)
+      rememberDiscarded(root, source)
+    }
+    standard.normalMap = texture
+  }
+}
+
+function canonicalizeNormalMaps(root: THREE.Object3D, options: PortableNormalizeOptions): void {
+  const cache = new Map<THREE.Texture, Map<string, THREE.CanvasTexture>>()
+  for (const standard of canonicalNormalMaterials(root, options)) {
+    const source = standard.normalMap!
     const key = `${standard.normalScale.x}:${standard.normalScale.y}`
     let variants = cache.get(source)
     if (!variants) {
@@ -818,7 +867,10 @@ function clampPortableMaterialColors(root: THREE.Object3D): boolean {
   return clipped
 }
 
-export function normalizePortableScene(root: THREE.Object3D): string[] {
+export function normalizePortableScene(
+  root: THREE.Object3D,
+  options: PortableNormalizeOptions = {},
+): string[] {
   expandInstancedMeshes(root)
   root.updateMatrixWorld(true)
   freezeDeformedMeshes(root)
@@ -827,7 +879,7 @@ export function normalizePortableScene(root: THREE.Object3D): string[] {
   const clampedVertexColors = bakeVertexColors(root)
   const clampedHdr = clampedMaterialColors || clampedVertexColors
   canonicalizeAlphaMaps(root)
-  canonicalizeNormalMaps(root)
+  canonicalizeNormalMaps(root, options)
   bakeDoubleSidedMeshes(root)
   root.updateMatrixWorld(true)
   return clampedHdr
@@ -840,12 +892,15 @@ export function normalizePortableScene(root: THREE.Object3D): string[] {
  * Canonicalize baked static material details without freezing authored item
  * deformation that existing saved-viewer animation clips still target.
  */
-export function normalizeViewerArtifactMaterials(root: THREE.Object3D): string[] {
+export function normalizeViewerArtifactMaterials(
+  root: THREE.Object3D,
+  options: PortableNormalizeOptions = {},
+): string[] {
   const clampedMaterialColors = clampPortableMaterialColors(root)
   materializeDataTextures(root)
   const clampedVertexColors = bakeVertexColors(root, true)
   canonicalizeAlphaMaps(root)
-  canonicalizeNormalMaps(root)
+  canonicalizeNormalMaps(root, options)
   return clampedMaterialColors || clampedVertexColors
     ? [
         'Some rendered colors were outside the portable range (including colors brighter than the portable range) and were clipped to 0–1; the brightest areas may lose contrast.',

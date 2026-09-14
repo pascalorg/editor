@@ -38,6 +38,8 @@ import {
 import * as WebGPUTextureUtils from 'three/examples/jsm/utils/WebGPUTextureUtils.js'
 import { cloneExportUserData } from './export-user-data'
 import {
+  type CompressedTextureDecompressor,
+  decompressCanonicalNormalMaps,
   disposeExportResources,
   normalizePortableScene,
   normalizeViewerArtifactMaterials,
@@ -76,6 +78,8 @@ export type GlbExportOptions = {
   onWarning?: (warning: string) => void
   /** Reject retained node kinds whose export geometry can only be baked asynchronously. */
   requireSynchronousBake?: boolean
+  /** GPU decompressor for compressed normal maps that must be baked; defaults to WebGPUTextureUtils. */
+  decompressTexture?: CompressedTextureDecompressor
 }
 
 /** Resolve after the next couple of animation frames, giving React/R3F time to
@@ -350,10 +354,21 @@ async function completeSceneExportPreparation(
     await replaceBakeGeometryAsync(preparation)
     await appendSelectedPresentations(preparation)
     const prepared = finishSceneExportPreparation(preparation)
+    const { options } = preparation
+    const byReference = (options.textures ?? 'embed') === 'reference'
+    const normalizeOptions = {
+      preserveNormalMap: (texture: THREE.Texture) =>
+        byReference && getPascalTextureRef(texture) !== null,
+    }
+    await decompressCanonicalNormalMaps(
+      prepared.scene,
+      options.decompressTexture ?? ((texture) => WebGPUTextureUtils.decompress(texture)),
+      normalizeOptions,
+    )
     prepared.warnings.push(
-      ...(preparation.options.purpose === 'viewer'
-        ? normalizeViewerArtifactMaterials(prepared.scene)
-        : normalizePortableScene(prepared.scene)),
+      ...(options.purpose === 'viewer'
+        ? normalizeViewerArtifactMaterials(prepared.scene, normalizeOptions)
+        : normalizePortableScene(prepared.scene, normalizeOptions)),
     )
     return prepared
   } catch (error) {
