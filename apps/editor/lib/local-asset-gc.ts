@@ -84,8 +84,13 @@ export async function collectAllPersistedAssetUrls(
 /**
  * Explicit GC: delete IndexedDB Files that no persisted scene references.
  *
- * `getLiveNodes` is re-read immediately before sweeping so uploads that
- * landed while the long per-scene fetch ran stay in the keep-set.
+ * **Do not call this from scene mount / load.** Automatic mount-time GC races
+ * keepalive flushes, other tabs, and uploads that have hit IndexedDB but are
+ * not yet on a node; a sequential GET per scene also burns the shared API rate
+ * bucket used by autosave (#733 review). Call only when the host can prove:
+ * no in-flight writes, a complete scene inventory, and spare rate budget.
+ *
+ * `getLiveNodes` is re-read immediately before sweeping.
  * No-ops when the full keep-set cannot be built (never partial-sweeps).
  */
 export async function runLocalAssetGc(
