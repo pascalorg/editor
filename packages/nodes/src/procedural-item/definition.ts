@@ -1,17 +1,24 @@
 import type { AnyNode, HandleDescriptor, NodeDefinition } from '@pascal-app/core'
+import { type AnyNodeId, useScene } from '@pascal-app/core'
 import {
+  boundsOf,
+  boxCorners,
   evaluateRecipe,
+  frame,
   ProceduralItemNode,
   parameterPatch,
   proceduralFootprint,
   proceduralSlotColor,
   queryProceduralItem,
+  resolveProceduralWallPlacement,
   setProceduralMaterial,
   shelfRecipe,
   snapParameters,
+  transformPoint,
   validateProceduralRelations,
 } from '@pascal-app/core/procedural-items'
 import { itemPaint } from '../item/paint'
+import { proceduralFloorplanMoveTarget } from './move-session'
 export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode> = {
   kind: 'procedural-item',
   schemaVersion: 1,
@@ -50,14 +57,7 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
       applies: (n) => !(n as unknown as ProceduralItemNode).wallId,
       collides: true,
     },
-    movable: {
-      axes: ['x', 'z'],
-      gridSnap: true,
-      override: ({ node }) =>
-        (node as unknown as ProceduralItemNode).wallId
-          ? { axes: [], gridSnap: false }
-          : { axes: ['x', 'z'], gridSnap: true },
-    },
+    movable: { axes: ['x', 'z'], gridSnap: true },
     rotatable: { axes: ['y'], snapAngles: [0, Math.PI / 4, Math.PI / 2, Math.PI] },
     duplicable: true,
     deletable: true,
@@ -87,6 +87,35 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
   relations: { hosts: ['item', 'procedural-item'], cascadeDelete: 'descendants' },
   renderer: { kind: 'parametric', module: () => import('./renderer') },
   parametrics: { groups: [], customPanel: () => import('@pascal-app/editor/procedural-items') },
+  affordanceTools: { move: () => import('./move-tool') },
+  floorplanMoveTarget: proceduralFloorplanMoveTarget,
+  keyboardActions: {
+    r: {
+      appliesTo: (n) => Boolean((n as unknown as ProceduralItemNode).wallId),
+      run: (n) => {
+        const node = n as unknown as ProceduralItemNode
+        const nodes = useScene.getState().nodes
+        const wall = nodes[node.wallId as AnyNodeId]
+        if (wall?.type !== 'wall') return
+        const next = resolveProceduralWallPlacement(
+          node,
+          wall,
+          node.position[0],
+          node.position[1],
+          node.side === 'back' ? 'front' : 'back',
+          nodes,
+        )
+        if (next)
+          useScene.getState().updateNode(
+            node.id as AnyNodeId,
+            {
+              side: next.side,
+              position: [next.position[0], next.position[1], node.position[2]],
+            } as never,
+          )
+      },
+    },
+  },
   handles: (node) => {
     const result: HandleDescriptor<ProceduralItemNode>[] = []
     for (const p of node.recipe.parameters) {
@@ -95,6 +124,9 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
         index = axis === 'x' ? 0 : axis === 'y' ? 1 : 2
       result.push({
         kind: 'linear-resize',
+        latchGroup: p.part,
+        faceNormal: Boolean(node.wallId),
+        portal: node.wallId ? 'grandparent' : 'self',
         axis,
         anchor: axis === 'y' ? 'min' : 'center',
         min: p.min,
@@ -122,7 +154,18 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
         placement: {
           position: (n) => {
             const e = evaluateRecipe(n.recipe, n.parameters)
-            const pos = e.max.map((v, i) => (i === index ? v + 0.15 : (e.min[i]! + v) / 2)) as [
+            const shapes = p.part ? e.shapes.filter((shape) => shape.partId === p.part) : []
+            const b = shapes.length
+              ? boundsOf(
+                  shapes.flatMap((shape) =>
+                    boxCorners(
+                      shape.size.map((v) => -v / 2) as [number, number, number],
+                      shape.size.map((v) => v / 2) as [number, number, number],
+                    ).map((point) => transformPoint(frame(shape.position, shape.rotation), point)),
+                  ),
+                )
+              : e
+            const pos = b.max.map((v, i) => (i === index ? v + 0.15 : (b.min[i]! + v) / 2)) as [
               number,
               number,
               number,

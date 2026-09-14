@@ -186,8 +186,9 @@ export function parseRecipe(input: unknown): Recipe {
     !(recipe.surfaces ?? []).some((s) => s.id === recipe.mounting!.reference && !s.part)
   )
     throw new Error('Mounting requires one named, non-repeated reference surface')
-  const axes = recipe.parameters.flatMap((p) => (p.axis ? [p.axis] : []))
-  if (new Set(axes).size !== axes.length) throw new Error('Only one handle binding per axis')
+  const axes = recipe.parameters.flatMap((p) => (p.axis ? [`${p.part ?? 'design'}:${p.axis}`] : []))
+  if (new Set(axes).size !== axes.length)
+    throw new Error('Only one handle binding per axis in each part')
   evaluateRecipe(recipe)
   return recipe
 }

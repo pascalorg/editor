@@ -1,14 +1,14 @@
 'use client'
-import { type AnyNodeId, MaterialSchema, useLiveNodeOverrides, useScene } from '@pascal-app/core'
+import { type AnyNodeId, useLiveNodeOverrides, useScene } from '@pascal-app/core'
 import {
   ProceduralItemNode,
-  proceduralSlotColor,
-  setProceduralMaterial,
   snapParameters,
   validateProceduralRelations,
 } from '@pascal-app/core/procedural-items'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useState } from 'react'
+import { useHandleGroup } from '../../store/use-handle-group'
+import { PanelSection } from '../ui/controls/panel-section'
 import { SliderControl } from '../ui/controls/slider-control'
 import { PanelWrapper } from '../ui/panels/panel-wrapper'
 export function ProceduralInspector({
@@ -25,7 +25,13 @@ export function ProceduralInspector({
     | undefined
   const override = useLiveNodeOverrides((s) => s.overrides.get(nodeId))
   const node = committed ? ({ ...committed, ...override } as ProceduralItemNode) : null
-  const materials = useScene((s) => s.materials)
+  useEffect(() => {
+    useHandleGroup.setState({ active: partId ? { nodeId, group: partId } : null })
+    return () => {
+      if (useHandleGroup.getState().active?.nodeId === nodeId)
+        useHandleGroup.setState({ active: null })
+    }
+  }, [nodeId, partId])
   const [error, setError] = useState('')
   useEffect(() => () => useLiveNodeOverrides.getState().clear(nodeId as AnyNodeId), [nodeId])
   if (!node || !committed) return null
@@ -51,9 +57,7 @@ export function ProceduralInspector({
       useScene.getState().updateNode(nodeId as AnyNodeId, { parameters } as never)
     } else useLiveNodeOverrides.getState().set(nodeId as AnyNodeId, { parameters } as never)
   }
-  const fields = node.recipe.parameters.filter((p) =>
-    partId ? p.part === partId : !p.part || Boolean(p.axis),
-  )
+  const fields = node.recipe.parameters.filter((p) => (partId ? p.part === partId : !p.part))
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -83,6 +87,7 @@ export function ProceduralInspector({
             unit={p.unit === 'm' ? 'm' : ''}
             onChange={(v) => change(p.id, v, false)}
             onCommit={(v) => change(p.id, v, true)}
+            restoreOnCommit={false}
           />
         ))}
       </div>
@@ -110,82 +115,34 @@ export function ProceduralInspector({
           {error}
         </p>
       )}
-      {!partId && (
+      {!partId && node.recipe.parameters.some((p) => p.part) && (
         <div>
           <h3 className="mb-2 font-medium text-sm">Edit parts</h3>
           <div className="flex flex-wrap gap-2">
-            {node.recipe.parts.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                className="rounded-full border px-3 py-1.5 text-sm hover:bg-stone-100"
-                onClick={() => onPartChange(p.id)}
-              >
-                {p.label}
-              </button>
-            ))}
+            {node.recipe.parts
+              .filter((part) => node.recipe.parameters.some((p) => p.part === part.id))
+              .map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  className="rounded-full border px-3 py-1.5 text-sm text-foreground hover:bg-muted hover:text-foreground"
+                  onClick={() => onPartChange(p.id)}
+                >
+                  {p.label}
+                </button>
+              ))}
           </div>
         </div>
       )}
-      <div>
-        <h3 className="mb-3 font-medium text-sm">Materials</h3>
-        {node.recipe.slots
-          .filter(
-            (slot) =>
-              !partId ||
-              node.recipe.parts
-                .find((p) => p.id === partId)
-                ?.shapes.some((s) => s.slot === slot.id),
-          )
-          .map((slot) => (
-            <label key={slot.id} className="mb-2 flex items-center justify-between text-sm">
-              {slot.label}
-              <select
-                aria-label={`${slot.label} material`}
-                className="max-w-28 rounded border text-xs"
-                value={
-                  node.slots[slot.id]?.startsWith('scene:') ||
-                  node.slots[slot.id]?.startsWith('library:')
-                    ? node.slots[slot.id]
-                    : ''
-                }
-                onChange={(e) =>
-                  setProceduralMaterial(nodeId, slot.id, e.target.value || undefined)
-                }
-              >
-                <option value="">Design default</option>
-                {node.slots[slot.id]?.startsWith('library:') && (
-                  <option value={node.slots[slot.id]}>Library material</option>
-                )}
-                {Object.values(materials).map((m) => (
-                  <option key={m.id} value={`scene:${m.id}`}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
-              <input
-                aria-label={`${slot.label} color`}
-                type="color"
-                value={proceduralSlotColor(node.slots[slot.id], slot.color, materials)}
-                onChange={(e) =>
-                  setProceduralMaterial(
-                    nodeId,
-                    slot.id,
-                    undefined,
-                    MaterialSchema.parse({
-                      properties: { color: e.target.value, roughness: 0.75 },
-                    }),
-                  )
-                }
-              />
-            </label>
-          ))}
-      </div>
     </div>
   )
 }
 
 export default function ProceduralItemPanel({ node }: { node: ProceduralItemNode }) {
+  return <ProceduralPanel key={node.id} node={node} />
+}
+
+function ProceduralPanel({ node }: { node: ProceduralItemNode }) {
   const [partId, setPartId] = useState<string | null>(null)
   return (
     <PanelWrapper
@@ -215,52 +172,52 @@ function ProceduralPlacementControls({ node }: { node: ProceduralItemNode }) {
       setError(e instanceof Error ? e.message : 'Invalid placement')
     }
   }
+  const changePosition = (index: number, value: number, commit: boolean) => {
+    const live = useLiveNodeOverrides.getState().overrides.get(node.id)
+    const position = [
+      ...((live?.position as typeof node.position | undefined) ?? node.position),
+    ] as typeof node.position
+    position[index] = Number(value.toFixed(3))
+    const patch = { position }
+    try {
+      validateProceduralRelations({ ...node, ...patch }, useScene.getState().nodes)
+      if (commit) {
+        useLiveNodeOverrides.getState().clear(node.id as AnyNodeId)
+        update(patch)
+      } else useLiveNodeOverrides.getState().set(node.id as AnyNodeId, patch)
+      setError('')
+    } catch (e) {
+      if (commit) useLiveNodeOverrides.getState().clear(node.id as AnyNodeId)
+      setError(e instanceof Error ? e.message : 'Invalid position')
+    }
+  }
   return (
-    <details className="space-y-3">
-      <summary className="cursor-pointer font-medium text-sm">Placement</summary>
-      <div className="grid grid-cols-3 gap-2">
-        {(node.wallId ? ['Along wall', 'Height', 'Gap'] : ['X', 'Y', 'Z']).map((label, i) => (
-          <label className="text-xs" key={`${node.id}:${i}:${node.position[i]}`}>
-            {label} (m)
-            <input
-              className="mt-1 w-full rounded border border-border bg-background p-1"
-              defaultValue={node.position[i]}
-              step="0.01"
-              type="number"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') e.currentTarget.blur()
-              }}
-              onBlur={(e) => {
-                const position = [...node.position] as [number, number, number]
-                position[i] = Math.round(e.currentTarget.valueAsNumber * 1000) / 1000
-                update({ position })
-                e.currentTarget.value = String(
-                  (useScene.getState().nodes[node.id as AnyNodeId] as unknown as ProceduralItemNode)
-                    .position[i],
-                )
-              }}
-            />
-          </label>
-        ))}
-      </div>
-      {node.wallId && (
-        <label className="block text-xs">
-          Side
-          <select
-            className="ml-2 rounded border border-border bg-background p-1"
-            value={node.side ?? 'front'}
-            onChange={(e) => update({ side: e.target.value as 'front' | 'back' })}
-          >
-            <option value="front">Front</option>
-            <option value="back">Back</option>
-          </select>
-        </label>
-      )}
+    <PanelSection title="Position">
+      {(['X', 'Y', 'Z'] as const).map((axis, index) => (
+        <SliderControl
+          key={axis}
+          label={
+            <>
+              {axis}
+              <sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
+            </>
+          }
+          value={node.position[index]!}
+          min={node.position[index]! - 2}
+          max={node.position[index]! + 2}
+          precision={2}
+          step={0.01}
+          unit="m"
+          onChange={(value) => changePosition(index, value, false)}
+          onCommit={(value) => changePosition(index, value, true)}
+          restoreOnCommit={false}
+        />
+      ))}
       {error && (
-        <p role="alert" className="text-red-600 text-xs">
+        <p role="alert" className="text-destructive text-xs">
           {error}
         </p>
       )}
-    </details>
+    </PanelSection>
   )
 }

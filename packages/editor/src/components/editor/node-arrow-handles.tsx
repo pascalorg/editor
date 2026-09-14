@@ -47,6 +47,7 @@ import { createEditorApi } from '../../lib/editor-api'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
 import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../store/use-editor'
+import { useHandleGroup } from '../../store/use-handle-group'
 import useInteractionScope, {
   useEndpointReshape,
   useIsCurveReshape,
@@ -227,6 +228,9 @@ export function NodeArrowHandles() {
     () => (rawNode && liveOverride ? ({ ...rawNode, ...liveOverride } as AnyNode) : rawNode),
     [rawNode, liveOverride],
   )
+  const activeGroup = useHandleGroup((s) =>
+    s.active && s.active.nodeId === node?.id ? s.active.group : null,
+  )
   const def = node ? nodeRegistry.get(node.type) : null
   const descriptorSceneApi = useMemo(() => createSceneApi(useScene), [])
   const descriptors = useMemo(() => {
@@ -236,6 +240,8 @@ export function NodeArrowHandles() {
         ? def.handles(node as never, descriptorSceneApi)
         : (def.handles as HandleDescriptor[])
     return all.filter((descriptor) => {
+      if (activeGroup)
+        return descriptor.kind === 'linear-resize' && descriptor.latchGroup === activeGroup
       if (descriptor.kind === 'translate') return false
       const visible =
         'visible' in descriptor
@@ -244,7 +250,7 @@ export function NodeArrowHandles() {
       if ('shape' in descriptor && descriptor.shape === 'move-cross') return visible === true
       return visible !== false
     })
-  }, [node, def, descriptorSceneApi])
+  }, [node, def, descriptorSceneApi, activeGroup])
 
   const shouldRender =
     Boolean(node && descriptors?.length) &&
@@ -291,6 +297,9 @@ function NodeArrowHandlesForNode({
   node: AnyNode
   descriptors: HandleDescriptor[]
 }) {
+  const controlledGroup = useHandleGroup((s) =>
+    s.active?.nodeId === node.id ? s.active.group : null,
+  )
   const parentId = node.parentId ?? null
 
   const portalMode: HandlePortal = descriptors.some((d) => d.portal === 'grandparent')
@@ -476,7 +485,8 @@ function NodeArrowHandlesForNode({
     }
     // Arrows tagged with a latch group stay hidden until that group is open.
     const latchGroup = descriptor.kind === 'linear-resize' ? descriptor.latchGroup : undefined
-    if (latchGroup && !openLatchGroups.has(latchGroup)) return null
+    if (latchGroup && latchGroup !== controlledGroup && !openLatchGroups.has(latchGroup))
+      return null
     return (
       <ArrowHandle
         activeIndex={activeIndex}

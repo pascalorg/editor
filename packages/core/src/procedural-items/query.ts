@@ -151,13 +151,19 @@ export function validateProceduralRelations(raw: AnyNode | ProceduralItemNode, n
   if (!isProceduralItem(raw)) return
   const node = raw,
     evaluation = evaluateRecipe(node.recipe, node.parameters)
-  if (node.recipe.mounting) {
+  const draft = node.metadata as { isNew?: boolean; isTransient?: boolean } | undefined
+  const awaitingHost =
+    (draft?.isNew || draft?.isTransient) &&
+    !node.wallId &&
+    node.parentId &&
+    nodes[node.parentId]?.type === 'level'
+  if (node.recipe.mounting && !awaitingHost) {
     const wall = node.wallId ? nodes[node.wallId] : undefined
     if (wall?.type !== 'wall' || node.parentId !== wall.id)
       throw new Error('This design needs a wall host')
     if (wall.curveOffset) throw new Error('Curved wall mounting is not supported yet')
     if (node.rotation.some((v) => Math.abs(v) > 1e-8))
-      throw new Error('Use the wall side control to face a mounted design')
+      throw new Error('Move the item onto a wall face or press R to flip it')
     const pose = proceduralLocalPose(node, nodes)
     const b = boundsOf(
       boxCorners(evaluation.min, evaluation.max).map((p) =>

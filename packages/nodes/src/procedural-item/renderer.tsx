@@ -59,16 +59,17 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
       slots.map((s) => {
         const ref = overrides[s.id]
         const material = textures
-          ? (resolveMaterialRef(ref, sceneMaterials, shading)?.clone() ??
+          ? (resolveMaterialRef(ref, sceneMaterials, shading) ??
             createDefaultMaterial(ref?.startsWith('#') ? ref : s.color, 0.75, shading))
-          : createSurfaceRoleMaterial('furnishing', colorPreset, undefined, sceneTheme).clone()
+          : createSurfaceRoleMaterial('furnishing', colorPreset, undefined, sceneTheme)
         return [s.id, material] as const
       }),
     )
   }, [materialKey, sceneMaterials, shading, textures, colorPreset, sceneTheme])
   useLayoutEffect(
     () => () => {
-      for (const material of materials.values()) material.dispose()
+      for (const material of materials.values())
+        if (!material.userData.__pascalCachedMaterial) material.dispose()
     },
     [materials],
   )
@@ -93,7 +94,7 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
       ref={ref}
       position={live?.position ?? pose.position}
       rotation={rotation}
-      visible={node.visible}
+      visible={effective.visible}
       {...handlers}
     >
       {meshes.map((mesh) => (
