@@ -50,7 +50,7 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
         center: e.min.map((v, i) => (v + e.max[i]!) / 2) as [number, number, number],
       }
     },
-    hostable: { parents: ['level', 'wall', 'procedural-item'], align: 'face' },
+    hostable: { parents: ['level', 'wall', 'procedural-item', 'item'], align: 'face' },
     hostRefFields: ['wallId', 'side', 'supportSlabId'],
     floorPlaced: {
       footprint: (n) => proceduralFootprint(n as unknown as ProceduralItemNode),
