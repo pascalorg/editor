@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { StaticGeometryGenerator } from 'three-mesh-bvh'
+import { cloneExportUserData } from './export-user-data'
 
 const VERTEX_COLOR_UV_CHANNEL = 0
 const VERTEX_COLOR_TILE_SIZE = 8
@@ -64,7 +65,7 @@ function copyObjectState(source: THREE.Object3D, target: THREE.Object3D): void {
   target.layers.mask = source.layers.mask
   target.renderOrder = source.renderOrder
   target.frustumCulled = source.frustumCulled
-  target.userData = structuredClone(source.userData)
+  target.userData = cloneExportUserData(source.userData)
 }
 
 function replaceObject(source: THREE.Object3D, replacement: THREE.Object3D): void {
@@ -554,7 +555,7 @@ function cloneTextureSettings(source: THREE.Texture, target: THREE.Texture): voi
   target.flipY = source.flipY
   target.unpackAlignment = source.unpackAlignment
   target.colorSpace = THREE.NoColorSpace
-  target.userData = structuredClone(source.userData)
+  target.userData = cloneExportUserData(source.userData)
   target.needsUpdate = true
 }
 function materializeDataTextures(root: THREE.Object3D): void {
@@ -671,19 +672,68 @@ function canonicalNormalTexture(source: THREE.Texture, scale: THREE.Vector2): TH
   return texture
 }
 
-function canonicalizeNormalMaps(root: THREE.Object3D): void {
+export type PortableNormalizeOptions = {
+  /**
+   * Leave this normal map and its material's `normalScale` untouched. By-reference
+   * placeholders get their real bytes re-attached later, so baking the scale into
+   * placeholder pixels would drop both the reference and the strength.
+   */
+  preserveNormalMap?: (texture: THREE.Texture) => boolean
+}
+
+export type CompressedTextureDecompressor = (
+  texture: THREE.CompressedTexture,
+) => Promise<THREE.Texture>
+
+function canonicalNormalMaterials(
+  root: THREE.Object3D,
+  options: PortableNormalizeOptions,
+): THREE.MeshStandardMaterial[] {
   const materials = new Set<THREE.Material>()
   root.traverse((object) => {
     if (!(object as THREE.Mesh).isMesh) return
     for (const material of materialsOf(object as THREE.Mesh)) materials.add(material)
   })
-
-  const cache = new Map<THREE.Texture, Map<string, THREE.CanvasTexture>>()
+  const result: THREE.MeshStandardMaterial[] = []
   for (const material of materials) {
     const standard = material as THREE.MeshStandardMaterial
     if (!standard.normalMap || !standard.normalScale) continue
     if (standard.normalScale.x === 1 && standard.normalScale.y === 1) continue
-    const source = standard.normalMap
+    if (options.preserveNormalMap?.(standard.normalMap)) continue
+    result.push(standard)
+  }
+  return result
+}
+
+/**
+ * Canonicalizing a normal map reads its pixels on the CPU, which compressed
+ * (KTX2) textures cannot provide — decompress the ones that will be baked
+ * first. Runs before `normalizePortableScene` / `normalizeViewerArtifactMaterials`.
+ */
+export async function decompressCanonicalNormalMaps(
+  root: THREE.Object3D,
+  decompress: CompressedTextureDecompressor,
+  options: PortableNormalizeOptions = {},
+): Promise<void> {
+  const readable = new Map<THREE.Texture, THREE.Texture>()
+  for (const standard of canonicalNormalMaterials(root, options)) {
+    const source = standard.normalMap as THREE.CompressedTexture
+    if (!source.isCompressedTexture) continue
+    let texture = readable.get(source)
+    if (!texture) {
+      texture = await decompress(source)
+      cloneTextureSettings(source, texture)
+      readable.set(source, texture)
+      rememberDiscarded(root, source)
+    }
+    standard.normalMap = texture
+  }
+}
+
+function canonicalizeNormalMaps(root: THREE.Object3D, options: PortableNormalizeOptions): void {
+  const cache = new Map<THREE.Texture, Map<string, THREE.CanvasTexture>>()
+  for (const standard of canonicalNormalMaterials(root, options)) {
+    const source = standard.normalMap!
     const key = `${standard.normalScale.x}:${standard.normalScale.y}`
     let variants = cache.get(source)
     if (!variants) {
@@ -817,7 +867,10 @@ function clampPortableMaterialColors(root: THREE.Object3D): boolean {
   return clipped
 }
 
-export function normalizePortableScene(root: THREE.Object3D): string[] {
+export function normalizePortableScene(
+  root: THREE.Object3D,
+  options: PortableNormalizeOptions = {},
+): string[] {
   expandInstancedMeshes(root)
   root.updateMatrixWorld(true)
   freezeDeformedMeshes(root)
@@ -826,7 +879,7 @@ export function normalizePortableScene(root: THREE.Object3D): string[] {
   const clampedVertexColors = bakeVertexColors(root)
   const clampedHdr = clampedMaterialColors || clampedVertexColors
   canonicalizeAlphaMaps(root)
-  canonicalizeNormalMaps(root)
+  canonicalizeNormalMaps(root, options)
   bakeDoubleSidedMeshes(root)
   root.updateMatrixWorld(true)
   return clampedHdr
@@ -839,12 +892,15 @@ export function normalizePortableScene(root: THREE.Object3D): string[] {
  * Canonicalize baked static material details without freezing authored item
  * deformation that existing saved-viewer animation clips still target.
  */
-export function normalizeViewerArtifactMaterials(root: THREE.Object3D): string[] {
+export function normalizeViewerArtifactMaterials(
+  root: THREE.Object3D,
+  options: PortableNormalizeOptions = {},
+): string[] {
   const clampedMaterialColors = clampPortableMaterialColors(root)
   materializeDataTextures(root)
   const clampedVertexColors = bakeVertexColors(root, true)
   canonicalizeAlphaMaps(root)
-  canonicalizeNormalMaps(root)
+  canonicalizeNormalMaps(root, options)
   return clampedMaterialColors || clampedVertexColors
     ? [
         'Some rendered colors were outside the portable range (including colors brighter than the portable range) and were clipped to 0–1; the brightest areas may lose contrast.',
@@ -852,9 +908,26 @@ export function normalizeViewerArtifactMaterials(root: THREE.Object3D): string[]
     : []
 }
 
+/** Where the portable GLB conversion parks the authored opacity of glass it
+ * rewrote as transmission, so formats without transmission can fall back. */
+export const GLASS_OPACITY_USERDATA = 'pascalGlassOpacity'
+
 function cloneMaterialForUsdz(material: THREE.Material): THREE.Material {
   const clone = material.clone()
   clone.side = THREE.FrontSide
+  // USDPreviewSurface has no transmission and USDZExporter only writes
+  // `inputs:opacity`; hand glass back its authored opacity for Quick Look.
+  const physical = clone as THREE.MeshPhysicalMaterial
+  const authoredOpacity = clone.userData[GLASS_OPACITY_USERDATA]
+  if (
+    physical.isMeshPhysicalMaterial &&
+    physical.transmission > 0 &&
+    typeof authoredOpacity === 'number'
+  ) {
+    physical.transmission = 0
+    physical.transparent = true
+    physical.opacity = authoredOpacity
+  }
   return clone
 }
 
@@ -925,7 +998,7 @@ export function createUsdzScene(source: THREE.Object3D): THREE.Object3D {
     clone.visible = object.visible
     clone.layers.mask = object.layers.mask
     clone.renderOrder = object.renderOrder
-    clone.userData = structuredClone(object.userData)
+    clone.userData = cloneExportUserData(object.userData)
     for (const child of object.children) clone.add(cloneObject(child))
     return clone
   }

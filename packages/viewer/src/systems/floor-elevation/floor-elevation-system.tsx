@@ -89,6 +89,10 @@ export const FloorElevationSystem = () => {
       const position = (effectiveNode as PositionedNode).position
       if (!position) return
 
+      if (!(def.geometry || def.system) && dirtyNodes.has(id)) {
+        clearDirty(id)
+      }
+
       // `applies === false` means the kind opts OUT of floor stacking for this
       // node: its Y belongs to a host frame (a wall/ceiling-mounted item, a
       // cabinet module inside a run, a wall duct terminal). `getFloorPlacedElevation`
@@ -116,10 +120,6 @@ export const FloorElevationSystem = () => {
         maxElevation: liveTransform?.supportElevationCap,
       })
       mesh.position.y = visualPosition[1]
-
-      if (!(def.geometry || def.system) && dirtyNodes.has(id)) {
-        clearDirty(id)
-      }
     }
 
     dirtyNodes.forEach((id) => {

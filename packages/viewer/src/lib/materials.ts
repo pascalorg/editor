@@ -645,7 +645,8 @@ export function resolveSlotDefaultMaterial(
       cachedDefaultMaterial(`slot-#ffffff-${roughness}`, '#ffffff', roughness, shading)
     )
   }
-  return cachedDefaultMaterial(`slot-${slotDefault}-${roughness}`, slotDefault, roughness, shading)
+  const color = slotDefault.startsWith('#') ? slotDefault.toLowerCase() : slotDefault
+  return cachedDefaultMaterial(`slot-${color}-${roughness}`, color, roughness, shading)
 }
 
 export function createDefaultMaterial(
