@@ -44,6 +44,28 @@ export function validateCursorPluginPackage(root: string): string[] {
       'Cursor local MCP must bootstrap the pinned npm CLI without a global Pascal dependency',
     )
   }
+  const expectedHostedServer = {
+    type: 'http',
+    url: 'https://editor.pascal.app/api/mcp',
+    auth: {
+      CLIENT_ID: 'pascal-cursor',
+      scopes: ['openid', 'profile', 'offline_access', 'scene:read', 'scene:write'],
+    },
+  }
+  if (
+    JSON.stringify(
+      (config.mcpServers as Record<string, unknown> | undefined)?.['pascal-hosted'],
+    ) !== JSON.stringify(expectedHostedServer)
+  ) {
+    failures.push('Cursor hosted MCP must use managed browser OAuth without an API-key header')
+  }
+  if (
+    'variables' in rootManifest ||
+    'variables' in manifest ||
+    JSON.stringify(config).includes('${')
+  ) {
+    failures.push('Cursor browser sign-in must not require plugin secrets or placeholders')
+  }
   for (const path of [
     'pascal-3d/SKILL.md',
     'furniture-fit/SKILL.md',

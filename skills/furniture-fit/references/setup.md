@@ -31,7 +31,7 @@ Use only one active agent client with each local CLI service. The standalone HTT
 
 ## Existing hosted project
 
-Create an API key in Pascal Settings (`https://editor.pascal.app/settings`) for the same user or organization that owns the target project. Set `PASCAL_API_KEY` to that key without printing it. If you assign it in a shell command, avoid or remove that command from shell history. The hosted Streamable HTTP endpoint is:
+Cursor users follow the browser sign-in instructions below. For other clients, create an API key in Pascal Settings (`https://editor.pascal.app/settings`) for the same user or organization that owns the target project. Set `PASCAL_API_KEY` to that key without printing it. If you assign it in a shell command, avoid or remove that command from shell history. The hosted Streamable HTTP endpoint is:
 
 ```text
 https://editor.pascal.app/api/mcp
@@ -83,29 +83,39 @@ Cursor:
 
 The Cursor marketplace installs this repository's `skills/` directory. Its `.cursor-plugin/plugin.json` explicitly selects the Cursor MCP configuration, so the Claude-only `${user_config.pascal_api_key}` header is never used by Cursor. The local server runs `npx --yes --package=@pascal-app/cli@1.0.0 pascal mcp connect`; Node.js 22.13 or newer and npm must be available to Cursor. No global `pascal` installation or web-editor runtime is required. The first connection downloads the pinned CLI from npm, and later connections reuse npm's cache. This starts only the local MCP service and keeps existing local project storage. If Cursor reports `spawn npx ENOENT`, install Node.js/npm and fully restart Cursor so it picks up the executable path. For an older installed bundle that still runs `pascal`, update the plugin; `npm install --global @pascal-app/cli@1.0.0` followed by **Customize → MCPs → pascal → Reload** repairs that legacy local command.
 
-Installing this repository as a Cursor plugin declares an optional `PASCAL_API_KEY` variable. A team admin sets its value in the Cursor dashboard under **Plugins** → **Configure**, at install time or later; the repository holds only the `${PASCAL_API_KEY}` placeholder. With a value set, the plugin's `pascal-hosted` server reaches the hosted endpoint alongside the local `pascal` server. Leaving it unset keeps the install local-only: the local server still works and `pascal-hosted` fails with `401 Unauthorized` because the placeholder resolves to nothing. Disable `pascal-hosted` in Cursor's MCP settings to remove that failing entry.
+The hosted `pascal-hosted` server uses browser sign-in. In **Customize → MCPs**, choose **Authenticate** (or **Connect**) beside `pascal-hosted`. Pascal opens in your browser: sign in or create an account with Google or email, choose the intended workspace, review access, then return to Cursor. No API key or plugin variable is required. Let the user approve the account and workspace shown in consent. Ordinary access covers reading and editing projects; it does not authorize publishing, credit spending, external AI processing, community posting, or account management. Disconnect at `https://editor.pascal.app/settings/connected-apps`.
 
-Cursor without the plugin, in `.cursor/mcp.json`:
+For local-only work, use `pascal` and leave `pascal-hosted` disconnected. Local project storage stays on this machine. If browser sign-in is unavailable, verify that the installed plugin and hosted service support this flow; do not create another account or fall back to a different workspace implicitly.
+
+For Cursor without the plugin, add this to `.cursor/mcp.json` and start authentication in Cursor:
 
 ```json
 {
   "mcpServers": {
-    "pascal": {
+    "pascal-hosted": {
+      "type": "http",
       "url": "https://editor.pascal.app/api/mcp",
-      "headers": {
-        "Authorization": "Bearer ${env:PASCAL_API_KEY}"
+      "auth": {
+        "CLIENT_ID": "pascal-cursor",
+        "scopes": [
+          "openid",
+          "profile",
+          "offline_access",
+          "scene:read",
+          "scene:write"
+        ]
       }
     }
   }
 }
 ```
 
-Cursor resolves `${env:PASCAL_API_KEY}` from the environment it starts in, so the file holds no key and `PASCAL_API_KEY` must be exported where Cursor is launched. The two Cursor syntaxes are not interchangeable: `${env:NAME}` reads the environment in a user or project `.cursor/mcp.json`, while a plugin's `mcp.json` uses the bare `${NAME}` plugin-variable form resolved from the dashboard. Interpolation syntax varies between clients; confirm that the chosen host supports this form before relying on it.
+Existing manually configured API-key connections remain supported. Do not combine an Authorization header with this OAuth configuration.
 
 ## Separate autonomous workspace
 
 Only when the task explicitly authorizes creating separate private agent-owned work, register through `POST https://editor.pascal.app/api/auth/agent/register` with `name` and optional `purpose` and `agentClient`. Capture the returned key without printing it and store it securely.
 
-Self-registration does not create an email or browser login. The project belongs to a separate agent account and will not automatically appear in the user's existing Pascal workspace. For an existing user's room, use their Settings-created key instead.
+Self-registration does not create an email or browser login. The project belongs to a separate agent account and will not automatically appear in the user's existing Pascal workspace. For an existing user's room, use their browser-approved Cursor connection or Settings-created key instead.
 
 Current hosted instructions: `https://editor.pascal.app/docs/developers/mcp`.
