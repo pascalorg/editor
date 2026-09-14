@@ -27,6 +27,7 @@ import {
   prepareSceneForExportAsync,
   writeTextureReferenceExtras,
 } from './glb-export'
+import { createUsdzScene } from './portable-export'
 
 // The reference module reads the storage origin lazily on first use, so
 // setting the env here (before any validation call) pins it for the file.
@@ -1818,5 +1819,53 @@ describe('normal maps in async export preparation', () => {
       )
       expect(exported.normalScale.toArray()).toEqual([1, -1])
     })
+  })
+})
+
+describe('portable glass', () => {
+  test('see-through untextured surfaces become transmission glass in portable exports only', async () => {
+    const root = new THREE.Group()
+    const glass = new MeshStandardNodeMaterial({
+      color: '#3d9ed4',
+      transparent: true,
+      opacity: 0.3,
+      roughness: 0.1,
+    })
+    const tintedPlastic = new MeshStandardNodeMaterial({
+      color: '#3d9ed4',
+      transparent: true,
+      opacity: 0.8,
+    })
+    root.add(meshWithNodeMaterial(glass), meshWithNodeMaterial(tintedPlastic))
+
+    const portable = await prepareSceneForExportAsync(root, {})
+    const [exportedGlass, exportedPlastic] = portable.scene.children.map(
+      (child) => (child as THREE.Mesh).material as THREE.MeshPhysicalMaterial,
+    )
+    expect(exportedGlass!.isMeshPhysicalMaterial).toBe(true)
+    expect(exportedGlass!.transmission).toBe(1)
+    expect(exportedGlass!.transparent).toBe(false)
+    expect(exportedGlass!.opacity).toBe(1)
+    expect(exportedGlass!.roughness).toBeCloseTo(0.1)
+    // 30% authored opacity keeps 30% of the (linear) tint.
+    const tint = new THREE.Color('#3d9ed4')
+    expect(exportedGlass!.color.r).toBeCloseTo(tint.r + (1 - tint.r) * 0.7, 4)
+    expect(exportedGlass!.color.b).toBeCloseTo(tint.b + (1 - tint.b) * 0.7, 4)
+    expect(exportedPlastic!.isMeshPhysicalMaterial).toBeUndefined()
+    expect(exportedPlastic!.transparent).toBe(true)
+
+    const viewer = prepareSceneForExport(root, {}, { purpose: 'viewer' })
+    const kept = (viewer.scene.children[0] as THREE.Mesh).material as THREE.MeshStandardMaterial
+    expect((kept as { isMeshPhysicalMaterial?: boolean }).isMeshPhysicalMaterial).toBeUndefined()
+    expect(kept.transparent).toBe(true)
+    expect(kept.opacity).toBeCloseTo(0.3)
+
+    // USDZ has no transmission: the same prep hands glass its opacity back.
+    const usdz = createUsdzScene(portable.scene)
+    const usdzGlass = (usdz.children[0] as THREE.Mesh).material as THREE.MeshPhysicalMaterial
+    expect(usdzGlass.transmission).toBe(0)
+    expect(usdzGlass.transparent).toBe(true)
+    expect(usdzGlass.opacity).toBeCloseTo(0.3)
+    expect(exportedGlass!.transmission).toBe(1)
   })
 })

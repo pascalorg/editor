@@ -908,9 +908,26 @@ export function normalizeViewerArtifactMaterials(
     : []
 }
 
+/** Where the portable GLB conversion parks the authored opacity of glass it
+ * rewrote as transmission, so formats without transmission can fall back. */
+export const GLASS_OPACITY_USERDATA = 'pascalGlassOpacity'
+
 function cloneMaterialForUsdz(material: THREE.Material): THREE.Material {
   const clone = material.clone()
   clone.side = THREE.FrontSide
+  // USDPreviewSurface has no transmission and USDZExporter only writes
+  // `inputs:opacity`; hand glass back its authored opacity for Quick Look.
+  const physical = clone as THREE.MeshPhysicalMaterial
+  const authoredOpacity = clone.userData[GLASS_OPACITY_USERDATA]
+  if (
+    physical.isMeshPhysicalMaterial &&
+    physical.transmission > 0 &&
+    typeof authoredOpacity === 'number'
+  ) {
+    physical.transmission = 0
+    physical.transparent = true
+    physical.opacity = authoredOpacity
+  }
   return clone
 }
 
