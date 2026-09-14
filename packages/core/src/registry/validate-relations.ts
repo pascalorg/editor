@@ -18,7 +18,7 @@ export function validateNodeRelations(
   for (const id of affected) {
     const node = next[id]
     if (!node) continue
-    const validate = nodeRegistry.get(node.type)?.schema.meta()?.validateRelations
+    const validate = nodeRegistry.get(node.type)?.schema?.meta?.()?.validateRelations
     if (typeof validate === 'function') validate(node, next)
   }
 }
