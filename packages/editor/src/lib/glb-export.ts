@@ -41,6 +41,7 @@ import {
   type CompressedTextureDecompressor,
   decompressCanonicalNormalMaps,
   disposeExportResources,
+  GLASS_OPACITY_USERDATA,
   normalizePortableScene,
   normalizeViewerArtifactMaterials,
 } from './portable-export'
@@ -1135,6 +1136,7 @@ function applyPortableGlass(target: THREE.MeshPhysicalMaterial, source: THREE.Ma
   target.transparent = false
   target.opacity = 1
   target.depthWrite = true
+  target.userData[GLASS_OPACITY_USERDATA] = source.opacity
 }
 
 function replaceReferencedTextures(

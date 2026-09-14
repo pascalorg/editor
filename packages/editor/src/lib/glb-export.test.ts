@@ -27,6 +27,7 @@ import {
   prepareSceneForExportAsync,
   writeTextureReferenceExtras,
 } from './glb-export'
+import { createUsdzScene } from './portable-export'
 
 // The reference module reads the storage origin lazily on first use, so
 // setting the env here (before any validation call) pins it for the file.
@@ -1858,5 +1859,13 @@ describe('portable glass', () => {
     expect((kept as { isMeshPhysicalMaterial?: boolean }).isMeshPhysicalMaterial).toBeUndefined()
     expect(kept.transparent).toBe(true)
     expect(kept.opacity).toBeCloseTo(0.3)
+
+    // USDZ has no transmission: the same prep hands glass its opacity back.
+    const usdz = createUsdzScene(portable.scene)
+    const usdzGlass = (usdz.children[0] as THREE.Mesh).material as THREE.MeshPhysicalMaterial
+    expect(usdzGlass.transmission).toBe(0)
+    expect(usdzGlass.transparent).toBe(true)
+    expect(usdzGlass.opacity).toBeCloseTo(0.3)
+    expect(exportedGlass!.transmission).toBe(1)
   })
 })
