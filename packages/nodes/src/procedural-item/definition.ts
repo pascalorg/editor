@@ -77,28 +77,6 @@ function proceduralRotateHandle(): HandleDescriptor<ProceduralItemNode> {
   }
 }
 
-function proceduralMoveHandle(wall: boolean): HandleDescriptor<ProceduralItemNode> {
-  return {
-    kind: 'tap-action',
-    shape: 'move-cross',
-    cursor: 'move',
-    visible: () => true,
-    plane: wall ? 'node-normal' : 'horizontal',
-    portal: wall ? 'grandparent' : 'self',
-    onActivate: (node, _scene, editor) => editor.engageMoveDrag(node),
-    placement: {
-      position: (n) => {
-        const b = evaluateRecipe(n.recipe, n.parameters)
-        return [
-          b.min[0] - GIZMO_SIDE_OFFSET,
-          (b.min[1] + b.max[1]) / 2,
-          b.max[2] + (wall ? 0.12 : GIZMO_FRONT_OFFSET),
-        ]
-      },
-    },
-  }
-}
-
 export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode> = {
   kind: 'procedural-item',
   schemaVersion: 1,
@@ -249,7 +227,6 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
       })
     }
     if (!node.recipe.mounting) result.push(proceduralRotateHandle())
-    result.push(proceduralMoveHandle(Boolean(node.recipe.mounting)))
     return result
   },
   floorplan: (node, ctx) => {

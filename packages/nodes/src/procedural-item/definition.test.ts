@@ -1,5 +1,5 @@
-import { expect, mock, test } from 'bun:test'
-import { createSceneApi, type EditorApi, type HandleDescriptor, useScene } from '@pascal-app/core'
+import { expect, test } from 'bun:test'
+import { createSceneApi, type HandleDescriptor, useScene } from '@pascal-app/core'
 import {
   bedRecipe,
   evaluateRecipe,
@@ -49,7 +49,7 @@ const recipe = parseRecipe({
 })
 
 for (const size of [0.12, 2.4]) {
-  test(`places arrows and floor gizmos outside an offset ${size} m evaluated recipe`, () => {
+  test(`places arrows and floor rotate handle outside an offset ${size} m evaluated recipe`, () => {
     const node = ProceduralItemNode.parse({
       recipe,
       parameters: { width: size, height: size, depth: size },
@@ -79,13 +79,7 @@ for (const size of [0.12, 2.4]) {
       expect(v).toBeCloseTo([0.4, 2, -0.3][i]!)
     })
     expect(rotate.decoration?.y?.(node)).toBeCloseTo(2)
-    const move = all.find((h) => h.kind === 'tap-action')!
-    expect(move.shape).toBe('move-cross')
-    expect(move.visible?.(node, scene)).toBe(true)
-    expect(move.placement.position(node, scene)).toEqual([b.min[0] - 0.3, 2, b.max[2] + 0.3])
-    const engageMoveDrag = mock(() => {})
-    move.onActivate(node, scene, { engageMoveDrag } as unknown as EditorApi)
-    expect(engageMoveDrag).toHaveBeenCalledWith(node)
+    expect(all.some((h) => h.kind === 'tap-action' && h.shape === 'move-cross')).toBe(false)
     const initial = { ...node, rotation: [0.1, 0.2, 0.3] as [number, number, number] }
     expect(rotate.apply(initial, Math.PI / 12, scene)).toEqual({
       rotation: [0.1, 0.2 - Math.PI / 12, 0.3],
@@ -104,15 +98,11 @@ test('part arrows retain their latch group and use the part edge for clearance',
   expect(arrow.placement.clearance?.edge(node, scene)).toBeCloseTo(1.1)
 })
 
-test('mounted recipes never expose rotation, including before a wall is assigned', () => {
+test('mounted recipes never expose rotation or move crosses, including before a wall is assigned', () => {
   for (const wallId of [undefined, 'wall_gizmo-test']) {
     const node = ProceduralItemNode.parse({ recipe: radiatorRecipe, wallId })
     const all = handles(node)
     expect(all.some((h) => h.kind === 'arc-resize')).toBe(false)
-    expect(all.find((h) => h.kind === 'tap-action')).toMatchObject({
-      shape: 'move-cross',
-      plane: 'node-normal',
-      portal: 'grandparent',
-    })
+    expect(all.some((h) => h.kind === 'tap-action' && h.shape === 'move-cross')).toBe(false)
   }
 })
