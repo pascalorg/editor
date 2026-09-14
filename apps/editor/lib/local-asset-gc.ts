@@ -1,4 +1,5 @@
 import {
+  collectGraphAssetUrlsFromParts,
   collectNodeAssetUrls,
   collectSceneAssetUrls,
   sweepLocalAssetsExcept,
@@ -10,11 +11,12 @@ const SCENES_LIST_MAX = 500
 
 type SceneGraphLike = {
   nodes?: Record<string, unknown>
+  materials?: unknown
 }
 
 function collectGraphAssetUrls(graph: SceneGraphLike | null | undefined): string[] {
-  if (!graph?.nodes) return []
-  return collectSceneAssetUrls(graph.nodes as never)
+  if (!graph?.nodes && !graph?.materials) return []
+  return collectGraphAssetUrlsFromParts(graph.nodes as never, graph.materials)
 }
 
 /** Asset URLs still referenced by the browser's localStorage scene, if any. */

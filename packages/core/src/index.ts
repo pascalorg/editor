@@ -112,7 +112,11 @@ export {
   SECTIONAL_GARAGE_RENDER_OPEN_SCALE,
 } from './lib/door-operation'
 export { getDefaultLevelName, getLevelDisplayName } from './lib/level-name'
-export { collectNodeAssetUrls, collectSceneAssetUrls } from './lib/local-asset-lifecycle'
+export {
+  collectGraphAssetUrlsFromParts,
+  collectNodeAssetUrls,
+  collectSceneAssetUrls,
+} from './lib/local-asset-lifecycle'
 export {
   areMeasurementPointsCoplanar,
   closestMeasurementFeatureBinding,

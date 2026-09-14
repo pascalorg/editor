@@ -6,7 +6,11 @@ import {
   saveAsset,
   sweepLocalAssetsExcept,
 } from './asset-storage'
-import { collectNodeAssetUrls, collectSceneAssetUrls } from './local-asset-lifecycle'
+import {
+  collectGraphAssetUrlsFromParts,
+  collectNodeAssetUrls,
+  collectSceneAssetUrls,
+} from './local-asset-lifecycle'
 
 function file(contents: string, name = 'test.txt'): File {
   return new File([contents], name, { type: 'text/plain' })
@@ -25,6 +29,16 @@ describe('collectNodeAssetUrls', () => {
     ]
     expect(urls.sort()).toEqual(['asset://guide-1', 'asset://model-1'])
   })
+
+  test('collects nested item.asset and captureSession URLs', () => {
+    const urls = collectNodeAssetUrls({
+      id: 'item1',
+      type: 'item',
+      asset: { src: 'asset://chair.glb', thumbnail: 'asset://chair.png' },
+      extra: { nested: { ref: 'asset://deep' } },
+    } as never)
+    expect(urls.sort()).toEqual(['asset://chair.glb', 'asset://chair.png', 'asset://deep'])
+  })
 })
 
 describe('collectSceneAssetUrls', () => {
@@ -34,6 +48,27 @@ describe('collectSceneAssetUrls', () => {
       b: { id: 'b', type: 'item', src: 'asset://s' } as never,
     })
     expect(urls.sort()).toEqual(['asset://g', 'asset://s'])
+  })
+})
+
+describe('collectGraphAssetUrlsFromParts', () => {
+  test('includes materials texture maps', () => {
+    const urls = collectGraphAssetUrlsFromParts(
+      { guide: { id: 'guide', type: 'guide', url: 'asset://g' } } as never,
+      {
+        mat1: {
+          url: 'asset://tex-albedo',
+          albedoMap: 'asset://albedo',
+          maps: [{ url: 'asset://map-0' }],
+        },
+      },
+    )
+    expect(urls.sort()).toEqual([
+      'asset://albedo',
+      'asset://g',
+      'asset://map-0',
+      'asset://tex-albedo',
+    ])
   })
 })
 
