@@ -53,6 +53,7 @@ import {
 import { Input } from './../../../../../components/ui/primitives/input'
 import { Switch } from './../../../../../components/ui/primitives/switch'
 import useEditor, { selectDefaultBuildingAndLevel } from './../../../../../store/use-editor'
+import { type SendToAppStep, useSendToApp } from './../../../../../store/use-send-to-app'
 import useFloorplanMode from './../../../../../store/use-floorplan-mode'
 import { AudioSettingsDialog } from './audio-settings-dialog'
 import { KeyboardShortcutsDialog } from './keyboard-shortcuts-dialog'
@@ -91,9 +92,7 @@ const MODEL_EXPORT_FORMATS = [
 
 type ModelExportFormat = (typeof MODEL_EXPORT_FORMATS)[number]['format']
 
-type SendToBlenderStep = 'probing' | 'exporting' | 'sending' | 'importing'
-
-const SEND_TO_BLENDER_STEP_LABEL: Record<SendToBlenderStep, string> = {
+const SEND_TO_BLENDER_STEP_LABEL: Record<SendToAppStep, string> = {
   probing: 'Looking for Blender…',
   exporting: 'Preparing the scene…',
   sending: 'Sending to Blender…',
@@ -266,11 +265,10 @@ export function SettingsPanel({
   const [activeModelExport, setActiveModelExport] = useState<ModelExportFormat | null>(null)
   const [modelExportError, setModelExportError] = useState<string | null>(null)
   const [modelExportWarning, setModelExportWarning] = useState<string | null>(null)
-  const [sendToBlenderStep, setSendToBlenderStep] = useState<SendToBlenderStep | null>(null)
-  const [sendToBlenderMessage, setSendToBlenderMessage] = useState<{
-    tone: 'info' | 'error'
-    text: string
-  } | null>(null)
+  const sendToBlenderStep = useSendToApp((state) => state.step)
+  const sendToBlenderMessage = useSendToApp((state) => state.message)
+  const setSendToBlenderStep = useSendToApp((state) => state.setStep)
+  const setSendToBlenderMessage = useSendToApp((state) => state.setMessage)
   const [activeFloorplanExport, setActiveFloorplanExport] = useState<FloorplanExportScope | null>(
     null,
   )
@@ -491,7 +489,7 @@ export function SettingsPanel({
   }, [])
 
   const handleModelExport = async (format: ModelExportFormat, label: string) => {
-    if (!modelExport || activeModelExport) return
+    if (!modelExport || activeModelExport || useSendToApp.getState().step) return
 
     setActiveModelExport(format)
     setModelExportError(null)
@@ -521,7 +519,7 @@ export function SettingsPanel({
   }
 
   const handleSendToBlender = async () => {
-    if (!modelExport || activeModelExport || sendToBlenderStep) return
+    if (!modelExport || activeModelExport || useSendToApp.getState().step) return
 
     setSendToBlenderMessage(null)
     setSendToBlenderStep('probing')
@@ -794,7 +792,7 @@ export function SettingsPanel({
               <Button
                 aria-busy={isActive}
                 className="w-full justify-start gap-2"
-                disabled={activeModelExport !== null || !modelExport}
+                disabled={activeModelExport !== null || sendToBlenderStep !== null || !modelExport}
                 key={format}
                 onClick={() => void handleModelExport(format, label)}
                 variant="outline"
