@@ -1,5 +1,6 @@
 // Base
 
+export { ProceduralItemNode } from '../procedural-items/node'
 export {
   SOLAR_PANEL_PRESET_LABELS,
   SOLAR_PANEL_PRESETS,

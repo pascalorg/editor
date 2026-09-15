@@ -1,4 +1,4 @@
-import { itemOverlapsPolygon } from '../hooks/spatial-grid/spatial-grid-manager'
+import { itemOverlapsPolygon } from '../lib/item-polygon-overlap'
 import {
   pointInPolygon as containsPoint,
   type Point2D,

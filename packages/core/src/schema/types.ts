@@ -1,4 +1,5 @@
 import z from 'zod'
+import { ProceduralItemNode } from '../procedural-items/node'
 import { BlockNode } from './nodes/block'
 import { BoxVentNode } from './nodes/box-vent'
 import { BuildingNode } from './nodes/building'
@@ -68,14 +69,15 @@ type BareDiscriminator<T extends NodeMember> = z.ZodObject<
  *
  * Each member is therefore projected to a clone whose `type` is the bare
  * literal. Per-kind schemas keep their default; only the union's view of the
- * discriminator narrows. Metadata lives in zod's global registry keyed by
+ * discriminator narrows. `safeExtend` retains member refinements, including
+ * procedural recipe/parameter validation. Metadata lives in zod's global registry keyed by
  * instance, so `.describe()` text has to be carried over to the clone by hand.
  */
 export const nodeUnion = <const T extends readonly [NodeMember, ...NodeMember[]]>(members: T) =>
   z.discriminatedUnion(
     'type',
     members.map((member) => {
-      const projected = member.extend({ type: member.shape.type.unwrap() })
+      const projected = member.safeExtend({ type: member.shape.type.unwrap() })
       const meta = z.globalRegistry.get(member)
       return meta ? projected.meta(meta) : projected
     }) as { [K in keyof T]: BareDiscriminator<T[K]> },
@@ -96,6 +98,7 @@ export const AnyNode = nodeUnion([
   CabinetNode,
   CabinetModuleNode,
   ItemNode,
+  ProceduralItemNode,
   ImportedMeshNode,
   ZoneNode,
   SlabNode,
@@ -133,9 +136,7 @@ export const AnyNode = nodeUnion([
   PipeTrapNode,
 ])
 
-export type AnyNode =
-  | z.infer<typeof AnyNode>
-  | import('../procedural-items/node').ProceduralItemNode
+export type AnyNode = z.infer<typeof AnyNode>
 export type AnyNodeType = AnyNode['type']
 export type AnyNodeId = AnyNode['id']
 
