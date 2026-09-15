@@ -3,11 +3,19 @@ import {
   type AnyNodeId,
   type HandleDragModifiers,
   type LinearResizeHandle,
+  type RadialResizeHandle,
   type SceneApi,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import { replacePreviewOverrideIds } from './preview-overrides'
+
+export function linearResizeFactor<N>(
+  descriptor: LinearResizeHandle<N> | RadialResizeHandle<N>,
+): number {
+  if (descriptor.kind === 'radial-resize') return 1
+  return descriptor.anchor === 'center' ? 2 : descriptor.anchor === 'min' ? 1 : -1
+}
 
 export function createLinearResizeDragBinding({
   descriptor,

@@ -131,8 +131,10 @@ export type HandleDecoration<N> = {
  */
 export type LinearResizeHandle<N> = {
   kind: 'linear-resize'
-  /** Local axis. The arrow's chevron points along +axis. */
+  /** Local resize axis. */
   axis: HandleAxis
+  /** Arrow and clearance direction. Drag growth remains controlled by `anchor`. */
+  direction?: 1 | -1
   anchor: HandleAnchor
   currentValue: (node: N) => number
   apply: (
@@ -203,7 +205,7 @@ export type LinearResizeHandle<N> = {
    */
   connectionSnap?: (node: N, newValue: number, sceneApi: SceneApi) => number
   placement: HandlePlacement<N> & {
-    /** Opt-in minimum +axis center distance from an edge, in scaled arrow units. */
+    /** Opt-in minimum center distance from an edge along `direction` (default +1), in scaled arrow units. */
     clearance?: {
       edge: (node: N, sceneApi: SceneApi) => number
       distance: number

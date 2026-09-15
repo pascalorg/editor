@@ -63,8 +63,12 @@ import {
   HandleArrow,
   NO_RAYCAST,
 } from './handles/handle-arrow'
-import { computeFreezeOffset, resolveLinearHandlePosition } from './handles/handle-placement'
-import { createLinearResizeDragBinding } from './handles/linear-resize-drag'
+import {
+  computeFreezeOffset,
+  resolveLinearHandlePosition,
+  resolveLinearHandleRotation,
+} from './handles/handle-placement'
+import { createLinearResizeDragBinding, linearResizeFactor } from './handles/linear-resize-drag'
 import { resolveResizeSnapValue } from './handles/resize-snap'
 import { type HandleDragControls, useHandleDrag } from './handles/use-handle-drag'
 
@@ -708,14 +712,7 @@ function LinearArrow({
       const initialValue = descriptor.currentValue(initialNode)
       const minBound = resolveBound(descriptor.min, Number.NEGATIVE_INFINITY, initialNode, sceneApi)
       const maxBound = resolveBound(descriptor.max, Number.POSITIVE_INFINITY, initialNode, sceneApi)
-      const factor =
-        descriptor.kind === 'radial-resize'
-          ? 1
-          : descriptor.anchor === 'center'
-            ? 2
-            : descriptor.anchor === 'min'
-              ? 1
-              : -1
+      const factor = linearResizeFactor(descriptor)
 
       // Last value an emitted resize tick fired at — a new tick fires only
       // when the (snapped + clamped) value actually changes, so the cue
@@ -784,23 +781,7 @@ function LinearArrow({
     },
   })
 
-  // For axis === 'y' (vertical handles), tilt the chevron up via local
-  // X+Z rotation chain matching DoorHeightArrowHandle. When the handle
-  // sits below the node (placement Y < 0, e.g. window bottom arrow),
-  // flip the Z rotation so the chevron points outward (downward).
-  //
-  // For axis === 'x' with `faceNormal` (wall-mounted opening width arrows),
-  // roll the blade 90° about its own pointing (X) axis so it stands up from
-  // the horizontal XZ plane into the node's facing plane (XY = the wall
-  // face) — otherwise the blade is seen edge-on from the front.
-  const faceNormalX =
-    descriptor.kind === 'linear-resize' && descriptor.axis === 'x' && descriptor.faceNormal === true
-  const innerRotation: [number, number, number] =
-    descriptor.axis === 'y'
-      ? [0, Math.PI / 2, position[1] < 0 ? -Math.PI / 2 : Math.PI / 2]
-      : faceNormalX
-        ? [Math.PI / 2, 0, 0]
-        : [0, 0, 0]
+  const innerRotation = resolveLinearHandleRotation(descriptor, position)
 
   // Optional guide decoration — linear handles use it for curved-stair
   // width / inner-radius rings; radial handles use it for the column's

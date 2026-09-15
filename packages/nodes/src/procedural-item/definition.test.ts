@@ -1,9 +1,11 @@
 import { expect, test } from 'bun:test'
 import {
+  CeilingNode,
   createSceneApi,
   type GeometryContext,
   type HandleDescriptor,
   ItemNode,
+  LevelNode,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -14,6 +16,12 @@ import {
   queryProceduralItem,
   radiatorRecipe,
 } from '@pascal-app/core/procedural-items'
+import { Euler, Vector3 } from 'three'
+import {
+  resolveLinearHandlePosition,
+  resolveLinearHandleRotation,
+} from '../../../editor/src/components/editor/handles/handle-placement'
+import { linearResizeFactor } from '../../../editor/src/components/editor/handles/linear-resize-drag'
 import { proceduralItemDefinition } from './definition'
 
 const scene = createSceneApi(useScene)
@@ -205,4 +213,69 @@ test('plan image composes item host yaw and draws selected outline over the snap
   expect(image.center[0]).toBeCloseTo(4.7)
   expect(image.center[1]).toBeCloseTo(5.6)
   expect(result.children[2]).toMatchObject({ kind: 'polygon', fill: 'none', strokeWidth: 0.035 })
+})
+
+for (const part of [undefined, 'body']) {
+  test(`ceiling height arrow points down below offset bounds (${part ?? 'whole item'})`, () => {
+    const ceilingRecipe = parseRecipe({
+      ...recipe,
+      mounting: { attachTo: 'ceiling', reference: 'top' },
+      surfaces: [
+        {
+          id: 'top',
+          label: 'Top',
+          position: [0.4, { op: 'add', args: [2, { op: 'div', args: ['height', 2] }] }, -0.3],
+          size: ['width', 'depth'],
+        },
+      ],
+      parameters: recipe.parameters.map((p) => (p.axis === 'y' ? { ...p, part } : p)),
+    })
+    const node = ProceduralItemNode.parse({ recipe: ceilingRecipe })
+    const arrow = handles(node).find((h) => h.kind === 'linear-resize' && h.axis === 'y')!
+    if (arrow.kind !== 'linear-resize') throw new Error('Missing height arrow')
+    const bounds = evaluateRecipe(node.recipe, node.parameters)
+    expect(arrow.anchor).toBe('max')
+    expect(arrow.direction).toBe(-1)
+    expect(arrow.latchGroup).toBe(part)
+    expect(arrow.placement.clearance!.edge(node, scene)).toBeCloseTo(bounds.min[1])
+    const position = resolveLinearHandlePosition(arrow, node, scene, 1)
+    expect(position[1]).toBeCloseTo(bounds.min[1] - 0.4)
+    expect(position[1]).toBeGreaterThan(0)
+    const pointing = new Vector3(1, 0, 0).applyEuler(
+      new Euler(...resolveLinearHandleRotation(arrow, position)),
+    )
+    expect(pointing.y).toBeCloseTo(-1)
+    const next = arrow.currentValue(node) + -0.237 * linearResizeFactor(arrow)
+    expect(next).toBeCloseTo(0.357)
+    const level = LevelNode.parse({ height: 3 })
+    const ceiling = CeilingNode.parse({
+      parentId: level.id,
+      polygon: [
+        [-2, -2],
+        [2, -2],
+        [2, 2],
+        [-2, 2],
+      ],
+    })
+    const mounted = { ...node, parentId: ceiling.id }
+    const mountedScene = { ...scene, nodes: () => ({ [level.id]: level, [ceiling.id]: ceiling }) }
+    expect(arrow.apply(mounted, next, mountedScene).parameters?.height).toBeCloseTo(next)
+  })
+}
+
+test('floor and wall height arrows keep upward growth and clearance', () => {
+  for (const source of [recipe, radiatorRecipe]) {
+    const node = ProceduralItemNode.parse({ recipe: source })
+    const arrow = handles(node).find((h) => h.kind === 'linear-resize' && h.axis === 'y')!
+    if (arrow.kind !== 'linear-resize') throw new Error('Missing height arrow')
+    const bounds = evaluateRecipe(node.recipe, node.parameters)
+    expect(arrow.anchor).toBe('min')
+    expect(arrow.direction).toBeUndefined()
+    expect(arrow.placement.position(node, scene)[1]).toBeCloseTo(bounds.max[1] + 0.15)
+    expect(linearResizeFactor(arrow)).toBe(1)
+    const pointing = new Vector3(1, 0, 0).applyEuler(
+      new Euler(...resolveLinearHandleRotation(arrow, arrow.placement.position(node, scene))),
+    )
+    expect(pointing.y).toBeCloseTo(1)
+  }
 })
