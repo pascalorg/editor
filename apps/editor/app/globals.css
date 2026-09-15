@@ -372,19 +372,3 @@
       100% 100%;
   }
 }
-
-.pascal-switch[data-state='checked'] {
-  background-color: var(--primary);
-}
-
-.pascal-switch[data-state='unchecked'] {
-  background-color: var(--input);
-}
-
-.pascal-switch[data-state='checked'] .pascal-switch-thumb {
-  transform: translateX(1rem);
-}
-
-.pascal-switch[data-state='unchecked'] .pascal-switch-thumb {
-  transform: translateX(0);
-}

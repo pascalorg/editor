@@ -1347,6 +1347,7 @@ function EditorContent({
 
   // Load on mount, project switches, and explicit retry attempts.
   useEffect(() => {
+    void sceneLoadAttempt
     let cancelled = false
 
     async function load() {

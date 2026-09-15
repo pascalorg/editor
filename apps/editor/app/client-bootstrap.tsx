@@ -9,11 +9,18 @@
 // `loaded` guard inside `../lib/bootstrap` keeps the side effect
 // idempotent under HMR.
 import '../lib/bootstrap'
-import type { ReactNode } from 'react'
+import { type ReactNode, useEffect } from 'react'
 
-export function ClientBootstrap({ children }: { children: ReactNode }) {
-  // React Scan is an optional diagnostic and currently has an ESM/CommonJS
-  // package.json export mismatch under the editor's webpack dev build.
-  // Keep the bootstrap side-effect free until the host dependency is aligned.
+export function ClientBootstrap({
+  children,
+  enableDevDiagnostics,
+}: {
+  children: ReactNode
+  enableDevDiagnostics: boolean
+}) {
+  useEffect(() => {
+    if (!enableDevDiagnostics) return
+    import('react-scan').then(({ scan }) => scan({ enabled: true }))
+  }, [enableDevDiagnostics])
   return children
 }

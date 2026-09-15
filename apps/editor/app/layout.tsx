@@ -35,7 +35,7 @@ export default function RootLayout({
       lang="en"
     >
       <body className="font-sans">
-        <ClientBootstrap>{children}</ClientBootstrap>
+        <ClientBootstrap enableDevDiagnostics={enableDevDiagnostics}>{children}</ClientBootstrap>
         {enableDevDiagnostics && <Agentation />}
       </body>
     </html>
