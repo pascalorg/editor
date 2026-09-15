@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { Euler, Group, Matrix3, Quaternion, Vector3 } from 'three'
+import { shelfRowSurfaceYs } from '../../../nodes/src/shelf/geometry'
 import { shelfRecipe } from '../procedural-items/fixtures'
 import { ProceduralItemNode } from '../procedural-items/node'
 import {
@@ -14,10 +12,9 @@ import { evaluateRecipe } from '../procedural-items/recipe'
 import { composeFrames, frame, transformPoint } from '../procedural-items/spatial'
 import { nodeRegistry, registerNode } from '../registry/registry'
 import type { Capabilities, SceneApi, SurfacesConfig } from '../registry/types'
-import { getScaledDimensions, ItemNode, isLowProfileItemSurface } from '../schema/nodes/item'
+import { getScaledDimensions, ItemNode } from '../schema/nodes/item'
 import { ShelfNode } from '../schema/nodes/shelf'
 import type { AnyNode } from '../schema/types'
-import { canHostOnTop } from './hosting'
 import {
   getSurfaceProvider,
   type HostSurface,
@@ -27,97 +24,6 @@ import {
   type SurfaceProvider,
   shelfSurfaceProvider,
 } from './surface-hosting'
-import { expectLiveParity } from './surface-hosting-parity.test'
-
-// Execute the actual legacy helpers without importing mover stores or node renderers into core tests.
-function legacy<T>(file: string, names: string[], dependencies: Record<string, unknown>): T {
-  const source = readFileSync(resolve(import.meta.dir, '../../..', file), 'utf8')
-  const declarations = names
-    .map((name) => {
-      const start = source.search(new RegExp(`^(?:export )?(?:function|const) ${name}\\b`, 'm'))
-      if (start < 0) throw new Error(`Missing legacy helper ${name}`)
-      const lineEnd = source.indexOf('\n', start)
-      const singleLine = /^const (?:UPWARD_SURFACE_NORMAL_MIN_Y|DEFAULT_DIMENSIONS)\b/.test(
-        source.slice(start),
-      )
-      const end = singleLine ? lineEnd - start - 1 : source.slice(start).search(/\n}(?=\r?\n|$)/)
-      if (end < 0) throw new Error(`Missing end of legacy helper ${name}`)
-      return source.slice(start, start + end + 2).replace(/^export /, '')
-    })
-    .join('\n')
-  const code = new Bun.Transpiler({ loader: 'ts' }).transformSync(declarations)
-  return new Function(...Object.keys(dependencies), `${code}\nreturn { ${names.join(',')} }`)(
-    ...Object.values(dependencies),
-  ) as T
-}
-
-const registry = { nodes: new Map<string, Group>() }
-let gridStep = 0
-function loadLegacy() {
-  const strategyFile = 'editor/src/components/tools/item/placement-strategies.ts'
-  const { snapToGrid } = legacy<{ snapToGrid: (p: number, d: number, step: number) => number }>(
-    'editor/src/components/tools/item/placement-math.ts',
-    ['positiveModulo', 'snapToGrid'],
-    {},
-  )
-  const { sanitizeShelfDimensions } = legacy<{
-    sanitizeShelfDimensions: (node: ShelfNode) => ShelfNode
-  }>('nodes/src/shelf/dimensions.ts', ['clampShelfDim', 'sanitizeShelfDimensions'], {})
-  const { shelfRowSurfaceYs } = legacy<{ shelfRowSurfaceYs: (node: ShelfNode) => number[] }>(
-    'nodes/src/shelf/geometry.ts',
-    ['boardCenterYs', 'shelfRowSurfaceYs'],
-    { sanitizeShelfDimensions },
-  )
-  const old = legacy<{
-    getSurfacePlacementHeight: (host: ItemNode, event: unknown, local: Vector3) => number | null
-    resolveItemSurfacePlacement: (
-      host: ItemNode,
-      event: unknown,
-      size: number[],
-      yaw: number,
-    ) => { position: number[]; rotationY: number } | null
-    getShelfRowSurfaceY: (host: ShelfNode, y: number) => number | null
-    shelfSurfaceStrategy: {
-      enter: (
-        ctx: unknown,
-        event: unknown,
-      ) => { nodeUpdate: { position: number[]; rotation: number[] } } | null
-    }
-  }>(
-    strategyFile,
-    [
-      'UPWARD_SURFACE_NORMAL_MIN_Y',
-      'DEFAULT_DIMENSIONS',
-      'getWorldNormalY',
-      'isUpwardItemSurfaceHit',
-      'getSurfacePlacementHeight',
-      'resolveItemSurfacePlacement',
-      'getShelfRowSurfaceY',
-      'isUpwardShelfSurfaceHit',
-      'shelfSurfaceStrategy',
-    ],
-    {
-      canHostOnTop,
-      isLowProfileItemSurface,
-      getScaledDimensions,
-      nodeRegistry,
-      Vector3,
-      Matrix3,
-      Quaternion,
-      Euler,
-      sceneRegistry: registry,
-      snapToGrid: (p: number, d: number) => snapToGrid(p, d, gridStep),
-    },
-  )
-
-  return { snapToGrid, shelfRowSurfaceYs, old }
-}
-let live: ReturnType<typeof loadLegacy> | undefined
-try {
-  live = loadLegacy()
-} catch (error) {
-  if (!(error instanceof Error) || !/Missing legacy helper|ENOENT/.test(error.message)) throw error
-}
 
 const asset = {
   id: 'sofa',
@@ -133,11 +39,9 @@ let restoreRegistry: () => void
 beforeEach(() => {
   restoreRegistry = nodeRegistry._snapshot()
   nodeRegistry._reset()
-  gridStep = 0
 })
 afterEach(() => {
   restoreRegistry()
-  registry.nodes.clear()
 })
 
 function register(kind: string, capabilities: Capabilities = {}) {
@@ -151,96 +55,14 @@ function register(kind: string, capabilities: Capabilities = {}) {
   })
 }
 
-function eventFor(host: AnyNode, point: readonly [number, number, number], normalY = 1) {
-  const mesh = new Group()
-  mesh.position.set(4, 2, -3)
-  mesh.rotation.y = Math.PI / 3
-  mesh.updateMatrixWorld(true)
-  registry.nodes.set(host.id, mesh)
-  return {
-    node: host,
-    object: mesh,
-    position: mesh.localToWorld(new Vector3(...point)).toArray(),
-    normal: [Math.sqrt(1 - normalY ** 2), normalY, 0],
-  }
-}
-
-describe.skipIf(!live)('item parity', () => {
-  const { snapToGrid, old } = live ?? ({} as NonNullable<typeof live>)
-  for (const fixture of [
-    { name: 'sofa armrest with no authored surface', y: 0.81 },
-    { name: 'sofa cushion with a different hit height', y: 0.42 },
-    { name: 'scaled authored height', y: 0.81, surface: 0.7, scaleY: 2 },
-    { name: 'low-profile dimension boundary', y: 0.1, height: 0.1 },
-    { name: 'just above low-profile boundary', y: 0.101, height: 0.101 },
-    { name: 'authored low-profile boundary', y: 0.8, surface: 0.05, scaleY: 2 },
-    { name: 'wall-mounted thin shelf', y: 0.05, height: 0.05, attachTo: 'wall' },
-    { name: 'ceiling host', y: 0.8, attachTo: 'ceiling' },
-    { name: 'normal threshold', y: 0.8, normalY: 0.75 },
-    { name: 'below normal threshold', y: 0.8, normalY: 0.749 },
-    { name: 'side normal', y: 0.8, normalY: 0 },
-    { name: 'oversized width', y: 0.8, width: 2.01 },
-    { name: 'oversized depth', y: 0.8, depth: 3.01 },
-    {
-      name: 'legacy coarse fit at edge with rotation',
-      y: 0.8,
-      x: 0.99,
-      width: 2,
-      yaw: Math.PI / 4,
-    },
-  ]) {
-    for (const step of [0, 0.5])
-      test(`${fixture.name}; grid ${step}`, () => {
-        gridStep = step
-        const host = ItemNode.parse({
-          asset: {
-            ...asset,
-            dimensions: [2, fixture.height ?? 1, 3],
-            attachTo: fixture.attachTo,
-            ...(fixture.surface === undefined ? {} : { surface: { height: fixture.surface } }),
-          },
-          scale: [1, fixture.scaleY ?? 1, 1],
-        })
-        const childSize = [fixture.width ?? 0.5, 1, fixture.depth ?? 0.5] as const
-        const event = eventFor(host, [fixture.x ?? 0.37, fixture.y, -0.39], fixture.normalY ?? 1)
-        const point = event.object.worldToLocal(new Vector3(...event.position)).toArray()
-        const yaw = fixture.yaw ?? 0.2
-        const prior = old.resolveItemSurfacePlacement(
-          host,
-          event,
-          [...childSize],
-          yaw + Math.PI / 3,
-        )
-        const result = resolveSurfacePlacement({
-          host,
-          childKind: 'procedural-item',
-          childFootprint: { size: childSize, rotationY: yaw },
-          hit: { point, normalWorldY: fixture.normalY ?? 1 },
-          scene,
-          snapScalar: (p, d) => snapToGrid(p, d, step),
-        })
-        expectLiveParity(fixture.name, point, childSize, yaw, fixture.normalY ?? 1, step, prior)
-        expect(result !== null).toBe(prior !== null)
-        if (prior) {
-          expect(result!.position).toEqual(prior.position)
-          expect(result!.position[1]).toBe(
-            old.getSurfacePlacementHeight(host, event, new Vector3(...point)),
-          )
-          expect(result!.rotationY).toBeCloseTo(prior.rotationY)
-          expect(result!.surfaceId).toBeNull()
-        }
-      })
-  }
-
-  test('D7 rejects non-finite hit Y even when legacy authored heights short-circuited it', () => {
+describe('item surface boundaries', () => {
+  test('rejects non-finite hit Y with and without authored heights', () => {
     for (const y of [Number.NaN, Infinity, -Infinity])
       for (const authored of [false, true]) {
         const host = ItemNode.parse({
           asset: { ...asset, ...(authored ? { surface: { height: 0.7 } } : {}) },
           scale: [1, 2, 1],
         })
-        const event = eventFor(host, [0, 0, 0])
-        const expected = old.getSurfacePlacementHeight(host, event, new Vector3(0, y, 0))
         const result = resolveSurfacePlacement({
           host,
           childKind: 'item',
@@ -248,35 +70,30 @@ describe.skipIf(!live)('item parity', () => {
           hit: { point: [0, y, 0], normalWorldY: 1 },
           scene,
         })
-        expect(expected).toBe(authored ? 1.4 : null)
         expect(result).toBeNull()
       }
   })
 
   test('scaled host dimensions preserve exact width and depth entry boundaries', () => {
     const host = ItemNode.parse({ asset, scale: [2, 1, 0.5] })
-    const event = eventFor(host, [0, 0.8, 0])
-    const point = event.object.worldToLocal(new Vector3(...event.position)).toArray()
     for (const childSize of [
       [4, 5, 1.5],
       [4.01, 1, 1.5],
       [4, 1, 1.51],
     ] as const) {
-      const prior = old.resolveItemSurfacePlacement(host, event, [...childSize], 0)
       const result = resolveSurfacePlacement({
         host,
         childKind: 'item',
         childFootprint: { size: childSize, rotationY: -Math.PI / 3 },
-        hit: { point, normalWorldY: 1 },
+        hit: { point: [0, 0.8, 0], normalWorldY: 1 },
         scene,
       })
-      expect(result !== null).toBe(prior !== null)
+      expect(result !== null).toBe(childSize[0] === 4 && childSize[2] === 1.5)
     }
   })
 })
 
-describe.skipIf(!live)('shelf parity', () => {
-  const { snapToGrid, shelfRowSurfaceYs, old } = live ?? ({} as NonNullable<typeof live>)
+describe('shelf production rows', () => {
   beforeEach(() =>
     register('shelf', {
       surfaces: {
@@ -290,7 +107,7 @@ describe.skipIf(!live)('shelf parity', () => {
   )
   for (const style of ['wall-shelf', 'bookshelf', 'open-rack', 'cubby'] as const) {
     for (const withBottom of [false, true])
-      test(`${style}, bottom ${withBottom}: rows, ties, XZ, yaw and entry fit`, () => {
+      test(`${style}, bottom ${withBottom}: provider rows and grid policy match geometry`, () => {
         const host = ShelfNode.parse({
           style,
           withBottom,
@@ -307,50 +124,6 @@ describe.skipIf(!live)('shelf parity', () => {
         expect(
           shelfSurfaceProvider.surfaces!(host, { scene }).every((s) => s.gridSnap === true),
         ).toBe(true)
-        for (const y of [-0.2, ...rows, (rows[0]! + rows[1]!) / 2, 3])
-          for (const step of [0, 0.5]) {
-            gridStep = step
-            for (const width of [0.3, 1.2, 1.21]) {
-              const draft = ItemNode.parse({ asset: { ...asset, dimensions: [width, 1, 0.3] } })
-              const event = eventFor(host, [0.37, y, -0.09])
-              const point = event.object.worldToLocal(new Vector3(...event.position)).toArray()
-              const prior = old.shelfSurfaceStrategy.enter(
-                {
-                  asset: draft.asset,
-                  draftItem: draft,
-                  state: { surface: 'floor' },
-                  currentCursorRotationY: 0.2 + Math.PI / 3,
-                },
-                event,
-              )
-              const result = resolveSurfacePlacement({
-                host,
-                childKind: 'item',
-                childFootprint: { size: getScaledDimensions(draft), rotationY: 0.2 },
-                hit: { point, normalWorldY: 1 },
-                scene,
-                snapScalar: (p, d) => snapToGrid(p, d, step),
-              })
-              expectLiveParity(
-                `${style}, bottom ${withBottom}`,
-                point,
-                getScaledDimensions(draft),
-                0.2,
-                1,
-                step,
-                prior
-                  ? { position: prior.nodeUpdate.position, rotationY: prior.nodeUpdate.rotation[1] }
-                  : null,
-              )
-              expect(result !== null).toBe(prior !== null)
-              if (prior) {
-                expect(result!.position).toEqual(prior.nodeUpdate.position)
-                expect(result!.position[1]).toBe(old.getShelfRowSurfaceY(host, point[1]))
-                expect(result!.rotationY).toBeCloseTo(prior.nodeUpdate.rotation[1]!)
-                expect(result!.surfaceId).toBe(`row:${rows.indexOf(result!.position[1])}`)
-              }
-            }
-          }
       })
   }
 

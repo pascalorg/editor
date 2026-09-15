@@ -17,19 +17,17 @@ import type {
   WallNode,
 } from '@pascal-app/core'
 import {
-  canHostOnTop,
   clampRectToRoofWallFace,
   createSceneApi,
   getRoofSegmentWallFace,
   getScaledDimensions,
-  isLowProfileItemSurface,
   nodeRegistry,
   resolveSurfacePlacement,
   roofFacePointToSegment,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { Euler, Matrix3, Quaternion, Vector3 } from 'three'
+import { Euler, Quaternion, Vector3 } from 'three'
 import { hasRoofFaceChildOverlap, resolveRoofWallHit } from '../../../lib/roof-wall-hit'
 import { snapWorldXZForActiveBuilding } from '../../../lib/world-grid-snap'
 import { itemEventToSurfaceHit, surfaceWorldNormalY } from '../shared/surface-hit'
@@ -52,34 +50,6 @@ import type {
 } from './placement-types'
 
 const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
-const UPWARD_SURFACE_NORMAL_MIN_Y = 0.75
-
-function getWorldNormalY(event: ItemEvent): number | null {
-  if (!event.normal) return null
-
-  const normal = new Vector3(event.normal[0], event.normal[1], event.normal[2])
-  normal.applyNormalMatrix(new Matrix3().getNormalMatrix(event.object.matrixWorld)).normalize()
-  return normal.y
-}
-
-function isUpwardItemSurfaceHit(event: ItemEvent): boolean {
-  const normalY = getWorldNormalY(event)
-  return normalY !== null && normalY >= UPWARD_SURFACE_NORMAL_MIN_Y
-}
-
-function getSurfacePlacementHeight(surfaceItem: ItemNode, event: ItemEvent, localPos: Vector3) {
-  if (!canHostOnTop(surfaceItem)) return null
-  if (isLowProfileItemSurface(surfaceItem)) return null
-  if (!isUpwardItemSurfaceHit(event)) return null
-
-  if (surfaceItem.asset.surface) {
-    return surfaceItem.asset.surface.height * surfaceItem.scale[1]
-  }
-
-  if (!Number.isFinite(localPos.y)) return null
-  return localPos.y
-}
-
 function isDescendantOfItem(
   candidate: ItemNode,
   ancestorId: string,
@@ -883,46 +853,6 @@ export const ceilingStrategy = {
 // ============================================================================
 // ITEM SURFACE STRATEGY
 // ============================================================================
-
-export function resolveItemSurfacePlacement(
-  host: ItemNode,
-  event: ItemEvent,
-  dimensions: [number, number, number],
-  worldYaw: number,
-  movingNodeId?: string,
-  checkFootprint = true,
-): {
-  position: [number, number, number]
-  worldPosition: [number, number, number]
-  rotationY: number
-} | null {
-  if (movingNodeId) {
-    if (host.id === movingNodeId) return null
-    if (isDescendantOfItem(host, movingNodeId, useScene.getState().nodes)) return null
-  }
-  if (checkFootprint) {
-    const hostDimensions = getScaledDimensions(host)
-    if (dimensions[0] > hostDimensions[0] || dimensions[2] > hostDimensions[2]) return null
-  }
-  const mesh = sceneRegistry.nodes.get(host.id)
-  if (!mesh) return null
-  const local = mesh.worldToLocal(new Vector3(...event.position))
-  const height = getSurfacePlacementHeight(host, event, local)
-  if (height === null) return null
-  const position: [number, number, number] = [
-    snapToGrid(local.x, dimensions[0]),
-    height,
-    snapToGrid(local.z, dimensions[2]),
-  ]
-  const world = mesh.localToWorld(new Vector3(...position))
-  const quaternion = mesh.getWorldQuaternion(new Quaternion())
-  const hostYaw = new Euler().setFromQuaternion(quaternion, 'YXZ').y
-  return {
-    position,
-    worldPosition: [world.x, world.y, world.z],
-    rotationY: worldYaw - hostYaw,
-  }
-}
 
 function resolveCatalogItemSurfacePlacement(
   host: ItemNode,

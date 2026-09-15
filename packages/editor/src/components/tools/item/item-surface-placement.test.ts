@@ -10,7 +10,7 @@ import {
 import { Group, Vector3 } from 'three'
 import useEditor from '../../../store/use-editor'
 import useInteractionScope from '../../../store/use-interaction-scope'
-import { itemSurfaceStrategy, resolveItemSurfacePlacement } from './placement-strategies'
+import { itemSurfaceStrategy } from './placement-strategies'
 import type { PlacementContext } from './placement-types'
 
 const asset = {
@@ -69,12 +69,30 @@ function surface(overrides: Partial<ItemNode> = {}) {
   return { host, mesh, event }
 }
 
-describe('resolveItemSurfacePlacement', () => {
+function enterSurface(
+  event: ItemEvent,
+  dimensions: [number, number, number],
+  yaw = 0,
+  draftId?: ItemNode['id'],
+) {
+  const draft = ItemNode.parse({ id: draftId, asset: { ...asset, dimensions } })
+  return itemSurfaceStrategy.enter(
+    {
+      asset: draft.asset,
+      draftItem: draft,
+      state: { surface: 'floor' },
+      currentCursorRotationY: yaw,
+    } as PlacementContext,
+    event,
+  )
+}
+
+describe('itemSurfaceStrategy production placement', () => {
   test('fits against the scaled footprint and rejects excess width or depth', () => {
-    const { host, event } = surface({ scale: [2, 1, 0.5] })
-    expect(resolveItemSurfacePlacement(host, event, [4, 5, 1.5], 0)).not.toBeNull()
-    expect(resolveItemSurfacePlacement(host, event, [4.01, 1, 1.5], 0)).toBeNull()
-    expect(resolveItemSurfacePlacement(host, event, [4, 1, 1.51], 0)).toBeNull()
+    const { event } = surface({ scale: [2, 1, 0.5] })
+    expect(enterSurface(event, [4, 5, 1.5], 0)).not.toBeNull()
+    expect(enterSurface(event, [4.01, 1, 1.5], 0)).toBeNull()
+    expect(enterSurface(event, [4, 1, 1.51], 0)).toBeNull()
   })
 
   test('rejects ceiling hosts, low profiles, side hits, and absent normals', () => {
@@ -82,41 +100,41 @@ describe('resolveItemSurfacePlacement', () => {
       { asset: { ...asset, attachTo: 'ceiling' } },
       { asset: { ...asset, dimensions: [2, 0.05, 3] } },
     ]) {
-      const { host, event } = surface(overrides as Partial<ItemNode>)
-      expect(resolveItemSurfacePlacement(host, event, [0.5, 1, 0.5], 0)).toBeNull()
+      const { event } = surface(overrides as Partial<ItemNode>)
+      expect(enterSurface(event, [0.5, 1, 0.5], 0)).toBeNull()
     }
-    const { host, event } = surface()
+    const { event } = surface()
     for (const normal of [[1, 0, 0], [0, -1, 0], undefined]) {
-      expect(
-        resolveItemSurfacePlacement(host, { ...event, normal } as ItemEvent, [0.5, 1, 0.5], 0),
-      ).toBeNull()
+      expect(enterSurface({ ...event, normal } as ItemEvent, [0.5, 1, 0.5], 0)).toBeNull()
     }
   })
 
   test('uses scaled asset surface height, snapped host-local XZ, and continuous world yaw', () => {
-    const { host, mesh, event } = surface({
+    const { mesh, event } = surface({
       asset: { ...asset, surface: { height: 0.7 } } as ItemNode['asset'],
       scale: [1, 2, 1],
     })
-    const pose = resolveItemSurfacePlacement(host, event, [0.5, 1, 0.5], Math.PI / 4)!
-    expect(pose.position).toEqual([0.25, 1.4, -0.25])
-    expect(pose.rotationY + Math.PI / 3).toBeCloseTo(Math.PI / 4)
-    expect(pose.worldPosition).toEqual(mesh.localToWorld(new Vector3(...pose.position)).toArray())
+    const pose = enterSurface(event, [0.5, 1, 0.5], Math.PI / 4)!
+    expect(pose.nodeUpdate.position!).toEqual([0.25, 1.4, -0.25])
+    expect(pose.nodeUpdate.rotation![1]! + Math.PI / 3).toBeCloseTo(Math.PI / 4)
+    expect(pose.cursorPosition).toEqual(
+      mesh.localToWorld(new Vector3(...pose.nodeUpdate.position!)).toArray(),
+    )
   })
 
   test('uses local hit Y without surface metadata and honors snapping off', () => {
     useEditor.getState().setSnappingMode('item', 'off')
-    const { host, event } = surface()
-    const pose = resolveItemSurfacePlacement(host, event, [0.5, 1, 0.5], 0)!
-    expect(pose.position[0]).toBeCloseTo(0.37)
-    expect(pose.position[1]).toBeCloseTo(0.81)
-    expect(pose.position[2]).toBeCloseTo(-0.39)
+    const { event } = surface()
+    const pose = enterSurface(event, [0.5, 1, 0.5], 0)!
+    expect(pose.nodeUpdate.position![0]).toBeCloseTo(0.37)
+    expect(pose.nodeUpdate.position![1]).toBeCloseTo(0.81)
+    expect(pose.nodeUpdate.position![2]).toBeCloseTo(-0.39)
   })
 
   test('rejects the moving node and its descendants', () => {
     const { host, event } = surface({ parentId: 'item_moving' })
-    expect(resolveItemSurfacePlacement(host, event, [0.5, 1, 0.5], 0, host.id)).toBeNull()
-    expect(resolveItemSurfacePlacement(host, event, [0.5, 1, 0.5], 0, 'item_moving')).toBeNull()
+    expect(enterSurface(event, [0.5, 1, 0.5], 0, host.id)).toBeNull()
+    expect(enterSurface(event, [0.5, 1, 0.5], 0, 'item_moving')).toBeNull()
   })
 
   test('catalog strategy keeps its enter pose and position-only move contract', () => {

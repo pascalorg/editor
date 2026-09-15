@@ -1,9 +1,12 @@
 import { describe, expect, test } from 'bun:test'
+import { snapToGrid } from '../../../editor/src/components/tools/item/placement-math'
+import { shelfRowSurfaceYs } from '../../../nodes/src/shelf/geometry'
 import { nodeRegistry, registerNode } from '../registry/registry'
 import type { SceneApi } from '../registry/types'
 import { ShelfNode } from '../schema/nodes/shelf'
 import type { AnyNode } from '../schema/types'
 import { resolveSurfacePlacement } from './surface-hosting'
+import { frozenProceduralParity } from './surface-hosting-procedural-parity.fixtures'
 
 type Vec3 = readonly [number, number, number]
 type Row = readonly [
@@ -13,7 +16,7 @@ type Row = readonly [
   normalY: number,
   grid: number,
   snapped: readonly [number, number],
-  expected: { position: number[]; rotationY: number } | null,
+  expected: { position: number[]; rotationY: number; worldPosition?: number[] } | null,
 ]
 // Generated from the live item resolver and shelf strategy at 65b03fa3; no legacy source is needed to replay it.
 const frozenParity: { label: string; host: unknown; rows: Row[] }[] = [
@@ -4152,74 +4155,103 @@ const frozenParity: { label: string; host: unknown; rows: Row[] }[] = [
 ]
 
 describe('frozen surface hosting parity', () => {
-  for (const fixture of frozenParity)
-    test(fixture.label, () => {
-      const restore = nodeRegistry._snapshot()
-      nodeRegistry._reset()
-      try {
-        const host = fixture.host as AnyNode
-        if (host.type === 'shelf') {
-          // Actual elected heights in the live table recover the rows without importing shelf source.
-          const ys = [
-            ...new Set(fixture.rows.flatMap((row) => (row[6] ? [row[6].position[1]!] : []))),
-          ].sort((a, b) => a - b)
-          registerNode({
-            kind: 'shelf',
-            schemaVersion: 1,
-            schema: ShelfNode,
-            category: 'furnish',
-            defaults: () => ({}),
-            capabilities: {
-              surfaces: {
-                custom: () => ys.map((y) => ({ position: [0, y, 0], normal: [0, 1, 0] })),
-              },
-            },
-          })
-        }
-        for (const [point, size, yaw, normalY, grid, snapped, expected] of fixture.rows) {
-          const result = resolveSurfacePlacement({
-            host,
-            childKind: 'item',
-            childFootprint: { size, rotationY: yaw },
-            hit: { point, normalWorldY: normalY },
-            scene: { get: () => undefined, nodes: () => ({}) } as unknown as SceneApi,
-            snapScalar:
-              grid === 0
-                ? undefined
-                : (p, d) => {
-                    const axis = p === point[0] ? 0 : 1
-                    expect(d).toBe(size[axis * 2]!)
-                    return snapped[axis]!
-                  },
-          })
-          expect(result !== null).toBe(expected !== null)
-          if (expected) {
-            expect(result!.position).toEqual(expected.position)
-            expect(result!.rotationY).toBeCloseTo(expected.rotationY)
-            expect(result!.childFrame).toBe('host-local')
-            expect(result!.surfaceLocal === null).toBe(host.type === 'item')
-          }
-        }
-      } finally {
-        restore()
-      }
+  for (const [adapter, count] of [
+    ['item', 28],
+    ['shelf', 300],
+    ['procedural-item', 103],
+  ] as const) {
+    test(`${adapter}: frozen case count`, () => {
+      const fixtures = adapter === 'procedural-item' ? frozenProceduralParity : frozenParity
+      expect(
+        fixtures
+          .filter((fixture) => (fixture.host as AnyNode).type === adapter)
+          .reduce((total, fixture) => total + fixture.rows.length, 0),
+      ).toBe(count)
     })
-})
+  }
 
-export function expectLiveParity(
-  label: string,
-  point: readonly number[],
-  size: readonly number[],
-  yaw: number,
-  normalY: number,
-  grid: number,
-  expected: unknown,
-) {
-  const row = frozenParity
-    .find((f) => f.label === label)!
-    .rows.find(
-      (r) => JSON.stringify(r.slice(0, 5)) === JSON.stringify([point, size, yaw, normalY, grid]),
-    )
-  expect(row).toBeDefined()
-  expect(expected).toEqual(row![6])
-}
+  for (const fixture of frozenParity)
+    for (const [
+      index,
+      [point, size, yaw, normalY, grid, snapped, expected],
+    ] of fixture.rows.entries())
+      test(`${fixture.label}; case ${index + 1}`, () => {
+        const restore = nodeRegistry._snapshot()
+        nodeRegistry._reset()
+        try {
+          const host = fixture.host as AnyNode
+          if (host.type === 'shelf') {
+            registerNode({
+              kind: 'shelf',
+              schemaVersion: 1,
+              schema: ShelfNode,
+              category: 'furnish',
+              defaults: () => ({}),
+              capabilities: {
+                surfaces: {
+                  custom: (node) =>
+                    shelfRowSurfaceYs(node as ShelfNode).map((y) => ({
+                      position: [0, y, 0],
+                      normal: [0, 1, 0],
+                    })),
+                },
+              },
+            })
+          }
+          for (const childKind of host.type === 'item' ? ['item', 'procedural-item'] : ['item']) {
+            const result = resolveSurfacePlacement({
+              host,
+              childKind,
+              childFootprint: { size, rotationY: yaw },
+              hit: { point, normalWorldY: normalY },
+              scene: { get: () => undefined, nodes: () => ({}) } as unknown as SceneApi,
+              snapScalar:
+                grid === 0
+                  ? undefined
+                  : (p, d) => {
+                      const axis = p === point[0] ? 0 : 1
+                      expect(d).toBe(size[axis * 2]!)
+                      const snappedPosition = snapToGrid(p, d, grid)
+                      expect(snappedPosition).toBe(snapped[axis]!)
+                      return snappedPosition
+                    },
+            })
+            expect(result !== null).toBe(expected !== null)
+            if (expected) {
+              expect(result!.position).toEqual(expected.position)
+              expect(result!.rotationY).toBeCloseTo(expected.rotationY)
+              expect(result!.childFrame).toBe('host-local')
+              expect(result!.surfaceLocal === null).toBe(host.type === 'item')
+              expect(result!.surfaceId).toBe(
+                host.type === 'shelf'
+                  ? `row:${shelfRowSurfaceYs(host).indexOf(expected.position[1]!)}`
+                  : null,
+              )
+            }
+          }
+        } finally {
+          restore()
+        }
+      })
+
+  for (const fixture of frozenProceduralParity)
+    for (const [index, row] of fixture.rows.entries())
+      test(`procedural ${fixture.label}; case ${index + 1}`, () => {
+        const restore = nodeRegistry._snapshot()
+        nodeRegistry._reset()
+        try {
+          const { expected, rejections, ...args } = row
+          const rejected: string[] = []
+          const result = resolveSurfacePlacement({
+            ...args,
+            host: fixture.host as AnyNode,
+            scene: { get: () => undefined, nodes: () => ({}) } as unknown as SceneApi,
+            onReject: (reason) => rejected.push(reason),
+          })
+          expect(result).toEqual(expected)
+          expect(rejected).toEqual(rejections)
+        } finally {
+          restore()
+        }
+      })
+})

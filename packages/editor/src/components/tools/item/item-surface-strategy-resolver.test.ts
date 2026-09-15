@@ -11,7 +11,7 @@ import {
 import { Group, Vector3 } from 'three'
 import useEditor from '../../../store/use-editor'
 import useInteractionScope from '../../../store/use-interaction-scope'
-import { itemSurfaceStrategy, resolveItemSurfacePlacement } from './placement-strategies'
+import { itemSurfaceStrategy } from './placement-strategies'
 import type { PlacementContext } from './placement-types'
 
 const asset = {
@@ -106,6 +106,7 @@ function onHost(ctx: PlacementContext): PlacementContext {
   return { ...ctx, state: { ...ctx.state, surface: 'item-surface', surfaceItemId: host.id } }
 }
 
+// Expected poses were captured from resolveItemSurfacePlacement at ad2a57b8 before its removal.
 test.each([
   [4.01, 1, 1.5],
   [4, 1, 1.51],
@@ -122,14 +123,19 @@ test.each([
   const event = hit()
   const before = useScene.getState().nodes
   expect(itemSurfaceStrategy.enter(ctx, event)).toBeNull()
-  const expected = resolveItemSurfacePlacement(
-    host,
-    event,
-    [width, height, depth],
-    0.2,
-    undefined,
-    false,
-  )!
+  const expected: {
+    position: [number, number, number]
+    worldPosition: [number, number, number]
+  } =
+    width === 4.01
+      ? {
+          position: [0.5049999999999999, 0.8099999999999996, -0.25],
+          worldPosition: [4.434656461734313, 2.8017166019018256, -3.927442316539199],
+        }
+      : {
+          position: [0.5, 0.8099999999999996, -0.245],
+          worldPosition: [4.4318465044173845, 2.8017248933478855, -3.9175249544338326],
+        }
   const moved = itemSurfaceStrategy.move(onHost(ctx), event)!
   expect(moved.nodeUpdate).toEqual({ position: expected.position })
   expect(moved.cursorPosition).toEqual(expected.worldPosition)
@@ -141,11 +147,26 @@ test.each([
 test.each([
   'grid',
   'off',
-] as const)('accepted poses are exactly legacy poses with snapping %s', (mode) => {
+] as const)('accepted poses match the frozen live capture with snapping %s', (mode) => {
   useEditor.getState().setSnappingMode('item', mode)
   const ctx = context()
   const event = hit()
-  const expected = resolveItemSurfacePlacement(host, event, [0.5, 1, 0.5], 0.2, child.id)!
+  const expected: {
+    position: [number, number, number]
+    worldPosition: [number, number, number]
+    rotationY: number
+  } = {
+    ...(mode === 'grid'
+      ? {
+          position: [0.25, 0.8099999999999996, -0.25],
+          worldPosition: [4.180930399588417, 2.808503845962115, -3.4850883647019826],
+        }
+      : {
+          position: [0.36999999999999966, 0.8099999999999996, -0.39000000000000146],
+          worldPosition: [4.239709121156868, 2.808804018339912, -3.728080076057168],
+        }),
+    rotationY: -0.84936351290154,
+  }
   const entered = itemSurfaceStrategy.enter(ctx, event)!
   expect(entered.nodeUpdate).toEqual({
     position: expected.position,

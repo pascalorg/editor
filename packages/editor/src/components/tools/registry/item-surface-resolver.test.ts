@@ -15,7 +15,8 @@ import {
 } from '@pascal-app/core'
 import { Group, Vector3 } from 'three'
 import { commitFreshPlacementSubtree } from '../../../lib/fresh-planar-placement'
-import { resolveItemSurfacePlacement } from '../item/placement-strategies'
+import useEditor from '../../../store/use-editor'
+import useInteractionScope from '../../../store/use-interaction-scope'
 import { createRegistryItemSurfaceMove } from './item-surface-move'
 
 const level = LevelNode.parse({ id: 'level_resolver' })
@@ -48,6 +49,8 @@ const savedRaf = globalThis.requestAnimationFrame
 const savedCancelRaf = globalThis.cancelAnimationFrame
 let savedNodes: ReturnType<typeof useScene.getState>['nodes']
 let savedRoots: AnyNodeId[]
+let savedEditor: ReturnType<typeof useEditor.getState>
+let savedScope: ReturnType<typeof useInteractionScope.getState>
 let restoreRegistry: () => void
 let resolver: ReturnType<typeof spyOn<typeof core, 'resolveSurfacePlacement'>>
 
@@ -57,6 +60,11 @@ beforeEach(() => {
     return 0
   }
   globalThis.cancelAnimationFrame = () => {}
+  savedEditor = useEditor.getState()
+  savedScope = useInteractionScope.getState()
+  useInteractionScope.setState({ scope: { kind: 'idle' } })
+  useEditor.setState({ mode: 'build', tool: 'item' })
+  useEditor.getState().setSnappingMode('item', 'off')
   savedNodes = useScene.getState().nodes
   savedRoots = useScene.getState().rootNodeIds
   restoreRegistry = nodeRegistry._snapshot()
@@ -97,6 +105,8 @@ beforeEach(() => {
 
 afterEach(() => {
   resolver.mockRestore()
+  useEditor.setState(savedEditor)
+  useInteractionScope.setState(savedScope)
   restoreRegistry()
   useLiveTransforms.getState().clear(child.id)
   sceneRegistry.nodes.delete(level.id)
@@ -121,20 +131,19 @@ function hit(local: [number, number, number] = [0.2, 1, 0.3]): ItemEvent {
   } as ItemEvent
 }
 
-test('the registry asks the shared resolver with host-local input and keeps exact legacy output', () => {
+test('the registry asks the shared resolver with host-local input and keeps the frozen live output', () => {
   const event = hit()
-  const mesh = sceneRegistry.nodes.get(host.id)!
-  const correctedWorld = mesh
-    .localToWorld(mesh.worldToLocal(new Vector3(...event.position)))
-    .toArray()
   const session = createRegistryItemSurfaceMove(child)!
-  const expected = resolveItemSurfacePlacement(
-    host,
-    { ...event, position: correctedWorld },
-    dimensions,
-    session.worldYaw(0.3),
-    child.id,
-  )
+  // Captured from resolveItemSurfacePlacement at ad2a57b8 with snapping off.
+  const expected: {
+    position: [number, number, number]
+    worldPosition: [number, number, number]
+    rotationY: number
+  } = {
+    position: [0.20000000000000284, 1, 0.29999999999999716],
+    worldPosition: [15.991837444170788, 4, 23.04142809557868],
+    rotationY: -0.30000000000000004,
+  }
   expect(session.enter(event, dimensions, 0.3)).toEqual(expected)
   expect(resolver).toHaveBeenCalledTimes(1)
   const args = resolver.mock.calls[0]![0]
