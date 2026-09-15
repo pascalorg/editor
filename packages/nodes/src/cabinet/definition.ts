@@ -77,6 +77,7 @@ import {
   minCabinetCarcassHeightForStack,
   stackForCabinet,
 } from './stack'
+import { cabinetSurfaceProvider } from './surfaces'
 import {
   cabinetFloorplanAffectedIds,
   cabinetTreeChildIds,
@@ -2357,6 +2358,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
     duplicable: { subtree: true, prepareSubtreeClone: prepareCabinetSubtreeClone },
     deletable: true,
     surfaces: {
+      hosting: cabinetSurfaceProvider,
       top: {
         height: (node, context) => cabinetLocalBounds(node as CabinetNodeType, context.nodes).maxY,
       },
