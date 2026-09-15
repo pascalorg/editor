@@ -76,6 +76,13 @@ type ResolvedRunPoint = RunConnection & {
 
 type RunWallSurfaceTarget = Extract<RunSurfaceTarget, { kind: 'wall' }>
 
+export function shouldLockRunWallSurface(
+  target: RunSurfaceTarget | null | undefined,
+  connection: RunConnection,
+): target is RunWallSurfaceTarget {
+  return target?.kind === 'wall' && !connection.port && !connection.body
+}
+
 export function isSameRunWallSurface(
   target: RunWallSurfaceTarget,
   hit:
@@ -547,7 +554,6 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
   const lastClientYRef = useRef<number | null>(null)
   const lastResolvedRef = useRef<ResolvedRunPoint | null>(null)
   const lockedWallTargetRef = useRef<RunWallSurfaceTarget | null>(null)
-  const lockedWallFrameRef = useRef<RunSurfaceFrame | null>(null)
   const forcedDirectionRef = useRef<RunPoint | null>(null)
   const hoveredDirectionRef = useRef<RunPoint | null>(null)
   const lengthInputRef = useRef('')
@@ -620,11 +626,18 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       const lockedWallHit =
         lockedWallTarget && isSameRunWallSurface(lockedWallTarget, event.surfaceHit)
       const working = lockedWallTarget
-        ? (lockedWallFrameRef.current ??
-          (currentStart
-            ? createRunSurfaceFrame(currentStart, lockedWallTarget.frame.normal)
-            : null))
-        : (previous?.frame ?? (currentStart ? createRunSurfaceFrame(currentStart) : null))
+        ? {
+            ...lockedWallTarget.frame,
+            origin: lockedWallTarget.frame.origin.map(
+              (value, index) =>
+                value +
+                lockedWallTarget.frame.normal[index]! *
+                  (adapter.surfaceClearance?.(lockedWallTarget) ?? 0),
+            ) as RunPoint,
+          }
+        : !event.surfaceHit && previous?.surfaceTarget?.kind === 'wall' && currentStart
+          ? createRunSurfaceFrame(currentStart, UP)
+          : (previous?.frame ?? (currentStart ? createRunSurfaceFrame(currentStart) : null))
       const hasSurface = !!event.surfaceHit || !working || !event.localRay
       const target = lockedWallTarget ?? (hasSurface ? hit.target : null)
       const hitForCursor = lockedWallTarget
@@ -956,15 +969,14 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       const resolved = applyTypedLength(resolvePoint(event))
       updateCursor(resolved)
       if (!currentStart) {
-        if (resolved.surfaceTarget?.kind === 'wall') {
-          lockedWallTargetRef.current = resolved.surfaceTarget
-          lockedWallFrameRef.current = resolved.frame ?? null
-        }
-        triggerSFX('sfx:grid-snap')
         const connection = {
           port: resolved.port,
           body: resolved.port ? null : resolved.body,
         }
+        if (shouldLockRunWallSurface(resolved.surfaceTarget, connection)) {
+          lockedWallTargetRef.current = resolved.surfaceTarget
+        }
+        triggerSFX('sfx:grid-snap')
         startConnectionRef.current = connection
         configRef.current.inheritFromConnection?.(connection)
         startRef.current = resolved.point
@@ -1067,7 +1079,6 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
 
     const onCancel = () => {
       lockedWallTargetRef.current = null
-      lockedWallFrameRef.current = null
       clearDrawAlignment()
       if (!startRef.current) return
       markToolCancelConsumed()
@@ -1119,7 +1130,6 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       altAnchorRef.current = null
       lastPointerRef.current = null
       lockedWallTargetRef.current = null
-      lockedWallFrameRef.current = null
       refreshCursorRef.current = () => {}
       clearPlacementSurface()
       clearDrawAlignment()

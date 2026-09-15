@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import type { AnyNodeId } from '@pascal-app/core'
-import { createRunSurfaceFrame, isSameRunWallSurface } from './distribution-run-tool'
+import {
+  createRunSurfaceFrame,
+  isSameRunWallSurface,
+  shouldLockRunWallSurface,
+} from './distribution-run-tool'
 import { intersectRunPlane, resolveRunCursorPlane } from './run-cursor'
 
 describe('surface-first run cursor', () => {
@@ -38,6 +42,21 @@ describe('surface-first run cursor', () => {
         side: 'front',
       }),
     ).toBe(false)
+  })
+
+  test('locks a wall only when the start is not snapped to a body or port', () => {
+    const target = {
+      kind: 'wall' as const,
+      levelId: 'level-1' as AnyNodeId,
+      hostId: 'wall-1' as AnyNodeId,
+      side: 'front' as const,
+      frame: createRunSurfaceFrame([0, 0, 0], [0, 0, 1]),
+      bounds: { minU: 0, maxU: 1, minV: 0, maxV: 1 },
+    }
+
+    expect(shouldLockRunWallSurface(target, { port: null, body: null })).toBe(true)
+    expect(shouldLockRunWallSurface(target, { port: {} as never, body: null })).toBe(false)
+    expect(shouldLockRunWallSurface(target, { port: null, body: {} as never })).toBe(false)
   })
 
   test('reacquires either ceiling face from free space with duct or pipe clearance', () => {
