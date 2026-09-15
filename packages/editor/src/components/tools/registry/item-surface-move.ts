@@ -11,9 +11,10 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { Euler, Matrix3, Quaternion, Vector3 } from 'three'
+import { Euler, Quaternion, Vector3 } from 'three'
 import { isFreshPlacementMetadata } from '../../../lib/placement-metadata'
 import { snapToGrid, snapToHalf } from '../item/placement-math'
+import { itemEventToSurfaceHit } from '../shared/surface-hit'
 
 export function createItemSurfacePointerArbitration() {
   let hostId: string | null = null
@@ -130,8 +131,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
     useScene.getState().updateNode(node.id, {
       parentId,
       position,
-      rotation:
-        fullRotation && Array.isArray(original.rotation) ? [...fullRotation] : rotation(yaw),
+      rotation: fullRotation ? [...fullRotation] : rotation(yaw),
       supportSlabId: undefined,
     } as Partial<AnyNode>)
     useLiveTransforms.getState().clear(node.id)
@@ -174,12 +174,8 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
       const corrected = resolveItemSurfaceGrab(grab, host.id, raw)
       const position = mesh.localToWorld(new Vector3(...corrected.position)).toArray()
       // Keep the legacy world round-trip so existing poses retain identical floating-point values.
-      const local = mesh.worldToLocal(new Vector3(...position)).toArray()
-      const normalWorldY = event.normal
-        ? new Vector3(...event.normal)
-            .applyNormalMatrix(new Matrix3().getNormalMatrix(event.object.matrixWorld))
-            .normalize().y
-        : Number.NaN
+      const hit = itemEventToSurfaceHit(host, { ...event, position })
+      if (!hit) return null
       const placement = resolveSurfacePlacement({
         host,
         childKind: node.type,
@@ -187,7 +183,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
           size: dimensions,
           rotationY: session.worldYaw(yaw) - parentWorldYaw(host.id),
         },
-        hit: { point: local, normalWorldY },
+        hit,
         scene,
         snapScalar: snapToGrid,
         checkFootprint: true,

@@ -19,10 +19,12 @@ import type {
 import {
   canHostOnTop,
   clampRectToRoofWallFace,
+  createSceneApi,
   getRoofSegmentWallFace,
   getScaledDimensions,
   isLowProfileItemSurface,
   nodeRegistry,
+  resolveSurfacePlacement,
   roofFacePointToSegment,
   sceneRegistry,
   useScene,
@@ -30,6 +32,7 @@ import {
 import { Euler, Matrix3, Quaternion, Vector3 } from 'three'
 import { hasRoofFaceChildOverlap, resolveRoofWallHit } from '../../../lib/roof-wall-hit'
 import { snapWorldXZForActiveBuilding } from '../../../lib/world-grid-snap'
+import { itemEventToSurfaceHit } from '../shared/surface-hit'
 import {
   calculateItemRotation,
   getGridAlignedDimensions,
@@ -921,6 +924,36 @@ export function resolveItemSurfacePlacement(
   }
 }
 
+function resolveCatalogItemSurfacePlacement(
+  host: ItemNode,
+  event: ItemEvent,
+  dimensions: [number, number, number],
+  worldYaw: number,
+  checkFootprint: boolean,
+) {
+  const mesh = sceneRegistry.nodes.get(host.id)
+  if (!mesh) return null
+  const hit = itemEventToSurfaceHit(host, event)
+  if (!hit) return null
+  const quaternion = mesh.getWorldQuaternion(new Quaternion())
+  const hostYaw = new Euler().setFromQuaternion(quaternion, 'YXZ').y
+  const placement = resolveSurfacePlacement({
+    host,
+    childKind: 'item',
+    childFootprint: { size: dimensions, rotationY: worldYaw - hostYaw },
+    hit,
+    scene: createSceneApi(useScene),
+    snapScalar: snapToGrid,
+    checkFootprint,
+  })
+  if (!placement) return null
+  return {
+    position: [...placement.position] as [number, number, number],
+    rotationY: placement.rotationY,
+    worldPosition: mesh.localToWorld(new Vector3(...placement.position)).toArray(),
+  }
+}
+
 export const itemSurfaceStrategy = {
   /**
    * Handle item:enter — transition from floor to an item surface.
@@ -939,12 +972,17 @@ export const itemSurfaceStrategy = {
     const ourDims = ctx.draftItem
       ? getScaledDimensions(ctx.draftItem)
       : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS)
-    const pose = resolveItemSurfacePlacement(
+    if (
+      ctx.draftItem &&
+      isDescendantOfItem(surfaceItem, ctx.draftItem.id, useScene.getState().nodes)
+    )
+      return null
+    const pose = resolveCatalogItemSurfacePlacement(
       surfaceItem,
       event,
       ourDims,
       ctx.currentCursorRotationY,
-      ctx.draftItem?.id,
+      true,
     )
     if (!pose) return null
     const draftRotation = ctx.draftItem?.rotation ?? [0, 0, 0]
@@ -975,12 +1013,11 @@ export const itemSurfaceStrategy = {
     const surfaceItem = nodes[ctx.state.surfaceItemId as AnyNodeId] as ItemNode | undefined
     if (!surfaceItem) return null
 
-    const pose = resolveItemSurfacePlacement(
+    const pose = resolveCatalogItemSurfacePlacement(
       surfaceItem,
       event,
       getScaledDimensions(ctx.draftItem),
       ctx.currentCursorRotationY,
-      undefined,
       false,
     )
     if (!pose) return null
