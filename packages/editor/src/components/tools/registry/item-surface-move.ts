@@ -1,18 +1,19 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  createSceneApi,
   findLevelAncestorId,
   type GridEvent,
   type ItemEvent,
   nodeRegistry,
+  resolveSurfacePlacement,
   sceneRegistry,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { Euler, Quaternion, Vector3 } from 'three'
+import { Euler, Matrix3, Quaternion, Vector3 } from 'three'
 import { isFreshPlacementMetadata } from '../../../lib/placement-metadata'
-import { snapToHalf } from '../item/placement-math'
-import { resolveItemSurfacePlacement } from '../item/placement-strategies'
+import { snapToGrid, snapToHalf } from '../item/placement-math'
 
 export function createItemSurfacePointerArbitration() {
   let hostId: string | null = null
@@ -103,6 +104,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
     supportSlabId?: string
   }
   let changed = false
+  const scene = createSceneApi(useScene)
   const pointer = createItemSurfacePointerArbitration()
   const originalParent = original.parentId
     ? useScene.getState().nodes[original.parentId as AnyNodeId]
@@ -121,13 +123,15 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
     parentId: string | null | undefined,
     position: [number, number, number],
     yaw: number,
+    fullRotation?: readonly [number, number, number],
   ) => {
     changed = true
     // Hosted renderers and floorplan builders need the same parent-local pose.
     useScene.getState().updateNode(node.id, {
       parentId,
       position,
-      rotation: rotation(yaw),
+      rotation:
+        fullRotation && Array.isArray(original.rotation) ? [...fullRotation] : rotation(yaw),
       supportSlabId: undefined,
     } as Partial<AnyNode>)
     useLiveTransforms.getState().clear(node.id)
@@ -159,23 +163,53 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
       if (floorPlaced.applies && !floorPlaced.applies(live)) return null
       const host = useScene.getState().nodes[event.node.id]
       if (host?.type !== 'item') return null
+      let ancestor: AnyNode | undefined = host
+      while (ancestor) {
+        if (ancestor.id === node.id) return null
+        ancestor = ancestor.parentId ? scene.get(ancestor.parentId as AnyNodeId) : undefined
+      }
       const mesh = sceneRegistry.nodes.get(host.id)
       if (!mesh) return null
       const raw = mesh.worldToLocal(new Vector3(...event.position)).toArray()
       const corrected = resolveItemSurfaceGrab(grab, host.id, raw)
       const position = mesh.localToWorld(new Vector3(...corrected.position)).toArray()
-      const pose = resolveItemSurfacePlacement(
+      // Keep the legacy world round-trip so existing poses retain identical floating-point values.
+      const local = mesh.worldToLocal(new Vector3(...position)).toArray()
+      const normalWorldY = event.normal
+        ? new Vector3(...event.normal)
+            .applyNormalMatrix(new Matrix3().getNormalMatrix(event.object.matrixWorld))
+            .normalize().y
+        : Number.NaN
+      const placement = resolveSurfacePlacement({
         host,
-        { ...event, position },
-        dimensions,
-        session.worldYaw(yaw),
-        node.id,
-      )
-      if (!pose) return null
+        childKind: node.type,
+        childFootprint: {
+          size: dimensions,
+          rotationY: session.worldYaw(yaw) - parentWorldYaw(host.id),
+        },
+        hit: { point: local, normalWorldY },
+        scene,
+        snapScalar: snapToGrid,
+        checkFootprint: true,
+      })
+      if (!placement) return null
+      const childPose =
+        placement.childFrame === 'surface-local' ? placement.surfaceLocal : placement
+      if (!childPose) return null
+      const pose = {
+        position: [...childPose.position] as [number, number, number],
+        rotationY: childPose.rotationY,
+        worldPosition: mesh.localToWorld(new Vector3(...placement.position)).toArray(),
+      }
       grab = corrected.grab
       pointer.hit(host.id, pointerEventOf(event))
       event.stopPropagation()
-      write(host.id, pose.position, pose.rotationY)
+      write(
+        host.id,
+        pose.position,
+        pose.rotationY,
+        placement.childFrame === 'surface-local' ? placement.surfaceLocal?.rotation : undefined,
+      )
       return pose
     },
     blocksGrid(event: GridEvent) {
