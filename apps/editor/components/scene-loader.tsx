@@ -1,5 +1,7 @@
 'use client'
 
+import { PascalWebXRButton, usePascalWebXR } from '@webxr/plugin/pascal-editor'
+
 // Node registry bootstrap is loaded once at the root via
 // `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
 // import here.
@@ -17,7 +19,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { countGraphNodes, isEmptyGraphOverwrite } from '@/lib/empty-graph-guard'
 import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signature'
 import { cn } from '@/lib/utils'
-import { BuildTab } from './build-tab'
+import { BuildTab, webXRWandBindings } from './build-tab'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
 export interface SceneMeta {
@@ -109,6 +111,7 @@ function isLightPreviewQuery(searchParams: URLSearchParams): boolean {
 }
 
 export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
+  const vr = usePascalWebXR(webXRWandBindings)
   const router = useRouter()
   const searchParams = useSearchParams()
   const versionRef = useRef(meta.version)
@@ -294,6 +297,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         </Link>
       </div>
       <Editor
+        immersive={vr.immersive}
         disablePostFx={lightPreview}
         layoutVersion="v2"
         onLoad={handleLoad}
@@ -302,7 +306,16 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         projectId={meta.projectId ?? 'default'}
         sidebarTabs={SIDEBAR_TABS}
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
-        viewerToolbarRight={<CommunityViewerToolbarRight />}
+        viewerToolbarRight={
+          <CommunityViewerToolbarRight
+            vrButton={
+              <PascalWebXRButton
+                className="flex h-8 w-8 items-center justify-center text-muted-foreground hover:bg-accent disabled:opacity-50"
+                feature={vr}
+              />
+            }
+          />
+        }
       />
     </div>
   )

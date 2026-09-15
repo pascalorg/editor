@@ -21,6 +21,7 @@ import {
 } from '../../../lib/contextual-help'
 import { getContextualHelpNodeExtension } from '../../../lib/contextual-help-extension'
 import { continuationContextOf } from '../../../lib/continuation'
+import { isDrawingTool } from '../../../lib/drawing-controls'
 import { canDirectMoveNode, canDirectRotateNode } from '../../../lib/direct-manipulation'
 import type { ReshapeKind } from '../../../lib/interaction/scope'
 import { isFreshPlacementMetadata } from '../../../lib/placement-metadata'
@@ -257,7 +258,13 @@ export function HelperManager() {
     return <ContextualHelperPanel hints={reshapingHints(scope.reshape)} snapContext={snapContext} />
   }
 
-  if (movingNode) {
+  const isRegistryDrawing =
+    mode === 'build' &&
+    isDrawingTool(tool) &&
+    scope.kind === 'placing' &&
+    scope.driver === 'registry-tool' &&
+    scope.nodeType === tool
+  if (movingNode && !isRegistryDrawing) {
     if (movingNode.type === 'building') return <BuildingHelper showRotate />
     // A fresh placement (e.g. a positioned preset like a shelf) advertises its
     // once/repeat continuation, exactly like the GLB item tool — but an existing

@@ -37,6 +37,7 @@ import useDeleteConfirmation from '../store/use-delete-confirmation'
 import useEditor, { getActiveContinuationContext, getActiveSnapContext } from '../store/use-editor'
 import useInteractionScope, { getMovingNode } from '../store/use-interaction-scope'
 import { groupCurrentSelection, ungroupCurrentSelection } from '../store/use-session-groups'
+import { useDrawingControls } from './use-drawing-controls'
 
 // References (guide/scan) are selected via `useEditor.selectedReferenceId`, not
 // the viewer selection, so selection-based key arms (R/T rotate) need this
@@ -225,6 +226,7 @@ export const useKeyboard = ({
   isVersionPreviewMode?: boolean
   disabled?: boolean
 } = {}) => {
+  useDrawingControls(disabled || isVersionPreviewMode)
   useEffect(() => {
     if (disabled) {
       return

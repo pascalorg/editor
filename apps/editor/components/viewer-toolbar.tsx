@@ -695,7 +695,7 @@ export function CommunityViewerToolbarLeft() {
   )
 }
 
-export function CommunityViewerToolbarRight() {
+export function CommunityViewerToolbarRight({ vrButton }: { vrButton?: React.ReactNode }) {
   return (
     <div className={TOOLBAR_CONTAINER}>
       <LevelModeToggle />
@@ -704,6 +704,7 @@ export function CommunityViewerToolbarRight() {
       <DisplayMenu />
       <div className="my-1.5 w-px bg-border/50" />
       <WalkthroughButton />
+      {vrButton}
       <PreviewButton />
     </div>
   )

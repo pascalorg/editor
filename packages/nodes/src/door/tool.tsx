@@ -4,12 +4,14 @@ import {
   DoorNode,
   emitter,
   type GridEvent,
+  getEffectiveNode,
   holdHiddenWallPointerEvents,
   isCurvedWall,
   type RoofEvent,
   type RoofNode,
   sceneRegistry,
   spatialGridManager,
+  useLiveNodeOverrides,
   useScene,
   type WallEvent,
   type WallNode,
@@ -134,7 +136,8 @@ const DoorTool: React.FC = () => {
       const live = useScene.getState().nodes[draft.id as AnyNodeId]
       if (live?.type !== 'door') return
       draftRef.current = live
-      publishPlacementPreview(live, parentNode)
+      publishPlacementPreview(getEffectiveNode(live), parentNode)
+      useScene.getState().markDirty(live.id)
     }
 
     let hostKind: HostKind = null
@@ -180,6 +183,7 @@ const DoorTool: React.FC = () => {
         return
       }
       const wallId = draft.parentId
+      useLiveNodeOverrides.getState().clear(draft.id)
       useScene.getState().deleteNode(draft.id)
       draftRef.current = null
       clearPlacementPreview()
@@ -341,13 +345,14 @@ const DoorTool: React.FC = () => {
       )
 
       if (wall.id === draftRef.current.parentId) {
-        useScene.getState().updateNode(draftRef.current.id, {
+        useLiveNodeOverrides.getState().set(draftRef.current.id, {
           position: [clampedX, clampedY, 0],
           rotation: [0, itemRotation, 0],
           side,
         })
         markHostDirty(wall.id)
       } else {
+        useLiveNodeOverrides.getState().clear(draftRef.current.id)
         useScene.getState().updateNode(draftRef.current.id, {
           position: [clampedX, clampedY, 0],
           rotation: [0, itemRotation, 0],
@@ -405,6 +410,7 @@ const DoorTool: React.FC = () => {
       draftRef.current = null
       hostKind = null
 
+      useLiveNodeOverrides.getState().clear(draft.id)
       useScene.getState().deleteNode(draft.id)
       useScene.temporal.getState().resume()
 
@@ -588,7 +594,7 @@ const DoorTool: React.FC = () => {
 
       if (draftRef.current && draftRef.current.parentId !== segment.id) destroyDraft()
       if (draftRef.current) {
-        useScene.getState().updateNode(draftRef.current.id, {
+        useLiveNodeOverrides.getState().set(draftRef.current.id, {
           position,
           rotation: [0, 0, 0],
           roofFace: face.id,
@@ -626,6 +632,7 @@ const DoorTool: React.FC = () => {
       draftRef.current = null
       hostKind = null
 
+      useLiveNodeOverrides.getState().clear(draft.id)
       useScene.getState().deleteNode(draft.id)
       useScene.temporal.getState().resume()
 

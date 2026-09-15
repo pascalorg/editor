@@ -14,6 +14,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { resolveSnapFlags } from '../../../lib/snapping-mode'
 import useEditor, { getActiveSnappingMode, isMagneticSnapActive } from '../../../store/use-editor'
+import { useFloorplanDraftPreview } from '../../../store/use-floorplan-draft-preview'
 import {
   distanceSquared,
   findWallSnapTarget,
@@ -217,7 +218,15 @@ export function createWallOnCurrentLevel(
     return null
   }
 
-  const joinRadius = isMagneticSnapActive() ? WALL_JOIN_SNAP_RADIUS : WALL_CONNECT_SNAP_RADIUS
+  const draft = useFloorplanDraftPreview.getState()
+  end = draft.constrainWallDraftPoint(start, end)
+  // An explicit length must survive the topology planner's endpoint projection.
+  const joinRadius =
+    draft.wallDraftLength !== null
+      ? 1e-7
+      : isMagneticSnapActive()
+        ? WALL_JOIN_SNAP_RADIUS
+        : WALL_CONNECT_SNAP_RADIUS
 
   return runAsSingleSceneHistoryStep(useScene, () => {
     const result = planWallInsertion(nodes, {

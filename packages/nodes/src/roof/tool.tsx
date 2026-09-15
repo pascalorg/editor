@@ -781,7 +781,9 @@ export const RoofTool: React.FC = () => {
       outlineRef.current.visible = true
     }
 
+    let lastGridEvent: GridEvent | null = null
     const onGridMove = (event: GridEvent) => {
+      lastGridEvent = event
       if (!cursorRef.current) return
 
       if (footprintSource !== 'draw') {
@@ -842,7 +844,7 @@ export const RoofTool: React.FC = () => {
       }
     }
 
-    const onGridClick = (event: GridEvent) => {
+    const onGridClick = (event: GridEvent, previewEnd?: [number, number]) => {
       if (!currentLevelId) return
 
       if (footprintSource !== 'draw') {
@@ -860,7 +862,7 @@ export const RoofTool: React.FC = () => {
         return
       }
 
-      const [gridX, gridZ] = resolveDraftPoint(event)
+      const [gridX, gridZ] = previewEnd ?? resolveDraftPoint(event)
       const y = event.localPosition[1]
 
       if (corner1Ref.current) {
@@ -879,6 +881,7 @@ export const RoofTool: React.FC = () => {
         selectNode(roofId as AnyNode['id'])
 
         corner1Ref.current = null
+        setPreview((prev) => ({ ...prev, corner1: null }))
         const draftPreview = useFloorplanDraftPreview.getState()
         draftPreview.setRoofDraftStart(null)
         draftPreview.setRoofDraftEnd(null)
@@ -957,6 +960,21 @@ export const RoofTool: React.FC = () => {
       triggerSFX('sfx:item-rotate')
     }
 
+    const unregisterControls = useFloorplanDraftPreview
+      .getState()
+      .registerDrawingControls('roof', '3d', {
+        finish: () => {
+          const end = useFloorplanDraftPreview.getState().roofDraftEnd
+          const start = corner1Ref.current
+          if (footprintSource !== 'draw' || !start || !end || !lastGridEvent) return false
+          if (Math.abs(end[0] - start[0]) <= 0.1 || Math.abs(end[1] - start[2]) <= 0.1) return false
+          const before = sceneApi.nodes()
+          onGridClick(lastGridEvent, end)
+          return sceneApi.nodes() !== before
+        },
+        back: onCancel,
+      })
+
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
@@ -995,6 +1013,7 @@ export const RoofTool: React.FC = () => {
     window.addEventListener('keydown', onKeyDown)
 
     return () => {
+      unregisterControls()
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)

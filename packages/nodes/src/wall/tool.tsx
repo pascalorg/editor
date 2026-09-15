@@ -495,6 +495,7 @@ export const WallTool: React.FC = () => {
   useEffect(() => {
     let gridPosition: WallPlanPoint = [0, 0]
     let previousWallEnd: [number, number] | null = null
+    let lastGridEvent: GridEvent | null = null
 
     // Alignment candidates — anchors of every alignable object. Refreshed
     // after each segment commits (the new wall becomes a candidate too).
@@ -624,7 +625,9 @@ export const WallTool: React.FC = () => {
     }
 
     const onGridMove = (event: GridEvent) => {
+      if (useEditor.getState().viewMode === '2d') return
       if (!(cursorRef.current && wallPreviewRef.current)) return
+      lastGridEvent = event
 
       // Ride the grid event plane on the pointed surface: aiming at an
       // elevated deck lifts the plane to the deck top, so the draft's XZ
@@ -660,12 +663,21 @@ export const WallTool: React.FC = () => {
         magnetic: isMagneticSnapActive(),
       })
       gridPosition = alignPoint(snapResult.point, { applySnap: !angleLocked })
+      if (buildingState.current === 1) {
+        const draft = useFloorplanDraftPreview.getState()
+        draft.setWallDraftStart([startingPoint.current.x, startingPoint.current.z])
+        draft.setWallDraftEnd(gridPosition)
+        gridPosition = useFloorplanDraftPreview.getState().wallDraftEnd ?? gridPosition
+        if (useFloorplanDraftPreview.getState().wallDraftLength !== null) {
+          useAlignmentGuides.getState().clear()
+        }
+      }
       // Stand the magnetic beacon at the endpoint when it locked onto an
       // existing wall corner / wall point; clear it for plain grid/angle moves.
       useWallSnapIndicator
         .getState()
         .set(
-          snapResult.snap
+          snapResult.snap && useFloorplanDraftPreview.getState().wallDraftLength === null
             ? { x: gridPosition[0], z: gridPosition[1], kind: snapResult.snap }
             : null,
         )
@@ -674,9 +686,6 @@ export const WallTool: React.FC = () => {
         const snappedLocal = gridPosition
         const draftY = constructionPlane.current?.localY ?? event.localPosition[1]
         endingPoint.current.set(snappedLocal[0], draftY, snappedLocal[1])
-        const draftPreview = useFloorplanDraftPreview.getState()
-        draftPreview.setWallDraftStart([startingPoint.current.x, startingPoint.current.z])
-        draftPreview.setWallDraftEnd(snappedLocal)
         cursorRef.current.position.copy(endingPoint.current)
         setAxisGuide({
           origin: [startingPoint.current.x, startingPoint.current.z],
@@ -727,10 +736,12 @@ export const WallTool: React.FC = () => {
       }
     }
 
-    const onGridClick = (event: GridEvent) => {
+    const onGridClick = (event: GridEvent, previewEnd?: WallPlanPoint) => {
+      // The floorplan owns commits in 2D; the hidden canvas can still receive its grid events.
+      if (useEditor.getState().viewMode === '2d') return
       if (!wallPreviewRef.current) return
 
-      if (buildingState.current === 1 && event.nativeEvent.detail >= 2) {
+      if (!previewEnd && buildingState.current === 1 && event.nativeEvent.detail >= 2) {
         stopDrafting()
         return
       }
@@ -780,16 +791,21 @@ export const WallTool: React.FC = () => {
         setDraftMeasurement(null)
       } else if (buildingState.current === 1) {
         const angleLocked = isAngleSnapActive()
-        const snappedEnd = alignPoint(
-          snapWallDraftPointDetailed({
-            point: localClick,
-            walls: snapWalls,
-            start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
-            angleSnap: angleLocked,
-            magnetic: isMagneticSnapActive(),
-          }).point,
-          { applySnap: !angleLocked },
-        )
+        let snappedEnd =
+          previewEnd ??
+          alignPoint(
+            snapWallDraftPointDetailed({
+              point: localClick,
+              walls: snapWalls,
+              start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
+              angleSnap: angleLocked,
+              magnetic: isMagneticSnapActive(),
+            }).point,
+            { applySnap: !angleLocked },
+          )
+        snappedEnd = useFloorplanDraftPreview
+          .getState()
+          .constrainWallDraftPoint([startingPoint.current.x, startingPoint.current.z], snappedEnd)
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
         if (dx * dx + dz * dz < 0.01 * 0.01) return
@@ -886,11 +902,36 @@ export const WallTool: React.FC = () => {
       }
     }
 
+    const unregisterControls = useFloorplanDraftPreview
+      .getState()
+      .registerDrawingControls('wall', '3d', { back: stopDrafting })
+
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
+    const unregisterCommit = useFloorplanDraftPreview
+      .getState()
+      .registerWallDraftCommit('3d', (end) => {
+        if (buildingState.current !== 1 || !lastGridEvent) return false
+        const before = useScene.getState().nodes
+        onGridClick(lastGridEvent, end)
+        return useScene.getState().nodes !== before
+      })
+    const unsubscribeLength = useFloorplanDraftPreview.subscribe((state, previous) => {
+      if (
+        state.wallDraftLength !== previous.wallDraftLength &&
+        state.wallDraftStart === previous.wallDraftStart &&
+        buildingState.current === 1 &&
+        lastGridEvent
+      ) {
+        onGridMove(lastGridEvent)
+      }
+    })
 
     return () => {
+      unregisterControls()
+      unregisterCommit()
+      unsubscribeLength()
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)

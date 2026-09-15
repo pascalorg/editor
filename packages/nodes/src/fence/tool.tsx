@@ -491,6 +491,7 @@ const StraightFenceTool: React.FC = () => {
   useEffect(() => () => useEditor.getState().setToolDefaults('fence', null), [])
 
   useEffect(() => {
+    let lastGridEvent: GridEvent | null = null
     let previousFenceEnd: FencePlanPoint | null = null
 
     // Alignment candidates — anchors of every alignable object. Refreshed
@@ -538,6 +539,7 @@ const StraightFenceTool: React.FC = () => {
     }
 
     const onGridMove = (event: GridEvent) => {
+      lastGridEvent = event
       if (!(cursorRef.current && previewRef.current)) return
       // Ride the grid event plane on the pointed surface: aiming at an
       // elevated deck lifts the plane to the deck top, so the draft's XZ
@@ -634,9 +636,9 @@ const StraightFenceTool: React.FC = () => {
       }
     }
 
-    const onGridClick = (event: GridEvent) => {
+    const onGridClick = (event: GridEvent, previewEnd?: FencePlanPoint) => {
       if (!previewRef.current) return
-      if (buildingState.current === 1 && event.nativeEvent.detail >= 2) {
+      if (!previewEnd && buildingState.current === 1 && event.nativeEvent.detail >= 2) {
         stopDrafting()
         return
       }
@@ -676,17 +678,19 @@ const StraightFenceTool: React.FC = () => {
         })
       } else {
         const angleLocked = isAngleSnapActive()
-        const snappedEnd = alignPoint(
-          snapFenceDraftPoint({
-            point: localClick,
-            walls,
-            fences,
-            start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
-            angleSnap: angleLocked,
-            magnetic: isMagneticSnapActive(),
-          }),
-          { applySnap: !angleLocked },
-        )
+        const snappedEnd =
+          previewEnd ??
+          alignPoint(
+            snapFenceDraftPoint({
+              point: localClick,
+              walls,
+              fences,
+              start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
+              angleSnap: angleLocked,
+              magnetic: isMagneticSnapActive(),
+            }),
+            { applySnap: !angleLocked },
+          )
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
         if (dx * dx + dz * dz < 0.01 * 0.01) return
@@ -749,11 +753,24 @@ const StraightFenceTool: React.FC = () => {
       }
     }
 
+    const unregisterControls = useFloorplanDraftPreview
+      .getState()
+      .registerDrawingControls('fence', '3d', {
+        finish: () => {
+          if (buildingState.current !== 1 || !lastGridEvent) return false
+          const before = useScene.getState().nodes
+          onGridClick(lastGridEvent, [endingPoint.current.x, endingPoint.current.z])
+          return useScene.getState().nodes !== before
+        },
+        back: stopDrafting,
+      })
+
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
 
     return () => {
+      unregisterControls()
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
@@ -850,27 +867,28 @@ const SplineFenceDraft: React.FC = () => {
       return [snapScalarToGrid(local[0], step), snapScalarToGrid(local[1], step)]
     }
 
-    const commit = () => {
-      const points = draftRef.current
-      if (points.length >= 2) {
-        const created = createSplineFenceOnCurrentLevel(points, undefined, {
-          supportCap: supportSurfaceRef.current?.elevation ?? null,
-          preferredSupportSlabId: supportSurfaceRef.current?.supportSlabId ?? null,
-          constructionElevation: supportSurfaceRef.current?.sourceNodeId
-            ? supportSurfaceRef.current.elevation
-            : null,
-        })
-        if (created) {
-          triggerSFX('sfx:item-place')
-          // Once the new curve fence is selected for direct editing, leave
-          // placement mode so the toolbar matches the active interaction.
-          useViewer.getState().setSelection({ selectedIds: [created.id] })
-          useEditor.getState().setTool(null)
-          useEditor.getState().setMode('select')
-        }
-      }
+    const resetDraft = () => {
+      draftRef.current = []
       setDraftPoints([])
       setCursor(null)
+      supportSurfaceRef.current = null
+      clearPlacementSurface()
+    }
+    const commit = () => {
+      const points = draftRef.current
+      if (points.length < 2) return false
+      const created = createSplineFenceOnCurrentLevel(points, undefined, {
+        supportCap: supportSurfaceRef.current?.elevation ?? null,
+        preferredSupportSlabId: supportSurfaceRef.current?.supportSlabId ?? null,
+        constructionElevation: supportSurfaceRef.current?.sourceNodeId
+          ? supportSurfaceRef.current.elevation
+          : null,
+      })
+      if (!created) return false
+      triggerSFX('sfx:item-place')
+      useViewer.getState().setSelection({ selectedIds: [created.id] })
+      resetDraft()
+      return true
     }
 
     const trackPointedSurface = (event: GridEvent) => {
@@ -910,26 +928,34 @@ const SplineFenceDraft: React.FC = () => {
       setDraftPoints((prev) => [...prev, point])
     }
 
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Enter') commit()
-    }
     const onCancel = () => {
       if (draftRef.current.length === 0) return
       markToolCancelConsumed()
-      setDraftPoints((prev) => prev.slice(0, -1))
+      resetDraft()
     }
+    const unregisterControls = useFloorplanDraftPreview
+      .getState()
+      .registerDrawingControls('fence', '3d', {
+        finish: commit,
+        back: () => {
+          if (draftRef.current.length <= 1) resetDraft()
+          else {
+            draftRef.current = draftRef.current.slice(0, -1)
+            setDraftPoints(draftRef.current)
+          }
+        },
+      })
 
     emitter.on('grid:move', onMove)
     emitter.on('grid:click', onClick)
     emitter.on('tool:cancel', onCancel)
-    window.addEventListener('keydown', onKeyDown)
 
     return () => {
       emitter.off('grid:move', onMove)
       emitter.off('grid:click', onClick)
       emitter.off('tool:cancel', onCancel)
       clearPlacementSurface()
-      window.removeEventListener('keydown', onKeyDown)
+      unregisterControls()
     }
   }, [])
 

@@ -34,7 +34,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
-import { type SlabCompletionTrigger, shouldRegistryCommitSlab } from './placement-ownership'
+import { shouldRegistryCommitSlab } from './placement-ownership'
 import { SlabNode } from './schema'
 
 /**
@@ -205,7 +205,7 @@ export const SlabTool: React.FC = () => {
         Math.abs(clickPoint[0] - firstPoint[0]) < 0.25 &&
         Math.abs(clickPoint[1] - firstPoint[1]) < 0.25
       ) {
-        if (shouldRegistryCommitSlab(useEditor.getState().viewMode, 'grid')) {
+        if (shouldRegistryCommitSlab(useEditor.getState().viewMode)) {
           const slabId = commitSlabDrawing(
             currentLevelId,
             points,
@@ -235,9 +235,9 @@ export const SlabTool: React.FC = () => {
 
     // Finish the polygon (Enter or double-click): commit once there are enough
     // vertices. Closing near the first vertex (in onGridClick) is the third way.
-    const finishDrawing = (trigger: SlabCompletionTrigger) => {
+    const finishDrawing = () => {
       if (points.length < 3) return
-      if (shouldRegistryCommitSlab(useEditor.getState().viewMode, trigger)) {
+      if (shouldRegistryCommitSlab(useEditor.getState().viewMode)) {
         const slabId = commitSlabDrawing(
           currentLevelId,
           points,
@@ -249,7 +249,7 @@ export const SlabTool: React.FC = () => {
     }
 
     const onGridDoubleClick = (_event: GridEvent) => {
-      finishDrawing('grid')
+      finishDrawing()
     }
 
     const onCancel = () => {
@@ -257,13 +257,20 @@ export const SlabTool: React.FC = () => {
       resetDraft()
     }
 
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Enter') {
-        e.preventDefault()
-        finishDrawing('keyboard')
-      }
-    }
-    document.addEventListener('keydown', onKeyDown)
+    const unregisterControls = useFloorplanDraftPreview
+      .getState()
+      .registerDrawingControls('slab', '3d', {
+        finish: () => {
+          if (points.length < 3) return false
+          finishDrawing()
+          return true
+        },
+        back: () => {
+          if (points.length <= 1) resetDraft()
+          else setPoints(points.slice(0, -1))
+        },
+        afterFinish: resetDraft,
+      })
 
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
@@ -271,7 +278,7 @@ export const SlabTool: React.FC = () => {
     emitter.on('tool:cancel', onCancel)
 
     return () => {
-      document.removeEventListener('keydown', onKeyDown)
+      unregisterControls()
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('grid:double-click', onGridDoubleClick)

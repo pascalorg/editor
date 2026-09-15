@@ -1,10 +1,12 @@
 'use client'
 
+import { PascalWebXRButton, usePascalWebXR } from '@webxr/plugin/pascal-editor'
+
 import { Editor, ItemsPanel } from '@pascal-app/editor'
 import { Hammer, Layers, Package, Settings } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { BuildTab } from '@/components/build-tab'
+import { BuildTab, webXRWandBindings } from '@/components/build-tab'
 import {
   CommunityViewerToolbarLeft,
   CommunityViewerToolbarRight,
@@ -87,6 +89,7 @@ const SIDEBAR_TABS = [
 const PROJECT_ID = 'local-editor'
 
 export default function Home() {
+  const vr = usePascalWebXR(webXRWandBindings)
   return (
     <div className="relative h-screen w-screen">
       {PROJECT_ID === 'local-editor' && (
@@ -105,11 +108,21 @@ export default function Home() {
         </div>
       )}
       <Editor
+        immersive={vr.immersive}
         layoutVersion="v2"
         projectId={PROJECT_ID}
         sidebarTabs={SIDEBAR_TABS}
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
-        viewerToolbarRight={<CommunityViewerToolbarRight />}
+        viewerToolbarRight={
+          <CommunityViewerToolbarRight
+            vrButton={
+              <PascalWebXRButton
+                className="flex h-8 w-8 items-center justify-center text-muted-foreground hover:bg-accent disabled:opacity-50"
+                feature={vr}
+              />
+            }
+          />
+        }
       />
     </div>
   )

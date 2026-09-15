@@ -16,30 +16,28 @@ export const DoorRenderer = ({ node }: { node: DoorNode }) => {
     useScene.getState().markDirty(node.id)
   }, [node.id])
   const handlers = useNodeEvents(node, 'door')
-  const liveVisible = useLiveNodeOverrides((s) => {
-    const visible = s.get(node.id)?.visible
-    return typeof visible === 'boolean' ? visible : undefined
-  })
+  const liveOverrides = useLiveNodeOverrides((s) => s.get(node.id))
+  const renderNode = liveOverrides ? ({ ...node, ...liveOverrides } as DoorNode) : node
   const isTransient = !!(node.metadata as Record<string, unknown> | null)?.isTransient
 
   const mesh = (
     <mesh
       castShadow
       material={doorHitboxMaterial}
-      position={node.position}
+      position={renderNode.position}
       receiveShadow
       ref={ref}
-      rotation={node.rotation}
-      visible={liveVisible ?? node.visible}
+      rotation={renderNode.rotation}
+      visible={renderNode.visible}
       {...(isTransient ? {} : handlers)}
     >
       <boxGeometry args={[0, 0, 0]} />
     </mesh>
   )
 
-  if (!node.roofSegmentId) return mesh
+  if (!renderNode.roofSegmentId) return mesh
   return (
-    <RoofFaceHostFrame roofFace={node.roofFace} roofSegmentId={node.roofSegmentId}>
+    <RoofFaceHostFrame roofFace={renderNode.roofFace} roofSegmentId={renderNode.roofSegmentId}>
       {mesh}
     </RoofFaceHostFrame>
   )

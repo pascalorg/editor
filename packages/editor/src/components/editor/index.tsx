@@ -13,6 +13,7 @@ import {
 } from '@pascal-app/core'
 import {
   type HoverStyles,
+  type ViewerImmersiveConfig,
   InteractiveSystem,
   PERF_OVERLAY_ENABLED,
   recordPerfSample,
@@ -162,6 +163,7 @@ function initializeEditorRuntime(): () => void {
   }
 }
 export interface EditorProps {
+  immersive?: ViewerImmersiveConfig
   // Layout version — 'v1' (default) or 'v2' (navbar + two-column)
   layoutVersion?: 'v1' | 'v2'
 
@@ -786,6 +788,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   onThumbnailCapture,
   viewerSceneSlot,
   presentationsReady,
+  isImmersive = false,
 }: {
   isVersionPreviewMode: boolean
   isLoading: boolean
@@ -794,6 +797,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
   viewerSceneSlot?: ReactNode
   presentationsReady: boolean
+  isImmersive?: boolean
 }) {
   // Studio mode is a clean render/snapshot surface — no selection or editing
   // affordances. It mirrors version-preview's chrome gating on the canvas.
@@ -806,7 +810,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
     <>
       <SceneEnvironment />
       {!(isFirstPersonMode || isStudioMode || isCaptureMode) && <SelectionManager />}
-      {!noEditing && <BoxSelectTool />}
+      {!(noEditing || isImmersive) && <BoxSelectTool />}
       {!noEditing && <NodeArrowHandles />}
       {!noEditing && <GroupRotateHandle />}
       {!noEditing && <GroupSelectionBox3D />}
@@ -814,9 +818,9 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!noEditing && <SlabHoleHighlights />}
       {!noEditing && <WallMoveSideHandles />}
       {!noEditing && <FenceTangentLines3D />}
-      {!noEditing && <FloatingActionMenu />}
-      {!noEditing && <GroupFloatingActionMenu />}
-      {!noEditing && <FloatingBuildingActionMenu />}
+      {!(noEditing || isImmersive) && <FloatingActionMenu />}
+      {!(noEditing || isImmersive) && <GroupFloatingActionMenu />}
+      {!(noEditing || isImmersive) && <FloatingBuildingActionMenu />}
       {!isFirstPersonMode && <WallMeasurementLabel />}
       <ExportManager />
       {isFirstPersonMode ? <ViewerZoneSystem /> : <ZoneSystem />}
@@ -828,9 +832,9 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!(isLoading || isFirstPersonMode) && <SnapAwareGrid />}
       {!(isLoading || noEditing) && <ToolManager />}
       {isFirstPersonMode && <FirstPersonControls />}
-      {isCaptureMode && <CaptureCameraRig />}
-      <CustomCameraControls />
-      <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
+      {isCaptureMode && !isImmersive && <CaptureCameraRig />}
+      {!isImmersive && <CustomCameraControls />}
+      {!isImmersive && <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />}
       {!isFirstPersonMode && <SiteEdgeLabels />}
       <InteractiveSystem />
       {presentationsReady ? <ViewerPresentations /> : null}
@@ -1021,6 +1025,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   viewerSceneSlot,
   floorplanSceneSlot,
   disablePostFx = false,
+  immersive,
 }: {
   isVersionPreviewMode: boolean
   isLoading: boolean
@@ -1035,6 +1040,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   viewerSceneSlot?: ReactNode
   floorplanSceneSlot?: ReactNode
   disablePostFx?: boolean
+  immersive?: ViewerImmersiveConfig
 }) {
   const viewMode = useEditor((s) => s.viewMode)
   const floorplanPaneRatio = useEditor((s) => s.floorplanPaneRatio)
@@ -1094,8 +1100,8 @@ const ViewerCanvas = memo(function ViewerCanvas({
     writeCameraControlsHintDismissed(true)
   }, [])
 
-  const show2d = viewMode === '2d' || viewMode === 'split'
-  const show3d = viewMode === '3d' || viewMode === 'split'
+  const show2d = !immersive && (viewMode === '2d' || viewMode === 'split')
+  const show3d = !!immersive || viewMode === '3d' || viewMode === 'split'
 
   return (
     <ErrorBoundary fallback={<EditorSceneCrashFallback />}>
@@ -1148,6 +1154,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
           ) : null}
           <SelectionPersistenceManager enabled={hasLoadedInitialScene && !showLoader} />
           <Viewer
+            immersive={immersive}
             defaultRender={EDITOR_DEFAULT_RENDER}
             disablePostFx={disablePostFx}
             hoverStyles={EDITOR_HOVER_STYLES}
@@ -1161,6 +1168,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
             selectionManager={isFirstPersonMode && !isCaptureMode ? 'default' : 'custom'}
           >
             <ViewerSceneContent
+              isImmersive={immersive != null}
               isFirstPersonMode={isFirstPersonMode}
               isLoading={showLoader}
               isStudioMode={isStudioMode}
@@ -1232,6 +1240,7 @@ function PreviewStage({
 }
 
 function EditorContent({
+  immersive,
   layoutVersion = 'v1',
   appMenuButton,
   sidebarTop,
@@ -1520,6 +1529,7 @@ function EditorContent({
 
   const viewerCanvas = (
     <ViewerCanvas
+      immersive={immersive}
       disablePostFx={disablePostFx}
       hasLoadedInitialScene={hasLoadedInitialScene}
       isFirstPersonMode={isFirstPersonMode}

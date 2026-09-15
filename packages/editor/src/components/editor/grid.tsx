@@ -317,6 +317,7 @@ export const Grid = ({
     // Orientation is driven imperatively in `useFrame` (horizontal by default,
     // tilted into the wall plane while placing on a wall), so no static rotation.
     <mesh
+      name="editor-grid"
       geometry={geometry}
       layers={GRID_LAYER}
       material={material}

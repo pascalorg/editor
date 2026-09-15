@@ -25,17 +25,17 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
 import { mix, positionLocal } from 'three/tsl'
+import { resolveCeilingDraftElevation } from './draft-elevation'
 import { CeilingNode } from './schema'
 
 /**
  * Phase 5 Stage D — ceiling placement tool (kind-owned via `def.tool`).
  *
- * Multi-click polygon drawing at the ceiling height (2.52m default)
+ * Multi-click polygon drawing at the resolved ceiling height
  * with a vertical TSL-gradient connector + ground-shadow lines so the
  * draft is visible against both the ceiling plane and the floor.
  */
 
-const CEILING_HEIGHT = 2.52
 const GRID_OFFSET = 0.02
 
 function commitCeilingDrawing(levelId: LevelNode['id'], points: Array<[number, number]>): string {
@@ -65,7 +65,16 @@ export const CeilingTool: React.FC = () => {
   const [points, setPoints] = useState<Array<[number, number]>>([])
   const [cursorPosition, setCursorPosition] = useState<[number, number]>([0, 0])
   const [snappedCursorPosition, setSnappedCursorPosition] = useState<[number, number]>([0, 0])
-  const [levelY, setLevelY] = useState(0)
+  const nodes = useScene((state) => state.nodes)
+  const ceilingDefaults = useEditor((state) => state.toolDefaults.ceiling)
+  const { baseY: levelY, height: ceilingHeight } = resolveCeilingDraftElevation(
+    {
+      parentId: currentLevelId,
+      polygon: [...points, snappedCursorPosition],
+      height: typeof ceilingDefaults?.height === 'number' ? ceilingDefaults.height : undefined,
+    },
+    nodes,
+  )
   const previousSnappedPointRef = useRef<[number, number] | null>(null)
 
   // Clear preset-seeded defaults on deactivation so a later manual ceiling
@@ -98,15 +107,23 @@ export const CeilingTool: React.FC = () => {
     () =>
       new BufferGeometry().setFromPoints([
         new Vector3(0, 0, 0),
-        new Vector3(0, CEILING_HEIGHT - GRID_OFFSET, 0),
+        new Vector3(0, ceilingHeight - GRID_OFFSET, 0),
       ]),
-    [],
+    [ceilingHeight],
   )
 
+  useEffect(() => () => verticalGeo.dispose(), [verticalGeo])
+
   const gradientOpacityNode = useMemo(
-    () => mix(0.6, 0.0, positionLocal.y.div(CEILING_HEIGHT - GRID_OFFSET).clamp()),
-    [],
+    () => mix(0.6, 0.0, positionLocal.y.div(Math.max(0.001, ceilingHeight - GRID_OFFSET)).clamp()),
+    [ceilingHeight],
   )
+
+  useEffect(() => {
+    if (cursorRef.current) cursorRef.current.position.y = levelY + ceilingHeight
+    if (gridCursorRef.current) gridCursorRef.current.position.y = levelY + GRID_OFFSET
+    if (verticalLineRef.current) verticalLineRef.current.position.y = levelY + GRID_OFFSET
+  }, [levelY, ceilingHeight])
 
   useEffect(() => {
     if (!currentLevelId) return
@@ -119,9 +136,8 @@ export const CeilingTool: React.FC = () => {
       const gridStep = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
       const gridPosition: [number, number] = [...snapPointToGrid(rawPoint, gridStep)]
       setCursorPosition(gridPosition)
-      setLevelY(event.localPosition[1])
-      const ceilingY = event.localPosition[1] + CEILING_HEIGHT
-      const gridY = event.localPosition[1] + GRID_OFFSET
+      const ceilingY = levelY + ceilingHeight
+      const gridY = levelY + GRID_OFFSET
       const lastPoint = points[points.length - 1]
       const orthoPoint: [number, number] =
         isAngleSnapActive() && lastPoint
@@ -160,8 +176,10 @@ export const CeilingTool: React.FC = () => {
         Math.abs(clickPoint[0] - firstPoint[0]) < 0.25 &&
         Math.abs(clickPoint[1] - firstPoint[1]) < 0.25
       ) {
-        const ceilingId = commitCeilingDrawing(currentLevelId, points)
-        setSelection({ selectedIds: [ceilingId] })
+        if (useEditor.getState().viewMode !== '2d') {
+          const ceilingId = commitCeilingDrawing(currentLevelId, points)
+          setSelection({ selectedIds: [ceilingId] })
+        }
         setPoints([])
         clearCeilingSnapFeedback()
       } else {
@@ -175,8 +193,10 @@ export const CeilingTool: React.FC = () => {
     const onGridDoubleClick = (_event: GridEvent) => {
       if (!currentLevelId) return
       if (points.length >= 3) {
-        const ceilingId = commitCeilingDrawing(currentLevelId, points)
-        setSelection({ selectedIds: [ceilingId] })
+        if (useEditor.getState().viewMode !== '2d') {
+          const ceilingId = commitCeilingDrawing(currentLevelId, points)
+          setSelection({ selectedIds: [ceilingId] })
+        }
         setPoints([])
         clearCeilingSnapFeedback()
       }
@@ -188,18 +208,41 @@ export const CeilingTool: React.FC = () => {
       clearCeilingSnapFeedback()
     }
 
+    const resetDraft = () => {
+      setPoints([])
+      previousSnappedPointRef.current = null
+      clearCeilingSnapFeedback()
+    }
+    const unregisterControls = useFloorplanDraftPreview
+      .getState()
+      .registerDrawingControls('ceiling', '3d', {
+        finish: () => {
+          if (points.length < 3) return false
+          const ceilingId = commitCeilingDrawing(currentLevelId, points)
+          setSelection({ selectedIds: [ceilingId] })
+          resetDraft()
+          return true
+        },
+        back: () => {
+          if (points.length <= 1) resetDraft()
+          else setPoints(points.slice(0, -1))
+        },
+        afterFinish: resetDraft,
+      })
+
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('grid:double-click', onGridDoubleClick)
     emitter.on('tool:cancel', onCancel)
 
     return () => {
+      unregisterControls()
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('grid:double-click', onGridDoubleClick)
       emitter.off('tool:cancel', onCancel)
     }
-  }, [currentLevelId, points, cursorPosition, setSelection])
+  }, [currentLevelId, points, cursorPosition, setSelection, levelY, ceilingHeight])
 
   useEffect(() => {
     if (!(mainLineRef.current && closingLineRef.current)) return
@@ -210,7 +253,7 @@ export const CeilingTool: React.FC = () => {
       if (groundClosingLineRef.current) groundClosingLineRef.current.visible = false
       return
     }
-    const ceilingY = levelY + CEILING_HEIGHT
+    const ceilingY = levelY + ceilingHeight
     const snappedCursor = snappedCursorPosition
     const linePoints: Vector3[] = points.map(([x, z]) => new Vector3(x, ceilingY, z))
     linePoints.push(new Vector3(snappedCursor[0], ceilingY, snappedCursor[1]))
@@ -250,7 +293,7 @@ export const CeilingTool: React.FC = () => {
       closingLineRef.current.visible = false
       groundClosingLineRef.current.visible = false
     }
-  }, [points, snappedCursorPosition, levelY])
+  }, [points, snappedCursorPosition, levelY, ceilingHeight])
 
   const previewShape = useMemo(() => {
     if (points.length < 3) return null
@@ -301,7 +344,7 @@ export const CeilingTool: React.FC = () => {
         <mesh
           frustumCulled={false}
           layers={EDITOR_LAYER}
-          position={[0, levelY + CEILING_HEIGHT, 0]}
+          position={[0, levelY + ceilingHeight, 0]}
           rotation={[-Math.PI / 2, 0, 0]}
         >
           <shapeGeometry args={[previewShape]} />
@@ -404,7 +447,7 @@ export const CeilingTool: React.FC = () => {
         <CursorSphere
           color="#818cf8"
           key={index}
-          position={[x, levelY + CEILING_HEIGHT + 0.01, z]}
+          position={[x, levelY + ceilingHeight + 0.01, z]}
           showTooltip={false}
         />
       ))}

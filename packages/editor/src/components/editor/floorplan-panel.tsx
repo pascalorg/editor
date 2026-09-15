@@ -76,6 +76,7 @@ import {
 import { createPortal } from 'react-dom'
 import { Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
+import { markToolCancelConsumed } from '../../hooks/use-keyboard'
 import { resolveCeilingPlanPointSnap } from '../../lib/ceiling-plan-snap'
 import {
   alignFloorplanDraftPoint,
@@ -7937,6 +7938,9 @@ export function FloorplanPanel({
 
   useEffect(() => {
     const handleCancel = () => {
+      if (draftStart || fenceDraftStart || roofDraftStart || activePolygonDraftPoints.length > 0) {
+        markToolCancelConsumed()
+      }
       clearDraft()
     }
 
@@ -7944,7 +7948,7 @@ export function FloorplanPanel({
     return () => {
       emitter.off('tool:cancel', handleCancel)
     }
-  }, [clearDraft])
+  }, [clearDraft, draftStart, fenceDraftStart, roofDraftStart, activePolygonDraftPoints.length])
 
   const createZoneOnCurrentLevel = useCallback(
     (points: WallPlanPoint[]) => {
@@ -9859,6 +9863,73 @@ export function FloorplanPanel({
       setCursorPoint,
     ],
   )
+  useEffect(() => {
+    const register = useFloorplanDraftPreview.getState().registerDrawingControls
+    const unregister = [
+      register('wall', '2d', { back: clearWallPlacementDraft }),
+      register('fence', '2d', {
+        back: clearFencePlacementDraft,
+        afterFinish: () => {
+          const next = useSegmentDraftChain.getState().fence
+          setFenceDraftStart(next)
+          setFenceDraftEnd(next)
+        },
+      }),
+      register('roof', '2d', {
+        back: clearRoofPlacementDraft,
+        afterFinish: clearRoofPlacementDraft,
+      }),
+      register('slab', '2d', {
+        finish: () => {
+          if (slabDraftPoints.length < 3) return false
+          const before = useScene.getState().nodes
+          handleSlabPlacementConfirm()
+          return useScene.getState().nodes !== before
+        },
+        back: () => {
+          if (slabDraftPoints.length <= 1) clearSlabPlacementDraft()
+          else setSlabDraftPoints((points) => points.slice(0, -1))
+        },
+        afterFinish: clearSlabPlacementDraft,
+      }),
+      register('ceiling', '2d', {
+        finish: () => {
+          if (ceilingDraftPoints.length < 3) return false
+          const before = useScene.getState().nodes
+          handleCeilingPlacementConfirm()
+          return useScene.getState().nodes !== before
+        },
+        back: () => setCeilingDraftPoints((points) => points.slice(0, -1)),
+        afterFinish: clearCeilingPlacementDraft,
+      }),
+      register('zone', '2d', {
+        finish: () => {
+          if (zoneDraftPoints.length < 3) return false
+          const before = useScene.getState().nodes
+          handleZonePlacementConfirm()
+          return useScene.getState().nodes !== before
+        },
+        back: () => setZoneDraftPoints((points) => points.slice(0, -1)),
+      }),
+    ]
+    return () => {
+      for (const cleanup of unregister) cleanup()
+    }
+  }, [
+    clearWallPlacementDraft,
+    clearFencePlacementDraft,
+    clearRoofPlacementDraft,
+    clearSlabPlacementDraft,
+    clearCeilingPlacementDraft,
+    setFenceDraftEnd,
+    slabDraftPoints.length,
+    ceilingDraftPoints.length,
+    zoneDraftPoints.length,
+    handleSlabPlacementConfirm,
+    handleCeilingPlacementConfirm,
+    handleZonePlacementConfirm,
+  ])
+
   const { getFloorplanHitIdAtPoint, getFloorplanSelectionIdsInBounds } = useFloorplanHitTesting({
     sceneRef: floorplanSceneRef,
   })

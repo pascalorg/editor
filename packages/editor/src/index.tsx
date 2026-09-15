@@ -726,3 +726,16 @@ export {
   type WallSnapKind,
   type WallSnapPoint,
 } from './store/use-wall-snap-indicator'
+
+export { canDirectMoveNode } from './lib/direct-manipulation'
+export { cyclePaintScope, paintScopeLabel, type PaintHoverInfo } from './lib/paint-scope'
+export { cycleSnappingModeIn } from './lib/snapping-mode'
+export { emitDeleteSFX } from './lib/sfx-bus'
+export {
+  brushRadiusRange,
+  clipTerrainPatchToSite,
+  commitStroke,
+  terrainPointInsideSite,
+} from './lib/terrain-sculpt'
+
+export { getSpatialPointerId, spatialPointerInput } from './lib/spatial-pointer-input'
