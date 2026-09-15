@@ -32,7 +32,7 @@ import {
 import { Euler, Matrix3, Quaternion, Vector3 } from 'three'
 import { hasRoofFaceChildOverlap, resolveRoofWallHit } from '../../../lib/roof-wall-hit'
 import { snapWorldXZForActiveBuilding } from '../../../lib/world-grid-snap'
-import { itemEventToSurfaceHit } from '../shared/surface-hit'
+import { itemEventToSurfaceHit, surfaceWorldNormalY } from '../shared/surface-hit'
 import {
   calculateItemRotation,
   getGridAlignedDimensions,
@@ -1056,32 +1056,38 @@ export const itemSurfaceStrategy = {
 // SHELF SURFACE STRATEGY
 // ============================================================================
 
-/**
- * Resolve the row Y closest to the cursor's local Y. Reads candidate row
- * positions from the kind's `capabilities.surfaces.custom` — the shelf
- * declaration emits one `SurfacePoint` per board's top surface. The
- * strategy stays kind-agnostic at this level: any future "multi-board"
- * kind that declares `surfaces.custom` with upward normals gets the
- * same hit behaviour for free.
- */
-function getShelfRowSurfaceY(shelfNode: ShelfNode, localY: number): number | null {
-  const def = nodeRegistry.get('shelf')
-  const custom = def?.capabilities?.surfaces?.custom
-  if (!custom) return null
-  const candidates = custom(shelfNode as AnyNode)
-  if (candidates.length === 0) return null
-  let best = candidates[0]
-  let bestDist = Math.abs(best!.position[1] - localY)
-  for (let i = 1; i < candidates.length; i++) {
-    const c = candidates[i]
-    if (!c) continue
-    const dist = Math.abs(c.position[1] - localY)
-    if (dist < bestDist) {
-      best = c
-      bestDist = dist
-    }
+function resolveShelfSurfacePlacement(
+  host: ShelfNode,
+  event: ShelfEvent,
+  dimensions: [number, number, number],
+  worldYaw: number,
+  entering: boolean,
+) {
+  const mesh = sceneRegistry.nodes.get(host.id)
+  if (!mesh) return null
+  const local = mesh.worldToLocal(new Vector3(...event.position))
+  const quaternion = mesh.getWorldQuaternion(new Quaternion())
+  const hostYaw = new Euler().setFromQuaternion(quaternion, 'YXZ').y
+  const placement = resolveSurfacePlacement({
+    host,
+    childKind: 'item',
+    childFootprint: { size: dimensions, rotationY: worldYaw - hostYaw },
+    hit: {
+      point: local.toArray(),
+      // Existing shelf movement elects rows even over side faces or board gaps;
+      // only entering requires an upward hit and a fitting footprint.
+      normalWorldY: entering ? surfaceWorldNormalY(event.normal, event.object.matrixWorld) : 1,
+    },
+    scene: createSceneApi(useScene),
+    snapScalar: snapToGrid,
+    checkFootprint: entering,
+  })
+  if (!placement) return null
+  return {
+    position: [...placement.position] as [number, number, number],
+    rotationY: placement.rotationY,
+    worldPosition: mesh.localToWorld(new Vector3(...placement.position)).toArray(),
   }
-  return best?.position[1] ?? null
 }
 
 export const shelfSurfaceStrategy = {
@@ -1100,43 +1106,29 @@ export const shelfSurfaceStrategy = {
     if (ctx.state.surface === 'shelf-surface' && ctx.state.shelfId === shelfNode.id) {
       return null
     }
-    if (!isUpwardShelfSurfaceHit(event)) return null
-
-    // Size check: draft footprint must fit on the shelf board (width × depth).
     const ourDims = ctx.draftItem
       ? getScaledDimensions(ctx.draftItem)
       : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS)
-    if (ourDims[0] > shelfNode.width || ourDims[2] > shelfNode.depth) return null
-
-    const shelfMesh = sceneRegistry.nodes.get(shelfNode.id)
-    if (!shelfMesh) return null
-
-    const worldPos = new Vector3(event.position[0], event.position[1], event.position[2])
-    const localPos = shelfMesh.worldToLocal(worldPos)
-    const rowY = getShelfRowSurfaceY(shelfNode, localPos.y)
-    if (rowY === null) return null
-
-    const x = snapToGrid(localPos.x, ourDims[0])
-    const z = snapToGrid(localPos.z, ourDims[2])
-
-    const worldSnapped = shelfMesh.localToWorld(new Vector3(x, rowY, z))
-
-    const surfaceQuat = new Quaternion()
-    shelfMesh.getWorldQuaternion(surfaceQuat)
-    const surfaceWorldY = new Euler().setFromQuaternion(surfaceQuat, 'YXZ').y
-    const localRotationY = ctx.currentCursorRotationY - surfaceWorldY
+    const pose = resolveShelfSurfacePlacement(
+      shelfNode,
+      event,
+      ourDims,
+      ctx.currentCursorRotationY,
+      true,
+    )
+    if (!pose) return null
     const draftRotation = ctx.draftItem?.rotation ?? [0, 0, 0]
 
     return {
       stateUpdate: { surface: 'shelf-surface', shelfId: shelfNode.id },
       nodeUpdate: {
-        position: [x, rowY, z],
+        position: pose.position,
         parentId: shelfNode.id,
-        rotation: [draftRotation[0], localRotationY, draftRotation[2]],
+        rotation: [draftRotation[0], pose.rotationY, draftRotation[2]],
       },
       cursorRotationY: ctx.currentCursorRotationY,
-      gridPosition: [x, rowY, z],
-      cursorPosition: [worldSnapped.x, worldSnapped.y, worldSnapped.z],
+      gridPosition: pose.position,
+      cursorPosition: pose.worldPosition,
       stopPropagation: true,
     }
   },
@@ -1150,25 +1142,20 @@ export const shelfSurfaceStrategy = {
     if (!(ctx.state.shelfId && ctx.draftItem)) return null
     if (event.node.id !== ctx.state.shelfId) return null
 
-    const shelfNode = event.node as ShelfNode
-    const shelfMesh = sceneRegistry.nodes.get(shelfNode.id)
-    if (!shelfMesh) return null
-
-    const ourDims = getScaledDimensions(ctx.draftItem)
-    const worldPos = new Vector3(event.position[0], event.position[1], event.position[2])
-    const localPos = shelfMesh.worldToLocal(worldPos)
-    const rowY = getShelfRowSurfaceY(shelfNode, localPos.y)
-    if (rowY === null) return null
-
-    const x = snapToGrid(localPos.x, ourDims[0])
-    const z = snapToGrid(localPos.z, ourDims[2])
-    const worldSnapped = shelfMesh.localToWorld(new Vector3(x, rowY, z))
+    const pose = resolveShelfSurfacePlacement(
+      event.node as ShelfNode,
+      event,
+      getScaledDimensions(ctx.draftItem),
+      ctx.currentCursorRotationY,
+      false,
+    )
+    if (!pose) return null
 
     return {
-      gridPosition: [x, rowY, z],
-      cursorPosition: [worldSnapped.x, worldSnapped.y, worldSnapped.z],
+      gridPosition: pose.position,
+      cursorPosition: pose.worldPosition,
       cursorRotationY: ctx.currentCursorRotationY,
-      nodeUpdate: { position: [x, rowY, z] },
+      nodeUpdate: { position: pose.position },
       stopPropagation: true,
       dirtyNodeId: null,
     }
@@ -1192,14 +1179,6 @@ export const shelfSurfaceStrategy = {
       dirtyNodeId: null,
     }
   },
-}
-
-/** Same upward-normal heuristic as `isUpwardItemSurfaceHit`, but typed
- *  for `ShelfEvent`. Re-uses the matrix-driven world normal calculation
- *  via a tiny `ItemEvent`-shaped adapter — the function only reads
- *  `event.normal` + `event.object`. */
-function isUpwardShelfSurfaceHit(event: ShelfEvent): boolean {
-  return isUpwardItemSurfaceHit(event as unknown as ItemEvent)
 }
 
 // ============================================================================
