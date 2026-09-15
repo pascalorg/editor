@@ -2,9 +2,44 @@ import { MATERIAL_CATALOG, type MaterialCatalogItem } from '../material-library'
 import type { ProceduralItemNode } from './node'
 import type { Recipe } from './recipe'
 
+type ProceduralFinish = NonNullable<Recipe['slots'][number]['finish']>
+
+// Textured tones average source WebP RGB pixels (wood) or decoded KTX2 mip 0 (metal)
+// under apps/editor/public/material; flat finishes use their preset color.
 export const FINISH_LIBRARY_REFS = {
-  glass: 'library:preset-glass',
-} as const satisfies Record<NonNullable<Recipe['slots'][number]['finish']>, `library:${string}`>
+  glass: [{ ref: 'library:preset-glass', color: '#87ceeb' }],
+  metal: [
+    { ref: 'library:metal-steel', color: '#636363' },
+    { ref: 'library:metal-chrome', color: '#c8ccce' },
+    { ref: 'library:metal-brass', color: '#b08d57' },
+    { ref: 'library:metal-copper', color: '#cc845b' },
+    { ref: 'library:metal-polished', color: '#f3f3f3' },
+    { ref: 'library:preset-metal', color: '#c7ccd2' },
+  ],
+  wood: [
+    { ref: 'library:wood-finewood27', color: '#a77440' },
+    { ref: 'library:wood-woodplank48', color: '#88654c' },
+    { ref: 'library:wood-hungarianparquet2', color: '#663020' },
+    { ref: 'library:wood-squareparquet21', color: '#3e220d' },
+  ],
+} as const satisfies Record<
+  ProceduralFinish,
+  readonly { ref: `library:${string}`; color: string }[]
+>
+
+export function proceduralFinishLibraryColor(ref: string): string | undefined {
+  return Object.values(FINISH_LIBRARY_REFS)
+    .flat()
+    .find((preset) => preset.ref === ref)?.color
+}
+
+export function resolveProceduralFinishRef(
+  finish: ProceduralFinish,
+  color: string,
+): `library:${string}` | undefined {
+  return nearestColor<Pick<LibraryColorMatch, 'ref' | 'color'>>(color, FINISH_LIBRARY_REFS[finish])
+    ?.ref
+}
 
 export type LibraryColorMatch = {
   ref: `library:${string}`
@@ -31,25 +66,36 @@ function hexToLab(hex: string): [number, number, number] | null {
   return [116 * y - 16, 500 * (x - y), 200 * (y - z)]
 }
 
+function nearestColor<T extends { color: string }>(hex: string, candidates: readonly T[]) {
+  const lab = hexToLab(hex)
+  if (!lab) return null
+  let nearest: (T & { distance: number }) | null = null
+  for (const entry of candidates) {
+    const candidate = hexToLab(entry.color)
+    if (!candidate) continue
+    const distance = Math.hypot(lab[0] - candidate[0], lab[1] - candidate[1], lab[2] - candidate[2])
+    if (!nearest || distance < nearest.distance) nearest = { ...entry, distance }
+  }
+  return nearest
+}
+
 export function nearestLibraryColorRef(
   hex: string,
   catalog: readonly MaterialCatalogItem[] = MATERIAL_CATALOG,
 ): LibraryColorMatch | null {
-  const lab = hexToLab(hex)
-  if (!lab) return null
-  let nearest: LibraryColorMatch | null = null
-  for (const entry of catalog) {
-    // Flat swatches are in `colors` and have no populated maps, including non-albedo maps.
-    if (entry.category !== 'colors' || Object.values(entry.preset.maps).some(Boolean)) continue
-    const color = entry.preset.mapProperties.color
-    const candidate = hexToLab(color)
-    if (!candidate) continue
-    const distance = Math.hypot(lab[0] - candidate[0], lab[1] - candidate[1], lab[2] - candidate[2])
-    if (!nearest || distance < nearest.distance) {
-      nearest = { ref: `library:${entry.id}`, color, name: entry.label, distance }
-    }
-  }
-  return nearest
+  return nearestColor(
+    hex,
+    catalog
+      // Flat swatches are in `colors` and have no populated maps, including non-albedo maps.
+      .filter(
+        (entry) => entry.category === 'colors' && !Object.values(entry.preset.maps).some(Boolean),
+      )
+      .map((entry) => ({
+        ref: `library:${entry.id}` as const,
+        color: entry.preset.mapProperties.color,
+        name: entry.label,
+      })),
+  )
 }
 
 export function snapProceduralSlotsToLibrary(
@@ -60,7 +106,7 @@ export function snapProceduralSlotsToLibrary(
   for (const slot of node.recipe.slots) {
     if (options.keepOverrides && Object.hasOwn(node.slots, slot.id)) continue
     const ref = slot.finish
-      ? FINISH_LIBRARY_REFS[slot.finish]
+      ? resolveProceduralFinishRef(slot.finish, slot.color)
       : nearestLibraryColorRef(slot.color)?.ref
     if (ref) slots[slot.id] = ref
   }

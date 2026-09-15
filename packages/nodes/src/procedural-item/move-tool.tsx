@@ -2,6 +2,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type CeilingEvent,
   emitter,
   type GridEvent,
   holdHiddenWallPointerEvents,
@@ -30,26 +31,34 @@ import { Vector3 } from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { beginOpeningMoveHistorySession } from '../shared/opening-move-history'
 import { acquireProceduralGeometry } from './geometry'
-import { createProceduralWallMoveSession } from './move-session'
+import { createProceduralCeilingMoveSession, createProceduralWallMoveSession } from './move-session'
 
 export default function MoveProceduralItem({ node }: { node: ProceduralItemNode }) {
   return node.recipe.mounting ? (
-    <WallMove node={node} />
+    <MountedMove node={node} />
   ) : (
     <MoveRegistryNodeTool node={node as unknown as AnyNode} />
   )
 }
-function WallMove({ node }: { node: ProceduralItemNode }) {
+function MountedMove({ node }: { node: ProceduralItemNode }) {
   const { activeLevelId, isCameraDragging, selectNode } = useRegistryToolContext()
   const [valid, setValid] = useState(false)
   useEffect(() => {
     if (!activeLevelId) return
-    const session = createProceduralWallMoveSession(node, activeLevelId)
+    const ceilingMounted = node.recipe.mounting?.attachTo === 'ceiling'
+    const session = (
+      ceilingMounted ? createProceduralCeilingMoveSession : createProceduralWallMoveSession
+    )(node, activeLevelId)
     const releaseWallEvents = holdHiddenWallPointerEvents()
     let wallAt = -Infinity
     let finished = false
     const onWall = (event: WallEvent) => {
-      if (useEditor.getState().isFloorplanHovered || !isValidWallSideFace(event.normal)) return
+      if (
+        ceilingMounted ||
+        useEditor.getState().isFloorplanHovered ||
+        !isValidWallSideFace(event.normal)
+      )
+        return
       wallAt = performance.now()
       session.wall(
         event.node,
@@ -64,12 +73,26 @@ function WallMove({ node }: { node: ProceduralItemNode }) {
       if (wall) normal.transformDirection(wall.matrixWorld)
       publishPlacementSurface(new Vector3(...event.position), normal)
     }
+    const onCeiling = (event: CeilingEvent) => {
+      if (!ceilingMounted || useEditor.getState().isFloorplanHovered) return
+      wallAt = performance.now()
+      session.ceiling(
+        event.node,
+        event.localPosition[0],
+        event.localPosition[2],
+        event.nativeEvent.altKey,
+      )
+      setValid(session.canCommit())
+      publishPlacementSurface(new Vector3(...event.position), new Vector3(0, -1, 0))
+    }
     const onGrid = (event: GridEvent) => {
       if (useEditor.getState().isFloorplanHovered || performance.now() - wallAt < 64) return
-      session.apply({
-        planPoint: [event.position[0], event.position[2]],
-        modifiers: event.nativeEvent,
-      })
+      if (ceilingMounted) session.free([event.position[0], event.position[2]])
+      else
+        session.apply({
+          planPoint: [event.position[0], event.position[2]],
+          modifiers: event.nativeEvent,
+        })
       setValid(session.canCommit())
       if (!session.candidate) clearPlacementSurface()
     }
@@ -91,11 +114,27 @@ function WallMove({ node }: { node: ProceduralItemNode }) {
       useEditor.getState().setMovingNode(null)
     }
     const clickWall = (event: WallEvent) => {
+      if (ceilingMounted) return
       onWall(event)
       if (session.canCommit()) {
         event.stopPropagation()
         commit()
       }
+    }
+    const clickCeiling = (event: CeilingEvent) => {
+      if (!ceilingMounted) return
+      onCeiling(event)
+      if (session.canCommit()) {
+        event.stopPropagation()
+        commit()
+      }
+    }
+    const leaveCeiling = (event: CeilingEvent) => {
+      if (!ceilingMounted || useEditor.getState().isFloorplanHovered) return
+      wallAt = -Infinity
+      session.free([event.position[0], event.position[2]])
+      setValid(false)
+      clearPlacementSurface()
     }
     const clickGrid = (event: GridEvent) => {
       onGrid(event)
@@ -113,12 +152,18 @@ function WallMove({ node }: { node: ProceduralItemNode }) {
       if (useEditor.getState().isFloorplanHovered || event.repeat || event.metaKey || event.ctrlKey)
         return
       if ((event.target as HTMLElement)?.closest('input,textarea,[contenteditable="true"]')) return
-      if (event.key.toLowerCase() === 'r') {
+      if (event.key.toLowerCase() === 'r' || (ceilingMounted && event.key.toLowerCase() === 't')) {
         event.preventDefault()
-        session.flipSide?.()
+        event.stopImmediatePropagation()
+        if (ceilingMounted) session.rotate(event.key.toLowerCase() === 't' ? -1 : 1)
+        else session.flipSide?.()
         setValid(session.canCommit())
       }
     }
+    emitter.on('ceiling:enter', onCeiling)
+    emitter.on('ceiling:move', onCeiling)
+    emitter.on('ceiling:click', clickCeiling)
+    emitter.on('ceiling:leave', leaveCeiling)
     emitter.on('wall:enter', onWall)
     emitter.on('wall:move', onWall)
     emitter.on('wall:click', clickWall)
@@ -126,8 +171,12 @@ function WallMove({ node }: { node: ProceduralItemNode }) {
     emitter.on('grid:click', clickGrid)
     emitter.on('tool:cancel', cancel)
     window.addEventListener('pointerup', release)
-    window.addEventListener('keydown', key)
+    window.addEventListener('keydown', key, true)
     return () => {
+      emitter.off('ceiling:enter', onCeiling)
+      emitter.off('ceiling:move', onCeiling)
+      emitter.off('ceiling:click', clickCeiling)
+      emitter.off('ceiling:leave', leaveCeiling)
       emitter.off('wall:enter', onWall)
       emitter.off('wall:move', onWall)
       emitter.off('wall:click', clickWall)
@@ -135,16 +184,16 @@ function WallMove({ node }: { node: ProceduralItemNode }) {
       emitter.off('grid:click', clickGrid)
       emitter.off('tool:cancel', cancel)
       window.removeEventListener('pointerup', release)
-      window.removeEventListener('keydown', key)
+      window.removeEventListener('keydown', key, true)
       useLiveNodeOverrides.getState().clear(node.id as AnyNodeId)
       usePlacementPreview.getState().clear()
       clearPlacementSurface()
       releaseWallEvents()
     }
   }, [node, activeLevelId, isCameraDragging, selectNode])
-  return <WallGhost node={node} valid={valid} levelId={activeLevelId} />
+  return <MountedGhost node={node} valid={valid} levelId={activeLevelId} />
 }
-function WallGhost({
+function MountedGhost({
   node,
   valid,
   levelId,

@@ -169,7 +169,7 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
   },
 
   relations: {
-    hosts: ['item'],
+    hosts: ['item', 'procedural-item'],
     cascadeDelete: 'descendants',
   },
 

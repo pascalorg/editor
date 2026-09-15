@@ -399,7 +399,7 @@ function buildSurfaceItemSession(
  * valid target: floor items are parented to the level, not the slab,
  * because slabs don't carry a `children` field on their schema.
  */
-function findContainingSurface(
+export function findContainingSurface(
   point: readonly [number, number],
   nodes: Record<AnyNodeId, AnyNode>,
   parentLevelId: AnyNodeId | null,
