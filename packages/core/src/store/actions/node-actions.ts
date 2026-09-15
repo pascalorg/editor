@@ -1,4 +1,5 @@
 import { nodeRegistry } from '../../registry/registry'
+import { validateNodeRelations } from '../../registry/validate-relations'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -28,7 +29,11 @@ import {
 } from '../../schema'
 import type { CollectionId } from '../../schema/collections'
 import { constrainWallCurveOffsetToAvoidIntersections } from '../../systems/wall/wall-curve'
-import { addActiveSceneCommitNodeIds, runWithSceneCommitNodeIds } from '../history-control'
+import {
+  activeSceneCommitNodeIds,
+  addActiveSceneCommitNodeIds,
+  runWithSceneCommitNodeIds,
+} from '../history-control'
 import type { SceneState } from '../use-scene'
 
 type AnyContainerNode = AnyNode & { children: string[] }
@@ -530,6 +535,9 @@ function warnSanitizedNodeMutation(
 
 function parseCreatedNode(node: AnyNode, parentId: AnyNodeId | null): AnyNode {
   const candidate = { ...node, parentId }
+  const registered = nodeRegistry.get(candidate.type)?.schema
+  // Generated definitions must reject invalid geometry instead of retaining a failed parse.
+  if (registered?.meta?.()?.strictMutations === true) return registered.parse(candidate) as AnyNode
   const parsed = parseNode(candidate)
   if (parsed.success) return parsed.data
 
@@ -560,6 +568,9 @@ function mergeNodeUpdate(currentNode: AnyNode, patch: Partial<AnyNode>): AnyNode
 
 function parseUpdatedNode(currentNode: AnyNode, data: Partial<AnyNode>): AnyNode {
   const candidate = mergeNodeUpdate(currentNode, data)
+  const registered = nodeRegistry.get(currentNode.type)?.schema
+  // Generated definitions must reject invalid geometry instead of retaining a failed parse.
+  if (registered?.meta?.()?.strictMutations === true) return registered.parse(candidate) as AnyNode
   const parsed = parseNode(candidate)
   if (parsed.success) return parsed.data
 
@@ -1760,6 +1771,16 @@ const deleteNodesActionImpl = (
   })
 }
 
+function validatedSet(set: Parameters<typeof createNodesActionImpl>[0]): typeof set {
+  return (change) =>
+    set((state) => {
+      const patch = change(state)
+      if (patch.nodes)
+        validateNodeRelations(state.nodes, patch.nodes, activeSceneCommitNodeIds() ?? [])
+      return patch
+    })
+}
+
 export const createNodesAction = (
   set: Parameters<typeof createNodesActionImpl>[0],
   get: Parameters<typeof createNodesActionImpl>[1],
@@ -1770,7 +1791,7 @@ export const createNodesAction = (
       const effectiveParentId = parentId ?? (node.parentId as AnyNodeId | null)
       return effectiveParentId ? [node.id, effectiveParentId] : [node.id]
     }),
-    () => createNodesActionImpl(set, get, ops),
+    () => createNodesActionImpl(validatedSet(set), get, ops),
   )
 
 export const applyNodeChangesAction = (
@@ -1787,7 +1808,7 @@ export const applyNodeChangesAction = (
       ...(changes.update ?? []).map(({ id }) => id),
       ...(changes.delete ?? []),
     ],
-    () => applyNodeChangesActionImpl(set, get, changes),
+    () => applyNodeChangesActionImpl(validatedSet(set), get, changes),
   )
 
 export const updateNodesAction = (
@@ -1797,11 +1818,11 @@ export const updateNodesAction = (
 ) =>
   runWithSceneCommitNodeIds(
     updates.map(({ id }) => id),
-    () => updateNodesActionImpl(set, get, updates),
+    () => updateNodesActionImpl(validatedSet(set), get, updates),
   )
 
 export const deleteNodesAction = (
   set: Parameters<typeof deleteNodesActionImpl>[0],
   get: Parameters<typeof deleteNodesActionImpl>[1],
   ids: AnyNodeId[],
-) => runWithSceneCommitNodeIds(ids, () => deleteNodesActionImpl(set, get, ids))
+) => runWithSceneCommitNodeIds(ids, () => deleteNodesActionImpl(validatedSet(set), get, ids))

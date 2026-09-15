@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { readFile } from 'node:fs/promises'
+import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { AnyNode, ImportedMeshNode, WallNode, ZoneNode } from '@pascal-app/core'
 import { type ConversionOptions, convertIfcToPascal, type PascalSceneGraph } from '../src'
@@ -7,7 +8,7 @@ import { type ConversionOptions, convertIfcToPascal, type PascalSceneGraph } fro
 const fixturesDirectory = fileURLToPath(
   new URL('../../../apps/ifc-converter/public/test-ifc-files/', import.meta.url),
 )
-const wasmPath = fileURLToPath(new URL('../../../node_modules/web-ifc/', import.meta.url))
+const wasmPath = `${dirname(fileURLToPath(import.meta.resolve('web-ifc')))}/`
 
 async function convertFixture(
   name: string,

@@ -65,6 +65,11 @@
       "types": "./dist/systems/stair/stair-opening-sync.d.ts",
       "import": "./dist/systems/stair/stair-opening-sync.js",
       "default": "./dist/systems/stair/stair-opening-sync.js"
+    },
+    "./procedural-items": {
+      "types": "./dist/procedural-items/index.d.ts",
+      "import": "./dist/procedural-items/index.js",
+      "default": "./dist/procedural-items/index.js"
     }
   },
   "files": [

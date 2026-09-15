@@ -36,8 +36,12 @@ import {
   type GLTFWriter,
 } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import * as WebGPUTextureUtils from 'three/examples/jsm/utils/WebGPUTextureUtils.js'
+import { cloneExportUserData } from './export-user-data'
 import {
+  type CompressedTextureDecompressor,
+  decompressCanonicalNormalMaps,
   disposeExportResources,
+  GLASS_OPACITY_USERDATA,
   normalizePortableScene,
   normalizeViewerArtifactMaterials,
 } from './portable-export'
@@ -69,12 +73,20 @@ export type GlbExportOptions = {
   excludedNodeTypes?: readonly string[]
   /** Selected static viewer-presentation contributions; omitted means none. */
   includedPresentationIds?: readonly string[]
-  /** Portable downloads are static; the baked viewer retains internal clips. */
+  /** Portable materials/geometry normalisation vs the baked viewer artifact. */
   purpose?: 'portable' | 'viewer'
+  /**
+   * Door/window open clips. Defaults to `keep` for the viewer bake and for GLB
+   * downloads (Blender turns them into actions); USDZ and print pass `none`
+   * because those formats freeze geometry and cannot play them.
+   */
+  animations?: 'keep' | 'none'
   /** Called for actual lossy portable conversions discovered during preparation. */
   onWarning?: (warning: string) => void
   /** Reject retained node kinds whose export geometry can only be baked asynchronously. */
   requireSynchronousBake?: boolean
+  /** GPU decompressor for compressed normal maps that must be baked; defaults to WebGPUTextureUtils. */
+  decompressTexture?: CompressedTextureDecompressor
 }
 
 /** Resolve after the next couple of animation frames, giving React/R3F time to
@@ -144,7 +156,10 @@ export async function exportSceneToGlb(
   options: GlbExportOptions = {},
 ): Promise<ArrayBuffer> {
   const textureMode = options.textures ?? 'embed'
-  const prepared = await preparePortableSceneFromViewer(sceneGroup, nodes, options)
+  const prepared = await preparePortableSceneFromViewer(sceneGroup, nodes, {
+    ...options,
+    animations: options.animations ?? 'keep',
+  })
   for (const warning of prepared.warnings) options.onWarning?.(warning)
   try {
     return await serializePreparedSceneToGlb(prepared, {
@@ -349,10 +364,21 @@ async function completeSceneExportPreparation(
     await replaceBakeGeometryAsync(preparation)
     await appendSelectedPresentations(preparation)
     const prepared = finishSceneExportPreparation(preparation)
+    const { options } = preparation
+    const byReference = (options.textures ?? 'embed') === 'reference'
+    const normalizeOptions = {
+      preserveNormalMap: (texture: THREE.Texture) =>
+        byReference && getPascalTextureRef(texture) !== null,
+    }
+    await decompressCanonicalNormalMaps(
+      prepared.scene,
+      options.decompressTexture ?? ((texture) => WebGPUTextureUtils.decompress(texture)),
+      normalizeOptions,
+    )
     prepared.warnings.push(
-      ...(preparation.options.purpose === 'viewer'
-        ? normalizeViewerArtifactMaterials(prepared.scene)
-        : normalizePortableScene(prepared.scene)),
+      ...(options.purpose === 'viewer'
+        ? normalizeViewerArtifactMaterials(prepared.scene, normalizeOptions)
+        : normalizePortableScene(prepared.scene, normalizeOptions)),
     )
     return prepared
   } catch (error) {
@@ -374,10 +400,12 @@ function finishSceneExportPreparation(preparation: SceneExportPreparation): GlbE
   convertMaterials(scene, options.textures ?? 'embed', options.purpose ?? 'viewer')
 
   const retainedCloneByOriginal = retainedClones(scene, cloneByOriginal)
-  const animation =
-    options.purpose === 'viewer'
-      ? bakeAnimationClips(retainedCloneByOriginal, nodes, registryEntries)
-      : { clips: [], clipNamesByNode: new Map<string, string[]>() }
+  const keepClips = options.animations
+    ? options.animations === 'keep'
+    : options.purpose === 'viewer'
+  const animation = keepClips
+    ? bakeAnimationClips(retainedCloneByOriginal, nodes, registryEntries)
+    : { clips: [], clipNamesByNode: new Map<string, string[]>() }
   stampIdentity(scene, retainedCloneByOriginal, nodes, animation.clipNamesByNode, registryEntries)
 
   let disposed = false
@@ -495,7 +523,7 @@ function ownBorrowedPresentationTextures(root: THREE.Object3D): void {
         let ownedTexture = ownedTextures.get(sourceTexture)
         if (!ownedTexture) {
           ownedTexture = sourceTexture.clone()
-          ownedTexture.userData = structuredClone(sourceTexture.userData)
+          ownedTexture.userData = cloneExportUserData(sourceTexture.userData)
           ownedTexture.needsUpdate = true
           ownedTextures.set(sourceTexture, ownedTexture)
         }
@@ -670,7 +698,7 @@ function cloneSceneForExport(
   if (excludedObjects.has(source)) return new THREE.Group()
 
   const clone = source.clone(false)
-  clone.userData = structuredClone(source.userData)
+  clone.userData = cloneExportUserData(source.userData)
   const renderable = source as THREE.Mesh
   const renderableClone = clone as THREE.Mesh
   if (renderable.geometry) {
@@ -693,7 +721,7 @@ function cloneSceneForExport(
         let textureClone = cache.textures.get(texture)
         if (!textureClone) {
           textureClone = texture.clone()
-          textureClone.userData = structuredClone(texture.userData)
+          textureClone.userData = cloneExportUserData(texture.userData)
           textureClone.needsUpdate = true
           cache.textures.set(texture, textureClone)
         }
@@ -1047,7 +1075,8 @@ function convertMaterial(
   if (cached) return cached
 
   const src = material as THREE.Material & Record<string, unknown>
-  const target = new THREE.MeshStandardMaterial()
+  const glass = purpose === 'portable' && isPortableGlass(material)
+  const target = glass ? new THREE.MeshPhysicalMaterial() : new THREE.MeshStandardMaterial()
 
   target.name = material.name
   if (src.color instanceof THREE.Color) target.color.copy(src.color)
@@ -1083,10 +1112,42 @@ function convertMaterial(
     }
   }
 
+  if (glass) applyPortableGlass(target as THREE.MeshPhysicalMaterial, material)
   if (textureMode === 'reference') replaceReferencedTextures(target, placeholderCache)
 
   cache.set(material, target)
   return target
+}
+
+/** Mirrors the viewer's own rule (`maybeApplyGlassFresnel`): an untextured
+ * see-through surface below this opacity is glass, not tinted plastic. */
+const GLASS_OPACITY_THRESHOLD = 0.6
+
+function isPortableGlass(material: THREE.Material): boolean {
+  const src = material as THREE.Material & Record<string, unknown>
+  return (
+    material.transparent &&
+    material.opacity < GLASS_OPACITY_THRESHOLD &&
+    !(src.map instanceof THREE.Texture)
+  )
+}
+
+/**
+ * The viewer sells glass with a fresnel-driven opacity node, which glTF cannot
+ * carry; a plain alpha blend lands in every other tool as a blue film. Real
+ * transmission (KHR_materials_transmission + ior) is what Blender, Unity and
+ * Unreal all render as glass. The authored opacity becomes the tint strength.
+ */
+function applyPortableGlass(target: THREE.MeshPhysicalMaterial, source: THREE.Material) {
+  target.color.lerp(new THREE.Color(0xffffff), 1 - source.opacity)
+  target.transmission = 1
+  target.ior = 1.5
+  target.roughness = Math.min(target.roughness, 0.15)
+  target.metalness = 0
+  target.transparent = false
+  target.opacity = 1
+  target.depthWrite = true
+  target.userData[GLASS_OPACITY_USERDATA] = source.opacity
 }
 
 function replaceReferencedTextures(

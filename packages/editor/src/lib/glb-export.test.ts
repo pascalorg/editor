@@ -27,6 +27,7 @@ import {
   prepareSceneForExportAsync,
   writeTextureReferenceExtras,
 } from './glb-export'
+import { createUsdzScene } from './portable-export'
 
 // The reference module reads the storage origin lazily on first use, so
 // setting the env here (before any validation call) pins it for the file.
@@ -97,6 +98,29 @@ describe('prepareSceneForExport', () => {
     expect(material.roughness).toBeCloseTo(0.3)
     expect(material.metalness).toBeCloseTo(0.7)
     expect(material.color.getHexString()).toBe('cc3300')
+  })
+
+  test('clones userData that holds runtime resources and functions', () => {
+    const root = new THREE.Group()
+    root.name = 'scene-renderer'
+    const effectMaterial = new THREE.MeshStandardMaterial()
+    effectMaterial.addEventListener('dispose', () => {})
+    const pool = meshWithNodeMaterial(nodeMaterial())
+    pool.userData = { waterEffect: { material: effectMaterial, onFrame: () => {} } }
+    const overlay = meshWithNodeMaterial(nodeMaterial())
+    overlay.userData = { pascalExport: 'strip', mesh: pool }
+    root.add(pool, overlay)
+    expect(() => structuredClone(pool.userData)).toThrow()
+
+    const { scene } = prepareSceneForExport(root, {})
+
+    const meshes: THREE.Mesh[] = []
+    scene.traverse((object) => {
+      if ((object as THREE.Mesh).isMesh) meshes.push(object as THREE.Mesh)
+    })
+    expect(meshes).toHaveLength(1)
+    expect(meshes[0]?.userData.waterEffect).toBeUndefined()
+    expect(pool.userData.waterEffect.material).toBe(effectMaterial)
   })
 
   test('replaces only the cloned registered subtree with bake-only geometry', () => {
@@ -1685,6 +1709,21 @@ async function withCanvasCapture(
           putImageData: (image: ImageData) => {
             pixelsByCanvas.set(canvas, new Uint8ClampedArray(image.data))
           },
+          fillRect: (_x: number, _y: number, width: number, height: number) => {
+            pixelsByCanvas.set(canvas, new Uint8ClampedArray(width * height * 4).fill(255))
+          },
+          drawImage: (image: HTMLCanvasElement) => {
+            const pixels = pixelsByCanvas.get(image)
+            if (!pixels) throw new Error('Source canvas has no captured pixels')
+            pixelsByCanvas.set(canvas, new Uint8ClampedArray(pixels))
+          },
+          getImageData: (_x: number, _y: number, width: number, height: number) =>
+            ({
+              colorSpace: 'srgb',
+              data: pixelsByCanvas.get(canvas) ?? new Uint8ClampedArray(width * height * 4),
+              height,
+              width,
+            }) as ImageData,
         }),
       } as unknown as HTMLCanvasElement
       return canvas
@@ -1702,3 +1741,170 @@ async function withCanvasCapture(
     else delete globals.document
   }
 }
+
+describe('normal maps in async export preparation', () => {
+  test('decompresses a compressed normal map through the provided decompressor before baking its scale', async () => {
+    await withCanvasCapture(async () => {
+      const root = new THREE.Group()
+      const compressed = new THREE.CompressedTexture([], 2, 2)
+      compressed.name = 'NormalGL_3a132c5f'
+      const material = nodeMaterial({ normalMap: compressed }) as THREE.MeshStandardMaterial
+      material.normalScale.set(0.5, 0.5)
+      root.add(meshWithNodeMaterial(material))
+      let calls = 0
+
+      const prepared = await prepareSceneForExportAsync(
+        root,
+        {},
+        {
+          decompressTexture: async (texture) => {
+            calls += 1
+            expect(texture.name).toBe('NormalGL_3a132c5f')
+            return new THREE.DataTexture(
+              new Uint8Array(
+                [128, 128, 255, 255].concat(
+                  [128, 128, 255, 255],
+                  [128, 128, 255, 255],
+                  [128, 128, 255, 255],
+                ),
+              ),
+              2,
+              2,
+            )
+          },
+        },
+      )
+
+      const exported = (prepared.scene.children[0] as THREE.Mesh)
+        .material as THREE.MeshStandardMaterial
+      expect(calls).toBe(1)
+      expect((exported.normalMap as { isCanvasTexture?: boolean }).isCanvasTexture).toBe(true)
+      expect(exported.normalScale.toArray()).toEqual([1, 1])
+      expect(material.normalMap).toBe(compressed)
+      expect(material.normalScale.toArray()).toEqual([0.5, 0.5])
+    })
+  })
+
+  test('reference mode keeps a stamped normal-map placeholder and its scale for the packer', async () => {
+    await withCanvasCapture(async () => {
+      const root = new THREE.Group()
+      const stamped = new THREE.CompressedTexture([], 4, 4)
+      stamped.userData.pascalTextureRef = {
+        v: 1,
+        kind: 'library-material',
+        src: `${STORAGE_ORIGIN}/storage/v1/object/public/materials/user/material/oak_normal_512.ktx2`,
+        map: 'normal',
+        colorSpace: 'linear',
+      }
+      const material = nodeMaterial({ normalMap: stamped }) as THREE.MeshStandardMaterial
+      material.normalScale.set(1, -1)
+      root.add(meshWithNodeMaterial(material))
+
+      const prepared = await prepareSceneForExportAsync(
+        root,
+        {},
+        {
+          textures: 'reference',
+          purpose: 'viewer',
+          decompressTexture: async () => {
+            throw new Error('by-reference placeholders must not be decompressed')
+          },
+        },
+      )
+
+      const exported = (prepared.scene.children[0] as THREE.Mesh)
+        .material as THREE.MeshStandardMaterial
+      expect(exported.normalMap?.userData.pascalTextureRef).toEqual(
+        stamped.userData.pascalTextureRef,
+      )
+      expect(exported.normalScale.toArray()).toEqual([1, -1])
+    })
+  })
+})
+
+describe('portable glass', () => {
+  test('see-through untextured surfaces become transmission glass in portable exports only', async () => {
+    const root = new THREE.Group()
+    const glass = new MeshStandardNodeMaterial({
+      color: '#3d9ed4',
+      transparent: true,
+      opacity: 0.3,
+      roughness: 0.1,
+    })
+    const tintedPlastic = new MeshStandardNodeMaterial({
+      color: '#3d9ed4',
+      transparent: true,
+      opacity: 0.8,
+    })
+    root.add(meshWithNodeMaterial(glass), meshWithNodeMaterial(tintedPlastic))
+
+    const portable = await prepareSceneForExportAsync(root, {})
+    const [exportedGlass, exportedPlastic] = portable.scene.children.map(
+      (child) => (child as THREE.Mesh).material as THREE.MeshPhysicalMaterial,
+    )
+    expect(exportedGlass!.isMeshPhysicalMaterial).toBe(true)
+    expect(exportedGlass!.transmission).toBe(1)
+    expect(exportedGlass!.transparent).toBe(false)
+    expect(exportedGlass!.opacity).toBe(1)
+    expect(exportedGlass!.roughness).toBeCloseTo(0.1)
+    // 30% authored opacity keeps 30% of the (linear) tint.
+    const tint = new THREE.Color('#3d9ed4')
+    expect(exportedGlass!.color.r).toBeCloseTo(tint.r + (1 - tint.r) * 0.7, 4)
+    expect(exportedGlass!.color.b).toBeCloseTo(tint.b + (1 - tint.b) * 0.7, 4)
+    expect(exportedPlastic!.isMeshPhysicalMaterial).toBeUndefined()
+    expect(exportedPlastic!.transparent).toBe(true)
+
+    const viewer = prepareSceneForExport(root, {}, { purpose: 'viewer' })
+    const kept = (viewer.scene.children[0] as THREE.Mesh).material as THREE.MeshStandardMaterial
+    expect((kept as { isMeshPhysicalMaterial?: boolean }).isMeshPhysicalMaterial).toBeUndefined()
+    expect(kept.transparent).toBe(true)
+    expect(kept.opacity).toBeCloseTo(0.3)
+
+    // USDZ has no transmission: the same prep hands glass its opacity back.
+    const usdz = createUsdzScene(portable.scene)
+    const usdzGlass = (usdz.children[0] as THREE.Mesh).material as THREE.MeshPhysicalMaterial
+    expect(usdzGlass.transmission).toBe(0)
+    expect(usdzGlass.transparent).toBe(true)
+    expect(usdzGlass.opacity).toBeCloseTo(0.3)
+    expect(exportedGlass!.transmission).toBe(1)
+  })
+})
+
+describe('portable clips', () => {
+  function swingDoorScene() {
+    const root = new THREE.Group()
+    const doorGroup = new THREE.Group()
+    const leaf = new THREE.Group()
+    leaf.userData.pascalSwingLeaf = { axis: 'y', openRotationY: Math.PI / 2 }
+    leaf.add(meshWithNodeMaterial(nodeMaterial()))
+    doorGroup.add(leaf)
+    root.add(doorGroup)
+    const doorId = 'door_portable'
+    sceneRegistry.nodes.set(doorId, doorGroup)
+    const nodes: Record<string, AnyNode> = {
+      [doorId]: { object: 'node', id: doorId, type: 'door', name: 'Door' } as unknown as AnyNode,
+    }
+    return { root, nodes, doorId }
+  }
+
+  test('GLB downloads keep door clips when asked, USDZ passes none', async () => {
+    const { root, nodes, doorId } = swingDoorScene()
+
+    const glb = await prepareSceneForExportAsync(root, nodes, { animations: 'keep' })
+    expect(glb.animations).toHaveLength(1)
+    expect(glb.animations[0]!.name).toBe(`${doorId}: open`)
+    const track = glb.animations[0]!.tracks[0]!
+    const targetUuid = track.name.split('.')[0]
+    expect(glb.scene.getObjectByProperty('uuid', targetUuid)).toBeDefined()
+    expect(glb.scene.getObjectByProperty('name', doorId)?.userData.clips).toEqual([
+      `${doorId}: open`,
+    ])
+
+    const usdz = await prepareSceneForExportAsync(root, nodes, { animations: 'none' })
+    expect(usdz.animations).toEqual([])
+    expect(usdz.scene.getObjectByProperty('name', doorId)?.userData.clips).toBeUndefined()
+
+    const legacy = await prepareSceneForExportAsync(root, nodes)
+    expect(legacy.animations).toEqual([])
+  })
+})

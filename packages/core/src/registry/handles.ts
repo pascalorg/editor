@@ -202,7 +202,13 @@ export type LinearResizeHandle<N> = {
    * lean-to roof edges becoming one continuous run.
    */
   connectionSnap?: (node: N, newValue: number, sceneApi: SceneApi) => number
-  placement: HandlePlacement<N>
+  placement: HandlePlacement<N> & {
+    /** Opt-in minimum +axis center distance from an edge, in scaled arrow units. */
+    clearance?: {
+      edge: (node: N, sceneApi: SceneApi) => number
+      distance: number
+    }
+  }
   /**
    * Dimension this handle steers (e.g. `'height'`). When set, the editor
    * publishes it to `activeHandleDrag.label` for the duration of the drag

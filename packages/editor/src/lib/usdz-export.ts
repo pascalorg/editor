@@ -19,6 +19,7 @@ export async function exportSceneToUsdz(
   const prepared = await preparePortableSceneFromViewer(sceneGroup, nodes, {
     ...options,
     textures: 'embed',
+    animations: 'none',
   })
   for (const warning of prepared.warnings) options.onWarning?.(warning)
 

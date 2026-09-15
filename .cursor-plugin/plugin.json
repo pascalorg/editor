@@ -1,7 +1,7 @@
 {
   "name": "pascal-agent-skills",
   "displayName": "Pascal",
-  "version": "0.1.8",
+  "version": "0.1.10",
   "description": "Create, inspect, validate, and assess furniture layouts with bounded next actions in Pascal through MCP.",
   "author": {
     "name": "Pascal",
@@ -28,15 +28,5 @@
     "mcp"
   ],
   "skills": "./skills/",
-  "variables": {
-    "type": "object",
-    "properties": {
-      "PASCAL_API_KEY": {
-        "type": "string",
-        "title": "Pascal API key (hosted)",
-        "description": "Optional. Create a key under Settings -> API keys at editor.pascal.app to reach your hosted projects, Pascal Capture scans, and shared workspaces. Leave it unset to use only the local Pascal CLI."
-      }
-    }
-  },
   "mcpServers": "./.cursor-plugin/mcp.json"
 }

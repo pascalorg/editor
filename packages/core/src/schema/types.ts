@@ -133,7 +133,9 @@ export const AnyNode = nodeUnion([
   PipeTrapNode,
 ])
 
-export type AnyNode = z.infer<typeof AnyNode>
+export type AnyNode =
+  | z.infer<typeof AnyNode>
+  | import('../procedural-items/node').ProceduralItemNode
 export type AnyNodeType = AnyNode['type']
 export type AnyNodeId = AnyNode['id']
 

@@ -51,6 +51,7 @@ import {
 } from '../../lib/fresh-planar-placement'
 import { resolveFloatingActionMenuVisibility } from '../../lib/interaction/overlay-policy'
 import { curveReshapeScope, holeEditScope } from '../../lib/interaction/scope'
+import { duplicateWithoutMove, registryMoveDisabled } from '../../lib/node-action-movement'
 import { playBlockedQuickActionFeedback } from '../../lib/quick-action-feedback'
 import { collectQuickActionNodeScope } from '../../lib/quick-action-nodes'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
@@ -501,6 +502,16 @@ export function FloatingActionMenu() {
       if (!node?.parentId) return
       sfxEmitter.emit('sfx:item-pick')
 
+      if (registryMoveDisabled(node)) {
+        try {
+          const id = duplicateWithoutMove(node)
+          if (id) setSelection({ selectedIds: [id] })
+        } catch (error) {
+          console.error('Failed to duplicate node', error)
+        }
+        return
+      }
+
       if (node.type === 'roof') {
         try {
           duplicateRoofSubtree(node.id as AnyNodeId, { mode: 'move' })
@@ -805,7 +816,9 @@ export function FloatingActionMenu() {
                   // `capabilities.movable`, a `floorplanMoveTarget`, or a
                   // 3D `affordanceTools.move` mover gets the Move button.
                   // Adding a new movable kind never touches this file.
-                  node && isRegistryMovable(node.type) ? handleMove : undefined
+                  node && isRegistryMovable(node.type) && !registryMoveDisabled(node)
+                    ? handleMove
+                    : undefined
                 }
                 onDelete={handleDelete}
                 onDuplicate={
