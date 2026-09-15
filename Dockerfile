@@ -1,6 +1,7 @@
 # Matches `packageManager` in package.json and the version CI installs — a skew
 # here is what makes `--frozen-lockfile` fail inside the image but not locally.
 FROM oven/bun:1.3.14-alpine
+LABEL org.opencontainers.image.source="https://github.com/pascalorg/editor"
 WORKDIR /app
 
 # `next build` runs under `node`, and this image's `node` is a shim that re-execs
