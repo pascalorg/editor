@@ -1,7 +1,11 @@
 import { expect, test } from 'bun:test'
 import { MATERIAL_CATALOG, type MaterialCatalogItem } from '../material-library'
 import { shelfRecipe } from './fixtures'
-import { nearestLibraryColorRef, snapProceduralSlotsToLibrary } from './library-colors'
+import {
+  nearestLibraryColorRef,
+  resolveProceduralFinishRef,
+  snapProceduralSlotsToLibrary,
+} from './library-colors'
 import { proceduralSlotColor } from './materials'
 import { ProceduralItemNode } from './node'
 
@@ -106,3 +110,45 @@ test('scene, library, and hex overrides are preserved while other slots are snap
     expect(node).toEqual(before)
   }
 })
+
+const finishSamples = [
+  ['wood', '#aa7744', 'wood-finewood27', 'Finewood 27', '#a77440'],
+  ['wood', '#89664d', 'wood-woodplank48', 'Wood Plank 48', '#88654c'],
+  ['wood', '#683222', 'wood-hungarianparquet2', 'Hungarian Parquet 2', '#663020'],
+  ['wood', '#301a0a', 'wood-squareparquet21', 'Square Parquet 21', '#3e220d'],
+  ['metal', '#666666', 'metal-steel', 'Brushed Steel', '#636363'],
+  ['metal', '#c8ccce', 'metal-chrome', 'Chrome', '#c8ccce'],
+  ['metal', '#b18e58', 'metal-brass', 'Brass', '#b08d57'],
+  ['metal', '#cd855c', 'metal-copper', 'Copper', '#cc845b'],
+  ['metal', '#f4f4f4', 'metal-polished', 'Polished Metal', '#f3f3f3'],
+  ['metal', '#c7ccd2', 'preset-metal', 'Metal', '#c7ccd2'],
+  ['glass', '#ff0000', 'preset-glass', 'Glass', '#87ceeb'],
+] as const
+
+for (const [finish, color, id, label, tone] of finishSamples) {
+  test(`${finish} tone ${color} selects ${label} and supplies its glyph color`, () => {
+    expect(MATERIAL_CATALOG.find((entry) => entry.id === id)?.label).toBe(label)
+    expect(resolveProceduralFinishRef(finish, color)).toBe(`library:${id}`)
+    expect(proceduralSlotColor(`library:${id}`, color, {})).toBe(tone)
+    const recipe = structuredClone(shelfRecipe)
+    Object.assign(recipe.slots[0]!, { finish, color })
+    const node = ProceduralItemNode.parse({ recipe })
+    const before = structuredClone(node)
+    expect(snapProceduralSlotsToLibrary(node).frame).toBe(`library:${id}`)
+    expect(node).toEqual(before)
+  })
+}
+
+for (const finish of ['wood', 'metal'] as const) {
+  test(`${finish} preserves scene, library and Authored overrides`, () => {
+    const recipe = structuredClone(shelfRecipe)
+    recipe.slots[0]!.finish = finish
+    for (const ref of ['scene:mtl_painted', 'library:preset-white', '#AbCdEf']) {
+      const node = ProceduralItemNode.parse({ recipe, slots: { frame: ref } })
+      const before = structuredClone(node)
+      expect(snapProceduralSlotsToLibrary(node).frame).toBe(ref)
+      expect(node).toEqual(before)
+    }
+    expect(resolveProceduralFinishRef(finish, 'invalid')).toBeUndefined()
+  })
+}
