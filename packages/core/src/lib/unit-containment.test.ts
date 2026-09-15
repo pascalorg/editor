@@ -127,6 +127,21 @@ describe('deriveUnit', () => {
     expect(new Set(result.boundaryWallIds)).toEqual(new Set(walls.map((wall) => wall.id)))
   })
 
+  test('adopts the walls of the detected room that encloses a zone drawn short of them', () => {
+    const s = scene()
+    const polygon = rectangle(0, 0, 8, 6)
+    const walls = polygon.map((start, index) =>
+      s.add(
+        WallNode.parse({ parentId: s.lower.id, start, end: polygon[(index + 1) % polygon.length] }),
+      ),
+    )
+    const farWall = s.add(WallNode.parse({ parentId: s.lower.id, start: [20, 0], end: [24, 0] }))
+    const inset = s.zone(s.lower, rectangle(1, 1, 6, 4), 'Inset')
+    const result = deriveUnit(s.unit([inset]), s.nodes)
+    expect(new Set(result.boundaryWallIds)).toEqual(new Set(walls.map((wall) => wall.id)))
+    expect(result.boundaryWallIds).not.toContain(farWall.id)
+  })
+
   test('resolves auto zones from current walls instead of the stored polygon', () => {
     const s = scene()
     const polygon = rectangle()

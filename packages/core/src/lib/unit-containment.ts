@@ -10,7 +10,7 @@ import type {
 import { pointOnPolygonBoundary, wallOverlapsSlabFootprint } from '../systems/slab/slab-support'
 import { measurementCentroid } from './measurement-geometry'
 import { type Point2D, pointInPolygon } from './polygon-relations'
-import { resolveAutoZonePolygon } from './space-detection'
+import { detectSpacesForLevel, resolveAutoZonePolygon } from './space-detection'
 
 export type UnitDerivation = {
   unitId: UnitNode['id']
@@ -33,6 +33,12 @@ function footprintCentroid(node: AnyNode): Point2D | null {
     return centroid ? [centroid[0], centroid[2]] : null
   }
   return null
+}
+
+function polygonCentroid(polygon: Point2D[]): Point2D | null {
+  if (polygon.length < 3) return null
+  const centroid = measurementCentroid(polygon.map(([x, z]) => [x, 0, z]))
+  return centroid ? [centroid[0], centroid[2]] : null
 }
 
 function coversPoint(point: Point2D, polygon: Point2D[], holes: Point2D[][] = []): boolean {
@@ -81,18 +87,21 @@ export function deriveUnit(unit: UnitNode, nodes: Nodes): UnitDerivation {
     .sort((a, b) => a.level - b.level || a.id.localeCompare(b.id))
     .map((level) => level.id)
   const containedNodeIds: AnyNodeId[] = []
-  const boundaryWallIds: WallNode['id'][] = []
+  const boundaryWalls = new Set<WallNode['id']>()
   const supportIds: AnyNodeId[] = []
+  const wallsByLevel = new Map<LevelNode['id'], WallNode[]>()
   for (const node of Object.values(nodes)) {
     const polygons = node.parentId
       ? polygonsByLevel.get(node.parentId as LevelNode['id'])
       : undefined
     if (!polygons) continue
     if (node.type === 'wall') {
+      const levelId = node.parentId as LevelNode['id']
+      wallsByLevel.set(levelId, [...(wallsByLevel.get(levelId) ?? []), node])
       if (
         polygons.some((polygon) => polygon.length >= 3 && wallOverlapsSlabFootprint(node, polygon))
       ) {
-        boundaryWallIds.push(node.id)
+        boundaryWalls.add(node.id)
       }
     } else if (node.type === 'slab' || node.type === 'ceiling') {
       if (polygons.some((polygon) => overlapsSupport(polygon, node))) supportIds.push(node.id)
@@ -108,6 +117,25 @@ export function deriveUnit(unit: UnitNode, nodes: Nodes): UnitDerivation {
         containedNodeIds.push(node.id)
     }
   }
+  // A zone drawn inside a room, short of the wall centerlines, still means
+  // that room: the walls of every detected space that encloses a member
+  // centroid, or whose own centroid the member encloses, are boundary walls.
+  for (const [levelId, walls] of wallsByLevel) {
+    const polygons = polygonsByLevel.get(levelId) ?? []
+    for (const space of detectSpacesForLevel(levelId, walls).spaces) {
+      if (space.isExterior) continue
+      const spaceCentroid = polygonCentroid(space.polygon)
+      const matches = polygons.some((polygon) => {
+        const memberCentroid = polygonCentroid(polygon)
+        return (
+          (memberCentroid !== null && coversPoint(memberCentroid, space.polygon)) ||
+          (spaceCentroid !== null && coversPoint(spaceCentroid, polygon))
+        )
+      })
+      if (matches) for (const wallId of space.wallIds) boundaryWalls.add(wallId)
+    }
+  }
+  const boundaryWallIds = [...boundaryWalls]
   const memberZoneIds = members.map((zone) => zone.id)
   // Ancestors (levels, building, site, the unit itself) are left out: the
   // viewer's isolation filter keeps every descendant of a listed id, so
