@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
+  CeilingNode,
   ItemNode,
   LevelNode,
   nodeRegistry,
@@ -156,5 +157,34 @@ test('wall-mounted and item-hosted procedural nodes keep host-local height and d
     } finally {
       await renderer.unmount()
     }
+  }
+})
+
+test('ceiling parameter changes keep the top flush, yaw intact and floor lift disabled', async () => {
+  const ceiling = CeilingNode.parse({ parentId: level.id, polygon: slab.polygon, height: 3 })
+  const node = ProceduralItemNode.parse({
+    recipe: {
+      ...shelfRecipe,
+      mounting: { attachTo: 'ceiling', reference: 'top' },
+      surfaces: [{ id: 'top', label: 'Top', position: [0, 'height', 0], size: ['width', 'depth'] }],
+    },
+    parentId: ceiling.id,
+    position: [1, 0, 2],
+    rotation: [0, 0.7, 0],
+  })
+  install(node, ceiling)
+  const renderer = await create(scene(node))
+  try {
+    await renderer.advanceFrames(1, 1 / 60)
+    expect(sceneRegistry.nodes.get(node.id)!.position.y).toBeCloseTo(-1.8)
+    const resized = { ...node, parameters: { height: 2.2 } }
+    install(resized, ceiling)
+    await renderer.update(scene(resized))
+    await renderer.advanceFrames(1, 1 / 60)
+    expect(sceneRegistry.nodes.get(node.id)!.position.y).toBeCloseTo(-2.2)
+    expect(sceneRegistry.nodes.get(node.id)!.rotation.y).toBeCloseTo(0.7)
+    expect(useScene.getState().dirtyNodes.has(node.id as AnyNodeId)).toBe(false)
+  } finally {
+    await renderer.unmount()
   }
 })

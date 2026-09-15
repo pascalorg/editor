@@ -8,14 +8,17 @@ export function prepareProceduralPlacement(
   placement: { parentId: string; position: Vec3; side?: 'front' | 'back' },
 ) {
   const parent = nodes[placement.parentId]
-  if (!parent || parent.type !== (recipe.mounting ? 'wall' : 'level'))
-    throw new Error(recipe.mounting ? 'Choose a wall for this design' : 'Choose a level')
+  const hostType =
+    recipe.mounting?.attachTo === 'ceiling' ? 'ceiling' : recipe.mounting ? 'wall' : 'level'
+  if (!parent || parent.type !== hostType) throw new Error(`Choose a ${hostType} for this design`)
   const node = ProceduralItemNode.parse({
     recipe,
     name: recipe.name,
     parentId: parent.id,
     position: placement.position,
-    ...(recipe.mounting ? { wallId: parent.id, side: placement.side ?? 'front' } : {}),
+    ...(recipe.mounting?.attachTo === 'wall-side'
+      ? { wallId: parent.id, side: placement.side ?? 'front' }
+      : {}),
   })
   validateProceduralRelations(node, { ...nodes, [node.id]: node })
   return node

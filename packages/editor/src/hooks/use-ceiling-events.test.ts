@@ -7,6 +7,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
+import { ProceduralItemNode, shelfRecipe } from '@pascal-app/core/procedural-items'
 import { hideFromScene, showInScene, useViewer } from '@pascal-app/viewer'
 import { _roots, act, createRoot } from '@react-three/fiber'
 import { createElement } from 'react'
@@ -18,11 +19,16 @@ import {
   type WebGLRenderer,
 } from 'three'
 import useEditor from '../store/use-editor'
+import useInteractionScope from '../store/use-interaction-scope'
 import { useCeilingEvents } from './use-ceiling-events'
 
-test('ceiling-item placement keeps move and commit hits while an unhovered ceiling is batched', async () => {
+test.each([
+  'item',
+  'procedural-item',
+])('%s ceiling placement keeps move and commit hits while an unhovered ceiling is batched', async (kind) => {
   const previousViewer = useViewer.getState()
   const previousEditor = useEditor.getState()
+  const previousInteraction = useInteractionScope.getState()
   const previousScene = useScene.getState()
   const actGlobal = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
   const previousAct = actGlobal.IS_REACT_ACT_ENVIRONMENT
@@ -73,7 +79,22 @@ test('ceiling-item placement keeps move and commit hits while an unhovered ceili
       cameraDragging: false,
       selection: { buildingId: null, levelId: level.id, zoneId: null, selectedIds: [] },
     })
-    useEditor.setState({ selectedItem: { attachTo: 'ceiling' } as never })
+    if (kind === 'item') useEditor.setState({ selectedItem: { attachTo: 'ceiling' } as never })
+    else {
+      useEditor.setState({ selectedItem: null })
+      useEditor.getState().setMovingNode(
+        ProceduralItemNode.parse({
+          recipe: {
+            ...shelfRecipe,
+            mounting: { attachTo: 'ceiling', reference: 'top' },
+            surfaces: [
+              { id: 'top', label: 'Top', position: [0, 'height', 0], size: ['width', 'depth'] },
+            ],
+          },
+          parentId: ceiling.id,
+        }) as never,
+      )
+    }
     await root.configure({
       gl: {
         domElement: canvas,
@@ -116,6 +137,7 @@ test('ceiling-item placement keeps move and commit hits while an unhovered ceili
     surface.material.dispose()
     useScene.setState(previousScene)
     useEditor.setState(previousEditor)
+    useInteractionScope.setState(previousInteraction)
     useViewer.setState(previousViewer)
     actGlobal.IS_REACT_ACT_ENVIRONMENT = previousAct
   }

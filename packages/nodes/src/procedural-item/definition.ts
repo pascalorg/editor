@@ -107,11 +107,11 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
         center: e.min.map((v, i) => (v + e.max[i]!) / 2) as [number, number, number],
       }
     },
-    hostable: { parents: ['level', 'wall', 'procedural-item', 'item'], align: 'face' },
+    hostable: { parents: ['level', 'wall', 'ceiling', 'procedural-item', 'item'], align: 'face' },
     hostRefFields: ['wallId', 'side', 'supportSlabId'],
     floorPlaced: {
       footprint: (n) => proceduralFootprint(n as unknown as ProceduralItemNode),
-      applies: (n) => !(n as unknown as ProceduralItemNode).wallId,
+      applies: (n) => !(n as unknown as ProceduralItemNode).recipe.mounting,
       collides: true,
     },
     movable: { axes: ['x', 'z'], gridSnap: true },
@@ -183,7 +183,7 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
         kind: 'linear-resize',
         latchGroup: p.part,
         faceNormal: Boolean(node.wallId),
-        portal: node.wallId ? 'grandparent' : 'self',
+        portal: node.recipe.mounting ? 'grandparent' : 'self',
         axis,
         anchor: axis === 'y' ? 'min' : 'center',
         min: p.min,
@@ -225,7 +225,11 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
         },
       })
     }
-    if (!node.recipe.mounting) result.push(proceduralRotateHandle())
+    if (node.recipe.mounting?.attachTo !== 'wall-side')
+      result.push({
+        ...proceduralRotateHandle(),
+        portal: node.recipe.mounting ? 'grandparent' : 'self',
+      })
     return result
   },
   floorplan: (node, ctx) => {

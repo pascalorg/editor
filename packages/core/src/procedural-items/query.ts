@@ -1,10 +1,17 @@
 import { itemOverlapsPolygon } from '../hooks/spatial-grid/spatial-grid-manager'
+import {
+  pointInPolygon as containsPoint,
+  type Point2D,
+  polygonsOverlap,
+} from '../lib/polygon-relations'
 import { getRenderableSlabPolygon } from '../lib/slab-polygon'
 import { levelBaseElevationAt } from '../lib/terrain-support'
 import type { ItemNode } from '../schema/nodes/item'
 import type { SlabNode } from '../schema/nodes/slab'
 import type { WallNode } from '../schema/nodes/wall'
 import type { AnyNode } from '../schema/types'
+import { resolveCeilingHeight } from '../services/level-height'
+import { getStoredLevelHeight } from '../services/storey'
 import { computeWallSlabSupport, pointInPolygon } from '../systems/slab/slab-support'
 import { getWallThickness } from '../systems/wall/wall-footprint'
 import type { ProceduralItemNode } from './node'
@@ -35,6 +42,19 @@ function levelSurfaces(nodes: QueryNodes, levelId: string) {
 export function proceduralLocalPose(node: ProceduralItemNode, nodes: QueryNodes) {
   const position = [...node.position] as Vec3,
     rotation = [...node.rotation] as Vec3
+  if (
+    node.recipe.mounting?.attachTo === 'ceiling' &&
+    node.parentId &&
+    nodes[node.parentId]?.type === 'ceiling'
+  ) {
+    const reference = evaluateRecipe(node.recipe, node.parameters).surfaces.find(
+      (s) => s.id === node.recipe.mounting?.reference,
+    )
+    if (!reference) throw new Error('Missing mounting reference')
+    const offset = transformPoint(frame([0, 0, 0], rotation), reference.position)
+    for (let i = 0; i < 3; i++) position[i] = position[i]! - offset[i]!
+    return { position, rotation }
+  }
   if (!node.wallId) return { position, rotation }
   const wall = nodes[node.wallId]
   if (wall?.type !== 'wall') throw new Error('Missing wall host')
@@ -98,6 +118,13 @@ export function nodeLevelFrame(id: string, nodes: QueryNodes, seen = new Set<str
   if (!node) throw new Error(`Missing node ${id}`)
   if (node.type === 'level') return IDENTITY_FRAME
   seen.add(id)
+  if (node.type === 'ceiling') {
+    // Match the ceiling renderer's underside frame, including its 1 cm inset.
+    return frame(
+      [0, resolveCeilingHeight(node, nodes as Record<string, AnyNode>) - 0.01, 0],
+      [0, 0, 0],
+    )
+  }
   if (node.type === 'wall') {
     const { slabs, walls } = levelSurfaces(nodes, node.parentId ?? '')
     const ground = levelBaseElevationAt(
@@ -147,6 +174,31 @@ export function attachmentBounds(child: ProceduralItemNode | ItemNode) {
     boxCorners(b.min, b.max).map((p) => transformPoint(frame(child.position, child.rotation), p)),
   )
 }
+function ceilingContainsFootprint(outer: Point2D[], footprint: Point2D[]) {
+  if (!footprint.every((p) => containsPoint(p, outer))) return false
+  // A concave boundary can cross a footprint whose corners all lie inside.
+  // Clip each boundary segment against the open, convex footprint interior.
+  return !outer.some((a, i) => {
+    const b = outer[(i + 1) % outer.length]!
+    let enter = 0
+    let exit = 1
+    for (let j = 0; j < footprint.length; j++) {
+      const c = footprint[j]!,
+        d = footprint[(j + 1) % footprint.length]!
+      const distance = (p: Point2D) =>
+        ((d[0] - c[0]) * (p[1] - c[1]) - (d[1] - c[1]) * (p[0] - c[0])) /
+          Math.hypot(d[0] - c[0], d[1] - c[1]) -
+        1e-6
+      const start = distance(a),
+        end = distance(b)
+      if (start <= 0 && end <= 0) return false
+      if (start <= 0) enter = Math.max(enter, -start / (end - start))
+      else if (end <= 0) exit = Math.min(exit, start / (start - end))
+      if (enter >= exit) return false
+    }
+    return enter < exit
+  })
+}
 export function validateProceduralRelations(raw: AnyNode | ProceduralItemNode, nodes: QueryNodes) {
   if (!isProceduralItem(raw)) return
   const node = raw,
@@ -157,7 +209,40 @@ export function validateProceduralRelations(raw: AnyNode | ProceduralItemNode, n
     !node.wallId &&
     node.parentId &&
     nodes[node.parentId]?.type === 'level'
-  if (node.recipe.mounting && !awaitingHost) {
+  if (node.recipe.mounting?.attachTo === 'ceiling' && !awaitingHost) {
+    const ceiling = node.parentId ? nodes[node.parentId] : undefined
+    if (ceiling?.type !== 'ceiling' || node.wallId || node.side)
+      throw new Error('This design needs a ceiling host')
+    if (Math.abs(node.rotation[0]) > 1e-8 || Math.abs(node.rotation[2]) > 1e-8)
+      throw new Error('Ceiling designs allow Y rotation only')
+    if (Math.abs(node.position[1]) > 1e-6)
+      throw new Error('The top reference must be flush with the ceiling')
+    const pose = proceduralLocalPose(node, nodes)
+    const f = frame(pose.position, pose.rotation)
+    const b = boundsOf(boxCorners(evaluation.min, evaluation.max).map((p) => transformPoint(f, p)))
+    const height = nodeLevelFrame(ceiling.id, nodes).position[1]
+    const level = ceiling.parentId ? nodes[ceiling.parentId] : undefined
+    if (
+      b.min[1] + height < -1e-6 ||
+      b.max[1] > 1e-6 ||
+      b.max[1] + height > getStoredLevelHeight(level?.type === 'level' ? level : {}) + 1e-6
+    )
+      throw new Error('The hanging design must fit below the ceiling within the level height')
+    const footprint: Point2D[] = [
+      [evaluation.min[0], evaluation.min[2]],
+      [evaluation.max[0], evaluation.min[2]],
+      [evaluation.max[0], evaluation.max[2]],
+      [evaluation.min[0], evaluation.max[2]],
+    ].map(([x, z]) => {
+      const p = transformPoint(f, [x!, 0, z!])
+      return [p[0], p[2]]
+    })
+    if (
+      !ceilingContainsFootprint(ceiling.polygon, footprint) ||
+      ceiling.holes.some((hole) => polygonsOverlap(hole, footprint))
+    )
+      throw new Error('The hanging design must fit inside the ceiling, outside its holes')
+  } else if (node.recipe.mounting?.attachTo === 'wall-side' && !awaitingHost) {
     const wall = node.wallId ? nodes[node.wallId] : undefined
     if (wall?.type !== 'wall' || node.parentId !== wall.id)
       throw new Error('This design needs a wall host')
@@ -181,8 +266,11 @@ export function validateProceduralRelations(raw: AnyNode | ProceduralItemNode, n
       node.position[2] < 0
     )
       throw new Error('The mounted item must fit on the wall')
-  } else if (node.wallId || (node.parentId && nodes[node.parentId]?.type === 'wall'))
-    throw new Error('A floor design cannot be attached to a wall')
+  } else if (
+    node.wallId ||
+    (node.parentId && ['wall', 'ceiling'].includes(nodes[node.parentId]?.type ?? ''))
+  )
+    throw new Error('A floor design cannot be attached to a wall or ceiling')
   const regions = new Map<string, ReturnType<typeof attachmentBounds>[]>()
   for (const childId of node.children) {
     const child = nodes[childId]
