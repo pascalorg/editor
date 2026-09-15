@@ -117,6 +117,24 @@ export {
   type LevelElevation,
 } from './storey'
 export {
+  getSurfaceProvider,
+  type HostSurface,
+  hitDerivedSurfaceProvider,
+  itemSurfaceProvider,
+  NON_PHYSICAL_HOST_KINDS,
+  proceduralItemSurfaceProvider,
+  resolveSurfacePlacement,
+  type SurfaceContext,
+  type SurfaceHit,
+  type SurfaceId,
+  type SurfacePlacement,
+  type SurfaceProvider,
+  type SurfaceRegion,
+  type SurfaceRejectReason,
+  shelfSurfaceProvider,
+} from './surface-hosting'
+export { surfaceRegionContainsFootprint, surfaceRegionContainsPoint } from './surface-region'
+export {
   buildPortComponents,
   collectSystemPorts,
   distributionPointToWorld,

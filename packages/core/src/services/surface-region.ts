@@ -1,5 +1,5 @@
-import { planFootprintCorners } from '../lib/plan-footprint'
 import { type Point2D, pointInPolygon, polygonsOverlap } from '../lib/polygon-relations'
+import { boxCorners, frame, transformPoint } from '../procedural-items/spatial'
 import type { SurfaceRegion } from './surface-hosting'
 
 const EPSILON = 1e-6
@@ -53,16 +53,50 @@ function crossesInterior(a: Point2D, b: Point2D, footprint: Point2D[]): boolean 
   return enter < exit
 }
 
-/** Position and yaw are relative to the surface frame; size is the full child size. */
+function projectedHull(points: Point2D[]): Point2D[] {
+  const sorted = points.sort((a, b) => a[0] - b[0] || a[1] - b[1])
+  const half = (input: Point2D[]) => {
+    const hull: Point2D[] = []
+    for (const p of input) {
+      while (hull.length >= 2) {
+        const a = hull[hull.length - 2]!
+        const b = hull[hull.length - 1]!
+        if ((b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]) > 0) break
+        hull.pop()
+      }
+      hull.push(p)
+    }
+    return hull.slice(0, -1)
+  }
+  return [...half(sorted), ...half([...sorted].reverse())]
+}
+
+/** Position and XYZ rotation are surface-local; bounds and size are scaled child-local values. */
 export function surfaceRegionContainsFootprint(
   region: SurfaceRegion | undefined,
   position: readonly [number, number, number],
   size: readonly [number, number, number],
-  rotationY: number,
+  rotation: number | readonly [number, number, number],
+  localBounds?: { min: readonly [number, number, number]; max: readonly [number, number, number] },
 ): boolean {
   if (!region) return true
-  // Plan helpers use the opposite yaw sign to the scene's XYZ Euler frames.
-  const footprint = planFootprintCorners(position, size, -rotationY)
+  const bounds = localBounds ?? {
+    min: [-size[0] / 2, 0, -size[2] / 2],
+    max: [size[0] / 2, size[1], size[2] / 2],
+  }
+  const childFrame = frame(
+    [...position],
+    typeof rotation === 'number' ? [0, rotation, 0] : [...rotation],
+  )
+  const footprint = projectedHull(
+    boxCorners(
+      [bounds.min[0]!, bounds.min[1]!, bounds.min[2]!],
+      [bounds.max[0]!, bounds.max[1]!, bounds.max[2]!],
+    ).map((p) => {
+      const point = transformPoint(childFrame, p)
+      return [point[0], point[2]]
+    }),
+  )
   if (region.kind === 'rect') {
     if (!region.size) return false
     const [x, z] = region.center ?? [0, 0]

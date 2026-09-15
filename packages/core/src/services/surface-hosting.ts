@@ -1,6 +1,8 @@
-import { isProceduralItem, queryProceduralItem } from '../procedural-items/query'
+import { isProceduralItem } from '../procedural-items/query'
+import { evaluateRecipe, type Recipe, type Vec3 } from '../procedural-items/recipe'
+import { boxCorners, frame, transformPoint } from '../procedural-items/spatial'
 import { nodeRegistry } from '../registry/registry'
-import type { SceneApi, SurfacesConfig } from '../registry/types'
+import type { SceneApi } from '../registry/types'
 import { getScaledDimensions, isLowProfileItemSurface } from '../schema/nodes/item'
 import type { AnyNode } from '../schema/types'
 import { canHostOnTop } from './hosting'
@@ -22,12 +24,12 @@ export interface HostSurface {
   id: SurfaceId | null
   label?: string
   position: readonly [number, number, number]
-  rotationY?: number
+  rotation?: readonly [number, number, number]
   normal: readonly [number, number, number]
   /** Absent regions retain the legacy dimension-only host fit check. */
   region?: SurfaceRegion
-  /** Free by default; center selects child-centered grid snapping, not the host origin. */
-  snap?: 'free' | 'center'
+  /** Defaults to true; the caller's snap function still controls whether the grid is active. */
+  gridSnap?: boolean
 }
 
 export interface SurfaceHit {
@@ -41,25 +43,33 @@ export interface SurfaceContext {
 }
 
 export interface SurfaceProvider {
+  childFrame: 'host-local' | 'surface-local'
   surfaces?(host: AnyNode, ctx: SurfaceContext): readonly HostSurface[]
   resolveHit(host: AnyNode, hit: SurfaceHit, ctx: SurfaceContext): HostSurface | null
   accepts?(host: AnyNode, childKind: string, surface: HostSurface, ctx: SurfaceContext): boolean
 }
 
-/** Additive registry declaration; existing SurfacesConfig consumers ignore hosting. */
-export type SurfaceHostingConfig = SurfacesConfig & { hosting?: SurfaceProvider }
+export type SurfaceRejectReason =
+  | 'host-not-eligible'
+  | 'invalid-hit'
+  | 'no-surface'
+  | 'child-not-accepted'
+  | 'footprint-outside-surface'
+  | 'footprint-exceeds-host'
 
 export type SurfacePlacement = {
   position: readonly [number, number, number]
   rotationY: number
   surfaceId: SurfaceId | null
-} & (
-  | { valid: true; reason?: never }
-  | {
-      valid: false
-      reason: 'child-not-accepted' | 'footprint-outside-surface' | 'footprint-exceeds-host'
-    }
-)
+  /** Movers write surfaceLocal for surface-local providers, otherwise the host-local pose. */
+  childFrame: SurfaceProvider['childFrame']
+  /** Null exactly for hit-derived surfaces. Full XYZ rotation is needed on tilted surfaces. */
+  surfaceLocal: {
+    position: readonly [number, number, number]
+    rotationY: number
+    rotation: readonly [number, number, number]
+  } | null
+}
 
 export const NON_PHYSICAL_HOST_KINDS: readonly string[] = [
   'guide',
@@ -78,21 +88,27 @@ export const NON_PHYSICAL_HOST_KINDS: readonly string[] = [
 const UPWARD_SURFACE_NORMAL_MIN_Y = 0.75
 
 export const hitDerivedSurfaceProvider: SurfaceProvider = {
+  childFrame: 'host-local',
   resolveHit(_host, hit) {
-    if (!(hit.normalWorldY >= UPWARD_SURFACE_NORMAL_MIN_Y) || !Number.isFinite(hit.point[1]))
+    if (!(hit.normalWorldY >= UPWARD_SURFACE_NORMAL_MIN_Y) || !hit.point.every(Number.isFinite))
       return null
-    return { id: null, position: hit.point, normal: [0, 1, 0] }
+    return { id: null, position: hit.point, normal: [0, 1, 0], gridSnap: true }
   },
 }
 
 export const itemSurfaceProvider: SurfaceProvider = {
+  childFrame: 'host-local',
   resolveHit(host, hit) {
     if (host.type !== 'item' || !canHostOnTop(host) || isLowProfileItemSurface(host)) return null
-    if (!(hit.normalWorldY >= UPWARD_SURFACE_NORMAL_MIN_Y)) return null
-    // Authored heights short-circuit even a non-finite local hit Y, as in the mover.
+    if (!(hit.normalWorldY >= UPWARD_SURFACE_NORMAL_MIN_Y) || !hit.point.every(Number.isFinite))
+      return null
     const height = host.asset.surface ? host.asset.surface.height * host.scale[1] : hit.point[1]
-    if (!host.asset.surface && !Number.isFinite(height)) return null
-    return { id: null, position: [hit.point[0], height, hit.point[2]], normal: [0, 1, 0] }
+    return {
+      id: null,
+      position: [hit.point[0], height, hit.point[2]],
+      normal: [0, 1, 0],
+      gridSnap: true,
+    }
   },
 }
 
@@ -110,53 +126,74 @@ function shelfSurfaces(host: AnyNode): readonly HostSurface[] {
     (surface, index) => ({
       ...surface,
       id: `row:${index}`,
-      snap: 'center',
+      gridSnap: true,
     }),
   )
 }
 
 export const shelfSurfaceProvider: SurfaceProvider = {
+  childFrame: 'host-local',
   surfaces: shelfSurfaces,
   resolveHit(host, hit) {
-    if (!(hit.normalWorldY >= UPWARD_SURFACE_NORMAL_MIN_Y)) return null
+    if (!(hit.normalWorldY >= UPWARD_SURFACE_NORMAL_MIN_Y) || !hit.point.every(Number.isFinite))
+      return null
     return nearestSurface(shelfSurfaces(host), hit.point[1])
   },
 }
 
+const proceduralSurfaceCache = new WeakMap<
+  Recipe,
+  { key: string; surfaces: readonly HostSurface[] }
+>()
+
 function proceduralSurfaces(host: AnyNode): readonly HostSurface[] {
   if (!isProceduralItem(host)) return []
-  // Query in an isolated host frame: ancestor support/attachment composition belongs to the caller.
-  const local = {
-    ...host,
-    parentId: null,
-    wallId: undefined,
-    position: [0, 0, 0] as [number, number, number],
-    rotation: [0, 0, 0] as [number, number, number],
-  }
-  return queryProceduralItem(local, {}).surfaces.map((surface) => ({
-    id: surface.id,
-    label: surface.label,
-    position: surface.position,
-    rotationY: surface.rotation[1],
-    normal: surface.normal,
-    region: { kind: 'rect', size: [surface.size[0] / 2, surface.size[1] / 2] },
-  }))
+  // Include contents as well as identity so in-place parameter/recipe edits cannot leave stale surfaces.
+  const key = JSON.stringify([host.recipe, host.parameters])
+  const cached = proceduralSurfaceCache.get(host.recipe)
+  if (cached?.key === key) return cached.surfaces
+  const surfaces: HostSurface[] = evaluateRecipe(host.recipe, host.parameters).surfaces.map(
+    (surface) => ({
+      id: surface.id,
+      label: surface.label,
+      position: surface.position,
+      rotation: surface.rotation,
+      normal: surface.normal,
+      gridSnap: true,
+      region: { kind: 'rect', size: [surface.size[0] / 2, surface.size[1] / 2] },
+    }),
+  )
+  proceduralSurfaceCache.set(host.recipe, { key, surfaces })
+  return surfaces
 }
 
-function surfaceLocalPoint(
-  surface: HostSurface,
-  point: readonly [number, number, number],
-): [number, number, number] {
-  const x = point[0] - surface.position[0]
-  const z = point[2] - surface.position[2]
-  const yaw = surface.rotationY ?? 0
-  return [Math.cos(yaw) * x - Math.sin(yaw) * z, 0, Math.sin(yaw) * x + Math.cos(yaw) * z]
+function surfaceLocalPoint(surface: HostSurface, point: readonly [number, number, number]): Vec3 {
+  const delta = point.map((v, i) => v - surface.position[i]!)
+  return frame([0, 0, 0], [...(surface.rotation ?? [0, 0, 0])]).axes.map((axis) =>
+    axis.reduce((sum, v, i) => sum + v * delta[i]!, 0),
+  ) as Vec3
+}
+
+function surfaceLocalRotation(surface: HostSurface, rotation: Vec3): Vec3 {
+  const surfaceRotation = surface.rotation ?? [0, 0, 0]
+  // Preserve unwrapped yaw exactly for the common horizontal, yaw-only case.
+  if (!surfaceRotation[0] && !surfaceRotation[2] && !rotation[0] && !rotation[2])
+    return [0, rotation[1] - surfaceRotation[1], 0]
+  const axes = frame([0, 0, 0], rotation).axes.map((axis) =>
+    surfaceLocalPoint({ ...surface, position: [0, 0, 0] }, axis),
+  )
+  const y = Math.asin(Math.max(-1, Math.min(1, axes[2]![0])))
+  return Math.abs(axes[2]![0]) < 0.9999999
+    ? [Math.atan2(-axes[2]![1], axes[2]![2]), y, Math.atan2(-axes[1]![0], axes[0]![0])]
+    : [Math.atan2(axes[1]![2], axes[1]![1]), y, 0]
 }
 
 export const proceduralItemSurfaceProvider: SurfaceProvider = {
+  childFrame: 'surface-local',
   surfaces: proceduralSurfaces,
   resolveHit(host, hit) {
-    if (!(hit.normalWorldY >= UPWARD_SURFACE_NORMAL_MIN_Y)) return null
+    if (!(hit.normalWorldY >= UPWARD_SURFACE_NORMAL_MIN_Y) || !hit.point.every(Number.isFinite))
+      return null
     const candidates = proceduralSurfaces(host).filter((surface) => {
       const point = surfaceLocalPoint(surface, hit.point)
       return (
@@ -175,9 +212,7 @@ const adapters = new Map<string, SurfaceProvider>([
 ])
 
 export function getSurfaceProvider(host: AnyNode): SurfaceProvider {
-  const declaration = nodeRegistry.get(host.type)?.capabilities.surfaces as
-    | SurfaceHostingConfig
-    | undefined
+  const declaration = nodeRegistry.get(host.type)?.capabilities.surfaces
   return declaration?.hosting ?? adapters.get(host.type) ?? hitDerivedSurfaceProvider
 }
 
@@ -194,48 +229,102 @@ function hostSize(
   )
 }
 
-/** All inputs/outputs are host-local; callers supply scaled child dimensions and host-local yaw. */
+/** Hit and child rotation are host-local; bounds and dimensions are scaled child-local values. */
 export function resolveSurfacePlacement(args: {
   host: AnyNode
   childKind: string
-  childFootprint: { size: readonly [number, number, number]; rotationY: number }
+  childFootprint: {
+    size: readonly [number, number, number]
+    rotationY: number
+    /** Full host-local XYZ Euler rotation, when available; otherwise rotationY is used. */
+    rotation?: readonly [number, number, number]
+    localBounds?: { min: readonly [number, number, number]; max: readonly [number, number, number] }
+  }
   hit: SurfaceHit
   scene: SceneApi
   /** Pure child-centered grid function; omitted means snapping is off. */
   snapScalar?: (position: number, dimension: number) => number
+  /** Defaults to true; drag previews may skip fit while still enforcing host and child eligibility. */
+  checkFootprint?: boolean
+  onReject?: (reason: SurfaceRejectReason) => void
 }): SurfacePlacement | null {
   const { host, hit, childKind, childFootprint } = args
-  if (NON_PHYSICAL_HOST_KINDS.includes(host.type) || !canHostOnTop(host)) return null
+  const reject = (reason: SurfaceRejectReason) => {
+    args.onReject?.(reason)
+    return null
+  }
+  if (!hit.point.every(Number.isFinite)) return reject('invalid-hit')
+  if (NON_PHYSICAL_HOST_KINDS.includes(host.type) || !canHostOnTop(host))
+    return reject('host-not-eligible')
   const ctx: SurfaceContext = { scene: args.scene }
   const provider = getSurfaceProvider(host)
   const surface = provider.resolveHit(host, hit, ctx)
-  if (!surface) return null
-  const snap = surface.id === null || surface.snap === 'center' ? args.snapScalar : undefined
+  if (!surface) return reject('no-surface')
+  const snap = (surface.gridSnap ?? true) ? args.snapScalar : undefined
   const position: [number, number, number] = [
     snap?.(hit.point[0], childFootprint.size[0]) ?? hit.point[0],
     surface.position[1],
     snap?.(hit.point[2], childFootprint.size[2]) ?? hit.point[2],
   ]
-  const pose = { position, rotationY: childFootprint.rotationY, surfaceId: surface.id }
-  if (provider.accepts && !provider.accepts(host, childKind, surface, ctx)) {
-    return { ...pose, valid: false, reason: 'child-not-accepted' }
+  const rotation = surfaceLocalRotation(surface, [
+    ...(childFootprint.rotation ?? [0, childFootprint.rotationY, 0]),
+  ])
+  const localPosition = surfaceLocalPoint(surface, position)
+  if (surface.id !== null) {
+    const bounds = childFootprint.localBounds ?? {
+      min: [-childFootprint.size[0] / 2, 0, -childFootprint.size[2] / 2] as const,
+      max: [
+        childFootprint.size[0] / 2,
+        childFootprint.size[1],
+        childFootprint.size[2] / 2,
+      ] as const,
+    }
+    localPosition[1] = -Math.min(
+      ...boxCorners([...bounds.min], [...bounds.max]).map(
+        (p) => transformPoint(frame([0, 0, 0], rotation), p)[1],
+      ),
+    )
+    // Intersect the host-local vertical cursor line with the support plane, then lift the child's bottom.
+    const normal = frame([0, 0, 0], [...(surface.rotation ?? [0, 0, 0])]).axes[1]
+    position[1] =
+      surface.position[1] +
+      (localPosition[1] -
+        normal[0] * (position[0] - surface.position[0]) -
+        normal[2] * (position[2] - surface.position[2])) /
+        normal[1]
+    const projected = surfaceLocalPoint(surface, position)
+    localPosition[0] = projected[0]
+    localPosition[2] = projected[2]
   }
+  const pose: SurfacePlacement = {
+    position,
+    rotationY: childFootprint.rotationY,
+    surfaceId: surface.id,
+    childFrame: provider.childFrame,
+    surfaceLocal:
+      surface.id === null ? null : { position: localPosition, rotationY: rotation[1], rotation },
+  }
+  if (provider.accepts && !provider.accepts(host, childKind, surface, ctx)) {
+    return reject('child-not-accepted')
+  }
+  if (args.checkFootprint === false) return pose
   if (surface.region) {
     if (
       !surfaceRegionContainsFootprint(
         surface.region,
-        surfaceLocalPoint(surface, position),
+        localPosition,
         childFootprint.size,
-        childFootprint.rotationY - (surface.rotationY ?? 0),
+        rotation,
+        childFootprint.localBounds,
       )
     ) {
-      return { ...pose, valid: false, reason: 'footprint-outside-surface' }
+      return reject('footprint-outside-surface')
     }
   } else {
     const size = hostSize(host, ctx)
     if (size && (childFootprint.size[0] > size[0] || childFootprint.size[2] > size[2])) {
-      return { ...pose, valid: false, reason: 'footprint-exceeds-host' }
+      return reject('footprint-exceeds-host')
     }
   }
-  return { ...pose, valid: true }
+  return pose
 }
