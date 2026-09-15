@@ -30,6 +30,7 @@ import { measurementDefinition } from './measurement'
 import { pipeFittingDefinition } from './pipe-fitting'
 import { pipeSegmentDefinition } from './pipe-segment'
 import { pipeTrapDefinition } from './pipe-trap'
+import { proceduralItemDefinition } from './procedural-item/definition'
 import { ridgeVentDefinition } from './ridge-vent'
 import { roofDefinition } from './roof'
 import { roofSegmentDefinition } from './roof-segment'
@@ -82,6 +83,7 @@ export const builtinPlugin: Plugin = {
     cabinetDefinition as unknown as AnyNodeDefinition,
     cabinetModuleDefinition as unknown as AnyNodeDefinition,
     itemDefinition as unknown as AnyNodeDefinition,
+    proceduralItemDefinition as unknown as AnyNodeDefinition,
     importedMeshDefinition as unknown as AnyNodeDefinition,
     // Stage A — wrap-exports the legacy renderer + system. Legacy
     // panels / move tools / floorplan branches still serve these.
