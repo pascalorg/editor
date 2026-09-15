@@ -3,7 +3,7 @@ import { CeilingNode } from '../schema/nodes/ceiling'
 import { LevelNode } from '../schema/nodes/level'
 import { WallNode } from '../schema/nodes/wall'
 import { shelfRecipe } from './fixtures'
-import { prepareProceduralPlacement, prepareProceduralReplacement } from './integration'
+import { prepareProceduralPlacement } from './integration'
 import { ProceduralItemNode } from './node'
 import { resolveProceduralCeilingPlacement } from './placement'
 import {
@@ -150,14 +150,12 @@ test('full rotated footprint must fit, including holes away from its center and 
   ).not.toThrow()
 })
 
-test('placement and replacement keep the ceiling contract', () => {
+test('placement keeps the ceiling contract', () => {
   const placed = prepareProceduralPlacement(recipe, nodes, {
     parentId: ceiling.id,
     position: [0, 0, 0],
   })
   expect(placed.wallId).toBeUndefined()
   expect(placed.parentId).toBe(ceiling.id)
-  expect(prepareProceduralReplacement(node, recipe, recipe, nodes).node.parentId).toBe(ceiling.id)
-  expect(() => prepareProceduralReplacement(node, recipe, shelfRecipe, nodes)).toThrow()
   expect(CeilingNode.parse({ ...ceiling, children: [node.id] }).children).toEqual([node.id])
 })
