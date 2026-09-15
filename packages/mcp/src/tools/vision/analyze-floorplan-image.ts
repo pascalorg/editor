@@ -34,6 +34,41 @@ export const analyzeFloorplanImageOutput = {
       approximateAreaSqM: z.number().optional(),
     }),
   ),
+  doors: z.array(
+    z.object({
+      position: z.tuple([z.number(), z.number()]),
+      widthM: z.number().positive().optional(),
+      heightM: z.number().positive().optional(),
+      swingDirection: z.enum(['inward', 'outward']).optional(),
+    }),
+  ).default([]),
+  windows: z.array(
+    z.object({
+      position: z.tuple([z.number(), z.number()]),
+      widthM: z.number().positive().optional(),
+      heightM: z.number().positive().optional(),
+      sillHeightM: z.number().nonnegative().optional(),
+    }),
+  ).default([]),
+  stairs: z.array(
+    z.object({
+      position: z.tuple([z.number(), z.number()]),
+      widthM: z.number().positive().optional(),
+      runLengthM: z.number().positive().optional(),
+      rotationDeg: z.number().optional(),
+      stepCount: z.number().int().positive().optional(),
+    }),
+  ).default([]),
+  furniture: z.array(
+    z.object({
+      type: z.string().min(1),
+      position: z.tuple([z.number(), z.number()]),
+      rotationDeg: z.number().optional(),
+      widthM: z.number().positive().optional(),
+      depthM: z.number().positive().optional(),
+      confidence: z.number().min(0).max(1).optional(),
+    }),
+  ).default([]),
   approximateDimensions: z.object({
     widthM: z.number(),
     depthM: z.number(),
@@ -49,6 +84,10 @@ Your ONLY job: return a JSON object that exactly matches this schema — no pros
 {
   "walls": [{ "start": [x, z], "end": [x, z], "thickness": number? }, ...],
   "rooms": [{ "name": string, "polygon": [[x,z], ...], "approximateAreaSqM": number? }, ...],
+  "doors": [{ "position": [x,z], "widthM": number?, "heightM": number?, "swingDirection": "inward"|"outward"? }, ...],
+  "windows": [{ "position": [x,z], "widthM": number?, "heightM": number?, "sillHeightM": number? }, ...],
+  "stairs": [{ "position": [x,z], "widthM": number?, "runLengthM": number?, "rotationDeg": number?, "stepCount": number? }, ...],
+  "furniture": [{ "type": string, "position": [x,z], "rotationDeg": number?, "widthM": number?, "depthM": number?, "confidence": number? }, ...],
   "approximateDimensions": { "widthM": number, "depthM": number },
   "confidence": number 0..1
 }
