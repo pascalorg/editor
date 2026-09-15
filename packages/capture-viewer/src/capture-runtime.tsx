@@ -311,7 +311,7 @@ export function CaptureStreamLayer({
       />
     )
   } else if (
-    layerKey === 'model' &&
+    (layerKey === 'model' || layerKey === 'spaceformScene') &&
     isCaptureModelArtifact(stream.artifact) &&
     stream.artifact &&
     artifactUrl
