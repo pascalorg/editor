@@ -1,8 +1,64 @@
 import { describe, expect, test } from 'bun:test'
-import { createRunSurfaceFrame } from './distribution-run-tool'
+import type { AnyNodeId } from '@pascal-app/core'
+import {
+  createRunSurfaceFrame,
+  isSameRunWallSurface,
+  shouldLockRunWallSurface,
+} from './distribution-run-tool'
 import { intersectRunPlane, resolveRunCursorPlane } from './run-cursor'
 
 describe('surface-first run cursor', () => {
+  test('matches only the wall host and face that started the draft', () => {
+    const target = {
+      kind: 'wall' as const,
+      levelId: 'level-1' as AnyNodeId,
+      hostId: 'wall-1' as AnyNodeId,
+      side: 'front' as const,
+      frame: createRunSurfaceFrame([0, 0, 0], [0, 0, 1]),
+      bounds: { min: { x: -1, y: -1 }, max: { x: 1, y: 1 } },
+    }
+
+    expect(
+      isSameRunWallSurface(target, {
+        kind: 'wall',
+        hostId: target.hostId,
+        face: 'side',
+        side: 'front',
+      }),
+    ).toBe(true)
+    expect(
+      isSameRunWallSurface(target, {
+        kind: 'wall',
+        hostId: target.hostId,
+        face: 'side',
+        side: 'back',
+      }),
+    ).toBe(false)
+    expect(
+      isSameRunWallSurface(target, {
+        kind: 'wall',
+        hostId: 'wall-2',
+        face: 'side',
+        side: 'front',
+      }),
+    ).toBe(false)
+  })
+
+  test('locks a wall only when the start is not snapped to a body or port', () => {
+    const target = {
+      kind: 'wall' as const,
+      levelId: 'level-1' as AnyNodeId,
+      hostId: 'wall-1' as AnyNodeId,
+      side: 'front' as const,
+      frame: createRunSurfaceFrame([0, 0, 0], [0, 0, 1]),
+      bounds: { minU: 0, maxU: 1, minV: 0, maxV: 1 },
+    }
+
+    expect(shouldLockRunWallSurface(target, { port: null, body: null })).toBe(true)
+    expect(shouldLockRunWallSurface(target, { port: {} as never, body: null })).toBe(false)
+    expect(shouldLockRunWallSurface(target, { port: null, body: {} as never })).toBe(false)
+  })
+
   test('reacquires either ceiling face from free space with duct or pipe clearance', () => {
     for (const side of [-1, 1]) {
       for (const clearance of [0.0254, 0.1016]) {

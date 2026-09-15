@@ -2455,6 +2455,8 @@ export type ParamAction<N> = {
 export type ParamGroup<N> = {
   label: string
   fields: ParamField<N>[]
+  /** Whether this inspector group is open when it is first rendered. */
+  defaultExpanded?: boolean
 }
 
 export type ParamField<N> =

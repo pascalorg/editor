@@ -72,6 +72,7 @@ export function MultiParametricInspector({ footer }: { footer?: React.ReactNode 
       )}
       {parametrics.groups.map((group, gi) => (
         <MultiGroupFields
+          defaultExpanded={group.defaultExpanded}
           fields={group.fields as ParamField<AnyNode>[]}
           key={`group-${gi}`}
           nodeIds={nodeIds}
@@ -88,12 +89,14 @@ export function MultiParametricInspector({ footer }: { footer?: React.ReactNode 
 }
 
 function MultiGroupFields({
+  defaultExpanded,
   title,
   fields,
   nodeIds,
   nodeType,
   parametrics,
 }: {
+  defaultExpanded?: boolean
   title: string
   fields: ParamField<AnyNode>[]
   nodeIds: AnyNodeId[]
@@ -108,7 +111,7 @@ function MultiGroupFields({
   )
   if (genericFields.length === 0 || !anyVisible) return null
   return (
-    <PanelSection title={title}>
+    <PanelSection defaultExpanded={defaultExpanded} title={title}>
       {genericFields.map((field, fi) => {
         if (
           String(field.key) === 'height' &&
