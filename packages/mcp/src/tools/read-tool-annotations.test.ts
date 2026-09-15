@@ -30,6 +30,7 @@ const TOOL_POLICIES = [
       'list_levels',
       'list_scenes',
       'list_templates',
+      'list_units',
       'measure',
       'search_assets',
       'validate_scene',
@@ -59,6 +60,7 @@ const TOOL_POLICIES = [
       'create_roof',
       'create_room',
       'create_story_shell',
+      'create_unit',
       'create_wall',
       'cut_opening',
       'duplicate_level',
@@ -88,6 +90,15 @@ const TOOL_POLICIES = [
       'save_scene',
       'undo',
     ],
+  },
+  {
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    tools: ['set_unit_members'],
   },
   {
     annotations: {

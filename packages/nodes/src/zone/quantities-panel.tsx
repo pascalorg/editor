@@ -1,8 +1,10 @@
 'use client'
 
 import {
+  type AnyNodeId,
   deriveZoneQuantityReport,
   resolveAutoZonePolygon,
+  type UnitNode,
   useLiveNodeOverrides,
   useScene,
   type ZoneNode,
@@ -17,8 +19,10 @@ import {
   ToggleControl,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { PanelSelect, PanelTextField } from '../shared/panel-fields'
+import { buildingUnitsForZone } from './unit-membership'
 
 type Point2D = readonly [number, number]
 
@@ -155,78 +159,43 @@ function QuantityRow({
   )
 }
 
-function RoomTextField({
-  label,
-  onCommit,
-  value,
-}: {
-  label: string
-  onCommit: (value: string) => void
-  value: string
-}) {
-  const [draft, setDraft] = useState(value)
-  const cancelRef = useRef(false)
+function ZoneUnitPanel({ zone }: { zone: ZoneNode }) {
+  const units = useScene(useShallow((state) => buildingUnitsForZone(zone, (id) => state.nodes[id])))
+  if (units.length === 0) return null
 
-  useEffect(() => setDraft(value), [value])
+  const memberOf = units.filter((unit) => unit.members.includes(zone.id))
+  const current = memberOf[0]
 
-  const commit = () => {
-    if (cancelRef.current) {
-      cancelRef.current = false
-      setDraft(value)
-      return
+  const handleChange = (nextId: string) => {
+    const updates: { id: AnyNodeId; data: Partial<UnitNode> }[] = []
+    if (current && current.id !== nextId) {
+      updates.push({
+        id: current.id,
+        data: { members: current.members.filter((id) => id !== zone.id) },
+      })
     }
-    const next = draft.trim()
-    if (next !== value) onCommit(next)
-    else setDraft(value)
+    const next = units.find((unit) => unit.id === nextId)
+    if (next && !next.members.includes(zone.id)) {
+      updates.push({ id: next.id, data: { members: [...next.members, zone.id] } })
+    }
+    if (updates.length > 0) useScene.getState().updateNodes(updates)
   }
 
   return (
-    <label className="flex h-10 items-center gap-3 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm">
-      <span className="shrink-0 text-muted-foreground">{label}</span>
-      <input
-        className="min-w-0 flex-1 bg-transparent text-right text-foreground outline-none selection:bg-primary/30"
-        onBlur={commit}
-        onChange={(event) => setDraft(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') event.currentTarget.blur()
-          if (event.key === 'Escape') {
-            cancelRef.current = true
-            event.currentTarget.blur()
-          }
-        }}
-        type="text"
-        value={draft}
+    <PanelSection title="Unit">
+      <PanelSelect
+        label="Unit"
+        onChange={handleChange}
+        options={[
+          { label: 'None', value: '' },
+          ...units.map((unit) => ({ label: unit.name || 'Unit', value: unit.id })),
+        ]}
+        value={current?.id ?? ''}
       />
-    </label>
-  )
-}
-
-function RoomSelect({
-  label,
-  onChange,
-  options,
-  value,
-}: {
-  label: string
-  onChange: (value: string) => void
-  options: ReadonlyArray<{ label: string; value: string }>
-  value: string
-}) {
-  return (
-    <label className="flex h-10 items-center justify-between gap-3 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <select
-        className="min-w-0 rounded-md border border-border/50 bg-[#232325] px-2 py-1 text-foreground text-xs outline-none"
-        onChange={(event) => onChange(event.target.value)}
-        value={value}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
+      {memberOf.length > 1 ? (
+        <p className="text-muted-foreground text-xs">In {memberOf.length} units</p>
+      ) : null}
+    </PanelSection>
   )
 }
 
@@ -244,17 +213,17 @@ function RoomDocumentationPanel({ zone }: { zone: ZoneNode }) {
       />
       {isRoom ? (
         <>
-          <RoomTextField
+          <PanelTextField
             label="Room name"
             onCommit={(name) => update({ name })}
             value={zone.name}
           />
-          <RoomTextField
+          <PanelTextField
             label="Room number"
             onCommit={(roomNumber) => update({ roomNumber })}
             value={zone.roomNumber}
           />
-          <RoomSelect
+          <PanelSelect
             label="Enclosure"
             onChange={(enclosureStatus) =>
               update({ enclosureStatus: enclosureStatus as ZoneNode['enclosureStatus'] })
@@ -266,22 +235,22 @@ function RoomDocumentationPanel({ zone }: { zone: ZoneNode }) {
             ]}
             value={zone.enclosureStatus}
           />
-          <RoomTextField
+          <PanelTextField
             label="Occupancy / use"
             onCommit={(occupancy) => update({ occupancy })}
             value={zone.occupancy}
           />
-          <RoomTextField
+          <PanelTextField
             label="Floor finish"
             onCommit={(floorFinish) => update({ floorFinish })}
             value={zone.floorFinish}
           />
-          <RoomTextField
+          <PanelTextField
             label="Wall finish"
             onCommit={(wallFinish) => update({ wallFinish })}
             value={zone.wallFinish}
           />
-          <RoomTextField
+          <PanelTextField
             label="Ceiling finish"
             onCommit={(ceilingFinish) => update({ ceilingFinish })}
             value={zone.ceilingFinish}
@@ -296,7 +265,7 @@ function RoomDocumentationPanel({ zone }: { zone: ZoneNode }) {
             unit="m"
             value={zone.ceilingHeight}
           />
-          <RoomSelect
+          <PanelSelect
             label="Clear dimensions"
             onChange={(clearDimensionPolicy) =>
               update({
@@ -360,6 +329,7 @@ export default function ZoneQuantitiesPanel() {
 
   return (
     <>
+      <ZoneUnitPanel zone={effectiveZone} />
       <RoomDocumentationPanel zone={effectiveZone} />
       <PanelSection
         title={effectiveZone.spaceRole === 'room' ? 'Room quantities' : 'Zone quantities'}

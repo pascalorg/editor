@@ -3,6 +3,7 @@ import {
   emitter,
   type GridEvent,
   type LevelNode,
+  runAsSingleSceneHistoryStep,
   snapPointAlongAngleRay,
   useScene,
   ZoneNode,
@@ -27,7 +28,7 @@ const Y_OFFSET = 0.02
  * Creates a zone with the given polygon points
  */
 const commitZoneDrawing = (levelId: LevelNode['id'], points: Array<[number, number]>) => {
-  const { createNode, nodes } = useScene.getState()
+  const { createNode, updateNode, nodes } = useScene.getState()
 
   // Count existing zones for naming and color cycling
   const zoneCount = Object.values(nodes).filter((n) => n.type === 'zone').length
@@ -42,7 +43,16 @@ const commitZoneDrawing = (levelId: LevelNode['id'], points: Array<[number, numb
     color,
   })
 
-  createNode(zone, levelId)
+  const activeUnitId = useEditor.getState().activeUnitId
+  const activeUnit = activeUnitId ? nodes[activeUnitId] : undefined
+
+  // Joining the active unit rides in the zone's own undo step.
+  runAsSingleSceneHistoryStep(useScene, () => {
+    createNode(zone, levelId)
+    if (activeUnit?.type === 'unit') {
+      updateNode(activeUnit.id, { members: [...activeUnit.members, zone.id] })
+    }
+  })
 
   // Select the newly created zone
   useViewer.getState().setSelection({ zoneId: zone.id })

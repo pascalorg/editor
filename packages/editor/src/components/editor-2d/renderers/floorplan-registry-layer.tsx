@@ -1967,7 +1967,7 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   const hovered = useViewer((state) => state.hoveredId === selectionProxyId)
   const setHoveredId = useViewer((state) => state.setHoveredId)
   const referencedAnnotationRole = useViewer((state) =>
-    floorplanEntryReferencedAnnotationRole(node, new Set(state.selection.selectedIds)),
+    floorplanEntryReferencedAnnotationRole(node, nodes, new Set(state.selection.selectedIds)),
   )
   const activeRotateNodeId = useDirectManipulationFeedback((state) =>
     state.activeRotateNodeId === nodeId ? nodeId : null,
@@ -2167,7 +2167,7 @@ export function collectFloorplanDependencyNodes(
   nodes: Record<string, AnyNode>,
   liveOverrides?: Map<string, LiveNodeOverrides>,
 ): AnyNode[] {
-  return (def.floorplanDependencies?.(node) ?? []).flatMap((id) => {
+  return (def.floorplanDependencies?.(node, nodes) ?? []).flatMap((id) => {
     const dependency = nodes[id]
     if (!dependency) return []
     const dependencyOverride = liveOverrides?.get(dependency.id)
@@ -2184,13 +2184,14 @@ export function collectFloorplanDependencyNodes(
 
 function floorplanEntryReferencedAnnotationRole(
   node: AnyNode,
+  nodes: Record<string, AnyNode>,
   selectedIds: ReadonlySet<string>,
 ): FloorplanAnnotationRole | undefined {
   if (selectedIds.size === 0) return undefined
   const definition = nodeRegistry.get(node.type)
   const role = getFloorplanNodeExtension(definition)?.referencedSelectionAnnotationRole
   if (!role) return undefined
-  const dependencyIds = definition?.floorplanDependencies?.(node) ?? []
+  const dependencyIds = definition?.floorplanDependencies?.(node, nodes) ?? []
   return dependencyIds.some((id) => selectedIds.has(id)) ? role : undefined
 }
 

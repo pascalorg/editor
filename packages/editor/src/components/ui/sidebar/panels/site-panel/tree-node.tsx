@@ -107,6 +107,7 @@ import { SlabTreeNode } from './slab-tree-node'
 import { SolarPanelTreeNode } from './solar-panel-tree-node'
 import { SpawnTreeNode } from './spawn-tree-node'
 import { StairTreeNode } from './stair-tree-node'
+import { UnitTreeNode } from './unit-tree-node'
 import { WallTreeNode } from './wall-tree-node'
 import { WindowTreeNode } from './window-tree-node'
 import { ZoneTreeNode } from './zone-tree-node'
@@ -175,6 +176,7 @@ const treeNodeByType: Record<string, TreeNodeComponent> = {
   roof: RoofTreeNode,
   scan: RegistryTreeNode,
   stair: StairTreeNode,
+  unit: UnitTreeNode,
   door: DoorTreeNode,
   window: WindowTreeNode,
   zone: ZoneTreeNode as React.ComponentType<{

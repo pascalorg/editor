@@ -15,6 +15,7 @@ import {
   type Space,
   type StairSurfaceMaterialRole,
   type TerrainVerb,
+  type UnitNode,
   useScene,
   type WallSurfaceSide,
 } from '@pascal-app/core'
@@ -418,6 +419,13 @@ type EditorState = {
   captureMode: CaptureMode
   isCaptureMode: boolean
   setCaptureMode: (next: boolean | CaptureMode) => void
+  // Units. Zones drawn while `activeUnitId` is set join that unit; while
+  // `isolatedUnitId` is set the viewer shows only that unit's derived content.
+  // Both are scene-scoped node ids, so neither is persisted.
+  activeUnitId: UnitNode['id'] | null
+  isolatedUnitId: UnitNode['id'] | null
+  setActiveUnit: (id: UnitNode['id'] | null) => void
+  setIsolatedUnit: (id: UnitNode['id'] | null) => void
   // View mode (3D only, 2D only, or split 2D+3D)
   viewMode: ViewMode
   setViewMode: (mode: ViewMode) => void
@@ -1368,6 +1376,10 @@ const useEditor = create<EditorState>()(
           return { captureMode: resolved, isCaptureMode: false }
         })
       },
+      activeUnitId: null,
+      isolatedUnitId: null,
+      setActiveUnit: (id) => set({ activeUnitId: id }),
+      setIsolatedUnit: (id) => set({ isolatedUnitId: id }),
       viewMode: DEFAULT_PERSISTED_EDITOR_UI_STATE.viewMode,
       setViewMode: (mode) => {
         set({ viewMode: mode, isFloorplanOpen: mode !== '3d' })

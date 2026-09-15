@@ -15,6 +15,7 @@ import {
   EyeOff,
   FileJson,
   Grid3X3,
+  Group,
   Hexagon,
   Layers,
   Map,
@@ -39,6 +40,7 @@ import {
 import { useEffect } from 'react'
 import { getHistoryCommandState, runRedo, runUndo } from '../../../lib/history'
 import { deleteLevelWithFallbackSelection } from '../../../lib/level-selection'
+import { createUnitInBuilding, toggleActiveUnitIsolation } from '../../../lib/units'
 import { useCommandRegistry } from '../../../store/use-command-registry'
 import type { StructureTool } from '../../../store/use-editor'
 import useEditor from '../../../store/use-editor'
@@ -247,6 +249,39 @@ export function EditorCommands() {
             if (!activeLevelId) return
             deleteLevelWithFallbackSelection(activeLevelId as AnyNodeId)
           }),
+      },
+
+      // ── Units ────────────────────────────────────────────────────────────
+      {
+        id: 'editor.unit.new',
+        label: 'New unit',
+        group: 'Units',
+        icon: <Group className="h-4 w-4" />,
+        keywords: ['unit', 'apartment', 'hotel', 'room', 'add', 'create', 'new'],
+        when: () => Object.values(useScene.getState().nodes).some((n) => n.type === 'building'),
+        execute: () =>
+          run(() => {
+            const { nodes } = useScene.getState()
+            const selectedBuildingId = useViewer.getState().selection.buildingId
+            const building =
+              (selectedBuildingId ? nodes[selectedBuildingId] : undefined) ??
+              Object.values(nodes).find((n) => n.type === 'building')
+            if (building?.type !== 'building') return
+            createUnitInBuilding(building.id)
+          }),
+      },
+      {
+        id: 'editor.unit.isolate',
+        label: () =>
+          useEditor.getState().isolatedUnitId ? 'Show all units' : 'Isolate active unit',
+        group: 'Units',
+        icon: <Eye className="h-4 w-4" />,
+        keywords: ['unit', 'isolate', 'focus', 'show', 'all', 'apartment'],
+        when: () => {
+          const { activeUnitId, isolatedUnitId } = useEditor.getState()
+          return !!activeUnitId || !!isolatedUnitId
+        },
+        execute: () => run(toggleActiveUnitIsolation),
       },
 
       // ── Viewer Controls ──────────────────────────────────────────────────

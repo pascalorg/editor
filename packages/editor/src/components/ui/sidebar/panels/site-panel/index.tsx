@@ -8,6 +8,8 @@ import {
   LevelNode,
   type ScanNode,
   type SiteNode,
+  unassignedZoneIds,
+  type UnitNode,
   useScene,
   type ZoneNode,
 } from '@pascal-app/core'
@@ -19,6 +21,7 @@ import {
   Copy,
   Eye,
   EyeOff,
+  Group,
   Loader2,
   MoreHorizontal,
   Pencil,
@@ -52,14 +55,16 @@ import {
 } from './../../../../../lib/measurements'
 import { createLocalGuideImage, createLocalScan } from './../../../../../lib/local-guide-image'
 import { editorHostTreeChildrenRegistry } from './../../../../../lib/host-tree-children'
+import { createUnitInBuilding } from './../../../../../lib/units'
 import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'
 import { MetricControl } from '../../../controls/metric-control'
 import { LevelDuplicateDialog } from '../../../level-duplicate-dialog'
 import { InlineRenameInput } from './inline-rename-input'
-import { focusTreeNode, TreeNode } from './tree-node'
+import { focusTreeNode, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeDragProvider } from './tree-node-drag'
+import { UnitZoneRow } from './unit-tree-node'
 
 // ============================================================================
 // PROPERTY LINE SECTION
@@ -1078,6 +1083,104 @@ const LevelsSection = memo(function LevelsSection({
   )
 })
 
+const UnitsSection = memo(function UnitsSection({
+  buildingId,
+}: {
+  buildingId: BuildingNode['id']
+}) {
+  const unitIds = useScene(
+    useShallow((s) => {
+      const building = s.nodes[buildingId] as BuildingNode | undefined
+      return (building?.children ?? []).filter((id) => s.nodes[id]?.type === 'unit')
+    }),
+  )
+  const hasUnits = unitIds.length > 0
+  const commonZoneIds = useScene(
+    useShallow((s) => (hasUnits ? unassignedZoneIds(buildingId, s.nodes) : [])),
+  )
+  const [expanded, setExpanded] = useState(hasUnits)
+  const [commonExpanded, setCommonExpanded] = useState(false)
+
+  useEffect(() => {
+    if (hasUnits) setExpanded(true)
+  }, [hasUnits])
+
+  const handleNewUnit = (event: React.MouseEvent) => {
+    event.stopPropagation()
+    createUnitInBuilding(buildingId)
+    setExpanded(true)
+  }
+
+  return (
+    <div className="subtle-scrollbar max-h-72 shrink-0 overflow-y-auto overflow-x-hidden">
+      <TreeNodeWrapper
+        actions={
+          <button
+            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10"
+            onClick={handleNewUnit}
+            title="New unit"
+            type="button"
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+        }
+        depth={1}
+        expanded={expanded}
+        hasChildren
+        icon={<Group className="h-3.5 w-3.5" />}
+        label={
+          <span className="flex items-center gap-1.5">
+            Units
+            {hasUnits && <span className="text-muted-foreground text-xs">{unitIds.length}</span>}
+          </span>
+        }
+        onClick={() => setExpanded((value) => !value)}
+        onToggle={() => setExpanded((value) => !value)}
+      >
+        {unitIds.map((unitId) => (
+          <TreeNode depth={2} key={unitId} nodeId={unitId} />
+        ))}
+        <TreeNodeWrapper
+          depth={2}
+          expanded={false}
+          hasChildren={false}
+          icon={<Plus className="h-3.5 w-3.5" />}
+          isLast={!hasUnits}
+          label="New unit"
+          onClick={handleNewUnit}
+          onToggle={() => {}}
+        />
+        {hasUnits && (
+          <TreeNodeWrapper
+            depth={2}
+            expanded={commonExpanded}
+            hasChildren={commonZoneIds.length > 0}
+            icon={<Pentagon className="h-3.5 w-3.5" />}
+            isLast
+            label={
+              <span className="flex items-center gap-1.5">
+                Common
+                <span className="text-muted-foreground text-xs">{commonZoneIds.length}</span>
+              </span>
+            }
+            onClick={() => setCommonExpanded((value) => !value)}
+            onToggle={() => setCommonExpanded((value) => !value)}
+          >
+            {commonZoneIds.map((zoneId, index) => (
+              <UnitZoneRow
+                depth={3}
+                isLast={index === commonZoneIds.length - 1}
+                key={zoneId}
+                zoneId={zoneId}
+              />
+            ))}
+          </TreeNodeWrapper>
+        )}
+      </TreeNodeWrapper>
+    </div>
+  )
+})
+
 const LayerToggle = memo(function LayerToggle() {
   const structureLayer = useEditor((state) => state.structureLayer)
   const setStructureLayer = useEditor((state) => state.setStructureLayer)
@@ -1211,8 +1314,19 @@ const LayerToggle = memo(function LayerToggle() {
 const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLast?: boolean }) {
   const [isEditing, setIsEditing] = useState(false)
   const [cameraPopoverOpen, setCameraPopoverOpen] = useState(false)
+  const [unitPopoverOpen, setUnitPopoverOpen] = useState(false)
   const deleteNode = useScene((state) => state.deleteNode)
   const updateNode = useScene((state) => state.updateNode)
+  const buildingUnits = useScene(
+    useShallow((s) => {
+      const level = s.nodes[zone.parentId as AnyNodeId]
+      const building = level?.parentId ? s.nodes[level.parentId as AnyNodeId] : undefined
+      if (building?.type !== 'building') return [] as UnitNode[]
+      return building.children
+        .map((id) => s.nodes[id])
+        .filter((node): node is UnitNode => node?.type === 'unit')
+    }),
+  )
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
   const hoveredId = useViewer((state) => state.hoveredId)
   const setSelection = useViewer((state) => state.setSelection)
@@ -1360,6 +1474,55 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
             </div>
           </PopoverContent>
         </Popover>
+        {buildingUnits.length > 0 && (
+          <Popover onOpenChange={setUnitPopoverOpen} open={unitPopoverOpen}>
+            <PopoverTrigger asChild>
+              <button
+                className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-black/5 hover:text-foreground group-hover/row:opacity-100 dark:hover:bg-white/10"
+                onClick={(e) => e.stopPropagation()}
+                title="Unit"
+                type="button"
+              >
+                <Group className="h-3 w-3" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              className="w-auto p-1"
+              onClick={(e) => e.stopPropagation()}
+              side="right"
+            >
+              <div className="flex flex-col gap-0.5">
+                {buildingUnits.map((buildingUnit) => {
+                  const isMember = buildingUnit.members.includes(zone.id)
+                  const unitName = buildingUnit.name || 'Unit'
+                  return (
+                    <button
+                      className="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-left text-popover-foreground text-sm hover:bg-accent"
+                      key={buildingUnit.id}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        updateNode(buildingUnit.id, {
+                          members: isMember
+                            ? buildingUnit.members.filter((id) => id !== zone.id)
+                            : [...buildingUnit.members, zone.id],
+                        })
+                        setUnitPopoverOpen(false)
+                      }}
+                      type="button"
+                    >
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: buildingUnit.color }}
+                      />
+                      {isMember ? `Remove from ${unitName}` : `Add to ${unitName}`}
+                    </button>
+                  )
+                })}
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
         <button
           className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-black/5 hover:text-foreground group-hover/row:opacity-100 dark:hover:bg-white/10"
           onClick={handleDelete}
@@ -1629,6 +1792,7 @@ const BuildingItem = memo(function BuildingItem({
                   onUploadAsset={onUploadAsset}
                   projectId={projectId}
                 />
+                <UnitsSection buildingId={building.id} />
                 <LayerToggle />
               </div>
               <div className="subtle-scrollbar relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">

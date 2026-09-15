@@ -49,6 +49,7 @@ import {
   writePersistedSelection,
 } from '../../lib/scene'
 import { disposeSFXBus, initSFXBus } from '../../lib/sfx-bus'
+import { useClearStaleUnitState, useUnitIsolateIds } from '../../lib/units'
 import { type CameraHintAction, useCameraHintFocus } from '../../store/use-camera-hint-focus'
 import useEditor from '../../store/use-editor'
 import useFloorplanMode from '../../store/use-floorplan-mode'
@@ -1041,6 +1042,11 @@ const ViewerCanvas = memo(function ViewerCanvas({
   const setFloorplanPaneRatio = useEditor((s) => s.setFloorplanPaneRatio)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
+  const captureMode = useEditor((s) => s.captureMode)
+  const unitIsolateIds = useUnitIsolateIds()
+  useClearStaleUnitState()
+  // Preset capture owns the isolation filter while it runs.
+  const isolate = captureMode.mode === 'preset' ? captureMode.isolated : unitIsolateIds
 
   const [isCameraControlsHintVisible, setIsCameraControlsHintVisible] = useState<boolean | null>(
     null,
@@ -1151,6 +1157,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
             defaultRender={EDITOR_DEFAULT_RENDER}
             disablePostFx={disablePostFx}
             hoverStyles={EDITOR_HOVER_STYLES}
+            isolate={isolate}
             onSceneReadyChange={onSceneReadyChange}
             renderContext="editor"
             renderPaused={!show3d && !showLoader}
