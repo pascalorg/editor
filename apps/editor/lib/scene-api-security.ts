@@ -66,10 +66,10 @@ function validateAuth(request: Request): NextResponse | null {
   const token = process.env.PASCAL_SCENE_API_TOKEN
   const origin = request.headers.get('origin')
 
-  // A configured browser origin is already protected by the Origin check.
-  // Reverse proxies make the request host non-loopback, so host-based
-  // loopback detection cannot identify same-origin browser calls reliably.
-  if (origin && configuredOrigins().has(normalizeOrigin(new URL(origin)))) {
+  // Only a browser request whose origin matches the trusted proxy's
+  // forwarded request origin may use same-origin authentication. The Origin
+  // header alone is spoofable and must never bypass an API token.
+  if (origin && isSameOrigin(request, origin) && configuredOrigins().has(normalizeOrigin(new URL(origin)))) {
     return null
   }
 
@@ -154,7 +154,11 @@ function configuredOrigins(): Set<string> {
 function isSameOrigin(request: Request, origin: string): boolean {
   const parsedOrigin = parseUrl(origin)
   if (!parsedOrigin) return false
-  const requestUrl = new URL(request.url)
+  const forwardedHost = request.headers.get('x-forwarded-host')
+  const forwardedProto = request.headers.get('x-forwarded-proto')
+  const requestUrl = forwardedHost
+    ? new URL(`${forwardedProto ?? 'https'}://${forwardedHost.split(',')[0]?.trim()}`)
+    : new URL(request.url)
   return normalizeOrigin(parsedOrigin) === normalizeOrigin(requestUrl)
 }
 
