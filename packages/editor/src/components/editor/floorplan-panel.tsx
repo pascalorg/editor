@@ -99,12 +99,7 @@ import { formatLinearMeasurement, linearUnitToMeters } from '../../lib/measureme
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { SITE_BOUNDARY_DRAG_LABEL, siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
-import {
-  cancelPendingZonePaint,
-  focusedUnitNode,
-  leaveUnitFocus,
-  paintZoneMembership,
-} from '../../lib/units'
+import { cancelPendingZonePaint, focusedUnitNode, paintZoneMembership } from '../../lib/units'
 import { cn } from '../../lib/utils'
 import { snapBuildingLocalToWorldGrid } from '../../lib/world-grid-snap'
 import { subscribeNavigationSyncPose } from '../../store/navigation-sync-pose-store'
@@ -10021,13 +10016,12 @@ export function FloorplanPanel({
         setSelectedReferenceId(null)
 
         if (backgroundSelection.kind === 'select-zone') {
-          // Unit focus: a click paints membership, a double-click ends focus
-          // and selects the zone (the SVG gets the second click as detail 2).
+          // Unit focus: a click paints membership, a double-click selects the
+          // zone and keeps focus (the SVG gets the second click as detail 2).
           const focusedUnitId = useViewer.getState().focusedUnitId
           if (focusedUnitId) {
             if (event.detail >= 2) {
               cancelPendingZonePaint(backgroundSelection.zoneId)
-              leaveUnitFocus({ keepLayer: true })
               setSelection({ zoneId: backgroundSelection.zoneId })
             } else {
               paintZoneMembership(focusedUnitId, backgroundSelection.zoneId)

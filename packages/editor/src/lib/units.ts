@@ -224,10 +224,12 @@ export function useUnitFocusRules(): void {
       }
       const unitId = state.focusedUnitId
       if (!unitId || state.selection === prev.selection) return
-      const { selectedIds, zoneId } = state.selection
+      // Selecting a zone keeps focus: renaming or recolouring a zone row is
+      // part of arranging the unit, and zones live on the layer focus uses.
+      const { selectedIds } = state.selection
       const selectsOther =
         selectedIds.length > 0 && !(selectedIds.length === 1 && selectedIds[0] === unitId)
-      if (selectsOther || zoneId) leaveUnitFocus()
+      if (selectsOther) leaveUnitFocus()
     })
     const unsubscribeEditor = useEditor.subscribe((state, prev) => {
       if (state.structureLayer === prev.structureLayer && state.phase === prev.phase) return

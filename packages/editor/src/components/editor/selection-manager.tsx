@@ -83,7 +83,6 @@ import {
 import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
 import {
   cancelPendingZonePaint,
-  leaveUnitFocus,
   paintZoneMembership,
   zoneAtLevelPoint,
   zoneAtWorldPoint,
@@ -1951,18 +1950,14 @@ export const SelectionManager = () => {
         }
       }
 
-      // While a unit is focused a double-click inside a zone ends focus and
-      // selects that zone normally; the two clicks before it cancel each
-      // other's paint.
+      // While a unit is focused a double-click inside a zone selects that
+      // zone (focus stays); the two clicks before it cancel each other's paint.
       if (useViewer.getState().focusedUnitId) {
         const zone =
           node.type === 'zone' ? node : zoneAtWorldPoint(event.position[0], event.position[2])
         if (zone) {
           event.stopPropagation()
           cancelPendingZonePaint(zone.id)
-          leaveUnitFocus({ keepLayer: true })
-          useEditor.getState().setPhase('structure')
-          useEditor.getState().setStructureLayer('zones')
           SELECTION_STRATEGIES.structure?.handleSelect(
             zone,
             event.nativeEvent,

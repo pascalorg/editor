@@ -1,3 +1,5 @@
+import { Checkbox } from './../../../primitives/checkbox'
+
 /** Membership toggle shown on zone rows while a unit is focused. */
 export function ZoneMembershipCheckbox({
   checked,
@@ -9,15 +11,12 @@ export function ZoneMembershipCheckbox({
   unitName: string
 }) {
   return (
-    <input
+    <Checkbox
       aria-label={`In ${unitName}`}
       checked={checked}
-      className="mr-2 h-3.5 w-3.5 shrink-0 cursor-pointer accent-primary"
-      onChange={onToggle}
-      onClick={(event) => event.stopPropagation()}
+      className="mr-2"
+      onCheckedChange={onToggle}
       onDoubleClick={(event) => event.stopPropagation()}
-      type="checkbox"
     />
   )
 }
-
