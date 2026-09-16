@@ -332,6 +332,7 @@ export {
   getWallFaceBandForHeight,
   getWallSurfaceMaterialSignature,
   getWallSurfaceSideFromBandSlot,
+  validateWallRelations,
   WALL_CHAIR_RAIL_DEFAULT,
   WALL_CHAIR_RAIL_SLOT_DEFAULT,
   WALL_CROWN_DEFAULT,

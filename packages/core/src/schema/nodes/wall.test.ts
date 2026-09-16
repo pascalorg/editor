@@ -3,6 +3,7 @@ import {
   buildEnabledWallFaceBandPatch,
   buildWallFaceBandCountPatch,
   getWallFaceBandConfig,
+  validateWallRelations,
   WALL_CHAIR_RAIL_DEFAULT,
   WALL_CHAIR_RAIL_SLOT_DEFAULT,
   WALL_CROWN_DEFAULT,
@@ -33,6 +34,46 @@ describe('wall support offset', () => {
     expect(WallNode.parse({ start: [0, 0], end: [4, 0] }).fillToTerrain).toBeUndefined()
     expect(WallNode.parse({ start: [0, 0], end: [4, 0], fillToTerrain: true }).fillToTerrain).toBe(
       true,
+    )
+  })
+
+  test('rejects non-finite and non-positive wall dimensions', () => {
+    for (const patch of [
+      { thickness: 0 },
+      { thickness: -0.1 },
+      { thickness: Number.NaN },
+      { height: 0 },
+      { height: Number.POSITIVE_INFINITY },
+      { curveOffset: Number.NaN },
+      { start: [Number.POSITIVE_INFINITY, 0] },
+    ]) {
+      expect(WallNode.safeParse({ start: [0, 0], end: [4, 0], ...patch }).success).toBe(false)
+    }
+  })
+})
+
+describe('wall child ownership', () => {
+  const wall = WallNode.parse({ id: 'wall_host', start: [0, 0], end: [4, 0] })
+  const item = { id: 'item_child', type: 'item' as const, parentId: wall.id } as never
+
+  test('accepts a listed child whose parent points back to the wall', () => {
+    expect(() =>
+      validateWallRelations({ ...wall, children: [item.id] }, { [wall.id]: wall, [item.id]: item }),
+    ).not.toThrow()
+  })
+
+  test('rejects missing, mismatched, and unlisted owned children', () => {
+    expect(() =>
+      validateWallRelations({ ...wall, children: ['item_missing'] }, { [wall.id]: wall }),
+    ).toThrow('references missing child')
+    expect(() =>
+      validateWallRelations(
+        { ...wall, children: [item.id] },
+        { [wall.id]: wall, [item.id]: { ...item, parentId: null } },
+      ),
+    ).toThrow('does not own listed child')
+    expect(() => validateWallRelations(wall, { [wall.id]: wall, [item.id]: item })).toThrow(
+      'missing owned child',
     )
   })
 })

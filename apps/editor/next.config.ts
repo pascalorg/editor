@@ -3,6 +3,10 @@ import { fileURLToPath } from 'node:url'
 import type { NextConfig } from 'next'
 
 const appDirectory = path.dirname(fileURLToPath(import.meta.url))
+const webxrPluginDirectory = path.relative(
+  appDirectory,
+  '/Users/sudhir/Desktop/work/webxr-pascal-plugin',
+)
 const portableBuild = process.env.PASCAL_PORTABLE_BUILD === '1'
 
 const nextConfig: NextConfig = {
@@ -32,7 +36,6 @@ const nextConfig: NextConfig = {
     '@pascal-app/core',
     '@pascal-app/editor',
     '@pascal-app/mcp',
-    '@pascal-app/plugin-pool',
     '@pascal-app/plugin-streetscape',
     '@pascal-app/plugin-trees',
     '@mint/pascal-plugin',
@@ -52,6 +55,10 @@ const nextConfig: NextConfig = {
       three: '../../node_modules/three',
       '@react-three/fiber': '../../node_modules/@react-three/fiber',
       '@react-three/drei': '../../node_modules/@react-three/drei',
+      // Use the checked-out plugin during local development so the viewer
+      // reflects edits without rebuilding the vendored tarball.
+      '@webxr/plugin/pascal-editor': `${webxrPluginDirectory}/src/integrations/pascal-editor/index.ts`,
+      '@webxr/plugin': `${webxrPluginDirectory}/src/index.ts`,
     },
   },
   experimental: {

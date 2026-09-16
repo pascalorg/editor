@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { WallNode } from '../../schema'
+import { getWallCurveFrameAt } from './wall-curve'
 import { calculateLevelMiters, getWallMiterBoundaryPoints, pointToKey } from './wall-mitering'
 
 function wall(id: string, start: [number, number], end: [number, number]): WallNode {
@@ -127,5 +128,25 @@ describe('junction grid prefilter', () => {
 
     const junction = calculateLevelMiters([long, spur]).junctions.get(pointToKey({ x: 60, y: 0 }))
     expect(junction?.connectedWalls.map((cw) => cw.wall.id)).toEqual(['spur', 'long'])
+  })
+
+  test('finds a T-junction on a curved wall and uses its local tangent', () => {
+    const curved = {
+      ...wall('curved', [0, 0], [4, 0]),
+      curveOffset: 1,
+    } as WallNode
+    const midpoint = getWallCurveFrameAt(curved, 0.5).point
+    const spur = wall('spur', [midpoint.x, midpoint.y], [midpoint.x, midpoint.y + 3])
+    const miter = calculateLevelMiters([curved, spur])
+    const junction = miter.junctions.get(pointToKey(midpoint))
+
+    expect(junction?.connectedWalls.map((entry) => [entry.wall.id, entry.endType])).toEqual([
+      ['spur', 'start'],
+      ['curved', 'passthrough'],
+    ])
+    const boundary = getWallMiterBoundaryPoints(spur, miter)
+    expect(boundary).not.toBeNull()
+    expect(boundary?.startLeft.x).toBeCloseTo(midpoint.x - 0.05, 4)
+    expect(boundary?.startRight.x).toBeCloseTo(midpoint.x + 0.05, 4)
   })
 })

@@ -3,7 +3,12 @@
 import type { TemporalState } from 'zundo'
 import { temporal } from 'zundo'
 import { create, type StateCreator, type StoreApi, type UseBoundStore } from 'zustand'
-import { parseMaterialRef, toSceneMaterialRef } from '../material-library'
+import {
+  getCatalogMaterialById,
+  parseMaterialRef,
+  toLibraryMaterialRef,
+  toSceneMaterialRef,
+} from '../material-library'
 import { getNodePluginId, isNodeKindEnabled, nodeRegistry } from '../registry/registry'
 import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
@@ -312,8 +317,10 @@ function legacySpecToMaterialRef(
   spec: { material?: unknown; materialPreset?: unknown },
   mintedMaterials: Record<SceneMaterialId, SceneMaterial>,
 ): string | undefined {
-  if (typeof spec.materialPreset === 'string' && parseMaterialRef(spec.materialPreset)) {
-    return spec.materialPreset
+  if (typeof spec.materialPreset === 'string') {
+    if (parseMaterialRef(spec.materialPreset)) return spec.materialPreset
+    const legacyId = spec.materialPreset.trim()
+    if (getCatalogMaterialById(legacyId)) return toLibraryMaterialRef(legacyId)
   }
   if (spec.material !== undefined) {
     const existing = findMintedSceneMaterialRef(spec.material, mintedMaterials)
@@ -338,18 +345,16 @@ function migrateWallSurfaceMaterials(
   node: Record<string, any>,
   mintedMaterials: Record<SceneMaterialId, SceneMaterial>,
 ) {
-  if (node.slots && (node.slots.interior !== undefined || node.slots.exterior !== undefined)) {
-    return node
-  }
-
   const slots: Record<string, string> = { ...(node.slots ?? {}) }
   for (const side of ['interior', 'exterior'] as WallSurfaceSide[]) {
     const spec = getEffectiveWallSurfaceMaterial(
       node as Parameters<typeof getEffectiveWallSurfaceMaterial>[0],
       side,
     )
-    const ref = legacySpecToMaterialRef(spec, mintedMaterials)
-    if (ref) slots[side] = ref
+    if (slots[side] === undefined) {
+      const ref = legacySpecToMaterialRef(spec, mintedMaterials)
+      if (ref) slots[side] = ref
+    }
   }
 
   if (Object.keys(slots).length === 0) {

@@ -1,20 +1,26 @@
 import { GROUND_SUPPORT_ID } from '../../hooks/spatial-grid/support-host-id'
 import { terrainSupportLift } from '../../lib/terrain-support'
+import { type AnyNode, type AnyNodeId, type WallNode, WallNode as WallSchema } from '../../schema'
 import {
-  type AnyNode,
-  type AnyNodeId,
-  type DoorNode,
-  getScaledDimensions,
-  type ItemNode,
-  type WallNode,
-  WallNode as WallSchema,
-  type WindowNode,
-} from '../../schema'
-import { getWallArcData, getWallCurveFrameAt, getWallCurveLength, isCurvedWall } from './wall-curve'
+  getWallAttachmentSpan,
+  getWallAttachments,
+  remapWallAttachment,
+  segmentCurveOffset,
+  wallLength,
+  wallPointAt,
+} from './wall-attachments'
+import { isCurvedWall } from './wall-curve'
+import {
+  curvedSegmentIntersections,
+  distanceSquared,
+  joinCrossingAtNearbyWallEndpoint,
+  nearestWallProjection,
+  straightSegmentIntersection,
+  type WallSegmentIntersection,
+} from './wall-intersections'
 import type { WallPlanPoint } from './wall-move'
 
 const WALL_MIN_LENGTH = 0.01
-const WALL_SPLIT_ENDPOINT_EPSILON = 0.02
 const WALL_INTERSECTION_EPSILON = 1e-6
 
 export type WallTopologyChanges = {
@@ -46,19 +52,6 @@ export type WallPointSplitPlan = {
 export type WallPointSplitResult =
   | { ok: true; plan: WallPointSplitPlan }
   | { ok: false; reason: 'no-host' }
-
-type WallSegmentIntersection = {
-  wallId: WallNode['id']
-  point: WallPlanPoint
-  draftT: number
-  wallT: number
-}
-
-function distanceSquared(a: WallPlanPoint, b: WallPlanPoint) {
-  const dx = a[0] - b[0]
-  const dz = a[1] - b[1]
-  return dx * dx + dz * dz
-}
 
 function isSegmentLongEnough(start: WallPlanPoint, end: WallPlanPoint) {
   return distanceSquared(start, end) >= WALL_MIN_LENGTH * WALL_MIN_LENGTH
@@ -99,60 +92,6 @@ function wallSegmentsCoverSegment(start: WallPlanPoint, end: WallPlanPoint, wall
     if (coveredUntil >= 1 - parameterTolerance) return true
   }
   return false
-}
-
-function projectPointOntoWallCenterline(
-  point: WallPlanPoint,
-  wall: WallNode,
-): { point: WallPlanPoint; wallT: number } | null {
-  if (isCurvedWall(wall)) {
-    const arc = getWallArcData(wall)
-    if (!arc) return null
-    const pointAngle = Math.atan2(point[1] - arc.center.y, point[0] - arc.center.x)
-    let directedAngle = (pointAngle - arc.startAngle) * arc.direction
-    while (directedAngle < 0) directedAngle += Math.PI * 2
-    const wallT = directedAngle / Math.abs(arc.delta)
-    if (wallT <= 0 || wallT >= 1) return null
-    return { point: wallPointAt(wall, wallT), wallT }
-  }
-
-  const dx = wall.end[0] - wall.start[0]
-  const dz = wall.end[1] - wall.start[1]
-  const lengthSquared = dx * dx + dz * dz
-  if (lengthSquared < 1e-9) return null
-  const wallT = ((point[0] - wall.start[0]) * dx + (point[1] - wall.start[1]) * dz) / lengthSquared
-  if (wallT <= 0 || wallT >= 1) return null
-  return {
-    point: [wall.start[0] + dx * wallT, wall.start[1] + dz * wallT],
-    wallT,
-  }
-}
-
-function nearestWallProjection(
-  point: WallPlanPoint,
-  walls: WallNode[],
-  radius: number,
-  ignoreWallIds: ReadonlySet<string> = new Set(),
-) {
-  let best: { wall: WallNode | null; point: WallPlanPoint; wallT: number } | null = null
-  let bestDistance = Number.POSITIVE_INFINITY
-  for (const wall of walls) {
-    if (ignoreWallIds.has(wall.id)) continue
-    const projection = projectPointOntoWallCenterline(point, wall)
-    if (!projection) continue
-    const candidateDistance = distanceSquared(point, projection.point)
-    if (candidateDistance > radius * radius || candidateDistance >= bestDistance) continue
-    const corner = ([wall.start, wall.end] as WallPlanPoint[]).find(
-      (candidate) =>
-        distanceSquared(projection.point, candidate) <=
-        WALL_SPLIT_ENDPOINT_EPSILON * WALL_SPLIT_ENDPOINT_EPSILON,
-    )
-    best = corner
-      ? { wall: null, point: [corner[0], corner[1]], wallT: projection.wallT }
-      : { wall, ...projection }
-    bestDistance = candidateDistance
-  }
-  return best
 }
 
 export function planWallSplitAtPoint(
@@ -202,171 +141,6 @@ export function planWallSplitAtPoint(
   }
 }
 
-function straightSegmentIntersection(
-  start: WallPlanPoint,
-  end: WallPlanPoint,
-  wall: WallNode,
-): WallSegmentIntersection | null {
-  const rx = end[0] - start[0]
-  const rz = end[1] - start[1]
-  const sx = wall.end[0] - wall.start[0]
-  const sz = wall.end[1] - wall.start[1]
-  const denominator = rx * sz - rz * sx
-  if (Math.abs(denominator) < 1e-9) return null
-
-  const offsetX = wall.start[0] - start[0]
-  const offsetZ = wall.start[1] - start[1]
-  const draftT = (offsetX * sz - offsetZ * sx) / denominator
-  const wallT = (offsetX * rz - offsetZ * rx) / denominator
-  if (draftT <= 0 || draftT >= 1 || wallT < 0 || wallT > 1) return null
-
-  return {
-    wallId: wall.id,
-    point: [start[0] + draftT * rx, start[1] + draftT * rz],
-    draftT,
-    wallT,
-  }
-}
-
-function curvedSegmentIntersections(
-  start: WallPlanPoint,
-  end: WallPlanPoint,
-  wall: WallNode,
-): WallSegmentIntersection[] {
-  const arc = getWallArcData(wall)
-  if (!arc) return []
-
-  const dx = end[0] - start[0]
-  const dz = end[1] - start[1]
-  const offsetX = start[0] - arc.center.x
-  const offsetZ = start[1] - arc.center.y
-  const a = dx * dx + dz * dz
-  if (a < 1e-12) return []
-
-  const b = 2 * (offsetX * dx + offsetZ * dz)
-  const c = offsetX * offsetX + offsetZ * offsetZ - arc.radius * arc.radius
-  const discriminant = b * b - 4 * a * c
-  if (discriminant < -1e-9) return []
-
-  const root = Math.sqrt(Math.max(0, discriminant))
-  const results: WallSegmentIntersection[] = []
-  for (const rawDraftT of [(-b - root) / (2 * a), (-b + root) / (2 * a)]) {
-    if (rawDraftT < -1e-9 || rawDraftT > 1 + 1e-9) continue
-    const point: WallPlanPoint = [start[0] + rawDraftT * dx, start[1] + rawDraftT * dz]
-    const angle = Math.atan2(point[1] - arc.center.y, point[0] - arc.center.x)
-    let directedAngle = (angle - arc.startAngle) * arc.direction
-    while (directedAngle < 0) directedAngle += Math.PI * 2
-    const rawWallT = directedAngle / Math.abs(arc.delta)
-    if (rawWallT < -1e-9 || rawWallT > 1 + 1e-9) continue
-    if (results.some((candidate) => distanceSquared(candidate.point, point) < 1e-12)) continue
-    results.push({
-      wallId: wall.id,
-      point,
-      draftT: Math.max(0, Math.min(1, rawDraftT)),
-      wallT: Math.max(0, Math.min(1, rawWallT)),
-    })
-  }
-  return results
-}
-
-function joinCrossingAtNearbyWallEndpoint(
-  crossing: WallSegmentIntersection,
-  walls: WallNode[],
-): WallSegmentIntersection {
-  const wall = walls.find((candidate) => candidate.id === crossing.wallId)
-  if (!wall) return crossing
-  const endpointIndex = ([wall.start, wall.end] as WallPlanPoint[]).findIndex(
-    (endpoint) =>
-      distanceSquared(crossing.point, endpoint) <=
-      WALL_SPLIT_ENDPOINT_EPSILON * WALL_SPLIT_ENDPOINT_EPSILON,
-  )
-  if (endpointIndex < 0) return crossing
-  const endpoint = endpointIndex === 0 ? wall.start : wall.end
-  return { ...crossing, point: [endpoint[0], endpoint[1]], wallT: endpointIndex }
-}
-
-function wallLength(wall: WallNode) {
-  return isCurvedWall(wall)
-    ? getWallCurveLength(wall)
-    : Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
-}
-
-function wallPointAt(wall: WallNode, wallT: number): WallPlanPoint {
-  if (wallT <= WALL_INTERSECTION_EPSILON) return wall.start
-  if (wallT >= 1 - WALL_INTERSECTION_EPSILON) return wall.end
-  const frame = getWallCurveFrameAt(wall, wallT)
-  return [frame.point.x, frame.point.y]
-}
-
-function segmentCurveOffset(wall: WallNode, startT: number, endT: number) {
-  const arc = getWallArcData(wall)
-  if (!arc) return wall.curveOffset
-  const angle = Math.abs(arc.delta) * (endT - startT)
-  return arc.direction * arc.radius * (1 - Math.cos(angle / 2))
-}
-
-function attachmentSpan(node: AnyNode): { min: number; max: number; center: number } | null {
-  if (node.type === 'door') {
-    const door = node as DoorNode
-    return {
-      min: door.position[0] - door.width / 2,
-      max: door.position[0] + door.width / 2,
-      center: door.position[0],
-    }
-  }
-  if (node.type === 'window') {
-    const window = node as WindowNode
-    return {
-      min: window.position[0] - window.width / 2,
-      max: window.position[0] + window.width / 2,
-      center: window.position[0],
-    }
-  }
-  if (node.type === 'item') {
-    const item = node as ItemNode
-    if (item.asset.attachTo !== 'wall' && item.asset.attachTo !== 'wall-side') return null
-    const [width] = getScaledDimensions(item)
-    return {
-      min: item.position[0] - width / 2,
-      max: item.position[0] + width / 2,
-      center: item.position[0],
-    }
-  }
-  return null
-}
-
-function wallAttachments(wall: WallNode, nodes: Record<AnyNodeId, AnyNode>) {
-  const ids = new Set<AnyNodeId>((wall.children ?? []) as AnyNodeId[])
-  for (const node of Object.values(nodes)) {
-    if (
-      node.parentId === wall.id ||
-      ('wallId' in node && typeof node.wallId === 'string' && node.wallId === wall.id)
-    ) {
-      ids.add(node.id)
-    }
-  }
-  return [...ids].flatMap((id) => {
-    const node = nodes[id]
-    return node ? [node] : []
-  })
-}
-
-function remapAttachment(
-  node: AnyNode,
-  wall: WallNode,
-  nextLocalX: number,
-): Partial<AnyNode> | null {
-  if (!(node.type === 'door' || node.type === 'window' || node.type === 'item')) return null
-  const nextLength = wallLength(wall)
-  const clampedX = Math.max(0, Math.min(nextLength, nextLocalX))
-  return {
-    parentId: wall.id,
-    wallId: wall.id,
-    position: [clampedX, node.position[1], node.position[2]],
-    ...(node.type === 'item' ? { wallT: nextLength > 1e-6 ? clampedX / nextLength : 0 } : {}),
-  } as Partial<AnyNode>
-}
-
 function splitWall(
   wall: WallNode,
   splitParameters: number[],
@@ -409,8 +183,8 @@ function splitWall(
   const totalLength = wallLength(wall)
   const segmentChildren = segments.map(() => [] as AnyNodeId[])
   const updates: WallTopologyChanges['update'] = []
-  for (const attachment of wallAttachments(wall, nodes)) {
-    const span = attachmentSpan(attachment)
+  for (const attachment of getWallAttachments(wall, nodes)) {
+    const span = getWallAttachmentSpan(attachment)
     if (!span) return null
     const segmentIndex = parameters.slice(0, -1).findIndex((startT, index) => {
       const endT = parameters[index + 1]!
@@ -418,7 +192,7 @@ function splitWall(
     })
     if (segmentIndex < 0) return null
     const segment = segments[segmentIndex]!
-    const update = remapAttachment(
+    const update = remapWallAttachment(
       attachment,
       segment,
       span.center - totalLength * parameters[segmentIndex]!,

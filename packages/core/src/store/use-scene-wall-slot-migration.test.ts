@@ -106,6 +106,36 @@ describe('wall surface-material → slots migration', () => {
     expect(wall.exteriorMaterialPreset).toBeUndefined()
   })
 
+  test('normalizes bare catalog preset IDs from older projects', () => {
+    useScene
+      .getState()
+      .setScene(sceneWithWall({ materialPreset: 'preset-white' }), ['site_test'] as never)
+
+    const wall = useScene.getState().nodes.wall_test as WallNode
+    expect(wall.slots).toEqual({
+      interior: 'library:preset-white',
+      exterior: 'library:preset-white',
+    })
+    expect(wall.materialPreset).toBeUndefined()
+  })
+
+  test('completes a partially migrated wall without overwriting existing slots', () => {
+    useScene.getState().setScene(
+      sceneWithWall({
+        slots: { interior: 'library:concrete-plate' },
+        exteriorMaterialPreset: 'preset-white',
+      }),
+      ['site_test'] as never,
+    )
+
+    const wall = useScene.getState().nodes.wall_test as WallNode
+    expect(wall.slots).toEqual({
+      interior: 'library:concrete-plate',
+      exterior: 'library:preset-white',
+    })
+    expect(wall.exteriorMaterialPreset).toBeUndefined()
+  })
+
   test('mints a scene material for an inline legacy material and references it', () => {
     useScene.getState().setScene(
       sceneWithWall({

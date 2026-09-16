@@ -1,5 +1,9 @@
 import type { FenceNode } from '../../schema'
-import { getWallCurveFrameAt, getWallCurveLength, sampleWallCenterline } from '../wall/wall-curve'
+import {
+  getWallCurveFrameAt,
+  getWallCurveSampledLength,
+  sampleWallCenterline,
+} from '../wall/wall-curve'
 import type { Point2D } from '../wall/wall-mitering'
 import {
   getFenceSplineFrameAt,
@@ -19,7 +23,7 @@ import {
  * math in `wall-curve.ts` is untouched — walls never carry a `path`.
  */
 
-const DEFAULT_SAMPLE_SEGMENTS = 96
+const DEFAULT_SPLINE_SAMPLE_SEGMENTS = 96
 
 type CurveFrame = {
   point: Point2D
@@ -34,28 +38,22 @@ export function getFenceCenterlineFrameAt(fence: FenceNode, t: number): CurveFra
   return getWallCurveFrameAt(fence, t)
 }
 
-export function sampleFenceCenterline(
-  fence: FenceNode,
-  segments = DEFAULT_SAMPLE_SEGMENTS,
-): Point2D[] {
+export function sampleFenceCenterline(fence: FenceNode, segments?: number): Point2D[] {
   if (isSplineFence(fence) && fence.path) {
     // Spread the requested sample budget across the spans so a long path still
     // reads smoothly without exploding the point count.
     const spanCount = Math.max(1, fence.path.length - 1)
-    const perSpan = Math.max(2, Math.ceil(segments / spanCount))
+    const perSpan = Math.max(2, Math.ceil((segments ?? DEFAULT_SPLINE_SAMPLE_SEGMENTS) / spanCount))
     return sampleFenceSpline(fence.path, fence.tangents, perSpan)
   }
   return sampleWallCenterline(fence, segments)
 }
 
-export function getFenceCenterlineLength(
-  fence: FenceNode,
-  segments = DEFAULT_SAMPLE_SEGMENTS,
-): number {
+export function getFenceCenterlineLength(fence: FenceNode, segments?: number): number {
   if (isSplineFence(fence) && fence.path) {
     const spanCount = Math.max(1, fence.path.length - 1)
-    const perSpan = Math.max(2, Math.ceil(segments / spanCount))
+    const perSpan = Math.max(2, Math.ceil((segments ?? DEFAULT_SPLINE_SAMPLE_SEGMENTS) / spanCount))
     return getFenceSplineLength(fence.path, fence.tangents, perSpan)
   }
-  return getWallCurveLength(fence, segments)
+  return getWallCurveSampledLength(fence, segments)
 }

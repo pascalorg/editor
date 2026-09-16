@@ -2,13 +2,14 @@ import type { FenceNode, WallNode } from '../../schema'
 import type { Point2D } from './wall-mitering'
 
 const CURVE_EPSILON = 1e-6
-const DEFAULT_SAMPLE_SEGMENTS = 24
+const DEFAULT_CURVE_TOLERANCE = 0.005
+const MAX_ADAPTIVE_CURVE_SEGMENTS = 128
 const CURVE_INTERSECTION_SEARCH_STEPS = 20
 const CURVE_INTERSECTION_TOLERANCE = 1e-6
 
 type WallCurveLike = Pick<WallNode | FenceNode, 'start' | 'end' | 'curveOffset'>
 
-type CurveFrame = {
+export type WallCurveFrame = {
   point: Point2D
   tangent: Point2D
   normal: Point2D
@@ -137,7 +138,7 @@ export function getWallArcData(wall: WallCurveLike) {
   return { center, radius, startAngle, delta, direction }
 }
 
-export function getWallCurveFrameAt(wall: WallCurveLike, t: number): CurveFrame {
+export function getWallCurveFrameAt(wall: WallCurveLike, t: number): WallCurveFrame {
   const chord = getWallChordFrame(wall)
   if (!isCurvedWall(wall) || chord.length < CURVE_EPSILON) {
     return {
@@ -183,12 +184,112 @@ export function getWallMidpointHandlePoint(wall: WallCurveLike) {
   return getWallCurveFrameAt(wall, 0.5).point
 }
 
-export function sampleWallCenterline(wall: WallCurveLike, segments = DEFAULT_SAMPLE_SEGMENTS) {
-  const count = Math.max(1, segments)
+/** Return a tessellation budget whose chord error stays below `tolerance`. */
+export function getWallCurveSampleCount(
+  wall: WallCurveLike,
+  tolerance = DEFAULT_CURVE_TOLERANCE,
+  maxSegments = MAX_ADAPTIVE_CURVE_SEGMENTS,
+) {
+  const arc = getWallArcData(wall)
+  if (!arc) return 1
+  const safeTolerance = Math.max(CURVE_EPSILON, tolerance)
+  const angleStep =
+    2 *
+    Math.acos(Math.max(-1, Math.min(1, 1 - safeTolerance / Math.max(arc.radius, safeTolerance))))
+  const count = Math.ceil(Math.abs(arc.delta) / Math.max(angleStep, CURVE_EPSILON))
+  return Math.max(2, Math.min(Math.max(2, Math.floor(maxSegments)), count))
+}
+
+export function sampleWallCenterline(wall: WallCurveLike, segments?: number) {
+  const count = segments === undefined ? getWallCurveSampleCount(wall) : Math.max(1, segments)
   return Array.from(
     { length: count + 1 },
     (_, index) => getWallCurveFrameAt(wall, index / count).point,
   )
+}
+
+/** Return the centerline frame at a distance from the wall's start point. */
+export function getWallCurveFrameAtDistance(
+  wall: WallCurveLike,
+  distanceAlong: number,
+): WallCurveFrame {
+  const length = getWallCurveLength(wall)
+  return getWallCurveFrameAt(wall, length <= CURVE_EPSILON ? 0 : distanceAlong / length)
+}
+
+export function getWallPointAtDistance(wall: WallCurveLike, distanceAlong: number): Point2D {
+  return getWallCurveFrameAtDistance(wall, distanceAlong).point
+}
+
+export type WallCenterlineProjection = {
+  point: Point2D
+  frame: WallCurveFrame
+  distance: number
+  distanceAlong: number
+  t: number
+  signedNormalDistance: number
+}
+
+/** Project a plan point onto the wall centerline, including curved walls. */
+export function projectPointToWallCenterline(
+  wall: WallCurveLike,
+  planPoint: Point2D,
+): WallCenterlineProjection {
+  const chord = getWallChordFrame(wall)
+  if (!isCurvedWall(wall) || chord.length <= CURVE_EPSILON) {
+    const dx = planPoint.x - chord.start.x
+    const dy = planPoint.y - chord.start.y
+    const t =
+      chord.length <= CURVE_EPSILON
+        ? 0
+        : clamp01((dx * chord.tangent.x + dy * chord.tangent.y) / chord.length)
+    const frame = getWallCurveFrameAt(wall, t)
+    const projected = frame.point
+    const signedNormalDistance =
+      (planPoint.x - projected.x) * frame.normal.x + (planPoint.y - projected.y) * frame.normal.y
+    return {
+      point: projected,
+      frame,
+      distance: Math.hypot(planPoint.x - projected.x, planPoint.y - projected.y),
+      distanceAlong: chord.length * t,
+      t,
+      signedNormalDistance,
+    }
+  }
+
+  const arc = getWallArcData(wall)
+  if (!arc) return projectPointToWallCenterline({ ...wall, curveOffset: 0 }, planPoint)
+
+  const pointAngle = Math.atan2(planPoint.y - arc.center.y, planPoint.x - arc.center.x)
+  let directedAngle = (pointAngle - arc.startAngle) * arc.direction
+  while (directedAngle < 0) directedAngle += Math.PI * 2
+  const arcAngle = Math.abs(arc.delta)
+  const candidates = [0, 1]
+  if (directedAngle <= arcAngle) candidates.push(directedAngle / arcAngle)
+
+  let bestT = 0
+  let bestDistance = Number.POSITIVE_INFINITY
+  for (const t of candidates) {
+    const frame = getWallCurveFrameAt(wall, t)
+    const candidateDistance = Math.hypot(planPoint.x - frame.point.x, planPoint.y - frame.point.y)
+    if (candidateDistance < bestDistance) {
+      bestDistance = candidateDistance
+      bestT = t
+    }
+  }
+
+  const frame = getWallCurveFrameAt(wall, bestT)
+  const signedNormalDistance =
+    (planPoint.x - frame.point.x) * frame.normal.x + (planPoint.y - frame.point.y) * frame.normal.y
+  const distanceAlong = getWallCurveLength(wall) * bestT
+  return {
+    point: frame.point,
+    frame,
+    distance: bestDistance,
+    distanceAlong,
+    t: bestT,
+    signedNormalDistance,
+  }
 }
 
 function segmentIntersectionPoint(a: Point2D, b: Point2D, c: Point2D, d: Point2D): Point2D | null {
@@ -278,7 +379,7 @@ export function constrainWallCurveOffsetToAvoidIntersections(
   return normalizeWallCurveOffset(wall, safeOffset)
 }
 
-export function getWallCurveLength(wall: WallCurveLike, segments = DEFAULT_SAMPLE_SEGMENTS) {
+export function getWallCurveSampledLength(wall: WallCurveLike, segments?: number) {
   const points = sampleWallCenterline(wall, segments)
   let totalLength = 0
 
@@ -289,13 +390,19 @@ export function getWallCurveLength(wall: WallCurveLike, segments = DEFAULT_SAMPL
   return totalLength
 }
 
+/** Exact centerline length for straight and circular wall centerlines. */
+export function getWallCurveLength(wall: WallCurveLike) {
+  const arc = getWallArcData(wall)
+  return arc ? Math.abs(arc.radius * arc.delta) : getWallChordLength(wall)
+}
+
 export function getWallSurfacePolygon(
   wall: Pick<WallNode | FenceNode, 'start' | 'end' | 'curveOffset' | 'thickness'>,
-  segments = DEFAULT_SAMPLE_SEGMENTS,
+  segments?: number,
   miterOverrides?: WallSurfaceMiterOverrides,
 ) {
   const halfThickness = (wall.thickness ?? 0.1) / 2
-  const count = Math.max(1, segments)
+  const count = segments === undefined ? getWallCurveSampleCount(wall) : Math.max(1, segments)
   const left: Point2D[] = []
   const right: Point2D[] = []
 

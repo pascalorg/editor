@@ -3,12 +3,10 @@ import {
   type AnyNodeId,
   collectLevelWallSegments,
   getScaledDimensions,
-  getWallArcData,
-  getWallCurveFrameAt,
   getWallCurveLength,
   type ItemNode,
-  isCurvedWall,
   nearestWallSegment,
+  projectPointToWallCenterline,
   WALL_SNAP_DISTANCE_M,
   type WallNode,
 } from '@pascal-app/core'
@@ -112,56 +110,8 @@ export function findClosestWallInPlan(
   }
 }
 
-type CurvedWallPlanHit = {
-  distance: number
-  localX: number
-  perpDistance: number
-  dirX: number
-  dirY: number
-  wallLength: number
-}
-
 export type WallPlanAttachment = Omit<WallHit, 'wall'> & {
   distance: number
-}
-
-function closestCurvedWallInPlan(
-  wall: WallNode,
-  planPoint: readonly [number, number],
-  maxDistance: number,
-): CurvedWallPlanHit | null {
-  const arc = getWallArcData(wall)
-  const wallLength = getWallCurveLength(wall)
-  if (!arc || wallLength <= 1e-6) return null
-
-  const pointAngle = Math.atan2(planPoint[1] - arc.center.y, planPoint[0] - arc.center.x)
-  let directedAngle = (pointAngle - arc.startAngle) * arc.direction
-  while (directedAngle < 0) directedAngle += Math.PI * 2
-
-  const candidates = [0, 1]
-  const arcAngle = Math.abs(arc.delta)
-  if (directedAngle <= arcAngle) candidates.push(directedAngle / arcAngle)
-
-  let best: { distance: number; t: number } | null = null
-  for (const t of candidates) {
-    const frame = getWallCurveFrameAt(wall, t)
-    const distance = Math.hypot(planPoint[0] - frame.point.x, planPoint[1] - frame.point.y)
-    if (!best || distance < best.distance) best = { distance, t }
-  }
-  if (!best || best.distance > maxDistance) return null
-
-  const frame = getWallCurveFrameAt(wall, best.t)
-  const perpDistance =
-    (planPoint[0] - frame.point.x) * frame.normal.x +
-    (planPoint[1] - frame.point.y) * frame.normal.y
-  return {
-    distance: best.distance,
-    localX: wallLength * best.t,
-    perpDistance,
-    dirX: frame.tangent.x,
-    dirY: frame.tangent.y,
-    wallLength,
-  }
 }
 
 /** Resolve a plan point against one wall, including its curved centerline. */
@@ -170,45 +120,20 @@ export function resolveWallAttachmentAtPlanPoint(
   planPoint: readonly [number, number],
   maxDistance = WALL_SNAP_DISTANCE_M,
 ): WallPlanAttachment | null {
-  if (!isCurvedWall(wall)) {
-    const dx = wall.end[0] - wall.start[0]
-    const dz = wall.end[1] - wall.start[1]
-    const wallLength = Math.hypot(dx, dz)
-    if (wallLength <= 1e-6) return null
-    const dirX = dx / wallLength
-    const dirY = dz / wallLength
-    const px = planPoint[0] - wall.start[0]
-    const pz = planPoint[1] - wall.start[1]
-    const localX = Math.max(0, Math.min(wallLength, px * dirX + pz * dirY))
-    const perpDistance = px * -dirY + pz * dirX
-    const closestX = wall.start[0] + dirX * localX
-    const closestZ = wall.start[1] + dirY * localX
-    const distance = Math.hypot(planPoint[0] - closestX, planPoint[1] - closestZ)
-    if (distance > maxDistance) return null
-    const side: 'front' | 'back' = perpDistance >= 0 ? 'front' : 'back'
-    return {
-      distance,
-      localX,
-      perpDistance,
-      side,
-      dirX,
-      dirY,
-      wallLength,
-      itemRotation: side === 'front' ? 0 : Math.PI,
-    }
-  }
-
-  const curvedHit = closestCurvedWallInPlan(wall, planPoint, maxDistance)
-  if (!curvedHit || curvedHit.distance > maxDistance) return null
-  const side: 'front' | 'back' = curvedHit.perpDistance >= 0 ? 'front' : 'back'
+  const projection = projectPointToWallCenterline(wall, {
+    x: planPoint[0],
+    y: planPoint[1],
+  })
+  if (projection.distance > maxDistance) return null
+  const side: 'front' | 'back' = projection.signedNormalDistance >= 0 ? 'front' : 'back'
   return {
-    distance: curvedHit.distance,
-    localX: curvedHit.localX,
-    perpDistance: curvedHit.perpDistance,
+    distance: projection.distance,
+    localX: projection.distanceAlong,
+    perpDistance: projection.signedNormalDistance,
     side,
-    dirX: curvedHit.dirX,
-    dirY: curvedHit.dirY,
-    wallLength: curvedHit.wallLength,
+    dirX: projection.frame.tangent.x,
+    dirY: projection.frame.tangent.y,
+    wallLength: getWallCurveLength(wall),
     itemRotation: side === 'front' ? 0 : Math.PI,
   }
 }

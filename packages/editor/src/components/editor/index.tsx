@@ -809,7 +809,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   return (
     <>
       <SceneEnvironment />
-      {!(isFirstPersonMode || isStudioMode || isCaptureMode) && <SelectionManager />}
+      {!noEditing && <SelectionManager />}
       {!(noEditing || isImmersive) && <BoxSelectTool />}
       {!noEditing && <NodeArrowHandles />}
       {!noEditing && <GroupRotateHandle />}
@@ -821,21 +821,21 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!(noEditing || isImmersive) && <FloatingActionMenu />}
       {!(noEditing || isImmersive) && <GroupFloatingActionMenu />}
       {!(noEditing || isImmersive) && <FloatingBuildingActionMenu />}
-      {!isFirstPersonMode && <WallMeasurementLabel />}
+      {!isFirstPersonMode && !isImmersive && <WallMeasurementLabel />}
       <ExportManager />
       {isFirstPersonMode ? <ViewerZoneSystem /> : <ZoneSystem />}
       <CeilingSystem />
       <CeilingSelectionAffordanceSystem />
       {!noEditing && <SelectionAffordanceManager />}
-      <RoofEditSystem />
-      <StairEditSystem />
-      {!(isLoading || isFirstPersonMode) && <SnapAwareGrid />}
+      {!noEditing && <RoofEditSystem />}
+      {!noEditing && <StairEditSystem />}
+      {!(isLoading || noEditing) && <SnapAwareGrid />}
       {!(isLoading || noEditing) && <ToolManager />}
       {isFirstPersonMode && <FirstPersonControls />}
       {isCaptureMode && !isImmersive && <CaptureCameraRig />}
       {!isImmersive && <CustomCameraControls />}
       {!isImmersive && <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />}
-      {!isFirstPersonMode && <SiteEdgeLabels />}
+      {!isFirstPersonMode && !isImmersive && <SiteEdgeLabels />}
       <InteractiveSystem />
       {presentationsReady ? <ViewerPresentations /> : null}
       {!noEditing && viewerSceneSlot}

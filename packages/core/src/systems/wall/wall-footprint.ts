@@ -11,7 +11,6 @@ export { calculateLevelMiters, type Point2D, type WallMiterData } from './wall-m
 
 export const DEFAULT_WALL_THICKNESS = 0.1
 export const DEFAULT_WALL_HEIGHT = 2.5
-const CURVED_WALL_SURFACE_SEGMENTS = 24
 
 export function getWallThickness(wallNode: WallNode): number {
   return wallNode.thickness ?? DEFAULT_WALL_THICKNESS
@@ -43,7 +42,7 @@ export function getWallPlanFootprint(wallNode: WallNode, miterData: WallMiterDat
 
     const { startLeft, startRight, endLeft, endRight } = boundaryPoints
 
-    return getWallSurfacePolygon(wallNode, CURVED_WALL_SURFACE_SEGMENTS, {
+    return getWallSurfacePolygon(wallNode, undefined, {
       endLeft,
       endRight,
       startLeft,

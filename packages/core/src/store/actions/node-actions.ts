@@ -28,7 +28,12 @@ import {
   type WallNode,
 } from '../../schema'
 import type { CollectionId } from '../../schema/collections'
-import { constrainWallCurveOffsetToAvoidIntersections } from '../../systems/wall/wall-curve'
+import {
+  constrainWallCurveOffsetToAvoidIntersections,
+  getWallCurveLength,
+  getWallPointAtDistance,
+  projectPointToWallCenterline,
+} from '../../systems/wall/wall-curve'
 import {
   activeSceneCommitNodeIds,
   addActiveSceneCommitNodeIds,
@@ -1006,10 +1011,6 @@ function pointsEqual(a: [number, number], b: [number, number], tolerance = 1e-6)
   return dx * dx + dz * dz <= tolerance * tolerance
 }
 
-function wallLength(wall: Pick<WallNode, 'start' | 'end'>) {
-  return Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
-}
-
 function getWallEndpointAtPoint(
   wall: Pick<WallNode, 'start' | 'end'>,
   point: [number, number],
@@ -1091,12 +1092,12 @@ function buildMergedWallAttachmentUpdates(
   mergedEnd: [number, number],
   nodes: Record<AnyNodeId, AnyNode>,
 ): WallAttachmentUpdate[] {
-  const mergedLength = Math.max(
-    Math.hypot(mergedEnd[0] - mergedStart[0], mergedEnd[1] - mergedStart[1]),
-    1e-6,
-  )
-  const tangentX = (mergedEnd[0] - mergedStart[0]) / mergedLength
-  const tangentZ = (mergedEnd[1] - mergedStart[1]) / mergedLength
+  const mergedWallGeometry = {
+    start: mergedStart,
+    end: mergedEnd,
+    curveOffset: primary.curveOffset,
+  }
+  const mergedLength = Math.max(getWallCurveLength(mergedWallGeometry), 1e-6)
   const updates: WallAttachmentUpdate[] = []
 
   const wallChildren = [...(primary.children ?? []), ...(secondary.children ?? [])] as AnyNodeId[]
@@ -1107,19 +1108,10 @@ function buildMergedWallAttachmentUpdates(
     }
 
     const sourceWall = child.parentId === secondary.id ? secondary : primary
-    const sourceLength = Math.max(wallLength(sourceWall), 1e-6)
     const localX = typeof child.position[0] === 'number' ? child.position[0] : 0
-    const worldX =
-      sourceWall.start[0] + ((sourceWall.end[0] - sourceWall.start[0]) * localX) / sourceLength
-    const worldZ =
-      sourceWall.start[1] + ((sourceWall.end[1] - sourceWall.start[1]) * localX) / sourceLength
-    const nextLocalX = Math.max(
-      0,
-      Math.min(
-        mergedLength,
-        (worldX - mergedStart[0]) * tangentX + (worldZ - mergedStart[1]) * tangentZ,
-      ),
-    )
+    const sourcePoint = getWallPointAtDistance(sourceWall, localX)
+    const mergedProjection = projectPointToWallCenterline(mergedWallGeometry, sourcePoint)
+    const nextLocalX = Math.max(0, Math.min(mergedLength, mergedProjection.distanceAlong))
 
     updates.push({
       id: childId,

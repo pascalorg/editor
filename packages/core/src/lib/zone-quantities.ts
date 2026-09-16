@@ -261,7 +261,7 @@ function wallForBoundarySegment(
 function wallPathsFor(walls: readonly WallNode[]): WallPath[] {
   return walls.map((wall) => ({
     wall,
-    points: sampleWallCenterline(wall, 32).map((point) => [point.x, point.y] as Point2D),
+    points: sampleWallCenterline(wall).map((point) => [point.x, point.y] as Point2D),
   }))
 }
 

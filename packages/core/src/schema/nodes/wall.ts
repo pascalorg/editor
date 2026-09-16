@@ -5,7 +5,10 @@ import { MaterialSchema } from '../material'
 import { DoorNode } from './door'
 import { ItemNode } from './item'
 import { LeanToExtensionNode } from './lean-to-extension'
+import { validateWallRelations } from './wall-relations'
 import { WindowNode } from './window'
+
+export { validateWallRelations } from './wall-relations'
 
 export const WallTreatmentSide = z.enum(['interior', 'exterior', 'both'])
 export type WallTreatmentSide = z.infer<typeof WallTreatmentSide>
@@ -157,9 +160,9 @@ export const WallNode = BaseNode.extend({
   // read only by the load migration that moves them into `slots`; delete them
   // in a follow-up once migrated scenes are the norm.
   slots: z.record(z.string(), z.string()).optional(),
-  thickness: z.number().optional(),
-  height: z.number().optional(),
-  curveOffset: z.number().optional(),
+  thickness: z.number().finite().positive().optional(),
+  height: z.number().finite().positive().optional(),
+  curveOffset: z.number().finite().optional(),
   // Persisted slab-support host — see ItemNode.supportSlabId for the rules.
   supportSlabId: z.string().optional(),
   // Vertical offset from the elected support surface. Ground-hosted chained
@@ -173,13 +176,14 @@ export const WallNode = BaseNode.extend({
   crown: WallTrimConfig.optional(),
   chairRail: WallTrimConfig.optional(),
   // e.g., start/end points for path
-  start: z.tuple([z.number(), z.number()]),
-  end: z.tuple([z.number(), z.number()]),
+  start: z.tuple([z.number().finite(), z.number().finite()]),
+  end: z.tuple([z.number().finite(), z.number().finite()]),
   // Space detection for cutaway mode
   frontSide: z.enum(['interior', 'exterior', 'unknown']).default('unknown'),
   backSide: z.enum(['interior', 'exterior', 'unknown']).default('unknown'),
-}).describe(
-  dedent`
+})
+  .describe(
+    dedent`
   Wall node - used to represent a wall in the building
   - thickness: thickness in meters
   - height: height in meters
@@ -191,7 +195,8 @@ export const WallNode = BaseNode.extend({
   - frontSide: whether the front side faces interior, exterior, or unknown
   - backSide: whether the back side faces interior, exterior, or unknown
   `,
-)
+  )
+  .meta({ validateRelations: validateWallRelations })
 export type WallNode = z.infer<typeof WallNode>
 
 export type WallSurfaceSide = 'interior' | 'exterior'

@@ -7,6 +7,7 @@ import {
   getEffectiveNode,
   getWallBandSlotId,
   getWallCurveFrameAt,
+  getWallCurveSampleCount,
   getWallFaceBandConfig,
   getWallFaceBandForHeight,
   getWallMiterBoundaryPoints,
@@ -1232,7 +1233,7 @@ export function generateExtrudedWall(
   const polyPoints = isCurvedWall(wallNode)
     ? getWallSurfacePolygon(
         wallNode,
-        24,
+        undefined,
         insetCurvedWallBoundaryPointsFor3D(wallNode, boundaryPoints, miterData) ?? undefined,
       )
     : getWallPlanFootprint(wallNode, miterData)
@@ -1300,7 +1301,10 @@ export function generateExtrudedWall(
     const worldCutoutPoints: Point2D[] = []
 
     if (isCurvedWall(wallNode)) {
-      const sampleCount = Math.max(2, Math.ceil((segmentEnd - segmentStart) * 24))
+      const sampleCount = Math.max(
+        2,
+        Math.ceil((segmentEnd - segmentStart) * getWallCurveSampleCount(wallNode)),
+      )
       const left: Point2D[] = []
       const right: Point2D[] = []
       for (let index = 0; index <= sampleCount; index++) {

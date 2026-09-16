@@ -2,6 +2,7 @@
 
 import {
   getWallCurveFrameAt,
+  getWallCurveSampleCount,
   getWallMiterBoundaryPoints,
   getWallThickness,
   isCurvedWall,
@@ -29,7 +30,6 @@ import { mergeGeometries as mergeBufferGeometries } from 'three/examples/jsm/uti
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 import { treatmentMiterDataForProud, type WallTreatmentLevelData } from './treatment-level-data'
 
-const CURVE_SEGMENTS = 24
 const MIN_SLICE_PROUD = 0.0005
 const EPS = 1e-6
 
@@ -321,7 +321,7 @@ function wallToLocalTransform(node: WallNode) {
 function buildSidePolyline(node: WallNode, side: WallSide, offset: number): Point2[] {
   const sideSign = resolveTreatmentSideSign(node, side)
   const toLocal = wallToLocalTransform(node)
-  const sampleCount = isCurvedWall(node) ? CURVE_SEGMENTS : 1
+  const sampleCount = isCurvedWall(node) ? getWallCurveSampleCount(node) : 1
   const points: Point2[] = []
 
   for (let index = 0; index <= sampleCount; index += 1) {

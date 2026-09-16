@@ -78,7 +78,6 @@ const MIN_SUBEDGE_LENGTH = 0.05
  * Otherwise the nearest centerline wins (parallel close walls).
  */
 const WALL_LATERAL_TIE_EPSILON = 0.02
-const CURVED_WALL_SAMPLE_SEGMENTS = 32
 const SLAB_SEAM_ELEVATION_EPSILON = 1e-4
 const DEFAULT_SLAB_ELEVATION = 0.05
 const DEFAULT_SLAB_THICKNESS = 0.05
@@ -252,7 +251,7 @@ function wallCenterlineSegments(wall: WallNode): Segment[] {
     return [[wall.start[0], wall.start[1], wall.end[0], wall.end[1]]]
   }
 
-  const points = sampleWallCenterline(wall, CURVED_WALL_SAMPLE_SEGMENTS)
+  const points = sampleWallCenterline(wall)
   const segments: Segment[] = []
   for (let index = 0; index < points.length - 1; index += 1) {
     const from = points[index]!
