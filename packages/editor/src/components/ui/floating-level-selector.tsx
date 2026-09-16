@@ -25,20 +25,17 @@ import {
   DEFAULT_LEVEL_HEIGHT,
   getStoredLevelHeight,
   LevelNode,
-  type UnitNode,
   useScene,
 } from '@pascal-app/core'
 import { markPerfAction, useViewer } from '@pascal-app/viewer'
 import {
-  ChevronDown,
   ClipboardPaste,
   Copy,
-  Eye,
-  EyeOff,
   GripVertical,
   MoreVertical,
   Plus,
   Trash2,
+  X,
 } from 'lucide-react'
 import {
   type ButtonHTMLAttributes,
@@ -56,9 +53,9 @@ import {
 } from '../../lib/level-duplication'
 import { getDefaultLevelName, getLevelDisplayName } from '@pascal-app/core'
 import { deleteLevelWithFallbackSelection } from '../../lib/level-selection'
+import { unitMemberLevels, leaveUnitFocus } from '../../lib/units'
 import { useLinearDisplay } from '../../lib/use-linear-display'
 import { cn } from '../../lib/utils'
-import useEditor from '../../store/use-editor'
 import { ActionButton } from './controls/action-button'
 import { SliderControl } from './controls/slider-control'
 import { LevelDuplicateDialog } from './level-duplicate-dialog'
@@ -143,12 +140,15 @@ function LevelRow({
   onDuplicate,
   onPaste,
   onRequestDelete,
+  unitDotColor,
 }: {
   level: LevelNode
   isSelected: boolean
   isDragging?: boolean
   dragHandleProps?: ButtonHTMLAttributes<HTMLButtonElement>
   dragHandleRef?: (element: HTMLButtonElement | null) => void
+  /** Focused-unit color when the unit has zones on this level. */
+  unitDotColor?: string
   onSelect: () => void
   onDuplicate: (preset?: LevelDuplicatePreset) => void
   onPaste?: () => void
@@ -230,6 +230,13 @@ function LevelRow({
             type="button"
           >
             <span className="truncate">{getLevelDisplayName(level)}</span>
+            {unitDotColor && (
+              <span
+                className="ml-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ backgroundColor: unitDotColor }}
+                title="Focused unit has zones here"
+              />
+            )}
           </button>
 
           {/* Storey height badge — opens the height popover */}
@@ -358,9 +365,11 @@ function SortableLevelRow({
   onDuplicate,
   onPaste,
   onRequestDelete,
+  unitDotColor,
 }: {
   level: LevelNode
   isSelected: boolean
+  unitDotColor?: string
   onSelect: () => void
   onDuplicate: (preset?: LevelDuplicatePreset) => void
   onPaste?: () => void
@@ -396,104 +405,41 @@ function SortableLevelRow({
         onPaste={onPaste}
         onRequestDelete={onRequestDelete}
         onSelect={onSelect}
+        unitDotColor={unitDotColor}
       />
     </div>
   )
 }
 
-// ── Unit chip: active unit picker + isolate toggle, only once a unit exists ──
+// ── Unit focus chip: name + × to end focus, only while a unit is focused ────
 
-const UNIT_MENU_ITEM_CLASS =
-  'flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-white/10 hover:text-foreground'
+function UnitFocusChip() {
+  const focusedUnitId = useViewer((s) => s.focusedUnitId)
+  const focusedUnit = useScene((s) => {
+    const unit = focusedUnitId ? s.nodes[focusedUnitId] : undefined
+    return unit?.type === 'unit' ? unit : null
+  })
 
-function UnitChip({ buildingId }: { buildingId: BuildingNode['id'] | null }) {
-  const [open, setOpen] = useState(false)
-  const units = useScene(
-    useShallow((state) => {
-      if (!buildingId) return [] as UnitNode[]
-      const building = state.nodes[buildingId]
-      if (building?.type !== 'building') return [] as UnitNode[]
-      return building.children
-        .map((id) => state.nodes[id])
-        .filter((node): node is UnitNode => node?.type === 'unit')
-    }),
-  )
-  const activeUnitId = useEditor((s) => s.activeUnitId)
-  const isolatedUnitId = useEditor((s) => s.isolatedUnitId)
-  const setActiveUnit = useEditor((s) => s.setActiveUnit)
-  const setIsolatedUnit = useEditor((s) => s.setIsolatedUnit)
-
-  if (units.length === 0) return null
-
-  const activeUnit = units.find((unit) => unit.id === activeUnitId) ?? null
-  const isIsolated = activeUnit !== null && isolatedUnitId === activeUnit.id
+  if (!focusedUnit) return null
 
   return (
-    <div className="mt-4 flex items-center gap-1">
-      <Popover onOpenChange={setOpen} open={open}>
-        <PopoverTrigger asChild>
-          <button
-            className="flex h-7 max-w-44 items-center gap-1.5 rounded-full border border-border bg-background/90 pr-2 pl-2.5 font-medium text-xs shadow-2xl backdrop-blur-md transition-colors hover:bg-white/10"
-            title="Active unit"
-            type="button"
-          >
-            <span
-              className={cn(
-                'h-2 w-2 shrink-0 rounded-full',
-                !activeUnit && 'border border-muted-foreground/50',
-              )}
-              style={activeUnit ? { backgroundColor: activeUnit.color } : undefined}
-            />
-            <span className={cn('truncate', !activeUnit && 'text-muted-foreground')}>
-              {activeUnit ? activeUnit.name || 'Unit' : 'No unit'}
-            </span>
-            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground/60" />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-44 p-1" side="right" sideOffset={8}>
-          <button
-            className={cn(UNIT_MENU_ITEM_CLASS, !activeUnit && 'text-foreground')}
-            onClick={() => {
-              setActiveUnit(null)
-              setOpen(false)
-            }}
-            type="button"
-          >
-            None
-          </button>
-          {units.map((unit) => (
-            <button
-              className={cn(UNIT_MENU_ITEM_CLASS, unit.id === activeUnitId && 'text-foreground')}
-              key={unit.id}
-              onClick={() => {
-                setActiveUnit(unit.id)
-                setOpen(false)
-              }}
-              type="button"
-            >
-              <span
-                className="h-2 w-2 shrink-0 rounded-full"
-                style={{ backgroundColor: unit.color }}
-              />
-              <span className="truncate">{unit.name || 'Unit'}</span>
-            </button>
-          ))}
-        </PopoverContent>
-      </Popover>
+    <div
+      className="mt-4 flex h-7 max-w-48 items-center gap-1.5 rounded-full border border-border bg-background/90 pr-1 pl-2.5 font-medium text-xs shadow-2xl backdrop-blur-md"
+      data-testid="unit-focus-chip"
+    >
+      <span
+        className="h-2 w-2 shrink-0 rounded-full"
+        style={{ backgroundColor: focusedUnit.color }}
+      />
+      <span className="truncate">{focusedUnit.name || 'Unit'}</span>
       <button
-        className={cn(
-          'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border bg-background/90 shadow-2xl backdrop-blur-md transition-colors',
-          isIsolated ? 'text-primary' : 'text-muted-foreground hover:text-foreground',
-          !activeUnit && 'cursor-not-allowed opacity-50',
-        )}
-        disabled={!activeUnit}
-        onClick={() => {
-          if (activeUnit) setIsolatedUnit(isIsolated ? null : activeUnit.id)
-        }}
-        title={isIsolated ? 'Show all' : 'Isolate unit'}
+        aria-label="Exit unit focus"
+        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+        onClick={() => leaveUnitFocus()}
+        title="Exit unit focus"
         type="button"
       >
-        {isIsolated ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+        <X className="h-3 w-3" />
       </button>
     </div>
   )
@@ -511,6 +457,17 @@ export function FloatingLevelSelector() {
 
   const [deletingLevel, setDeletingLevel] = useState<LevelNode | null>(null)
   const [draggingLevelId, setDraggingLevelId] = useState<string | null>(null)
+  const focusedUnitId = useViewer((s) => s.focusedUnitId)
+  const focusedUnitColor = useScene((s) => {
+    const unit = focusedUnitId ? s.nodes[focusedUnitId] : undefined
+    return unit?.type === 'unit' ? unit.color : null
+  })
+  const focusedUnitLevelIds = useScene(
+    useShallow((s) => {
+      const unit = focusedUnitId ? s.nodes[focusedUnitId] : undefined
+      return unit?.type === 'unit' ? unitMemberLevels(unit, s.nodes).map((level) => level.id) : []
+    }),
+  )
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 4 },
@@ -741,6 +698,11 @@ export function FloatingLevelSelector() {
                       <SortableLevelRow
                         isSelected={isSelected}
                         level={level}
+                        unitDotColor={
+                          focusedUnitColor && focusedUnitLevelIds.includes(level.id)
+                            ? focusedUnitColor
+                            : undefined
+                        }
                         onDuplicate={(preset) => handleDuplicateLevel(level, preset)}
                         onPaste={() => handlePasteToLevel(level)}
                         onRequestDelete={() => setDeletingLevel(level)}
@@ -771,7 +733,7 @@ export function FloatingLevelSelector() {
             </SortableContext>
           </DndContext>
         </div>
-        <UnitChip buildingId={resolvedBuildingId} />
+        <UnitFocusChip />
       </div>
 
       {/* Delete confirmation dialog */}

@@ -81,6 +81,13 @@ import {
   shouldPreserveSelectedRoofHostTarget,
 } from '../../lib/selection-routing'
 import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
+import {
+  cancelPendingZonePaint,
+  leaveUnitFocus,
+  paintZoneMembership,
+  zoneAtLevelPoint,
+  zoneAtWorldPoint,
+} from '../../lib/units'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
 import useEditor, { type MaterialTargetRole } from './../../store/use-editor'
 import useInteractionScope, {
@@ -1609,6 +1616,23 @@ export const SelectionManager = () => {
       // the click falls through to the item underneath.
       if (node.type === 'ceiling' && !event.viaHandle) return
 
+      // Unit focus turns clicks inside a zone into the paint gesture:
+      // membership toggles, the zone stays unselected, focus stays.
+      const focusedUnitId = useViewer.getState().focusedUnitId
+      if (focusedUnitId) {
+        const zone =
+          node.type === 'zone' ? node : zoneAtWorldPoint(event.position[0], event.position[2])
+        if (zone) {
+          event.stopPropagation()
+          clickHandledRef.current = true
+          setTimeout(() => {
+            clickHandledRef.current = false
+          }, 50)
+          paintZoneMembership(focusedUnitId, zone.id)
+          return
+        }
+      }
+
       let currentPhase = useEditor.getState().phase
       let currentStructureLayer = useEditor.getState().structureLayer
       const selectedIdsBeforeRouting = useViewer.getState().selection.selectedIds
@@ -1809,6 +1833,14 @@ export const SelectionManager = () => {
       if (useInteractionScope.getState().scope.kind === 'mesh-editing') return
       const nativeEvent = event.nativeEvent
       if (nativeEvent?.metaKey || nativeEvent?.ctrlKey || nativeEvent?.shiftKey) return
+      // Unit focus: a ground click inside a zone paints it; elsewhere it
+      // leaves focus and the unit selection alone.
+      const focusedUnitId = useViewer.getState().focusedUnitId
+      if (focusedUnitId) {
+        const zone = zoneAtLevelPoint(event.localPosition[0], event.localPosition[2])
+        if (zone) paintZoneMembership(focusedUnitId, zone.id)
+        return
+      }
       const { phase, structureLayer } = useEditor.getState()
       const activeStrategy = SELECTION_STRATEGIES[phase]
       if (activeStrategy) activeStrategy.handleDeselect()
@@ -1916,6 +1948,28 @@ export const SelectionManager = () => {
         }
         if (node.type === 'stair-segment' && currentPhase === 'structure') {
           forceSelect = true // allow double click to dive into stair-segment even if already in structure phase
+        }
+      }
+
+      // While a unit is focused a double-click inside a zone ends focus and
+      // selects that zone normally; the two clicks before it cancel each
+      // other's paint.
+      if (useViewer.getState().focusedUnitId) {
+        const zone =
+          node.type === 'zone' ? node : zoneAtWorldPoint(event.position[0], event.position[2])
+        if (zone) {
+          event.stopPropagation()
+          cancelPendingZonePaint(zone.id)
+          leaveUnitFocus({ keepLayer: true })
+          useEditor.getState().setPhase('structure')
+          useEditor.getState().setStructureLayer('zones')
+          SELECTION_STRATEGIES.structure?.handleSelect(
+            zone,
+            event.nativeEvent,
+            modifierKeysRef.current,
+            [],
+          )
+          return
         }
       }
 

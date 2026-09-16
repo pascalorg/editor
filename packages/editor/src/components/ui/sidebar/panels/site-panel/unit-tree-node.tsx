@@ -8,20 +8,18 @@ import {
   type ZoneNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { AlertTriangle, Eye, EyeOff, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Trash2, X } from 'lucide-react'
 import { memo, useCallback, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
-import { cn } from './../../../../../lib/utils'
-import useEditor from './../../../../../store/use-editor'
+import { assignZoneToUnit, enterUnitFocus } from './../../../../../lib/units'
 import { InlineRenameInput } from './inline-rename-input'
-import { handleTreeSelection, routeTreeSelectionToNode, TreeNodeWrapper } from './tree-node'
+import { routeTreeSelectionToNode, TreeNodeWrapper } from './tree-node'
 
 type UnitWarningCode = ReturnType<typeof unitWarnings>[number]['code']
 
 const WARNING_LABELS: Record<UnitWarningCode, string> = {
   empty: 'No zones in this unit',
-  'shared-zone': 'A zone also belongs to another unit',
   'non-adjacent-levels': 'Members sit on non-adjacent levels',
 }
 
@@ -35,7 +33,7 @@ interface UnitZoneRowProps {
   onRemove?: (zoneId: ZoneNode['id']) => void
 }
 
-/** One member (or common) zone under a unit: name + level, click selects it. */
+/** One member zone under a unit: name + level, click selects it. */
 export const UnitZoneRow = memo(function UnitZoneRow({
   zoneId,
   depth,
@@ -139,27 +137,20 @@ export const UnitTreeNode = memo(function UnitTreeNode({
   )
   const isSelected = useViewer((s) => s.selection.selectedIds.includes(nodeId))
   const isHovered = useViewer((s) => s.hoveredId === nodeId)
-  const setSelection = useViewer((s) => s.setSelection)
   const setHoveredId = useViewer((s) => s.setHoveredId)
-  const isActive = useEditor((s) => s.activeUnitId === unitId)
-  const isIsolated = useEditor((s) => s.isolatedUnitId === unitId)
-  const setActiveUnit = useEditor((s) => s.setActiveUnit)
-  const setIsolatedUnit = useEditor((s) => s.setIsolatedUnit)
+  const isFocused = useViewer((s) => s.focusedUnitId === unitId)
 
   const handleClick = useCallback(
     (event: React.MouseEvent) => {
       event.stopPropagation()
-      handleTreeSelection(event, nodeId, useViewer.getState().selection.selectedIds, setSelection)
-      setActiveUnit(unitId)
+      enterUnitFocus(unitId)
     },
-    [nodeId, unitId, setSelection, setActiveUnit],
+    [unitId],
   )
 
   const handleRemoveMember = useCallback(
-    (zoneId: ZoneNode['id']) => {
-      updateNode(unitId, { members: members.filter((id) => id !== zoneId) })
-    },
-    [unitId, members, updateNode],
+    (zoneId: ZoneNode['id']) => assignZoneToUnit(zoneId, null),
+    [],
   )
 
   const warningTitle = [...new Set(warningCodes)].map((code) => WARNING_LABELS[code]).join('\n')
@@ -167,30 +158,17 @@ export const UnitTreeNode = memo(function UnitTreeNode({
   return (
     <TreeNodeWrapper
       actions={
-        <div className="flex items-center gap-0.5">
-          <button
-            className={cn(ACTION_BUTTON_CLASS, isIsolated && 'text-primary')}
-            onClick={(event) => {
-              event.stopPropagation()
-              setIsolatedUnit(isIsolated ? null : unitId)
-            }}
-            title={isIsolated ? 'Show all' : 'Isolate'}
-            type="button"
-          >
-            {isIsolated ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-          </button>
-          <button
-            className={ACTION_BUTTON_CLASS}
-            onClick={(event) => {
-              event.stopPropagation()
-              deleteNode(unitId)
-            }}
-            title="Delete unit"
-            type="button"
-          >
-            <Trash2 className="h-3 w-3" />
-          </button>
-        </div>
+        <button
+          className={ACTION_BUTTON_CLASS}
+          onClick={(event) => {
+            event.stopPropagation()
+            deleteNode(unitId)
+          }}
+          title="Delete unit"
+          type="button"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
       }
       depth={depth}
       expanded={expanded}
@@ -214,9 +192,9 @@ export const UnitTreeNode = memo(function UnitTreeNode({
             onStartEditing={() => setIsEditing(true)}
             onStopEditing={() => setIsEditing(false)}
           />
-          {isActive && (
+          {isFocused && (
             <span className="shrink-0 rounded-full bg-primary/15 px-1.5 text-[10px] text-primary leading-4">
-              Active
+              Focused
             </span>
           )}
           {warningCodes.length > 0 && (

@@ -99,6 +99,10 @@ export type GeometryContext = {
      * wall ends only during the move.
      */
     moving: boolean
+    /** The unit under focus in the editor and its member zone ids, so zone
+     * builders can dim non-members. Absent when no unit is focused. */
+    focusedUnitId?: string
+    focusedUnitMemberIds?: readonly string[]
     /**
      * The kind's theme palette. Theme-aware colors (selection stroke,
      * endpoint handle fill, hatch color) live here so kinds don't need

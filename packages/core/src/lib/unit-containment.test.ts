@@ -191,7 +191,7 @@ describe('unit membership and warnings', () => {
     s.add(ZoneNode.parse({ parentId: 'level_elsewhere', name: 'Elsewhere', polygon: rectangle() }))
     expect(unitsForZone(shared.id, s.nodes)).toEqual([first, second])
     expect(unassignedZoneIds(s.building.id, s.nodes)).toEqual([common.id])
-    expect(unitWarnings(first, s.nodes)).toEqual([{ code: 'shared-zone', zoneId: shared.id }])
+    expect(unitWarnings(first, s.nodes)).toEqual([])
   })
 
   test('warns for empty and non-adjacent levels, allowing adjacent duplexes', () => {

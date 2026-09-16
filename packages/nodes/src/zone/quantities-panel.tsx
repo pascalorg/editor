@@ -163,22 +163,24 @@ function ZoneUnitPanel({ zone }: { zone: ZoneNode }) {
   const units = useScene(useShallow((state) => buildingUnitsForZone(zone, (id) => state.nodes[id])))
   if (units.length === 0) return null
 
-  const memberOf = units.filter((unit) => unit.members.includes(zone.id))
-  const current = memberOf[0]
+  const current = units.find((unit) => unit.members.includes(zone.id))
 
   const handleChange = (nextId: string) => {
+    const { nodes, updateNodes } = useScene.getState()
     const updates: { id: AnyNodeId; data: Partial<UnitNode> }[] = []
-    if (current && current.id !== nextId) {
-      updates.push({
-        id: current.id,
-        data: { members: current.members.filter((id) => id !== zone.id) },
-      })
+    for (const unit of Object.values(nodes)) {
+      if (unit.type !== 'unit') continue
+      const isMember = unit.members.includes(zone.id)
+      if (unit.id === nextId && !isMember) {
+        updates.push({ id: unit.id, data: { members: [...unit.members, zone.id] } })
+      } else if (unit.id !== nextId && isMember) {
+        updates.push({
+          id: unit.id,
+          data: { members: unit.members.filter((id) => id !== zone.id) },
+        })
+      }
     }
-    const next = units.find((unit) => unit.id === nextId)
-    if (next && !next.members.includes(zone.id)) {
-      updates.push({ id: next.id, data: { members: [...next.members, zone.id] } })
-    }
-    if (updates.length > 0) useScene.getState().updateNodes(updates)
+    if (updates.length > 0) updateNodes(updates)
   }
 
   return (
@@ -192,9 +194,6 @@ function ZoneUnitPanel({ zone }: { zone: ZoneNode }) {
         ]}
         value={current?.id ?? ''}
       />
-      {memberOf.length > 1 ? (
-        <p className="text-muted-foreground text-xs">In {memberOf.length} units</p>
-      ) : null}
     </PanelSection>
   )
 }

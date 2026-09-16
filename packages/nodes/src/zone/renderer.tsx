@@ -215,9 +215,9 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
   }, [tintColor])
 
   const wallMaterial = useMemo(() => {
-    if (!tintColor) return null
-    return createWallGradientMaterial(tintColor)
-  }, [tintColor])
+    if (!node.color) return null
+    return createWallGradientMaterial(node.color)
+  }, [node.color])
 
   const handlers = useNodeEvents(node, 'zone')
 
@@ -250,7 +250,7 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
                 style={{
                   width: 'max-content',
                   color: 'white',
-                  textShadow: `-1px -1px 0 ${tintColor}, 1px -1px 0 ${tintColor}, -1px 1px 0 ${tintColor}, 1px 1px 0 ${tintColor}`,
+                  textShadow: `-1px -1px 0 ${node.color}, 1px -1px 0 ${node.color}, -1px 1px 0 ${node.color}, 1px 1px 0 ${node.color}`,
                   textAlign: 'center',
                 }}
               >
@@ -287,7 +287,7 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
                   style={{
                     width: '2px',
                     height: '40px',
-                    backgroundColor: tintColor,
+                    backgroundColor: node.color,
                   }}
                 />
                 <div
@@ -295,7 +295,7 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
                     width: '10px',
                     height: '10px',
                     borderRadius: '50%',
-                    backgroundColor: tintColor,
+                    backgroundColor: node.color,
                     border: '1px solid white',
                   }}
                 />

@@ -14,6 +14,8 @@ export type FloorplanViewState = {
   highlighted: boolean
   hovered: boolean
   moving: boolean
+  focusedUnitId?: string
+  focusedUnitMemberIds?: readonly string[]
   palette: FloorplanPalette | undefined
 }
 
@@ -66,6 +68,8 @@ export function buildFloorplanContext(
           highlighted: viewState.highlighted,
           hovered: viewState.hovered,
           moving: viewState.moving,
+          focusedUnitId: viewState.focusedUnitId,
+          focusedUnitMemberIds: viewState.focusedUnitMemberIds,
           palette: viewState.palette,
         }
       : undefined,

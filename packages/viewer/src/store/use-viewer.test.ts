@@ -73,3 +73,21 @@ describe('external selection highlights', () => {
     expect(useViewer.getState().selection).toBe(localSelection)
   })
 })
+
+describe('unit focus', () => {
+  afterEach(() => useViewer.getState().setFocusedUnit(null))
+
+  test('focuses one unit at a time and clears without touching the selection', () => {
+    const selection = useViewer.getState().selection
+
+    useViewer.getState().setFocusedUnit('unit_a' as never)
+    expect(useViewer.getState().focusedUnitId).toBe('unit_a')
+
+    useViewer.getState().setFocusedUnit('unit_b' as never)
+    expect(useViewer.getState().focusedUnitId).toBe('unit_b')
+
+    useViewer.getState().setFocusedUnit(null)
+    expect(useViewer.getState().focusedUnitId).toBeNull()
+    expect(useViewer.getState().selection).toBe(selection)
+  })
+})

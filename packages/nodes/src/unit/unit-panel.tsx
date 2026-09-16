@@ -46,6 +46,7 @@ export default function UnitPanel({ node }: { node: UnitNode }) {
   const updateNode = useScene((state) => state.updateNode)
   const setSelection = useViewer((state) => state.setSelection)
   const areaUnit = useViewer((state) => state.unit)
+  const focusedUnitId = useViewer((state) => state.focusedUnitId)
 
   const report = useMemo(() => buildUnitReport(node, nodes), [node, nodes])
   const warnings = useMemo(() => unitWarnings(node, nodes), [node, nodes])
@@ -95,11 +96,6 @@ export default function UnitPanel({ node }: { node: UnitNode }) {
   }, [node.id, setSelection])
 
   const warningMessages = warnings.map((warning) => {
-    if (warning.code === 'shared-zone') {
-      const zone = warning.zoneId ? nodes[warning.zoneId as AnyNodeId] : undefined
-      const name = zone?.type === 'zone' && zone.name ? zone.name : 'A zone'
-      return `${name} is also in another unit.`
-    }
     if (warning.code === 'non-adjacent-levels') {
       return 'Members sit on levels that are not adjacent.'
     }
@@ -138,7 +134,7 @@ export default function UnitPanel({ node }: { node: UnitNode }) {
       <PanelSection title="Members">
         {report.members.length === 0 ? (
           <p className="text-muted-foreground text-xs leading-snug">
-            No zones yet. Draw zones while this unit is active, or pick it from a zone's inspector.
+            No zones yet. Draw zones while this unit is focused, or pick it from a zone's inspector.
           </p>
         ) : (
           report.members.map((member) => (
@@ -169,9 +165,7 @@ export default function UnitPanel({ node }: { node: UnitNode }) {
         {warningMessages.length > 0 ? (
           <ul className="flex flex-col gap-1 text-amber-300 text-xs leading-snug">
             {warningMessages.map((message, index) => (
-              <li key={`${warnings[index]?.code}-${warnings[index]?.zoneId ?? index}`}>
-                {message}
-              </li>
+              <li key={warnings[index]?.code}>{message}</li>
             ))}
           </ul>
         ) : null}
@@ -185,6 +179,13 @@ export default function UnitPanel({ node }: { node: UnitNode }) {
 
       <PanelSection title="Actions">
         <ActionGroup>
+          {focusedUnitId !== node.id && (
+            <ActionButton
+              className="rounded-full"
+              label="Focus"
+              onClick={() => useViewer.getState().setFocusedUnit(node.id)}
+            />
+          )}
           <ActionButton
             className="text-destructive hover:text-destructive"
             icon={<Trash2 className="h-3.5 w-3.5" />}

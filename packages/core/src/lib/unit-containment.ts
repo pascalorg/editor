@@ -190,17 +190,11 @@ export function unitWarnings(
   unit: UnitNode,
   nodes: Nodes,
 ): Array<{
-  code: 'empty' | 'shared-zone' | 'non-adjacent-levels'
-  zoneId?: ZoneNode['id']
+  code: 'empty' | 'non-adjacent-levels'
 }> {
   const members = [...new Set(unit.members)].filter((id) => nodes[id]?.type === 'zone')
   const warnings: ReturnType<typeof unitWarnings> = []
   if (members.length === 0) warnings.push({ code: 'empty' })
-  for (const zoneId of members) {
-    if (unitsForZone(zoneId, nodes).some((other) => other.id !== unit.id)) {
-      warnings.push({ code: 'shared-zone', zoneId })
-    }
-  }
   const ordinals = [
     ...new Set(
       members.flatMap((id) => {

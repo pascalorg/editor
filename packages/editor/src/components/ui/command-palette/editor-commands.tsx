@@ -1,7 +1,7 @@
 'use client'
 
 import type { AnyNodeId } from '@pascal-app/core'
-import { DEFAULT_LEVEL_HEIGHT, LevelNode, useScene } from '@pascal-app/core'
+import { DEFAULT_LEVEL_HEIGHT, LevelNode, type UnitNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import {
   AppWindow,
@@ -40,7 +40,7 @@ import {
 import { useEffect } from 'react'
 import { getHistoryCommandState, runRedo, runUndo } from '../../../lib/history'
 import { deleteLevelWithFallbackSelection } from '../../../lib/level-selection'
-import { createUnitInBuilding, toggleActiveUnitIsolation } from '../../../lib/units'
+import { createUnitInBuilding, enterUnitFocus, leaveUnitFocus } from '../../../lib/units'
 import { useCommandRegistry } from '../../../store/use-command-registry'
 import type { StructureTool } from '../../../store/use-editor'
 import useEditor from '../../../store/use-editor'
@@ -58,13 +58,25 @@ export function EditorCommands() {
   const setPreviewMode = useEditor((s) => s.setPreviewMode)
 
   const exportScene = useViewer((s) => s.exportScene)
+  // Focusable units are listed one command each; the key changes only when a
+  // unit is added, removed or renamed.
+  const unitListKey = useScene((s) =>
+    Object.values(s.nodes)
+      .filter((n): n is UnitNode => n.type === 'unit')
+      .map((n) => `${n.id}:${n.name ?? ''}`)
+      .join('|'),
+  )
 
   // Re-register when exportScene availability changes (it's a conditional action)
   useEffect(() => {
+    void unitListKey
     const run = (fn: () => void) => {
       fn()
       setOpen(false)
     }
+    const focusableUnits = Object.values(useScene.getState().nodes).filter(
+      (n): n is UnitNode => n.type === 'unit',
+    )
 
     const activateTool = (tool: StructureTool) => {
       run(() => {
@@ -270,18 +282,23 @@ export function EditorCommands() {
             createUnitInBuilding(building.id)
           }),
       },
-      {
-        id: 'editor.unit.isolate',
-        label: () =>
-          useEditor.getState().isolatedUnitId ? 'Show all units' : 'Isolate active unit',
+      ...focusableUnits.map((unit) => ({
+        id: `editor.unit.focus.${unit.id}`,
+        label: `Focus unit: ${unit.name || 'Unit'}`,
         group: 'Units',
-        icon: <Eye className="h-4 w-4" />,
-        keywords: ['unit', 'isolate', 'focus', 'show', 'all', 'apartment'],
-        when: () => {
-          const { activeUnitId, isolatedUnitId } = useEditor.getState()
-          return !!activeUnitId || !!isolatedUnitId
-        },
-        execute: () => run(toggleActiveUnitIsolation),
+        icon: <Group className="h-4 w-4" />,
+        keywords: ['unit', 'focus', 'apartment', unit.name || 'Unit'],
+        when: () => useViewer.getState().focusedUnitId !== unit.id,
+        execute: () => run(() => enterUnitFocus(unit.id)),
+      })),
+      {
+        id: 'editor.unit.exit-focus',
+        label: 'Exit unit focus',
+        group: 'Units',
+        icon: <Group className="h-4 w-4" />,
+        keywords: ['unit', 'focus', 'exit', 'leave', 'apartment'],
+        when: () => !!useViewer.getState().focusedUnitId,
+        execute: () => run(() => leaveUnitFocus()),
       },
 
       // ── Viewer Controls ──────────────────────────────────────────────────
@@ -466,6 +483,7 @@ export function EditorCommands() {
     isPreviewMode,
     setPreviewMode,
     exportScene,
+    unitListKey,
   ])
 
   return null

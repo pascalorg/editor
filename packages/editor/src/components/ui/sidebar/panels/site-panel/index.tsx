@@ -8,8 +8,6 @@ import {
   LevelNode,
   type ScanNode,
   type SiteNode,
-  unassignedZoneIds,
-  type UnitNode,
   useScene,
   type ZoneNode,
 } from '@pascal-app/core'
@@ -55,16 +53,16 @@ import {
 } from './../../../../../lib/measurements'
 import { createLocalGuideImage, createLocalScan } from './../../../../../lib/local-guide-image'
 import { editorHostTreeChildrenRegistry } from './../../../../../lib/host-tree-children'
-import { createUnitInBuilding } from './../../../../../lib/units'
+import { createUnitInBuilding, toggleZoneMembership } from './../../../../../lib/units'
 import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'
 import { MetricControl } from '../../../controls/metric-control'
 import { LevelDuplicateDialog } from '../../../level-duplicate-dialog'
 import { InlineRenameInput } from './inline-rename-input'
+import { ZoneMembershipCheckbox } from './zone-membership-checkbox'
 import { focusTreeNode, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeDragProvider } from './tree-node-drag'
-import { UnitZoneRow } from './unit-tree-node'
 
 // ============================================================================
 // PROPERTY LINE SECTION
@@ -1095,11 +1093,7 @@ const UnitsSection = memo(function UnitsSection({
     }),
   )
   const hasUnits = unitIds.length > 0
-  const commonZoneIds = useScene(
-    useShallow((s) => (hasUnits ? unassignedZoneIds(buildingId, s.nodes) : [])),
-  )
   const [expanded, setExpanded] = useState(hasUnits)
-  const [commonExpanded, setCommonExpanded] = useState(false)
 
   useEffect(() => {
     if (hasUnits) setExpanded(true)
@@ -1145,37 +1139,11 @@ const UnitsSection = memo(function UnitsSection({
           expanded={false}
           hasChildren={false}
           icon={<Plus className="h-3.5 w-3.5" />}
-          isLast={!hasUnits}
+          isLast
           label="New unit"
           onClick={handleNewUnit}
           onToggle={() => {}}
         />
-        {hasUnits && (
-          <TreeNodeWrapper
-            depth={2}
-            expanded={commonExpanded}
-            hasChildren={commonZoneIds.length > 0}
-            icon={<Pentagon className="h-3.5 w-3.5" />}
-            isLast
-            label={
-              <span className="flex items-center gap-1.5">
-                Common
-                <span className="text-muted-foreground text-xs">{commonZoneIds.length}</span>
-              </span>
-            }
-            onClick={() => setCommonExpanded((value) => !value)}
-            onToggle={() => setCommonExpanded((value) => !value)}
-          >
-            {commonZoneIds.map((zoneId, index) => (
-              <UnitZoneRow
-                depth={3}
-                isLast={index === commonZoneIds.length - 1}
-                key={zoneId}
-                zoneId={zoneId}
-              />
-            ))}
-          </TreeNodeWrapper>
-        )}
       </TreeNodeWrapper>
     </div>
   )
@@ -1314,19 +1282,13 @@ const LayerToggle = memo(function LayerToggle() {
 const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLast?: boolean }) {
   const [isEditing, setIsEditing] = useState(false)
   const [cameraPopoverOpen, setCameraPopoverOpen] = useState(false)
-  const [unitPopoverOpen, setUnitPopoverOpen] = useState(false)
   const deleteNode = useScene((state) => state.deleteNode)
   const updateNode = useScene((state) => state.updateNode)
-  const buildingUnits = useScene(
-    useShallow((s) => {
-      const level = s.nodes[zone.parentId as AnyNodeId]
-      const building = level?.parentId ? s.nodes[level.parentId as AnyNodeId] : undefined
-      if (building?.type !== 'building') return [] as UnitNode[]
-      return building.children
-        .map((id) => s.nodes[id])
-        .filter((node): node is UnitNode => node?.type === 'unit')
-    }),
-  )
+  const focusedUnitId = useViewer((state) => state.focusedUnitId)
+  const focusedUnit = useScene((s) => {
+    const unit = focusedUnitId ? s.nodes[focusedUnitId] : undefined
+    return unit?.type === 'unit' ? unit : null
+  })
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
   const hoveredId = useViewer((state) => state.hoveredId)
   const setSelection = useViewer((state) => state.setSelection)
@@ -1400,6 +1362,13 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
         style={{ left: 8, width: 4 }}
       />
 
+      {focusedUnit && (
+        <ZoneMembershipCheckbox
+          checked={focusedUnit.members.includes(zone.id)}
+          onToggle={() => toggleZoneMembership(focusedUnit.id, zone.id)}
+          unitName={focusedUnit.name || 'Unit'}
+        />
+      )}
       <span className={cn('mr-2', !isSelected && 'opacity-40')}>
         <ColorDot color={zone.color} onChange={handleColorChange} />
       </span>
@@ -1474,55 +1443,6 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
             </div>
           </PopoverContent>
         </Popover>
-        {buildingUnits.length > 0 && (
-          <Popover onOpenChange={setUnitPopoverOpen} open={unitPopoverOpen}>
-            <PopoverTrigger asChild>
-              <button
-                className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-black/5 hover:text-foreground group-hover/row:opacity-100 dark:hover:bg-white/10"
-                onClick={(e) => e.stopPropagation()}
-                title="Unit"
-                type="button"
-              >
-                <Group className="h-3 w-3" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent
-              align="start"
-              className="w-auto p-1"
-              onClick={(e) => e.stopPropagation()}
-              side="right"
-            >
-              <div className="flex flex-col gap-0.5">
-                {buildingUnits.map((buildingUnit) => {
-                  const isMember = buildingUnit.members.includes(zone.id)
-                  const unitName = buildingUnit.name || 'Unit'
-                  return (
-                    <button
-                      className="flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-left text-popover-foreground text-sm hover:bg-accent"
-                      key={buildingUnit.id}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        updateNode(buildingUnit.id, {
-                          members: isMember
-                            ? buildingUnit.members.filter((id) => id !== zone.id)
-                            : [...buildingUnit.members, zone.id],
-                        })
-                        setUnitPopoverOpen(false)
-                      }}
-                      type="button"
-                    >
-                      <span
-                        className="h-2.5 w-2.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: buildingUnit.color }}
-                      />
-                      {isMember ? `Remove from ${unitName}` : `Add to ${unitName}`}
-                    </button>
-                  )
-                })}
-              </div>
-            </PopoverContent>
-          </Popover>
-        )}
         <button
           className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-black/5 hover:text-foreground group-hover/row:opacity-100 dark:hover:bg-white/10"
           onClick={handleDelete}

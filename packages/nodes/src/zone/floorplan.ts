@@ -14,9 +14,7 @@ import { buildRoomClearDimensions } from './room-clear-dimensions'
 import { owningUnitForZone } from './unit-membership'
 
 /**
- * Stage C floor-plan builder for zone. Zones are colored polygons —
- * fill + outline both come from `zone.color`. Selection adds an
- * accent-colored outline.
+ * Stage C floor-plan builder for zone. Zones are colored polygons.
  *
  * The zone's `name` renders as a centered text label at the polygon's
  * geometric centroid. The registry layer sorts zones before every
@@ -29,7 +27,6 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
 
   const view = ctx.viewState
   const floorplanContext = readFloorplanContext(ctx)
-  const palette = view?.palette
   const isSelected = view?.selected ?? false
   const isHighlighted = view?.highlighted ?? false
   const showSelectedChrome = isSelected || isHighlighted
@@ -37,7 +34,9 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
   const points: FloorplanPoint[] = ring.map(([x, z]) => [x, z] as FloorplanPoint)
   const unit = owningUnitForZone(node, ctx.resolve)
   const tintColor = unit?.color ?? node.color
-  const stroke = showSelectedChrome && palette ? palette.selectedStroke : tintColor
+  const stroke = node.color
+  const focusOpacity =
+    view?.focusedUnitId && !view.focusedUnitMemberIds?.includes(node.id) ? 0.35 : 1
   const isRoom = node.spaceRole === 'room'
   const fillOpacity = isRoom ? (isSelected ? 0.12 : 0.04) : isSelected ? 0.28 : 0.16
 
@@ -46,10 +45,10 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
       kind: 'polygon',
       points,
       fill: tintColor,
-      fillOpacity,
+      fillOpacity: fillOpacity * focusOpacity,
       stroke,
       strokeWidth: showSelectedChrome ? 0.08 : 0.05,
-      strokeOpacity: showSelectedChrome ? 0.96 : 0.72,
+      strokeOpacity: (showSelectedChrome ? 0.96 : 0.72) * focusOpacity,
       strokeLinejoin: 'round',
       vectorEffect: 'non-scaling-stroke',
     },
@@ -139,7 +138,7 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
         // (0.2 plan metres ≈ readable at typical building zooms).
         fontSize: line.fontSize,
         fill: '#ffffff',
-        stroke: tintColor,
+        stroke: node.color,
         strokeWidth: line.fontSize * 0.35,
         paintOrder: 'stroke',
         fontFamily: 'system-ui, -apple-system, sans-serif',

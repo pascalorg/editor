@@ -49,7 +49,7 @@ import {
   writePersistedSelection,
 } from '../../lib/scene'
 import { disposeSFXBus, initSFXBus } from '../../lib/sfx-bus'
-import { useClearStaleUnitState, useUnitIsolateIds } from '../../lib/units'
+import { useUnitFocusRules } from '../../lib/units'
 import { type CameraHintAction, useCameraHintFocus } from '../../store/use-camera-hint-focus'
 import useEditor from '../../store/use-editor'
 import useFloorplanMode from '../../store/use-floorplan-mode'
@@ -1043,10 +1043,8 @@ const ViewerCanvas = memo(function ViewerCanvas({
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
   const captureMode = useEditor((s) => s.captureMode)
-  const unitIsolateIds = useUnitIsolateIds()
-  useClearStaleUnitState()
-  // Preset capture owns the isolation filter while it runs.
-  const isolate = captureMode.mode === 'preset' ? captureMode.isolated : unitIsolateIds
+  useUnitFocusRules()
+  const isolate = captureMode.mode === 'preset' ? captureMode.isolated : null
 
   const [isCameraControlsHintVisible, setIsCameraControlsHintVisible] = useState<boolean | null>(
     null,
