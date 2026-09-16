@@ -45,6 +45,7 @@ import { StairNode } from './nodes/stair'
 import { StairSegmentNode } from './nodes/stair-segment'
 import { StructuralGridNode } from './nodes/structural-grid'
 import { TurbineVentNode } from './nodes/turbine-vent'
+import { UnitNode } from './nodes/unit'
 import { WallNode } from './nodes/wall'
 import { WindowNode } from './nodes/window'
 import { ZoneNode } from './nodes/zone'
@@ -87,6 +88,7 @@ export const AnyNode = nodeUnion([
   SiteNode,
   BuildingNode,
   ElevatorNode,
+  UnitNode,
   LevelNode,
   LeanToExtensionNode,
   ColumnNode,

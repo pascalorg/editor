@@ -315,6 +315,7 @@ export { AttachmentSide, StairSegmentNode, StairSegmentType } from './nodes/stai
 export { StructuralGridNode } from './nodes/structural-grid'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
 export { TurbineVentMaterialRole, TurbineVentNode } from './nodes/turbine-vent'
+export { DEFAULT_UNIT_COLOR, UNIT_KINDS, type UnitKind, UnitNode } from './nodes/unit'
 export type {
   WallBandSurfaceSlotId,
   WallFaceBand,

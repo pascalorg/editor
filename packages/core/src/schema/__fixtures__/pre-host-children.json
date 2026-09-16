@@ -52,6 +52,18 @@
   },
   {
     "object": "node",
+    "id": "unit_k41irhcq2elqoplx",
+    "type": "unit",
+    "name": "Unit",
+    "parentId": null,
+    "visible": true,
+    "metadata": {},
+    "kind": "apartment",
+    "members": [],
+    "color": "#f59e0b"
+  },
+  {
+    "object": "node",
     "id": "level_moxqm7bybe8sfzli",
     "type": "level",
     "parentId": null,

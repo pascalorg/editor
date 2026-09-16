@@ -34,6 +34,7 @@ import {
   type RoofSegmentNode,
   resolveSlabPlacementElevation,
   resolveTerrainWallConstructionOptions,
+  runAsSingleSceneHistoryStep,
   type SiteNode,
   type SlabNode,
   SlabNode as SlabNodeSchema,
@@ -98,6 +99,7 @@ import { formatLinearMeasurement, linearUnitToMeters } from '../../lib/measureme
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { SITE_BOUNDARY_DRAG_LABEL, siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
+import { cancelPendingZonePaint, focusedUnitNode, paintZoneMembership } from '../../lib/units'
 import { cn } from '../../lib/utils'
 import { snapBuildingLocalToWorldGrid } from '../../lib/world-grid-snap'
 import { subscribeNavigationSyncPose } from '../../store/navigation-sync-pose-store'
@@ -7952,7 +7954,7 @@ export function FloorplanPanel({
         return null
       }
 
-      const { createNode, nodes } = useScene.getState()
+      const { createNode, updateNode, nodes } = useScene.getState()
       const zoneCount = Object.values(nodes).filter((node) => node.type === 'zone').length
       const zone = ZoneNodeSchema.parse({
         color: PALETTE_COLORS[zoneCount % PALETTE_COLORS.length],
@@ -7960,9 +7962,15 @@ export function FloorplanPanel({
         polygon: points.map(([x, z]) => [x, z] as [number, number]),
       })
 
-      createNode(zone, levelId)
+      // Joining the focused unit rides in the zone's own undo step; selecting
+      // the zone would end focus, so a painted unit keeps it instead.
+      const focusedUnit = focusedUnitNode()
+      runAsSingleSceneHistoryStep(useScene, () => {
+        createNode(zone, levelId)
+        if (focusedUnit) updateNode(focusedUnit.id, { members: [...focusedUnit.members, zone.id] })
+      })
       sfxEmitter.emit('sfx:structure-build')
-      setSelection({ zoneId: zone.id })
+      if (!focusedUnit) setSelection({ zoneId: zone.id })
       return zone.id
     },
     [levelId, setSelection],
@@ -10008,6 +10016,18 @@ export function FloorplanPanel({
         setSelectedReferenceId(null)
 
         if (backgroundSelection.kind === 'select-zone') {
+          // Unit focus: a click paints membership, a double-click selects the
+          // zone and keeps focus (the SVG gets the second click as detail 2).
+          const focusedUnitId = useViewer.getState().focusedUnitId
+          if (focusedUnitId) {
+            if (event.detail >= 2) {
+              cancelPendingZonePaint(backgroundSelection.zoneId)
+              setSelection({ zoneId: backgroundSelection.zoneId })
+            } else {
+              paintZoneMembership(focusedUnitId, backgroundSelection.zoneId)
+            }
+            return
+          }
           setSelection({ zoneId: backgroundSelection.zoneId })
           return
         }

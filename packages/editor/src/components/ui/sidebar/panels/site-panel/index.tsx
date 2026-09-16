@@ -19,6 +19,7 @@ import {
   Copy,
   Eye,
   EyeOff,
+  Group,
   Loader2,
   MoreHorizontal,
   Pencil,
@@ -52,13 +53,15 @@ import {
 } from './../../../../../lib/measurements'
 import { createLocalGuideImage, createLocalScan } from './../../../../../lib/local-guide-image'
 import { editorHostTreeChildrenRegistry } from './../../../../../lib/host-tree-children'
+import { createUnitInBuilding, toggleZoneMembership } from './../../../../../lib/units'
 import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'
 import { MetricControl } from '../../../controls/metric-control'
 import { LevelDuplicateDialog } from '../../../level-duplicate-dialog'
 import { InlineRenameInput } from './inline-rename-input'
-import { focusTreeNode, TreeNode } from './tree-node'
+import { ZoneMembershipCheckbox } from './zone-membership-checkbox'
+import { focusTreeNode, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeDragProvider } from './tree-node-drag'
 
 // ============================================================================
@@ -1078,6 +1081,74 @@ const LevelsSection = memo(function LevelsSection({
   )
 })
 
+const UnitsSection = memo(function UnitsSection({
+  buildingId,
+}: {
+  buildingId: BuildingNode['id']
+}) {
+  const unitIds = useScene(
+    useShallow((s) => {
+      const building = s.nodes[buildingId] as BuildingNode | undefined
+      return (building?.children ?? []).filter((id) => s.nodes[id]?.type === 'unit')
+    }),
+  )
+  const hasUnits = unitIds.length > 0
+  const [expanded, setExpanded] = useState(hasUnits)
+
+  useEffect(() => {
+    if (hasUnits) setExpanded(true)
+  }, [hasUnits])
+
+  const handleNewUnit = (event: React.MouseEvent) => {
+    event.stopPropagation()
+    createUnitInBuilding(buildingId)
+    setExpanded(true)
+  }
+
+  return (
+    <div className="subtle-scrollbar max-h-72 shrink-0 overflow-y-auto overflow-x-hidden">
+      <TreeNodeWrapper
+        actions={
+          <button
+            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10"
+            onClick={handleNewUnit}
+            title="New unit"
+            type="button"
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+        }
+        depth={1}
+        expanded={expanded}
+        hasChildren
+        icon={<Group className="h-3.5 w-3.5" />}
+        label={
+          <span className="flex items-center gap-1.5">
+            Units
+            {hasUnits && <span className="text-muted-foreground text-xs">{unitIds.length}</span>}
+          </span>
+        }
+        onClick={() => setExpanded((value) => !value)}
+        onToggle={() => setExpanded((value) => !value)}
+      >
+        {unitIds.map((unitId) => (
+          <TreeNode depth={2} key={unitId} nodeId={unitId} />
+        ))}
+        <TreeNodeWrapper
+          depth={2}
+          expanded={false}
+          hasChildren={false}
+          icon={<Plus className="h-3.5 w-3.5" />}
+          isLast
+          label="New unit"
+          onClick={handleNewUnit}
+          onToggle={() => {}}
+        />
+      </TreeNodeWrapper>
+    </div>
+  )
+})
+
 const LayerToggle = memo(function LayerToggle() {
   const structureLayer = useEditor((state) => state.structureLayer)
   const setStructureLayer = useEditor((state) => state.setStructureLayer)
@@ -1213,6 +1284,11 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
   const [cameraPopoverOpen, setCameraPopoverOpen] = useState(false)
   const deleteNode = useScene((state) => state.deleteNode)
   const updateNode = useScene((state) => state.updateNode)
+  const focusedUnitId = useViewer((state) => state.focusedUnitId)
+  const focusedUnit = useScene((s) => {
+    const unit = focusedUnitId ? s.nodes[focusedUnitId] : undefined
+    return unit?.type === 'unit' ? unit : null
+  })
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
   const hoveredId = useViewer((state) => state.hoveredId)
   const setSelection = useViewer((state) => state.setSelection)
@@ -1286,6 +1362,13 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
         style={{ left: 8, width: 4 }}
       />
 
+      {focusedUnit && (
+        <ZoneMembershipCheckbox
+          checked={focusedUnit.members.includes(zone.id)}
+          onToggle={() => toggleZoneMembership(focusedUnit.id, zone.id)}
+          unitName={focusedUnit.name || 'Unit'}
+        />
+      )}
       <span className={cn('mr-2', !isSelected && 'opacity-40')}>
         <ColorDot color={zone.color} onChange={handleColorChange} />
       </span>
@@ -1629,6 +1712,7 @@ const BuildingItem = memo(function BuildingItem({
                   onUploadAsset={onUploadAsset}
                   projectId={projectId}
                 />
+                <UnitsSection buildingId={building.id} />
                 <LayerToggle />
               </div>
               <div className="subtle-scrollbar relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">

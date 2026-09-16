@@ -14,6 +14,7 @@ import { nodeRegistry, registerNode } from '../registry/registry'
 import type { Capabilities, SceneApi, SurfacesConfig } from '../registry/types'
 import { getScaledDimensions, ItemNode } from '../schema/nodes/item'
 import { ShelfNode } from '../schema/nodes/shelf'
+import { UnitNode } from '../schema/nodes/unit'
 import type { AnyNode } from '../schema/types'
 import {
   getSurfaceProvider,
@@ -280,6 +281,22 @@ describe('protocol defaults', () => {
   test('one non-physical list refuses every listed host', () => {
     for (const type of NON_PHYSICAL_HOST_KINDS)
       expect(resolveSurfacePlacement({ ...args, host: { ...host, type } as AnyNode })).toBeNull()
+  })
+
+  test('a unit overlay cannot host catalog or procedural children from an upward hit', () => {
+    const unit = UnitNode.parse({})
+    for (const childKind of ['item', 'procedural-item']) {
+      const rejections: string[] = []
+      expect(
+        resolveSurfacePlacement({
+          ...args,
+          host: unit,
+          childKind,
+          onReject: (reason) => rejections.push(reason),
+        }),
+      ).toBeNull()
+      expect(rejections).toEqual(['host-not-eligible'])
+    }
   })
 
   test('ceiling refusal covers both catalog and procedural mounting, even with an explicit provider', () => {

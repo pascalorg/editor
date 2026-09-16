@@ -11,11 +11,10 @@ import {
   formatConstructionLength,
 } from '../shared/construction-length'
 import { buildRoomClearDimensions } from './room-clear-dimensions'
+import { owningUnitForZone } from './unit-membership'
 
 /**
- * Stage C floor-plan builder for zone. Zones are colored polygons —
- * fill + outline both come from `zone.color`. Selection adds an
- * accent-colored outline.
+ * Stage C floor-plan builder for zone. Zones are colored polygons.
  *
  * The zone's `name` renders as a centered text label at the polygon's
  * geometric centroid. The registry layer sorts zones before every
@@ -28,13 +27,16 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
 
   const view = ctx.viewState
   const floorplanContext = readFloorplanContext(ctx)
-  const palette = view?.palette
   const isSelected = view?.selected ?? false
   const isHighlighted = view?.highlighted ?? false
   const showSelectedChrome = isSelected || isHighlighted
 
   const points: FloorplanPoint[] = ring.map(([x, z]) => [x, z] as FloorplanPoint)
-  const stroke = showSelectedChrome && palette ? palette.selectedStroke : node.color
+  const unit = owningUnitForZone(node, ctx.resolve)
+  const tintColor = unit?.color ?? node.color
+  const stroke = node.color
+  const focusOpacity =
+    view?.focusedUnitId && !view.focusedUnitMemberIds?.includes(node.id) ? 0.35 : 1
   const isRoom = node.spaceRole === 'room'
   const fillOpacity = isRoom ? (isSelected ? 0.12 : 0.04) : isSelected ? 0.28 : 0.16
 
@@ -42,11 +44,11 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
     {
       kind: 'polygon',
       points,
-      fill: node.color,
-      fillOpacity,
+      fill: tintColor,
+      fillOpacity: fillOpacity * focusOpacity,
       stroke,
       strokeWidth: showSelectedChrome ? 0.08 : 0.05,
-      strokeOpacity: showSelectedChrome ? 0.96 : 0.72,
+      strokeOpacity: (showSelectedChrome ? 0.96 : 0.72) * focusOpacity,
       strokeLinejoin: 'round',
       vectorEffect: 'non-scaling-stroke',
     },
@@ -111,30 +113,41 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
         floorplanContext.purpose === 'document' ? 'document' : 'editor',
         floorplanContext.metricNotation,
         stroke,
+        unit?.name,
       ),
     )
     if (floorplanContext.automaticDimensions) {
       children.push(...buildRoomClearDimensions(node, ctx))
     }
   } else if (name) {
-    children.push({
-      kind: 'text',
-      x: cx,
-      y: cy,
-      text: name,
-      // Same constants the legacy `FLOORPLAN_ZONE_LABEL_FONT_SIZE` uses
-      // (0.2 plan metres ≈ readable at typical building zooms).
-      fontSize: ZONE_LABEL_FONT_SIZE,
-      fill: '#ffffff',
-      stroke: node.color,
-      strokeWidth: ZONE_LABEL_FONT_SIZE * 0.35,
-      paintOrder: 'stroke',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
-      fontWeight: 500,
-      textAnchor: 'middle',
-      dominantBaseline: 'central',
-      opacity: showSelectedChrome ? 1 : 0.92,
-      upright: true,
+    const unitName = unit?.name.trim()
+    const lines = unitName
+      ? [
+          { text: name, fontSize: ZONE_LABEL_FONT_SIZE, fontWeight: 500 },
+          { text: unitName, fontSize: ZONE_UNIT_LABEL_FONT_SIZE, fontWeight: 600 },
+        ]
+      : [{ text: name, fontSize: ZONE_LABEL_FONT_SIZE, fontWeight: 500 }]
+    const startY = cy - ((lines.length - 1) * ROOM_LABEL_LINE_SPACING) / 2
+    lines.forEach((line, index) => {
+      children.push({
+        kind: 'text',
+        x: cx,
+        y: startY + index * ROOM_LABEL_LINE_SPACING,
+        text: line.text,
+        // Same constants the legacy `FLOORPLAN_ZONE_LABEL_FONT_SIZE` uses
+        // (0.2 plan metres ≈ readable at typical building zooms).
+        fontSize: line.fontSize,
+        fill: '#ffffff',
+        stroke: node.color,
+        strokeWidth: line.fontSize * 0.35,
+        paintOrder: 'stroke',
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontWeight: line.fontWeight,
+        textAnchor: 'middle',
+        dominantBaseline: 'central',
+        opacity: showSelectedChrome ? 1 : 0.92,
+        upright: true,
+      })
     })
   }
 
@@ -142,6 +155,7 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
 }
 
 const ZONE_LABEL_FONT_SIZE = 0.2
+const ZONE_UNIT_LABEL_FONT_SIZE = 0.13
 const ROOM_NAME_FONT_SIZE = 0.2
 const ROOM_NUMBER_FONT_SIZE = 0.16
 const ROOM_DETAIL_FONT_SIZE = 0.11
@@ -155,10 +169,14 @@ function buildRoomLabels(
   profile: ConstructionLengthProfile,
   metricNotation: 'meters' | 'millimeters',
   color: string,
+  unitName?: string,
 ): FloorplanGeometry[] {
   const lines: Array<{ text: string; fontSize: number; fontWeight: number }> = []
   const name = node.name.trim()
   if (name) lines.push({ text: name, fontSize: ROOM_NAME_FONT_SIZE, fontWeight: 700 })
+  if (unitName?.trim()) {
+    lines.push({ text: unitName.trim(), fontSize: ROOM_NUMBER_FONT_SIZE, fontWeight: 600 })
+  }
   if (node.roomNumber) {
     lines.push({ text: node.roomNumber, fontSize: ROOM_NUMBER_FONT_SIZE, fontWeight: 600 })
   }

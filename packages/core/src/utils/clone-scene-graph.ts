@@ -120,6 +120,13 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
       ) as string | undefined
     }
 
+    if (clonedNode.type === 'unit') {
+      clonedNode.members = clonedNode.members.flatMap((id) => {
+        const remapped = idMap.get(id)
+        return remapped ? [remapped as typeof id] : []
+      })
+    }
+
     if ('deckSlabId' in clonedNode && typeof clonedNode.deckSlabId === 'string') {
       ;(clonedNode as Record<string, unknown>).deckSlabId = idMap.get(clonedNode.deckSlabId) as
         | string

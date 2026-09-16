@@ -318,6 +318,7 @@ export {
   ViewerStageSwitcher,
   type ViewerStageSwitcherProps,
 } from './components/viewer/viewer-stage-switcher'
+export { ViewerUnitsPanel } from './components/viewer/viewer-units-panel'
 export {
   WalkthroughHud,
   type WalkthroughHudProps,

@@ -1,4 +1,5 @@
 import type { ParametricDescriptor } from '@pascal-app/core'
+import { findAutomaticRunEndCapIds } from '../shared/automatic-run-end-cap'
 import { fittingDeletionPlansForRun } from '../shared/fitting-deletion-cleanup'
 import type { PipeSegmentNode } from './schema'
 
@@ -15,10 +16,12 @@ export const pipeSegmentParametrics: ParametricDescriptor<PipeSegmentNode> = {
     fittingDeletionPlansForRun(pipe, nodes, requestedDeleteIds, true).flatMap(
       (plan) => plan.updates,
     ),
-  onDeleteCascade: (pipe, nodes, _pendingDeleteIds, requestedDeleteIds) =>
-    fittingDeletionPlansForRun(pipe, nodes, requestedDeleteIds, false).flatMap((plan) =>
+  onDeleteCascade: (pipe, nodes, _pendingDeleteIds, requestedDeleteIds) => [
+    ...findAutomaticRunEndCapIds(pipe.id, nodes, 'pipe-fitting'),
+    ...fittingDeletionPlansForRun(pipe, nodes, requestedDeleteIds, false).flatMap((plan) =>
       plan.deleteFitting ? [plan.fittingId, ...plan.cascadeDeleteIds] : [],
     ),
+  ],
   trailingSection: () => import('../shared/run-hanger-inspector'),
   groups: [
     {

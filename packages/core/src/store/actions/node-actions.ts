@@ -1717,6 +1717,20 @@ const deleteNodesActionImpl = (
       }
     }
 
+    const deletedZoneIds = new Set<string>()
+    for (const id of allIds) {
+      if (nextNodes[id]?.type === 'zone') deletedZoneIds.add(id)
+    }
+    if (deletedZoneIds.size > 0) {
+      for (const node of Object.values(nextNodes)) {
+        if (node.type !== 'unit' || allIds.has(node.id)) continue
+        const members = node.members.filter((id) => !deletedZoneIds.has(id))
+        if (members.length === node.members.length) continue
+        nextNodes[node.id] = { ...node, members }
+        nodesToMarkDirty.add(node.id)
+      }
+    }
+
     for (const id of allIds) {
       const node = nextNodes[id]
       if (!node) continue

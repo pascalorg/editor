@@ -82,6 +82,7 @@ export const NON_PHYSICAL_HOST_KINDS: readonly string[] = [
   'structural-grid',
   'spawn',
   'zone',
+  'unit',
   'site',
   'building',
   'level',

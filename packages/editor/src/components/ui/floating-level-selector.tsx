@@ -28,7 +28,15 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { markPerfAction, useViewer } from '@pascal-app/viewer'
-import { ClipboardPaste, Copy, GripVertical, MoreVertical, Plus, Trash2 } from 'lucide-react'
+import {
+  ClipboardPaste,
+  Copy,
+  GripVertical,
+  MoreVertical,
+  Plus,
+  Trash2,
+  X,
+} from 'lucide-react'
 import {
   type ButtonHTMLAttributes,
   type CSSProperties,
@@ -45,6 +53,7 @@ import {
 } from '../../lib/level-duplication'
 import { getDefaultLevelName, getLevelDisplayName } from '@pascal-app/core'
 import { deleteLevelWithFallbackSelection } from '../../lib/level-selection'
+import { unitMemberLevels, leaveUnitFocus } from '../../lib/units'
 import { useLinearDisplay } from '../../lib/use-linear-display'
 import { cn } from '../../lib/utils'
 import { ActionButton } from './controls/action-button'
@@ -131,12 +140,15 @@ function LevelRow({
   onDuplicate,
   onPaste,
   onRequestDelete,
+  unitDotColor,
 }: {
   level: LevelNode
   isSelected: boolean
   isDragging?: boolean
   dragHandleProps?: ButtonHTMLAttributes<HTMLButtonElement>
   dragHandleRef?: (element: HTMLButtonElement | null) => void
+  /** Focused-unit color when the unit has zones on this level. */
+  unitDotColor?: string
   onSelect: () => void
   onDuplicate: (preset?: LevelDuplicatePreset) => void
   onPaste?: () => void
@@ -218,6 +230,13 @@ function LevelRow({
             type="button"
           >
             <span className="truncate">{getLevelDisplayName(level)}</span>
+            {unitDotColor && (
+              <span
+                className="ml-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ backgroundColor: unitDotColor }}
+                title="Focused unit has zones here"
+              />
+            )}
           </button>
 
           {/* Storey height badge — opens the height popover */}
@@ -346,9 +365,11 @@ function SortableLevelRow({
   onDuplicate,
   onPaste,
   onRequestDelete,
+  unitDotColor,
 }: {
   level: LevelNode
   isSelected: boolean
+  unitDotColor?: string
   onSelect: () => void
   onDuplicate: (preset?: LevelDuplicatePreset) => void
   onPaste?: () => void
@@ -384,7 +405,42 @@ function SortableLevelRow({
         onPaste={onPaste}
         onRequestDelete={onRequestDelete}
         onSelect={onSelect}
+        unitDotColor={unitDotColor}
       />
+    </div>
+  )
+}
+
+// ── Unit focus chip: name + × to end focus, only while a unit is focused ────
+
+function UnitFocusChip() {
+  const focusedUnitId = useViewer((s) => s.focusedUnitId)
+  const focusedUnit = useScene((s) => {
+    const unit = focusedUnitId ? s.nodes[focusedUnitId] : undefined
+    return unit?.type === 'unit' ? unit : null
+  })
+
+  if (!focusedUnit) return null
+
+  return (
+    <div
+      className="mt-4 flex h-7 max-w-48 items-center gap-1.5 rounded-full border border-border bg-background/90 pr-1 pl-2.5 font-medium text-xs shadow-2xl backdrop-blur-md"
+      data-testid="unit-focus-chip"
+    >
+      <span
+        className="h-2 w-2 shrink-0 rounded-full"
+        style={{ backgroundColor: focusedUnit.color }}
+      />
+      <span className="truncate">{focusedUnit.name || 'Unit'}</span>
+      <button
+        aria-label="Exit unit focus"
+        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+        onClick={() => leaveUnitFocus()}
+        title="Exit unit focus"
+        type="button"
+      >
+        <X className="h-3 w-3" />
+      </button>
     </div>
   )
 }
@@ -401,6 +457,17 @@ export function FloatingLevelSelector() {
 
   const [deletingLevel, setDeletingLevel] = useState<LevelNode | null>(null)
   const [draggingLevelId, setDraggingLevelId] = useState<string | null>(null)
+  const focusedUnitId = useViewer((s) => s.focusedUnitId)
+  const focusedUnitColor = useScene((s) => {
+    const unit = focusedUnitId ? s.nodes[focusedUnitId] : undefined
+    return unit?.type === 'unit' ? unit.color : null
+  })
+  const focusedUnitLevelIds = useScene(
+    useShallow((s) => {
+      const unit = focusedUnitId ? s.nodes[focusedUnitId] : undefined
+      return unit?.type === 'unit' ? unitMemberLevels(unit, s.nodes).map((level) => level.id) : []
+    }),
+  )
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 4 },
@@ -631,6 +698,11 @@ export function FloatingLevelSelector() {
                       <SortableLevelRow
                         isSelected={isSelected}
                         level={level}
+                        unitDotColor={
+                          focusedUnitColor && focusedUnitLevelIds.includes(level.id)
+                            ? focusedUnitColor
+                            : undefined
+                        }
                         onDuplicate={(preset) => handleDuplicateLevel(level, preset)}
                         onPaste={() => handlePasteToLevel(level)}
                         onRequestDelete={() => setDeletingLevel(level)}
@@ -661,6 +733,7 @@ export function FloatingLevelSelector() {
             </SortableContext>
           </DndContext>
         </div>
+        <UnitFocusChip />
       </div>
 
       {/* Delete confirmation dialog */}
