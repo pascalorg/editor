@@ -98,6 +98,14 @@ membership, including candidates larger than one frame's allowance.
 
 Access Three.js objects (via `useRegistry`) and manage rendering side-effects.
 
+`FloorElevationSystem` writes mesh Y only for nodes directly parented to a level.
+Hosted children inherit their host and any named-surface frame; a zero support lift
+does not make a live world-space position safe to write into their local transform.
+The rendered preview/commit matrix in
+`packages/nodes/src/cabinet/__tests__/hosting-preview-pose.test.tsx` mounts the movers,
+renderers and frame systems together to check position and rotation against the
+preview box and committed world pose.
+
 | System | Responsibility |
 |---|---|
 | `LevelSystem` | Stacked / exploded / solo / manual level positions |

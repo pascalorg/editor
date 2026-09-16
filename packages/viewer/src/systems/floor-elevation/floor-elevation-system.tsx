@@ -101,6 +101,10 @@ export const FloorElevationSystem = () => {
       // in WORLD space, so during a drag that lifts the ghost off its host by
       // the host frame's own elevation.
       if (floorPlaced.applies && !floorPlaced.applies(effectiveNode)) return
+      // Hosted meshes inherit elevation from their parent (and possibly a surface group).
+      // Their live transform can be world-space, so it cannot replace the mesh's local Y.
+      if (!effectiveNode.parentId || nodes[effectiveNode.parentId as AnyNodeId]?.type !== 'level')
+        return
 
       // This system is the single drag-time authority for floor-stack mesh Y:
       // tools publish base positions to live stores, renderers may
