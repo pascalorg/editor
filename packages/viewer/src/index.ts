@@ -16,6 +16,7 @@ export {
   default as Viewer,
   type ViewerHandle,
   type ViewerXRConfig,
+  type ViewerImmersiveSession,
 } from './components/viewer'
 export {
   type BVHEcctrlApi,

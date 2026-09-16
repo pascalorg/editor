@@ -43,6 +43,7 @@
         "@react-three/fiber": "^9.5.0",
         "@react-three/xr": "^6.6.30",
         "@tailwindcss/postcss": "^4.2.1",
+        "@webxr/plugin": "github:sudhir9297/webxr-pascal-plugin#b5e81a21d91fada14460295d29b539f7fdd67e12",
         "clsx": "^2.1.1",
         "geist": "^1.7.0",
         "lucide-react": "^1.7.0",
@@ -1103,6 +1104,8 @@
     "@visual-json/core": ["@visual-json/core@0.4.0", "", {}, "sha512-T/HvRIp7r6SehxVnO+akV72NLv2OMBEoQdYTFbpwMi6uU2TaXQOpIOHBG4r9XBz7OqC2e8aedOwal/NtqtzyCg=="],
 
     "@visual-json/react": ["@visual-json/react@0.4.0", "", { "dependencies": { "@visual-json/core": "0.4.0" }, "peerDependencies": { "react": "^18.0.0 || ^19.0.0" } }, "sha512-qiDrXI7wu9VoTE0TaLoJp7kwRj8SQTpkS/wkts5sBPA8078zdrIKc+0u0Y8wAXGYd3udw9dNfD4kmpO48OEwXQ=="],
+
+    "@webxr/plugin": ["@webxr/plugin@github:sudhir9297/webxr-pascal-plugin#b5e81a2", { "dependencies": { "@iwer/devui": "2.3.0", "iwer": "2.3.0", "lucide-react": "^1.7.0" }, "peerDependencies": { "@pascal-app/core": "^1.0.0-beta.5", "@pascal-app/editor": "^1.0.0-beta.5", "@pascal-app/viewer": "^1.0.0-beta.5", "@react-three/drei": "^10", "@react-three/fiber": "^9", "@react-three/xr": "^6", "react": "^18 || ^19", "react-dom": "^18 || ^19", "three": "^0.185 || ^0.186", "zustand": "^5" } }, "sudhir9297-webxr-pascal-plugin-b5e81a2", "sha512-N1zeh9RiPuULvaMJIHExkPpLslr/j/vBrcJ9UTibYCkUXBtS3rmnobE2vtWdg4ASDzjFRXN67p8vv2FEf1ZOkw=="],
 
     "accepts": ["accepts@2.0.0", "", { "dependencies": { "mime-types": "^3.0.0", "negotiator": "^1.0.0" } }, "sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng=="],
 

@@ -727,11 +727,13 @@ export function CommunityViewerToolbarLeft() {
 
 export function CommunityViewerToolbarRight({
   onVRToggle,
+  vrButton,
   vrActive = false,
   vrDisabled = false,
   vrLabel = vrActive ? 'Exit VR' : 'Enter VR',
 }: {
   onVRToggle?: () => void
+  vrButton?: ReactNode
   vrActive?: boolean
   vrDisabled?: boolean
   vrLabel?: string
@@ -744,9 +746,17 @@ export function CommunityViewerToolbarRight({
       <DisplayMenu />
       <div className="my-1.5 w-px bg-border/50" />
       <WalkthroughButton />
-      {onVRToggle ? (
-        <VRButton active={vrActive} disabled={vrDisabled} label={vrLabel} onToggle={onVRToggle} />
-      ) : null}
+      {onVRToggle || vrButton
+        ? (vrButton ??
+          (onVRToggle ? (
+            <VRButton
+              active={vrActive}
+              disabled={vrDisabled}
+              label={vrLabel}
+              onToggle={onVRToggle}
+            />
+          ) : null))
+        : null}
       <PreviewButton />
     </div>
   )

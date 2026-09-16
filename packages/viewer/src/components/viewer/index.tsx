@@ -333,6 +333,12 @@ function SceneReadyTracker({
   return null
 }
 
+export interface ViewerImmersiveSession {
+  Session: ComponentType<{ children: React.ReactNode }>
+  Scene: ComponentType<{ children: React.ReactNode }>
+  onError?: (cause: unknown) => void
+}
+
 export interface ViewerXRConfig {
   store: ViewerXRStore
   playerModes?: boolean
@@ -404,6 +410,7 @@ interface ViewerProps {
   renderPaused?: boolean
   /** Mount the viewer in immersive WebXR mode using a WebGL renderer. */
   xr?: ViewerXRConfig
+  immersive?: ViewerImmersiveSession
 }
 
 /** Imperative handle exposed via `ref` on `<Viewer>`. */
@@ -435,6 +442,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     disablePostFx = false,
     renderPaused = false,
     xr,
+    immersive,
   },
   ref,
 ) {
@@ -547,11 +555,15 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     return () => window.clearTimeout(timeout)
   }, [xr?.session])
 
+  const ImmersiveSession = immersive?.Session
+  const immersiveActive = immersive != null || xr != null
+
   if (showGpuFallback) {
     return <UnsupportedGpuViewerFallback />
   }
   return (
     <Canvas
+      key={immersiveActive ? 'webgl' : 'webgpu'}
       camera={{ position: [50, 50, 50], fov: 50 }}
       className={`transition-colors duration-700 ${
         transparentBackground ? 'bg-transparent' : isDark ? 'bg-[#1f2433]' : 'bg-[#fafafa]'
@@ -566,7 +578,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
           if (cached) return cached
           const promise = (async () => {
             const result = await initializeGpuRenderer({
-              forceWebGL: xr != null,
+              forceWebGL: immersiveActive,
               // Supplying `device` makes three skip its own `requestAdapter`,
               // so R3F's `powerPreference` only reaches the GPU if we forward it.
               powerPreference: props.powerPreference,
@@ -615,8 +627,26 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
         enabled: shadowsEnabled,
       }}
     >
-      <ImmersiveXRPresentationProvider enabled={xr != null}>
-        {xr ? (
+      <ImmersiveXRPresentationProvider enabled={immersiveActive}>
+        {ImmersiveSession ? (
+          <ImmersiveSession>
+            <ViewerScene
+              disablePostFx
+              hoverStyles={hoverStyles}
+              immersiveXR
+              SceneWrapper={immersive?.Scene}
+              onRenderError={immersive?.onError}
+              onSceneReadyChange={onSceneReadyChange}
+              perf={perf}
+              sceneReadyKey={sceneReadyKey}
+              sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
+              selectionManager={selectionManager}
+              useBvh={useBvh}
+            >
+              {children}
+            </ViewerScene>
+          </ImmersiveSession>
+        ) : xr ? (
           <ViewerXRSessionRoot
             fps={maxFps}
             originPosition={xr.playerModes ? GOD_ORIGIN_POSITION.toArray() : xr.originPosition}
@@ -677,6 +707,8 @@ function ViewerScene({
   selectionManager,
   useBvh,
   xrStore,
+  SceneWrapper,
+  onRenderError,
 }: {
   children?: React.ReactNode
   disablePostFx: boolean
@@ -691,6 +723,8 @@ function ViewerScene({
   selectionManager: 'default' | 'custom'
   useBvh: boolean
   xrStore?: ViewerXRStore
+  SceneWrapper?: ViewerImmersiveSession['Scene']
+  onRenderError?: (cause: unknown) => void
 }) {
   const renderedScene = useBvh ? (
     <SceneBvh>
@@ -737,11 +771,13 @@ function ViewerScene({
         sceneReadyKey={sceneReadyKey}
         sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
       />
-      <ErrorBoundary fallback={null} scope="viewer-scene">
+      <ErrorBoundary fallback={null} scope="viewer-scene" onError={onRenderError}>
         {/* <directionalLight position={[10, 10, 5]} intensity={0.5} castShadow
           /> */}
         <Lights />
-        {playerModes && xrStore ? (
+        {SceneWrapper ? (
+          <SceneWrapper>{spatialScene}</SceneWrapper>
+        ) : playerModes && xrStore ? (
           <PlayerModeScene inputSourceOverlay={inputSourceOverlay} store={xrStore}>
             {spatialScene}
           </PlayerModeScene>

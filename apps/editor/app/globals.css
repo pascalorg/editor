@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source not "../public";
 @import "tw-animate-css";
 @import "../../../styles/elevation.css";
 @source "../../../packages/editor/src";

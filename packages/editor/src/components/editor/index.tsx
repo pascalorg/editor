@@ -18,6 +18,7 @@ import {
   useViewer,
   Viewer,
   type ViewerXRConfig,
+  type ViewerImmersiveSession,
 } from '@pascal-app/viewer'
 import { memo, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { ViewerOverlay } from '../../components/viewer-overlay'
@@ -205,6 +206,7 @@ export interface EditorProps {
   disablePostFx?: boolean
 
   /** Host-provided immersive XR runtime for the main 3D canvas. */
+  immersive?: ViewerImmersiveSession
   xr?: ViewerXRConfig
 
   // Version preview overlays (rendered by host app)
@@ -775,13 +777,12 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   // selection, editing handles, and the tool manager (which mounts the site
   // boundary flags) so the framed shot stays clean.
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
-  const noEditing =
-    isVersionPreviewMode || isFirstPersonMode || isXRMode || isStudioMode || isCaptureMode
+  const noEditing = isVersionPreviewMode || isFirstPersonMode || isStudioMode || isCaptureMode
   return (
     <>
       <SceneEnvironment />
       {!noEditing && <SelectionManager />}
-      {!noEditing && <BoxSelectTool />}
+      {!(noEditing || isXRMode) && <BoxSelectTool />}
       {!noEditing && <NodeArrowHandles />}
       {!noEditing && <GroupRotateHandle />}
       {!noEditing && <GroupSelectionBox3D />}
@@ -789,9 +790,9 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!noEditing && <SlabHoleHighlights />}
       {!noEditing && <WallMoveSideHandles />}
       {!noEditing && <FenceTangentLines3D />}
-      {!noEditing && <FloatingActionMenu />}
-      {!noEditing && <GroupFloatingActionMenu />}
-      {!noEditing && <FloatingBuildingActionMenu />}
+      {!(noEditing || isXRMode) && <FloatingActionMenu />}
+      {!(noEditing || isXRMode) && <GroupFloatingActionMenu />}
+      {!(noEditing || isXRMode) && <FloatingBuildingActionMenu />}
       {!(isFirstPersonMode || isXRMode) && <WallMeasurementLabel />}
       <ExportManager />
       {isFirstPersonMode ? <ViewerZoneSystem /> : <ZoneSystem />}
@@ -994,6 +995,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   floorplanSceneSlot,
   disablePostFx = false,
   xr,
+  immersive,
 }: {
   isVersionPreviewMode: boolean
   isLoading: boolean
@@ -1007,6 +1009,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   viewerSceneSlot?: ReactNode
   floorplanSceneSlot?: ReactNode
   disablePostFx?: boolean
+  immersive?: ViewerImmersiveSession
   xr?: ViewerXRConfig
 }) {
   const viewMode = useEditor((s) => s.viewMode)
@@ -1129,13 +1132,14 @@ const ViewerCanvas = memo(function ViewerCanvas({
             sceneReadyKey={sceneReadyKey}
             selectionManager={isFirstPersonMode ? 'default' : 'custom'}
             xr={xr}
+            immersive={immersive}
           >
             <ViewerSceneContent
               isFirstPersonMode={isFirstPersonMode}
               isLoading={showLoader}
               isStudioMode={isStudioMode}
               isVersionPreviewMode={isVersionPreviewMode}
-              isXRMode={xr != null}
+              isXRMode={xr != null || immersive != null}
               onThumbnailCapture={onThumbnailCapture}
               viewerSceneSlot={viewerSceneSlot}
             />
@@ -1226,6 +1230,7 @@ export default function Editor({
   onThumbnailCapture,
   disablePostFx = false,
   xr,
+  immersive,
   sidebarOverlay,
   viewerBanner,
   settingsPanelProps,
@@ -1459,6 +1464,7 @@ export default function Editor({
       viewerSceneSlot={viewerSceneSlot}
       floorplanSceneSlot={floorplanSceneSlot}
       xr={xr}
+      immersive={immersive}
     />
   )
 

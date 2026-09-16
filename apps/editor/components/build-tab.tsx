@@ -9,6 +9,7 @@ import {
   useFloorplanMode,
 } from '@pascal-app/editor'
 import { useLiquidLineToolOptions } from '@pascal-app/nodes'
+import type { PascalXRWandBindings } from '@webxr/plugin/pascal-editor'
 import Image from 'next/image'
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
 import {
@@ -24,6 +25,7 @@ import {
   activateRoofFeatureTool,
   activateRoofFootprintSource,
   activateRoofType,
+  activateSelectMode,
   activateTerrainSculptMode,
   BASE_BUILD_TYPES,
   type BuildType,
@@ -41,6 +43,33 @@ import {
   ROOF_TYPE_OPTIONS,
 } from '@/lib/build-tab-state'
 import { cn } from '@/lib/utils'
+
+export const webXRWandBindings: PascalXRWandBindings = {
+  activateBuildTool,
+  activateModularCabinetTool,
+  activatePaintMode,
+  activateRoofFeatureTool,
+  activateRoofType,
+  activateTerrainSculptMode,
+  activateSelectMode: () => {
+    activateSelectMode()
+    useEditor.getState().setTool(null)
+  },
+  activateRoofFootprintSource: (source) => {
+    activateRoofFootprintSource(source)
+  },
+  collectBuildTypes,
+  collectRoofFeatures,
+  getRoofFootprintSources: (type) =>
+    type === 'conical'
+      ? [{ label: 'Walls', value: 'walls' }]
+      : [
+          { label: 'Draw', value: 'draw' },
+          { label: 'Room', value: 'room' },
+        ],
+  roofTypeOptions: ROOF_TYPE_OPTIONS,
+  xrMepItems: MEP_ITEMS,
+}
 
 const subscribeToClientMount = () => () => {}
 

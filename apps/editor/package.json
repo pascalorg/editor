@@ -29,6 +29,7 @@
     "@react-three/fiber": "^9.5.0",
     "@react-three/xr": "^6.6.30",
     "@tailwindcss/postcss": "^4.2.1",
+    "@webxr/plugin": "github:sudhir9297/webxr-pascal-plugin#b5e81a21d91fada14460295d29b539f7fdd67e12",
     "clsx": "^2.1.1",
     "geist": "^1.7.0",
     "lucide-react": "^1.7.0",

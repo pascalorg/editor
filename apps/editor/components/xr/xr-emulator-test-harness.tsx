@@ -102,7 +102,7 @@ export type XREmulatorTestHarness = {
 declare global {
   var __pascalXRLastGridEvent: string | undefined
   var __pascalXRLastNodeEvent: string | undefined
-  var __pascalXRTestHarness: XREmulatorTestHarness | undefined
+  var __pascalLegacyXRTestHarness: XREmulatorTestHarness | undefined
 }
 
 export function XREmulatorTestHarnessBridge() {
@@ -764,13 +764,13 @@ export function XREmulatorTestHarnessBridge() {
       },
       version: 1,
     }
-    globalThis.__pascalXRTestHarness = harness
+    globalThis.__pascalLegacyXRTestHarness = harness
     return () => {
       emitter.off('node:click', recordNodeClick)
       emitter.off('node:pointerdown', recordNodeDown)
       emitter.off('grid:click', recordGridClick)
-      if (globalThis.__pascalXRTestHarness === harness) {
-        globalThis.__pascalXRTestHarness = undefined
+      if (globalThis.__pascalLegacyXRTestHarness === harness) {
+        globalThis.__pascalLegacyXRTestHarness = undefined
       }
     }
   }, [camera, origin, scene, session])
