@@ -82,7 +82,7 @@ import {
   resolvePointerSupportSurface,
 } from '../shared/pointer-support-cap'
 import { createShelfStickiness } from '../shared/shelf-stickiness'
-import { createSurfaceRejectionFeedback, SurfaceRejectionLabel } from '../shared/surface-rejection'
+import { createSurfaceRejectionFeedback } from '../shared/surface-rejection'
 import { shouldCreateFloorDraft } from './draft-creation'
 import { commitFaceHostClick, resolveFaceHostPreviewCommit } from './face-host-commit'
 import {
@@ -329,7 +329,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   const pointerSupportCapRef = useRef<number | null>(null)
   const pointerSupportSurfaceRef = useRef<PointerSupportSurface | null>(null)
   const frozenSupportSlabIdRef = useRef<string | undefined>(undefined)
-  const [surfaceRejection, setSurfaceRejection] = useState<SurfaceRejectReason | null>(null)
   const [dimensionBounds, setDimensionBounds] = useState<PreviewBounds | null>(null)
 
   // Live camera ref — the shelf-stickiness test reconstructs the cursor world
@@ -559,7 +558,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     let lastSurfaceEvent: ItemEvent | CabinetEvent | ShelfEvent | null = null
-    const feedback = createSurfaceRejectionFeedback(setSurfaceRejection)
+    const feedback = createSurfaceRejectionFeedback()
     feedback.clear()
 
     // ---- Helpers ----
@@ -652,6 +651,27 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     const surfacePointer = createItemSurfacePointerArbitration()
     const revalidate = (): boolean => {
       const fits = checkCanPlace(getContext(), validators)
+      if (
+        !fits &&
+        lastSurfaceEvent &&
+        (feedback.reason === 'footprint-outside-surface' ||
+          feedback.reason === 'footprint-exceeds-host' ||
+          feedback.reason === 'no-surface') &&
+        (placementState.current.surface === 'item-surface' ||
+          placementState.current.surface === 'shelf-surface')
+      ) {
+        const hostId =
+          placementState.current.surface === 'shelf-surface'
+            ? placementState.current.shelfId
+            : placementState.current.surfaceItemId
+        const mesh = hostId ? sceneRegistry.nodes.get(hostId) : undefined
+        if (mesh) {
+          const position = mesh.localToWorld(gridPosition.current.clone()).toArray()
+          feedback.clear()
+          detachItemSurfaceToFloor({ ...lastSurfaceEvent, position } as ItemEvent)
+          return revalidate()
+        }
+      }
       const placeable = !feedback.reason && (altFreeRef.current || fits)
       const color = placeable ? 0x22_c5_5e : 0xef_44_44 // green-500 : red-500
       edgeMaterial.color.setHex(color)
@@ -664,6 +684,18 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       return {
         ...getContext(),
         onSurfaceReject: (reason: SurfaceRejectReason) => {
+          if (
+            (reason === 'footprint-outside-surface' ||
+              reason === 'footprint-exceeds-host' ||
+              reason === 'no-surface') &&
+            (placementState.current.surface === 'item-surface' ||
+              placementState.current.surface === 'shelf-surface')
+          ) {
+            feedback.clear()
+            detachItemSurfaceToFloor(event as ItemEvent)
+            surfacePointer.hit(event.node.id, event.nativeEvent.nativeEvent ?? event.nativeEvent)
+            return
+          }
           feedback.reject(reason, event.nativeEvent.nativeEvent ?? event.nativeEvent)
           revalidate()
         },
@@ -3004,14 +3036,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         material={edgeMaterial}
         ref={edgesRef}
         renderOrder={999}
-      />
-      <SurfaceRejectionLabel
-        reason={surfaceRejection}
-        position={[
-          currentDimensionBounds.center[0],
-          currentDimensionBounds.dimensions[1] + 0.15,
-          currentDimensionBounds.center[2],
-        ]}
       />
       {measurementContent}
       <mesh

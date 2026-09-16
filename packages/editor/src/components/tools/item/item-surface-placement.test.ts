@@ -88,12 +88,12 @@ function enterSurface(
 }
 
 describe('itemSurfaceStrategy production placement', () => {
-  test('scaled host accepts aligned equality and refuses a rotated or oversized footprint', () => {
+  test('scaled host accepts centred rotated and oversized footprints', () => {
     const { event } = surface({ scale: [2, 1, 0.5] })
-    expect(enterSurface(event, [4, 5, 1.5], 0)).toBeNull()
+    expect(enterSurface(event, [4, 5, 1.5], 0)).not.toBeNull()
     expect(enterSurface(event, [4, 5, 1.5], Math.PI / 3)).not.toBeNull()
-    expect(enterSurface(event, [4.01, 1, 1.5], 0)).toBeNull()
-    expect(enterSurface(event, [4, 1, 1.51], 0)).toBeNull()
+    expect(enterSurface(event, [4.01, 1, 1.5], 0)).not.toBeNull()
+    expect(enterSurface(event, [4, 1, 1.51], 0)).not.toBeNull()
   })
 
   test('rejects ceiling hosts, low profiles, side hits, and absent normals', () => {

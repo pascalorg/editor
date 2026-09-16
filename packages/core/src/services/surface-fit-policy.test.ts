@@ -21,20 +21,20 @@ beforeEach(() => {
 })
 afterEach(() => restore())
 
-test('a generated design deeper than the actual shelf board is refused', () => {
+test('a generated design larger than the actual shelf board is accepted at its centre', () => {
   const host = ShelfNode.parse({ width: 1.2, depth: 0.5 })
   expect(
     resolveSurfacePlacement({
       host,
       childKind: 'procedural-item',
-      childFootprint: { size: [0.4, 0.3, 0.499], rotationY: 0 },
+      childFootprint: { size: [2, 0.3, 1], rotationY: 0 },
       hit: { point: [0, 1, 0], normalWorldY: 1 },
       scene,
     }),
-  ).toBeNull()
+  ).not.toBeNull()
 })
 
-test('a centred exact board fit accepts floating point noise but refuses genuine overhang', () => {
+test('a centre on the board boundary accepts floating point noise but refuses a centre outside', () => {
   const host = ShelfNode.parse({ width: 1.2, depth: 0.5 })
   const region = shelfSurfaceProvider.surfaces!(host, { scene })[0]!.region!
   expect(region).toBeDefined()
@@ -48,14 +48,14 @@ test('a centred exact board fit accepts floating point noise but refuses genuine
         host,
         childKind: 'item',
         childFootprint: { size: [region.size![0] * 2, 0.2, region.size![1] * 2], rotationY: 0 },
-        hit: { point: [offset, 1, 0], normalWorldY: 1 },
+        hit: { point: [region.size![0] + offset, 1, 0], normalWorldY: 1 },
         scene,
       }) !== null,
     ).toBe(fits)
   }
 })
 
-test('a hit-derived host judges rotated extents in both directions, independently of the hit position', () => {
+test('a hit-derived host accepts rotated overhang while the centre remains on it', () => {
   registerNode({
     kind: 'plugin-host',
     schemaVersion: 1,
@@ -67,8 +67,8 @@ test('a hit-derived host judges rotated extents in both directions, independentl
   const host = { id: 'plugin_host', type: 'plugin-host' } as unknown as AnyNode
   for (const [size, yaw, fits] of [
     [[0.8, 0.2, 0.4], 0, true],
-    [[0.8, 0.2, 0.4], Math.PI / 2, false],
-    [[0.4, 0.2, 0.8], 0, false],
+    [[0.8, 0.2, 0.4], Math.PI / 2, true],
+    [[0.4, 0.2, 0.8], 0, true],
     [[0.4, 0.2, 0.8], Math.PI / 2, true],
   ] as const) {
     expect(
@@ -111,5 +111,102 @@ test('a malformed declared provider fails loudly even for an unchecked preview',
         checkFootprint,
       }),
     ).toThrow('Declared surface broken-host:top must publish a region')
+  }
+})
+
+test('a mug may overhang two table edges until its centre crosses either edge', () => {
+  registerNode({
+    kind: 'table',
+    schemaVersion: 1,
+    schema: ShelfNode,
+    category: 'furnish',
+    defaults: () => ({}),
+    capabilities: { dragBounds: () => ({ size: [1, 1, 1] }) },
+  })
+  const host = { id: 'table_test', type: 'table' } as unknown as AnyNode
+  for (const [x, accepted] of [
+    [0.49, true],
+    [0.5, true],
+    [0.5000001, true],
+    [0.5001, false],
+  ] as const) {
+    const reasons: string[] = []
+    const result = resolveSurfacePlacement({
+      host,
+      childKind: 'item',
+      childFootprint: { size: [0.2, 0.1, 0.2], rotationY: Math.PI / 4 },
+      hit: { point: [x, 1, 0.49], normalWorldY: 1 },
+      scene,
+      onReject: (reason) => reasons.push(reason),
+    })
+    expect(result !== null).toBe(accepted)
+    if (result) expect(result.position).toEqual([x, 1, 0.49])
+    else expect(reasons).toEqual(['footprint-exceeds-host'])
+  }
+})
+
+test('fit follows the snapped centre without moving it back onto the board', () => {
+  const host = ShelfNode.parse({ width: 1.2, depth: 0.5 })
+  const halfWidth = shelfSurfaceProvider.surfaces!(host, { scene })[0]!.region.size![0]
+  for (const [x, accepted] of [
+    [halfWidth, true],
+    [halfWidth + 0.01, false],
+  ] as const) {
+    const result = resolveSurfacePlacement({
+      host,
+      childKind: 'item',
+      childFootprint: { size: [2, 0.1, 2], rotationY: 0 },
+      hit: { point: [halfWidth - 0.01, 1, 0.1], normalWorldY: 1 },
+      scene,
+      snapScalar: (p) => (p === 0.1 ? 0 : x),
+    })
+    expect(result !== null).toBe(accepted)
+    if (result) expect(result.position[0]).toBe(x)
+  }
+})
+
+test('the rotated bounds midpoint, including pitch and an offset origin, decides fit', () => {
+  const host = ShelfNode.parse({ width: 1.2, depth: 0.5 })
+  const localBounds = { min: [0.3, 0, -0.1], max: [0.5, 1, 0.1] } as const
+  for (const [rotation, accepted] of [
+    [[0, 0, 0], true],
+    [[0, Math.PI / 2, 0], false],
+    [[Math.PI / 2, 0, 0], false],
+  ] as const) {
+    expect(
+      resolveSurfacePlacement({
+        host,
+        childKind: 'procedural-item',
+        childFootprint: { size: [0.2, 1, 0.2], rotationY: rotation[1], rotation, localBounds },
+        hit: { point: [0, 1, 0], normalWorldY: 1 },
+        scene,
+      }) !== null,
+    ).toBe(accepted)
+  }
+})
+
+test('hit-derived bounds retain an offset host centre', () => {
+  registerNode({
+    kind: 'offset-table',
+    schemaVersion: 1,
+    schema: ShelfNode,
+    category: 'furnish',
+    defaults: () => ({}),
+    capabilities: { dragBounds: () => ({ size: [1, 1, 1], center: [2, 0.5, -1] }) },
+  })
+  for (const [x, accepted] of [
+    [2.49, true],
+    [0, false],
+    [2.51, false],
+  ] as const) {
+    expect(
+      resolveSurfacePlacement({
+        host: { id: 'offset_table', type: 'offset-table' } as unknown as AnyNode,
+        childKind: 'item',
+        childFootprint: { size: [4, 1, 4], rotationY: 0 },
+        hit: { point: [x, 1, -1], normalWorldY: 1 },
+        scene,
+      }) !== null,
+    ).toBe(accepted)
   }
 })

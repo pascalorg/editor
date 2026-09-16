@@ -195,8 +195,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
       const counterHit = host.type === 'cabinet' ? itemEventToSurfaceHit(host, event) : null
       const stayingOnShelf = host.type === 'shelf' && live.parentId === host.id
       const localYaw = session.worldYaw(yaw) - parentWorldYaw(host.id)
-      const bounds =
-        host.type !== 'item' ? capabilities?.dragBounds?.(live, scene.nodes()) : undefined
+      const bounds = capabilities?.dragBounds?.(live, scene.nodes())
       const center = bounds?.center
       const localRotation = rotation(localYaw)
       const offset = center
@@ -225,19 +224,13 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
         childFootprint: {
           size: dimensions,
           rotationY: localYaw,
-          ...(host.type !== 'item'
+          rotation: Array.isArray(localRotation) ? localRotation : [0, localYaw, 0],
+          localBounds: center
             ? {
-                rotation: Array.isArray(localRotation)
-                  ? localRotation
-                  : ([0, localYaw, 0] as const),
-                localBounds: center
-                  ? {
-                      min: center.map((v, i) => v - dimensions[i]! / 2) as [number, number, number],
-                      max: center.map((v, i) => v + dimensions[i]! / 2) as [number, number, number],
-                    }
-                  : undefined,
+                min: center.map((v, i) => v - dimensions[i]! / 2) as [number, number, number],
+                max: center.map((v, i) => v + dimensions[i]! / 2) as [number, number, number],
               }
-            : {}),
+            : undefined,
         },
         hit: counterHit ?? hit,
         origin: counterHit ? hit.point : undefined,
@@ -284,6 +277,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
       const level = levelId()
       if (!level) return null
       pointer.clear()
+      feedback.clear()
       valid = true
       grab = null
       const point = new Vector3(...worldPosition)
@@ -346,6 +340,15 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
         })
         valid = !!placement
         if (placement) position[1] = placement.position[1]
+        else if (
+          feedback.reason === 'footprint-outside-surface' ||
+          feedback.reason === 'footprint-exceeds-host' ||
+          feedback.reason === 'no-surface'
+        ) {
+          const mesh = sceneRegistry.nodes.get(host.id)
+          if (mesh)
+            return session.detach(mesh.localToWorld(new Vector3(...position)).toArray(), yaw)
+        }
       }
       write(live.parentId, position, yaw)
       return { position, rotationY: yaw }

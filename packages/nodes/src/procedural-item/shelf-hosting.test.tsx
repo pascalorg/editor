@@ -251,11 +251,11 @@ test('enters the nearest declared row with offset bounds, shelf-local yaw and on
   expect(plan.rotationY).toBeCloseTo(original.rotation[1])
 })
 
-test('entry rejects side normals and excessive width/depth; shelf movement now refuses overhang too', () => {
+test('entry rejects side normals; oversized children accept until their centre leaves the shelf', () => {
   const session = createRegistryItemSurfaceMove(original)!
   expect(session.enter(hit([0, 1, 0], [1, 0, 0]), dimensions, 0.2)).toBeNull()
-  expect(session.enter(hit(), [2.1, 0.3, 0.2], 0.2)).toBeNull()
-  expect(session.enter(hit(), [0.4, 0.3, 1.1], 0.2)).toBeNull()
+  expect(session.enter(hit(), [2.1, 0.3, 0.2], 0.2)).not.toBeNull()
+  expect(session.enter(hit(), [0.4, 0.3, 1.1], 0.2)).not.toBeNull()
   const pose = session.enter(hit(), dimensions, 0.2)!
   expect(session.enter(hit([1.2, 1, 0]), [2.1, 0.3, 0.2], pose.rotationY)).toBeNull()
 })

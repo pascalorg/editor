@@ -180,17 +180,19 @@ test('registry entry and subsequent moves keep checking fit; commit uses the acc
   const first = session.enter(hit(), dimensions, 0.3)!
   const moved = session.enter(hit([0.7, 1, -0.4]), dimensions, first.rotationY)!
   expect(moved).not.toBeNull()
+  const oversized = session.enter(hit(), [4, 1, 4], moved.rotationY)!
+  expect(oversized).not.toBeNull()
   const accepted = useScene.getState().nodes[child.id]
-  expect(session.enter(hit(), [4, 1, 4], moved.rotationY)).toBeNull()
+  expect(session.enter(hit([2, 1, 0]), [4, 1, 4], moved.rotationY)).toBeNull()
   expect(useScene.getState().nodes[child.id]).toBe(accepted)
-  expect(resolver.mock.calls.map(([args]) => args.checkFootprint)).toEqual([true, true, true])
+  expect(resolver.mock.calls.map(([args]) => args.checkFootprint)).toEqual([true, true, true, true])
   const finalId = commitFreshPlacementSubtree(child.id, { visible: true })!
   expect(useScene.getState().nodes[finalId]).toMatchObject({
     parentId: host.id,
-    position: moved.position,
-    rotation: [0.1, moved.rotationY, 0.2],
+    position: oversized.position,
+    rotation: [0.1, oversized.rotationY, 0.2],
   })
-  expect(resolver).toHaveBeenCalledTimes(3)
+  expect(resolver).toHaveBeenCalledTimes(4)
 })
 
 test('the mover rejects itself before asking the resolver', () => {

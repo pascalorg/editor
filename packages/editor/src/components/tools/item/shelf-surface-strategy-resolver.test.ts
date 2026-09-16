@@ -162,19 +162,19 @@ test.each([
 test.each([
   [2.01, 0.25],
   [0.5, 1.01],
-])('scaled footprint %s by %s overhang is refused on enter and move', (width, depth) => {
+])('scaled footprint %s by %s overhang is accepted on enter and move', (width, depth) => {
   const draft = ItemNode.parse({
     ...child,
     asset: { ...child.asset, dimensions: [width / 2, 0.25, depth / 2] },
     scale: [2, 1, 2],
   })
   const ctx = context(draft)
-  expect(shelfSurfaceStrategy.enter(ctx, hit())).toBeNull()
-  expect(shelfSurfaceStrategy.move(onShelf(ctx), hit())).toBeNull()
+  expect(shelfSurfaceStrategy.enter(ctx, hit())).not.toBeNull()
+  expect(shelfSurfaceStrategy.move(onShelf(ctx), hit())).not.toBeNull()
   expect(resolver.mock.calls.map(([args]) => args.checkFootprint)).toEqual([true, true])
 })
 
-test('a full-board object overhanging at the edge and rotated is now refused', () => {
+test('a full-board object is refused when grid snapping puts its centre outside the board', () => {
   const draft = ItemNode.parse({
     ...child,
     asset: { ...child.asset, dimensions: [host.width, 0.25, host.depth] },

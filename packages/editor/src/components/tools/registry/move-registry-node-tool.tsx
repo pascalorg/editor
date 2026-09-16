@@ -71,7 +71,6 @@ import {
   type PointerSupportSurface,
   resolvePointerSupportSurface,
 } from '../shared/pointer-support-cap'
-import { SurfaceRejectionLabel } from '../shared/surface-rejection'
 import { createItemSurfaceGridDispatch, createRegistryItemSurfaceMove } from './item-surface-move'
 
 /** Snap a world-plan coordinate to the editor's active grid step (0.5 / 0.25
@@ -750,7 +749,16 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
           gridSnapActive: isGridSnapActive(),
           gridStep: useEditor.getState().gridSnapStep,
         })
-      } else recomputeValidity()
+      } else {
+        if (
+          itemSurfaceMove.hosted &&
+          (itemSurfaceMove.rejection === 'footprint-outside-surface' ||
+            itemSurfaceMove.rejection === 'footprint-exceeds-host' ||
+            itemSurfaceMove.rejection === 'no-surface')
+        )
+          detachSurface(event.position)
+        recomputeValidity()
+      }
     }
     const onItemLeave = (event: NodeEvent<AnyNode>) => {
       if (!itemSurfaceMove?.hosted || committed) return
@@ -1254,7 +1262,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         position = canonicalPositionFromPlan(planOrigin[0], position[1], planOrigin[2])
       }
       lastCursorRef.current = position
-      freeRotationRef.current = nextFreeRotation
+      freeRotationRef.current = hostedPose?.rotationY ?? nextFreeRotation
       rotationRef.current = freeRotationRef.current
       setCursorRotationY(previewRotationY(rotationRef.current))
       const visualPosition = getVisualPosition(position)
@@ -1417,14 +1425,6 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   if (boxDimensions && !dragBounds?.center) {
     return (
       <group ref={previewGroupRef}>
-        <SurfaceRejectionLabel
-          reason={surfaceRejection}
-          position={[
-            cursorPosition[0],
-            cursorPosition[1] + boxDimensions[1] + 0.15,
-            cursorPosition[2],
-          ]}
-        />
         <PlacementBox
           dimensions={boxDimensions}
           position={cursorPosition}
@@ -1442,14 +1442,6 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
 
   return (
     <group ref={previewGroupRef}>
-      <SurfaceRejectionLabel
-        reason={surfaceRejection}
-        position={[
-          dragCenterPosition[0],
-          dragCenterPosition[1] + (dragBounds?.size[1] ?? 0) / 2 + 0.15,
-          dragCenterPosition[2],
-        ]}
-      />
       <CursorSphere color="#a78bfa" height={2.5} position={dragCenterPosition} />
       <DragBoundingBox
         center={dragBounds?.center}

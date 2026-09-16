@@ -15,7 +15,7 @@ describe('surface regions', () => {
     ] as const)
       expect(surfaceRegionContainsPoint(rect, point)).toBe(expected)
     expect(surfaceRegionContainsFootprint(rect, [2, 0, -1], [2, 1, 1], 0)).toBe(true)
-    expect(surfaceRegionContainsFootprint(rect, [2.01, 0, -1], [2, 1, 1], 0)).toBe(false)
+    expect(surfaceRegionContainsFootprint(rect, [2.01, 0, -1], [2, 1, 1], 0)).toBe(true)
   })
 
   test('polygon boundary is included and outside points are rejected', () => {
@@ -33,7 +33,7 @@ describe('surface regions', () => {
     expect(surfaceRegionContainsFootprint(triangle, [0.5, 0, 0.5], [0.5, 1, 0.5], 0)).toBe(true)
   })
 
-  test('a concave notch rejects a footprint even when all four corners are inside', () => {
+  test('a concave notch accepts its boundary and rejects a centre inside the notch', () => {
     const notched: SurfaceRegion = {
       kind: 'polygon',
       points: [
@@ -47,12 +47,13 @@ describe('surface regions', () => {
         [-2, 2],
       ],
     }
-    expect(surfaceRegionContainsFootprint(notched, [0, 0, 0], [2, 1, 2], 0)).toBe(false)
+    expect(surfaceRegionContainsFootprint(notched, [0, 0, 0], [2, 1, 2], 0)).toBe(true)
+    expect(surfaceRegionContainsFootprint(notched, [0, 0, 0.1], [2, 1, 2], 0)).toBe(false)
     expect(surfaceRegionContainsFootprint(notched, [-1, 0, 0], [1, 1, 2], 0)).toBe(true)
   })
 
   for (const kind of ['rect', 'polygon'] as const) {
-    test(`${kind}: sink cutout rejects hits, crossings, touching and a fully enclosed hole`, () => {
+    test(`${kind}: sink cutout rejects the centre but accepts footprint crossings and touching`, () => {
       const region: SurfaceRegion = {
         kind,
         size: [2, 2],
@@ -74,19 +75,17 @@ describe('surface regions', () => {
       expect(surfaceRegionContainsPoint(region, [0, 0])).toBe(false)
       expect(surfaceRegionContainsPoint(region, [0.2, 0])).toBe(false)
       expect(surfaceRegionContainsFootprint(region, [0, 0, 0], [1, 1, 1], 0)).toBe(false)
-      expect(surfaceRegionContainsFootprint(region, [0.4, 0, 0], [0.6, 1, 0.1], 0)).toBe(false)
-      expect(surfaceRegionContainsFootprint(region, [0.7, 0, 0], [1, 1, 0.1], 0)).toBe(false)
+      expect(surfaceRegionContainsFootprint(region, [0.4, 0, 0], [0.6, 1, 0.1], 0)).toBe(true)
+      expect(surfaceRegionContainsFootprint(region, [0.7, 0, 0], [1, 1, 0.1], 0)).toBe(true)
       expect(surfaceRegionContainsFootprint(region, [1, 0, 0], [0.5, 1, 0.5], 0)).toBe(true)
     })
   }
 
-  test('rotation can make a child fit or make it overhang', () => {
+  test('rotation and size do not reject a centred footprint', () => {
     const region: SurfaceRegion = { kind: 'rect', size: [1, 0.4] }
-    expect(surfaceRegionContainsFootprint(region, [0, 0, 0], [0.5, 1, 1.5], 0)).toBe(false)
+    expect(surfaceRegionContainsFootprint(region, [0, 0, 0], [0.5, 1, 1.5], 0)).toBe(true)
     expect(surfaceRegionContainsFootprint(region, [0, 0, 0], [0.5, 1, 1.5], Math.PI / 2)).toBe(true)
-    expect(surfaceRegionContainsFootprint(region, [0, 0, 0], [1.5, 1, 0.5], Math.PI / 4)).toBe(
-      false,
-    )
+    expect(surfaceRegionContainsFootprint(region, [0, 0, 0], [1.5, 1, 0.5], Math.PI / 4)).toBe(true)
   })
 
   test('an absent region is unbounded', () => {

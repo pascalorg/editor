@@ -223,17 +223,20 @@ export function getSurfaceProvider(host: AnyNode): SurfaceProvider {
   return declaration?.hosting ?? adapters.get(host.type) ?? hitDerivedSurfaceProvider
 }
 
-function hostSize(
-  host: AnyNode,
-  ctx: SurfaceContext,
-): readonly [number, number, number] | undefined {
-  if (host.type === 'item') return getScaledDimensions(host)
-  if (host.type === 'shelf') return [host.width, host.height, host.depth]
+function hostRegion(host: AnyNode, ctx: SurfaceContext): SurfaceRegion | undefined {
   const capabilities = nodeRegistry.get(host.type)?.capabilities
-  return (
-    capabilities?.dragBounds?.(host, ctx.scene.nodes()).size ??
-    capabilities?.floorPlaced?.footprint?.(host, { nodes: ctx.scene.nodes() }).dimensions
-  )
+  const bounds = capabilities?.dragBounds?.(host, ctx.scene.nodes())
+  const size =
+    host.type === 'item'
+      ? getScaledDimensions(host)
+      : (bounds?.size ??
+        capabilities?.floorPlaced?.footprint?.(host, { nodes: ctx.scene.nodes() }).dimensions)
+  if (!size) return undefined
+  return {
+    kind: 'rect',
+    size: [size[0] / 2, size[2] / 2],
+    center: bounds?.center ? [bounds.center[0], bounds.center[2]] : [0, 0],
+  }
 }
 
 /** Hit and child rotation are host-local; bounds and dimensions are scaled child-local values. */
@@ -267,7 +270,75 @@ export function resolveSurfacePlacement(args: {
     return reject('host-not-eligible')
   const ctx: SurfaceContext = { scene: args.scene }
   const provider = getSurfaceProvider(host)
-  const surface = provider.resolveHit(host, hit, ctx)
+  const poseFor = (surface: HostSurface): SurfacePlacement => {
+    const declaredId = surface.id
+    if (declaredId !== null && !surface.region) {
+      throw new Error(`Declared surface ${host.type}:${declaredId} must publish a region`)
+    }
+    const snap = (surface.gridSnap ?? true) ? args.snapScalar : undefined
+    const origin = args.origin ?? hit.point
+    const position: [number, number, number] = [
+      snap?.(origin[0], childFootprint.size[0]) ?? origin[0],
+      surface.position[1],
+      snap?.(origin[2], childFootprint.size[2]) ?? origin[2],
+    ]
+    const rotation = surfaceLocalRotation(surface, [
+      ...(childFootprint.rotation ?? [0, childFootprint.rotationY, 0]),
+    ])
+    const localPosition = surfaceLocalPoint(surface, position)
+    if (surface.id !== null) {
+      const bounds = childFootprint.localBounds ?? {
+        min: [-childFootprint.size[0] / 2, 0, -childFootprint.size[2] / 2] as const,
+        max: [
+          childFootprint.size[0] / 2,
+          childFootprint.size[1],
+          childFootprint.size[2] / 2,
+        ] as const,
+      }
+      localPosition[1] = -Math.min(
+        ...boxCorners([...bounds.min], [...bounds.max]).map(
+          (p) => transformPoint(frame([0, 0, 0], rotation), p)[1],
+        ),
+      )
+      // Intersect the host-local vertical cursor line with the support plane, then lift the child's bottom.
+      const normal = frame([0, 0, 0], [...(surface.rotation ?? [0, 0, 0])]).axes[1]
+      position[1] =
+        surface.position[1] +
+        (localPosition[1] -
+          normal[0] * (position[0] - surface.position[0]) -
+          normal[2] * (position[2] - surface.position[2])) /
+          normal[1]
+      const projected = surfaceLocalPoint(surface, position)
+      localPosition[0] = projected[0]
+      localPosition[2] = projected[2]
+    }
+    return {
+      position,
+      rotationY: childFootprint.rotationY,
+      surfaceId: surface.id,
+      childFrame: provider.childFrame,
+      surfaceLocal:
+        surface.id === null ? null : { position: localPosition, rotationY: rotation[1], rotation },
+    }
+  }
+  let surface = provider.resolveHit(host, hit, ctx)
+  if (!surface && hit.normalWorldY >= UPWARD_SURFACE_NORMAL_MIN_Y) {
+    // Grab offsets and snapping can leave the pointer over a hole while the child's centre is supported.
+    surface = nearestSurface(
+      (provider.surfaces?.(host, ctx) ?? []).filter((candidate) => {
+        if (candidate.normal[1] < UPWARD_SURFACE_NORMAL_MIN_Y) return false
+        const proposal = poseFor(candidate).surfaceLocal!
+        return surfaceRegionContainsFootprint(
+          candidate.region,
+          proposal.position,
+          childFootprint.size,
+          proposal.rotation,
+          childFootprint.localBounds,
+        )
+      }),
+      hit.point[1],
+    )
+  }
   if (!surface) {
     const overCutout =
       hit.normalWorldY >= UPWARD_SURFACE_NORMAL_MIN_Y &&
@@ -282,55 +353,9 @@ export function resolveSurfacePlacement(args: {
       })
     return reject(overCutout ? 'surface-cutout' : 'no-surface')
   }
-  const declaredId = surface.id
-  if (declaredId !== null && !surface.region) {
-    throw new Error(`Declared surface ${host.type}:${declaredId} must publish a region`)
-  }
-  const snap = (surface.gridSnap ?? true) ? args.snapScalar : undefined
-  const origin = args.origin ?? hit.point
-  const position: [number, number, number] = [
-    snap?.(origin[0], childFootprint.size[0]) ?? origin[0],
-    surface.position[1],
-    snap?.(origin[2], childFootprint.size[2]) ?? origin[2],
-  ]
-  const rotation = surfaceLocalRotation(surface, [
-    ...(childFootprint.rotation ?? [0, childFootprint.rotationY, 0]),
-  ])
-  const localPosition = surfaceLocalPoint(surface, position)
-  if (surface.id !== null) {
-    const bounds = childFootprint.localBounds ?? {
-      min: [-childFootprint.size[0] / 2, 0, -childFootprint.size[2] / 2] as const,
-      max: [
-        childFootprint.size[0] / 2,
-        childFootprint.size[1],
-        childFootprint.size[2] / 2,
-      ] as const,
-    }
-    localPosition[1] = -Math.min(
-      ...boxCorners([...bounds.min], [...bounds.max]).map(
-        (p) => transformPoint(frame([0, 0, 0], rotation), p)[1],
-      ),
-    )
-    // Intersect the host-local vertical cursor line with the support plane, then lift the child's bottom.
-    const normal = frame([0, 0, 0], [...(surface.rotation ?? [0, 0, 0])]).axes[1]
-    position[1] =
-      surface.position[1] +
-      (localPosition[1] -
-        normal[0] * (position[0] - surface.position[0]) -
-        normal[2] * (position[2] - surface.position[2])) /
-        normal[1]
-    const projected = surfaceLocalPoint(surface, position)
-    localPosition[0] = projected[0]
-    localPosition[2] = projected[2]
-  }
-  const pose: SurfacePlacement = {
-    position,
-    rotationY: childFootprint.rotationY,
-    surfaceId: surface.id,
-    childFrame: provider.childFrame,
-    surfaceLocal:
-      surface.id === null ? null : { position: localPosition, rotationY: rotation[1], rotation },
-  }
+  const pose = poseFor(surface)
+  const localPosition = pose.surfaceLocal?.position ?? ([0, 0, 0] as const)
+  const rotation = pose.surfaceLocal?.rotation ?? ([0, childFootprint.rotationY, 0] as const)
   if (provider.accepts && !provider.accepts(host, childKind, surface, ctx)) {
     return reject('child-not-accepted')
   }
@@ -355,32 +380,16 @@ export function resolveSurfacePlacement(args: {
       return reject(insideOutline ? 'surface-cutout' : 'footprint-outside-surface')
     }
   } else {
-    const size = hostSize(host, ctx)
-    if (size) {
-      const bounds = childFootprint.localBounds ?? {
-        min: [-childFootprint.size[0] / 2, 0, -childFootprint.size[2] / 2] as const,
-        max: [
-          childFootprint.size[0] / 2,
-          childFootprint.size[1],
-          childFootprint.size[2] / 2,
-        ] as const,
-      }
-      const childFrame = frame(
-        [0, 0, 0],
-        [...(childFootprint.rotation ?? [0, childFootprint.rotationY, 0])],
+    if (
+      !surfaceRegionContainsFootprint(
+        hostRegion(host, ctx),
+        pose.position,
+        childFootprint.size,
+        childFootprint.rotation ?? childFootprint.rotationY,
+        childFootprint.localBounds,
       )
-      const rotated = boxCorners([...bounds.min], [...bounds.max]).map((point) =>
-        transformPoint(childFrame, point),
-      )
-      if (
-        [0, 2].some(
-          (axis) =>
-            Math.max(...rotated.map((p) => p[axis]!)) - Math.min(...rotated.map((p) => p[axis]!)) >
-            size[axis]! + 1e-6,
-        )
-      )
-        return reject('footprint-exceeds-host')
-    }
+    )
+      return reject('footprint-exceeds-host')
   }
   return pose
 }

@@ -16,6 +16,7 @@ import type { WallNode } from '../schema/nodes/wall'
 import type { AnyNode } from '../schema/types'
 import { resolveCeilingHeight } from '../services/level-height'
 import { getStoredLevelHeight } from '../services/storey'
+import { surfaceRegionContainsPoint } from '../services/surface-region'
 import { computeWallSlabSupport, pointInPolygon } from '../systems/slab/slab-support'
 import { getWallThickness } from '../systems/wall/wall-footprint'
 import type { ProceduralItemNode } from './node'
@@ -332,10 +333,10 @@ export function validateProceduralRelations(raw: AnyNode | ProceduralItemNode, n
     if (!surface) throw new Error('Choose a named attachment surface for the child')
     const b = attachmentBounds(child)
     if (
-      b.min[0] < -surface.size[0] / 2 - 1e-6 ||
-      b.max[0] > surface.size[0] / 2 + 1e-6 ||
-      b.min[2] < -surface.size[1] / 2 - 1e-6 ||
-      b.max[2] > surface.size[1] / 2 + 1e-6 ||
+      !surfaceRegionContainsPoint(
+        { kind: 'rect', size: [surface.size[0] / 2, surface.size[1] / 2] },
+        [(b.min[0] + b.max[0]) / 2, (b.min[2] + b.max[2]) / 2],
+      ) ||
       Math.abs(b.min[1]) > 1e-6
     )
       throw new Error(`The hosted item does not fit on ${surface.label}`)

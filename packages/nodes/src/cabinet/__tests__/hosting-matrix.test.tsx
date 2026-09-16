@@ -29,7 +29,6 @@ import { Children, cloneElement, isValidElement, type ReactNode, useMemo } from 
 import { Group, Vector3 } from 'three'
 import { z } from 'zod'
 import { MoveRegistryNodeTool } from '../../../../editor/src/components/tools/registry/move-registry-node-tool'
-import { SurfaceRejectionLabel } from '../../../../editor/src/components/tools/shared/surface-rejection'
 import useEditor from '../../../../editor/src/store/use-editor'
 import useInteractionScope from '../../../../editor/src/store/use-interaction-scope'
 import { itemDefinition } from '../../item/definition'
@@ -221,16 +220,6 @@ function hit(run: Cabinet, local: [number, number, number] = [0, 0.85, 0]): Cabi
 function withoutLabels(element: ReactNode): ReactNode {
   if (!isValidElement<{ children?: ReactNode }>(element)) return element
   if (element.type === Html) return null
-  if (element.type === SurfaceRejectionLabel) {
-    const props = element.props as Parameters<typeof SurfaceRejectionLabel>[0]
-    const label = SurfaceRejectionLabel(props)
-    return (
-      <group
-        name="surface-rejection"
-        userData={{ reason: props.reason, message: label?.props.children.props.children ?? null }}
-      />
-    )
-  }
   return cloneElement(element, {}, Children.map(element.props.children, withoutLabels))
 }
 function RegistryMover({ node }: { node: AnyNode }) {
@@ -364,10 +353,10 @@ test.each([
 for (const mover of ['catalog', 'registry procedural'] as const) {
   for (const order of ['grid first', 'host first'] as const) {
     test.each([
-      ['fit', "Doesn't fit this surface"],
-      ['cutout', 'Over a sink or hob cutout'],
-      ['kind', "This host doesn't accept this kind of object"],
-    ] as const)(`${mover}, ${order}: %s refusal reaches the invalid preview and blocks floor commits`, async (reason, message) => {
+      'fit',
+      'cutout',
+      'kind',
+    ] as const)(`${mover}, ${order}: %s accepts overhang or refuses without text and never silently commits to the floor`, async (reason) => {
       const run = fixture({}, [
         CabinetModuleNode.parse({
           width: 0.8,
@@ -387,8 +376,6 @@ for (const mover of ['catalog', 'registry procedural'] as const) {
       const renderer = await create(
         mover === 'catalog' ? <CatalogMover /> : <RegistryMover node={child} />,
       )
-      const label = () =>
-        renderer.scene.findByProps({ name: 'surface-rejection' }).instance.userData
       try {
         const event = hit(run, [reason === 'fit' ? 2.39 : reason === 'cutout' ? 0 : 2, 0.85, 0.01])
         const nativeEvent = {}
@@ -406,18 +393,25 @@ for (const mover of ['catalog', 'registry procedural'] as const) {
         await act(async () => {
           await new Promise((resolve) => setTimeout(resolve, 5))
         })
-        expect(label().message).toBe(message)
         const root = renderer.scene.children[0]!.instance as Group
         let invalidColor = false
         root.traverse((object) => {
           const material = (object as { material?: { color?: { getHex(): number } } }).material
           if (material?.color?.getHex() === 0xef4444) invalidColor = true
         })
+        if (reason === 'fit') {
+          expect(invalidColor).toBe(false)
+          await act(async () => emitter.emit('cabinet:click', event))
+          const placed = useScene.getState().nodes[child.id] as typeof child
+          expect(placed.parentId).toBe(run.id)
+          expect(placed.position[0]).toBeCloseTo(2.39)
+          expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+          return
+        }
         expect(invalidColor).toBe(true)
         await act(async () =>
           window.dispatchEvent(Object.assign(new Event('keydown'), { key: 'Alt' })),
         )
-        expect(label().message).toBe(message)
         await act(async () => {
           emitter.emit('cabinet:click', event)
           emitter.emit('grid:click', grid)
@@ -430,7 +424,7 @@ for (const mover of ['catalog', 'registry procedural'] as const) {
         )
         accepts = true
         await act(async () => emitter.emit('cabinet:move', hit(run, [2, 0.85, 0.01])))
-        expect(label().message).toBeNull()
+        expect(useEditor.getState().movingNode).not.toBeNull()
         expect(useScene.getState().nodes[child.id]!.parentId).toBe(run.id)
         await act(async () => emitter.emit('cabinet:click', hit(run, [2, 0.85, 0.01])))
         expect(useScene.temporal.getState().pastStates).toHaveLength(1)
@@ -442,7 +436,7 @@ for (const mover of ['catalog', 'registry procedural'] as const) {
 }
 
 for (const mover of ['catalog', 'registry procedural', 'registry catalog'] as const) {
-  test(`${mover}: rotating a hosted shelf object into overhang refuses the drop and rotating back recovers`, async () => {
+  test(`${mover}: rotating a hosted shelf object into overhang keeps the drop valid`, async () => {
     const shelf = ShelfNode.parse({ parentId: level.id, width: 1.2, depth: 0.5, height: 1 })
     useScene.getState().createNode(shelf, level.id)
     sceneRegistry.nodes.set(shelf.id, new Group())
@@ -452,7 +446,6 @@ for (const mover of ['catalog', 'registry procedural', 'registry catalog'] as co
       mover === 'catalog' ? <CatalogMover /> : <RegistryMover node={child} />,
     )
     const event = hit(shelf as unknown as Cabinet, [0, 1.04, 0])
-    const label = () => renderer.scene.findByProps({ name: 'surface-rejection' }).instance.userData
     const key = (key: string) => window.dispatchEvent(Object.assign(new Event('keydown'), { key }))
     const inputElement = globalThis.HTMLInputElement
     const textElement = globalThis.HTMLTextAreaElement
@@ -462,17 +455,68 @@ for (const mover of ['catalog', 'registry procedural', 'registry catalog'] as co
       await act(async () => emitter.emit('shelf:move', event as never))
       expect(useScene.getState().nodes[child.id]!.parentId).toBe(shelf.id)
       await act(async () => key('r'))
-      expect(label().message).toBe("Doesn't fit this surface")
-      await act(async () => emitter.emit('shelf:click', event as never))
-      expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+      expect(hasInvalidPreview(renderer.scene.children[0]!.instance as Group)).toBe(false)
       await act(async () => key('t'))
-      expect(label().message).toBeNull()
+      expect(hasInvalidPreview(renderer.scene.children[0]!.instance as Group)).toBe(false)
       await act(async () => emitter.emit('shelf:click', event as never))
       expect(useScene.temporal.getState().pastStates).toHaveLength(1)
     } finally {
       await renderer.unmount()
       globalThis.HTMLInputElement = inputElement
       globalThis.HTMLTextAreaElement = textElement
+    }
+  })
+}
+
+function hasInvalidPreview(root: Group): boolean {
+  let invalid = false
+  root.traverse((object) => {
+    const material = (object as { material?: { color?: { getHex(): number } } }).material
+    if (material?.color?.getHex() === 0xef4444) invalid = true
+  })
+  return invalid
+}
+
+for (const mover of ['catalog', 'registry procedural'] as const) {
+  test(`${mover}: crossing the shelf centre boundary detaches with a visible floor preview before commit`, async () => {
+    const shelf = ShelfNode.parse({ parentId: level.id, width: 1.2, depth: 0.5, height: 1 })
+    useScene.getState().createNode(shelf, level.id)
+    sceneRegistry.nodes.set(shelf.id, new Group())
+    const child = mover === 'catalog' ? catalog : design
+    useEditor.getState().setMovingNode(child)
+    const renderer = await create(
+      mover === 'catalog' ? <CatalogMover /> : <RegistryMover node={child} />,
+    )
+    try {
+      await act(async () =>
+        emitter.emit('shelf:move', hit(shelf as unknown as Cabinet, [0.57, 1.04, 0]) as never),
+      )
+      expect(useScene.getState().nodes[child.id]!.parentId).toBe(shelf.id)
+      expect(hasInvalidPreview(renderer.scene.children[0]!.instance as Group)).toBe(false)
+      const outside = hit(shelf as unknown as Cabinet, [0.61, 1.04, 0])
+      await act(async () => emitter.emit('shelf:move', outside as never))
+      const preview = useScene.getState().nodes[child.id] as typeof child
+      expect(preview.parentId).toBe(level.id)
+      expect(preview.position[0]).toBeCloseTo(0.61)
+      expect(preview.position[1]).toBe(0)
+      expect(preview.position[2]).toBeCloseTo(0)
+      expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+      await act(async () =>
+        window.dispatchEvent(Object.assign(new Event('keydown'), { key: 'Alt' })),
+      )
+      await act(async () =>
+        emitter.emit('grid:click', {
+          position: outside.position,
+          localPosition: outside.position,
+          nativeEvent: {},
+        } as never),
+      )
+      const committed = useScene.getState().nodes[child.id] as typeof child
+      expect(committed.parentId).toBe(level.id)
+      expect(committed.position).toEqual(preview.position)
+      expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    } finally {
+      await renderer.unmount()
     }
   })
 }

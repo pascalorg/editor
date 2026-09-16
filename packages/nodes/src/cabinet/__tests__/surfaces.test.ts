@@ -485,7 +485,38 @@ describe('cabinet hosting surfaces', () => {
       })
     })
 
-    test('rejects footprints crossing holes or span edges with null and reports the reason', () => {
+    test('a grab offset and snapping judge the centre even when the raw hit is over a sink', () => {
+      const f = fixture([moduleAt(0, { stack: [{ id: 'sink', type: 'sink' }] }), moduleAt(2)])
+      const args = {
+        host: f.run,
+        childKind: 'item',
+        childFootprint: { size: [0.6, 0.2, 0.6] as const, rotationY: Math.PI / 4 },
+        scene: f.scene as SceneApi,
+      }
+      expect(
+        resolveSurfacePlacement({
+          ...args,
+          hit: { point: [0, 0.85, 0], normalWorldY: 1 },
+          origin: [0, 0.85, 0.3],
+        })?.position,
+      ).toEqual([0, 0.85, 0.3])
+      expect(
+        resolveSurfacePlacement({
+          ...args,
+          hit: { point: [0, 0.85, 0.3], normalWorldY: 1 },
+          origin: [0, 0.85, 0],
+        }),
+      ).toBeNull()
+      expect(
+        resolveSurfacePlacement({
+          ...args,
+          hit: { point: [2.33, 0.85, 0.1], normalWorldY: 1 },
+          snapScalar: (p) => Math.round(p * 10) / 10,
+        })?.position,
+      ).toEqual([2.3, 0.85, 0.1])
+    })
+
+    test('accepts overhang at span edges but rejects centres in holes and gaps', () => {
       const f = fixture([moduleAt(0, { stack: [{ id: 'sink', type: 'sink' }] }), moduleAt(2)])
       const onReject = mock()
       const args = {
@@ -495,15 +526,13 @@ describe('cabinet hosting surfaces', () => {
         scene: f.scene as SceneApi,
         onReject,
       }
-      for (const point of [
-        [0, 0.85, 0.3],
-        [2.3, 0.85, 0],
-      ] as const) {
-        const hit = { point, normalWorldY: 1 }
-        expect(resolveSurfacePlacement({ ...args, hit })).toBeNull()
-        expect(onReject).toHaveBeenLastCalledWith('footprint-outside-surface')
-        expect(resolveSurfacePlacement({ ...args, hit, checkFootprint: false })).not.toBeNull()
-      }
+      expect(
+        resolveSurfacePlacement({ ...args, hit: { point: [0, 0.85, 0.3], normalWorldY: 1 } }),
+      ).not.toBeNull()
+      expect(onReject).not.toHaveBeenCalled()
+      expect(
+        resolveSurfacePlacement({ ...args, hit: { point: [2.3, 0.85, 0], normalWorldY: 1 } }),
+      ).not.toBeNull()
       for (const point of [
         [0, 0.85, 0],
         [1, 0.85, 0],

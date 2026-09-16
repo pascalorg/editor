@@ -114,7 +114,7 @@ test.each([
   number,
   number,
   number,
-][])('enter checks the scaled footprint while move skips it: %j', (width, height, depth) => {
+][])('enter and move accept oversized objects with their centres on the host: %j', (width, height, depth) => {
   const draft = ItemNode.parse({
     ...child,
     asset: { ...asset, dimensions: [width, height, depth] },
@@ -122,7 +122,7 @@ test.each([
   const ctx = context(draft)
   const event = hit()
   const before = useScene.getState().nodes
-  expect(itemSurfaceStrategy.enter(ctx, event)).toBeNull()
+  expect(itemSurfaceStrategy.enter(ctx, event)).not.toBeNull()
   const expected: {
     position: [number, number, number]
     worldPosition: [number, number, number]
@@ -140,7 +140,7 @@ test.each([
   expect(moved.nodeUpdate).toEqual({ position: expected.position })
   expect(moved.cursorPosition).toEqual(expected.worldPosition)
   expect(moved.cursorRotationY).toBe(ctx.currentCursorRotationY)
-  expect(resolver.mock.calls.map(([args]) => args.checkFootprint)).toEqual([true, false])
+  expect(resolver.mock.calls.map(([args]) => args.checkFootprint)).toEqual([true, true])
   expect(useScene.getState().nodes).toBe(before)
 })
 
@@ -190,7 +190,7 @@ test('resolver rejection leaves both enter and move drafts alone', () => {
   expect(ctx.draftItem).toBe(child)
 })
 
-test('move still rejects side hits and missing normals even when fit is skipped', () => {
+test('move still rejects side hits and missing normals', () => {
   for (const normal of [[1, 0, 0], [0, -1, 0], undefined] as ItemEvent['normal'][]) {
     const event = { ...hit(), normal }
     expect(itemSurfaceStrategy.enter(context(), event)).toBeNull()

@@ -861,7 +861,6 @@ function resolveCatalogItemSurfacePlacement(
   event: ItemEvent | CabinetEvent,
   dimensions: [number, number, number],
   worldYaw: number,
-  checkFootprint: boolean,
   onReject?: PlacementContext['onSurfaceReject'],
 ) {
   const mesh = sceneRegistry.nodes.get(host.id)
@@ -877,7 +876,7 @@ function resolveCatalogItemSurfacePlacement(
     hit,
     scene: createSceneApi(useScene),
     snapScalar: snapToGrid,
-    checkFootprint: host.type === 'cabinet' || checkFootprint,
+    checkFootprint: true,
     onReject,
   })
   if (!placement) return null
@@ -939,7 +938,6 @@ export const itemSurfaceStrategy = {
       event,
       ourDims,
       ctx.currentCursorRotationY,
-      true,
       ctx.onSurfaceReject,
     )
     if (!pose) return null
@@ -980,7 +978,6 @@ export const itemSurfaceStrategy = {
       event,
       getScaledDimensions(ctx.draftItem),
       ctx.currentCursorRotationY,
-      false,
       ctx.onSurfaceReject,
     )
     if (!pose) return null

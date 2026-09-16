@@ -9,8 +9,7 @@ import {
   type SurfaceProvider,
   type SurfaceRejectReason,
 } from '@pascal-app/core'
-import { renderToStaticMarkup } from 'react-dom/server'
-import { createSurfaceRejectionFeedback, SurfaceRejectionLabel } from './surface-rejection'
+import { createSurfaceRejectionFeedback } from './surface-rejection'
 
 let restore: () => void
 beforeEach(() => {
@@ -19,16 +18,16 @@ beforeEach(() => {
 })
 afterEach(() => restore())
 
-for (const [reason, wording] of [
-  ['footprint-outside-surface', "Doesn't fit this surface"],
-  ['footprint-exceeds-host', "Doesn't fit this surface"],
-  ['surface-cutout', 'Over a sink or hob cutout'],
-  ['child-not-accepted', "This host doesn't accept this kind of object"],
-  ['host-not-eligible', "This host doesn't accept this kind of object"],
-  ['no-surface', 'No supporting surface here'],
-  ['invalid-hit', 'No supporting surface here'],
+for (const reason of [
+  'footprint-outside-surface',
+  'footprint-exceeds-host',
+  'surface-cutout',
+  'child-not-accepted',
+  'host-not-eligible',
+  'no-surface',
+  'invalid-hit',
 ] as const) {
-  test(`${reason} reaches the preview's status wording from onReject`, () => {
+  test(`${reason} remains available from onReject without user-facing text`, () => {
     const provider: SurfaceProvider = {
       childFrame: 'host-local',
       resolveHit: () =>
@@ -80,15 +79,15 @@ for (const [reason, wording] of [
           size: reason === 'footprint-outside-surface' ? [3, 1, 3] : [0.3, 0.3, 0.3],
           rotationY: 0,
         },
-        hit: { point: [0, reason === 'invalid-hit' ? NaN : 1, 0], normalWorldY: 1 },
+        hit: {
+          point: [reason.startsWith('footprint-') ? 2 : 0, reason === 'invalid-hit' ? NaN : 1, 0],
+          normalWorldY: 1,
+        },
         scene: { get: () => undefined, nodes: () => ({}) } as unknown as SceneApi,
         onReject: (r) => feedback.reject(r),
       }),
     ).toBeNull()
     expect(feedback.reason).toBe(reason)
-    const label = SurfaceRejectionLabel({ reason: feedback.reason, position: [0, 1, 0] })!
-    expect(label.props.children.props.children).toBe(wording)
-    expect(renderToStaticMarkup(label.props.children)).toContain('role="status"')
   })
 }
 
@@ -101,7 +100,6 @@ test('the paired grid cannot erase a refusal; a new floor move and cleanup clear
   expect(feedback.reason).toBe('footprint-exceeds-host')
   feedback.grid({})
   expect(feedback.reason).toBeNull()
-  expect(SurfaceRejectionLabel({ reason: feedback.reason, position: [0, 0, 0] })).toBeNull()
   feedback.reject('surface-cutout', event)
   feedback.clear()
   expect(changes).toEqual(['footprint-exceeds-host', null, 'surface-cutout', null])

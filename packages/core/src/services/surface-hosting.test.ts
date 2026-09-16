@@ -74,7 +74,7 @@ describe('item surface boundaries', () => {
       }
   })
 
-  test('scaled host dimensions accept aligned equality and refuse rotated excess', () => {
+  test('scaled host dimensions accept centred rotated and oversized children', () => {
     const host = ItemNode.parse({ asset, scale: [2, 1, 0.5] })
     for (const childSize of [
       [4, 5, 1.5],
@@ -88,7 +88,7 @@ describe('item surface boundaries', () => {
         hit: { point: [0, 0.8, 0], normalWorldY: 1 },
         scene,
       })
-      expect(result).toBeNull()
+      expect(result).not.toBeNull()
       expect(
         resolveSurfacePlacement({
           host,
@@ -97,7 +97,7 @@ describe('item surface boundaries', () => {
           hit: { point: [0, 0.8, 0], normalWorldY: 1 },
           scene,
         }) !== null,
-      ).toBe(childSize[0] === 4 && childSize[2] === 1.5)
+      ).toBe(true)
     }
   })
 })
@@ -150,7 +150,7 @@ describe('shelf production rows', () => {
 })
 
 describe('procedural named surfaces', () => {
-  test('query IDs and frames survive parameters; placement matches existing containment including tolerance', () => {
+  test('query IDs and frames survive parameters; placement matches centre validation including tolerance', () => {
     for (const height of [1.8, 2.4]) {
       const host = ProceduralItemNode.parse({ recipe: shelfRecipe, parameters: { height } })
       const surfaces = queryProceduralItem(host, {}).surfaces
@@ -352,7 +352,7 @@ describe('protocol defaults', () => {
     expect(resolveSurfacePlacement({ ...args, checkFootprint: false })).not.toBeNull()
   })
 
-  test('a sink cutout and post-snap overhang return null with diagnostic reasons', () => {
+  test('a sink cutout and post-snap centre outside return null with diagnostic reasons', () => {
     const surface: HostSurface = {
       id: 'counter',
       position: [0, 1, 0],
@@ -380,7 +380,7 @@ describe('protocol defaults', () => {
       resolveSurfacePlacement({ ...args, onReject, hit: { point: [0, 1, 0], normalWorldY: 1 } }),
     ).toBeNull()
     surface.gridSnap = true
-    expect(resolveSurfacePlacement({ ...args, onReject, snapScalar: () => 1 })).toBeNull()
+    expect(resolveSurfacePlacement({ ...args, onReject, snapScalar: () => 1.01 })).toBeNull()
     expect(rejections).toEqual(['surface-cutout', 'footprint-outside-surface'])
     expect(
       resolveSurfacePlacement({ ...args, checkFootprint: false, snapScalar: () => 1 })!.position,
@@ -469,16 +469,14 @@ describe('surface frame contract', () => {
       hit: { point: outside, normalWorldY: 1 },
       scene,
     }
-    expect(resolveSurfacePlacement(args)).toBeNull()
+    expect(resolveSurfacePlacement(args)).not.toBeNull()
     const unchecked = resolveSurfacePlacement({ ...args, checkFootprint: false })!
     const overhang = {
       ...child,
       position: [...unchecked.surfaceLocal!.position] as [number, number, number],
     }
     const invalid = attachedScene(host, overhang)
-    expect(() => validateProceduralRelations(invalid.attached, invalid.nodes)).toThrow(
-      'does not fit',
-    )
+    expect(() => validateProceduralRelations(invalid.attached, invalid.nodes)).not.toThrow()
   })
 
   test.each([

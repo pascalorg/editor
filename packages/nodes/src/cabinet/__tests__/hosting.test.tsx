@@ -271,21 +271,21 @@ test('both assets slide freely across modules in one span with mode-driven grid 
   expect(snapped.gridPosition[0]).toBeCloseTo(0.1)
   expect(session.enter(hit(run, [0.137, 0.85, 0]), dimensions, 0)).not.toBeNull()
 })
-test('catalog commit rejects a rotated footprint over the counter edge after snapping', () => {
+test('catalog commit accepts rotated overhang while its centre stays on the counter', () => {
   const run = fixture()
   const ctx = enterCatalog(run)
   ctx.gridPosition.set(0, 0.85, 0.25)
   ctx.draftItem!.rotation = [0, Math.PI / 4, 0]
-  expect(validCatalogCounterPose(ctx)).toBe(false)
-  expect(itemSurfaceStrategy.click(ctx, hit(run))).toBeNull()
+  expect(validCatalogCounterPose(ctx)).toBe(true)
+  expect(itemSurfaceStrategy.click(ctx, hit(run))).not.toBeNull()
 })
-test('procedural parameter changes and rotation cannot manufacture a fitting counter footprint', () => {
+test('procedural parameter changes and rotation allow overhang with a supported centre', () => {
   const run = fixture()
   const wide = { ...design, parameters: { width: 1.8 } }
   useScene.getState().updateNode(design.id, wide)
   expect(
     createRegistryItemSurfaceMove(wide)!.enter(hit(run), [1.8, 0.2, 0.2], Math.PI / 2),
-  ).toBeNull()
+  ).not.toBeNull()
 })
 test.each(['wall', 'tall'] as const)('%s run refuses both movers', (runTier) => {
   const run = fixture({ runTier })
