@@ -15,11 +15,12 @@ export function restingNodePlanFrame(
     const effective = getEffectiveNode(parent)
     const live = useLiveTransforms.getState().get(parent.id)
     nodes[id] =
-      live && (parent.type === 'shelf' || parent.type === 'cabinet')
+      live &&
+      (parent.type === 'shelf' || parent.type === 'cabinet' || parent.type === 'procedural-item')
         ? ({
             ...effective,
             position: live.position,
-            rotation: parent.type === 'shelf' ? [0, live.rotation, 0] : live.rotation,
+            rotation: parent.type === 'cabinet' ? live.rotation : [0, live.rotation, 0],
           } as AnyNode)
         : effective
     if (parent.type === 'level') break

@@ -80,6 +80,7 @@ export interface PlacementContext {
  * Returned by strategy move handlers.
  */
 export interface PlacementResult {
+  surfaceId?: string | null
   gridPosition: [number, number, number]
   cursorPosition: [number, number, number]
   cursorRotationY: number
@@ -94,6 +95,7 @@ export interface PlacementResult {
  * Returned by enter/leave handlers (surface transitions).
  */
 export interface TransitionResult {
+  surfaceId?: string | null
   stateUpdate: Partial<PlacementState>
   nodeUpdate: Partial<ItemNode>
   gridPosition: [number, number, number]

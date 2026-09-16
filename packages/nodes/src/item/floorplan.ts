@@ -89,7 +89,11 @@ function resolveItemTransform(
         rotation: parentT.rotation + localRotation,
       }
     }
-  } else if (parentNode?.type === 'cabinet' || parentNode?.type === 'cabinet-module') {
+  } else if (
+    parentNode?.type === 'cabinet' ||
+    parentNode?.type === 'cabinet-module' ||
+    parentNode?.type === 'procedural-item'
+  ) {
     const f = restingNodePlanFrame(item, ctx.resolve)
     result = {
       x: f.position[0],

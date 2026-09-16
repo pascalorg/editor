@@ -225,7 +225,15 @@ export function getSurfaceProvider(host: AnyNode): SurfaceProvider {
 
 function hostRegion(host: AnyNode, ctx: SurfaceContext): SurfaceRegion | undefined {
   const capabilities = nodeRegistry.get(host.type)?.capabilities
-  const bounds = capabilities?.dragBounds?.(host, ctx.scene.nodes())
+  const evaluated = isProceduralItem(host) ? evaluateRecipe(host.recipe, host.parameters) : null
+  const bounds =
+    capabilities?.dragBounds?.(host, ctx.scene.nodes()) ??
+    (evaluated
+      ? {
+          size: evaluated.dimensions,
+          center: evaluated.min.map((v, i) => (v + evaluated.max[i]!) / 2),
+        }
+      : undefined)
   const size =
     host.type === 'item'
       ? getScaledDimensions(host)
@@ -316,7 +324,7 @@ export function resolveSurfacePlacement(args: {
       position,
       rotationY: childFootprint.rotationY,
       surfaceId: surface.id,
-      childFrame: provider.childFrame,
+      childFrame: surface.id === null ? 'host-local' : provider.childFrame,
       surfaceLocal:
         surface.id === null ? null : { position: localPosition, rotationY: rotation[1], rotation },
     }
@@ -338,6 +346,15 @@ export function resolveSurfacePlacement(args: {
       }),
       hit.point[1],
     )
+  }
+  if (!surface && isProceduralItem(host)) {
+    const bounds = evaluateRecipe(host.recipe, host.parameters)
+    if (
+      hit.point.every(
+        (value, axis) => value >= bounds.min[axis]! - 1e-6 && value <= bounds.max[axis]! + 1e-6,
+      )
+    )
+      surface = hitDerivedSurfaceProvider.resolveHit(host, hit, ctx)
   }
   if (!surface) {
     const overCutout =

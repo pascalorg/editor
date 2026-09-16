@@ -51,7 +51,11 @@ import { resolveAttachmentPreviewRotation } from '../../../lib/rigid-plan-svg-tr
 import { createMovementSfxTick } from '../../../lib/sfx/movement-tick'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { resolveSnapFlags } from '../../../lib/snapping-mode'
-
+import {
+  surfaceAttachmentId,
+  surfaceAttachmentUpdates,
+  updateSurfaceNode,
+} from '../../../lib/surface-attachment'
 import useAlignmentGuides from '../../../store/use-alignment-guides'
 import useEditor, {
   getActiveSnappingMode,
@@ -59,7 +63,6 @@ import useEditor, {
   isGridSnapActive,
   isMagneticSnapActive,
 } from '../../../store/use-editor'
-
 import useFacingPose from '../../../store/use-facing-pose'
 import { swallowNextClick } from '../../editor/node-arrow-handles'
 import { CursorSphere } from '../shared/cursor-sphere'
@@ -455,10 +458,12 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     const isNew = isFreshPlacement
 
     const baseRotation = (node as { rotation?: unknown }).rotation
-    const toCommitRotation = (y: number): number | [number, number, number] =>
-      Array.isArray(baseRotation)
-        ? [(baseRotation[0] as number) ?? 0, y, (baseRotation[2] as number) ?? 0]
-        : y
+    const toCommitRotation = (y: number): number | [number, number, number] => {
+      const live = useScene.getState().nodes[node.id]
+      const rotation =
+        live && surfaceAttachmentId(live) && 'rotation' in live ? live.rotation : baseRotation
+      return Array.isArray(rotation) ? [rotation[0] ?? 0, y, rotation[2] ?? 0] : y
+    }
 
     const currentLevelId = () =>
       useViewer.getState().selection.levelId ??
@@ -1123,11 +1128,16 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
                 buildPreviewNode(position, rotationRef.current),
               ).filter((u) => useScene.getState().nodes[u.id])
             : []
+          const surfaceId = surfaceAttachmentId(effectiveNode)
           itemSurfaceMove?.restore()
           useScene.temporal.getState().resume()
           useScene
             .getState()
-            .updateNodes([{ id: node.id as AnyNodeId, data }, ...connectivityUpdates])
+            .updateNodes([
+              { id: node.id as AnyNodeId, data },
+              ...surfaceAttachmentUpdates(node.id, effectiveNode.parentId, surfaceId),
+              ...connectivityUpdates,
+            ])
           // Kind-owned derived-state maintenance after a parent-frame move
           // (cabinet run re-flow + linked corner-run re-anchor). Runs in the
           // resumed window so its writes are undoable alongside the move.
@@ -1328,6 +1338,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       clearConnectivityOverrides()
       clearParentFramePreview()
       if (isNew) {
+        updateSurfaceNode(node.id, {}, null)
         useScene.getState().deleteNode(node.id as AnyNodeId)
       } else {
         itemSurfaceMove?.restore()

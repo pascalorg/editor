@@ -90,7 +90,11 @@ function resolveItemPlanTransform(
       point: [parent.start[0] + offsetX, parent.start[1] + offsetZ],
       rotation: wallRotation + localRotation,
     }
-  } else if (parent?.type === 'cabinet' || parent?.type === 'cabinet-module') {
+  } else if (
+    parent?.type === 'cabinet' ||
+    parent?.type === 'cabinet-module' ||
+    parent?.type === 'procedural-item'
+  ) {
     const f = restingNodePlanFrame(item, (id) => nodes[id])
     result = {
       point: [f.position[0], f.position[2]],

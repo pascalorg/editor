@@ -15,6 +15,11 @@ import {
 import { boxCorners } from '@pascal-app/core/procedural-items'
 import { type Camera, Euler, Quaternion, Vector3 } from 'three'
 import { isFreshPlacementMetadata } from '../../../lib/placement-metadata'
+import {
+  surfaceAttachmentId,
+  surfaceFramePose,
+  updateSurfaceNode,
+} from '../../../lib/surface-attachment'
 import { snapToGrid, snapToHalf } from '../item/placement-math'
 import { createShelfStickiness } from '../shared/shelf-stickiness'
 import { itemEventToSurfaceHit } from '../shared/surface-hit'
@@ -103,6 +108,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
     rotation: number | [number, number, number]
     supportSlabId?: string
   }
+  const originalSurfaceId = surfaceAttachmentId(node)
   let changed = false
   let valid = true
   const feedback = createSurfaceRejectionFeedback()
@@ -115,7 +121,21 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
     originalParent &&
     !NON_PHYSICAL_HOST_KINDS.includes(originalParent.type) &&
     !isFreshPlacementMetadata(original.metadata)
-      ? { hostId: originalParent.id, start: original.position, anchor: null }
+      ? {
+          hostId: originalParent.id,
+          start: surfaceFramePose(
+            original.parentId,
+            originalSurfaceId,
+            {
+              position: original.position,
+              rotation: Array.isArray(original.rotation)
+                ? original.rotation
+                : [0, original.rotation, 0],
+            },
+            false,
+          ).position,
+          anchor: null,
+        }
       : null
   let grab = initialGrab()
   const cursorRayIntersectsShelf = createShelfStickiness()
@@ -130,15 +150,20 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
     position: [number, number, number],
     yaw: number,
     fullRotation?: readonly [number, number, number],
+    surfaceId?: string | null,
   ) => {
     changed = true
     // Hosted renderers and floorplan builders need the same parent-local pose.
-    useScene.getState().updateNode(node.id, {
-      parentId,
-      position,
-      rotation: fullRotation ? [...fullRotation] : rotation(yaw),
-      supportSlabId: undefined,
-    } as Partial<AnyNode>)
+    updateSurfaceNode(
+      node.id,
+      {
+        parentId,
+        position,
+        rotation: fullRotation ? [...fullRotation] : rotation(yaw),
+        supportSlabId: undefined,
+      } as Partial<AnyNode>,
+      surfaceId,
+    )
     useLiveTransforms.getState().clear(node.id)
   }
   const session = {
@@ -157,14 +182,27 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
       return !!parent && !NON_PHYSICAL_HOST_KINDS.includes(parent.type)
     },
     worldYaw(yaw: number) {
-      return yaw + parentWorldYaw(liveNode().parentId)
+      const live = liveNode() as typeof original
+      const pose = surfaceFramePose(
+        live.parentId,
+        surfaceAttachmentId(live),
+        { position: live.position, rotation: [0, yaw, 0] },
+        false,
+      )
+      return pose.rotation[1] + parentWorldYaw(live.parentId)
     },
     planPose(position: [number, number, number], yaw: number) {
       const parentId = liveNode().parentId
       const parentMesh = parentId ? sceneRegistry.nodes.get(parentId) : undefined
       const level = levelId()
       const levelMesh = level ? sceneRegistry.nodes.get(level) : undefined
-      const point = new Vector3(...position)
+      const local = surfaceFramePose(
+        parentId,
+        surfaceAttachmentId(liveNode()),
+        { position, rotation: [0, yaw, 0] },
+        false,
+      )
+      const point = new Vector3(...local.position)
       parentMesh?.localToWorld(point)
       levelMesh?.worldToLocal(point)
       return {
@@ -192,7 +230,10 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
       // Keep the legacy world round-trip so existing poses retain identical floating-point values.
       const hit = itemEventToSurfaceHit(host, { ...event, position })
       if (!hit) return null
-      const counterHit = host.type === 'cabinet' ? itemEventToSurfaceHit(host, event) : null
+      const counterHit =
+        host.type === 'cabinet' || host.type === 'procedural-item'
+          ? itemEventToSurfaceHit(host, event)
+          : null
       const stayingOnShelf = host.type === 'shelf' && live.parentId === host.id
       const localYaw = session.worldYaw(yaw) - parentWorldYaw(host.id)
       const bounds = capabilities?.dragBounds?.(live, scene.nodes())
@@ -257,6 +298,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
         pose.position,
         pose.rotationY,
         placement.childFrame === 'surface-local' ? placement.surfaceLocal?.rotation : undefined,
+        placement.surfaceId,
       )
       return pose
     },
@@ -292,7 +334,22 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
       const live = liveNode() as typeof original
       const position: [number, number, number] = [...live.position]
       const host = live.parentId ? scene.get(live.parentId as AnyNodeId) : undefined
-      if (host?.type === 'cabinet' || host?.type === 'shelf' || host?.type === 'item') {
+      const storedRotation = Array.isArray(live.rotation)
+        ? ([live.rotation[0], yaw, live.rotation[2]] as [number, number, number])
+        : ([0, yaw, 0] as [number, number, number])
+      const local = surfaceFramePose(
+        live.parentId,
+        surfaceAttachmentId(live),
+        { position, rotation: storedRotation },
+        false,
+      )
+      if (host?.type === 'procedural-item') position.splice(0, 3, ...local.position)
+      if (
+        host?.type === 'cabinet' ||
+        host?.type === 'shelf' ||
+        host?.type === 'item' ||
+        host?.type === 'procedural-item'
+      ) {
         const footprint = floorPlaced.footprint?.(live, { nodes: scene.nodes() })
         const bounds:
           | { size: [number, number, number]; center?: [number, number, number] }
@@ -301,7 +358,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
           (footprint ? { size: footprint.dimensions } : undefined)
         if (!bounds) return null
         const center = bounds.center ?? [0, bounds.size[1] / 2, 0]
-        const localRotation = rotation(yaw)
+        const localRotation = host.type === 'procedural-item' ? local.rotation : rotation(yaw)
         const euler = new Euler(
           ...(Array.isArray(localRotation) ? localRotation : ([0, yaw, 0] as const)),
         )
@@ -321,10 +378,8 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
           childKind: live.type,
           childFootprint: {
             size: bounds.size,
-            rotationY: yaw,
-            rotation: Array.isArray(rotation(yaw))
-              ? (rotation(yaw) as [number, number, number])
-              : [0, yaw, 0],
+            rotationY: Array.isArray(localRotation) ? localRotation[1] : localRotation,
+            rotation: Array.isArray(localRotation) ? localRotation : [0, yaw, 0],
             localBounds,
           },
           hit: {
@@ -339,6 +394,17 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
           onReject: (reason) => feedback.reject(reason),
         })
         valid = !!placement
+        if (placement && host.type === 'procedural-item') {
+          const pose =
+            placement.childFrame === 'surface-local'
+              ? placement.surfaceLocal!
+              : { ...placement, rotation: local.rotation }
+          write(host.id, [...pose.position], pose.rotationY, pose.rotation, placement.surfaceId)
+          return {
+            position: [...pose.position] as [number, number, number],
+            rotationY: pose.rotationY,
+          }
+        }
         if (placement) position[1] = placement.position[1]
         else if (
           feedback.reason === 'footprint-outside-surface' ||
@@ -359,12 +425,16 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
       pointer.clear()
       grab = initialGrab()
       if (!changed || !useScene.getState().nodes[node.id]) return
-      useScene.getState().updateNode(node.id, {
-        parentId: original.parentId,
-        position: original.position,
-        rotation: original.rotation,
-        supportSlabId: original.supportSlabId,
-      } as Partial<AnyNode>)
+      updateSurfaceNode(
+        node.id,
+        {
+          parentId: original.parentId,
+          position: original.position,
+          rotation: original.rotation,
+          supportSlabId: original.supportSlabId,
+        } as Partial<AnyNode>,
+        originalSurfaceId,
+      )
     },
   }
   return session

@@ -3,7 +3,6 @@ import {
   type AlignmentAnchor,
   type AnyNode,
   type AnyNodeId,
-  type CabinetEvent,
   type CeilingEvent,
   collectAlignmentAnchors,
   emitter,
@@ -51,7 +50,11 @@ import { EDITOR_LAYER } from '../../../lib/constants'
 import { formatLinearMeasurement } from '../../../lib/measurements'
 import { createMovementSfxTick } from '../../../lib/sfx/movement-tick'
 import { sfxEmitter } from '../../../lib/sfx-bus'
-
+import {
+  surfaceAttachmentId,
+  surfaceFramePose,
+  updateSurfaceNode,
+} from '../../../lib/surface-attachment'
 import {
   projectAlignmentGuidesWorldToActiveBuildingLocal,
   resolveAlignmentForActiveBuilding,
@@ -62,7 +65,6 @@ import useEditor, {
   isGridSnapActive,
   isMagneticSnapActive,
 } from '../../../store/use-editor'
-
 import useFacingPose from '../../../store/use-facing-pose'
 import usePlacementPreview from '../../../store/use-placement-preview'
 import {
@@ -557,7 +559,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
     }
 
-    let lastSurfaceEvent: ItemEvent | CabinetEvent | ShelfEvent | null = null
+    let lastSurfaceEvent: NodeEvent<AnyNode> | null = null
     const feedback = createSurfaceRejectionFeedback()
     feedback.clear()
 
@@ -679,7 +681,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       return placeable
     }
 
-    const surfaceContext = (event: ItemEvent | CabinetEvent | ShelfEvent) => {
+    const surfaceContext = (event: NodeEvent<AnyNode>) => {
       lastSurfaceEvent = event
       return {
         ...getContext(),
@@ -742,10 +744,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       })
     }
 
-    const applyTransition = (
-      result: TransitionResult,
-      event?: ItemEvent | CabinetEvent | ShelfEvent,
-    ) => {
+    const applyTransition = (result: TransitionResult, event?: NodeEvent<AnyNode>) => {
       if (event) {
         surfacePointer.hit(event.node.id, event.nativeEvent.nativeEvent ?? event.nativeEvent)
         tickSurfaceMovementSfx(result.cursorPosition)
@@ -813,7 +812,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (draft) {
         Object.assign(draft, result.nodeUpdate)
         // One-time setup: put node in the right parent so it renders correctly
-        useScene.getState().updateNode(draft.id, result.nodeUpdate)
+        if (result.surfaceId !== undefined)
+          draftNode.updateSurface(result.nodeUpdate, result.surfaceId)
+        else updateSurfaceNode(draft.id, result.nodeUpdate)
         disableDraftRaycastNow()
       }
 
@@ -832,6 +833,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // ---- Init draft ----
     configRef.current.initDraft(gridPosition.current)
+    if (draftNode.current && surfaceAttachmentId(draftNode.current))
+      gridPosition.current.set(...draftNode.current.position)
     const preserveDragOffset = configRef.current.preserveDragOffset === true
     // The host the item was grabbed from + its pre-drag host-local position.
     // Each surface's grab anchor preserves the grab offset only on THAT host,
@@ -1278,7 +1281,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         ensureDraft(result)
       } else if (result.nodeUpdate.parentId) {
         // Existing draft (move mode): reparent to new wall
-        useScene.getState().updateNode(draftNode.current.id, result.nodeUpdate)
+        updateSurfaceNode(draftNode.current.id, result.nodeUpdate)
         if (result.stateUpdate.wallId) {
           useScene.getState().dirtyNodes.add(result.stateUpdate.wallId as AnyNodeId)
         }
@@ -1305,7 +1308,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         event.stopPropagation()
         applyTransition(enterResult)
         if (draftNode.current && enterResult.nodeUpdate.parentId) {
-          useScene.getState().updateNode(draftNode.current.id, enterResult.nodeUpdate)
+          updateSurfaceNode(draftNode.current.id, enterResult.nodeUpdate)
           if (enterResult.stateUpdate.wallId) {
             useScene.getState().dirtyNodes.add(enterResult.stateUpdate.wallId as AnyNodeId)
           }
@@ -1502,7 +1505,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         ensureDraft(result)
       } else if (result.nodeUpdate.parentId) {
         // Existing draft (move mode): reparent to the segment
-        useScene.getState().updateNode(draftNode.current.id, result.nodeUpdate)
+        updateSurfaceNode(draftNode.current.id, result.nodeUpdate)
       }
       return true
     }
@@ -1631,7 +1634,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!draftNode.current) {
         ensureDraft(result)
       } else if (result.nodeUpdate.parentId) {
-        useScene.getState().updateNode(draftNode.current.id, result.nodeUpdate)
+        updateSurfaceNode(draftNode.current.id, result.nodeUpdate)
         disableDraftRaycastNow()
       }
       if (draftNode.current) useLiveTransforms.getState().clear(draftNode.current.id)
@@ -1735,7 +1738,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // ---- Item Surface Handlers ----
 
-    const detachItemSurfaceToFloor = (event: ItemEvent | CabinetEvent) => {
+    const detachItemSurfaceToFloor = (event: NodeEvent<AnyNode>) => {
       hostSurfaceDragAnchor = null
       surfacePointer.clear()
       // Landing back on the floor: refresh the pointer surface cap from
@@ -1810,7 +1813,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         // parent-must-be-a-level guard and the item + grid stopped following
         // slab elevations for the rest of the drag).
         if (levelId) draft.parentId = levelId
-        useScene.getState().updateNode(draft.id, {
+        updateSurfaceNode(draft.id, {
           parentId: useViewer.getState().selection.levelId as string,
           position: floorPos,
           rotation,
@@ -1820,7 +1823,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       revalidate()
     }
 
-    const onItemEnter = (event: ItemEvent | CabinetEvent) => {
+    const onItemEnter = (event: NodeEvent<AnyNode>) => {
       if (event.node.type === 'cabinet' && placementState.current.surfaceItemId === event.node.id) {
         onItemMove(event)
         return
@@ -1842,11 +1845,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         ensureDraft(result)
       } else if (result.nodeUpdate.parentId) {
         // Existing draft (move mode): reparent to surface item
-        useScene.getState().updateNode(draftNode.current.id, result.nodeUpdate)
+        draftNode.updateSurface(result.nodeUpdate, result.surfaceId ?? null)
       }
     }
 
-    const onItemMove = (event: ItemEvent | CabinetEvent) => {
+    const onItemMove = (event: NodeEvent<AnyNode>) => {
       if (event.node.id === draftNode.current?.id) return
       releaseCommit = () => onItemClick(event)
       has3DPointerDrivenMoveRef.current = true
@@ -1865,7 +1868,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         event.stopPropagation()
         applyTransition(enterResult, event)
         if (draftNode.current && enterResult.nodeUpdate.parentId) {
-          useScene.getState().updateNode(draftNode.current.id, enterResult.nodeUpdate)
+          draftNode.updateSurface(enterResult.nodeUpdate, enterResult.surfaceId ?? null)
         }
         return
       }
@@ -1880,7 +1883,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         if (enterResult) {
           applyTransition(enterResult, event)
           if (draftNode.current && enterResult.nodeUpdate.parentId) {
-            useScene.getState().updateNode(draftNode.current.id, enterResult.nodeUpdate)
+            draftNode.updateSurface(enterResult.nodeUpdate, enterResult.surfaceId ?? null)
           }
         } else if (!feedback.reason) {
           detachItemSurfaceToFloor(event)
@@ -1906,7 +1909,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         itemMoveEvent.position[1],
         itemMoveEvent.position[2],
       )
-      const result = itemSurfaceStrategy.move(ctx, itemMoveEvent)
+      const result = itemSurfaceStrategy.move(ctx, itemMoveEvent, event)
       if (!result) {
         revalidate()
         return
@@ -1925,8 +1928,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       const draft = draftNode.current
       if (draft) {
         draft.position = result.gridPosition
+        if (event.node.type === 'procedural-item')
+          draftNode.updateSurface(result.nodeUpdate ?? {}, result.surfaceId ?? null)
         const mesh = sceneRegistry.nodes.get(draft.id)
-        if (mesh) mesh.position.set(...result.gridPosition)
+        if (mesh)
+          mesh.position.set(
+            ...surfaceFramePose(draft.parentId, surfaceAttachmentId(draft), draft, true).position,
+          )
 
         // Publish live transform for 2D floorplan
         useLiveTransforms.getState().set(draft.id, {
@@ -1938,7 +1946,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       revalidate()
     }
 
-    const onItemLeave = (event: ItemEvent | CabinetEvent) => {
+    const onItemLeave = (event: NodeEvent<AnyNode>) => {
       if (event.node.type === 'cabinet') return
       if (event.node.id === draftNode.current?.id) return
       if (placementState.current.surface !== 'item-surface') return
@@ -1953,7 +1961,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       detachItemSurfaceToFloor(event)
     }
 
-    const onItemClick = (event: ItemEvent | CabinetEvent) => {
+    const onItemClick = (event: NodeEvent<AnyNode>) => {
       gridDispatch.flush()
       if (feedback.reason) return
       // Click on the draft item itself. R3F dispatches click events to
@@ -1999,7 +2007,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         // the host's own click event is blocked by the cursor preview.
         if (ctx.state.surface === 'item-surface' && ctx.state.surfaceItemId) {
           const hostNode = useScene.getState().nodes[ctx.state.surfaceItemId as AnyNodeId]
-          if (hostNode && (hostNode.type === 'item' || hostNode.type === 'cabinet')) {
+          if (
+            hostNode &&
+            (hostNode.type === 'item' ||
+              hostNode.type === 'cabinet' ||
+              hostNode.type === 'procedural-item')
+          ) {
             const synthetic = { ...event, node: hostNode } as ItemEvent
             const result = itemSurfaceStrategy.click(ctx, synthetic)
             if (result) {
@@ -2084,7 +2097,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         ensureDraft(result)
       } else if (result.nodeUpdate.parentId) {
         // Existing draft (move mode): reparent to new ceiling
-        useScene.getState().updateNode(draftNode.current.id, result.nodeUpdate)
+        updateSurfaceNode(draftNode.current.id, result.nodeUpdate)
         if (result.stateUpdate.ceilingId) {
           useScene.getState().dirtyNodes.add(result.stateUpdate.ceilingId as AnyNodeId)
         }
@@ -2243,7 +2256,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!draftNode.current) {
         ensureDraft(result)
       } else if (result.nodeUpdate.parentId) {
-        useScene.getState().updateNode(draftNode.current.id, result.nodeUpdate)
+        updateSurfaceNode(draftNode.current.id, result.nodeUpdate)
       }
     }
 
@@ -2265,7 +2278,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         if (!draftNode.current) {
           ensureDraft(enterResult)
         } else if (enterResult.nodeUpdate.parentId) {
-          useScene.getState().updateNode(draftNode.current.id, enterResult.nodeUpdate)
+          updateSurfaceNode(draftNode.current.id, enterResult.nodeUpdate)
         }
         return
       }
@@ -2291,7 +2304,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (draft) {
         draft.position = result.gridPosition
         const mesh = sceneRegistry.nodes.get(draft.id)
-        if (mesh) mesh.position.set(...result.gridPosition)
+        if (mesh)
+          mesh.position.set(
+            ...surfaceFramePose(draft.parentId, surfaceAttachmentId(draft), draft, true).position,
+          )
         useLiveTransforms.getState().set(draft.id, {
           position: result.cursorPosition,
           rotation: result.cursorRotationY,
@@ -2446,7 +2462,21 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         // Keep both preview renderers on the rotated draft. The item renderer
         // consumes live node overrides, while the floor-plan renderer consumes
         // the live transform and placement-preview snapshot.
-        useLiveNodeOverrides.getState().set(draft.id, { rotation: draft.rotation })
+        const storedSurfacePose = surfaceFramePose(
+          draft.parentId,
+          surfaceAttachmentId(draft),
+          draft,
+          true,
+        )
+        if (surfaceAttachmentId(draft)) {
+          draftNode.updateSurface(
+            { position: draft.position, rotation: draft.rotation },
+            surfaceAttachmentId(draft),
+          )
+          mesh?.position.set(...storedSurfacePose.position)
+          mesh?.rotation.set(...storedSurfacePose.rotation)
+        }
+        useLiveNodeOverrides.getState().set(draft.id, { rotation: storedSurfacePose.rotation })
         const currentLive = useLiveTransforms.getState().get(draft.id)
         const livePosition: [number, number, number] =
           surface === 'floor'
@@ -2481,7 +2511,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
         if (feedback.reason && lastSurfaceEvent) {
           if (lastSurfaceEvent.node.type === 'shelf') onShelfMove(lastSurfaceEvent as ShelfEvent)
-          else onItemMove(lastSurfaceEvent as ItemEvent | CabinetEvent)
+          else onItemMove(lastSurfaceEvent as NodeEvent<AnyNode>)
         } else {
           feedback.clear()
           revalidate()
@@ -2603,9 +2633,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     emitter.on('ceiling:click', onCeilingClick)
     emitter.on('ceiling:leave', onCeilingLeave)
     emitter.on('cabinet:enter', onItemEnter)
+    emitter.on('procedural-item:enter' as never, onItemEnter)
     emitter.on('cabinet:move', onItemMove)
+    emitter.on('procedural-item:move' as never, onItemMove)
     emitter.on('cabinet:click', onItemClick)
+    emitter.on('procedural-item:click' as never, onItemClick)
     emitter.on('cabinet:leave', onItemLeave)
+    emitter.on('procedural-item:leave' as never, onItemLeave)
     emitter.on('shelf:enter', onShelfEnter)
     emitter.on('shelf:move', onShelfMove)
     emitter.on('shelf:click', onShelfClick)
@@ -2664,9 +2698,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       emitter.off('ceiling:click', onCeilingClick)
       emitter.off('ceiling:leave', onCeilingLeave)
       emitter.off('cabinet:enter', onItemEnter)
+      emitter.off('procedural-item:enter' as never, onItemEnter)
       emitter.off('cabinet:move', onItemMove)
+      emitter.off('procedural-item:move' as never, onItemMove)
       emitter.off('cabinet:click', onItemClick)
+      emitter.off('procedural-item:click' as never, onItemClick)
       emitter.off('cabinet:leave', onItemLeave)
+      emitter.off('procedural-item:leave' as never, onItemLeave)
       emitter.off('shelf:enter', onShelfEnter)
       emitter.off('shelf:move', onShelfMove)
       emitter.off('shelf:click', onShelfClick)
@@ -2725,6 +2763,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       draftParent?.type === 'item' ||
       draftParent?.type === 'shelf' ||
       draftParent?.type === 'cabinet' ||
+      draftParent?.type === 'procedural-item' ||
       (draftParent &&
         nodeRegistry.get(draftParent.type)?.capabilities.faceHost?.currentFaceId(draft))
     )

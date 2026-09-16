@@ -1,12 +1,9 @@
 import type {
   AnyNode,
   AnyNodeId,
-  CabinetEvent,
-  CabinetNode,
   CeilingEvent,
   CeilingNode,
   GridEvent,
-  ItemEvent,
   ItemNode,
   NodeEvent,
   RoofEvent,
@@ -857,11 +854,12 @@ export const ceilingStrategy = {
 // ============================================================================
 
 function resolveCatalogItemSurfacePlacement(
-  host: ItemNode | CabinetNode,
-  event: ItemEvent | CabinetEvent,
+  host: AnyNode,
+  event: NodeEvent<AnyNode>,
   dimensions: [number, number, number],
   worldYaw: number,
   onReject?: PlacementContext['onSurfaceReject'],
+  rawEvent = event,
 ) {
   const mesh = sceneRegistry.nodes.get(host.id)
   if (!mesh) return null
@@ -873,7 +871,8 @@ function resolveCatalogItemSurfacePlacement(
     host,
     childKind: 'item',
     childFootprint: { size: dimensions, rotationY: worldYaw - hostYaw },
-    hit,
+    hit: host.type === 'procedural-item' ? (itemEventToSurfaceHit(host, rawEvent) ?? hit) : hit,
+    origin: host.type === 'procedural-item' ? hit.point : undefined,
     scene: createSceneApi(useScene),
     snapScalar: snapToGrid,
     checkFootprint: true,
@@ -883,6 +882,7 @@ function resolveCatalogItemSurfacePlacement(
   return {
     position: [...placement.position] as [number, number, number],
     rotationY: placement.rotationY,
+    surfaceId: placement.surfaceId,
     worldPosition: mesh.localToWorld(new Vector3(...placement.position)).toArray(),
   }
 }
@@ -890,7 +890,13 @@ function resolveCatalogItemSurfacePlacement(
 export function validCatalogCounterPose(ctx: PlacementContext): boolean {
   const hostId = ctx.state.surface === 'shelf-surface' ? ctx.state.shelfId : ctx.state.surfaceItemId
   const host = hostId ? useScene.getState().nodes[hostId as AnyNodeId] : undefined
-  if (host?.type !== 'cabinet' && host?.type !== 'shelf' && host?.type !== 'item') return true
+  if (
+    host?.type !== 'cabinet' &&
+    host?.type !== 'shelf' &&
+    host?.type !== 'item' &&
+    host?.type !== 'procedural-item'
+  )
+    return true
   if (!ctx.draftItem) return false
   const placement = resolveSurfacePlacement({
     host,
@@ -915,7 +921,7 @@ export const itemSurfaceStrategy = {
    * Handle item:enter — transition from floor to an item surface.
    * Returns null if: item has no surface, our item doesn't fit, or it's the draft itself.
    */
-  enter(ctx: PlacementContext, event: ItemEvent | CabinetEvent): TransitionResult | null {
+  enter(ctx: PlacementContext, event: NodeEvent<AnyNode>): TransitionResult | null {
     // Only floor items can be placed on surfaces
     if (ctx.asset.attachTo) return null
 
@@ -944,6 +950,7 @@ export const itemSurfaceStrategy = {
     const draftRotation = ctx.draftItem?.rotation ?? [0, 0, 0]
 
     return {
+      surfaceId: pose.surfaceId,
       stateUpdate: { surface: 'item-surface', surfaceItemId: surfaceItem.id },
       nodeUpdate: {
         position: pose.position,
@@ -961,16 +968,13 @@ export const itemSurfaceStrategy = {
   /**
    * Handle item:move — update position while on an item surface.
    */
-  move(ctx: PlacementContext, event: ItemEvent | CabinetEvent): PlacementResult | null {
+  move(ctx: PlacementContext, event: NodeEvent<AnyNode>, rawEvent = event): PlacementResult | null {
     if (ctx.state.surface !== 'item-surface') return null
     if (!(ctx.state.surfaceItemId && ctx.draftItem)) return null
     if (event.node.id !== ctx.state.surfaceItemId) return null
 
     const nodes = useScene.getState().nodes
-    const surfaceItem = nodes[ctx.state.surfaceItemId as AnyNodeId] as
-      | ItemNode
-      | CabinetNode
-      | undefined
+    const surfaceItem = nodes[ctx.state.surfaceItemId as AnyNodeId]
     if (!surfaceItem) return null
 
     const pose = resolveCatalogItemSurfacePlacement(
@@ -979,10 +983,12 @@ export const itemSurfaceStrategy = {
       getScaledDimensions(ctx.draftItem),
       ctx.currentCursorRotationY,
       ctx.onSurfaceReject,
+      rawEvent,
     )
     if (!pose) return null
 
     return {
+      surfaceId: pose.surfaceId,
       gridPosition: pose.position,
       cursorPosition: pose.worldPosition,
       cursorRotationY: ctx.currentCursorRotationY,
@@ -995,7 +1001,7 @@ export const itemSurfaceStrategy = {
   /**
    * Handle item:click — commit placement on item surface.
    */
-  click(ctx: PlacementContext, _event: ItemEvent | CabinetEvent): CommitResult | null {
+  click(ctx: PlacementContext, _event: NodeEvent<AnyNode>): CommitResult | null {
     if (ctx.state.surface !== 'item-surface') return null
     if (!(ctx.draftItem && ctx.state.surfaceItemId)) return null
     if (_event.node.id !== ctx.state.surfaceItemId) return null

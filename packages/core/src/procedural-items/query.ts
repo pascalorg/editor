@@ -206,7 +206,7 @@ export function nodeLevelFrame(id: string, nodes: QueryNodes, seen = new Set<str
   const parent = node.parentId ? nodes[node.parentId] : undefined
   if (!node.parentId) return frame(pose.position, pose.rotation)
   let parentFrame = nodeLevelFrame(node.parentId, nodes, seen)
-  if (isProceduralItem(parent)) {
+  if (isProceduralItem(parent) && parent.attachments[node.id] !== undefined) {
     const surface = evaluateRecipe(parent.recipe, parent.parameters).surfaces.find(
       (s) => s.id === parent.attachments[node.id],
     )
@@ -329,6 +329,7 @@ export function validateProceduralRelations(raw: AnyNode | ProceduralItemNode, n
     if (!child || child.parentId !== node.id) throw new Error('Invalid hosted child link')
     if (!(isProceduralItem(child) || child.type === 'item'))
       throw new Error('Unsupported hosted child')
+    if (node.attachments[childId] === undefined) continue
     const surface = evaluation.surfaces.find((s) => s.id === node.attachments[childId])
     if (!surface) throw new Error('Choose a named attachment surface for the child')
     const b = attachmentBounds(child)
