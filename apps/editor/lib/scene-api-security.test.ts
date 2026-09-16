@@ -34,6 +34,19 @@ test('requires a token for non-loopback scene API requests', async () => {
   expect(response?.status).toBe(503)
   expect(await response?.json()).toEqual({ error: 'scene_api_token_required' })
 })
+test('allows configured browser origins without a token', () => {
+  delete process.env.PASCAL_SCENE_API_TOKEN
+  process.env.PASCAL_SCENE_API_ORIGINS = 'https://app.example'
+  const request = new Request('https://editor.example/api/scenes', {
+    headers: {
+      host: 'editor.example',
+      origin: 'https://app.example',
+    },
+  })
+
+  expect(guardSceneApiRequest(request)).toBeNull()
+})
+
 
 test('accepts bearer token auth when configured', () => {
   process.env.PASCAL_SCENE_API_TOKEN = 'secret'

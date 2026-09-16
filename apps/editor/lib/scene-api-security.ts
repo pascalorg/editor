@@ -64,6 +64,15 @@ function validateOrigin(request: Request): NextResponse | null {
 
 function validateAuth(request: Request): NextResponse | null {
   const token = process.env.PASCAL_SCENE_API_TOKEN
+  const origin = request.headers.get('origin')
+
+  // A configured browser origin is already protected by the Origin check.
+  // Reverse proxies make the request host non-loopback, so host-based
+  // loopback detection cannot identify same-origin browser calls reliably.
+  if (origin && configuredOrigins().has(normalizeOrigin(new URL(origin)))) {
+    return null
+  }
+
   if (!token) {
     if (isLoopbackRequest(request)) return null
     return sceneApiJson(request, { error: 'scene_api_token_required' }, { status: 503 })
