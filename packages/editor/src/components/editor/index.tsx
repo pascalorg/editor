@@ -1352,10 +1352,9 @@ function EditorContent({
 
   // Load on mount, project switches, and explicit retry attempts.
   useEffect(() => {
-    void sceneLoadAttempt
     let cancelled = false
 
-    async function load() {
+    async function load(attempt: number) {
       isLoadingSceneRef.current = true
       setSceneLoadError(null)
       setHasLoadedInitialScene(false)
@@ -1369,7 +1368,7 @@ function EditorContent({
       let failed = false
       try {
         const sceneGraph = onLoad ? await onLoad() : loadSceneFromLocalStorage()
-        if (!cancelled) {
+        if (!cancelled && attempt === sceneLoadAttempt) {
           applySceneGraphToEditor(sceneGraph)
           setIsViewerSceneReady(false)
           setSceneReadyKey((key) => key + 1)
@@ -1395,7 +1394,7 @@ function EditorContent({
       }
     }
 
-    load()
+    load(sceneLoadAttempt)
 
     return () => {
       cancelled = true
