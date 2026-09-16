@@ -5,6 +5,8 @@ export type Expr =
   | number
   | string
   | { op: 'add' | 'sub' | 'mul' | 'div' | 'min' | 'max'; args: Expr[] }
+  | { op: 'floor' | 'ceil' | 'round' | 'abs'; args: [Expr] }
+  | { op: 'mod'; args: [Expr, Expr] }
 export type Vec3 = [number, number, number]
 const id = z.string().regex(/^[a-z][a-z0-9_]{0,47}$/)
 const finite = z.number().finite().min(-1000).max(1000)
@@ -15,6 +17,14 @@ const expression: z.ZodType<Expr> = z.lazy(() =>
     z.strictObject({
       op: z.enum(['add', 'sub', 'mul', 'div', 'min', 'max']),
       args: z.array(expression).min(2).max(8),
+    }),
+    z.strictObject({
+      op: z.enum(['floor', 'ceil', 'round', 'abs']),
+      args: z.tuple([expression]),
+    }),
+    z.strictObject({
+      op: z.literal('mod'),
+      args: z.tuple([expression, expression]),
     }),
   ]),
 )
@@ -236,6 +246,25 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
       case 'div':
         result = a.reduce((x, y) => x / y)
         break
+      case 'floor':
+        result = Math.floor(a[0]!)
+        break
+      case 'ceil':
+        result = Math.ceil(a[0]!)
+        break
+      case 'round':
+        result = Math.round(a[0]!)
+        break
+      case 'abs':
+        result = Math.abs(a[0]!)
+        break
+      case 'mod': {
+        const divisor = a[1]!
+        if (divisor <= 0) throw new Error('Modulo divisor must be positive')
+        const remainder = a[0]! % divisor
+        result = remainder < 0 ? remainder + divisor : remainder === 0 ? 0 : remainder
+        break
+      }
       case 'min':
         result = Math.min(...a)
         break
