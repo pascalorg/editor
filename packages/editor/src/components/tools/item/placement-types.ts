@@ -5,6 +5,7 @@ import type {
   CeilingNode,
   ItemNode,
   LevelNode,
+  SurfaceRejectReason,
   WallNode,
 } from '@pascal-app/core'
 import type { Vector3 } from 'three'
@@ -56,6 +57,7 @@ export interface PlacementState {
  * Read-only snapshot passed to every strategy call.
  */
 export interface PlacementContext {
+  onSurfaceReject?: (reason: SurfaceRejectReason) => void
   asset: AssetInput
   levelId: LevelNode['id'] | null
   draftItem: ItemNode | null

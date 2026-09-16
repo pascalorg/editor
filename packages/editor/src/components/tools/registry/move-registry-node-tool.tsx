@@ -29,6 +29,7 @@ import {
   resolveFacingIndicator,
   resolveFrozenFloorPlacementPatch,
   resolveSupportSlabPatch,
+  type SurfaceRejectReason,
   sceneRegistry,
   spatialGridManager,
   useLiveNodeOverrides,
@@ -70,6 +71,7 @@ import {
   type PointerSupportSurface,
   resolvePointerSupportSurface,
 } from '../shared/pointer-support-cap'
+import { SurfaceRejectionLabel } from '../shared/surface-rejection'
 import { createItemSurfaceGridDispatch, createRegistryItemSurfaceMove } from './item-surface-move'
 
 /** Snap a world-plan coordinate to the editor's active grid step (0.5 / 0.25
@@ -355,6 +357,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     [collides, parentFrameCollides, resolvedFootprint],
   )
   const [valid, setValid] = useState(true)
+  const [surfaceRejection, setSurfaceRejection] = useState<SurfaceRejectReason | null>(null)
   const previewRotationY = useCallback(
     (rotationY = rotationRef.current) =>
       parentFrame && frameParent
@@ -566,6 +569,13 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     // override so the user can drop on top of an existing item on purpose. Only
     // shelves show the box, so this no-ops for every other movable kind.
     const recomputeValidity = () => {
+      const rejection = itemSurfaceMove?.rejection ?? null
+      setSurfaceRejection(rejection)
+      if (rejection) {
+        validRef.current = false
+        setValid(false)
+        return
+      }
       if (!boxDimensions && !movableValidityConfig) return
       if (altRef.current || itemSurfaceMove?.hosted) {
         const valid = !itemSurfaceMove?.hosted || itemSurfaceMove.valid
@@ -724,8 +734,10 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       applySurfacePose(pose)
       applyMeshPose(pose.position)
     }
+    let lastSurfaceEvent: NodeEvent<AnyNode> | null = null
     const onItemMove = (event: NodeEvent<AnyNode>) => {
       if (committed || !resolvedFootprint || !itemSurfaceMove) return
+      lastSurfaceEvent = event
       const pose = itemSurfaceMove.enter(event, resolvedFootprint, rotationRef.current)
       if (pose) {
         applySurfacePose(pose)
@@ -749,7 +761,10 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
 
     const onGridMove = (event: GridEvent) => {
       const blocked = Boolean(itemSurfaceMove?.blocksGrid(event, cameraRef.current))
-      if (!committed && !blocked) detachSurface(event.position)
+      if (!committed && !blocked) {
+        itemSurfaceMove?.clearRejectionForGrid(event)
+        detachSurface(event.position)
+      }
       if (committed || blocked) return
       // The pointer decides the target surface AND the cursor plan point,
       // both resolved from the true camera ray in one place. The event's
@@ -1038,7 +1053,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       if (committed) return
       gridDispatch.flush()
       movementSfx.flush()
-      if (itemSurfaceMove?.hosted && !itemSurfaceMove.valid) return
+      if (itemSurfaceMove?.rejection || (itemSurfaceMove?.hosted && !itemSurfaceMove.valid)) return
       // Ignore a commit that fires before the cursor has moved into place —
       // it's the stray trailing click of whatever armed this move, not a
       // deliberate drop. Prevents preset re-arm from double-placing.
@@ -1256,7 +1271,9 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // Rotating the fitting swings its collars — connected ducts follow.
       previewConnectivity(position, rotationRef.current)
       // Rotation changes the footprint's collision span — re-check validity.
-      recomputeValidity()
+      if (!itemSurfaceMove?.hosted && itemSurfaceMove?.rejection && lastSurfaceEvent)
+        onItemMove(lastSurfaceEvent)
+      else recomputeValidity()
     }
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key === 'Alt') {
@@ -1400,6 +1417,14 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   if (boxDimensions && !dragBounds?.center) {
     return (
       <group ref={previewGroupRef}>
+        <SurfaceRejectionLabel
+          reason={surfaceRejection}
+          position={[
+            cursorPosition[0],
+            cursorPosition[1] + boxDimensions[1] + 0.15,
+            cursorPosition[2],
+          ]}
+        />
         <PlacementBox
           dimensions={boxDimensions}
           position={cursorPosition}
@@ -1417,11 +1442,27 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
 
   return (
     <group ref={previewGroupRef}>
+      <SurfaceRejectionLabel
+        reason={surfaceRejection}
+        position={[
+          dragCenterPosition[0],
+          dragCenterPosition[1] + (dragBounds?.size[1] ?? 0) / 2 + 0.15,
+          dragCenterPosition[2],
+        ]}
+      />
       <CursorSphere color="#a78bfa" height={2.5} position={dragCenterPosition} />
       <DragBoundingBox
         center={dragBounds?.center}
         centerY={dragBounds?.centerY}
-        color={boxDimensions ? (valid ? VALID_COLOR : INVALID_COLOR) : undefined}
+        color={
+          surfaceRejection
+            ? INVALID_COLOR
+            : boxDimensions
+              ? valid
+                ? VALID_COLOR
+                : INVALID_COLOR
+              : undefined
+        }
         nodeId={node.id}
         position={cursorPosition}
         rotationY={cursorRotationY}

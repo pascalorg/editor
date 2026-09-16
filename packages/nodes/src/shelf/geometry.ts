@@ -1,4 +1,9 @@
-import { type GeometryContext, getMaterialPresetByRef } from '@pascal-app/core'
+import {
+  SHELF_BOARD_INSET as BOARD_INSET,
+  type GeometryContext,
+  getMaterialPresetByRef,
+  shelfBoardDimensions,
+} from '@pascal-app/core'
 import {
   applyMaterialPresetToMaterials,
   createDefaultMaterial,
@@ -63,15 +68,6 @@ function stampShelfSlot(mesh: Mesh, slotId: ShelfSlotId): Mesh {
   return mesh
 }
 
-// A board's front/back faces land on the frame's outer faces (posts / back panel)
-// — coplanar surfaces the depth buffer can't separate, which flickers as z-fighting.
-// Recess 1mm so the board sits just inside: the meshes still overlap (no gap), but
-// no faces are coplanar. Depth is always recessed (boards reach into the back panel
-// / posts). Width is recessed only at call sites where boards span OVER posts
-// (open-rack / no-sides bookshelf); boards that ABUT side panels keep full width so
-// they meet the sides flush — abutting faces are back-to-back and never fight.
-const BOARD_INSET = 0.001
-
 // Frame members that pass under the top board (dividers / back / corner posts) reach
 // y=unitHeight, coplanar with the top board's top face → z-fighting. Drop their top 1mm so
 // the board cleanly caps them; their bottom stays on the floor.
@@ -88,11 +84,7 @@ function boardGeometry(
   depth: number,
   insetWidth = false,
 ): BoxGeometry {
-  return new BoxGeometry(
-    insetWidth ? Math.max(width - 2 * BOARD_INSET, 0.001) : width,
-    thickness,
-    Math.max(depth - 2 * BOARD_INSET, 0.001),
-  )
+  return new BoxGeometry(...shelfBoardDimensions(width, thickness, depth, insetWidth))
 }
 
 export function buildShelfGeometry(

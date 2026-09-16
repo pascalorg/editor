@@ -206,8 +206,9 @@ capability applies. Neither `hostable` nor `hostable.parents` gates the session.
 subscribes to registered physical host kinds and lets their surface providers accept
 or reject the child; the protocol's non-physical denylist excludes containers and guides.
 Mounted procedural recipes stay in their separate session. The shared surface resolver owns shelf row election and fit. Shelf
-entry checks the upward normal and overall width/depth; subsequent moves can switch
-rows over side faces without repeating those entry checks. Offset procedural bounds
+entry checks the upward normal; subsequent moves can switch rows over side faces.
+Every shelf placement checks the board region, including movement and rotation; see
+[Surface fit policy](#surface-fit-policy). Offset procedural bounds
 keep the footprint centered under a new cursor hit and put its bottom on the board.
 
 While hosted, grid dispatch waits until both DOM listeners have run and matches the
@@ -304,3 +305,64 @@ When emitting a `FloorplanGeometry` polygon that should remain interactive but v
 ## Procedural ceiling placement
 
 Procedural recipes declare `mounting: { attachTo: 'ceiling', reference }` with a named, non-repeated +Y top surface. The shared procedural mounted move session handles wall and ceiling previews, snapping, collision checks, Alt force-place for collisions, fresh subtree commits and single-step undo. Ceiling enter/move/click events use ceiling-local XZ; grid fallback shows an unhosted red ghost and cannot commit. The parent is the ceiling, stored Y is zero at the reference, and only yaw rotates (R/T); the rendered pose subtracts the rotated reference so the design hangs flush below the ceiling underside. Core validation enforces polygon containment, holes and level height even with Alt. The 2D move target finds ceiling polygons and uses the same session; glyphs resolve the ceiling frame, while parameter arrows portal through the ceiling frame and floor elevation never applies.
+
+
+## Surface fit policy
+
+`resolveSurfacePlacement` owns fit for both movers. Strictness follows what the
+provider knows about the surface:
+
+- **Declared:** a stable, non-null surface ID requires a `region`. The child's
+  rotated hull must fit inside that region after snapping, excluding holes. The
+  hull projects all eight corners when full XYZ rotation or offset bounds are
+  supplied. Rectangle containment allows 1e-6 m per edge, so a centred, unrotated
+  object exactly matching a board fits despite floating-point noise.
+- **Hit-derived:** `id: null` has no region. An upward hit identifies support but
+  cannot describe an armrest or cushion's outline. The best-effort test compares
+  the rotated child's XZ spans to the host's available bounds, with a 1e-6 m
+  tolerance. It does not constrain the hit position to a fictitious flat top.
+  Hosts without measurable bounds remain permissive.
+
+`HostSurface` is a union: a non-null ID requires `region`, while a null ID has none.
+`SurfaceProvider.surfaces()` returns only `DeclaredHostSurface[]`. Untyped plugins
+that resolve a declared surface without a region throw an explicit contract error;
+they never silently enter the hit-derived fit path. The low-level
+`checkFootprint: false` option is for unchecked pose proposals, not valid drops:
+it still enforces declaration integrity and acceptance. Both shelf movers check
+fit on entry and movement and revalidate rotations before commit.
+
+Provider audit:
+
+| Provider | Published extent |
+|---|---|
+| Shelf rows | Centred board rectangles. Depth is `D - 0.002 m`. Wall shelves use width `W`; bookshelves with sides and cubbies use `W - 2 × thickness`; open racks and bookshelves without sides use `W - 0.002 m`. A bookshelf's optional bottom board without sides uses `W`, matching its mesh. The mesh and adapter share the board-dimension helper. |
+| Cabinet countertops and bars | Each real countertop span and bar slab's rectangle, with its actual centre and half-extents. Counter holes cover sink bowls, faucets and hob footprints. Tall/wall/disabled spans publish nothing. |
+| Procedural named surfaces | Evaluated recipe width/depth divided by two, in each surface's own frame. |
+| Catalog item hit provider | No declared extent: authored `asset.surface.height` supplies only Y, not a usable XZ boundary. Retains ray-selected freeform placement and the rotated best-effort host-bounds check. |
+| Generic hit-derived provider | No declared extent: the upward mesh hit supplies support, optionally bounded by `dragBounds` or `floorPlaced.footprint`. Legacy top-height/side metadata alone is not a region declaration. |
+
+Row election, first-row ties, shelf-volume stickiness and the existing grid snap
+functions remain unchanged. In 2D, current-host retention uses this same resolver
+and board region; its previous extra whole-shelf rectangle check is gone. Fresh
+host acquisition, surface cycling and the existing exit-to-level behavior remain
+in surface-hosting slice F. A 2D exit currently chooses the level rather than
+refusing a host drop, so it does not publish a surface-refusal label.
+
+A refusal in 3D sets the existing footprint preview red and places a short status
+label beside it. `onReject` reaches both movers; the matching floor event cannot
+erase the reason or commit the refused drop to the floor. A new floor move or a
+valid surface clears it, as do cleanup/cancel. Alt can bypass collision checks,
+but not a surface refusal. Rotation retries the attempted host when needed.
+
+| Rejection | Preview wording |
+|---|---|
+| Footprint outside declared region or exceeding hit-derived host bounds | Doesn't fit this surface |
+| Hit inside a hole, or contained footprint overlapping a hole | Over a sink or hob cutout |
+| Host ineligible or child rejected by its acceptance predicate | This host doesn't accept this kind of object |
+| No supporting surface or invalid hit | No supporting surface here |
+
+The frozen fit table pins both acceptance and refusal for each adapter, with exact
+per-verdict counts. Shelf acceptance sweeps every fixture board through interior,
+near-edge, centred equality and rotated placements, including grid-on cases. Captured
+expected poses stay static during tests; changing fit policy requires reviewing the
+verdict changes and retaining coverage of both outcomes.

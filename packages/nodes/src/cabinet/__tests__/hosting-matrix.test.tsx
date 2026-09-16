@@ -29,6 +29,7 @@ import { Children, cloneElement, isValidElement, type ReactNode, useMemo } from 
 import { Group, Vector3 } from 'three'
 import { z } from 'zod'
 import { MoveRegistryNodeTool } from '../../../../editor/src/components/tools/registry/move-registry-node-tool'
+import { SurfaceRejectionLabel } from '../../../../editor/src/components/tools/shared/surface-rejection'
 import useEditor from '../../../../editor/src/store/use-editor'
 import useInteractionScope from '../../../../editor/src/store/use-interaction-scope'
 import { itemDefinition } from '../../item/definition'
@@ -220,7 +221,20 @@ function hit(run: Cabinet, local: [number, number, number] = [0, 0.85, 0]): Cabi
 function withoutLabels(element: ReactNode): ReactNode {
   if (!isValidElement<{ children?: ReactNode }>(element)) return element
   if (element.type === Html) return null
+  if (element.type === SurfaceRejectionLabel) {
+    const props = element.props as Parameters<typeof SurfaceRejectionLabel>[0]
+    const label = SurfaceRejectionLabel(props)
+    return (
+      <group
+        name="surface-rejection"
+        userData={{ reason: props.reason, message: label?.props.children.props.children ?? null }}
+      />
+    )
+  }
   return cloneElement(element, {}, Children.map(element.props.children, withoutLabels))
+}
+function RegistryMover({ node }: { node: AnyNode }) {
+  return withoutLabels(MoveRegistryNodeTool({ node }))
 }
 function CatalogMover() {
   const node = useMemo(() => structuredClone(catalog), [])
@@ -259,7 +273,7 @@ for (const kind of ['item top', 'shelf board', 'countertop', 'bar ledge'] as con
       }
       useEditor.getState().setMovingNode(child)
       const renderer = await create(
-        mover === 'catalog' ? <CatalogMover /> : <MoveRegistryNodeTool node={child} />,
+        mover === 'catalog' ? <CatalogMover /> : <RegistryMover node={child} />,
       )
       try {
         for (const dx of [0, 0.12, 0.27]) {
@@ -333,7 +347,7 @@ test.each([
   useScene.getState().createNode(host, level.id)
   sceneRegistry.nodes.set(host.id, new Group())
   const child = assetType === 'catalog' ? catalog : design
-  const renderer = await create(<MoveRegistryNodeTool node={child} />)
+  const renderer = await create(<RegistryMover node={child} />)
   const event = hit(host as Cabinet, [0, 0.84, 0])
   try {
     await act(async () => emitter.emit('test-surface:move' as never, event as never))
@@ -346,3 +360,119 @@ test.each([
     await renderer.unmount()
   }
 })
+
+for (const mover of ['catalog', 'registry procedural'] as const) {
+  for (const order of ['grid first', 'host first'] as const) {
+    test.each([
+      ['fit', "Doesn't fit this surface"],
+      ['cutout', 'Over a sink or hob cutout'],
+      ['kind', "This host doesn't accept this kind of object"],
+    ] as const)(`${mover}, ${order}: %s refusal reaches the invalid preview and blocks floor commits`, async (reason, message) => {
+      const run = fixture({}, [
+        CabinetModuleNode.parse({
+          width: 0.8,
+          position: [0, 0.1, 0],
+          stack: [{ id: 'sink', type: 'sink' }],
+        }),
+        CabinetModuleNode.parse({ width: 0.8, position: [2, 0.1, 0] }),
+      ])
+      let accepts = reason !== 'kind'
+      const capabilities = nodeRegistry.get('cabinet')!.capabilities
+      capabilities.surfaces = {
+        ...capabilities.surfaces,
+        hosting: { ...getSurfaceProvider(run), accepts: () => accepts },
+      }
+      const child = mover === 'catalog' ? catalog : design
+      useEditor.getState().setMovingNode(child)
+      const renderer = await create(
+        mover === 'catalog' ? <CatalogMover /> : <RegistryMover node={child} />,
+      )
+      const label = () =>
+        renderer.scene.findByProps({ name: 'surface-rejection' }).instance.userData
+      try {
+        const event = hit(run, [reason === 'fit' ? 2.39 : reason === 'cutout' ? 0 : 2, 0.85, 0.01])
+        const nativeEvent = {}
+        event.nativeEvent = { nativeEvent } as CabinetEvent['nativeEvent']
+        const grid = {
+          position: event.position,
+          localPosition: event.position,
+          nativeEvent,
+        } as never
+        await act(async () => {
+          if (order === 'grid first') emitter.emit('grid:move', grid)
+          emitter.emit('cabinet:move', event)
+          if (order === 'host first') emitter.emit('grid:move', grid)
+        })
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 5))
+        })
+        expect(label().message).toBe(message)
+        const root = renderer.scene.children[0]!.instance as Group
+        let invalidColor = false
+        root.traverse((object) => {
+          const material = (object as { material?: { color?: { getHex(): number } } }).material
+          if (material?.color?.getHex() === 0xef4444) invalidColor = true
+        })
+        expect(invalidColor).toBe(true)
+        await act(async () =>
+          window.dispatchEvent(Object.assign(new Event('keydown'), { key: 'Alt' })),
+        )
+        expect(label().message).toBe(message)
+        await act(async () => {
+          emitter.emit('cabinet:click', event)
+          emitter.emit('grid:click', grid)
+          emitter.emit('node:click', event as never)
+        })
+        expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+        expect(useEditor.getState().movingNode).not.toBeNull()
+        await act(async () =>
+          window.dispatchEvent(Object.assign(new Event('keyup'), { key: 'Alt' })),
+        )
+        accepts = true
+        await act(async () => emitter.emit('cabinet:move', hit(run, [2, 0.85, 0.01])))
+        expect(label().message).toBeNull()
+        expect(useScene.getState().nodes[child.id]!.parentId).toBe(run.id)
+        await act(async () => emitter.emit('cabinet:click', hit(run, [2, 0.85, 0.01])))
+        expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+      } finally {
+        await renderer.unmount()
+      }
+    })
+  }
+}
+
+for (const mover of ['catalog', 'registry procedural', 'registry catalog'] as const) {
+  test(`${mover}: rotating a hosted shelf object into overhang refuses the drop and rotating back recovers`, async () => {
+    const shelf = ShelfNode.parse({ parentId: level.id, width: 1.2, depth: 0.5, height: 1 })
+    useScene.getState().createNode(shelf, level.id)
+    sceneRegistry.nodes.set(shelf.id, new Group())
+    const child = mover === 'registry procedural' ? design : catalog
+    useEditor.getState().setMovingNode(child)
+    const renderer = await create(
+      mover === 'catalog' ? <CatalogMover /> : <RegistryMover node={child} />,
+    )
+    const event = hit(shelf as unknown as Cabinet, [0, 1.04, 0])
+    const label = () => renderer.scene.findByProps({ name: 'surface-rejection' }).instance.userData
+    const key = (key: string) => window.dispatchEvent(Object.assign(new Event('keydown'), { key }))
+    const inputElement = globalThis.HTMLInputElement
+    const textElement = globalThis.HTMLTextAreaElement
+    globalThis.HTMLInputElement = class {} as typeof HTMLInputElement
+    globalThis.HTMLTextAreaElement = class {} as typeof HTMLTextAreaElement
+    try {
+      await act(async () => emitter.emit('shelf:move', event as never))
+      expect(useScene.getState().nodes[child.id]!.parentId).toBe(shelf.id)
+      await act(async () => key('r'))
+      expect(label().message).toBe("Doesn't fit this surface")
+      await act(async () => emitter.emit('shelf:click', event as never))
+      expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+      await act(async () => key('t'))
+      expect(label().message).toBeNull()
+      await act(async () => emitter.emit('shelf:click', event as never))
+      expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    } finally {
+      await renderer.unmount()
+      globalThis.HTMLInputElement = inputElement
+      globalThis.HTMLTextAreaElement = textElement
+    }
+  })
+}

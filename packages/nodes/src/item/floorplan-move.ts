@@ -15,7 +15,6 @@ import {
   type RoofSegmentNode,
   resolveSurfacePlacement,
   roofFacePointToSegment,
-  surfaceRegionContainsFootprint,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
@@ -373,16 +372,7 @@ function buildFloorItemSession(
           origin: local,
           scene: createSceneApi(useScene),
         })
-        const contained =
-          host.type !== 'shelf' ||
-          surfaceRegionContainsFootprint(
-            { kind: 'rect', size: [host.width / 2, host.depth / 2] },
-            local,
-            dimensions,
-            node.rotation,
-            localBounds,
-          )
-        if (pose && contained && Math.abs(pose.position[1] - node.position[1]) < 1e-5) {
+        if (pose && Math.abs(pose.position[1] - node.position[1]) < 1e-5) {
           lastPatch = { parentId: host.id, position: [...pose.position], supportSlabId: undefined }
           useLiveNodeOverrides.getState().set(node.id as AnyNodeId, lastPatch)
           useScene.getState().markDirty(node.id as AnyNodeId)

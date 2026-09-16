@@ -18,6 +18,7 @@ import {
   resolveFrozenFloorPlacementPatch,
   resolveLevelId,
   type ShelfEvent,
+  type SurfaceRejectReason,
   sceneRegistry,
   useLiveNodeOverrides,
   useLiveTransforms,
@@ -81,6 +82,7 @@ import {
   resolvePointerSupportSurface,
 } from '../shared/pointer-support-cap'
 import { createShelfStickiness } from '../shared/shelf-stickiness'
+import { createSurfaceRejectionFeedback, SurfaceRejectionLabel } from '../shared/surface-rejection'
 import { shouldCreateFloorDraft } from './draft-creation'
 import { commitFaceHostClick, resolveFaceHostPreviewCommit } from './face-host-commit'
 import {
@@ -327,6 +329,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   const pointerSupportCapRef = useRef<number | null>(null)
   const pointerSupportSurfaceRef = useRef<PointerSupportSurface | null>(null)
   const frozenSupportSlabIdRef = useRef<string | undefined>(undefined)
+  const [surfaceRejection, setSurfaceRejection] = useState<SurfaceRejectReason | null>(null)
   const [dimensionBounds, setDimensionBounds] = useState<PreviewBounds | null>(null)
 
   // Live camera ref — the shelf-stickiness test reconstructs the cursor world
@@ -555,10 +558,15 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
     }
 
+    let lastSurfaceEvent: ItemEvent | CabinetEvent | ShelfEvent | null = null
+    const feedback = createSurfaceRejectionFeedback(setSurfaceRejection)
+    feedback.clear()
+
     // ---- Helpers ----
 
     const getContext = () => ({
       asset,
+      onSurfaceReject: (reason: SurfaceRejectReason) => feedback.reject(reason),
       levelId: useViewer.getState().selection.levelId,
       draftItem: draftNode.current,
       gridPosition: gridPosition.current,
@@ -642,14 +650,24 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const surfacePointer = createItemSurfacePointerArbitration()
-    let counterHitValid = true
     const revalidate = (): boolean => {
-      const placeable =
-        counterHitValid && (altFreeRef.current || checkCanPlace(getContext(), validators))
+      const fits = checkCanPlace(getContext(), validators)
+      const placeable = !feedback.reason && (altFreeRef.current || fits)
       const color = placeable ? 0x22_c5_5e : 0xef_44_44 // green-500 : red-500
       edgeMaterial.color.setHex(color)
       basePlaneMaterial.color.setHex(color)
       return placeable
+    }
+
+    const surfaceContext = (event: ItemEvent | CabinetEvent | ShelfEvent) => {
+      lastSurfaceEvent = event
+      return {
+        ...getContext(),
+        onSurfaceReject: (reason: SurfaceRejectReason) => {
+          feedback.reject(reason, event.nativeEvent.nativeEvent ?? event.nativeEvent)
+          revalidate()
+        },
+      }
     }
 
     // Tool visuals are rendered inside the building-local ToolManager group, so all cursor
@@ -700,7 +718,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         surfacePointer.hit(event.node.id, event.nativeEvent.nativeEvent ?? event.nativeEvent)
         tickSurfaceMovementSfx(result.cursorPosition)
       }
-      counterHitValid = true
+      feedback.clear()
       // Alignment guides are floor-only; clear them when the cursor moves
       // onto a wall / ceiling / item surface (only those paths call this).
       useAlignmentGuides.getState().clear()
@@ -1040,7 +1058,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         detachItemSurfaceToFloor(surfaceEvent as unknown as ItemEvent)
       }
 
-      if (placementState.current.surface === 'floor') counterHitValid = true
+      if (placementState.current.surface === 'floor')
+        feedback.grid(event.nativeEvent.nativeEvent ?? event.nativeEvent)
       const floorEvent = applyFloorGrabOffset(surfaceEvent)
 
       lastRawPos.current.set(
@@ -1165,6 +1184,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const onGridClick = (event: GridEvent) => {
       gridDispatch.flush()
+      if (feedback.reason) return
       // Drop alignment guides on click — the move commits (guides done) or
       // placement re-arms (the next move republishes them).
       useAlignmentGuides.getState().clear()
@@ -1685,7 +1705,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const detachItemSurfaceToFloor = (event: ItemEvent | CabinetEvent) => {
       hostSurfaceDragAnchor = null
-      counterHitValid = true
       surfacePointer.clear()
       // Landing back on the floor: refresh the pointer surface cap from
       // this event's world hit so the first floor position already targets
@@ -1776,14 +1795,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
       if (event.node.type === 'cabinet') {
         lastRawPos.current.set(...event.position)
-        counterHitValid = false
         surfacePointer.hit(event.node.id, event.nativeEvent.nativeEvent ?? event.nativeEvent)
       }
       if (event.node.id === draftNode.current?.id) return
       has3DPointerDrivenMoveRef.current = true
-      const result = itemSurfaceStrategy.enter(getContext(), event)
+      const result = itemSurfaceStrategy.enter(surfaceContext(event), event)
       if (!result) return
-      counterHitValid = true
+      feedback.clear()
 
       event.stopPropagation()
       applyTransition(result, event)
@@ -1801,12 +1819,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       releaseCommit = () => onItemClick(event)
       has3DPointerDrivenMoveRef.current = true
       if (!cursorGroupRef.current) return
-      const ctx = getContext()
+      const ctx = surfaceContext(event)
       if (event.node.type === 'cabinet') {
         lastRawPos.current.set(...event.position)
-        counterHitValid = false
         surfacePointer.hit(event.node.id, event.nativeEvent.nativeEvent ?? event.nativeEvent)
-      } else counterHitValid = true
+      }
 
       if (ctx.state.surface !== 'item-surface') {
         // Try entering surface mode
@@ -1833,14 +1850,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           if (draftNode.current && enterResult.nodeUpdate.parentId) {
             useScene.getState().updateNode(draftNode.current.id, enterResult.nodeUpdate)
           }
-        } else {
+        } else if (!feedback.reason) {
           detachItemSurfaceToFloor(event)
         }
         return
       }
 
       if (!draftNode.current) {
-        const enterResult = itemSurfaceStrategy.enter(getContext(), event)
+        const enterResult = itemSurfaceStrategy.enter(surfaceContext(event), event)
         if (!enterResult) return
         event.stopPropagation()
         ensureDraft(enterResult)
@@ -1862,7 +1879,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         revalidate()
         return
       }
-      counterHitValid = true
+      feedback.clear()
 
       event.stopPropagation()
 
@@ -1906,7 +1923,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const onItemClick = (event: ItemEvent | CabinetEvent) => {
       gridDispatch.flush()
-      if (!counterHitValid) return
+      if (feedback.reason) return
       // Click on the draft item itself. R3F dispatches click events to
       // the closest intersected mesh only — when the draft is hovering
       // on a host (shelf / table / etc.) the draft's mesh is *above*
@@ -1915,7 +1932,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // self-click as a commit on the active shelf so the user doesn't
       // have to aim around the cursor preview to drop the item.
       if (event.node.id === draftNode.current?.id) {
-        const ctx = getContext()
+        const ctx = surfaceContext(event)
         if (ctx.state.surface === 'block-face') {
           const result = resolveFaceHostPreviewCommit(ctx)
           if (result) {
@@ -1985,7 +2002,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
               finishCommittedPlacement(committedId, wasAdopted, () => {
                 const nodes = useScene.getState().nodes
                 const enterResult = ceilingStrategy.enter(
-                  getContext(),
+                  surfaceContext(event),
                   synthetic,
                   resolveLevelId,
                   nodes,
@@ -2003,7 +2020,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         return
       }
 
-      const result = itemSurfaceStrategy.click(getContext(), event)
+      const result = itemSurfaceStrategy.click(surfaceContext(event), event)
       if (!result) return
 
       event.stopPropagation()
@@ -2011,7 +2028,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       finishCommittedPlacement(committedId, wasAdopted, () => {
         // Try to set up next draft on the same surface
-        const enterResult = itemSurfaceStrategy.enter(getContext(), event)
+        const enterResult = itemSurfaceStrategy.enter(surfaceContext(event), event)
         if (enterResult) {
           applyTransition(enterResult)
         } else {
@@ -2185,7 +2202,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const onShelfEnter = (event: ShelfEvent) => {
       has3DPointerDrivenMoveRef.current = true
-      const result = shelfSurfaceStrategy.enter(getContext(), event)
+      const result = shelfSurfaceStrategy.enter(surfaceContext(event), event)
       if (!result) return
 
       event.stopPropagation()
@@ -2204,7 +2221,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // A shelf event can fire before the cursor group mounts or after
       // teardown, leaving the ref null; bail before dereferencing it below.
       if (!cursorGroupRef.current) return
-      const ctx = getContext()
+      const ctx = surfaceContext(event)
       if (ctx.state.surface !== 'shelf-surface') {
         // Cursor entered via a move event without an enter — try
         // transitioning in so the user doesn't need to mouse out + back
@@ -2228,6 +2245,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       const result = shelfSurfaceStrategy.move(ctx, shelfMoveEvent)
       if (!result) return
 
+      feedback.clear()
       event.stopPropagation()
 
       surfacePointer.hit(event.node.id, event.nativeEvent.nativeEvent ?? event.nativeEvent)
@@ -2265,14 +2283,16 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onShelfClick = (event: ShelfEvent) => {
-      const result = shelfSurfaceStrategy.click(getContext(), event)
+      gridDispatch.flush()
+      if (feedback.reason) return
+      const result = shelfSurfaceStrategy.click(surfaceContext(event), event)
       if (!result) return
 
       event.stopPropagation()
       const { committedId, wasAdopted } = commitDraft(result.nodeUpdate)
 
       finishCommittedPlacement(committedId, wasAdopted, () => {
-        const enterResult = shelfSurfaceStrategy.enter(getContext(), event)
+        const enterResult = shelfSurfaceStrategy.enter(surfaceContext(event), event)
         if (enterResult) {
           applyTransition(enterResult)
         } else {
@@ -2427,7 +2447,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           )
         }
 
-        revalidate()
+        if (feedback.reason && lastSurfaceEvent) {
+          if (lastSurfaceEvent.node.type === 'shelf') onShelfMove(lastSurfaceEvent as ShelfEvent)
+          else onItemMove(lastSurfaceEvent as ItemEvent | CabinetEvent)
+        } else {
+          feedback.clear()
+          revalidate()
+        }
       }
     }
 
@@ -2571,6 +2597,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     return () => {
       tearingDown = true
+      feedback.clear()
       if (dragMode) window.removeEventListener('pointerup', onReleaseCommit)
       unsubDraftWatch()
       useAlignmentGuides.getState().clear()
@@ -2977,6 +3004,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         material={edgeMaterial}
         ref={edgesRef}
         renderOrder={999}
+      />
+      <SurfaceRejectionLabel
+        reason={surfaceRejection}
+        position={[
+          currentDimensionBounds.center[0],
+          currentDimensionBounds.dimensions[1] + 0.15,
+          currentDimensionBounds.center[2],
+        ]}
       />
       {measurementContent}
       <mesh

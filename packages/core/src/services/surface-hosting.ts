@@ -6,6 +6,7 @@ import type { SceneApi } from '../registry/types'
 import { getScaledDimensions, isLowProfileItemSurface } from '../schema/nodes/item'
 import type { AnyNode } from '../schema/types'
 import { canHostOnTop } from './hosting'
+import { shelfRowBoardDimensions } from './shelf-board'
 import { surfaceRegionContainsFootprint, surfaceRegionContainsPoint } from './surface-region'
 
 export type SurfaceId = string
@@ -20,17 +21,17 @@ export interface SurfaceRegion {
   holes?: readonly (readonly (readonly [number, number])[])[]
 }
 
-export interface HostSurface {
-  id: SurfaceId | null
+interface SurfaceFrame {
   label?: string
   position: readonly [number, number, number]
   rotation?: readonly [number, number, number]
   normal: readonly [number, number, number]
-  /** Absent regions retain the legacy dimension-only host fit check. */
-  region?: SurfaceRegion
   /** Defaults to true; the caller's snap function still controls whether the grid is active. */
   gridSnap?: boolean
 }
+
+export type DeclaredHostSurface = SurfaceFrame & { id: SurfaceId; region: SurfaceRegion }
+export type HostSurface = DeclaredHostSurface | (SurfaceFrame & { id: null; region?: never })
 
 export interface SurfaceHit {
   point: readonly [number, number, number]
@@ -44,7 +45,7 @@ export interface SurfaceContext {
 
 export interface SurfaceProvider {
   childFrame: 'host-local' | 'surface-local'
-  surfaces?(host: AnyNode, ctx: SurfaceContext): readonly HostSurface[]
+  surfaces?(host: AnyNode, ctx: SurfaceContext): readonly DeclaredHostSurface[]
   resolveHit(host: AnyNode, hit: SurfaceHit, ctx: SurfaceContext): HostSurface | null
   accepts?(host: AnyNode, childKind: string, surface: HostSurface, ctx: SurfaceContext): boolean
 }
@@ -56,6 +57,7 @@ export type SurfaceRejectReason =
   | 'child-not-accepted'
   | 'footprint-outside-surface'
   | 'footprint-exceeds-host'
+  | 'surface-cutout'
 
 export type SurfacePlacement = {
   position: readonly [number, number, number]
@@ -121,13 +123,18 @@ function nearestSurface(surfaces: readonly HostSurface[], localY: number): HostS
   return best
 }
 
-function shelfSurfaces(host: AnyNode): readonly HostSurface[] {
+function shelfSurfaces(host: AnyNode): readonly DeclaredHostSurface[] {
+  if (host.type !== 'shelf') return []
   return (nodeRegistry.get(host.type)?.capabilities.surfaces?.custom?.(host) ?? []).map(
-    (surface, index) => ({
-      ...surface,
-      id: `row:${index}`,
-      gridSnap: true,
-    }),
+    (surface, index) => {
+      const [width, , depth] = shelfRowBoardDimensions(host, surface.position[1])
+      return {
+        ...surface,
+        id: `row:${index}`,
+        gridSnap: true,
+        region: { kind: 'rect', size: [width / 2, depth / 2] },
+      }
+    },
   )
 }
 
@@ -143,16 +150,16 @@ export const shelfSurfaceProvider: SurfaceProvider = {
 
 const proceduralSurfaceCache = new WeakMap<
   Recipe,
-  { key: string; surfaces: readonly HostSurface[] }
+  { key: string; surfaces: readonly DeclaredHostSurface[] }
 >()
 
-function proceduralSurfaces(host: AnyNode): readonly HostSurface[] {
+function proceduralSurfaces(host: AnyNode): readonly DeclaredHostSurface[] {
   if (!isProceduralItem(host)) return []
   // Include contents as well as identity so in-place parameter/recipe edits cannot leave stale surfaces.
   const key = JSON.stringify([host.recipe, host.parameters])
   const cached = proceduralSurfaceCache.get(host.recipe)
   if (cached?.key === key) return cached.surfaces
-  const surfaces: HostSurface[] = evaluateRecipe(host.recipe, host.parameters).surfaces.map(
+  const surfaces: DeclaredHostSurface[] = evaluateRecipe(host.recipe, host.parameters).surfaces.map(
     (surface) => ({
       id: surface.id,
       label: surface.label,
@@ -261,7 +268,24 @@ export function resolveSurfacePlacement(args: {
   const ctx: SurfaceContext = { scene: args.scene }
   const provider = getSurfaceProvider(host)
   const surface = provider.resolveHit(host, hit, ctx)
-  if (!surface) return reject('no-surface')
+  if (!surface) {
+    const overCutout =
+      hit.normalWorldY >= UPWARD_SURFACE_NORMAL_MIN_Y &&
+      provider.surfaces?.(host, ctx).some((candidate) => {
+        if (!candidate.region?.holes?.length) return false
+        const local = surfaceLocalPoint(candidate, hit.point)
+        const point = [local[0], local[2]] as const
+        return (
+          surfaceRegionContainsPoint({ ...candidate.region, holes: [] }, point) &&
+          !surfaceRegionContainsPoint(candidate.region, point)
+        )
+      })
+    return reject(overCutout ? 'surface-cutout' : 'no-surface')
+  }
+  const declaredId = surface.id
+  if (declaredId !== null && !surface.region) {
+    throw new Error(`Declared surface ${host.type}:${declaredId} must publish a region`)
+  }
   const snap = (surface.gridSnap ?? true) ? args.snapScalar : undefined
   const origin = args.origin ?? hit.point
   const position: [number, number, number] = [
@@ -321,12 +345,41 @@ export function resolveSurfacePlacement(args: {
         childFootprint.localBounds,
       )
     ) {
-      return reject('footprint-outside-surface')
+      const insideOutline = surfaceRegionContainsFootprint(
+        { ...surface.region, holes: [] },
+        localPosition,
+        childFootprint.size,
+        rotation,
+        childFootprint.localBounds,
+      )
+      return reject(insideOutline ? 'surface-cutout' : 'footprint-outside-surface')
     }
   } else {
     const size = hostSize(host, ctx)
-    if (size && (childFootprint.size[0] > size[0] || childFootprint.size[2] > size[2])) {
-      return reject('footprint-exceeds-host')
+    if (size) {
+      const bounds = childFootprint.localBounds ?? {
+        min: [-childFootprint.size[0] / 2, 0, -childFootprint.size[2] / 2] as const,
+        max: [
+          childFootprint.size[0] / 2,
+          childFootprint.size[1],
+          childFootprint.size[2] / 2,
+        ] as const,
+      }
+      const childFrame = frame(
+        [0, 0, 0],
+        [...(childFootprint.rotation ?? [0, childFootprint.rotationY, 0])],
+      )
+      const rotated = boxCorners([...bounds.min], [...bounds.max]).map((point) =>
+        transformPoint(childFrame, point),
+      )
+      if (
+        [0, 2].some(
+          (axis) =>
+            Math.max(...rotated.map((p) => p[axis]!)) - Math.min(...rotated.map((p) => p[axis]!)) >
+            size[axis]! + 1e-6,
+        )
+      )
+        return reject('footprint-exceeds-host')
     }
   }
   return pose

@@ -89,6 +89,7 @@ export {
   type RiserLine,
   type RiserMarker,
 } from './riser-diagram'
+export { SHELF_BOARD_INSET, shelfBoardDimensions, shelfRowBoardDimensions } from './shelf-board'
 export {
   DEFAULT_ANGLE_STEP,
   DEFAULT_GRID_STEP,
@@ -117,6 +118,7 @@ export {
   type LevelElevation,
 } from './storey'
 export {
+  type DeclaredHostSurface,
   getSurfaceProvider,
   type HostSurface,
   hitDerivedSurfaceProvider,

@@ -862,6 +862,7 @@ function resolveCatalogItemSurfacePlacement(
   dimensions: [number, number, number],
   worldYaw: number,
   checkFootprint: boolean,
+  onReject?: PlacementContext['onSurfaceReject'],
 ) {
   const mesh = sceneRegistry.nodes.get(host.id)
   if (!mesh) return null
@@ -877,6 +878,7 @@ function resolveCatalogItemSurfacePlacement(
     scene: createSceneApi(useScene),
     snapScalar: snapToGrid,
     checkFootprint: host.type === 'cabinet' || checkFootprint,
+    onReject,
   })
   if (!placement) return null
   return {
@@ -887,10 +889,9 @@ function resolveCatalogItemSurfacePlacement(
 }
 
 export function validCatalogCounterPose(ctx: PlacementContext): boolean {
-  const host = ctx.state.surfaceItemId
-    ? useScene.getState().nodes[ctx.state.surfaceItemId as AnyNodeId]
-    : undefined
-  if (host?.type !== 'cabinet') return true
+  const hostId = ctx.state.surface === 'shelf-surface' ? ctx.state.shelfId : ctx.state.surfaceItemId
+  const host = hostId ? useScene.getState().nodes[hostId as AnyNodeId] : undefined
+  if (host?.type !== 'cabinet' && host?.type !== 'shelf' && host?.type !== 'item') return true
   if (!ctx.draftItem) return false
   const placement = resolveSurfacePlacement({
     host,
@@ -902,8 +903,12 @@ export function validCatalogCounterPose(ctx: PlacementContext): boolean {
     },
     hit: { point: ctx.gridPosition.toArray(), normalWorldY: 1 },
     scene: createSceneApi(useScene),
+    onReject: ctx.onSurfaceReject,
   })
-  return !!placement && Math.abs(placement.position[1] - ctx.gridPosition.y) < 1e-5
+  return (
+    !!placement &&
+    (host.type !== 'cabinet' || Math.abs(placement.position[1] - ctx.gridPosition.y) < 1e-5)
+  )
 }
 
 export const itemSurfaceStrategy = {
@@ -935,6 +940,7 @@ export const itemSurfaceStrategy = {
       ourDims,
       ctx.currentCursorRotationY,
       true,
+      ctx.onSurfaceReject,
     )
     if (!pose) return null
     const draftRotation = ctx.draftItem?.rotation ?? [0, 0, 0]
@@ -975,6 +981,7 @@ export const itemSurfaceStrategy = {
       getScaledDimensions(ctx.draftItem),
       ctx.currentCursorRotationY,
       false,
+      ctx.onSurfaceReject,
     )
     if (!pose) return null
 
@@ -1019,6 +1026,7 @@ function resolveShelfSurfacePlacement(
   dimensions: [number, number, number],
   worldYaw: number,
   entering: boolean,
+  onReject?: PlacementContext['onSurfaceReject'],
 ) {
   const mesh = sceneRegistry.nodes.get(host.id)
   if (!mesh) return null
@@ -1032,12 +1040,13 @@ function resolveShelfSurfacePlacement(
     hit: {
       point: local.toArray(),
       // Existing shelf movement elects rows even over side faces or board gaps;
-      // only entering requires an upward hit and a fitting footprint.
+      // only entering requires an upward hit.
       normalWorldY: entering ? surfaceWorldNormalY(event.normal, event.object.matrixWorld) : 1,
     },
     scene: createSceneApi(useScene),
     snapScalar: snapToGrid,
-    checkFootprint: entering,
+    onReject,
+    checkFootprint: true,
   })
   if (!placement) return null
   return {
@@ -1072,6 +1081,7 @@ export const shelfSurfaceStrategy = {
       ourDims,
       ctx.currentCursorRotationY,
       true,
+      ctx.onSurfaceReject,
     )
     if (!pose) return null
     const draftRotation = ctx.draftItem?.rotation ?? [0, 0, 0]
@@ -1105,6 +1115,7 @@ export const shelfSurfaceStrategy = {
       getScaledDimensions(ctx.draftItem),
       ctx.currentCursorRotationY,
       false,
+      ctx.onSurfaceReject,
     )
     if (!pose) return null
 
@@ -1125,6 +1136,7 @@ export const shelfSurfaceStrategy = {
     if (ctx.state.surface !== 'shelf-surface') return null
     if (!(ctx.draftItem && ctx.state.shelfId)) return null
     if (event.node.id !== ctx.state.shelfId) return null
+    if (!validCatalogCounterPose(ctx)) return null
 
     return {
       nodeUpdate: {
@@ -1149,14 +1161,12 @@ export const shelfSurfaceStrategy = {
 export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidators): boolean {
   if (!(ctx.levelId && ctx.draftItem)) return false
 
-  // Item surface: valid if we entered (size check was in enter)
   if (ctx.state.surface === 'item-surface') {
     return ctx.state.surfaceItemId !== null && validCatalogCounterPose(ctx)
   }
 
-  // Shelf surface: same — size check already happened on enter
   if (ctx.state.surface === 'shelf-surface') {
-    return ctx.state.shelfId !== null
+    return ctx.state.shelfId !== null && validCatalogCounterPose(ctx)
   }
 
   const attachTo = ctx.draftItem.asset.attachTo

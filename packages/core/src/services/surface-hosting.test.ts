@@ -74,7 +74,7 @@ describe('item surface boundaries', () => {
       }
   })
 
-  test('scaled host dimensions preserve exact width and depth entry boundaries', () => {
+  test('scaled host dimensions accept aligned equality and refuse rotated excess', () => {
     const host = ItemNode.parse({ asset, scale: [2, 1, 0.5] })
     for (const childSize of [
       [4, 5, 1.5],
@@ -88,7 +88,16 @@ describe('item surface boundaries', () => {
         hit: { point: [0, 0.8, 0], normalWorldY: 1 },
         scene,
       })
-      expect(result !== null).toBe(childSize[0] === 4 && childSize[2] === 1.5)
+      expect(result).toBeNull()
+      expect(
+        resolveSurfacePlacement({
+          host,
+          childKind: 'item',
+          childFootprint: { size: childSize, rotationY: 0 },
+          hit: { point: [0, 0.8, 0], normalWorldY: 1 },
+          scene,
+        }) !== null,
+      ).toBe(childSize[0] === 4 && childSize[2] === 1.5)
     }
   })
 })
@@ -276,7 +285,12 @@ describe('protocol defaults', () => {
   test('ceiling refusal covers both catalog and procedural mounting, even with an explicit provider', () => {
     const provider: SurfaceProvider = {
       childFrame: 'host-local',
-      resolveHit: () => ({ id: 'top', position: [0, 1, 0], normal: [0, 1, 0] }),
+      resolveHit: () => ({
+        id: 'top',
+        position: [0, 1, 0],
+        normal: [0, 1, 0],
+        region: { kind: 'rect', size: [1, 1] },
+      }),
     }
     const surfaces: SurfacesConfig = { hosting: provider }
     register('plugin-host', { surfaces })
@@ -367,7 +381,7 @@ describe('protocol defaults', () => {
     ).toBeNull()
     surface.gridSnap = true
     expect(resolveSurfacePlacement({ ...args, onReject, snapScalar: () => 1 })).toBeNull()
-    expect(rejections).toEqual(['footprint-outside-surface', 'footprint-outside-surface'])
+    expect(rejections).toEqual(['surface-cutout', 'footprint-outside-surface'])
     expect(
       resolveSurfacePlacement({ ...args, checkFootprint: false, snapScalar: () => 1 })!.position,
     ).toEqual([1, 1, 1])
@@ -642,7 +656,12 @@ describe('surface frame contract', () => {
       for (const gridSnap of [undefined, true, false]) {
         const provider: SurfaceProvider = {
           childFrame: 'host-local',
-          resolveHit: () => ({ id, gridSnap, position: [0, 1, 0], normal: [0, 1, 0] }),
+          resolveHit: () => ({
+            ...(id === null ? { id: null } : { id, region: { kind: 'rect', size: [1, 1] } }),
+            gridSnap,
+            position: [0, 1, 0],
+            normal: [0, 1, 0],
+          }),
         }
         nodeRegistry._reset()
         register('plugin-host', { surfaces: { hosting: provider } })

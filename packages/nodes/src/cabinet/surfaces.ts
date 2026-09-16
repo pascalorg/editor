@@ -2,8 +2,8 @@ import {
   type AnyNode,
   type AnyNodeId,
   type CabinetNode,
+  type DeclaredHostSurface,
   type GeometryContext,
-  type HostSurface,
   pointInPolygon2D,
   type SurfaceContext,
   type SurfaceProvider,
@@ -21,7 +21,7 @@ function rectangle(x: number, z: number, width: number, depth: number): [number,
   ]
 }
 
-function slabSurface(id: string, label: string, slab: CabinetSlab): HostSurface {
+function slabSurface(id: string, label: string, slab: CabinetSlab): DeclaredHostSurface {
   // Keep XZ anchored to the run, so changing either end or an overhang cannot move an attachment.
   return {
     id,
@@ -37,8 +37,11 @@ function slabSurface(id: string, label: string, slab: CabinetSlab): HostSurface 
   }
 }
 
-export function getCabinetSurfaces(node: CabinetNode, ctx?: GeometryContext): HostSurface[] {
-  const surfaces: HostSurface[] = []
+export function getCabinetSurfaces(
+  node: CabinetNode,
+  ctx?: GeometryContext,
+): DeclaredHostSurface[] {
+  const surfaces: DeclaredHostSurface[] = []
   for (const layout of getCabinetCountertopLayout(node, ctx)) {
     // First member identity survives edits to other spans and changes to this span's far end.
     // Removing/replacing that member or splitting/merging the span is a topology edit.
@@ -104,7 +107,7 @@ export const cabinetSurfaceProvider: SurfaceProvider = {
     if (host.type !== 'cabinet' || !(hit.normalWorldY >= 0.75) || !hit.point.every(Number.isFinite))
       return null
     const surfaces = getCabinetSurfaces(host, geometryContext(host, ctx))
-    let nearest: HostSurface | null = null
+    let nearest: DeclaredHostSurface | null = null
     for (const surface of surfaces) {
       const region = surface.region!
       const [x, z] = [hit.point[0], hit.point[2]]

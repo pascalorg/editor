@@ -509,7 +509,7 @@ describe('cabinet hosting surfaces', () => {
         [1, 0.85, 0],
       ] as const) {
         expect(resolveSurfacePlacement({ ...args, hit: { point, normalWorldY: 1 } })).toBeNull()
-        expect(onReject).toHaveBeenLastCalledWith('no-surface')
+        expect(onReject).toHaveBeenLastCalledWith(point[0] === 0 ? 'surface-cutout' : 'no-surface')
       }
     })
   })

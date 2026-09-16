@@ -104,14 +104,14 @@ function onShelf(ctx: PlacementContext): PlacementContext {
   return { ...ctx, state: { ...ctx.state, surface: 'shelf-surface', shelfId: host.id } }
 }
 
-function hit(y = 1): ShelfEvent {
+function hit(y = 1, z = -0.1): ShelfEvent {
   const object = sceneRegistry.nodes.get(host.id)!
   return {
     node: host,
     object,
     normal: [0, 1, 0],
-    position: object.localToWorld(new Vector3(0.37, y, -0.39)).toArray(),
-    localPosition: [0.37, y, -0.39],
+    position: object.localToWorld(new Vector3(0.37, y, z)).toArray(),
+    localPosition: [0.37, y, z],
     nativeEvent: {},
     stopPropagation() {},
   } as ShelfEvent
@@ -128,7 +128,7 @@ test.each([
   ]) {
     rows = declared
     const expected: [number, number, number] =
-      mode === 'grid' ? [0.25, rows[0]!, -0.375] : [0.37, rows[0]!, -0.39]
+      mode === 'grid' ? [0.25, rows[0]!, 0.125] : [0.37, rows[0]!, -0.1]
     const ctx = context()
     const entered = shelfSurfaceStrategy.enter(ctx, hit())!
     expect(entered.nodeUpdate).toEqual({
@@ -148,7 +148,7 @@ test.each([
     expect(committed.nodeUpdate.position).toEqual(expected)
     expect(committed.nodeUpdate.parentId).toBe(host.id)
   }
-  expect(resolver).toHaveBeenCalledTimes(4)
+  expect(resolver).toHaveBeenCalledTimes(6)
 })
 
 test.each([
@@ -162,7 +162,7 @@ test.each([
 test.each([
   [2.01, 0.25],
   [0.5, 1.01],
-])('scaled footprint %s by %s is rejected only on enter', (width, depth) => {
+])('scaled footprint %s by %s overhang is refused on enter and move', (width, depth) => {
   const draft = ItemNode.parse({
     ...child,
     asset: { ...child.asset, dimensions: [width / 2, 0.25, depth / 2] },
@@ -170,16 +170,16 @@ test.each([
   })
   const ctx = context(draft)
   expect(shelfSurfaceStrategy.enter(ctx, hit())).toBeNull()
-  expect(shelfSurfaceStrategy.move(onShelf(ctx), hit())).not.toBeNull()
-  expect(resolver.mock.calls.map(([args]) => args.checkFootprint)).toEqual([true, false])
+  expect(shelfSurfaceStrategy.move(onShelf(ctx), hit())).toBeNull()
+  expect(resolver.mock.calls.map(([args]) => args.checkFootprint)).toEqual([true, true])
 })
 
-test('overall shelf dimensions allow an exact fit even at the edge and rotated', () => {
+test('a full-board object overhanging at the edge and rotated is now refused', () => {
   const draft = ItemNode.parse({
     ...child,
     asset: { ...child.asset, dimensions: [host.width, 0.25, host.depth] },
   })
-  expect(shelfSurfaceStrategy.enter(context(draft), hit())).not.toBeNull()
+  expect(shelfSurfaceStrategy.enter(context(draft), hit(1, -0.39))).toBeNull()
 })
 
 test.each([
@@ -194,7 +194,7 @@ test.each([
   const event = hit(1.2)
   const local = mesh.worldToLocal(new Vector3(...event.position))
   const expected: [number, number, number] =
-    mode === 'grid' ? [0.25, 1.5, -0.375] : [local.x, 1.5, local.z]
+    mode === 'grid' ? [0.25, 1.5, 0.125] : [local.x, 1.5, local.z]
   const yaw = new Euler().setFromQuaternion(mesh.getWorldQuaternion(new Quaternion()), 'YXZ').y
   const entered = shelfSurfaceStrategy.enter(context(), event)!
   expect(entered.nodeUpdate).toEqual({
@@ -224,4 +224,34 @@ test('missing rows and resolver rejection leave the draft untouched', () => {
   expect(shelfSurfaceStrategy.enter(context(), hit())).toBeNull()
   expect(shelfSurfaceStrategy.move(onShelf(context()), hit())).toBeNull()
   expect(useScene.getState().nodes).toBe(before)
+})
+
+test('a centred unrotated object exactly matching the board is accepted with epsilon tolerance', () => {
+  useEditor.getState().setSnappingMode('item', 'off')
+  const region = core.shelfSurfaceProvider.surfaces!(host, {
+    scene: core.createSceneApi(useScene),
+  })[0]!.region
+  const draft = ItemNode.parse({
+    ...child,
+    rotation: [0, 0, 0],
+    asset: { ...child.asset, dimensions: [region.size![0] * 2, 0.25, region.size![1] * 2] },
+  })
+  const ctx = { ...context(draft), currentCursorRotationY: 0 }
+  for (const x of [0, 1e-7]) {
+    const event = { ...hit(), position: [x, 0.5, 0], localPosition: [x, 0.5, 0] } as ShelfEvent
+    expect(shelfSurfaceStrategy.enter(ctx, event)).not.toBeNull()
+  }
+})
+
+test('shelf validation uses the current shelf after leaving a different surface host', () => {
+  const other = ItemNode.parse({
+    ...child,
+    id: 'item_previous-host',
+    asset: { ...child.asset, dimensions: [0.01, 0.1, 0.01] },
+  })
+  useScene.setState({ nodes: { ...useScene.getState().nodes, [other.id]: other } })
+  const ctx = onShelf(context(ItemNode.parse({ ...child, rotation: [0, 0, 0] })))
+  ctx.state.surfaceItemId = other.id
+  ctx.gridPosition.set(0, 0.5, 0)
+  expect(shelfSurfaceStrategy.click(ctx, hit())).not.toBeNull()
 })

@@ -18,6 +18,7 @@ import { isFreshPlacementMetadata } from '../../../lib/placement-metadata'
 import { snapToGrid, snapToHalf } from '../item/placement-math'
 import { createShelfStickiness } from '../shared/shelf-stickiness'
 import { itemEventToSurfaceHit } from '../shared/surface-hit'
+import { createSurfaceRejectionFeedback } from '../shared/surface-rejection'
 
 export function createItemSurfacePointerArbitration() {
   let hostId: string | null = null
@@ -104,6 +105,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
   }
   let changed = false
   let valid = true
+  const feedback = createSurfaceRejectionFeedback()
   const scene = createSceneApi(useScene)
   const pointer = createItemSurfacePointerArbitration()
   const originalParent = original.parentId
@@ -140,8 +142,14 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
     useLiveTransforms.getState().clear(node.id)
   }
   const session = {
+    get rejection() {
+      return feedback.reason
+    },
+    clearRejectionForGrid(event: GridEvent) {
+      feedback.grid(pointerEventOf(event))
+    },
     get valid() {
-      return valid
+      return valid && !feedback.reason
     },
     get hosted() {
       const parentId = liveNode().parentId
@@ -166,10 +174,10 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
     },
     enter(event: NodeEvent<AnyNode>, dimensions: [number, number, number], yaw: number) {
       pointer.clear()
+      feedback.clear()
       const live = liveNode()
       if (floorPlaced.applies && !floorPlaced.applies(live)) return null
       const host = useScene.getState().nodes[event.node.id]
-      if (host?.type === 'cabinet') valid = false
       if (!host || NON_PHYSICAL_HOST_KINDS.includes(host.type)) return null
       let ancestor: AnyNode | undefined = host
       while (ancestor) {
@@ -235,7 +243,8 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
         origin: counterHit ? hit.point : undefined,
         scene,
         snapScalar: host.type !== 'item' ? undefined : snapToGrid,
-        checkFootprint: !stayingOnShelf,
+        checkFootprint: true,
+        onReject: (reason) => feedback.reject(reason, pointerEventOf(event)),
       })
       if (!placement) return null
       valid = true
@@ -289,8 +298,13 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
       const live = liveNode() as typeof original
       const position: [number, number, number] = [...live.position]
       const host = live.parentId ? scene.get(live.parentId as AnyNodeId) : undefined
-      if (host?.type === 'cabinet') {
-        const bounds = capabilities?.dragBounds?.(live, scene.nodes())
+      if (host?.type === 'cabinet' || host?.type === 'shelf' || host?.type === 'item') {
+        const footprint = floorPlaced.footprint?.(live, { nodes: scene.nodes() })
+        const bounds:
+          | { size: [number, number, number]; center?: [number, number, number] }
+          | undefined =
+          capabilities?.dragBounds?.(live, scene.nodes()) ??
+          (footprint ? { size: footprint.dimensions } : undefined)
         if (!bounds) return null
         const center = bounds.center ?? [0, bounds.size[1] / 2, 0]
         const localRotation = rotation(yaw)
@@ -307,6 +321,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
             (point) => new Vector3(...point).applyEuler(euler).y,
           ),
         )
+        feedback.clear()
         const placement = resolveSurfacePlacement({
           host,
           childKind: live.type,
@@ -319,11 +334,15 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
             localBounds,
           },
           hit: {
-            point: [position[0] + offset.x, position[1] + bottom, position[2] + offset.z],
+            point:
+              host.type === 'item'
+                ? position
+                : [position[0] + offset.x, position[1] + bottom, position[2] + offset.z],
             normalWorldY: 1,
           },
           origin: position,
           scene,
+          onReject: (reason) => feedback.reject(reason),
         })
         valid = !!placement
         if (placement) position[1] = placement.position[1]
@@ -332,6 +351,8 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
       return { position, rotationY: yaw }
     },
     restore() {
+      feedback.clear()
+      valid = true
       pointer.clear()
       grab = initialGrab()
       if (!changed || !useScene.getState().nodes[node.id]) return
