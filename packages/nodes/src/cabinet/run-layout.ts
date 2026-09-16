@@ -341,7 +341,7 @@ function childDerivedBaseLegSides(ctx?: GeometryContext): Set<'left' | 'right'> 
 
 function modulesForRun(node: CabinetNode, ctx?: GeometryContext): CabinetModuleNode[] {
   return (node.children ?? [])
-    .map((id) => ctx?.resolve<AnyNode>(id))
+    .map((id) => ctx?.resolve<AnyNode>(id as AnyNodeId))
     .filter((child): child is CabinetModuleNode => child?.type === 'cabinet-module')
 }
 

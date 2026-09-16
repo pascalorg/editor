@@ -86,7 +86,7 @@ function geometryContext(host: CabinetNode, ctx: SurfaceContext): GeometryContex
   return {
     resolve: <N = AnyNode>(id: AnyNodeId) => nodes[id] as N | undefined,
     children: host.children
-      .map((id) => ctx.scene.get(id))
+      .map((id) => ctx.scene.get(id as AnyNodeId))
       .filter((node): node is AnyNode => !!node),
     parent: host.parentId ? (nodes[host.parentId as AnyNodeId] ?? null) : null,
     siblings: Object.values(nodes).filter(

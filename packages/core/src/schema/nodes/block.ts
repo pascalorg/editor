@@ -1,7 +1,6 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
-import { ItemNode } from './item'
 
 export const BlockVertex = z.object({
   id: z.string().min(1),
@@ -228,7 +227,7 @@ export function createBoxBlockTopology(width = 2, height = 2.4, depth = 2): Bloc
 export const BlockNode = BaseNode.extend({
   id: objectId('block'),
   type: nodeType('block'),
-  children: z.array(ItemNode.shape.id).default([]),
+  children: z.array(z.string()).default([]),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.number().default(0),
   supportSlabId: z.string().optional(),
@@ -237,7 +236,7 @@ export const BlockNode = BaseNode.extend({
   slotNames: z.record(z.string(), z.string().min(1)).default({ body: 'Body' }),
 }).describe(dedent`
   block node - a topology-backed editable solid.
-  - children: items hosted on persistent topology faces
+  - children: hosted node ids
   - topology: persistent vertices, edges, and ordered face loops with stable IDs
   - position/rotation: level-local placement transform
   - supportSlabId: persisted placement surface that prevents later slabs from lifting the mesh
