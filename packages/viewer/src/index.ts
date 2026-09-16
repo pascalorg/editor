@@ -15,8 +15,8 @@ export { NodeRenderer } from './components/renderers/node-renderer'
 export {
   default as Viewer,
   type ViewerHandle,
-  type ViewerXRConfig,
   type ViewerImmersiveSession,
+  type ViewerXRConfig,
 } from './components/viewer'
 export {
   type BVHEcctrlApi,

@@ -17,8 +17,8 @@ import {
   SceneEnvironment,
   useViewer,
   Viewer,
-  type ViewerXRConfig,
   type ViewerImmersiveSession,
+  type ViewerXRConfig,
 } from '@pascal-app/viewer'
 import { memo, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { ViewerOverlay } from '../../components/viewer-overlay'
