@@ -8,7 +8,6 @@ import {
   type AnyNodeId,
   analyzePortConnectivity,
   bboxCornerAnchors,
-  type CabinetEvent,
   cascadeDirty,
   collectAlignmentAnchors,
   createSceneApi,
@@ -18,9 +17,9 @@ import {
   type GridEvent,
   type GroupMoveSnapResult,
   getFloorPlacedFootprints,
-  type ItemEvent,
   type MovableConfig,
   movingFootprintAnchors,
+  NON_PHYSICAL_HOST_KINDS,
   type NodeEvent,
   nodeRegistry,
   type ParentFrameSnapMatch,
@@ -30,7 +29,6 @@ import {
   resolveFacingIndicator,
   resolveFrozenFloorPlacementPatch,
   resolveSupportSlabPatch,
-  type ShelfEvent,
   sceneRegistry,
   spatialGridManager,
   useLiveNodeOverrides,
@@ -714,7 +712,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     }
     const detachSurface = (
       worldPosition: [number, number, number],
-      leaveEvent?: ItemEvent | ShelfEvent | CabinetEvent,
+      leaveEvent?: NodeEvent<AnyNode>,
     ) => {
       const pose = leaveEvent
         ? itemSurfaceMove?.leave(leaveEvent, rotationRef.current)
@@ -727,13 +725,13 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       applySurfacePose(pose)
       applyMeshPose(pose.position)
     }
-    const onItemMove = (event: ItemEvent | ShelfEvent | CabinetEvent) => {
+    const onItemMove = (event: NodeEvent<AnyNode>) => {
       if (committed || !resolvedFootprint || !itemSurfaceMove) return
       const pose = itemSurfaceMove.enter(event, resolvedFootprint, rotationRef.current)
       if (pose) applySurfacePose(pose)
       else recomputeValidity()
     }
-    const onItemLeave = (event: ItemEvent | ShelfEvent | CabinetEvent) => {
+    const onItemLeave = (event: NodeEvent<AnyNode>) => {
       if (!itemSurfaceMove?.hosted || committed) return
       if (event.node.id !== useScene.getState().nodes[node.id]?.parentId) return
       event.stopPropagation()
@@ -994,7 +992,13 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     }
 
     const gridDispatch = createItemSurfaceGridDispatch(onGridMove)
-    const receiveGridMove = itemSurfaceMove ? gridDispatch.schedule : onGridMove
+    const receiveGridMove = (event: GridEvent) => {
+      if (itemSurfaceMove?.hosted) gridDispatch.schedule(event)
+      else {
+        gridDispatch.cancel()
+        onGridMove(event)
+      }
+    }
 
     /** Commit the move at the latest cursor position. Shared by every
      *  click variant — grid plane, the moved node itself, or any other
@@ -1251,18 +1255,15 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
 
-    emitter.on('item:enter', onItemMove)
-    emitter.on('item:move', onItemMove)
-    emitter.on('item:leave', onItemLeave)
-    emitter.on('item:click', commitAtCursor)
-    emitter.on('cabinet:enter', onItemMove)
-    emitter.on('cabinet:move', onItemMove)
-    emitter.on('cabinet:leave', onItemLeave)
-    emitter.on('cabinet:click', commitAtCursor)
-    emitter.on('shelf:enter', onItemMove)
-    emitter.on('shelf:move', onItemMove)
-    emitter.on('shelf:leave', onItemLeave)
-    emitter.on('shelf:click', commitAtCursor)
+    const surfaceKinds = Array.from(nodeRegistry.entries(), ([kind]) => kind).filter(
+      (kind) => !NON_PHYSICAL_HOST_KINDS.includes(kind),
+    )
+    for (const kind of surfaceKinds) {
+      emitter.on(`${kind}:enter` as never, onItemMove)
+      emitter.on(`${kind}:move` as never, onItemMove)
+      emitter.on(`${kind}:leave` as never, onItemLeave)
+      emitter.on(`${kind}:click` as never, commitAtCursor)
+    }
     emitter.on('grid:move', receiveGridMove)
     emitter.on('grid:click', commitAtCursor)
 
@@ -1307,18 +1308,12 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
       suppressRaycastsRef.current = null
-      emitter.off('item:enter', onItemMove)
-      emitter.off('item:move', onItemMove)
-      emitter.off('item:leave', onItemLeave)
-      emitter.off('item:click', commitAtCursor)
-      emitter.off('cabinet:enter', onItemMove)
-      emitter.off('cabinet:move', onItemMove)
-      emitter.off('cabinet:leave', onItemLeave)
-      emitter.off('cabinet:click', commitAtCursor)
-      emitter.off('shelf:enter', onItemMove)
-      emitter.off('shelf:move', onItemMove)
-      emitter.off('shelf:leave', onItemLeave)
-      emitter.off('shelf:click', commitAtCursor)
+      for (const kind of surfaceKinds) {
+        emitter.off(`${kind}:enter` as never, onItemMove)
+        emitter.off(`${kind}:move` as never, onItemMove)
+        emitter.off(`${kind}:leave` as never, onItemLeave)
+        emitter.off(`${kind}:click` as never, commitAtCursor)
+      }
       emitter.off('grid:move', receiveGridMove)
       emitter.off('grid:click', commitAtCursor)
       window.removeEventListener('pointerup', onPlacementDragPointerUp)

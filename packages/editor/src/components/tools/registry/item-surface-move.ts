@@ -1,14 +1,13 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  type CabinetEvent,
   createSceneApi,
   findLevelAncestorId,
   type GridEvent,
-  type ItemEvent,
+  NON_PHYSICAL_HOST_KINDS,
+  type NodeEvent,
   nodeRegistry,
   resolveSurfacePlacement,
-  type ShelfEvent,
   sceneRegistry,
   useLiveTransforms,
   useScene,
@@ -38,7 +37,7 @@ export function createItemSurfacePointerArbitration() {
   }
 }
 
-function pointerEventOf(event: GridEvent | ItemEvent | ShelfEvent | CabinetEvent): object {
+function pointerEventOf(event: GridEvent | NodeEvent<AnyNode>): object {
   return event.nativeEvent.nativeEvent ?? event.nativeEvent
 }
 
@@ -96,12 +95,7 @@ function parentWorldYaw(parentId: string | null | undefined): number {
 export function createRegistryItemSurfaceMove(node: AnyNode) {
   const capabilities = nodeRegistry.get(node.type)?.capabilities
   const floorPlaced = capabilities?.floorPlaced
-  if (
-    !capabilities?.hostable ||
-    !floorPlaced ||
-    (floorPlaced.applies && !floorPlaced.applies(node))
-  )
-    return null
+  if (!floorPlaced || (floorPlaced.applies && !floorPlaced.applies(node))) return null
 
   const original = node as AnyNode & {
     position: [number, number, number]
@@ -116,9 +110,8 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
     ? useScene.getState().nodes[original.parentId as AnyNodeId]
     : null
   const initialGrab = (): ItemSurfaceGrab | null =>
-    (originalParent?.type === 'item' ||
-      originalParent?.type === 'shelf' ||
-      originalParent?.type === 'cabinet') &&
+    originalParent &&
+    !NON_PHYSICAL_HOST_KINDS.includes(originalParent.type) &&
     !isFreshPlacementMetadata(original.metadata)
       ? { hostId: originalParent.id, start: original.position, anchor: null }
       : null
@@ -153,7 +146,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
     get hosted() {
       const parentId = liveNode().parentId
       const parent = parentId ? useScene.getState().nodes[parentId as AnyNodeId] : null
-      return parent?.type === 'item' || parent?.type === 'shelf' || parent?.type === 'cabinet'
+      return !!parent && !NON_PHYSICAL_HOST_KINDS.includes(parent.type)
     },
     worldYaw(yaw: number) {
       return yaw + parentWorldYaw(liveNode().parentId)
@@ -171,17 +164,13 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
         rotationY: session.worldYaw(yaw) - parentWorldYaw(level),
       }
     },
-    enter(
-      event: ItemEvent | ShelfEvent | CabinetEvent,
-      dimensions: [number, number, number],
-      yaw: number,
-    ) {
+    enter(event: NodeEvent<AnyNode>, dimensions: [number, number, number], yaw: number) {
       pointer.clear()
       const live = liveNode()
       if (floorPlaced.applies && !floorPlaced.applies(live)) return null
       const host = useScene.getState().nodes[event.node.id]
       if (host?.type === 'cabinet') valid = false
-      if (host?.type !== 'item' && host?.type !== 'shelf' && host?.type !== 'cabinet') return null
+      if (!host || NON_PHYSICAL_HOST_KINDS.includes(host.type)) return null
       let ancestor: AnyNode | undefined = host
       while (ancestor) {
         if (ancestor.id === node.id) return null
@@ -199,7 +188,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
       const stayingOnShelf = host.type === 'shelf' && live.parentId === host.id
       const localYaw = session.worldYaw(yaw) - parentWorldYaw(host.id)
       const bounds =
-        host.type !== 'item' ? capabilities.dragBounds?.(live, scene.nodes()) : undefined
+        host.type !== 'item' ? capabilities?.dragBounds?.(live, scene.nodes()) : undefined
       const center = bounds?.center
       const localRotation = rotation(localYaw)
       const offset = center
@@ -276,7 +265,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
           Boolean(camera && cursorRayIntersectsShelf(liveNode().parentId, camera, event.position)))
       )
     },
-    leave(event: ItemEvent | ShelfEvent | CabinetEvent, yaw: number) {
+    leave(event: NodeEvent<AnyNode>, yaw: number) {
       if (event.node.id !== liveNode().parentId) return null
       if (event.node.type === 'shelf' || event.node.type === 'cabinet') return null
       return session.detach(event.position, yaw)
@@ -301,7 +290,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
       const position: [number, number, number] = [...live.position]
       const host = live.parentId ? scene.get(live.parentId as AnyNodeId) : undefined
       if (host?.type === 'cabinet') {
-        const bounds = capabilities.dragBounds?.(live, scene.nodes())
+        const bounds = capabilities?.dragBounds?.(live, scene.nodes())
         if (!bounds) return null
         const center = bounds.center ?? [0, bounds.size[1] / 2, 0]
         const localRotation = rotation(yaw)

@@ -1,4 +1,4 @@
-import { getFloorPlacedFootprints } from '../hooks/spatial-grid/floor-placed-elevation'
+import { getFloorPlacedFootprints } from '../hooks/spatial-grid/floor-placed-footprints'
 import { itemOverlapsPolygon } from '../lib/item-polygon-overlap'
 import {
   pointInPolygon as containsPoint,

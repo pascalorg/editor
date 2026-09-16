@@ -201,16 +201,18 @@ A 3D move tool that follows the cursor by writing `mesh.position.set(x, 0, z)` r
 
 Fix in `MoveRegistryNodeTool`: at drag-start, traverse the moved mesh and overwrite `child.raycast = () => {}` on every descendant; restore the originals in the effect's cleanup. The ray now passes through the moved mesh, hits the grid plane, and `grid:move` keeps firing.
 
-`MoveRegistryNodeTool` accepts item top surfaces, shelf boards and cabinet countertops/bar ledges for a kind with a
-`hostable` capability whose `floorPlaced` capability applies. The `hostable.parents`
-list is no longer an eligibility gate; mounted procedural recipes stay in their
-separate session. The shared surface resolver owns shelf row election and fit. Shelf
+`MoveRegistryNodeTool` uses the shared surface resolver for kinds whose `floorPlaced`
+capability applies. Neither `hostable` nor `hostable.parents` gates the session. It
+subscribes to registered physical host kinds and lets their surface providers accept
+or reject the child; the protocol's non-physical denylist excludes containers and guides.
+Mounted procedural recipes stay in their separate session. The shared surface resolver owns shelf row election and fit. Shelf
 entry checks the upward normal and overall width/depth; subsequent moves can switch
 rows over side faces without repeating those entry checks. Offset procedural bounds
 keep the footprint centered under a new cursor hit and put its bottom on the board.
 
-Grid dispatch waits until both DOM listeners have run and matches the native pointer
-event to the host hit. Both the catalog coordinator and registry mover use
+While hosted, grid dispatch waits until both DOM listeners have run and matches the
+native pointer event to the host hit. Unhosted registry floor moves apply immediately;
+a subsequent host hit in the same dispatch replaces the floor preview. Both the catalog coordinator and registry mover use
 `shared/shelf-stickiness.ts`: shelf leave events retain hosting, and a grid ray must
 miss the shelf's local volume (with the existing 8 cm margin) before detaching.
 Item-surface leaves still detach immediately. Existing hosted moves preserve their
