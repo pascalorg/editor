@@ -28,6 +28,7 @@ supabase/.temp/
 
 # Build Outputs
 .next/
+.next-failed-cache/
 out/
 build
 dist

@@ -17,7 +17,6 @@ import {
 } from '@pascal-app/plugin-environment'
 import { streetscapeHostPanel, streetscapePlugin } from '@pascal-app/plugin-streetscape'
 import { treesHostPanel, treesPlugin } from '@pascal-app/plugin-trees'
-import { webXRHostPanel, webXRPlugin } from '@webxr/plugin'
 import { registerViewerPresentation } from '@pascal-app/viewer'
 
 // Idempotency guards: HMR can reload this module, but `registerNode`
@@ -110,8 +109,5 @@ registerEditorHostPanel({
   ...streetscapeHostPanel,
   creator: { name: 'Sudhir Yadav', url: 'https://github.com/sudhir9297' },
 })
-extendPluginDiscovery(async () => [webXRPlugin])
-registerEditorHostPanel(webXRHostPanel)
-
 loadBuiltinsSync()
 void loadExternalPlugins()

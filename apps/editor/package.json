@@ -29,7 +29,6 @@
     "@react-three/fiber": "^9.5.0",
     "@react-three/xr": "^6.6.30",
     "@tailwindcss/postcss": "^4.2.1",
-    "@webxr/plugin": "file:./vendor/webxr-plugin-0.1.0-quest-layout-v21.tgz",
     "clsx": "^2.1.1",
     "geist": "^1.7.0",
     "lucide-react": "^1.7.0",

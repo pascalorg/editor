@@ -18,8 +18,7 @@ import {
   useEditor,
   useFloorplanMode,
 } from '@pascal-app/editor'
-import type { PascalXRWandBindings } from '@webxr/plugin/pascal-editor'
-import { useRoofFootprintSource, useLiquidLineToolOptions } from '@pascal-app/nodes'
+import { useLiquidLineToolOptions } from '@pascal-app/nodes'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
@@ -631,34 +630,4 @@ export function BuildTab() {
       ) : null}
     </div>
   )
-}
-
-export const webXRWandBindings: PascalXRWandBindings = {
-  activateBuildTool,
-  activateModularCabinetTool,
-  activatePaintMode,
-  activateRoofFeatureTool,
-  activateRoofType,
-  activateTerrainSculptMode,
-  activateSelectMode: () => {
-    useEditor.getState().setMode('select')
-    useEditor.getState().setTool(null)
-  },
-  activateRoofFootprintSource: (source) => {
-    const defaults = useEditor.getState().toolDefaults.roof
-    activateBuildTool('roof')
-    useEditor.getState().setToolDefaults('roof', defaults ?? null)
-    if (source !== 'walls') useRoofFootprintSource.getState().setSource(source)
-  },
-  collectBuildTypes,
-  collectRoofFeatures,
-  getRoofFootprintSources: (type) =>
-    type === 'conical'
-      ? [{ label: 'Walls', value: 'walls' }]
-      : [
-          { label: 'Draw', value: 'draw' },
-          { label: 'Room', value: 'room' },
-        ],
-  roofTypeOptions: ROOF_TYPE_OPTIONS,
-  xrMepItems: MEP_ITEMS,
 }

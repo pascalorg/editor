@@ -1,7 +1,5 @@
 'use client'
 
-import { PascalWebXRButton } from '@webxr/plugin/pascal-editor'
-
 // Node registry bootstrap is loaded once at the root via
 // `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
 // import here.
@@ -21,7 +19,6 @@ import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signa
 import { cn } from '@/lib/utils'
 import { BuildTab } from './build-tab'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
-import { useWebXRInstalled, WebXRFeatureConsumer, WebXRFeatureRuntime } from './webxr-feature-gate'
 
 export interface SceneMeta {
   id: string
@@ -112,7 +109,6 @@ function isLightPreviewQuery(searchParams: URLSearchParams): boolean {
 }
 
 export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
-  const webXRInstalled = useWebXRInstalled()
   const router = useRouter()
   const searchParams = useSearchParams()
   const versionRef = useRef(meta.version)
@@ -246,90 +242,68 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
 
   return (
     <div className="relative h-screen w-screen">
-      <WebXRFeatureRuntime enabled={webXRInstalled}>
-        <WebXRFeatureConsumer>
-          {(vr) => (
-            <>
-              {conflict && (
-                <div className="pointer-events-auto absolute top-4 left-1/2 z-50 w-full max-w-md -translate-x-1/2 rounded-lg border border-border bg-background p-4 shadow-xl">
-                  <h2 className="font-semibold text-sm">Another session saved first — refresh?</h2>
-                  <p className="mt-1 text-muted-foreground text-xs">
-                    Your changes haven&apos;t been saved. Reload to pick up the latest version.
-                  </p>
-                  <div className="mt-3 flex items-center gap-2">
-                    <button
-                      className="rounded-md border border-border bg-accent px-3 py-1.5 font-medium text-xs hover:bg-accent/80"
-                      onClick={() => router.refresh()}
-                      type="button"
-                    >
-                      Reload
-                    </button>
-                    <button
-                      className="rounded-md border border-border bg-background px-3 py-1.5 font-medium text-xs hover:bg-accent/40"
-                      onClick={() => setConflict(false)}
-                      type="button"
-                    >
-                      Dismiss
-                    </button>
-                  </div>
-                </div>
-              )}
-              {saveError && !conflict && (
-                <div className="pointer-events-auto absolute top-4 left-1/2 z-50 w-full max-w-md -translate-x-1/2 rounded-lg border border-destructive/50 bg-background p-3 shadow-xl">
-                  <p className="font-medium text-destructive text-xs">{saveError}</p>
-                </div>
-              )}
-              <div className="pointer-events-none absolute top-4 right-4 z-40 flex flex-col items-end gap-1 md:top-14 md:flex-row md:items-center md:gap-2">
-                <button
-                  aria-pressed={lightPreview}
-                  className={cn(
-                    'pointer-events-auto rounded-md border border-border px-3 py-1.5 font-medium text-xs shadow-sm backdrop-blur',
-                    lightPreview ? 'bg-accent' : 'bg-background/90 hover:bg-accent/40',
-                  )}
-                  onClick={() =>
-                    router.push(
-                      lightPreview ? `/scene/${meta.id}` : `/scene/${meta.id}?disable=postFx`,
-                    )
-                  }
-                  title="Skip the post-processing pipeline — lighter on the GPU, no ambient occlusion or selection outlines"
-                  type="button"
-                >
-                  Light preview
-                </button>
-                <Link
-                  className="pointer-events-auto rounded-md border border-border bg-background/90 px-3 py-1.5 font-medium text-xs shadow-sm backdrop-blur hover:bg-accent/40"
-                  href="/scenes"
-                >
-                  All scenes
-                </Link>
-              </div>
-              <Editor
-                immersive={vr?.immersive}
-                disablePostFx={lightPreview}
-                layoutVersion="v2"
-                onLoad={handleLoad}
-                onSave={handleSave}
-                onThumbnailCapture={handleThumb}
-                projectId={meta.projectId ?? 'default'}
-                sidebarTabs={SIDEBAR_TABS}
-                viewerToolbarLeft={<CommunityViewerToolbarLeft />}
-                viewerToolbarRight={
-                  <CommunityViewerToolbarRight
-                    vrButton={
-                      vr ? (
-                        <PascalWebXRButton
-                          className="flex h-8 w-8 items-center justify-center text-muted-foreground hover:bg-accent disabled:opacity-50"
-                          feature={vr}
-                        />
-                      ) : null
-                    }
-                  />
-                }
-              />
-            </>
+      {conflict && (
+        <div className="pointer-events-auto absolute top-4 left-1/2 z-50 w-full max-w-md -translate-x-1/2 rounded-lg border border-border bg-background p-4 shadow-xl">
+          <h2 className="font-semibold text-sm">Another session saved first — refresh?</h2>
+          <p className="mt-1 text-muted-foreground text-xs">
+            Your changes haven&apos;t been saved. Reload to pick up the latest version.
+          </p>
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              className="rounded-md border border-border bg-accent px-3 py-1.5 font-medium text-xs hover:bg-accent/80"
+              onClick={() => router.refresh()}
+              type="button"
+            >
+              Reload
+            </button>
+            <button
+              className="rounded-md border border-border bg-background px-3 py-1.5 font-medium text-xs hover:bg-accent/40"
+              onClick={() => setConflict(false)}
+              type="button"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+      {saveError && !conflict && (
+        <div className="pointer-events-auto absolute top-4 left-1/2 z-50 w-full max-w-md -translate-x-1/2 rounded-lg border border-destructive/50 bg-background p-3 shadow-xl">
+          <p className="font-medium text-destructive text-xs">{saveError}</p>
+        </div>
+      )}
+      <div className="pointer-events-none absolute top-4 right-4 z-40 flex flex-col items-end gap-1 md:top-14 md:flex-row md:items-center md:gap-2">
+        <button
+          aria-pressed={lightPreview}
+          className={cn(
+            'pointer-events-auto rounded-md border border-border px-3 py-1.5 font-medium text-xs shadow-sm backdrop-blur',
+            lightPreview ? 'bg-accent' : 'bg-background/90 hover:bg-accent/40',
           )}
-        </WebXRFeatureConsumer>
-      </WebXRFeatureRuntime>
+          onClick={() =>
+            router.push(lightPreview ? `/scene/${meta.id}` : `/scene/${meta.id}?disable=postFx`)
+          }
+          title="Skip the post-processing pipeline — lighter on the GPU, no ambient occlusion or selection outlines"
+          type="button"
+        >
+          Light preview
+        </button>
+        <Link
+          className="pointer-events-auto rounded-md border border-border bg-background/90 px-3 py-1.5 font-medium text-xs shadow-sm backdrop-blur hover:bg-accent/40"
+          href="/scenes"
+        >
+          All scenes
+        </Link>
+      </div>
+      <Editor
+        disablePostFx={lightPreview}
+        layoutVersion="v2"
+        onLoad={handleLoad}
+        onSave={handleSave}
+        onThumbnailCapture={handleThumb}
+        projectId={meta.projectId ?? 'default'}
+        sidebarTabs={SIDEBAR_TABS}
+        viewerToolbarLeft={<CommunityViewerToolbarLeft />}
+        viewerToolbarRight={<CommunityViewerToolbarRight vrButton={null} />}
+      />
     </div>
   )
 }
