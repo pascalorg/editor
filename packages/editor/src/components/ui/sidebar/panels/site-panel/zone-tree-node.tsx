@@ -50,6 +50,7 @@ export const ZoneTreeNode = memo(function ZoneTreeNode({
       isHovered={isHovered}
       isLast={isLast}
       isSelected={isSelected}
+      keepIconColor
       isVisible={isVisible}
       label={
         <InlineRenameInput

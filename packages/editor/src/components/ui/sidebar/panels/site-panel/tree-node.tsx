@@ -209,6 +209,8 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth = 0, isLast }: Tr
 interface TreeNodeWrapperProps {
   nodeId?: string
   icon: React.ReactNode
+  /** Keep the icon's own color when unselected (color dots are the identity). */
+  keepIconColor?: boolean
   label: React.ReactNode
   depth: number
   hasChildren: boolean
@@ -234,6 +236,7 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
     {
       nodeId,
       icon,
+      keepIconColor,
       label,
       depth,
       hasChildren,
@@ -328,7 +331,7 @@ export const TreeNodeWrapper = forwardRef<HTMLDivElement, TreeNodeWrapperProps>(
             <span
               className={cn(
                 'flex h-5 w-5 shrink-0 items-center justify-center transition-all duration-200',
-                !isSelected && 'opacity-60 grayscale',
+                !isSelected && !keepIconColor && 'opacity-60 grayscale',
               )}
             >
               {icon}

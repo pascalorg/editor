@@ -8,7 +8,7 @@ import {
   type ZoneNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { AlertTriangle, Crosshair, Eye, EyeOff, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Eye, EyeOff, Trash2, X } from 'lucide-react'
 import { memo, useCallback, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
@@ -93,6 +93,7 @@ export const UnitZoneRow = memo(function UnitZoneRow({
       isHovered={isHovered}
       isLast={isLast}
       isSelected={isSelected}
+      keepIconColor
       label={
         <span className="flex min-w-0 items-baseline gap-1.5">
           <span className="truncate">{zone.name || 'Zone'}</span>
@@ -168,17 +169,6 @@ export const UnitTreeNode = memo(function UnitTreeNode({
       actions={
         <div className="flex items-center gap-0.5">
           <button
-            className={cn(ACTION_BUTTON_CLASS, isActive && 'text-primary')}
-            onClick={(event) => {
-              event.stopPropagation()
-              setActiveUnit(isActive ? null : unitId)
-            }}
-            title={isActive ? 'Clear active unit' : 'Set as active unit'}
-            type="button"
-          >
-            <Crosshair className="h-3 w-3" />
-          </button>
-          <button
             className={cn(ACTION_BUTTON_CLASS, isIsolated && 'text-primary')}
             onClick={(event) => {
               event.stopPropagation()
@@ -214,6 +204,7 @@ export const UnitTreeNode = memo(function UnitTreeNode({
       isHovered={isHovered}
       isLast={isLast}
       isSelected={isSelected}
+      keepIconColor
       label={
         <span className="flex min-w-0 items-center gap-1.5">
           <InlineRenameInput
