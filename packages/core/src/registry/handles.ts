@@ -327,6 +327,8 @@ export type ArcResizeHandle<N = any> = {
    * arrow icon, intended for whole-node rotation handles.
    */
   shape?: 'chevron' | 'rotate'
+  /** Disable the default 15° snap for whole-node rotation. */
+  continuous?: boolean
   /**
    * Plane the angular drag is measured in:
    *   - 'horizontal' (default): cursor bearing around +Y — whole-node yaw

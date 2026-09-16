@@ -180,6 +180,8 @@ export function useHandleDrag(args: UseHandleDragArgs) {
     let lastPatch: Partial<AnyNode> | null = null
     let historyPaused = true
     let altKey = event.nativeEvent.altKey
+    let pendingMoveEvent: PointerEvent | null = null
+    let moveFrame = 0
 
     const resumeHistory = () => {
       if (!historyPaused) return
@@ -187,7 +189,7 @@ export function useHandleDrag(args: UseHandleDragArgs) {
       useScene.temporal.getState().resume()
     }
 
-    const onMove = (moveEvent: PointerEvent) => {
+    const processMove = (moveEvent: PointerEvent) => {
       const patch = session.move({
         event: moveEvent,
         modifiers: { altKey },
@@ -202,7 +204,23 @@ export function useHandleDrag(args: UseHandleDragArgs) {
       }
     }
 
+    // Coalesce high-frequency pointer events so live React/store updates happen
+    // at most once per animation frame while retaining the newest position.
+    const flushMove = () => {
+      moveFrame = 0
+      const moveEvent = pendingMoveEvent
+      pendingMoveEvent = null
+      if (moveEvent) processMove(moveEvent)
+    }
+    const onMove = (moveEvent: PointerEvent) => {
+      pendingMoveEvent = moveEvent
+      if (moveFrame === 0) moveFrame = window.requestAnimationFrame(flushMove)
+    }
+
     const cleanup = () => {
+      if (moveFrame !== 0) window.cancelAnimationFrame(moveFrame)
+      moveFrame = 0
+      pendingMoveEvent = null
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onCancel)
@@ -227,6 +245,8 @@ export function useHandleDrag(args: UseHandleDragArgs) {
     }
 
     const onUp = () => {
+      if (moveFrame !== 0) window.cancelAnimationFrame(moveFrame)
+      flushMove()
       swallowNextClick()
       sfxEmitter.emit('sfx:item-place')
       if (lastPatch) {
