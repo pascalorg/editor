@@ -48,6 +48,7 @@ import {
 } from '../../../lib/active-placement-surface'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { formatLinearMeasurement } from '../../../lib/measurements'
+import { createMovementSfxTick } from '../../../lib/sfx/movement-tick'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 
 import {
@@ -55,7 +56,11 @@ import {
   resolveAlignmentForActiveBuilding,
 } from '../../../lib/world-grid-snap'
 import useAlignmentGuides from '../../../store/use-alignment-guides'
-import useEditor, { isAlignmentGuideActive, isMagneticSnapActive } from '../../../store/use-editor'
+import useEditor, {
+  isAlignmentGuideActive,
+  isGridSnapActive,
+  isMagneticSnapActive,
+} from '../../../store/use-editor'
 
 import useFacingPose from '../../../store/use-facing-pose'
 import usePlacementPreview from '../../../store/use-placement-preview'
@@ -636,7 +641,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         : null
     }
 
-    const counterPointer = createItemSurfacePointerArbitration()
+    const surfacePointer = createItemSurfacePointerArbitration()
     let counterHitValid = true
     const revalidate = (): boolean => {
       const placeable =
@@ -677,7 +682,24 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       return [localRotation.x, localRotation.y, localRotation.z]
     }
 
-    const applyTransition = (result: TransitionResult) => {
+    const { tick: tickMovementSfx } = createMovementSfxTick()
+    const tickSurfaceMovementSfx = (position: [number, number, number]) => {
+      const point = worldToBuildingLocal(...position)
+      tickMovementSfx({
+        coords: [point.x, point.z],
+        gridSnapActive: isGridSnapActive(),
+        gridStep: useEditor.getState().gridSnapStep,
+      })
+    }
+
+    const applyTransition = (
+      result: TransitionResult,
+      event?: ItemEvent | CabinetEvent | ShelfEvent,
+    ) => {
+      if (event) {
+        surfacePointer.hit(event.node.id, event.nativeEvent.nativeEvent ?? event.nativeEvent)
+        tickSurfaceMovementSfx(result.cursorPosition)
+      }
       counterHitValid = true
       // Alignment guides are floor-only; clear them when the cursor moves
       // onto a wall / ceiling / item surface (only those paths call this).
@@ -956,11 +978,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // ---- Floor Handlers ----
 
-    let previousGridPos: [number, number, number] | null = null
-
     const cursorRayIntersectsShelf = createShelfStickiness()
 
     const onGridMove = (event: GridEvent) => {
+      if (surfacePointer.blocksGrid(event.nativeEvent.nativeEvent ?? event.nativeEvent)) return
       releaseCommit = () => onGridClick(event)
       // Lazy draft creation: if no draft yet (e.g. level wasn't ready during init), create now
       if (
@@ -999,7 +1020,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           : null
       if (counterId && useScene.getState().nodes[counterId as AnyNodeId]?.type === 'cabinet') {
         if (
-          counterPointer.blocksGrid(event.nativeEvent.nativeEvent ?? event.nativeEvent) ||
+          surfacePointer.blocksGrid(event.nativeEvent.nativeEvent ?? event.nativeEvent) ||
           cursorRayIntersectsShelf(counterId, cameraRef.current, event.position)
         )
           return
@@ -1106,15 +1127,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         frozenSupportSlabIdRef.current = frozenPatch.supportSlabId
       }
 
-      // Play snap sound when grid position changes
-      if (
-        previousGridPos &&
-        (gridPos[0] !== previousGridPos[0] || gridPos[2] !== previousGridPos[2])
-      ) {
-        sfxEmitter.emit('sfx:grid-snap')
-      }
-
-      previousGridPos = [...gridPos]
+      tickMovementSfx({
+        coords: [gridPos[0], gridPos[2]],
+        gridSnapActive: isGridSnapActive(),
+        gridStep: useEditor.getState().gridSnapStep,
+      })
       gridPosition.current.set(...gridPos)
       const cursorPosition = getFloorVisualPosition(gridPos)
       if (!draft && asset.attachTo) {
@@ -1669,7 +1686,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     const detachItemSurfaceToFloor = (event: ItemEvent | CabinetEvent) => {
       hostSurfaceDragAnchor = null
       counterHitValid = true
-      counterPointer.clear()
+      surfacePointer.clear()
       // Landing back on the floor: refresh the pointer surface cap from
       // this event's world hit so the first floor position already targets
       // the aimed-at surface (not a deck above it).
@@ -1760,7 +1777,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (event.node.type === 'cabinet') {
         lastRawPos.current.set(...event.position)
         counterHitValid = false
-        counterPointer.hit(event.node.id, event.nativeEvent.nativeEvent ?? event.nativeEvent)
+        surfacePointer.hit(event.node.id, event.nativeEvent.nativeEvent ?? event.nativeEvent)
       }
       if (event.node.id === draftNode.current?.id) return
       has3DPointerDrivenMoveRef.current = true
@@ -1769,7 +1786,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       counterHitValid = true
 
       event.stopPropagation()
-      applyTransition(result)
+      applyTransition(result, event)
 
       if (!draftNode.current) {
         ensureDraft(result)
@@ -1788,7 +1805,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (event.node.type === 'cabinet') {
         lastRawPos.current.set(...event.position)
         counterHitValid = false
-        counterPointer.hit(event.node.id, event.nativeEvent.nativeEvent ?? event.nativeEvent)
+        surfacePointer.hit(event.node.id, event.nativeEvent.nativeEvent ?? event.nativeEvent)
       } else counterHitValid = true
 
       if (ctx.state.surface !== 'item-surface') {
@@ -1797,7 +1814,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         if (!enterResult) return
 
         event.stopPropagation()
-        applyTransition(enterResult)
+        applyTransition(enterResult, event)
         if (draftNode.current && enterResult.nodeUpdate.parentId) {
           useScene.getState().updateNode(draftNode.current.id, enterResult.nodeUpdate)
         }
@@ -1812,7 +1829,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
         event.stopPropagation()
         if (enterResult) {
-          applyTransition(enterResult)
+          applyTransition(enterResult, event)
           if (draftNode.current && enterResult.nodeUpdate.parentId) {
             useScene.getState().updateNode(draftNode.current.id, enterResult.nodeUpdate)
           }
@@ -1849,6 +1866,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       event.stopPropagation()
 
+      surfacePointer.hit(event.node.id, event.nativeEvent.nativeEvent ?? event.nativeEvent)
+      tickSurfaceMovementSfx(result.cursorPosition)
       gridPosition.current.set(...result.gridPosition)
       const ic = worldToBuildingLocal(...result.cursorPosition)
       cursorGroupRef.current.position.set(ic.x, ic.y, ic.z)
@@ -2170,7 +2189,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!result) return
 
       event.stopPropagation()
-      applyTransition(result)
+      applyTransition(result, event)
 
       if (!draftNode.current) {
         ensureDraft(result)
@@ -2193,7 +2212,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         const enterResult = shelfSurfaceStrategy.enter(ctx, event)
         if (!enterResult) return
         event.stopPropagation()
-        applyTransition(enterResult)
+        applyTransition(enterResult, event)
         if (!draftNode.current) {
           ensureDraft(enterResult)
         } else if (enterResult.nodeUpdate.parentId) {
@@ -2211,6 +2230,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       event.stopPropagation()
 
+      surfacePointer.hit(event.node.id, event.nativeEvent.nativeEvent ?? event.nativeEvent)
+      tickSurfaceMovementSfx(result.cursorPosition)
       gridPosition.current.set(...result.gridPosition)
       const ic = worldToBuildingLocal(...result.cursorPosition)
       cursorGroupRef.current.position.set(ic.x, ic.y, ic.z)

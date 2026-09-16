@@ -38,7 +38,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Group } from 'three'
+import { type Group, Vector3 } from 'three'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { commitFreshPlacementSubtree } from '../../../lib/fresh-planar-placement'
 import { stripPlacementMetadataFlags } from '../../../lib/placement-metadata'
@@ -47,7 +47,7 @@ import {
   resolvePrioritizedPlanarCursorPosition,
 } from '../../../lib/planar-cursor-placement'
 import { resolveAttachmentPreviewRotation } from '../../../lib/rigid-plan-svg-transform'
-import { movementSfxStepKey } from '../../../lib/sfx/movement-tick'
+import { createMovementSfxTick } from '../../../lib/sfx/movement-tick'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { resolveSnapFlags } from '../../../lib/snapping-mode'
 
@@ -276,7 +276,6 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     return 0
   }, [node])
   const [cursorPosition, setCursorPosition] = useState<[number, number, number]>(originalPosition)
-  const previousSnapRef = useRef<string | null>(null)
   /**
    * The latest snapped cursor position from `grid:move`. We commit at
    * THIS position regardless of which event variant fires the click —
@@ -429,7 +428,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
 
   useEffect(() => {
     useScene.temporal.getState().pause()
-    previousSnapRef.current = null
+    const movementSfx = createMovementSfxTick()
     dragAnchorRef.current = null
     hasMovedRef.current = false
     rotationRef.current = originalRotationY
@@ -728,8 +727,18 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     const onItemMove = (event: NodeEvent<AnyNode>) => {
       if (committed || !resolvedFootprint || !itemSurfaceMove) return
       const pose = itemSurfaceMove.enter(event, resolvedFootprint, rotationRef.current)
-      if (pose) applySurfacePose(pose)
-      else recomputeValidity()
+      if (pose) {
+        applySurfacePose(pose)
+        // Compare floor and host movement in the same plan frame, never host-local storage.
+        const point = new Vector3(...pose.worldPosition)
+        const levelId = currentLevelId()
+        if (levelId) sceneRegistry.nodes.get(levelId)?.worldToLocal(point)
+        movementSfx.tick({
+          coords: [point.x, point.z],
+          gridSnapActive: isGridSnapActive(),
+          gridStep: useEditor.getState().gridSnapStep,
+        })
+      } else recomputeValidity()
     }
     const onItemLeave = (event: NodeEvent<AnyNode>) => {
       if (!itemSurfaceMove?.hosted || committed) return
@@ -979,16 +988,18 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // Carry connected ductwork along (preview only — committed on drop).
       previewConnectivity(position, rotationRef.current)
 
-      const nextSnapKey = movementSfxStepKey({
+      const soundStep = {
         coords: [x, z],
         gridSnapActive: isGridSnapActive() && !attachmentSnapped,
         gridStep: useEditor.getState().gridSnapStep,
-      })
-      const prev = previousSnapRef.current
-      if (prev !== nextSnapKey) {
-        sfxEmitter.emit('sfx:grid-snap')
-        previousSnapRef.current = nextSnapKey
       }
+      if (itemSurfaceMove) {
+        movementSfx.schedule(
+          soundStep,
+          () => !itemSurfaceMove.blocksGrid(event, cameraRef.current),
+          true,
+        )
+      } else movementSfx.tick(soundStep, true)
     }
 
     const gridDispatch = createItemSurfaceGridDispatch(onGridMove)
@@ -1026,6 +1037,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // path below, minting a hidden ghost copy and replaying the SFX.
       if (committed) return
       gridDispatch.flush()
+      movementSfx.flush()
       if (itemSurfaceMove?.hosted && !itemSurfaceMove.valid) return
       // Ignore a commit that fires before the cursor has moved into place —
       // it's the stray trailing click of whatever armed this move, not a
@@ -1285,6 +1297,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     emitter.on('node:click', commitAtCursor)
 
     const onCancel = () => {
+      movementSfx.cancel()
       gridDispatch.cancel()
       useLiveTransforms.getState().clear(node.id)
       clearConnectivityOverrides()
@@ -1304,6 +1317,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     emitter.on('tool:cancel', onCancel)
 
     return () => {
+      movementSfx.cancel()
       gridDispatch.cancel()
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
