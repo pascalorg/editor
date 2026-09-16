@@ -37,7 +37,7 @@
         "@pascal-app/nodes": "*",
         "@pascal-app/plugin-bones": "github:pascalorg/plugin-bones#5679260261ee1c733656ff6dfb99e30bb24b58a7",
         "@pascal-app/plugin-environment": "github:AxiomeCG/environment#40baf63ddd06a657aaa0f60e1559fd9ad561f295",
-        "@pascal-app/plugin-pool": "github:sudhir9297/pool-pascal-plugin#6ee417c88fa0f01057b654d2417abbebeb6c3436",
+        "@pascal-app/plugin-pool": "github:sudhir9297/pool-pascal-plugin#ad53660873afdd001cf091ad9d117aa8fd3ed698",
         "@pascal-app/plugin-streetscape": "github:sudhir9297/streetscape-pascal-plugin#1c04ec9ccb3fa8124ec56dfc1026567cbbc51aef",
         "@pascal-app/plugin-trees": "github:pascalorg/plugin-trees#56d978cd9b409b716207b3f3d269455d3cd6f067",
         "@pascal-app/viewer": "*",
@@ -271,6 +271,7 @@
         "@pascal-app/editor": "^1.0.0",
         "@pascal-app/viewer": "^1.0.0",
         "@pascal/typescript-config": "*",
+        "@react-three/test-renderer": "^9.1.0",
         "@types/bun": "^1.3.0",
         "@types/node": "^22.19.12",
         "@types/react": "^19.2.2",
@@ -753,7 +754,7 @@
 
     "@pascal-app/plugin-environment": ["@pascal-app/plugin-environment@github:AxiomeCG/environment#40baf63", { "peerDependencies": { "@dgreenheck/ez-tree": "^1.1.0", "@pascal-app/core": ">=1.0.0-beta.6 <2", "@pascal-app/editor": ">=1.0.0-beta.6 <2", "@pascal-app/viewer": ">=1.0.0-beta.6 <2", "@radix-ui/react-tooltip": "^1.2.8", "@react-three/fiber": "^9", "lucide-react": "^1.7.0", "react": "^18 || ^19", "react-colorful": "^5.8.1", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "AxiomeCG-environment-40baf63", "sha512-mb9i4IFq1c62BcAhtGJAKgJHBVQtFYySFW/LzkmnNfnWSOlGdUavoiR4f8cq5Y4xg6MTvGFX0ytO1Urk8wOPPQ=="],
 
-    "@pascal-app/plugin-pool": ["@pascal-app/plugin-pool@github:sudhir9297/pool-pascal-plugin#6ee417c", { "dependencies": { "three-bvh-csg": "^0.0.18", "three-mesh-bvh": "^0.9.8" }, "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1 || >=1.0.0-beta.0 <2", "@pascal-app/editor": ">=0.9.1 <1 || >=1.0.0-beta.0 <2", "@pascal-app/viewer": ">=0.9.1 <1 || >=1.0.0-beta.0 <2", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "sudhir9297-pool-pascal-plugin-6ee417c", "sha512-x0bfYueNZOiHwYHGxNLxLEW19TbB6ULy6GzVebSs4oJJq8zGZ1prSCtVNs07GNsjyMWDQtrw43MiJR+Qjt81lA=="],
+    "@pascal-app/plugin-pool": ["@pascal-app/plugin-pool@github:sudhir9297/pool-pascal-plugin#ad53660", { "dependencies": { "three-bvh-csg": "^0.0.18", "three-mesh-bvh": "^0.9.8" }, "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1 || >=1.0.0-beta.0 <2", "@pascal-app/editor": ">=0.9.1 <1 || >=1.0.0-beta.0 <2", "@pascal-app/viewer": ">=0.9.1 <1 || >=1.0.0-beta.0 <2", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.186.0", "zod": "^4", "zustand": "^5" } }, "sudhir9297-pool-pascal-plugin-ad53660", "sha512-aGWs6PJ2sUoA7G1XlmVYEnzXefithXbsb7m42yd2+XUT8etX3CEA1Os4OgoS3MN1s5EVYAShyGgVY8cSXzG2MA=="],
 
     "@pascal-app/plugin-streetscape": ["@pascal-app/plugin-streetscape@github:sudhir9297/streetscape-pascal-plugin#1c04ec9", { "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "sudhir9297-streetscape-pascal-plugin-1c04ec9", "sha512-X7Zg7wi0ghZRcTtbH5LF6xye493uSZ2ft3AmAQBtguBCU6VCwCexA7pdKDr5AnVxX/JRj2s6JSd/OX4aIZ9Y6Q=="],
 
