@@ -1,5 +1,6 @@
 import {
   type AnyNode,
+  type CabinetEvent,
   type ItemEvent,
   type ShelfEvent,
   type SurfaceHit,
@@ -17,7 +18,7 @@ export function surfaceWorldNormalY(normal: ItemEvent['normal'], matrixWorld: Ma
 
 export function itemEventToSurfaceHit(
   host: AnyNode,
-  event: ItemEvent | ShelfEvent,
+  event: ItemEvent | ShelfEvent | CabinetEvent,
 ): SurfaceHit | null {
   const mesh = sceneRegistry.nodes.get(host.id)
   if (!mesh) return null

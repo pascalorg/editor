@@ -1,6 +1,8 @@
 import type {
   AnyNode,
   AnyNodeId,
+  CabinetEvent,
+  CabinetNode,
   CeilingEvent,
   CeilingNode,
   GridEvent,
@@ -51,7 +53,7 @@ import type {
 
 const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
 function isDescendantOfItem(
-  candidate: ItemNode,
+  candidate: AnyNode,
   ancestorId: string,
   nodes: Record<string, AnyNode>,
 ): boolean {
@@ -855,8 +857,8 @@ export const ceilingStrategy = {
 // ============================================================================
 
 function resolveCatalogItemSurfacePlacement(
-  host: ItemNode,
-  event: ItemEvent,
+  host: ItemNode | CabinetNode,
+  event: ItemEvent | CabinetEvent,
   dimensions: [number, number, number],
   worldYaw: number,
   checkFootprint: boolean,
@@ -874,7 +876,7 @@ function resolveCatalogItemSurfacePlacement(
     hit,
     scene: createSceneApi(useScene),
     snapScalar: snapToGrid,
-    checkFootprint,
+    checkFootprint: host.type === 'cabinet' || checkFootprint,
   })
   if (!placement) return null
   return {
@@ -884,16 +886,36 @@ function resolveCatalogItemSurfacePlacement(
   }
 }
 
+export function validCatalogCounterPose(ctx: PlacementContext): boolean {
+  const host = ctx.state.surfaceItemId
+    ? useScene.getState().nodes[ctx.state.surfaceItemId as AnyNodeId]
+    : undefined
+  if (host?.type !== 'cabinet') return true
+  if (!ctx.draftItem) return false
+  const placement = resolveSurfacePlacement({
+    host,
+    childKind: 'item',
+    childFootprint: {
+      size: getScaledDimensions(ctx.draftItem),
+      rotationY: ctx.draftItem.rotation[1],
+      rotation: ctx.draftItem.rotation,
+    },
+    hit: { point: ctx.gridPosition.toArray(), normalWorldY: 1 },
+    scene: createSceneApi(useScene),
+  })
+  return !!placement && Math.abs(placement.position[1] - ctx.gridPosition.y) < 1e-5
+}
+
 export const itemSurfaceStrategy = {
   /**
    * Handle item:enter — transition from floor to an item surface.
    * Returns null if: item has no surface, our item doesn't fit, or it's the draft itself.
    */
-  enter(ctx: PlacementContext, event: ItemEvent): TransitionResult | null {
+  enter(ctx: PlacementContext, event: ItemEvent | CabinetEvent): TransitionResult | null {
     // Only floor items can be placed on surfaces
     if (ctx.asset.attachTo) return null
 
-    const surfaceItem = event.node as ItemNode
+    const surfaceItem = event.node
     // Don't surface-place on the draft itself
     if (surfaceItem.id === ctx.draftItem?.id) return null
     if (ctx.state.surface === 'item-surface' && ctx.state.surfaceItemId === surfaceItem.id) {
@@ -922,6 +944,7 @@ export const itemSurfaceStrategy = {
       nodeUpdate: {
         position: pose.position,
         parentId: surfaceItem.id,
+        supportSlabId: undefined,
         rotation: [draftRotation[0], pose.rotationY, draftRotation[2]],
       },
       cursorRotationY: ctx.currentCursorRotationY,
@@ -934,13 +957,16 @@ export const itemSurfaceStrategy = {
   /**
    * Handle item:move — update position while on an item surface.
    */
-  move(ctx: PlacementContext, event: ItemEvent): PlacementResult | null {
+  move(ctx: PlacementContext, event: ItemEvent | CabinetEvent): PlacementResult | null {
     if (ctx.state.surface !== 'item-surface') return null
     if (!(ctx.state.surfaceItemId && ctx.draftItem)) return null
     if (event.node.id !== ctx.state.surfaceItemId) return null
 
     const nodes = useScene.getState().nodes
-    const surfaceItem = nodes[ctx.state.surfaceItemId as AnyNodeId] as ItemNode | undefined
+    const surfaceItem = nodes[ctx.state.surfaceItemId as AnyNodeId] as
+      | ItemNode
+      | CabinetNode
+      | undefined
     if (!surfaceItem) return null
 
     const pose = resolveCatalogItemSurfacePlacement(
@@ -965,10 +991,11 @@ export const itemSurfaceStrategy = {
   /**
    * Handle item:click — commit placement on item surface.
    */
-  click(ctx: PlacementContext, _event: ItemEvent): CommitResult | null {
+  click(ctx: PlacementContext, _event: ItemEvent | CabinetEvent): CommitResult | null {
     if (ctx.state.surface !== 'item-surface') return null
     if (!(ctx.draftItem && ctx.state.surfaceItemId)) return null
     if (_event.node.id !== ctx.state.surfaceItemId) return null
+    if (!validCatalogCounterPose(ctx)) return null
 
     return {
       nodeUpdate: {
@@ -1124,7 +1151,7 @@ export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidato
 
   // Item surface: valid if we entered (size check was in enter)
   if (ctx.state.surface === 'item-surface') {
-    return ctx.state.surfaceItemId !== null
+    return ctx.state.surfaceItemId !== null && validCatalogCounterPose(ctx)
   }
 
   // Shelf surface: same — size check already happened on enter

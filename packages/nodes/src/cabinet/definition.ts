@@ -25,6 +25,7 @@ import { buildCabinetFloorplan, buildCabinetModuleFloorplan } from './floorplan'
 import { cabinetModuleFloorplanMoveTarget } from './floorplan-move'
 import { cabinetFloorplanSiblingOverrides } from './floorplan-overrides'
 import { buildCabinetGeometry } from './geometry'
+import { withCabinetHostedChildren } from './hosted-resize'
 import { toggleCabinetOperationState } from './interaction'
 import { cabinetModuleParentFrame } from './move-frame'
 import { cabinetPaint } from './paint'
@@ -512,7 +513,9 @@ export function cabinetRunNeighborSignature(run: CabinetNodeType): string {
     run.carcassHeight,
     run.runTier,
     run.countertopOverhang,
-    run.children ?? [],
+    (run.children ?? []).filter(
+      (id) => id.startsWith('cabinet_') || id.startsWith('cabinet-module_'),
+    ),
     cabinetLayoutRevision(run.metadata),
   ])
 }
@@ -2221,7 +2224,10 @@ function cabinetHandles(
   node: CabinetNodeType,
   sceneApi?: SceneApi,
 ): HandleDescriptor<CabinetNodeType>[] {
-  if ((node.children ?? []).length > 0) {
+  const structuralChildren = (node.children ?? []).filter(
+    (id) => id.startsWith('cabinet_') || id.startsWith('cabinet-module_'),
+  )
+  if (structuralChildren.length > 0) {
     const connectedRuns =
       sceneApi && node.runTier === 'base' ? connectedBaseRuns(node, sceneApi) : []
     const depthHandles = sceneApi
@@ -2239,7 +2245,7 @@ function cabinetHandles(
     cabinetHeightHandle(),
     cabinetRotateHandle(),
   ]
-  if ((node.children ?? []).length === 0) {
+  if (structuralChildren.length === 0) {
     handles.unshift(cabinetWidthHandle('left'), cabinetWidthHandle('right'))
   }
   return handles as HandleDescriptor<CabinetNodeType>[]
@@ -2388,11 +2394,11 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   // Dirty-cascade: a dirtied run re-marks its hosted modules so their
   // composite geometry re-flows with the run (see `cascadeDirty`).
   relations: {
-    hosts: ['cabinet', 'cabinet-module'],
+    hosts: ['cabinet', 'cabinet-module', 'item', 'procedural-item'],
   },
 
   parametrics: cabinetParametrics,
-  handles: cabinetHandles,
+  handles: (node, sceneApi) => cabinetHandles(node, sceneApi).map(withCabinetHostedChildren),
   geometry: buildCabinetGeometry,
   exportAnimation: ({ node, object }) => bakeCabinetAnimationClip(node, object),
   system: {
@@ -2401,6 +2407,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   },
   // `operationState` is deliberately absent — door/drawer poses are applied
   // per-frame by the cabinet animation system, not by geometry rebuilds.
+  geometryChildTypes: ['cabinet', 'cabinet-module'],
   geometryKey: (n) =>
     JSON.stringify([
       n.width,
@@ -2435,7 +2442,11 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
       // overhang re-trims against the neighbor's new spans (the neighbor's
       // own fields never appear in this key).
       JSON.stringify(cabinetAdjacencyRevision(n.metadata)),
-      JSON.stringify(n.children ?? []),
+      JSON.stringify(
+        (n.children ?? []).filter(
+          (id) => id.startsWith('cabinet_') || id.startsWith('cabinet-module_'),
+        ),
+      ),
       JSON.stringify(n.stack ?? null),
     ]),
   floorplan: buildCabinetFloorplan,
@@ -2575,11 +2586,13 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
     slots: () => cabinetSlots(),
   },
 
+  relations: { hosts: ['cabinet', 'cabinet-module', 'item', 'procedural-item'] },
   parametrics: cabinetModuleParametrics,
-  handles: cabinetModuleHandles,
+  handles: () => cabinetModuleHandles().map(withCabinetHostedChildren),
   geometry: buildCabinetGeometry,
   exportAnimation: ({ node, object }) => bakeCabinetAnimationClip(node, object),
   // `operationState` is deliberately absent — see cabinetDefinition.geometryKey.
+  geometryChildTypes: ['cabinet', 'cabinet-module'],
   geometryKey: (n) =>
     JSON.stringify([
       n.cabinetType,
@@ -2610,7 +2623,11 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
       JSON.stringify(n.material ?? null),
       JSON.stringify(n.materialPreset ?? null),
       JSON.stringify(n.slots ?? null),
-      JSON.stringify(n.children ?? []),
+      JSON.stringify(
+        (n.children ?? []).filter(
+          (id) => id.startsWith('cabinet_') || id.startsWith('cabinet-module_'),
+        ),
+      ),
       JSON.stringify(n.stack ?? null),
     ]),
   floorplan: buildCabinetModuleFloorplan,

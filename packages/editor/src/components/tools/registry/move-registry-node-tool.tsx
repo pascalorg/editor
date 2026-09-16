@@ -8,6 +8,7 @@ import {
   type AnyNodeId,
   analyzePortConnectivity,
   bboxCornerAnchors,
+  type CabinetEvent,
   cascadeDirty,
   collectAlignmentAnchors,
   createSceneApi,
@@ -570,8 +571,9 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     const recomputeValidity = () => {
       if (!boxDimensions && !movableValidityConfig) return
       if (altRef.current || itemSurfaceMove?.hosted) {
-        validRef.current = true
-        setValid(true)
+        const valid = !itemSurfaceMove?.hosted || itemSurfaceMove.valid
+        validRef.current = valid
+        setValid(valid)
         return
       }
       if (parentFrameCollides && frameParent && parentFrame?.isValidPosition) {
@@ -712,7 +714,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     }
     const detachSurface = (
       worldPosition: [number, number, number],
-      leaveEvent?: ItemEvent | ShelfEvent,
+      leaveEvent?: ItemEvent | ShelfEvent | CabinetEvent,
     ) => {
       const pose = leaveEvent
         ? itemSurfaceMove?.leave(leaveEvent, rotationRef.current)
@@ -725,12 +727,13 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       applySurfacePose(pose)
       applyMeshPose(pose.position)
     }
-    const onItemMove = (event: ItemEvent | ShelfEvent) => {
+    const onItemMove = (event: ItemEvent | ShelfEvent | CabinetEvent) => {
       if (committed || !resolvedFootprint || !itemSurfaceMove) return
       const pose = itemSurfaceMove.enter(event, resolvedFootprint, rotationRef.current)
       if (pose) applySurfacePose(pose)
+      else recomputeValidity()
     }
-    const onItemLeave = (event: ItemEvent | ShelfEvent) => {
+    const onItemLeave = (event: ItemEvent | ShelfEvent | CabinetEvent) => {
       if (!itemSurfaceMove?.hosted || committed) return
       if (event.node.id !== useScene.getState().nodes[node.id]?.parentId) return
       event.stopPropagation()
@@ -1019,6 +1022,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // path below, minting a hidden ghost copy and replaying the SFX.
       if (committed) return
       gridDispatch.flush()
+      if (itemSurfaceMove?.hosted && !itemSurfaceMove.valid) return
       // Ignore a commit that fires before the cursor has moved into place —
       // it's the stray trailing click of whatever armed this move, not a
       // deliberate drop. Prevents preset re-arm from double-placing.
@@ -1251,6 +1255,10 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     emitter.on('item:move', onItemMove)
     emitter.on('item:leave', onItemLeave)
     emitter.on('item:click', commitAtCursor)
+    emitter.on('cabinet:enter', onItemMove)
+    emitter.on('cabinet:move', onItemMove)
+    emitter.on('cabinet:leave', onItemLeave)
+    emitter.on('cabinet:click', commitAtCursor)
     emitter.on('shelf:enter', onItemMove)
     emitter.on('shelf:move', onItemMove)
     emitter.on('shelf:leave', onItemLeave)
@@ -1303,6 +1311,10 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       emitter.off('item:move', onItemMove)
       emitter.off('item:leave', onItemLeave)
       emitter.off('item:click', commitAtCursor)
+      emitter.off('cabinet:enter', onItemMove)
+      emitter.off('cabinet:move', onItemMove)
+      emitter.off('cabinet:leave', onItemLeave)
+      emitter.off('cabinet:click', commitAtCursor)
       emitter.off('shelf:enter', onItemMove)
       emitter.off('shelf:move', onItemMove)
       emitter.off('shelf:leave', onItemLeave)

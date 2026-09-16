@@ -3,6 +3,7 @@ import {
   type AlignmentAnchor,
   type AnyNode,
   type AnyNodeId,
+  type CabinetEvent,
   type CeilingEvent,
   collectAlignmentAnchors,
   emitter,
@@ -58,6 +59,10 @@ import useEditor, { isAlignmentGuideActive, isMagneticSnapActive } from '../../.
 
 import useFacingPose from '../../../store/use-facing-pose'
 import usePlacementPreview from '../../../store/use-placement-preview'
+import {
+  createItemSurfaceGridDispatch,
+  createItemSurfacePointerArbitration,
+} from '../registry/item-surface-move'
 import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
 import {
   createLineGeometry,
@@ -631,8 +636,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         : null
     }
 
+    const counterPointer = createItemSurfacePointerArbitration()
+    let counterHitValid = true
     const revalidate = (): boolean => {
-      const placeable = altFreeRef.current || checkCanPlace(getContext(), validators)
+      const placeable =
+        counterHitValid && (altFreeRef.current || checkCanPlace(getContext(), validators))
       const color = placeable ? 0x22_c5_5e : 0xef_44_44 // green-500 : red-500
       edgeMaterial.color.setHex(color)
       basePlaneMaterial.color.setHex(color)
@@ -670,6 +678,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const applyTransition = (result: TransitionResult) => {
+      counterHitValid = true
       // Alignment guides are floor-only; clear them when the cursor moves
       // onto a wall / ceiling / item surface (only those paths call this).
       useAlignmentGuides.getState().clear()
@@ -937,6 +946,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 300)
     }
     const onReleaseCommit = () => {
+      gridDispatch.flush()
       if (!releaseCommit) return
       const commit = releaseCommit
       releaseCommit = null
@@ -983,6 +993,18 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // off a board / through a gap and hit the floor behind). Detach to the
       // floor only once the ray misses the shelf entirely — without this the
       // item oscillates between the shelf row and the floor on every micro-move.
+      const counterId =
+        placementState.current.surface === 'item-surface'
+          ? placementState.current.surfaceItemId
+          : null
+      if (counterId && useScene.getState().nodes[counterId as AnyNodeId]?.type === 'cabinet') {
+        if (
+          counterPointer.blocksGrid(event.nativeEvent.nativeEvent ?? event.nativeEvent) ||
+          cursorRayIntersectsShelf(counterId, cameraRef.current, event.position)
+        )
+          return
+        detachItemSurfaceToFloor(surfaceEvent as unknown as ItemEvent)
+      }
       if (placementState.current.surface === 'shelf-surface') {
         if (
           cursorRayIntersectsShelf(
@@ -997,6 +1019,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         detachItemSurfaceToFloor(surfaceEvent as unknown as ItemEvent)
       }
 
+      if (placementState.current.surface === 'floor') counterHitValid = true
       const floorEvent = applyFloorGrabOffset(surfaceEvent)
 
       lastRawPos.current.set(
@@ -1124,6 +1147,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onGridClick = (event: GridEvent) => {
+      gridDispatch.flush()
       // Drop alignment guides on click — the move commits (guides done) or
       // placement re-arms (the next move republishes them).
       useAlignmentGuides.getState().clear()
@@ -1642,8 +1666,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // ---- Item Surface Handlers ----
 
-    const detachItemSurfaceToFloor = (event: ItemEvent) => {
+    const detachItemSurfaceToFloor = (event: ItemEvent | CabinetEvent) => {
       hostSurfaceDragAnchor = null
+      counterHitValid = true
+      counterPointer.clear()
       // Landing back on the floor: refresh the pointer surface cap from
       // this event's world hit so the first floor position already targets
       // the aimed-at surface (not a deck above it).
@@ -1726,11 +1752,21 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       revalidate()
     }
 
-    const onItemEnter = (event: ItemEvent) => {
+    const onItemEnter = (event: ItemEvent | CabinetEvent) => {
+      if (event.node.type === 'cabinet' && placementState.current.surfaceItemId === event.node.id) {
+        onItemMove(event)
+        return
+      }
+      if (event.node.type === 'cabinet') {
+        lastRawPos.current.set(...event.position)
+        counterHitValid = false
+        counterPointer.hit(event.node.id, event.nativeEvent.nativeEvent ?? event.nativeEvent)
+      }
       if (event.node.id === draftNode.current?.id) return
       has3DPointerDrivenMoveRef.current = true
       const result = itemSurfaceStrategy.enter(getContext(), event)
       if (!result) return
+      counterHitValid = true
 
       event.stopPropagation()
       applyTransition(result)
@@ -1743,12 +1779,17 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
     }
 
-    const onItemMove = (event: ItemEvent) => {
+    const onItemMove = (event: ItemEvent | CabinetEvent) => {
       if (event.node.id === draftNode.current?.id) return
       releaseCommit = () => onItemClick(event)
       has3DPointerDrivenMoveRef.current = true
       if (!cursorGroupRef.current) return
       const ctx = getContext()
+      if (event.node.type === 'cabinet') {
+        lastRawPos.current.set(...event.position)
+        counterHitValid = false
+        counterPointer.hit(event.node.id, event.nativeEvent.nativeEvent ?? event.nativeEvent)
+      } else counterHitValid = true
 
       if (ctx.state.surface !== 'item-surface') {
         // Try entering surface mode
@@ -1800,7 +1841,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         itemMoveEvent.position[2],
       )
       const result = itemSurfaceStrategy.move(ctx, itemMoveEvent)
-      if (!result) return
+      if (!result) {
+        revalidate()
+        return
+      }
+      counterHitValid = true
 
       event.stopPropagation()
 
@@ -1825,7 +1870,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       revalidate()
     }
 
-    const onItemLeave = (event: ItemEvent) => {
+    const onItemLeave = (event: ItemEvent | CabinetEvent) => {
+      if (event.node.type === 'cabinet') return
       if (event.node.id === draftNode.current?.id) return
       if (placementState.current.surface !== 'item-surface') return
 
@@ -1839,7 +1885,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       detachItemSurfaceToFloor(event)
     }
 
-    const onItemClick = (event: ItemEvent) => {
+    const onItemClick = (event: ItemEvent | CabinetEvent) => {
+      gridDispatch.flush()
+      if (!counterHitValid) return
       // Click on the draft item itself. R3F dispatches click events to
       // the closest intersected mesh only — when the draft is hovering
       // on a host (shelf / table / etc.) the draft's mesh is *above*
@@ -1883,7 +1931,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         // the host's own click event is blocked by the cursor preview.
         if (ctx.state.surface === 'item-surface' && ctx.state.surfaceItemId) {
           const hostNode = useScene.getState().nodes[ctx.state.surfaceItemId as AnyNodeId]
-          if (hostNode && hostNode.type === 'item') {
+          if (hostNode && (hostNode.type === 'item' || hostNode.type === 'cabinet')) {
             const synthetic = { ...event, node: hostNode } as ItemEvent
             const result = itemSurfaceStrategy.click(ctx, synthetic)
             if (result) {
@@ -2452,7 +2500,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // ---- Subscribe ----
 
-    emitter.on('grid:move', onGridMove)
+    const gridDispatch = createItemSurfaceGridDispatch(onGridMove)
+    emitter.on('grid:move', gridDispatch.schedule)
     emitter.on('grid:click', onGridClick)
     emitter.on('item:enter', onItemEnter)
     emitter.on('item:move', onItemMove)
@@ -2474,6 +2523,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     emitter.on('ceiling:move', onCeilingMove)
     emitter.on('ceiling:click', onCeilingClick)
     emitter.on('ceiling:leave', onCeilingLeave)
+    emitter.on('cabinet:enter', onItemEnter)
+    emitter.on('cabinet:move', onItemMove)
+    emitter.on('cabinet:click', onItemClick)
+    emitter.on('cabinet:leave', onItemLeave)
     emitter.on('shelf:enter', onShelfEnter)
     emitter.on('shelf:move', onShelfMove)
     emitter.on('shelf:click', onShelfClick)
@@ -2507,7 +2560,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
       draftNode.destroy()
       useScene.temporal.getState().resume()
-      emitter.off('grid:move', onGridMove)
+      gridDispatch.cancel()
+      emitter.off('grid:move', gridDispatch.schedule)
       emitter.off('grid:click', onGridClick)
       emitter.off('item:enter', onItemEnter)
       emitter.off('item:move', onItemMove)
@@ -2529,6 +2583,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       emitter.off('ceiling:move', onCeilingMove)
       emitter.off('ceiling:click', onCeilingClick)
       emitter.off('ceiling:leave', onCeilingLeave)
+      emitter.off('cabinet:enter', onItemEnter)
+      emitter.off('cabinet:move', onItemMove)
+      emitter.off('cabinet:click', onItemClick)
+      emitter.off('cabinet:leave', onItemLeave)
       emitter.off('shelf:enter', onShelfEnter)
       emitter.off('shelf:move', onShelfMove)
       emitter.off('shelf:click', onShelfClick)
@@ -2586,6 +2644,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     if (
       draftParent?.type === 'item' ||
       draftParent?.type === 'shelf' ||
+      draftParent?.type === 'cabinet' ||
       (draftParent &&
         nodeRegistry.get(draftParent.type)?.capabilities.faceHost?.currentFaceId(draft))
     )

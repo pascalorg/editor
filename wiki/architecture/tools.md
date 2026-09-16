@@ -201,7 +201,7 @@ A 3D move tool that follows the cursor by writing `mesh.position.set(x, 0, z)` r
 
 Fix in `MoveRegistryNodeTool`: at drag-start, traverse the moved mesh and overwrite `child.raycast = () => {}` on every descendant; restore the originals in the effect's cleanup. The ray now passes through the moved mesh, hits the grid plane, and `grid:move` keeps firing.
 
-`MoveRegistryNodeTool` accepts item top surfaces and shelf boards for a kind with a
+`MoveRegistryNodeTool` accepts item top surfaces, shelf boards and cabinet countertops/bar ledges for a kind with a
 `hostable` capability whose `floorPlaced` capability applies. The `hostable.parents`
 list is no longer an eligibility gate; mounted procedural recipes stay in their
 separate session. The shared surface resolver owns shelf row election and fit. Shelf
@@ -216,7 +216,7 @@ miss the shelf's local volume (with the existing 8 cm margin) before detaching.
 Item-surface leaves still detach immediately. Existing hosted moves preserve their
 grab offset until switching hosts or detaching; R/T rotates around the stored local
 position. Attachment clears the child's slab support; detachment uses the existing
-floor support election. Procedural queries compose shelf transforms and apply slab
+floor support election. Procedural queries compose shelf and nested cabinet transforms and apply slab
 lift only at the level-parented ancestor.
 
 Parent transitions and hosted poses preview in `useScene` with history paused so
@@ -225,13 +225,30 @@ world-plan live transform); the footprint box is converted to the level frame.
 Commit restores the drag-start parent and pose before one tracked write. Cleanup
 restores both fresh and existing nodes without history, resets pointer/grab state,
 and leaves fresh drafts alive; explicit cancel deletes fresh drafts. The 2D item
-move path, also used by procedural items, composes the shelf transform and detaches
-to the level while preserving source Y. It does not acquire new hosts.
+move path, also used by procedural items, composes the host transform and retains the
+current shelf row or counter surface while the rotated footprint remains contained.
+Outside it, the legacy level-detach/source-Y behavior remains pending slice F, together
+with acquiring and cycling surfaces in plan view.
 
 Shelf `relations.hosts` includes catalog and procedural children. Registry moves,
 3D handle previews/cleanup, and shelf 2D move/resize/rotate previews cascade dirty
 marks on each tick so children are re-marked after a renderer drains the set.
 Shelf `geometryKey` excludes children, keeping the boards stable during attachment.
+Cabinet geometry and neighbor keys include only structural cabinet/module child IDs.
+`geometryChildTypes` also filters the viewer's live child override key: shelves declare
+none, cabinets/modules declare only their structural child kinds.
+
+Both movers route cabinet events through `resolveSurfacePlacement`. Counters retain
+free XZ movement with grid snapping; they do not elect module or span centers. The
+provider chooses the real span or bar height from the hit, while the optional `origin`
+keeps a grabbed or off-origin child's pose separate from the contact that elected it.
+Full rotated footprints are checked after snapping against the span and its holes.
+Counter stickiness intersects the published surface regions, never the run's bounding
+volume, so real gaps and sink openings remain exits. The hit run owns the child,
+including a nested corner leg. Run inspector edits and registered resize handles stage
+their structural changes, carry child Y by the old/new stable surface height, and reject
+an edit that removes or invalidates an occupied surface. These are editing-path rules;
+arbitrary raw scene writes do not invoke this reconciliation.
 
 
 The same applies to placement previews — see `nodes/src/shelf/preview.tsx` for the `(obj as { raycast: () => void }).raycast = () => {}` pattern. A preview that captures rays starves the placement tool's own `grid:move` snapshot.

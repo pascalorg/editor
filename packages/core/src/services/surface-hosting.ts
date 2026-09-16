@@ -241,6 +241,8 @@ export function resolveSurfacePlacement(args: {
     localBounds?: { min: readonly [number, number, number]; max: readonly [number, number, number] }
   }
   hit: SurfaceHit
+  /** Child origin after grab-offset correction; the hit still elects the actual support. */
+  origin?: readonly [number, number, number]
   scene: SceneApi
   /** Pure child-centered grid function; omitted means snapping is off. */
   snapScalar?: (position: number, dimension: number) => number
@@ -261,10 +263,11 @@ export function resolveSurfacePlacement(args: {
   const surface = provider.resolveHit(host, hit, ctx)
   if (!surface) return reject('no-surface')
   const snap = (surface.gridSnap ?? true) ? args.snapScalar : undefined
+  const origin = args.origin ?? hit.point
   const position: [number, number, number] = [
-    snap?.(hit.point[0], childFootprint.size[0]) ?? hit.point[0],
+    snap?.(origin[0], childFootprint.size[0]) ?? origin[0],
     surface.position[1],
-    snap?.(hit.point[2], childFootprint.size[2]) ?? hit.point[2],
+    snap?.(origin[2], childFootprint.size[2]) ?? origin[2],
   ]
   const rotation = surfaceLocalRotation(surface, [
     ...(childFootprint.rotation ?? [0, childFootprint.rotationY, 0]),
