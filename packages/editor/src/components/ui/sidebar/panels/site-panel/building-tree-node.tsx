@@ -26,8 +26,15 @@ export const BuildingTreeNode = memo(function BuildingTreeNode({
   const createNode = useScene((state) => state.createNode)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
   const name = useScene((s) => s.nodes[nodeId]?.name)
+  // Levels and elevators first, units after, so the units read as one group.
   const children = useScene(
-    useShallow((s) => (s.nodes[nodeId] as BuildingNode | undefined)?.children ?? []),
+    useShallow((s) => {
+      const ids = (s.nodes[nodeId] as BuildingNode | undefined)?.children ?? []
+      return [
+        ...ids.filter((id) => s.nodes[id]?.type !== 'unit'),
+        ...ids.filter((id) => s.nodes[id]?.type === 'unit'),
+      ]
+    }),
   )
   const isSelected = useViewer((state) => state.selection.buildingId === nodeId)
   const isHovered = useViewer((state) => state.hoveredId === nodeId)

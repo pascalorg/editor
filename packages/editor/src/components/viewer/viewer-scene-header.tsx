@@ -15,6 +15,7 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { cn } from '../../lib/utils'
+import { ViewerUnitsPanel } from './viewer-units-panel'
 
 const getNodeName = (node: AnyNode): string => {
   if ('name' in node && node.name) return node.name
@@ -63,6 +64,7 @@ export const ViewerSceneHeader = ({
   const selectedNode = useScene((s) =>
     firstSelectedId ? (s.nodes[firstSelectedId as AnyNodeId] as AnyNode | undefined) : null,
   )
+  const sceneNodes = useScene((s) => s.nodes)
   // Highest first so the list reads top-down like a building section.
   const levels = useScene(
     useShallow((s) => {
@@ -231,6 +233,7 @@ export const ViewerSceneHeader = ({
           </div>
         </div>
       )}
+      {building && <ViewerUnitsPanel nodes={sceneNodes} />}
     </div>
   )
 }

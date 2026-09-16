@@ -32,6 +32,7 @@ import { isActive } from '../lib/interaction/scope'
 import { copySelectedNodesToEditorClipboard } from '../lib/scene-clipboard'
 import { sfxEmitter } from '../lib/sfx-bus'
 import { activeSiteNode, clampBrushRadius } from '../lib/terrain-sculpt'
+import { leaveUnitFocus } from '../lib/units'
 import { toggleWindowOpenState } from '../lib/window-interaction'
 import useDeleteConfirmation from '../store/use-delete-confirmation'
 import useEditor, { getActiveContinuationContext, getActiveSnapContext } from '../store/use-editor'
@@ -390,7 +391,8 @@ export const useKeyboard = ({
         // Only switch to select mode if no tool had an active mid-action to cancel.
         // (e.g. mid-wall draw or mid-slab polygon should only cancel the action, not exit the tool)
         if (!_toolCancelConsumed) {
-          exitToSelectAfterUnconsumedCancel()
+          if (leaveUnitFocus()) useEditor.getState().armToolMode({ mode: 'select' })
+          else exitToSelectAfterUnconsumedCancel()
         }
       } else if (e.key === '1' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()

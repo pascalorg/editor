@@ -15,6 +15,7 @@ import { BufferGeometry, Color, DoubleSide, Float32BufferAttribute, type Group, 
 import { color, float, uniform, uv } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { useShallow } from 'zustand/react/shallow'
+import { owningUnitForZone } from './unit-membership'
 
 const Y_OFFSET = 0.01
 const WALL_HEIGHT = 2.3
@@ -151,6 +152,11 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
   )
   const polygon = livePolygon ?? proceduralPolygon
 
+  // The selector returns the unit node itself, so only edits to that unit
+  // or its membership re-render this zone.
+  const unit = useScene((s) => owningUnitForZone(node, (id) => s.nodes[id]))
+  const tintColor = unit?.color ?? node.color
+
   // Create floor shape from polygon
   const floorShape = useMemo(() => {
     if (!polygon || polygon.length < 3) return null
@@ -204,14 +210,14 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
 
   // Create materials
   const floorMaterial = useMemo(() => {
-    if (!node?.color) return null
-    return createFloorMaterial(node.color)
-  }, [node?.color])
+    if (!tintColor) return null
+    return createFloorMaterial(tintColor)
+  }, [tintColor])
 
   const wallMaterial = useMemo(() => {
-    if (!node?.color) return null
+    if (!node.color) return null
     return createWallGradientMaterial(node.color)
-  }, [node?.color])
+  }, [node.color])
 
   const handlers = useNodeEvents(node, 'zone')
 
@@ -250,6 +256,22 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
               >
                 <span>{node.name}</span>
               </div>
+              {unit && (
+                <div
+                  style={{
+                    marginTop: '2px',
+                    padding: '1px 6px',
+                    borderRadius: '999px',
+                    backgroundColor: tintColor,
+                    color: 'white',
+                    fontSize: '10px',
+                    lineHeight: '14px',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {unit.name}
+                </div>
+              )}
               <div
                 className="label-pin"
                 style={{

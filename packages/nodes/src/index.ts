@@ -44,6 +44,7 @@ import { stairDefinition } from './stair'
 import { stairSegmentDefinition } from './stair-segment'
 import { structuralGridDefinition } from './structural-grid'
 import { turbineVentDefinition } from './turbine-vent'
+import { unitDefinition } from './unit'
 import { wallDefinition } from './wall'
 import { windowDefinition } from './window'
 import { zoneDefinition } from './zone'
@@ -87,6 +88,7 @@ export const builtinPlugin: Plugin = {
     // panels / move tools / floorplan branches still serve these.
     columnDefinition as unknown as AnyNodeDefinition,
     elevatorDefinition as unknown as AnyNodeDefinition,
+    unitDefinition as unknown as AnyNodeDefinition,
     roofDefinition as unknown as AnyNodeDefinition,
     roofSegmentDefinition as unknown as AnyNodeDefinition,
     stairDefinition as unknown as AnyNodeDefinition,
@@ -194,6 +196,7 @@ export { stairDefinition } from './stair'
 export { stairSegmentDefinition } from './stair-segment'
 export { structuralGridDefinition } from './structural-grid'
 export { turbineVentDefinition } from './turbine-vent'
+export { unitDefinition } from './unit'
 export { wallDefinition } from './wall'
 export { windowDefinition } from './window'
 export { zoneDefinition } from './zone'
