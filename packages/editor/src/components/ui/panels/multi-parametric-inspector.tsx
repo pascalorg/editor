@@ -74,7 +74,7 @@ export function MultiParametricInspector({ footer }: { footer?: React.ReactNode 
         <MultiGroupFields
           defaultExpanded={group.defaultExpanded}
           fields={group.fields as ParamField<AnyNode>[]}
-          key={`group-${gi}`}
+          key={`${nodeType}-${group.label}-${gi}`}
           nodeIds={nodeIds}
           nodeType={nodeType}
           parametrics={parametrics}

@@ -189,11 +189,14 @@ type DraftProfile = {
   height: number
 }
 
-/** Half the largest profile dimension, used to keep a duct clear of a wall. */
 export function ductSurfaceClearanceM(profile: DraftProfile, wall = false): number {
   return (
     runSectionHalfSizeM(
-      profile.shape === 'round' ? profile.diameter : Math.max(profile.width, profile.height),
+      profile.shape === 'round'
+        ? profile.diameter
+        : wall
+          ? Math.max(profile.width, profile.height)
+          : profile.height,
     ) + (wall && profile.shape !== 'round' ? DUCT_WALL_STANDOFF_M : 0)
   )
 }

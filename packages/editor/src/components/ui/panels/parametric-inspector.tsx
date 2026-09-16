@@ -157,7 +157,11 @@ export function ParametricInspector({
       width={320}
     >
       {parametrics.groups.map((group, gi) => (
-        <PanelSection defaultExpanded={group.defaultExpanded} key={`group-${gi}`} title={group.label}>
+        <PanelSection
+          defaultExpanded={group.defaultExpanded}
+          key={`${nodeType}-${group.label}-${gi}`}
+          title={group.label}
+        >
           {group.fields.map((field, fi) => (
             <FieldRenderer
               key={`field-${gi}-${fi}-${String(field.key)}`}

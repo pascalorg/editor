@@ -915,6 +915,26 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
         setValidationMessage('Fitting clearance is too small for this connection')
         return
       }
+      const lockedWallTarget = lockedWallTargetRef.current
+      if (lockedWallTarget) {
+        const offset = result.nextStart.map(
+          (value, index) => value - lockedWallTarget.frame.origin[index]!,
+        )
+        const clearance = configRef.current.surfaceClearance?.(lockedWallTarget) ?? 0
+        if (Math.abs(dotRun(offset, lockedWallTarget.frame.normal) - clearance) > 1e-4) {
+          lockedWallTargetRef.current = null
+          lastResolvedRef.current = {
+            point: result.nextStart,
+            frame: createRunSurfaceFrame(result.nextStart),
+            surfaceTarget: null,
+            snapped: null,
+            directionMode: 'free',
+            port: null,
+            body: null,
+          }
+          clearPlacementSurface()
+        }
+      }
       triggerSFX('sfx:item-place')
       startRef.current = result.nextStart
       setStart(result.nextStart)

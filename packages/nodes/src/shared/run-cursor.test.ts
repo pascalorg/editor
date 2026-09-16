@@ -15,7 +15,7 @@ describe('surface-first run cursor', () => {
       hostId: 'wall-1' as AnyNodeId,
       side: 'front' as const,
       frame: createRunSurfaceFrame([0, 0, 0], [0, 0, 1]),
-      bounds: { min: { x: -1, y: -1 }, max: { x: 1, y: 1 } },
+      bounds: { minU: -1, maxU: 1, minV: -1, maxV: 1 },
     }
 
     expect(

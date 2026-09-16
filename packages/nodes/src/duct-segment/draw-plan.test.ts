@@ -8,15 +8,19 @@ test('keeps rectangular and oval ducts outside wall faces using their largest di
   expect(ductSurfaceClearanceM({ shape: 'round', diameter: 6, width: 12, height: 8 })).toBeCloseTo(
     0.0762,
   )
-  expect(ductSurfaceClearanceM({ shape: 'rect', diameter: 6, width: 14, height: 8 })).toBeCloseTo(
-    0.1778,
-  )
   expect(
     ductSurfaceClearanceM({ shape: 'rect', diameter: 6, width: 14, height: 8 }, true),
   ).toBeCloseTo(0.1878)
   expect(
     ductSurfaceClearanceM({ shape: 'oval', diameter: 6, width: 14, height: 8 }, true),
   ).toBeCloseTo(0.1878)
+})
+
+test('floor and ceiling clearance uses the height of rectangular and oval ducts', () => {
+  for (const shape of ['rect', 'oval'] as const) {
+    expect(ductSurfaceClearanceM({ shape, diameter: 6, width: 14, height: 8 })).toBeCloseTo(0.1016)
+    expect(ductSurfaceClearanceM({ shape, diameter: 6, width: 20, height: 8 })).toBeCloseTo(0.1016)
+  }
 })
 
 test('a short existing run cannot silently lose its required elbow', () => {
