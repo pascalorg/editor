@@ -156,9 +156,10 @@ function isSameOrigin(request: Request, origin: string): boolean {
   if (!parsedOrigin) return false
   const forwardedHost = request.headers.get('x-forwarded-host')
   const forwardedProto = request.headers.get('x-forwarded-proto')
-  const requestUrl = forwardedHost
-    ? new URL(`${forwardedProto ?? 'https'}://${forwardedHost.split(',')[0]?.trim()}`)
-    : new URL(request.url)
+  const host = forwardedHost ? forwardedHost.split(',')[0]?.trim() : null
+  const proto = forwardedProto ? forwardedProto.split(',')[0]?.trim() : 'https'
+  const requestUrl = host ? parseUrl(`${proto}://${host}`) : parseUrl(request.url)
+  if (!requestUrl) return false
   return normalizeOrigin(parsedOrigin) === normalizeOrigin(requestUrl)
 }
 
