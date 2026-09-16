@@ -8,6 +8,7 @@ import {
   type AnyNodeId,
   analyzePortConnectivity,
   bboxCornerAnchors,
+  cascadeDirty,
   collectAlignmentAnchors,
   createSceneApi,
   emitter,
@@ -28,6 +29,7 @@ import {
   resolveFacingIndicator,
   resolveFrozenFloorPlacementPatch,
   resolveSupportSlabPatch,
+  type ShelfEvent,
   sceneRegistry,
   spatialGridManager,
   useLiveNodeOverrides,
@@ -471,7 +473,8 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     }
     const markMovedNodeDirty = () => {
       if (useScene.getState().nodes[node.id]) {
-        useScene.getState().markDirty(node.id as AnyNodeId)
+        for (const id of cascadeDirty(node.id as AnyNodeId, { scene: createSceneApi(useScene) }))
+          useScene.getState().markDirty(id)
       }
     }
 
@@ -707,7 +710,10 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       useAlignmentGuides.getState().clear()
       recomputeValidity()
     }
-    const detachSurface = (worldPosition: [number, number, number], leaveEvent?: ItemEvent) => {
+    const detachSurface = (
+      worldPosition: [number, number, number],
+      leaveEvent?: ItemEvent | ShelfEvent,
+    ) => {
       const pose = leaveEvent
         ? itemSurfaceMove?.leave(leaveEvent, rotationRef.current)
         : itemSurfaceMove?.detach(worldPosition, rotationRef.current)
@@ -719,12 +725,12 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       applySurfacePose(pose)
       applyMeshPose(pose.position)
     }
-    const onItemMove = (event: ItemEvent) => {
+    const onItemMove = (event: ItemEvent | ShelfEvent) => {
       if (committed || !resolvedFootprint || !itemSurfaceMove) return
       const pose = itemSurfaceMove.enter(event, resolvedFootprint, rotationRef.current)
       if (pose) applySurfacePose(pose)
     }
-    const onItemLeave = (event: ItemEvent) => {
+    const onItemLeave = (event: ItemEvent | ShelfEvent) => {
       if (!itemSurfaceMove?.hosted || committed) return
       if (event.node.id !== useScene.getState().nodes[node.id]?.parentId) return
       event.stopPropagation()
@@ -732,7 +738,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     }
 
     const onGridMove = (event: GridEvent) => {
-      const blocked = Boolean(itemSurfaceMove?.blocksGrid(event))
+      const blocked = Boolean(itemSurfaceMove?.blocksGrid(event, cameraRef.current))
       if (!committed && !blocked) detachSurface(event.position)
       if (committed || blocked) return
       // The pointer decides the target surface AND the cursor plan point,
@@ -1245,6 +1251,10 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     emitter.on('item:move', onItemMove)
     emitter.on('item:leave', onItemLeave)
     emitter.on('item:click', commitAtCursor)
+    emitter.on('shelf:enter', onItemMove)
+    emitter.on('shelf:move', onItemMove)
+    emitter.on('shelf:leave', onItemLeave)
+    emitter.on('shelf:click', commitAtCursor)
     emitter.on('grid:move', receiveGridMove)
     emitter.on('grid:click', commitAtCursor)
 
@@ -1293,6 +1303,10 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       emitter.off('item:move', onItemMove)
       emitter.off('item:leave', onItemLeave)
       emitter.off('item:click', commitAtCursor)
+      emitter.off('shelf:enter', onItemMove)
+      emitter.off('shelf:move', onItemMove)
+      emitter.off('shelf:leave', onItemLeave)
+      emitter.off('shelf:click', commitAtCursor)
       emitter.off('grid:move', receiveGridMove)
       emitter.off('grid:click', commitAtCursor)
       window.removeEventListener('pointerup', onPlacementDragPointerUp)

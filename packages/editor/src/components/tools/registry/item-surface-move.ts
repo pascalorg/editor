@@ -7,13 +7,15 @@ import {
   type ItemEvent,
   nodeRegistry,
   resolveSurfacePlacement,
+  type ShelfEvent,
   sceneRegistry,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { Euler, Quaternion, Vector3 } from 'three'
+import { type Camera, Euler, Quaternion, Vector3 } from 'three'
 import { isFreshPlacementMetadata } from '../../../lib/placement-metadata'
 import { snapToGrid, snapToHalf } from '../item/placement-math'
+import { createShelfStickiness } from '../shared/shelf-stickiness'
 import { itemEventToSurfaceHit } from '../shared/surface-hit'
 
 export function createItemSurfacePointerArbitration() {
@@ -34,7 +36,7 @@ export function createItemSurfacePointerArbitration() {
   }
 }
 
-function pointerEventOf(event: GridEvent | ItemEvent): object {
+function pointerEventOf(event: GridEvent | ItemEvent | ShelfEvent): object {
   return event.nativeEvent.nativeEvent ?? event.nativeEvent
 }
 
@@ -93,7 +95,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
   const capabilities = nodeRegistry.get(node.type)?.capabilities
   const floorPlaced = capabilities?.floorPlaced
   if (
-    !capabilities?.hostable?.parents.includes('item') ||
+    !capabilities?.hostable ||
     !floorPlaced ||
     (floorPlaced.applies && !floorPlaced.applies(node))
   )
@@ -110,10 +112,13 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
   const originalParent = original.parentId
     ? useScene.getState().nodes[original.parentId as AnyNodeId]
     : null
-  let grab: ItemSurfaceGrab | null =
-    originalParent?.type === 'item' && !isFreshPlacementMetadata(original.metadata)
+  const initialGrab = (): ItemSurfaceGrab | null =>
+    (originalParent?.type === 'item' || originalParent?.type === 'shelf') &&
+    !isFreshPlacementMetadata(original.metadata)
       ? { hostId: originalParent.id, start: original.position, anchor: null }
       : null
+  let grab = initialGrab()
+  const cursorRayIntersectsShelf = createShelfStickiness()
   const liveNode = () => useScene.getState().nodes[node.id] ?? node
   const levelId = () => findLevelAncestorId(node.id, useScene.getState().nodes)
   const rotation = (yaw: number) =>
@@ -139,7 +144,8 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
   const session = {
     get hosted() {
       const parentId = liveNode().parentId
-      return Boolean(parentId && useScene.getState().nodes[parentId as AnyNodeId]?.type === 'item')
+      const parent = parentId ? useScene.getState().nodes[parentId as AnyNodeId] : null
+      return parent?.type === 'item' || parent?.type === 'shelf'
     },
     worldYaw(yaw: number) {
       return yaw + parentWorldYaw(liveNode().parentId)
@@ -157,12 +163,12 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
         rotationY: session.worldYaw(yaw) - parentWorldYaw(level),
       }
     },
-    enter(event: ItemEvent, dimensions: [number, number, number], yaw: number) {
+    enter(event: ItemEvent | ShelfEvent, dimensions: [number, number, number], yaw: number) {
       pointer.clear()
       const live = liveNode()
       if (floorPlaced.applies && !floorPlaced.applies(live)) return null
       const host = useScene.getState().nodes[event.node.id]
-      if (host?.type !== 'item') return null
+      if (host?.type !== 'item' && host?.type !== 'shelf') return null
       let ancestor: AnyNode | undefined = host
       while (ancestor) {
         if (ancestor.id === node.id) return null
@@ -176,17 +182,56 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
       // Keep the legacy world round-trip so existing poses retain identical floating-point values.
       const hit = itemEventToSurfaceHit(host, { ...event, position })
       if (!hit) return null
+      const stayingOnShelf = host.type === 'shelf' && live.parentId === host.id
+      const localYaw = session.worldYaw(yaw) - parentWorldYaw(host.id)
+      const bounds =
+        host.type === 'shelf' ? capabilities.dragBounds?.(live, scene.nodes()) : undefined
+      const center = bounds?.center
+      const localRotation = rotation(localYaw)
+      const offset = center
+        ? new Vector3(...center).applyEuler(
+            new Euler(
+              ...(Array.isArray(localRotation) ? localRotation : ([0, localYaw, 0] as const)),
+            ),
+          )
+        : new Vector3()
+      if (host.type === 'shelf') {
+        const origin = [...hit.point]
+        if (!corrected.grab) {
+          origin[0]! -= offset.x
+          origin[2]! -= offset.z
+        }
+        hit.point = [
+          snapToGrid(origin[0]! + offset.x, dimensions[0]) - offset.x,
+          origin[1]!,
+          snapToGrid(origin[2]! + offset.z, dimensions[2]) - offset.z,
+        ]
+        if (stayingOnShelf) hit.normalWorldY = 1
+      }
       const placement = resolveSurfacePlacement({
         host,
         childKind: node.type,
         childFootprint: {
           size: dimensions,
-          rotationY: session.worldYaw(yaw) - parentWorldYaw(host.id),
+          rotationY: localYaw,
+          ...(host.type === 'shelf'
+            ? {
+                rotation: Array.isArray(localRotation)
+                  ? localRotation
+                  : ([0, localYaw, 0] as const),
+                localBounds: center
+                  ? {
+                      min: center.map((v, i) => v - dimensions[i]! / 2) as [number, number, number],
+                      max: center.map((v, i) => v + dimensions[i]! / 2) as [number, number, number],
+                    }
+                  : undefined,
+              }
+            : {}),
         },
         hit,
         scene,
-        snapScalar: snapToGrid,
-        checkFootprint: true,
+        snapScalar: host.type === 'shelf' ? undefined : snapToGrid,
+        checkFootprint: !stayingOnShelf,
       })
       if (!placement) return null
       const childPose =
@@ -208,11 +253,16 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
       )
       return pose
     },
-    blocksGrid(event: GridEvent) {
-      return session.hosted && pointer.blocksGrid(pointerEventOf(event))
+    blocksGrid(event: GridEvent, camera?: Camera) {
+      return (
+        session.hosted &&
+        (pointer.blocksGrid(pointerEventOf(event)) ||
+          Boolean(camera && cursorRayIntersectsShelf(liveNode().parentId, camera, event.position)))
+      )
     },
-    leave(event: ItemEvent, yaw: number) {
+    leave(event: ItemEvent | ShelfEvent, yaw: number) {
       if (event.node.id !== liveNode().parentId) return null
+      if (event.node.type === 'shelf') return null
       return session.detach(event.position, yaw)
     },
     detach(worldPosition: [number, number, number], yaw: number) {
@@ -236,6 +286,8 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
       return { position, rotationY: yaw }
     },
     restore() {
+      pointer.clear()
+      grab = initialGrab()
       if (!changed || !useScene.getState().nodes[node.id]) return
       useScene.getState().updateNode(node.id, {
         parentId: original.parentId,

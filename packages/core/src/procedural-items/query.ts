@@ -7,6 +7,7 @@ import {
 import { getRenderableSlabPolygon } from '../lib/slab-polygon'
 import { levelBaseElevationAt } from '../lib/terrain-support'
 import type { ItemNode } from '../schema/nodes/item'
+import type { ShelfNode } from '../schema/nodes/shelf'
 import type { SlabNode } from '../schema/nodes/slab'
 import type { WallNode } from '../schema/nodes/wall'
 import type { AnyNode } from '../schema/types'
@@ -75,7 +76,7 @@ export function proceduralFootprint(node: ProceduralItemNode) {
   const position = transformPoint(frame(node.position, node.rotation), center)
   return { position, rotation: node.rotation, dimensions: e.dimensions }
 }
-function floorLift(node: ProceduralItemNode | ItemNode, nodes: QueryNodes): number {
+function floorLift(node: ProceduralItemNode | ItemNode | ShelfNode, nodes: QueryNodes): number {
   if (!node.parentId || nodes[node.parentId]?.type !== 'level') return 0
   const { slabs, walls } = levelSurfaces(nodes, node.parentId)
   const ground = levelBaseElevationAt(
@@ -89,7 +90,10 @@ function floorLift(node: ProceduralItemNode | ItemNode, nodes: QueryNodes): numb
     ? proceduralFootprint(node)
     : {
         position: node.position,
-        dimensions: node.asset.dimensions.map((v, i) => v * node.scale[i]!) as Vec3,
+        dimensions:
+          node.type === 'shelf'
+            ? ([node.width, node.height, node.depth] as Vec3)
+            : (node.asset.dimensions.map((v, i) => v * node.scale[i]!) as Vec3),
         rotation: node.rotation,
       }
   const candidates = slabs.filter((s) => {
@@ -146,7 +150,7 @@ export function nodeLevelFrame(id: string, nodes: QueryNodes, seen = new Set<str
       [0, -Math.atan2(node.end[1] - node.start[1], node.end[0] - node.start[0]), 0],
     )
   }
-  if (!(isProceduralItem(node) || node.type === 'item'))
+  if (!(isProceduralItem(node) || node.type === 'item' || node.type === 'shelf'))
     throw new Error(`Unsupported host ${node.type}`)
   const pose = isProceduralItem(node)
     ? proceduralLocalPose(node, nodes)

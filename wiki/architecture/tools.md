@@ -201,7 +201,38 @@ A 3D move tool that follows the cursor by writing `mesh.position.set(x, 0, z)` r
 
 Fix in `MoveRegistryNodeTool`: at drag-start, traverse the moved mesh and overwrite `child.raycast = () => {}` on every descendant; restore the originals in the effect's cleanup. The ray now passes through the moved mesh, hits the grid plane, and `grid:move` keeps firing.
 
-`MoveRegistryNodeTool` also accepts item top surfaces when the moved kind declares `hostable.parents` containing `'item'` and its `floorPlaced` capability applies. It shares the catalog item surface gates and snapped host-local pose resolver; valid hosts bypass floor collision. Grid dispatch waits until both DOM listeners have run and matches the native pointer event to the host hit, preventing the independent canvas listener from undoing hosting; leaving the current host detaches immediately. Existing hosted moves preserve their host-local grab offset until switching hosts or detaching, and R/T rotates around the stored host-local position. Parent transitions and hosted poses preview in `useScene` with history paused so React can reparent the renderer. Hosted previews use that stored local pose (no world-plan live transform); the footprint box is converted to the level frame. Commit restores the drag-start parent and pose before one tracked write, while cleanup without commit restores them for both fresh and existing nodes without history. Cleanup leaves fresh nodes in place; explicit tool cancellation deletes fresh drafts. The 2D item move path composes the existing host transform but does not acquire new hosts.
+`MoveRegistryNodeTool` accepts item top surfaces and shelf boards for a kind with a
+`hostable` capability whose `floorPlaced` capability applies. The `hostable.parents`
+list is no longer an eligibility gate; mounted procedural recipes stay in their
+separate session. The shared surface resolver owns shelf row election and fit. Shelf
+entry checks the upward normal and overall width/depth; subsequent moves can switch
+rows over side faces without repeating those entry checks. Offset procedural bounds
+keep the footprint centered under a new cursor hit and put its bottom on the board.
+
+Grid dispatch waits until both DOM listeners have run and matches the native pointer
+event to the host hit. Both the catalog coordinator and registry mover use
+`shared/shelf-stickiness.ts`: shelf leave events retain hosting, and a grid ray must
+miss the shelf's local volume (with the existing 8 cm margin) before detaching.
+Item-surface leaves still detach immediately. Existing hosted moves preserve their
+grab offset until switching hosts or detaching; R/T rotates around the stored local
+position. Attachment clears the child's slab support; detachment uses the existing
+floor support election. Procedural queries compose shelf transforms and apply slab
+lift only at the level-parented ancestor.
+
+Parent transitions and hosted poses preview in `useScene` with history paused so
+React can reparent the renderer. Hosted previews use that stored local pose (no
+world-plan live transform); the footprint box is converted to the level frame.
+Commit restores the drag-start parent and pose before one tracked write. Cleanup
+restores both fresh and existing nodes without history, resets pointer/grab state,
+and leaves fresh drafts alive; explicit cancel deletes fresh drafts. The 2D item
+move path, also used by procedural items, composes the shelf transform and detaches
+to the level while preserving source Y. It does not acquire new hosts.
+
+Shelf `relations.hosts` includes catalog and procedural children. Registry moves,
+3D handle previews/cleanup, and shelf 2D move/resize/rotate previews cascade dirty
+marks on each tick so children are re-marked after a renderer drains the set.
+Shelf `geometryKey` excludes children, keeping the boards stable during attachment.
+
 
 The same applies to placement previews — see `nodes/src/shelf/preview.tsx` for the `(obj as { raycast: () => void }).raycast = () => {}` pattern. A preview that captures rays starves the placement tool's own `grid:move` snapshot.
 

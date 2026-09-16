@@ -30,16 +30,13 @@ import { Html } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Box3,
   Euler,
   type Group,
   type LineSegments,
-  Matrix4,
   type Mesh,
   type Object3D,
   PlaneGeometry,
   Quaternion,
-  Ray,
   Vector3,
 } from 'three'
 import { distance, smoothstep, uv, vec2 } from 'three/tsl'
@@ -73,6 +70,7 @@ import {
   resolvePointerSupportElevation,
   resolvePointerSupportSurface,
 } from '../shared/pointer-support-cap'
+import { createShelfStickiness } from '../shared/shelf-stickiness'
 import { shouldCreateFloorDraft } from './draft-creation'
 import { commitFaceHostClick, resolveFaceHostPreviewCommit } from './face-host-commit'
 import {
@@ -950,49 +948,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     let previousGridPos: [number, number, number] | null = null
 
-    // Scratch objects reused by the stickiness test (runs per grid:move).
-    const stickyRay = new Ray()
-    const stickyBox = new Box3()
-    const stickyMat = new Matrix4()
-    const stickyCamPos = new Vector3()
-
-    // True while the cursor ray still points at the active shelf's volume.
-    // Used to keep an item hosted on a shelf "sticky": from an angled camera
-    // the cursor ray slips off the shelf's thin boards / through its gaps and
-    // lands on the floor *behind* the shelf, which would otherwise thrash the
-    // placement between the shelf row and the floor on every micro-move. We
-    // reconstruct the world ray (camera → grid hit point) and test it against
-    // the shelf's bounding box — so a ray that passes *through* the shelf but
-    // lands behind it still counts as "on the shelf". Only a ray that misses
-    // the shelf box entirely means the user genuinely moved off it. A simple
-    // footprint test on the floor hit point can't distinguish those.
-    const cursorRayIntersectsActiveShelf = (gridWorldPoint: [number, number, number]): boolean => {
-      const shelfId = placementState.current.shelfId
-      if (!shelfId) return false
-      const shelfMesh = sceneRegistry.nodes.get(shelfId as AnyNodeId)
-      const shelfNode = useScene.getState().nodes[shelfId as AnyNodeId] as
-        | { width?: number; depth?: number; height?: number }
-        | undefined
-      if (!(shelfMesh && shelfNode?.width && shelfNode?.depth && shelfNode?.height)) return false
-
-      cameraRef.current.getWorldPosition(stickyCamPos)
-      stickyRay.origin.copy(stickyCamPos)
-      stickyRay.direction
-        .set(
-          gridWorldPoint[0] - stickyCamPos.x,
-          gridWorldPoint[1] - stickyCamPos.y,
-          gridWorldPoint[2] - stickyCamPos.z,
-        )
-        .normalize()
-
-      // Into shelf-local space, then test the shelf's local AABB (origin at the
-      // base: y ∈ [0, height]) with a small margin.
-      stickyRay.applyMatrix4(stickyMat.copy(shelfMesh.matrixWorld).invert())
-      const m = 0.08
-      stickyBox.min.set(-shelfNode.width / 2 - m, -m, -shelfNode.depth / 2 - m)
-      stickyBox.max.set(shelfNode.width / 2 + m, shelfNode.height + m, shelfNode.depth / 2 + m)
-      return stickyRay.intersectsBox(stickyBox)
-    }
+    const cursorRayIntersectsShelf = createShelfStickiness()
 
     const onGridMove = (event: GridEvent) => {
       releaseCommit = () => onGridClick(event)
@@ -1028,7 +984,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // floor only once the ray misses the shelf entirely — without this the
       // item oscillates between the shelf row and the floor on every micro-move.
       if (placementState.current.surface === 'shelf-surface') {
-        if (cursorRayIntersectsActiveShelf(event.position)) return
+        if (
+          cursorRayIntersectsShelf(
+            placementState.current.shelfId,
+            cameraRef.current,
+            event.position,
+          )
+        )
+          return
         // Land at the pointed surface's plan point — the raw grid hit is
         // still skewed by the plane riding at the shelf-surface height.
         detachItemSurfaceToFloor(surfaceEvent as unknown as ItemEvent)

@@ -1,4 +1,10 @@
-import { type AnyNode, type ItemEvent, type SurfaceHit, sceneRegistry } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type ItemEvent,
+  type ShelfEvent,
+  type SurfaceHit,
+  sceneRegistry,
+} from '@pascal-app/core'
 import { Matrix3, type Matrix4, Vector3 } from 'three'
 
 export function surfaceWorldNormalY(normal: ItemEvent['normal'], matrixWorld: Matrix4): number {
@@ -9,7 +15,10 @@ export function surfaceWorldNormalY(normal: ItemEvent['normal'], matrixWorld: Ma
     : Number.NaN
 }
 
-export function itemEventToSurfaceHit(host: AnyNode, event: ItemEvent): SurfaceHit | null {
+export function itemEventToSurfaceHit(
+  host: AnyNode,
+  event: ItemEvent | ShelfEvent,
+): SurfaceHit | null {
   const mesh = sceneRegistry.nodes.get(host.id)
   if (!mesh) return null
   return {

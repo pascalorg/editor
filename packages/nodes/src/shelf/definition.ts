@@ -207,7 +207,7 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
   // declared here so the placement coordinator's shelf strategy can
   // confirm parent-kind compatibility before reparenting.
   relations: {
-    hosts: ['item'],
+    hosts: ['item', 'procedural-item'],
     cascadeDelete: 'descendants',
   },
 
