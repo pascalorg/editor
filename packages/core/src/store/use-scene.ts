@@ -1110,6 +1110,14 @@ function migrateNodes(nodes: Record<string, any>): {
         children: validChildren,
       }
     }
+    // These kinds are not all schema-parsed on load, so defaults must also
+    // reach saved hosts that predate their children field.
+    if (
+      ['shelf', 'cabinet', 'cabinet-module', 'block', 'item', 'column'].includes(node.type) &&
+      patchedNodes[id].children === undefined
+    ) {
+      patchedNodes[id] = { ...patchedNodes[id], children: [] }
+    }
   }
 
   // Pass 2: elevator migration.

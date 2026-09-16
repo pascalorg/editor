@@ -207,7 +207,7 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
   // declared here so the placement coordinator's shelf strategy can
   // confirm parent-kind compatibility before reparenting.
   relations: {
-    hosts: ['item'],
+    hosts: ['item', 'procedural-item'],
     cascadeDelete: 'descendants',
   },
 
@@ -224,6 +224,7 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
   // Boards/posts/back depend only on these fields — never on hosted
   // `children`. Lets <GeometrySystem> skip the dispose+rebuild (and the
   // pointer enter/leave churn it causes) when an item reparents onto a row.
+  geometryChildTypes: [],
   geometryKey: (n) => {
     const s = sanitizeShelfDimensions(n as ShelfNode)
     return JSON.stringify([

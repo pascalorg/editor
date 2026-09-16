@@ -334,10 +334,13 @@ describe('registry item-surface move session', () => {
 
   test('invalid hosts leave propagation and the scene untouched', () => {
     const session = createRegistryItemSurfaceMove(original)!
-    const hit = eventFor()
+    expect(session.enter(eventFor().event, [4, 1, 4], 0.3)).not.toBeNull()
+    session.restore()
+    const restored = useScene.getState().nodes[original.id]
+    const hit = eventFor(host, [2, 1, 0])
     expect(session.enter(hit.event, [4, 1, 4], 0.3)).toBeNull()
     expect(hit.stopped()).toBe(false)
-    expect(useScene.getState().nodes[original.id]).toBe(original)
+    expect(useScene.getState().nodes[original.id]).toBe(restored)
     expect(
       createRegistryItemSurfaceMove({ ...original, wallId: 'wall_test' } as AnyNode),
     ).toBeNull()

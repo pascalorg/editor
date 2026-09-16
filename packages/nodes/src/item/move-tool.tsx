@@ -88,7 +88,7 @@ export function getInitialState(
   // handler — which preserves the grab offset — instead of a fresh `enter()`
   // that snaps the item's origin under the cursor. Without this the item
   // teleports the instant it's grabbed.
-  if (parent?.type === 'item') {
+  if (parent?.type === 'item' || parent?.type === 'cabinet' || parent?.type === 'procedural-item') {
     return {
       surface: 'item-surface',
       wallId: null,

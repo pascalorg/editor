@@ -4,7 +4,6 @@ import type {
   CeilingEvent,
   CeilingNode,
   GridEvent,
-  ItemEvent,
   ItemNode,
   NodeEvent,
   RoofEvent,
@@ -17,19 +16,20 @@ import type {
   WallNode,
 } from '@pascal-app/core'
 import {
-  canHostOnTop,
   clampRectToRoofWallFace,
+  createSceneApi,
   getRoofSegmentWallFace,
   getScaledDimensions,
-  isLowProfileItemSurface,
   nodeRegistry,
+  resolveSurfacePlacement,
   roofFacePointToSegment,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { Euler, Matrix3, Quaternion, Vector3 } from 'three'
+import { Euler, Quaternion, Vector3 } from 'three'
 import { hasRoofFaceChildOverlap, resolveRoofWallHit } from '../../../lib/roof-wall-hit'
 import { snapWorldXZForActiveBuilding } from '../../../lib/world-grid-snap'
+import { itemEventToSurfaceHit, surfaceWorldNormalY } from '../shared/surface-hit'
 import {
   calculateItemRotation,
   getGridAlignedDimensions,
@@ -49,36 +49,8 @@ import type {
 } from './placement-types'
 
 const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
-const UPWARD_SURFACE_NORMAL_MIN_Y = 0.75
-
-function getWorldNormalY(event: ItemEvent): number | null {
-  if (!event.normal) return null
-
-  const normal = new Vector3(event.normal[0], event.normal[1], event.normal[2])
-  normal.applyNormalMatrix(new Matrix3().getNormalMatrix(event.object.matrixWorld)).normalize()
-  return normal.y
-}
-
-function isUpwardItemSurfaceHit(event: ItemEvent): boolean {
-  const normalY = getWorldNormalY(event)
-  return normalY !== null && normalY >= UPWARD_SURFACE_NORMAL_MIN_Y
-}
-
-function getSurfacePlacementHeight(surfaceItem: ItemNode, event: ItemEvent, localPos: Vector3) {
-  if (!canHostOnTop(surfaceItem)) return null
-  if (isLowProfileItemSurface(surfaceItem)) return null
-  if (!isUpwardItemSurfaceHit(event)) return null
-
-  if (surfaceItem.asset.surface) {
-    return surfaceItem.asset.surface.height * surfaceItem.scale[1]
-  }
-
-  if (!Number.isFinite(localPos.y)) return null
-  return localPos.y
-}
-
 function isDescendantOfItem(
-  candidate: ItemNode,
+  candidate: AnyNode,
   ancestorId: string,
   nodes: Record<string, AnyNode>,
 ): boolean {
@@ -881,44 +853,67 @@ export const ceilingStrategy = {
 // ITEM SURFACE STRATEGY
 // ============================================================================
 
-export function resolveItemSurfacePlacement(
-  host: ItemNode,
-  event: ItemEvent,
+function resolveCatalogItemSurfacePlacement(
+  host: AnyNode,
+  event: NodeEvent<AnyNode>,
   dimensions: [number, number, number],
   worldYaw: number,
-  movingNodeId?: string,
-  checkFootprint = true,
-): {
-  position: [number, number, number]
-  worldPosition: [number, number, number]
-  rotationY: number
-} | null {
-  if (movingNodeId) {
-    if (host.id === movingNodeId) return null
-    if (isDescendantOfItem(host, movingNodeId, useScene.getState().nodes)) return null
-  }
-  if (checkFootprint) {
-    const hostDimensions = getScaledDimensions(host)
-    if (dimensions[0] > hostDimensions[0] || dimensions[2] > hostDimensions[2]) return null
-  }
+  onReject?: PlacementContext['onSurfaceReject'],
+  rawEvent = event,
+) {
   const mesh = sceneRegistry.nodes.get(host.id)
   if (!mesh) return null
-  const local = mesh.worldToLocal(new Vector3(...event.position))
-  const height = getSurfacePlacementHeight(host, event, local)
-  if (height === null) return null
-  const position: [number, number, number] = [
-    snapToGrid(local.x, dimensions[0]),
-    height,
-    snapToGrid(local.z, dimensions[2]),
-  ]
-  const world = mesh.localToWorld(new Vector3(...position))
+  const hit = itemEventToSurfaceHit(host, event)
+  if (!hit) return null
   const quaternion = mesh.getWorldQuaternion(new Quaternion())
   const hostYaw = new Euler().setFromQuaternion(quaternion, 'YXZ').y
+  const placement = resolveSurfacePlacement({
+    host,
+    childKind: 'item',
+    childFootprint: { size: dimensions, rotationY: worldYaw - hostYaw },
+    hit: host.type === 'procedural-item' ? (itemEventToSurfaceHit(host, rawEvent) ?? hit) : hit,
+    origin: host.type === 'procedural-item' ? hit.point : undefined,
+    scene: createSceneApi(useScene),
+    snapScalar: snapToGrid,
+    checkFootprint: true,
+    onReject,
+  })
+  if (!placement) return null
   return {
-    position,
-    worldPosition: [world.x, world.y, world.z],
-    rotationY: worldYaw - hostYaw,
+    position: [...placement.position] as [number, number, number],
+    rotationY: placement.rotationY,
+    surfaceId: placement.surfaceId,
+    worldPosition: mesh.localToWorld(new Vector3(...placement.position)).toArray(),
   }
+}
+
+export function validCatalogCounterPose(ctx: PlacementContext): boolean {
+  const hostId = ctx.state.surface === 'shelf-surface' ? ctx.state.shelfId : ctx.state.surfaceItemId
+  const host = hostId ? useScene.getState().nodes[hostId as AnyNodeId] : undefined
+  if (
+    host?.type !== 'cabinet' &&
+    host?.type !== 'shelf' &&
+    host?.type !== 'item' &&
+    host?.type !== 'procedural-item'
+  )
+    return true
+  if (!ctx.draftItem) return false
+  const placement = resolveSurfacePlacement({
+    host,
+    childKind: 'item',
+    childFootprint: {
+      size: getScaledDimensions(ctx.draftItem),
+      rotationY: ctx.draftItem.rotation[1],
+      rotation: ctx.draftItem.rotation,
+    },
+    hit: { point: ctx.gridPosition.toArray(), normalWorldY: 1 },
+    scene: createSceneApi(useScene),
+    onReject: ctx.onSurfaceReject,
+  })
+  return (
+    !!placement &&
+    (host.type !== 'cabinet' || Math.abs(placement.position[1] - ctx.gridPosition.y) < 1e-5)
+  )
 }
 
 export const itemSurfaceStrategy = {
@@ -926,11 +921,11 @@ export const itemSurfaceStrategy = {
    * Handle item:enter — transition from floor to an item surface.
    * Returns null if: item has no surface, our item doesn't fit, or it's the draft itself.
    */
-  enter(ctx: PlacementContext, event: ItemEvent): TransitionResult | null {
+  enter(ctx: PlacementContext, event: NodeEvent<AnyNode>): TransitionResult | null {
     // Only floor items can be placed on surfaces
     if (ctx.asset.attachTo) return null
 
-    const surfaceItem = event.node as ItemNode
+    const surfaceItem = event.node
     // Don't surface-place on the draft itself
     if (surfaceItem.id === ctx.draftItem?.id) return null
     if (ctx.state.surface === 'item-surface' && ctx.state.surfaceItemId === surfaceItem.id) {
@@ -939,21 +934,28 @@ export const itemSurfaceStrategy = {
     const ourDims = ctx.draftItem
       ? getScaledDimensions(ctx.draftItem)
       : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS)
-    const pose = resolveItemSurfacePlacement(
+    if (
+      ctx.draftItem &&
+      isDescendantOfItem(surfaceItem, ctx.draftItem.id, useScene.getState().nodes)
+    )
+      return null
+    const pose = resolveCatalogItemSurfacePlacement(
       surfaceItem,
       event,
       ourDims,
       ctx.currentCursorRotationY,
-      ctx.draftItem?.id,
+      ctx.onSurfaceReject,
     )
     if (!pose) return null
     const draftRotation = ctx.draftItem?.rotation ?? [0, 0, 0]
 
     return {
+      surfaceId: pose.surfaceId,
       stateUpdate: { surface: 'item-surface', surfaceItemId: surfaceItem.id },
       nodeUpdate: {
         position: pose.position,
         parentId: surfaceItem.id,
+        supportSlabId: undefined,
         rotation: [draftRotation[0], pose.rotationY, draftRotation[2]],
       },
       cursorRotationY: ctx.currentCursorRotationY,
@@ -966,26 +968,27 @@ export const itemSurfaceStrategy = {
   /**
    * Handle item:move — update position while on an item surface.
    */
-  move(ctx: PlacementContext, event: ItemEvent): PlacementResult | null {
+  move(ctx: PlacementContext, event: NodeEvent<AnyNode>, rawEvent = event): PlacementResult | null {
     if (ctx.state.surface !== 'item-surface') return null
     if (!(ctx.state.surfaceItemId && ctx.draftItem)) return null
     if (event.node.id !== ctx.state.surfaceItemId) return null
 
     const nodes = useScene.getState().nodes
-    const surfaceItem = nodes[ctx.state.surfaceItemId as AnyNodeId] as ItemNode | undefined
+    const surfaceItem = nodes[ctx.state.surfaceItemId as AnyNodeId]
     if (!surfaceItem) return null
 
-    const pose = resolveItemSurfacePlacement(
+    const pose = resolveCatalogItemSurfacePlacement(
       surfaceItem,
       event,
       getScaledDimensions(ctx.draftItem),
       ctx.currentCursorRotationY,
-      undefined,
-      false,
+      ctx.onSurfaceReject,
+      rawEvent,
     )
     if (!pose) return null
 
     return {
+      surfaceId: pose.surfaceId,
       gridPosition: pose.position,
       cursorPosition: pose.worldPosition,
       cursorRotationY: ctx.currentCursorRotationY,
@@ -998,10 +1001,11 @@ export const itemSurfaceStrategy = {
   /**
    * Handle item:click — commit placement on item surface.
    */
-  click(ctx: PlacementContext, _event: ItemEvent): CommitResult | null {
+  click(ctx: PlacementContext, _event: NodeEvent<AnyNode>): CommitResult | null {
     if (ctx.state.surface !== 'item-surface') return null
     if (!(ctx.draftItem && ctx.state.surfaceItemId)) return null
     if (_event.node.id !== ctx.state.surfaceItemId) return null
+    if (!validCatalogCounterPose(ctx)) return null
 
     return {
       nodeUpdate: {
@@ -1019,32 +1023,40 @@ export const itemSurfaceStrategy = {
 // SHELF SURFACE STRATEGY
 // ============================================================================
 
-/**
- * Resolve the row Y closest to the cursor's local Y. Reads candidate row
- * positions from the kind's `capabilities.surfaces.custom` — the shelf
- * declaration emits one `SurfacePoint` per board's top surface. The
- * strategy stays kind-agnostic at this level: any future "multi-board"
- * kind that declares `surfaces.custom` with upward normals gets the
- * same hit behaviour for free.
- */
-function getShelfRowSurfaceY(shelfNode: ShelfNode, localY: number): number | null {
-  const def = nodeRegistry.get('shelf')
-  const custom = def?.capabilities?.surfaces?.custom
-  if (!custom) return null
-  const candidates = custom(shelfNode as AnyNode)
-  if (candidates.length === 0) return null
-  let best = candidates[0]
-  let bestDist = Math.abs(best!.position[1] - localY)
-  for (let i = 1; i < candidates.length; i++) {
-    const c = candidates[i]
-    if (!c) continue
-    const dist = Math.abs(c.position[1] - localY)
-    if (dist < bestDist) {
-      best = c
-      bestDist = dist
-    }
+function resolveShelfSurfacePlacement(
+  host: ShelfNode,
+  event: ShelfEvent,
+  dimensions: [number, number, number],
+  worldYaw: number,
+  entering: boolean,
+  onReject?: PlacementContext['onSurfaceReject'],
+) {
+  const mesh = sceneRegistry.nodes.get(host.id)
+  if (!mesh) return null
+  const local = mesh.worldToLocal(new Vector3(...event.position))
+  const quaternion = mesh.getWorldQuaternion(new Quaternion())
+  const hostYaw = new Euler().setFromQuaternion(quaternion, 'YXZ').y
+  const placement = resolveSurfacePlacement({
+    host,
+    childKind: 'item',
+    childFootprint: { size: dimensions, rotationY: worldYaw - hostYaw },
+    hit: {
+      point: local.toArray(),
+      // Existing shelf movement elects rows even over side faces or board gaps;
+      // only entering requires an upward hit.
+      normalWorldY: entering ? surfaceWorldNormalY(event.normal, event.object.matrixWorld) : 1,
+    },
+    scene: createSceneApi(useScene),
+    snapScalar: snapToGrid,
+    onReject,
+    checkFootprint: true,
+  })
+  if (!placement) return null
+  return {
+    position: [...placement.position] as [number, number, number],
+    rotationY: placement.rotationY,
+    worldPosition: mesh.localToWorld(new Vector3(...placement.position)).toArray(),
   }
-  return best?.position[1] ?? null
 }
 
 export const shelfSurfaceStrategy = {
@@ -1063,43 +1075,30 @@ export const shelfSurfaceStrategy = {
     if (ctx.state.surface === 'shelf-surface' && ctx.state.shelfId === shelfNode.id) {
       return null
     }
-    if (!isUpwardShelfSurfaceHit(event)) return null
-
-    // Size check: draft footprint must fit on the shelf board (width × depth).
     const ourDims = ctx.draftItem
       ? getScaledDimensions(ctx.draftItem)
       : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS)
-    if (ourDims[0] > shelfNode.width || ourDims[2] > shelfNode.depth) return null
-
-    const shelfMesh = sceneRegistry.nodes.get(shelfNode.id)
-    if (!shelfMesh) return null
-
-    const worldPos = new Vector3(event.position[0], event.position[1], event.position[2])
-    const localPos = shelfMesh.worldToLocal(worldPos)
-    const rowY = getShelfRowSurfaceY(shelfNode, localPos.y)
-    if (rowY === null) return null
-
-    const x = snapToGrid(localPos.x, ourDims[0])
-    const z = snapToGrid(localPos.z, ourDims[2])
-
-    const worldSnapped = shelfMesh.localToWorld(new Vector3(x, rowY, z))
-
-    const surfaceQuat = new Quaternion()
-    shelfMesh.getWorldQuaternion(surfaceQuat)
-    const surfaceWorldY = new Euler().setFromQuaternion(surfaceQuat, 'YXZ').y
-    const localRotationY = ctx.currentCursorRotationY - surfaceWorldY
+    const pose = resolveShelfSurfacePlacement(
+      shelfNode,
+      event,
+      ourDims,
+      ctx.currentCursorRotationY,
+      true,
+      ctx.onSurfaceReject,
+    )
+    if (!pose) return null
     const draftRotation = ctx.draftItem?.rotation ?? [0, 0, 0]
 
     return {
       stateUpdate: { surface: 'shelf-surface', shelfId: shelfNode.id },
       nodeUpdate: {
-        position: [x, rowY, z],
+        position: pose.position,
         parentId: shelfNode.id,
-        rotation: [draftRotation[0], localRotationY, draftRotation[2]],
+        rotation: [draftRotation[0], pose.rotationY, draftRotation[2]],
       },
       cursorRotationY: ctx.currentCursorRotationY,
-      gridPosition: [x, rowY, z],
-      cursorPosition: [worldSnapped.x, worldSnapped.y, worldSnapped.z],
+      gridPosition: pose.position,
+      cursorPosition: pose.worldPosition,
       stopPropagation: true,
     }
   },
@@ -1113,25 +1112,21 @@ export const shelfSurfaceStrategy = {
     if (!(ctx.state.shelfId && ctx.draftItem)) return null
     if (event.node.id !== ctx.state.shelfId) return null
 
-    const shelfNode = event.node as ShelfNode
-    const shelfMesh = sceneRegistry.nodes.get(shelfNode.id)
-    if (!shelfMesh) return null
-
-    const ourDims = getScaledDimensions(ctx.draftItem)
-    const worldPos = new Vector3(event.position[0], event.position[1], event.position[2])
-    const localPos = shelfMesh.worldToLocal(worldPos)
-    const rowY = getShelfRowSurfaceY(shelfNode, localPos.y)
-    if (rowY === null) return null
-
-    const x = snapToGrid(localPos.x, ourDims[0])
-    const z = snapToGrid(localPos.z, ourDims[2])
-    const worldSnapped = shelfMesh.localToWorld(new Vector3(x, rowY, z))
+    const pose = resolveShelfSurfacePlacement(
+      event.node as ShelfNode,
+      event,
+      getScaledDimensions(ctx.draftItem),
+      ctx.currentCursorRotationY,
+      false,
+      ctx.onSurfaceReject,
+    )
+    if (!pose) return null
 
     return {
-      gridPosition: [x, rowY, z],
-      cursorPosition: [worldSnapped.x, worldSnapped.y, worldSnapped.z],
+      gridPosition: pose.position,
+      cursorPosition: pose.worldPosition,
       cursorRotationY: ctx.currentCursorRotationY,
-      nodeUpdate: { position: [x, rowY, z] },
+      nodeUpdate: { position: pose.position },
       stopPropagation: true,
       dirtyNodeId: null,
     }
@@ -1144,6 +1139,7 @@ export const shelfSurfaceStrategy = {
     if (ctx.state.surface !== 'shelf-surface') return null
     if (!(ctx.draftItem && ctx.state.shelfId)) return null
     if (event.node.id !== ctx.state.shelfId) return null
+    if (!validCatalogCounterPose(ctx)) return null
 
     return {
       nodeUpdate: {
@@ -1157,14 +1153,6 @@ export const shelfSurfaceStrategy = {
   },
 }
 
-/** Same upward-normal heuristic as `isUpwardItemSurfaceHit`, but typed
- *  for `ShelfEvent`. Re-uses the matrix-driven world normal calculation
- *  via a tiny `ItemEvent`-shaped adapter — the function only reads
- *  `event.normal` + `event.object`. */
-function isUpwardShelfSurfaceHit(event: ShelfEvent): boolean {
-  return isUpwardItemSurfaceHit(event as unknown as ItemEvent)
-}
-
 // ============================================================================
 // VALIDATION
 // ============================================================================
@@ -1176,14 +1164,12 @@ function isUpwardShelfSurfaceHit(event: ShelfEvent): boolean {
 export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidators): boolean {
   if (!(ctx.levelId && ctx.draftItem)) return false
 
-  // Item surface: valid if we entered (size check was in enter)
   if (ctx.state.surface === 'item-surface') {
-    return ctx.state.surfaceItemId !== null
+    return ctx.state.surfaceItemId !== null && validCatalogCounterPose(ctx)
   }
 
-  // Shelf surface: same — size check already happened on enter
   if (ctx.state.surface === 'shelf-surface') {
-    return ctx.state.shelfId !== null
+    return ctx.state.shelfId !== null && validCatalogCounterPose(ctx)
   }
 
   const attachTo = ctx.draftItem.asset.attachTo

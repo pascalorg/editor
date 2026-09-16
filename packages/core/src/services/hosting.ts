@@ -17,7 +17,6 @@ export type AttachError =
   | { kind: 'cycle'; nodeId: AnyNodeId; hostId: AnyNodeId }
   | { kind: 'depth-exceeded'; depth: number; max: number }
   | { kind: 'host-missing'; hostId: AnyNodeId }
-  | { kind: 'kind-not-allowed'; hostKind: string; allowed: readonly string[] }
 
 export type AttachResult = { ok: true } | { ok: false; error: AttachError }
 
@@ -31,8 +30,6 @@ export type AttachResult = { ok: true } | { ok: false; error: AttachError }
  * - The hosting chain (child → host → host.parent → ...) must not contain
  *   `child` (cycle prevention).
  * - The resulting chain must not exceed {@link MAX_HOST_DEPTH}.
- * - If the child's NodeDefinition declares `capabilities.hostable.parents`,
- *   `host.type` must appear in that list.
  */
 export function canAttach(childId: AnyNodeId, hostId: AnyNodeId, scene: SceneApi): AttachResult {
   if (childId === hostId) {
@@ -49,15 +46,6 @@ export function canAttach(childId: AnyNodeId, hostId: AnyNodeId, scene: SceneApi
     // No child node yet — likely a placement preview. Allow attach to proceed;
     // the caller is responsible for ensuring child exists before commit.
     return checkDepth(hostId, scene)
-  }
-
-  const childDef = nodeRegistry.get(child.type)
-  const allowed = childDef?.capabilities.hostable?.parents
-  if (allowed && allowed.length > 0 && !(allowed as readonly string[]).includes(host.type)) {
-    return {
-      ok: false,
-      error: { kind: 'kind-not-allowed', hostKind: host.type, allowed },
-    }
   }
 
   // Cycle: walk host's ancestors and reject if we hit the child.
@@ -124,11 +112,7 @@ export function getTopSurfaceHeight(
  */
 export function canHostOnTop(host: AnyNode): boolean {
   const attachTo = (host as { asset?: { attachTo?: string } }).asset?.attachTo
-  return (
-    attachTo !== 'ceiling' &&
-    (host as { recipe?: { mounting?: { attachTo?: string } } }).recipe?.mounting?.attachTo !==
-      'ceiling'
-  )
+  return attachTo !== 'ceiling' && !(host as { recipe?: { mounting?: unknown } }).recipe?.mounting
 }
 
 /**

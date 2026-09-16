@@ -89,6 +89,7 @@ export {
   type RiserLine,
   type RiserMarker,
 } from './riser-diagram'
+export { SHELF_BOARD_INSET, shelfBoardDimensions, shelfRowBoardDimensions } from './shelf-board'
 export {
   DEFAULT_ANGLE_STEP,
   DEFAULT_GRID_STEP,
@@ -116,6 +117,25 @@ export {
   getWallPlaneTop,
   type LevelElevation,
 } from './storey'
+export {
+  type DeclaredHostSurface,
+  getSurfaceProvider,
+  type HostSurface,
+  hitDerivedSurfaceProvider,
+  itemSurfaceProvider,
+  NON_PHYSICAL_HOST_KINDS,
+  proceduralItemSurfaceProvider,
+  resolveSurfacePlacement,
+  type SurfaceContext,
+  type SurfaceHit,
+  type SurfaceId,
+  type SurfacePlacement,
+  type SurfaceProvider,
+  type SurfaceRegion,
+  type SurfaceRejectReason,
+  shelfSurfaceProvider,
+} from './surface-hosting'
+export { surfaceRegionContainsFootprint, surfaceRegionContainsPoint } from './surface-region'
 export {
   buildPortComponents,
   collectSystemPorts,

@@ -231,6 +231,11 @@ export type RunSpan = {
   hasCountertop: boolean
 }
 
+type SpanModule = Pick<
+  CabinetModuleNode,
+  'position' | 'width' | 'depth' | 'carcassHeight' | 'cabinetType'
+>
+
 /**
  * Contiguous same-height module groups along the run — the units the
  * countertop, plinth, and appliance-gap logic operate on. A gap, a
@@ -238,16 +243,20 @@ export type RunSpan = {
  * starts a new span.
  */
 export function getRunSpans(
-  modules: readonly Pick<
-    CabinetModuleNode,
-    'position' | 'width' | 'depth' | 'carcassHeight' | 'cabinetType'
-  >[],
+  modules: readonly SpanModule[],
+  opts: { runTier?: CabinetNode['runTier'] } = {},
+): RunSpan[] {
+  return getRunSpanGroups(modules, opts).map((group) => group.span)
+}
+
+export function getRunSpanGroups<T extends SpanModule>(
+  modules: readonly T[],
   opts: {
     runTier?: CabinetNode['runTier']
   } = {},
-): RunSpan[] {
+): Array<{ span: RunSpan; modules: T[] }> {
   const sorted = [...modules].sort((a, b) => a.position[0] - b.position[0])
-  const spans: RunSpan[] = []
+  const groups: Array<{ span: RunSpan; modules: T[] }> = []
   const runTier = opts.runTier ?? 'base'
 
   for (const module of sorted) {
@@ -257,7 +266,8 @@ export function getRunSpans(
     const maxZ = module.position[2] + module.depth / 2
     const topY = module.position[1] + module.carcassHeight
     const hasCountertop = runTier === 'base' && (module.cabinetType ?? 'base') !== 'tall'
-    const current = spans.at(-1)
+    const group = groups.at(-1)
+    const current = group?.span
     if (
       !current ||
       minX - current.maxX > RUN_ADJACENCY_EPSILON ||
@@ -266,21 +276,25 @@ export function getRunSpans(
       Math.abs(current.minZ - minZ) > RUN_ADJACENCY_EPSILON ||
       Math.abs(current.maxZ - maxZ) > RUN_ADJACENCY_EPSILON
     ) {
-      spans.push({
-        minX,
-        maxX,
-        centerX: module.position[0],
-        centerZ: module.position[2],
-        width: module.width,
-        depth: module.depth,
-        minZ,
-        maxZ,
-        topY,
-        hasCountertop,
+      groups.push({
+        modules: [module],
+        span: {
+          minX,
+          maxX,
+          centerX: module.position[0],
+          centerZ: module.position[2],
+          width: module.width,
+          depth: module.depth,
+          minZ,
+          maxZ,
+          topY,
+          hasCountertop,
+        },
       })
       continue
     }
 
+    group!.modules.push(module)
     current.maxX = Math.max(current.maxX, maxX)
     current.minZ = Math.min(current.minZ, minZ)
     current.maxZ = Math.max(current.maxZ, maxZ)
@@ -291,7 +305,7 @@ export function getRunSpans(
     current.topY = Math.max(current.topY, topY)
   }
 
-  return spans
+  return groups
 }
 
 function angleDelta(a: number, b: number): number {
@@ -327,7 +341,7 @@ function childDerivedBaseLegSides(ctx?: GeometryContext): Set<'left' | 'right'> 
 
 function modulesForRun(node: CabinetNode, ctx?: GeometryContext): CabinetModuleNode[] {
   return (node.children ?? [])
-    .map((id) => ctx?.resolve<AnyNode>(id))
+    .map((id) => ctx?.resolve<AnyNode>(id as AnyNodeId))
     .filter((child): child is CabinetModuleNode => child?.type === 'cabinet-module')
 }
 

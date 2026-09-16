@@ -11,10 +11,11 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { setSurfaceRaycastLayers, useViewer } from '@pascal-app/viewer'
-import { type Camera, Matrix3, type Object3D, Raycaster, Vector3 } from 'three'
+import { type Camera, type Object3D, Raycaster, Vector3 } from 'three'
 import { resolveTerrainGroundHit } from '../../../lib/ground-surface'
 import { scopeNodeId } from '../../../lib/interaction/scope'
 import useInteractionScope from '../../../store/use-interaction-scope'
+import { surfaceWorldNormalY } from './surface-hit'
 
 const originScratch = new Vector3()
 const hitScratch = new Vector3()
@@ -24,8 +25,6 @@ const worldRayOrigin = new Vector3()
 const worldRayDirection = new Vector3()
 const nodeTopRaycaster = new Raycaster()
 setSurfaceRaycastLayers(nodeTopRaycaster.layers)
-const nodeTopNormal = new Vector3()
-const nodeTopNormalMatrix = new Matrix3()
 
 export type PointerSupportSurface = {
   /** Level-local elevation of the pointed surface — the election cap. */
@@ -248,11 +247,13 @@ export function resolvePointerSupportSurface(
             ownerObject = ownerObject.parent
           }
           if (belongsToNestedNode) continue
-          nodeTopNormal
-            .copy(intersection.face.normal)
-            .applyNormalMatrix(nodeTopNormalMatrix.getNormalMatrix(intersection.object.matrixWorld))
-            .normalize()
-          if (nodeTopNormal.y < 0.75) continue
+          if (
+            surfaceWorldNormalY(
+              intersection.face.normal.toArray(),
+              intersection.object.matrixWorld,
+            ) < 0.75
+          )
+            continue
           nearest = {
             distance: intersection.distance,
             nodeId,

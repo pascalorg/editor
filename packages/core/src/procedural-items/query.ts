@@ -1,4 +1,5 @@
-import { itemOverlapsPolygon } from '../hooks/spatial-grid/spatial-grid-manager'
+import { getFloorPlacedFootprints } from '../hooks/spatial-grid/floor-placed-footprints'
+import { itemOverlapsPolygon } from '../lib/item-polygon-overlap'
 import {
   pointInPolygon as containsPoint,
   type Point2D,
@@ -6,12 +7,16 @@ import {
 } from '../lib/polygon-relations'
 import { getRenderableSlabPolygon } from '../lib/slab-polygon'
 import { levelBaseElevationAt } from '../lib/terrain-support'
+import { nodeRegistry } from '../registry/registry'
+import type { CabinetModuleNode, CabinetNode } from '../schema/nodes/cabinet'
 import type { ItemNode } from '../schema/nodes/item'
+import type { ShelfNode } from '../schema/nodes/shelf'
 import type { SlabNode } from '../schema/nodes/slab'
 import type { WallNode } from '../schema/nodes/wall'
 import type { AnyNode } from '../schema/types'
 import { resolveCeilingHeight } from '../services/level-height'
 import { getStoredLevelHeight } from '../services/storey'
+import { surfaceRegionContainsPoint } from '../services/surface-region'
 import { computeWallSlabSupport, pointInPolygon } from '../systems/slab/slab-support'
 import { getWallThickness } from '../systems/wall/wall-footprint'
 import type { ProceduralItemNode } from './node'
@@ -75,7 +80,10 @@ export function proceduralFootprint(node: ProceduralItemNode) {
   const position = transformPoint(frame(node.position, node.rotation), center)
   return { position, rotation: node.rotation, dimensions: e.dimensions }
 }
-function floorLift(node: ProceduralItemNode | ItemNode, nodes: QueryNodes): number {
+function floorLift(
+  node: ProceduralItemNode | ItemNode | ShelfNode | CabinetNode | CabinetModuleNode,
+  nodes: QueryNodes,
+): number {
   if (!node.parentId || nodes[node.parentId]?.type !== 'level') return 0
   const { slabs, walls } = levelSurfaces(nodes, node.parentId)
   const ground = levelBaseElevationAt(
@@ -85,11 +93,43 @@ function floorLift(node: ProceduralItemNode | ItemNode, nodes: QueryNodes): numb
     node.position[2],
   )
   if (node.supportSlabId === 'ground') return ground
+  if (node.type === 'cabinet' || node.type === 'cabinet-module') {
+    const capability = nodeRegistry.get(node.type)?.capabilities.floorPlaced
+    const footprints = capability
+      ? getFloorPlacedFootprints(capability, node, { nodes: nodes as Record<string, AnyNode> })
+      : []
+    const candidatesFor = (footprint: (typeof footprints)[number]) =>
+      slabs.filter((slab) => {
+        const position = footprint.position ?? node.position
+        return (
+          itemOverlapsPolygon(
+            position,
+            footprint.dimensions,
+            footprint.rotation,
+            getRenderableSlabPolygon(slab, { walls, siblingSlabs: slabs }),
+            0.005,
+          ) && !(slab.holes ?? []).some((hole) => pointInPolygon(position[0], position[2], hole))
+        )
+      })
+    const candidates = footprints.map(candidatesFor)
+    const pinned = candidates.flat().find((slab) => slab.id === node.supportSlabId)
+    if (pinned) return pinned.elevation ?? 0.05
+    return candidates.length
+      ? Math.max(
+          ...candidates.map((slabs) =>
+            slabs.length ? Math.max(...slabs.map((slab) => slab.elevation ?? 0.05)) : ground,
+          ),
+        )
+      : ground
+  }
   const footprint = isProceduralItem(node)
     ? proceduralFootprint(node)
     : {
         position: node.position,
-        dimensions: node.asset.dimensions.map((v, i) => v * node.scale[i]!) as Vec3,
+        dimensions:
+          node.type === 'shelf'
+            ? ([node.width, node.height, node.depth] as Vec3)
+            : (node.asset.dimensions.map((v, i) => v * node.scale[i]!) as Vec3),
         rotation: node.rotation,
       }
   const candidates = slabs.filter((s) => {
@@ -146,15 +186,27 @@ export function nodeLevelFrame(id: string, nodes: QueryNodes, seen = new Set<str
       [0, -Math.atan2(node.end[1] - node.start[1], node.end[0] - node.start[0]), 0],
     )
   }
-  if (!(isProceduralItem(node) || node.type === 'item'))
+  if (
+    !(
+      isProceduralItem(node) ||
+      node.type === 'item' ||
+      node.type === 'shelf' ||
+      node.type === 'cabinet' ||
+      node.type === 'cabinet-module'
+    )
+  )
     throw new Error(`Unsupported host ${node.type}`)
   const pose = isProceduralItem(node)
     ? proceduralLocalPose(node, nodes)
-    : { position: [...node.position] as Vec3, rotation: node.rotation }
+    : {
+        position: [...node.position] as Vec3,
+        rotation:
+          typeof node.rotation === 'number' ? ([0, node.rotation, 0] as Vec3) : node.rotation,
+      }
   const parent = node.parentId ? nodes[node.parentId] : undefined
   if (!node.parentId) return frame(pose.position, pose.rotation)
   let parentFrame = nodeLevelFrame(node.parentId, nodes, seen)
-  if (isProceduralItem(parent)) {
+  if (isProceduralItem(parent) && parent.attachments[node.id] !== undefined) {
     const surface = evaluateRecipe(parent.recipe, parent.parameters).surfaces.find(
       (s) => s.id === parent.attachments[node.id],
     )
@@ -277,14 +329,15 @@ export function validateProceduralRelations(raw: AnyNode | ProceduralItemNode, n
     if (!child || child.parentId !== node.id) throw new Error('Invalid hosted child link')
     if (!(isProceduralItem(child) || child.type === 'item'))
       throw new Error('Unsupported hosted child')
+    if (node.attachments[childId] === undefined) continue
     const surface = evaluation.surfaces.find((s) => s.id === node.attachments[childId])
     if (!surface) throw new Error('Choose a named attachment surface for the child')
     const b = attachmentBounds(child)
     if (
-      b.min[0] < -surface.size[0] / 2 - 1e-6 ||
-      b.max[0] > surface.size[0] / 2 + 1e-6 ||
-      b.min[2] < -surface.size[1] / 2 - 1e-6 ||
-      b.max[2] > surface.size[1] / 2 + 1e-6 ||
+      !surfaceRegionContainsPoint(
+        { kind: 'rect', size: [surface.size[0] / 2, surface.size[1] / 2] },
+        [(b.min[0] + b.max[0]) / 2, (b.min[2] + b.max[2]) / 2],
+      ) ||
       Math.abs(b.min[1]) > 1e-6
     )
       throw new Error(`The hosted item does not fit on ${surface.label}`)
