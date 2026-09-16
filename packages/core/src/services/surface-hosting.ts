@@ -269,6 +269,9 @@ export function resolveSurfacePlacement(args: {
   onReject?: (reason: SurfaceRejectReason) => void
 }): SurfacePlacement | null {
   const { host, hit, childKind, childFootprint } = args
+  // Slabs support level children via supportSlabId. Defer to floor placement
+  // without a refusal, which would block the paired grid event's floor drop.
+  if (host.type === 'slab') return null
   const reject = (reason: SurfaceRejectReason) => {
     args.onReject?.(reason)
     return null
