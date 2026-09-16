@@ -250,3 +250,7 @@ If the tool *also* rotates the node during the drag, it should drive `rotation` 
 ## SVG `fill="none"` is click-through
 
 When emitting a `FloorplanGeometry` polygon that should remain interactive but visually invisible (e.g. an item with a thumbnail image carrying the visual weight), use `fill="transparent"`, not `fill="none"`. The default `pointer-events: visiblePainted` only hit-tests the interior when there's a paint server — `none` is not paint, `transparent` is. Without this the floor-plan layer's wrapping `<g>` never sees the `onPointerDown` and clicks don't select the node.
+
+## Procedural ceiling placement
+
+Procedural recipes declare `mounting: { attachTo: 'ceiling', reference }` with a named, non-repeated +Y top surface. The shared procedural mounted move session handles wall and ceiling previews, snapping, collision checks, Alt force-place for collisions, fresh subtree commits and single-step undo. Ceiling enter/move/click events use ceiling-local XZ; grid fallback shows an unhosted red ghost and cannot commit. The parent is the ceiling, stored Y is zero at the reference, and only yaw rotates (R/T); the rendered pose subtracts the rotated reference so the design hangs flush below the ceiling underside. Core validation enforces polygon containment, holes and level height even with Alt. The 2D move target finds ceiling polygons and uses the same session; glyphs resolve the ceiling frame, while parameter arrows portal through the ceiling frame and floor elevation never applies.

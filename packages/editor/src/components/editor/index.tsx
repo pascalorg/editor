@@ -49,6 +49,7 @@ import {
   writePersistedSelection,
 } from '../../lib/scene'
 import { disposeSFXBus, initSFXBus } from '../../lib/sfx-bus'
+import { useUnitFocusRules } from '../../lib/units'
 import { type CameraHintAction, useCameraHintFocus } from '../../store/use-camera-hint-focus'
 import useEditor from '../../store/use-editor'
 import useFloorplanMode from '../../store/use-floorplan-mode'
@@ -1041,6 +1042,9 @@ const ViewerCanvas = memo(function ViewerCanvas({
   const setFloorplanPaneRatio = useEditor((s) => s.setFloorplanPaneRatio)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
+  const captureMode = useEditor((s) => s.captureMode)
+  useUnitFocusRules()
+  const isolate = captureMode.mode === 'preset' ? captureMode.isolated : null
 
   const [isCameraControlsHintVisible, setIsCameraControlsHintVisible] = useState<boolean | null>(
     null,
@@ -1151,6 +1155,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
             defaultRender={EDITOR_DEFAULT_RENDER}
             disablePostFx={disablePostFx}
             hoverStyles={EDITOR_HOVER_STYLES}
+            isolate={isolate}
             onSceneReadyChange={onSceneReadyChange}
             renderContext="editor"
             renderPaused={!show3d && !showLoader}
@@ -1349,7 +1354,7 @@ function EditorContent({
   useEffect(() => {
     let cancelled = false
 
-    async function load() {
+    async function load(attempt: number) {
       isLoadingSceneRef.current = true
       setSceneLoadError(null)
       setHasLoadedInitialScene(false)
@@ -1363,7 +1368,7 @@ function EditorContent({
       let failed = false
       try {
         const sceneGraph = onLoad ? await onLoad() : loadSceneFromLocalStorage()
-        if (!cancelled) {
+        if (!cancelled && attempt === sceneLoadAttempt) {
           applySceneGraphToEditor(sceneGraph)
           setIsViewerSceneReady(false)
           setSceneReadyKey((key) => key + 1)
@@ -1389,7 +1394,7 @@ function EditorContent({
       }
     }
 
-    load()
+    load(sceneLoadAttempt)
 
     return () => {
       cancelled = true

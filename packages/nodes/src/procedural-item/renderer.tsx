@@ -25,9 +25,9 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
   const overrides = useLiveNodeOverrides((s) => s.overrides.get(node.id))
   const live = useLiveTransforms((s) => s.get(node.id as AnyNodeId))
   const effective = { ...node, ...overrides } as ProceduralItemNode
-  const host = useScene((s) => (node.wallId ? s.nodes[node.wallId as AnyNodeId] : undefined))
+  const host = useScene((s) => (node.parentId ? s.nodes[node.parentId as AnyNodeId] : undefined))
   const hostOverride = useLiveNodeOverrides((s) =>
-    node.wallId ? s.overrides.get(node.wallId) : undefined,
+    node.parentId ? s.overrides.get(node.parentId) : undefined,
   )
   const pose = proceduralLocalPose(
     effective,

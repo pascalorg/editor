@@ -11,11 +11,24 @@ export function resolveLinearHandlePosition<N>(
   if (!clearance) return position
   const index = descriptor.axis === 'x' ? 0 : descriptor.axis === 'y' ? 1 : 2
   const result: [number, number, number] = [...position]
-  result[index] = Math.max(
-    result[index],
-    clearance.edge(node, scene) + clearance.distance * baseScale,
-  )
+  const direction = descriptor.kind === 'linear-resize' ? (descriptor.direction ?? 1) : 1
+  const edge = clearance.edge(node, scene) + direction * clearance.distance * baseScale
+  result[index] = direction === -1 ? Math.min(result[index], edge) : Math.max(result[index], edge)
   return result
+}
+
+export function resolveLinearHandleRotation<N>(
+  descriptor: LinearResizeHandle<N> | RadialResizeHandle<N>,
+  position: readonly [number, number, number],
+): [number, number, number] {
+  const direction = descriptor.kind === 'linear-resize' ? descriptor.direction : undefined
+  if (descriptor.axis === 'y') {
+    const sign = direction ?? (position[1] < 0 ? -1 : 1)
+    return [0, Math.PI / 2, (sign * Math.PI) / 2]
+  }
+  const faceNormal =
+    descriptor.kind === 'linear-resize' && descriptor.axis === 'x' && descriptor.faceNormal
+  return [faceNormal ? Math.PI / 2 : 0, 0, direction === -1 ? Math.PI : 0]
 }
 
 // Offset, in node-local frame, that compensates for `position` drift on

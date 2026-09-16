@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { BuildingNode, LevelNode, UnitNode, ZoneNode } from '../schema'
 import type { CollectionId } from '../schema/collections'
 import type { SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
@@ -326,5 +327,59 @@ describe('roof surface support remap', () => {
     if (levelMounted.type === 'roof' && levelMounted.support.kind === 'roof') {
       expect(levelMounted.support.roofSegmentId).toBe(levelClone.idMap.get('rseg_host'))
     }
+  })
+})
+
+describe('unit member remap', () => {
+  function unitScene(): SceneGraph {
+    const building = BuildingNode.parse({})
+    const lower = LevelNode.parse({ parentId: building.id })
+    const upper = LevelNode.parse({ parentId: building.id, level: 1 })
+    const first = ZoneNode.parse({ parentId: lower.id, name: 'Lower', polygon: [] })
+    const second = ZoneNode.parse({ parentId: upper.id, name: 'Upper', polygon: [] })
+    const unit = UnitNode.parse({
+      parentId: building.id,
+      members: [first.id, second.id, 'zone_missing'],
+    })
+    building.children = [lower.id, upper.id, unit.id]
+    lower.children = [first.id]
+    upper.children = [second.id]
+    return {
+      nodes: Object.fromEntries(
+        [building, lower, upper, first, second, unit].map((node) => [node.id, node]),
+      ),
+      rootNodeIds: [building.id],
+    }
+  }
+
+  for (const clone of [cloneSceneGraph, forkSceneGraph]) {
+    test(`${clone.name} remaps member ids across levels and drops missing references`, () => {
+      const source = unitScene()
+      const before = structuredClone(source)
+      const cloned = clone(source)
+      const unit = Object.values(cloned.nodes).find((node) => node.type === 'unit')!
+      const zones = Object.values(cloned.nodes).filter((node) => node.type === 'zone')
+      const building = Object.values(cloned.nodes).find((node) => node.type === 'building')!
+      expect(unit.members).toEqual(zones.map((zone) => zone.id))
+      expect(unit.parentId).toBe(building.id)
+      expect(building.children).toContain(unit.id)
+      expect(unit.members.every((id) => source.nodes[id] === undefined)).toBe(true)
+      expect(source).toEqual(before)
+    })
+  }
+
+  test('level subtree clones expose the member id map without cloning building units', () => {
+    const source = unitScene()
+    const level = Object.values(source.nodes).find((node) => node.type === 'level')!
+    const zone = Object.values(source.nodes).find(
+      (node) => node.type === 'zone' && node.parentId === level.id,
+    )!
+    const clone = cloneLevelSubtree(source.nodes, level.id)
+    expect(clone.clonedNodes.some((node) => node.type === 'unit')).toBe(false)
+    expect(
+      clone.clonedNodes.some(
+        (node) => node.type === 'zone' && node.id === clone.idMap.get(zone.id),
+      ),
+    ).toBe(true)
   })
 })

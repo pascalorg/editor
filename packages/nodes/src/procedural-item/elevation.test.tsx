@@ -2,6 +2,8 @@ import { afterEach, beforeEach, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
+  CeilingNode,
+  createSceneApi,
   ItemNode,
   LevelNode,
   nodeRegistry,
@@ -10,6 +12,7 @@ import {
   SlabNode,
   sceneRegistry,
   spatialGridManager,
+  useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
   WallNode,
@@ -19,13 +22,20 @@ import {
   proceduralLocalPose,
   radiatorRecipe,
   shelfRecipe,
+  snapParameters,
+  validateProceduralRelations,
 } from '@pascal-app/core/procedural-items'
 import { act, create } from '@react-three/test-renderer'
+import { Box3 } from 'three'
+import { linearResizeFactor } from '../../../editor/src/components/editor/handles/linear-resize-drag'
 import { FloorElevationSystem } from '../../../viewer/src/systems/floor-elevation/floor-elevation-system'
 import { proceduralItemDefinition } from './definition'
 import ProceduralRenderer from './renderer'
 
-const level = LevelNode.parse({ id: 'level_procedural-elevation' })
+globalThis.requestAnimationFrame ??= () => 0
+globalThis.cancelAnimationFrame ??= () => {}
+
+const level = LevelNode.parse({ id: 'level_procedural-elevation', height: 3 })
 const slab = SlabNode.parse({
   id: 'slab_procedural-elevation',
   parentId: level.id,
@@ -49,6 +59,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   useLiveTransforms.getState().clearAll()
+  useLiveNodeOverrides.getState().clearAll()
   spatialGridManager.clear()
   useScene.setState({ nodes: oldNodes })
   restoreRegistry()
@@ -156,5 +167,59 @@ test('wall-mounted and item-hosted procedural nodes keep host-local height and d
     } finally {
       await renderer.unmount()
     }
+  }
+})
+
+test('ceiling parameter changes keep the top flush, yaw intact and floor lift disabled', async () => {
+  const ceiling = CeilingNode.parse({ parentId: level.id, polygon: slab.polygon, height: 3 })
+  const node = ProceduralItemNode.parse({
+    recipe: {
+      ...shelfRecipe,
+      mounting: { attachTo: 'ceiling', reference: 'top' },
+      surfaces: [{ id: 'top', label: 'Top', position: [0, 'height', 0], size: ['width', 'depth'] }],
+    },
+    parentId: ceiling.id,
+    position: [1, 0, 2],
+    rotation: [0, 0.7, 0],
+  })
+  install(node, ceiling)
+  const renderer = await create(scene(node))
+  try {
+    await renderer.advanceFrames(1, 1 / 60)
+    expect(sceneRegistry.nodes.get(node.id)!.position.y).toBeCloseTo(-1.8)
+    const api = createSceneApi(useScene)
+    const definitions = proceduralItemDefinition.handles
+    if (typeof definitions !== 'function') throw new Error('Missing handles')
+    const height = definitions(node, api).find((h) => h.kind === 'linear-resize' && h.axis === 'y')!
+    if (height.kind !== 'linear-resize') throw new Error('Missing height arrow')
+    const before = new Box3().setFromObject(sceneRegistry.nodes.get(node.id)!)
+    const next = height.currentValue(node) + -0.237 * linearResizeFactor(height)
+    validateProceduralRelations({ ...node, parameters: { height: next } }, api.nodes())
+    const patch = height.apply(node, next, api)
+    expect(patch.parameters?.height).toBeCloseTo(next)
+    await act(async () => useLiveNodeOverrides.getState().set(node.id, patch))
+    await renderer.advanceFrames(1, 1 / 60)
+    const during = new Box3().setFromObject(sceneRegistry.nodes.get(node.id)!)
+    expect(during.max.y).toBeCloseTo(before.max.y)
+    expect(during.min.y).toBeCloseTo(before.min.y - 0.237)
+    expect(useScene.getState().nodes[node.id as AnyNodeId]).toBe(node)
+    const committed = snapParameters(node.recipe, patch.parameters!)
+    useScene.temporal.getState().clear()
+    height.commit!(node, patch, api)
+    const resized = useScene.getState().nodes[node.id as AnyNodeId] as unknown as ProceduralItemNode
+    expect(resized.parameters).toEqual(committed)
+    await act(async () => useLiveNodeOverrides.getState().clear(node.id))
+    await renderer.update(scene(resized))
+    await renderer.advanceFrames(1, 1 / 60)
+    expect(sceneRegistry.nodes.get(node.id)!.position.y).toBeCloseTo(-committed.height!)
+    expect(new Box3().setFromObject(sceneRegistry.nodes.get(node.id)!).max.y).toBeCloseTo(
+      before.max.y,
+    )
+    useScene.temporal.getState().undo()
+    expect(useScene.getState().nodes[node.id as AnyNodeId]).toEqual(node)
+    expect(sceneRegistry.nodes.get(node.id)!.rotation.y).toBeCloseTo(0.7)
+    expect(useScene.getState().dirtyNodes.has(node.id as AnyNodeId)).toBe(false)
+  } finally {
+    await renderer.unmount()
   }
 })

@@ -4,6 +4,7 @@ import { registerApplyPatch } from './apply-patch'
 import { registerCheckCollisions } from './check-collisions'
 import { registerConstructionTools } from './construction-tools'
 import { registerCreateLevel } from './create-level'
+import { registerCreateUnit } from './create-unit'
 import { registerCreateWall } from './create-wall'
 import { registerCutOpening } from './cut-opening'
 import { registerDeleteNode } from './delete-node'
@@ -14,6 +15,7 @@ import { registerExportJson } from './export-json'
 import { registerFindNodes } from './find-nodes'
 import { registerGetNode } from './get-node'
 import { registerGetScene } from './get-scene'
+import { registerListUnits } from './list-units'
 import { registerMeasure } from './measure'
 import { registerPhotoToSceneTool } from './photo-to-scene'
 import { registerPlaceItem } from './place-item'
@@ -21,6 +23,7 @@ import { registerRedo } from './redo'
 import { registerRoomTools } from './room-tools'
 import { registerSceneLifecycleTools } from './scene-lifecycle'
 import { registerSceneQueryTools } from './scene-query'
+import { registerSetUnitMembers } from './set-unit-members'
 import { registerSetZone } from './set-zone'
 import { registerTemplateTools } from './templates'
 import { registerUndo } from './undo'
@@ -46,6 +49,9 @@ export function registerTools(server: McpServer, operations: SceneOperations): v
   registerRoomTools(server, operations)
   registerApplyPatch(server, operations)
   registerCreateLevel(server, operations)
+  registerCreateUnit(server, operations)
+  registerSetUnitMembers(server, operations)
+  registerListUnits(server, operations)
   registerCreateWall(server, operations)
   registerPlaceItem(server, operations)
   registerCutOpening(server, operations)

@@ -770,12 +770,12 @@ if (
 const annotationValidation = publishing.tool_annotation_validation
 if (
   annotationValidation?.status !== 'local_pass' ||
-  annotationValidation.registered_tools !== 46 ||
+  annotationValidation.registered_tools !== 49 ||
   JSON.stringify(annotationValidation.required_hints) !==
     JSON.stringify(['readOnlyHint', 'destructiveHint', 'openWorldHint']) ||
   annotationValidation.justification_packet !== 'plugin-evals/tool-annotation-justifications.json'
 ) {
-  fail('Publishing suite must reference the locally validated exact 46-tool justification packet')
+  fail('Publishing suite must reference the locally validated exact 49-tool justification packet')
 }
 const publishingCases = publishing.cases ?? []
 let positivePublishingCases = 0

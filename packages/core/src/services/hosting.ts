@@ -124,7 +124,11 @@ export function getTopSurfaceHeight(
  */
 export function canHostOnTop(host: AnyNode): boolean {
   const attachTo = (host as { asset?: { attachTo?: string } }).asset?.attachTo
-  return attachTo !== 'ceiling'
+  return (
+    attachTo !== 'ceiling' &&
+    (host as { recipe?: { mounting?: { attachTo?: string } } }).recipe?.mounting?.attachTo !==
+      'ceiling'
+  )
 }
 
 /**

@@ -49,6 +49,7 @@ import type {
   StairSegmentNode,
   StructuralGridNode,
   TurbineVentNode,
+  UnitNode,
   WallNode,
   WindowNode,
   ZoneNode,
@@ -140,6 +141,7 @@ export type StructuralGridEvent = NodeEvent<StructuralGridNode>
 export type WindowEvent = NodeEvent<WindowNode>
 export type DoorEvent = NodeEvent<DoorNode>
 export type ElevatorEvent = NodeEvent<ElevatorNode>
+export type UnitEvent = NodeEvent<UnitNode>
 export type ScanEvent = NodeEvent<ScanNode>
 export type GuideEvent = NodeEvent<GuideNode>
 export type BoxVentEvent = NodeEvent<BoxVentNode>
@@ -357,6 +359,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'site', SiteEvent> &
   NodeEvents<'building', BuildingEvent> &
   NodeEvents<'elevator', ElevatorEvent> &
+  NodeEvents<'unit', UnitEvent> &
   NodeEvents<'level', LevelEvent> &
   NodeEvents<'lean-to-extension', LeanToExtensionEvent> &
   NodeEvents<'zone', ZoneEvent> &

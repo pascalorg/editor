@@ -30,7 +30,9 @@ export const RecipeSchema = z.strictObject({
       tags: z.array(z.string().min(1).max(80)).max(16),
     })
     .optional(),
-  mounting: z.strictObject({ attachTo: z.literal('wall-side'), reference: id }).optional(),
+  mounting: z
+    .strictObject({ attachTo: z.enum(['wall-side', 'ceiling']), reference: id })
+    .optional(),
   surfaces: z
     .array(
       z.strictObject({
@@ -66,7 +68,7 @@ export const RecipeSchema = z.strictObject({
         id,
         label: z.string().min(1).max(60),
         color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-        finish: z.enum(['glass']).optional(),
+        finish: z.enum(['glass', 'metal', 'wood']).optional(),
       }),
     )
     .min(1)
@@ -340,8 +342,14 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
     }
   }
   if (recipe.mounting) {
-    const reference = surfaces.find((s) => s.id === recipe.mounting!.reference)!
-    if (Math.abs(reference.normal[2] + 1) > 1e-6)
+    const reference = surfaces.find((s) => s.id === recipe.mounting!.reference)
+    if (!reference || reference.id.includes(':')) throw new Error('Missing mounting reference')
+    if (recipe.mounting.attachTo === 'ceiling') {
+      if (Math.abs(reference.normal[1] - 1) > 1e-6)
+        throw new Error('Ceiling mounting reference must face local +Y')
+      if (Math.abs(reference.position[1] - max[1]) > 1e-6)
+        throw new Error('Ceiling mounting reference must lie at the top of the design')
+    } else if (Math.abs(reference.normal[2] + 1) > 1e-6)
       throw new Error('Wall-side mounting reference must face local -Z')
   }
   if (!shapes.length) throw new Error('The item must contain geometry')
