@@ -99,9 +99,12 @@ export function resolveCabinetTypedPlacementPosition({
   width: number
 }): { position: [number, number, number]; wallLocalX: number; yaw: number } | null {
   if (!Number.isFinite(distance) || !Number.isFinite(offset)) return null
-  if (distance < 0 || distance > hit.wallLength - width) return null
-
-  const localX = distance + width / 2
+  // A cabinet wider than the wall still places (wall snap allows the pose);
+  // clamp the distance into the valid span — which is empty when the cabinet
+  // is wider than the wall, leaving distance 0 — instead of rejecting.
+  const maxDistance = Math.max(0, hit.wallLength - width)
+  const clampedDistance = Math.min(Math.max(distance, 0), maxDistance)
+  const localX = clampedDistance + width / 2
   const frame = cabinetWallFrameAtLocalX(hit, localX)
   const faceOffset = resolveCabinetWallFaceOffset({
     hit,

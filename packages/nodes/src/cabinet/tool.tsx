@@ -439,6 +439,14 @@ const CabinetTool = () => {
   const lastRawPositionRef = useRef<[number, number, number] | null>(null)
   const typedWallHitRef = useRef<WallHit | null>(null)
   const typedCoordinateDefaultsRef = useRef<[number, number] | null>(null)
+  // Pre-typing placement snapshot — restored when a typing session ends
+  // without a commit so a click right after Escape cannot commit the
+  // cancelled typed pose (`placementRef` would otherwise still hold it).
+  const preTypedPlacementRef = useRef<CabinetPlacement | null>(null)
+  // Set while a code path intentionally ends the session *and* owns the
+  // placement afterwards (canvas-click commit, island toggle) so the
+  // restore-on-cancel logic stays out of the way.
+  const suppressTypedRestoreRef = useRef(false)
   const lastPlacementEventRef = useRef<FloorPlacementClickTriggerEvent | null>(null)
   const activeGhostRef = useRef<Group | null>(null)
   const surfacePointRef = useRef(new Vector3())
@@ -738,6 +746,15 @@ const CabinetTool = () => {
         draftAnchorRef.current !== null || draftSegmentsRef.current.length > 0
       if (hasContinuousDraft) clearDraft()
       islandModeRef.current = nextIslandMode
+      // Island mode has no wall snapping, so a live typed session would be
+      // orphaned (frozen pointer + vanished HUD). End it — the toggle owns
+      // the placement afterwards, so suppress the pose restore.
+      if (nextIslandMode && usePlacementTyping.getState().isActive) {
+        suppressTypedRestoreRef.current = true
+        usePlacementTyping.getState().clear()
+        typedWallHitRef.current = null
+        typedCoordinateDefaultsRef.current = null
+      }
       if (hasContinuousDraft) return
       // Drop a stale wall-snapped preview so the next move re-resolves free.
       if (nextIslandMode && currentPlacement?.snappedToWall) {
@@ -1653,6 +1670,8 @@ const CabinetTool = () => {
       })
       typedWallHitRef.current = hit
       typedCoordinateDefaultsRef.current = [coordinates.distance, coordinates.offset]
+      preTypedPlacementRef.current = current
+      suppressTypedRestoreRef.current = false
       usePlacementTyping
         .getState()
         .begin([
@@ -1683,10 +1702,22 @@ const CabinetTool = () => {
         }
         // Any exit path (Escape in the HUD input, tool cancel, commit) must
         // drop the frozen wall hit — otherwise pointer moves keep feeding it
-        // into `publishFloorplanPreview`.
+        // into `publishFloorplanPreview`. An uncommitted exit also restores
+        // the pre-typing pose: `placementRef` still holds the typed pose,
+        // which a click right after Escape would otherwise commit.
         if (becameInactive) {
           typedWallHitRef.current = null
           typedCoordinateDefaultsRef.current = null
+          if (!suppressTypedRestoreRef.current && preTypedPlacementRef.current) {
+            const restored = preTypedPlacementRef.current
+            preTypedPlacementRef.current = null
+            if (!placementRef.current?.stretch) {
+              placementRef.current = restored
+              setPlacement(restored)
+              publishFloorplanPreview(restored)
+            }
+          }
+          suppressTypedRestoreRef.current = false
         }
         if (state.submitRevision === handledSubmitRevision) return
         handledSubmitRevision = state.submitRevision
@@ -1707,12 +1738,19 @@ const CabinetTool = () => {
         }
         // Seed any continuous-mode stretch at the typed position (zero-length
         // span), not the stale cursor carried by the reused pointer event.
+        // Restore is suppressed: a successful commit owns the placement, and
+        // `onClick`'s internal `clear()` would otherwise re-trigger the
+        // restore logic below and revert the fresh stretch anchor.
         const typedPosition = placementRef.current?.position
+        suppressTypedRestoreRef.current = true
         const committed = onClick(commitEvent, true, typedPosition)
         // Keep the typed values when the pose was rejected (e.g. collision)
         // so Enter does not silently wipe the session — the user can adjust
         // distance/offset and retry.
-        if (!committed) return
+        if (!committed) {
+          suppressTypedRestoreRef.current = false
+          return
+        }
         typedWallHitRef.current = null
         typedCoordinateDefaultsRef.current = null
         usePlacementTyping.getState().clear()
