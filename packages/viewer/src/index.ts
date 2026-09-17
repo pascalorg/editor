@@ -110,6 +110,7 @@ export {
   clearIsolation,
   collectIsolationSubtree,
   isIsolationActive,
+  refreshIsolation,
 } from './lib/isolation'
 export { configureKtx2Support, ensureKtx2Support } from './lib/ktx2-loader'
 export { LayerPassIndex } from './lib/layer-pass'

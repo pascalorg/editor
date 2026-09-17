@@ -13,6 +13,7 @@ import {
   GRID_LAYER,
   getVisibleWallMaterials,
   heroCameraPose,
+  refreshIsolation,
   SNAPSHOT_MAX_EDGE,
   SNAPSHOT_MIME,
   SNAPSHOT_QUALITY,
@@ -277,6 +278,11 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               }
             }
 
+            // Geometry and presentation systems may have mounted new meshes
+            // since the viewport's last frame. Apply the same isolation to
+            // those meshes before either snapshot render path submits them,
+            // and restore fog afterwards so the atmosphere never leaks in.
+            restore(refreshIsolation(scene))
             if (pipeline) return pipeline.capture({ captureMode, cropRegion, standardSize })
             gl.render(scene, thumbnailCamera)
             return undefined
