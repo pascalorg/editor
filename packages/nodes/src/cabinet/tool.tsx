@@ -417,6 +417,8 @@ const CabinetTool = () => {
   const dimensionInput = usePlacementPreview((s) => s.dimensionInput)
   const typingActive = usePlacementTyping((s) => s.isActive)
   const typingProjectedPosition = usePlacementTyping((s) => s.projectedPosition)
+  // HUD ownership: in 2d/split the floorplan pane owns the typed-entry HUD.
+  const viewMode = useEditor((s) => s.viewMode)
   const [placement, setPlacement] = useState<CabinetPlacement | null>(null)
   const [draftSegments, setDraftSegments] = useState<DraftSegment[]>([])
   const [yaw, setYaw] = useState(0)
@@ -1565,7 +1567,17 @@ const CabinetTool = () => {
       })
       if (!resolved) return false
 
-      const { conflictIds: _conflictIds, valid: _valid, ...placementBase } = current
+      // Typed entry targets an exact wall position. Drop any run-insertion
+      // preview captured by the pointer path — otherwise Enter re-enters the
+      // `onClick` insertion branch and commits the original run slot instead
+      // of the typed coordinates.
+      const {
+        conflictIds: _conflictIds,
+        insertionFailure: _insertionFailure,
+        insertionPreview: _insertionPreview,
+        valid: _valid,
+        ...placementBase
+      } = current
       const next = withPlacementValidity(
         {
           ...placementBase,
@@ -1615,7 +1627,6 @@ const CabinetTool = () => {
           formatLinearMeasurement(coordinates.offset, unit, metricNotation),
         ])
       usePlacementTyping.getState().append(key)
-      usePlacementTyping.getState().setProjectedPosition(current.position)
       return true
     }
 
@@ -1629,12 +1640,20 @@ const CabinetTool = () => {
           state.fields[0] !== previousTypingFields[0] || state.fields[1] !== previousTypingFields[1]
         const activeFieldChanged = state.activeField !== previousTypingField
         const becameActive = state.isActive && !previousTypingActive
+        const becameInactive = !state.isActive && previousTypingActive
         previousTypingFields = state.fields
         previousTypingField = state.activeField
         previousTypingActive = state.isActive
 
         if (state.isActive && (fieldsChanged || activeFieldChanged || becameActive)) {
           applyTypedPlacement()
+        }
+        // Any exit path (Escape in the HUD input, tool cancel, commit) must
+        // drop the frozen wall hit — otherwise pointer moves keep feeding it
+        // into `publishFloorplanPreview`.
+        if (becameInactive) {
+          typedWallHitRef.current = null
+          typedCoordinateDefaultsRef.current = null
         }
         if (state.submitRevision === handledSubmitRevision) return
         handledSubmitRevision = state.submitRevision
@@ -2110,7 +2129,12 @@ const CabinetTool = () => {
           ))}
         </group>
       ) : null}
-      {typingActive && !stretch && placement.snappedToWall ? (
+      {/* Render the typed-entry HUD from exactly one surface: the 2D pane
+          owns it whenever it is visible (2d / split); the 3D Html mounts it
+          only in 3d-only mode. Both instances share one store, so mounting
+          both in split view would show two HUDs and steal the caret on
+          Tab/activation. */}
+      {viewMode === '3d' && typingActive && !stretch && placement.snappedToWall ? (
         <Html
           center
           position={[

@@ -11,6 +11,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { memo, useMemo } from 'react'
 import { formatLinearMeasurement } from '../../../lib/measurements'
+import useEditor from '../../../store/use-editor'
 import usePlacementPreview from '../../../store/use-placement-preview'
 import { usePlacementTyping } from '../../../store/use-placement-typing'
 import { PlacementCoordinateInput } from '../../tools/shared/placement-coordinate-input'
@@ -143,6 +144,11 @@ export const FloorplanPlacementPreviewLayer = memo(function FloorplanPlacementPr
   const dimensionInput = usePlacementPreview((s) => s.dimensionInput)
   const typingActive = usePlacementTyping((s) => s.isActive)
   const typingProjectedPosition = usePlacementTyping((s) => s.projectedPosition)
+  // HUD ownership: this pane owns the typed-entry HUD only while it is the
+  // visible surface (2d / split). The pane stays mounted (CSS-hidden) in 3d
+  // mode, so without this gate an invisible input would compete for focus
+  // with the 3D Html instance.
+  const viewMode = useEditor((s) => s.viewMode)
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
   const sceneRotationDeg = useFloorplanSceneRotation()
@@ -151,7 +157,7 @@ export const FloorplanPlacementPreviewLayer = memo(function FloorplanPlacementPr
   return (
     <g data-floorplan-placement-preview>
       <FloorplanNodePreview contextNodes={contextNodes} node={node} parentNode={parentNode} />
-      {typingActive && node.type === 'cabinet' ? (
+      {viewMode !== '3d' && typingActive && node.type === 'cabinet' ? (
         <foreignObject
           height={0.75}
           pointerEvents="auto"
