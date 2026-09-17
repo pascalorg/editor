@@ -5158,7 +5158,11 @@ export function FloorplanPanel({
   const setDraftEnd = useCallback(
     (next: WallPlanPoint | null | ((prev: WallPlanPoint | null) => WallPlanPoint | null)) => {
       const store = useFloorplanDraftPreview.getState()
-      store.setWallDraftEnd(typeof next === 'function' ? next(store.wallDraftEnd) : next)
+      const value = typeof next === 'function' ? next(store.wallDraftEnd) : next
+      store.setWallDraftEnd(value)
+      // Keep the typing store's projected endpoint in sync with the live
+      // preview so a click mid-type commits the projected point (#308).
+      if (value) useWallDraftTyping.getState().setProjectedEnd(value)
     },
     [],
   )
@@ -8309,6 +8313,8 @@ export function FloorplanPanel({
                 draftStart[0] + (dx / length) * value,
                 draftStart[1] + (dz / length) * value,
               ]
+              // typedEnd is passed as the raw point; handleWallPlacementPoint
+              // commits it verbatim (no snap) since the buffer is cleared.
               setDraftEnd(typedEnd)
               wallPlacementPointRef.current?.(typedEnd)
               event.preventDefault()
@@ -9875,7 +9881,6 @@ export function FloorplanPanel({
 
   const handleWallPlacementPoint = useCallback(
     (rawPoint: WallPlanPoint) => {
-      wallPlacementPointRef.current = handleWallPlacementPoint
       // Typed-length editing (#308): while a buffer is active, commit the
       // projected endpoint the preview shows instead of the raw pointer —
       // keeps the 2D-only commit, the chain continuation, and the length
@@ -9994,6 +9999,12 @@ export function FloorplanPanel({
       setCursorPoint,
     ],
   )
+  // Latest-ref for the Enter-commit path: assigning the ref inside the
+  // callback itself froze the first-render closure (draftStart === null), so
+  // a typed Enter re-started the draft instead of committing the wall.
+  useEffect(() => {
+    wallPlacementPointRef.current = handleWallPlacementPoint
+  }, [handleWallPlacementPoint])
   const { getFloorplanHitIdAtPoint, getFloorplanSelectionIdsInBounds } = useFloorplanHitTesting({
     sceneRef: floorplanSceneRef,
   })

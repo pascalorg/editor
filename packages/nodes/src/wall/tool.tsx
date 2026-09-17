@@ -613,6 +613,7 @@ export const WallTool: React.FC = () => {
       flatConstructionBase.current = false
       chainFirstVertex.current = null
       chainWallIds.current = []
+      useWallDraftTyping.getState().clearInput()
       const draftPreview = useFloorplanDraftPreview.getState()
       draftPreview.setWallDraftStart(null)
       draftPreview.setWallDraftEnd(null)
@@ -960,8 +961,10 @@ export const WallTool: React.FC = () => {
             system: unit === 'imperial' ? 'imperial' : 'metric',
           },
         )
-        typing.clearInput()
-        if (value === null || value <= 0) return
+        if (value === null || value <= 0) {
+          typing.clearInput()
+          return
+        }
         // Project the current draft end onto the typed length, then run the
         // normal commit path with that endpoint.
         const dx = endingPoint.current.x - startingPoint.current.x
@@ -972,6 +975,10 @@ export const WallTool: React.FC = () => {
           startingPoint.current.x + (dx / length) * value,
           startingPoint.current.z + (dz / length) * value,
         ]
+        // Keep the buffer across the synthetic click below: onGridClick only
+        // honors a typed commit while `input` is non-empty, and the commit
+        // path clears the buffer itself once the wall is created.
+        typing.setProjectedEnd(typedEnd)
         endingPoint.current.set(typedEnd[0], endingPoint.current.y, typedEnd[1])
         const draftPreview = useFloorplanDraftPreview.getState()
         draftPreview.setWallDraftEnd(typedEnd)
@@ -983,6 +990,9 @@ export const WallTool: React.FC = () => {
           position: [typedEnd[0], endingPoint.current.y, typedEnd[1]],
           localPosition: [typedEnd[0], endingPoint.current.y, typedEnd[1]],
         } as GridEvent)
+        // Clear defensively in case the commit path bailed before its own
+        // clear (e.g. zero-length guard).
+        typing.clearInput()
         event.preventDefault()
         event.stopPropagation()
       } else if (event.key === 'Backspace') {
