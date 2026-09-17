@@ -99,13 +99,14 @@ export function resolveCabinetTypedPlacementPosition({
   width: number
 }): { position: [number, number, number]; wallLocalX: number; yaw: number } | null {
   if (!Number.isFinite(distance) || !Number.isFinite(offset)) return null
-  // A cabinet wider than the wall still places (wall snap allows the pose);
-  // clamp the distance into the valid span — which is empty when the cabinet
-  // is wider than the wall, leaving distance 0 — instead of rejecting.
+  // A cabinet wider than the wall still places (wall snap allows the pose),
+  // and wall snap centers it on the wall (empty span → midpoint). Typed
+  // distance collapses to that centered pose instead of mapping 0 to
+  // width / 2, which would slide the cabinet off the wall center.
   const maxDistance = Math.max(0, hit.wallLength - width)
   if (distance < -DIMENSION_EPSILON || distance > maxDistance + DIMENSION_EPSILON) return null
   const clampedDistance = Math.min(Math.max(distance, 0), maxDistance)
-  const localX = clampedDistance + width / 2
+  const localX = hit.wallLength <= width ? hit.wallLength / 2 : clampedDistance + width / 2
   const frame = cabinetWallFrameAtLocalX(hit, localX)
   // Sample the miter at the destination station — the frozen hit's localX is
   // the pre-typing snap, so its face offset is wrong on mitered corners.

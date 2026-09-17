@@ -206,6 +206,54 @@ describe('cabinet placement dimensions', () => {
     expect(result?.yaw).toBeCloseTo(0)
   })
 
+  test('centers a cabinet wider than the wall on typed entry (no jump off center)', () => {
+    const level = LevelNode.parse({ id: 'level_typed-oversize' })
+    const wall = WallNode.parse({
+      id: 'wall_typed-oversize',
+      parentId: level.id,
+      start: [0, 0],
+      end: [4, 0],
+    })
+    const nodes = Object.fromEntries(
+      [level, wall].map((node) => [node.id, node as AnyNode]),
+    ) as Record<string, AnyNode>
+    const typedNodes = nodes as Record<AnyNodeId, AnyNode>
+    const hit = findClosestCabinetWallInPlan({
+      excludeIds: [],
+      nodes: typedNodes,
+      parentLevelId: level.id,
+      planPoint: [2, 0.35],
+    })
+
+    expect(hit).not.toBeNull()
+    // Wall snap centers an oversized cabinet (empty span → midpoint).
+    const coordinates = getCabinetPlacementCoordinates({
+      depth: 0.6,
+      hit: hit!,
+      levelId: level.id,
+      nodes: typedNodes,
+      position: [2, 0, 0.35],
+      width: 5,
+    })
+    expect(coordinates.distance).toBeCloseTo(0)
+    expect(coordinates.offset).toBeCloseTo(0)
+
+    // Typed entry (including committing the default distance 0) must resolve
+    // to the same centered pose instead of localX = width / 2.
+    const result = resolveCabinetTypedPlacementPosition({
+      depth: 0.6,
+      distance: 0,
+      hit: hit!,
+      levelId: level.id,
+      nodes: typedNodes,
+      offset: 0,
+      position: [2, 0, 0.35],
+      width: 5,
+    })
+    expect(result?.wallLocalX).toBeCloseTo(2)
+    expect(result?.position[0]).toBeCloseTo(2)
+  })
+
   test('builds editable cabinet size dimensions for the placement views', () => {
     const dimensions = buildCabinetPlacementSizeDimensions({
       depth: 0.6,
