@@ -1455,24 +1455,13 @@ const CabinetTool = () => {
     }
 
     // Returns true when a cabinet (or insertion) was actually committed —
-    // typed-entry uses this to decide whether to end the typing session.
     // `fromTypedCommit` marks the synthetic Enter-commit call, which manages
     // the typing session itself in its caller.
-    const onClick = (
+    const onClickInner = (
       event: FloorPlacementClickTriggerEvent,
       fromTypedCommit = false,
       rawOverride?: [number, number, number],
     ): boolean => {
-      // A canvas click during typed entry ends the typing session. The typed
-      // preview is what the user sees, so it is what the click commits —
-      // keep `placementRef` (typed pose) and only suppress the pre-typing
-      // restore the subscriber would otherwise run.
-      if (!fromTypedCommit && usePlacementTyping.getState().isActive) {
-        suppressTypedRestoreRef.current = true
-        usePlacementTyping.getState().clear()
-        typedWallHitRef.current = null
-        typedCoordinateDefaultsRef.current = null
-      }
       const anchor = resolveDraftAnchor()
       if (anchor) {
         const detail =
@@ -1583,6 +1572,26 @@ const CabinetTool = () => {
       useFacingPose.getState().clear()
       stopPlacementCommitPropagation(event)
       return true
+    }
+
+    // Canvas clicks land here. A click during typed entry commits the typed
+    // preview (what the user sees); the session is only ended when the
+    // commit actually succeeds — an invalid typed pose keeps the session
+    // alive so the values can still be edited.
+    const onClick = (
+      event: FloorPlacementClickTriggerEvent,
+      fromTypedCommit = false,
+      rawOverride?: [number, number, number],
+    ): boolean => {
+      const typingActive = !fromTypedCommit && usePlacementTyping.getState().isActive
+      const committed = onClickInner(event, fromTypedCommit, rawOverride)
+      if (typingActive && committed) {
+        suppressTypedRestoreRef.current = true
+        usePlacementTyping.getState().clear()
+        typedWallHitRef.current = null
+        typedCoordinateDefaultsRef.current = null
+      }
+      return committed
     }
 
     const applyTypedPlacement = () => {
@@ -1907,7 +1916,7 @@ const CabinetTool = () => {
       const dimensionEditor = usePlacementPreview.getState()
       const placementTyping = usePlacementTyping.getState()
       if (placementTyping.isActive) {
-        if (event.key === 'Tab') {
+        if (event.key === 'Tab' || event.key === ',') {
           placementTyping.toggleField()
           event.preventDefault()
           event.stopPropagation()
