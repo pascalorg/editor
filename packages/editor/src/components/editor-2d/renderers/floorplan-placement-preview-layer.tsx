@@ -152,22 +152,56 @@ export const FloorplanPlacementPreviewLayer = memo(function FloorplanPlacementPr
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
   const sceneRotationDeg = useFloorplanSceneRotation()
+  // Null outside the interactive floorplan (static render in tests/exports);
+  // callers fall back to 1 unit-per-pixel when absent.
+  const renderContext = useFloorplanRender()
+  const unitsPerPixel = renderContext?.unitsPerPixel ?? 1
   if (!node) return null
 
   return (
     <g data-floorplan-placement-preview>
       <FloorplanNodePreview contextNodes={contextNodes} node={node} parentNode={parentNode} />
-      {viewMode !== '3d' && typingActive && node.type === 'cabinet' ? (
-        <foreignObject
-          height={0.75}
-          pointerEvents="auto"
-          width={2.35}
-          x={(typingProjectedPosition?.[0] ?? node.position[0]) - 1.175}
-          y={(typingProjectedPosition?.[2] ?? node.position[2]) - 0.375}
-        >
-          <PlacementCoordinateInput />
-        </foreignObject>
-      ) : null}
+      {viewMode !== '3d' && typingActive && node.type === 'cabinet'
+        ? // HTML inside a `foreignObject` is laid out in CSS pixels equal to
+          // SVG user units, and this layer sits inside the rotated, zoomed
+          // pan/zoom `<g>`. Size the box from CSS pixels × `unitsPerPixel`
+          // (like the measurement extrusion control) and counter-rotate so
+          // the inputs stay screen-upright at a usable size.
+          (() => {
+            const hudWidthPx = 236
+            const hudHeightPx = 64
+            const anchorX = typingProjectedPosition?.[0] ?? node.position[0]
+            const anchorY = typingProjectedPosition?.[2] ?? node.position[2]
+            const scale = Math.max(unitsPerPixel ?? 1, 1e-6)
+            return (
+              <g transform={`translate(${anchorX} ${anchorY}) rotate(${-sceneRotationDeg})`}>
+                <foreignObject
+                  height={hudHeightPx * scale}
+                  overflow="visible"
+                  pointerEvents="auto"
+                  style={{
+                    overflow: 'visible',
+                  }}
+                  width={hudWidthPx * scale}
+                  x={(-hudWidthPx / 2) * scale}
+                  y={(-hudHeightPx / 2) * scale}
+                >
+                  <div
+                    style={{
+                      height: hudHeightPx,
+                      overflow: 'visible',
+                      transform: `scale(${scale})`,
+                      transformOrigin: 'top left',
+                      width: hudWidthPx,
+                    }}
+                  >
+                    <PlacementCoordinateInput />
+                  </div>
+                </foreignObject>
+              </g>
+            )
+          })()
+        : null}
       <g data-floorplan-placement-dimensions>
         {dimensions
           .filter((dimension) => dimension.renderInFloorplan !== false)

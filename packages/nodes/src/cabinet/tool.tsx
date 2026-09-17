@@ -1436,7 +1436,9 @@ const CabinetTool = () => {
       stopPlacementCommitPropagation(event)
     }
 
-    const onClick = (event: FloorPlacementClickTriggerEvent) => {
+    // Returns true when a cabinet (or insertion) was actually committed —
+    // typed-entry uses this to decide whether to end the typing session.
+    const onClick = (event: FloorPlacementClickTriggerEvent): boolean => {
       const anchor = resolveDraftAnchor()
       if (anchor) {
         const detail =
@@ -1446,17 +1448,17 @@ const CabinetTool = () => {
         if (isCabinetContinuousFollowUpClick(detail)) {
           clearDraft()
           stopPlacementCommitPropagation(event)
-          return
+          return false
         }
         const segment = resolveCurrentDraftSegment(anchor, event)
         if (!segment) {
           stopPlacementCommitPropagation(event)
-          return
+          return false
         }
         const committed = commitDraftSegment(segment)
         if (!committed) {
           stopPlacementCommitPropagation(event)
-          return
+          return false
         }
         chainRootRunRef.current ??= committed.run
         chainRunRef.current = committed.run
@@ -1471,20 +1473,20 @@ const CabinetTool = () => {
         publishPlacement(resolveActiveStretchPlacement(draftAnchorRef.current, event))
         triggerSFX('sfx:item-place')
         stopPlacementCommitPropagation(event)
-        return
+        return true
       }
       const next = isForcePlacementEvent(event)
         ? resolvePlacement(event)
         : (placementRef.current ?? resolvePlacement(event))
       if (!next.valid) {
         stopPlacementCommitPropagation(event)
-        return
+        return false
       }
       if (next.insertionPreview) {
         const insertedId = commitInsertion(next)
         if (!insertedId) {
           stopPlacementCommitPropagation(event)
-          return
+          return false
         }
         useViewer.getState().setSelection({ selectedIds: [insertedId] })
         useEditor.getState().setMode('select')
@@ -1494,7 +1496,7 @@ const CabinetTool = () => {
         clearPlacementSurface()
         useFacingPose.getState().clear()
         stopPlacementCommitPropagation(event)
-        return
+        return true
       }
       if (useEditor.getState().getContinuation('cabinet') === 'continuous') {
         draftSegmentsRef.current = []
@@ -1514,7 +1516,7 @@ const CabinetTool = () => {
         publishPlacement(resolveStretchedPlacement(draftAnchorRef.current, event))
         triggerSFX('sfx:item-pick')
         stopPlacementCommitPropagation(event)
-        return
+        return true
       }
       const { cabinet, buildModule } = buildRunNodes(next.position, next.yaw)
       const module = buildModule(0, previewNodeRef.current.width, 0)
@@ -1539,6 +1541,7 @@ const CabinetTool = () => {
       clearPlacementSurface()
       useFacingPose.getState().clear()
       stopPlacementCommitPropagation(event)
+      return true
     }
 
     const applyTypedPlacement = () => {
@@ -1659,12 +1662,24 @@ const CabinetTool = () => {
         handledSubmitRevision = state.submitRevision
         if (!applyTypedPlacement()) return
 
-        const commitEvent =
+        // Typed commits must honor the typed pose. Reusing the last pointer
+        // event in continuous mode would replay a stale `altKey` into
+        // `isForcePlacementEvent` and re-resolve placement from the old
+        // cursor hit instead of the typed distance/offset.
+        const baseCommitEvent =
           useEditor.getState().getContinuation('cabinet') === 'continuous'
             ? (lastPlacementEventRef.current ??
               ({ nativeEvent: {} } as FloorPlacementClickTriggerEvent))
             : ({ nativeEvent: {} } as FloorPlacementClickTriggerEvent)
-        onClick(commitEvent)
+        const commitEvent: FloorPlacementClickTriggerEvent = {
+          ...baseCommitEvent,
+          nativeEvent: { ...(baseCommitEvent.nativeEvent ?? {}), altKey: false },
+        }
+        const committed = onClick(commitEvent)
+        // Keep the typed values when the pose was rejected (e.g. collision)
+        // so Enter does not silently wipe the session — the user can adjust
+        // distance/offset and retry.
+        if (!committed) return
         typedWallHitRef.current = null
         typedCoordinateDefaultsRef.current = null
         usePlacementTyping.getState().clear()
