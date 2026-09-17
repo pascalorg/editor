@@ -24,16 +24,20 @@ import {
 import {
   clearPlacementSurface,
   EDITOR_LAYER,
+  formatLinearMeasurement,
   getFloorStackPreviewPosition,
   getSideFromNormal,
   isAlignmentGuideActive,
   isGridSnapActive,
   isMagneticSnapActive,
+  isPlacementTypingKey,
   isValidWallSideFace,
   markToolCancelConsumed,
   movementSfxStepKey,
   PlacementBox,
+  PlacementCoordinateInput,
   PlacementDimensionGuides,
+  type PlacementTypingState,
   parseMeasurement,
   publishPlacementSurface,
   triggerSFX,
@@ -41,6 +45,7 @@ import {
   useEditor,
   useFacingPose,
   usePlacementPreview,
+  usePlacementTyping,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
@@ -80,8 +85,10 @@ import { buildCabinetGeometry } from './geometry'
 import { applyCabinetModuleInsertion, cabinetModuleForRunInsertion } from './insertion'
 import {
   buildCabinetPlacementSizeDimensions,
+  getCabinetPlacementCoordinates,
   resolveCabinetPlacementDimensionPosition,
   resolveCabinetPlacementDimensions,
+  resolveCabinetTypedPlacementPosition,
 } from './placement-dimensions'
 import {
   resolveCabinetGridPosition,
@@ -408,6 +415,8 @@ const CabinetTool = () => {
   const metricNotation = useViewer((s) => s.metricNotation)
   const activeDimensionId = usePlacementPreview((s) => s.activeDimensionId)
   const dimensionInput = usePlacementPreview((s) => s.dimensionInput)
+  const typingActive = usePlacementTyping((s) => s.isActive)
+  const typingProjectedPosition = usePlacementTyping((s) => s.projectedPosition)
   const [placement, setPlacement] = useState<CabinetPlacement | null>(null)
   const [draftSegments, setDraftSegments] = useState<DraftSegment[]>([])
   const [yaw, setYaw] = useState(0)
@@ -426,6 +435,9 @@ const CabinetTool = () => {
   const previousTickFrameRef = useRef(-1)
   const draftAnchorRef = useRef<DraftAnchorState | null>(null)
   const lastRawPositionRef = useRef<[number, number, number] | null>(null)
+  const typedWallHitRef = useRef<WallHit | null>(null)
+  const typedCoordinateDefaultsRef = useRef<[number, number] | null>(null)
+  const lastPlacementEventRef = useRef<FloorPlacementClickTriggerEvent | null>(null)
   const activeGhostRef = useRef<Group | null>(null)
   const surfacePointRef = useRef(new Vector3())
   const surfaceNormalRef = useRef(new Vector3(0, 1, 0))
@@ -601,6 +613,10 @@ const CabinetTool = () => {
               levelId: activeLevelId,
               nodes: useScene.getState().nodes,
               position: previewPosition,
+              providedWallHit:
+                typedWallHitRef.current && next.wallLocalX != null
+                  ? { ...typedWallHitRef.current, localX: next.wallLocalX }
+                  : undefined,
               rotation: next.yaw,
               wallId: next.wallId,
               width: stretch?.length ?? livePreviewNode.width,
@@ -676,6 +692,10 @@ const CabinetTool = () => {
     previousWasWallSnapRef.current = false
     previousTickFrameRef.current = -1
     draftAnchorRef.current = null
+    typedWallHitRef.current = null
+    typedCoordinateDefaultsRef.current = null
+    lastPlacementEventRef.current = null
+    usePlacementTyping.getState().clear()
     let alignmentCandidates = collectAlignmentAnchors(
       useScene.getState().nodes,
       previewNodeRef.current.id,
@@ -1128,6 +1148,8 @@ const CabinetTool = () => {
     const onGridMove = (event: GridEvent) => {
       const ts = event.nativeEvent?.timeStamp ?? -1
       if (ts === lastWallEventTime || wallOwnsPointer()) return
+      if (usePlacementTyping.getState().isActive) return
+      lastPlacementEventRef.current = event
       const anchor = resolveDraftAnchor()
       if (anchor) {
         publishPlacement(resolveActiveStretchPlacement(anchor, event), ts)
@@ -1139,6 +1161,11 @@ const CabinetTool = () => {
     const onWallMove = (event: WallEvent) => {
       lastWallEventTime = event.nativeEvent?.timeStamp ?? -1
       if (event.node.parentId !== activeLevelId) return
+      if (usePlacementTyping.getState().isActive) {
+        event.stopPropagation()
+        return
+      }
+      lastPlacementEventRef.current = event
       const anchor = resolveDraftAnchor()
       if (anchor) {
         markWallOwnedPointer()
@@ -1504,10 +1531,126 @@ const CabinetTool = () => {
       triggerSFX('sfx:item-place')
       useAlignmentGuides.getState().clear()
       usePlacementPreview.getState().clear()
+      usePlacementTyping.getState().clear()
+      typedWallHitRef.current = null
+      typedCoordinateDefaultsRef.current = null
       clearPlacementSurface()
       useFacingPose.getState().clear()
       stopPlacementCommitPropagation(event)
     }
+
+    const applyTypedPlacement = () => {
+      const typing = usePlacementTyping.getState()
+      const current = placementRef.current
+      const hit = typedWallHitRef.current
+      const defaults = typedCoordinateDefaultsRef.current
+      if (!typing.isActive || !current || !hit || !defaults || current.stretch) return false
+
+      const bareUnit = unit === 'imperial' ? 'in' : metricNotation === 'millimeters' ? 'mm' : 'm'
+      const parseTypedValue = (raw: string, fallback: number) =>
+        raw.trim() ? parseMeasurement(raw, { kind: 'length', unitId: 'm' }, { bareUnit }) : fallback
+      const distance = parseTypedValue(typing.fields[0], defaults[0])
+      const offset = parseTypedValue(typing.fields[1], defaults[1])
+      if (distance == null || offset == null) return false
+
+      const resolved = resolveCabinetTypedPlacementPosition({
+        depth: previewNodeRef.current.depth,
+        distance,
+        hit,
+        levelId: activeLevelId,
+        nodes: useScene.getState().nodes,
+        offset,
+        position: current.position,
+        width: previewNodeRef.current.width,
+      })
+      if (!resolved) return false
+
+      const { conflictIds: _conflictIds, valid: _valid, ...placementBase } = current
+      const next = withPlacementValidity(
+        {
+          ...placementBase,
+          position: resolved.position,
+          wallLocalX: resolved.wallLocalX,
+          yaw: resolved.yaw,
+          snappedToWall: true,
+        },
+        false,
+      )
+      placementRef.current = next
+      setPlacement(next)
+      usePlacementTyping.getState().setProjectedPosition(next.position)
+      publishFloorplanPreview(next)
+      return true
+    }
+
+    const beginTypedPlacement = (key: string) => {
+      const current = placementRef.current
+      if (!current || current.stretch || !current.snappedToWall || !current.wallId) return false
+      const nodes = useScene.getState().nodes
+      const excludedWallIds = Object.values(nodes as Record<AnyNodeId, AnyNode>)
+        .filter((node): node is WallNode => node.type === 'wall' && node.id !== current.wallId)
+        .map((node) => node.id as AnyNodeId)
+      const hit = findClosestCabinetWallInPlan({
+        excludeIds: excludedWallIds,
+        nodes,
+        parentLevelId: activeLevelId,
+        planPoint: [current.position[0], current.position[2]],
+      })
+      if (!hit || hit.wall.id !== current.wallId) return false
+
+      const coordinates = getCabinetPlacementCoordinates({
+        depth: previewNodeRef.current.depth,
+        hit,
+        levelId: activeLevelId,
+        nodes,
+        position: current.position,
+        width: previewNodeRef.current.width,
+      })
+      typedWallHitRef.current = hit
+      typedCoordinateDefaultsRef.current = [coordinates.distance, coordinates.offset]
+      usePlacementTyping
+        .getState()
+        .begin([
+          formatLinearMeasurement(coordinates.distance, unit, metricNotation),
+          formatLinearMeasurement(coordinates.offset, unit, metricNotation),
+        ])
+      usePlacementTyping.getState().append(key)
+      usePlacementTyping.getState().setProjectedPosition(current.position)
+      return true
+    }
+
+    let handledSubmitRevision = usePlacementTyping.getState().submitRevision
+    let previousTypingFields = usePlacementTyping.getState().fields
+    let previousTypingField = usePlacementTyping.getState().activeField
+    let previousTypingActive = usePlacementTyping.getState().isActive
+    const unsubscribePlacementTyping = usePlacementTyping.subscribe(
+      (state: PlacementTypingState) => {
+        const fieldsChanged =
+          state.fields[0] !== previousTypingFields[0] || state.fields[1] !== previousTypingFields[1]
+        const activeFieldChanged = state.activeField !== previousTypingField
+        const becameActive = state.isActive && !previousTypingActive
+        previousTypingFields = state.fields
+        previousTypingField = state.activeField
+        previousTypingActive = state.isActive
+
+        if (state.isActive && (fieldsChanged || activeFieldChanged || becameActive)) {
+          applyTypedPlacement()
+        }
+        if (state.submitRevision === handledSubmitRevision) return
+        handledSubmitRevision = state.submitRevision
+        if (!applyTypedPlacement()) return
+
+        const commitEvent =
+          useEditor.getState().getContinuation('cabinet') === 'continuous'
+            ? (lastPlacementEventRef.current ??
+              ({ nativeEvent: {} } as FloorPlacementClickTriggerEvent))
+            : ({ nativeEvent: {} } as FloorPlacementClickTriggerEvent)
+        onClick(commitEvent)
+        typedWallHitRef.current = null
+        typedCoordinateDefaultsRef.current = null
+        usePlacementTyping.getState().clear()
+      },
+    )
 
     const applyTypedDimension = () => {
       const editor = usePlacementPreview.getState()
@@ -1655,6 +1798,55 @@ const CabinetTool = () => {
       const tag = (event.target as HTMLElement | null)?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
       const dimensionEditor = usePlacementPreview.getState()
+      const placementTyping = usePlacementTyping.getState()
+      if (placementTyping.isActive) {
+        if (event.key === 'Tab') {
+          placementTyping.toggleField()
+          event.preventDefault()
+          event.stopPropagation()
+          return
+        }
+        if (event.key === 'Enter') {
+          placementTyping.requestCommit()
+          event.preventDefault()
+          event.stopPropagation()
+          return
+        }
+        if (event.key === 'Escape') {
+          placementTyping.clear()
+          typedWallHitRef.current = null
+          typedCoordinateDefaultsRef.current = null
+          event.preventDefault()
+          event.stopPropagation()
+          return
+        }
+        if (event.key === 'Backspace' || event.key === 'Delete') {
+          if (event.key === 'Delete') placementTyping.setField(placementTyping.activeField, '')
+          else placementTyping.backspace()
+          event.preventDefault()
+          event.stopPropagation()
+          return
+        }
+        if (isPlacementTypingKey(event.key) && !event.metaKey && !event.ctrlKey && !event.altKey) {
+          placementTyping.append(event.key)
+          event.preventDefault()
+          event.stopPropagation()
+          return
+        }
+      }
+      if (
+        !dimensionEditor.activeDimensionId &&
+        isPlacementTypingKey(event.key) &&
+        /^[0-9.-]$/.test(event.key) &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        beginTypedPlacement(event.key)
+      ) {
+        event.preventDefault()
+        event.stopPropagation()
+        return
+      }
       if (event.key === 'Tab' && dimensionEditor.dimensions.length > 0) {
         const currentIndex = dimensionEditor.dimensions.findIndex(
           (dimension) => dimension.id === dimensionEditor.activeDimensionId,
@@ -1745,6 +1937,13 @@ const CabinetTool = () => {
     }
 
     const onCancel = () => {
+      if (usePlacementTyping.getState().isActive) {
+        markToolCancelConsumed()
+        usePlacementTyping.getState().clear()
+        typedWallHitRef.current = null
+        typedCoordinateDefaultsRef.current = null
+        return
+      }
       if (!draftAnchorRef.current) return
       markToolCancelConsumed()
       clearDraft()
@@ -1764,11 +1963,15 @@ const CabinetTool = () => {
       emitter.off('wall:move', onWallMove)
       emitter.off('tool:cancel', onCancel)
       unsubscribeCabinetPlacementType()
+      unsubscribePlacementTyping()
       unsubscribePlacementClicks()
       unsubscribePlacementDoubleClicks()
       window.removeEventListener('keydown', onKeyDown, true)
       draftAnchorRef.current = null
       usePlacementPreview.getState().clear()
+      usePlacementTyping.getState().clear()
+      typedWallHitRef.current = null
+      typedCoordinateDefaultsRef.current = null
       clearPlacementSurface()
       useFacingPose.getState().clear()
       useAlignmentGuides.getState().clear()
@@ -1906,6 +2109,20 @@ const CabinetTool = () => {
             </group>
           ))}
         </group>
+      ) : null}
+      {typingActive && !stretch && placement.snappedToWall ? (
+        <Html
+          center
+          position={[
+            typingProjectedPosition?.[0] ?? placement.position[0],
+            visualPosition[1] + previewNode.carcassHeight + 0.45,
+            typingProjectedPosition?.[2] ?? placement.position[2],
+          ]}
+          style={{ pointerEvents: 'auto', userSelect: 'none' }}
+          zIndexRange={[200, 0]}
+        >
+          <PlacementCoordinateInput />
+        </Html>
       ) : null}
       {placementLabel ? (
         <Html

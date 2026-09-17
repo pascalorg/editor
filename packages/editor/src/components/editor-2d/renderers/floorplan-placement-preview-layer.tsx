@@ -12,6 +12,8 @@ import { useViewer } from '@pascal-app/viewer'
 import { memo, useMemo } from 'react'
 import { formatLinearMeasurement } from '../../../lib/measurements'
 import usePlacementPreview from '../../../store/use-placement-preview'
+import { usePlacementTyping } from '../../../store/use-placement-typing'
+import { PlacementCoordinateInput } from '../../tools/shared/placement-coordinate-input'
 import { useFloorplanRender, useFloorplanSceneRotation } from '../floorplan-render-context'
 import { FloorplanDimensionRenderer } from './floorplan-dimension-renderer'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
@@ -139,6 +141,8 @@ export const FloorplanPlacementPreviewLayer = memo(function FloorplanPlacementPr
   const dimensions = usePlacementPreview((s) => s.dimensions)
   const activeDimensionId = usePlacementPreview((s) => s.activeDimensionId)
   const dimensionInput = usePlacementPreview((s) => s.dimensionInput)
+  const typingActive = usePlacementTyping((s) => s.isActive)
+  const typingProjectedPosition = usePlacementTyping((s) => s.projectedPosition)
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
   const sceneRotationDeg = useFloorplanSceneRotation()
@@ -147,6 +151,17 @@ export const FloorplanPlacementPreviewLayer = memo(function FloorplanPlacementPr
   return (
     <g data-floorplan-placement-preview>
       <FloorplanNodePreview contextNodes={contextNodes} node={node} parentNode={parentNode} />
+      {typingActive && node.type === 'cabinet' ? (
+        <foreignObject
+          height={0.75}
+          pointerEvents="auto"
+          width={2.35}
+          x={(typingProjectedPosition?.[0] ?? node.position[0]) - 1.175}
+          y={(typingProjectedPosition?.[2] ?? node.position[2]) - 0.375}
+        >
+          <PlacementCoordinateInput />
+        </foreignObject>
+      ) : null}
       <g data-floorplan-placement-dimensions>
         {dimensions
           .filter((dimension) => dimension.renderInFloorplan !== false)

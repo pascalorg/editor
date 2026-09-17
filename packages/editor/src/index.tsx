@@ -151,6 +151,7 @@ export {
   resolveLevelConstructionPlane,
 } from './components/tools/shared/horizontal-construction-plane'
 export { PlacementBox } from './components/tools/shared/placement-box'
+export { PlacementCoordinateInput } from './components/tools/shared/placement-coordinate-input'
 export { PlacementDimensionGuides } from './components/tools/shared/placement-dimension-guides'
 // Pointer-decided support surface (deck top vs floor underneath) — the
 // draw tools (wall / fence) ride their grid plane and commit cap on it.
@@ -706,6 +707,14 @@ export {
   default as usePlacementPreview,
   type PlacementPreviewDimension,
 } from './store/use-placement-preview'
+export {
+  isPlacementTypingKey,
+  type PlacementTypingField,
+  type PlacementTypingProjection,
+  type PlacementTypingState,
+  type PlacementTypingValues,
+  usePlacementTyping,
+} from './store/use-placement-typing'
 export {
   activateQuickMeasurementHudSource,
   clearQuickMeasurementHudSource,

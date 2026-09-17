@@ -1,10 +1,13 @@
 import { describe, expect, test } from 'bun:test'
-import { type AnyNode, DoorNode, LevelNode, WallNode } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, DoorNode, LevelNode, WallNode } from '@pascal-app/core'
 import {
   buildCabinetPlacementSizeDimensions,
+  getCabinetPlacementCoordinates,
   resolveCabinetPlacementDimensionPosition,
   resolveCabinetPlacementDimensions,
+  resolveCabinetTypedPlacementPosition,
 } from '../placement-dimensions'
+import { findClosestCabinetWallInPlan } from '../wall-snap'
 
 describe('cabinet placement dimensions', () => {
   test('reports the distance from a wall start to the cabinet edge', () => {
@@ -154,6 +157,53 @@ describe('cabinet placement dimensions', () => {
 
     expect(result?.wallLocalX).toBeCloseTo(1.1)
     expect(result?.position[0]).toBeCloseTo(1.1)
+  })
+
+  test('projects typed distance and offset from the same wall reference', () => {
+    const level = LevelNode.parse({ id: 'level_typed-coordinate' })
+    const wall = WallNode.parse({
+      id: 'wall_typed-coordinate',
+      parentId: level.id,
+      start: [0, 0],
+      end: [4, 0],
+    })
+    const nodes = Object.fromEntries(
+      [level, wall].map((node) => [node.id, node as AnyNode]),
+    ) as Record<string, AnyNode>
+    const typedNodes = nodes as Record<AnyNodeId, AnyNode>
+    const hit = findClosestCabinetWallInPlan({
+      excludeIds: [],
+      nodes: typedNodes,
+      parentLevelId: level.id,
+      planPoint: [1, 0.35],
+    })
+
+    expect(hit).not.toBeNull()
+    const coordinates = getCabinetPlacementCoordinates({
+      depth: 0.6,
+      hit: hit!,
+      levelId: level.id,
+      nodes: typedNodes,
+      position: [1, 0, 0.35],
+      width: 0.6,
+    })
+    expect(coordinates.distance).toBeCloseTo(0.7)
+    expect(coordinates.offset).toBeCloseTo(0)
+
+    const result = resolveCabinetTypedPlacementPosition({
+      depth: 0.6,
+      distance: 1.2,
+      hit: hit!,
+      levelId: level.id,
+      nodes: typedNodes,
+      offset: 0.1,
+      position: [1, 0, 0.35],
+      width: 0.6,
+    })
+    expect(result?.wallLocalX).toBeCloseTo(1.5)
+    expect(result?.position[0]).toBeCloseTo(1.5)
+    expect(result?.position[2]).toBeCloseTo(0.45)
+    expect(result?.yaw).toBeCloseTo(0)
   })
 
   test('builds editable cabinet size dimensions for the placement views', () => {
