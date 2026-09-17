@@ -45,7 +45,7 @@ describe('usePlacementTyping', () => {
 
 describe('isPlacementTypingKey', () => {
   test('accepts the cabinet measurement grammar', () => {
-    for (const key of ['0', '9', 'm', 'c', '.', "'", '"', '-', ' ']) {
+    for (const key of ['0', '9', 'm', 'c', '.', "'", '"', '-', ' ', '/', ',']) {
       expect(isPlacementTypingKey(key)).toBe(true)
     }
   })

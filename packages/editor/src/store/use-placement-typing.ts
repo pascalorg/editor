@@ -73,5 +73,5 @@ export const usePlacementTyping = create<PlacementTypingState>((set) => ({
 }))
 
 export function isPlacementTypingKey(key: string): boolean {
-  return key.length === 1 && /^[0-9a-zA-Z.'"+\- ]$/.test(key)
+  return key.length === 1 && /^[0-9a-zA-Z.'"+\-/, ]$/.test(key)
 }

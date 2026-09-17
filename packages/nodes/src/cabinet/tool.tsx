@@ -440,10 +440,6 @@ const CabinetTool = () => {
   const lastRawPositionRef = useRef<[number, number, number] | null>(null)
   const typedWallHitRef = useRef<WallHit | null>(null)
   const typedCoordinateDefaultsRef = useRef<[number, number] | null>(null)
-  // Pre-typing placement snapshot — restored when a typing session ends
-  // without a commit so a click right after Escape cannot commit the
-  // cancelled typed pose (`placementRef` would otherwise still hold it).
-  const preTypedPlacementRef = useRef<CabinetPlacement | null>(null)
   // Set while a code path intentionally ends the session *and* owns the
   // placement afterwards (canvas-click commit, island toggle) so the
   // restore-on-cancel logic stays out of the way.
@@ -1632,6 +1628,7 @@ const CabinetTool = () => {
           position: resolved.position,
           wallLocalX: resolved.wallLocalX,
           yaw: resolved.yaw,
+          wallSurfaceNormal: [Math.sin(resolved.yaw), 0, Math.cos(resolved.yaw)],
           snappedToWall: true,
         },
         false,
@@ -1673,7 +1670,6 @@ const CabinetTool = () => {
       })
       typedWallHitRef.current = hit
       typedCoordinateDefaultsRef.current = [coordinates.distance, coordinates.offset]
-      preTypedPlacementRef.current = current
       suppressTypedRestoreRef.current = false
       usePlacementTyping
         .getState()
@@ -1705,20 +1701,19 @@ const CabinetTool = () => {
         }
         // Any exit path (Escape in the HUD input, tool cancel, commit) must
         // drop the frozen wall hit — otherwise pointer moves keep feeding it
-        // into `publishFloorplanPreview`. An uncommitted exit also restores
-        // the pre-typing pose: `placementRef` still holds the typed pose,
-        // which a click right after Escape would otherwise commit.
+        // into `publishFloorplanPreview`. An uncommitted exit re-resolves
+        // placement from the last pointer event so `placementRef` does not
+        // stay stuck at the cancelled typed pose.
         if (becameInactive) {
           typedWallHitRef.current = null
           typedCoordinateDefaultsRef.current = null
-          if (!suppressTypedRestoreRef.current && preTypedPlacementRef.current) {
-            const restored = preTypedPlacementRef.current
-            preTypedPlacementRef.current = null
-            if (!placementRef.current?.stretch) {
-              placementRef.current = restored
-              setPlacement(restored)
-              publishFloorplanPreview(restored)
-            }
+          if (!suppressTypedRestoreRef.current && lastPlacementEventRef.current) {
+            const event = lastPlacementEventRef.current
+            const anchor = resolveDraftAnchor()
+            const next = anchor
+              ? resolveActiveStretchPlacement(anchor, event)
+              : resolvePlacement(event)
+            publishPlacement(next)
           }
           suppressTypedRestoreRef.current = false
         }

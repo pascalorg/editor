@@ -69,7 +69,7 @@ export function PlacementCoordinateInput({ className }: PlacementCoordinateInput
               }
               onFocus={() => usePlacementTyping.getState().setActiveField(field)}
               onKeyDown={(event) => {
-                if (event.key === 'Tab') {
+                if (event.key === 'Tab' || event.key === ',') {
                   event.preventDefault()
                   event.stopPropagation()
                   usePlacementTyping.getState().toggleField()
