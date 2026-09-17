@@ -4678,6 +4678,7 @@ function FloorplanLinearDraftLayer({
 }) {
   const metricNotation = useViewer((state) => state.metricNotation)
   const wallDraftEnd = useFloorplanDraftPreview((s) => s.wallDraftEnd)
+  const wallTypingInput = useWallDraftTyping((s) => s.input)
   const fenceDraftEnd = useFloorplanDraftPreview((s) => s.fenceDraftEnd)
   const roofDraftEnd = useFloorplanDraftPreview((s) => s.roofDraftEnd)
   const roofDraftQuarterTurn = useFloorplanDraftPreview((s) => s.roofDraftQuarterTurn)
@@ -4752,7 +4753,6 @@ function FloorplanLinearDraftLayer({
   const draftWallMeasurement = useMemo(() => {
     // Typed-length editing (#308): while a buffer is active the HUD shows the
     // buffer instead of the live pointer length — parity with the 3D tool.
-    const wallTypingInput = useWallDraftTyping.getState().input
     if (
       !(
         isWallBuildActive &&
@@ -4822,7 +4822,15 @@ function FloorplanLinearDraftLayer({
       direction: [dx / length, dy / length] as WallPlanPoint,
       angleLabels,
     }
-  }, [isWallBuildActive, metricNotation, unit, wallDraftEnd, wallDraftStart, walls])
+  }, [
+    isWallBuildActive,
+    metricNotation,
+    unit,
+    wallDraftEnd,
+    wallDraftStart,
+    wallTypingInput,
+    walls,
+  ])
 
   // Axis guides for wall and fence drafts — parity with the 3D tools'
   // `DraftAxisGuides`: an X/Z cross through the draft start, and a single
@@ -7846,6 +7854,7 @@ export function FloorplanPanel({
     wallConstructionOptionsRef.current = undefined
     wallChainWallIdsRef.current = []
     setDraftEnd(null)
+    useWallDraftTyping.getState().clearInput()
     useSegmentDraftChain.getState().clear('wall')
   }, [setDraftEnd])
   const clearFencePlacementDraft = useCallback(() => {
@@ -8255,22 +8264,26 @@ export function FloorplanPanel({
           if (isWallTypingKey(event.key)) {
             typing.append(event.key)
             event.preventDefault()
+            event.stopPropagation()
             return
           }
           if (hasInput) {
             if (event.key === 'Backspace') {
               typing.backspace()
               event.preventDefault()
+              event.stopPropagation()
               return
             }
             if (event.key === 'Delete') {
               typing.clearInput()
               event.preventDefault()
+              event.stopPropagation()
               return
             }
             if (event.key === 'Escape') {
               typing.clearInput()
               event.preventDefault()
+              event.stopPropagation()
               return
             }
             if (event.key === 'Enter') {
@@ -8299,6 +8312,7 @@ export function FloorplanPanel({
               setDraftEnd(typedEnd)
               wallPlacementPointRef.current?.(typedEnd)
               event.preventDefault()
+              event.stopPropagation()
               return
             }
           }
@@ -9860,8 +9874,15 @@ export function FloorplanPanel({
   )
 
   const handleWallPlacementPoint = useCallback(
-    (point: WallPlanPoint) => {
+    (rawPoint: WallPlanPoint) => {
       wallPlacementPointRef.current = handleWallPlacementPoint
+      // Typed-length editing (#308): while a buffer is active, commit the
+      // projected endpoint the preview shows instead of the raw pointer —
+      // keeps the 2D-only commit, the chain continuation, and the length
+      // label in agreement with what the user typed.
+      const typing = useWallDraftTyping.getState()
+      const point: WallPlanPoint =
+        typing.input && typing.projectedEnd ? (typing.projectedEnd as WallPlanPoint) : rawPoint
       if (!draftStart) {
         wallConstructionOptionsRef.current = levelId
           ? resolveTerrainWallConstructionOptions(
@@ -9960,6 +9981,9 @@ export function FloorplanPanel({
       setDraftStart(nextStart)
       setDraftEnd(nextStart)
       setCursorPoint(nextStart)
+      // Typed length applied to the committed segment only — never carry it
+      // into the next chain segment.
+      useWallDraftTyping.getState().clearInput()
     },
     [
       clearWallPlacementDraft,

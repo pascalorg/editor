@@ -699,6 +699,7 @@ export const WallTool: React.FC = () => {
             ]
           }
         }
+        useWallDraftTyping.getState().setProjectedEnd?.(snappedLocal)
         const draftY = constructionPlane.current?.localY ?? event.localPosition[1]
         endingPoint.current.set(snappedLocal[0], draftY, snappedLocal[1])
         const draftPreview = useFloorplanDraftPreview.getState()
@@ -806,17 +807,24 @@ export const WallTool: React.FC = () => {
         // positions it for the active segment.
         setDraftMeasurement(null)
       } else if (buildingState.current === 1) {
+        // Typed-length editing (#308): when a buffer is active, commit the
+        // projected endpoint the previews already show — re-snapping the raw
+        // pointer (or the projected point) would change the typed length.
+        const typing = useWallDraftTyping.getState()
+        const typedCommit = typing.input ? typing.projectedEnd : null
         const angleLocked = isAngleSnapActive()
-        const snappedEnd = alignPoint(
-          snapWallDraftPointDetailed({
-            point: localClick,
-            walls: snapWalls,
-            start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
-            angleSnap: angleLocked,
-            magnetic: isMagneticSnapActive(),
-          }).point,
-          { applySnap: !angleLocked },
-        )
+        const snappedEnd =
+          typedCommit ??
+          alignPoint(
+            snapWallDraftPointDetailed({
+              point: localClick,
+              walls: snapWalls,
+              start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
+              angleSnap: angleLocked,
+              magnetic: isMagneticSnapActive(),
+            }).point,
+            { applySnap: !angleLocked },
+          )
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
         if (dx * dx + dz * dz < 0.01 * 0.01) return
@@ -842,6 +850,9 @@ export const WallTool: React.FC = () => {
         )
         if (!createdWall) return
         chainWallIds.current.push(createdWall.id)
+        // The committed length was typed for this segment only; a stale
+        // buffer would silently re-apply it to the next segment.
+        useWallDraftTyping.getState().clearInput()
 
         // The new segment is now a real node — make it an alignment target
         // for the next segment, and drop the just-shown guide.

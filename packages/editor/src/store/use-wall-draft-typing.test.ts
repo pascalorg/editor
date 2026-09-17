@@ -24,18 +24,18 @@ describe('useWallDraftTyping', () => {
     expect(useWallDraftTyping.getState().input).toBe('2')
   })
 
-  test('clearInput empties the buffer', () => {
+  test('clearInput empties the buffer and the projected end', () => {
     const typing = useWallDraftTyping.getState()
     typing.append('5')
+    typing.setProjectedEnd([1.5, 2.5])
     typing.clearInput()
     expect(useWallDraftTyping.getState().input).toBe('')
+    expect(useWallDraftTyping.getState().projectedEnd).toBeNull()
   })
 
-  test('begin resets the buffer for a new draft', () => {
-    const typing = useWallDraftTyping.getState()
-    typing.append('9')
-    useWallDraftTyping.getState().begin()
-    expect(useWallDraftTyping.getState().input).toBe('')
+  test('setProjectedEnd stores the committed endpoint for click parity', () => {
+    useWallDraftTyping.getState().setProjectedEnd([3.2, -0.4])
+    expect(useWallDraftTyping.getState().projectedEnd).toEqual([3.2, -0.4])
   })
 })
 
