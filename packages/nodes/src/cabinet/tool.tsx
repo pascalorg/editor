@@ -1056,9 +1056,13 @@ const CabinetTool = () => {
     const resolveStretchedPlacement = (
       anchor: StretchAnchor,
       event: FloorPlacementClickTriggerEvent,
+      rawOverride?: [number, number, number],
     ): CabinetPlacement => {
       useAlignmentGuides.getState().clear()
-      const raw = resolveRawPosition(event)
+      // `rawOverride` lets callers seed the stretch geometry directly (typed
+      // entry commits at the typed pose — the reused pointer event's cursor
+      // position is stale and must not grow the run).
+      const raw = rawOverride ?? resolveRawPosition(event)
       let stretch = planCabinetContinuousStretch({
         anchor,
         previewWidth: previewNodeRef.current.width,
@@ -1438,7 +1442,21 @@ const CabinetTool = () => {
 
     // Returns true when a cabinet (or insertion) was actually committed —
     // typed-entry uses this to decide whether to end the typing session.
-    const onClick = (event: FloorPlacementClickTriggerEvent): boolean => {
+    // `fromTypedCommit` marks the synthetic Enter-commit call, which manages
+    // the typing session itself in its caller.
+    const onClick = (
+      event: FloorPlacementClickTriggerEvent,
+      fromTypedCommit = false,
+      rawOverride?: [number, number, number],
+    ): boolean => {
+      // A canvas click during typed entry ends the typing session: pointer
+      // moves are frozen while `isActive`, so a stretch started here could
+      // not follow the cursor until the user pressed Escape.
+      if (!fromTypedCommit && usePlacementTyping.getState().isActive) {
+        usePlacementTyping.getState().clear()
+        typedWallHitRef.current = null
+        typedCoordinateDefaultsRef.current = null
+      }
       const anchor = resolveDraftAnchor()
       if (anchor) {
         const detail =
@@ -1513,7 +1531,14 @@ const CabinetTool = () => {
           wallLocalX: next.wallLocalX,
           wallSurfaceNormal: next.wallSurfaceNormal,
         }
-        publishPlacement(resolveStretchedPlacement(draftAnchorRef.current, event))
+        // Typed entry commits at the typed pose: seed the stretch preview
+        // there (zero-length) instead of growing toward the stale cursor
+        // position carried by the reused pointer event.
+        publishPlacement(
+          rawOverride
+            ? resolveStretchedPlacement(draftAnchorRef.current, event, rawOverride)
+            : resolveStretchedPlacement(draftAnchorRef.current, event),
+        )
         triggerSFX('sfx:item-pick')
         stopPlacementCommitPropagation(event)
         return true
@@ -1675,7 +1700,10 @@ const CabinetTool = () => {
           ...baseCommitEvent,
           nativeEvent: { ...(baseCommitEvent.nativeEvent ?? {}), altKey: false },
         }
-        const committed = onClick(commitEvent)
+        // Seed any continuous-mode stretch at the typed position (zero-length
+        // span), not the stale cursor carried by the reused pointer event.
+        const typedPosition = placementRef.current?.position
+        const committed = onClick(commitEvent, true, typedPosition)
         // Keep the typed values when the pose was rejected (e.g. collision)
         // so Enter does not silently wipe the session — the user can adjust
         // distance/offset and retry.
