@@ -835,7 +835,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!isFirstPersonMode && <SiteEdgeLabels />}
       <InteractiveSystem />
       {presentationsReady ? <ViewerPresentations /> : null}
-      {viewerSceneSlot}
+      {!noEditing && viewerSceneSlot}
     </>
   )
 })

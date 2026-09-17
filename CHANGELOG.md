@@ -25,7 +25,7 @@
 
 ### Fixes
 
-- Preserve native and active presentation skies in snapshots, keep preset captures transparent, and retain host scene content in Studio.
+- Preserve native and active presentation skies in snapshots and keep preset captures transparent.
 - Localize terrain and ground-cover brush updates, preserve pending dab uploads, and keep Environment's day/night light graph stable.
 - Keep Site-scoped floorplan overlays aligned with live move and rotation previews.
 - Preserve Site ownership and same-kind sibling context in synchronous and asynchronous export geometry, including Site children without a parent ID.
