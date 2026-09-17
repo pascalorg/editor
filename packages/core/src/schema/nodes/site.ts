@@ -11,6 +11,8 @@ const PropertyLineData = z.object({
   points: z.array(z.tuple([z.number(), z.number()])),
 })
 
+export const DEFAULT_NORTH_DIRECTION_DEG = 0
+
 export const SiteNode = BaseNode.extend({
   id: objectId('site'),
   type: nodeType('site'),
@@ -26,6 +28,11 @@ export const SiteNode = BaseNode.extend({
     ],
   }),
   /**
+   * Site north heading in degrees, clockwise from world −Z toward +X.
+   * Zero preserves the established scene convention: +Z is south.
+   */
+  northDirectionDeg: z.number().finite().default(DEFAULT_NORTH_DIRECTION_DEG),
+  /**
    * Sculpted ground. Absent means flat ground at the datum — the state every
    * scene that predates terrain is in, and the state an untouched site stays in
    * so ~11 KB of base64 zeroes does not land in every saved scene.
@@ -36,6 +43,7 @@ export const SiteNode = BaseNode.extend({
   dedent`
   Site node - used to represent a site
   - polygon: polygon data
+  - northDirectionDeg: site north heading in degrees, clockwise from world −Z toward +X; 0 means +Z is south
   - terrain: optional sculpted heightfield; absent means flat ground
   - children: array of child node ids (buildings, items)
   `,

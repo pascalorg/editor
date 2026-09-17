@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import {
   cameraAzimuthFromFloorplanRotation,
+  compassRotationFromFloorplanRotation,
+  floorplanRotationForNorthUp,
   floorplanRotationFromCameraAzimuth,
   floorplanViewBoxFromNavigationPose,
   nearestEquivalentDegrees,
@@ -16,6 +18,13 @@ describe('floorplan preview navigation', () => {
   test('uses the same north-up azimuth convention as the editor', () => {
     expect(cameraAzimuthFromFloorplanRotation(0)).toBe(0)
     expect(cameraAzimuthFromFloorplanRotation(90)).toBeCloseTo(Math.PI / 2)
+  })
+
+  test('adds the site heading to the live compass without rotating geometry', () => {
+    expect(compassRotationFromFloorplanRotation(0, 0)).toBe(0)
+    expect(compassRotationFromFloorplanRotation(30, 90)).toBe(120)
+    expect(floorplanRotationForNorthUp(90, 0)).toBe(-90)
+    expect(floorplanRotationForNorthUp(450, -80)).toBe(-90)
   })
 
   test('maps a camera pose to an aspect-correct centered view box', () => {

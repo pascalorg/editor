@@ -17,6 +17,17 @@ export function floorplanRotationFromCameraAzimuth(azimuth: number, reference: n
   return nearestEquivalentDegrees((azimuth * 180) / Math.PI, reference)
 }
 
+export function compassRotationFromFloorplanRotation(
+  floorplanRotationDeg: number,
+  northDirectionDeg: number,
+) {
+  return floorplanRotationDeg + northDirectionDeg
+}
+
+export function floorplanRotationForNorthUp(northDirectionDeg: number, reference: number) {
+  return nearestEquivalentDegrees(-northDirectionDeg, reference)
+}
+
 export function cameraAzimuthFromFloorplanRotation(rotationDeg: number) {
   return (rotationDeg * Math.PI) / 180
 }
