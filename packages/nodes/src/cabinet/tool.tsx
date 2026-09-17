@@ -1632,6 +1632,11 @@ const CabinetTool = () => {
         .map((node) => node.id as AnyNodeId)
       const hit = findClosestCabinetWallInPlan({
         excludeIds: excludedWallIds,
+        // The placement already knows its wall; a typed perpendicular offset
+        // can push the cabinet center beyond the normal snap distance, so
+        // don't cap the projection — just make sure the closest wall is the
+        // one we're attached to.
+        maxDistance: Infinity,
         nodes,
         parentLevelId: activeLevelId,
         planPoint: [current.position[0], current.position[2]],
