@@ -22,6 +22,7 @@ import {
   CursorSphere,
   chainEndJoinsExistingWall,
   clearPlacementSurface,
+  constrainWallDraftLength,
   createWallOnCurrentLevel,
   EDITOR_LAYER,
   formatAngleRadians,
@@ -33,7 +34,9 @@ import {
   isAlignmentGuideActive,
   isAngleSnapActive,
   isMagneticSnapActive,
+  isWallTypingKey,
   markToolCancelConsumed,
+  parseWallDraftLength,
   publishHorizontalConstructionPlane,
   publishPlacementSurface,
   resampleTerrainConstructionPlane,
@@ -46,6 +49,7 @@ import {
   useEditor,
   useFloorplanDraftPreview,
   useSegmentDraftChain,
+  useWallDraftTyping,
   useWallSnapIndicator,
   WALL_CONNECT_SNAP_RADIUS,
   WALL_JOIN_SNAP_RADIUS,
@@ -483,14 +487,23 @@ export const WallTool: React.FC = () => {
   const constructionPlane = useRef<HorizontalConstructionPlane | null>(null)
   const flatConstructionBase = useRef(false)
   const buildingState = useRef(0)
+  /** One-shot exact length (metres) for the next click commit — set by Enter. */
+  const pendingTypedLengthMeters = useRef<number | null>(null)
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
+  const wallTypingInput = useWallDraftTyping((s) => s.input)
   const [axisGuide, setAxisGuide] = useState<DraftAxisGuideState>(null)
   const measurementColor = isDark ? '#ffffff' : '#111111'
   const measurementShadowColor = isDark ? '#111111' : '#ffffff'
 
   // Clear preset-seeded defaults on deactivation so a later manual wall draw
   // isn't built with a stale preset's parameters. Unmount-only.
-  useEffect(() => () => useEditor.getState().setToolDefaults('wall', null), [])
+  useEffect(
+    () => () => {
+      useEditor.getState().setToolDefaults('wall', null)
+      useWallDraftTyping.getState().clearInput()
+    },
+    [],
+  )
 
   useEffect(() => {
     let gridPosition: WallPlanPoint = [0, 0]
@@ -609,6 +622,8 @@ export const WallTool: React.FC = () => {
       flatConstructionBase.current = false
       chainFirstVertex.current = null
       chainWallIds.current = []
+      pendingTypedLengthMeters.current = null
+      useWallDraftTyping.getState().clearInput()
       const draftPreview = useFloorplanDraftPreview.getState()
       draftPreview.setWallDraftStart(null)
       draftPreview.setWallDraftEnd(null)
@@ -660,6 +675,15 @@ export const WallTool: React.FC = () => {
         magnetic: isMagneticSnapActive(),
       })
       gridPosition = alignPoint(snapResult.point, { applySnap: !angleLocked })
+      // Typed-length editing (#308): length constrains distance; snap still
+      // owns the heading (angle / junction / magnetic).
+      if (buildingState.current === 1) {
+        gridPosition = constrainWallDraftLength(
+          [startingPoint.current.x, startingPoint.current.z],
+          gridPosition,
+          parseWallDraftLength(useWallDraftTyping.getState().input, unit, metricNotation),
+        )
+      }
       // Stand the magnetic beacon at the endpoint when it locked onto an
       // existing wall corner / wall point; clear it for plain grid/angle moves.
       useWallSnapIndicator
@@ -764,6 +788,7 @@ export const WallTool: React.FC = () => {
         chainFirstVertex.current = startingPoint.current.clone()
         endingPoint.current.copy(startingPoint.current)
         buildingState.current = 1
+        useWallDraftTyping.getState().begin()
         const draftPreview = useFloorplanDraftPreview.getState()
         draftPreview.setWallDraftStart(snappedStart)
         draftPreview.setWallDraftEnd(snappedStart)
@@ -780,7 +805,7 @@ export const WallTool: React.FC = () => {
         setDraftMeasurement(null)
       } else if (buildingState.current === 1) {
         const angleLocked = isAngleSnapActive()
-        const snappedEnd = alignPoint(
+        let snappedEnd = alignPoint(
           snapWallDraftPointDetailed({
             point: localClick,
             walls: snapWalls,
@@ -790,6 +815,16 @@ export const WallTool: React.FC = () => {
           }).point,
           { applySnap: !angleLocked },
         )
+        const typedMeters =
+          pendingTypedLengthMeters.current ??
+          parseWallDraftLength(useWallDraftTyping.getState().input, unit, metricNotation)
+        pendingTypedLengthMeters.current = null
+        snappedEnd = constrainWallDraftLength(
+          [startingPoint.current.x, startingPoint.current.z],
+          snappedEnd,
+          typedMeters,
+        )
+        useWallDraftTyping.getState().clearInput()
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
         if (dx * dx + dz * dz < 0.01 * 0.01) return
@@ -861,6 +896,7 @@ export const WallTool: React.FC = () => {
         draftPreview.setWallDraftEnd(null)
         draftPreview.setWallDraftStart(nextStart)
         draftPreview.setWallDraftEnd(nextStart)
+        useWallDraftTyping.getState().begin()
         cursorRef.current?.position.copy(startingPoint.current)
         buildingState.current = 1
         setAxisGuide({
@@ -881,19 +917,86 @@ export const WallTool: React.FC = () => {
 
     const onCancel = () => {
       if (buildingState.current === 1) {
+        // Stage-1 Escape clears the typing buffer; stage-2 cancels the draft.
+        if (useWallDraftTyping.getState().input) {
+          useWallDraftTyping.getState().clearInput()
+          return
+        }
         markToolCancelConsumed()
         stopDrafting()
+      }
+    }
+
+    // Typed-length editing (#308): digit keys start a buffer while drafting;
+    // Enter commits at the typed length along the current draft direction.
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (buildingState.current !== 1) return
+      const target = event.target as HTMLElement | null
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target?.isContentEditable
+      ) {
+        return
+      }
+      const typing = useWallDraftTyping.getState()
+      const hasInput = typing.input.length > 0
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      if (isWallTypingKey(event.key)) {
+        typing.append(event.key)
+        event.preventDefault()
+        event.stopPropagation()
+        return
+      }
+      if (!hasInput) return
+      if (event.key === 'Enter') {
+        const value = parseWallDraftLength(typing.input, unit, metricNotation)
+        typing.clearInput()
+        if (value === null || value <= 0) return
+        const dx = endingPoint.current.x - startingPoint.current.x
+        const dz = endingPoint.current.z - startingPoint.current.z
+        const length = Math.hypot(dx, dz)
+        if (length <= 1e-6) return
+        const typedEnd: WallPlanPoint = [
+          startingPoint.current.x + (dx / length) * value,
+          startingPoint.current.z + (dz / length) * value,
+        ]
+        endingPoint.current.set(typedEnd[0], endingPoint.current.y, typedEnd[1])
+        useFloorplanDraftPreview.getState().setWallDraftEnd(typedEnd)
+        pendingTypedLengthMeters.current = value
+        emitter.emit('grid:click', {
+          nativeEvent: { detail: 1 } as unknown as GridEvent['nativeEvent'],
+          position: [typedEnd[0], endingPoint.current.y, typedEnd[1]],
+          localPosition: [typedEnd[0], endingPoint.current.y, typedEnd[1]],
+        } as GridEvent)
+        event.preventDefault()
+        event.stopPropagation()
+      } else if (event.key === 'Backspace') {
+        typing.backspace()
+        event.preventDefault()
+        event.stopPropagation()
+      } else if (event.key === 'Delete') {
+        typing.clearInput()
+        event.preventDefault()
+        event.stopPropagation()
+      } else if (event.key === 'Escape') {
+        typing.clearInput()
+        event.preventDefault()
+        event.stopPropagation()
       }
     }
 
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('keydown', onKeyDown, true)
 
     return () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('keydown', onKeyDown, true)
+      useWallDraftTyping.getState().clearInput()
       clearPlacementSurface()
       useAlignmentGuides.getState().clear()
       useWallSnapIndicator.getState().clear()
@@ -927,7 +1030,7 @@ export const WallTool: React.FC = () => {
         <>
           <DraftMeasurementLabel
             color={measurementColor}
-            label={draftMeasurement.lengthLabel}
+            label={wallTypingInput || draftMeasurement.lengthLabel}
             position={draftMeasurement.lengthPosition}
             shadowColor={measurementShadowColor}
           />

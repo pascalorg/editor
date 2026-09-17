@@ -122,6 +122,7 @@ import useInteractionScope, {
 import usePlacementPreview from '../../store/use-placement-preview'
 import { expandSessionSelectionForNode } from '../../store/use-session-groups'
 import { useStairBuildPreview } from '../../store/use-stair-build-preview'
+import { isWallTypingKey, useWallDraftTyping } from '../../store/use-wall-draft-typing'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
 import { FloorplanGroupActionMenu } from '../editor-2d/floorplan-group-action-menu'
@@ -188,8 +189,10 @@ import {
 } from '../tools/stair/stair-defaults'
 import {
   chainEndJoinsExistingWall,
+  constrainWallDraftLength,
   createWallOnCurrentLevel,
   isSegmentLongEnough,
+  parseWallDraftLength,
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
   snapPointToGrid as snapWallPointToGrid,
@@ -4680,6 +4683,7 @@ function FloorplanLinearDraftLayer({
   const fenceDraftEnd = useFloorplanDraftPreview((s) => s.fenceDraftEnd)
   const roofDraftEnd = useFloorplanDraftPreview((s) => s.roofDraftEnd)
   const roofDraftQuarterTurn = useFloorplanDraftPreview((s) => s.roofDraftQuarterTurn)
+  const wallTypingInput = useWallDraftTyping((s) => s.input)
 
   const draftPolygon = useMemo(() => {
     if (
@@ -4810,7 +4814,7 @@ function FloorplanLinearDraftLayer({
     }
 
     return {
-      lengthLabel: formatMeasurement(length, unit, null, metricNotation),
+      lengthLabel: wallTypingInput || formatMeasurement(length, unit, null, metricNotation),
       midpoint: [
         (wallDraftStart[0] + wallDraftEnd[0]) / 2,
         (wallDraftStart[1] + wallDraftEnd[1]) / 2,
@@ -4818,7 +4822,15 @@ function FloorplanLinearDraftLayer({
       direction: [dx / length, dy / length] as WallPlanPoint,
       angleLabels,
     }
-  }, [isWallBuildActive, metricNotation, unit, wallDraftEnd, wallDraftStart, walls])
+  }, [
+    isWallBuildActive,
+    metricNotation,
+    unit,
+    wallDraftEnd,
+    wallDraftStart,
+    wallTypingInput,
+    walls,
+  ])
 
   // Axis guides for wall and fence drafts — parity with the 3D tools'
   // `DraftAxisGuides`: an X/Z cross through the draft start, and a single
@@ -4965,6 +4977,9 @@ export function FloorplanPanel({
   const floorplanSpacePanPressedRef = useRef(false)
   const floorplanNavigationClickSuppressedRef = useRef(false)
   const guideInteractionRef = useRef<GuideInteractionState | null>(null)
+  // Late-bound so the window keydown effect can commit the wall draft at the
+  // typed length without an ordering dependency on `handleWallPlacementPoint`.
+  const wallPlacementPointRef = useRef<((point: WallPlanPoint) => void) | null>(null)
   const guideTransformDraftRef = useRef<GuideTransformDraft | null>(null)
   const pendingFenceDragRef = useRef<PendingFenceDragState | null>(null)
   const wallEndpointDragRef = useRef<WallEndpointDragState | null>(null)
@@ -7839,6 +7854,7 @@ export function FloorplanPanel({
     wallConstructionOptionsRef.current = undefined
     wallChainWallIdsRef.current = []
     setDraftEnd(null)
+    useWallDraftTyping.getState().clearInput()
     useSegmentDraftChain.getState().clear('wall')
   }, [setDraftEnd])
   const clearFencePlacementDraft = useCallback(() => {
@@ -8238,6 +8254,50 @@ export function FloorplanPanel({
         setShiftPressed(true)
       }
 
+      // Typed-length editing for the 2D wall draft (#308) — parity with the
+      // 3D wall tool: printable keys extend the buffer, Enter commits at the
+      // typed length, Escape (stage 1) clears it.
+      if (isWallBuildActive && draftStart) {
+        const typing = useWallDraftTyping.getState()
+        const hasInput = typing.input.length > 0
+        if (!event.metaKey && !event.ctrlKey && !event.altKey) {
+          if (isWallTypingKey(event.key)) {
+            typing.append(event.key)
+            event.preventDefault()
+            return
+          }
+          if (hasInput) {
+            if (event.key === 'Backspace') {
+              typing.backspace()
+              event.preventDefault()
+              return
+            }
+            if (event.key === 'Delete') {
+              typing.clearInput()
+              event.preventDefault()
+              return
+            }
+            if (event.key === 'Escape') {
+              typing.clearInput()
+              event.preventDefault()
+              return
+            }
+            if (event.key === 'Enter') {
+              const value = parseWallDraftLength(typing.input, unit, metricNotation)
+              typing.clearInput()
+              if (value === null || value <= 0 || !draftStart) return
+              const previousEnd = useFloorplanDraftPreview.getState().wallDraftEnd
+              if (!previousEnd) return
+              const typedEnd = constrainWallDraftLength(draftStart, previousEnd, value)
+              setDraftEnd(typedEnd)
+              wallPlacementPointRef.current?.(typedEnd)
+              event.preventDefault()
+              return
+            }
+          }
+        }
+      }
+
       if (
         isStairBuildActive &&
         useEditor.getState().viewMode === '2d' &&
@@ -8293,7 +8353,16 @@ export function FloorplanPanel({
       window.removeEventListener('keyup', handleKeyUp)
       window.removeEventListener('blur', handleBlur)
     }
-  }, [isFloorplanOpen, isStairBuildActive, movingNode])
+  }, [
+    isFloorplanOpen,
+    isStairBuildActive,
+    movingNode,
+    isWallBuildActive,
+    draftStart,
+    unit,
+    metricNotation,
+    setDraftEnd,
+  ])
 
   useEffect(() => {
     const handleWindowPointerMove = (event: PointerEvent) => {
@@ -9514,15 +9583,27 @@ export function FloorplanPanel({
           applySnap: isMagneticSnapActive() && !wallAngleSnap,
         })
       }
+      // Typed-length editing (#308): length constrains distance; snap still
+      // owns the heading. Applied after magnetic / angle / alignment snap.
+      let draftEndPoint = snappedPoint
+      if (draftStart) {
+        draftEndPoint = constrainWallDraftLength(
+          draftStart,
+          snappedPoint,
+          parseWallDraftLength(useWallDraftTyping.getState().input, unit, metricNotation),
+        )
+      }
       useWallSnapIndicator
         .getState()
-        .set(wallSnap.snap ? { x: snappedPoint[0], z: snappedPoint[1], kind: wallSnap.snap } : null)
+        .set(
+          wallSnap.snap ? { x: draftEndPoint[0], z: draftEndPoint[1], kind: wallSnap.snap } : null,
+        )
 
       // Emit `grid:move` so the registry-driven wall tool's 3D preview
       // tracks the cursor. The local draftEnd update below is what
       // drives the 2D draft polygon — both views update in parallel.
-      emitFloorplanGridEvent('move', snappedPoint, event)
-      setCursorPoint(snappedPoint)
+      emitFloorplanGridEvent('move', draftEndPoint, event)
+      setCursorPoint(draftEndPoint)
 
       if (!draftStart) {
         return
@@ -9531,13 +9612,13 @@ export function FloorplanPanel({
       setDraftEnd((previousEnd) => {
         if (
           !previousEnd ||
-          previousEnd[0] !== snappedPoint[0] ||
-          previousEnd[1] !== snappedPoint[1]
+          previousEnd[0] !== draftEndPoint[0] ||
+          previousEnd[1] !== draftEndPoint[1]
         ) {
           sfxEmitter.emit('sfx:grid-snap')
         }
 
-        return snappedPoint
+        return draftEndPoint
       })
     },
     [
@@ -9582,6 +9663,8 @@ export function FloorplanPanel({
       walls,
       setCursorPoint,
       setDraftEnd,
+      unit,
+      metricNotation,
       setRoofDraftEnd,
       setFenceDraftEnd,
     ],
@@ -9759,6 +9842,7 @@ export function FloorplanPanel({
 
   const handleWallPlacementPoint = useCallback(
     (point: WallPlanPoint) => {
+      wallPlacementPointRef.current = handleWallPlacementPoint
       if (!draftStart) {
         wallConstructionOptionsRef.current = levelId
           ? resolveTerrainWallConstructionOptions(
@@ -9771,11 +9855,18 @@ export function FloorplanPanel({
         setDraftStart(point)
         setWallChainFirstVertex(point)
         setDraftEnd(point)
+        useWallDraftTyping.getState().begin()
         setCursorPoint(point)
         return
       }
 
-      if (!isSegmentLongEnough(draftStart, point)) {
+      const placementPoint = constrainWallDraftLength(
+        draftStart,
+        point,
+        parseWallDraftLength(useWallDraftTyping.getState().input, unit, metricNotation),
+      )
+      useWallDraftTyping.getState().clearInput()
+      if (!isSegmentLongEnough(draftStart, placementPoint)) {
         return
       }
 
@@ -9798,7 +9889,7 @@ export function FloorplanPanel({
       if (viewIs2DOnly) {
         createdWall = createWallOnCurrentLevel(
           draftStart,
-          point,
+          placementPoint,
           wallConstructionOptionsRef.current,
         )
       }
@@ -9813,7 +9904,7 @@ export function FloorplanPanel({
       const publishedNextStart = useSegmentDraftChain.getState().wall
       const nextStart: WallPlanPoint = createdWall
         ? (createdWall.end as WallPlanPoint)
-        : (publishedNextStart ?? point)
+        : (publishedNextStart ?? placementPoint)
 
       if (
         useEditor.getState().getContinuation('wall') === 'single' ||
@@ -9856,6 +9947,7 @@ export function FloorplanPanel({
 
       setDraftStart(nextStart)
       setDraftEnd(nextStart)
+      useWallDraftTyping.getState().begin()
       setCursorPoint(nextStart)
     },
     [
@@ -9865,6 +9957,8 @@ export function FloorplanPanel({
       wallChainFirstVertex,
       setDraftEnd,
       setCursorPoint,
+      metricNotation,
+      unit,
     ],
   )
   const { getFloorplanHitIdAtPoint, getFloorplanSelectionIdsInBounds } = useFloorplanHitTesting({

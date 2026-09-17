@@ -196,9 +196,11 @@ export {
 export { preloadRegistryToolModules, ToolManager } from './components/tools/tool-manager'
 export {
   chainEndJoinsExistingWall,
+  constrainWallDraftLength,
   createWallOnCurrentLevel,
   getSegmentGridStep,
   isSegmentLongEnough,
+  parseWallDraftLength,
   resolveEndpointWallSplit,
   snapPointToGrid,
   snapScalarToGrid,
@@ -721,6 +723,10 @@ export {
   useStairBuildPreview,
 } from './store/use-stair-build-preview'
 export { useUploadStore } from './store/use-upload'
+export {
+  isWallTypingKey,
+  useWallDraftTyping,
+} from './store/use-wall-draft-typing'
 export { useWallMoveGhosts, type WallMoveGhostBridge } from './store/use-wall-move-ghosts'
 export {
   default as useWallSnapIndicator,
