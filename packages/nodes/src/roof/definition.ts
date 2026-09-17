@@ -72,7 +72,12 @@ function roofMoveHandle(): HandleDescriptor<RoofNodeType> {
         return [(bounds.minX + bounds.maxX) / 2, 0.02, bounds.maxZ + MOVE_FRONT_OFFSET]
       },
     },
-    apply: (_node, position) => ({ position: [position[0], position[1], position[2]] }),
+    apply: (node, position) => ({
+      position: [position[0], position[1], position[2]],
+      ...(node.support?.kind === 'walls' && Math.abs(position[1] - node.position[1]) > 1e-4
+        ? { support: { kind: 'level' as const } }
+        : {}),
+    }),
     snapExtents: (node, sceneApi) => {
       const bounds = getRoofFootprintBounds(node, sceneApi)
       const width = Math.max(bounds.maxX - bounds.minX, MIN_ROOF_FOOTPRINT)
@@ -107,7 +112,7 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
   // Drafted as a 2-corner footprint (axis-aligned bbox), not a directional
   // edge → no angle-lock mode (grid / lines / off only).
   snapDraftDirectional: false,
-  schemaVersion: 2,
+  schemaVersion: 3,
   schema: RoofNode,
   category: 'structure',
   surfaceRole: 'roof',

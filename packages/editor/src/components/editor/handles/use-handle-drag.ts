@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type Cursor,
+  cascadeDirty,
   createSceneApi,
   type HandleDragModifiers,
   runAsSingleSceneHistoryStep,
@@ -198,7 +199,8 @@ export function useHandleDrag(args: UseHandleDragArgs) {
       lastPatch = patch
       useLiveNodeOverrides.getState().set(overrideId, patch as Record<string, unknown>)
       if (markDirty) {
-        useScene.getState().markDirty(overrideId)
+        for (const id of cascadeDirty(overrideId, { scene: createSceneApi(useScene) }))
+          useScene.getState().markDirty(id)
       }
     }
 
@@ -222,7 +224,8 @@ export function useHandleDrag(args: UseHandleDragArgs) {
     const clearOverride = () => {
       useLiveNodeOverrides.getState().clear(overrideId)
       if (markDirty) {
-        useScene.getState().markDirty(overrideId)
+        for (const id of cascadeDirty(overrideId, { scene: createSceneApi(useScene) }))
+          useScene.getState().markDirty(id)
       }
     }
 

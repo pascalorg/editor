@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { SceneBridge } from '../bridge/scene-bridge'
@@ -30,6 +30,7 @@ const TOOL_POLICIES = [
       'list_levels',
       'list_scenes',
       'list_templates',
+      'list_units',
       'measure',
       'search_assets',
       'validate_scene',
@@ -59,6 +60,7 @@ const TOOL_POLICIES = [
       'create_roof',
       'create_room',
       'create_story_shell',
+      'create_unit',
       'create_wall',
       'cut_opening',
       'duplicate_level',
@@ -93,6 +95,15 @@ const TOOL_POLICIES = [
     annotations: {
       readOnlyHint: false,
       destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    tools: ['set_unit_members'],
+  },
+  {
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
       openWorldHint: true,
     },
     tools: ['photo_to_scene'],
@@ -100,6 +111,19 @@ const TOOL_POLICIES = [
 ] as const
 
 const EXPECTED_TOOL_NAMES = TOOL_POLICIES.flatMap(({ tools }) => tools).toSorted()
+const annotationPacket = JSON.parse(
+  readFileSync(
+    resolve(import.meta.dir, '../../../../plugin-evals/tool-annotation-justifications.json'),
+    'utf8',
+  ),
+) as {
+  required_hints: Array<'readOnlyHint' | 'destructiveHint' | 'openWorldHint'>
+  tools: Array<{
+    name: string
+    annotations: Record<'readOnlyHint' | 'destructiveHint' | 'openWorldHint', boolean>
+    justifications: Record<'readOnlyHint' | 'destructiveHint' | 'openWorldHint', string>
+  }>
+}
 
 describe('MCP tool annotations', () => {
   test('classifies every registered tool for approval-aware clients', async () => {
@@ -121,6 +145,15 @@ describe('MCP tool annotations', () => {
       for (const policy of TOOL_POLICIES) {
         for (const name of policy.tools) {
           expect(byName.get(name)?.annotations).toEqual(policy.annotations)
+        }
+      }
+
+      expect(annotationPacket.tools.map(({ name }) => name)).toEqual(EXPECTED_TOOL_NAMES)
+      for (const tool of annotationPacket.tools) {
+        const registeredAnnotations = byName.get(tool.name)?.annotations
+        for (const hint of annotationPacket.required_hints) {
+          expect(tool.annotations[hint]).toBe(registeredAnnotations?.[hint])
+          expect(tool.justifications[hint].trim().length).toBeGreaterThan(0)
         }
       }
     } finally {

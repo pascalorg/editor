@@ -221,33 +221,33 @@ describe('continuous mono canopy rendering', () => {
     expect(extendedChain.overlaps).toBe(0)
   })
 
-  test('miters either turn and slope direction throughout the angle range', () => {
-    for (const angle of Array.from({ length: 90 }, (_, index) => 90 - index)) {
-      const radians = (angle * Math.PI) / 180
-      const corner: Pt = [8, 0]
-      const forwardEnd: Pt = [8 + 6 * Math.cos(radians), 6 * Math.sin(radians)]
-      const mirroredEnd: Pt = [8 + 6 * Math.cos(radians), -6 * Math.sin(radians)]
-      const paths = [
-        [[0, 0] as Pt, corner, forwardEnd],
-        [forwardEnd, corner, [0, 0] as Pt],
-        [[0, 0] as Pt, corner, mirroredEnd],
-        [mirroredEnd, corner, [0, 0] as Pt],
-      ]
+  test.each(
+    Array.from({ length: 90 }, (_, index) => 90 - index),
+  )('miters either turn and slope direction at %i degrees', (angle) => {
+    const radians = (angle * Math.PI) / 180
+    const corner: Pt = [8, 0]
+    const forwardEnd: Pt = [8 + 6 * Math.cos(radians), 6 * Math.sin(radians)]
+    const mirroredEnd: Pt = [8 + 6 * Math.cos(radians), -6 * Math.sin(radians)]
+    const paths = [
+      [[0, 0] as Pt, corner, forwardEnd],
+      [forwardEnd, corner, [0, 0] as Pt],
+      [[0, 0] as Pt, corner, mirroredEnd],
+      [mirroredEnd, corner, [0, 0] as Pt],
+    ]
 
-      for (const [pathIndex, points] of paths.entries()) {
-        for (const flipProjection of [false, true]) {
-          const result = buildCanopy(
-            `angle_${angle}_path_${pathIndex}_flip_${flipProjection}`,
-            points,
-            flipProjection,
-          )
-          expect(result.holes).toBe(0)
-          expect(result.overlaps).toBe(0)
-          expect(result.totalVertical).toBeLessThan(0.05)
-        }
+    for (const [pathIndex, points] of paths.entries()) {
+      for (const flipProjection of [false, true]) {
+        const result = buildCanopy(
+          `angle_${angle}_path_${pathIndex}_flip_${flipProjection}`,
+          points,
+          flipProjection,
+        )
+        expect(result.holes).toBe(0)
+        expect(result.overlaps).toBe(0)
+        expect(result.totalVertical).toBeLessThan(0.05)
       }
     }
-  }, 15_000)
+  })
 
   // J-shapes and closed loops use the same corner partitioning as an L at each end.
   const multiJointShapes: Record<string, Pt[]> = {

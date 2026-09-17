@@ -471,7 +471,7 @@ export const ItemRenderer = ({ node: storeNode }: { node: ItemNode }) => {
         <>
           <ModelWithRetry key={node.asset.src ?? 'no-src'} node={node} setSettled={setSettled} />
           {node.children?.map((childId) => (
-            <NodeRenderer key={childId} nodeId={childId} />
+            <NodeRenderer key={childId} nodeId={childId as AnyNodeId} />
           ))}
         </>
       )}

@@ -382,7 +382,7 @@ function parseClipboardPayload(text: string): ClipboardPayload | null {
     if (materials.some((result) => !result.success)) return null
 
     const parsedNodes = nodes.filter((result) => result.success).map((result) => result.data)
-    const nodeIds = new Set(parsedNodes.map((node) => node.id))
+    const nodeIds = new Set<AnyNodeId>(parsedNodes.map((node) => node.id))
     const rootIds = candidate.rootIds as AnyNodeId[]
     if (rootIds.length === 0 || rootIds.some((id) => !nodeIds.has(id))) return null
 

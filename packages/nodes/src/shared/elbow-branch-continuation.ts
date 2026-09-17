@@ -78,6 +78,12 @@ function resolveFittingExpansionHandle<T extends DuctFittingNode | PipeFittingNo
   for (const mate of mates) {
     const fitting = nodes[mate.nodeId]
     if (fitting?.type !== fittingType) continue
+    if (fitting.fittingType === 'end-cap') {
+      return {
+        position: handlePosition(source, gap),
+        fittingId: fitting.id,
+      }
+    }
     const promotion =
       fitting.fittingType === 'elbow'
         ? promoteElbow(fitting as T, mate.id)

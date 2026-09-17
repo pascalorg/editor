@@ -16,6 +16,8 @@ Stop there. Do not add conditional maximum-size, fit, height, route, or alternat
 
 Do not create a placeholder with guessed dimensions and report it as a verified fit.
 
+**Open dimension-only footprint pre-check:** unavailable — the room and item footprints are not exact rectangular measurements.
+
 ```yaml
 nextAction:
   kind: request_measurement

@@ -114,6 +114,7 @@ export function resolvePipeContinuationSeed(
   if (fitting?.type !== 'pipe-fitting') return null
   const fittingPort = findMatedScenePorts(port, nodes).find((mate) => mate.nodeId === fitting.id)
   if (!fittingPort) return null
+  if (fitting.fittingType === 'end-cap') return { pipe: node, port, body: null }
   const promotion =
     fitting.fittingType === 'elbow'
       ? planPipeElbowBranchPromotion(fitting, fittingPort.id)

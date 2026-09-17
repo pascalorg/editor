@@ -47,6 +47,7 @@ import { createEditorApi } from '../../lib/editor-api'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
 import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../store/use-editor'
+import { useHandleGroup } from '../../store/use-handle-group'
 import useInteractionScope, {
   useEndpointReshape,
   useIsCurveReshape,
@@ -62,7 +63,12 @@ import {
   HandleArrow,
   NO_RAYCAST,
 } from './handles/handle-arrow'
-import { createLinearResizeDragBinding } from './handles/linear-resize-drag'
+import {
+  computeFreezeOffset,
+  resolveLinearHandlePosition,
+  resolveLinearHandleRotation,
+} from './handles/handle-placement'
+import { createLinearResizeDragBinding, linearResizeFactor } from './handles/linear-resize-drag'
 import { resolveResizeSnapValue } from './handles/resize-snap'
 import { type HandleDragControls, useHandleDrag } from './handles/use-handle-drag'
 
@@ -227,6 +233,9 @@ export function NodeArrowHandles() {
     () => (rawNode && liveOverride ? ({ ...rawNode, ...liveOverride } as AnyNode) : rawNode),
     [rawNode, liveOverride],
   )
+  const activeGroup = useHandleGroup((s) =>
+    s.active && s.active.nodeId === node?.id ? s.active.group : null,
+  )
   const def = node ? nodeRegistry.get(node.type) : null
   const descriptorSceneApi = useMemo(() => createSceneApi(useScene), [])
   const descriptors = useMemo(() => {
@@ -236,6 +245,8 @@ export function NodeArrowHandles() {
         ? def.handles(node as never, descriptorSceneApi)
         : (def.handles as HandleDescriptor[])
     return all.filter((descriptor) => {
+      if (activeGroup)
+        return descriptor.kind === 'linear-resize' && descriptor.latchGroup === activeGroup
       if (descriptor.kind === 'translate') return false
       const visible =
         'visible' in descriptor
@@ -244,7 +255,7 @@ export function NodeArrowHandles() {
       if ('shape' in descriptor && descriptor.shape === 'move-cross') return visible === true
       return visible !== false
     })
-  }, [node, def, descriptorSceneApi])
+  }, [node, def, descriptorSceneApi, activeGroup])
 
   const shouldRender =
     Boolean(node && descriptors?.length) &&
@@ -291,6 +302,9 @@ function NodeArrowHandlesForNode({
   node: AnyNode
   descriptors: HandleDescriptor[]
 }) {
+  const controlledGroup = useHandleGroup((s) =>
+    s.active?.nodeId === node.id ? s.active.group : null,
+  )
   const parentId = node.parentId ?? null
 
   const portalMode: HandlePortal = descriptors.some((d) => d.portal === 'grandparent')
@@ -476,7 +490,8 @@ function NodeArrowHandlesForNode({
     }
     // Arrows tagged with a latch group stay hidden until that group is open.
     const latchGroup = descriptor.kind === 'linear-resize' ? descriptor.latchGroup : undefined
-    if (latchGroup && !openLatchGroups.has(latchGroup)) return null
+    if (latchGroup && latchGroup !== controlledGroup && !openLatchGroups.has(latchGroup))
+      return null
     return (
       <ArrowHandle
         activeIndex={activeIndex}
@@ -500,39 +515,6 @@ function NodeArrowHandlesForNode({
     </group>,
     portalObject,
   )
-}
-
-// Offset, in node-local frame, that compensates for `position` drift on
-// the mesh during an asymmetric resize. Width/length L+R recompute
-// `position` so the anchored edge stays world-fixed — the renderer
-// follows that override, the ride object moves, and every arrow under
-// it would drift along with the mesh center. Subtracting this offset
-// from a non-active arrow's local placement undoes that drift so it
-// stays at its pre-drag world position.
-//
-// Rotation drags don't change `position`, so the offset collapses to
-// zero and non-active arrows naturally rotate with the mesh — which is
-// the desired behaviour (the whole rig rotates as a unit).
-function computeFreezeOffset(liveNode: AnyNode, preDragNode: AnyNode): [number, number, number] {
-  // Not every node in the union carries a `position` field (sites are the
-  // notable holdout — they don't have handles anyway, but TypeScript still
-  // requires us to discriminate). Guarded access keeps the freeze logic
-  // safe for the few node kinds that lack the field.
-  const liveP = (liveNode as { position?: readonly [number, number, number] }).position ?? [0, 0, 0]
-  const preP = (preDragNode as { position?: readonly [number, number, number] }).position ?? [
-    0, 0, 0,
-  ]
-  const deltaWorldX = liveP[0] - preP[0]
-  const deltaWorldY = liveP[1] - preP[1]
-  const deltaWorldZ = liveP[2] - preP[2]
-  const rotY = (preDragNode as { rotation?: number }).rotation ?? 0
-  // World → node-local for Y-axis rotation by rotY (THREE.Object3D
-  // rotation-y convention): inverse is rotation by -rotY around +Y.
-  const cosR = Math.cos(rotY)
-  const sinR = Math.sin(rotY)
-  const deltaLocalX = cosR * deltaWorldX - sinR * deltaWorldZ
-  const deltaLocalZ = sinR * deltaWorldX + cosR * deltaWorldZ
-  return [deltaLocalX, deltaWorldY, deltaLocalZ]
 }
 
 function ArrowHandle({
@@ -666,7 +648,7 @@ function LinearArrow({
   // for the edge being resized); cleared when the drag ends.
   const onDrag = descriptor.kind === 'linear-resize' ? descriptor.onDrag : undefined
   const placementSceneApi = useMemo(() => createSceneApi(useScene), [])
-  const basePosition = descriptor.placement.position(node, placementSceneApi)
+  const basePosition = resolveLinearHandlePosition(descriptor, node, placementSceneApi, baseScale)
   // `freezeOffset` (in node-local frame) cancels the mesh's `position`
   // drift while another arrow is being dragged — `basePosition` is
   // computed against the pre-drag snapshot, then we subtract the offset
@@ -730,14 +712,7 @@ function LinearArrow({
       const initialValue = descriptor.currentValue(initialNode)
       const minBound = resolveBound(descriptor.min, Number.NEGATIVE_INFINITY, initialNode, sceneApi)
       const maxBound = resolveBound(descriptor.max, Number.POSITIVE_INFINITY, initialNode, sceneApi)
-      const factor =
-        descriptor.kind === 'radial-resize'
-          ? 1
-          : descriptor.anchor === 'center'
-            ? 2
-            : descriptor.anchor === 'min'
-              ? 1
-              : -1
+      const factor = linearResizeFactor(descriptor)
 
       // Last value an emitted resize tick fired at — a new tick fires only
       // when the (snapped + clamped) value actually changes, so the cue
@@ -806,23 +781,7 @@ function LinearArrow({
     },
   })
 
-  // For axis === 'y' (vertical handles), tilt the chevron up via local
-  // X+Z rotation chain matching DoorHeightArrowHandle. When the handle
-  // sits below the node (placement Y < 0, e.g. window bottom arrow),
-  // flip the Z rotation so the chevron points outward (downward).
-  //
-  // For axis === 'x' with `faceNormal` (wall-mounted opening width arrows),
-  // roll the blade 90° about its own pointing (X) axis so it stands up from
-  // the horizontal XZ plane into the node's facing plane (XY = the wall
-  // face) — otherwise the blade is seen edge-on from the front.
-  const faceNormalX =
-    descriptor.kind === 'linear-resize' && descriptor.axis === 'x' && descriptor.faceNormal === true
-  const innerRotation: [number, number, number] =
-    descriptor.axis === 'y'
-      ? [0, Math.PI / 2, position[1] < 0 ? -Math.PI / 2 : Math.PI / 2]
-      : faceNormalX
-        ? [Math.PI / 2, 0, 0]
-        : [0, 0, 0]
+  const innerRotation = resolveLinearHandleRotation(descriptor, position)
 
   // Optional guide decoration — linear handles use it for curved-stair
   // width / inner-radius rings; radial handles use it for the column's

@@ -1,6 +1,7 @@
 import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
 import type { Object3D } from 'three'
+import type { ProceduralItemNode } from '../procedural-items/node'
 import type {
   BlockNode,
   BoxVentNode,
@@ -24,6 +25,7 @@ import type {
   GuideNode,
   GutterNode,
   HvacEquipmentNode,
+  ImportedMeshNode,
   ItemNode,
   LeanToExtensionNode,
   LevelNode,
@@ -47,6 +49,7 @@ import type {
   StairSegmentNode,
   StructuralGridNode,
   TurbineVentNode,
+  UnitNode,
   WallNode,
   WindowNode,
   ZoneNode,
@@ -115,6 +118,7 @@ export interface NodeEvent<T extends AnyNode = AnyNode> {
 export type WallEvent = NodeEvent<WallNode>
 export type FenceEvent = NodeEvent<FenceNode>
 export type ItemEvent = NodeEvent<ItemNode>
+export type ImportedMeshEvent = NodeEvent<ImportedMeshNode>
 export type SiteEvent = NodeEvent<SiteNode>
 export type BuildingEvent = NodeEvent<BuildingNode>
 export type CabinetEvent = NodeEvent<CabinetNode>
@@ -137,6 +141,7 @@ export type StructuralGridEvent = NodeEvent<StructuralGridNode>
 export type WindowEvent = NodeEvent<WindowNode>
 export type DoorEvent = NodeEvent<DoorNode>
 export type ElevatorEvent = NodeEvent<ElevatorNode>
+export type UnitEvent = NodeEvent<UnitNode>
 export type ScanEvent = NodeEvent<ScanNode>
 export type GuideEvent = NodeEvent<GuideNode>
 export type BoxVentEvent = NodeEvent<BoxVentNode>
@@ -344,14 +349,17 @@ type SelectionEvents = {
 
 type EditorEvents = GridEvents &
   GenericNodeEvents &
+  NodeEvents<'procedural-item', NodeEvent<ProceduralItemNode>> &
   NodeEvents<'wall', WallEvent> &
   NodeEvents<'fence', FenceEvent> &
   NodeEvents<'cabinet', CabinetEvent> &
   NodeEvents<'cabinet-module', CabinetModuleEvent> &
   NodeEvents<'item', ItemEvent> &
+  NodeEvents<'imported-mesh', ImportedMeshEvent> &
   NodeEvents<'site', SiteEvent> &
   NodeEvents<'building', BuildingEvent> &
   NodeEvents<'elevator', ElevatorEvent> &
+  NodeEvents<'unit', UnitEvent> &
   NodeEvents<'level', LevelEvent> &
   NodeEvents<'lean-to-extension', LeanToExtensionEvent> &
   NodeEvents<'zone', ZoneEvent> &

@@ -39,7 +39,7 @@ jobs:
       - name: Verify hosted endpoint contract
         run: |
           jq --exit-status '
-            .version == "0.6.1"
+            (.version | strings | test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))
             and .remotes == [{
               "type": "streamable-http",
               "url": "https://editor.pascal.app/api/mcp",

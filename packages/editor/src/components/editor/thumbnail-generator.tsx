@@ -13,6 +13,7 @@ import {
   GRID_LAYER,
   getVisibleWallMaterials,
   heroCameraPose,
+  refreshIsolation,
   SNAPSHOT_MAX_EDGE,
   SNAPSHOT_MIME,
   SNAPSHOT_QUALITY,
@@ -22,6 +23,7 @@ import {
   THUMBNAIL_WIDTH,
   temporarilyHideNodeTypes,
   temporarilyShowShadowOnly,
+  useSceneAtmosphere,
   useViewer,
 } from '@pascal-app/viewer'
 import type { CameraControls } from '@react-three/drei'
@@ -68,6 +70,7 @@ function clampSnapshotSize(width: number, height: number): { w: number; h: numbe
 export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorProps) => {
   const gl = useThree((state) => state.gl)
   const scene = useThree((state) => state.scene)
+  const atmosphere = useSceneAtmosphere()
   const getThree = useThree((state) => state.get)
   const controls = useThree((state) => state.controls) as CameraControls | null
   const isGenerating = useRef(false)
@@ -82,7 +85,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
     onThumbnailCaptureRef.current = onThumbnailCapture
   }, [onThumbnailCapture])
 
-  // Build the thumbnail camera, SSGI pipeline, and render target once — reused on every capture.
+  // Reuse the camera and snapshot graph until the active atmosphere source changes.
   useEffect(() => {
     captureVersion.current += 1
     const cam = new THREE.PerspectiveCamera(60, THUMBNAIL_WIDTH / THUMBNAIL_HEIGHT, 0.1, 1000)
@@ -97,6 +100,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         renderer: gl as unknown as WebGPURenderer,
         scene,
         camera: cam,
+        atmosphere,
       })
       if (!mounted) {
         pipeline?.dispose()
@@ -114,7 +118,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       pipelineRef.current?.dispose()
       pipelineRef.current = null
     }
-  }, [gl, scene])
+  }, [gl, scene, atmosphere])
 
   const generate = useCallback(
     async (event: ThumbnailGenerateEvent) => {
@@ -274,6 +278,11 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               }
             }
 
+            // Geometry and presentation systems may have mounted new meshes
+            // since the viewport's last frame. Apply the same isolation to
+            // those meshes before either snapshot render path submits them,
+            // and restore fog afterwards so the atmosphere never leaks in.
+            restore(refreshIsolation(scene))
             if (pipeline) return pipeline.capture({ captureMode, cropRegion, standardSize })
             gl.render(scene, thumbnailCamera)
             return undefined

@@ -11,6 +11,7 @@ import {
   getSelectableKinds,
   type ItemNode,
   isRegistrySelectable,
+  isSelectionHighlightEnabled,
   type NodeEvent,
   nodeRegistry,
   type RoofEvent,
@@ -80,6 +81,12 @@ import {
   shouldPreserveSelectedRoofHostTarget,
 } from '../../lib/selection-routing'
 import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
+import {
+  cancelPendingZonePaint,
+  paintZoneMembership,
+  zoneAtLevelPoint,
+  zoneAtWorldPoint,
+} from '../../lib/units'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
 import useEditor, { type MaterialTargetRole } from './../../store/use-editor'
 import useInteractionScope, {
@@ -1608,6 +1615,23 @@ export const SelectionManager = () => {
       // the click falls through to the item underneath.
       if (node.type === 'ceiling' && !event.viaHandle) return
 
+      // Unit focus turns clicks inside a zone into the paint gesture:
+      // membership toggles, the zone stays unselected, focus stays.
+      const focusedUnitId = useViewer.getState().focusedUnitId
+      if (focusedUnitId) {
+        const zone =
+          node.type === 'zone' ? node : zoneAtWorldPoint(event.position[0], event.position[2])
+        if (zone) {
+          event.stopPropagation()
+          clickHandledRef.current = true
+          setTimeout(() => {
+            clickHandledRef.current = false
+          }, 50)
+          paintZoneMembership(focusedUnitId, zone.id)
+          return
+        }
+      }
+
       let currentPhase = useEditor.getState().phase
       let currentStructureLayer = useEditor.getState().structureLayer
       const selectedIdsBeforeRouting = useViewer.getState().selection.selectedIds
@@ -1808,6 +1832,14 @@ export const SelectionManager = () => {
       if (useInteractionScope.getState().scope.kind === 'mesh-editing') return
       const nativeEvent = event.nativeEvent
       if (nativeEvent?.metaKey || nativeEvent?.ctrlKey || nativeEvent?.shiftKey) return
+      // Unit focus: a ground click inside a zone paints it; elsewhere it
+      // leaves focus and the unit selection alone.
+      const focusedUnitId = useViewer.getState().focusedUnitId
+      if (focusedUnitId) {
+        const zone = zoneAtLevelPoint(event.localPosition[0], event.localPosition[2])
+        if (zone) paintZoneMembership(focusedUnitId, zone.id)
+        return
+      }
       const { phase, structureLayer } = useEditor.getState()
       const activeStrategy = SELECTION_STRATEGIES[phase]
       if (activeStrategy) activeStrategy.handleDeselect()
@@ -1915,6 +1947,24 @@ export const SelectionManager = () => {
         }
         if (node.type === 'stair-segment' && currentPhase === 'structure') {
           forceSelect = true // allow double click to dive into stair-segment even if already in structure phase
+        }
+      }
+
+      // While a unit is focused a double-click inside a zone selects that
+      // zone (focus stays); the two clicks before it cancel each other's paint.
+      if (useViewer.getState().focusedUnitId) {
+        const zone =
+          node.type === 'zone' ? node : zoneAtWorldPoint(event.position[0], event.position[2])
+        if (zone) {
+          event.stopPropagation()
+          cancelPendingZonePaint(zone.id)
+          SELECTION_STRATEGIES.structure?.handleSelect(
+            zone,
+            event.nativeEvent,
+            modifierKeysRef.current,
+            [],
+          )
+          return
         }
       }
 
@@ -2154,6 +2204,7 @@ const SelectionMaterialSync = () => {
   const previewSelectedIds = useViewer((s) => s.previewSelectedIds)
   const hoveredId = useViewer((s) => s.hoveredId)
   const hoverHighlightMode = useViewer((s) => s.hoverHighlightMode)
+  const registryVersion = useRegistryVersion()
   const geometryRevision = useViewer((s) => s.geometryRevision)
   const activeHighlightKindsRef = useRef(new Map<string, HighlightKind>())
   const highlightedMaterialsRef = useRef(
@@ -2173,6 +2224,10 @@ const SelectionMaterialSync = () => {
     for (const [id, kind] of activeHighlightKindsRef.current.entries()) {
       const node = useScene.getState().nodes[id as AnyNodeId]
       if (node?.type === 'wall') {
+        continue
+      }
+
+      if (node && !isSelectionHighlightEnabled(node.type)) {
         continue
       }
 
@@ -2231,6 +2286,7 @@ const SelectionMaterialSync = () => {
   }, [])
 
   useEffect(() => {
+    void registryVersion
     void geometryRevision
     const nextHighlightKinds = new Map<string, HighlightKind>()
 
@@ -2246,6 +2302,7 @@ const SelectionMaterialSync = () => {
     syncSelectionMaterials()
   }, [
     geometryRevision,
+    registryVersion,
     hoverHighlightMode,
     hoveredId,
     previewSelectedIds,
@@ -2312,11 +2369,13 @@ const EditorOutlinerSync = () => {
   const previewSelectedIds = useViewer((s) => s.previewSelectedIds)
   const hoveredId = useViewer((s) => s.hoveredId)
   const geometryRevision = useViewer((s) => s.geometryRevision)
+  const registryVersion = useRegistryVersion()
   const outliner = useViewer((s) => s.outliner)
   const nodes = useScene((s) => s.nodes)
 
   useEffect(() => {
     void geometryRevision
+    void registryVersion
     let idsToHighlight: string[] = []
 
     // 1. Determine what should be highlighted based on Phase
@@ -2351,7 +2410,8 @@ const EditorOutlinerSync = () => {
     // 2. Sync with the imperative outliner arrays (mutate in place to keep references)
     outliner.selectedObjects.length = 0
     for (const id of idsToHighlight) {
-      if (!nodes[id as AnyNodeId]) continue
+      const node = nodes[id as AnyNodeId]
+      if (!(node && isSelectionHighlightEnabled(node.type))) continue
       const obj = sceneRegistry.nodes.get(id)
       if (obj?.parent) outliner.selectedObjects.push(obj)
     }
@@ -2362,14 +2422,25 @@ const EditorOutlinerSync = () => {
         useViewer.setState({ hoveredId: null })
       } else {
         const hoveredNode = nodes[hoveredId as AnyNodeId]
-        const obj =
-          hoveredNode?.type === 'roof-segment'
-            ? (getHoveredRoofSegmentOutlineProxy(hoveredId) ?? sceneRegistry.nodes.get(hoveredId))
-            : sceneRegistry.nodes.get(hoveredId)
-        if (obj?.parent) outliner.hoveredObjects.push(obj)
+        if (hoveredNode && isSelectionHighlightEnabled(hoveredNode.type)) {
+          const obj =
+            hoveredNode.type === 'roof-segment'
+              ? (getHoveredRoofSegmentOutlineProxy(hoveredId) ?? sceneRegistry.nodes.get(hoveredId))
+              : sceneRegistry.nodes.get(hoveredId)
+          if (obj?.parent) outliner.hoveredObjects.push(obj)
+        }
       }
     }
-  }, [geometryRevision, phase, previewSelectedIds, selection, hoveredId, outliner, nodes])
+  }, [
+    geometryRevision,
+    registryVersion,
+    phase,
+    previewSelectedIds,
+    selection,
+    hoveredId,
+    outliner,
+    nodes,
+  ])
 
   return null
 }

@@ -1,9 +1,8 @@
 'use client'
 
 import { type Cursor, emitter } from '@pascal-app/core'
-import { markPureRaycast } from '@pascal-app/viewer'
 import type { ThreeEvent } from '@react-three/fiber'
-import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { type ReactNode, useEffect, useMemo, useRef } from 'react'
 import {
   BoxGeometry,
   type BufferGeometry,
@@ -31,13 +30,10 @@ import useEditor from '../../../store/use-editor'
 // (`wall:move` for openings, `grid:move` for free movers), freezing the drag.
 // Make every handle hit area inert for the duration; the indicator mesh still
 // renders (it's already NO_RAYCAST + depthTest off) so the grip stays visible.
-export const hitAreaRaycast = markPureRaycast(function hitAreaRaycast(
-  this: Mesh,
-  raycaster: Raycaster,
-  intersects: Intersection[],
-): void {
+export function hitAreaRaycast(this: Mesh, raycaster: Raycaster, intersects: Intersection[]): void {
+  if (useEditor.getState().placementDragMode) return
   Mesh.prototype.raycast.call(this, raycaster, intersects)
-})
+}
 
 export const ARROW_SCALE = 0.65
 export const ARROW_COLOR = '#8381ed'
@@ -283,6 +279,44 @@ export function createMoveCrossHandleGeometry() {
   return merged
 }
 
+export function createArrowHitAreaGeometry() {
+  const length = CHEVRON_MAX_X - CHEVRON_MIN_X + HIT_AREA_MARGIN * 2
+  const centerX = (CHEVRON_MIN_X + CHEVRON_MAX_X) / 2
+  const geometry = new CylinderGeometry(
+    CHEVRON_HALF_WIDTH + HIT_AREA_MARGIN,
+    CHEVRON_HALF_WIDTH + HIT_AREA_MARGIN,
+    length,
+    16,
+  )
+  geometry.rotateZ(-Math.PI / 2)
+  geometry.translate(centerX, 0, 0)
+  geometry.computeBoundingSphere()
+  return geometry
+}
+
+// The move cross is a plus, not a disk. A disk-shaped hit area fills the four
+// corner gaps between the arms, so a neighbouring node sitting next to the
+// selected node (a lamp by a door, a slab beside a wall) gets swallowed by the
+// invisible grip and can't be picked. Wrap the visible arms instead: two flat
+// arm boxes (length/width + margin) merged into a plus, leaving the corners
+// empty so co-located neighbours stay selectable while the grip stays grabbable.
+function createMoveCrossHitAreaGeometry() {
+  const armLength = (MOVE_CROSS_HALF_LENGTH + HIT_AREA_MARGIN) * 2
+  const armWidth = (MOVE_CROSS_HEAD_HALF_WIDTH + HIT_AREA_MARGIN) * 2
+  const armX = new BoxGeometry(armLength, HIT_AREA_THICKNESS, armWidth)
+  const armZ = new BoxGeometry(armWidth, HIT_AREA_THICKNESS, armLength)
+  const merged = mergeGeometries([armX, armZ], false)
+  if (!merged) {
+    armZ.dispose()
+    armX.computeBoundingSphere()
+    return armX
+  }
+  armX.dispose()
+  armZ.dispose()
+  merged.computeBoundingSphere()
+  return merged
+}
+
 function createPlusHandleGeometry() {
   const shape = new Shape()
   shape.moveTo(-PLUS_HALF_WIDTH, PLUS_HALF_LENGTH)
@@ -327,44 +361,6 @@ function createPlusHitAreaGeometry() {
   }
   horizontal.dispose()
   vertical.dispose()
-  merged.computeBoundingSphere()
-  return merged
-}
-
-export function createArrowHitAreaGeometry() {
-  const length = CHEVRON_MAX_X - CHEVRON_MIN_X + HIT_AREA_MARGIN * 2
-  const centerX = (CHEVRON_MIN_X + CHEVRON_MAX_X) / 2
-  const geometry = new CylinderGeometry(
-    CHEVRON_HALF_WIDTH + HIT_AREA_MARGIN,
-    CHEVRON_HALF_WIDTH + HIT_AREA_MARGIN,
-    length,
-    16,
-  )
-  geometry.rotateZ(-Math.PI / 2)
-  geometry.translate(centerX, 0, 0)
-  geometry.computeBoundingSphere()
-  return geometry
-}
-
-// The move cross is a plus, not a disk. A disk-shaped hit area fills the four
-// corner gaps between the arms, so a neighbouring node sitting next to the
-// selected node (a lamp by a door, a slab beside a wall) gets swallowed by the
-// invisible grip and can't be picked. Wrap the visible arms instead: two flat
-// arm boxes (length/width + margin) merged into a plus, leaving the corners
-// empty so co-located neighbours stay selectable while the grip stays grabbable.
-function createMoveCrossHitAreaGeometry() {
-  const armLength = (MOVE_CROSS_HALF_LENGTH + HIT_AREA_MARGIN) * 2
-  const armWidth = (MOVE_CROSS_HEAD_HALF_WIDTH + HIT_AREA_MARGIN) * 2
-  const armX = new BoxGeometry(armLength, HIT_AREA_THICKNESS, armWidth)
-  const armZ = new BoxGeometry(armWidth, HIT_AREA_THICKNESS, armLength)
-  const merged = mergeGeometries([armX, armZ], false)
-  if (!merged) {
-    armZ.dispose()
-    armX.computeBoundingSphere()
-    return armX
-  }
-  armX.dispose()
-  armZ.dispose()
   merged.computeBoundingSphere()
   return merged
 }
@@ -440,7 +436,29 @@ function createHandleArrowHitGeometry(shape: HandleArrowShape, round = false) {
 }
 
 let sharedHitAreaMaterial: MeshBasicNodeMaterial | null = null
-let sharedHitAreaMaterialRefs = 0
+const sharedHandleGeometries = new Map<string, BufferGeometry>()
+const sharedHandleHitGeometries = new Map<string, BufferGeometry>()
+const sharedHandleMaterials = new Map<string, MeshBasicNodeMaterial>()
+
+function sharedHandleGeometry(shape: HandleArrowShape, thin: boolean, round: boolean) {
+  const key = `${shape}:${thin}:${round}`
+  let geometry = sharedHandleGeometries.get(key)
+  if (!geometry) {
+    geometry = createHandleArrowGeometry(shape, thin, round)
+    sharedHandleGeometries.set(key, geometry)
+  }
+  return geometry
+}
+
+function sharedHandleHitGeometry(shape: HandleArrowShape, round: boolean) {
+  const key = `${shape}:${round}`
+  let geometry = sharedHandleHitGeometries.get(key)
+  if (!geometry) {
+    geometry = createHandleArrowHitGeometry(shape, round)
+    sharedHandleHitGeometries.set(key, geometry)
+  }
+  return geometry
+}
 
 function createInvisibleHitAreaMaterial() {
   return new MeshBasicNodeMaterial({
@@ -455,23 +473,8 @@ function createInvisibleHitAreaMaterial() {
 }
 
 export function useInvisibleHitAreaMaterial(): MeshBasicNodeMaterial {
-  const materialRef = useRef<MeshBasicNodeMaterial | null>(null)
-  if (!materialRef.current) {
-    sharedHitAreaMaterial ??= createInvisibleHitAreaMaterial()
-    materialRef.current = sharedHitAreaMaterial
-  }
-  useEffect(() => {
-    sharedHitAreaMaterialRefs += 1
-    return () => {
-      sharedHitAreaMaterialRefs -= 1
-      if (sharedHitAreaMaterialRefs <= 0 && sharedHitAreaMaterial) {
-        sharedHitAreaMaterial.dispose()
-        sharedHitAreaMaterial = null
-        sharedHitAreaMaterialRefs = 0
-      }
-    }
-  }, [])
-  return materialRef.current
+  sharedHitAreaMaterial ??= createInvisibleHitAreaMaterial()
+  return sharedHitAreaMaterial
 }
 
 export function InvisibleHandleHitArea({
@@ -489,18 +492,6 @@ export function InvisibleHandleHitArea({
   onPointerLeave: PointerHandler
   scale: number
 }) {
-  const ref = useRef<Mesh>(null)
-  useLayoutEffect(() => {
-    const mesh = ref.current
-    if (!mesh) return
-    // Subscribe synchronously so the next pointer event sees drag state before React renders.
-    const syncRaycast = () => {
-      mesh.raycast = useEditor.getState().placementDragMode ? NO_RAYCAST : hitAreaRaycast
-    }
-    syncRaycast()
-    return useEditor.subscribe(syncRaycast)
-  }, [])
-
   return (
     <mesh
       frustumCulled={false}
@@ -511,7 +502,6 @@ export function InvisibleHandleHitArea({
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}
       raycast={hitAreaRaycast}
-      ref={ref}
       renderOrder={HIT_AREA_RENDER_ORDER}
       scale={scale}
       userData={{ [EDITOR_HANDLE_HIT_AREA_USER_DATA_KEY]: true }}
@@ -542,19 +532,21 @@ export function useArrowMaterial(): MeshBasicNodeMaterial {
   )
 }
 
-function useHandleArrowMaterial(shape: HandleArrowShape): MeshBasicNodeMaterial {
-  return useMemo(
-    () =>
-      new MeshBasicNodeMaterial({
-        color: new Color(ARROW_COLOR),
-        side: DoubleSide,
-        transparent: true,
-        opacity: shape === 'corner-picker' ? 0.95 : 1,
-        depthTest: false,
-        depthWrite: shape !== 'corner-picker',
-      }),
-    [shape],
-  )
+function useHandleArrowMaterial(shape: HandleArrowShape, hover: boolean): MeshBasicNodeMaterial {
+  const key = `${shape}:${hover}`
+  let material = sharedHandleMaterials.get(key)
+  if (!material) {
+    material = new MeshBasicNodeMaterial({
+      color: new Color(hover ? ARROW_HOVER_COLOR : ARROW_COLOR),
+      side: DoubleSide,
+      transparent: true,
+      opacity: shape === 'corner-picker' ? 0.95 : 1,
+      depthTest: false,
+      depthWrite: shape !== 'corner-picker',
+    })
+    sharedHandleMaterials.set(key, material)
+  }
+  return material
 }
 
 function indicatorRenderOrder(shape: HandleArrowShape) {
@@ -578,15 +570,9 @@ export function HandleArrow({
   round = false,
 }: HandleArrowProps) {
   const visualShape = normalizeHandleArrowShape(shape, cursor)
-  const geometry = useMemo(
-    () => createHandleArrowGeometry(visualShape, thin, round),
-    [visualShape, thin, round],
-  )
-  const hitGeometry = useMemo(
-    () => createHandleArrowHitGeometry(visualShape, round),
-    [visualShape, round],
-  )
-  const indicatorMaterial = useHandleArrowMaterial(visualShape)
+  const geometry = sharedHandleGeometry(visualShape, thin, round)
+  const hitGeometry = sharedHandleHitGeometry(visualShape, round)
+  const indicatorMaterial = useHandleArrowMaterial(visualShape, hover)
   const hitMaterial = useInvisibleHitAreaMaterial()
   const rootRef = useRef<Group>(null)
   const rotation: [number, number, number] = placement.rotation
@@ -598,9 +584,6 @@ export function HandleArrow({
   const scale = (hover ? hoverScale : 1) * placement.baseScale
   const hitScale = visualShape === 'corner-picker' ? scale : placement.baseScale
 
-  useEffect(() => {
-    indicatorMaterial.color.set(hover ? ARROW_HOVER_COLOR : ARROW_COLOR)
-  }, [indicatorMaterial, hover])
   useEffect(() => {
     const hideForCapture = () => {
       if (rootRef.current) rootRef.current.visible = false
@@ -615,9 +598,6 @@ export function HandleArrow({
       emitter.off('thumbnail:after-capture', restoreAfterCapture)
     }
   }, [])
-  useEffect(() => () => geometry.dispose(), [geometry])
-  useEffect(() => () => hitGeometry.dispose(), [hitGeometry])
-  useEffect(() => () => indicatorMaterial.dispose(), [indicatorMaterial])
 
   const handleEnter: PointerHandler = (event) => {
     event.stopPropagation()

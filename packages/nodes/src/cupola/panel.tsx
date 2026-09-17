@@ -173,7 +173,7 @@ export default function CupolaPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round(node.width * 100) / 100}
+          value={node.width}
         />
         <SliderControl
           label="Depth"
@@ -185,7 +185,7 @@ export default function CupolaPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round(node.depth * 100) / 100}
+          value={node.depth}
         />
         <SliderControl
           label="Height"
@@ -197,7 +197,7 @@ export default function CupolaPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round(node.height * 100) / 100}
+          value={node.height}
         />
       </PanelSection>
 
@@ -216,7 +216,7 @@ export default function CupolaPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round((node.position[0] ?? 0) * 100) / 100}
+          value={node.position[0] ?? 0}
         />
         <SliderControl
           label="Y"
@@ -235,7 +235,7 @@ export default function CupolaPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round((node.position[1] ?? 0) * 100) / 100}
+          value={node.position[1] ?? 0}
         />
         <SliderControl
           label="Z"
@@ -251,7 +251,7 @@ export default function CupolaPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round((node.position[2] ?? 0) * 100) / 100}
+          value={node.position[2] ?? 0}
         />
         <SliderControl
           label="Rotation"

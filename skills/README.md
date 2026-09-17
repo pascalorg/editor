@@ -2,6 +2,23 @@
 
 These public skills teach MCP-capable agents to use Pascal for editable building models and bounded spatial answers.
 
+## Channel status
+
+Status on 2026-09-14. Installable and publicly listed are separate results.
+
+The hosted OAuth service is enabled in production, and native Cursor browser sign-in is verified.
+The corrected 0.1.10 Cursor bundle still requires marketplace review and refresh; an existing
+marketplace install may continue to use the older bundle until Cursor publishes the update.
+
+| Channel | Status |
+| --- | --- |
+| [skills.sh](https://skills.sh/pascalorg/editor) | Indexed automatically from this repository; installable, with install counts on that listing. |
+| Claude Code plugin | Installable from this Git marketplace; not submitted to the Anthropic plugin directory. |
+| Codex and Cursor Agent Plugin | Installable from this repository, including the root [`mcp.json`](../mcp.json) server; a Cursor-native [`.cursor-plugin/plugin.json`](../.cursor-plugin/plugin.json) carries the marketplace logo and category and uses browser sign-in for hosted access; [listed in the Cursor marketplace](https://cursor.com/marketplace/pascal). The corrected Cursor bundle below still needs marketplace refresh; OpenAI submission remains separate. |
+| Gemini CLI extension | Root [`gemini-extension.json`](../gemini-extension.json) is present; installable from a release tag that carries it, and gallery listing waits on the `gemini-cli-extension` repository topic. |
+| Official MCP Registry | `io.github.pascalorg/editor` 0.6.1 is published. |
+| ClawHub and OpenClaw | Not published; waiting on an authorized publisher accepting the MIT-0 terms. |
+
 ## Install with skills.sh
 
 List the available skills:
@@ -25,6 +42,8 @@ npx skills add https://github.com/pascalorg/editor/tree/main/skills/furniture-fi
 ```
 
 Use `-g` for a user-wide installation or `-a claude-code -a codex` to choose hosts explicitly.
+
+skills.sh indexes this repository automatically, so no submission step is involved; its listing at [skills.sh/pascalorg/editor](https://skills.sh/pascalorg/editor) also reports install counts from the `skills` CLI.
 
 ## Install with OpenClaw
 
@@ -55,17 +74,35 @@ codex plugin marketplace add pascalorg/editor
 codex plugin add pascal-agent-skills@pascal
 ```
 
-The Claude plugin installs the instructions from the canonical `skills/` directory and supplies one local stdio server that runs `pascal mcp connect`. Install and start the Pascal CLI first, and keep `pascal` on Claude Code's `PATH`. The bundled local connector needs no Pascal account or API key and does not upload projects automatically. Codex and individually installed skills still use the setup reference included in either skill.
+The Claude plugin installs the instructions from the canonical `skills/` directory and supplies two servers: a local stdio server that runs `pascal mcp connect`, and a hosted `pascal-hosted` server for `https://editor.pascal.app/api/mcp` that prompts for an optional Pascal API key when the plugin is enabled and keeps it in the OS keychain. This `skills/` directory is itself the Claude plugin root, so an install copies only the two skill bundles and their plugin metadata rather than the repository. Install and start the Pascal CLI first, and keep `pascal` on Claude Code's `PATH`. The bundled local connector needs no Pascal account or API key and does not upload projects automatically; leaving the hosted key empty keeps the install local-only. Codex and individually installed skills still use the setup reference included in either skill.
 
 Claude Code 2.1.258 loads both the user-scoped `pascal` server created by `pascal mcp setup claude` and the plugin-provided server. Run `claude mcp remove --scope user pascal` before reloading or restarting Claude Code so only the plugin owns the connection lifecycle. Use `/mcp` to remove or disable any project- or local-scoped Pascal connection too. Leaving both connections active violates the one-active-agent-client-per-local-service requirement. For a hosted Pascal project, disable the plugin-provided local server in `/mcp`, then configure the hosted endpoint from the setup reference.
 
 Plugin installation alone never creates an account, uploads a project, or authorizes paid work.
 
-The root [`plugin.json`](../plugin.json) is the portable Agent Plugins manifest used for OpenAI submission. The repository keeps `.codex-plugin/plugin.json` as a compatibility fallback and validates that both expose the same OpenAI listing metadata. Public-directory submission, review, and publication are separate external steps; a Git marketplace install does not make the plugin publicly listed in ChatGPT or Codex.
+The root [`plugin.json`](../plugin.json) is the portable Agent Plugins manifest used for OpenAI submission, and the root [`mcp.json`](../mcp.json) is the MCP configuration path Codex reads; Claude Code reads the same local server from [`.mcp.json`](.mcp.json) in its `skills/` plugin root, next to [`.claude-plugin/plugin.json`](.claude-plugin/plugin.json), and Cursor uses its pinned npm launcher from [`.cursor-plugin/mcp.json`](.cursor-plugin/mcp.json) inside the installed `skills/` directory. Each host keeps its own hosted configuration: Claude Code uses `${user_config.pascal_api_key}`, and Cursor uses a managed public OAuth client — while the portable `mcp.json` stays local-only: Agent Plugins 1.0.0 forbids secrets and placeholder expansion in `headers`, and Codex strips a plugin-supplied `Authorization`, so Codex users register the hosted endpoint with `codex mcp add --bearer-token-env-var PASCAL_API_KEY`. The repository keeps `.codex-plugin/plugin.json` as a compatibility fallback and validates that both expose the same OpenAI listing metadata. Public-directory submission, review, and publication are separate external steps; a Git marketplace install does not make the plugin publicly listed in ChatGPT or Codex.
 
-The npm `beta` CLI remains on the older runtime contract. For the read-only `check_collisions.candidate` capability used by the current furniture workflow, follow the checksum-verified [GitHub preview instructions](pascal-3d/references/setup.md#candidate-enabled-github-preview). The preview archive is published on GitHub, not npm.
+`@pascal-app/cli` 1.0.0 on the npm `latest` tag carries the read-only `check_collisions.candidate` capability used by the current furniture workflow.
 
 Use one active agent client per local CLI service. Its standalone HTTP runtime shares active scene state; the hosted endpoint uses a separate session-isolated bridge.
+
+## Install in Cursor
+
+The Cursor marketplace installs this repository's `skills/` directory. Its `.cursor-plugin/plugin.json` explicitly selects the Cursor MCP configuration, so the Claude-only `${user_config.pascal_api_key}` header is never used by Cursor. The local server runs `npx --yes --package=@pascal-app/cli@1.0.0 pascal mcp connect`; Node.js 22.13 or newer and npm must be available to Cursor. No global `pascal` installation or web-editor runtime is required. The first connection downloads the pinned CLI from npm, and later connections reuse npm's cache. This starts only the local MCP service and keeps existing local project storage. If Cursor reports `spawn npx ENOENT`, install Node.js/npm and fully restart Cursor so it picks up the executable path. For an older installed bundle that still runs `pascal`, update the plugin; `npm install --global @pascal-app/cli@1.0.0` followed by **Customize → MCPs → pascal → Reload** repairs that legacy local command.
+
+The hosted `pascal-hosted` server uses browser sign-in. In **Customize → MCPs**, choose **Authenticate** (or **Connect**) beside `pascal-hosted`. Pascal opens in your browser: sign in or create an account with Google or email, choose the intended workspace, review access, then return to Cursor. No API key or plugin variable is required. Let the user approve the account and workspace shown in consent. Ordinary access covers reading and editing projects; it does not authorize publishing, credit spending, external AI processing, community posting, or account management. Disconnect at `https://editor.pascal.app/settings/connected-apps`.
+
+For local-only work, use `pascal` and leave `pascal-hosted` disconnected. Local project storage stays on this machine. If browser sign-in is unavailable, verify that the installed plugin and hosted service support this flow; do not create another account or fall back to a different workspace implicitly.
+
+## Install as a Gemini CLI extension
+
+The root [`gemini-extension.json`](../gemini-extension.json) declares the same `pascal mcp connect` server and loads this file as the extension context. Gemini CLI resolves a plain repository URL to the GitHub release marked **Latest**, which predates this manifest, so install from a release tag that contains it:
+
+```bash
+gemini extensions install https://github.com/pascalorg/editor --ref <release tag>
+```
+
+Gemini CLI copies the extension on install; run `gemini extensions update pascal` to pull later changes.
 
 ## Included skills
 
@@ -81,9 +118,9 @@ The `source-reviewed` date records a code and public-documentation review. The `
 ## Validate the source package
 
 ```bash
-bun test scripts/clawhub-ignore-policy.test.ts scripts/claude-mcp-config-policy.test.ts scripts/public-skill-discovery-policy.test.ts
-bun scripts/validate-skills.ts
-claude plugin validate . --strict
+bun run skills:validate
 ```
 
-The repository validator checks the exact two-skill public discovery surface, keeps contributor-only workflows internal, and checks frontmatter, bundled links, task and trigger fixtures, semantic furniture next-action decision cases, scoped ClawHub ignore policies without re-inclusion overrides, the exact credential-free Claude local MCP configuration, the publishing suite, portable and compatibility manifest consistency, OpenAI public-directory metadata limits, bundled branding assets, and accidental private-path or credential leakage.
+Run `claude plugin validate . --strict` manually as well. It stays out of the script and out of CI because it needs the Claude Code CLI, which is not installed on every runner.
+
+The repository validator checks the exact two-skill public discovery surface, keeps contributor-only workflows internal, and checks frontmatter, semantic skill versions, bundled links and their heading anchors, task and trigger fixtures, semantic furniture next-action decision cases, scoped ClawHub ignore policies without re-inclusion overrides, the exact Claude local and hosted MCP configuration with the hosted key declared as an optional, sensitive user-configuration option, the identical global CLI command for Claude and Codex and a version-pinned npm launcher for Cursor, with a self-contained Cursor manifest at the marketplace's `skills/` root, the Cursor hosted server with its exact managed OAuth client and ordinary scopes, without API-key headers or plugin secrets, a Gemini CLI manifest that runs the same command at the same version, Claude marketplace and plugin skills lists that equal the packaged bundles exactly, the publishing suite, the exact 49-tool OpenAI annotation and justification packet, portable and compatibility manifest consistency with one plugin version, description, and author across every plugin descriptor, OpenAI public-directory metadata limits including its documented interface fields, bundled branding assets, and accidental private-path or credential leakage.

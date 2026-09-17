@@ -7,6 +7,7 @@ import {
   type FloorplanGeometry,
   type FloorplanPalette,
   type FloorplanPoint,
+  isNodeKindEnabled,
   type LiveNodeOverrides,
   type NodeCategory,
   nodeRegistry,
@@ -21,10 +22,13 @@ import { resolveSvgAnnotationCollisions } from '../../components/editor-2d/rende
 import { FloorplanGeometryRenderer } from '../../components/editor-2d/renderers/floorplan-geometry-renderer'
 import {
   buildContext,
+  collectDirectFloorplanScopeNodes,
   collectFloorplanLinkedLevelNodes,
   floorplanLayerRank,
   getFloorplanLevelData,
+  isFloorplanHierarchyVisible,
   isFloorplanNodeVisible,
+  siteToFloorplanTransform,
   splitFloorplanOverlay,
 } from '../../components/editor-2d/renderers/floorplan-registry-layer'
 import useDrawingView, { DRAWING_TYPE_OPTIONS } from '../../store/use-drawing-view'
@@ -146,12 +150,27 @@ type ExportGeometry = {
   annotations: FloorplanGeometry | null
 }
 
+type ExportGeometryContext = {
+  children: AnyNode[]
+  siblings: AnyNode[]
+  parent: AnyNode
+  outputTransform: { translate: FloorplanPoint; rotate: number }
+}
+
+type ExportGeometryEntry = {
+  id: AnyNodeId
+  node: AnyNode
+  parentOverride?: AnyNode
+  context?: ExportGeometryContext
+  scopeRank?: number
+}
+
 export type FloorplanPageLayout = {
   planBox: { x: number; y: number; width: number; height: number }
 }
 
 export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<void> {
-  const nodes = useScene.getState().nodes
+  const { nodes, installedPlugins } = useScene.getState()
   const viewer = useViewer.getState()
   const unit = viewer.unit
   const metricNotation = viewer.metricNotation
@@ -198,8 +217,9 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
         annotationVisibility,
         drawingType,
         wallDimensionReference,
+        installedPlugins,
       )
-      const schedules = collectFloorplanSchedules(nodes, level.id, unit)
+      const schedules = collectFloorplanSchedules(nodes, level.id, unit, scope)
       if (geometries.length === 0 && schedules.length === 0) continue
       const layout = resolveFloorplanPageLayout(A4_LANDSCAPE_WIDTH_PT, A4_LANDSCAPE_HEIGHT_PT)
 
@@ -285,6 +305,7 @@ export function collectFloorplanSchedules(
   nodes: Record<string, AnyNode>,
   levelId: AnyNodeId,
   unit: 'metric' | 'imperial',
+  scope: FloorplanExportScope = 'full',
 ): FloorplanSchedule[] {
   const siblingsByType = new Map<string, AnyNode[]>()
   const visit = (id: AnyNodeId) => {
@@ -304,6 +325,9 @@ export function collectFloorplanSchedules(
   for (const [kind, definition] of nodeRegistry.entries()) {
     const scheduleContribution = getFloorplanNodeExtension(definition)?.schedule
     if (!scheduleContribution) continue
+    // Same scope gate as geometry: a structure-only PDF must not list rooms
+    // or other site-category contributors whose plan geometry was excluded.
+    if (!isFloorplanNodeInExportScope(definition, scope)) continue
     const siblings = siblingsByType.get(kind) ?? []
     const schedule = scheduleContribution({ siblings, nodes, levelId, unit })
     if (schedule && schedule.rows.length > 0) schedules.push(schedule)
@@ -736,7 +760,7 @@ function applyFloorplanViewport(
   mounted.svg.insertBefore(background, mounted.svg.firstChild)
 }
 
-function collectFloorplanGeometry(
+export function collectFloorplanGeometry(
   nodes: Record<string, AnyNode>,
   levelId: AnyNodeId,
   scope: FloorplanExportScope,
@@ -745,10 +769,11 @@ function collectFloorplanGeometry(
   annotationVisibility: FloorplanAnnotationVisibility,
   drawingType: ConstructionDrawingType,
   wallDimensionReference: FloorplanWallDimensionReference,
+  installedPlugins: readonly string[],
 ): ExportGeometry[] {
   const noLiveOverrides = new Map<string, LiveNodeOverrides>()
   const levelNodeIdsByType = new Map<string, AnyNodeId[]>()
-  const entries: { id: AnyNodeId; node: AnyNode; parentOverride?: AnyNode }[] = []
+  const entries: ExportGeometryEntry[] = []
 
   const visit = (id: AnyNodeId) => {
     const node = nodes[id]
@@ -773,28 +798,74 @@ function collectFloorplanGeometry(
   visit(levelId)
 
   const activeLevelNode = nodes[levelId]
+  const collectedIds = new Set(entries.map((entry) => entry.id))
   if (activeLevelNode) {
-    const collectedIds = new Set(entries.map((entry) => entry.id))
     for (const linked of collectFloorplanLinkedLevelNodes(nodes, levelId, collectedIds)) {
       const definition = nodeRegistry.get(linked.node.type)
       if (isFloorplanNodeVisible(linked.node) && isFloorplanNodeInExportScope(definition, scope)) {
         const drawingNode = resolveNodeForDrawingType(linked.node, nodes, drawingType)
         if (drawingNode) {
           entries.push({ id: linked.id, node: drawingNode, parentOverride: activeLevelNode })
+          collectedIds.add(linked.id)
         }
       }
     }
   }
 
-  // Document order is paint order — sort the same way the live layer does so
-  // zones sit under walls/slabs/furniture rather than on top of them.
-  entries.sort((a, b) => floorplanLayerRank(a.node.type) - floorplanLayerRank(b.node.type))
+  const buildingId = resolveBuildingForLevel(levelId, nodes as Record<AnyNodeId, AnyNode>)
+  const buildingNode = buildingId ? nodes[buildingId] : undefined
+  const siteNode =
+    buildingNode?.type === 'building' && buildingNode.parentId
+      ? nodes[buildingNode.parentId as AnyNodeId]
+      : undefined
+  if (siteNode?.type === 'site' && buildingNode?.type === 'building') {
+    const siteScopedNodes = collectDirectFloorplanScopeNodes(nodes, siteNode, 'site')
+    const outputTransform = siteToFloorplanTransform(
+      buildingNode.position,
+      buildingNode.rotation[1],
+    )
+    for (const node of siteScopedNodes) {
+      if (collectedIds.has(node.id) || !isNodeKindEnabled(node.type, installedPlugins)) continue
+      const drawingNode = resolveNodeForDrawingType(node, nodes, drawingType)
+      if (!drawingNode) continue
+      const definition = nodeRegistry.get(drawingNode.type)
+      if (
+        !definition?.floorplan ||
+        !isFloorplanNodeInExportScope(definition, scope) ||
+        !isFloorplanHierarchyVisible(drawingNode, nodes, noLiveOverrides, siteNode.id)
+      ) {
+        continue
+      }
+      const childIds = 'children' in node ? node.children : undefined
+      const children = Array.isArray(childIds)
+        ? childIds.map((childId) => nodes[childId]).filter((child): child is AnyNode => !!child)
+        : []
+      const siblings = siteScopedNodes.filter(
+        (candidate) => candidate.id !== node.id && candidate.type === node.type,
+      )
+      entries.push({
+        id: node.id,
+        node: drawingNode,
+        context: { children, siblings, parent: siteNode, outputTransform },
+        scopeRank: -1,
+      })
+      collectedIds.add(node.id)
+    }
+  }
+
+  // Document order is paint order. Site context sits below level
+  // architecture, then each scope retains the live layer's z-order.
+  entries.sort(
+    (a, b) =>
+      (a.scopeRank ?? 0) - (b.scopeRank ?? 0) ||
+      floorplanLayerRank(a.node.type) - floorplanLayerRank(b.node.type),
+  )
 
   // One-shot per-type cache for `computeFloorplanLevelData`; value type is
   // module-private to the registry layer, so let it infer.
   const levelDataCache = new Map()
   const out: ExportGeometry[] = []
-  for (const { id, node, parentOverride } of entries) {
+  for (const { id, node, parentOverride, context } of entries) {
     const builder = nodeRegistry.get(node.type)?.floorplan
     if (!builder) continue
     const levelData = getFloorplanLevelData(
@@ -815,9 +886,25 @@ function collectFloorplanGeometry(
       ),
       levelData,
     )
-    const ctx = parentOverride ? { ...baseContext, parent: parentOverride } : baseContext
-    const geometry = builder(node, ctx)
-    if (!geometry) continue
+    const ctx = context
+      ? {
+          ...baseContext,
+          children: context.children,
+          siblings: context.siblings,
+          parent: context.parent,
+        }
+      : parentOverride
+        ? { ...baseContext, parent: parentOverride }
+        : baseContext
+    const builtGeometry = builder(node, ctx)
+    if (!builtGeometry) continue
+    const geometry = context
+      ? {
+          kind: 'group' as const,
+          children: [builtGeometry],
+          transform: context.outputTransform,
+        }
+      : builtGeometry
     const visibleGeometry = filterFloorplanAnnotationGeometry(geometry, annotationVisibility)
     if (!visibleGeometry) continue
     const { base, overlay } = splitFloorplanOverlay(visibleGeometry)
@@ -938,9 +1025,10 @@ function combineGeometryList(
  * Levels to export, ordered bottom-to-top. The active building (the building
  * owning the selected level, or the first one found) contributes all of its
  * level children; if there is no building wrapper we fall back to the single
- * resolved level.
+ * resolved level. Roof support levels are excluded: they are not occupied
+ * stories, so they do not get a floor-plan page.
  */
-function resolveExportLevels(nodes: Record<string, AnyNode>): ExportLevel[] {
+export function resolveExportLevels(nodes: Record<string, AnyNode>): ExportLevel[] {
   const selected = useViewer.getState().selection.levelId as AnyNodeId | null | undefined
   const activeLevelId = selected && nodes[selected] ? selected : firstLevelId(nodes)
   if (!activeLevelId) return []
@@ -955,6 +1043,7 @@ function resolveExportLevels(nodes: Record<string, AnyNode>): ExportLevel[] {
     levelNodes = node ? [node] : []
   }
 
+  levelNodes = levelNodes.filter((n) => n.metadata.role !== 'roof')
   levelNodes.sort((a, b) => levelIndexOf(a) - levelIndexOf(b))
   return levelNodes.map((n) => ({ id: n.id as AnyNodeId, label: levelLabelOf(n) }))
 }

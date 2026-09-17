@@ -214,7 +214,7 @@ export const TerrainSculptTool: React.FC = () => {
         detachStrokeAnchor(active.stroke)
         return
       }
-      const point = groundPoint(event, active.field)
+      const point = groundPoint(event, active.stroke.snapshot)
       if (!point) return
       const brushPatch = advanceStroke(active.stroke, point[0], point[1])
       if (!brushPatch) return

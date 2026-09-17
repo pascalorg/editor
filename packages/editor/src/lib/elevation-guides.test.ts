@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
 import { type AnyNode, CeilingNode, LevelNode, SlabNode } from '@pascal-app/core'
 import useElevationGuides from '../store/use-elevation-guides'
 import {
@@ -43,6 +43,10 @@ function structuralScene() {
 }
 
 describe('elevation guides', () => {
+  afterEach(() => {
+    useElevationGuides.setState({ guide: null })
+  })
+
   test('collects the level, slab faces, and ceiling plane on the source level', () => {
     const { level, nodes, slab } = structuralScene()
     const targets = collectElevationSnapTargets(

@@ -1,8 +1,28 @@
 import { expect, test } from 'bun:test'
 import { DuctSegmentNode, useScene } from '@pascal-app/core'
-import { planDuctDraw } from './tool'
+import { ductSurfaceClearanceM, planDuctDraw } from './tool'
 
 const profile = { shape: 'round' as const, diameter: 6, width: 12, height: 8 }
+
+test('keeps rectangular and oval ducts outside wall faces using their largest dimension', () => {
+  expect(ductSurfaceClearanceM({ shape: 'round', diameter: 6, width: 12, height: 8 })).toBeCloseTo(
+    0.0762,
+  )
+  expect(
+    ductSurfaceClearanceM({ shape: 'rect', diameter: 6, width: 14, height: 8 }, true),
+  ).toBeCloseTo(0.1878)
+  expect(
+    ductSurfaceClearanceM({ shape: 'oval', diameter: 6, width: 14, height: 8 }, true),
+  ).toBeCloseTo(0.1878)
+})
+
+test('floor and ceiling clearance uses the height of rectangular and oval ducts', () => {
+  for (const shape of ['rect', 'oval'] as const) {
+    expect(ductSurfaceClearanceM({ shape, diameter: 6, width: 14, height: 8 })).toBeCloseTo(0.1016)
+    expect(ductSurfaceClearanceM({ shape, diameter: 6, width: 20, height: 8 })).toBeCloseTo(0.1016)
+  }
+})
+
 test('a short existing run cannot silently lose its required elbow', () => {
   const node = DuctSegmentNode.parse({
     path: [
@@ -28,6 +48,7 @@ test('a short existing run cannot silently lose its required elbow', () => {
       null,
       null,
       profile,
+      useScene.getState().nodes,
     )
     expect(plan?.validationMessage).toBeTruthy()
   } finally {
@@ -36,9 +57,10 @@ test('a short existing run cannot silently lose its required elbow', () => {
 })
 
 test('a free run remains drawable', () => {
-  const plan = planDuctDraw([0, 0, 0], [2, 0, 0], null, null, null, null, profile)
+  const plan = planDuctDraw([0, 0, 0], [2, 0, 0], null, null, null, null, profile, {})
   expect(plan?.validationMessage).toBeNull()
   expect(plan?.ducts).toHaveLength(1)
+  expect(plan?.fittings.map((fitting) => fitting.fittingType)).toEqual(['end-cap', 'end-cap'])
 })
 
 test('a short branch reports failure instead of omitting its tee', () => {
@@ -59,6 +81,7 @@ test('a short branch reports failure instead of omitting its tee', () => {
       null,
       null,
       profile,
+      useScene.getState().nodes,
     )
     expect(plan?.validationMessage).toBeTruthy()
     expect(plan?.ducts).toHaveLength(0)

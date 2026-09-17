@@ -2,7 +2,7 @@
 
 *How buildings stack: stored level heights, plane-bound wall/ceiling tops, slab placement + thickness, support hosts, and the clamp rules that keep it all coherent.*
 
-Applies to: anything that reads or writes vertical geometry — levels, walls, slabs, ceilings, stairs, fences, floor-placed items.
+Applies to: anything that reads or writes vertical geometry — levels, walls, slabs, ceilings, roofs, stairs, fences, floor-placed items.
 
 The invariant, in one sentence:
 
@@ -21,6 +21,7 @@ The invariant, in one sentence:
 | `level.baseElevation` | Additive offset from the computed stack position. It shifts this level and cumulatively shifts every higher level in the same building; negative offsets are valid. | Zero (the schema default). |
 | `wall.height` | Explicit body height (half wall, parapet, or a raised-support draft whose ghost height must remain invariant). Ground-hosted walls always resolve top = elected base + height, including below datum; other legacy sunken supports retain their absolute-top constraint. | **Plane-bound** (the default for ordinary datum placement): the top follows `getWallPlaneTop` — `min(level height, lowest covering-slab underside over the span)`. |
 | `ceiling.height` | Explicit custom height, write-clamped to the bound. | **Follows the level**: resolves live to `getCeilingClampBound` = `min(level height, covering underside) − 0.01`. |
+| `roof.support.kind` | `walls` follows the highest spatially matched wall top in the roof’s level frame; `level` keeps custom Y; `roof` retains its roof-surface attachment rule. Room and curved-wall creation write `walls`; free-drawn rectangles write `level` at Y 0. | Existing roofs remain custom (`level`); no load migration enables following. |
 | `slab.elevation` | The walking surface (top), level-local. | Default 0.05. |
 | `slab.thickness` | Grows **downward**: the solid occupies `[elevation − thickness, elevation]`. | Default 0.05. |
 | `slab.recessed` | Recess intent: open shell whose floor is `elevation` and whose rim is `recessedRimElevation`. Excluded from "covering" queries and wall-face adoption. | Solid slab. |
@@ -31,7 +32,7 @@ The invariant, in one sentence:
 | `fence.supportOffset` | Optional level-local delta from the fence's slab host or level plane. It translates the complete fence while preserving height. | Zero offset: the fence sits directly on its host or level plane. |
 | `wall.fillToTerrain` | Extends the wall downward from its authored base to the terrain with independently sampled left/right faces. The wall body height and top stay unchanged. | Fixed base with no terrain infill. |
 | `stair.deckSlabId` | Destination deck: rise follows `deck.elevation − the stair's own elected base` live; cutout sync disabled while attached. | Destination is a level. |
-| `stair.totalRise` | Explicit custom rise (wins over everything). | Follows: derived from the deck or the containing level; `syncStairRises` converges straight-stair segments to the resolved rise. |
+| `stair.totalRise` | Explicit custom rise (wins over everything). | Follows: the deck's `elevation`, else the containing level's floor-to-floor height — each **minus the stair's own elected base**, so a slab under the stair shortens the rise the way it shortens a plane-bound wall; `syncStairRises` converges straight-stair segments to the resolved rise. |
 
 Two schema rules protect these semantics:
 
@@ -49,6 +50,7 @@ Two schema rules protect these semantics:
 | `getCeilingClampBound`, `getCoveringSlabUndersideAt` | `services/storey.ts` | Ceiling bound; the cross-level covering query (level above, non-recessed slabs) |
 | `resolveCeilingHeight` | `services/level-height.ts` | A ceiling's effective height (explicit or follows) |
 | `resolveStairTotalRise`, `syncStairRises` | `systems/stair/stair-rise.ts` | Stair rise precedence + straight-flight convergence |
+| `resolveRoofElevation`, `resolveRoofWallTopElevation` | `systems/roof/roof-elevation.ts` | Highest spatially matched wall top for `walls` support, including explicit heights and elected bases, converted to the roof's level frame |
 | `computeWallSlabSupport`, `getSlabSupportForItem`, `getSupportCandidatesForFootprint` | `systems/slab/slab-support.ts` + spatial-grid manager | Support election (rendered polygons, host-preferring, optional `maxElevation` cap) |
 | `resolveSlabPlacementElevation` | `systems/slab/slab-placement.ts` | Translates a solid slab's authored top/thickness interval onto a captured base plane; recessed slabs stay level-relative |
 | `getSlabBaseElevation`, `applySlabBaseElevationChange`, `applySlabThicknessChange` | `nodes/slab/elevation-limit.ts` | Separates whole-body underside placement from fixed-base thickness editing |
@@ -134,6 +136,7 @@ Because community autosave only persists after the first post-load edit, the mig
 
 ## Gotchas
 
+- **Only `support.kind: 'walls'` roofs follow walls.** The resolver projects the roof’s XZ centre onto its parent level’s lower neighbour, selected by `findLevelBelowId` from `getLevelElevations` in the same building stack (ordinals need not be consecutive). It uses the smallest enclosing room at that point and takes the highest resolved wall top without clamping to the storey. Conical roofs match curved walls by arc centre and radius against their transformed segment footprint, without a wall-ID binding. No matching enclosure or arc freezes Y and preserves follow intent, so redrawing walls resumes following. Negative level-local Y is valid: 2.5 m walls under a 3 m storey put the roof at −0.5 m. `RoofElevationSystem` re-derives Y only for following roofs on wall, slab, level, building, site, and roof edits, history-paused and one microtask after store updates so the spatial grid has settled. Settled updates publish a separate scene commit without adding an undo step; an outer gesture’s history pause retains commit ownership. The panel’s “Follows walls” choice enables this rule; “Custom” writes `level` and keeps Y. An explicit Y change exceeding 1e-4 m in the panel or 3D move handle switches to `level` in the same patch; XZ-only moves retain `walls` and re-resolve spatially. Undo/redo restores mode and Y together. Roof-surface attachments hide this mode control and retain their own rule. Schema version stays 3 and load never opts existing roofs into following.
 - **Ordinals are semantic.** `level < 0` renders "Basement N"; `level === 0` is the ground-floor lookup. Never renumber without the zero anchor.
 - **Boundary geometry.** Auto slabs derive polygons from wall centerlines, so wall/ceiling clamp samples sit exactly on polygon edges — always use the boundary-inclusive band-overlap helpers (`wallOverlapsSlabFootprint`, `slabCoversPoint`), never raw ray-cast point-in-polygon on those paths.
 - **Straight stairs build from stored segment heights**, not the resolved rise — any rise change must go through `syncStairRises` (applied by `StairOpeningSystem`, history-paused, one microtask after store updates so the spatial grid has settled).

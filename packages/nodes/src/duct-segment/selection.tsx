@@ -48,6 +48,7 @@ import {
   withAutoOffsetTag,
   withoutAutoOffsetTag,
 } from '../shared/auto-offset-tag'
+import { planRunEndCapFollowUpdates } from '../shared/automatic-run-end-cap'
 import {
   detectFittingEndpoint,
   type FittingEndpoint,
@@ -399,11 +400,27 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       duct.wallAttachment && wall?.type === 'wall'
         ? refreshWallRunAttachment(path, duct.wallAttachment, wall)
         : duct.wallAttachment
+    const withEndCapFollow = (
+      path: Point[],
+      updates: { id: AnyNodeId; data: Partial<AnyNode> }[],
+    ) => {
+      if (drag.index !== 0 && drag.index !== drag.initialPath.length - 1) return updates
+      const endpoint = drag.index === 0 ? 'start' : 'end'
+      const nextDuct = { ...duct, path } as DuctSegmentNode
+      const capUpdates = planRunEndCapFollowUpdates(
+        duct,
+        nextDuct,
+        endpoint,
+        useScene.getState().nodes,
+      )
+      const capIds = new Set(capUpdates.map((update) => update.id))
+      return [...updates.filter((update) => !capIds.has(update.id)), ...capUpdates]
+    }
     if (!detached && drag.fittingEndpoint) {
       const plan = planFittingEndpointReaim(drag.fittingEndpoint, drag.index, next)
       // Out of the fitting's buildable range — hold this frame.
       if (!plan) return null
-      return [
+      return withEndCapFollow(plan.path, [
         {
           id: duct.id as AnyNodeId,
           data: { path: plan.path, wallAttachment: attachmentFor(plan.path) },
@@ -425,13 +442,14 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
               },
             ]
           : []),
-      ]
+      ])
     }
     const path = drag.initialPath.map((p, i) => (i === drag.index ? next : p)) as Point[]
-    return [
+    const updates = [
       { id: duct.id as AnyNodeId, data: { path, wallAttachment: attachmentFor(path) } },
       ...(detached ? [] : connectivityUpdatesForPath(drag.connectivity, path)),
     ]
+    return detached ? updates : withEndCapFollow(path, updates)
   }
 
   /** World-space position of a local path point. */

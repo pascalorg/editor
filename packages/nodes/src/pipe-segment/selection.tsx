@@ -28,6 +28,7 @@ import { Html } from '@react-three/drei'
 import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { type Group, type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
+import { planRunEndCapFollowUpdates } from '../shared/automatic-run-end-cap'
 import {
   detectFittingEndpoint,
   type FittingEndpoint,
@@ -285,11 +286,27 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
       pipe.wallAttachment && wall?.type === 'wall'
         ? refreshWallRunAttachment(path, pipe.wallAttachment, wall)
         : pipe.wallAttachment
+    const withEndCapFollow = (
+      path: Point[],
+      updates: { id: AnyNodeId; data: Partial<AnyNode> }[],
+    ) => {
+      if (drag.index !== 0 && drag.index !== drag.initialPath.length - 1) return updates
+      const endpoint = drag.index === 0 ? 'start' : 'end'
+      const nextPipe = { ...pipe, path } as PipeSegmentNode
+      const capUpdates = planRunEndCapFollowUpdates(
+        pipe,
+        nextPipe,
+        endpoint,
+        useScene.getState().nodes,
+      )
+      const capIds = new Set(capUpdates.map((update) => update.id))
+      return [...updates.filter((update) => !capIds.has(update.id)), ...capUpdates]
+    }
     if (!detached && drag.fittingEndpoint) {
       const plan = planFittingEndpointReaim(drag.fittingEndpoint, drag.index, next)
       // Out of the elbow's buildable turn range — hold this frame.
       if (!plan) return null
-      return [
+      return withEndCapFollow(plan.path, [
         {
           id: pipe.id as AnyNodeId,
           data: { path: plan.path, wallAttachment: attachmentFor(plan.path) },
@@ -311,13 +328,14 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
               },
             ]
           : []),
-      ]
+      ])
     }
     const path = drag.initialPath.map((p, i) => (i === drag.index ? next : p)) as Point[]
-    return [
+    const updates = [
       { id: pipe.id as AnyNodeId, data: { path, wallAttachment: attachmentFor(path) } },
       ...(detached ? [] : connectivityUpdatesForPath(drag.connectivity, path)),
     ]
+    return detached ? updates : withEndCapFollow(path, updates)
   }
 
   /** World-space position of a local path point. */
@@ -833,6 +851,7 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
       ))}
       {draggingIndex === null &&
         !runMoving &&
+        openCluster === null &&
         (['start', 'end'] as const).map((endpoint) => (
           <PipeContinuationHandle endpoint={endpoint} key={endpoint} pipe={displayPipe} />
         ))}

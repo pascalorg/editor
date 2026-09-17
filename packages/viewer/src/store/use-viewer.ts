@@ -1,6 +1,13 @@
 'use client'
 
-import type { AnyNode, BaseNode, BuildingNode, LevelNode, ZoneNode } from '@pascal-app/core'
+import type {
+  AnyNode,
+  BaseNode,
+  BuildingNode,
+  LevelNode,
+  UnitNode,
+  ZoneNode,
+} from '@pascal-app/core'
 import type { Object3D } from 'three'
 
 import { create } from 'zustand'
@@ -27,6 +34,8 @@ type Outliner = {
 
 type ViewerState = {
   selection: SelectionPath
+  focusedUnitId: UnitNode['id'] | null
+  setFocusedUnit: (id: UnitNode['id'] | null) => void
   previewSelectedIds: BaseNode['id'][]
   setPreviewSelectedIds: (ids: BaseNode['id'][]) => void
   /** Host-owned selection highlights rendered through the viewer's native
@@ -148,8 +157,8 @@ type ViewerState = {
   bumpGeometryRevision: () => void
 
   // Export functionality
-  exportScene: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null
-  setExportScene: (fn: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null) => void
+  exportScene: ((format?: 'glb' | 'usdz' | 'stl' | 'obj') => Promise<void>) | null
+  setExportScene: (fn: ((format?: 'glb' | 'usdz' | 'stl' | 'obj') => Promise<void>) | null) => void
 
   debugColors: boolean
   setDebugColors: (enabled: boolean) => void
@@ -328,6 +337,8 @@ const useViewer = create<ViewerState>()(
   persist(
     (set) => ({
       selection: { buildingId: null, levelId: null, zoneId: null, selectedIds: [] },
+      focusedUnitId: null,
+      setFocusedUnit: (focusedUnitId) => set({ focusedUnitId }),
       previewSelectedIds: [],
       setPreviewSelectedIds: (ids) => set({ previewSelectedIds: ids }),
       externalSelectedIds: [],

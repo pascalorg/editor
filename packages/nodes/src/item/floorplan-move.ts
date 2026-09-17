@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   type CeilingNode,
   collectAlignmentAnchors,
+  createSceneApi,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
   getBlockFaceFrame,
@@ -10,11 +11,14 @@ import {
   getScaledDimensions,
   type ItemNode,
   movingFootprintAnchors,
+  nodeRegistry,
   type RoofSegmentNode,
+  resolveSurfacePlacement,
   roofFacePointToSegment,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
+import { boundsOf, boxCorners, frame, transformPoint } from '@pascal-app/core/procedural-items'
 import {
   applyFloorplanAlignment,
   isGridSnapActive,
@@ -23,6 +27,7 @@ import {
   type WallPlanPoint,
 } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
+import { restingNodePlanFrame } from '../shared/resting-surface-plan'
 import { findClosestWallInPlan, snapLocalXToNeighbors } from '../shared/wall-attach-target'
 
 /**
@@ -84,6 +89,16 @@ function resolveItemPlanTransform(
     result = {
       point: [parent.start[0] + offsetX, parent.start[1] + offsetZ],
       rotation: wallRotation + localRotation,
+    }
+  } else if (
+    parent?.type === 'cabinet' ||
+    parent?.type === 'cabinet-module' ||
+    parent?.type === 'procedural-item'
+  ) {
+    const f = restingNodePlanFrame(item, (id) => nodes[id])
+    result = {
+      point: [f.position[0], f.position[2]],
+      rotation: Math.atan2(f.axes[2][0], f.axes[2][2]),
     }
   } else if (parent?.type === 'shelf') {
     const shelf = parent as AnyNode & {
@@ -321,6 +336,53 @@ function buildFloorItemSession(
         { applySnap: isMagneticSnapActive() },
       )
 
+      const host = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
+      if (host?.type === 'cabinet' || host?.type === 'shelf') {
+        const hostFrame = restingNodePlanFrame(host, (id) => useScene.getState().nodes[id])
+        const dx = snapped[0] - hostFrame.position[0]
+        const dz = snapped[1] - hostFrame.position[2]
+        const local: [number, number, number] = [
+          dx * hostFrame.axes[0][0] + dz * hostFrame.axes[0][2],
+          node.position[1],
+          dx * hostFrame.axes[2][0] + dz * hostFrame.axes[2][2],
+        ]
+        const bounds = nodeRegistry.get(node.type)?.capabilities.dragBounds?.(node, nodes)
+        const dimensions = bounds?.size ?? getScaledDimensions(node)
+        const center = bounds?.center
+        const localBounds = center
+          ? {
+              min: center.map((v, i) => v - dimensions[i]! / 2) as [number, number, number],
+              max: center.map((v, i) => v + dimensions[i]! / 2) as [number, number, number],
+            }
+          : undefined
+        const projected = boundsOf(
+          boxCorners(
+            localBounds?.min ?? [-dimensions[0] / 2, 0, -dimensions[2] / 2],
+            localBounds?.max ?? [dimensions[0] / 2, dimensions[1], dimensions[2] / 2],
+          ).map((p) => transformPoint(frame(local, node.rotation), p)),
+        )
+        const pose = resolveSurfacePlacement({
+          host,
+          childKind: node.type,
+          childFootprint: { size: dimensions, rotationY, rotation: node.rotation, localBounds },
+          hit: {
+            point: [
+              (projected.min[0] + projected.max[0]) / 2,
+              projected.min[1],
+              (projected.min[2] + projected.max[2]) / 2,
+            ],
+            normalWorldY: 1,
+          },
+          origin: local,
+          scene: createSceneApi(useScene),
+        })
+        if (pose && Math.abs(pose.position[1] - node.position[1]) < 1e-5) {
+          lastPatch = { parentId: host.id, position: [...pose.position], supportSlabId: undefined }
+          useLiveNodeOverrides.getState().set(node.id as AnyNodeId, lastPatch)
+          useScene.getState().markDirty(node.id as AnyNodeId)
+          return
+        }
+      }
       const sourceY = node.position[1]
       const nextPosition: [number, number, number] = [snapped[0], sourceY, snapped[1]]
 
@@ -399,7 +461,7 @@ function buildSurfaceItemSession(
  * valid target: floor items are parented to the level, not the slab,
  * because slabs don't carry a `children` field on their schema.
  */
-function findContainingSurface(
+export function findContainingSurface(
   point: readonly [number, number],
   nodes: Record<AnyNodeId, AnyNode>,
   parentLevelId: AnyNodeId | null,

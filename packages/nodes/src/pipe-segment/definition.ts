@@ -1,5 +1,6 @@
 import type { NodeDefinition } from '@pascal-app/core'
 import { createPathPointMoveAffordance } from '../shared/path-point-affordance'
+import { createRunHangerToolHint } from '../shared/run-hanger-mode'
 import { pipeBranchAffordance, pipeContinuationAffordance } from './continuation'
 import { buildPipeSegmentFloorplan } from './floorplan'
 import { buildPipeSegmentGeometry } from './geometry'
@@ -126,9 +127,10 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
     { key: 'Click again', label: 'Place and continue' },
     { key: 'Q', label: 'Waste / vent' },
     { key: 'S', label: 'Slope / level' },
+    createRunHangerToolHint('pipe-segment'),
     { key: '[ / ]', label: 'Pipe size down / up' },
     { key: 'Alt + drag', label: 'Vertical stack ↕, click to place' },
-    { key: 'Esc', label: 'Cancel start point' },
+    { key: 'Esc', label: 'Exit drawing' },
   ],
 
   presentation: {

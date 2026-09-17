@@ -120,6 +120,7 @@ export function resolveDuctContinuationSeed(
   if (fitting?.type !== 'duct-fitting') return null
   const fittingPort = findMatedScenePorts(port, nodes).find((mate) => mate.nodeId === fitting.id)
   if (!fittingPort) return null
+  if (fitting.fittingType === 'end-cap') return { duct: node, port, body: null }
   const promotion =
     fitting.fittingType === 'elbow'
       ? planDuctElbowBranchPromotion(fitting, fittingPort.id)

@@ -1,5 +1,7 @@
 import {
   type AnyNodeId,
+  cascadeDirty,
+  createSceneApi,
   type FloorplanAffordance,
   type ShelfNode,
   useLiveNodeOverrides,
@@ -48,7 +50,8 @@ export const shelfResizeAffordance: FloorplanAffordance<ShelfNode> = {
           lastPatch = { depth: Math.max(MIN_SHELF_DEPTH, initialDepth + 2 * projDelta) }
         }
         useLiveNodeOverrides.getState().set(shelfId, lastPatch)
-        useScene.getState().markDirty(shelfId)
+        for (const id of cascadeDirty(shelfId, { scene: createSceneApi(useScene) }))
+          useScene.getState().markDirty(id)
       },
       canCommit() {
         return true
@@ -97,7 +100,8 @@ export const shelfRotateAffordance: FloorplanAffordance<ShelfNode> = {
         const newRotationY = initialRotationY - delta
         lastRotation = [r[0], newRotationY, r[2]]
         useLiveNodeOverrides.getState().set(shelfId, { rotation: lastRotation })
-        useScene.getState().markDirty(shelfId)
+        for (const id of cascadeDirty(shelfId, { scene: createSceneApi(useScene) }))
+          useScene.getState().markDirty(id)
       },
       canCommit() {
         return true

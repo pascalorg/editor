@@ -95,6 +95,27 @@ function buildDeckScene(options: {
   return { deck, stair, nodes }
 }
 
+function registerStairFootprint() {
+  registerNode({
+    kind: 'stair',
+    schemaVersion: 1,
+    schema: z.object({ type: z.literal('stair') }) as never,
+    category: 'structure',
+    defaults: () => ({}) as never,
+    capabilities: {
+      floorPlaced: {
+        footprints: (node) => [
+          {
+            position: (node as StairNodeType).position,
+            dimensions: [1, 1, 2] as [number, number, number],
+            rotation: [0, 0, 0] as [number, number, number],
+          },
+        ],
+      },
+    },
+  } as AnyNodeDefinition)
+}
+
 function buildLevelSceneWithSegments(options: {
   levelHeight: number
   totalRise?: number
@@ -349,24 +370,7 @@ describe('deck-attached rise with a floor-lifted base', () => {
   ]
 
   beforeEach(() => {
-    registerNode({
-      kind: 'stair',
-      schemaVersion: 1,
-      schema: z.object({ type: z.literal('stair') }) as never,
-      category: 'structure',
-      defaults: () => ({}) as never,
-      capabilities: {
-        floorPlaced: {
-          footprints: (node) => [
-            {
-              position: (node as StairNodeType).position,
-              dimensions: [1, 1, 2] as [number, number, number],
-              rotation: [0, 0, 0] as [number, number, number],
-            },
-          ],
-        },
-      },
-    } as AnyNodeDefinition)
+    registerStairFootprint()
   })
 
   function makeFloorSlab(elevation: number) {
@@ -495,5 +499,106 @@ describe('deck-attached rise with a floor-lifted base', () => {
       supportSlabId: GROUND_SUPPORT_ID,
     })
     expect(resolveStairTotalRise(stair, nodes)).toBeCloseTo(1.25)
+  })
+})
+
+// A level-destination stair climbs to the storey plane above, which is an
+// absolute level-local height — so a slab that lifts the stair's own base eats
+// into the rise. Without the subtraction the last step overshoots the floor
+// above by the slab's thickness (and a tall storey used to be missed entirely).
+describe('level rise with a floor-lifted base', () => {
+  const FLOOR_POLYGON: Array<[number, number]> = [
+    [-5, -5],
+    [5, -5],
+    [5, 5],
+    [-5, 5],
+  ]
+
+  beforeEach(() => {
+    registerStairFootprint()
+  })
+
+  function buildLiftedLevelScene(options: {
+    levelHeight: number
+    floorElevation?: number | null
+    totalRise?: number
+    segments?: Array<{ id: string; segmentType: 'stair' | 'landing'; height: number }>
+  }) {
+    const scene = buildLevelSceneWithSegments({
+      levelHeight: options.levelHeight,
+      totalRise: options.totalRise,
+      segments: options.segments ?? [],
+    })
+    if (options.floorElevation == null) return { ...scene, floor: null }
+
+    const floor = SlabNode.parse({
+      id: 'slab_floor',
+      type: 'slab',
+      polygon: FLOOR_POLYGON,
+      elevation: options.floorElevation,
+      thickness: 0.05,
+    })
+    spatialGridManager.handleNodeCreated(floor as AnyNode, 'level_1')
+    return {
+      ...scene,
+      floor,
+      nodes: { ...scene.nodes, [floor.id]: floor } as Record<string, AnyNode>,
+    }
+  }
+
+  it('lands the last step on the storey plane: rise = floor-to-floor − elected base', () => {
+    const { stair, nodes } = buildLiftedLevelScene({ levelHeight: 5.3, floorElevation: 0.05 })
+    const base = getFloorPlacedElevation({
+      node: stair,
+      nodes,
+      position: stair.position,
+      rotation: stair.rotation,
+      levelId: 'level_1',
+    })
+    expect(base).toBeCloseTo(0.05)
+    const rise = resolveStairTotalRise(stair, nodes)
+    expect(rise).toBeCloseTo(5.25)
+    expect(base + rise).toBeCloseTo(5.3)
+  })
+
+  it('keeps the full storey height when the stair stands on bare ground', () => {
+    const { stair, nodes } = buildLiftedLevelScene({ levelHeight: 5.3, floorElevation: null })
+    expect(resolveStairTotalRise(stair, nodes)).toBeCloseTo(5.3)
+  })
+
+  it('lets an explicit totalRise win over the base-adjusted storey rise', () => {
+    const { stair, nodes } = buildLiftedLevelScene({
+      levelHeight: 5.3,
+      floorElevation: 0.05,
+      totalRise: 2.7,
+    })
+    expect(resolveStairTotalRise(stair, nodes)).toBe(2.7)
+  })
+
+  it('converges a straight flight to the base-adjusted storey rise', () => {
+    const { nodes } = buildLiftedLevelScene({
+      levelHeight: 5.3,
+      floorElevation: 0.05,
+      segments: [{ id: 'sseg_1', segmentType: 'stair', height: 2.5 }],
+    })
+    const updates = syncStairRises(nodes)
+    expect(updates).toHaveLength(1)
+    expect(updates[0]?.id).toBe('sseg_1' as never)
+    expect((updates[0]?.data as { height?: number }).height).toBeCloseTo(5.25)
+  })
+
+  it('re-converges after the base slab elevation changes', () => {
+    const scene = buildLiftedLevelScene({
+      levelHeight: 2.5,
+      floorElevation: 0.05,
+      segments: [{ id: 'sseg_1', segmentType: 'stair', height: 2.45 }],
+    })
+    expect(syncStairRises(scene.nodes)).toEqual([])
+    const movedFloor = { ...scene.floor, elevation: 0.3 }
+    const nodes = { ...scene.nodes, slab_floor: movedFloor as AnyNode }
+    spatialGridManager.handleNodeUpdated(movedFloor as AnyNode, 'level_1')
+    const updates = syncStairRises(nodes)
+    expect(updates).toHaveLength(1)
+    expect((updates[0]?.data as { height?: number }).height).toBeCloseTo(2.2)
   })
 })

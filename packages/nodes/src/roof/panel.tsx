@@ -19,6 +19,7 @@ import {
   ActionButton,
   ActionGroup,
   duplicateRoofSubtree,
+  formatLinearMeasurement,
   PanelSection,
   PanelWrapper,
   SegmentedControl,
@@ -34,6 +35,8 @@ import { useShallow } from 'zustand/react/shallow'
 export default function RoofPanel() {
   const [ventType, setVentType] = useState<'box-vent' | 'ridge-vent' | 'turbine-vent'>('box-vent')
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
+  const unit = useViewer((s) => s.unit)
+  const metricNotation = useViewer((s) => s.metricNotation)
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
@@ -281,20 +284,46 @@ export default function RoofPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.position[0] * 100) / 100}
+          value={node.position[0]}
         />
-        <SliderControl
-          label="Y"
-          onChange={(v) => {
-            const pos = [...node.position] as [number, number, number]
-            pos[1] = v
-            handleUpdate({ position: pos })
-          }}
-          precision={2}
-          step={0.05}
-          unit="m"
-          value={Math.round(node.position[1] * 100) / 100}
-        />
+        {node.support?.kind !== 'roof' && (
+          <SegmentedControl
+            onChange={(mode) =>
+              handleUpdate({ support: { kind: mode === 'walls' ? 'walls' : 'level' } })
+            }
+            options={[
+              { label: 'Follows walls', value: 'walls' },
+              { label: 'Custom', value: 'custom' },
+            ]}
+            value={node.support?.kind === 'walls' ? 'walls' : 'custom'}
+          />
+        )}
+        {node.support?.kind === 'walls' ? (
+          <div className="px-1 text-[11px] text-muted-foreground">
+            Currently {formatLinearMeasurement(node.position[1], unit, metricNotation)}
+          </div>
+        ) : (
+          <SliderControl
+            label="Y"
+            onChange={(v) => {
+              const pos = [...node.position] as [number, number, number]
+              pos[1] = v
+              const current = useScene.getState().nodes[node.id]
+              handleUpdate({
+                position: pos,
+                ...(current?.type === 'roof' &&
+                current.support?.kind === 'walls' &&
+                Math.abs(v - current.position[1]) > 1e-4
+                  ? { support: { kind: 'level' as const } }
+                  : {}),
+              })
+            }}
+            precision={2}
+            step={0.05}
+            unit="m"
+            value={node.position[1]}
+          />
+        )}
         <SliderControl
           label="Z"
           onChange={(v) => {
@@ -305,7 +334,7 @@ export default function RoofPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.position[2] * 100) / 100}
+          value={node.position[2]}
         />
         <SliderControl
           label="Rotation"

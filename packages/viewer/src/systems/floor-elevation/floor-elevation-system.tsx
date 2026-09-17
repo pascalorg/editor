@@ -89,6 +89,10 @@ export const FloorElevationSystem = () => {
       const position = (effectiveNode as PositionedNode).position
       if (!position) return
 
+      if (!(def.geometry || def.system) && dirtyNodes.has(id)) {
+        clearDirty(id)
+      }
+
       // `applies === false` means the kind opts OUT of floor stacking for this
       // node: its Y belongs to a host frame (a wall/ceiling-mounted item, a
       // cabinet module inside a run, a wall duct terminal). `getFloorPlacedElevation`
@@ -97,6 +101,10 @@ export const FloorElevationSystem = () => {
       // in WORLD space, so during a drag that lifts the ghost off its host by
       // the host frame's own elevation.
       if (floorPlaced.applies && !floorPlaced.applies(effectiveNode)) return
+      // Hosted meshes inherit elevation from their parent (and possibly a surface group).
+      // Their live transform can be world-space, so it cannot replace the mesh's local Y.
+      if (!effectiveNode.parentId || nodes[effectiveNode.parentId as AnyNodeId]?.type !== 'level')
+        return
 
       // This system is the single drag-time authority for floor-stack mesh Y:
       // tools publish base positions to live stores, renderers may
@@ -116,10 +124,6 @@ export const FloorElevationSystem = () => {
         maxElevation: liveTransform?.supportElevationCap,
       })
       mesh.position.y = visualPosition[1]
-
-      if (!(def.geometry || def.system) && dirtyNodes.has(id)) {
-        clearDirty(id)
-      }
     }
 
     dirtyNodes.forEach((id) => {

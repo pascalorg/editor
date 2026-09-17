@@ -1,13 +1,18 @@
 import { describe, expect, test } from 'bun:test'
-import { emitter, LevelNode, type WallEvent, WallNode } from '@pascal-app/core'
 import {
+  emitter,
   fitRoofFootprint,
+  LevelNode,
+  resolveRoomRoofFootprint,
+  type WallEvent,
+  WallNode,
+} from '@pascal-app/core'
+import {
   isStandardRoofWallEligible,
   parseRoofFootprintSource,
   resolveRoofFootprintElevation,
   resolveRoofFootprintWorldElevation,
   resolveRoofWallTopWorldElevation,
-  resolveRoomRoofFootprint,
   subscribeToConicalRoofWallClicks,
 } from './roof-footprint'
 

@@ -78,6 +78,16 @@ const { updateNode } = useScene.getState()
 updateNode(wall.id, { height: 2.8 })   // partial update, merges with existing
 ```
 
+`parseUpdatedNode` preserves the current `children` array when the patch omits
+`children`, including when a built-in or strict registered schema strips the field.
+This protects graph links through single, batch and atomic updates. An explicit
+`children` patch still follows the schema and existing removal semantics. This
+update safeguard does not change direct schema parsing or load migrations.
+
+Slabs are floor supports, not surface-host parents: floor nodes remain level
+children with `supportSlabId`. The shared surface resolver defers slab hits to
+floor placement without producing a refusal that would block the grid event.
+
 ## Schema Evolution & Backward Compatibility
 
 Saved scenes are persisted JSON parsed back through `AnyNode` at load (`SceneState.setScene` → `migrateNodes` → `markDirty`, in `packages/core/src/store/use-scene.ts`). Any change to an existing node's properties must keep older saved scenes loadable — a scene written months ago must still parse and render.

@@ -1,4 +1,5 @@
 import z from 'zod'
+import { ProceduralItemNode } from '../procedural-items/node'
 import { BlockNode } from './nodes/block'
 import { BoxVentNode } from './nodes/box-vent'
 import { BuildingNode } from './nodes/building'
@@ -20,6 +21,7 @@ import { FenceNode } from './nodes/fence'
 import { GuideNode } from './nodes/guide'
 import { GutterNode } from './nodes/gutter'
 import { HvacEquipmentNode } from './nodes/hvac-equipment'
+import { ImportedMeshNode } from './nodes/imported-mesh'
 import { ItemNode } from './nodes/item'
 import { LeanToExtensionNode } from './nodes/lean-to-extension'
 import { LevelNode } from './nodes/level'
@@ -43,6 +45,7 @@ import { StairNode } from './nodes/stair'
 import { StairSegmentNode } from './nodes/stair-segment'
 import { StructuralGridNode } from './nodes/structural-grid'
 import { TurbineVentNode } from './nodes/turbine-vent'
+import { UnitNode } from './nodes/unit'
 import { WallNode } from './nodes/wall'
 import { WindowNode } from './nodes/window'
 import { ZoneNode } from './nodes/zone'
@@ -67,14 +70,15 @@ type BareDiscriminator<T extends NodeMember> = z.ZodObject<
  *
  * Each member is therefore projected to a clone whose `type` is the bare
  * literal. Per-kind schemas keep their default; only the union's view of the
- * discriminator narrows. Metadata lives in zod's global registry keyed by
+ * discriminator narrows. `safeExtend` retains member refinements, including
+ * procedural recipe/parameter validation. Metadata lives in zod's global registry keyed by
  * instance, so `.describe()` text has to be carried over to the clone by hand.
  */
 export const nodeUnion = <const T extends readonly [NodeMember, ...NodeMember[]]>(members: T) =>
   z.discriminatedUnion(
     'type',
     members.map((member) => {
-      const projected = member.extend({ type: member.shape.type.unwrap() })
+      const projected = member.safeExtend({ type: member.shape.type.unwrap() })
       const meta = z.globalRegistry.get(member)
       return meta ? projected.meta(meta) : projected
     }) as { [K in keyof T]: BareDiscriminator<T[K]> },
@@ -84,6 +88,7 @@ export const AnyNode = nodeUnion([
   SiteNode,
   BuildingNode,
   ElevatorNode,
+  UnitNode,
   LevelNode,
   LeanToExtensionNode,
   ColumnNode,
@@ -95,6 +100,8 @@ export const AnyNode = nodeUnion([
   CabinetNode,
   CabinetModuleNode,
   ItemNode,
+  ProceduralItemNode,
+  ImportedMeshNode,
   ZoneNode,
   SlabNode,
   CeilingNode,

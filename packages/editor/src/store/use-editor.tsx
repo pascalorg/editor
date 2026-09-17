@@ -116,6 +116,10 @@ export type FirstPersonMovementMode = 'walk' | 'drone'
 export const CAPTURE_FOV_MIN = 15
 export const CAPTURE_FOV_MAX = 110
 
+function clampCaptureFov(fov: number): number {
+  return Math.min(Math.max(Math.round(fov), CAPTURE_FOV_MIN), CAPTURE_FOV_MAX)
+}
+
 export type Phase = 'site' | 'structure' | 'furnish'
 
 /**
@@ -1485,14 +1489,12 @@ const useEditor = create<EditorState>()(
       captureFovBaseline: null,
       setCaptureFov: (fov) =>
         set({
-          captureFov: Math.min(Math.max(Math.round(fov), CAPTURE_FOV_MIN), CAPTURE_FOV_MAX),
+          captureFov: clampCaptureFov(fov),
         }),
-      armCaptureFov: (fov) =>
-        set(
-          fov === null
-            ? { captureFov: null, captureFovBaseline: null }
-            : { captureFov: fov, captureFovBaseline: fov },
-        ),
+      armCaptureFov: (fov) => {
+        const captureFov = fov === null ? null : clampCaptureFov(fov)
+        set({ captureFov, captureFovBaseline: captureFov })
+      },
       captureShutterHold: false,
       setCaptureShutterHold: (hold) => set({ captureShutterHold: hold }),
       workspaceMode: 'edit' as WorkspaceMode,

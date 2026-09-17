@@ -59,6 +59,7 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       { keys: ['Delete / Backspace'], action: 'Delete selected objects' },
       { keys: ['Cmd/Ctrl', 'Z'], action: 'Undo' },
       { keys: ['Cmd/Ctrl', 'Shift', 'Z'], action: 'Redo' },
+      { keys: ['Cmd/Ctrl', 'S'], action: 'Save' },
     ],
   },
   {

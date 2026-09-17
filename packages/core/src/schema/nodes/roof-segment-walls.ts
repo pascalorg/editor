@@ -16,7 +16,9 @@ import { getDutchRoofMetrics, getSegmentSlopeFrame } from './roof-segment'
  * (`getVol(wallThickness / 2, 0, 0, …)`): the volume is the segment
  * footprint extended outward by `wallThickness / 2`, which drops the eave
  * line by `(wallThickness / 2) · tanθ` and raises the ridge by the same
- * amount so the apex stays at `wallHeight + activeRh`.
+ * amount so the apex stays at `wallHeight + activeRh` unless the eave
+ * hits the CSG minimum. The base stays at 0; the eave is raised to at
+ * least 0.05 above it to avoid sinking the shell into the supporting wall.
  */
 
 export type RoofWallFaceId = 'front' | 'back' | 'right' | 'left'
@@ -76,7 +78,7 @@ function getWallVolumeFrame(node: SegmentWallInputs): WallVolumeFrame {
   const autoDrop = (wallThickness / 2) * tanTheta
   const wV = Math.max(0.01, node.width + wallThickness)
   const dV = Math.max(0.01, node.depth + wallThickness)
-  const eaveY = Math.max(0.01, node.wallHeight - autoDrop)
+  const eaveY = Math.max(0.05, node.wallHeight - autoDrop)
   let rh = activeRh
   if (activeRh > 0) {
     rh = activeRh + autoDrop

@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/viewer",
-  "version": "1.0.0-beta.5",
+  "version": "1.0.0",
   "description": "3D viewer component for Pascal building editor",
   "type": "module",
   "main": "./dist/index.js",
@@ -10,6 +10,16 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./capture": {
+      "types": "./dist/capture/index.d.ts",
+      "import": "./dist/capture/index.js",
+      "default": "./dist/capture/index.js"
+    },
+    "./capture/preview": {
+      "types": "./dist/capture/preview.d.ts",
+      "import": "./dist/capture/preview.js",
+      "default": "./dist/capture/preview.js"
     }
   },
   "files": [
@@ -23,12 +33,12 @@
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
-    "@pascal-app/core": "^1.0.0-beta.5",
+    "@pascal-app/core": "^1.0.0",
     "@react-three/drei": "^10",
     "@react-three/fiber": "^9",
     "react": "^18 || ^19",
     "react-dom": "^18 || ^19",
-    "three": "^0.185"
+    "three": "^0.186"
   },
   "dependencies": {
     "three-bvh-csg": "^0.0.18",
@@ -36,8 +46,9 @@
     "zustand": "^5"
   },
   "devDependencies": {
-    "@pascal-app/core": "^1.0.0-beta.5",
+    "@pascal-app/core": "^1.0.0",
     "@pascal/typescript-config": "*",
+    "@react-three/test-renderer": "^9.1.0",
     "@types/node": "^22",
     "@types/react": "^19.2.2",
     "@types/react-dom": "19.2.2",

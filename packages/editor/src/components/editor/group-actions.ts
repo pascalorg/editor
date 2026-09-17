@@ -40,9 +40,11 @@ import {
   collectParticipants,
   computeGroupBox,
   expandToComponent,
+  groupPlanBounds,
   levelFrame,
-  participantExtents,
+  planBoundsCenter,
   rotateGroupSnapshots,
+  rotatePlanBounds,
   translateGroupPatches,
   type Vec2,
 } from './group-transform-shared'
@@ -104,46 +106,15 @@ export function startGroupPickUp(
   if (starts.length === 0) return false
   const affectedIds: AnyNodeId[] = [...starts.map((s) => s.id), ...links.map((l) => l.id)]
 
-  // Rest bounds in the level frame. Prefer the mounted meshes' world box
-  // (footprint-accurate), but fall back to the participant DATA when the
-  // meshes aren't up yet — Duplicate starts the pick-up synchronously after
-  // `createNodes`, one frame before the clones' renderers mount.
   const { inverse: frameInv } = levelFrame(levelId)
   const restBox = computeGroupBox(fullIds)
-  let minX = Number.POSITIVE_INFINITY
-  let minZ = Number.POSITIVE_INFINITY
-  let maxX = Number.NEGATIVE_INFINITY
-  let maxZ = Number.NEGATIVE_INFINITY
-  if (restBox) {
-    const boxMin = restBox.min.clone().applyMatrix4(frameInv)
-    const boxMax = restBox.max.clone().applyMatrix4(frameInv)
-    minX = Math.min(boxMin.x, boxMax.x)
-    minZ = Math.min(boxMin.z, boxMax.z)
-    maxX = Math.max(boxMin.x, boxMax.x)
-    maxZ = Math.max(boxMin.z, boxMax.z)
-  } else {
-    const reach = (x: number, z: number) => {
-      minX = Math.min(minX, x)
-      minZ = Math.min(minZ, z)
-      maxX = Math.max(maxX, x)
-      maxZ = Math.max(maxZ, z)
-    }
-    for (const s of starts) {
-      if (s.kind === 'endpoint') {
-        reach(s.start[0], s.start[1])
-        reach(s.end[0], s.end[1])
-      } else if (s.kind === 'polygon') {
-        for (const [x, z] of s.polygon) {
-          reach(x, z)
-        }
-      } else {
-        reach(s.position[0], s.position[2])
-      }
-    }
-  }
-  if (!Number.isFinite(minX)) return false
+  const startBounds = groupPlanBounds(restBox, starts, frameInv)
+  if (!startBounds) return false
+  // Mutable: mid-carry R/T re-seeds the footprint around the same pivot.
+  let restBounds = startBounds
+  let carriedRotation = 0
   // Rotation pivot for mid-carry R/T; stable across the whole pick-up.
-  const restCenter: [number, number] = [(minX + maxX) / 2, (minZ + maxZ) / 2]
+  const restCenter = planBoundsCenter(restBounds)
   // Ground plane for the 3D surface: the meshes' base when available, floor
   // level otherwise. Placements live in the level frame, so both surfaces
   // resolve into it before measuring.
@@ -157,7 +128,13 @@ export function startGroupPickUp(
     if (n && !movingIdSet.has(nid)) staticNodes[nid] = n
   }
   const candidates = collectAlignmentAnchors(staticNodes, '', levelId)
-  let restAnchors = bboxCornerAnchors('group-move', minX, minZ, maxX, maxZ)
+  let restAnchors = bboxCornerAnchors(
+    'group-move',
+    restBounds.minX,
+    restBounds.minZ,
+    restBounds.maxX,
+    restBounds.maxZ,
+  )
 
   // Cursor → level-frame plan point, whichever surface the pointer is over.
   const ndc = new Vector2()
@@ -274,18 +251,20 @@ export function startGroupPickUp(
   // the current delta — the carried group turns exactly like the idle
   // keyboard rotate, and the placement stays a single updateNodes.
   const rotateCarried = (direction: 1 | -1) => {
-    const rotated = rotateGroupSnapshots(
-      starts,
-      links,
-      { x: restCenter[0], z: restCenter[1] },
-      -direction * (Math.PI / 4),
-    )
+    const pivot = { x: restCenter[0], z: restCenter[1] }
+    const delta = -direction * (Math.PI / 4)
+    const rotated = rotateGroupSnapshots(starts, links, pivot, delta)
     starts = rotated.starts
     links = rotated.links
-    const ext = participantExtents(rotated.starts)
-    if (ext) {
-      restAnchors = bboxCornerAnchors('group-move', ext.minX, ext.minZ, ext.maxX, ext.maxZ)
-    }
+    carriedRotation += delta
+    restBounds = rotatePlanBounds(startBounds, pivot, carriedRotation)
+    restAnchors = bboxCornerAnchors(
+      'group-move',
+      restBounds.minX,
+      restBounds.minZ,
+      restBounds.maxX,
+      restBounds.maxZ,
+    )
     sfxEmitter.emit('sfx:item-rotate')
     applyDelta(lastDelta?.[0] ?? 0, lastDelta?.[1] ?? 0)
   }

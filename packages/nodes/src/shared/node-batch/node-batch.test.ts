@@ -25,6 +25,7 @@ import {
 } from '../../../../editor/src/lib/paint-preview-owner'
 import { commitPaintScopeFanout } from '../../../../editor/src/lib/paint-scope'
 import { applyShadowOnly, clearShadowOnly } from '../../../../viewer/src/lib/shadow-only'
+import { isWallInitialBuildActive } from '../../../../viewer/src/systems/wall/wall-system'
 import { getCeilingMaterials } from '../../ceiling/materials'
 import { ceilingPaint } from '../../ceiling/paint'
 import {
@@ -71,6 +72,7 @@ afterEach(() => {
   useLiveTransforms.getState().clearAll()
   useLiveNodeOverrides.getState().clearAll()
   useInteractive.setState({ doorAnimations: {}, windowAnimations: {} })
+  useScene.setState({ hydrationToken: null } as never)
   resetNodeBatchState()
   for (const store of stores.splice(0)) store.disposeAll()
   if (wakeRef.current) clearTimeout(wakeRef.current)
@@ -692,4 +694,40 @@ test('a throwing preview listener rolls back its hold before preview creation', 
   } finally {
     unsubscribePreview()
   }
+})
+
+test.each([
+  true,
+  false,
+])('dirty hosts retain the global quiet clock with initial build = %s (drain batching deferred)', (initial) => {
+  const { root } = setup('item')
+  useScene.setState({
+    nodes: {
+      ...useScene.getState().nodes,
+      wall_host: {
+        id: 'wall_host',
+        type: 'wall',
+        parentId: 'level_test',
+        children: ['door_hosted'],
+      },
+      door_hosted: { id: 'door_hosted', type: 'door', parentId: 'wall_host', children: [] },
+    },
+  } as never)
+  useScene.setState({ hydrationToken: initial ? {} : null })
+  expect(isWallInitialBuildActive()).toBe(initial)
+  frame()
+  for (const time of [100, 200, 300]) {
+    now = time
+    useScene.getState().dirtyNodes.add('wall_host' as never)
+    captureChangedNodes()
+    useScene.getState().dirtyNodes.clear()
+    frame()
+    expect(batches(root)).toHaveLength(0)
+  }
+  now = 479
+  frame()
+  expect(batches(root)).toHaveLength(0)
+  now = 481
+  frame()
+  expect(batches(root)).toHaveLength(1)
 })

@@ -29,7 +29,7 @@
     "react-dom": "^19.2.4",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.1",
-    "three": "^0.185.0",
+    "three": "^0.186.0",
     "web-ifc": "^0.0.77"
   },
   "devDependencies": {

@@ -94,7 +94,10 @@ export function useAutoSave({
   onDirty,
   onSaveStatusChange,
   isVersionPreviewMode = false,
-}: UseAutoSaveOptions): { isLoadingSceneRef: MutableRefObject<boolean> } {
+}: UseAutoSaveOptions): {
+  isLoadingSceneRef: MutableRefObject<boolean>
+  saveNow: () => void
+} {
   const saveTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
   const isSavingRef = useRef(false)
   // Starts TRUE: the scene is "loading" from mount until the Editor's load
@@ -339,5 +342,24 @@ export function useAutoSave({
     setSaveStatus('saved')
   }, [isVersionPreviewMode, setSaveStatus])
 
-  return { isLoadingSceneRef }
+  // Imperative flush for the save shortcut: drop the debounce and write now,
+  // through the same `executeSave` so the wipe guard and status callbacks stay
+  // in the loop. A write already in flight only arms the follow-up.
+  const saveNow = useCallback(() => {
+    if (isLoadingSceneRef.current) return
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current)
+      saveTimeoutRef.current = undefined
+    }
+
+    if (isSavingRef.current) {
+      pendingSaveRef.current = true
+      return
+    }
+
+    executeSaveRef.current?.()
+  }, [])
+
+  return { isLoadingSceneRef, saveNow }
 }

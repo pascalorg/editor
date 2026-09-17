@@ -3,6 +3,7 @@
 import {
   type AnyNodeId,
   nodeRegistry,
+  RoofElevationSystem,
   StairOpeningSystem,
   sceneRegistry,
   useScene,
@@ -30,6 +31,7 @@ import useViewer, { type RenderContext } from '../../store/use-viewer'
 import { FloorElevationSystem } from '../../systems/floor-elevation/floor-elevation-system'
 import { GeometrySystem } from '../../systems/geometry/geometry-system'
 import { PerfActionSettleSystem } from '../../systems/perf-action-settle/perf-action-settle-system'
+import { subscribeWallBuildInteractions } from '../../systems/wall/wall-build-lifecycle'
 import { ErrorBoundary } from '../error-boundary'
 import { SceneRenderer } from '../renderers/scene-renderer'
 import { BATCH_SPIKE_ENABLED, BatchedMeshSpike } from './batched-mesh-spike'
@@ -40,6 +42,7 @@ import { PerfPanel } from './perf-panel'
 import { PointerRaycastLayers } from './pointer-raycast-layers'
 import PostProcessing, { DEFAULT_HOVER_STYLES, type HoverStyles } from './post-processing'
 import { RegisteredSystems } from './registered-systems'
+import { useSceneAtmosphere } from './scene-atmosphere'
 import { SceneBvh } from './scene-bvh'
 import { SelectionManager } from './selection-manager'
 import { UnsupportedGpuViewerFallback } from './unsupported-gpu-fallback'
@@ -217,13 +220,20 @@ function GPUDeviceWatcher() {
 
 function ToneMappingExposure() {
   const sceneTheme = useViewer((state) => state.sceneTheme)
+  const atmosphere = useSceneAtmosphere()
   const gl = useThree((state) => state.gl)
   const invalidate = useThree((state) => state.invalidate)
 
   useEffect(() => {
+    if (atmosphere) return
     gl.toneMappingExposure = getSceneTheme(sceneTheme).toneMappingExposure
     invalidate()
-  }, [gl, invalidate, sceneTheme])
+  }, [atmosphere, gl, invalidate, sceneTheme])
+
+  useFrame(() => {
+    if (!atmosphere) return
+    gl.toneMappingExposure = atmosphere.exposure
+  }, -1)
 
   return null
 }
@@ -526,6 +536,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
           a camera transform that defeats position:fixed (see perf-panel.tsx). */}
       {(perf || PERF_OVERLAY_ENABLED) && <PerfPanel />}
       <Canvas
+        ref={subscribeWallBuildInteractions}
         camera={{ position: [50, 50, 50], fov: 50 }}
         className={`transition-colors duration-700 ${
           transparentBackground ? 'bg-transparent' : isDark ? 'bg-[#1f2433]' : 'bg-[#fafafa]'
@@ -625,6 +636,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
           {/* Automated stair opening sync — updates slab/ceiling cutouts
             whenever stairs, slabs, or levels change. */}
           <StairOpeningSystem />
+          <RoofElevationSystem />
           {/* Mounts systems contributed by registry-backed kinds. Each
             kind's `def.system` is loaded via lazy() and rendered here,
             ordered by `system.priority`. */}

@@ -6,6 +6,7 @@ import type { AssetInput, ItemNode } from '../schema/nodes/item'
 import type { MeasurementFeatureReference, MeasurementPoint } from '../schema/nodes/measurement'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import type { SurfaceProvider } from '../services/surface-hosting'
 import type { HandleList } from './handles'
 import type { CloneNodesIntoOptions, Subtree } from './subtree'
 
@@ -99,6 +100,10 @@ export type GeometryContext = {
      * wall ends only during the move.
      */
     moving: boolean
+    /** The unit under focus in the editor and its member zone ids, so zone
+     * builders can dim non-members. Absent when no unit is focused. */
+    focusedUnitId?: string
+    focusedUnitMemberIds?: readonly string[]
     /**
      * The kind's theme palette. Theme-aware colors (selection stroke,
      * endpoint handle fill, hatch color) live here so kinds don't need
@@ -244,6 +249,8 @@ export type DimensionTextPosition = 'above' | 'centered'
 export type FloorplanStyle = {
   stroke?: string
   fill?: string
+  /** Winding rule for compound paths. `evenodd` keeps nested contour rings hollow. */
+  fillRule?: 'nonzero' | 'evenodd'
   strokeWidth?: number
   strokeDasharray?: string
   opacity?: number
@@ -373,6 +380,7 @@ export type ToolHintChip = {
   tooltip?: string
 }
 
+export type FloorplanScope = 'level' | 'building' | 'site'
 // ─── ToolOption ──────────────────────────────────────────────────────
 //
 // A declarative pick-one option row for a kind's build tool, chosen in a
@@ -1083,6 +1091,27 @@ export type NodeDefinition<S extends ZodObject<any>> = {
 
   /** GLB bake treatment for this kind (default `'static'`). See {@link BakePolicy}. */
   bake?: BakePolicy
+  /**
+   * Optional export-only geometry builder. The GLB exporter calls this against
+   * persisted scene data and replaces the registered node's cloned subtree
+   * with the returned local-space Object3D. The live editor object is never
+   * passed to the hook or mutated.
+   *
+   * Use this when the live geometry is unsuitable for a portable GLB (for
+   * example, a procedural NodeMaterial that masks a maximum candidate
+   * population on the GPU). The returned tree must be a complete static
+   * snapshot for this node and use exporter-supported Three.js materials.
+   */
+  bakeGeometry?: BakeGeometryBuilder<z.infer<S>>
+  /**
+   * Optional asynchronous export-only geometry builder for textured static artifacts.
+   * Export preparation awaits this exactly once in place of {@link bakeGeometry}.
+   * Synchronous geometry-only callers continue to use `bakeGeometry`.
+   *
+   * The returned tree follows the same ownership contract: it is detached,
+   * local-space, complete for the node, and owned by the export artifact.
+   */
+  bakeGeometryAsync?: BakeGeometryAsyncBuilder<z.infer<S>>
 
   /**
    * Renderer for this kind. Optional under the three-checkbox composition
@@ -1144,6 +1173,8 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * inputs aren't captured by the node alone.
    */
   geometryKey?: (node: z.infer<S>) => string
+  /** Child kinds whose live overrides affect this node’s generated geometry. */
+  geometryChildTypes?: readonly string[]
   /**
    * Level-batch precompute hook. Called by `<GeometrySystem>` once per
    * level per frame, **before** the per-node `def.geometry` calls in
@@ -1179,8 +1210,9 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   /**
    * Pure 2D builder for floor-plan rendering. Mirrors `geometry` but emits
    * plain `FloorplanGeometry` data (SVG-renderable) rather than three.js
-   * Object3D. Coordinates are level-local meters — the floor-plan panel
-   * applies the world→SVG transform.
+   * Object3D. Level- and building-scoped builders emit building-local metres.
+   * Site-scoped builders emit site-local metres; the floor-plan layer projects
+   * their output into the active building's plan coordinates.
    *
    * Returns `null` when the kind shouldn't appear in floor plan (e.g. an
    * invisible utility node, or a kind that's 3D-only). Kinds that need
@@ -1191,8 +1223,13 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * the legacy `floorplan-panel.tsx` monolith.
    */
   floorplan?: (node: z.infer<S>, ctx: GeometryContext) => FloorplanGeometry | null
-  /** Extra node IDs whose committed changes invalidate this node's floor-plan cache. */
-  floorplanDependencies?: (node: z.infer<S>) => readonly AnyNodeId[]
+  /** Extra node IDs whose committed changes invalidate this node's floor-plan cache.
+   *  `nodes` is the committed scene, for dependencies the node doesn't name itself
+   *  (a zone's owning unit lists the zone, not the other way round). */
+  floorplanDependencies?: (
+    node: z.infer<S>,
+    nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+  ) => readonly AnyNodeId[]
   /** Stable semantic geometry that associative measurement anchors may reference. */
   measurement?: MeasurementContribution<z.infer<S>>
   /**
@@ -1205,8 +1242,11 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * building). For `'building'`-scoped kinds the layer iterates every
    * instance whose parent matches the active level's building, and
    * synthesises a `GeometryContext` whose `parent` is the active level.
+   * `'site'` discovers direct children of the active building's Site,
+   * supplies the real Site as `ctx.parent`, and projects site-local output
+   * into the active building's plan coordinates below level architecture.
    */
-  floorplanScope?: 'level' | 'building'
+  floorplanScope?: FloorplanScope
   /**
    * 2D drag affordances keyed by the string identifier emitted on
    * `endpoint-handle` (and similar interactive floor-plan primitives) via
@@ -1549,6 +1589,9 @@ export type BakeReplaceRenderer<N> = {
   module: () => Promise<{ default: ComponentType<{ nodes: N[] }> }>
 }
 
+export type BakeGeometryBuilder<N> = (node: N, ctx: GeometryContext) => Object3D
+export type BakeGeometryAsyncBuilder<N> = (node: N, ctx: GeometryContext) => Promise<Object3D>
+
 export type AssetRef = {
   id: string
   src: string
@@ -1598,6 +1641,13 @@ export type Capabilities = {
   deletable?: boolean
   groupable?: boolean
   selectable?: SelectableConfig
+  /**
+   * Whether selecting this kind should replace its rendered mesh materials
+   * with the editor's selection tint. Defaults to `true`. Set to `false` for
+   * hidden interaction nodes whose rendered geometry must retain its authored
+   * materials while the node remains selected (for example, paint layers).
+   */
+  selectionHighlight?: boolean
   interactive?: boolean
   floorPlaced?: FloorPlacedConfig
   /**
@@ -2183,6 +2233,7 @@ export type SnappableConfig = {
 export type SnapPointKind = 'start' | 'end' | 'midpoint' | 'center' | 'corners'
 
 export type SurfacesConfig = {
+  hosting?: SurfaceProvider
   top?: {
     height: number | ((n: AnyNode, context: { nodes: Record<string, AnyNode> }) => number)
   }
@@ -2417,6 +2468,8 @@ export type ParamAction<N> = {
 export type ParamGroup<N> = {
   label: string
   fields: ParamField<N>[]
+  /** Whether this inspector group is open when it is first rendered. */
+  defaultExpanded?: boolean
 }
 
 export type ParamField<N> =
