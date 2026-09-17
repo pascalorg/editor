@@ -103,11 +103,14 @@ export function resolveCabinetTypedPlacementPosition({
   // clamp the distance into the valid span — which is empty when the cabinet
   // is wider than the wall, leaving distance 0 — instead of rejecting.
   const maxDistance = Math.max(0, hit.wallLength - width)
+  if (distance < -DIMENSION_EPSILON || distance > maxDistance + DIMENSION_EPSILON) return null
   const clampedDistance = Math.min(Math.max(distance, 0), maxDistance)
   const localX = clampedDistance + width / 2
   const frame = cabinetWallFrameAtLocalX(hit, localX)
+  // Sample the miter at the destination station — the frozen hit's localX is
+  // the pre-typing snap, so its face offset is wrong on mitered corners.
   const faceOffset = resolveCabinetWallFaceOffset({
-    hit,
+    hit: { ...hit, localX },
     nodes: nodes as Record<AnyNodeId, AnyNode>,
     parentLevelId: levelId,
   })

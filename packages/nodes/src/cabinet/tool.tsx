@@ -13,6 +13,7 @@ import {
   getWallThickness,
   isCurvedWall,
   movingFootprintAnchors,
+  type NodeEvent,
   nodeRegistry,
   resolveAlignment,
   resolveSupportSlabPatch,
@@ -1466,10 +1467,12 @@ const CabinetTool = () => {
       fromTypedCommit = false,
       rawOverride?: [number, number, number],
     ): boolean => {
-      // A canvas click during typed entry ends the typing session: pointer
-      // moves are frozen while `isActive`, so a stretch started here could
-      // not follow the cursor until the user pressed Escape.
+      // A canvas click during typed entry ends the typing session. The typed
+      // preview is what the user sees, so it is what the click commits —
+      // keep `placementRef` (typed pose) and only suppress the pre-typing
+      // restore the subscriber would otherwise run.
       if (!fromTypedCommit && usePlacementTyping.getState().isActive) {
+        suppressTypedRestoreRef.current = true
         usePlacementTyping.getState().clear()
         typedWallHitRef.current = null
         typedCoordinateDefaultsRef.current = null
@@ -1726,14 +1729,18 @@ const CabinetTool = () => {
         // Typed commits must honor the typed pose. Reusing the last pointer
         // event in continuous mode would replay a stale `altKey` into
         // `isForcePlacementEvent` and re-resolve placement from the old
-        // cursor hit instead of the typed distance/offset.
+        // cursor hit instead of the typed distance/offset. `node` is also
+        // stripped: `stopPlacementCommitPropagation` installs a 300ms
+        // window click swallow for real wall hits, which would eat the
+        // user's next real click after this keyboard commit.
         const baseCommitEvent =
           useEditor.getState().getContinuation('cabinet') === 'continuous'
             ? (lastPlacementEventRef.current ??
               ({ nativeEvent: {} } as FloorPlacementClickTriggerEvent))
             : ({ nativeEvent: {} } as FloorPlacementClickTriggerEvent)
+        const { node: _node, ...baseEventWithoutNode } = baseCommitEvent as NodeEvent<AnyNode>
         const commitEvent: FloorPlacementClickTriggerEvent = {
-          ...baseCommitEvent,
+          ...baseEventWithoutNode,
           nativeEvent: { ...(baseCommitEvent.nativeEvent ?? {}), altKey: false },
         }
         // Seed any continuous-mode stretch at the typed position (zero-length
