@@ -6,6 +6,7 @@ import {
   GRID_LAYER,
   heroCameraPose,
   temporarilyHideNodeTypes,
+  useSceneAtmosphere,
   useViewer,
 } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
@@ -25,6 +26,7 @@ export function BakeThumbnail({
 }) {
   const renderer = useThree((state) => state.gl)
   const scene = useThree((state) => state.scene)
+  const atmosphere = useSceneAtmosphere()
   const doneRef = useRef(false)
 
   useEffect(() => {
@@ -61,6 +63,7 @@ export function BakeThumbnail({
           renderer: renderer as unknown as WebGPURenderer,
           scene,
           camera,
+          atmosphere,
         })
         if (!pipeline) {
           onError('thumbnail pipeline failed to build')
@@ -89,7 +92,7 @@ export function BakeThumbnail({
     }
 
     void run()
-  }, [active, onComplete, onError, renderer, scene])
+  }, [active, atmosphere, onComplete, onError, renderer, scene])
 
   return null
 }
