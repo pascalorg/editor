@@ -31,7 +31,14 @@ export const SiteNode = BaseNode.extend({
    * Site north heading in degrees, clockwise from world −Z toward +X.
    * Zero preserves the established scene convention: +Z is south.
    */
-  northDirectionDeg: z.number().finite().default(DEFAULT_NORTH_DIRECTION_DEG),
+  northDirectionDeg: z
+    .number()
+    .finite()
+    .default(DEFAULT_NORTH_DIRECTION_DEG)
+    .transform((deg) => {
+      const canonical = ((deg % 360) + 360) % 360
+      return Object.is(canonical, -0) ? 0 : canonical
+    }),
   /**
    * Sculpted ground. Absent means flat ground at the datum — the state every
    * scene that predates terrain is in, and the state an untouched site stays in

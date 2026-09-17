@@ -34,6 +34,27 @@ describe('SiteNode.northDirectionDeg', () => {
       }).success,
     ).toBe(false)
   })
+
+  test('canonicalizes headings to [0, 360) degrees', () => {
+    expect(
+      SiteNode.parse({ id: 'site_1', type: 'site', northDirectionDeg: -45 }).northDirectionDeg,
+    ).toBe(315)
+    expect(
+      SiteNode.parse({ id: 'site_1', type: 'site', northDirectionDeg: 360 }).northDirectionDeg,
+    ).toBe(0)
+    expect(
+      SiteNode.parse({ id: 'site_1', type: 'site', northDirectionDeg: 720 }).northDirectionDeg,
+    ).toBe(0)
+    expect(
+      SiteNode.parse({ id: 'site_1', type: 'site', northDirectionDeg: 397.5 }).northDirectionDeg,
+    ).toBe(37.5)
+    expect(
+      SiteNode.parse({ id: 'site_1', type: 'site', northDirectionDeg: -360 }).northDirectionDeg,
+    ).toBe(0)
+    expect(
+      SiteNode.parse({ id: 'site_1', type: 'site', northDirectionDeg: -0 }).northDirectionDeg,
+    ).toBe(0)
+  })
 })
 
 describe('SiteNode.terrain', () => {
