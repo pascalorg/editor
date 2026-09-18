@@ -5,11 +5,12 @@ import {
   type NodeDefinition,
   type WallNode as WallNodeType,
 } from '@pascal-app/core'
-import { type NodePanelModel, PANEL_MODEL_EXTENSION } from '@pascal-app/editor'
 import {
   DRAFTING_SURFACE_EXTENSION_KEY,
   type DraftingSurfaceExtension,
   type FloorplanNodeExtension,
+  type NodePanelModel,
+  PANEL_MODEL_EXTENSION,
 } from '@pascal-app/editor'
 import { buildWallContextualDimensions } from './contextual-dimensions'
 import { hasWallCurveBlockingChildren } from './curve-eligibility'

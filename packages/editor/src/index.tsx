@@ -547,6 +547,12 @@ export {
   metersToLinearUnit,
   squareMetersToAreaUnit,
 } from './lib/measurements'
+export type {
+  ModelExport,
+  ModelExportArtifact,
+  ModelExportFormat,
+  ModelExportOptions,
+} from './lib/model-export'
 export {
   cyclePaintScope,
   type PaintHoverInfo,
@@ -562,12 +568,6 @@ export {
 } from './lib/panel-rows'
 export { type PanelToolOption, usePanelToolHints } from './lib/panel-tool-options'
 export { commitParametricNodeFields } from './lib/parametric-node-update'
-export type {
-  ModelExport,
-  ModelExportArtifact,
-  ModelExportFormat,
-  ModelExportOptions,
-} from './lib/model-export'
 export { consumePlacementDragRelease } from './lib/placement-drag-release'
 export {
   addFreshPlacementMetadata,

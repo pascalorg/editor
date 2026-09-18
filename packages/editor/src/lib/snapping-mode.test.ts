@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'bun:test'
-import { GROUP_MOVE_DRAG_LABEL, GROUP_ROTATE_DRAG_LABEL, ROTATE_HANDLE_DRAG_LABEL } from './contextual-help'
+import {
+  GROUP_MOVE_DRAG_LABEL,
+  GROUP_ROTATE_DRAG_LABEL,
+  ROTATE_HANDLE_DRAG_LABEL,
+} from './contextual-help'
 import {
   cycleSnappingModeIn,
   DEFAULT_SNAPPING_MODE,

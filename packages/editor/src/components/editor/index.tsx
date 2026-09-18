@@ -20,8 +20,8 @@ import {
   useViewer,
   Viewer,
   type ViewerImmersiveSession,
-  type ViewerXRConfig,
   ViewerPresentations,
+  type ViewerXRConfig,
 } from '@pascal-app/viewer'
 import {
   memo,

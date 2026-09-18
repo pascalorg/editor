@@ -512,7 +512,9 @@ export function planDuctDraw(
 
 const DuctSegmentTool = () => {
   const { activeLevelId, sceneApi, unit } = useRegistryToolContext()
-  const toolDefaults = useEditor((s) => s.toolDefaults['duct-segment']) as Partial<DraftProfile> | undefined
+  const toolDefaults = useEditor((s) => s.toolDefaults['duct-segment']) as
+    | Partial<DraftProfile>
+    | undefined
   const cursorRef = useRef<Group>(null)
   const continuationSeedRef = useRef(currentDuctContinuationSeed())
   const continuationSeed = continuationSeedRef.current

@@ -63,7 +63,9 @@ function getConnectionPorts(
 
 const PipeSegmentTool = () => {
   const { activeLevelId, sceneApi, unit } = useRegistryToolContext()
-  const toolDefaults = useEditor((s) => s.toolDefaults['pipe-segment']) as Partial<PipeSegmentNode> | undefined
+  const toolDefaults = useEditor((s) => s.toolDefaults['pipe-segment']) as
+    | Partial<PipeSegmentNode>
+    | undefined
   const continuationSeedRef = useRef(currentPipeContinuationSeed())
   const continuationSeed = continuationSeedRef.current
   const hangerDefaults = useEditor((state) => state.toolDefaults['pipe-segment'])
@@ -95,7 +97,9 @@ const PipeSegmentTool = () => {
   const slopeDirection = 1
   const gradeRef = useRef(slopePercent / 100)
   gradeRef.current = (slopeDirection * slopePercent) / 100
-  const [diameter, setDiameter] = useState(continuationSeed?.pipe.diameter ?? toolDefaults?.diameter ?? defaults.diameter)
+  const [diameter, setDiameter] = useState(
+    continuationSeed?.pipe.diameter ?? toolDefaults?.diameter ?? defaults.diameter,
+  )
   const [pipeMaterial, setPipeMaterial] = useState<PipeSegmentNode['pipeMaterial']>(
     continuationSeed?.pipe.pipeMaterial ?? toolDefaults?.pipeMaterial ?? defaults.pipeMaterial,
   )

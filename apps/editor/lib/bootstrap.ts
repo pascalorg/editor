@@ -18,8 +18,8 @@ import {
 import { poolHostPanel, poolPlugin } from '@pascal-app/plugin-pool'
 import { streetscapeHostPanel, streetscapePlugin } from '@pascal-app/plugin-streetscape'
 import { treesHostPanel, treesPlugin } from '@pascal-app/plugin-trees'
-import { webXRHostPanel, webXRPlugin } from '@webxr/plugin'
 import { registerViewerPresentation } from '@pascal-app/viewer'
+import { webXRHostPanel, webXRPlugin } from '@webxr/plugin'
 
 // Idempotency guards: HMR can reload this module, but `registerNode`
 // throws on duplicate kinds. Flags live in the module closure so they

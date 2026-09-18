@@ -448,7 +448,7 @@ const CabinetTool = () => {
       countertopOverhang: runDefaults.countertopOverhang,
       countertopBackOverhang: runDefaults.countertopBackOverhang,
     })
-  }, [])
+  }, [toolDefaults])
   const [previewSize, setPreviewSize] = useState(() => ({
     depth: previewNodeTemplate.depth,
     height: previewNodeTemplate.carcassHeight,

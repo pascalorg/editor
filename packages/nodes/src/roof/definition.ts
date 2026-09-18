@@ -7,8 +7,11 @@ import {
   type RoofSegmentNode,
   type SceneApi,
 } from '@pascal-app/core'
-import { PANEL_MODEL_EXTENSION } from '@pascal-app/editor'
-import { DRAFTING_SURFACE_EXTENSION_KEY, type DraftingSurfaceExtension } from '@pascal-app/editor'
+import {
+  DRAFTING_SURFACE_EXTENSION_KEY,
+  type DraftingSurfaceExtension,
+  PANEL_MODEL_EXTENSION,
+} from '@pascal-app/editor'
 import { buildRoofFloorplan } from './floorplan'
 import { roofPanelModel } from './panel-model'
 import { roofParametrics } from './parametrics'

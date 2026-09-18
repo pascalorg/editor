@@ -44,9 +44,7 @@ export function useMaterialCatalogModel(
       getDynamicLibraryMaterials().some((item) => item.source === 'workspace'),
   )
   const itemsFor = (category: typeof selectedCategory) =>
-    getMaterialsForCategory(category).filter(
-      (item) => (item.source ?? 'pascal') === sourceFilter,
-    )
+    getMaterialsForCategory(category).filter((item) => (item.source ?? 'pascal') === sourceFilter)
   useEffect(() => {
     const entry = getCatalogMaterialById(
       getLibraryMaterialIdFromRef(selectedMaterialPreset) ?? undefined,

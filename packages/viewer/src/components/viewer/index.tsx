@@ -31,6 +31,8 @@ import { installTextureNodeNullGuard } from '../../lib/texture-node-guard'
 import useViewer, { type RenderContext } from '../../store/use-viewer'
 import { FloorElevationSystem } from '../../systems/floor-elevation/floor-elevation-system'
 import { GeometrySystem } from '../../systems/geometry/geometry-system'
+import { PerfActionSettleSystem } from '../../systems/perf-action-settle/perf-action-settle-system'
+import { subscribeWallBuildInteractions } from '../../systems/wall/wall-build-lifecycle'
 import { shouldMountPostProcessingRenderDriver } from '../../xr/frame-loop'
 import { GOD_ORIGIN_POSITION } from '../../xr/god-mode'
 import { PlayerModeScene } from '../../xr/mode-switching'
@@ -38,8 +40,6 @@ import { immersiveXRBackgroundColor } from '../../xr/presentation-background'
 import { ImmersiveXRPresentationProvider } from '../../xr/presentation-context'
 import { ViewerXRSessionRoot } from '../../xr/session-root'
 import type { ViewerXRStore } from '../../xr/store'
-import { PerfActionSettleSystem } from '../../systems/perf-action-settle/perf-action-settle-system'
-import { subscribeWallBuildInteractions } from '../../systems/wall/wall-build-lifecycle'
 import { ErrorBoundary } from '../error-boundary'
 import { SceneRenderer } from '../renderers/scene-renderer'
 import { BATCH_SPIKE_ENABLED, BatchedMeshSpike } from './batched-mesh-spike'
@@ -580,137 +580,137 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
   return (
     <>
       {(perf || PERF_OVERLAY_ENABLED) && <PerfPanel />}
-    <Canvas
-      ref={subscribeWallBuildInteractions}
-      events={pointerEvents}
-      key={immersiveActive ? 'webgl' : 'webgpu'}
-      camera={{ position: [50, 50, 50], fov: 50 }}
-      className={`transition-colors duration-700 ${
-        transparentBackground ? 'bg-transparent' : isDark ? 'bg-[#1f2433]' : 'bg-[#fafafa]'
-      }`}
-      dpr={[1, maxDpr]}
-      frameloop="never"
-      gl={
-        ((props: { canvas?: HTMLCanvasElement; powerPreference?: RendererPowerPreference }) => {
-          const canvas = props.canvas
-          const xrMultiview = xr?.multiview ?? false
-          const cached = canvas ? WEBGPU_RENDERER_CACHE.get(canvas) : undefined
-          if (cached) return cached
-          const promise = (async () => {
-            const result = await initializeGpuRenderer({
-              forceWebGL: immersiveActive,
-              // Supplying `device` makes three skip its own `requestAdapter`,
-              // so R3F's `powerPreference` only reaches the GPU if we forward it.
-              powerPreference: props.powerPreference,
-              createRenderer: (backendParameters) => {
-                const renderer = new THREE.WebGPURenderer({
-                  ...(props as any),
-                  ...backendParameters,
-                  alpha: true,
-                  multiview: xrMultiview,
-                  trackTimestamp: PERF_OVERLAY_ENABLED,
-                })
-                renderer.toneMapping = THREE.ACESFilmicToneMapping
-                renderer.toneMappingExposure = getSceneTheme(
-                  useViewer.getState().sceneTheme,
-                ).toneMappingExposure
-                return renderer
-              },
-            })
-            if (result.status === 'ready') {
-              // XR uses the same WebGL-backed WebGPURenderer as the editor's
-              // desktop fallback. Empty transient geometries are unsafe in
-              // both paths because they submit a draw with no position buffer.
-              installEmptyDrawGuard(result.renderer)
-              return result.renderer
-            }
+      <Canvas
+        ref={subscribeWallBuildInteractions}
+        events={pointerEvents}
+        key={immersiveActive ? 'webgl' : 'webgpu'}
+        camera={{ position: [50, 50, 50], fov: 50 }}
+        className={`transition-colors duration-700 ${
+          transparentBackground ? 'bg-transparent' : isDark ? 'bg-[#1f2433]' : 'bg-[#fafafa]'
+        }`}
+        dpr={[1, maxDpr]}
+        frameloop="never"
+        gl={
+          ((props: { canvas?: HTMLCanvasElement; powerPreference?: RendererPowerPreference }) => {
+            const canvas = props.canvas
+            const xrMultiview = xr?.multiview ?? false
+            const cached = canvas ? WEBGPU_RENDERER_CACHE.get(canvas) : undefined
+            if (cached) return cached
+            const promise = (async () => {
+              const result = await initializeGpuRenderer({
+                forceWebGL: immersiveActive,
+                // Supplying `device` makes three skip its own `requestAdapter`,
+                // so R3F's `powerPreference` only reaches the GPU if we forward it.
+                powerPreference: props.powerPreference,
+                createRenderer: (backendParameters) => {
+                  const renderer = new THREE.WebGPURenderer({
+                    ...(props as any),
+                    ...backendParameters,
+                    alpha: true,
+                    multiview: xrMultiview,
+                    trackTimestamp: PERF_OVERLAY_ENABLED,
+                  })
+                  renderer.toneMapping = THREE.ACESFilmicToneMapping
+                  renderer.toneMappingExposure = getSceneTheme(
+                    useViewer.getState().sceneTheme,
+                  ).toneMappingExposure
+                  return renderer
+                },
+              })
+              if (result.status === 'ready') {
+                // XR uses the same WebGL-backed WebGPURenderer as the editor's
+                // desktop fallback. Empty transient geometries are unsafe in
+                // both paths because they submit a draw with no position buffer.
+                installEmptyDrawGuard(result.renderer)
+                return result.renderer
+              }
 
-            if (canvas) WEBGPU_RENDERER_CACHE.delete(canvas)
-            console.error('[viewer] WebGPURenderer init failed', result.error)
-            setRendererInitFailed(true)
-            // Never settles on purpose. Rejecting is what produced
-            // MONOREPO-EDITOR-59: R3F awaits this inside its own configure()
-            // with no catch, so a rejection surfaces as an unhandled rejection.
-            // Resolving is worse still — R3F would call render() on a renderer
-            // that has no context. The state update above unmounts this Canvas,
-            // which is what releases the pending configure().
-            return new Promise<never>(() => undefined)
-          })()
-          if (canvas) WEBGPU_RENDERER_CACHE.set(canvas, promise)
-          return promise
-        }) as any
-      }
-      resize={{
-        debounce: 100,
-      }}
-      shadows={{
-        type: THREE.PCFShadowMap,
-        enabled: shadowsEnabled,
-      }}
-    >
-      <ImmersiveXRPresentationProvider enabled={immersiveActive}>
-        {ImmersiveSession ? (
-          <ImmersiveSession>
-            <ViewerScene
-              disablePostFx
-              hoverStyles={hoverStyles}
-              immersiveXR
-              SceneWrapper={immersive?.Scene}
-              onRenderError={immersive?.onError}
-              onSceneReadyChange={onSceneReadyChange}
-              perf={perf}
-              sceneReadyKey={sceneReadyKey}
-              sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
-              selectionManager={selectionManager}
-              useBvh={useBvh}
+              if (canvas) WEBGPU_RENDERER_CACHE.delete(canvas)
+              console.error('[viewer] WebGPURenderer init failed', result.error)
+              setRendererInitFailed(true)
+              // Never settles on purpose. Rejecting is what produced
+              // MONOREPO-EDITOR-59: R3F awaits this inside its own configure()
+              // with no catch, so a rejection surfaces as an unhandled rejection.
+              // Resolving is worse still — R3F would call render() on a renderer
+              // that has no context. The state update above unmounts this Canvas,
+              // which is what releases the pending configure().
+              return new Promise<never>(() => undefined)
+            })()
+            if (canvas) WEBGPU_RENDERER_CACHE.set(canvas, promise)
+            return promise
+          }) as any
+        }
+        resize={{
+          debounce: 100,
+        }}
+        shadows={{
+          type: THREE.PCFShadowMap,
+          enabled: shadowsEnabled,
+        }}
+      >
+        <ImmersiveXRPresentationProvider enabled={immersiveActive}>
+          {ImmersiveSession ? (
+            <ImmersiveSession>
+              <ViewerScene
+                disablePostFx
+                hoverStyles={hoverStyles}
+                immersiveXR
+                SceneWrapper={immersive?.Scene}
+                onRenderError={immersive?.onError}
+                onSceneReadyChange={onSceneReadyChange}
+                perf={perf}
+                sceneReadyKey={sceneReadyKey}
+                sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
+                selectionManager={selectionManager}
+                useBvh={useBvh}
+              >
+                {children}
+              </ViewerScene>
+            </ImmersiveSession>
+          ) : xr ? (
+            <ViewerXRSessionRoot
+              fps={maxFps}
+              originPosition={xr.playerModes ? GOD_ORIGIN_POSITION.toArray() : xr.originPosition}
+              paused={renderPaused}
+              session={xr.session}
+              store={xr.store}
             >
-              {children}
-            </ViewerScene>
-          </ImmersiveSession>
-        ) : xr ? (
-          <ViewerXRSessionRoot
-            fps={maxFps}
-            originPosition={xr.playerModes ? GOD_ORIGIN_POSITION.toArray() : xr.originPosition}
-            paused={renderPaused}
-            session={xr.session}
-            store={xr.store}
-          >
-            <ViewerScene
-              disablePostFx
-              inputSourceOverlay={xr.inputSourceOverlay}
-              playerModes={xr.playerModes}
-              hoverStyles={hoverStyles}
-              immersiveXR
-              onSceneReadyChange={onSceneReadyChange}
-              perf={perf}
-              sceneReadyKey={sceneReadyKey}
-              sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
-              selectionManager={selectionManager}
-              useBvh={useBvh}
-              xrStore={xr.store}
-            >
-              {children}
-            </ViewerScene>
-          </ViewerXRSessionRoot>
-        ) : (
-          <>
-            <FrameLimiter fps={maxFps} paused={renderPaused} />
-            <ViewerScene
-              disablePostFx={disablePostFx}
-              hoverStyles={hoverStyles}
-              onSceneReadyChange={onSceneReadyChange}
-              perf={perf}
-              sceneReadyKey={sceneReadyKey}
-              sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
-              selectionManager={selectionManager}
-              useBvh={useBvh}
-            >
-              {children}
-            </ViewerScene>
-          </>
-        )}
-      </ImmersiveXRPresentationProvider>
-    </Canvas>
+              <ViewerScene
+                disablePostFx
+                inputSourceOverlay={xr.inputSourceOverlay}
+                playerModes={xr.playerModes}
+                hoverStyles={hoverStyles}
+                immersiveXR
+                onSceneReadyChange={onSceneReadyChange}
+                perf={perf}
+                sceneReadyKey={sceneReadyKey}
+                sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
+                selectionManager={selectionManager}
+                useBvh={useBvh}
+                xrStore={xr.store}
+              >
+                {children}
+              </ViewerScene>
+            </ViewerXRSessionRoot>
+          ) : (
+            <>
+              <FrameLimiter fps={maxFps} paused={renderPaused} />
+              <ViewerScene
+                disablePostFx={disablePostFx}
+                hoverStyles={hoverStyles}
+                onSceneReadyChange={onSceneReadyChange}
+                perf={perf}
+                sceneReadyKey={sceneReadyKey}
+                sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
+                selectionManager={selectionManager}
+                useBvh={useBvh}
+              >
+                {children}
+              </ViewerScene>
+            </>
+          )}
+        </ImmersiveXRPresentationProvider>
+      </Canvas>
     </>
   )
 })
