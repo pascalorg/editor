@@ -61,6 +61,8 @@ import { ItemGLTFLoader } from './model-loader'
 import { MoveItemTool } from './move-tool'
 
 class SvgNode extends Group {
+  // Keep R3F from interpreting this SVG attribute as a pierced Three.js property.
+  'data-node-id': string | undefined = undefined
   setAttribute(name: string, value: unknown) {
     ;(this as unknown as Record<string, unknown>)[name] = value
   }
@@ -1478,6 +1480,136 @@ for (const kind of ['shelf', 'plugin'] as const)
             6,
           )
         }
+      } finally {
+        await renderer.unmount()
+      }
+    })
+
+for (const hostKind of ['item', 'generated'] as const)
+  for (const childKind of ['item', 'procedural-item'] as const)
+    test(`review bot 3: undeclared ${hostKind} top retains and exits ${childKind}`, async () => {
+      const { child, host, level, slab } = fixture(hostKind, childKind, false)
+      const provider = getSurfaceProvider(host)
+      if (hostKind === 'item') expect(provider.surfaces).toBeUndefined()
+      else expect(provider.surfaces?.(host, { scene: createSceneApi(useScene) })).toEqual([])
+      const renderer = await create(<RenderedScene levelId={level.id} />)
+      try {
+        await settle(renderer)
+        const origin = sceneRegistry.nodes
+          .get(level.id)!
+          .worldToLocal(new Vector3().setFromMatrixPosition(worldMatrix(child.id)))
+        await moving(child)
+        for (const delta of [0, 0.1, 0.2]) {
+          await pointer('pointermove', [origin.x + delta, origin.z])
+          await settle(renderer)
+          const preview = getEffectiveNode(useScene.getState().nodes[child.id]!) as typeof child
+          expect(preview.parentId).toBe(host.id)
+          expect(preview.position[1]).toBeCloseTo(child.position[1])
+        }
+        await pointer('pointermove', [8, 8])
+        await settle(renderer)
+        const preview = worldMatrix(child.id)
+        const plan = svgPose(renderer, child.id)
+        await pointer('pointerup', [8, 8])
+        await settle(renderer)
+        const committed = useScene.getState().nodes[child.id] as typeof child
+        expect(committed.parentId).toBe(level.id)
+        expect(committed.position[0]).toBeCloseTo(8)
+        expect(committed.position[1]).toBe(0)
+        expect(committed.position[2]).toBeCloseTo(8)
+        expect(committed.supportSlabId).toBe(slab.id)
+        expectMatrix(worldMatrix(child.id), preview)
+        expect(svgPose(renderer, child.id)).toEqual(plan)
+      } finally {
+        await renderer.unmount()
+      }
+    })
+
+for (const childKind of ['item', 'procedural-item'] as const)
+  for (const finish of ['occupied', 'exit', 'reentry'] as const)
+    test(`review bot 3: named occupancy ${childKind} ${finish}`, async () => {
+      const { child, host, level, slab } = fixture('named', childKind, false)
+      const source = { ...child, position: [0, 0, 0], rotation: [0, 0.2, 0] } as typeof child
+      const occupant = ItemNode.parse({
+        asset,
+        parentId: host.id,
+        position: [0.92, 0, 0],
+      })
+      const generated = useScene.getState().nodes[host.id] as ProceduralItemNode
+      const attachments = { ...generated.attachments, [occupant.id]: 'top' }
+      useScene.setState({
+        nodes: {
+          ...useScene.getState().nodes,
+          [child.id]: source,
+          [occupant.id]: occupant,
+          [host.id]: { ...generated, children: [child.id, occupant.id], attachments },
+        },
+      })
+      useScene.temporal.getState().clear()
+      const baseline = structuredClone(useScene.getState().nodes)
+      const renderer = await create(<RenderedScene levelId={level.id} />)
+      try {
+        await settle(renderer)
+        const wrapper = sceneRegistry.nodes.get(child.id)!.parent!
+        const levelMesh = sceneRegistry.nodes.get(level.id)!
+        const planPoint = (x: number) => {
+          const point = levelMesh.worldToLocal(wrapper.localToWorld(new Vector3(x, 0, 0)))
+          return [point.x, point.z]
+        }
+        const origin = planPoint(0)
+        const valid = planPoint(0.45)
+        const occupied = planPoint(0.8)
+        const outside = planPoint(1.05)
+        await moving(source)
+        await pointer('pointermove', origin)
+        await pointer('pointermove', valid)
+        await settle(renderer)
+        const lastValid = getEffectiveNode(useScene.getState().nodes[child.id]!) as typeof child
+        expect(lastValid.parentId).toBe(host.id)
+        expect(lastValid.position[0]).toBeCloseTo(0.45)
+        const hostedPreview = worldMatrix(child.id)
+        const hostedPlan = svgPose(renderer, child.id)[0]
+        if (finish === 'reentry') {
+          await pointer('pointermove', outside)
+          await settle(renderer)
+          expect(getEffectiveNode(useScene.getState().nodes[child.id]!).parentId).toBe(level.id)
+        }
+        await pointer('pointermove', occupied)
+        await settle(renderer)
+        if (finish !== 'exit') {
+          const refused = getEffectiveNode(useScene.getState().nodes[child.id]!) as typeof child
+          expect(refused.parentId).toBe(host.id)
+          expect(refused.position).toEqual(lastValid.position)
+          expect(refused.rotation).toEqual(lastValid.rotation)
+          expectMatrix(worldMatrix(child.id), hostedPreview)
+          expect(svgPose(renderer, child.id)[0]).toEqual(hostedPlan)
+        } else {
+          await pointer('pointermove', outside)
+          await settle(renderer)
+        }
+        const preview = worldMatrix(child.id)
+        const plan = svgPose(renderer, child.id)[0]
+        await pointer('pointerup', finish === 'exit' ? outside : occupied)
+        await settle(renderer)
+        const committed = useScene.getState().nodes[child.id] as typeof child
+        const committedHost = useScene.getState().nodes[host.id] as ProceduralItemNode
+        if (finish === 'exit') {
+          expect(committed.parentId).toBe(level.id)
+          expect(committed.position[1]).toBe(0)
+          expect(committed.supportSlabId).toBe(slab.id)
+          expect(committedHost.attachments[child.id]).toBeUndefined()
+          expect(committedHost.children).not.toContain(child.id)
+        } else {
+          expect(committed.parentId).toBe(host.id)
+          expect(committed.position).toEqual(lastValid.position)
+          expect(committed.rotation).toEqual(lastValid.rotation)
+          expect(committedHost.attachments).toEqual(attachments)
+        }
+        expectMatrix(worldMatrix(child.id), preview)
+        expect(svgPose(renderer, child.id)[0]).toEqual(plan)
+        expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+        await act(async () => useScene.temporal.getState().undo())
+        expect(useScene.getState().nodes).toEqual(baseline)
       } finally {
         await renderer.unmount()
       }

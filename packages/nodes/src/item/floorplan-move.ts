@@ -300,6 +300,12 @@ function buildFloorItemSession(
 
   let lastPatch: Partial<ItemNode> | null = null
   let lastInput: Parameters<FloorplanMoveTargetSession['apply']>[0] | null = null
+  let lastHostedPatch: Partial<ItemNode> = {
+    parentId: node.parentId,
+    position: [...node.position],
+    rotation: [...node.rotation],
+    supportSlabId: undefined,
+  }
   const session: FloorplanMoveTargetSession = {
     affectedIds: [node.id as AnyNodeId],
     apply(input) {
@@ -408,6 +414,7 @@ function buildFloorItemSession(
             localBounds?.max ?? [dimensions[0] / 2, dimensions[1], dimensions[2] / 2],
           ).map((p) => transformPoint(frame(local, hostPose.rotation), p)),
         )
+        let occupied = false
         const pose = resolveSurfacePlacement({
           host,
           surface: retainedSurface,
@@ -429,7 +436,16 @@ function buildFloorItemSession(
           },
           origin: local,
           scene: createSceneApi(useScene),
+          onReject: (reason) => {
+            occupied = reason === 'surface-occupied'
+          },
         })
+        if (occupied) {
+          lastPatch = lastHostedPatch
+          useLiveNodeOverrides.getState().set(node.id as AnyNodeId, lastPatch)
+          markMoved()
+          return
+        }
         if (
           pose &&
           (pose.childFrame === 'surface-local' ? pose.surfaceId === surfaceId : surfaceId === null)
@@ -441,6 +457,7 @@ function buildFloorItemSession(
             rotation: [...node.rotation],
             supportSlabId: undefined,
           }
+          lastHostedPatch = lastPatch
           useLiveNodeOverrides.getState().set(node.id as AnyNodeId, lastPatch)
           markMoved()
           return
