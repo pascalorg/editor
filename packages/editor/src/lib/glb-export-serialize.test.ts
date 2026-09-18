@@ -101,7 +101,7 @@ afterEach(() => {
   for (const key of DOM_KEYS) globals[key] = previous.get(key)
 })
 
-function texturedScene(texture: THREE.Texture): GlbExport {
+function texturedRoot(texture: THREE.Texture): THREE.Group {
   const root = new THREE.Group()
   root.add(
     new THREE.Mesh(
@@ -109,7 +109,11 @@ function texturedScene(texture: THREE.Texture): GlbExport {
       new THREE.MeshStandardMaterial({ map: texture }),
     ),
   )
-  return { scene: root, animations: [], warnings: [], dispose: () => {} }
+  return root
+}
+
+function texturedScene(texture: THREE.Texture): GlbExport {
+  return { scene: texturedRoot(texture), animations: [], warnings: [], dispose: () => {} }
 }
 
 function readableTexture(): THREE.DataTexture {
@@ -147,26 +151,12 @@ describe('serializePreparedSceneToGlb', () => {
     expect(textureUtils.calls.map((texture) => texture.name)).toEqual(['Color_ktx2'])
   })
 
-  test('rejects at the deadline when a FileReader inside GLTFExporter fails silently', async () => {
-    // The image bufferView read is the first one; a null result throws inside
-    // onloadend, so GLTFExporter's pending list never drains.
-    installExporterDom({ reads: 0, failAt: 1 })
-
-    await expect(
-      serializePreparedSceneToGlb(texturedScene(readableTexture()), {
-        textureUtils: passthroughUtils(),
-        timeoutMs: 50,
-      }),
-    ).rejects.toThrow('GLB export timed out')
-  })
-
   test('rejects instead of resolving null when the final GLB read fails', async () => {
     installExporterDom({ reads: 0, failAt: 3 })
 
     await expect(
       serializePreparedSceneToGlb(texturedScene(readableTexture()), {
         textureUtils: passthroughUtils(),
-        timeoutMs: 5_000,
       }),
     ).rejects.toThrow('GLB export produced no data')
   })
@@ -193,6 +183,23 @@ describe('withExportDeadline', () => {
 describe('exportSceneToGlb', () => {
   afterEach(() => {
     sceneRegistry.clear()
+  })
+
+  test('rejects at the deadline when a FileReader inside GLTFExporter fails silently', async () => {
+    // The image bufferView read is the first one; a null result throws inside
+    // onloadend, so GLTFExporter's pending list never drains.
+    installExporterDom({ reads: 0, failAt: 1 })
+
+    await expect(
+      exportSceneToGlb(
+        texturedRoot(readableTexture()),
+        {},
+        {
+          textureUtils: passthroughUtils(),
+          timeoutMs: 50,
+        },
+      ),
+    ).rejects.toThrow('GLB export timed out')
   })
 
   test('exports a live scene through a caller-owned decompressor without disposing it', async () => {

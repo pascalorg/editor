@@ -221,7 +221,6 @@ export async function exportSceneToGlb(
         return serializePreparedSceneToGlb(run.prepared, {
           textures: textureMode,
           onlyVisible: options.onlyVisible,
-          timeoutMs: Number.POSITIVE_INFINITY,
           textureUtils,
         })
       })(),
@@ -261,9 +260,10 @@ export async function preparePortableSceneFromViewer(
   return completeSceneExportPreparation(preparation)
 }
 
+/** Serialise a prepared scene; callers own the deadline (see `exportSceneToGlb`). */
 export function serializePreparedSceneToGlb(
   prepared: GlbExport,
-  options: Pick<GlbExportOptions, 'textures' | 'onlyVisible' | 'timeoutMs'> & {
+  options: Pick<GlbExportOptions, 'textures' | 'onlyVisible'> & {
     textureUtils: ExportTextureUtils
   },
 ): Promise<ArrayBuffer> {
@@ -273,7 +273,7 @@ export function serializePreparedSceneToGlb(
   }
   exporter.setTextureUtils(options.textureUtils)
 
-  const serialized = new Promise<ArrayBuffer>((resolve, reject) => {
+  return new Promise<ArrayBuffer>((resolve, reject) => {
     exporter.parse(
       prepared.scene,
       (gltf) => {
@@ -292,7 +292,6 @@ export function serializePreparedSceneToGlb(
       },
     )
   })
-  return withExportDeadline(serialized, options.timeoutMs ?? DEFAULT_MODEL_EXPORT_TIMEOUT_MS, 'GLB')
 }
 
 type RegistryEntry = readonly [id: string, original: THREE.Object3D]
