@@ -426,8 +426,10 @@ for (const finish of ['commit', 'cancel', 'unmount'] as const) {
         emitter.emit('grid:move', event as never)
         if (finish === 'commit') emitter.emit('grid:click', event as never)
         else if (finish === 'cancel') emitter.emit('tool:cancel')
+        // Unmount inside act(): the cue is scheduled on a 0ms timer, and act()
+        // yields before resolving, so unmounting after it races the timer.
+        else if (finish === 'unmount') await renderer.unmount()
       })
-      if (finish === 'unmount') await renderer.unmount()
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 5))
       })
