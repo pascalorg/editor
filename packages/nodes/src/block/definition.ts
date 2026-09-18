@@ -112,6 +112,7 @@ export const blockDefinition: NodeDefinition<typeof BlockNode> = {
   },
 
   geometry: buildBlockGeometry,
+  geometryChildTypes: [],
   geometryKey: (node) => JSON.stringify([node.topology, node.slots]),
   floorplan: buildBlockFloorplan,
   parametrics: blockParametrics,
