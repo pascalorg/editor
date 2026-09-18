@@ -154,6 +154,19 @@ function floorLift(
       ? Math.max(...candidates.map((s) => s.elevation ?? 0.05))
       : ground
 }
+function nodeParentFrame(node: AnyNode | ProceduralItemNode, nodes: QueryNodes, seen: Set<string>) {
+  if (!node.parentId) return IDENTITY_FRAME
+  let parentFrame = nodeLevelFrame(node.parentId, nodes, seen)
+  const parent = nodes[node.parentId]
+  if (isProceduralItem(parent) && parent.attachments[node.id] !== undefined) {
+    const surface = evaluateRecipe(parent.recipe, parent.parameters).surfaces.find(
+      (s) => s.id === parent.attachments[node.id],
+    )
+    if (!surface) throw new Error('Missing attachment surface')
+    parentFrame = composeFrames(parentFrame, frame(surface.position, surface.rotation))
+  }
+  return parentFrame
+}
 export function nodeLevelFrame(id: string, nodes: QueryNodes, seen = new Set<string>()): Frame {
   if (seen.has(id) || seen.size > 32) throw new Error('Cyclic or excessively deep hosting graph')
   const node = nodes[id]
@@ -206,7 +219,7 @@ export function nodeLevelFrame(id: string, nodes: QueryNodes, seen = new Set<str
       node.type === 'slab'
         ? IDENTITY_FRAME
         : frame(transform.position ?? [0, 0, 0], rotation ?? [0, 0, 0])
-    return node.parentId ? composeFrames(nodeLevelFrame(node.parentId, nodes, seen), local) : local
+    return node.parentId ? composeFrames(nodeParentFrame(node, nodes, seen), local) : local
   }
   const pose = isProceduralItem(node)
     ? proceduralLocalPose(node, nodes)
@@ -239,14 +252,8 @@ export function nodeLevelFrame(id: string, nodes: QueryNodes, seen = new Set<str
       )
     }
   }
-  let parentFrame = nodeLevelFrame(node.parentId, nodes, seen)
-  if (isProceduralItem(parent) && parent.attachments[node.id] !== undefined) {
-    const surface = evaluateRecipe(parent.recipe, parent.parameters).surfaces.find(
-      (s) => s.id === parent.attachments[node.id],
-    )
-    if (!surface) throw new Error('Missing attachment surface')
-    parentFrame = composeFrames(parentFrame, frame(surface.position, surface.rotation))
-  } else if (parent?.type === 'level') pose.position[1] += floorLift(node, nodes)
+  const parentFrame = nodeParentFrame(node, nodes, seen)
+  if (parent?.type === 'level') pose.position[1] += floorLift(node, nodes)
   return composeFrames(parentFrame, frame(pose.position, pose.rotation))
 }
 function localBounds(node: ProceduralItemNode | ItemNode) {

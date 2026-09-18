@@ -1568,4 +1568,137 @@ if (process.env.PASCAL_HOST_AUDIT_ISOLATED !== '1') {
       await renderer.unmount()
     }
   })
+
+  for (const mover of ['registry', 'catalog'] as const)
+    for (const key of ['r', 't'] as const)
+      for (const occupied of [true, false])
+        test(`review bot 2: ${mover} ${key} rotation occupied=${occupied}`, async () => {
+          const seeded = seed('procedural-item', mover)
+          const host = ProceduralItemNode.parse({
+            ...seeded.host,
+            position: [2, 0, 3],
+            rotation: [0, 0.6, 0],
+            recipe: {
+              ...(seeded.host as ProceduralItemNode).recipe,
+              surfaces: [{ id: 'top', label: 'Top', position: [0.3, 1, 0.2], size: [4, 4] }],
+            },
+          })
+          const child =
+            mover === 'catalog'
+              ? ItemNode.parse({
+                  ...seeded.child,
+                  rotation: [0, 0.6, 0],
+                  asset: { ...asset, dimensions: [0.8, 0.2, 0.2] },
+                })
+              : ProceduralItemNode.parse({
+                  ...seeded.child,
+                  rotation: [0, 0.6, 0],
+                  recipe: {
+                    ...recipe,
+                    parts: [
+                      {
+                        ...recipe.parts[0]!,
+                        shapes: [{ ...recipe.parts[0]!.shapes[0]!, size: [0.8, 0.2, 0.2] }],
+                      },
+                    ],
+                  },
+                })
+          const occupant = ItemNode.parse({
+            asset: { ...asset, dimensions: [0.2, 0.2, 0.2] },
+            parentId: host.id,
+            position: [0, 0, occupied ? 0.35 : 1],
+          })
+          useScene.setState({
+            nodes: {
+              ...useScene.getState().nodes,
+              [host.id]: {
+                ...host,
+                children: [occupant.id],
+                attachments: { [occupant.id]: 'top' },
+              },
+              [child.id]: child,
+              [occupant.id]: occupant,
+            },
+          })
+          const globals = ['HTMLInputElement', 'HTMLTextAreaElement'] as const
+          const descriptors = globals.map((name) =>
+            Object.getOwnPropertyDescriptor(globalThis, name),
+          )
+          globals.forEach((name) => {
+            Object.defineProperty(globalThis, name, { configurable: true, value: class {} })
+          })
+          const keys: EventListener[] = []
+          const addListener = window.addEventListener.bind(window)
+          const listen = spyOn(window, 'addEventListener').mockImplementation(
+            (type, listener, options) => {
+              if (type === 'keydown') keys.push(listener as EventListener)
+              addListener(type, listener, options)
+            },
+          )
+          useEditor.getState().setMovingNode(child)
+          const renderer = await create(<Scene mover={mover} child={child} />)
+          try {
+            await settle(renderer)
+            const object = sceneRegistry.nodes.get(host.id)!
+            const point: [number, number, number] = [0.3, 1, 0.2]
+            const event = {
+              node: host,
+              object,
+              position: object.localToWorld(new Vector3(...point)).toArray(),
+              localPosition: point,
+              normal: [0, 1, 0],
+              nativeEvent: { nativeEvent: {} },
+              stopPropagation() {},
+            }
+            for (let tick = 0; tick < 2; tick++) {
+              await act(async () => {
+                emitter.emit('procedural-item:move', event as never)
+                emitter.emit('node:move', event as never)
+              })
+              await settle(renderer)
+            }
+            const before = matrix(sceneRegistry.nodes.get(child.id))!
+            const saved = structuredClone(useScene.getState().nodes[child.id]) as
+              | ItemNode
+              | ProceduralItemNode
+            expect(saved.parentId).toBe(host.id)
+            expect(saved.rotation[1]).toBeCloseTo(0)
+            await act(async () => {
+              expect(() => {
+                for (const handler of keys)
+                  handler(
+                    Object.assign(new Event('keydown', { cancelable: true }), {
+                      key,
+                      metaKey: false,
+                      ctrlKey: false,
+                      altKey: false,
+                    }),
+                  )
+              }).not.toThrow()
+            })
+            await settle(renderer)
+            const after = matrix(sceneRegistry.nodes.get(child.id))!
+            const stored = useScene.getState().nodes[child.id] as ItemNode | ProceduralItemNode
+            if (occupied) {
+              expect(stored.position).toEqual(saved.position)
+              expect(stored.rotation).toEqual(saved.rotation)
+              before.forEach((value, index) => {
+                expect(after[index]).toBeCloseTo(value, 6)
+              })
+              expect(hasRedPreview(renderer)).toBe(true)
+            } else {
+              const expected = ((key === 'r' ? 1 : -1) * Math.PI) / 4
+              expect(stored.rotation[1]).toBeCloseTo(expected)
+              expect(Math.atan2(after[8]!, after[10]!)).toBeCloseTo(0.6 + expected)
+              expect(hasRedPreview(renderer)).toBe(false)
+            }
+          } finally {
+            await renderer.unmount()
+            listen.mockRestore()
+            globals.forEach((name, i) => {
+              if (descriptors[i]) Object.defineProperty(globalThis, name, descriptors[i]!)
+              else Reflect.deleteProperty(globalThis, name)
+            })
+          }
+        })
 }

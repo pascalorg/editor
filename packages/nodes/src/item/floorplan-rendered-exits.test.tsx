@@ -1393,3 +1393,92 @@ for (const kind of ['item', 'shelf', 'generated'] as const)
       await renderer.unmount()
     }
   })
+
+for (const kind of ['shelf', 'plugin'] as const)
+  for (const check of ['frame', 'plan'] as const)
+    test(`review bot 2: ${kind} named attachment ${check}`, async () => {
+      const { nodeType, objectId } = await import('@pascal-app/core')
+      const schema = ShelfNode.extend({
+        type: nodeType('review:child'),
+        id: objectId('reviewchild'),
+      })
+      registerNode({
+        kind: 'review:child',
+        schemaVersion: 1,
+        schema,
+        category: 'furnish',
+        defaults: () => ({}),
+        capabilities: {},
+        geometry: () => {
+          const group = new Group()
+          group.add(
+            new Mesh(new BoxGeometry(0.6, 0.4, 0.3).translate(0, 0.2, 0), new MeshBasicMaterial()),
+          )
+          return group
+        },
+        floorplan: shelfDefinition.floorplan,
+      } as never)
+      const { host, child, level } = fixture('named', 'item', true)
+      const source = (kind === 'shelf' ? ShelfNode : schema).parse({
+        parentId: host.id,
+        position: [0.2, 0, -0.1],
+        rotation: [0, 0.15, 0],
+        width: 0.6,
+        height: 0.4,
+        depth: 0.3,
+      })
+      const generated = useScene.getState().nodes[host.id] as ProceduralItemNode
+      const recipe = structuredClone(generated.recipe)
+      recipe.surfaces[0]!.position = [0.4, 1, -0.3]
+      recipe.surfaces[0]!.rotation = [0.3, 0.4, 0.1]
+      const graph = {
+        ...useScene.getState().nodes,
+        [host.id]: {
+          ...generated,
+          recipe,
+          children: [source.id],
+          attachments: { [source.id]: 'top' },
+        },
+        [source.id]: source,
+      } as Record<AnyNodeId, AnyNode>
+      delete graph[child.id]
+      useScene.setState({ nodes: graph })
+      const renderer = await create(<RenderedScene levelId={level.id} />)
+      try {
+        await settle(renderer)
+        useScene.getState().markDirty(host.parentId as AnyNodeId)
+        await renderer.advanceFrames(1, 1 / 60)
+        const rendered = worldMatrix(source.id as AnyNodeId)
+        const actual = sceneRegistry.nodes
+          .get(level.id)!
+          .matrixWorld.clone()
+          .invert()
+          .multiply(rendered)
+        if (check === 'frame') {
+          const resolved = nodeLevelFrame(source.id, graph)
+          resolved.position.forEach((v, i) => {
+            expect(v).toBeCloseTo(actual.elements[12 + i]!, 6)
+          })
+          resolved.axes.forEach((axis, i) => {
+            axis.forEach((v, j) => {
+              expect(v).toBeCloseTo(actual.elements[i * 4 + j]!, 6)
+            })
+          })
+        } else {
+          const entry = renderer.scene.findAll((n) => n.props['data-node-id'] === source.id)[0]!
+          const transform = entry.findAll(
+            (n) =>
+              typeof n.props.transform === 'string' && n.props.transform.startsWith('translate('),
+          )[0]!.props.transform as string
+          const values = transform.match(/-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/g)!.map(Number)
+          expect(values[0]).toBeCloseTo(actual.elements[12]!, 6)
+          expect(values[1]).toBeCloseTo(actual.elements[14]!, 6)
+          expect((values[2]! * Math.PI) / 180).toBeCloseTo(
+            -Math.atan2(actual.elements[8]!, actual.elements[10]!),
+            6,
+          )
+        }
+      } finally {
+        await renderer.unmount()
+      }
+    })

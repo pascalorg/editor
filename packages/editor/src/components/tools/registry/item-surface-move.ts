@@ -404,6 +404,13 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
           onReject: (reason) => feedback.reject(reason),
         })
         valid = !!placement
+        if (!placement && feedback.reason === 'surface-occupied') {
+          // Null means free rotation to the caller, so return the unchanged stored pose.
+          return {
+            position: [...live.position] as [number, number, number],
+            rotationY: Array.isArray(live.rotation) ? live.rotation[1] : live.rotation,
+          }
+        }
         if (placement && host.type === 'procedural-item') {
           const pose =
             placement.childFrame === 'surface-local'
