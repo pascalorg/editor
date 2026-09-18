@@ -104,7 +104,7 @@
     },
     "packages/cli": {
       "name": "@pascal-app/cli",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "bin": {
         "pascal": "dist/bin/pascal.js",
       },
