@@ -50,6 +50,11 @@ export class TerminalProgress {
     this.stream.write(`✓ ${message}\n`)
   }
 
+  warn(message: string): void {
+    this.stopActive(true)
+    this.stream.write(`! ${message}\n`)
+  }
+
   stop(): void {
     this.stopActive(true)
   }

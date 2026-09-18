@@ -27,7 +27,11 @@ import {
   readActiveRuntime,
   readRuntimeManifest,
 } from './runtime.js'
-import { ensureWebRuntime, type RuntimeProvisionProgress } from './runtime-download.js'
+import {
+  ensureWebRuntime,
+  type RuntimeProvisionProgress,
+  readRuntimeSource,
+} from './runtime-download.js'
 
 export interface EditorState {
   schemaVersion: 1
@@ -55,12 +59,16 @@ export interface StartEditorOptions {
   foreground?: boolean
   /** A web-runtime directory or `.tar.gz` archive to install instead of downloading one. */
   runtimeSource?: string
+  /** Overrides `dist/runtime-source.json`; tests point it at a fixture. */
+  runtimeSourceFile?: string
+  environment?: NodeJS.ProcessEnv
   onProgress?: (event: EditorStartProgress) => void
 }
 
 export type EditorStartProgress =
   | { step: 'storage-ready'; dataDirectory: string }
   | { step: 'runtime-ready'; version: string; installed: boolean }
+  | { step: 'runtime-outdated'; active: string; pinned: string }
   | { step: 'port-ready'; port: number; preferredPort: number }
   | { step: 'process-starting'; port: number }
   | { step: 'health-checking'; port: number }
@@ -111,6 +119,24 @@ export async function getEditorStatus(paths: PascalPaths): Promise<EditorStatus>
   }
 }
 
+/**
+ * The runtime version this CLI was published with, or `null` when the caller pins a runtime
+ * explicitly (or the package's manifest is unreadable, e.g. running from source). The active
+ * runtime pointer survives CLI upgrades, so without this a newer CLI would keep launching the
+ * runtime an older one installed.
+ */
+export async function pinnedRuntimeVersion(
+  options: Pick<StartEditorOptions, 'runtimeSource' | 'runtimeSourceFile' | 'environment'>,
+): Promise<string | null> {
+  const environment = options.environment ?? process.env
+  if (options.runtimeSource || environment.PASCAL_BUNDLED_RUNTIME_DIR) return null
+  try {
+    return (await readRuntimeSource(options.runtimeSourceFile)).version
+  } catch {
+    return null
+  }
+}
+
 export async function startEditor(options: StartEditorOptions): Promise<StartEditorResult> {
   return withEditorLifecycleLock(options.paths, () => startEditorUnlocked(options))
 }
@@ -127,12 +153,20 @@ async function startEditorUnlocked(options: StartEditorOptions): Promise<StartEd
     await rm(options.paths.currentRuntime, { force: true })
     currentStatus = await getEditorStatus(options.paths)
   }
+  const pinned = await pinnedRuntimeVersion(options)
   if (currentStatus.healthy && currentStatus.state) {
     const mcp = await ensureMcpService({
       paths: options.paths,
       editorOrigin: currentStatus.state.url,
       onProgress: options.onProgress,
     })
+    if (pinned && currentStatus.state.version !== pinned) {
+      options.onProgress?.({
+        step: 'runtime-outdated',
+        active: currentStatus.state.version,
+        pinned,
+      })
+    }
     options.onProgress?.({ step: 'already-running', port: currentStatus.state.port })
     return { state: currentStatus.state, mcp: mcp.state, alreadyRunning: true }
   }
@@ -146,10 +180,12 @@ async function startEditorUnlocked(options: StartEditorOptions): Promise<StartEd
 
   let runtime = await readActiveRuntime(options.paths)
   let installedRuntime = false
-  if (!runtime || options.runtimeSource) {
+  if (!runtime || options.runtimeSource || (pinned !== null && runtime.version !== pinned)) {
     const provisioned = await ensureWebRuntime({
       paths: options.paths,
       runtimeSource: options.runtimeSource,
+      sourceFile: options.runtimeSourceFile,
+      environment: options.environment,
       onProgress: options.onProgress,
     })
     runtime = provisioned.runtime
