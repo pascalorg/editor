@@ -64,6 +64,15 @@ function validateOrigin(request: Request): NextResponse | null {
 
 function validateAuth(request: Request): NextResponse | null {
   const token = process.env.PASCAL_SCENE_API_TOKEN
+  const origin = request.headers.get('origin')
+
+  // Only a browser request whose origin matches the trusted proxy's
+  // forwarded request origin may use same-origin authentication. The Origin
+  // header alone is spoofable and must never bypass an API token.
+  if (origin && isSameOrigin(request, origin) && configuredOrigins().has(normalizeOrigin(new URL(origin)))) {
+    return null
+  }
+
   if (!token) {
     if (isLoopbackRequest(request)) return null
     return sceneApiJson(request, { error: 'scene_api_token_required' }, { status: 503 })
@@ -145,7 +154,12 @@ function configuredOrigins(): Set<string> {
 function isSameOrigin(request: Request, origin: string): boolean {
   const parsedOrigin = parseUrl(origin)
   if (!parsedOrigin) return false
-  const requestUrl = new URL(request.url)
+  const forwardedHost = request.headers.get('x-forwarded-host')
+  const forwardedProto = request.headers.get('x-forwarded-proto')
+  const host = forwardedHost ? forwardedHost.split(',')[0]?.trim() : null
+  const proto = forwardedProto ? forwardedProto.split(',')[0]?.trim() : 'https'
+  const requestUrl = host ? parseUrl(`${proto}://${host}`) : parseUrl(request.url)
+  if (!requestUrl) return false
   return normalizeOrigin(parsedOrigin) === normalizeOrigin(requestUrl)
 }
 

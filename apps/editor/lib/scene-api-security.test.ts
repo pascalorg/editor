@@ -34,6 +34,67 @@ test('requires a token for non-loopback scene API requests', async () => {
   expect(response?.status).toBe(503)
   expect(await response?.json()).toEqual({ error: 'scene_api_token_required' })
 })
+test('allows configured same-origin browser requests through a proxy', () => {
+  delete process.env.PASCAL_SCENE_API_TOKEN
+  process.env.PASCAL_SCENE_API_ORIGINS = 'https://app.example'
+  const request = new Request('http://127.0.0.1:3000/api/scenes', {
+    headers: {
+      host: '127.0.0.1:3000',
+      origin: 'https://app.example',
+      'x-forwarded-host': 'app.example',
+      'x-forwarded-proto': 'https',
+    },
+  })
+
+  expect(guardSceneApiRequest(request)).toBeNull()
+})
+
+test('handles chained proxy forwarded headers without throwing', () => {
+  delete process.env.PASCAL_SCENE_API_TOKEN
+  process.env.PASCAL_SCENE_API_ORIGINS = 'https://app.example'
+  const request = new Request('http://127.0.0.1:3000/api/scenes', {
+    headers: {
+      host: '127.0.0.1:3000',
+      origin: 'https://app.example',
+      'x-forwarded-host': 'app.example, proxy.internal',
+      'x-forwarded-proto': 'https, http',
+    },
+  })
+
+  expect(guardSceneApiRequest(request)).toBeNull()
+})
+
+test('gracefully handles malformed forwarded headers', async () => {
+  delete process.env.PASCAL_SCENE_API_TOKEN
+  process.env.PASCAL_SCENE_API_ORIGINS = 'https://app.example'
+  const request = new Request('https://editor.example/api/scenes', {
+    headers: {
+      host: 'editor.example',
+      origin: 'https://app.example',
+      'x-forwarded-host': 'invalid:host:name:too:many:colons',
+      'x-forwarded-proto': ':::invalid',
+    },
+  })
+
+  // Should not throw an unhandled TypeError, but fall back to token/origin validation safely
+  const response = guardSceneApiRequest(request)
+  expect(response?.status).toBe(503)
+})
+test('does not let a spoofed configured origin bypass a token', async () => {
+  process.env.PASCAL_SCENE_API_TOKEN = 'secret'
+  process.env.PASCAL_SCENE_API_ORIGINS = 'https://app.example'
+  const request = new Request('https://editor.example/api/scenes', {
+    headers: {
+      host: 'editor.example',
+      origin: 'https://app.example',
+    },
+  })
+
+  const response = guardSceneApiRequest(request)
+  expect(response?.status).toBe(401)
+  expect(await response?.json()).toEqual({ error: 'unauthorized' })
+})
+
 
 test('accepts bearer token auth when configured', () => {
   process.env.PASCAL_SCENE_API_TOKEN = 'secret'
