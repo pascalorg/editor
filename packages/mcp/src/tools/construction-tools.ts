@@ -14,6 +14,7 @@ import {
 } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
+import { ADDITIVE_TOOL_ANNOTATIONS, DESTRUCTIVE_TOOL_ANNOTATIONS } from './annotations'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { measurement } from './measurement'
 import { NodeIdSchema, Vec2Schema, Vec3Schema } from './schemas'
@@ -259,6 +260,7 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         'Create one level-owned building shell from a footprint: perimeter walls plus optional slab and ceiling. Use once per story; do not make first-floor walls span multiple stories.',
       inputSchema: createStoryShellInput,
       outputSchema: createStoryShellOutput,
+      annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
     async ({
       levelId,
@@ -355,6 +357,7 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         'Create a roof container with one roof segment. By default creates a dedicated roof level above the reference level so exploded/solo level views can isolate the roof.',
       inputSchema: createRoofInput,
       outputSchema: createRoofOutput,
+      annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
     async ({
       levelId,
@@ -460,6 +463,7 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         'Create a straight stair and a single rectangular manual opening in the destination slab/source ceiling. This disables stair auto-opening mode to avoid duplicate or irregular holes.',
       inputSchema: createStairBetweenLevelsInput,
       outputSchema: createStairBetweenLevelsOutput,
+      annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async ({
       fromLevelId,

@@ -3,6 +3,7 @@
 import {
   type AnyNodeId,
   nodeRegistry,
+  RoofElevationSystem,
   StairOpeningSystem,
   sceneRegistry,
   useScene,
@@ -19,10 +20,11 @@ import {
 } from 'react'
 import * as THREE from 'three/webgpu'
 import { hasDrawableGeometry } from '../../lib/drawable-geometry'
-import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
+import { PERF_OVERLAY_ENABLED } from '../../lib/gpu-perf'
 import { applyIsolation, clearIsolation } from '../../lib/isolation'
 import { ensureKtx2Support } from '../../lib/ktx2-loader'
 import type { ColorPreset, RenderShading } from '../../lib/materials'
+import { choosePointerEvents } from '../../lib/pointer-events'
 import { initializeGpuRenderer, type RendererPowerPreference } from '../../lib/renderer-capability'
 import { getSceneTheme } from '../../lib/scene-themes'
 import { installTextureNodeNullGuard } from '../../lib/texture-node-guard'
@@ -36,14 +38,19 @@ import { immersiveXRBackgroundColor } from '../../xr/presentation-background'
 import { ImmersiveXRPresentationProvider } from '../../xr/presentation-context'
 import { ViewerXRSessionRoot } from '../../xr/session-root'
 import type { ViewerXRStore } from '../../xr/store'
+import { PerfActionSettleSystem } from '../../systems/perf-action-settle/perf-action-settle-system'
+import { subscribeWallBuildInteractions } from '../../systems/wall/wall-build-lifecycle'
 import { ErrorBoundary } from '../error-boundary'
 import { SceneRenderer } from '../renderers/scene-renderer'
+import { BATCH_SPIKE_ENABLED, BatchedMeshSpike } from './batched-mesh-spike'
 import FrameLimiter from './frame-limiter'
 import { Lights } from './lights'
 import { PerfMonitor } from './perf-monitor'
+import { PerfPanel } from './perf-panel'
 import { PointerRaycastLayers } from './pointer-raycast-layers'
 import PostProcessing, { DEFAULT_HOVER_STYLES, type HoverStyles } from './post-processing'
 import { RegisteredSystems } from './registered-systems'
+import { useSceneAtmosphere } from './scene-atmosphere'
 import { SceneBvh } from './scene-bvh'
 import { SelectionManager } from './selection-manager'
 import { UnsupportedGpuViewerFallback } from './unsupported-gpu-fallback'
@@ -223,13 +230,20 @@ function GPUDeviceWatcher({ intentionalWebGL = false }: { intentionalWebGL?: boo
 
 function ToneMappingExposure() {
   const sceneTheme = useViewer((state) => state.sceneTheme)
+  const atmosphere = useSceneAtmosphere()
   const gl = useThree((state) => state.gl)
   const invalidate = useThree((state) => state.invalidate)
 
   useEffect(() => {
+    if (atmosphere) return
     gl.toneMappingExposure = getSceneTheme(sceneTheme).toneMappingExposure
     invalidate()
-  }, [gl, invalidate, sceneTheme])
+  }, [atmosphere, gl, invalidate, sceneTheme])
+
+  useFrame(() => {
+    if (!atmosphere) return
+    gl.toneMappingExposure = atmosphere.exposure
+  }, -1)
 
   return null
 }
@@ -476,6 +490,8 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     }
   }, [isolate])
 
+  const [pointerEvents] = useState(() => choosePointerEvents())
+
   const [rendererInitFailed, setRendererInitFailed] = useState(false)
 
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
@@ -562,7 +578,11 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     return <UnsupportedGpuViewerFallback />
   }
   return (
+    <>
+      {(perf || PERF_OVERLAY_ENABLED) && <PerfPanel />}
     <Canvas
+      ref={subscribeWallBuildInteractions}
+      events={pointerEvents}
       key={immersiveActive ? 'webgl' : 'webgpu'}
       camera={{ position: [50, 50, 50], fov: 50 }}
       className={`transition-colors duration-700 ${
@@ -588,6 +608,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
                   ...backendParameters,
                   alpha: true,
                   multiview: xrMultiview,
+                  trackTimestamp: PERF_OVERLAY_ENABLED,
                 })
                 renderer.toneMapping = THREE.ACESFilmicToneMapping
                 renderer.toneMappingExposure = getSceneTheme(
@@ -690,6 +711,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
         )}
       </ImmersiveXRPresentationProvider>
     </Canvas>
+    </>
   )
 })
 
@@ -751,10 +773,12 @@ function ViewerScene({
       {/* Automated stair opening sync — updates slab/ceiling cutouts
           whenever stairs, slabs, or levels change. */}
       <StairOpeningSystem />
+      <RoofElevationSystem />
       {/* Mounts systems contributed by registry-backed kinds. Each
           kind's `def.system` is loaded via lazy() and rendered here,
           ordered by `system.priority`. */}
       <RegisteredSystems />
+      {BATCH_SPIKE_ENABLED && <BatchedMeshSpike />}
       {children}
     </>
   )
@@ -789,25 +813,10 @@ function ViewerScene({
         )}
         {selectionManager === 'default' && <SelectionManager />}
         {(perf || PERF_OVERLAY_ENABLED) && <PerfMonitor />}
+        {(perf || PERF_OVERLAY_ENABLED) && <PerfActionSettleSystem />}
       </ErrorBoundary>
     </>
   )
-}
-
-const DebugRenderer = () => {
-  useFrame(({ gl, scene, camera }) => {
-    const submittedAt = PERF_OVERLAY_ENABLED ? performance.now() : 0
-    gl.render(scene, camera)
-    if (PERF_OVERLAY_ENABLED) {
-      const queue = (gl as any).backend?.device?.queue as
-        | { onSubmittedWorkDone?: () => Promise<void> }
-        | undefined
-      queue?.onSubmittedWorkDone?.().then(() => {
-        pushGpuSample(performance.now() - submittedAt)
-      })
-    }
-  })
-  return null
 }
 
 export default Viewer

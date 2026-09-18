@@ -11,9 +11,18 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { BoxGeometry, type Group, type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
+import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
+import { Group, type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import {
   clearCeilingSnapFeedback,
@@ -23,31 +32,22 @@ import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor, { isGridSnapActive } from '../../../store/use-editor'
 import useInteractionScope from '../../../store/use-interaction-scope'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
+import {
+  BRACKET_Y_OFFSET,
+  BracketPointerState,
+  type BracketTarget,
+  bracketTargetKey,
+  buildCornerBrackets,
+  CeilingBracketBatchStore,
+  type CornerBracketData,
+} from './ceiling-bracket-batch'
 
-const BRACKET_THICKNESS = 0.04
-const BRACKET_HEIGHT = 0.04
-const BRACKET_Y_OFFSET = 0.035
-const HIT_BOX_SIZE: [number, number, number] = [0.28, 0.08, 0.28]
-const HANDLE_COLOR = '#d4d4d4'
-const HANDLE_HOVER_COLOR = '#818cf8'
-const HANDLE_OPACITY = 0.72
-const HANDLE_HOVER_OPACITY = 0.92
 const HANDLE_DRAG_THRESHOLD_PX = 4
-const SHARED_HANDLE_BOX_GEOMETRY = new BoxGeometry(1, 1, 1)
-// Draw the corner handles after the ceiling surface so they read cleanly
-// when unobstructed, while material depth testing still lets other scene
-// geometry hide them.
-const CORNER_RENDER_ORDER = 1000
 
-type CornerBracketData = {
-  corner: [number, number]
-  index: number
-  incomingEdgeIndex: number
-  incomingDirection: [number, number]
-  outgoingEdgeIndex: number
-  outgoingDirection: [number, number]
-  incomingLength: number
-  outgoingLength: number
+type CeilingBracketController = {
+  onHoverChange: (cornerIndex: number, hovered: boolean) => void
+  onPointerDown: (cornerIndex: number, event: ThreeEvent<PointerEvent>) => void
+  onClick: (cornerIndex: number, event: ThreeEvent<MouseEvent>) => void
 }
 
 type CornerDragState = {
@@ -128,23 +128,211 @@ export const CeilingSelectionAffordanceSystem = () => {
 
   if (!shouldRender) return null
 
+  return <LevelCeilingBrackets ceilings={ceilings} key={currentLevelId} levelId={currentLevelId} />
+}
+
+const LevelCeilingBrackets = ({
+  ceilings,
+  levelId,
+}: {
+  ceilings: CeilingNode[]
+  levelId: string
+}) => {
+  const [store] = useState(() => new CeilingBracketBatchStore())
+  const [controllers] = useState(() => new Map<CeilingNode['id'], CeilingBracketController>())
+  const [levelObject, setLevelObject] = useState<Object3D | null>(
+    () => sceneRegistry.nodes.get(levelId) ?? null,
+  )
+  // A stable portal container preserves instance event records when the level object changes.
+  const [bracketsRoot] = useState(() => new Group())
+  const registryRevision = useRef(sceneRegistry.revision)
+
+  useFrame(() => {
+    if (registryRevision.current === sceneRegistry.revision) return
+    registryRevision.current = sceneRegistry.revision
+    setLevelObject(sceneRegistry.nodes.get(levelId) ?? null)
+  })
+
+  useLayoutEffect(() => {
+    if (!levelObject) return
+    levelObject.add(bracketsRoot)
+    return () => {
+      bracketsRoot.removeFromParent()
+    }
+  }, [bracketsRoot, levelObject])
+
+  // The brackets render on SCENE_LAYER (scene-depth occlusion), so unlike
+  // EDITOR_LAYER affordances the thumbnail camera can't filter them — hide
+  // them around captures via synchronous Object3D.visible mutation (the
+  // capture renders right after the emit), same as `site-boundary-editor.tsx`.
+  useEffect(() => {
+    const hideForCapture = () => {
+      bracketsRoot.visible = false
+    }
+    const restoreAfterCapture = () => {
+      bracketsRoot.visible = true
+    }
+    emitter.on('thumbnail:before-capture', hideForCapture)
+    emitter.on('thumbnail:after-capture', restoreAfterCapture)
+    return () => {
+      emitter.off('thumbnail:before-capture', hideForCapture)
+      emitter.off('thumbnail:after-capture', restoreAfterCapture)
+    }
+  }, [bracketsRoot])
+
+  useEffect(() => {
+    let frameId = 0
+
+    const resolveLevelObject = () => {
+      const nextLevelObject = sceneRegistry.nodes.get(levelId) ?? null
+      setLevelObject((currentLevelObject) => {
+        if (currentLevelObject === nextLevelObject) {
+          return currentLevelObject
+        }
+        return nextLevelObject
+      })
+
+      if (!nextLevelObject) {
+        frameId = window.requestAnimationFrame(resolveLevelObject)
+      }
+    }
+
+    resolveLevelObject()
+
+    return () => {
+      if (frameId) {
+        window.cancelAnimationFrame(frameId)
+      }
+    }
+  }, [levelId])
+
+  useEffect(() => () => store.dispose(), [store])
+
   return (
     <>
       {ceilings.map((ceiling) => (
-        <CeilingSelectionAffordance ceiling={ceiling} key={ceiling.id} levelId={currentLevelId} />
+        <CeilingSelectionAffordance
+          ceiling={ceiling}
+          controllers={controllers}
+          key={ceiling.id}
+          levelId={levelId}
+          store={store}
+        />
       ))}
+      {levelObject &&
+        createPortal(
+          <CeilingBracketMeshes controllers={controllers} store={store} />,
+          bracketsRoot,
+        )}
     </>
   )
 }
 
-const CeilingSelectionAffordance = ({
+const CeilingBracketMeshes = memo(
+  ({
+    store,
+    controllers,
+  }: {
+    store: CeilingBracketBatchStore
+    controllers: Map<CeilingNode['id'], CeilingBracketController>
+  }) => {
+    const get = useThree((state) => state.get)
+    const [pointer] = useState(() => new BracketPointerState())
+    const previousMeshes = useRef(store.getSnapshot())
+    const meshes = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
+
+    useLayoutEffect(() => {
+      for (const [index, previous] of previousMeshes.current.entries()) {
+        const next = meshes[index]!
+        if (previous !== next) pointer.replaceObject(previous.uuid, next.uuid)
+      }
+      previousMeshes.current = meshes
+    }, [meshes, pointer])
+
+    useLayoutEffect(
+      () => () => {
+        for (const target of pointer.clearHover()) {
+          controllers.get(target.ceilingId)?.onHoverChange(target.cornerIndex, false)
+        }
+      },
+      [controllers, pointer],
+    )
+
+    const hover = (target: BracketTarget, hovered: boolean) => {
+      controllers.get(target.ceilingId)?.onHoverChange(target.cornerIndex, hovered)
+    }
+    const eventKey = (event: ThreeEvent<PointerEvent>) =>
+      `${event.object.uuid}/${event.index}/${event.instanceId}`
+    const handleOver = (event: ThreeEvent<PointerEvent>) => {
+      event.stopPropagation()
+      const target = store.resolveHitTarget(event, event.intersections)
+      if (!target) return
+      const previous = pointer.over(eventKey(event), target)
+      if (previous && bracketTargetKey(previous) === bracketTargetKey(target)) return
+      if (previous) hover(previous, false)
+      hover(target, true)
+    }
+    const handleOut = (event: ThreeEvent<PointerEvent>) => {
+      event.stopPropagation()
+      const target = pointer.out(eventKey(event))
+      if (target) hover(target, false)
+    }
+    const handlePointerDown = (event: ThreeEvent<PointerEvent>) => {
+      const target = store.resolveHitTarget(event, event.intersections)
+      if (!target) return
+      pointer.pointerDown(
+        event.intersections.flatMap((hit) => {
+          const hitTarget = store.getTarget(hit.object, hit.instanceId)
+          return hitTarget ? [hitTarget] : []
+        }),
+      )
+      // R3F gates clicks by mesh, not instance. Allow transfers between highlight batches,
+      // then enforce the original per-part pointer-down targets in handleClick.
+      let root = get()
+      while (root.previousRoot) root = root.previousRoot.getState()
+      const initialHits = root.internal.initialHits
+      for (const mesh of meshes) {
+        if (!initialHits.includes(mesh)) initialHits.push(mesh)
+      }
+      controllers.get(target.ceilingId)?.onPointerDown(target.cornerIndex, event)
+    }
+    const handleClick = (event: ThreeEvent<MouseEvent>) => {
+      const target = store.resolveHitTarget(event, event.intersections)
+      if (!target || !pointer.canClick(target)) return
+      controllers.get(target.ceilingId)?.onClick(target.cornerIndex, event)
+    }
+
+    return (
+      <>
+        {meshes.map((mesh) => (
+          <primitive
+            // Stable keys let R3F transfer hover and initial-hit records on capacity growth.
+            key={mesh.name}
+            object={mesh}
+            onClick={handleClick}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handleOver}
+            onPointerOut={handleOut}
+            onPointerOver={handleOver}
+          />
+        ))}
+      </>
+    )
+  },
+)
+
+const CeilingSelectionAffordance = memo(function CeilingSelectionAffordance({
   ceiling,
   levelId,
+  store,
+  controllers,
 }: {
   ceiling: CeilingNode
   levelId: string
-}) => {
-  const { camera, gl } = useThree()
+  store: CeilingBracketBatchStore
+  controllers: Map<CeilingNode['id'], CeilingBracketController>
+}) {
+  const { camera, gl, invalidate } = useThree()
   const liveOverride = useLiveNodeOverrides(
     (state) => state.overrides.get(ceiling.id) as Partial<CeilingNode> | undefined,
   )
@@ -155,14 +343,10 @@ const CeilingSelectionAffordance = ({
   // Explicit height when stored, else the live level-top bound the ceiling
   // follows (primitive selector — re-render-safe).
   const resolvedHeight = useScene((s) => resolveCeilingHeight(effectiveCeiling, s.nodes))
-  const [levelObject, setLevelObject] = useState<Object3D | null>(
-    () => sceneRegistry.nodes.get(levelId) ?? null,
-  )
   const [hoveredCornerIndex, setHoveredCornerIndex] = useState<number | null>(null)
   const [draggedCornerIndex, setDraggedCornerIndex] = useState<number | null>(null)
   const [previewPolygon, setPreviewPolygon] = useState<Array<[number, number]> | null>(null)
   const dragRef = useRef<CornerDragState | null>(null)
-  const bracketsRootRef = useRef<Group>(null)
   const raycasterRef = useRef(new Raycaster())
   const ndcRef = useRef(new Vector2())
   const planeRef = useRef(new Plane())
@@ -175,22 +359,6 @@ const CeilingSelectionAffordance = ({
   const displayPolygon = previewPolygon ?? effectiveCeiling.polygon
   const activeCornerIndex = draggedCornerIndex ?? hoveredCornerIndex
   const corners = useMemo(() => buildCornerBrackets(displayPolygon), [displayPolygon])
-  const highlightedEdgeIndices = useMemo(() => {
-    const next = new Set<number>()
-    if (activeCornerIndex === null || displayPolygon.length < 2) return next
-    next.add(activeCornerIndex)
-    next.add((activeCornerIndex - 1 + displayPolygon.length) % displayPolygon.length)
-    return next
-  }, [activeCornerIndex, displayPolygon.length])
-  const highlightedCornerIndices = useMemo(() => {
-    const next = new Set<number>()
-    if (activeCornerIndex === null || displayPolygon.length < 2) return next
-    next.add(activeCornerIndex)
-    next.add((activeCornerIndex - 1 + displayPolygon.length) % displayPolygon.length)
-    next.add((activeCornerIndex + 1) % displayPolygon.length)
-    return next
-  }, [activeCornerIndex, displayPolygon.length])
-
   useEffect(() => {
     if (activeCornerIndex === null) return
 
@@ -216,6 +384,7 @@ const CeilingSelectionAffordance = ({
 
   const getHandlePlanePoint = useCallback(
     (event: MouseEvent | PointerEvent): [number, number] | null => {
+      const levelObject = sceneRegistry.nodes.get(levelId)
       if (!levelObject) return null
 
       const rect = gl.domElement.getBoundingClientRect()
@@ -242,7 +411,7 @@ const CeilingSelectionAffordance = ({
       levelObject.worldToLocal(localIntersectionRef.current)
       return [localIntersectionRef.current.x, localIntersectionRef.current.z]
     },
-    [camera, resolvedHeight, gl.domElement, levelObject],
+    [camera, resolvedHeight, gl.domElement, levelId],
   )
 
   const handleCornerPointerDown = useCallback(
@@ -394,264 +563,71 @@ const CeilingSelectionAffordance = ({
     }
   }, [effectiveCeiling.id, getHandlePlanePoint, levelId, selectCeilingForEdit])
 
-  // The brackets render on SCENE_LAYER (scene-depth occlusion), so unlike
-  // EDITOR_LAYER affordances the thumbnail camera can't filter them — hide
-  // them around captures via synchronous Object3D.visible mutation (the
-  // capture renders right after the emit), same as `site-boundary-editor.tsx`.
-  useEffect(() => {
-    const hideForCapture = () => {
-      if (bracketsRootRef.current) bracketsRootRef.current.visible = false
-    }
-    const restoreAfterCapture = () => {
-      if (bracketsRootRef.current) bracketsRootRef.current.visible = true
-    }
-    emitter.on('thumbnail:before-capture', hideForCapture)
-    emitter.on('thumbnail:after-capture', restoreAfterCapture)
-    return () => {
-      emitter.off('thumbnail:before-capture', hideForCapture)
-      emitter.off('thumbnail:after-capture', restoreAfterCapture)
-    }
-  }, [])
+  useLayoutEffect(() => {
+    store.setGeometry(ceiling.id, corners, resolvedHeight)
+    invalidate()
+  }, [ceiling.id, corners, resolvedHeight, store, invalidate])
 
-  useEffect(() => {
-    let frameId = 0
+  useLayoutEffect(() => {
+    store.setHighlight(ceiling.id, activeCornerIndex)
+    invalidate()
+  }, [ceiling.id, activeCornerIndex, store, invalidate])
 
-    const resolveLevelObject = () => {
-      const nextLevelObject = sceneRegistry.nodes.get(levelId) ?? null
-      setLevelObject((currentLevelObject) => {
-        if (currentLevelObject === nextLevelObject) {
-          return currentLevelObject
-        }
-        return nextLevelObject
-      })
-
-      if (!nextLevelObject) {
-        frameId = window.requestAnimationFrame(resolveLevelObject)
-      }
-    }
-
-    resolveLevelObject()
-
-    return () => {
-      if (frameId) {
-        window.cancelAnimationFrame(frameId)
-      }
-    }
-  }, [levelId])
-
-  if (!levelObject || corners.length === 0) return null
-
-  return createPortal(
-    <group position={[0, resolvedHeight + BRACKET_Y_OFFSET, 0]} ref={bracketsRootRef}>
-      {corners.map((corner, index) => (
-        <CornerBracket
-          ceiling={effectiveCeiling}
-          corner={corner}
-          highlightIncoming={highlightedEdgeIndices.has(corner.incomingEdgeIndex)}
-          highlightOutgoing={highlightedEdgeIndices.has(corner.outgoingEdgeIndex)}
-          isHovered={activeCornerIndex === corner.index}
-          isLinkedHovered={
-            activeCornerIndex !== null &&
-            activeCornerIndex !== corner.index &&
-            highlightedCornerIndices.has(corner.index)
-          }
-          key={`${ceiling.id}-corner-${index}`}
-          onHoverChange={(hovered) => {
-            setHoveredCornerIndex((current) => {
-              if (hovered) return corner.index
-              return current === corner.index ? null : current
-            })
-          }}
-          onPointerDown={(event) => handleCornerPointerDown(corner, event)}
-        />
-      ))}
-    </group>,
-    levelObject,
+  useLayoutEffect(
+    () => () => {
+      store.removeCeiling(ceiling.id)
+      invalidate()
+    },
+    [ceiling.id, store, invalidate],
   )
-}
 
-const CornerBracket = ({
-  ceiling,
-  corner,
-  highlightIncoming,
-  highlightOutgoing,
-  isHovered,
-  isLinkedHovered,
-  onHoverChange,
-  onPointerDown,
-}: {
-  ceiling: CeilingNode
-  corner: CornerBracketData
-  highlightIncoming: boolean
-  highlightOutgoing: boolean
-  isHovered: boolean
-  isLinkedHovered: boolean
-  onHoverChange: (hovered: boolean) => void
-  onPointerDown: (event: ThreeEvent<PointerEvent>) => void
-}) => {
-  const cubeHighlighted = isHovered || isLinkedHovered
-  const cubeColor = cubeHighlighted ? HANDLE_HOVER_COLOR : HANDLE_COLOR
-  const cubeOpacity = cubeHighlighted ? HANDLE_HOVER_OPACITY : HANDLE_OPACITY
+  useLayoutEffect(() => {
+    controllers.set(ceiling.id, {
+      onHoverChange: (cornerIndex, hovered) => {
+        setHoveredCornerIndex((current) => {
+          if (hovered) return cornerIndex
+          return current === cornerIndex ? null : current
+        })
+      },
+      onPointerDown: (cornerIndex, event) => {
+        const corner = corners[cornerIndex]
+        if (corner) handleCornerPointerDown(corner, event)
+      },
+      onClick: (cornerIndex, event) => {
+        const corner = corners[cornerIndex]
+        if (!corner) return
+        event.stopPropagation()
+        useEditor.getState().setMovingNode(null)
+        useInteractionScope
+          .getState()
+          .endIf((sc) => sc.kind === 'reshaping' && sc.reshape === 'endpoint')
+        useInteractionScope
+          .getState()
+          .endIf((sc) => sc.kind === 'reshaping' && sc.reshape === 'curve')
+        useInteractionScope
+          .getState()
+          .endIf((sc) => sc.kind === 'reshaping' && sc.reshape === 'hole')
+        useEditor.getState().setMode('select')
 
-  const handleClick = (e: ThreeEvent<MouseEvent>) => {
-    e.stopPropagation()
-
-    useEditor.getState().setMovingNode(null)
-    useInteractionScope
-      .getState()
-      .endIf((sc) => sc.kind === 'reshaping' && sc.reshape === 'endpoint')
-    useInteractionScope.getState().endIf((sc) => sc.kind === 'reshaping' && sc.reshape === 'curve')
-    useInteractionScope.getState().endIf((sc) => sc.kind === 'reshaping' && sc.reshape === 'hole')
-    useEditor.getState().setMode('select')
-
-    emitter.emit('ceiling:click' as any, {
-      node: ceiling,
-      nativeEvent: e.nativeEvent,
-      localPosition: [0, 0, 0],
-      position: [
-        corner.corner[0],
-        resolveCeilingHeight(ceiling, useScene.getState().nodes),
-        corner.corner[1],
-      ],
-      stopPropagation: () => e.stopPropagation(),
-      viaHandle: true,
+        emitter.emit('ceiling:click' as any, {
+          node: effectiveCeiling,
+          nativeEvent: event.nativeEvent,
+          localPosition: [0, 0, 0],
+          // Position is level-local, matching the original ceiling handle payload.
+          position: [
+            corner.corner[0],
+            resolveCeilingHeight(effectiveCeiling, useScene.getState().nodes),
+            corner.corner[1],
+          ],
+          stopPropagation: () => event.stopPropagation(),
+          viaHandle: true,
+        })
+      },
     })
-  }
-
-  return (
-    <group position={[corner.corner[0], 0, corner.corner[1]]}>
-      <BracketLeg
-        color={highlightIncoming ? HANDLE_HOVER_COLOR : HANDLE_COLOR}
-        direction={corner.incomingDirection}
-        highlighted={highlightIncoming}
-        length={corner.incomingLength}
-        onClick={handleClick}
-        onHoverChange={onHoverChange}
-        onPointerDown={onPointerDown}
-      />
-      <BracketLeg
-        color={highlightOutgoing ? HANDLE_HOVER_COLOR : HANDLE_COLOR}
-        direction={corner.outgoingDirection}
-        highlighted={highlightOutgoing}
-        length={corner.outgoingLength}
-        onClick={handleClick}
-        onHoverChange={onHoverChange}
-        onPointerDown={onPointerDown}
-      />
-
-      <mesh
-        geometry={SHARED_HANDLE_BOX_GEOMETRY}
-        onClick={handleClick}
-        onPointerDown={onPointerDown}
-        onPointerEnter={(e) => {
-          e.stopPropagation()
-          onHoverChange(true)
-        }}
-        onPointerLeave={(e) => {
-          e.stopPropagation()
-          onHoverChange(false)
-        }}
-        renderOrder={CORNER_RENDER_ORDER}
-        scale={HIT_BOX_SIZE}
-      >
-        <meshBasicMaterial
-          color={cubeColor}
-          depthTest
-          depthWrite={false}
-          opacity={cubeOpacity}
-          transparent
-        />
-      </mesh>
-    </group>
-  )
-}
-
-const BracketLeg = ({
-  direction,
-  length,
-  color,
-  highlighted,
-  onClick,
-  onHoverChange,
-  onPointerDown,
-}: {
-  direction: [number, number]
-  length: number
-  color: string
-  highlighted: boolean
-  onClick: (e: ThreeEvent<MouseEvent>) => void
-  onHoverChange: (hovered: boolean) => void
-  onPointerDown: (event: ThreeEvent<PointerEvent>) => void
-}) => {
-  const angle = -Math.atan2(direction[1], direction[0])
-  const position: [number, number, number] = [
-    direction[0] * (length / 2),
-    0,
-    direction[1] * (length / 2),
-  ]
-
-  return (
-    <mesh
-      geometry={SHARED_HANDLE_BOX_GEOMETRY}
-      onClick={onClick}
-      onPointerDown={onPointerDown}
-      onPointerEnter={(e) => {
-        e.stopPropagation()
-        onHoverChange(true)
-      }}
-      onPointerLeave={(e) => {
-        e.stopPropagation()
-        onHoverChange(false)
-      }}
-      position={position}
-      renderOrder={CORNER_RENDER_ORDER}
-      rotation={[0, angle, 0]}
-      scale={[length, BRACKET_HEIGHT, BRACKET_THICKNESS]}
-    >
-      <meshBasicMaterial
-        color={color}
-        depthTest
-        depthWrite={false}
-        opacity={highlighted ? HANDLE_HOVER_OPACITY : HANDLE_OPACITY}
-        transparent
-      />
-    </mesh>
-  )
-}
-
-function buildCornerBrackets(polygon: Array<[number, number]>): CornerBracketData[] {
-  if (polygon.length < 3) return []
-
-  return polygon.map((corner, index) => {
-    const previous = polygon[(index - 1 + polygon.length) % polygon.length]!
-    const next = polygon[(index + 1) % polygon.length]!
-    const incomingVector = [previous[0] - corner[0], previous[1] - corner[1]] as [number, number]
-    const outgoingVector = [next[0] - corner[0], next[1] - corner[1]] as [number, number]
-    const incomingDirection = normalize2D(incomingVector)
-    const outgoingDirection = normalize2D(outgoingVector)
-
-    const incomingLength = Math.hypot(incomingVector[0], incomingVector[1])
-    const outgoingLength = Math.hypot(outgoingVector[0], outgoingVector[1])
-
-    return {
-      corner,
-      index,
-      incomingEdgeIndex: (index - 1 + polygon.length) % polygon.length,
-      incomingDirection,
-      outgoingEdgeIndex: index,
-      outgoingDirection,
-      incomingLength: getBracketLength(incomingLength),
-      outgoingLength: getBracketLength(outgoingLength),
+    return () => {
+      controllers.delete(ceiling.id)
     }
-  })
-}
+  }, [ceiling.id, controllers, corners, effectiveCeiling, handleCornerPointerDown])
 
-function normalize2D(vector: [number, number]): [number, number] {
-  const length = Math.hypot(vector[0], vector[1])
-  if (length < 1e-6) return [1, 0]
-  return [vector[0] / length, vector[1] / length]
-}
-
-function getBracketLength(edgeLength: number): number {
-  return Math.max(0.14, Math.min(0.38, edgeLength * 0.22))
-}
+  return null
+})

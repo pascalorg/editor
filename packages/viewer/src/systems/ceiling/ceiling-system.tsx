@@ -50,7 +50,7 @@ export const CeilingSystem = () => {
       }
       // If mesh not found, keep it dirty for next frame
     })
-  })
+  }, 2)
 
   return null
 }

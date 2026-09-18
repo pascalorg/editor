@@ -23,6 +23,17 @@ describe('active placement surface', () => {
     expect(getPlacementSurface()?.projection).toBe('surface')
   })
 
+  test('copies a stable lattice anchor when one is provided', () => {
+    publishPlacementSurface(
+      new Vector3(4, 2, 3),
+      new Vector3(0, 0, 1),
+      'surface',
+      new Vector3(1, 2, 3),
+    )
+
+    expect(getPlacementSurface()?.anchor?.toArray()).toEqual([1, 2, 3])
+  })
+
   test('orients the grid to a sloped placement surface', () => {
     expect(usesOrientedPlacementPlane(new Vector3(0, 0.6, 0.8))).toBe(true)
   })

@@ -1,26 +1,11 @@
-// GPU work-time measurement, gated by `?perf` in the URL.
+// `?perf` gate. Kept in its own module because both the overlay and
+// `lib/perf-tracks.ts` (the instrumentation sink every system writes to) read
+// it, and perf-tracks must not import a React component tree.
 //
-// We can't use WebGPU timestamp queries here because the editor renders via
-// a custom `RenderPipeline.render()` path that bypasses three.js's built-in
-// timestamp infrastructure. Instead we use `device.queue.onSubmittedWorkDone()`,
-// which resolves when the GPU finishes all submitted work — measuring the
-// CPU→GPU-done delta gives a clean approximation of per-frame GPU duration
-// regardless of which render path produced it.
+// Timing itself lives in perf-tracks: `gpu-render` carries three's WebGPU
+// timestamp-query total for the frame's render passes, `gpu-queue` the
+// submit→onSubmittedWorkDone fence, `render-encode` the synchronous CPU cost of
+// building and submitting the frame. See components/viewer/post-processing.tsx.
 
 export const PERF_OVERLAY_ENABLED =
   typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('perf')
-
-const MAX_SAMPLES = 256
-const samples: number[] = []
-
-export function pushGpuSample(ms: number): void {
-  samples.push(ms)
-  if (samples.length > MAX_SAMPLES) samples.shift()
-}
-
-export function drainGpuSamples(): number[] {
-  if (samples.length === 0) return []
-  const out = samples.slice()
-  samples.length = 0
-  return out
-}

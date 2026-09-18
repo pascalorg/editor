@@ -266,7 +266,7 @@ export function CeilingPanel() {
             precision={3}
             step={0.01}
             unit="m"
-            value={Math.round((node.height ?? resolvedHeight) * 1000) / 1000}
+            value={node.height ?? resolvedHeight}
           />
         )}
 

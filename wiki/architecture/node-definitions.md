@@ -61,7 +61,7 @@ Per-kind `def.system` components mount alongside via `<RegisteredSystems>`. They
 
 ### `dirtyTracking`
 
-`dirtyNodes` is the per-frame rebuild queue consumed by `<GeometrySystem>` (`def.geometry`), `<FloorElevationSystem>` (`capabilities.floorPlaced`), and the legacy per-kind viewer systems. Kinds none of those consume — structural/organizational kinds like site, building, level, zone, guide — declare `dirtyTracking: false` so `markDirty` skips them. Without it their marks are never cleared: they accumulate for the whole session, defeat every consumer's empty-set early exit each frame, and pollute the perf overlay's DIRTY readout. If such a kind later gains `def.geometry` (or any other dirty consumer), delete the flag.
+`dirtyNodes` is the per-frame rebuild queue consumed by `<GeometrySystem>` (`def.geometry`), `<FloorElevationSystem>` (`capabilities.floorPlaced`), and the legacy per-kind viewer systems. Kinds none of those consume — structural/organizational kinds like site, building, level, zone, guide — declare `dirtyTracking: false`. The store's set is a `GuardedDirtySet`: `add()` itself refuses marks for flagged kinds, so both `markDirty` and direct `dirtyNodes.add(...)` calls are covered (blindly marking `node.parentId` is safe — a wall's parent is a level, and the guard drops it). A mark without a consumer would otherwise sit for the whole session, defeat every consumer's empty-set early exit each frame, and pollute the perf overlay's DIRTY readout. If such a kind later gains `def.geometry` (or any other dirty consumer), delete the flag.
 
 ## `GeometryContext`
 
@@ -83,6 +83,82 @@ type GeometryContext = {
 `GeometryContext` exists so builders stay pure (no `useScene` import, no store mutation) and trivially unit-testable. The generic `<GeometrySystem>` builds `ctx` from the current scene snapshot once per dirty node; the cost is a few `Map.get` calls.
 
 For level-scoped batch data (wall mitering across an entire level), `ctx` can be extended with `ctx.levelData?.miters` in a future revision — decided alongside the wall migration (Phase 3 of the registry plan).
+
+## Floor-plan scope
+
+`def.floorplan` is a pure `FloorplanGeometry` builder over the same
+`GeometryContext` shape. `def.floorplanScope` controls discovery:
+
+| Scope | Persisted parent | Builder coordinates | `ctx.parent` |
+|---|---|---|---|
+| `'level'` (default) | active level subtree | building-local metres | semantic parent |
+| `'building'` | active building | building-local metres | active level |
+| `'site'` | active building's Site | site-local metres | real Site |
+
+The floor-plan layer applies the inverse active-building transform to
+site-scoped output and paints that output below level architecture. A plugin
+therefore keeps one semantic Site child while the same representation appears
+from every level of every building on that Site. Scope discovery is
+registry-driven; editor code must not name plugin kinds.
+
+`FloorplanStyle.fillRule` is the winding rule for compound contours. Use
+`'evenodd'` when nested rings represent holes; both the interactive SVG
+renderer and PDFKit export preserve it. `FloorplanImage.url` may also be an
+inline `data:` URL, which PDF export passes directly to PDFKit rather than
+through the asset resolver.
+
+## Export-only geometry
+
+`def.bakeGeometry(node, ctx)` replaces the registered node's cloned subtree
+only inside `prepareSceneForExport()`. It exists for procedural runtime trees
+whose live GPU representation is not a faithful portable artifact—for example,
+an instanced maximum population masked by a TSL material.
+
+The hook receives persisted scene data through `GeometryContext` and returns a
+new detached, local-space `Object3D`. That return value is the complete static
+snapshot for the node. It must use geometry and materials supported by
+`GLTFExporter`; the exporter preserves the registered node's transform and
+identity. The live editor tree is neither passed to the hook nor mutated.
+
+Use `bake: 'replace'` with `bakeGeometry` when the generic GLB should retain the
+portable static snapshot while Pascal's baked viewer hides it and mounts
+`bakeReplaceRenderer` for the richer live result.
+
+`def.bakeGeometryAsync(node, ctx)` is the asynchronous counterpart for material
+baking and texture reads. Portable export awaits it once instead of invoking the
+synchronous hook; synchronous geometry-only callers retain `bakeGeometry`.
+Both return detached, local-space trees owned by the export artifact. Context
+includes captured materials and level data as well as semantic node lookup.
+
+Model exports accept `excludedNodeTypes?: readonly string[]`. Matching registered
+subtrees are omitted before cloning or invoking either builder. Filtering affects
+output, not the complete semantic context available to retained builders.
+
+Settings → Export → **Include in file** discovers procedural kinds from
+`bakeGeometry`, `bakeGeometryAsync`, or `bake: 'replace'`, including palette-hidden
+kinds. Node filters apply to model downloads, not saved-viewer artifacts, print
+profiles, scene JSON, or floor-plan PDFs. GLB and USDZ additionally accept
+`includedPresentationIds` for explicitly selected static presentation builders;
+live presentation subtrees remain outside `scene-renderer` and are never cloned.
+
+Portable GLB/USDZ outputs freeze instancing and deformation and normalize
+material textures, vertex colors, sidedness, and reflected geometry. Saved-viewer
+artifacts retain their authored animation clips. Preparation captures the source
+synchronously, restores viewer state before asynchronous work, and returns an
+owned artifact that callers must dispose after serialization or failure.
+
+## Selection presentation
+
+`capabilities.selectionHighlight` controls only the Editor's material-based
+selection and hover presentation. It defaults to `true`, including for legacy
+and unregistered kinds. Set it to `false` when a node must stay semantically
+selected while its rendered subtree keeps plugin-authored materials—for
+example, a paint layer whose NodeMaterial carries the result being edited.
+
+The selection manager and outliner query this capability through the registry,
+including after late plugin registration. The capability does not change
+selectability, inspector ownership, tool activation, keyboard behavior or
+deletion policy. Host code must not special-case the opting-out kind.
 
 ## Choosing the right combination
 
@@ -160,7 +236,7 @@ useFrame(() => {
 Use this when the kind has parametric geometry **and** extra responsibilities. **Door, window.**
 
 - `geometry` builds the visible meshes (frame, panels, hardware) as a pure function of node state + parent wall.
-- `system` advances animation (`operationState`), then calls `markDirty(node.id)` so the geometry system rebuilds on the next frame.
+- `system` advances animation (`operationState`) in `useInteractive`. The animation *record itself* is the per-frame rebuild signal — the consumer system rebuilds any node with an active entry (doors) or poses named parts directly (windows). Do **not** `markDirty` per animation tick: a dirty mark is one-shot work that must drain to zero, and per-tick marks keep the scene from ever settling (breaks the `?perf` settle detector and any render-on-demand quiet gate). Mark once when the animation completes so the settled pose gets its rebuild.
 
 This split keeps animation state outside the node schema (it's ephemeral — lives in `useInteractive`) while still re-using the generic rebuild path.
 
@@ -184,7 +260,7 @@ If the system also handles cascades, animations, or material updates, keep `def.
 - **Builders must be pure.** No `useScene` import inside a `def.geometry` function. Read scene state via `ctx`. Mutating the store from a builder breaks idempotence.
 - **Builders emit local-space children.** The registered `<group>` is positioned/rotated by `<ParametricNodeRenderer>` via JSX (`position={liveTransform?.position ?? node.position}`). Builders return geometry as if the parent were at the origin — never bake the node's world position into vertex coords.
 - **One mesh registered per node ID.** The generic renderer registers a single `<group>` per node. If a custom renderer mounts multiple meshes, register the parent group (or whichever object the system needs to address).
-- **Custom systems run in addition to the generic system, not instead of it.** A kind with `def.geometry` + `def.system` will see the generic system rebuild children on dirty AND the per-kind system run its `useFrame`. Plan priorities accordingly: door-animation runs at priority 2, geometry rebuild at priority 3.
+- **Custom systems run in addition to the generic system, not instead of it.** A kind with `def.geometry` + `def.system` will see the generic system rebuild children on dirty AND the per-kind system run its `useFrame`. Plan priorities accordingly: `GeometrySystem` and ceiling dirty consumption run at frame priority 2, after the node batch's priority-1 dirty snapshot. `def.system.priority` orders components, not frame callbacks.
 - **Dispose on rebuild.** The generic system disposes the previous children's geometry + material before swapping. Custom systems that imperatively add children must dispose what they replace, or accept the GPU-memory cost.
 - **`def.renderer` overrides the generic renderer.** Once you set it, you own the mount — `<ParametricNodeRenderer>` is not invoked. The generic geometry system still runs for the kind if `def.geometry` is set, so a custom renderer can register an empty group and let the system fill it.
 

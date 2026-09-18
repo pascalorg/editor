@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { SceneOperations } from '../../operations'
+import { DESTRUCTIVE_TOOL_ANNOTATIONS } from '../annotations'
 import { ErrorCode, McpError, throwMcpError } from '../errors'
 import { currentLevelContext, projectStatusPayload } from './metadata'
 
@@ -41,6 +42,7 @@ export function registerGetProjectStatus(server: McpServer, operations: SceneOpe
         'Authoritative status/debug call for a Pascal project: editor URL, browser-visible version, latest saved version, published version, node count, and graph hash.',
       inputSchema: getProjectStatusInput,
       outputSchema: getProjectStatusOutput,
+      annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async ({ id }) => {
       try {

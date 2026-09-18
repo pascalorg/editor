@@ -34,6 +34,7 @@ import {
   type RoofSegmentNode,
   resolveSlabPlacementElevation,
   resolveTerrainWallConstructionOptions,
+  runAsSingleSceneHistoryStep,
   type SiteNode,
   type SlabNode,
   SlabNode as SlabNodeSchema,
@@ -90,6 +91,7 @@ import {
   worldToFloorplanLocalPoint,
 } from '../../lib/floorplan'
 import { resolveGenericFloorplanGridEventPoint } from '../../lib/floorplan-grid-event-point'
+import type { EditorGridEvent } from '../../lib/grid-event-presentation'
 import { groundHeightAt } from '../../lib/ground-surface'
 import { guideEmitter } from '../../lib/guide-events'
 import { measurementHint, parseMeasurement } from '../../lib/measurement-parser'
@@ -97,6 +99,7 @@ import { formatLinearMeasurement, linearUnitToMeters } from '../../lib/measureme
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { SITE_BOUNDARY_DRAG_LABEL, siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
+import { cancelPendingZonePaint, focusedUnitNode, paintZoneMembership } from '../../lib/units'
 import { cn } from '../../lib/utils'
 import { snapBuildingLocalToWorldGrid } from '../../lib/world-grid-snap'
 import { subscribeNavigationSyncPose } from '../../store/navigation-sync-pose-store'
@@ -150,6 +153,7 @@ import {
   isBoxSelectPointerSuppressed,
   markBoxSelectHandled,
 } from '../tools/select/box-select-state'
+import { marqueePolygon } from '../tools/select/marquee-footprint'
 import {
   type Point2 as MarqueePoint2,
   polygonsIntersect as marqueePolygonsIntersect,
@@ -865,7 +869,8 @@ function collectFloorplanScreenSelectionIds(rect: ScreenRect, svg: SVGSVGElement
         | { start?: unknown; end?: unknown; polygon?: unknown }
         | undefined
       if (!node) continue
-      const { start, end, polygon } = node
+      const { start, end } = node
+      const polygon = marqueePolygon(node)
       if (isMarqueeVec2(start) && isMarqueeVec2(end)) {
         dataTested.add(id)
         if (marqueeSegmentIntersectsPolygon(start, end, planQuad)) hitIdsFromData.add(id)
@@ -7949,7 +7954,7 @@ export function FloorplanPanel({
         return null
       }
 
-      const { createNode, nodes } = useScene.getState()
+      const { createNode, updateNode, nodes } = useScene.getState()
       const zoneCount = Object.values(nodes).filter((node) => node.type === 'zone').length
       const zone = ZoneNodeSchema.parse({
         color: PALETTE_COLORS[zoneCount % PALETTE_COLORS.length],
@@ -7957,9 +7962,15 @@ export function FloorplanPanel({
         polygon: points.map(([x, z]) => [x, z] as [number, number]),
       })
 
-      createNode(zone, levelId)
+      // Joining the focused unit rides in the zone's own undo step; selecting
+      // the zone would end focus, so a painted unit keeps it instead.
+      const focusedUnit = focusedUnitNode()
+      runAsSingleSceneHistoryStep(useScene, () => {
+        createNode(zone, levelId)
+        if (focusedUnit) updateNode(focusedUnit.id, { members: [...focusedUnit.members, zone.id] })
+      })
       sfxEmitter.emit('sfx:structure-build')
-      setSelection({ zoneId: zone.id })
+      if (!focusedUnit) setSelection({ zoneId: zone.id })
       return zone.id
     },
     [levelId, setSelection],
@@ -8964,12 +8975,29 @@ export function FloorplanPanel({
       const groundY = groundHeightAt(worldX, worldZ, floorplanGridWorldY)
       const worldY = groundY ?? floorplanGridWorldY
       const localY = groundY === null ? floorplanGridLocalY : groundY - buildingPosition[1]
+      const planScene =
+        nativeEvent.currentTarget.querySelector<SVGGraphicsElement>('[data-floorplan-scene]')
+      const screenMatrix = planScene?.getScreenCTM()
 
-      emitter.emit(`grid:${eventType}` as any, {
+      const gridEvent: EditorGridEvent = {
         nativeEvent: nativeEvent.nativeEvent as any,
         position: [worldX, worldY, worldZ],
         localPosition: [planPoint[0], localY, planPoint[1]],
-      })
+        screenProjection: screenMatrix
+          ? {
+              pointer: [nativeEvent.clientX, nativeEvent.clientY],
+              localToScreen: [
+                screenMatrix.a,
+                screenMatrix.b,
+                screenMatrix.c,
+                screenMatrix.d,
+                screenMatrix.e,
+                screenMatrix.f,
+              ],
+            }
+          : undefined,
+      }
+      emitter.emit(`grid:${eventType}` as any, gridEvent)
     },
     [buildingPosition, buildingRotationY, floorplanGridLocalY, floorplanGridWorldY],
   )
@@ -9988,6 +10016,18 @@ export function FloorplanPanel({
         setSelectedReferenceId(null)
 
         if (backgroundSelection.kind === 'select-zone') {
+          // Unit focus: a click paints membership, a double-click selects the
+          // zone and keeps focus (the SVG gets the second click as detail 2).
+          const focusedUnitId = useViewer.getState().focusedUnitId
+          if (focusedUnitId) {
+            if (event.detail >= 2) {
+              cancelPendingZonePaint(backgroundSelection.zoneId)
+              setSelection({ zoneId: backgroundSelection.zoneId })
+            } else {
+              paintZoneMembership(focusedUnitId, backgroundSelection.zoneId)
+            }
+            return
+          }
           setSelection({ zoneId: backgroundSelection.zoneId })
           return
         }
@@ -10551,9 +10591,11 @@ export function FloorplanPanel({
       }
 
       if (useEditor.getState().phase !== 'site') {
-        useEditor.setState({ catalogCategory: null, mode: 'select', phase: 'site', tool: null })
+        useEditor.getState().setPhase('site')
+        useEditor.getState().armToolMode({ mode: 'select' })
+      } else {
+        selectSiteFloorplanContext()
       }
-      selectSiteFloorplanContext()
 
       const nextDraft = {
         siteId,
@@ -10635,9 +10677,11 @@ export function FloorplanPanel({
       ]
 
       if (useEditor.getState().phase !== 'site') {
-        useEditor.setState({ catalogCategory: null, mode: 'select', phase: 'site', tool: null })
+        useEditor.getState().setPhase('site')
+        useEditor.getState().armToolMode({ mode: 'select' })
+      } else {
+        selectSiteFloorplanContext()
       }
-      selectSiteFloorplanContext()
 
       const nextDraft = {
         siteId,

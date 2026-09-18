@@ -1,0 +1,306 @@
+{
+  "skill_name": "furniture-fit",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "In my Pascal living-room project, check whether the existing 84 in by 38 in sofa at its current pose overlaps anything or blocks the modeled door. Don't move it. Tell me exactly what was and was not checked.",
+      "expected_output": "Runs a read-only, level-scoped footprint and door keep-out assessment, preserves the scene, qualifies unsupported checks, and offers one bounded related check.",
+      "files": [],
+      "semantic_case": "no-unresolved-requested-blocker",
+      "decision_context": {
+        "has_passing_footprint": true,
+        "has_failing_requested_pose": false,
+        "has_blocking_failure": false,
+        "missing_blocking_measurement": false,
+        "supported_unchecked_alternative": false,
+        "unresolved_requested_check_due_to_tool_limit": false
+      },
+      "expected_next_action": {
+        "kind": "check_related_item_or_pose",
+        "target": "one optional related item or pose in the same measured context",
+        "must_not": ["claim an unresolved blocker", "authorize a project mutation"]
+      },
+      "expectations": [
+        "Uses get_scene or get_node to verify item scale and rotation rather than trusting catalog labels alone.",
+        "Calls check_collisions with an explicit minimumClearance and verify_scene without mutating or saving the project.",
+        "Checks the collision result status and reports skipped evidence rather than treating partial output as a pass.",
+        "Separates actual overlap, item spacing, and rectangular door keep-out evidence.",
+        "Marks height, door swing, delivery route, and detailed mesh contact as not checked unless separately evidenced.",
+        "Returns exactly one check_related_item_or_pose nextAction with exact available context and no mutation or spending authority."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "My alcove is 2.30 m wide by 1.15 m deep. A cabinet is 2.00 m wide, 2.20 m tall, and 0.60 m deep. Compare it at 0 degrees and rotated 90 degrees, and tell me if I should order it.",
+      "expected_output": "Correctly reports that the horizontal footprint fits at 0 degrees but not at 90 degrees, withholds purchase and height/delivery assurance, and requests the first decisive missing measurement instead of rechecking the passing footprint.",
+      "files": [],
+      "semantic_case": "mixed-passing-and-failing-poses-height-blocker",
+      "decision_context": {
+        "has_passing_footprint": true,
+        "has_failing_requested_pose": true,
+        "has_blocking_failure": false,
+        "missing_blocking_measurement": true,
+        "supported_unchecked_alternative": false,
+        "unresolved_requested_check_due_to_tool_limit": false
+      },
+      "expected_next_action": {
+        "kind": "request_measurement",
+        "target": "measured clear height over the passing 0-degree footprint",
+        "must_not": ["check_alternate_pose", "treat the failed 90-degree pose as the blocker"]
+      },
+      "expectations": [
+        "Computes 2.00 m by 0.60 m at 0 degrees and 0.60 m by 2.00 m at 90 degrees.",
+        "Reports the 90-degree depth failure against the 1.15 m alcove depth.",
+        "Uses qualified footprint language instead of an unqualified furniture-fit or purchase guarantee.",
+        "Requests vertical and delivery-route evidence before advising that the item can be installed.",
+        "Marks door access not checked or insufficient evidence when no doors are modeled; a clean verify_scene result does not prove candidate spacing or access.",
+        "Returns exactly one request_measurement nextAction for clear vertical height because the tested 0-degree footprint already passes and height blocks the requested order decision."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "The couch is 0 by 90 by 40 inches and the room is 12 by 10 feet. Check if it fits.",
+      "expected_output": "Rejects the zero width as invalid and asks for a corrected item dimension without fabricating a verdict.",
+      "files": [],
+      "expectations": [
+        "Does not run or claim a successful fit check with a zero dimension.",
+        "Identifies the invalid width and requests a positive replacement value.",
+        "Does not silently substitute a default or guessed dimension."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "I wrote the table width as 1,234 and only have this unscaled listing photo. Will it fit through the hallway and around the stair turn?",
+      "expected_output": "Returns insufficient evidence because the number and scale are ambiguous and delivery-route checks are unsupported without route measurements.",
+      "files": [],
+      "expectations": [
+        "Treats 1,234 as ambiguous rather than choosing 1.234 or 1234.",
+        "Does not infer dimensions or scale from the photo.",
+        "Marks delivery path as not checked or insufficient evidence.",
+        "Requests the smallest useful item, packaging, doorway, hallway, and turn measurements."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "The wardrobe footprint clears the room in Pascal. It is 2.45 m tall. The level and zone contain a nominal 2.40 m height value, but there are no modeled ceiling or soffit nodes and nobody recorded where that value came from. Confirm that it fits and can be delivered.",
+      "expected_output": "Reports only the verified footprint result, treats nominal height metadata as a possible mismatch rather than a measured pass or failure, and refuses to confirm height or delivery without measurements.",
+      "files": [],
+      "expectations": [
+        "Uses the phrase footprint fits or an equivalent explicitly bounded verdict.",
+        "Marks height or overhead clearance as not checked or insufficient evidence instead of passed or failed.",
+        "Treats nominal level, wall, or zone height metadata without measurement provenance only as a possible mismatch to verify.",
+        "Marks delivery route as not checked or insufficient evidence.",
+        "Does not treat a clear footprint as proof of real-world installation."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "In my measured Pascal room, test a prospective 7 ft by 3 ft sofa at 90 degrees with 24 inches of clearance. Do not add it to the project.",
+      "expected_output": "Uses the advertised read-only candidate input when available and proves that the scene graph was not mutated.",
+      "files": [],
+      "expectations": [
+        "Inspects the connected check_collisions schema before using candidate fields.",
+        "Passes exact candidate dimensions, target level, position, Y rotation, and minimum clearance without calling place_item.",
+        "Confirms the returned candidateItemId and keeps room containment separate from item collision evidence.",
+        "Does not save, checkpoint, or leave a temporary node in the project.",
+        "Falls back to a qualified preliminary report if the connected release lacks candidate support.",
+        "Does not treat verify_scene as checking a candidate supplied only to check_collisions."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "The room footprint is measured and clear. I measured the clear floor-to-soffit height directly over the intended cabinet footprint as 2.40 m, and recorded that measurement on the soffit node. The cabinet is 2.45 m tall. Does its height pass? Keep this read only.",
+      "expected_output": "Reports a supported categorical height failure as a manual comparison between the 2.45 m item and the 2.40 m measured clear height, names the measurement provenance and exact spatial coverage, and does not imply that the footprint tool certified vertical clearance.",
+      "files": [],
+      "expectations": [
+        "Uses the user-supplied 2.40 m clear-height measurement and 2.45 m item height without substitution.",
+        "Reports a supported height failure because the measured clearance is 0.05 m shorter than the item.",
+        "Names the measurement provenance and its coverage of the exact intended footprint.",
+        "Labels the conclusion as a manual height-versus-clear-height comparison rather than a Pascal footprint-tool result.",
+        "Keeps the project unchanged."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "My measured Pascal room is 4.00 m wide by 3.00 m deep. The wardrobe is 1.80 m wide and 2.20 m tall, but its depth is missing. Check whether it fits centered in the room. This is read only. Do not infer a depth; request only the decisive missing measurement.",
+      "expected_output": "Stops with insufficient evidence, preserves the supplied dimensions and target, asks only for wardrobe depth through the structured next action, and does not calculate conditional fit thresholds or call assessment tools.",
+      "files": [],
+      "expectations": [
+        "Returns insufficient evidence because wardrobe depth is decisive for the requested footprint conclusion.",
+        "Preserves the supplied 1.80 m width, 2.20 m height, 4.00 m by 3.00 m room, centered pose, and read-only scope without substituting values.",
+        "Asks only for the wardrobe depth in a clear unit.",
+        "Does not state a maximum fitting depth, a conditional 'would fit' threshold, a height result, or an alternative pose while depth is missing.",
+        "Does not call candidate, collision, placement, validation, or save tools and does not mutate the project.",
+        "Returns exactly one request_measurement nextAction for wardrobe depth, carries exact available context, and authorizes no mutation or paid operation."
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "The sofa's measured footprint passes at its requested pose, but the user also asked whether it clears a soffit. The sofa is 2.10 m tall; the only soffit value is nominal metadata with no measurement provenance. Give one next action and keep this read only.",
+      "expected_output": "Keeps the passing footprint verdict narrow, treats height as insufficient evidence, and makes the missing clear-height measurement the next action rather than offering a related pose check.",
+      "files": [],
+      "semantic_case": "mixed-evidence-height-blocker",
+      "decision_context": {
+        "has_passing_footprint": true,
+        "has_failing_requested_pose": false,
+        "has_blocking_failure": false,
+        "missing_blocking_measurement": true,
+        "supported_unchecked_alternative": false,
+        "unresolved_requested_check_due_to_tool_limit": false
+      },
+      "expected_next_action": {
+        "kind": "request_measurement",
+        "target": "measured clear floor-to-soffit height over the exact footprint",
+        "must_not": [
+          "check_related_item_or_pose",
+          "claim the nominal height proves a pass or failure"
+        ]
+      },
+      "expectations": [
+        "Reports footprint fits only for the checked horizontal evidence and marks height insufficient evidence.",
+        "Uses exactly one request_measurement nextAction for measured clear height with provenance and spatial coverage.",
+        "Does not choose a related pose merely because the footprint passed and does not treat nominal metadata as measured evidence."
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "A 1.80 m by 1.20 m cabinet was checked centered at 0 and 90 degrees in a measured 1.50 m by 1.10 m alcove. Both footprints fail, and no other offset, room, or smaller cabinet has been supplied or established. Give exactly one bounded next action without guessing a pose.",
+      "expected_output": "Reports both tested footprint failures and asks the user for one exact alternate item, target, or pose without inventing an unsupported candidate.",
+      "files": [],
+      "semantic_case": "all-tested-poses-fail",
+      "decision_context": {
+        "has_passing_footprint": false,
+        "has_failing_requested_pose": true,
+        "has_blocking_failure": true,
+        "missing_blocking_measurement": false,
+        "supported_unchecked_alternative": false,
+        "unresolved_requested_check_due_to_tool_limit": false
+      },
+      "expected_next_action": {
+        "kind": "request_alternate_item_or_target",
+        "target": "one user-supplied alternate item, target room or zone, or explicit pose",
+        "must_not": ["check_alternate_pose", "invent a position or rotation"]
+      },
+      "expectations": [
+        "Computes or preserves the evidence that 0 and 90 degrees both exceed the measured alcove bounds.",
+        "Returns exactly one request_alternate_item_or_target nextAction asking for one exact user-supplied alternate.",
+        "Does not fabricate an offset, rotation, passing pose, smaller item, or different room."
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "Check a prospective sofa with exact dimensions against a measured room, 24 inches of clearance, and a modeled door. check_collisions includes the candidate and passes its footprint and requested gap, but verify_scene only checks saved scene items and therefore did not include this candidate. The user specifically asked whether the candidate blocks the door. Keep it read only and give one next action.",
+      "expected_output": "Reports the candidate footprint and requested gap as passed, keeps candidate door access unresolved, and requests a candidate-aware read-only door check instead of borrowing verify_scene's clean result.",
+      "files": [],
+      "semantic_case": "prospective-candidate-door-limit",
+      "decision_context": {
+        "has_passing_footprint": true,
+        "has_failing_requested_pose": false,
+        "has_blocking_failure": false,
+        "missing_blocking_measurement": false,
+        "supported_unchecked_alternative": false,
+        "unresolved_requested_check_due_to_tool_limit": true
+      },
+      "expected_next_action": {
+        "kind": "complete_unresolved_check",
+        "target": "candidate-aware read-only door-access assessment using the modeled door geometry",
+        "must_not": [
+          "mark candidate door access passed",
+          "treat verify_scene as including the prospective candidate"
+        ]
+      },
+      "expectations": [
+        "Keeps the prospective candidate in memory and reports only the footprint and explicit clearance evidence returned by check_collisions.",
+        "Marks door access not checked or insufficient evidence because verify_scene did not include the candidate, even though a door is modeled.",
+        "Returns exactly one complete_unresolved_check nextAction for a candidate-aware read-only door assessment and does not save or place the sofa."
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "The cabinet's requested centered pose fails because it overlaps a fixed island. The measured room geometry shows that moving the same cabinet to position [1.20, 0, 0.80] at 90 degrees is within the room bounds, but that alternate has not been checked for collision, clearance, or door access. Give one read-only next action.",
+      "expected_output": "Keeps the requested pose failed and offers the geometry-supported alternate as proposed and unverified, requiring a fresh full assessment before calling it a pass.",
+      "files": [],
+      "semantic_case": "supported-untested-alternate",
+      "decision_context": {
+        "has_passing_footprint": false,
+        "has_failing_requested_pose": true,
+        "has_blocking_failure": true,
+        "missing_blocking_measurement": false,
+        "supported_unchecked_alternative": true,
+        "unresolved_requested_check_due_to_tool_limit": false
+      },
+      "expected_next_action": {
+        "kind": "check_alternate_pose",
+        "target": "position [1.20, 0, 0.80] at 90 degrees with fresh containment, collision, clearance, and applicable door checks",
+        "must_not": ["call the alternate a pass", "save or place the cabinet"]
+      },
+      "expectations": [
+        "Reports the requested centered pose as failed and does not erase the fixed-island collision.",
+        "Returns exactly one check_alternate_pose nextAction naming position [1.20, 0, 0.80] and 90 degrees.",
+        "Labels the alternate proposed and unverified and requires fresh containment, collision, requested-clearance, and applicable door checks before a pass."
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "A user supplied an exact empty rectangular room 144 in wide by 120 in deep, a sofa footprint 84 in wide by 36 in deep, and 8 in of room-boundary clearance on every side. They explicitly ask for a Pascal link using these measurements. Return the bounded furniture-fit report and a human-openable pre-check.",
+      "expected_output": "Keeps the scene-backed report separate and includes the exact no-sign-in Pascal dimension-only pre-check URL using only the supplied inch values and fixed attribution keys.",
+      "files": [],
+      "semantic_case": "no-sign-in-dimension-precheck-link",
+      "expectations": [
+        "Labels the link Open dimension-only footprint pre-check.",
+        "Uses exactly https://editor.pascal.app/tools/furniture-fit with roomWidth=144, roomDepth=120, itemWidth=84, itemDepth=36, clearance=8, unit=in, shared=1, and entry=agent_report.",
+        "States that the public calculator does not carry the scene-backed verdict or project-specific collision, door, height, delivery, or mesh evidence.",
+        "Discloses that opening the link sends the visible measurement query to Pascal and can retain it in browser history and service request logs.",
+        "Does not place project, revision, graph hash, node, identity, credential, address, signed URL, flow, prompt, or arbitrary scene data in the URL."
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "The user authorizes sending the measurements to Pascal. The measured room is L-shaped inside a 400 cm by 350 cm bounding box, the exact sofa footprint is 210 cm by 95 cm, and the requested room-boundary clearance is 20 cm on every side. Include any safe human-openable pre-check in the report.",
+      "expected_output": "Omits the dimension-only calculator URL because the rectangular uniform-clearance calculator cannot represent the evidence, while retaining the scene-backed report.",
+      "files": [],
+      "semantic_case": "no-sign-in-dimension-precheck-unrepresentable",
+      "expectations": [
+        "Marks Open dimension-only footprint pre-check unavailable and gives the first unrepresentable-input reason.",
+        "Does not flatten the irregular room, pose-specific obstacle, or unequal clearances into a misleading rectangular link.",
+        "Does not expose project, revision, graph hash, node, identity, credential, address, signed URL, flow, prompt, or arbitrary scene data."
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "The user authorizes sending the measurements to Pascal. The exact rectangular room is 400 cm by 350 cm, the exact sofa footprint is 210 cm by 95 cm, and the user requests zero added room-boundary clearance. The requested scene pose overlaps a fixed kitchen island. The user asks whether that placement works and asks for a Pascal link.",
+      "expected_output": "Keeps the scene-backed collision failure and omits the empty-room calculator link because it would contradict the requested conclusion.",
+      "files": [],
+      "semantic_case": "dimension-precheck-scene-conflict",
+      "expectations": [
+        "Marks Open dimension-only footprint pre-check unavailable because the requested conclusion depends on the fixed-island collision.",
+        "Does not produce a link whose empty-room verdict could contradict the scene-backed result.",
+        "Names the scene-dependent collision as the reason the narrower calculator is unavailable."
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "The user authorizes sending the measurements to Pascal. The exact rectangular room is 400 cm by 350 cm and the exact sofa footprint is 210 cm by 95 cm, but the user requires 60 cm only in front of the sofa and 10 cm at the sides. They ask for a report and a Pascal link.",
+      "expected_output": "Omits the dimension-only link because the calculator cannot represent directional clearance without changing the request.",
+      "files": [],
+      "semantic_case": "dimension-precheck-asymmetric-clearance",
+      "expectations": [
+        "Marks Open dimension-only footprint pre-check unavailable because the requested clearances are directional.",
+        "Does not replace the directional values with zero or with item-to-item minimum clearance.",
+        "Retains the exact directional constraint in the scene-backed report."
+      ]
+    },
+    {
+      "id": 17,
+      "prompt": "A generated coordinate import reports a rectangular room width of 1000001 cm and otherwise exact dimensions. The user asks for a Pascal pre-check link.",
+      "expected_output": "Omits the link because the room width exceeds the calculator's accepted maximum instead of emitting a link that silently falls back to defaults.",
+      "files": [],
+      "semantic_case": "dimension-precheck-over-limit",
+      "expectations": [
+        "Marks Open dimension-only footprint pre-check unavailable because one value exceeds 1000000.",
+        "Does not clamp, round, or replace the value with a default.",
+        "Does not emit a calculator URL."
+      ]
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
+import { DESTRUCTIVE_TOOL_ANNOTATIONS } from './annotations'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 
 export const redoInput = {
@@ -21,6 +22,7 @@ export function registerRedo(server: McpServer, bridge: SceneOperations): void {
         'Redo the next N previously-undone steps (default 1). Returns the number of steps actually redone.',
       inputSchema: redoInput,
       outputSchema: redoOutput,
+      annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async ({ steps }) => {
       const redone = bridge.redo(steps ?? 1)

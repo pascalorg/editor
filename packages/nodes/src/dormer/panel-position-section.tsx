@@ -180,7 +180,7 @@ export function DormerPositionSection({
         restoreOnCommit={false}
         step={0.05}
         unit="m"
-        value={Math.round(worldX_now * 100) / 100}
+        value={worldX_now}
       />
       <SliderControl
         label="Z"
@@ -196,7 +196,7 @@ export function DormerPositionSection({
         restoreOnCommit={false}
         step={0.05}
         unit="m"
-        value={Math.round(worldZ_now * 100) / 100}
+        value={worldZ_now}
       />
       <SliderControl
         label="Rotation"

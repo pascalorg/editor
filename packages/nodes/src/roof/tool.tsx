@@ -4,17 +4,22 @@ import {
   type AnyNodeId,
   collectAlignmentAnchors,
   emitter,
+  findLevelAboveId,
   type GridEvent,
+  getLevelElevations,
   getWallArcData,
   getWallBaseElevationForNodes,
   getWallEffectiveHeightForNodes,
   isCurvedWall,
   type LevelNode,
+  type RoofFootprintTarget,
   RoofNode,
   RoofSegmentNode,
   type RoofType,
   RoofType as RoofTypeSchema,
   resolveBuildingForLevel,
+  resolveLevelId,
+  resolveRoomRoofFootprint,
   type SceneApi,
   sceneRegistry,
   type WallEvent,
@@ -52,13 +57,12 @@ import { resolveConicalRoofPlacement } from './conical-roof-placement'
 import {
   isStandardRoofWallEligible,
   parseRoofFootprintSource,
-  type RoofFootprintTarget,
   resolveRoofFootprintElevation,
   resolveRoofFootprintWorldElevation,
   resolveRoofWallTopWorldElevation,
-  resolveRoomRoofFootprint,
   subscribeToConicalRoofWallClicks,
 } from './roof-footprint'
+import useRoofFootprintSource from './roof-footprint-source'
 import useRoofPlacementMode, { type RoofPlacementMode } from './roof-placement-mode'
 
 const DEFAULT_WALL_HEIGHT = 0.5
@@ -182,7 +186,7 @@ function collectRoofAlignmentAnchors(
 /**
  * Creates a roof group with one default gable segment
  */
-const commitRoofPlacement = (
+export const commitRoofPlacement = (
   sceneApi: SceneApi,
   levelId: LevelNode['id'],
   corner1: [number, number, number],
@@ -336,6 +340,7 @@ const commitRoofPlacement = (
     ...defaults,
     name,
     position: [centerX, 0, centerZ],
+    support: { kind: 'level' },
     children: [segment.id],
   })
 
@@ -349,7 +354,7 @@ const commitRoofPlacement = (
   return roof.id
 }
 
-const commitRoofFootprint = (
+export const commitRoofFootprint = (
   sceneApi: SceneApi,
   levelId: LevelNode['id'],
   target: RoofFootprintTarget,
@@ -372,19 +377,26 @@ const commitRoofFootprint = (
     position: [0, 0, 0],
     rotation: quarterTurn ? Math.PI / 2 : 0,
   })
+  // A roof belongs to the storey above the walls it covers, whichever level the
+  // tool was armed on; the top floor keeps it on the walls' own level.
+  const firstWall = target.wallIds.map((id) => nodes[id]).find((node) => node?.type === 'wall')
+  const wallsLevelId = firstWall ? resolveLevelId(firstWall, nodes) : levelId
+  const parentLevelId = (findLevelAboveId(wallsLevelId, getLevelElevations(nodes)) ??
+    wallsLevelId) as LevelNode['id']
   const roof = RoofNode.parse({
     ...defaults,
     name: `Roof ${roofCount + 1}`,
     position: [
       target.center[0],
-      resolveRoofFootprintElevation(levelId, target, nodes),
+      resolveRoofFootprintElevation(parentLevelId, target, nodes),
       target.center[1],
     ],
     rotation: target.rotation,
+    support: { kind: 'walls' },
     children: [segment.id],
   })
   createRoofNodes(sceneApi, [
-    { node: roof, parentId: levelId },
+    { node: roof, parentId: parentLevelId },
     { node: segment, parentId: roof.id },
   ])
   triggerSFX('sfx:structure-build')
@@ -591,7 +603,8 @@ export const RoofTool: React.FC = () => {
   const nodes = useSyncExternalStore(subscribeToNodes, sceneApi.nodes, sceneApi.nodes)
   const parsedRoofType = RoofTypeSchema.safeParse(roofDefaults?.roofType)
   const roofType = parsedRoofType.success ? parsedRoofType.data : 'gable'
-  const footprintSource = parseRoofFootprintSource(roofDefaults?.footprintSource, roofType)
+  const footprintSourceChoice = useRoofFootprintSource((state) => state.source)
+  const footprintSource = parseRoofFootprintSource(footprintSourceChoice, roofType)
   const previewWallHeight =
     typeof roofDefaults?.wallHeight === 'number' ? roofDefaults.wallHeight : DEFAULT_WALL_HEIGHT
   const previewPitch =

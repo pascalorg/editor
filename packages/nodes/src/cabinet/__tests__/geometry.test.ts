@@ -1123,6 +1123,28 @@ describe('buildCabinetGeometry — appliance compartments', () => {
     expect(hinge.rotation.y).toBeGreaterThan(1.9)
   })
 
+  test('panel-ready refrigerator uses the cabinet front and handle settings', () => {
+    const node = CabinetModuleNode.parse({
+      cabinetType: 'tall',
+      width: FRIDGE_COLUMN_WIDTH,
+      depth: FRIDGE_STANDARD_DEPTH,
+      carcassHeight: FRIDGE_COLUMN_HEIGHT,
+      panelReady: true,
+      frontStyle: 'shaker',
+      handleStyle: 'bar',
+      stack: [{ id: 'fridge', type: 'fridge-single', height: FRIDGE_COLUMN_HEIGHT }],
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+
+    const panel = findMeshByName(group, 'cabinet-fridge-single-0-door-single-panel')
+    expect(panel.userData.slotId).toBe('front')
+    expect(findMeshByName(group, 'cabinet-fridge-single-0-door-single-handle')).toBeDefined()
+    expect(() => findMeshByName(group, 'cabinet-fridge-single-0-door-single-badge')).toThrow()
+    expect(() =>
+      findMeshByName(group, 'cabinet-fridge-single-0-door-single-water-dispenser'),
+    ).toThrow()
+  })
+
   test('fridge cabinet carcass ends at the appliance without a top filler', () => {
     const node = CabinetModuleNode.parse({
       cabinetType: 'tall',
@@ -1278,6 +1300,77 @@ describe('buildCabinetGeometry — run countertops', () => {
     const group = buildCabinetGeometry(run, geometryContext({ children: [] }), 'rendered', false)
 
     expect(group.children).toHaveLength(0)
+  })
+
+  test('finished end panels follow exposed run ends and match the front style', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_finished-ends-run',
+      withFinishedEnds: true,
+      frontStyle: 'shaker',
+      children: ['cabinet-module_finished-ends-left', 'cabinet-module_finished-ends-right'],
+    })
+    const modules = [
+      CabinetModuleNode.parse({
+        id: 'cabinet-module_finished-ends-left',
+        parentId: run.id,
+        position: [-0.3, 0.1, 0],
+        width: 0.6,
+        showPlinth: false,
+        withCountertop: false,
+      }),
+      CabinetModuleNode.parse({
+        id: 'cabinet-module_finished-ends-right',
+        parentId: run.id,
+        position: [0.3, 0.1, 0],
+        width: 0.6,
+        showPlinth: false,
+        withCountertop: false,
+      }),
+    ]
+    const group = buildCabinetGeometry(
+      run,
+      geometryContext({ children: modules }),
+      'rendered',
+      false,
+    )
+
+    const left = findMeshByName(group, 'cabinet-run-finished-end-left')
+    const right = findMeshByName(group, 'cabinet-run-finished-end-right')
+    expect(left.userData.slotId).toBe('front')
+    expect(right.userData.slotId).toBe('front')
+    expect(worldBounds(left).min.x).toBeLessThan(-0.59)
+    expect(worldBounds(right).max.x).toBeGreaterThan(0.59)
+  })
+
+  test('finished end panels are omitted where a neighboring run abuts the end', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_finished-ends-joined-run',
+      withFinishedEnds: true,
+      children: ['cabinet-module_finished-ends-joined-module'],
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_finished-ends-joined-module',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.6,
+      showPlinth: false,
+      withCountertop: false,
+    })
+    const neighbor = CabinetNode.parse({
+      id: 'cabinet_finished-ends-neighbor',
+      position: [0.6, 0, 0],
+      width: 0.6,
+      depth: 0.6,
+    })
+    const group = buildCabinetGeometry(
+      run,
+      geometryContext({ children: [module], siblings: [neighbor] }),
+      'rendered',
+      false,
+    )
+
+    expect(() => findMeshByName(group, 'cabinet-run-finished-end-left')).not.toThrow()
+    expect(() => findMeshByName(group, 'cabinet-run-finished-end-right')).toThrow()
   })
 
   test('run plinth follows shifted module depth extents instead of growing backward', () => {
@@ -2343,6 +2436,159 @@ describe('cabinet handles', () => {
     expect(rightHandle).toBeDefined()
     expect(leftHandle!.apply(node, 0.8, null as never).position?.[0]).toBeCloseTo(-0.1)
     expect(rightHandle!.apply(node, 0.8, null as never).position?.[0]).toBeCloseTo(0.1)
+  })
+
+  test.each(['left', 'right'] as const)('L %s width preview moves the linked leg live', (side) => {
+    const fixture = generatedL(side)
+    const handles = cabinetModuleDefinition.handles as (
+      node: CabinetModuleNode,
+      sceneApi: ReturnType<typeof sceneApiFixture>,
+    ) => HandleDescriptor<CabinetModuleNode>[]
+    const widthHandle = handles(fixture.sourceModule, fixture.sceneApi).find(
+      (handle): handle is LinearResizeHandle<CabinetModuleNode> =>
+        handle.kind === 'linear-resize' &&
+        handle.axis === 'x' &&
+        handle.anchor === (side === 'right' ? 'min' : 'max'),
+    )
+
+    expect(widthHandle).toBeDefined()
+    const before = fixture.sceneApi.get<CabinetNode>(fixture.leg.id)!.position
+    const preview = new Map(
+      widthHandle!.previewOverrides?.(
+        fixture.sourceModule,
+        fixture.sourceModule.width + 0.2,
+        fixture.sceneApi,
+      ) ?? [],
+    )
+    const linkedLegPreview = preview.get(fixture.leg.id as AnyNodeId)
+
+    expect(linkedLegPreview?.position).toBeDefined()
+    expect(linkedLegPreview?.position?.[0]).toBeCloseTo(before[0] + (side === 'right' ? 0.2 : -0.2))
+    expect(fixture.sceneApi.get<CabinetNode>(fixture.leg.id)!.position).toEqual(before)
+  })
+
+  test.each([
+    'left',
+    'right',
+  ] as const)('resizing into a gap left by a deleted module keeps the neighbor fixed from the %s side', (side) => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_handle-gap-run',
+      children: ['cabinet-module_handle-gap-left', 'cabinet-module_handle-gap-right'],
+    })
+    const left = CabinetModuleNode.parse({
+      id: 'cabinet-module_handle-gap-left',
+      parentId: run.id,
+      position: [-0.5, 0.1, 0],
+      width: 0.5,
+    })
+    const right = CabinetModuleNode.parse({
+      id: 'cabinet-module_handle-gap-right',
+      parentId: run.id,
+      position: [0.2, 0.1, 0],
+      width: 0.5,
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, left as AnyNode, right as AnyNode])
+    const selected = side === 'right' ? left : right
+    const neighbor = side === 'right' ? right : left
+    const handles =
+      typeof cabinetModuleDefinition.handles === 'function'
+        ? cabinetModuleDefinition.handles(selected, sceneApi as never)
+        : (cabinetModuleDefinition.handles ?? [])
+    const widthHandle = handles.find(
+      (handle): handle is LinearResizeHandle<typeof selected> =>
+        handle.kind === 'linear-resize' &&
+        handle.axis === 'x' &&
+        handle.anchor === (side === 'right' ? 'min' : 'max'),
+    )
+
+    expect(widthHandle).toBeDefined()
+    expect(widthHandle!.magneticSnap).toBeDefined()
+    const snappedWidth = widthHandle!.magneticSnap!(selected, 0.65, sceneApi as never)
+    const unsnappedWidth = widthHandle!.magneticSnap!(selected, 0.6, sceneApi as never)
+    const patch = widthHandle!.apply(selected, snappedWidth, sceneApi as never)
+    const preview = widthHandle!.previewOverrides?.(selected, snappedWidth, sceneApi as never) ?? []
+    const previewNeighbor = preview.find(([id]) => id === neighbor.id)?.[1]
+
+    expect(snappedWidth).toBeCloseTo(0.7)
+    expect(unsnappedWidth).toBeCloseTo(0.6)
+    expect(patch.position?.[0]).toBeCloseTo(side === 'right' ? -0.4 : 0.1)
+    expect(previewNeighbor?.position?.[0]).toBeCloseTo(neighbor.position[0])
+
+    widthHandle!.commit?.(selected, patch, sceneApi as never)
+    expect(sceneApi.get<CabinetModuleNode>(neighbor.id)?.position[0]).toBeCloseTo(
+      neighbor.position[0],
+    )
+  })
+
+  test.each([
+    'left',
+    'right',
+  ] as const)('Alt-resizing a run module leaves the neighbor independent from the %s side', (side) => {
+    const run = CabinetNode.parse({
+      id: `cabinet_handle-alt-run-${side}`,
+      children: [
+        `cabinet-module_handle-alt-left-${side}`,
+        `cabinet-module_handle-alt-right-${side}`,
+      ],
+    })
+    const left = CabinetModuleNode.parse({
+      id: `cabinet-module_handle-alt-left-${side}`,
+      parentId: run.id,
+      position: [-0.5, 0.1, 0],
+      width: 0.5,
+    })
+    const right = CabinetModuleNode.parse({
+      id: `cabinet-module_handle-alt-right-${side}`,
+      parentId: run.id,
+      position: [0.2, 0.1, 0],
+      width: 0.5,
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, left as AnyNode, right as AnyNode])
+    const selected = side === 'right' ? left : right
+    const neighbor = side === 'right' ? right : left
+    const handles =
+      typeof cabinetModuleDefinition.handles === 'function'
+        ? cabinetModuleDefinition.handles(selected, sceneApi as never)
+        : (cabinetModuleDefinition.handles ?? [])
+    const widthHandle = handles.find(
+      (handle): handle is LinearResizeHandle<typeof selected> =>
+        handle.kind === 'linear-resize' &&
+        handle.axis === 'x' &&
+        handle.anchor === (side === 'right' ? 'min' : 'max'),
+    )
+
+    expect(widthHandle).toBeDefined()
+    const applyWithAlt = widthHandle!.apply as unknown as (
+      node: typeof selected,
+      width: number,
+      sceneApi: never,
+      modifiers: { altKey: boolean },
+    ) => Partial<typeof selected>
+    const previewWithAlt = widthHandle!.previewOverrides as unknown as (
+      node: typeof selected,
+      width: number,
+      sceneApi: never,
+      modifiers: { altKey: boolean },
+    ) => ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]>
+    const commitWithAlt = widthHandle!.commit as unknown as (
+      node: typeof selected,
+      patch: Partial<typeof selected>,
+      sceneApi: never,
+      modifiers: { altKey: boolean },
+    ) => void
+    const patch = applyWithAlt(selected, 0.8, sceneApi as never, { altKey: true })
+    const preview = new Map(previewWithAlt(selected, 0.8, sceneApi as never, { altKey: true }))
+
+    expect(patch.width).toBeCloseTo(0.8)
+    expect(preview.has(neighbor.id as AnyNodeId)).toBe(false)
+
+    commitWithAlt(selected, patch, sceneApi as never, { altKey: true })
+
+    expect(sceneApi.get<CabinetModuleNode>(selected.id)?.width).toBeCloseTo(0.8)
+    expect(sceneApi.get<CabinetModuleNode>(neighbor.id)?.width).toBeCloseTo(neighbor.width)
+    expect(sceneApi.get<CabinetModuleNode>(neighbor.id)?.position[0]).toBeCloseTo(
+      neighbor.position[0],
+    )
   })
 
   test.each([

@@ -13,6 +13,7 @@ import {
   useLiveTransforms,
 } from '@pascal-app/core'
 import { formatLinearMeasurement, readFloorplanMetricNotationOverride } from '@pascal-app/editor'
+import { restingNodePlanFrame } from '../shared/resting-surface-plan'
 
 /**
  * Stage C floor-plan builder for item.
@@ -87,6 +88,17 @@ function resolveItemTransform(
         y: parentT.y + offsetY,
         rotation: parentT.rotation + localRotation,
       }
+    }
+  } else if (
+    parentNode?.type === 'cabinet' ||
+    parentNode?.type === 'cabinet-module' ||
+    parentNode?.type === 'procedural-item'
+  ) {
+    const f = restingNodePlanFrame(item, ctx.resolve)
+    result = {
+      x: f.position[0],
+      y: f.position[2],
+      rotation: Math.atan2(f.axes[2][0], f.axes[2][2]),
     }
   } else if (parentNode?.type === 'shelf') {
     // Shelf-hosted item: `item.position` is in shelf-local coords. The

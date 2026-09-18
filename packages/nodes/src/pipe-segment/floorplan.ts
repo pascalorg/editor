@@ -1,5 +1,7 @@
 import type { FloorplanGeometry, FloorplanPoint, GeometryContext } from '@pascal-app/core'
 import { INCHES_TO_METERS } from '../duct-segment/geometry'
+import { runHangerFloorplan } from '../shared/run-hangers'
+import { pipeContinuationHandlePlan, pipeEndpointPort } from './continuation'
 import type { PipeSegmentNode } from './schema'
 
 const WASTE_COLOR = '#57534e'
@@ -42,6 +44,7 @@ export function buildPipeSegmentFloorplan(
     return {
       kind: 'group',
       children: [
+        ...runHangerFloorplan(node, ctx),
         {
           kind: 'circle',
           cx: p[0],
@@ -93,7 +96,48 @@ export function buildPipeSegmentFloorplan(
         payload: { pointIndex: indexMap[k]! },
       })
     }
+    const continuationGap = Math.max(0.28, diameterM / 2 + 0.18)
+    for (const endpoint of ['start', 'end'] as const) {
+      const port = pipeEndpointPort(node, endpoint)
+      const sceneNodes = ctx.sceneNodes ?? { [node.id]: node }
+      const plan = pipeContinuationHandlePlan(node, endpoint, sceneNodes, continuationGap)
+      if (!(port && plan)) continue
+      if (
+        Math.hypot(plan.position[0] - port.position[0], plan.position[2] - port.position[2]) < 1e-6
+      )
+        continue
+      children.push({
+        kind: 'midpoint-handle',
+        point: [plan.position[0], plan.position[2]],
+        activation: 'action',
+        affordance: 'continue-run',
+        payload: { action: 'continue-run', endpoint, fittingId: plan.fittingId },
+      })
+    }
+
+    for (let k = 0; k < points.length - 1; k++) {
+      const a = points[k]!
+      const b = points[k + 1]!
+      const pathIndex = indexMap[k]!
+      const nextPathIndex = indexMap[k + 1]!
+      children.push({
+        kind: 'midpoint-handle',
+        point: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2],
+        activation: 'action',
+        affordance: 'branch-run',
+        payload: {
+          action: 'branch-run',
+          segmentIndex: pathIndex,
+          point: [
+            (a[0] + b[0]) / 2,
+            (node.path[pathIndex]![1] + node.path[nextPathIndex]![1]) / 2,
+            (a[1] + b[1]) / 2,
+          ],
+        },
+      })
+    }
   }
 
+  children.push(...runHangerFloorplan(node, ctx))
   return { kind: 'group', children }
 }

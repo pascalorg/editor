@@ -83,7 +83,7 @@ describe('emitCanvasNodeSelection', () => {
 
   test('deletes an accepted floorplan node when Delete mode is active', () => {
     const node = BlockNode.parse({ id: 'block_floorplan-delete-target' })
-    const previousMode = useEditor.getState().mode
+    const previousToolMode = useEditor.getState().toolMode
     const previousScene = useScene.getState()
     const previousSelection = useViewer.getState().selection
     const received: AnyNode[] = []
@@ -92,7 +92,7 @@ describe('emitCanvasNodeSelection', () => {
     emitter.on('selection:canvas-node-click', listener)
 
     try {
-      useEditor.setState({ mode: 'delete' })
+      useEditor.getState().armToolMode({ mode: 'delete' })
       useScene.setState({
         nodes: { [node.id]: node },
         rootNodeIds: [node.id],
@@ -107,7 +107,7 @@ describe('emitCanvasNodeSelection', () => {
       expect(received).toEqual([])
     } finally {
       emitter.off('selection:canvas-node-click', listener)
-      useEditor.setState({ mode: previousMode })
+      useEditor.getState().armToolMode(previousToolMode)
       useScene.setState(previousScene)
       useViewer.setState({ selection: previousSelection })
     }
@@ -115,12 +115,12 @@ describe('emitCanvasNodeSelection', () => {
 
   test('preserves a floorplan node and its selection when the scene is read-only', () => {
     const node = BlockNode.parse({ id: 'block_floorplan-read-only-target' })
-    const previousMode = useEditor.getState().mode
+    const previousToolMode = useEditor.getState().toolMode
     const previousScene = useScene.getState()
     const previousSelection = useViewer.getState().selection
 
     try {
-      useEditor.setState({ mode: 'delete' })
+      useEditor.getState().armToolMode({ mode: 'delete' })
       useScene.setState({
         nodes: { [node.id]: node },
         rootNodeIds: [node.id],
@@ -133,7 +133,7 @@ describe('emitCanvasNodeSelection', () => {
       expect(useScene.getState().nodes[node.id]).toEqual(node)
       expect(useViewer.getState().selection.selectedIds).toEqual([node.id])
     } finally {
-      useEditor.setState({ mode: previousMode })
+      useEditor.getState().armToolMode(previousToolMode)
       useScene.setState(previousScene)
       useViewer.setState({ selection: previousSelection })
     }

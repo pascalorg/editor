@@ -1,4 +1,6 @@
 import type { FloorplanGeometry, FloorplanPoint, GeometryContext } from '@pascal-app/core'
+import { runHangerFloorplan } from '../shared/run-hangers'
+import { ductContinuationHandlePlan, ductEndpointPort } from './continuation'
 import { INCHES_TO_METERS } from './geometry'
 import type { DuctSegmentNode } from './schema'
 
@@ -51,6 +53,7 @@ export function buildDuctSegmentFloorplan(
     return {
       kind: 'group',
       children: [
+        ...runHangerFloorplan(node, ctx),
         {
           kind: 'circle',
           cx: p[0],
@@ -101,6 +104,48 @@ export function buildDuctSegmentFloorplan(
       })
     }
 
+    const continuationGap = Math.max(0.28, diameterM / 2 + 0.18)
+    for (const endpoint of ['start', 'end'] as const) {
+      const port = ductEndpointPort(node, endpoint)
+      const sceneNodes = ctx.sceneNodes ?? { [node.id]: node }
+      const plan = ductContinuationHandlePlan(node, endpoint, sceneNodes, continuationGap)
+      if (!(port && plan)) continue
+      if (
+        Math.hypot(plan.position[0] - port.position[0], plan.position[2] - port.position[2]) < 1e-6
+      )
+        continue
+      children.push({
+        kind: 'midpoint-handle',
+        point: [plan.position[0], plan.position[2]],
+        activation: 'action',
+        affordance: 'continue-run',
+        payload: { action: 'continue-run', endpoint, fittingId: plan.fittingId },
+      })
+    }
+
+    for (let k = 0; k < points.length - 1; k++) {
+      const a = points[k]!
+      const b = points[k + 1]!
+      const t = 0.5
+      const pathIndex = indexMap[k]!
+      const nextPathIndex = indexMap[k + 1]!
+      children.push({
+        kind: 'midpoint-handle',
+        point: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t],
+        activation: 'action',
+        affordance: 'branch-run',
+        payload: {
+          action: 'branch-run',
+          segmentIndex: pathIndex,
+          point: [
+            a[0] + (b[0] - a[0]) * t,
+            (node.path[pathIndex]![1] + node.path[nextPathIndex]![1]) / 2,
+            a[1] + (b[1] - a[1]) * t,
+          ],
+        },
+      })
+    }
+
     // Side-move arrows: a front / back pair at each segment midpoint, sliding
     // that segment perpendicular to itself. 2D twin of the 3D side-move
     // arrows. The arrows stand one duct-radius + gap off the body; `angle`
@@ -128,5 +173,6 @@ export function buildDuctSegmentFloorplan(
     }
   }
 
+  children.push(...runHangerFloorplan(node, ctx))
   return { kind: 'group', children }
 }

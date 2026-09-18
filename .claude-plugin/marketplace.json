@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "pascal",
+  "version": "0.1.10",
+  "description": "Public Pascal workflows for MCP-capable agents.",
+  "owner": {
+    "name": "Pascal"
+  },
+  "plugins": [
+    {
+      "name": "pascal-agent-skills",
+      "source": "./skills",
+      "description": "Create, inspect, validate, and assess furniture layouts with bounded next actions in Pascal through MCP.",
+      "author": {
+        "name": "Pascal",
+        "email": "support@pascal.app",
+        "url": "https://pascal.app"
+      },
+      "version": "0.1.10",
+      "category": "productivity",
+      "skills": ["./pascal-3d", "./furniture-fit"]
+    }
+  ]
+}

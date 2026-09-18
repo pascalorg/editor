@@ -387,12 +387,11 @@ export function rotateGroupSnapshots(
   return { starts: rotatedStarts, links: rotatedLinks }
 }
 
+export type GroupPlanBounds = { minX: number; minZ: number; maxX: number; maxZ: number }
+
 // Level-frame XZ extents of the participant DATA — the mesh-free sibling of
-// `computeGroupBox`, used when meshes aren't mounted yet and to re-seed
-// alignment anchors after a mid-drag rotation.
-export function participantExtents(
-  starts: ParticipantStart[],
-): { minX: number; minZ: number; maxX: number; maxZ: number } | null {
+// `computeGroupBox`, used when meshes aren't mounted yet.
+function participantExtents(starts: ParticipantStart[]): GroupPlanBounds | null {
   let minX = Number.POSITIVE_INFINITY
   let minZ = Number.POSITIVE_INFINITY
   let maxX = Number.NEGATIVE_INFINITY
@@ -419,8 +418,73 @@ export function participantExtents(
   return { minX, minZ, maxX, maxZ }
 }
 
+// The one footprint every group transform measures itself against: the
+// selection's mounted meshes (world box, converted into the level frame) with
+// the participant DATA extents as the fallback when the meshes aren't up yet
+// (Duplicate picks up its clones a frame before their renderers mount). Anchor
+// points alone sit metres inside a wide selection's real footprint, so a
+// gesture that pivots on the data extents orbits a different point than the
+// idle keyboard rotate and the rotate gizmos, which both use the mesh box.
+export function groupPlanBounds(
+  box: Box3 | null,
+  starts: ParticipantStart[],
+  frameInv: Matrix4,
+): GroupPlanBounds | null {
+  if (!box) return participantExtents(starts)
+  const min = box.min.clone().applyMatrix4(frameInv)
+  const max = box.max.clone().applyMatrix4(frameInv)
+  return {
+    minX: Math.min(min.x, max.x),
+    minZ: Math.min(min.z, max.z),
+    maxX: Math.max(min.x, max.x),
+    maxZ: Math.max(min.z, max.z),
+  }
+}
+
+export const planBoundsCenter = (b: GroupPlanBounds): Vec2 => [
+  (b.minX + b.maxX) / 2,
+  (b.minZ + b.maxZ) / 2,
+]
+
+// Re-seed the footprint after a mid-gesture rotation by orbiting the box
+// corners and re-fitting an axis-aligned box. Re-measuring the rotated DATA
+// extents instead would slide the centre off the pivot the snapshots turned
+// around, dragging the alignment anchors away from the group under the cursor.
+export function rotatePlanBounds(
+  b: GroupPlanBounds,
+  center: { x: number; z: number },
+  delta: number,
+): GroupPlanBounds {
+  const cos = Math.cos(delta)
+  const sin = Math.sin(delta)
+  let minX = Number.POSITIVE_INFINITY
+  let minZ = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let maxZ = Number.NEGATIVE_INFINITY
+  const corners: Vec2[] = [
+    [b.minX, b.minZ],
+    [b.maxX, b.minZ],
+    [b.maxX, b.maxZ],
+    [b.minX, b.maxZ],
+  ]
+  for (const [x, z] of corners) {
+    const dx = x - center.x
+    const dz = z - center.z
+    const rx = center.x + dx * cos - dz * sin
+    const rz = center.z + dx * sin + dz * cos
+    minX = Math.min(minX, rx)
+    minZ = Math.min(minZ, rz)
+    maxX = Math.max(maxX, rx)
+    maxZ = Math.max(maxZ, rz)
+  }
+  return { minX, minZ, maxX, maxZ }
+}
+
 // Rigid group slide: shift every participant (and each linked neighbour's
-// shared endpoint) by the same level-frame XZ delta. Y and rotations untouched.
+// shared endpoint) by the same level-frame XZ delta. Y is untouched; the
+// snapshot's rotation rides along because a mid-gesture R/T turns the
+// SNAPSHOTS — dropping it here would republish (and commit) the pre-rotation
+// facing, orbiting the layout while every member keeps its old bearing.
 export function translateGroupPatches(
   starts: ParticipantStart[],
   links: LinkedNeighbor[],
@@ -437,7 +501,10 @@ export function translateGroupPatches(
       if (s.holes) patch.holes = s.holes.map((hole) => hole.map(shift))
       patches.push([s.id, patch])
     } else {
-      patches.push([s.id, { position: [s.position[0] + dx, s.position[1], s.position[2] + dz] }])
+      const position: Vec3 = [s.position[0] + dx, s.position[1], s.position[2] + dz]
+      const rotation =
+        s.kind === 'vec3' ? ([s.rotation[0], s.rotation[1], s.rotation[2]] as Vec3) : s.rotation
+      patches.push([s.id, { position, rotation }])
     }
   }
   for (const l of links) {

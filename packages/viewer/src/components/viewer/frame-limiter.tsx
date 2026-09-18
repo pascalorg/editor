@@ -1,5 +1,6 @@
 import { useThree } from '@react-three/fiber'
 import { useLayoutEffect, useRef } from 'react'
+import { timeSpan } from '../../lib/perf-tracks'
 import useViewer from '../../store/use-viewer'
 
 type FrameLimiterProps = {
@@ -86,13 +87,13 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50, paused = false })
       const frameTime = clock.sample(t, interval)
       if (frameTime === null) return
       nextFrameTimeRef.current = frameTime
-      advance(frameTime)
+      timeSpan('frame-cpu', () => advance(frameTime))
     }
     function kick() {
       syncSize()
       const frameTime = clock.step(1 / 1000)
       nextFrameTimeRef.current = frameTime
-      advance(frameTime)
+      timeSpan('frame-cpu', () => advance(frameTime))
     }
     function onVisibilityChange() {
       if (document.visibilityState === 'visible') kick()
@@ -103,7 +104,7 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50, paused = false })
       timer = setInterval(() => {
         const frameTime = clock.step(interval / 1000)
         nextFrameTimeRef.current = frameTime
-        advance(frameTime)
+        timeSpan('frame-cpu', () => advance(frameTime))
       }, interval)
     } else {
       // Kick off custom render loop

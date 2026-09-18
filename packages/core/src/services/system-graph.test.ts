@@ -27,7 +27,7 @@ function stubDef(
   } as unknown as AnyNodeDefinition)
 }
 
-stubDef('duct-segment', 'run', (node) => {
+const runPorts = (node: AnyNode): NodePort[] => {
   const path = (node as unknown as { path: Point[] }).path
   const system = (node as unknown as { system: string }).system
   return [
@@ -40,7 +40,9 @@ stubDef('duct-segment', 'run', (node) => {
       system,
     },
   ]
-})
+}
+stubDef('duct-segment', 'run', runPorts)
+stubDef('pipe-segment', 'run', runPorts)
 stubDef('hvac-equipment', 'equipment', (node) => {
   const position = (node as unknown as { position: Point }).position
   return [{ id: 'supply', position, direction: [0, 1, 0], diameter: 12, system: 'supply' }]
@@ -99,6 +101,89 @@ describe('buildPortComponents', () => {
     ]) // 20 cm in another row — separate
     const components = buildPortComponents(sceneOf(a, near, far))
     expect(components.length).toBe(2)
+  })
+
+  test('coincident ports with different systems stay separate', () => {
+    const supply = run([
+      [0, 0, 0],
+      [3, 0, 0],
+    ])
+    const returnRun = run(
+      [
+        [3, 0, 0],
+        [6, 0, 0],
+      ],
+      'return',
+    )
+    expect(buildPortComponents(sceneOf(supply, returnRun))).toHaveLength(2)
+  })
+
+  test('matching local coordinates on separate floors stay separate', () => {
+    const lower = makeNode('level', { level: 0, height: 3, children: [] })
+    const upper = makeNode('level', { level: 1, height: 3, children: [] })
+    const a = {
+      ...run([
+        [0, 0, 0],
+        [3, 0, 0],
+      ]),
+      parentId: lower.id,
+    }
+    const b = {
+      ...run([
+        [0, 0, 0],
+        [3, 0, 0],
+      ]),
+      parentId: upper.id,
+    }
+    expect(buildPortComponents(sceneOf(lower, upper, a, b))).toHaveLength(2)
+  })
+
+  test('a waste stack connects across floors at their actual elevation', () => {
+    const lower = makeNode('level', { level: 0, height: 3, baseElevation: 0.5, children: [] })
+    const upper = makeNode('level', { level: 1, height: 3, baseElevation: 0.2, children: [] })
+    const a = makeNode('pipe-segment', {
+      path: [
+        [0, 0, 0],
+        [0, 3.2, 0],
+      ],
+      system: 'waste',
+      parentId: lower.id,
+    })
+    const b = makeNode('pipe-segment', {
+      path: [
+        [0, 0, 0],
+        [0, 2, 0],
+      ],
+      system: 'waste',
+      parentId: upper.id,
+    })
+    expect(buildPortComponents(sceneOf(lower, upper, a, b))).toEqual([[a.id, b.id]])
+  })
+
+  test('building rotation and translation determine the joint position', () => {
+    const building = makeNode('building', {
+      position: [10, 0, 0],
+      rotation: [0, Math.PI / 2, 0],
+      children: [],
+    })
+    const level = makeNode('level', { parentId: building.id, level: 0, height: 3, children: [] })
+    const a = {
+      ...run([
+        [0, 0, 0],
+        [2, 0, 0],
+      ]),
+      parentId: level.id,
+    }
+    const b = run([
+      [10, 0, -2],
+      [10, 0, -4],
+    ])
+    const unrelated = run([
+      [2, 0, 0],
+      [4, 0, 0],
+    ])
+    const groups = buildPortComponents(sceneOf(building, level, a, b, unrelated))
+    expect(groups).toEqual([[a.id, b.id], [unrelated.id]])
   })
 
   test('nodes without ports do not participate', () => {

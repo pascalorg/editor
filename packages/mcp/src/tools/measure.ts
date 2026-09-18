@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
+import { READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 import { ErrorCode, throwMcpError } from './errors'
 import { NodeIdSchema } from './schemas'
 
@@ -14,6 +15,7 @@ export const measureOutput = {
   distanceMeters: z.number(),
   areaSqMeters: z.number().optional(),
   units: z.literal('meters'),
+  areaUnits: z.literal('square_meters').optional(),
 }
 
 /**
@@ -93,6 +95,7 @@ export function registerMeasure(server: McpServer, bridge: SceneOperations): voi
         'Measure distance (in meters) between two nodes, or the net area of a polygon node when fromId === toId.',
       inputSchema: measureInput,
       outputSchema: measureOutput,
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async ({ fromId, toId }) => {
       const from = bridge.getNode(fromId as AnyNodeId)
@@ -117,6 +120,7 @@ export function registerMeasure(server: McpServer, bridge: SceneOperations): voi
             distanceMeters: 0,
             areaSqMeters: area,
             units: 'meters' as const,
+            areaUnits: 'square_meters' as const,
           }
           return {
             content: [{ type: 'text' as const, text: JSON.stringify(payload) }],

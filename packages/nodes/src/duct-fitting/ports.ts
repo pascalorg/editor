@@ -29,6 +29,27 @@ type LocalPort = { id: string; position: Vector3; direction: Vector3; diameter: 
  * 135° → upstream lateral); reducer -X → +X.
  */
 export function localFittingPorts(node: DuctFittingNode): LocalPort[] {
+  if (node.fittingType === 'access-panel') return []
+  if (['end-cap', 'damper', 'coupling'].includes(node.fittingType)) {
+    const half = node.fittingType === 'end-cap' ? 0.025 : 0.1
+    const inlet = {
+      id: 'inlet',
+      position: new Vector3(-half, 0, 0),
+      direction: new Vector3(-1, 0, 0),
+      diameter: node.diameter,
+    }
+    return node.fittingType === 'end-cap'
+      ? [inlet]
+      : [
+          inlet,
+          {
+            id: 'outlet',
+            position: new Vector3(half, 0, 0),
+            direction: new Vector3(1, 0, 0),
+            diameter: node.diameter,
+          },
+        ]
+  }
   const main = fittingLegLength(node.diameter)
   if (node.fittingType === 'elbow') {
     const theta = (node.angle * Math.PI) / 180
@@ -130,6 +151,15 @@ export function localFittingPorts(node: DuctFittingNode): LocalPort[] {
   ]
 }
 
+export function adapterShape(node: DuctFittingNode, outlet = false): 'round' | 'rect' | 'oval' {
+  const inlet = node.inletShape ?? (node.fittingType === 'transition' ? 'rect' : 'round')
+  if (!outlet) return inlet
+  const target = node.outletShape ?? 'round'
+  if (node.fittingType === 'transition' && target === inlet)
+    return inlet === 'round' ? 'rect' : 'round'
+  return target
+}
+
 /** `def.ports` — local ports transformed into level-local space. */
 export function getDuctFittingPorts(node: DuctFittingNode): NodePort[] {
   const euler = new Euler(node.rotation[0], node.rotation[1], node.rotation[2])
@@ -142,6 +172,24 @@ export function getDuctFittingPorts(node: DuctFittingNode): NodePort[] {
       position: [position.x, position.y, position.z] as const,
       direction: [direction.x, direction.y, direction.z] as const,
       diameter: port.diameter,
+      shape:
+        node.fittingType === 'reducer' || node.fittingType === 'transition'
+          ? adapterShape(node, port.id === 'outlet')
+          : node.shape === 'round'
+            ? 'round'
+            : port.id.startsWith('branch')
+              ? node.shape2
+              : node.shape,
+      width:
+        port.id.startsWith('branch') ||
+        (port.id === 'outlet' && ['reducer', 'transition'].includes(node.fittingType))
+          ? node.width2
+          : node.width,
+      height:
+        port.id.startsWith('branch') ||
+        (port.id === 'outlet' && ['reducer', 'transition'].includes(node.fittingType))
+          ? node.height2
+          : node.height,
       system: node.system,
     }
   })

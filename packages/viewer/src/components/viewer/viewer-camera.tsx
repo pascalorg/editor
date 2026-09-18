@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import type { Layers } from 'three'
 import { GRID_LAYER, OVERLAY_LAYER, ZONE_LAYER } from '../../lib/layers'
 import useViewer from '../../store/use-viewer'
+import { useSceneGroundReplacement } from './scene-ground-replacement'
 
 const IMMERSIVE_XR_VISIBLE_LAYERS = [OVERLAY_LAYER, ZONE_LAYER, GRID_LAYER] as const
 
@@ -53,12 +54,13 @@ export function viewerUsesPerspectiveCamera(cameraMode: string, immersiveXR: boo
 export const ViewerCamera = ({ immersiveXR = false }: { immersiveXR?: boolean }) => {
   const cameraMode = useViewer((state) => state.cameraMode)
   const clipping = viewerCameraClipping(immersiveXR)
+  const far = useSceneGroundReplacement() ? 20_000 : clipping.far
 
   return (
     <>
       {viewerUsesPerspectiveCamera(cameraMode, immersiveXR) ? (
         <PerspectiveCamera
-          far={clipping.far}
+          far={far}
           fov={50}
           makeDefault
           near={clipping.near}

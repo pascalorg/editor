@@ -135,6 +135,7 @@ export const WallNode = BaseNode.extend({
     .array(
       z.union([
         ItemNode.shape.id,
+        objectId('procedural-item'),
         DoorNode.shape.id,
         WindowNode.shape.id,
         LeanToExtensionNode.shape.id,

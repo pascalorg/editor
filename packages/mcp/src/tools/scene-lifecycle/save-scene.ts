@@ -4,6 +4,7 @@ import { AnyNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../../operations'
 import { SceneVersionConflictError } from '../../storage/types'
+import { DESTRUCTIVE_TOOL_ANNOTATIONS } from '../annotations'
 import { ErrorCode, throwMcpError } from '../errors'
 import { appendLiveSceneEvent } from '../live-sync'
 import { currentLevelContext, sceneMetaPayload } from './metadata'
@@ -66,6 +67,7 @@ export function registerSaveScene(server: McpServer, bridge: SceneOperations): v
         'Save the current scene (or a provided graph) to the SceneStore. Defaults to a browser-visible draft save so agents can iterate without creating many project versions. Use saveMode: "checkpoint" for meaningful version history.',
       inputSchema: saveSceneInput,
       outputSchema: saveSceneOutput,
+      annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async ({
       id,

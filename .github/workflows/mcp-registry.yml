@@ -1,0 +1,105 @@
+name: MCP Registry
+
+on:
+  pull_request:
+    paths:
+      - server.json
+      - .github/workflows/mcp-registry.yml
+  push:
+    branches: [main]
+    paths:
+      - server.json
+      - .github/workflows/mcp-registry.yml
+
+env:
+  MCP_PUBLISHER_VERSION: 1.8.1
+  MCP_PUBLISHER_LINUX_AMD64_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Install MCP Registry publisher
+        run: |
+          curl --fail --location \
+            "https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz" \
+            --output "$RUNNER_TEMP/mcp-publisher.tar.gz"
+          echo "${MCP_PUBLISHER_LINUX_AMD64_SHA256}  $RUNNER_TEMP/mcp-publisher.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/mcp-publisher.tar.gz" -C "$RUNNER_TEMP" mcp-publisher
+
+      - name: Validate MCP Registry manifest
+        run: "$RUNNER_TEMP/mcp-publisher validate"
+
+      - name: Verify hosted endpoint contract
+        run: |
+          jq --exit-status '
+            (.version | strings | test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))
+            and .remotes == [{
+              "type": "streamable-http",
+              "url": "https://editor.pascal.app/api/mcp",
+              "headers": [{
+                "name": "Authorization",
+                "description": "Bearer API key created in Pascal Settings, formatted as Bearer sk_live_...",
+                "isRequired": true,
+                "isSecret": true
+              }]
+            }]
+          ' server.json
+          curl --fail --location --output /dev/null \
+            https://editor.pascal.app/docs/developers/mcp
+          status=$(curl --silent --show-error --output "$RUNNER_TEMP/mcp-response.json" \
+            --write-out '%{http_code}' \
+            --request POST \
+            --header 'content-type: application/json' \
+            --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"registry-check","version":"1"}}}' \
+            https://editor.pascal.app/api/mcp)
+          test "$status" = "401"
+
+      - name: Verify live API catalog matches manifest
+        run: |
+          endpoint=$(jq --raw-output '.remotes[0].url' server.json)
+          version=$(jq --raw-output '.version' server.json)
+          transport=$(jq --raw-output '.remotes[0].type' server.json)
+          registry_name=$(jq --raw-output '.name' server.json)
+
+          curl --fail \
+            --connect-timeout 10 \
+            --max-time 30 \
+            --retry 3 \
+            --retry-connrefused \
+            --retry-delay 2 \
+            --header 'accept: application/linkset+json' \
+            --dump-header "$RUNNER_TEMP/api-catalog.headers" \
+            --output "$RUNNER_TEMP/api-catalog.json" \
+            https://editor.pascal.app/.well-known/api-catalog
+          grep --ignore-case --extended-regexp \
+            '^content-type: application/linkset\+json([;[:space:]]|$)' \
+            "$RUNNER_TEMP/api-catalog.headers"
+          jq --exit-status \
+            --arg endpoint "$endpoint" \
+            --arg version "$version" \
+            --arg transport "$transport" \
+            --arg registry_name "$registry_name" '
+              [.linkset[] | .item[]? | select(.href == $endpoint)] as $matches
+              | ($matches | length) == 1
+                and $matches[0].version == [$version]
+                and $matches[0].transport == [$transport]
+                and $matches[0]["registry-name"] == [$registry_name]
+            ' "$RUNNER_TEMP/api-catalog.json"
+
+          curl --fail --head \
+            --connect-timeout 10 \
+            --max-time 30 \
+            --retry 3 \
+            --retry-connrefused \
+            --retry-delay 2 \
+            https://editor.pascal.app/.well-known/api-catalog \
+            | tr -d '\r' \
+            | grep --fixed-strings --ignore-case \
+              'link: <https://editor.pascal.app/.well-known/api-catalog>; rel="api-catalog"'

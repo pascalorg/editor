@@ -7,6 +7,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
+import { isProceduralItem } from '@pascal-app/core/procedural-items'
 import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
@@ -63,7 +64,10 @@ export function useCeilingEvents() {
       const ed = useEditor.getState()
       if (ed.selectedItem?.attachTo === 'ceiling') return true
       const moving = getMovingNode()
-      return moving?.type === 'item' && moving.asset?.attachTo === 'ceiling'
+      return (
+        (moving?.type === 'item' && moving.asset?.attachTo === 'ceiling') ||
+        (isProceduralItem(moving) && moving.recipe.mounting?.attachTo === 'ceiling')
+      )
     }
 
     type Hit = { node: CeilingNode; mesh: Object3D; world: Vector3; local: Vector3 }

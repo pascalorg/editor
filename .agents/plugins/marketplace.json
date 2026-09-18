@@ -1,0 +1,27 @@
+{
+  "name": "pascal",
+  "interface": {
+    "displayName": "Pascal"
+  },
+  "plugins": [
+    {
+      "name": "pascal-agent-skills",
+      "version": "0.1.10",
+      "description": "Create, inspect, validate, and assess furniture layouts with bounded next actions in Pascal through MCP.",
+      "author": {
+        "name": "Pascal",
+        "email": "support@pascal.app",
+        "url": "https://pascal.app"
+      },
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

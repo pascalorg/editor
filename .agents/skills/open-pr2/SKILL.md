@@ -1,6 +1,8 @@
 ---
 name: open-pr2
 description: Open or update a pull request on pascalorg/editor with a plain-language issue-and-fix description based on the full branch diff. Use only when the user explicitly asks for OpenPR2 or /open-pr2.
+metadata:
+  internal: true
 disable-model-invocation: true
 allowed-tools: Bash(git *) Bash(gh *) Bash(bun *) Read
 ---

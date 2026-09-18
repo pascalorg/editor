@@ -1,4 +1,4 @@
-import { AnyNode, AssetUrl, BaseNode, SceneMaterial } from '@pascal-app/core/schema'
+import { AnyNode, AssetUrl, BaseNode, nodeKindOf, SceneMaterial } from '@pascal-app/core/schema'
 import { z } from 'zod'
 
 /**
@@ -24,9 +24,7 @@ import { z } from 'zod'
  * hostile scheme where `AssetUrl` already enumerates the safe ones.
  */
 
-const KNOWN_TYPES = new Set<string>(
-  AnyNode.options.map((o) => o.shape.type.parse(undefined) as string),
-)
+const KNOWN_TYPES = new Set<string>(AnyNode.options.map(nodeKindOf))
 
 /** The envelope every persisted node satisfies, builtin or foreign. */
 const ForeignNodeEnvelope = BaseNode.extend({

@@ -3,6 +3,7 @@ import type { AnyNodeId } from '@pascal-app/core/schema'
 import { WallNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
+import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
 import { ErrorCode, throwMcpError } from './errors'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { measurement } from './measurement'
@@ -33,6 +34,7 @@ export function registerCreateWall(server: McpServer, bridge: SceneOperations): 
         'Create a new wall on the given level between two 2D points. Thickness and height default to the core library defaults when omitted.',
       inputSchema: createWallInput,
       outputSchema: createWallOutput,
+      annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
     async ({ levelId, start, end, thickness, height }) => {
       const parent = bridge.getNode(levelId as AnyNodeId)

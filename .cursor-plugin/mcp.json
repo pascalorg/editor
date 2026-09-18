@@ -1,0 +1,29 @@
+{
+  "mcpServers": {
+    "pascal": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "--yes",
+        "--package=@pascal-app/cli@1.0.0",
+        "pascal",
+        "mcp",
+        "connect"
+      ]
+    },
+    "pascal-hosted": {
+      "type": "http",
+      "url": "https://editor.pascal.app/api/mcp",
+      "auth": {
+        "CLIENT_ID": "pascal-cursor",
+        "scopes": [
+          "openid",
+          "profile",
+          "offline_access",
+          "scene:read",
+          "scene:write"
+        ]
+      }
+    }
+  }
+}

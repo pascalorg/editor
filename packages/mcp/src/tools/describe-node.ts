@@ -3,6 +3,7 @@ import { resolveCeilingHeight } from '@pascal-app/core'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
+import { READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 import { ErrorCode, throwMcpError } from './errors'
 import { resolveReportedWallHeight } from './scene-query'
 import { NodeIdSchema } from './schemas'
@@ -70,6 +71,7 @@ export function registerDescribeNode(server: McpServer, bridge: SceneOperations)
         'Return a structured summary of a node including its ancestry, children IDs, key properties, and a short human description.',
       inputSchema: describeNodeInput,
       outputSchema: describeNodeOutput,
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async ({ id }) => {
       const node = bridge.getNode(id as AnyNodeId)

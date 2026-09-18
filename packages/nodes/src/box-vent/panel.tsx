@@ -193,7 +193,7 @@ export default function BoxVentPanel() {
           restoreOnCommit={false}
           step={0.01}
           unit="m"
-          value={Math.round(node.width * 100) / 100}
+          value={node.width}
         />
         <SliderControl
           label="Depth"
@@ -205,7 +205,7 @@ export default function BoxVentPanel() {
           restoreOnCommit={false}
           step={0.01}
           unit="m"
-          value={Math.round(node.depth * 100) / 100}
+          value={node.depth}
         />
         <SliderControl
           label="Height"
@@ -217,7 +217,7 @@ export default function BoxVentPanel() {
           restoreOnCommit={false}
           step={0.01}
           unit="m"
-          value={Math.round(node.height * 100) / 100}
+          value={node.height}
         />
         {/* Hood Overhang is `cap`-only — the dome shape rolls down to
             the body footprint without a flange skirt, and `box` doesn't
@@ -234,7 +234,7 @@ export default function BoxVentPanel() {
             restoreOnCommit={false}
             step={0.005}
             unit="m"
-            value={Math.round((node.hoodOverhang ?? 0) * 1000) / 1000}
+            value={node.hoodOverhang ?? 0}
           />
         )}
         {node.style === 'box' && (
@@ -249,7 +249,7 @@ export default function BoxVentPanel() {
               restoreOnCommit={false}
               step={0.005}
               unit="m"
-              value={Math.round((node.baseInset ?? 0.06) * 1000) / 1000}
+              value={node.baseInset ?? 0.06}
             />
             <SliderControl
               label="Base Height"
@@ -261,7 +261,7 @@ export default function BoxVentPanel() {
               restoreOnCommit={false}
               step={0.005}
               unit="m"
-              value={Math.round((node.baseHeight ?? 0.04) * 1000) / 1000}
+              value={node.baseHeight ?? 0.04}
             />
             <SliderControl
               label="Corner Bevel"
@@ -276,7 +276,7 @@ export default function BoxVentPanel() {
               restoreOnCommit={false}
               step={0.002}
               unit="m"
-              value={Math.round((node.cornerBevel ?? 0.012) * 1000) / 1000}
+              value={node.cornerBevel ?? 0.012}
             />
           </>
         )}
@@ -292,7 +292,7 @@ export default function BoxVentPanel() {
               restoreOnCommit={false}
               step={0.005}
               unit="m"
-              value={Math.round((node.capHeight ?? 0.07) * 1000) / 1000}
+              value={node.capHeight ?? 0.07}
             />
             <SliderControl
               label="Gap Height"
@@ -304,7 +304,7 @@ export default function BoxVentPanel() {
               restoreOnCommit={false}
               step={0.005}
               unit="m"
-              value={Math.round((node.capGap ?? 0) * 1000) / 1000}
+              value={node.capGap ?? 0}
             />
             <SliderControl
               label="Top Taper"
@@ -344,7 +344,7 @@ export default function BoxVentPanel() {
               restoreOnCommit={false}
               step={0.005}
               unit="m"
-              value={Math.round((node.hoodOverhang ?? 0.04) * 1000) / 1000}
+              value={node.hoodOverhang ?? 0.04}
             />
           </>
         )}
@@ -369,7 +369,7 @@ export default function BoxVentPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round((node.position[0] ?? 0) * 100) / 100}
+          value={node.position[0] ?? 0}
         />
         <SliderControl
           label="Y"
@@ -392,7 +392,7 @@ export default function BoxVentPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round((node.position[1] ?? 0) * 100) / 100}
+          value={node.position[1] ?? 0}
         />
         <SliderControl
           label="Z"
@@ -412,7 +412,7 @@ export default function BoxVentPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round((node.position[2] ?? 0) * 100) / 100}
+          value={node.position[2] ?? 0}
         />
         <SliderControl
           label="Rotation"

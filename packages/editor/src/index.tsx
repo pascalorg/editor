@@ -121,7 +121,6 @@ export { MoveTool } from './components/tools/item/move-tool'
 // `@pascal-app/nodes` (wall curve sagitta snap, door / window placement,
 // item drop) so kinds don't reach into editor internals.
 export {
-  calculateCursorRotation,
   calculateItemRotation,
   getSideFromNormal,
   isValidWallSideFace,
@@ -140,6 +139,7 @@ export {
   type PlacementCoordinatorConfig,
   usePlacementCoordinator,
 } from './components/tools/item/use-placement-coordinator'
+export { MoveRegistryNodeTool } from './components/tools/registry/move-registry-node-tool'
 export { useRegistryToolContext } from './components/tools/registry-tool-context'
 export { CursorSphere } from './components/tools/shared/cursor-sphere'
 export { DragBoundingBox } from './components/tools/shared/drag-bounding-box'
@@ -153,6 +153,7 @@ export {
   resolveLevelConstructionPlane,
 } from './components/tools/shared/horizontal-construction-plane'
 export { PlacementBox } from './components/tools/shared/placement-box'
+export { PlacementDimensionGuides } from './components/tools/shared/placement-dimension-guides'
 // Pointer-decided support surface (deck top vs floor underneath) — the
 // draw tools (wall / fence) ride their grid plane and commit cap on it.
 export {
@@ -244,6 +245,7 @@ export { SegmentedControl } from './components/ui/controls/segmented-control'
 export { SliderControl } from './components/ui/controls/slider-control'
 export { TerrainSculptPanel } from './components/ui/controls/terrain-sculpt-panel'
 export { ToggleControl } from './components/ui/controls/toggle-control'
+export { ToolOptionsPanel } from './components/ui/controls/tool-options-panel'
 export { FloatingLevelSelector } from './components/ui/floating-level-selector'
 export { CATALOG_ITEMS } from './components/ui/item-catalog/catalog-items'
 // Item collections UI — used by the kind-owned ItemPanel in nodes/.
@@ -332,6 +334,7 @@ export {
   ViewerStageSwitcher,
   type ViewerStageSwitcherProps,
 } from './components/viewer/viewer-stage-switcher'
+export { ViewerUnitsPanel } from './components/viewer/viewer-units-panel'
 export {
   WalkthroughHud,
   type WalkthroughHudProps,
@@ -399,6 +402,7 @@ export {
   resolveElevatorSupportLevelId,
   resolveElevatorSupportY,
 } from './lib/elevator-support'
+export type { ExportTextureUtils } from './lib/export-texture-utils'
 export { getFloatingMenuScale } from './lib/floating-menu-scale'
 // Floor-plan stair helpers — the cumulative-transform walk
 // (`computeFloorplanStairSegmentTransforms`) and the rich segment-entry
@@ -457,7 +461,12 @@ export {
   commitFreshPlacementSubtree,
   createFreshPlacementSubtree,
 } from './lib/fresh-planar-placement'
-export { exportSceneToGlb } from './lib/glb-export'
+export { exportSceneToGlb, type GlbExportOptions } from './lib/glb-export'
+export {
+  type EditorGridEvent,
+  type GridEventScreenProjection,
+  getGridEventScreenProjection,
+} from './lib/grid-event-presentation'
 export {
   getHistoryCommandState,
   type HistoryCommandDelegate,
@@ -475,6 +484,10 @@ export {
   registerEditorHostTreeChildren,
 } from './lib/host-tree-children'
 export {
+  DRAFTING_SURFACE_EXTENSION_KEY,
+  type DraftingSurfaceExtension,
+} from './lib/interaction/registered-drafting'
+export {
   boundaryReshapeScope,
   curveReshapeScope,
   endpointReshapeScope,
@@ -485,6 +498,7 @@ export {
 } from './lib/interaction/scope'
 export { useMaterialCatalogModel } from './lib/material-catalog-model'
 export {
+  type ActivePaintMaterial,
   buildResetSurfaceMaterialUpdates,
   buildRoofSurfaceMaterialPatch,
   buildSingleSurfaceMaterialPatch,
@@ -504,6 +518,14 @@ export {
   measurementPolygonLabelAnchor,
   triangulateMeasurementPolygon,
 } from './lib/measurement-label'
+export {
+  type LingoUnitSpec,
+  lingoUnitSpec,
+  type MeasurementHintOptions,
+  measurementHint,
+  type ParseMeasurementOptions,
+  parseMeasurement,
+} from './lib/measurement-parser'
 export {
   buildMeasurementAngleArcPoints,
   cubicMetersToVolumeUnit,
@@ -540,6 +562,12 @@ export {
 } from './lib/panel-rows'
 export { type PanelToolOption, usePanelToolHints } from './lib/panel-tool-options'
 export { commitParametricNodeFields } from './lib/parametric-node-update'
+export type {
+  ModelExport,
+  ModelExportArtifact,
+  ModelExportFormat,
+  ModelExportOptions,
+} from './lib/model-export'
 export { consumePlacementDragRelease } from './lib/placement-drag-release'
 export {
   addFreshPlacementMetadata,
@@ -558,6 +586,8 @@ export {
   editorHostPanelRegistry,
   registerEditorHostPanel,
 } from './lib/plugin-panels'
+export { configureManifoldRuntime } from './lib/print-shell-compiler-manifold-worker'
+export type { ManifoldRuntimeOptions } from './lib/print-shell-compiler-protocol'
 export {
   createQuickMeasurementPointerScheduler,
   quickMeasurementContext,
@@ -620,6 +650,7 @@ export {
   sculptFieldForSite,
   terrainPointInsideSite,
 } from './lib/terrain-sculpt'
+export { exportSceneToUsdz, type UsdzExportOptions } from './lib/usdz-export'
 // `cn` (twMerge + clsx) — used by kind-owned panels in `@pascal-app/
 // nodes` so they don't need their own copy / their own tailwind-merge
 // dependency.
@@ -644,15 +675,20 @@ export {
 export type {
   CaptureMode,
   FloorplanSelectionTool,
+  Mode,
   SnapshotCropMode,
   SnapshotStandardAspect,
   SplitOrientation,
+  StructureTool,
   Tool,
   ToolDefaults,
+  ToolMode,
   ViewMode,
   WorkspaceMode,
 } from './store/use-editor'
 export {
+  armMaterialPaint,
+  armToolMode,
   default as useEditor,
   getActiveContinuationContext,
   getActiveSnapContext,
@@ -714,7 +750,10 @@ export {
   type PathDraftPoint,
   usePathDraftPreview,
 } from './store/use-path-draft-preview'
-export { default as usePlacementPreview } from './store/use-placement-preview'
+export {
+  default as usePlacementPreview,
+  type PlacementPreviewDimension,
+} from './store/use-placement-preview'
 export {
   activateQuickMeasurementHudSource,
   clearQuickMeasurementHudSource,

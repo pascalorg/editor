@@ -3,6 +3,7 @@ import {
   emitter,
   type GridEvent,
   type LevelNode,
+  runAsSingleSceneHistoryStep,
   snapPointAlongAngleRay,
   useScene,
   ZoneNode,
@@ -16,6 +17,7 @@ import {
   clearSurfacePlanSnapFeedback,
   resolveSurfacePlanPointSnap,
 } from './../../../lib/surface-plan-snap'
+import { focusedUnitNode } from './../../../lib/units'
 import { snapWorldXZForActiveBuilding } from './../../../lib/world-grid-snap'
 import useEditor, { isAngleSnapActive, isGridSnapActive } from './../../../store/use-editor'
 import { useFloorplanDraftPreview } from './../../../store/use-floorplan-draft-preview'
@@ -27,7 +29,7 @@ const Y_OFFSET = 0.02
  * Creates a zone with the given polygon points
  */
 const commitZoneDrawing = (levelId: LevelNode['id'], points: Array<[number, number]>) => {
-  const { createNode, nodes } = useScene.getState()
+  const { createNode, updateNode, nodes } = useScene.getState()
 
   // Count existing zones for naming and color cycling
   const zoneCount = Object.values(nodes).filter((n) => n.type === 'zone').length
@@ -42,10 +44,17 @@ const commitZoneDrawing = (levelId: LevelNode['id'], points: Array<[number, numb
     color,
   })
 
-  createNode(zone, levelId)
+  const focusedUnit = focusedUnitNode()
 
-  // Select the newly created zone
-  useViewer.getState().setSelection({ zoneId: zone.id })
+  // Joining the focused unit rides in the zone's own undo step.
+  runAsSingleSceneHistoryStep(useScene, () => {
+    createNode(zone, levelId)
+    if (focusedUnit) updateNode(focusedUnit.id, { members: [...focusedUnit.members, zone.id] })
+  })
+
+  // Selecting the zone would end unit focus; while painting a unit the new
+  // zone just joins it and drawing continues.
+  if (!focusedUnit) useViewer.getState().setSelection({ zoneId: zone.id })
 
   // Play structure build sound
   sfxEmitter.emit('sfx:structure-build')

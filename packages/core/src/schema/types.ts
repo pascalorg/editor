@@ -1,4 +1,5 @@
 import z from 'zod'
+import { ProceduralItemNode } from '../procedural-items/node'
 import { BlockNode } from './nodes/block'
 import { BoxVentNode } from './nodes/box-vent'
 import { BuildingNode } from './nodes/building'
@@ -20,6 +21,7 @@ import { FenceNode } from './nodes/fence'
 import { GuideNode } from './nodes/guide'
 import { GutterNode } from './nodes/gutter'
 import { HvacEquipmentNode } from './nodes/hvac-equipment'
+import { ImportedMeshNode } from './nodes/imported-mesh'
 import { ItemNode } from './nodes/item'
 import { LeanToExtensionNode } from './nodes/lean-to-extension'
 import { LevelNode } from './nodes/level'
@@ -43,14 +45,50 @@ import { StairNode } from './nodes/stair'
 import { StairSegmentNode } from './nodes/stair-segment'
 import { StructuralGridNode } from './nodes/structural-grid'
 import { TurbineVentNode } from './nodes/turbine-vent'
+import { UnitNode } from './nodes/unit'
 import { WallNode } from './nodes/wall'
 import { WindowNode } from './nodes/window'
 import { ZoneNode } from './nodes/zone'
 
-export const AnyNode = z.discriminatedUnion('type', [
+/** A node schema as authored: `type` is a literal wrapped by `nodeType()`'s `.default()`. */
+type NodeMember = z.ZodObject<{ type: z.ZodDefault<z.ZodLiteral<string>> } & z.core.$ZodLooseShape>
+
+/** The same schema with the discriminator narrowed back to its bare literal. */
+type BareDiscriminator<T extends NodeMember> = z.ZodObject<
+  Omit<T['shape'], 'type'> & { type: ReturnType<T['shape']['type']['unwrap']> }
+>
+
+/**
+ * Assembles the node union on discriminators that claim exactly one value.
+ *
+ * `nodeType()` defaults the literal so a per-kind schema can fill `type` in
+ * (`WallNode.parse({ start, end })`), but a `.default()`-wrapped discriminator
+ * also claims `undefined` from zod 4.5 on (upstream #6432). With 48 members
+ * doing it, the union's lazily-built discriminator map collides on
+ * `undefined` and throws `Duplicate discriminator value` — as a plain Error,
+ * so it escapes `safeParse` and surfaces as a crash at the first parse.
+ *
+ * Each member is therefore projected to a clone whose `type` is the bare
+ * literal. Per-kind schemas keep their default; only the union's view of the
+ * discriminator narrows. `safeExtend` retains member refinements, including
+ * procedural recipe/parameter validation. Metadata lives in zod's global registry keyed by
+ * instance, so `.describe()` text has to be carried over to the clone by hand.
+ */
+export const nodeUnion = <const T extends readonly [NodeMember, ...NodeMember[]]>(members: T) =>
+  z.discriminatedUnion(
+    'type',
+    members.map((member) => {
+      const projected = member.safeExtend({ type: member.shape.type.unwrap() })
+      const meta = z.globalRegistry.get(member)
+      return meta ? projected.meta(meta) : projected
+    }) as { [K in keyof T]: BareDiscriminator<T[K]> },
+  )
+
+export const AnyNode = nodeUnion([
   SiteNode,
   BuildingNode,
   ElevatorNode,
+  UnitNode,
   LevelNode,
   LeanToExtensionNode,
   ColumnNode,
@@ -62,6 +100,8 @@ export const AnyNode = z.discriminatedUnion('type', [
   CabinetNode,
   CabinetModuleNode,
   ItemNode,
+  ProceduralItemNode,
+  ImportedMeshNode,
   ZoneNode,
   SlabNode,
   CeilingNode,
@@ -101,3 +141,9 @@ export const AnyNode = z.discriminatedUnion('type', [
 export type AnyNode = z.infer<typeof AnyNode>
 export type AnyNodeType = AnyNode['type']
 export type AnyNodeId = AnyNode['id']
+
+/** One member schema of `AnyNode`, discriminator already projected to a bare literal. */
+export type AnyNodeOption = (typeof AnyNode)['options'][number]
+
+/** The node kind a union member accepts, read off its bare-literal discriminator. */
+export const nodeKindOf = (option: AnyNodeOption): AnyNodeType => option.shape.type.value

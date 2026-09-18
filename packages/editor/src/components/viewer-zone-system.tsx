@@ -13,6 +13,9 @@ export const ViewerZoneSystem = () => {
     const { levelId, zoneId } = useViewer.getState().selection
     const structureLayer = useEditor.getState().structureLayer
     const nodes = useScene.getState().nodes
+    // Snapshot capture is a clean, camera-only surface — zone geometry and
+    // tags stay out of the framed shot (mirrors the editor ZoneSystem's gate).
+    const isCaptureMode = useEditor.getState().isCaptureMode
     // During any active interaction zone labels step back entirely (Sims-light).
     const zoneLabelsHidden =
       resolveOverlayPolicy(useInteractionScope.getState().scope).zoneLabels === 'hidden'
@@ -31,7 +34,8 @@ export const ViewerZoneSystem = () => {
       // The editor ZoneSystem handles the selected zone's opacity animation.
       const isSelected = id === zoneId
       const shouldShowGeometry =
-        (structureLayer === 'zones' && !!levelId && isOnSelectedLevel) || isSelected
+        !isCaptureMode &&
+        ((structureLayer === 'zones' && !!levelId && isOnSelectedLevel) || isSelected)
       if (!obj.visible) obj.visible = true
       obj.traverse((child) => {
         if ((child as Mesh).isMesh) {
@@ -40,7 +44,7 @@ export const ViewerZoneSystem = () => {
       })
 
       // Labels: always visible on the current level (regardless of mode or zone selection)
-      const showLabel = !zoneLabelsHidden && !!levelId && isOnSelectedLevel
+      const showLabel = !isCaptureMode && !zoneLabelsHidden && !!levelId && isOnSelectedLevel
       const targetOpacity = showLabel ? '1' : '0'
       const labelEl = document.getElementById(`${id}-label`)
       if (labelEl && labelEl.style.opacity !== targetOpacity) {

@@ -44,6 +44,7 @@ import {
   backAlignZ,
   type CabinetRunStylePatch,
   cabinetCeilingGap,
+  cabinetModuleCeilingOverflow,
   cabinetModulesForRun,
   resolveCabinetType,
   runModuleBaseY,
@@ -63,6 +64,7 @@ import {
   backAnchoredModuleZ,
   type CabinetCompartment,
   clampCabinetCarcassHeightForStack,
+  isFridgeCompartmentType,
   isHoodCompartmentType,
   minCabinetCarcassHeightForStack,
   newCabinetCompartment,
@@ -73,6 +75,12 @@ import {
 } from './stack'
 import { resolveCompartmentTransition } from './stack-transitions'
 import { validateCabinetRun } from './validation'
+import {
+  CABINET_WALL_HEIGHT_PRESETS,
+  type CabinetWallHeightPresetId,
+  cabinetWallHeightPresetById,
+  cabinetWallHeightPresetId,
+} from './wall-height-presets'
 import {
   CABINET_STANDARD_WIDTHS,
   type CabinetStandardWidthId,
@@ -178,7 +186,6 @@ export default function CabinetPanel() {
       s.nodes[selected.parentId as AnyNodeId]?.type === 'cabinet-module'
     )
   })
-
   const showReflowRejected = useCallback(() => {
     setReflowNotice({ message: REFLOW_REJECTED_MESSAGE })
   }, [])
@@ -307,6 +314,8 @@ export default function CabinetPanel() {
           if (liveNode?.type === 'cabinet-module') {
             syncCornerRunsFromSourceModule({
               module: liveNode,
+              previousModule:
+                liveBeforeUpdate?.type === 'cabinet-module' ? liveBeforeUpdate : undefined,
               run: parent,
               sceneApi: createSceneApi(useScene),
             })
@@ -381,7 +390,9 @@ export default function CabinetPanel() {
           if (seen.has(run.id as AnyNodeId)) continue
           seen.add(run.id as AnyNodeId)
           reports.push(
-            validateCabinetRun(run, cabinetModulesForRun(run, useScene.getState().nodes)),
+            validateCabinetRun(run, cabinetModulesForRun(run, useScene.getState().nodes), {
+              nodes: useScene.getState().nodes,
+            }),
           )
           for (const childId of run.children ?? []) {
             const child = useScene.getState().nodes[childId as AnyNodeId]
@@ -406,6 +417,13 @@ export default function CabinetPanel() {
     : null
   const isHoodOnlyNode =
     stack.length > 0 && stack.every((compartment) => isHoodCompartmentType(compartment.type))
+  const isFridgeModule =
+    node.type === 'cabinet-module' &&
+    stack.some((compartment) => isFridgeCompartmentType(compartment.type))
+  const ceilingOverflow =
+    node.type === 'cabinet-module'
+      ? cabinetModuleCeilingOverflow(node, useScene.getState().nodes as Record<AnyNodeId, AnyNode>)
+      : 0
   const normalized = normalizeCabinetStack(node)
   const rowHeights = new Map(normalized.map((row) => [row.index, row.height]))
   const rows = stack.map((compartment, index) => ({ compartment, index })).reverse()
@@ -512,6 +530,13 @@ export default function CabinetPanel() {
   const hasWallCabinet = node?.type === 'cabinet-module' ? Boolean(wallChild) : false
 
   const isWallChildModule = node?.type === 'cabinet-module' && parentIsModule
+  const isWallCabinetModule =
+    node?.type === 'cabinet-module' && (isWallChildModule || parentRun?.runTier === 'wall')
+  const wallHeightPreset = isWallCabinetModule ? cabinetWallHeightPresetId(node) : 'custom'
+  const applyWallHeightPreset = (presetId: CabinetWallHeightPresetId) => {
+    if (!isWallCabinetModule) return
+    updateNode({ carcassHeight: cabinetWallHeightPresetById(presetId).value })
+  }
   const canAddTopFinish =
     node.type === 'cabinet-module' &&
     !isHoodOnlyNode &&
@@ -619,6 +644,30 @@ export default function CabinetPanel() {
               }))}
               value={standardWidth === 'custom' ? '600' : standardWidth}
             />
+          </div>
+        )}
+        {isWallCabinetModule && !isHoodOnlyNode && (
+          <div className="space-y-1 px-1 pb-2">
+            <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+              Height preset
+            </div>
+            <SegmentedControl
+              mixed={wallHeightPreset === 'custom'}
+              onChange={(value) => applyWallHeightPreset(value as CabinetWallHeightPresetId)}
+              options={CABINET_WALL_HEIGHT_PRESETS.map((preset) => ({
+                label: (
+                  <span className="flex flex-col items-center leading-3">
+                    <span>{preset.label}</span>
+                    <span className="text-[9px] text-muted-foreground">{preset.metricLabel}</span>
+                  </span>
+                ),
+                value: preset.id,
+              }))}
+              value={wallHeightPreset === 'custom' ? '18' : wallHeightPreset}
+            />
+            <p className="px-1 pt-1 text-[10px] leading-4 text-muted-foreground">
+              Common wall-cabinet heights. Use the slider below for a custom height.
+            </p>
           </div>
         )}
         <SliderControl
@@ -753,6 +802,15 @@ export default function CabinetPanel() {
                 />
               </>
             )}
+            {ceilingOverflow > 1e-4 && (
+              <div className="flex gap-1.5 px-1 text-xs leading-5 text-red-300">
+                <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0" />
+                <span>
+                  Finished height extends {(ceilingOverflow * 1000).toFixed(0)} mm above the
+                  ceiling.
+                </span>
+              </div>
+            )}
           </div>
         </PanelSection>
       )}
@@ -772,7 +830,7 @@ export default function CabinetPanel() {
               ))}
               {planningReport.warnings.map((planningIssue) => (
                 <div
-                  className="flex gap-1.5 text-amber-300"
+                  className={`flex gap-1.5 ${planningIssue.code === 'ceiling-overflow' ? 'text-red-300' : 'text-amber-300'}`}
                   key={`${planningIssue.severity}-${planningIssue.code}-${planningIssue.nodeIds.join('-')}`}
                 >
                   <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0" />
@@ -877,6 +935,30 @@ export default function CabinetPanel() {
 
       {!isHoodOnlyNode && (
         <>
+          {isFridgeModule && (
+            <PanelSection title="Appliance front">
+              <div className="space-y-2 px-1 pb-2">
+                <div>
+                  <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Panel-ready
+                  </div>
+                  <SegmentedControl
+                    onChange={(value) => updateNode({ panelReady: value === 'on' })}
+                    options={[
+                      { value: 'off', label: 'Appliance' },
+                      { value: 'on', label: 'Cabinet panel' },
+                    ]}
+                    value={node.panelReady ? 'on' : 'off'}
+                  />
+                </div>
+                {node.panelReady && (
+                  <p className="px-1 text-xs leading-5 text-muted-foreground">
+                    Uses the cabinet front style, reveal, handle, and front material settings below.
+                  </p>
+                )}
+              </div>
+            </PanelSection>
+          )}
           <PanelSection title="Fronts">
             <div className="space-y-2 px-1 pb-2">
               <div>

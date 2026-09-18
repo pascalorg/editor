@@ -7,6 +7,8 @@ type ResolvePlanarCursorPositionArgs = {
   original: PlanarPoint
   anchor: PlanarPoint | null
   mode: PlanarCursorPlacementMode
+  localCenter?: [number, number, number]
+  rotationY?: number
   snap?: (value: number) => number
   snapPoint?: (point: PlanarPoint) => PlanarPoint
 }
@@ -26,18 +28,42 @@ type ResolvePrioritizedPlanarCursorPositionResult = ResolvePlanarCursorPositionR
 
 const identity = (value: number) => value
 
+export function offsetPlanPositionByLocalCenter(
+  position: [number, number, number],
+  center: [number, number, number],
+  rotationY: number,
+): [number, number, number] {
+  const cos = Math.cos(rotationY)
+  const sin = Math.sin(rotationY)
+  return [
+    position[0] + center[0] * cos + center[2] * sin,
+    position[1] + center[1],
+    position[2] - center[0] * sin + center[2] * cos,
+  ]
+}
+
 export function resolvePlanarCursorPosition({
   cursor,
   original,
   anchor,
   mode,
+  localCenter,
+  rotationY = 0,
   snap = identity,
   snapPoint,
 }: ResolvePlanarCursorPositionArgs): ResolvePlanarCursorPositionResult {
   if (mode === 'absolute') {
     const proposal: PlanarPoint = [cursor[0], cursor[1]]
+    const snapped: PlanarPoint = snapPoint?.(proposal) ?? [snap(cursor[0]), snap(cursor[1])]
+    const origin: [number, number, number] = localCenter
+      ? offsetPlanPositionByLocalCenter(
+          [snapped[0], 0, snapped[1]],
+          [-localCenter[0], 0, -localCenter[2]],
+          rotationY,
+        )
+      : [snapped[0], 0, snapped[1]]
     return {
-      point: snapPoint?.(proposal) ?? [snap(cursor[0]), snap(cursor[1])],
+      point: [origin[0], origin[2]],
       anchor,
     }
   }

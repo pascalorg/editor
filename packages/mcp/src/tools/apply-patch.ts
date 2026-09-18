@@ -3,6 +3,7 @@ import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { Patch as BridgePatch } from '../bridge/scene-bridge'
 import type { SceneOperations } from '../operations'
+import { DESTRUCTIVE_TOOL_ANNOTATIONS } from './annotations'
 import { ErrorCode, throwMcpError } from './errors'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { PatchSchema } from './schemas'
@@ -24,9 +25,10 @@ export function registerApplyPatch(server: McpServer, bridge: SceneOperations): 
     {
       title: 'Apply patch',
       description:
-        'Apply a batch of create/update/delete operations atomically. All patches are validated before any are applied; the entire batch forms a single undo step.',
+        'Apply a batch of create/update/delete operations atomically. All patches are validated before any are applied; the entire batch forms a single undo step. Batch-first is the default: prefer one apply_patch call containing all create/update/delete ops for a build step, in stable order so later ops can reference ids created by earlier ops. A single call is atomic (all or nothing) and pays the snapshot and save cost once; do not loop one-op calls.',
       inputSchema: applyPatchInput,
       outputSchema: applyPatchOutput,
+      annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async ({ patches }) => {
       const bridgePatches: BridgePatch[] = patches.map((p) => {

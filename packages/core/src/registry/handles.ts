@@ -76,6 +76,11 @@ export type HandleAxis = 'x' | 'y' | 'z'
 
 export type HandleAnchor = 'center' | 'min' | 'max'
 
+/** Keyboard modifiers captured for a handle-resize tick. */
+export type HandleDragModifiers = {
+  readonly altKey: boolean
+}
+
 /** 3D position + rotation of the arrow in its portal target's local space. */
 export type HandlePlacement<N> = {
   /**
@@ -126,11 +131,18 @@ export type HandleDecoration<N> = {
  */
 export type LinearResizeHandle<N> = {
   kind: 'linear-resize'
-  /** Local axis. The arrow's chevron points along +axis. */
+  /** Local resize axis. */
   axis: HandleAxis
+  /** Arrow and clearance direction. Drag growth remains controlled by `anchor`. */
+  direction?: 1 | -1
   anchor: HandleAnchor
   currentValue: (node: N) => number
-  apply: (node: N, newValue: number, sceneApi: SceneApi) => Partial<N>
+  apply: (
+    node: N,
+    newValue: number,
+    sceneApi: SceneApi,
+    modifiers?: HandleDragModifiers,
+  ) => Partial<N>
   /**
    * Additional live-only patches for geometry owned by related nodes. The
    * editor publishes these during the drag and clears them on release or
@@ -141,6 +153,7 @@ export type LinearResizeHandle<N> = {
     node: N,
     newValue: number,
     sceneApi: SceneApi,
+    modifiers?: HandleDragModifiers,
   ) => ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]>
   /** Optional live-scene visibility gate for context-dependent arrows. */
   visible?: (node: N, sceneApi: SceneApi) => boolean
@@ -151,7 +164,7 @@ export type LinearResizeHandle<N> = {
    * final write here to fan the resize out to siblings / parents while keeping
    * the handle UI generic.
    */
-  commit?: (node: N, patch: Partial<N>, sceneApi: SceneApi) => void
+  commit?: (node: N, patch: Partial<N>, sceneApi: SceneApi, modifiers?: HandleDragModifiers) => void
   /**
    * Optional per-tick hook fired while this handle is being dragged, with the
    * live (in-progress, override-merged) node. A pure side-channel for transient
@@ -191,7 +204,13 @@ export type LinearResizeHandle<N> = {
    * lean-to roof edges becoming one continuous run.
    */
   connectionSnap?: (node: N, newValue: number, sceneApi: SceneApi) => number
-  placement: HandlePlacement<N>
+  placement: HandlePlacement<N> & {
+    /** Opt-in minimum center distance from an edge along `direction` (default +1), in scaled arrow units. */
+    clearance?: {
+      edge: (node: N, sceneApi: SceneApi) => number
+      distance: number
+    }
+  }
   /**
    * Dimension this handle steers (e.g. `'height'`). When set, the editor
    * publishes it to `activeHandleDrag.label` for the duration of the drag

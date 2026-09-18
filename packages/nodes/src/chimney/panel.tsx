@@ -377,7 +377,7 @@ export default function ChimneyPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round(node.width * 100) / 100}
+          value={node.width}
         />
         {(node.bodyShape ?? 'square') !== 'round' && (
           <SliderControl
@@ -390,7 +390,7 @@ export default function ChimneyPanel() {
             restoreOnCommit={false}
             step={0.05}
             unit="m"
-            value={Math.round(node.depth * 100) / 100}
+            value={node.depth}
           />
         )}
         <SliderControl
@@ -403,7 +403,7 @@ export default function ChimneyPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round((node.bodyHollowDepth ?? 0.6) * 100) / 100}
+          value={node.bodyHollowDepth ?? 0.6}
         />
         <SliderControl
           label="Wall Thickness"
@@ -415,7 +415,7 @@ export default function ChimneyPanel() {
           restoreOnCommit={false}
           step={0.005}
           unit="m"
-          value={Math.round((node.bodyHollowMargin ?? 0.08) * 1000) / 1000}
+          value={node.bodyHollowMargin ?? 0.08}
         />
         {(node.bodyShape ?? 'square') !== 'round' && (
           <SliderControl
@@ -428,7 +428,7 @@ export default function ChimneyPanel() {
             restoreOnCommit={false}
             step={0.005}
             unit="m"
-            value={Math.round((node.cornerBevel ?? 0) * 1000) / 1000}
+            value={node.cornerBevel ?? 0}
           />
         )}
       </PanelSection>
@@ -444,7 +444,7 @@ export default function ChimneyPanel() {
           restoreOnCommit={false}
           step={0.1}
           unit="m"
-          value={Math.round(node.heightAboveRidge * 100) / 100}
+          value={node.heightAboveRidge}
         />
         <SliderControl
           label="Cutout Offset"
@@ -456,7 +456,7 @@ export default function ChimneyPanel() {
           restoreOnCommit={false}
           step={0.005}
           unit="m"
-          value={Math.round((node.cutoutOffset ?? 0) * 1000) / 1000}
+          value={node.cutoutOffset ?? 0}
         />
       </PanelSection>
 
@@ -478,7 +478,7 @@ export default function ChimneyPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round(worldX_now * 100) / 100}
+          value={worldX_now}
         />
         <SliderControl
           label="Z"
@@ -494,7 +494,7 @@ export default function ChimneyPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round(worldZ_now * 100) / 100}
+          value={worldZ_now}
         />
         <SliderControl
           label="Rotation"
@@ -577,7 +577,7 @@ export default function ChimneyPanel() {
                   restoreOnCommit={false}
                   step={0.005}
                   unit="m"
-                  value={Math.round((node.capOverhang ?? 0.04) * 1000) / 1000}
+                  value={node.capOverhang ?? 0.04}
                 />
                 <SliderControl
                   label="Thickness"
@@ -589,7 +589,7 @@ export default function ChimneyPanel() {
                   restoreOnCommit={false}
                   step={0.005}
                   unit="m"
-                  value={Math.round((node.capThickness ?? 0.08) * 1000) / 1000}
+                  value={node.capThickness ?? 0.08}
                 />
               </>
             )}
@@ -620,7 +620,7 @@ export default function ChimneyPanel() {
                   restoreOnCommit={false}
                   step={0.05}
                   unit="m"
-                  value={Math.round((node.shoulderHeight ?? 0.5) * 100) / 100}
+                  value={node.shoulderHeight ?? 0.5}
                 />
                 <SliderControl
                   label="Extent"
@@ -632,7 +632,7 @@ export default function ChimneyPanel() {
                   restoreOnCommit={false}
                   step={0.01}
                   unit="m"
-                  value={Math.round((node.shoulderExtent ?? 0.1) * 100) / 100}
+                  value={node.shoulderExtent ?? 0.1}
                 />
               </>
             )}
@@ -673,7 +673,7 @@ export default function ChimneyPanel() {
                   restoreOnCommit={false}
                   step={0.01}
                   unit="m"
-                  value={Math.round((node.flueDiameter ?? 0.22) * 100) / 100}
+                  value={node.flueDiameter ?? 0.22}
                 />
                 <SliderControl
                   label="Height"
@@ -685,7 +685,7 @@ export default function ChimneyPanel() {
                   restoreOnCommit={false}
                   step={0.01}
                   unit="m"
-                  value={Math.round((node.flueHeight ?? 0.3) * 100) / 100}
+                  value={node.flueHeight ?? 0.3}
                 />
                 {(node.flueCount ?? 1) > 1 && (
                   <SliderControl
@@ -710,7 +710,7 @@ export default function ChimneyPanel() {
                   restoreOnCommit={false}
                   step={0.005}
                   unit="m"
-                  value={Math.round((node.flueWallThickness ?? 0.02) * 1000) / 1000}
+                  value={node.flueWallThickness ?? 0.02}
                 />
               </>
             )}
@@ -741,7 +741,7 @@ export default function ChimneyPanel() {
                   restoreOnCommit={false}
                   step={0.01}
                   unit="m"
-                  value={Math.round((node.bandHeight ?? 0.1) * 100) / 100}
+                  value={node.bandHeight ?? 0.1}
                 />
                 <SliderControl
                   label="Extent"
@@ -753,7 +753,7 @@ export default function ChimneyPanel() {
                   restoreOnCommit={false}
                   step={0.005}
                   unit="m"
-                  value={Math.round((node.bandExtent ?? 0.04) * 1000) / 1000}
+                  value={node.bandExtent ?? 0.04}
                 />
                 <SliderControl
                   label="Offset"
@@ -765,7 +765,7 @@ export default function ChimneyPanel() {
                   restoreOnCommit={false}
                   step={0.05}
                   unit="m"
-                  value={Math.round((node.bandOffset ?? 0.4) * 100) / 100}
+                  value={node.bandOffset ?? 0.4}
                 />
               </>
             )}
@@ -804,7 +804,7 @@ export default function ChimneyPanel() {
                   restoreOnCommit={false}
                   step={0.05}
                   unit="m"
-                  value={Math.round((node.cricketLength ?? 0.6) * 100) / 100}
+                  value={node.cricketLength ?? 0.6}
                 />
                 <SliderControl
                   label="Height"
@@ -816,7 +816,7 @@ export default function ChimneyPanel() {
                   restoreOnCommit={false}
                   step={0.05}
                   unit="m"
-                  value={Math.round((node.cricketHeight ?? 0.4) * 100) / 100}
+                  value={node.cricketHeight ?? 0.4}
                 />
               </>
             )}
@@ -846,7 +846,7 @@ export default function ChimneyPanel() {
                   restoreOnCommit={false}
                   step={0.005}
                   unit="m"
-                  value={Math.round((node.panelDepth ?? 0.03) * 1000) / 1000}
+                  value={node.panelDepth ?? 0.03}
                 />
                 <SliderControl
                   label="Height"
@@ -858,7 +858,7 @@ export default function ChimneyPanel() {
                   restoreOnCommit={false}
                   step={0.05}
                   unit="m"
-                  value={Math.round((node.panelHeight ?? 0.8) * 100) / 100}
+                  value={node.panelHeight ?? 0.8}
                 />
                 <SliderControl
                   label="Top Offset"
@@ -870,7 +870,7 @@ export default function ChimneyPanel() {
                   restoreOnCommit={false}
                   step={0.05}
                   unit="m"
-                  value={Math.round((node.panelOffsetTop ?? 0.15) * 100) / 100}
+                  value={node.panelOffsetTop ?? 0.15}
                 />
                 <SliderControl
                   label="Side Margin"
@@ -882,7 +882,7 @@ export default function ChimneyPanel() {
                   restoreOnCommit={false}
                   step={0.01}
                   unit="m"
-                  value={Math.round((node.panelMargin ?? 0.1) * 100) / 100}
+                  value={node.panelMargin ?? 0.1}
                 />
               </>
             )}

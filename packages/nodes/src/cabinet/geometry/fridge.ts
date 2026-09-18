@@ -1,5 +1,6 @@
 import { BoxGeometry, Group, Mesh, type Object3D } from 'three'
 import type { CabinetFridgeCompartmentType } from '../stack'
+import { addHandleFeature, buildFrontGeometry } from './fronts'
 import {
   addApplianceHandle,
   addBox,
@@ -1092,18 +1093,60 @@ export function addFridgeCompartment(
     const doorHeight = Math.max(0.01, layout.height - doorGap * 2)
     const doorCenterX = shellWidth * layout.xFraction
     const doorCenterY = shellCenterY + layout.y
-    addFridgeLeaf(
-      group,
-      materials,
-      doorWidth,
-      doorHeight,
-      layout.hinge,
-      doorCenterX,
-      doorCenterY,
-      frontZ,
-      `${name}-door-${layout.key}`,
-      layout.section,
-      node.operationState ?? 0,
-    )
+    const doorName = `${name}-door-${layout.key}`
+    if (node.panelReady) {
+      const hingeGroup = new Group()
+      hingeGroup.name = `${doorName}-hinge`
+      hingeGroup.position.set(
+        layout.hinge === 'left' ? doorCenterX - doorWidth / 2 : doorCenterX + doorWidth / 2,
+        doorCenterY,
+        frontZ,
+      )
+      hingeGroup.rotation.y =
+        (layout.hinge === 'left' ? -1 : 1) * (Math.PI * 0.62) * (node.operationState ?? 0)
+      hingeGroup.userData.cabinetPose = {
+        type: 'rotate',
+        axis: 'y',
+        angle: (layout.hinge === 'left' ? -1 : 1) * (Math.PI * 0.62),
+      }
+      const panel = stampSlot(
+        new Mesh(
+          buildFrontGeometry(node, doorWidth, doorHeight, false, layout.hinge),
+          materials.front,
+        ),
+        'front',
+      )
+      panel.name = `${doorName}-panel`
+      panel.position.x = layout.hinge === 'left' ? doorWidth / 2 : -doorWidth / 2
+      panel.castShadow = true
+      panel.receiveShadow = true
+      addHandleFeature(
+        panel,
+        node,
+        materials,
+        doorWidth,
+        doorHeight,
+        layout.hinge,
+        true,
+        false,
+        `${doorName}-handle`,
+      )
+      hingeGroup.add(panel)
+      group.add(hingeGroup)
+    } else {
+      addFridgeLeaf(
+        group,
+        materials,
+        doorWidth,
+        doorHeight,
+        layout.hinge,
+        doorCenterX,
+        doorCenterY,
+        frontZ,
+        doorName,
+        layout.section,
+        node.operationState ?? 0,
+      )
+    }
   }
 }

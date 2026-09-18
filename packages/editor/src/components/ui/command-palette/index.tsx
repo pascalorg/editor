@@ -2,7 +2,7 @@
 
 import type { AnyNodeId, LevelNode } from '@pascal-app/core'
 import { useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { markPerfAction, useViewer } from '@pascal-app/viewer'
 import { Command, useCommandState } from 'cmdk'
 import { ChevronRight, Search } from 'lucide-react'
 import type { ReactNode } from 'react'
@@ -408,7 +408,12 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
                       key={level.id}
                       label={getLevelDisplayName(level)}
                       onSelect={() =>
-                        run(() => useViewer.getState().setSelection({ levelId: level.id }))
+                        run(() => {
+                          if (level.id !== useViewer.getState().selection.levelId) {
+                            markPerfAction('level-switch', level.id)
+                          }
+                          useViewer.getState().setSelection({ levelId: level.id })
+                        })
                       }
                     />
                   ))}

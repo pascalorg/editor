@@ -12,6 +12,7 @@ import {
   LIBRARY_MATERIAL_REF_PREFIX,
   type LightEffect,
   SCENE_MATERIAL_REF_PREFIX,
+  sceneRegistry,
   toLibraryMaterialRef,
   useInteractive,
   useLiveNodeOverrides,
@@ -37,8 +38,17 @@ import {
 import { useAnimations } from '@react-three/drei'
 import { Clone } from '@react-three/drei/core/Clone'
 import { useFrame, useLoader, useThree } from '@react-three/fiber'
-import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { AnimationAction, Group, Material, Mesh, Object3D } from 'three'
+import {
+  type RefObject,
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import type { AnimationAction, AnimationClip, Group, Material, Mesh, Object3D } from 'three'
 import { MathUtils, Texture } from 'three'
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
@@ -461,7 +471,7 @@ export const ItemRenderer = ({ node: storeNode }: { node: ItemNode }) => {
         <>
           <ModelWithRetry key={node.asset.src ?? 'no-src'} node={node} setSettled={setSettled} />
           {node.children?.map((childId) => (
-            <NodeRenderer key={childId} nodeId={childId} />
+            <NodeRenderer key={childId} nodeId={childId as AnyNodeId} />
           ))}
         </>
       )}
@@ -579,13 +589,17 @@ const LoadedModelRenderer = ({
   markSettled: () => void
 }) => {
   const ref = useRef<Group>(null!)
-  const { actions } = useAnimations(animations, ref)
 
   // Mounting past the suspense gate means the GLB resolved — the item's build
   // work is done (`ItemSystem` may clear its dirty mark, scene-ready may fire).
   useEffect(() => {
+    // Clip presence, not just the effect path: with no animEffect,
+    // <ItemAnimation> still autoplays the first clip, and the node batch must
+    // keep such items out of static batches (shared/node-batch/candidates).
+    const group = sceneRegistry.nodes.get(node.id)
+    if (group) group.userData.itemHasAnimations = animations.length > 0
     markSettled()
-  }, [markSettled])
+  }, [markSettled, node.id, animations])
   const shading = useViewer((s) => s.shading)
   const textures = useViewer((s) => s.textures)
   const colorPreset = useViewer((s) => s.colorPreset)
@@ -705,11 +719,11 @@ const LoadedModelRenderer = ({
       </group>
       {animations.length > 0 && (
         <ItemAnimation
-          actions={actions}
           animations={animations}
           animEffect={animEffect}
           interactive={interactive ?? null}
           nodeId={node.id}
+          rootRef={ref}
         />
       )}
       {lightEffects.map((effect, i) => (
@@ -729,15 +743,16 @@ const ItemAnimation = ({
   nodeId,
   animEffect,
   interactive,
-  actions,
   animations,
+  rootRef,
 }: {
   nodeId: AnyNodeId
   animEffect: AnimationEffect | null
   interactive: Interactive | null
-  actions: Record<string, AnimationAction | null>
-  animations: { name: string }[]
+  animations: AnimationClip[]
+  rootRef: RefObject<Group>
 }) => {
+  const { actions } = useAnimations(animations, rootRef)
   const activeClipRef = useRef<string | null>(null)
   const fadingOutRef = useRef<AnimationAction | null>(null)
 

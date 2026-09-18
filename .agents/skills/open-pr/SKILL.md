@@ -1,6 +1,8 @@
 ---
 name: open-pr
 description: Open a pull request on pascalorg/editor using the repo's PR template. Use when the user asks to open/create a PR, push and PR, or ship a branch in the editor repo.
+metadata:
+  internal: true
 allowed-tools: Bash(git *) Bash(gh *) Read
 ---
 

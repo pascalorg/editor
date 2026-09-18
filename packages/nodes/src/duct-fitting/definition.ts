@@ -1,6 +1,7 @@
 import type { NodeDefinition } from '@pascal-app/core'
 import { ductBodyPaint, ductBodySlots } from '../shared/duct-body-paint'
 import { rotateFittingNode } from '../shared/fitting-rotation'
+import { ductFittingToolOptions } from '../shared/fitting-tool-options'
 import { buildDuctFittingFloorplan } from './floorplan'
 import { buildDuctFittingGeometry } from './geometry'
 import { ductFittingParametrics } from './parametrics'
@@ -17,7 +18,7 @@ import { DuctFittingNode } from './schema'
  */
 export const ductFittingDefinition: NodeDefinition<typeof DuctFittingNode> = {
   kind: 'duct-fitting',
-  schemaVersion: 1,
+  schemaVersion: 3,
   schema: DuctFittingNode,
   category: 'utility',
   distributionRole: 'fitting',
@@ -30,6 +31,9 @@ export const ductFittingDefinition: NodeDefinition<typeof DuctFittingNode> = {
     metadata: {},
     position: [0, 0, 0],
     rotation: [0, 0, 0],
+    damperAngle: 0,
+    panelWidth: 0.25,
+    panelHeight: 0.15,
     fittingType: 'elbow',
     shape: 'rect',
     width: 14,
@@ -63,11 +67,16 @@ export const ductFittingDefinition: NodeDefinition<typeof DuctFittingNode> = {
   geometryKey: (n) =>
     JSON.stringify([
       n.fittingType,
+      n.damperAngle,
+      n.panelWidth,
+      n.panelHeight,
       // The mitered elbow + flange profiles swap width/height roles based
       // on where world-up sits in the local frame, so orientation is a
       // geometry input.
       n.rotation,
       n.shape,
+      n.inletShape,
+      n.outletShape,
       n.width,
       n.height,
       n.shape2,
@@ -85,7 +94,6 @@ export const ductFittingDefinition: NodeDefinition<typeof DuctFittingNode> = {
   ports: getDuctFittingPorts,
 
   floorplan: buildDuctFittingFloorplan,
-
   // R/T rotate a selected fitting ±45° around the shared active axis.
   // The default editor rotate only knows Y; fittings need X/Z for
   // risers, so this overrides it. Alt-cycling of the axis + the axis
@@ -115,6 +123,7 @@ export const ductFittingDefinition: NodeDefinition<typeof DuctFittingNode> = {
     move: () => import('./move-tool'),
   },
 
+  toolOptions: ductFittingToolOptions,
   tool: () => import('./tool'),
   toolHints: [
     { key: 'Click', label: 'Place fitting' },

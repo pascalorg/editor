@@ -12,6 +12,8 @@ import {
 } from '@pascal-app/core'
 import {
   clearStructuralElevationGuide,
+  DRAFTING_SURFACE_EXTENSION_KEY,
+  type DraftingSurfaceExtension,
   publishStructuralElevationGuide,
   resolveStructuralElevationSnap,
 } from '@pascal-app/editor'
@@ -272,6 +274,11 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
   schema: SlabNode,
   category: 'structure',
   surfaceRole: 'floor',
+  extensions: {
+    [DRAFTING_SURFACE_EXTENSION_KEY]: {
+      kind: 'slab',
+    } satisfies DraftingSurfaceExtension,
+  },
 
   defaults: () => ({
     object: 'node',

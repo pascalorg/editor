@@ -1,5 +1,6 @@
 // Base
 
+export { ProceduralItemNode } from '../procedural-items/node'
 export {
   SOLAR_PANEL_PRESET_LABELS,
   SOLAR_PANEL_PRESETS,
@@ -13,6 +14,12 @@ export { BaseNode, generateId, Material, nodeType, objectId } from './base'
 export { CameraSchema } from './camera'
 // Collections
 export { type Collection, type CollectionId, generateCollectionId } from './collections'
+// Compiled per-kind parsers (opt-in)
+export {
+  compiledNodeParsersEnabled,
+  enableCompiledNodeParsers,
+  parseNode,
+} from './compiled-node-parsers'
 export type {
   MaterialMapProperties,
   MaterialMaps,
@@ -158,6 +165,11 @@ export {
   isDefaultGutterNode,
 } from './nodes/gutter'
 export { HvacEquipmentNode } from './nodes/hvac-equipment'
+export {
+  ImportedMeshNode,
+  ImportedMeshPrimitive,
+  type ImportedMeshPrimitive as ImportedMeshPrimitiveValue,
+} from './nodes/imported-mesh'
 export type {
   AnimationEffect,
   Asset,
@@ -303,6 +315,7 @@ export { AttachmentSide, StairSegmentNode, StairSegmentType } from './nodes/stai
 export { StructuralGridNode } from './nodes/structural-grid'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
 export { TurbineVentMaterialRole, TurbineVentNode } from './nodes/turbine-vent'
+export { DEFAULT_UNIT_COLOR, UNIT_KINDS, type UnitKind, UnitNode } from './nodes/unit'
 export type {
   WallBandSurfaceSlotId,
   WallFaceBand,
@@ -344,6 +357,6 @@ export {
 export { ZoneNode } from './nodes/zone'
 export { generateSceneMaterialId, SceneMaterial, type SceneMaterialId } from './scene-material'
 export { MAX_TERRAIN_SIDE, TerrainData } from './terrain'
-export type { AnyNodeId, AnyNodeType } from './types'
+export type { AnyNodeId, AnyNodeOption, AnyNodeType } from './types'
 // Union types
-export { AnyNode } from './types'
+export { AnyNode, nodeKindOf } from './types'

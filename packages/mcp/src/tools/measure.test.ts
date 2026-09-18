@@ -59,6 +59,7 @@ describe('measure', () => {
     const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(parsed.distanceMeters).toBe(0)
     expect(parsed.areaSqMeters).toBeCloseTo(16, 5)
+    expect(parsed.areaUnits).toBe('square_meters')
   })
 
   test('subtracts slab holes without changing an un-holed slab area', async () => {

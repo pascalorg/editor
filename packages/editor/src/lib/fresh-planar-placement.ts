@@ -8,6 +8,11 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { getPlacementMetadataRecord, stripPlacementMetadataFlags } from './placement-metadata'
+import {
+  surfaceAttachmentId,
+  surfaceAttachmentUpdates,
+  updateSurfaceNode,
+} from './surface-attachment'
 
 function cleanPlacementMetadata<N extends AnyNode>(node: N): N {
   return {
@@ -131,16 +136,19 @@ export function commitFreshPlacementSubtree(
     parentId,
   })
 
+  const surfaceId = surfaceAttachmentId(subtree.root)
   const temporal = useScene.temporal.getState()
   const wasTracking = (temporal as { isTracking?: boolean }).isTracking !== false
   if (wasTracking) temporal.pause()
+  updateSurfaceNode(rootId, {}, null)
   useScene.getState().deleteNode(rootId)
   temporal.resume()
-  useScene
-    .getState()
-    .createNodes(
-      cloned.nodes.map((node, index) => (index === 0 && parentId ? { node, parentId } : { node })),
-    )
+  useScene.getState().applyNodeChanges({
+    create: cloned.nodes.map((node, index) =>
+      index === 0 && parentId ? { node, parentId } : { node },
+    ),
+    update: surfaceAttachmentUpdates(cloned.rootId, parentId, surfaceId),
+  })
   if (!wasTracking) temporal.pause()
 
   return cloned.rootId

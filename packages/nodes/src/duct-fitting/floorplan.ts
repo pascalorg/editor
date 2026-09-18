@@ -1,5 +1,9 @@
 import type { FloorplanGeometry, GeometryContext } from '@pascal-app/core'
+import { MeshStandardMaterial } from 'three'
 import { INCHES_TO_METERS } from '../duct-segment/geometry'
+import { accessoryFloorplan } from '../shared/accessory-floorplan'
+import { buildDuctAccessory } from './accessory-geometry'
+import { buildDuctFittingGeometry } from './geometry'
 import { getDuctFittingPorts } from './ports'
 import type { DuctFittingNode } from './schema'
 
@@ -19,6 +23,10 @@ export function buildDuctFittingFloorplan(
   node: DuctFittingNode,
   ctx: GeometryContext,
 ): FloorplanGeometry | null {
+  if (['end-cap', 'damper', 'access-panel', 'coupling'].includes(node.fittingType))
+    return accessoryFloorplan(buildDuctAccessory(node, new MeshStandardMaterial())!, node, ctx)
+  if (node.fittingType === 'transition' || node.fittingType === 'reducer')
+    return accessoryFloorplan(buildDuctFittingGeometry(node), node, ctx)
   const [cx, , cz] = node.position
   const ports = getDuctFittingPorts(node)
   const view = ctx.viewState

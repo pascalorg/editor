@@ -1,11 +1,15 @@
 'use client'
 
+import { markPureRaycast } from '@pascal-app/viewer'
 import type { Material, Mesh, Object3D, Raycaster } from 'three'
 
 export const INVALID_GHOST_COLOR = 0xef_44_44
 export const VALID_GHOST_COLOR = 0x22_c5_5e
 
-const NO_RAYCAST = (_raycaster: Raycaster, _intersects: unknown[]) => {}
+const NO_RAYCAST = markPureRaycast(function NO_RAYCAST(
+  _raycaster: Raycaster,
+  _intersects: unknown[],
+) {})
 
 /**
  * Apply ghost material treatment to a preview mesh tree.

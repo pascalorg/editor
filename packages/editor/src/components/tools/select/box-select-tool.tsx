@@ -19,6 +19,7 @@ import {
   isBoxSelectPointerSuppressed,
   markBoxSelectHandled,
 } from './box-select-state'
+import { marqueePolygon } from './marquee-footprint'
 import {
   convexHull2D,
   type Point2,
@@ -223,7 +224,8 @@ function collectNodeIdsInScreenRect(
         | { start?: unknown; end?: unknown; polygon?: unknown }
         | undefined
       if (node) {
-        const { start, end, polygon } = node
+        const { start, end } = node
+        const polygon = marqueePolygon(node)
         if (isVec2(start) && isVec2(end)) {
           if (segmentIntersectsPolygon(start, end, quad)) result.push(id)
           continue

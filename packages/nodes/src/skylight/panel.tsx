@@ -297,7 +297,7 @@ export default function SkylightPanel() {
           restoreOnCommit={false}
           step={0.001}
           unit="m"
-          value={Math.round((node.glassThickness ?? 0.01) * 1000) / 1000}
+          value={node.glassThickness ?? 0.01}
         />
         {activeSkylightType === 'lantern' && (
           <>
@@ -311,7 +311,7 @@ export default function SkylightPanel() {
               restoreOnCommit={false}
               step={0.01}
               unit="m"
-              value={Math.round((node.lanternHeight ?? 0.25) * 1000) / 1000}
+              value={node.lanternHeight ?? 0.25}
             />
             <SliderControl
               label="Top Scale"
@@ -382,7 +382,7 @@ export default function SkylightPanel() {
                 restoreOnCommit={false}
                 step={0.005}
                 unit="m"
-                value={Math.round((node.motorHousingSize ?? 0.08) * 1000) / 1000}
+                value={node.motorHousingSize ?? 0.08}
               />
             )}
           </>
@@ -419,7 +419,7 @@ export default function SkylightPanel() {
               restoreOnCommit={false}
               step={0.005}
               unit="m"
-              value={Math.round((node.trackWidth ?? 0.045) * 1000) / 1000}
+              value={node.trackWidth ?? 0.045}
             />
           </>
         )}
@@ -436,7 +436,7 @@ export default function SkylightPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round(node.width * 100) / 100}
+          value={node.width}
         />
         <SliderControl
           label="Height"
@@ -448,7 +448,7 @@ export default function SkylightPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round(node.height * 100) / 100}
+          value={node.height}
         />
       </PanelSection>
 
@@ -463,7 +463,7 @@ export default function SkylightPanel() {
           restoreOnCommit={false}
           step={0.005}
           unit="m"
-          value={Math.round((node.frameThickness ?? 0.05) * 1000) / 1000}
+          value={node.frameThickness ?? 0.05}
         />
         <SliderControl
           label="Depth"
@@ -475,7 +475,7 @@ export default function SkylightPanel() {
           restoreOnCommit={false}
           step={0.005}
           unit="m"
-          value={Math.round((node.frameDepth ?? 0.08) * 1000) / 1000}
+          value={node.frameDepth ?? 0.08}
         />
         <SliderControl
           label="Cutout Offset"
@@ -487,7 +487,7 @@ export default function SkylightPanel() {
           restoreOnCommit={false}
           step={0.005}
           unit="m"
-          value={Math.round((node.cutoutOffset ?? 0.01) * 1000) / 1000}
+          value={node.cutoutOffset ?? 0.01}
         />
       </PanelSection>
 
@@ -511,7 +511,7 @@ export default function SkylightPanel() {
             restoreOnCommit={false}
             step={0.005}
             unit="m"
-            value={Math.round((node.curbHeight ?? 0.1) * 1000) / 1000}
+            value={node.curbHeight ?? 0.1}
           />
         )}
       </PanelSection>
@@ -531,7 +531,7 @@ export default function SkylightPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round(worldX_now * 100) / 100}
+          value={worldX_now}
         />
         <SliderControl
           label="Z"
@@ -547,7 +547,7 @@ export default function SkylightPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round(worldZ_now * 100) / 100}
+          value={worldZ_now}
         />
         <SliderControl
           label="Rotation"

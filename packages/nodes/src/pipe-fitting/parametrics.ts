@@ -64,8 +64,22 @@ export const pipeFittingParametrics: ParametricDescriptor<PipeFittingNode> = {
         {
           key: 'fittingType',
           kind: 'enum',
-          options: ['elbow', 'wye', 'sanitary-tee', 'cross'],
-          display: 'segmented',
+          options: [
+            'elbow',
+            'wye',
+            'sanitary-tee',
+            'cross',
+            'end-cap',
+            'cleanout',
+            'reducer',
+            'coupling',
+          ],
+        },
+        {
+          key: 'cleanoutStyle',
+          kind: 'enum',
+          options: ['end', 'inline'],
+          visibleIf: (n) => n.fittingType === 'cleanout',
         },
         {
           key: 'angle',
@@ -95,7 +109,7 @@ export const pipeFittingParametrics: ParametricDescriptor<PipeFittingNode> = {
           min: 1.25,
           max: 6,
           step: 0.25,
-          visibleIf: (n) => n.fittingType !== 'elbow',
+          visibleIf: (n) => ['wye', 'sanitary-tee', 'cross', 'reducer'].includes(n.fittingType),
         },
         { key: 'pipeMaterial', kind: 'enum', options: ['pvc', 'abs', 'cast-iron'] },
       ],

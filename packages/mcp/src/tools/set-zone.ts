@@ -3,6 +3,7 @@ import type { AnyNodeId } from '@pascal-app/core/schema'
 import { ZoneNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
+import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
 import { ErrorCode, throwMcpError } from './errors'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { NodeIdSchema, Vec2Schema } from './schemas'
@@ -28,6 +29,7 @@ export function registerSetZone(server: McpServer, bridge: SceneOperations): voi
         'Create a polygonal zone on the given level. label is stored as the zone name and properties are merged into metadata.',
       inputSchema: setZoneInput,
       outputSchema: setZoneOutput,
+      annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
     async ({ levelId, polygon, label, properties }) => {
       const parent = bridge.getNode(levelId as AnyNodeId)

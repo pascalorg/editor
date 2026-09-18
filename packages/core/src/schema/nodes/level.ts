@@ -1,5 +1,6 @@
 import dedent from 'dedent'
 import { z } from 'zod'
+import type { ProceduralItemNode } from '../../procedural-items/node'
 import { BaseNode, nodeType, objectId } from '../base'
 import type { BlockNode } from './block'
 import type { CeilingNode } from './ceiling'
@@ -11,6 +12,7 @@ import type { DuctTerminalNode } from './duct-terminal'
 import type { FenceNode } from './fence'
 import type { GuideNode } from './guide'
 import type { HvacEquipmentNode } from './hvac-equipment'
+import type { ImportedMeshNode } from './imported-mesh'
 import type { ItemNode } from './item'
 import type { LinesetNode } from './lineset'
 import type { LiquidLineNode } from './liquid-line'
@@ -36,6 +38,8 @@ type CoreLevelChildId =
   | BlockNode['id']
   | StructuralGridNode['id']
   | ItemNode['id']
+  | ProceduralItemNode['id']
+  | ImportedMeshNode['id']
   | ZoneNode['id']
   | SlabNode['id']
   | CeilingNode['id']

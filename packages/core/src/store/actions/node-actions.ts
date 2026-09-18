@@ -1,4 +1,5 @@
 import { nodeRegistry } from '../../registry/registry'
+import { validateNodeRelations } from '../../registry/validate-relations'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -20,6 +21,7 @@ import {
   isDefaultDownspoutNode,
   isDefaultGutterNode,
   isDefaultRidgeVentNode,
+  parseNode,
   planAutomaticDownspouts,
   type RoofSegmentNode,
   resolveAutomaticDownspoutLength,
@@ -27,7 +29,11 @@ import {
 } from '../../schema'
 import type { CollectionId } from '../../schema/collections'
 import { constrainWallCurveOffsetToAvoidIntersections } from '../../systems/wall/wall-curve'
-import { addActiveSceneCommitNodeIds, runWithSceneCommitNodeIds } from '../history-control'
+import {
+  activeSceneCommitNodeIds,
+  addActiveSceneCommitNodeIds,
+  runWithSceneCommitNodeIds,
+} from '../history-control'
 import type { SceneState } from '../use-scene'
 
 type AnyContainerNode = AnyNode & { children: string[] }
@@ -529,7 +535,10 @@ function warnSanitizedNodeMutation(
 
 function parseCreatedNode(node: AnyNode, parentId: AnyNodeId | null): AnyNode {
   const candidate = { ...node, parentId }
-  const parsed = AnyNodeSchema.safeParse(candidate)
+  const registered = nodeRegistry.get(candidate.type)?.schema
+  // Generated definitions must reject invalid geometry instead of retaining a failed parse.
+  if (registered?.meta?.()?.strictMutations === true) return registered.parse(candidate) as AnyNode
+  const parsed = parseNode(candidate)
   if (parsed.success) return parsed.data
 
   const schema = getNodeSchemaForType(candidate.type)
@@ -559,8 +568,19 @@ function mergeNodeUpdate(currentNode: AnyNode, patch: Partial<AnyNode>): AnyNode
 
 function parseUpdatedNode(currentNode: AnyNode, data: Partial<AnyNode>): AnyNode {
   const candidate = mergeNodeUpdate(currentNode, data)
-  const parsed = AnyNodeSchema.safeParse(candidate)
-  if (parsed.success) return parsed.data
+  // Graph links survive schemas that omit children; only an explicit patch may change them.
+  const preserveChildren = (updated: AnyNode): AnyNode =>
+    !Object.hasOwn(data, 'children') &&
+    'children' in currentNode &&
+    Array.isArray(currentNode.children)
+      ? ({ ...updated, children: currentNode.children } as AnyNode)
+      : updated
+  const registered = nodeRegistry.get(currentNode.type)?.schema
+  // Generated definitions must reject invalid geometry instead of retaining a failed parse.
+  if (registered?.meta?.()?.strictMutations === true)
+    return preserveChildren(registered.parse(candidate) as AnyNode)
+  const parsed = parseNode(candidate)
+  if (parsed.success) return preserveChildren(parsed.data)
 
   const schema = getNodeSchemaForType(candidate.type)
   const sanitized = sanitizeNumericValue(schema, data, currentNode, [])
@@ -1591,6 +1611,7 @@ const deleteNodesActionImpl = (
   const nodesToMarkDirty = new Set<AnyNodeId>()
   const deletedIds = new Set<AnyNodeId>()
   const mergePlans = buildWallMergePlans(get().nodes, ids)
+  const requestedDeleteIds = new Set(ids)
 
   set((state) => {
     const nextNodes = { ...state.nodes }
@@ -1605,7 +1626,9 @@ const deleteNodesActionImpl = (
       allIds.add(id)
       const node = nextNodes[id]
       const cascadeDeletes = node
-        ? nodeRegistry.get(node.type)?.parametrics?.onDeleteCascade?.(node, nextNodes, allIds)
+        ? nodeRegistry
+            .get(node.type)
+            ?.parametrics?.onDeleteCascade?.(node, nextNodes, allIds, requestedDeleteIds)
         : null
       if (cascadeDeletes) {
         for (const companionId of cascadeDeletes) collect(companionId)
@@ -1637,7 +1660,7 @@ const deleteNodesActionImpl = (
       if (!node) continue
       const onDelete = nodeRegistry.get(node.type)?.parametrics?.onDelete
       if (!onDelete) continue
-      for (const { id: targetId, data } of onDelete(node, nextNodes)) {
+      for (const { id: targetId, data } of onDelete(node, nextNodes, allIds, requestedDeleteIds)) {
         if (allIds.has(targetId)) continue
         const target = nextNodes[targetId]
         if (!target) continue
@@ -1691,6 +1714,20 @@ const deleteNodesActionImpl = (
           nextNodes[nodeId as AnyNodeId] = { ...node, ...patch } as AnyNode
           nodesToMarkDirty.add(nodeId as AnyNodeId)
         }
+      }
+    }
+
+    const deletedZoneIds = new Set<string>()
+    for (const id of allIds) {
+      if (nextNodes[id]?.type === 'zone') deletedZoneIds.add(id)
+    }
+    if (deletedZoneIds.size > 0) {
+      for (const node of Object.values(nextNodes)) {
+        if (node.type !== 'unit' || allIds.has(node.id)) continue
+        const members = node.members.filter((id) => !deletedZoneIds.has(id))
+        if (members.length === node.members.length) continue
+        nextNodes[node.id] = { ...node, members }
+        nodesToMarkDirty.add(node.id)
       }
     }
 
@@ -1756,6 +1793,16 @@ const deleteNodesActionImpl = (
   })
 }
 
+function validatedSet(set: Parameters<typeof createNodesActionImpl>[0]): typeof set {
+  return (change) =>
+    set((state) => {
+      const patch = change(state)
+      if (patch.nodes)
+        validateNodeRelations(state.nodes, patch.nodes, activeSceneCommitNodeIds() ?? [])
+      return patch
+    })
+}
+
 export const createNodesAction = (
   set: Parameters<typeof createNodesActionImpl>[0],
   get: Parameters<typeof createNodesActionImpl>[1],
@@ -1766,7 +1813,7 @@ export const createNodesAction = (
       const effectiveParentId = parentId ?? (node.parentId as AnyNodeId | null)
       return effectiveParentId ? [node.id, effectiveParentId] : [node.id]
     }),
-    () => createNodesActionImpl(set, get, ops),
+    () => createNodesActionImpl(validatedSet(set), get, ops),
   )
 
 export const applyNodeChangesAction = (
@@ -1783,7 +1830,7 @@ export const applyNodeChangesAction = (
       ...(changes.update ?? []).map(({ id }) => id),
       ...(changes.delete ?? []),
     ],
-    () => applyNodeChangesActionImpl(set, get, changes),
+    () => applyNodeChangesActionImpl(validatedSet(set), get, changes),
   )
 
 export const updateNodesAction = (
@@ -1793,11 +1840,11 @@ export const updateNodesAction = (
 ) =>
   runWithSceneCommitNodeIds(
     updates.map(({ id }) => id),
-    () => updateNodesActionImpl(set, get, updates),
+    () => updateNodesActionImpl(validatedSet(set), get, updates),
   )
 
 export const deleteNodesAction = (
   set: Parameters<typeof deleteNodesActionImpl>[0],
   get: Parameters<typeof deleteNodesActionImpl>[1],
   ids: AnyNodeId[],
-) => runWithSceneCommitNodeIds(ids, () => deleteNodesActionImpl(set, get, ids))
+) => runWithSceneCommitNodeIds(ids, () => deleteNodesActionImpl(validatedSet(set), get, ids))

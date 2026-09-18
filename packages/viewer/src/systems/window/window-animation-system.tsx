@@ -17,17 +17,12 @@ import {
   FRENCH_CASEMENT_RIGHT_SASH_NAME,
   HOPPER_WINDOW_SASH_NAME,
   LOUVERED_WINDOW_SLATS_NAME,
+  pendingWindowAnimationRebuilds,
   SINGLE_HUNG_ACTIVE_SASH_NAME,
   SLIDING_WINDOW_ACTIVE_PANEL_NAME,
 } from './window-system'
 
 const easeWindowAnimation = (value: number) => value * value * (3 - 2 * value)
-
-function markWindowDirty(windowId: AnyNodeId) {
-  const scene = useScene.getState()
-  const node = scene.nodes[windowId]
-  scene.dirtyNodes.add(windowId)
-}
 
 /**
  * Pose a window's moving parts (sash/panel/slats) at `value` (0 = closed,
@@ -162,7 +157,10 @@ export const WindowAnimationSystem = () => {
       const value = animation.from + (animation.to - animation.from) * easeWindowAnimation(progress)
       interactive.setWindowOpenState(typedWindowId, { [animation.field]: value })
       const appliedDirectly = applyDirectWindowAnimation(typedWindowId, value)
-      if (!appliedDirectly) markWindowDirty(typedWindowId)
+      // A dirty mark is one-shot work, not a needs-frame signal — per-tick
+      // marks kept the scene from ever settling. Types without a direct pose
+      // path get a transient rebuild request instead.
+      if (!appliedDirectly) pendingWindowAnimationRebuilds.add(typedWindowId)
 
       if (progress < 1) continue
 
@@ -170,9 +168,11 @@ export const WindowAnimationSystem = () => {
       if (animation.persist) {
         scene.updateNode(typedWindowId, { [animation.field]: animation.to })
         interactive.removeWindowOpenState(typedWindowId)
-        markWindowDirty(typedWindowId)
+        // One-shot: the rebuild re-derives the pose from the persisted node.
+        scene.markDirty(typedWindowId)
       } else {
         interactive.setWindowOpenState(typedWindowId, { [animation.field]: animation.to })
+        if (!appliedDirectly) scene.markDirty(typedWindowId)
       }
       emitter.emit('window:animation-completed', {
         windowId: typedWindowId as WindowNode['id'],

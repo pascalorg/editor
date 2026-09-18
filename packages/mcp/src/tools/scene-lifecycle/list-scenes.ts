@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { SceneOperations } from '../../operations'
+import { READ_ONLY_TOOL_ANNOTATIONS } from '../annotations'
 import { ErrorCode, throwMcpError } from '../errors'
 
 const DEFAULT_LIMIT = 100
@@ -40,6 +41,7 @@ export function registerListScenes(server: McpServer, operations: SceneOperation
         'List scenes in the SceneStore. Optionally filter by `projectId` and cap results with `limit` (default 100).',
       inputSchema: listScenesInput,
       outputSchema: listScenesOutput,
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async ({ projectId, limit }) => {
       try {

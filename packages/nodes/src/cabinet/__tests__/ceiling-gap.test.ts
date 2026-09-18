@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { type AnyNode, CabinetModuleNode, CabinetNode, LevelNode } from '@pascal-app/core'
-import { cabinetCeilingGap } from '../run-ops'
+import { cabinetCeilingGap, cabinetModuleCeilingOverflow } from '../run-ops'
 
 test('ceiling gap resolves the remaining space above a nested tall module', () => {
   const level = LevelNode.parse({ id: 'level_ceiling-gap', height: 2.5 })
@@ -80,4 +80,32 @@ test('ceiling gap does not count a plinth already included in module position', 
       [module.id]: module,
     } as Record<string, AnyNode>),
   ).toBeCloseTo(0.33)
+})
+
+test('ceiling overflow includes a nested top finish without double-counting the plinth', () => {
+  const level = LevelNode.parse({ id: 'level_ceiling-overflow', height: 2.5 })
+  const run = CabinetNode.parse({
+    id: 'cabinet_ceiling-overflow-run',
+    parentId: level.id,
+    children: ['cabinet-module_ceiling-overflow-module'],
+  })
+  const module = CabinetModuleNode.parse({
+    id: 'cabinet-module_ceiling-overflow-module',
+    parentId: run.id,
+    position: [0, 0.1, 0],
+    carcassHeight: 2.07,
+    showPlinth: true,
+    plinthHeight: 0.1,
+    withCountertop: false,
+    topFinish: 'trim',
+    topFinishHeight: 0.4,
+  })
+
+  expect(
+    cabinetModuleCeilingOverflow(module, {
+      [level.id]: level,
+      [run.id]: run,
+      [module.id]: module,
+    } as Record<string, AnyNode>),
+  ).toBeCloseTo(0.07)
 })

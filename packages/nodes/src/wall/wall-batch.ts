@@ -221,10 +221,10 @@ export function applyWallBatchGroups(batch: WallBatch, hidden: ReadonlySet<strin
  * its subtree keeps rendering and picking.
  */
 export function hideBatchedWall(mesh: THREE.Object3D): void {
-  hideFromScene(mesh, 'batched')
+  hideFromScene(mesh, 'wall-batched')
 }
 
 /** Hands a wall back its own draw call — unless solo or isolation still hide it. */
 export function revealBatchedWall(mesh: THREE.Object3D): void {
-  showInScene(mesh, 'batched')
+  showInScene(mesh, 'wall-batched')
 }

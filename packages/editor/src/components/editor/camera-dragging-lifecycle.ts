@@ -11,6 +11,7 @@ export function createCameraDraggingLifecycle({
   schedule?: (callback: () => void, delay: number) => TimerHandle
   cancel?: (timer: TimerHandle) => void
 }) {
+  let paused = false
   let releaseTimer: TimerHandle | null = null
 
   const clearScheduledEnd = () => {
@@ -21,7 +22,7 @@ export function createCameraDraggingLifecycle({
 
   const begin = () => {
     clearScheduledEnd()
-    setDragging(true)
+    if (!paused) setDragging(true)
   }
 
   const end = () => {
@@ -31,11 +32,18 @@ export function createCameraDraggingLifecycle({
 
   const scheduleEnd = () => {
     clearScheduledEnd()
+    if (paused) return
     releaseTimer = schedule(() => {
       releaseTimer = null
       setDragging(false)
     }, fallbackMs)
   }
 
-  return { begin, end, scheduleEnd }
+  const setPaused = (value: boolean) => {
+    paused = value
+    // Paused controls cannot advance damping to rest/sleep.
+    if (paused) end()
+  }
+
+  return { begin, end, scheduleEnd, setPaused }
 }

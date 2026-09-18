@@ -72,6 +72,12 @@ const MOVE_CROSS_DEPTH = 0.06
 const MOVE_CROSS_BEVEL_THICKNESS = 0.018
 const MOVE_CROSS_BEVEL_SIZE = 0.012
 const MOVE_CROSS_BEVEL_SEGMENTS = 6
+const PLUS_HALF_LENGTH = 0.18
+const PLUS_HALF_WIDTH = 0.045
+const PLUS_DEPTH = 0.06
+const PLUS_BEVEL_THICKNESS = 0.018
+const PLUS_BEVEL_SIZE = 0.012
+const PLUS_BEVEL_SEGMENTS = 6
 const ROTATE_HANDLE_RADIUS = 0.2
 const ROTATE_HANDLE_HALF_SWEEP = Math.PI / 3
 const ROTATE_RIBBON_HALF_WIDTH = 0.02
@@ -79,7 +85,13 @@ const ROTATE_HEAD_HALF_WIDTH = 0.045
 const TRACKER_CUBE_SIZE = 0.16
 export const CORNER_HEX_RADIUS = 0.11
 
-export type HandleArrowShape = 'chevron' | 'cross' | 'curved-arrow' | 'tracker' | 'corner-picker'
+export type HandleArrowShape =
+  | 'chevron'
+  | 'cross'
+  | 'plus'
+  | 'curved-arrow'
+  | 'tracker'
+  | 'corner-picker'
 export type HandleArrowInputShape = HandleArrowShape | 'arrow' | 'move-cross'
 
 export type HandleArrowPlacement = {
@@ -310,6 +322,54 @@ function createMoveCrossHitAreaGeometry() {
   return merged
 }
 
+function createPlusHandleGeometry() {
+  const shape = new Shape()
+  shape.moveTo(-PLUS_HALF_WIDTH, PLUS_HALF_LENGTH)
+  shape.lineTo(PLUS_HALF_WIDTH, PLUS_HALF_LENGTH)
+  shape.lineTo(PLUS_HALF_WIDTH, PLUS_HALF_WIDTH)
+  shape.lineTo(PLUS_HALF_LENGTH, PLUS_HALF_WIDTH)
+  shape.lineTo(PLUS_HALF_LENGTH, -PLUS_HALF_WIDTH)
+  shape.lineTo(PLUS_HALF_WIDTH, -PLUS_HALF_WIDTH)
+  shape.lineTo(PLUS_HALF_WIDTH, -PLUS_HALF_LENGTH)
+  shape.lineTo(-PLUS_HALF_WIDTH, -PLUS_HALF_LENGTH)
+  shape.lineTo(-PLUS_HALF_WIDTH, -PLUS_HALF_WIDTH)
+  shape.lineTo(-PLUS_HALF_LENGTH, -PLUS_HALF_WIDTH)
+  shape.lineTo(-PLUS_HALF_LENGTH, PLUS_HALF_WIDTH)
+  shape.lineTo(-PLUS_HALF_WIDTH, PLUS_HALF_WIDTH)
+  shape.closePath()
+  const geometry = new ExtrudeGeometry(shape, {
+    depth: PLUS_DEPTH,
+    bevelEnabled: true,
+    bevelThickness: PLUS_BEVEL_THICKNESS,
+    bevelSize: PLUS_BEVEL_SIZE,
+    bevelOffset: 0,
+    bevelSegments: PLUS_BEVEL_SEGMENTS,
+    curveSegments: 8,
+    steps: 1,
+  })
+  geometry.translate(0, 0, -PLUS_DEPTH / 2)
+  geometry.computeVertexNormals()
+  geometry.computeBoundingSphere()
+  return geometry
+}
+
+function createPlusHitAreaGeometry() {
+  const length = (PLUS_HALF_LENGTH + HIT_AREA_MARGIN) * 2
+  const width = (PLUS_HALF_WIDTH + HIT_AREA_MARGIN) * 2
+  const horizontal = new BoxGeometry(length, width, HIT_AREA_THICKNESS)
+  const vertical = new BoxGeometry(width, length, HIT_AREA_THICKNESS)
+  const merged = mergeGeometries([horizontal, vertical], false)
+  if (!merged) {
+    vertical.dispose()
+    horizontal.computeBoundingSphere()
+    return horizontal
+  }
+  horizontal.dispose()
+  vertical.dispose()
+  merged.computeBoundingSphere()
+  return merged
+}
+
 export function createRotateArrowHitAreaGeometry() {
   const halfSweep = ROTATE_HANDLE_HALF_SWEEP + HIT_AREA_MARGIN / ROTATE_HANDLE_RADIUS
   const geometry = new TorusGeometry(
@@ -351,6 +411,7 @@ const CORNER_DISC_ROUND_SEGMENTS = 32
 function createHandleArrowGeometry(shape: HandleArrowShape, thin = false, round = false) {
   if (shape === 'chevron') return createArrowHandleGeometry(thin)
   if (shape === 'cross') return createMoveCrossHandleGeometry()
+  if (shape === 'plus') return createPlusHandleGeometry()
   if (shape === 'curved-arrow') return createRotateArrowHandleGeometry()
   if (shape === 'tracker') {
     const geometry = new BoxGeometry(TRACKER_CUBE_SIZE, TRACKER_CUBE_SIZE, TRACKER_CUBE_SIZE)
@@ -368,6 +429,7 @@ function createHandleArrowGeometry(shape: HandleArrowShape, thin = false, round 
 function createHandleArrowHitGeometry(shape: HandleArrowShape, round = false) {
   if (shape === 'chevron') return createArrowHitAreaGeometry()
   if (shape === 'cross') return createMoveCrossHitAreaGeometry()
+  if (shape === 'plus') return createPlusHitAreaGeometry()
   if (shape === 'curved-arrow') return createRotateArrowHitAreaGeometry()
   if (shape === 'tracker') return createTrackerHitAreaGeometry()
   const geometry = new CircleGeometry(
@@ -379,7 +441,29 @@ function createHandleArrowHitGeometry(shape: HandleArrowShape, round = false) {
 }
 
 let sharedHitAreaMaterial: MeshBasicNodeMaterial | null = null
-let sharedHitAreaMaterialRefs = 0
+const sharedHandleGeometries = new Map<string, BufferGeometry>()
+const sharedHandleHitGeometries = new Map<string, BufferGeometry>()
+const sharedHandleMaterials = new Map<string, MeshBasicNodeMaterial>()
+
+function sharedHandleGeometry(shape: HandleArrowShape, thin: boolean, round: boolean) {
+  const key = `${shape}:${thin}:${round}`
+  let geometry = sharedHandleGeometries.get(key)
+  if (!geometry) {
+    geometry = createHandleArrowGeometry(shape, thin, round)
+    sharedHandleGeometries.set(key, geometry)
+  }
+  return geometry
+}
+
+function sharedHandleHitGeometry(shape: HandleArrowShape, round: boolean) {
+  const key = `${shape}:${round}`
+  let geometry = sharedHandleHitGeometries.get(key)
+  if (!geometry) {
+    geometry = createHandleArrowHitGeometry(shape, round)
+    sharedHandleHitGeometries.set(key, geometry)
+  }
+  return geometry
+}
 
 function createInvisibleHitAreaMaterial() {
   return new MeshBasicNodeMaterial({
@@ -394,23 +478,8 @@ function createInvisibleHitAreaMaterial() {
 }
 
 export function useInvisibleHitAreaMaterial(): MeshBasicNodeMaterial {
-  const materialRef = useRef<MeshBasicNodeMaterial | null>(null)
-  if (!materialRef.current) {
-    sharedHitAreaMaterial ??= createInvisibleHitAreaMaterial()
-    materialRef.current = sharedHitAreaMaterial
-  }
-  useEffect(() => {
-    sharedHitAreaMaterialRefs += 1
-    return () => {
-      sharedHitAreaMaterialRefs -= 1
-      if (sharedHitAreaMaterialRefs <= 0 && sharedHitAreaMaterial) {
-        sharedHitAreaMaterial.dispose()
-        sharedHitAreaMaterial = null
-        sharedHitAreaMaterialRefs = 0
-      }
-    }
-  }, [])
-  return materialRef.current
+  sharedHitAreaMaterial ??= createInvisibleHitAreaMaterial()
+  return sharedHitAreaMaterial
 }
 
 export function InvisibleHandleHitArea({
@@ -526,19 +595,21 @@ export function useArrowMaterial(): MeshBasicNodeMaterial {
   )
 }
 
-function useHandleArrowMaterial(shape: HandleArrowShape): MeshBasicNodeMaterial {
-  return useMemo(
-    () =>
-      new MeshBasicNodeMaterial({
-        color: new Color(ARROW_COLOR),
-        side: DoubleSide,
-        transparent: true,
-        opacity: shape === 'corner-picker' ? 0.95 : 1,
-        depthTest: false,
-        depthWrite: shape !== 'corner-picker',
-      }),
-    [shape],
-  )
+function useHandleArrowMaterial(shape: HandleArrowShape, hover: boolean): MeshBasicNodeMaterial {
+  const key = `${shape}:${hover}`
+  let material = sharedHandleMaterials.get(key)
+  if (!material) {
+    material = new MeshBasicNodeMaterial({
+      color: new Color(hover ? ARROW_HOVER_COLOR : ARROW_COLOR),
+      side: DoubleSide,
+      transparent: true,
+      opacity: shape === 'corner-picker' ? 0.95 : 1,
+      depthTest: false,
+      depthWrite: shape !== 'corner-picker',
+    })
+    sharedHandleMaterials.set(key, material)
+  }
+  return material
 }
 
 function indicatorRenderOrder(shape: HandleArrowShape) {
@@ -562,15 +633,9 @@ export function HandleArrow({
   round = false,
 }: HandleArrowProps) {
   const visualShape = normalizeHandleArrowShape(shape, cursor)
-  const geometry = useMemo(
-    () => createHandleArrowGeometry(visualShape, thin, round),
-    [visualShape, thin, round],
-  )
-  const hitGeometry = useMemo(
-    () => createHandleArrowHitGeometry(visualShape, round),
-    [visualShape, round],
-  )
-  const indicatorMaterial = useHandleArrowMaterial(visualShape)
+  const geometry = sharedHandleGeometry(visualShape, thin, round)
+  const hitGeometry = sharedHandleHitGeometry(visualShape, round)
+  const indicatorMaterial = useHandleArrowMaterial(visualShape, hover)
   const hitMaterial = useInvisibleHitAreaMaterial()
   const rootRef = useRef<Group>(null)
   const rotation: [number, number, number] = placement.rotation
@@ -582,9 +647,6 @@ export function HandleArrow({
   const scale = (hover ? hoverScale : 1) * placement.baseScale
   const hitScale = visualShape === 'corner-picker' ? scale : placement.baseScale
 
-  useEffect(() => {
-    indicatorMaterial.color.set(hover ? ARROW_HOVER_COLOR : ARROW_COLOR)
-  }, [indicatorMaterial, hover])
   useEffect(() => {
     const hideForCapture = () => {
       if (rootRef.current) rootRef.current.visible = false
@@ -599,9 +661,6 @@ export function HandleArrow({
       emitter.off('thumbnail:after-capture', restoreAfterCapture)
     }
   }, [])
-  useEffect(() => () => geometry.dispose(), [geometry])
-  useEffect(() => () => hitGeometry.dispose(), [hitGeometry])
-  useEffect(() => () => indicatorMaterial.dispose(), [indicatorMaterial])
 
   const handleEnter: PointerHandler = (event) => {
     event.stopPropagation()

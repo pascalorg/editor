@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { SceneOperations } from '../../operations'
 import { SceneNotFoundError, SceneVersionConflictError } from '../../storage/types'
+import { DESTRUCTIVE_TOOL_ANNOTATIONS } from '../annotations'
 import { ErrorCode, throwMcpError } from '../errors'
 
 export const renameSceneInput = {
@@ -32,6 +33,7 @@ export function registerRenameScene(server: McpServer, operations: SceneOperatio
         'Rename a scene in the SceneStore. Returns the updated SceneMeta. Optionally pass `expectedVersion` for optimistic concurrency.',
       inputSchema: renameSceneInput,
       outputSchema: renameSceneOutput,
+      annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async ({ id, newName, expectedVersion }) => {
       try {

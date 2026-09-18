@@ -14,7 +14,13 @@ import {
   toSceneMaterialRef,
   useScene,
 } from '@pascal-app/core'
-import { createMaterial, createMaterialFromPresetRef, useViewer } from '@pascal-app/viewer'
+import {
+  createMaterial,
+  createMaterialFromPresetRef,
+  registerMaterialCacheCleanup,
+  setSurfaceRaycastLayers,
+  useViewer,
+} from '@pascal-app/viewer'
 import { type Material, type Mesh, type Object3D, Raycaster } from 'three'
 
 /**
@@ -28,6 +34,45 @@ import { type Material, type Mesh, type Object3D, Raycaster } from 'three'
  * only the slot-resolution from a pointer hit and the mesh preview differ, so
  * those are injected per kind.
  */
+
+let materialCacheGeneration = 0
+registerMaterialCacheCleanup(() => {
+  materialCacheGeneration++
+})
+
+const previewCounts = new Map<string, number>()
+const previewListeners = new Set<(nodeId: string) => void>()
+
+export function isSlotPaintPreviewActive(nodeId: string): boolean {
+  return previewCounts.has(nodeId)
+}
+
+export function subscribeSlotPaintPreviews(listener: (nodeId: string) => void): () => void {
+  previewListeners.add(listener)
+  return () => {
+    previewListeners.delete(listener)
+  }
+}
+
+function beginSlotPaintPreview(nodeId: string): () => void {
+  const count = previewCounts.get(nodeId) ?? 0
+  previewCounts.set(nodeId, count + 1)
+  try {
+    if (count === 0) for (const listener of previewListeners) listener(nodeId)
+  } catch (error) {
+    if (count === 0) previewCounts.delete(nodeId)
+    else previewCounts.set(nodeId, count)
+    throw error
+  }
+  return () => {
+    const remaining = (previewCounts.get(nodeId) ?? 1) - 1
+    if (remaining > 0) previewCounts.set(nodeId, remaining)
+    else {
+      previewCounts.delete(nodeId)
+      for (const listener of previewListeners) listener(nodeId)
+    }
+  }
+}
 
 type SlotsNode = AnyNode & { slots?: Record<string, string> }
 
@@ -167,6 +212,7 @@ export function previewGeometrySlot(args: PaintPreviewArgs): (() => void) | null
   const preview = buildSlotPreviewMaterial(material, materialPreset)
   if (!preview) return () => {}
 
+  const generation = materialCacheGeneration
   const restores: Array<() => void> = []
   ;(root as Object3D).traverse((object) => {
     const mesh = object as Mesh
@@ -183,6 +229,10 @@ export function previewGeometrySlot(args: PaintPreviewArgs): (() => void) | null
 
   if (restores.length === 0) return null
   return () => {
+    if (generation !== materialCacheGeneration) {
+      useScene.getState().markDirty(args.node.id as AnyNodeId)
+      return
+    }
     for (let index = restores.length - 1; index >= 0; index -= 1) restores[index]?.()
   }
 }
@@ -197,6 +247,7 @@ export function previewSlotByUserData(args: PaintPreviewArgs): (() => void) | nu
   const preview = buildSlotPreviewMaterial(material, materialPreset)
   if (!preview) return () => {}
 
+  const generation = materialCacheGeneration
   const restores: Array<() => void> = []
   ;(root as Object3D).traverse((object) => {
     const mesh = object as Mesh
@@ -211,12 +262,17 @@ export function previewSlotByUserData(args: PaintPreviewArgs): (() => void) | nu
 
   if (restores.length === 0) return null
   return () => {
+    if (generation !== materialCacheGeneration) {
+      useScene.getState().markDirty(args.node.id as AnyNodeId)
+      return
+    }
     for (let index = restores.length - 1; index >= 0; index -= 1) restores[index]?.()
   }
 }
 
 // Reused across calls — set from the pointer ray each time.
 const subtreeRaycaster = new Raycaster()
+setSurfaceRaycastLayers(subtreeRaycaster.layers)
 
 /**
  * Resolve the slot for a kind whose paint hit lands on a proud opening proxy
@@ -271,7 +327,33 @@ export function createSlotPaintCapability(config: SlotPaintConfig): PaintCapabil
     },
     commit: ({ node, role, material, materialPreset }) =>
       commitSlotPaint(node as SlotsNode, role, material, materialPreset),
-    applyPreview: config.applyPreview,
+    applyPreview: (args) => {
+      // Release before swapping materials, including each room/all-matching target.
+      const end = beginSlotPaintPreview(args.node.id)
+      let restore: (() => void) | null
+      try {
+        restore = config.applyPreview(args)
+      } catch (error) {
+        end()
+        throw error
+      }
+      if (!restore) {
+        end()
+        return null
+      }
+      let ended = false
+      const finish = (committed: boolean) => {
+        if (ended) return
+        ended = true
+        try {
+          if (committed) useScene.getState().markDirty(args.node.id as AnyNodeId)
+          else restore()
+        } finally {
+          end()
+        }
+      }
+      return Object.assign(() => finish(false), { commit: () => finish(true) })
+    },
     getEffectiveMaterial: ({ node, role }) => {
       const ref = (node as SlotsNode).slots?.[role]
       const parsed = parseMaterialRef(ref)

@@ -2,11 +2,7 @@
 
 import { useScene } from '@pascal-app/core'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  lingoUnitSpec,
-  measurementHint,
-  parseMeasurement,
-} from '../../../lib/measurement-parser'
+import { lingoUnitSpec, measurementHint, parseMeasurement } from '../../../lib/measurement-parser'
 import { useLinearDisplay } from '../../../lib/use-linear-display'
 import { cn } from '../../../lib/utils'
 
@@ -31,8 +27,8 @@ export function MetricControl({
   onCommit,
   min = Number.NEGATIVE_INFINITY,
   max = Number.POSITIVE_INFINITY,
-  precision = 2,
-  step = 1,
+  precision: storedPrecision = 2,
+  step: storedStep = 1,
   className,
   unit = '',
   restoreOnCommit = true,
@@ -40,9 +36,12 @@ export function MetricControl({
   const {
     isImperial,
     displayUnit,
+    parseUnit,
+    precision,
+    step,
     toDisplay: toDisplayValue,
     toStored: toStoredValue,
-  } = useLinearDisplay(unit, precision)
+  } = useLinearDisplay(unit, storedPrecision, storedStep)
 
   const clamp = useCallback(
     (val: number) => {
@@ -110,7 +109,14 @@ export function MetricControl({
 
     container.addEventListener('wheel', handleWheel, { passive: false })
     return () => container.removeEventListener('wheel', handleWheel)
-  }, [isEditing, step, clamp, applyCommittedValue, toStoredValue, roundStoredValueForDisplayPrecision])
+  }, [
+    isEditing,
+    step,
+    clamp,
+    applyCommittedValue,
+    toStoredValue,
+    roundStoredValueForDisplayPrecision,
+  ])
 
   useEffect(() => {
     if (!isHovered || isEditing) return
@@ -226,7 +232,7 @@ export function MetricControl({
     const spec = lingoUnitSpec(unit)
     let stored = spec
       ? parseMeasurement(inputValue, spec, {
-          bareUnit: isImperial ? 'ft' : spec.unitId,
+          bareUnit: parseUnit ?? spec.unitId,
           system: isImperial ? 'us' : 'metric',
         })
       : null
@@ -244,6 +250,7 @@ export function MetricControl({
     inputValue,
     unit,
     isImperial,
+    parseUnit,
     applyCommittedValue,
     clamp,
     toStoredValue,
@@ -256,9 +263,9 @@ export function MetricControl({
   const hint =
     isEditing && spec
       ? measurementHint(inputValue, spec, {
-          bareUnit: isImperial ? 'ft' : spec.unitId,
+          bareUnit: parseUnit ?? spec.unitId,
           system: isImperial ? 'us' : 'metric',
-          displayUnit: isImperial ? 'ft' : spec.unitId,
+          displayUnit: parseUnit ?? spec.unitId,
           precision,
           clamp,
         })
@@ -287,7 +294,16 @@ export function MetricControl({
         setInputValue(toDisplayValue(newV).toFixed(precision))
       }
     },
-    [submitValue, value, toDisplayValue, precision, step, clamp, applyCommittedValue, toStoredValue],
+    [
+      submitValue,
+      value,
+      toDisplayValue,
+      precision,
+      step,
+      clamp,
+      applyCommittedValue,
+      toStoredValue,
+    ],
   )
 
   return (

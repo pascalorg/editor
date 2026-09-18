@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { rehydrateSiteChildren } from '../../lib/rehydrate-site-children'
 import type { SceneOperations } from '../../operations'
 import { isTemplateId, TEMPLATES, type TemplateId } from '../../templates'
+import { DESTRUCTIVE_TOOL_ANNOTATIONS } from '../annotations'
 import { ErrorCode, throwMcpError } from '../errors'
 import { appendLiveSceneEvent } from '../live-sync'
 import { currentLevelContext, sceneMetaPayload } from '../scene-lifecycle/metadata'
@@ -83,6 +84,7 @@ export function registerCreateHouseFromBrief(server: McpServer, bridge: SceneOpe
         'High-level hosted workflow for external agents: choose a starter house from a brief, create/save/publish it, and return the editor URL. Use semantic tools afterward for exact customization.',
       inputSchema: createHouseFromBriefInput,
       outputSchema: createHouseFromBriefOutput,
+      annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async ({
       brief,

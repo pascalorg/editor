@@ -11,7 +11,7 @@ import {
   useScene,
   type ZoneNode,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { markPerfAction, useViewer } from '@pascal-app/viewer'
 import {
   Camera,
   ChevronDown,
@@ -19,6 +19,7 @@ import {
   Copy,
   Eye,
   EyeOff,
+  Group,
   Loader2,
   MoreHorizontal,
   Pencil,
@@ -50,15 +51,17 @@ import {
   metersToLinearUnit,
   squareMetersToAreaUnit,
 } from './../../../../../lib/measurements'
-import { createLocalGuideImage } from './../../../../../lib/local-guide-image'
+import { createLocalGuideImage, createLocalScan } from './../../../../../lib/local-guide-image'
 import { editorHostTreeChildrenRegistry } from './../../../../../lib/host-tree-children'
+import { createUnitInBuilding, toggleZoneMembership } from './../../../../../lib/units'
 import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'
 import { MetricControl } from '../../../controls/metric-control'
 import { LevelDuplicateDialog } from '../../../level-duplicate-dialog'
 import { InlineRenameInput } from './inline-rename-input'
-import { focusTreeNode, TreeNode } from './tree-node'
+import { ZoneMembershipCheckbox } from './zone-membership-checkbox'
+import { focusTreeNode, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeDragProvider } from './tree-node-drag'
 
 // ============================================================================
@@ -497,6 +500,7 @@ const LevelReferences = memo(function LevelReferences({
   const deleteNode = useScene((s) => s.deleteNode)
   const setSelection = useViewer((s) => s.setSelection)
   const setShowGuides = useViewer((s) => s.setShowGuides)
+  const setShowScans = useViewer((s) => s.setShowScans)
   const references = useScene(
     useShallow((s) =>
       Object.values(s.nodes).filter(
@@ -566,6 +570,23 @@ const LevelReferences = memo(function LevelReferences({
       return
     }
 
+    if (!onUploadAsset) {
+      useUploadStore.getState().startUpload(levelId, 'scan', file.name)
+      useUploadStore.getState().setStatus(levelId, 'uploading')
+
+      try {
+        const { scan, url } = await createLocalScan({ createNode, file, levelId })
+        setShowScans(true)
+        setSelectedReferenceId(scan.id)
+        setSelection({ selectedIds: [], zoneId: null })
+        useUploadStore.getState().setResult(levelId, url)
+        window.setTimeout(() => useUploadStore.getState().clearUpload(levelId), 600)
+      } catch {
+        useUploadStore.getState().setError(levelId, 'Could not add that scan.')
+      }
+      return
+    }
+
     if (!projectId) {
       useUploadStore.getState().startUpload(levelId, 'scan', file.name)
       useUploadStore.getState().setError(levelId, 'No active project. Please open a project first.')
@@ -573,7 +594,7 @@ const LevelReferences = memo(function LevelReferences({
     }
 
     clearUpload(levelId)
-    onUploadAsset?.(projectId, levelId, file, type)
+    onUploadAsset(projectId, levelId, file, type)
   }
 
   const handleDelete = async (nodeId: string, e: React.MouseEvent) => {
@@ -709,7 +730,8 @@ const LevelItem = memo(function LevelItem({
       ? (level.parentId as BuildingNode['id'])
       : undefined
 
-  const selectLevel = (levelId: LevelNode['id']) => {
+  const selectLevel = (levelId: LevelNode['id'], measure = true) => {
+    if (measure && selectedLevelId !== levelId) markPerfAction('level-switch', levelId)
     setSelection(buildingId ? { buildingId, levelId } : { levelId })
   }
 
@@ -748,7 +770,7 @@ const LevelItem = memo(function LevelItem({
       )
     }
     createNodes(createOps)
-    selectLevel(newLevelId as LevelNode['id'])
+    selectLevel(newLevelId as LevelNode['id'], false)
     setDuplicateDialogOpen(false)
   }
 
@@ -948,7 +970,7 @@ const LevelItem = memo(function LevelItem({
                 precision={2}
                 step={0.05}
                 unit="m"
-                value={Math.round((level.baseElevation ?? 0) * 100) / 100}
+                value={(level.baseElevation ?? 0)}
               />
             </div>
             <LevelReferences
@@ -1055,6 +1077,74 @@ const LevelsSection = memo(function LevelsSection({
           />
         ))}
       </div>
+    </div>
+  )
+})
+
+const UnitsSection = memo(function UnitsSection({
+  buildingId,
+}: {
+  buildingId: BuildingNode['id']
+}) {
+  const unitIds = useScene(
+    useShallow((s) => {
+      const building = s.nodes[buildingId] as BuildingNode | undefined
+      return (building?.children ?? []).filter((id) => s.nodes[id]?.type === 'unit')
+    }),
+  )
+  const hasUnits = unitIds.length > 0
+  const [expanded, setExpanded] = useState(hasUnits)
+
+  useEffect(() => {
+    if (hasUnits) setExpanded(true)
+  }, [hasUnits])
+
+  const handleNewUnit = (event: React.MouseEvent) => {
+    event.stopPropagation()
+    createUnitInBuilding(buildingId)
+    setExpanded(true)
+  }
+
+  return (
+    <div className="subtle-scrollbar max-h-72 shrink-0 overflow-y-auto overflow-x-hidden">
+      <TreeNodeWrapper
+        actions={
+          <button
+            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10"
+            onClick={handleNewUnit}
+            title="New unit"
+            type="button"
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+        }
+        depth={1}
+        expanded={expanded}
+        hasChildren
+        icon={<Group className="h-3.5 w-3.5" />}
+        label={
+          <span className="flex items-center gap-1.5">
+            Units
+            {hasUnits && <span className="text-muted-foreground text-xs">{unitIds.length}</span>}
+          </span>
+        }
+        onClick={() => setExpanded((value) => !value)}
+        onToggle={() => setExpanded((value) => !value)}
+      >
+        {unitIds.map((unitId) => (
+          <TreeNode depth={2} key={unitId} nodeId={unitId} />
+        ))}
+        <TreeNodeWrapper
+          depth={2}
+          expanded={false}
+          hasChildren={false}
+          icon={<Plus className="h-3.5 w-3.5" />}
+          isLast
+          label="New unit"
+          onClick={handleNewUnit}
+          onToggle={() => {}}
+        />
+      </TreeNodeWrapper>
     </div>
   )
 })
@@ -1194,6 +1284,11 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
   const [cameraPopoverOpen, setCameraPopoverOpen] = useState(false)
   const deleteNode = useScene((state) => state.deleteNode)
   const updateNode = useScene((state) => state.updateNode)
+  const focusedUnitId = useViewer((state) => state.focusedUnitId)
+  const focusedUnit = useScene((s) => {
+    const unit = focusedUnitId ? s.nodes[focusedUnitId] : undefined
+    return unit?.type === 'unit' ? unit : null
+  })
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
   const hoveredId = useViewer((state) => state.hoveredId)
   const setSelection = useViewer((state) => state.setSelection)
@@ -1267,6 +1362,13 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
         style={{ left: 8, width: 4 }}
       />
 
+      {focusedUnit && (
+        <ZoneMembershipCheckbox
+          checked={focusedUnit.members.includes(zone.id)}
+          onToggle={() => toggleZoneMembership(focusedUnit.id, zone.id)}
+          unitName={focusedUnit.name || 'Unit'}
+        />
+      )}
       <span className={cn('mr-2', !isSelected && 'opacity-40')}>
         <ColorDot color={zone.color} onChange={handleColorChange} />
       </span>
@@ -1610,6 +1712,7 @@ const BuildingItem = memo(function BuildingItem({
                   onUploadAsset={onUploadAsset}
                   projectId={projectId}
                 />
+                <UnitsSection buildingId={building.id} />
                 <LayerToggle />
               </div>
               <div className="subtle-scrollbar relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">

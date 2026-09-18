@@ -45,6 +45,8 @@ export type ItemCollision = {
   bName?: string
   levelId?: string | null
   kind: 'item-aabb'
+  violation: 'overlap' | 'clearance'
+  minimumClearanceMeters: number
   message: string
 }
 
@@ -111,7 +113,11 @@ export function findItemItemCollisions(args: {
         bName: b.name,
         levelId: a.levelId ?? b.levelId,
         kind: 'item-aabb',
-        message: `Items overlap: ${a.name ?? a.id} (${a.id}) and ${b.name ?? b.id} (${b.id})`,
+        violation: aabbsOverlap(a.aabb, b.aabb, 0) ? 'overlap' : 'clearance',
+        minimumClearanceMeters: gap,
+        message: aabbsOverlap(a.aabb, b.aabb, 0)
+          ? `Items overlap: ${a.name ?? a.id} (${a.id}) and ${b.name ?? b.id} (${b.id})`
+          : `Items are closer than ${gap} m: ${a.name ?? a.id} (${a.id}) and ${b.name ?? b.id} (${b.id})`,
       })
     }
   }

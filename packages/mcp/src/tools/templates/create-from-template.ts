@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { rehydrateSiteChildren } from '../../lib/rehydrate-site-children'
 import type { SceneOperations } from '../../operations'
 import { isTemplateId, TEMPLATES, type TemplateId } from '../../templates'
+import { DESTRUCTIVE_TOOL_ANNOTATIONS } from '../annotations'
 import { ErrorCode, throwMcpError } from '../errors'
 import { appendLiveSceneEvent } from '../live-sync'
 import { currentLevelContext, sceneMetaPayload } from '../scene-lifecycle/metadata'
@@ -79,6 +80,7 @@ export function registerCreateFromTemplate(server: McpServer, bridge: SceneOpera
         'Instantiate a seed Pascal scene template into the bridge. Regenerates all ids before applying. When `save: true` and a SceneStore is wired, also persists the new scene and returns the SceneMeta.',
       inputSchema: createFromTemplateInput,
       outputSchema: createFromTemplateOutput,
+      annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async ({ id, name, save, projectId }) => {
       if (!isTemplateId(id)) {

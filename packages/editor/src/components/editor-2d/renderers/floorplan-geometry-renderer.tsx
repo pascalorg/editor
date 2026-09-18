@@ -83,6 +83,7 @@ function styleAttrs(
   // filtered out by the caller's type bound).
   const s = g as unknown as {
     fill?: string
+    fillRule?: 'nonzero' | 'evenodd'
     fillOpacity?: number
     stroke?: string
     strokeWidth?: number
@@ -109,6 +110,7 @@ function styleAttrs(
     'data-floorplan-annotation-obstacle': floorplanAnnotationObstacleMode(g),
     'data-floorplan-annotation-role': annotationMetadata.annotationRole,
     fill: documentStyle.fill ?? s.fill ?? 'none',
+    fillRule: s.fillRule,
     fillOpacity: s.fillOpacity,
     stroke: documentStyle.stroke ?? s.stroke,
     strokeWidth,

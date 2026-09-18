@@ -1,9 +1,8 @@
 import { calculateLevelMiters, type WallMiterData, type WallNode } from '@pascal-app/core'
 
-// A progressive rebuild drains 8 walls per frame, so a 1081-wall import takes
-// ~136 frames. The miter solution does not change across those frames — nothing
-// dirties the geometry in between — yet the naive code recomputed it every
-// frame. Cache it, keyed on the exact wall data the miters depend on.
+// Progressive rebuilds span frames (initial hydration uses an 8 ms budget;
+// interactive bulk edits also cap at 8 walls). The miter solution is stable
+// between input changes, so cache it by the exact data the miters depend on.
 //
 // The comparison is exact (no hashing): a stale hit would silently render wrong
 // joints, and 7 numeric compares × N walls is microseconds — far cheaper than

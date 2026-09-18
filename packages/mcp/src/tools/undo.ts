@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
+import { DESTRUCTIVE_TOOL_ANNOTATIONS } from './annotations'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 
 export const undoInput = {
@@ -21,6 +22,7 @@ export function registerUndo(server: McpServer, bridge: SceneOperations): void {
         'Undo the most recent N steps in the scene history (default 1). Returns the number of steps actually undone.',
       inputSchema: undoInput,
       outputSchema: undoOutput,
+      annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async ({ steps }) => {
       const undone = bridge.undo(steps ?? 1)

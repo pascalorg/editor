@@ -25,7 +25,7 @@ export const ZoneNode = BaseNode.extend({
   clearDimensionPolicy: z.enum(['none', 'inside-faces', 'finish-faces']).default('none'),
   // Visual styling
   color: z.string().default('#3b82f6'), // Default blue
-  metadata: z.json().optional().default({}),
+  metadata: z.record(z.string(), z.unknown()).optional().default({}),
 }).describe(
   dedent`
   Zone schema - a polygon zone attached to a level

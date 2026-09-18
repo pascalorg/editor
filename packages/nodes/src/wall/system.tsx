@@ -1,41 +1,92 @@
 'use client'
 
 import { type AnyNodeId, useLiveNodeOverrides, useScene, type WallNode } from '@pascal-app/core'
-import { WallCutout, WallSystem } from '@pascal-app/viewer'
+import { timeSpan, WallCutout, WallSystem } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
-import { buildWallTreatmentLevelData, useWallTreatmentLevelData } from './treatment-level-data'
+import { useEffect } from 'react'
+import {
+  buildWallTreatmentLevelData,
+  clearWallTreatmentMiterCache,
+  sameTreatmentWalls,
+  treatmentProudKeys,
+  useWallTreatmentLevelData,
+} from './treatment-level-data'
 import { wallTreatmentProudOffsets } from './treatments'
 import { WallBatchSystem } from './wall-batch-system'
 
+const levelInputs = new Map<string, { walls: readonly WallNode[]; proudKey: string }>()
+let effectiveWalls = new WeakMap<
+  WallNode,
+  { override: ReturnType<ReturnType<typeof useLiveNodeOverrides.getState>['get']>; wall: WallNode }
+>()
+let previousNodes: ReturnType<typeof useScene.getState>['nodes'] | undefined
+let previousOverrides: ReturnType<typeof useLiveNodeOverrides.getState>['overrides'] | undefined
+
 function effectiveWall(wall: WallNode): WallNode {
   const override = useLiveNodeOverrides.getState().get(wall.id)
-  return override ? ({ ...wall, ...override } as WallNode) : wall
+  if (!override) return wall
+  const cached = effectiveWalls.get(wall)
+  if (cached?.override === override) return cached.wall
+  const effective = { ...wall, ...override } as WallNode
+  effectiveWalls.set(wall, { override, wall: effective })
+  return effective
+}
+
+export function resetWallTreatmentLevels(): void {
+  levelInputs.clear()
+  effectiveWalls = new WeakMap()
+  previousNodes = undefined
+  previousOverrides = undefined
+  clearWallTreatmentMiterCache()
+  useWallTreatmentLevelData.setState({ byLevelId: new Map() })
+}
+
+export function updateWallTreatmentLevels(): void {
+  const { dirtyNodes, nodes } = useScene.getState()
+  const { overrides } = useLiveNodeOverrides.getState()
+  const dirtyLevelIds = new Set<string>()
+  for (const id of dirtyNodes) {
+    const node = nodes[id]
+    if (node?.type === 'wall' && node.parentId) dirtyLevelIds.add(node.parentId)
+    else if (node?.type === 'level') dirtyLevelIds.add(node.id)
+  }
+
+  // Removed walls and cleared overrides can leave no dirty wall to identify their old level.
+  if (nodes !== previousNodes || overrides !== previousOverrides) {
+    for (const levelId of levelInputs.keys()) dirtyLevelIds.add(levelId)
+    previousNodes = nodes
+    previousOverrides = overrides
+  }
+
+  for (const levelId of dirtyLevelIds) {
+    const level = nodes[levelId as AnyNodeId]
+    if (level?.type !== 'level') {
+      levelInputs.delete(levelId)
+      clearWallTreatmentMiterCache(levelId)
+      useWallTreatmentLevelData.getState().removeLevelData(levelId)
+      continue
+    }
+    const walls = level.children
+      .map((id) => nodes[id])
+      .filter((node): node is WallNode => node?.type === 'wall')
+      .map(effectiveWall)
+    const proudOffsets = walls.flatMap(wallTreatmentProudOffsets)
+    const proudKey = treatmentProudKeys(proudOffsets).join(',')
+    const previous = levelInputs.get(levelId)
+    if (previous?.proudKey === proudKey && sameTreatmentWalls(previous.walls, walls)) continue
+
+    timeSpan('wall-treatment-level', () => {
+      useWallTreatmentLevelData
+        .getState()
+        .setLevelData(levelId, buildWallTreatmentLevelData(levelId, walls, proudOffsets))
+      levelInputs.set(levelId, { walls, proudKey })
+    })
+  }
 }
 
 const WallTreatmentMiterSystem = () => {
-  useFrame(() => {
-    const { dirtyNodes, nodes } = useScene.getState()
-    if (dirtyNodes.size === 0) return
-
-    const dirtyLevelIds = new Set<string>()
-    for (const id of dirtyNodes) {
-      const node = nodes[id]
-      if (node?.type === 'wall' && node.parentId) dirtyLevelIds.add(node.parentId)
-    }
-
-    for (const levelId of dirtyLevelIds) {
-      const level = nodes[levelId as AnyNodeId]
-      if (level?.type !== 'level') continue
-      const walls = level.children
-        .map((id) => nodes[id])
-        .filter((node): node is WallNode => node?.type === 'wall')
-        .map(effectiveWall)
-      const proudOffsets = walls.flatMap(wallTreatmentProudOffsets)
-      useWallTreatmentLevelData
-        .getState()
-        .setLevelData(levelId, buildWallTreatmentLevelData(walls, proudOffsets))
-    }
-  }, -1)
+  useEffect(() => resetWallTreatmentLevels, [])
+  useFrame(updateWallTreatmentLevels, -1)
 
   return null
 }

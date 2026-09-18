@@ -10,6 +10,7 @@ import {
   type SceneMaterialId,
   type SurfaceRole,
 } from '@pascal-app/core'
+import { addAfterEffect, invalidate } from '@react-three/fiber'
 import * as THREE from 'three'
 import { float, mix, positionViewDirection, transformedNormalView } from 'three/tsl'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
@@ -111,6 +112,12 @@ const surfaceRoleMaterialCache = new Map<string, THREE.Material>()
 const textureCache = new Map<string, THREE.Texture>()
 const textureLoadPromises = new Map<string, Promise<THREE.Texture | null>>()
 const textureLoader = new THREE.TextureLoader()
+let materialTextureVersion = 0
+
+// Highlight clones can observe late assignments without polling every material.
+export function getMaterialTextureVersion(): number {
+  return materialTextureVersion
+}
 
 // `.ktx2` finish maps transcode through the shared KTX2 loader (support is
 // detected once at viewer init); everything else loads as a normal image.
@@ -385,6 +392,7 @@ function queueTextureAssignment(
       // and crash in TextureNode.update ("null (reading 'matrix')").
       textureMaterial[slot] = null
       material.needsUpdate = true
+      materialTextureVersion++
     }
     return
   }
@@ -401,6 +409,7 @@ function queueTextureAssignment(
   if (cached) {
     textureMaterial[slot] = createAssignedTexture(cached, props, slot)
     material.needsUpdate = true
+    materialTextureVersion++
     return
   }
 
@@ -411,12 +420,14 @@ function queueTextureAssignment(
   if (textureMaterial[slot] != null) {
     textureMaterial[slot] = null
     material.needsUpdate = true
+    materialTextureVersion++
   }
 
   loadPresetTexture(path, props, slot).then((texture) => {
     if (!texture) return
     textureMaterial[slot] = createAssignedTexture(texture, props, slot)
     material.needsUpdate = true
+    materialTextureVersion++
   })
 }
 
@@ -589,6 +600,17 @@ export function createMaterial(
 }
 
 /**
+ * Cache-signature fragment for a catalog preset ref. Dynamic library
+ * materials (AI-generated `library:mtl_*`) register asynchronously, so a ref
+ * that fails to resolve is NOT static content: tag it so signature-keyed
+ * material caches re-resolve once the library registers instead of pinning
+ * the dangling-ref fallback for the whole session.
+ */
+export function materialPresetRefSignature(ref: string): string {
+  return getMaterialPresetByRef(ref) ? ref : `${ref}#unresolved`
+}
+
+/**
  * Resolve a MaterialRef ('library:<id>' | 'scene:<id>') to a three.js material.
  * Returns null for an unknown / dangling ref so callers fall back to the
  * slot's default (authored material, then themed default). Never throws.
@@ -620,10 +642,11 @@ export function resolveSlotDefaultMaterial(
   if (parseMaterialRef(slotDefault)?.kind === 'library') {
     return (
       createMaterialFromPresetRef(slotDefault, shading) ??
-      createDefaultMaterial('#ffffff', roughness, shading)
+      cachedDefaultMaterial(`slot-#ffffff-${roughness}`, '#ffffff', roughness, shading)
     )
   }
-  return createDefaultMaterial(slotDefault, roughness, shading)
+  const color = slotDefault.startsWith('#') ? slotDefault.toLowerCase() : slotDefault
+  return cachedDefaultMaterial(`slot-${color}-${roughness}`, color, roughness, shading)
 }
 
 export function createDefaultMaterial(
@@ -767,25 +790,38 @@ export function disposeMaterial(material: THREE.Material): void {
   material.dispose()
 }
 
+type MaterialCacheCleanup = (() => void) | (() => () => void)
+const materialCacheCleanups = new Set<MaterialCacheCleanup>()
+
+export function registerMaterialCacheCleanup(cleanup: MaterialCacheCleanup): () => void {
+  materialCacheCleanups.add(cleanup)
+  return () => {
+    materialCacheCleanups.delete(cleanup)
+  }
+}
+
 export function clearMaterialCache(): void {
-  for (const material of materialCache.values()) {
-    material.dispose()
-  }
+  const previous = [
+    ...materialCache.values(),
+    ...defaultMaterialCache.values(),
+    ...surfaceRoleMaterialCache.values(),
+    ...textureCache.values(),
+  ]
   materialCache.clear()
-
-  for (const material of defaultMaterialCache.values()) {
-    material.dispose()
-  }
   defaultMaterialCache.clear()
-
-  for (const material of surfaceRoleMaterialCache.values()) {
-    material.dispose()
-  }
   surfaceRoleMaterialCache.clear()
-
-  for (const texture of textureCache.values()) {
-    texture.dispose()
-  }
   textureCache.clear()
   textureLoadPromises.clear()
+  const disposals: Array<() => void> = []
+  for (const cleanup of materialCacheCleanups) {
+    const dispose = cleanup()
+    if (dispose) disposals.push(dispose)
+  }
+  // Consumers must rebuild sources and release batches before the old caches die.
+  const unsubscribe = addAfterEffect(() => {
+    unsubscribe()
+    for (const resource of previous) resource.dispose()
+    for (const dispose of disposals) dispose()
+  })
+  invalidate()
 }

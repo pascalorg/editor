@@ -1,0 +1,45 @@
+{
+  "skill_name": "pascal-3d",
+  "evals": [
+    {
+      "query": "Connect Codex to Pascal locally, build a two-room floor plan, validate it, and give me the editor link.",
+      "should_trigger": true
+    },
+    {
+      "query": "Open my existing Pascal project and add one window to the west wall without changing the rest of the scene.",
+      "should_trigger": true
+    },
+    {
+      "query": "I authorize a private agent-owned Pascal account for this task. Create a small studio model and keep the key secret.",
+      "should_trigger": true
+    },
+    {
+      "query": "Inspect this Pascal scene for schema and practical layout problems, but do not save any changes.",
+      "should_trigger": true
+    },
+    {
+      "query": "Set up the Pascal MCP server in Claude Code for a project that must stay in my company workspace.",
+      "should_trigger": true
+    },
+    {
+      "query": "Optimize the frame rate of my Three.js particle demo.",
+      "should_trigger": false
+    },
+    {
+      "query": "Write a Blender Python script that renders a rotating logo.",
+      "should_trigger": false
+    },
+    {
+      "query": "Summarize this architecture magazine article; no modeling work is needed.",
+      "should_trigger": false
+    },
+    {
+      "query": "Help me choose paint colors for a living room from a text description.",
+      "should_trigger": false
+    },
+    {
+      "query": "Convert 84 inches to meters.",
+      "should_trigger": false
+    }
+  ]
+}

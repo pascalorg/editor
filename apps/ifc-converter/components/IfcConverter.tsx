@@ -13,7 +13,7 @@ const PascalViewer = dynamic(() => import('./PascalSceneViewer'), { ssr: false }
 type Status = 'idle' | 'loading' | 'converting' | 'ready' | 'error'
 
 // The converter writes a fixed shape into BaseNode.metadata, but the
-// underlying type is z.json() — a loose JSON value. This helper gives
+// underlying type is an open `Record<string, unknown>`. This helper gives
 // the UI dot-access on the fields the converter actually writes.
 type ConverterMetadata = {
   ifcType?: string
@@ -66,7 +66,7 @@ export default function IfcConverter() {
   }, [pascalData])
 
   const elementTypes = useMemo(() => {
-    const order = ['wall', 'slab', 'door', 'window', 'stair', 'roof', 'column', 'item']
+    const order = ['wall', 'slab', 'door', 'window', 'stair', 'roof', 'column', 'block', 'item']
     return order.filter((t) => typeCounts[t])
   }, [typeCounts])
 

@@ -42,7 +42,6 @@ function createCeilingMaterials(color = '#999999'): CeilingMaterials {
 
   const bottomMaterial = new MeshBasicNodeMaterial({
     color,
-    transparent: true,
     side: BackSide,
   })
 

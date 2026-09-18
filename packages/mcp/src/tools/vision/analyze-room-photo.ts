@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 import type { SceneOperations } from '../../operations'
+import { READ_ONLY_OPEN_WORLD_TOOL_ANNOTATIONS } from '../annotations'
 
 /**
  * Input shape for `analyze_room_photo`.
@@ -108,6 +109,7 @@ export function registerAnalyzeRoomPhoto(server: McpServer, _bridge: SceneOperat
         'Defer to the MCP host (via sampling) to extract approximate dimensions, fixtures, and windows from a single-room photograph. Requires host support for sampling.',
       inputSchema: analyzeRoomPhotoInput,
       outputSchema: analyzeRoomPhotoOutput,
+      annotations: READ_ONLY_OPEN_WORLD_TOOL_ANNOTATIONS,
     },
     async ({ image }) => {
       const caps = server.server.getClientCapabilities()

@@ -5,6 +5,7 @@ import {
   type AnyNodeId,
   type ElevatorNode,
   ElevatorNode as ElevatorNodeSchema,
+  getLevelDisplayName,
   type LevelNode,
   requestElevatorLevel,
   useInteractive,
@@ -596,7 +597,7 @@ export default function ElevatorPanel() {
             >
               {levels.map((level) => (
                 <option key={level.id} value={level.id}>
-                  {level.name || `Level ${level.level}`}
+                  {getLevelDisplayName(level)}
                 </option>
               ))}
             </select>
@@ -613,7 +614,7 @@ export default function ElevatorPanel() {
             >
               {levels.map((level) => (
                 <option key={level.id} value={level.id}>
-                  {level.name || `Level ${level.level}`}
+                  {getLevelDisplayName(level)}
                 </option>
               ))}
             </select>
@@ -631,7 +632,7 @@ export default function ElevatorPanel() {
           >
             {defaultLevelOptions.map((level) => (
               <option key={level.id} value={level.id}>
-                {level.name || `Level ${level.level}`}
+                {getLevelDisplayName(level)}
               </option>
             ))}
           </select>
@@ -810,9 +811,7 @@ export default function ElevatorPanel() {
                 className="flex items-center justify-between gap-2 rounded-lg border border-border/45 bg-[#2C2C2E] px-2.5 py-2"
                 key={level.id}
               >
-                <span className="min-w-0 truncate text-sm">
-                  {level.name || `Level ${level.level}`}
-                </span>
+                <span className="min-w-0 truncate text-sm">{getLevelDisplayName(level)}</span>
                 <div className="flex shrink-0 gap-1.5">
                   <button
                     className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${
@@ -866,7 +865,7 @@ export default function ElevatorPanel() {
                 type="button"
               >
                 <span className="flex min-w-0 flex-col">
-                  <span className="truncate text-xs">{level.name || `Level ${level.level}`}</span>
+                  <span className="truncate text-xs">{getLevelDisplayName(level)}</span>
                   {isDisabled ? (
                     <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-current/65">
                       Disabled

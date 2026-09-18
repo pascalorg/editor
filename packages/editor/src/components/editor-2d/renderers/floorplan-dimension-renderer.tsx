@@ -161,12 +161,14 @@ export function FloorplanDimensionRenderer({
   stroke = geometry.stroke ?? '#334155',
   annotationUnitsPerPoint,
   renderMode = 'screen',
+  onSelect,
 }: {
   geometry: DimensionGeometry
   sceneRotationDeg?: number
   stroke?: string
   annotationUnitsPerPoint?: number
   renderMode?: FloorplanDimensionRenderMode
+  onSelect?: () => void
 }): React.ReactElement | null {
   const layout = computeArchitecturalDimensionLayout(
     geometry,
@@ -200,7 +202,18 @@ export function FloorplanDimensionRenderer({
     : undefined
 
   return (
-    <g data-floorplan-dimension="" pointerEvents="none">
+    <g
+      data-floorplan-dimension=""
+      onClick={
+        onSelect
+          ? (event) => {
+              event.stopPropagation()
+              onSelect()
+            }
+          : undefined
+      }
+      pointerEvents={onSelect ? 'auto' : 'none'}
+    >
       <line
         {...lineProps}
         x1={layout.extensionStart[0]}

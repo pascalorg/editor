@@ -6,13 +6,20 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { beginPerfAction, commitPerfAction, useViewer } from '@pascal-app/viewer'
 import { useCallback, useMemo, useRef } from 'react'
 import type { Vector3 } from 'three'
+import {
+  surfaceAttachmentId,
+  surfaceAttachmentUpdates,
+  surfaceFramePose,
+  updateSurfaceNode,
+} from '../../../lib/surface-attachment'
 import usePlacementPreview from '../../../store/use-placement-preview'
 import { stripTransient } from './placement-math'
 
 interface OriginalState {
+  surfaceId: string | null
   position: [number, number, number]
   rotation: [number, number, number]
   side: ItemNode['side']
@@ -26,6 +33,7 @@ interface OriginalState {
 }
 
 export interface DraftNodeHandle {
+  updateSurface: (data: Partial<ItemNode>, surfaceId: string | null) => void
   /** Current draft item, or null */
   readonly current: ItemNode | null
   /** Whether the current draft was adopted (move mode) vs created (create mode) */
@@ -112,6 +120,7 @@ export function useDraftNode(): DraftNodeHandle {
         : {}
 
     originalStateRef.current = {
+      surfaceId: surfaceAttachmentId(node),
       position: [...node.position] as [number, number, number],
       rotation: [...node.rotation] as [number, number, number],
       side: node.side,
@@ -122,7 +131,10 @@ export function useDraftNode(): DraftNodeHandle {
       metadata: node.metadata,
     }
 
-    draftRef.current = node
+    draftRef.current = {
+      ...node,
+      ...surfaceFramePose(node.parentId, surfaceAttachmentId(node), node, false),
+    }
     adoptedRef.current = true
 
     // Mark as transient so it renders as a draft
@@ -149,6 +161,14 @@ export function useDraftNode(): DraftNodeHandle {
       const draft = draftRef.current
       if (!draft) return null
 
+      const surfaceId = surfaceAttachmentId(useScene.getState().nodes[draft.id] ?? draft)
+      const stored = surfaceFramePose(
+        finalUpdate.parentId ?? draft.parentId,
+        surfaceId,
+        { ...draft, ...finalUpdate },
+        true,
+      )
+      finalUpdate = { ...finalUpdate, ...stored }
       if (adoptedRef.current) {
         // Move mode: update in place (single undoable action)
         const { parentId: newParentId, ...updateProps } = finalUpdate
@@ -159,16 +179,20 @@ export function useDraftNode(): DraftNodeHandle {
         const original = originalStateRef.current!
 
         // Restore original state while paused — so the undo baseline is clean
-        useScene.getState().updateNode(draft.id, {
-          position: original.position,
-          rotation: original.rotation,
-          side: original.side,
-          parentId: original.parentId,
-          roofSegmentId: original.roofSegmentId,
-          roofFace: original.roofFace,
-          blockFaceId: original.blockFaceId,
-          metadata: original.metadata,
-        })
+        updateSurfaceNode(
+          draft.id,
+          {
+            position: original.position,
+            rotation: original.rotation,
+            side: original.side,
+            parentId: original.parentId,
+            roofSegmentId: original.roofSegmentId,
+            roofFace: original.roofFace,
+            blockFaceId: original.blockFaceId,
+            metadata: original.metadata,
+          },
+          original.surfaceId,
+        )
 
         // Resume → tracked update (undo reverts to original)
         useScene.temporal.getState().resume()
@@ -180,28 +204,32 @@ export function useDraftNode(): DraftNodeHandle {
           metadata: updateProps.metadata ?? stripTransient(draft.metadata),
         })
 
-        useScene.getState().updateNode(draft.id, {
-          position: updateProps.position ?? draft.position,
-          rotation: updateProps.rotation ?? draft.rotation,
-          side: updateProps.side ?? draft.side,
-          metadata: updateProps.metadata ?? stripTransient(draft.metadata),
-          parentId: parentId as string,
-          // Forward the roof host explicitly: strategies set it on every
-          // commit (segment id on a roof face, undefined elsewhere), and
-          // dropping it here strands the item in the roof frame without
-          // the segment transform.
-          roofSegmentId: updateProps.roofSegmentId,
-          roofFace: updateProps.roofFace,
-          blockFaceId: updateProps.blockFaceId,
-          // Only when the strategy decided about wallId (roof commits clear
-          // it) — floor/ceiling commits never managed the field.
-          ...('wallId' in updateProps ? { wallId: updateProps.wallId } : {}),
-          ...resolveSupportSlabPatch(effectiveNode, useScene.getState().nodes, {
-            maxElevation: options?.supportElevationCap,
-            preferredSlabId: options?.preferredSupportSlabId,
-            pinSupport: options?.pinSupport,
-          }),
-        })
+        updateSurfaceNode(
+          draft.id,
+          {
+            position: updateProps.position ?? draft.position,
+            rotation: updateProps.rotation ?? draft.rotation,
+            side: updateProps.side ?? draft.side,
+            metadata: updateProps.metadata ?? stripTransient(draft.metadata),
+            parentId: parentId as string,
+            // Forward the roof host explicitly: strategies set it on every
+            // commit (segment id on a roof face, undefined elsewhere), and
+            // dropping it here strands the item in the roof frame without
+            // the segment transform.
+            roofSegmentId: updateProps.roofSegmentId,
+            roofFace: updateProps.roofFace,
+            blockFaceId: updateProps.blockFaceId,
+            // Only when the strategy decided about wallId (roof commits clear
+            // it) — floor/ceiling commits never managed the field.
+            ...('wallId' in updateProps ? { wallId: updateProps.wallId } : {}),
+            ...resolveSupportSlabPatch(effectiveNode, useScene.getState().nodes, {
+              maxElevation: options?.supportElevationCap,
+              preferredSlabId: options?.preferredSupportSlabId,
+              pinSupport: options?.pinSupport,
+            }),
+          },
+          surfaceId,
+        )
 
         useScene.temporal.getState().pause()
 
@@ -220,7 +248,9 @@ export function useDraftNode(): DraftNodeHandle {
       const parentId = (newParentId ?? useViewer.getState().selection.levelId) as AnyNodeId
       if (!parentId) return null
 
+      beginPerfAction('place:item', draft.id)
       // Delete draft while paused (invisible to undo)
+      updateSurfaceNode(draft.id, {}, null)
       useScene.getState().deleteNode(draft.id)
       draftRef.current = null
 
@@ -258,7 +288,10 @@ export function useDraftNode(): DraftNodeHandle {
           },
         ),
       })
-      useScene.getState().createNode(committedNode, parentId)
+      useScene.getState().applyNodeChanges({
+        create: [{ node: committedNode, parentId }],
+        update: surfaceAttachmentUpdates(committedNode.id, parentId, surfaceId),
+      })
       if (usePlacementPreview.getState().node?.id === draft.id) {
         usePlacementPreview.getState().clear()
       }
@@ -268,6 +301,7 @@ export function useDraftNode(): DraftNodeHandle {
 
       adoptedRef.current = false
       originalStateRef.current = null
+      commitPerfAction()
       return committedNode.id
     },
     [],
@@ -291,6 +325,7 @@ export function useDraftNode(): DraftNodeHandle {
       const live = useScene.getState().nodes[id as AnyNodeId] as ItemNode | undefined
       const livePosition = live?.position
       const externallyMoved =
+        !live?.metadata?.isTransient &&
         !!livePosition &&
         (livePosition[0] !== original.position[0] ||
           livePosition[1] !== original.position[1] ||
@@ -305,16 +340,20 @@ export function useDraftNode(): DraftNodeHandle {
         return
       }
 
-      useScene.getState().updateNode(id, {
-        position: original.position,
-        rotation: original.rotation,
-        side: original.side,
-        parentId: original.parentId,
-        roofSegmentId: original.roofSegmentId,
-        roofFace: original.roofFace,
-        blockFaceId: original.blockFaceId,
-        metadata: original.metadata,
-      })
+      updateSurfaceNode(
+        id,
+        {
+          position: original.position,
+          rotation: original.rotation,
+          side: original.side,
+          parentId: original.parentId,
+          roofSegmentId: original.roofSegmentId,
+          roofFace: original.roofFace,
+          blockFaceId: original.blockFaceId,
+          metadata: original.metadata,
+        },
+        original.surfaceId,
+      )
 
       // Also reset the Three.js mesh directly — the store update triggers a React
       // re-render but the mesh position was mutated by useFrame and may not reset
@@ -327,6 +366,7 @@ export function useDraftNode(): DraftNodeHandle {
       }
     } else {
       // Create mode: delete the transient node
+      updateSurfaceNode(draftRef.current.id, {}, null)
       useScene.getState().deleteNode(draftRef.current.id)
     }
 
@@ -338,6 +378,17 @@ export function useDraftNode(): DraftNodeHandle {
     }
   }, [])
 
+  const updateSurface = useCallback((data: Partial<ItemNode>, surfaceId: string | null) => {
+    const draft = draftRef.current
+    if (!draft) return
+    const pose = { ...draft, ...data }
+    updateSurfaceNode(
+      draft.id,
+      { ...data, ...surfaceFramePose(pose.parentId, surfaceId, pose, true) },
+      surfaceId,
+    )
+  }, [])
+
   return useMemo(
     () => ({
       get current() {
@@ -346,11 +397,12 @@ export function useDraftNode(): DraftNodeHandle {
       get isAdopted() {
         return adoptedRef.current
       },
+      updateSurface,
       create,
       adopt,
       commit,
       destroy,
     }),
-    [create, adopt, commit, destroy],
+    [create, adopt, commit, destroy, updateSurface],
   )
 }

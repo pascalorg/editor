@@ -12,6 +12,7 @@ import {
   slabPolygonContextFromGeometry,
   surfaceHeightAt,
   terrainFieldOf,
+  useScene,
 } from '@pascal-app/core'
 import {
   applyMaterialPresetToMaterials,
@@ -22,6 +23,7 @@ import {
   createSurfaceRoleMaterial,
   generateSlabGeometry,
   type RenderShading,
+  registerMaterialCacheCleanup,
   resolveMaterialRef,
   resolveSlotDefaultMaterial,
 } from '@pascal-app/viewer'
@@ -57,6 +59,18 @@ type SlabMaterial = Material & {
 }
 
 const slabMaterialCache = new Map<string, Material>()
+registerMaterialCacheCleanup(() => {
+  const previous = [...slabMaterialCache.values()]
+  slabMaterialCache.clear()
+  const state = useScene.getState()
+  for (const node of Object.values(state.nodes)) {
+    if (node.type === 'slab') state.markDirty(node.id as AnyNodeId)
+  }
+  return () => {
+    for (const material of previous) material.dispose()
+  }
+})
+
 function getSlabSlotMaterial(
   node: SlabNode,
   slotId: SlabSlotId,
@@ -182,6 +196,7 @@ function getLegacySlabMaterial(node: SlabNode, shading: RenderShading): Material
   slabMaterial.depthWrite = true
   slabMaterial.needsUpdate = true
 
+  material.userData.__pascalCachedMaterial = true
   slabMaterialCache.set(cacheKey, material)
   return material
 }

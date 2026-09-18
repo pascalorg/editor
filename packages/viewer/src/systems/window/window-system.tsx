@@ -24,6 +24,7 @@ import {
   type RenderShading,
   resolveMaterialRef,
 } from '../../lib/materials'
+import { timeSpan } from '../../lib/perf-tracks'
 import useViewer from '../../store/use-viewer'
 import { getOpeningCutoutProxyDepth } from '../wall/opening-cutout-geometry'
 
@@ -52,6 +53,11 @@ export const HOPPER_WINDOW_SASH_NAME = 'hopper-window-sash'
 const MAX_WINDOW_REBUILDS_PER_FRAME = 16
 const WINDOW_PROGRESSIVE_DIRTY_THRESHOLD = MAX_WINDOW_REBUILDS_PER_FRAME
 const WINDOW_PROGRESSIVE_TIME_BUDGET_MS = 8
+
+// Transient rebuild requests from WindowAnimationSystem for windows whose type
+// has no direct pose path: drained every frame. Deliberately not dirtyNodes —
+// a running animation must not keep the dirty set from reaching zero.
+export const pendingWindowAnimationRebuilds = new Set<AnyNodeId>()
 
 export const WindowSystem = () => {
   const dirtyNodes = useScene((state) => state.dirtyNodes)
@@ -99,7 +105,7 @@ export const WindowSystem = () => {
   }, [sceneMaterials])
 
   useFrame(() => {
-    if (dirtyNodes.size === 0) return
+    if (dirtyNodes.size === 0 && pendingWindowAnimationRebuilds.size === 0) return
     baseMaterial = textures
       ? getBaseMaterial(shading)
       : createSurfaceRoleMaterial('joinery', colorPreset)
@@ -119,6 +125,12 @@ export const WindowSystem = () => {
       if (node?.type !== 'window') return
       dirtyWindowIds.push(id as AnyNodeId)
     })
+    if (pendingWindowAnimationRebuilds.size > 0) {
+      for (const id of pendingWindowAnimationRebuilds) {
+        if (nodes[id]?.type === 'window' && !dirtyWindowIds.includes(id)) dirtyWindowIds.push(id)
+      }
+      pendingWindowAnimationRebuilds.clear()
+    }
 
     const useProgressiveWindowRebuilds = dirtyWindowIds.length > WINDOW_PROGRESSIVE_DIRTY_THRESHOLD
     const frameStartedAt = performance.now()
@@ -146,7 +158,9 @@ export const WindowSystem = () => {
       // Merge any live override (width / height / position) so the mesh
       // rebuild reflects the in-flight drag without zustand churn.
       const effectiveNode = getEffectiveNode(node as WindowNode)
-      updateWindowMesh(effectiveNode, mesh)
+      timeSpan('window', () => updateWindowMesh(effectiveNode, mesh), {
+        properties: [['node', id]],
+      })
       clearDirty(id as AnyNodeId)
       rebuiltWindowsThisFrame += 1
 

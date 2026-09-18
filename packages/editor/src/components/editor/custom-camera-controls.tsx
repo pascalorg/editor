@@ -9,10 +9,10 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { GRID_LAYER, useViewer, ZONE_LAYER } from '@pascal-app/viewer'
+import { GRID_LAYER, getLevelPresentationY, useViewer, ZONE_LAYER } from '@pascal-app/viewer'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import {
   Box3,
   type Camera,
@@ -347,7 +347,7 @@ function useFirstPersonCameraPoseRestore(
   return useCallback(() => isRestoring.current, [])
 }
 
-export const CustomCameraControls = () => {
+export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) => {
   const controls = useRef<CameraControlsImpl | null>(null)
   const pendingAppliedPose = useRef<CameraPoseApplicationPlan | null>(null)
   const activePoseInterpolation = useRef<{
@@ -366,6 +366,8 @@ export const CustomCameraControls = () => {
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const allowUndergroundCamera = useEditor((s) => s.allowUndergroundCamera)
   const selection = useViewer((s) => s.selection)
+  const levelMode = useViewer((s) => s.levelMode)
+  const renderPaused = useViewer((state) => state.renderPaused)
   const cameraMode = useViewer((state) => state.cameraMode)
   const isRestoringFirstPersonPose = useFirstPersonCameraPoseRestore(
     controls,
@@ -528,21 +530,24 @@ export const CustomCameraControls = () => {
 
   useEffect(() => {
     if (isPreviewMode || isFirstPersonMode || isRestoringFirstPersonPose()) return
-    let targetY = 0
-    if (currentLevelId) {
-      const levelMesh = sceneRegistry.nodes.get(currentLevelId)
-      if (levelMesh) {
-        targetY = levelMesh.position.y
-      }
-    }
+    // Analytic destination, not `sceneRegistry` mesh position: a level created
+    // this frame still sits at y=0 (LevelSystem lerps it later), and a mode
+    // switch leaves every level mid-lerp — the camera must pan to where the
+    // level will settle, in the CURRENT presentation mode.
+    const targetY = currentLevelId
+      ? getLevelPresentationY(currentLevelId, useScene.getState().nodes, levelMode)
+      : 0
     if (!controls.current) return
     if (firstLoad.current) {
       firstLoad.current = false
       controls.current.setLookAt(20, 20, 20, 0, 0, 0, true)
     }
     controls.current.getTarget(currentTarget)
+    // Idempotence guard: skip when already there — also swallows the thumbnail
+    // generator's synchronous stacked→restore levelMode round-trip.
+    if (Math.abs(currentTarget.y - targetY) < 1e-3) return
     controls.current.moveTo(currentTarget.x, targetY, currentTarget.z, true)
-  }, [currentLevelId, isPreviewMode, isFirstPersonMode, isRestoringFirstPersonPose])
+  }, [currentLevelId, levelMode, isPreviewMode, isFirstPersonMode, isRestoringFirstPersonPose])
 
   useEffect(() => {
     if (isFirstPersonMode || !controls.current) return
@@ -1273,6 +1278,10 @@ export const CustomCameraControls = () => {
   const onRest = useCallback(() => {
     cameraDraggingLifecycle.end()
   }, [cameraDraggingLifecycle])
+
+  useLayoutEffect(() => {
+    cameraDraggingLifecycle.setPaused(paused || renderPaused)
+  }, [cameraDraggingLifecycle, paused, renderPaused])
 
   const onControlEnd = useCallback(() => {
     // A mapped-button tap with zero camera movement never wakes the

@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { SceneOperations } from '../../operations'
 import { SceneNotFoundError, SceneVersionConflictError } from '../../storage/types'
+import { DESTRUCTIVE_TOOL_ANNOTATIONS } from '../annotations'
 import { ErrorCode, throwMcpError } from '../errors'
 
 export const deleteSceneInput = {
@@ -22,6 +23,7 @@ export function registerDeleteScene(server: McpServer, operations: SceneOperatio
         'Delete a scene from the SceneStore by id. Optionally pass `expectedVersion` for optimistic concurrency.',
       inputSchema: deleteSceneInput,
       outputSchema: deleteSceneOutput,
+      annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async ({ id, expectedVersion }) => {
       try {

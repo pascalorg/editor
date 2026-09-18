@@ -4,12 +4,19 @@ import {
   type AnyNode,
   type AnyNodeId,
   hiddenWallPointerEventsHeld,
+  useLiveNodeOverrides,
   useRegistry,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
-import { getVisibleWallMaterials, NodeRenderer, useNodeEvents, useViewer } from '@pascal-app/viewer'
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import {
+  getVisibleWallMaterials,
+  NodeRenderer,
+  useLibraryMaterialsVersion,
+  useNodeEvents,
+  useViewer,
+} from '@pascal-app/viewer'
+import { type ComponentProps, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { Mesh } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
@@ -19,8 +26,25 @@ import {
   wallPointerEventsSuppressed,
 } from './pointer-transparency'
 import { createWallRayHitClassifier } from './selection-hit-owner'
-import { useWallTreatmentLevelData } from './treatment-level-data'
-import { createWallExtraSlotMaterials, WallTreatments } from './treatments'
+import { createWallTreatmentSelector, useWallTreatmentLevelData } from './treatment-level-data'
+import {
+  createWallExtraSlotMaterials,
+  hasWallTreatments,
+  WallTreatments,
+  wallTreatmentProudOffsets,
+} from './treatments'
+
+function WallTreatmentSubscription(
+  props: Omit<ComponentProps<typeof WallTreatments>, 'levelData'>,
+) {
+  const { node } = props
+  const selector = useMemo(
+    () => createWallTreatmentSelector(node, wallTreatmentProudOffsets(node)),
+    [node],
+  )
+  const levelData = useWallTreatmentLevelData(selector)
+  return levelData ? <WallTreatments {...props} levelData={levelData} /> : null
+}
 
 /**
  * Thin wall renderer.
@@ -116,14 +140,20 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
         .filter((child): child is AnyNode => child !== undefined),
     ),
   )
-  const treatmentLevelData = useWallTreatmentLevelData((state) =>
-    node.parentId ? state.byLevelId.get(node.parentId) : undefined,
+  const treatmentOverride = useLiveNodeOverrides((state) => state.overrides.get(node.id))
+  const treatmentNode = useMemo(
+    () => (treatmentOverride ? ({ ...node, ...treatmentOverride } as WallNode) : node),
+    [node, treatmentOverride],
   )
   // Subscribe to the scene-material palette so editing a `scene:` material a
   // wall slot references re-renders the wall live (the wall-system geometry
   // dirty loop never fires for a material-only edit). `getMaterialsForWall`'s
   // content hash keeps unaffected walls on their cached materials.
   const sceneMaterials = useScene((s) => s.materials)
+  // Same for the dynamic library: AI-generated `library:mtl_*` presets
+  // register after mount, and a dangling ref cached as the slot default must
+  // re-resolve when they land.
+  const libraryMaterialsVersion = useLibraryMaterialsVersion()
   const baseMaterials = getVisibleWallMaterials(
     node,
     shading,
@@ -132,9 +162,10 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
     sceneTheme,
     sceneMaterials,
   )
+  // biome-ignore lint/correctness/useExhaustiveDependencies: libraryMaterialsVersion invalidates the ref resolution inside createWallExtraSlotMaterials
   const extraMaterials = useMemo(
     () => createWallExtraSlotMaterials(node, shading, sceneMaterials),
-    [node, sceneMaterials, shading],
+    [node, sceneMaterials, shading, libraryMaterialsVersion],
   )
   useEffect(
     () => () => {
@@ -158,12 +189,11 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
         <meshBasicMaterial colorWrite={false} depthWrite={false} />
       </mesh>
 
-      {treatmentLevelData && (
-        <WallTreatments
+      {hasWallTreatments(treatmentNode) && (
+        <WallTreatmentSubscription
           childrenNodes={childNodes}
-          levelData={treatmentLevelData}
           materials={extraMaterials}
-          node={node}
+          node={treatmentNode}
         />
       )}
 

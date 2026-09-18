@@ -3,6 +3,7 @@
 import { createSceneApi, nodeRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, lazy, Suspense, useCallback, useMemo } from 'react'
+import { useRegisteredToolEnabled } from '../../hooks/use-registered-tool-enabled'
 import {
   type FloorplanToolContext,
   getFloorplanNodeExtension,
@@ -35,6 +36,7 @@ function registeredFloorplanTool(
 export function FloorplanRegisteredToolLayer() {
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
+  const registeredToolEnabled = useRegisteredToolEnabled(tool)
   const floorplanMode = useFloorplanMode((state) => state.mode)
   const gridSnapStep = useEditor((state) => state.gridSnapStep)
   const toolDefaults = useEditor((state) =>
@@ -54,7 +56,7 @@ export function FloorplanRegisteredToolLayer() {
     useEditor.getState().setMode('select')
   }, [])
   if (mode !== 'build') return null
-  const Tool = registeredFloorplanTool(tool, floorplanMode)
+  const Tool = registeredToolEnabled ? registeredFloorplanTool(tool, floorplanMode) : null
   return Tool ? (
     <Suspense fallback={null}>
       <Tool

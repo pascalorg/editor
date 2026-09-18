@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
+import { READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 
 export const getSceneInput = {}
 
@@ -19,6 +20,7 @@ export function registerGetScene(server: McpServer, bridge: SceneOperations): vo
         'Returns the full scene graph: flat node dictionary, root node IDs, and collections.',
       inputSchema: getSceneInput,
       outputSchema: getSceneOutput,
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async () => {
       const scene = bridge.exportJSON()

@@ -3,6 +3,7 @@ import type { AnyNodeId } from '@pascal-app/core/schema'
 import { DoorNode, WindowNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
+import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
 import { ErrorCode, throwMcpError } from './errors'
 import { wallLength, wallLocalXFromT } from './geometry'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
@@ -31,6 +32,7 @@ export function registerCutOpening(server: McpServer, bridge: SceneOperations): 
         'Cut a door or window opening into an existing wall. position is a parametric 0..1 offset along the wall centreline.',
       inputSchema: cutOpeningInput,
       outputSchema: cutOpeningOutput,
+      annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
     async ({ wallId, type, position, width, height }) => {
       const wall = bridge.getNode(wallId as AnyNodeId)
