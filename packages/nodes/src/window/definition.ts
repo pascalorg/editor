@@ -263,6 +263,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   parametrics: windowParametrics,
   handles: windowHandles,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

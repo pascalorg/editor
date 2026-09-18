@@ -385,7 +385,7 @@ for (const kind of [
 test.each([
   'catalog',
   'procedural',
-] as const)('registry %s uses an unlisted host provider and respects its acceptance predicate', async (assetType) => {
+] as const)('registry %s defers an unrenderable, uncomposable provider host to the floor', async (assetType) => {
   const schema = BaseNode.extend({
     id: objectId('test-surface'),
     type: nodeType('test-surface'),
@@ -424,8 +424,8 @@ test.each([
     expect(useScene.getState().nodes[child.id]!.parentId).toBe(level.id)
     accepts = true
     await act(async () => emitter.emit('test-surface:move' as never, event as never))
-    expect(useScene.getState().nodes[child.id]!.parentId).toBe(host.id)
-    expect((useScene.getState().nodes[child.id] as typeof child).position[1]).toBeCloseTo(0.84)
+    expect(useScene.getState().nodes[child.id]!.parentId).toBe(level.id)
+    expect((useScene.getState().nodes[child.id] as typeof child).position[1]).toBe(0)
   } finally {
     await renderer.unmount()
   }

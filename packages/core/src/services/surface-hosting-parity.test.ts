@@ -1,10 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import { snapToGrid } from '../../../editor/src/components/tools/item/placement-math'
-import { shelfRowSurfaceYs } from '../../../nodes/src/shelf/geometry'
-import { nodeRegistry, registerNode } from '../registry/registry'
+import { ProceduralItemNode } from '../procedural-items/node'
+import { nodeRegistry } from '../registry/registry'
 import type { SceneApi } from '../registry/types'
+import { ItemNode } from '../schema/nodes/item'
 import { ShelfNode } from '../schema/nodes/shelf'
 import type { AnyNode } from '../schema/types'
+import { registerHostingTestNode } from './__fixtures__/hosting'
+import { shelfRowSurfaceYs } from './__fixtures__/shelf-surface-rows'
 import { resolveSurfacePlacement } from './surface-hosting'
 import { frozenProceduralParity } from './surface-hosting-procedural-parity.fixtures'
 import { frozenShelfContainedParity } from './surface-hosting-shelf-parity.fixtures'
@@ -4347,9 +4350,17 @@ describe('frozen surface hosting parity', () => {
         const restore = nodeRegistry._snapshot()
         nodeRegistry._reset()
         try {
+          registerHostingTestNode({
+            kind: 'item',
+            schemaVersion: 1,
+            schema: ItemNode,
+            category: 'furnish',
+            defaults: () => ({}),
+            capabilities: {},
+          })
           const host = fixture.host as AnyNode
           if (host.type === 'shelf') {
-            registerNode({
+            registerHostingTestNode({
               kind: 'shelf',
               schemaVersion: 1,
               schema: ShelfNode,
@@ -4370,6 +4381,9 @@ describe('frozen surface hosting parity', () => {
             const result = resolveSurfacePlacement({
               host,
               childKind,
+              childId: (childKind === 'item' ? ItemNode : ProceduralItemNode).shape.id.parse(
+                undefined,
+              ),
               childFootprint: { size, rotationY: yaw },
               hit: { point, normalWorldY: normalY },
               scene: { get: () => undefined, nodes: () => ({}) } as unknown as SceneApi,
@@ -4408,10 +4422,22 @@ describe('frozen surface hosting parity', () => {
         const restore = nodeRegistry._snapshot()
         nodeRegistry._reset()
         try {
+          registerHostingTestNode({
+            kind: 'procedural-item',
+            schemaVersion: 1,
+            schema: ProceduralItemNode,
+            category: 'furnish',
+            defaults: () => ({}),
+            capabilities: {},
+          })
           const { expected, rejections, ...args } = row
           const rejected: string[] = []
           const result = resolveSurfacePlacement({
             ...args,
+            childId: (args.childKind === 'procedural-item'
+              ? ProceduralItemNode
+              : ItemNode
+            ).shape.id.parse(undefined),
             host: fixture.host as AnyNode,
             scene: { get: () => undefined, nodes: () => ({}) } as unknown as SceneApi,
             onReject: (reason) => rejected.push(reason),

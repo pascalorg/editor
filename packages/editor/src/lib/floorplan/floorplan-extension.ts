@@ -57,6 +57,7 @@ export type FloorplanToolContext = {
 
 export type FloorplanNodeExtension<N extends AnyNode = AnyNode> = {
   tool?: () => Promise<{ default: ComponentType<FloorplanToolContext> }>
+  directDrag?: boolean
   availableModes?: readonly FloorplanToolMode[]
   preferredView?: '2d' | '3d'
   referencedSelectionAnnotationRole?: FloorplanAnnotationRole

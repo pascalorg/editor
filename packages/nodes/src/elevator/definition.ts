@@ -195,6 +195,7 @@ export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
   },
 
   capabilities: {
+    surfacePlacement: 'floor-only',
     selectable: { hitVolume: 'bbox' },
     // Generic XZ translate so the floating action menu's Move button
     // (and the side move-arrows emitted from `def.floorplan`) drive the
@@ -245,6 +246,7 @@ export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
   // No dirty consumer rebuilds this kind — see NodeDefinition.dirtyTracking.
   dirtyTracking: false,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

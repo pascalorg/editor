@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { shelfRowSurfaceYs } from '../../../nodes/src/shelf/geometry'
 import { shelfRecipe } from '../procedural-items/fixtures'
 import { ProceduralItemNode } from '../procedural-items/node'
 import {
@@ -10,12 +9,14 @@ import {
 } from '../procedural-items/query'
 import { evaluateRecipe } from '../procedural-items/recipe'
 import { composeFrames, frame, transformPoint } from '../procedural-items/spatial'
-import { nodeRegistry, registerNode } from '../registry/registry'
+import { nodeRegistry } from '../registry/registry'
 import type { Capabilities, SceneApi, SurfacesConfig } from '../registry/types'
 import { getScaledDimensions, ItemNode } from '../schema/nodes/item'
 import { ShelfNode } from '../schema/nodes/shelf'
 import { UnitNode } from '../schema/nodes/unit'
 import type { AnyNode } from '../schema/types'
+import { registerHostingTestNode } from './__fixtures__/hosting'
+import { shelfRowSurfaceYs } from './__fixtures__/shelf-surface-rows'
 import {
   getSurfaceProvider,
   type HostSurface,
@@ -40,13 +41,22 @@ let restoreRegistry: () => void
 beforeEach(() => {
   restoreRegistry = nodeRegistry._snapshot()
   nodeRegistry._reset()
+  register('item')
+  registerHostingTestNode({
+    kind: 'procedural-item',
+    schemaVersion: 1,
+    schema: ProceduralItemNode,
+    category: 'furnish',
+    defaults: () => ({}),
+    capabilities: {},
+  })
 })
 afterEach(() => {
   restoreRegistry()
 })
 
 function register(kind: string, capabilities: Capabilities = {}) {
-  registerNode({
+  registerHostingTestNode({
     kind,
     schemaVersion: 1,
     schema: ItemNode,
@@ -229,6 +239,7 @@ describe('procedural named surfaces', () => {
     const result = resolveSurfacePlacement({
       host: host as unknown as AnyNode,
       childKind: 'plugin-child',
+      childId: 'plugin-child_existing',
       childFootprint: { size: [0.4, 1, 0.2], rotationY: 0.6 },
       hit: { point, normalWorldY: 1 },
       scene,
@@ -259,12 +270,15 @@ describe('protocol defaults', () => {
   const args = {
     host,
     childKind: 'plugin-child',
+    childId: 'plugin-child_existing',
     childFootprint: { size, rotationY: 0.2 },
     hit,
     scene,
   }
 
-  test('unregistered and undeclared kinds host freely; child parent declarations are not consulted', () => {
+  test('unregistered hosts defer; undeclared child kinds and child parent declarations do not restrict hosting', () => {
+    expect(resolveSurfacePlacement(args)).toBeNull()
+    register('plugin-host')
     register('plugin-child', { hostable: { parents: ['wall'] } })
     expect(resolveSurfacePlacement(args)).toEqual({
       position: hit.point,
@@ -273,7 +287,6 @@ describe('protocol defaults', () => {
       childFrame: 'host-local',
       surfaceLocal: null,
     })
-    register('plugin-host')
     expect(resolveSurfacePlacement(args)).not.toBeNull()
     expect(resolveSurfacePlacement({ ...args, hit: { ...hit, normalWorldY: 0.749 } })).toBeNull()
   })
@@ -295,7 +308,7 @@ describe('protocol defaults', () => {
           onReject: (reason) => rejections.push(reason),
         }),
       ).toBeNull()
-      expect(rejections).toEqual(['host-not-eligible'])
+      expect(rejections).toEqual([])
     }
   })
 
@@ -636,6 +649,8 @@ describe('surface frame contract', () => {
   })
 
   test('all providers reject every non-finite hit axis', () => {
+    register('plugin-host')
+    register('shelf')
     const hosts = [
       ItemNode.parse({ asset: { ...asset, surface: { height: 1 } } }),
       ShelfNode.parse({}),
@@ -683,6 +698,7 @@ describe('surface frame contract', () => {
         const args = {
           host,
           childKind: 'item',
+          childId: 'item_existing',
           childFootprint: { size, rotationY: 0 },
           hit: { point: [0.37, 1, -0.39] as const, normalWorldY: 1 },
           scene,

@@ -7,7 +7,6 @@ import {
   ItemNode,
   LevelNode,
   nodeRegistry,
-  registerNode,
   type SurfacePlacement,
   sceneRegistry,
   useLiveTransforms,
@@ -17,6 +16,7 @@ import { Group, Vector3 } from 'three'
 import { commitFreshPlacementSubtree } from '../../../lib/fresh-planar-placement'
 import useEditor from '../../../store/use-editor'
 import useInteractionScope from '../../../store/use-interaction-scope'
+import { registerHostingTestNode } from '../__fixtures__/hosting'
 import { createRegistryItemSurfaceMove } from './item-surface-move'
 
 const level = LevelNode.parse({ id: 'level_resolver' })
@@ -69,7 +69,7 @@ beforeEach(() => {
   savedRoots = useScene.getState().rootNodeIds
   restoreRegistry = nodeRegistry._snapshot()
   nodeRegistry._reset()
-  registerNode({
+  registerHostingTestNode({
     kind: 'item',
     schemaVersion: 1,
     schema: ItemNode,

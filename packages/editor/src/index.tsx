@@ -590,6 +590,7 @@ export {
   resolveStairPlacementLevelId,
   resolveStairToLevelId,
 } from './lib/stair-levels'
+export { surfaceAttachmentId, surfaceFramePose, updateSurfaceNode } from './lib/surface-attachment'
 export {
   clearSurfacePlanSnapFeedback,
   resolveSurfacePlanPointSnap,

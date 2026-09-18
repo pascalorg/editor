@@ -1,15 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import {
-  type ItemEvent,
-  ItemNode,
-  nodeRegistry,
-  registerNode,
-  sceneRegistry,
-  useScene,
-} from '@pascal-app/core'
+import { type ItemEvent, ItemNode, nodeRegistry, sceneRegistry, useScene } from '@pascal-app/core'
 import { Group, Vector3 } from 'three'
 import useEditor from '../../../store/use-editor'
 import useInteractionScope from '../../../store/use-interaction-scope'
+import { registerHostingTestNode } from '../__fixtures__/hosting'
 import { itemSurfaceStrategy } from './placement-strategies'
 import type { PlacementContext } from './placement-types'
 
@@ -28,7 +22,7 @@ const scopeState = useInteractionScope.getState()
 beforeEach(() => {
   restoreRegistry = nodeRegistry._snapshot()
   nodeRegistry._reset()
-  registerNode({
+  registerHostingTestNode({
     kind: 'item',
     schemaVersion: 1,
     schema: ItemNode,

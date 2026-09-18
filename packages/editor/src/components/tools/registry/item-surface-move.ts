@@ -165,6 +165,14 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
       surfaceId,
     )
     useLiveTransforms.getState().clear(node.id)
+    // A floor move and host return can share a React batch with unchanged final props.
+    // Restore the local mesh pose too, so an imperative floor preview cannot survive it.
+    const mesh = sceneRegistry.nodes.get(node.id)
+    if (mesh) {
+      mesh.position.set(...position)
+      const angles = fullRotation ?? rotation(yaw)
+      mesh.rotation.set(...(typeof angles === 'number' ? ([0, angles, 0] as const) : angles))
+    }
   }
   const session = {
     get rejection() {
@@ -262,6 +270,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
       const placement = resolveSurfacePlacement({
         host,
         childKind: node.type,
+        childId: node.id,
         childFootprint: {
           size: dimensions,
           rotationY: localYaw,
@@ -376,6 +385,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
         const placement = resolveSurfacePlacement({
           host,
           childKind: live.type,
+          childId: live.id,
           childFootprint: {
             size: bounds.size,
             rotationY: Array.isArray(localRotation) ? localRotation[1] : localRotation,

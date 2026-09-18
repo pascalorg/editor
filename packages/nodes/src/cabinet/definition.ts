@@ -2339,6 +2339,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   }),
 
   capabilities: {
+    surfacePlacement: 'floor-only',
     selectable: { hitVolume: 'bbox' },
     movable: {
       axes: ['x', 'z'],

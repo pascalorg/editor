@@ -45,7 +45,7 @@ function rotateVec(x: number, y: number, angle: number): [number, number] {
   return [x * c + y * s, -x * s + y * c]
 }
 
-function resolveItemTransform(
+export function resolveItemTransform(
   item: ItemNode,
   ctx: GeometryContext,
   cache = new Map<AnyNodeId, Transform | null>(),
@@ -120,6 +120,25 @@ function resolveItemTransform(
       rotation: [number, number, number]
     }
     const live = useLiveTransforms.getState().get(shelf.id as AnyNodeId)
+    if (
+      shelf.parentId &&
+      ['item', 'shelf', 'cabinet', 'cabinet-module', 'procedural-item'].includes(
+        ctx.resolve(shelf.parentId as AnyNodeId)?.type ?? '',
+      )
+    ) {
+      const parentT = resolveItemTransform(
+        {
+          ...shelf,
+          position: live?.position ?? shelf.position,
+          rotation: [0, live?.rotation ?? shelf.rotation[1], 0],
+        } as ItemNode,
+        ctx,
+        cache,
+      )
+      if (!parentT) return null
+      const [x, y] = rotateVec(item.position[0], item.position[2], parentT.rotation)
+      return { x: parentT.x + x, y: parentT.y + y, rotation: parentT.rotation + localRotation }
+    }
     const shelfX = live?.position[0] ?? shelf.position[0]
     const shelfZ = live?.position[2] ?? shelf.position[2]
     const shelfRotationY = live?.rotation ?? shelf.rotation[1] ?? 0

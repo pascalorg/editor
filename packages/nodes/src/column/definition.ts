@@ -363,6 +363,7 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
   },
 
   capabilities: {
+    surfacePlacement: 'floor-only',
     selectable: { hitVolume: 'bbox' },
     surfaces: { top: { height: (node) => (node as ColumnNodeType).height } },
     duplicable: true,
@@ -400,6 +401,7 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
   parametrics: columnParametrics,
   handles: columnHandles,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

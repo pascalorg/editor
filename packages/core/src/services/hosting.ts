@@ -1,5 +1,6 @@
 import { nodeRegistry } from '../registry/registry'
 import type { SceneApi, SurfacesConfig } from '../registry/types'
+import type { ItemNode } from '../schema/nodes/item'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 
 /**
@@ -150,4 +151,14 @@ export function clampYToHostTop(
 ): number {
   const top = getTopSurfaceHeight(host, nodes)
   return top == null ? originalY : top
+}
+
+export function clearFaceHostItemFields(host: AnyNode | undefined): Partial<ItemNode> {
+  const patch: Partial<ItemNode> = {}
+  for (const field of (host &&
+    nodeRegistry.get(host.type)?.capabilities.faceHost?.clearItemFields) ??
+    []) {
+    ;(patch as Record<string, unknown>)[field] = undefined
+  }
+  return patch
 }

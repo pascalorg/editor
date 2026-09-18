@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { nodeRegistry, registerNode } from '../registry/registry'
+import { nodeRegistry } from '../registry/registry'
 import type { SceneApi } from '../registry/types'
 import { ShelfNode } from '../schema/nodes/shelf'
 import type { AnyNode } from '../schema/types'
+import { registerHostingTestNode } from './__fixtures__/hosting'
 import { resolveSurfacePlacement, shelfSurfaceProvider } from './surface-hosting'
 
 const scene = { nodes: () => ({}), get: () => undefined } as unknown as SceneApi
@@ -10,7 +11,7 @@ let restore: () => void
 beforeEach(() => {
   restore = nodeRegistry._snapshot()
   nodeRegistry._reset()
-  registerNode({
+  registerHostingTestNode({
     kind: 'shelf',
     schemaVersion: 1,
     schema: ShelfNode,
@@ -27,6 +28,7 @@ test('a generated design larger than the actual shelf board is accepted at its c
     resolveSurfacePlacement({
       host,
       childKind: 'procedural-item',
+      childId: 'procedural-item_fit-probe',
       childFootprint: { size: [2, 0.3, 1], rotationY: 0 },
       hit: { point: [0, 1, 0], normalWorldY: 1 },
       scene,
@@ -47,6 +49,7 @@ test('a centre on the board boundary accepts floating point noise but refuses a 
       resolveSurfacePlacement({
         host,
         childKind: 'item',
+        childId: 'item_fit-probe',
         childFootprint: { size: [region.size![0] * 2, 0.2, region.size![1] * 2], rotationY: 0 },
         hit: { point: [region.size![0] + offset, 1, 0], normalWorldY: 1 },
         scene,
@@ -56,7 +59,7 @@ test('a centre on the board boundary accepts floating point noise but refuses a 
 })
 
 test('a hit-derived host accepts rotated overhang while the centre remains on it', () => {
-  registerNode({
+  registerHostingTestNode({
     kind: 'plugin-host',
     schemaVersion: 1,
     schema: ShelfNode,
@@ -75,6 +78,7 @@ test('a hit-derived host accepts rotated overhang while the centre remains on it
       resolveSurfacePlacement({
         host,
         childKind: 'item',
+        childId: 'item_fit-probe',
         childFootprint: { size, rotationY: yaw },
         hit: { point: [0.49, 0.8, 0.24], normalWorldY: 1 },
         scene,
@@ -84,7 +88,7 @@ test('a hit-derived host accepts rotated overhang while the centre remains on it
 })
 
 test('a malformed declared provider fails loudly even for an unchecked preview', () => {
-  registerNode({
+  registerHostingTestNode({
     kind: 'broken-host',
     schemaVersion: 1,
     schema: ShelfNode,
@@ -105,6 +109,7 @@ test('a malformed declared provider fails loudly even for an unchecked preview',
       resolveSurfacePlacement({
         host: { id: 'broken_host', type: 'broken-host' } as unknown as AnyNode,
         childKind: 'item',
+        childId: 'item_fit-probe',
         childFootprint: { size: [0.1, 0.1, 0.1], rotationY: 0 },
         hit: { point: [0, 1, 0], normalWorldY: 1 },
         scene,
@@ -115,7 +120,7 @@ test('a malformed declared provider fails loudly even for an unchecked preview',
 })
 
 test('a mug may overhang two table edges until its centre crosses either edge', () => {
-  registerNode({
+  registerHostingTestNode({
     kind: 'table',
     schemaVersion: 1,
     schema: ShelfNode,
@@ -134,6 +139,7 @@ test('a mug may overhang two table edges until its centre crosses either edge', 
     const result = resolveSurfacePlacement({
       host,
       childKind: 'item',
+      childId: 'item_fit-probe',
       childFootprint: { size: [0.2, 0.1, 0.2], rotationY: Math.PI / 4 },
       hit: { point: [x, 1, 0.49], normalWorldY: 1 },
       scene,
@@ -155,6 +161,7 @@ test('fit follows the snapped centre without moving it back onto the board', () 
     const result = resolveSurfacePlacement({
       host,
       childKind: 'item',
+      childId: 'item_fit-probe',
       childFootprint: { size: [2, 0.1, 2], rotationY: 0 },
       hit: { point: [halfWidth - 0.01, 1, 0.1], normalWorldY: 1 },
       scene,
@@ -177,6 +184,7 @@ test('the rotated bounds midpoint, including pitch and an offset origin, decides
       resolveSurfacePlacement({
         host,
         childKind: 'procedural-item',
+        childId: 'procedural-item_fit-probe',
         childFootprint: { size: [0.2, 1, 0.2], rotationY: rotation[1], rotation, localBounds },
         hit: { point: [0, 1, 0], normalWorldY: 1 },
         scene,
@@ -186,7 +194,7 @@ test('the rotated bounds midpoint, including pitch and an offset origin, decides
 })
 
 test('hit-derived bounds retain an offset host centre', () => {
-  registerNode({
+  registerHostingTestNode({
     kind: 'offset-table',
     schemaVersion: 1,
     schema: ShelfNode,
@@ -203,6 +211,7 @@ test('hit-derived bounds retain an offset host centre', () => {
       resolveSurfacePlacement({
         host: { id: 'offset_table', type: 'offset-table' } as unknown as AnyNode,
         childKind: 'item',
+        childId: 'item_fit-probe',
         childFootprint: { size: [4, 1, 4], rotationY: 0 },
         hit: { point: [x, 1, -1], normalWorldY: 1 },
         scene,

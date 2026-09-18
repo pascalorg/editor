@@ -145,6 +145,7 @@ export const eyebrowVentDefinition: NodeDefinition<typeof EyebrowVentNode> = {
   handles: eyebrowVentHandles,
   floorplan: buildEyebrowVentFloorplan,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

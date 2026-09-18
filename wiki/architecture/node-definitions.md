@@ -53,6 +53,19 @@ Two framework components live in `packages/viewer/src/components/viewer/`:
   3. After building, if `textures` is off and the kind declares `def.surfaceRole`, `GeometrySystem` overrides the built meshes' materials with the themed role colour (`applyDefaultSurfaceRole`).
   4. Kinds with no `def.geometry` are skipped — their custom `def.renderer` handles geometry on its own.
 
+### Hosting declarations
+
+`rendersChildren` describes whether a custom parametric renderer mounts arbitrary child
+nodes. It defaults to true for custom renderers; a renderer that filters children or
+only draws its own meshes declares `rendersChildren: false`. Geometry-only definitions
+inherit child mounting from the generic renderer. Hosting also requires the host schema
+to retain the actual child ID in `children`; renderability alone is insufficient.
+
+`capabilities.surfaces.hosting: false` disables surface hosting for a kind.
+`capabilities.surfacePlacement: 'floor-only'` prevents that kind from becoming a
+hosted child; it does not prevent the kind from hosting other objects. Cabinets,
+columns, stairs, elevators and fences use this child-placement restriction.
+
 ### `surfaceRole`
 
 A kind may declare `surfaceRole?: SurfaceRole` on its definition. It is a colour token only (`core` stores no material), used to resolve the per-role clay/theme colour for untextured surfaces. See [materials-and-themes](materials-and-themes.md).

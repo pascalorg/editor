@@ -97,6 +97,7 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
     position: [0, 0, 0],
     rotation: [0, 0, 0],
   }),
+  extensions: { 'pascal:editor/floorplan': { directDrag: true } },
   capabilities: {
     selectable: { hitVolume: 'bbox' },
     dragBounds: (n) => {

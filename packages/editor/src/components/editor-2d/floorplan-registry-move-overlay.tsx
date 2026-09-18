@@ -6,10 +6,13 @@ import {
   type AnyNodeId,
   bboxAnchors,
   bboxCornerAnchors,
+  cascadeDirty,
+  collectDescendants,
   createSceneApi,
   emitter,
   type FloorplanMoveTargetSession,
   type GroupMoveSnapResult,
+  getEffectiveNode,
   type MovableConfig,
   nodeRegistry,
   pauseSceneHistory,
@@ -18,6 +21,7 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
+import { nodeLevelFrame } from '@pascal-app/core/procedural-items'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import { commitFreshPlacementSubtree } from '../../lib/fresh-planar-placement'
@@ -137,7 +141,12 @@ export function FloorplanRegistryMoveOverlay() {
         for (const id of session.affectedIds) {
           liveTransforms.clear(id)
           liveOverrides.clear(id)
-          scene.markDirty(id)
+          const api = createSceneApi(useScene)
+          for (const dirtyId of new Set([
+            ...cascadeDirty(id, { scene: api }),
+            ...collectDescendants(id, { scene: api }),
+          ]))
+            scene.markDirty(dirtyId)
         }
       }
 
@@ -190,7 +199,14 @@ export function FloorplanRegistryMoveOverlay() {
         // ticks as the item lands on each new snapped/free position.
         const movedId = session.affectedIds[0]
         const moved = movedId ? useScene.getState().nodes[movedId] : undefined
-        const pos = (moved as { position?: [number, number, number] } | undefined)?.position
+        const effective = moved ? getEffectiveNode(moved) : undefined
+        const pos =
+          effective?.type === 'item' || effective?.type === 'procedural-item'
+            ? nodeLevelFrame(effective.id, {
+                ...useScene.getState().nodes,
+                [effective.id]: effective,
+              }).position
+            : (effective as { position?: [number, number, number] } | undefined)?.position
         if (pos) {
           const key = movementSfxStepKey({
             coords: [pos[0], pos[2]],
@@ -247,7 +263,7 @@ export function FloorplanRegistryMoveOverlay() {
         }
 
         if (commitValid && session.commit) {
-          useScene.getState().updateNodes(snapshotsToUpdates(snapshots))
+          restoreSnapshots(snapshots)
           if (historyPaused) {
             resumeSceneHistory(useScene)
             historyPaused = false
@@ -298,7 +314,7 @@ export function FloorplanRegistryMoveOverlay() {
           //   1. Revert to baseline while history is still paused.
           //   2. Resume history.
           //   3. Re-apply the final state — recorded as one tracked change.
-          useScene.getState().updateNodes(snapshotsToUpdates(snapshots))
+          restoreSnapshots(snapshots)
           if (historyPaused) {
             resumeSceneHistory(useScene)
             historyPaused = false
@@ -312,7 +328,7 @@ export function FloorplanRegistryMoveOverlay() {
           // brings them back at the new position.
           useViewer.getState().setSelection({ selectedIds: snapshots.map((s) => s.id) })
         } else {
-          useScene.getState().updateNodes(snapshotsToUpdates(snapshots))
+          restoreSnapshots(snapshots)
           if (historyPaused) {
             resumeSceneHistory(useScene)
             historyPaused = false
@@ -419,7 +435,7 @@ export function FloorplanRegistryMoveOverlay() {
           return
         }
         // Revert untracked, then resume — no history entry.
-        useScene.getState().updateNodes(snapshotsToUpdates(snapshots))
+        restoreSnapshots(snapshots)
         if (historyPaused) {
           resumeSceneHistory(useScene)
           historyPaused = false
@@ -468,7 +484,7 @@ export function FloorplanRegistryMoveOverlay() {
           if (hasMovedSinceStart) {
             const finalisedBy3D = useEditor.getState().movingNodeOrigin === '3d'
             if (!finalisedBy3D) {
-              useScene.getState().updateNodes(snapshotsToUpdates(snapshots))
+              restoreSnapshots(snapshots)
             }
           }
           resumeSceneHistory(useScene)
@@ -888,8 +904,15 @@ function snapshotNode(node: AnyNode): NodeSnapshot {
   return { id: node.id, data }
 }
 
-function snapshotsToUpdates(snapshots: NodeSnapshot[]) {
-  return snapshots.map((s) => ({ id: s.id, data: s.data }))
+function restoreSnapshots(snapshots: NodeSnapshot[]) {
+  const updates = snapshots
+    .filter(
+      (s) =>
+        !useScene.getState().nodes[s.id] ||
+        !deepEqual(s.data, snapshotNode(useScene.getState().nodes[s.id]!).data),
+    )
+    .map((s) => ({ id: s.id, data: s.data }))
+  if (updates.length) useScene.getState().updateNodes(updates)
 }
 
 function deepEqual(a: unknown, b: unknown): boolean {

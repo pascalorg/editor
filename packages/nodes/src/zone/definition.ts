@@ -68,6 +68,7 @@ export const zoneDefinition: NodeDefinition<typeof ZoneNode> = {
   // No dirty consumer rebuilds this kind — see NodeDefinition.dirtyTracking.
   dirtyTracking: false,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

@@ -316,6 +316,7 @@ export const dormerDefinition: NodeDefinition<typeof DormerNode> = {
   handles: dormerHandles,
   floorplan: buildDormerFloorplan,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),
