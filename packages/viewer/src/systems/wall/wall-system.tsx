@@ -614,6 +614,12 @@ const DRAG_FLUSH_MS = 80
 const MAX_WALL_REBUILDS_PER_FRAME = 8
 const WALL_PROGRESSIVE_DIRTY_THRESHOLD = MAX_WALL_REBUILDS_PER_FRAME
 const WALL_PROGRESSIVE_TIME_BUDGET_MS = 8
+// Initial build (see wall-build-lifecycle) has no interactive gesture to protect:
+// the frame is dominated by rendering the still-unbatched scene, so every extra
+// frame spent draining walls costs a full scene render. Three display frames of
+// wall work per frame drains a 1,600-wall scene in ~1/6 of the frames while every
+// frame stays two orders of magnitude under a perceptible freeze.
+const WALL_INITIAL_BUILD_TIME_BUDGET_MS = 48
 const HEAVY_WALL_OPENINGS = 6
 let lastWallDirtyAtMs = 0
 let unmountedFrames = 0
@@ -628,7 +634,10 @@ function wallRebuildExitReason(
 ): 'cap' | 'budget' | 'heavy' | null {
   if (!initialBuild && rebuiltThisFrame >= MAX_WALL_REBUILDS_PER_FRAME) return 'cap'
   if (rebuiltThisFrame === 0) return null
-  if (elapsedMs >= WALL_PROGRESSIVE_TIME_BUDGET_MS) return 'budget'
+  const budgetMs = initialBuild
+    ? WALL_INITIAL_BUILD_TIME_BUDGET_MS
+    : WALL_PROGRESSIVE_TIME_BUDGET_MS
+  if (elapsedMs >= budgetMs) return 'budget'
   const wall = nodes[wallId as AnyNodeId]
   if (wall?.type !== 'wall') return null
   let cutouts = 0
@@ -654,8 +663,9 @@ export function shouldDeferWallRebuild(
   nodes: Record<AnyNodeId, AnyNode>,
   rebuiltThisFrame: number,
   elapsedMs: number,
+  initialBuild = false,
 ): boolean {
-  return wallRebuildExitReason(wallId, nodes, rebuiltThisFrame, elapsedMs) !== null
+  return wallRebuildExitReason(wallId, nodes, rebuiltThisFrame, elapsedMs, initialBuild) !== null
 }
 
 /** Rebuilds this system still owes — neighbours deferred during a drag. */
