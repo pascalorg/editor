@@ -202,6 +202,7 @@ export interface EditorProps {
   projectId?: string | null
 
   // Persistence — defaults to localStorage when omitted
+  guardAgainstSceneWipe?: boolean
   onLoad?: () => Promise<SceneGraph | null>
   onSave?: (scene: SceneGraph, options?: { keepalive?: boolean }) => Promise<void>
   /**
@@ -1241,6 +1242,7 @@ function PreviewStage({
 }
 
 function EditorContent({
+  guardAgainstSceneWipe,
   layoutVersion = 'v1',
   appMenuButton,
   sidebarTop,
@@ -1300,6 +1302,7 @@ function EditorContent({
   useKeyboard({ isVersionPreviewMode, disabled: isFirstPersonMode || isStudioMode })
 
   const { isLoadingSceneRef, saveNow } = useAutoSave({
+    guardAgainstSceneWipe,
     onSave,
     onDirty,
     onSaveStatusChange,
