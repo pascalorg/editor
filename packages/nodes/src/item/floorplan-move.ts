@@ -214,21 +214,19 @@ function buildFloorItemSession(
   nodes: Record<AnyNodeId, AnyNode>,
 ): FloorplanMoveTargetSession {
   const host = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
-  const hosted =
-    host &&
-    (host.type === 'shelf' ||
-      host.type === 'cabinet' ||
-      host.type === 'cabinet-module' ||
-      host.type === 'item' ||
-      host.type === 'procedural-item' ||
-      (host.type === 'block' && !!node.blockFaceId))
+  const hosted = host && host.type !== 'level'
   const surfaceId = surfaceAttachmentId(node)
   const hostPose = surfaceFramePose(node.parentId, surfaceId, node, false)
   const planTransform = resolveItemPlanTransform(node, nodes)
-  const rotationY = planTransform.rotation
+  const levelFrame = hosted ? restingNodePlanFrame(node, (id) => nodes[id]) : null
+  const rotationY = levelFrame
+    ? Math.atan2(levelFrame.axes[2][0], levelFrame.axes[2][2])
+    : planTransform.rotation
   const levelRotation: [number, number, number] = [...node.rotation]
   if (hosted) {
     if ((node as AnyNode).type === 'procedural-item') {
+      // Generated footprints use the query frame; catalog footprints keep their legacy plan mapping.
+      planTransform.point = [levelFrame!.position[0], levelFrame!.position[2]]
       const hostFrame = restingNodePlanFrame(host, (id) => nodes[id])
       const headingPose = surfaceFramePose(
         node.parentId,

@@ -1189,3 +1189,207 @@ test('audit: unmount releases every imperative exit transform', async () => {
     if (!unmounted) await renderer.unmount()
   }
 })
+
+for (const kind of ['fence', 'imported-mesh', 'plugin', 'ineligible-plugin', 'slab'] as const)
+  for (const childKind of ['item', 'procedural-item'] as const)
+    for (const overSlab of [true, false])
+      test(`review bot: generic parent exit ${kind} ${childKind} slab=${overSlab}`, async () => {
+        const { FenceNode, ImportedMeshNode, nodeType, objectId } = await import('@pascal-app/core')
+        const { fenceDefinition } = await import('../fence/definition')
+        const { importedMeshDefinition } = await import('../imported-mesh/definition')
+        const { slabDefinition } = await import('../slab/definition')
+        registerNode(fenceDefinition)
+        registerNode(importedMeshDefinition)
+        registerNode(slabDefinition)
+        const pluginSchema = ShelfNode.extend({
+          type: nodeType('review:host'),
+          id: objectId('reviewhost'),
+        })
+        const schema =
+          kind === 'ineligible-plugin' ? pluginSchema.omit({ children: true }) : pluginSchema
+        registerNode({
+          kind: 'review:host',
+          schemaVersion: 1,
+          schema,
+          category: 'furnish',
+          defaults: () => ({}),
+          capabilities: { dragBounds: () => ({ size: [2, 1, 2], center: [0, 0.5, 0] }) },
+          geometry: () => {
+            const group = new Group()
+            group.add(
+              new Mesh(new BoxGeometry(2, 1, 2).translate(0, 0.5, 0), new MeshBasicMaterial()),
+            )
+            return group
+          },
+        } as never)
+        const { child, host: ancestor, level, slab } = fixture('item', childKind, false)
+        const parent =
+          kind === 'fence'
+            ? FenceNode.parse({ parentId: ancestor.id, start: [-1, 0], end: [1, 0], height: 1 })
+            : kind === 'imported-mesh'
+              ? ImportedMeshNode.parse({
+                  parentId: level.id,
+                  position: [2, 0.6, 3],
+                  rotation: [0, 0.6, 0],
+                  primitives: [
+                    { positions: [-1, 1, -1, 1, 1, 1, 1, 1, -1, -1, 1, -1, -1, 1, 1, 1, 1, 1] },
+                  ],
+                })
+              : kind === 'slab'
+                ? slab
+                : schema.parse({ parentId: level.id, position: [2, 0.6, 3], rotation: [0, 0.6, 0] })
+        const source = {
+          ...child,
+          parentId: parent.id,
+          position: [0, kind === 'slab' ? slab.elevation : 1, 0],
+          rotation: [0, 0.2, 0],
+          supportSlabId: undefined,
+        } as typeof child
+        const graph = {
+          ...useScene.getState().nodes,
+          [child.id]: source,
+          [ancestor.id]: { ...ancestor, children: kind === 'fence' ? [parent.id] : [] },
+          [parent.id]: { ...parent, children: [child.id] },
+          [level.id]: {
+            ...level,
+            children:
+              kind === 'fence'
+                ? [slab.id, ancestor.id]
+                : kind === 'slab'
+                  ? [slab.id]
+                  : [slab.id, parent.id],
+          },
+        } as Record<AnyNodeId, AnyNode>
+        useScene.setState({ nodes: graph })
+        useScene.temporal.getState().clear()
+        const baseline = structuredClone(graph)
+        const renderer = await create(<RenderedScene levelId={level.id} />)
+        try {
+          await settle(renderer)
+          if (kind === 'fence') {
+            useScene.getState().markDirty(ancestor.id)
+            await renderer.advanceFrames(1, 1 / 60)
+          }
+          const baselineMatrix = worldMatrix(child.id)
+          const initial = sceneRegistry.nodes
+            .get(level.id)!
+            .matrixWorld.clone()
+            .invert()
+            .multiply(baselineMatrix)
+          const heading = Math.atan2(initial.elements[8]!, initial.elements[10]!)
+          const footprint = svgPose(renderer, child.id)[0]!
+          const points =
+            typeof footprint.points === 'string'
+              ? footprint.points.split(' ').map((p) => p.split(',').map(Number))
+              : [
+                  [
+                    Number(footprint.x) + Number(footprint.width) / 2,
+                    Number(footprint.y) + Number(footprint.height) / 2,
+                  ],
+                ]
+          const pickup = [0, 1].map(
+            (axis) => points.reduce((sum, p) => sum + p[axis]!, 0) / points.length,
+          )
+          const target = overSlab ? [8, 8] : [14, 14]
+          await moving(source)
+          await pointer('pointermove', pickup)
+          await pointer('pointermove', target)
+          await settle(renderer)
+          const preview = worldMatrix(child.id)
+          const plan = svgPose(renderer, child.id)
+          await pointer('pointerup', target)
+          await settle(renderer)
+          const committed = useScene.getState().nodes[child.id] as ItemNode
+          expect(committed.parentId).toBe(level.id)
+          expect(committed.position[1]).toBe(0)
+          expect(committed.position[0]).toBeCloseTo(target[0]!)
+          expect(committed.position[2]).toBeCloseTo(target[1]!)
+          expect(committed.rotation[0]).toBe(0)
+          expect(committed.rotation[1]).toBeCloseTo(heading)
+          expect(committed.rotation[2]).toBe(0)
+          expect(committed.supportSlabId).toBe(overSlab ? slab.id : undefined)
+          const rendered = worldMatrix(child.id)
+          const actual = sceneRegistry.nodes
+            .get(level.id)!
+            .matrixWorld.clone()
+            .invert()
+            .multiply(rendered)
+          expect(actual.elements[13]).toBeCloseTo(overSlab ? slab.elevation : 0)
+          expect(Math.atan2(actual.elements[8]!, actual.elements[10]!)).toBeCloseTo(heading)
+          expectMatrix(preview, worldMatrix(child.id))
+          expect(svgPose(renderer, child.id)).toEqual(plan)
+          expect(
+            (useScene.getState().nodes[parent.id] as { children: string[] }).children,
+          ).not.toContain(child.id)
+          expect(
+            (useScene.getState().nodes[level.id] as LevelNode).children.filter(
+              (id) => id === child.id,
+            ),
+          ).toHaveLength(1)
+          expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+          await act(async () => useScene.temporal.getState().undo())
+          await settle(renderer)
+          expect(useScene.getState().nodes).toEqual(baseline)
+          expectMatrix(worldMatrix(child.id), baselineMatrix)
+        } finally {
+          await renderer.unmount()
+        }
+      })
+
+for (const kind of ['item', 'shelf', 'generated'] as const)
+  test(`review bot: block face frame composes ${kind} ancestor and one slab lift`, async () => {
+    const { BlockNode, getBlockFaceFrame } = await import('@pascal-app/core')
+    const { blockDefinition } = await import('../block/definition')
+    registerNode(blockDefinition)
+    const { child, host, level, slab } = fixture(kind, 'item', false)
+    const block = BlockNode.parse({
+      parentId: host.id,
+      position: [0.3, 1, 0.2],
+      rotation: 0.4,
+      children: [child.id],
+    })
+    const face = block.topology.faces.find(
+      (f) => getBlockFaceFrame(block.topology, f.id)!.normal[2] > 0.99,
+    )!
+    const source = {
+      ...child,
+      parentId: block.id,
+      position: [0.1, 0.2, 0.05],
+      rotation: [0, 0.2, 0],
+      blockFaceId: face.id,
+    } as ItemNode
+    const graph = {
+      ...useScene.getState().nodes,
+      [child.id]: source,
+      [host.id]: { ...host, children: [block.id] },
+      [block.id]: block,
+    } as Record<AnyNodeId, AnyNode>
+    useScene.setState({ nodes: graph })
+    const renderer = await create(<RenderedScene levelId={level.id} />)
+    try {
+      await settle(renderer)
+      useScene.getState().markDirty(host.id)
+      await renderer.advanceFrames(1, 1 / 60)
+      const rendered = worldMatrix(child.id)
+      const actual = sceneRegistry.nodes
+        .get(level.id)!
+        .matrixWorld.clone()
+        .invert()
+        .multiply(rendered)
+      const faceFrame = getBlockFaceFrame(block.topology, face.id)!
+      expect(actual.elements[13]).toBeCloseTo(
+        slab.elevation + block.position[1] + faceFrame.origin[1] + source.position[1],
+      )
+      const resolved = nodeLevelFrame(child.id, graph)
+      resolved.position.forEach((v, i) => {
+        expect(v).toBeCloseTo(actual.elements[12 + i]!, 6)
+      })
+      resolved.axes.forEach((axis, i) => {
+        axis.forEach((v, j) => {
+          expect(v).toBeCloseTo(actual.elements[i * 4 + j]!, 6)
+        })
+      })
+    } finally {
+      await renderer.unmount()
+    }
+  })

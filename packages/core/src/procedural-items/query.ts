@@ -229,7 +229,7 @@ export function nodeLevelFrame(id: string, nodes: QueryNodes, seen = new Set<str
   if (node.type === 'item' && parent?.type === 'block' && node.blockFaceId) {
     const face = getBlockFaceFrame(parent.topology, node.blockFaceId)
     if (face) {
-      const host = frame([...parent.position], [0, parent.rotation, 0])
+      const host = nodeLevelFrame(parent.id, nodes, seen)
       return composeFrames(
         host,
         composeFrames(
