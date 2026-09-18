@@ -98,6 +98,11 @@ Every command that starts the editor (`editor`, `start`, `open`, `resume`, `proj
 4. The release asset recorded in the package, streamed into `~/.pascal/tmp` with download
    progress in the terminal.
 
+Each CLI version pins its own runtime version, so upgrading the CLI switches the editor to
+the matching runtime the next time it starts. If the editor is already running on an older
+runtime, `pascal editor` says so; `pascal restart` (or `pascal update`) makes the switch.
+`pascal doctor` reports the installed and the pinned runtime version when they differ.
+
 A downloaded archive is checked against the SHA-256 digest published inside the npm
 package before anything is extracted. On a mismatch the CLI deletes the temporary file and
 installs nothing, so a corrupted or substituted archive never becomes your runtime.
