@@ -801,7 +801,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!noEditing && <SelectionAffordanceManager />}
       <RoofEditSystem />
       <StairEditSystem />
-      {!(isLoading || isFirstPersonMode || isXRMode) && <SnapAwareGrid />}
+      {!(isLoading || isFirstPersonMode) && <SnapAwareGrid />}
       {!(isLoading || noEditing) && <ToolManager />}
       {isFirstPersonMode && <FirstPersonControls />}
       {!isXRMode && <CustomCameraControls />}

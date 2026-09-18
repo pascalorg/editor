@@ -17,7 +17,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { countGraphNodes, isEmptyGraphOverwrite } from '@/lib/empty-graph-guard'
 import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signature'
 import { cn } from '@/lib/utils'
-import { openXRPreview } from '@/lib/xr/preview-window'
 import { BuildTab } from './build-tab'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
@@ -322,10 +321,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         sidebarTabs={SIDEBAR_TABS}
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
         viewerToolbarRight={
-          <CommunityViewerToolbarRight
-            onVRToggle={() => openXRPreview(`/xr/scene/${encodeURIComponent(meta.id)}`)}
-            vrLabel="Open WebXR test environment"
-          />
+          <CommunityViewerToolbarRight />
         }
       />
     </div>

@@ -1,7 +1,8 @@
 'use client'
 
-import { type Cursor, emitter } from '@pascal-app/core'
-import { type ThreeEvent, useThree } from '@react-three/fiber'
+import { type Cursor, emitter, sceneRegistry } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
+import { type ThreeEvent } from '@react-three/fiber'
 import { type ReactNode, useEffect, useMemo, useRef } from 'react'
 import {
   BoxGeometry,
@@ -14,8 +15,6 @@ import {
   type Group,
   type Intersection,
   Mesh,
-  type Object3D,
-  type Ray,
   type Raycaster,
   Shape,
   TorusGeometry,
@@ -26,6 +25,7 @@ import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { EDITOR_HANDLE_HIT_AREA_USER_DATA_KEY } from '../../../lib/direct-manipulation'
 import { getSpatialPointerId, spatialPointerInput } from '../../../lib/spatial-pointer-input'
+import { createSpatialDragPlane, intersectSpatialDragPlane } from '../../../lib/spatial-drag-plane'
 import useEditor from '../../../store/use-editor'
 
 // While a press-drag move is in flight (`placementDragMode`), the move tool
@@ -428,48 +428,53 @@ export function InvisibleHandleHitArea({
   onPointerLeave: PointerHandler
   scale: number
 }) {
-  const camera = useThree((state) => state.camera)
-  const canvas = useThree((state) => state.gl.domElement)
-
-  const windowPointerEventForRay = (
-    type: 'pointermove' | 'pointerup' | 'pointercancel',
-    ray: Ray,
-  ) => {
-    const point = ray.at(4, new Vector3()).project(camera)
-    const rect = canvas.getBoundingClientRect()
-    return new PointerEvent(type, {
-      bubbles: true,
-      button: 0,
-      buttons: type === 'pointermove' ? 1 : 0,
-      clientX: rect.left + ((point.x + 1) / 2) * rect.width,
-      clientY: rect.top + ((1 - point.y) / 2) * rect.height,
-      pointerType: 'xr',
-    })
-  }
-
   const handlePointerDown: PointerHandler = (event) => {
     const spatialPointerId = getSpatialPointerId(event.nativeEvent)
     if (spatialPointerId) {
-      const target = event.object as Object3D & {
-        setPointerCapture?: (pointerId: number) => void
-      }
-      target.setPointerCapture?.(event.pointerId)
-      const initialPointer = windowPointerEventForRay('pointermove', event.ray)
-      const nativeEvent = event.nativeEvent as PointerEvent
-      try {
-        Object.defineProperties(nativeEvent, {
-          clientX: { configurable: true, value: initialPointer.clientX },
-          clientY: { configurable: true, value: initialPointer.clientY },
-          pointerId: { configurable: true, value: event.pointerId },
-          pointerType: { configurable: true, value: 'xr' },
+      event.object.setPointerCapture?.(event.pointerId)
+      const buildingId = useViewer.getState().selection.buildingId
+      const building = buildingId ? sceneRegistry.nodes.get(buildingId) : undefined
+      building?.updateWorldMatrix(true, false)
+      const inverse = building?.matrixWorld.clone().invert()
+      const initialPoint = event.point.clone()
+      const plane = createSpatialDragPlane(initialPoint, event.ray, building?.matrixWorld)
+      const point = new Vector3()
+      let seeded = false
+      const emitPoint = (position: Vector3, ray = event.ray) => {
+        const local = inverse ? position.clone().applyMatrix4(inverse) : position
+        emitter.emit('grid:move', {
+          position: [position.x, position.y, position.z],
+          localPosition: [local.x, local.y, local.z],
+          nativeEvent: {
+            ...event.nativeEvent,
+            inputSource: spatialPointerId,
+            pointerType: 'xr',
+            pointerId: event.pointerId,
+            target: event.nativeEvent.target,
+            ray: ray.clone(),
+          } as never,
         })
-      } catch {
-        // Direct-ray handle sessions do not need projected DOM coordinates.
       }
+      // Direct resize sessions replace this capture in onPointerDown below.
+      // Move/reshape tools consume grid events in a plane frozen at the grip.
       spatialPointerInput.capture(spatialPointerId, {
-        onMove: (ray) => window.dispatchEvent(windowPointerEventForRay('pointermove', ray)),
-        onRelease: () => window.dispatchEvent(windowPointerEventForRay('pointerup', event.ray)),
-        onCancel: () => window.dispatchEvent(windowPointerEventForRay('pointercancel', event.ray)),
+        onMove: (ray) => {
+          if (!seeded) {
+            emitPoint(initialPoint)
+            seeded = true
+          }
+          if (intersectSpatialDragPlane(ray, plane, point)) emitPoint(point, ray)
+        },
+        onRelease: () => {
+          event.object.releasePointerCapture?.(event.pointerId)
+          window.dispatchEvent(new PointerEvent('pointerup', {
+            bubbles: true, button: 0, pointerId: event.pointerId, pointerType: 'xr',
+          }))
+        },
+        onCancel: () => {
+          event.object.releasePointerCapture?.(event.pointerId)
+          emitter.emit('tool:cancel')
+        },
       })
     }
     onPointerDown(event)

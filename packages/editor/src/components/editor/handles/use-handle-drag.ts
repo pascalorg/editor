@@ -16,6 +16,7 @@ import { type Camera, type Object3D, type Plane, type Ray, Vector2, type Vector3
 import { isHistoryShortcut } from '../../../lib/history'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { getSpatialPointerId, spatialPointerInput } from '../../../lib/spatial-pointer-input'
+import { intersectSpatialDragPlane } from '../../../lib/spatial-drag-plane'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
 import { commitHandleDragPatch } from './handle-drag-history'
 
@@ -162,7 +163,7 @@ export function useHandleDrag(args: UseHandleDragArgs) {
       return target.copy(raycaster.ray)
     }
     const intersectPlane: IntersectPlane = (clientX, clientY, plane, target) => {
-      if (spatialRay) return spatialRay.intersectPlane(plane, target)
+      if (spatialRay) return intersectSpatialDragPlane(spatialRay, plane, target)
       setPointerRay(clientX, clientY)
       return raycaster.ray.intersectPlane(plane, target)
     }
@@ -279,6 +280,9 @@ export function useHandleDrag(args: UseHandleDragArgs) {
               buttons: 1,
               pointerId: event.pointerId,
               pointerType: 'xr',
+              // The editor uses Shift for continuous rotation. Controllers
+              // have no keyboard modifier, so spatial drags use that mode.
+              shiftKey: true,
             }),
           )
         },
@@ -286,9 +290,11 @@ export function useHandleDrag(args: UseHandleDragArgs) {
         onCancel,
       })
     }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onCancel)
+    if (!spatialPointerSource) {
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+      window.addEventListener('pointercancel', onCancel)
+    }
     window.addEventListener('keydown', onKeyDown, true)
   }
 }

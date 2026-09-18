@@ -214,6 +214,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     const levelId = node.parentId ?? null
     pauseSceneHistory(useScene)
     let shouldRestoreOnCleanup = true
+    let active = true
 
     // Wall ids that currently carry a live position override. Cleared on commit
     // (after the final store write lands) and on cancel / external unmount.
@@ -421,6 +422,12 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     }
 
     const applyPreview = (nextStart: [number, number], nextEnd: [number, number]) => {
+      const previous = previewRef.current ?? { start: originalStart, end: originalEnd }
+      if (
+        nextStart[0] === previous.start[0] && nextStart[1] === previous.start[1] &&
+        nextEnd[0] === previous.end[0] && nextEnd[1] === previous.end[1]
+      ) return
+      hasDraggedRef.current = true
       previewRef.current = { start: nextStart, end: nextEnd }
       const centerX = (nextStart[0] + nextEnd[0]) / 2
       const centerZ = (nextStart[1] + nextEnd[1]) / 2
@@ -466,6 +473,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     }
 
     const onGridMove = (event: GridEvent) => {
+      if (!active) return
       const rawX = event.localPosition[0]
       const rawZ = event.localPosition[2]
       const snapStep = getSegmentGridStep()
@@ -473,10 +481,15 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       // Anchor at the raw cursor so the displacement is measured in
       // continuous space.
       const anchor = dragAnchorRef.current ?? [rawX, rawZ]
+      const firstMove = dragAnchorRef.current === null
       dragAnchorRef.current = anchor
+      // Seeding a controller grab is not movement; don't snap an off-grid wall
+      // to the lattice before the user has moved their hand.
+      if (firstMove) return
 
       const rawDeltaX = rawX - anchor[0]
       const rawDeltaZ = rawZ - anchor[1]
+      if (!hasDraggedRef.current && Math.hypot(rawDeltaX, rawDeltaZ) < 1e-6) return
 
       // When the move is axis-locked (side-handle drag), snap the wall
       // center's absolute perpendicular offset to a multiple of
@@ -527,7 +540,6 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
 
       const nextCenter: [number, number] = [originalCenter[0] + deltaX, originalCenter[1] + deltaZ]
       const nextWall = buildWallFromCenter(nextCenter)
-      hasDraggedRef.current = true
       applyPreview(nextWall.start, nextWall.end)
     }
 
@@ -628,6 +640,8 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     }
 
     const onPointerUp = () => {
+      if (!active) return
+      active = false
       // Press-release without drag: dismiss the tool without committing.
       // This is the same UX as MoveWallEndpointTool / WallHeightArrowHandle
       // — pointer-down on the affordance starts the move, drag updates the
@@ -669,6 +683,8 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     }
 
     const onCancel = () => {
+      if (!active) return
+      active = false
       shouldRestoreOnCleanup = false
       restoreOriginal()
       useViewer.getState().setSelection({ selectedIds: [nodeId] })

@@ -29,6 +29,8 @@ export function useGridEvents(gridY: number) {
   }, [gridY])
 
   useEffect(() => {
+    // XR placement is driven by the controller-ray bridge, never screen coordinates.
+    if (gl.xr.isPresenting) return
     const canvas = gl.domElement
 
     const getIntersection = (nativeEvent: MouseEvent | PointerEvent): Vector3 | null => {

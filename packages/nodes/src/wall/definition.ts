@@ -6,6 +6,8 @@ import {
   type WallNode as WallNodeType,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import { PANEL_MODEL_EXTENSION, type NodePanelModel } from '@pascal-app/editor'
+import { wallSettings } from './panel-model'
 import { buildWallContextualDimensions } from './contextual-dimensions'
 import { hasWallCurveBlockingChildren } from './curve-eligibility'
 import { buildWallFloorplan, computeWallFloorplanLevelData } from './floorplan'
@@ -50,6 +52,9 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   category: 'structure',
   surfaceRole: 'wall',
   extensions: {
+    [PANEL_MODEL_EXTENSION]: {
+      rows: ({ node, nodes, update }) => wallSettings(node, nodes, update),
+    } satisfies NodePanelModel<WallNodeType>,
     'pascal:editor/floorplan': {
       contextualDimensions: buildWallContextualDimensions,
       actionMenu: {

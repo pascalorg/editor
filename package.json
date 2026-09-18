@@ -61,7 +61,8 @@
   "workspaces": [
     "apps/*",
     "packages/*",
-    "tooling/*"
+    "tooling/*",
+    "../../../../Desktop/work/webxr-pascal-plugin"
   ],
   "patchedDependencies": {
     "three@0.185.1": "patches/three@0.185.1.patch",

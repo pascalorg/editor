@@ -16,6 +16,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { OrthographicCamera, Plane, type Ray, Vector2, Vector3 } from 'three'
 import { GROUP_MOVE_DRAG_LABEL, GROUP_ROTATE_DRAG_LABEL } from '../../lib/contextual-help'
 import { isHistoryShortcut } from '../../lib/history'
+import { intersectSpatialDragPlane } from '../../lib/spatial-drag-plane'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { getSpatialPointerId, spatialPointerInput } from '../../lib/spatial-pointer-input'
 import useEditor from '../../store/use-editor'
@@ -227,7 +228,7 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
       raycaster.setFromCamera(ndc, camera)
     }
     const hit = new Vector3()
-    if (!(spatialRay ?? raycaster.ray).intersectPlane(plane, hit)) return
+    if (!intersectSpatialDragPlane(spatialRay ?? raycaster.ray, plane, hit)) return
     const initialAngle = angleOf(hit)
 
     document.body.style.cursor = 'grabbing'
@@ -243,7 +244,7 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
 
     const applyRay = (ray: Ray, freeRotation: boolean) => {
       const moveHit = new Vector3()
-      if (!ray.intersectPlane(plane, moveHit)) return
+      if (!intersectSpatialDragPlane(ray, plane, moveHit)) return
       let delta = angleOf(moveHit) - initialAngle
       while (delta > Math.PI) delta -= 2 * Math.PI
       while (delta < -Math.PI) delta += 2 * Math.PI
@@ -387,15 +388,17 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
       releaseSpatialCapture = spatialPointerInput.capture(spatialPointerId, {
         onMove: (ray) => {
           spatialRay.copy(ray)
-          applyRay(spatialRay, false)
+          applyRay(spatialRay, true)
         },
         onRelease: onUp,
         onCancel,
       })
     }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onCancel)
+    if (!spatialPointerId) {
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+      window.addEventListener('pointercancel', onCancel)
+    }
     window.addEventListener('keydown', onKeyDown, true)
   }
 

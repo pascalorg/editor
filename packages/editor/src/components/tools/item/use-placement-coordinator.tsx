@@ -69,7 +69,6 @@ import {
 } from '../shared/placement-box-geometry'
 import {
   type PointerSupportSurface,
-  resolvePointerSupportElevation,
   resolvePointerSupportSurface,
 } from '../shared/pointer-support-cap'
 import { shouldCreateFloorDraft } from './draft-creation'
@@ -942,7 +941,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // lands behind it still counts as "on the shelf". Only a ray that misses
     // the shelf box entirely means the user genuinely moved off it. A simple
     // footprint test on the floor hit point can't distinguish those.
-    const cursorRayIntersectsActiveShelf = (gridWorldPoint: [number, number, number]): boolean => {
+    const cursorRayIntersectsActiveShelf = (gridWorldPoint: [number, number, number], pointerRay?: Ray): boolean => {
       const shelfId = placementState.current.shelfId
       if (!shelfId) return false
       const shelfMesh = sceneRegistry.nodes.get(shelfId as AnyNodeId)
@@ -951,15 +950,18 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         | undefined
       if (!(shelfMesh && shelfNode?.width && shelfNode?.depth && shelfNode?.height)) return false
 
-      cameraRef.current.getWorldPosition(stickyCamPos)
-      stickyRay.origin.copy(stickyCamPos)
-      stickyRay.direction
-        .set(
-          gridWorldPoint[0] - stickyCamPos.x,
-          gridWorldPoint[1] - stickyCamPos.y,
-          gridWorldPoint[2] - stickyCamPos.z,
-        )
-        .normalize()
+      if (pointerRay) stickyRay.copy(pointerRay)
+      else {
+        cameraRef.current.getWorldPosition(stickyCamPos)
+        stickyRay.origin.copy(stickyCamPos)
+        stickyRay.direction
+          .set(
+            gridWorldPoint[0] - stickyCamPos.x,
+            gridWorldPoint[1] - stickyCamPos.y,
+            gridWorldPoint[2] - stickyCamPos.z,
+          )
+          .normalize()
+      }
 
       // Into shelf-local space, then test the shelf's local AABB (origin at the
       // base: y ∈ [0, height]) with a small margin.
@@ -990,7 +992,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // perspective-skewed along the ray whenever the plane sits on a
       // different storey than the pointed surface (the skew is what made
       // a drag over a deck-above-a-floor hop between the two surfaces).
-      const pointed = resolvePointerSupportSurface(cameraRef.current, event.position)
+      const pointed = resolvePointerSupportSurface(cameraRef.current, event.position, { pointerRay: event.nativeEvent.ray })
       pointerSupportCapRef.current = pointed?.elevation ?? null
       pointerSupportSurfaceRef.current = pointed
       const surfaceEvent: GridEvent =
@@ -1004,7 +1006,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // floor only once the ray misses the shelf entirely — without this the
       // item oscillates between the shelf row and the floor on every micro-move.
       if (placementState.current.surface === 'shelf-surface') {
-        if (cursorRayIntersectsActiveShelf(event.position)) return
+        if (cursorRayIntersectsActiveShelf(event.position, event.nativeEvent.ray)) return
         // Land at the pointed surface's plan point — the raw grid hit is
         // still skewed by the plane riding at the shelf-surface height.
         detachItemSurfaceToFloor(surfaceEvent as unknown as ItemEvent)
@@ -1650,11 +1652,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // Landing back on the floor: refresh the pointer surface cap from
       // this event's world hit so the first floor position already targets
       // the aimed-at surface (not a deck above it).
-      pointerSupportCapRef.current = resolvePointerSupportElevation(cameraRef.current, [
-        event.position[0],
-        event.position[1],
-        event.position[2],
-      ])
+      pointerSupportCapRef.current = resolvePointerSupportSurface(cameraRef.current, event.position, {
+        pointerRay: event.nativeEvent.ray,
+      })?.elevation ?? null
       // Coming back from a host: forget the floor grab too, so the item
       // centers under the cursor instead of restoring the pre-drag offset —
       // and landing on the floor is "anchoring elsewhere", so a later return
@@ -2600,6 +2600,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   // instead of drawing an inline triangle. Only this coordinator publishes — a
   // moving existing node has no draft here, so the grid reads that case straight
   // off the node's mesh. Cleared when idle.
+  const surfaceWorldPointRef = useRef(new Vector3())
   const surfaceNormalRef = useRef(new Vector3(0, 1, 0))
   const facingForwardRef = useRef(new Vector3(0, 0, 1))
   const facingQuatRef = useRef(new Quaternion())
@@ -2648,7 +2649,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       ghost.getWorldQuaternion(ghostSurfaceQuatRef.current)
       resolveItemPlacementSurfaceNormal(surf, ghostSurfaceQuatRef.current, null, n)
     }
-    publishPlacementSurface(ghost.position, n)
+    publishPlacementSurface(ghost.getWorldPosition(surfaceWorldPointRef.current), n)
 
     if (shape.depth > 0) {
       useFacingPose.getState().set({

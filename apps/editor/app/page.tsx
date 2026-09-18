@@ -131,7 +131,7 @@ export default function Home() {
                         />
                       ) : null
                     }
-                    vrLabel="Open WebXR test environment"
+                    vrLabel="Enter VR"
                   />
                 }
               />

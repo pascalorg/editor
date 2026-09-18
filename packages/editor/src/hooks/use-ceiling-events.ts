@@ -55,6 +55,8 @@ export function useCeilingEvents() {
   const hoveredRef = useRef<string | null>(null)
 
   useEffect(() => {
+    // XR placement is driven by the controller-ray bridge, never screen coordinates.
+    if (gl.xr.isPresenting) return
     const canvas = gl.domElement
 
     const isActive = (): boolean => {
