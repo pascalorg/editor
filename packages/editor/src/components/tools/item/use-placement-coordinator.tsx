@@ -941,7 +941,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // lands behind it still counts as "on the shelf". Only a ray that misses
     // the shelf box entirely means the user genuinely moved off it. A simple
     // footprint test on the floor hit point can't distinguish those.
-    const cursorRayIntersectsActiveShelf = (gridWorldPoint: [number, number, number], pointerRay?: Ray): boolean => {
+    const cursorRayIntersectsActiveShelf = (
+      gridWorldPoint: [number, number, number],
+      pointerRay?: Ray,
+    ): boolean => {
       const shelfId = placementState.current.shelfId
       if (!shelfId) return false
       const shelfMesh = sceneRegistry.nodes.get(shelfId as AnyNodeId)
@@ -992,7 +995,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // perspective-skewed along the ray whenever the plane sits on a
       // different storey than the pointed surface (the skew is what made
       // a drag over a deck-above-a-floor hop between the two surfaces).
-      const pointed = resolvePointerSupportSurface(cameraRef.current, event.position, { pointerRay: event.nativeEvent.ray })
+      const pointed = resolvePointerSupportSurface(cameraRef.current, event.position, {
+        pointerRay: event.nativeEvent.ray,
+      })
       pointerSupportCapRef.current = pointed?.elevation ?? null
       pointerSupportSurfaceRef.current = pointed
       const surfaceEvent: GridEvent =
@@ -1652,9 +1657,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // Landing back on the floor: refresh the pointer surface cap from
       // this event's world hit so the first floor position already targets
       // the aimed-at surface (not a deck above it).
-      pointerSupportCapRef.current = resolvePointerSupportSurface(cameraRef.current, event.position, {
-        pointerRay: event.nativeEvent.ray,
-      })?.elevation ?? null
+      pointerSupportCapRef.current =
+        resolvePointerSupportSurface(cameraRef.current, event.position, {
+          pointerRay: event.nativeEvent.ray,
+        })?.elevation ?? null
       // Coming back from a host: forget the floor grab too, so the item
       // centers under the cursor instead of restoring the pre-drag offset —
       // and landing on the floor is "anchoring elsewhere", so a later return

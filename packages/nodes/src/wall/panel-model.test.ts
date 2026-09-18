@@ -2,10 +2,10 @@ import { describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
-  WallNode,
   DoorNode,
-  getWallEffectiveHeightForNodes,
   getWallCurveLength,
+  getWallEffectiveHeightForNodes,
+  WallNode,
 } from '@pascal-app/core'
 import { wallSettings } from './panel-model'
 

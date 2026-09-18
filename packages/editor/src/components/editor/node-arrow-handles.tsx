@@ -46,7 +46,11 @@ import { RESIZE_HANDLE_DRAG_LABEL, ROTATE_HANDLE_DRAG_LABEL } from '../../lib/co
 import { createEditorApi } from '../../lib/editor-api'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
-import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../store/use-editor'
+import useEditor, {
+  isAngleSnapActive,
+  isGridSnapActive,
+  isMagneticSnapActive,
+} from '../../store/use-editor'
 import useInteractionScope, {
   useEndpointReshape,
   useIsCurveReshape,
@@ -1282,10 +1286,7 @@ function ArcArrow({
       }
       const initialAngle = angleOf(hitWorld)
 
-      // Advertise the rotate interaction so the contextual HUD can surface the
-      // Shift = free-rotation toggle (the angle-step bypass below). Resize
-      // handles route a measurement label here; rotate gets a sentinel label so
-      // the HUD shows the rotate hint, not a dimension pill.
+      // A distinct label selects rotation snapping instead of resize measurements.
       if (isRotateShape) {
         useInteractionScope
           .getState()
@@ -1307,7 +1308,7 @@ function ArcArrow({
           while (delta > Math.PI) delta -= 2 * Math.PI
           while (delta < -Math.PI) delta += 2 * Math.PI
 
-          if (!moveEvent.shiftKey && descriptor.shape === 'rotate') {
+          if (!moveEvent.altKey && isAngleSnapActive() && descriptor.shape === 'rotate') {
             delta = Math.round(delta / DEFAULT_ANGLE_STEP) * DEFAULT_ANGLE_STEP
           }
 

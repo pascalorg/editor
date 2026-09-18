@@ -1,4 +1,4 @@
-import { type Object3D, Vector3 } from 'three'
+import type { Object3D, Vector3 } from 'three'
 
 // Placement surfaces are world-space; the grid lives under the scalable XR
 // scene root. Keep its lattice and reveal in that root's model coordinates.

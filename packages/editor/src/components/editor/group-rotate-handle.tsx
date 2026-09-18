@@ -16,10 +16,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { OrthographicCamera, Plane, type Ray, Vector2, Vector3 } from 'three'
 import { GROUP_MOVE_DRAG_LABEL, GROUP_ROTATE_DRAG_LABEL } from '../../lib/contextual-help'
 import { isHistoryShortcut } from '../../lib/history'
-import { intersectSpatialDragPlane } from '../../lib/spatial-drag-plane'
 import { sfxEmitter } from '../../lib/sfx-bus'
+import { intersectSpatialDragPlane } from '../../lib/spatial-drag-plane'
 import { getSpatialPointerId, spatialPointerInput } from '../../lib/spatial-pointer-input'
-import useEditor from '../../store/use-editor'
+import useEditor, { isAngleSnapActive } from '../../store/use-editor'
 import useInteractionScope, {
   useActiveHandleDrag,
   useMovingNode,
@@ -242,13 +242,14 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
     })
     setIsDragging(true)
 
-    const applyRay = (ray: Ray, freeRotation: boolean) => {
+    const applyRay = (ray: Ray, freeRotation = false) => {
       const moveHit = new Vector3()
       if (!intersectSpatialDragPlane(ray, plane, moveHit)) return
       let delta = angleOf(moveHit) - initialAngle
       while (delta > Math.PI) delta -= 2 * Math.PI
       while (delta < -Math.PI) delta += 2 * Math.PI
-      if (!freeRotation) delta = Math.round(delta / DEFAULT_ANGLE_STEP) * DEFAULT_ANGLE_STEP
+      if (!freeRotation && isAngleSnapActive())
+        delta = Math.round(delta / DEFAULT_ANGLE_STEP) * DEFAULT_ANGLE_STEP
 
       // Shared rigid-rotation math (also used by the keyboard group R/T);
       // see `rotateGroupPatches` for the orbit/yaw handedness contract.
@@ -299,7 +300,7 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
     const onMove = (e: PointerEvent) => {
       setNDC(e.clientX, e.clientY)
       raycaster.setFromCamera(ndc, camera)
-      applyRay(raycaster.ray, e.shiftKey)
+      applyRay(raycaster.ray, e.altKey)
     }
 
     const affectedIds: AnyNodeId[] = [...starts.map((s) => s.id), ...links.map((l) => l.id)]
@@ -388,7 +389,7 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
       releaseSpatialCapture = spatialPointerInput.capture(spatialPointerId, {
         onMove: (ray) => {
           spatialRay.copy(ray)
-          applyRay(spatialRay, true)
+          applyRay(spatialRay)
         },
         onRelease: onUp,
         onCancel,

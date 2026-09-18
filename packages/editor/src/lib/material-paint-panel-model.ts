@@ -8,8 +8,8 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
-import { buildResetSurfaceMaterialUpdates, resolvePaintTargetFromSelection } from './material-paint'
 import useEditor from '../store/use-editor'
+import { buildResetSurfaceMaterialUpdates, resolvePaintTargetFromSelection } from './material-paint'
 
 export function useMaterialPaintPanelModel(enabled = true) {
   const activePaintMaterial = useEditor((state) => state.activePaintMaterial)

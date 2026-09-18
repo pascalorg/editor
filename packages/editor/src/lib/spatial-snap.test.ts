@@ -1,7 +1,7 @@
 import { test } from 'bun:test'
 import assert from 'node:assert/strict'
+import { snapLocalXZInWorld } from '@pascal-app/core'
 import { Group, Vector3 } from 'three'
-import { snapItemFloorPoint } from './floor-placement-point'
 
 const close = (a: number, b: number) => assert.ok(Math.abs(a - b) < 1e-8)
 
@@ -19,7 +19,7 @@ test('free placement stays under the same hit through God-mode zoom and rotation
     world.updateWorldMatrix(true, true)
     const hit = building.localToWorld(new Vector3(2, 0, -6))
     const local = building.worldToLocal(hit.clone())
-    const snapped = snapItemFloorPoint([local.x, local.z], pose, [1.8, 0.6], value => value)
+    const snapped = snapLocalXZInWorld([local.x, local.z], pose, (value) => value)
     const placed = building.localToWorld(new Vector3(snapped[0], 0, snapped[1]))
     close(placed.distanceTo(hit), 0)
   }
@@ -27,8 +27,8 @@ test('free placement stays under the same hit through God-mode zoom and rotation
 
 test('grid snapping still uses model units and the item footprint', () => {
   const dimensions: number[] = []
-  const result = snapItemFloorPoint([1.23, -2.16], null, [1.8, 0.6], (value, size) => {
-    dimensions.push(size)
+  const result = snapLocalXZInWorld([1.23, -2.16], null, (value, axis) => {
+    dimensions.push([1.8, 0.6][axis]!)
     return Math.round(value / 0.1) * 0.1
   })
   close(result[0], 1.2)
@@ -37,7 +37,11 @@ test('grid snapping still uses model units and the item footprint', () => {
 })
 
 test('rotated buildings snap in model-world axes then return building-local coordinates', () => {
-  const result = snapItemFloorPoint([1.2, 2.3], { position: [10, 0, 20], rotationY: Math.PI / 2 }, [1, 1], Math.round)
+  const result = snapLocalXZInWorld(
+    [1.2, 2.3],
+    { position: [10, 0, 20], rotationY: Math.PI / 2 },
+    Math.round,
+  )
   close(result[0], 1)
   close(result[1], 2)
 })

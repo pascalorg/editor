@@ -1,7 +1,12 @@
 'use client'
 
 import { type AnyNodeId, emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
-import { GRID_LAYER, getSceneTheme, useImmersiveXRPresentation, useViewer } from '@pascal-app/viewer'
+import {
+  GRID_LAYER,
+  getSceneTheme,
+  useImmersiveXRPresentation,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { DoubleSide, type Mesh, PlaneGeometry, Quaternion, Vector2, Vector3 } from 'three'
@@ -203,7 +208,11 @@ export const Grid = ({
       const levelMesh = sceneRegistry.nodes.get(levelId)
       if (levelMesh) {
         levelMesh.getWorldPosition(worldPosRef.current)
-        levelY = gridLocalPoint(gridRef.current.parent, worldPosRef.current, localSurfaceRef.current).y
+        levelY = gridLocalPoint(
+          gridRef.current.parent,
+          worldPosRef.current,
+          localSurfaceRef.current,
+        ).y
       }
     }
 

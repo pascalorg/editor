@@ -320,9 +320,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         projectId={meta.projectId ?? 'default'}
         sidebarTabs={SIDEBAR_TABS}
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
-        viewerToolbarRight={
-          <CommunityViewerToolbarRight />
-        }
+        viewerToolbarRight={<CommunityViewerToolbarRight />}
       />
     </div>
   )

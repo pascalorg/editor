@@ -1,7 +1,5 @@
 'use client'
 
-import { intersectSpatialDragPlane, spatialDragLocalY } from '../../lib/spatial-drag-plane'
-
 import {
   type AnyNode,
   type AnyNodeId,
@@ -51,6 +49,7 @@ import {
 import { isHistoryShortcut } from '../../lib/history'
 import { endpointReshapeScope } from '../../lib/interaction/scope'
 import { sfxEmitter } from '../../lib/sfx-bus'
+import { intersectSpatialDragPlane, spatialDragLocalY } from '../../lib/spatial-drag-plane'
 import { getSpatialPointerId, spatialPointerInput } from '../../lib/spatial-pointer-input'
 import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../store/use-editor'
 import useInteractionScope, {
@@ -980,7 +979,10 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
     const applyRay = (ray: Ray) => {
       const intersection = new Vector3()
       if (!intersectSpatialDragPlane(ray, plane, intersection)) return
-      const newHeight = Math.max(MIN_WALL_HEIGHT, initialHeight + (spatialDragLocalY(intersection, worldToLocal) - initialY))
+      const newHeight = Math.max(
+        MIN_WALL_HEIGHT,
+        initialHeight + (spatialDragLocalY(intersection, worldToLocal) - initialY),
+      )
       if (Math.abs(newHeight - pendingHeight) < 1e-6) return
       pendingHeight = newHeight
       useLiveNodeOverrides.getState().set(wallId, { height: newHeight })

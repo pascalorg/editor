@@ -32,7 +32,10 @@ import { WallSnapBeaconLayer } from '../editor/wall-snap-beacon-layer'
 import { ElevatorTool } from './elevator/elevator-tool'
 import { MoveTool } from './item/move-tool'
 import { RegistryToolProvider } from './registry-tool-context'
-import { getRegistryAffordanceTool, preloadRegistryAffordanceTools } from './shared/affordance-dispatch'
+import {
+  getRegistryAffordanceTool,
+  preloadRegistryAffordanceTools,
+} from './shared/affordance-dispatch'
 import { FacingPoseIndicator } from './shared/facing-pose-indicator'
 import { SiteBoundaryEditor } from './site/site-boundary-editor'
 import { TerrainSculptTool } from './site/terrain-sculpt-tool'

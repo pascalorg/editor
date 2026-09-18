@@ -25,6 +25,7 @@ import {
   nodeRegistry,
   roofFacePointToSegment,
   sceneRegistry,
+  snapLocalXZInWorld,
   useScene,
 } from '@pascal-app/core'
 import { Euler, Matrix3, Quaternion, Vector3 } from 'three'
@@ -39,7 +40,6 @@ import {
   snapToHalf,
   stripTransient,
 } from './placement-math'
-import { snapItemFloorPoint } from './floor-placement-point'
 import type {
   CommitResult,
   LevelResolver,
@@ -118,11 +118,11 @@ export const floorStrategy = {
     // the world grid.
     // Snapping is governed by the active mode (snapToGrid returns raw in Off /
     // non-grid modes); Alt is force-place only and never bypasses snapping here.
-    const [x, z] = snapItemFloorPoint(
+    const dimensions = [swapDims ? dimZ : dimX, swapDims ? dimX : dimZ] as const
+    const [x, z] = snapLocalXZInWorld(
       [event.localPosition[0], event.localPosition[2]],
       getActiveBuildingPose(),
-      [swapDims ? dimZ : dimX, swapDims ? dimX : dimZ],
-      snapToGrid,
+      (value, axis) => snapToGrid(value, dimensions[axis]),
     )
     const y = ctx.gridPosition.y
 

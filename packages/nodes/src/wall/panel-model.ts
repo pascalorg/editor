@@ -1,8 +1,6 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  type WallNode,
-  type WallTrimProfile,
   buildWallFaceBandCountPatch,
   GROUND_SUPPORT_ID,
   getClampedWallCurveOffset,
@@ -15,16 +13,19 @@ import {
   WALL_CROWN_DEFAULT,
   WALL_FACE_BAND_DEFAULT,
   WALL_SKIRTING_DEFAULT,
+  type WallNode,
+  type WallTrimProfile,
 } from '@pascal-app/core'
 import {
-  type PanelRow,
   curveReshapeScope,
+  type PanelRow,
   triggerSFX,
   useInteractionScope,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { hasWallCurveBlockingChildren } from './curve-eligibility'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
+import { hasWallCurveBlockingChildren } from './curve-eligibility'
+import { buildWallLengthPatch } from './length-patch'
 
 type TrimKey = 'skirting' | 'crown' | 'chairRail'
 const profiles: Record<TrimKey, readonly WallTrimProfile[]> = {
@@ -110,15 +111,7 @@ export function wallSettings(
   }
   const length = getWallCurveLength(node)
   number('Dimensions', 'wall-length', 'Length', length, 0.1, 1000, 0.05, (next) => {
-    if (!length) return
-    const ratio = next / length
-    update({
-      end: [
-        node.start[0] + (node.end[0] - node.start[0]) * ratio,
-        node.start[1] + (node.end[1] - node.start[1]) * ratio,
-      ],
-      ...(node.curveOffset ? { curveOffset: getClampedWallCurveOffset(node) * ratio } : {}),
-    })
+    update(buildWallLengthPatch(node, next))
   })
   choice(
     'Dimensions',

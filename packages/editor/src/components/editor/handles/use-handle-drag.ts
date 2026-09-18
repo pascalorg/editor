@@ -15,8 +15,8 @@ import { useEffect, useRef } from 'react'
 import { type Camera, type Object3D, type Plane, type Ray, Vector2, type Vector3 } from 'three'
 import { isHistoryShortcut } from '../../../lib/history'
 import { sfxEmitter } from '../../../lib/sfx-bus'
-import { getSpatialPointerId, spatialPointerInput } from '../../../lib/spatial-pointer-input'
 import { intersectSpatialDragPlane } from '../../../lib/spatial-drag-plane'
+import { getSpatialPointerId, spatialPointerInput } from '../../../lib/spatial-pointer-input'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
 import { commitHandleDragPatch } from './handle-drag-history'
 
@@ -280,9 +280,6 @@ export function useHandleDrag(args: UseHandleDragArgs) {
               buttons: 1,
               pointerId: event.pointerId,
               pointerType: 'xr',
-              // The editor uses Shift for continuous rotation. Controllers
-              // have no keyboard modifier, so spatial drags use that mode.
-              shiftKey: true,
             }),
           )
         },

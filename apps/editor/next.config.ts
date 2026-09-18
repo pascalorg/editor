@@ -6,7 +6,6 @@ const appDirectory = path.dirname(fileURLToPath(import.meta.url))
 const portableBuild = process.env.PASCAL_PORTABLE_BUILD === '1'
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ['192.168.0.101'],
   ...(portableBuild
     ? { output: 'standalone' as const, outputFileTracingRoot: path.join(appDirectory, '../..') }
     : {}),
@@ -41,7 +40,6 @@ const nextConfig: NextConfig = {
     '@dgreenheck/ez-tree',
   ],
   turbopack: {
-    root: path.resolve(appDirectory, '../../../../../../'),
     resolveAlias: {
       react: './node_modules/react',
       three: './node_modules/three',

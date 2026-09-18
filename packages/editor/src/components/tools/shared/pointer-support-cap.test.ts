@@ -167,7 +167,9 @@ describe('resolvePointerSupportSurface node tops', () => {
     camera.position.set(0, 5, 5)
     camera.updateMatrixWorld(true)
     const controllerRay = new Ray(new Vector3(0, 1.5, 0), new Vector3(0, -1, 0))
-    const desktop = resolvePointerSupportSurface(camera, [0, 0, 0], { includeNodeTopSurfaces: true })
+    const desktop = resolvePointerSupportSurface(camera, [0, 0, 0], {
+      includeNodeTopSurfaces: true,
+    })
     expect(desktop?.sourceNodeId).toBe(PLATFORM_ID)
     const xr = resolvePointerSupportSurface(camera, [0, 0, 0], {
       includeNodeTopSurfaces: true,
@@ -177,9 +179,12 @@ describe('resolvePointerSupportSurface node tops', () => {
     expect(xr?.worldPoint).toEqual([0, 0, 0])
     camera.position.set(12, 8, -10)
     camera.updateMatrixWorld(true)
-    expect(resolvePointerSupportSurface(camera, [0, 0, 0], {
-      includeNodeTopSurfaces: true, pointerRay: controllerRay,
-    })?.worldPoint).toEqual([0, 0, 0])
+    expect(
+      resolvePointerSupportSurface(camera, [0, 0, 0], {
+        includeNodeTopSurfaces: true,
+        pointerRay: controllerRay,
+      })?.worldPoint,
+    ).toEqual([0, 0, 0])
   })
 
   test('keeps the ground result unless node-top surfaces are asked for', () => {

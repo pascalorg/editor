@@ -6,8 +6,7 @@ import {
   type WallNode as WallNodeType,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
-import { PANEL_MODEL_EXTENSION, type NodePanelModel } from '@pascal-app/editor'
-import { wallSettings } from './panel-model'
+import { type NodePanelModel, PANEL_MODEL_EXTENSION } from '@pascal-app/editor'
 import { buildWallContextualDimensions } from './contextual-dimensions'
 import { hasWallCurveBlockingChildren } from './curve-eligibility'
 import { buildWallFloorplan, computeWallFloorplanLevelData } from './floorplan'
@@ -24,6 +23,7 @@ import {
   wallMeasurementFeatures,
 } from './measurement'
 import { wallPaint } from './paint'
+import { wallSettings } from './panel-model'
 import { wallParametrics } from './parametrics'
 import { wallQuickMeasurement } from './quick-measurement'
 import { WallNode } from './schema'

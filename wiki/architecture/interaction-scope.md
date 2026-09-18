@@ -131,7 +131,8 @@ The active scope selects the _context_; the context's current mode selects the _
 There is no per-kind snapping switch.
 
 - **Contexts** (`lib/snapping-mode.ts`, `SNAP_PROFILES`): `wall` (grid/lines/angles/off, default grid),
-  `item` (lines/grid/off, default lines), `polygon` (grid/lines/off, default grid). A kind opts in by
+  `item` (lines/grid/off, default grid), `polygon` (grid/lines/off, default grid), and
+  `rotation` (angles/off, default angles) for single-node and group rotate handles. A kind opts in by
   declaring `NodeDefinition.snapProfile` (`'item' | 'structural'`); `snapContextOf(scope × profile)` maps
   it — `structural` while **setting direction** (drafting / endpoint drag) → `wall` (angle-bearing),
   `structural` otherwise (translate / curve) → `polygon` (no angle), `item` → `item`. No profile → no chip.

@@ -2,9 +2,9 @@ import { describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
+  ChimneyNode,
   RoofNode,
   RoofSegmentNode,
-  ChimneyNode,
 } from '@pascal-app/core'
 import { roofPanelModel } from './panel-model'
 

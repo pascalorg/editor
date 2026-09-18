@@ -1,9 +1,9 @@
 'use client'
 
 import { type SiteNode, type TerrainVerb, useScene } from '@pascal-app/core'
-import { brushRadiusRange, flattenSite, resetSiteTerrain } from './terrain-sculpt'
 import useEditor from '../store/use-editor'
 import type { PanelRow } from './panel-rows'
+import { brushRadiusRange, flattenSite, resetSiteTerrain } from './terrain-sculpt'
 
 const TERRAIN_VERBS: TerrainVerb[] = ['raise', 'lower', 'flatten', 'smooth']
 

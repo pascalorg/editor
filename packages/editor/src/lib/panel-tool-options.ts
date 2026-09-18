@@ -19,7 +19,9 @@ export function createToolHintsStore(hints: readonly ToolHint[]) {
       const cleanups = [...new Set(subscriptions)].flatMap((subscribe) =>
         subscribe ? [subscribe(listener)] : [],
       )
-      return () => cleanups.forEach((cleanup) => cleanup())
+      return () => {
+        for (const cleanup of cleanups) cleanup()
+      }
     },
     getSnapshot: () =>
       JSON.stringify(hints.map((hint) => [hint.visible?.value() ?? true, hint.chip?.value()])),

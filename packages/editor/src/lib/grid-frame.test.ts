@@ -12,6 +12,8 @@ test('grid floor and cursor stay in model coordinates after God-view pan, scale 
   const world = root.localToWorld(local.clone())
   expect(gridLocalPoint(root, world, new Vector3()).distanceTo(local)).toBeLessThan(1e-8)
   const normal = new Vector3(1, 0, 0).transformDirection(root.matrixWorld)
-  expect(gridLocalNormal(root, normal, new Vector3()).distanceTo(new Vector3(1, 0, 0))).toBeLessThan(1e-8)
+  expect(
+    gridLocalNormal(root, normal, new Vector3()).distanceTo(new Vector3(1, 0, 0)),
+  ).toBeLessThan(1e-8)
   expect(world.distanceTo(local)).toBeGreaterThan(1)
 })

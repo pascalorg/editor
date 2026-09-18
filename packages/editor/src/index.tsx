@@ -222,6 +222,7 @@ export {
   CameraActions as ToolbarRight,
   CameraActions as ViewerToolbarRight,
 } from './components/ui/action-menu/camera-actions'
+export { furnishTools } from './components/ui/action-menu/furnish-tools'
 export {
   ViewToggles as ToolbarLeft,
   ViewToggles as ViewerToolbarLeft,
@@ -242,23 +243,24 @@ export { PanelSection } from './components/ui/controls/panel-section'
 export { SegmentedControl } from './components/ui/controls/segmented-control'
 export { SliderControl } from './components/ui/controls/slider-control'
 export { TerrainSculptPanel } from './components/ui/controls/terrain-sculpt-panel'
-export { useTerrainPanelRows } from './lib/terrain-panel-model'
-export { useMaterialCatalogModel } from './lib/material-catalog-model'
-export { useMaterialPaintPanelModel } from './lib/material-paint-panel-model'
 export { ToggleControl } from './components/ui/controls/toggle-control'
 export { FloatingLevelSelector } from './components/ui/floating-level-selector'
 export { CATALOG_ITEMS } from './components/ui/item-catalog/catalog-items'
-export { furnishTools } from './components/ui/action-menu/furnish-tools'
-export { activateCatalogItem, filterCatalogItems, isCatalogItemSelected } from './lib/catalog-panel-model'
-export { commitMultiNodeFields, fieldVisibleForAll, reduceFieldValue, firstNumericFieldValue, firstVec3FieldValue } from './components/ui/panels/multi-field-value'
-export { resolveUniqueSelectionIds, resolveHomogeneousSelection } from './components/ui/panels/homogeneous-selection'
-export { reduceHeightBoundMode } from './components/ui/panels/multi-field-value'
-export { applyMultiHeightMode } from './components/ui/panels/multi-height-mode'
-export { usePanelToolHints, type PanelToolOption } from './lib/panel-tool-options'
-export { getNodePanelModel, PANEL_MODEL_EXTENSION, type NodePanelModel, type PanelRow, type PanelAction } from './lib/panel-rows'
-export { PanelRows } from './components/ui/controls/panel-rows'
 // Item collections UI — used by the kind-owned ItemPanel in nodes/.
 export { CollectionsPopover } from './components/ui/panels/collections/collections-popover'
+export {
+  resolveHomogeneousSelection,
+  resolveUniqueSelectionIds,
+} from './components/ui/panels/homogeneous-selection'
+export {
+  commitMultiNodeFields,
+  fieldVisibleForAll,
+  firstNumericFieldValue,
+  firstVec3FieldValue,
+  reduceFieldValue,
+  reduceHeightBoundMode,
+} from './components/ui/panels/multi-field-value'
+export { applyMultiHeightMode } from './components/ui/panels/multi-height-mode'
 // Phase 5 Stage E — kinds with bespoke editors (slab holes list,
 // ceiling height presets, etc.) use `parametrics.customPanel` to mount
 // a kind-owned panel and need PanelWrapper for the chrome.
@@ -350,6 +352,11 @@ export {
   type PlacementSurface,
   publishPlacementSurface,
 } from './lib/active-placement-surface'
+export {
+  activateCatalogItem,
+  filterCatalogItems,
+  isCatalogItemSelected,
+} from './lib/catalog-panel-model'
 export {
   CEILING_ALIGNMENT_THRESHOLD_M,
   type CeilingPlanSnapInput,
@@ -476,6 +483,7 @@ export {
   movingNodeOf,
   scopeNodeId,
 } from './lib/interaction/scope'
+export { useMaterialCatalogModel } from './lib/material-catalog-model'
 export {
   buildResetSurfaceMaterialUpdates,
   buildRoofSurfaceMaterialPatch,
@@ -484,6 +492,7 @@ export {
   getActivePaintMaterialLabel,
   hasActivePaintMaterial,
 } from './lib/material-paint'
+export { useMaterialPaintPanelModel } from './lib/material-paint-panel-model'
 export {
   CREATABLE_MEASUREMENT_KINDS,
   type CreatableMeasurementKind,
@@ -522,6 +531,14 @@ export {
   type PaintScope,
   paintScopeLabel,
 } from './lib/paint-scope'
+export {
+  getNodePanelModel,
+  type NodePanelModel,
+  PANEL_MODEL_EXTENSION,
+  type PanelAction,
+  type PanelRow,
+} from './lib/panel-rows'
+export { type PanelToolOption, usePanelToolHints } from './lib/panel-tool-options'
 export { commitParametricNodeFields } from './lib/parametric-node-update'
 export { consumePlacementDragRelease } from './lib/placement-drag-release'
 export {
@@ -591,6 +608,7 @@ export {
   type SurfacePlanSnapInput,
   type SurfacePlanSnapResult,
 } from './lib/surface-plan-snap'
+export { useTerrainPanelRows } from './lib/terrain-panel-model'
 export {
   brushRadiusRange,
   clipTerrainPatchToSite,

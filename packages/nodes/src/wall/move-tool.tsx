@@ -424,9 +424,12 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     const applyPreview = (nextStart: [number, number], nextEnd: [number, number]) => {
       const previous = previewRef.current ?? { start: originalStart, end: originalEnd }
       if (
-        nextStart[0] === previous.start[0] && nextStart[1] === previous.start[1] &&
-        nextEnd[0] === previous.end[0] && nextEnd[1] === previous.end[1]
-      ) return
+        nextStart[0] === previous.start[0] &&
+        nextStart[1] === previous.start[1] &&
+        nextEnd[0] === previous.end[0] &&
+        nextEnd[1] === previous.end[1]
+      )
+        return
       hasDraggedRef.current = true
       previewRef.current = { start: nextStart, end: nextEnd }
       const centerX = (nextStart[0] + nextEnd[0]) / 2

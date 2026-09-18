@@ -1,6 +1,10 @@
 import { expect, test } from 'bun:test'
 import { Matrix4, Ray, Vector3 } from 'three'
-import { createSpatialDragPlane, intersectSpatialDragPlane, spatialDragLocalY } from './spatial-drag-plane'
+import {
+  createSpatialDragPlane,
+  intersectSpatialDragPlane,
+  spatialDragLocalY,
+} from './spatial-drag-plane'
 
 test('controller translation gives continuous motion at the grabbed height', () => {
   const start = new Vector3(2, 2.4, 1)
@@ -34,7 +38,7 @@ test('drag plane follows a rotated, scaled building frame', () => {
   expect(intersectSpatialDragPlane(ray, plane, new Vector3())?.distanceTo(point)).toBeLessThan(1e-8)
 })
 
- test('height drag uses model metres at human and miniature scales without an initial jump', () => {
+test('height drag uses model metres at human and miniature scales without an initial jump', () => {
   for (const scale of [1, 0.2, 2]) {
     const frame = new Matrix4().makeRotationY(0.7).scale(new Vector3(scale, scale, scale))
     frame.setPosition(2, 4, -3)
@@ -42,7 +46,7 @@ test('drag plane follows a rotated, scaled building frame', () => {
     const start = new Vector3(1, 2.5, 3).applyMatrix4(frame)
     const initialY = spatialDragLocalY(start, inverse)
     for (let step = 0; step <= 10; step++) {
-      const moved = start.clone().add(new Vector3(0, scale * step / 10, 0))
+      const moved = start.clone().add(new Vector3(0, (scale * step) / 10, 0))
       expect(2.5 + spatialDragLocalY(moved, inverse) - initialY).toBeCloseTo(2.5 + step / 10)
     }
   }

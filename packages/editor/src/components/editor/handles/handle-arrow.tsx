@@ -2,7 +2,7 @@
 
 import { type Cursor, emitter, sceneRegistry } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { type ThreeEvent } from '@react-three/fiber'
+import type { ThreeEvent } from '@react-three/fiber'
 import { type ReactNode, useEffect, useMemo, useRef } from 'react'
 import {
   BoxGeometry,
@@ -24,8 +24,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { EDITOR_HANDLE_HIT_AREA_USER_DATA_KEY } from '../../../lib/direct-manipulation'
-import { getSpatialPointerId, spatialPointerInput } from '../../../lib/spatial-pointer-input'
 import { createSpatialDragPlane, intersectSpatialDragPlane } from '../../../lib/spatial-drag-plane'
+import { getSpatialPointerId, spatialPointerInput } from '../../../lib/spatial-pointer-input'
 import useEditor from '../../../store/use-editor'
 
 // While a press-drag move is in flight (`placementDragMode`), the move tool
@@ -467,9 +467,14 @@ export function InvisibleHandleHitArea({
         },
         onRelease: () => {
           event.object.releasePointerCapture?.(event.pointerId)
-          window.dispatchEvent(new PointerEvent('pointerup', {
-            bubbles: true, button: 0, pointerId: event.pointerId, pointerType: 'xr',
-          }))
+          window.dispatchEvent(
+            new PointerEvent('pointerup', {
+              bubbles: true,
+              button: 0,
+              pointerId: event.pointerId,
+              pointerType: 'xr',
+            }),
+          )
         },
         onCancel: () => {
           event.object.releasePointerCapture?.(event.pointerId)

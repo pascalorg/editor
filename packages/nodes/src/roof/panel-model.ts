@@ -26,7 +26,7 @@ export const roofPanelModel: NodePanelModel<RoofNode> = {
     const segments = (node.children ?? [])
       .map((id) => nodes[id])
       .filter((child) => child?.type === 'roof-segment')
-    const segmentIds = new Set(segments.map((segment) => segment.id))
+    const segmentIds = new Set<string>(segments.map((segment) => segment.id))
     const rows: PanelRow[] = segments.map((segment, index) => ({
       id: segment.id,
       kind: 'choice',
@@ -155,7 +155,7 @@ export const roofPanelModel: NodePanelModel<RoofNode> = {
             if (!live) return
             triggerSFX('sfx:item-delete')
             useScene.getState().deleteNode(node.id)
-            if (live.parentId) useScene.getState().dirtyNodes.add(live.parentId)
+            if (live.parentId) useScene.getState().markDirty(live.parentId as AnyNodeId)
             useViewer.getState().setSelection({ selectedIds: [] })
           },
         },
