@@ -88,10 +88,13 @@ export function resolvePointerSupportSurface(
   // world-space (site geometry, not level-local), so the march needs this frame.
   if (options?.pointerRay) worldRayOrigin.copy(options.pointerRay.origin)
   else camera.getWorldPosition(worldRayOrigin)
+  const isOrthographic =
+    !options?.pointerRay &&
+    (camera as Camera & { isOrthographicCamera?: boolean }).isOrthographicCamera === true
   const cameraToHit = hitScratch.set(worldHit[0], worldHit[1], worldHit[2]).sub(worldRayOrigin)
   if (options?.pointerRay) {
     worldRayDirection.copy(options.pointerRay.direction).normalize()
-  } else if ((camera as Camera & { isOrthographicCamera?: boolean }).isOrthographicCamera) {
+  } else if (isOrthographic) {
     // For an orthographic camera every screen pixel has the same direction. The
     // hit point is offset from the camera along the view plane, so using
     // `camera.position -> hit` tilts the ray toward the screen centre and makes
@@ -105,7 +108,13 @@ export function resolvePointerSupportSurface(
   }
 
   originScratch.copy(worldRayOrigin)
-  hitScratch.copy(worldRayOrigin).add(worldRayDirection)
+  // Second world point defining the ray fed to the surface solve. In the plain
+  // perspective case `worldHit` already lies on the true pointer ray, so using
+  // it keeps `t === 1` (and the returned plan point exact) whenever the pointed
+  // surface IS the event plane — the pointer-ray and orthographic branches have
+  // no such hit, so they step one unit along the resolved direction.
+  if (options?.pointerRay || isOrthographic) hitScratch.copy(worldRayOrigin).add(worldRayDirection)
+  else hitScratch.set(worldHit[0], worldHit[1], worldHit[2])
   // Slab polygons/elevations live in the level frame; the level mesh
   // carries the storey Y offset and any building rotation.
   const levelMesh = sceneRegistry.nodes.get(levelId as AnyNodeId)
