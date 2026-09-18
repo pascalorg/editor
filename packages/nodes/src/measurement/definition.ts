@@ -35,6 +35,7 @@ export const measurementDefinition: NodeDefinition<typeof MeasurementNode> = {
 
   dirtyTracking: false,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

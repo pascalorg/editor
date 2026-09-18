@@ -205,6 +205,7 @@ export const boxVentDefinition: NodeDefinition<typeof BoxVentNode> = {
   handles: boxVentHandles,
   floorplan: buildBoxVentFloorplan,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

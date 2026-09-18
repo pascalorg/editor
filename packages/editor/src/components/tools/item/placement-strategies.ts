@@ -4,7 +4,6 @@ import type {
   CeilingEvent,
   CeilingNode,
   GridEvent,
-  ItemNode,
   NodeEvent,
   RoofEvent,
   RoofNode,
@@ -17,6 +16,7 @@ import type {
 } from '@pascal-app/core'
 import {
   clampRectToRoofWallFace,
+  clearFaceHostItemFields,
   createSceneApi,
   getRoofSegmentWallFace,
   getScaledDimensions,
@@ -624,18 +624,6 @@ function resolveFaceHostTarget(ctx: PlacementContext, event: NodeEvent) {
   })
 }
 
-function clearFaceHostItemFields(ctx: PlacementContext): Partial<ItemNode> {
-  const host = ctx.state.blockId ? useScene.getState().nodes[ctx.state.blockId] : undefined
-  const clearFields = host
-    ? nodeRegistry.get(host.type)?.capabilities.faceHost?.clearItemFields
-    : undefined
-  const patch: Partial<ItemNode> = {}
-  for (const field of clearFields ?? []) {
-    ;(patch as Record<string, unknown>)[field] = undefined
-  }
-  return patch
-}
-
 export const faceHostStrategy = {
   enter(ctx: PlacementContext, event: NodeEvent): TransitionResult | null {
     const target = resolveFaceHostTarget(ctx, event)
@@ -695,7 +683,9 @@ export const faceHostStrategy = {
     return {
       stateUpdate: { surface: 'floor', blockId: null },
       nodeUpdate: {
-        ...clearFaceHostItemFields(ctx),
+        ...clearFaceHostItemFields(
+          ctx.state.blockId ? useScene.getState().nodes[ctx.state.blockId] : undefined,
+        ),
         position: floorPosition,
         parentId: ctx.levelId,
         rotation: [0, ctx.currentCursorRotationY, 0],
@@ -860,6 +850,7 @@ function resolveCatalogItemSurfacePlacement(
   worldYaw: number,
   onReject?: PlacementContext['onSurfaceReject'],
   rawEvent = event,
+  childId?: string,
 ) {
   const mesh = sceneRegistry.nodes.get(host.id)
   if (!mesh) return null
@@ -870,6 +861,7 @@ function resolveCatalogItemSurfacePlacement(
   const placement = resolveSurfacePlacement({
     host,
     childKind: 'item',
+    childId,
     childFootprint: { size: dimensions, rotationY: worldYaw - hostYaw },
     hit: host.type === 'procedural-item' ? (itemEventToSurfaceHit(host, rawEvent) ?? hit) : hit,
     origin: host.type === 'procedural-item' ? hit.point : undefined,
@@ -901,6 +893,7 @@ export function validCatalogCounterPose(ctx: PlacementContext): boolean {
   const placement = resolveSurfacePlacement({
     host,
     childKind: 'item',
+    childId: ctx.draftItem.id,
     childFootprint: {
       size: getScaledDimensions(ctx.draftItem),
       rotationY: ctx.draftItem.rotation[1],
@@ -945,6 +938,8 @@ export const itemSurfaceStrategy = {
       ourDims,
       ctx.currentCursorRotationY,
       ctx.onSurfaceReject,
+      event,
+      ctx.draftItem?.id,
     )
     if (!pose) return null
     const draftRotation = ctx.draftItem?.rotation ?? [0, 0, 0]
@@ -984,6 +979,7 @@ export const itemSurfaceStrategy = {
       ctx.currentCursorRotationY,
       ctx.onSurfaceReject,
       rawEvent,
+      ctx.draftItem.id,
     )
     if (!pose) return null
 
@@ -1030,6 +1026,7 @@ function resolveShelfSurfacePlacement(
   worldYaw: number,
   entering: boolean,
   onReject?: PlacementContext['onSurfaceReject'],
+  childId?: string,
 ) {
   const mesh = sceneRegistry.nodes.get(host.id)
   if (!mesh) return null
@@ -1039,6 +1036,7 @@ function resolveShelfSurfacePlacement(
   const placement = resolveSurfacePlacement({
     host,
     childKind: 'item',
+    childId,
     childFootprint: { size: dimensions, rotationY: worldYaw - hostYaw },
     hit: {
       point: local.toArray(),
@@ -1085,6 +1083,7 @@ export const shelfSurfaceStrategy = {
       ctx.currentCursorRotationY,
       true,
       ctx.onSurfaceReject,
+      ctx.draftItem?.id,
     )
     if (!pose) return null
     const draftRotation = ctx.draftItem?.rotation ?? [0, 0, 0]
@@ -1119,6 +1118,7 @@ export const shelfSurfaceStrategy = {
       ctx.currentCursorRotationY,
       false,
       ctx.onSurfaceReject,
+      ctx.draftItem.id,
     )
     if (!pose) return null
 

@@ -401,7 +401,7 @@ test('2D renders a shelf-hosted design and delegates dragging to the same detach
   expect(useLiveNodeOverrides.getState().overrides.get(node.id)).toEqual(catalogPatch)
   expect(catalogPatch).toMatchObject({
     parentId: level.id,
-    position: [expect.any(Number), node.position[1], expect.any(Number)],
+    position: [expect.any(Number), 0, expect.any(Number)],
   })
 })
 

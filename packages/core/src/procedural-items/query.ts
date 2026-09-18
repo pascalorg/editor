@@ -8,8 +8,10 @@ import {
 import { getRenderableSlabPolygon } from '../lib/slab-polygon'
 import { levelBaseElevationAt } from '../lib/terrain-support'
 import { nodeRegistry } from '../registry/registry'
+import { getBlockFaceFrame } from '../schema/nodes/block'
 import type { CabinetModuleNode, CabinetNode } from '../schema/nodes/cabinet'
 import type { ItemNode } from '../schema/nodes/item'
+import { getRoofWallFaceFrame, roofFacePointToSegment } from '../schema/nodes/roof-segment-walls'
 import type { ShelfNode } from '../schema/nodes/shelf'
 import type { SlabNode } from '../schema/nodes/slab'
 import type { WallNode } from '../schema/nodes/wall'
@@ -152,6 +154,19 @@ function floorLift(
       ? Math.max(...candidates.map((s) => s.elevation ?? 0.05))
       : ground
 }
+function nodeParentFrame(node: AnyNode | ProceduralItemNode, nodes: QueryNodes, seen: Set<string>) {
+  if (!node.parentId) return IDENTITY_FRAME
+  let parentFrame = nodeLevelFrame(node.parentId, nodes, seen)
+  const parent = nodes[node.parentId]
+  if (isProceduralItem(parent) && parent.attachments[node.id] !== undefined) {
+    const surface = evaluateRecipe(parent.recipe, parent.parameters).surfaces.find(
+      (s) => s.id === parent.attachments[node.id],
+    )
+    if (!surface) throw new Error('Missing attachment surface')
+    parentFrame = composeFrames(parentFrame, frame(surface.position, surface.rotation))
+  }
+  return parentFrame
+}
 export function nodeLevelFrame(id: string, nodes: QueryNodes, seen = new Set<string>()): Frame {
   if (seen.has(id) || seen.size > 32) throw new Error('Cyclic or excessively deep hosting graph')
   const node = nodes[id]
@@ -194,8 +209,18 @@ export function nodeLevelFrame(id: string, nodes: QueryNodes, seen = new Set<str
       node.type === 'cabinet' ||
       node.type === 'cabinet-module'
     )
-  )
-    throw new Error(`Unsupported host ${node.type}`)
+  ) {
+    const transform = node as { position?: Vec3; rotation?: Vec3 | number }
+    const rotation =
+      typeof transform.rotation === 'number'
+        ? ([0, transform.rotation, 0] as Vec3)
+        : transform.rotation
+    const local =
+      node.type === 'slab'
+        ? IDENTITY_FRAME
+        : frame(transform.position ?? [0, 0, 0], rotation ?? [0, 0, 0])
+    return node.parentId ? composeFrames(nodeParentFrame(node, nodes, seen), local) : local
+  }
   const pose = isProceduralItem(node)
     ? proceduralLocalPose(node, nodes)
     : {
@@ -205,14 +230,30 @@ export function nodeLevelFrame(id: string, nodes: QueryNodes, seen = new Set<str
       }
   const parent = node.parentId ? nodes[node.parentId] : undefined
   if (!node.parentId) return frame(pose.position, pose.rotation)
-  let parentFrame = nodeLevelFrame(node.parentId, nodes, seen)
-  if (isProceduralItem(parent) && parent.attachments[node.id] !== undefined) {
-    const surface = evaluateRecipe(parent.recipe, parent.parameters).surfaces.find(
-      (s) => s.id === parent.attachments[node.id],
-    )
-    if (!surface) throw new Error('Missing attachment surface')
-    parentFrame = composeFrames(parentFrame, frame(surface.position, surface.rotation))
-  } else if (parent?.type === 'level') pose.position[1] += floorLift(node, nodes)
+  if (node.type === 'item' && parent?.type === 'roof-segment' && node.roofFace) {
+    const face = getRoofWallFaceFrame(parent, node.roofFace)
+    const local = frame(roofFacePointToSegment(parent, node.roofFace, pose.position), pose.rotation)
+    local.axes = composeFrames(
+      frame([0, 0, 0], [0, face.yaw, 0]),
+      frame([0, 0, 0], pose.rotation),
+    ).axes
+    return composeFrames(nodeLevelFrame(parent.id, nodes, seen), local)
+  }
+  if (node.type === 'item' && parent?.type === 'block' && node.blockFaceId) {
+    const face = getBlockFaceFrame(parent.topology, node.blockFaceId)
+    if (face) {
+      const host = nodeLevelFrame(parent.id, nodes, seen)
+      return composeFrames(
+        host,
+        composeFrames(
+          { position: face.origin, axes: [face.xAxis, face.yAxis, face.normal] },
+          frame(pose.position, pose.rotation),
+        ),
+      )
+    }
+  }
+  const parentFrame = nodeParentFrame(node, nodes, seen)
+  if (parent?.type === 'level') pose.position[1] += floorLift(node, nodes)
   return composeFrames(parentFrame, frame(pose.position, pose.rotation))
 }
 function localBounds(node: ProceduralItemNode | ItemNode) {
@@ -224,6 +265,17 @@ export function attachmentBounds(child: ProceduralItemNode | ItemNode) {
   const b = localBounds(child)
   return boundsOf(
     boxCorners(b.min, b.max).map((p) => transformPoint(frame(child.position, child.rotation), p)),
+  )
+}
+export function attachmentRegionsOverlap(
+  a: ReturnType<typeof attachmentBounds>,
+  b: ReturnType<typeof attachmentBounds>,
+) {
+  return (
+    a.min[0] < b.max[0] - 1e-6 &&
+    a.max[0] > b.min[0] + 1e-6 &&
+    a.min[2] < b.max[2] - 1e-6 &&
+    a.max[2] > b.min[2] + 1e-6
   )
 }
 function ceilingContainsFootprint(outer: Point2D[], footprint: Point2D[]) {
@@ -342,15 +394,7 @@ export function validateProceduralRelations(raw: AnyNode | ProceduralItemNode, n
     )
       throw new Error(`The hosted item does not fit on ${surface.label}`)
     const occupied = regions.get(surface.id) ?? []
-    if (
-      occupied.some(
-        (a) =>
-          a.min[0] < b.max[0] - 1e-6 &&
-          a.max[0] > b.min[0] + 1e-6 &&
-          a.min[2] < b.max[2] - 1e-6 &&
-          a.max[2] > b.min[2] + 1e-6,
-      )
-    )
+    if (occupied.some((a) => attachmentRegionsOverlap(a, b)))
       throw new Error(`Another item occupies ${surface.label}`)
     occupied.push(b)
     regions.set(surface.id, occupied)

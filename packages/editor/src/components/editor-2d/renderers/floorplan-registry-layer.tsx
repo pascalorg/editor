@@ -733,7 +733,10 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       const node = useScene.getState().nodes[id]
       if (!node || !isRegistryMovable(node.type)) return false
       const currentSelectedIds = useViewer.getState().selection.selectedIds
-      const allowPlainDrag = nodeRegistry.get(node.type)?.capabilities?.movable?.directDrag === true
+      const definition = nodeRegistry.get(node.type)
+      const allowPlainDrag =
+        getFloorplanNodeExtension(definition)?.directDrag === true ||
+        definition?.capabilities?.movable?.directDrag === true
       const commandModifier = event.metaKey || event.ctrlKey
       if (
         !shouldStartDirectMoveDrag({

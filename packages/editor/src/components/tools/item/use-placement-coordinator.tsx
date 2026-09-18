@@ -2386,7 +2386,49 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         const currentRotation = draft.rotation
         // Round to the nearest 45° then step, matching the placed-item R/T.
         const newRotationY = steppedRotation(currentRotation[1] ?? 0, rotationDir)
-        draft.rotation = [currentRotation[0], newRotationY, currentRotation[2]]
+        const nextRotation: [number, number, number] = [
+          currentRotation[0],
+          newRotationY,
+          currentRotation[2],
+        ]
+        const surface = placementState.current.surface
+        const surfaceMesh =
+          surface === 'item-surface' && placementState.current.surfaceItemId
+            ? sceneRegistry.nodes.get(placementState.current.surfaceItemId)
+            : undefined
+        let surfacePosition: [number, number, number] | undefined
+        if (surfaceMesh) {
+          const localPos = surfaceMesh.worldToLocal(lastRawPos.current.clone())
+          const [dimX, , dimZ] = getScaledDimensions(draft)
+          const swapDims = Math.abs(Math.sin(newRotationY)) > 0.9
+          surfacePosition = [
+            snapToGrid(localPos.x, swapDims ? dimZ : dimX),
+            gridPosition.current.y,
+            snapToGrid(localPos.z, swapDims ? dimX : dimZ),
+          ]
+        }
+        if (surfaceAttachmentId(draft)) {
+          let occupied = false
+          checkCanPlace(
+            {
+              ...getContext(),
+              draftItem: { ...draft, rotation: nextRotation },
+              gridPosition: surfacePosition
+                ? new Vector3(...surfacePosition)
+                : gridPosition.current,
+              onSurfaceReject: (reason) => {
+                occupied = reason === 'surface-occupied'
+              },
+            },
+            validators,
+          )
+          if (occupied) {
+            feedback.reject('surface-occupied')
+            revalidate()
+            return
+          }
+        }
+        draft.rotation = nextRotation
 
         // Rotate the building-local cursor by the same delta as the host-local
         // draft. This preserves the host's composed yaw for items resting on a
@@ -2398,7 +2440,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         if (mesh) mesh.rotation.y = newRotationY
 
         // Re-snap position immediately with updated rotation (dimX/dimZ may swap at 90°)
-        const surface = placementState.current.surface
         if (surface === 'floor' || surface === 'ceiling') {
           const dims = getScaledDimensions(draft)
           const [dimX, , dimZ] = dims
@@ -2428,15 +2469,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
             }
           }
         } else if (surface === 'item-surface' && placementState.current.surfaceItemId) {
-          const surfaceMesh = sceneRegistry.nodes.get(placementState.current.surfaceItemId)
-          if (surfaceMesh) {
-            const localPos = surfaceMesh.worldToLocal(lastRawPos.current.clone())
-            const dims = getScaledDimensions(draft)
-            const [dimX, , dimZ] = dims
-            const swapDims = Math.abs(Math.sin(newRotationY)) > 0.9
-            const x = snapToGrid(localPos.x, swapDims ? dimZ : dimX)
-            const z = snapToGrid(localPos.z, swapDims ? dimX : dimZ)
-            const y = gridPosition.current.y
+          if (surfaceMesh && surfacePosition) {
+            const [x, y, z] = surfacePosition
             gridPosition.current.set(x, y, z)
             draft.position = [x, y, z]
             const worldSnapped = surfaceMesh.localToWorld(new Vector3(x, y, z))

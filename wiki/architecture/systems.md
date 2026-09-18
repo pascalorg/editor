@@ -101,6 +101,13 @@ Access Three.js objects (via `useRegistry`) and manage rendering side-effects.
 `FloorElevationSystem` writes mesh Y only for nodes directly parented to a level.
 Hosted children inherit their host and any named-surface frame; a zero support lift
 does not make a live world-space position safe to write into their local transform.
+A plan-view exit can override the logical parent to a level while the mesh remains
+mounted beneath its original host. The floor-elevation preview pass converts that
+level pose through the inverse mounted ancestry, including a named-surface wrapper
+and inherited slab lift. It saves the original local matrix state and restores it
+when the override ends on cancel, re-entry or unmount; reparented commits keep their
+new local pose. Ordinary hosted 3D previews retain their mounted local frame.
+
 The rendered preview/commit matrix in
 `packages/nodes/src/cabinet/__tests__/hosting-preview-pose.test.tsx` mounts the movers,
 renderers and frame systems together to check position and rotation against the
