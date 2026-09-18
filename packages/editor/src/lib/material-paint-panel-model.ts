@@ -14,7 +14,7 @@ import { buildResetSurfaceMaterialUpdates, resolvePaintTargetFromSelection } fro
 export function useMaterialPaintPanelModel(enabled = true) {
   const activePaintMaterial = useEditor((state) => state.activePaintMaterial)
   const activePaintTarget = useEditor((state) => state.activePaintTarget)
-  const setActivePaintMaterial = useEditor((state) => state.setActivePaintMaterial)
+  const setActivePaintMaterial = useEditor((state) => state.armMaterialPaint)
   const setActivePaintTarget = useEditor((state) => state.setActivePaintTarget)
   const paintEraser = useEditor((state) => state.paintEraser)
   const setPaintEraser = useEditor((state) => state.setPaintEraser)

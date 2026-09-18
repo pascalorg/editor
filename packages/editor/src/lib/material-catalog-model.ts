@@ -13,9 +13,8 @@ import {
 } from '@pascal-app/core'
 import { useEffect, useState, useSyncExternalStore } from 'react'
 
-export type MaterialSourceFilter = 'all' | MaterialSource
+export type MaterialSourceFilter = MaterialSource
 const SOURCE_FILTERS: { id: MaterialSourceFilter; label: string }[] = [
-  { id: 'all', label: 'All' },
   { id: 'pascal', label: 'Pascal' },
   { id: 'mine', label: 'Mine' },
   { id: 'workspace', label: 'Workspace' },
@@ -30,7 +29,7 @@ export function useMaterialCatalogModel(
   const [selectedCategory, setCategory] = useState<(typeof MATERIAL_CATEGORIES)[number]>(
     MATERIAL_CATEGORIES[0],
   )
-  const [sourceFilter, setSourceFilter] = useState<MaterialSourceFilter>('all')
+  const [sourceFilter, setSourceFilter] = useState<MaterialSourceFilter>('pascal')
   useSyncExternalStore(
     subscribeLibraryMaterials,
     getLibraryMaterialsVersion,
@@ -46,7 +45,7 @@ export function useMaterialCatalogModel(
   )
   const itemsFor = (category: typeof selectedCategory) =>
     getMaterialsForCategory(category).filter(
-      (item) => sourceFilter === 'all' || (item.source ?? 'pascal') === sourceFilter,
+      (item) => (item.source ?? 'pascal') === sourceFilter,
     )
   useEffect(() => {
     const entry = getCatalogMaterialById(
