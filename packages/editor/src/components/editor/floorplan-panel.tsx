@@ -10,6 +10,7 @@ import {
   type ColumnNode,
   calculateLevelMiters,
   DEFAULT_ANGLE_STEP,
+  DEFAULT_NORTH_DIRECTION_DEG,
   type DoorNode,
   DoorNode as DoorNodeSchema,
   type ElevatorNode,
@@ -200,6 +201,10 @@ import {
 
 import { PALETTE_COLORS } from '../ui/primitives/color-dot'
 import { FloorplanCompassButton } from '../viewer/floorplan-compass-button'
+import {
+  compassRotationFromFloorplanRotation,
+  floorplanRotationForNorthUp,
+} from '../viewer/floorplan-preview-navigation'
 import { resolveFloorplanBackgroundSelection } from './floorplan-background-selection'
 import {
   subscribeFloorplanCameraNavigation,
@@ -5077,6 +5082,10 @@ export function FloorplanPanel({
     walls,
     zones,
   } = useFloorplanSceneData({ buildingId, levelId })
+  const northDirectionDeg =
+    site?.type === 'site' && Number.isFinite(site.northDirectionDeg)
+      ? site.northDirectionDeg
+      : DEFAULT_NORTH_DIRECTION_DEG
   // When only a building is selected (or we're mid-drag on a building),
   // the FloorplanRegistryLayer falls back to that building's level 0
   // (or lowest level) and renders it dimmed as context. We let the SVG
@@ -6659,14 +6668,17 @@ export function FloorplanPanel({
           nextDeg = targetDeg
         }
         latestFloorplanUserRotationDegRef.current = nextDeg
-        setFloorplanCompassRotation(compassNeedleRef.current, nextDeg)
+        setFloorplanCompassRotation(
+          compassNeedleRef.current,
+          compassRotationFromFloorplanRotation(nextDeg, northDirectionDeg),
+        )
         if (nextDeg !== targetDeg) {
           hiddenCompassAnimationRef.current = requestAnimationFrame(tick)
         }
       }
       hiddenCompassAnimationRef.current = requestAnimationFrame(tick)
     },
-    [cancelHiddenCompassAnimation],
+    [cancelHiddenCompassAnimation, northDirectionDeg],
   )
 
   const receiveFloorplanNavigationPose = useCallback(
@@ -6690,7 +6702,10 @@ export function FloorplanPanel({
           // owns the needle, so any local animation yields to it.
           cancelHiddenCompassAnimation()
           latestFloorplanUserRotationDegRef.current = nextDeg
-          setFloorplanCompassRotation(compassNeedleRef.current, nextDeg)
+          setFloorplanCompassRotation(
+            compassNeedleRef.current,
+            compassRotationFromFloorplanRotation(nextDeg, northDirectionDeg),
+          )
         } else {
           animateHiddenCompassNeedle(nextDeg)
         }
@@ -6704,6 +6719,7 @@ export function FloorplanPanel({
     [
       animateHiddenCompassNeedle,
       cancelHiddenCompassAnimation,
+      northDirectionDeg,
       syncFloorplanViewportToNavigationPose,
     ],
   )
@@ -6737,7 +6753,10 @@ export function FloorplanPanel({
     if (!isFloorplanOpen) {
       setFloorplanCompassRotation(
         compassNeedleRef.current,
-        latestFloorplanUserRotationDegRef.current,
+        compassRotationFromFloorplanRotation(
+          latestFloorplanUserRotationDegRef.current,
+          northDirectionDeg,
+        ),
       )
     }
   })
@@ -7403,7 +7422,7 @@ export function FloorplanPanel({
       if (!pose) return
       const currentRotation = latestFloorplanUserRotationDegRef.current
       const northAzimuth = cameraAzimuthFromFloorplanRotation(
-        nearestEquivalentDegrees(0, currentRotation),
+        floorplanRotationForNorthUp(northDirectionDeg, currentRotation),
       )
       useEditor.getState().publishNavigationSyncPose({
         source: '2d',
@@ -7429,11 +7448,19 @@ export function FloorplanPanel({
       },
       -currentSceneRotationDeg,
     )
-    const nextUserRotationDeg = nearestEquivalentDegrees(0, currentUserRotationDeg)
+    const nextUserRotationDeg = floorplanRotationForNorthUp(
+      northDirectionDeg,
+      currentUserRotationDeg,
+    )
 
     smoothFloorplanNavigationView(localCenter, nextUserRotationDeg, currentViewport.width)
     publishFloorplanNavigationPose(localCenter, nextUserRotationDeg, currentViewport.width)
-  }, [buildingRotationDeg, publishFloorplanNavigationPose, smoothFloorplanNavigationView])
+  }, [
+    buildingRotationDeg,
+    northDirectionDeg,
+    publishFloorplanNavigationPose,
+    smoothFloorplanNavigationView,
+  ])
 
   const clearGuideInteraction = useCallback(() => {
     guideInteractionRef.current = null
@@ -7592,7 +7619,10 @@ export function FloorplanPanel({
       hasUserAdjustedViewportRef.current = true
       latestFloorplanUserRotationDegRef.current = nextUserRotationDeg
       latestViewportRef.current = nextViewport
-      setFloorplanCompassRotation(compassNeedleRef.current, nextUserRotationDeg)
+      setFloorplanCompassRotation(
+        compassNeedleRef.current,
+        compassRotationFromFloorplanRotation(nextUserRotationDeg, northDirectionDeg),
+      )
       // Transform the already-painted SVG as one compositor layer. Mutating the
       // scene rotation/viewBox here forces the heavy vector plan to rerasterize.
       rotationState.svg.style.transform = `rotate(${nextUserRotationDeg - rotationState.initialUserRotationDeg}deg)`
@@ -7600,7 +7630,7 @@ export function FloorplanPanel({
       rotationState.latestUserRotationDeg = nextUserRotationDeg
       rotationState.latestViewport = nextViewport
     },
-    [buildingRotationDeg],
+    [buildingRotationDeg, northDirectionDeg],
   )
 
   const commitFloorplanZoom = useCallback(() => {
@@ -11196,7 +11226,10 @@ export function FloorplanPanel({
             createPortal(
               <FloorplanCompassButton
                 needleRef={compassNeedleRef}
-                northRotationDeg={floorplanUserRotationDeg}
+                northRotationDeg={compassRotationFromFloorplanRotation(
+                  floorplanUserRotationDeg,
+                  northDirectionDeg,
+                )}
                 onAlignNorth={alignFloorplanViewToNorth}
               />,
               compassHost,
@@ -11204,7 +11237,10 @@ export function FloorplanPanel({
           ) : (
             <FloorplanCompassButton
               needleRef={compassNeedleRef}
-              northRotationDeg={floorplanUserRotationDeg}
+              northRotationDeg={compassRotationFromFloorplanRotation(
+                floorplanUserRotationDeg,
+                northDirectionDeg,
+              )}
               onAlignNorth={alignFloorplanViewToNorth}
             />
           ))}

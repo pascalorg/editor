@@ -3,9 +3,64 @@ import { encodeTerrainField } from '../../lib/terrain-codec'
 import { createTerrainField } from '../../lib/terrain-field'
 import { SiteNode } from './site'
 
+describe('SiteNode.northDirectionDeg', () => {
+  test('defaults legacy scenes to the established world convention', () => {
+    const parsed = SiteNode.parse({ id: 'site_1', type: 'site' })
+
+    expect(parsed.northDirectionDeg).toBe(0)
+  })
+
+  test('documents and preserves a custom site north heading through JSON', () => {
+    const parsed = SiteNode.parse({
+      id: 'site_1',
+      type: 'site',
+      northDirectionDeg: 37.5,
+    })
+    const roundTripped = JSON.parse(JSON.stringify(parsed))
+
+    expect(roundTripped.northDirectionDeg).toBe(37.5)
+    expect(SiteNode.parse(roundTripped).northDirectionDeg).toBe(37.5)
+  })
+
+  test('rejects non-finite headings', () => {
+    expect(
+      SiteNode.safeParse({ id: 'site_1', type: 'site', northDirectionDeg: Number.NaN }).success,
+    ).toBe(false)
+    expect(
+      SiteNode.safeParse({
+        id: 'site_1',
+        type: 'site',
+        northDirectionDeg: Number.POSITIVE_INFINITY,
+      }).success,
+    ).toBe(false)
+  })
+
+  test('canonicalizes headings to [0, 360) degrees', () => {
+    expect(
+      SiteNode.parse({ id: 'site_1', type: 'site', northDirectionDeg: -45 }).northDirectionDeg,
+    ).toBe(315)
+    expect(
+      SiteNode.parse({ id: 'site_1', type: 'site', northDirectionDeg: 360 }).northDirectionDeg,
+    ).toBe(0)
+    expect(
+      SiteNode.parse({ id: 'site_1', type: 'site', northDirectionDeg: 720 }).northDirectionDeg,
+    ).toBe(0)
+    expect(
+      SiteNode.parse({ id: 'site_1', type: 'site', northDirectionDeg: 397.5 }).northDirectionDeg,
+    ).toBe(37.5)
+    expect(
+      SiteNode.parse({ id: 'site_1', type: 'site', northDirectionDeg: -360 }).northDirectionDeg,
+    ).toBe(0)
+    expect(
+      SiteNode.parse({ id: 'site_1', type: 'site', northDirectionDeg: -0 }).northDirectionDeg,
+    ).toBe(0)
+  })
+})
+
 describe('SiteNode.terrain', () => {
   test('a scene saved before terrain existed still parses', () => {
     const parsed = SiteNode.parse({ id: 'site_1', type: 'site' })
+    expect(parsed.northDirectionDeg).toBe(0)
     expect(parsed.terrain).toBeUndefined()
     // And the default polygon is untouched by the new field.
     expect(parsed.polygon.points).toHaveLength(4)
