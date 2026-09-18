@@ -1701,4 +1701,125 @@ if (process.env.PASCAL_HOST_AUDIT_ISOLATED !== '1') {
             })
           }
         })
+
+  for (const mover of ['catalog', 'registry'] as const)
+    for (const tilt of ['pitch', 'roll'] as const)
+      test(`review bot 4: differential ${mover} ${tilt} floor exit`, async () => {
+        const seeded = seed('procedural-item', mover)
+        const child = {
+          ...seeded.child,
+          parentId: seeded.host.id,
+          position: [0, 0, 0],
+          rotation: [0, 0, 0],
+          supportSlabId: undefined,
+        } as ItemNode | ProceduralItemNode
+        const host = ProceduralItemNode.parse({
+          ...seeded.host,
+          position: [2, 0, 3],
+          rotation: [0, 0.6, 0],
+          children: [child.id],
+          attachments: { [child.id]: 'top' },
+          recipe: {
+            ...(seeded.host as ProceduralItemNode).recipe,
+            surfaces: [
+              {
+                id: 'top',
+                label: 'Top',
+                position: [0.3, 1, 0.2],
+                size: [2, 2],
+                rotation: tilt === 'pitch' ? [0.2, 0, 0] : [0, 0, 0.2],
+              },
+            ],
+          },
+        })
+        const baseline = {
+          ...useScene.getState().nodes,
+          [level.id]: { ...level, children: [host.id] },
+          [host.id]: host,
+          [child.id]: child,
+        }
+        const results: { rotation: number[]; initialHeading: number; heading: number }[] = []
+        for (const view of ['3d', '2d'] as const) {
+          useLiveNodeOverrides.getState().clearAll()
+          useLiveTransforms.getState().clearAll()
+          useScene.setState({ nodes: structuredClone(baseline), dirtyNodes: new Set() })
+          useInteractionScope.getState().end()
+          useEditor.setState({ movingNode: null, movingNodeOrigin: view, viewMode: view })
+          const source = useScene.getState().nodes[child.id] as typeof child
+          const renderer = await create(
+            <Scene mover={view === '3d' ? mover : undefined} child={source} />,
+          )
+          try {
+            await settle(renderer)
+            const before = matrix(sceneRegistry.nodes.get(child.id))!
+            const heading = Math.atan2(before[8]!, before[10]!)
+            expect(heading).toBeCloseTo(0.6, 6)
+            if (view === '3d') {
+              await act(async () => useEditor.getState().setMovingNode(source))
+              await settle(renderer)
+              const event = {
+                position: [8, 0, 8],
+                localPosition: [8, 0, 8],
+                normal: [0, 1, 0],
+                nativeEvent: {},
+                stopPropagation() {},
+              }
+              await act(async () => {
+                if (mover === 'catalog') {
+                  const object = sceneRegistry.nodes.get(host.id)!
+                  emitter.emit(
+                    'procedural-item:leave' as never,
+                    {
+                      ...event,
+                      node: host,
+                      object,
+                      localPosition: object.worldToLocal(new Vector3(8, 0, 8)).toArray(),
+                    } as never,
+                  )
+                }
+                emitter.emit('grid:move', event as never)
+                await new Promise((resolve) => setTimeout(resolve, 1))
+              })
+              await settle(renderer)
+              await act(async () => emitter.emit('grid:click', event as never))
+              await settle(renderer)
+              expect(useInteractionScope.getState().scope.kind).toBe('idle')
+            } else {
+              const session = nodeRegistry.get(source.type)!.floorplanMoveTarget!({
+                node: source,
+                nodes: useScene.getState().nodes,
+                sceneApi: createSceneApi(useScene),
+              } as never)
+              const modifiers = { shiftKey: false, altKey: false, ctrlKey: false, metaKey: false }
+              await act(async () => {
+                session.apply({ planPoint: [before[12]!, before[14]!], modifiers })
+                session.apply({ planPoint: [8, 8], modifiers })
+              })
+              await settle(renderer)
+              expect(session.canCommit()).toBe(true)
+              await act(async () => session.commit!())
+              await settle(renderer)
+            }
+            const stored = useScene.getState().nodes[child.id] as typeof child
+            expect(stored.parentId).toBe(level.id)
+            expect(stored.position[1]).toBe(0)
+            expect(
+              (useScene.getState().nodes[host.id] as ProceduralItemNode).attachments[child.id],
+            ).toBeUndefined()
+            const after = matrix(sceneRegistry.nodes.get(child.id))!
+            results.push({
+              rotation: [...stored.rotation],
+              initialHeading: heading,
+              heading: Math.atan2(after[8]!, after[10]!),
+            })
+          } finally {
+            await renderer.unmount()
+          }
+        }
+        console.log(`review bot 4 ${mover} ${tilt}: ${JSON.stringify(results)}`)
+        results[1]!.rotation.forEach((v, i) => {
+          expect(v).toBeCloseTo(results[0]!.rotation[i]!, 6)
+        })
+        expect(results[1]!.heading).toBeCloseTo(results[0]!.heading, 6)
+      })
 }
