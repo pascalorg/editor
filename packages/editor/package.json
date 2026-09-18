@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/editor",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Pascal building editor component",
   "license": "MIT",
   "type": "module",
@@ -14,8 +14,8 @@
     "test": "bun test src"
   },
   "peerDependencies": {
-    "@pascal-app/core": "^1.0.0",
-    "@pascal-app/viewer": "^1.0.0",
+    "@pascal-app/core": "^1.0.1",
+    "@pascal-app/viewer": "^1.0.1",
     "@react-three/drei": "^10",
     "@react-three/fiber": "^9",
     "next": ">=15",
@@ -62,8 +62,8 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
-    "@pascal-app/core": "^1.0.0",
-    "@pascal-app/viewer": "^1.0.0",
+    "@pascal-app/core": "^1.0.1",
+    "@pascal-app/viewer": "^1.0.1",
     "@pascal/typescript-config": "*",
     "@react-three/test-renderer": "^9.1.0",
     "@types/blob-stream": "^0.1.33",
