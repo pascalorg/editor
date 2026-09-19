@@ -1810,4 +1810,202 @@ if (process.env.PASCAL_DUPLICATE_AUDIT_ISOLATED !== '1') {
             await second.unmount()
           }
         })
+
+  for (const view of ['3d', '2d'])
+    for (const kind of ['item', 'procedural-item'])
+      for (const childless of [true, false])
+        test(`review bot occupied commit ${view} ${kind} childless=${childless}`, async () => {
+          const { root, host } = lifecycleFixture(kind, childless)
+          select(root, view)
+          const before = snapshot()
+          const renderer = await create(<Scene menu />)
+          try {
+            const copy = await duplicate(renderer)
+            const pointer = view === '3d' ? pointerDispatcher() : null
+            const send = async (x: number, click = false) => {
+              if (pointer) await pointer.send(new Vector3(x, 2, 0), 'grid first', click)
+              else await planPointer(x, 0, click)
+              await settle(renderer)
+            }
+            // A release at the source pose must not finalize the overlapping copy.
+            if (!pointer) await send(-1)
+            await send(-1, true)
+            expect(getMovingNode()?.id).toBe(copy.id)
+            expect(useScene.getState().nodes[copy.id]).toBeDefined()
+            expect(surfaceAttachmentId(useScene.getState().nodes[copy.id]!)).toBe('top')
+            for (const id of copy.children) expect(useScene.getState().nodes[id]).toBeDefined()
+            expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+            await send(1)
+            if (!pointer) {
+              const lastValidPose = getEffectiveNode(useScene.getState().nodes[copy.id]!).position
+              await send(-1)
+              await send(-1, true)
+              expect(getMovingNode()?.id).toBe(copy.id)
+              expect(getEffectiveNode(useScene.getState().nodes[copy.id]!).position).toEqual(
+                lastValidPose,
+              )
+              await send(1)
+            }
+            // Validation must also observe occupancy acquired after the last pointer tick.
+            const obstacle = ItemNode.parse({ parentId: host.id, asset, position: [1, 0, 0] })
+            const tracking = useScene.temporal.getState().isTracking
+            useScene.temporal.getState().pause()
+            useScene.getState().applyNodeChanges({
+              create: [{ node: obstacle }],
+              update: [
+                {
+                  id: host.id,
+                  data: {
+                    attachments: {
+                      ...(useScene.getState().nodes[host.id] as ProceduralItemNode).attachments,
+                      [obstacle.id]: 'top',
+                    },
+                  },
+                },
+              ],
+            })
+            if (tracking) useScene.temporal.getState().resume()
+            const beforeRefusal = snapshot()
+            await send(1, true)
+            expect(snapshot()).toBe(beforeRefusal)
+            expect(getMovingNode()?.id).toBe(copy.id)
+            expect(useScene.getState().nodes[copy.id]).toBeDefined()
+            expect(surfaceAttachmentId(useScene.getState().nodes[copy.id]!)).toBe('top')
+            const attachments = {
+              ...(useScene.getState().nodes[host.id] as ProceduralItemNode).attachments,
+            }
+            delete attachments[obstacle.id]
+            useScene.temporal.getState().pause()
+            useScene.getState().applyNodeChanges({
+              delete: [obstacle.id],
+              update: [{ id: host.id, data: { attachments } }],
+            })
+            if (tracking) useScene.temporal.getState().resume()
+            await send(0.5)
+            await send(0.5, true)
+            expect(getMovingNode()).toBeNull()
+            for (const id of [copy.id, ...copy.children])
+              expect(useScene.getState().dirtyNodes.has(id as AnyNodeId)).toBe(false)
+            expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+            const placed = snapshot()
+            await act(async () => useScene.temporal.getState().undo())
+            expect(snapshot()).toBe(before)
+            await act(async () => useScene.temporal.getState().redo())
+            expect(snapshot()).toBe(placed)
+          } finally {
+            await renderer.unmount()
+          }
+        })
+
+  for (const kind of ['item', 'procedural-item'])
+    for (const childless of [false, true])
+      test(`review bot surface shrinks before release ${kind} childless=${childless}`, async () => {
+        const { root, host } = lifecycleFixture(kind, childless)
+        select(root, '2d')
+        const renderer = await create(<Scene menu />)
+        try {
+          const copy = await duplicate(renderer)
+          await planPointer(1.5, 0)
+          const tracking = useScene.temporal.getState().isTracking
+          useScene.temporal.getState().pause()
+          useScene.getState().updateNode(host.id, {
+            recipe: {
+              ...host.recipe,
+              surfaces: [{ id: 'top', label: 'Top', position: [0, 2, 0], size: [2.5, 4] }],
+            },
+          })
+          if (tracking) useScene.temporal.getState().resume()
+          const before = snapshot()
+          await planPointer(1.5, 0, true)
+          await settle(renderer)
+          expect(snapshot()).toBe(before)
+          expect(getMovingNode()?.id).toBe(copy.id)
+          expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+          await planPointer(0.5, 0)
+          await planPointer(0.5, 0, true)
+          await settle(renderer)
+          expect(getMovingNode()).toBeNull()
+          expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+        } finally {
+          await renderer.unmount()
+        }
+      })
+
+  for (const strict of [false, true])
+    for (const kind of ['item', 'shelf', 'procedural-item', 'cabinet'])
+      for (const pending of [false, true])
+        for (const outcome of ['commit', 'replace'])
+          test(`review bot repeat begin ${kind} pending=${pending} ${outcome} strict=${strict}`, async () => {
+            const { root } = interactionFixture(kind)
+            select(root)
+            const before = snapshot()
+            const tree = (view: string, key = 'editor') => {
+              const scene = (
+                <Scene
+                  key={key}
+                  menu
+                  panes={view === 'none' ? { plan: false, spatial: false } : panesFor(view)}
+                />
+              )
+              return strict ? <StrictMode>{scene}</StrictMode> : scene
+            }
+            const renderer = await create(tree(pending ? 'none' : '3d'))
+            try {
+              // The pending case re-arms inside the menu gesture, before effects adopt it.
+              await settle(renderer)
+              await act(async () => {
+                menuAction()!({ stopPropagation() {} })
+                if (pending) {
+                  const initial = useInteractionScope.getState()
+                  useEditor.getState().setMovingNode(getMovingNode())
+                  expect(useInteractionScope.getState().gesture).toBe(initial.gesture)
+                  expect(useInteractionScope.getState().pendingSubtree).toBe(initial.pendingSubtree)
+                }
+              })
+              await settle(renderer)
+              const copy = getMovingNode()!
+              const gesture = useInteractionScope.getState().gesture
+              await act(async () => useEditor.getState().setMovingNode(copy))
+              expect(useInteractionScope.getState().gesture).toBe(gesture)
+              expect(useScene.getState().nodes[copy.id]).toBeDefined()
+              await renderer.update(tree('2d', 'replay'))
+              await settle(renderer)
+              await act(async () =>
+                useInteractionScope.getState().begin({
+                  kind: pending ? 'moving' : 'placing',
+                  node: copy,
+                  nodeId: copy.id,
+                  nodeType: copy.type,
+                  view: '2d',
+                  pressDrag: false,
+                  driver: 'move-tool',
+                }),
+              )
+              expect(useInteractionScope.getState().gesture).toBe(gesture)
+              expect(useInteractionScope.getState().adoptSubtree(copy.id)).toBe(true)
+              for (const id of copy.children) expect(useScene.getState().nodes[id]).toBeDefined()
+              if (outcome === 'replace') {
+                await act(async () => useEditor.getState().setMovingNode(root))
+                expect(useScene.getState().nodes[copy.id]).toBeUndefined()
+                for (const id of copy.children)
+                  expect(useScene.getState().nodes[id]).toBeUndefined()
+                await act(async () => useEditor.getState().setMovingNode(null))
+                expect(snapshot()).toBe(before)
+                expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+              } else {
+                await planPointer(6, 5)
+                await planPointer(6, 5, true)
+                await settle(renderer)
+                expect(getMovingNode()).toBeNull()
+                expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+                const after = snapshot()
+                await act(async () => useScene.temporal.getState().undo())
+                expect(snapshot()).toBe(before)
+                await act(async () => useScene.temporal.getState().redo())
+                expect(snapshot()).toBe(after)
+              }
+            } finally {
+              await renderer.unmount()
+            }
+          })
 }

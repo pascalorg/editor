@@ -159,6 +159,18 @@ const useInteractionScope = create<InteractionScopeState>((set, get) => ({
       }
     }),
   begin: (scope) => {
+    const state = get()
+    const nodeId = movingNodeOf(scope)?.id
+    const creation = state.ownedSubtree?.creation ?? state.pendingSubtree
+    if (
+      nodeId &&
+      nodeId === movingNodeOf(state.scope)?.id &&
+      creation?.rootId === nodeId &&
+      isCurrentCreation(creation)
+    ) {
+      set({ scope })
+      return
+    }
     beginScopePerfAction(scope)
     set({
       scope,
@@ -308,8 +320,8 @@ export const useReshapingNode = (): AnyNode | null => {
 // The node currently being placed or moved. Replaces the legacy
 // `useEditor.movingNode` flag. Unlike `useReshapingNode`, no `useRef` snapshot is
 // needed: the node is carried inline in the scope and set once at `begin`, so it
-// is already a stable reference for the whole gesture (nothing calls `begin` mid
-// drag). Returns null whenever no placing/moving interaction is active.
+// remains stable until a caller explicitly re-arms the same interaction.
+// Returns null whenever no placing/moving interaction is active.
 export const useMovingNode = (): AnyNode | null => useInteractionScope((s) => movingNodeOf(s.scope))
 
 // Imperative (non-React) read for event handlers / effects.

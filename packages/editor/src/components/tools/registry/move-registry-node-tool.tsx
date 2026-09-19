@@ -1126,11 +1126,13 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
         } as Partial<AnyNode>
 
         if (isNew) {
-          const finalId = commitFreshPlacementSubtree(node.id as AnyNodeId, data)
-          if (finalId) {
-            committed = true
-            committedId = finalId
-          }
+          const finalId = commitFreshPlacementSubtree(node.id as AnyNodeId, data, (reason) => {
+            setSurfaceRejection(reason)
+            setValid(false)
+          })
+          if (!finalId) return
+          committed = true
+          committedId = finalId
         } else {
           // Fold the connected-ductwork follow-updates into the SAME
           // batch as the moved node so the whole thing is one undo step.

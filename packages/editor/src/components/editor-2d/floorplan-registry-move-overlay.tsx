@@ -42,6 +42,7 @@ import useEditor, {
   isMagneticSnapActive,
 } from '../../store/use-editor'
 import useInteractionScope, { useMovingNode } from '../../store/use-interaction-scope'
+import usePlacementPreview from '../../store/use-placement-preview'
 import { useWallMoveGhosts } from '../../store/use-wall-move-ghosts'
 
 // Figma-style alignment snap threshold. Meters in world space; 8cm gives
@@ -244,6 +245,8 @@ export function FloorplanRegistryMoveOverlay() {
             ?.metadata,
         )
 
+        if (freshPlacement && !commitValid) return false
+
         // Claim ownership of the drag teardown so the 3D move tool's
         // unmount-time cleanup skips its restore-from-snapshot — see
         // `movingNodeOrigin` in `use-editor.tsx`. Set here (before any
@@ -257,17 +260,31 @@ export function FloorplanRegistryMoveOverlay() {
         // and Phase 2's resume — but Phase 2's write is delegated, and
         // we skip the snapshot-diff finalUpdates path.
         if (commitValid && freshPlacement) {
-          session.commit?.()
+          // Owned drafts finalize directly from the preview; staging a session commit
+          // would publish an unvalidated intermediate graph before the atomic replacement.
+          if (!ownsSubtree) session.commit?.()
           const stagedNode = useScene.getState().nodes[movingNode.id]
+          const preview = usePlacementPreview.getState().node
+          const effective = stagedNode ? getEffectiveNode(stagedNode) : null
+          const candidate =
+            effective?.visible === false && preview?.id === movingNode.id ? preview : effective
           const committedId = stagedNode
             ? commitFreshPlacementSubtree(
                 movingNode.id as AnyNodeId,
                 {
+                  ...(ownsSubtree ? candidate : {}),
                   metadata: stripPlacementMetadataFlags(stagedNode.metadata),
                   visible: true,
                 } as Partial<AnyNode>,
               )
             : null
+          if (!committedId) return false
+          if (ownsSubtree) {
+            for (const id of session.affectedIds) {
+              useLiveTransforms.getState().clear(id)
+              useLiveNodeOverrides.getState().clear(id)
+            }
+          }
           if (historyPaused) {
             resumeSceneHistory(useScene)
             historyPaused = false
@@ -377,7 +394,7 @@ export function FloorplanRegistryMoveOverlay() {
         // pointermove right before pointerup, so the trade-off lands
         // on the side of WYSIWYG.
 
-        commitFinalStateOrRevert()
+        if (commitFinalStateOrRevert() === false) return
         setMovingNode(null)
 
         // Swallow the click event that follows this pointer-up — the
@@ -829,18 +846,20 @@ export function FloorplanRegistryMoveOverlay() {
         return
       }
       if (isFreshPlacement) {
-        selectedId =
-          commitFreshPlacementSubtree(
-            movingNode.id as AnyNodeId,
-            {
-              position: [sx, oldY, sz],
-              ...rotationPatch,
-              metadata: stripPlacementMetadataFlags(
-                (movingNode as { metadata?: unknown }).metadata,
-              ),
-              visible: true,
-            } as Partial<AnyNode>,
-          ) ?? selectedId
+        const committedId = commitFreshPlacementSubtree(
+          movingNode.id as AnyNodeId,
+          {
+            position: [sx, oldY, sz],
+            ...rotationPatch,
+            metadata: stripPlacementMetadataFlags((movingNode as { metadata?: unknown }).metadata),
+            visible: true,
+          } as Partial<AnyNode>,
+        )
+        if (!committedId) {
+          boxEl.setAttribute('stroke', '#ef4444')
+          return
+        }
+        selectedId = committedId
       } else {
         useScene.getState().updateNode(
           movingNode.id as AnyNodeId,

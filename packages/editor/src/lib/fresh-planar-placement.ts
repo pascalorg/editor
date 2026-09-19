@@ -3,8 +3,12 @@ import {
   type AnyNodeId,
   cloneNodesInto,
   collectSubtree,
+  createSceneApi,
   type DuplicableConfig,
+  getSurfaceProvider,
   nodeRegistry,
+  resolveSurfacePlacement,
+  type SurfaceRejectReason,
   useScene,
 } from '@pascal-app/core'
 import useInteractionScope from '../store/use-interaction-scope'
@@ -13,6 +17,7 @@ import { getPlacementMetadataRecord, stripPlacementMetadataFlags } from './place
 import {
   surfaceAttachmentId,
   surfaceAttachmentUpdates,
+  surfaceFramePose,
   updateSurfaceNode,
 } from './surface-attachment'
 
@@ -129,50 +134,145 @@ export function discardFreshPlacementSubtree(rootId: AnyNodeId): void {
   })
 }
 
+function namedSurfaceRejection(
+  root: AnyNode,
+  surfaceId: string | null,
+): SurfaceRejectReason | null {
+  if (surfaceId === null) return null
+  const scene = createSceneApi(useScene)
+  const host = root.parentId ? scene.get(root.parentId as AnyNodeId) : undefined
+  const footprint = nodeRegistry.get(root.type)?.capabilities.floorPlaced?.footprint?.(root)
+  if (!host || !footprint || !('position' in root) || !Array.isArray(root.rotation))
+    return 'no-surface'
+  const surface = getSurfaceProvider(host)
+    .surfaces?.(host, { scene })
+    .find((s) => s.id === surfaceId)
+  if (!surface) return 'no-surface'
+  const pose = surfaceFramePose(
+    root.parentId,
+    surfaceId,
+    root as {
+      position: [number, number, number]
+      rotation: [number, number, number]
+    },
+    false,
+  )
+  const center = nodeRegistry.get(root.type)?.capabilities.dragBounds?.(root, scene.nodes())?.center
+  const localBounds = center
+    ? {
+        min: center.map((value, axis) => value - footprint.dimensions[axis]! / 2) as [
+          number,
+          number,
+          number,
+        ],
+        max: center.map((value, axis) => value + footprint.dimensions[axis]! / 2) as [
+          number,
+          number,
+          number,
+        ],
+      }
+    : undefined
+  let reason: SurfaceRejectReason | null = null
+  const placement = resolveSurfacePlacement({
+    host,
+    surface,
+    childKind: root.type,
+    childId: root.id,
+    childFootprint: {
+      size: footprint.dimensions,
+      rotationY: pose.rotation[1],
+      rotation: pose.rotation,
+      localBounds,
+    },
+    hit: { point: pose.position, normalWorldY: 1 },
+    origin: pose.position,
+    scene,
+    onReject: (value) => {
+      reason = value
+    },
+  })
+  if (!placement) return reason ?? 'no-surface'
+  if (
+    placement.surfaceLocal?.position.some(
+      (value, axis) => Math.abs(value - root.position[axis]!) > 1e-6,
+    )
+  )
+    return 'footprint-outside-surface'
+  return null
+}
+
 /**
- * Finalises a fresh catalog/duplicate draft as a single undoable creation.
- *
- * Fresh drafts already exist in the scene so renderers and move tools can
- * preview real geometry. On commit we delete that draft while history is
- * paused, then create a clean clone at the final cursor position with history
- * resumed. Undo therefore removes the placed node instead of resurrecting the
- * hidden draft at its origin.
+ * Replace the draft in one validated write. History already excludes fresh
+ * subtrees, so this records one creation without first deleting the preview.
  */
 export function commitFreshPlacementSubtree(
   rootId: AnyNodeId,
   rootPatch: Partial<AnyNode>,
+  onReject?: (reason: SurfaceRejectReason) => void,
 ): AnyNodeId | null {
   const scene = useScene.getState()
   const subtree = collectSubtree(scene.nodes, rootId)
-  if (!subtree) return null
+  if (!subtree || scene.readOnly) return null
 
-  const root = cleanPlacementMetadata({
-    ...subtree.root,
-    ...rootPatch,
-  } as AnyNode)
+  const root = cleanPlacementMetadata({ ...subtree.root, ...rootPatch } as AnyNode)
+  const surfaceId =
+    root.parentId === subtree.root.parentId ? surfaceAttachmentId(subtree.root) : null
+  const rejection = namedSurfaceRejection(root, surfaceId)
+  if (rejection) {
+    onReject?.(rejection)
+    return null
+  }
   const descendants = subtree.descendants.map((node) => cleanPlacementMetadata(node))
   const parentId = parentIdOf(root)
-  const cloned = cloneNodesInto([root, ...descendants], {
-    rootId,
-    parentId,
-  })
+  const cloned = cloneNodesInto([root, ...descendants], { rootId, parentId })
+  const updates = surfaceAttachmentUpdates(rootId, null, null)
+  for (const update of surfaceAttachmentUpdates(cloned.rootId, parentId, surfaceId)) {
+    const attachments = { ...(update.data as { attachments: Record<string, string> }).attachments }
+    delete attachments[rootId]
+    const previous = updates.findIndex((entry) => entry.id === update.id)
+    const merged = { id: update.id, data: { attachments } }
+    if (previous === -1) updates.push(merged)
+    else updates[previous] = merged
+  }
 
-  useInteractionScope.getState().finishSubtree(rootId)
-  const surfaceId = surfaceAttachmentId(subtree.root)
+  const scope = useInteractionScope.getState()
+  const factoryCreated =
+    scope.ownedSubtree?.creation.rootId === rootId || scope.pendingSubtree?.rootId === rootId
   const temporal = useScene.temporal.getState()
-  const wasTracking = (temporal as { isTracking?: boolean }).isTracking !== false
-  if (wasTracking) temporal.pause()
-  updateSurfaceNode(rootId, {}, null)
-  useScene.getState().deleteNode(rootId)
-  temporal.resume()
-  useScene.getState().applyNodeChanges({
-    create: cloned.nodes.map((node, index) =>
-      index === 0 && parentId ? { node, parentId } : { node },
-    ),
-    update: surfaceAttachmentUpdates(cloned.rootId, parentId, surfaceId),
-  })
-  if (!wasTracking) temporal.pause()
+  const wasTracking = temporal.isTracking
+  if (!factoryCreated && descendants.length === 0 && surfaceId === null) {
+    // Preserve the established root-only lifecycle for placements outside the subtree factory.
+    if (wasTracking) temporal.pause()
+    updateSurfaceNode(rootId, {}, null)
+    useScene.getState().deleteNode(rootId)
+    temporal.resume()
+    useScene.getState().applyNodeChanges({
+      create: cloned.nodes.map((node, index) =>
+        index === 0 && parentId ? { node, parentId } : { node },
+      ),
+      update: updates,
+    })
+    if (!wasTracking) temporal.pause()
+  } else {
+    temporal.resume()
+    try {
+      // applyNodeChanges validates the complete proposed graph before publishing any part of it.
+      scene.applyNodeChanges({
+        delete: [rootId],
+        create: cloned.nodes.map((node, index) =>
+          index === 0 && parentId ? { node, parentId } : { node },
+        ),
+        update: updates,
+      })
+      for (const node of [subtree.root, ...subtree.descendants]) scene.clearDirty(node.id)
+    } catch {
+      onReject?.('no-surface')
+      return null
+    } finally {
+      if (!wasTracking) temporal.pause()
+    }
+  }
+  useInteractionScope.getState().finishSubtree(rootId)
   if (usePlacementPreview.getState().node?.id === rootId) usePlacementPreview.getState().clear()
-
   return cloned.rootId
 }

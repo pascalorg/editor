@@ -602,6 +602,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       wasAdopted: boolean,
       repeat: () => void,
     ) => {
+      if (!committedId) return
       if (configRef.current.onCommitted()) {
         repeat()
         return
@@ -631,12 +632,19 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     ) => {
       const draftId = draftNode.current?.id ?? null
       const wasAdopted = draftNode.isAdopted
-      const finalId = draftNode.commit(nodeUpdate, options)
-      if (draftId) {
+      const finalId = draftNode.commit(nodeUpdate, {
+        ...options,
+        onReject: (reason) => {
+          feedback.reject(reason)
+          edgeMaterial.color.setHex(0xef_44_44)
+          basePlaneMaterial.color.setHex(0xef_44_44)
+        },
+      })
+      if (finalId && draftId) {
         useLiveTransforms.getState().clear(draftId)
         useLiveNodeOverrides.getState().clearFields(draftId, faceHostClearFields(draftNode.current))
       }
-      return { committedId: finalId ?? draftId, wasAdopted }
+      return { committedId: finalId, wasAdopted }
     }
 
     const faceHostClearFields = (draft: ItemNode | null | undefined): Array<keyof ItemNode> => {

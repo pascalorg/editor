@@ -3,6 +3,7 @@ import {
   type AssetInput,
   ItemNode,
   resolveSupportSlabPatch,
+  type SurfaceRejectReason,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -61,6 +62,7 @@ export interface DraftNodeHandle {
     options?: {
       supportElevationCap?: number | null
       preferredSupportSlabId?: string | null
+      onReject?: (reason: SurfaceRejectReason) => void
       pinSupport?: boolean
     },
   ) => string | null
@@ -161,6 +163,7 @@ export function useDraftNode(): DraftNodeHandle {
       options?: {
         supportElevationCap?: number | null
         preferredSupportSlabId?: string | null
+        onReject?: (reason: SurfaceRejectReason) => void
         pinSupport?: boolean
       },
     ): string | null => {
@@ -177,14 +180,19 @@ export function useDraftNode(): DraftNodeHandle {
       finalUpdate = { ...finalUpdate, ...stored }
       if (isFreshPlacementMetadata(originalStateRef.current?.metadata)) {
         const effectiveNode = ItemNode.parse({ ...draft, ...finalUpdate })
-        const id = commitFreshPlacementSubtree(draft.id, {
-          ...finalUpdate,
-          ...resolveSupportSlabPatch(effectiveNode, useScene.getState().nodes, {
-            maxElevation: options?.supportElevationCap,
-            preferredSlabId: options?.preferredSupportSlabId,
-            pinSupport: options?.pinSupport,
-          }),
-        })
+        const id = commitFreshPlacementSubtree(
+          draft.id,
+          {
+            ...finalUpdate,
+            ...resolveSupportSlabPatch(effectiveNode, useScene.getState().nodes, {
+              maxElevation: options?.supportElevationCap,
+              preferredSlabId: options?.preferredSupportSlabId,
+              pinSupport: options?.pinSupport,
+            }),
+          },
+          options?.onReject,
+        )
+        if (!id) return null
         if (usePlacementPreview.getState().node?.id === draft.id) {
           usePlacementPreview.getState().clear()
         }
