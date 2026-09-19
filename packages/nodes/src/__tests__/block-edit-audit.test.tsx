@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
+import * as core from '@pascal-app/core'
 import {
   type AnyNodeId,
   BlockNode,
@@ -194,7 +195,25 @@ if (process.env.PASCAL_BLOCK_EDIT_AUDIT_ISOLATED !== '1') {
     nodeRegistry._reset()
     for (const def of builtinPlugin.nodes!) registerNode(def)
   })
-  afterEach(() => {
+  const mounts = new Set<Promise<Awaited<ReturnType<typeof create>>>>()
+  const workSpies: Array<{ mockRestore(): void }> = []
+  function ownSpy<T extends { mockRestore(): void }>(spy: T): T {
+    workSpies.push(spy)
+    return spy
+  }
+  async function mount(element: React.ReactElement) {
+    const pending = create(element)
+    mounts.add(pending)
+    const renderer = await pending
+    const unmount = renderer.unmount.bind(renderer)
+    renderer.unmount = async () => {
+      if (mounts.delete(pending)) await unmount()
+    }
+    return renderer
+  }
+  afterEach(async () => {
+    for (const pending of mounts) await (await pending).unmount()
+    for (const spy of workSpies.splice(0).reverse()) spy.mockRestore()
     htmlLabels.mockRestore()
     loadModel.mockRestore()
     sceneRegistry.nodes.clear()
@@ -370,7 +389,7 @@ if (process.env.PASCAL_BLOCK_EDIT_AUDIT_ISOLATED !== '1') {
     const before = childId ? pose(childId) : null
     await renderer.unmount()
     useScene.setState({ nodes: saved, dirtyNodes: new Set(Object.keys(saved) as AnyNodeId[]) })
-    const next = await create(<Scene id={hostId} editing={false} />)
+    const next = await mount(<Scene id={hostId} editing={false} />)
     await settle(next)
     expect(nodes()).toEqual(saved)
     if (childId) {
@@ -383,7 +402,7 @@ if (process.env.PASCAL_BLOCK_EDIT_AUDIT_ISOLATED !== '1') {
   for (const kind of ['catalog', 'generated'] as const)
     test(`BlockEditor: ${kind} top tilt respects stored support and reload`, async () => {
       const { host, child } = seed(kind)
-      let renderer = await create(<Scene id={host.id} />)
+      let renderer = await mount(<Scene id={host.id} />)
       try {
         await settle(renderer)
         const before = nodes()
@@ -413,7 +432,7 @@ if (process.env.PASCAL_BLOCK_EDIT_AUDIT_ISOLATED !== '1') {
   for (const finish of ['Escape', 'correct'])
     test(`BlockEditor: refused inset .19 stays open; ${finish}`, async () => {
       const { host, child } = seed('catalog', -0.85)
-      let renderer = await create(<Scene id={host.id} />)
+      let renderer = await mount(<Scene id={host.id} />)
       try {
         await settle(renderer)
         const before = nodes()
@@ -452,7 +471,7 @@ if (process.env.PASCAL_BLOCK_EDIT_AUDIT_ISOLATED !== '1') {
     })
   test('BlockEditor: childless preview and cancel match main dirty/write/history counts', async () => {
     const { host } = seed('none')
-    const renderer = await create(<Scene id={host.id} />)
+    const renderer = await mount(<Scene id={host.id} />)
     const dirty = spyOn(api.sceneApi, 'markDirty'),
       write = spyOn(api.sceneApi, 'update'),
       batch = spyOn(api.sceneApi, 'applyChanges')
@@ -480,7 +499,7 @@ if (process.env.PASCAL_BLOCK_EDIT_AUDIT_ISOLATED !== '1') {
   for (const kind of ['catalog', 'generated'] as const)
     test(`BlockEditor loop-cut: ${kind} moves to new half, undo/redo and reload`, async () => {
       const { host, child } = seed(kind, 0.5)
-      let renderer = await create(<Scene id={host.id} />)
+      let renderer = await mount(<Scene id={host.id} />)
       try {
         await settle(renderer)
         const before = nodes()
@@ -534,7 +553,7 @@ if (process.env.PASCAL_BLOCK_EDIT_AUDIT_ISOLATED !== '1') {
   for (const kind of ['none', 'catalog', 'generated'] as const)
     test(`BlockEditor ${kind}: commit, undo, redo and repeat are single writes/history steps`, async () => {
       const { host, child } = seed(kind)
-      let renderer = await create(<Scene id={host.id} />)
+      let renderer = await mount(<Scene id={host.id} />)
       const dirty = spyOn(api.sceneApi, 'markDirty'),
         write = spyOn(api.sceneApi, 'update'),
         batch = spyOn(api.sceneApi, 'applyChanges')
@@ -599,7 +618,7 @@ if (process.env.PASCAL_BLOCK_EDIT_AUDIT_ISOLATED !== '1') {
     })
   test('BlockEditor axis changes commit the complete accepted extrusion command', async () => {
     const { host } = seed('catalog')
-    const renderer = await create(<Scene id={host.id} />)
+    const renderer = await mount(<Scene id={host.id} />)
     try {
       await settle(renderer)
       await keys(['e', '0', '.', '2', 'x'])
@@ -620,7 +639,7 @@ if (process.env.PASCAL_BLOCK_EDIT_AUDIT_ISOLATED !== '1') {
   })
   test('BlockEditor: a translated horizontal top carries a generated child in every axis', async () => {
     const { host, child } = seed('generated', 0.9)
-    let renderer = await create(<Scene id={host.id} />)
+    let renderer = await mount(<Scene id={host.id} />)
     try {
       await settle(renderer)
       for (const [axis, index] of [
@@ -677,7 +696,7 @@ if (process.env.PASCAL_BLOCK_EDIT_AUDIT_ISOLATED !== '1') {
     for (const vertex of topology.vertices)
       if (vertex.id.startsWith('box1-')) vertex.position[0] -= 1
     const { host, child } = seed('catalog', 1, topology)
-    let renderer = await create(<Scene id={host.id} />)
+    let renderer = await mount(<Scene id={host.id} />)
     try {
       await settle(renderer)
       const before = nodes()[child.id]
@@ -691,74 +710,110 @@ if (process.env.PASCAL_BLOCK_EDIT_AUDIT_ISOLATED !== '1') {
       await renderer.unmount()
     }
   })
-  test('occupied 1200-face topology: cold reconciliation budget and BlockEditor commit', async () => {
-    const { host } = seed('catalog', 0.5, manyBoxes(200))
-    const renderer = await create(<Scene id={host.id} />)
-    let started = 0
-    const previewTimes: number[] = []
-    const get = api.sceneApi.get
-    const setMany = useLiveNodeOverrides.getState().setMany
-    const read = spyOn(api.sceneApi, 'get').mockImplementation((id) => {
-      if (id === host.id) started = performance.now()
-      return get(id)
-    })
-    const preview = spyOn(useLiveNodeOverrides.getState(), 'setMany').mockImplementation(
-      (updates) => {
-        previewTimes.push(performance.now() - started)
-        setMany(updates)
-      },
+  function workCounters(topologies: BlockTopology[]) {
+    const frames = ownSpy(spyOn(core, 'getBlockFaceNormal'))
+    const centroids = ownSpy(spyOn(core, 'getBlockFaceCentroid'))
+    const polygons = ownSpy(spyOn(core, 'pointInPolygon2D'))
+    const extractions = [...new Set(topologies.map((topology) => topology.faces))].map((faces) =>
+      ownSpy(spyOn(faces, 'flatMap')),
     )
-    try {
-      await settle(renderer)
-      const samples: number[] = []
-      for (let i = 0; i < 7; i++) {
-        const proposed = applyBlockCommand(host.topology, {
-          type: 'translate-components',
-          selection: { mode: 'face', ids: ['f-top'] },
-          delta: [0, 0.2 + i * 0.01, 0],
+    const indices = [...new Set(topologies.map((topology) => topology.vertices))].map((vertices) =>
+      ownSpy(spyOn(vertices, 'map')),
+    )
+    const spies = [frames, centroids, polygons, ...extractions, ...indices]
+    const reset = () => {
+      for (const spy of spies) spy.mockClear()
+    }
+    reset()
+    return {
+      reset,
+      read: () => ({
+        frames: frames.mock.calls.length,
+        centroids: centroids.mock.calls.length,
+        polygons: polygons.mock.calls.length,
+        extractions: extractions.reduce((n, spy) => n + spy.mock.calls.length, 0),
+        indices: indices.reduce((n, spy) => n + spy.mock.calls.length, 0),
+      }),
+    }
+  }
+  for (const kind of ['catalog', 'generated'] as const)
+    for (const childCount of [1, 8])
+      test(`1200-face reconciliation work is cached: ${kind}, ${childCount} children`, () => {
+        const { host, child } = seed(kind, 0.5, manyBoxes(200))
+        const children = Array.from({ length: childCount }, (_, index) =>
+          index === 0
+            ? child
+            : kind === 'catalog'
+              ? ItemNode.parse({ ...child, id: undefined })
+              : ProceduralItemNode.parse({ ...child, id: undefined }),
+        )
+        const live = { ...host, children: children.map((n) => n.id) }
+        useScene.setState({
+          nodes: {
+            ...useScene.getState().nodes,
+            [host.id]: live,
+            ...Object.fromEntries(children.map((n) => [n.id, n])),
+          },
         })
-        if (!proposed.ok) throw Error(proposed.error)
-        const start = performance.now()
-        const updates = planBlockTopologyEdit(api.sceneApi, host.id, proposed.topology)
-        samples.push(performance.now() - start)
-        expect(updates).not.toBeNull()
-      }
-      samples.sort((a, b) => a - b)
-      console.log('1200-face occupied reconciliation median ms', samples[3])
-      await keys(['e', '0', '.', '2', 'Enter'])
-      await settle(renderer)
-      console.log('1200-face BlockEditor preview reconciliation ms', previewTimes)
-      expect(previewTimes).toHaveLength(1)
-      expect(previewTimes[0]).toBeLessThan(15)
-      expect(samples[3]).toBeLessThan(15)
-      expect(useScene.temporal.getState().pastStates).toHaveLength(1)
-      expect(ui(renderer)).not.toContain(BLOCK_SUPPORT_REFUSAL)
-    } finally {
-      read.mockRestore()
-      preview.mockRestore()
-      await renderer.unmount()
-    }
-  }, 30000)
-  test('childless reconciliation does zero polygon work', async () => {
-    const { host } = seed('none')
-    const renderer = await create(<Scene id={host.id} />)
-    try {
-      await settle(renderer)
-      await keys(['e', '1', 'Escape'])
-      await settle(renderer)
-      let reads = 0
-      const topology = new Proxy(host.topology, {
-        get(target, key, receiver) {
-          if (key === 'vertices' || key === 'faces') reads++
-          return Reflect.get(target, key, receiver)
-        },
+        for (const distance of [0.2, 0.3]) {
+          const proposed = applyBlockCommand(live.topology, {
+            type: 'translate-components',
+            selection: { mode: 'face', ids: ['f-top'] },
+            delta: [0, distance, 0],
+          })
+          if (!proposed.ok) throw Error(proposed.error)
+          const counts = workCounters([live.topology, proposed.topology])
+          expect(planBlockTopologyEdit(api.sceneApi, host.id, proposed.topology)).not.toBeNull()
+          const cold = counts.read()
+          expect(cold.frames).toBeLessThanOrEqual(2400)
+          expect(cold.centroids).toBe(cold.frames)
+          expect(cold.extractions).toBeLessThanOrEqual(2)
+          expect(cold.indices).toBeLessThanOrEqual(6)
+          expect(cold.polygons).toBeGreaterThan(0)
+          expect(cold.polygons).toBeLessThanOrEqual(childCount * (kind === 'catalog' ? 2 : 404))
+          counts.reset()
+          expect(planBlockTopologyEdit(api.sceneApi, host.id, proposed.topology)).not.toBeNull()
+          const warm = counts.read()
+          expect(warm.frames).toBe(0)
+          expect(warm.centroids).toBe(0)
+          expect(warm.extractions).toBe(0)
+          expect(warm.indices).toBeLessThanOrEqual(2)
+          expect(warm.polygons).toBe(cold.polygons)
+          console.log('reconciliation work', { kind, childCount, distance, cold, warm })
+        }
       })
-      expect(planBlockTopologyEdit(api.sceneApi, host.id, topology)).toEqual([
-        [host.id, { topology }],
-      ])
-      expect(reads).toBe(0)
-    } finally {
-      await renderer.unmount()
-    }
+  test('small occupied BlockEditor preview and commit still reconcile children', async () => {
+    const { host, child } = seed('generated', 0.5, manyBoxes(2))
+    const renderer = await mount(<Scene id={host.id} />)
+    await settle(renderer)
+    await keys(['e', '0', '.', '2', 'Enter'])
+    await settle(renderer)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    expect(ui(renderer)).not.toContain(BLOCK_SUPPORT_REFUSAL)
+    expect(pose(child.id)[1]).toBeCloseTo(1.7)
+    expect(valid(host.id, child.id)).toBe(true)
+  })
+  test('childless reconciliation does zero polygon work', () => {
+    const { host } = seed('none')
+    const proposed = structuredClone(host.topology)
+    const counts = workCounters([host.topology, proposed])
+    let reads = 0
+    const topology = new Proxy(proposed, {
+      get(target, key, receiver) {
+        if (key === 'vertices' || key === 'faces') reads++
+        return Reflect.get(target, key, receiver)
+      },
+    })
+    expect(planBlockTopologyEdit(api.sceneApi, host.id, topology)).toEqual([
+      [host.id, { topology }],
+    ])
+    expect(reads).toBe(0)
+    expect(counts.read()).toEqual({
+      frames: 0,
+      centroids: 0,
+      polygons: 0,
+      extractions: 0,
+      indices: 0,
+    })
   })
 }

@@ -375,12 +375,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
         false,
       )
       if (host?.type === 'procedural-item') position.splice(0, 3, ...local.position)
-      if (
-        host?.type === 'cabinet' ||
-        host?.type === 'shelf' ||
-        host?.type === 'item' ||
-        host?.type === 'procedural-item'
-      ) {
+      if (host) {
         const footprint = floorPlaced.footprint?.(live, { nodes: scene.nodes() })
         const bounds:
           | { size: [number, number, number]; center?: [number, number, number] }
@@ -426,14 +421,14 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
           onReject: (reason) => feedback.reject(reason),
         })
         valid = !!placement
-        if (!placement && feedback.reason === 'surface-occupied') {
+        if (!placement) {
           // Null means free rotation to the caller, so return the unchanged stored pose.
           return {
             position: [...live.position] as [number, number, number],
             rotationY: Array.isArray(live.rotation) ? live.rotation[1] : live.rotation,
           }
         }
-        if (placement && host.type === 'procedural-item') {
+        if (host.type === 'procedural-item') {
           const pose =
             placement.childFrame === 'surface-local'
               ? placement.surfaceLocal!
@@ -444,16 +439,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
             rotationY: pose.rotationY,
           }
         }
-        if (placement) position[1] = placement.position[1]
-        else if (
-          feedback.reason === 'footprint-outside-surface' ||
-          feedback.reason === 'footprint-exceeds-host' ||
-          feedback.reason === 'no-surface'
-        ) {
-          const mesh = sceneRegistry.nodes.get(host.id)
-          if (mesh)
-            return session.detach(mesh.localToWorld(new Vector3(...position)).toArray(), yaw)
-        }
+        position[1] = placement.position[1]
       }
       write(live.parentId, position, yaw)
       return { position, rotationY: yaw }

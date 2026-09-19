@@ -17,6 +17,7 @@ import {
   nodeType,
   objectId,
   registerNode,
+  resolveSurfacePlacement,
   ShelfNode,
   SiteNode,
   SlabNode,
@@ -35,6 +36,7 @@ import { act, create } from '@react-three/test-renderer'
 import { Children, isValidElement, type ReactNode, useMemo, useRef } from 'react'
 import {
   BoxGeometry,
+  Euler,
   Group,
   Matrix3,
   Mesh,
@@ -1055,4 +1057,154 @@ if (process.env.PASCAL_BROWSER_FIXES_ISOLATED !== '1') {
             await renderer.unmount()
           }
         })
+  for (const kind of ['column', 'box', 'L notch'] as const)
+    for (const mode of ['offset', 'grab-offset', 'centred grab', 'centred with neighbour'] as const)
+      for (const key of ['r', 't'] as const)
+        for (const order of ['grid first', 'host first'])
+          test(`registry ${key} rotation on ${kind}: ${mode}, resolver-valid stored pose (${order})`, async () => {
+            const host =
+              kind === 'column'
+                ? ColumnNode.parse({
+                    parentId: level.id,
+                    height: 0.8,
+                    radius: 0.3,
+                    capitalStyle: 'none',
+                    baseStyle: 'none',
+                    shaftTaper: 0,
+                    shaftProfile: 'straight',
+                  })
+                : kind === 'box'
+                  ? BlockNode.parse({
+                      parentId: level.id,
+                      topology: createBoxBlockTopology(2, 1.5, 2),
+                    })
+                  : lBlock()
+            const centred = mode === 'centred grab' || mode === 'centred with neighbour'
+            const offset: [number, number, number] = centred
+              ? [0, 0.1, 0]
+              : kind === 'column'
+                ? [0.7, 0.1, 0]
+                : [0, 0.1, key === 'r' ? 0.7 : -0.7]
+            const center: [number, number, number] =
+              kind === 'column' ? [0, 0.8, 0] : kind === 'box' ? [0.9, 1.5, 0] : [-0.1, 1.5, 0.3]
+            if (kind === 'column')
+              center[1] = getSurfaceProvider(host).surfaces!(host, {
+                scene: createSceneApi(useScene),
+              })[0]!.position[1]
+            const fresh = mode === 'offset' || mode === 'centred with neighbour'
+            const child = ProceduralItemNode.parse({
+              ...childFor('registry', fresh),
+              ...(fresh
+                ? {}
+                : {
+                    parentId: host.id,
+                    position: [center[0] - offset[0], center[1], center[2] - offset[2]],
+                  }),
+              recipe: {
+                ...recipe,
+                parts: [
+                  {
+                    ...recipe.parts[0]!,
+                    shapes: [
+                      {
+                        ...recipe.parts[0]!.shapes[0]!,
+                        position: offset,
+                        size: mode === 'centred with neighbour' ? [0.8, 0.2, 0.2] : [0.1, 0.2, 0.1],
+                      },
+                    ],
+                  },
+                ],
+              },
+            })
+            const neighbour = ItemNode.parse({
+              parentId: host.id,
+              position: [center[0], center[1], center[2] + 0.2],
+              asset,
+            })
+            seed([host, child, ...(mode === 'centred with neighbour' ? [neighbour] : [])])
+            arm('registry', child, fresh)
+            const renderer = await create(<Scene mover="registry" child={child} />)
+            try {
+              await settle(renderer)
+              const pointer = pointerDispatcher()
+              const point = new Vector3(...center)
+              if (!fresh) point.x += 0.03
+              expect(
+                pointer.ray(point).cast.intersectObject(sceneRegistry.nodes.get(host.id)!, true)[0]!
+                  .face!.normal.y,
+              ).toBeGreaterThan(0.75)
+              await pointer.send(point, order)
+              await settle(renderer)
+              const before = structuredClone(
+                useScene.getState().nodes[child.id],
+              ) as ProceduralItemNode
+              expect(before.parentId).toBe(host.id)
+              const bounds = nodeRegistry.get(child.type)!.capabilities.dragBounds!(
+                before,
+                useScene.getState().nodes,
+              )
+              const midpoint = bounds.center ?? [0, bounds.size[1] / 2, 0]
+              const localBounds = {
+                min: midpoint.map((v, i) => v - bounds.size[i]! / 2) as [number, number, number],
+                max: midpoint.map((v, i) => v + bounds.size[i]! / 2) as [number, number, number],
+              }
+              const fit = (pose: ProceduralItemNode, yaw: number) => {
+                const rotatedCenter = new Vector3(...midpoint).applyEuler(new Euler(0, yaw, 0))
+                return resolveSurfacePlacement({
+                  host: useScene.getState().nodes[host.id]!,
+                  childKind: child.type,
+                  childId: child.id,
+                  childFootprint: { size: bounds.size, rotationY: yaw, localBounds },
+                  hit: {
+                    point: [
+                      pose.position[0] + rotatedCenter.x,
+                      pose.position[1],
+                      pose.position[2] + rotatedCenter.z,
+                    ],
+                    normalWorldY: 1,
+                  },
+                  origin: pose.position,
+                  scene: createSceneApi(useScene),
+                })
+              }
+              expect(fit(before, before.rotation[1])).not.toBeNull()
+              const proposedYaw = before.rotation[1] + ((key === 'r' ? 1 : -1) * Math.PI) / 4
+              expect(fit(before, proposedYaw) === null).toBe(!centred)
+              const beforeWorld = world(child.id).toArray()
+              await act(async () =>
+                window.dispatchEvent(
+                  Object.assign(new Event('keydown', { cancelable: true }), {
+                    key,
+                    code: key === 'r' ? 'KeyR' : 'KeyT',
+                    metaKey: false,
+                    ctrlKey: false,
+                    altKey: false,
+                  }),
+                ),
+              )
+              await settle(renderer)
+              const rotated = useScene.getState().nodes[child.id] as ProceduralItemNode
+              expect(rotated.parentId).toBe(host.id)
+              expect(rotated.position).toEqual(before.position)
+              expect(rotated.rotation[1]).toBeCloseTo(centred ? proposedYaw : before.rotation[1])
+              expect(sceneRegistry.nodes.get(child.id)!.rotation.y).toBeCloseTo(rotated.rotation[1])
+              expect(fit(rotated, rotated.rotation[1])).not.toBeNull()
+              expect(world(child.id).toArray()).toEqual(beforeWorld)
+              expect(previewColors(renderer)).toContain(centred ? '22c55e' : 'ef4444')
+              if (!centred) {
+                await pointer.send(point, order, true)
+                await settle(renderer)
+                expect(useInteractionScope.getState().scope.kind).toBe(fresh ? 'placing' : 'moving')
+                await pointer.send(point, order)
+                await settle(renderer)
+                expect(previewColors(renderer)).toContain('22c55e')
+                await pointer.send(point, order, true)
+                await settle(renderer)
+                expect(useInteractionScope.getState().scope.kind).toBe('idle')
+                expect(liveChild('registry').parentId).toBe(host.id)
+              }
+            } finally {
+              await renderer.unmount()
+            }
+          })
 }
