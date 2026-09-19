@@ -1332,14 +1332,24 @@ function sceneHistorySnapshotFromState(
   }
 
   const historyNodes = {} as Record<AnyNodeId, AnyNode>
-  for (const [id, node] of Object.entries(nodes) as [AnyNodeId, AnyNode][]) {
+  for (const [id, sourceNode] of Object.entries(nodes) as [AnyNodeId, AnyNode][]) {
     if (transientNodeIds.has(id)) continue
+    let node = sourceNode
+    if (node.type === 'procedural-item') {
+      let attachments: typeof node.attachments | undefined
+      for (const childId of transientNodeIds) {
+        if (!Object.hasOwn(node.attachments, childId)) continue
+        attachments ??= { ...node.attachments }
+        delete attachments[childId]
+      }
+      if (attachments) node = { ...node, attachments }
+    }
     if (!('children' in node && Array.isArray(node.children))) {
       historyNodes[id] = node
       continue
     }
     const children = (node.children as AnyNodeId[]).filter(
-      (childId) => !transientNodeIds.has(childId),
+      (childId) => !transientNodeIds.has(childId as AnyNodeId),
     )
     historyNodes[id] =
       children.length === node.children.length ? node : ({ ...node, children } as AnyNode)

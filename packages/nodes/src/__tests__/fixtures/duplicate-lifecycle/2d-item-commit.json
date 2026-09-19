@@ -1,0 +1,176 @@
+[
+  {
+    "stage": "preview",
+    "minted": 1,
+    "writes": 1,
+    "history": 0,
+    "commits": 0,
+    "moving": "fresh-0",
+    "nodes": [
+      {
+        "object": "node",
+        "id": "fresh-0",
+        "type": "item",
+        "parentId": "original-2",
+        "visible": true,
+        "metadata": {
+          "isNew": true
+        },
+        "position": [-2, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1],
+        "children": [],
+        "asset": {
+          "id": "audit-box",
+          "category": "decor",
+          "name": "Audit box",
+          "thumbnail": "",
+          "source": "library",
+          "src": "/unrenderable-host-audit.glb",
+          "dimensions": [0.1, 0.2, 0.1],
+          "offset": [0, 0, 0],
+          "rotation": [0, 0, 0],
+          "scale": [1, 1, 1]
+        }
+      }
+    ],
+    "preview": [
+      {
+        "id": "fresh-0",
+        "position": [-2, 0, 0]
+      }
+    ]
+  },
+  {
+    "stage": "pointer",
+    "minted": 1,
+    "writes": 1,
+    "history": 0,
+    "commits": 0,
+    "moving": "fresh-0",
+    "nodes": [
+      {
+        "object": "node",
+        "id": "fresh-0",
+        "type": "item",
+        "parentId": "original-2",
+        "visible": true,
+        "metadata": {
+          "isNew": true
+        },
+        "position": [-2, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1],
+        "children": [],
+        "asset": {
+          "id": "audit-box",
+          "category": "decor",
+          "name": "Audit box",
+          "thumbnail": "",
+          "source": "library",
+          "src": "/unrenderable-host-audit.glb",
+          "dimensions": [0.1, 0.2, 0.1],
+          "offset": [0, 0, 0],
+          "rotation": [0, 0, 0],
+          "scale": [1, 1, 1]
+        }
+      }
+    ],
+    "preview": [
+      {
+        "id": "fresh-0",
+        "position": [6, 0, 5]
+      }
+    ]
+  },
+  {
+    "stage": "commit",
+    "minted": 2,
+    "writes": 5,
+    "history": 1,
+    "commits": 1,
+    "moving": null,
+    "nodes": [
+      {
+        "object": "node",
+        "id": "fresh-1",
+        "type": "item",
+        "parentId": "original-2",
+        "visible": true,
+        "metadata": {},
+        "position": [6, 0, 5],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1],
+        "children": [],
+        "asset": {
+          "id": "audit-box",
+          "category": "decor",
+          "name": "Audit box",
+          "thumbnail": "",
+          "source": "library",
+          "src": "/unrenderable-host-audit.glb",
+          "dimensions": [0.1, 0.2, 0.1],
+          "offset": [0, 0, 0],
+          "rotation": [0, 0, 0],
+          "scale": [1, 1, 1]
+        }
+      }
+    ],
+    "preview": [
+      {
+        "id": "fresh-1",
+        "position": [6, 0, 5]
+      }
+    ]
+  },
+  {
+    "stage": "undo",
+    "minted": 2,
+    "writes": 6,
+    "history": 0,
+    "commits": 1,
+    "moving": null,
+    "nodes": [],
+    "preview": []
+  },
+  {
+    "stage": "redo",
+    "minted": 2,
+    "writes": 7,
+    "history": 1,
+    "commits": 1,
+    "moving": null,
+    "nodes": [
+      {
+        "object": "node",
+        "id": "fresh-1",
+        "type": "item",
+        "parentId": "original-2",
+        "visible": true,
+        "metadata": {},
+        "position": [6, 0, 5],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1],
+        "children": [],
+        "asset": {
+          "id": "audit-box",
+          "category": "decor",
+          "name": "Audit box",
+          "thumbnail": "",
+          "source": "library",
+          "src": "/unrenderable-host-audit.glb",
+          "dimensions": [0.1, 0.2, 0.1],
+          "offset": [0, 0, 0],
+          "rotation": [0, 0, 0],
+          "scale": [1, 1, 1]
+        }
+      }
+    ],
+    "preview": [
+      {
+        "id": "fresh-1",
+        "position": [6, 0, 5]
+      }
+    ]
+  }
+]

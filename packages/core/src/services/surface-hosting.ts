@@ -9,7 +9,7 @@ import { nodeRegistry } from '../registry/registry'
 import type { AnyNodeDefinition, SceneApi } from '../registry/types'
 import { getScaledDimensions, isLowProfileItemSurface } from '../schema/nodes/item'
 import type { AnyNode, AnyNodeId } from '../schema/types'
-import { canHostOnTop } from './hosting'
+import { canHostOnTop, wouldCreateHostingCycle } from './hosting'
 import { shelfRowBoardDimensions } from './shelf-board'
 import { surfaceRegionContainsFootprint, surfaceRegionContainsPoint } from './surface-region'
 
@@ -302,6 +302,7 @@ export function resolveSurfacePlacement(args: {
   onReject?: (reason: SurfaceRejectReason) => void
 }): SurfacePlacement | null {
   const { host, hit, childKind, childFootprint } = args
+  if (args.childId && wouldCreateHostingCycle(args.childId, host, args.scene)) return null
   // Defer without a refusal so the paired grid event can place on floor support.
   if (!canHostOnTop(host) || !canHostSurfaceChild(host, childKind, args.childId)) return null
   const reject = (reason: SurfaceRejectReason) => {
