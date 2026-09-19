@@ -199,6 +199,8 @@ import {
   nextLocalWallDraftStartFromStore,
   parseWallDraftLength,
   refreshWallDraftTypedEnd,
+  shouldClearFloorplanDraftAfterWallToolCommit,
+  shouldCreateWallLocallyOnFloorplanPlacement,
   shouldResetWallPlacementDraftFromStoreStart,
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
@@ -5013,6 +5015,9 @@ export function FloorplanPanel({
     | null
   >(null)
   const clearWallPlacementDraftRef = useRef<() => void>(() => {})
+  // Typed Enter emits grid:click so WallTool owns the create; this flag tells
+  // handleWallPlacementPoint to sync the 2D rubber band without creating again.
+  const wallToolOwnsTypedCommitRef = useRef(false)
   const guideTransformDraftRef = useRef<GuideTransformDraft | null>(null)
   const pendingFenceDragRef = useRef<PendingFenceDragState | null>(null)
   const wallEndpointDragRef = useRef<WallEndpointDragState | null>(null)
@@ -8340,12 +8345,15 @@ export function FloorplanPanel({
               if (!previousEnd) return
               const typedEnd = constrainWallDraftLength(draftStart, previousEnd, value)
               setDraftEnd(typedEnd)
-              // Arm WallTool's skip-re-snap, then emit grid:click so split/3D
-              // commit through the 3D owner. 2D-only still creates locally in
-              // handleWallPlacementPoint after this (viewMode === '2d').
+              // Arm WallTool's skip-re-snap, then emit grid:click so WallTool
+              // owns the create in every view mode (incl. 2D-only via adopt).
+              // handleWallPlacementPoint only syncs the 2D rubber band — it
+              // must not createWallOnCurrentLevel for this same typed commit.
               useWallDraftTyping.getState().setPendingCommitMeters(value)
+              wallToolOwnsTypedCommitRef.current = true
               emitFloorplanGridEventRef.current?.('click', typedEnd)
               wallPlacementPointRef.current?.(typedEnd)
+              wallToolOwnsTypedCommitRef.current = false
               event.preventDefault()
               event.stopPropagation()
               return
@@ -9958,13 +9966,21 @@ export function FloorplanPanel({
       // pipelines resolved endpoints ≥1e-6 apart (the duplicate
       // check compares exact endpoints).
       //
-      // That 3D path is dead in 2D-only view — the canvas is
-      // `display:none`, so the tool never commits. Mirror the slab /
-      // ceiling 2D-only committers: create locally here, gated on the
-      // view, so split / 3D keep their single-owner tool commit.
+      // Pointer clicks in 2D-only still create locally here (canvas
+      // `display:none` leaves the tool's pointer path idle). Typed Enter
+      // is different: it emits `grid:click` with pendingCommitMeters so
+      // WallTool adopts + commits in every view mode — skip local create
+      // for that same typed commit or we get two walls / a dirty rubber
+      // band after duplicate-endpoint rejection.
+      const wallToolOwnedTypedCommit = wallToolOwnsTypedCommitRef.current
       const viewIs2DOnly = useEditor.getState().viewMode === '2d'
       let createdWall: WallNode | null = null
-      if (viewIs2DOnly) {
+      if (
+        shouldCreateWallLocallyOnFloorplanPlacement({
+          viewIs2DOnly,
+          wallToolOwnedTypedCommit,
+        })
+      ) {
         createdWall = createWallOnCurrentLevel(
           draftStart,
           placementPoint,
@@ -10013,11 +10029,18 @@ export function FloorplanPanel({
           setCursorPoint(null)
           return
         }
-      } else if (!(viewIs2DOnly || publishedNextStart)) {
-        // Split view: the 3D tool owns both the commit and the continuation
-        // decision, and it clears the published chain start whenever it stops
-        // drafting (room close, T-junction, single). Mirror that here instead
-        // of chaining the 2D draft from a dead point.
+      } else if (
+        shouldClearFloorplanDraftAfterWallToolCommit({
+          viewIs2DOnly,
+          wallToolOwnedTypedCommit,
+          publishedNextStart,
+        })
+      ) {
+        // WallTool owns both the commit and the continuation decision, and
+        // clears the published chain start whenever it stops drafting (room
+        // close, T-junction, single). Mirror that here — including 2D-only
+        // typed Enter — instead of chaining the rubber band from a dead point
+        // (the old `viewIs2DOnly` skip left draft dirty after stopDrafting).
         clearWallPlacementDraft()
         setCursorPoint(null)
         return

@@ -176,6 +176,30 @@ export function adoptedWallDraftStartForTypedCommit(args: {
   return args.publishedStart
 }
 
+/**
+ * 2D-only pointer commits still create locally (3D canvas idle). Typed Enter
+ * emits grid:click so WallTool owns that create — skip the local twin.
+ */
+export function shouldCreateWallLocallyOnFloorplanPlacement(args: {
+  viewIs2DOnly: boolean
+  wallToolOwnedTypedCommit: boolean
+}): boolean {
+  return args.viewIs2DOnly && !args.wallToolOwnedTypedCommit
+}
+
+/**
+ * When WallTool already committed (and may have stopDrafting'd), clear the 2D
+ * rubber band if no next chain start was published — including 2D-only typed
+ * Enter. Pointer 2D-only create path keeps chaining via createdWall instead.
+ */
+export function shouldClearFloorplanDraftAfterWallToolCommit(args: {
+  viewIs2DOnly: boolean
+  wallToolOwnedTypedCommit: boolean
+  publishedNextStart: WallPlanPoint | null
+}): boolean {
+  return !args.publishedNextStart && (!args.viewIs2DOnly || args.wallToolOwnedTypedCommit)
+}
+
 export function getSegmentGridStep(): number {
   // A 0 step means "no grid lattice" — every grid-snap consumer guards on
   // `step <= 0` and returns the raw value, so disabling grid here suppresses

@@ -27,6 +27,8 @@ import useEditor from '../../../store/use-editor'
 import useInteractionScope from '../../../store/use-interaction-scope'
 import {
   adoptedWallDraftStartForTypedCommit,
+  shouldClearFloorplanDraftAfterWallToolCommit,
+  shouldCreateWallLocallyOnFloorplanPlacement,
   constrainWallDraftLength,
   createWallOnCurrentLevel,
   nextLocalWallDraftStartFromStore,
@@ -1154,3 +1156,75 @@ describe('adoptedWallDraftStartForTypedCommit', () => {
     ).toBeNull()
   })
 })
+
+describe('shouldCreateWallLocallyOnFloorplanPlacement', () => {
+  test('creates locally for 2D-only pointer commits', () => {
+    expect(
+      shouldCreateWallLocallyOnFloorplanPlacement({
+        viewIs2DOnly: true,
+        wallToolOwnedTypedCommit: false,
+      }),
+    ).toBe(true)
+  })
+
+  test('skips local create when typed Enter already went through WallTool', () => {
+    expect(
+      shouldCreateWallLocallyOnFloorplanPlacement({
+        viewIs2DOnly: true,
+        wallToolOwnedTypedCommit: true,
+      }),
+    ).toBe(false)
+  })
+
+  test('never creates locally in split/3D (WallTool owns create)', () => {
+    expect(
+      shouldCreateWallLocallyOnFloorplanPlacement({
+        viewIs2DOnly: false,
+        wallToolOwnedTypedCommit: false,
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('shouldClearFloorplanDraftAfterWallToolCommit', () => {
+  test('clears when WallTool stopped after typed Enter in 2D-only', () => {
+    expect(
+      shouldClearFloorplanDraftAfterWallToolCommit({
+        viewIs2DOnly: true,
+        wallToolOwnedTypedCommit: true,
+        publishedNextStart: null,
+      }),
+    ).toBe(true)
+  })
+
+  test('does not clear 2D-only pointer path when WallTool did not own commit', () => {
+    expect(
+      shouldClearFloorplanDraftAfterWallToolCommit({
+        viewIs2DOnly: true,
+        wallToolOwnedTypedCommit: false,
+        publishedNextStart: null,
+      }),
+    ).toBe(false)
+  })
+
+  test('clears split/3D when WallTool published no next start', () => {
+    expect(
+      shouldClearFloorplanDraftAfterWallToolCommit({
+        viewIs2DOnly: false,
+        wallToolOwnedTypedCommit: false,
+        publishedNextStart: null,
+      }),
+    ).toBe(true)
+  })
+
+  test('keeps drafting when WallTool published a next chain start', () => {
+    expect(
+      shouldClearFloorplanDraftAfterWallToolCommit({
+        viewIs2DOnly: true,
+        wallToolOwnedTypedCommit: true,
+        publishedNextStart: [3, 0],
+      }),
+    ).toBe(false)
+  })
+})
+

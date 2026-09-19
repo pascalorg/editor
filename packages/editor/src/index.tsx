@@ -196,6 +196,8 @@ export {
 export { preloadRegistryToolModules, ToolManager } from './components/tools/tool-manager'
 export {
   adoptedWallDraftStartForTypedCommit,
+  shouldClearFloorplanDraftAfterWallToolCommit,
+  shouldCreateWallLocallyOnFloorplanPlacement,
   chainEndJoinsExistingWall,
   constrainWallDraftLength,
   createWallOnCurrentLevel,
