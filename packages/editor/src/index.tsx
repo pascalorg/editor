@@ -195,11 +195,21 @@ export {
 } from './components/tools/stair/stair-defaults'
 export { preloadRegistryToolModules, ToolManager } from './components/tools/tool-manager'
 export {
+  adoptedWallDraftStartForTypedCommit,
   chainEndJoinsExistingWall,
+  constrainWallDraftLength,
   createWallOnCurrentLevel,
   getSegmentGridStep,
+  hasWallDraftHeading,
   isSegmentLongEnough,
+  parseWallDraftLength,
+  refreshWallDraftTypedEnd,
   resolveEndpointWallSplit,
+  resolveWallDraftCommitEnd,
+  shouldClearFloorplanDraftAfterWallToolCommit,
+  shouldCreateWallLocallyOnFloorplanPlacement,
+  shouldResetWallPlacementDraftFromStoreStart,
+  shouldRestoreTypedCommitArm,
   snapPointToGrid,
   snapScalarToGrid,
   snapWallDraftPoint,
@@ -211,6 +221,8 @@ export {
   type WallDraftSnapResult,
   type WallPlanPoint,
   type WallSnapRadii,
+  wallToolCommittedOnFloorplanClick,
+  wallToolOwnedTypedCommitFromPending,
 } from './components/tools/wall/wall-drafting'
 // `ToolbarLeft` / `ToolbarRight` are the headless-spec aliases for the
 // existing `ViewerToolbarLeft` / `ViewerToolbarRight` exports — the
@@ -723,6 +735,10 @@ export {
   useStairBuildPreview,
 } from './store/use-stair-build-preview'
 export { useUploadStore } from './store/use-upload'
+export {
+  isWallTypingKey,
+  useWallDraftTyping,
+} from './store/use-wall-draft-typing'
 export { useWallMoveGhosts, type WallMoveGhostBridge } from './store/use-wall-move-ghosts'
 export {
   default as useWallSnapIndicator,

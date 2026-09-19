@@ -122,6 +122,11 @@ import useInteractionScope, {
 import usePlacementPreview from '../../store/use-placement-preview'
 import { expandSessionSelectionForNode } from '../../store/use-session-groups'
 import { useStairBuildPreview } from '../../store/use-stair-build-preview'
+import {
+  isWallTypingKey,
+  shouldArmFloorplanSpacePan,
+  useWallDraftTyping,
+} from '../../store/use-wall-draft-typing'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
 import { FloorplanGroupActionMenu } from '../editor-2d/floorplan-group-action-menu'
@@ -188,14 +193,24 @@ import {
 } from '../tools/stair/stair-defaults'
 import {
   chainEndJoinsExistingWall,
+  constrainWallDraftLength,
   createWallOnCurrentLevel,
+  hasWallDraftHeading,
   isSegmentLongEnough,
+  nextLocalWallDraftStartFromStore,
+  parseWallDraftLength,
+  refreshWallDraftTypedEnd,
+  shouldClearFloorplanDraftAfterWallToolCommit,
+  shouldCreateWallLocallyOnFloorplanPlacement,
+  shouldResetWallPlacementDraftFromStoreStart,
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
   snapPointToGrid as snapWallPointToGrid,
   WALL_GRID_STEP,
   WALL_JOIN_SNAP_RADIUS,
   type WallPlanPoint,
+  wallToolCommittedOnFloorplanClick,
+  wallToolOwnedTypedCommitFromPending,
 } from '../tools/wall/wall-drafting'
 
 import { PALETTE_COLORS } from '../ui/primitives/color-dot'
@@ -4680,6 +4695,23 @@ function FloorplanLinearDraftLayer({
   const fenceDraftEnd = useFloorplanDraftPreview((s) => s.fenceDraftEnd)
   const roofDraftEnd = useFloorplanDraftPreview((s) => s.roofDraftEnd)
   const roofDraftQuarterTurn = useFloorplanDraftPreview((s) => s.roofDraftQuarterTurn)
+  const wallTypingInput = useWallDraftTyping((s) => s.input)
+
+  // Re-project the rubber band when the typed buffer or unit changes without
+  // waiting for a pointer move. Heading stays on the current end — no re-snap.
+  useEffect(() => {
+    if (!(isWallBuildActive && wallDraftStart)) return
+    const store = useFloorplanDraftPreview.getState()
+    const nextEnd = refreshWallDraftTypedEnd({
+      start: wallDraftStart,
+      currentEnd: store.wallDraftEnd,
+      raw: wallTypingInput,
+      unit,
+      metricNotation,
+    })
+    store.setWallDraftEnd(nextEnd)
+    if (nextEnd) store.setCursorPoint(nextEnd)
+  }, [isWallBuildActive, metricNotation, unit, wallDraftStart, wallTypingInput])
 
   const draftPolygon = useMemo(() => {
     if (
@@ -4810,7 +4842,7 @@ function FloorplanLinearDraftLayer({
     }
 
     return {
-      lengthLabel: formatMeasurement(length, unit, null, metricNotation),
+      lengthLabel: wallTypingInput || formatMeasurement(length, unit, null, metricNotation),
       midpoint: [
         (wallDraftStart[0] + wallDraftEnd[0]) / 2,
         (wallDraftStart[1] + wallDraftEnd[1]) / 2,
@@ -4818,7 +4850,15 @@ function FloorplanLinearDraftLayer({
       direction: [dx / length, dy / length] as WallPlanPoint,
       angleLabels,
     }
-  }, [isWallBuildActive, metricNotation, unit, wallDraftEnd, wallDraftStart, walls])
+  }, [
+    isWallBuildActive,
+    metricNotation,
+    unit,
+    wallDraftEnd,
+    wallDraftStart,
+    wallTypingInput,
+    walls,
+  ])
 
   // Axis guides for wall and fence drafts — parity with the 3D tools'
   // `DraftAxisGuides`: an X/Z cross through the draft start, and a single
@@ -4965,6 +5005,23 @@ export function FloorplanPanel({
   const floorplanSpacePanPressedRef = useRef(false)
   const floorplanNavigationClickSuppressedRef = useRef(false)
   const guideInteractionRef = useRef<GuideInteractionState | null>(null)
+  // Late-bound so the window keydown effect can commit the wall draft at the
+  // typed length without an ordering dependency on `handleWallPlacementPoint`
+  // / `emitFloorplanGridEvent`.
+  const wallPlacementPointRef = useRef<((point: WallPlanPoint) => void) | null>(null)
+  const emitFloorplanGridEventRef = useRef<
+    | ((
+        eventType: 'move' | 'click' | 'double-click',
+        planPoint: WallPlanPoint,
+        nativeEvent?: ReactMouseEvent<SVGSVGElement> | ReactPointerEvent<SVGSVGElement>,
+      ) => void)
+    | null
+  >(null)
+  const clearWallPlacementDraftRef = useRef<() => void>(() => {})
+  // Typed Enter emits grid:click so WallTool owns the create; this flag tells
+  // handleWallPlacementPoint to sync the 2D rubber band without creating again.
+  const wallToolOwnsTypedCommitRef = useRef(false)
+  const prevStoreWallDraftStartRef = useRef<WallPlanPoint | null>(null)
   const guideTransformDraftRef = useRef<GuideTransformDraft | null>(null)
   const pendingFenceDragRef = useRef<PendingFenceDragState | null>(null)
   const wallEndpointDragRef = useRef<WallEndpointDragState | null>(null)
@@ -5172,6 +5229,31 @@ export function FloorplanPanel({
   useEffect(() => {
     useFloorplanDraftPreview.getState().setWallDraftStart(draftStart)
   }, [draftStart])
+  // Split-view Enter is owned by the 3D capture listener (grid:click +
+  // stopPropagation), which advances useFloorplanDraftPreview.wallDraftStart
+  // without running handleWallPlacementPoint. Pull that start back into the
+  // 2D draftStart so the rubber band chains from the new segment. A null
+  // store start means 3D ended the chain — close the 2D rubber band too.
+  const storeWallDraftStart = useFloorplanDraftPreview((s) => s.wallDraftStart)
+  const wallBuildActiveForDraftSync = phase === 'structure' && mode === 'build' && tool === 'wall'
+  useEffect(() => {
+    const previousStoreStart = prevStoreWallDraftStartRef.current
+    if (
+      shouldResetWallPlacementDraftFromStoreStart(
+        wallBuildActiveForDraftSync,
+        storeWallDraftStart,
+        previousStoreStart,
+      )
+    ) {
+      clearWallPlacementDraftRef.current()
+      useFloorplanDraftPreview.getState().setCursorPoint(null)
+      prevStoreWallDraftStartRef.current = storeWallDraftStart
+      return
+    }
+    prevStoreWallDraftStartRef.current = storeWallDraftStart
+    if (!wallBuildActiveForDraftSync) return
+    setDraftStart((prev) => nextLocalWallDraftStartFromStore(storeWallDraftStart, prev))
+  }, [storeWallDraftStart, wallBuildActiveForDraftSync])
   useEffect(() => {
     useFloorplanDraftPreview.getState().setFenceDraftStart(fenceDraftStart)
   }, [fenceDraftStart])
@@ -7839,8 +7921,10 @@ export function FloorplanPanel({
     wallConstructionOptionsRef.current = undefined
     wallChainWallIdsRef.current = []
     setDraftEnd(null)
+    useWallDraftTyping.getState().clearInput()
     useSegmentDraftChain.getState().clear('wall')
   }, [setDraftEnd])
+  clearWallPlacementDraftRef.current = clearWallPlacementDraft
   const clearFencePlacementDraft = useCallback(() => {
     setFenceDraftStart(null)
     setFenceDraftEnd(null)
@@ -8228,7 +8312,92 @@ export function FloorplanPanel({
         return
       }
 
-      if (event.code === 'Space' && isFloorplanOpen) {
+      // Typed-length editing for the 2D wall draft (#308) — parity with the
+      // 3D wall tool: printable keys extend the buffer, Enter commits at the
+      // typed length, Escape (stage 1) clears it. Capture + stopPropagation
+      // beat the bubble `use-keyboard` shortcuts. Evaluated before Space pan
+      // so mid-entry Space can be a length separator (`5' 6"`). Skip when 3D
+      // already owned the key (same window, capture) so split view does not
+      // double-append.
+      if (isWallBuildActive && draftStart && !event.defaultPrevented) {
+        const typing = useWallDraftTyping.getState()
+        const hasInput = typing.input.length > 0
+        if (!event.metaKey && !event.ctrlKey && !event.altKey) {
+          if (isWallTypingKey(event.key, typing.input)) {
+            typing.append(event.key)
+            event.preventDefault()
+            event.stopPropagation()
+            return
+          }
+          if (hasInput) {
+            if (event.key === 'Backspace') {
+              typing.backspace()
+              event.preventDefault()
+              event.stopPropagation()
+              return
+            }
+            if (event.key === 'Delete') {
+              typing.clearInput()
+              event.preventDefault()
+              event.stopPropagation()
+              return
+            }
+            if (event.key === 'Escape') {
+              typing.clearInput()
+              event.preventDefault()
+              event.stopPropagation()
+              return
+            }
+            if (event.key === 'Enter') {
+              // Consume Enter while a length buffer is active; keep the buffer
+              // on parse/heading failure so the user can correct it.
+              event.preventDefault()
+              event.stopPropagation()
+              const value = parseWallDraftLength(typing.input, unit, metricNotation)
+              if (value === null || value <= 0 || !draftStart) return
+              const previousEnd = useFloorplanDraftPreview.getState().wallDraftEnd
+              if (!previousEnd || !hasWallDraftHeading(draftStart, previousEnd)) return
+              const typedEnd = constrainWallDraftLength(draftStart, previousEnd, value)
+              setDraftEnd(typedEnd)
+              // clearInput also nulls pendingCommitMeters — clear before arming.
+              typing.clearInput()
+              // Arm WallTool's skip-re-snap, then emit grid:click so WallTool
+              // owns the create in every view mode (incl. 2D-only via adopt).
+              // handleWallPlacementPoint only syncs the 2D rubber band — it
+              // must not createWallOnCurrentLevel for this same typed commit.
+              useWallDraftTyping.getState().setPendingCommitMeters(value)
+              emitFloorplanGridEventRef.current?.('click', typedEnd)
+              // Only skip local create when WallTool actually took the arm.
+              // If the tool is unmounted / preview-less, pending remains and
+              // 2D-only must still createWallOnCurrentLevel.
+              const wallToolOwned = wallToolOwnedTypedCommitFromPending(
+                useWallDraftTyping.getState().pendingCommitMeters,
+              )
+              if (!wallToolOwned) {
+                useWallDraftTyping.getState().setPendingCommitMeters(null)
+              }
+              wallToolOwnsTypedCommitRef.current = wallToolOwned
+              try {
+                wallPlacementPointRef.current?.(typedEnd)
+              } finally {
+                wallToolOwnsTypedCommitRef.current = false
+              }
+              return
+            }
+          }
+        }
+      }
+
+      if (
+        event.code === 'Space' &&
+        shouldArmFloorplanSpacePan({
+          defaultPrevented: event.defaultPrevented,
+          isFloorplanOpen,
+          isWallBuildActive,
+          hasDraftStart: Boolean(draftStart),
+          typingBuffer: useWallDraftTyping.getState().input,
+        })
+      ) {
         event.preventDefault()
         floorplanSpacePanPressedRef.current = true
         setIsSpacePanPressed(true)
@@ -8284,16 +8453,25 @@ export function FloorplanPanel({
       setRotationModifierPressed(false)
     }
 
-    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keydown', handleKeyDown, true)
     window.addEventListener('keyup', handleKeyUp)
     window.addEventListener('blur', handleBlur)
 
     return () => {
-      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keydown', handleKeyDown, true)
       window.removeEventListener('keyup', handleKeyUp)
       window.removeEventListener('blur', handleBlur)
     }
-  }, [isFloorplanOpen, isStairBuildActive, movingNode])
+  }, [
+    isFloorplanOpen,
+    isStairBuildActive,
+    movingNode,
+    isWallBuildActive,
+    draftStart,
+    unit,
+    metricNotation,
+    setDraftEnd,
+  ])
 
   useEffect(() => {
     const handleWindowPointerMove = (event: PointerEvent) => {
@@ -8959,7 +9137,7 @@ export function FloorplanPanel({
     (
       eventType: 'move' | 'click' | 'double-click',
       planPoint: WallPlanPoint,
-      nativeEvent: ReactMouseEvent<SVGSVGElement> | ReactPointerEvent<SVGSVGElement>,
+      nativeEvent?: ReactMouseEvent<SVGSVGElement> | ReactPointerEvent<SVGSVGElement>,
     ) => {
       const cos = Math.cos(buildingRotationY)
       const sin = Math.sin(buildingRotationY)
@@ -8975,32 +9153,35 @@ export function FloorplanPanel({
       const groundY = groundHeightAt(worldX, worldZ, floorplanGridWorldY)
       const worldY = groundY ?? floorplanGridWorldY
       const localY = groundY === null ? floorplanGridLocalY : groundY - buildingPosition[1]
-      const planScene =
-        nativeEvent.currentTarget.querySelector<SVGGraphicsElement>('[data-floorplan-scene]')
+      const planScene = nativeEvent
+        ? nativeEvent.currentTarget.querySelector<SVGGraphicsElement>('[data-floorplan-scene]')
+        : null
       const screenMatrix = planScene?.getScreenCTM()
 
       const gridEvent: EditorGridEvent = {
-        nativeEvent: nativeEvent.nativeEvent as any,
+        nativeEvent: (nativeEvent?.nativeEvent ?? { detail: 1 }) as any,
         position: [worldX, worldY, worldZ],
         localPosition: [planPoint[0], localY, planPoint[1]],
-        screenProjection: screenMatrix
-          ? {
-              pointer: [nativeEvent.clientX, nativeEvent.clientY],
-              localToScreen: [
-                screenMatrix.a,
-                screenMatrix.b,
-                screenMatrix.c,
-                screenMatrix.d,
-                screenMatrix.e,
-                screenMatrix.f,
-              ],
-            }
-          : undefined,
+        screenProjection:
+          nativeEvent && screenMatrix
+            ? {
+                pointer: [nativeEvent.clientX, nativeEvent.clientY],
+                localToScreen: [
+                  screenMatrix.a,
+                  screenMatrix.b,
+                  screenMatrix.c,
+                  screenMatrix.d,
+                  screenMatrix.e,
+                  screenMatrix.f,
+                ],
+              }
+            : undefined,
       }
       emitter.emit(`grid:${eventType}` as any, gridEvent)
     },
     [buildingPosition, buildingRotationY, floorplanGridLocalY, floorplanGridWorldY],
   )
+  emitFloorplanGridEventRef.current = emitFloorplanGridEvent
 
   // Build a synthetic `CeilingEvent` from a 2D plan point so the placement
   // coordinator's existing ceiling handlers (which expect the same payload
@@ -9514,15 +9695,28 @@ export function FloorplanPanel({
           applySnap: isMagneticSnapActive() && !wallAngleSnap,
         })
       }
+      // Typed-length editing (#308): length constrains distance; snap still
+      // owns the heading. Applied after magnetic / angle / alignment snap.
+      let draftEndPoint = snappedPoint
+      if (draftStart) {
+        draftEndPoint = constrainWallDraftLength(
+          draftStart,
+          snappedPoint,
+          parseWallDraftLength(useWallDraftTyping.getState().input, unit, metricNotation),
+        )
+      }
       useWallSnapIndicator
         .getState()
-        .set(wallSnap.snap ? { x: snappedPoint[0], z: snappedPoint[1], kind: wallSnap.snap } : null)
+        .set(
+          wallSnap.snap ? { x: draftEndPoint[0], z: draftEndPoint[1], kind: wallSnap.snap } : null,
+        )
 
-      // Emit `grid:move` so the registry-driven wall tool's 3D preview
-      // tracks the cursor. The local draftEnd update below is what
-      // drives the 2D draft polygon — both views update in parallel.
+      // Heading owner for 3D: the pre-length-constraint snap. 3D re-snaps
+      // this as the pointer heading and applies its own typing-buffer
+      // constrain. Emitting the projected end let 3D treat it as a pointer
+      // and steal heading near other walls (#308).
       emitFloorplanGridEvent('move', snappedPoint, event)
-      setCursorPoint(snappedPoint)
+      setCursorPoint(draftEndPoint)
 
       if (!draftStart) {
         return
@@ -9531,13 +9725,13 @@ export function FloorplanPanel({
       setDraftEnd((previousEnd) => {
         if (
           !previousEnd ||
-          previousEnd[0] !== snappedPoint[0] ||
-          previousEnd[1] !== snappedPoint[1]
+          previousEnd[0] !== draftEndPoint[0] ||
+          previousEnd[1] !== draftEndPoint[1]
         ) {
           sfxEmitter.emit('sfx:grid-snap')
         }
 
-        return snappedPoint
+        return draftEndPoint
       })
     },
     [
@@ -9582,6 +9776,8 @@ export function FloorplanPanel({
       walls,
       setCursorPoint,
       setDraftEnd,
+      unit,
+      metricNotation,
       setRoofDraftEnd,
       setFenceDraftEnd,
     ],
@@ -9771,11 +9967,18 @@ export function FloorplanPanel({
         setDraftStart(point)
         setWallChainFirstVertex(point)
         setDraftEnd(point)
+        useWallDraftTyping.getState().begin()
         setCursorPoint(point)
         return
       }
 
-      if (!isSegmentLongEnough(draftStart, point)) {
+      const placementPoint = constrainWallDraftLength(
+        draftStart,
+        point,
+        parseWallDraftLength(useWallDraftTyping.getState().input, unit, metricNotation),
+      )
+      useWallDraftTyping.getState().clearInput()
+      if (!isSegmentLongEnough(draftStart, placementPoint)) {
         return
       }
 
@@ -9784,21 +9987,33 @@ export function FloorplanPanel({
       // call. `emitFloorplanGridEvent('click', …)` in
       // `useFloorplanBackgroundPlacement` fires it synchronously
       // just before this callback runs, so by the time we get here
-      // the wall already exists in the scene. Committing here as
-      // well used to double-create walls whenever the two snap
-      // pipelines resolved endpoints ≥1e-6 apart (the duplicate
-      // check compares exact endpoints).
-      //
-      // That 3D path is dead in 2D-only view — the canvas is
-      // `display:none`, so the tool never commits. Mirror the slab /
-      // ceiling 2D-only committers: create locally here, gated on the
-      // view, so split / 3D keep their single-owner tool commit.
+      // WallTool may already have committed (even in 2D-only — the
+      // canvas is hidden but listeners stay mounted). Creating here
+      // again twins a wall; after WallTool clearInput the twin can
+      // even land unconstrained.
+      const wallToolOwnedTypedCommit = wallToolOwnsTypedCommitRef.current
       const viewIs2DOnly = useEditor.getState().viewMode === '2d'
+      const publishedNextStart = useSegmentDraftChain.getState().wall
+      const storeWallDraftStartAfterClick =
+        useFloorplanDraftPreview.getState().wallDraftStart
+      const wallToolAlreadyCommitted =
+        wallToolOwnedTypedCommit ||
+        wallToolCommittedOnFloorplanClick({
+          publishedNextStart,
+          storeWallDraftStart: storeWallDraftStartAfterClick,
+          hadLocalDraftStart: true,
+        })
       let createdWall: WallNode | null = null
-      if (viewIs2DOnly) {
+      if (
+        shouldCreateWallLocallyOnFloorplanPlacement({
+          viewIs2DOnly,
+          wallToolOwnedTypedCommit,
+          wallToolAlreadyCommitted,
+        })
+      ) {
         createdWall = createWallOnCurrentLevel(
           draftStart,
-          point,
+          placementPoint,
           wallConstructionOptionsRef.current,
         )
       }
@@ -9810,10 +10025,9 @@ export function FloorplanPanel({
       // have corner-snapped or split-adjusted): the wall we just made in
       // 2D-only, otherwise the 3D tool's published chain start. Both views
       // then draft from the same start.
-      const publishedNextStart = useSegmentDraftChain.getState().wall
       const nextStart: WallPlanPoint = createdWall
         ? (createdWall.end as WallPlanPoint)
-        : (publishedNextStart ?? point)
+        : (publishedNextStart ?? placementPoint)
 
       if (
         useEditor.getState().getContinuation('wall') === 'single' ||
@@ -9844,11 +10058,20 @@ export function FloorplanPanel({
           setCursorPoint(null)
           return
         }
-      } else if (!(viewIs2DOnly || publishedNextStart)) {
-        // Split view: the 3D tool owns both the commit and the continuation
-        // decision, and it clears the published chain start whenever it stops
-        // drafting (room close, T-junction, single). Mirror that here instead
-        // of chaining the 2D draft from a dead point.
+      } else if (
+        shouldClearFloorplanDraftAfterWallToolCommit({
+          viewIs2DOnly,
+          wallToolOwnedTypedCommit,
+          publishedNextStart,
+          storeWallDraftStart: storeWallDraftStartAfterClick,
+          wallToolAlreadyCommitted,
+        })
+      ) {
+        // WallTool owns both the commit and the continuation decision, and
+        // clears the published chain start whenever it stops drafting (room
+        // close, T-junction, single). Mirror that here — including 2D-only
+        // typed Enter — instead of chaining the rubber band from a dead point
+        // (the old `viewIs2DOnly` skip left draft dirty after stopDrafting).
         clearWallPlacementDraft()
         setCursorPoint(null)
         return
@@ -9856,6 +10079,7 @@ export function FloorplanPanel({
 
       setDraftStart(nextStart)
       setDraftEnd(nextStart)
+      useWallDraftTyping.getState().begin()
       setCursorPoint(nextStart)
     },
     [
@@ -9865,8 +10089,11 @@ export function FloorplanPanel({
       wallChainFirstVertex,
       setDraftEnd,
       setCursorPoint,
+      metricNotation,
+      unit,
     ],
   )
+  wallPlacementPointRef.current = handleWallPlacementPoint
   const { getFloorplanHitIdAtPoint, getFloorplanSelectionIdsInBounds } = useFloorplanHitTesting({
     sceneRef: floorplanSceneRef,
   })

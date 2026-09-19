@@ -26,9 +26,22 @@ import { useViewer } from '@pascal-app/viewer'
 import useEditor from '../../../store/use-editor'
 import useInteractionScope from '../../../store/use-interaction-scope'
 import {
+  adoptedWallDraftStartForTypedCommit,
+  constrainWallDraftLength,
   createWallOnCurrentLevel,
+  hasWallDraftHeading,
+  nextLocalWallDraftStartFromStore,
+  parseWallDraftLength,
+  refreshWallDraftTypedEnd,
   resolveEndpointWallSplit,
+  resolveWallDraftCommitEnd,
+  shouldClearFloorplanDraftAfterWallToolCommit,
+  shouldCreateWallLocallyOnFloorplanPlacement,
+  shouldResetWallPlacementDraftFromStoreStart,
+  shouldRestoreTypedCommitArm,
   snapWallDraftPointDetailed,
+  wallToolCommittedOnFloorplanClick,
+  wallToolOwnedTypedCommitFromPending,
 } from './wall-drafting'
 import type { WallPlanPoint } from './wall-snap-geometry'
 
@@ -966,5 +979,419 @@ describe('snapWallDraftPointDetailed', () => {
     })
     expect(freed.point).toEqual([2, 0])
     expect(freed.snap).toBeNull()
+  })
+})
+
+describe('wall draft length input', () => {
+  test('constrains the endpoint without changing the pointer heading', () => {
+    expect(constrainWallDraftLength([0, 0], [3, 4], 2)).toEqual([1.2, 1.6])
+    expect(constrainWallDraftLength([0, 0], [3, 4], null)).toEqual([3, 4])
+  })
+
+  test('collapsed start/end is a no-op so Enter must keep the typed buffer', () => {
+    expect(constrainWallDraftLength([2, 1], [2, 1], 5)).toEqual([2, 1])
+    expect(hasWallDraftHeading([2, 1], [2, 1])).toBe(false)
+    expect(hasWallDraftHeading([2, 1], [4, 1])).toBe(true)
+    expect(hasWallDraftHeading(null, [4, 1])).toBe(false)
+    expect(hasWallDraftHeading([2, 1], null)).toBe(false)
+  })
+
+  test('parses bare values in the active unit and preserves explicit units', () => {
+    expect(parseWallDraftLength('2', 'metric')).toBe(2)
+    expect(parseWallDraftLength('5', 'imperial')).toBeCloseTo(1.524, 6)
+    expect(parseWallDraftLength('180cm', 'imperial')).toBeCloseTo(1.8, 6)
+    expect(parseWallDraftLength('5\'11"', 'imperial')).toBeCloseTo(1.8034, 6)
+    expect(parseWallDraftLength('2500', 'metric', 'millimeters')).toBeCloseTo(2.5, 6)
+    expect(parseWallDraftLength('not a length', 'metric')).toBeNull()
+  })
+
+  test('the same bare buffer re-parses under a unit toggle', () => {
+    expect(parseWallDraftLength('30', 'metric')).toBe(30)
+    expect(parseWallDraftLength('30', 'imperial')).toBeCloseTo(9.144, 6)
+    expect(parseWallDraftLength('30', 'metric', 'millimeters')).toBeCloseTo(0.03, 6)
+  })
+
+  test('typed Enter commit skips snap and keeps the projected heading', () => {
+    let snapCalls = 0
+    const snapEnd = (point: WallPlanPoint): WallPlanPoint => {
+      snapCalls += 1
+      return [10, 0]
+    }
+    const end = resolveWallDraftCommitEnd({
+      start: [0, 0],
+      clickPoint: [0, 5],
+      typedCommitMeters: 5,
+      snapEnd,
+      liveTypedMeters: 5,
+    })
+    expect(snapCalls).toBe(0)
+    expect(end).toEqual([0, 5])
+  })
+
+  test('pointer click snaps first then constrains a live typed length', () => {
+    const end = resolveWallDraftCommitEnd({
+      start: [0, 0],
+      clickPoint: [8, 1],
+      typedCommitMeters: null,
+      snapEnd: () => [10, 0],
+      liveTypedMeters: 4,
+    })
+    expect(end).toEqual([4, 0])
+  })
+
+  test('pointer click without a typed buffer uses the snapped end', () => {
+    const end = resolveWallDraftCommitEnd({
+      start: [0, 0],
+      clickPoint: [8, 1],
+      typedCommitMeters: null,
+      snapEnd: () => [10, 0],
+      liveTypedMeters: null,
+    })
+    expect(end).toEqual([10, 0])
+  })
+
+  test('a 2D-armed typed commit still skips snap when WallTool reads store meters', () => {
+    let snapCalls = 0
+    const end = resolveWallDraftCommitEnd({
+      start: [0, 0],
+      clickPoint: [0, 6],
+      typedCommitMeters: 6,
+      snapEnd: () => {
+        snapCalls += 1
+        return [10, 0]
+      },
+      liveTypedMeters: null,
+    })
+    expect(snapCalls).toBe(0)
+    expect(end).toEqual([0, 6])
+  })
+
+  test('refreshing typed length reuses the current end heading without a new snap', () => {
+    const start: WallPlanPoint = [0, 0]
+    const pointerEnd: WallPlanPoint = [10, 0]
+    const afterFirstType = refreshWallDraftTypedEnd({
+      start,
+      currentEnd: pointerEnd,
+      raw: '4',
+      unit: 'metric',
+    })
+    expect(afterFirstType).toEqual([4, 0])
+
+    const afterSecondType = refreshWallDraftTypedEnd({
+      start,
+      currentEnd: afterFirstType,
+      raw: '7',
+      unit: 'metric',
+    })
+    expect(afterSecondType).toEqual([7, 0])
+
+    const afterClear = refreshWallDraftTypedEnd({
+      start,
+      currentEnd: afterSecondType,
+      raw: '',
+      unit: 'metric',
+    })
+    expect(afterClear).toEqual([7, 0])
+
+    const afterUnitToggle = refreshWallDraftTypedEnd({
+      start,
+      currentEnd: afterFirstType,
+      raw: '4',
+      unit: 'imperial',
+    })
+    expect(afterUnitToggle?.[0]).toBeCloseTo(1.2192, 4)
+    expect(afterUnitToggle?.[1]).toBe(0)
+  })
+})
+
+describe('nextLocalWallDraftStartFromStore', () => {
+  test('clears the local rubber-band start when the store start becomes null', () => {
+    expect(nextLocalWallDraftStartFromStore(null, [2, 1])).toBeNull()
+  })
+
+  test('preserves the local start when the store matches it', () => {
+    const local: WallPlanPoint = [4, 0]
+    expect(nextLocalWallDraftStartFromStore([4, 0], local)).toBe(local)
+  })
+
+  test('advances the local start when the store publishes a new chain point', () => {
+    expect(nextLocalWallDraftStartFromStore([8, 2], [4, 0])).toEqual([8, 2])
+  })
+
+  test('copies a store start when the local draft has not been set yet', () => {
+    expect(nextLocalWallDraftStartFromStore([1, 1], null)).toEqual([1, 1])
+  })
+})
+
+describe('shouldResetWallPlacementDraftFromStoreStart', () => {
+  test('resets only when a published start transitions to null', () => {
+    expect(shouldResetWallPlacementDraftFromStoreStart(true, null, [4, 0])).toBe(true)
+  })
+
+  test('does not wipe a 2D first click while store was always null', () => {
+    expect(shouldResetWallPlacementDraftFromStoreStart(true, null, null)).toBe(false)
+  })
+
+  test('does not reset while a chain start is still published', () => {
+    expect(shouldResetWallPlacementDraftFromStoreStart(true, [4, 0], [2, 0])).toBe(false)
+  })
+
+  test('does not reset when wall build is inactive', () => {
+    expect(shouldResetWallPlacementDraftFromStoreStart(false, null, [1, 0])).toBe(false)
+  })
+})
+
+describe('adoptedWallDraftStartForTypedCommit', () => {
+  test('adopts the 2D published start when 3D has not begun drafting', () => {
+    expect(
+      adoptedWallDraftStartForTypedCommit({
+        buildingState: 0,
+        typedCommitMeters: 5,
+        publishedStart: [2, 1],
+      }),
+    ).toEqual([2, 1])
+  })
+
+  test('does not adopt when 3D already owns the draft start', () => {
+    expect(
+      adoptedWallDraftStartForTypedCommit({
+        buildingState: 1,
+        typedCommitMeters: 5,
+        publishedStart: [2, 1],
+      }),
+    ).toBeNull()
+  })
+
+  test('does not adopt a pointer click with no typed commit', () => {
+    expect(
+      adoptedWallDraftStartForTypedCommit({
+        buildingState: 0,
+        typedCommitMeters: null,
+        publishedStart: [2, 1],
+      }),
+    ).toBeNull()
+  })
+
+  test('adopts a pointer click when a live typing buffer is present', () => {
+    expect(
+      adoptedWallDraftStartForTypedCommit({
+        buildingState: 0,
+        typedCommitMeters: null,
+        publishedStart: [2, 1],
+        hasLiveTypingBuffer: true,
+      }),
+    ).toEqual([2, 1])
+  })
+
+  test('does not adopt a live buffer when 3D already owns the draft', () => {
+    expect(
+      adoptedWallDraftStartForTypedCommit({
+        buildingState: 1,
+        typedCommitMeters: null,
+        publishedStart: [2, 1],
+        hasLiveTypingBuffer: true,
+      }),
+    ).toBeNull()
+  })
+})
+
+describe('shouldCreateWallLocallyOnFloorplanPlacement', () => {
+  test('creates locally for 2D-only pointer commits when WallTool did not commit', () => {
+    expect(
+      shouldCreateWallLocallyOnFloorplanPlacement({
+        viewIs2DOnly: true,
+        wallToolOwnedTypedCommit: false,
+        wallToolAlreadyCommitted: false,
+      }),
+    ).toBe(true)
+  })
+
+  test('skips local create when typed Enter already went through WallTool', () => {
+    expect(
+      shouldCreateWallLocallyOnFloorplanPlacement({
+        viewIs2DOnly: true,
+        wallToolOwnedTypedCommit: true,
+      }),
+    ).toBe(false)
+  })
+
+  test('skips local create when WallTool already committed the pointer click', () => {
+    expect(
+      shouldCreateWallLocallyOnFloorplanPlacement({
+        viewIs2DOnly: true,
+        wallToolOwnedTypedCommit: false,
+        wallToolAlreadyCommitted: true,
+      }),
+    ).toBe(false)
+  })
+
+  test('never creates locally in split/3D (WallTool owns create)', () => {
+    expect(
+      shouldCreateWallLocallyOnFloorplanPlacement({
+        viewIs2DOnly: false,
+        wallToolOwnedTypedCommit: false,
+      }),
+    ).toBe(false)
+  })
+})
+
+function wallDraftCommitCreatorCount(args: {
+  viewIs2DOnly: boolean
+  wallToolOwnedTypedCommit: boolean
+  wallToolAlreadyCommitted?: boolean
+}): number {
+  const floorplanCreates = shouldCreateWallLocallyOnFloorplanPlacement(args)
+  // WallTool creates when it owns typed Enter, already committed this click,
+  // or the view is split/3D. 2D-only pointer without WallTool falls to local.
+  const wallToolCreates =
+    args.wallToolOwnedTypedCommit ||
+    args.wallToolAlreadyCommitted === true ||
+    !args.viewIs2DOnly
+  return Number(floorplanCreates) + Number(wallToolCreates)
+}
+
+describe('wall draft commit ownership', () => {
+  test.each([
+    { viewIs2DOnly: true, wallToolOwnedTypedCommit: false, wallToolAlreadyCommitted: false },
+    { viewIs2DOnly: true, wallToolOwnedTypedCommit: false, wallToolAlreadyCommitted: true },
+    { viewIs2DOnly: true, wallToolOwnedTypedCommit: true, wallToolAlreadyCommitted: true },
+    { viewIs2DOnly: false, wallToolOwnedTypedCommit: false, wallToolAlreadyCommitted: false },
+    { viewIs2DOnly: false, wallToolOwnedTypedCommit: true, wallToolAlreadyCommitted: true },
+  ])('creates exactly one wall for %j', (args) => {
+    expect(wallDraftCommitCreatorCount(args)).toBe(1)
+  })
+
+  test('2D rubber band clears after WallTool stopDrafting on 2D-only typed Enter', () => {
+    expect(
+      shouldClearFloorplanDraftAfterWallToolCommit({
+        viewIs2DOnly: true,
+        wallToolOwnedTypedCommit: true,
+        publishedNextStart: null,
+        storeWallDraftStart: null,
+      }),
+    ).toBe(true)
+    expect(nextLocalWallDraftStartFromStore(null, [4, 0])).toBeNull()
+    expect(shouldResetWallPlacementDraftFromStoreStart(true, null, [4, 0])).toBe(true)
+  })
+})
+
+describe('shouldClearFloorplanDraftAfterWallToolCommit', () => {
+  test('clears when WallTool stopDrafting after typed Enter in 2D-only', () => {
+    expect(
+      shouldClearFloorplanDraftAfterWallToolCommit({
+        viewIs2DOnly: true,
+        wallToolOwnedTypedCommit: true,
+        publishedNextStart: null,
+        storeWallDraftStart: null,
+      }),
+    ).toBe(true)
+  })
+
+  test('does not clear 2D-only when WallTool no-op left draft start published', () => {
+    expect(
+      shouldClearFloorplanDraftAfterWallToolCommit({
+        viewIs2DOnly: true,
+        wallToolOwnedTypedCommit: true,
+        publishedNextStart: null,
+        storeWallDraftStart: [2, 1],
+      }),
+    ).toBe(false)
+  })
+
+  test('does not clear 2D-only pointer path when WallTool did not own commit', () => {
+    expect(
+      shouldClearFloorplanDraftAfterWallToolCommit({
+        viewIs2DOnly: true,
+        wallToolOwnedTypedCommit: false,
+        publishedNextStart: null,
+        storeWallDraftStart: null,
+        wallToolAlreadyCommitted: false,
+      }),
+    ).toBe(false)
+  })
+
+  test('clears 2D-only pointer path when WallTool stopDrafting already committed', () => {
+    expect(
+      shouldClearFloorplanDraftAfterWallToolCommit({
+        viewIs2DOnly: true,
+        wallToolOwnedTypedCommit: false,
+        publishedNextStart: null,
+        storeWallDraftStart: null,
+        wallToolAlreadyCommitted: true,
+      }),
+    ).toBe(true)
+  })
+
+  test('clears split/3D when WallTool published no next start', () => {
+    expect(
+      shouldClearFloorplanDraftAfterWallToolCommit({
+        viewIs2DOnly: false,
+        wallToolOwnedTypedCommit: false,
+        publishedNextStart: null,
+      }),
+    ).toBe(true)
+  })
+
+  test('keeps drafting when WallTool published a next chain start', () => {
+    expect(
+      shouldClearFloorplanDraftAfterWallToolCommit({
+        viewIs2DOnly: true,
+        wallToolOwnedTypedCommit: true,
+        publishedNextStart: [3, 0],
+        storeWallDraftStart: [3, 0],
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('shouldRestoreTypedCommitArm', () => {
+  test('restores when create never ran so 2D can still own the commit', () => {
+    expect(shouldRestoreTypedCommitArm({ createAttempted: false })).toBe(true)
+  })
+
+  test('does not re-arm after failed createWall (HUD is already empty)', () => {
+    expect(shouldRestoreTypedCommitArm({ createAttempted: true })).toBe(false)
+  })
+})
+
+describe('wallToolOwnedTypedCommitFromPending', () => {
+  test('owned when emit consumed pending meters', () => {
+    expect(wallToolOwnedTypedCommitFromPending(null)).toBe(true)
+  })
+
+  test('not owned when pending remains (WallTool did not take)', () => {
+    expect(wallToolOwnedTypedCommitFromPending(5)).toBe(false)
+  })
+})
+
+describe('wallToolCommittedOnFloorplanClick', () => {
+  test('true when WallTool published a next chain start', () => {
+    expect(
+      wallToolCommittedOnFloorplanClick({
+        publishedNextStart: [3, 0],
+        storeWallDraftStart: [3, 0],
+        hadLocalDraftStart: true,
+      }),
+    ).toBe(true)
+  })
+
+  test('true when WallTool stopDrafting nulled the store', () => {
+    expect(
+      wallToolCommittedOnFloorplanClick({
+        publishedNextStart: null,
+        storeWallDraftStart: null,
+        hadLocalDraftStart: true,
+      }),
+    ).toBe(true)
+  })
+
+  test('false when WallTool did not handle the click', () => {
+    expect(
+      wallToolCommittedOnFloorplanClick({
+        publishedNextStart: null,
+        storeWallDraftStart: [2, 1],
+        hadLocalDraftStart: true,
+      }),
+    ).toBe(false)
   })
 })
