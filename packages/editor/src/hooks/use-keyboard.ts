@@ -36,7 +36,10 @@ import { leaveUnitFocus } from '../lib/units'
 import { toggleWindowOpenState } from '../lib/window-interaction'
 import useDeleteConfirmation from '../store/use-delete-confirmation'
 import useEditor, { getActiveContinuationContext, getActiveSnapContext } from '../store/use-editor'
-import useInteractionScope, { getMovingNode } from '../store/use-interaction-scope'
+import useInteractionScope, {
+  getMovingNode,
+  isInteractionSubtreeDraft,
+} from '../store/use-interaction-scope'
 import { groupCurrentSelection, ungroupCurrentSelection } from '../store/use-session-groups'
 
 // References (guide/scan) are selected via `useEditor.selectedReferenceId`, not
@@ -120,7 +123,7 @@ const exitToSelectAfterUnconsumedCancel = () => {
     .getState()
     .endIf(
       (sc) =>
-        (sc.kind === 'placing' && useInteractionScope.getState().ownedSubtree !== null) ||
+        (sc.kind === 'placing' && isInteractionSubtreeDraft()) ||
         (sc.kind === 'reshaping' && sc.reshape === 'hole'),
     )
 

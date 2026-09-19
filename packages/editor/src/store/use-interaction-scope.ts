@@ -208,6 +208,21 @@ function isCurrentCreation(creation: SubtreeCreation): boolean {
   )
 }
 
+export function isInteractionSubtreeDraft(
+  rootId = movingNodeOf(useInteractionScope.getState().scope)?.id,
+): boolean {
+  const state = useInteractionScope.getState()
+  const creation = state.ownedSubtree?.creation ?? state.pendingSubtree
+  return Boolean(
+    creation &&
+      state.gesture &&
+      rootId === movingNodeOf(state.scope)?.id &&
+      creation.rootId === rootId &&
+      (!state.ownedSubtree || state.ownedSubtree.gesture === state.gesture) &&
+      isCurrentCreation(creation),
+  )
+}
+
 // Track the identity of the factory-created node through scene patches, never through metadata.
 // Hydration or deletion invalidates the creation even if a later scene reuses the same id.
 useScene.subscribe((scene, previous) => {

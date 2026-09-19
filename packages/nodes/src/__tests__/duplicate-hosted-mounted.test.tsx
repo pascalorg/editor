@@ -48,6 +48,7 @@ import {
 import * as ReactDOM from 'react-dom'
 import {
   BoxGeometry,
+  Euler,
   Group,
   Mesh,
   MeshBasicMaterial,
@@ -56,11 +57,14 @@ import {
   Vector2,
   Vector3,
 } from 'three'
+import gridTableRecipe from '../../../core/src/procedural-items/__fixtures__/grid-table.json'
+import { counterRecipe } from '../../../core/src/procedural-items/fixtures'
 import { FloatingActionMenu } from '../../../editor/src/components/editor/floating-action-menu'
 import { NodeActionMenu } from '../../../editor/src/components/editor/node-action-menu'
 import { FloorplanRegistryActionMenu } from '../../../editor/src/components/editor-2d/floorplan-registry-action-menu'
 import { FloorplanRegistryMoveOverlay } from '../../../editor/src/components/editor-2d/floorplan-registry-move-overlay'
 import { MoveRegistryNodeTool } from '../../../editor/src/components/tools/registry/move-registry-node-tool'
+import { CATALOG_ITEMS } from '../../../editor/src/components/ui/item-catalog/catalog-items'
 import { useGridEvents } from '../../../editor/src/hooks/use-grid-events'
 import { useKeyboard } from '../../../editor/src/hooks/use-keyboard'
 import {
@@ -2216,4 +2220,187 @@ if (process.env.PASCAL_DUPLICATE_AUDIT_ISOLATED !== '1') {
         await renderer.unmount()
       }
     })
+
+  for (const view of ['3d', '2d'])
+    for (const kind of ['item', 'shelf', 'procedural-item', 'cabinet'])
+      for (const adoption of ['unmounted', 'refused'])
+        test(`review2 pending Escape ${view} ${kind} ${adoption}`, async () => {
+          const { root } = interactionFixture(kind)
+          select(root, view)
+          const before = snapshot()
+          const adopt =
+            adoption === 'refused'
+              ? spyOn(useInteractionScope.getState(), 'adoptSubtree').mockReturnValue(false)
+              : null
+          const renderer = await create(
+            <Scene
+              menu
+              panes={adoption === 'unmounted' ? { plan: false, spatial: false } : panesFor(view)}
+            />,
+          )
+          try {
+            const copy = await duplicate(renderer)
+            expect(useInteractionScope.getState().pendingSubtree?.rootId).toBe(copy.id)
+            expect(useInteractionScope.getState().ownedSubtree).toBeNull()
+            await key('Escape')
+            await settle(renderer)
+            expect(getMovingNode()).toBeNull()
+            expect(snapshot()).toBe(before)
+            expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+          } finally {
+            adopt?.mockRestore()
+            await renderer.unmount()
+          }
+        })
+
+  for (const kind of ['item', 'shelf', 'procedural-item', 'cabinet'])
+    for (const cancel of kind === 'item'
+      ? ['tool', 'selection', 'right-click']
+      : ['tool', 'selection'])
+      test(`review2 pending cancel ${kind} ${cancel}`, async () => {
+        const { root } = interactionFixture(kind)
+        select(root)
+        const before = snapshot()
+        const adopt = spyOn(useInteractionScope.getState(), 'adoptSubtree').mockReturnValue(false)
+        const renderer = await create(<Scene menu panes={panesFor('3d')} />)
+        try {
+          const copy = await duplicate(renderer)
+          expect(useInteractionScope.getState().pendingSubtree?.rootId).toBe(copy.id)
+          if (cancel === 'tool') await key('p')
+          else if (cancel === 'selection')
+            await act(async () => useEditor.getState().setMovingNode(null))
+          else
+            await act(async () => {
+              for (const type of ['pointerdown', 'pointerup'])
+                window.dispatchEvent(
+                  Object.assign(new Event(type), {
+                    button: 2,
+                    clientX: 0,
+                    clientY: 0,
+                  }),
+                )
+            })
+          await settle(renderer)
+          expect(getMovingNode()).toBeNull()
+          expect(snapshot()).toBe(before)
+          expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+        } finally {
+          adopt.mockRestore()
+          await renderer.unmount()
+        }
+      })
+
+  for (const view of ['3d', '2d'])
+    for (const snapping of ['off', 'grid'] as const)
+      for (const childKind of [
+        'catalog',
+        'generated',
+        'generated-no-footprint',
+        'generated-recipe-fallback',
+        'generated-no-drag-bounds',
+      ])
+        test(`review2 real named surface ${view} ${snapping} ${childKind}`, async () => {
+          const host = ProceduralItemNode.parse({
+            parentId: level.id,
+            recipe: {
+              ...counterRecipe,
+              parameters: counterRecipe.parameters.map((p) =>
+                p.id === 'width' || p.id === 'depth' ? { ...p, max: 6 } : p,
+              ),
+              surfaces: [
+                {
+                  id: 'worktop',
+                  label: 'Worktop',
+                  position: [0.2, 0.9, -0.1],
+                  rotation: [0.2, 0.35, 0],
+                  size: [4, 3],
+                },
+              ],
+            },
+            parameters: { width: 4.5, depth: 3.5 },
+          })
+          const realAsset = CATALOG_ITEMS.find((a) => a.id === 'table-lamp')!
+          const root =
+            childKind === 'catalog'
+              ? ItemNode.parse({ parentId: host.id, asset: realAsset, position: [-1, 0, 0] })
+              : ProceduralItemNode.parse({
+                  parentId: host.id,
+                  position: [-1, -0.03, 0],
+                  recipe: {
+                    ...gridTableRecipe,
+                    parts: gridTableRecipe.parts.map((part) => ({
+                      ...part,
+                      shapes: part.shapes.map((shape) => ({
+                        ...shape,
+                        position: shape.position.map((v, i) => ({
+                          op: 'add',
+                          args: [v, [0.11, 0.03, 0.035][i]],
+                        })),
+                      })),
+                    })),
+                  },
+                })
+          const leaf = ItemNode.parse({
+            parentId: root.id,
+            asset: CATALOG_ITEMS.find((a) => a.id === 'books')!,
+            position: [0, 0.8, 0],
+          })
+          host.attachments[root.id] = 'worktop'
+          seed([host, root, leaf])
+          if (childKind === 'generated-no-footprint' || childKind === 'generated-recipe-fallback') {
+            const definition = nodeRegistry.get('procedural-item')!
+            registerNode({
+              ...definition,
+              capabilities: {
+                ...definition.capabilities,
+                floorPlaced: { ...definition.capabilities.floorPlaced, footprint: undefined },
+              },
+            } as never)
+          }
+          select(root, view)
+          useEditor.getState().setSnappingMode('item', snapping)
+          const before = snapshot()
+          const renderer = await create(<Scene menu />)
+          try {
+            const copy = await duplicate(renderer)
+            const point = (x: number) =>
+              new Vector3(x, 0, 0)
+                .applyEuler(new Euler(0.2, 0.35, 0))
+                .add(new Vector3(0.2, 0.9, -0.1))
+            const pointer = view === '3d' ? pointerDispatcher() : null
+            const send = async (x: number, click = false) => {
+              const p = point(x)
+              if (pointer) await pointer.send(p, 'grid first', click)
+              else await planPointer(p.x, p.z, click)
+              await settle(renderer)
+            }
+            await send(1)
+            expect(surfaceAttachmentId(useScene.getState().nodes[copy.id]!)).toBe('worktop')
+            if (
+              childKind === 'generated-recipe-fallback' ||
+              childKind === 'generated-no-drag-bounds'
+            ) {
+              const definition = nodeRegistry.get('procedural-item')!
+              registerNode({
+                ...definition,
+                capabilities: {
+                  ...definition.capabilities,
+                  dragBounds: undefined,
+                },
+              } as never)
+            }
+            await send(1, true)
+            expect(getMovingNode()).toBeNull()
+            expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+            const copied = Object.values(useScene.getState().nodes).filter(
+              (n) => !(n.id in JSON.parse(before).nodes),
+            )
+            expect(copied).toHaveLength(2)
+            const placed = copied.find((n) => n.parentId === host.id)!
+            expect(surfaceAttachmentId(placed)).toBe('worktop')
+            expect(copied.find((n) => n.id !== placed.id)?.parentId).toBe(placed.id)
+          } finally {
+            await renderer.unmount()
+          }
+        })
 }

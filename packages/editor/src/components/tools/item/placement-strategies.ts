@@ -860,6 +860,7 @@ function resolveCatalogItemSurfacePlacement(
   onReject?: PlacementContext['onSurfaceReject'],
   rawEvent = event,
   childId?: string,
+  childRotation?: [number, number, number],
 ) {
   const mesh = sceneRegistry.nodes.get(host.id)
   if (!mesh) return null
@@ -871,7 +872,11 @@ function resolveCatalogItemSurfacePlacement(
     host,
     childKind: 'item',
     childId,
-    childFootprint: { size: dimensions, rotationY: worldYaw - hostYaw },
+    childFootprint: {
+      size: dimensions,
+      rotationY: worldYaw - hostYaw,
+      rotation: [childRotation?.[0] ?? 0, worldYaw - hostYaw, childRotation?.[2] ?? 0],
+    },
     hit: host.type === 'procedural-item' ? (itemEventToSurfaceHit(host, rawEvent) ?? hit) : hit,
     origin: host.type === 'procedural-item' ? hit.point : undefined,
     scene: createSceneApi(useScene),
@@ -943,6 +948,7 @@ export const itemSurfaceStrategy = {
       ctx.onSurfaceReject,
       event,
       ctx.draftItem?.id,
+      ctx.draftItem?.rotation,
     )
     if (!pose) return null
     const draftRotation = ctx.draftItem?.rotation ?? [0, 0, 0]
@@ -983,6 +989,7 @@ export const itemSurfaceStrategy = {
       ctx.onSurfaceReject,
       rawEvent,
       ctx.draftItem.id,
+      ctx.draftItem.rotation,
     )
     if (!pose) return null
 

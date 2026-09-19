@@ -18,7 +18,9 @@ import {
   surfaceFramePose,
   updateSurfaceNode,
 } from '../../../lib/surface-attachment'
-import useInteractionScope from '../../../store/use-interaction-scope'
+import useInteractionScope, {
+  isInteractionSubtreeDraft,
+} from '../../../store/use-interaction-scope'
 import usePlacementPreview from '../../../store/use-placement-preview'
 import { stripTransient } from './placement-math'
 
@@ -120,7 +122,8 @@ export function useDraftNode(): DraftNodeHandle {
   )
 
   const adopt = useCallback((node: ItemNode): void => {
-    ownsSubtreeRef.current = useInteractionScope.getState().adoptSubtree(node.id)
+    ownsSubtreeRef.current =
+      useInteractionScope.getState().adoptSubtree(node.id) || isInteractionSubtreeDraft(node.id)
     // Save original state so destroy() can restore it
     const meta =
       typeof node.metadata === 'object' && node.metadata !== null && !Array.isArray(node.metadata)

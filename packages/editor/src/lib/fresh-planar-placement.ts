@@ -11,6 +11,7 @@ import {
   type SurfaceRejectReason,
   useScene,
 } from '@pascal-app/core'
+import { evaluateRecipe, isProceduralItem } from '@pascal-app/core/procedural-items'
 import useInteractionScope from '../store/use-interaction-scope'
 import usePlacementPreview from '../store/use-placement-preview'
 import { getPlacementMetadataRecord, stripPlacementMetadataFlags } from './placement-metadata'
@@ -141,9 +142,7 @@ function namedSurfaceRejection(
   if (surfaceId === null) return null
   const scene = createSceneApi(useScene)
   const host = root.parentId ? scene.get(root.parentId as AnyNodeId) : undefined
-  const footprint = nodeRegistry.get(root.type)?.capabilities.floorPlaced?.footprint?.(root)
-  if (!host || !footprint || !('position' in root) || !Array.isArray(root.rotation))
-    return 'no-surface'
+  if (!host || !('position' in root) || !Array.isArray(root.rotation)) return 'no-surface'
   const surface = getSurfaceProvider(host)
     .surfaces?.(host, { scene })
     .find((s) => s.id === surfaceId)
@@ -157,19 +156,27 @@ function namedSurfaceRejection(
     },
     false,
   )
-  const center = nodeRegistry.get(root.type)?.capabilities.dragBounds?.(root, scene.nodes())?.center
+  const capabilities = nodeRegistry.get(root.type)?.capabilities
+  const evaluated = isProceduralItem(root) ? evaluateRecipe(root.recipe, root.parameters) : null
+  const bounds =
+    capabilities?.dragBounds?.(root, scene.nodes()) ??
+    (evaluated
+      ? {
+          size: evaluated.dimensions,
+          center: evaluated.min.map((v, i) => (v + evaluated.max[i]!) / 2) as [
+            number,
+            number,
+            number,
+          ],
+        }
+      : undefined)
+  const size = bounds?.size ??
+    capabilities?.floorPlaced?.footprint?.(root, { nodes: scene.nodes() }).dimensions ?? [0, 0, 0]
+  const center = bounds?.center
   const localBounds = center
     ? {
-        min: center.map((value, axis) => value - footprint.dimensions[axis]! / 2) as [
-          number,
-          number,
-          number,
-        ],
-        max: center.map((value, axis) => value + footprint.dimensions[axis]! / 2) as [
-          number,
-          number,
-          number,
-        ],
+        min: center.map((value, axis) => value - size[axis]! / 2) as [number, number, number],
+        max: center.map((value, axis) => value + size[axis]! / 2) as [number, number, number],
       }
     : undefined
   let reason: SurfaceRejectReason | null = null
@@ -179,7 +186,7 @@ function namedSurfaceRejection(
     childKind: root.type,
     childId: root.id,
     childFootprint: {
-      size: footprint.dimensions,
+      size,
       rotationY: pose.rotation[1],
       rotation: pose.rotation,
       localBounds,
@@ -192,12 +199,6 @@ function namedSurfaceRejection(
     },
   })
   if (!placement) return reason ?? 'no-surface'
-  if (
-    placement.surfaceLocal?.position.some(
-      (value, axis) => Math.abs(value - root.position[axis]!) > 1e-6,
-    )
-  )
-    return 'footprint-outside-surface'
   return null
 }
 

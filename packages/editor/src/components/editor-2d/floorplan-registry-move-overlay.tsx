@@ -42,7 +42,10 @@ import useEditor, {
   isGridSnapActive,
   isMagneticSnapActive,
 } from '../../store/use-editor'
-import useInteractionScope, { useMovingNode } from '../../store/use-interaction-scope'
+import useInteractionScope, {
+  isInteractionSubtreeDraft,
+  useMovingNode,
+} from '../../store/use-interaction-scope'
 import usePlacementPreview from '../../store/use-placement-preview'
 import { useWallMoveGhosts } from '../../store/use-wall-move-ghosts'
 
@@ -489,7 +492,8 @@ export function FloorplanRegistryMoveOverlay() {
         setMovingNodeOrigin('2d')
         if (isFreshPlacementMetadata((movingNode as { metadata?: unknown }).metadata)) {
           emitter.emit('tool:cancel')
-          if (!ownsSubtree) useScene.getState().deleteNode(movingNode.id)
+          if (!ownsSubtree && !isInteractionSubtreeDraft(movingNode.id))
+            useScene.getState().deleteNode(movingNode.id)
           if (historyPaused) {
             resumeSceneHistory(useScene)
             historyPaused = false
@@ -921,7 +925,8 @@ export function FloorplanRegistryMoveOverlay() {
       setMovingNodeOrigin('2d')
       if (isFreshPlacement) {
         emitter.emit('tool:cancel')
-        if (!ownsSubtree) useScene.getState().deleteNode(movingNode.id)
+        if (!ownsSubtree && !isInteractionSubtreeDraft(movingNode.id))
+          useScene.getState().deleteNode(movingNode.id)
       }
       for (const relatedEntry of relatedEntries) {
         relatedEntry.removeAttribute('transform')
