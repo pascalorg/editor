@@ -232,7 +232,9 @@ if (process.env.PASCAL_DUPLICATE_AUDIT_ISOLATED !== '1') {
       }),
     }
     Object.assign(document, {
+      createElementNS: () => ({ setAttribute() {}, remove() {} }),
       querySelector: () => ({
+        appendChild() {},
         ownerSVGElement: svg,
         getScreenCTM: () => ({ inverse: () => ({}) }),
         querySelector: () => ({ getBoundingClientRect: () => ({ left: 0, top: 0, width: 10 }) }),
@@ -2008,4 +2010,210 @@ if (process.env.PASCAL_DUPLICATE_AUDIT_ISOLATED !== '1') {
               await renderer.unmount()
             }
           })
+
+  for (const view of ['3d', '2d'])
+    for (const kind of ['item', 'procedural-item', ...(view === '2d' ? ['cabinet'] : [])])
+      test(`audit7 subscriber error rolls back ${view} ${kind}`, async () => {
+        const { root } = interactionFixture(kind)
+        select(root, view)
+        const listeners = spyOn(window, 'addEventListener')
+        const renderer = await create(<Scene menu />)
+        let unsubscribe = () => {}
+        try {
+          const copy = await duplicate(renderer)
+          if (view === '3d') await pointerDispatcher().send(new Vector3(1, 2, 0), 'grid first')
+          else await planPointer(kind === 'cabinet' ? 6 : 1, 0)
+          await settle(renderer)
+          const before = useScene.getState()
+          const graph = snapshot()
+          const scope = useInteractionScope.getState()
+          const history = useScene.temporal.getState()
+          const fault = new Error('injected post-publication scene subscriber failure')
+          unsubscribe = useScene.subscribe((scene) => {
+            if (!scene.nodes[copy.id]) throw fault
+          })
+          let caught: unknown
+          await act(async () => {
+            try {
+              // Invoke the mounted event callback directly so EventTarget cannot defer the throw.
+              if (view === '2d') {
+                const handler = listeners.mock.calls
+                  .filter(([type]) => type === 'pointerup')
+                  .at(-1)![1]
+                ;(handler as (event: PointerEvent) => void)({
+                  button: 0,
+                  clientX: 1,
+                  clientY: 0,
+                } as PointerEvent)
+              } else
+                emitter.emit(kind === 'item' ? 'procedural-item:click' : 'grid:click', {
+                  node: useScene.getState().nodes[root.parentId!],
+                  stopPropagation() {},
+                  position: [1, 2, 0],
+                  localPosition: [1, 2, 0],
+                  nativeEvent: { button: 0, stopPropagation() {}, preventDefault() {} },
+                } as never)
+            } catch (error) {
+              caught = error
+            }
+          })
+          expect(snapshot()).toBe(graph)
+          expect(useScene.getState().nodes).toBe(before.nodes)
+          expect(useScene.temporal.getState().pastStates).toEqual(history.pastStates)
+          expect(useScene.temporal.getState().futureStates).toEqual(history.futureStates)
+          expect(useInteractionScope.getState().ownedSubtree).toBe(scope.ownedSubtree)
+          expect(getMovingNode()?.id).toBe(copy.id)
+          expect(caught).toBe(fault)
+          unsubscribe()
+          if (view === '3d')
+            await pointerDispatcher().send(new Vector3(1, 2, 0), 'grid first', true)
+          else await planPointer(1, 0, true)
+          await settle(renderer)
+          expect(getMovingNode()).toBeNull()
+          expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+        } finally {
+          unsubscribe()
+          listeners.mockRestore()
+          await renderer.unmount()
+        }
+      })
+
+  for (const view of ['2d', '3d'])
+    for (const kind of ['item', 'procedural-item'])
+      for (const refusal of view === '2d' ? ['occupied', 'shrunk'] : ['occupied'])
+        for (const check of view === '2d' ? ['unchanged', 'feedback'] : ['unchanged'])
+          test(`audit7 unregistered preset ${view} ${kind} ${refusal} ${check}`, async () => {
+            const { root, host } = lifecycleFixture(kind, false)
+            genericPlanDOM()
+            const indicators: any[] = []
+            const createElement = document.createElementNS.bind(document)
+            const elements = spyOn(document, 'createElementNS').mockImplementation(
+              (...args: any[]) => {
+                const element = createElement(...(args as [string, string]))
+                const attributes: Record<string, string> = {}
+                Object.assign(element, {
+                  setAttribute: (key: string, value: string) => {
+                    attributes[key] = value
+                  },
+                  attributes,
+                })
+                indicators.push(element)
+                return element
+              },
+            )
+            useScene.getState().updateNode(root.id, { metadata: { isNew: true } })
+            select(root, view)
+            useEditor.getState().setMovingNode(useScene.getState().nodes[root.id]!)
+            const renderer = await create(<Scene />)
+            try {
+              await settle(renderer)
+              const pointer = view === '3d' ? pointerDispatcher() : null
+              if (pointer) await pointer.send(new Vector3(1.5, 2, 0), 'grid first')
+              else await planPointer(1.5, 0)
+              await settle(renderer)
+              useScene.temporal.getState().pause()
+              if (refusal === 'shrunk')
+                useScene.getState().updateNode(host.id, {
+                  recipe: {
+                    ...host.recipe,
+                    surfaces: [{ id: 'top', label: 'Top', position: [0, 2, 0], size: [2.5, 4] }],
+                  },
+                })
+              else {
+                const obstacle = ItemNode.parse({ parentId: host.id, asset, position: [1.5, 0, 0] })
+                useScene.getState().applyNodeChanges({
+                  create: [{ node: obstacle }],
+                  update: [
+                    {
+                      id: host.id,
+                      data: {
+                        attachments: {
+                          ...(useScene.getState().nodes[host.id] as ProceduralItemNode).attachments,
+                          [obstacle.id]: 'top',
+                        },
+                      },
+                    },
+                  ],
+                })
+              }
+              const before = snapshot()
+              const node = useScene.getState().nodes[root.id]
+              if (pointer) await pointer.send(new Vector3(1.5, 2, 0), 'grid first', true)
+              else await planPointer(1.5, 0, true)
+              await settle(renderer)
+              if (check === 'feedback')
+                expect(indicators.some((el) => el.attributes.stroke === '#ef4444')).toBe(true)
+              else {
+                expect(snapshot()).toBe(before)
+                expect(useScene.getState().nodes[root.id]).toBe(node)
+              }
+              expect(getMovingNode()?.id).toBe(root.id)
+              expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+            } finally {
+              elements.mockRestore()
+              await renderer.unmount()
+            }
+          })
+
+  for (const strict of [false, true])
+    for (const kind of ['item', 'shelf', 'procedural-item', 'cabinet'])
+      for (const outcome of ['replace', 'end'])
+        test(`audit7 pending abandonment ${kind} ${outcome} strict=${strict}`, async () => {
+          const { root } = interactionFixture(kind)
+          select(root)
+          const before = snapshot()
+          const scene = <Scene menu panes={{ plan: false, spatial: false }} />
+          const renderer = await create(strict ? <StrictMode>{scene}</StrictMode> : scene)
+          try {
+            const copy = await duplicate(renderer)
+            expect(useInteractionScope.getState().pendingSubtree?.rootId).toBe(copy.id)
+            expect(useInteractionScope.getState().ownedSubtree).toBeNull()
+            await act(async () =>
+              useEditor.getState().setMovingNode(outcome === 'replace' ? root : null),
+            )
+            expect(snapshot()).toBe(before)
+            expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+            expect(useInteractionScope.getState().pendingSubtree).toBeNull()
+          } finally {
+            await renderer.unmount()
+          }
+        })
+
+  for (const continuation of ['single', 'repeat'] as const)
+    test(`audit7 fresh catalog ${continuation}`, async () => {
+      seed([])
+      useEditor.getState().setSelectedItem(asset)
+      useEditor.getState().setContinuation('point', continuation)
+      const renderer = await create(<Scene fresh />)
+      try {
+        await settle(renderer)
+        const pointer = pointerDispatcher()
+        const count = continuation === 'repeat' ? 3 : 1
+        for (let index = 0; index < count; index++) {
+          const point = new Vector3(2 + index, 0, 3)
+          await pointer.send(point, 'grid first')
+          await settle(renderer)
+          await pointer.send(point, 'grid first', true)
+          await settle(renderer)
+          const placed = Object.values(useScene.getState().nodes).filter(
+            (node) => node.type === 'item' && !node.metadata?.isNew && !node.metadata?.isTransient,
+          )
+          expect(placed).toHaveLength(index + 1)
+          expect(placed.at(-1)!.position[0]).toBeCloseTo(2 + index)
+          expect(placed.at(-1)!.position[1]).toBeCloseTo(0)
+          expect(placed.at(-1)!.position[2]).toBeCloseTo(3)
+          expect(useScene.temporal.getState().pastStates).toHaveLength(index + 1)
+        }
+        if (continuation === 'repeat') await key('Escape')
+        const placed = snapshot()
+        await act(async () => useScene.temporal.getState().undo())
+        expect(
+          Object.values(useScene.getState().nodes).filter((node) => node.type === 'item'),
+        ).toHaveLength(count - 1)
+        await act(async () => useScene.temporal.getState().redo())
+        expect(snapshot()).toBe(placed)
+      } finally {
+        await renderer.unmount()
+      }
+    })
 }

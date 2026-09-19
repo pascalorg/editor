@@ -224,14 +224,18 @@ useScene.subscribe((scene, previous) => {
   }
 })
 
-// Only adopters that implement the commit protocol may opt into interaction-end deletion.
+// Factory drafts belong to their gesture even before a mover mounts to adopt them.
 useInteractionScope.subscribe((state, previous) => {
   if (
     state.gesture === previous.gesture &&
     movingNodeOf(state.scope)?.id === movingNodeOf(previous.scope)?.id
   )
     return
-  const owned = previous.ownedSubtree
+  const owned =
+    previous.ownedSubtree ??
+    (previous.pendingSubtree && previous.gesture
+      ? { creation: previous.pendingSubtree, gesture: previous.gesture }
+      : null)
   if (
     !owned ||
     owned.gesture !== previous.gesture ||

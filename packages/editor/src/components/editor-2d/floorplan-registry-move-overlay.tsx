@@ -34,6 +34,7 @@ import {
 } from '../../lib/rigid-plan-svg-transform'
 import { movementSfxStepKey } from '../../lib/sfx/movement-tick'
 import { sfxEmitter } from '../../lib/sfx-bus'
+import { surfaceAttachmentId } from '../../lib/surface-attachment'
 import { resolveAlignmentForFloorplanView } from '../../lib/world-grid-snap'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useEditor, {
@@ -191,6 +192,26 @@ export function FloorplanRegistryMoveOverlay() {
         pointerOverFloorplan = isPointerOverFloorplanScene(event)
       }
 
+      let rejectionIndicator: SVGCircleElement | null = null
+      let lastPlanPoint: [number, number] | null = null
+      const clearRejection = () => {
+        rejectionIndicator?.remove()
+        rejectionIndicator = null
+      }
+      const showRejection = () => {
+        if (!lastPlanPoint) return
+        clearRejection()
+        rejectionIndicator = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+        rejectionIndicator.setAttribute('cx', String(lastPlanPoint[0]))
+        rejectionIndicator.setAttribute('cy', String(lastPlanPoint[1]))
+        rejectionIndicator.setAttribute('r', '0.15')
+        rejectionIndicator.setAttribute('fill', 'none')
+        rejectionIndicator.setAttribute('stroke', '#ef4444')
+        rejectionIndicator.setAttribute('stroke-width', '1.5')
+        rejectionIndicator.setAttribute('vector-effect', 'non-scaling-stroke')
+        rejectionIndicator.setAttribute('pointer-events', 'none')
+        scene.appendChild(rejectionIndicator)
+      }
       const onMove = (event: PointerEvent) => {
         // Skip 3D-canvas / other-UI cursor moves so the overlay only
         // tracks pointer events that actually correspond to a floor-plan
@@ -203,6 +224,8 @@ export function FloorplanRegistryMoveOverlay() {
         const planPoint = toMeters(event.clientX, event.clientY)
         if (!planPoint) return
         hasMovedSinceStart = true
+        lastPlanPoint = planPoint
+        clearRejection()
         session.apply({
           planPoint,
           modifiers: {
@@ -245,7 +268,10 @@ export function FloorplanRegistryMoveOverlay() {
             ?.metadata,
         )
 
-        if (freshPlacement && !commitValid) return false
+        if (freshPlacement && !commitValid) {
+          showRejection()
+          return false
+        }
 
         // Claim ownership of the drag teardown so the 3D move tool's
         // unmount-time cleanup skips its restore-from-snapshot — see
@@ -260,9 +286,13 @@ export function FloorplanRegistryMoveOverlay() {
         // and Phase 2's resume — but Phase 2's write is delegated, and
         // we skip the snapshot-diff finalUpdates path.
         if (commitValid && freshPlacement) {
-          // Owned drafts finalize directly from the preview; staging a session commit
-          // would publish an unvalidated intermediate graph before the atomic replacement.
-          if (!ownsSubtree) session.commit?.()
+          // Subtrees finalize from the preview. Staging a session commit would publish
+          // an unvalidated graph, including for presets created outside our factory.
+          const atomicPreview =
+            ownsSubtree ||
+            ('children' in movingNode && movingNode.children.length > 0) ||
+            surfaceAttachmentId(useScene.getState().nodes[movingNode.id] ?? movingNode) !== null
+          if (!atomicPreview) session.commit?.()
           const stagedNode = useScene.getState().nodes[movingNode.id]
           const preview = usePlacementPreview.getState().node
           const effective = stagedNode ? getEffectiveNode(stagedNode) : null
@@ -272,14 +302,15 @@ export function FloorplanRegistryMoveOverlay() {
             ? commitFreshPlacementSubtree(
                 movingNode.id as AnyNodeId,
                 {
-                  ...(ownsSubtree ? candidate : {}),
+                  ...(atomicPreview ? candidate : {}),
                   metadata: stripPlacementMetadataFlags(stagedNode.metadata),
                   visible: true,
                 } as Partial<AnyNode>,
+                showRejection,
               )
             : null
           if (!committedId) return false
-          if (ownsSubtree) {
+          if (atomicPreview) {
             for (const id of session.affectedIds) {
               useLiveTransforms.getState().clear(id)
               useLiveNodeOverrides.getState().clear(id)
@@ -494,6 +525,7 @@ export function FloorplanRegistryMoveOverlay() {
       // then pre-empts it so only one handler flips.
       window.addEventListener('keydown', onKey, true)
       return () => {
+        clearRejection()
         window.removeEventListener('pointermove', onPointerTrack)
         window.removeEventListener('pointermove', onMove)
         window.removeEventListener('pointerup', onPointerUp)

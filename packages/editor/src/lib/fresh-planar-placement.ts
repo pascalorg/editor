@@ -265,9 +265,17 @@ export function commitFreshPlacementSubtree(
         update: updates,
       })
       for (const node of [subtree.root, ...subtree.descendants]) scene.clearDirty(node.id)
-    } catch {
-      onReject?.('no-surface')
-      return null
+    } catch (error) {
+      // Zustand publishes before notifying subscribers. A subscriber error must restore
+      // the draft and its ownership/history, never masquerade as a placement refusal.
+      temporal.pause()
+      try {
+        if (useScene.getState() !== scene) useScene.setState(scene, true)
+      } finally {
+        useInteractionScope.setState(scope)
+        useScene.temporal.setState(temporal)
+      }
+      throw error
     } finally {
       if (!wasTracking) temporal.pause()
     }
