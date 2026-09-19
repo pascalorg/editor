@@ -182,35 +182,54 @@ export function adoptedWallDraftStartForTypedCommit(args: {
 }
 
 /**
- * 2D-only pointer commits still create locally (3D canvas idle). Typed Enter
- * emits grid:click so WallTool owns that create — skip the local twin.
+ * True when WallTool already committed on this grid:click (published a next
+ * chain start, or stopDrafting nulled the store while 2D still had a draft).
+ */
+export function wallToolCommittedOnFloorplanClick(args: {
+  publishedNextStart: WallPlanPoint | null
+  storeWallDraftStart: WallPlanPoint | null
+  hadLocalDraftStart: boolean
+}): boolean {
+  if (args.publishedNextStart != null) return true
+  return args.hadLocalDraftStart && args.storeWallDraftStart == null
+}
+
+/**
+ * 2D-only creates locally only when WallTool did not already commit on the
+ * same grid:click. WallTool stays mounted in 2D-only (hidden canvas) and
+ * receives the emit synchronously — a twin local create can land a second
+ * unconstrained wall after WallTool clearInput'd the typed buffer.
  */
 export function shouldCreateWallLocallyOnFloorplanPlacement(args: {
   viewIs2DOnly: boolean
   wallToolOwnedTypedCommit: boolean
+  wallToolAlreadyCommitted?: boolean
 }): boolean {
+  if (args.wallToolAlreadyCommitted) return false
   return args.viewIs2DOnly && !args.wallToolOwnedTypedCommit
 }
 
 /**
  * When WallTool already committed (and may have stopDrafting'd), clear the 2D
  * rubber band if no next chain start was published — including 2D-only typed
- * Enter. Require storeWallDraftStart == null for the 2D-only typed path so a
- * no-op / failed WallTool click does not discard an open rubber band.
- * Pointer 2D-only create path keeps chaining via createdWall instead.
+ * Enter and 2D-only pointer clicks WallTool handled. Require storeWallDraftStart
+ * == null for the 2D-only path so a no-op / failed WallTool click does not
+ * discard an open rubber band. Pointer 2D-only create path keeps chaining via
+ * createdWall instead.
  */
 export function shouldClearFloorplanDraftAfterWallToolCommit(args: {
   viewIs2DOnly: boolean
   wallToolOwnedTypedCommit: boolean
   publishedNextStart: WallPlanPoint | null
   storeWallDraftStart?: WallPlanPoint | null
+  wallToolAlreadyCommitted?: boolean
 }): boolean {
   if (args.publishedNextStart) return false
   if (!args.viewIs2DOnly) return true
-  return (
-    args.wallToolOwnedTypedCommit &&
-    (args.storeWallDraftStart === undefined || args.storeWallDraftStart == null)
-  )
+  const wallToolFinished =
+    args.wallToolOwnedTypedCommit || args.wallToolAlreadyCommitted === true
+  if (!wallToolFinished) return false
+  return args.storeWallDraftStart === undefined || args.storeWallDraftStart == null
 }
 
 /** True when emit consumed pendingCommitMeters (WallTool onGridClick ran past take). */

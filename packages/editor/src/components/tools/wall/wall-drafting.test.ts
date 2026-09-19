@@ -38,6 +38,7 @@ import {
   shouldCreateWallLocallyOnFloorplanPlacement,
   shouldResetWallPlacementDraftFromStoreStart,
   wallToolOwnedTypedCommitFromPending,
+  wallToolCommittedOnFloorplanClick,
   snapWallDraftPointDetailed,
 } from './wall-drafting'
 import type { WallPlanPoint } from './wall-snap-geometry'
@@ -1163,11 +1164,12 @@ describe('adoptedWallDraftStartForTypedCommit', () => {
 })
 
 describe('shouldCreateWallLocallyOnFloorplanPlacement', () => {
-  test('creates locally for 2D-only pointer commits', () => {
+  test('creates locally for 2D-only pointer commits when WallTool did not commit', () => {
     expect(
       shouldCreateWallLocallyOnFloorplanPlacement({
         viewIs2DOnly: true,
         wallToolOwnedTypedCommit: false,
+        wallToolAlreadyCommitted: false,
       }),
     ).toBe(true)
   })
@@ -1177,6 +1179,16 @@ describe('shouldCreateWallLocallyOnFloorplanPlacement', () => {
       shouldCreateWallLocallyOnFloorplanPlacement({
         viewIs2DOnly: true,
         wallToolOwnedTypedCommit: true,
+      }),
+    ).toBe(false)
+  })
+
+  test('skips local create when WallTool already committed the pointer click', () => {
+    expect(
+      shouldCreateWallLocallyOnFloorplanPlacement({
+        viewIs2DOnly: true,
+        wallToolOwnedTypedCommit: false,
+        wallToolAlreadyCommitted: true,
       }),
     ).toBe(false)
   })
@@ -1194,20 +1206,25 @@ describe('shouldCreateWallLocallyOnFloorplanPlacement', () => {
 function wallDraftCommitCreatorCount(args: {
   viewIs2DOnly: boolean
   wallToolOwnedTypedCommit: boolean
+  wallToolAlreadyCommitted?: boolean
 }): number {
   const floorplanCreates = shouldCreateWallLocallyOnFloorplanPlacement(args)
-  // Typed Enter always goes through WallTool (adopt when buildingState is 0).
-  // Pointer clicks in 2D-only stay on the floorplan create path.
-  const wallToolCreates = args.wallToolOwnedTypedCommit || !args.viewIs2DOnly
+  // WallTool creates when it owns typed Enter, already committed this click,
+  // or the view is split/3D. 2D-only pointer without WallTool falls to local.
+  const wallToolCreates =
+    args.wallToolOwnedTypedCommit ||
+    args.wallToolAlreadyCommitted === true ||
+    !args.viewIs2DOnly
   return Number(floorplanCreates) + Number(wallToolCreates)
 }
 
 describe('wall draft commit ownership', () => {
   test.each([
-    { viewIs2DOnly: true, wallToolOwnedTypedCommit: false },
-    { viewIs2DOnly: true, wallToolOwnedTypedCommit: true },
-    { viewIs2DOnly: false, wallToolOwnedTypedCommit: false },
-    { viewIs2DOnly: false, wallToolOwnedTypedCommit: true },
+    { viewIs2DOnly: true, wallToolOwnedTypedCommit: false, wallToolAlreadyCommitted: false },
+    { viewIs2DOnly: true, wallToolOwnedTypedCommit: false, wallToolAlreadyCommitted: true },
+    { viewIs2DOnly: true, wallToolOwnedTypedCommit: true, wallToolAlreadyCommitted: true },
+    { viewIs2DOnly: false, wallToolOwnedTypedCommit: false, wallToolAlreadyCommitted: false },
+    { viewIs2DOnly: false, wallToolOwnedTypedCommit: true, wallToolAlreadyCommitted: true },
   ])('creates exactly one wall for %j', (args) => {
     expect(wallDraftCommitCreatorCount(args)).toBe(1)
   })
@@ -1256,8 +1273,21 @@ describe('shouldClearFloorplanDraftAfterWallToolCommit', () => {
         wallToolOwnedTypedCommit: false,
         publishedNextStart: null,
         storeWallDraftStart: null,
+        wallToolAlreadyCommitted: false,
       }),
     ).toBe(false)
+  })
+
+  test('clears 2D-only pointer path when WallTool stopDrafting already committed', () => {
+    expect(
+      shouldClearFloorplanDraftAfterWallToolCommit({
+        viewIs2DOnly: true,
+        wallToolOwnedTypedCommit: false,
+        publishedNextStart: null,
+        storeWallDraftStart: null,
+        wallToolAlreadyCommitted: true,
+      }),
+    ).toBe(true)
   })
 
   test('clears split/3D when WallTool published no next start', () => {
@@ -1289,5 +1319,37 @@ describe('wallToolOwnedTypedCommitFromPending', () => {
 
   test('not owned when pending remains (WallTool did not take)', () => {
     expect(wallToolOwnedTypedCommitFromPending(5)).toBe(false)
+  })
+})
+
+describe('wallToolCommittedOnFloorplanClick', () => {
+  test('true when WallTool published a next chain start', () => {
+    expect(
+      wallToolCommittedOnFloorplanClick({
+        publishedNextStart: [3, 0],
+        storeWallDraftStart: [3, 0],
+        hadLocalDraftStart: true,
+      }),
+    ).toBe(true)
+  })
+
+  test('true when WallTool stopDrafting nulled the store', () => {
+    expect(
+      wallToolCommittedOnFloorplanClick({
+        publishedNextStart: null,
+        storeWallDraftStart: null,
+        hadLocalDraftStart: true,
+      }),
+    ).toBe(true)
+  })
+
+  test('false when WallTool did not handle the click', () => {
+    expect(
+      wallToolCommittedOnFloorplanClick({
+        publishedNextStart: null,
+        storeWallDraftStart: [2, 1],
+        hadLocalDraftStart: true,
+      }),
+    ).toBe(false)
   })
 })

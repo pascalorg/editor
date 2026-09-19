@@ -208,6 +208,7 @@ export {
   shouldClearFloorplanDraftAfterWallToolCommit,
   shouldCreateWallLocallyOnFloorplanPlacement,
   wallToolOwnedTypedCommitFromPending,
+  wallToolCommittedOnFloorplanClick,
   shouldResetWallPlacementDraftFromStoreStart,
   snapPointToGrid,
   snapScalarToGrid,

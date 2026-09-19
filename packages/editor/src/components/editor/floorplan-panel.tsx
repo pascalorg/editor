@@ -203,6 +203,7 @@ import {
   shouldCreateWallLocallyOnFloorplanPlacement,
   shouldResetWallPlacementDraftFromStoreStart,
   wallToolOwnedTypedCommitFromPending,
+  wallToolCommittedOnFloorplanClick,
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
   snapPointToGrid as snapWallPointToGrid,
@@ -9982,24 +9983,28 @@ export function FloorplanPanel({
       // call. `emitFloorplanGridEvent('click', …)` in
       // `useFloorplanBackgroundPlacement` fires it synchronously
       // just before this callback runs, so by the time we get here
-      // the wall already exists in the scene. Committing here as
-      // well used to double-create walls whenever the two snap
-      // pipelines resolved endpoints ≥1e-6 apart (the duplicate
-      // check compares exact endpoints).
-      //
-      // Pointer clicks in 2D-only still create locally here (canvas
-      // `display:none` leaves the tool's pointer path idle). Typed Enter
-      // is different: it emits `grid:click` with pendingCommitMeters so
-      // WallTool adopts + commits in every view mode — skip local create
-      // for that same typed commit or we get two walls / a dirty rubber
-      // band after duplicate-endpoint rejection.
+      // WallTool may already have committed (even in 2D-only — the
+      // canvas is hidden but listeners stay mounted). Creating here
+      // again twins a wall; after WallTool clearInput the twin can
+      // even land unconstrained.
       const wallToolOwnedTypedCommit = wallToolOwnsTypedCommitRef.current
       const viewIs2DOnly = useEditor.getState().viewMode === '2d'
+      const publishedNextStart = useSegmentDraftChain.getState().wall
+      const storeWallDraftStartAfterClick =
+        useFloorplanDraftPreview.getState().wallDraftStart
+      const wallToolAlreadyCommitted =
+        wallToolOwnedTypedCommit ||
+        wallToolCommittedOnFloorplanClick({
+          publishedNextStart,
+          storeWallDraftStart: storeWallDraftStartAfterClick,
+          hadLocalDraftStart: true,
+        })
       let createdWall: WallNode | null = null
       if (
         shouldCreateWallLocallyOnFloorplanPlacement({
           viewIs2DOnly,
           wallToolOwnedTypedCommit,
+          wallToolAlreadyCommitted,
         })
       ) {
         createdWall = createWallOnCurrentLevel(
@@ -10016,7 +10021,6 @@ export function FloorplanPanel({
       // have corner-snapped or split-adjusted): the wall we just made in
       // 2D-only, otherwise the 3D tool's published chain start. Both views
       // then draft from the same start.
-      const publishedNextStart = useSegmentDraftChain.getState().wall
       const nextStart: WallPlanPoint = createdWall
         ? (createdWall.end as WallPlanPoint)
         : (publishedNextStart ?? placementPoint)
@@ -10055,7 +10059,8 @@ export function FloorplanPanel({
           viewIs2DOnly,
           wallToolOwnedTypedCommit,
           publishedNextStart,
-          storeWallDraftStart: useFloorplanDraftPreview.getState().wallDraftStart,
+          storeWallDraftStart: storeWallDraftStartAfterClick,
+          wallToolAlreadyCommitted,
         })
       ) {
         // WallTool owns both the commit and the continuation decision, and

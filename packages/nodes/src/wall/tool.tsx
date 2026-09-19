@@ -876,7 +876,8 @@ export const WallTool: React.FC = () => {
             metricNotationRef.current,
           ),
         })
-        useWallDraftTyping.getState().clearInput()
+        // Keep the typing buffer until create succeeds so a 2D fallback
+        // (WallTool no-op / failed insert) can still constrain length.
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
         if (dx * dx + dz * dz < 0.01 * 0.01) {
@@ -907,6 +908,7 @@ export const WallTool: React.FC = () => {
           restoreTypedCommitArm()
           return
         }
+        useWallDraftTyping.getState().clearInput()
         chainWallIds.current.push(createdWall.id)
 
         // The new segment is now a real node — make it an alignment target
