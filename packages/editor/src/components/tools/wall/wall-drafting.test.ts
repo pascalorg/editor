@@ -30,6 +30,7 @@ import {
   createWallOnCurrentLevel,
   nextLocalWallDraftStartFromStore,
   parseWallDraftLength,
+  refreshWallDraftTypedEnd,
   resolveEndpointWallSplit,
   resolveWallDraftCommitEnd,
   snapWallDraftPointDetailed,
@@ -1031,6 +1032,43 @@ describe('wall draft length input', () => {
       liveTypedMeters: null,
     })
     expect(end).toEqual([10, 0])
+  })
+
+  test('refreshing typed length reuses the current end heading without a new snap', () => {
+    const start: WallPlanPoint = [0, 0]
+    const pointerEnd: WallPlanPoint = [10, 0]
+    const afterFirstType = refreshWallDraftTypedEnd({
+      start,
+      currentEnd: pointerEnd,
+      raw: '4',
+      unit: 'metric',
+    })
+    expect(afterFirstType).toEqual([4, 0])
+
+    const afterSecondType = refreshWallDraftTypedEnd({
+      start,
+      currentEnd: afterFirstType,
+      raw: '7',
+      unit: 'metric',
+    })
+    expect(afterSecondType).toEqual([7, 0])
+
+    const afterClear = refreshWallDraftTypedEnd({
+      start,
+      currentEnd: afterSecondType,
+      raw: '',
+      unit: 'metric',
+    })
+    expect(afterClear).toEqual([7, 0])
+
+    const afterUnitToggle = refreshWallDraftTypedEnd({
+      start,
+      currentEnd: afterFirstType,
+      raw: '4',
+      unit: 'imperial',
+    })
+    expect(afterUnitToggle?.[0]).toBeCloseTo(1.2192, 4)
+    expect(afterUnitToggle?.[1]).toBe(0)
   })
 })
 

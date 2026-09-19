@@ -201,6 +201,7 @@ export {
   getSegmentGridStep,
   isSegmentLongEnough,
   parseWallDraftLength,
+  refreshWallDraftTypedEnd,
   resolveEndpointWallSplit,
   resolveWallDraftCommitEnd,
   snapPointToGrid,

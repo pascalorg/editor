@@ -88,6 +88,26 @@ export function parseWallDraftLength(
 }
 
 /**
+ * Re-project a live draft end onto the typed length along the current heading.
+ * Used when the buffer / unit changes without a pointer move — never re-snaps.
+ * Empty or unparsable input leaves `currentEnd` unchanged.
+ */
+export function refreshWallDraftTypedEnd(args: {
+  start: WallPlanPoint | null
+  currentEnd: WallPlanPoint | null
+  raw: string
+  unit: 'metric' | 'imperial'
+  metricNotation?: 'meters' | 'millimeters'
+}): WallPlanPoint | null {
+  if (!args.start || !args.currentEnd) return args.currentEnd ?? null
+  return constrainWallDraftLength(
+    args.start,
+    args.currentEnd,
+    parseWallDraftLength(args.raw, args.unit, args.metricNotation),
+  )
+}
+
+/**
  * Resolve the wall-draft commit endpoint.
  *
  * Enter already projected `clickPoint` along the pointer heading. Re-snapping

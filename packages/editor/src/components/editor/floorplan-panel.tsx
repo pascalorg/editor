@@ -122,7 +122,11 @@ import useInteractionScope, {
 import usePlacementPreview from '../../store/use-placement-preview'
 import { expandSessionSelectionForNode } from '../../store/use-session-groups'
 import { useStairBuildPreview } from '../../store/use-stair-build-preview'
-import { isWallTypingKey, useWallDraftTyping } from '../../store/use-wall-draft-typing'
+import {
+  isWallTypingKey,
+  shouldArmFloorplanSpacePan,
+  useWallDraftTyping,
+} from '../../store/use-wall-draft-typing'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
 import { FloorplanGroupActionMenu } from '../editor-2d/floorplan-group-action-menu'
@@ -194,6 +198,7 @@ import {
   isSegmentLongEnough,
   nextLocalWallDraftStartFromStore,
   parseWallDraftLength,
+  refreshWallDraftTypedEnd,
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
   snapPointToGrid as snapWallPointToGrid,
@@ -4686,6 +4691,22 @@ function FloorplanLinearDraftLayer({
   const roofDraftQuarterTurn = useFloorplanDraftPreview((s) => s.roofDraftQuarterTurn)
   const wallTypingInput = useWallDraftTyping((s) => s.input)
 
+  // Re-project the rubber band when the typed buffer or unit changes without
+  // waiting for a pointer move. Heading stays on the current end — no re-snap.
+  useEffect(() => {
+    if (!(isWallBuildActive && wallDraftStart)) return
+    const store = useFloorplanDraftPreview.getState()
+    const nextEnd = refreshWallDraftTypedEnd({
+      start: wallDraftStart,
+      currentEnd: store.wallDraftEnd,
+      raw: wallTypingInput,
+      unit,
+      metricNotation,
+    })
+    store.setWallDraftEnd(nextEnd)
+    if (nextEnd) store.setCursorPoint(nextEnd)
+  }, [isWallBuildActive, metricNotation, unit, wallDraftStart, wallTypingInput])
+
   const draftPolygon = useMemo(() => {
     if (
       !(
@@ -8260,26 +8281,18 @@ export function FloorplanPanel({
         return
       }
 
-      if (event.code === 'Space' && isFloorplanOpen) {
-        event.preventDefault()
-        floorplanSpacePanPressedRef.current = true
-        setIsSpacePanPressed(true)
-      }
-
-      if (event.key === 'Shift') {
-        setShiftPressed(true)
-      }
-
       // Typed-length editing for the 2D wall draft (#308) — parity with the
       // 3D wall tool: printable keys extend the buffer, Enter commits at the
       // typed length, Escape (stage 1) clears it. Capture + stopPropagation
-      // beat the bubble `use-keyboard` shortcuts. Skip when 3D already owned
-      // the key (same window, capture) so split view does not double-append.
+      // beat the bubble `use-keyboard` shortcuts. Evaluated before Space pan
+      // so mid-entry Space can be a length separator (`5' 6"`). Skip when 3D
+      // already owned the key (same window, capture) so split view does not
+      // double-append.
       if (isWallBuildActive && draftStart && !event.defaultPrevented) {
         const typing = useWallDraftTyping.getState()
         const hasInput = typing.input.length > 0
         if (!event.metaKey && !event.ctrlKey && !event.altKey) {
-          if (isWallTypingKey(event.key)) {
+          if (isWallTypingKey(event.key, typing.input)) {
             typing.append(event.key)
             event.preventDefault()
             event.stopPropagation()
@@ -8319,6 +8332,25 @@ export function FloorplanPanel({
             }
           }
         }
+      }
+
+      if (
+        event.code === 'Space' &&
+        shouldArmFloorplanSpacePan({
+          defaultPrevented: event.defaultPrevented,
+          isFloorplanOpen,
+          isWallBuildActive,
+          hasDraftStart: Boolean(draftStart),
+          typingBuffer: useWallDraftTyping.getState().input,
+        })
+      ) {
+        event.preventDefault()
+        floorplanSpacePanPressedRef.current = true
+        setIsSpacePanPressed(true)
+      }
+
+      if (event.key === 'Shift') {
+        setShiftPressed(true)
       }
 
       if (

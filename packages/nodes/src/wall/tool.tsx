@@ -39,6 +39,7 @@ import {
   parseWallDraftLength,
   publishHorizontalConstructionPlane,
   publishPlacementSurface,
+  refreshWallDraftTypedEnd,
   resampleTerrainConstructionPlane,
   resolveEventConstructionPlane,
   resolvePointerSupportSurface,
@@ -952,6 +953,7 @@ export const WallTool: React.FC = () => {
     // Enter commits at the typed length along the current draft direction.
     const onKeyDown = (event: KeyboardEvent) => {
       if (buildingState.current !== 1) return
+      if (event.defaultPrevented) return
       const target = event.target as HTMLElement | null
       if (
         target instanceof HTMLInputElement ||
@@ -963,7 +965,7 @@ export const WallTool: React.FC = () => {
       const typing = useWallDraftTyping.getState()
       const hasInput = typing.input.length > 0
       if (event.metaKey || event.ctrlKey || event.altKey) return
-      if (isWallTypingKey(event.key)) {
+      if (isWallTypingKey(event.key, typing.input)) {
         typing.append(event.key)
         event.preventDefault()
         event.stopPropagation()
@@ -1027,6 +1029,53 @@ export const WallTool: React.FC = () => {
       draftPreview.setWallDraftEnd(null)
     }
   }, [])
+
+  // Live typed-length preview: re-project along the current heading when the
+  // buffer or unit/notation changes, without a pointer move or re-snap.
+  useEffect(() => {
+    if (buildingState.current !== 1) return
+    const start: WallPlanPoint = [startingPoint.current.x, startingPoint.current.z]
+    const currentEnd: WallPlanPoint = [endingPoint.current.x, endingPoint.current.z]
+    const nextEnd = refreshWallDraftTypedEnd({
+      start,
+      currentEnd,
+      raw: wallTypingInput,
+      unit,
+      metricNotation,
+    })
+    if (!nextEnd) return
+    // No heading yet (first click, no pointer move) — constrain is a no-op.
+    if (Math.hypot(nextEnd[0] - start[0], nextEnd[1] - start[1]) < 1e-6) return
+    endingPoint.current.set(nextEnd[0], endingPoint.current.y, nextEnd[1])
+    useFloorplanDraftPreview.getState().setWallDraftEnd(nextEnd)
+    cursorRef.current?.position.copy(endingPoint.current)
+    if (wallPreviewRef.current) {
+      updateWallPreview(
+        wallPreviewRef.current,
+        startingPoint.current,
+        endingPoint.current,
+        previewHeightRef.current,
+        previewThicknessRef.current,
+      )
+    }
+    setAxisGuide({
+      origin: start,
+      endOrigin: nextEnd,
+      y: startingPoint.current.y,
+      angleLabel: getNearestAxisAngleLabel(start, nextEnd, startingPoint.current.y),
+    })
+    setDraftMeasurement(
+      getDraftMeasurementState(
+        start,
+        nextEnd,
+        getCurrentLevelWalls(),
+        unit,
+        metricNotation,
+        startingPoint.current.y,
+        previewHeightRef.current,
+      ),
+    )
+  }, [metricNotation, unit, wallTypingInput])
 
   return (
     <group>

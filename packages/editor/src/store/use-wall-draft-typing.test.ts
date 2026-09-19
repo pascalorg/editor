@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { isWallTypingKey, useWallDraftTyping } from './use-wall-draft-typing'
+import {
+  isWallTypingKey,
+  shouldArmFloorplanSpacePan,
+  useWallDraftTyping,
+} from './use-wall-draft-typing'
 
 describe('useWallDraftTyping', () => {
   beforeEach(() => {
@@ -40,15 +44,64 @@ describe('useWallDraftTyping', () => {
 })
 
 describe('isWallTypingKey', () => {
-  test('accepts digits, unit letters, and separators', () => {
-    for (const key of ['0', '9', 'm', 'c', '.', "'", '"', '-', ' ']) {
+  test('empty buffer only starts on a digit or decimal point', () => {
+    for (const key of ['0', '9', '.']) {
       expect(isWallTypingKey(key)).toBe(true)
+      expect(isWallTypingKey(key, '')).toBe(true)
+    }
+    for (const key of ['m', 'c', 'f', ' ', "'", '"', '+', '-']) {
+      expect(isWallTypingKey(key)).toBe(false)
+      expect(isWallTypingKey(key, '')).toBe(false)
+    }
+  })
+
+  test('non-empty buffer accepts digits, unit letters, and separators', () => {
+    for (const key of ['0', '9', 'm', 'c', 'f', '.', "'", '"', '-', '+', ' ']) {
+      expect(isWallTypingKey(key, '5')).toBe(true)
     }
   })
 
   test('rejects modifiers and multi-key names', () => {
     for (const key of ['Enter', 'Escape', 'Tab', 'Shift', '', 'F1']) {
       expect(isWallTypingKey(key)).toBe(false)
+      expect(isWallTypingKey(key, '5')).toBe(false)
     }
+  })
+})
+
+describe('shouldArmFloorplanSpacePan', () => {
+  const openFloorplan = {
+    defaultPrevented: false,
+    isFloorplanOpen: true,
+    isWallBuildActive: true,
+    hasDraftStart: true,
+    typingBuffer: '',
+  }
+
+  test('arms pan when the floorplan is open and the length buffer is empty', () => {
+    expect(shouldArmFloorplanSpacePan(openFloorplan)).toBe(true)
+  })
+
+  test('skips pan when 3D typing already owned the key', () => {
+    expect(shouldArmFloorplanSpacePan({ ...openFloorplan, defaultPrevented: true })).toBe(false)
+  })
+
+  test('skips pan while a wall draft is mid typed-length entry', () => {
+    expect(shouldArmFloorplanSpacePan({ ...openFloorplan, typingBuffer: "5'" })).toBe(false)
+  })
+
+  test('still pans on an open wall draft when the buffer is empty', () => {
+    expect(
+      shouldArmFloorplanSpacePan({
+        ...openFloorplan,
+        isWallBuildActive: true,
+        hasDraftStart: true,
+        typingBuffer: '',
+      }),
+    ).toBe(true)
+  })
+
+  test('does not pan when the floorplan is closed', () => {
+    expect(shouldArmFloorplanSpacePan({ ...openFloorplan, isFloorplanOpen: false })).toBe(false)
   })
 })

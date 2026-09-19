@@ -28,6 +28,25 @@ export const useWallDraftTyping = create<WallDraftTypingState>((set) => ({
 }))
 
 /** Keys the wall typing buffer accepts (digits, unit letters, separators). */
-export function isWallTypingKey(key: string): boolean {
-  return key.length === 1 && /^[0-9a-zA-Z.'"+\- ]$/.test(key)
+export function isWallTypingKey(key: string, buffer = ''): boolean {
+  if (key.length !== 1 || !/^[0-9a-zA-Z.'"+\- ]$/.test(key)) return false
+  // Empty buffer may only start from a digit or decimal — letters / Space /
+  // unit suffixes must not swallow draft-time shortcuts such as `c`.
+  if (buffer.length === 0) return /^[0-9.]$/.test(key)
+  return true
+}
+
+/** Floorplan Space-pan must not steal a mid-entry typed length, or a key 3D already owned. */
+export function shouldArmFloorplanSpacePan(args: {
+  defaultPrevented: boolean
+  isFloorplanOpen: boolean
+  isWallBuildActive: boolean
+  hasDraftStart: boolean
+  typingBuffer: string
+}): boolean {
+  if (!args.isFloorplanOpen || args.defaultPrevented) return false
+  if (args.isWallBuildActive && args.hasDraftStart && args.typingBuffer.length > 0) {
+    return false
+  }
+  return true
 }
