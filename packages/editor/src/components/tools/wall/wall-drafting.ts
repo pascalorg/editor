@@ -88,6 +88,28 @@ export function parseWallDraftLength(
 }
 
 /**
+ * Resolve the wall-draft commit endpoint.
+ *
+ * Enter already projected `clickPoint` along the pointer heading. Re-snapping
+ * that projected point can steal heading near other walls, then length is
+ * reapplied along the wrong ray. Skip snap and only re-apply the typed metres
+ * (idempotent). Pointer clicks still snap, then constrain if a live buffer
+ * is present.
+ */
+export function resolveWallDraftCommitEnd(args: {
+  start: WallPlanPoint
+  clickPoint: WallPlanPoint
+  typedCommitMeters: number | null
+  snapEnd: (point: WallPlanPoint) => WallPlanPoint
+  liveTypedMeters: number | null
+}): WallPlanPoint {
+  if (args.typedCommitMeters != null) {
+    return constrainWallDraftLength(args.start, args.clickPoint, args.typedCommitMeters)
+  }
+  return constrainWallDraftLength(args.start, args.snapEnd(args.clickPoint), args.liveTypedMeters)
+}
+
+/**
  * Split-view 2D rubber band: copy the draft store's chain start into local
  * `draftStart`. A null store start means the 3D owner ended the chain, so the
  * local start must clear too — otherwise the 2D band stays open.

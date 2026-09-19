@@ -202,6 +202,7 @@ export {
   isSegmentLongEnough,
   parseWallDraftLength,
   resolveEndpointWallSplit,
+  resolveWallDraftCommitEnd,
   snapPointToGrid,
   snapScalarToGrid,
   snapWallDraftPoint,

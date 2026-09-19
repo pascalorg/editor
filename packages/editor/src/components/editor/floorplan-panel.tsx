@@ -9622,10 +9622,11 @@ export function FloorplanPanel({
           wallSnap.snap ? { x: draftEndPoint[0], z: draftEndPoint[1], kind: wallSnap.snap } : null,
         )
 
-      // Emit `grid:move` so the registry-driven wall tool's 3D preview
-      // tracks the cursor. The local draftEnd update below is what
-      // drives the 2D draft polygon — both views update in parallel.
-      emitFloorplanGridEvent('move', draftEndPoint, event)
+      // Heading owner for 3D: the pre-length-constraint snap. 3D re-snaps
+      // this as the pointer heading and applies its own typing-buffer
+      // constrain. Emitting the projected end let 3D treat it as a pointer
+      // and steal heading near other walls (#308).
+      emitFloorplanGridEvent('move', snappedPoint, event)
       setCursorPoint(draftEndPoint)
 
       if (!draftStart) {

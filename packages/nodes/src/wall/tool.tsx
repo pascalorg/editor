@@ -42,6 +42,7 @@ import {
   resampleTerrainConstructionPlane,
   resolveEventConstructionPlane,
   resolvePointerSupportSurface,
+  resolveWallDraftCommitEnd,
   type SegmentAngleReference,
   snapWallDraftPointDetailed,
   triggerSFX,
@@ -450,6 +451,12 @@ function getBelowLevelWalls(): WallNode[] {
 export const WallTool: React.FC = () => {
   const unit = useViewer((state) => state.unit)
   const metricNotation = useViewer((state) => state.metricNotation)
+  // Read through refs so toggling units does not tear down the draft
+  // listeners, clear the typing buffer, or drop the 2D rubber band (#308).
+  const unitRef = useRef(unit)
+  unitRef.current = unit
+  const metricNotationRef = useRef(metricNotation)
+  metricNotationRef.current = metricNotation
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const activeLevelHeight = useScene((state) => {
@@ -505,6 +512,8 @@ export const WallTool: React.FC = () => {
     [],
   )
 
+  // Unit / notation live in refs so toggling them does not re-run this
+  // effect (cleanup would clearInput and null the shared draft preview).
   useEffect(() => {
     let gridPosition: WallPlanPoint = [0, 0]
     let previousWallEnd: [number, number] | null = null
@@ -681,7 +690,11 @@ export const WallTool: React.FC = () => {
         gridPosition = constrainWallDraftLength(
           [startingPoint.current.x, startingPoint.current.z],
           gridPosition,
-          parseWallDraftLength(useWallDraftTyping.getState().input, unit, metricNotation),
+          parseWallDraftLength(
+            useWallDraftTyping.getState().input,
+            unitRef.current,
+            metricNotationRef.current,
+          ),
         )
       }
       // Stand the magnetic beacon at the endpoint when it locked onto an
@@ -734,8 +747,8 @@ export const WallTool: React.FC = () => {
             [startingPoint.current.x, startingPoint.current.z],
             snappedLocal,
             walls,
-            unit,
-            metricNotation,
+            unitRef.current,
+            metricNotationRef.current,
             startingPoint.current.y,
             previewHeightRef.current,
           ),
@@ -804,26 +817,34 @@ export const WallTool: React.FC = () => {
         // positions it for the active segment.
         setDraftMeasurement(null)
       } else if (buildingState.current === 1) {
-        const angleLocked = isAngleSnapActive()
-        let snappedEnd = alignPoint(
-          snapWallDraftPointDetailed({
-            point: localClick,
-            walls: snapWalls,
-            start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
-            angleSnap: angleLocked,
-            magnetic: isMagneticSnapActive(),
-          }).point,
-          { applySnap: !angleLocked },
-        )
-        const typedMeters =
-          pendingTypedLengthMeters.current ??
-          parseWallDraftLength(useWallDraftTyping.getState().input, unit, metricNotation)
+        const start: WallPlanPoint = [startingPoint.current.x, startingPoint.current.z]
+        const typedCommitMeters = pendingTypedLengthMeters.current
         pendingTypedLengthMeters.current = null
-        snappedEnd = constrainWallDraftLength(
-          [startingPoint.current.x, startingPoint.current.z],
-          snappedEnd,
-          typedMeters,
-        )
+        const angleLocked = isAngleSnapActive()
+        // Enter commits with `pendingTypedLengthMeters` set and `localClick`
+        // already the typed projection. Do not re-snap that point — nearby
+        // walls can steal heading, then length is reapplied along the new ray.
+        const snappedEnd = resolveWallDraftCommitEnd({
+          start,
+          clickPoint: localClick,
+          typedCommitMeters,
+          snapEnd: (point) =>
+            alignPoint(
+              snapWallDraftPointDetailed({
+                point,
+                walls: snapWalls,
+                start: angleLocked ? start : undefined,
+                angleSnap: angleLocked,
+                magnetic: isMagneticSnapActive(),
+              }).point,
+              { applySnap: !angleLocked },
+            ),
+          liveTypedMeters: parseWallDraftLength(
+            useWallDraftTyping.getState().input,
+            unitRef.current,
+            metricNotationRef.current,
+          ),
+        })
         useWallDraftTyping.getState().clearInput()
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
@@ -950,7 +971,7 @@ export const WallTool: React.FC = () => {
       }
       if (!hasInput) return
       if (event.key === 'Enter') {
-        const value = parseWallDraftLength(typing.input, unit, metricNotation)
+        const value = parseWallDraftLength(typing.input, unitRef.current, metricNotationRef.current)
         typing.clearInput()
         if (value === null || value <= 0) return
         const dx = endingPoint.current.x - startingPoint.current.x
@@ -1005,7 +1026,7 @@ export const WallTool: React.FC = () => {
       draftPreview.setWallDraftStart(null)
       draftPreview.setWallDraftEnd(null)
     }
-  }, [unit, metricNotation])
+  }, [])
 
   return (
     <group>

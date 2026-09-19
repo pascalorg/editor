@@ -31,6 +31,7 @@ import {
   nextLocalWallDraftStartFromStore,
   parseWallDraftLength,
   resolveEndpointWallSplit,
+  resolveWallDraftCommitEnd,
   snapWallDraftPointDetailed,
 } from './wall-drafting'
 import type { WallPlanPoint } from './wall-snap-geometry'
@@ -985,6 +986,51 @@ describe('wall draft length input', () => {
     expect(parseWallDraftLength('5\'11"', 'imperial')).toBeCloseTo(1.8034, 6)
     expect(parseWallDraftLength('2500', 'metric', 'millimeters')).toBeCloseTo(2.5, 6)
     expect(parseWallDraftLength('not a length', 'metric')).toBeNull()
+  })
+
+  test('the same bare buffer re-parses under a unit toggle', () => {
+    expect(parseWallDraftLength('30', 'metric')).toBe(30)
+    expect(parseWallDraftLength('30', 'imperial')).toBeCloseTo(9.144, 6)
+    expect(parseWallDraftLength('30', 'metric', 'millimeters')).toBeCloseTo(0.03, 6)
+  })
+
+  test('typed Enter commit skips snap and keeps the projected heading', () => {
+    let snapCalls = 0
+    const snapEnd = (point: WallPlanPoint): WallPlanPoint => {
+      snapCalls += 1
+      return [10, 0]
+    }
+    const end = resolveWallDraftCommitEnd({
+      start: [0, 0],
+      clickPoint: [0, 5],
+      typedCommitMeters: 5,
+      snapEnd,
+      liveTypedMeters: 5,
+    })
+    expect(snapCalls).toBe(0)
+    expect(end).toEqual([0, 5])
+  })
+
+  test('pointer click snaps first then constrains a live typed length', () => {
+    const end = resolveWallDraftCommitEnd({
+      start: [0, 0],
+      clickPoint: [8, 1],
+      typedCommitMeters: null,
+      snapEnd: () => [10, 0],
+      liveTypedMeters: 4,
+    })
+    expect(end).toEqual([4, 0])
+  })
+
+  test('pointer click without a typed buffer uses the snapped end', () => {
+    const end = resolveWallDraftCommitEnd({
+      start: [0, 0],
+      clickPoint: [8, 1],
+      typedCommitMeters: null,
+      snapEnd: () => [10, 0],
+      liveTypedMeters: null,
+    })
+    expect(end).toEqual([10, 0])
   })
 })
 
