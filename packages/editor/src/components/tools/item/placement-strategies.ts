@@ -24,11 +24,12 @@ import {
   resolveSurfacePlacement,
   roofFacePointToSegment,
   sceneRegistry,
+  snapLocalXZInWorld,
   useScene,
 } from '@pascal-app/core'
 import { Euler, Quaternion, Vector3 } from 'three'
 import { hasRoofFaceChildOverlap, resolveRoofWallHit } from '../../../lib/roof-wall-hit'
-import { snapWorldXZForActiveBuilding } from '../../../lib/world-grid-snap'
+import { getActiveBuildingPose } from '../../../lib/world-grid-snap'
 import { itemEventToSurfaceHit, surfaceWorldNormalY } from '../shared/surface-hit'
 import {
   calculateItemRotation,
@@ -89,11 +90,12 @@ export const floorStrategy = {
     // the world grid.
     // Snapping is governed by the active mode (snapToGrid returns raw in Off /
     // non-grid modes); Alt is force-place only and never bypasses snapping here.
-    const [x, z] = snapWorldXZForActiveBuilding(
-      snapToGrid(event.position[0], swapDims ? dimZ : dimX),
-      snapToGrid(event.position[2], swapDims ? dimX : dimZ),
-      0,
-    ).local
+    const dimensions = [swapDims ? dimZ : dimX, swapDims ? dimX : dimZ] as const
+    const [x, z] = snapLocalXZInWorld(
+      [event.localPosition[0], event.localPosition[2]],
+      getActiveBuildingPose(),
+      (value, axis) => snapToGrid(value, dimensions[axis]),
+    )
     const y = ctx.gridPosition.y
 
     return {

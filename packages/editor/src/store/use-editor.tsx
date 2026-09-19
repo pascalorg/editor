@@ -570,6 +570,7 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
     wall: defaultSnappingModeFor('wall'),
     item: defaultSnappingModeFor('item'),
     polygon: defaultSnappingModeFor('polygon'),
+    rotation: defaultSnappingModeFor('rotation'),
   },
   continuationByContext: {
     wall: CONTINUATION_PROFILES.wall.default,
@@ -800,8 +801,14 @@ function normalizeContinuationByContext(
   }
 }
 
-function normalizePersistedEditorLayoutState(
-  state: (Partial<PersistedEditorLayoutState> & LegacyContinuationState) | null | undefined,
+export function normalizePersistedEditorLayoutState(
+  state:
+    | (Omit<Partial<PersistedEditorLayoutState>, 'snappingModeByContext'> &
+        LegacyContinuationState & {
+          snappingModeByContext?: Partial<Record<SnapContext, unknown>>
+        })
+    | null
+    | undefined,
 ): PersistedEditorLayoutState {
   return {
     activeSidebarPanel:
@@ -821,6 +828,7 @@ function normalizePersistedEditorLayoutState(
       wall: migrateSnappingMode(state?.snappingModeByContext?.wall, 'wall'),
       item: migrateSnappingMode(state?.snappingModeByContext?.item, 'item'),
       polygon: migrateSnappingMode(state?.snappingModeByContext?.polygon, 'polygon'),
+      rotation: migrateSnappingMode(state?.snappingModeByContext?.rotation, 'rotation'),
     },
     continuationByContext: normalizeContinuationByContext(state),
     showReferenceFloor: state?.showReferenceFloor === true,

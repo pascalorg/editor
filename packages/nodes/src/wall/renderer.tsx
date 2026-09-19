@@ -185,12 +185,9 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
       ref={ref}
       visible={node.visible}
     >
-      <mesh
-        geometry={collisionPlaceholderGeometry}
-        name={WALL_COLLISION_MESH_NAME}
-        visible={false}
-        {...handlers}
-      />
+      <mesh geometry={collisionPlaceholderGeometry} name={WALL_COLLISION_MESH_NAME} {...handlers}>
+        <meshBasicMaterial colorWrite={false} depthWrite={false} />
+      </mesh>
 
       {hasWallTreatments(treatmentNode) && (
         <WallTreatmentSubscription

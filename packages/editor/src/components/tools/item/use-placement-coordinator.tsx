@@ -81,7 +81,6 @@ import {
 } from '../shared/placement-box-geometry'
 import {
   type PointerSupportSurface,
-  resolvePointerSupportElevation,
   resolvePointerSupportSurface,
 } from '../shared/pointer-support-cap'
 import { createShelfStickiness } from '../shared/shelf-stickiness'
@@ -1073,7 +1072,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // perspective-skewed along the ray whenever the plane sits on a
       // different storey than the pointed surface (the skew is what made
       // a drag over a deck-above-a-floor hop between the two surfaces).
-      const pointed = resolvePointerSupportSurface(cameraRef.current, event.position)
+      const pointed = resolvePointerSupportSurface(cameraRef.current, event.position, {
+        pointerRay: event.nativeEvent.ray,
+      })
       pointerSupportCapRef.current = pointed?.elevation ?? null
       pointerSupportSurfaceRef.current = pointed
       const surfaceEvent: GridEvent =
@@ -1764,11 +1765,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // Landing back on the floor: refresh the pointer surface cap from
       // this event's world hit so the first floor position already targets
       // the aimed-at surface (not a deck above it).
-      pointerSupportCapRef.current = resolvePointerSupportElevation(cameraRef.current, [
-        event.position[0],
-        event.position[1],
-        event.position[2],
-      ])
+      pointerSupportCapRef.current =
+        resolvePointerSupportSurface(cameraRef.current, event.position, {
+          pointerRay: event.nativeEvent.ray,
+        })?.elevation ?? null
       // Coming back from a host: forget the floor grab too, so the item
       // centers under the cursor instead of restoring the pre-drag offset —
       // and landing on the floor is "anchoring elsewhere", so a later return
@@ -2866,8 +2866,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   // instead of drawing an inline triangle. Only this coordinator publishes — a
   // moving existing node has no draft here, so the grid reads that case straight
   // off the node's mesh. Cleared when idle.
-  const surfaceNormalRef = useRef(new Vector3(0, 1, 0))
   const surfaceWorldPointRef = useRef(new Vector3())
+  const surfaceNormalRef = useRef(new Vector3(0, 1, 0))
   const facingForwardRef = useRef(new Vector3(0, 0, 1))
   const facingQuatRef = useRef(new Quaternion())
   const ghostSurfaceQuatRef = useRef(new Quaternion())

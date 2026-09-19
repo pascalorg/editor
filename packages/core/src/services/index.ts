@@ -96,6 +96,7 @@ export {
   DEFAULT_GRID_STEP,
   type SnapServices,
   snapAngleToList,
+  snapLocalXZInWorld,
   snapPointAlongAngleRay,
   snapPointToAngle,
   snapPointToGrid,

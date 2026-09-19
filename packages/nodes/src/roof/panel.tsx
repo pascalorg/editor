@@ -18,6 +18,7 @@ import {
 import {
   ActionButton,
   ActionGroup,
+  commitParametricNodeFields,
   duplicateRoofSubtree,
   formatLinearMeasurement,
   PanelSection,
@@ -38,7 +39,6 @@ export default function RoofPanel() {
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
   const setSelection = useViewer((s) => s.setSelection)
-  const updateNode = useScene((s) => s.updateNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
 
   const node = useScene((s) =>
@@ -158,9 +158,9 @@ export default function RoofPanel() {
   const handleUpdate = useCallback(
     (updates: Partial<RoofNode>) => {
       if (!selectedId) return
-      updateNode(selectedId as AnyNode['id'], updates)
+      commitParametricNodeFields(selectedId as AnyNode['id'], updates)
     },
-    [selectedId, updateNode],
+    [selectedId],
   )
 
   const handleClose = useCallback(() => {

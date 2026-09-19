@@ -1,20 +1,9 @@
 'use client'
 
-import {
-  type AnyNodeId,
-  generateSceneMaterialId,
-  type SceneMaterialId,
-  toSceneMaterialRef,
-  useScene,
-} from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { type SceneMaterialId } from '@pascal-app/core'
 import { Eraser, Plus, RotateCcw } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import {
-  buildResetSurfaceMaterialUpdates,
-  resolvePaintTargetFromSelection,
-} from './../../../lib/material-paint'
-import useEditor from './../../../store/use-editor'
+import { useState } from 'react'
+import { useMaterialPaintPanelModel } from '../../../lib/material-paint-panel-model'
 import { Button } from '../primitives/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
 import { MaterialPicker } from './material-picker'
@@ -33,57 +22,9 @@ export type MaterialPaintPanelProps = {
 }
 
 export function MaterialPaintPanel({ onCreateMaterialRequest }: MaterialPaintPanelProps) {
-  const activePaintMaterial = useEditor((state) => state.activePaintMaterial)
-  const activePaintTarget = useEditor((state) => state.activePaintTarget)
-  const armMaterialPaint = useEditor((state) => state.armMaterialPaint)
-  const setActivePaintTarget = useEditor((state) => state.setActivePaintTarget)
-  const paintEraser = useEditor((state) => state.paintEraser)
-  const setPaintEraser = useEditor((state) => state.setPaintEraser)
-  // Id of a just-created scene material whose inline editor should open on mount.
+  const { activePaintMaterial, paintEraser, setPaintEraser, canResetSelection, resetSelection, materialCount, selectMaterial, createCustomMaterial: createMaterial } = useMaterialPaintPanelModel()
   const [autoEditMaterialId, setAutoEditMaterialId] = useState<SceneMaterialId | null>(null)
-  const selectedIds = useViewer((state) => state.selection.selectedIds)
-  const nodes = useScene((state) => state.nodes)
-  const materialCount = useScene((state) => Object.keys(state.materials).length)
-  const selectedId = selectedIds.length === 1 ? (selectedIds[0] ?? null) : null
-  const selectedNode = selectedId ? nodes[selectedId as AnyNodeId] : null
-  const canResetSelection =
-    selectedNode != null && resolvePaintTargetFromSelection({ nodes, selectedId }) != null
-
-  useEffect(() => {
-    const selectedPaintTarget = resolvePaintTargetFromSelection({ nodes, selectedId })
-    if (selectedPaintTarget) {
-      setActivePaintTarget(selectedPaintTarget)
-    }
-  }, [nodes, selectedId, setActivePaintTarget])
-
-  const resetSelection = () => {
-    if (!selectedNode) return
-    useScene.getState().updateNodes(buildResetSurfaceMaterialUpdates(nodes, selectedNode))
-  }
-
-  // Create a blank custom scene material, select it as the brush (`scene:` ref so
-  // edits propagate), and open its inline editor. Available from any category.
-  const createCustomMaterial = () => {
-    const id = generateSceneMaterialId()
-    const count = Object.keys(useScene.getState().materials).length
-    useScene.getState().addSceneMaterial({
-      id,
-      name: `Material ${count + 1}`,
-      material: {
-        preset: 'custom',
-        properties: {
-          color: '#ffffff',
-          roughness: 0.5,
-          metalness: 0,
-          opacity: 1,
-          transparent: false,
-          side: 'front',
-        },
-      },
-    })
-    armMaterialPaint({ materialPreset: toSceneMaterialRef(id), sourceTarget: activePaintTarget })
-    setAutoEditMaterialId(id)
-  }
+  const createCustomMaterial = () => setAutoEditMaterialId(createMaterial())
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
@@ -117,9 +58,7 @@ export function MaterialPaintPanel({ onCreateMaterialRequest }: MaterialPaintPan
       <div className="min-h-0 flex-1" data-guide-target="paint-material">
         <MaterialPicker
           onCreateMaterialRequest={onCreateMaterialRequest}
-          onSelectMaterialPreset={(materialPreset) => {
-            armMaterialPaint({ materialPreset, sourceTarget: activePaintTarget })
-          }}
+          onSelectMaterialPreset={selectMaterial}
           selectedMaterialPreset={activePaintMaterial?.materialPreset}
         />
       </div>

@@ -14,6 +14,23 @@ function canvasWithContexts(contexts: Partial<Record<'webgl2', unknown>>) {
 }
 
 describe('GPU renderer capability and initialization', () => {
+  test('forces WebGL without requesting a WebGPU adapter', async () => {
+    const requestAdapter = mock(async () => ({ requestDevice: async () => ({}) }))
+    const createRenderer = mock(() => ({ init: async () => undefined }))
+
+    const result = await initializeGpuRenderer({
+      createRenderer,
+      forceWebGL: true,
+      gpu: { requestAdapter },
+      probeCanvas: canvasWithContexts({ webgl2: {} }),
+    })
+
+    expect(result.status).toBe('ready')
+    if (result.status === 'ready') expect(result.backend).toBe('webgl')
+    expect(requestAdapter).not.toHaveBeenCalled()
+    expect(createRenderer).toHaveBeenCalledWith({ forceWebGL: true })
+  })
+
   test('uses a working WebGPU device without requiring WebGL', async () => {
     const device = {}
     const createRenderer = mock(() => ({ init: async () => undefined }))

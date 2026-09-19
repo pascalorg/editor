@@ -19,6 +19,7 @@ import {
   MeshBasicMaterial,
   OrthographicCamera,
   PerspectiveCamera,
+  Ray,
   Vector3,
 } from 'three'
 import { z } from 'zod'
@@ -159,6 +160,32 @@ describe('resolvePointerSupportSurface node tops', () => {
     expect(support?.sourceNodeId).toBe(PLATFORM_ID)
     expect(support?.elevation).toBeCloseTo(2)
     expect(support?.worldPoint).toEqual([0, 2, 0])
+  })
+
+  test('XR floor drawing uses the controller ray even when the camera sees a raised surface', () => {
+    addPluginPlatform(2, [4, 2, 2])
+    const camera = new PerspectiveCamera()
+    camera.position.set(0, 5, 5)
+    camera.updateMatrixWorld(true)
+    const controllerRay = new Ray(new Vector3(0, 1.5, 0), new Vector3(0, -1, 0))
+    const desktop = resolvePointerSupportSurface(camera, [0, 0, 0], {
+      includeNodeTopSurfaces: true,
+    })
+    expect(desktop?.sourceNodeId).toBe(PLATFORM_ID)
+    const xr = resolvePointerSupportSurface(camera, [0, 0, 0], {
+      includeNodeTopSurfaces: true,
+      pointerRay: controllerRay,
+    })
+    expect(xr?.sourceNodeId).toBeNull()
+    expect(xr?.worldPoint).toEqual([0, 0, 0])
+    camera.position.set(12, 8, -10)
+    camera.updateMatrixWorld(true)
+    expect(
+      resolvePointerSupportSurface(camera, [0, 0, 0], {
+        includeNodeTopSurfaces: true,
+        pointerRay: controllerRay,
+      })?.worldPoint,
+    ).toEqual([0, 0, 0])
   })
 
   test('keeps an unhovered item top above a batched slab across batch transitions', () => {

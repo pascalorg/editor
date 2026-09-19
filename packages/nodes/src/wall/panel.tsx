@@ -40,6 +40,7 @@ import { Spline } from 'lucide-react'
 import { useCallback, useMemo, useRef } from 'react'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 import { hasWallCurveBlockingChildren } from './curve-eligibility'
+import { buildWallLengthPatch } from './length-patch'
 
 /**
  * Base half of the plane-bound repair: a stamped draft offset goes, and a
@@ -154,21 +155,7 @@ export default function WallPanel() {
       const n = nodeRef.current
       if (!n || newLength <= 0) return
 
-      const dx = n.end[0] - n.start[0]
-      const dz = n.end[1] - n.start[1]
-      const currentLength = Math.sqrt(dx * dx + dz * dz)
-
-      if (currentLength === 0) return
-
-      const dirX = dx / currentLength
-      const dirZ = dz / currentLength
-
-      const newEnd: [number, number] = [
-        n.start[0] + dirX * newLength,
-        n.start[1] + dirZ * newLength,
-      ]
-
-      handleUpdate({ end: newEnd })
+      handleUpdate(buildWallLengthPatch(n, newLength))
     },
     [handleUpdate],
   )

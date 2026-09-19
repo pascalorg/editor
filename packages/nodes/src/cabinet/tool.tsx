@@ -411,6 +411,7 @@ const CabinetTool = () => {
   const [placement, setPlacement] = useState<CabinetPlacement | null>(null)
   const [draftSegments, setDraftSegments] = useState<DraftSegment[]>([])
   const [yaw, setYaw] = useState(0)
+  const toolDefaults = useEditor((state) => state.toolDefaults.cabinet)
   const placementType = useCabinetPlacementType((s) => s.type)
   const islandMode = placementType === 'island'
   const yawRef = useRef(0)
@@ -438,6 +439,7 @@ const CabinetTool = () => {
     return CabinetModuleNode.parse({
       ...cabinetModuleDefinition.defaults(),
       ...DEFAULT_PLACEMENT_PRESET.createPatch(),
+      ...toolDefaults,
       showPlinth: runDefaults.showPlinth,
       plinthHeight: runDefaults.plinthHeight,
       toeKickDepth: runDefaults.toeKickDepth,
@@ -446,7 +448,7 @@ const CabinetTool = () => {
       countertopOverhang: runDefaults.countertopOverhang,
       countertopBackOverhang: runDefaults.countertopBackOverhang,
     })
-  }, [])
+  }, [toolDefaults])
   const [previewSize, setPreviewSize] = useState(() => ({
     depth: previewNodeTemplate.depth,
     height: previewNodeTemplate.carcassHeight,
@@ -1165,12 +1167,13 @@ const CabinetTool = () => {
       const island = islandModeRef.current
       const cabinet = CabinetNode.parse({
         ...cabinetDefinition.defaults(),
+        ...toolDefaults,
         name: island ? 'Kitchen Island' : 'Modular Cabinet',
         position,
         rotation: yaw,
         parentId: activeLevelId,
-        depth: patch.depth ?? cabinetDefinition.defaults().depth,
-        carcassHeight: patch.carcassHeight ?? cabinetDefinition.defaults().carcassHeight,
+        depth: previewNode.depth,
+        carcassHeight: previewNode.carcassHeight,
         ...(island && {
           countertopBackOverhang: ISLAND_SEATING_OVERHANG,
           withFinishedBack: true,
@@ -1180,6 +1183,7 @@ const CabinetTool = () => {
         CabinetModuleNode.parse({
           ...cabinetModuleDefinition.defaults(),
           ...patch,
+          ...toolDefaults,
           name: index === 0 ? (patch.name ?? 'Base Cabinet') : `Base Cabinet ${index + 1}`,
           parentId: cabinet.id,
           position: [localX, runModuleBaseY(cabinet.plinthHeight, cabinet.showPlinth), 0],
@@ -1774,7 +1778,7 @@ const CabinetTool = () => {
       useAlignmentGuides.getState().clear()
       useCabinetPlacementStatus.getState().setBlocked(false)
     }
-  }, [activeLevelId, metricNotation, publishFloorplanPreview, unit])
+  }, [activeLevelId, metricNotation, previewNode, publishFloorplanPreview, toolDefaults, unit])
 
   if (!activeLevelId || !placement) return null
   const stretch = placement.stretch

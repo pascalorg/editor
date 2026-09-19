@@ -11,8 +11,8 @@ export type ContextualShortcutHint = {
 }
 
 // `activeHandleDrag.label` value a rotate gizmo sets while dragging, so the
-// contextual HUD can surface the Shift = free-rotation toggle for the duration
-// (mirrors how wall drafting advertises Shift). Distinct from resize handles,
+// contextual HUD can surface the rotation snapping mode for the duration.
+// Distinct from resize handles,
 // which route their own measurement label here.
 export const ROTATE_HANDLE_DRAG_LABEL = 'rotate-handle'
 
@@ -29,15 +29,12 @@ export const RESIZE_HANDLE_DRAG_LABEL = 'resize-handle'
 export const GROUP_MOVE_DRAG_LABEL = 'group-move-handle'
 export const GROUP_ROTATE_DRAG_LABEL = 'group-rotate-handle'
 
-// Hints shown while a rotate gizmo is mid-drag: Shift bypasses the angle step
-// (free rotation), the same toggle wall drafting exposes. `active` lights the
-// pill while Shift is held.
-export function resolveRotateHandleHelpHints(shiftPressed: boolean): ContextualShortcutHint[] {
+export function resolveRotateHandleHelpHints(altPressed: boolean): ContextualShortcutHint[] {
   return [
     {
-      keys: [SHIFT_KEY],
-      label: shiftPressed ? 'Rotating freely (no angle step)' : 'Hold to rotate freely',
-      active: shiftPressed,
+      keys: [ALT_KEY],
+      label: altPressed ? 'Rotating freely (no angle step)' : 'Hold to rotate freely',
+      active: altPressed,
     },
   ]
 }

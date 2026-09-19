@@ -168,7 +168,39 @@ async function pruneBuildOnlyFiles(root: string): Promise<void> {
     ),
   )
   await removeStrayItemAssets(path.join(root, 'apps/editor/public/items'))
+  await removeCatalogGpuTextures(path.join(root, 'apps/editor/public/material'))
   await removeTraceArtifacts(path.join(root, 'apps/editor/.next'))
+}
+
+/**
+ * Catalog material maps (`{slug}_{map}_{size}.ktx2`) resolve through the assets
+ * CDN, so the portable editor fetches them from the hosted origin rather than
+ * its own public dir. Bundling them only inflates the release archive past its
+ * budget, so they are dropped and their reclaimed size reported on stdout.
+ */
+async function removeCatalogGpuTextures(materialDirectory: string): Promise<void> {
+  let reclaimed = 0
+  const walk = async (directory: string): Promise<void> => {
+    let entries
+    try {
+      entries = await readdir(directory, { withFileTypes: true })
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      return
+    }
+    for (const entry of entries) {
+      const absolute = path.join(directory, entry.name)
+      if (entry.isDirectory()) await walk(absolute)
+      else if (entry.name.endsWith('.ktx2')) {
+        reclaimed += (await stat(absolute)).size
+        await rm(absolute, { force: true })
+      }
+    }
+  }
+  await walk(materialDirectory)
+  if (reclaimed > 0) {
+    console.log(`Dropped CDN-served catalog textures (${formatMegabytes(reclaimed)} MB)`)
+  }
 }
 
 /**

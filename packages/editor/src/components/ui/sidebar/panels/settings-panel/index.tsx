@@ -1,6 +1,11 @@
 import {
   clearSceneHistory,
+  DEFAULT_LEVEL_HEIGHT,
   emitter,
+  getLevelDisplayName,
+  LevelNode,
+  type AnyNodeId,
+  type BuildingNode,
   isNodeKindEnabled,
   nodeRegistry,
   useRegistryVersion,
@@ -11,13 +16,16 @@ import {
 import { useViewer, viewerPresentationRegistry } from '@pascal-app/viewer'
 import { TreeView, VisualJson } from '@visual-json/react'
 import {
+  ArrowDown,
+  ArrowUp,
   Camera,
   Check,
-  ChevronDown,
   Copy,
   Download,
+  Layers,
   Map as MapIcon,
   Save,
+  ChevronDown,
   Send,
   Trash2,
   Upload,
@@ -33,6 +41,7 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import {
   exportFloorplanPdf,
   type FloorplanExportScope,
@@ -52,6 +61,8 @@ import {
 } from './../../../../../components/ui/primitives/dialog'
 import { Input } from './../../../../../components/ui/primitives/input'
 import { Switch } from './../../../../../components/ui/primitives/switch'
+import { cn } from './../../../../../lib/utils'
+import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
 import useEditor, { selectDefaultBuildingAndLevel } from './../../../../../store/use-editor'
 import { type SendToAppStep, useSendToApp } from './../../../../../store/use-send-to-app'
 import useFloorplanMode from './../../../../../store/use-floorplan-mode'
@@ -232,6 +243,122 @@ export interface SettingsPanelProps {
     field: 'isPrivate' | 'showScansPublic' | 'showGuidesPublic',
     value: boolean,
   ) => Promise<void>
+}
+
+function FloorSettingsSection() {
+  const selectedBuildingId = useViewer((state) => state.selection.buildingId)
+  const selectedLevelId = useViewer((state) => state.selection.levelId)
+  const setSelection = useViewer((state) => state.setSelection)
+  const createNode = useScene((state) => state.createNode)
+  const building = useScene((state) => {
+    const selected = selectedBuildingId ? state.nodes[selectedBuildingId] : undefined
+    if (selected?.type === 'building') return selected as BuildingNode
+
+    const site = state.rootNodeIds
+      .map((nodeId) => state.nodes[nodeId])
+      .find((node) => node?.type === 'site')
+    if (site?.type !== 'site') return null
+
+    return (
+      site.children
+        .map((childId) => state.nodes[childId as AnyNodeId])
+        .find((node): node is BuildingNode => node?.type === 'building') ?? null
+    )
+  })
+  const levels = useScene(
+    useShallow((state) => {
+      if (!building) return []
+
+      return building.children
+        .map((childId) => state.nodes[childId as AnyNodeId])
+        .filter((node): node is LevelNode => node?.type === 'level')
+        .sort((a, b) => b.level - a.level)
+    }),
+  )
+
+  if (!building) return null
+
+  const addLevel = (level: number) => {
+    const newLevel = LevelNode.parse({
+      level,
+      height: DEFAULT_LEVEL_HEIGHT,
+      children: [],
+      parentId: building.id,
+    })
+    createNode(newLevel, building.id)
+    setSelection({ buildingId: building.id, levelId: newLevel.id })
+  }
+
+  const addFloor = () =>
+    addLevel(levels.length === 0 ? 0 : Math.max(0, ...levels.map((level) => level.level)) + 1)
+  const addBasement = () => addLevel(Math.min(0, ...levels.map((level) => level.level)) - 1)
+
+  return (
+    <div className="space-y-3">
+      <label className="font-medium text-muted-foreground text-xs uppercase">Floors</label>
+      <div className="grid grid-cols-2 gap-2">
+        <Button className="justify-start" onClick={addFloor} size="sm" type="button" variant="outline">
+          <ArrowUp className="size-3.5" />
+          Add floor
+        </Button>
+        <Button
+          className="justify-start"
+          onClick={addBasement}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          <ArrowDown className="size-3.5" />
+          Add basement
+        </Button>
+      </div>
+
+      <div className="space-y-1 rounded-md border p-1">
+        {levels.length === 0 ? (
+          <div className="px-2 py-2 text-muted-foreground text-xs">No floors yet</div>
+        ) : (
+          levels.map((level) => {
+            const isSelected = level.id === selectedLevelId
+            const canDelete = level.level !== 0
+
+            return (
+              <div className="flex items-center gap-1" key={level.id}>
+                <button
+                  className={cn(
+                    'flex min-w-0 flex-1 items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors',
+                    isSelected
+                      ? 'bg-accent text-foreground'
+                      : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+                  )}
+                  onClick={() => setSelection({ buildingId: building.id, levelId: level.id })}
+                  type="button"
+                >
+                  <Layers className="size-3.5 shrink-0" />
+                  <span className="truncate">{getLevelDisplayName(level)}</span>
+                  <span className="ml-auto shrink-0 text-muted-foreground text-xs">
+                    {level.level === 0 ? '0' : level.level > 0 ? `+${level.level}` : level.level}
+                  </span>
+                </button>
+                <button
+                  aria-label={`Remove ${getLevelDisplayName(level)}`}
+                  className="flex size-7 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-30"
+                  disabled={!canDelete}
+                  onClick={() => deleteLevelWithFallbackSelection(level.id)}
+                  title={canDelete ? 'Remove floor' : 'The ground floor cannot be removed'}
+                  type="button"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              </div>
+            )
+          })
+        )}
+      </div>
+      <p className="text-muted-foreground text-xs">
+        Select a floor to make it active. The ground floor is always kept as the building datum.
+      </p>
+    </div>
+  )
 }
 
 export function SettingsPanel({
@@ -592,6 +719,7 @@ export function SettingsPanel({
 
   return (
     <div className="subtle-scrollbar min-h-0 flex-1 space-y-6 overflow-x-hidden overflow-y-auto overscroll-contain p-3">
+      <FloorSettingsSection />
       {projectId && (
         <div className="space-y-2">
           <label className="font-medium text-muted-foreground text-xs uppercase">Project</label>

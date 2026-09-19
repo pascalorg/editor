@@ -1,0 +1,39 @@
+diff --git a/build/three.webgpu.js b/build/three.webgpu.js
+index 2e490796d4d4aa9479b04a5c46ddbf31cc05b1a1..4d46bd53869497fb43debdd56037ecb673c6d85c 100644
+--- a/build/three.webgpu.js
++++ b/build/three.webgpu.js
+@@ -14495,1 +14495,5 @@
+-			_cameraPositionArray = uniformArray( positions ).setGroup( renderGroup ).setName( 'cameraPositions' ).onRenderUpdate( ( { camera }, self ) => {
++			_cameraPositionArray = uniformArray( positions ).setGroup( renderGroup ).setName( 'cameraPositions' ).onRenderUpdate( ( frame, self ) => {
++
++				if ( frame === undefined ) return;
++
++				const { camera } = frame;
+@@ -68378,1 +68382,1 @@
+-		if ( renderContext.textures !== null ) {
++		if ( renderContext.textures !== null && framebuffer !== null ) {
+diff --git a/build/three.webgpu.nodes.js b/build/three.webgpu.nodes.js
+index f707acc24f5711fdae065ce920b08435b0869c1b..270c6824ce277ec0b14a56a34f1f487298e968d5 100644
+--- a/build/three.webgpu.nodes.js
++++ b/build/three.webgpu.nodes.js
+@@ -68378,1 +68378,1 @@
+-		if ( renderContext.textures !== null ) {
++		if ( renderContext.textures !== null && framebuffer !== null ) {
+diff --git a/src/nodes/accessors/Camera.js b/src/nodes/accessors/Camera.js
+index 5e89cb93c61f37a1a2d03a27735c74287c0f0e9f..167c7226183d62af9ec61911a742e2445f58a5bc 100644
+--- a/src/nodes/accessors/Camera.js
++++ b/src/nodes/accessors/Camera.js
+@@ -318,1 +318,5 @@
+-			_cameraPositionArray = uniformArray( positions ).setGroup( renderGroup ).setName( 'cameraPositions' ).onRenderUpdate( ( { camera }, self ) => {
++			_cameraPositionArray = uniformArray( positions ).setGroup( renderGroup ).setName( 'cameraPositions' ).onRenderUpdate( ( frame, self ) => {
++
++				if ( frame === undefined ) return;
++
++				const { camera } = frame;
+diff --git a/src/renderers/webgl-fallback/utils/WebGLState.js b/src/renderers/webgl-fallback/utils/WebGLState.js
+index adf1eae5944f91aef5964b4754b0c0f7fc9f5cdc..5ffca30b3e4a94be6ca4e3db68ecc03a051d6d3f 100644
+--- a/src/renderers/webgl-fallback/utils/WebGLState.js
++++ b/src/renderers/webgl-fallback/utils/WebGLState.js
+@@ -1135,1 +1135,1 @@
+-		if ( renderContext.textures !== null ) {
++		if ( renderContext.textures !== null && framebuffer !== null ) {

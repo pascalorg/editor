@@ -108,6 +108,20 @@ function isLightPreviewQuery(searchParams: URLSearchParams): boolean {
   return disable.split(',').some((p) => p.trim() === 'postFx')
 }
 
+function sceneUrl(
+  sceneId: string,
+  searchParams: URLSearchParams,
+  update: Record<string, string | null>,
+) {
+  const next = new URLSearchParams(searchParams)
+  for (const [key, value] of Object.entries(update)) {
+    if (value == null) next.delete(key)
+    else next.set(key, value)
+  }
+  const query = next.toString()
+  return `/scene/${sceneId}${query ? `?${query}` : ''}`
+}
+
 export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -279,7 +293,11 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
             lightPreview ? 'bg-accent' : 'bg-background/90 hover:bg-accent/40',
           )}
           onClick={() =>
-            router.push(lightPreview ? `/scene/${meta.id}` : `/scene/${meta.id}?disable=postFx`)
+            router.push(
+              sceneUrl(meta.id, searchParams, {
+                disable: lightPreview ? null : 'postFx',
+              }),
+            )
           }
           title="Skip the post-processing pipeline — lighter on the GPU, no ambient occlusion or selection outlines"
           type="button"
