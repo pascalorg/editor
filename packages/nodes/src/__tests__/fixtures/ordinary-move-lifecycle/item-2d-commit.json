@@ -1,0 +1,633 @@
+[
+  {
+    "stage": "start",
+    "scene": {
+      "nodes": {
+        "original-0": {
+          "object": "node",
+          "id": "original-0",
+          "type": "site",
+          "parentId": null,
+          "visible": true,
+          "metadata": {},
+          "polygon": {
+            "type": "polygon",
+            "points": [[-15, -15], [15, -15], [15, 15], [-15, 15]]
+          },
+          "children": ["original-1"]
+        },
+        "original-1": {
+          "object": "node",
+          "id": "original-1",
+          "type": "building",
+          "parentId": "original-0",
+          "visible": true,
+          "metadata": {},
+          "children": ["original-2"],
+          "position": [0, 0, 0],
+          "rotation": [0, 0, 0]
+        },
+        "original-2": {
+          "object": "node",
+          "id": "original-2",
+          "type": "level",
+          "parentId": "original-1",
+          "visible": true,
+          "metadata": {},
+          "children": ["original-3", "original-4"],
+          "level": 0,
+          "baseElevation": 0
+        },
+        "original-3": {
+          "object": "node",
+          "id": "original-3",
+          "type": "procedural-item",
+          "parentId": "original-2",
+          "visible": true,
+          "metadata": {},
+          "recipe": {
+            "version": 1,
+            "name": "Audit box",
+            "description": "",
+            "surfaces": [
+              {
+                "id": "top",
+                "label": "Top",
+                "position": [0, 2, 0],
+                "size": [4, 4]
+              }
+            ],
+            "parameters": [
+              {
+                "id": "width",
+                "label": "Width",
+                "default": 0.1,
+                "min": 0.05,
+                "max": 1,
+                "step": 0.05,
+                "unit": "m"
+              }
+            ],
+            "slots": [
+              {
+                "id": "body",
+                "label": "Body",
+                "color": "#ffffff"
+              }
+            ],
+            "parts": [
+              {
+                "id": "body",
+                "label": "Body",
+                "count": 1,
+                "shapes": [
+                  {
+                    "id": "box",
+                    "primitive": "box",
+                    "slot": "body",
+                    "size": [4, 0.2, 4],
+                    "position": [0, 1.9, 0]
+                  }
+                ]
+              }
+            ],
+            "constraints": []
+          },
+          "parameters": {},
+          "slots": {},
+          "position": [20, 0, 0],
+          "rotation": [0, 0, 0],
+          "children": [],
+          "attachments": {}
+        },
+        "original-4": {
+          "object": "node",
+          "id": "original-4",
+          "type": "item",
+          "parentId": "original-2",
+          "visible": true,
+          "metadata": {
+            "isTransient": true
+          },
+          "position": [-1, 0, 0],
+          "rotation": [0, 0, 0],
+          "scale": [1, 1, 1],
+          "children": [],
+          "asset": {
+            "id": "audit-box",
+            "category": "decor",
+            "name": "Audit box",
+            "thumbnail": "",
+            "source": "library",
+            "src": "/unrenderable-host-audit.glb",
+            "dimensions": [0.1, 0.2, 0.1],
+            "offset": [0, 0, 0],
+            "rotation": [0, 0, 0],
+            "scale": [1, 1, 1]
+          }
+        }
+      },
+      "rootNodeIds": ["original-0"],
+      "collections": {},
+      "materials": {},
+      "installedPlugins": []
+    },
+    "mesh": [-1, 0, 0],
+    "placement": {
+      "object": "node",
+      "id": "original-4",
+      "type": "item",
+      "parentId": "original-2",
+      "visible": true,
+      "metadata": {},
+      "position": [-1, 0, 0],
+      "rotation": [0, 0, 0],
+      "scale": [1, 1, 1],
+      "children": [],
+      "asset": {
+        "id": "audit-box",
+        "category": "decor",
+        "name": "Audit box",
+        "thumbnail": "",
+        "source": "library",
+        "src": "/unrenderable-host-audit.glb",
+        "dimensions": [0.1, 0.2, 0.1],
+        "offset": [0, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1]
+      }
+    },
+    "transforms": [],
+    "overrides": [],
+    "history": 0
+  },
+  {
+    "stage": "pointer",
+    "scene": {
+      "nodes": {
+        "original-0": {
+          "object": "node",
+          "id": "original-0",
+          "type": "site",
+          "parentId": null,
+          "visible": true,
+          "metadata": {},
+          "polygon": {
+            "type": "polygon",
+            "points": [[-15, -15], [15, -15], [15, 15], [-15, 15]]
+          },
+          "children": ["original-1"]
+        },
+        "original-1": {
+          "object": "node",
+          "id": "original-1",
+          "type": "building",
+          "parentId": "original-0",
+          "visible": true,
+          "metadata": {},
+          "children": ["original-2"],
+          "position": [0, 0, 0],
+          "rotation": [0, 0, 0]
+        },
+        "original-2": {
+          "object": "node",
+          "id": "original-2",
+          "type": "level",
+          "parentId": "original-1",
+          "visible": true,
+          "metadata": {},
+          "children": ["original-3", "original-4"],
+          "level": 0,
+          "baseElevation": 0
+        },
+        "original-3": {
+          "object": "node",
+          "id": "original-3",
+          "type": "procedural-item",
+          "parentId": "original-2",
+          "visible": true,
+          "metadata": {},
+          "recipe": {
+            "version": 1,
+            "name": "Audit box",
+            "description": "",
+            "surfaces": [
+              {
+                "id": "top",
+                "label": "Top",
+                "position": [0, 2, 0],
+                "size": [4, 4]
+              }
+            ],
+            "parameters": [
+              {
+                "id": "width",
+                "label": "Width",
+                "default": 0.1,
+                "min": 0.05,
+                "max": 1,
+                "step": 0.05,
+                "unit": "m"
+              }
+            ],
+            "slots": [
+              {
+                "id": "body",
+                "label": "Body",
+                "color": "#ffffff"
+              }
+            ],
+            "parts": [
+              {
+                "id": "body",
+                "label": "Body",
+                "count": 1,
+                "shapes": [
+                  {
+                    "id": "box",
+                    "primitive": "box",
+                    "slot": "body",
+                    "size": [4, 0.2, 4],
+                    "position": [0, 1.9, 0]
+                  }
+                ]
+              }
+            ],
+            "constraints": []
+          },
+          "parameters": {},
+          "slots": {},
+          "position": [20, 0, 0],
+          "rotation": [0, 0, 0],
+          "children": [],
+          "attachments": {}
+        },
+        "original-4": {
+          "object": "node",
+          "id": "original-4",
+          "type": "item",
+          "parentId": "original-2",
+          "visible": true,
+          "metadata": {
+            "isTransient": true
+          },
+          "position": [-1, 0, 0],
+          "rotation": [0, 0, 0],
+          "scale": [1, 1, 1],
+          "children": [],
+          "asset": {
+            "id": "audit-box",
+            "category": "decor",
+            "name": "Audit box",
+            "thumbnail": "",
+            "source": "library",
+            "src": "/unrenderable-host-audit.glb",
+            "dimensions": [0.1, 0.2, 0.1],
+            "offset": [0, 0, 0],
+            "rotation": [0, 0, 0],
+            "scale": [1, 1, 1]
+          }
+        }
+      },
+      "rootNodeIds": ["original-0"],
+      "collections": {},
+      "materials": {},
+      "installedPlugins": []
+    },
+    "mesh": [2, 0, 4],
+    "placement": {
+      "object": "node",
+      "id": "original-4",
+      "type": "item",
+      "parentId": "original-2",
+      "visible": true,
+      "metadata": {},
+      "position": [-1, 0, 0],
+      "rotation": [0, 0, 0],
+      "scale": [1, 1, 1],
+      "children": [],
+      "asset": {
+        "id": "audit-box",
+        "category": "decor",
+        "name": "Audit box",
+        "thumbnail": "",
+        "source": "library",
+        "src": "/unrenderable-host-audit.glb",
+        "dimensions": [0.1, 0.2, 0.1],
+        "offset": [0, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1]
+      }
+    },
+    "transforms": [],
+    "overrides": [
+      [
+        "original-4",
+        {
+          "position": [2, 0, 4],
+          "rotation": [0, 0, 0],
+          "parentId": "original-2"
+        }
+      ]
+    ],
+    "history": 0
+  },
+  {
+    "stage": "teardown",
+    "scene": {
+      "nodes": {
+        "original-0": {
+          "object": "node",
+          "id": "original-0",
+          "type": "site",
+          "parentId": null,
+          "visible": true,
+          "metadata": {},
+          "polygon": {
+            "type": "polygon",
+            "points": [[-15, -15], [15, -15], [15, 15], [-15, 15]]
+          },
+          "children": ["original-1"]
+        },
+        "original-1": {
+          "object": "node",
+          "id": "original-1",
+          "type": "building",
+          "parentId": "original-0",
+          "visible": true,
+          "metadata": {},
+          "children": ["original-2"],
+          "position": [0, 0, 0],
+          "rotation": [0, 0, 0]
+        },
+        "original-2": {
+          "object": "node",
+          "id": "original-2",
+          "type": "level",
+          "parentId": "original-1",
+          "visible": true,
+          "metadata": {},
+          "children": ["original-3", "original-4"],
+          "level": 0,
+          "baseElevation": 0
+        },
+        "original-3": {
+          "object": "node",
+          "id": "original-3",
+          "type": "procedural-item",
+          "parentId": "original-2",
+          "visible": true,
+          "metadata": {},
+          "recipe": {
+            "version": 1,
+            "name": "Audit box",
+            "description": "",
+            "surfaces": [
+              {
+                "id": "top",
+                "label": "Top",
+                "position": [0, 2, 0],
+                "size": [4, 4]
+              }
+            ],
+            "parameters": [
+              {
+                "id": "width",
+                "label": "Width",
+                "default": 0.1,
+                "min": 0.05,
+                "max": 1,
+                "step": 0.05,
+                "unit": "m"
+              }
+            ],
+            "slots": [
+              {
+                "id": "body",
+                "label": "Body",
+                "color": "#ffffff"
+              }
+            ],
+            "parts": [
+              {
+                "id": "body",
+                "label": "Body",
+                "count": 1,
+                "shapes": [
+                  {
+                    "id": "box",
+                    "primitive": "box",
+                    "slot": "body",
+                    "size": [4, 0.2, 4],
+                    "position": [0, 1.9, 0]
+                  }
+                ]
+              }
+            ],
+            "constraints": []
+          },
+          "parameters": {},
+          "slots": {},
+          "position": [20, 0, 0],
+          "rotation": [0, 0, 0],
+          "children": [],
+          "attachments": {}
+        },
+        "original-4": {
+          "object": "node",
+          "id": "original-4",
+          "type": "item",
+          "parentId": "original-2",
+          "visible": true,
+          "metadata": {},
+          "position": [-1, 0, 0],
+          "rotation": [0, 0, 0],
+          "scale": [1, 1, 1],
+          "children": [],
+          "asset": {
+            "id": "audit-box",
+            "category": "decor",
+            "name": "Audit box",
+            "thumbnail": "",
+            "source": "library",
+            "src": "/unrenderable-host-audit.glb",
+            "dimensions": [0.1, 0.2, 0.1],
+            "offset": [0, 0, 0],
+            "rotation": [0, 0, 0],
+            "scale": [1, 1, 1]
+          }
+        }
+      },
+      "rootNodeIds": ["original-0"],
+      "collections": {},
+      "materials": {},
+      "installedPlugins": []
+    },
+    "mesh": [-1, 0, 0],
+    "placement": {
+      "object": "node",
+      "id": "original-4",
+      "type": "item",
+      "parentId": "original-2",
+      "visible": true,
+      "metadata": {},
+      "position": [-1, 0, 0],
+      "rotation": [0, 0, 0],
+      "scale": [1, 1, 1],
+      "children": [],
+      "asset": {
+        "id": "audit-box",
+        "category": "decor",
+        "name": "Audit box",
+        "thumbnail": "",
+        "source": "library",
+        "src": "/unrenderable-host-audit.glb",
+        "dimensions": [0.1, 0.2, 0.1],
+        "offset": [0, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1]
+      }
+    },
+    "transforms": [],
+    "overrides": [],
+    "history": 0
+  },
+  {
+    "stage": "commit",
+    "scene": {
+      "nodes": {
+        "original-0": {
+          "object": "node",
+          "id": "original-0",
+          "type": "site",
+          "parentId": null,
+          "visible": true,
+          "metadata": {},
+          "polygon": {
+            "type": "polygon",
+            "points": [[-15, -15], [15, -15], [15, 15], [-15, 15]]
+          },
+          "children": ["original-1"]
+        },
+        "original-1": {
+          "object": "node",
+          "id": "original-1",
+          "type": "building",
+          "parentId": "original-0",
+          "visible": true,
+          "metadata": {},
+          "children": ["original-2"],
+          "position": [0, 0, 0],
+          "rotation": [0, 0, 0]
+        },
+        "original-2": {
+          "object": "node",
+          "id": "original-2",
+          "type": "level",
+          "parentId": "original-1",
+          "visible": true,
+          "metadata": {},
+          "children": ["original-3", "original-4"],
+          "level": 0,
+          "baseElevation": 0
+        },
+        "original-3": {
+          "object": "node",
+          "id": "original-3",
+          "type": "procedural-item",
+          "parentId": "original-2",
+          "visible": true,
+          "metadata": {},
+          "recipe": {
+            "version": 1,
+            "name": "Audit box",
+            "description": "",
+            "surfaces": [
+              {
+                "id": "top",
+                "label": "Top",
+                "position": [0, 2, 0],
+                "size": [4, 4]
+              }
+            ],
+            "parameters": [
+              {
+                "id": "width",
+                "label": "Width",
+                "default": 0.1,
+                "min": 0.05,
+                "max": 1,
+                "step": 0.05,
+                "unit": "m"
+              }
+            ],
+            "slots": [
+              {
+                "id": "body",
+                "label": "Body",
+                "color": "#ffffff"
+              }
+            ],
+            "parts": [
+              {
+                "id": "body",
+                "label": "Body",
+                "count": 1,
+                "shapes": [
+                  {
+                    "id": "box",
+                    "primitive": "box",
+                    "slot": "body",
+                    "size": [4, 0.2, 4],
+                    "position": [0, 1.9, 0]
+                  }
+                ]
+              }
+            ],
+            "constraints": []
+          },
+          "parameters": {},
+          "slots": {},
+          "position": [20, 0, 0],
+          "rotation": [0, 0, 0],
+          "children": [],
+          "attachments": {}
+        },
+        "original-4": {
+          "object": "node",
+          "id": "original-4",
+          "type": "item",
+          "parentId": "original-2",
+          "visible": true,
+          "metadata": {},
+          "position": [-1, 0, 0],
+          "rotation": [0, 0, 0],
+          "scale": [1, 1, 1],
+          "children": [],
+          "supportSlabId": "ground",
+          "asset": {
+            "id": "audit-box",
+            "category": "decor",
+            "name": "Audit box",
+            "thumbnail": "",
+            "source": "library",
+            "src": "/unrenderable-host-audit.glb",
+            "dimensions": [0.1, 0.2, 0.1],
+            "offset": [0, 0, 0],
+            "rotation": [0, 0, 0],
+            "scale": [1, 1, 1]
+          }
+        }
+      },
+      "rootNodeIds": ["original-0"],
+      "collections": {},
+      "materials": {},
+      "installedPlugins": []
+    },
+    "mesh": [-1, 0, 0],
+    "placement": null,
+    "transforms": [],
+    "overrides": [],
+    "history": 1
+  }
+]

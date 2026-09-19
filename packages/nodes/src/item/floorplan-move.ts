@@ -36,6 +36,7 @@ import {
   surfaceFramePose,
   updateSurfaceNode,
   useEditor,
+  useInteractionScope,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
@@ -300,6 +301,7 @@ function buildFloorItemSession(
 
   let lastPatch: Partial<ItemNode> | null = null
   let lastInput: Parameters<FloorplanMoveTargetSession['apply']>[0] | null = null
+  let commitBlocked = false
   let lastHostedPatch: Partial<ItemNode> = {
     parentId: node.parentId,
     position: [...node.position],
@@ -310,6 +312,7 @@ function buildFloorItemSession(
     affectedIds: [node.id as AnyNodeId],
     apply(input) {
       lastInput = input
+      commitBlocked = false
       const { planPoint } = input
       const gridSnapped = resolvePlanPoint(planPoint)
       // Figma-style alignment layered on the grid snap, mode-driven (matching 3D):
@@ -441,6 +444,7 @@ function buildFloorItemSession(
           },
         })
         if (occupied) {
+          commitBlocked = useInteractionScope.getState().ownedSubtree?.creation.rootId === node.id
           lastPatch = lastHostedPatch
           useLiveNodeOverrides.getState().set(node.id as AnyNodeId, lastPatch)
           markMoved()
@@ -483,7 +487,7 @@ function buildFloorItemSession(
       markMoved()
     },
     canCommit() {
-      return lastPatch !== null
+      return lastPatch !== null && !commitBlocked
     },
     commit() {
       if (lastInput) session.apply(lastInput)

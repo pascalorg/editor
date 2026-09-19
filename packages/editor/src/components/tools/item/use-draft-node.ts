@@ -3,18 +3,24 @@ import {
   type AssetInput,
   ItemNode,
   resolveSupportSlabPatch,
+  type SurfaceRejectReason,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
 import { beginPerfAction, commitPerfAction, useViewer } from '@pascal-app/viewer'
 import { useCallback, useMemo, useRef } from 'react'
 import type { Vector3 } from 'three'
+import { commitFreshPlacementSubtree } from '../../../lib/fresh-planar-placement'
+import { isFreshPlacementMetadata } from '../../../lib/placement-metadata'
 import {
   surfaceAttachmentId,
   surfaceAttachmentUpdates,
   surfaceFramePose,
   updateSurfaceNode,
 } from '../../../lib/surface-attachment'
+import useInteractionScope, {
+  isInteractionSubtreeDraft,
+} from '../../../store/use-interaction-scope'
 import usePlacementPreview from '../../../store/use-placement-preview'
 import { stripTransient } from './placement-math'
 
@@ -58,6 +64,7 @@ export interface DraftNodeHandle {
     options?: {
       supportElevationCap?: number | null
       preferredSupportSlabId?: string | null
+      onReject?: (reason: SurfaceRejectReason) => void
       pinSupport?: boolean
     },
   ) => string | null
@@ -76,6 +83,7 @@ export interface DraftNodeHandle {
 export function useDraftNode(): DraftNodeHandle {
   const draftRef = useRef<ItemNode | null>(null)
   const adoptedRef = useRef(false)
+  const ownsSubtreeRef = useRef(false)
   const originalStateRef = useRef<OriginalState | null>(null)
 
   const create = useCallback(
@@ -106,6 +114,7 @@ export function useDraftNode(): DraftNodeHandle {
         .set(node, useScene.getState().nodes[currentLevelId as AnyNodeId] ?? null)
       draftRef.current = node
       adoptedRef.current = false
+      ownsSubtreeRef.current = false
       originalStateRef.current = null
       return node
     },
@@ -113,6 +122,8 @@ export function useDraftNode(): DraftNodeHandle {
   )
 
   const adopt = useCallback((node: ItemNode): void => {
+    ownsSubtreeRef.current =
+      useInteractionScope.getState().adoptSubtree(node.id) || isInteractionSubtreeDraft(node.id)
     // Save original state so destroy() can restore it
     const meta =
       typeof node.metadata === 'object' && node.metadata !== null && !Array.isArray(node.metadata)
@@ -155,6 +166,7 @@ export function useDraftNode(): DraftNodeHandle {
       options?: {
         supportElevationCap?: number | null
         preferredSupportSlabId?: string | null
+        onReject?: (reason: SurfaceRejectReason) => void
         pinSupport?: boolean
       },
     ): string | null => {
@@ -169,6 +181,29 @@ export function useDraftNode(): DraftNodeHandle {
         true,
       )
       finalUpdate = { ...finalUpdate, ...stored }
+      if (isFreshPlacementMetadata(originalStateRef.current?.metadata)) {
+        const effectiveNode = ItemNode.parse({ ...draft, ...finalUpdate })
+        const id = commitFreshPlacementSubtree(
+          draft.id,
+          {
+            ...finalUpdate,
+            ...resolveSupportSlabPatch(effectiveNode, useScene.getState().nodes, {
+              maxElevation: options?.supportElevationCap,
+              preferredSlabId: options?.preferredSupportSlabId,
+              pinSupport: options?.pinSupport,
+            }),
+          },
+          options?.onReject,
+        )
+        if (!id) return null
+        if (usePlacementPreview.getState().node?.id === draft.id) {
+          usePlacementPreview.getState().clear()
+        }
+        draftRef.current = null
+        adoptedRef.current = false
+        originalStateRef.current = null
+        return id
+      }
       if (adoptedRef.current) {
         // Move mode: update in place (single undoable action)
         const { parentId: newParentId, ...updateProps } = finalUpdate
@@ -311,8 +346,12 @@ export function useDraftNode(): DraftNodeHandle {
     if (!draftRef.current) return
 
     const draftId = draftRef.current.id
-
-    if (adoptedRef.current && originalStateRef.current) {
+    if (ownsSubtreeRef.current) {
+      draftRef.current = null
+      adoptedRef.current = false
+      originalStateRef.current = null
+      return
+    } else if (adoptedRef.current && originalStateRef.current) {
       // Move mode: restore original state instead of deleting — but only
       // if no other system has already committed a new position for this
       // node. The 2D `FloorplanRegistryMoveOverlay` commits via

@@ -6,6 +6,7 @@ import {
   type NodeDefinition,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import { restingFloorplanAffectedIds } from '../shared/resting-surface-plan'
 import { buildItemContextualDimensions, buildItemFloorplan } from './floorplan'
 import { itemFloorplanMoveTarget } from './floorplan-move'
 import { itemPaint } from './paint'
@@ -214,7 +215,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
         },
       },
     },
-    duplicable: true,
+    duplicable: { subtree: 'with-children' },
     deletable: true,
     paint: itemPaint,
     // Items participate in compositions — e.g. "table-with-plants",
@@ -322,6 +323,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   // Stage C: floor-plan polygon. ctx.resolve walks the parent chain
   // (wall / nested item / level) to compute the world-space transform.
   floorplan: buildItemFloorplan,
+  floorplanAffectedIds: restingFloorplanAffectedIds,
   // 2D move-on-floorplan handler. Branches on `asset.attachTo`:
   // wall items snap to walls (like door / window), ceiling items
   // snap to ceiling polygons, floor items snap to slabs. attachTo

@@ -1,4 +1,5 @@
 import type { HandleDescriptor, NodeDefinition, ShelfNode as ShelfNodeType } from '@pascal-app/core'
+import { restingFloorplanAffectedIds } from '../shared/resting-surface-plan'
 import { sanitizeShelfDimensions } from './dimensions'
 import { buildShelfFloorplan } from './floorplan'
 import { shelfResizeAffordance, shelfRotateAffordance } from './floorplan-affordances'
@@ -185,7 +186,7 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
         })),
     },
     selectable: { hitVolume: 'bbox' },
-    duplicable: true,
+    duplicable: { subtree: 'with-children' },
     deletable: true,
     paint: shelfPaint,
     slots: (n) => shelfSlots(n as ShelfNode),
@@ -245,6 +246,7 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
     ])
   },
   floorplan: buildShelfFloorplan,
+  floorplanAffectedIds: restingFloorplanAffectedIds,
   // 2D move handler — Path 1 in `FloorplanRegistryMoveOverlay`. Without
   // this the overlay falls through to Path 2 which stomps the SVG
   // entry's `transform` attribute (set by the floor-plan layer to

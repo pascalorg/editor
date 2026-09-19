@@ -42,6 +42,7 @@ export {
   MAX_HOST_DEPTH,
   pickHost,
   type Vec3,
+  wouldCreateHostingCycle,
 } from './hosting'
 export {
   DEFAULT_LEVEL_HEIGHT,
