@@ -138,7 +138,27 @@ for (const kind of [
         ],
       })
     if (kind === 'plugin')
-      host = { id: 'plugin_pin', type: 'environment:ground-cover', ...props } as unknown as AnyNode
+      host = {
+        id: 'grass-field_pin',
+        type: 'environment:ground-cover',
+        object: 'node',
+        parentId: null,
+        visible: true,
+        metadata: {},
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        bladeWidth: 0.035,
+        bladeHeight: 0.3,
+        density: 100,
+        paintMap: {
+          type: 'grass-paint-field',
+          origin: [2, 3],
+          spacing: 0.05,
+          cols: 33,
+          rows: 33,
+          values: Buffer.alloc(33 * 33 * 4).toString('base64'),
+        },
+      } as unknown as AnyNode
     child.parentId = host.id
     nodes[host.id] = host
     nodes[child.id] = child

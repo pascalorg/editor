@@ -5,7 +5,6 @@ import {
   type FloorplanPoint,
   type GeometryContext,
   getBlockFaceFrame,
-  getEffectiveNode,
   getRoofWallFaceFrame,
   getScaledDimensions,
   type ItemNode,
@@ -14,7 +13,7 @@ import {
   useLiveTransforms,
 } from '@pascal-app/core'
 import { formatLinearMeasurement, readFloorplanMetricNotationOverride } from '@pascal-app/editor'
-import { restingNodePlanFrame } from '../shared/resting-surface-plan'
+import { restingNodePlanFrame } from '../../shared/resting-surface-plan'
 
 /**
  * Stage C floor-plan builder for item.
@@ -46,50 +45,6 @@ function rotateVec(x: number, y: number, angle: number): [number, number] {
   return [x * c + y * s, -x * s + y * c]
 }
 
-function needsFullAncestorFrame(item: ItemNode, ctx: GeometryContext): boolean {
-  let id = item.parentId
-  const visited = new Set<string>([item.id])
-  while (id && !visited.has(id)) {
-    visited.add(id)
-    const parent = ctx.resolve(id as AnyNodeId)
-    if (!parent || parent.type === 'level') break
-    if (
-      ![
-        'wall',
-        'ceiling',
-        'roof',
-        'roof-segment',
-        'item',
-        'shelf',
-        'cabinet',
-        'cabinet-module',
-        'procedural-item',
-        'block',
-        'slab',
-      ].includes(parent.type)
-    ) {
-      const effective = getEffectiveNode(parent) as AnyNode & {
-        position?: number[]
-        rotation?: number | number[]
-      }
-      const live = useLiveTransforms.getState().get(parent.id)
-      const position = live?.position ?? effective.position
-      const rotation = effective.rotation
-      // Main's level-local fallback already handles identity plugins directly on a level.
-      if (
-        parent.type === 'column' ||
-        (parent.parentId && ctx.resolve(parent.parentId as AnyNodeId)?.type !== 'level') ||
-        position?.some((v) => v !== 0) ||
-        live?.rotation ||
-        (Array.isArray(rotation) ? rotation.some((v) => v !== 0) : rotation)
-      )
-        return true
-    }
-    id = parent.parentId
-  }
-  return false
-}
-
 export function resolveItemTransform(
   item: ItemNode,
   ctx: GeometryContext,
@@ -97,17 +52,6 @@ export function resolveItemTransform(
 ): Transform | null {
   const cached = cache.get(item.id as AnyNodeId)
   if (cached !== undefined) return cached
-
-  if (needsFullAncestorFrame(item, ctx)) {
-    const f = restingNodePlanFrame(item, ctx.resolve)
-    const result = {
-      x: f.position[0],
-      y: f.position[2],
-      rotation: Math.atan2(f.axes[2][0], f.axes[2][2]),
-    }
-    cache.set(item.id, result)
-    return result
-  }
 
   const localRotation = item.rotation[1] ?? 0
   let result: Transform | null = null

@@ -1,6 +1,12 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, type ItemNode, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  canHostSurfaceChild,
+  type ItemNode,
+  useScene,
+} from '@pascal-app/core'
 import {
   type PlacementState,
   triggerSFX,
@@ -88,7 +94,12 @@ export function getInitialState(
   // handler — which preserves the grab offset — instead of a fresh `enter()`
   // that snaps the item's origin under the cursor. Without this the item
   // teleports the instant it's grabbed.
-  if (parent?.type === 'item' || parent?.type === 'cabinet' || parent?.type === 'procedural-item') {
+  if (
+    parent?.type === 'item' ||
+    parent?.type === 'cabinet' ||
+    parent?.type === 'procedural-item' ||
+    (parent && parent.type !== 'shelf' && canHostSurfaceChild(parent, node.type, node.id))
+  ) {
     return {
       surface: 'item-surface',
       wallId: null,

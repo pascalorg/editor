@@ -363,7 +363,7 @@ function buildFloorItemSession(
           }
         }
       }
-      if (hosted && liveHost && liveHost.type !== 'block') {
+      if (hosted && liveHost && (liveHost.type !== 'block' || !node.blockFaceId)) {
         const host = liveHost
         const retainedSurface = getSurfaceProvider(host)
           .surfaces?.(host, { scene })

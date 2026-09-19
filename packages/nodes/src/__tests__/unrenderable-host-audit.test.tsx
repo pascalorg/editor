@@ -28,6 +28,7 @@ import { ProceduralItemNode, type Recipe } from '@pascal-app/core/procedural-ite
 import { AnyNode as AnyNodeSchema } from '@pascal-app/core/schema'
 import { NodeRenderer, useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
+import { events, type RootStore } from '@react-three/fiber'
 import { act, create } from '@react-three/test-renderer'
 import React, {
   Children,
@@ -473,6 +474,32 @@ if (process.env.PASCAL_HOST_AUDIT_ISOLATED !== '1') {
       await renderer.advanceFrames(3, 1 / 60)
     })
   }
+  function r3fPointer() {
+    const root = (sceneRegistry.nodes.get(level.id)! as Object3D & { __r3f: { root: RootStore } })
+      .__r3f.root
+    const manager = events(root)
+    root.setState({ events: manager })
+    const state = root.getState()
+    state.setSize(1000, 1000)
+    state.camera.position.set(0, 15, 0)
+    state.camera.up.set(0, 0, -1)
+    state.camera.lookAt(0, 0, 0)
+    state.camera.updateMatrixWorld()
+    state.raycaster.layers.enableAll()
+    return async (point: Vector3, click = false) => {
+      state.scene.updateMatrixWorld(true)
+      const p = point.clone().project(state.camera)
+      const native = Object.assign(new Event(click ? 'pointerup' : 'pointermove'), {
+        offsetX: (p.x + 1) * 500,
+        offsetY: (1 - p.y) * 500,
+        pointerId: 1,
+        button: 0,
+      })
+      await act(async () =>
+        manager.handlers![click ? 'onPointerUp' : 'onPointerMove'](native as never),
+      )
+    }
+  }
   function visible(object?: Object3D): boolean {
     if (!object) return false
     for (let current: Object3D | null = object; current; current = current.parent)
@@ -586,62 +613,18 @@ if (process.env.PASCAL_HOST_AUDIT_ISOLATED !== '1') {
           -0.4380499772232196, 0.9199999997764826, 0.2234751571494149,
         ]
         const world = object.localToWorld(new Vector3(...point)).toArray()
-        const nativeEvent = {}
-        const event = {
-          node: host,
-          object,
-          normal: [0, 1, 0],
-          position: world,
-          localPosition: point,
-          nativeEvent: { nativeEvent },
-          stopPropagation() {},
-        }
-        const grid = {
-          position: [world[0], 0, world[2]],
-          localPosition: [world[0], 0, world[2]],
-          nativeEvent,
-          stopPropagation() {},
-        }
-        await act(async () =>
-          emitter.emit('grid:move', {
-            ...grid,
-            position: [1, 0, 1],
-            localPosition: [1, 0, 1],
-          } as never),
-        )
-        await settle(renderer)
-        for (let i = 0; i < 3; i++) {
-          await act(async () => {
-            emitter.emit('grid:move', grid as never)
-            emitter.emit(`${host.type}:move` as never, event as never)
-            emitter.emit('node:move', event as never)
-          })
-          await settle(renderer)
-        }
-        await act(async () => {
-          emitter.emit('grid:move', {
-            ...grid,
-            position: [8, 0, 8],
-            localPosition: [8, 0, 8],
-            nativeEvent: {},
-          } as never)
-          await new Promise((resolve) => setTimeout(resolve, 1))
-          emitter.emit(`${host.type}:move` as never, event as never)
-        })
+        const pointer = r3fPointer()
+        await pointer(new Vector3(...world))
         await settle(renderer)
         const preview = matrix(sceneRegistry.nodes.get(child.id))!
-        await act(async () => {
-          emitter.emit(`${host.type}:click` as never, event as never)
-          emitter.emit('node:click', event as never)
-          emitter.emit('grid:click', grid as never)
-        })
+        await pointer(new Vector3(...world), true)
         await settle(renderer)
         expect(useInteractionScope.getState().scope.kind).toBe('idle')
         const committed = matrix(sceneRegistry.nodes.get(child.id))!
         expect(Math.atan2(committed[8]!, committed[10]!)).toBeCloseTo(1.7707963267948965, 6)
-        expect(committed[13]).toBeCloseTo(1.0199999997764826, 6)
+        expect(committed[13]).toBeCloseTo(0.92, 6)
         const stored = useScene.getState().nodes[child.id] as unknown as ProceduralItemNode
-        expect(stored.parentId).toBe(host.id)
+        expect(stored.parentId).toBe(host.parentId)
         expect(stored.rotation[0]).toBe(0)
         expect(stored.rotation[1]).toBeCloseTo(1.7707963267948965 - (degrees * Math.PI) / 180, 6)
         expect(stored.rotation[2]).toBe(0)
@@ -950,7 +933,6 @@ if (process.env.PASCAL_HOST_AUDIT_ISOLATED !== '1') {
       const renderer = await create(<Scene mover="registry" child={child} />)
       try {
         await settle(renderer)
-        const object = sceneRegistry.nodes.get(host.id)!
         const surface = getSurfaceProvider(run!).surfaces!(run!, {
           scene: createSceneApi(useScene),
         }).find((s) => s.label === 'Countertop')!
@@ -964,27 +946,13 @@ if (process.env.PASCAL_HOST_AUDIT_ISOLATED !== '1') {
             ),
           )
           .toArray()
-        const point = object.worldToLocal(new Vector3(...world)).toArray()
-        const event = {
-          node: host,
-          object,
-          position: world,
-          localPosition: point,
-          normal: [0, 1, 0],
-          nativeEvent: { nativeEvent: {} },
-          stopPropagation() {},
-        }
-        await act(async () => {
-          emitter.emit(`${kind}:move` as never, event as never)
-          emitter.emit('node:move', event as never)
-        })
+        const pointer = r3fPointer()
+        await pointer(new Vector3(...world))
         await settle(renderer)
         const before = matrix(sceneRegistry.nodes.get(child.id))!
         expect(Math.atan2(before[8]!, before[10]!)).toBeCloseTo(Math.PI / 2 + 0.2, 6)
-        await act(async () => {
-          emitter.emit(`${kind}:click` as never, event as never)
-          emitter.emit('node:click', event as never)
-        })
+        expect(useScene.getState().nodes[child.id]!.parentId).toBe(run!.id)
+        await pointer(new Vector3(...world), true)
         await settle(renderer)
         expect(useInteractionScope.getState().scope.kind).toBe('idle')
         const after = matrix(sceneRegistry.nodes.get(child.id))!

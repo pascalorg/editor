@@ -23,7 +23,10 @@ import {
 import { snapToGrid, snapToHalf } from '../item/placement-math'
 import { createShelfStickiness } from '../shared/shelf-stickiness'
 import { itemEventToSurfaceHit } from '../shared/surface-hit'
-import { createSurfaceRejectionFeedback } from '../shared/surface-rejection'
+import {
+  createSurfaceEventOwnership,
+  createSurfaceRejectionFeedback,
+} from '../shared/surface-rejection'
 
 export function createItemSurfacePointerArbitration() {
   let hostId: string | null = null
@@ -114,6 +117,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
   const feedback = createSurfaceRejectionFeedback()
   const scene = createSceneApi(useScene)
   const pointer = createItemSurfacePointerArbitration()
+  const ownership = createSurfaceEventOwnership()
   const originalParent = original.parentId
     ? useScene.getState().nodes[original.parentId as AnyNodeId]
     : null
@@ -219,6 +223,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
       }
     },
     enter(event: NodeEvent<AnyNode>, dimensions: [number, number, number], yaw: number) {
+      if (!ownership.allows(event.node.id, pointerEventOf(event))) return null
       pointer.clear()
       feedback.clear()
       const live = liveNode()
@@ -287,7 +292,23 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
         scene,
         snapScalar: host.type !== 'item' ? undefined : snapToGrid,
         checkFootprint: true,
-        onReject: (reason) => feedback.reject(reason, pointerEventOf(event)),
+        onReject: (reason) => {
+          if (
+            live.parentId !== host.id &&
+            !counterHit &&
+            host.type !== 'item' &&
+            host.type !== 'shelf' &&
+            reason !== 'surface-cutout' &&
+            reason !== 'surface-occupied'
+          )
+            return
+          if (reason === 'surface-cutout' || reason === 'surface-occupied') {
+            ownership.claim(host.id, pointerEventOf(event))
+            pointer.hit(host.id, pointerEventOf(event))
+            event.stopPropagation()
+          }
+          feedback.reject(reason, pointerEventOf(event))
+        },
       })
       if (!placement) return null
       valid = true
@@ -300,6 +321,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
         worldPosition: mesh.localToWorld(new Vector3(...placement.position)).toArray(),
       }
       grab = corrected.grab
+      ownership.claim(host.id, pointerEventOf(event))
       pointer.hit(host.id, pointerEventOf(event))
       event.stopPropagation()
       write(

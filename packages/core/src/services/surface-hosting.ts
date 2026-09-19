@@ -235,7 +235,7 @@ export function rendersHostedChildren(def: AnyNodeDefinition): boolean {
     : !!def.geometry
 }
 
-function canHostSurfaceChild(host: AnyNode, childKind: string, childId?: string): boolean {
+export function canHostSurfaceChild(host: AnyNode, childKind: string, childId?: string): boolean {
   const def = nodeRegistry.get(host.type)
   if (
     !def ||

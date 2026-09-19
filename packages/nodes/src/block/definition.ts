@@ -12,6 +12,7 @@ import { blockPaint } from './paint'
 import { blockParametrics } from './parametrics'
 import { BlockNode } from './schema'
 import { blockSlots } from './slots'
+import { blockSurfaceProvider } from './surface'
 
 export function blockBounds(node: BlockNodeType) {
   const xs = node.topology.vertices.map((vertex) => vertex.position[0])
@@ -76,6 +77,7 @@ export const blockDefinition: NodeDefinition<typeof BlockNode> = {
   capabilities: {
     selectable: { hitVolume: 'bbox' },
     surfaces: {
+      hosting: blockSurfaceProvider,
       top: {
         height: (rawNode) => {
           const node = rawNode as BlockNodeType
@@ -86,7 +88,7 @@ export const blockDefinition: NodeDefinition<typeof BlockNode> = {
       sides: { faces: 'all' },
     },
     movable: { axes: ['x', 'z'], gridSnap: true },
-    duplicable: true,
+    duplicable: { subtree: true },
     deletable: true,
     dragBounds: (rawNode) => blockBounds(rawNode as BlockNodeType),
     floorPlaced: {

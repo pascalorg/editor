@@ -7,13 +7,14 @@ import {
   type BlockSelection,
   blockSelectionVertexIds,
 } from './commands'
+import { BLOCK_SUPPORT_REFUSAL, commitBlockTopologyEdit } from './hosted-edit'
 
 type SuccessfulBlockCommandResult = Extract<BlockCommandResult, { ok: true }>
 
 export type BlockOperationServices = {
   historyApi: SelectionAffordanceHistoryApi
   readOnly: boolean
-  sceneApi: Pick<SceneApi, 'get' | 'update'>
+  sceneApi: Pick<SceneApi, 'get' | 'update' | 'applyChanges'>
 }
 
 export type BlockLastOperation = {
@@ -125,7 +126,8 @@ export function commitBlockOperation(
   if (!result.ok) return result
   if (sameTopology(baseTopology, result.topology)) return { ok: true, changed: false }
 
-  services.sceneApi.update(nodeId, { topology: result.topology })
+  if (!commitBlockTopologyEdit(services.sceneApi, nodeId, result.topology))
+    return { ok: false, error: BLOCK_SUPPORT_REFUSAL }
   return {
     ok: true,
     changed: true,
@@ -163,8 +165,7 @@ export function replaceCommittedBlockOperation(
     if (baseline?.type !== 'block' || !sameTopology(baseline.topology, operation.baseTopology)) {
       return false
     }
-    services.sceneApi.update(operation.nodeId, { topology: result.topology })
-    return true
+    return commitBlockTopologyEdit(services.sceneApi, operation.nodeId, result.topology)
   })
   if (!restored) return { ok: false, error: 'Could not restore the operation baseline' }
 
@@ -198,7 +199,8 @@ export function repeatCommittedBlockOperation(
   if (!command) return { ok: false, error: 'The current selection cannot repeat this operation' }
   const result = applyBlockCommand(current.topology, command)
   if (!result.ok) return result
-  services.sceneApi.update(operation.nodeId, { topology: result.topology })
+  if (!commitBlockTopologyEdit(services.sceneApi, operation.nodeId, result.topology))
+    return { ok: false, error: BLOCK_SUPPORT_REFUSAL }
   return {
     ok: true,
     operation: recordCommittedBlockOperation(
