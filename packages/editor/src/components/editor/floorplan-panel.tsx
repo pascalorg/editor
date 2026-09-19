@@ -5187,6 +5187,27 @@ export function FloorplanPanel({
   useEffect(() => {
     useFloorplanDraftPreview.getState().setWallDraftStart(draftStart)
   }, [draftStart])
+  // Split-view Enter is owned by the 3D capture listener (grid:click +
+  // stopPropagation), which advances useFloorplanDraftPreview.wallDraftStart
+  // without running handleWallPlacementPoint. Pull that start back into the
+  // 2D draftStart so the rubber band chains from the new segment.
+  const storeWallDraftStart = useFloorplanDraftPreview((s) => s.wallDraftStart)
+  const wallBuildActiveForDraftSync =
+    phase === 'structure' && mode === 'build' && tool === 'wall'
+  useEffect(() => {
+    if (!wallBuildActiveForDraftSync) return
+    if (!storeWallDraftStart) return
+    setDraftStart((prev) => {
+      if (
+        prev &&
+        prev[0] === storeWallDraftStart[0] &&
+        prev[1] === storeWallDraftStart[1]
+      ) {
+        return prev
+      }
+      return storeWallDraftStart
+    })
+  }, [wallBuildActiveForDraftSync, storeWallDraftStart])
   useEffect(() => {
     useFloorplanDraftPreview.getState().setFenceDraftStart(fenceDraftStart)
   }, [fenceDraftStart])
@@ -8256,7 +8277,9 @@ export function FloorplanPanel({
 
       // Typed-length editing for the 2D wall draft (#308) — parity with the
       // 3D wall tool: printable keys extend the buffer, Enter commits at the
-      // typed length, Escape (stage 1) clears it.
+      // typed length, Escape (stage 1) clears it. stopPropagation keeps the
+      // global tool listener from treating Escape/digits/unit letters as
+      // cancel / phase / tool shortcuts while the buffer owns the keys.
       if (isWallBuildActive && draftStart) {
         const typing = useWallDraftTyping.getState()
         const hasInput = typing.input.length > 0
@@ -8264,22 +8287,26 @@ export function FloorplanPanel({
           if (isWallTypingKey(event.key)) {
             typing.append(event.key)
             event.preventDefault()
+            event.stopPropagation()
             return
           }
           if (hasInput) {
             if (event.key === 'Backspace') {
               typing.backspace()
               event.preventDefault()
+              event.stopPropagation()
               return
             }
             if (event.key === 'Delete') {
               typing.clearInput()
               event.preventDefault()
+              event.stopPropagation()
               return
             }
             if (event.key === 'Escape') {
               typing.clearInput()
               event.preventDefault()
+              event.stopPropagation()
               return
             }
             if (event.key === 'Enter') {
@@ -8292,6 +8319,7 @@ export function FloorplanPanel({
               setDraftEnd(typedEnd)
               wallPlacementPointRef.current?.(typedEnd)
               event.preventDefault()
+              event.stopPropagation()
               return
             }
           }
