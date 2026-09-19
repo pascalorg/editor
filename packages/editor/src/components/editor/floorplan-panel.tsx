@@ -8348,13 +8348,18 @@ export function FloorplanPanel({
               return
             }
             if (event.key === 'Enter') {
+              // Consume Enter while a length buffer is active; keep the buffer
+              // on parse/heading failure so the user can correct it.
+              event.preventDefault()
+              event.stopPropagation()
               const value = parseWallDraftLength(typing.input, unit, metricNotation)
-              typing.clearInput()
               if (value === null || value <= 0 || !draftStart) return
               const previousEnd = useFloorplanDraftPreview.getState().wallDraftEnd
               if (!previousEnd) return
               const typedEnd = constrainWallDraftLength(draftStart, previousEnd, value)
               setDraftEnd(typedEnd)
+              // clearInput also nulls pendingCommitMeters — clear before arming.
+              typing.clearInput()
               // Arm WallTool's skip-re-snap, then emit grid:click so WallTool
               // owns the create in every view mode (incl. 2D-only via adopt).
               // handleWallPlacementPoint only syncs the 2D rubber band — it
@@ -8376,8 +8381,6 @@ export function FloorplanPanel({
               } finally {
                 wallToolOwnsTypedCommitRef.current = false
               }
-              event.preventDefault()
-              event.stopPropagation()
               return
             }
           }

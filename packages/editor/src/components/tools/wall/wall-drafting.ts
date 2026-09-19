@@ -168,16 +168,21 @@ export function shouldResetWallPlacementDraftFromStoreStart(
 
 /**
  * 2D may start a wall while the 3D canvas is hidden, so WallTool's
- * buildingState stays 0. A typed Enter that emits grid:click must still
+ * buildingState stays 0. A typed Enter that emits grid:click — or a
+ * pointer click while a live typing buffer is present — must still
  * commit from that published start rather than treating the click as a
- * new first point.
+ * new first point (which would `begin()` and wipe the buffer).
  */
 export function adoptedWallDraftStartForTypedCommit(args: {
   buildingState: number
   typedCommitMeters: number | null
   publishedStart: WallPlanPoint | null
+  hasLiveTypingBuffer?: boolean
 }): WallPlanPoint | null {
-  if (args.buildingState !== 0 || args.typedCommitMeters == null) return null
+  if (args.buildingState !== 0) return null
+  const hasTypedLength =
+    args.typedCommitMeters != null || Boolean(args.hasLiveTypingBuffer)
+  if (!hasTypedLength) return null
   return args.publishedStart
 }
 

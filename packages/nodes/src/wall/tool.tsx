@@ -787,10 +787,12 @@ export const WallTool: React.FC = () => {
 
       const walls = getCurrentLevelWalls()
       const snapWalls = [...walls, ...getBelowLevelWalls()]
+      const hasLiveTypingBuffer = useWallDraftTyping.getState().input.length > 0
       const adoptedStart = adoptedWallDraftStartForTypedCommit({
         buildingState: buildingState.current,
         typedCommitMeters,
         publishedStart: useFloorplanDraftPreview.getState().wallDraftStart,
+        hasLiveTypingBuffer,
       })
       if (adoptedStart) {
         const adoptPointed = pointedSurfaceFor(event)
@@ -1011,8 +1013,11 @@ export const WallTool: React.FC = () => {
       }
       if (!hasInput) return
       if (event.key === 'Enter') {
+        // Always consume Enter while a length buffer is active so global
+        // shortcuts cannot fire; only clear the buffer after a successful arm.
+        event.preventDefault()
+        event.stopPropagation()
         const value = parseWallDraftLength(typing.input, unitRef.current, metricNotationRef.current)
-        typing.clearInput()
         if (value === null || value <= 0) return
         const dx = endingPoint.current.x - startingPoint.current.x
         const dz = endingPoint.current.z - startingPoint.current.z
@@ -1025,13 +1030,13 @@ export const WallTool: React.FC = () => {
         endingPoint.current.set(typedEnd[0], endingPoint.current.y, typedEnd[1])
         useFloorplanDraftPreview.getState().setWallDraftEnd(typedEnd)
         pendingTypedLengthMeters.current = value
+        // clearInput also nulls pendingCommitMeters — clear before arming store.
+        typing.clearInput()
         emitter.emit('grid:click', {
           nativeEvent: { detail: 1 } as unknown as GridEvent['nativeEvent'],
           position: [typedEnd[0], endingPoint.current.y, typedEnd[1]],
           localPosition: [typedEnd[0], endingPoint.current.y, typedEnd[1]],
         } as GridEvent)
-        event.preventDefault()
-        event.stopPropagation()
       } else if (event.key === 'Backspace') {
         typing.backspace()
         event.preventDefault()

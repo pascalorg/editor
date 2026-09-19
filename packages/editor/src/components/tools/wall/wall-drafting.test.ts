@@ -1161,6 +1161,28 @@ describe('adoptedWallDraftStartForTypedCommit', () => {
       }),
     ).toBeNull()
   })
+
+  test('adopts a pointer click when a live typing buffer is present', () => {
+    expect(
+      adoptedWallDraftStartForTypedCommit({
+        buildingState: 0,
+        typedCommitMeters: null,
+        publishedStart: [2, 1],
+        hasLiveTypingBuffer: true,
+      }),
+    ).toEqual([2, 1])
+  })
+
+  test('does not adopt a live buffer when 3D already owns the draft', () => {
+    expect(
+      adoptedWallDraftStartForTypedCommit({
+        buildingState: 1,
+        typedCommitMeters: null,
+        publishedStart: [2, 1],
+        hasLiveTypingBuffer: true,
+      }),
+    ).toBeNull()
+  })
 })
 
 describe('shouldCreateWallLocallyOnFloorplanPlacement', () => {
