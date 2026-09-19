@@ -774,6 +774,11 @@ export const WallTool: React.FC = () => {
       const typedCommitMeters =
         pendingTypedLengthMeters.current ?? useWallDraftTyping.getState().takePendingCommitMeters()
       pendingTypedLengthMeters.current = null
+      const restoreTypedCommitArm = () => {
+        if (typedCommitMeters != null) {
+          useWallDraftTyping.getState().setPendingCommitMeters(typedCommitMeters)
+        }
+      }
 
       if (buildingState.current === 1 && event.nativeEvent.detail >= 2) {
         stopDrafting()
@@ -874,7 +879,10 @@ export const WallTool: React.FC = () => {
         useWallDraftTyping.getState().clearInput()
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
-        if (dx * dx + dz * dz < 0.01 * 0.01) return
+        if (dx * dx + dz * dz < 0.01 * 0.01) {
+          restoreTypedCommitArm()
+          return
+        }
         // A ground(terrain)-hosted chain keeps its frozen construction plane;
         // any other chain re-resolves the aimed surface per commit so a later
         // segment can still elect the slab it visibly crosses instead of
@@ -895,7 +903,10 @@ export const WallTool: React.FC = () => {
             flatConstructionBase: flatConstructionBase.current,
           },
         )
-        if (!createdWall) return
+        if (!createdWall) {
+          restoreTypedCommitArm()
+          return
+        }
         chainWallIds.current.push(createdWall.id)
 
         // The new segment is now a real node — make it an alignment target
@@ -1044,14 +1055,18 @@ export const WallTool: React.FC = () => {
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown, true)
-      useWallDraftTyping.getState().clearInput()
       clearPlacementSurface()
       useAlignmentGuides.getState().clear()
       useWallSnapIndicator.getState().clear()
-      useSegmentDraftChain.getState().clear('wall')
-      const draftPreview = useFloorplanDraftPreview.getState()
-      draftPreview.setWallDraftStart(null)
-      draftPreview.setWallDraftEnd(null)
+      // 2D may still own an active draft mirrored into the preview store.
+      // Only wipe shared draft/chain when 3D was actively drafting.
+      if (buildingState.current !== 0) {
+        useWallDraftTyping.getState().clearInput()
+        useSegmentDraftChain.getState().clear('wall')
+        const draftPreview = useFloorplanDraftPreview.getState()
+        draftPreview.setWallDraftStart(null)
+        draftPreview.setWallDraftEnd(null)
+      }
     }
   }, [])
 
