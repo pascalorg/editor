@@ -4,6 +4,7 @@ import {
   type CabinetNode,
   type DeclaredHostSurface,
   type GeometryContext,
+  hitDerivedSurfaceProvider,
   pointInPolygon2D,
   type SurfaceContext,
   type SurfaceProvider,
@@ -131,5 +132,17 @@ export const cabinetSurfaceProvider: SurfaceProvider = {
         nearest = surface
     }
     return nearest
+  },
+}
+
+export const cabinetModuleSurfaceProvider: SurfaceProvider = {
+  childFrame: 'host-local',
+  // Catalog placement has always targeted runs; standalone module hosting belongs to registry movers.
+  accepts: (_host, childKind) => childKind !== 'item',
+  resolveHit(host, hit, ctx) {
+    const parent = host.parentId ? ctx.scene.get(host.parentId as AnyNodeId) : undefined
+    // A run owns its counter and cutouts; its module meshes must let the hit bubble.
+    if (parent?.type === 'cabinet') return null
+    return hitDerivedSurfaceProvider.resolveHit(host, hit, ctx)
   },
 }

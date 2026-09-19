@@ -7,6 +7,7 @@ import {
 } from '@pascal-app/core'
 import { isAngleSnapActive } from '@pascal-app/editor'
 import { rotateAffordanceDelta } from '../shared/rotate-affordance'
+import { planColumnEdit } from './hosted-resize'
 
 // Floor minimums — mirror the 3D handles in `column/definition.ts` so a
 // drag can't push a value past what the renderer accepts.
@@ -62,6 +63,7 @@ export const columnResizeAffordance: FloorplanAffordance<ColumnNode> = {
     let lastPatch: Partial<ColumnNode> = {}
 
     const previewPatch = (patch: Partial<ColumnNode>) => {
+      if (!planColumnEdit(columnId, patch)) return
       lastPatch = patch
       useLiveNodeOverrides.getState().set(columnId, patch)
       useScene.getState().markDirty(columnId)
@@ -124,7 +126,8 @@ export const columnResizeAffordance: FloorplanAffordance<ColumnNode> = {
       commit() {
         if (Object.keys(lastPatch).length > 0) {
           useLiveNodeOverrides.getState().clear(columnId)
-          useScene.getState().updateNode(columnId, lastPatch)
+          const updates = planColumnEdit(columnId, lastPatch)
+          if (updates) useScene.getState().updateNodes(updates.map(([id, data]) => ({ id, data })))
         }
       },
     }

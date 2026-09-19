@@ -119,6 +119,7 @@ export {
   type LevelElevation,
 } from './storey'
 export {
+  canHostSurfaceChild,
   type DeclaredHostSurface,
   getSurfaceProvider,
   type HostSurface,

@@ -9,10 +9,8 @@ import { getRenderableSlabPolygon } from '../lib/slab-polygon'
 import { levelBaseElevationAt } from '../lib/terrain-support'
 import { nodeRegistry } from '../registry/registry'
 import { getBlockFaceFrame } from '../schema/nodes/block'
-import type { CabinetModuleNode, CabinetNode } from '../schema/nodes/cabinet'
 import type { ItemNode } from '../schema/nodes/item'
 import { getRoofWallFaceFrame, roofFacePointToSegment } from '../schema/nodes/roof-segment-walls'
-import type { ShelfNode } from '../schema/nodes/shelf'
 import type { SlabNode } from '../schema/nodes/slab'
 import type { WallNode } from '../schema/nodes/wall'
 import type { AnyNode } from '../schema/types'
@@ -82,39 +80,41 @@ export function proceduralFootprint(node: ProceduralItemNode) {
   const position = transformPoint(frame(node.position, node.rotation), center)
   return { position, rotation: node.rotation, dimensions: e.dimensions }
 }
-function floorLift(
-  node: ProceduralItemNode | ItemNode | ShelfNode | CabinetNode | CabinetModuleNode,
-  nodes: QueryNodes,
-): number {
-  if (!node.parentId || nodes[node.parentId]?.type !== 'level') return 0
+function floorLift(node: AnyNode | ProceduralItemNode, nodes: QueryNodes): number {
+  if (!node.parentId || nodes[node.parentId]?.type !== 'level' || !('position' in node)) return 0
+  const position = node.position as Vec3
+  const supportSlabId = (node as { supportSlabId?: string }).supportSlabId
+  const capability = nodeRegistry.get(node.type)?.capabilities.floorPlaced
   const { slabs, walls } = levelSurfaces(nodes, node.parentId)
   const ground = levelBaseElevationAt(
     nodes as Record<string, AnyNode>,
     node.parentId,
-    node.position[0],
-    node.position[2],
+    position[0],
+    position[2],
   )
-  if (node.supportSlabId === 'ground') return ground
-  if (node.type === 'cabinet' || node.type === 'cabinet-module') {
-    const capability = nodeRegistry.get(node.type)?.capabilities.floorPlaced
+  if (supportSlabId === 'ground') return ground
+  if (capability || node.type === 'cabinet' || node.type === 'cabinet-module') {
     const footprints = capability
       ? getFloorPlacedFootprints(capability, node, { nodes: nodes as Record<string, AnyNode> })
       : []
     const candidatesFor = (footprint: (typeof footprints)[number]) =>
       slabs.filter((slab) => {
-        const position = footprint.position ?? node.position
+        const footprintPosition = footprint.position ?? position
         return (
           itemOverlapsPolygon(
-            position,
+            footprintPosition,
             footprint.dimensions,
             footprint.rotation,
             getRenderableSlabPolygon(slab, { walls, siblingSlabs: slabs }),
             0.005,
-          ) && !(slab.holes ?? []).some((hole) => pointInPolygon(position[0], position[2], hole))
+          ) &&
+          !(slab.holes ?? []).some((hole) =>
+            pointInPolygon(footprintPosition[0], footprintPosition[2], hole),
+          )
         )
       })
     const candidates = footprints.map(candidatesFor)
-    const pinned = candidates.flat().find((slab) => slab.id === node.supportSlabId)
+    const pinned = candidates.flat().find((slab) => slab.id === supportSlabId)
     if (pinned) return pinned.elevation ?? 0.05
     return candidates.length
       ? Math.max(
@@ -124,10 +124,11 @@ function floorLift(
         )
       : ground
   }
+  if (!(isProceduralItem(node) || node.type === 'item' || node.type === 'shelf')) return 0
   const footprint = isProceduralItem(node)
     ? proceduralFootprint(node)
     : {
-        position: node.position,
+        position: position,
         dimensions:
           node.type === 'shelf'
             ? ([node.width, node.height, node.depth] as Vec3)
@@ -147,7 +148,7 @@ function floorLift(
       !(s.holes ?? []).some((h) => pointInPolygon(footprint.position[0], footprint.position[2], h))
     )
   })
-  const pinned = candidates.find((s) => s.id === node.supportSlabId)
+  const pinned = candidates.find((s) => s.id === supportSlabId)
   return pinned
     ? (pinned.elevation ?? 0.05)
     : candidates.length
@@ -215,10 +216,12 @@ export function nodeLevelFrame(id: string, nodes: QueryNodes, seen = new Set<str
       typeof transform.rotation === 'number'
         ? ([0, transform.rotation, 0] as Vec3)
         : transform.rotation
-    const local =
-      node.type === 'slab'
-        ? IDENTITY_FRAME
-        : frame(transform.position ?? [0, 0, 0], rotation ?? [0, 0, 0])
+    const position = [...(transform.position ?? [0, 0, 0])] as Vec3
+    const capability = nodeRegistry.get(node.type)?.capabilities.floorPlaced
+    if (!capability?.applies || capability.applies(node as AnyNode)) {
+      position[1] += floorLift(node, nodes)
+    }
+    const local = node.type === 'slab' ? IDENTITY_FRAME : frame(position, rotation ?? [0, 0, 0])
     return node.parentId ? composeFrames(nodeParentFrame(node, nodes, seen), local) : local
   }
   const pose = isProceduralItem(node)

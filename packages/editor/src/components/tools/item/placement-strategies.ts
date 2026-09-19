@@ -882,13 +882,7 @@ function resolveCatalogItemSurfacePlacement(
 export function validCatalogCounterPose(ctx: PlacementContext): boolean {
   const hostId = ctx.state.surface === 'shelf-surface' ? ctx.state.shelfId : ctx.state.surfaceItemId
   const host = hostId ? useScene.getState().nodes[hostId as AnyNodeId] : undefined
-  if (
-    host?.type !== 'cabinet' &&
-    host?.type !== 'shelf' &&
-    host?.type !== 'item' &&
-    host?.type !== 'procedural-item'
-  )
-    return true
+  if (!host) return true
   if (!ctx.draftItem) return false
   const placement = resolveSurfacePlacement({
     host,
