@@ -23,7 +23,7 @@ import {
 } from '@pascal-app/core'
 import { nodeLevelFrame } from '@pascal-app/core/procedural-items'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { commitFreshPlacementSubtree } from '../../lib/fresh-planar-placement'
 import { isHistoryShortcut } from '../../lib/history'
 import { isFreshPlacementMetadata, stripPlacementMetadataFlags } from '../../lib/placement-metadata'
@@ -41,7 +41,7 @@ import useEditor, {
   isGridSnapActive,
   isMagneticSnapActive,
 } from '../../store/use-editor'
-import { useMovingNode } from '../../store/use-interaction-scope'
+import useInteractionScope, { useMovingNode } from '../../store/use-interaction-scope'
 import { useWallMoveGhosts } from '../../store/use-wall-move-ghosts'
 
 // Figma-style alignment snap threshold. Meters in world space; 8cm gives
@@ -71,7 +71,14 @@ const ALIGNMENT_THRESHOLD_M = 0.08
  * cursor → meters accounts for pan / zoom / building rotation.
  */
 export function FloorplanRegistryMoveOverlay() {
-  const movingNode = useMovingNode()
+  const source = useMovingNode()
+  const movingNode = useMemo(
+    () =>
+      source && isFreshPlacementMetadata(source.metadata)
+        ? (useScene.getState().nodes[source.id] ?? source)
+        : source,
+    [source],
+  )
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setMovingNodeOrigin = useEditor((s) => s.setMovingNodeOrigin)
 
@@ -97,7 +104,15 @@ export function FloorplanRegistryMoveOverlay() {
       return [m.x, m.y]
     }
 
-    const isPointerOverFloorplanScene = (clientX: number, clientY: number): boolean => {
+    const isPointerOverFloorplanScene = (event: PointerEvent): boolean => {
+      // View controls overlap the SVG viewport; clicking one must not place the draft.
+      if (
+        (event.target as Element | null)?.closest?.(
+          'button, input, select, textarea, [role="button"]',
+        )
+      )
+        return false
+      const { clientX, clientY } = event
       // The scene's `<g>` only covers painted SVG elements, so hovers over
       // empty grid background often target the parent SVG. Bounds keep the
       // cursor active anywhere inside the floor-plan viewport.
@@ -111,6 +126,8 @@ export function FloorplanRegistryMoveOverlay() {
         clientY <= rect.bottom
       )
     }
+
+    const ownsSubtree = useInteractionScope.getState().adoptSubtree(movingNode.id)
 
     // ── Path 1 — kind-owned `floorplanMoveTarget` ───────────────────
     if (hasMoveTarget && def?.floorplanMoveTarget) {
@@ -170,7 +187,7 @@ export function FloorplanRegistryMoveOverlay() {
       // the 2D pane the overlay claimed R forever and the 3D flip went dead.
       let pointerOverFloorplan = false
       const onPointerTrack = (event: PointerEvent) => {
-        pointerOverFloorplan = isPointerOverFloorplanScene(event.clientX, event.clientY)
+        pointerOverFloorplan = isPointerOverFloorplanScene(event)
       }
 
       const onMove = (event: PointerEvent) => {
@@ -181,7 +198,7 @@ export function FloorplanRegistryMoveOverlay() {
         // hovers over empty grid background — without it, the cursor
         // only updated the shelf when it happened to brush over an
         // existing SVG entry, leaving the move feeling "stuck" elsewhere.
-        if (!isPointerOverFloorplanScene(event.clientX, event.clientY)) return
+        if (!isPointerOverFloorplanScene(event)) return
         const planPoint = toMeters(event.clientX, event.clientY)
         if (!planPoint) return
         hasMovedSinceStart = true
@@ -341,7 +358,7 @@ export function FloorplanRegistryMoveOverlay() {
         // Bounding-rect check (see `isPointerOverFloorplanScene`) — same
         // reason as `onMove`: commits should land for any pointer-up
         // inside the SVG viewport, including empty grid background.
-        if (!isPointerOverFloorplanScene(event.clientX, event.clientY)) return
+        if (!isPointerOverFloorplanScene(event)) return
         if (!hasMovedSinceStart) return
 
         // Commit using the LAST pointermove's state — no re-apply at
@@ -424,7 +441,7 @@ export function FloorplanRegistryMoveOverlay() {
         setMovingNodeOrigin('2d')
         if (isFreshPlacementMetadata((movingNode as { metadata?: unknown }).metadata)) {
           emitter.emit('tool:cancel')
-          useScene.getState().deleteNode(movingNode.id as AnyNodeId)
+          if (!ownsSubtree) useScene.getState().deleteNode(movingNode.id)
           if (historyPaused) {
             resumeSceneHistory(useScene)
             historyPaused = false
@@ -480,10 +497,11 @@ export function FloorplanRegistryMoveOverlay() {
         //     our unmount
         // are now distinguished by the origin flag — no scene-state
         // diff heuristic required.
+        const freshPlacement = ownsSubtree
         if (historyPaused) {
-          if (hasMovedSinceStart) {
-            const finalisedBy3D = useEditor.getState().movingNodeOrigin === '3d'
-            if (!finalisedBy3D) {
+          const finalisedBy3D = useEditor.getState().movingNodeOrigin === '3d'
+          if (!finalisedBy3D && !freshPlacement) {
+            if (hasMovedSinceStart) {
               restoreSnapshots(snapshots)
             }
           }
@@ -494,7 +512,7 @@ export function FloorplanRegistryMoveOverlay() {
         // `useLiveTransforms`; wall sessions write to
         // `useLiveNodeOverrides`. In pure 2D view the corresponding 3D
         // tool's cleanup isn't there to clear them for us.
-        clearLivePreviews()
+        if (!freshPlacement) clearLivePreviews()
         // Sessions that publish Figma-style alignment guides during `apply`
         // (item / shelf / column) leave them in the store; this cleanup runs
         // after every terminal path (commit + Esc both unmount via
@@ -605,7 +623,7 @@ export function FloorplanRegistryMoveOverlay() {
       // Same target guard as Path 1 — pointer must be over the floor
       // plan scene; otherwise we'd react to 3D-canvas moves with garbage
       // plan coords.
-      if (!isPointerOverFloorplanScene(event.clientX, event.clientY)) return
+      if (!isPointerOverFloorplanScene(event)) return
       const m = toMeters(event.clientX, event.clientY)
       if (!m) return
       forcePlace = event.altKey
@@ -756,7 +774,7 @@ export function FloorplanRegistryMoveOverlay() {
 
     const onPointerUp = (event: PointerEvent) => {
       if (event.button !== 0) return
-      if (!isPointerOverFloorplanScene(event.clientX, event.clientY)) return
+      if (!isPointerOverFloorplanScene(event)) return
 
       const snapped = lastSnapped
       if (!snapped) return
@@ -852,11 +870,7 @@ export function FloorplanRegistryMoveOverlay() {
       setMovingNodeOrigin('2d')
       if (isFreshPlacement) {
         emitter.emit('tool:cancel')
-        const temporal = useScene.temporal.getState()
-        const wasTracking = (temporal as { isTracking?: boolean }).isTracking !== false
-        if (wasTracking) temporal.pause()
-        useScene.getState().deleteNode(movingNode.id as AnyNodeId)
-        if (wasTracking) temporal.resume()
+        if (!ownsSubtree) useScene.getState().deleteNode(movingNode.id)
       }
       for (const relatedEntry of relatedEntries) {
         relatedEntry.removeAttribute('transform')

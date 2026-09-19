@@ -1,6 +1,13 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  collectSubtree,
+  useLiveNodeOverrides,
+  useLiveTransforms,
+  useScene,
+} from '@pascal-app/core'
 import {
   beginPerfAction,
   commitPerfAction,
@@ -10,6 +17,7 @@ import {
 import { useRef } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
+import { discardFreshPlacementSubtree } from '../lib/fresh-planar-placement'
 import {
   type ActiveInteractionScope,
   controlPointReshapeInfo,
@@ -25,6 +33,7 @@ import {
   reshapingNodeId,
   tangentReshapeInfo,
 } from '../lib/interaction/scope'
+import usePlacementPreview from './use-placement-preview'
 
 // The authoritative interaction state machine. A single owner holds exactly one
 // scope at a time. `begin` enters an interaction (atomically replacing any prior
@@ -33,8 +42,21 @@ import {
 // the end of its interaction. There is no setter that can leave the store in an
 // illegal half-state: the only writable shape is `InteractionScope`.
 
+type SubtreeCreation = {
+  rootId: AnyNodeId
+  node: AnyNode
+  hydrationId: object | null
+}
+type OwnedSubtree = { creation: SubtreeCreation; gesture: object }
+
 export type InteractionScopeState = {
   scope: InteractionScope
+  gesture: object | null
+  pendingSubtree: SubtreeCreation | null
+  ownedSubtree: OwnedSubtree | null
+  noteSubtreeCreation: (node: AnyNode) => void
+  adoptSubtree: (rootId: AnyNodeId) => boolean
+  finishSubtree: (rootId: AnyNodeId) => void
   // Enter an interaction. If one is already active it is ended first, so the
   // store is always single-owner.
   begin: (scope: ActiveInteractionScope) => void
@@ -101,9 +123,50 @@ function commitScopePerfAction(): void {
 
 const useInteractionScope = create<InteractionScopeState>((set, get) => ({
   scope: IDLE_SCOPE,
+  gesture: null,
+  pendingSubtree: null,
+  ownedSubtree: null,
+  noteSubtreeCreation: (node) =>
+    set({
+      pendingSubtree: { rootId: node.id, node, hydrationId: useScene.getState().hydrationId },
+    }),
+  adoptSubtree: (rootId) => {
+    const state = get()
+    if (state.ownedSubtree?.creation.rootId === rootId)
+      return (
+        state.ownedSubtree.gesture === state.gesture &&
+        isCurrentCreation(state.ownedSubtree.creation)
+      )
+    const creation = state.pendingSubtree
+    if (
+      !creation ||
+      creation.rootId !== rootId ||
+      !state.gesture ||
+      movingNodeOf(state.scope)?.id !== rootId ||
+      !isCurrentCreation(creation)
+    )
+      return false
+    set({ ownedSubtree: { creation, gesture: state.gesture }, pendingSubtree: null })
+    return true
+  },
+  finishSubtree: (rootId) =>
+    set((state) => {
+      if (state.ownedSubtree?.creation.rootId !== rootId && state.pendingSubtree?.rootId !== rootId)
+        return state
+      return {
+        ownedSubtree: state.ownedSubtree?.creation.rootId === rootId ? null : state.ownedSubtree,
+        pendingSubtree: state.pendingSubtree?.rootId === rootId ? null : state.pendingSubtree,
+      }
+    }),
   begin: (scope) => {
     beginScopePerfAction(scope)
-    set({ scope })
+    set({
+      scope,
+      gesture: {},
+      ownedSubtree: null,
+      pendingSubtree:
+        get().pendingSubtree?.rootId === movingNodeOf(scope)?.id ? get().pendingSubtree : null,
+    })
   },
   update: (patch) =>
     set((state) => {
@@ -114,17 +177,72 @@ const useInteractionScope = create<InteractionScopeState>((set, get) => ({
   end: () => {
     if (get().scope.kind === 'idle') return
     commitScopePerfAction()
-    set({ scope: IDLE_SCOPE })
+    set({ scope: IDLE_SCOPE, gesture: null, ownedSubtree: null, pendingSubtree: null })
   },
   endIf: (match) => {
     const scope = get().scope
     if (scope.kind === 'idle') return
     if (match(scope)) {
       commitScopePerfAction()
-      set({ scope: IDLE_SCOPE })
+      set({ scope: IDLE_SCOPE, gesture: null, ownedSubtree: null, pendingSubtree: null })
     }
   },
 }))
+
+function isCurrentCreation(creation: SubtreeCreation): boolean {
+  const scene = useScene.getState()
+  return (
+    scene.hydrationId === creation.hydrationId && scene.nodes[creation.rootId] === creation.node
+  )
+}
+
+// Track the identity of the factory-created node through scene patches, never through metadata.
+// Hydration or deletion invalidates the creation even if a later scene reuses the same id.
+useScene.subscribe((scene, previous) => {
+  const state = useInteractionScope.getState()
+  for (const creation of [state.pendingSubtree, state.ownedSubtree?.creation]) {
+    if (!creation) continue
+    if (
+      scene.hydrationId !== creation.hydrationId ||
+      previous.nodes[creation.rootId] !== creation.node ||
+      !scene.nodes[creation.rootId]
+    ) {
+      state.finishSubtree(creation.rootId)
+    } else creation.node = scene.nodes[creation.rootId]!
+  }
+})
+
+// Only adopters that implement the commit protocol may opt into interaction-end deletion.
+useInteractionScope.subscribe((state, previous) => {
+  if (
+    state.gesture === previous.gesture &&
+    movingNodeOf(state.scope)?.id === movingNodeOf(previous.scope)?.id
+  )
+    return
+  const owned = previous.ownedSubtree
+  if (
+    !owned ||
+    owned.gesture !== previous.gesture ||
+    movingNodeOf(previous.scope)?.id !== owned.creation.rootId ||
+    !isCurrentCreation(owned.creation)
+  )
+    return
+  const node = owned.creation.node
+  const subtree = collectSubtree(useScene.getState().nodes, node.id)
+  const temporal = useScene.temporal.getState()
+  const wasTracking = temporal.isTracking
+  temporal.pause()
+  try {
+    discardFreshPlacementSubtree(node.id)
+    for (const entry of subtree ? [subtree.root, ...subtree.descendants] : []) {
+      useLiveTransforms.getState().clear(entry.id)
+      useLiveNodeOverrides.getState().clear(entry.id)
+    }
+    if (usePlacementPreview.getState().node?.id === node.id) usePlacementPreview.getState().clear()
+  } finally {
+    if (wasTracking) temporal.resume()
+  }
+})
 
 // Derived, reference-stable views of the active scope, replacing the legacy
 // `useEditor.activeHandleDrag` / `useEditor.editingHole` flags. `useShallow`

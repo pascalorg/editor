@@ -7,6 +7,8 @@ import {
   nodeRegistry,
   useScene,
 } from '@pascal-app/core'
+import useInteractionScope from '../store/use-interaction-scope'
+import usePlacementPreview from '../store/use-placement-preview'
 import { getPlacementMetadataRecord, stripPlacementMetadataFlags } from './placement-metadata'
 import {
   surfaceAttachmentId,
@@ -32,7 +34,13 @@ function duplicableConfigFor(node: AnyNode): DuplicableConfig | null {
 }
 
 export function duplicatesAsFreshSubtree(node: AnyNode): boolean {
-  return duplicableConfigFor(node)?.subtree === true
+  // A surface-local root needs the same attachment lifecycle even without descendants.
+  if (surfaceAttachmentId(node) !== null) return true
+  const policy = duplicableConfigFor(node)?.subtree
+  return (
+    policy === true ||
+    (policy === 'with-children' && 'children' in node && node.children.length > 0)
+  )
 }
 
 /**
@@ -99,13 +107,26 @@ export function createFreshPlacementSubtree(
     parentId,
   })
 
-  useScene
-    .getState()
-    .createNodes(
-      cloned.nodes.map((node, index) => (index === 0 && parentId ? { node, parentId } : { node })),
-    )
+  scene.applyNodeChanges({
+    create: cloned.nodes.map((node, index) =>
+      index === 0 && parentId ? { node, parentId } : { node },
+    ),
+    update: surfaceAttachmentUpdates(cloned.rootId, parentId, surfaceAttachmentId(subtree.root)),
+  })
 
+  const created = useScene.getState().nodes[cloned.rootId]
+  if (!created) return null
+  useInteractionScope.getState().noteSubtreeCreation(created)
   return cloned.rootId
+}
+
+export function discardFreshPlacementSubtree(rootId: AnyNodeId): void {
+  const scene = useScene.getState()
+  if (!scene.nodes[rootId]) return
+  scene.applyNodeChanges({
+    delete: [rootId],
+    update: surfaceAttachmentUpdates(rootId, null, null),
+  })
 }
 
 /**
@@ -136,6 +157,7 @@ export function commitFreshPlacementSubtree(
     parentId,
   })
 
+  useInteractionScope.getState().finishSubtree(rootId)
   const surfaceId = surfaceAttachmentId(subtree.root)
   const temporal = useScene.temporal.getState()
   const wasTracking = (temporal as { isTracking?: boolean }).isTracking !== false
@@ -150,6 +172,7 @@ export function commitFreshPlacementSubtree(
     update: surfaceAttachmentUpdates(cloned.rootId, parentId, surfaceId),
   })
   if (!wasTracking) temporal.pause()
+  if (usePlacementPreview.getState().node?.id === rootId) usePlacementPreview.getState().clear()
 
   return cloned.rootId
 }

@@ -396,6 +396,8 @@ export function validateProceduralRelations(raw: AnyNode | ProceduralItemNode, n
       Math.abs(b.min[1]) > 1e-6
     )
       throw new Error(`The hosted item does not fit on ${surface.label}`)
+    // A fresh duplicate initially overlaps its source; only committed children occupy a surface.
+    if (child.metadata?.isNew === true) continue
     const occupied = regions.get(surface.id) ?? []
     if (occupied.some((a) => attachmentRegionsOverlap(a, b)))
       throw new Error(`Another item occupies ${surface.label}`)

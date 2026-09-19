@@ -49,6 +49,7 @@ import {
 } from '../../../lib/active-placement-surface'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { formatLinearMeasurement } from '../../../lib/measurements'
+import { isFreshPlacementMetadata } from '../../../lib/placement-metadata'
 import { createMovementSfxTick } from '../../../lib/sfx/movement-tick'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import {
@@ -2645,7 +2646,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     const unsubDraftWatch = useScene.subscribe((state) => {
       if (tearingDown) return
       const draft = draftNode.current
-      if (draft === null) return
+      if (draft === null || isFreshPlacementMetadata(draft.metadata)) return
       if (draft.id in state.nodes) return
 
       queueMicrotask(() => {

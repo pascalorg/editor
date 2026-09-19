@@ -1,0 +1,96 @@
+[
+  {
+    "stage": "preview",
+    "minted": 1,
+    "writes": 1,
+    "history": 0,
+    "commits": 0,
+    "moving": "fresh-0",
+    "nodes": [
+      {
+        "object": "node",
+        "id": "fresh-0",
+        "type": "item",
+        "parentId": "original-2",
+        "visible": true,
+        "metadata": {
+          "isNew": true
+        },
+        "position": [-2, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1],
+        "children": [],
+        "asset": {
+          "id": "audit-box",
+          "category": "decor",
+          "name": "Audit box",
+          "thumbnail": "",
+          "source": "library",
+          "src": "/unrenderable-host-audit.glb",
+          "dimensions": [0.1, 0.2, 0.1],
+          "offset": [0, 0, 0],
+          "rotation": [0, 0, 0],
+          "scale": [1, 1, 1]
+        }
+      }
+    ],
+    "preview": [
+      {
+        "id": "fresh-0",
+        "position": [-2, 0, 0]
+      }
+    ]
+  },
+  {
+    "stage": "pointer",
+    "minted": 1,
+    "writes": 1,
+    "history": 0,
+    "commits": 0,
+    "moving": "fresh-0",
+    "nodes": [
+      {
+        "object": "node",
+        "id": "fresh-0",
+        "type": "item",
+        "parentId": "original-2",
+        "visible": true,
+        "metadata": {
+          "isNew": true
+        },
+        "position": [-2, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1],
+        "children": [],
+        "asset": {
+          "id": "audit-box",
+          "category": "decor",
+          "name": "Audit box",
+          "thumbnail": "",
+          "source": "library",
+          "src": "/unrenderable-host-audit.glb",
+          "dimensions": [0.1, 0.2, 0.1],
+          "offset": [0, 0, 0],
+          "rotation": [0, 0, 0],
+          "scale": [1, 1, 1]
+        }
+      }
+    ],
+    "preview": [
+      {
+        "id": "fresh-0",
+        "position": [6, 0, 5]
+      }
+    ]
+  },
+  {
+    "stage": "Escape",
+    "minted": 1,
+    "writes": 2,
+    "history": 0,
+    "commits": 0,
+    "moving": null,
+    "nodes": [],
+    "preview": []
+  }
+]

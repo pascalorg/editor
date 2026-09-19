@@ -25,6 +25,7 @@ import {
   roofFacePointToSegment,
   sceneRegistry,
   useScene,
+  wouldCreateHostingCycle,
 } from '@pascal-app/core'
 import { Euler, Quaternion, Vector3 } from 'three'
 import { hasRoofFaceChildOverlap, resolveRoofWallHit } from '../../../lib/roof-wall-hit'
@@ -49,20 +50,6 @@ import type {
 } from './placement-types'
 
 const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
-function isDescendantOfItem(
-  candidate: AnyNode,
-  ancestorId: string,
-  nodes: Record<string, AnyNode>,
-): boolean {
-  let parentId = candidate.parentId
-  while (parentId) {
-    if (parentId === ancestorId) return true
-    const parent = nodes[parentId as AnyNodeId]
-    parentId = parent?.parentId ?? null
-  }
-  return false
-}
-
 // ============================================================================
 // FLOOR STRATEGY
 // ============================================================================
@@ -211,6 +198,12 @@ export const wallStrategy = {
     const attachTo = ctx.asset.attachTo
     if (attachTo !== 'wall' && attachTo !== 'wall-side') return null
     if (!isValidWallSideFace(event.normal)) return null
+
+    if (
+      ctx.draftItem &&
+      wouldCreateHostingCycle(ctx.draftItem.id, event.node, createSceneApi(useScene))
+    )
+      return null
 
     // Level guard
     const wallLevelId = resolveLevelId(event.node, nodes)
@@ -416,6 +409,11 @@ function resolveRoofWallTarget(
 
   const hit = resolveRoofWallHit(event.node as RoofNode, event.position, event.normal, event.object)
   if (!hit) return null
+  if (
+    ctx.draftItem &&
+    wouldCreateHostingCycle(ctx.draftItem.id, hit.segment, createSceneApi(useScene))
+  )
+    return null
 
   const rawDims = ctx.draftItem
     ? getScaledDimensions(ctx.draftItem)
@@ -605,6 +603,11 @@ export const roofWallStrategy = {
 // ============================================================================
 
 function resolveFaceHostTarget(ctx: PlacementContext, event: NodeEvent) {
+  if (
+    ctx.draftItem &&
+    wouldCreateHostingCycle(ctx.draftItem.id, event.node, createSceneApi(useScene))
+  )
+    return null
   const faceHost = nodeRegistry.get(event.node.type)?.capabilities.faceHost
   if (!faceHost) return null
   const rawDimensions = ctx.draftItem
@@ -714,6 +717,12 @@ export const ceilingStrategy = {
     nodes: Record<string, AnyNode>,
   ): TransitionResult | null {
     if (ctx.asset.attachTo !== 'ceiling') return null
+
+    if (
+      ctx.draftItem &&
+      wouldCreateHostingCycle(ctx.draftItem.id, event.node, createSceneApi(useScene))
+    )
+      return null
 
     // Level guard
     const ceilingLevelId = resolveLevelId(event.node, nodes)
@@ -923,7 +932,7 @@ export const itemSurfaceStrategy = {
       : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS)
     if (
       ctx.draftItem &&
-      isDescendantOfItem(surfaceItem, ctx.draftItem.id, useScene.getState().nodes)
+      wouldCreateHostingCycle(ctx.draftItem.id, surfaceItem, createSceneApi(useScene))
     )
       return null
     const pose = resolveCatalogItemSurfacePlacement(

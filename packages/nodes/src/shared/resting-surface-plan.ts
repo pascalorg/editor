@@ -1,5 +1,32 @@
-import { type AnyNode, type AnyNodeId, getEffectiveNode, useLiveTransforms } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeDefinition,
+  type AnyNodeId,
+  collectSubtree,
+  getEffectiveNode,
+  useLiveTransforms,
+} from '@pascal-app/core'
 import { nodeLevelFrame } from '@pascal-app/core/procedural-items'
+
+// Live transforms do not replace the committed snapshot; topology edits do.
+const affectedIdsBySnapshot = new WeakMap<object, Map<AnyNodeId, readonly AnyNodeId[]>>()
+
+// Hosted footprints read ancestor poses, so a host preview invalidates its descendants too.
+export const restingFloorplanAffectedIds: NonNullable<
+  AnyNodeDefinition['floorplanAffectedIds']
+> = ({ nodeId, nodes }) => {
+  let cached = affectedIdsBySnapshot.get(nodes)
+  if (!cached) {
+    cached = new Map()
+    affectedIdsBySnapshot.set(nodes, cached)
+  }
+  let ids = cached.get(nodeId)
+  if (!ids) {
+    ids = collectSubtree(nodes, nodeId)?.descendants.map((node) => node.id) ?? []
+    cached.set(nodeId, ids)
+  }
+  return ids
+}
 
 export function restingNodePlanFrame(
   node: AnyNode,

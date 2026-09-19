@@ -908,7 +908,9 @@ if (process.env.PASCAL_BROWSER_FIXES_ISOLATED !== '1') {
       const renderer = await create(<Scene menu />)
       try {
         await settle(renderer)
-        const carries = ['column', 'block', 'cabinet'].includes(kind)
+        const carries = ['column', 'block', 'cabinet', 'item', 'shelf', 'procedural-item'].includes(
+          kind,
+        )
         if (kind === 'block') {
           expect(menuAction()).toBeUndefined()
           expect(duplicatesAsFreshSubtree(useScene.getState().nodes[host.id]!)).toBe(true)

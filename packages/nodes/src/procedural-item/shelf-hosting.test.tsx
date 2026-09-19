@@ -651,6 +651,7 @@ test('fresh mounted placement commits via a shelf click and explicit cancel dele
   }
   useScene.temporal.getState().pause()
   useScene.getState().createNode(draft, level.id)
+  useEditor.getState().setMovingNode(draft)
   const cancelled = await create(<MoveRegistryNodeTool node={draft} />)
   try {
     await act(async () => emitter.emit('shelf:enter', hit()))

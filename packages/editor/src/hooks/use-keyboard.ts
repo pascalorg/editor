@@ -116,7 +116,13 @@ const exitToSelectAfterUnconsumedCancel = () => {
   const currentPhase = useEditor.getState().phase
   const currentStructureLayer = useEditor.getState().structureLayer
 
-  useInteractionScope.getState().endIf((sc) => sc.kind === 'reshaping' && sc.reshape === 'hole')
+  useInteractionScope
+    .getState()
+    .endIf(
+      (sc) =>
+        (sc.kind === 'placing' && useInteractionScope.getState().ownedSubtree !== null) ||
+        (sc.kind === 'reshaping' && sc.reshape === 'hole'),
+    )
 
   // From zone mode, return to structure select
   if (currentPhase === 'structure' && currentStructureLayer === 'zones') {

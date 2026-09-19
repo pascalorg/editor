@@ -11,6 +11,7 @@ import {
   sceneRegistry,
   useLiveTransforms,
   useScene,
+  wouldCreateHostingCycle,
 } from '@pascal-app/core'
 import { boxCorners } from '@pascal-app/core/procedural-items'
 import { type Camera, Euler, Quaternion, Vector3 } from 'three'
@@ -230,11 +231,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
       if (floorPlaced.applies && !floorPlaced.applies(live)) return null
       const host = useScene.getState().nodes[event.node.id]
       if (!host || NON_PHYSICAL_HOST_KINDS.includes(host.type)) return null
-      let ancestor: AnyNode | undefined = host
-      while (ancestor) {
-        if (ancestor.id === node.id) return null
-        ancestor = ancestor.parentId ? scene.get(ancestor.parentId as AnyNodeId) : undefined
-      }
+      if (wouldCreateHostingCycle(node.id, host, scene)) return null
       const mesh = sceneRegistry.nodes.get(host.id)
       if (!mesh) return null
       const raw = mesh.worldToLocal(new Vector3(...event.position)).toArray()
