@@ -192,6 +192,7 @@ import {
   constrainWallDraftLength,
   createWallOnCurrentLevel,
   isSegmentLongEnough,
+  nextLocalWallDraftStartFromStore,
   parseWallDraftLength,
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
@@ -5190,24 +5191,18 @@ export function FloorplanPanel({
   // Split-view Enter is owned by the 3D capture listener (grid:click +
   // stopPropagation), which advances useFloorplanDraftPreview.wallDraftStart
   // without running handleWallPlacementPoint. Pull that start back into the
-  // 2D draftStart so the rubber band chains from the new segment.
+  // 2D draftStart so the rubber band chains from the new segment. A null
+  // store start means 3D ended the chain — close the 2D rubber band too.
   const storeWallDraftStart = useFloorplanDraftPreview((s) => s.wallDraftStart)
-  const wallBuildActiveForDraftSync =
-    phase === 'structure' && mode === 'build' && tool === 'wall'
+  const wallBuildActiveForDraftSync = phase === 'structure' && mode === 'build' && tool === 'wall'
   useEffect(() => {
     if (!wallBuildActiveForDraftSync) return
-    if (!storeWallDraftStart) return
-    setDraftStart((prev) => {
-      if (
-        prev &&
-        prev[0] === storeWallDraftStart[0] &&
-        prev[1] === storeWallDraftStart[1]
-      ) {
-        return prev
-      }
-      return storeWallDraftStart
-    })
-  }, [wallBuildActiveForDraftSync, storeWallDraftStart])
+    setDraftStart((prev) => nextLocalWallDraftStartFromStore(storeWallDraftStart, prev))
+    if (!storeWallDraftStart) {
+      setDraftEnd(null)
+      useFloorplanDraftPreview.getState().setCursorPoint(null)
+    }
+  }, [setDraftEnd, storeWallDraftStart, wallBuildActiveForDraftSync])
   useEffect(() => {
     useFloorplanDraftPreview.getState().setFenceDraftStart(fenceDraftStart)
   }, [fenceDraftStart])
@@ -8277,10 +8272,10 @@ export function FloorplanPanel({
 
       // Typed-length editing for the 2D wall draft (#308) — parity with the
       // 3D wall tool: printable keys extend the buffer, Enter commits at the
-      // typed length, Escape (stage 1) clears it. stopPropagation keeps the
-      // global tool listener from treating Escape/digits/unit letters as
-      // cancel / phase / tool shortcuts while the buffer owns the keys.
-      if (isWallBuildActive && draftStart) {
+      // typed length, Escape (stage 1) clears it. Capture + stopPropagation
+      // beat the bubble `use-keyboard` shortcuts. Skip when 3D already owned
+      // the key (same window, capture) so split view does not double-append.
+      if (isWallBuildActive && draftStart && !event.defaultPrevented) {
         const typing = useWallDraftTyping.getState()
         const hasInput = typing.input.length > 0
         if (!event.metaKey && !event.ctrlKey && !event.altKey) {
@@ -8372,12 +8367,12 @@ export function FloorplanPanel({
       setRotationModifierPressed(false)
     }
 
-    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keydown', handleKeyDown, true)
     window.addEventListener('keyup', handleKeyUp)
     window.addEventListener('blur', handleBlur)
 
     return () => {
-      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keydown', handleKeyDown, true)
       window.removeEventListener('keyup', handleKeyUp)
       window.removeEventListener('blur', handleBlur)
     }
@@ -9870,7 +9865,6 @@ export function FloorplanPanel({
 
   const handleWallPlacementPoint = useCallback(
     (point: WallPlanPoint) => {
-      wallPlacementPointRef.current = handleWallPlacementPoint
       if (!draftStart) {
         wallConstructionOptionsRef.current = levelId
           ? resolveTerrainWallConstructionOptions(
@@ -9989,6 +9983,7 @@ export function FloorplanPanel({
       unit,
     ],
   )
+  wallPlacementPointRef.current = handleWallPlacementPoint
   const { getFloorplanHitIdAtPoint, getFloorplanSelectionIdsInBounds } = useFloorplanHitTesting({
     sceneRef: floorplanSceneRef,
   })

@@ -28,6 +28,7 @@ import useInteractionScope from '../../../store/use-interaction-scope'
 import {
   constrainWallDraftLength,
   createWallOnCurrentLevel,
+  nextLocalWallDraftStartFromStore,
   parseWallDraftLength,
   resolveEndpointWallSplit,
   snapWallDraftPointDetailed,
@@ -984,5 +985,24 @@ describe('wall draft length input', () => {
     expect(parseWallDraftLength('5\'11"', 'imperial')).toBeCloseTo(1.8034, 6)
     expect(parseWallDraftLength('2500', 'metric', 'millimeters')).toBeCloseTo(2.5, 6)
     expect(parseWallDraftLength('not a length', 'metric')).toBeNull()
+  })
+})
+
+describe('nextLocalWallDraftStartFromStore', () => {
+  test('clears the local rubber-band start when the store start becomes null', () => {
+    expect(nextLocalWallDraftStartFromStore(null, [2, 1])).toBeNull()
+  })
+
+  test('preserves the local start when the store matches it', () => {
+    const local: WallPlanPoint = [4, 0]
+    expect(nextLocalWallDraftStartFromStore([4, 0], local)).toBe(local)
+  })
+
+  test('advances the local start when the store publishes a new chain point', () => {
+    expect(nextLocalWallDraftStartFromStore([8, 2], [4, 0])).toEqual([8, 2])
+  })
+
+  test('copies a store start when the local draft has not been set yet', () => {
+    expect(nextLocalWallDraftStartFromStore([1, 1], null)).toEqual([1, 1])
   })
 })

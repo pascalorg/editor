@@ -87,6 +87,26 @@ export function parseWallDraftLength(
   return parsed != null && parsed >= WALL_MIN_LENGTH ? parsed : null
 }
 
+/**
+ * Split-view 2D rubber band: copy the draft store's chain start into local
+ * `draftStart`. A null store start means the 3D owner ended the chain, so the
+ * local start must clear too — otherwise the 2D band stays open.
+ */
+export function nextLocalWallDraftStartFromStore(
+  storeWallDraftStart: WallPlanPoint | null,
+  localDraftStart: WallPlanPoint | null,
+): WallPlanPoint | null {
+  if (!storeWallDraftStart) return null
+  if (
+    localDraftStart &&
+    localDraftStart[0] === storeWallDraftStart[0] &&
+    localDraftStart[1] === storeWallDraftStart[1]
+  ) {
+    return localDraftStart
+  }
+  return storeWallDraftStart
+}
+
 export function getSegmentGridStep(): number {
   // A 0 step means "no grid lattice" — every grid-snap consumer guards on
   // `step <= 0` and returns the raw value, so disabling grid here suppresses
