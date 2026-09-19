@@ -26,6 +26,7 @@ import { useViewer } from '@pascal-app/viewer'
 import useEditor from '../../../store/use-editor'
 import useInteractionScope from '../../../store/use-interaction-scope'
 import {
+  adoptedWallDraftStartForTypedCommit,
   constrainWallDraftLength,
   createWallOnCurrentLevel,
   nextLocalWallDraftStartFromStore,
@@ -33,6 +34,7 @@ import {
   refreshWallDraftTypedEnd,
   resolveEndpointWallSplit,
   resolveWallDraftCommitEnd,
+  shouldResetWallPlacementDraftFromStoreStart,
   snapWallDraftPointDetailed,
 } from './wall-drafting'
 import type { WallPlanPoint } from './wall-snap-geometry'
@@ -1034,6 +1036,22 @@ describe('wall draft length input', () => {
     expect(end).toEqual([10, 0])
   })
 
+  test('a 2D-armed typed commit still skips snap when WallTool reads store meters', () => {
+    let snapCalls = 0
+    const end = resolveWallDraftCommitEnd({
+      start: [0, 0],
+      clickPoint: [0, 6],
+      typedCommitMeters: 6,
+      snapEnd: () => {
+        snapCalls += 1
+        return [10, 0]
+      },
+      liveTypedMeters: null,
+    })
+    expect(snapCalls).toBe(0)
+    expect(end).toEqual([0, 6])
+  })
+
   test('refreshing typed length reuses the current end heading without a new snap', () => {
     const start: WallPlanPoint = [0, 0]
     const pointerEnd: WallPlanPoint = [10, 0]
@@ -1088,5 +1106,51 @@ describe('nextLocalWallDraftStartFromStore', () => {
 
   test('copies a store start when the local draft has not been set yet', () => {
     expect(nextLocalWallDraftStartFromStore([1, 1], null)).toEqual([1, 1])
+  })
+})
+
+describe('shouldResetWallPlacementDraftFromStoreStart', () => {
+  test('resets the 2D chain when 3D publishes a null start during wall build', () => {
+    expect(shouldResetWallPlacementDraftFromStoreStart(true, null)).toBe(true)
+  })
+
+  test('does not reset while a chain start is still published', () => {
+    expect(shouldResetWallPlacementDraftFromStoreStart(true, [4, 0])).toBe(false)
+  })
+
+  test('does not reset when wall build is inactive', () => {
+    expect(shouldResetWallPlacementDraftFromStoreStart(false, null)).toBe(false)
+  })
+})
+
+describe('adoptedWallDraftStartForTypedCommit', () => {
+  test('adopts the 2D published start when 3D has not begun drafting', () => {
+    expect(
+      adoptedWallDraftStartForTypedCommit({
+        buildingState: 0,
+        typedCommitMeters: 5,
+        publishedStart: [2, 1],
+      }),
+    ).toEqual([2, 1])
+  })
+
+  test('does not adopt when 3D already owns the draft start', () => {
+    expect(
+      adoptedWallDraftStartForTypedCommit({
+        buildingState: 1,
+        typedCommitMeters: 5,
+        publishedStart: [2, 1],
+      }),
+    ).toBeNull()
+  })
+
+  test('does not adopt a pointer click with no typed commit', () => {
+    expect(
+      adoptedWallDraftStartForTypedCommit({
+        buildingState: 0,
+        typedCommitMeters: null,
+        publishedStart: [2, 1],
+      }),
+    ).toBeNull()
   })
 })

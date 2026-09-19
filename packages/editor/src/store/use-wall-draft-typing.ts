@@ -12,19 +12,34 @@ import { create } from 'zustand'
  */
 type WallDraftTypingState = {
   input: string
+  /**
+   * One-shot exact length (metres) for the next `grid:click` commit.
+   * 2D typed Enter arms this so WallTool can skip re-snap even though
+   * the 2D capture handler owns the key and emits the click.
+   */
+  pendingCommitMeters: number | null
   begin(): void
   append(key: string): void
   backspace(): void
   clearInput(): void
+  setPendingCommitMeters(meters: number | null): void
+  takePendingCommitMeters(): number | null
 }
 
-export const useWallDraftTyping = create<WallDraftTypingState>((set) => ({
+export const useWallDraftTyping = create<WallDraftTypingState>((set, get) => ({
   input: '',
-  begin: () => set({ input: '' }),
+  pendingCommitMeters: null,
+  begin: () => set({ input: '', pendingCommitMeters: null }),
   append: (key) => set((state) => ({ input: state.input + key })),
   backspace: () =>
     set((state) => ({ input: state.input.slice(0, Math.max(0, state.input.length - 1)) })),
-  clearInput: () => set({ input: '' }),
+  clearInput: () => set({ input: '', pendingCommitMeters: null }),
+  setPendingCommitMeters: (meters) => set({ pendingCommitMeters: meters }),
+  takePendingCommitMeters: () => {
+    const meters = get().pendingCommitMeters
+    set({ pendingCommitMeters: null })
+    return meters
+  },
 }))
 
 /** Keys the wall typing buffer accepts (digits, unit letters, separators). */

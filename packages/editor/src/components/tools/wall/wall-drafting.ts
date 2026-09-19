@@ -149,6 +149,33 @@ export function nextLocalWallDraftStartFromStore(
   return storeWallDraftStart
 }
 
+/**
+ * 3D ended the chain (null published start). Reset the 2D chain exclusion
+ * set too — clearing only draftStart/draftEnd leaves wallChainWallIdsRef
+ * pointing at the previous chain.
+ */
+export function shouldResetWallPlacementDraftFromStoreStart(
+  wallBuildActive: boolean,
+  storeWallDraftStart: WallPlanPoint | null,
+): boolean {
+  return wallBuildActive && storeWallDraftStart == null
+}
+
+/**
+ * 2D may start a wall while the 3D canvas is hidden, so WallTool's
+ * buildingState stays 0. A typed Enter that emits grid:click must still
+ * commit from that published start rather than treating the click as a
+ * new first point.
+ */
+export function adoptedWallDraftStartForTypedCommit(args: {
+  buildingState: number
+  typedCommitMeters: number | null
+  publishedStart: WallPlanPoint | null
+}): WallPlanPoint | null {
+  if (args.buildingState !== 0 || args.typedCommitMeters == null) return null
+  return args.publishedStart
+}
+
 export function getSegmentGridStep(): number {
   // A 0 step means "no grid lattice" — every grid-snap consumer guards on
   // `step <= 0` and returns the raw value, so disabling grid here suppresses

@@ -195,6 +195,7 @@ export {
 } from './components/tools/stair/stair-defaults'
 export { preloadRegistryToolModules, ToolManager } from './components/tools/tool-manager'
 export {
+  adoptedWallDraftStartForTypedCommit,
   chainEndJoinsExistingWall,
   constrainWallDraftLength,
   createWallOnCurrentLevel,
@@ -204,6 +205,7 @@ export {
   refreshWallDraftTypedEnd,
   resolveEndpointWallSplit,
   resolveWallDraftCommitEnd,
+  shouldResetWallPlacementDraftFromStoreStart,
   snapPointToGrid,
   snapScalarToGrid,
   snapWallDraftPoint,

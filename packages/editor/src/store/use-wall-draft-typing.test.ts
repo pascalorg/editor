@@ -41,6 +41,35 @@ describe('useWallDraftTyping', () => {
     useWallDraftTyping.getState().begin()
     expect(useWallDraftTyping.getState().input).toBe('')
   })
+
+  test('pendingCommitMeters is a one-shot typed Enter signal for WallTool', () => {
+    const typing = useWallDraftTyping.getState()
+    typing.setPendingCommitMeters(4.5)
+    expect(useWallDraftTyping.getState().pendingCommitMeters).toBe(4.5)
+    expect(useWallDraftTyping.getState().takePendingCommitMeters()).toBe(4.5)
+    expect(useWallDraftTyping.getState().pendingCommitMeters).toBeNull()
+    expect(useWallDraftTyping.getState().takePendingCommitMeters()).toBeNull()
+  })
+
+  test('clearInput and begin drop an unused pending typed commit', () => {
+    const typing = useWallDraftTyping.getState()
+    typing.setPendingCommitMeters(3)
+    typing.clearInput()
+    expect(useWallDraftTyping.getState().pendingCommitMeters).toBeNull()
+
+    typing.setPendingCommitMeters(2)
+    typing.begin()
+    expect(useWallDraftTyping.getState().pendingCommitMeters).toBeNull()
+  })
+
+  test('clearInput can empty the buffer without racing a subsequent arm', () => {
+    const typing = useWallDraftTyping.getState()
+    typing.append('5')
+    typing.clearInput()
+    typing.setPendingCommitMeters(5)
+    expect(useWallDraftTyping.getState().input).toBe('')
+    expect(useWallDraftTyping.getState().pendingCommitMeters).toBe(5)
+  })
 })
 
 describe('isWallTypingKey', () => {

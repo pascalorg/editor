@@ -19,6 +19,7 @@ import {
   wallClosesRoom,
 } from '@pascal-app/core'
 import {
+  adoptedWallDraftStartForTypedCommit,
   CursorSphere,
   chainEndJoinsExistingWall,
   clearPlacementSurface,
@@ -766,6 +767,10 @@ export const WallTool: React.FC = () => {
     }
 
     const onGridClick = (event: GridEvent) => {
+      const typedCommitMeters =
+        pendingTypedLengthMeters.current ?? useWallDraftTyping.getState().takePendingCommitMeters()
+      pendingTypedLengthMeters.current = null
+
       if (!wallPreviewRef.current) return
 
       if (buildingState.current === 1 && event.nativeEvent.detail >= 2) {
@@ -775,6 +780,26 @@ export const WallTool: React.FC = () => {
 
       const walls = getCurrentLevelWalls()
       const snapWalls = [...walls, ...getBelowLevelWalls()]
+      const adoptedStart = adoptedWallDraftStartForTypedCommit({
+        buildingState: buildingState.current,
+        typedCommitMeters,
+        publishedStart: useFloorplanDraftPreview.getState().wallDraftStart,
+      })
+      if (adoptedStart) {
+        const adoptPointed = pointedSurfaceFor(event)
+        const plane = resampleTerrainConstructionPlane(
+          resolveEventConstructionPlane(event, adoptPointed),
+          adoptedStart,
+        )
+        constructionPlane.current = plane
+        flatConstructionBase.current = adoptPointed?.sourceNodeId != null
+        publishHorizontalConstructionPlane(event, plane)
+        startingPoint.current.set(adoptedStart[0], plane.localY, adoptedStart[1])
+        chainFirstVertex.current = startingPoint.current.clone()
+        endingPoint.current.copy(startingPoint.current)
+        buildingState.current = 1
+      }
+
       const pointed = buildingState.current === 0 ? pointedSurfaceFor(event) : null
       const localClick: WallPlanPoint = pointed?.localPoint
         ? [pointed.localPoint[0], pointed.localPoint[2]]
@@ -819,8 +844,6 @@ export const WallTool: React.FC = () => {
         setDraftMeasurement(null)
       } else if (buildingState.current === 1) {
         const start: WallPlanPoint = [startingPoint.current.x, startingPoint.current.z]
-        const typedCommitMeters = pendingTypedLengthMeters.current
-        pendingTypedLengthMeters.current = null
         const angleLocked = isAngleSnapActive()
         // Enter commits with `pendingTypedLengthMeters` set and `localClick`
         // already the typed projection. Do not re-snap that point — nearby

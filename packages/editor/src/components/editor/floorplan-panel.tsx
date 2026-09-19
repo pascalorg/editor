@@ -199,6 +199,7 @@ import {
   nextLocalWallDraftStartFromStore,
   parseWallDraftLength,
   refreshWallDraftTypedEnd,
+  shouldResetWallPlacementDraftFromStoreStart,
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
   snapPointToGrid as snapWallPointToGrid,
@@ -5000,8 +5001,18 @@ export function FloorplanPanel({
   const floorplanNavigationClickSuppressedRef = useRef(false)
   const guideInteractionRef = useRef<GuideInteractionState | null>(null)
   // Late-bound so the window keydown effect can commit the wall draft at the
-  // typed length without an ordering dependency on `handleWallPlacementPoint`.
+  // typed length without an ordering dependency on `handleWallPlacementPoint`
+  // / `emitFloorplanGridEvent`.
   const wallPlacementPointRef = useRef<((point: WallPlanPoint) => void) | null>(null)
+  const emitFloorplanGridEventRef = useRef<
+    | ((
+        eventType: 'move' | 'click' | 'double-click',
+        planPoint: WallPlanPoint,
+        nativeEvent?: ReactMouseEvent<SVGSVGElement> | ReactPointerEvent<SVGSVGElement>,
+      ) => void)
+    | null
+  >(null)
+  const clearWallPlacementDraftRef = useRef<() => void>(() => {})
   const guideTransformDraftRef = useRef<GuideTransformDraft | null>(null)
   const pendingFenceDragRef = useRef<PendingFenceDragState | null>(null)
   const wallEndpointDragRef = useRef<WallEndpointDragState | null>(null)
@@ -5217,13 +5228,16 @@ export function FloorplanPanel({
   const storeWallDraftStart = useFloorplanDraftPreview((s) => s.wallDraftStart)
   const wallBuildActiveForDraftSync = phase === 'structure' && mode === 'build' && tool === 'wall'
   useEffect(() => {
+    if (
+      shouldResetWallPlacementDraftFromStoreStart(wallBuildActiveForDraftSync, storeWallDraftStart)
+    ) {
+      clearWallPlacementDraftRef.current()
+      useFloorplanDraftPreview.getState().setCursorPoint(null)
+      return
+    }
     if (!wallBuildActiveForDraftSync) return
     setDraftStart((prev) => nextLocalWallDraftStartFromStore(storeWallDraftStart, prev))
-    if (!storeWallDraftStart) {
-      setDraftEnd(null)
-      useFloorplanDraftPreview.getState().setCursorPoint(null)
-    }
-  }, [setDraftEnd, storeWallDraftStart, wallBuildActiveForDraftSync])
+  }, [storeWallDraftStart, wallBuildActiveForDraftSync])
   useEffect(() => {
     useFloorplanDraftPreview.getState().setFenceDraftStart(fenceDraftStart)
   }, [fenceDraftStart])
@@ -7894,6 +7908,7 @@ export function FloorplanPanel({
     useWallDraftTyping.getState().clearInput()
     useSegmentDraftChain.getState().clear('wall')
   }, [setDraftEnd])
+  clearWallPlacementDraftRef.current = clearWallPlacementDraft
   const clearFencePlacementDraft = useCallback(() => {
     setFenceDraftStart(null)
     setFenceDraftEnd(null)
@@ -8325,6 +8340,11 @@ export function FloorplanPanel({
               if (!previousEnd) return
               const typedEnd = constrainWallDraftLength(draftStart, previousEnd, value)
               setDraftEnd(typedEnd)
+              // Arm WallTool's skip-re-snap, then emit grid:click so split/3D
+              // commit through the 3D owner. 2D-only still creates locally in
+              // handleWallPlacementPoint after this (viewMode === '2d').
+              useWallDraftTyping.getState().setPendingCommitMeters(value)
+              emitFloorplanGridEventRef.current?.('click', typedEnd)
               wallPlacementPointRef.current?.(typedEnd)
               event.preventDefault()
               event.stopPropagation()
@@ -9083,7 +9103,7 @@ export function FloorplanPanel({
     (
       eventType: 'move' | 'click' | 'double-click',
       planPoint: WallPlanPoint,
-      nativeEvent: ReactMouseEvent<SVGSVGElement> | ReactPointerEvent<SVGSVGElement>,
+      nativeEvent?: ReactMouseEvent<SVGSVGElement> | ReactPointerEvent<SVGSVGElement>,
     ) => {
       const cos = Math.cos(buildingRotationY)
       const sin = Math.sin(buildingRotationY)
@@ -9099,32 +9119,35 @@ export function FloorplanPanel({
       const groundY = groundHeightAt(worldX, worldZ, floorplanGridWorldY)
       const worldY = groundY ?? floorplanGridWorldY
       const localY = groundY === null ? floorplanGridLocalY : groundY - buildingPosition[1]
-      const planScene =
-        nativeEvent.currentTarget.querySelector<SVGGraphicsElement>('[data-floorplan-scene]')
+      const planScene = nativeEvent
+        ? nativeEvent.currentTarget.querySelector<SVGGraphicsElement>('[data-floorplan-scene]')
+        : null
       const screenMatrix = planScene?.getScreenCTM()
 
       const gridEvent: EditorGridEvent = {
-        nativeEvent: nativeEvent.nativeEvent as any,
+        nativeEvent: (nativeEvent?.nativeEvent ?? { detail: 1 }) as any,
         position: [worldX, worldY, worldZ],
         localPosition: [planPoint[0], localY, planPoint[1]],
-        screenProjection: screenMatrix
-          ? {
-              pointer: [nativeEvent.clientX, nativeEvent.clientY],
-              localToScreen: [
-                screenMatrix.a,
-                screenMatrix.b,
-                screenMatrix.c,
-                screenMatrix.d,
-                screenMatrix.e,
-                screenMatrix.f,
-              ],
-            }
-          : undefined,
+        screenProjection:
+          nativeEvent && screenMatrix
+            ? {
+                pointer: [nativeEvent.clientX, nativeEvent.clientY],
+                localToScreen: [
+                  screenMatrix.a,
+                  screenMatrix.b,
+                  screenMatrix.c,
+                  screenMatrix.d,
+                  screenMatrix.e,
+                  screenMatrix.f,
+                ],
+              }
+            : undefined,
       }
       emitter.emit(`grid:${eventType}` as any, gridEvent)
     },
     [buildingPosition, buildingRotationY, floorplanGridLocalY, floorplanGridWorldY],
   )
+  emitFloorplanGridEventRef.current = emitFloorplanGridEvent
 
   // Build a synthetic `CeilingEvent` from a 2D plan point so the placement
   // coordinator's existing ceiling handlers (which expect the same payload
