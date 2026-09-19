@@ -27,8 +27,6 @@ import useEditor from '../../../store/use-editor'
 import useInteractionScope from '../../../store/use-interaction-scope'
 import {
   adoptedWallDraftStartForTypedCommit,
-  shouldClearFloorplanDraftAfterWallToolCommit,
-  shouldCreateWallLocallyOnFloorplanPlacement,
   constrainWallDraftLength,
   createWallOnCurrentLevel,
   nextLocalWallDraftStartFromStore,
@@ -36,6 +34,8 @@ import {
   refreshWallDraftTypedEnd,
   resolveEndpointWallSplit,
   resolveWallDraftCommitEnd,
+  shouldClearFloorplanDraftAfterWallToolCommit,
+  shouldCreateWallLocallyOnFloorplanPlacement,
   shouldResetWallPlacementDraftFromStoreStart,
   snapWallDraftPointDetailed,
 } from './wall-drafting'
@@ -1186,6 +1186,40 @@ describe('shouldCreateWallLocallyOnFloorplanPlacement', () => {
   })
 })
 
+function wallDraftCommitCreatorCount(args: {
+  viewIs2DOnly: boolean
+  wallToolOwnedTypedCommit: boolean
+}): number {
+  const floorplanCreates = shouldCreateWallLocallyOnFloorplanPlacement(args)
+  // Typed Enter always goes through WallTool (adopt when buildingState is 0).
+  // Pointer clicks in 2D-only stay on the floorplan create path.
+  const wallToolCreates = args.wallToolOwnedTypedCommit || !args.viewIs2DOnly
+  return Number(floorplanCreates) + Number(wallToolCreates)
+}
+
+describe('wall draft commit ownership', () => {
+  test.each([
+    { viewIs2DOnly: true, wallToolOwnedTypedCommit: false },
+    { viewIs2DOnly: true, wallToolOwnedTypedCommit: true },
+    { viewIs2DOnly: false, wallToolOwnedTypedCommit: false },
+    { viewIs2DOnly: false, wallToolOwnedTypedCommit: true },
+  ])('creates exactly one wall for %j', (args) => {
+    expect(wallDraftCommitCreatorCount(args)).toBe(1)
+  })
+
+  test('2D rubber band clears after WallTool stopDrafting on 2D-only typed Enter', () => {
+    expect(
+      shouldClearFloorplanDraftAfterWallToolCommit({
+        viewIs2DOnly: true,
+        wallToolOwnedTypedCommit: true,
+        publishedNextStart: null,
+      }),
+    ).toBe(true)
+    expect(nextLocalWallDraftStartFromStore(null, [4, 0])).toBeNull()
+    expect(shouldResetWallPlacementDraftFromStoreStart(true, null)).toBe(true)
+  })
+})
+
 describe('shouldClearFloorplanDraftAfterWallToolCommit', () => {
   test('clears when WallTool stopped after typed Enter in 2D-only', () => {
     expect(
@@ -1227,4 +1261,3 @@ describe('shouldClearFloorplanDraftAfterWallToolCommit', () => {
     ).toBe(false)
   })
 })
-
