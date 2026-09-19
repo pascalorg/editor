@@ -200,6 +200,7 @@ export {
   constrainWallDraftLength,
   createWallOnCurrentLevel,
   getSegmentGridStep,
+  hasWallDraftHeading,
   isSegmentLongEnough,
   parseWallDraftLength,
   refreshWallDraftTypedEnd,
@@ -207,9 +208,8 @@ export {
   resolveWallDraftCommitEnd,
   shouldClearFloorplanDraftAfterWallToolCommit,
   shouldCreateWallLocallyOnFloorplanPlacement,
-  wallToolOwnedTypedCommitFromPending,
-  wallToolCommittedOnFloorplanClick,
   shouldResetWallPlacementDraftFromStoreStart,
+  shouldRestoreTypedCommitArm,
   snapPointToGrid,
   snapScalarToGrid,
   snapWallDraftPoint,
@@ -221,6 +221,8 @@ export {
   type WallDraftSnapResult,
   type WallPlanPoint,
   type WallSnapRadii,
+  wallToolCommittedOnFloorplanClick,
+  wallToolOwnedTypedCommitFromPending,
 } from './components/tools/wall/wall-drafting'
 // `ToolbarLeft` / `ToolbarRight` are the headless-spec aliases for the
 // existing `ViewerToolbarLeft` / `ViewerToolbarRight` exports — the

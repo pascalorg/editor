@@ -32,6 +32,7 @@ import {
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
   type HorizontalConstructionPlane,
+  hasWallDraftHeading,
   isAlignmentGuideActive,
   isAngleSnapActive,
   isMagneticSnapActive,
@@ -46,6 +47,7 @@ import {
   resolvePointerSupportSurface,
   resolveWallDraftCommitEnd,
   type SegmentAngleReference,
+  shouldRestoreTypedCommitArm,
   snapWallDraftPointDetailed,
   triggerSFX,
   useAlignmentGuides,
@@ -883,7 +885,9 @@ export const WallTool: React.FC = () => {
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
         if (dx * dx + dz * dz < 0.01 * 0.01) {
-          restoreTypedCommitArm()
+          if (shouldRestoreTypedCommitArm({ createAttempted: false })) {
+            restoreTypedCommitArm()
+          }
           return
         }
         // A ground(terrain)-hosted chain keeps its frozen construction plane;
@@ -907,7 +911,9 @@ export const WallTool: React.FC = () => {
           },
         )
         if (!createdWall) {
-          restoreTypedCommitArm()
+          if (shouldRestoreTypedCommitArm({ createAttempted: true })) {
+            restoreTypedCommitArm()
+          }
           return
         }
         useWallDraftTyping.getState().clearInput()
@@ -1019,14 +1025,10 @@ export const WallTool: React.FC = () => {
         event.stopPropagation()
         const value = parseWallDraftLength(typing.input, unitRef.current, metricNotationRef.current)
         if (value === null || value <= 0) return
-        const dx = endingPoint.current.x - startingPoint.current.x
-        const dz = endingPoint.current.z - startingPoint.current.z
-        const length = Math.hypot(dx, dz)
-        if (length <= 1e-6) return
-        const typedEnd: WallPlanPoint = [
-          startingPoint.current.x + (dx / length) * value,
-          startingPoint.current.z + (dz / length) * value,
-        ]
+        const start: WallPlanPoint = [startingPoint.current.x, startingPoint.current.z]
+        const currentEnd: WallPlanPoint = [endingPoint.current.x, endingPoint.current.z]
+        if (!hasWallDraftHeading(start, currentEnd)) return
+        const typedEnd = constrainWallDraftLength(start, currentEnd, value)
         endingPoint.current.set(typedEnd[0], endingPoint.current.y, typedEnd[1])
         useFloorplanDraftPreview.getState().setWallDraftEnd(typedEnd)
         pendingTypedLengthMeters.current = value

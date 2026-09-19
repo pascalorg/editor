@@ -68,6 +68,31 @@ export function constrainWallDraftLength(
 }
 
 /**
+ * Typed Enter projects along the current draft heading. Collapsed start/end
+ * makes `constrainWallDraftLength` a no-op, so the buffer must stay (same as
+ * parse failure / 3D `length <= 1e-6`).
+ */
+export function hasWallDraftHeading(
+  start: WallPlanPoint | null | undefined,
+  end: WallPlanPoint | null | undefined,
+): boolean {
+  if (!start || !end) return false
+  const dx = end[0] - start[0]
+  const dz = end[1] - start[1]
+  return Math.hypot(dx, dz) > 1e-6
+}
+
+/**
+ * Re-arm `pendingCommitMeters` after a typed grid:click bailed.
+ * Degenerate length never reached create — restore so 2D can still own the
+ * commit. Failed `createWall` already emptied the HUD; restoring would make
+ * the next pointer click skip-snap at the old length.
+ */
+export function shouldRestoreTypedCommitArm(args: { createAttempted: boolean }): boolean {
+  return !args.createAttempted
+}
+
+/**
  * Parse a wall draft's free-text length into the editor's canonical metres.
  * Bare values follow the unit toggle (and metric mm notation); explicit
  * suffixes always win.

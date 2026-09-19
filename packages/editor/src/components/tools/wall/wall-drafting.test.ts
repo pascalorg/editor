@@ -29,6 +29,7 @@ import {
   adoptedWallDraftStartForTypedCommit,
   constrainWallDraftLength,
   createWallOnCurrentLevel,
+  hasWallDraftHeading,
   nextLocalWallDraftStartFromStore,
   parseWallDraftLength,
   refreshWallDraftTypedEnd,
@@ -37,9 +38,10 @@ import {
   shouldClearFloorplanDraftAfterWallToolCommit,
   shouldCreateWallLocallyOnFloorplanPlacement,
   shouldResetWallPlacementDraftFromStoreStart,
-  wallToolOwnedTypedCommitFromPending,
-  wallToolCommittedOnFloorplanClick,
+  shouldRestoreTypedCommitArm,
   snapWallDraftPointDetailed,
+  wallToolCommittedOnFloorplanClick,
+  wallToolOwnedTypedCommitFromPending,
 } from './wall-drafting'
 import type { WallPlanPoint } from './wall-snap-geometry'
 
@@ -986,6 +988,14 @@ describe('wall draft length input', () => {
     expect(constrainWallDraftLength([0, 0], [3, 4], null)).toEqual([3, 4])
   })
 
+  test('collapsed start/end is a no-op so Enter must keep the typed buffer', () => {
+    expect(constrainWallDraftLength([2, 1], [2, 1], 5)).toEqual([2, 1])
+    expect(hasWallDraftHeading([2, 1], [2, 1])).toBe(false)
+    expect(hasWallDraftHeading([2, 1], [4, 1])).toBe(true)
+    expect(hasWallDraftHeading(null, [4, 1])).toBe(false)
+    expect(hasWallDraftHeading([2, 1], null)).toBe(false)
+  })
+
   test('parses bare values in the active unit and preserves explicit units', () => {
     expect(parseWallDraftLength('2', 'metric')).toBe(2)
     expect(parseWallDraftLength('5', 'imperial')).toBeCloseTo(1.524, 6)
@@ -1331,6 +1341,16 @@ describe('shouldClearFloorplanDraftAfterWallToolCommit', () => {
         storeWallDraftStart: [3, 0],
       }),
     ).toBe(false)
+  })
+})
+
+describe('shouldRestoreTypedCommitArm', () => {
+  test('restores when create never ran so 2D can still own the commit', () => {
+    expect(shouldRestoreTypedCommitArm({ createAttempted: false })).toBe(true)
+  })
+
+  test('does not re-arm after failed createWall (HUD is already empty)', () => {
+    expect(shouldRestoreTypedCommitArm({ createAttempted: true })).toBe(false)
   })
 })
 

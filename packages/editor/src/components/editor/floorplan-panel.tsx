@@ -195,6 +195,7 @@ import {
   chainEndJoinsExistingWall,
   constrainWallDraftLength,
   createWallOnCurrentLevel,
+  hasWallDraftHeading,
   isSegmentLongEnough,
   nextLocalWallDraftStartFromStore,
   parseWallDraftLength,
@@ -202,14 +203,14 @@ import {
   shouldClearFloorplanDraftAfterWallToolCommit,
   shouldCreateWallLocallyOnFloorplanPlacement,
   shouldResetWallPlacementDraftFromStoreStart,
-  wallToolOwnedTypedCommitFromPending,
-  wallToolCommittedOnFloorplanClick,
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
   snapPointToGrid as snapWallPointToGrid,
   WALL_GRID_STEP,
   WALL_JOIN_SNAP_RADIUS,
   type WallPlanPoint,
+  wallToolCommittedOnFloorplanClick,
+  wallToolOwnedTypedCommitFromPending,
 } from '../tools/wall/wall-drafting'
 
 import { PALETTE_COLORS } from '../ui/primitives/color-dot'
@@ -8355,7 +8356,7 @@ export function FloorplanPanel({
               const value = parseWallDraftLength(typing.input, unit, metricNotation)
               if (value === null || value <= 0 || !draftStart) return
               const previousEnd = useFloorplanDraftPreview.getState().wallDraftEnd
-              if (!previousEnd) return
+              if (!previousEnd || !hasWallDraftHeading(draftStart, previousEnd)) return
               const typedEnd = constrainWallDraftLength(draftStart, previousEnd, value)
               setDraftEnd(typedEnd)
               // clearInput also nulls pendingCommitMeters — clear before arming.

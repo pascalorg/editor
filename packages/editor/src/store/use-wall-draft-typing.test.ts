@@ -70,6 +70,19 @@ describe('useWallDraftTyping', () => {
     expect(useWallDraftTyping.getState().input).toBe('')
     expect(useWallDraftTyping.getState().pendingCommitMeters).toBe(5)
   })
+
+  test('a taken typed-commit arm stays disarmed unless explicitly restored', () => {
+    const typing = useWallDraftTyping.getState()
+    typing.append('5')
+    typing.clearInput()
+    typing.setPendingCommitMeters(5)
+    expect(typing.takePendingCommitMeters()).toBe(5)
+    // Failed createWall must not setPendingCommitMeters again: HUD is empty
+    // so a leftover arm would skip-snap the next pointer click.
+    expect(useWallDraftTyping.getState().input).toBe('')
+    expect(useWallDraftTyping.getState().pendingCommitMeters).toBeNull()
+    expect(useWallDraftTyping.getState().takePendingCommitMeters()).toBeNull()
+  })
 })
 
 describe('isWallTypingKey', () => {
