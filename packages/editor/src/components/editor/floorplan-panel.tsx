@@ -202,6 +202,7 @@ import {
   shouldClearFloorplanDraftAfterWallToolCommit,
   shouldCreateWallLocallyOnFloorplanPlacement,
   shouldResetWallPlacementDraftFromStoreStart,
+  wallToolOwnedTypedCommitFromPending,
   snapWallDraftPoint,
   snapWallDraftPointDetailed,
   snapPointToGrid as snapWallPointToGrid,
@@ -5018,6 +5019,7 @@ export function FloorplanPanel({
   // Typed Enter emits grid:click so WallTool owns the create; this flag tells
   // handleWallPlacementPoint to sync the 2D rubber band without creating again.
   const wallToolOwnsTypedCommitRef = useRef(false)
+  const prevStoreWallDraftStartRef = useRef<WallPlanPoint | null>(null)
   const guideTransformDraftRef = useRef<GuideTransformDraft | null>(null)
   const pendingFenceDragRef = useRef<PendingFenceDragState | null>(null)
   const wallEndpointDragRef = useRef<WallEndpointDragState | null>(null)
@@ -5233,13 +5235,20 @@ export function FloorplanPanel({
   const storeWallDraftStart = useFloorplanDraftPreview((s) => s.wallDraftStart)
   const wallBuildActiveForDraftSync = phase === 'structure' && mode === 'build' && tool === 'wall'
   useEffect(() => {
+    const previousStoreStart = prevStoreWallDraftStartRef.current
     if (
-      shouldResetWallPlacementDraftFromStoreStart(wallBuildActiveForDraftSync, storeWallDraftStart)
+      shouldResetWallPlacementDraftFromStoreStart(
+        wallBuildActiveForDraftSync,
+        storeWallDraftStart,
+        previousStoreStart,
+      )
     ) {
       clearWallPlacementDraftRef.current()
       useFloorplanDraftPreview.getState().setCursorPoint(null)
+      prevStoreWallDraftStartRef.current = storeWallDraftStart
       return
     }
+    prevStoreWallDraftStartRef.current = storeWallDraftStart
     if (!wallBuildActiveForDraftSync) return
     setDraftStart((prev) => nextLocalWallDraftStartFromStore(storeWallDraftStart, prev))
   }, [storeWallDraftStart, wallBuildActiveForDraftSync])
@@ -8350,10 +8359,22 @@ export function FloorplanPanel({
               // handleWallPlacementPoint only syncs the 2D rubber band — it
               // must not createWallOnCurrentLevel for this same typed commit.
               useWallDraftTyping.getState().setPendingCommitMeters(value)
-              wallToolOwnsTypedCommitRef.current = true
               emitFloorplanGridEventRef.current?.('click', typedEnd)
-              wallPlacementPointRef.current?.(typedEnd)
-              wallToolOwnsTypedCommitRef.current = false
+              // Only skip local create when WallTool actually took the arm.
+              // If the tool is unmounted / preview-less, pending remains and
+              // 2D-only must still createWallOnCurrentLevel.
+              const wallToolOwned = wallToolOwnedTypedCommitFromPending(
+                useWallDraftTyping.getState().pendingCommitMeters,
+              )
+              if (!wallToolOwned) {
+                useWallDraftTyping.getState().setPendingCommitMeters(null)
+              }
+              wallToolOwnsTypedCommitRef.current = wallToolOwned
+              try {
+                wallPlacementPointRef.current?.(typedEnd)
+              } finally {
+                wallToolOwnsTypedCommitRef.current = false
+              }
               event.preventDefault()
               event.stopPropagation()
               return
@@ -10034,6 +10055,7 @@ export function FloorplanPanel({
           viewIs2DOnly,
           wallToolOwnedTypedCommit,
           publishedNextStart,
+          storeWallDraftStart: useFloorplanDraftPreview.getState().wallDraftStart,
         })
       ) {
         // WallTool owns both the commit and the continuation decision, and

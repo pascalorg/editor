@@ -37,6 +37,7 @@ import {
   shouldClearFloorplanDraftAfterWallToolCommit,
   shouldCreateWallLocallyOnFloorplanPlacement,
   shouldResetWallPlacementDraftFromStoreStart,
+  wallToolOwnedTypedCommitFromPending,
   snapWallDraftPointDetailed,
 } from './wall-drafting'
 import type { WallPlanPoint } from './wall-snap-geometry'
@@ -1112,16 +1113,20 @@ describe('nextLocalWallDraftStartFromStore', () => {
 })
 
 describe('shouldResetWallPlacementDraftFromStoreStart', () => {
-  test('resets the 2D chain when 3D publishes a null start during wall build', () => {
-    expect(shouldResetWallPlacementDraftFromStoreStart(true, null)).toBe(true)
+  test('resets only when a published start transitions to null', () => {
+    expect(shouldResetWallPlacementDraftFromStoreStart(true, null, [4, 0])).toBe(true)
+  })
+
+  test('does not wipe a 2D first click while store was always null', () => {
+    expect(shouldResetWallPlacementDraftFromStoreStart(true, null, null)).toBe(false)
   })
 
   test('does not reset while a chain start is still published', () => {
-    expect(shouldResetWallPlacementDraftFromStoreStart(true, [4, 0])).toBe(false)
+    expect(shouldResetWallPlacementDraftFromStoreStart(true, [4, 0], [2, 0])).toBe(false)
   })
 
   test('does not reset when wall build is inactive', () => {
-    expect(shouldResetWallPlacementDraftFromStoreStart(false, null)).toBe(false)
+    expect(shouldResetWallPlacementDraftFromStoreStart(false, null, [1, 0])).toBe(false)
   })
 })
 
@@ -1213,22 +1218,35 @@ describe('wall draft commit ownership', () => {
         viewIs2DOnly: true,
         wallToolOwnedTypedCommit: true,
         publishedNextStart: null,
+        storeWallDraftStart: null,
       }),
     ).toBe(true)
     expect(nextLocalWallDraftStartFromStore(null, [4, 0])).toBeNull()
-    expect(shouldResetWallPlacementDraftFromStoreStart(true, null)).toBe(true)
+    expect(shouldResetWallPlacementDraftFromStoreStart(true, null, [4, 0])).toBe(true)
   })
 })
 
 describe('shouldClearFloorplanDraftAfterWallToolCommit', () => {
-  test('clears when WallTool stopped after typed Enter in 2D-only', () => {
+  test('clears when WallTool stopDrafting after typed Enter in 2D-only', () => {
     expect(
       shouldClearFloorplanDraftAfterWallToolCommit({
         viewIs2DOnly: true,
         wallToolOwnedTypedCommit: true,
         publishedNextStart: null,
+        storeWallDraftStart: null,
       }),
     ).toBe(true)
+  })
+
+  test('does not clear 2D-only when WallTool no-op left draft start published', () => {
+    expect(
+      shouldClearFloorplanDraftAfterWallToolCommit({
+        viewIs2DOnly: true,
+        wallToolOwnedTypedCommit: true,
+        publishedNextStart: null,
+        storeWallDraftStart: [2, 1],
+      }),
+    ).toBe(false)
   })
 
   test('does not clear 2D-only pointer path when WallTool did not own commit', () => {
@@ -1237,6 +1255,7 @@ describe('shouldClearFloorplanDraftAfterWallToolCommit', () => {
         viewIs2DOnly: true,
         wallToolOwnedTypedCommit: false,
         publishedNextStart: null,
+        storeWallDraftStart: null,
       }),
     ).toBe(false)
   })
@@ -1257,7 +1276,18 @@ describe('shouldClearFloorplanDraftAfterWallToolCommit', () => {
         viewIs2DOnly: true,
         wallToolOwnedTypedCommit: true,
         publishedNextStart: [3, 0],
+        storeWallDraftStart: [3, 0],
       }),
     ).toBe(false)
+  })
+})
+
+describe('wallToolOwnedTypedCommitFromPending', () => {
+  test('owned when emit consumed pending meters', () => {
+    expect(wallToolOwnedTypedCommitFromPending(null)).toBe(true)
+  })
+
+  test('not owned when pending remains (WallTool did not take)', () => {
+    expect(wallToolOwnedTypedCommitFromPending(5)).toBe(false)
   })
 })

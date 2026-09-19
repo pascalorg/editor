@@ -150,15 +150,20 @@ export function nextLocalWallDraftStartFromStore(
 }
 
 /**
- * 3D ended the chain (null published start). Reset the 2D chain exclusion
- * set too — clearing only draftStart/draftEnd leaves wallChainWallIdsRef
- * pointing at the previous chain.
+ * 3D ended the chain (published start went non-null → null). A null that was
+ * always null (2D first click before the mirror effect, WallTool unmount) must
+ * not wipe local draftStart / wallChainWallIdsRef.
  */
 export function shouldResetWallPlacementDraftFromStoreStart(
   wallBuildActive: boolean,
   storeWallDraftStart: WallPlanPoint | null,
+  previousStoreWallDraftStart: WallPlanPoint | null,
 ): boolean {
-  return wallBuildActive && storeWallDraftStart == null
+  return (
+    wallBuildActive &&
+    storeWallDraftStart == null &&
+    previousStoreWallDraftStart != null
+  )
 }
 
 /**
@@ -190,14 +195,29 @@ export function shouldCreateWallLocallyOnFloorplanPlacement(args: {
 /**
  * When WallTool already committed (and may have stopDrafting'd), clear the 2D
  * rubber band if no next chain start was published — including 2D-only typed
- * Enter. Pointer 2D-only create path keeps chaining via createdWall instead.
+ * Enter. Require storeWallDraftStart == null for the 2D-only typed path so a
+ * no-op / failed WallTool click does not discard an open rubber band.
+ * Pointer 2D-only create path keeps chaining via createdWall instead.
  */
 export function shouldClearFloorplanDraftAfterWallToolCommit(args: {
   viewIs2DOnly: boolean
   wallToolOwnedTypedCommit: boolean
   publishedNextStart: WallPlanPoint | null
+  storeWallDraftStart?: WallPlanPoint | null
 }): boolean {
-  return !args.publishedNextStart && (!args.viewIs2DOnly || args.wallToolOwnedTypedCommit)
+  if (args.publishedNextStart) return false
+  if (!args.viewIs2DOnly) return true
+  return (
+    args.wallToolOwnedTypedCommit &&
+    (args.storeWallDraftStart === undefined || args.storeWallDraftStart == null)
+  )
+}
+
+/** True when emit consumed pendingCommitMeters (WallTool onGridClick ran past take). */
+export function wallToolOwnedTypedCommitFromPending(
+  pendingCommitMetersAfterEmit: number | null,
+): boolean {
+  return pendingCommitMetersAfterEmit == null
 }
 
 export function getSegmentGridStep(): number {

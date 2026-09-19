@@ -767,11 +767,13 @@ export const WallTool: React.FC = () => {
     }
 
     const onGridClick = (event: GridEvent) => {
+      // Do not take pendingCommitMeters before this guard — a no-op would
+      // consume the 2D typed-Enter arm and leave floorplan skipping create.
+      if (!wallPreviewRef.current) return
+
       const typedCommitMeters =
         pendingTypedLengthMeters.current ?? useWallDraftTyping.getState().takePendingCommitMeters()
       pendingTypedLengthMeters.current = null
-
-      if (!wallPreviewRef.current) return
 
       if (buildingState.current === 1 && event.nativeEvent.detail >= 2) {
         stopDrafting()
