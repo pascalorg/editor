@@ -2403,4 +2403,204 @@ if (process.env.PASCAL_DUPLICATE_AUDIT_ISOLATED !== '1') {
             await renderer.unmount()
           }
         })
+
+  for (const kind of ['item', 'fence', 'lean-to-extension', 'spawn', 'plugin'])
+    for (const outcome of ['Escape', 'commit', 'unmount'])
+      test(`review3 unregistered fresh overlay ${kind} ${outcome}`, async () => {
+        Core.resetSceneHistoryPauseDepth()
+        genericPlanDOM()
+        const pluginRoot = kind === 'plugin' ? genericHost() : null
+        if (pluginRoot) {
+          const definition = nodeRegistry.get(pluginRoot.type)!
+          registerNode({ ...definition, floorplan: nodeRegistry.get('shelf')!.floorplan } as never)
+        }
+        const definition = nodeRegistry.get(kind === 'plugin' ? pluginRoot!.type : kind)!
+        const root = definition.schema.parse({
+          ...definition.defaults(),
+          ...(kind === 'item' ? { asset } : {}),
+          ...(kind === 'lean-to-extension'
+            ? { hostKind: 'freestanding', hostRoofId: 'roof_fixture', hostSlabId: 'slab_fixture' }
+            : {}),
+          ...(pluginRoot ?? {}),
+          parentId: level.id,
+          position: [-1, 0, 0],
+          metadata: { isNew: true },
+        }) as AnyNode
+        seed([root])
+        usePlacementPreview.getState().clear()
+        useScene.temporal.getState().resume()
+        select(root, '2d')
+        const ids = new Map(
+          Object.keys(useScene.getState().nodes).map((id, i) => [id, `node-${i}`]),
+        )
+        const trace: unknown[] = []
+        const record = (stage: string) => {
+          const temporal = useScene.temporal.getState()
+          for (const id of Object.keys(useScene.getState().nodes))
+            if (!ids.has(id)) ids.set(id, `node-${ids.size}`)
+          let value = JSON.stringify({
+            stage,
+            scene: JSON.parse(snapshot()),
+            moving: getMovingNode(),
+            origin: useEditor.getState().movingNodeOrigin,
+            past: temporal.pastStates,
+            future: temporal.futureStates,
+            tracking: temporal.isTracking,
+          })
+          for (const [id, replacement] of ids) value = value.replaceAll(id, replacement)
+          trace.push(JSON.parse(value))
+        }
+        await act(async () => useEditor.getState().setMovingNode(root))
+        const renderer = await create(<Scene panes={panesFor('2d')} />)
+        try {
+          await settle(renderer)
+          expect(useInteractionScope.getState().ownedSubtree ?? null).toBeNull()
+          expect(useInteractionScope.getState().pendingSubtree ?? null).toBeNull()
+          record('start')
+          await planPointer(1, 0)
+          await planPointer(3, 4)
+          await settle(renderer)
+          record('pointer')
+          if (outcome === 'Escape') await key('Escape')
+          else if (outcome === 'commit') await planPointer(3, 4, true)
+          else await renderer.update(<Scene panes={{ plan: false, spatial: false }} />)
+          await settle(renderer)
+          record(outcome)
+          await act(async () => useScene.temporal.getState().undo())
+          record('undo')
+          await act(async () => useScene.temporal.getState().redo())
+          record('redo')
+          const name = `${kind}-${outcome}`
+          if (process.env.DUPLICATE_CAPTURE_FRESH_OVERLAY)
+            await Bun.write(
+              `${process.env.DUPLICATE_CAPTURE_FRESH_OVERLAY}/${name}.json`,
+              `${JSON.stringify(trace, null, 2)}\n`,
+            )
+          else
+            expect(trace).toEqual(
+              await Bun.file(
+                new URL(`./fixtures/fresh-overlay-lifecycle/${name}.json`, import.meta.url),
+              ).json(),
+            )
+        } finally {
+          await renderer.unmount()
+        }
+      })
+
+  for (const kind of ['item', 'procedural-item', 'procedural-generic'])
+    for (const outcome of ['Escape', 'commit'])
+      test(`review3 refused 2d release then 3d ${kind} ${outcome}`, async () => {
+        Core.resetSceneHistoryPauseDepth()
+        const { root, host } = lifecycleFixture(
+          kind === 'procedural-generic' ? 'procedural-item' : kind,
+          false,
+        )
+        if (kind === 'procedural-generic') {
+          genericPlanDOM()
+          const definition = nodeRegistry.get('procedural-item')!
+          registerNode({ ...definition, floorplanMoveTarget: undefined } as never)
+        }
+        select(root)
+        const before = snapshot()
+        const renderer = await create(<Scene menu panes={{ plan: true, spatial: true }} />)
+        try {
+          const copy = await duplicate(renderer)
+          const origin = useEditor.getState().movingNodeOrigin
+          await planPointer(1, 0)
+          const obstacle = ItemNode.parse({ parentId: host.id, asset, position: [1, 0, 0] })
+          useScene.getState().applyNodeChanges({
+            create: [{ node: obstacle }],
+            update: [
+              {
+                id: host.id,
+                data: {
+                  attachments: {
+                    ...(useScene.getState().nodes[host.id] as ProceduralItemNode).attachments,
+                    [obstacle.id]: 'top',
+                  },
+                },
+              },
+            ],
+          })
+          const atRelease = snapshot()
+          await planPointer(1, 0, true)
+          await settle(renderer)
+          expect(getMovingNode()?.id).toBe(copy.id)
+          expect(snapshot()).toBe(atRelease)
+          expect(useEditor.getState().movingNodeOrigin).toBe(origin)
+          const attachments = {
+            ...(useScene.getState().nodes[host.id] as ProceduralItemNode).attachments,
+          }
+          delete attachments[obstacle.id]
+          useScene.getState().applyNodeChanges({
+            delete: [obstacle.id],
+            update: [{ id: host.id, data: { attachments } }],
+          })
+          await renderer.update(<Scene menu panes={panesFor('3d')} />)
+          const pointer = pointerDispatcher()
+          await pointer.send(new Vector3(1, 2, 0), 'grid first')
+          await settle(renderer)
+          if (outcome === 'Escape') await key('Escape')
+          else await pointer.send(new Vector3(1, 2, 0), 'grid first', true)
+          await settle(renderer)
+          expect(getMovingNode()).toBeNull()
+          if (outcome === 'Escape') {
+            expect(snapshot()).toBe(before)
+            expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+          } else {
+            expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+            const committed = snapshot()
+            const originalIds = new Set(Object.keys(JSON.parse(before).nodes))
+            const copies = Object.values(useScene.getState().nodes).filter(
+              (n) => !originalIds.has(n.id),
+            )
+            expect(copies).toHaveLength(2)
+            const placed = copies.find((n) => n.parentId === host.id)!
+            const position = (placed as ItemNode | ProceduralItemNode).position
+            for (const [axis, value] of [1, 0, 0].entries())
+              expect(position[axis]).toBeCloseTo(value, 8)
+            expect(surfaceAttachmentId(placed)).toBe('top')
+            expect(copies.find((n) => n.id !== placed.id)?.parentId).toBe(placed.id)
+            expect(world(placed.id).y).toBeCloseTo(2)
+            await act(async () => useScene.temporal.getState().undo())
+            expect(snapshot()).toBe(before)
+            await act(async () => useScene.temporal.getState().redo())
+            expect(snapshot()).toBe(committed)
+          }
+        } finally {
+          await renderer.unmount()
+        }
+      })
+
+  test('review3 unregistered generic Escape cannot record deletion after flags change', async () => {
+    Core.resetSceneHistoryPauseDepth()
+    genericPlanDOM()
+    const root = genericHost()
+    const definition = nodeRegistry.get(root.type)!
+    registerNode({ ...definition, floorplan: nodeRegistry.get('shelf')!.floorplan } as never)
+    root.metadata = { isNew: true }
+    seed([root])
+    select(root, '2d')
+    useScene.temporal.getState().resume()
+    await act(async () => useEditor.getState().setMovingNode(root))
+    const renderer = await create(<Scene panes={panesFor('2d')} />)
+    try {
+      await planPointer(3, 4)
+      // A custom mover can clear its scene flags while the scope still carries the fresh payload.
+      useScene.temporal.getState().pause()
+      useScene.getState().updateNode(root.id, { metadata: {} })
+      useScene.temporal.getState().resume()
+      await key('Escape')
+      await settle(renderer)
+      expect(useScene.getState().nodes[root.id]).toBeUndefined()
+      const historySteps = useScene.temporal.getState().pastStates.length
+      await act(async () => useScene.temporal.getState().undo())
+      expect(useScene.getState().nodes[root.id]).toBeUndefined()
+      expect(historySteps).toBe(0)
+      await act(async () => useScene.temporal.getState().redo())
+      expect(useScene.getState().nodes[root.id]).toBeUndefined()
+    } finally {
+      await renderer.unmount()
+    }
+  })
 }

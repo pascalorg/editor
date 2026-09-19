@@ -79,7 +79,7 @@ export function FloorplanRegistryMoveOverlay() {
   const source = useMovingNode()
   const movingNode = useMemo(
     () =>
-      source && isFreshPlacementMetadata(source.metadata)
+      source && isInteractionSubtreeDraft(source.id)
         ? (useScene.getState().nodes[source.id] ?? source)
         : source,
     [source],
@@ -271,17 +271,19 @@ export function FloorplanRegistryMoveOverlay() {
             ?.metadata,
         )
 
-        if (freshPlacement && !commitValid) {
+        const atomicPreview =
+          freshPlacement &&
+          (ownsSubtree ||
+            ('children' in movingNode && movingNode.children.length > 0) ||
+            surfaceAttachmentId(useScene.getState().nodes[movingNode.id] ?? movingNode) !== null)
+        if (atomicPreview && !commitValid) {
           showRejection()
           return false
         }
 
-        // Claim ownership of the drag teardown so the 3D move tool's
-        // unmount-time cleanup skips its restore-from-snapshot — see
-        // `movingNodeOrigin` in `use-editor.tsx`. Set here (before any
-        // `setMovingNode(null)`) so that by the time the 3D effect's
-        // cleanup runs the origin is observable in the store.
-        setMovingNodeOrigin('2d')
+        // Keep ordinary teardown order. Validated replacements can refuse, so they
+        // claim teardown only after success, before clearing the moving node.
+        if (!atomicPreview) setMovingNodeOrigin('2d')
 
         // Sessions with a `commit` hook own their atomic write (e.g.
         // wall move emits creates + deletes + updates via the junction
@@ -291,10 +293,6 @@ export function FloorplanRegistryMoveOverlay() {
         if (commitValid && freshPlacement) {
           // Subtrees finalize from the preview. Staging a session commit would publish
           // an unvalidated graph, including for presets created outside our factory.
-          const atomicPreview =
-            ownsSubtree ||
-            ('children' in movingNode && movingNode.children.length > 0) ||
-            surfaceAttachmentId(useScene.getState().nodes[movingNode.id] ?? movingNode) !== null
           if (!atomicPreview) session.commit?.()
           const stagedNode = useScene.getState().nodes[movingNode.id]
           const preview = usePlacementPreview.getState().node
@@ -312,8 +310,9 @@ export function FloorplanRegistryMoveOverlay() {
                 showRejection,
               )
             : null
-          if (!committedId) return false
+          if (!committedId && atomicPreview) return false
           if (atomicPreview) {
+            setMovingNodeOrigin('2d')
             for (const id of session.affectedIds) {
               useLiveTransforms.getState().clear(id)
               useLiveNodeOverrides.getState().clear(id)
@@ -841,8 +840,14 @@ export function FloorplanRegistryMoveOverlay() {
           ]
         : snapped.rotation
       const rotationPatch = 'rotation' in movingNode ? { rotation } : {}
-      setMovingNodeOrigin('2d')
+      const atomicPreview =
+        isFreshPlacement &&
+        (ownsSubtree ||
+          ('children' in movingNode && movingNode.children.length > 0) ||
+          surfaceAttachmentId(useScene.getState().nodes[movingNode.id] ?? movingNode) !== null)
+      if (!atomicPreview) setMovingNodeOrigin('2d')
       if (!lastPositionValid && !forcePlace) {
+        if (atomicPreview) setMovingNodeOrigin('2d')
         for (const relatedEntry of relatedEntries) {
           relatedEntry.removeAttribute('transform')
         }
@@ -853,6 +858,7 @@ export function FloorplanRegistryMoveOverlay() {
       }
       let selectedId = movingNode.id as AnyNodeId
       if (originalPath) {
+        if (atomicPreview) setMovingNodeOrigin('2d')
         // Polyline kinds: shift every point by the committed delta and
         // write `path`. Strip the fresh-placement flags on first drop.
         const dx = sx - originalPosition[0]
@@ -891,11 +897,12 @@ export function FloorplanRegistryMoveOverlay() {
             visible: true,
           } as Partial<AnyNode>,
         )
-        if (!committedId) {
+        if (!committedId && atomicPreview) {
           boxEl.setAttribute('stroke', '#ef4444')
           return
         }
-        selectedId = committedId
+        if (atomicPreview) setMovingNodeOrigin('2d')
+        selectedId = committedId ?? selectedId
       } else {
         useScene.getState().updateNode(
           movingNode.id as AnyNodeId,
@@ -925,8 +932,13 @@ export function FloorplanRegistryMoveOverlay() {
       setMovingNodeOrigin('2d')
       if (isFreshPlacement) {
         emitter.emit('tool:cancel')
-        if (!ownsSubtree && !isInteractionSubtreeDraft(movingNode.id))
+        if (!ownsSubtree && !isInteractionSubtreeDraft(movingNode.id)) {
+          const temporal = useScene.temporal.getState()
+          const wasTracking = (temporal as { isTracking?: boolean }).isTracking !== false
+          if (wasTracking) temporal.pause()
           useScene.getState().deleteNode(movingNode.id)
+          if (wasTracking) temporal.resume()
+        }
       }
       for (const relatedEntry of relatedEntries) {
         relatedEntry.removeAttribute('transform')
