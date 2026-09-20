@@ -36,6 +36,7 @@
         "@pascal-app/mcp": "*",
         "@pascal-app/nodes": "*",
         "@pascal-app/plugin-bones": "workspace:*",
+        "@pascal-app/plugin-construction": "workspace:*",
         "@pascal-app/plugin-environment": "github:AxiomeCG/environment#40baf63ddd06a657aaa0f60e1559fd9ad561f295",
         "@pascal-app/plugin-generate": "workspace:*",
         "@pascal-app/plugin-lot": "workspace:*",
@@ -327,6 +328,21 @@
         "three": "^0.185",
         "zod": "^4",
         "zustand": "^5",
+      },
+    },
+    "packages/plugin-construction": {
+      "name": "@pascal-app/plugin-construction",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@types/bun": "^1.3.0",
+        "@types/react": "^19.2.0",
+        "@typescript/native-preview": "7.0.0-dev.20260624.1",
+      },
+      "peerDependencies": {
+        "@pascal-app/core": "^1.0.0",
+        "@pascal-app/editor": "^1.0.0",
+        "lucide-react": "^1.7.0",
+        "react": "^19.2.0",
       },
     },
     "packages/plugin-generate": {
@@ -924,6 +940,8 @@
     "@pascal-app/nodes": ["@pascal-app/nodes@workspace:packages/nodes"],
 
     "@pascal-app/plugin-bones": ["@pascal-app/plugin-bones@workspace:packages/plugin-bones"],
+
+    "@pascal-app/plugin-construction": ["@pascal-app/plugin-construction@workspace:packages/plugin-construction"],
 
     "@pascal-app/plugin-environment": ["@pascal-app/plugin-environment@github:AxiomeCG/environment#40baf63", { "peerDependencies": { "@dgreenheck/ez-tree": "^1.1.0", "@pascal-app/core": ">=1.0.0-beta.6 <2", "@pascal-app/editor": ">=1.0.0-beta.6 <2", "@pascal-app/viewer": ">=1.0.0-beta.6 <2", "@radix-ui/react-tooltip": "^1.2.8", "@react-three/fiber": "^9", "lucide-react": "^1.7.0", "react": "^18 || ^19", "react-colorful": "^5.8.1", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "AxiomeCG-environment-40baf63", "sha512-mb9i4IFq1c62BcAhtGJAKgJHBVQtFYySFW/LzkmnNfnWSOlGdUavoiR4f8cq5Y4xg6MTvGFX0ytO1Urk8wOPPQ=="],
 

@@ -196,7 +196,11 @@ Install/uninstall is a project-level visibility operation. Plugin code and node 
 
 `creator` and `pluginUrl` are optional manager metadata. Selecting a plugin in the Plugins sidebar opens its detail page, where the host shows this metadata and the project install/uninstall control.
 
+An optional `overview: () => import('./guide')` adds a lazy component below the install control. It is visible before installation and has its own loading state and error boundary. Use it to explain the plugin's workflow, supported categories and expected outputs without requiring a project or activating plugin behavior. Keep this guide independent of scene stores so a host can reuse it before project entry.
+
 Host panels mount lazily inside an error boundary. Use host CSS variables, keep CSS scoped to the plugin, and do not write global styles.
+
+`@pascal-app/editor/ui` exports the host `Button` and `buttonVariants` without importing the full editor. Prefer this narrow entry point for shared guides and plugin UI.
 
 ## Viewer presentation contributions
 

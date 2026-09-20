@@ -11,6 +11,7 @@ import {
 import { registerEditorHostPanel, registerSitePlanContributor } from '@pascal-app/editor'
 import { builtinPlugin } from '@pascal-app/nodes'
 import { activateBones, bonesHostPanel, bonesPlugin } from '@pascal-app/plugin-bones'
+import { constructionHostPanel, constructionPlugin } from '@pascal-app/plugin-construction'
 import {
   environmentHostPanel,
   environmentPlugin,
@@ -116,6 +117,8 @@ export async function loadExternalPlugins(): Promise<void> {
 // so it is registered separately from the core plugin manifest.
 extendPluginDiscovery(async () => [treesPlugin])
 registerEditorHostPanel(treesHostPanel)
+extendPluginDiscovery(async () => [constructionPlugin])
+registerEditorHostPanel(constructionHostPanel)
 extendPluginDiscovery(async () => [environmentPlugin])
 registerEditorHostPanel(environmentHostPanel)
 registerViewerPresentation(environmentPresentation)

@@ -6,7 +6,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.tsx",
-    "./catalog": "./src/components/ui/item-catalog/catalog-items.tsx"
+    "./catalog": "./src/components/ui/item-catalog/catalog-items.tsx",
+    "./ui": "./src/components/ui/public.ts"
   },
   "scripts": {
     "check-types": "tsgo --noEmit",

@@ -7,6 +7,7 @@ export type EditorHostPanel = {
   label: string
   icon: IconRef
   component: LazyComponent
+  overview?: LazyComponent
   kinds?: readonly string[]
   workspaces?: readonly EditorHostPanelWorkspace[]
   pluginId?: string

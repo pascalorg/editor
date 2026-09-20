@@ -3,13 +3,37 @@
 import { Icon } from '@iconify/react'
 import { type IconRef, useScene } from '@pascal-app/core'
 import { ChevronLeft, ChevronRight, ExternalLink, Puzzle } from 'lucide-react'
-import { lazy, type ReactNode, Suspense, useState, useSyncExternalStore } from 'react'
-import { editorHostPanelRegistry } from '../../../../lib/plugin-panels'
+import { lazy, type ReactNode, Suspense, useMemo, useState, useSyncExternalStore } from 'react'
+import { type EditorHostPanel, editorHostPanelRegistry } from '../../../../lib/plugin-panels'
 import { IconRefImage } from '../../icon-ref'
 import { Button } from '../../primitives/button'
+import { ErrorBoundary } from '../../primitives/error-boundary'
 
 const PLUGIN_AUTHORING_URL =
   'https://editor.pascal.app/docs/developers/plugins'
+
+function PluginOverview({ load }: { load: NonNullable<EditorHostPanel['overview']> }) {
+  const Overview = useMemo(() => lazy(load), [load])
+  return (
+    <ErrorBoundary
+      fallback={
+        <p className="text-muted-foreground text-sm" role="alert">
+          This plugin guide could not be loaded. The install controls are still available.
+        </p>
+      }
+    >
+      <Suspense
+        fallback={
+          <p className="text-muted-foreground text-sm" role="status">
+            Loading plugin guide…
+          </p>
+        }
+      >
+        <Overview />
+      </Suspense>
+    </ErrorBoundary>
+  )
+}
 
 function renderPluginIcon(ref: IconRef): ReactNode {
   if (ref.kind === 'url') {
@@ -143,6 +167,11 @@ export function PluginsPanel() {
           >
             {installed ? 'Uninstall' : 'Install'}
           </Button>
+          {panel.overview && (
+            <div className="mt-6 border-t border-border/60 pt-5">
+              <PluginOverview key={pluginId} load={panel.overview} />
+            </div>
+          )}
         </div>
 
         <div className="mt-auto pt-6">
