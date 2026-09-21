@@ -553,6 +553,9 @@ export function InvisibleHandleHitArea({
           pointerTarget.releasePointerCapture?.(event.pointerId)
           emitter.emit('tool:cancel')
         },
+        onReplace: () => {
+          pointerTarget.releasePointerCapture?.(event.pointerId)
+        },
       })
     }
     onPointerDown(event)

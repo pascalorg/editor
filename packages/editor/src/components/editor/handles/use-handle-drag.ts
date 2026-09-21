@@ -317,6 +317,7 @@ export function useHandleDrag(args: UseHandleDragArgs) {
             new PointerEvent('pointermove', {
               button: 0,
               buttons: 1,
+              altKey,
               pointerId: event.pointerId,
               pointerType: 'xr',
             }),

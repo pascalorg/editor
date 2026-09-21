@@ -167,11 +167,9 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
     suppressBoxSelectForPointer(event)
     const spatialPointerId = getSpatialPointerId(event.nativeEvent)
     const spatialRay = spatialPointerId ? event.ray.clone() : null
-    if (spatialPointerId) {
-      const target = event.object as typeof event.object & {
-        setPointerCapture?: (pointerId: number) => void
-      }
-      target.setPointerCapture?.(event.pointerId)
+    const pointerTarget = event.object as typeof event.object & {
+      releasePointerCapture?: (pointerId: number) => void
+      setPointerCapture?: (pointerId: number) => void
     }
 
     frozenRest.current = { pivot: rest.pivot.clone(), corner: rest.corner.clone() }
@@ -230,6 +228,8 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
     const hit = new Vector3()
     if (!intersectSpatialDragPlane(spatialRay ?? raycaster.ray, plane, hit)) return
     const initialAngle = angleOf(hit)
+    if (spatialPointerId) pointerTarget.setPointerCapture?.(event.pointerId)
+    let altKey = event.nativeEvent.altKey
 
     document.body.style.cursor = 'grabbing'
     sfxEmitter.emit('sfx:item-pick')
@@ -320,8 +320,10 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onCancel)
       window.removeEventListener('keydown', onKeyDown, true)
+      window.removeEventListener('keyup', onKeyUp, true)
       releaseSpatialCapture?.()
       releaseSpatialCapture = null
+      if (spatialPointerId) pointerTarget.releasePointerCapture?.(event.pointerId)
       if (document.body.style.cursor === 'grabbing') document.body.style.cursor = ''
       useScene.temporal.getState().resume()
       useViewer.getState().setInputDragging(false)
@@ -371,11 +373,18 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
     // Escape / ⌘Z abort the rotate — capture phase so they win over the global
     // use-keyboard arms (⌘Z must never history-jump under a live pointer).
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Alt') {
+        altKey = true
+        return
+      }
       if (e.key !== 'Escape' && !isHistoryShortcut(e)) return
       e.preventDefault()
       e.stopPropagation()
       swallowNextClick()
       onCancel()
+    }
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Alt') altKey = false
     }
 
     dragCleanupRef.current = () => {
@@ -389,7 +398,7 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
       releaseSpatialCapture = spatialPointerInput.capture(spatialPointerId, {
         onMove: (ray) => {
           spatialRay.copy(ray)
-          applyRay(spatialRay)
+          applyRay(spatialRay, altKey)
         },
         onRelease: onUp,
         onCancel,
@@ -400,6 +409,7 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
       window.addEventListener('pointercancel', onCancel)
     }
     window.addEventListener('keydown', onKeyDown, true)
+    window.addEventListener('keyup', onKeyUp, true)
   }
 
   return createPortal(

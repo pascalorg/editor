@@ -4,6 +4,7 @@ type SpatialPointerCapture = {
   onMove: (ray: Ray) => void
   onRelease: () => void
   onCancel: () => void
+  onReplace?: () => void
 }
 
 export type SpatialPointerId = object | number | string
@@ -21,6 +22,11 @@ export class SpatialPointerInput {
   private readonly captures = new Map<SpatialPointerId, SpatialPointerCapture>()
 
   capture(pointerId: SpatialPointerId, capture: SpatialPointerCapture): () => void {
+    const previous = this.captures.get(pointerId)
+    if (previous && previous !== capture) {
+      this.captures.delete(pointerId)
+      ;(previous.onReplace ?? previous.onCancel)()
+    }
     this.captures.set(pointerId, capture)
     return () => {
       if (this.captures.get(pointerId) === capture) {

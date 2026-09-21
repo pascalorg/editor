@@ -813,7 +813,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   return (
     <>
       <SceneEnvironment />
-      {!noEditing && <SelectionManager />}
+      {!(isFirstPersonMode || isStudioMode || isCaptureMode) && <SelectionManager />}
       {!(noEditing || isXRMode) && <BoxSelectTool />}
       {!noEditing && <NodeArrowHandles />}
       {!noEditing && <GroupRotateHandle />}

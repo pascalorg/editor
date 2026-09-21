@@ -912,28 +912,12 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
     const levelObject = wall.parentId ? sceneRegistry.nodes.get(wall.parentId) : null
     if (!levelObject) return
 
-    // Vertical plane through the wall midpoint whose normal points toward
-    // the camera (projected to horizontal). Raycasting against it converts
-    // pointer movement into a world-space Y value.
     levelObject.updateWorldMatrix(true, false)
     const worldToLocal = levelObject.matrixWorld.clone().invert()
     const midpointWorld = new Vector3(midX, 0, midZ).applyMatrix4(levelObject.matrixWorld)
-    const planeNormal = new Vector3()
-      .subVectors(camera.getWorldPosition(new Vector3()), midpointWorld)
-      .setY(0)
-    if (planeNormal.lengthSq() === 0) return
-    planeNormal.normalize()
-    const plane = new Plane().setFromNormalAndCoplanarPoint(planeNormal, midpointWorld)
-
     const ndc = new Vector2()
     const spatialPointerId = getSpatialPointerId(event.nativeEvent)
     const spatialRay = spatialPointerId ? event.ray.clone() : null
-    if (spatialRay) {
-      const up = new Vector3(0, 1, 0).transformDirection(levelObject.matrixWorld)
-      planeNormal.copy(spatialRay.direction).addScaledVector(up, -spatialRay.direction.dot(up))
-      if (planeNormal.lengthSq() < 0.0025) return
-      plane.setFromNormalAndCoplanarPoint(planeNormal.normalize(), midpointWorld)
-    }
     const setNDC = (clientX: number, clientY: number) => {
       const rect = gl.domElement.getBoundingClientRect()
       ndc.set(
@@ -942,17 +926,36 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
       )
     }
 
-    if (!spatialRay) {
+    let plane: Plane | null = null
+    let initialY: number
+    if (spatialRay) {
+      const worldUp = new Vector3(0, 1, 0).transformDirection(levelObject.matrixWorld)
+      const axisPoint = new Vector3()
+      const spatialRayLocalY = (ray: Ray) => {
+        const axisParameter = closestAxisParameterToRay(midpointWorld, worldUp, ray)
+        axisPoint.copy(midpointWorld).addScaledVector(worldUp, axisParameter)
+        return spatialDragLocalY(axisPoint, worldToLocal)
+      }
+      initialY = spatialRayLocalY(spatialRay)
+    } else {
+      // A camera-facing vertical plane gives desktop pointer movement a stable
+      // world-space height. Spatial pointers use the closest point on the
+      // wall's vertical axis instead, which remains defined for vertical rays.
+      const planeNormal = new Vector3()
+        .subVectors(camera.getWorldPosition(new Vector3()), midpointWorld)
+        .setY(0)
+      if (planeNormal.lengthSq() === 0) return
+      plane = new Plane().setFromNormalAndCoplanarPoint(planeNormal.normalize(), midpointWorld)
       setNDC(event.nativeEvent.clientX, event.nativeEvent.clientY)
       raycaster.setFromCamera(ndc, camera)
+      const hit = new Vector3()
+      if (!intersectSpatialDragPlane(raycaster.ray, plane, hit)) return
+      initialY = spatialDragLocalY(hit, worldToLocal)
     }
-    const hit = new Vector3()
-    if (!intersectSpatialDragPlane(spatialRay ?? raycaster.ray, plane, hit)) return
 
     // Dragging the top makes the wall custom-height; seed from the resolved
     // effective height so a plane-bound wall's drag starts at its real top.
     const initialHeight = getWallEffectiveHeightForNodes(wall, useScene.getState().nodes)
-    const initialY = spatialDragLocalY(hit, worldToLocal)
     const wallId = wall.id as AnyNodeId
     let pendingHeight = initialHeight
     let releaseSpatialCapture: (() => void) | null = null
@@ -976,12 +979,19 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
       applyRay(raycaster.ray)
     }
     const applyRay = (ray: Ray) => {
-      const intersection = new Vector3()
-      if (!intersectSpatialDragPlane(ray, plane, intersection)) return
-      const newHeight = Math.max(
-        MIN_WALL_HEIGHT,
-        initialHeight + (spatialDragLocalY(intersection, worldToLocal) - initialY),
-      )
+      let currentY: number
+      if (spatialRay) {
+        const worldUp = new Vector3(0, 1, 0).transformDirection(levelObject.matrixWorld)
+        const axisParameter = closestAxisParameterToRay(midpointWorld, worldUp, ray)
+        const axisPoint = midpointWorld.clone().addScaledVector(worldUp, axisParameter)
+        currentY = spatialDragLocalY(axisPoint, worldToLocal)
+      } else {
+        if (!plane) return
+        const intersection = new Vector3()
+        if (!intersectSpatialDragPlane(ray, plane, intersection)) return
+        currentY = spatialDragLocalY(intersection, worldToLocal)
+      }
+      const newHeight = Math.max(MIN_WALL_HEIGHT, initialHeight + (currentY - initialY))
       if (Math.abs(newHeight - pendingHeight) < 1e-6) return
       pendingHeight = newHeight
       useLiveNodeOverrides.getState().set(wallId, { height: newHeight })

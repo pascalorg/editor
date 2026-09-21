@@ -45,4 +45,28 @@ describe('SpatialPointerInput', () => {
     expect(cancels).toBe(1)
     expect(releases).toBe(0)
   })
+
+  test('cleans up a replaced capture without letting its stale disposer clear the replacement', () => {
+    const input = new SpatialPointerInput()
+    const ray = new Ray(new Vector3(), new Vector3(0, 0, -1))
+    let replacements = 0
+    let replacementMoves = 0
+
+    const disposeOriginal = input.capture(12, {
+      onMove: () => undefined,
+      onRelease: () => undefined,
+      onCancel: () => undefined,
+      onReplace: () => replacements++,
+    })
+    input.capture(12, {
+      onMove: () => replacementMoves++,
+      onRelease: () => undefined,
+      onCancel: () => undefined,
+    })
+
+    expect(replacements).toBe(1)
+    disposeOriginal()
+    expect(input.move(12, ray)).toBe(true)
+    expect(replacementMoves).toBe(1)
+  })
 })
