@@ -250,6 +250,7 @@ export const skylightDefinition: NodeDefinition<typeof SkylightNode> = {
   handles: skylightHandles,
   floorplan: buildSkylightFloorplan,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

@@ -157,7 +157,11 @@ export function ParametricInspector({
       width={320}
     >
       {parametrics.groups.map((group, gi) => (
-        <PanelSection key={`group-${gi}`} title={group.label}>
+        <PanelSection
+          defaultExpanded={group.defaultExpanded}
+          key={`${nodeType}-${group.label}-${gi}`}
+          title={group.label}
+        >
           {group.fields.map((field, fi) => (
             <FieldRenderer
               key={`field-${gi}-${fi}-${String(field.key)}`}
@@ -175,7 +179,7 @@ export function ParametricInspector({
       )}
       {(canMove || canDelete || (parametrics.actions && parametrics.actions.length > 0)) && (
         <PanelSection title="Actions">
-          <ActionGroup className={isZone ? 'flex-col' : undefined}>
+          <ActionGroup className={isZone ? 'flex-col' : parametrics.actions?.length ? 'grid grid-cols-2 gap-2' : undefined}>
             {canMove && (
               <ActionButton icon={<Move className="h-4 w-4" />} label="Move" onClick={handleMove} />
             )}

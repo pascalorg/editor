@@ -302,6 +302,11 @@ function reportStartProgress(progress: TerminalProgress, event: EditorStartProgr
           : `Editor runtime ${event.version} ready`,
       )
       return
+    case 'runtime-outdated':
+      progress.warn(
+        `Editor runtime ${event.active} is running; this CLI ships ${event.pinned}. Run "pascal restart" to switch.`,
+      )
+      return
     case 'port-ready':
       progress.succeed(
         event.preferredPort === 0

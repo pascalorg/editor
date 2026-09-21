@@ -1,7 +1,6 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
-import { ItemNode } from './item'
 
 export const BlockVertex = z.object({
   id: z.string().min(1),
@@ -46,8 +45,8 @@ function normalizeBlockVector(vector: [number, number, number]): [number, number
 export function getBlockFaceNormal(
   topology: BlockTopology,
   face: BlockFace,
+  vertices = new Map(topology.vertices.map((vertex) => [vertex.id, vertex.position])),
 ): [number, number, number] | null {
-  const vertices = new Map(topology.vertices.map((vertex) => [vertex.id, vertex.position]))
   const positions = face.vertexIds
     .map((id) => vertices.get(id))
     .filter((value): value is [number, number, number] => !!value)
@@ -67,8 +66,8 @@ export function getBlockFaceNormal(
 export function getBlockFaceCentroid(
   topology: BlockTopology,
   face: BlockFace,
+  vertices = new Map(topology.vertices.map((vertex) => [vertex.id, vertex.position])),
 ): [number, number, number] | null {
-  const vertices = new Map(topology.vertices.map((vertex) => [vertex.id, vertex.position]))
   const positions = face.vertexIds
     .map((id) => vertices.get(id))
     .filter((value): value is [number, number, number] => !!value)
@@ -80,11 +79,31 @@ export function getBlockFaceCentroid(
   return [sum[0] / positions.length, sum[1] / positions.length, sum[2] / positions.length]
 }
 
+const faceFrameIndices = new WeakMap<
+  BlockTopology,
+  {
+    vertices: Map<string, [number, number, number]>
+    faces: Map<string, BlockFace>
+    frames: Map<string, BlockFaceFrame>
+  }
+>()
+
 export function getBlockFaceFrame(topology: BlockTopology, faceId: string): BlockFaceFrame | null {
-  const face = topology.faces.find((candidate) => candidate.id === faceId)
+  let index = faceFrameIndices.get(topology)
+  if (!index) {
+    index = {
+      vertices: new Map(topology.vertices.map((vertex) => [vertex.id, vertex.position])),
+      faces: new Map(topology.faces.map((face) => [face.id, face])),
+      frames: new Map(),
+    }
+    faceFrameIndices.set(topology, index)
+  }
+  const cached = index.frames.get(faceId)
+  if (cached) return cached
+  const face = index.faces.get(faceId)
   if (!face) return null
-  const origin = getBlockFaceCentroid(topology, face)
-  const normal = getBlockFaceNormal(topology, face)
+  const origin = getBlockFaceCentroid(topology, face, index.vertices)
+  const normal = getBlockFaceNormal(topology, face, index.vertices)
   if (!(origin && normal)) return null
 
   const horizontal: [number, number, number] = [normal[2], 0, -normal[0]]
@@ -102,7 +121,9 @@ export function getBlockFaceFrame(topology: BlockTopology, faceId: string): Bloc
     normal[0] * xAxis[1] - normal[1] * xAxis[0],
   ])
   if (!yAxis) return null
-  return { origin, xAxis, yAxis, normal }
+  const frame = { origin, xAxis, yAxis, normal }
+  index.frames.set(faceId, frame)
+  return frame
 }
 
 export type BlockTopologyIssue = {
@@ -228,7 +249,7 @@ export function createBoxBlockTopology(width = 2, height = 2.4, depth = 2): Bloc
 export const BlockNode = BaseNode.extend({
   id: objectId('block'),
   type: nodeType('block'),
-  children: z.array(ItemNode.shape.id).default([]),
+  children: z.array(z.string()).default([]),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.number().default(0),
   supportSlabId: z.string().optional(),
@@ -237,7 +258,7 @@ export const BlockNode = BaseNode.extend({
   slotNames: z.record(z.string(), z.string().min(1)).default({ body: 'Body' }),
 }).describe(dedent`
   block node - a topology-backed editable solid.
-  - children: items hosted on persistent topology faces
+  - children: hosted node ids
   - topology: persistent vertices, edges, and ordered face loops with stable IDs
   - position/rotation: level-local placement transform
   - supportSlabId: persisted placement surface that prevents later slabs from lifting the mesh

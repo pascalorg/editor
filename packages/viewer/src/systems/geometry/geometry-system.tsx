@@ -264,7 +264,10 @@ function liveChildOverrideKey(node: AnyNode): string {
 
   const overrides = useLiveNodeOverrides.getState().overrides
   const entries: Array<[AnyNodeId, unknown]> = []
+  const childTypes = nodeRegistry.get(node.type)?.geometryChildTypes
+  const nodes = useScene.getState().nodes
   for (const childId of childIds) {
+    if (childTypes && !childTypes.includes(nodes[childId]?.type ?? '')) continue
     const override = overrides.get(childId)
     if (override) entries.push([childId, override])
   }

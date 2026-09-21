@@ -156,6 +156,7 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
   capabilities: {
     selectable: { hitVolume: 'bbox' },
     surfaces: {
+      hosting: false,
       top: {
         height: (n) => resolveCeilingHeight(n as CeilingNodeType, useScene.getState().nodes),
       },
@@ -169,7 +170,7 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
   },
 
   relations: {
-    hosts: ['item'],
+    hosts: ['item', 'procedural-item'],
     cascadeDelete: 'descendants',
   },
 

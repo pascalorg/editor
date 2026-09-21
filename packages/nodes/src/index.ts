@@ -30,6 +30,7 @@ import { measurementDefinition } from './measurement'
 import { pipeFittingDefinition } from './pipe-fitting'
 import { pipeSegmentDefinition } from './pipe-segment'
 import { pipeTrapDefinition } from './pipe-trap'
+import { proceduralItemDefinition } from './procedural-item/definition'
 import { ridgeVentDefinition } from './ridge-vent'
 import { roofDefinition } from './roof'
 import { roofSegmentDefinition } from './roof-segment'
@@ -44,6 +45,7 @@ import { stairDefinition } from './stair'
 import { stairSegmentDefinition } from './stair-segment'
 import { structuralGridDefinition } from './structural-grid'
 import { turbineVentDefinition } from './turbine-vent'
+import { unitDefinition } from './unit'
 import { wallDefinition } from './wall'
 import { windowDefinition } from './window'
 import { zoneDefinition } from './zone'
@@ -82,11 +84,13 @@ export const builtinPlugin: Plugin = {
     cabinetDefinition as unknown as AnyNodeDefinition,
     cabinetModuleDefinition as unknown as AnyNodeDefinition,
     itemDefinition as unknown as AnyNodeDefinition,
+    proceduralItemDefinition as unknown as AnyNodeDefinition,
     importedMeshDefinition as unknown as AnyNodeDefinition,
     // Stage A — wrap-exports the legacy renderer + system. Legacy
     // panels / move tools / floorplan branches still serve these.
     columnDefinition as unknown as AnyNodeDefinition,
     elevatorDefinition as unknown as AnyNodeDefinition,
+    unitDefinition as unknown as AnyNodeDefinition,
     roofDefinition as unknown as AnyNodeDefinition,
     roofSegmentDefinition as unknown as AnyNodeDefinition,
     stairDefinition as unknown as AnyNodeDefinition,
@@ -194,6 +198,7 @@ export { stairDefinition } from './stair'
 export { stairSegmentDefinition } from './stair-segment'
 export { structuralGridDefinition } from './structural-grid'
 export { turbineVentDefinition } from './turbine-vent'
+export { unitDefinition } from './unit'
 export { wallDefinition } from './wall'
 export { windowDefinition } from './window'
 export { zoneDefinition } from './zone'

@@ -55,15 +55,6 @@ function isCabinetModule(node: AnyNode | undefined): node is CabinetModuleNodeTy
   return node?.type === 'cabinet-module'
 }
 
-function cabinetModuleChildren(
-  run: CabinetNodeType,
-  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
-): CabinetModuleNodeType[] {
-  return (run.children ?? [])
-    .map((id) => nodes[id as AnyNodeId])
-    .filter((child): child is CabinetModuleNodeType => child?.type === 'cabinet-module')
-}
-
 function childIdsOf(node: AnyNode | undefined): AnyNodeId[] {
   if (!node || typeof node !== 'object' || !('children' in node) || !Array.isArray(node.children)) {
     return []
@@ -82,13 +73,21 @@ function resolveCabinetRunChildIds(
       resolved.push(child.id as AnyNodeId)
       continue
     }
-    if (!isCabinetRun(child)) continue
+    if (!isCabinetRun(child)) {
+      resolved.push(childId as AnyNodeId)
+      continue
+    }
     const link = cornerDerivedRunLink(child.metadata)
     if (link?.role === 'base-leg') {
       resolved.push(...resolveCabinetRunChildIds(child, nodes))
       continue
     }
-    if (link) continue
+    if (link) {
+      resolved.push(
+        ...resolveCabinetRunChildIds(child, nodes).filter((id) => !isCabinetModule(nodes[id])),
+      )
+      continue
+    }
     resolved.push(child.id as AnyNodeId)
   }
   return resolved
@@ -137,10 +136,13 @@ export function cabinetTreeChildIds(
       resolved.push(child.id as AnyNodeId)
       continue
     }
-    if (!isCabinetRun(child)) continue
+    if (!isCabinetRun(child)) {
+      resolved.push(childId as AnyNodeId)
+      continue
+    }
     const link = cornerDerivedRunLink(child.metadata)
     if (link) {
-      resolved.push(...cabinetModuleChildren(child, nodes).map((module) => module.id as AnyNodeId))
+      resolved.push(...resolveCabinetRunChildIds(child, nodes))
       continue
     }
     resolved.push(child.id as AnyNodeId)

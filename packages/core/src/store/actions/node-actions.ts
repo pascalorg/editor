@@ -573,11 +573,19 @@ function mergeNodeUpdate(currentNode: AnyNode, patch: Partial<AnyNode>): AnyNode
 
 function parseUpdatedNode(currentNode: AnyNode, data: Partial<AnyNode>): AnyNode {
   const candidate = mergeNodeUpdate(currentNode, data)
+  // Graph links survive schemas that omit children; only an explicit patch may change them.
+  const preserveChildren = (updated: AnyNode): AnyNode =>
+    !Object.hasOwn(data, 'children') &&
+    'children' in currentNode &&
+    Array.isArray(currentNode.children)
+      ? ({ ...updated, children: currentNode.children } as AnyNode)
+      : updated
   const registered = nodeRegistry.get(currentNode.type)?.schema
   // Generated definitions must reject invalid geometry instead of retaining a failed parse.
-  if (registered?.meta?.()?.strictMutations === true) return registered.parse(candidate) as AnyNode
+  if (registered?.meta?.()?.strictMutations === true)
+    return preserveChildren(registered.parse(candidate) as AnyNode)
   const parsed = parseNode(candidate)
-  if (parsed.success) return parsed.data
+  if (parsed.success) return preserveChildren(parsed.data)
 
   const schema = getNodeSchemaForType(candidate.type)
   const sanitized = sanitizeNumericValue(schema, data, currentNode, [])
@@ -1698,6 +1706,20 @@ const deleteNodesActionImpl = (
           nextNodes[nodeId as AnyNodeId] = { ...node, ...patch } as AnyNode
           nodesToMarkDirty.add(nodeId as AnyNodeId)
         }
+      }
+    }
+
+    const deletedZoneIds = new Set<string>()
+    for (const id of allIds) {
+      if (nextNodes[id]?.type === 'zone') deletedZoneIds.add(id)
+    }
+    if (deletedZoneIds.size > 0) {
+      for (const node of Object.values(nextNodes)) {
+        if (node.type !== 'unit' || allIds.has(node.id)) continue
+        const members = node.members.filter((id) => !deletedZoneIds.has(id))
+        if (members.length === node.members.length) continue
+        nextNodes[node.id] = { ...node, members }
+        nodesToMarkDirty.add(node.id)
       }
     }
 

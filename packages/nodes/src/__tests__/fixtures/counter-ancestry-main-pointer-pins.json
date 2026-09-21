@@ -1,0 +1,320 @@
+{
+  "nested corner:catalog:grid first": {
+    "object": "node",
+    "id": "child",
+    "type": "item",
+    "parentId": "cabinet_browser",
+    "visible": true,
+    "metadata": {},
+    "position": [1.0000000000134486, 0.92, 0.10000000003654774],
+    "rotation": [0, -1.8707963267948966, 0],
+    "scale": [1, 1, 1],
+    "children": [],
+    "asset": {
+      "id": "audit-box",
+      "category": "decor",
+      "name": "Audit box",
+      "thumbnail": "",
+      "source": "library",
+      "src": "/unrenderable-host-audit.glb",
+      "dimensions": [0.1, 0.2, 0.1],
+      "offset": [0, 0, 0],
+      "rotation": [0, 0, 0],
+      "scale": [1, 1, 1]
+    }
+  },
+  "nested corner:catalog:host first": {
+    "object": "node",
+    "id": "child",
+    "type": "item",
+    "parentId": "cabinet_browser",
+    "visible": true,
+    "metadata": {},
+    "position": [1.0000000000134486, 0.92, 0.10000000003654774],
+    "rotation": [0, -1.8707963267948966, 0],
+    "scale": [1, 1, 1],
+    "children": [],
+    "asset": {
+      "id": "audit-box",
+      "category": "decor",
+      "name": "Audit box",
+      "thumbnail": "",
+      "source": "library",
+      "src": "/unrenderable-host-audit.glb",
+      "dimensions": [0.1, 0.2, 0.1],
+      "offset": [0, 0, 0],
+      "rotation": [0, 0, 0],
+      "scale": [1, 1, 1]
+    }
+  },
+  "nested corner:registry:grid first": {
+    "object": "node",
+    "id": "child",
+    "type": "procedural-item",
+    "parentId": "cabinet_browser",
+    "visible": true,
+    "metadata": {},
+    "recipe": {
+      "version": 1,
+      "name": "Audit box",
+      "description": "",
+      "surfaces": [],
+      "parameters": [
+        {
+          "id": "width",
+          "label": "Width",
+          "default": 0.1,
+          "min": 0.05,
+          "max": 1,
+          "step": 0.05,
+          "unit": "m"
+        }
+      ],
+      "slots": [
+        {
+          "id": "body",
+          "label": "Body",
+          "color": "#ffffff"
+        }
+      ],
+      "parts": [
+        {
+          "id": "body",
+          "label": "Body",
+          "count": 1,
+          "shapes": [
+            {
+              "id": "box",
+              "primitive": "box",
+              "slot": "body",
+              "size": [0.1, 0.2, 0.1],
+              "position": [0, 0.1, 0]
+            }
+          ]
+        }
+      ],
+      "constraints": []
+    },
+    "parameters": {},
+    "slots": {},
+    "position": [1.0000000000134486, 0.92, 0.10000000003654774],
+    "rotation": [0, -1.8707963267948966, 0],
+    "children": [],
+    "attachments": {}
+  },
+  "nested corner:registry:host first": {
+    "object": "node",
+    "id": "child",
+    "type": "procedural-item",
+    "parentId": "cabinet_browser",
+    "visible": true,
+    "metadata": {},
+    "recipe": {
+      "version": 1,
+      "name": "Audit box",
+      "description": "",
+      "surfaces": [],
+      "parameters": [
+        {
+          "id": "width",
+          "label": "Width",
+          "default": 0.1,
+          "min": 0.05,
+          "max": 1,
+          "step": 0.05,
+          "unit": "m"
+        }
+      ],
+      "slots": [
+        {
+          "id": "body",
+          "label": "Body",
+          "color": "#ffffff"
+        }
+      ],
+      "parts": [
+        {
+          "id": "body",
+          "label": "Body",
+          "count": 1,
+          "shapes": [
+            {
+              "id": "box",
+              "primitive": "box",
+              "slot": "body",
+              "size": [0.1, 0.2, 0.1],
+              "position": [0, 0.1, 0]
+            }
+          ]
+        }
+      ],
+      "constraints": []
+    },
+    "parameters": {},
+    "slots": {},
+    "position": [1.0000000000134486, 0.92, 0.10000000003654774],
+    "rotation": [0, -1.8707963267948966, 0],
+    "children": [],
+    "attachments": {}
+  },
+  "standalone module:catalog:grid first": {
+    "object": "node",
+    "id": "child",
+    "type": "item",
+    "parentId": "level",
+    "visible": true,
+    "metadata": {},
+    "position": [0.6428571428571388, 0, -16.00000000000004],
+    "rotation": [0, 0, 0],
+    "scale": [1, 1, 1],
+    "children": [],
+    "supportSlabId": "ground",
+    "asset": {
+      "id": "audit-box",
+      "category": "decor",
+      "name": "Audit box",
+      "thumbnail": "",
+      "source": "library",
+      "src": "/unrenderable-host-audit.glb",
+      "dimensions": [0.1, 0.2, 0.1],
+      "offset": [0, 0, 0],
+      "rotation": [0, 0, 0],
+      "scale": [1, 1, 1]
+    }
+  },
+  "standalone module:catalog:host first": {
+    "object": "node",
+    "id": "child",
+    "type": "item",
+    "parentId": "level",
+    "visible": true,
+    "metadata": {},
+    "position": [0.6428571428571388, 0, -16.00000000000004],
+    "rotation": [0, 0, 0],
+    "scale": [1, 1, 1],
+    "children": [],
+    "supportSlabId": "ground",
+    "asset": {
+      "id": "audit-box",
+      "category": "decor",
+      "name": "Audit box",
+      "thumbnail": "",
+      "source": "library",
+      "src": "/unrenderable-host-audit.glb",
+      "dimensions": [0.1, 0.2, 0.1],
+      "offset": [0, 0, 0],
+      "rotation": [0, 0, 0],
+      "scale": [1, 1, 1]
+    }
+  },
+  "standalone module:registry:grid first": {
+    "object": "node",
+    "id": "child",
+    "type": "procedural-item",
+    "parentId": "cabinet-module_plain",
+    "visible": true,
+    "metadata": {},
+    "recipe": {
+      "version": 1,
+      "name": "Audit box",
+      "description": "",
+      "surfaces": [],
+      "parameters": [
+        {
+          "id": "width",
+          "label": "Width",
+          "default": 0.1,
+          "min": 0.05,
+          "max": 1,
+          "step": 0.05,
+          "unit": "m"
+        }
+      ],
+      "slots": [
+        {
+          "id": "body",
+          "label": "Body",
+          "color": "#ffffff"
+        }
+      ],
+      "parts": [
+        {
+          "id": "body",
+          "label": "Body",
+          "count": 1,
+          "shapes": [
+            {
+              "id": "box",
+              "primitive": "box",
+              "slot": "body",
+              "size": [0.1, 0.2, 0.1],
+              "position": [0, 0.1, 0]
+            }
+          ]
+        }
+      ],
+      "constraints": []
+    },
+    "parameters": {},
+    "slots": {},
+    "position": [0.15000000011974168, 0.9199999997764827, 0.09999999608843989],
+    "rotation": [0, 0, 0],
+    "children": [],
+    "attachments": {}
+  },
+  "standalone module:registry:host first": {
+    "object": "node",
+    "id": "child",
+    "type": "procedural-item",
+    "parentId": "cabinet-module_plain",
+    "visible": true,
+    "metadata": {},
+    "recipe": {
+      "version": 1,
+      "name": "Audit box",
+      "description": "",
+      "surfaces": [],
+      "parameters": [
+        {
+          "id": "width",
+          "label": "Width",
+          "default": 0.1,
+          "min": 0.05,
+          "max": 1,
+          "step": 0.05,
+          "unit": "m"
+        }
+      ],
+      "slots": [
+        {
+          "id": "body",
+          "label": "Body",
+          "color": "#ffffff"
+        }
+      ],
+      "parts": [
+        {
+          "id": "body",
+          "label": "Body",
+          "count": 1,
+          "shapes": [
+            {
+              "id": "box",
+              "primitive": "box",
+              "slot": "body",
+              "size": [0.1, 0.2, 0.1],
+              "position": [0, 0.1, 0]
+            }
+          ]
+        }
+      ],
+      "constraints": []
+    },
+    "parameters": {},
+    "slots": {},
+    "position": [0.15000000011974168, 0.9199999997764827, 0.09999999608843989],
+    "rotation": [0, 0, 0],
+    "children": [],
+    "attachments": {}
+  }
+}

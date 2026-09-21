@@ -8,6 +8,7 @@ import {
 import type { AnyNodeId } from '../schema/types'
 import { runAsSingleSceneHistoryStep } from '../store/history-control'
 import useScene from '../store/use-scene'
+import { proceduralFinishLibraryColor } from './library-colors'
 import { isProceduralItem } from './query'
 
 export function proceduralSlotColor(
@@ -18,7 +19,11 @@ export function proceduralSlotColor(
   if (ref?.startsWith('#')) return ref
   const parsed = parseMaterialRef(ref)
   if (parsed?.kind === 'scene') return materials[parsed.id]?.material.properties?.color ?? fallback
-  return ref ? (getMaterialPresetByRef(ref)?.mapProperties?.color ?? fallback) : fallback
+  return ref
+    ? (proceduralFinishLibraryColor(ref) ??
+        getMaterialPresetByRef(ref)?.mapProperties?.color ??
+        fallback)
+    : fallback
 }
 export function setProceduralMaterial(
   nodeId: string,

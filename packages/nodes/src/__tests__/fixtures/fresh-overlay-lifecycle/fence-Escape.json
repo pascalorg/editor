@@ -1,0 +1,361 @@
+[
+  {
+    "stage": "start",
+    "scene": {
+      "nodes": {
+        "node-0": {
+          "object": "node",
+          "id": "node-0",
+          "type": "site",
+          "parentId": null,
+          "visible": true,
+          "metadata": {},
+          "polygon": {
+            "type": "polygon",
+            "points": [[-15, -15], [15, -15], [15, 15], [-15, 15]]
+          },
+          "children": ["node-1"]
+        },
+        "node-1": {
+          "object": "node",
+          "id": "node-1",
+          "type": "building",
+          "parentId": "node-0",
+          "visible": true,
+          "metadata": {},
+          "children": ["node-2"],
+          "position": [0, 0, 0],
+          "rotation": [0, 0, 0]
+        },
+        "node-2": {
+          "object": "node",
+          "id": "node-2",
+          "type": "level",
+          "parentId": "node-1",
+          "visible": true,
+          "metadata": {},
+          "children": ["node-3"],
+          "level": 0,
+          "baseElevation": 0
+        },
+        "node-3": {
+          "object": "node",
+          "id": "node-3",
+          "type": "fence",
+          "parentId": "node-2",
+          "visible": true,
+          "metadata": {
+            "isNew": true
+          },
+          "start": [0, 0],
+          "end": [3, 0],
+          "height": 1.8,
+          "thickness": 0.08,
+          "baseHeight": 0.22,
+          "postSpacing": 2,
+          "postSize": 0.1,
+          "topRailHeight": 0.04,
+          "groundClearance": 0,
+          "edgeInset": 0.015,
+          "slatGap": 0.01,
+          "postCap": "pyramid",
+          "baseStyle": "grounded",
+          "showInfill": true,
+          "color": "#ffffff",
+          "style": "slat",
+          "children": []
+        }
+      },
+      "rootNodeIds": ["node-0"],
+      "collections": {},
+      "materials": {},
+      "installedPlugins": []
+    },
+    "moving": {
+      "object": "node",
+      "id": "node-3",
+      "type": "fence",
+      "parentId": "node-2",
+      "visible": true,
+      "metadata": {
+        "isNew": true
+      },
+      "start": [0, 0],
+      "end": [3, 0],
+      "height": 1.8,
+      "thickness": 0.08,
+      "baseHeight": 0.22,
+      "postSpacing": 2,
+      "postSize": 0.1,
+      "topRailHeight": 0.04,
+      "groundClearance": 0,
+      "edgeInset": 0.015,
+      "slatGap": 0.01,
+      "postCap": "pyramid",
+      "baseStyle": "grounded",
+      "showInfill": true,
+      "color": "#ffffff",
+      "style": "slat"
+    },
+    "origin": null,
+    "past": [],
+    "future": [],
+    "tracking": false
+  },
+  {
+    "stage": "pointer",
+    "scene": {
+      "nodes": {
+        "node-0": {
+          "object": "node",
+          "id": "node-0",
+          "type": "site",
+          "parentId": null,
+          "visible": true,
+          "metadata": {},
+          "polygon": {
+            "type": "polygon",
+            "points": [[-15, -15], [15, -15], [15, 15], [-15, 15]]
+          },
+          "children": ["node-1"]
+        },
+        "node-1": {
+          "object": "node",
+          "id": "node-1",
+          "type": "building",
+          "parentId": "node-0",
+          "visible": true,
+          "metadata": {},
+          "children": ["node-2"],
+          "position": [0, 0, 0],
+          "rotation": [0, 0, 0]
+        },
+        "node-2": {
+          "object": "node",
+          "id": "node-2",
+          "type": "level",
+          "parentId": "node-1",
+          "visible": true,
+          "metadata": {},
+          "children": ["node-3"],
+          "level": 0,
+          "baseElevation": 0
+        },
+        "node-3": {
+          "object": "node",
+          "id": "node-3",
+          "type": "fence",
+          "parentId": "node-2",
+          "visible": true,
+          "metadata": {
+            "isNew": true
+          },
+          "start": [0, 0],
+          "end": [3, 0],
+          "height": 1.8,
+          "thickness": 0.08,
+          "baseHeight": 0.22,
+          "postSpacing": 2,
+          "postSize": 0.1,
+          "topRailHeight": 0.04,
+          "groundClearance": 0,
+          "edgeInset": 0.015,
+          "slatGap": 0.01,
+          "postCap": "pyramid",
+          "baseStyle": "grounded",
+          "showInfill": true,
+          "color": "#ffffff",
+          "style": "slat",
+          "children": []
+        }
+      },
+      "rootNodeIds": ["node-0"],
+      "collections": {},
+      "materials": {},
+      "installedPlugins": []
+    },
+    "moving": {
+      "object": "node",
+      "id": "node-3",
+      "type": "fence",
+      "parentId": "node-2",
+      "visible": true,
+      "metadata": {
+        "isNew": true
+      },
+      "start": [0, 0],
+      "end": [3, 0],
+      "height": 1.8,
+      "thickness": 0.08,
+      "baseHeight": 0.22,
+      "postSpacing": 2,
+      "postSize": 0.1,
+      "topRailHeight": 0.04,
+      "groundClearance": 0,
+      "edgeInset": 0.015,
+      "slatGap": 0.01,
+      "postCap": "pyramid",
+      "baseStyle": "grounded",
+      "showInfill": true,
+      "color": "#ffffff",
+      "style": "slat"
+    },
+    "origin": null,
+    "past": [],
+    "future": [],
+    "tracking": false
+  },
+  {
+    "stage": "Escape",
+    "scene": {
+      "nodes": {
+        "node-0": {
+          "object": "node",
+          "id": "node-0",
+          "type": "site",
+          "parentId": null,
+          "visible": true,
+          "metadata": {},
+          "polygon": {
+            "type": "polygon",
+            "points": [[-15, -15], [15, -15], [15, 15], [-15, 15]]
+          },
+          "children": ["node-1"]
+        },
+        "node-1": {
+          "object": "node",
+          "id": "node-1",
+          "type": "building",
+          "parentId": "node-0",
+          "visible": true,
+          "metadata": {},
+          "children": ["node-2"],
+          "position": [0, 0, 0],
+          "rotation": [0, 0, 0]
+        },
+        "node-2": {
+          "object": "node",
+          "id": "node-2",
+          "type": "level",
+          "parentId": "node-1",
+          "visible": true,
+          "metadata": {},
+          "children": [],
+          "level": 0,
+          "baseElevation": 0
+        }
+      },
+      "rootNodeIds": ["node-0"],
+      "collections": {},
+      "materials": {},
+      "installedPlugins": []
+    },
+    "moving": null,
+    "origin": "2d",
+    "past": [],
+    "future": [],
+    "tracking": true
+  },
+  {
+    "stage": "undo",
+    "scene": {
+      "nodes": {
+        "node-0": {
+          "object": "node",
+          "id": "node-0",
+          "type": "site",
+          "parentId": null,
+          "visible": true,
+          "metadata": {},
+          "polygon": {
+            "type": "polygon",
+            "points": [[-15, -15], [15, -15], [15, 15], [-15, 15]]
+          },
+          "children": ["node-1"]
+        },
+        "node-1": {
+          "object": "node",
+          "id": "node-1",
+          "type": "building",
+          "parentId": "node-0",
+          "visible": true,
+          "metadata": {},
+          "children": ["node-2"],
+          "position": [0, 0, 0],
+          "rotation": [0, 0, 0]
+        },
+        "node-2": {
+          "object": "node",
+          "id": "node-2",
+          "type": "level",
+          "parentId": "node-1",
+          "visible": true,
+          "metadata": {},
+          "children": [],
+          "level": 0,
+          "baseElevation": 0
+        }
+      },
+      "rootNodeIds": ["node-0"],
+      "collections": {},
+      "materials": {},
+      "installedPlugins": []
+    },
+    "moving": null,
+    "origin": "2d",
+    "past": [],
+    "future": [],
+    "tracking": true
+  },
+  {
+    "stage": "redo",
+    "scene": {
+      "nodes": {
+        "node-0": {
+          "object": "node",
+          "id": "node-0",
+          "type": "site",
+          "parentId": null,
+          "visible": true,
+          "metadata": {},
+          "polygon": {
+            "type": "polygon",
+            "points": [[-15, -15], [15, -15], [15, 15], [-15, 15]]
+          },
+          "children": ["node-1"]
+        },
+        "node-1": {
+          "object": "node",
+          "id": "node-1",
+          "type": "building",
+          "parentId": "node-0",
+          "visible": true,
+          "metadata": {},
+          "children": ["node-2"],
+          "position": [0, 0, 0],
+          "rotation": [0, 0, 0]
+        },
+        "node-2": {
+          "object": "node",
+          "id": "node-2",
+          "type": "level",
+          "parentId": "node-1",
+          "visible": true,
+          "metadata": {},
+          "children": [],
+          "level": 0,
+          "baseElevation": 0
+        }
+      },
+      "rootNodeIds": ["node-0"],
+      "collections": {},
+      "materials": {},
+      "installedPlugins": []
+    },
+    "moving": null,
+    "origin": "2d",
+    "past": [],
+    "future": [],
+    "tracking": true
+  }
+]

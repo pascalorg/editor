@@ -1,3 +1,4 @@
+import type { CeilingNode } from '../schema/nodes/ceiling'
 import type { WallNode } from '../schema/nodes/wall'
 import type { ProceduralItemNode } from './node'
 import { proceduralLocalPose, type QueryNodes, validateProceduralRelations } from './query'
@@ -12,7 +13,7 @@ export function resolveProceduralWallPlacement(
   side: 'front' | 'back',
   nodes: QueryNodes,
 ): ProceduralItemNode | null {
-  if (!node.recipe.mounting || wall.curveOffset) return null
+  if (node.recipe.mounting?.attachTo !== 'wall-side' || wall.curveOffset) return null
   const candidate: ProceduralItemNode = {
     ...node,
     parentId: wall.id,
@@ -41,5 +42,24 @@ export function resolveProceduralWallPlacement(
     return candidate
   } catch {
     return null
+  }
+}
+
+export function resolveProceduralCeilingPlacement(
+  node: ProceduralItemNode,
+  ceiling: CeilingNode,
+  x: number,
+  z: number,
+  yaw = node.rotation[1],
+): ProceduralItemNode {
+  return {
+    ...node,
+    parentId: ceiling.id,
+    wallId: undefined,
+    side: undefined,
+    supportSlabId: undefined,
+    position: [x, 0, z],
+    rotation: [0, yaw, 0],
+    visible: true,
   }
 }

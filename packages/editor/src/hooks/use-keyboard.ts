@@ -32,10 +32,14 @@ import { isActive } from '../lib/interaction/scope'
 import { copySelectedNodesToEditorClipboard } from '../lib/scene-clipboard'
 import { sfxEmitter } from '../lib/sfx-bus'
 import { activeSiteNode, clampBrushRadius } from '../lib/terrain-sculpt'
+import { leaveUnitFocus } from '../lib/units'
 import { toggleWindowOpenState } from '../lib/window-interaction'
 import useDeleteConfirmation from '../store/use-delete-confirmation'
 import useEditor, { getActiveContinuationContext, getActiveSnapContext } from '../store/use-editor'
-import useInteractionScope, { getMovingNode } from '../store/use-interaction-scope'
+import useInteractionScope, {
+  getMovingNode,
+  isInteractionSubtreeDraft,
+} from '../store/use-interaction-scope'
 import { groupCurrentSelection, ungroupCurrentSelection } from '../store/use-session-groups'
 import { useDrawingControls } from './use-drawing-controls'
 
@@ -116,7 +120,13 @@ const exitToSelectAfterUnconsumedCancel = () => {
   const currentPhase = useEditor.getState().phase
   const currentStructureLayer = useEditor.getState().structureLayer
 
-  useInteractionScope.getState().endIf((sc) => sc.kind === 'reshaping' && sc.reshape === 'hole')
+  useInteractionScope
+    .getState()
+    .endIf(
+      (sc) =>
+        (sc.kind === 'placing' && isInteractionSubtreeDraft()) ||
+        (sc.kind === 'reshaping' && sc.reshape === 'hole'),
+    )
 
   // From zone mode, return to structure select
   if (currentPhase === 'structure' && currentStructureLayer === 'zones') {
@@ -392,7 +402,8 @@ export const useKeyboard = ({
         // Only switch to select mode if no tool had an active mid-action to cancel.
         // (e.g. mid-wall draw or mid-slab polygon should only cancel the action, not exit the tool)
         if (!_toolCancelConsumed) {
-          exitToSelectAfterUnconsumedCancel()
+          if (leaveUnitFocus()) useEditor.getState().armToolMode({ mode: 'select' })
+          else exitToSelectAfterUnconsumedCancel()
         }
       } else if (e.key === '1' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()

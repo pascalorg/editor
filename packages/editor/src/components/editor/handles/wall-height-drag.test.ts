@@ -38,8 +38,7 @@ describe('wall height pointer drag', () => {
 
   test('desktop perspective rays resize without an initial jump', () => {
     const origin = new Vector3(4, 5, 8)
-    const rayAt = (y: number) =>
-      new Ray(origin, new Vector3(0, y, 0).sub(origin).normalize())
+    const rayAt = (y: number) => new Ray(origin, new Vector3(0, y, 0).sub(origin).normalize())
     const resize = createWallHeightDrag({
       initialRay: rayAt(2.76),
       levelMatrixWorld: new Matrix4(),

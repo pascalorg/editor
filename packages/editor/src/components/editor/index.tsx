@@ -13,13 +13,13 @@ import {
 } from '@pascal-app/core'
 import {
   type HoverStyles,
-  type ViewerImmersiveConfig,
   InteractiveSystem,
   PERF_OVERLAY_ENABLED,
   recordPerfSample,
   SceneEnvironment,
   useViewer,
   Viewer,
+  type ViewerImmersiveConfig,
   ViewerPresentations,
 } from '@pascal-app/viewer'
 import {
@@ -50,6 +50,7 @@ import {
   writePersistedSelection,
 } from '../../lib/scene'
 import { disposeSFXBus, initSFXBus } from '../../lib/sfx-bus'
+import { useUnitFocusRules } from '../../lib/units'
 import { type CameraHintAction, useCameraHintFocus } from '../../store/use-camera-hint-focus'
 import useEditor from '../../store/use-editor'
 import useFloorplanMode from '../../store/use-floorplan-mode'
@@ -203,6 +204,7 @@ export interface EditorProps {
   projectId?: string | null
 
   // Persistence — defaults to localStorage when omitted
+  guardAgainstSceneWipe?: boolean
   onLoad?: () => Promise<SceneGraph | null>
   onSave?: (scene: SceneGraph, options?: { keepalive?: boolean }) => Promise<void>
   /**
@@ -1047,6 +1049,10 @@ const ViewerCanvas = memo(function ViewerCanvas({
   const setFloorplanPaneRatio = useEditor((s) => s.setFloorplanPaneRatio)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
+  useUnitFocusRules()
+  const presetIsolation = useEditor((s) =>
+    s.captureMode.mode === 'preset' ? s.captureMode.isolated : null,
+  )
 
   const [isCameraControlsHintVisible, setIsCameraControlsHintVisible] = useState<boolean | null>(
     null,
@@ -1158,6 +1164,10 @@ const ViewerCanvas = memo(function ViewerCanvas({
             defaultRender={EDITOR_DEFAULT_RENDER}
             disablePostFx={disablePostFx}
             hoverStyles={EDITOR_HOVER_STYLES}
+            isolate={presetIsolation}
+            // Preset captures isolate one subtree and keep the exterior transparent.
+            // Other modes retain the viewer's configured background policy.
+            transparent={presetIsolation === null ? undefined : true}
             onSceneReadyChange={onSceneReadyChange}
             renderContext="editor"
             renderPaused={!show3d && !showLoader}
@@ -1241,6 +1251,7 @@ function PreviewStage({
 
 function EditorContent({
   immersive,
+  guardAgainstSceneWipe,
   layoutVersion = 'v1',
   appMenuButton,
   sidebarTop,
@@ -1300,6 +1311,7 @@ function EditorContent({
   useKeyboard({ isVersionPreviewMode, disabled: isFirstPersonMode || isStudioMode })
 
   const { isLoadingSceneRef, saveNow } = useAutoSave({
+    guardAgainstSceneWipe,
     onSave,
     onDirty,
     onSaveStatusChange,
@@ -1358,7 +1370,7 @@ function EditorContent({
   useEffect(() => {
     let cancelled = false
 
-    async function load() {
+    async function load(attempt: number) {
       isLoadingSceneRef.current = true
       setSceneLoadError(null)
       setHasLoadedInitialScene(false)
@@ -1372,7 +1384,7 @@ function EditorContent({
       let failed = false
       try {
         const sceneGraph = onLoad ? await onLoad() : loadSceneFromLocalStorage()
-        if (!cancelled) {
+        if (!cancelled && attempt === sceneLoadAttempt) {
           applySceneGraphToEditor(sceneGraph)
           setIsViewerSceneReady(false)
           setSceneReadyKey((key) => key + 1)
@@ -1398,7 +1410,7 @@ function EditorContent({
       }
     }
 
-    load()
+    load(sceneLoadAttempt)
 
     return () => {
       cancelled = true

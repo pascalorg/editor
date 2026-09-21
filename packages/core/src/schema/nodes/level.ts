@@ -1,5 +1,6 @@
 import dedent from 'dedent'
 import { z } from 'zod'
+import type { ProceduralItemNode } from '../../procedural-items/node'
 import { BaseNode, nodeType, objectId } from '../base'
 import type { BlockNode } from './block'
 import type { CeilingNode } from './ceiling'
@@ -37,6 +38,7 @@ type CoreLevelChildId =
   | BlockNode['id']
   | StructuralGridNode['id']
   | ItemNode['id']
+  | ProceduralItemNode['id']
   | ImportedMeshNode['id']
   | ZoneNode['id']
   | SlabNode['id']

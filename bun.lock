@@ -37,6 +37,7 @@
         "@pascal-app/nodes": "*",
         "@pascal-app/plugin-bones": "github:pascalorg/plugin-bones#5679260261ee1c733656ff6dfb99e30bb24b58a7",
         "@pascal-app/plugin-environment": "github:AxiomeCG/environment#40baf63ddd06a657aaa0f60e1559fd9ad561f295",
+        "@pascal-app/plugin-pool": "github:sudhir9297/pool-pascal-plugin#483a080558293cd344170e66318230e2ac9b6ae8",
         "@pascal-app/plugin-streetscape": "github:sudhir9297/streetscape-pascal-plugin#1c04ec9ccb3fa8124ec56dfc1026567cbbc51aef",
         "@pascal-app/plugin-trees": "github:pascalorg/plugin-trees#56d978cd9b409b716207b3f3d269455d3cd6f067",
         "@pascal-app/viewer": "*",
@@ -104,7 +105,7 @@
     },
     "packages/cli": {
       "name": "@pascal-app/cli",
-      "version": "1.0.0",
+      "version": "1.0.2",
       "bin": {
         "pascal": "dist/bin/pascal.js",
       },
@@ -119,7 +120,7 @@
     },
     "packages/core": {
       "name": "@pascal-app/core",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "dependencies": {
         "dedent": "^1.7.1",
         "idb-keyval": "^6.2.2",
@@ -146,7 +147,7 @@
     },
     "packages/editor": {
       "name": "@pascal-app/editor",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "dependencies": {
         "@dnd-kit/core": "^6.3.1",
         "@dnd-kit/sortable": "^10.0.0",
@@ -186,8 +187,8 @@
         "zustand": "^5.0.11",
       },
       "devDependencies": {
-        "@pascal-app/core": "^1.0.0",
-        "@pascal-app/viewer": "^1.0.0",
+        "@pascal-app/core": "^1.0.1",
+        "@pascal-app/viewer": "^1.0.1",
         "@pascal/typescript-config": "*",
         "@react-three/test-renderer": "^9.1.0",
         "@types/blob-stream": "^0.1.33",
@@ -201,8 +202,8 @@
         "typescript": "6.0.3",
       },
       "peerDependencies": {
-        "@pascal-app/core": "^1.0.0",
-        "@pascal-app/viewer": "^1.0.0",
+        "@pascal-app/core": "^1.0.1",
+        "@pascal-app/viewer": "^1.0.1",
         "@react-three/drei": "^10",
         "@react-three/fiber": "^9",
         "next": ">=15",
@@ -230,9 +231,9 @@
     },
     "packages/ifc-converter": {
       "name": "@pascal-app/ifc-converter",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "dependencies": {
-        "@pascal-app/core": "^1.0.0",
+        "@pascal-app/core": "^1.0.1",
         "nanoid": "^5.1.6",
         "web-ifc": "^0.0.77",
       },
@@ -244,7 +245,7 @@
     },
     "packages/mcp": {
       "name": "@pascal-app/mcp",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "bin": {
         "pascal-mcp": "./dist/bin/pascal-mcp.js",
       },
@@ -254,22 +255,22 @@
         "zod": ">=4.5.4 <4.6",
       },
       "devDependencies": {
-        "@pascal-app/core": "^1.0.0",
+        "@pascal-app/core": "^1.0.1",
         "@pascal/typescript-config": "*",
         "@types/node": "^22.19.20",
         "typescript": "6.0.3",
       },
       "peerDependencies": {
-        "@pascal-app/core": "^1.0.0",
+        "@pascal-app/core": "^1.0.1",
       },
     },
     "packages/nodes": {
       "name": "@pascal-app/nodes",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "devDependencies": {
-        "@pascal-app/core": "^1.0.0",
-        "@pascal-app/editor": "^1.0.0",
-        "@pascal-app/viewer": "^1.0.0",
+        "@pascal-app/core": "^1.0.1",
+        "@pascal-app/editor": "^1.0.1",
+        "@pascal-app/viewer": "^1.0.1",
         "@pascal/typescript-config": "*",
         "@react-three/test-renderer": "^9.1.0",
         "@types/bun": "^1.3.0",
@@ -280,9 +281,9 @@
         "typescript": "6.0.3",
       },
       "peerDependencies": {
-        "@pascal-app/core": "^1.0.0",
-        "@pascal-app/editor": "^1.0.0",
-        "@pascal-app/viewer": "^1.0.0",
+        "@pascal-app/core": "^1.0.1",
+        "@pascal-app/editor": "^1.0.1",
+        "@pascal-app/viewer": "^1.0.1",
         "@react-three/drei": "^10",
         "@react-three/fiber": "^9",
         "lucide-react": "^1",
@@ -315,14 +316,14 @@
     },
     "packages/viewer": {
       "name": "@pascal-app/viewer",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "dependencies": {
         "three-bvh-csg": "^0.0.18",
         "three-mesh-bvh": "^0.9.8",
         "zustand": "^5",
       },
       "devDependencies": {
-        "@pascal-app/core": "^1.0.0",
+        "@pascal-app/core": "^1.0.1",
         "@pascal/typescript-config": "*",
         "@react-three/test-renderer": "^9.1.0",
         "@types/node": "^22",
@@ -332,7 +333,7 @@
         "typescript": "6.0.3",
       },
       "peerDependencies": {
-        "@pascal-app/core": "^1.0.0",
+        "@pascal-app/core": "^1.0.1",
         "@react-three/drei": "^10",
         "@react-three/fiber": "^9",
         "react": "^18 || ^19",
@@ -772,6 +773,7 @@
 
     "@pascal-app/plugin-environment": ["@pascal-app/plugin-environment@github:AxiomeCG/environment#40baf63", { "peerDependencies": { "@dgreenheck/ez-tree": "^1.1.0", "@pascal-app/core": ">=1.0.0-beta.6 <2", "@pascal-app/editor": ">=1.0.0-beta.6 <2", "@pascal-app/viewer": ">=1.0.0-beta.6 <2", "@radix-ui/react-tooltip": "^1.2.8", "@react-three/fiber": "^9", "lucide-react": "^1.7.0", "react": "^18 || ^19", "react-colorful": "^5.8.1", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "AxiomeCG-environment-40baf63", "sha512-mb9i4IFq1c62BcAhtGJAKgJHBVQtFYySFW/LzkmnNfnWSOlGdUavoiR4f8cq5Y4xg6MTvGFX0ytO1Urk8wOPPQ=="],
 
+    "@pascal-app/plugin-pool": ["@pascal-app/plugin-pool@github:sudhir9297/pool-pascal-plugin#483a080", { "dependencies": { "three-bvh-csg": "^0.0.18", "three-mesh-bvh": "^0.9.8" }, "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1 || >=1.0.0-beta.0 <2", "@pascal-app/editor": ">=0.9.1 <1 || >=1.0.0-beta.0 <2", "@pascal-app/viewer": ">=0.9.1 <1 || >=1.0.0-beta.0 <2", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.186.0", "zod": "^4", "zustand": "^5" } }, "sudhir9297-pool-pascal-plugin-483a080", "sha512-amY0DNHKXnjBGLyouD78sIKZ+AbQrX67gQEX2N21I4t9o1F07sObYnU77tLsCTc8TQdm/G7YNSWM1w1sEmwhVw=="],
     "@pascal-app/plugin-streetscape": ["@pascal-app/plugin-streetscape@github:sudhir9297/streetscape-pascal-plugin#1c04ec9", { "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "sudhir9297-streetscape-pascal-plugin-1c04ec9", "sha512-X7Zg7wi0ghZRcTtbH5LF6xye493uSZ2ft3AmAQBtguBCU6VCwCexA7pdKDr5AnVxX/JRj2s6JSd/OX4aIZ9Y6Q=="],
 
     "@pascal-app/plugin-trees": ["@pascal-app/plugin-trees@github:pascalorg/plugin-trees#56d978c", { "dependencies": { "@dgreenheck/ez-tree": "^1.1.0" }, "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "pascalorg-plugin-trees-56d978c", "sha512-16VzWot1oadvxCPqsRwMJbaP0a3u5FESFy7F7++pY5wAAFq9JTFwzHvKAsllrY5TZ5TJ7Y5vSqvbmQk8sy8HaA=="],

@@ -250,6 +250,14 @@ export {
   terrainSupportLift,
 } from './lib/terrain-support'
 export {
+  deriveUnit,
+  type UnitDerivation,
+  unassignedZoneIds,
+  unitsForZone,
+  unitWarnings,
+} from './lib/unit-containment'
+export { buildUnitReport, type UnitReport } from './lib/unit-report'
+export {
   closestOnSegment,
   collectLevelWallSegments,
   nearestWallSegment,

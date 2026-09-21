@@ -5,6 +5,8 @@ export type Expr =
   | number
   | string
   | { op: 'add' | 'sub' | 'mul' | 'div' | 'min' | 'max'; args: Expr[] }
+  | { op: 'floor' | 'ceil' | 'round' | 'abs'; args: [Expr] }
+  | { op: 'mod'; args: [Expr, Expr] }
 export type Vec3 = [number, number, number]
 const id = z.string().regex(/^[a-z][a-z0-9_]{0,47}$/)
 const finite = z.number().finite().min(-1000).max(1000)
@@ -15,6 +17,14 @@ const expression: z.ZodType<Expr> = z.lazy(() =>
     z.strictObject({
       op: z.enum(['add', 'sub', 'mul', 'div', 'min', 'max']),
       args: z.array(expression).min(2).max(8),
+    }),
+    z.strictObject({
+      op: z.enum(['floor', 'ceil', 'round', 'abs']),
+      args: z.tuple([expression]),
+    }),
+    z.strictObject({
+      op: z.literal('mod'),
+      args: z.tuple([expression, expression]),
     }),
   ]),
 )
@@ -30,7 +40,9 @@ export const RecipeSchema = z.strictObject({
       tags: z.array(z.string().min(1).max(80)).max(16),
     })
     .optional(),
-  mounting: z.strictObject({ attachTo: z.literal('wall-side'), reference: id }).optional(),
+  mounting: z
+    .strictObject({ attachTo: z.enum(['wall-side', 'ceiling']), reference: id })
+    .optional(),
   surfaces: z
     .array(
       z.strictObject({
@@ -66,7 +78,7 @@ export const RecipeSchema = z.strictObject({
         id,
         label: z.string().min(1).max(60),
         color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-        finish: z.enum(['glass']).optional(),
+        finish: z.enum(['glass', 'metal', 'wood']).optional(),
       }),
     )
     .min(1)
@@ -234,6 +246,25 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
       case 'div':
         result = a.reduce((x, y) => x / y)
         break
+      case 'floor':
+        result = Math.floor(a[0]!)
+        break
+      case 'ceil':
+        result = Math.ceil(a[0]!)
+        break
+      case 'round':
+        result = Math.round(a[0]!)
+        break
+      case 'abs':
+        result = Math.abs(a[0]!)
+        break
+      case 'mod': {
+        const divisor = a[1]!
+        if (divisor <= 0) throw new Error('Modulo divisor must be positive')
+        const remainder = a[0]! % divisor
+        result = remainder < 0 ? remainder + divisor : remainder === 0 ? 0 : remainder
+        break
+      }
       case 'min':
         result = Math.min(...a)
         break
@@ -340,8 +371,14 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
     }
   }
   if (recipe.mounting) {
-    const reference = surfaces.find((s) => s.id === recipe.mounting!.reference)!
-    if (Math.abs(reference.normal[2] + 1) > 1e-6)
+    const reference = surfaces.find((s) => s.id === recipe.mounting!.reference)
+    if (!reference || reference.id.includes(':')) throw new Error('Missing mounting reference')
+    if (recipe.mounting.attachTo === 'ceiling') {
+      if (Math.abs(reference.normal[1] - 1) > 1e-6)
+        throw new Error('Ceiling mounting reference must face local +Y')
+      if (Math.abs(reference.position[1] - max[1]) > 1e-6)
+        throw new Error('Ceiling mounting reference must lie at the top of the design')
+    } else if (Math.abs(reference.normal[2] + 1) > 1e-6)
       throw new Error('Wall-side mounting reference must face local -Z')
   }
   if (!shapes.length) throw new Error('The item must contain geometry')

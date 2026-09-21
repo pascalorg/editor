@@ -111,6 +111,7 @@ export const turbineVentDefinition: NodeDefinition<typeof TurbineVentNode> = {
   handles: turbineVentHandles,
   floorplan: buildTurbineVentFloorplan,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

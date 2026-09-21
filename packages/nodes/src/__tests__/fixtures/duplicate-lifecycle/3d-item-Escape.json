@@ -1,0 +1,98 @@
+[
+  {
+    "stage": "preview",
+    "minted": 2,
+    "writes": 1,
+    "history": 0,
+    "commits": 0,
+    "moving": "fresh-0",
+    "nodes": [
+      {
+        "object": "node",
+        "id": "fresh-1",
+        "type": "item",
+        "name": "Audit box",
+        "parentId": "original-2",
+        "visible": true,
+        "metadata": {
+          "isTransient": true
+        },
+        "position": [-2, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1],
+        "children": [],
+        "asset": {
+          "id": "audit-box",
+          "category": "decor",
+          "name": "Audit box",
+          "thumbnail": "",
+          "source": "library",
+          "src": "/unrenderable-host-audit.glb",
+          "dimensions": [0.1, 0.2, 0.1],
+          "offset": [0, 0, 0],
+          "rotation": [0, 0, 0],
+          "scale": [1, 1, 1]
+        }
+      }
+    ],
+    "preview": [
+      {
+        "id": "fresh-1",
+        "position": [-2, 0, 0]
+      }
+    ]
+  },
+  {
+    "stage": "pointer",
+    "minted": 2,
+    "writes": 1,
+    "history": 0,
+    "commits": 0,
+    "moving": "fresh-0",
+    "nodes": [
+      {
+        "object": "node",
+        "id": "fresh-1",
+        "type": "item",
+        "name": "Audit box",
+        "parentId": "original-2",
+        "visible": true,
+        "metadata": {
+          "isTransient": true
+        },
+        "position": [-2, 0, 0],
+        "rotation": [0, 0, 0],
+        "scale": [1, 1, 1],
+        "children": [],
+        "asset": {
+          "id": "audit-box",
+          "category": "decor",
+          "name": "Audit box",
+          "thumbnail": "",
+          "source": "library",
+          "src": "/unrenderable-host-audit.glb",
+          "dimensions": [0.1, 0.2, 0.1],
+          "offset": [0, 0, 0],
+          "rotation": [0, 0, 0],
+          "scale": [1, 1, 1]
+        }
+      }
+    ],
+    "preview": [
+      {
+        "id": "fresh-1",
+        "position": [0.9999999999999938, 0, 1.9999999999999964]
+      }
+    ]
+  },
+  {
+    "stage": "Escape",
+    "minted": 2,
+    "writes": 3,
+    "history": 0,
+    "commits": 0,
+    "moving": null,
+    "nodes": [],
+    "preview": []
+  }
+]

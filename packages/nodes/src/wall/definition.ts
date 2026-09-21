@@ -103,6 +103,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     selectable: { hitVolume: 'bbox' },
     // Front + back faces host items (paintings, shelves, switches).
     surfaces: {
+      hosting: false,
       top: {
         height: (node, { nodes }) => {
           const wall = node as WallNodeType

@@ -110,7 +110,8 @@ test('Maxi 8× endpoint undo/redo matches full-level graph and preserves unrelat
   useScene.setState({ nodes: moved })
   expect(redoGraph).toEqual(graph(useScene.getState().nodes))
   fullRedo.stop()
-})
+  // The 8× fixture takes 5–6 s on the shared CI runner, past bun's 5 s default.
+}, 30_000)
 
 type Nodes = Record<AnyNodeId, AnyNode>
 type Transition = { before: Nodes; target: Nodes; actual: Nodes }

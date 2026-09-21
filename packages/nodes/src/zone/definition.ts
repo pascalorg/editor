@@ -18,6 +18,7 @@ import { zoneParametrics } from './parametrics'
 import { zoneQuickMeasurement } from './quick-measurement'
 import { buildRoomFloorplanSchedule } from './room-documentation'
 import { ZoneNode } from './schema'
+import { buildingUnitsForZone } from './unit-membership'
 
 /**
  * Zone — Stage A. Custom-behavior escape hatch: zone uses TSL shader
@@ -67,6 +68,7 @@ export const zoneDefinition: NodeDefinition<typeof ZoneNode> = {
   // No dirty consumer rebuilds this kind — see NodeDefinition.dirtyTracking.
   dirtyTracking: false,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),
@@ -76,7 +78,12 @@ export const zoneDefinition: NodeDefinition<typeof ZoneNode> = {
     priority: 4,
   },
   floorplan: buildZoneFloorplan,
-  floorplanDependencies: (node) => (node.autoFromWalls ? node.boundaryWallIds : []),
+  // Every unit under the building, not just the current owner: a zone that
+  // joins its first unit has no owner to depend on until the unit changes.
+  floorplanDependencies: (node, nodes) => [
+    ...(node.autoFromWalls ? node.boundaryWallIds : []),
+    ...buildingUnitsForZone(node, (id) => nodes[id]).map((unit) => unit.id),
+  ],
   // 2D body move — centroid-pivot polygon mover (same as slab / ceiling).
   // Without this, zone fell through to the overlay's generic free-translate
   // path, which committed a `position` field zone has no schema for, so the

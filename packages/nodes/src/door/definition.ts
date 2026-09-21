@@ -220,6 +220,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   parametrics: doorParametrics,
   handles: doorHandles,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

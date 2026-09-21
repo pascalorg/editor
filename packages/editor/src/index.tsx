@@ -318,6 +318,7 @@ export {
   ViewerStageSwitcher,
   type ViewerStageSwitcherProps,
 } from './components/viewer/viewer-stage-switcher'
+export { ViewerUnitsPanel } from './components/viewer/viewer-units-panel'
 export {
   WalkthroughHud,
   type WalkthroughHudProps,
@@ -360,6 +361,7 @@ export {
   continuationContextOf,
   nextContinuation,
 } from './lib/continuation'
+export { canDirectMoveNode } from './lib/direct-manipulation'
 export { createEditorApi } from './lib/editor-api'
 export {
   clearStructuralElevationGuide,
@@ -379,6 +381,7 @@ export {
   resolveElevatorSupportLevelId,
   resolveElevatorSupportY,
 } from './lib/elevator-support'
+export type { ExportTextureUtils } from './lib/export-texture-utils'
 export { getFloatingMenuScale } from './lib/floating-menu-scale'
 // Floor-plan stair helpers — the cumulative-transform walk
 // (`computeFloorplanStairSegmentTransforms`) and the rich segment-entry
@@ -527,6 +530,7 @@ export type {
   ModelExportFormat,
   ModelExportOptions,
 } from './lib/model-export'
+export { cyclePaintScope, type PaintHoverInfo, paintScopeLabel } from './lib/paint-scope'
 export { consumePlacementDragRelease } from './lib/placement-drag-release'
 export {
   addFreshPlacementMetadata,
@@ -560,7 +564,7 @@ export { hasRoofFaceChildOverlap, type RoofWallHit, resolveRoofWallHit } from '.
 export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor } from './lib/scene'
 export { movementSfxStepKey } from './lib/sfx/movement-tick'
-export { triggerSFX } from './lib/sfx-bus'
+export { emitDeleteSFX, triggerSFX } from './lib/sfx-bus'
 export { playSFX, type SFXName, type SFXPlaybackOptions } from './lib/sfx-player'
 export {
   clearSlabSnapFeedback,
@@ -573,12 +577,14 @@ export {
   type SlabPlanSnapResult,
 } from './lib/slab-plan-snap'
 export {
+  cycleSnappingModeIn,
   getSnappingModeLabel,
   resolveSnapFlags,
   type SnapContext,
   type SnapFlags,
   type SnappingMode,
 } from './lib/snapping-mode'
+export { getSpatialPointerId, spatialPointerInput } from './lib/spatial-pointer-input'
 export { duplicateStairSubtree } from './lib/stair-duplication'
 export {
   getBuildingLevelsForLevel,
@@ -588,6 +594,7 @@ export {
   resolveStairPlacementLevelId,
   resolveStairToLevelId,
 } from './lib/stair-levels'
+export { surfaceAttachmentId, surfaceFramePose, updateSurfaceNode } from './lib/surface-attachment'
 export {
   clearSurfacePlanSnapFeedback,
   resolveSurfacePlanPointSnap,
@@ -596,11 +603,15 @@ export {
   type SurfacePlanSnapResult,
 } from './lib/surface-plan-snap'
 export {
+  brushRadiusRange,
+  clipTerrainPatchToSite,
+  commitStroke,
   fieldExtentForSite,
   flattenSite,
   resetSiteTerrain,
   resolveFlattenTarget,
   sculptFieldForSite,
+  terrainPointInsideSite,
 } from './lib/terrain-sculpt'
 export { exportSceneToUsdz, type UsdzExportOptions } from './lib/usdz-export'
 // `cn` (twMerge + clsx) — used by kind-owned panels in `@pascal-app/
@@ -726,16 +737,3 @@ export {
   type WallSnapKind,
   type WallSnapPoint,
 } from './store/use-wall-snap-indicator'
-
-export { canDirectMoveNode } from './lib/direct-manipulation'
-export { cyclePaintScope, paintScopeLabel, type PaintHoverInfo } from './lib/paint-scope'
-export { cycleSnappingModeIn } from './lib/snapping-mode'
-export { emitDeleteSFX } from './lib/sfx-bus'
-export {
-  brushRadiusRange,
-  clipTerrainPatchToSite,
-  commitStroke,
-  terrainPointInsideSite,
-} from './lib/terrain-sculpt'
-
-export { getSpatialPointerId, spatialPointerInput } from './lib/spatial-pointer-input'

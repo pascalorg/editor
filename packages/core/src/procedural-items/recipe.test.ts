@@ -4,14 +4,15 @@ import { ProceduralItemNode } from './node'
 import { evaluateRecipe, parseRecipe, sweepRecipe } from './recipe'
 
 describe('procedural recipe contract', () => {
-  test('slots accept only optional glass finish and still require a color', () => {
+  test('slots accept optional curated finishes and still require a color', () => {
     const recipe = structuredClone(shelfRecipe)
     expect(parseRecipe(recipe)).toEqual(recipe)
-    recipe.slots[0]!.finish = 'glass'
-    expect(parseRecipe(recipe).slots[0]!.finish).toBe('glass')
+    for (const finish of ['glass', 'metal', 'wood'] as const) {
+      recipe.slots[0]!.finish = finish
+      expect(parseRecipe(recipe).slots[0]!.finish).toBe(finish)
+    }
     for (const slot of [
-      { ...recipe.slots[0], finish: 'metal' },
-      { ...recipe.slots[0], finish: 'wood' },
+      { ...recipe.slots[0], finish: 'plastic' },
       { ...recipe.slots[0], texture: 'glass' },
       { ...recipe.slots[0], color: undefined },
     ]) {

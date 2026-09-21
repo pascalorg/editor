@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type Cursor,
+  cascadeDirty,
   createSceneApi,
   type HandleDragModifiers,
   runAsSingleSceneHistoryStep,
@@ -15,8 +16,8 @@ import { type ThreeEvent, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { type Camera, type Object3D, type Plane, type Ray, Vector2, type Vector3 } from 'three'
 import { isHistoryShortcut } from '../../../lib/history'
-import { getSpatialPointerId, spatialPointerInput } from '../../../lib/spatial-pointer-input'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { getSpatialPointerId, spatialPointerInput } from '../../../lib/spatial-pointer-input'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
 import { commitHandleDragPatch } from './handle-drag-history'
 
@@ -207,7 +208,8 @@ export function useHandleDrag(args: UseHandleDragArgs) {
       lastPatch = patch
       useLiveNodeOverrides.getState().set(overrideId, patch as Record<string, unknown>)
       if (markDirty) {
-        useScene.getState().markDirty(overrideId)
+        for (const id of cascadeDirty(overrideId, { scene: createSceneApi(useScene) }))
+          useScene.getState().markDirty(id)
       }
     }
 
@@ -232,7 +234,8 @@ export function useHandleDrag(args: UseHandleDragArgs) {
     const clearOverride = () => {
       useLiveNodeOverrides.getState().clear(overrideId)
       if (markDirty) {
-        useScene.getState().markDirty(overrideId)
+        for (const id of cascadeDirty(overrideId, { scene: createSceneApi(useScene) }))
+          useScene.getState().markDirty(id)
       }
     }
 

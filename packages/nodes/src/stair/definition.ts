@@ -458,6 +458,7 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
   },
 
   capabilities: {
+    surfacePlacement: 'floor-only',
     selectable: { hitVolume: 'bbox' },
     // A stair has no centred box footprint: straight = a cumulative
     // `stair-segment` chain, curved / spiral = an annular sector. Hand the
@@ -488,6 +489,7 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
   parametrics: stairParametrics,
   handles: stairHandles,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

@@ -189,6 +189,19 @@
       }
     },
     {
+      "name": "create_unit",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it creates a new unit node under a building in the connected Pascal scene.",
+        "destructiveHint": "Its intended operation adds new modeled state (a unit grouping) without deleting or replacing existing Pascal scene or project state.",
+        "openWorldHint": "It operates on the connected Pascal scene, project, and configured catalog data without accessing the public internet."
+      }
+    },
+    {
       "name": "create_wall",
       "annotations": {
         "readOnlyHint": false,
@@ -449,6 +462,19 @@
       }
     },
     {
+      "name": "list_units",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It lists units already present in the connected Pascal scene and derives their reports without changing scene or project state.",
+        "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
+        "openWorldHint": "It operates only on data supplied by or already available inside the connected Pascal service and does not access the public internet."
+      }
+    },
+    {
       "name": "load_scene",
       "annotations": {
         "readOnlyHint": false,
@@ -550,6 +576,19 @@
         "readOnlyHint": "It searches Pascal asset catalog data available to the connected service without placing an asset or changing a scene.",
         "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
         "openWorldHint": "It operates only on data supplied by or already available inside the connected Pascal service and does not access the public internet."
+      }
+    },
+    {
+      "name": "set_unit_members",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it rewrites the member zone list of an existing unit in the connected Pascal scene.",
+        "destructiveHint": "It replaces the unit's whole member list, so a wrong call can drop zones from the unit; it never deletes zones or other modeled state.",
+        "openWorldHint": "It operates on the connected Pascal scene, project, and configured catalog data without accessing the public internet."
       }
     },
     {
