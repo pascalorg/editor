@@ -94,6 +94,15 @@ import { resolveGenericFloorplanGridEventPoint } from '../../lib/floorplan-grid-
 import type { EditorGridEvent } from '../../lib/grid-event-presentation'
 import { groundHeightAt } from '../../lib/ground-surface'
 import { guideEmitter } from '../../lib/guide-events'
+import {
+  acceptsKeyboardPan,
+  clearKeyboardPanKeys,
+  isKeyboardPanKey,
+  type KeyboardPanState,
+  keyboardPanDirection,
+  keyboardPanSpeed,
+  setKeyboardPanKey,
+} from '../../lib/keyboard-pan'
 import { measurementHint, parseMeasurement } from '../../lib/measurement-parser'
 import { formatLinearMeasurement, linearUnitToMeters } from '../../lib/measurements'
 import { sfxEmitter } from '../../lib/sfx-bus'
@@ -5036,6 +5045,7 @@ export function FloorplanPanel({
   // the user closes and re-opens the 2D editor instead of restoring the
   // stale viewport from before they closed it.
   const isFloorplanOpen = useEditor((state) => state.isFloorplanOpen)
+  const viewMode = useEditor((state) => state.viewMode)
   // Mirror for callbacks that fire outside React's render (the per-frame
   // navigation-pose subscriber): when the 2D panel is hidden (`display:none` in
   // 3D mode) it must NOT re-render on every camera-zoom frame.
@@ -7783,6 +7793,116 @@ export function FloorplanPanel({
     },
     [publishFloorplanNavigationPose],
   )
+
+  // WASD and the orbit buttons in 2D-only view. The 3D canvas is paused there
+  // (`renderPaused`), so the plan drives them itself — same keys and speed as
+  // the camera — and hands the pose to 3D when the move ends.
+  const keyboardPanKeysRef = useRef<KeyboardPanState>({
+    forward: false,
+    backward: false,
+    left: false,
+    right: false,
+  })
+  useEffect(() => {
+    if (viewMode !== '2d') return
+    const keys = keyboardPanKeysRef.current
+    let frame: number | null = null
+    let lastTime: number | null = null
+    const sceneRotationDeg = (userRotationDeg: number) =>
+      FLOORPLAN_VIEW_ROTATION_DEG + userRotationDeg - buildingRotationDeg
+    const step = (time: number) => {
+      const { horizontal, vertical } = keyboardPanDirection(keys)
+      const viewport = latestViewportRef.current ?? latestFittedViewportRef.current
+      if ((horizontal === 0 && vertical === 0) || !viewport) {
+        frame = null
+        lastTime = null
+        commitFloorplanPan()
+        return
+      }
+      const elapsed = lastTime === null ? 0 : Math.min((time - lastTime) / 1000, 0.05)
+      lastTime = time
+      const distance =
+        (keyboardPanSpeed(viewport.width) * elapsed) / Math.hypot(horizontal, vertical)
+      const next = {
+        centerX: viewport.centerX + horizontal * distance,
+        centerY: viewport.centerY - vertical * distance,
+        width: viewport.width,
+      }
+      const userRotationDeg = latestFloorplanUserRotationDegRef.current
+      floorplanViewportInteractionInProgressRef.current = true
+      applyFloorplanViewportImperatively(next)
+      floorplanPanPoseRef.current = {
+        localCenter: rotateSvgPoint(
+          { x: next.centerX, y: next.centerY },
+          -sceneRotationDeg(userRotationDeg),
+        ),
+        userRotationDeg,
+        viewWidth: next.width,
+      }
+      frame = requestAnimationFrame(step)
+    }
+    const start = () => {
+      if (frame === null) frame = requestAnimationFrame(step)
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(isKeyboardPanKey(event.code) && acceptsKeyboardPan(event))) return
+      if (setKeyboardPanKey(keys, event.code, true)) start()
+      event.preventDefault()
+      event.stopPropagation()
+    }
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (isKeyboardPanKey(event.code) && setKeyboardPanKey(keys, event.code, false)) {
+        event.preventDefault()
+        event.stopPropagation()
+      }
+    }
+    const onBlur = () => clearKeyboardPanKeys(keys)
+    // Same rule as the 3D buttons: snap to the nearest quarter turn, then turn one more.
+    const orbit = (clockwise: boolean) => {
+      const viewport = latestViewportRef.current ?? latestFittedViewportRef.current
+      if (!viewport) return
+      const userRotationDeg = latestFloorplanUserRotationDegRef.current
+      const quarter = Math.PI / 2
+      const azimuth =
+        Math.round(cameraAzimuthFromFloorplanRotation(userRotationDeg) / quarter) * quarter +
+        (clockwise ? -quarter : quarter)
+      const nextRotationDeg = floorplanRotationFromCameraAzimuth(azimuth, userRotationDeg)
+      const localCenter = rotateSvgPoint(
+        { x: viewport.centerX, y: viewport.centerY },
+        -sceneRotationDeg(userRotationDeg),
+      )
+      smoothFloorplanNavigationView(localCenter, nextRotationDeg, viewport.width)
+      publishFloorplanNavigationPose(localCenter, nextRotationDeg, viewport.width)
+    }
+    const orbitClockwise = () => orbit(true)
+    const orbitCounterClockwise = () => orbit(false)
+    document.addEventListener('keydown', onKeyDown)
+    document.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onBlur)
+    emitter.on('camera-controls:orbit-cw', orbitClockwise)
+    emitter.on('camera-controls:orbit-ccw', orbitCounterClockwise)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      document.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onBlur)
+      emitter.off('camera-controls:orbit-cw', orbitClockwise)
+      emitter.off('camera-controls:orbit-ccw', orbitCounterClockwise)
+      // A key released while 3D owns the keys would otherwise still read as
+      // held when the plan takes them back; the camera clears its own the same way.
+      clearKeyboardPanKeys(keys)
+      if (frame !== null) {
+        cancelAnimationFrame(frame)
+        commitFloorplanPan()
+      }
+    }
+  }, [
+    applyFloorplanViewportImperatively,
+    buildingRotationDeg,
+    commitFloorplanPan,
+    publishFloorplanNavigationPose,
+    smoothFloorplanNavigationView,
+    viewMode,
+  ])
 
   useLayoutEffect(() => {
     flushFloorplanRotationPresentationRestore(pendingFloorplanRotationRestoreRef)
