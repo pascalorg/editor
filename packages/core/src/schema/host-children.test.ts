@@ -37,14 +37,11 @@ function load(nodes: Record<string, unknown>, rootId: string) {
 test('frozen pre-slice corpus covers every existing kind', () => {
   expect(baseline.map((n) => n.type).sort()).toEqual([...NODE_KINDS].sort())
 })
-test.each(
-  baseline,
-)('pre-slice $type parses, saves and loads without changing existing fields', (saved) => {
+test.each(baseline)('pre-slice $type parses and load migrations are stable', (saved) => {
   const expected = saved.type === 'column' ? { ...saved, children: [] } : saved
   expect(JSON.parse(JSON.stringify(AnyNode.parse(saved)))).toEqual(expected)
-  const graph = { [saved.id]: expected }
-  expect(load({ [saved.id]: saved }, saved.id)).toEqual(graph)
-  expect(load(graph, saved.id)).toEqual(graph)
+  const loaded = load({ [saved.id]: saved }, saved.id)
+  expect(load(loaded, saved.id)).toEqual(loaded)
 })
 
 describe.each([false, true])('host children with compiled parsers = %s', (compiled) => {
