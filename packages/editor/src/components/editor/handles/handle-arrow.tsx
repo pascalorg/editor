@@ -1,7 +1,6 @@
 'use client'
 
 import { type Cursor, emitter, sceneRegistry } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
 import type { ThreeEvent } from '@react-three/fiber'
 import { type ReactNode, useEffect, useMemo, useRef } from 'react'
 import {
@@ -26,6 +25,7 @@ import { EDITOR_LAYER } from '../../../lib/constants'
 import { EDITOR_HANDLE_HIT_AREA_USER_DATA_KEY } from '../../../lib/direct-manipulation'
 import { createSpatialDragPlane, intersectSpatialDragPlane } from '../../../lib/spatial-drag-plane'
 import { getSpatialPointerId, spatialPointerInput } from '../../../lib/spatial-pointer-input'
+import { getActiveBuildingId } from '../../../lib/world-grid-snap'
 import useEditor from '../../../store/use-editor'
 
 // While a press-drag move is in flight (`placementDragMode`), the move tool
@@ -505,7 +505,7 @@ export function InvisibleHandleHitArea({
         setPointerCapture?: (pointerId: number) => void
       }
       pointerTarget.setPointerCapture?.(event.pointerId)
-      const buildingId = useViewer.getState().selection.buildingId
+      const buildingId = getActiveBuildingId()
       const building = buildingId ? sceneRegistry.nodes.get(buildingId) : undefined
       building?.updateWorldMatrix(true, false)
       const inverse = building?.matrixWorld.clone().invert()
