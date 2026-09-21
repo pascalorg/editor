@@ -138,6 +138,12 @@ Concretely, door/window placement/move keeps these in lockstep across `{door,win
 
 Tells that you've broken parity: a sound/guide/snap that fires in 3D but is silent in 2D (or vice-versa), or a fix landed in one move file but not its sibling. The two move files are deliberately near-mirrors; diff them when in doubt.
 
+**Navigation is part of parity.** Movement learned in one view works in the other (WASD, Space + drag, middle drag, wheel, orbit), and split view keeps both in sync through `navigationSyncPose`. In 2D-only view the 3D canvas is paused (`renderPaused`), so nothing driven from its frame loop reaches the plan: the plan owns WASD and the orbit buttons there itself (`components/editor/floorplan-panel.tsx`, sharing `lib/keyboard-pan.ts` with `custom-camera-controls.tsx` — physical keys, same guards and speed) and publishes the pose to 3D when the move ends, while the camera stands down. A navigation input that only exists on the camera side is a 2D regression waiting to happen.
+
+**Group selection acts on the selection.** Group move / rotate / duplicate transform the selected participants only; connected walls outside the selection stretch at their shared ends (`LinkedNeighbor`). Their footprint comes from plan data, never from meshes: `groupPlanBounds` (`components/editor/group-transform-shared.ts`) reads wall outlines, polygon rings and fence runs in the level frame, and measures meshes only for placed objects (fresh bounds, `userData.placeholder` skipped, anchor as fallback). A world-space mesh box mapped into the level frame lands beside the meshes under a rotated building, and in 2D-only view meshes may be unbuilt. The 2D dashed box, the 3D rotate gizmo and keyboard R/T all pivot on that box's centre.
+
+**A room's slab and ceiling deselect together in the plan.** The floor plan draws the ceiling as an unfilled outline under the walls (`fill="none"` is click-through, see below), so a marquee can select it but a click can't reach it. Removing either surface from the selection removes its same-outline counterpart: slab and ceiling declare `extensions['pascal:editor/floorplan'].selectionCounterparts` (`packages/nodes/src/shared/surface-counterparts.ts`) and `applyEntrySelection` asks the registry, so the plan never names a kind. Adding stays single, and 3D keeps single toggles because each surface is clickable there.
+
 Plan-view surface movement retains only the original host while the footprint centre
 is supported. Exiting commits a level-frame floor pose with support re-elected and
 attachment links removed atomically. Plan view never acquires a new host or cycles
@@ -304,6 +310,14 @@ useLiveTransforms.getState().set(node.id, {
 ```
 
 If the tool *also* rotates the node during the drag, it should drive `rotation` from the current tool state — not from 0, not from the stale node value.
+
+## Wall lifecycle: draw, split, merge
+
+Walls are drawn as a line chain or a rectangle (`R` toggles inside the wall tool; the HUD's Shape chip cycles the same `useWallDrawingMode` store, `packages/nodes/src/wall/drawing-mode.ts`). In 2D the rectangle tool only claims clicks and publishes its first corner to `useFloorplanDraftPreview`; the panel's linear draft layer draws the four mitered walls with the line draft's plates and guides, so cursor, snapping and alignment are the line wall's own (`packages/nodes/src/wall/floorplan-tool.tsx`).
+
+Split is a HUD-driven loop cut that lives entirely in `packages/nodes/src/wall/`: `split-session.ts` opens the wall's own `reshaping` scope (`reshape: 'split'`, `driver: 'tool'`, which resolves to the `polygon` snap context — see `interaction-scope.md`) and owns every transition of the `split-store.ts` draft; scrolling sets 1–32 cuts, a single cut follows the pointer with the snapping modes, several divide the wall evenly, and a click commits them as one undo step through `planWallDivisions` (core). The editor mounts it through kind-agnostic seams only: `def.affordanceTools.split` (3D markers, `split-tool.tsx`), `extensions['pascal:editor/floorplan'].reshapeLayers.split` (the plan layer, `split-floorplan-layer.tsx`, mounted by `FloorplanRegisteredToolLayer` while the scope runs), `def.affordanceHints.split` (the HUD's cut-count chip and hints, rendered by `HelperManager` like `toolHints`), and `actionMenu.actions` (`actions.tsx`, the Split and Merge buttons `NodeActionMenu` renders for whichever kinds are selected). Any reshape name without a dedicated arm in `ToolManager` resolves the same way, so the next kind-owned reshape needs no editor change. Merge is the inverse (core `planWallMerge`): selected walls that continue each other join into the wall with the most attachments, openings keep their world position, rooms keep one boundary reference; refusals name the difference in the button's tooltip. The join rule (`systems/wall/wall-merge.ts`) is shared with the delete heal.
+
+Modes and parameters of these tools live on keys, the wheel and the HUD (`ToolHint.chip`), not in sidebar option rows or floating panels.
 
 ## SVG `fill="none"` is click-through
 

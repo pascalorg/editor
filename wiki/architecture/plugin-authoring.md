@@ -47,6 +47,7 @@ The core `Plugin` manifest owns semantic node definitions (and registry-backed i
 - `floorplan` — pure `(node, ctx) => FloorplanGeometry` for the 2D layer.
 - `floorplanAffordances` / `floorplanMoveTarget` — 2D drag handlers.
 - `tool` / `affordanceTools` — 3D placement + move tools (lazy components).
+- `affordanceHints` — HUD hints for a kind-owned reshape, keyed like `affordanceTools`; the floorplan extension's `reshapeLayers` (its 2D sibling) and `actionMenu.actions` (action-menu buttons) complete the set.
 - `presentation` — palette / sidebar metadata (`label`, `icon`, `paletteSection`, etc.).
 - `mcp` — MCP tool descriptions for AI consumers.
 - `relations` / `computeLevelData` — sibling lookups + level-batch precompute.
