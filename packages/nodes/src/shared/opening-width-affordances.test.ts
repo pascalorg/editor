@@ -28,27 +28,30 @@ afterEach(() => {
 describe('opening width floor-plan affordances', () => {
   for (const kind of ['door', 'window'] as const) {
     test(`${kind} previews through a live override and writes the scene only on commit`, () => {
-      const wall = WallNode.parse({
-        id: `wall_${kind}`,
-        start: [0, 0],
-        end: [6, 0],
-      })
+      const wallId = `wall_${kind}`
+      const openingId = `${kind}_width-live`
       const opening =
         kind === 'door'
           ? DoorNode.parse({
-              id: 'door_width-live',
-              parentId: wall.id,
-              wallId: wall.id,
+              id: openingId,
+              parentId: wallId,
+              wallId,
               position: [2, 1.05, 0],
               width: 1,
             })
           : WindowNode.parse({
-              id: 'window_width-live',
-              parentId: wall.id,
-              wallId: wall.id,
+              id: openingId,
+              parentId: wallId,
+              wallId,
               position: [2, 1.05, 0],
               width: 1,
             })
+      const wall = WallNode.parse({
+        id: wallId,
+        children: [opening.id],
+        start: [0, 0],
+        end: [6, 0],
+      })
       const nodes = { [wall.id]: wall, [opening.id]: opening }
       useScene.setState({ nodes } as never)
       const affordance = kind === 'door' ? doorWidthAffordance : windowWidthAffordance
