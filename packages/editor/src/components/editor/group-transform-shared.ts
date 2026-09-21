@@ -1,11 +1,15 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  calculateLevelMiters,
+  getWallPlanFootprint,
   nodeRegistry,
   resolveBuildingForLevel,
   sceneRegistry,
+  useScene,
+  type WallNode,
 } from '@pascal-app/core'
-import { Box3, Matrix4 } from 'three'
+import { Box3, type BufferGeometry, Matrix4, type Object3D, Vector3 } from 'three'
 
 // Shared plumbing for the group transform gizmos (rotate + move). Both operate
 // on the same multi-selection: classify each participant by how its placement
@@ -242,48 +246,6 @@ export function collectParticipants(
   return { starts, links }
 }
 
-// Grow a selection to the full connected component of walls/fences: any
-// endpoint node transitively reachable through shared junctions from a selected
-// endpoint node joins in, so the whole rigid structure transforms as one piece
-// (rather than tearing/stretching at the boundary). Non-endpoint selections
-// (items, columns) pass through unchanged.
-export function expandToComponent(
-  selectedIds: string[],
-  sceneNodes: Record<string, AnyNode | undefined>,
-  levelId: string | null,
-): string[] {
-  const endpoints: { id: string; start: Vec2; end: Vec2 }[] = []
-  for (const [id, node] of Object.entries(sceneNodes)) {
-    if (classifyParticipant(node, levelId, sceneNodes) === 'endpoint') {
-      const n = node as AnyNode & { start: Vec2; end: Vec2 }
-      endpoints.push({ id, start: [n.start[0], n.start[1]], end: [n.end[0], n.end[1]] })
-    }
-  }
-  const included = new Set(selectedIds)
-  if (!endpoints.some((e) => included.has(e.id))) return selectedIds
-
-  let changed = true
-  while (changed) {
-    changed = false
-    for (const e of endpoints) {
-      if (included.has(e.id)) continue
-      const touches = endpoints.some(
-        (o) =>
-          included.has(o.id) &&
-          (nearPoint(e.start, o.start) ||
-            nearPoint(e.start, o.end) ||
-            nearPoint(e.end, o.start) ||
-            nearPoint(e.end, o.end)),
-      )
-      if (touches) {
-        included.add(e.id)
-        changed = true
-      }
-    }
-  }
-  return Array.from(included)
-}
-
 // Per-node field patch, keyed for `useLiveNodeOverrides.setMany` during a live
 // preview and for the single batched `updateNodes` on commit.
 export type GroupPatch = readonly [AnyNodeId, Record<string, unknown>]
@@ -389,9 +351,24 @@ export function rotateGroupSnapshots(
 
 export type GroupPlanBounds = { minX: number; minZ: number; maxX: number; maxZ: number }
 
-// Level-frame XZ extents of the participant DATA — the mesh-free sibling of
-// `computeGroupBox`, used when meshes aren't mounted yet.
-function participantExtents(starts: ParticipantStart[]): GroupPlanBounds | null {
+const planCorner = new Vector3()
+const planMatrix = new Matrix4()
+
+/**
+ * The selection's footprint in the level frame — the plan's own coordinates,
+ * measured from node data wherever the plan draws from data: walls by their
+ * mitered outline, polygon hosts (slab, ceiling, zone) by their polygon, fences
+ * by their run. Only placed objects (items, columns, stairs…) measure their
+ * meshes: bounds go through `frameInv × matrixWorld` (a world box can't be
+ * carried into a rotated building's frame), placeholders — unbuilt while the
+ * 3D scene is paused in 2D-only view — are skipped, and a node with no built
+ * mesh falls back to its anchor.
+ */
+export function groupPlanBounds(
+  starts: ParticipantStart[],
+  frameInv: Matrix4,
+): GroupPlanBounds | null {
+  const nodes = useScene.getState().nodes
   let minX = Number.POSITIVE_INFINITY
   let minZ = Number.POSITIVE_INFINITY
   let maxX = Number.NEGATIVE_INFINITY
@@ -402,43 +379,72 @@ function participantExtents(starts: ParticipantStart[]): GroupPlanBounds | null 
     maxX = Math.max(maxX, x)
     maxZ = Math.max(maxZ, z)
   }
+  const miters = new Map<string | null, ReturnType<typeof calculateLevelMiters>>()
+  const wallOutline = (wall: WallNode) => {
+    const levelId = wall.parentId ?? null
+    let levelMiters = miters.get(levelId)
+    if (!levelMiters) {
+      levelMiters = calculateLevelMiters(
+        Object.values(nodes).filter(
+          (node): node is WallNode => node?.type === 'wall' && (node.parentId ?? null) === levelId,
+        ),
+      )
+      miters.set(levelId, levelMiters)
+    }
+    return getWallPlanFootprint(wall, levelMiters)
+  }
+  const measureMeshes = (id: string) => {
+    const obj = sceneRegistry.nodes.get(id as AnyNodeId)
+    if (!obj) return false
+    obj.updateWorldMatrix(true, true)
+    let found = false
+    obj.traverse((child: Object3D) => {
+      const geometry = (child as Object3D & { geometry?: BufferGeometry }).geometry
+      if (!child.visible || !geometry || geometry.userData.placeholder) return
+      // Always fresh: geometries rebuilt in place keep a stale cached box.
+      geometry.computeBoundingBox()
+      const bounds = geometry.boundingBox
+      if (!bounds || bounds.isEmpty()) return
+      planMatrix.multiplyMatrices(frameInv, child.matrixWorld)
+      for (let corner = 0; corner < 8; corner++) {
+        planCorner
+          .set(
+            corner & 1 ? bounds.max.x : bounds.min.x,
+            corner & 2 ? bounds.max.y : bounds.min.y,
+            corner & 4 ? bounds.max.z : bounds.min.z,
+          )
+          .applyMatrix4(planMatrix)
+        reach(planCorner.x, planCorner.z)
+      }
+      found = true
+    })
+    return found
+  }
   for (const s of starts) {
+    const node = nodes[s.id]
     if (s.kind === 'endpoint') {
+      const outline = node?.type === 'wall' ? wallOutline(node) : []
+      if (outline.length > 0) {
+        for (const point of outline) reach(point.x, point.y)
+        continue
+      }
       reach(s.start[0], s.start[1])
       reach(s.end[0], s.end[1])
+      const path = (node as { path?: unknown } | undefined)?.path
+      if (isVec2Array(path)) for (const [x, z] of path) reach(x, z)
     } else if (s.kind === 'polygon') {
-      for (const [x, z] of s.polygon) {
-        reach(x, z)
-      }
-    } else {
+      for (const [x, z] of s.polygon) reach(x, z)
+    } else if (!measureMeshes(s.id)) {
       reach(s.position[0], s.position[2])
     }
   }
-  if (!Number.isFinite(minX)) return null
-  return { minX, minZ, maxX, maxZ }
+  return Number.isFinite(minX) ? { minX, minZ, maxX, maxZ } : null
 }
 
-// The one footprint every group transform measures itself against: the
-// selection's mounted meshes (world box, converted into the level frame) with
-// the participant DATA extents as the fallback when the meshes aren't up yet
-// (Duplicate picks up its clones a frame before their renderers mount). Anchor
-// points alone sit metres inside a wide selection's real footprint, so a
-// gesture that pivots on the data extents orbits a different point than the
-// idle keyboard rotate and the rotate gizmos, which both use the mesh box.
-export function groupPlanBounds(
-  box: Box3 | null,
-  starts: ParticipantStart[],
-  frameInv: Matrix4,
-): GroupPlanBounds | null {
-  if (!box) return participantExtents(starts)
-  const min = box.min.clone().applyMatrix4(frameInv)
-  const max = box.max.clone().applyMatrix4(frameInv)
-  return {
-    minX: Math.min(min.x, max.x),
-    minZ: Math.min(min.z, max.z),
-    maxX: Math.max(min.x, max.x),
-    maxZ: Math.max(min.z, max.z),
-  }
+/** `groupPlanBounds` for a selection: the dashed boxes and gizmos measure this. */
+export function computeGroupPlanBox(ids: string[], levelId: string | null): GroupPlanBounds | null {
+  const { starts } = collectParticipants(ids, useScene.getState().nodes, levelId)
+  return groupPlanBounds(starts, levelFrame(levelId).inverse)
 }
 
 export const planBoundsCenter = (b: GroupPlanBounds): Vec2 => [
