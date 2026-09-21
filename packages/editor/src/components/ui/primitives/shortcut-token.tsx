@@ -20,6 +20,10 @@ const MOUSE_SHORTCUTS = {
     icon: 'ph:mouse-right-click-fill',
     label: 'Right click',
   },
+  Scroll: {
+    icon: 'ph:mouse-scroll-fill',
+    label: 'Scroll',
+  },
 } as const
 
 // The platform-agnostic command modifier. Both Cmd and Ctrl bind the action; we

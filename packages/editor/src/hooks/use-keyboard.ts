@@ -176,7 +176,8 @@ export const runHistoryShortcut = (direction: 'undo' | 'redo') => {
   return true
 }
 
-export const isToolOwnedRotation = () => {
+/** Whether an armed tool owns the rotation key (`R` or `T`) instead of the selection. */
+export const isToolOwnedRotation = (key: 'r' | 't' = 'r') => {
   const editor = useEditor.getState()
   const moving = getMovingNode()
   if (
@@ -196,7 +197,10 @@ export const isToolOwnedRotation = () => {
       // exist. Without this check, selecting an existing item in the 2D plan
       // while the item tool is armed silently drops the global rotate key.
       (editor.tool === 'item' && editor.selectedItem !== null) ||
-      editor.tool === 'lean-to-extension')
+      editor.tool === 'lean-to-extension' ||
+      // R toggles the wall tool between line and rectangle drawing; T stays
+      // the selection's.
+      (editor.tool === 'wall' && key === 'r'))
   )
 }
 
@@ -619,7 +623,7 @@ export const useKeyboard = ({
       } else if (
         (e.key === 't' || e.key === 'T') &&
         !isVersionPreviewMode &&
-        !isToolOwnedRotation() &&
+        !isToolOwnedRotation('t') &&
         canRunGlobalRotationShortcut()
       ) {
         // Rotate selected node counter-clockwise

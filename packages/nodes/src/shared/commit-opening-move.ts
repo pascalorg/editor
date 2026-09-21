@@ -1,4 +1,4 @@
-import { type AnyNodeId, type DoorNode, type WindowNode, useScene } from '@pascal-app/core'
+import { type AnyNodeId, type DoorNode, useScene, type WindowNode } from '@pascal-app/core'
 
 /** A move changes placement, not persistent ownership (Array, assets, etc.). */
 export function commitOpeningMove(id: AnyNodeId, patch: Partial<DoorNode | WindowNode>) {

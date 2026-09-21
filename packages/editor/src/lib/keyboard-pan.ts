@@ -67,7 +67,9 @@ export function clearKeyboardPanKeys(state: KeyboardPanState) {
 
 /** Pan keys are ignored with a modifier held (shortcuts) or while typing. */
 export function acceptsKeyboardPan(event: KeyboardEvent) {
-  return !(event.metaKey || event.ctrlKey || event.altKey) && !isEditableKeyboardTarget(event.target)
+  return (
+    !(event.metaKey || event.ctrlKey || event.altKey) && !isEditableKeyboardTarget(event.target)
+  )
 }
 
 /** Screen-space direction: `horizontal` +1 is right, `vertical` +1 is forward (up). */

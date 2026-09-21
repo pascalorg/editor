@@ -454,6 +454,7 @@ export {
   getWallPlanFootprint,
   getWallThickness,
 } from './systems/wall/wall-footprint'
+export { planWallMerge } from './systems/wall/wall-merge'
 export {
   calculateLevelMiters,
   getAdjacentWallIds,
@@ -475,6 +476,12 @@ export {
   type WallMoveLinkedWallTargetPlan,
   type WallPlanPoint,
 } from './systems/wall/wall-move'
+export {
+  planWallDivision,
+  planWallDivisions,
+  planWallRectangle,
+  wallRectangleCorners,
+} from './systems/wall/wall-operations'
 export {
   MIN_WALL_HEIGHT,
   resolveWallEffectiveHeight,

@@ -55,6 +55,7 @@ import {
   type WindowNode,
   WindowNode as WindowNodeSchema,
   wallClosesRoom,
+  wallRectangleCorners,
   ZoneNode as ZoneNodeSchema,
   type ZoneNode as ZoneNodeType,
 } from '@pascal-app/core'
@@ -146,6 +147,7 @@ import {
 import { FloorplanSnapBeaconLayer } from '../editor-2d/floorplan-snap-beacon-layer'
 import { FloorplanWallMoveGhostLayer } from '../editor-2d/floorplan-wall-move-ghost-layer'
 import { FloorplanDraftLayer } from '../editor-2d/renderers/floorplan-draft-layer'
+import { FloorplanDraftWallMeasurement } from '../editor-2d/renderers/floorplan-draft-wall-measurement'
 import { FloorplanGeometryRenderer } from '../editor-2d/renderers/floorplan-geometry-renderer'
 import { FloorplanMarqueeLayer } from '../editor-2d/renderers/floorplan-marquee-layer'
 import { FloorplanPlacementPreviewLayer } from '../editor-2d/renderers/floorplan-placement-preview-layer'
@@ -2329,168 +2331,6 @@ function buildDraftWall(levelId: string, start: WallPlanPoint, end: WallPlanPoin
   }
 }
 
-type DraftWallMeasurement = {
-  lengthLabel: string
-  midpoint: WallPlanPoint
-  direction: WallPlanPoint
-  angleLabels: {
-    id: string
-    label: string
-    center: WallPlanPoint
-    radius: number
-    startAngle: number
-    endAngle: number
-    midAngle: number
-  }[]
-}
-
-function FloorplanDraftWallMeasurement({
-  measurement,
-  measurementStroke,
-  labelBackground,
-  labelText,
-  sceneRotationDeg,
-  unitsPerPixel,
-}: {
-  measurement: DraftWallMeasurement
-  measurementStroke: string
-  labelBackground: string
-  labelText: string
-  sceneRotationDeg: number
-  unitsPerPixel: number
-}) {
-  const stroke = measurementStroke
-  const labelBg = labelBackground
-
-  const upx = unitsPerPixel
-  const fontSize = Math.max(upx * 10, 0.08)
-  const padX = upx * 6
-  const padY = upx * 3
-
-  // Length plate: rotates to follow the wall direction, but flips 180°
-  // when its on-screen orientation would read upside-down (same trick as
-  // `floorplan-registry-layer.tsx` for dimension labels).
-  const wallAngleDeg =
-    (Math.atan2(measurement.direction[1], measurement.direction[0]) * 180) / Math.PI
-  let labelAngleDeg = wallAngleDeg
-  let screenDeg = wallAngleDeg + sceneRotationDeg
-  screenDeg = ((((screenDeg + 180) % 360) + 360) % 360) - 180
-  if (screenDeg > 90) labelAngleDeg -= 180
-  else if (screenDeg <= -90) labelAngleDeg += 180
-
-  // Push the plate perpendicular to the wall so the dashed footprint
-  // stays visible underneath.
-  const perpX = -measurement.direction[1]
-  const perpY = measurement.direction[0]
-  const offset = upx * 18
-  const cx = measurement.midpoint[0] + perpX * offset
-  const cy = measurement.midpoint[1] + perpY * offset
-
-  const lengthTextWidth = measurement.lengthLabel.length * upx * 6.2
-  const lengthPlateW = lengthTextWidth + padX * 2
-  const lengthPlateH = fontSize + padY * 2
-
-  const arcSampleCount = 32
-
-  return (
-    <g pointerEvents="none">
-      <g transform={`translate(${cx} ${cy}) rotate(${labelAngleDeg})`}>
-        <rect
-          fill={labelBg}
-          height={lengthPlateH}
-          opacity={0.92}
-          rx={upx * 3}
-          ry={upx * 3}
-          stroke={stroke}
-          strokeWidth={upx * 0.5}
-          vectorEffect="non-scaling-stroke"
-          width={lengthPlateW}
-          x={-lengthPlateW / 2}
-          y={-lengthPlateH / 2}
-        />
-        <text
-          dominantBaseline="middle"
-          fill={labelText}
-          fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
-          fontSize={fontSize}
-          fontWeight={600}
-          textAnchor="middle"
-          x={0}
-          y={0}
-        >
-          {measurement.lengthLabel}
-        </text>
-      </g>
-
-      {measurement.angleLabels.map((arc) => {
-        // Sample the arc as a polyline — avoids the SVG arc command's
-        // sweep-flag direction quirks across negative/positive sweeps.
-        const points: string[] = []
-        for (let i = 0; i <= arcSampleCount; i += 1) {
-          const t = i / arcSampleCount
-          const a = arc.startAngle + (arc.endAngle - arc.startAngle) * t
-          const px = arc.center[0] + Math.cos(a) * arc.radius
-          const py = arc.center[1] + Math.sin(a) * arc.radius
-          points.push(`${px},${py}`)
-        }
-
-        const aFontSize = Math.max(upx * 9, 0.075)
-        const aPadX = upx * 5
-        const aPadY = upx * 2.5
-        const aTextWidth = arc.label.length * upx * 6.2
-        const aPlateW = aTextWidth + aPadX * 2
-        const aPlateH = aFontSize + aPadY * 2
-
-        const labelDist = arc.radius + upx * 16
-        const lx = arc.center[0] + Math.cos(arc.midAngle) * labelDist
-        const ly = arc.center[1] + Math.sin(arc.midAngle) * labelDist
-
-        return (
-          <g key={`draft-angle-${arc.id}`}>
-            <polyline
-              fill="none"
-              points={points.join(' ')}
-              stroke={stroke}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeOpacity={0.95}
-              strokeWidth={upx * 1.2}
-              vectorEffect="non-scaling-stroke"
-            />
-            <g transform={`translate(${lx} ${ly})`}>
-              <rect
-                fill={labelBg}
-                height={aPlateH}
-                opacity={0.92}
-                rx={upx * 3}
-                ry={upx * 3}
-                stroke={stroke}
-                strokeWidth={upx * 0.5}
-                vectorEffect="non-scaling-stroke"
-                width={aPlateW}
-                x={-aPlateW / 2}
-                y={-aPlateH / 2}
-              />
-              <text
-                dominantBaseline="middle"
-                fill={labelText}
-                fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
-                fontSize={aFontSize}
-                fontWeight={600}
-                textAnchor="middle"
-                x={0}
-                y={0}
-              >
-                {arc.label}
-              </text>
-            </g>
-          </g>
-        )
-      })}
-    </g>
-  )
-}
-
 function pointsEqual(a: WallPlanPoint, b: WallPlanPoint): boolean {
   return a[0] === b[0] && a[1] === b[1]
 }
@@ -4579,7 +4419,7 @@ function FloorplanDraftCursorLayer({
       )}
 
       {cursorPoint && (
-        <g>
+        <g pointerEvents="none">
           <circle
             cx={toSvgX(cursorPoint[0])}
             cy={toSvgY(cursorPoint[1])}
@@ -4689,6 +4529,12 @@ function FloorplanLinearDraftLayer({
   const fenceDraftEnd = useFloorplanDraftPreview((s) => s.fenceDraftEnd)
   const roofDraftEnd = useFloorplanDraftPreview((s) => s.roofDraftEnd)
   const roofDraftQuarterTurn = useFloorplanDraftPreview((s) => s.roofDraftQuarterTurn)
+  const wallRectangleDraftStart = useFloorplanDraftPreview((s) => s.wallRectangleDraftStart)
+  // The live cursor is the rectangle's opposite corner; select it only while a
+  // rectangle draft is open so idle moves don't re-render this layer.
+  const wallRectangleDraftEnd = useFloorplanDraftPreview((s) =>
+    s.wallRectangleDraftStart ? s.cursorPoint : null,
+  )
 
   const draftPolygon = useMemo(() => {
     if (
@@ -4705,6 +4551,53 @@ function FloorplanLinearDraftLayer({
     // Keep the live draft preview cheap; full level-wide mitering here runs on every mouse move.
     return getWallPlanFootprint(draftWall, EMPTY_WALL_MITER_DATA)
   }, [levelId, wallDraftStart, wallDraftEnd])
+
+  // Rectangle mode drafts four walls at once; they read exactly like a line
+  // draft — same mitered footprints, measurement plates and axis guides.
+  const rectangleDraft = useMemo(() => {
+    if (!(levelId && isWallBuildActive && wallRectangleDraftStart && wallRectangleDraftEnd)) {
+      return null
+    }
+    const corners = wallRectangleCorners(wallRectangleDraftStart, wallRectangleDraftEnd)
+    if (corners.length !== 4) return null
+    const draftWalls = corners.map((start, index) =>
+      getSharedFloorplanWall({
+        ...buildDraftWall(levelId, start, corners[(index + 1) % 4]!),
+        id: `wall_draft_${index}` as WallNode['id'],
+      }),
+    )
+    const miterData = calculateLevelMiters(draftWalls)
+    const polygons = draftWalls.map((wall) =>
+      formatPolygonPoints(getWallPlanFootprint(wall, miterData)),
+    )
+    // Measure the two sides meeting at the cursor corner. Corners wind
+    // counter-clockwise, so each side is measured end → start to push its
+    // plate outside the rectangle.
+    const cursorIndex = corners.findIndex(
+      ([x, z]) => x === wallRectangleDraftEnd[0] && z === wallRectangleDraftEnd[1],
+    )
+    const measurements = [cursorIndex - 1, cursorIndex].map((side) => {
+      const from = corners[(side + 5) % 4]!
+      const to = corners[(side + 4) % 4]!
+      const dx = to[0] - from[0]
+      const dy = to[1] - from[1]
+      const length = Math.hypot(dx, dy)
+      return {
+        lengthLabel: formatMeasurement(length, unit, null, metricNotation),
+        midpoint: [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2] as WallPlanPoint,
+        direction: [dx / length, dy / length] as WallPlanPoint,
+        angleLabels: [],
+      }
+    })
+    return { polygons, measurements }
+  }, [
+    isWallBuildActive,
+    levelId,
+    metricNotation,
+    unit,
+    wallRectangleDraftEnd,
+    wallRectangleDraftStart,
+  ])
 
   const draftPolygonPoints = useMemo(() => {
     if (isRoofBuildActive && roofDraftStart && roofDraftEnd) {
@@ -4873,6 +4766,10 @@ function FloorplanLinearDraftLayer({
     if (isWallBuildActive && wallDraftStart && wallDraftEnd) {
       pushDraft(wallDraftStart, wallDraftEnd)
     }
+    if (isWallBuildActive && wallRectangleDraftStart && wallRectangleDraftEnd) {
+      pushCross(wallRectangleDraftStart)
+      pushCross(wallRectangleDraftEnd)
+    }
     if (isFenceBuildActive && fenceDraftStart && fenceDraftEnd) {
       pushDraft(fenceDraftStart, fenceDraftEnd)
     }
@@ -4884,6 +4781,8 @@ function FloorplanLinearDraftLayer({
     fenceDraftStart,
     wallDraftEnd,
     wallDraftStart,
+    wallRectangleDraftEnd,
+    wallRectangleDraftStart,
   ])
 
   return (
@@ -4941,6 +4840,34 @@ function FloorplanLinearDraftLayer({
           unitsPerPixel={unitsPerPixel}
         />
       )}
+
+      {rectangleDraft?.polygons.map((points, index) => (
+        <FloorplanDraftLayer
+          anchorFill={draftStroke}
+          draftAnchorPoints={EMPTY_DRAFT_ANCHOR_POINTS}
+          draftFill={draftFill}
+          draftPolygonPoints={points}
+          draftStroke={draftStroke}
+          key={index}
+          linearDraftSegment={null}
+          polygonDraftClosingSegment={null}
+          polygonDraftPolygonPoints={null}
+          polygonDraftPolylinePoints={null}
+          unitsPerPixel={unitsPerPixel}
+        />
+      ))}
+
+      {rectangleDraft?.measurements.map((measurement, index) => (
+        <FloorplanDraftWallMeasurement
+          key={index}
+          labelBackground={isDark ? '#0f172a' : '#ffffff'}
+          labelText={isDark ? '#e2e8f0' : '#171717'}
+          measurement={measurement}
+          measurementStroke={measurementStroke}
+          sceneRotationDeg={sceneRotationDeg}
+          unitsPerPixel={unitsPerPixel}
+        />
+      ))}
     </>
   )
 }

@@ -1412,6 +1412,13 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   toolHints?: ToolHint[]
 
   /**
+   * HUD hints for the kind's own reshapes, keyed by reshape name (see
+   * `affordanceTools`): shown while a node of this kind is in that `reshaping`
+   * scope, with the same chips and visibility rules as `toolHints`.
+   */
+  affordanceHints?: Record<string, ToolHint[]>
+
+  /**
    * Pick-one option rows for this kind's build tool, rendered by the shared
    * `<ToolOptionsPanel>` in whichever sidebar the host mounts it (see
    * `ToolOption`). E.g. the roof's 'Create from: Draw / Room'.

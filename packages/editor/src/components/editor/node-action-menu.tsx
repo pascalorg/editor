@@ -3,6 +3,7 @@
 import { Icon } from '@iconify/react'
 import { Copy, Group, Move, PencilRuler, Search, Spline, Trash2, Ungroup } from 'lucide-react'
 import type { MouseEventHandler, PointerEventHandler } from 'react'
+import { RegistryActionContributions } from './registry-action-contributions'
 
 type NodeActionMenuProps = {
   onFind?: MouseEventHandler<HTMLButtonElement>
@@ -111,6 +112,7 @@ export function NodeActionMenu({
           <Spline className="h-4 w-4" />
         </button>
       )}
+      <RegistryActionContributions />
       {onDuplicate && (
         <button
           aria-label="Duplicate"

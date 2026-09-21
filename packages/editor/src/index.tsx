@@ -85,6 +85,10 @@ export {
 } from './components/editor/thumbnail-generator'
 export { useFloorplanRender } from './components/editor-2d/floorplan-render-context'
 export { FloorplanDimensionRenderer } from './components/editor-2d/renderers/floorplan-dimension-renderer'
+export {
+  type DraftWallMeasurement,
+  FloorplanDraftWallMeasurement,
+} from './components/editor-2d/renderers/floorplan-draft-wall-measurement'
 export { FloorplanGeometryRenderer } from './components/editor-2d/renderers/floorplan-geometry-renderer'
 export {
   FloorplanNodePreview,
@@ -140,6 +144,10 @@ export {
 export { MoveRegistryNodeTool } from './components/tools/registry/move-registry-node-tool'
 export { useRegistryToolContext } from './components/tools/registry-tool-context'
 export { CursorSphere } from './components/tools/shared/cursor-sphere'
+export {
+  DRAFT_LABEL_Y_OFFSET,
+  DraftMeasurementLabel,
+} from './components/tools/shared/draft-measurement-label'
 export { DragBoundingBox } from './components/tools/shared/drag-bounding-box'
 export { getFloorStackPreviewPosition } from './components/tools/shared/floor-stack-preview'
 export { useFreshPlacementVisibility } from './components/tools/shared/fresh-placement-visibility'
@@ -269,6 +277,7 @@ export {
 } from './components/ui/primitives/shortcut-token'
 export { useSidebarStore } from './components/ui/primitives/sidebar'
 export { Slider } from './components/ui/primitives/slider'
+export { Tooltip, TooltipContent, TooltipTrigger } from './components/ui/primitives/tooltip'
 export { SceneLoader } from './components/ui/scene-loader'
 export type { ExtraPanel } from './components/ui/sidebar/icon-rail'
 export { ItemsPanel } from './components/ui/sidebar/panels/items-panel'
@@ -435,6 +444,7 @@ export {
   type FloorplanMode,
   isFloorplanToolAvailableInMode,
 } from './lib/floorplan/floorplan-mode'
+export { clientToPlan } from './lib/floorplan/plan-coords'
 export {
   commitFreshPlacementSubtree,
   createFreshPlacementSubtree,
@@ -474,6 +484,7 @@ export {
   movingNodeOf,
   scopeNodeId,
 } from './lib/interaction/scope'
+export { isEditableKeyboardTarget } from './lib/keyboard-pan'
 export {
   type ActivePaintMaterial,
   buildResetSurfaceMaterialUpdates,
@@ -606,6 +617,7 @@ export {
   sculptFieldForSite,
 } from './lib/terrain-sculpt'
 export { exportSceneToUsdz, type UsdzExportOptions } from './lib/usdz-export'
+export { useLinearDisplay } from './lib/use-linear-display'
 // `cn` (twMerge + clsx) — used by kind-owned panels in `@pascal-app/
 // nodes` so they don't need their own copy / their own tailwind-merge
 // dependency.

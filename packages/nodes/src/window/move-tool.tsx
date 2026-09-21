@@ -1,4 +1,3 @@
-import { commitOpeningMove } from '../shared/commit-opening-move'
 import {
   type AnyNodeId,
   type DormerEvent,
@@ -39,6 +38,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group, Vector3 } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
+import { commitOpeningMove } from '../shared/commit-opening-move'
 import {
   type DormerWindowTarget,
   dormerEventFromHostedWindow,

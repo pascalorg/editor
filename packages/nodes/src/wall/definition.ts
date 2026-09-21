@@ -12,6 +12,7 @@ import {
 } from '@pascal-app/editor'
 import { buildWallContextualDimensions } from './contextual-dimensions'
 import { hasWallCurveBlockingChildren } from './curve-eligibility'
+import { useWallDrawingMode } from './drawing-mode'
 import { buildWallFloorplan, computeWallFloorplanLevelData } from './floorplan'
 import {
   wallCurveAffordance,
@@ -30,6 +31,9 @@ import { wallParametrics } from './parametrics'
 import { wallQuickMeasurement } from './quick-measurement'
 import { WallNode } from './schema'
 import { wallSlots } from './slots'
+import { WALL_SPLIT_MAX_CUTS } from './split-preview'
+import { setWallSplitCuts } from './split-session'
+import { useWallSplit } from './split-store'
 
 /**
  * Wall — the Phase 3 stress test of the registry-driven node model.
@@ -46,6 +50,10 @@ import { wallSlots } from './slots'
  *   floorplan-panel.tsx's `wallPolygons` short-circuits to [] when
  *   wall is registered.
  */
+const SPLIT_CUT_COUNTS = Array.from({ length: WALL_SPLIT_MAX_CUTS }, (_, index) =>
+  String(index + 1),
+)
+
 export const wallDefinition: NodeDefinition<typeof WallNode> = {
   kind: 'wall',
   snapProfile: 'structural',
@@ -71,8 +79,11 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
       },
     } satisfies DraftingSurfaceExtension,
     'pascal:editor/floorplan': {
+      tool: () => import('./floorplan-tool'),
+      reshapeLayers: { split: () => import('./split-floorplan-layer') },
       contextualDimensions: buildWallContextualDimensions,
       actionMenu: {
+        actions: () => import('./actions'),
         canCurve: ({ node, nodes }) =>
           !hasWallCurveBlockingChildren(
             node.children.flatMap((childId) => {
@@ -152,6 +163,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     curve: () => import('./curve-tool'),
     'move-endpoint': () => import('./move-endpoint-tool'),
     move: () => import('./move-tool'),
+    split: () => import('./split-tool'),
   },
 
   renderer: {
@@ -188,8 +200,57 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   floorplanSiblingOverrides: wallFloorplanSiblingOverrides,
   toolHints: [
     { key: 'Left click', label: 'Set wall start / end' },
+    {
+      key: 'R',
+      label: 'Shape',
+      chip: {
+        subscribe: (onChange) => useWallDrawingMode.subscribe(onChange),
+        value: () => useWallDrawingMode.getState().mode,
+        cycle: () => useWallDrawingMode.getState().toggle(),
+        labels: { line: 'Shape: Line', rectangle: 'Shape: Rectangle' },
+        icons: { line: 'lucide:minus', rectangle: 'lucide:square' },
+        tooltip: 'Wall shape — click or press R to toggle',
+      },
+    },
     { key: 'Esc', label: 'Cancel' },
   ],
+  // The split session (`split-session.ts`) is the wall's own reshape; the HUD
+  // shows these while it runs. The snapping chip comes from the scope.
+  affordanceHints: {
+    split: [
+      { key: 'Left click', label: 'Split at the marks' },
+      {
+        key: 'Scroll',
+        label: 'Cuts',
+        chip: {
+          subscribe: (onChange) => useWallSplit.subscribe(onChange),
+          value: () => String(useWallSplit.getState().draft?.cuts ?? 1),
+          cycle: () => {
+            const cuts = useWallSplit.getState().draft?.cuts ?? 1
+            setWallSplitCuts(cuts >= WALL_SPLIT_MAX_CUTS ? 1 : cuts + 1)
+          },
+          labels: Object.fromEntries(
+            SPLIT_CUT_COUNTS.map((count) => [
+              count,
+              count === '1' ? 'Cuts: 1' : `Cuts: ${count}, even`,
+            ]),
+          ),
+          icons: Object.fromEntries(SPLIT_CUT_COUNTS.map((count) => [count, 'lucide:scissors'])),
+          tooltip: 'Number of cuts — scroll or click to change',
+        },
+      },
+      {
+        key: 'Alt',
+        label: 'Free placement',
+        // Several cuts are evenly spaced, so there is nothing to place freely.
+        visible: {
+          subscribe: (onChange) => useWallSplit.subscribe(onChange),
+          value: () => (useWallSplit.getState().draft?.cuts ?? 1) === 1,
+        },
+      },
+      { key: 'Esc', label: 'Cancel' },
+    ],
+  },
 
   presentation: {
     label: 'Wall',
