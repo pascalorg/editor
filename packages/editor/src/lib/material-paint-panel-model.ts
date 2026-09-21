@@ -18,18 +18,17 @@ export function useMaterialPaintPanelModel(enabled = true) {
   const setActivePaintTarget = useEditor((state) => state.setActivePaintTarget)
   const paintEraser = useEditor((state) => state.paintEraser)
   const setPaintEraser = useEditor((state) => state.setPaintEraser)
-  const selectedIds = useViewer((state) => state.selection.selectedIds)
-  const nodes = useScene((state) => state.nodes)
+  const selectedId = useViewer((state) =>
+    state.selection.selectedIds.length === 1 ? (state.selection.selectedIds[0] ?? null) : null,
+  )
+  const paintTarget = useScene((state) =>
+    resolvePaintTargetFromSelection({ nodes: state.nodes, selectedId }),
+  )
   const materials = useScene((state) => state.materials)
-  const selectedId = selectedIds.length === 1 ? (selectedIds[0] ?? null) : null
-  const selectedNode = selectedId ? nodes[selectedId as AnyNodeId] : undefined
-  const canResetSelection =
-    !!selectedNode && !!resolvePaintTargetFromSelection({ nodes, selectedId })
+  const canResetSelection = paintTarget !== null
   useEffect(() => {
-    if (!enabled) return
-    const target = resolvePaintTargetFromSelection({ nodes, selectedId })
-    if (target) setActivePaintTarget(target)
-  }, [enabled, nodes, selectedId, setActivePaintTarget])
+    if (enabled && paintTarget) setActivePaintTarget(paintTarget)
+  }, [enabled, paintTarget, setActivePaintTarget])
   const resetSelection = () => {
     const scene = useScene.getState()
     const node = selectedId ? scene.nodes[selectedId as AnyNodeId] : undefined
