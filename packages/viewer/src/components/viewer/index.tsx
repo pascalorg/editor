@@ -10,8 +10,6 @@ import {
 } from '@pascal-app/core'
 import { Canvas, extend, type ThreeElement, useFrame, useThree } from '@react-three/fiber'
 import {
-  type ComponentType,
-  Fragment,
   forwardRef,
   useEffect,
   useImperativeHandle,
@@ -334,15 +332,7 @@ function SceneReadyTracker({
   return null
 }
 
-export type ViewerImmersiveConfig = {
-  onError?: (cause: unknown) => void
-  Session: ComponentType<{ children: React.ReactNode }>
-  Scene: ComponentType<{ children: React.ReactNode }>
-}
-
 interface ViewerProps {
-  /** Plugin-owned session and scene wrappers. The plugin drives immersive frames. */
-  immersive?: ViewerImmersiveConfig
   children?: React.ReactNode
   hoverStyles?: HoverStyles
   selectionManager?: 'default' | 'custom'
@@ -432,7 +422,6 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     maxFps = 50,
     disablePostFx = false,
     renderPaused = false,
-    immersive,
   },
   ref,
 ) {
@@ -469,9 +458,6 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
   const [pointerEvents] = useState(() => choosePointerEvents())
 
   const [rendererInitFailed, setRendererInitFailed] = useState(false)
-
-  const Session = immersive?.Session ?? Fragment
-  const SpatialScene = immersive?.Scene ?? Fragment
 
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
   const transparentBackground = useViewer((state) => state.transparentBackground)
@@ -550,7 +536,6 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
           a camera transform that defeats position:fixed (see perf-panel.tsx). */}
       {(perf || PERF_OVERLAY_ENABLED) && <PerfPanel />}
       <Canvas
-        key={immersive ? 'immersive' : 'desktop'}
         ref={subscribeWallBuildInteractions}
         camera={{ position: [50, 50, 50], fov: 50 }}
         className={`transition-colors duration-700 ${
@@ -569,13 +554,11 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
                 // Supplying `device` makes three skip its own `requestAdapter`,
                 // so R3F's `powerPreference` only reaches the GPU if we forward it.
                 powerPreference: props.powerPreference,
-                ...(immersive ? { gpu: null } : {}),
                 createRenderer: (backendParameters) => {
                   const renderer = new THREE.WebGPURenderer({
                     ...(props as any),
                     ...backendParameters,
                     alpha: true,
-                    multiview: false,
                     // Allocates the backend's timestamp query pool so
                     // `resolveTimestampsAsync()` can report real GPU render-pass
                     // time (post-processing.tsx). The backend self-disables it
@@ -596,7 +579,6 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
 
               if (canvas) WEBGPU_RENDERER_CACHE.delete(canvas)
               console.error('[viewer] WebGPURenderer init failed', result.error)
-              immersive?.onError?.(result.error)
               setRendererInitFailed(true)
               // Never settles on purpose. Rejecting is what produced
               // MONOREPO-EDITOR-59: R3F awaits this inside its own configure()
@@ -618,65 +600,58 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
           enabled: shadowsEnabled,
         }}
       >
-        <Session>
-          {!immersive && <FrameLimiter fps={maxFps} paused={renderPaused} />}
-          <ViewerCamera immersive={immersive != null} />
-          {immersive && <color attach="background" args={[isDark ? '#1f2433' : '#fafafa']} />}
-          <PointerRaycastLayers />
-          <GPUDeviceWatcher />
-          <ToneMappingExposure />
-          <SceneReadyTracker
-            onSceneReadyChange={onSceneReadyChange}
-            sceneReadyKey={sceneReadyKey}
-            sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
-          />
+        <FrameLimiter fps={maxFps} paused={renderPaused} />
+        <ViewerCamera />
+        <PointerRaycastLayers />
+        <GPUDeviceWatcher />
+        <ToneMappingExposure />
+        <SceneReadyTracker
+          onSceneReadyChange={onSceneReadyChange}
+          sceneReadyKey={sceneReadyKey}
+          sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
+        />
 
-          <ErrorBoundary fallback={null} onError={immersive?.onError} scope="viewer-scene">
-            {/* <directionalLight position={[10, 10, 5]} intensity={0.5} castShadow
+        <ErrorBoundary fallback={null} scope="viewer-scene">
+          {/* <directionalLight position={[10, 10, 5]} intensity={0.5} castShadow
           /> */}
-            <Lights />
-            <SpatialScene>
-              {useBvh ? (
-                <SceneBvh>
-                  <SceneRenderer />
-                </SceneBvh>
-              ) : (
-                <SceneRenderer />
-              )}
+          <Lights />
+          {useBvh ? (
+            <SceneBvh>
+              <SceneRenderer />
+            </SceneBvh>
+          ) : (
+            <SceneRenderer />
+          )}
 
-              {/* Generic slab-elevation lift for any kind that declares
+          {/* Generic slab-elevation lift for any kind that declares
             `capabilities.floorPlaced`. Runs at frame priority 1 so it
             lands its mesh.position.y override before the priority-2
             systems below clear the dirty mark. */}
-              <FloorElevationSystem />
-              {/* Generic geometry rebuild loop for any registered kind that
+          <FloorElevationSystem />
+          {/* Generic geometry rebuild loop for any registered kind that
             ships `def.geometry`. Reads dirtyNodes, calls the kind's pure
             builder, swaps the registered group's children. See
             wiki/architecture/node-definitions.md. */}
-              <GeometrySystem />
-              {/* Automated stair opening sync — updates slab/ceiling cutouts
+          <GeometrySystem />
+          {/* Automated stair opening sync — updates slab/ceiling cutouts
             whenever stairs, slabs, or levels change. */}
-              <StairOpeningSystem />
-              <RoofElevationSystem />
-              {/* Mounts systems contributed by registry-backed kinds. Each
+          <StairOpeningSystem />
+          <RoofElevationSystem />
+          {/* Mounts systems contributed by registry-backed kinds. Each
             kind's `def.system` is loaded via lazy() and rendered here,
             ordered by `system.priority`. */}
-              <RegisteredSystems />
-              {!immersive && (
-                <PostProcessing disablePostFx={disablePostFx} hoverStyles={hoverStyles} />
-              )}
-              {selectionManager === 'default' && <SelectionManager />}
-              {(perf || PERF_OVERLAY_ENABLED) && <PerfMonitor />}
-              {/* Feeds the action-cost ledger the frame's settle state (dirty
+          <RegisteredSystems />
+          <PostProcessing disablePostFx={disablePostFx} hoverStyles={hoverStyles} />
+          {selectionManager === 'default' && <SelectionManager />}
+          {(perf || PERF_OVERLAY_ENABLED) && <PerfMonitor />}
+          {/* Feeds the action-cost ledger the frame's settle state (dirty
             queue + deferred wall rebuilds) at a priority after every other
             system, so a receipt closes when the user can actually see the
             edit. */}
-              {(perf || PERF_OVERLAY_ENABLED) && <PerfActionSettleSystem />}
-              {BATCH_SPIKE_ENABLED && <BatchedMeshSpike />}
-              {children}
-            </SpatialScene>
-          </ErrorBoundary>
-        </Session>
+          {(perf || PERF_OVERLAY_ENABLED) && <PerfActionSettleSystem />}
+          {BATCH_SPIKE_ENABLED && <BatchedMeshSpike />}
+          {children}
+        </ErrorBoundary>
       </Canvas>
     </>
   )

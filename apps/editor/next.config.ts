@@ -43,7 +43,6 @@ const nextConfig: NextConfig = {
   turbopack: {
     resolveAlias: {
       'react-dom': '../../node_modules/react-dom',
-      '@react-three/xr': '../../node_modules/@react-three/xr',
       '@pascal-app/core': '../../packages/core',
       '@pascal-app/viewer': '../../packages/viewer',
       '@pascal-app/editor': '../../packages/editor',

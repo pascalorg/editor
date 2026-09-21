@@ -17,7 +17,6 @@ import { useEffect, useRef } from 'react'
 import { type Camera, type Object3D, type Plane, type Ray, Vector2, type Vector3 } from 'three'
 import { isHistoryShortcut } from '../../../lib/history'
 import { sfxEmitter } from '../../../lib/sfx-bus'
-import { getSpatialPointerId, spatialPointerInput } from '../../../lib/spatial-pointer-input'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
 import { commitHandleDragPatch } from './handle-drag-history'
 
@@ -123,10 +122,8 @@ export function useHandleDrag(args: UseHandleDragArgs) {
     event.stopPropagation()
     suppressBoxSelectForPointer(event)
 
-    const spatialId = getSpatialPointerId(event.nativeEvent) ?? getSpatialPointerId(event)
-
     if (args.kind === 'tap') {
-      if (spatialId == null) suppressInputDraggingUntilPointerRelease(event.nativeEvent.pointerId)
+      suppressInputDraggingUntilPointerRelease(event.nativeEvent.pointerId)
       swallowNextClick()
       sfxEmitter.emit('sfx:item-pick')
       document.body.style.cursor = ''
@@ -137,14 +134,8 @@ export function useHandleDrag(args: UseHandleDragArgs) {
     const { cursor, dragControls, handleIndex, node, rideObject, setIsDragging } = args
     rideObject.updateMatrixWorld()
 
-    let spatialRay = spatialId == null ? null : event.ray.clone()
-    let releaseCapture: (() => void) | undefined
     const ndc = new Vector2()
     const setPointerRay = (clientX: number, clientY: number) => {
-      if (spatialRay) {
-        raycaster.ray.copy(spatialRay)
-        return
-      }
       const rect = gl.domElement.getBoundingClientRect()
       ndc.set(
         ((clientX - rect.left) / rect.width) * 2 - 1,
@@ -214,7 +205,6 @@ export function useHandleDrag(args: UseHandleDragArgs) {
     }
 
     const cleanup = () => {
-      releaseCapture?.()
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onCancel)
@@ -277,20 +267,9 @@ export function useHandleDrag(args: UseHandleDragArgs) {
     }
 
     dragCleanupRef.current = onCancel
-    if (spatialId != null) {
-      releaseCapture = spatialPointerInput.capture(spatialId, {
-        onMove: (ray) => {
-          spatialRay = ray
-          onMove(event.nativeEvent)
-        },
-        onRelease: onUp,
-        onCancel,
-      })
-    } else {
-      window.addEventListener('pointermove', onMove)
-      window.addEventListener('pointerup', onUp)
-      window.addEventListener('pointercancel', onCancel)
-    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
     window.addEventListener('keydown', onKeyDown, true)
     window.addEventListener('keyup', onKeyUp, true)
   }

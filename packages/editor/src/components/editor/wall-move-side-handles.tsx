@@ -12,6 +12,7 @@ import {
   getWallEffectiveHeightForNodes,
   getWallThickness,
   isCurvedWall,
+  MIN_WALL_HEIGHT,
   sceneRegistry,
   useLiveNodeOverrides,
   useScene,
@@ -45,6 +46,7 @@ import {
   publishStructuralElevationGuide,
   resolveStructuralElevationSnap,
 } from '../../lib/elevation-guides'
+import { isHistoryShortcut } from '../../lib/history'
 import { endpointReshapeScope } from '../../lib/interaction/scope'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../store/use-editor'
@@ -56,7 +58,6 @@ import useInteractionScope, {
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
 import { resolveResizeSnapValue } from './handles/resize-snap'
 import { type HandleDragControls, useHandleDrag } from './handles/use-handle-drag'
-import { createWallHeightDrag } from './handles/wall-height-drag'
 import { MeasurementPill } from './measurement-pill'
 import {
   createArrowHitAreaGeometry,
@@ -89,6 +90,20 @@ type WallMoveHandle = {
   key: string
   position: [number, number, number]
   rotationY: number
+}
+
+// Pre-empt the synthetic `click` the browser fires immediately after a
+// drag's pointerup. Without this, PointerMissedHandler treats the click
+// as "missed" and deselects the wall when the height arrow drag commits.
+function swallowNextClick() {
+  const swallow = (clickEvent: Event) => {
+    clickEvent.stopPropagation()
+    clickEvent.preventDefault()
+  }
+  window.addEventListener('click', swallow, { capture: true, once: true })
+  setTimeout(() => {
+    window.removeEventListener('click', swallow, { capture: true })
+  }, 300)
 }
 
 function createArrowHandleGeometry() {
@@ -214,7 +229,7 @@ function WallMoveSideHandlesForWall({ wall }: { wall: WallNode }) {
         {handles.map((handle) => (
           <WallMoveArrowHandle handle={handle} key={handle.key} wall={effectiveWall} />
         ))}
-        <WallHeightArrowHandle levelObject={levelObject} wall={effectiveWall} />
+        <WallHeightArrowHandle wall={effectiveWall} />
         <StructureThicknessHandle
           baseElevation={baseElevation}
           levelObject={levelObject}
@@ -831,8 +846,7 @@ function WallBaseElevationHandle({
   )
 }
 
-function WallHeightArrowHandle({ wall, levelObject }: { wall: WallNode; levelObject: Object3D }) {
-  const [isDragging, setIsDragging] = useState(false)
+function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
   const [isHovered, setIsHovered] = useState(false)
   const arrowGeometry = useMemo(() => createArrowHandleGeometry(), [])
   const hitGeometry = useMemo(() => createArrowHitAreaGeometry(), [])
@@ -849,10 +863,11 @@ function WallHeightArrowHandle({ wall, levelObject }: { wall: WallNode; levelObj
       }),
     [],
   )
-  const { camera } = useThree()
+  const { camera, raycaster, gl } = useThree()
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
   const baseScale = zoom * ARROW_SCALE
-  const scale = (isHovered || isDragging ? 1.12 : 1) * baseScale
+  const scale = (isHovered ? 1.12 : 1) * baseScale
+  const dragCleanupRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
@@ -863,6 +878,7 @@ function WallHeightArrowHandle({ wall, levelObject }: { wall: WallNode; levelObj
       if (document.body.style.cursor === 'ns-resize') {
         document.body.style.cursor = ''
       }
+      dragCleanupRef.current?.()
     }
   }, [])
 
@@ -885,43 +901,117 @@ function WallHeightArrowHandle({ wall, levelObject }: { wall: WallNode; levelObj
   const wallHeight = getWallEffectiveHeightForNodes(wall, useScene.getState().nodes)
   const handleY = wallHeight + HEIGHT_HANDLE_OFFSET
 
-  const dragControls = useMemo<HandleDragControls>(
-    () => ({ onStart: () => {}, onEnd: () => {} }),
-    [],
-  )
-  const activateHeightResize = useHandleDrag({
-    kind: 'drag',
-    cursor: 'ns-resize',
-    dragControls,
-    handleIndex: 0,
-    node: wall,
-    rideObject: levelObject,
-    setIsDragging,
-    onStart: ({ event, getPointerRay, initialNode, nodeId, sceneApi }) => {
-      if (initialNode.type !== 'wall') return null
-      levelObject.updateWorldMatrix(true, false)
-      const pointerRay = new Ray()
-      const resize = createWallHeightDrag({
-        initialRay: getPointerRay(event.nativeEvent.clientX, event.nativeEvent.clientY, pointerRay),
-        levelMatrixWorld: levelObject.matrixWorld,
-        midpoint: new Vector3(midX, 0, midZ),
-        initialHeight: getWallEffectiveHeightForNodes(initialNode, sceneApi.nodes()),
-      })
-      if (!resize) return null
-      return {
-        onBegin: () => {
-          useInteractionScope.getState().begin({ kind: 'handle-drag', nodeId, handle: 'height' })
-        },
-        onEnd: () => {
-          useInteractionScope.getState().endIf((scope) => scope.kind === 'handle-drag')
-        },
-        move: ({ event: moveEvent, getPointerRay: getMovePointerRay }) => {
-          const height = resize(getMovePointerRay(moveEvent.clientX, moveEvent.clientY, pointerRay))
-          return height == null ? null : { height }
-        },
+  const activateHeightResize = (event: ThreeEvent<PointerEvent>) => {
+    if (event.button !== 0) return
+    event.stopPropagation()
+    suppressBoxSelectForPointer(event)
+    const levelObject = wall.parentId ? sceneRegistry.nodes.get(wall.parentId) : null
+    if (!levelObject) return
+
+    // Vertical plane through the wall midpoint whose normal points toward
+    // the camera (projected to horizontal). Raycasting against it converts
+    // pointer movement into a world-space Y value.
+    const midpointWorld = new Vector3(midX, 0, midZ).applyMatrix4(levelObject.matrixWorld)
+    const planeNormal = new Vector3().subVectors(camera.position, midpointWorld).setY(0)
+    if (planeNormal.lengthSq() === 0) return
+    planeNormal.normalize()
+    const plane = new Plane().setFromNormalAndCoplanarPoint(planeNormal, midpointWorld)
+
+    const ndc = new Vector2()
+    const setNDC = (clientX: number, clientY: number) => {
+      const rect = gl.domElement.getBoundingClientRect()
+      ndc.set(
+        ((clientX - rect.left) / rect.width) * 2 - 1,
+        -((clientY - rect.top) / rect.height) * 2 + 1,
+      )
+    }
+
+    setNDC(event.nativeEvent.clientX, event.nativeEvent.clientY)
+    raycaster.setFromCamera(ndc, camera)
+    const hit = new Vector3()
+    if (!raycaster.ray.intersectPlane(plane, hit)) return
+
+    // Dragging the top makes the wall custom-height; seed from the resolved
+    // effective height so a plane-bound wall's drag starts at its real top.
+    const initialHeight = getWallEffectiveHeightForNodes(wall, useScene.getState().nodes)
+    const initialY = hit.y
+    const wallId = wall.id as AnyNodeId
+    let pendingHeight = initialHeight
+
+    document.body.style.cursor = 'ns-resize'
+    sfxEmitter.emit('sfx:item-pick')
+    useInteractionScope.getState().begin({ kind: 'handle-drag', nodeId: wallId, handle: 'height' })
+    // Suppress R3F node pointer events until pointerup completes so the
+    // synthesized click doesn't reroute selection to whatever mesh sits
+    // under the cursor at release.
+    useViewer.getState().setInputDragging(true)
+    useScene.temporal.getState().pause()
+
+    // Drag publishes `{ height }` to `useLiveNodeOverrides` and marks
+    // the wall dirty so `WallSystem.updateWallGeometry` rebuilds against
+    // the override-merged value (via `getEffectiveWall`). Zustand stays
+    // at the pre-drag height until pointerup commits one tracked write.
+    const onMove = (e: PointerEvent) => {
+      setNDC(e.clientX, e.clientY)
+      raycaster.setFromCamera(ndc, camera)
+      const intersection = new Vector3()
+      if (!raycaster.ray.intersectPlane(plane, intersection)) return
+      const newHeight = Math.max(MIN_WALL_HEIGHT, initialHeight + (intersection.y - initialY))
+      pendingHeight = newHeight
+      useLiveNodeOverrides.getState().set(wallId, { height: newHeight })
+      useScene.getState().markDirty(wallId)
+    }
+
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      window.removeEventListener('keydown', onKeyDown, true)
+      if (document.body.style.cursor === 'ns-resize') {
+        document.body.style.cursor = ''
       }
-    },
-  })
+      useScene.temporal.getState().resume()
+      useInteractionScope.getState().endIf((sc) => sc.kind === 'handle-drag')
+      useViewer.getState().setInputDragging(false)
+      dragCleanupRef.current = null
+    }
+    const onUp = () => {
+      swallowNextClick()
+      sfxEmitter.emit('sfx:item-place')
+      // Commit: write the final override-merged value to zustand once
+      // (tracked, undoable), then drop the override so the renderer
+      // falls back to the scene store.
+      if (pendingHeight !== initialHeight) {
+        useScene.getState().updateNode(wallId, { height: pendingHeight })
+      }
+      useLiveNodeOverrides.getState().clear(wallId)
+      useScene.getState().markDirty(wallId)
+      cleanup()
+    }
+    const onCancel = () => {
+      // Revert: drop the override, mark dirty so the geometry rebuilds
+      // against the original scene height.
+      useLiveNodeOverrides.getState().clear(wallId)
+      useScene.getState().markDirty(wallId)
+      cleanup()
+    }
+
+    // Escape / ⌘Z abort the drag — capture phase so they win over the global
+    // use-keyboard arms (⌘Z must never history-jump under a live pointer).
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' && !isHistoryShortcut(e)) return
+      e.preventDefault()
+      e.stopPropagation()
+      swallowNextClick()
+      onCancel()
+    }
+
+    dragCleanupRef.current = cleanup
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
+    window.addEventListener('keydown', onKeyDown, true)
+  }
 
   return (
     <group position={[midX, handleY, midZ]} rotation={[0, wallAngle, 0]}>
@@ -938,7 +1028,7 @@ function WallHeightArrowHandle({ wall, levelObject }: { wall: WallNode; levelObj
           onPointerLeave={(event) => {
             event.stopPropagation()
             setIsHovered(false)
-            if (!isDragging && document.body.style.cursor === 'ns-resize') {
+            if (document.body.style.cursor === 'ns-resize') {
               document.body.style.cursor = ''
             }
           }}

@@ -584,7 +584,6 @@ export {
   type SnapFlags,
   type SnappingMode,
 } from './lib/snapping-mode'
-export { getSpatialPointerId, spatialPointerInput } from './lib/spatial-pointer-input'
 export { duplicateStairSubtree } from './lib/stair-duplication'
 export {
   getBuildingLevelsForLevel,

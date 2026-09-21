@@ -1,6 +1,6 @@
 ---
 name: open-pr2
-description: Open or update a pull request on pascalorg/editor with a plain-language issue-and-fix description based on the full branch diff. Use only when the user explicitly asks for OpenPR2 or /open-pr2.
+description: Open or update a pascalorg/editor pull request from verified branch-authored commits while excluding changes imported by merges. Use only when the user explicitly asks for OpenPR2 or /open-pr2.
 metadata:
   internal: true
 disable-model-invocation: true
@@ -9,148 +9,248 @@ allowed-tools: Bash(git *) Bash(gh *) Bash(bun *) Read
 
 # OpenPR2
 
-Open or update a pull request against `pascalorg/editor` from the current branch. Keep the repository's PR template, but write the body like one developer explaining the change to another.
+Open or update a pull request against `pascalorg/editor`. Describe only work introduced by the feature branch's own non-merge, first-parent commits and still present in the PR. Treat merge commits as synchronization, never as evidence that the feature branch implemented the merged work.
 
-## 1. Pre-flight
+The invariant is:
 
-Inspect the working tree and the whole branch before writing anything:
+> Every title or body claim must map to an eligible branch commit, concrete changed lines from that commit, and the final PR diff.
+
+If provenance cannot be established, stop before changing GitHub and explain why the branch must be cleaned or the intended commits identified.
+
+## 1. Establish the canonical base
+
+Inspect the repository, working tree, remotes, branch, and existing PR:
 
 ```bash
 git status
 git branch --show-current
-git log --oneline main..HEAD
-git diff --stat main...HEAD
-git diff --name-status main...HEAD
+git remote -v
+gh pr view --json number,url,title,body,baseRefName,headRefName 2>/dev/null
 ```
 
-Read the relevant parts of `git diff main...HEAD`. Do not build the description from the latest commit alone or from conversation memory.
+For this repository, the canonical base is the remote whose fetch URL is `pascalorg/editor`, normally `upstream`. Use the existing PR's `baseRefName`; use `main` only when no PR exists. Fetch that exact base before comparing:
+
+```bash
+git fetch upstream <base-branch>
+git rev-parse HEAD upstream/<base-branch>
+git merge-base --all upstream/<base-branch> HEAD
+```
 
 Stop if:
 
-- The current branch is `main`. Ask the user to create a feature branch first.
-- The branch has no commits ahead of `main`.
-- There are uncommitted changes the user has not asked to commit.
+- the current branch is the base branch;
+- the working tree has changes the user did not ask to commit;
+- the canonical remote or base cannot be resolved;
+- the branch has no eligible commits after the provenance audit below;
+- there is more than one merge base, unless the ambiguity is resolved before continuing.
 
-For a non-trivial change, run checks that match the affected packages. Prefer focused tests plus:
+Completion criterion: one fetched canonical base ref and one unambiguous merge base are recorded. A local branch named `main` is not a substitute for the canonical ref.
+
+## 2. Build the provenance audit
+
+Run the deterministic audit. Save its output as the provenance manifest for the rest of the workflow:
+
+```bash
+bun .agents/skills/open-pr2/scripts/provenance-audit.ts \
+  --base upstream/<base-branch> \
+  --head HEAD \
+  --format markdown
+```
+
+The audit classifies:
+
+- **Eligible:** non-merge commits on the first-parent feature-branch line.
+- **Patch-equivalent:** branch commits whose patch already exists on the canonical base.
+- **Imported:** merge commits and changes reachable only through their merged parents.
+- **Branch-only files:** final-diff files touched only by eligible commits.
+- **Merge-only files:** final-diff files touched only by excluded merges.
+- **Patch-equivalent files:** final-diff files whose eligible-looking patch already exists on the base.
+- **Overlapping files:** files touched by both an eligible commit and a merge; these require hunk review.
+- **Unexplained files:** final-diff files not accounted for by either class.
+- **Reverted eligible files:** files touched by eligible commits but absent from the final diff.
+
+Treat merge-only files, patch-equivalent commits and files, and reverted eligible files as excluded. Stop for unexplained files. For every overlapping file, compare the eligible commit patch with the merge patch before deciding whether any behavior is describable:
+
+```bash
+git diff <merge>^1 <merge> -- <overlapping-path>
+git diff <eligible-commit>^ <eligible-commit> -- <overlapping-path>
+```
+
+The merge patch is an exclusion inventory. Conflict resolution inside a merge is maintenance unless the user identifies it as intentional feature work.
+
+For every eligible commit, inspect the actual patch relative to its first parent:
+
+```bash
+git show --format=fuller --stat --name-status <commit>
+git diff <commit>^ <commit> -- <relevant-paths>
+```
+
+Commit subjects, branch names, prior chat, issue text, and the final aggregate diff are discovery hints only. They are not evidence of authorship.
+
+The script uses `git cherry` to detect patch-equivalent commits. This cannot detect rewritten or partially copied patches. If a non-merge commit bundles unrelated feature families, has a subject that does not explain major parts of its patch, or appears copied from another branch, classify it as ambiguous. Stop and ask the user to identify the intended hunks or recommend rebuilding from `upstream/<base-branch>`.
+
+Completion criterion: the manifest is generated, every overlap has a hunk decision, and there are no unexplained or unresolved ambiguous changes.
+
+## 3. Intersect authored work with the final PR
+
+Inspect what reviewers will actually receive:
+
+```bash
+git diff --stat upstream/<base-branch>...HEAD
+git diff --name-status upstream/<base-branch>...HEAD
+git diff upstream/<base-branch>...HEAD -- <relevant-paths>
+```
+
+For an existing PR, also inspect GitHub's diff:
+
+```bash
+gh pr diff <number> --name-only
+gh pr diff <number>
+```
+
+A change is describable only when both are true:
+
+1. an eligible commit's patch proves the branch introduced it; and
+2. the behavior still appears in the final PR diff.
+
+This intersection prevents two opposite errors:
+
+- merged work appearing in the description merely because it is visible in the aggregate branch history;
+- reverted or superseded branch work appearing merely because an old eligible commit mentions it.
+
+Aggregate-diff changes with no eligible-commit evidence are inherited or unexplained. Exclude them from PR claims and report them to the user outside the proposed PR body. If those unexplained changes make the PR unsafe or misleading to review, stop and recommend branch cleanup.
+
+Completion criterion: every surviving eligible behavior is identified, and every unexplained final-diff cluster is excluded and reported.
+
+## 4. Build a claim ledger
+
+Before writing prose, create a private evidence ledger with one row per behavior:
+
+| Claim | Eligible commit | Patch evidence | Present in final PR | Test evidence |
+|---|---|---|---|---|
+| Concrete user-visible result | SHA | Files and relevant hunks | Yes | Command/manual check or not run |
+
+Rules:
+
+- Every proposed title and `What does this PR do?` item must have a ledger row.
+- Every meaningful surviving eligible behavior must be represented.
+- A filename alone is insufficient; inspect the relevant hunk.
+- Tests added by a merge do not validate branch-authored claims.
+- Never infer a claim from a branch name such as `improve-project-items`.
+- Never turn an unexplained aggregate-diff cluster into an umbrella claim.
+
+Completion criterion: the body can be reconstructed from the ledger without using conversation memory or merge-imported changes.
+
+### Reconcile a user-provided example
+
+When the user supplies an expected title, description, feature list, or teammate review, compare every supplied item with the ledger before drafting:
+
+| Supplied item | Eligible commit | Final evidence | Decision |
+|---|---|---|---|
+| User's wording | SHA or none | Files and hunks | Include, rewrite, exclude, or clarify |
+
+Preserve the supplied level of technical detail when its claims are supported. The repository template still controls section headings. Report every omitted or rewritten item and the evidence decision. User wording is a coverage target, not provenance evidence.
+
+## 5. Run proportionate checks
+
+Choose focused tests from the eligible changed behavior, then run package-level checks appropriate to that scope. For a non-trivial cross-package change, prefer focused tests plus:
 
 ```bash
 bun run check-types
 bun run build
 ```
 
-Do not open a PR when a required check fails. Report the failure instead. Do not claim that a command or manual test passed unless it was run.
+Do not open or update the PR when a required check fails. Report the failure. Record only commands actually run and their real result; leave manual-runtime and checklist claims unchecked when they were not verified.
 
-## 2. Read the current PR template
+Completion criterion: each claimed check has command output from this run.
 
-Read `.github/pull_request_template.md` every time. Its headings and checklist wording are the source of truth.
+## 6. Read the current PR template
 
-Keep the template headings in the same order:
+Read `.github/pull_request_template.md` every time. Keep its headings, order, and checklist wording exactly. The template is the source of truth.
 
-1. `## What does this PR do?`
-2. `## How to test`
-3. `## Screenshots / screen recording`
-4. `## Checklist`
+Preserve from an existing PR:
 
-Do not replace them with `Summary`, `Details`, `Validation`, or custom headings unless the template itself changes.
+- `Fixes #...` and `Refs #...` lines;
+- screenshots, recordings, links, and embedded media;
+- relevant reviewer notes;
+- checklist state only where current evidence still supports it.
 
-## 3. Write the title
+Remove stale claims and test steps that lack a claim-ledger row. Never preserve inaccurate prose merely because it already exists.
 
+Treat generated blocks such as `<!-- CURSOR_SUMMARY --> ... <!-- /CURSOR_SUMMARY -->` as automation output, not author evidence. Preserve a generated block only when all of its claims pass the ledger audit and repository automation expects it to remain. Otherwise remove it from the authored body and report that decision. Never copy claims from a generated block into the human description without independent commit-and-hunk evidence.
+
+## 7. Write from the ledger
+
+### Title
+
+- Describe the most important surviving eligible result.
 - Keep it under 70 characters when practical.
-- State the result, not the activity. Prefer `fix(editor): keep curved room slabs attached` over `update wall files`.
-- Add a package scope when one package clearly owns the change, such as `core:`, `viewer:`, `editor:`, or `mcp:`.
-- Avoid vague verbs such as `improve`, `enhance`, `update`, or `refactor` when a concrete verb fits.
-
-## 4. Write the body in plain language
+- Use a package scope when one package clearly owns the change.
+- Prefer a concrete result over `improve`, `enhance`, `update`, or `refactor`.
+- When eligible work has unrelated feature groups, stop and recommend splitting the PR instead of inventing a narrow umbrella title.
+- Update an existing title when its scope is unsupported by the ledger.
 
 ### What does this PR do?
 
-The reviewer should understand every changed behavior without opening the diff. Do not compress unrelated fixes into a paragraph or a long bullet.
-
-Give each problem its own short item. Use this exact shape:
+Use one short item per problem and result:
 
 ```markdown
 - **Short feature or problem name**
   - Issue: One short sentence describing what was wrong or missing.
-  - Fixed: One short sentence describing the behavior after this PR.
+  - Fixed: One short sentence describing the behavior introduced by an eligible commit.
 ```
 
-Add one more indented sentence only when the reviewer needs an important constraint, risk, or design decision. Keep it short and do not add labels such as `Details`, `Technical`, or `Implementation`.
-
-Example:
-
-```markdown
-- **Curved triangular rooms**
-  - Issue: Slabs and ceilings kept a straight corner after curving a wall.
-  - Fixed: Both surfaces now rebuild from the curved room boundary.
-
-- **Wall and fence thickness**
-  - Issue: Thickness could only be changed from the settings panel.
-  - Fixed: Each face now has a circular thickness handle in 2D and 3D.
-  - The centerline stays fixed, and the change uses one undo step.
-```
-
-Keep the item title concrete. Start with product behavior, not filenames or function names. Cover every meaningful user-visible fix on the branch. Combine items only when they describe the same problem and the same fix.
-
-Avoid this compressed style:
-
-```text
-This PR fixes curved wall topology, adds thickness handles, improves floor-plan previews, updates roof paint slots, and cleans up roof controls.
-```
-
-Link issues with `Fixes #123` or `Refs #123` when applicable. Never invent an issue number.
+Add one short constraint or design sentence only when a reviewer needs it. Cover all meaningful ledger rows and nothing else. Link issues only when an issue number is known.
 
 ### How to test
 
-Write numbered reviewer steps. Put the action on the numbered line and the expected result on a short indented line.
-
-Good:
-
-```text
-1. Create a triangular room and curve one wall.
-   - The slab and ceiling should follow the curved corner with no gap.
-
-2. Drag either wall thickness dot.
-   - The wall should stay centered while its thickness changes.
-```
-
-List automated commands only when they were run. Include pass counts when they are known and useful. Do not turn the section into a dump of every command used during development.
+Write numbered, concrete reviewer steps for ledger-backed behavior. Put the expected result on an indented line. Include automated commands only when they were run during this workflow.
 
 ### Screenshots / screen recording
 
-- Preserve any existing media verbatim when updating a PR.
-- For a visual or interactive change, add the supplied media. If none exists, write `Not added yet.`
-- For a non-visual change, write `N/A, no visual change.`
-- Do not claim that a recording exists when it does not.
+Preserve existing media verbatim. For visual changes without supplied media, write `Not added yet.` For non-visual changes, write `N/A, no visual change.`
 
 ### Checklist
 
-Copy every checklist line from the current template verbatim.
+Copy the current template verbatim. Tick only evidence-backed items. A prior checked box may be unchecked when the current audit cannot verify it.
 
-- Tick an item only when it is true.
-- `bun dev` is checked only after local runtime testing.
-- The code-style item is checked only after the requested style command passes.
-- Documentation is checked when docs were updated or when the item explicitly says it is not applicable. Otherwise leave it unchecked.
-- Confirm the actual base branch before checking the target-branch item.
+### Human writing pass
 
-## 5. Human writing pass
+Read the draft as a developer who has not seen the branch:
 
-Before submitting, read the title and body once as a reviewer who has not seen the branch.
+- use plain words, short sentences, and active voice;
+- preserve necessary technical detail without turning the body into a file inventory;
+- remove filler, hype, repeated claims, and implementation trivia that does not help review;
+- keep unrelated ledger rows separate rather than compressing them into a vague umbrella item;
+- make every test step concrete and verifiable;
+- match a user-provided example's useful specificity while keeping only evidence-backed claims.
 
-Rewrite anything that fails these checks:
+Completion criterion: the draft reads naturally and every sentence still maps to the ledger.
 
-- Use plain words and short sentences.
-- Say what the change does. Avoid phrases that could describe any PR.
-- Remove filler, hype, sales language, and chatbot phrases.
-- Remove repeated points and details that the diff explains on its own.
-- Avoid jargon unless the repository uses the term and the reviewer needs it.
-- Avoid forced lists, excessive bold text, em dashes, and long parenthetical asides.
-- Prefer active voice.
-- Keep a human rhythm. The body should not read like generated release notes.
-- Make every test step concrete and verifiable.
+## 8. Pre-write audit
 
-If the summary sounds too small, add the missing problem or behavior. If it sounds dense, remove implementation trivia before shortening the explanation of the bug.
+Read the proposed title and body against the claim ledger and exclusion inventory.
 
-## 6. Push and find the PR
+For every title phrase, feature bullet, test step, and checked box, answer:
+
+1. Which eligible non-merge commit introduced it?
+2. Which changed lines prove it?
+3. Is it still present in the final PR diff?
+4. Was the claimed validation actually run?
+
+Then confirm:
+
+- no merge-only feature is named;
+- no meaningful surviving eligible behavior is omitted;
+- no branch-name or conversation assumption became a claim;
+- unexplained final-diff changes were reported to the user rather than described as authored work;
+- the title matches the ledger rather than the aggregate diff;
+- each user-supplied example item has an explicit include, rewrite, exclude, or clarify decision;
+- generated summary blocks contain no unaudited claims.
+
+Any unanswered question blocks the GitHub update.
+
+## 9. Push, create or update, and verify
 
 Push the current branch:
 
@@ -158,59 +258,38 @@ Push the current branch:
 git push -u origin HEAD
 ```
 
-Check whether it already has a PR:
+Create a PR only when none exists. Otherwise update the existing PR; never create a duplicate. Pass Markdown through a quoted heredoc.
 
 ```bash
-gh pr view --json number,url,title,body 2>/dev/null
-```
-
-### No existing PR
-
-Create one with `gh pr create`. Pass the body through a quoted heredoc so Markdown stays intact:
-
-```bash
-gh pr create --title "<title>" --body "$(cat <<'EOF'
-<body using the current PR template>
+gh pr create --title "<ledger-backed title>" --body "$(cat <<'EOF'
+<body using the current template>
 EOF
 )"
 ```
 
-### Existing PR
-
-Do not create another PR. Update the current one from the full branch diff.
-
-Before rewriting it:
-
 ```bash
-gh pr view --json number,title,body,url
-git log --oneline main..HEAD
-git diff --stat main...HEAD
+gh pr edit <number> --title "<ledger-backed title>" --body "$(cat <<'EOF'
+<body using the current template>
+EOF
+)"
 ```
 
-When rebuilding the body:
-
-- Preserve `Fixes #123` and `Refs #123` lines.
-- Preserve screenshots, recordings, links, and embedded images verbatim unless the user supplied replacements.
-- Preserve the user's checklist state for work that remains true. Never change an unchecked item to checked without evidence.
-- Keep extra reviewer notes that are still relevant.
-- Remove old claims and test steps that no longer match the branch.
-- Leave the title unchanged unless the branch's purpose clearly changed.
-
-Apply the update with `gh pr edit <number> --body ...`. Change the title only when needed.
-
-## 7. Verify and report
-
-Read the PR back after creation or editing:
+Read it back:
 
 ```bash
-gh pr view --json number,url,title,body,baseRefName,headRefName
+gh pr view <number> --json number,url,title,body,baseRefName,headRefName
 ```
 
-Confirm that the title, template sections, base branch, and body were saved correctly.
+Verify the saved title, template sections, base, head, media, checklist state, and every claim against the ledger. Correct a serialization mistake immediately; stop for any provenance or content discrepancy.
+
+## 10. Report
 
 Return:
 
-- PR URL
-- Title
-- Checks and tests actually run
-- Any unchecked checklist item or missing recording the reviewer should know about
+- PR URL and final title;
+- eligible commits used as evidence;
+- merge commits excluded from the description;
+- checks actually run and their outcomes;
+- unexplained or inherited final-diff changes;
+- unchecked checklist items or missing recordings;
+- whether branch cleanup or PR splitting is still recommended.
