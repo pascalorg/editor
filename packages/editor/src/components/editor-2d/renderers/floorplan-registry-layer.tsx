@@ -699,9 +699,23 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       const currentSelectedIds = useViewer.getState().selection.selectedIds
       let nextSelectedIds: string[]
       if (options.shouldToggle) {
-        nextSelectedIds = currentSelectedIds.includes(id)
-          ? currentSelectedIds.filter((selectedId) => selectedId !== id)
-          : [...currentSelectedIds, id]
+        if (currentSelectedIds.includes(id)) {
+          // A room's slab and ceiling overlap in the plan and only the slab
+          // takes the click, so removing one removes the other too (a marquee
+          // picks both). 3D keeps single toggles: each is clickable there.
+          const nodes = useScene.getState().nodes
+          const node = nodes[id as AnyNodeId]
+          const counterparts = node
+            ? (getFloorplanNodeExtension(nodeRegistry.get(node.type))?.selectionCounterparts?.({
+                node,
+                nodes,
+              }) ?? [])
+            : []
+          const removed = new Set<string>([id, ...counterparts])
+          nextSelectedIds = currentSelectedIds.filter((selectedId) => !removed.has(selectedId))
+        } else {
+          nextSelectedIds = [...currentSelectedIds, id]
+        }
       } else if (options.isolateMember) {
         nextSelectedIds = [id]
       } else {
