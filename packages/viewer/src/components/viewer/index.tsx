@@ -10,6 +10,7 @@ import {
 } from '@pascal-app/core'
 import { Canvas, extend, type ThreeElement, useFrame, useThree } from '@react-three/fiber'
 import {
+  type ComponentType,
   forwardRef,
   useEffect,
   useImperativeHandle,
@@ -32,6 +33,7 @@ import { FloorElevationSystem } from '../../systems/floor-elevation/floor-elevat
 import { GeometrySystem } from '../../systems/geometry/geometry-system'
 import { PerfActionSettleSystem } from '../../systems/perf-action-settle/perf-action-settle-system'
 import { subscribeWallBuildInteractions } from '../../systems/wall/wall-build-lifecycle'
+import { ImmersiveXRPresentationProvider } from '../../xr/presentation-context'
 import { ErrorBoundary } from '../error-boundary'
 import { SceneRenderer } from '../renderers/scene-renderer'
 import { BATCH_SPIKE_ENABLED, BatchedMeshSpike } from './batched-mesh-spike'
@@ -171,7 +173,7 @@ type WebGPUDeviceLike = {
   removeEventListener?: (type: string, listener: EventListener) => void
 }
 
-function GPUDeviceWatcher() {
+function GPUDeviceWatcher({ intentionalWebGL = false }: { intentionalWebGL?: boolean }) {
   const gl = useThree((s) => s.gl)
 
   useEffect(() => {
@@ -183,13 +185,14 @@ function GPUDeviceWatcher() {
     const backend = (gl as any).backend
     const device = backend?.device as WebGPUDeviceLike | undefined
 
-    if (!device) {
+    if (!device && !intentionalWebGL) {
       console.warn('[viewer] No WebGPU device on backend — running on a fallback renderer.', {
         backend: backend?.constructor?.name ?? 'unknown',
         rendererType: (gl as any).constructor?.name ?? 'unknown',
       })
       return
     }
+    if (!device) return
 
     console.log('[viewer] WebGPU device ready', {
       label: device.label,
@@ -213,7 +216,7 @@ function GPUDeviceWatcher() {
     return () => {
       device.removeEventListener?.('uncapturederror', onUncapturedError)
     }
-  }, [gl])
+  }, [gl, intentionalWebGL])
 
   return null
 }
@@ -236,6 +239,11 @@ function ToneMappingExposure() {
   }, -1)
 
   return null
+}
+
+function ImmersiveXRBackground() {
+  const background = useViewer((state) => getSceneTheme(state.sceneTheme).background)
+  return <color args={[background]} attach="background" />
 }
 
 function hasPendingSceneBuildWork() {
@@ -332,6 +340,12 @@ function SceneReadyTracker({
   return null
 }
 
+export interface ViewerImmersiveSession {
+  Session: ComponentType<{ children: React.ReactNode }>
+  Scene: ComponentType<{ children: React.ReactNode }>
+  onError?: (cause: unknown) => void
+}
+
 interface ViewerProps {
   children?: React.ReactNode
   hoverStyles?: HoverStyles
@@ -392,6 +406,8 @@ interface ViewerProps {
   disablePostFx?: boolean
   /** Keep the mounted renderer/context warm without advancing scene frames. */
   renderPaused?: boolean
+  /** Host-provided immersive XR session wrappers for the main scene. */
+  immersive?: ViewerImmersiveSession
 }
 
 /** Imperative handle exposed via `ref` on `<Viewer>`. */
@@ -422,6 +438,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     maxFps = 50,
     disablePostFx = false,
     renderPaused = false,
+    immersive,
   },
   ref,
 ) {
@@ -527,6 +544,15 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     if (showGpuFallback) onSceneReadyChange?.(true)
   }, [showGpuFallback, onSceneReadyChange])
 
+  useEffect(() => {
+    if (!immersive) return
+    const timeout = window.setTimeout(() => window.dispatchEvent(new Event('resize')), 0)
+    return () => window.clearTimeout(timeout)
+  }, [immersive])
+
+  const ImmersiveSession = immersive?.Session
+  const immersiveActive = immersive != null
+
   if (showGpuFallback) {
     return <UnsupportedGpuViewerFallback />
   }
@@ -537,6 +563,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
       {(perf || PERF_OVERLAY_ENABLED) && <PerfPanel />}
       <Canvas
         ref={subscribeWallBuildInteractions}
+        key={immersiveActive ? 'webgl-xr' : 'webgpu'}
         camera={{ position: [50, 50, 50], fov: 50 }}
         className={`transition-colors duration-700 ${
           transparentBackground ? 'bg-transparent' : isDark ? 'bg-[#1f2433]' : 'bg-[#fafafa]'
@@ -551,6 +578,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
             if (cached) return cached
             const promise = (async () => {
               const result = await initializeGpuRenderer({
+                forceWebGL: immersiveActive,
                 // Supplying `device` makes three skip its own `requestAdapter`,
                 // so R3F's `powerPreference` only reaches the GPU if we forward it.
                 powerPreference: props.powerPreference,
@@ -600,61 +628,117 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
           enabled: shadowsEnabled,
         }}
       >
-        <FrameLimiter fps={maxFps} paused={renderPaused} />
-        <ViewerCamera />
-        <PointerRaycastLayers />
-        <GPUDeviceWatcher />
-        <ToneMappingExposure />
-        <SceneReadyTracker
-          onSceneReadyChange={onSceneReadyChange}
-          sceneReadyKey={sceneReadyKey}
-          sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
-        />
-
-        <ErrorBoundary fallback={null} scope="viewer-scene">
-          {/* <directionalLight position={[10, 10, 5]} intensity={0.5} castShadow
-          /> */}
-          <Lights />
-          {useBvh ? (
-            <SceneBvh>
-              <SceneRenderer />
-            </SceneBvh>
+        <ImmersiveXRPresentationProvider enabled={immersiveActive}>
+          {ImmersiveSession ? (
+            <ImmersiveSession>
+              <ViewerScene
+                disablePostFx
+                hoverStyles={hoverStyles}
+                immersiveXR
+                onRenderError={immersive.onError}
+                onSceneReadyChange={onSceneReadyChange}
+                perf={perf}
+                sceneReadyKey={sceneReadyKey}
+                sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
+                selectionManager={selectionManager}
+                useBvh={useBvh}
+                SceneWrapper={immersive.Scene}
+              >
+                {children}
+              </ViewerScene>
+            </ImmersiveSession>
           ) : (
-            <SceneRenderer />
+            <>
+              <FrameLimiter fps={maxFps} paused={renderPaused} />
+              <ViewerScene
+                disablePostFx={disablePostFx}
+                hoverStyles={hoverStyles}
+                onSceneReadyChange={onSceneReadyChange}
+                perf={perf}
+                sceneReadyKey={sceneReadyKey}
+                sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
+                selectionManager={selectionManager}
+                useBvh={useBvh}
+              >
+                {children}
+              </ViewerScene>
+            </>
           )}
-
-          {/* Generic slab-elevation lift for any kind that declares
-            `capabilities.floorPlaced`. Runs at frame priority 1 so it
-            lands its mesh.position.y override before the priority-2
-            systems below clear the dirty mark. */}
-          <FloorElevationSystem />
-          {/* Generic geometry rebuild loop for any registered kind that
-            ships `def.geometry`. Reads dirtyNodes, calls the kind's pure
-            builder, swaps the registered group's children. See
-            wiki/architecture/node-definitions.md. */}
-          <GeometrySystem />
-          {/* Automated stair opening sync — updates slab/ceiling cutouts
-            whenever stairs, slabs, or levels change. */}
-          <StairOpeningSystem />
-          <RoofElevationSystem />
-          {/* Mounts systems contributed by registry-backed kinds. Each
-            kind's `def.system` is loaded via lazy() and rendered here,
-            ordered by `system.priority`. */}
-          <RegisteredSystems />
-          <PostProcessing disablePostFx={disablePostFx} hoverStyles={hoverStyles} />
-          {selectionManager === 'default' && <SelectionManager />}
-          {(perf || PERF_OVERLAY_ENABLED) && <PerfMonitor />}
-          {/* Feeds the action-cost ledger the frame's settle state (dirty
-            queue + deferred wall rebuilds) at a priority after every other
-            system, so a receipt closes when the user can actually see the
-            edit. */}
-          {(perf || PERF_OVERLAY_ENABLED) && <PerfActionSettleSystem />}
-          {BATCH_SPIKE_ENABLED && <BatchedMeshSpike />}
-          {children}
-        </ErrorBoundary>
+        </ImmersiveXRPresentationProvider>
       </Canvas>
     </>
   )
 })
+
+function ViewerScene({
+  children,
+  disablePostFx,
+  hoverStyles,
+  immersiveXR = false,
+  onRenderError,
+  onSceneReadyChange,
+  perf,
+  sceneReadyKey,
+  sceneReadyMaxWaitMs,
+  selectionManager,
+  useBvh,
+  SceneWrapper,
+}: {
+  children?: React.ReactNode
+  disablePostFx: boolean
+  hoverStyles: HoverStyles
+  immersiveXR?: boolean
+  onRenderError?: (cause: unknown) => void
+  onSceneReadyChange?: (ready: boolean) => void
+  perf: boolean
+  sceneReadyKey?: string | number | null
+  sceneReadyMaxWaitMs?: number
+  selectionManager: 'default' | 'custom'
+  useBvh: boolean
+  SceneWrapper?: ViewerImmersiveSession['Scene']
+}) {
+  const renderedScene = useBvh ? (
+    <SceneBvh>
+      <SceneRenderer />
+    </SceneBvh>
+  ) : (
+    <SceneRenderer />
+  )
+  const spatialScene = (
+    <>
+      {renderedScene}
+      <FloorElevationSystem />
+      <GeometrySystem />
+      <StairOpeningSystem />
+      <RoofElevationSystem />
+      <RegisteredSystems />
+      {BATCH_SPIKE_ENABLED && <BatchedMeshSpike />}
+      {children}
+    </>
+  )
+
+  return (
+    <>
+      <ViewerCamera immersiveXR={immersiveXR} />
+      {immersiveXR && <ImmersiveXRBackground />}
+      <PointerRaycastLayers />
+      <GPUDeviceWatcher intentionalWebGL={immersiveXR} />
+      <ToneMappingExposure />
+      <SceneReadyTracker
+        onSceneReadyChange={onSceneReadyChange}
+        sceneReadyKey={sceneReadyKey}
+        sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
+      />
+      <ErrorBoundary fallback={null} onError={onRenderError} scope="viewer-scene">
+        <Lights />
+        {SceneWrapper ? <SceneWrapper>{spatialScene}</SceneWrapper> : spatialScene}
+        {!immersiveXR && <PostProcessing disablePostFx={disablePostFx} hoverStyles={hoverStyles} />}
+        {selectionManager === 'default' && <SelectionManager />}
+        {(perf || PERF_OVERLAY_ENABLED) && <PerfMonitor />}
+        {(perf || PERF_OVERLAY_ENABLED) && <PerfActionSettleSystem />}
+      </ErrorBoundary>
+    </>
+  )
+}
 
 export default Viewer

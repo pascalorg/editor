@@ -58,6 +58,32 @@ function ceilingCustomHeight(node: CeilingNode, nodes: Record<string, AnyNode>):
   return Math.min(resolved, max)
 }
 
+export function applyMultiHeightMode(
+  nodeIds: AnyNodeId[],
+  next: 'storey' | 'custom',
+  parametrics: ParametricDescriptor<AnyNode>,
+) {
+  const nodes = useScene.getState().nodes as Record<string, AnyNode>
+  commitMultiNodeFields(
+    nodeIds,
+    (node) => {
+      const isCustom = (node as { height?: number }).height != null
+      if (next === 'custom') {
+        if (isCustom) return {}
+        if (node.type === 'ceiling') return { height: ceilingCustomHeight(node, nodes) }
+        if (node.type === 'wall') {
+          return { height: Math.max(0.1, getWallEffectiveHeightForNodes(node, nodes)) }
+        }
+        return {}
+      }
+      if (!isCustom) return {}
+      if (node.type === 'wall') return wallFollowsLevelPatch(node, nodes)
+      return { height: undefined }
+    },
+    parametrics,
+  )
+}
+
 export function MultiHeightModeField({
   nodeIds,
   nodeType,

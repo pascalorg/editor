@@ -56,6 +56,7 @@ export function useCeilingEvents() {
   const hoveredRef = useRef<string | null>(null)
 
   useEffect(() => {
+    if (gl.xr.isPresenting) return
     const canvas = gl.domElement
 
     const isActive = (): boolean => {

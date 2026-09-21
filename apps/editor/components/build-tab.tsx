@@ -68,7 +68,7 @@ type MepItem = {
 }
 
 // Same icons + ordering as the community Build sidebar, minus presets.
-const BASE_BUILD_TYPES: BuildType[] = [
+export const BASE_BUILD_TYPES: BuildType[] = [
   { id: 'wall', label: 'Wall', iconSrc: '/icons/wall.webp', kind: 'wall' },
   { id: 'fence', label: 'Fence', iconSrc: '/icons/fence.webp', kind: 'fence' },
   { id: 'slab', label: 'Slab', iconSrc: '/icons/floor.webp', kind: 'slab' },
@@ -125,7 +125,7 @@ function collectBuildTypes(floorplanMode: FloorplanMode): BuildType[] {
 
 // MEP sub-grid surfaced under the "MEP" tile — same icons + ordering the MEP
 // tools had in the community Build sidebar.
-const MEP_ITEMS: MepItem[] = [
+export const MEP_ITEMS: MepItem[] = [
   { id: 'duct-segment', label: 'Duct', iconSrc: '/icons/duct.webp', kind: 'duct-segment' },
   {
     id: 'duct-terminal',
@@ -146,7 +146,7 @@ const MODULAR_CABINET_ICON = MODULAR_CABINET_CATALOG_ITEM?.thumbnail ?? '/icons/
  * Activate a raw structure draw/cursor tool. Mirrors the editor's own
  * structure-tool activation (`setPhase`/`setStructureLayer`/`setMode`/`setTool`).
  */
-function activateBuildTool(kind: string): void {
+export function activateBuildTool(kind: string): void {
   const ed = useEditor.getState()
   const definition = nodeRegistry.get(kind)
   const extension = getFloorplanNodeExtension(definition)
@@ -166,7 +166,7 @@ function activateBuildTool(kind: string): void {
   ed.setTool(kind)
 }
 
-function activateModularCabinetTool(): void {
+export function activateModularCabinetTool(): void {
   const ed = useEditor.getState()
   useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
   if (MODULAR_CABINET_CATALOG_ITEM) ed.setSelectedItem(MODULAR_CABINET_CATALOG_ITEM)
@@ -178,7 +178,7 @@ function activateModularCabinetTool(): void {
 }
 
 /** Enter material-paint mode — the Build tab's "Painting" category. */
-function activatePaintMode(): void {
+export function activatePaintMode(): void {
   const ed = useEditor.getState()
   ed.setPhase('structure')
   ed.setStructureLayer('elements')
@@ -189,7 +189,7 @@ function activatePaintMode(): void {
  * Enter terrain-sculpt mode — the Build tab's "Terrain" category. No `setPhase`:
  * `setMode` moves to the site phase itself, since sculpting is a site-phase mode.
  */
-function activateTerrainSculptMode(): void {
+export function activateTerrainSculptMode(): void {
   useEditor.getState().setMode('terrain-sculpt')
 }
 
@@ -202,7 +202,7 @@ type RoofFeature = {
 
 const ROOF_FEATURE_FALLBACK_ICON = '/icons/roof.webp'
 
-function collectRoofFeatures(): RoofFeature[] {
+export function collectRoofFeatures(): RoofFeature[] {
   const features: RoofFeature[] = []
   for (const [kind, def] of nodeRegistry.entries()) {
     if (
@@ -231,7 +231,7 @@ function collectRoofFeatures(): RoofFeature[] {
  * populated during app bootstrap. Label + icon come from `presentation`;
  * non-url icons fall back to the roof icon.
  */
-function activateRoofFeatureTool(feature: RoofFeature): void {
+export function activateRoofFeatureTool(feature: RoofFeature): void {
   const ed = useEditor.getState()
   ed.setPhase('structure')
   ed.setStructureLayer('elements')
@@ -240,7 +240,7 @@ function activateRoofFeatureTool(feature: RoofFeature): void {
   if (feature.kind) ed.setTool(feature.kind)
 }
 
-function activateRoofType(roofType: RoofType): void {
+export function activateRoofType(roofType: RoofType): void {
   const editor = useEditor.getState()
   if (!(editor.mode === 'build' && editor.tool === 'roof')) activateBuildTool('roof')
   editor.setToolDefaults('roof', { ...editor.toolDefaults.roof, roofType })

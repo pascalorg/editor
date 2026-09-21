@@ -58,6 +58,7 @@ export function useGridEvents(gridY: number) {
   }, [gridY])
 
   useEffect(() => {
+    if (gl.xr.isPresenting) return
     const canvas = gl.domElement
     setSurfaceRaycastLayers(raycaster.current.layers)
 
