@@ -174,6 +174,7 @@ export const gutterDefinition: NodeDefinition<typeof GutterNode> = {
   floorplan: buildGutterFloorplan,
   floorplanDependsOnSiblings: true,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

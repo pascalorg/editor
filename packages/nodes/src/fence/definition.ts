@@ -309,6 +309,7 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
   }),
 
   capabilities: {
+    surfacePlacement: 'floor-only',
     selectable: { hitVolume: 'bbox' },
     surfaces: { sides: { faces: 'all' } },
     duplicable: true,

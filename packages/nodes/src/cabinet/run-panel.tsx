@@ -5,8 +5,9 @@ import type {
   AnyNodeId,
   CabinetModuleNode as CabinetModuleNodeType,
   CabinetNode as CabinetNodeType,
+  SceneApi,
 } from '@pascal-app/core'
-import { createSceneApi, resolveLevelId, useScene } from '@pascal-app/core'
+import { cascadeDirty, createSceneApi, resolveLevelId, useScene } from '@pascal-app/core'
 import {
   ActionButton,
   PanelSection,
@@ -19,6 +20,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Copy, Equal as EqualIcon, Plus, Trash } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { planCabinetHostedEdit } from './hosted-resize'
 import {
   metadataForSelectedWidth,
   metadataWithPresetWidthDebt,
@@ -354,17 +356,32 @@ export function reflowRunModules({
   return true
 }
 
-export function updateCabinetRun({
-  modules,
-  node,
-  patch,
-}: {
+export function updateCabinetRun(args: {
   modules: CabinetModuleNodeType[]
   node: CabinetNodeType
   patch: Partial<CabinetNodeType>
 }) {
-  const scene = useScene.getState()
   const sceneApi = createSceneApi(useScene)
+  const updates = planCabinetHostedEdit(sceneApi, (staged) => writeCabinetRun(args, staged))
+  if (!updates) return
+  useScene.getState().updateNodes(updates.map(([id, data]) => ({ id, data })))
+  for (const id of cascadeDirty(args.node.id, { scene: sceneApi }))
+    useScene.getState().markDirty(id)
+}
+
+function writeCabinetRun(
+  {
+    modules,
+    node,
+    patch,
+  }: {
+    modules: CabinetModuleNodeType[]
+    node: CabinetNodeType
+    patch: Partial<CabinetNodeType>
+  },
+  sceneApi: SceneApi,
+) {
+  const nodes = sceneApi.nodes()
   const nextPatch = { ...patch }
   if (typeof nextPatch.carcassHeight === 'number') {
     const minModuleHeight = Math.max(
@@ -374,7 +391,7 @@ export function updateCabinetRun({
     nextPatch.carcassHeight = Math.max(nextPatch.carcassHeight, minModuleHeight)
   }
   const nextNode = { ...node, ...nextPatch }
-  scene.updateNode(node.id, nextPatch)
+  sceneApi.update(node.id, nextPatch)
 
   const shouldSyncDepth = RUN_DEPTH_PATCH_KEY in nextPatch
   const shouldSyncHeight = 'carcassHeight' in nextPatch
@@ -414,15 +431,15 @@ export function updateCabinetRun({
       if ('handlePosition' in nextPatch) modulePatch.handlePosition = nextNode.handlePosition
       if ('frontGap' in nextPatch) modulePatch.frontGap = nextNode.frontGap
     }
-    scene.updateNode(module.id, modulePatch)
+    sceneApi.update(module.id, modulePatch)
 
     if (shouldSyncModules) {
       const wallChild = wallChildOf(
         module,
-        scene.nodes as Record<string, CabinetEditableNode | undefined>,
+        nodes as Record<string, CabinetEditableNode | undefined>,
       )
       if (wallChild) {
-        scene.updateNode(wallChild.id, {
+        sceneApi.update(wallChild.id, {
           frontStyle: nextNode.frontStyle,
           frontOverlay: nextNode.frontOverlay,
           handleStyle: nextNode.handleStyle,

@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  cascadeDirty,
   type HandleDragModifiers,
   type LinearResizeHandle,
   type RadialResizeHandle,
@@ -60,14 +61,16 @@ export function createLinearResizeDragBinding({
           previewEntries.map(([id, previewPatch]) => [id, previewPatch as Record<string, unknown>]),
         )
       for (const [previewId] of previewEntries) {
-        useScene.getState().markDirty(previewId)
+        for (const id of cascadeDirty(previewId, { scene: sceneApi }))
+          useScene.getState().markDirty(id)
       }
       return patch
     },
     clearPreview(): void {
       for (const previewId of previewOverrideIds) {
         useLiveNodeOverrides.getState().clear(previewId)
-        useScene.getState().markDirty(previewId)
+        for (const id of cascadeDirty(previewId, { scene: sceneApi }))
+          useScene.getState().markDirty(id)
       }
       previewOverrideIds = new Set()
     },

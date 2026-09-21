@@ -312,6 +312,82 @@ describe('managed runtime', () => {
   })
 })
 
+describe('runtime pinned by the CLI package', () => {
+  type ProgressEvent = { step: string } & Record<string, unknown>
+
+  async function pinnedSourceFile(root: string, version: string): Promise<string> {
+    const file = path.join(root, `runtime-source-${version}.json`)
+    await writeFile(
+      file,
+      JSON.stringify({
+        version,
+        url: `https://127.0.0.1:1/pascal-web-runtime-${version}.tar.gz`,
+        sha256: 'a'.repeat(64),
+        size: 10,
+      }),
+    )
+    return file
+  }
+
+  test('a newer CLI starts the runtime it was published with, not the previously active one', async () => {
+    const root = await temporaryRoot()
+    const paths = resolvePascalPaths({ PASCAL_HOME: path.join(root, 'home') })
+    await installBundledRuntime(paths, await fakeRuntime(root, '1.2.3'))
+    await installBundledRuntime(paths, await fakeRuntime(root, '2.0.0'), { activate: false })
+    const events: ProgressEvent[] = []
+
+    const started = await startEditor({
+      paths,
+      port: 0,
+      runtimeSourceFile: await pinnedSourceFile(root, '2.0.0'),
+      onProgress: (event) => events.push(event),
+    })
+
+    expect(started.state.version).toBe('2.0.0')
+    expect((await readActiveRuntime(paths))?.version).toBe('2.0.0')
+    expect(events).toContainEqual({ step: 'runtime-ready', version: '2.0.0', installed: false })
+    await stopEditor(paths)
+  })
+
+  test('reports an already-running older runtime instead of restarting it', async () => {
+    const root = await temporaryRoot()
+    const paths = resolvePascalPaths({ PASCAL_HOME: path.join(root, 'home') })
+    const first = await startEditor({
+      paths,
+      port: 0,
+      runtimeSource: await fakeRuntime(root, '1.2.3'),
+    })
+    const events: ProgressEvent[] = []
+
+    const second = await startEditor({
+      paths,
+      runtimeSourceFile: await pinnedSourceFile(root, '2.0.0'),
+      onProgress: (event) => events.push(event),
+    })
+
+    expect(second.alreadyRunning).toBe(true)
+    expect(second.state.instanceId).toBe(first.state.instanceId)
+    expect(events).toContainEqual({ step: 'runtime-outdated', active: '1.2.3', pinned: '2.0.0' })
+    expect((await readActiveRuntime(paths))?.version).toBe('1.2.3')
+    await stopEditor(paths)
+  })
+
+  test('keeps the active runtime when the package manifest cannot be read', async () => {
+    const root = await temporaryRoot()
+    const paths = resolvePascalPaths({ PASCAL_HOME: path.join(root, 'home') })
+    await installBundledRuntime(paths, await fakeRuntime(root, '1.2.3'))
+
+    const started = await startEditor({
+      paths,
+      port: 0,
+      runtimeSourceFile: path.join(root, 'missing-runtime-source.json'),
+    })
+
+    expect(started.state.version).toBe('1.2.3')
+    await stopEditor(paths)
+  })
+})
+
 async function temporaryRoot(): Promise<string> {
   const root = await mkdtemp(path.join(os.tmpdir(), 'pascal-cli-test-'))
   roots.push(root)

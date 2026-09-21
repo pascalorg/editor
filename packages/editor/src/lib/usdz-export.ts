@@ -1,13 +1,19 @@
 import type { AnyNode } from '@pascal-app/core'
 import type { Object3D } from 'three'
 import { USDZExporter } from 'three/examples/jsm/exporters/USDZExporter.js'
-import * as WebGPUTextureUtils from 'three/examples/jsm/utils/WebGPUTextureUtils.js'
-import { type GlbExportOptions, preparePortableSceneFromViewer } from './glb-export'
+import { createExportTextureUtils } from './export-texture-utils'
+import {
+  DEFAULT_MODEL_EXPORT_TIMEOUT_MS,
+  type GlbExport,
+  type GlbExportOptions,
+  preparePortableSceneFromViewer,
+  withExportDeadline,
+} from './glb-export'
 import { createUsdzScene, disposeExportResources } from './portable-export'
 
 export type UsdzExportOptions = Pick<
   GlbExportOptions,
-  'excludedNodeTypes' | 'includedPresentationIds' | 'onlyVisible' | 'onWarning'
+  'excludedNodeTypes' | 'includedPresentationIds' | 'onlyVisible' | 'onWarning' | 'timeoutMs'
 >
 
 /** Export a native, self-contained USDZ with no glTF conversion fallback. */
@@ -16,24 +22,44 @@ export async function exportSceneToUsdz(
   nodes: Record<string, AnyNode>,
   options: UsdzExportOptions = {},
 ): Promise<Uint8Array<ArrayBuffer>> {
-  const prepared = await preparePortableSceneFromViewer(sceneGroup, nodes, {
+  const textureUtils = createExportTextureUtils()
+  const preparation = preparePortableSceneFromViewer(sceneGroup, nodes, {
     ...options,
     textures: 'embed',
     animations: 'none',
+    textureUtils,
   })
-  for (const warning of prepared.warnings) options.onWarning?.(warning)
-
-  let scene: Object3D | null = null
+  // Assigned inside the raced closure, so plain `let`s narrow to `never` in
+  // the `finally`.
+  const run: { prepared: GlbExport | null; scene: Object3D | null; abandoned: boolean } = {
+    prepared: null,
+    scene: null,
+    abandoned: false,
+  }
   try {
-    scene = createUsdzScene(prepared.scene)
-    const exporter = new USDZExporter()
-    exporter.textureUtils = WebGPUTextureUtils
-    return await exporter.parseAsync(scene, {
-      onlyVisible: options.onlyVisible ?? true,
-      quickLookCompatible: true,
-    })
+    return await withExportDeadline(
+      (async () => {
+        run.prepared = await preparation
+        if (run.abandoned) throw new Error('USDZ export abandoned')
+        for (const warning of run.prepared.warnings) options.onWarning?.(warning)
+        run.scene = createUsdzScene(run.prepared.scene)
+        const exporter = new USDZExporter()
+        exporter.textureUtils = textureUtils as unknown as USDZExporter['textureUtils']
+        return exporter.parseAsync(run.scene, {
+          onlyVisible: options.onlyVisible ?? true,
+          quickLookCompatible: true,
+        })
+      })(),
+      options.timeoutMs ?? DEFAULT_MODEL_EXPORT_TIMEOUT_MS,
+      'USDZ',
+      () => {
+        run.abandoned = true
+      },
+    )
   } finally {
-    if (scene) disposeExportResources(scene, { textures: false })
-    prepared.dispose()
+    if (run.scene) disposeExportResources(run.scene, { textures: false })
+    if (run.prepared) run.prepared.dispose()
+    else preparation.then((late) => late.dispose()).catch(() => {})
+    await textureUtils.dispose()
   }
 }

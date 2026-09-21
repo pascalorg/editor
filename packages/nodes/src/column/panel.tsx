@@ -22,6 +22,8 @@ import { useViewer } from '@pascal-app/viewer'
 import { Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 
+import { planColumnEdit } from './hosted-resize'
+
 const SELECT_CLASS =
   'h-10 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm text-foreground outline-none transition-colors hover:bg-[#3e3e3e] focus:ring-1 focus:ring-border'
 
@@ -290,7 +292,7 @@ export default function ColumnPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const selectedCount = useViewer((s) => s.selection.selectedIds.length)
   const setSelection = useViewer((s) => s.setSelection)
-  const updateNode = useScene((s) => s.updateNode)
+  const updateNodes = useScene((s) => s.updateNodes)
   const deleteNode = useScene((s) => s.deleteNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
 
@@ -304,9 +306,10 @@ export default function ColumnPanel() {
       const nextUpdates =
         node && isManagedLeanToPost(node) ? filterManagedLeanToLayoutUpdates(updates) : updates
       if (Object.keys(nextUpdates).length === 0) return
-      updateNode(selectedId as AnyNode['id'], nextUpdates)
+      const updatesToApply = planColumnEdit(selectedId as AnyNode['id'], nextUpdates)
+      if (updatesToApply) updateNodes(updatesToApply.map(([id, data]) => ({ id, data })))
     },
-    [node, selectedId, updateNode],
+    [node, selectedId, updateNodes],
   )
 
   const handleClose = useCallback(() => {

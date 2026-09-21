@@ -1,9 +1,4 @@
-import {
-  type AnyNodeId,
-  type BlockTopology,
-  type SceneApi,
-  useLiveNodeOverrides,
-} from '@pascal-app/core'
+import type { AnyNodeId, BlockTopology, SceneApi } from '@pascal-app/core'
 import {
   isGridSnapActive,
   meshEditScope,
@@ -12,7 +7,13 @@ import {
   useEditor,
   useInteractionScope,
 } from '@pascal-app/editor'
-import { type Dispatch, type MutableRefObject, type SetStateAction, useCallback } from 'react'
+import {
+  type Dispatch,
+  type MutableRefObject,
+  type SetStateAction,
+  useCallback,
+  useMemo,
+} from 'react'
 import type { Camera, Object3D } from 'three'
 import { Vector2, Vector3 } from 'three'
 import {
@@ -21,6 +22,7 @@ import {
   type BlockSelection,
   blockFaceNormal,
 } from './commands'
+import { BLOCK_SUPPORT_REFUSAL, createBlockTopologyPreview } from './hosted-edit'
 import type { BlockSfxAction } from './interaction-sfx'
 import {
   type BlockExtrudeAxis,
@@ -58,7 +60,7 @@ export type UseBlockFaceOperationOptions = {
   nodeId: AnyNodeId
   ownsEditSession: () => boolean
   playSfx: (action: BlockSfxAction) => void
-  sceneApi: Pick<SceneApi, 'markDirty'>
+  sceneApi: Pick<SceneApi, 'get' | 'markDirty'>
   selectedIds: string[]
   selection: BlockSelection
   setActiveFaceOperation: StateSetter<BlockModalFaceOperation | null>
@@ -97,6 +99,10 @@ export function useBlockFaceOperation({
   setTransformNumericInput,
   target,
 }: UseBlockFaceOperationOptions) {
+  const topologyPreview = useMemo(
+    () => createBlockTopologyPreview(nodeId, sceneApi),
+    [nodeId, sceneApi],
+  )
   return useCallback(
     (operation: BlockModalFaceOperation) => {
       if (!ownsEditSession() || mode !== 'face' || selectedIds.length === 0 || cancelRef.current) {
@@ -142,7 +148,8 @@ export function useBlockFaceOperation({
       const baseTopology = displayTopology
       let latestTopology: BlockTopology | null = null
       let latestSelection: BlockSelection | null = null
-      let latestValue = 0
+      let latestCommand: BlockCommand | null = null
+      let supportRefused = false
       let typedInput = ''
       let lastClientX = startPointer.x
       let lastClientY = startPointer.y
@@ -184,9 +191,11 @@ export function useBlockFaceOperation({
         if (Math.abs(value) <= 1e-6) {
           latestTopology = null
           latestSelection = null
-          latestValue = 0
+          latestCommand = null
+          supportRefused = false
+          setError(null)
           setPreviewTopology(null)
-          useLiveNodeOverrides.getState().clear(nodeId)
+          topologyPreview.clear()
           sceneApi.markDirty(nodeId)
           return
         }
@@ -196,25 +205,30 @@ export function useBlockFaceOperation({
         } else if (!snapping) {
           lastSnapValue = null
         }
-        const result = applyBlockCommand(
-          baseTopology,
-          blockFaceOperationCommand(operation, faceIds, value, extrudeAxis),
-        )
+        const command = blockFaceOperationCommand(operation, faceIds, value, extrudeAxis)
+        const result = applyBlockCommand(baseTopology, command)
         if (!result.ok) {
+          // Command errors keep the last accepted preview; only lost support holds the modal open.
+          supportRefused = false
           setError(result.error)
+          return
+        }
+        if (!topologyPreview.set(result.topology)) {
+          supportRefused = true
+          setError(BLOCK_SUPPORT_REFUSAL)
           return
         }
         latestTopology = result.topology
         latestSelection = result.selection
-        latestValue = value
+        latestCommand = command
+        supportRefused = false
         setPreviewTopology(result.topology)
-        useLiveNodeOverrides.getState().set(nodeId, { topology: result.topology })
         sceneApi.markDirty(nodeId)
         setError(null)
       }
 
       const complete = (commitOperation: boolean) => {
-        useLiveNodeOverrides.getState().clear(nodeId)
+        topologyPreview.clear()
         sceneApi.markDirty(nodeId)
         setPreviewTopology(null)
         setActiveFaceOperation(null)
@@ -222,12 +236,8 @@ export function useBlockFaceOperation({
         setFaceOperationValue('')
         setTransformNumericInput('')
         setModalFeedbackMode('free')
-        if (commitOperation && latestTopology && latestSelection && Math.abs(latestValue) > 1e-6) {
-          commit(
-            baseTopology,
-            blockFaceOperationCommand(operation, faceIds, latestValue, extrudeAxis),
-            operation === 'extrude' ? 'Extrude' : 'Inset',
-          )
+        if (commitOperation && latestTopology && latestSelection && latestCommand) {
+          commit(baseTopology, latestCommand, operation === 'extrude' ? 'Extrude' : 'Inset')
           playSfx('operation-commit')
         } else if (!commitOperation) {
           playSfx('cancel')
@@ -293,6 +303,7 @@ export function useBlockFaceOperation({
       setModalFeedbackMode('free')
       setError(null)
       beginBlockModalSession({
+        canCommit: () => !supportRefused,
         beginInputDrag,
         cancelRef,
         cursor: operation === 'extrude' ? 'ns-resize' : 'nwse-resize',
@@ -304,6 +315,7 @@ export function useBlockFaceOperation({
       return true
     },
     [
+      topologyPreview,
       beginInputDrag,
       camera,
       cancelRef,

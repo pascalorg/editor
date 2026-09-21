@@ -30,6 +30,7 @@ import { backdropGradient, deepSkyColor, horizonHazeColor } from '../../lib/back
 import { edgeColorFor, edgeOpacityScaleFor } from '../../lib/edge-style'
 import { PERF_OVERLAY_ENABLED } from '../../lib/gpu-perf'
 import { inkedEdges } from '../../lib/ink-edges'
+import { refreshIsolation } from '../../lib/isolation'
 import { LayerPassIndex, LayerPassNode } from '../../lib/layer-pass'
 import { GRID_LAYER, OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
 import { mergedOutline } from '../../lib/merged-outline-node'
@@ -755,6 +756,7 @@ const PostProcessingPasses = ({
     inkOpacityScaleUniform.current.value = edgeOpacityScaleFor(bgHex)
 
     const outliner = useViewer.getState().outliner
+    const restoreAtmosphere = refreshIsolation(scene)
     sanitizeOutlineObjects(outliner.selectedObjects)
     sanitizeOutlineObjects(outliner.hoveredObjects)
 
@@ -782,6 +784,7 @@ const PostProcessingPasses = ({
         console.error('[viewer/post-processing] Fallback render failed.', fallbackError)
       } finally {
         scene.backgroundNode = previousBackgroundNode
+        restoreAtmosphere()
       }
       return
     }
@@ -819,6 +822,8 @@ const PostProcessingPasses = ({
           '[viewer/post-processing] Retries exhausted. Rendering without post FX for this session.',
         )
       }
+    } finally {
+      restoreAtmosphere()
     }
   }, 1)
 

@@ -7,6 +7,7 @@
 - Add plugin-contributed editor panels and viewer presentations with project-local configuration persistence.
 - Include Environment in the standalone app's Plugins catalogue, with a pinned GitHub dependency and registered editor panel and viewer presentation.
 - Refresh Environment's authoring controls and include its interactive color picker.
+- Update Environment to its pinned global-visibility release, with a session-wide master control and isolation-aware presentation visibility.
 - Expose generic atmosphere and ground-replacement adapters, Site-scoped floorplan output, bake-only GLB geometry, and plugin-owned selection materials.
 - Add portable GLB/USDZ downloads with asynchronous material baking, procedural-content filters, and opt-in static viewer-presentation exports.
 - **Public agent skills** — `pascal-3d` and `furniture-fit` teach MCP-capable agents to build, inspect, validate, and hand off scenes, and to report measured furniture footprints with evidence-scoped conclusions, fail-closed input gates, blocker-aware next actions, and an optional no-sign-in footprint pre-check link ([#777](https://github.com/pascalorg/editor/pull/777), [#781](https://github.com/pascalorg/editor/pull/781), [#791](https://github.com/pascalorg/editor/pull/791), [#794](https://github.com/pascalorg/editor/pull/794), [#824](https://github.com/pascalorg/editor/pull/824))
@@ -24,6 +25,7 @@
 
 ### Fixes
 
+- Preserve native and active presentation skies in snapshots and keep preset captures transparent.
 - Localize terrain and ground-cover brush updates, preserve pending dab uploads, and keep Environment's day/night light graph stable.
 - Keep Site-scoped floorplan overlays aligned with live move and rotation previews.
 - Preserve Site ownership and same-kind sibling context in synchronous and asynchronous export geometry, including Site children without a parent ID.

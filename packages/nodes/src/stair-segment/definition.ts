@@ -132,6 +132,7 @@ export const stairSegmentDefinition: NodeDefinition<typeof StairSegmentNode> = {
   parametrics: stairSegmentParametrics,
   handles: stairSegmentHandles,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

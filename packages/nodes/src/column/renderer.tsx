@@ -1,7 +1,10 @@
 'use client'
 
 import {
+  type AnyNodeId,
   type ColumnNode,
+  collectDescendants,
+  createSceneApi,
   useLiveNodeOverrides,
   useLiveTransforms,
   useRegistry,
@@ -17,6 +20,7 @@ import {
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
+  NodeRenderer,
   type RenderShading,
   resolveMaterialRef,
   resolveSlotDefaultMaterial,
@@ -25,6 +29,14 @@ import {
 } from '@pascal-app/viewer'
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef } from 'react'
 import { BufferGeometry, Float32BufferAttribute, type Group, type Material } from 'three'
+import {
+  columnCapitalBlocks,
+  columnShaftLayout,
+  getSegments,
+  getShaftScaleAt,
+  getShaftSegmentCount,
+  getShaftTwistRadians,
+} from './shape'
 import {
   COLUMN_BASE_DEFAULT,
   COLUMN_CAPITAL_DEFAULT,
@@ -173,60 +185,6 @@ function createColumnSlotMaterials({
       textures,
     }),
   }
-}
-
-function getSegments(node: ColumnNode) {
-  if (node.crossSection === 'octagonal') return 8
-  if (node.crossSection === 'sixteen-sided') return 16
-  return 32
-}
-
-function getShaftProfile(node: ColumnNode) {
-  return node.shaftProfile ?? (node.shaftTaper > 0 ? 'tapered' : 'straight')
-}
-
-function getShaftSegmentCount(node: ColumnNode) {
-  const shaftProfile = getShaftProfile(node)
-  const shaftTaper = node.shaftTaper ?? 0
-  const hasTwist = Math.abs(node.shaftTwistStep ?? 0) > 0.001
-  return Math.max(
-    hasTwist ? 4 : 1,
-    shaftProfile === 'straight' && shaftTaper <= 0 && !hasTwist
-      ? 1
-      : (node.shaftSegmentCount ?? (hasTwist ? 12 : 24)),
-  )
-}
-
-function getShaftTwistRadians(node: ColumnNode, index: number) {
-  return ((node.shaftTwistStep ?? 0) * Math.PI * index) / 180
-}
-
-function getShaftScaleAt(node: ColumnNode, t: number) {
-  const shaftProfile = getShaftProfile(node)
-  const shaftTaper = Math.min(node.shaftTaper ?? 0, 0.85)
-  const startScale = node.shaftStartScale ?? 0.72
-  const endScale = node.shaftEndScale ?? startScale
-  const shaftBulge =
-    node.shaftBulge ??
-    (shaftProfile === 'bulged'
-      ? 0.16
-      : shaftProfile === 'baluster'
-        ? 0.2
-        : shaftProfile === 'hourglass'
-          ? 0.18
-          : 0)
-  const taperedScale = 1 - shaftTaper * t
-  const linearScale = (startScale + (endScale - startScale) * t) * taperedScale
-  const bulgeCurve = Math.sin(Math.PI * t)
-  const hourglassCurve = Math.abs(t - 0.5) * 2
-  const profileScale =
-    shaftProfile === 'bulged' || shaftProfile === 'baluster'
-      ? linearScale + shaftBulge * bulgeCurve
-      : shaftProfile === 'hourglass'
-        ? linearScale - shaftBulge * (1 - hourglassCurve)
-        : linearScale
-
-  return Math.max(0.1, profileScale)
 }
 
 type VectorTuple = [number, number, number]
@@ -2087,38 +2045,53 @@ function LeafCarvings({
 }
 
 function Capital({ node, y, height }: { node: ColumnNode; y: number; height: number }) {
-  if (height <= 0) return null
-
-  const capitalStyle = node.capitalStyle ?? 'simple'
-  if (capitalStyle === 'none') return null
-
-  if (capitalStyle === 'south-indian-bracket' || capitalStyle === 'wood-bracket') {
-    const tierCount = Math.max(1, node.bracketTierCount ?? 3)
-    const tierHeight = height / tierCount
-    const bracketDepth = node.bracketDepth ?? 0.35
-    return (
-      <group>
-        {Array.from({ length: tierCount }, (_, index) => {
-          const t = index / Math.max(1, tierCount - 1)
-          const scale = (node.capitalWidthScale ?? 1.6) + t * 0.32
-          return (
-            <SquareBlock
-              depth={node.depth * scale + bracketDepth * t}
-              height={tierHeight}
-              key={index}
-              width={node.width * scale + bracketDepth * t}
-              y={y + index * tierHeight}
-            />
-          )
-        })}
-        {Array.from({ length: node.pendantCount ?? 0 }, (_, index) => {
-          const count = Math.max(1, node.pendantCount ?? 0)
-          const angle = (index / count) * Math.PI * 2
+  const blocks = columnCapitalBlocks(node, y, height)
+  if (!blocks.length) return null
+  return (
+    <group>
+      {blocks.map((block, index) =>
+        block.kind === 'box' ? (
+          <SquareBlock
+            key={index}
+            y={block.y}
+            height={block.height}
+            width={block.width!}
+            depth={block.depth!}
+          />
+        ) : block.kind === 'oval' ? (
+          <OvalBlock
+            key={index}
+            y={block.y}
+            height={block.height}
+            width={block.width!}
+            depth={block.depth!}
+          />
+        ) : block.kind === 'round' ? (
+          <RoundBlock
+            key={index}
+            y={block.y}
+            height={block.height}
+            radius={block.radius!}
+            segments={getSegments(node)}
+          />
+        ) : (
+          <ColumnBlock
+            key={index}
+            node={node}
+            y={block.y}
+            height={block.height}
+            scale={block.scale}
+          />
+        ),
+      )}
+      {(node.capitalStyle === 'south-indian-bracket' || node.capitalStyle === 'wood-bracket') &&
+        Array.from({ length: node.pendantCount ?? 0 }, (_, index) => {
+          const angle = (index / Math.max(1, node.pendantCount ?? 0)) * Math.PI * 2
           const distance = Math.max(node.width, node.depth) * 0.56
           return (
             <MappedCone
-              height={height * 0.28}
               key={index}
+              height={height * 0.28}
               position={[Math.cos(angle) * distance, y - height * 0.1, Math.sin(angle) * distance]}
               radiusX={0.035}
               rotation={[0, 0, 0]}
@@ -2126,112 +2099,9 @@ function Capital({ node, y, height }: { node: ColumnNode; y: number; height: num
             />
           )
         })}
-      </group>
-    )
-  }
-
-  if (capitalStyle === 'rounded' || capitalStyle === 'doric') {
-    const topWidth = node.width * (node.capitalWidthScale ?? 1.34)
-    const topDepth = node.depth * (node.capitalDepthScale ?? node.capitalWidthScale ?? 1.34)
-    return (
-      <group>
-        <OvalBlock
-          depth={topDepth * 0.72}
-          height={height * 0.24}
-          segments={32}
-          width={topWidth * 0.72}
-          y={y}
-        />
-        <OvalBlock
-          depth={topDepth * 0.92}
-          height={height * 0.32}
-          segments={32}
-          width={topWidth * 0.92}
-          y={y + height * 0.24}
-        />
-        <SquareBlock
-          depth={topDepth}
-          height={height * 0.44}
-          width={topWidth}
-          y={y + height * 0.56}
-        />
-      </group>
-    )
-  }
-
-  if (capitalStyle === 'stepped') {
-    const widthScale = node.capitalWidthScale ?? 1.46
-    const depthScale = node.capitalDepthScale ?? widthScale
-    const tierCount = Math.max(3, node.capitalTierCount ?? 3)
-    const tierHeight = height / tierCount
-    const stepSpread = node.capitalStepSpread ?? 0.42
-
-    return (
-      <group>
-        {Array.from({ length: tierCount }, (_, index) => {
-          const t = index / Math.max(1, tierCount - 1)
-          const widthScaleAt = Math.max(0.5, widthScale - (1 - t) * stepSpread)
-          const depthScaleAt = Math.max(0.5, depthScale - (1 - t) * stepSpread)
-          return (
-            <SquareBlock
-              depth={node.depth * depthScaleAt}
-              height={tierHeight * 1.01}
-              key={index}
-              width={node.width * widthScaleAt}
-              y={y + index * tierHeight}
-            />
-          )
-        })}
-      </group>
-    )
-  }
-
-  if (
-    capitalStyle === 'volute' ||
-    capitalStyle === 'ionic-volute' ||
-    capitalStyle === 'leaf-carved' ||
-    capitalStyle === 'corinthian-leaf'
-  ) {
-    const topWidth = node.width * (node.capitalWidthScale ?? 1.46)
-    const topDepth = node.depth * (node.capitalDepthScale ?? node.capitalWidthScale ?? 1.46)
-
-    return (
-      <group>
-        <ColumnBlock height={height * 0.24} node={node} scale={0.9} y={y} />
-        <ColumnBlock height={height * 0.2} node={node} scale={1.08} y={y + height * 0.24} />
-        <SquareBlock
-          depth={topDepth}
-          height={height * 0.28}
-          width={topWidth}
-          y={y + height * 0.44}
-        />
-        <Volutes capitalHeight={height} capitalY={y} node={node} />
-        <LeafCarvings capitalHeight={height} capitalY={y} node={node} />
-      </group>
-    )
-  }
-
-  const widthScale = node.capitalWidthScale ?? (capitalStyle === 'simple-slab' ? 1.28 : 1.18)
-  const depthScale = node.capitalDepthScale ?? widthScale
-
-  if (node.crossSection === 'square' || node.crossSection === 'rectangular') {
-    return (
-      <SquareBlock
-        depth={node.depth * depthScale}
-        height={height}
-        width={node.width * widthScale}
-        y={y}
-      />
-    )
-  }
-
-  return (
-    <RoundBlock
-      height={height}
-      radius={Math.max(node.radius * widthScale, node.width * widthScale * 0.5)}
-      segments={getSegments(node)}
-      y={y}
-    />
+      <Volutes capitalHeight={height} capitalY={y} node={node} />
+      <LeafCarvings capitalHeight={height} capitalY={y} node={node} />
+    </group>
   )
 }
 
@@ -2245,13 +2115,7 @@ function Capital({ node, y, height }: { node: ColumnNode; y: number; height: num
  * wrapping this in its own providers.
  */
 function ColumnBody({ node }: { node: ColumnNode }) {
-  const shaftLayout = useMemo(() => {
-    const baseHeight = node.baseStyle === 'none' ? 0 : Math.min(node.baseHeight, node.height * 0.4)
-    const capitalHeight =
-      node.capitalStyle === 'none' ? 0 : Math.min(node.capitalHeight, node.height * 0.4)
-    const shaftHeight = Math.max(0.1, node.height - baseHeight - capitalHeight)
-    return { baseHeight, capitalHeight, shaftY: baseHeight, shaftHeight }
-  }, [node.baseHeight, node.baseStyle, node.capitalHeight, node.capitalStyle, node.height])
+  const shaftLayout = columnShaftLayout(node)
 
   if (node.supportStyle !== 'vertical') {
     const support =
@@ -2408,6 +2272,19 @@ export const ColumnRenderer = ({ node: rawNode }: { node: ColumnNode }) => {
   )
 
   useRegistry(node.id, node.type, ref)
+  // This renderer bypasses GeometrySystem, which normally invalidates hosted descendants.
+  useEffect(() => {
+    const dirtySubtree = () => {
+      const scene = createSceneApi(useScene)
+      for (const id of collectDescendants(node.id, { scene })) {
+        scene.markDirty(id)
+      }
+    }
+    dirtySubtree()
+    return useLiveTransforms.subscribe((state, previous) => {
+      if (state.transforms.get(node.id) !== previous.transforms.get(node.id)) dirtySubtree()
+    })
+  }, [node])
 
   return (
     <ColumnMaterialContext.Provider value={materials}>
@@ -2420,6 +2297,9 @@ export const ColumnRenderer = ({ node: rawNode }: { node: ColumnNode }) => {
           {...handlers}
         >
           <ColumnBody node={node} />
+          {node.children.map((id) => (
+            <NodeRenderer key={id} nodeId={id as AnyNodeId} />
+          ))}
         </group>
       </ColumnEdgeSoftnessContext.Provider>
     </ColumnMaterialContext.Provider>

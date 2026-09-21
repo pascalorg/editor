@@ -144,6 +144,7 @@ export const cupolaDefinition: NodeDefinition<typeof CupolaNode> = {
   handles: cupolaHandles,
   floorplan: buildCupolaFloorplan,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

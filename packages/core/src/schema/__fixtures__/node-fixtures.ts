@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { shelfRecipe } from '../../procedural-items/fixtures'
 import * as schema from '../index'
 import { AnyNode, type AnyNodeType, nodeKindOf } from '../types'
 
@@ -62,6 +63,7 @@ export const NODE_REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
       [1, 0, 0],
     ],
   },
+  'procedural-item': { recipe: shelfRecipe },
   slab: {
     polygon: [
       [0, 0],

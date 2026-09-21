@@ -8,7 +8,11 @@ const AUTOSAVE_DEBOUNCE_MS = 1000
 const STRUCTURAL_NODE_COUNT = 4
 
 export function isSuspiciousNodeDrop(previousNodeCount: number, currentNodeCount: number) {
-  return previousNodeCount > STRUCTURAL_NODE_COUNT && currentNodeCount <= STRUCTURAL_NODE_COUNT
+  return (
+    previousNodeCount > STRUCTURAL_NODE_COUNT &&
+    currentNodeCount <= STRUCTURAL_NODE_COUNT &&
+    previousNodeCount - currentNodeCount > 1
+  )
 }
 
 /**
@@ -37,8 +41,8 @@ export function createStoredNodeCountTracker(initialNodeCount: number) {
      * which is an accidental full deletion far more often than an intent. The
      * caller reports the block; on `true` the write becomes the new baseline.
      */
-    allowWrite(nodeCount: number) {
-      if (isSuspiciousNodeDrop(count, nodeCount)) return false
+    allowWrite(nodeCount: number, guardAgainstSceneWipe = true) {
+      if (guardAgainstSceneWipe && isSuspiciousNodeDrop(count, nodeCount)) return false
       count = nodeCount
       return true
     },
@@ -65,10 +69,14 @@ export function decideExitFlush(opts: {
   hasDirtyChanges: boolean
   storedNodeCount: number
   currentNodeCount: number
+  guardAgainstSceneWipe?: boolean
 }): ExitFlushDecision {
   if (!opts.hasDirtyChanges) return 'skip-clean'
   if (opts.isLoadingScene) return 'skip-loading'
-  if (isSuspiciousNodeDrop(opts.storedNodeCount, opts.currentNodeCount)) {
+  if (
+    opts.guardAgainstSceneWipe !== false &&
+    isSuspiciousNodeDrop(opts.storedNodeCount, opts.currentNodeCount)
+  ) {
     return 'blocked-suspicious'
   }
   return 'flush'
@@ -77,6 +85,7 @@ export function decideExitFlush(opts: {
 export type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'paused' | 'error'
 
 interface UseAutoSaveOptions {
+  guardAgainstSceneWipe?: boolean
   onSave?: (scene: SceneGraph, options?: { keepalive?: boolean }) => Promise<void>
   onDirty?: () => void
   onSaveStatusChange?: (status: SaveStatus) => void
@@ -90,6 +99,7 @@ interface UseAutoSaveOptions {
  * ⚠️  Mount in exactly ONE component (the Editor).
  */
 export function useAutoSave({
+  guardAgainstSceneWipe = true,
   onSave,
   onDirty,
   onSaveStatusChange,
@@ -116,6 +126,7 @@ export function useAutoSave({
   const onDirtyRef = useRef(onDirty)
   const onSaveStatusChangeRef = useRef(onSaveStatusChange)
   const isVersionPreviewModeRef = useRef(isVersionPreviewMode)
+  const guardAgainstSceneWipeRef = useRef(guardAgainstSceneWipe)
 
   useEffect(() => {
     onSaveRef.current = onSave
@@ -129,6 +140,9 @@ export function useAutoSave({
   useEffect(() => {
     isVersionPreviewModeRef.current = isVersionPreviewMode
   }, [isVersionPreviewMode])
+  useEffect(() => {
+    guardAgainstSceneWipeRef.current = guardAgainstSceneWipe
+  }, [guardAgainstSceneWipe])
 
   const setSaveStatus = useCallback((status: SaveStatus) => {
     onSaveStatusChangeRef.current?.(status)
@@ -166,7 +180,7 @@ export function useAutoSave({
 
       const currentNodeCount = Object.keys(nodes).length
       const previousNodeCount = storedNodeCount.count
-      if (!storedNodeCount.allowWrite(currentNodeCount)) {
+      if (!storedNodeCount.allowWrite(currentNodeCount, guardAgainstSceneWipeRef.current)) {
         console.warn(
           `[autosave] Blocked: scene dropped from ${previousNodeCount} to ${currentNodeCount} nodes. Likely accidental deletion.`,
         )
@@ -266,6 +280,7 @@ export function useAutoSave({
         hasDirtyChanges: hasDirtyChangesRef.current,
         storedNodeCount: previousNodeCount,
         currentNodeCount,
+        guardAgainstSceneWipe: guardAgainstSceneWipeRef.current,
       })
       if (decision === 'skip-clean') return
       if (decision === 'skip-loading') {
@@ -282,7 +297,7 @@ export function useAutoSave({
         return
       }
       // 'flush' — adopt the write as the new stored baseline.
-      storedNodeCount.allowWrite(currentNodeCount)
+      storedNodeCount.allowWrite(currentNodeCount, guardAgainstSceneWipeRef.current)
 
       hasDirtyChangesRef.current = false
       const sceneGraph = {

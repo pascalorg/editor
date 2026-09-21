@@ -380,6 +380,7 @@ export {
   resolveElevatorSupportLevelId,
   resolveElevatorSupportY,
 } from './lib/elevator-support'
+export type { ExportTextureUtils } from './lib/export-texture-utils'
 export { getFloatingMenuScale } from './lib/floating-menu-scale'
 // Floor-plan stair helpers — the cumulative-transform walk
 // (`computeFloorplanStairSegmentTransforms`) and the rich segment-entry
@@ -589,6 +590,7 @@ export {
   resolveStairPlacementLevelId,
   resolveStairToLevelId,
 } from './lib/stair-levels'
+export { surfaceAttachmentId, surfaceFramePose, updateSurfaceNode } from './lib/surface-attachment'
 export {
   clearSurfacePlanSnapFeedback,
   resolveSurfacePlanPointSnap,

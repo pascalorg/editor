@@ -77,10 +77,13 @@ function applyHold(obj: Object3D, hold: Hold): void {
   // A batched wall is both drawn and shadowed by the merged mesh, so it stays
   // out of the shadow pass too — enabling the shadow-only bit would submit its
   // triangles a second time, on top of the copy the batch already casts.
+  if (hold.reasons.has('isolated')) obj.layers.disable(SHADOW_ONLY_LAYER)
+
   if (hold.reasons.has('batched') || hold.reasons.has('wall-batched')) {
     obj.layers.enable(BATCHED_LAYER)
     return
   }
 
-  if (hold.reasons.has('shadow-only')) obj.layers.enable(SHADOW_ONLY_LAYER)
+  if (!hold.reasons.has('isolated') && hold.reasons.has('shadow-only'))
+    obj.layers.enable(SHADOW_ONLY_LAYER)
 }

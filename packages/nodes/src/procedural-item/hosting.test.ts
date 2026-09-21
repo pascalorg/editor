@@ -130,5 +130,8 @@ test('hosted procedural floorplan moves use the same parent-composed grab point 
   apply(catalog, [4, 4])
   apply(catalog, [6, 7])
   expect(useLiveNodeOverrides.getState().overrides.get(node.id)).toEqual(proceduralPatch)
-  expect(proceduralPatch).toMatchObject({ parentId: level.id, position: [6, 1, 7] })
+  expect(proceduralPatch).toMatchObject({
+    parentId: level.id,
+    position: [6, 0, 7],
+  })
 })

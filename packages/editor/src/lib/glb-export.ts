@@ -35,7 +35,7 @@ import {
   type GLTFExporterPlugin,
   type GLTFWriter,
 } from 'three/examples/jsm/exporters/GLTFExporter.js'
-import * as WebGPUTextureUtils from 'three/examples/jsm/utils/WebGPUTextureUtils.js'
+import { createExportTextureUtils, type ExportTextureUtils } from './export-texture-utils'
 import { cloneExportUserData } from './export-user-data'
 import {
   type CompressedTextureDecompressor,
@@ -85,8 +85,49 @@ export type GlbExportOptions = {
   onWarning?: (warning: string) => void
   /** Reject retained node kinds whose export geometry can only be baked asynchronously. */
   requireSynchronousBake?: boolean
-  /** GPU decompressor for compressed normal maps that must be baked; defaults to WebGPUTextureUtils. */
+  /** GPU decompressor for compressed normal maps that must be baked; defaults to `textureUtils`. */
   decompressTexture?: CompressedTextureDecompressor
+  /**
+   * Shared GPU decompressor for every compressed texture in the export. The
+   * export entry points create one per export and dispose it; supplying your
+   * own keeps ownership with you.
+   */
+  textureUtils?: ExportTextureUtils
+  /**
+   * Wall-clock deadline for the whole export (preparation and serialisation),
+   * after which it rejects instead of leaving the caller waiting. Defaults to
+   * `DEFAULT_MODEL_EXPORT_TIMEOUT_MS`; `Infinity` disables it.
+   */
+  timeoutMs?: number
+}
+
+export const DEFAULT_MODEL_EXPORT_TIMEOUT_MS = 180_000
+
+/**
+ * three's exporters finish inside `FileReader.onloadend` and `canvas.toBlob`
+ * callbacks that carry no error path: a failed read or a callback the browser
+ * never invokes calls neither `onDone` nor `onError`, so without a deadline the
+ * returned promise stays pending forever and the export UI is stuck.
+ */
+export function withExportDeadline<Result>(
+  promise: Promise<Result>,
+  timeoutMs: number,
+  format: string,
+  onTimeout?: () => void,
+): Promise<Result> {
+  if (!Number.isFinite(timeoutMs)) return promise
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      onTimeout?.()
+      reject(
+        new Error(
+          `${format} export timed out after ${Math.max(1, Math.round(timeoutMs / 1000))} s. Try again with “Visible nodes only” to shrink the scene, or reload the page if it keeps failing.`,
+        ),
+      )
+    }, timeoutMs)
+  })
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer))
 }
 
 /** Resolve after the next couple of animation frames, giving React/R3F time to
@@ -156,18 +197,43 @@ export async function exportSceneToGlb(
   options: GlbExportOptions = {},
 ): Promise<ArrayBuffer> {
   const textureMode = options.textures ?? 'embed'
-  const prepared = await preparePortableSceneFromViewer(sceneGroup, nodes, {
+  const textureUtils = options.textureUtils ?? createExportTextureUtils()
+  // Preparation awaits plugin bake hooks and presentation builders, so the
+  // deadline has to cover it as well as the serialisation.
+  const preparation = preparePortableSceneFromViewer(sceneGroup, nodes, {
     ...options,
+    textureUtils,
     animations: options.animations ?? 'keep',
   })
-  for (const warning of prepared.warnings) options.onWarning?.(warning)
+  // Assigned inside the raced closure, so a plain `let` narrows to `never` in
+  // the `finally`.
+  const run: { prepared: GlbExport | null; abandoned: boolean } = {
+    prepared: null,
+    abandoned: false,
+  }
   try {
-    return await serializePreparedSceneToGlb(prepared, {
-      textures: textureMode,
-      onlyVisible: options.onlyVisible,
-    })
+    return await withExportDeadline(
+      (async () => {
+        run.prepared = await preparation
+        // The race has already rejected; don't serialise a file nobody will get.
+        if (run.abandoned) throw new Error('GLB export abandoned')
+        for (const warning of run.prepared.warnings) options.onWarning?.(warning)
+        return serializePreparedSceneToGlb(run.prepared, {
+          textures: textureMode,
+          onlyVisible: options.onlyVisible,
+          textureUtils,
+        })
+      })(),
+      options.timeoutMs ?? DEFAULT_MODEL_EXPORT_TIMEOUT_MS,
+      'GLB',
+      () => {
+        run.abandoned = true
+      },
+    )
   } finally {
-    prepared.dispose()
+    if (run.prepared) run.prepared.dispose()
+    else preparation.then((late) => late.dispose()).catch(() => {})
+    if (!options.textureUtils) await textureUtils.dispose()
   }
 }
 /**
@@ -194,24 +260,30 @@ export async function preparePortableSceneFromViewer(
   return completeSceneExportPreparation(preparation)
 }
 
+/** Serialise a prepared scene; callers own the deadline (see `exportSceneToGlb`). */
 export function serializePreparedSceneToGlb(
   prepared: GlbExport,
-  options: Pick<GlbExportOptions, 'textures' | 'onlyVisible'> = {},
+  options: Pick<GlbExportOptions, 'textures' | 'onlyVisible'> & {
+    textureUtils: ExportTextureUtils
+  },
 ): Promise<ArrayBuffer> {
   const exporter = new GLTFExporter()
   if ((options.textures ?? 'embed') === 'reference') {
     exporter.register(textureReferencePlugin)
   }
-  exporter.setTextureUtils(WebGPUTextureUtils)
+  exporter.setTextureUtils(options.textureUtils)
 
   return new Promise<ArrayBuffer>((resolve, reject) => {
     exporter.parse(
       prepared.scene,
       (gltf) => {
-        resolve(gltf as ArrayBuffer)
+        // A failed final FileReader hands GLTFExporter's onDone `null`, which
+        // `new Blob([null])` would happily turn into a four-byte download.
+        if (gltf instanceof ArrayBuffer) resolve(gltf)
+        else reject(new Error('GLB export produced no data'))
       },
       (error) => {
-        reject(error)
+        reject(error instanceof Error ? error : new Error(String(error)))
       },
       {
         binary: true,
@@ -357,9 +429,25 @@ function startSceneExportPreparation(
   }
 }
 
+/** Own a throwaway decompressor only when the caller supplied neither form. */
+function resolveNormalMapDecompressor(options: GlbExportOptions): {
+  decompress: CompressedTextureDecompressor
+  dispose: () => Promise<void>
+} {
+  if (options.decompressTexture) {
+    return { decompress: options.decompressTexture, dispose: async () => {} }
+  }
+  const utils = options.textureUtils ?? createExportTextureUtils()
+  return {
+    decompress: (texture) => utils.decompress(texture),
+    dispose: options.textureUtils ? async () => {} : () => utils.dispose(),
+  }
+}
+
 async function completeSceneExportPreparation(
   preparation: SceneExportPreparation,
 ): Promise<GlbExport> {
+  const decompressor = resolveNormalMapDecompressor(preparation.options)
   try {
     await replaceBakeGeometryAsync(preparation)
     await appendSelectedPresentations(preparation)
@@ -370,11 +458,7 @@ async function completeSceneExportPreparation(
       preserveNormalMap: (texture: THREE.Texture) =>
         byReference && getPascalTextureRef(texture) !== null,
     }
-    await decompressCanonicalNormalMaps(
-      prepared.scene,
-      options.decompressTexture ?? ((texture) => WebGPUTextureUtils.decompress(texture)),
-      normalizeOptions,
-    )
+    await decompressCanonicalNormalMaps(prepared.scene, decompressor.decompress, normalizeOptions)
     prepared.warnings.push(
       ...(options.purpose === 'viewer'
         ? normalizeViewerArtifactMaterials(prepared.scene, normalizeOptions)
@@ -384,6 +468,8 @@ async function completeSceneExportPreparation(
   } catch (error) {
     disposeExportResources(preparation.scene)
     throw error
+  } finally {
+    await decompressor.dispose()
   }
 }
 
