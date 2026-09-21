@@ -36,6 +36,7 @@ import {
   markToolCancelConsumed,
   type PointerSupportSurface,
   publishPlacementSurface,
+  registerDrawingControls,
   resolvePointerSupportSurface,
   type SegmentAngleReference,
   snapFenceDraftPoint,
@@ -753,17 +754,15 @@ const StraightFenceTool: React.FC = () => {
       }
     }
 
-    const unregisterControls = useFloorplanDraftPreview
-      .getState()
-      .registerDrawingControls('fence', '3d', {
-        finish: () => {
-          if (buildingState.current !== 1 || !lastGridEvent) return false
-          const before = useScene.getState().nodes
-          onGridClick(lastGridEvent, [endingPoint.current.x, endingPoint.current.z])
-          return useScene.getState().nodes !== before
-        },
-        back: stopDrafting,
-      })
+    const unregisterControls = registerDrawingControls('fence', '3d', {
+      finish: () => {
+        if (buildingState.current !== 1 || !lastGridEvent) return false
+        const before = useScene.getState().nodes
+        onGridClick(lastGridEvent, [endingPoint.current.x, endingPoint.current.z])
+        return useScene.getState().nodes !== before
+      },
+      back: stopDrafting,
+    })
 
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
@@ -933,18 +932,16 @@ const SplineFenceDraft: React.FC = () => {
       markToolCancelConsumed()
       resetDraft()
     }
-    const unregisterControls = useFloorplanDraftPreview
-      .getState()
-      .registerDrawingControls('fence', '3d', {
-        finish: commit,
-        back: () => {
-          if (draftRef.current.length <= 1) resetDraft()
-          else {
-            draftRef.current = draftRef.current.slice(0, -1)
-            setDraftPoints(draftRef.current)
-          }
-        },
-      })
+    const unregisterControls = registerDrawingControls('fence', '3d', {
+      finish: commit,
+      back: () => {
+        if (draftRef.current.length <= 1) resetDraft()
+        else {
+          draftRef.current = draftRef.current.slice(0, -1)
+          setDraftPoints(draftRef.current)
+        }
+      },
+    })
 
     emitter.on('grid:move', onMove)
     emitter.on('grid:click', onClick)

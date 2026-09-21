@@ -1,8 +1,7 @@
 import { useEffect } from 'react'
-import { isDrawingTool } from '../lib/drawing-controls'
+import { hasDrawingControls, runDrawingControl } from '../lib/drawing-controls'
 import useDeleteConfirmation from '../store/use-delete-confirmation'
 import useEditor from '../store/use-editor'
-import { useFloorplanDraftPreview } from '../store/use-floorplan-draft-preview'
 import useInteractionScope from '../store/use-interaction-scope'
 
 export function useDrawingControls(disabled = false) {
@@ -15,7 +14,7 @@ export function useDrawingControls(disabled = false) {
         isFirstPersonMode ||
         workspaceMode === 'studio' ||
         useDeleteConfirmation.getState().request ||
-        !isDrawingTool(tool) ||
+        !hasDrawingControls(tool) ||
         event.defaultPrevented ||
         event.isComposing ||
         event.metaKey ||
@@ -41,9 +40,7 @@ export function useDrawingControls(disabled = false) {
       event.preventDefault()
       event.stopImmediatePropagation()
       if (event.repeat) return
-      const draft = useFloorplanDraftPreview.getState()
-      if (event.key === 'Enter' && tool === 'wall') draft.commitWallDraft(viewMode, true)
-      else draft.runDrawingControl(tool, event.key === 'Enter' ? 'finish' : 'back', viewMode)
+      runDrawingControl(tool, event.key === 'Enter' ? 'finish' : 'back', viewMode)
     }
     window.addEventListener('keydown', onKeyDown, true)
     return () => window.removeEventListener('keydown', onKeyDown, true)

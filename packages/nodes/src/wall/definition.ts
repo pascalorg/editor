@@ -9,6 +9,8 @@ import {
   DRAFTING_SURFACE_EXTENSION_KEY,
   type DraftingSurfaceExtension,
   type FloorplanNodeExtension,
+  TOOL_OVERLAY_EXTENSION_KEY,
+  type ToolOverlayExtension,
 } from '@pascal-app/editor'
 import { buildWallContextualDimensions } from './contextual-dimensions'
 import { hasWallCurveBlockingChildren } from './curve-eligibility'
@@ -54,6 +56,9 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   category: 'structure',
   surfaceRole: 'wall',
   extensions: {
+    [TOOL_OVERLAY_EXTENSION_KEY]: {
+      component: () => import('./tool-overlay'),
+    } satisfies ToolOverlayExtension,
     [DRAFTING_SURFACE_EXTENSION_KEY]: {
       kind: 'wall',
       classifyFace: (node, localNormal) => {

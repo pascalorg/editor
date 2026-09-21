@@ -106,6 +106,26 @@ describe('wall surface-material → slots migration', () => {
     expect(wall.exteriorMaterialPreset).toBeUndefined()
   })
 
+  test('repairs legacy wall dimensions before strict schema parsing', () => {
+    useScene.getState().setScene(
+      sceneWithWall({
+        thickness: 0,
+        height: Number.NaN,
+        curveOffset: Number.POSITIVE_INFINITY,
+        start: [null, 2],
+        end: [null, 2],
+      }),
+      ['site_test'] as never,
+    )
+
+    const wall = useScene.getState().nodes.wall_test as WallNode
+    expect(wall.thickness).toBeUndefined()
+    expect(wall.height).toBeUndefined()
+    expect(wall.curveOffset).toBeUndefined()
+    expect(wall.start).toEqual([0, 2])
+    expect(wall.end).toEqual([3, 2])
+  })
+
   test('normalizes bare catalog preset IDs from older projects', () => {
     useScene
       .getState()

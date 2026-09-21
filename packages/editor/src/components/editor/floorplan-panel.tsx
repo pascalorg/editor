@@ -79,6 +79,8 @@ import { Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { markToolCancelConsumed } from '../../hooks/use-keyboard'
 import { resolveCeilingPlanPointSnap } from '../../lib/ceiling-plan-snap'
+import { constrainDraftPointToLength } from '../../lib/draft-length'
+import { registerDrawingControls } from '../../lib/drawing-controls'
 import {
   alignFloorplanDraftPoint,
   buildFloorplanItemEntry,
@@ -105,6 +107,7 @@ import { cn } from '../../lib/utils'
 import { snapBuildingLocalToWorldGrid } from '../../lib/world-grid-snap'
 import { subscribeNavigationSyncPose } from '../../store/navigation-sync-pose-store'
 import useAlignmentGuides from '../../store/use-alignment-guides'
+import { useDraftLength } from '../../store/use-draft-length'
 import type { GuideUiState, NavigationSyncPose } from '../../store/use-editor'
 import useEditor, {
   isAngleSnapActive,
@@ -5144,7 +5147,17 @@ export function FloorplanPanel({
   const setDraftEnd = useCallback(
     (next: WallPlanPoint | null | ((prev: WallPlanPoint | null) => WallPlanPoint | null)) => {
       const store = useFloorplanDraftPreview.getState()
-      store.setWallDraftEnd(typeof next === 'function' ? next(store.wallDraftEnd) : next)
+      const pointerEnd = typeof next === 'function' ? next(store.wallDraftPointerEnd) : next
+      store.setWallDraftPointerEnd(pointerEnd)
+      store.setWallDraftEnd(
+        pointerEnd && store.wallDraftStart
+          ? constrainDraftPointToLength(
+              store.wallDraftStart,
+              pointerEnd,
+              useDraftLength.getState().length,
+            )
+          : pointerEnd,
+      )
     },
     [],
   )
@@ -5173,6 +5186,22 @@ export function FloorplanPanel({
   useEffect(() => {
     useFloorplanDraftPreview.getState().setWallDraftStart(draftStart)
   }, [draftStart])
+  useEffect(
+    () =>
+      useDraftLength.subscribe((state, previous) => {
+        if (state.length === previous.length) return
+        const preview = useFloorplanDraftPreview.getState()
+        if (!(preview.wallDraftStart && preview.wallDraftPointerEnd)) return
+        preview.setWallDraftEnd(
+          constrainDraftPointToLength(
+            preview.wallDraftStart,
+            preview.wallDraftPointerEnd,
+            state.length,
+          ),
+        )
+      }),
+    [],
+  )
   useEffect(() => {
     useFloorplanDraftPreview.getState().setFenceDraftStart(fenceDraftStart)
   }, [fenceDraftStart])
@@ -7840,6 +7869,7 @@ export function FloorplanPanel({
     wallConstructionOptionsRef.current = undefined
     wallChainWallIdsRef.current = []
     setDraftEnd(null)
+    useDraftLength.getState().clear()
     useSegmentDraftChain.getState().clear('wall')
   }, [setDraftEnd])
   const clearFencePlacementDraft = useCallback(() => {
@@ -9859,6 +9889,7 @@ export function FloorplanPanel({
       }
 
       setDraftStart(nextStart)
+      useDraftLength.getState().clear()
       setDraftEnd(nextStart)
       setCursorPoint(nextStart)
     },
@@ -9872,9 +9903,29 @@ export function FloorplanPanel({
     ],
   )
   useEffect(() => {
-    const register = useFloorplanDraftPreview.getState().registerDrawingControls
+    const register = registerDrawingControls
     const unregister = [
-      register('wall', '2d', { back: clearWallPlacementDraft }),
+      register('wall', '2d', {
+        finish: () => {
+          const { wallDraftStart, wallDraftEnd } = useFloorplanDraftPreview.getState()
+          if (
+            !wallDraftStart ||
+            !wallDraftEnd ||
+            Math.hypot(wallDraftEnd[0] - wallDraftStart[0], wallDraftEnd[1] - wallDraftStart[1]) <
+              0.01
+          )
+            return false
+          const before = useScene.getState().nodes
+          handleWallPlacementPoint(wallDraftEnd)
+          return useScene.getState().nodes !== before
+        },
+        back: clearWallPlacementDraft,
+        afterFinish: () => {
+          if (useEditor.getState().viewMode !== 'split') return
+          const end = useFloorplanDraftPreview.getState().wallDraftEnd
+          if (end) handleWallPlacementPoint(end)
+        },
+      }),
       register('fence', '2d', {
         back: clearFencePlacementDraft,
         afterFinish: () => {
@@ -9936,6 +9987,7 @@ export function FloorplanPanel({
     handleSlabPlacementConfirm,
     handleCeilingPlacementConfirm,
     handleZonePlacementConfirm,
+    handleWallPlacementPoint,
   ])
 
   const { getFloorplanHitIdAtPoint, getFloorplanSelectionIdsInBounds } = useFloorplanHitTesting({

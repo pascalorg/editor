@@ -634,7 +634,7 @@ function wallRebuildExitReason(
   if (wall?.type !== 'wall') return null
   let cutouts = 0
   for (const childId of getEffectiveWall(wall).children ?? []) {
-    const child = nodes[childId]
+    const child = nodes[childId as AnyNodeId]
     if (
       child?.type === 'door' ||
       child?.type === 'window' ||
@@ -997,7 +997,7 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   // without waiting on the scene store. Non-cutout children pass through
   // unchanged.
   const childrenNodes = childrenIds
-    .map((childId) => nodes[childId])
+    .map((childId) => nodes[childId as AnyNodeId])
     .filter((n): n is AnyNode => n !== undefined)
     .map((child) => {
       if (child.type !== 'door' && child.type !== 'window') return child

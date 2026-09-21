@@ -2,6 +2,7 @@
 
 import {
   type AnyNode,
+  type AnyNodeId,
   type BuildingNode,
   type CeilingNode,
   type DoorNode,
@@ -159,7 +160,7 @@ export function useFloorplanSceneData({
 
       return nextWalls.flatMap((wall) =>
         wall.children
-          .map((childId) => state.nodes[childId])
+          .map((childId) => state.nodes[childId as AnyNodeId])
           .filter((node): node is OpeningNode => node?.type === 'window' || node?.type === 'door'),
       )
     }),

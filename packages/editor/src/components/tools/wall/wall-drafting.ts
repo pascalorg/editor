@@ -11,10 +11,11 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { constrainDraftPointToLength } from '../../../lib/draft-length'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { resolveSnapFlags } from '../../../lib/snapping-mode'
+import { useDraftLength } from '../../../store/use-draft-length'
 import useEditor, { getActiveSnappingMode, isMagneticSnapActive } from '../../../store/use-editor'
-import { useFloorplanDraftPreview } from '../../../store/use-floorplan-draft-preview'
 import {
   distanceSquared,
   findWallSnapTarget,
@@ -218,11 +219,11 @@ export function createWallOnCurrentLevel(
     return null
   }
 
-  const draft = useFloorplanDraftPreview.getState()
-  end = draft.constrainWallDraftPoint(start, end)
+  const draftLength = useDraftLength.getState().length
+  end = constrainDraftPointToLength(start, end, draftLength)
   // An explicit length must survive the topology planner's endpoint projection.
   const joinRadius =
-    draft.wallDraftLength !== null
+    draftLength !== null
       ? 1e-7
       : isMagneticSnapActive()
         ? WALL_JOIN_SNAP_RADIUS

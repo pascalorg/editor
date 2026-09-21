@@ -362,6 +362,8 @@ export {
   nextContinuation,
 } from './lib/continuation'
 export { canDirectMoveNode } from './lib/direct-manipulation'
+export { constrainDraftPointToLength } from './lib/draft-length'
+export { registerDrawingControls, runDrawingControl } from './lib/drawing-controls'
 export { createEditorApi } from './lib/editor-api'
 export {
   clearStructuralElevationGuide,
@@ -612,6 +614,10 @@ export {
   sculptFieldForSite,
   terrainPointInsideSite,
 } from './lib/terrain-sculpt'
+export {
+  TOOL_OVERLAY_EXTENSION_KEY,
+  type ToolOverlayExtension,
+} from './lib/tool-overlay-extension'
 export { exportSceneToUsdz, type UsdzExportOptions } from './lib/usdz-export'
 // `cn` (twMerge + clsx) — used by kind-owned panels in `@pascal-app/
 // nodes` so they don't need their own copy / their own tailwind-merge
@@ -630,6 +636,7 @@ export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export { default as useAudio } from './store/use-audio'
 export { type CameraHintAction, useCameraHintFocus } from './store/use-camera-hint-focus'
 export { type CommandAction, useCommandRegistry } from './store/use-command-registry'
+export { useDraftLength } from './store/use-draft-length'
 export {
   DRAWING_TYPE_OPTIONS,
   default as useDrawingView,

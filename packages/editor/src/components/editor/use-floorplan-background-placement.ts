@@ -5,7 +5,6 @@ import {
   type FenceNode,
   isCurvedWall,
   nodeRegistry,
-  useScene,
   type WallNode,
 } from '@pascal-app/core'
 import {
@@ -20,7 +19,6 @@ import { resolveGenericFloorplanGridEventPoint } from '../../lib/floorplan-grid-
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useEditor, { isAngleSnapActive, isMagneticSnapActive } from '../../store/use-editor'
-import { useFloorplanDraftPreview } from '../../store/use-floorplan-draft-preview'
 import usePlacementPreview from '../../store/use-placement-preview'
 import useSegmentDraftChain from '../../store/use-segment-draft-chain'
 import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
@@ -159,15 +157,6 @@ export function useFloorplanBackgroundPlacement({
   // Conical always builds from a curved wall pick, regardless of the choice.
   const roofIsConical = useEditor((state) => state.toolDefaults.roof?.roofType === 'conical')
   const roofFootprintSource = roofIsConical ? 'walls' : roofFootprintChoice
-
-  useEffect(() => {
-    if (!isWallBuildActive) return
-    return useFloorplanDraftPreview.getState().registerWallDraftCommit('2d', (end) => {
-      const before = useScene.getState().nodes
-      handleWallPlacementPoint(end)
-      return useScene.getState().nodes !== before
-    })
-  }, [isWallBuildActive, handleWallPlacementPoint])
 
   useEffect(() => {
     if (isRoofBuildActive && roofFootprintSource !== 'draw') clearRoofPlacementDraft()

@@ -62,6 +62,20 @@ describe('wall child ownership', () => {
     ).not.toThrow()
   })
 
+  test('accepts plugin-defined children without teaching core their kind', () => {
+    const pluginChild = {
+      id: 'fixture:plugin_child',
+      type: 'fixture:plugin',
+      parentId: wall.id,
+    } as never
+    expect(() =>
+      validateWallRelations(
+        { ...wall, children: [pluginChild.id] },
+        { [wall.id]: wall, [pluginChild.id]: pluginChild },
+      ),
+    ).not.toThrow()
+  })
+
   test('rejects missing, mismatched, and unlisted owned children', () => {
     expect(() =>
       validateWallRelations({ ...wall, children: ['item_missing'] }, { [wall.id]: wall }),

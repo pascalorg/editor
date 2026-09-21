@@ -1,12 +1,16 @@
+import {
+  runDrawingControl,
+  useDraftLength,
+  useEditor,
+  useFloorplanDraftPreview,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import useEditor from '../../../store/use-editor'
-import { useFloorplanDraftPreview } from '../../../store/use-floorplan-draft-preview'
 
 function LengthField({ unit, scale }: { unit: string; scale: number }) {
   const input = useRef<HTMLInputElement>(null)
   const [text, setText] = useState(() => {
-    const current = useFloorplanDraftPreview.getState().wallDraftLength
+    const current = useDraftLength.getState().length
     return current === null ? '' : String(Number((current / scale).toPrecision(12)))
   })
   const value = /^\d*\.?\d+$/.test(text.trim()) ? Number(text) * scale : null
@@ -15,10 +19,9 @@ function LengthField({ unit, scale }: { unit: string; scale: number }) {
   const update = useCallback(
     (next: string) => {
       setText(next)
-      if (next === '') {
-        useFloorplanDraftPreview.getState().setWallDraftLength(null)
-      } else if (/^\d*\.?\d+$/.test(next.trim())) {
-        useFloorplanDraftPreview.getState().setWallDraftLength(Number(next) * scale)
+      if (next === '') useDraftLength.getState().clear()
+      else if (/^\d*\.?\d+$/.test(next.trim())) {
+        useDraftLength.getState().setLength(Number(next) * scale)
       }
     },
     [scale],
@@ -36,14 +39,11 @@ function LengthField({ unit, scale }: { unit: string; scale: number }) {
       )
         return
 
-      if (
-        event.key === 'Escape' &&
-        (ownInput || useFloorplanDraftPreview.getState().wallDraftLength !== null)
-      ) {
+      if (event.key === 'Escape' && (ownInput || useDraftLength.getState().length !== null)) {
         event.preventDefault()
         event.stopImmediatePropagation()
         setText('')
-        useFloorplanDraftPreview.getState().setWallDraftLength(null)
+        useDraftLength.getState().clear()
         input.current?.blur()
       } else if (ownInput && event.key === 'Enter') {
         event.preventDefault()
@@ -51,7 +51,7 @@ function LengthField({ unit, scale }: { unit: string; scale: number }) {
         if (
           !invalid &&
           !event.repeat &&
-          useFloorplanDraftPreview.getState().commitWallDraft(useEditor.getState().viewMode)
+          runDrawingControl('wall', 'finish', useEditor.getState().viewMode)
         ) {
           input.current?.blur()
         }
@@ -79,7 +79,7 @@ function LengthField({ unit, scale }: { unit: string; scale: number }) {
         id="wall-draft-length"
         inputMode="decimal"
         onBlur={() => {
-          const current = useFloorplanDraftPreview.getState().wallDraftLength
+          const current = useDraftLength.getState().length
           setText(current === null ? '' : String(Number((current / scale).toPrecision(12))))
         }}
         onChange={(event) => update(event.target.value)}
@@ -105,13 +105,13 @@ function LengthField({ unit, scale }: { unit: string; scale: number }) {
   )
 }
 
-export function WallDraftLengthInput() {
+export default function WallToolOverlay() {
   const start = useFloorplanDraftPreview((state) => state.wallDraftStart)
   const unit = useViewer((state) => state.unit)
   const metricNotation = useViewer((state) => state.metricNotation)
   const label = unit === 'imperial' ? 'ft' : metricNotation === 'millimeters' ? 'mm' : 'm'
   const scale = label === 'ft' ? 0.3048 : label === 'mm' ? 0.001 : 1
-  useEffect(() => () => useFloorplanDraftPreview.getState().setWallDraftLength(null), [])
+  useEffect(() => () => useDraftLength.getState().clear(), [])
   if (!start) return null
   return <LengthField key={`${start[0]},${start[1]},${label}`} scale={scale} unit={label} />
 }

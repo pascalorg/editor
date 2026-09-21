@@ -1,22 +1,31 @@
-export type DrawingTool = 'wall' | 'fence' | 'roof' | 'slab' | 'ceiling' | 'zone'
+export type DrawingTool = string
 type DrawingView = '2d' | '3d'
-type DrawingControls = {
+export type DrawingControls = {
   finish?: () => boolean
   back: () => void
   afterFinish?: () => void
 }
 
 const controls = new Map<DrawingTool, Map<DrawingView, DrawingControls>>()
+const subscribers = new Set<() => void>()
+let revision = 0
 
-export function isDrawingTool(tool: string | null): tool is DrawingTool {
-  return (
-    tool === 'wall' ||
-    tool === 'fence' ||
-    tool === 'roof' ||
-    tool === 'slab' ||
-    tool === 'ceiling' ||
-    tool === 'zone'
-  )
+function notifySubscribers() {
+  revision += 1
+  for (const subscriber of subscribers) subscriber()
+}
+
+export function subscribeDrawingControls(subscriber: () => void) {
+  subscribers.add(subscriber)
+  return () => subscribers.delete(subscriber)
+}
+
+export function getDrawingControlsRevision() {
+  return revision
+}
+
+export function hasDrawingControls(tool: string | null): tool is DrawingTool {
+  return tool !== null && controls.has(tool)
 }
 
 export function registerDrawingControls(
@@ -30,9 +39,12 @@ export function registerDrawingControls(
     controls.set(tool, views)
   }
   views.set(view, handlers)
+  notifySubscribers()
   return () => {
-    if (views.get(view) === handlers) views.delete(view)
+    if (views.get(view) !== handlers) return
+    views.delete(view)
     if (views.size === 0 && controls.get(tool) === views) controls.delete(tool)
+    notifySubscribers()
   }
 }
 
@@ -47,15 +59,9 @@ export function runDrawingControl(
     for (const handlers of views.values()) handlers.back()
     return true
   }
-  // Fence and roof use the registry tool even when the floorplan is the only visible view.
-  const owner =
-    tool === 'zone'
-      ? '2d'
-      : tool === 'fence' || tool === 'roof'
-        ? '3d'
-        : view === '2d'
-          ? '2d'
-          : '3d'
+  const preferred: DrawingView = view === '2d' ? '2d' : '3d'
+  const fallback: DrawingView = preferred === '2d' ? '3d' : '2d'
+  const owner = views.get(preferred)?.finish ? preferred : fallback
   const primary = views.get(owner)
   const secondary = views.get(owner === '2d' ? '3d' : '2d')
   if (!primary?.finish?.()) return false

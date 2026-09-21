@@ -22,6 +22,7 @@ import {
   CursorSphere,
   chainEndJoinsExistingWall,
   clearPlacementSurface,
+  constrainDraftPointToLength,
   createWallOnCurrentLevel,
   EDITOR_LAYER,
   formatAngleRadians,
@@ -36,6 +37,7 @@ import {
   markToolCancelConsumed,
   publishHorizontalConstructionPlane,
   publishPlacementSurface,
+  registerDrawingControls,
   resampleTerrainConstructionPlane,
   resolveEventConstructionPlane,
   resolvePointerSupportSurface,
@@ -43,6 +45,7 @@ import {
   snapWallDraftPointDetailed,
   triggerSFX,
   useAlignmentGuides,
+  useDraftLength,
   useEditor,
   useFloorplanDraftPreview,
   useSegmentDraftChain,
@@ -613,6 +616,8 @@ export const WallTool: React.FC = () => {
       const draftPreview = useFloorplanDraftPreview.getState()
       draftPreview.setWallDraftStart(null)
       draftPreview.setWallDraftEnd(null)
+      draftPreview.setWallDraftPointerEnd(null)
+      useDraftLength.getState().clear()
       if (wallPreviewRef.current) {
         wallPreviewRef.current.visible = false
       }
@@ -666,9 +671,14 @@ export const WallTool: React.FC = () => {
       if (buildingState.current === 1) {
         const draft = useFloorplanDraftPreview.getState()
         draft.setWallDraftStart([startingPoint.current.x, startingPoint.current.z])
+        draft.setWallDraftPointerEnd(gridPosition)
+        gridPosition = constrainDraftPointToLength(
+          [startingPoint.current.x, startingPoint.current.z],
+          gridPosition,
+          useDraftLength.getState().length,
+        )
         draft.setWallDraftEnd(gridPosition)
-        gridPosition = useFloorplanDraftPreview.getState().wallDraftEnd ?? gridPosition
-        if (useFloorplanDraftPreview.getState().wallDraftLength !== null) {
+        if (useDraftLength.getState().length !== null) {
           useAlignmentGuides.getState().clear()
         }
       }
@@ -677,7 +687,7 @@ export const WallTool: React.FC = () => {
       useWallSnapIndicator
         .getState()
         .set(
-          snapResult.snap && useFloorplanDraftPreview.getState().wallDraftLength === null
+          snapResult.snap && useDraftLength.getState().length === null
             ? { x: gridPosition[0], z: gridPosition[1], kind: snapResult.snap }
             : null,
         )
@@ -777,6 +787,7 @@ export const WallTool: React.FC = () => {
         buildingState.current = 1
         const draftPreview = useFloorplanDraftPreview.getState()
         draftPreview.setWallDraftStart(snappedStart)
+        draftPreview.setWallDraftPointerEnd(snappedStart)
         draftPreview.setWallDraftEnd(snappedStart)
         setAxisGuide({
           origin: snappedStart,
@@ -803,9 +814,11 @@ export const WallTool: React.FC = () => {
             }).point,
             { applySnap: !angleLocked },
           )
-        snappedEnd = useFloorplanDraftPreview
-          .getState()
-          .constrainWallDraftPoint([startingPoint.current.x, startingPoint.current.z], snappedEnd)
+        snappedEnd = constrainDraftPointToLength(
+          [startingPoint.current.x, startingPoint.current.z],
+          snappedEnd,
+          useDraftLength.getState().length,
+        )
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
         if (dx * dx + dz * dz < 0.01 * 0.01) return
@@ -866,6 +879,7 @@ export const WallTool: React.FC = () => {
         }
 
         const nextStart = createdWall.end
+        useDraftLength.getState().clear()
         // Publish the resolved chain start so the 2D floor-plan draft
         // chains its next segment from the same point (its own snap
         // pipeline can resolve a slightly different endpoint).
@@ -876,6 +890,7 @@ export const WallTool: React.FC = () => {
         const draftPreview = useFloorplanDraftPreview.getState()
         draftPreview.setWallDraftEnd(null)
         draftPreview.setWallDraftStart(nextStart)
+        draftPreview.setWallDraftPointerEnd(nextStart)
         draftPreview.setWallDraftEnd(nextStart)
         cursorRef.current?.position.copy(startingPoint.current)
         buildingState.current = 1
@@ -902,35 +917,28 @@ export const WallTool: React.FC = () => {
       }
     }
 
-    const unregisterControls = useFloorplanDraftPreview
-      .getState()
-      .registerDrawingControls('wall', '3d', { back: stopDrafting })
+    const unregisterControls = registerDrawingControls('wall', '3d', {
+      finish: () => {
+        const end = useFloorplanDraftPreview.getState().wallDraftEnd
+        if (buildingState.current !== 1 || !lastGridEvent || !end) return false
+        const before = useScene.getState().nodes
+        onGridClick(lastGridEvent, end)
+        return useScene.getState().nodes !== before
+      },
+      back: stopDrafting,
+    })
 
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
-    const unregisterCommit = useFloorplanDraftPreview
-      .getState()
-      .registerWallDraftCommit('3d', (end) => {
-        if (buildingState.current !== 1 || !lastGridEvent) return false
-        const before = useScene.getState().nodes
-        onGridClick(lastGridEvent, end)
-        return useScene.getState().nodes !== before
-      })
-    const unsubscribeLength = useFloorplanDraftPreview.subscribe((state, previous) => {
-      if (
-        state.wallDraftLength !== previous.wallDraftLength &&
-        state.wallDraftStart === previous.wallDraftStart &&
-        buildingState.current === 1 &&
-        lastGridEvent
-      ) {
+    const unsubscribeLength = useDraftLength.subscribe((state, previous) => {
+      if (state.length !== previous.length && buildingState.current === 1 && lastGridEvent) {
         onGridMove(lastGridEvent)
       }
     })
 
     return () => {
       unregisterControls()
-      unregisterCommit()
       unsubscribeLength()
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
@@ -942,6 +950,8 @@ export const WallTool: React.FC = () => {
       const draftPreview = useFloorplanDraftPreview.getState()
       draftPreview.setWallDraftStart(null)
       draftPreview.setWallDraftEnd(null)
+      draftPreview.setWallDraftPointerEnd(null)
+      useDraftLength.getState().clear()
     }
   }, [unit, metricNotation])
 

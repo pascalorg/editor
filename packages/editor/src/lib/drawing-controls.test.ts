@@ -1,7 +1,29 @@
 import { describe, expect, test } from 'bun:test'
-import { registerDrawingControls, runDrawingControl } from './drawing-controls'
+import {
+  hasDrawingControls,
+  registerDrawingControls,
+  runDrawingControl,
+  subscribeDrawingControls,
+} from './drawing-controls'
 
 describe('drawing controls', () => {
+  test('discovers plugin-defined drawing tools through registration', () => {
+    const tool = 'fixture:route'
+    let notifications = 0
+    const unsubscribe = subscribeDrawingControls(() => notifications++)
+    expect(hasDrawingControls(tool)).toBe(false)
+    const unregister = registerDrawingControls(tool, '3d', {
+      finish: () => true,
+      back: () => {},
+    })
+    expect(hasDrawingControls(tool)).toBe(true)
+    expect(runDrawingControl(tool, 'finish', '3d')).toBe(true)
+    unregister()
+    expect(hasDrawingControls(tool)).toBe(false)
+    expect(notifications).toBe(2)
+    unsubscribe()
+  })
+
   test.each([
     '2d',
     '3d',
@@ -30,29 +52,33 @@ describe('drawing controls', () => {
   })
 
   test.each([
-    'fence',
-    'roof',
-    'zone',
-  ] as const)('%s respects its creation owner in every view', (tool) => {
+    ['fence', '3d'],
+    ['roof', '3d'],
+    ['zone', '2d'],
+  ] as const)('%s discovers its registered creation owner', (tool, owner) => {
     const calls: string[] = []
     const cleanup = (['2d', '3d'] as const).map((view) =>
       registerDrawingControls(tool, view, {
-        finish: () => {
-          calls.push(view)
-          return true
-        },
+        ...(view === owner
+          ? {
+              finish: () => {
+                calls.push(view)
+                return true
+              },
+            }
+          : {}),
         back: () => {},
       }),
     )
     try {
       for (const view of ['2d', '3d', 'split'] as const) runDrawingControl(tool, 'finish', view)
-      expect(calls).toEqual(Array(3).fill(tool === 'zone' ? '2d' : '3d'))
+      expect(calls).toEqual(Array(3).fill(owner))
     } finally {
       for (const off of cleanup) off()
     }
   })
 
-  test('invalid drafts stay intact and an absent owner never falls back to duplicate creation', () => {
+  test('invalid drafts stay intact and a failed preferred owner does not duplicate creation', () => {
     const calls: string[] = []
     const off2d = registerDrawingControls('ceiling', '2d', {
       finish: () => {
@@ -66,8 +92,8 @@ describe('drawing controls', () => {
     try {
       expect(runDrawingControl('ceiling', 'finish', 'split')).toBe(false)
       off3d()
-      expect(runDrawingControl('ceiling', 'finish', '3d')).toBe(false)
-      expect(calls).toEqual([])
+      expect(runDrawingControl('ceiling', 'finish', '3d')).toBe(true)
+      expect(calls).toEqual(['commit'])
     } finally {
       off2d()
       off3d()

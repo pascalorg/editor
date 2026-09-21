@@ -1,120 +1,28 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { LevelNode, useScene, WallNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useFloorplanDraftPreview } from '../../../store/use-floorplan-draft-preview'
+import { constrainDraftPointToLength } from '../../../lib/draft-length'
+import { useDraftLength } from '../../../store/use-draft-length'
 import { createWallOnCurrentLevel } from './wall-drafting'
 
-afterEach(() => useFloorplanDraftPreview.getState().reset())
+afterEach(() => useDraftLength.getState().clear())
 
 describe('wall draft length', () => {
-  test('Enter routes the exact preview endpoint to the active owner and synchronizes split view', () => {
-    const draft = useFloorplanDraftPreview.getState()
-    const calls: Array<{ view: string; end: number[] }> = []
-    const unregister2D = draft.registerWallDraftCommit('2d', (end) => {
-      calls.push({ view: '2d', end })
-      return true
-    })
-    const unregister3D = draft.registerWallDraftCommit('3d', (end) => {
-      calls.push({ view: '3d', end })
-      return true
-    })
-    try {
-      draft.setWallDraftStart([0, 0])
-      draft.setWallDraftEnd([4, 0])
-      draft.setWallDraftLength(3.75)
-      expect(draft.commitWallDraft('2d')).toBe(true)
-      expect(draft.commitWallDraft('3d')).toBe(true)
-      expect(draft.commitWallDraft('split')).toBe(true)
-      expect(calls).toEqual([
-        { view: '2d', end: [3.75, 0] },
-        { view: '3d', end: [3.75, 0] },
-        { view: '3d', end: [3.75, 0] },
-        { view: '2d', end: [3.75, 0] },
-      ])
-    } finally {
-      unregister2D()
-      unregister3D()
-    }
-    expect(draft.commitWallDraft('3d')).toBe(false)
+  test('keeps an exact length while direction changes without inventing a direction', () => {
+    expect(constrainDraftPointToLength([1, 1], [1, 1], 3)).toEqual([1, 1])
+    expect(constrainDraftPointToLength([2, 3], [5, 7], 2.5)).toEqual([3.5, 5])
+    expect(constrainDraftPointToLength([2, 3], [-8, 3], 1.25)).toEqual([0.75, 3])
   })
 
-  test('Enter without a direction or length does not place a wall', () => {
-    const draft = useFloorplanDraftPreview.getState()
-    let commits = 0
-    const unregister = draft.registerWallDraftCommit('2d', () => {
-      commits++
-      return true
-    })
-    try {
-      draft.setWallDraftStart([0, 0])
-      draft.setWallDraftEnd([0, 0])
-      draft.setWallDraftLength(3)
-      expect(draft.commitWallDraft('2d')).toBe(false)
-      draft.setWallDraftEnd([4, 0])
-      draft.setWallDraftLength(null)
-      expect(draft.commitWallDraft('2d')).toBe(false)
-      expect(commits).toBe(0)
-    } finally {
-      unregister()
-    }
-  })
-
-  test('bare Enter places the current preview without requiring a typed length', () => {
-    const draft = useFloorplanDraftPreview.getState()
-    const ends: number[][] = []
-    const unregister = draft.registerWallDraftCommit('2d', (end) => {
-      ends.push(end)
-      return true
-    })
-    try {
-      draft.setWallDraftStart([1, 2])
-      draft.setWallDraftEnd([1, 2])
-      expect(draft.commitWallDraft('2d', true)).toBe(false)
-      draft.setWallDraftEnd([5, 2])
-      expect(draft.commitWallDraft('2d', true)).toBe(true)
-      expect(ends).toEqual([[5, 2]])
-    } finally {
-      unregister()
-    }
-  })
-
-  test('updates the preview immediately and keeps length while changing direction', () => {
-    const draft = useFloorplanDraftPreview.getState()
-    draft.setWallDraftStart([2, 3])
-    draft.setWallDraftEnd([5, 7])
-    draft.setWallDraftLength(2.5)
-    expect(useFloorplanDraftPreview.getState().wallDraftEnd).toEqual([3.5, 5])
-    draft.setWallDraftEnd([-8, 3])
-    expect(useFloorplanDraftPreview.getState().wallDraftEnd).toEqual([-0.5, 3])
-    draft.setWallDraftLength(1.25)
-    expect(useFloorplanDraftPreview.getState().wallDraftEnd).toEqual([0.75, 3])
-    draft.setWallDraftLength(null)
-    expect(useFloorplanDraftPreview.getState().wallDraftEnd).toEqual([-8, 3])
-  })
-
-  test('clears the length for the next segment, but preserves it on repeated start publication', () => {
-    const draft = useFloorplanDraftPreview.getState()
-    draft.setWallDraftStart([0, 0])
-    draft.setWallDraftLength(3)
-    draft.setWallDraftStart([0, 0])
-    expect(useFloorplanDraftPreview.getState().wallDraftLength).toBe(3)
-    draft.setWallDraftStart([3, 0])
-    expect(useFloorplanDraftPreview.getState().wallDraftLength).toBeNull()
-    draft.setWallDraftLength(2)
-    draft.setWallDraftStart(null)
-    expect(useFloorplanDraftPreview.getState().wallDraftLength).toBeNull()
-  })
-
-  test('does not invent a direction at the start or accept invalid lengths', () => {
-    const draft = useFloorplanDraftPreview.getState()
-    draft.setWallDraftStart([1, 1])
-    draft.setWallDraftEnd([1, 1])
-    draft.setWallDraftLength(3)
-    expect(useFloorplanDraftPreview.getState().wallDraftEnd).toEqual([1, 1])
+  test('stores only finite lengths of at least one centimetre', () => {
+    const draft = useDraftLength.getState()
+    draft.setLength(3)
     for (const invalid of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, 0.001]) {
-      draft.setWallDraftLength(invalid)
-      expect(useFloorplanDraftPreview.getState().wallDraftLength).toBe(3)
+      draft.setLength(invalid)
+      expect(useDraftLength.getState().length).toBe(3)
     }
+    draft.clear()
+    expect(useDraftLength.getState().length).toBeNull()
   })
 
   test('commits the preview length near a wall without shortening it, as one undo step', () => {
@@ -137,11 +45,8 @@ describe('wall draft length', () => {
       useScene.temporal.getState().clear()
       useScene.temporal.getState().resume()
       const before = useScene.getState().nodes
-      const draft = useFloorplanDraftPreview.getState()
-      draft.setWallDraftStart([0, 0])
-      draft.setWallDraftEnd([3.78, 0])
-      draft.setWallDraftLength(3.75)
-      const previewEnd = useFloorplanDraftPreview.getState().wallDraftEnd
+      useDraftLength.getState().setLength(3.75)
+      const previewEnd = constrainDraftPointToLength([0, 0], [3.78, 0], 3.75)
       expect(useScene.getState().nodes).toBe(before)
       const wall = createWallOnCurrentLevel([0, 0], [3.78, 0])
       expect(wall?.end).toEqual(previewEnd!)

@@ -33,6 +33,7 @@ import {
   isGridSnapActive,
   isMagneticSnapActive,
   markToolCancelConsumed,
+  registerDrawingControls,
   resolveSurfacePlanPointSnap,
   snapWorldXZForActiveBuilding,
   triggerSFX,
@@ -960,20 +961,18 @@ export const RoofTool: React.FC = () => {
       triggerSFX('sfx:item-rotate')
     }
 
-    const unregisterControls = useFloorplanDraftPreview
-      .getState()
-      .registerDrawingControls('roof', '3d', {
-        finish: () => {
-          const end = useFloorplanDraftPreview.getState().roofDraftEnd
-          const start = corner1Ref.current
-          if (footprintSource !== 'draw' || !start || !end || !lastGridEvent) return false
-          if (Math.abs(end[0] - start[0]) <= 0.1 || Math.abs(end[1] - start[2]) <= 0.1) return false
-          const before = sceneApi.nodes()
-          onGridClick(lastGridEvent, end)
-          return sceneApi.nodes() !== before
-        },
-        back: onCancel,
-      })
+    const unregisterControls = registerDrawingControls('roof', '3d', {
+      finish: () => {
+        const end = useFloorplanDraftPreview.getState().roofDraftEnd
+        const start = corner1Ref.current
+        if (footprintSource !== 'draw' || !start || !end || !lastGridEvent) return false
+        if (Math.abs(end[0] - start[0]) <= 0.1 || Math.abs(end[1] - start[2]) <= 0.1) return false
+        const before = sceneApi.nodes()
+        onGridClick(lastGridEvent, end)
+        return sceneApi.nodes() !== before
+      },
+      back: onCancel,
+    })
 
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)

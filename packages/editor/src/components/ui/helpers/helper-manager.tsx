@@ -21,7 +21,12 @@ import {
 } from '../../../lib/contextual-help'
 import { getContextualHelpNodeExtension } from '../../../lib/contextual-help-extension'
 import { continuationContextOf } from '../../../lib/continuation'
-import { isDrawingTool } from '../../../lib/drawing-controls'
+import {
+  getDrawingControlsRevision,
+  hasDrawingControls,
+  subscribeDrawingControls,
+} from '../../../lib/drawing-controls'
+import { getToolOverlayExtension } from '../../../lib/tool-overlay-extension'
 import { canDirectMoveNode, canDirectRotateNode } from '../../../lib/direct-manipulation'
 import type { ReshapeKind } from '../../../lib/interaction/scope'
 import { isFreshPlacementMetadata } from '../../../lib/placement-metadata'
@@ -140,6 +145,11 @@ export function HelperManager() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const isMobile = useIsMobile()
   const modifiers = useActiveModifierKeys()
+  useSyncExternalStore(
+    subscribeDrawingControls,
+    getDrawingControlsRevision,
+    getDrawingControlsRevision,
+  )
   const selectedNodes = useScene(
     useShallow((s) =>
       selectedIds
@@ -260,7 +270,7 @@ export function HelperManager() {
 
   const isRegistryDrawing =
     mode === 'build' &&
-    isDrawingTool(tool) &&
+    hasDrawingControls(tool) &&
     scope.kind === 'placing' &&
     scope.driver === 'registry-tool' &&
     scope.nodeType === tool
@@ -330,11 +340,13 @@ export function HelperManager() {
   if (tool) {
     const def = nodeRegistry.get(tool)
     const hints = def?.toolHints ?? []
-    if (hints.length > 0 || snapContext || continuationContext) {
+    const overlay = getToolOverlayExtension(def)?.component
+    if (hints.length > 0 || snapContext || continuationContext || overlay) {
       return (
         <RegisteredToolHelper
           continuationContext={continuationContext}
           hints={hints}
+          overlay={overlay}
           shiftPressed={modifiers.shift}
           snapContext={snapContext}
         />

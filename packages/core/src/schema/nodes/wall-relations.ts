@@ -1,7 +1,5 @@
 import type { AnyNode } from '../types'
 
-const WALL_CHILD_TYPES = new Set(['item', 'procedural-item', 'door', 'window', 'lean-to-extension'])
-
 type WallRelationNode = {
   id: string
   type: 'wall'
@@ -23,14 +21,12 @@ export function validateWallRelations(
 
     const child = nodes[childId]
     if (!child) throw new Error(`Wall ${wall.id} references missing child ${childId}`)
-    if (!WALL_CHILD_TYPES.has(child.type))
-      throw new Error(`Wall ${wall.id} cannot host ${child.type} ${child.id}`)
     if (child.parentId !== wall.id)
       throw new Error(`Wall ${wall.id} does not own listed child ${child.id}`)
   }
 
   for (const child of Object.values(nodes)) {
-    if (child.parentId !== wall.id || !WALL_CHILD_TYPES.has(child.type)) continue
+    if (child.parentId !== wall.id) continue
     if (!listed.has(child.id))
       throw new Error(`Wall ${wall.id} is missing owned child ${child.id} from children`)
   }

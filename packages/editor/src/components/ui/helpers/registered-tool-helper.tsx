@@ -1,11 +1,25 @@
-import type { ToolHint } from '@pascal-app/core'
-import { useMemo, useSyncExternalStore } from 'react'
-import { isDrawingTool } from '../../../lib/drawing-controls'
+import type { LazyComponent, ToolHint } from '@pascal-app/core'
+import { type ComponentType, lazy, Suspense, useMemo, useSyncExternalStore } from 'react'
+import { hasDrawingControls } from '../../../lib/drawing-controls'
 import type { ContinuationContext } from '../../../lib/continuation'
 import type { SnapContext } from '../../../lib/snapping-mode'
 import useEditor from '../../../store/use-editor'
 import { ContextualHelperPanel } from './contextual-helper-panel'
-import { WallDraftLengthInput } from './wall-draft-length-input'
+
+const overlayCache = new WeakMap<LazyComponent, ComponentType>()
+
+function ToolOverlay({ loader }: { loader: LazyComponent }) {
+  let Overlay = overlayCache.get(loader)
+  if (!Overlay) {
+    Overlay = lazy(loader)
+    overlayCache.set(loader, Overlay)
+  }
+  return (
+    <Suspense fallback={null}>
+      <Overlay />
+    </Suspense>
+  )
+}
 
 /**
  * Generic helper panel rendered from `def.toolHints` data. Matches the
@@ -21,19 +35,20 @@ export function RegisteredToolHelper({
   shiftPressed = false,
   snapContext = null,
   continuationContext = null,
+  overlay,
 }: {
   hints: ToolHint[]
   shiftPressed?: boolean
   snapContext?: SnapContext | null
   continuationContext?: ContinuationContext | null
+  overlay?: LazyComponent
 }) {
   const drawingTool = useEditor((s) =>
-    s.mode === 'build' && isDrawingTool(s.tool) ? s.tool : null,
+    s.mode === 'build' && hasDrawingControls(s.tool) ? s.tool : null,
   )
   // Live vertex count of an in-progress polygon draft, so hints gated on a
   // minimum (e.g. "Finish" at ≥ 3) only appear once they're actually possible.
   const draftVertexCount = useEditor((s) => s.draftVertexCount)
-  const isWallBuildActive = useEditor((s) => s.mode === 'build' && s.tool === 'wall')
   const visibilityStore = useMemo(
     () => ({
       subscribe: (onChange: () => void) => {
@@ -63,7 +78,7 @@ export function RegisteredToolHelper({
       hint.visible?.value() !== false &&
       (hint.minDraftVertices == null || draftVertexCount >= hint.minDraftVertices),
   )
-  if (visible.length === 0 && !snapContext && !continuationContext) return null
+  if (visible.length === 0 && !snapContext && !continuationContext && !overlay) return null
   // Hints carrying a live-state `chip` render as mode chips next to the
   // snapping / continuation rows; the rest stay static key rows.
   const chipHints = visible.filter((hint) => hint.chip)
@@ -76,7 +91,7 @@ export function RegisteredToolHelper({
     )
   return (
     <>
-      {isWallBuildActive && <WallDraftLengthInput />}
+      {overlay && <ToolOverlay loader={overlay} />}
       <ContextualHelperPanel
         chipHints={chipHints}
         hints={staticHints.map((hint) => {

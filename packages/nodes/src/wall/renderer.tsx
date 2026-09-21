@@ -201,7 +201,7 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
       )}
 
       {(node.children ?? []).map((childId) => (
-        <NodeRenderer key={`${node.id}:${childId}`} nodeId={childId} />
+        <NodeRenderer key={`${node.id}:${childId}`} nodeId={childId as AnyNodeId} />
       ))}
     </mesh>
   )

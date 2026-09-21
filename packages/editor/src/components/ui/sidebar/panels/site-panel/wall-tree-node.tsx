@@ -106,7 +106,7 @@ export const WallTreeNode = memo(function WallTreeNode({
           depth={depth + 1}
           isLast={index === children.length - 1}
           key={childId}
-          nodeId={childId}
+          nodeId={childId as AnyNodeId}
         />
       ))}
     </TreeNodeWrapper>

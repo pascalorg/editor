@@ -11,7 +11,7 @@ import {
 import { ColumnNode } from './nodes/column'
 import { AnyNode } from './types'
 
-const hosts = ['shelf', 'cabinet', 'cabinet-module', 'block', 'item', 'column'] as const
+const hosts = ['shelf', 'cabinet', 'cabinet-module', 'block', 'item', 'column', 'wall'] as const
 const schemas = authoredNodeSchemas()
 const previous = useScene.getState()
 const previousCompiled = compiledNodeParsersEnabled()

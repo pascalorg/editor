@@ -13,25 +13,14 @@
 
 import type { WallPlanPoint } from '@pascal-app/core'
 import { create } from 'zustand'
-import { registerDrawingControls, runDrawingControl } from '../lib/drawing-controls'
 
 /** Screen-space (SVG-local px) cursor point — drives the coordinate badge. */
 type SvgPoint = { x: number; y: number }
 
 export type FloorplanPolygonDraftType = 'ceiling' | 'slab' | 'zone'
 
-type WallDraftCommit = (end: WallPlanPoint) => boolean
-const wallDraftCommitters = new Map<'2d' | '3d', WallDraftCommit>()
-
 type FloorplanDraftPreviewState = {
-  registerDrawingControls: typeof registerDrawingControls
-  runDrawingControl: typeof runDrawingControl
-  wallDraftLength: number | null
   wallDraftPointerEnd: WallPlanPoint | null
-  setWallDraftLength(length: number | null): void
-  constrainWallDraftPoint(start: WallPlanPoint, point: WallPlanPoint): WallPlanPoint
-  registerWallDraftCommit(view: '2d' | '3d', commit: WallDraftCommit): () => void
-  commitWallDraft(view: '2d' | '3d' | 'split', allowFreeLength?: boolean): boolean
   /** Snapped plan-XZ point under the cursor; drives the crosshair + the
    *  cursor-following polygon-draft preview. `null` when idle. */
   cursorPoint: WallPlanPoint | null
@@ -62,6 +51,7 @@ type FloorplanDraftPreviewState = {
   /** Set the screen-space cursor point (deduped on x/y). */
   setCursorPosition(point: SvgPoint | null): void
   setWallDraftEnd(point: WallPlanPoint | null): void
+  setWallDraftPointerEnd(point: WallPlanPoint | null): void
   setFenceDraftEnd(point: WallPlanPoint | null): void
   setRoofDraftEnd(point: WallPlanPoint | null): void
   setWallDraftStart(point: WallPlanPoint | null): void
@@ -99,54 +89,8 @@ function setPlanPointField(
   }
 }
 
-function constrainLength(
-  start: WallPlanPoint,
-  point: WallPlanPoint,
-  length: number | null,
-): WallPlanPoint {
-  const dx = point[0] - start[0]
-  const dz = point[1] - start[1]
-  const distance = Math.hypot(dx, dz)
-  if (length === null || distance < 1e-8) return point
-  return [start[0] + (dx * length) / distance, start[1] + (dz * length) / distance]
-}
-
-export const useFloorplanDraftPreview = create<FloorplanDraftPreviewState>((set, get) => ({
-  registerDrawingControls,
-  runDrawingControl,
-  wallDraftLength: null,
+export const useFloorplanDraftPreview = create<FloorplanDraftPreviewState>((set) => ({
   wallDraftPointerEnd: null,
-  registerWallDraftCommit: (view, commit) => {
-    wallDraftCommitters.set(view, commit)
-    return () => {
-      if (wallDraftCommitters.get(view) === commit) wallDraftCommitters.delete(view)
-    }
-  },
-  commitWallDraft: (view, allowFreeLength = false) => {
-    const { wallDraftStart: start, wallDraftEnd: end, wallDraftLength: length } = get()
-    if (
-      !start ||
-      !end ||
-      (!allowFreeLength && length === null) ||
-      Math.hypot(end[0] - start[0], end[1] - start[1]) < 0.01
-    )
-      return false
-    const committed = wallDraftCommitters.get(view === '2d' ? '2d' : '3d')?.(end) ?? false
-    // Split view's floorplan must advance its local chain after the 3D owner commits.
-    if (committed && view === 'split') wallDraftCommitters.get('2d')?.(end)
-    return committed
-  },
-  constrainWallDraftPoint: (start, point) => constrainLength(start, point, get().wallDraftLength),
-  setWallDraftLength: (length) =>
-    set((state) => {
-      if (length !== null && (!Number.isFinite(length) || length < 0.01)) return state
-      if (length === state.wallDraftLength) return state
-      const end =
-        state.wallDraftStart && state.wallDraftPointerEnd
-          ? constrainLength(state.wallDraftStart, state.wallDraftPointerEnd, length)
-          : state.wallDraftEnd
-      return { wallDraftLength: length, wallDraftEnd: end }
-    }),
   cursorPoint: null,
   cursorPosition: null,
   wallDraftEnd: null,
@@ -172,32 +116,17 @@ export const useFloorplanDraftPreview = create<FloorplanDraftPreviewState>((set,
       if (point && prev && prev.x === point.x && prev.y === point.y) return state
       return { cursorPosition: point }
     }),
-  setWallDraftEnd: (point) =>
+  setWallDraftEnd: (point) => set(setPlanPointField('wallDraftEnd', point)),
+  setWallDraftPointerEnd: (point) =>
     set((state) => {
-      const end =
-        point && state.wallDraftStart
-          ? constrainLength(state.wallDraftStart, point, state.wallDraftLength)
-          : point
-      const next = setPlanPointField('wallDraftEnd', end)(state)
-      const previousPointer = state.wallDraftPointerEnd
-      if (
-        next === state &&
-        (point === previousPointer ||
-          (point &&
-            previousPointer &&
-            point[0] === previousPointer[0] &&
-            point[1] === previousPointer[1]))
-      )
-        return state
-      return { ...next, wallDraftPointerEnd: point }
+      const previous = state.wallDraftPointerEnd
+      if (!point && !previous) return state
+      if (point && previous && point[0] === previous[0] && point[1] === previous[1]) return state
+      return { wallDraftPointerEnd: point }
     }),
   setFenceDraftEnd: (point) => set(setPlanPointField('fenceDraftEnd', point)),
   setRoofDraftEnd: (point) => set(setPlanPointField('roofDraftEnd', point)),
-  setWallDraftStart: (point) =>
-    set((state) => {
-      const next = setPlanPointField('wallDraftStart', point)(state)
-      return next === state ? state : { ...next, wallDraftLength: null, wallDraftPointerEnd: null }
-    }),
+  setWallDraftStart: (point) => set(setPlanPointField('wallDraftStart', point)),
   setFenceDraftStart: (point) => set(setPlanPointField('fenceDraftStart', point)),
   setRoofDraftStart: (point) => set(setPlanPointField('roofDraftStart', point)),
   setRoofDraftQuarterTurn: (quarterTurn) =>
@@ -215,7 +144,6 @@ export const useFloorplanDraftPreview = create<FloorplanDraftPreviewState>((set,
       state.cursorPoint === null &&
       state.cursorPosition === null &&
       state.wallDraftEnd === null &&
-      state.wallDraftLength === null &&
       state.wallDraftPointerEnd === null &&
       state.fenceDraftEnd === null &&
       state.roofDraftEnd === null &&
@@ -230,7 +158,6 @@ export const useFloorplanDraftPreview = create<FloorplanDraftPreviewState>((set,
             cursorPoint: null,
             cursorPosition: null,
             wallDraftEnd: null,
-            wallDraftLength: null,
             wallDraftPointerEnd: null,
             fenceDraftEnd: null,
             roofDraftEnd: null,

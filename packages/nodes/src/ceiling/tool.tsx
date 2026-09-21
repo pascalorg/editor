@@ -16,6 +16,7 @@ import {
   isAngleSnapActive,
   isGridSnapActive,
   markToolCancelConsumed,
+  registerDrawingControls,
   resolveCeilingPlanPointSnap,
   triggerSFX,
   useEditor,
@@ -25,6 +26,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
 import { mix, positionLocal } from 'three/tsl'
+import { useShallow } from 'zustand/react/shallow'
 import { resolveCeilingDraftElevation } from './draft-elevation'
 import { CeilingNode } from './schema'
 
@@ -65,15 +67,18 @@ export const CeilingTool: React.FC = () => {
   const [points, setPoints] = useState<Array<[number, number]>>([])
   const [cursorPosition, setCursorPosition] = useState<[number, number]>([0, 0])
   const [snappedCursorPosition, setSnappedCursorPosition] = useState<[number, number]>([0, 0])
-  const nodes = useScene((state) => state.nodes)
   const ceilingDefaults = useEditor((state) => state.toolDefaults.ceiling)
-  const { baseY: levelY, height: ceilingHeight } = resolveCeilingDraftElevation(
-    {
-      parentId: currentLevelId,
-      polygon: [...points, snappedCursorPosition],
-      height: typeof ceilingDefaults?.height === 'number' ? ceilingDefaults.height : undefined,
-    },
-    nodes,
+  const { baseY: levelY, height: ceilingHeight } = useScene(
+    useShallow((state) =>
+      resolveCeilingDraftElevation(
+        {
+          parentId: currentLevelId,
+          polygon: [...points, snappedCursorPosition],
+          height: typeof ceilingDefaults?.height === 'number' ? ceilingDefaults.height : undefined,
+        },
+        state.nodes,
+      ),
+    ),
   )
   const previousSnappedPointRef = useRef<[number, number] | null>(null)
 
@@ -213,22 +218,20 @@ export const CeilingTool: React.FC = () => {
       previousSnappedPointRef.current = null
       clearCeilingSnapFeedback()
     }
-    const unregisterControls = useFloorplanDraftPreview
-      .getState()
-      .registerDrawingControls('ceiling', '3d', {
-        finish: () => {
-          if (points.length < 3) return false
-          const ceilingId = commitCeilingDrawing(currentLevelId, points)
-          setSelection({ selectedIds: [ceilingId] })
-          resetDraft()
-          return true
-        },
-        back: () => {
-          if (points.length <= 1) resetDraft()
-          else setPoints(points.slice(0, -1))
-        },
-        afterFinish: resetDraft,
-      })
+    const unregisterControls = registerDrawingControls('ceiling', '3d', {
+      finish: () => {
+        if (points.length < 3) return false
+        const ceilingId = commitCeilingDrawing(currentLevelId, points)
+        setSelection({ selectedIds: [ceilingId] })
+        resetDraft()
+        return true
+      },
+      back: () => {
+        if (points.length <= 1) resetDraft()
+        else setPoints(points.slice(0, -1))
+      },
+      afterFinish: resetDraft,
+    })
 
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)

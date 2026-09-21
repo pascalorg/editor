@@ -2,11 +2,7 @@ import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
-import { DoorNode } from './door'
-import { ItemNode } from './item'
-import { LeanToExtensionNode } from './lean-to-extension'
 import { validateWallRelations } from './wall-relations'
-import { WindowNode } from './window'
 
 export { validateWallRelations } from './wall-relations'
 
@@ -134,17 +130,7 @@ export type WallSurfaceSlotId = keyof typeof WALL_SURFACE_SLOT_DEFAULTS
 export const WallNode = BaseNode.extend({
   id: objectId('wall'),
   type: nodeType('wall'),
-  children: z
-    .array(
-      z.union([
-        ItemNode.shape.id,
-        objectId('procedural-item'),
-        DoorNode.shape.id,
-        WindowNode.shape.id,
-        LeanToExtensionNode.shape.id,
-      ]),
-    )
-    .default([]),
+  children: z.array(z.string()).default([]),
   // Legacy single-material wall finish. Read for backward compatibility only.
   material: MaterialSchema.optional(),
   // Legacy single-material wall finish preset. Read for backward compatibility only.

@@ -21,6 +21,7 @@ import {
   markToolCancelConsumed,
   publishHorizontalConstructionPlane,
   publishPlacementSurface,
+  registerDrawingControls,
   resampleTerrainConstructionPlane,
   resolveEventConstructionPlane,
   resolveLevelConstructionPlane,
@@ -257,20 +258,18 @@ export const SlabTool: React.FC = () => {
       resetDraft()
     }
 
-    const unregisterControls = useFloorplanDraftPreview
-      .getState()
-      .registerDrawingControls('slab', '3d', {
-        finish: () => {
-          if (points.length < 3) return false
-          finishDrawing()
-          return true
-        },
-        back: () => {
-          if (points.length <= 1) resetDraft()
-          else setPoints(points.slice(0, -1))
-        },
-        afterFinish: resetDraft,
-      })
+    const unregisterControls = registerDrawingControls('slab', '3d', {
+      finish: () => {
+        if (points.length < 3) return false
+        finishDrawing()
+        return true
+      },
+      back: () => {
+        if (points.length <= 1) resetDraft()
+        else setPoints(points.slice(0, -1))
+      },
+      afterFinish: resetDraft,
+    })
 
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)

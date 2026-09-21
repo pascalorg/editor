@@ -373,6 +373,46 @@ function migrateWallSurfaceMaterials(
   }
 }
 
+function normalizeWallGeometry(node: Record<string, any>) {
+  const point = (value: unknown, fallback: [number, number]): [number, number] => {
+    if (!Array.isArray(value)) return fallback
+    return [getFiniteNumber(value[0], fallback[0]), getFiniteNumber(value[1], fallback[1])]
+  }
+  const start = Array.isArray(node.start) ? point(node.start, [0, 0]) : node.start
+  let end = Array.isArray(node.end)
+    ? point(node.end, Array.isArray(start) ? [start[0] + 3, start[1]] : [3, 0])
+    : node.end
+  if (
+    Array.isArray(start) &&
+    Array.isArray(end) &&
+    Math.hypot(end[0] - start[0], end[1] - start[1]) <= 1e-6
+  ) {
+    end = [start[0] + 3, start[1]]
+  }
+  const next: Record<string, any> = {
+    ...node,
+    children: getStringArray(node.children),
+    start,
+    end,
+  }
+  for (const field of ['thickness', 'height'] as const) {
+    const value = next[field]
+    if (
+      value !== undefined &&
+      !(typeof value === 'number' && Number.isFinite(value) && value > 0)
+    ) {
+      delete next[field]
+    }
+  }
+  for (const field of ['curveOffset', 'supportOffset'] as const) {
+    const value = next[field]
+    if (value !== undefined && !(typeof value === 'number' && Number.isFinite(value))) {
+      delete next[field]
+    }
+  }
+  return next
+}
+
 // Move a kind's single legacy `material` / `materialPreset` onto its declared
 // slots. A pre-slot-model node painted one material rendered that material on
 // every part (each slot resolves `node.slots[slot]` → legacy → default), so the
@@ -885,6 +925,7 @@ function migrateNodes(nodes: Record<string, any>): {
     }
 
     if (node.type === 'wall') {
+      patchedNodes[id] = normalizeWallGeometry(patchedNodes[id])
       patchedNodes[id] = migrateWallSurfaceMaterials(
         migrateWallAssembly(patchedNodes[id]),
         mintedMaterials,
