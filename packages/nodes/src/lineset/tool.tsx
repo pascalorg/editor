@@ -120,6 +120,7 @@ const LinesetTool = () => {
       // mitered polyline run.
       const lineset = LinesetNode.parse({
         ...linesetDefinition.defaults(),
+        ...useEditor.getState().toolDefaults.lineset,
         name: 'Lineset',
         path: [start, end],
       })

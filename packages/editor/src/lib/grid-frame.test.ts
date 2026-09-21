@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { Group, Vector3 } from 'three'
 import { gridLocalNormal, gridLocalPoint } from './grid-frame'
 
-test('grid stays in model coordinates after XR scene pan, scale, and yaw', () => {
+test('grid floor and cursor stay in model coordinates after God-view pan, scale and yaw', () => {
   const root = new Group()
   root.position.set(2, 4, -3)
   root.rotation.y = Math.PI / 3
@@ -15,4 +15,5 @@ test('grid stays in model coordinates after XR scene pan, scale, and yaw', () =>
   expect(
     gridLocalNormal(root, normal, new Vector3()).distanceTo(new Vector3(1, 0, 0)),
   ).toBeLessThan(1e-8)
+  expect(world.distanceTo(local)).toBeGreaterThan(1)
 })

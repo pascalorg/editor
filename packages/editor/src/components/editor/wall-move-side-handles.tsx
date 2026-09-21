@@ -771,7 +771,9 @@ function WallBaseElevationHandle({
       const midpointWorld = new Vector3(midpoint[0], initialBase, midpoint[1]).applyMatrix4(
         levelObject.matrixWorld,
       )
-      const planeNormal = new Vector3().subVectors(camera.position, midpointWorld).setY(0)
+      const planeNormal = new Vector3()
+        .subVectors(camera.getWorldPosition(new Vector3()), midpointWorld)
+        .setY(0)
       if (planeNormal.lengthSq() === 0) return null
       planeNormal.normalize()
       const plane = new Plane().setFromNormalAndCoplanarPoint(planeNormal, midpointWorld)
@@ -1007,6 +1009,7 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
       // Commit: write the final override-merged value to zustand once
       // (tracked, undoable), then drop the override so the renderer
       // falls back to the scene store.
+      useScene.temporal.getState().resume()
       if (pendingHeight !== initialHeight) {
         useScene.getState().updateNode(wallId, { height: pendingHeight })
       }

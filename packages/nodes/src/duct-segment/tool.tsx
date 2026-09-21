@@ -512,6 +512,9 @@ export function planDuctDraw(
 
 const DuctSegmentTool = () => {
   const { activeLevelId, sceneApi, unit } = useRegistryToolContext()
+  const toolDefaults = useEditor((s) => s.toolDefaults['duct-segment']) as
+    | Partial<DraftProfile>
+    | undefined
   const cursorRef = useRef<Group>(null)
   const continuationSeedRef = useRef(currentDuctContinuationSeed())
   const continuationSeed = continuationSeedRef.current
@@ -674,6 +677,16 @@ const DuctSegmentTool = () => {
       }
     },
   })
+
+  useEffect(() => {
+    if (!toolDefaults) return
+    setProfile((current) => ({
+      shape: toolDefaults.shape ?? current.shape,
+      diameter: toolDefaults.diameter ?? current.diameter,
+      width: toolDefaults.width ?? current.width,
+      height: toolDefaults.height ?? current.height,
+    }))
+  }, [toolDefaults])
 
   const previewPlan = useMemo(() => {
     if (!(activeLevelId && run.start && run.cursor)) return null

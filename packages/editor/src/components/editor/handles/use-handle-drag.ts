@@ -231,11 +231,16 @@ export function useHandleDrag(args: UseHandleDragArgs) {
     }
     const onMove = (moveEvent: PointerEvent) => {
       pendingMoveEvent = moveEvent
-      if (moveFrame === 0) moveFrame = window.requestAnimationFrame(flushMove)
+      if (moveFrame !== 0) return
+      if (typeof window.requestAnimationFrame === 'function') {
+        moveFrame = window.requestAnimationFrame(flushMove)
+      } else {
+        flushMove()
+      }
     }
 
     const cleanup = () => {
-      if (moveFrame !== 0) window.cancelAnimationFrame(moveFrame)
+      if (moveFrame !== 0) window.cancelAnimationFrame?.(moveFrame)
       moveFrame = 0
       pendingMoveEvent = null
       window.removeEventListener('pointermove', onMove)
@@ -265,7 +270,7 @@ export function useHandleDrag(args: UseHandleDragArgs) {
     }
 
     const onUp = () => {
-      if (moveFrame !== 0) window.cancelAnimationFrame(moveFrame)
+      if (moveFrame !== 0) window.cancelAnimationFrame?.(moveFrame)
       flushMove()
       swallowNextClick()
       sfxEmitter.emit('sfx:item-place')

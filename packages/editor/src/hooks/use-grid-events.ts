@@ -58,6 +58,7 @@ export function useGridEvents(gridY: number) {
   }, [gridY])
 
   useEffect(() => {
+    // XR placement is driven by the controller-ray bridge, never screen coordinates.
     if (gl.xr.isPresenting) return
     const canvas = gl.domElement
     setSurfaceRaycastLayers(raycaster.current.layers)

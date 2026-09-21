@@ -167,6 +167,12 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
     suppressBoxSelectForPointer(event)
     const spatialPointerId = getSpatialPointerId(event.nativeEvent)
     const spatialRay = spatialPointerId ? event.ray.clone() : null
+    if (spatialPointerId) {
+      const target = event.object as typeof event.object & {
+        setPointerCapture?: (pointerId: number) => void
+      }
+      target.setPointerCapture?.(event.pointerId)
+    }
 
     frozenRest.current = { pivot: rest.pivot.clone(), corner: rest.corner.clone() }
     const center = rest.pivot.clone()

@@ -79,10 +79,12 @@ export {
   useInvisibleHitAreaMaterial,
 } from './components/editor/node-arrow-handles'
 export { QuickMeasurementCard } from './components/editor/quick-measurement-card'
+export { SelectionManager } from './components/editor/selection-manager'
 export {
   type SnapshotCameraData,
   ThumbnailGenerator,
 } from './components/editor/thumbnail-generator'
+export { WallMoveSideHandles } from './components/editor/wall-move-side-handles'
 export { useFloorplanRender } from './components/editor-2d/floorplan-render-context'
 export { FloorplanDimensionRenderer } from './components/editor-2d/renderers/floorplan-dimension-renderer'
 export { FloorplanGeometryRenderer } from './components/editor-2d/renderers/floorplan-geometry-renderer'
@@ -255,6 +257,8 @@ export {
 export {
   commitMultiNodeFields,
   fieldVisibleForAll,
+  firstNumericFieldValue,
+  firstVec3FieldValue,
   reduceFieldValue,
   reduceHeightBoundMode,
 } from './components/ui/panels/multi-field-value'
@@ -342,7 +346,7 @@ export type { SaveStatus } from './hooks/use-auto-save'
 // can express their affordances declaratively in their own folder.
 export { type UseDragActionArgs, useDragAction } from './hooks/use-drag-action'
 // Phase 5 Stage D — extras for kind-owned placement tools (FenceTool etc.).
-export { markToolCancelConsumed } from './hooks/use-keyboard'
+export { cancelActiveTool, markToolCancelConsumed } from './hooks/use-keyboard'
 export { useReducedMotion } from './hooks/use-reduced-motion'
 export { type Selection, useSelection } from './hooks/use-selection'
 export {
@@ -637,6 +641,7 @@ export {
 } from './lib/surface-plan-snap'
 export { useTerrainPanelRows } from './lib/terrain-panel-model'
 export {
+  brushRadiusRange,
   clipTerrainPatchToSite,
   commitStroke,
   fieldExtentForSite,
@@ -694,6 +699,7 @@ export {
   isAngleSnapActive,
   isGridSnapActive,
   isMagneticSnapActive,
+  selectDefaultBuildingAndLevel,
 } from './store/use-editor'
 export { default as useFacingPose, type FacingPose } from './store/use-facing-pose'
 export { default as useFenceCurveDraft } from './store/use-fence-curve-draft'

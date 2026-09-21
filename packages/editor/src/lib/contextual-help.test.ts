@@ -1,5 +1,14 @@
 import { describe, expect, test } from 'bun:test'
-import { resolveSelectModeHelpHints } from './contextual-help'
+import { resolveRotateHandleHelpHints, resolveSelectModeHelpHints } from './contextual-help'
+
+test('rotation advertises Alt as the temporary free-rotation override', () => {
+  expect(resolveRotateHandleHelpHints(false)).toEqual([
+    { keys: ['Alt'], label: 'Hold to rotate freely', active: false },
+  ])
+  expect(resolveRotateHandleHelpHints(true)).toEqual([
+    { keys: ['Alt'], label: 'Rotating freely (no angle step)', active: true },
+  ])
+})
 
 describe('resolveSelectModeHelpHints', () => {
   test('stays hidden in idle select mode with no selection', () => {
