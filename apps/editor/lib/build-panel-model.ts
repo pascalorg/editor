@@ -49,12 +49,7 @@ export function useBuildToolOptions(): PanelToolOption[] {
   }
   const parsed = RoofTypeSchema.safeParse(defaults?.roofType)
   const roofType = parsed.success ? parsed.data : 'gable'
-  const features = collectRoofFeatures()
-  if (
-    (tool !== 'roof' && !features.some((feature) => feature.kind === tool)) ||
-    roofType === 'conical'
-  )
-    return []
+  if (tool !== 'roof' || roofType === 'conical') return []
   return [
     {
       id: 'roof-footprint-source',

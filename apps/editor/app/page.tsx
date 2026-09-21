@@ -116,7 +116,7 @@ export default function Home() {
                 </div>
               )}
               <Editor
-                immersive={vr?.immersive}
+                immersive={vr?.session ? vr.immersive : undefined}
                 layoutVersion="v2"
                 projectId={PROJECT_ID}
                 sidebarTabs={SIDEBAR_TABS}
