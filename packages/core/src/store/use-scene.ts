@@ -178,6 +178,22 @@ function normalizeWindowNode(node: Record<string, unknown>) {
   return parsed.success ? { ...node, ...parsed.data } : null
 }
 
+// Slabs and ceilings written by third-party exporters (scanning apps, IFC
+// hand-offs) can legitimately omit `holes` / `holeMetadata` / `autoFromWalls`:
+// the schema gives them defaults. The opening sync and the public viewer read
+// those fields on the raw node, so a missing `holes` throws
+// "Cannot read properties of undefined (reading 'map')" and the scene never
+// renders. Only the hole fields are filled here — a full zod parse would also
+// default `thickness`, which the vertical-model migration below must still see
+// as absent on legacy solids.
+function normalizeSurfaceHoleFields(node: Record<string, unknown>) {
+  const holes = Array.isArray(node.holes) ? node.holes : []
+  const holeMetadata = Array.isArray(node.holeMetadata) ? node.holeMetadata : []
+  const autoFromWalls =
+    node.type === 'slab' && node.autoFromWalls === undefined ? { autoFromWalls: false } : {}
+  return { ...node, holes, holeMetadata, ...autoFromWalls }
+}
+
 function normalizeShelfNode(node: Record<string, unknown>) {
   const sanitized = {
     ...node,
@@ -824,6 +840,10 @@ function migrateNodes(nodes: Record<string, any>): {
       if (normalized) {
         patchedNodes[id] = normalized
       }
+    }
+
+    if (node.type === 'slab' || node.type === 'ceiling') {
+      patchedNodes[id] = normalizeSurfaceHoleFields(patchedNodes[id] ?? node) as AnyNode
     }
 
     // Dormers originally rendered one inline parametric window. Promote that
