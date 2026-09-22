@@ -2,6 +2,7 @@ import { afterEach, expect, test } from 'bun:test'
 import {
   DoorNode,
   getEffectiveNode,
+  getWallCurveLength,
   useLiveNodeOverrides,
   useScene,
   WallNode,
@@ -50,6 +51,20 @@ test('door and window placement keep the curtain perimeter surround clear', () =
   const windowPosition = clampWindowToWall(wall, 0, 0, 1, 1, nodes)
   expect(doorPosition).toEqual({ clampedX: 0.55, clampedY: 1 })
   expect(windowPosition).toEqual({ clampedX: 0.55, clampedY: 0.55 })
+})
+
+test('placement uses curved curtain arc length at the far perimeter', () => {
+  const curvedWall = WallNode.parse({
+    start: [0, 0],
+    end: [4, 0],
+    curveOffset: 1,
+    height: 2.5,
+    wallType: 'curtain',
+  })
+  const curvedNodes = { [curvedWall.id]: curvedWall }
+  const expectedX = getWallCurveLength(curvedWall) - 0.55
+  expect(clampDoorToWall(curvedWall, 100, 1, 2).clampedX).toBeCloseTo(expectedX)
+  expect(clampWindowToWall(curvedWall, 100, 1, 1, 1, curvedNodes).clampedX).toBeCloseTo(expectedX)
 })
 
 test('non-curtain hosts retain their existing sizing policy', () => {

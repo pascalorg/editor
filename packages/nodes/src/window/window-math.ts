@@ -1,4 +1,10 @@
-import { type AnyNode, type AnyNodeId, getCurtainWallConfig, type WallNode } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  getCurtainWallConfig,
+  getWallCurveLength,
+  type WallNode,
+} from '@pascal-app/core'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 
 /**
@@ -50,9 +56,7 @@ export function clampToWall(
   height: number,
   nodes: Readonly<Record<AnyNodeId, AnyNode>>,
 ): { clampedX: number; clampedY: number } {
-  const dx = wallNode.end[0] - wallNode.start[0]
-  const dz = wallNode.end[1] - wallNode.start[1]
-  const wallLength = Math.sqrt(dx * dx + dz * dz)
+  const wallLength = getWallCurveLength(wallNode)
   const wallHeight = resolveWallOpeningCeiling(wallNode, nodes)
   const margin = wallNode.wallType === 'curtain' ? getCurtainWallConfig(wallNode).perimeterWidth : 0
 
