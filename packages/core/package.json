@@ -118,7 +118,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/pascalorg/editor.git",
+    "url": "git+https://github.com/pascalorg/editor.git",
     "directory": "packages/core"
   },
   "license": "MIT",
