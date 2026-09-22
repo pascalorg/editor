@@ -1,6 +1,37 @@
-import type { DoorNode, WindowNode } from '@pascal-app/core'
+import {
+  type DoorNode,
+  getWallCurveFrameAt,
+  getWallCurveLength,
+  isCurvedWall,
+  type WallNode,
+  type WindowNode,
+} from '@pascal-app/core'
 import { buildOpeningCutoutShape, ensureRenderableGeometryAttributes } from '@pascal-app/viewer'
-import { ExtrudeGeometry, Path, Shape, Vector2 } from 'three'
+import { type BufferGeometry, ExtrudeGeometry, Path, Shape, Vector2 } from 'three'
+
+export function mapCurtainOpeningGeometryToWall(geometry: BufferGeometry, wall: WallNode) {
+  if (!isCurvedWall(wall)) return
+  const length = getWallCurveLength(wall)
+  if (length <= 1e-6) return
+  const angle = Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
+  const cos = Math.cos(angle)
+  const sin = Math.sin(angle)
+  const position = geometry.getAttribute('position')
+  for (let index = 0; index < position.count; index++) {
+    const along = position.getX(index)
+    const depth = position.getZ(index)
+    const clampedAlong = Math.max(0, Math.min(length, along))
+    const frame = getWallCurveFrameAt(wall, clampedAlong / length)
+    const extension = along - clampedAlong
+    const x = frame.point.x + frame.tangent.x * extension + frame.normal.x * depth - wall.start[0]
+    const z = frame.point.y + frame.tangent.y * extension + frame.normal.y * depth - wall.start[1]
+    position.setXYZ(index, x * cos + z * sin, position.getY(index), -x * sin + z * cos)
+  }
+  position.needsUpdate = true
+  geometry.boundingBox = null
+  geometry.boundingSphere = null
+  geometry.computeVertexNormals()
+}
 
 export function curtainOpeningProfile(opening: DoorNode | WindowNode, width: number) {
   const bottom = opening.position[1] - opening.height / 2

@@ -3,11 +3,14 @@ import {
   CurtainWallConfig,
   calculateLevelMiters,
   DoorNode,
+  getWallCurveLength,
   sceneRegistry,
   WallNode,
+  WindowNode,
 } from '@pascal-app/core'
 import { generateExtrudedWall } from '@pascal-app/viewer'
 import { DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
+import { curtainWallGeometryAdapter } from './curtain-wall-adapter'
 import { buildCurtainWallGeometry } from './curtain-wall-geometry'
 import { getCurtainAwareWallMaterials } from './curtain-wall-materials'
 
@@ -102,6 +105,36 @@ describe('curtain wall geometry', () => {
     expect(geometry.boundingBox!.max.y).toBeCloseTo(3)
     expect(geometry.boundingBox!.min.y).toBeCloseTo(0)
     expect(Array.from(geometry.getAttribute('position').array).every(Number.isFinite)).toBe(true)
+    geometry.dispose()
+  })
+  test('curved walls bend shaped opening frames and cutters with the curtain surface', () => {
+    const wall = WallNode.parse({
+      start: [0, 0],
+      end: [4, 0],
+      curveOffset: 1,
+      height: 3,
+      thickness: 0.15,
+      wallType: 'curtain',
+    })
+    const window = WindowNode.parse({
+      position: [getWallCurveLength(wall) / 2, 1.5, 0],
+      width: 1,
+      height: 1,
+      openingShape: 'arch',
+      archHeight: 0.4,
+    })
+    const prepared = curtainWallGeometryAdapter.prepareChildren!(wall, [window], {
+      isLive: () => false,
+    })
+    expect(prepared.envelopeChildren).toEqual([])
+    const geometry = buildCurtainWallGeometry(
+      wall,
+      generateExtrudedWall(wall, prepared.envelopeChildren, calculateLevelMiters([wall])),
+      prepared.renderChildren,
+    )
+    const mesh = new Mesh(geometry, [material, material, material])
+    expect(hit(mesh, 2, 1.5)).toHaveLength(0)
+    expect(hit(mesh, 2, 0.5).length).toBeGreaterThan(0)
     geometry.dispose()
   })
   test('material cache changes with curtain settings and wall type', () => {

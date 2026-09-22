@@ -23,6 +23,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo } from 'react'
 import { constrainCurtainOpening, curtainOpeningLimits } from '../shared/curtain-opening-limits'
+import { OpeningDocumentationFields } from '../shared/opening-documentation-fields'
 import { createOpeningPropertyPreview } from '../shared/opening-property-preview'
 import { openingPropertyPreviewHost } from '../shared/opening-property-preview-host'
 
@@ -364,6 +365,21 @@ export default function WindowPanel() {
             { value: 'opening', label: 'Opening' },
           ]}
           value={node.openingKind ?? 'window'}
+        />
+      </PanelSection>
+
+      <PanelSection title="Documentation">
+        <OpeningDocumentationFields
+          constructionType={node.constructionType}
+          dimensionReference={node.dimensionReference}
+          finishOpeningHeight={node.finishOpeningHeight}
+          finishOpeningWidth={node.finishOpeningWidth}
+          mark={node.mark}
+          masonryOpeningHeight={node.masonryOpeningHeight}
+          masonryOpeningWidth={node.masonryOpeningWidth}
+          onChange={handleUpdate}
+          roughOpeningHeight={node.roughOpeningHeight}
+          roughOpeningWidth={node.roughOpeningWidth}
         />
       </PanelSection>
 

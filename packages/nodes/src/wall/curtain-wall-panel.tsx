@@ -5,6 +5,7 @@ import {
   type CurtainPanelType,
   type CurtainWallConfig,
   getCurtainWallConfig,
+  getEffectiveNode,
   getWallCurveLength,
   getWallThickness,
   type WallNode,
@@ -202,6 +203,15 @@ const PANEL_OPTIONS = [
   { label: 'Empty', value: 'empty' },
 ] as const
 
+export function getCurtainWallUpdate(
+  node: WallNode,
+  patch: Partial<CurtainWallConfig>,
+): Pick<WallNode, 'curtainWall'> {
+  return {
+    curtainWall: { ...getCurtainWallConfig(getEffectiveNode(node)), ...patch },
+  }
+}
+
 export function CurtainWallPanel({
   node,
   height,
@@ -213,7 +223,7 @@ export function CurtainWallPanel({
 }: Props) {
   const config = getCurtainWallConfig(node)
   const update = (patch: Partial<CurtainWallConfig>, preview = false) => {
-    ;(preview ? onPreview : onUpdate)({ curtainWall: { ...config, ...patch } })
+    ;(preview ? onPreview : onUpdate)(getCurtainWallUpdate(node, patch))
   }
 
   const [tintEditing, setTintEditing] = useState(false)
@@ -602,6 +612,11 @@ export function CurtainWallPanel({
                   onChange={(event) => {
                     setTintEditing(true)
                     update({ glassColor: event.target.value }, true)
+                  }}
+                  onBlur={() => {
+                    if (!tintEditing) return
+                    onCommit()
+                    setTintEditing(false)
                   }}
                   onInput={(event) => {
                     setTintEditing(true)

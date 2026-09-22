@@ -1,4 +1,4 @@
-import { isCurvedWall, type WallNode } from '@pascal-app/core'
+import type { WallNode } from '@pascal-app/core'
 import type { WallGeometryAdapter } from '@pascal-app/viewer'
 import type { Mesh } from 'three'
 import { buildCurtainWallGeometry } from './curtain-wall-geometry'
@@ -6,7 +6,7 @@ import { buildCurtainWallShadowGeometry, CURTAIN_WALL_SHADOW_NAME } from './curt
 
 export const curtainWallGeometryAdapter: WallGeometryAdapter = {
   prepareChildren(wall, children, context) {
-    if (wall.wallType !== 'curtain' || isCurvedWall(wall)) {
+    if (wall.wallType !== 'curtain') {
       return { envelopeChildren: [...children], renderChildren: [...children] }
     }
     const renderChildren = children.map((child) => {

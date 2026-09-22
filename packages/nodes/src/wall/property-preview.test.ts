@@ -7,6 +7,7 @@ import {
   useScene,
   WallNode,
 } from '@pascal-app/core'
+import { getCurtainWallUpdate } from './curtain-wall-panel'
 import { createWallPropertyPreview } from './property-preview'
 
 globalThis.requestAnimationFrame ??= (callback) => {
@@ -72,4 +73,13 @@ test('a preview cleared by history cannot be recommitted by a later release', ()
   edit.commit()
   expect(useScene.getState().nodes[wall.id]).toBe(wall)
   expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+})
+
+test('a discrete curtain setting preserves an in-flight curtain preview', () => {
+  const { wall, edit } = setup()
+  edit.preview(getCurtainWallUpdate(wall, { glassColor: '#123456' }))
+  edit.commit(getCurtainWallUpdate(wall, { framing: 'structural-glazing' }))
+  const committed = useScene.getState().nodes[wall.id] as WallNode
+  expect(committed.curtainWall?.glassColor).toBe('#123456')
+  expect(committed.curtainWall?.framing).toBe('structural-glazing')
 })

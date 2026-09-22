@@ -17,7 +17,7 @@ import {
 } from '@pascal-app/viewer'
 import { BufferGeometry, ExtrudeGeometry, Shape } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { buildCurtainOpeningFrame } from './curtain-opening-frame'
+import { buildCurtainOpeningFrame, mapCurtainOpeningGeometryToWall } from './curtain-opening-frame'
 import {
   buildCurtainWallLayout,
   type CurtainWallPiece,
@@ -84,13 +84,16 @@ export function buildCurtainWallGeometry(
       (child) =>
         (child.type === 'window' || child.type === 'door') && child.openingShape !== 'rectangle',
     )
-    .map((opening) =>
-      buildCurtainOpeningFrame(
+    .map((opening) => {
+      const geometry = buildCurtainOpeningFrame(
         opening as Extract<AnyNode, { type: 'door' | 'window' }>,
         getCurtainWallConfig(wall).perimeterWidth,
         getWallThickness(wall),
-      ),
-    )
+      )
+      mapCurtainOpeningGeometryToWall(geometry.frame, wall)
+      mapCurtainOpeningGeometryToWall(geometry.cutter, wall)
+      return geometry
+    })
   const hasRectangularOpenings = children.some(
     (child) =>
       (child.type === 'window' || child.type === 'door') && child.openingShape === 'rectangle',
