@@ -91,7 +91,7 @@ import { clearSurfacePlanSnapFeedback } from '../../../lib/surface-plan-snap'
 import { paintZoneMembership } from '../../../lib/units'
 import useDirectManipulationFeedback from '../../../store/use-direct-manipulation-feedback'
 import useDrawingView from '../../../store/use-drawing-view'
-import useEditor, { isAngleSnapActive } from '../../../store/use-editor'
+import useEditor, { isAngleSnapActive, type Mode } from '../../../store/use-editor'
 import useFloorplanAnnotationVisibility from '../../../store/use-floorplan-annotation-visibility'
 import useFloorplanMode from '../../../store/use-floorplan-mode'
 import useInteractionScope, {
@@ -456,15 +456,32 @@ export function isFloorplanOpeningPlacementState({
   )
 }
 
-function isFloorplanOpeningPlacementActiveNow(): boolean {
+/**
+ * Whether a press on an entry belongs to the active tool instead of selecting
+ * the entry. Build tools own the plan the way their 3D tools own the canvas,
+ * where selection only runs in select mode: a wall drawn onto another wall
+ * must place its point (T-junction), not select the wall under the cursor.
+ */
+export function floorplanEntryYieldsToTool(state: {
+  mode: Mode
+  openingPlacement: boolean
+}): boolean {
+  return state.mode === 'build' || state.openingPlacement
+}
+
+function floorplanEntryYieldsToToolNow(): boolean {
   const { phase, mode, tool } = useEditor.getState()
   const movingNode = getMovingNode()
-  return isFloorplanOpeningPlacementState({
-    phase,
+  return floorplanEntryYieldsToTool({
     mode,
-    tool,
-    movingNodeHasWallOpeningPlacement:
-      movingNode != null && !!nodeRegistry.get(movingNode.type)?.capabilities?.wallOpeningPlacement,
+    openingPlacement: isFloorplanOpeningPlacementState({
+      phase,
+      mode,
+      tool,
+      movingNodeHasWallOpeningPlacement:
+        movingNode != null &&
+        !!nodeRegistry.get(movingNode.type)?.capabilities?.wallOpeningPlacement,
+    }),
   })
 }
 
@@ -558,13 +575,13 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   const sceneRotationDeg = renderCtx?.getSceneRotationDeg() ?? 0
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setMovingNodeOrigin = useEditor((s) => s.setMovingNodeOrigin)
-  // Door / window placement (both build and move) needs the SVG's
-  // background click handler to run — it finds the closest wall via
-  // `findClosestWallPoint` and emits `wall:click` for the door / window
-  // tool. When the user clicks *on top of* a wall in this mode, the
+  // Build tools and door / window placement (both build and move) need the
+  // SVG's background handlers to run — wall drafting places its point there,
+  // and opening placement finds the closest wall via `findClosestWallPoint`
+  // and emits `wall:click`. When the user clicks *on top of* a wall, the
   // wall's registry entry would otherwise swallow the click via
-  // `handleClickStop` / `handleSelect`, so the placement never fires.
-  // Pass clicks through in that case.
+  // `handleClickStop` / `handleSelect`, so the tool never sees it. Pass
+  // clicks through in that case (`floorplanEntryYieldsToToolNow`).
   const editorMode = useEditor((s) => s.mode)
   const structureLayer = useEditor((s) => s.structureLayer)
   const floorplanSelectionTool = useEditor((s) => s.floorplanSelectionTool)
@@ -682,9 +699,23 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       const currentSelectedIds = useViewer.getState().selection.selectedIds
       let nextSelectedIds: string[]
       if (options.shouldToggle) {
-        nextSelectedIds = currentSelectedIds.includes(id)
-          ? currentSelectedIds.filter((selectedId) => selectedId !== id)
-          : [...currentSelectedIds, id]
+        if (currentSelectedIds.includes(id)) {
+          // A room's slab and ceiling overlap in the plan and only the slab
+          // takes the click, so removing one removes the other too (a marquee
+          // picks both). 3D keeps single toggles: each is clickable there.
+          const nodes = useScene.getState().nodes
+          const node = nodes[id as AnyNodeId]
+          const counterparts = node
+            ? (getFloorplanNodeExtension(nodeRegistry.get(node.type))?.selectionCounterparts?.({
+                node,
+                nodes,
+              }) ?? [])
+            : []
+          const removed = new Set<string>([id, ...counterparts])
+          nextSelectedIds = currentSelectedIds.filter((selectedId) => !removed.has(selectedId))
+        } else {
+          nextSelectedIds = [...currentSelectedIds, id]
+        }
       } else if (options.isolateMember) {
         nextSelectedIds = [id]
       } else {
@@ -722,7 +753,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
   )
 
   const handleClickStop = useCallback((event: React.MouseEvent<SVGGElement>) => {
-    if (isFloorplanOpeningPlacementActiveNow()) return
+    if (floorplanEntryYieldsToToolNow()) return
     event.stopPropagation()
   }, [])
 
@@ -983,7 +1014,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       // the stores at event time. Commit clears the interaction scope before
       // React paints the next frame; a render-time `undefined` handler leaves
       // a short dead zone where the first post-placement selection is lost.
-      if (isFloorplanOpeningPlacementActiveNow()) return
+      if (floorplanEntryYieldsToToolNow()) return
       if (startDirectMoveDrag(id, event)) return
       if (startDirectRotateDrag(id, event)) return
       if (startGroupMoveDrag(id, event)) return

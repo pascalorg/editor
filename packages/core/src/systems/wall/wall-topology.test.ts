@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { GROUND_SUPPORT_ID } from '../../hooks/spatial-grid/support-host-id'
 import { encodeTerrainField } from '../../lib/terrain-codec'
 import { applyHeightPatch, createTerrainField, flattenPatch } from '../../lib/terrain-field'
-import { type AnyNode, type AnyNodeId, DoorNode, WallNode } from '../../schema'
+import { type AnyNode, type AnyNodeId, DoorNode, WallNode, ZoneNode } from '../../schema'
 import { getWallArcData, getWallCurveFrameAt } from './wall-curve'
 import { planWallInsertion, planWallSplitAtPoint } from './wall-topology'
 
@@ -106,6 +106,36 @@ describe('planWallInsertion', () => {
     ])
   })
 
+  test('a room keeps naming its boundary when a T-join splits one of its walls', () => {
+    const host = WallNode.parse({ parentId: LEVEL_ID, start: [0, 0], end: [8, 0] })
+    const other = WallNode.parse({ parentId: LEVEL_ID, start: [8, 0], end: [8, 6] })
+    const room = ZoneNode.parse({
+      parentId: LEVEL_ID,
+      name: 'Room',
+      polygon: [
+        [0, 0],
+        [8, 0],
+        [8, 6],
+        [0, 6],
+      ],
+      autoFromWalls: true,
+      boundaryWallIds: [host.id, other.id],
+    })
+    const result = planWallInsertion(nodeMap([host, other, room]), {
+      levelId: LEVEL_ID,
+      start: [4, 0],
+      end: [4, -3],
+      joinRadius: 0.1,
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const replacementIds = result.plan.changes.create
+      .map((op) => op.node.id)
+      .filter((id) => !result.plan.insertedWalls.some((wall) => wall.id === id))
+    expect(replacementIds).toHaveLength(2)
+    const zoneUpdate = result.plan.changes.update.find((op) => op.id === room.id)
+    expect(zoneUpdate?.data).toEqual({ boundaryWallIds: [...replacementIds, other.id] })
+  })
   test('moves an attached opening to the replacement wall that contains it', () => {
     const door = DoorNode.parse({
       id: 'door_attached',

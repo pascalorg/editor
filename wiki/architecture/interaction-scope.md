@@ -135,6 +135,11 @@ There is no per-kind snapping switch.
   declaring `NodeDefinition.snapProfile` (`'item' | 'structural'`); `snapContextOf(scope × profile)` maps
   it — `structural` while **setting direction** (drafting / endpoint drag) → `wall` (angle-bearing),
   `structural` otherwise (translate / curve) → `polygon` (no angle), `item` → `item`. No profile → no chip.
+  Tools that are not registered kinds map through `TOOL_SNAP_CONTEXTS` in the same file (the host
+  room-preset stamp `room`); without an entry a tool has no snap context, so Shift cycling and the HUD
+  chip stay dead while it runs. A kind's own reshape (the wall split, `reshape: 'split'`) runs as a
+  `reshaping` scope and inherits that scope's mapping (`polygon` unless it sets direction), so it
+  never needs a tool entry.
 - **Single read path.** Tools read `isGridSnapActive()` / `isMagneticSnapActive()` / `isAngleSnapActive()`
   (`store/use-editor`); the grid step is `useEditor.getState().gridSnapStep` gated on `isGridSnapActive()`.
   These resolve the mode from the scope via `getActiveSnapContext()` → `snappingModeByContext[context]`.

@@ -37,8 +37,7 @@ import useInteractionScope, { useMovingNode } from '../../store/use-interaction-
 import {
   classifyParticipant,
   collectParticipants,
-  computeGroupBox,
-  expandToComponent,
+  computeGroupPlanBox,
   type GroupPlanBounds,
   groupPlanBounds,
   levelFrame,
@@ -128,9 +127,8 @@ export function startFloorplanGroupMove(
     const participantIds = selectedIds.filter(
       (id) => classifyParticipant(nodes[id as AnyNodeId], levelId, nodes) !== null,
     )
-    // Move the full connected wall/fence component, mirroring the 3D gizmo.
-    const fullIds = expandToComponent(participantIds, nodes, levelId)
-    const { starts, links } = collectParticipants(fullIds, nodes, levelId)
+    // Only the selection moves; connected walls stretch through `links`, as in 3D.
+    const { starts, links } = collectParticipants(participantIds, nodes, levelId)
     if (starts.length === 0) return null
     const affectedIds: AnyNodeId[] = [...starts.map((s) => s.id), ...links.map((l) => l.id)]
 
@@ -144,10 +142,9 @@ export function startFloorplanGroupMove(
     const candidates = collectAlignmentAnchors(staticNodes, '', levelId)
 
     // The group aligns as one rigid footprint: its bbox corners + center are
-    // the moving anchors. `computeGroupBox` is world-space (the 3D scene stays
-    // mounted under every view mode); plan coords are level-frame, so convert.
+    // the moving anchors, measured in the level frame like the plan itself.
     const { inverse: frameInv } = levelFrame(levelId)
-    const restBounds = groupPlanBounds(computeGroupBox(fullIds), starts, frameInv)
+    const restBounds = groupPlanBounds(starts, frameInv)
     if (!restBounds) return null
     const restAnchors = bboxCornerAnchors(
       'group-move',
@@ -441,12 +438,11 @@ export function startFloorplanGroupRotate(event: {
     (id) => classifyParticipant(nodes[id as AnyNodeId], levelId, nodes) !== null,
   )
   if (participantIds.length === 0) return false
-  const fullIds = expandToComponent(participantIds, nodes, levelId)
-  const { starts, links } = collectParticipants(fullIds, nodes, levelId)
+  const { starts, links } = collectParticipants(participantIds, nodes, levelId)
   if (starts.length === 0) return false
   const affectedIds: AnyNodeId[] = [...starts.map((s) => s.id), ...links.map((l) => l.id)]
   const { inverse: frameInv } = levelFrame(levelId)
-  const bounds = groupPlanBounds(computeGroupBox(fullIds), starts, frameInv)
+  const bounds = groupPlanBounds(starts, frameInv)
   if (!bounds) return false
   // Same pivot as the dashed box the handles hang off (and as the 3D rotate
   // gizmo): its centre, not the anchor points' centre.
@@ -605,8 +601,9 @@ const GROUP_BOX_ROTATE_CURSOR_STYLE = {
 
 /**
  * Dashed bounding box around the current multi-selection's transformable
- * participants (expanded to the welded wall/fence component) — shows what a
- * group drag will carry along, and IS the group's drag handle: press anywhere
+ * participants — what a group drag carries (connected walls outside the
+ * selection stretch at their shared ends to stay joined) — and IS the group's
+ * drag handle: press anywhere
  * inside it to slide the group, click to pick it up. Holding a selection
  * modifier (Cmd/Ctrl/Shift) lets pointer events pass through so members under
  * the box can still be toggled in and out. Rides the live drag delta so it
@@ -653,7 +650,7 @@ export const FloorplanGroupSelectionBox = memo(function FloorplanGroupSelectionB
   }, [])
 
   // `meshEpoch` re-runs the measurement once the meshes settle after a scene
-  // change (undo/redo included) — `computeGroupBox` reads mesh world bounds,
+  // change (undo/redo included) — `computeGroupPlanBox` reads mesh bounds,
   // which lag the `nodes` commit by a frame or two.
   const meshEpoch = useMeshSettleEpoch(nodes)
   const box = useMemo(() => {
@@ -663,17 +660,13 @@ export const FloorplanGroupSelectionBox = memo(function FloorplanGroupSelectionB
       (id) => classifyParticipant(nodes[id as AnyNodeId], levelId, nodes) !== null,
     )
     if (participantIds.length === 0) return null
-    const fullIds = expandToComponent(participantIds, nodes, levelId)
-    const world = computeGroupBox(fullIds)
-    if (!world) return null
-    const { inverse } = levelFrame(levelId)
-    const min = world.min.clone().applyMatrix4(inverse)
-    const max = world.max.clone().applyMatrix4(inverse)
+    const plan = computeGroupPlanBox(participantIds, levelId)
+    if (!plan) return null
     return {
-      x: Math.min(min.x, max.x),
-      z: Math.min(min.z, max.z),
-      width: Math.abs(max.x - min.x),
-      depth: Math.abs(max.z - min.z),
+      x: plan.minX,
+      z: plan.minZ,
+      width: plan.maxX - plan.minX,
+      depth: plan.maxZ - plan.minZ,
     }
   }, [selectedIds, levelId, nodes, meshEpoch])
 
