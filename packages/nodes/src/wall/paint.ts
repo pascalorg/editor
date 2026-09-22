@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  getCurtainWallConfig,
   getEffectiveWallSurfaceMaterial,
   getWallBandSlotId,
   getWallFaceBandConfig,
@@ -91,6 +92,15 @@ export function resolveWallRole(args: {
   ray?: Ray
 }): string | null {
   const { node, hitObject, materialIndex, normal, localPosition, ray } = args
+  if (node.wallType === 'curtain') {
+    const root = sceneRegistry.nodes.get(node.id)
+    if (!(root && ray)) return null
+    wallSlotRaycaster.ray.copy(ray)
+    const hit = wallSlotRaycaster.intersectObject(root, false)[0]
+    return (
+      ['curtain-frame', 'curtain-glass', 'curtain-solid'][hit?.face?.materialIndex ?? -1] ?? null
+    )
+  }
   const directSlotId = hitObject?.userData?.slotId
   if (typeof directSlotId === 'string' && WALL_SLOT_IDS.has(directSlotId)) {
     return directSlotId
@@ -162,12 +172,13 @@ export function resolveWallRole(args: {
  */
 function applyWallPreview(args: PaintPreviewArgs): (() => void) | null {
   const { role, material, materialPreset } = args
-  if (!(role in WALL_ARRAY_SLOT_INDEX)) {
+  const curtainIndex = ['curtain-frame', 'curtain-glass', 'curtain-solid'].indexOf(role)
+  if (curtainIndex < 0 && !(role in WALL_ARRAY_SLOT_INDEX)) {
     return previewSlotByUserData(args)
   }
 
-  const index = WALL_ARRAY_SLOT_INDEX[role as WallSurfaceSlotId]
-  if (!index) return previewSlotByUserData(args)
+  const index = curtainIndex >= 0 ? curtainIndex : WALL_ARRAY_SLOT_INDEX[role as WallSurfaceSlotId]
+  if (index === undefined) return previewSlotByUserData(args)
 
   const mesh = sceneRegistry.nodes.get(args.node.id as AnyNodeId)
   if (!(mesh && (mesh as Mesh).isMesh)) return null
@@ -208,6 +219,32 @@ export const wallPaint: PaintCapability = createSlotPaintCapability({
     }),
   applyPreview: applyWallPreview,
   legacyEffective: (node: AnyNode, role: string) => {
+    if (node.type === 'wall' && node.wallType === 'curtain') {
+      const config = getCurtainWallConfig(node as WallNode)
+      const color =
+        role === 'curtain-frame'
+          ? config.frameColor
+          : role === 'curtain-glass'
+            ? config.glassColor
+            : role === 'curtain-solid'
+              ? config.solidColor
+              : undefined
+      if (!color) return null
+      return {
+        materialPreset: undefined,
+        material: {
+          preset: 'custom',
+          properties: {
+            color,
+            roughness: role === 'curtain-glass' ? config.glassRoughness : 0.4,
+            metalness: role === 'curtain-frame' ? 0.65 : 0,
+            opacity: role === 'curtain-glass' ? config.glassOpacity : 1,
+            transparent: role === 'curtain-glass',
+            side: 'front',
+          },
+        },
+      }
+    }
     const side = getWallSurfaceSideFromBandSlot(role)
     if (!side && role in WALL_SURFACE_SLOT_DEFAULTS) {
       return {

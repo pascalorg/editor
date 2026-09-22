@@ -12,6 +12,7 @@ import {
 import {
   getVisibleWallMaterials,
   NodeRenderer,
+  SHADOW_ONLY_LAYER,
   useLibraryMaterialsVersion,
   useNodeEvents,
   useViewer,
@@ -69,6 +70,7 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
   const ref = useRef<Mesh>(null!)
   const placeholderGeometry = useMemo(() => createPlaceholderGeometry(3), [])
   const collisionPlaceholderGeometry = useMemo(() => createPlaceholderGeometry(), [])
+  const shadowPlaceholderGeometry = useMemo(() => createPlaceholderGeometry(), [])
 
   useRegistry(node.id, 'wall', ref)
 
@@ -80,8 +82,9 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
     return () => {
       placeholderGeometry.dispose()
       collisionPlaceholderGeometry.dispose()
+      shadowPlaceholderGeometry.dispose()
     }
-  }, [collisionPlaceholderGeometry, placeholderGeometry])
+  }, [collisionPlaceholderGeometry, placeholderGeometry, shadowPlaceholderGeometry])
 
   const rawHandlers = useNodeEvents(node, 'wall')
   // Hidden walls participate in hover/selection NEAREST-FIRST: when the
@@ -155,7 +158,7 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
   // re-resolve when they land.
   const libraryMaterialsVersion = useLibraryMaterialsVersion()
   const baseMaterials = getVisibleWallMaterials(
-    node,
+    treatmentNode,
     shading,
     textures,
     colorPreset,
@@ -178,18 +181,32 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
 
   return (
     <mesh
-      castShadow
+      castShadow={node.wallType !== 'curtain'}
       geometry={placeholderGeometry}
       material={baseMaterials}
       receiveShadow
       ref={ref}
       visible={node.visible}
     >
-      <mesh geometry={collisionPlaceholderGeometry} name={WALL_COLLISION_MESH_NAME} {...handlers}>
-        <meshBasicMaterial colorWrite={false} depthWrite={false} />
+      <mesh
+        name="curtain-wall-shadow"
+        userData={{ pascalExport: 'strip' }}
+        geometry={shadowPlaceholderGeometry}
+        layers={SHADOW_ONLY_LAYER}
+        castShadow
+        visible={node.wallType === 'curtain'}
+        raycast={() => {}}
+      >
+        <meshBasicMaterial />
       </mesh>
+      <mesh
+        geometry={collisionPlaceholderGeometry}
+        name={WALL_COLLISION_MESH_NAME}
+        visible={false}
+        {...handlers}
+      />
 
-      {hasWallTreatments(treatmentNode) && (
+      {node.wallType !== 'curtain' && hasWallTreatments(treatmentNode) && (
         <WallTreatmentSubscription
           childrenNodes={childNodes}
           materials={extraMaterials}

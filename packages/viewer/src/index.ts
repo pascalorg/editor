@@ -280,6 +280,7 @@ export {
   type StairBodyMaterials,
 } from './systems/stair/stair-materials'
 export { StairSystem } from './systems/stair/stair-system'
+export { curtainOpeningProfile, curtainProfileSpan } from './systems/wall/curtain-opening-frame'
 // Pure opening-cutout profile math shared by the wall CSG pipeline and
 // roof-wall opening cuts in `@pascal-app/nodes` — keeps shaped holes
 // (arch / rounded / frameless opening) identical across both hosts.

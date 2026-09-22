@@ -60,7 +60,7 @@ const SPLIT_CUT_COUNTS = Array.from({ length: WALL_SPLIT_MAX_CUTS }, (_, index) 
 export const wallDefinition: NodeDefinition<typeof WallNode> = {
   kind: 'wall',
   snapProfile: 'structural',
-  schemaVersion: 8,
+  schemaVersion: 9,
   schema: WallNode,
   category: 'structure',
   surfaceRole: 'wall',
@@ -142,7 +142,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     // `{ slotId, label, default }` contract every other paintable kind exposes.
     // Paint still writes the legacy inline fields for base faces via
     // `wallPaint`; migrating those fully into `node.slots` is a later step.
-    slots: () => wallSlots(),
+    slots: (node) => wallSlots(node as WallNodeType),
   },
 
   relations: {
@@ -268,6 +268,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   },
 
   mcp: {
-    description: 'A wall segment defined by start + end points, with optional curve sagitta.',
+    description:
+      'A wall defined by endpoints and optional curve sagitta. wallType selects standard or curtain. curtainWall configures construction, framing, grids, glazing, spandrels, and zero-based panel overrides. Thickness is frame depth for curtain walls.',
   },
 }

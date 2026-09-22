@@ -161,6 +161,8 @@ function toCandidate(
 ): WallBatchCandidate | null {
   if (excludedNodeIds.has(nodeId)) return null
   if (node.visible === false) return null
+  // Curtain walls use a separate caster that excludes their transparent panes.
+  if (node.wallType === 'curtain') return null
 
   const mesh = sceneRegistry.nodes.get(nodeId) as Mesh | undefined
   if (!mesh?.visible) return null

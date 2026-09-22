@@ -1,4 +1,5 @@
 import {
+  getCurtainWallConfig,
   getEffectiveWallSurfaceMaterial,
   getMaterialPresetByRef,
   getWallSurfaceMaterialSignature,
@@ -30,6 +31,8 @@ import {
   resolveSurfaceColor,
 } from '../../lib/materials'
 
+import { createCurtainWallMaterials, isOwnedCurtainWallMaterial } from './curtain-wall-materials'
+
 type SceneMaterials = Record<SceneMaterialId, SceneMaterial> | undefined
 
 const DEFAULT_WALL_COLOR = '#e9e7e3'
@@ -55,6 +58,7 @@ export interface WallMaterials {
   deleteInvisible: WallMaterialArray
   deleteTranslucent: WallMaterialArray
   materialHash: string
+  ownsVisible?: boolean
 }
 
 const wallMaterialCache = new Map<string, WallMaterials>()
@@ -449,8 +453,29 @@ export function getWallMaterialHash(
   shading: RenderShading,
   sceneMaterials?: SceneMaterials,
 ): string {
+  const curtain = getCurtainWallConfig(wallNode)
   return JSON.stringify({
     shading,
+    wallType: wallNode.wallType,
+    curtainWall:
+      wallNode.wallType === 'curtain'
+        ? [
+            curtain.frameColor,
+            curtain.glassColor,
+            curtain.solidColor,
+            curtain.glassOpacity,
+            curtain.glassRoughness,
+          ]
+        : undefined,
+    curtainSlots:
+      wallNode.wallType === 'curtain'
+        ? Object.fromEntries(
+            ['curtain-frame', 'curtain-glass', 'curtain-solid'].map((slot) => [
+              slot,
+              wallSlotMaterialSignature(wallNode, slot as WallSurfaceSlotId, sceneMaterials),
+            ]),
+          )
+        : undefined,
     interior: wallFaceMaterialSignature(wallNode, 'interior', sceneMaterials),
     exterior: wallFaceMaterialSignature(wallNode, 'exterior', sceneMaterials),
     lowerInterior: wallSlotMaterialSignature(wallNode, 'lowerInterior', sceneMaterials),
@@ -484,6 +509,7 @@ export function getMaterialsForWall(
 
   if (existing) {
     disposeOwnedMaterials([
+      ...(existing.ownsVisible ? [existing.visible.filter(isOwnedCurtainWallMaterial)] : []),
       existing.invisible,
       existing.translucent,
       existing.deleteVisible,
@@ -498,21 +524,24 @@ export function getMaterialsForWall(
   // fields → declared slot default, parity with the retired DEFAULT_WALL_MATERIAL).
   // Textures-off collapses every face to the themed wall role (the guaranteed
   // escape hatch). The edge/cap slot (index 0) stays role-based.
-  const visible: WallMaterialArray = textures
-    ? [
-        wallRoleMaterial,
-        resolveWallFaceMaterial(wallNode, 'interior', shading, sceneMaterials),
-        resolveWallFaceMaterial(wallNode, 'exterior', shading, sceneMaterials),
-        resolveWallSlotMaterial(wallNode, 'lowerInterior', shading, sceneMaterials),
-        resolveWallSlotMaterial(wallNode, 'middleInterior', shading, sceneMaterials),
-        resolveWallSlotMaterial(wallNode, 'upperInterior', shading, sceneMaterials),
-        resolveWallSlotMaterial(wallNode, 'topInterior', shading, sceneMaterials),
-        resolveWallSlotMaterial(wallNode, 'lowerExterior', shading, sceneMaterials),
-        resolveWallSlotMaterial(wallNode, 'middleExterior', shading, sceneMaterials),
-        resolveWallSlotMaterial(wallNode, 'upperExterior', shading, sceneMaterials),
-        resolveWallSlotMaterial(wallNode, 'topExterior', shading, sceneMaterials),
-      ]
-    : Array.from({ length: 11 }, () => wallRoleMaterial)
+  const visible: WallMaterialArray =
+    textures && wallNode.wallType === 'curtain'
+      ? createCurtainWallMaterials(wallNode, shading, sceneMaterials)
+      : textures
+        ? [
+            wallRoleMaterial,
+            resolveWallFaceMaterial(wallNode, 'interior', shading, sceneMaterials),
+            resolveWallFaceMaterial(wallNode, 'exterior', shading, sceneMaterials),
+            resolveWallSlotMaterial(wallNode, 'lowerInterior', shading, sceneMaterials),
+            resolveWallSlotMaterial(wallNode, 'middleInterior', shading, sceneMaterials),
+            resolveWallSlotMaterial(wallNode, 'upperInterior', shading, sceneMaterials),
+            resolveWallSlotMaterial(wallNode, 'topInterior', shading, sceneMaterials),
+            resolveWallSlotMaterial(wallNode, 'lowerExterior', shading, sceneMaterials),
+            resolveWallSlotMaterial(wallNode, 'middleExterior', shading, sceneMaterials),
+            resolveWallSlotMaterial(wallNode, 'upperExterior', shading, sceneMaterials),
+            resolveWallSlotMaterial(wallNode, 'topExterior', shading, sceneMaterials),
+          ]
+        : Array.from({ length: 11 }, () => wallRoleMaterial)
 
   const wallRoleColor = resolveSurfaceColor('wall', colorPreset, sceneTheme)
   const invisible: WallMaterialArray = [
@@ -595,6 +624,7 @@ export function getMaterialsForWall(
     deleteInvisible,
     deleteTranslucent,
     materialHash,
+    ownsVisible: textures && wallNode.wallType === 'curtain',
   }
 
   wallMaterialCache.set(cacheKey, result)

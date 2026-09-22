@@ -11,6 +11,8 @@ interface SliderControlProps {
   value: number
   onChange: (value: number) => void
   onCommit?: (value: number) => void
+  onCancel?: () => void
+  previewWhileTyping?: boolean
   min?: number
   max?: number
   precision?: number
@@ -54,6 +56,8 @@ export function SliderControl({
   value,
   onChange,
   onCommit,
+  onCancel,
+  previewWhileTyping = false,
   min = Number.NEGATIVE_INFINITY,
   max = Number.POSITIVE_INFINITY,
   precision: storedPrecision = 0,
@@ -87,6 +91,9 @@ export function SliderControl({
     anchorValue: number
     stepMultiplier: number
   } | null>(null)
+  const cancelRef = useRef(onCancel)
+  cancelRef.current = onCancel
+  const editingRef = useRef(false)
   const labelRef = useRef<HTMLDivElement>(null)
   const shown = dragDisplay ?? value
   const valueRef = useRef(shown)
@@ -217,45 +224,74 @@ export function SliderControl({
     [onChange, onCommit, restoreOnCommit],
   )
 
+  const cancelEdit = useCallback(() => {
+    const drag = dragRef.current
+    dragRef.current = null
+    editingRef.current = false
+    if (drag) {
+      if (!onCancel) onChange(drag.originValue)
+      useScene.temporal.getState().resume()
+    }
+    onCancel?.()
+    setIsDragging(false)
+    setIsEditing(false)
+    setDragDisplay(null)
+  }, [onCancel, onChange])
+
+  useEffect(
+    () => () => {
+      if (dragRef.current) useScene.temporal.getState().resume()
+      if (dragRef.current || editingRef.current) cancelRef.current?.()
+    },
+    [],
+  )
+
+  useEffect(() => {
+    if (!isDragging) return
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') cancelEdit()
+    }
+    window.addEventListener('keydown', escape)
+    return () => window.removeEventListener('keydown', escape)
+  }, [isDragging, cancelEdit])
+
   const handleValueClick = useCallback(() => {
+    editingRef.current = true
     setIsEditing(true)
     setInputValue(toDisplay(value).toFixed(precision))
   }, [value, precision, toDisplay])
 
+  const parseInputValue = useCallback(
+    (text: string) => {
+      const spec = lingoUnitSpec(unit)
+      const parsed = spec
+        ? parseMeasurement(text, spec, {
+            bareUnit: parseUnit ?? spec.unitId,
+            system: isImperial ? 'us' : 'metric',
+          })
+        : null
+      const bare = Number(text)
+      const stored = parsed ?? (text.trim() && Number.isFinite(bare) ? toStored(bare) : null)
+      return stored === null
+        ? null
+        : clamp(toStored(Number.parseFloat(toDisplay(stored).toFixed(precision))))
+    },
+    [unit, parseUnit, isImperial, toStored, clamp, toDisplay, precision],
+  )
+
   const submitValue = useCallback(() => {
-    const spec = lingoUnitSpec(unit)
-    let stored = spec
-      ? parseMeasurement(inputValue, spec, {
-          bareUnit: parseUnit ?? spec.unitId,
-          system: isImperial ? 'us' : 'metric',
-        })
-      : null
-    if (stored === null) {
-      // Fallback: a bare number typed in the DISPLAY unit → convert to stored.
-      const numValue = Number.parseFloat(inputValue)
-      stored = Number.isFinite(numValue) ? toStored(numValue) : null
-    }
-    if (stored === null) {
+    if (!editingRef.current) return
+    editingRef.current = false
+    const nextValue = parseInputValue(inputValue)
+    if (nextValue === null) {
+      onCancel?.()
       setInputValue(toDisplay(value).toFixed(precision))
     } else {
-      const nextValue = clamp(toStored(Number.parseFloat(toDisplay(stored).toFixed(precision))))
       onChange(nextValue)
       onCommit?.(nextValue)
     }
     setIsEditing(false)
-  }, [
-    inputValue,
-    unit,
-    isImperial,
-    parseUnit,
-    onChange,
-    onCommit,
-    clamp,
-    precision,
-    value,
-    toDisplay,
-    toStored,
-  ])
+  }, [inputValue, parseInputValue, onCancel, onChange, onCommit, toDisplay, value, precision])
 
   const spec = lingoUnitSpec(unit)
   const hint =
@@ -274,8 +310,7 @@ export function SliderControl({
       if (e.key === 'Enter') {
         submitValue()
       } else if (e.key === 'Escape') {
-        setInputValue(toDisplay(value).toFixed(precision))
-        setIsEditing(false)
+        cancelEdit()
       } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault()
         const direction = e.key === 'ArrowUp' ? 1 : -1
@@ -285,7 +320,7 @@ export function SliderControl({
         setInputValue(toDisplay(newV).toFixed(precision))
       }
     },
-    [submitValue, value, precision, step, applyDisplayDelta, onChange, toDisplay],
+    [submitValue, cancelEdit, value, precision, step, applyDisplayDelta, onChange, toDisplay],
   )
 
   const displayValue = toDisplay(shown)
@@ -309,6 +344,10 @@ export function SliderControl({
         onPointerDown={handleLabelPointerDown}
         onPointerMove={handleLabelPointerMove}
         onPointerUp={handleLabelPointerUp}
+        onPointerCancel={cancelEdit}
+        onLostPointerCapture={() => {
+          if (dragRef.current) cancelEdit()
+        }}
         ref={labelRef}
       >
         {/* Grip dots — 2×3 grid */}
@@ -340,7 +379,13 @@ export function SliderControl({
               autoFocus
               className="w-14 bg-transparent p-0 text-right font-mono text-foreground outline-none selection:bg-primary/30"
               onBlur={submitValue}
-              onChange={(e) => setInputValue(e.target.value)}
+              onChange={(e) => {
+                setInputValue(e.target.value)
+                if (previewWhileTyping) {
+                  const next = parseInputValue(e.target.value)
+                  if (next !== null) onChange(next)
+                }
+              }}
               onKeyDown={handleInputKeyDown}
               type="text"
               value={inputValue}

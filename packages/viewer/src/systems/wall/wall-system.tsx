@@ -42,6 +42,8 @@ import { ensureRenderableGeometryAttributes, prepareBrushForCSG } from '../../li
 import { setGroupsSortedByMaterial } from '../../lib/geometry-groups'
 import { timeSpan } from '../../lib/perf-tracks'
 import { buildTerrainPerimeterFillGeometry } from '../../lib/terrain-perimeter-fill'
+import { buildCurtainWallGeometry } from './curtain-wall-geometry'
+import { buildCurtainWallShadowGeometry, CURTAIN_WALL_SHADOW_NAME } from './curtain-wall-shadow'
 import { clearLevelMiterCache, getCachedLevelMiters } from './level-miter-cache'
 import {
   buildOpeningCutoutGeometry,
@@ -1012,7 +1014,9 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
 
   const builtGeo = generateExtrudedWall(
     node,
-    childrenNodes,
+    node.wallType === 'curtain' && !isCurvedWall(node)
+      ? childrenNodes.filter((child) => child.type !== 'door' && child.type !== 'window')
+      : childrenNodes,
     miterData,
     slabElevation,
     slabSupport.baseElevation,
@@ -1029,13 +1033,23 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
     new THREE.Quaternion().setFromAxisAngle(WALL_UV_Y_AXIS, -wallAngle),
     WALL_UV_UNIT_SCALE,
   )
-  const newGeo = applyWorldPlanarWallUVs(builtGeo, wallWorldMatrix)
+  const renderedGeo =
+    node.wallType === 'curtain' ? buildCurtainWallGeometry(node, builtGeo, childrenNodes) : builtGeo
+  const newGeo = applyWorldPlanarWallUVs(renderedGeo, wallWorldMatrix)
 
   mesh.geometry.dispose()
   // A degenerate rebuild (zero-length or fully cut wall) yields as few vertices
   // as the mount-time placeholder; the stamp keeps the sweep from re-marking it.
   newGeo.userData.built = true
   mesh.geometry = newGeo
+  const shadowMesh = mesh.getObjectByName(CURTAIN_WALL_SHADOW_NAME) as THREE.Mesh | undefined
+  if (shadowMesh && node.wallType === 'curtain') {
+    shadowMesh.geometry.dispose()
+    shadowMesh.geometry = buildCurtainWallShadowGeometry(
+      newGeo,
+      node.curtainWall?.glassOpacity === 1,
+    )
+  }
   // Update collision mesh
   const collisionMesh = mesh.getObjectByName('collision-mesh') as THREE.Mesh
   if (collisionMesh) {
