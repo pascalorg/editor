@@ -1,9 +1,12 @@
 import { commitWallSplit, hoverWallSplit, setWallSplitCuts } from './split-session'
 import { useWallSplit } from './split-store'
 
-// Pixels of wheel travel per cut: one mouse notch, or a short trackpad swipe.
+// Pixels of continuous wheel travel per cut: a short trackpad swipe.
 const WHEEL_STEP_PX = 60
-const WHEEL_LINE_PX = 33
+// A wheel event after this pause is a new notch or gesture and steps at once,
+// so each notch of a notched wheel is one cut whatever pixels the OS reports
+// for it; a continuous stream (trackpad, fast spin) steps by travel.
+const WHEEL_GESTURE_GAP_MS = 80
 
 /** Both viewports feed a wall distance; neither writes scene nodes while hovering. */
 export function bindWallSplitPointer(
@@ -12,6 +15,7 @@ export function bindWallSplitPointer(
 ) {
   let pressed: number | null = null
   let wheelTravel = 0
+  let lastWheelAt = Number.NEGATIVE_INFINITY
   const move = (event: PointerEvent) => {
     if (event.buttons && pressed !== event.pointerId) return
     const distance = distanceAt(event)
@@ -53,10 +57,20 @@ export function bindWallSplitPointer(
     if (event.ctrlKey || !(event.target instanceof Node) || !surface.contains(event.target)) return
     event.preventDefault()
     event.stopImmediatePropagation()
-    wheelTravel += event.deltaMode === 1 ? event.deltaY * WHEEL_LINE_PX : event.deltaY
-    const steps = Math.trunc(wheelTravel / WHEEL_STEP_PX)
+    if (!event.deltaY) return
+    const fresh = event.timeStamp - lastWheelAt > WHEEL_GESTURE_GAP_MS
+    lastWheelAt = event.timeStamp
+    let steps: number
+    // Line-mode deltas only come from a notched wheel: one line event, one notch.
+    if (fresh || event.deltaMode !== 0) {
+      wheelTravel = 0
+      steps = Math.sign(event.deltaY)
+    } else {
+      wheelTravel += event.deltaY
+      steps = Math.trunc(wheelTravel / WHEEL_STEP_PX)
+      wheelTravel -= steps * WHEEL_STEP_PX
+    }
     if (!steps) return
-    wheelTravel -= steps * WHEEL_STEP_PX
     const draft = useWallSplit.getState().draft
     if (draft) setWallSplitCuts(draft.cuts - steps)
   }

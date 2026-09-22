@@ -58,6 +58,7 @@ export default function RectangleWallTool() {
     setDraft(null)
     setMessage('')
     let start: WallPlanPoint | null = null
+    let end: WallPlanPoint | null = null
     let plane: ReturnType<typeof resolveEventConstructionPlane> | null = null
     useInteractionScope.getState().begin({ kind: 'drafting', tool: 'wall' })
     const pointFor = (e: GridEvent) => {
@@ -87,7 +88,11 @@ export default function RectangleWallTool() {
       if (plane) publishHorizontalConstructionPlane(e, plane)
       setCursor([point[0], hoverPlane.localY, point[1]])
       setMessage('')
-      if (start) setDraft({ start, end: point, y: hoverPlane.localY })
+      if (!start) return
+      // The line draft's tick: once per snapped corner position.
+      if (end && (end[0] !== point[0] || end[1] !== point[1])) triggerSFX('sfx:grid-snap')
+      end = point
+      setDraft({ start, end: point, y: hoverPlane.localY })
     }
     const leave = () => {
       setCursor(null)
@@ -96,6 +101,7 @@ export default function RectangleWallTool() {
     const cancel = () => {
       if (start) markToolCancelConsumed()
       start = null
+      end = null
       plane = null
       setDraft(null)
       setMessage('')
@@ -108,11 +114,13 @@ export default function RectangleWallTool() {
       const point = pointFor(e)
       if (!start) {
         start = point
+        end = point
         plane = resolveEventConstructionPlane(e, null)
         publishHorizontalConstructionPlane(e, plane)
         setCursor([point[0], plane.localY, point[1]])
         setDraft({ start, end: point, y: plane.localY })
         setMessage('')
+        triggerSFX('sfx:structure-build-start')
         return
       }
       try {
