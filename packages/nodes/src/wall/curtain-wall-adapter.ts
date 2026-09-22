@@ -1,8 +1,12 @@
 import type { WallNode } from '@pascal-app/core'
 import type { WallGeometryAdapter } from '@pascal-app/viewer'
-import type { Mesh } from 'three'
+import type { Material, Mesh } from 'three'
 import { buildCurtainWallGeometry } from './curtain-wall-geometry'
 import { buildCurtainWallShadowGeometry, CURTAIN_WALL_SHADOW_NAME } from './curtain-wall-shadow'
+
+function isOpaque(material: Material | undefined) {
+  return material !== undefined && (!material.transparent || material.opacity >= 1)
+}
 
 export const curtainWallGeometryAdapter: WallGeometryAdapter = {
   prepareChildren(wall, children, context) {
@@ -30,10 +34,8 @@ export const curtainWallGeometryAdapter: WallGeometryAdapter = {
     if (wall.wallType !== 'curtain') return
     const shadowMesh = mesh.getObjectByName(CURTAIN_WALL_SHADOW_NAME) as Mesh | undefined
     if (!shadowMesh) return
+    const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
     shadowMesh.geometry.dispose()
-    shadowMesh.geometry = buildCurtainWallShadowGeometry(
-      geometry,
-      wall.curtainWall?.glassOpacity === 1,
-    )
+    shadowMesh.geometry = buildCurtainWallShadowGeometry(geometry, isOpaque(materials[1]))
   },
 }

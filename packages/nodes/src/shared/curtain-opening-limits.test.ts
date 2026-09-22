@@ -71,6 +71,22 @@ test('door drag writes no scene history until commit and undoes in one step', ()
   expect((useScene.getState().nodes[door.id] as DoorNode).width).toBeCloseTo(2.04)
 })
 
+test('a second property preview constrains against the in-flight opening', () => {
+  const window = WindowNode.parse({
+    parentId: wall.id,
+    position: [5, 1.25, 0],
+    width: 1,
+    height: 1,
+  })
+  useScene.setState({ nodes: { ...nodes, [window.id]: window }, dirtyNodes: new Set() })
+  const preview = createOpeningPropertyPreview<WindowNode>(window.id, openingPropertyPreviewHost)
+  preview.preview({ width: 1.8 })
+  preview.preview({ height: 1.4 })
+  expect(getEffectiveNode(window)).toMatchObject({ width: 1.8, height: 1.4 })
+  preview.commit()
+  expect(useScene.getState().nodes[window.id]).toMatchObject({ width: 1.8, height: 1.4 })
+})
+
 test('cancel and a history-cleared preview cannot be committed by a stale release', () => {
   useScene.setState({ nodes, dirtyNodes: new Set() })
   const preview = createOpeningPropertyPreview<DoorNode>(door.id, openingPropertyPreviewHost)

@@ -31,7 +31,9 @@ export function createOpeningPropertyPreview<T extends DoorNode | WindowNode>(
       const nodes = dependencies.nodes()
       const node = nodes[id]
       if (node?.type !== 'door' && node?.type !== 'window') return
-      patch = constrainCurtainOpening(node as T, patch, nodes)
+      const live = dependencies.override(id)
+      const effective = live ? ({ ...node, ...live } as T) : (node as T)
+      patch = constrainCurtainOpening(effective, patch, nodes)
       pending = { ...pending, ...patch }
       dependencies.setOverride(id, patch as Partial<AnyNode>)
       dirty()
