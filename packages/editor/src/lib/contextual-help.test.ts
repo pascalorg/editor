@@ -133,7 +133,7 @@ describe('resolveSelectModeHelpHints', () => {
         selectedCount: 1,
         hasMovableSelection: true,
         hasRotatableSelection: false,
-        hasRoundedOpeningSelection: true,
+        hasOpeningRadiusSelection: true,
         commandPressed: false,
         shiftPressed: false,
       }),
