@@ -14,14 +14,12 @@ import {
   formatAreaLabel,
   formatLinearMeasurement,
   formatVolumeLabel,
-  MetricControl,
   PanelSection,
-  ToggleControl,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { PanelSelect, PanelTextField } from '../shared/panel-fields'
+import { PanelSelect } from '../shared/panel-fields'
 import { buildingUnitsForZone } from './unit-membership'
 
 type Point2D = readonly [number, number]
@@ -198,92 +196,6 @@ function ZoneUnitPanel({ zone }: { zone: ZoneNode }) {
   )
 }
 
-function RoomDocumentationPanel({ zone }: { zone: ZoneNode }) {
-  const updateNode = useScene((state) => state.updateNode)
-  const update = (patch: Partial<ZoneNode>) => updateNode(zone.id, patch)
-  const isRoom = zone.spaceRole === 'room'
-
-  return (
-    <PanelSection title="Room documentation">
-      <ToggleControl
-        checked={isRoom}
-        label="Architectural room"
-        onChange={(checked) => update({ spaceRole: checked ? 'room' : 'generic' })}
-      />
-      {isRoom ? (
-        <>
-          <PanelTextField
-            label="Room name"
-            onCommit={(name) => update({ name })}
-            value={zone.name}
-          />
-          <PanelTextField
-            label="Room number"
-            onCommit={(roomNumber) => update({ roomNumber })}
-            value={zone.roomNumber}
-          />
-          <PanelSelect
-            label="Enclosure"
-            onChange={(enclosureStatus) =>
-              update({ enclosureStatus: enclosureStatus as ZoneNode['enclosureStatus'] })
-            }
-            options={[
-              { label: 'Auto-detect', value: 'auto' },
-              { label: 'Enclosed', value: 'enclosed' },
-              { label: 'Open', value: 'open' },
-            ]}
-            value={zone.enclosureStatus}
-          />
-          <PanelTextField
-            label="Occupancy / use"
-            onCommit={(occupancy) => update({ occupancy })}
-            value={zone.occupancy}
-          />
-          <PanelTextField
-            label="Floor finish"
-            onCommit={(floorFinish) => update({ floorFinish })}
-            value={zone.floorFinish}
-          />
-          <PanelTextField
-            label="Wall finish"
-            onCommit={(wallFinish) => update({ wallFinish })}
-            value={zone.wallFinish}
-          />
-          <PanelTextField
-            label="Ceiling finish"
-            onCommit={(ceilingFinish) => update({ ceilingFinish })}
-            value={zone.ceilingFinish}
-          />
-          <MetricControl
-            label="Ceiling height"
-            max={20}
-            min={0.1}
-            onChange={(ceilingHeight) => update({ ceilingHeight })}
-            precision={2}
-            step={0.05}
-            unit="m"
-            value={zone.ceilingHeight}
-          />
-          <PanelSelect
-            label="Clear dimensions"
-            onChange={(clearDimensionPolicy) =>
-              update({
-                clearDimensionPolicy: clearDimensionPolicy as ZoneNode['clearDimensionPolicy'],
-              })
-            }
-            options={[
-              { label: 'None', value: 'none' },
-              { label: 'Inside faces', value: 'inside-faces' },
-              { label: 'Finish faces', value: 'finish-faces' },
-            ]}
-            value={zone.clearDimensionPolicy}
-          />
-        </>
-      ) : null}
-    </PanelSection>
-  )
-}
-
 export default function ZoneQuantitiesPanel() {
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
   const unit = useViewer((state) => state.unit)
@@ -329,7 +241,6 @@ export default function ZoneQuantitiesPanel() {
   return (
     <>
       <ZoneUnitPanel zone={effectiveZone} />
-      <RoomDocumentationPanel zone={effectiveZone} />
       <PanelSection
         title={effectiveZone.spaceRole === 'room' ? 'Room quantities' : 'Zone quantities'}
       >

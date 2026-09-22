@@ -8,6 +8,7 @@ import {
   curtainPanelType,
   getCurtainWallConfig,
   getWallCurveLength,
+  getWallThickness,
   type WallNode,
 } from '@pascal-app/core'
 import {
@@ -19,7 +20,6 @@ import {
   SliderControl,
 } from '@pascal-app/editor'
 import { useState } from 'react'
-import { CurtainFrameMaterial } from './curtain-frame-material'
 
 type Props = {
   node: WallNode
@@ -73,7 +73,9 @@ function LengthControl({
   onChange,
   onCommit,
   onCancel,
+  profile = false,
 }: {
+  profile?: boolean
   label: string
   value: number
   min: number
@@ -83,6 +85,9 @@ function LengthControl({
   onCommit: () => void
   onCancel: () => void
 }) {
+  const millimeters = profile && unit === 'metric'
+  const display = (meters: number) =>
+    millimeters ? meters * 1000 : metersToLinearUnit(meters, unit)
   return (
     <SliderControl
       onCommit={onCommit}
@@ -90,20 +95,26 @@ function LengthControl({
       restoreOnCommit={false}
       previewWhileTyping
       label={label}
-      max={metersToLinearUnit(max, unit)}
-      min={metersToLinearUnit(min, unit)}
+      max={display(max)}
+      min={display(min)}
       onChange={(next) =>
-        onChange(linearControlValueToMeters(next, unit, { minMeters: min, maxMeters: max }))
+        onChange(
+          millimeters
+            ? Math.max(min, Math.min(max, next / 1000))
+            : linearControlValueToMeters(next, unit, { minMeters: min, maxMeters: max }),
+        )
       }
-      precision={3}
-      step={0.005}
-      unit={getLinearUnitLabel(unit)}
-      value={metersToLinearUnit(value, unit)}
+      precision={millimeters ? 1 : 3}
+      step={millimeters ? 1 : 0.005}
+      unit={millimeters ? 'mm' : getLinearUnitLabel(unit)}
+      value={display(value)}
     />
   )
 }
 
 function GridSection({
+  length,
+  vertical = false,
   onPreview,
   title,
   value,
@@ -112,6 +123,8 @@ function GridSection({
   onCommit,
   onCancel,
 }: {
+  length: number
+  vertical?: boolean
   title: string
   value: CurtainGrid
   unit: Props['unit']
@@ -162,13 +175,23 @@ function GridSection({
         <SegmentedControl
           onChange={(alignment) => onChange({ ...value, alignment })}
           options={[
-            { label: 'Start', value: 'start' },
+            { label: vertical ? 'Bottom' : 'Start', value: 'start' },
             { label: 'Center', value: 'center' },
-            { label: 'End', value: 'end' },
+            { label: vertical ? 'Top' : 'End', value: 'end' },
           ]}
           value={value.alignment}
         />
       )}
+      <p className="text-[11px] text-muted-foreground">
+        {(() => {
+          const positions = curtainGridPositions(length, value)
+          const spans = positions.slice(1).map((position, i) => position - positions[i]!)
+          if (!spans.length) return 'No panels'
+          const min = metersToLinearUnit(Math.min(...spans), unit)
+          const max = metersToLinearUnit(Math.max(...spans), unit)
+          return `${spans.length} ${vertical ? 'rows' : 'columns'} · ${min.toFixed(2)}${max - min > 0.005 ? `–${max.toFixed(2)}` : ''} ${getLinearUnitLabel(unit)} grid spacing`
+        })()}
+      </p>
     </PanelSection>
   )
 }
@@ -190,11 +213,9 @@ export function CurtainWallPanel({
 }: Props) {
   const config = getCurtainWallConfig(node)
   const update = (patch: Partial<CurtainWallConfig>, preview = false) => {
-    const slots = { ...node.slots }
-    if (patch.glassOpacity !== undefined || patch.glassRoughness !== undefined)
-      delete slots['curtain-glass']
-    ;(preview ? onPreview : onUpdate)({ curtainWall: { ...config, ...patch }, slots })
+    ;(preview ? onPreview : onUpdate)({ curtainWall: { ...config, ...patch } })
   }
+
   const [selectedColumn, setColumn] = useState(0)
   const [selectedRow, setRow] = useState(0)
   const columnCount = curtainGridPositions(getWallCurveLength(node), config.columns).length - 1
@@ -209,15 +230,21 @@ export function CurtainWallPanel({
         ...(type ? [{ column, row, type }] : []),
       ],
     })
-  const colors = [
-    { key: 'frameColor', label: 'Frame color', slot: 'curtain-frame' },
-    { key: 'glassColor', label: 'Glass tint', slot: 'curtain-glass' },
-    { key: 'solidColor', label: 'Solid color', slot: 'curtain-solid' },
-  ] as const
+
+  const overridden = config.panels.some((panel) => panel.column === column && panel.row === row)
+  const xs = curtainGridPositions(getWallCurveLength(node), config.columns)
+  const ys = curtainGridPositions(height, config.rows)
+  const hasGlass = xs
+    .slice(1)
+    .some((_, c) =>
+      ys.slice(1).some((_, r) => curtainPanelType(config, c, r, rowCount) === 'glass'),
+    )
+  const paintedGlass = Boolean(node.slots?.['curtain-glass'])
+  const effectiveThickness = Math.min(config.glassThickness, getWallThickness(node) * 0.45)
 
   return (
     <>
-      <PanelSection title="Curtain wall">
+      <PanelSection title="Wall system">
         <Choice
           label="Construction"
           onChange={(construction) => update({ construction })}
@@ -254,7 +281,8 @@ export function CurtainWallPanel({
         onPreview={(columns) => update({ columns }, true)}
         onCommit={onCommit}
         onCancel={onCancel}
-        title="Columns"
+        title="Column layout"
+        length={getWallCurveLength(node)}
         unit={unit}
         value={config.columns}
       />
@@ -263,7 +291,9 @@ export function CurtainWallPanel({
         onPreview={(rows) => update({ rows }, true)}
         onCommit={onCommit}
         onCancel={onCancel}
-        title="Rows"
+        title="Row layout"
+        length={height}
+        vertical
         unit={unit}
         value={config.rows}
       />
@@ -274,11 +304,12 @@ export function CurtainWallPanel({
           Grid limited to 32 panels per axis. Spacing expands to fit this wall.
         </p>
       )}
-      <PanelSection title="Frame profiles">
+      <PanelSection title="Frame dimensions">
         <LengthControl
+          profile
           onCommit={onCommit}
           onCancel={onCancel}
-          label="Mullion width"
+          label="Vertical frame width"
           max={0.3}
           min={0.01}
           onChange={(mullionWidth) => update({ mullionWidth }, true)}
@@ -286,9 +317,10 @@ export function CurtainWallPanel({
           value={config.mullionWidth}
         />
         <LengthControl
+          profile
           onCommit={onCommit}
           onCancel={onCancel}
-          label="Transom width"
+          label="Horizontal frame width"
           max={0.3}
           min={0.01}
           onChange={(transomWidth) => update({ transomWidth }, true)}
@@ -296,9 +328,10 @@ export function CurtainWallPanel({
           value={config.transomWidth}
         />
         <LengthControl
+          profile
           onCommit={onCommit}
           onCancel={onCancel}
-          label="Border width"
+          label="Border / opening frame"
           max={0.3}
           min={0.01}
           onChange={(perimeterWidth) => update({ perimeterWidth }, true)}
@@ -307,9 +340,10 @@ export function CurtainWallPanel({
         />
         {(config.construction === 'unitized' || config.framing !== 'capped') && (
           <LengthControl
+            profile
             onCommit={onCommit}
             onCancel={onCancel}
-            label="Joint width"
+            label={config.construction === 'unitized' ? 'Module joint width' : 'Glazing gap'}
             max={0.05}
             min={0.002}
             onChange={(jointWidth) => update({ jointWidth }, true)}
@@ -318,7 +352,7 @@ export function CurtainWallPanel({
           />
         )}
       </PanelSection>
-      <PanelSection title="Panels and glazing">
+      <PanelSection title="Panel infill">
         <Choice
           label="Default panel"
           onChange={(panelType) => update({ panelType })}
@@ -326,7 +360,7 @@ export function CurtainWallPanel({
           value={config.panelType}
         />
         <Choice
-          label="Solid band"
+          label="Opaque band"
           onChange={(spandrel) => update({ spandrel })}
           options={[
             { label: 'None', value: 'none' },
@@ -335,7 +369,11 @@ export function CurtainWallPanel({
           ]}
           value={config.spandrel}
         />
+        <p className="text-[11px] text-muted-foreground">
+          Opaque bands replace a full row with solid panels. Apply their finish with the paint tool.
+        </p>
         <LengthControl
+          profile
           onCommit={onCommit}
           onCancel={onCancel}
           label="Panel thickness"
@@ -345,65 +383,64 @@ export function CurtainWallPanel({
           unit={unit}
           value={config.glassThickness}
         />
-        <SliderControl
-          onCommit={onCommit}
-          onCancel={onCancel}
-          restoreOnCommit={false}
-          previewWhileTyping
-          label="Glass opacity"
-          max={1}
-          min={0.05}
-          onChange={(glassOpacity) => update({ glassOpacity }, true)}
-          precision={2}
-          step={0.05}
-          value={config.glassOpacity}
-        />
-        <SliderControl
-          onCommit={onCommit}
-          onCancel={onCancel}
-          restoreOnCommit={false}
-          previewWhileTyping
-          label="Glass roughness"
-          max={1}
-          min={0}
-          onChange={(glassRoughness) => update({ glassRoughness }, true)}
-          precision={2}
-          step={0.05}
-          value={config.glassRoughness}
-        />
-        <CurtainFrameMaterial node={node} onCommit={onCommit} />
-        {colors
-          .filter(({ key }) => key !== 'frameColor' || !node.slots?.['curtain-frame'])
-          .map(({ key, label, slot }) => (
-            <label
-              className="flex items-center justify-between text-xs text-muted-foreground"
-              key={key}
-            >
-              {label}
-              <input
-                aria-label={label}
-                className="h-7 w-10 cursor-pointer rounded border border-border bg-transparent"
-                onBlur={onCommit}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    event.preventDefault()
-                    onCancel()
-                  }
-                }}
-                onChange={(event) => {
-                  const slots = { ...node.slots }
-                  delete slots[slot]
-                  onPreview({ curtainWall: { ...config, [key]: event.target.value }, slots })
-                }}
-                type="color"
-                value={config[key]}
-              />
-            </label>
-          ))}
+        {effectiveThickness < config.glassThickness - 1e-6 && (
+          <p className="text-[11px] text-muted-foreground">
+            Effective thickness:{' '}
+            {unit === 'metric'
+              ? `${(effectiveThickness * 1000).toFixed(1)} mm`
+              : `${metersToLinearUnit(effectiveThickness, unit).toFixed(3)} ${getLinearUnitLabel(unit)}`}
+            , limited by frame depth.
+          </p>
+        )}
       </PanelSection>
-      <PanelSection title="Individual panel">
+      <PanelSection title="Edit individual panels">
         <p className="text-[11px] text-muted-foreground">
-          Columns run from the wall start. Rows count upward.
+          Choose a cell below. Columns run from the wall start; rows count upward.
+        </p>
+        <svg
+          viewBox="0 0 300 150"
+          className="w-full rounded border border-border"
+          role="group"
+          aria-label="Curtain wall panel selection"
+        >
+          {xs.slice(1).flatMap((right, c) =>
+            ys.slice(1).map((top, r) => {
+              const type = curtainPanelType(config, c, r, rowCount)
+              const selected = c === column && r === row
+              return (
+                <rect
+                  key={`${c}-${r}`}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Column ${c + 1}, row ${r + 1}: ${type}`}
+                  aria-pressed={selected}
+                  x={(xs[c]! / xs.at(-1)!) * 300}
+                  y={150 - (top / height) * 150}
+                  width={((right - xs[c]!) / xs.at(-1)!) * 300}
+                  height={((top - ys[r]!) / height) * 150}
+                  fill={type === 'glass' ? '#53788a' : type === 'solid' ? '#64748b' : 'transparent'}
+                  stroke={selected ? '#fb923c' : '#94a3b8'}
+                  strokeWidth={selected ? 3 : 1}
+                  className="cursor-pointer focus:stroke-orange-400 focus:stroke-[3]"
+                  onClick={() => {
+                    setColumn(c)
+                    setRow(r)
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      setColumn(c)
+                      setRow(r)
+                    }
+                  }}
+                />
+              )
+            }),
+          )}
+        </svg>
+        <p className="text-[11px] text-muted-foreground">
+          Column {column + 1}, row {row + 1} ·{' '}
+          {overridden ? 'Custom infill' : 'Following wall defaults'}
         </p>
         <SliderControl
           label="Column"
@@ -430,7 +467,8 @@ export function CurtainWallPanel({
           value={selectedType}
         />
         <button
-          className="rounded border border-border px-2 py-1 text-xs"
+          className="rounded border border-border px-2 py-1 text-xs disabled:cursor-default disabled:opacity-40"
+          disabled={!overridden}
           onClick={() => changePanel()}
           type="button"
         >
@@ -440,6 +478,80 @@ export function CurtainWallPanel({
           Use the Door or Window tool to add an opening through the wall.
         </p>
       </PanelSection>
+      {hasGlass && (
+        <PanelSection title="Glass appearance">
+          {paintedGlass && (
+            <div className="space-y-2 text-xs text-muted-foreground">
+              <p>Glass appearance is controlled by the paint tool.</p>
+              <button
+                type="button"
+                className="rounded border border-border px-2 py-1"
+                onClick={() => {
+                  onCommit()
+                  const slots = { ...node.slots }
+                  delete slots['curtain-glass']
+                  onUpdate({ slots })
+                }}
+              >
+                Use glass settings instead
+              </button>
+            </div>
+          )}
+          {!paintedGlass && (
+            <div className="space-y-2">
+              <SliderControl
+                onCommit={onCommit}
+                onCancel={onCancel}
+                restoreOnCommit={false}
+                previewWhileTyping
+                label="Opacity"
+                max={100}
+                min={5}
+                onChange={(value) => update({ glassOpacity: value / 100 }, true)}
+                precision={0}
+                step={5}
+                unit="%"
+                value={Math.round(config.glassOpacity * 100)}
+              />
+              <SliderControl
+                onCommit={onCommit}
+                onCancel={onCancel}
+                restoreOnCommit={false}
+                previewWhileTyping
+                label="Surface roughness"
+                max={1}
+                min={0}
+                onChange={(glassRoughness) => update({ glassRoughness }, true)}
+                precision={2}
+                step={0.05}
+                value={config.glassRoughness}
+              />
+              <label className="flex items-center justify-between text-xs text-muted-foreground">
+                Glass tint
+                <input
+                  aria-label="Glass tint"
+                  className="h-7 w-10 cursor-pointer rounded border border-border bg-transparent"
+                  onBlur={onCommit}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      event.preventDefault()
+                      onCancel()
+                    }
+                  }}
+                  onChange={(event) => {
+                    update({ glassColor: event.target.value }, true)
+                  }}
+                  type="color"
+                  value={config.glassColor}
+                />
+              </label>
+              <p className="text-[11px] text-muted-foreground">
+                Low roughness is smooth; high roughness gives a matte surface in rendered shading.
+              </p>
+            </div>
+          )}
+        </PanelSection>
+      )}
     </>
   )
 }

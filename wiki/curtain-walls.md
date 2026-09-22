@@ -10,14 +10,14 @@ This distinction follows the assembly and glazing options described by [Schüco'
 
 ## Settings
 
-Numeric curtain controls and wall dimensions preview through temporary overrides while dragging or typing. Release, Enter, or leaving the field commits one undoable scene change. Escape cancels the preview. Colors preview until the color field loses focus; dropdown choices commit immediately.
+Numeric curtain controls and wall dimensions preview through temporary overrides while dragging or typing. Release, Enter, or leaving the field commits one undoable scene change. Escape cancels the preview. Glass tint previews until the color field loses focus; dropdown choices commit immediately.
 
 - Columns and rows independently support panel count, maximum spacing, or fixed spacing. Fixed spacing offers start, center, and end alignment, following the grid controls described in [Revit's curtain wall properties](https://help.autodesk.com/cloudhelp/2026/ENU/Revit-ArchDesign/files/GUID-B9263125-74EA-4C78-AAAA-F40916EFE2DB.htm).
 - Frame depth uses the existing wall thickness. Mullion, transom, and border widths have separate controls.
 - Default panels can be glass, solid, or empty. A solid top or bottom row creates a spandrel band.
-- Individual panels can override the default or spandrel setting. Columns count from the wall start; rows count from the bottom. Reset removes the override. Overrides outside a resized grid are retained if that grid grows again.
-- Glass has tint, opacity, roughness, and panel thickness controls. Frame and solid-panel colors are editable. The paint tool exposes separate frame, glass, and solid slots. Editing a color removes that slot's paint override; editing glass opacity or roughness removes the glass paint override so the new setting takes effect.
-- The Frame material control shows the assigned library or scene material. Choose a material in the paint tool and click a frame in 3D, or use **Apply selected paint to frame** in the wall panel. This affects the selected wall's framing only. **Use frame color** removes the frame material and restores its color control.
+- Select an individual panel in the clickable diagram or with column/row controls. The diagram highlights the selected cell, and the panel indicates whether it has a custom infill. Reset is enabled only for an override. Individual panels can override the default or spandrel setting. Columns count from the wall start; rows count from the bottom. Reset removes the override. Overrides outside a resized grid are retained if that grid grows again.
+- Glass appearance follows panel layout and infill settings. Opacity is shown as a percentage; glass controls appear only when the wall contains glass. Painted glass keeps its material until **Use glass settings instead** is explicitly selected.
+- Apply frame and solid-panel finishes directly with the paint tool. The paint tool exposes separate frame, glass, and solid slots; the wall panel keeps only the glass tint color control.
 - Existing Door and Window tools cut through the curtain geometry. Empty infill removes the panel while retaining its surrounding frame.
 
 ## Rendering and limits
