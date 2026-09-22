@@ -32,6 +32,14 @@ A renderer **must not**:
 - Manage selection state directly (use `useViewer` for read, emit events for write)
 - Perform expensive per-frame calculations in the component body
 
+## `node.visible` Is the Renderer's Job
+
+A custom renderer **must** apply `visible={node.visible !== false}` to its root group (or outer renderable). Registry-driven kinds get this for free — `ParametricNodeRenderer` already sets it — but a kind that ships its own `renderer.tsx` and forgets it stays drawn in the 3D viewport while it is already gone everywhere else: selection candidates, first-person collision, the 2D plan and every export honour the flag. The result is a node that is on screen but unclickable.
+
+If a system writes `.visible` on the kind's registry object every frame (solo mode does this for levels, the zone systems do it to keep `<Html>` labels alive), that write has to fold the node flag in as well, or it silently undoes the prop on the next frame.
+
+The **Site is the one exception**: its flag governs only its own presentation — ground fill, sculpted terrain, boundary line — and stops there. Buildings and items standing on a hidden Site keep their own flag and still render, and the horizon disc is a world backdrop rather than part of the parcel, so it renders regardless.
+
 ## Example — Minimal Renderer
 
 ```tsx
