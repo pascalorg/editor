@@ -725,6 +725,7 @@ export {
 export { useUploadStore } from './store/use-upload'
 export {
   isWallTypingKey,
+  resolveTypedCommitEnd,
   useWallDraftTyping,
 } from './store/use-wall-draft-typing'
 export { useWallMoveGhosts, type WallMoveGhostBridge } from './store/use-wall-move-ghosts'

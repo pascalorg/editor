@@ -122,7 +122,11 @@ import useInteractionScope, {
 import usePlacementPreview from '../../store/use-placement-preview'
 import { expandSessionSelectionForNode } from '../../store/use-session-groups'
 import { useStairBuildPreview } from '../../store/use-stair-build-preview'
-import { isWallTypingKey, useWallDraftTyping } from '../../store/use-wall-draft-typing'
+import {
+  isWallTypingKey,
+  resolveTypedCommitEnd,
+  useWallDraftTyping,
+} from '../../store/use-wall-draft-typing'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
 import { FloorplanGroupActionMenu } from '../editor-2d/floorplan-group-action-menu'
@@ -9694,6 +9698,11 @@ export function FloorplanPanel({
       isRoofBuildActive,
       isWallBuildActive,
       levelId,
+      // `unit` / `metricNotation` feed the typed-length projection helpers
+      // shared with the commit path; listed so a unit change re-binds the
+      // move preview to the new bare-unit parse.
+      metricNotation,
+      unit,
       publishFloorplanNavigationPose,
       referenceScaleDraft,
       roofDraftStart,
@@ -9884,10 +9893,25 @@ export function FloorplanPanel({
       // Typed-length editing (#308): while a buffer is active, commit the
       // projected endpoint the preview shows instead of the raw pointer —
       // keeps the 2D-only commit, the chain continuation, and the length
-      // label in agreement with what the user typed.
+      // label in agreement with what the user typed. Re-derived at commit
+      // time (Bugbot 8497d792): digits arriving after the last pointer move
+      // leave `projectedEnd` stale; the commit must reflect the full buffer.
       const typing = useWallDraftTyping.getState()
-      const point: WallPlanPoint =
-        typing.input && typing.projectedEnd ? (typing.projectedEnd as WallPlanPoint) : rawPoint
+      const draftPreviewStore = useFloorplanDraftPreview.getState()
+      const typedEnd =
+        (draftStart &&
+          typing.input &&
+          resolveTypedCommitEnd(
+            draftStart,
+            draftPreviewStore.wallDraftEnd ?? rawPoint,
+            typing.input,
+            {
+              bareUnit: unit === 'imperial' ? 'in' : metricNotation === 'millimeters' ? 'mm' : 'm',
+              system: unit === 'imperial' ? 'imperial' : 'metric',
+            },
+          )) ||
+        (typing.input ? typing.projectedEnd : null)
+      const point: WallPlanPoint = typedEnd ?? rawPoint
       if (!draftStart) {
         wallConstructionOptionsRef.current = levelId
           ? resolveTerrainWallConstructionOptions(
@@ -9994,6 +10018,8 @@ export function FloorplanPanel({
       clearWallPlacementDraft,
       draftStart,
       levelId,
+      metricNotation,
+      unit,
       wallChainFirstVertex,
       setDraftEnd,
       setCursorPoint,

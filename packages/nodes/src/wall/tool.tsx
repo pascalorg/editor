@@ -41,6 +41,7 @@ import {
   resampleTerrainConstructionPlane,
   resolveEventConstructionPlane,
   resolvePointerSupportSurface,
+  resolveTypedCommitEnd,
   type SegmentAngleReference,
   snapWallDraftPointDetailed,
   triggerSFX,
@@ -811,8 +812,25 @@ export const WallTool: React.FC = () => {
         // Typed-length editing (#308): when a buffer is active, commit the
         // projected endpoint the previews already show — re-snapping the raw
         // pointer (or the projected point) would change the typed length.
+        // The projection is re-derived from the live draft direction at
+        // commit time (Bugbot 8497d792): append/backspace only change the
+        // buffer, so the pointer-move-published `projectedEnd` can be stale
+        // (e.g. typed "1" then "2" without moving — the click must commit
+        // 12, not 1).
         const typing = useWallDraftTyping.getState()
-        const typedCommit = typing.input ? typing.projectedEnd : null
+        const typedCommit =
+          (typing.input &&
+            resolveTypedCommitEnd(
+              [startingPoint.current.x, startingPoint.current.z],
+              [endingPoint.current.x, endingPoint.current.z],
+              typing.input,
+              {
+                bareUnit:
+                  unit === 'imperial' ? 'in' : metricNotation === 'millimeters' ? 'mm' : 'm',
+                system: unit === 'imperial' ? 'imperial' : 'metric',
+              },
+            )) ||
+          (typing.input ? typing.projectedEnd : null)
         const angleLocked = isAngleSnapActive()
         const snappedEnd =
           typedCommit ??
