@@ -83,6 +83,10 @@ export function buildCurtainWallGeometry(
         getWallThickness(wall),
       ),
     )
+  const hasRectangularOpenings = children.some(
+    (child) =>
+      (child.type === 'window' || child.type === 'door') && child.openingShape === 'rectangle',
+  )
   const evaluator = new Evaluator()
   evaluator.attributes = ['position', 'normal', 'uv', 'uv2']
   evaluator.useGroups = false
@@ -99,6 +103,16 @@ export function buildCurtainWallGeometry(
         (near(position.getZ(i), -halfDepth) || near(position.getZ(i), halfDepth)),
     )
   if (!rectangular) prepareBrushForCSG(shell)
+  const leftEnvelopeXs: number[] = []
+  const rightEnvelopeXs: number[] = []
+  if (!rectangular && !isCurvedWall(wall)) {
+    for (let index = 0; index < position.count; index++) {
+      const x = position.getX(index)
+      ;(x < length / 2 ? leftEnvelopeXs : rightEnvelopeXs).push(x)
+    }
+  }
+  const safeLeft = leftEnvelopeXs.length ? Math.max(...leftEnvelopeXs) : 0
+  const safeRight = rightEnvelopeXs.length ? Math.min(...rightEnvelopeXs) : length
   const xs = curtainGridPositions(length, getCurtainWallConfig(wall).columns)
   const ys = curtainGridPositions(bounds.max.y - bounds.min.y, getCurtainWallConfig(wall).rows)
   const cutRegions = shapedFrames.map(({ cutter }) => {
@@ -122,8 +136,8 @@ export function buildCurtainWallGeometry(
     for (const [materialIndex, role] of roles.entries()) {
       const allRolePieces = pieces.filter((piece) => piece.role === role)
       const nearCut = (piece: CurtainWallPiece) =>
-        !rectangular ||
-        !cutRegions.length ||
+        isCurvedWall(wall) ||
+        (!rectangular && (piece.left < safeLeft - 1e-6 || piece.right > safeRight + 1e-6)) ||
         cutRegions.some(
           (region) =>
             piece.left < region.right &&
@@ -131,76 +145,80 @@ export function buildCurtainWallGeometry(
             piece.bottom < region.top &&
             piece.top > region.bottom,
         )
+      const partitionPieces = !rectangular || cutRegions.length > 0
       const rolePieces = allRolePieces.filter(nearCut)
-      const untouchedPieces = allRolePieces.filter((piece) => !nearCut(piece))
+      const untouchedPieces = partitionPieces
+        ? allRolePieces.filter((piece) => !nearCut(piece))
+        : []
+      const builtPieces = partitionPieces ? rolePieces : allRolePieces
       if (!allRolePieces.length && !(role === 'frame' && shapedFrames.length)) continue
-      let merged: BufferGeometry | null
-      if (!isCurvedWall(wall)) {
+      let merged: BufferGeometry | null = null
+      if (!isCurvedWall(wall) && builtPieces.length) {
         merged = buildStraightCurtainPieces(
-          rolePieces.map((piece) => ({
+          builtPieces.map((piece) => ({
             ...piece,
             left: piece.left === 0 ? Math.min(0, bounds.min.x) : piece.left,
             right: piece.right === length ? Math.max(length, bounds.max.x) : piece.right,
           })),
           bounds.min.y,
+          hasRectangularOpenings || shapedFrames.length > 0,
         )
-      } else {
+      } else if (builtPieces.length) {
         const sources = rolePieces.map((piece) => pieceGeometry(wall, piece, length, bounds.min.y))
         merged = mergeGeometries(sources, false)
         for (const source of sources) source.dispose()
       }
-      if (!merged) continue
-      for (const opening of shapedFrames) {
-        if (!merged.getAttribute('position').count) break
-        const brush: Brush = new Brush(merged)
-        const cutter = new Brush(opening.cutter)
-        prepareBrushForCSG(brush)
-        prepareBrushForCSG(cutter)
-        const cut: BufferGeometry = evaluator.evaluate(brush, cutter, SUBTRACTION).geometry
-        merged.dispose()
-        merged = cut.index ? cut.toNonIndexed() : cut
-        if (merged !== cut) cut.dispose()
-      }
-      if (untouchedPieces.length) {
-        const untouched = buildStraightCurtainPieces(untouchedPieces, bounds.min.y)
-        const combined = mergeGeometries([merged, untouched], false)
-        untouched.dispose()
-        merged.dispose()
-        if (!combined) continue
-        merged = combined
+      if (merged) {
+        for (const opening of shapedFrames) {
+          if (!merged.getAttribute('position').count) break
+          const brush: Brush = new Brush(merged)
+          const cutter = new Brush(opening.cutter)
+          prepareBrushForCSG(brush)
+          prepareBrushForCSG(cutter)
+          const cut: BufferGeometry = evaluator.evaluate(brush, cutter, SUBTRACTION).geometry
+          merged.dispose()
+          merged = cut.index ? cut.toNonIndexed() : cut
+          if (merged !== cut) cut.dispose()
+        }
       }
       if (role === 'frame' && shapedFrames.length) {
         const frames = shapedFrames.map(({ frame }) => frame)
-        const combined = mergeGeometries([merged, ...frames], false)
-        merged.dispose()
+        const combined = mergeGeometries(merged ? [merged, ...frames] : frames, false)
+        merged?.dispose()
         if (!combined) continue
         merged = combined
       }
-      merged.computeBoundingBox()
-      if (
-        rectangular &&
-        merged.boundingBox &&
-        bounds.clone().expandByScalar(1e-6).containsBox(merged.boundingBox)
-      ) {
-        merged.clearGroups()
-        merged.addGroup(0, merged.getAttribute('position').count, materialIndex)
-        results.push(merged)
-        continue
+      if (merged && !rectangular) {
+        const brush = new Brush(merged)
+        prepareBrushForCSG(brush)
+        try {
+          // The existing wall envelope owns miter joins, support profiles, and all hosted cuts.
+          const clipped = evaluator.evaluate(brush, shell, INTERSECTION).geometry
+          const geometry = clipped.index ? clipped.toNonIndexed() : clipped
+          if (geometry !== clipped) clipped.dispose()
+          merged.dispose()
+          merged = geometry
+        } catch (error) {
+          merged.dispose()
+          throw error
+        }
       }
-      if (rectangular) prepareBrushForCSG(shell)
-      const brush = new Brush(merged)
-      prepareBrushForCSG(brush)
-      try {
-        // The existing wall envelope owns miter joins, support profiles, and all hosted cuts.
-        const clipped = evaluator.evaluate(brush, shell, INTERSECTION).geometry
-        const geometry = clipped.index ? clipped.toNonIndexed() : clipped
-        if (geometry !== clipped) clipped.dispose()
-        geometry.clearGroups()
-        geometry.addGroup(0, geometry.getAttribute('position').count, materialIndex)
-        results.push(geometry)
-      } finally {
-        merged.dispose()
+      if (untouchedPieces.length) {
+        const untouched = buildStraightCurtainPieces(untouchedPieces, bounds.min.y, false)
+        if (merged) {
+          const combined = mergeGeometries([merged, untouched], false)
+          untouched.dispose()
+          merged.dispose()
+          if (!combined) continue
+          merged = combined
+        } else {
+          merged = untouched
+        }
       }
+      if (!merged) continue
+      merged.clearGroups()
+      merged.addGroup(0, merged.getAttribute('position').count, materialIndex)
+      results.push(merged)
     }
     if (!results.length) return new BufferGeometry()
     const combined = mergeGeometries(results, false) ?? new BufferGeometry()

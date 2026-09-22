@@ -98,6 +98,24 @@ describe('curtain walls', () => {
     ])
       expect(CurtainWallConfig.safeParse(input).success).toBe(false)
   })
+
+  test('dense stick grids use continuous members instead of one frame per panel edge', () => {
+    const columns = 32
+    const rows = 32
+    const pieces = buildCurtainWallLayout(
+      10,
+      3,
+      0.15,
+      CurtainWallConfig.parse({
+        construction: 'stick',
+        columns: { layout: 'count', count: columns },
+        rows: { layout: 'count', count: rows },
+      }),
+    )
+    const frames = pieces.filter((piece) => piece.role === 'frame')
+    expect(frames).toHaveLength(columns + 1 + columns * (rows + 1))
+    expect(frames.length).toBeLessThan(columns * rows * 2)
+  })
 })
 
 test('entrance frames adapt to door size, position, support elevation, and removal', () => {

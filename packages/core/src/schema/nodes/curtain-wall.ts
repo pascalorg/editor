@@ -139,59 +139,111 @@ export function buildCurtainWallLayout(
   }
   const verticalCap = config.framing === 'capped' || config.framing === 'vertical-caps'
   const horizontalCap = config.framing === 'capped' || config.framing === 'horizontal-caps'
-  for (let column = 0; column < xs.length - 1; column++) {
-    for (let row = 0; row < ys.length - 1; row++) {
-      const x0 = xs[column]!,
-        x1 = xs[column + 1]!,
-        y0 = ys[row]!,
-        y1 = ys[row + 1]!
-      const gap =
-        config.construction === 'unitized'
-          ? Math.min(config.jointWidth / 2, (x1 - x0) / 10, (y1 - y0) / 10)
-          : 0
-      const left = x0 + (column === 0 ? 0 : gap),
-        right = x1 - (column === xs.length - 2 ? 0 : gap)
-      const bottom = y0 + (row === 0 ? 0 : gap),
-        top = y1 - (row === ys.length - 2 ? 0 : gap)
-      const lw = Math.min(
-        column === 0 ? config.perimeterWidth : config.mullionWidth / 2,
-        (right - left) * 0.4,
-      )
-      const rw = Math.min(
-        column === xs.length - 2 ? config.perimeterWidth : config.mullionWidth / 2,
-        (right - left) * 0.4,
-      )
-      const bw = Math.min(
-        row === 0 ? config.perimeterWidth : config.transomWidth / 2,
-        (top - bottom) * 0.4,
-      )
-      const tw = Math.min(
-        row === ys.length - 2 ? config.perimeterWidth : config.transomWidth / 2,
-        (top - bottom) * 0.4,
-      )
-      add(left, left + lw, bottom, top, verticalCap ? depth / 2 : panelBack, 'frame')
-      add(right - rw, right, bottom, top, verticalCap ? depth / 2 : panelBack, 'frame')
-      add(
-        left + lw,
-        right - rw,
-        bottom,
-        bottom + bw,
-        horizontalCap ? depth / 2 : panelBack,
-        'frame',
-      )
-      add(left + lw, right - rw, top - tw, top, horizontalCap ? depth / 2 : panelBack, 'frame')
-      const type = curtainPanelType(config, column, row, ys.length - 1)
-      if (type === 'empty') continue
-      const joint = Math.min(config.jointWidth / 2, (right - left) * 0.1, (top - bottom) * 0.1)
-      add(
-        left + (verticalCap ? lw : joint),
-        right - (verticalCap ? rw : joint),
-        bottom + (horizontalCap ? bw : joint),
-        top - (horizontalCap ? tw : joint),
-        panelFront,
-        type,
-        panelBack,
-      )
+  if (config.construction === 'stick') {
+    const verticalBounds = xs.map((x, index): [number, number] => {
+      if (index === 0) return [0, Math.min(config.perimeterWidth, (xs[1]! - x) * 0.4)]
+      if (index === xs.length - 1)
+        return [length - Math.min(config.perimeterWidth, (x - xs[index - 1]!) * 0.4), length]
+      return [
+        x - Math.min(config.mullionWidth / 2, (x - xs[index - 1]!) * 0.4),
+        x + Math.min(config.mullionWidth / 2, (xs[index + 1]! - x) * 0.4),
+      ]
+    })
+    const horizontalBounds = ys.map((y, index): [number, number] => {
+      if (index === 0) return [0, Math.min(config.perimeterWidth, (ys[1]! - y) * 0.4)]
+      if (index === ys.length - 1)
+        return [height - Math.min(config.perimeterWidth, (y - ys[index - 1]!) * 0.4), height]
+      return [
+        y - Math.min(config.transomWidth / 2, (y - ys[index - 1]!) * 0.4),
+        y + Math.min(config.transomWidth / 2, (ys[index + 1]! - y) * 0.4),
+      ]
+    })
+
+    for (const [left, right] of verticalBounds)
+      add(left, right, 0, height, verticalCap ? depth / 2 : panelBack, 'frame')
+    for (const [bottom, top] of horizontalBounds) {
+      for (let column = 0; column < xs.length - 1; column++) {
+        add(
+          verticalBounds[column]![1],
+          verticalBounds[column + 1]![0],
+          bottom,
+          top,
+          horizontalCap ? depth / 2 : panelBack,
+          'frame',
+        )
+      }
+    }
+
+    for (let column = 0; column < xs.length - 1; column++) {
+      for (let row = 0; row < ys.length - 1; row++) {
+        const type = curtainPanelType(config, column, row, ys.length - 1)
+        if (type === 'empty') continue
+        add(
+          verticalBounds[column]![1],
+          verticalBounds[column + 1]![0],
+          horizontalBounds[row]![1],
+          horizontalBounds[row + 1]![0],
+          panelFront,
+          type,
+          panelBack,
+        )
+      }
+    }
+  } else {
+    for (let column = 0; column < xs.length - 1; column++) {
+      for (let row = 0; row < ys.length - 1; row++) {
+        const x0 = xs[column]!,
+          x1 = xs[column + 1]!,
+          y0 = ys[row]!,
+          y1 = ys[row + 1]!
+        const gap =
+          config.construction === 'unitized'
+            ? Math.min(config.jointWidth / 2, (x1 - x0) / 10, (y1 - y0) / 10)
+            : 0
+        const left = x0 + (column === 0 ? 0 : gap),
+          right = x1 - (column === xs.length - 2 ? 0 : gap)
+        const bottom = y0 + (row === 0 ? 0 : gap),
+          top = y1 - (row === ys.length - 2 ? 0 : gap)
+        const lw = Math.min(
+          column === 0 ? config.perimeterWidth : config.mullionWidth / 2,
+          (right - left) * 0.4,
+        )
+        const rw = Math.min(
+          column === xs.length - 2 ? config.perimeterWidth : config.mullionWidth / 2,
+          (right - left) * 0.4,
+        )
+        const bw = Math.min(
+          row === 0 ? config.perimeterWidth : config.transomWidth / 2,
+          (top - bottom) * 0.4,
+        )
+        const tw = Math.min(
+          row === ys.length - 2 ? config.perimeterWidth : config.transomWidth / 2,
+          (top - bottom) * 0.4,
+        )
+        add(left, left + lw, bottom, top, verticalCap ? depth / 2 : panelBack, 'frame')
+        add(right - rw, right, bottom, top, verticalCap ? depth / 2 : panelBack, 'frame')
+        add(
+          left + lw,
+          right - rw,
+          bottom,
+          bottom + bw,
+          horizontalCap ? depth / 2 : panelBack,
+          'frame',
+        )
+        add(left + lw, right - rw, top - tw, top, horizontalCap ? depth / 2 : panelBack, 'frame')
+        const type = curtainPanelType(config, column, row, ys.length - 1)
+        if (type === 'empty') continue
+        const joint = Math.min(config.jointWidth / 2, (right - left) * 0.1, (top - bottom) * 0.1)
+        add(
+          left + (verticalCap ? lw : joint),
+          right - (verticalCap ? rw : joint),
+          bottom + (horizontalCap ? bw : joint),
+          top - (horizontalCap ? tw : joint),
+          panelFront,
+          type,
+          panelBack,
+        )
+      }
     }
   }
   let fitted = pieces

@@ -1011,11 +1011,26 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
       if (!live?.position) return effective
       return { ...effective, position: live.position }
     })
+  const curtainGeometryChildren =
+    node.wallType === 'curtain' && !isCurvedWall(node)
+      ? childrenNodes.map((child) => {
+          if (
+            (child.type !== 'door' && child.type !== 'window') ||
+            child.openingShape === 'rectangle'
+          )
+            return child
+          const isLive =
+            useLiveNodeOverrides.getState().get(child.id) !== undefined ||
+            useLiveTransforms.getState().get(child.id) !== undefined
+          // Exact shaped CSG can exceed the frame budget; the committed rebuild restores the arch.
+          return isLive ? { ...child, openingShape: 'rectangle' as const } : child
+        })
+      : childrenNodes
 
   const builtGeo = generateExtrudedWall(
     node,
     node.wallType === 'curtain' && !isCurvedWall(node)
-      ? childrenNodes.filter((child) => child.type !== 'door' && child.type !== 'window')
+      ? curtainGeometryChildren.filter((child) => child.type !== 'door' && child.type !== 'window')
       : childrenNodes,
     miterData,
     slabElevation,
@@ -1034,7 +1049,9 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
     WALL_UV_UNIT_SCALE,
   )
   const renderedGeo =
-    node.wallType === 'curtain' ? buildCurtainWallGeometry(node, builtGeo, childrenNodes) : builtGeo
+    node.wallType === 'curtain'
+      ? buildCurtainWallGeometry(node, builtGeo, curtainGeometryChildren)
+      : builtGeo
   const newGeo = applyWorldPlanarWallUVs(renderedGeo, wallWorldMatrix)
 
   mesh.geometry.dispose()
