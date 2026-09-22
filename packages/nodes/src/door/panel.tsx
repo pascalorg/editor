@@ -17,7 +17,6 @@ import { useViewer } from '@pascal-app/viewer'
 import { Copy, DoorOpen, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo } from 'react'
 import { constrainCurtainOpening, curtainOpeningLimits } from '../shared/curtain-opening-limits'
-import { OpeningDocumentationFields } from '../shared/opening-documentation-fields'
 import { createOpeningPropertyPreview } from '../shared/opening-property-preview'
 import { openingPropertyPreviewHost } from '../shared/opening-property-preview-host'
 import { scaleHandleHeight } from './door-math'
@@ -554,21 +553,6 @@ export default function DoorPanel() {
             })}
           </div>
         )}
-      </PanelSection>
-
-      <PanelSection title="Documentation">
-        <OpeningDocumentationFields
-          constructionType={node.constructionType}
-          dimensionReference={node.dimensionReference}
-          finishOpeningHeight={node.finishOpeningHeight}
-          finishOpeningWidth={node.finishOpeningWidth}
-          mark={node.mark}
-          masonryOpeningHeight={node.masonryOpeningHeight}
-          masonryOpeningWidth={node.masonryOpeningWidth}
-          onChange={handleUpdate}
-          roughOpeningHeight={node.roughOpeningHeight}
-          roughOpeningWidth={node.roughOpeningWidth}
-        />
       </PanelSection>
 
       <PanelSection title="Position">
