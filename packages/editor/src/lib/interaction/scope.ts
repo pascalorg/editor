@@ -19,7 +19,15 @@ export type ReshapeDriver = 'tool' | 'floorplan'
 // node, one in-flight reshape. Grouping them as sub-states of `reshaping`
 // (rather than four sibling scopes) keeps the union small while still making
 // "curving and hole-editing at once" unrepresentable.
-export type ReshapeKind = 'curve' | 'hole' | 'endpoint' | 'boundary' | 'control-point' | 'tangent'
+export type ReshapeKind =
+  | 'curve'
+  | 'hole'
+  | 'endpoint'
+  | 'boundary'
+  | 'control-point'
+  | 'tangent'
+  // A kind's own reshape (wall 'split'): mounted from `def.affordanceTools[reshape]`.
+  | 'split'
 
 export type InteractionScope =
   | { kind: 'idle' }

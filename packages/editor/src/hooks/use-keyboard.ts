@@ -9,7 +9,6 @@ import {
 } from '@pascal-app/core'
 import { cancelPerfAction, markPerfAction, useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
-import { Vector3 } from 'three'
 import {
   cutSelectionToEditorClipboard,
   deleteSelection,
@@ -18,9 +17,9 @@ import {
 import {
   classifyParticipant,
   collectParticipants,
-  computeGroupBox,
-  expandToComponent,
+  groupPlanBounds,
   levelFrame,
+  planBoundsCenter,
   rotateGroupPatches,
 } from '../components/editor/group-transform-shared'
 import { steppedRotation } from '../components/tools/item/placement-math'
@@ -70,27 +69,20 @@ function rotateGroupSelection(direction: 1 | -1): boolean {
     (id) => classifyParticipant(nodes[id as AnyNodeId], levelId, nodes) !== null,
   )
   if (participantIds.length === 0) return false
-  const fullIds = expandToComponent(participantIds, nodes, levelId)
-  const { starts, links } = collectParticipants(fullIds, nodes, levelId)
+  const { starts, links } = collectParticipants(participantIds, nodes, levelId)
   if (starts.length === 0) return false
 
-  // Same pivot as the 3D gizmo: the selection's world bbox center, converted
-  // into the level frame before orbiting placements (a rotated building would
-  // otherwise displace the centre).
-  const box = computeGroupBox(fullIds)
-  if (!box) return false
-  const worldCenter = new Vector3(
-    (box.min.x + box.max.x) / 2,
-    box.min.y,
-    (box.min.z + box.max.z) / 2,
-  )
-  const localCenter = worldCenter.applyMatrix4(levelFrame(levelId).inverse)
+  // Same pivot as the dashed boxes and the rotate gizmo: the selection's box
+  // centre in the level frame.
+  const bounds = groupPlanBounds(starts, levelFrame(levelId).inverse)
+  if (!bounds) return false
+  const [pivotX, pivotZ] = planBoundsCenter(bounds)
 
   // R (+45° yaw) orbits by -45° in the atan2 x→z sense: yaw = rotation - delta
   // (see rotateGroupPatches), so keyboard direction matches the single-node
   // steppedRotation sense.
   const delta = -direction * (Math.PI / 4)
-  const patches = rotateGroupPatches(starts, links, { x: localCenter.x, z: localCenter.z }, delta)
+  const patches = rotateGroupPatches(starts, links, { x: pivotX, z: pivotZ }, delta)
   // Space detection stays out: a rigid rotation of existing walls must not
   // re-create the room's auto floors/ceilings at the new bearing.
   pauseSpaceDetection()
@@ -186,7 +178,8 @@ export const runHistoryShortcut = (direction: 'undo' | 'redo') => {
   return true
 }
 
-export const isToolOwnedRotation = () => {
+/** Whether an armed tool owns the rotation key (`R` or `T`) instead of the selection. */
+export const isToolOwnedRotation = (key: 'r' | 't' = 'r') => {
   const editor = useEditor.getState()
   const moving = getMovingNode()
   if (
@@ -206,7 +199,10 @@ export const isToolOwnedRotation = () => {
       // exist. Without this check, selecting an existing item in the 2D plan
       // while the item tool is armed silently drops the global rotate key.
       (editor.tool === 'item' && editor.selectedItem !== null) ||
-      editor.tool === 'lean-to-extension')
+      editor.tool === 'lean-to-extension' ||
+      // R toggles the wall tool between line and rectangle drawing; T stays
+      // the selection's.
+      (editor.tool === 'wall' && key === 'r'))
   )
 }
 
@@ -630,7 +626,7 @@ export const useKeyboard = ({
       } else if (
         (e.key === 't' || e.key === 'T') &&
         !isVersionPreviewMode &&
-        !isToolOwnedRotation() &&
+        !isToolOwnedRotation('t') &&
         canRunGlobalRotationShortcut()
       ) {
         // Rotate selected node counter-clockwise

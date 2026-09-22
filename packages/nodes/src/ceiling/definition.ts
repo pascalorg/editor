@@ -12,10 +12,12 @@ import {
   clearStructuralElevationGuide,
   DRAFTING_SURFACE_EXTENSION_KEY,
   type DraftingSurfaceExtension,
+  type FloorplanNodeExtension,
   publishStructuralElevationGuide,
   resolveStructuralElevationSnap,
 } from '@pascal-app/editor'
 import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
+import { sameOutlineSurfaceCounterparts } from '../shared/surface-counterparts'
 import { buildCeilingFloorplan } from './floorplan'
 import {
   ceilingAddVertexAffordance,
@@ -137,6 +139,9 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
       kind: 'ceiling',
       raycast: 'underside',
     } satisfies DraftingSurfaceExtension,
+    'pascal:editor/floorplan': {
+      selectionCounterparts: sameOutlineSurfaceCounterparts,
+    } satisfies FloorplanNodeExtension,
   },
 
   // Height-less on purpose: a new ceiling follows the level top until the

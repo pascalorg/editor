@@ -278,7 +278,7 @@ export function hasWallChildOverlap(
   for (const childId of Array.isArray(wallNode.children) ? wallNode.children : []) {
     if (childId === ignoreId) continue
     const child = nodes[childId as AnyNodeId]
-    if (!child) continue
+    if (!child || child.metadata.isTransient) continue
 
     let childLeft: number
     let childRight: number

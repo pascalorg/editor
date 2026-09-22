@@ -35,6 +35,7 @@ import useEditor, { getActiveContinuationContext } from '../../../store/use-edit
 import useInteractionScope, {
   useActiveHandleDrag,
   useMovingNode,
+  useReshapingNode,
 } from '../../../store/use-interaction-scope'
 import { BuildingHelper } from './building-helper'
 import { ContextualHelperPanel } from './contextual-helper-panel'
@@ -141,6 +142,7 @@ export function HelperManager() {
   const workspaceMode = useEditor((s) => s.workspaceMode)
   const scope = useInteractionScope((s) => s.scope)
   const movingNode = useMovingNode()
+  const reshapingNode = useReshapingNode()
   const activeHandleDrag = useActiveHandleDrag()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const isMobile = useIsMobile()
@@ -265,6 +267,15 @@ export function HelperManager() {
   // before the select branch so the idle "drag selected / add objects" hints
   // never leak over an in-progress reshape — and it gets its own snapping chip.
   if (scope.kind === 'reshaping') {
+    // A kind's own reshape brings its hints (`def.affordanceHints[reshape]`).
+    const hints = reshapingNode
+      ? nodeRegistry.get(reshapingNode.type)?.affordanceHints?.[scope.reshape]
+      : undefined
+    if (hints) {
+      return (
+        <RegisteredToolHelper hints={hints} shiftPressed={modifiers.shift} snapContext={snapContext} />
+      )
+    }
     return <ContextualHelperPanel hints={reshapingHints(scope.reshape)} snapContext={snapContext} />
   }
 
@@ -313,6 +324,7 @@ export function HelperManager() {
   if (scope.kind === 'mesh-editing') {
     return <ContextualHelperPanel hints={contextualEditHints} snapContext={snapContext} />
   }
+
 
   // Idle select only — an active scope (handle-drag, box-select, …) must not show
   // the idle selection hints.

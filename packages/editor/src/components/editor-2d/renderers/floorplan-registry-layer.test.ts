@@ -23,6 +23,7 @@ import {
   collectFloorplanLinkedLevelNodes,
   computeAffectedSiblingIds,
   floorplanAffordanceReshapeScope,
+  floorplanEntryYieldsToTool,
   floorplanHandleDoubleClickAffordance,
   InteractiveGeometry,
   isFloorplanOpeningPlacementState,
@@ -778,5 +779,14 @@ describe('collectFloorplanLinkedLevelNodes', () => {
         new Set([parent.id as AnyNodeId]),
       ),
     ).toEqual([])
+  })
+})
+
+describe('floorplan entry routing while a tool is active', () => {
+  test('build tools get presses on entries, as in 3D; select and delete keep selecting', () => {
+    expect(floorplanEntryYieldsToTool({ mode: 'build', openingPlacement: false })).toBe(true)
+    expect(floorplanEntryYieldsToTool({ mode: 'select', openingPlacement: true })).toBe(true)
+    expect(floorplanEntryYieldsToTool({ mode: 'select', openingPlacement: false })).toBe(false)
+    expect(floorplanEntryYieldsToTool({ mode: 'delete', openingPlacement: false })).toBe(false)
   })
 })

@@ -21,6 +21,7 @@ import {
   clearPlacementSurface,
   createFenceOnCurrentLevel,
   createSplineFenceOnCurrentLevel,
+  DraftMeasurementLabel,
   EDITOR_LAYER,
   type FencePlanPoint,
   formatAngleRadians,
@@ -58,7 +59,6 @@ import {
   type DraftAngleLabel,
   type DraftAxisGuideState,
   DraftAxisGuides,
-  DraftMeasurementLabel,
   getNearestAxisAngleLabel,
 } from '../shared/draft-axis-guides'
 

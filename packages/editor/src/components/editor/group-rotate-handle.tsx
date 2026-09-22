@@ -28,7 +28,7 @@ import {
   classifyParticipant,
   collectParticipants,
   computeGroupBox,
-  expandToComponent,
+  computeGroupPlanBox,
   levelFrame,
   rotateGroupPatches,
   type Vec3,
@@ -79,14 +79,6 @@ export function GroupRotateHandle() {
     [selectedIds, levelId, nodes],
   )
 
-  // Gate on the explicit selection (so a single connected wall still gets the
-  // per-node handles), but transform the full connected wall/fence component so
-  // attached structure rotates rigidly as one piece.
-  const fullIds = useMemo(
-    () => expandToComponent(participantIds, nodes, levelId),
-    [participantIds, levelId, nodes],
-  )
-
   const shouldRender =
     participantIds.length >= 2 &&
     mode !== 'delete' &&
@@ -98,7 +90,13 @@ export function GroupRotateHandle() {
 
   if (!shouldRender) return null
   // Remount when the moving set changes so the rest pivot re-seeds cleanly.
-  return <GroupRotateHandleInner ids={fullIds} key={fullIds.join(',')} meshEpoch={meshEpoch} />
+  return (
+    <GroupRotateHandleInner
+      ids={participantIds}
+      key={participantIds.join(',')}
+      meshEpoch={meshEpoch}
+    />
+  )
 }
 
 function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: number }) {
@@ -125,22 +123,28 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
   const baseScale = zoom * ARROW_SCALE * 1.05
   const scale = (isHovered ? 1.12 : 1) * baseScale
 
-  // World-space bounding box of the selected meshes. Levels are axis-aligned in
-  // XZ, so world XZ coincides with each node's level-local placement — letting
-  // us rotate `position` / `start` / `end` directly against the pivot without
-  // per-node frame conversion.
-  //   - `pivot`  = bbox center (XZ), Y at the group's base → the rotation origin
-  //   - `corner` = front-right bbox corner at mid-height → where the gizmo sits
+  // Both rest points come from the level-frame box (the dashed boxes' box, also
+  // keyboard R/T's pivot), carried to world so they stay on it under a rotated
+  // building; the world mesh box only supplies heights.
+  //   - `pivot`  = box center, Y at the group's base → the rotation origin
+  //   - `corner` = far box corner at mid-height → where the gizmo sits
   const rest = useMemo(() => {
     void meshEpoch
     const box = computeGroupBox(ids)
     if (!box) return null
-    const pivot = new Vector3((box.min.x + box.max.x) / 2, box.min.y, (box.min.z + box.max.z) / 2)
-    const corner = new Vector3(
-      box.max.x + CORNER_OFFSET,
-      (box.min.y + box.max.y) / 2,
-      box.max.z + CORNER_OFFSET,
-    )
+    const levelId = useViewer.getState().selection.levelId
+    const { matrix } = levelFrame(levelId)
+    const plan = computeGroupPlanBox(ids, levelId)
+    const pivot = plan
+      ? new Vector3((plan.minX + plan.maxX) / 2, 0, (plan.minZ + plan.maxZ) / 2).applyMatrix4(
+          matrix,
+        )
+      : new Vector3((box.min.x + box.max.x) / 2, 0, (box.min.z + box.max.z) / 2)
+    pivot.y = box.min.y
+    const corner = plan
+      ? new Vector3(plan.maxX + CORNER_OFFSET, 0, plan.maxZ + CORNER_OFFSET).applyMatrix4(matrix)
+      : new Vector3(box.max.x + CORNER_OFFSET, 0, box.max.z + CORNER_OFFSET)
+    corner.y = (box.min.y + box.max.y) / 2
     return { pivot, corner }
   }, [ids, meshEpoch])
 

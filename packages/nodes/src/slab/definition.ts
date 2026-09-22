@@ -14,10 +14,12 @@ import {
   clearStructuralElevationGuide,
   DRAFTING_SURFACE_EXTENSION_KEY,
   type DraftingSurfaceExtension,
+  type FloorplanNodeExtension,
   publishStructuralElevationGuide,
   resolveStructuralElevationSnap,
 } from '@pascal-app/editor'
 import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
+import { sameOutlineSurfaceCounterparts } from '../shared/surface-counterparts'
 import {
   applySlabBaseElevationChange,
   applySlabThicknessChange,
@@ -278,6 +280,9 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
     [DRAFTING_SURFACE_EXTENSION_KEY]: {
       kind: 'slab',
     } satisfies DraftingSurfaceExtension,
+    'pascal:editor/floorplan': {
+      selectionCounterparts: sameOutlineSurfaceCounterparts,
+    } satisfies FloorplanNodeExtension,
   },
 
   defaults: () => ({

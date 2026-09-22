@@ -14,8 +14,6 @@ import {
   type GutterNode,
   generateId,
   getDefaultGutterSide,
-  getEffectiveWallSurfaceMaterial,
-  getWallSurfaceMaterialSignature,
   isAutoGutterEnabled,
   isAutoRidgeVentEnabled,
   isDefaultDownspoutNode,
@@ -35,6 +33,14 @@ import {
   projectPointToWallCenterline,
 } from '../../systems/wall/wall-curve'
 import {
+  areWallStylesCompatible,
+  areWallsCollinearAcrossPoint,
+  buildMergedWallAttachmentUpdates,
+  getWallEndpointAtPoint,
+  resolveMergedWallEndpoints,
+  type WallAttachmentUpdate,
+} from '../../systems/wall/wall-merge'
+import {
   activeSceneCommitNodeIds,
   addActiveSceneCommitNodeIds,
   runWithSceneCommitNodeIds,
@@ -45,7 +51,6 @@ type AnyContainerNode = AnyNode & { children: string[] }
 type NodeCreateOp = { node: AnyNode; parentId?: AnyNodeId }
 type NodeUpdateOp = { id: AnyNodeId; data: Partial<AnyNode> }
 type NodeDeleteOp = AnyNodeId
-type WallAttachmentUpdate = { id: AnyNodeId; data: Partial<AnyNode> }
 type WallMergePlan = {
   primaryWallId: AnyNodeId
   secondaryWallId: AnyNodeId
@@ -1013,128 +1018,6 @@ function refreshDefaultGuttersForRoofIds(
 let pendingRafId: number | null = null
 let pendingUpdates: Set<AnyNodeId> = new Set()
 
-function pointsEqual(a: [number, number], b: [number, number], tolerance = 1e-6) {
-  const dx = a[0] - b[0]
-  const dz = a[1] - b[1]
-  return dx * dx + dz * dz <= tolerance * tolerance
-}
-
-function getWallEndpointAtPoint(
-  wall: Pick<WallNode, 'start' | 'end'>,
-  point: [number, number],
-): 'start' | 'end' | null {
-  if (pointsEqual(wall.start, point)) return 'start'
-  if (pointsEqual(wall.end, point)) return 'end'
-  return null
-}
-
-function getWallFreeEndpoint(wall: Pick<WallNode, 'start' | 'end'>, sharedPoint: [number, number]) {
-  return pointsEqual(wall.start, sharedPoint) ? wall.end : wall.start
-}
-
-function areWallStylesCompatible(a: WallNode, b: WallNode) {
-  const aInterior = getWallSurfaceMaterialSignature(getEffectiveWallSurfaceMaterial(a, 'interior'))
-  const bInterior = getWallSurfaceMaterialSignature(getEffectiveWallSurfaceMaterial(b, 'interior'))
-  const aExterior = getWallSurfaceMaterialSignature(getEffectiveWallSurfaceMaterial(a, 'exterior'))
-  const bExterior = getWallSurfaceMaterialSignature(getEffectiveWallSurfaceMaterial(b, 'exterior'))
-
-  return (
-    (a.parentId ?? null) === (b.parentId ?? null) &&
-    Math.abs((a.curveOffset ?? 0) - (b.curveOffset ?? 0)) <= 1e-6 &&
-    Math.abs((a.thickness ?? 0.2) - (b.thickness ?? 0.2)) <= 1e-6 &&
-    // Absent height means plane-bound (follows the storey), which must never
-    // merge with an explicit height — even one that currently matches the plane.
-    (a.height == null) === (b.height == null) &&
-    Math.abs((a.height ?? 0) - (b.height ?? 0)) <= 1e-6 &&
-    aInterior === bInterior &&
-    aExterior === bExterior &&
-    a.frontSide === b.frontSide &&
-    a.backSide === b.backSide &&
-    a.visible === b.visible
-  )
-}
-
-function areWallsCollinearAcrossPoint(a: WallNode, b: WallNode, sharedPoint: [number, number]) {
-  const freeA = getWallFreeEndpoint(a, sharedPoint)
-  const freeB = getWallFreeEndpoint(b, sharedPoint)
-  const ax = freeA[0] - sharedPoint[0]
-  const az = freeA[1] - sharedPoint[1]
-  const bx = freeB[0] - sharedPoint[0]
-  const bz = freeB[1] - sharedPoint[1]
-  const lenA = Math.hypot(ax, az)
-  const lenB = Math.hypot(bx, bz)
-
-  if (lenA < 1e-6 || lenB < 1e-6) return false
-
-  const cross = (ax * bz - az * bx) / (lenA * lenB)
-  const dot = (ax * bx + az * bz) / (lenA * lenB)
-  return Math.abs(cross) <= 1e-4 && dot < -0.999
-}
-
-function resolveMergedWallEndpoints(
-  primary: WallNode,
-  secondary: WallNode,
-  sharedPoint: [number, number],
-): { start: [number, number]; end: [number, number] } {
-  const primaryEndpoint = getWallEndpointAtPoint(primary, sharedPoint)
-  const secondaryEndpoint = getWallEndpointAtPoint(secondary, sharedPoint)
-
-  if (primaryEndpoint === 'end' && secondaryEndpoint === 'start') {
-    return { start: primary.start, end: secondary.end }
-  }
-  if (primaryEndpoint === 'start' && secondaryEndpoint === 'end') {
-    return { start: secondary.start, end: primary.end }
-  }
-  if (primaryEndpoint === 'start' && secondaryEndpoint === 'start') {
-    return { start: primary.end, end: secondary.end }
-  }
-
-  return { start: primary.start, end: secondary.start }
-}
-
-function buildMergedWallAttachmentUpdates(
-  primary: WallNode,
-  secondary: WallNode,
-  mergedWallId: AnyNodeId,
-  mergedStart: [number, number],
-  mergedEnd: [number, number],
-  nodes: Record<AnyNodeId, AnyNode>,
-): WallAttachmentUpdate[] {
-  const mergedWallGeometry = {
-    start: mergedStart,
-    end: mergedEnd,
-    curveOffset: primary.curveOffset,
-  }
-  const mergedLength = Math.max(getWallCurveLength(mergedWallGeometry), 1e-6)
-  const updates: WallAttachmentUpdate[] = []
-
-  const wallChildren = [...(primary.children ?? []), ...(secondary.children ?? [])] as AnyNodeId[]
-  for (const childId of wallChildren) {
-    const child = nodes[childId]
-    if (!(child && 'position' in child && Array.isArray(child.position))) {
-      continue
-    }
-
-    const sourceWall = child.parentId === secondary.id ? secondary : primary
-    const localX = typeof child.position[0] === 'number' ? child.position[0] : 0
-    const sourcePoint = getWallPointAtDistance(sourceWall, localX)
-    const mergedProjection = projectPointToWallCenterline(mergedWallGeometry, sourcePoint)
-    const nextLocalX = Math.max(0, Math.min(mergedLength, mergedProjection.distanceAlong))
-
-    updates.push({
-      id: childId,
-      data: {
-        parentId: mergedWallId,
-        wallId: mergedWallId,
-        position: [nextLocalX, child.position[1], child.position[2]] as typeof child.position,
-        ...('wallT' in child ? { wallT: nextLocalX / mergedLength } : {}),
-      } as Partial<AnyNode>,
-    })
-  }
-
-  return updates
-}
-
 function buildWallMergePlans(
   nodes: Record<AnyNodeId, AnyNode>,
   idsToDelete: AnyNodeId[],
@@ -1154,7 +1037,7 @@ function buildWallMergePlans(
         if (node?.type !== 'wall') return false
         if (skippedWallIds.has(node.id) || usedWallIds.has(node.id)) return false
         if ((node.parentId ?? null) !== (deletedWall.parentId ?? null)) return false
-        return pointsEqual(node.start, junction) || pointsEqual(node.end, junction)
+        return getWallEndpointAtPoint(node, junction) !== null
       })
 
       if (candidates.length !== 2) {

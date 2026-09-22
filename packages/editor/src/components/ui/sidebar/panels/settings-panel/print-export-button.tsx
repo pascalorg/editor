@@ -118,7 +118,7 @@ export function PrintExportButton({ onlyVisible }: { onlyVisible: boolean }) {
         Export 3D print STL
       </Button>
       {error && (
-        <div className="flex gap-2 text-destructive text-xs">
+        <div className="col-span-full flex gap-2 text-destructive text-xs">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" />
           <span>{error}</span>
         </div>

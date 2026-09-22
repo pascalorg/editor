@@ -12,6 +12,35 @@ WebGPU. Run it in the browser or from the CLI, and connect AI agents through MCP
 
 https://github.com/user-attachments/assets/8b50e7cf-cebe-4579-9cf3-8786b35f7b6b
 
+## A first look at Pascal Next
+
+[Explore the live demo](https://editor.pascal.app/next) — a real home reconstructed
+in detail, from its rooms and finishes to the structure and systems behind the walls.
+This hosted preview explores the direction of the next Pascal editor; the experience
+shown here is not yet part of the open-source editor release.
+
+| Exploded view — see how the home fits together | Cut view — slice through the building |
+| --- | --- |
+| [![Roof lifted above the reconstructed home](docs/media/next-demo/exploded.gif)](https://editor.pascal.app/next) | [![A section cut reveals the roof framing and interior](docs/media/next-demo/cutview.gif)](https://editor.pascal.app/next) |
+| **X-ray — reveal the modeled systems** | **Walkthrough — step inside at eye level** |
+| [![Building systems isolated with the walls hidden](docs/media/next-demo/xray.gif)](https://editor.pascal.app/next) | [![Walking through the home toward the pool terrace](docs/media/next-demo/walkthrough.gif)](https://editor.pascal.app/next) |
+| **Interactions — open doors and explore** | **Environment — change the light and atmosphere** |
+| [![Interacting with doors in the reconstructed home](docs/media/next-demo/interactions.gif)](https://editor.pascal.app/next) | [![Changing the lighting around the reconstructed home](docs/media/next-demo/environment.gif)](https://editor.pascal.app/next) |
+
+We are exploring what this could make possible for facility management, home services,
+architecture, home building, and infrastructure.
+[Join the discussion on X](https://x.com/pascal_app/status/2102097655031558496)
+and tell us where you would use it.
+
+### Make something with these videos
+
+Making a video, tutorial, article, or social post about Pascal? You are welcome to
+use and edit this footage, including in monetized content, under
+[CC BY 4.0](docs/media/next-demo/LICENSE.md). Credit Pascal, link the license,
+and note your edits; no separate permission is needed.
+
+[Download the six original videos and see the creator guide](docs/media/next-demo/README.md).
+
 ## Run the Editor Locally
 
 Node.js 22.13 or newer can create a persistent local Pascal installation without
