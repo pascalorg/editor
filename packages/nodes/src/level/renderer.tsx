@@ -12,7 +12,7 @@ export const LevelRenderer = ({ node }: { node: LevelNode }) => {
   const handlers = useNodeEvents(node, 'level')
 
   return (
-    <group ref={ref} {...handlers}>
+    <group ref={ref} visible={node.visible !== false} {...handlers}>
       {node.children.map((childId) => (
         <NodeRenderer key={childId} nodeId={childId} />
       ))}

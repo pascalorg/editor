@@ -383,6 +383,13 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   // terrain still mounts the mesh.
   const showTerrain = terrainGrid !== null
 
+  // The Site is the one kind whose `visible` flag stops at itself: hiding it
+  // drops the parcel's own presentation — ground fill, sculpted ground, lot
+  // line — while everything standing on the site keeps its own flag (the
+  // exporter and the 2D plan draw the same line). The horizon disc is a world
+  // backdrop rather than part of the parcel, so it stays either way.
+  const showSiteSurfaces = node.visible !== false
+
   if (!(node && lineGeometry)) {
     return null
   }
@@ -395,10 +402,10 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       ))}
 
       {/* Sculpted ground, when the site has terrain */}
-      {showTerrain && <TerrainRenderer material={groundMaterial} site={node} />}
+      {showSiteSurfaces && showTerrain && <TerrainRenderer material={groundMaterial} site={node} />}
 
       {/* Ground fill: site polygon with slab holes, occludes below-grade geometry */}
-      {groundGeometry && !showTerrain && (
+      {showSiteSurfaces && groundGeometry && !showTerrain && (
         <mesh
           geometry={groundGeometry}
           material={groundMaterial}
@@ -422,10 +429,12 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       )}
 
       {/* Simple boundary line */}
-      {/* @ts-ignore */}
-      <line frustumCulled={false} geometry={lineGeometry} renderOrder={9}>
-        <lineBasicMaterial color="#f59e0b" linewidth={2} opacity={0.6} transparent />
-      </line>
+      {showSiteSurfaces && (
+        // @ts-expect-error
+        <line frustumCulled={false} geometry={lineGeometry} renderOrder={9}>
+          <lineBasicMaterial color="#f59e0b" linewidth={2} opacity={0.6} transparent />
+        </line>
+      )}
     </group>
   )
 }
