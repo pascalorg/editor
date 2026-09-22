@@ -4,8 +4,6 @@ import {
   type CurtainGrid,
   type CurtainPanelType,
   type CurtainWallConfig,
-  curtainGridPositions,
-  curtainPanelType,
   getCurtainWallConfig,
   getWallCurveLength,
   getWallThickness,
@@ -21,6 +19,7 @@ import {
 } from '@pascal-app/editor'
 import { useState } from 'react'
 import { useCurtainPanelHighlight } from './curtain-panel-highlight'
+import { curtainGridPositions, curtainPanelType } from './curtain-wall-layout'
 
 type Props = {
   node: WallNode

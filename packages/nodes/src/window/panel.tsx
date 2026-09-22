@@ -24,6 +24,7 @@ import { Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo } from 'react'
 import { constrainCurtainOpening, curtainOpeningLimits } from '../shared/curtain-opening-limits'
 import { createOpeningPropertyPreview } from '../shared/opening-property-preview'
+import { openingPropertyPreviewHost } from '../shared/opening-property-preview-host'
 
 function isSameWindowValue(current: unknown, next: unknown): boolean {
   if (typeof current === 'number' && typeof next === 'number') {
@@ -91,7 +92,13 @@ export default function WindowPanel() {
   const deleteNode = useScene((s) => s.deleteNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const preview = useMemo(
-    () => (selectedId ? createOpeningPropertyPreview<WindowNode>(selectedId as AnyNodeId) : null),
+    () =>
+      selectedId
+        ? createOpeningPropertyPreview<WindowNode>(
+            selectedId as AnyNodeId,
+            openingPropertyPreviewHost,
+          )
+        : null,
     [selectedId],
   )
   useEffect(() => () => preview?.cancel(), [preview])

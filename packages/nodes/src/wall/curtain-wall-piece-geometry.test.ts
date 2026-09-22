@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
-import type { CurtainWallPiece } from '@pascal-app/core'
 import { DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
+import type { CurtainWallPiece } from './curtain-wall-layout'
 import { buildStraightCurtainPieces } from './curtain-wall-piece-geometry'
 
 test('a pane around a doorway has no internal glass faces above the header', () => {

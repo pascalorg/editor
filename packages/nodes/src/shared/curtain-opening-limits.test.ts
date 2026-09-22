@@ -9,6 +9,7 @@ import {
 } from '@pascal-app/core'
 import { constrainCurtainOpening, curtainOpeningLimits } from './curtain-opening-limits'
 import { createOpeningPropertyPreview } from './opening-property-preview'
+import { openingPropertyPreviewHost } from './opening-property-preview-host'
 
 globalThis.requestAnimationFrame ??= (callback) => {
   callback(0)
@@ -56,7 +57,7 @@ test('door drag writes no scene history until commit and undoes in one step', ()
   useScene.setState({ nodes, dirtyNodes: new Set() })
   useScene.temporal.getState().resume()
   useScene.temporal.getState().clear()
-  const preview = createOpeningPropertyPreview<DoorNode>(door.id)
+  const preview = createOpeningPropertyPreview<DoorNode>(door.id, openingPropertyPreviewHost)
   for (const width of [1.2, 1.5, 3]) preview.preview({ width })
   expect(useScene.getState().nodes[door.id]).toBe(door)
   expect(getEffectiveNode(door).width).toBeCloseTo(2.04)
@@ -72,7 +73,7 @@ test('door drag writes no scene history until commit and undoes in one step', ()
 
 test('cancel and a history-cleared preview cannot be committed by a stale release', () => {
   useScene.setState({ nodes, dirtyNodes: new Set() })
-  const preview = createOpeningPropertyPreview<DoorNode>(door.id)
+  const preview = createOpeningPropertyPreview<DoorNode>(door.id, openingPropertyPreviewHost)
   preview.preview({ height: 2.4 })
   preview.cancel()
   expect(getEffectiveNode(door).height).toBe(door.height)

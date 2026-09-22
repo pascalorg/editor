@@ -1,12 +1,10 @@
 import { describe, expect, test } from 'bun:test'
+import { CurtainGrid, CurtainWallConfig, WallNode } from '@pascal-app/core'
 import {
   buildCurtainWallLayout,
-  CurtainGrid,
-  CurtainWallConfig,
   curtainGridPositions,
   curtainPanelType,
-} from './curtain-wall'
-import { WallNode } from './wall'
+} from './curtain-wall-layout'
 
 describe('curtain walls', () => {
   test('old walls remain standard and switching preserves both configurations', () => {

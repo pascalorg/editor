@@ -6,8 +6,9 @@ import {
   useScene,
   WallNode,
 } from '@pascal-app/core'
+import { WallCutoutCache, type WallCutoutViewerState } from '@pascal-app/viewer'
 import { Mesh, PerspectiveCamera } from 'three'
-import { WallCutoutCache, type WallCutoutViewerState } from './wall-cutout-cache'
+import { getCurtainAwareWallMaterials } from './curtain-wall-materials'
 
 const initial = useScene.getState()
 afterEach(() => {
@@ -40,7 +41,7 @@ test('selected curtain glass previews and cancels without changing the document 
     hoveredId: null,
     hoverHighlightMode: 'default',
   }
-  const cache = new WallCutoutCache({ getState: () => viewer })
+  const cache = new WallCutoutCache({ getState: () => viewer }, getCurtainAwareWallMaterials)
   const camera = new PerspectiveCamera()
   cache.update(camera, 1)
   const otherMaterial = otherMesh.material

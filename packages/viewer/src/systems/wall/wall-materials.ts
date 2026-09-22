@@ -1,5 +1,4 @@
 import {
-  getCurtainWallConfig,
   getEffectiveWallSurfaceMaterial,
   getMaterialPresetByRef,
   getWallSurfaceMaterialSignature,
@@ -31,8 +30,6 @@ import {
   resolveSurfaceColor,
 } from '../../lib/materials'
 
-import { createCurtainWallMaterials, isOwnedCurtainWallMaterial } from './curtain-wall-materials'
-
 type SceneMaterials = Record<SceneMaterialId, SceneMaterial> | undefined
 
 const DEFAULT_WALL_COLOR = '#e9e7e3'
@@ -58,8 +55,22 @@ export interface WallMaterials {
   deleteInvisible: WallMaterialArray
   deleteTranslucent: WallMaterialArray
   materialHash: string
-  ownsVisible?: boolean
+  ownedVisible?: Material[]
 }
+
+export type WallMaterialOverride = {
+  hash: string
+  create: () => { visible: WallMaterialArray; owned?: Material[] }
+}
+
+export type WallMaterialsResolver = (
+  wallNode: WallNode,
+  shading?: RenderShading,
+  textures?: boolean,
+  colorPreset?: ColorPreset,
+  sceneTheme?: string,
+  sceneMaterials?: SceneMaterials,
+) => WallMaterials
 
 const wallMaterialCache = new Map<string, WallMaterials>()
 
@@ -452,30 +463,11 @@ export function getWallMaterialHash(
   wallNode: WallNode,
   shading: RenderShading,
   sceneMaterials?: SceneMaterials,
+  overrideHash?: string,
 ): string {
-  const curtain = getCurtainWallConfig(wallNode)
   return JSON.stringify({
     shading,
-    wallType: wallNode.wallType,
-    curtainWall:
-      wallNode.wallType === 'curtain'
-        ? [
-            curtain.frameColor,
-            curtain.glassColor,
-            curtain.solidColor,
-            curtain.glassOpacity,
-            curtain.glassRoughness,
-          ]
-        : undefined,
-    curtainSlots:
-      wallNode.wallType === 'curtain'
-        ? Object.fromEntries(
-            ['curtain-frame', 'curtain-glass', 'curtain-solid'].map((slot) => [
-              slot,
-              wallSlotMaterialSignature(wallNode, slot as WallSurfaceSlotId, sceneMaterials),
-            ]),
-          )
-        : undefined,
+    overrideHash,
     interior: wallFaceMaterialSignature(wallNode, 'interior', sceneMaterials),
     exterior: wallFaceMaterialSignature(wallNode, 'exterior', sceneMaterials),
     lowerInterior: wallSlotMaterialSignature(wallNode, 'lowerInterior', sceneMaterials),
@@ -496,10 +488,11 @@ export function getMaterialsForWall(
   colorPreset: ColorPreset = 'clay',
   sceneTheme?: string,
   sceneMaterials?: SceneMaterials,
+  override?: WallMaterialOverride,
 ): WallMaterials {
   const cacheKey = `${wallNode.id}-${shading}-${textures}-${colorPreset}-${sceneTheme ?? 'base'}`
   const materialHash = textures
-    ? getWallMaterialHash(wallNode, shading, sceneMaterials)
+    ? getWallMaterialHash(wallNode, shading, sceneMaterials, override?.hash)
     : JSON.stringify({ textures, colorPreset, sceneTheme })
 
   const existing = wallMaterialCache.get(cacheKey)
@@ -509,7 +502,7 @@ export function getMaterialsForWall(
 
   if (existing) {
     disposeOwnedMaterials([
-      ...(existing.ownsVisible ? [existing.visible.filter(isOwnedCurtainWallMaterial)] : []),
+      ...(existing.ownedVisible ? [existing.ownedVisible] : []),
       existing.invisible,
       existing.translucent,
       existing.deleteVisible,
@@ -519,29 +512,29 @@ export function getMaterialsForWall(
   }
 
   const wallRoleMaterial = createSurfaceRoleMaterial('wall', colorPreset, undefined, sceneTheme)
+  const resolvedOverride = textures ? override?.create() : undefined
 
   // Colored mode: each face resolves slot-first (node.slots ref → legacy inline
   // fields → declared slot default, parity with the retired DEFAULT_WALL_MATERIAL).
   // Textures-off collapses every face to the themed wall role (the guaranteed
   // escape hatch). The edge/cap slot (index 0) stays role-based.
-  const visible: WallMaterialArray =
-    textures && wallNode.wallType === 'curtain'
-      ? createCurtainWallMaterials(wallNode, shading, sceneMaterials)
-      : textures
-        ? [
-            wallRoleMaterial,
-            resolveWallFaceMaterial(wallNode, 'interior', shading, sceneMaterials),
-            resolveWallFaceMaterial(wallNode, 'exterior', shading, sceneMaterials),
-            resolveWallSlotMaterial(wallNode, 'lowerInterior', shading, sceneMaterials),
-            resolveWallSlotMaterial(wallNode, 'middleInterior', shading, sceneMaterials),
-            resolveWallSlotMaterial(wallNode, 'upperInterior', shading, sceneMaterials),
-            resolveWallSlotMaterial(wallNode, 'topInterior', shading, sceneMaterials),
-            resolveWallSlotMaterial(wallNode, 'lowerExterior', shading, sceneMaterials),
-            resolveWallSlotMaterial(wallNode, 'middleExterior', shading, sceneMaterials),
-            resolveWallSlotMaterial(wallNode, 'upperExterior', shading, sceneMaterials),
-            resolveWallSlotMaterial(wallNode, 'topExterior', shading, sceneMaterials),
-          ]
-        : Array.from({ length: 11 }, () => wallRoleMaterial)
+  const visible: WallMaterialArray = resolvedOverride
+    ? resolvedOverride.visible
+    : textures
+      ? [
+          wallRoleMaterial,
+          resolveWallFaceMaterial(wallNode, 'interior', shading, sceneMaterials),
+          resolveWallFaceMaterial(wallNode, 'exterior', shading, sceneMaterials),
+          resolveWallSlotMaterial(wallNode, 'lowerInterior', shading, sceneMaterials),
+          resolveWallSlotMaterial(wallNode, 'middleInterior', shading, sceneMaterials),
+          resolveWallSlotMaterial(wallNode, 'upperInterior', shading, sceneMaterials),
+          resolveWallSlotMaterial(wallNode, 'topInterior', shading, sceneMaterials),
+          resolveWallSlotMaterial(wallNode, 'lowerExterior', shading, sceneMaterials),
+          resolveWallSlotMaterial(wallNode, 'middleExterior', shading, sceneMaterials),
+          resolveWallSlotMaterial(wallNode, 'upperExterior', shading, sceneMaterials),
+          resolveWallSlotMaterial(wallNode, 'topExterior', shading, sceneMaterials),
+        ]
+      : Array.from({ length: 11 }, () => wallRoleMaterial)
 
   const wallRoleColor = resolveSurfaceColor('wall', colorPreset, sceneTheme)
   const invisible: WallMaterialArray = [
@@ -624,7 +617,7 @@ export function getMaterialsForWall(
     deleteInvisible,
     deleteTranslucent,
     materialHash,
-    ownsVisible: textures && wallNode.wallType === 'curtain',
+    ownedVisible: resolvedOverride?.owned,
   }
 
   wallMaterialCache.set(cacheKey, result)

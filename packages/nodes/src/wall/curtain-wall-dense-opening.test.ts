@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test'
 import { calculateLevelMiters, DoorNode, WallNode } from '@pascal-app/core'
+import { generateExtrudedWall } from '@pascal-app/viewer'
 import { DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
 import { buildCurtainWallGeometry } from './curtain-wall-geometry'
-import { generateExtrudedWall } from './wall-system'
 
 test('dense-grid curved cuts preserve distant glass and leave the door clear', () => {
   const wall = WallNode.parse({

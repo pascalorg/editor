@@ -6,6 +6,7 @@ import {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
+import { generateExtrudedWall } from '@pascal-app/viewer'
 import { DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
 import {
   buildCurtainOpeningFrame,
@@ -13,7 +14,6 @@ import {
   curtainProfileSpan,
 } from './curtain-opening-frame'
 import { buildCurtainWallGeometry } from './curtain-wall-geometry'
-import { generateExtrudedWall } from './wall-system'
 
 for (const type of ['door', 'window'] as const) {
   for (const shape of ['rectangle', 'rounded', 'arch'] as const) {

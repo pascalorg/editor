@@ -4,6 +4,8 @@ import { type AnyNodeId, useLiveNodeOverrides, useScene, type WallNode } from '@
 import { timeSpan, WallCutout, WallSystem } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { useEffect } from 'react'
+import { curtainWallGeometryAdapter } from './curtain-wall-adapter'
+import { getCurtainAwareWallMaterials } from './curtain-wall-materials'
 import {
   buildWallTreatmentLevelData,
   clearWallTreatmentMiterCache,
@@ -109,8 +111,8 @@ const WallSystems = () => {
   return (
     <>
       <WallTreatmentMiterSystem />
-      <WallSystem />
-      <WallCutout />
+      <WallSystem geometryAdapter={curtainWallGeometryAdapter} />
+      <WallCutout materialResolver={getCurtainAwareWallMaterials} />
       <WallBatchSystem />
     </>
   )

@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from 'bun:test'
 import { useLiveNodeOverrides, useScene, WallNode, WindowNode } from '@pascal-app/core'
 import { createOpeningPropertyPreview } from '../shared/opening-property-preview'
+import { openingPropertyPreviewHost } from '../shared/opening-property-preview-host'
 
 const initial = useScene.getState()
 afterEach(() => {
@@ -17,7 +18,7 @@ test('window dimensions and curved-frame parameters preview without document mut
     cornerRadius: 0.3,
   })
   useScene.setState({ nodes: { [wall.id]: wall, [window.id]: window }, dirtyNodes: new Set() })
-  const preview = createOpeningPropertyPreview<WindowNode>(window.id)
+  const preview = createOpeningPropertyPreview<WindowNode>(window.id, openingPropertyPreviewHost)
   preview.preview({ width: 0.4, cornerRadius: 0.2 })
   expect(useScene.getState().nodes[window.id]).toBe(window)
   expect(window.cornerRadius).toBe(0.3)

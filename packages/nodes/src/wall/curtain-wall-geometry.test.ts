@@ -6,10 +6,10 @@ import {
   sceneRegistry,
   WallNode,
 } from '@pascal-app/core'
+import { generateExtrudedWall } from '@pascal-app/viewer'
 import { DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
 import { buildCurtainWallGeometry } from './curtain-wall-geometry'
-import { getMaterialsForWall } from './wall-materials'
-import { generateExtrudedWall } from './wall-system'
+import { getCurtainAwareWallMaterials } from './curtain-wall-materials'
 
 const material = new MeshBasicMaterial({ side: DoubleSide })
 function hit(mesh: Mesh, x: number, y: number) {
@@ -106,15 +106,15 @@ describe('curtain wall geometry', () => {
   })
   test('material cache changes with curtain settings and wall type', () => {
     const wall = WallNode.parse({ start: [0, 0], end: [6, 0], wallType: 'curtain' })
-    const first = getMaterialsForWall(wall)
+    const first = getCurtainAwareWallMaterials(wall)
     expect(first.visible[1]!.transparent).toBe(true)
-    const changed = getMaterialsForWall({
+    const changed = getCurtainAwareWallMaterials({
       ...wall,
       curtainWall: CurtainWallConfig.parse({ glassOpacity: 0.7 }),
     })
     expect(changed.visible[1]!.opacity).toBe(0.7)
     expect(changed.materialHash).not.toBe(first.materialHash)
-    const standard = getMaterialsForWall({ ...wall, wallType: 'standard' })
+    const standard = getCurtainAwareWallMaterials({ ...wall, wallType: 'standard' })
     expect(standard.visible[1]!.transparent).toBe(false)
   })
 })

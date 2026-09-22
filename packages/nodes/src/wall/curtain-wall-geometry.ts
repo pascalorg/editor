@@ -1,8 +1,5 @@
 import {
   type AnyNode,
-  buildCurtainWallLayout,
-  type CurtainWallPiece,
-  curtainGridPositions,
   getCurtainWallConfig,
   getWallCurveFrameAt,
   getWallCurveLength,
@@ -10,11 +7,22 @@ import {
   isCurvedWall,
   type WallNode,
 } from '@pascal-app/core'
+import {
+  Brush,
+  Evaluator,
+  ensureRenderableGeometryAttributes,
+  INTERSECTION,
+  prepareBrushForCSG,
+  SUBTRACTION,
+} from '@pascal-app/viewer'
 import { BufferGeometry, ExtrudeGeometry, Shape } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { Brush, Evaluator, INTERSECTION, SUBTRACTION } from 'three-bvh-csg'
-import { ensureRenderableGeometryAttributes, prepareBrushForCSG } from '../../lib/csg-utils'
 import { buildCurtainOpeningFrame } from './curtain-opening-frame'
+import {
+  buildCurtainWallLayout,
+  type CurtainWallPiece,
+  curtainGridPositions,
+} from './curtain-wall-layout'
 import { buildStraightCurtainPieces } from './curtain-wall-piece-geometry'
 
 function pieceGeometry(wall: WallNode, piece: CurtainWallPiece, length: number, base: number) {
@@ -102,6 +110,23 @@ export function buildCurtainWallGeometry(
         (near(position.getY(i), bounds.min.y) || near(position.getY(i), bounds.max.y)) &&
         (near(position.getZ(i), -halfDepth) || near(position.getZ(i), halfDepth)),
     )
+  if (rectangular) {
+    for (const { frame } of shapedFrames) {
+      const framePosition = frame.getAttribute('position')
+      for (let index = 0; index < framePosition.count; index++) {
+        framePosition.setX(
+          index,
+          Math.max(bounds.min.x, Math.min(bounds.max.x, framePosition.getX(index))),
+        )
+        framePosition.setY(
+          index,
+          Math.max(bounds.min.y, Math.min(bounds.max.y, framePosition.getY(index))),
+        )
+      }
+      framePosition.needsUpdate = true
+      frame.computeVertexNormals()
+    }
+  }
   if (!rectangular) prepareBrushForCSG(shell)
   const leftEnvelopeXs: number[] = []
   const rightEnvelopeXs: number[] = []

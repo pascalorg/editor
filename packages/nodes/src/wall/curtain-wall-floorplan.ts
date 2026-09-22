@@ -1,7 +1,5 @@
 import {
   type AnyNode,
-  buildCurtainWallLayout,
-  type CurtainWallPiece,
   type FloorplanGeometry,
   getCurtainWallConfig,
   getWallCurveFrameAt,
@@ -9,7 +7,8 @@ import {
   getWallThickness,
   type WallNode,
 } from '@pascal-app/core'
-import { curtainOpeningProfile, curtainProfileSpan } from '@pascal-app/viewer'
+import { curtainOpeningProfile, curtainProfileSpan } from './curtain-opening-frame'
+import { buildCurtainWallLayout, type CurtainWallPiece } from './curtain-wall-layout'
 
 export function buildCurtainWallFloorplan(
   wall: WallNode,

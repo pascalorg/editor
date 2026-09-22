@@ -1,6 +1,6 @@
-import type { CurtainWallPiece } from '@pascal-app/core'
+import { ensureRenderableGeometryAttributes } from '@pascal-app/viewer'
 import { BufferGeometry, Float32BufferAttribute } from 'three'
-import { ensureRenderableGeometryAttributes } from '../../lib/csg-utils'
+import type { CurtainWallPiece } from './curtain-wall-layout'
 
 // Adjacent fragments of one pane share a boundary, not a second glass surface.
 export function buildStraightCurtainPieces(

@@ -42,8 +42,6 @@ import { ensureRenderableGeometryAttributes, prepareBrushForCSG } from '../../li
 import { setGroupsSortedByMaterial } from '../../lib/geometry-groups'
 import { timeSpan } from '../../lib/perf-tracks'
 import { buildTerrainPerimeterFillGeometry } from '../../lib/terrain-perimeter-fill'
-import { buildCurtainWallGeometry } from './curtain-wall-geometry'
-import { buildCurtainWallShadowGeometry, CURTAIN_WALL_SHADOW_NAME } from './curtain-wall-shadow'
 import { clearLevelMiterCache, getCachedLevelMiters } from './level-miter-cache'
 import {
   buildOpeningCutoutGeometry,
@@ -667,15 +665,33 @@ export function getPendingWallRebuildCount(): number {
 
 let placeholderSweepCountdown = WALL_PLACEHOLDER_SWEEP_INTERVAL
 
-export const WallSystem = () => {
+export type WallGeometryAdapterContext = {
+  isLive: (id: AnyNodeId) => boolean
+}
+
+export type WallGeometryAdapter = {
+  prepareChildren?: (
+    wall: WallNode,
+    children: readonly AnyNode[],
+    context: WallGeometryAdapterContext,
+  ) => { envelopeChildren: AnyNode[]; renderChildren: AnyNode[] }
+  buildGeometry?: (
+    wall: WallNode,
+    envelope: THREE.BufferGeometry,
+    children: readonly AnyNode[],
+  ) => THREE.BufferGeometry
+  syncAuxiliaryGeometry?: (wall: WallNode, mesh: THREE.Mesh, geometry: THREE.BufferGeometry) => void
+}
+
+export const WallSystem = ({ geometryAdapter }: { geometryAdapter?: WallGeometryAdapter } = {}) => {
   useScene((state) => state.dirtyNodes)
   useLiveNodeOverrides((s) => s.overrides)
   useEffect(() => () => clearLevelMiterCache(), [])
-  useFrame(runWallBuildFrame, 4)
+  useFrame(() => runWallBuildFrame(geometryAdapter), 4)
   return null
 }
 
-export function runWallBuildFrame() {
+export function runWallBuildFrame(geometryAdapter?: WallGeometryAdapter) {
   const initialBuild = isWallInitialBuildActive()
   const token = useScene.getState().hydrationToken
   if (token !== stalledHydrationToken) {
@@ -684,13 +700,13 @@ export function runWallBuildFrame() {
   }
   drainStats.wallsConsumedThisFrame = 0
   try {
-    consumeWallBuildFrame(initialBuild)
+    consumeWallBuildFrame(initialBuild, geometryAdapter)
   } finally {
     publishWallDrainStats()
   }
 }
 
-function consumeWallBuildFrame(initialBuild: boolean) {
+function consumeWallBuildFrame(initialBuild: boolean, geometryAdapter?: WallGeometryAdapter) {
   const clearDirty = useScene.getState().clearDirty
   // Self-heal: any registered wall still on its mount-time placeholder
   // geometry with NO dirty mark gets re-marked, so a lost mark (system
@@ -790,7 +806,7 @@ function consumeWallBuildFrame(initialBuild: boolean) {
 
       const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
       if (mesh) {
-        timeSpan('wall-rebuild', () => updateWallGeometry(wallId, miterData), {
+        timeSpan('wall-rebuild', () => updateWallGeometry(wallId, miterData, geometryAdapter), {
           properties: [['node', wallId]],
         })
         clearDirty(wallId as AnyNodeId)
@@ -873,7 +889,7 @@ function consumeWallBuildFrame(initialBuild: boolean) {
 
         const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
         if (mesh) {
-          timeSpan('wall-rebuild', () => updateWallGeometry(wallId, miterData), {
+          timeSpan('wall-rebuild', () => updateWallGeometry(wallId, miterData, geometryAdapter), {
             properties: [['node', wallId]],
           })
           notifyWallRebuilt(wallId)
@@ -964,7 +980,11 @@ function getLevelWalls(levelId: string): WallNode[] {
  * (override-merged) so a 2D drag visibly moves the 3D mesh without
  * having touched `useScene` mid-drag.
  */
-function updateWallGeometry(wallId: string, miterData: WallMiterData) {
+function updateWallGeometry(
+  wallId: string,
+  miterData: WallMiterData,
+  geometryAdapter?: WallGeometryAdapter,
+) {
   const nodes = useScene.getState().nodes
   const sceneNode = nodes[wallId as WallNode['id']]
   if (sceneNode?.type !== 'wall') return
@@ -993,45 +1013,27 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
     : undefined
 
   const childrenIds = node.children || []
-  // Merge live overrides into door / window children so cutouts track an
-  // in-flight resize drag (door width arrow, window height arrow, etc.)
-  // without waiting on the scene store. Non-cutout children pass through
-  // unchanged.
   const childrenNodes = childrenIds
     .map((childId) => nodes[childId])
     .filter((n): n is AnyNode => n !== undefined)
     .map((child) => {
       if (child.type !== 'door' && child.type !== 'window') return child
-      // `getEffectiveNode` folds in resize overrides (width/height arrows).
-      // Position moves publish to `useLiveTransforms` instead, so fold that
-      // in too — opening cutout brushes are rebuilt directly from the
-      // effective node position rather than from the rendered proxy mesh.
       const effective = getEffectiveNode(child)
       const live = useLiveTransforms.getState().get(child.id)
-      if (!live?.position) return effective
-      return { ...effective, position: live.position }
+      return live?.position ? { ...effective, position: live.position } : effective
     })
-  const curtainGeometryChildren =
-    node.wallType === 'curtain' && !isCurvedWall(node)
-      ? childrenNodes.map((child) => {
-          if (
-            (child.type !== 'door' && child.type !== 'window') ||
-            child.openingShape === 'rectangle'
-          )
-            return child
-          const isLive =
-            useLiveNodeOverrides.getState().get(child.id) !== undefined ||
-            useLiveTransforms.getState().get(child.id) !== undefined
-          // Exact shaped CSG can exceed the frame budget; the committed rebuild restores the arch.
-          return isLive ? { ...child, openingShape: 'rectangle' as const } : child
-        })
-      : childrenNodes
+  const prepared = geometryAdapter?.prepareChildren?.(node, childrenNodes, {
+    isLive: (id) =>
+      useLiveNodeOverrides.getState().get(id) !== undefined ||
+      useLiveTransforms.getState().get(id) !== undefined,
+  }) ?? {
+    envelopeChildren: childrenNodes,
+    renderChildren: childrenNodes,
+  }
 
   const builtGeo = generateExtrudedWall(
     node,
-    node.wallType === 'curtain' && !isCurvedWall(node)
-      ? curtainGeometryChildren.filter((child) => child.type !== 'door' && child.type !== 'window')
-      : childrenNodes,
+    prepared.envelopeChildren,
     miterData,
     slabElevation,
     slabSupport.baseElevation,
@@ -1049,9 +1051,7 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
     WALL_UV_UNIT_SCALE,
   )
   const renderedGeo =
-    node.wallType === 'curtain'
-      ? buildCurtainWallGeometry(node, builtGeo, curtainGeometryChildren)
-      : builtGeo
+    geometryAdapter?.buildGeometry?.(node, builtGeo, prepared.renderChildren) ?? builtGeo
   const newGeo = applyWorldPlanarWallUVs(renderedGeo, wallWorldMatrix)
 
   mesh.geometry.dispose()
@@ -1059,14 +1059,7 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   // as the mount-time placeholder; the stamp keeps the sweep from re-marking it.
   newGeo.userData.built = true
   mesh.geometry = newGeo
-  const shadowMesh = mesh.getObjectByName(CURTAIN_WALL_SHADOW_NAME) as THREE.Mesh | undefined
-  if (shadowMesh && node.wallType === 'curtain') {
-    shadowMesh.geometry.dispose()
-    shadowMesh.geometry = buildCurtainWallShadowGeometry(
-      newGeo,
-      node.curtainWall?.glassOpacity === 1,
-    )
-  }
+  geometryAdapter?.syncAuxiliaryGeometry?.(node, mesh, newGeo)
   // Update collision mesh
   const collisionMesh = mesh.getObjectByName('collision-mesh') as THREE.Mesh
   if (collisionMesh) {

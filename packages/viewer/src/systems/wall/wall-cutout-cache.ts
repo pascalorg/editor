@@ -24,6 +24,7 @@ import {
   getMaterialsForWall,
   getSelectionHighlightMaterials,
   type WallMaterials,
+  type WallMaterialsResolver,
 } from './wall-materials'
 
 export function sameMaterialArray(a: Material | Material[], b: Material[]): boolean {
@@ -132,7 +133,10 @@ export class WallCutoutCache {
   private transformed = new Set<string>()
   private overrides = useLiveNodeOverrides.getState().overrides
 
-  constructor(private readonly viewerStore: WallCutoutViewerStore = useViewer) {}
+  constructor(
+    private readonly viewerStore: WallCutoutViewerStore = useViewer,
+    private readonly materialResolver: WallMaterialsResolver = getMaterialsForWall,
+  ) {}
 
   subscribeLiveTransforms(): () => void {
     return useLiveTransforms.subscribe((state, previous) => {
@@ -327,7 +331,7 @@ export class WallCutoutCache {
       )
       selectionHighlighted = !getWallFaceBandConfig(node, height).enabled
     }
-    const materials = getMaterialsForWall(
+    const materials = this.materialResolver(
       node,
       viewer.shading,
       viewer.textures,

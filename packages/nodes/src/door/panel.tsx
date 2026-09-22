@@ -18,6 +18,7 @@ import { Copy, DoorOpen, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo } from 'react'
 import { constrainCurtainOpening, curtainOpeningLimits } from '../shared/curtain-opening-limits'
 import { createOpeningPropertyPreview } from '../shared/opening-property-preview'
+import { openingPropertyPreviewHost } from '../shared/opening-property-preview-host'
 import { scaleHandleHeight } from './door-math'
 
 const doorTypeOptions = [
@@ -140,7 +141,13 @@ export default function DoorPanel() {
   const deleteNode = useScene((s) => s.deleteNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const preview = useMemo(
-    () => (selectedId ? createOpeningPropertyPreview<DoorNode>(selectedId as AnyNodeId) : null),
+    () =>
+      selectedId
+        ? createOpeningPropertyPreview<DoorNode>(
+            selectedId as AnyNodeId,
+            openingPropertyPreviewHost,
+          )
+        : null,
     [selectedId],
   )
   useEffect(() => () => preview?.cancel(), [preview])

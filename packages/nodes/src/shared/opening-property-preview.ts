@@ -1,38 +1,43 @@
-import {
-  type AnyNodeId,
-  type DoorNode,
-  useLiveNodeOverrides,
-  useScene,
-  type WindowNode,
-} from '@pascal-app/core'
-
+import type { AnyNode, AnyNodeId, DoorNode, WindowNode } from '@pascal-app/core'
 import { constrainCurtainOpening } from './curtain-opening-limits'
 
-export function createOpeningPropertyPreview<T extends DoorNode | WindowNode>(id: AnyNodeId) {
+export type OpeningPropertyPreviewDependencies = {
+  nodes: () => Readonly<Record<AnyNodeId, AnyNode>>
+  override: (id: AnyNodeId) => Partial<AnyNode> | undefined
+  setOverride: (id: AnyNodeId, patch: Partial<AnyNode>) => void
+  clearOverrideFields: (id: AnyNodeId, fields: string[]) => void
+  markDirty: (id: AnyNodeId) => void
+  updateNode: (id: AnyNodeId, patch: Partial<AnyNode>) => void
+}
+
+export function createOpeningPropertyPreview<T extends DoorNode | WindowNode>(
+  id: AnyNodeId,
+  dependencies: OpeningPropertyPreviewDependencies,
+) {
   let pending: Partial<T> | undefined
   const dirty = () => {
-    const scene = useScene.getState()
-    scene.markDirty(id)
-    const parent = scene.nodes[id]?.parentId
-    if (parent) scene.markDirty(parent as AnyNodeId)
+    dependencies.markDirty(id)
+    const parent = dependencies.nodes()[id]?.parentId
+    if (parent) dependencies.markDirty(parent as AnyNodeId)
   }
   const clear = () => {
     if (!pending) return
-    useLiveNodeOverrides.getState().clearFields(id, Object.keys(pending))
+    dependencies.clearOverrideFields(id, Object.keys(pending))
     pending = undefined
     dirty()
   }
   return {
     preview(patch: Partial<T>) {
-      const node = useScene.getState().nodes[id]
+      const nodes = dependencies.nodes()
+      const node = nodes[id]
       if (node?.type !== 'door' && node?.type !== 'window') return
-      patch = constrainCurtainOpening(node as T, patch, useScene.getState().nodes)
+      patch = constrainCurtainOpening(node as T, patch, nodes)
       pending = { ...pending, ...patch }
-      useLiveNodeOverrides.getState().set(id, patch)
+      dependencies.setOverride(id, patch as Partial<AnyNode>)
       dirty()
     },
     commit(patch?: Partial<T>) {
-      const live = useLiveNodeOverrides.getState().get(id)
+      const live = dependencies.override(id)
       if (pending && !Object.keys(pending).some((key) => live && key in live)) {
         clear()
         return
@@ -42,19 +47,16 @@ export function createOpeningPropertyPreview<T extends DoorNode | WindowNode>(id
           ? Object.fromEntries(
               Object.keys(pending)
                 .filter((key) => key in live)
-                .map((key) => [key, live[key]]),
+                .map((key) => [key, live[key as keyof typeof live]]),
             )
           : undefined
-      const node = useScene.getState().nodes[id]
+      const nodes = dependencies.nodes()
+      const node = nodes[id]
       const updates =
         node?.type === 'door' || node?.type === 'window'
-          ? constrainCurtainOpening(
-              node as T,
-              { ...current, ...patch } as Partial<T>,
-              useScene.getState().nodes,
-            )
+          ? constrainCurtainOpening(node as T, { ...current, ...patch } as Partial<T>, nodes)
           : {}
-      if (Object.keys(updates).length) useScene.getState().updateNode(id, updates)
+      if (Object.keys(updates).length) dependencies.updateNode(id, updates as Partial<AnyNode>)
       clear()
     },
     cancel: clear,

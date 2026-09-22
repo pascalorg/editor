@@ -108,6 +108,7 @@
       "apps/**/*.jsx",
       "!**/node_modules",
       "!**/.next",
+      "!**/.next-*",
       "!**/dist",
       "!**/build",
       "!**/public",

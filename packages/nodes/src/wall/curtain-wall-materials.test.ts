@@ -1,9 +1,9 @@
 import { expect, test } from 'bun:test'
 import { CurtainWallConfig, SceneMaterial, WallNode } from '@pascal-app/core'
+import { resolveMaterialRef } from '@pascal-app/viewer'
 import { Texture } from 'three'
 import type { MeshStandardNodeMaterial } from 'three/webgpu'
-import { resolveMaterialRef } from '../../lib/materials'
-import { getMaterialsForWall } from './wall-materials'
+import { getCurtainAwareWallMaterials } from './curtain-wall-materials'
 
 test('painted frames keep shared texture updates and do not dispose the paint material on edits', () => {
   const ref = 'library:preset-metal'
@@ -14,7 +14,7 @@ test('painted frames keep shared texture updates and do not dispose the paint ma
     wallType: 'curtain',
     slots: { 'curtain-frame': ref },
   })
-  const first = getMaterialsForWall(wall)
+  const first = getCurtainAwareWallMaterials(wall)
   expect(first.visible[0]).toBe(shared)
   const previousMap = shared.map
   const texture = new Texture()
@@ -26,7 +26,7 @@ test('painted frames keep shared texture updates and do not dispose the paint ma
   try {
     shared.map = texture
     expect((first.visible[0] as MeshStandardNodeMaterial).map).toBe(texture)
-    const next = getMaterialsForWall({
+    const next = getCurtainAwareWallMaterials({
       ...wall,
       curtainWall: CurtainWallConfig.parse({ glassOpacity: 0.6 }),
     })
@@ -52,7 +52,7 @@ test('scene material edits update the frame while preserving glass and solid pan
     wallType: 'curtain',
     slots: { 'curtain-frame': `scene:${material.id}` },
   })
-  const first = getMaterialsForWall(wall, 'rendered', true, 'clay', undefined, {
+  const first = getCurtainAwareWallMaterials(wall, 'rendered', true, 'clay', undefined, {
     [material.id]: material,
   })
   const edited = SceneMaterial.parse({
@@ -62,7 +62,7 @@ test('scene material edits update the frame while preserving glass and solid pan
       properties: { color: '#ff0000', roughness: 0.2, metalness: 0.9 },
     },
   })
-  const next = getMaterialsForWall(wall, 'rendered', true, 'clay', undefined, {
+  const next = getCurtainAwareWallMaterials(wall, 'rendered', true, 'clay', undefined, {
     [material.id]: edited,
   })
   expect(next.visible[0]).not.toBe(first.visible[0])

@@ -10,7 +10,6 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import {
-  getVisibleWallMaterials,
   NodeRenderer,
   SHADOW_ONLY_LAYER,
   useLibraryMaterialsVersion,
@@ -21,6 +20,7 @@ import { type ComponentProps, useEffect, useLayoutEffect, useMemo, useRef } from
 import type { Mesh } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
+import { getCurtainAwareWallMaterials } from './curtain-wall-materials'
 import {
   extractWallSelectionRay,
   WALL_COLLISION_MESH_NAME,
@@ -157,14 +157,14 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
   // register after mount, and a dangling ref cached as the slot default must
   // re-resolve when they land.
   const libraryMaterialsVersion = useLibraryMaterialsVersion()
-  const baseMaterials = getVisibleWallMaterials(
+  const baseMaterials = getCurtainAwareWallMaterials(
     treatmentNode,
     shading,
     textures,
     colorPreset,
     sceneTheme,
     sceneMaterials,
-  )
+  ).visible
   // biome-ignore lint/correctness/useExhaustiveDependencies: libraryMaterialsVersion invalidates the ref resolution inside createWallExtraSlotMaterials
   const extraMaterials = useMemo(
     () => createWallExtraSlotMaterials(node, shading, sceneMaterials),

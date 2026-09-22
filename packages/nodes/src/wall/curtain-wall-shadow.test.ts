@@ -1,9 +1,9 @@
 import { expect, test } from 'bun:test'
 import { calculateLevelMiters, WallNode } from '@pascal-app/core'
+import { generateExtrudedWall } from '@pascal-app/viewer'
 import { DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
 import { buildCurtainWallGeometry } from './curtain-wall-geometry'
 import { buildCurtainWallShadowGeometry } from './curtain-wall-shadow'
-import { generateExtrudedWall } from './wall-system'
 
 test('shadow geometry blocks frames and spandrels but leaves transparent pane openings', () => {
   const wall = WallNode.parse({

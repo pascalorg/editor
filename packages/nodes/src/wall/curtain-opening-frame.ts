@@ -1,7 +1,6 @@
 import type { DoorNode, WindowNode } from '@pascal-app/core'
+import { buildOpeningCutoutShape, ensureRenderableGeometryAttributes } from '@pascal-app/viewer'
 import { ExtrudeGeometry, Path, Shape, Vector2 } from 'three'
-import { ensureRenderableGeometryAttributes } from '../../lib/csg-utils'
-import { buildOpeningCutoutShape } from './opening-cutout-geometry'
 
 export function curtainOpeningProfile(opening: DoorNode | WindowNode, width: number) {
   const bottom = opening.position[1] - opening.height / 2

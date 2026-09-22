@@ -94,6 +94,8 @@ export {
   csgEvaluator,
   csgGeometry,
   csgMaterials,
+  Evaluator,
+  ensureRenderableGeometryAttributes,
   INTERSECTION,
   prepareBrushForCSG,
   SUBTRACTION,
@@ -280,25 +282,40 @@ export {
   type StairBodyMaterials,
 } from './systems/stair/stair-materials'
 export { StairSystem } from './systems/stair/stair-system'
-export { curtainOpeningProfile, curtainProfileSpan } from './systems/wall/curtain-opening-frame'
 // Pure opening-cutout profile math shared by the wall CSG pipeline and
 // roof-wall opening cuts in `@pascal-app/nodes` — keeps shaped holes
 // (arch / rounded / frameless opening) identical across both hosts.
 export {
   buildOpeningCutoutGeometry,
+  buildOpeningCutoutShape,
   getOpeningCutoutBottomPadding,
   hasFlatOpeningCutoutBottom,
 } from './systems/wall/opening-cutout-geometry'
 export { getWallHideState, WallCutout } from './systems/wall/wall-cutout'
-export { getVisibleWallMaterials } from './systems/wall/wall-materials'
+export {
+  WallCutoutCache,
+  type WallCutoutViewerState,
+  type WallCutoutViewerStore,
+} from './systems/wall/wall-cutout-cache'
+export {
+  getMaterialsForWall,
+  getVisibleWallMaterials,
+  type WallMaterialOverride,
+  type WallMaterials,
+  type WallMaterialsResolver,
+} from './systems/wall/wall-materials'
 // Wall internals re-exported so `@pascal-app/nodes`' registry-driven wall
 // definition can compose them into `def.system` without duplicating the
 // 800+ lines of CSG / mitering logic during Phase 3. These exports are
 // removed in Phase 6 when the legacy mount points are deleted.
 export {
   drainRebuiltWalls,
+  generateExtrudedWall,
   getPendingWallRebuildCount,
   isWallInitialBuildActive,
+  runWallBuildFrame,
+  type WallGeometryAdapter,
+  type WallGeometryAdapterContext,
   WallSystem,
 } from './systems/wall/wall-system'
 export {

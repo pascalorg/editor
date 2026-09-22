@@ -7,8 +7,9 @@ import {
   useScene,
   WallNode,
 } from '@pascal-app/core'
+import { runWallBuildFrame } from '@pascal-app/viewer'
 import { DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
-import { runWallBuildFrame } from './wall-system'
+import { curtainWallGeometryAdapter } from './curtain-wall-adapter'
 
 const initial = useScene.getState()
 afterEach(() => {
@@ -44,18 +45,18 @@ test('curtain door width previews rebuild a clear opening and cancel without doc
   const hit = (x: number, y: number) =>
     new Raycaster(new Vector3(x, y, 2), new Vector3(0, 0, -1)).intersectObject(mesh, false)
   try {
-    runWallBuildFrame()
+    runWallBuildFrame(curtainWallGeometryAdapter)
     expect(hit(0.85, 1).length).toBeGreaterThan(0)
     useLiveNodeOverrides.getState().set(door.id, { width: 1.6 })
     useScene.getState().markDirty(wall.id)
-    runWallBuildFrame()
+    runWallBuildFrame(curtainWallGeometryAdapter)
     expect(hit(0.85, 1)).toHaveLength(0)
     expect(hit(0.675, 1)[0]?.face?.materialIndex).toBe(0)
     expect(hit(0.85, 2.4)[0]?.face?.materialIndex).toBe(1)
     expect(useScene.getState().nodes[door.id]).toBe(door)
     useLiveNodeOverrides.getState().clear(door.id)
     useScene.getState().markDirty(wall.id)
-    runWallBuildFrame()
+    runWallBuildFrame(curtainWallGeometryAdapter)
     expect(hit(0.85, 1).length).toBeGreaterThan(0)
     expect(useScene.getState().nodes[door.id]).toBe(door)
   } finally {
