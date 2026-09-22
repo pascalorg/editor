@@ -295,7 +295,11 @@ during the gesture. A `Shift` hint should describe the bypass in user terms, suc
 `Free angle`, `Free place`, or `Bypass guided constraints`.
 
 `HelperManager` renders `def.toolHints` through `RegisteredToolHelper`, and active Shift
-state can update the row to show that guided constraints are currently bypassed. Select
+state can update the row to show that guided constraints are currently bypassed.
+`affordanceHints?: Record<string, ToolHint[]>` is the same contract for a kind's own
+reshapes, keyed like `affordanceTools`: while a node of the kind is in that `reshaping`
+scope the HUD shows those hints instead of the generic reshape rows (the wall split's
+cut-count chip lives there). Select
 mode is not owned by a node definition, so its helper is derived separately from
 selection state, selected-node move/rotate capabilities, and held modifiers.
 

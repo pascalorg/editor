@@ -39,7 +39,6 @@ import {
   classifyParticipant,
   collectParticipants,
   computeGroupBox,
-  expandToComponent,
   groupPlanBounds,
   levelFrame,
   planBoundsCenter,
@@ -83,8 +82,8 @@ export function canGroupPickUp(): boolean {
  * until a click commits, mirroring the single-node `movingNode` flow. Returns
  * false when the selection holds no transformable participants.
  *
- * `scopeToSelection` limits the moving set to the selected participants —
- * no connected-component expansion and no welded-neighbor endpoints. The
+ * `scopeToSelection` drops the welded-neighbor endpoints, so connected walls
+ * don't stretch along with the move. The
  * Duplicate flow needs this: its clones sit EXACTLY on the originals, so
  * junction coincidence would otherwise weld the originals into the pick-up
  * and drag them along with the copies.
@@ -96,10 +95,7 @@ export function startGroupPickUp(
   const participantIds = groupParticipantIds()
   if (participantIds.length === 0) return false
   const nodes = useScene.getState().nodes
-  const fullIds = opts.scopeToSelection
-    ? participantIds
-    : expandToComponent(participantIds, nodes, levelId)
-  const collected = collectParticipants(fullIds, nodes, levelId)
+  const collected = collectParticipants(participantIds, nodes, levelId)
   // Mutable: mid-carry R/T rotates these snapshots in place.
   let starts = collected.starts
   let links = opts.scopeToSelection ? [] : collected.links
@@ -107,8 +103,8 @@ export function startGroupPickUp(
   const affectedIds: AnyNodeId[] = [...starts.map((s) => s.id), ...links.map((l) => l.id)]
 
   const { inverse: frameInv } = levelFrame(levelId)
-  const restBox = computeGroupBox(fullIds)
-  const startBounds = groupPlanBounds(restBox, starts, frameInv)
+  const restBox = computeGroupBox(participantIds)
+  const startBounds = groupPlanBounds(starts, frameInv)
   if (!startBounds) return false
   // Mutable: mid-carry R/T re-seeds the footprint around the same pivot.
   let restBounds = startBounds

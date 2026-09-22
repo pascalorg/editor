@@ -106,6 +106,13 @@ describe('rotation shortcut ownership', () => {
     expect(isToolOwnedRotation()).toBe(true)
   })
 
+  test('leaves R to the wall tool for its line / rectangle toggle, but not T', () => {
+    useEditor.getState().armToolMode({ mode: 'build', tool: 'wall' })
+
+    expect(isToolOwnedRotation('r')).toBe(true)
+    expect(isToolOwnedRotation('t')).toBe(false)
+  })
+
   test('leaves R and T to a moving lean-to extension', () => {
     const leanTo = { id: 'lean_to_moving', type: 'lean-to-extension' } as unknown as AnyNode
     useInteractionScope.getState().begin({

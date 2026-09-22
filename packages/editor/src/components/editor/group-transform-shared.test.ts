@@ -1,9 +1,24 @@
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { type AnyNode, type AnyNodeDefinition, nodeRegistry, registerNode } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeDefinition,
+  type AnyNodeId,
+  CeilingNode,
+  LevelNode,
+  nodeRegistry,
+  registerNode,
+  SlabNode,
+  sceneRegistry,
+  useScene,
+  WallNode,
+} from '@pascal-app/core'
+import { BoxGeometry, Group, Mesh } from 'three'
 import { z } from 'zod'
 import {
   classifyParticipant,
   collectParticipants,
+  computeGroupPlanBox,
+  groupPlanBounds,
   planBoundsCenter,
   rotateGroupPatches,
   rotateGroupSnapshots,
@@ -470,5 +485,115 @@ describe('group transform participants', () => {
         rotation: 0,
       },
     ])
+  })
+})
+
+describe('group plan bounds', () => {
+  const withNodes = (nodes: AnyNode[], run: () => void) => {
+    const saved = useScene.getState().nodes
+    useScene.setState({ nodes: Object.fromEntries(nodes.map((n) => [n.id, n])) as typeof saved })
+    try {
+      run()
+    } finally {
+      useScene.setState({ nodes: saved })
+    }
+  }
+
+  test('a placed object measures its built mesh in the level frame, or falls back to its anchor', () => {
+    const level = new Group()
+    level.position.set(10, 0, -4)
+    level.rotation.y = Math.PI / 5
+    const item = new Mesh(new BoxGeometry(1, 1, 1))
+    item.position.set(2, 0.5, 0)
+    level.add(item)
+    level.updateWorldMatrix(true, true)
+    const registry = sceneRegistry.nodes as unknown as Map<string, unknown>
+    registry.set('item_plan_bounds_test', item)
+    const start = {
+      id: 'item_plan_bounds_test' as AnyNodeId,
+      kind: 'vec3' as const,
+      position: [2, 0, 0] as [number, number, number],
+      rotation: [0, 0, 0] as [number, number, number],
+    }
+    try {
+      const frameInv = level.matrixWorld.clone().invert()
+      const built = groupPlanBounds([start], frameInv)
+      expect(built?.minX).toBeCloseTo(1.5)
+      expect(built?.maxX).toBeCloseTo(2.5)
+      expect(built?.minZ).toBeCloseTo(-0.5)
+      expect(built?.maxZ).toBeCloseTo(0.5)
+      // Unbuilt while the 3D scene is paused: the placeholder must not count.
+      item.geometry.userData.placeholder = true
+      expect(groupPlanBounds([start], frameInv)).toEqual({ minX: 2, minZ: 0, maxX: 2, maxZ: 0 })
+    } finally {
+      registry.delete('item_plan_bounds_test')
+    }
+  })
+
+  test('hugs the selected wall outlines; a connected wall stays outside', () => {
+    const level = LevelNode.parse({ children: [] })
+    const bottom = WallNode.parse({
+      parentId: level.id,
+      start: [0, 0],
+      end: [2.4, 0],
+      thickness: 0.2,
+    })
+    const side = WallNode.parse({
+      parentId: level.id,
+      start: [2.4, 0],
+      end: [2.4, 5.3],
+      thickness: 0.2,
+    })
+    const neighbour = WallNode.parse({
+      parentId: level.id,
+      start: [2.4, 5.3],
+      end: [8, 5.3],
+      thickness: 0.2,
+    })
+    withNodes([level, bottom, side, neighbour], () => {
+      const plan = computeGroupPlanBox([bottom.id, side.id], level.id)
+      expect(plan?.minX).toBeCloseTo(0)
+      expect(plan?.maxX).toBeCloseTo(2.5)
+      expect(plan?.minZ).toBeCloseTo(-0.1)
+      expect(plan?.maxZ).toBeLessThan(5.5)
+      expect(plan?.maxX).toBeLessThan(8)
+    })
+  })
+
+  test('two walls with the room floor and ceiling: the box is the drawn outlines, never the meshes', () => {
+    // A user's selection whose box came out 13 m wide in 2D-only view.
+    const level = LevelNode.parse({ id: 'level_vvkg048zziz9ktiy', children: [] })
+    const room: [number, number][] = [
+      [-3.6221682640435353, -9.037533979512114],
+      [-6.21504662384804, -8.29671159099654],
+      [-5.712152486161543, -6.5365821090938],
+      [-5.712152486161543, -5],
+      [-8.223564365687542, -5],
+      [-8.223564365687542, -6.5365821090938],
+      [-10.712152486161543, -6.5365821090938],
+      [-11.712152486161543, -8.5365821090938],
+      [-4.119274126357038, -10.777404497609373],
+    ]
+    const wall15 = WallNode.parse({
+      parentId: level.id,
+      start: [-10.712152486161543, -6.5365821090938],
+      end: [-11.712152486161543, -8.5365821090938],
+    })
+    const wall12 = WallNode.parse({
+      parentId: level.id,
+      start: [-11.712152486161543, -8.5365821090938],
+      end: [-6.712152486161543, -10.0365821090938],
+    })
+    const slab = SlabNode.parse({ parentId: level.id, polygon: room, elevation: 0.05 })
+    const ceiling = CeilingNode.parse({ parentId: level.id, polygon: room, height: 2.49 })
+    withNodes([level, wall15, wall12, slab, ceiling], () => {
+      const plan = computeGroupPlanBox([wall15.id, ceiling.id, slab.id, wall12.id], level.id)!
+      expect(plan.minX).toBeLessThan(-11.71)
+      expect(plan.minX).toBeGreaterThan(-11.95)
+      expect(plan.maxX).toBeCloseTo(-3.62, 1)
+      expect(plan.minZ).toBeCloseTo(-10.78, 1)
+      expect(plan.maxZ).toBeCloseTo(-5, 1)
+      expect(plan.maxX - plan.minX).toBeLessThan(8.4)
+    })
   })
 })

@@ -64,7 +64,22 @@ export type FloorplanNodeExtension<N extends AnyNode = AnyNode> = {
   contextualDimensions?: (node: N, ctx: GeometryContext) => FloorplanGeometry | null
   actionMenu?: {
     canCurve?: (args: { node: N; nodes: Readonly<Record<AnyNodeId, AnyNode>> }) => boolean
+    /** Buttons the kind adds to the selection's action menu (2D and 3D); each decides its own visibility. */
+    actions?: () => Promise<{ default: ComponentType }>
   }
+  /**
+   * Plan layers mounted while a node of this kind is in a `reshaping` scope of
+   * that name (the 2D sibling of `def.affordanceTools[reshape]`).
+   */
+  reshapeLayers?: Record<string, () => Promise<{ default: ComponentType<FloorplanToolContext> }>>
+  /**
+   * Nodes the plan treats as one with this node when toggling it out of a
+   * selection (a slab and its ceiling share an outline and a click).
+   */
+  selectionCounterparts?: (args: {
+    node: N
+    nodes: Readonly<Record<AnyNodeId, AnyNode>>
+  }) => AnyNodeId[]
   schedule?: (args: {
     siblings: ReadonlyArray<N>
     nodes: Readonly<Record<string, AnyNode>>

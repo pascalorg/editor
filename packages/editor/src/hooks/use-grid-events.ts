@@ -3,6 +3,7 @@ import {
   type EventSuffix,
   emitter,
   type GridEvent,
+  hiddenWallPointerEventsHeld,
   nodeRegistry,
   sceneRegistry,
   useScene,
@@ -134,7 +135,10 @@ export function useGridEvents(gridY: number) {
       // Architectural meshes are expensive to raycast and are meaningful only
       // to an active placement/drafting interaction. Floor tools retain the
       // ordinary terrain/grid intersection without scanning every wall.
-      const surfaceHit = semanticSurfaceQueryRef.current ? getSurfaceIntersection() : null
+      const surfaceHit =
+        semanticSurfaceQueryRef.current || hiddenWallPointerEventsHeld()
+          ? getSurfaceIntersection()
+          : null
 
       // A semantic architectural hit is the authoritative cursor position.
       // Do not replace it with the terrain/grid intersection below: that would
@@ -246,16 +250,15 @@ export function useGridEvents(gridY: number) {
           : undefined,
         surfaceNormal: localNormal ? [localNormal.x, localNormal.y, localNormal.z] : undefined,
         surfaceObject: point.surface?.object,
-        surfaceHit:
-          semanticSurfaceQueryRef.current && point.surface
-            ? {
-                kind: point.surface.descriptor.kind,
-                hostId: point.surface.hostId,
-                face: classifiedFace?.face ?? 'unknown',
-                levelId: useViewer.getState().selection.levelId ?? undefined,
-                side: classifiedFace?.side,
-              }
-            : undefined,
+        surfaceHit: point.surface
+          ? {
+              kind: point.surface.descriptor.kind,
+              hostId: point.surface.hostId,
+              face: classifiedFace?.face ?? 'unknown',
+              levelId: useViewer.getState().selection.levelId ?? undefined,
+              side: classifiedFace?.side,
+            }
+          : undefined,
         nativeEvent: nativeEvent as any, // Type compatibility with ThreeEvent
       }
 

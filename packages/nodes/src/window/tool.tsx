@@ -62,6 +62,7 @@ import {
   resolveRoofWallOpeningTarget,
   worldToSelectedBuildingLocal,
 } from '../shared/roof-wall-opening-placement'
+import { wallEventFromGrid } from '../shared/wall-event-from-grid'
 import {
   collectWallOpeningAlignmentCandidates,
   resolveWallSlideAlignment,
@@ -761,6 +762,16 @@ const WindowTool: React.FC = () => {
         })
       )
         return
+      const wallEvent = wallEventFromGrid(
+        event,
+        activeLevelId,
+        useScene.getState().nodes,
+        sceneRegistry.nodes,
+      )
+      if (wallEvent) {
+        onWallHover(wallEvent)
+        return
+      }
       // Fresh floor-only frame: the cursor is off any wall/roof. Drop any draft
       // and free-follow the cursor with the invalid (unplaceable) ghost.
       hostKind = null
@@ -768,6 +779,17 @@ const WindowTool: React.FC = () => {
       const [x, y, z] = event.localPosition
       destroyDraft()
       showGhostAt([x, y + FALLBACK_HEIGHT / 2 + FALLBACK_SILL_LIFT, z], y)
+    }
+
+    const onGridPointerUp = (event: GridEvent) => {
+      if (isCameraDragging() || !draftRef.current) return
+      const wallEvent = wallEventFromGrid(
+        event,
+        activeLevelId,
+        useScene.getState().nodes,
+        sceneRegistry.nodes,
+      )
+      if (wallEvent) onWallClick(wallEvent)
     }
 
     // ── Dormer wall faces ──────────────────────────────────────────
@@ -1032,6 +1054,7 @@ const WindowTool: React.FC = () => {
     emitter.on('window:click', onDormerWindowClick)
     emitter.on('window:leave', onDormerWindowLeave)
     emitter.on('grid:move', onGridFreeFollow)
+    emitter.on('grid:pointerup', onGridPointerUp)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('keydown', onKeyDown)
     // Placement tracks the cursor through wall events; keep walls hidden by
@@ -1066,6 +1089,7 @@ const WindowTool: React.FC = () => {
       emitter.off('window:click', onDormerWindowClick)
       emitter.off('window:leave', onDormerWindowLeave)
       emitter.off('grid:move', onGridFreeFollow)
+      emitter.off('grid:pointerup', onGridPointerUp)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
     }
