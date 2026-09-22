@@ -22,7 +22,8 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo } from 'react'
-import { createWindowPropertyPreview } from './property-preview'
+import { constrainCurtainOpening, curtainOpeningLimits } from '../shared/curtain-opening-limits'
+import { createOpeningPropertyPreview } from '../shared/opening-property-preview'
 
 function isSameWindowValue(current: unknown, next: unknown): boolean {
   if (typeof current === 'number' && typeof next === 'number') {
@@ -90,7 +91,7 @@ export default function WindowPanel() {
   const deleteNode = useScene((s) => s.deleteNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const preview = useMemo(
-    () => (selectedId ? createWindowPropertyPreview(selectedId as AnyNodeId) : null),
+    () => (selectedId ? createOpeningPropertyPreview<WindowNode>(selectedId as AnyNodeId) : null),
     [selectedId],
   )
   useEffect(() => () => preview?.cancel(), [preview])
@@ -107,6 +108,7 @@ export default function WindowPanel() {
       const liveNode = useScene.getState().nodes[selectedId as AnyNodeId]
       if (liveNode?.type !== 'window') return
 
+      updates = constrainCurtainOpening(liveNode, updates, useScene.getState().nodes)
       const hasChange = Object.entries(updates).some(([key, value]) => {
         const currentValue = liveNode[key as keyof WindowNode]
         return !isSameWindowValue(currentValue, value)
@@ -201,6 +203,7 @@ export default function WindowPanel() {
 
   if (!(node && node.type === 'window' && selectedId)) return null
 
+  const limits = curtainOpeningLimits(node, useScene.getState().nodes)
   const numCols = node.columnRatios.length
   const numRows = node.rowRatios.length
 
@@ -486,29 +489,36 @@ export default function WindowPanel() {
       </PanelSection>
 
       <PanelSection title="Dimensions">
+        {limits && (
+          <p className="text-[11px] text-muted-foreground">
+            Size is limited to the wall, including clearance for the opening frame.
+          </p>
+        )}
         <SliderControl
           label="Width"
-          min={0}
+          max={limits?.width}
+          min={0.01}
           onChange={(v) => preview?.preview(getDimensionUpdates({ width: v }))}
           onCommit={(v) => preview?.commit(getDimensionUpdates({ width: v }))}
           onCancel={() => preview?.cancel()}
           previewWhileTyping
           precision={2}
           restoreOnCommit={false}
-          step={0.1}
+          step={0.01}
           unit="m"
           value={node.width}
         />
         <SliderControl
           label="Height"
-          min={0}
+          max={limits?.height}
+          min={0.01}
           onChange={(v) => preview?.preview(getDimensionUpdates({ height: v }))}
           onCommit={(v) => preview?.commit(getDimensionUpdates({ height: v }))}
           onCancel={() => preview?.cancel()}
           previewWhileTyping
           precision={2}
           restoreOnCommit={false}
-          step={0.1}
+          step={0.01}
           unit="m"
           value={node.height}
         />

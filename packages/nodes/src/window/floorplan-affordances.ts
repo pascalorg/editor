@@ -7,6 +7,7 @@ import {
   type WallNode,
   type WindowNode,
 } from '@pascal-app/core'
+import { curtainOpeningLimits } from '../shared/curtain-opening-limits'
 
 const MIN_WINDOW_WIDTH = 0.3
 
@@ -51,7 +52,10 @@ export const windowWidthAffordance: FloorplanAffordance<WindowNode> = {
     const dirX = dx / wallLength
     const dirZ = dz / wallLength
 
-    const maxWidth = growDir > 0 ? wallLength - anchorX : anchorX
+    const limits = curtainOpeningLimits(node, nodes)
+    const margin = limits?.margin ?? 0
+    const maxWidth =
+      growDir > 0 ? (limits?.length ?? wallLength) - margin - anchorX : anchorX - margin
 
     const projectToWallLocalX = (planPoint: readonly [number, number]) => {
       return (planPoint[0] - wallStart[0]) * dirX + (planPoint[1] - wallStart[1]) * dirZ

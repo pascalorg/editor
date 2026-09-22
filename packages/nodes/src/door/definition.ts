@@ -7,6 +7,7 @@ import type {
   WallNode,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import { curtainOpeningResizeMax } from '../shared/curtain-opening-limits'
 import {
   buildDoorFloorplanSchedule,
   computeDoorFloorplanLevelData,
@@ -58,7 +59,7 @@ function doorWidthHandle(side: 'left' | 'right'): HandleDescriptor<DoorNodeType>
       // limits read Infinity when wallId is unset).
       const roofMax = readRoofFaceWidthMax(n, scene, sign)
       if (roofMax !== null) return Math.max(MIN_DOOR_WIDTH, roofMax)
-      return readWallLength(n, scene)
+      return curtainOpeningResizeMax(n, scene.nodes(), 'x', sign) ?? readWallLength(n, scene)
     },
     currentValue: (n) => n.width,
     onDrag: (node) => publishOpeningResizeGuides(node, false),
@@ -100,6 +101,8 @@ function doorHeightHandle(): HandleDescriptor<DoorNodeType> {
     max: (n, scene) => {
       const roofMax = readRoofFaceHeightMax(n, scene, 1)
       if (roofMax !== null) return Math.max(MIN_DOOR_HEIGHT, roofMax)
+      const curtainMax = curtainOpeningResizeMax(n, scene.nodes(), 'y', 1)
+      if (curtainMax !== undefined) return curtainMax
       const bottom = n.position[1] - n.height / 2
       return Math.max(MIN_DOOR_HEIGHT, readHostWallCeiling(n.wallId, scene) - bottom)
     },

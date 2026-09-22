@@ -13,6 +13,7 @@ import {
   getDormerWallOpeningVerticalBounds,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import { curtainOpeningResizeMax } from '../shared/curtain-opening-limits'
 import {
   buildWindowFloorplanSchedule,
   computeWindowFloorplanLevelData,
@@ -121,7 +122,7 @@ function windowWidthHandle(side: 'left' | 'right'): HandleDescriptor<WindowNodeT
       // wall-based limits read Infinity when wallId is unset).
       const roofMax = readRoofFaceWidthMax(n, scene, sign)
       if (roofMax !== null) return Math.max(MIN_WINDOW_WIDTH, roofMax)
-      return readWallLength(n, scene)
+      return curtainOpeningResizeMax(n, scene.nodes(), 'x', sign) ?? readWallLength(n, scene)
     },
     currentValue: (n) => n.width,
     onDrag: (node) => publishOpeningResizeGuides(node, true),
@@ -169,6 +170,8 @@ function windowHeightHandle(edge: 'top' | 'bottom'): HandleDescriptor<WindowNode
       // Maximum: distance from the anchored edge to the wall's allowed Y
       // bounds. Top arrow caps at the wall's resolved ceiling - bottom;
       // bottom arrow caps at top (positive Y room above the floor).
+      const curtainMax = curtainOpeningResizeMax(n, scene.nodes(), 'y', sign)
+      if (curtainMax !== undefined) return curtainMax
       const wallH = readHostWallCeiling(n.wallId, scene)
       const anchored = edge === 'top' ? n.position[1] - n.height / 2 : n.position[1] + n.height / 2
       return edge === 'top'

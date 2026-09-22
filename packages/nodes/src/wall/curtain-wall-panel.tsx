@@ -20,6 +20,7 @@ import {
   SliderControl,
 } from '@pascal-app/editor'
 import { useState } from 'react'
+import { useCurtainPanelHighlight } from './curtain-panel-highlight'
 
 type Props = {
   node: WallNode
@@ -216,6 +217,7 @@ export function CurtainWallPanel({
     ;(preview ? onPreview : onUpdate)({ curtainWall: { ...config, ...patch } })
   }
 
+  const [tintEditing, setTintEditing] = useState(false)
   const [selectedColumn, setColumn] = useState(0)
   const [selectedRow, setRow] = useState(0)
   const columnCount = curtainGridPositions(getWallCurveLength(node), config.columns).length - 1
@@ -231,9 +233,21 @@ export function CurtainWallPanel({
       ],
     })
 
+  const hiddenOverrides = config.panels.filter(
+    (panel) => panel.column >= columnCount || panel.row >= rowCount,
+  )
+  const diagramWidth = Math.max(240, columnCount * 32)
+  const diagramHeight = Math.max(150, rowCount * 32)
   const overridden = config.panels.some((panel) => panel.column === column && panel.row === row)
   const xs = curtainGridPositions(getWallCurveLength(node), config.columns)
   const ys = curtainGridPositions(height, config.rows)
+  useCurtainPanelHighlight(
+    node,
+    xs[column] ?? 0,
+    xs[column + 1] ?? 0,
+    ys[row] ?? 0,
+    ys[row + 1] ?? 0,
+  )
   const hasGlass = xs
     .slice(1)
     .some((_, c) =>
@@ -395,49 +409,97 @@ export function CurtainWallPanel({
       </PanelSection>
       <PanelSection title="Edit individual panels">
         <p className="text-[11px] text-muted-foreground">
-          Choose a cell below. Columns run from the wall start; rows count upward.
+          Choose a cell or enter its column and row. Use arrow keys to move between cells. Columns
+          run from the wall start; rows count upward.
         </p>
-        <svg
-          viewBox="0 0 300 150"
-          className="w-full rounded border border-border"
-          role="group"
-          aria-label="Curtain wall panel selection"
-        >
-          {xs.slice(1).flatMap((right, c) =>
-            ys.slice(1).map((top, r) => {
-              const type = curtainPanelType(config, c, r, rowCount)
-              const selected = c === column && r === row
-              return (
-                <rect
-                  key={`${c}-${r}`}
-                  role="button"
-                  tabIndex={0}
-                  aria-label={`Column ${c + 1}, row ${r + 1}: ${type}`}
-                  aria-pressed={selected}
-                  x={(xs[c]! / xs.at(-1)!) * 300}
-                  y={150 - (top / height) * 150}
-                  width={((right - xs[c]!) / xs.at(-1)!) * 300}
-                  height={((top - ys[r]!) / height) * 150}
-                  fill={type === 'glass' ? '#53788a' : type === 'solid' ? '#64748b' : 'transparent'}
-                  stroke={selected ? '#fb923c' : '#94a3b8'}
-                  strokeWidth={selected ? 3 : 1}
-                  className="cursor-pointer focus:stroke-orange-400 focus:stroke-[3]"
-                  onClick={() => {
-                    setColumn(c)
-                    setRow(r)
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault()
+        <div className="max-h-64 overflow-auto rounded border border-border">
+          <svg
+            viewBox={`0 0 ${diagramWidth} ${diagramHeight}`}
+            style={{ width: diagramWidth, height: diagramHeight }}
+            className="block"
+            role="group"
+            aria-label="Curtain wall panel selection"
+          >
+            {xs.slice(1).flatMap((_, c) =>
+              ys.slice(1).map((_, r) => {
+                const type = curtainPanelType(config, c, r, rowCount)
+                const selected = c === column && r === row
+                return (
+                  <rect
+                    key={`${c}-${r}`}
+                    role="button"
+                    tabIndex={selected ? 0 : -1}
+                    aria-label={`Column ${c + 1}, row ${r + 1}: ${type}`}
+                    aria-pressed={selected}
+                    data-cell={`${c}-${r}`}
+                    x={(c / columnCount) * diagramWidth}
+                    y={diagramHeight - ((r + 1) / rowCount) * diagramHeight}
+                    width={diagramWidth / columnCount}
+                    height={diagramHeight / rowCount}
+                    fill={
+                      type === 'glass' ? '#53788a' : type === 'solid' ? '#64748b' : 'transparent'
+                    }
+                    stroke={selected ? '#fb923c' : '#94a3b8'}
+                    strokeWidth={selected ? 3 : 1}
+                    className="cursor-pointer focus:stroke-orange-400 focus:stroke-[3]"
+                    onClick={() => {
                       setColumn(c)
                       setRow(r)
-                    }
-                  }}
-                />
-              )
-            }),
-          )}
-        </svg>
+                    }}
+                    onKeyDown={(event) => {
+                      const arrows: Record<string, [number, number]> = {
+                        ArrowLeft: [-1, 0],
+                        ArrowRight: [1, 0],
+                        ArrowUp: [0, 1],
+                        ArrowDown: [0, -1],
+                      }
+                      const delta = arrows[event.key]
+                      if (delta) {
+                        event.preventDefault()
+                        const nextColumn = Math.max(0, Math.min(columnCount - 1, c + delta[0]))
+                        const nextRow = Math.max(0, Math.min(rowCount - 1, r + delta[1]))
+                        setColumn(nextColumn)
+                        setRow(nextRow)
+                        const target =
+                          event.currentTarget.parentElement?.querySelector<SVGRectElement>(
+                            `[data-cell="${nextColumn}-${nextRow}"]`,
+                          )
+                        target?.focus()
+                        target?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+                      }
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        setColumn(c)
+                        setRow(r)
+                      }
+                    }}
+                  />
+                )
+              }),
+            )}
+          </svg>
+        </div>
+        {hiddenOverrides.length > 0 && (
+          <div className="space-y-2 text-[11px] text-muted-foreground">
+            <p>
+              {hiddenOverrides.length} custom panels are outside this grid. They return if the grid
+              expands.
+            </p>
+            <button
+              type="button"
+              className="rounded border border-border px-2 py-1 text-xs"
+              onClick={() =>
+                update({
+                  panels: config.panels.filter(
+                    (panel) => panel.column < columnCount && panel.row < rowCount,
+                  ),
+                })
+              }
+            >
+              Clear hidden overrides
+            </button>
+          </div>
+        )}
         <p className="text-[11px] text-muted-foreground">
           Column {column + 1}, row {row + 1} ·{' '}
           {overridden ? 'Custom infill' : 'Following wall defaults'}
@@ -531,20 +593,49 @@ export function CurtainWallPanel({
                 <input
                   aria-label="Glass tint"
                   className="h-7 w-10 cursor-pointer rounded border border-border bg-transparent"
-                  onBlur={onCommit}
                   onKeyDown={(event) => {
                     if (event.key === 'Escape') {
                       event.preventDefault()
                       onCancel()
+                      setTintEditing(false)
                     }
                   }}
                   onChange={(event) => {
+                    setTintEditing(true)
                     update({ glassColor: event.target.value }, true)
+                  }}
+                  onInput={(event) => {
+                    setTintEditing(true)
+                    update({ glassColor: event.currentTarget.value }, true)
                   }}
                   type="color"
                   value={config.glassColor}
                 />
               </label>
+              {tintEditing && (
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    className="rounded border border-border px-2 py-1 text-xs"
+                    onClick={() => {
+                      onCommit()
+                      setTintEditing(false)
+                    }}
+                  >
+                    Apply tint
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded border border-border px-2 py-1 text-xs"
+                    onClick={() => {
+                      onCancel()
+                      setTintEditing(false)
+                    }}
+                  >
+                    Cancel tint
+                  </button>
+                </div>
+              )}
               <p className="text-[11px] text-muted-foreground">
                 Low roughness is smooth; high roughness gives a matte surface in rendered shading.
               </p>

@@ -2,6 +2,7 @@ import {
   type AnyNode,
   buildCurtainWallLayout,
   type CurtainWallPiece,
+  curtainGridPositions,
   getCurtainWallConfig,
   getWallCurveFrameAt,
   getWallCurveLength,
@@ -98,12 +99,41 @@ export function buildCurtainWallGeometry(
         (near(position.getZ(i), -halfDepth) || near(position.getZ(i), halfDepth)),
     )
   if (!rectangular) prepareBrushForCSG(shell)
+  const xs = curtainGridPositions(length, getCurtainWallConfig(wall).columns)
+  const ys = curtainGridPositions(bounds.max.y - bounds.min.y, getCurtainWallConfig(wall).rows)
+  const cutRegions = shapedFrames.map(({ cutter }) => {
+    cutter.computeBoundingBox()
+    const box = cutter.boundingBox!
+    // Keep every fragment of a pane in the same partition to avoid new glass seams.
+    const lower = (positions: number[], value: number) =>
+      [...positions].reverse().find((p) => p <= value) ?? positions[0]!
+    const upper = (positions: number[], value: number) =>
+      positions.find((p) => p >= value) ?? positions.at(-1)!
+    return {
+      left: lower(xs, box.min.x),
+      right: upper(xs, box.max.x),
+      bottom: lower(ys, box.min.y - bounds.min.y),
+      top: upper(ys, box.max.y - bounds.min.y),
+    }
+  })
   const results: BufferGeometry[] = []
   const roles = ['frame', 'glass', 'solid'] as const
   try {
     for (const [materialIndex, role] of roles.entries()) {
-      const rolePieces = pieces.filter((piece) => piece.role === role)
-      if (!rolePieces.length && !(role === 'frame' && shapedFrames.length)) continue
+      const allRolePieces = pieces.filter((piece) => piece.role === role)
+      const nearCut = (piece: CurtainWallPiece) =>
+        !rectangular ||
+        !cutRegions.length ||
+        cutRegions.some(
+          (region) =>
+            piece.left < region.right &&
+            piece.right > region.left &&
+            piece.bottom < region.top &&
+            piece.top > region.bottom,
+        )
+      const rolePieces = allRolePieces.filter(nearCut)
+      const untouchedPieces = allRolePieces.filter((piece) => !nearCut(piece))
+      if (!allRolePieces.length && !(role === 'frame' && shapedFrames.length)) continue
       let merged: BufferGeometry | null
       if (!isCurvedWall(wall)) {
         merged = buildStraightCurtainPieces(
@@ -121,6 +151,7 @@ export function buildCurtainWallGeometry(
       }
       if (!merged) continue
       for (const opening of shapedFrames) {
+        if (!merged.getAttribute('position').count) break
         const brush: Brush = new Brush(merged)
         const cutter = new Brush(opening.cutter)
         prepareBrushForCSG(brush)
@@ -129,6 +160,14 @@ export function buildCurtainWallGeometry(
         merged.dispose()
         merged = cut.index ? cut.toNonIndexed() : cut
         if (merged !== cut) cut.dispose()
+      }
+      if (untouchedPieces.length) {
+        const untouched = buildStraightCurtainPieces(untouchedPieces, bounds.min.y)
+        const combined = mergeGeometries([merged, untouched], false)
+        untouched.dispose()
+        merged.dispose()
+        if (!combined) continue
+        merged = combined
       }
       if (role === 'frame' && shapedFrames.length) {
         const frames = shapedFrames.map(({ frame }) => frame)

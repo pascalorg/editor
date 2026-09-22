@@ -15,7 +15,9 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, DoorOpen, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
+import { constrainCurtainOpening, curtainOpeningLimits } from '../shared/curtain-opening-limits'
+import { createOpeningPropertyPreview } from '../shared/opening-property-preview'
 import { scaleHandleHeight } from './door-math'
 
 const doorTypeOptions = [
@@ -137,11 +139,11 @@ export default function DoorPanel() {
   const setSelection = useViewer((s) => s.setSelection)
   const deleteNode = useScene((s) => s.deleteNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
-  const previewRef = useRef<{
-    id: AnyNodeId
-    key: keyof DoorNode
-    value: unknown
-  } | null>(null)
+  const preview = useMemo(
+    () => (selectedId ? createOpeningPropertyPreview<DoorNode>(selectedId as AnyNodeId) : null),
+    [selectedId],
+  )
+  useEffect(() => () => preview?.cancel(), [preview])
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as DoorNode | undefined) : undefined,
@@ -154,6 +156,7 @@ export default function DoorPanel() {
       const liveNode = useScene.getState().nodes[selectedId as AnyNodeId]
       if (liveNode?.type !== 'door') return
 
+      updates = constrainCurtainOpening(liveNode, updates, useScene.getState().nodes)
       const hasChange = Object.entries(updates).some(([key, value]) => {
         const currentValue = liveNode[key as keyof DoorNode]
         return !isSameDoorValue(currentValue, value)
@@ -171,54 +174,10 @@ export default function DoorPanel() {
     [selectedId],
   )
 
-  const previewDoorUpdate = useCallback(
-    <K extends keyof DoorNode>(key: K, value: DoorNode[K]) => {
-      if (!selectedId) return
-      const liveNode = useScene.getState().nodes[selectedId as AnyNodeId]
-      if (liveNode?.type !== 'door') return
-
-      if (
-        !(
-          previewRef.current &&
-          previewRef.current.id === selectedId &&
-          previewRef.current.key === key
-        )
-      ) {
-        previewRef.current = {
-          id: selectedId as AnyNodeId,
-          key,
-          value: liveNode[key],
-        }
-      }
-
-      if (isSameDoorValue(liveNode[key], value)) return
-
-      ;(liveNode as DoorNode)[key] = value
-      useScene.getState().dirtyNodes.add(selectedId as AnyNodeId)
-    },
-    [selectedId],
-  )
-
-  const commitDoorPreview = useCallback(
-    <K extends keyof DoorNode>(key: K, value: DoorNode[K]) => {
-      if (!selectedId) return
-
-      const scene = useScene.getState()
-      const liveNode = scene.nodes[selectedId as AnyNodeId]
-      const preview = previewRef.current
-      if (liveNode?.type === 'door' && preview?.id === selectedId && preview.key === key) {
-        ;(liveNode as DoorNode)[key] = preview.value as DoorNode[K]
-        scene.dirtyNodes.add(selectedId as AnyNodeId)
-      }
-      previewRef.current = null
-
-      useScene
-        .getState()
-        .updateNode(selectedId as AnyNode['id'], { [key]: value } as Partial<DoorNode>)
-      scene.dirtyNodes.add(selectedId as AnyNodeId)
-    },
-    [selectedId],
-  )
+  const previewDoorUpdate = <K extends keyof DoorNode>(key: K, value: DoorNode[K]) =>
+    preview?.preview({ [key]: value } as Partial<DoorNode>)
+  const commitDoorPreview = <K extends keyof DoorNode>(key: K, value: DoorNode[K]) =>
+    preview?.commit({ [key]: value } as Partial<DoorNode>)
 
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
@@ -304,6 +263,12 @@ export default function DoorPanel() {
 
   if (!(node && node.type === 'door' && selectedId)) return null
 
+  const limits = curtainOpeningLimits(node, useScene.getState().nodes)
+  const heightUpdates = (height: number): Partial<DoorNode> => ({
+    height,
+    position: [node.position[0], height / 2, node.position[2]],
+    handleHeight: scaleHandleHeight(node.handleHeight, node.height, height),
+  })
   const hSum = node.segments.reduce((s, seg) => s + seg.heightRatio, 0)
   const normHeights = node.segments.map((seg) => seg.heightRatio / hSum)
   const isOpening = node.openingKind === 'opening'
@@ -701,33 +666,36 @@ export default function DoorPanel() {
       )}
 
       <PanelSection title="Dimensions">
+        {limits && (
+          <p className="text-[11px] text-muted-foreground">
+            Size is limited to the wall, including clearance for the opening frame.
+          </p>
+        )}
         <SliderControl
           label="Width"
-          max={maxDoorWidth}
-          min={0.5}
-          onChange={(v) => handleUpdate({ width: v })}
+          max={Math.min(maxDoorWidth, limits?.width ?? Infinity)}
+          min={Math.min(0.5, limits?.width ?? 0.5)}
+          onChange={(v) => previewDoorUpdate('width', v)}
+          onCommit={(v) => commitDoorPreview('width', v)}
+          onCancel={() => preview?.cancel()}
+          previewWhileTyping
           precision={2}
           restoreOnCommit={false}
-          step={0.05}
+          step={0.01}
           unit="m"
           value={node.width}
         />
         <SliderControl
           label="Height"
-          max={1000}
-          min={1.0}
-          onChange={(v) =>
-            handleUpdate({
-              height: v,
-              position: [node.position[0], v / 2, node.position[2]],
-              // Keep the handle at the same relative height as the door resizes,
-              // matching the height-resize arrow.
-              handleHeight: scaleHandleHeight(node.handleHeight, node.height, v),
-            })
-          }
+          max={limits?.height ?? 1000}
+          min={Math.min(1, limits?.height ?? 1)}
+          onChange={(v) => preview?.preview(heightUpdates(v))}
+          onCommit={(v) => preview?.commit(heightUpdates(v))}
+          onCancel={() => preview?.cancel()}
+          previewWhileTyping
           precision={2}
           restoreOnCommit={false}
-          step={0.05}
+          step={0.01}
           unit="m"
           value={node.height}
         />
@@ -780,6 +748,9 @@ export default function DoorPanel() {
                   min={0}
                   onChange={(v) => previewDoorUpdate('cornerRadius', v)}
                   onCommit={(v) => commitDoorPreview('cornerRadius', v)}
+                  onCancel={() => preview?.cancel()}
+                  previewWhileTyping
+                  restoreOnCommit={false}
                   precision={2}
                   step={0.05}
                   unit="m"
@@ -798,6 +769,9 @@ export default function DoorPanel() {
                       min={0}
                       onChange={(v) => setOpeningTopRadius(index as number, v)}
                       onCommit={(v) => setOpeningTopRadius(index as number, v, true)}
+                      onCancel={() => preview?.cancel()}
+                      previewWhileTyping
+                      restoreOnCommit={false}
                       precision={2}
                       step={0.05}
                       unit="m"
@@ -812,6 +786,9 @@ export default function DoorPanel() {
                 min={0}
                 onChange={(v) => previewDoorUpdate('openingRevealRadius', v)}
                 onCommit={(v) => commitDoorPreview('openingRevealRadius', v)}
+                onCancel={() => preview?.cancel()}
+                previewWhileTyping
+                restoreOnCommit={false}
                 precision={3}
                 step={0.005}
                 unit="m"
@@ -824,7 +801,10 @@ export default function DoorPanel() {
               label="Arch Height"
               max={node.height}
               min={0.05}
-              onChange={(v) => handleUpdate({ archHeight: v })}
+              onChange={(v) => previewDoorUpdate('archHeight', v)}
+              onCommit={(v) => commitDoorPreview('archHeight', v)}
+              onCancel={() => preview?.cancel()}
+              previewWhileTyping
               precision={2}
               restoreOnCommit={false}
               step={0.05}
@@ -877,6 +857,9 @@ export default function DoorPanel() {
                   min={0}
                   onChange={(v) => previewDoorUpdate('cornerRadius', v)}
                   onCommit={(v) => commitDoorPreview('cornerRadius', v)}
+                  onCancel={() => preview?.cancel()}
+                  previewWhileTyping
+                  restoreOnCommit={false}
                   precision={2}
                   step={0.05}
                   unit="m"
@@ -895,6 +878,9 @@ export default function DoorPanel() {
                       min={0}
                       onChange={(v) => setOpeningTopRadius(index as number, v)}
                       onCommit={(v) => setOpeningTopRadius(index as number, v, true)}
+                      onCancel={() => preview?.cancel()}
+                      previewWhileTyping
+                      restoreOnCommit={false}
                       precision={2}
                       step={0.05}
                       unit="m"
@@ -909,6 +895,9 @@ export default function DoorPanel() {
                 min={0}
                 onChange={(v) => previewDoorUpdate('openingRevealRadius', v)}
                 onCommit={(v) => commitDoorPreview('openingRevealRadius', v)}
+                onCancel={() => preview?.cancel()}
+                previewWhileTyping
+                restoreOnCommit={false}
                 precision={3}
                 step={0.005}
                 unit="m"
@@ -921,7 +910,10 @@ export default function DoorPanel() {
               label="Arch Height"
               max={node.height}
               min={0.05}
-              onChange={(v) => handleUpdate({ archHeight: v })}
+              onChange={(v) => previewDoorUpdate('archHeight', v)}
+              onCommit={(v) => commitDoorPreview('archHeight', v)}
+              onCancel={() => preview?.cancel()}
+              previewWhileTyping
               precision={2}
               restoreOnCommit={false}
               step={0.05}
