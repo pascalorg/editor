@@ -117,6 +117,23 @@ test('a second property preview constrains against the in-flight opening', () =>
   expect(useScene.getState().nodes[window.id]).toMatchObject({ width: 1.8, height: 1.4 })
 })
 
+test('editing an opening inside the perimeter moves it back into a legal position', () => {
+  const flushDoor = DoorNode.parse({
+    parentId: wall.id,
+    position: [0, 1.05, 0],
+    width: 0.9,
+  })
+  useScene.setState({ nodes: { ...nodes, [flushDoor.id]: flushDoor }, dirtyNodes: new Set() })
+  const preview = createOpeningPropertyPreview<DoorNode>(flushDoor.id, openingPropertyPreviewHost)
+  preview.preview({ width: 1 })
+  expect(getEffectiveNode(flushDoor)).toMatchObject({ position: [0.55, 1.05, 0], width: 1 })
+  preview.commit()
+  expect(useScene.getState().nodes[flushDoor.id]).toMatchObject({
+    position: [0.55, 1.05, 0],
+    width: 1,
+  })
+})
+
 test('cancel and a history-cleared preview cannot be committed by a stale release', () => {
   useScene.setState({ nodes, dirtyNodes: new Set() })
   const preview = createOpeningPropertyPreview<DoorNode>(door.id, openingPropertyPreviewHost)

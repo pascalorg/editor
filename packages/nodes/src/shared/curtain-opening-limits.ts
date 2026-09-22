@@ -68,14 +68,12 @@ export function constrainCurtainOpening<T extends Opening>(
   const next = { ...opening, ...patch }
   const moving =
     patch.position !== undefined && patch.width === undefined && patch.height === undefined
-  const width = Math.min(
-    Math.max(0.01, next.width),
-    moving ? limits.length - 2 * limits.margin : limits.width,
-  )
-  const height = Math.min(
-    Math.max(0.01, next.height),
-    moving ? limits.top - limits.bottom : limits.height,
-  )
+  const availableWidth = Math.max(0, limits.length - 2 * limits.margin)
+  const availableHeight = Math.max(0, limits.top - limits.bottom)
+  const widthLimit = moving || limits.width < 0.01 ? availableWidth : limits.width
+  const heightLimit = moving || limits.height < 0.01 ? availableHeight : limits.height
+  const width = Math.min(Math.max(0.01, next.width), widthLimit)
+  const height = Math.min(Math.max(0.01, next.height), heightLimit)
   if (width < 0.01 || height < 0.01) return {}
   const x = Math.max(
     limits.margin + width / 2,
