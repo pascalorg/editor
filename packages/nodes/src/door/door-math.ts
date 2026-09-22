@@ -1,4 +1,9 @@
-import { getCurtainWallConfig, getWallCurveLength, type WallNode } from '@pascal-app/core'
+import {
+  getCurtainWallConfig,
+  getWallCurveFrameAt,
+  getWallCurveLength,
+  type WallNode,
+} from '@pascal-app/core'
 
 /**
  * Keep the door handle at the same relative height when the door is resized:
@@ -26,15 +31,9 @@ export function wallLocalToWorld(
   levelYOffset = 0,
   slabElevation = 0,
 ): [number, number, number] {
-  const wallAngle = Math.atan2(
-    wallNode.end[1] - wallNode.start[1],
-    wallNode.end[0] - wallNode.start[0],
-  )
-  return [
-    wallNode.start[0] + localX * Math.cos(wallAngle),
-    slabElevation + localY + levelYOffset,
-    wallNode.start[1] + localX * Math.sin(wallAngle),
-  ]
+  const wallLength = getWallCurveLength(wallNode)
+  const frame = getWallCurveFrameAt(wallNode, wallLength > 1e-6 ? localX / wallLength : 0)
+  return [frame.point.x, slabElevation + localY + levelYOffset, frame.point.y]
 }
 
 /**

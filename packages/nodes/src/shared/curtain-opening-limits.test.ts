@@ -9,8 +9,14 @@ import {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
-import { clampToWall as clampDoorToWall } from '../door/door-math'
-import { clampToWall as clampWindowToWall } from '../window/window-math'
+import {
+  clampToWall as clampDoorToWall,
+  wallLocalToWorld as doorWallLocalToWorld,
+} from '../door/door-math'
+import {
+  clampToWall as clampWindowToWall,
+  wallLocalToWorld as windowWallLocalToWorld,
+} from '../window/window-math'
 import { constrainCurtainOpening, curtainOpeningLimits } from './curtain-opening-limits'
 import { createOpeningPropertyPreview } from './opening-property-preview'
 import { openingPropertyPreviewHost } from './opening-property-preview-host'
@@ -71,6 +77,9 @@ test('placement uses curved curtain arc length at the far perimeter', () => {
   expect(projectPlanPointToWallLocalX(curvedWall, [pointer.x, pointer.y])).toBeCloseTo(
     getWallCurveLength(curvedWall) * 0.75,
   )
+  const localX = getWallCurveLength(curvedWall) * 0.75
+  expect(doorWallLocalToWorld(curvedWall, localX, 1, 2, 0.2)).toEqual([pointer.x, 3.2, pointer.y])
+  expect(windowWallLocalToWorld(curvedWall, localX, 1, 2, 0.2)).toEqual([pointer.x, 3.2, pointer.y])
 })
 
 test('non-curtain hosts retain their existing sizing policy', () => {

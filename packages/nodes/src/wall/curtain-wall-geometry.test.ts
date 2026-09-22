@@ -12,6 +12,7 @@ import {
 } from '@pascal-app/core'
 import { generateExtrudedWall } from '@pascal-app/viewer'
 import { DoubleSide, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
+import { buildCurtainOpeningFrame } from './curtain-opening-frame'
 import { curtainWallGeometryAdapter } from './curtain-wall-adapter'
 import { buildCurtainWallGeometry } from './curtain-wall-geometry'
 import { getCurtainAwareWallMaterials } from './curtain-wall-materials'
@@ -138,6 +139,20 @@ describe('curtain wall geometry', () => {
     expect(hit(mesh, 2, 1.5)).toHaveLength(0)
     expect(hit(mesh, 2, 0.5).length).toBeGreaterThan(0)
     geometry.dispose()
+  })
+  test('shaped opening frames remain merge-compatible with cut curtain geometry', () => {
+    const window = WindowNode.parse({
+      position: [2, 1.5, 0],
+      width: 1,
+      height: 1,
+      openingShape: 'rounded',
+      cornerRadius: 0.2,
+    })
+    const { frame, cutter } = buildCurtainOpeningFrame(window, 0.05, 0.1)
+    expect(frame.index).toBeNull()
+    expect(cutter.index).toBeNull()
+    frame.dispose()
+    cutter.dispose()
   })
   test('live shape settings retain their shaped curtain opening preview', () => {
     const wall = WallNode.parse({ start: [0, 0], end: [4, 0], wallType: 'curtain' })

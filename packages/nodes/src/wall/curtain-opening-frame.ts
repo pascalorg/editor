@@ -81,9 +81,16 @@ export function buildCurtainOpeningFrame(
     ring.holes.push(hole)
   }
   const extrude = (shape: Shape, thickness: number) => {
-    const geometry = new ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false, steps: 1 })
-    geometry.translate(0, 0, -thickness / 2)
-    ensureRenderableGeometryAttributes(geometry)
+    const indexed = new ExtrudeGeometry(shape, {
+      depth: thickness,
+      bevelEnabled: false,
+      steps: 1,
+    })
+    indexed.translate(0, 0, -thickness / 2)
+    ensureRenderableGeometryAttributes(indexed)
+    if (!indexed.index) return indexed
+    const geometry = indexed.toNonIndexed()
+    indexed.dispose()
     return geometry
   }
   return { frame: extrude(ring, depth), cutter: extrude(outline, depth * 3) }
