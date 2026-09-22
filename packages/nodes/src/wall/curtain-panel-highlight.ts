@@ -26,22 +26,35 @@ export function useCurtainPanelHighlight(
   bottom: number,
   top: number,
 ) {
+  const wallId = wall.id
+  const startX = wall.start[0]
+  const startZ = wall.start[1]
+  const endX = wall.end[0]
+  const endZ = wall.end[1]
+  const curveOffset = wall.curveOffset
+  const thickness = getWallThickness(wall)
+
   useEffect(() => {
-    const host = sceneRegistry.nodes.get(wall.id) as Object3D | undefined
+    const curveWall: Pick<WallNode, 'start' | 'end' | 'curveOffset'> = {
+      start: [startX, startZ],
+      end: [endX, endZ],
+      curveOffset,
+    }
+    const host = sceneRegistry.nodes.get(wallId) as Object3D | undefined
     if (!host) return
-    const length = getWallCurveLength(wall)
+    const length = getWallCurveLength(curveWall)
     if (length <= 0) return
-    const angle = Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
+    const angle = Math.atan2(endZ - startZ, endX - startX)
     const cos = Math.cos(angle),
       sin = Math.sin(angle)
     const points: Vector3[] = []
     for (const y of [bottom, top]) {
       const edge: Vector3[] = []
       for (let i = 0; i <= 24; i++) {
-        const frame = getWallCurveFrameAt(wall, (left + ((right - left) * i) / 24) / length)
-        const offset = getWallThickness(wall) / 2 + 0.005
-        const x = frame.point.x + frame.normal.x * offset - wall.start[0]
-        const z = frame.point.y + frame.normal.y * offset - wall.start[1]
+        const frame = getWallCurveFrameAt(curveWall, (left + ((right - left) * i) / 24) / length)
+        const offset = thickness / 2 + 0.005
+        const x = frame.point.x + frame.normal.x * offset - startX
+        const z = frame.point.y + frame.normal.y * offset - startZ
         edge.push(new Vector3(x * cos + z * sin, y, -x * sin + z * cos))
       }
       points.push(...(y === bottom ? edge : edge.reverse()))
@@ -82,7 +95,7 @@ export function useCurtainPanelHighlight(
     scene.add(outline, fill)
     let frameId = 0
     const sync = () => {
-      const current = sceneRegistry.nodes.get(wall.id) as Object3D | undefined
+      const current = sceneRegistry.nodes.get(wallId) as Object3D | undefined
       outline.visible = fill.visible = Boolean(current?.visible)
       if (current) {
         current.updateWorldMatrix(true, false)
@@ -103,5 +116,5 @@ export function useCurtainPanelHighlight(
       geometry.dispose()
       material.dispose()
     }
-  }, [wall, left, right, bottom, top])
+  }, [wallId, startX, startZ, endX, endZ, curveOffset, thickness, left, right, bottom, top])
 }
