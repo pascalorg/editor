@@ -8,6 +8,8 @@ function isOpaque(material: Material | undefined) {
   return material !== undefined && (!material.transparent || material.opacity >= 1)
 }
 
+const deferredShadowWalls = new Set<string>()
+
 export const curtainWallGeometryAdapter: WallGeometryAdapter = {
   prepareChildren(wall, children, context) {
     if (wall.wallType !== 'curtain') {
@@ -30,12 +32,26 @@ export const curtainWallGeometryAdapter: WallGeometryAdapter = {
     }
   },
   buildGeometry(wall, envelope, children) {
-    return wall.wallType === 'curtain'
-      ? buildCurtainWallGeometry(wall as WallNode, envelope, children)
-      : envelope
+    if (wall.wallType !== 'curtain') return envelope
+    const livePreview = children.some(
+      (child) =>
+        (child.type === 'door' || child.type === 'window') &&
+        useLiveNodeOverrides.getState().get(child.id) !== undefined,
+    )
+    const deferShadow = children.some((child) => {
+      if (child.type !== 'door' && child.type !== 'window') return false
+      const metadata = useLiveNodeOverrides.getState().get(child.id)?.metadata as
+        | Record<string, unknown>
+        | undefined
+      return metadata?.deferParentRebuild === true
+    })
+    if (deferShadow) deferredShadowWalls.add(wall.id)
+    else deferredShadowWalls.delete(wall.id)
+    return buildCurtainWallGeometry(wall as WallNode, envelope, children, livePreview)
   },
   syncAuxiliaryGeometry(wall, mesh, geometry) {
     if (wall.wallType !== 'curtain') return
+    if (deferredShadowWalls.has(wall.id)) return
     const shadowMesh = mesh.getObjectByName(CURTAIN_WALL_SHADOW_NAME) as Mesh | undefined
     if (!shadowMesh) return
     const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]

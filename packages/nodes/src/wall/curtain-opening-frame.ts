@@ -35,13 +35,25 @@ export function mapCurtainOpeningGeometryToWall(geometry: BufferGeometry, wall: 
 
 export function curtainOpeningProfile(opening: DoorNode | WindowNode, width: number) {
   const bottom = opening.position[1] - opening.height / 2
+  if (Math.cos(opening.rotation[1]) < 0 && opening.openingRadiusMode === 'individual') {
+    if (opening.type === 'window') {
+      const [topLeft, topRight, bottomRight, bottomLeft] = opening.openingCornerRadii
+      opening = {
+        ...opening,
+        openingCornerRadii: [topRight, topLeft, bottomLeft, bottomRight],
+      }
+    } else {
+      const [topLeft, topRight] = opening.openingTopRadii
+      opening = { ...opening, openingTopRadii: [topRight, topLeft] }
+    }
+  }
   const points = buildOpeningCutoutShape(opening, {
     left: opening.position[0] - opening.width / 2,
     right: opening.position[0] + opening.width / 2,
     bottom,
     top: bottom + opening.height,
   })
-    .getPoints(16)
+    .getPoints(4)
     .filter((point, index, all) => index === 0 || point.distanceToSquared(all[index - 1]!) > 1e-14)
   if (points[0]!.distanceToSquared(points.at(-1)!) < 1e-14) points.pop()
   const outer = points.map((point, index) => {
@@ -93,7 +105,7 @@ export function buildCurtainOpeningFrame(
     indexed.dispose()
     return geometry
   }
-  return { frame: extrude(ring, depth), cutter: extrude(outline, depth * 3) }
+  return { frame: extrude(ring, depth), cutter: extrude(outline, depth * 3), cutout: outer }
 }
 
 export function curtainProfileSpan(

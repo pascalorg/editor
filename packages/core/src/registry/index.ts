@@ -1,5 +1,6 @@
 export type {
   ArcResizeHandle,
+  CornerRadiusHandle,
   Cursor,
   EditorApi,
   EndpointMoveHandle,
@@ -10,6 +11,7 @@ export type {
   HandleList,
   HandlePlacement,
   HandlePortal,
+  HandlePreviewSession,
   LatchHandle,
   LinearResizeHandle,
   RadialResizeHandle,

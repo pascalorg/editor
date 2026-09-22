@@ -23,7 +23,10 @@ import {
   type CurtainWallPiece,
   curtainGridPositions,
 } from './curtain-wall-layout'
-import { buildStraightCurtainPieces } from './curtain-wall-piece-geometry'
+import {
+  buildStraightCurtainPieces,
+  buildStraightCurtainPiecesWithCutouts,
+} from './curtain-wall-piece-geometry'
 
 function pieceGeometry(wall: WallNode, piece: CurtainWallPiece, length: number, base: number) {
   const angle = Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
@@ -66,6 +69,7 @@ export function buildCurtainWallGeometry(
   wall: WallNode,
   envelope: BufferGeometry,
   children: readonly AnyNode[] = [],
+  livePreview = false,
 ): BufferGeometry {
   const length = getWallCurveLength(wall)
   envelope.computeBoundingBox()
@@ -182,21 +186,29 @@ export function buildCurtainWallGeometry(
       if (!allRolePieces.length && !(role === 'frame' && shapedFrames.length)) continue
       let merged: BufferGeometry | null = null
       if (!isCurvedWall(wall) && builtPieces.length) {
-        merged = buildStraightCurtainPieces(
-          builtPieces.map((piece) => ({
-            ...piece,
-            left: piece.left === 0 ? Math.min(0, bounds.min.x) : piece.left,
-            right: piece.right === length ? Math.max(length, bounds.max.x) : piece.right,
-          })),
-          bounds.min.y,
-          hasRectangularOpenings || shapedFrames.length > 0,
-        )
+        const straightPieces = builtPieces.map((piece) => ({
+          ...piece,
+          left: piece.left === 0 ? Math.min(0, bounds.min.x) : piece.left,
+          right: piece.right === length ? Math.max(length, bounds.max.x) : piece.right,
+        }))
+        merged =
+          rectangular && shapedFrames.length
+            ? buildStraightCurtainPiecesWithCutouts(
+                straightPieces,
+                bounds.min.y,
+                shapedFrames.map(({ cutout }) => cutout),
+              )
+            : buildStraightCurtainPieces(
+                straightPieces,
+                bounds.min.y,
+                livePreview ? false : hasRectangularOpenings || shapedFrames.length > 0,
+              )
       } else if (builtPieces.length) {
         const sources = rolePieces.map((piece) => pieceGeometry(wall, piece, length, bounds.min.y))
         merged = mergeGeometries(sources, false)
         for (const source of sources) source.dispose()
       }
-      if (merged) {
+      if (merged && !rectangular) {
         for (const opening of shapedFrames) {
           if (!merged.getAttribute('position').count) break
           const brush: Brush = new Brush(merged)

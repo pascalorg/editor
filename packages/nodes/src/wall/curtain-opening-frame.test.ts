@@ -98,6 +98,30 @@ test('rounded profiles respect individual radii and arch height edits', () => {
   expect(changed[1] - changed[0]).toBeGreaterThan(first[1] - first[0])
 })
 
+for (const schema of [DoorNode, WindowNode]) {
+  test(`flipped ${schema === DoorNode ? 'door' : 'window'} surround mirrors individual radii`, () => {
+    const opening = schema.parse({
+      position: [1, 1, 0],
+      width: 2,
+      height: 2,
+      openingShape: 'rounded',
+      openingRadiusMode: 'individual',
+      openingTopRadii: [0, 0.7],
+      openingCornerRadii: [0, 0.7, 0.2, 0.4],
+    })
+    const original = curtainOpeningProfile(opening, 0.05)
+    const flipped = curtainOpeningProfile({ ...opening, rotation: [0, Math.PI, 0] }, 0.05)
+    for (const edge of ['inner', 'outer'] as const) {
+      for (const height of [0.1, 1, 1.9]) {
+        const before = curtainProfileSpan(original[edge], height)!
+        const after = curtainProfileSpan(flipped[edge], height)!
+        expect(after[0]).toBeCloseTo(2 - before[1])
+        expect(after[1]).toBeCloseTo(2 - before[0])
+      }
+    }
+  })
+}
+
 test('arched surrounds stop at the host wall top', () => {
   const wall = WallNode.parse({ start: [0, 0], end: [6, 0], height: 3, wallType: 'curtain' })
   const opening = WindowNode.parse({

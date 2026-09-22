@@ -8,4 +8,14 @@ export const openingPropertyPreviewHost: OpeningPropertyPreviewDependencies = {
   clearOverrideFields: (id, fields) => useLiveNodeOverrides.getState().clearFields(id, fields),
   markDirty: (id) => useScene.getState().markDirty(id),
   updateNode: (id, patch) => useScene.getState().updateNode(id, patch as Partial<AnyNode>),
+  scheduleFrame: (callback) => {
+    if (typeof requestAnimationFrame === 'function') return requestAnimationFrame(callback)
+    callback(0)
+    return 0
+  },
+  cancelFrame: (handle) => {
+    if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(handle)
+  },
+  scheduleDelay: (callback, delay) => setTimeout(callback, delay) as unknown as number,
+  cancelDelay: (handle) => clearTimeout(handle),
 }

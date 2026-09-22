@@ -13,6 +13,8 @@ import {
   computeDoorFloorplanLevelData,
 } from '../shared/opening-documentation'
 import { publishOpeningResizeGuides } from '../shared/opening-guides-runtime'
+import { createOpeningPropertyPreview } from '../shared/opening-property-preview'
+import { openingPropertyPreviewHost } from '../shared/opening-property-preview-host'
 import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-opening-host'
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
 import { readHostWallCeiling } from '../shared/wall-opening-ceiling'
@@ -143,11 +145,47 @@ function doorMoveHandle(): HandleDescriptor<DoorNodeType> {
   }
 }
 
+function doorRadiusHandle(index: 0 | 1): HandleDescriptor<DoorNodeType> {
+  const sign = index === 0 ? -1 : 1
+  return {
+    kind: 'corner-radius',
+    corner: [sign, 1],
+    width: (node) => node.width,
+    height: (node) => node.height,
+    currentValue: (node) =>
+      node.openingRadiusMode === 'individual'
+        ? (node.openingTopRadii[index] ?? 0)
+        : node.cornerRadius,
+    max: (node) => Math.min(node.width / 2, node.height),
+    apply: (node, radius, _scene, modifiers) => {
+      if (!modifiers.shiftKey) {
+        return { openingShape: 'rounded', openingRadiusMode: 'all', cornerRadius: radius }
+      }
+      const radii =
+        node.openingRadiusMode === 'individual'
+          ? [...node.openingTopRadii]
+          : [node.cornerRadius, node.cornerRadius]
+      radii[index] = radius
+      return {
+        openingShape: 'rounded',
+        openingRadiusMode: 'individual',
+        openingTopRadii: radii as [number, number],
+      }
+    },
+    createPreview: (node) =>
+      createOpeningPropertyPreview<DoorNodeType>(node.id, openingPropertyPreviewHost),
+    visible: (node) => node.openingShape !== 'arch',
+    portal: 'grandparent',
+  }
+}
+
 const doorHandles: HandleDescriptor<DoorNodeType>[] = [
   doorMoveHandle(),
   doorWidthHandle('left'),
   doorWidthHandle('right'),
   doorHeightHandle(),
+  doorRadiusHandle(0),
+  doorRadiusHandle(1),
 ]
 
 /**
