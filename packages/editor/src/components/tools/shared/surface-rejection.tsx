@@ -27,3 +27,17 @@ export function createSurfaceRejectionFeedback(
     },
   }
 }
+
+// R3F reuses one native event across enter/move dispatch and bubbled ancestor hits.
+export function createSurfaceEventOwnership() {
+  const owners = new WeakMap<object, string>()
+  return {
+    allows(hostId: string, event: object) {
+      const owner = owners.get(event)
+      return owner === undefined || owner === hostId
+    },
+    claim(hostId: string, event: object) {
+      if (!owners.has(event)) owners.set(event, hostId)
+    },
+  }
+}

@@ -6,6 +6,7 @@ type FinishModal = (commit: boolean) => void
 export type BlockModalSessionOptions = {
   beginInputDrag: SelectionAffordanceInteractionApi['beginInputDrag']
   cancelRef: MutableRefObject<(() => void) | null>
+  canCommit?: () => boolean
   cursor: string
   onFinish: (commit: boolean) => void
   onKeyDown?: (event: KeyboardEvent, finish: FinishModal) => void
@@ -16,6 +17,7 @@ export type BlockModalSessionOptions = {
 export function beginBlockModalSession({
   beginInputDrag,
   cancelRef,
+  canCommit,
   cursor,
   onFinish,
   onKeyDown,
@@ -35,7 +37,7 @@ export function beginBlockModalSession({
   const keyDown = (event: KeyboardEvent) => onKeyDown?.(event, finish)
 
   function finish(commit: boolean) {
-    if (finished) return
+    if (finished || (commit && canCommit && !canCommit())) return
     finished = true
     if (onPointerMove) window.removeEventListener('pointermove', onPointerMove, true)
     if (onPointerDown) window.removeEventListener('pointerdown', pointerDown, true)

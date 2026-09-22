@@ -401,7 +401,7 @@ test('2D renders a shelf-hosted design and delegates dragging to the same detach
   expect(useLiveNodeOverrides.getState().overrides.get(node.id)).toEqual(catalogPatch)
   expect(catalogPatch).toMatchObject({
     parentId: level.id,
-    position: [expect.any(Number), node.position[1], expect.any(Number)],
+    position: [expect.any(Number), 0, expect.any(Number)],
   })
 })
 
@@ -651,6 +651,7 @@ test('fresh mounted placement commits via a shelf click and explicit cancel dele
   }
   useScene.temporal.getState().pause()
   useScene.getState().createNode(draft, level.id)
+  useEditor.getState().setMovingNode(draft)
   const cancelled = await create(<MoveRegistryNodeTool node={draft} />)
   try {
     await act(async () => emitter.emit('shelf:enter', hit()))

@@ -11,6 +11,7 @@ import {
   sceneRegistry,
   useLiveTransforms,
   useScene,
+  wouldCreateHostingCycle,
 } from '@pascal-app/core'
 import { boxCorners } from '@pascal-app/core/procedural-items'
 import { type Camera, Euler, Quaternion, Vector3 } from 'three'
@@ -23,7 +24,10 @@ import {
 import { snapToGrid, snapToHalf } from '../item/placement-math'
 import { createShelfStickiness } from '../shared/shelf-stickiness'
 import { itemEventToSurfaceHit } from '../shared/surface-hit'
-import { createSurfaceRejectionFeedback } from '../shared/surface-rejection'
+import {
+  createSurfaceEventOwnership,
+  createSurfaceRejectionFeedback,
+} from '../shared/surface-rejection'
 
 export function createItemSurfacePointerArbitration() {
   let hostId: string | null = null
@@ -114,6 +118,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
   const feedback = createSurfaceRejectionFeedback()
   const scene = createSceneApi(useScene)
   const pointer = createItemSurfacePointerArbitration()
+  const ownership = createSurfaceEventOwnership()
   const originalParent = original.parentId
     ? useScene.getState().nodes[original.parentId as AnyNodeId]
     : null
@@ -165,6 +170,14 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
       surfaceId,
     )
     useLiveTransforms.getState().clear(node.id)
+    // A floor move and host return can share a React batch with unchanged final props.
+    // Restore the local mesh pose too, so an imperative floor preview cannot survive it.
+    const mesh = sceneRegistry.nodes.get(node.id)
+    if (mesh) {
+      mesh.position.set(...position)
+      const angles = fullRotation ?? rotation(yaw)
+      mesh.rotation.set(...(typeof angles === 'number' ? ([0, angles, 0] as const) : angles))
+    }
   }
   const session = {
     get rejection() {
@@ -211,17 +224,14 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
       }
     },
     enter(event: NodeEvent<AnyNode>, dimensions: [number, number, number], yaw: number) {
+      if (!ownership.allows(event.node.id, pointerEventOf(event))) return null
       pointer.clear()
       feedback.clear()
       const live = liveNode()
       if (floorPlaced.applies && !floorPlaced.applies(live)) return null
       const host = useScene.getState().nodes[event.node.id]
       if (!host || NON_PHYSICAL_HOST_KINDS.includes(host.type)) return null
-      let ancestor: AnyNode | undefined = host
-      while (ancestor) {
-        if (ancestor.id === node.id) return null
-        ancestor = ancestor.parentId ? scene.get(ancestor.parentId as AnyNodeId) : undefined
-      }
+      if (wouldCreateHostingCycle(node.id, host, scene)) return null
       const mesh = sceneRegistry.nodes.get(host.id)
       if (!mesh) return null
       const raw = mesh.worldToLocal(new Vector3(...event.position)).toArray()
@@ -262,6 +272,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
       const placement = resolveSurfacePlacement({
         host,
         childKind: node.type,
+        childId: node.id,
         childFootprint: {
           size: dimensions,
           rotationY: localYaw,
@@ -278,7 +289,23 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
         scene,
         snapScalar: host.type !== 'item' ? undefined : snapToGrid,
         checkFootprint: true,
-        onReject: (reason) => feedback.reject(reason, pointerEventOf(event)),
+        onReject: (reason) => {
+          if (
+            live.parentId !== host.id &&
+            !counterHit &&
+            host.type !== 'item' &&
+            host.type !== 'shelf' &&
+            reason !== 'surface-cutout' &&
+            reason !== 'surface-occupied'
+          )
+            return
+          if (reason === 'surface-cutout' || reason === 'surface-occupied') {
+            ownership.claim(host.id, pointerEventOf(event))
+            pointer.hit(host.id, pointerEventOf(event))
+            event.stopPropagation()
+          }
+          feedback.reject(reason, pointerEventOf(event))
+        },
       })
       if (!placement) return null
       valid = true
@@ -291,6 +318,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
         worldPosition: mesh.localToWorld(new Vector3(...placement.position)).toArray(),
       }
       grab = corrected.grab
+      ownership.claim(host.id, pointerEventOf(event))
       pointer.hit(host.id, pointerEventOf(event))
       event.stopPropagation()
       write(
@@ -344,12 +372,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
         false,
       )
       if (host?.type === 'procedural-item') position.splice(0, 3, ...local.position)
-      if (
-        host?.type === 'cabinet' ||
-        host?.type === 'shelf' ||
-        host?.type === 'item' ||
-        host?.type === 'procedural-item'
-      ) {
+      if (host) {
         const footprint = floorPlaced.footprint?.(live, { nodes: scene.nodes() })
         const bounds:
           | { size: [number, number, number]; center?: [number, number, number] }
@@ -376,6 +399,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
         const placement = resolveSurfacePlacement({
           host,
           childKind: live.type,
+          childId: live.id,
           childFootprint: {
             size: bounds.size,
             rotationY: Array.isArray(localRotation) ? localRotation[1] : localRotation,
@@ -394,7 +418,14 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
           onReject: (reason) => feedback.reject(reason),
         })
         valid = !!placement
-        if (placement && host.type === 'procedural-item') {
+        if (!placement) {
+          // Null means free rotation to the caller, so return the unchanged stored pose.
+          return {
+            position: [...live.position] as [number, number, number],
+            rotationY: Array.isArray(live.rotation) ? live.rotation[1] : live.rotation,
+          }
+        }
+        if (host.type === 'procedural-item') {
           const pose =
             placement.childFrame === 'surface-local'
               ? placement.surfaceLocal!
@@ -405,16 +436,7 @@ export function createRegistryItemSurfaceMove(node: AnyNode) {
             rotationY: pose.rotationY,
           }
         }
-        if (placement) position[1] = placement.position[1]
-        else if (
-          feedback.reason === 'footprint-outside-surface' ||
-          feedback.reason === 'footprint-exceeds-host' ||
-          feedback.reason === 'no-surface'
-        ) {
-          const mesh = sceneRegistry.nodes.get(host.id)
-          if (mesh)
-            return session.detach(mesh.localToWorld(new Vector3(...position)).toArray(), yaw)
-        }
+        position[1] = placement.position[1]
       }
       write(live.parentId, position, yaw)
       return { position, rotationY: yaw }

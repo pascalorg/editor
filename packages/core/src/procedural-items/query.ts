@@ -8,9 +8,9 @@ import {
 import { getRenderableSlabPolygon } from '../lib/slab-polygon'
 import { levelBaseElevationAt } from '../lib/terrain-support'
 import { nodeRegistry } from '../registry/registry'
-import type { CabinetModuleNode, CabinetNode } from '../schema/nodes/cabinet'
+import { getBlockFaceFrame } from '../schema/nodes/block'
 import type { ItemNode } from '../schema/nodes/item'
-import type { ShelfNode } from '../schema/nodes/shelf'
+import { getRoofWallFaceFrame, roofFacePointToSegment } from '../schema/nodes/roof-segment-walls'
 import type { SlabNode } from '../schema/nodes/slab'
 import type { WallNode } from '../schema/nodes/wall'
 import type { AnyNode } from '../schema/types'
@@ -80,39 +80,41 @@ export function proceduralFootprint(node: ProceduralItemNode) {
   const position = transformPoint(frame(node.position, node.rotation), center)
   return { position, rotation: node.rotation, dimensions: e.dimensions }
 }
-function floorLift(
-  node: ProceduralItemNode | ItemNode | ShelfNode | CabinetNode | CabinetModuleNode,
-  nodes: QueryNodes,
-): number {
-  if (!node.parentId || nodes[node.parentId]?.type !== 'level') return 0
+function floorLift(node: AnyNode | ProceduralItemNode, nodes: QueryNodes): number {
+  if (!node.parentId || nodes[node.parentId]?.type !== 'level' || !('position' in node)) return 0
+  const position = node.position as Vec3
+  const supportSlabId = (node as { supportSlabId?: string }).supportSlabId
+  const capability = nodeRegistry.get(node.type)?.capabilities.floorPlaced
   const { slabs, walls } = levelSurfaces(nodes, node.parentId)
   const ground = levelBaseElevationAt(
     nodes as Record<string, AnyNode>,
     node.parentId,
-    node.position[0],
-    node.position[2],
+    position[0],
+    position[2],
   )
-  if (node.supportSlabId === 'ground') return ground
-  if (node.type === 'cabinet' || node.type === 'cabinet-module') {
-    const capability = nodeRegistry.get(node.type)?.capabilities.floorPlaced
+  if (supportSlabId === 'ground') return ground
+  if (capability || node.type === 'cabinet' || node.type === 'cabinet-module') {
     const footprints = capability
       ? getFloorPlacedFootprints(capability, node, { nodes: nodes as Record<string, AnyNode> })
       : []
     const candidatesFor = (footprint: (typeof footprints)[number]) =>
       slabs.filter((slab) => {
-        const position = footprint.position ?? node.position
+        const footprintPosition = footprint.position ?? position
         return (
           itemOverlapsPolygon(
-            position,
+            footprintPosition,
             footprint.dimensions,
             footprint.rotation,
             getRenderableSlabPolygon(slab, { walls, siblingSlabs: slabs }),
             0.005,
-          ) && !(slab.holes ?? []).some((hole) => pointInPolygon(position[0], position[2], hole))
+          ) &&
+          !(slab.holes ?? []).some((hole) =>
+            pointInPolygon(footprintPosition[0], footprintPosition[2], hole),
+          )
         )
       })
     const candidates = footprints.map(candidatesFor)
-    const pinned = candidates.flat().find((slab) => slab.id === node.supportSlabId)
+    const pinned = candidates.flat().find((slab) => slab.id === supportSlabId)
     if (pinned) return pinned.elevation ?? 0.05
     return candidates.length
       ? Math.max(
@@ -122,10 +124,11 @@ function floorLift(
         )
       : ground
   }
+  if (!(isProceduralItem(node) || node.type === 'item' || node.type === 'shelf')) return 0
   const footprint = isProceduralItem(node)
     ? proceduralFootprint(node)
     : {
-        position: node.position,
+        position: position,
         dimensions:
           node.type === 'shelf'
             ? ([node.width, node.height, node.depth] as Vec3)
@@ -145,12 +148,25 @@ function floorLift(
       !(s.holes ?? []).some((h) => pointInPolygon(footprint.position[0], footprint.position[2], h))
     )
   })
-  const pinned = candidates.find((s) => s.id === node.supportSlabId)
+  const pinned = candidates.find((s) => s.id === supportSlabId)
   return pinned
     ? (pinned.elevation ?? 0.05)
     : candidates.length
       ? Math.max(...candidates.map((s) => s.elevation ?? 0.05))
       : ground
+}
+function nodeParentFrame(node: AnyNode | ProceduralItemNode, nodes: QueryNodes, seen: Set<string>) {
+  if (!node.parentId) return IDENTITY_FRAME
+  let parentFrame = nodeLevelFrame(node.parentId, nodes, seen)
+  const parent = nodes[node.parentId]
+  if (isProceduralItem(parent) && parent.attachments[node.id] !== undefined) {
+    const surface = evaluateRecipe(parent.recipe, parent.parameters).surfaces.find(
+      (s) => s.id === parent.attachments[node.id],
+    )
+    if (!surface) throw new Error('Missing attachment surface')
+    parentFrame = composeFrames(parentFrame, frame(surface.position, surface.rotation))
+  }
+  return parentFrame
 }
 export function nodeLevelFrame(id: string, nodes: QueryNodes, seen = new Set<string>()): Frame {
   if (seen.has(id) || seen.size > 32) throw new Error('Cyclic or excessively deep hosting graph')
@@ -194,8 +210,20 @@ export function nodeLevelFrame(id: string, nodes: QueryNodes, seen = new Set<str
       node.type === 'cabinet' ||
       node.type === 'cabinet-module'
     )
-  )
-    throw new Error(`Unsupported host ${node.type}`)
+  ) {
+    const transform = node as { position?: Vec3; rotation?: Vec3 | number }
+    const rotation =
+      typeof transform.rotation === 'number'
+        ? ([0, transform.rotation, 0] as Vec3)
+        : transform.rotation
+    const position = [...(transform.position ?? [0, 0, 0])] as Vec3
+    const capability = nodeRegistry.get(node.type)?.capabilities.floorPlaced
+    if (!capability?.applies || capability.applies(node as AnyNode)) {
+      position[1] += floorLift(node, nodes)
+    }
+    const local = node.type === 'slab' ? IDENTITY_FRAME : frame(position, rotation ?? [0, 0, 0])
+    return node.parentId ? composeFrames(nodeParentFrame(node, nodes, seen), local) : local
+  }
   const pose = isProceduralItem(node)
     ? proceduralLocalPose(node, nodes)
     : {
@@ -205,14 +233,30 @@ export function nodeLevelFrame(id: string, nodes: QueryNodes, seen = new Set<str
       }
   const parent = node.parentId ? nodes[node.parentId] : undefined
   if (!node.parentId) return frame(pose.position, pose.rotation)
-  let parentFrame = nodeLevelFrame(node.parentId, nodes, seen)
-  if (isProceduralItem(parent) && parent.attachments[node.id] !== undefined) {
-    const surface = evaluateRecipe(parent.recipe, parent.parameters).surfaces.find(
-      (s) => s.id === parent.attachments[node.id],
-    )
-    if (!surface) throw new Error('Missing attachment surface')
-    parentFrame = composeFrames(parentFrame, frame(surface.position, surface.rotation))
-  } else if (parent?.type === 'level') pose.position[1] += floorLift(node, nodes)
+  if (node.type === 'item' && parent?.type === 'roof-segment' && node.roofFace) {
+    const face = getRoofWallFaceFrame(parent, node.roofFace)
+    const local = frame(roofFacePointToSegment(parent, node.roofFace, pose.position), pose.rotation)
+    local.axes = composeFrames(
+      frame([0, 0, 0], [0, face.yaw, 0]),
+      frame([0, 0, 0], pose.rotation),
+    ).axes
+    return composeFrames(nodeLevelFrame(parent.id, nodes, seen), local)
+  }
+  if (node.type === 'item' && parent?.type === 'block' && node.blockFaceId) {
+    const face = getBlockFaceFrame(parent.topology, node.blockFaceId)
+    if (face) {
+      const host = nodeLevelFrame(parent.id, nodes, seen)
+      return composeFrames(
+        host,
+        composeFrames(
+          { position: face.origin, axes: [face.xAxis, face.yAxis, face.normal] },
+          frame(pose.position, pose.rotation),
+        ),
+      )
+    }
+  }
+  const parentFrame = nodeParentFrame(node, nodes, seen)
+  if (parent?.type === 'level') pose.position[1] += floorLift(node, nodes)
   return composeFrames(parentFrame, frame(pose.position, pose.rotation))
 }
 function localBounds(node: ProceduralItemNode | ItemNode) {
@@ -224,6 +268,17 @@ export function attachmentBounds(child: ProceduralItemNode | ItemNode) {
   const b = localBounds(child)
   return boundsOf(
     boxCorners(b.min, b.max).map((p) => transformPoint(frame(child.position, child.rotation), p)),
+  )
+}
+export function attachmentRegionsOverlap(
+  a: ReturnType<typeof attachmentBounds>,
+  b: ReturnType<typeof attachmentBounds>,
+) {
+  return (
+    a.min[0] < b.max[0] - 1e-6 &&
+    a.max[0] > b.min[0] + 1e-6 &&
+    a.min[2] < b.max[2] - 1e-6 &&
+    a.max[2] > b.min[2] + 1e-6
   )
 }
 function ceilingContainsFootprint(outer: Point2D[], footprint: Point2D[]) {
@@ -341,16 +396,10 @@ export function validateProceduralRelations(raw: AnyNode | ProceduralItemNode, n
       Math.abs(b.min[1]) > 1e-6
     )
       throw new Error(`The hosted item does not fit on ${surface.label}`)
+    // A fresh duplicate initially overlaps its source; only committed children occupy a surface.
+    if (child.metadata?.isNew === true) continue
     const occupied = regions.get(surface.id) ?? []
-    if (
-      occupied.some(
-        (a) =>
-          a.min[0] < b.max[0] - 1e-6 &&
-          a.max[0] > b.min[0] + 1e-6 &&
-          a.min[2] < b.max[2] - 1e-6 &&
-          a.max[2] > b.min[2] + 1e-6,
-      )
-    )
+    if (occupied.some((a) => attachmentRegionsOverlap(a, b)))
       throw new Error(`Another item occupies ${surface.label}`)
     occupied.push(b)
     regions.set(surface.id, occupied)

@@ -190,6 +190,7 @@ export const downspoutDefinition: NodeDefinition<typeof DownspoutNode> = {
   parametrics: downspoutParametrics,
   handles: downspoutHandles,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

@@ -18,6 +18,7 @@ import {
   validateProceduralRelations,
 } from '@pascal-app/core/procedural-items'
 import { itemPaint } from '../item/paint'
+import { restingFloorplanAffectedIds } from '../shared/resting-surface-plan'
 import { proceduralFloorplanMoveTarget } from './move-session'
 
 const GIZMO_SIDE_OFFSET = 0.3
@@ -97,6 +98,7 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
     position: [0, 0, 0],
     rotation: [0, 0, 0],
   }),
+  extensions: { 'pascal:editor/floorplan': { directDrag: true } },
   capabilities: {
     selectable: { hitVolume: 'bbox' },
     dragBounds: (n) => {
@@ -119,7 +121,7 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
     },
     movable: { axes: ['x', 'z'], gridSnap: true },
     rotatable: { axes: ['y'], snapAngles: [0, Math.PI / 4, Math.PI / 2, Math.PI] },
-    duplicable: true,
+    duplicable: { subtree: 'with-children' },
     deletable: true,
     slots: (n) => {
       const node = n as unknown as ProceduralItemNode
@@ -149,6 +151,7 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
   parametrics: { groups: [], customPanel: () => import('@pascal-app/editor/procedural-items') },
   affordanceTools: { move: () => import('./move-tool') },
   floorplanMoveTarget: proceduralFloorplanMoveTarget,
+  floorplanAffectedIds: restingFloorplanAffectedIds,
   keyboardActions: {
     r: {
       appliesTo: (n) => Boolean((n as unknown as ProceduralItemNode).wallId),

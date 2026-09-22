@@ -53,6 +53,16 @@ The core `Plugin` manifest owns semantic node definitions (and registry-backed i
 
 See [`node-definitions.md`](node-definitions.md) for the three-checkbox composition model that ties these together.
 
+## Hosting children
+
+A custom parametric renderer is assumed to mount arbitrary children unless its
+definition declares `rendersChildren: false`. Declare false for selection proxies,
+collective renderers and renderers that only display a restricted child kind. A
+geometry-only definition inherits child mounting from the framework. The host's
+`children` schema must retain the child's actual ID, including plugin-specific ID
+prefixes. `capabilities.surfaces.hosting: false` opts out as a host;
+`capabilities.surfacePlacement: 'floor-only'` opts out as a hosted child.
+
 ## Standing on the ground (terrain)
 
 The site carries a sculpted heightfield, so "the floor" is not the plane `y = 0`. A plugin kind that

@@ -3,12 +3,12 @@ import {
   type AnyNode,
   ItemNode,
   nodeRegistry,
-  registerNode,
   resolveSurfacePlacement,
   type SceneApi,
   type SurfaceProvider,
   type SurfaceRejectReason,
 } from '@pascal-app/core'
+import { registerHostingTestNode } from '../__fixtures__/hosting'
 import { createSurfaceRejectionFeedback } from './surface-rejection'
 
 let restore: () => void
@@ -27,7 +27,7 @@ for (const reason of [
   'no-surface',
   'invalid-hit',
 ] as const) {
-  test(`${reason} remains available from onReject without user-facing text`, () => {
+  test(`${reason}: eligible-host diagnostics remain available; ineligible hosts defer silently`, () => {
     const provider: SurfaceProvider = {
       childFrame: 'host-local',
       resolveHit: () =>
@@ -56,7 +56,7 @@ for (const reason of [
             },
       accepts: () => reason !== 'child-not-accepted',
     }
-    registerNode({
+    registerHostingTestNode({
       kind: 'test-host',
       schemaVersion: 1,
       schema: ItemNode,
@@ -75,6 +75,7 @@ for (const reason of [
           type: reason === 'host-not-eligible' ? 'guide' : 'test-host',
         } as unknown as AnyNode,
         childKind: 'item',
+        childId: 'item_existing',
         childFootprint: {
           size: reason === 'footprint-outside-surface' ? [3, 1, 3] : [0.3, 0.3, 0.3],
           rotationY: 0,
@@ -87,7 +88,7 @@ for (const reason of [
         onReject: (r) => feedback.reject(r),
       }),
     ).toBeNull()
-    expect(feedback.reason).toBe(reason)
+    expect(feedback.reason).toBe(reason === 'host-not-eligible' ? null : reason)
   })
 }
 

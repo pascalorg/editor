@@ -10,7 +10,6 @@ import {
   mrt,
   normalView,
   output,
-  pass,
   sample,
   saturation,
   screenUV,
@@ -19,8 +18,15 @@ import {
   vec3,
   vec4,
 } from 'three/tsl'
-import { RenderPipeline, RenderTarget, type WebGPURenderer } from 'three/webgpu'
+import {
+  type NodeFrame,
+  PassNode,
+  RenderPipeline,
+  RenderTarget,
+  type WebGPURenderer,
+} from 'three/webgpu'
 import { GRADE_PARAMS, SSGI_PARAMS } from '../components/viewer/post-processing'
+import type { SceneAtmosphereSource } from '../components/viewer/scene-atmosphere'
 import { backdropGradient, deepSkyColor, horizonHazeColor } from './backdrop'
 import { type EdgeMode, edgeColorFor, edgeOpacityScaleFor } from './edge-style'
 import { inkedEdges } from './ink-edges'
@@ -94,15 +100,31 @@ export type SnapshotPipeline = {
   }) => Promise<SnapshotCaptureResult>
   dispose: () => void
 }
+class SnapshotScenePass extends PassNode {
+  override updateBefore(frame: NodeFrame) {
+    const renderer = frame.renderer!
+    const clearAlpha = renderer.getClearAlpha()
+    // RTTNode resets clear alpha in r186. The geometry mask must be cleared
+    // inside this pass, not inherited from the outer snapshot render.
+    renderer.setClearAlpha(0)
+    try {
+      return super.updateBefore(frame)
+    } finally {
+      renderer.setClearAlpha(clearAlpha)
+    }
+  }
+}
 
 export async function createSnapshotPipeline({
   renderer,
   scene,
   camera,
+  atmosphere = null,
 }: {
   renderer: WebGPURenderer
   scene: Scene
   camera: Camera
+  atmosphere?: SceneAtmosphereSource | null
 }): Promise<SnapshotPipeline | null> {
   try {
     if ((renderer as any).init) await (renderer as any).init()
@@ -124,10 +146,9 @@ export async function createSnapshotPipeline({
     const inkOpacityUniform = uniform(0.5)
     const inkOpacityScaleUniform = uniform(1)
 
-    // pass() handles MRT internally for all material types, including custom
-    // shaders — unlike renderer.setMRT() which crashes on non-NodeMaterials.
-    // pass() also respects camera.layers, so caller-disabled objects are filtered.
-    const scenePass = pass(scene, camera)
+    // The scene pass owns MRT and its transparent clear, including when nested
+    // inside FXAA's intermediate render target.
+    const scenePass = new SnapshotScenePass('color', scene, camera)
     scenePass.setMRT(
       mrt({
         output,
@@ -197,13 +218,15 @@ export async function createSnapshotPipeline({
     const ndc = vec4(screenUV.x.mul(2).sub(1), float(1).sub(screenUV.y).mul(2).sub(1), 1, 1) as any
     const viewRay = (bgProjInvUniform as any).mul(ndc)
     const worldDir = (bgCamWorldUniform as any).mul(vec4(viewRay.xyz, 0)).xyz.normalize()
-    const ungradedBgGradient = backdropGradient({
-      dirY: worldDir.y,
-      background: bgColorUniform,
-      haze: bgHazeUniform,
-      sky: bgSkyUniform,
-      skyDeep: bgSkyDeepUniform,
-    })
+    const ungradedBgGradient = atmosphere
+      ? atmosphere.skyRadiance(worldDir)
+      : backdropGradient({
+          dirY: worldDir.y,
+          background: bgColorUniform,
+          haze: bgHazeUniform,
+          sky: bgSkyUniform,
+          skyDeep: bgSkyDeepUniform,
+        })
     const bgGradient = mix(ungradedBgGradient, gradeRgb(ungradedBgGradient), gradeMixUniform)
     const alpha = scenePassColor.a
     const finalOutput = vec4(
@@ -260,7 +283,6 @@ export async function createSnapshotPipeline({
         }
 
         try {
-          ;(renderer as any).setClearAlpha(0)
           renderer.setRenderTarget(renderTarget)
           pipeline.render()
         } finally {
@@ -390,6 +412,8 @@ export async function createSnapshotPipeline({
       dispose: () => {
         pipeline.dispose()
         renderTarget.dispose()
+        scenePass.dispose()
+        giPass.dispose()
       },
     }
   } catch (error) {

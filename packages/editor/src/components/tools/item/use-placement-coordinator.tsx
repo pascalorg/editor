@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type CeilingEvent,
+  canHostSurfaceChild,
   collectAlignmentAnchors,
   emitter,
   findLevelAncestorId,
@@ -48,6 +49,7 @@ import {
 } from '../../../lib/active-placement-surface'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { formatLinearMeasurement } from '../../../lib/measurements'
+import { isFreshPlacementMetadata } from '../../../lib/placement-metadata'
 import { createMovementSfxTick } from '../../../lib/sfx/movement-tick'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import {
@@ -84,7 +86,10 @@ import {
   resolvePointerSupportSurface,
 } from '../shared/pointer-support-cap'
 import { createShelfStickiness } from '../shared/shelf-stickiness'
-import { createSurfaceRejectionFeedback } from '../shared/surface-rejection'
+import {
+  createSurfaceEventOwnership,
+  createSurfaceRejectionFeedback,
+} from '../shared/surface-rejection'
 import { shouldCreateFloorDraft } from './draft-creation'
 import { commitFaceHostClick, resolveFaceHostPreviewCommit } from './face-host-commit'
 import {
@@ -597,6 +602,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       wasAdopted: boolean,
       repeat: () => void,
     ) => {
+      if (!committedId) return
       if (configRef.current.onCommitted()) {
         repeat()
         return
@@ -626,12 +632,19 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     ) => {
       const draftId = draftNode.current?.id ?? null
       const wasAdopted = draftNode.isAdopted
-      const finalId = draftNode.commit(nodeUpdate, options)
-      if (draftId) {
+      const finalId = draftNode.commit(nodeUpdate, {
+        ...options,
+        onReject: (reason) => {
+          feedback.reject(reason)
+          edgeMaterial.color.setHex(0xef_44_44)
+          basePlaneMaterial.color.setHex(0xef_44_44)
+        },
+      })
+      if (finalId && draftId) {
         useLiveTransforms.getState().clear(draftId)
         useLiveNodeOverrides.getState().clearFields(draftId, faceHostClearFields(draftNode.current))
       }
-      return { committedId: finalId ?? draftId, wasAdopted }
+      return { committedId: finalId, wasAdopted }
     }
 
     const faceHostClearFields = (draft: ItemNode | null | undefined): Array<keyof ItemNode> => {
@@ -651,6 +664,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const surfacePointer = createItemSurfacePointerArbitration()
+    const surfaceOwnership = createSurfaceEventOwnership()
     const revalidate = (): boolean => {
       const fits = checkCanPlace(getContext(), validators)
       if (
@@ -681,11 +695,22 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       return placeable
     }
 
-    const surfaceContext = (event: NodeEvent<AnyNode>) => {
+    const surfaceContext = (event: NodeEvent<AnyNode>, generic = false) => {
       lastSurfaceEvent = event
       return {
         ...getContext(),
         onSurfaceReject: (reason: SurfaceRejectReason) => {
+          // A rejected generic acquisition leaves the paired pointer's floor route in charge.
+          if (
+            generic &&
+            placementState.current.surfaceItemId !== event.node.id &&
+            reason !== 'surface-cutout' &&
+            reason !== 'surface-occupied'
+          ) {
+            return
+          }
+          surfaceOwnership.claim(event.node.id, event.nativeEvent.nativeEvent ?? event.nativeEvent)
+          event.stopPropagation()
           if (
             (reason === 'footprint-outside-surface' ||
               reason === 'footprint-exceeds-host' ||
@@ -695,7 +720,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           ) {
             feedback.clear()
             detachItemSurfaceToFloor(event as ItemEvent)
-            surfacePointer.hit(event.node.id, event.nativeEvent.nativeEvent ?? event.nativeEvent)
+            // A generic host exit yields positioning to this pointer's paired floor event.
+            if (!generic)
+              surfacePointer.hit(event.node.id, event.nativeEvent.nativeEvent ?? event.nativeEvent)
             return
           }
           feedback.reject(reason, event.nativeEvent.nativeEvent ?? event.nativeEvent)
@@ -746,6 +773,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const applyTransition = (result: TransitionResult, event?: NodeEvent<AnyNode>) => {
       if (event) {
+        surfaceOwnership.claim(event.node.id, event.nativeEvent.nativeEvent ?? event.nativeEvent)
         surfacePointer.hit(event.node.id, event.nativeEvent.nativeEvent ?? event.nativeEvent)
         tickSurfaceMovementSfx(result.cursorPosition)
       }
@@ -1732,6 +1760,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         if (draft) useScene.getState().updateNode(draft.id, result.nodeUpdate)
       } else {
         draftNode.destroy()
+        gridPosition.current.set(...result.gridPosition)
         Object.assign(placementState.current, result.stateUpdate)
       }
     }
@@ -1823,7 +1852,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       revalidate()
     }
 
-    const onItemEnter = (event: NodeEvent<AnyNode>) => {
+    const onItemEnter = (event: NodeEvent<AnyNode>, generic = false) => {
       if (event.node.type === 'cabinet' && placementState.current.surfaceItemId === event.node.id) {
         onItemMove(event)
         return
@@ -1834,7 +1863,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
       if (event.node.id === draftNode.current?.id) return
       has3DPointerDrivenMoveRef.current = true
-      const result = itemSurfaceStrategy.enter(surfaceContext(event), event)
+      const result = itemSurfaceStrategy.enter(surfaceContext(event, generic), event)
       if (!result) return
       feedback.clear()
 
@@ -1849,12 +1878,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
     }
 
-    const onItemMove = (event: NodeEvent<AnyNode>) => {
+    const onItemMove = (event: NodeEvent<AnyNode>, generic = false) => {
       if (event.node.id === draftNode.current?.id) return
       releaseCommit = () => onItemClick(event)
       has3DPointerDrivenMoveRef.current = true
       if (!cursorGroupRef.current) return
-      const ctx = surfaceContext(event)
+      const ctx = surfaceContext(event, generic)
       if (event.node.type === 'cabinet') {
         lastRawPos.current.set(...event.position)
         surfacePointer.hit(event.node.id, event.nativeEvent.nativeEvent ?? event.nativeEvent)
@@ -1879,6 +1908,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           event,
         )
 
+        // An unclaimed generic mesh must let its owning ancestor receive the same hit.
+        if (generic && !enterResult) return
         event.stopPropagation()
         if (enterResult) {
           applyTransition(enterResult, event)
@@ -1892,7 +1923,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
 
       if (!draftNode.current) {
-        const enterResult = itemSurfaceStrategy.enter(surfaceContext(event), event)
+        const enterResult = itemSurfaceStrategy.enter(surfaceContext(event, generic), event)
         if (!enterResult) return
         event.stopPropagation()
         ensureDraft(enterResult)
@@ -2007,12 +2038,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         // the host's own click event is blocked by the cursor preview.
         if (ctx.state.surface === 'item-surface' && ctx.state.surfaceItemId) {
           const hostNode = useScene.getState().nodes[ctx.state.surfaceItemId as AnyNodeId]
-          if (
-            hostNode &&
-            (hostNode.type === 'item' ||
-              hostNode.type === 'cabinet' ||
-              hostNode.type === 'procedural-item')
-          ) {
+          if (hostNode) {
             const synthetic = { ...event, node: hostNode } as ItemEvent
             const result = itemSurfaceStrategy.click(ctx, synthetic)
             if (result) {
@@ -2386,7 +2412,49 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         const currentRotation = draft.rotation
         // Round to the nearest 45° then step, matching the placed-item R/T.
         const newRotationY = steppedRotation(currentRotation[1] ?? 0, rotationDir)
-        draft.rotation = [currentRotation[0], newRotationY, currentRotation[2]]
+        const nextRotation: [number, number, number] = [
+          currentRotation[0],
+          newRotationY,
+          currentRotation[2],
+        ]
+        const surface = placementState.current.surface
+        const surfaceMesh =
+          surface === 'item-surface' && placementState.current.surfaceItemId
+            ? sceneRegistry.nodes.get(placementState.current.surfaceItemId)
+            : undefined
+        let surfacePosition: [number, number, number] | undefined
+        if (surfaceMesh) {
+          const localPos = surfaceMesh.worldToLocal(lastRawPos.current.clone())
+          const [dimX, , dimZ] = getScaledDimensions(draft)
+          const swapDims = Math.abs(Math.sin(newRotationY)) > 0.9
+          surfacePosition = [
+            snapToGrid(localPos.x, swapDims ? dimZ : dimX),
+            gridPosition.current.y,
+            snapToGrid(localPos.z, swapDims ? dimX : dimZ),
+          ]
+        }
+        if (surfaceAttachmentId(draft)) {
+          let occupied = false
+          checkCanPlace(
+            {
+              ...getContext(),
+              draftItem: { ...draft, rotation: nextRotation },
+              gridPosition: surfacePosition
+                ? new Vector3(...surfacePosition)
+                : gridPosition.current,
+              onSurfaceReject: (reason) => {
+                occupied = reason === 'surface-occupied'
+              },
+            },
+            validators,
+          )
+          if (occupied) {
+            feedback.reject('surface-occupied')
+            revalidate()
+            return
+          }
+        }
+        draft.rotation = nextRotation
 
         // Rotate the building-local cursor by the same delta as the host-local
         // draft. This preserves the host's composed yaw for items resting on a
@@ -2398,7 +2466,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         if (mesh) mesh.rotation.y = newRotationY
 
         // Re-snap position immediately with updated rotation (dimX/dimZ may swap at 90°)
-        const surface = placementState.current.surface
         if (surface === 'floor' || surface === 'ceiling') {
           const dims = getScaledDimensions(draft)
           const [dimX, , dimZ] = dims
@@ -2428,15 +2495,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
             }
           }
         } else if (surface === 'item-surface' && placementState.current.surfaceItemId) {
-          const surfaceMesh = sceneRegistry.nodes.get(placementState.current.surfaceItemId)
-          if (surfaceMesh) {
-            const localPos = surfaceMesh.worldToLocal(lastRawPos.current.clone())
-            const dims = getScaledDimensions(draft)
-            const [dimX, , dimZ] = dims
-            const swapDims = Math.abs(Math.sin(newRotationY)) > 0.9
-            const x = snapToGrid(localPos.x, swapDims ? dimZ : dimX)
-            const z = snapToGrid(localPos.z, swapDims ? dimX : dimZ)
-            const y = gridPosition.current.y
+          if (surfaceMesh && surfacePosition) {
+            const [x, y, z] = surfacePosition
             gridPosition.current.set(x, y, z)
             draft.position = [x, y, z]
             const worldSnapped = surfaceMesh.localToWorld(new Vector3(x, y, z))
@@ -2594,7 +2654,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     const unsubDraftWatch = useScene.subscribe((state) => {
       if (tearingDown) return
       const draft = draftNode.current
-      if (draft === null) return
+      if (draft === null || isFreshPlacementMetadata(draft.metadata)) return
       if (draft.id in state.nodes) return
 
       queueMicrotask(() => {
@@ -2609,41 +2669,73 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // ---- Subscribe ----
 
+    const specializedKinds = new Set<string>()
+    const subscribeSpecialized = <E,>(key: string, handler: (event: E) => void) => {
+      specializedKinds.add(key.slice(0, key.lastIndexOf(':')))
+      emitter.on(key as never, handler as never)
+    }
+    const genericRoute = (phase: 'enter' | 'move' | 'click' | 'leave') => (event: NodeEvent) => {
+      if (specializedKinds.has(event.node.type)) return
+      if (
+        !surfaceOwnership.allows(event.node.id, event.nativeEvent.nativeEvent ?? event.nativeEvent)
+      )
+        return
+      if (nodeRegistry.get(event.node.type)?.capabilities.faceHost) {
+        const handlers = {
+          enter: onFaceHostEnter,
+          move: onFaceHostMove,
+          click: onFaceHostClick,
+          leave: onFaceHostLeave,
+        }
+        handlers[phase](event)
+        return
+      }
+      if (!canHostSurfaceChild(event.node, 'item', draftNode.current?.id)) return
+      if (phase === 'leave' && placementState.current.surfaceItemId !== event.node.id) return
+      if (phase === 'enter') onItemEnter(event, true)
+      else if (phase === 'move') onItemMove(event, true)
+      else if (phase === 'click') onItemClick(event)
+      else onItemLeave(event)
+    }
+    const onNodeEnter = genericRoute('enter')
+    const onNodeMove = genericRoute('move')
+    const onNodeClick = genericRoute('click')
+    const onNodeLeave = genericRoute('leave')
     const gridDispatch = createItemSurfaceGridDispatch(onGridMove)
     emitter.on('grid:move', gridDispatch.schedule)
     emitter.on('grid:click', onGridClick)
-    emitter.on('item:enter', onItemEnter)
-    emitter.on('item:move', onItemMove)
-    emitter.on('item:leave', onItemLeave)
-    emitter.on('item:click', onItemClick)
-    emitter.on('wall:enter', onWallEnter)
-    emitter.on('wall:move', onWallMove)
-    emitter.on('wall:click', onWallClick)
-    emitter.on('wall:leave', onWallLeave)
-    emitter.on('roof:enter', onRoofWallEnter)
-    emitter.on('roof:move', onRoofWallMove)
-    emitter.on('roof:click', onRoofWallClick)
-    emitter.on('roof:leave', onRoofWallLeave)
-    emitter.on('node:enter', onFaceHostEnter)
-    emitter.on('node:move', onFaceHostMove)
-    emitter.on('node:click', onFaceHostClick)
-    emitter.on('node:leave', onFaceHostLeave)
-    emitter.on('ceiling:enter', onCeilingEnter)
-    emitter.on('ceiling:move', onCeilingMove)
-    emitter.on('ceiling:click', onCeilingClick)
-    emitter.on('ceiling:leave', onCeilingLeave)
-    emitter.on('cabinet:enter', onItemEnter)
-    emitter.on('procedural-item:enter' as never, onItemEnter)
-    emitter.on('cabinet:move', onItemMove)
-    emitter.on('procedural-item:move' as never, onItemMove)
-    emitter.on('cabinet:click', onItemClick)
-    emitter.on('procedural-item:click' as never, onItemClick)
-    emitter.on('cabinet:leave', onItemLeave)
-    emitter.on('procedural-item:leave' as never, onItemLeave)
-    emitter.on('shelf:enter', onShelfEnter)
-    emitter.on('shelf:move', onShelfMove)
-    emitter.on('shelf:click', onShelfClick)
-    emitter.on('shelf:leave', onShelfLeave)
+    subscribeSpecialized('item:enter', onItemEnter)
+    subscribeSpecialized('item:move', onItemMove)
+    subscribeSpecialized('item:leave', onItemLeave)
+    subscribeSpecialized('item:click', onItemClick)
+    subscribeSpecialized('wall:enter', onWallEnter)
+    subscribeSpecialized('wall:move', onWallMove)
+    subscribeSpecialized('wall:click', onWallClick)
+    subscribeSpecialized('wall:leave', onWallLeave)
+    subscribeSpecialized('roof:enter', onRoofWallEnter)
+    subscribeSpecialized('roof:move', onRoofWallMove)
+    subscribeSpecialized('roof:click', onRoofWallClick)
+    subscribeSpecialized('roof:leave', onRoofWallLeave)
+    emitter.on('node:enter', onNodeEnter)
+    emitter.on('node:move', onNodeMove)
+    emitter.on('node:click', onNodeClick)
+    emitter.on('node:leave', onNodeLeave)
+    subscribeSpecialized('ceiling:enter', onCeilingEnter)
+    subscribeSpecialized('ceiling:move', onCeilingMove)
+    subscribeSpecialized('ceiling:click', onCeilingClick)
+    subscribeSpecialized('ceiling:leave', onCeilingLeave)
+    subscribeSpecialized('cabinet:enter', onItemEnter)
+    subscribeSpecialized('procedural-item:enter', onItemEnter)
+    subscribeSpecialized('cabinet:move', onItemMove)
+    subscribeSpecialized('procedural-item:move', onItemMove)
+    subscribeSpecialized('cabinet:click', onItemClick)
+    subscribeSpecialized('procedural-item:click', onItemClick)
+    subscribeSpecialized('cabinet:leave', onItemLeave)
+    subscribeSpecialized('procedural-item:leave', onItemLeave)
+    subscribeSpecialized('shelf:enter', onShelfEnter)
+    subscribeSpecialized('shelf:move', onShelfMove)
+    subscribeSpecialized('shelf:click', onShelfClick)
+    subscribeSpecialized('shelf:leave', onShelfLeave)
 
     // A floor placement commits at the tracked floor cursor (`gridPosition`),
     // which keeps following the floor even when the click ray lands on a wall
@@ -2689,10 +2781,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       emitter.off('roof:move', onRoofWallMove)
       emitter.off('roof:click', onRoofWallClick)
       emitter.off('roof:leave', onRoofWallLeave)
-      emitter.off('node:enter', onFaceHostEnter)
-      emitter.off('node:move', onFaceHostMove)
-      emitter.off('node:click', onFaceHostClick)
-      emitter.off('node:leave', onFaceHostLeave)
+      emitter.off('node:enter', onNodeEnter)
+      emitter.off('node:move', onNodeMove)
+      emitter.off('node:click', onNodeClick)
+      emitter.off('node:leave', onNodeLeave)
       emitter.off('ceiling:enter', onCeilingEnter)
       emitter.off('ceiling:move', onCeilingMove)
       emitter.off('ceiling:click', onCeilingClick)
@@ -2764,6 +2856,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       draftParent?.type === 'shelf' ||
       draftParent?.type === 'cabinet' ||
       draftParent?.type === 'procedural-item' ||
+      (draftParent && canHostSurfaceChild(draftParent, draft.type, draft.id)) ||
       (draftParent &&
         nodeRegistry.get(draftParent.type)?.capabilities.faceHost?.currentFaceId(draft))
     )

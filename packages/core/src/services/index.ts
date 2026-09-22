@@ -36,11 +36,13 @@ export {
   canAttach,
   canHostOnTop,
   clampYToHostTop,
+  clearFaceHostItemFields,
   getSurface,
   getTopSurfaceHeight,
   MAX_HOST_DEPTH,
   pickHost,
   type Vec3,
+  wouldCreateHostingCycle,
 } from './hosting'
 export {
   DEFAULT_LEVEL_HEIGHT,
@@ -118,6 +120,7 @@ export {
   type LevelElevation,
 } from './storey'
 export {
+  canHostSurfaceChild,
   type DeclaredHostSurface,
   getSurfaceProvider,
   type HostSurface,
@@ -125,6 +128,7 @@ export {
   itemSurfaceProvider,
   NON_PHYSICAL_HOST_KINDS,
   proceduralItemSurfaceProvider,
+  rendersHostedChildren,
   resolveSurfacePlacement,
   type SurfaceContext,
   type SurfaceHit,

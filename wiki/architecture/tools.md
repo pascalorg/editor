@@ -138,6 +138,13 @@ Concretely, door/window placement/move keeps these in lockstep across `{door,win
 
 Tells that you've broken parity: a sound/guide/snap that fires in 3D but is silent in 2D (or vice-versa), or a fix landed in one move file but not its sibling. The two move files are deliberately near-mirrors; diff them when in doubt.
 
+Plan-view surface movement retains only the original host while the footprint centre
+is supported. Exiting commits a level-frame floor pose with support re-elected and
+attachment links removed atomically. Plan view never acquires a new host or cycles
+surfaces; fresh placement stays on the floor. Generated designs enable body drag
+through `extensions['pascal:editor/floorplan'].directDrag`, which does not enable
+plain body drag in 3D.
+
 ## Move coexistence: 2D `FloorplanRegistryMoveOverlay` + legacy 3D mover
 
 While a kind is mid-migration its move can run through two paths at once: the registry-driven 2D `FloorplanRegistryMoveOverlay` (`def.floorplanMoveTarget`) and the legacy 3D mover (e.g. `MoveItemContent`). Both react to `setMovingNode(node)`, both mount, both want to commit. Two pitfalls surfaced and have stable fixes; replicate the patterns when porting another kind to coexist.

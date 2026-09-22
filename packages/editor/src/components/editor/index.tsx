@@ -202,6 +202,7 @@ export interface EditorProps {
   projectId?: string | null
 
   // Persistence — defaults to localStorage when omitted
+  guardAgainstSceneWipe?: boolean
   onLoad?: () => Promise<SceneGraph | null>
   onSave?: (scene: SceneGraph, options?: { keepalive?: boolean }) => Promise<void>
   /**
@@ -1042,9 +1043,10 @@ const ViewerCanvas = memo(function ViewerCanvas({
   const setFloorplanPaneRatio = useEditor((s) => s.setFloorplanPaneRatio)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
-  const captureMode = useEditor((s) => s.captureMode)
   useUnitFocusRules()
-  const isolate = captureMode.mode === 'preset' ? captureMode.isolated : null
+  const presetIsolation = useEditor((s) =>
+    s.captureMode.mode === 'preset' ? s.captureMode.isolated : null,
+  )
 
   const [isCameraControlsHintVisible, setIsCameraControlsHintVisible] = useState<boolean | null>(
     null,
@@ -1155,7 +1157,10 @@ const ViewerCanvas = memo(function ViewerCanvas({
             defaultRender={EDITOR_DEFAULT_RENDER}
             disablePostFx={disablePostFx}
             hoverStyles={EDITOR_HOVER_STYLES}
-            isolate={isolate}
+            isolate={presetIsolation}
+            // Preset captures isolate one subtree and keep the exterior transparent.
+            // Other modes retain the viewer's configured background policy.
+            transparent={presetIsolation === null ? undefined : true}
             onSceneReadyChange={onSceneReadyChange}
             renderContext="editor"
             renderPaused={!show3d && !showLoader}
@@ -1237,6 +1242,7 @@ function PreviewStage({
 }
 
 function EditorContent({
+  guardAgainstSceneWipe,
   layoutVersion = 'v1',
   appMenuButton,
   sidebarTop,
@@ -1296,6 +1302,7 @@ function EditorContent({
   useKeyboard({ isVersionPreviewMode, disabled: isFirstPersonMode || isStudioMode })
 
   const { isLoadingSceneRef, saveNow } = useAutoSave({
+    guardAgainstSceneWipe,
     onSave,
     onDirty,
     onSaveStatusChange,

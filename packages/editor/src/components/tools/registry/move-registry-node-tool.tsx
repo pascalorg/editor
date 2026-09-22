@@ -42,7 +42,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { type Group, Vector3 } from 'three'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { commitFreshPlacementSubtree } from '../../../lib/fresh-planar-placement'
-import { stripPlacementMetadataFlags } from '../../../lib/placement-metadata'
+import {
+  isFreshPlacementMetadata,
+  stripPlacementMetadataFlags,
+} from '../../../lib/placement-metadata'
 import {
   offsetPlanPositionByLocalCenter,
   resolvePrioritizedPlanarCursorPosition,
@@ -64,6 +67,7 @@ import useEditor, {
   isMagneticSnapActive,
 } from '../../../store/use-editor'
 import useFacingPose from '../../../store/use-facing-pose'
+import useInteractionScope from '../../../store/use-interaction-scope'
 import { swallowNextClick } from '../../editor/node-arrow-handles'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { DragBoundingBox } from '../shared/drag-bounding-box'
@@ -218,7 +222,14 @@ const ALIGNMENT_THRESHOLD_M = 0.08
  */
 type ClickTriggerEvent = GridEvent | NodeEvent<AnyNode>
 
-export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
+export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
+  const node = useMemo(
+    () =>
+      isFreshPlacementMetadata(source.metadata)
+        ? (useScene.getState().nodes[source.id] ?? source)
+        : source,
+    [source],
+  )
   const itemSurfaceMove = useMemo(() => createRegistryItemSurfaceMove(node), [node])
   const suppressRaycastsRef = useRef<(() => void) | null>(null)
   const previewGroupRef = useRef<Group>(null)
@@ -432,6 +443,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   }, [])
 
   useEffect(() => {
+    const ownsSubtree = useInteractionScope.getState().adoptSubtree(node.id)
     useScene.temporal.getState().pause()
     const movementSfx = createMovementSfxTick()
     dragAnchorRef.current = null
@@ -1114,11 +1126,13 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         } as Partial<AnyNode>
 
         if (isNew) {
-          const finalId = commitFreshPlacementSubtree(node.id as AnyNodeId, data)
-          if (finalId) {
-            committed = true
-            committedId = finalId
-          }
+          const finalId = commitFreshPlacementSubtree(node.id as AnyNodeId, data, (reason) => {
+            setSurfaceRejection(reason)
+            setValid(false)
+          })
+          if (!finalId) return
+          committed = true
+          committedId = finalId
         } else {
           // Fold the connected-ductwork follow-updates into the SAME
           // batch as the moved node so the whole thing is one undo step.
@@ -1339,7 +1353,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       clearParentFramePreview()
       if (isNew) {
         updateSurfaceNode(node.id, {}, null)
-        useScene.getState().deleteNode(node.id as AnyNodeId)
+        if (!ownsSubtree) useScene.getState().deleteNode(node.id)
       } else {
         itemSurfaceMove?.restore()
         applyMeshPose(originalPosition, originalRotationY)
@@ -1376,7 +1390,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       // unmount / commit paths uniformly.
       useAlignmentGuides.getState().clear()
       const finalisedBy2D = useEditor.getState().movingNodeOrigin === '2d'
-      if (!committed && !finalisedBy2D && (!isNew || itemSurfaceMove)) {
+      if (!committed && !finalisedBy2D && (!isNew || (!ownsSubtree && itemSurfaceMove))) {
         useLiveTransforms.getState().clear(node.id)
         clearConnectivityOverrides()
         clearParentFramePreview()

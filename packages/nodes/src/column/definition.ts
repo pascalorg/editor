@@ -6,6 +6,7 @@ import {
   type HandleDescriptor,
   type NodeDefinition,
 } from '@pascal-app/core'
+import { withHostedChildren } from '../shared/hosted-resize'
 import {
   collectStructuralGridAxes,
   resolveStructuralGridSnap,
@@ -13,10 +14,12 @@ import {
 import { buildColumnFloorplan, computeColumnFloorplanLevelData } from './floorplan'
 import { columnResizeAffordance, columnRotateAffordance } from './floorplan-affordances'
 import { columnFloorplanMoveTarget } from './floorplan-move'
+import { columnHostedPolicy } from './hosted-resize'
 import { columnPaint } from './paint'
 import { columnParametrics } from './parametrics'
 import { ColumnNode } from './schema'
 import { columnSlots } from './slots'
+import { columnSurfaceProvider } from './surface'
 
 // Limits + offsets shared with the in-world arrows. Mirrors the floors
 // the renderer clamps to (`Math.max(0.2, node.height)` etc.) so a drag
@@ -315,7 +318,7 @@ function columnHandles(node: ColumnNodeType): HandleDescriptor<ColumnNodeType>[]
   }
   handles.push(columnRotateHandle())
   if (!managedByLeanTo) handles.push(columnMoveHandle())
-  return handles
+  return handles.map((handle) => withHostedChildren(handle, columnHostedPolicy))
 }
 
 function resolveColumnStructuralGridMoveSnap({
@@ -363,9 +366,13 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
   },
 
   capabilities: {
+    surfacePlacement: 'floor-only',
     selectable: { hitVolume: 'bbox' },
-    surfaces: { top: { height: (node) => (node as ColumnNodeType).height } },
-    duplicable: true,
+    surfaces: {
+      top: { height: (node) => (node as ColumnNodeType).height },
+      hosting: columnSurfaceProvider,
+    },
+    duplicable: { subtree: true },
     deletable: true,
     // Generic 3D translate-on-XZ via `MoveRegistryNodeTool` (grid snap + the
     // mode-driven snapping the overhaul standardised). 2D move keeps using

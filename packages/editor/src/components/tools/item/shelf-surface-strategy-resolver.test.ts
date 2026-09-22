@@ -3,7 +3,6 @@ import * as core from '@pascal-app/core'
 import {
   ItemNode,
   nodeRegistry,
-  registerNode,
   type ShelfEvent,
   ShelfNode,
   sceneRegistry,
@@ -12,6 +11,7 @@ import {
 import { Euler, Group, Quaternion, Vector3 } from 'three'
 import useEditor from '../../../store/use-editor'
 import useInteractionScope from '../../../store/use-interaction-scope'
+import { registerHostingTestNode } from '../__fixtures__/hosting'
 import { shelfSurfaceStrategy } from './placement-strategies'
 import type { PlacementContext } from './placement-types'
 
@@ -39,7 +39,7 @@ beforeEach(() => {
   restoreRegistry = nodeRegistry._snapshot()
   nodeRegistry._reset()
   rows = [0.5, 1.5]
-  registerNode({
+  registerHostingTestNode({
     kind: 'shelf',
     schemaVersion: 1,
     schema: ShelfNode,
@@ -51,7 +51,7 @@ beforeEach(() => {
       },
     },
   })
-  registerNode({
+  registerHostingTestNode({
     kind: 'item',
     schemaVersion: 1,
     schema: ItemNode,

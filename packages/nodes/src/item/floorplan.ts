@@ -5,6 +5,7 @@ import {
   type FloorplanPoint,
   type GeometryContext,
   getBlockFaceFrame,
+  getEffectiveNode,
   getRoofWallFaceFrame,
   getScaledDimensions,
   type ItemNode,
@@ -45,13 +46,68 @@ function rotateVec(x: number, y: number, angle: number): [number, number] {
   return [x * c + y * s, -x * s + y * c]
 }
 
-function resolveItemTransform(
+function needsFullAncestorFrame(item: ItemNode, ctx: GeometryContext): boolean {
+  let id = item.parentId
+  const visited = new Set<string>([item.id])
+  while (id && !visited.has(id)) {
+    visited.add(id)
+    const parent = ctx.resolve(id as AnyNodeId)
+    if (!parent || parent.type === 'level') break
+    if (
+      ![
+        'wall',
+        'ceiling',
+        'roof',
+        'roof-segment',
+        'item',
+        'shelf',
+        'cabinet',
+        'cabinet-module',
+        'procedural-item',
+        'block',
+        'slab',
+      ].includes(parent.type)
+    ) {
+      const effective = getEffectiveNode(parent) as AnyNode & {
+        position?: number[]
+        rotation?: number | number[]
+      }
+      const live = useLiveTransforms.getState().get(parent.id)
+      const position = live?.position ?? effective.position
+      const rotation = effective.rotation
+      // Main's level-local fallback already handles identity plugins directly on a level.
+      if (
+        parent.type === 'column' ||
+        (parent.parentId && ctx.resolve(parent.parentId as AnyNodeId)?.type !== 'level') ||
+        position?.some((v) => v !== 0) ||
+        live?.rotation ||
+        (Array.isArray(rotation) ? rotation.some((v) => v !== 0) : rotation)
+      )
+        return true
+    }
+    id = parent.parentId
+  }
+  return false
+}
+
+export function resolveItemTransform(
   item: ItemNode,
   ctx: GeometryContext,
   cache = new Map<AnyNodeId, Transform | null>(),
 ): Transform | null {
   const cached = cache.get(item.id as AnyNodeId)
   if (cached !== undefined) return cached
+
+  if (needsFullAncestorFrame(item, ctx)) {
+    const f = restingNodePlanFrame(item, ctx.resolve)
+    const result = {
+      x: f.position[0],
+      y: f.position[2],
+      rotation: Math.atan2(f.axes[2][0], f.axes[2][2]),
+    }
+    cache.set(item.id, result)
+    return result
+  }
 
   const localRotation = item.rotation[1] ?? 0
   let result: Transform | null = null
@@ -120,6 +176,25 @@ function resolveItemTransform(
       rotation: [number, number, number]
     }
     const live = useLiveTransforms.getState().get(shelf.id as AnyNodeId)
+    if (
+      shelf.parentId &&
+      ['item', 'shelf', 'cabinet', 'cabinet-module', 'procedural-item'].includes(
+        ctx.resolve(shelf.parentId as AnyNodeId)?.type ?? '',
+      )
+    ) {
+      const parentT = resolveItemTransform(
+        {
+          ...shelf,
+          position: live?.position ?? shelf.position,
+          rotation: [0, live?.rotation ?? shelf.rotation[1], 0],
+        } as ItemNode,
+        ctx,
+        cache,
+      )
+      if (!parentT) return null
+      const [x, y] = rotateVec(item.position[0], item.position[2], parentT.rotation)
+      return { x: parentT.x + x, y: parentT.y + y, rotation: parentT.rotation + localRotation }
+    }
     const shelfX = live?.position[0] ?? shelf.position[0]
     const shelfZ = live?.position[2] ?? shelf.position[2]
     const shelfRotationY = live?.rotation ?? shelf.rotation[1] ?? 0

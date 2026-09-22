@@ -2,33 +2,47 @@ import {
   type AnyNode,
   type AnyNodeId,
   type CeilingNode,
+  cascadeDirty,
+  clearFaceHostItemFields,
   collectAlignmentAnchors,
+  collectDescendants,
   createSceneApi,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
   getBlockFaceFrame,
-  getRoofWallFaceFrame,
   getScaledDimensions,
+  getSurfaceProvider,
   type ItemNode,
   movingFootprintAnchors,
   nodeRegistry,
-  type RoofSegmentNode,
+  resolveSupportSlabPatch,
   resolveSurfacePlacement,
-  roofFacePointToSegment,
+  surfaceRegionContainsPoint,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { boundsOf, boxCorners, frame, transformPoint } from '@pascal-app/core/procedural-items'
+import {
+  boundsOf,
+  boxCorners,
+  composeFrames,
+  frame,
+  transformPoint,
+} from '@pascal-app/core/procedural-items'
 import {
   applyFloorplanAlignment,
   isGridSnapActive,
   isMagneticSnapActive,
+  surfaceAttachmentId,
+  surfaceFramePose,
+  updateSurfaceNode,
   useEditor,
+  useInteractionScope,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 import { restingNodePlanFrame } from '../shared/resting-surface-plan'
 import { findClosestWallInPlan, snapLocalXToNeighbors } from '../shared/wall-attach-target'
+import { resolveItemTransform } from './floorplan'
 
 /**
  * 2D floor-plan move handler for item. Branches on `asset.attachTo`:
@@ -40,10 +54,9 @@ import { findClosestWallInPlan, snapLocalXToNeighbors } from '../shared/wall-att
  *   - `'ceiling'`: pointer is point-in-polygon-tested against every
  *     ceiling on the level. If hit, the item reparents to that
  *     ceiling at the snapped local plan position.
- *   - undefined (floor): pointer is point-in-polygon-tested against
- *     every slab on the level. If hit, the item reparents to that
- *     slab; otherwise it stays parented to the level (free-floating)
- *     at the snapped plan position.
+ *   - undefined (floor): retains the current resting surface while the
+ *     footprint centre is supported; otherwise reparents to the level
+ *     at the floor datum and re-elects slab support.
  *
  * Skipped vs the 3D `MoveItemContent` for now: attachTo *transitions*
  * (drop a wall lamp on a ceiling and have it switch to ceiling-attach).
@@ -56,128 +69,19 @@ type ItemPlanTransform = {
   rotation: number
 }
 
-function rotateVec(x: number, z: number, rotationY: number): [number, number] {
-  const c = Math.cos(rotationY)
-  const s = Math.sin(rotationY)
-  return [x * c + z * s, -x * s + z * c]
-}
-
 function resolveItemPlanTransform(
   item: ItemNode,
   nodes: Record<AnyNodeId, AnyNode>,
-  cache = new Map<AnyNodeId, ItemPlanTransform>(),
 ): ItemPlanTransform {
-  const cached = cache.get(item.id as AnyNodeId)
-  if (cached) return cached
-
-  const localRotation = item.rotation[1] ?? 0
-  let result: ItemPlanTransform = {
-    point: [item.position[0], item.position[2]],
-    rotation: localRotation,
+  const pose = resolveItemTransform(item, { resolve: (id: AnyNodeId) => nodes[id] } as never)
+  return {
+    point: pose ? [pose.x, pose.y] : [item.position[0], item.position[2]],
+    rotation: pose?.rotation ?? item.rotation[1],
   }
-  const parent = item.parentId ? nodes[item.parentId as AnyNodeId] : null
-  if (parent?.type === 'wall') {
-    const wallRotation = -Math.atan2(
-      parent.end[1] - parent.start[1],
-      parent.end[0] - parent.start[0],
-    )
-    const wallLocalZ =
-      item.asset.attachTo === 'wall-side'
-        ? ((parent.thickness ?? 0.1) / 2) * (item.side === 'front' ? 1 : -1)
-        : item.position[2]
-    const [offsetX, offsetZ] = rotateVec(item.position[0], wallLocalZ, wallRotation)
-    result = {
-      point: [parent.start[0] + offsetX, parent.start[1] + offsetZ],
-      rotation: wallRotation + localRotation,
-    }
-  } else if (
-    parent?.type === 'cabinet' ||
-    parent?.type === 'cabinet-module' ||
-    parent?.type === 'procedural-item'
-  ) {
-    const f = restingNodePlanFrame(item, (id) => nodes[id])
-    result = {
-      point: [f.position[0], f.position[2]],
-      rotation: Math.atan2(f.axes[2][0], f.axes[2][2]),
-    }
-  } else if (parent?.type === 'shelf') {
-    const shelf = parent as AnyNode & {
-      position: [number, number, number]
-      rotation: [number, number, number]
-    }
-    const [offsetX, offsetZ] = rotateVec(item.position[0], item.position[2], shelf.rotation[1] ?? 0)
-    result = {
-      point: [shelf.position[0] + offsetX, shelf.position[2] + offsetZ],
-      rotation: (shelf.rotation[1] ?? 0) + localRotation,
-    }
-  } else if (parent?.type === 'item') {
-    const parentTransform = resolveItemPlanTransform(parent as ItemNode, nodes, cache)
-    const [offsetX, offsetZ] = rotateVec(
-      item.position[0],
-      item.position[2],
-      parentTransform.rotation,
-    )
-    result = {
-      point: [parentTransform.point[0] + offsetX, parentTransform.point[1] + offsetZ],
-      rotation: parentTransform.rotation + localRotation,
-    }
-  } else if (parent?.type === 'roof-segment') {
-    // Roof-hosted wall item: FACE-LOCAL position mapped through the face
-    // frame, then composed through the segment's and roof's yaw +
-    // position into level-local plan coords — without this the drag seed
-    // jumps off the roof at move start.
-    const segment = parent as RoofSegmentNode
-    const roof = segment.parentId
-      ? (nodes[segment.parentId as AnyNodeId] as
-          | (AnyNode & { position: [number, number, number]; rotation: number })
-          | undefined)
-      : undefined
-    if (roof?.type === 'roof' && item.roofFace) {
-      const frame = getRoofWallFaceFrame(segment, item.roofFace)
-      const segLocal = roofFacePointToSegment(segment, item.roofFace, item.position)
-      const [sx, sz] = rotateVec(segLocal[0], segLocal[2], segment.rotation ?? 0)
-      const [rx, rz] = rotateVec(
-        sx + segment.position[0],
-        sz + segment.position[2],
-        roof.rotation ?? 0,
-      )
-      result = {
-        point: [rx + roof.position[0], rz + roof.position[2]],
-        rotation: (roof.rotation ?? 0) + (segment.rotation ?? 0) + frame.yaw + localRotation,
-      }
-    }
-  } else if (parent?.type === 'block' && item.blockFaceId) {
-    const frame = getBlockFaceFrame(parent.topology, item.blockFaceId)
-    if (frame) {
-      const localX =
-        frame.origin[0] +
-        frame.xAxis[0] * item.position[0] +
-        frame.yAxis[0] * item.position[1] +
-        frame.normal[0] * item.position[2]
-      const localZ =
-        frame.origin[2] +
-        frame.xAxis[2] * item.position[0] +
-        frame.yAxis[2] * item.position[1] +
-        frame.normal[2] * item.position[2]
-      const [offsetX, offsetZ] = rotateVec(localX, localZ, parent.rotation ?? 0)
-      result = {
-        point: [parent.position[0] + offsetX, parent.position[2] + offsetZ],
-        rotation:
-          (parent.rotation ?? 0) - Math.atan2(frame.xAxis[2], frame.xAxis[0]) + localRotation,
-      }
-    }
-  }
-
-  cache.set(item.id as AnyNodeId, result)
-  return result
 }
 
-function resolveItemPlanPoint(
-  item: ItemNode,
-  nodes: Record<AnyNodeId, AnyNode>,
-  cache = new Map<AnyNodeId, ItemPlanTransform>(),
-): [number, number] {
-  return resolveItemPlanTransform(item, nodes, cache).point
+function resolveItemPlanPoint(item: ItemNode, nodes: Record<AnyNodeId, AnyNode>): [number, number] {
+  return resolveItemPlanTransform(item, nodes).point
 }
 
 function createPlanarMovePointResolver(originalPlanPoint: [number, number], node: ItemNode) {
@@ -302,24 +206,114 @@ function buildWallItemSession(
  * bookkeeping and the item drops out of the level→children DFS the
  * floor-plan layer walks → the polygon stops rendering mid-drag.
  *
- * For the 2D move we just translate `position` in level-local coords and
- * leave the parent as the level (matching the 3D `detachItemSurfaceToFloor`
- * in `use-placement-coordinator.tsx`). Snap to the 0.5m grid unless the
- * user holds Shift.
+ * A host exit converts the pose to the level frame, matching the 3D
+ * `detachItemSurfaceToFloor`; inherited support lift stays out of stored Y.
  */
 function buildFloorItemSession(
   node: ItemNode,
   startLevelId: AnyNodeId | null,
   nodes: Record<AnyNodeId, AnyNode>,
 ): FloorplanMoveTargetSession {
-  const rotationY = node.rotation[1] ?? 0
-  const resolvePlanPoint = createPlanarMovePointResolver(resolveItemPlanPoint(node, nodes), node)
+  const host = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
+  const hosted = host && host.type !== 'level'
+  const surfaceId = surfaceAttachmentId(node)
+  const hostPose = surfaceFramePose(node.parentId, surfaceId, node, false)
+  const planTransform = resolveItemPlanTransform(node, nodes)
+  const levelFrame = hosted ? restingNodePlanFrame(node, (id) => nodes[id]) : null
+  const rotationY = levelFrame
+    ? Math.atan2(levelFrame.axes[2][0], levelFrame.axes[2][2])
+    : planTransform.rotation
+  const levelRotation: [number, number, number] = [...node.rotation]
+  if (hosted) {
+    if ((node as AnyNode).type === 'procedural-item') {
+      // Generated footprints use the query frame; catalog footprints keep their legacy plan mapping.
+      planTransform.point = [levelFrame!.position[0], levelFrame!.position[2]]
+      const hostFrame = restingNodePlanFrame(host, (id) => nodes[id])
+      const headingPose = surfaceFramePose(
+        node.parentId,
+        surfaceId,
+        { position: node.position, rotation: [0, node.rotation[1], 0] },
+        false,
+      )
+      levelRotation[1] =
+        headingPose.rotation[1] + Math.atan2(hostFrame.axes[2][0], hostFrame.axes[2][2])
+    } else {
+      levelRotation.splice(0, 3, hostPose.rotation[0], rotationY, hostPose.rotation[2])
+    }
+  }
+  if (host?.type === 'block' && node.blockFaceId) levelRotation.splice(0, 3, 0, rotationY, 0)
+  const resolvePlanPoint = createPlanarMovePointResolver(planTransform.point, node)
   // Alignment candidates gathered once — scene is stable during the drag.
   const candidates = collectAlignmentAnchors(nodes, node.id)
+  const scene = createSceneApi(useScene)
+  const bounds = nodeRegistry.get(node.type)?.capabilities.dragBounds?.(node, nodes)
+  const dimensions = bounds?.size ?? getScaledDimensions(node)
+  const localBounds = bounds?.center
+    ? {
+        min: bounds.center.map((v, i) => v - dimensions[i]! / 2) as [number, number, number],
+        max: bounds.center.map((v, i) => v + dimensions[i]! / 2) as [number, number, number],
+      }
+    : {
+        min: [-dimensions[0] / 2, 0, -dimensions[2] / 2] as [number, number, number],
+        max: [dimensions[0] / 2, dimensions[1], dimensions[2] / 2] as [number, number, number],
+      }
+  const originalBounds = boundsOf(
+    boxCorners(localBounds.min, localBounds.max).map((p) =>
+      transformPoint(frame(hostPose.position, hostPose.rotation), p),
+    ),
+  )
+  const originalPlacement = hosted
+    ? resolveSurfacePlacement({
+        host,
+        childKind: node.type,
+        childId: node.id,
+        childFootprint: {
+          size: dimensions,
+          rotationY: hostPose.rotation[1],
+          rotation: hostPose.rotation,
+          localBounds,
+        },
+        hit: {
+          point: [
+            (originalBounds.min[0] + originalBounds.max[0]) / 2,
+            originalBounds.min[1],
+            (originalBounds.min[2] + originalBounds.max[2]) / 2,
+          ],
+          normalWorldY: 1,
+        },
+        origin: hostPose.position,
+        scene,
+      })
+    : null
+  const retainedSurfaceId =
+    hosted && originalPlacement
+      ? getSurfaceProvider(host)
+          .surfaces?.(host, { scene })
+          .find((s) => s.id === (surfaceId ?? originalPlacement.surfaceId))?.id
+      : undefined
+  const markMoved = () => {
+    for (const id of new Set([
+      ...cascadeDirty(node.id, { scene }),
+      ...collectDescendants(node.id, { scene }),
+    ]))
+      useScene.getState().markDirty(id)
+  }
+
   let lastPatch: Partial<ItemNode> | null = null
-  return {
+  let lastInput: Parameters<FloorplanMoveTargetSession['apply']>[0] | null = null
+  let commitBlocked = false
+  let lastHostedPatch: Partial<ItemNode> = {
+    parentId: node.parentId,
+    position: [...node.position],
+    rotation: [...node.rotation],
+    supportSlabId: undefined,
+  }
+  const session: FloorplanMoveTargetSession = {
     affectedIds: [node.id as AnyNodeId],
-    apply({ planPoint }) {
+    apply(input) {
+      lastInput = input
+      commitBlocked = false
+      const { planPoint } = input
       const gridSnapped = resolvePlanPoint(planPoint)
       // Figma-style alignment layered on the grid snap, mode-driven (matching 3D):
       // guides are DISPLAYED in every snapping mode; the magnetic pull onto them
@@ -336,35 +330,105 @@ function buildFloorItemSession(
         { applySnap: isMagneticSnapActive() },
       )
 
-      const host = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
-      if (host?.type === 'cabinet' || host?.type === 'shelf') {
-        const hostFrame = restingNodePlanFrame(host, (id) => useScene.getState().nodes[id])
-        const dx = snapped[0] - hostFrame.position[0]
-        const dz = snapped[1] - hostFrame.position[2]
-        const local: [number, number, number] = [
-          dx * hostFrame.axes[0][0] + dz * hostFrame.axes[0][2],
-          node.position[1],
-          dx * hostFrame.axes[2][0] + dz * hostFrame.axes[2][2],
-        ]
-        const bounds = nodeRegistry.get(node.type)?.capabilities.dragBounds?.(node, nodes)
-        const dimensions = bounds?.size ?? getScaledDimensions(node)
-        const center = bounds?.center
-        const localBounds = center
-          ? {
-              min: center.map((v, i) => v - dimensions[i]! / 2) as [number, number, number],
-              max: center.map((v, i) => v + dimensions[i]! / 2) as [number, number, number],
+      const liveHost = host && useScene.getState().nodes[host.id]
+      if (liveHost?.type === 'block' && node.blockFaceId) {
+        const face = getBlockFaceFrame(liveHost.topology, node.blockFaceId)
+        if (face && face.normal[1] > 0.99) {
+          const hostFrame = restingNodePlanFrame(liveHost, (id) => useScene.getState().nodes[id])
+          const surface = composeFrames(hostFrame, {
+            position: face.origin,
+            axes: [face.xAxis, face.yAxis, face.normal],
+          })
+          const delta = [snapped[0] - surface.position[0], 0, snapped[1] - surface.position[2]]
+          const uv = surface.axes
+            .slice(0, 2)
+            .map((axis) => axis.reduce((sum, v, i) => sum + v * delta[i]!, 0)) as [number, number]
+          const vertices = new Map(liveHost.topology.vertices.map((v) => [v.id, v.position]))
+          const polygon = liveHost.topology.faces
+            .find((f) => f.id === node.blockFaceId)!
+            .vertexIds.map((id) => {
+              const v = vertices.get(id)!
+              const delta = v.map((value, i) => value - face.origin[i]!)
+              return [face.xAxis, face.yAxis].map((axis) =>
+                axis.reduce((sum, value, i) => sum + value * delta[i]!, 0),
+              ) as [number, number]
+            })
+          if (surfaceRegionContainsPoint({ kind: 'polygon', points: polygon }, uv)) {
+            lastPatch = {
+              parentId: liveHost.id,
+              position: [uv[0], uv[1], node.position[2]],
+              rotation: [...node.rotation],
+              supportSlabId: undefined,
             }
-          : undefined
+            useLiveNodeOverrides.getState().set(node.id, lastPatch)
+            markMoved()
+            return
+          }
+        }
+      }
+      if (hosted && liveHost && (liveHost.type !== 'block' || !node.blockFaceId)) {
+        const host = liveHost
+        const retainedSurface = getSurfaceProvider(host)
+          .surfaces?.(host, { scene })
+          .find((s) => s.id === retainedSurfaceId)
+        const hostFrame = restingNodePlanFrame(host, (id) => useScene.getState().nodes[id])
+        if (host.type === 'item') {
+          const plan = resolveItemTransform(host, {
+            resolve: (id: AnyNodeId) => useScene.getState().nodes[id],
+          } as never)
+          if (plan) {
+            hostFrame.position[0] = plan.x
+            hostFrame.position[2] = plan.y
+          }
+        }
+        const surfaceFrame = composeFrames(
+          hostFrame,
+          frame(
+            retainedSurface ? [...retainedSurface.position] : [0, hostPose.position[1], 0],
+            retainedSurface ? [...(retainedSurface.rotation ?? [0, 0, 0])] : [0, 0, 0],
+          ),
+        )
+        const normal = surfaceFrame.axes[1]
+        const localRotation = originalPlacement?.surfaceLocal?.rotation ?? hostPose.rotation
+        const bottomOffset = retainedSurface
+          ? -Math.min(
+              ...boxCorners(localBounds.min, localBounds.max).map(
+                (p) => transformPoint(frame([0, 0, 0], [...localRotation]), p)[1],
+              ),
+            )
+          : 0
+        const y =
+          surfaceFrame.position[1] +
+          (bottomOffset -
+            normal[0] * (snapped[0] - surfaceFrame.position[0]) -
+            normal[2] * (snapped[1] - surfaceFrame.position[2])) /
+            normal[1]
+        const delta = [
+          snapped[0] - hostFrame.position[0],
+          y - hostFrame.position[1],
+          snapped[1] - hostFrame.position[2],
+        ]
+        const local = hostFrame.axes.map((axis) =>
+          axis.reduce((sum, v, i) => sum + v * delta[i]!, 0),
+        ) as [number, number, number]
         const projected = boundsOf(
           boxCorners(
             localBounds?.min ?? [-dimensions[0] / 2, 0, -dimensions[2] / 2],
             localBounds?.max ?? [dimensions[0] / 2, dimensions[1], dimensions[2] / 2],
-          ).map((p) => transformPoint(frame(local, node.rotation), p)),
+          ).map((p) => transformPoint(frame(local, hostPose.rotation), p)),
         )
+        let occupied = false
         const pose = resolveSurfacePlacement({
           host,
+          surface: retainedSurface,
           childKind: node.type,
-          childFootprint: { size: dimensions, rotationY, rotation: node.rotation, localBounds },
+          childId: node.id,
+          childFootprint: {
+            size: dimensions,
+            rotationY: hostPose.rotation[1],
+            rotation: hostPose.rotation,
+            localBounds,
+          },
           hit: {
             point: [
               (projected.min[0] + projected.max[0]) / 2,
@@ -375,36 +439,64 @@ function buildFloorItemSession(
           },
           origin: local,
           scene: createSceneApi(useScene),
+          onReject: (reason) => {
+            occupied = reason === 'surface-occupied'
+          },
         })
-        if (pose && Math.abs(pose.position[1] - node.position[1]) < 1e-5) {
-          lastPatch = { parentId: host.id, position: [...pose.position], supportSlabId: undefined }
+        if (occupied) {
+          commitBlocked = useInteractionScope.getState().ownedSubtree?.creation.rootId === node.id
+          lastPatch = lastHostedPatch
           useLiveNodeOverrides.getState().set(node.id as AnyNodeId, lastPatch)
-          useScene.getState().markDirty(node.id as AnyNodeId)
+          markMoved()
+          return
+        }
+        if (
+          pose &&
+          (pose.childFrame === 'surface-local' ? pose.surfaceId === surfaceId : surfaceId === null)
+        ) {
+          const stored = pose.childFrame === 'surface-local' ? pose.surfaceLocal! : pose
+          lastPatch = {
+            parentId: host.id,
+            position: [...stored.position],
+            rotation: [...node.rotation],
+            supportSlabId: undefined,
+          }
+          lastHostedPatch = lastPatch
+          useLiveNodeOverrides.getState().set(node.id as AnyNodeId, lastPatch)
+          markMoved()
           return
         }
       }
-      const sourceY = node.position[1]
-      const nextPosition: [number, number, number] = [snapped[0], sourceY, snapped[1]]
+      const nextPosition: [number, number, number] = [
+        snapped[0],
+        hosted ? 0 : node.position[1],
+        snapped[1],
+      ]
 
       lastPatch = {
+        ...(node.blockFaceId ? clearFaceHostItemFields(host) : {}),
         position: nextPosition,
+        rotation: levelRotation,
         // Keep parent as the level we resolved at session-start. If
         // somehow it's null (e.g. orphaned item), fall back to the
         // existing parent so we don't write `null` and detach.
         parentId: startLevelId ?? node.parentId,
       }
+      Object.assign(lastPatch, resolveSupportSlabPatch({ ...node, ...lastPatch } as AnyNode, nodes))
       useLiveNodeOverrides.getState().set(node.id as AnyNodeId, lastPatch)
-      useScene.getState().markDirty(node.id as AnyNodeId)
+      markMoved()
     },
     canCommit() {
-      return lastPatch !== null
+      return lastPatch !== null && !commitBlocked
     },
     commit() {
+      if (lastInput) session.apply(lastInput)
       if (!lastPatch) return
+      updateSurfaceNode(node.id as AnyNodeId, lastPatch)
       useLiveNodeOverrides.getState().clear(node.id as AnyNodeId)
-      useScene.getState().updateNodes([{ id: node.id as AnyNodeId, data: lastPatch }])
     },
   }
+  return session
 }
 
 /**

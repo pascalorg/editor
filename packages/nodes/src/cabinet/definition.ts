@@ -78,7 +78,7 @@ import {
   minCabinetCarcassHeightForStack,
   stackForCabinet,
 } from './stack'
-import { cabinetSurfaceProvider } from './surfaces'
+import { cabinetModuleSurfaceProvider, cabinetSurfaceProvider } from './surfaces'
 import {
   cabinetFloorplanAffectedIds,
   cabinetTreeChildIds,
@@ -2339,6 +2339,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   }),
 
   capabilities: {
+    surfacePlacement: 'floor-only',
     selectable: { hitVolume: 'bbox' },
     movable: {
       axes: ['x', 'z'],
@@ -2552,6 +2553,7 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
+    surfaces: { hosting: cabinetModuleSurfaceProvider },
     movable: {
       axes: ['x', 'z'],
       directDrag: true,

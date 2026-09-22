@@ -8,6 +8,18 @@ import {
 const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]
 
 describe('capture manifests', () => {
+  test('keeps generated scenes independent from the original room model', () => {
+    const descriptor = normalizeCaptureSessionManifest({
+      schemaVersion: 2,
+      sessionId: 'capture_123',
+      streams: [
+        { id: 'room', kind: 'room-model', role: 'model' },
+        { id: 'generated', kind: 'spaceform-scene' },
+      ],
+    })
+    expect(descriptor.streams.map(captureLayerKey)).toEqual(['model', 'spaceformScene'])
+  })
+
   test('normalizes the Community v1 manifest into extensible streams', () => {
     const descriptor = normalizeCaptureSessionManifest({
       schemaVersion: 1,

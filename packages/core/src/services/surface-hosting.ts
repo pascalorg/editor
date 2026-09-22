@@ -1,11 +1,15 @@
-import { isProceduralItem } from '../procedural-items/query'
+import {
+  attachmentBounds,
+  attachmentRegionsOverlap,
+  isProceduralItem,
+} from '../procedural-items/query'
 import { evaluateRecipe, type Recipe, type Vec3 } from '../procedural-items/recipe'
-import { boxCorners, frame, transformPoint } from '../procedural-items/spatial'
+import { boundsOf, boxCorners, frame, transformPoint } from '../procedural-items/spatial'
 import { nodeRegistry } from '../registry/registry'
-import type { SceneApi } from '../registry/types'
+import type { AnyNodeDefinition, SceneApi } from '../registry/types'
 import { getScaledDimensions, isLowProfileItemSurface } from '../schema/nodes/item'
-import type { AnyNode } from '../schema/types'
-import { canHostOnTop } from './hosting'
+import type { AnyNode, AnyNodeId } from '../schema/types'
+import { canHostOnTop, wouldCreateHostingCycle } from './hosting'
 import { shelfRowBoardDimensions } from './shelf-board'
 import { surfaceRegionContainsFootprint, surfaceRegionContainsPoint } from './surface-region'
 
@@ -58,6 +62,7 @@ export type SurfaceRejectReason =
   | 'footprint-outside-surface'
   | 'footprint-exceeds-host'
   | 'surface-cutout'
+  | 'surface-occupied'
 
 export type SurfacePlacement = {
   position: readonly [number, number, number]
@@ -221,7 +226,32 @@ const adapters = new Map<string, SurfaceProvider>([
 
 export function getSurfaceProvider(host: AnyNode): SurfaceProvider {
   const declaration = nodeRegistry.get(host.type)?.capabilities.surfaces
-  return declaration?.hosting ?? adapters.get(host.type) ?? hitDerivedSurfaceProvider
+  return declaration?.hosting || adapters.get(host.type) || hitDerivedSurfaceProvider
+}
+
+export function rendersHostedChildren(def: AnyNodeDefinition): boolean {
+  return def.renderer
+    ? def.renderer.kind === 'parametric' && def.rendersChildren !== false
+    : !!def.geometry
+}
+
+export function canHostSurfaceChild(host: AnyNode, childKind: string, childId?: string): boolean {
+  const def = nodeRegistry.get(host.type)
+  if (
+    !def ||
+    NON_PHYSICAL_HOST_KINDS.includes(host.type) ||
+    def.capabilities.surfaces?.hosting === false ||
+    nodeRegistry.get(childKind)?.capabilities.surfacePlacement === 'floor-only' ||
+    !rendersHostedChildren(def)
+  )
+    return false
+  const generated = childId
+    ? undefined
+    : nodeRegistry.get(childKind)?.schema.shape.id?.safeParse(undefined)
+  const id = childId ?? (generated?.success ? generated.data : undefined)
+  if (typeof id !== 'string') return false
+  const parsed = def.schema.shape.children?.safeParse([id])
+  return parsed?.success === true && Array.isArray(parsed.data) && parsed.data.includes(id)
 }
 
 function hostRegion(host: AnyNode, ctx: SurfaceContext): SurfaceRegion | undefined {
@@ -251,7 +281,9 @@ function hostRegion(host: AnyNode, ctx: SurfaceContext): SurfaceRegion | undefin
 /** Hit and child rotation are host-local; bounds and dimensions are scaled child-local values. */
 export function resolveSurfacePlacement(args: {
   host: AnyNode
+  surface?: HostSurface
   childKind: string
+  childId?: string
   childFootprint: {
     size: readonly [number, number, number]
     rotationY: number
@@ -270,16 +302,14 @@ export function resolveSurfacePlacement(args: {
   onReject?: (reason: SurfaceRejectReason) => void
 }): SurfacePlacement | null {
   const { host, hit, childKind, childFootprint } = args
-  // Slabs support level children via supportSlabId. Defer to floor placement
-  // without a refusal, which would block the paired grid event's floor drop.
-  if (host.type === 'slab') return null
+  if (args.childId && wouldCreateHostingCycle(args.childId, host, args.scene)) return null
+  // Defer without a refusal so the paired grid event can place on floor support.
+  if (!canHostOnTop(host) || !canHostSurfaceChild(host, childKind, args.childId)) return null
   const reject = (reason: SurfaceRejectReason) => {
     args.onReject?.(reason)
     return null
   }
   if (!hit.point.every(Number.isFinite)) return reject('invalid-hit')
-  if (NON_PHYSICAL_HOST_KINDS.includes(host.type) || !canHostOnTop(host))
-    return reject('host-not-eligible')
   const ctx: SurfaceContext = { scene: args.scene }
   const provider = getSurfaceProvider(host)
   const poseFor = (surface: HostSurface): SurfacePlacement => {
@@ -333,7 +363,7 @@ export function resolveSurfacePlacement(args: {
         surface.id === null ? null : { position: localPosition, rotationY: rotation[1], rotation },
     }
   }
-  let surface = provider.resolveHit(host, hit, ctx)
+  let surface = args.surface ?? provider.resolveHit(host, hit, ctx)
   if (!surface && hit.normalWorldY >= UPWARD_SURFACE_NORMAL_MIN_Y) {
     // Grab offsets and snapping can leave the pointer over a hole while the child's centre is supported.
     surface = nearestSurface(
@@ -411,6 +441,30 @@ export function resolveSurfacePlacement(args: {
       )
     )
       return reject('footprint-exceeds-host')
+  }
+  if (isProceduralItem(host) && pose.surfaceId !== null && pose.surfaceLocal) {
+    const bounds = childFootprint.localBounds ?? {
+      min: [-childFootprint.size[0] / 2, 0, -childFootprint.size[2] / 2] as Vec3,
+      max: [childFootprint.size[0] / 2, childFootprint.size[1], childFootprint.size[2] / 2] as Vec3,
+    }
+    const proposal = boundsOf(
+      boxCorners([...bounds.min], [...bounds.max]).map((point) =>
+        transformPoint(
+          frame([...pose.surfaceLocal!.position], [...pose.surfaceLocal!.rotation]),
+          point,
+        ),
+      ),
+    )
+    for (const id of host.children) {
+      if (id === args.childId || host.attachments[id] !== pose.surfaceId) continue
+      const child = args.scene.get(id as AnyNodeId)
+      if (
+        child &&
+        (isProceduralItem(child) || child.type === 'item') &&
+        attachmentRegionsOverlap(attachmentBounds(child), proposal)
+      )
+        return reject('surface-occupied')
+    }
   }
   return pose
 }

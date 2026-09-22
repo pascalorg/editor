@@ -1125,6 +1125,8 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * already null-guard on `def.renderer` so omitting it is safe.
    */
   renderer?: RendererSource<z.infer<S>>
+  /** Custom renderers default to mounting arbitrary children; declare false when they do not. */
+  rendersChildren?: boolean
   /**
    * Collective renderer the baked `/viewer` uses to re-render this kind live when
    * `bake === 'replace'`. It receives every node of this kind under one baked
@@ -1622,7 +1624,8 @@ export type DuplicateSubtreeCloneResult = {
 }
 
 export type DuplicableConfig = {
-  subtree?: boolean
+  /** 'with-children' preserves the root-only draft lifecycle for childless nodes. */
+  subtree?: boolean | 'with-children'
   prepareSubtreeClone?: (args: DuplicateSubtreeCloneArgs) => DuplicateSubtreeCloneResult
 }
 
@@ -1633,6 +1636,7 @@ export type Capabilities = {
   rotatable?: RotatableConfig
   scalable?: ScalableConfig
   hostable?: HostableConfig
+  surfacePlacement?: 'floor-only'
   cuttable?: CuttableConfig
   snappable?: SnappableConfig
   surfaces?: SurfacesConfig
@@ -2233,7 +2237,7 @@ export type SnappableConfig = {
 export type SnapPointKind = 'start' | 'end' | 'midpoint' | 'center' | 'corners'
 
 export type SurfacesConfig = {
-  hosting?: SurfaceProvider
+  hosting?: SurfaceProvider | false
   top?: {
     height: number | ((n: AnyNode, context: { nodes: Record<string, AnyNode> }) => number)
   }

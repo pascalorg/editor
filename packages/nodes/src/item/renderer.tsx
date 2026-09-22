@@ -478,9 +478,16 @@ export const ItemRenderer = ({ node: storeNode }: { node: ItemNode }) => {
     </group>
   )
 
-  if (node.blockFaceId && node.parentId) {
+  // A floor-exit override is still mounted beneath the stored block until commit.
+  const faceNode =
+    liveOverrides?.parentId &&
+    useScene.getState().nodes[liveOverrides.parentId as AnyNodeId]?.type === 'level' &&
+    useScene.getState().nodes[storeNode.parentId as AnyNodeId]?.type === 'block'
+      ? storeNode
+      : node
+  if (faceNode.blockFaceId && faceNode.parentId) {
     return (
-      <BlockFaceHostFrame blockId={node.parentId} faceId={node.blockFaceId}>
+      <BlockFaceHostFrame blockId={faceNode.parentId} faceId={faceNode.blockFaceId}>
         {content}
       </BlockFaceHostFrame>
     )

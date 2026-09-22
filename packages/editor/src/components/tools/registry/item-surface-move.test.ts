@@ -9,7 +9,6 @@ import {
   ItemNode,
   LevelNode,
   nodeRegistry,
-  registerNode,
   resolveSupportSlabPatch,
   sceneRegistry,
   spatialGridManager,
@@ -23,6 +22,7 @@ import {
 } from '@pascal-app/core/procedural-items'
 import { Group, Vector3 } from 'three'
 import { commitFreshPlacementSubtree } from '../../../lib/fresh-planar-placement'
+import { registerHostingTestNode } from '../__fixtures__/hosting'
 import {
   createItemSurfaceGridDispatch,
   createItemSurfacePointerArbitration,
@@ -73,7 +73,15 @@ beforeEach(() => {
   oldNodes = useScene.getState().nodes
   oldRoots = useScene.getState().rootNodeIds
   nodeRegistry._reset()
-  registerNode({
+  registerHostingTestNode({
+    kind: 'item',
+    schemaVersion: 1,
+    schema: ItemNode,
+    category: 'furnish',
+    defaults: () => ({}),
+    capabilities: {},
+  })
+  registerHostingTestNode({
     kind: 'procedural-item',
     schemaVersion: 1,
     schema: ProceduralItemNode,

@@ -71,17 +71,29 @@ export function buildColumnFloorplan(
   const stroke = showSelectedChrome && palette ? palette.selectedStroke : '#374151'
   const fill = showSelectedChrome ? '#fed7aa' : '#9ca3af'
 
-  const children: FloorplanGeometry[] = [
-    {
-      kind: 'polygon',
-      points,
-      fill,
-      stroke,
-      strokeWidth: showSelectedChrome ? 0.03 : 0.02,
-      opacity: 0.92,
-      metadata: floorplanGeometryMetadata({ annotationObstacle: 'bounds' }),
-    },
-  ]
+  const body: FloorplanGeometry = {
+    kind: 'polygon',
+    points,
+    fill,
+    stroke,
+    strokeWidth: showSelectedChrome ? 0.03 : 0.02,
+    opacity: 0.92,
+    metadata: floorplanGeometryMetadata({ annotationObstacle: 'bounds' }),
+  }
+  const children: FloorplanGeometry[] = node.children.length
+    ? [
+        // Occupied columns keep label bounds in the overlay without covering their children.
+        {
+          kind: 'polygon',
+          points,
+          fill: 'none',
+          stroke: 'none',
+          pointerEvents: 'none',
+          metadata: body.metadata,
+        },
+        { ...body, metadata: undefined },
+      ]
+    : [body]
   const { halfX, halfZ } = columnPlanHalfExtents(node)
   const centerMarkHalf = Math.min(0.09, Math.max(0.035, Math.min(halfX, halfZ) * 0.45))
   const centerX = node.position[0]

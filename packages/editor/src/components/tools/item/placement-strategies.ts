@@ -4,7 +4,6 @@ import type {
   CeilingEvent,
   CeilingNode,
   GridEvent,
-  ItemNode,
   NodeEvent,
   RoofEvent,
   RoofNode,
@@ -17,6 +16,7 @@ import type {
 } from '@pascal-app/core'
 import {
   clampRectToRoofWallFace,
+  clearFaceHostItemFields,
   createSceneApi,
   getRoofSegmentWallFace,
   getScaledDimensions,
@@ -25,6 +25,7 @@ import {
   roofFacePointToSegment,
   sceneRegistry,
   useScene,
+  wouldCreateHostingCycle,
 } from '@pascal-app/core'
 import { Euler, Quaternion, Vector3 } from 'three'
 import { hasRoofFaceChildOverlap, resolveRoofWallHit } from '../../../lib/roof-wall-hit'
@@ -49,20 +50,6 @@ import type {
 } from './placement-types'
 
 const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
-function isDescendantOfItem(
-  candidate: AnyNode,
-  ancestorId: string,
-  nodes: Record<string, AnyNode>,
-): boolean {
-  let parentId = candidate.parentId
-  while (parentId) {
-    if (parentId === ancestorId) return true
-    const parent = nodes[parentId as AnyNodeId]
-    parentId = parent?.parentId ?? null
-  }
-  return false
-}
-
 // ============================================================================
 // FLOOR STRATEGY
 // ============================================================================
@@ -211,6 +198,12 @@ export const wallStrategy = {
     const attachTo = ctx.asset.attachTo
     if (attachTo !== 'wall' && attachTo !== 'wall-side') return null
     if (!isValidWallSideFace(event.normal)) return null
+
+    if (
+      ctx.draftItem &&
+      wouldCreateHostingCycle(ctx.draftItem.id, event.node, createSceneApi(useScene))
+    )
+      return null
 
     // Level guard
     const wallLevelId = resolveLevelId(event.node, nodes)
@@ -416,6 +409,11 @@ function resolveRoofWallTarget(
 
   const hit = resolveRoofWallHit(event.node as RoofNode, event.position, event.normal, event.object)
   if (!hit) return null
+  if (
+    ctx.draftItem &&
+    wouldCreateHostingCycle(ctx.draftItem.id, hit.segment, createSceneApi(useScene))
+  )
+    return null
 
   const rawDims = ctx.draftItem
     ? getScaledDimensions(ctx.draftItem)
@@ -605,6 +603,11 @@ export const roofWallStrategy = {
 // ============================================================================
 
 function resolveFaceHostTarget(ctx: PlacementContext, event: NodeEvent) {
+  if (
+    ctx.draftItem &&
+    wouldCreateHostingCycle(ctx.draftItem.id, event.node, createSceneApi(useScene))
+  )
+    return null
   const faceHost = nodeRegistry.get(event.node.type)?.capabilities.faceHost
   if (!faceHost) return null
   const rawDimensions = ctx.draftItem
@@ -622,18 +625,6 @@ function resolveFaceHostTarget(ctx: PlacementContext, event: NodeEvent) {
     dimensions: getGridAlignedDimensions(rawDimensions, ctx.asset.attachTo),
     snapScalar: snapToHalf,
   })
-}
-
-function clearFaceHostItemFields(ctx: PlacementContext): Partial<ItemNode> {
-  const host = ctx.state.blockId ? useScene.getState().nodes[ctx.state.blockId] : undefined
-  const clearFields = host
-    ? nodeRegistry.get(host.type)?.capabilities.faceHost?.clearItemFields
-    : undefined
-  const patch: Partial<ItemNode> = {}
-  for (const field of clearFields ?? []) {
-    ;(patch as Record<string, unknown>)[field] = undefined
-  }
-  return patch
 }
 
 export const faceHostStrategy = {
@@ -695,7 +686,9 @@ export const faceHostStrategy = {
     return {
       stateUpdate: { surface: 'floor', blockId: null },
       nodeUpdate: {
-        ...clearFaceHostItemFields(ctx),
+        ...clearFaceHostItemFields(
+          ctx.state.blockId ? useScene.getState().nodes[ctx.state.blockId] : undefined,
+        ),
         position: floorPosition,
         parentId: ctx.levelId,
         rotation: [0, ctx.currentCursorRotationY, 0],
@@ -724,6 +717,12 @@ export const ceilingStrategy = {
     nodes: Record<string, AnyNode>,
   ): TransitionResult | null {
     if (ctx.asset.attachTo !== 'ceiling') return null
+
+    if (
+      ctx.draftItem &&
+      wouldCreateHostingCycle(ctx.draftItem.id, event.node, createSceneApi(useScene))
+    )
+      return null
 
     // Level guard
     const ceilingLevelId = resolveLevelId(event.node, nodes)
@@ -860,6 +859,8 @@ function resolveCatalogItemSurfacePlacement(
   worldYaw: number,
   onReject?: PlacementContext['onSurfaceReject'],
   rawEvent = event,
+  childId?: string,
+  childRotation?: [number, number, number],
 ) {
   const mesh = sceneRegistry.nodes.get(host.id)
   if (!mesh) return null
@@ -870,7 +871,12 @@ function resolveCatalogItemSurfacePlacement(
   const placement = resolveSurfacePlacement({
     host,
     childKind: 'item',
-    childFootprint: { size: dimensions, rotationY: worldYaw - hostYaw },
+    childId,
+    childFootprint: {
+      size: dimensions,
+      rotationY: worldYaw - hostYaw,
+      rotation: [childRotation?.[0] ?? 0, worldYaw - hostYaw, childRotation?.[2] ?? 0],
+    },
     hit: host.type === 'procedural-item' ? (itemEventToSurfaceHit(host, rawEvent) ?? hit) : hit,
     origin: host.type === 'procedural-item' ? hit.point : undefined,
     scene: createSceneApi(useScene),
@@ -890,17 +896,12 @@ function resolveCatalogItemSurfacePlacement(
 export function validCatalogCounterPose(ctx: PlacementContext): boolean {
   const hostId = ctx.state.surface === 'shelf-surface' ? ctx.state.shelfId : ctx.state.surfaceItemId
   const host = hostId ? useScene.getState().nodes[hostId as AnyNodeId] : undefined
-  if (
-    host?.type !== 'cabinet' &&
-    host?.type !== 'shelf' &&
-    host?.type !== 'item' &&
-    host?.type !== 'procedural-item'
-  )
-    return true
+  if (!host) return true
   if (!ctx.draftItem) return false
   const placement = resolveSurfacePlacement({
     host,
     childKind: 'item',
+    childId: ctx.draftItem.id,
     childFootprint: {
       size: getScaledDimensions(ctx.draftItem),
       rotationY: ctx.draftItem.rotation[1],
@@ -936,7 +937,7 @@ export const itemSurfaceStrategy = {
       : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS)
     if (
       ctx.draftItem &&
-      isDescendantOfItem(surfaceItem, ctx.draftItem.id, useScene.getState().nodes)
+      wouldCreateHostingCycle(ctx.draftItem.id, surfaceItem, createSceneApi(useScene))
     )
       return null
     const pose = resolveCatalogItemSurfacePlacement(
@@ -945,6 +946,9 @@ export const itemSurfaceStrategy = {
       ourDims,
       ctx.currentCursorRotationY,
       ctx.onSurfaceReject,
+      event,
+      ctx.draftItem?.id,
+      ctx.draftItem?.rotation,
     )
     if (!pose) return null
     const draftRotation = ctx.draftItem?.rotation ?? [0, 0, 0]
@@ -984,6 +988,8 @@ export const itemSurfaceStrategy = {
       ctx.currentCursorRotationY,
       ctx.onSurfaceReject,
       rawEvent,
+      ctx.draftItem.id,
+      ctx.draftItem.rotation,
     )
     if (!pose) return null
 
@@ -1030,6 +1036,7 @@ function resolveShelfSurfacePlacement(
   worldYaw: number,
   entering: boolean,
   onReject?: PlacementContext['onSurfaceReject'],
+  childId?: string,
 ) {
   const mesh = sceneRegistry.nodes.get(host.id)
   if (!mesh) return null
@@ -1039,6 +1046,7 @@ function resolveShelfSurfacePlacement(
   const placement = resolveSurfacePlacement({
     host,
     childKind: 'item',
+    childId,
     childFootprint: { size: dimensions, rotationY: worldYaw - hostYaw },
     hit: {
       point: local.toArray(),
@@ -1085,6 +1093,7 @@ export const shelfSurfaceStrategy = {
       ctx.currentCursorRotationY,
       true,
       ctx.onSurfaceReject,
+      ctx.draftItem?.id,
     )
     if (!pose) return null
     const draftRotation = ctx.draftItem?.rotation ?? [0, 0, 0]
@@ -1119,6 +1128,7 @@ export const shelfSurfaceStrategy = {
       ctx.currentCursorRotationY,
       false,
       ctx.onSurfaceReject,
+      ctx.draftItem.id,
     )
     if (!pose) return null
 

@@ -436,6 +436,7 @@ describe('cabinet hosting surfaces', () => {
       const args = {
         host: f.run,
         childKind,
+        childId: `${childKind}_existing`,
         childFootprint: { size: [0.1, 0.2, 0.1] as const, rotationY: 0.3 },
         hit: { point: [2.123, y, z] as const, normalWorldY: 1 },
         scene: f.scene as SceneApi,
@@ -475,6 +476,7 @@ describe('cabinet hosting surfaces', () => {
       const placed = resolveSurfacePlacement({
         host: f.run,
         childKind: 'item',
+        childId: 'item_existing',
         childFootprint: { size: [0.1, 0.2, 0.1], rotationY: rotation[1], rotation },
         hit: { point: [0.123, 0.85, 0.1], normalWorldY: 1 },
         scene: f.scene as SceneApi,
@@ -490,6 +492,7 @@ describe('cabinet hosting surfaces', () => {
       const args = {
         host: f.run,
         childKind: 'item',
+        childId: 'item_existing',
         childFootprint: { size: [0.6, 0.2, 0.6] as const, rotationY: Math.PI / 4 },
         scene: f.scene as SceneApi,
       }
@@ -522,6 +525,7 @@ describe('cabinet hosting surfaces', () => {
       const args = {
         host: f.run,
         childKind: 'item',
+        childId: 'item_existing',
         childFootprint: { size: [0.2, 0.2, 0.2] as const, rotationY: 0 },
         scene: f.scene as SceneApi,
         onReject,

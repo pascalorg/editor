@@ -1,5 +1,6 @@
 import { nodeRegistry } from '../registry/registry'
 import type { SceneApi, SurfacesConfig } from '../registry/types'
+import type { ItemNode } from '../schema/nodes/item'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 
 /**
@@ -48,16 +49,27 @@ export function canAttach(childId: AnyNodeId, hostId: AnyNodeId, scene: SceneApi
     return checkDepth(hostId, scene)
   }
 
-  // Cycle: walk host's ancestors and reject if we hit the child.
-  let cursor: AnyNode | undefined = host
-  while (cursor) {
-    if (cursor.id === childId) {
-      return { ok: false, error: { kind: 'cycle', nodeId: childId, hostId } }
-    }
-    cursor = cursor.parentId ? scene.get(cursor.parentId as AnyNodeId) : undefined
+  if (wouldCreateHostingCycle(childId, host, scene)) {
+    return { ok: false, error: { kind: 'cycle', nodeId: childId, hostId } }
   }
 
   return checkDepth(hostId, scene)
+}
+
+export function wouldCreateHostingCycle(
+  childId: string,
+  host: Pick<AnyNode, 'id' | 'parentId'>,
+  scene: Pick<SceneApi, 'get'>,
+): boolean {
+  const visited = new Set<string>()
+  let cursor: string | null = host.id
+  while (cursor) {
+    if (cursor === childId || visited.has(cursor)) return true
+    visited.add(cursor)
+    cursor =
+      (scene.get(cursor as AnyNodeId) ?? (cursor === host.id ? host : undefined))?.parentId ?? null
+  }
+  return false
 }
 
 function checkDepth(hostId: AnyNodeId, scene: SceneApi): AttachResult {
@@ -150,4 +162,14 @@ export function clampYToHostTop(
 ): number {
   const top = getTopSurfaceHeight(host, nodes)
   return top == null ? originalY : top
+}
+
+export function clearFaceHostItemFields(host: AnyNode | undefined): Partial<ItemNode> {
+  const patch: Partial<ItemNode> = {}
+  for (const field of (host &&
+    nodeRegistry.get(host.type)?.capabilities.faceHost?.clearItemFields) ??
+    []) {
+    ;(patch as Record<string, unknown>)[field] = undefined
+  }
+  return patch
 }

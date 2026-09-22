@@ -6,7 +6,6 @@ import {
   type BlockTopology,
   emitter,
   sceneRegistry,
-  useLiveNodeOverrides,
 } from '@pascal-app/core'
 import {
   cn,
@@ -87,6 +86,11 @@ import useBlockEditSession from './edit-session'
 import { triangulateBlockFace } from './geometry'
 import { blockGeometrySnapThreshold, resolveBlockGeometrySnap } from './geometry-snap'
 import { BLOCK_WHEEL_OPTIONS, consumeBlockGestureWheel } from './gesture-wheel'
+import {
+  BLOCK_SUPPORT_REFUSAL,
+  commitBlockTopologyEdit,
+  createBlockTopologyPreview,
+} from './hosted-edit'
 import { type BlockSfxAction, blockSfx } from './interaction-sfx'
 import {
   type BlockLastOperation,
@@ -1503,6 +1507,10 @@ function BlockEditor({
   mirrorTarget: boolean
 }) {
   const { camera, gl } = useThree()
+  const topologyPreview = useMemo(
+    () => createBlockTopologyPreview(node.id, sceneApi),
+    [node.id, sceneApi],
+  )
   const outerRef = useRef<Group>(null)
   const menuScaleRef = useRef<HTMLDivElement>(null)
   const menuWorldPositionRef = useRef(new Vector3())
@@ -1605,7 +1613,7 @@ function BlockEditor({
   const exitEditMode = useCallback(() => {
     cancelDragRef.current?.()
     cancelDragRef.current = null
-    useLiveNodeOverrides.getState().clear(node.id)
+    topologyPreview.clear()
     sceneApi.markDirty(node.id)
     endOwnedScope()
     useBlockEditSession.getState().end(node.id)
@@ -1622,25 +1630,25 @@ function BlockEditor({
     setToolbarPanel(null)
     setError(null)
     playBlockSfx('finish')
-  }, [endOwnedScope, node.id, sceneApi.markDirty])
+  }, [endOwnedScope, node.id, sceneApi.markDirty, topologyPreview])
 
   useEffect(
     () => () => {
       cancelDragRef.current?.()
-      useLiveNodeOverrides.getState().clear(node.id)
+      topologyPreview.clear()
       sceneApi.markDirty(node.id)
       endOwnedScope()
       useBlockEditSession.getState().end(node.id)
       if (document.body.style.cursor === 'grabbing') document.body.style.cursor = ''
     },
-    [endOwnedScope, node.id, sceneApi.markDirty],
+    [endOwnedScope, node.id, sceneApi.markDirty, topologyPreview],
   )
 
   useEffect(() => {
     if (editing) return
     cancelDragRef.current?.()
     cancelDragRef.current = null
-    useLiveNodeOverrides.getState().clear(node.id)
+    topologyPreview.clear()
     sceneApi.markDirty(node.id)
     setPreviewTopology(null)
     setToolbarPanel(null)
@@ -1653,7 +1661,7 @@ function BlockEditor({
     setActiveFaceOperation(null)
     setFaceOperationValue('')
     useBlockEditSession.getState().end(node.id)
-  }, [editing, node.id, sceneApi.markDirty])
+  }, [editing, node.id, sceneApi.markDirty, topologyPreview])
 
   useEffect(() => {
     if (!editing) return
@@ -2128,16 +2136,19 @@ function BlockEditor({
           setError(result.error)
           return
         }
+        if (!topologyPreview.set(result.topology)) {
+          setError(BLOCK_SUPPORT_REFUSAL)
+          return
+        }
         latestTopology = result.topology
         latestCommand = command
         setPreviewTopology(result.topology)
-        useLiveNodeOverrides.getState().set(node.id, { topology: result.topology })
         sceneApi.markDirty(node.id)
         setError(null)
       }
 
       const complete = (commit: boolean) => {
-        useLiveNodeOverrides.getState().clear(node.id)
+        topologyPreview.clear()
         sceneApi.markDirty(node.id)
         setPreviewTopology(null)
         setActiveTransform(null)
@@ -2242,6 +2253,7 @@ function BlockEditor({
       setModalFeedbackMode('free')
       setError(null)
       beginBlockModalSession({
+        canCommit: () => topologyPreview.valid,
         beginInputDrag: interactionApi.beginInputDrag,
         cancelRef: cancelDragRef,
         cursor: operation === 'translate' ? 'move' : 'crosshair',
@@ -2266,6 +2278,7 @@ function BlockEditor({
       selection,
       target,
       sceneApi.markDirty,
+      topologyPreview,
     ],
   )
 
@@ -2376,10 +2389,15 @@ function BlockEditor({
           setError(result.error)
           return
         }
+        const wasSupportRefused = !topologyPreview.valid
+        if (!topologyPreview.set(result.topology)) {
+          setError(BLOCK_SUPPORT_REFUSAL)
+          return
+        }
+        if (wasSupportRefused) setError(null)
         latestDelta = delta
         latestTopology = result.topology
         setPreviewTopology(result.topology)
-        useLiveNodeOverrides.getState().set(node.id, { topology: result.topology })
         sceneApi.markDirty(node.id)
       }
 
@@ -2391,7 +2409,12 @@ function BlockEditor({
         window.removeEventListener('pointercancel', onPointerCancel)
         window.removeEventListener('blur', onPointerCancel)
         cancelDragRef.current = null
-        useLiveNodeOverrides.getState().clear(node.id)
+        if (!topologyPreview.valid) {
+          // Release keeps the last visible preview; an entirely refused drag cancels.
+          if (!latestTopology) commit = false
+          setError(null)
+        }
+        topologyPreview.clear()
         sceneApi.markDirty(node.id)
         restoreInputDragging()
         document.body.style.cursor = previousCursor
@@ -2436,6 +2459,7 @@ function BlockEditor({
       selection,
       target,
       sceneApi.markDirty,
+      topologyPreview,
     ],
   )
 
@@ -2514,10 +2538,15 @@ function BlockEditor({
           setError(result.error)
           return
         }
+        const wasSupportRefused = !topologyPreview.valid
+        if (!topologyPreview.set(result.topology)) {
+          setError(BLOCK_SUPPORT_REFUSAL)
+          return
+        }
+        if (wasSupportRefused) setError(null)
         latestAngle = angle
         latestTopology = result.topology
         setPreviewTopology(result.topology)
-        useLiveNodeOverrides.getState().set(node.id, { topology: result.topology })
         sceneApi.markDirty(node.id)
       }
 
@@ -2529,7 +2558,11 @@ function BlockEditor({
         window.removeEventListener('pointercancel', onPointerCancel)
         window.removeEventListener('blur', onPointerCancel)
         cancelDragRef.current = null
-        useLiveNodeOverrides.getState().clear(node.id)
+        if (!topologyPreview.valid) {
+          if (!latestTopology) commit = false
+          setError(null)
+        }
+        topologyPreview.clear()
         sceneApi.markDirty(node.id)
         restoreInputDragging()
         document.body.style.cursor = previousCursor
@@ -2577,6 +2610,7 @@ function BlockEditor({
       selection,
       target,
       sceneApi.markDirty,
+      topologyPreview,
     ],
   )
 
@@ -2643,10 +2677,13 @@ function BlockEditor({
           setError(result.error)
           return
         }
+        if (!topologyPreview.set(result.topology)) {
+          setError(BLOCK_SUPPORT_REFUSAL)
+          return
+        }
         latestFactor = factor
         latestTopology = result.topology
         setPreviewTopology(result.topology)
-        useLiveNodeOverrides.getState().set(node.id, { topology: result.topology })
         sceneApi.markDirty(node.id)
         setError(null)
       }
@@ -2659,7 +2696,11 @@ function BlockEditor({
         window.removeEventListener('pointercancel', onPointerCancel)
         window.removeEventListener('blur', onPointerCancel)
         cancelDragRef.current = null
-        useLiveNodeOverrides.getState().clear(node.id)
+        if (!topologyPreview.valid) {
+          if (!latestTopology) commit = false
+          setError(null)
+        }
+        topologyPreview.clear()
         sceneApi.markDirty(node.id)
         restoreInputDragging()
         document.body.style.cursor = previousCursor
@@ -2707,6 +2748,7 @@ function BlockEditor({
       selection,
       target,
       sceneApi.markDirty,
+      topologyPreview,
     ],
   )
 
@@ -2761,18 +2803,21 @@ function BlockEditor({
         setError(result.error)
         return
       }
-      latestFactor = factor
       setTransformNumericInput(typedInput || blockTransformDisplayValue('scale', factor))
       setModalFeedbackMode(typedInput ? 'exact' : snapStep > 0 ? 'grid' : 'free')
+      if (!topologyPreview.set(result.topology)) {
+        setError(BLOCK_SUPPORT_REFUSAL)
+        return
+      }
+      latestFactor = factor
       latestTopology = result.topology
       setPreviewTopology(result.topology)
-      useLiveNodeOverrides.getState().set(node.id, { topology: result.topology })
       sceneApi.markDirty(node.id)
       setError(null)
     }
 
     const complete = (commit: boolean) => {
-      useLiveNodeOverrides.getState().clear(node.id)
+      topologyPreview.clear()
       sceneApi.markDirty(node.id)
       setPreviewTopology(null)
       setActiveTransform(null)
@@ -2851,6 +2896,7 @@ function BlockEditor({
     setModalFeedbackMode('free')
     setError(null)
     beginBlockModalSession({
+      canCommit: () => topologyPreview.valid,
       beginInputDrag: interactionApi.beginInputDrag,
       cancelRef: cancelDragRef,
       cursor: 'nwse-resize',
@@ -2861,6 +2907,7 @@ function BlockEditor({
     })
     return true
   }, [
+    topologyPreview,
     camera,
     commitAdjustableOperation,
     displayTopology,
@@ -2925,13 +2972,16 @@ function BlockEditor({
           setError(result.error)
           return false
         }
+        setBevelWidth(width)
+        if (!topologyPreview.set(result.topology)) {
+          setError(BLOCK_SUPPORT_REFUSAL)
+          return false
+        }
         activeSegments = segments
         latestWidth = width
-        setBevelWidth(width)
         latestTopology = result.topology
         latestSelection = result.selection
         setPreviewTopology(result.topology)
-        useLiveNodeOverrides.getState().set(node.id, { topology: result.topology })
         sceneApi.markDirty(node.id)
         setError(null)
         return true
@@ -2973,7 +3023,7 @@ function BlockEditor({
         window.removeEventListener('pointercancel', onPointerCancel)
         window.removeEventListener('blur', onPointerCancel)
         cancelDragRef.current = null
-        useLiveNodeOverrides.getState().clear(node.id)
+        topologyPreview.clear()
         sceneApi.markDirty(node.id)
         restoreInputDragging()
         document.body.style.cursor = previousCursor
@@ -3023,6 +3073,7 @@ function BlockEditor({
       selectedIds,
       target,
       sceneApi.markDirty,
+      topologyPreview,
     ],
   )
 
@@ -3126,13 +3177,16 @@ function BlockEditor({
           setError(result.ok ? 'Could not preview loop cut' : result.error)
           return false
         }
+        if (!topologyPreview.set(result.topology)) {
+          setError(BLOCK_SUPPORT_REFUSAL)
+          return false
+        }
         latestFactor = effectiveFactor
         latestTopology = result.topology
         latestSelection = result.selection
         setPreviewTopology(result.topology)
         setLoopCutSegments(segments)
         setLoopCutFactor(effectiveFactor)
-        useLiveNodeOverrides.getState().set(node.id, { topology: result.topology })
         sceneApi.markDirty(node.id)
         setError(null)
         return true
@@ -3183,7 +3237,7 @@ function BlockEditor({
         window.removeEventListener('pointercancel', onPointerCancel)
         window.removeEventListener('blur', onPointerCancel)
         cancelDragRef.current = null
-        useLiveNodeOverrides.getState().clear(node.id)
+        topologyPreview.clear()
         sceneApi.markDirty(node.id)
         restoreInputDragging()
         document.body.style.cursor = previousCursor
@@ -3244,6 +3298,7 @@ function BlockEditor({
       ownsEditSession,
       target,
       sceneApi.markDirty,
+      topologyPreview,
     ],
   )
 
@@ -3282,7 +3337,11 @@ function BlockEditor({
       setError(result.error)
       return
     }
-    sceneApi.update(node.id, { topology: result.topology })
+    if (!commitBlockTopologyEdit(sceneApi, node.id, result.topology)) {
+      useInteractionScope.getState().begin(meshEditScope(node.id))
+      setError(BLOCK_SUPPORT_REFUSAL)
+      return
+    }
     const session = useBlockEditSession.getState()
     session.setSelection(node.id, {
       ...result.selection,
