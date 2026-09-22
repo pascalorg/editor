@@ -126,6 +126,7 @@ export {
   remapMeasurementAnchors,
   remapMeasurementReferences,
 } from './lib/measurement-geometry'
+export { HIDDEN_SITE_NOTE, hidesDescendants } from './lib/node-visibility'
 export {
   type Point2D as PolygonPoint2D,
   pointInPolygon as pointInPolygon2D,

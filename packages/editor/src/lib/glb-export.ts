@@ -7,6 +7,7 @@ import {
   findLevelAncestorId,
   type GeometryContext,
   getLevelDisplayName,
+  hidesDescendants,
   isNodeKindEnabled,
   isOperationDoorType,
   itemClipRegistry,
@@ -727,10 +728,8 @@ function pruneHiddenSceneNodes(
       return false
     }
     const parentId = node.parentId
-    // A Site is the parcel reference, not a container: its renderer ignores
-    // `visible`, so a hidden Site must not take the buildings on it out of the
-    // export the way a hidden level takes its furniture.
-    if (!parentId || path.has(id) || nodes[parentId]?.type === 'site') {
+    const parent = parentId ? nodes[parentId] : undefined
+    if (!parentId || path.has(id) || (parent && !hidesDescendants(parent))) {
       visibility.set(id, true)
       return true
     }
@@ -752,7 +751,8 @@ function pruneHiddenSceneNodes(
     if (isVisible(id, new Set())) continue
     const clone = cloneByOriginal.get(original)
     if (!clone) continue
-    if (nodes[id]?.type !== 'site') {
+    const node = nodes[id]
+    if (!node || hidesDescendants(node)) {
       clone.removeFromParent()
       continue
     }

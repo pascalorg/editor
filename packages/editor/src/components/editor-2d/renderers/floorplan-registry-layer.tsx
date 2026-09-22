@@ -12,6 +12,7 @@ import {
   type FloorplanPoint,
   type FloorplanScope,
   type GeometryContext,
+  hidesDescendants,
   isNodeKindEnabled,
   isRegistryMovable,
   kindsWithFloorplanScope,
@@ -3368,15 +3369,26 @@ export function isFloorplanHierarchyVisible(
   liveOverrides: Map<string, LiveNodeOverrides>,
   rootId: AnyNodeId,
 ): boolean {
+  // The root is checked on its own because a site-scoped node can be declared
+  // on the Site without a `parentId` link. A Site's flag never reaches the
+  // nodes on it; see `hidesDescendants`.
   const root = nodes[rootId]
-  if (root && !isFloorplanNodeVisible(root, liveOverrides.get(root.id))) return false
+  if (
+    root &&
+    root.id !== node.id &&
+    hidesDescendants(root) &&
+    !isFloorplanNodeVisible(root, liveOverrides.get(root.id))
+  ) {
+    return false
+  }
 
   let current: AnyNode | undefined = node
   const seen = new Set<AnyNodeId>()
   while (current) {
     if (seen.has(current.id)) return true
     seen.add(current.id)
-    if (!isFloorplanNodeVisible(current, liveOverrides.get(current.id))) return false
+    const reaches = current.id === node.id || hidesDescendants(current)
+    if (reaches && !isFloorplanNodeVisible(current, liveOverrides.get(current.id))) return false
     if (current.id === rootId) return true
     const parentId = current.parentId as AnyNodeId | null
     if (!parentId) return true

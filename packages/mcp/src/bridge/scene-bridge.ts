@@ -1,6 +1,6 @@
 // Side-effect import MUST come first: installs RAF polyfill before core loads.
 import './node-shims'
-
+import { HIDDEN_SITE_NOTE } from '@pascal-app/core'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import type { AnyNode } from '@pascal-app/core/schema'
 import {
@@ -14,7 +14,12 @@ import useScene from '@pascal-app/core/store'
 import type { SceneMeta } from '../storage/types'
 
 export type ValidationError = { nodeId: string; path: string; message: string }
-export type ValidationResult = { valid: boolean; errors: ValidationError[] }
+export type ValidationResult = {
+  valid: boolean
+  errors: ValidationError[]
+  /** Advisories that do not fail validation, such as a hidden Site. */
+  warnings: ValidationError[]
+}
 
 export type CreatePatch = { op: 'create'; node: AnyNode; parentId?: AnyNodeId }
 export type UpdatePatch = { op: 'update'; id: AnyNodeId; data: Partial<AnyNode> }
@@ -475,8 +480,12 @@ export class SceneBridge {
    */
   validateScene(): ValidationResult {
     const errors: ValidationError[] = []
+    const warnings: ValidationError[] = []
     const nodes = useScene.getState().nodes
     for (const [id, node] of Object.entries(nodes)) {
+      if (node.type === 'site' && node.visible === false) {
+        warnings.push({ nodeId: id, path: 'visible', message: HIDDEN_SITE_NOTE })
+      }
       const res = AnyNodeSchema.safeParse(node)
       if (res.success) continue
       for (const issue of res.error.issues) {
@@ -487,7 +496,7 @@ export class SceneBridge {
         })
       }
     }
-    return { valid: errors.length === 0, errors }
+    return { valid: errors.length === 0, errors, warnings }
   }
 
   /**
