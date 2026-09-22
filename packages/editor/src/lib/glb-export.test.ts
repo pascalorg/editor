@@ -590,19 +590,64 @@ describe('prepareSceneForExport', () => {
     expect(animations).toHaveLength(0)
   })
 
-  test('inherits hidden Site visibility for detached declared children and their descendants', async () => {
+  test('keeps the buildings on a hidden Site and drops only the Site ground', () => {
+    // A layout authored outside the editor can hide the root Site (the
+    // renderer ignores that flag) while every node on it stays visible. The
+    // Site's own flag must stop at the Site: it is the parcel reference, not
+    // a container the building inherits visibility from.
+    const root = new THREE.Group()
+    const siteGroup = new THREE.Group()
+    const siteGround = meshWithNodeMaterial(nodeMaterial())
+    const buildingGroup = new THREE.Group()
+    const levelGroup = new THREE.Group()
+    const itemGroup = new THREE.Group()
+    itemGroup.add(meshWithNodeMaterial(nodeMaterial()))
+    levelGroup.add(itemGroup)
+    buildingGroup.add(levelGroup)
+    siteGroup.add(buildingGroup, siteGround)
+    root.add(siteGroup)
+
+    const siteId = 'site_hidden'
+    const buildingId = 'building_on_hidden_site'
+    const levelId = 'level_on_hidden_site'
+    const itemId = 'item_on_hidden_site'
+    sceneRegistry.nodes.set(siteId, siteGroup)
+    sceneRegistry.nodes.set(buildingId, buildingGroup)
+    sceneRegistry.nodes.set(levelId, levelGroup)
+    sceneRegistry.nodes.set(itemId, itemGroup)
+    const node = (id: string, type: string, parentId: string | null, visible: boolean) =>
+      ({ object: 'node', id, type, parentId, visible }) as unknown as AnyNode
+    const nodes: Record<string, AnyNode> = {
+      [siteId]: node(siteId, 'site', null, false),
+      [buildingId]: node(buildingId, 'building', siteId, true),
+      [levelId]: node(levelId, 'level', buildingId, true),
+      [itemId]: node(itemId, 'item', levelId, true),
+    }
+
+    const { scene } = prepareSceneForExport(root, nodes)
+
+    const meshes: THREE.Mesh[] = []
+    scene.traverse((object) => {
+      if ((object as THREE.Mesh).isMesh) meshes.push(object as THREE.Mesh)
+    })
+    expect(scene.getObjectByName(buildingId)).toBeDefined()
+    expect(scene.getObjectByName(itemId)).toBeDefined()
+    expect(meshes).toHaveLength(1)
+    expect(meshes[0]?.parent?.name).toBe(itemId)
+  })
+
+  test('keeps the nodes a hidden Site hosts, declared or detached, unless hidden themselves', async () => {
     const restoreRegistry = nodeRegistry._snapshot()
     try {
-      const kind = 'test:detached-site-visibility'
+      const kind = 'test:hidden-site-host'
       const childId = 'detached_site_child'
       const descendantId = 'detached_site_descendant'
       const explicitId = 'explicit_site_child'
-      const unownedId = 'unowned_site_child'
+      const hiddenChildId = 'hidden_site_child'
       const hiddenSite = SiteNode.parse({
         visible: false,
-        children: [childId, explicitId],
+        children: [childId, explicitId, hiddenChildId],
       })
-      const visibleSite = SiteNode.parse({ visible: true })
       registerNode({
         kind,
         schemaVersion: 1,
@@ -615,17 +660,19 @@ describe('prepareSceneForExport', () => {
       } as AnyNodeDefinition)
       const nodes = {
         [hiddenSite.id]: hiddenSite,
-        [visibleSite.id]: visibleSite,
         [childId]: { id: childId, type: kind, parentId: null, visible: true },
         [descendantId]: { id: descendantId, type: kind, parentId: childId, visible: true },
-        [explicitId]: { id: explicitId, type: kind, parentId: visibleSite.id, visible: true },
-        [unownedId]: { id: unownedId, type: kind, parentId: null, visible: true },
+        [explicitId]: { id: explicitId, type: kind, parentId: hiddenSite.id, visible: true },
+        [hiddenChildId]: { id: hiddenChildId, type: kind, parentId: hiddenSite.id, visible: false },
       } as unknown as Record<string, AnyNode>
-      const allIds = [childId, descendantId, explicitId, unownedId]
+      const allIds = [childId, descendantId, explicitId, hiddenChildId]
       const root = new THREE.Group()
-      for (const id of [hiddenSite.id, visibleSite.id, ...allIds]) {
+      const siteObject = new THREE.Group()
+      root.add(siteObject)
+      sceneRegistry.nodes.set(hiddenSite.id, siteObject)
+      for (const id of allIds) {
         const object = new THREE.Group()
-        root.add(object)
+        siteObject.add(object)
         sceneRegistry.nodes.set(id, object)
       }
       const exportedIds = async (onlyVisible?: boolean) => {
@@ -637,12 +684,8 @@ describe('prepareSceneForExport', () => {
         }
       }
 
-      expect(await exportedIds()).toEqual([explicitId, unownedId])
+      expect(await exportedIds()).toEqual([childId, descendantId, explicitId])
       expect(await exportedIds(false)).toEqual(allIds)
-      nodes[hiddenSite.id] = { ...hiddenSite, visible: true }
-      expect(await exportedIds()).toEqual(allIds)
-      nodes[hiddenSite.id] = hiddenSite
-      expect(await exportedIds()).toEqual([explicitId, unownedId])
     } finally {
       restoreRegistry()
     }
