@@ -1,4 +1,4 @@
-import type { WallNode } from '@pascal-app/core'
+import { getCurtainWallConfig, type WallNode } from '@pascal-app/core'
 
 /**
  * Keep the door handle at the same relative height when the door is resized:
@@ -50,8 +50,9 @@ export function clampToWall(
   const dx = wallNode.end[0] - wallNode.start[0]
   const dz = wallNode.end[1] - wallNode.start[1]
   const wallLength = Math.sqrt(dx * dx + dz * dz)
+  const margin = wallNode.wallType === 'curtain' ? getCurtainWallConfig(wallNode).perimeterWidth : 0
 
-  const clampedX = Math.max(width / 2, Math.min(wallLength - width / 2, localX))
+  const clampedX = Math.max(margin + width / 2, Math.min(wallLength - margin - width / 2, localX))
   const clampedY = height / 2 // Doors always sit at floor level
   return { clampedX, clampedY }
 }

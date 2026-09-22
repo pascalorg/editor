@@ -1,4 +1,4 @@
-import type { WallNode } from '@pascal-app/core'
+import { useLiveNodeOverrides, type WallNode } from '@pascal-app/core'
 import type { WallGeometryAdapter } from '@pascal-app/viewer'
 import type { Material, Mesh } from 'three'
 import { buildCurtainWallGeometry } from './curtain-wall-geometry'
@@ -16,7 +16,11 @@ export const curtainWallGeometryAdapter: WallGeometryAdapter = {
     const renderChildren = children.map((child) => {
       if ((child.type !== 'door' && child.type !== 'window') || child.openingShape === 'rectangle')
         return child
-      return context.isLive(child.id) ? { ...child, openingShape: 'rectangle' as const } : child
+      const override = useLiveNodeOverrides.getState().get(child.id)
+      const liveBounds =
+        context.isLive(child.id) &&
+        (!override || 'position' in override || 'width' in override || 'height' in override)
+      return liveBounds ? { ...child, openingShape: 'rectangle' as const } : child
     })
     return {
       envelopeChildren: renderChildren.filter(

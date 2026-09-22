@@ -3,8 +3,10 @@ import {
   CurtainWallConfig,
   calculateLevelMiters,
   DoorNode,
+  getEffectiveNode,
   getWallCurveLength,
   sceneRegistry,
+  useLiveNodeOverrides,
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
@@ -136,6 +138,34 @@ describe('curtain wall geometry', () => {
     expect(hit(mesh, 2, 1.5)).toHaveLength(0)
     expect(hit(mesh, 2, 0.5).length).toBeGreaterThan(0)
     geometry.dispose()
+  })
+  test('live shape settings retain their shaped curtain opening preview', () => {
+    const wall = WallNode.parse({ start: [0, 0], end: [4, 0], wallType: 'curtain' })
+    const window = WindowNode.parse({
+      openingShape: 'rounded',
+      position: [2, 1.5, 0],
+      width: 1,
+      height: 1,
+    })
+    try {
+      useLiveNodeOverrides.getState().set(window.id, { cornerRadius: 0.3 })
+      const shaped = curtainWallGeometryAdapter.prepareChildren!(wall, [getEffectiveNode(window)], {
+        isLive: () => true,
+      })
+      expect(shaped.renderChildren[0]).toMatchObject({
+        openingShape: 'rounded',
+        cornerRadius: 0.3,
+      })
+      useLiveNodeOverrides.getState().set(window.id, { width: 1.5 })
+      const resized = curtainWallGeometryAdapter.prepareChildren!(
+        wall,
+        [getEffectiveNode(window)],
+        { isLive: () => true },
+      )
+      expect(resized.renderChildren[0]).toMatchObject({ openingShape: 'rectangle', width: 1.5 })
+    } finally {
+      useLiveNodeOverrides.getState().clear(window.id)
+    }
   })
   test('material cache changes with curtain settings and wall type', () => {
     const wall = WallNode.parse({ start: [0, 0], end: [6, 0], wallType: 'curtain' })

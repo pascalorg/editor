@@ -7,6 +7,8 @@ import {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
+import { clampToWall as clampDoorToWall } from '../door/door-math'
+import { clampToWall as clampWindowToWall } from '../window/window-math'
 import { constrainCurtainOpening, curtainOpeningLimits } from './curtain-opening-limits'
 import { createOpeningPropertyPreview } from './opening-property-preview'
 import { openingPropertyPreviewHost } from './opening-property-preview-host'
@@ -41,6 +43,13 @@ test('window grows about its center and position edits keep all four surrounds i
   expect(result.position).toEqual([0.55, 1.9500000000000002, 0])
   expect(result.width).toBe(1)
   expect(result.height).toBe(1)
+})
+
+test('door and window placement keep the curtain perimeter surround clear', () => {
+  const doorPosition = clampDoorToWall(wall, 0, 1, 2)
+  const windowPosition = clampWindowToWall(wall, 0, 0, 1, 1, nodes)
+  expect(doorPosition).toEqual({ clampedX: 0.55, clampedY: 1 })
+  expect(windowPosition).toEqual({ clampedX: 0.55, clampedY: 0.55 })
 })
 
 test('non-curtain hosts retain their existing sizing policy', () => {
