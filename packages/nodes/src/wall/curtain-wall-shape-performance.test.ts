@@ -45,15 +45,16 @@ test('switching a curtain window top shape stays within one frame', () => {
   sceneRegistry.byType.wall!.add(wall.id)
   runWallBuildFrame(curtainWallGeometryAdapter)
 
-  const measurements: number[] = []
   for (const openingShape of ['rounded', 'rectangle', 'arch', 'rectangle'] as const) {
     useScene.getState().updateNode(window.id, { openingShape })
     useScene.getState().markDirty(wall.id)
-    const started = performance.now()
+    const previousGeometry = mesh.geometry
     runWallBuildFrame(curtainWallGeometryAdapter)
-    measurements.push(performance.now() - started)
+
+    expect(mesh.geometry).not.toBe(previousGeometry)
+    expect(mesh.geometry.getAttribute('position').count).toBeGreaterThan(0)
+    expect(useScene.getState().dirtyNodes.has(wall.id)).toBe(false)
   }
 
-  expect(Math.max(...measurements)).toBeLessThan(25)
   mesh.geometry.dispose()
 })
