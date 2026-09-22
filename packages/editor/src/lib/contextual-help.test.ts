@@ -126,4 +126,21 @@ describe('resolveSelectModeHelpHints', () => {
       },
     ])
   })
+
+  test('shows the single-side radius hint for rounded openings', () => {
+    expect(
+      resolveSelectModeHelpHints({
+        selectedCount: 1,
+        hasMovableSelection: true,
+        hasRotatableSelection: false,
+        hasRoundedOpeningSelection: true,
+        commandPressed: false,
+        shiftPressed: false,
+      }),
+    ).toContainEqual({
+      keys: ['Shift'],
+      label: 'Adjust one side’s corner radius',
+      active: false,
+    })
+  })
 })
