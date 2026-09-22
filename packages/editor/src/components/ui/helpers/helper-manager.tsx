@@ -85,6 +85,7 @@ function terrainSculptHints(verb: TerrainVerb, sampling: boolean): ContextualSho
 }
 
 type ActiveModifierKeys = {
+  alt: boolean
   command: boolean
   shift: boolean
 }
@@ -94,6 +95,7 @@ const NO_CONTEXTUAL_HELP_SUBSCRIPTION = () => () => {}
 
 function useActiveModifierKeys(): ActiveModifierKeys {
   const [modifiers, setModifiers] = useState<ActiveModifierKeys>({
+    alt: false,
     command: false,
     shift: false,
   })
@@ -102,6 +104,7 @@ function useActiveModifierKeys(): ActiveModifierKeys {
     const updateModifiers = (event: KeyboardEvent) => {
       const isKeyDown = event.type === 'keydown'
       setModifiers({
+        alt: event.altKey || (isKeyDown && event.key === 'Alt'),
         command:
           event.metaKey ||
           event.ctrlKey ||
@@ -110,7 +113,7 @@ function useActiveModifierKeys(): ActiveModifierKeys {
       })
     }
     const clearModifiers = () => {
-      setModifiers({ command: false, shift: false })
+      setModifiers({ alt: false, command: false, shift: false })
     }
 
     window.addEventListener('keydown', updateModifiers)
@@ -213,15 +216,16 @@ export function HelperManager() {
   // tools — editor shortcut hints would only mislead there.
   if (workspaceMode === 'studio') return null
 
-  // Rotating a node (or a multi-selection group) via its in-world gizmo:
-  // advertise Shift = free rotation, the same angle-step bypass wall drafting
-  // exposes. Takes priority over the idle select-mode hints since a handle
-  // drag is the active interaction.
   if (
     activeHandleDrag?.label === ROTATE_HANDLE_DRAG_LABEL ||
     activeHandleDrag?.label === GROUP_ROTATE_DRAG_LABEL
   ) {
-    return <ContextualHelperPanel hints={resolveRotateHandleHelpHints(modifiers.shift)} />
+    return (
+      <ContextualHelperPanel
+        hints={resolveRotateHandleHelpHints(modifiers.alt)}
+        snapContext={snapContext}
+      />
+    )
   }
 
   // Group-move drag / pick-up: the drag resolves to the 'item' snap context

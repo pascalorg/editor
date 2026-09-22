@@ -15,6 +15,19 @@ import { type ComponentType, lazy } from 'react'
  */
 const lazyToolCache = new WeakMap<() => Promise<unknown>, ComponentType>()
 
+export async function preloadRegistryAffordanceTools(kind: string): Promise<void> {
+  const tools = nodeRegistry.get(kind)?.affordanceTools
+  await Promise.allSettled(
+    Object.values(tools ?? {}).map(async (loader) => {
+      if (!loader || lazyToolCache.has(loader)) return
+      const module = (await loader()) as { default: ComponentType<any> }
+      // Keep an already-mounted lazy component stable. Otherwise use the resolved
+      // component directly so grabbing a preloaded handle never suspends its tool.
+      if (!lazyToolCache.has(loader)) lazyToolCache.set(loader, module.default)
+    }),
+  )
+}
+
 export function getRegistryAffordanceTool(
   kind: string,
   affordance: string,

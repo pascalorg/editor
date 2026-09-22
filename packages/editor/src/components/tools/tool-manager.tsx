@@ -34,7 +34,10 @@ import { WallSnapBeaconLayer } from '../editor/wall-snap-beacon-layer'
 import { ElevatorTool } from './elevator/elevator-tool'
 import { MoveTool } from './item/move-tool'
 import { RegistryToolProvider } from './registry-tool-context'
-import { getRegistryAffordanceTool } from './shared/affordance-dispatch'
+import {
+  getRegistryAffordanceTool,
+  preloadRegistryAffordanceTools,
+} from './shared/affordance-dispatch'
 import { FacingPoseIndicator } from './shared/facing-pose-indicator'
 import { SiteBoundaryEditor } from './site/site-boundary-editor'
 import { TerrainSculptTool } from './site/terrain-sculpt-tool'
@@ -70,8 +73,7 @@ export function preloadRegistryToolModules(tool: string | null): Promise<void> {
   if (def.system) loaders.push(def.system.module)
   if (def.parametrics?.customPanel) loaders.push(def.parametrics.customPanel)
   if (def.parametrics?.trailingSection) loaders.push(def.parametrics.trailingSection)
-  const moveTool = def.affordanceTools?.move
-  if (moveTool) loaders.push(moveTool)
+  loaders.push(() => preloadRegistryAffordanceTools(tool))
 
   const preload = Promise.allSettled(loaders.map((loader) => loader())).then(() => undefined)
   registryToolPreloadCache.set(def, preload)

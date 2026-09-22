@@ -49,7 +49,7 @@ export { FloatingActionMenu as FloatingMenu } from './components/editor/floating
 // camera controls via the `useViewer.inputDragging` / `useEditor.movingNode`
 // flags. Tools place onto `useViewer.selection.levelId`, so the host must set a
 // building + level selection first.
-export { Grid } from './components/editor/grid'
+export { EDITOR_GRID_INPUT_NAME, Grid } from './components/editor/grid'
 export {
   DimensionPill,
   type DimensionPillPart,
@@ -79,10 +79,12 @@ export {
   useInvisibleHitAreaMaterial,
 } from './components/editor/node-arrow-handles'
 export { QuickMeasurementCard } from './components/editor/quick-measurement-card'
+export { SelectionManager } from './components/editor/selection-manager'
 export {
   type SnapshotCameraData,
   ThumbnailGenerator,
 } from './components/editor/thumbnail-generator'
+export { WallMoveSideHandles } from './components/editor/wall-move-side-handles'
 export { useFloorplanRender } from './components/editor-2d/floorplan-render-context'
 export { FloorplanDimensionRenderer } from './components/editor-2d/renderers/floorplan-dimension-renderer'
 export {
@@ -229,6 +231,7 @@ export {
   CameraActions as ToolbarRight,
   CameraActions as ViewerToolbarRight,
 } from './components/ui/action-menu/camera-actions'
+export { furnishTools } from './components/ui/action-menu/furnish-tools'
 export {
   ViewToggles as ToolbarLeft,
   ViewToggles as ViewerToolbarLeft,
@@ -255,6 +258,19 @@ export { FloatingLevelSelector } from './components/ui/floating-level-selector'
 export { CATALOG_ITEMS } from './components/ui/item-catalog/catalog-items'
 // Item collections UI — used by the kind-owned ItemPanel in nodes/.
 export { CollectionsPopover } from './components/ui/panels/collections/collections-popover'
+export {
+  resolveHomogeneousSelection,
+  resolveUniqueSelectionIds,
+} from './components/ui/panels/homogeneous-selection'
+export {
+  commitMultiNodeFields,
+  fieldVisibleForAll,
+  firstNumericFieldValue,
+  firstVec3FieldValue,
+  reduceFieldValue,
+  reduceHeightBoundMode,
+} from './components/ui/panels/multi-field-value'
+export { applyMultiHeightMode } from './components/ui/panels/multi-height-mode'
 // Phase 5 Stage E — kinds with bespoke editors (slab holes list,
 // ceiling height presets, etc.) use `parametrics.customPanel` to mount
 // a kind-owned panel and need PanelWrapper for the chrome.
@@ -339,7 +355,7 @@ export type { SaveStatus } from './hooks/use-auto-save'
 // can express their affordances declaratively in their own folder.
 export { type UseDragActionArgs, useDragAction } from './hooks/use-drag-action'
 // Phase 5 Stage D — extras for kind-owned placement tools (FenceTool etc.).
-export { markToolCancelConsumed } from './hooks/use-keyboard'
+export { cancelActiveTool, markToolCancelConsumed } from './hooks/use-keyboard'
 export { useReducedMotion } from './hooks/use-reduced-motion'
 export { type Selection, useSelection } from './hooks/use-selection'
 export {
@@ -348,6 +364,11 @@ export {
   type PlacementSurface,
   publishPlacementSurface,
 } from './lib/active-placement-surface'
+export {
+  activateCatalogItem,
+  filterCatalogItems,
+  isCatalogItemSelected,
+} from './lib/catalog-panel-model'
 export {
   CEILING_ALIGNMENT_THRESHOLD_M,
   type CeilingPlanSnapInput,
@@ -370,6 +391,7 @@ export {
   continuationContextOf,
   nextContinuation,
 } from './lib/continuation'
+export { canDirectMoveNode } from './lib/direct-manipulation'
 export { createEditorApi } from './lib/editor-api'
 export {
   clearStructuralElevationGuide,
@@ -485,6 +507,7 @@ export {
   scopeNodeId,
 } from './lib/interaction/scope'
 export { isEditableKeyboardTarget } from './lib/keyboard-pan'
+export { useMaterialCatalogModel } from './lib/material-catalog-model'
 export {
   type ActivePaintMaterial,
   buildResetSurfaceMaterialUpdates,
@@ -494,6 +517,7 @@ export {
   getActivePaintMaterialLabel,
   hasActivePaintMaterial,
 } from './lib/material-paint'
+export { useMaterialPaintPanelModel } from './lib/material-paint-panel-model'
 export {
   CREATABLE_MEASUREMENT_KINDS,
   type CreatableMeasurementKind,
@@ -540,6 +564,21 @@ export type {
   ModelExportFormat,
   ModelExportOptions,
 } from './lib/model-export'
+export {
+  cyclePaintScope,
+  type PaintHoverInfo,
+  type PaintScope,
+  paintScopeLabel,
+} from './lib/paint-scope'
+export {
+  getNodePanelModel,
+  type NodePanelModel,
+  PANEL_MODEL_EXTENSION,
+  type PanelAction,
+  type PanelRow,
+} from './lib/panel-rows'
+export { type PanelToolOption, usePanelToolHints } from './lib/panel-tool-options'
+export { commitParametricNodeFields } from './lib/parametric-node-update'
 export { consumePlacementDragRelease } from './lib/placement-drag-release'
 export {
   addFreshPlacementMetadata,
@@ -573,7 +612,7 @@ export { hasRoofFaceChildOverlap, type RoofWallHit, resolveRoofWallHit } from '.
 export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor } from './lib/scene'
 export { movementSfxStepKey } from './lib/sfx/movement-tick'
-export { triggerSFX } from './lib/sfx-bus'
+export { emitDeleteSFX, triggerSFX } from './lib/sfx-bus'
 export { playSFX, type SFXName, type SFXPlaybackOptions } from './lib/sfx-player'
 export {
   clearSlabSnapFeedback,
@@ -586,12 +625,14 @@ export {
   type SlabPlanSnapResult,
 } from './lib/slab-plan-snap'
 export {
+  cycleSnappingModeIn,
   getSnappingModeLabel,
   resolveSnapFlags,
   type SnapContext,
   type SnapFlags,
   type SnappingMode,
 } from './lib/snapping-mode'
+export { getSpatialPointerId, spatialPointerInput } from './lib/spatial-pointer-input'
 export { duplicateStairSubtree } from './lib/stair-duplication'
 export {
   getBuildingLevelsForLevel,
@@ -609,12 +650,17 @@ export {
   type SurfacePlanSnapInput,
   type SurfacePlanSnapResult,
 } from './lib/surface-plan-snap'
+export { useTerrainPanelRows } from './lib/terrain-panel-model'
 export {
+  brushRadiusRange,
+  clipTerrainPatchToSite,
+  commitStroke,
   fieldExtentForSite,
   flattenSite,
   resetSiteTerrain,
   resolveFlattenTarget,
   sculptFieldForSite,
+  terrainPointInsideSite,
 } from './lib/terrain-sculpt'
 export { exportSceneToUsdz, type UsdzExportOptions } from './lib/usdz-export'
 export { useLinearDisplay } from './lib/use-linear-display'
@@ -665,6 +711,7 @@ export {
   isAngleSnapActive,
   isGridSnapActive,
   isMagneticSnapActive,
+  selectDefaultBuildingAndLevel,
 } from './store/use-editor'
 export { default as useFacingPose, type FacingPose } from './store/use-facing-pose'
 export { default as useFenceCurveDraft } from './store/use-fence-curve-draft'

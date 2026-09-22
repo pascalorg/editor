@@ -546,6 +546,7 @@ const LineWallTool: React.FC = () => {
       event.nativeEvent?.target instanceof HTMLCanvasElement
         ? resolvePointerSupportSurface(cameraRef.current, event.position, {
             includeNodeTopSurfaces: true,
+            pointerRay: event.nativeEvent.ray,
           })
         : null
 

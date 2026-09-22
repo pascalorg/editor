@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'bun:test'
-import { GROUP_MOVE_DRAG_LABEL, ROTATE_HANDLE_DRAG_LABEL } from './contextual-help'
+import {
+  GROUP_MOVE_DRAG_LABEL,
+  GROUP_ROTATE_DRAG_LABEL,
+  ROTATE_HANDLE_DRAG_LABEL,
+} from './contextual-help'
 import {
   cycleSnappingModeIn,
   DEFAULT_SNAPPING_MODE,
@@ -49,6 +53,12 @@ describe('resolveSnapFlags', () => {
 })
 
 describe('per-context snapping', () => {
+  it('rotation defaults to angles and cycles independently to free rotation', () => {
+    expect(defaultSnappingModeFor('rotation')).toBe('angles')
+    expect(snappingModesFor('rotation')).toEqual(['angles', 'off'])
+    expect(cycleSnappingModeIn('rotation', 'angles')).toBe('off')
+    expect(cycleSnappingModeIn('rotation', 'off')).toBe('angles')
+  })
   it('items default to magnetic alignment with no angle lock', () => {
     expect(defaultSnappingModeFor('item')).toBe('lines')
     expect(snappingModesFor('item')).toEqual(['lines', 'grid', 'off'])
@@ -132,7 +142,8 @@ describe('snapContextOf (profile-driven, node-declared)', () => {
     expect(ctx({ kind: 'handle-drag', nodeId: 'unknown_1' })).toBeNull()
     expect(
       ctx({ kind: 'handle-drag', nodeId: 'cabinet-module_1', handle: ROTATE_HANDLE_DRAG_LABEL }),
-    ).toBeNull()
+    ).toBe('rotation')
+    expect(ctx({ kind: 'handle-drag', handle: GROUP_ROTATE_DRAG_LABEL })).toBe('rotation')
   })
 
   it('gives mesh rotation the angle context and other edit operations polygon snapping', () => {

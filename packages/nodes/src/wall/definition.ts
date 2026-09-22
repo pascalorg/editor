@@ -9,6 +9,8 @@ import {
   DRAFTING_SURFACE_EXTENSION_KEY,
   type DraftingSurfaceExtension,
   type FloorplanNodeExtension,
+  type NodePanelModel,
+  PANEL_MODEL_EXTENSION,
 } from '@pascal-app/editor'
 import { buildWallContextualDimensions } from './contextual-dimensions'
 import { hasWallCurveBlockingChildren } from './curve-eligibility'
@@ -27,6 +29,7 @@ import {
   wallMeasurementFeatures,
 } from './measurement'
 import { wallPaint } from './paint'
+import { wallSettings } from './panel-model'
 import { wallParametrics } from './parametrics'
 import { wallQuickMeasurement } from './quick-measurement'
 import { WallNode } from './schema'
@@ -62,6 +65,9 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   category: 'structure',
   surfaceRole: 'wall',
   extensions: {
+    [PANEL_MODEL_EXTENSION]: {
+      rows: ({ node, nodes, update }) => wallSettings(node, nodes, update),
+    } satisfies NodePanelModel<WallNodeType>,
     [DRAFTING_SURFACE_EXTENSION_KEY]: {
       kind: 'wall',
       classifyFace: (node, localNormal) => {

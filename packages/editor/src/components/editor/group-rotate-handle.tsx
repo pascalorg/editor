@@ -13,11 +13,13 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { OrthographicCamera, Plane, Vector2, Vector3 } from 'three'
+import { OrthographicCamera, Plane, type Ray, Vector2, Vector3 } from 'three'
 import { GROUP_MOVE_DRAG_LABEL, GROUP_ROTATE_DRAG_LABEL } from '../../lib/contextual-help'
 import { isHistoryShortcut } from '../../lib/history'
 import { sfxEmitter } from '../../lib/sfx-bus'
-import useEditor from '../../store/use-editor'
+import { intersectSpatialDragPlane } from '../../lib/spatial-drag-plane'
+import { getSpatialPointerId, spatialPointerInput } from '../../lib/spatial-pointer-input'
+import useEditor, { isAngleSnapActive } from '../../store/use-editor'
 import useInteractionScope, {
   useActiveHandleDrag,
   useMovingNode,
@@ -167,6 +169,12 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
     if (event.button !== 0) return
     event.stopPropagation()
     suppressBoxSelectForPointer(event)
+    const spatialPointerId = getSpatialPointerId(event.nativeEvent)
+    const spatialRay = spatialPointerId ? event.ray.clone() : null
+    const pointerTarget = event.object as typeof event.object & {
+      releasePointerCapture?: (pointerId: number) => void
+      setPointerCapture?: (pointerId: number) => void
+    }
 
     frozenRest.current = { pivot: rest.pivot.clone(), corner: rest.corner.clone() }
     const center = rest.pivot.clone()
@@ -217,11 +225,15 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
       )
     }
 
-    setNDC(event.nativeEvent.clientX, event.nativeEvent.clientY)
-    raycaster.setFromCamera(ndc, camera)
+    if (!spatialRay) {
+      setNDC(event.nativeEvent.clientX, event.nativeEvent.clientY)
+      raycaster.setFromCamera(ndc, camera)
+    }
     const hit = new Vector3()
-    if (!raycaster.ray.intersectPlane(plane, hit)) return
+    if (!intersectSpatialDragPlane(spatialRay ?? raycaster.ray, plane, hit)) return
     const initialAngle = angleOf(hit)
+    if (spatialPointerId) pointerTarget.setPointerCapture?.(event.pointerId)
+    let altKey = event.nativeEvent.altKey
 
     document.body.style.cursor = 'grabbing'
     sfxEmitter.emit('sfx:item-pick')
@@ -234,15 +246,14 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
     })
     setIsDragging(true)
 
-    const onMove = (e: PointerEvent) => {
-      setNDC(e.clientX, e.clientY)
-      raycaster.setFromCamera(ndc, camera)
+    const applyRay = (ray: Ray, freeRotation = false) => {
       const moveHit = new Vector3()
-      if (!raycaster.ray.intersectPlane(plane, moveHit)) return
+      if (!intersectSpatialDragPlane(ray, plane, moveHit)) return
       let delta = angleOf(moveHit) - initialAngle
       while (delta > Math.PI) delta -= 2 * Math.PI
       while (delta < -Math.PI) delta += 2 * Math.PI
-      if (!e.shiftKey) delta = Math.round(delta / DEFAULT_ANGLE_STEP) * DEFAULT_ANGLE_STEP
+      if (!freeRotation && isAngleSnapActive())
+        delta = Math.round(delta / DEFAULT_ANGLE_STEP) * DEFAULT_ANGLE_STEP
 
       // Shared rigid-rotation math (also used by the keyboard group R/T);
       // see `rotateGroupPatches` for the orbit/yaw handedness contract.
@@ -290,8 +301,14 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
         })
       }
     }
+    const onMove = (e: PointerEvent) => {
+      setNDC(e.clientX, e.clientY)
+      raycaster.setFromCamera(ndc, camera)
+      applyRay(raycaster.ray, e.altKey)
+    }
 
     const affectedIds: AnyNodeId[] = [...starts.map((s) => s.id), ...links.map((l) => l.id)]
+    let releaseSpatialCapture: (() => void) | null = null
     const clearLivePreviews = () => {
       const overrides = useLiveNodeOverrides.getState()
       const liveTransforms = useLiveTransforms.getState()
@@ -307,6 +324,10 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onCancel)
       window.removeEventListener('keydown', onKeyDown, true)
+      window.removeEventListener('keyup', onKeyUp, true)
+      releaseSpatialCapture?.()
+      releaseSpatialCapture = null
+      if (spatialPointerId) pointerTarget.releasePointerCapture?.(event.pointerId)
       if (document.body.style.cursor === 'grabbing') document.body.style.cursor = ''
       useScene.temporal.getState().resume()
       useViewer.getState().setInputDragging(false)
@@ -356,11 +377,18 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
     // Escape / ⌘Z abort the rotate — capture phase so they win over the global
     // use-keyboard arms (⌘Z must never history-jump under a live pointer).
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Alt') {
+        altKey = true
+        return
+      }
       if (e.key !== 'Escape' && !isHistoryShortcut(e)) return
       e.preventDefault()
       e.stopPropagation()
       swallowNextClick()
       onCancel()
+    }
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Alt') altKey = false
     }
 
     dragCleanupRef.current = () => {
@@ -370,10 +398,22 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
     for (const id of affectedIds) {
       useLiveTransforms.getState().clear(id)
     }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onCancel)
+    if (spatialPointerId && spatialRay) {
+      releaseSpatialCapture = spatialPointerInput.capture(spatialPointerId, {
+        onMove: (ray) => {
+          spatialRay.copy(ray)
+          applyRay(spatialRay, altKey)
+        },
+        onRelease: onUp,
+        onCancel,
+      })
+    } else {
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+      window.addEventListener('pointercancel', onCancel)
+    }
     window.addEventListener('keydown', onKeyDown, true)
+    window.addEventListener('keyup', onKeyUp, true)
   }
 
   return createPortal(
@@ -402,6 +442,7 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
           onPointerDown={activate}
           onPointerEnter={onHoverEnter}
           onPointerLeave={onHoverLeave}
+          {...({ pointerEventsOrder: 10 } as Record<string, unknown>)}
           scale={baseScale}
         />
         <mesh
@@ -411,6 +452,7 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
           onPointerDown={activate}
           onPointerEnter={onHoverEnter}
           onPointerLeave={onHoverLeave}
+          {...({ pointerEventsOrder: 10 } as Record<string, unknown>)}
           renderOrder={1010}
           scale={scale}
         />
