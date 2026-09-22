@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { z } from 'zod'
 import { nodeRegistry, registerNode } from '../registry'
 import type { AnyNodeDefinition } from '../registry/types'
-import { LevelNode, WallNode } from '../schema'
+import { LevelNode, SiteNode, WallNode } from '../schema'
 import { validateBuildJson } from './validate-build-json'
 
 function makeScene() {
@@ -29,6 +29,20 @@ describe('validateBuildJson', () => {
     const result = validateBuildJson(makeScene())
     expect(result.ok).toBe(true)
     expect(result.schemaIssueCount).toBe(0)
+  })
+
+  test('warns that a hidden site keeps the buildings on it visible', () => {
+    const scene = makeScene()
+    const site = SiteNode.parse({ id: 'site_test', visible: false })
+    const result = validateBuildJson({
+      ...scene,
+      nodes: { ...scene.nodes, [site.id]: site },
+      rootNodeIds: [site.id, ...scene.rootNodeIds],
+    })
+    expect(result.ok).toBe(true)
+    const warning = result.warnings.find((w) => w.code === 'site_hidden')
+    expect(warning?.message).toContain('site_test')
+    expect(warning?.message).toContain('stay visible')
   })
 
   test('plugin-typed children do not hard-fail their parent level', () => {

@@ -26,6 +26,7 @@ import {
   floorplanEntryYieldsToTool,
   floorplanHandleDoubleClickAffordance,
   InteractiveGeometry,
+  isFloorplanHierarchyVisible,
   isFloorplanOpeningPlacementState,
   resolveFloorplanHandleUnitsPerPixel,
   siteToFloorplanTransform,
@@ -788,5 +789,43 @@ describe('floorplan entry routing while a tool is active', () => {
     expect(floorplanEntryYieldsToTool({ mode: 'select', openingPlacement: true })).toBe(true)
     expect(floorplanEntryYieldsToTool({ mode: 'select', openingPlacement: false })).toBe(false)
     expect(floorplanEntryYieldsToTool({ mode: 'delete', openingPlacement: false })).toBe(false)
+  })
+})
+
+describe('isFloorplanHierarchyVisible', () => {
+  const node = (id: string, type: string, parentId: string | null, visible = true) =>
+    ({ object: 'node', id, type, parentId, visible, metadata: {} }) as unknown as AnyNode
+  const noOverrides = new Map<string, LiveNodeOverrides>()
+  const visibleUnder = (nodes: Record<string, AnyNode>, rootId: string, id: string) =>
+    isFloorplanHierarchyVisible(nodes[id]!, nodes, noOverrides, rootId as AnyNodeId)
+
+  test('a hidden Site root keeps the nodes on it, linked or detached', () => {
+    const nodes: Record<string, AnyNode> = {
+      site_a: node('site_a', 'site', null, false),
+      building_a: node('building_a', 'building', 'site_a'),
+      level_a: node('level_a', 'level', 'building_a'),
+      wall_a: node('wall_a', 'wall', 'level_a'),
+      wall_b: node('wall_b', 'wall', 'level_a', false),
+      tree_a: node('tree_a', 'trees:tree', null),
+    }
+    expect(visibleUnder(nodes, 'site_a', 'wall_a')).toBe(true)
+    expect(visibleUnder(nodes, 'site_a', 'tree_a')).toBe(true)
+    expect(visibleUnder(nodes, 'site_a', 'wall_b')).toBe(false)
+    expect(visibleUnder(nodes, 'site_a', 'site_a')).toBe(false)
+  })
+
+  test('a hidden building or level root still hides what it hosts', () => {
+    const nodes: Record<string, AnyNode> = {
+      site_a: node('site_a', 'site', null),
+      building_a: node('building_a', 'building', 'site_a', false),
+      level_a: node('level_a', 'level', 'building_a'),
+      wall_a: node('wall_a', 'wall', 'level_a'),
+      elevator_a: node('elevator_a', 'elevator', null),
+    }
+    expect(visibleUnder(nodes, 'site_a', 'wall_a')).toBe(false)
+    expect(visibleUnder(nodes, 'building_a', 'elevator_a')).toBe(false)
+    // A level plan is scoped to its level: the walk stops at the root and
+    // never consults the building above it.
+    expect(visibleUnder(nodes, 'level_a', 'wall_a')).toBe(true)
   })
 })

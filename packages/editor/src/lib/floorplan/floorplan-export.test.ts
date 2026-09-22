@@ -774,7 +774,9 @@ describe('collectFloorplanGeometry', () => {
         'finished-faces',
         [enabledPluginId],
       )
-      expect(hiddenSite.map(({ id }) => id)).toEqual(['level_architecture'])
+      // A hidden Site hides only its own ground and boundary; the site-scoped
+      // nodes on it keep their own flag (see `hidesDescendants`).
+      expect(hiddenSite.map(({ id }) => id)).toEqual(['site_overlay', 'level_architecture'])
 
       const structure = collectFloorplanGeometry(
         nodes,

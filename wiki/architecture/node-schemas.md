@@ -24,6 +24,8 @@ Every node shares these fields:
 }
 ```
 
+`visible: false` takes the node and everything beneath it out of the 2D plan and every export. `site` is the one exception: it is the parcel reference, so hiding it hides only its own ground fill and boundary, and the buildings on it keep their own flag. The rule lives in `hidesDescendants` (`packages/core/src/lib/node-visibility.ts`); `validate_scene` and Load Build warn when a Site is hidden.
+
 ## Defining a New Node Type
 
 ```ts
