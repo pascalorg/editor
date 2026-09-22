@@ -25,6 +25,7 @@ export function useCurtainPanelHighlight(
   right: number,
   bottom: number,
   top: number,
+  enabled: boolean,
 ) {
   const wallId = wall.id
   const startX = wall.start[0]
@@ -35,6 +36,7 @@ export function useCurtainPanelHighlight(
   const thickness = getWallThickness(wall)
 
   useEffect(() => {
+    if (!enabled) return
     const curveWall: Pick<WallNode, 'start' | 'end' | 'curveOffset'> = {
       start: [startX, startZ],
       end: [endX, endZ],
@@ -116,5 +118,18 @@ export function useCurtainPanelHighlight(
       geometry.dispose()
       material.dispose()
     }
-  }, [wallId, startX, startZ, endX, endZ, curveOffset, thickness, left, right, bottom, top])
+  }, [
+    enabled,
+    wallId,
+    startX,
+    startZ,
+    endX,
+    endZ,
+    curveOffset,
+    thickness,
+    left,
+    right,
+    bottom,
+    top,
+  ])
 }

@@ -17,6 +17,7 @@ import {
   PanelSection,
   SegmentedControl,
   SliderControl,
+  ToggleControl,
 } from '@pascal-app/editor'
 import { useState } from 'react'
 import { useCurtainPanelHighlight } from './curtain-panel-highlight'
@@ -227,6 +228,7 @@ export function CurtainWallPanel({
   }
 
   const [tintEditing, setTintEditing] = useState(false)
+  const [panelEditing, setPanelEditing] = useState(false)
   const [selectedColumn, setColumn] = useState(0)
   const [selectedRow, setRow] = useState(0)
   const columnCount = curtainGridPositions(getWallCurveLength(node), config.columns).length - 1
@@ -256,6 +258,7 @@ export function CurtainWallPanel({
     xs[column + 1] ?? 0,
     ys[row] ?? 0,
     ys[row + 1] ?? 0,
+    panelEditing,
   )
   const hasGlass = xs
     .slice(1)
@@ -417,137 +420,150 @@ export function CurtainWallPanel({
         )}
       </PanelSection>
       <PanelSection title="Edit individual panels">
-        <p className="text-[11px] text-muted-foreground">
-          Choose a cell or enter its column and row. Use arrow keys to move between cells. Columns
-          run from the wall start; rows count upward.
-        </p>
-        <div className="max-h-64 overflow-auto rounded border border-border">
-          <svg
-            viewBox={`0 0 ${diagramWidth} ${diagramHeight}`}
-            style={{ width: diagramWidth, height: diagramHeight }}
-            className="block"
-            role="group"
-            aria-label="Curtain wall panel selection"
-          >
-            {xs.slice(1).flatMap((_, c) =>
-              ys.slice(1).map((_, r) => {
-                const type = curtainPanelType(config, c, r, rowCount)
-                const selected = c === column && r === row
-                return (
-                  <rect
-                    key={`${c}-${r}`}
-                    role="button"
-                    tabIndex={selected ? 0 : -1}
-                    aria-label={`Column ${c + 1}, row ${r + 1}: ${type}`}
-                    aria-pressed={selected}
-                    data-cell={`${c}-${r}`}
-                    x={(c / columnCount) * diagramWidth}
-                    y={diagramHeight - ((r + 1) / rowCount) * diagramHeight}
-                    width={diagramWidth / columnCount}
-                    height={diagramHeight / rowCount}
-                    fill={
-                      type === 'glass' ? '#53788a' : type === 'solid' ? '#64748b' : 'transparent'
-                    }
-                    stroke={selected ? '#fb923c' : '#94a3b8'}
-                    strokeWidth={selected ? 3 : 1}
-                    className="cursor-pointer focus:stroke-orange-400 focus:stroke-[3]"
-                    onClick={() => {
-                      setColumn(c)
-                      setRow(r)
-                    }}
-                    onKeyDown={(event) => {
-                      const arrows: Record<string, [number, number]> = {
-                        ArrowLeft: [-1, 0],
-                        ArrowRight: [1, 0],
-                        ArrowUp: [0, 1],
-                        ArrowDown: [0, -1],
-                      }
-                      const delta = arrows[event.key]
-                      if (delta) {
-                        event.preventDefault()
-                        const nextColumn = Math.max(0, Math.min(columnCount - 1, c + delta[0]))
-                        const nextRow = Math.max(0, Math.min(rowCount - 1, r + delta[1]))
-                        setColumn(nextColumn)
-                        setRow(nextRow)
-                        const target =
-                          event.currentTarget.parentElement?.querySelector<SVGRectElement>(
-                            `[data-cell="${nextColumn}-${nextRow}"]`,
-                          )
-                        target?.focus()
-                        target?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
-                      }
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault()
-                        setColumn(c)
-                        setRow(r)
-                      }
-                    }}
-                  />
-                )
-              }),
-            )}
-          </svg>
-        </div>
-        {hiddenOverrides.length > 0 && (
-          <div className="space-y-2 text-[11px] text-muted-foreground">
-            <p>
-              {hiddenOverrides.length} custom panels are outside this grid. They return if the grid
-              expands.
+        <ToggleControl
+          checked={panelEditing}
+          label="Enable panel editing"
+          onChange={setPanelEditing}
+        />
+        {panelEditing && (
+          <>
+            <p className="text-[11px] text-muted-foreground">
+              Choose a cell or enter its column and row. Use arrow keys to move between cells.
+              Columns run from the wall start; rows count upward.
             </p>
+            <div className="max-h-64 overflow-auto rounded border border-border">
+              <svg
+                viewBox={`0 0 ${diagramWidth} ${diagramHeight}`}
+                style={{ width: diagramWidth, height: diagramHeight }}
+                className="block"
+                role="group"
+                aria-label="Curtain wall panel selection"
+              >
+                {xs.slice(1).flatMap((_, c) =>
+                  ys.slice(1).map((_, r) => {
+                    const type = curtainPanelType(config, c, r, rowCount)
+                    const selected = c === column && r === row
+                    return (
+                      <rect
+                        key={`${c}-${r}`}
+                        role="button"
+                        tabIndex={selected ? 0 : -1}
+                        aria-label={`Column ${c + 1}, row ${r + 1}: ${type}`}
+                        aria-pressed={selected}
+                        data-cell={`${c}-${r}`}
+                        x={(c / columnCount) * diagramWidth}
+                        y={diagramHeight - ((r + 1) / rowCount) * diagramHeight}
+                        width={diagramWidth / columnCount}
+                        height={diagramHeight / rowCount}
+                        fill={
+                          type === 'glass'
+                            ? '#53788a'
+                            : type === 'solid'
+                              ? '#64748b'
+                              : 'transparent'
+                        }
+                        stroke={selected ? '#fb923c' : '#94a3b8'}
+                        strokeWidth={selected ? 3 : 1}
+                        className="cursor-pointer focus:stroke-orange-400 focus:stroke-[3]"
+                        onClick={() => {
+                          setColumn(c)
+                          setRow(r)
+                        }}
+                        onKeyDown={(event) => {
+                          const arrows: Record<string, [number, number]> = {
+                            ArrowLeft: [-1, 0],
+                            ArrowRight: [1, 0],
+                            ArrowUp: [0, 1],
+                            ArrowDown: [0, -1],
+                          }
+                          const delta = arrows[event.key]
+                          if (delta) {
+                            event.preventDefault()
+                            const nextColumn = Math.max(0, Math.min(columnCount - 1, c + delta[0]))
+                            const nextRow = Math.max(0, Math.min(rowCount - 1, r + delta[1]))
+                            setColumn(nextColumn)
+                            setRow(nextRow)
+                            const target =
+                              event.currentTarget.parentElement?.querySelector<SVGRectElement>(
+                                `[data-cell="${nextColumn}-${nextRow}"]`,
+                              )
+                            target?.focus()
+                            target?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+                          }
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            setColumn(c)
+                            setRow(r)
+                          }
+                        }}
+                      />
+                    )
+                  }),
+                )}
+              </svg>
+            </div>
+            {hiddenOverrides.length > 0 && (
+              <div className="space-y-2 text-[11px] text-muted-foreground">
+                <p>
+                  {hiddenOverrides.length} custom panels are outside this grid. They return if the
+                  grid expands.
+                </p>
+                <button
+                  type="button"
+                  className="rounded border border-border px-2 py-1 text-xs"
+                  onClick={() =>
+                    update({
+                      panels: config.panels.filter(
+                        (panel) => panel.column < columnCount && panel.row < rowCount,
+                      ),
+                    })
+                  }
+                >
+                  Clear hidden overrides
+                </button>
+              </div>
+            )}
+            <p className="text-[11px] text-muted-foreground">
+              Column {column + 1}, row {row + 1} ·{' '}
+              {overridden ? 'Custom infill' : 'Following wall defaults'}
+            </p>
+            <SliderControl
+              label="Column"
+              max={Math.max(1, columnCount)}
+              min={1}
+              onChange={(value) => setColumn(Math.round(value) - 1)}
+              precision={0}
+              step={1}
+              value={column + 1}
+            />
+            <SliderControl
+              label="Row"
+              max={Math.max(1, rowCount)}
+              min={1}
+              onChange={(value) => setRow(Math.round(value) - 1)}
+              precision={0}
+              step={1}
+              value={row + 1}
+            />
+            <Choice
+              label="Panel infill"
+              onChange={changePanel}
+              options={PANEL_OPTIONS}
+              value={selectedType}
+            />
             <button
+              className="rounded border border-border px-2 py-1 text-xs disabled:cursor-default disabled:opacity-40"
+              disabled={!overridden}
+              onClick={() => changePanel()}
               type="button"
-              className="rounded border border-border px-2 py-1 text-xs"
-              onClick={() =>
-                update({
-                  panels: config.panels.filter(
-                    (panel) => panel.column < columnCount && panel.row < rowCount,
-                  ),
-                })
-              }
             >
-              Clear hidden overrides
+              Reset this panel
             </button>
-          </div>
+            <p className="text-[11px] text-muted-foreground">
+              Use the Door or Window tool to add an opening through the wall.
+            </p>
+          </>
         )}
-        <p className="text-[11px] text-muted-foreground">
-          Column {column + 1}, row {row + 1} ·{' '}
-          {overridden ? 'Custom infill' : 'Following wall defaults'}
-        </p>
-        <SliderControl
-          label="Column"
-          max={Math.max(1, columnCount)}
-          min={1}
-          onChange={(value) => setColumn(Math.round(value) - 1)}
-          precision={0}
-          step={1}
-          value={column + 1}
-        />
-        <SliderControl
-          label="Row"
-          max={Math.max(1, rowCount)}
-          min={1}
-          onChange={(value) => setRow(Math.round(value) - 1)}
-          precision={0}
-          step={1}
-          value={row + 1}
-        />
-        <Choice
-          label="Panel infill"
-          onChange={changePanel}
-          options={PANEL_OPTIONS}
-          value={selectedType}
-        />
-        <button
-          className="rounded border border-border px-2 py-1 text-xs disabled:cursor-default disabled:opacity-40"
-          disabled={!overridden}
-          onClick={() => changePanel()}
-          type="button"
-        >
-          Reset this panel
-        </button>
-        <p className="text-[11px] text-muted-foreground">
-          Use the Door or Window tool to add an opening through the wall.
-        </p>
       </PanelSection>
       {hasGlass && (
         <PanelSection title="Glass appearance">
