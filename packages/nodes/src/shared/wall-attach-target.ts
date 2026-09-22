@@ -213,6 +213,13 @@ export function resolveWallAttachmentAtPlanPoint(
   }
 }
 
+export function projectPlanPointToWallLocalX(
+  wall: WallNode,
+  planPoint: readonly [number, number],
+): number {
+  return resolveWallAttachmentAtPlanPoint(wall, planPoint, Number.POSITIVE_INFINITY)?.localX ?? 0
+}
+
 /**
  * Return the closest wall attachment target in plan space, including curved
  * walls. This is deliberately separate from `findClosestWallInPlan`: doors,

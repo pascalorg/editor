@@ -2,6 +2,7 @@ import { afterEach, expect, test } from 'bun:test'
 import {
   DoorNode,
   getEffectiveNode,
+  getWallCurveFrameAt,
   getWallCurveLength,
   useLiveNodeOverrides,
   useScene,
@@ -13,6 +14,7 @@ import { clampToWall as clampWindowToWall } from '../window/window-math'
 import { constrainCurtainOpening, curtainOpeningLimits } from './curtain-opening-limits'
 import { createOpeningPropertyPreview } from './opening-property-preview'
 import { openingPropertyPreviewHost } from './opening-property-preview-host'
+import { projectPlanPointToWallLocalX } from './wall-attach-target'
 
 globalThis.requestAnimationFrame ??= (callback) => {
   callback(0)
@@ -65,6 +67,10 @@ test('placement uses curved curtain arc length at the far perimeter', () => {
   const expectedX = getWallCurveLength(curvedWall) - 0.55
   expect(clampDoorToWall(curvedWall, 100, 1, 2).clampedX).toBeCloseTo(expectedX)
   expect(clampWindowToWall(curvedWall, 100, 1, 1, 1, curvedNodes).clampedX).toBeCloseTo(expectedX)
+  const pointer = getWallCurveFrameAt(curvedWall, 0.75).point
+  expect(projectPlanPointToWallLocalX(curvedWall, [pointer.x, pointer.y])).toBeCloseTo(
+    getWallCurveLength(curvedWall) * 0.75,
+  )
 })
 
 test('non-curtain hosts retain their existing sizing policy', () => {
