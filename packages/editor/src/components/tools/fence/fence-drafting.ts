@@ -215,7 +215,6 @@ export function createFenceOnCurrentLevel(
 export function createSplineFenceOnCurrentLevel(
   path: FencePlanPoint[],
   tangents?: FenceNode['tangents'],
-  options?: FenceCommitOptions,
 ): FenceNode | null {
   const currentLevelId = useViewer.getState().selection.levelId
   const { createNode, nodes } = useScene.getState()
@@ -241,7 +240,7 @@ export function createSplineFenceOnCurrentLevel(
     path,
     tangents,
   })
-  const fence = resolveFenceConstructionSupport(authoredFence, currentLevelId, nodes, options)
+  const fence = authoredFence
 
   createNode(fence, currentLevelId)
   sfxEmitter.emit('sfx:structure-build')

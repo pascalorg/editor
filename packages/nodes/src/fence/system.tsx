@@ -1,50 +1,113 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, useScene } from '@pascal-app/core'
-import { useEffect } from 'react'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  findLevelAncestorId,
+  nodeRegistry,
+  sceneRegistry,
+  useScene,
+} from '@pascal-app/core'
+import { useFrame } from '@react-three/fiber'
+import { useEffect, useRef } from 'react'
+import type { Object3D } from 'three'
 import { resolveFenceLiftElevationForNodes } from './lift'
 import type { FenceNode } from './schema'
 
-/**
- * Hosted-railing dependency tracker. A fence with `supportSlabId` renders at
- * its host slab's elevation, but a store update only dirties the node that
- * changed — editing the slab's elevation (or restoring a deleted host) would
- * leave the railing floating at the stale height. Watch each hosted fence's
- * resolved lift and dirty the fence when it moves; `GeometrySystem` rebuilds
- * through `def.geometry` as usual. (Deleting the host needs no help here:
- * `deleteNodesAction` strips `supportSlabId` and dirties the fence itself.)
- */
+function followsSurfaces(fence: FenceNode): boolean {
+  return (fence.path?.length ?? 0) >= 2 || Math.abs(fence.curveOffset ?? 0) > 1e-4
+}
 
-function fenceLiftSignatures(nodes: Record<string, AnyNode>): Map<string, number> {
-  const signatures = new Map<string, number>()
+function isSupport(node: AnyNode): boolean {
+  return (
+    node.type === 'slab' ||
+    (node.type !== 'fence' && !!nodeRegistry.get(node.type)?.capabilities.surfaces?.top)
+  )
+}
+
+function supportLevels(nodes: Record<AnyNodeId, AnyNode>): Map<AnyNodeId, AnyNodeId> {
+  const levels = new Map<AnyNodeId, AnyNodeId>()
   for (const node of Object.values(nodes)) {
-    if (node.type !== 'fence') continue
-    const fence = node as FenceNode
-    // Unhosted fences are covered too, and by a different mechanism: their lift
-    // is the ground, which only a sculpt moves, and `markTerrainSupportDependents`
-    // dirties them from the terrain change itself. Tracking them here would
-    // resolve every fence in the scene on every store update to catch an event
-    // this subscription never sees.
-    if (!fence.supportSlabId) continue
-    signatures.set(fence.id, resolveFenceLiftElevationForNodes(fence, nodes))
+    if (!isSupport(node)) continue
+    const level = findLevelAncestorId(node.id as AnyNodeId, nodes)
+    if (level) levels.set(node.id as AnyNodeId, level as AnyNodeId)
   }
-  return signatures
+  return levels
 }
 
 const FenceSystems = () => {
-  useEffect(() => {
-    let previous = fenceLiftSignatures(useScene.getState().nodes)
+  const outputs = useRef(new Map<AnyNodeId, Object3D | null>())
+  const levels = useRef(supportLevels(useScene.getState().nodes))
 
-    return useScene.subscribe((state) => {
-      const current = fenceLiftSignatures(state.nodes)
-      for (const [fenceId, lift] of current.entries()) {
-        if (previous.get(fenceId) !== lift) {
-          state.markDirty(fenceId as AnyNodeId)
+  useEffect(() => {
+    let previousNodes = useScene.getState().nodes
+    const unsubscribe = useScene.subscribe((state) => {
+      if (state.nodes === previousNodes) return
+      const currentNodes = state.nodes
+      const previousLevels = levels.current
+      const currentLevels = supportLevels(currentNodes)
+      const changedLevels = new Set<AnyNodeId>()
+      for (const id of new Set([...previousLevels.keys(), ...currentLevels.keys()])) {
+        if (
+          previousNodes[id] === currentNodes[id] &&
+          previousLevels.get(id) === currentLevels.get(id)
+        )
+          continue
+        const oldLevel = previousLevels.get(id)
+        const newLevel = currentLevels.get(id)
+        if (oldLevel) changedLevels.add(oldLevel)
+        if (newLevel) changedLevels.add(newLevel)
+      }
+      levels.current = currentLevels
+      for (const node of Object.values(currentNodes)) {
+        if (node.type !== 'fence') continue
+        const fence = node as FenceNode
+        if (followsSurfaces(fence)) {
+          const level = findLevelAncestorId(fence.id as AnyNodeId, currentNodes)
+          if (level && changedLevels.has(level as AnyNodeId)) state.markDirty(fence.id as AnyNodeId)
+        } else if (fence.supportSlabId || fence.supportSurfaceNodeId) {
+          const previous = previousNodes[fence.id as AnyNodeId] as FenceNode | undefined
+          if (
+            previous?.supportSurfaceNodeId !== fence.supportSurfaceNodeId ||
+            (fence.supportSurfaceNodeId &&
+              previousNodes[fence.supportSurfaceNodeId as AnyNodeId] !==
+                currentNodes[fence.supportSurfaceNodeId as AnyNodeId]) ||
+            resolveFenceLiftElevationForNodes(fence, currentNodes) !==
+              resolveFenceLiftElevationForNodes(fence, previousNodes)
+          )
+            state.markDirty(fence.id as AnyNodeId)
         }
       }
-      previous = current
+      previousNodes = currentNodes
     })
+    return () => {
+      unsubscribe()
+      outputs.current.clear()
+    }
   }, [])
+
+  useFrame(() => {
+    const nodes = useScene.getState().nodes
+    const changedLevels = new Set<AnyNodeId>()
+    for (const [id, level] of levels.current) {
+      const root = sceneRegistry.nodes.get(id as AnyNodeId)
+      const output = root?.children.find((child) => child.userData.__fromGeometry) ?? null
+      if (outputs.current.get(id) !== output) {
+        outputs.current.set(id, output)
+        changedLevels.add(level)
+      }
+    }
+    for (const id of outputs.current.keys()) {
+      if (!levels.current.has(id)) outputs.current.delete(id)
+    }
+    if (changedLevels.size === 0) return
+    for (const node of Object.values(nodes)) {
+      if (node.type !== 'fence' || !followsSurfaces(node as FenceNode)) continue
+      const level = findLevelAncestorId(node.id as AnyNodeId, nodes)
+      if (level && changedLevels.has(level as AnyNodeId))
+        useScene.getState().markDirty(node.id as AnyNodeId)
+    }
+  }, 3)
 
   return null
 }

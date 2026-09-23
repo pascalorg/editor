@@ -109,22 +109,43 @@ export function buildFenceGeometry(
   sceneTheme?: string,
 ): Group {
   const group = new Group()
-  const geometries = generateFenceSlotGeometries(node)
+  const startGround = ctx?.levelBaseAt?.(node.start[0], node.start[1]) ?? 0
+  const surfaceId = node.supportSurfaceNodeId as AnyNodeId | undefined
+  const surfaceAt = surfaceId
+    ? (x: number, z: number) => ctx?.surfaceHeightAt?.(surfaceId, x, z) ?? null
+    : undefined
+  const startSurface = surfaceAt?.(node.start[0], node.start[1]) ?? null
+  const startBase = startSurface ?? startGround
+  const followsTerrain = (node.path?.length ?? 0) >= 2 || Math.abs(node.curveOffset ?? 0) > 1e-4
+  const supportAt = followsTerrain ? ctx?.supportHeightAt : undefined
+  const sampledStart = supportAt?.(node.start[0], node.start[1]) ?? startBase
+  const sampledGround = new Map<string, number>()
+  const geometries = generateFenceSlotGeometries(
+    node,
+    supportAt
+      ? (x, z) => {
+          const key = `${x},${z}`
+          const cached = sampledGround.get(key)
+          if (cached !== undefined) return cached
+          const height = supportAt(x, z) - sampledStart
+          sampledGround.set(key, height)
+          return height
+        }
+      : undefined,
+  )
 
   // A hosted railing (`supportSlabId`) stands on its slab's walking surface;
-  // an unhosted one stands on the ground, which `ctx.levelBaseAt` resolves at
-  // the fence's own start point — the anchor its plan geometry is measured
-  // from, so the resolver and the mesh cannot disagree about where the ground
-  // is under this fence. The builder emits local-space children, so the lift
-  // lives on an inner group rather than the registered (React-transformed)
-  // root.
-  const lift = ctx
-    ? resolveFenceLiftElevation(
-        node,
-        (id) => ctx.resolve(id as AnyNodeId),
-        ctx.levelBaseAt?.(node.start[0], node.start[1]) ?? 0,
-      )
-    : 0
+  // an unhosted one starts at the ground height under its first point.
+  // Curved and freehand runs add the sampled height difference along their
+  // path in each slot geometry. The builder emits local-space children, so
+  // the starting lift lives on an inner group.
+  const lift = supportAt
+    ? sampledStart + (node.supportOffset ?? 0)
+    : startSurface !== null
+      ? startSurface + (node.supportOffset ?? 0)
+      : ctx
+        ? resolveFenceLiftElevation(node, (id) => ctx.resolve(id as AnyNodeId), startGround)
+        : 0
   const meshParent = new Group()
   meshParent.position.y = lift
   group.add(meshParent)

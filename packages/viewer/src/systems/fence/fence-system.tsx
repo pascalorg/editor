@@ -693,13 +693,29 @@ function createPicketFenceParts(fence: FenceNode): FenceSlotParts {
   return { posts, infill, base, rail }
 }
 
-function mergeFenceParts(parts: FencePart[]): THREE.BufferGeometry {
+function mergeFenceParts(
+  parts: FencePart[],
+  heightAt?: (x: number, z: number) => number,
+): THREE.BufferGeometry {
   // An empty slot group (e.g. infill with showInfill off, or base on a floating
   // fence) must not reach mergeGeometries — it throws on an empty array. The
   // empty geometry has no position attribute, so the renderer skips its mesh.
   if (parts.length === 0) return new THREE.BufferGeometry()
   const geometries = parts.map((part) => {
     const geometry = createFencePartGeometry(part)
+    if (heightAt) {
+      const positions = geometry.getAttribute('position')
+      if (positions) {
+        for (let index = 0; index < positions.count; index += 1) {
+          const x = positions.getX(index)
+          const z = positions.getZ(index)
+          const lift = part.geometry ? heightAt(x, z) : heightAt(part.position[0], part.position[2])
+          positions.setY(index, positions.getY(index) + lift)
+        }
+        positions.needsUpdate = true
+        geometry.computeVertexNormals()
+      }
+    }
     if (!geometry.index) return geometry
     const nonIndexed = geometry.toNonIndexed()
     geometry.dispose()
@@ -725,19 +741,23 @@ function mergeFenceParts(parts: FencePart[]): THREE.BufferGeometry {
  */
 export function generateFenceSlotGeometries(
   fence: FenceNode,
+  heightAt?: (x: number, z: number) => number,
 ): Record<FenceSlotId, THREE.BufferGeometry> {
   const parts = createFenceParts(fence)
   return {
-    posts: mergeFenceParts(parts.posts),
-    infill: mergeFenceParts(parts.infill),
-    base: mergeFenceParts(parts.base),
-    rail: mergeFenceParts(parts.rail),
+    posts: mergeFenceParts(parts.posts, heightAt),
+    infill: mergeFenceParts(parts.infill, heightAt),
+    base: mergeFenceParts(parts.base, heightAt),
+    rail: mergeFenceParts(parts.rail, heightAt),
   }
 }
 
-export function generateFenceGeometry(fence: FenceNode) {
+export function generateFenceGeometry(
+  fence: FenceNode,
+  heightAt?: (x: number, z: number) => number,
+) {
   const { posts, infill, base, rail } = createFenceParts(fence)
-  return mergeFenceParts([...posts, ...infill, ...base, ...rail])
+  return mergeFenceParts([...posts, ...infill, ...base, ...rail], heightAt)
 }
 
 function updateFenceGeometry(fenceId: FenceNode['id']) {

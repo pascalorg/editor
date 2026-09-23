@@ -49,6 +49,10 @@ export type GeometryContext = {
    * in 2D.
    */
   levelBaseAt?: (x: number, z: number) => number
+  /** Height of a rendered node's upward-facing top at level-local XZ, or null outside it. */
+  surfaceHeightAt?: (hostId: AnyNodeId, x: number, z: number) => number | null
+  /** Highest terrain, slab, or shaped top at a level-local point. */
+  supportHeightAt?: (x: number, z: number) => number
   /**
    * Pre-computed level-batch data, populated by the dispatcher when the
    * kind declares `def.computeLevelData` (3D) or
