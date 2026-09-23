@@ -2,11 +2,10 @@ import {
   DEFAULT_ANGLE_STEP,
   type FenceConstructionOptions as FenceCommitOptions,
   FenceNode,
-  getTwoPointFenceCurveTangents,
-  getWallCurveFrameAt,
-  getWallCurveLength,
-  isCurvedWall,
+  getFenceCenterlineLength,
+  getFenceSplineLength,
   resolveFenceConstructionSupport,
+  sampleFenceCenterline,
   snapPointAlongAngleRay,
   useScene,
   type WallNode,
@@ -51,10 +50,7 @@ function projectPointOntoSegment(
     return null
   }
 
-  const t = ((point[0] - x1) * dx + (point[1] - z1) * dz) / lengthSquared
-  if (t <= 0 || t >= 1) {
-    return null
-  }
+  const t = Math.max(0, Math.min(1, ((point[0] - x1) * dx + (point[1] - z1) * dz) / lengthSquared))
 
   return [x1 + dx * t, z1 + dz * t]
 }
@@ -90,36 +86,24 @@ function findFenceSnapTarget(
       bestCornerDistanceSquared = candidateDistanceSquared
     }
 
-    if (isCurvedWall(fence)) {
-      const sampleCount = Math.max(8, Math.ceil(getWallCurveLength(fence) / 0.3))
-      for (let index = 1; index < sampleCount; index += 1) {
-        const frame = getWallCurveFrameAt(fence, index / sampleCount)
-        const candidate: FencePlanPoint = [frame.point.x, frame.point.y]
-        const candidateDistanceSquared = distanceSquared(point, candidate)
-        if (
-          candidateDistanceSquared > spanRadiusSquared ||
-          candidateDistanceSquared >= bestSpanDistanceSquared
-        ) {
-          continue
-        }
-
-        bestSpanTarget = candidate
-        bestSpanDistanceSquared = candidateDistanceSquared
-      }
-    } else {
-      const candidate = projectPointOntoSegment(point, fence)
-      if (!candidate) {
-        continue
-      }
-
+    const samples = sampleFenceCenterline(
+      fence,
+      Math.max(32, Math.ceil(getFenceCenterlineLength(fence) / 0.1)),
+    )
+    for (let index = 1; index < samples.length; index += 1) {
+      const a = samples[index - 1]!
+      const b = samples[index]!
+      const candidate = projectPointOntoSegment(point, {
+        start: [a.x, a.y],
+        end: [b.x, b.y],
+      })
+      if (!candidate) continue
       const candidateDistanceSquared = distanceSquared(point, candidate)
       if (
         candidateDistanceSquared > spanRadiusSquared ||
         candidateDistanceSquared >= bestSpanDistanceSquared
-      ) {
+      )
         continue
-      }
-
       bestSpanTarget = candidate
       bestSpanDistanceSquared = candidateDistanceSquared
     }
@@ -230,7 +214,7 @@ export function createFenceOnCurrentLevel(
  */
 export function createSplineFenceOnCurrentLevel(
   path: FencePlanPoint[],
-  tangents = getTwoPointFenceCurveTangents(path),
+  tangents?: FenceNode['tangents'],
   options?: FenceCommitOptions,
 ): FenceNode | null {
   const currentLevelId = useViewer.getState().selection.levelId
@@ -243,7 +227,7 @@ export function createSplineFenceOnCurrentLevel(
   const end = path[path.length - 1]!
   // A degenerate single-point-ish path (all clicks on one spot) is rejected
   // the same way a too-short straight segment is.
-  if (!isSegmentLongEnough(start, end) && path.length < 3) {
+  if (getFenceSplineLength(path, tangents) < 0.01) {
     return null
   }
 

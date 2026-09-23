@@ -17,7 +17,8 @@ type FencePart = {
   scale: [number, number, number]
   // A `pyramid` part is a 4-sided cone (square base aligned to the part axes),
   // used for peaked post caps. Defaults to a box.
-  shape?: 'box' | 'pyramid'
+  shape?: 'box' | 'pyramid' | 'picket'
+  picketTop?: FenceNode['picketTop']
 }
 
 const MIN_CURVE_SEGMENT_LENGTH = 0.18
@@ -30,14 +31,61 @@ function createFencePartGeometry(part: FencePart) {
   const geometry =
     part.shape === 'pyramid'
       ? new THREE.ConeGeometry(0.5, 1, 4, 1, false, Math.PI / 4)
-      : new THREE.BoxGeometry(1, 1, 1)
-  geometry.scale(part.scale[0], part.scale[1], part.scale[2])
+      : part.shape === 'picket'
+        ? createPicketGeometry(part.scale[0], part.scale[1], part.scale[2], part.picketTop)
+        : new THREE.BoxGeometry(1, 1, 1)
+  if (part.shape !== 'picket') geometry.scale(part.scale[0], part.scale[1], part.scale[2])
   if (part.rotationY) {
     geometry.rotateY(part.rotationY)
   }
   geometry.translate(part.position[0], part.position[1], part.position[2])
   applyFenceUVs(geometry)
   return geometry
+}
+
+function createPicketGeometry(
+  width: number,
+  height: number,
+  depth: number,
+  top: FenceNode['picketTop'] = 'dog-ear',
+) {
+  const shape = new THREE.Shape()
+  const halfWidth = width / 2
+  const tip = height / 2
+  const shoulder = tip - Math.min(halfWidth, height * 0.2)
+  shape.moveTo(-halfWidth, -tip)
+  shape.lineTo(halfWidth, -tip)
+  if (top === 'flat') {
+    shape.lineTo(halfWidth, tip)
+    shape.lineTo(-halfWidth, tip)
+  } else {
+    shape.lineTo(halfWidth, shoulder)
+    if (top === 'pointed') {
+      shape.lineTo(0, tip)
+    } else if (top === 'rounded') {
+      shape.absellipse(0, shoulder, halfWidth, tip - shoulder, 0, Math.PI, false, 0)
+    } else {
+      shape.lineTo(width * 0.28, tip)
+      shape.lineTo(-width * 0.28, tip)
+    }
+    shape.lineTo(-halfWidth, shoulder)
+  }
+  shape.closePath()
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    bevelEnabled: false,
+    curveSegments: 8,
+    depth,
+    steps: 1,
+  })
+  geometry.translate(0, 0, -depth / 2)
+  return geometry
+}
+
+function getInfillOffset(fence: FenceNode, supportDepth: number, infillDepth: number) {
+  const direction =
+    fence.infillPlacement === 'front' ? 1 : fence.infillPlacement === 'back' ? -1 : 0
+  // A small overlap avoids coincident faces at the attachment surface.
+  return direction * Math.max(0, (supportDepth + infillDepth) / 2 - 0.002)
 }
 
 function getFencePointAt(fence: FenceNode, t: number) {
@@ -55,6 +103,7 @@ function createFenceCurveBlockPart(
   centerY: number,
   height: number,
   depth: number,
+  lateralOffset = 0,
 ): FencePart | null {
   if (endT - startT <= 1e-5) return null
   const halfHeight = height / 2
@@ -71,10 +120,10 @@ function createFenceCurveBlockPart(
     const normalX = -Math.sin(frame.tangentAngle)
     const normalZ = Math.cos(frame.tangentAngle)
 
-    const outerX = frame.point.x + normalX * halfDepth
-    const outerZ = frame.point.y + normalZ * halfDepth
-    const innerX = frame.point.x - normalX * halfDepth
-    const innerZ = frame.point.y - normalZ * halfDepth
+    const outerX = frame.point.x + normalX * (halfDepth + lateralOffset)
+    const outerZ = frame.point.y + normalZ * (halfDepth + lateralOffset)
+    const innerX = frame.point.x - normalX * (halfDepth - lateralOffset)
+    const innerZ = frame.point.y - normalZ * (halfDepth - lateralOffset)
 
     corners.push(
       [outerX, bottomY, outerZ],
@@ -182,6 +231,7 @@ function createFenceCurveBlockParts(
   height: number,
   depth: number,
   maxSegmentLength = MIN_CURVE_SEGMENT_LENGTH,
+  lateralOffset = 0,
 ): FencePart[] {
   const length = getFenceCenterlineLength(fence) * Math.max(1e-4, endT - startT)
   const segmentCount = Math.max(1, Math.ceil(length / Math.max(1e-4, maxSegmentLength)))
@@ -197,6 +247,7 @@ function createFenceCurveBlockParts(
       centerY,
       height,
       depth,
+      lateralOffset,
     )
     if (part) parts.push(part)
   }
@@ -295,6 +346,7 @@ function createHorizontalFenceParts(fence: FenceNode): FenceSlotParts {
   const postWidth = Math.max(fence.postSize * 1.4, 0.04)
   const postDepth = postWidth
   const boardDepth = Math.min(panelDepth, postDepth - 0.012)
+  const infillOffset = getInfillOffset(fence, postDepth, boardDepth)
   // Stop the horizontal boards / base / rail at the inner faces of the
   // end posts. Letting curved spans run all the way to t=0/1 makes them
   // overlap the terminal post mesh and creates the broken seam/notch seen
@@ -336,6 +388,7 @@ function createHorizontalFenceParts(fence: FenceNode): FenceSlotParts {
           verticalHeight,
           boardDepth,
           HORIZONTAL_FENCE_CURVE_SEGMENT_LENGTH,
+          infillOffset,
         ),
       )
     } else {
@@ -352,6 +405,7 @@ function createHorizontalFenceParts(fence: FenceNode): FenceSlotParts {
             slabHeight,
             boardDepth,
             HORIZONTAL_FENCE_CURVE_SEGMENT_LENGTH,
+            infillOffset,
           ),
         )
       }
@@ -406,6 +460,7 @@ function createHorizontalFenceParts(fence: FenceNode): FenceSlotParts {
 
 function createFenceParts(fence: FenceNode): FenceSlotParts {
   if (fence.style === 'horizontal') return createHorizontalFenceParts(fence)
+  if (fence.style === 'picket') return createPicketFenceParts(fence)
 
   const posts: FencePart[] = []
   const infill: FencePart[] = []
@@ -476,6 +531,13 @@ function createFenceParts(fence: FenceNode): FenceSlotParts {
       postY,
       postHeight,
       Math.max(panelDepth * 0.35 - 0.001, 0.011),
+      isEdgePost
+        ? 0
+        : getInfillOffset(
+            fence,
+            Math.max(panelDepth * 0.55, 0.018),
+            Math.max(panelDepth * 0.35 - 0.001, 0.011),
+          ),
     )
     if (slat) {
       ;(isEdgePost ? posts : infill).push(slat)
@@ -509,12 +571,140 @@ function createFenceParts(fence: FenceNode): FenceSlotParts {
   return { posts, infill, base, rail }
 }
 
+function createPicketFenceParts(fence: FenceNode): FenceSlotParts {
+  const posts: FencePart[] = []
+  const infill: FencePart[] = []
+  const base: FencePart[] = []
+  const rail: FencePart[] = []
+  const length = Math.max(getFenceCenterlineLength(fence), 0.01)
+  const height = Math.max(fence.height, 0.3)
+  const postWidth = Math.max(fence.postSize, 0.02)
+  const postDepth = Math.max(fence.thickness, postWidth)
+  const baseHeight =
+    fence.baseStyle === 'floating' ? 0 : Math.min(Math.max(fence.baseHeight, 0.04), height * 0.5)
+  const picketBottom = Math.min(baseHeight + Math.max(fence.groundClearance, 0), height * 0.75)
+  const topClearance = Math.min(
+    Math.max(fence.picketTopClearance ?? 0, 0),
+    height - picketBottom - 0.02,
+  )
+  const picketHeight = height - picketBottom - topClearance
+  const railHeight = Math.min(Math.max(fence.topRailHeight, 0.01), picketHeight * 0.15)
+  // Separate the exposed faces at post/base and post/rail intersections.
+  const baseDepth = postDepth * 0.8
+  const railDepth = postDepth + 2 * Math.max(fence.picketRailProjection, 0.006)
+  const variation =
+    fence.picketProfile === 'level'
+      ? 0
+      : Math.min(Math.max(fence.picketVariation, 0), picketHeight * 0.3)
+  const shortestPicketHeight = picketHeight - variation
+  const picketDepth = Math.max(Math.min(fence.thickness * 0.5, 0.052), 0.01)
+  const picketWidth = Math.max(fence.picketWidth, 0.02)
+  const isCurved = (fence.path?.length ?? 0) >= 2 || Math.abs(fence.curveOffset ?? 0) > 0.0001
+  // Curved runs need more clearance as neighboring boards turn toward each other.
+  const curveClearance = isCurved ? 0.03 : 0
+  const spacing = Math.max(fence.picketSpacing, picketWidth + 0.01) + curveClearance
+  const endInset = Math.max(fence.edgeInset, 0) + postWidth / 2
+  const postCount = Math.max(1, Math.ceil(length / Math.max(fence.postSpacing, postWidth * 2)))
+
+  for (let index = 0; index <= postCount; index += 1) {
+    const frame = getFencePointAt(fence, index / postCount)
+    posts.push({
+      position: [frame.point.x, height / 2, frame.point.y],
+      rotationY: -frame.tangentAngle,
+      scale: [postWidth, height, postDepth],
+    })
+    if (fence.postCap !== 'none') {
+      const capHeight = postWidth * (fence.postCap === 'flat' ? 0.2 : 0.5)
+      posts.push({
+        position: [frame.point.x, height + capHeight / 2, frame.point.y],
+        rotationY: -frame.tangentAngle,
+        scale: [postWidth * 1.5, capHeight, postDepth * 1.5],
+        shape: fence.postCap === 'flat' ? 'box' : 'pyramid',
+      })
+    }
+  }
+
+  const startInsetT = Math.min(0.499, endInset / length)
+  const endInsetT = Math.max(0.501, 1 - endInset / length)
+  if (baseHeight > 0) {
+    base.push(
+      ...createFenceCurveBlockParts(
+        fence,
+        startInsetT,
+        endInsetT,
+        baseHeight / 2,
+        baseHeight,
+        baseDepth,
+      ),
+    )
+  }
+  const railCount = Math.min(3, Math.max(2, Math.round(fence.picketRailCount)))
+  for (let index = 0; index < railCount; index += 1) {
+    const centerY = picketBottom + shortestPicketHeight * (0.2 + (0.55 * index) / (railCount - 1))
+    rail.push(
+      ...createFenceCurveBlockParts(
+        fence,
+        startInsetT,
+        endInsetT,
+        centerY,
+        railHeight,
+        railDepth,
+        0.22,
+      ),
+    )
+  }
+
+  // Lay out each bay independently so boards never intersect the structural posts.
+  const bayLength = length / postCount
+  const usableLength = bayLength - 2 * endInset - picketWidth
+  if (fence.showInfill && usableLength >= 0) {
+    const picketCount = Math.max(1, Math.floor(usableLength / spacing) + 1)
+    const occupiedLength = (picketCount - 1) * spacing
+    const faceOffset = getInfillOffset(fence, railDepth, picketDepth)
+    for (let bay = 0; bay < postCount; bay += 1) {
+      for (let index = 0; index < picketCount; index += 1) {
+        const distance = bay * bayLength + (bayLength - occupiedLength) / 2 + index * spacing
+        const frame = getFenceCenterlineFrameAt(fence, distance / length)
+        const u = picketCount === 1 ? 0.5 : index / (picketCount - 1)
+        const arch = Math.sin(Math.PI * u)
+        const reduction =
+          fence.picketProfile === 'arched'
+            ? 1 - arch
+            : fence.picketProfile === 'scalloped'
+              ? arch
+              : fence.picketProfile === 'alternating'
+                ? index % 2
+                : 0
+        const boardHeight = picketHeight - variation * reduction
+        infill.push({
+          position: [
+            frame.point.x + frame.normal.x * faceOffset,
+            picketBottom + boardHeight / 2,
+            frame.point.y + frame.normal.y * faceOffset,
+          ],
+          rotationY: -Math.atan2(frame.tangent.y, frame.tangent.x),
+          scale: [picketWidth, boardHeight, picketDepth],
+          shape: 'picket',
+          picketTop: fence.picketTop,
+        })
+      }
+    }
+  }
+  return { posts, infill, base, rail }
+}
+
 function mergeFenceParts(parts: FencePart[]): THREE.BufferGeometry {
   // An empty slot group (e.g. infill with showInfill off, or base on a floating
   // fence) must not reach mergeGeometries — it throws on an empty array. The
   // empty geometry has no position attribute, so the renderer skips its mesh.
   if (parts.length === 0) return new THREE.BufferGeometry()
-  const geometries = parts.map(createFencePartGeometry)
+  const geometries = parts.map((part) => {
+    const geometry = createFencePartGeometry(part)
+    if (!geometry.index) return geometry
+    const nonIndexed = geometry.toNonIndexed()
+    geometry.dispose()
+    return nonIndexed
+  })
   const merged = mergeGeometries(geometries, false) ?? new THREE.BufferGeometry()
   geometries.forEach((geometry) => {
     geometry.dispose()

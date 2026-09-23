@@ -49,7 +49,7 @@ function cloneGraph(graph: SceneGraph): SceneGraph {
 
 const WALL_THICKNESS_OPTIONS = [0.1, 0.15, 0.2, 0.25] as const
 const WALL_HEIGHT_OPTIONS = [2.4, 2.6, 2.7, 3.0] as const
-const FENCE_STYLES = ['privacy', 'slat', 'rail'] as const
+const FENCE_STYLES = ['privacy', 'slat', 'rail', 'picket'] as const
 
 /** Fisher–Yates shuffle in place using the provided RNG. */
 function shuffleInPlace<T>(arr: T[], rng: Rng): void {

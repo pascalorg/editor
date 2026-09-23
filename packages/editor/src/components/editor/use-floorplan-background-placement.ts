@@ -239,6 +239,12 @@ export function useFloorplanBackgroundPlacement({
         return true
       }
 
+      if (isFenceBuildActive && useEditor.getState().getContinuation('fence') === 'curved') {
+        clearFencePlacementDraft()
+        emitFloorplanGridEvent('click', planPoint, event)
+        return true
+      }
+
       if (isFenceBuildActive) {
         // Fence draft: mode-driven (matches the chip), same as the move
         // preview. `grid` snaps to the world XZ grid (rotation-safe via the

@@ -4,9 +4,8 @@ import {
   calculateLevelMiters,
   collectAlignmentAnchors,
   emitter,
-  type FenceNode,
+  FenceNode,
   type GridEvent,
-  getTwoPointFenceCurveTangents,
   getWallMiterBoundaryPoints,
   type LevelNode,
   type Point2D,
@@ -46,10 +45,11 @@ import {
   useEditor,
   useFenceCurveDraft,
   useFloorplanDraftPreview,
+  usePlacementPreview,
   useSegmentDraftChain,
 } from '@pascal-app/editor'
 
-import { getSceneTheme, useViewer } from '@pascal-app/viewer'
+import { generateFenceGeometry, getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, type Camera, DoubleSide, type Group, type Mesh, Vector3 } from 'three'
@@ -814,10 +814,9 @@ const SPLINE_PREVIEW_COLOR = '#8381ed'
 const SPLINE_PREVIEW_SEGMENTS = 40
 
 const SplineFenceDraft: React.FC = () => {
+  const fenceDefaults = useEditor((state) => state.toolDefaults.fence)
   const previewHeight =
-    typeof useEditor.getState().toolDefaults.fence?.height === 'number'
-      ? (useEditor.getState().toolDefaults.fence?.height as number)
-      : FENCE_PREVIEW_HEIGHT
+    typeof fenceDefaults?.height === 'number' ? fenceDefaults.height : FENCE_PREVIEW_HEIGHT
   const [draftPoints, setDraftPoints] = useState<FencePlanPoint[]>([])
   const [cursor, setCursor] = useState<FencePlanPoint | null>(null)
   // Building-local Y of the grid plane (rides the pointed surface — see
@@ -933,21 +932,52 @@ const SplineFenceDraft: React.FC = () => {
     }
   }, [])
 
-  const previewPoints = cursor ? [...draftPoints, cursor] : draftPoints
+  const previewPoints = useMemo(() => {
+    const last = draftPoints.at(-1)
+    return cursor && last && !pointMatches(last, cursor) ? [...draftPoints, cursor] : draftPoints
+  }, [cursor, draftPoints])
+  const previewNode = useMemo(() => {
+    if (previewPoints.length < 2) return null
+    return FenceNode.parse({
+      ...fenceDefaults,
+      id: 'fence_curve_preview',
+      start: previewPoints[0],
+      end: previewPoints.at(-1),
+      path: previewPoints,
+      tangents: undefined,
+    })
+  }, [fenceDefaults, previewPoints])
+  const ghostGeometry = useMemo(
+    () => (previewNode ? generateFenceGeometry(previewNode) : null),
+    [previewNode],
+  )
+  useEffect(() => () => ghostGeometry?.dispose(), [ghostGeometry])
+  useEffect(() => {
+    usePlacementPreview.getState().set(previewNode)
+  }, [previewNode])
+  useEffect(() => () => usePlacementPreview.getState().clear(), [])
   const curveGeometry = useMemo(() => {
     if (previewPoints.length < 2) return null
-    const sampled = sampleFenceSpline(
-      previewPoints,
-      getTwoPointFenceCurveTangents(previewPoints),
-      SPLINE_PREVIEW_SEGMENTS,
-    )
+    const sampled = sampleFenceSpline(previewPoints, undefined, SPLINE_PREVIEW_SEGMENTS)
     return new BufferGeometry().setFromPoints(
       sampled.map((point) => new Vector3(point.x, liftY + previewHeight, point.y)),
     )
   }, [liftY, previewHeight, previewPoints])
+  useEffect(() => () => curveGeometry?.dispose(), [curveGeometry])
 
   return (
     <group>
+      {ghostGeometry && (
+        <mesh
+          geometry={ghostGeometry}
+          layers={EDITOR_LAYER}
+          position={[0, liftY + (previewNode?.supportOffset ?? 0), 0]}
+          raycast={() => {}}
+          renderOrder={1}
+        >
+          <meshBasicMaterial color="#ffffff" depthWrite={false} opacity={0.45} transparent />
+        </mesh>
+      )}
       {cursor && <CursorSphere height={previewHeight} position={[cursor[0], liftY, cursor[1]]} />}
       {draftPoints.map((point, index) => (
         <mesh

@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 
-export const FenceStyle = z.enum(['slat', 'rail', 'privacy', 'horizontal'])
+export const FenceStyle = z.enum(['slat', 'rail', 'privacy', 'horizontal', 'picket'])
 export const FenceBaseStyle = z.enum(['floating', 'grounded'])
 export const FencePostCap = z.enum(['none', 'flat', 'pyramid'])
 
@@ -40,19 +40,27 @@ export const FenceNode = BaseNode.extend({
   supportOffset: z.number().finite().optional(),
   curveOffset: z.number().optional(),
   baseHeight: z.number().default(0.22),
-  postSpacing: z.number().default(2),
-  postSize: z.number().default(0.1),
+  postSpacing: z.number().default(1.98),
+  picketSpacing: z.number().default(0.27),
+  picketWidth: z.number().positive().default(0.07),
+  picketTop: z.enum(['flat', 'pointed', 'rounded', 'dog-ear']).default('flat'),
+  picketProfile: z.enum(['level', 'arched', 'scalloped', 'alternating']).default('level'),
+  picketTopClearance: z.number().nonnegative().default(0.2),
+  picketVariation: z.number().nonnegative().default(0.23),
+  picketRailProjection: z.number().positive().default(0.018),
+  picketRailCount: z.number().int().min(2).max(3).default(2),
+  postSize: z.number().default(0.109),
   topRailHeight: z.number().default(0.04),
-  groundClearance: z.number().default(0),
+  groundClearance: z.number().default(0.14),
   edgeInset: z.number().default(0.015),
   // Reveal between the boards of a `horizontal` fence (0 = flush cladding).
   slatGap: z.number().default(0.01),
-  // Topper drawn on each `horizontal`-fence post.
   postCap: FencePostCap.default('pyramid'),
-  baseStyle: FenceBaseStyle.default('grounded'),
+  baseStyle: FenceBaseStyle.default('floating'),
   showInfill: z.boolean().default(true),
+  infillPlacement: z.enum(['center', 'front', 'back']).default('center'),
   color: z.string().default('#ffffff'),
-  style: FenceStyle.default('slat'),
+  style: FenceStyle.default('picket'),
 }).describe(
   dedent`
   Fence node - used to represent a fence segment in the building/site level coordinate system
