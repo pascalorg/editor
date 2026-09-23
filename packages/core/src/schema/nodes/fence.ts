@@ -15,6 +15,14 @@ export const FencePatternDistribution = z.enum([
   'maximum-spacing',
   'equal-fit',
 ])
+
+export function maxFencePicketRailProjection(postSize: number): number {
+  return Math.max(0, postSize - 0.001)
+}
+
+export function clampFencePicketRailProjection(projection: number, postSize: number): number {
+  return Math.min(Math.max(projection, 0), maxFencePicketRailProjection(postSize))
+}
 export const FenceFeature = z.object({
   id: z.string(),
   kind: z.enum(['gate', 'opening']),
@@ -88,7 +96,7 @@ export const FenceNode = BaseNode.extend({
   picketProfile: z.enum(['level', 'arched', 'scalloped', 'alternating']).default('level'),
   picketTopClearance: z.number().nonnegative().default(0.2),
   picketVariation: z.number().nonnegative().default(0.23),
-  picketRailProjection: z.number().positive().default(0.018),
+  picketRailProjection: z.number().positive().default(0.001),
   picketRailCount: z.number().int().min(2).max(3).default(2),
   postSize: z.number().default(0.109),
   topRailHeight: z.number().default(0.04),

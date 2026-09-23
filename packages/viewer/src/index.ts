@@ -236,6 +236,7 @@ export { ElevatorInteractionSystem } from './systems/elevator/elevator-interacti
 export {
   createFenceRailHeightSampler,
   FenceSystem,
+  type FenceCornerNeighbors,
   generateFenceGeometry,
   generateFenceSlotGeometries,
 } from './systems/fence/fence-system'

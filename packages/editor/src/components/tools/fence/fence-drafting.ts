@@ -23,6 +23,36 @@ import {
 
 export type FencePlanPoint = WallPlanPoint
 
+const INHERITED_FENCE_FIELDS = [
+  'height', 'thickness', 'material', 'materialPreset', 'slots', 'baseHeight',
+  'postSpacing', 'picketSpacing', 'patternDistribution', 'patternAlignment',
+  'patternCount', 'patternRemainder', 'picketWidth', 'picketTop',
+  'picketRailCount', 'picketProfile', 'picketTopClearance', 'picketVariation',
+  'picketRailProjection', 'postSize', 'topRailHeight', 'groundClearance',
+  'edgeInset', 'slatGap', 'postCap', 'baseStyle', 'surfaceMode', 'supportOffset',
+  'transitionMode', 'transitionWidth', 'showInfill', 'infillPlacement',
+  'color', 'style',
+] as const satisfies readonly (keyof FenceNode)[]
+
+export function getFenceInheritedDefaults(start: FencePlanPoint): Partial<FenceNode> | null {
+  const levelId = useViewer.getState().selection.levelId
+  if (!levelId) return null
+  const nodes = useScene.getState().nodes
+  const source = Object.values(nodes).find(
+    (node): node is FenceNode =>
+      node.type === 'fence' &&
+      node.parentId === levelId &&
+      node.visible !== false &&
+      [node.start, node.end].some((point) => distanceSquared(start, point) < 0.001 ** 2),
+  )
+  if (!source) return null
+  const defaults: Record<string, unknown> = {}
+  for (const field of INHERITED_FENCE_FIELDS) {
+    if (source[field] !== undefined) defaults[field] = source[field]
+  }
+  return defaults as Partial<FenceNode>
+}
+
 const FENCE_CORNER_SNAP_RADIUS = 0.28
 const FENCE_SPAN_SNAP_RADIUS = 0.16
 
@@ -190,7 +220,10 @@ export function createFenceOnCurrentLevel(
   // Build parameters seeded by a placed preset (height, style, post
   // spacing, …) merge in first; `name`/`start`/`end` always win. The
   // schema parse validates and drops anything unexpected.
-  const defaults = useEditor.getState().toolDefaults.fence ?? {}
+  const defaults = {
+    ...useEditor.getState().toolDefaults.fence,
+    ...getFenceInheritedDefaults(start),
+  }
   const authoredFence = FenceNode.parse({
     ...defaults,
     name: `Fence ${fenceCount + 1}`,
@@ -232,7 +265,10 @@ export function createSplineFenceOnCurrentLevel(
   }
 
   const fenceCount = Object.values(nodes).filter((node) => node.type === 'fence').length
-  const defaults = useEditor.getState().toolDefaults.fence ?? {}
+  const defaults = {
+    ...useEditor.getState().toolDefaults.fence,
+    ...getFenceInheritedDefaults(start),
+  }
   const authoredFence = FenceNode.parse({
     ...defaults,
     name: `Fence ${fenceCount + 1}`,

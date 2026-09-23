@@ -30,6 +30,7 @@ import {
   type FencePlanPoint,
   formatAngleRadians,
   formatLinearMeasurement,
+  getFenceInheritedDefaults,
   getAngleArcToSegmentReference,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
@@ -501,10 +502,16 @@ const StraightFenceTool: React.FC = () => {
   // than the generic fallbacks. Read through refs so the live event
   // handlers below see the latest values without re-subscribing.
   const fenceDefaults = useEditor((s) => s.toolDefaults.fence)
+  const startingPoint = useRef(new Vector3(0, 0, 0))
+  const buildingState = useRef(0)
+  const inheritedPreview = buildingState.current === 1
+    ? getFenceInheritedDefaults([startingPoint.current.x, startingPoint.current.z])
+    : null
+  const effectiveDefaults = { ...fenceDefaults, ...inheritedPreview }
   const previewHeight =
-    typeof fenceDefaults?.height === 'number' ? fenceDefaults.height : FENCE_PREVIEW_HEIGHT
+    typeof effectiveDefaults.height === 'number' ? effectiveDefaults.height : FENCE_PREVIEW_HEIGHT
   const previewThickness =
-    typeof fenceDefaults?.thickness === 'number' ? fenceDefaults.thickness : FENCE_PREVIEW_THICKNESS
+    typeof effectiveDefaults.thickness === 'number' ? effectiveDefaults.thickness : FENCE_PREVIEW_THICKNESS
   const previewHeightRef = useRef(previewHeight)
   previewHeightRef.current = previewHeight
   const previewThicknessRef = useRef(previewThickness)
@@ -516,10 +523,8 @@ const StraightFenceTool: React.FC = () => {
   cameraRef.current = camera
   const cursorRef = useRef<Group>(null)
   const previewRef = useRef<Mesh>(null!)
-  const startingPoint = useRef(new Vector3(0, 0, 0))
   const endingPoint = useRef(new Vector3(0, 0, 0))
   const constructionSurface = useRef<PointerSupportSurface | null>(null)
-  const buildingState = useRef(0)
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
   const [axisGuide, setAxisGuide] = useState<DraftAxisGuideState>(null)
   const measurementColor = isDark ? '#ffffff' : '#111111'
@@ -919,9 +924,17 @@ const SplineFenceDraft: React.FC<{ freehand?: boolean }> = ({ freehand = false }
   const fenceDefaults = useEditor((state) => state.toolDefaults.fence)
   const sceneNodes = useScene((state) => state.nodes)
   const levelId = useViewer((state) => state.selection.levelId)
-  const previewHeight =
-    typeof fenceDefaults?.height === 'number' ? fenceDefaults.height : FENCE_PREVIEW_HEIGHT
   const [draftPoints, setDraftPoints] = useState<FencePlanPoint[]>([])
+  const inheritedPreview = useMemo(
+    () => draftPoints[0] ? getFenceInheritedDefaults(draftPoints[0]) : null,
+    [draftPoints[0], sceneNodes, levelId],
+  )
+  const effectiveDefaults = useMemo(
+    () => ({ ...fenceDefaults, ...inheritedPreview }),
+    [fenceDefaults, inheritedPreview],
+  )
+  const previewHeight =
+    typeof effectiveDefaults.height === 'number' ? effectiveDefaults.height : FENCE_PREVIEW_HEIGHT
   const [cursor, setCursor] = useState<FencePlanPoint | null>(null)
   // Building-local Y of the grid plane (rides the pointed surface — see
   // `pointedSurfaceFor`), so the spline preview draws on the deck top when
@@ -1104,14 +1117,14 @@ const SplineFenceDraft: React.FC<{ freehand?: boolean }> = ({ freehand = false }
   const previewNode = useMemo(() => {
     if (previewPoints.length < 2) return null
     return FenceNode.parse({
-      ...fenceDefaults,
+      ...effectiveDefaults,
       id: 'fence_curve_preview',
       start: previewPoints[0],
       end: previewPoints.at(-1),
       path: previewPoints,
       tangents: undefined,
     })
-  }, [fenceDefaults, previewPoints])
+  }, [effectiveDefaults, previewPoints])
   const previewGroundAt = useMemo(() => {
     if (!levelId || !previewNode) return null
     const selectedHost =

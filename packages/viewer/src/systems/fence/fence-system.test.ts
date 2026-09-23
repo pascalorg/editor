@@ -17,7 +17,7 @@ describe('picket fence geometry', () => {
         slots.infill.computeBoundingBox()
         expect(slots.posts.boundingBox!.min.y).toBeCloseTo(0)
         expect(slots.infill.boundingBox!.min.y).toBeCloseTo(baseStyle === 'grounded' ? 0.32 : 0.1)
-        expect(slots.infill.boundingBox!.max.y).toBeCloseTo(node.height)
+        expect(slots.infill.boundingBox!.max.y).toBeCloseTo(node.height - node.picketTopClearance)
         for (const geometry of Object.values(slots)) geometry.dispose()
       })
     }
@@ -33,6 +33,23 @@ describe('picket fence geometry', () => {
       plain.rail.getAttribute('position').count * 1.5,
     )
     for (const geometry of [...Object.values(plain), ...Object.values(capped)]) geometry.dispose()
+  })
+
+  test('picket rails overlap end posts and projection stays narrower than a post', () => {
+    const node = fence({
+      postCap: 'none',
+      postSize: 0.08,
+      thickness: 0.08,
+      edgeInset: 0.15,
+      picketRailProjection: 0.5,
+    })
+    const slots = generateFenceSlotGeometries(node)
+    slots.rail.computeBoundingBox()
+    const bounds = slots.rail.boundingBox!
+    expect(bounds.min.x).toBeLessThan(node.postSize / 2)
+    expect(bounds.max.x).toBeGreaterThan(4 - node.postSize / 2)
+    expect(bounds.max.z - bounds.min.z).toBeLessThan(node.thickness + 2 * node.postSize)
+    for (const geometry of Object.values(slots)) geometry.dispose()
   })
 
   test('combined geometry includes all slots on straight, arc and spline fences', () => {

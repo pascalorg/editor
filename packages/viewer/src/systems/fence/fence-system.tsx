@@ -1,5 +1,6 @@
 import {
   type AnyNodeId,
+  clampFencePicketRailProjection,
   type FenceNode,
   type FenceWithFeatures,
   getFenceCenterlineFrameAt,
@@ -28,6 +29,7 @@ type FencePart = {
   endT?: number
   heightOverride?: number
   curveBlock?: { centerY: number; height: number; depth: number; lateralOffset: number }
+  endpoint?: 'start' | 'end'
 }
 
 const MIN_CURVE_SEGMENT_LENGTH = 0.18
@@ -377,6 +379,55 @@ export type FenceSlotId = 'posts' | 'infill' | 'base' | 'rail'
 
 export type FenceSlotParts = Record<FenceSlotId, FencePart[]>
 
+export type FenceCornerNeighbors = Partial<Record<'start' | 'end', FenceNode>>
+
+function miterFencePartEnd(
+  fence: FenceNode,
+  part: FencePart,
+  endpoint: 'start' | 'end',
+  neighbor: FenceNode,
+) {
+  if (!part.geometry || !part.curveBlock) return
+  const t = endpoint === 'start' ? 0 : 1
+  if (Math.abs(((endpoint === 'start' ? part.startT : part.endT) ?? -1) - t) > 1e-5) return
+  const point = fence[endpoint]
+  const frame = getFenceCenterlineFrameAt(fence, t)
+  const sign = endpoint === 'start' ? 1 : -1
+  const ux = frame.tangent.x * sign
+  const uz = frame.tangent.y * sign
+  const neighborAtStart = Math.hypot(neighbor.start[0] - point[0], neighbor.start[1] - point[1]) < 0.001
+  const other = getFenceCenterlineFrameAt(neighbor, neighborAtStart ? 0 : 1)
+  const vx = other.tangent.x * (neighborAtStart ? 1 : -1)
+  const vz = other.tangent.y * (neighborAtStart ? 1 : -1)
+  const cross = ux * vz - uz * vx
+  if (Math.abs(cross) < 0.15) return
+  const { depth, lateralOffset } = part.curveBlock
+  const ratio = Math.max(neighbor.thickness, 0.03) / Math.max(fence.thickness, 0.03)
+  const position = part.geometry.getAttribute('position')
+  for (let index = 0; index < position.count; index += 1) {
+    const x = position.getX(index)
+    const z = position.getZ(index)
+    for (const side of [-1, 1]) {
+      const offset = lateralOffset + side * depth / 2
+      const originalX = point[0] - uz * offset * sign
+      const originalZ = point[1] + ux * offset * sign
+      if (Math.hypot(x - originalX, z - originalZ) > 1e-4) continue
+      const neighborOffset = -offset * sign * ratio
+      const nx = -uz * offset * sign
+      const nz = ux * offset * sign
+      const mx = -vz * neighborOffset
+      const mz = vx * neighborOffset
+      const reach = ((mx - nx) * vz - (mz - nz) * vx) / cross
+      if (Math.abs(reach) > Math.max(depth, depth * ratio) * 4) break
+      position.setX(index, originalX + ux * reach)
+      position.setZ(index, originalZ + uz * reach)
+      break
+    }
+  }
+  position.needsUpdate = true
+  part.geometry.computeVertexNormals()
+}
+
 /**
  * Horizontal-board fence — composite cladding boards stacked between square
  * intermediate posts (each capped), instead of the vertical pickets the other
@@ -384,7 +435,10 @@ export type FenceSlotParts = Record<FenceSlotId, FencePart[]>
  * two ends), the boards run full-length so they curve with the fence, and a
  * thin reveal between boards leaves the groove shadow that reads as cladding.
  */
-function createHorizontalFenceParts(fence: FenceNode): FenceSlotParts {
+function createHorizontalFenceParts(
+  fence: FenceNode,
+  sharedEndpoints?: ReadonlySet<'start' | 'end'>,
+): FenceSlotParts {
   const posts: FencePart[] = []
   const infill: FencePart[] = []
   const base: FencePart[] = []
@@ -411,8 +465,8 @@ function createHorizontalFenceParts(fence: FenceNode): FenceSlotParts {
   // overlap the terminal post mesh and creates the broken seam/notch seen
   // at curve ends.
   const edgeInset = Math.max(fence.edgeInset ?? 0.015, postWidth * 0.5)
-  const startInsetT = Math.min(0.499, edgeInset / length)
-  const endInsetT = Math.max(0.501, 1 - edgeInset / length)
+  const startInsetT = sharedEndpoints?.has('start') ? 0 : Math.min(0.499, edgeInset / length)
+  const endInsetT = sharedEndpoints?.has('end') ? 1 : Math.max(0.501, 1 - edgeInset / length)
 
   // Grounded fences get a kickboard along the bottom; floating ones don't.
   if (!isFloating) {
@@ -508,18 +562,21 @@ function createHorizontalFenceParts(fence: FenceNode): FenceSlotParts {
     const t = distance / length
     const frame = getFencePointAt(fence, t)
     posts.push({
+      endpoint: distance === 0 ? 'start' : distance === length ? 'end' : undefined,
       position: [frame.point.x, postHeight / 2, frame.point.y],
       rotationY: -frame.tangentAngle,
       scale: [postWidth, postHeight, postDepth],
     })
     if (cap === 'flat') {
       posts.push({
+        endpoint: distance === 0 ? 'start' : distance === length ? 'end' : undefined,
         position: [frame.point.x, postHeight + capHeight / 2, frame.point.y],
         rotationY: -frame.tangentAngle,
         scale: [postWidth * 1.22, capHeight, postDepth * 1.22],
       })
     } else if (cap === 'pyramid') {
       posts.push({
+        endpoint: distance === 0 ? 'start' : distance === length ? 'end' : undefined,
         position: [frame.point.x, postHeight + capHeight * 0.9, frame.point.y],
         rotationY: -frame.tangentAngle,
         scale: [postWidth * 1.18, capHeight * 1.8, postDepth * 1.18],
@@ -531,9 +588,12 @@ function createHorizontalFenceParts(fence: FenceNode): FenceSlotParts {
   return { posts, infill, base, rail }
 }
 
-function createFenceParts(fence: FenceNode): FenceSlotParts {
-  if (fence.style === 'horizontal') return createHorizontalFenceParts(fence)
-  if (fence.style === 'picket') return createPicketFenceParts(fence)
+function createFenceParts(
+  fence: FenceNode,
+  sharedEndpoints?: ReadonlySet<'start' | 'end'>,
+): FenceSlotParts {
+  if (fence.style === 'horizontal') return createHorizontalFenceParts(fence, sharedEndpoints)
+  if (fence.style === 'picket') return createPicketFenceParts(fence, sharedEndpoints)
 
   const posts: FencePart[] = []
   const infill: FencePart[] = []
@@ -633,6 +693,7 @@ function createFenceParts(fence: FenceNode): FenceSlotParts {
           ),
     )
     if (slat) {
+      if (isEdgePost) slat.endpoint = index === 0 ? 'start' : 'end'
       ;(isEdgePost ? posts : infill).push(slat)
     }
   }
@@ -664,7 +725,10 @@ function createFenceParts(fence: FenceNode): FenceSlotParts {
   return { posts, infill, base, rail }
 }
 
-function createPicketFenceParts(fence: FenceNode): FenceSlotParts {
+function createPicketFenceParts(
+  fence: FenceNode,
+  sharedEndpoints?: ReadonlySet<'start' | 'end'>,
+): FenceSlotParts {
   const posts: FencePart[] = []
   const infill: FencePart[] = []
   const base: FencePart[] = []
@@ -684,7 +748,8 @@ function createPicketFenceParts(fence: FenceNode): FenceSlotParts {
   const railHeight = Math.min(Math.max(fence.topRailHeight, 0.01), picketHeight * 0.15)
   // Separate the exposed faces at post/base and post/rail intersections.
   const baseDepth = postDepth * 0.8
-  const railDepth = postDepth + 2 * Math.max(fence.picketRailProjection, 0.006)
+  const railDepth =
+    postDepth + 2 * clampFencePicketRailProjection(fence.picketRailProjection, fence.postSize)
   const variation =
     fence.picketProfile === 'level'
       ? 0
@@ -702,6 +767,7 @@ function createPicketFenceParts(fence: FenceNode): FenceSlotParts {
   for (let index = 0; index <= postCount; index += 1) {
     const frame = getFencePointAt(fence, index / postCount)
     posts.push({
+      endpoint: index === 0 ? 'start' : index === postCount ? 'end' : undefined,
       position: [frame.point.x, height / 2, frame.point.y],
       rotationY: -frame.tangentAngle,
       scale: [postWidth, height, postDepth],
@@ -709,6 +775,7 @@ function createPicketFenceParts(fence: FenceNode): FenceSlotParts {
     if (fence.postCap !== 'none') {
       const capHeight = postWidth * (fence.postCap === 'flat' ? 0.2 : 0.5)
       posts.push({
+        endpoint: index === 0 ? 'start' : index === postCount ? 'end' : undefined,
         position: [frame.point.x, height + capHeight / 2, frame.point.y],
         rotationY: -frame.tangentAngle,
         scale: [postWidth * 1.5, capHeight, postDepth * 1.5],
@@ -717,8 +784,11 @@ function createPicketFenceParts(fence: FenceNode): FenceSlotParts {
     }
   }
 
-  const startInsetT = Math.min(0.499, endInset / length)
-  const endInsetT = Math.max(0.501, 1 - endInset / length)
+  const startInsetT = sharedEndpoints?.has('start') ? 0 : Math.min(0.499, endInset / length)
+  const endInsetT = sharedEndpoints?.has('end') ? 1 : Math.max(0.501, 1 - endInset / length)
+  const railEndInset = Math.max(0, postWidth / 2 - Math.min(postWidth * 0.2, 0.015))
+  const railStartT = sharedEndpoints?.has('start') ? 0 : Math.min(0.499, railEndInset / length)
+  const railEndT = sharedEndpoints?.has('end') ? 1 : Math.max(0.501, 1 - railEndInset / length)
   if (baseHeight > 0) {
     base.push(
       ...createFenceCurveBlockParts(
@@ -737,8 +807,8 @@ function createPicketFenceParts(fence: FenceNode): FenceSlotParts {
     rail.push(
       ...createFenceCurveBlockParts(
         fence,
-        startInsetT,
-        endInsetT,
+        railStartT,
+        railEndT,
         centerY,
         railHeight,
         railDepth,
@@ -1182,9 +1252,27 @@ export function generateFenceSlotGeometries(
   fence: FenceWithFeatures,
   heightAt?: (x: number, z: number) => number,
   mode: 'all' | 'body' | 'features' = 'all',
+  omitEndpointPosts?: ReadonlySet<'start' | 'end'>,
+  cornerNeighbors?: FenceCornerNeighbors,
 ): Record<FenceSlotId, THREE.BufferGeometry> {
   const parts =
-    mode === 'features' ? { posts: [], infill: [], base: [], rail: [] } : createFenceParts(fence)
+    mode === 'features'
+      ? { posts: [], infill: [], base: [], rail: [] }
+      : createFenceParts(fence, omitEndpointPosts)
+  if (omitEndpointPosts?.size) {
+    parts.posts = parts.posts.filter((part) => !part.endpoint || !omitEndpointPosts.has(part.endpoint))
+  }
+  if (cornerNeighbors) {
+    for (const slot of ['base', 'rail', 'infill'] as const) {
+      if (slot === 'infill' && fence.style !== 'horizontal') continue
+      for (const part of parts[slot]) {
+        for (const endpoint of ['start', 'end'] as const) {
+          const neighbor = cornerNeighbors[endpoint]
+          if (neighbor) miterFencePartEnd(fence, part, endpoint, neighbor)
+        }
+      }
+    }
+  }
   const features = resolveFenceFeatures(fence)
   if (features.length > 0) cutFenceParts(fence, parts, features, heightAt, mode !== 'body')
   const transitions =

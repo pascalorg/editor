@@ -2,6 +2,7 @@
 
 import {
   type AnyNodeId,
+  clampFencePicketRailProjection,
   type FenceNode,
   findLevelAncestorId,
   getClampedWallCurveOffset,
@@ -13,6 +14,7 @@ import {
   getWallArcData,
   getWallCurveFrameAt,
   getWallCurveLength,
+  maxFencePicketRailProjection,
   nodeRegistry,
   normalizeWallCurveOffset,
   sampleFenceSpline,
@@ -32,6 +34,30 @@ export function FencePatternInfo({ node }: { node: FenceNode }) {
       Distribution controls {subject}. Spacing is measured between centers. The available width
       limits the count so pieces do not overlap.
     </p>
+  )
+}
+
+export function FencePicketRailProjectionEditor({
+  node,
+  onUpdate,
+}: {
+  node: FenceNode
+  onUpdate: (patch: Partial<FenceNode>) => void
+}) {
+  const max = maxFencePicketRailProjection(node.postSize)
+  return (
+    <SliderControl
+      label="Picket rail projection"
+      max={max}
+      min={0.001}
+      onChange={(value) =>
+        onUpdate({ picketRailProjection: clampFencePicketRailProjection(value, node.postSize) })
+      }
+      precision={3}
+      step={0.002}
+      unit="m"
+      value={clampFencePicketRailProjection(node.picketRailProjection, node.postSize)}
+    />
   )
 }
 

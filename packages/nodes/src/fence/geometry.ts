@@ -11,6 +11,7 @@ import {
   createDefaultMaterial,
   createMaterial,
   createSurfaceRoleMaterial,
+  type FenceCornerNeighbors,
   generateFenceSlotGeometries,
   type RenderShading,
   resolveMaterialRef,
@@ -47,6 +48,27 @@ type FenceMaterial = Material & {
 const FENCE_SLOT_ORDER: FenceSlotId[] = ['posts', 'infill', 'base', 'rail']
 
 const fenceMaterialCache = new Map<string, Material>()
+
+function sharedFenceCorners(
+  node: FenceNode,
+  siblings: GeometryContext['siblings'],
+): { omittedPosts: Set<'start' | 'end'>; neighbors: FenceCornerNeighbors } {
+  const omitted = new Set<'start' | 'end'>()
+  const neighbors: FenceCornerNeighbors = {}
+  for (const sibling of siblings) {
+    if (sibling.type !== 'fence' || sibling.visible === false) continue
+    for (const endpoint of ['start', 'end'] as const) {
+      const point = node[endpoint]
+      if (![sibling.start, sibling.end].some(
+        (other) => Math.hypot(point[0] - other[0], point[1] - other[1]) < 0.001,
+      )) continue
+      if (sibling.height > node.height ||
+        (sibling.height === node.height && sibling.id < node.id)) omitted.add(endpoint)
+      if (!neighbors[endpoint]) neighbors[endpoint] = sibling
+    }
+  }
+  return { omittedPosts: omitted, neighbors }
+}
 
 function getFenceSlotMaterial(
   node: FenceNode,
@@ -138,6 +160,7 @@ export function buildFenceGeometry(
   const supportAt = levelHeight !== undefined ? () => levelHeight : sampledSupport
   const sampledStart = supportAt?.(node.start[0], node.start[1]) ?? startBase
   const sampledGround = new Map<string, number>()
+  const corners = mode === 'body' && ctx ? sharedFenceCorners(node, ctx.siblings) : undefined
   const geometries = generateFenceSlotGeometries(
     node,
     supportAt
@@ -151,6 +174,8 @@ export function buildFenceGeometry(
         }
       : undefined,
     mode,
+    corners?.omittedPosts,
+    corners?.neighbors,
   )
 
   // A hosted railing (`supportSlabId`) stands on its slab's walking surface;

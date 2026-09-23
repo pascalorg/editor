@@ -1,9 +1,14 @@
-import { isSplineFence, type ParametricDescriptor } from '@pascal-app/core'
+import {
+  clampFencePicketRailProjection,
+  isSplineFence,
+  type ParametricDescriptor,
+} from '@pascal-app/core'
 import {
   FenceCurveEditor,
   FenceLengthEditor,
   FencePathEditor,
   FencePatternInfo,
+  FencePicketRailProjectionEditor,
   FenceSurfaceEditor,
 } from './inspector-editors'
 import type { FenceNode } from './schema'
@@ -209,11 +214,8 @@ export const fenceParametrics: ParametricDescriptor<FenceNode> = {
         },
         {
           key: 'picketRailProjection',
-          kind: 'number',
-          unit: 'm',
-          min: 0.006,
-          max: 0.1,
-          step: 0.002,
+          kind: 'custom',
+          component: FencePicketRailProjectionEditor,
           visibleIf: (n) => n.style === 'picket',
         },
         { key: 'postSize', kind: 'number', unit: 'm', min: 0.01, max: 0.4, step: 0.005 },
@@ -250,4 +252,7 @@ export const fenceParametrics: ParametricDescriptor<FenceNode> = {
       ],
     },
   ],
+  derive: (next) => ({
+    picketRailProjection: clampFencePicketRailProjection(next.picketRailProjection, next.postSize),
+  }),
 }
