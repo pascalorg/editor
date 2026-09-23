@@ -2,13 +2,14 @@
 
 import {
   type AnyNodeId,
-  canPlaceFenceFeature,
+  fenceFeaturePlacementIssue,
   emitter,
   type FenceEvent,
   type FenceFeatureData,
   FenceGateNode,
   type FenceNode,
   FenceOpeningNode,
+  FenceStyle,
   fenceWithFeatures,
   type GridEvent,
   useLiveNodeOverrides,
@@ -30,6 +31,13 @@ export default function FenceFeatureTool({ kind }: { kind: 'gate' | 'opening' })
       useScene.getState().markDirty(previewId)
       previewId = undefined
     }
+    const setFeedback = (message?: string) => {
+      const defaults = useEditor.getState().toolDefaults.fence
+      if (defaults?.featurePlacementFeedback === message) return
+      useEditor
+        .getState()
+        .setToolDefaults('fence', { ...defaults, featurePlacementFeedback: message })
+    }
     const candidate = (
       point: readonly [number, number],
       host?: FenceNode,
@@ -37,37 +45,53 @@ export default function FenceFeatureTool({ kind }: { kind: 'gate' | 'opening' })
     ) => {
       const nodes = useScene.getState().nodes
       const best = pickFenceTarget(point, host, ray)
-      if (!best) return null
+      if (!best) return { issue: 'Click on a fence to place the feature.' }
       const defaults = useEditor.getState().toolDefaults.fence
+      const selectedStyle = FenceStyle.safeParse(defaults?.featureStyle)
       const feature: FenceFeatureData = {
         id: featureId,
         kind,
         center: best.center,
         width: typeof defaults?.featureWidth === 'number' ? defaults.featureWidth : 1.1,
+        matchFenceStyle: defaults?.featureMatchStyle !== false,
         leafType: defaults?.featureLeafType === 'double' ? 'double' : 'single',
-        height: Math.max(0.3, best.fence.height - 0.22),
-        clearance: best.fence.groundClearance,
-        style: 'match',
+        height:
+          defaults?.featureMatchStyle === false
+            ? Math.max(0.3, best.fence.height - 0.22)
+            : undefined,
+        clearance: defaults?.featureMatchStyle === false ? best.fence.groundClearance : undefined,
+        style:
+          defaults?.featureMatchStyle === false && selectedStyle.success
+            ? selectedStyle.data
+            : 'match',
         hinge: 'left',
         swing: 'inward',
         openAngle: 0,
-        frameWidth: 0.055,
-        thickness: 0.06,
-        spacing: 0.15,
-        boardWidth: 0.055,
+        frameWidth: defaults?.featureMatchStyle === false ? 0.055 : undefined,
+        thickness: defaults?.featureMatchStyle === false ? 0.06 : undefined,
+        spacing: defaults?.featureMatchStyle === false ? 0.15 : undefined,
+        boardWidth: defaults?.featureMatchStyle === false ? 0.055 : undefined,
         brace: 'none',
         showHardware: true,
         showPosts: true,
       }
-      return canPlaceFenceFeature(
+      const issue = fenceFeaturePlacementIssue(
         fenceWithFeatures(
           best.fence,
           (best.fence.children ?? []).map((id) => nodes[id as AnyNodeId]).filter(Boolean),
         ),
         feature,
       )
-        ? { fence: best.fence, feature }
-        : null
+      return issue
+        ? {
+            issue:
+              issue === 'overlap'
+                ? 'That spot overlaps another gate or passage. Choose a clear section.'
+                : issue === 'end'
+                  ? 'Move farther from the fence end or reduce the opening width.'
+                  : 'Opening width must be at least 0.35 m.',
+          }
+        : { hit: { fence: best.fence, feature } }
     }
     const update = (
       point: readonly [number, number],
@@ -75,13 +99,14 @@ export default function FenceFeatureTool({ kind }: { kind: 'gate' | 'opening' })
       ray?: GridEvent['localRay'],
     ) => {
       clear()
-      const hit = candidate(point, host, ray)
+      const { hit, issue } = candidate(point, host, ray)
       if (hit) {
+        setFeedback(undefined)
         previewId = hit.fence.id
         useLiveNodeOverrides.getState().set(previewId, { features: [hit.feature] })
         useScene.getState().markDirty(previewId)
       }
-      return hit
+      return { hit, issue }
     }
     const commit = (
       point: readonly [number, number],
@@ -89,8 +114,11 @@ export default function FenceFeatureTool({ kind }: { kind: 'gate' | 'opening' })
       ray?: GridEvent['localRay'],
     ) => {
       if (finished) return
-      const hit = update(point, host, ray)
-      if (!hit) return
+      const { hit, issue } = update(point, host, ray)
+      if (!hit) {
+        setFeedback(issue)
+        return
+      }
       finished = true
       clear()
       const { id: _id, kind: _kind, ...data } = hit.feature

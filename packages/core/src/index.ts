@@ -607,6 +607,7 @@ export type {
 export {
   canPlaceFenceFeature,
   fenceFeatureData,
+  fenceFeaturePlacementIssue,
   fenceWithFeatures,
   getFenceGateLeaves,
   isFenceFeatureNode,

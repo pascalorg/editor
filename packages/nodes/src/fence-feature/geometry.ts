@@ -7,7 +7,7 @@ import {
   getFenceCenterlineLength,
   getFenceGateLeaves,
 } from '@pascal-app/core'
-import type { ColorPreset, RenderShading } from '@pascal-app/viewer'
+import { type ColorPreset, type RenderShading, getFenceFeatureDimensions } from '@pascal-app/viewer'
 import { BoxGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial } from 'three'
 import { buildFenceGeometry } from '../fence/geometry'
 
@@ -50,12 +50,11 @@ export function buildFenceFeatureGeometry(
         (ctx?.supportHeightAt?.(...host.start, selectedHost) ?? 0)
       : 0
   const support = Math.max(relativeHeight(a.x, a.y), relativeHeight(b.x, b.y))
+  const dimensions = getFenceFeatureDimensions(host, fenceFeatureData(node))
+  const bottom = Math.min(dimensions.bottom, dimensions.postBottom)
   const height =
-    node.type === 'fence-gate'
-      ? (node.height ??
-        Math.max(0.3, host.height - (node.clearance ?? host.groundClearance) - 0.08))
-      : host.height
-  const bottom = node.type === 'fence-gate' ? (node.clearance ?? host.groundClearance) : 0
+    Math.max(dimensions.bottom + dimensions.height, dimensions.postBottom + dimensions.postHeight) -
+    bottom
   const spans =
     node.type === 'fence-gate'
       ? getFenceGateLeaves(host, feature).map((leaf) => ({ a: leaf.hinge, b: leaf.end }))

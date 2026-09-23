@@ -15,25 +15,31 @@ export type ResolvedFenceFeature = FenceFeatureData & {
   centerT: number
 }
 
-export function canPlaceFenceFeature(fence: FenceWithFeatures, feature: FenceFeatureData): boolean {
+export function fenceFeaturePlacementIssue(
+  fence: FenceWithFeatures,
+  feature: FenceFeatureData,
+): 'width' | 'end' | 'overlap' | null {
   const length = getFenceCenterlineLength(fence)
   const margin = Math.max(fence.postSize / 2, 0.04)
   const start = feature.center - feature.width / 2
   const end = feature.center + feature.width / 2
   const gap = Math.max(fence.postSize, 0.05)
-  return (
-    Number.isFinite(start) &&
-    Number.isFinite(end) &&
-    feature.width >= 0.35 &&
-    start >= margin &&
-    end <= length - margin &&
-    !(fence.features ?? []).some(
+  if (feature.width < 0.35 || !Number.isFinite(start) || !Number.isFinite(end)) return 'width'
+  if (start < margin || end > length - margin) return 'end'
+  if (
+    (fence.features ?? []).some(
       (other) =>
         other.id !== feature.id &&
         start < other.center + other.width / 2 + gap &&
         end > other.center - other.width / 2 - gap,
     )
   )
+    return 'overlap'
+  return null
+}
+
+export function canPlaceFenceFeature(fence: FenceWithFeatures, feature: FenceFeatureData): boolean {
+  return fenceFeaturePlacementIssue(fence, feature) === null
 }
 
 export function resolveFenceFeatures(fence: FenceWithFeatures): ResolvedFenceFeature[] {

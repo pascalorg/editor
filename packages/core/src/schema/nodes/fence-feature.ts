@@ -13,6 +13,9 @@ export const FenceGateNode = BaseNode.extend({
 export const FenceOpeningNode = BaseNode.extend({
   center: fields.center.default(1.5),
   width: fields.width.min(0.35).default(1.1),
+  matchFenceStyle: z.boolean().optional(),
+  matchFenceHeight: fields.matchFenceHeight,
+  height: fields.height,
   showPosts: z.boolean().default(true),
   id: objectId('fence-opening'),
   type: nodeType('fence-opening'),

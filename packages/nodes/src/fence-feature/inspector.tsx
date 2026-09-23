@@ -2,6 +2,7 @@
 import {
   type AnyNodeId,
   canPlaceFenceFeature,
+  FenceStyle,
   type FenceFeatureData,
   type FenceFeatureNode,
   fenceFeatureData,
@@ -10,6 +11,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { ActionButton, SliderControl, ToggleControl } from '@pascal-app/editor'
+import { getFenceFeatureDimensions } from '@pascal-app/viewer'
 import { useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 
@@ -58,9 +60,7 @@ export function FenceFeatureEditor({
       )}
       {features.map((feature) => {
         const gate = feature.kind === 'gate'
-        const height =
-          feature.height ??
-          Math.max(0.3, node.height - (feature.clearance ?? node.groundClearance) - 0.08)
+        const { height, bottom } = getFenceFeatureDimensions(node, feature)
         const selects = [
           ...(gate
             ? [
@@ -71,18 +71,6 @@ export function FenceFeatureEditor({
                   options: [
                     ['single', 'Single gate'],
                     ['double', 'Double gate'],
-                  ],
-                },
-                {
-                  key: 'style',
-                  label: 'Infill style',
-                  value: feature.style ?? 'match',
-                  options: [
-                    ['match', 'Match fence'],
-                    ['slat', 'Vertical slats'],
-                    ['horizontal', 'Horizontal boards'],
-                    ['privacy', 'Solid privacy'],
-                    ['rail', 'Open rails'],
                   ],
                 },
                 {
@@ -135,21 +123,21 @@ export function FenceFeatureEditor({
             step: 0.05,
             unit: 'm',
           },
+          {
+            key: 'height',
+            label: gate ? 'Gate height' : 'Post height',
+            value: height,
+            min: 0.3,
+            max: 1000,
+            step: 0.05,
+            unit: 'm',
+          },
           ...(gate
             ? [
                 {
-                  key: 'height',
-                  label: 'Gate height',
-                  value: height,
-                  min: 0.3,
-                  max: 1000,
-                  step: 0.05,
-                  unit: 'm',
-                },
-                {
                   key: 'clearance',
                   label: 'Ground clearance',
-                  value: feature.clearance ?? node.groundClearance,
+                  value: bottom,
                   min: 0,
                   max: 1000,
                   step: 0.01,
@@ -219,6 +207,48 @@ export function FenceFeatureEditor({
         return (
           <div key={feature.id}>
             <div className="mt-2 space-y-2">
+              <ToggleControl
+                label="Match fence style"
+                checked={feature.matchFenceStyle !== false}
+                onChange={(checked) =>
+                  update(feature.id, {
+                    matchFenceStyle: checked,
+                    ...(checked
+                      ? { matchFenceHeight: true }
+                      : { style: feature.style === 'match' ? 'picket' : feature.style }),
+                  })
+                }
+              />
+              <ToggleControl
+                label="Match fence height"
+                checked={feature.matchFenceHeight ?? feature.matchFenceStyle !== false}
+                onChange={(checked) =>
+                  update(feature.id, {
+                    matchFenceHeight: checked,
+                    height,
+                    ...(gate ? { clearance: bottom } : {}),
+                  })
+                }
+              />
+              {gate && feature.matchFenceStyle === false && (
+                <label className="flex min-h-9 items-center justify-between gap-3 text-xs text-muted-foreground">
+                  Gate style
+                  <select
+                    className="h-8 min-w-0 max-w-40 rounded-lg border border-border/50 bg-[#2C2C2E] px-2 text-xs text-foreground outline-none transition-colors hover:bg-[#3e3e3e] focus-visible:ring-2 focus-visible:ring-ring"
+                    value={feature.style && feature.style !== 'match' ? feature.style : 'picket'}
+                    onChange={(event) => {
+                      const style = FenceStyle.safeParse(event.currentTarget.value)
+                      if (style.success) update(feature.id, { style: style.data })
+                    }}
+                  >
+                    <option value="picket">Picket</option>
+                    <option value="slat">Vertical slats</option>
+                    <option value="horizontal">Horizontal boards</option>
+                    <option value="privacy">Solid privacy</option>
+                    <option value="rail">Open rails</option>
+                  </select>
+                </label>
+              )}
               {selects
                 .filter((field) => field.key !== 'hinge' || feature.leafType !== 'double')
                 .map((field) => (
@@ -240,19 +270,39 @@ export function FenceFeatureEditor({
                     </select>
                   </label>
                 ))}
-              {numbers.map((field) => (
-                <SliderControl
-                  key={field.key}
-                  label={field.label}
-                  value={field.value}
-                  min={field.min}
-                  max={field.max}
-                  step={field.step}
-                  precision={field.key === 'openAngle' ? 0 : 3}
-                  unit={field.unit}
-                  onChange={(value) => update(feature.id, { [field.key]: value })}
-                />
-              ))}
+              {numbers
+                .filter(
+                  (field) =>
+                    feature.matchFenceStyle === false ||
+                    !['thickness', 'frameWidth', 'spacing', 'boardWidth'].includes(field.key),
+                )
+                .map((field) => (
+                  <SliderControl
+                    key={field.key}
+                    label={field.label}
+                    value={field.value}
+                    min={field.min}
+                    max={field.max}
+                    step={field.step}
+                    precision={field.key === 'openAngle' ? 0 : 3}
+                    unit={field.unit}
+                    onChange={(value) =>
+                      update(feature.id, {
+                        [field.key]: value,
+                        ...(['height', 'clearance'].includes(field.key)
+                          ? {
+                              matchFenceHeight: false,
+                              ...(field.key === 'clearance'
+                                ? { height }
+                                : gate
+                                  ? { clearance: bottom }
+                                  : {}),
+                            }
+                          : {}),
+                      })
+                    }
+                  />
+                ))}
               <ToggleControl
                 label="Jamb posts"
                 checked={feature.showPosts !== false}
