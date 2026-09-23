@@ -7,9 +7,10 @@ import {
   getFenceCenterlineLength,
   getFenceGateLeaves,
 } from '@pascal-app/core'
-import { type ColorPreset, type RenderShading, getFenceFeatureDimensions } from '@pascal-app/viewer'
+import type { ColorPreset, RenderShading } from '@pascal-app/viewer'
 import { BoxGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial } from 'three'
 import { buildFenceGeometry } from '../fence/geometry'
+import { getFenceFeatureDimensions } from '../fence/geometry-parts'
 
 export function buildFenceFeatureGeometry(
   node: FenceFeatureNode,

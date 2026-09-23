@@ -16,12 +16,12 @@ import {
 import { resolveCeilingPlanPointSnap } from '../../lib/ceiling-plan-snap'
 import { alignFloorplanDraftPoint, getPlanPointDistance } from '../../lib/floorplan'
 import { resolveGenericFloorplanGridEventPoint } from '../../lib/floorplan-grid-event-point'
+import { snapRegisteredDraftPoint } from '../../lib/registered-draft-snap'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useEditor, { isAngleSnapActive, isMagneticSnapActive } from '../../store/use-editor'
 import usePlacementPreview from '../../store/use-placement-preview'
 import useSegmentDraftChain from '../../store/use-segment-draft-chain'
-import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
 import { getSegmentGridStep, type WallPlanPoint } from '../tools/wall/wall-drafting'
 
 const NOOP_SUBSCRIBE = () => () => {}
@@ -258,15 +258,19 @@ export function useFloorplanBackgroundPlacement({
         // pulls onto walls / fences / alignment, `off` is free.
         const fenceStep = getSegmentGridStep()
         const fenceAngleSnap = fenceDraftStart !== null && isAngleSnapActive()
-        const fenceSnapped = snapFenceDraftPoint({
-          point: planPoint,
-          walls,
-          fences,
-          start: fenceDraftStart ?? undefined,
-          angleSnap: fenceAngleSnap,
-          magnetic: isMagneticSnapActive(),
-          gridSnap: (p) => worldGridSnap(p, fenceStep),
-        })
+        const fenceSnapped = snapRegisteredDraftPoint(
+          'fence',
+          {
+            point: planPoint,
+            walls,
+            fences,
+            start: fenceDraftStart ?? undefined,
+            angleSnap: fenceAngleSnap,
+            magnetic: isMagneticSnapActive(),
+            gridSnap: (p: [number, number]) => worldGridSnap(p, fenceStep),
+          },
+          planPoint,
+        )
         const fenceGridBase = worldGridSnap(planPoint, fenceStep)
         const fenceLocked =
           fenceSnapped[0] !== fenceGridBase[0] || fenceSnapped[1] !== fenceGridBase[1]

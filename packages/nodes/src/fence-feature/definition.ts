@@ -4,9 +4,11 @@ import {
   FenceGateNode,
   FenceOpeningNode,
   type FloorplanMoveTarget,
+  findLevelAncestorId,
   type NodeDefinition,
   type ParametricDescriptor,
 } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
 import { buildFenceFeatureFloorplan } from './floorplan'
 import { fenceFeatureAffordance } from './floorplan-affordances'
 import { buildFenceFeatureGeometry } from './geometry'
@@ -15,8 +17,13 @@ import { FenceFeatureEditor } from './inspector'
 import { toggleFenceGate } from './interaction'
 import { createFenceFeatureMoveSession } from './move-session'
 
-const floorplanMoveTarget: FloorplanMoveTarget<FenceFeatureNode> = ({ node }) => {
-  const session = createFenceFeatureMoveSession(node)
+const floorplanMoveTarget: FloorplanMoveTarget<FenceFeatureNode> = ({ node, sceneApi }) => {
+  if (!sceneApi) throw new Error('Fence feature move requires SceneApi')
+  const levelId =
+    (findLevelAncestorId(node.id as AnyNodeId, sceneApi.nodes()) as AnyNodeId | undefined) ?? null
+  const session = createFenceFeatureMoveSession(node, sceneApi, levelId, (id) =>
+    useViewer.getState().setSelection({ selectedIds: [id] }),
+  )
   return {
     affectedIds: session.affectedIds,
     apply: ({ planPoint }) => session.update(planPoint),

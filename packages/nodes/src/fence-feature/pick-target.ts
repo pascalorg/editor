@@ -4,18 +4,19 @@ import {
   findLevelAncestorId,
   type GridEvent,
   projectPointToFence,
+  type SceneApi,
   sampleFenceCenterline,
-  useScene,
 } from '@pascal-app/core'
-import { createSceneSupportHeightSampler, useViewer } from '@pascal-app/viewer'
+import { createSceneSupportHeightSampler } from '@pascal-app/viewer'
 
 export function pickFenceTarget(
   point: readonly [number, number],
-  host?: FenceNode,
-  ray?: GridEvent['localRay'],
+  host: FenceNode | undefined,
+  ray: GridEvent['localRay'] | undefined,
+  sceneApi: SceneApi,
+  levelId: AnyNodeId | null,
 ) {
-  const nodes = useScene.getState().nodes
-  const levelId = useViewer.getState().selection.levelId
+  const nodes = sceneApi.nodes()
   let best: { fence: FenceNode; center: number; distance: number } | undefined
   for (const fence of host ? [nodes[host.id]] : Object.values(nodes)) {
     if (fence?.type !== 'fence' || fence.visible === false) continue

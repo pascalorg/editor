@@ -1,18 +1,14 @@
 import {
-  type AnyNodeId,
   clampFencePicketRailProjection,
-  type FenceNode,
   type FenceFeatureData,
+  type FenceNode,
   type FenceWithFeatures,
   getFenceCenterlineFrameAt,
   getFenceCenterlineLength,
   getFenceGateLeaves,
   type ResolvedFenceFeature,
   resolveFenceFeatures,
-  sceneRegistry,
-  useScene,
 } from '@pascal-app/core'
-import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
@@ -1469,37 +1465,4 @@ export function generateFenceGeometry(
   const merged = mergeGeometries(geometries, false) ?? new THREE.BufferGeometry()
   for (const geometry of Object.values(slots)) geometry.dispose()
   return merged
-}
-
-function updateFenceGeometry(fenceId: FenceNode['id']) {
-  const node = useScene.getState().nodes[fenceId]
-  if (node?.type !== 'fence') return
-
-  const mesh = sceneRegistry.nodes.get(fenceId) as THREE.Mesh | undefined
-  if (!mesh) return
-
-  const newGeometry = generateFenceGeometry(node)
-  mesh.geometry.dispose()
-  mesh.geometry = newGeometry
-  mesh.position.set(0, 0, 0)
-  mesh.rotation.set(0, 0, 0)
-}
-
-export const FenceSystem = () => {
-  const dirtyNodes = useScene((state) => state.dirtyNodes)
-  const clearDirty = useScene((state) => state.clearDirty)
-
-  useFrame(() => {
-    if (dirtyNodes.size === 0) return
-
-    const nodes = useScene.getState().nodes
-    dirtyNodes.forEach((id) => {
-      const node = nodes[id]
-      if (node?.type !== 'fence') return
-      updateFenceGeometry(id as FenceNode['id'])
-      clearDirty(id as AnyNodeId)
-    })
-  }, 4)
-
-  return null
 }

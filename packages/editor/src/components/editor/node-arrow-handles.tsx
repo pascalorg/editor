@@ -816,9 +816,10 @@ function LinearArrow({
     }) => {
       dragRideObject.matrixWorld.decompose(_resizePositionW, _resizeQuaternion, _resizeScale)
       _resizeOriginW.set(...position).applyMatrix4(dragRideObject.matrixWorld)
-      const dragAxis = descriptor.kind === 'linear-resize'
-        ? descriptor.dragAxis?.(initialNode as never, sceneApi)
-        : undefined
+      const dragAxis =
+        descriptor.kind === 'linear-resize'
+          ? descriptor.dragAxis?.(initialNode as never, sceneApi)
+          : undefined
       if (dragAxis) _resizeAxisW.set(...dragAxis).normalize()
       else axisVector(descriptor.axis, _resizeAxisW)
       const localToWorldScale = dragAxis

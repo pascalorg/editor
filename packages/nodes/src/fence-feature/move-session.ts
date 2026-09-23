@@ -6,13 +6,17 @@ import {
   fenceFeatureData,
   fenceWithFeatures,
   type GridEvent,
+  type SceneApi,
   useLiveNodeOverrides,
-  useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
 import { pickFenceTarget } from './pick-target'
 
-export function createFenceFeatureMoveSession(node: FenceFeatureNode) {
+export function createFenceFeatureMoveSession(
+  node: FenceFeatureNode,
+  sceneApi: SceneApi,
+  levelId: AnyNodeId | null,
+  selectNode: (id: AnyNodeId) => void,
+) {
   const affectedIds: AnyNodeId[] = [node.id]
   if (node.parentId) affectedIds.push(node.parentId as AnyNodeId)
   let target: ReturnType<typeof pickFenceTarget> = null
@@ -20,7 +24,7 @@ export function createFenceFeatureMoveSession(node: FenceFeatureNode) {
     const overrides = useLiveNodeOverrides.getState()
     for (const id of affectedIds) {
       overrides.clearFields(id, id === node.id ? ['visible'] : ['features'])
-      useScene.getState().markDirty(id)
+      sceneApi.markDirty(id)
     }
   }
   return {
@@ -28,9 +32,9 @@ export function createFenceFeatureMoveSession(node: FenceFeatureNode) {
     clear,
     update(point: readonly [number, number], host?: FenceNode, ray?: GridEvent['localRay']) {
       clear()
-      target = pickFenceTarget(point, host, ray)
+      target = pickFenceTarget(point, host, ray, sceneApi, levelId)
       if (!target) return
-      const nodes = useScene.getState().nodes
+      const nodes = sceneApi.nodes()
       const data = { ...fenceFeatureData(node), center: target.center }
       const fence = fenceWithFeatures(
         target.fence,
@@ -43,18 +47,16 @@ export function createFenceFeatureMoveSession(node: FenceFeatureNode) {
       if (!affectedIds.includes(target.fence.id)) affectedIds.push(target.fence.id)
       useLiveNodeOverrides.getState().set(node.id, { visible: false })
       useLiveNodeOverrides.getState().set(target.fence.id, { features: [data] })
-      useScene.getState().markDirty(node.id)
-      for (const id of affectedIds) useScene.getState().markDirty(id)
+      sceneApi.markDirty(node.id)
+      for (const id of affectedIds) sceneApi.markDirty(id)
     },
     canCommit: () => target !== null,
     commit() {
       if (!target) return
       const destination = target
       clear()
-      useScene
-        .getState()
-        .updateNode(node.id, { parentId: destination.fence.id, center: destination.center })
-      useViewer.getState().setSelection({ selectedIds: [node.id] })
+      sceneApi.update(node.id, { parentId: destination.fence.id, center: destination.center })
+      selectNode(node.id)
     },
   }
 }

@@ -11,13 +11,12 @@ import {
   createDefaultMaterial,
   createMaterial,
   createSurfaceRoleMaterial,
-  type FenceCornerNeighbors,
-  generateFenceSlotGeometries,
   type RenderShading,
   resolveMaterialRef,
   resolveSlotDefaultMaterial,
 } from '@pascal-app/viewer'
 import { FrontSide, Group, type Material, Mesh, type Texture } from 'three'
+import { type FenceCornerNeighbors, generateFenceSlotGeometries } from './geometry-parts'
 import { resolveFenceLiftElevation } from './lift'
 import type { FenceNode } from './schema'
 import { FENCE_SLOT_DEFAULTS, type FenceSlotId } from './slots'
@@ -33,10 +32,6 @@ import { FENCE_SLOT_DEFAULTS, type FenceSlotId } from './slots'
  * (pre-slot-model scenes, applied to every part) → the declared slot default.
  * Textures-off collapses every part to the themed joinery role.
  *
- * Phase 6 cleanup moves the geometry math out of the legacy
- * `viewer/src/systems/fence/fence-system.tsx` into this folder once the legacy
- * system file is deleted. Until then `generateFenceSlotGeometries` is publicly
- * re-exported from viewer.
  */
 type FenceMaterial = Material & {
   alphaMap?: Texture | null
@@ -59,11 +54,14 @@ function sharedFenceCorners(
     if (sibling.type !== 'fence' || sibling.visible === false) continue
     for (const endpoint of ['start', 'end'] as const) {
       const point = node[endpoint]
-      if (![sibling.start, sibling.end].some(
-        (other) => Math.hypot(point[0] - other[0], point[1] - other[1]) < 0.001,
-      )) continue
-      if (sibling.height > node.height ||
-        (sibling.height === node.height && sibling.id < node.id)) omitted.add(endpoint)
+      if (
+        ![sibling.start, sibling.end].some(
+          (other) => Math.hypot(point[0] - other[0], point[1] - other[1]) < 0.001,
+        )
+      )
+        continue
+      if (sibling.height > node.height || (sibling.height === node.height && sibling.id < node.id))
+        omitted.add(endpoint)
       if (!neighbors[endpoint]) neighbors[endpoint] = sibling
     }
   }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { FenceNode } from '@pascal-app/core'
-import { generateFenceGeometry, generateFenceSlotGeometries } from './fence-system'
+import { generateFenceGeometry, generateFenceSlotGeometries } from './geometry-parts'
 
 function fence(overrides: Partial<FenceNode> = {}) {
   return FenceNode.parse({ start: [0, 0], end: [4, 0], style: 'picket', ...overrides })

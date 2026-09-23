@@ -2,14 +2,15 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
+  createSceneApi,
   GROUND_SUPPORT_ID,
   type SlabNode,
   spatialGridManager,
   useScene,
 } from '@pascal-app/core'
+import { useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import useEditor from '../../../store/use-editor'
-import { createFenceOnCurrentLevel } from './fence-drafting'
+import { createFenceOnCurrentLevel } from './drafting'
 
 const LEVEL_ID = 'level_test' as AnyNodeId
 
@@ -77,22 +78,32 @@ describe('createFenceOnCurrentLevel', () => {
     seedLevel([slab as AnyNode])
     spatialGridManager.handleNodeCreated(slab as AnyNode, LEVEL_ID)
 
-    const fence = createFenceOnCurrentLevel([-1, 0], [1, 0], {
-      supportCap: 2,
-      preferredSupportSlabId: slab.id,
-      constructionElevation: 2,
-    })
+    const fence = createFenceOnCurrentLevel(
+      [-1, 0],
+      [1, 0],
+      {
+        supportCap: 2,
+        preferredSupportSlabId: slab.id,
+        constructionElevation: 2,
+      },
+      { sceneApi: createSceneApi(useScene), levelId: LEVEL_ID },
+    )
 
     expect(fence?.supportSlabId).toBe(slab.id)
     expect(fence?.supportOffset).toBeCloseTo(1.75)
   })
 
   test('pins ground beneath a block top when no slab exists', () => {
-    const fence = createFenceOnCurrentLevel([-1, 0], [1, 0], {
-      supportCap: 2,
-      preferredSupportSlabId: null,
-      constructionElevation: 2,
-    })
+    const fence = createFenceOnCurrentLevel(
+      [-1, 0],
+      [1, 0],
+      {
+        supportCap: 2,
+        preferredSupportSlabId: null,
+        constructionElevation: 2,
+      },
+      { sceneApi: createSceneApi(useScene), levelId: LEVEL_ID },
+    )
 
     expect(fence?.supportSlabId).toBe(GROUND_SUPPORT_ID)
     expect(fence?.supportOffset).toBeCloseTo(2)

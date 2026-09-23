@@ -106,6 +106,7 @@ import {
 } from '../../lib/keyboard-pan'
 import { measurementHint, parseMeasurement } from '../../lib/measurement-parser'
 import { formatLinearMeasurement, linearUnitToMeters } from '../../lib/measurements'
+import { snapRegisteredDraftPoint } from '../../lib/registered-draft-snap'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { SITE_BOUNDARY_DRAG_LABEL, siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
@@ -158,7 +159,6 @@ import {
 import { FloorplanStairLayer } from '../editor-2d/renderers/floorplan-stair-layer'
 import { FloorplanVoronoiLayer } from '../editor-2d/renderers/floorplan-voronoi-layer'
 import { buildSvgPolylinePath, formatPolygonPath, getArcPlanPoint } from '../editor-2d/svg-paths'
-import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
 import { snapToHalf } from '../tools/item/placement-math'
 import {
   isBoxSelectPointerSuppressed,
@@ -9354,14 +9354,18 @@ export function FloorplanPanel({
         // there is no Shift hold-to-bypass. Alignment follows the magnetic snap
         // mode, not Alt (continuation is cycled through the HUD / C).
         const fenceAngleSnap = fenceDraftStart !== null && isAngleSnapActive()
-        const fenceSnapped = snapFenceDraftPoint({
-          point: planPoint,
-          walls,
-          fences,
-          start: fenceDraftStart ?? undefined,
-          angleSnap: fenceAngleSnap,
-          magnetic: isMagneticSnapActive(),
-        })
+        const fenceSnapped = snapRegisteredDraftPoint(
+          'fence',
+          {
+            point: planPoint,
+            walls,
+            fences,
+            start: fenceDraftStart ?? undefined,
+            angleSnap: fenceAngleSnap,
+            magnetic: isMagneticSnapActive(),
+          },
+          planPoint,
+        )
         const fenceGridBase = snapWallPointToGrid(planPoint)
         const fenceLocked =
           fenceSnapped[0] !== fenceGridBase[0] || fenceSnapped[1] !== fenceGridBase[1]
