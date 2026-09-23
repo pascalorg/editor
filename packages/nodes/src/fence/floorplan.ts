@@ -4,6 +4,7 @@ import {
   getFenceCenterlineFrameAt,
   getFenceCenterlineLength,
   getFenceControlHandle,
+  getFenceSpanMode,
   getWallMidpointHandlePoint,
   isCurvedWall,
   isSplineFence,
@@ -420,39 +421,47 @@ export function buildFenceFloorplan(node: FenceNode, ctx: GeometryContext): Floo
         const armY = handle.y * TANGENT_HANDLE_ARM_SCALE
         const out: [number, number] = [point[0] + armX, point[1] + armY]
         const inn: [number, number] = [point[0] - armX, point[1] - armY]
+        const showOut =
+          i < node.path.length - 1 &&
+          getFenceSpanMode(node.path, node.tangents, node.spanModes, i) === 'curve'
+        const showIn =
+          i > 0 && getFenceSpanMode(node.path, node.tangents, node.spanModes, i - 1) === 'curve'
 
         // Connecting line (the "tangent" through the point). Violet to match
         // the 3D tangent line + the handle dots.
-        children.push({
-          kind: 'line',
-          x1: inn[0],
-          y1: inn[1],
-          x2: out[0],
-          y2: out[1],
-          stroke: '#8381ed',
-          strokeWidth: 1.25,
-          strokeOpacity: 0.85,
-          vectorEffect: 'non-scaling-stroke',
-        })
+        if (showOut || showIn)
+          children.push({
+            kind: 'line',
+            x1: showIn ? inn[0] : point[0],
+            y1: showIn ? inn[1] : point[1],
+            x2: showOut ? out[0] : point[0],
+            y2: showOut ? out[1] : point[1],
+            stroke: '#8381ed',
+            strokeWidth: 1.25,
+            strokeOpacity: 0.85,
+            vectorEffect: 'non-scaling-stroke',
+          })
         // Handle dot on each end. Both drive the same `move-tangent`
         // affordance; `side` tells it which end is being dragged so the
         // stored OUT vector gets the correct sign.
-        children.push({
-          kind: 'endpoint-handle',
-          point: out,
-          state: 'idle',
-          variant: 'curve',
-          affordance: 'move-tangent',
-          payload: { fenceId: node.id, index: i, side: 'out' as const },
-        })
-        children.push({
-          kind: 'endpoint-handle',
-          point: inn,
-          state: 'idle',
-          variant: 'curve',
-          affordance: 'move-tangent',
-          payload: { fenceId: node.id, index: i, side: 'in' as const },
-        })
+        if (showOut)
+          children.push({
+            kind: 'endpoint-handle',
+            point: out,
+            state: 'idle',
+            variant: 'curve',
+            affordance: 'move-tangent',
+            payload: { fenceId: node.id, index: i, side: 'out' as const },
+          })
+        if (showIn)
+          children.push({
+            kind: 'endpoint-handle',
+            point: inn,
+            state: 'idle',
+            variant: 'curve',
+            affordance: 'move-tangent',
+            payload: { fenceId: node.id, index: i, side: 'in' as const },
+          })
         // The control-point dot last so it sits on top of the tangent line.
         children.push({
           kind: 'endpoint-handle',

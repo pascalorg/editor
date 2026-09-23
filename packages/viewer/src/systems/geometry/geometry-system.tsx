@@ -349,11 +349,16 @@ function buildGeometryContext(
     return surfaceSamplers.get(hostId)?.(x, z) ?? null
   }
 
-  let supportSampler: ReturnType<typeof createSceneSupportHeightSampler> | undefined
-  const supportHeightAt = (x: number, z: number) => {
+  const supportSamplers = new Map<string, ReturnType<typeof createSceneSupportHeightSampler>>()
+  const supportHeightAt = (x: number, z: number, selectedHostId?: AnyNodeId) => {
     if (!levelId) return levelBaseAt(x, z)
-    supportSampler ??= createSceneSupportHeightSampler(nodes, levelId as AnyNodeId)
-    return supportSampler(x, z)
+    const key = selectedHostId ?? 'auto'
+    let sampler = supportSamplers.get(key)
+    if (!sampler) {
+      sampler = createSceneSupportHeightSampler(nodes, levelId as AnyNodeId, selectedHostId)
+      supportSamplers.set(key, sampler)
+    }
+    return sampler(x, z)
   }
   return {
     resolve,

@@ -27,6 +27,19 @@ const TWO_POINT_CURVE_MAX_SAGITTA = 1.2
 
 type FenceSplineLike = Pick<FenceNode, 'path'>
 type TangentList = ReadonlyArray<readonly [number, number] | null> | undefined
+export type FenceSpanMode = 'straight' | 'curve'
+type SpanModes = ReadonlyArray<FenceSpanMode> | undefined
+
+export function getFenceSpanMode(
+  path: ReadonlyArray<readonly [number, number]>,
+  tangents: TangentList,
+  spanModes: SpanModes,
+  index: number,
+): FenceSpanMode {
+  return (
+    spanModes?.[index] ?? (path.length === 2 && !hasAnyTangent(tangents) ? 'straight' : 'curve')
+  )
+}
 
 export function isSplineFence(fence: FenceSplineLike): boolean {
   return Array.isArray(fence.path) && fence.path.length >= 2
@@ -157,12 +170,14 @@ export function sampleFenceSpline(
   path: ReadonlyArray<readonly [number, number]>,
   tangents?: TangentList,
   segmentsPerSpan = DEFAULT_SEGMENTS_PER_SPAN,
+  spanModes?: SpanModes,
 ): Point2D[] {
   const pts = toPoints(path)
   if (pts.length === 0) return []
   if (pts.length === 1) return [pts[0]!]
   // Two points with no adjusted tangents is a straight segment.
-  if (pts.length === 2 && !hasAnyTangent(tangents)) return [pts[0]!, pts[1]!]
+  if (pts.length === 2 && getFenceSpanMode(path, tangents, spanModes, 0) === 'straight')
+    return [pts[0]!, pts[1]!]
 
   const steps = Math.max(1, Math.floor(segmentsPerSpan))
   const result: Point2D[] = [pts[0]!]
@@ -170,6 +185,10 @@ export function sampleFenceSpline(
   for (let i = 0; i < pts.length - 1; i += 1) {
     const p1 = pts[i]!
     const p2 = pts[i + 1]!
+    if (getFenceSpanMode(path, tangents, spanModes, i) === 'straight') {
+      result.push(p2)
+      continue
+    }
     const outHandle = getFenceControlHandle(path, tangents, i)
     const nextHandle = getFenceControlHandle(path, tangents, i + 1)
     // Bézier controls: leave p1 along its OUT handle, arrive at p2 along its
@@ -266,8 +285,9 @@ export function getFenceSplineFrameAt(
   t: number,
   tangents?: TangentList,
   segmentsPerSpan = DEFAULT_SEGMENTS_PER_SPAN,
+  spanModes?: SpanModes,
 ): CurveFrame {
-  return frameFromPolyline(sampleFenceSpline(path, tangents, segmentsPerSpan), t)
+  return frameFromPolyline(sampleFenceSpline(path, tangents, segmentsPerSpan, spanModes), t)
 }
 
 /** Total polyline length of the sampled spline centerline. */
@@ -275,8 +295,9 @@ export function getFenceSplineLength(
   path: ReadonlyArray<readonly [number, number]>,
   tangents?: TangentList,
   segmentsPerSpan = DEFAULT_SEGMENTS_PER_SPAN,
+  spanModes?: SpanModes,
 ): number {
-  const points = sampleFenceSpline(path, tangents, segmentsPerSpan)
+  const points = sampleFenceSpline(path, tangents, segmentsPerSpan, spanModes)
   let total = 0
   for (let i = 1; i < points.length; i += 1) {
     total += distance(points[i - 1]!, points[i]!)

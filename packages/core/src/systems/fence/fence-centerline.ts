@@ -30,7 +30,7 @@ type CurveFrame = {
 export function getFenceCenterlineFrameAt(fence: FenceNode, t: number): CurveFrame {
   if (isSplineFence(fence) && fence.path) {
     const perSpan = Math.max(32, Math.ceil(DEFAULT_SAMPLE_SEGMENTS / (fence.path.length - 1)))
-    return getFenceSplineFrameAt(fence.path, t, fence.tangents, perSpan)
+    return getFenceSplineFrameAt(fence.path, t, fence.tangents, perSpan, fence.spanModes)
   }
   return getWallCurveFrameAt(fence, t)
 }
@@ -44,7 +44,7 @@ export function sampleFenceCenterline(
     // reads smoothly without exploding the point count.
     const spanCount = Math.max(1, fence.path.length - 1)
     const perSpan = Math.max(32, Math.ceil(segments / spanCount))
-    return sampleFenceSpline(fence.path, fence.tangents, perSpan)
+    return sampleFenceSpline(fence.path, fence.tangents, perSpan, fence.spanModes)
   }
   return sampleWallCenterline(fence, segments)
 }
@@ -56,7 +56,7 @@ export function getFenceCenterlineLength(
   if (isSplineFence(fence) && fence.path) {
     const spanCount = Math.max(1, fence.path.length - 1)
     const perSpan = Math.max(32, Math.ceil(segments / spanCount))
-    return getFenceSplineLength(fence.path, fence.tangents, perSpan)
+    return getFenceSplineLength(fence.path, fence.tangents, perSpan, fence.spanModes)
   }
   return getWallCurveLength(fence, segments)
 }
