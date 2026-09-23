@@ -239,6 +239,7 @@ export {
   type FenceCornerNeighbors,
   generateFenceGeometry,
   generateFenceSlotGeometries,
+  getFenceFeatureDimensions,
 } from './systems/fence/fence-system'
 // Generic floor-elevation system. Lifts the rendered mesh of any kind
 // whose definition declares `capabilities.floorPlaced` by the slab

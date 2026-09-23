@@ -2,6 +2,7 @@ import {
   type AnyNodeId,
   clampFencePicketRailProjection,
   type FenceNode,
+  type FenceFeatureData,
   type FenceWithFeatures,
   getFenceCenterlineFrameAt,
   getFenceCenterlineLength,
@@ -326,6 +327,70 @@ function getStyleDefaults(style: FenceNode['style']) {
   return { spacingFactor: 0.3, postFactor: 0.55, baseFactor: 1, topFactor: 0.75 }
 }
 
+function getFenceInfillVerticalBounds(fence: FenceNode) {
+  const height = fence.style === 'picket' ? Math.max(fence.height, 0.3) : fence.height
+  if (fence.style === 'picket') {
+    const baseHeight =
+      fence.baseStyle === 'floating' ? 0 : Math.min(Math.max(fence.baseHeight, 0.04), height * 0.5)
+    const bottom = Math.min(baseHeight + Math.max(fence.groundClearance, 0), height * 0.75)
+    const topClearance = Math.min(
+      Math.max(fence.picketTopClearance ?? 0, 0),
+      height - bottom - 0.02,
+    )
+    return { bottom, top: height - topClearance }
+  }
+
+  const styleDefaults = getStyleDefaults(fence.style)
+  const baseY = fence.baseStyle === 'floating' ? Math.max(fence.groundClearance, 0) : 0
+  const baseHeight = Math.max(
+    fence.baseHeight * (fence.style === 'horizontal' ? 1 : styleDefaults.baseFactor),
+    0.04,
+  )
+  const topRailHeight = Math.max(
+    fence.topRailHeight * (fence.style === 'horizontal' ? 1 : styleDefaults.topFactor),
+    0.01,
+  )
+  const verticalHeight = Math.max(height - baseHeight - topRailHeight, 0.08)
+  const bottom = baseY + baseHeight
+  return { bottom, top: bottom + verticalHeight }
+}
+
+export function getFenceFeatureDimensions(fence: FenceNode, feature: FenceFeatureData) {
+  const bounds = getFenceInfillVerticalBounds(fence)
+  const fullPost =
+    fence.style === 'picket' ||
+    fence.style === 'horizontal' ||
+    fence.baseStyle === 'floating' ||
+    !fence.showInfill
+  const postBottom = fullPost ? 0 : bounds.bottom
+  const defaults = getStyleDefaults(fence.style)
+  const railHeight = Math.max(
+    fence.topRailHeight * (fence.style === 'horizontal' ? 1 : defaults.topFactor),
+    0.01,
+  )
+  const postTop =
+    fence.style === 'picket'
+      ? Math.max(fence.height, 0.3)
+      : fullPost
+        ? bounds.top -
+          (fence.baseStyle === 'floating' ? Math.max(fence.groundClearance, 0) : 0) +
+          railHeight +
+          Math.max(fence.groundClearance, 0)
+        : bounds.top
+  const matchesHeight = feature.matchFenceHeight ?? feature.matchFenceStyle !== false
+  const bottom =
+    feature.kind === 'opening'
+      ? postBottom
+      : matchesHeight
+        ? bounds.bottom
+        : (feature.clearance ?? bounds.bottom)
+  const defaultHeight =
+    feature.kind === 'opening' ? postTop - postBottom : bounds.top - bounds.bottom
+  const height = matchesHeight ? defaultHeight : (feature.height ?? defaultHeight)
+  const postHeight = Math.max(0.02, feature.kind === 'opening' ? height : postTop - postBottom)
+  return { bottom, height, postBottom, postHeight }
+}
+
 function distributePattern(
   fence: FenceNode,
   start: number,
@@ -395,7 +460,8 @@ function miterFencePartEnd(
   const sign = endpoint === 'start' ? 1 : -1
   const ux = frame.tangent.x * sign
   const uz = frame.tangent.y * sign
-  const neighborAtStart = Math.hypot(neighbor.start[0] - point[0], neighbor.start[1] - point[1]) < 0.001
+  const neighborAtStart =
+    Math.hypot(neighbor.start[0] - point[0], neighbor.start[1] - point[1]) < 0.001
   const other = getFenceCenterlineFrameAt(neighbor, neighborAtStart ? 0 : 1)
   const vx = other.tangent.x * (neighborAtStart ? 1 : -1)
   const vz = other.tangent.y * (neighborAtStart ? 1 : -1)
@@ -408,7 +474,7 @@ function miterFencePartEnd(
     const x = position.getX(index)
     const z = position.getZ(index)
     for (const side of [-1, 1]) {
-      const offset = lateralOffset + side * depth / 2
+      const offset = lateralOffset + (side * depth) / 2
       const originalX = point[0] - uz * offset * sign
       const originalZ = point[1] + ux * offset * sign
       if (Math.hypot(x - originalX, z - originalZ) > 1e-4) continue
@@ -644,7 +710,10 @@ function createFenceParts(
     )
   }
 
-  const count = showInfill ? Math.max(2, Math.floor((length - edgeInset * 2) / spacing) + 1) : 2
+  const count =
+    showInfill && fence.style !== 'privacy'
+      ? Math.max(2, Math.floor((length - edgeInset * 2) / spacing) + 1)
+      : 2
   const interiorStart = edgeInset + postWidth * 1.5
   const interiorEnd = length - edgeInset - postWidth * 1.5
   const positions =
@@ -696,6 +765,21 @@ function createFenceParts(
       if (isEdgePost) slat.endpoint = index === 0 ? 'start' : 'end'
       ;(isEdgePost ? posts : infill).push(slat)
     }
+  }
+
+  if (showInfill && fence.style === 'privacy') {
+    infill.push(
+      ...createFenceCurveBlockParts(
+        fence,
+        startInsetT,
+        endInsetT,
+        verticalY,
+        verticalHeight,
+        panelDepth * 0.7,
+        MIN_CURVE_SEGMENT_LENGTH,
+        getInfillOffset(fence, Math.max(panelDepth * 0.55, 0.018), panelDepth * 0.7),
+      ),
+    )
   }
 
   rail.push(
@@ -1060,36 +1144,87 @@ function cutFenceParts(
   }
 
   if (!renderFeatures) return
-  const postWidth = Math.max(fence.postSize, 0.05)
-  const postDepth = Math.max(fence.thickness, postWidth)
   for (const feature of features) {
-    const bottom = feature.clearance ?? fence.groundClearance
-    const height = feature.height ?? Math.max(0.3, fence.height - bottom - 0.08)
+    const matchesFence = feature.matchFenceStyle !== false
+    const styleDefaults = getStyleDefaults(fence.style)
+    const postWidth = matchesFence
+      ? fence.style === 'picket'
+        ? Math.max(fence.postSize, 0.02)
+        : fence.style === 'horizontal'
+          ? Math.max(fence.postSize * 1.4, 0.04)
+          : Math.max(fence.postSize * styleDefaults.postFactor, 0.01)
+      : Math.max(fence.postSize, 0.05)
+    const postDepth =
+      matchesFence && fence.style === 'horizontal'
+        ? postWidth
+        : matchesFence && fence.style !== 'picket'
+          ? Math.max(Math.max(fence.thickness, 0.03) * 0.35 - 0.001, 0.011)
+          : Math.max(fence.thickness, postWidth)
+    const { bottom, height, postBottom, postHeight } = getFenceFeatureDimensions(fence, feature)
     const top = bottom + height
     if (feature.showPosts !== false)
       for (const t of [feature.startT, feature.endT]) {
         const frame = getFencePointAt(fence, t)
-        const postHeight = Math.max(
-          fence.height,
-          feature.kind === 'gate' ? top + 0.08 : fence.height,
-        )
         parts.posts.push({
-          position: [frame.point.x, postHeight / 2, frame.point.y],
+          position: [frame.point.x, postBottom + postHeight / 2, frame.point.y],
           rotationY: -frame.tangentAngle,
           scale: [postWidth, postHeight, postDepth],
         })
-        if (fence.postCap !== 'none')
+        if (
+          matchesFence &&
+          fence.postCap !== 'none' &&
+          (fence.style === 'picket' || fence.style === 'horizontal')
+        ) {
+          const horizontal = fence.style === 'horizontal'
+          const capHeight = horizontal
+            ? Math.max(postWidth * 0.32, 0.03)
+            : postWidth * (fence.postCap === 'flat' ? 0.2 : 0.5)
+          const capScale = horizontal ? 1.22 : 1.5
           parts.posts.push({
-            position: [frame.point.x, postHeight + postWidth * 0.2, frame.point.y],
+            position: [
+              frame.point.x,
+              postBottom +
+                postHeight +
+                (horizontal && fence.postCap === 'pyramid' ? capHeight * 0.9 : capHeight / 2),
+              frame.point.y,
+            ],
             rotationY: -frame.tangentAngle,
-            scale: [postWidth * 1.25, postWidth * 0.4, postDepth * 1.25],
+            scale: [
+              postWidth * (horizontal && fence.postCap === 'pyramid' ? 1.18 : capScale),
+              horizontal && fence.postCap === 'pyramid' ? capHeight * 1.8 : capHeight,
+              postDepth * (horizontal && fence.postCap === 'pyramid' ? 1.18 : capScale),
+            ],
             shape: fence.postCap === 'pyramid' ? 'pyramid' : 'box',
           })
+        }
       }
     if (feature.kind !== 'gate') continue
-    const member = Math.min(feature.frameWidth ?? 0.055, height / 4)
-    const depth = feature.thickness ?? 0.06
-    const style = !feature.style || feature.style === 'match' ? fence.style : feature.style
+    const style = matchesFence
+      ? fence.style
+      : !feature.style || feature.style === 'match'
+        ? 'picket'
+        : feature.style
+    const hostPostWidth =
+      fence.style === 'picket'
+        ? Math.max(fence.postSize, 0.02)
+        : fence.style === 'horizontal'
+          ? Math.max(fence.postSize * 1.4, 0.04)
+          : Math.max(fence.postSize * styleDefaults.postFactor, 0.01)
+    const member = Math.min(
+      matchesFence
+        ? fence.style === 'rail'
+          ? Math.max(fence.topRailHeight * styleDefaults.topFactor, 0.01)
+          : Math.max(fence.picketWidth, hostPostWidth * 0.55)
+        : (feature.frameWidth ?? 0.055),
+      height / 4,
+    )
+    const matchedDepth =
+      fence.style === 'picket'
+        ? Math.max(Math.min(fence.thickness * 0.5, 0.052), 0.01)
+        : fence.style === 'slat'
+          ? Math.max(fence.thickness * 0.35, 0.011)
+          : Math.max(fence.thickness, 0.03)
+    const depth = matchesFence ? matchedDepth : (feature.thickness ?? 0.06)
     const leaves = getFenceGateLeaves(fence, feature)
     // A swinging leaf is rigid: both leaves share the higher jamb elevation.
     const support = Math.max(
@@ -1127,15 +1262,41 @@ function cutFenceParts(
       }
       for (const x of [frame / 2, width - frame / 2])
         add(x, bottom + height / 2, 0, frame, height, depth)
-      for (const y of [bottom + frame / 2, top - frame / 2])
-        add(width / 2, y, 0, innerWidth, frame, depth)
-      const spacing = Math.max(feature.spacing ?? 0.15, 0.04)
-      const board = Math.min(feature.boardWidth ?? 0.055, innerWidth)
+      const railThickness =
+        matchesFence && style === 'rail'
+          ? Math.max(fence.topRailHeight * styleDefaults.topFactor, 0.01)
+          : frame
+      for (const y of [
+        bottom + railThickness / 2,
+        top + (style === 'rail' && matchesFence ? railThickness / 2 : -railThickness / 2),
+      ])
+        add(width / 2, y, 0, innerWidth, railThickness, depth)
+      const matchedSpacing =
+        fence.style === 'picket'
+          ? fence.picketSpacing
+          : fence.style === 'slat'
+            ? fence.postSpacing * styleDefaults.spacingFactor
+            : fence.style === 'horizontal'
+              ? 0.155 + Math.max(fence.slatGap, 0)
+              : 0.15
+      const spacing = Math.max(matchesFence ? matchedSpacing : (feature.spacing ?? 0.15), 0.04)
+      const matchedBoardWidth =
+        fence.style === 'picket'
+          ? fence.picketWidth
+          : fence.style === 'slat'
+            ? hostPostWidth
+            : fence.style === 'horizontal'
+              ? 0.14
+              : 0.055
+      const board = Math.min(
+        matchesFence ? matchedBoardWidth : (feature.boardWidth ?? 0.055),
+        innerWidth,
+      )
       if (style === 'privacy')
         add(width / 2, bottom + height / 2, 0, innerWidth, innerHeight, depth * 0.6)
-      else if (style === 'horizontal' || style === 'rail') {
-        const count = style === 'rail' ? 3 : Math.max(1, Math.floor(innerHeight / spacing))
-        const boardHeight = Math.min(style === 'rail' ? frame : board, (innerHeight / count) * 0.8)
+      else if (style === 'horizontal') {
+        const count = Math.max(1, Math.floor(innerHeight / spacing))
+        const boardHeight = Math.min(board, (innerHeight / count) * 0.8)
         for (let i = 0; i < count; i++)
           add(
             width / 2,
@@ -1145,7 +1306,7 @@ function cutFenceParts(
             boardHeight,
             depth * 0.65,
           )
-      } else {
+      } else if (style !== 'rail') {
         const count = Math.max(1, Math.floor(innerWidth / Math.max(spacing, board + 0.015)))
         for (let i = 0; i < count; i++)
           add(
@@ -1260,7 +1421,9 @@ export function generateFenceSlotGeometries(
       ? { posts: [], infill: [], base: [], rail: [] }
       : createFenceParts(fence, omitEndpointPosts)
   if (omitEndpointPosts?.size) {
-    parts.posts = parts.posts.filter((part) => !part.endpoint || !omitEndpointPosts.has(part.endpoint))
+    parts.posts = parts.posts.filter(
+      (part) => !part.endpoint || !omitEndpointPosts.has(part.endpoint),
+    )
   }
   if (cornerNeighbors) {
     for (const slot of ['base', 'rail', 'infill'] as const) {

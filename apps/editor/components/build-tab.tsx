@@ -57,6 +57,10 @@ export function BuildTab() {
   const [mepOpen, setMepOpen] = useState(false)
   const activeTool = useEditor((s) => s.tool)
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
+  const selectedFenceFeature = useScene((s) => {
+    const selected = selectedId ? s.nodes[selectedId as AnyNodeId] : undefined
+    return isFenceFeatureNode(selected) ? selected : undefined
+  })
   const selectedFence = useScene((s) => {
     const selected = selectedId ? s.nodes[selectedId as AnyNodeId] : undefined
     const host =
@@ -310,32 +314,101 @@ export function BuildTab() {
       ) : fenceContext ? (
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto border-border/50 border-t pt-3">
           <div className="px-0.5 font-medium text-muted-foreground text-xs">Fence features</div>
-          <div className="grid grid-cols-2 gap-1.5">
+          <div
+            className="grid gap-1.5"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
+          >
             {(['gate', 'opening'] as const).map((kind) => (
               <button
                 aria-pressed={placingFenceFeature === kind}
                 className={cn(
-                  'rounded-lg px-2.5 py-2 text-left font-medium text-xs transition-colors',
+                  'group flex aspect-square items-center justify-center rounded-xl p-1 transition-all duration-200',
                   placingFenceFeature === kind
                     ? 'bg-primary/10 text-primary ring-1 ring-primary/50'
-                    : 'bg-muted/40 hover:bg-muted',
+                    : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
                 )}
                 key={kind}
+                aria-label={kind === 'gate' ? 'Add Gate' : 'Add Open Passage'}
+                title={kind === 'gate' ? 'Add Gate' : 'Add Open Passage'}
                 onClick={() => {
                   triggerSFX('sfx:menu-click')
                   activateFenceFeaturePlacement(kind)
                 }}
                 type="button"
               >
-                {kind === 'gate' ? 'Add Gate' : 'Add Open Passage'}
+                <Image
+                  alt=""
+                  className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
+                  height={48}
+                  src={kind === 'gate' ? '/icons/gate.webp' : '/icons/open-passage.webp'}
+                  width={48}
+                />
               </button>
             ))}
           </div>
+          {selectedFenceFeature && (
+            <label className="flex items-center justify-between text-xs">
+              Match fence style
+              <input
+                aria-label="Match fence style"
+                type="checkbox"
+                checked={selectedFenceFeature.matchFenceStyle !== false}
+                onChange={(event) =>
+                  useScene.getState().updateNode(selectedFenceFeature.id, {
+                    matchFenceStyle: event.currentTarget.checked,
+                  })
+                }
+              />
+            </label>
+          )}
           {!!placingFenceFeature && (
             <div className="space-y-2 text-xs">
               <p>
                 Hover a fence to preview. Click to place. Esc cancels. Leave room between openings.
               </p>
+              {typeof fenceDefaults?.featurePlacementFeedback === 'string' && (
+                <p role="status" className="text-amber-400">
+                  {fenceDefaults.featurePlacementFeedback}
+                </p>
+              )}
+              <label className="flex items-center justify-between">
+                Match fence style
+                <input
+                  type="checkbox"
+                  checked={fenceDefaults?.featureMatchStyle !== false}
+                  onChange={(event) =>
+                    useEditor.getState().setToolDefaults('fence', {
+                      ...fenceDefaults,
+                      featureMatchStyle: event.currentTarget.checked,
+                    })
+                  }
+                />
+              </label>
+              {fenceDefaults?.featureMatchStyle === false && placingFenceFeature === 'gate' && (
+                <label className="flex items-center justify-between">
+                  Gate style
+                  <select
+                    className="rounded border bg-background p-1"
+                    value={
+                      typeof fenceDefaults?.featureStyle === 'string'
+                        ? fenceDefaults.featureStyle
+                        : 'picket'
+                    }
+                    onChange={(event) =>
+                      useEditor.getState().setToolDefaults('fence', {
+                        ...fenceDefaults,
+                        featureStyle: event.currentTarget.value,
+                      })
+                    }
+                  >
+                    <option value="picket">Picket</option>
+                    <option value="slat">Vertical slats</option>
+                    <option value="horizontal">Horizontal boards</option>
+                    <option value="privacy">Solid privacy</option>
+                    <option value="rail">Open rails</option>
+                  </select>
+                </label>
+              )}
               <label className="flex items-center justify-between">
                 Opening width (m)
                 <input

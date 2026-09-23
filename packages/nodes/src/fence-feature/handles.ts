@@ -11,6 +11,7 @@ import {
   projectPointToFence,
   type SceneApi,
 } from '@pascal-app/core'
+import { getFenceFeatureDimensions } from '@pascal-app/viewer'
 import { fenceBaseElevation } from '../fence/definition'
 
 export function featureHost(node: FenceFeatureNode, scene: SceneApi): FenceNode | undefined {
@@ -43,10 +44,8 @@ export function fenceFeatureHandles(
   if (!host) return []
   const frame = (n: FenceFeatureNode) =>
     getFenceCenterlineFrameAt(host, n.center / Math.max(getFenceCenterlineLength(host), 0.001))
-  const height = (n: FenceFeatureNode) =>
-    n.type === 'fence-gate'
-      ? (n.height ?? Math.max(0.3, host.height - (n.clearance ?? host.groundClearance) - 0.08))
-      : host.height
+  const dimensions = (n: FenceFeatureNode) => getFenceFeatureDimensions(host, fenceFeatureData(n))
+  const height = (n: FenceFeatureNode) => dimensions(n).height
   const base = (n: FenceFeatureNode) => {
     const p = frame(n).point
     return fenceBaseElevation(host, scene, [p.x, p.y])
@@ -66,6 +65,10 @@ export function fenceFeatureHandles(
     {
       kind: 'linear-resize',
       axis: 'x',
+      dragAxis: (n) => {
+        const tangent = frame(n).tangent
+        return [tangent.x, 0, tangent.y]
+      },
       anchor: 'center',
       min: 0.35,
       currentValue: (n) => n.width,
@@ -80,28 +83,24 @@ export function fenceFeatureHandles(
       },
     },
   ]
-  if (node.type === 'fence-gate')
-    handles.push({
-      kind: 'linear-resize',
-      axis: 'y',
-      anchor: 'min',
-      min: 0.3,
-      max: 6,
-      currentValue: height,
-      apply: (_n, value) => ({ height: value }),
-      placement: {
-        position: (n) => {
-          const p = frame(n).point
-          return [
-            p.x,
-            base(n) +
-              height(n) +
-              (n.type === 'fence-gate' ? (n.clearance ?? host.groundClearance) : 0) +
-              0.35,
-            p.y,
-          ]
-        },
+  handles.push({
+    kind: 'linear-resize',
+    axis: 'y',
+    anchor: 'min',
+    min: 0.3,
+    max: 6,
+    currentValue: height,
+    apply: (n, value) => ({
+      height: value,
+      matchFenceHeight: false,
+      ...(n.type === 'fence-gate' ? { clearance: dimensions(n).bottom } : {}),
+    }),
+    placement: {
+      position: (n) => {
+        const p = frame(n).point
+        return [p.x, base(n) + height(n) + dimensions(n).bottom + 0.35, p.y]
       },
-    })
+    },
+  })
   return handles
 }

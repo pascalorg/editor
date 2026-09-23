@@ -28,6 +28,8 @@ export const FenceFeature = z.object({
   kind: z.enum(['gate', 'opening']),
   center: z.number().finite().nonnegative(),
   width: z.number().finite().positive(),
+  matchFenceStyle: z.boolean().optional(),
+  matchFenceHeight: z.boolean().optional(),
   leafType: z.enum(['single', 'double']).optional(),
   style: z.enum(['match', 'picket', 'slat', 'horizontal', 'privacy', 'rail']).optional(),
   height: z.number().finite().min(0.3).max(1000).optional(),

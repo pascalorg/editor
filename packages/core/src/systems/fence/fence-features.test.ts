@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { FenceNode } from '../../schema'
 import {
   canPlaceFenceFeature,
+  fenceFeaturePlacementIssue,
   getFenceGateLeaves,
   projectPointToFence,
   resolveFenceFeatures,
@@ -16,6 +17,13 @@ describe('fence features', () => {
     expect(resolveFenceFeatures(node)[0]?.centerT).toBeCloseTo(0.7)
     expect(canPlaceFenceFeature(node, { ...gate(7.2), id: 'other' })).toBe(false)
     expect(canPlaceFenceFeature(node, gate(0.3))).toBe(false)
+  })
+  test('explains a rejected placement without changing the placement rule', () => {
+    const node = { ...fence(), features: [gate(7)] }
+    expect(fenceFeaturePlacementIssue(node, { ...gate(7.2), id: 'other' })).toBe('overlap')
+    expect(fenceFeaturePlacementIssue(node, gate(0.3))).toBe('end')
+    expect(fenceFeaturePlacementIssue(node, { ...gate(4), width: 0.2 })).toBe('width')
+    expect(fenceFeaturePlacementIssue(node, gate(4))).toBeNull()
   })
   test('projects a cursor onto a mixed path by distance along the path', () => {
     const node = {
