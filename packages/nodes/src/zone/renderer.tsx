@@ -226,7 +226,12 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
   }
 
   return (
-    <group ref={ref} {...handlers} userData={{ labelPosition: [centroid[0], 1, centroid[1]] }}>
+    <group
+      ref={ref}
+      visible={node.visible !== false}
+      {...handlers}
+      userData={{ labelPosition: [centroid[0], 1, centroid[1]] }}
+    >
       {showZones && (
         <>
           <Html

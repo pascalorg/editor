@@ -62,6 +62,7 @@ import {
   rotateFloorplanPoint,
   visibleFloorplanViewWidth,
 } from './floorplan-preview-navigation'
+import { isVisibleInFloorplan } from './floorplan-preview-visibility'
 
 const READ_ONLY_PALETTE: FloorplanPalette = {
   selectedStroke: '#4f46e5',
@@ -191,18 +192,6 @@ export function normalizeFloorplanPreviewNodes(
     }
   }
   return normalized
-}
-
-function isVisibleInFloorplan(node: AnyNode, nodes: Record<string, AnyNode>): boolean {
-  const seen = new Set<string>()
-  let current: AnyNode | undefined = node
-  while (current) {
-    if (seen.has(current.id)) return true
-    seen.add(current.id)
-    if (current.visible === false) return false
-    current = current.parentId ? nodes[current.parentId] : undefined
-  }
-  return true
 }
 
 function buildFloorplanGeometries(

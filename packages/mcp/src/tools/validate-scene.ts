@@ -5,15 +5,16 @@ import { READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 
 export const validateSceneInput = {}
 
+const validationIssue = z.object({
+  nodeId: z.string(),
+  path: z.string(),
+  message: z.string(),
+})
+
 export const validateSceneOutput = {
   valid: z.boolean(),
-  errors: z.array(
-    z.object({
-      nodeId: z.string(),
-      path: z.string(),
-      message: z.string(),
-    }),
-  ),
+  errors: z.array(validationIssue),
+  warnings: z.array(validationIssue),
 }
 
 export function registerValidateScene(server: McpServer, bridge: SceneOperations): void {
@@ -22,7 +23,7 @@ export function registerValidateScene(server: McpServer, bridge: SceneOperations
     {
       title: 'Validate scene',
       description:
-        'Run Zod validation against every node in the scene. Returns `{ valid, errors }` where each error has `{ nodeId, path, message }`.',
+        'Run Zod validation against every node in the scene. Returns `{ valid, errors, warnings }` where each entry has `{ nodeId, path, message }`. Warnings do not fail validation; for example a hidden Site, whose flag hides only its own ground and boundary while the buildings on it stay visible and exported.',
       inputSchema: validateSceneInput,
       outputSchema: validateSceneOutput,
       annotations: READ_ONLY_TOOL_ANNOTATIONS,

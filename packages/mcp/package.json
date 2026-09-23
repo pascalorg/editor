@@ -38,7 +38,7 @@
     }
   },
   "bin": {
-    "pascal-mcp": "./dist/bin/pascal-mcp.js"
+    "pascal-mcp": "dist/bin/pascal-mcp.js"
   },
   "files": [
     "dist",
@@ -80,7 +80,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/pascalorg/editor.git",
+    "url": "git+https://github.com/pascalorg/editor.git",
     "directory": "packages/mcp"
   },
   "license": "MIT",

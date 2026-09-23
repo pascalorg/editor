@@ -21,8 +21,43 @@ export function getLevelPresentationY(
 }
 
 /**
+ * Whether a level renders this frame, and whether it renders as a
+ * shadow-caster only.
+ *
+ * Two unrelated things hide a level and they do not compose: the author's own
+ * `visible` flag (the sidebar eye), which hides the floor outright, and solo
+ * mode, which hides every level but the soloed one — keeping the levels ABOVE
+ * it in the shadow map so the sun still shadows the soloed floor through them.
+ * A level the author hid never enters that shadow-caster branch: its shadows
+ * on the floor below would be exactly what hiding it was meant to remove.
+ */
+export function resolveLevelVisibility({
+  levelMode,
+  hasSelectedLevel,
+  isSelected,
+  index,
+  selectedIndex,
+  nodeVisible,
+}: {
+  levelMode: 'stacked' | 'exploded' | 'solo' | 'manual'
+  hasSelectedLevel: boolean
+  isSelected: boolean
+  index: number
+  selectedIndex: number | undefined
+  nodeVisible: boolean
+}): { visible: boolean; shadowOnly: boolean } {
+  if (!nodeVisible) return { visible: false, shadowOnly: false }
+
+  const hidden = levelMode === 'solo' && hasSelectedLevel && !isSelected
+  const shadowOnly = hidden && selectedIndex !== undefined && index > selectedIndex
+  return { visible: shadowOnly || !hidden, shadowOnly }
+}
+
+/**
  * Instantly snaps all level Objects3D to their true stacked Y positions
- * (ignores levelMode — always uses stacked, no exploded gap).
+ * (ignores levelMode — always uses stacked, no exploded gap). Presentation
+ * hiding is undone with it, but a level the author hid stays hidden: the
+ * capture has to match the export, which prunes it.
  *
  * Returns a restore function that reverts each level's Y to what it was
  * before the snap, so lerp animations in LevelSystem can continue undisturbed.
@@ -38,6 +73,7 @@ export function snapLevelsToTruePositions(): () => void {
   type LevelEntry = {
     obj: NonNullable<ReturnType<typeof sceneRegistry.nodes.get>>
     levelId: string
+    nodeVisible: boolean
   }
 
   const entries: LevelEntry[] = []
@@ -48,6 +84,7 @@ export function snapLevelsToTruePositions(): () => void {
       entries.push({
         levelId,
         obj,
+        nodeVisible: level.visible !== false,
       })
     }
   })
@@ -58,10 +95,10 @@ export function snapLevelsToTruePositions(): () => void {
     entries.map(({ levelId, obj }) => [levelId, { y: obj.position.y, visible: obj.visible }]),
   )
 
-  // Snap to true stacked positions and make all levels visible
-  for (const { levelId, obj } of entries) {
+  // Snap to true stacked positions and undo presentation hiding
+  for (const { levelId, obj, nodeVisible } of entries) {
     obj.position.y = levelElevations.get(levelId)?.baseY ?? 0
-    obj.visible = true
+    obj.visible = nodeVisible
   }
 
   return () => {

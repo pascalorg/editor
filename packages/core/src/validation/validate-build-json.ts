@@ -1,3 +1,4 @@
+import { HIDDEN_SITE_NOTE } from '../lib/node-visibility'
 import { nodeRegistry } from '../registry'
 import type { Collection } from '../schema/collections'
 import { SceneMaterial } from '../schema/scene-material'
@@ -264,6 +265,17 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
       severity: 'error',
       code: 'empty_root_node_ids',
       message: '"rootNodeIds" is empty — no entry point into the scene.',
+    })
+  }
+
+  // Hand-authored files hide the Site expecting the parcel to disappear; the
+  // flag is accepted but reaches nothing beneath it, so say so at import.
+  for (const [key, value] of Object.entries(nodes)) {
+    if (!isPlainObject(value) || value.type !== 'site' || value.visible !== false) continue
+    warnings.push({
+      severity: 'warning',
+      code: 'site_hidden',
+      message: `Site "${typeof value.id === 'string' ? value.id : key}" is hidden. ${HIDDEN_SITE_NOTE}`,
     })
   }
 

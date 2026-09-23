@@ -7,6 +7,7 @@ import {
   findLevelAncestorId,
   type GeometryContext,
   getLevelDisplayName,
+  hidesDescendants,
   isNodeKindEnabled,
   isOperationDoorType,
   itemClipRegistry,
@@ -715,16 +716,6 @@ function pruneHiddenSceneNodes(
   registryEntries: readonly RegistryEntry[],
 ) {
   const visibility = new Map<string, boolean>()
-  const declaredSiteParents = new Map<string, string>()
-  for (const node of Object.values(nodes)) {
-    if (node.type !== 'site' || !('children' in node) || !Array.isArray(node.children)) continue
-    for (const childId of node.children) {
-      const child = nodes[childId]
-      if (child && !child.parentId && !declaredSiteParents.has(childId)) {
-        declaredSiteParents.set(childId, node.id)
-      }
-    }
-  }
 
   const isVisible = (id: string, path: Set<string>): boolean => {
     const cached = visibility.get(id)
@@ -736,8 +727,9 @@ function pruneHiddenSceneNodes(
       visibility.set(id, false)
       return false
     }
-    const parentId = node.parentId || declaredSiteParents.get(id)
-    if (!parentId || path.has(id)) {
+    const parentId = node.parentId
+    const parent = parentId ? nodes[parentId] : undefined
+    if (!parentId || path.has(id) || (parent && !hidesDescendants(parent))) {
       visibility.set(id, true)
       return true
     }
@@ -749,10 +741,31 @@ function pruneHiddenSceneNodes(
     return visible
   }
 
+  const nodeClones = new Set<THREE.Object3D>()
+  for (const [, original] of registryEntries) {
+    const clone = cloneByOriginal.get(original)
+    if (clone) nodeClones.add(clone)
+  }
+
   for (const [id, original] of registryEntries) {
     if (isVisible(id, new Set())) continue
-    cloneByOriginal.get(original)?.removeFromParent()
+    const clone = cloneByOriginal.get(original)
+    if (!clone) continue
+    const node = nodes[id]
+    if (!node || hidesDescendants(node)) {
+      clone.removeFromParent()
+      continue
+    }
+    // Drop the hidden Site's own ground fill and boundary; keep what it hosts.
+    for (const child of [...clone.children]) {
+      if (!hostsSceneNode(child, nodeClones)) child.removeFromParent()
+    }
   }
+}
+
+function hostsSceneNode(object: THREE.Object3D, nodeClones: Set<THREE.Object3D>): boolean {
+  if (nodeClones.has(object)) return true
+  return object.children.some((child) => hostsSceneNode(child, nodeClones))
 }
 
 function retainedClones(

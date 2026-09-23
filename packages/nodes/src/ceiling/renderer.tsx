@@ -118,6 +118,7 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
       material={materials.bottomMaterial}
       position={position}
       ref={ref}
+      visible={node.visible !== false}
       {...handlers}
     >
       <mesh
