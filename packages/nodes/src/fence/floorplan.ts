@@ -99,6 +99,37 @@ function buildMarker(
 ): FloorplanGeometry {
   const markerStrokeWidth = isActive ? 1.65 : 1.35
 
+  if (fence.style === 'picket') {
+    const w = clamp(fence.postSize * 0.55, 0.035, 0.065)
+    const h = clamp(fence.baseHeight * 0.55, 0.08, 0.14)
+    return {
+      kind: 'group',
+      transform: { translate: [point.x, point.y], rotate: angleRadians },
+      children: [
+        {
+          kind: 'rect',
+          x: -(w + 0.026) / 2,
+          y: -(h + 0.026) / 2,
+          width: w + 0.026,
+          height: h + 0.026,
+          rx: 0.012,
+          ry: 0.012,
+          fill: surfaceColor,
+        },
+        {
+          kind: 'rect',
+          x: -w / 2,
+          y: -h / 2,
+          width: w,
+          height: h,
+          rx: 0.008,
+          ry: 0.008,
+          fill: accentColor,
+        },
+      ],
+    }
+  }
+
   if (fence.style === 'privacy' || fence.style === 'horizontal') {
     const w = clamp(fence.postSize * 0.58, 0.038, 0.068)
     const h = clamp(Math.max(fence.baseHeight * 0.5, fence.postSize * 1.4), 0.1, 0.17)
