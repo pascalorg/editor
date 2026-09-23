@@ -119,6 +119,7 @@ export {
   createFenceOnCurrentLevel,
   createSplineFenceOnCurrentLevel,
   type FencePlanPoint,
+  getFenceInheritedDefaults,
   snapFenceDraftPoint,
 } from './components/tools/fence/fence-drafting'
 export { MoveTool } from './components/tools/item/move-tool'

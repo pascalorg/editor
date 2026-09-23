@@ -73,6 +73,24 @@ const FenceSystems = () => {
         const after = currentNodes[id as AnyNodeId]
         if (before === after) continue
         if (after?.type === 'fence') markFenceAndChildren(after.id)
+        if (before?.type === 'fence' || after?.type === 'fence') {
+          for (const neighbor of Object.values(currentNodes)) {
+            if (neighbor.type !== 'fence' || neighbor.id === id) continue
+            for (const changed of [before, after]) {
+              if (changed?.type !== 'fence' || changed.parentId !== neighbor.parentId) continue
+              if (
+                [changed.start, changed.end].some((point) =>
+                  [neighbor.start, neighbor.end].some(
+                    (other) => Math.hypot(point[0] - other[0], point[1] - other[1]) < 0.001,
+                  ),
+                )
+              ) {
+                markFenceAndChildren(neighbor.id)
+                break
+              }
+            }
+          }
+        }
         if (isFenceFeatureNode(before) && before.parentId)
           markFenceAndChildren(before.parentId as AnyNodeId)
         if (isFenceFeatureNode(after) && after.parentId)

@@ -359,7 +359,7 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
     picketProfile: 'level',
     picketTopClearance: 0.2,
     picketVariation: 0.23,
-    picketRailProjection: 0.018,
+    picketRailProjection: 0.001,
     postSize: 0.109,
     topRailHeight: 0.04,
     groundClearance: 0.14,
