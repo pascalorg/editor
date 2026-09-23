@@ -449,6 +449,7 @@ export const FenceTool: React.FC = () => {
   if (fenceMode === 'curved') {
     return <SplineFenceDraft />
   }
+  if (fenceMode === 'freehand') return <SplineFenceDraft freehand />
   return <StraightFenceTool />
 }
 
@@ -812,8 +813,64 @@ const StraightFenceTool: React.FC = () => {
 
 const SPLINE_PREVIEW_COLOR = '#8381ed'
 const SPLINE_PREVIEW_SEGMENTS = 40
+const FREEHAND_SAMPLE_DISTANCE = 0.2
+const FREEHAND_SIMPLIFY_TOLERANCE = 0.08
+const FREEHAND_MAX_CONTROL_POINTS = 64
 
-const SplineFenceDraft: React.FC = () => {
+function simplifyFreehandPath(
+  points: FencePlanPoint[],
+  tolerance = FREEHAND_SIMPLIFY_TOLERANCE,
+): FencePlanPoint[] {
+  if (points.length <= 2) return points
+
+  let threshold = tolerance * tolerance
+  while (true) {
+    const keep = new Uint8Array(points.length)
+    keep[0] = 1
+    keep[points.length - 1] = 1
+    const ranges: Array<[number, number]> = [[0, points.length - 1]]
+
+    while (ranges.length > 0) {
+      const [start, end] = ranges.pop()!
+      const a = points[start]!
+      const b = points[end]!
+      const dx = b[0] - a[0]
+      const dz = b[1] - a[1]
+      const lengthSquared = dx * dx + dz * dz
+      let farthestIndex = -1
+      let farthestDistanceSquared = threshold
+
+      for (let index = start + 1; index < end; index += 1) {
+        const point = points[index]!
+        const t =
+          lengthSquared > 1e-9
+            ? Math.max(
+                0,
+                Math.min(1, ((point[0] - a[0]) * dx + (point[1] - a[1]) * dz) / lengthSquared),
+              )
+            : 0
+        const offsetX = point[0] - (a[0] + dx * t)
+        const offsetZ = point[1] - (a[1] + dz * t)
+        const distanceSquared = offsetX * offsetX + offsetZ * offsetZ
+        if (distanceSquared > farthestDistanceSquared) {
+          farthestDistanceSquared = distanceSquared
+          farthestIndex = index
+        }
+      }
+
+      if (farthestIndex >= 0) {
+        keep[farthestIndex] = 1
+        ranges.push([start, farthestIndex], [farthestIndex, end])
+      }
+    }
+
+    const simplified = points.filter((_, index) => keep[index] === 1)
+    if (simplified.length <= FREEHAND_MAX_CONTROL_POINTS) return simplified
+    threshold *= 2.25
+  }
+}
+
+const SplineFenceDraft: React.FC<{ freehand?: boolean }> = ({ freehand = false }) => {
   const fenceDefaults = useEditor((state) => state.toolDefaults.fence)
   const previewHeight =
     typeof fenceDefaults?.height === 'number' ? fenceDefaults.height : FENCE_PREVIEW_HEIGHT
@@ -830,6 +887,8 @@ const SplineFenceDraft: React.FC = () => {
   // event of their own) — last resolved on move/click.
   const supportSurfaceRef = useRef<PointerSupportSurface | null>(null)
   const draftRef = useRef(draftPoints)
+  const freehandSamplesRef = useRef<FencePlanPoint[]>([])
+  const isSketchingRef = useRef(false)
 
   draftRef.current = draftPoints
 
@@ -844,13 +903,13 @@ const SplineFenceDraft: React.FC = () => {
 
   useEffect(() => {
     const snapPoint = (local: FencePlanPoint): FencePlanPoint => {
+      if (freehand) return local
       const step = isGridSnapActive() ? getSegmentGridStep() : 0
       if (step <= 0) return local
       return [snapScalarToGrid(local[0], step), snapScalarToGrid(local[1], step)]
     }
 
-    const commit = () => {
-      const points = draftRef.current
+    const commit = (points = draftRef.current) => {
       if (points.length >= 2) {
         const created = createSplineFenceOnCurrentLevel(points, undefined, {
           supportCap: supportSurfaceRef.current?.elevation ?? null,
@@ -868,6 +927,10 @@ const SplineFenceDraft: React.FC = () => {
           useEditor.getState().setMode('select')
         }
       }
+      draftRef.current = []
+      freehandSamplesRef.current = []
+      isSketchingRef.current = false
+      supportSurfaceRef.current = null
       setDraftPoints([])
       setCursor(null)
     }
@@ -887,15 +950,63 @@ const SplineFenceDraft: React.FC = () => {
 
     const onMove = (event: GridEvent) => {
       const pointed = trackPointedSurface(event)
-      setCursor(
-        snapPoint([
-          pointed?.localPoint?.[0] ?? event.localPosition[0],
-          pointed?.localPoint?.[2] ?? event.localPosition[2],
-        ]),
-      )
+      const point = snapPoint([
+        pointed?.localPoint?.[0] ?? event.localPosition[0],
+        pointed?.localPoint?.[2] ?? event.localPosition[2],
+      ])
+      setCursor(point)
+      if (freehand && isSketchingRef.current) {
+        const last = freehandSamplesRef.current.at(-1)
+        if (
+          last &&
+          Math.hypot(point[0] - last[0], point[1] - last[1]) >= FREEHAND_SAMPLE_DISTANCE
+        ) {
+          const samples = [...freehandSamplesRef.current, point]
+          freehandSamplesRef.current = samples
+          const next = simplifyFreehandPath(samples)
+          draftRef.current = next
+          setDraftPoints(next)
+        }
+      }
+    }
+
+    const onPointerDown = (event: GridEvent) => {
+      if (!freehand || event.nativeEvent.button !== 0) return
+      const pointed = trackPointedSurface(event)
+      const point = snapPoint([
+        pointed?.localPoint?.[0] ?? event.localPosition[0],
+        pointed?.localPoint?.[2] ?? event.localPosition[2],
+      ])
+      isSketchingRef.current = true
+      freehandSamplesRef.current = [point]
+      draftRef.current = [point]
+      setDraftPoints([point])
+      setCursor(point)
+    }
+
+    const onPointerUp = (event: GridEvent) => {
+      if (!freehand || !isSketchingRef.current) return
+      isSketchingRef.current = false
+      const pointed = trackPointedSurface(event)
+      const point = snapPoint([
+        pointed?.localPoint?.[0] ?? event.localPosition[0],
+        pointed?.localPoint?.[2] ?? event.localPosition[2],
+      ])
+      const previous = freehandSamplesRef.current
+      const last = previous.at(-1)
+      const samples =
+        last && Math.hypot(point[0] - last[0], point[1] - last[1]) < 0.03
+          ? previous
+          : [...previous, point]
+      freehandSamplesRef.current = samples
+      const next = simplifyFreehandPath(samples)
+      draftRef.current = next
+      setDraftPoints(next)
+      commit(next)
     }
 
     const onClick = (event: GridEvent) => {
+      if (freehand) return
       const pointed = trackPointedSurface(event)
       if (event.nativeEvent.detail >= 2) {
         commit()
@@ -915,22 +1026,34 @@ const SplineFenceDraft: React.FC = () => {
     const onCancel = () => {
       if (draftRef.current.length === 0) return
       markToolCancelConsumed()
+      isSketchingRef.current = false
+      if (freehand) {
+        draftRef.current = []
+        freehandSamplesRef.current = []
+        setDraftPoints([])
+        setCursor(null)
+        return
+      }
       setDraftPoints((prev) => prev.slice(0, -1))
     }
 
     emitter.on('grid:move', onMove)
     emitter.on('grid:click', onClick)
+    emitter.on('grid:pointerdown', onPointerDown)
+    emitter.on('grid:pointerup', onPointerUp)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('keydown', onKeyDown)
 
     return () => {
       emitter.off('grid:move', onMove)
       emitter.off('grid:click', onClick)
+      emitter.off('grid:pointerdown', onPointerDown)
+      emitter.off('grid:pointerup', onPointerUp)
       emitter.off('tool:cancel', onCancel)
       clearPlacementSurface()
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [])
+  }, [freehand])
 
   const previewPoints = useMemo(() => {
     const last = draftPoints.at(-1)

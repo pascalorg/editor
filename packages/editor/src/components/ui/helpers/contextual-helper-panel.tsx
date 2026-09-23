@@ -260,47 +260,52 @@ function FenceContinuationChips() {
   const curveStarted = useFenceCurveDraft((s) => s.pointCount > 0)
 
   const isCurved = mode === 'curved'
+  const isFreehand = mode === 'freehand'
   const straightMode = isCurved ? 'continuous' : mode
-  const straightLabel = straightMode === 'single' ? 'Straight: Single' : 'Straight: Continuous'
-  const straightIcon = straightMode === 'single' ? 'lucide:minus' : 'lucide:waypoints'
-  const typeLabel = isCurved ? 'Type: Curved' : 'Type: Straight'
-  const typeIcon = isCurved ? 'lucide:spline' : 'lucide:minus'
+  const typeLabel = isFreehand ? 'Type: Freehand' : isCurved ? 'Type: Curved' : 'Type: Straight'
+  const typeIcon = isFreehand ? 'lucide:scribble' : isCurved ? 'lucide:spline' : 'lucide:minus'
+  const nextType =
+    mode === 'continuous' || mode === 'single'
+      ? 'curved'
+      : mode === 'curved'
+        ? 'freehand'
+        : 'continuous'
 
   return (
     <>
       <ChipRow
-        ariaLabel={`Fence type: ${isCurved ? 'Curved' : 'Straight'}`}
+        ariaLabel={`Fence type: ${typeLabel.replace('Type: ', '')}`}
         icon={typeIcon}
         label={typeLabel}
-        onClick={() => setContinuation('fence', isCurved ? 'continuous' : 'curved')}
+        onClick={() => setContinuation('fence', nextType)}
         shortcut="T"
-        tooltip="Fence type — click or press T to switch between straight and curved"
+        tooltip="Fence type — click or press T to switch between straight, curved and freehand"
       />
       <ChipRow
-        ariaLabel={`Fence continuation: ${straightLabel}`}
-        disabled={isCurved}
-        icon={straightIcon}
-        label={straightLabel}
+        ariaLabel={`Fence continuation: ${straightMode === 'single' ? 'Single' : 'Continuous'}`}
+        disabled={isCurved || isFreehand}
+        icon={straightMode === 'single' ? 'lucide:minus' : 'lucide:waypoints'}
+        label={straightMode === 'single' ? 'Straight: Single' : 'Straight: Continuous'}
         onClick={
-          isCurved
+          isCurved || isFreehand
             ? undefined
             : () => setContinuation('fence', straightMode === 'single' ? 'continuous' : 'single')
         }
         shortcut="C"
         tooltip={
-          isCurved
-            ? 'Straight continuation is unavailable while curved fence type is active'
+          isCurved || isFreehand
+            ? 'Straight continuation is unavailable for curved or freehand fences'
             : 'Straight fence continuation — click or press C to toggle'
         }
       />
       {/* Curved fences are committed by a closing gesture rather than per-click,
           so the finish keys aren't discoverable on their own — surface them, but
           only once the user has placed a point and a curve is actually in flight. */}
-      {isCurved && curveStarted ? (
+      {(isCurved || isFreehand) && curveStarted ? (
         <ChipRow
           icon="lucide:circle-check"
-          label="Finish curve (or double-click)"
-          shortcut="Enter"
+          label={isFreehand ? 'Drag to draw fence' : 'Finish curve (or double-click)'}
+          shortcut={isFreehand ? 'Release' : 'Enter'}
         />
       ) : null}
     </>

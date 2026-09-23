@@ -239,9 +239,10 @@ export function useFloorplanBackgroundPlacement({
         return true
       }
 
-      if (isFenceBuildActive && useEditor.getState().getContinuation('fence') === 'curved') {
+      const fenceMode = useEditor.getState().getContinuation('fence')
+      if (isFenceBuildActive && (fenceMode === 'curved' || fenceMode === 'freehand')) {
         clearFencePlacementDraft()
-        emitFloorplanGridEvent('click', planPoint, event)
+        if (fenceMode === 'curved') emitFloorplanGridEvent('click', planPoint, event)
         return true
       }
 

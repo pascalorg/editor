@@ -9004,7 +9004,7 @@ export function FloorplanPanel({
   // tools that subscribe to these grid events.
   const emitFloorplanGridEvent = useCallback(
     (
-      eventType: 'move' | 'click' | 'double-click',
+      eventType: 'move' | 'click' | 'double-click' | 'pointerdown' | 'pointerup',
       planPoint: WallPlanPoint,
       nativeEvent: ReactMouseEvent<SVGSVGElement> | ReactPointerEvent<SVGSVGElement>,
     ) => {
@@ -9339,6 +9339,14 @@ export function FloorplanPanel({
       }
 
       if (isFenceBuildActive) {
+        if (useEditor.getState().getContinuation('fence') === 'freehand') {
+          useAlignmentGuides.getState().clear()
+          emitFloorplanGridEvent('move', planPoint, event)
+          setCursorPoint((previousPoint) =>
+            previousPoint && pointsEqual(previousPoint, planPoint) ? previousPoint : planPoint,
+          )
+          return
+        }
         // Fence draft: grid snap (+ existing-wall/fence endpoint snap), then
         // Figma alignment — same endpoint-wins precedence as the wall branch.
         // While a draft is open the segment locks to 15° rays from its start.
@@ -10149,6 +10157,49 @@ export function FloorplanPanel({
       handleBackgroundClick(event)
     },
     [handleBackgroundClick],
+  )
+  const handleSvgPointerDown = useCallback(
+    (event: ReactPointerEvent<SVGSVGElement>) => {
+      if (
+        isFenceBuildActive &&
+        useEditor.getState().getContinuation('fence') === 'freehand' &&
+        event.button === 0
+      ) {
+        const point = getPlanPointFromClientPoint(event.clientX, event.clientY)
+        if (point) {
+          clearFencePlacementDraft()
+          event.currentTarget.setPointerCapture(event.pointerId)
+          emitFloorplanGridEvent('pointerdown', point, event)
+        }
+      }
+      handlePointerDown(event)
+    },
+    [
+      clearFencePlacementDraft,
+      emitFloorplanGridEvent,
+      getPlanPointFromClientPoint,
+      handlePointerDown,
+      isFenceBuildActive,
+    ],
+  )
+  const handleSvgPointerUp = useCallback(
+    (event: ReactPointerEvent<SVGSVGElement>) => {
+      if (
+        isFenceBuildActive &&
+        useEditor.getState().getContinuation('fence') === 'freehand' &&
+        event.button === 0
+      ) {
+        const point = getPlanPointFromClientPoint(event.clientX, event.clientY)
+        if (point) emitFloorplanGridEvent('pointerup', point, event)
+      }
+      endFloorplanNavigation(event)
+    },
+    [
+      emitFloorplanGridEvent,
+      endFloorplanNavigation,
+      getPlanPointFromClientPoint,
+      isFenceBuildActive,
+    ],
   )
   const handleBackgroundDoubleClick = useCallback(
     (event: ReactMouseEvent<SVGSVGElement>) => {
@@ -11395,11 +11446,11 @@ export function FloorplanPanel({
             onContextMenu={(event) => event.preventDefault()}
             onDoubleClick={isMarqueeSelectionToolActive ? undefined : handleBackgroundDoubleClick}
             onPointerCancel={endFloorplanNavigation}
-            onPointerDown={handlePointerDown}
+            onPointerDown={handleSvgPointerDown}
             onPointerDownCapture={handleNavigationPointerDown}
             onPointerLeave={handleSvgPointerLeave}
             onPointerMove={handleSvgPointerMove}
-            onPointerUp={endFloorplanNavigation}
+            onPointerUp={handleSvgPointerUp}
             ref={svgRef}
             style={{
               cursor:
