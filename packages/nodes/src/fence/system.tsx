@@ -113,8 +113,7 @@ const FenceSystems = () => {
             node.type === 'fence-gate' &&
             [...changedFields].every((key) => key === 'openAngle' || before[key] === after[key])
           // Swinging a leaf does not change the opening cut or its sibling gates.
-          if (onlyGateAngle) useScene.getState().markDirty(node.id)
-          else markFenceAndChildren(node.parentId as AnyNodeId)
+          if (!onlyGateAngle) markFenceAndChildren(node.parentId as AnyNodeId)
         }
       }
     })

@@ -30,8 +30,6 @@ export const stairParametrics: ParametricDescriptor<StairNode> = {
           kind: 'number',
           label: 'Opening offset',
           unit: 'm',
-          min: 0,
-          max: 0.5,
           step: 0.01,
           visibleIf: (node) => node.slabOpeningMode === 'destination',
         },
