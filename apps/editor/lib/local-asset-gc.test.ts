@@ -58,6 +58,44 @@ describe('runLocalAssetGc safety', () => {
     }
   })
 
+  test('skips GC when the scene inventory is malformed', async () => {
+    for (const body of [{}, { scenes: [{ id: null }] }]) {
+      const restore = mockFetch(() => json(body))
+      try {
+        expect(await runLocalAssetGc(() => ({ nodes: {} }))).toBeNull()
+      } finally {
+        restore()
+      }
+    }
+  })
+
+  test('skips GC when a listed scene has no graph', async () => {
+    const restore = mockFetch((url) =>
+      url.includes('/api/scenes?') ? json({ scenes: [{ id: 'scene-1' }] }) : json({}),
+    )
+    try {
+      expect(await runLocalAssetGc(() => ({ nodes: {} }))).toBeNull()
+    } finally {
+      restore()
+    }
+  })
+
+  test('skips GC when the local scene cannot be parsed', async () => {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: { getItem: () => '{not-json' },
+    })
+    const restore = mockFetch(() => json({ scenes: [] }))
+    try {
+      expect(await runLocalAssetGc(() => ({ nodes: {} }))).toBeNull()
+    } finally {
+      restore()
+      if (previous) Object.defineProperty(globalThis, 'localStorage', previous)
+      else Reflect.deleteProperty(globalThis, 'localStorage')
+    }
+  })
+
   test('re-reads live nodes so mid-GC uploads stay in the keep-set', async () => {
     // Live graph is empty when GC starts, then gains a guide during the
     // per-scene fetch — the File must survive the sweep.

@@ -19,14 +19,14 @@ function collectGraphAssetUrls(graph: SceneGraphLike | null | undefined): string
 }
 
 /** Asset URLs still referenced by the browser's localStorage scene, if any. */
-export function collectLocalStorageSceneAssetUrls(): string[] {
+export function collectLocalStorageSceneAssetUrls(): string[] | null {
   if (typeof localStorage === 'undefined') return []
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_SCENE_KEY)
     if (!raw) return []
     return collectGraphAssetUrls(JSON.parse(raw) as SceneGraphLike)
   } catch {
-    return []
+    return null
   }
 }
 
@@ -39,7 +39,9 @@ export async function collectAllPersistedAssetUrls(
   currentGraph: SceneGraphLike,
 ): Promise<string[] | null> {
   const keep = new Set<string>(collectGraphAssetUrls(currentGraph))
-  for (const url of collectLocalStorageSceneAssetUrls()) keep.add(url)
+  const localUrls = collectLocalStorageSceneAssetUrls()
+  if (localUrls === null) return null
+  for (const url of localUrls) keep.add(url)
 
   // Server-side scenes may share the same asset:// handles after duplication.
   // If listing fails or is truncated we cannot prove the keep-set is complete.
@@ -55,16 +57,15 @@ export async function collectAllPersistedAssetUrls(
     return null
   }
 
-  const list = (scenesJson?.data?.scenes ?? scenesJson?.scenes ?? []) as Array<{
-    id?: unknown
-  }>
+  const list = scenesJson?.data?.scenes ?? scenesJson?.scenes
+  if (!Array.isArray(list)) return null
   // The API has no cursor/total. A full page means older scenes were dropped
   // by `limit` — treating it as complete would delete their Files.
   if (list.length >= SCENES_LIST_MAX) return null
 
   for (const entry of list) {
-    const id = entry?.id
-    if (typeof id !== 'string' || !id) continue
+    const id = (entry as { id?: unknown } | null)?.id
+    if (typeof id !== 'string' || !id) return null
     try {
       const res = await fetch(`/api/scenes/${encodeURIComponent(id)}`)
       if (!res.ok) return null
@@ -73,6 +74,7 @@ export async function collectAllPersistedAssetUrls(
         graph?: SceneGraphLike
       }
       const graph = body.data?.graph ?? body.data?.scene?.graph ?? body.graph ?? null
+      if (!graph || typeof graph !== 'object') return null
       for (const url of collectGraphAssetUrls(graph)) keep.add(url)
     } catch {
       return null
