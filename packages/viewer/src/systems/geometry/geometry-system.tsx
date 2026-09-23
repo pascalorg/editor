@@ -23,7 +23,9 @@ import {
   createSurfaceRoleMaterial,
   type RenderShading,
 } from '../../lib/materials'
+import { createNodeTopSurfaceHeightSampler } from '../../lib/node-top-surface-height'
 import { timeSpan } from '../../lib/perf-tracks'
+import { createSceneSupportHeightSampler } from '../../lib/scene-support-height'
 import useViewer from '../../store/use-viewer'
 
 /**
@@ -338,7 +340,32 @@ function buildGeometryContext(
     return levelId ? levelBaseElevationAt(nodes, levelId, x, z) : 0
   }
 
-  return { resolve, children, siblings, parent, levelBaseAt, levelData, materials }
+  const surfaceSamplers = new Map<AnyNodeId, ReturnType<typeof createNodeTopSurfaceHeightSampler>>()
+  const surfaceHeightAt = (hostId: AnyNodeId, x: number, z: number) => {
+    if (!levelId) return null
+    if (!surfaceSamplers.has(hostId)) {
+      surfaceSamplers.set(hostId, createNodeTopSurfaceHeightSampler(hostId, levelId as AnyNodeId))
+    }
+    return surfaceSamplers.get(hostId)?.(x, z) ?? null
+  }
+
+  let supportSampler: ReturnType<typeof createSceneSupportHeightSampler> | undefined
+  const supportHeightAt = (x: number, z: number) => {
+    if (!levelId) return levelBaseAt(x, z)
+    supportSampler ??= createSceneSupportHeightSampler(nodes, levelId as AnyNodeId)
+    return supportSampler(x, z)
+  }
+  return {
+    resolve,
+    children,
+    siblings,
+    parent,
+    levelBaseAt,
+    surfaceHeightAt,
+    supportHeightAt,
+    levelData,
+    materials,
+  }
 }
 
 function disposeChildren(group: Group) {

@@ -5,12 +5,16 @@ import {
   collectAlignmentAnchors,
   emitter,
   FenceNode,
+  GROUND_SUPPORT_ID,
   type GridEvent,
   getWallMiterBoundaryPoints,
   type LevelNode,
+  levelBaseElevationAt,
   type Point2D,
   resolveAlignment,
   sampleFenceSpline,
+  sceneRegistry,
+  spatialGridManager,
   useScene,
   type WallMiterData,
   type WallNode,
@@ -49,7 +53,12 @@ import {
   useSegmentDraftChain,
 } from '@pascal-app/editor'
 
-import { generateFenceGeometry, getSceneTheme, useViewer } from '@pascal-app/viewer'
+import {
+  createSceneSupportHeightSampler,
+  generateFenceGeometry,
+  getSceneTheme,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, type Camera, DoubleSide, type Group, type Mesh, Vector3 } from 'three'
@@ -68,14 +77,39 @@ const FENCE_PREVIEW_THICKNESS = 0.08
 const SURFACE_UP = new Vector3(0, 1, 0)
 const surfacePointScratch = new Vector3()
 
-// The walking surface the pointer actually aims at (deck top when over the
-// deck, floor/ground underneath it) — only for genuine 3D pointer events.
-// The 2D floor plan emits synthetic grid events with no camera ray behind
-// them; those keep the uncapped max election and leave the grid plane alone.
-function pointedSurfaceFor(camera: Camera, event: GridEvent) {
-  return event.nativeEvent?.target instanceof HTMLCanvasElement
-    ? resolvePointerSupportSurface(camera, event.position, { includeNodeTopSurfaces: true })
-    : null
+function pointedSurfaceFor(camera: Camera, event: GridEvent): PointerSupportSurface | null {
+  if (event.localRay) {
+    return resolvePointerSupportSurface(camera, event.position, { includeNodeTopSurfaces: true })
+  }
+
+  const levelId = useViewer.getState().selection.levelId
+  if (!levelId) return null
+  const [x, , z] = event.localPosition
+  const pointed = spatialGridManager.getPointedSupportSurface(levelId, [x, 10_000, z], [0, -1, 0])
+  const nodes = useScene.getState().nodes
+  const supportSlabId = pointed.slabId ?? GROUND_SUPPORT_ID
+  const elevation = pointed.slabId ? pointed.elevation : levelBaseElevationAt(nodes, levelId, x, z)
+  const levelMesh = sceneRegistry.nodes.get(levelId)
+  const world = levelMesh
+    ? levelMesh.localToWorld(new Vector3(x, elevation, z))
+    : new Vector3(
+        event.position[0],
+        event.position[1] + elevation - event.localPosition[1],
+        event.position[2],
+      )
+  const buildingId = useViewer.getState().selection.buildingId
+  const buildingMesh = buildingId ? sceneRegistry.nodes.get(buildingId) : null
+  const local = buildingMesh
+    ? buildingMesh.worldToLocal(world.clone())
+    : new Vector3(x, elevation, z)
+  return {
+    elevation,
+    supportSlabId,
+    sourceNodeId: null,
+    worldY: world.y,
+    worldPoint: [world.x, world.y, world.z],
+    localPoint: [local.x, local.y, local.z],
+  }
 }
 /** Figma-style alignment-snap threshold (meters), matching the move tools. */
 const ALIGNMENT_THRESHOLD_M = 0.08
@@ -872,6 +906,8 @@ function simplifyFreehandPath(
 
 const SplineFenceDraft: React.FC<{ freehand?: boolean }> = ({ freehand = false }) => {
   const fenceDefaults = useEditor((state) => state.toolDefaults.fence)
+  const sceneNodes = useScene((state) => state.nodes)
+  const levelId = useViewer((state) => state.selection.levelId)
   const previewHeight =
     typeof fenceDefaults?.height === 'number' ? fenceDefaults.height : FENCE_PREVIEW_HEIGHT
   const [draftPoints, setDraftPoints] = useState<FencePlanPoint[]>([])
@@ -883,9 +919,6 @@ const SplineFenceDraft: React.FC<{ freehand?: boolean }> = ({ freehand = false }
   const camera = useThree((state) => state.camera)
   const cameraRef = useRef(camera)
   cameraRef.current = camera
-  // Pointer cap for the commit (Enter / double-click carry no useful grid
-  // event of their own) — last resolved on move/click.
-  const supportSurfaceRef = useRef<PointerSupportSurface | null>(null)
   const draftRef = useRef(draftPoints)
   const freehandSamplesRef = useRef<FencePlanPoint[]>([])
   const isSketchingRef = useRef(false)
@@ -911,13 +944,7 @@ const SplineFenceDraft: React.FC<{ freehand?: boolean }> = ({ freehand = false }
 
     const commit = (points = draftRef.current) => {
       if (points.length >= 2) {
-        const created = createSplineFenceOnCurrentLevel(points, undefined, {
-          supportCap: supportSurfaceRef.current?.elevation ?? null,
-          preferredSupportSlabId: supportSurfaceRef.current?.supportSlabId ?? null,
-          constructionElevation: supportSurfaceRef.current?.sourceNodeId
-            ? supportSurfaceRef.current.elevation
-            : null,
-        })
+        const created = createSplineFenceOnCurrentLevel(points)
         if (created) {
           triggerSFX('sfx:item-place')
           // Once the new curve fence is selected for direct editing, leave
@@ -930,16 +957,14 @@ const SplineFenceDraft: React.FC<{ freehand?: boolean }> = ({ freehand = false }
       draftRef.current = []
       freehandSamplesRef.current = []
       isSketchingRef.current = false
-      supportSurfaceRef.current = null
       setDraftPoints([])
       setCursor(null)
     }
 
     const trackPointedSurface = (event: GridEvent) => {
       const pointed = pointedSurfaceFor(cameraRef.current, event)
-      if (!pointed) return null
-      if (draftRef.current.length === 0) supportSurfaceRef.current = pointed
-      const activeSurface = supportSurfaceRef.current ?? pointed
+      const activeSurface = pointed
+      if (!activeSurface) return null
       publishPlacementSurface(
         surfacePointScratch.set(event.position[0], activeSurface.worldY, event.position[2]),
         SURFACE_UP,
@@ -1070,9 +1095,32 @@ const SplineFenceDraft: React.FC<{ freehand?: boolean }> = ({ freehand = false }
       tangents: undefined,
     })
   }, [fenceDefaults, previewPoints])
+  const previewGroundAt = useMemo(() => {
+    if (!levelId || !previewNode) return null
+    const supportAt = createSceneSupportHeightSampler(sceneNodes, levelId)
+    const samples = new Map<string, number>()
+    return (x: number, z: number) => {
+      const key = `${x},${z}`
+      const cached = samples.get(key)
+      if (cached !== undefined) return cached
+      const height = supportAt(x, z)
+      samples.set(key, height)
+      return height
+    }
+  }, [levelId, previewNode, sceneNodes])
+  const previewStartGround = previewNode
+    ? (previewGroundAt?.(previewNode.start[0], previewNode.start[1]) ?? 0)
+    : 0
+  const previewLift = previewGroundAt ? previewStartGround : liftY
   const ghostGeometry = useMemo(
-    () => (previewNode ? generateFenceGeometry(previewNode) : null),
-    [previewNode],
+    () =>
+      previewNode
+        ? generateFenceGeometry(
+            previewNode,
+            previewGroundAt ? (x, z) => previewGroundAt(x, z) - previewStartGround : undefined,
+          )
+        : null,
+    [previewNode, previewGroundAt, previewStartGround],
   )
   useEffect(() => () => ghostGeometry?.dispose(), [ghostGeometry])
   useEffect(() => {
@@ -1083,9 +1131,18 @@ const SplineFenceDraft: React.FC<{ freehand?: boolean }> = ({ freehand = false }
     if (previewPoints.length < 2) return null
     const sampled = sampleFenceSpline(previewPoints, undefined, SPLINE_PREVIEW_SEGMENTS)
     return new BufferGeometry().setFromPoints(
-      sampled.map((point) => new Vector3(point.x, liftY + previewHeight, point.y)),
+      sampled.map(
+        (point) =>
+          new Vector3(
+            point.x,
+            previewLift +
+              previewHeight +
+              (previewGroundAt ? previewGroundAt(point.x, point.y) - previewStartGround : 0),
+            point.y,
+          ),
+      ),
     )
-  }, [liftY, previewHeight, previewPoints])
+  }, [previewLift, previewGroundAt, previewHeight, previewPoints, previewStartGround])
   useEffect(() => () => curveGeometry?.dispose(), [curveGeometry])
 
   return (
@@ -1094,19 +1151,35 @@ const SplineFenceDraft: React.FC<{ freehand?: boolean }> = ({ freehand = false }
         <mesh
           geometry={ghostGeometry}
           layers={EDITOR_LAYER}
-          position={[0, liftY + (previewNode?.supportOffset ?? 0), 0]}
+          position={[0, previewLift + (previewNode?.supportOffset ?? 0), 0]}
           raycast={() => {}}
           renderOrder={1}
         >
           <meshBasicMaterial color="#ffffff" depthWrite={false} opacity={0.45} transparent />
         </mesh>
       )}
-      {cursor && <CursorSphere height={previewHeight} position={[cursor[0], liftY, cursor[1]]} />}
+      {cursor && (
+        <CursorSphere
+          height={previewHeight}
+          position={[
+            cursor[0],
+            previewLift +
+              (previewGroundAt ? previewGroundAt(cursor[0], cursor[1]) - previewStartGround : 0),
+            cursor[1],
+          ]}
+        />
+      )}
       {draftPoints.map((point, index) => (
         <mesh
           key={`fence-spline-pt-${index}`}
           layers={EDITOR_LAYER}
-          position={[point[0], liftY + previewHeight, point[1]]}
+          position={[
+            point[0],
+            previewLift +
+              (previewGroundAt ? previewGroundAt(point[0], point[1]) - previewStartGround : 0) +
+              previewHeight,
+            point[1],
+          ]}
         >
           <sphereGeometry args={[0.07, 16, 12]} />
           <meshBasicMaterial color={SPLINE_PREVIEW_COLOR} depthTest={false} />

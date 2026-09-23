@@ -116,7 +116,30 @@ export function buildFenceGeometry(
   sceneTheme?: string,
 ): Group {
   const group = new Group()
-  const geometries = generateFenceSlotGeometries(node)
+  const startGround = ctx?.levelBaseAt?.(node.start[0], node.start[1]) ?? 0
+  const surfaceId = node.supportSurfaceNodeId as AnyNodeId | undefined
+  const surfaceAt = surfaceId
+    ? (x: number, z: number) => ctx?.surfaceHeightAt?.(surfaceId, x, z) ?? null
+    : undefined
+  const startSurface = surfaceAt?.(node.start[0], node.start[1]) ?? null
+  const startBase = startSurface ?? startGround
+  const followsTerrain = (node.path?.length ?? 0) >= 2 || Math.abs(node.curveOffset ?? 0) > 1e-4
+  const supportAt = followsTerrain && !node.supportSlabId ? ctx?.supportHeightAt : undefined
+  const sampledStart = supportAt?.(node.start[0], node.start[1]) ?? startBase
+  const sampledGround = new Map<string, number>()
+  const geometries = generateFenceSlotGeometries(
+    node,
+    supportAt
+      ? (x, z) => {
+          const key = `${x},${z}`
+          const cached = sampledGround.get(key)
+          if (cached !== undefined) return cached
+          const height = supportAt(x, z) - sampledStart
+          sampledGround.set(key, height)
+          return height
+        }
+      : undefined,
+  )
 
   // A hosted railing (`supportSlabId`) stands on its slab's walking surface;
   // an unhosted one stands on the ground, which `ctx.levelBaseAt` resolves at
@@ -126,7 +149,7 @@ export function buildFenceGeometry(
   // lives on an inner group rather than the registered (React-transformed)
   // root.
   const nodes = ctx ? (plateLevelContext(ctx.parent, ctx.resolve).nodes ?? {}) : {}
-  const lift = ctx
+  const baseLift = ctx
     ? resolveFenceLiftElevation(
         node,
         (id) => {
@@ -136,6 +159,11 @@ export function buildFenceGeometry(
         (ctx.levelBaseAt?.(node.start[0], node.start[1]) ?? 0) + floorConstructionLift(nodes, node),
       )
     : 0
+  const lift = supportAt
+    ? sampledStart + (node.supportOffset ?? 0)
+    : startSurface !== null && !node.supportSlabId
+      ? startSurface + (node.supportOffset ?? 0)
+      : baseLift
   const meshParent = new Group()
   meshParent.position.y = lift
   group.add(meshParent)
