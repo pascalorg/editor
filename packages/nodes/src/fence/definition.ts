@@ -3,6 +3,7 @@ import {
   type FenceNode as FenceNodeType,
   findLevelAncestorId,
   getFenceControlHandle,
+  getFenceSpanMode,
   type HandleDescriptor,
   isSplineFence,
   levelBaseElevationAt,
@@ -50,9 +51,17 @@ function fenceBaseElevation(
   if (!nodes) return resolveFenceLiftElevation(n, () => undefined)
   const levelId = findLevelAncestorId(n.id as AnyNodeId, nodes)
   if (levelId && ((n.path?.length ?? 0) >= 2 || Math.abs(n.curveOffset ?? 0) > 1e-4)) {
+    const selectedHost =
+      n.surfaceMode === 'selected'
+        ? ((n.supportSurfaceNodeId ?? n.supportSlabId) as AnyNodeId | undefined)
+        : undefined
+    const samplePoint = n.surfaceMode === 'level' ? n.start : point
     return (
-      createSceneSupportHeightSampler(nodes, levelId as AnyNodeId)(point[0], point[1]) +
-      (n.supportOffset ?? 0)
+      createSceneSupportHeightSampler(
+        nodes,
+        levelId as AnyNodeId,
+        selectedHost,
+      )(samplePoint[0], samplePoint[1]) + (n.supportOffset ?? 0)
     )
   }
   if (n.supportSurfaceNodeId && levelId) {
@@ -277,11 +286,20 @@ const fenceHandles = (
     return [
       elevationHandle,
       fenceHeightHandle(),
-      ...node.path.flatMap((_, index) => [
-        fenceControlPointPicker(index),
-        fenceTangentPicker(index, 'out'),
-        fenceTangentPicker(index, 'in'),
-      ]),
+      ...node.path.flatMap((_, index) => {
+        const path = node.path!
+        return [
+          fenceControlPointPicker(index),
+          ...(index < path.length - 1 &&
+          getFenceSpanMode(path, node.tangents, node.spanModes, index) === 'curve'
+            ? [fenceTangentPicker(index, 'out')]
+            : []),
+          ...(index > 0 &&
+          getFenceSpanMode(path, node.tangents, node.spanModes, index - 1) === 'curve'
+            ? [fenceTangentPicker(index, 'in')]
+            : []),
+        ]
+      }),
     ]
   }
 
@@ -328,6 +346,10 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
     baseHeight: 0.22,
     postSpacing: 1.98,
     picketSpacing: 0.27,
+    patternDistribution: 'automatic',
+    patternAlignment: 'center',
+    patternCount: 4,
+    patternRemainder: 'leave',
     picketWidth: 0.07,
     picketTop: 'flat',
     picketRailCount: 2,
@@ -342,6 +364,9 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
     slatGap: 0.01,
     postCap: 'pyramid',
     baseStyle: 'floating',
+    surfaceMode: 'auto',
+    transitionMode: 'slope',
+    transitionWidth: 0.8,
     showInfill: true,
     infillPlacement: 'center',
     color: '#ffffff',

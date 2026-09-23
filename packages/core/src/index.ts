@@ -402,8 +402,10 @@ export {
   getFenceCenterlineLength,
   sampleFenceCenterline,
 } from './systems/fence/fence-centerline'
+export type { FenceSpanMode } from './systems/fence/fence-spline'
 export {
   getFenceControlHandle,
+  getFenceSpanMode,
   getFenceSplineFrameAt,
   getFenceSplineLength,
   getTwoPointFenceCurveTangents,

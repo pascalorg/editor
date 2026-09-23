@@ -1,18 +1,116 @@
 'use client'
 
 import {
+  type AnyNodeId,
   type FenceNode,
+  findLevelAncestorId,
   getClampedWallCurveOffset,
   getFenceCenterlineLength,
   getFenceControlHandle,
+  getFenceSpanMode,
   getMaxWallCurveOffset,
+  getTwoPointFenceCurveTangents,
   getWallArcData,
   getWallCurveFrameAt,
   getWallCurveLength,
+  nodeRegistry,
   normalizeWallCurveOffset,
   sampleFenceSpline,
+  useScene,
 } from '@pascal-app/core'
 import { SliderControl } from '@pascal-app/editor'
+
+export function FencePatternInfo({ node }: { node: FenceNode }) {
+  const subject =
+    node.style === 'picket'
+      ? 'pickets in each bay between posts'
+      : node.style === 'horizontal'
+        ? 'posts along the full fence'
+        : 'infill pieces between the two end posts'
+  return (
+    <p className="text-xs text-muted-foreground">
+      Distribution controls {subject}. Spacing is measured between centers. The available width
+      limits the count so pieces do not overlap.
+    </p>
+  )
+}
+
+export function FenceSurfaceEditor({
+  node,
+  onUpdate,
+}: {
+  node: FenceNode
+  onUpdate: (patch: Partial<FenceNode>) => void
+}) {
+  const nodes = useScene((state) => state.nodes)
+  const levelId = findLevelAncestorId(node.id as AnyNodeId, nodes)
+  const hosts = Object.values(nodes).filter(
+    (candidate) =>
+      candidate.id !== node.id &&
+      candidate.visible !== false &&
+      (candidate.type === 'slab' ||
+        !!nodeRegistry.get(candidate.type)?.capabilities.surfaces?.top) &&
+      findLevelAncestorId(candidate.id as AnyNodeId, nodes) === levelId,
+  )
+  const selectedId = node.supportSurfaceNodeId ?? node.supportSlabId ?? ''
+
+  return (
+    <div className="space-y-2 text-xs">
+      <label className="flex items-center justify-between gap-2">
+        Surface behavior
+        <select
+          className="rounded border bg-background p-1"
+          value={node.surfaceMode}
+          onChange={(event) => {
+            const mode = event.target.value as FenceNode['surfaceMode']
+            if (mode === 'selected' && !selectedId && hosts[0]) {
+              const host = hosts[0]
+              onUpdate({
+                surfaceMode: mode,
+                supportSlabId: host.type === 'slab' ? host.id : undefined,
+                supportSurfaceNodeId: host.type === 'slab' ? undefined : host.id,
+              })
+            } else {
+              onUpdate({ surfaceMode: mode })
+            }
+          }}
+        >
+          <option value="auto">Follow highest surface</option>
+          <option disabled={hosts.length === 0} value="selected">
+            Follow selected surface
+          </option>
+          <option value="level">Hold starting height</option>
+        </select>
+      </label>
+      {node.surfaceMode === 'selected' && (
+        <label className="flex items-center justify-between gap-2">
+          Surface
+          <select
+            className="min-w-0 max-w-40 rounded border bg-background p-1"
+            value={selectedId}
+            onChange={(event) => {
+              const host = nodes[event.target.value as AnyNodeId]
+              onUpdate({
+                supportSlabId: host?.type === 'slab' ? host.id : undefined,
+                supportSurfaceNodeId: host && host.type !== 'slab' ? host.id : undefined,
+              })
+            }}
+          >
+            <option value="">Choose a surface</option>
+            {hosts.map((host) => (
+              <option key={host.id} value={host.id}>
+                {host.name || host.type} ({host.type})
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {node.surfaceMode === 'selected' && !selectedId && (
+        <p className="text-muted-foreground">Choose a slab or shaped surface on this level.</p>
+      )}
+    </div>
+  )
+}
 
 /**
  * Custom inspector editors for fence fields that don't map to a single
@@ -102,6 +200,9 @@ export function FenceCurveEditor({
           )
           onUpdate({
             path: frames.map((frame) => [frame.point.x, frame.point.y]),
+            spanModes: Array.from({ length: spans }, () =>
+              arc ? ('curve' as const) : ('straight' as const),
+            ),
             tangents: frames.map((frame) => [
               frame.tangent.x * handleLength,
               frame.tangent.y * handleLength,
@@ -110,7 +211,7 @@ export function FenceCurveEditor({
           })
         }}
       >
-        Edit as free curve
+        Edit path
       </button>
     </div>
   )
@@ -125,9 +226,18 @@ export function FencePathEditor({
 }) {
   const path = node.path ?? []
   const tangents = path.map((_, i) => node.tangents?.[i] ?? null)
-  const update = (points: [number, number][], handles = tangents) => {
+  const spanModes = path
+    .slice(1)
+    .map((_, i) => getFenceSpanMode(path, node.tangents, node.spanModes, i))
+  const update = (points: [number, number][], handles = tangents, modes = spanModes) => {
     if (points.length < 2) return
-    onUpdate({ path: points, tangents: handles, start: points[0]!, end: points.at(-1)! })
+    onUpdate({
+      path: points,
+      tangents: handles,
+      spanModes: modes,
+      start: points[0]!,
+      end: points.at(-1)!,
+    })
   }
   return (
     <div className="space-y-2 text-xs">
@@ -135,7 +245,7 @@ export function FencePathEditor({
         {path.length} points · {getFenceCenterlineLength(node).toFixed(2)} m
       </p>
       <p className="text-muted-foreground">
-        Drag the point handles in either view, or edit coordinates below.
+        Set each span to straight or curved, then drag its points and curve handles in either view.
       </p>
       {path.map((point, index) => (
         <details key={`curve-editor-${index}`} className="rounded border p-2">
@@ -163,21 +273,46 @@ export function FencePathEditor({
               </label>
             ))}
           </div>
-          <label className="mt-2 flex items-center justify-between">
-            Join
-            <select
-              className="rounded border bg-background p-1"
-              value={tangents[index]?.[0] === 0 && tangents[index]?.[1] === 0 ? 'corner' : 'smooth'}
-              onChange={(event) => {
-                const handles = [...tangents]
-                handles[index] = event.target.value === 'corner' ? [0, 0] : null
-                update(path, handles)
-              }}
-            >
-              <option value="smooth">Smooth</option>
-              <option value="corner">Corner</option>
-            </select>
-          </label>
+          {index < path.length - 1 && (
+            <label className="mt-2 flex items-center justify-between">
+              Span to point {index + 2}
+              <select
+                className="rounded border bg-background p-1"
+                value={spanModes[index]}
+                onChange={(event) => {
+                  const modes = [...spanModes]
+                  modes[index] = event.target.value as 'straight' | 'curve'
+                  const handles =
+                    path.length === 2 && modes[index] === 'curve' && spanModes[index] === 'straight'
+                      ? (getTwoPointFenceCurveTangents(path) ?? tangents)
+                      : tangents
+                  update(path, handles, modes)
+                }}
+              >
+                <option value="straight">Straight</option>
+                <option value="curve">Curved</option>
+              </select>
+            </label>
+          )}
+          {(spanModes[index - 1] === 'curve' || spanModes[index] === 'curve') && (
+            <label className="mt-2 flex items-center justify-between">
+              Join
+              <select
+                className="rounded border bg-background p-1"
+                value={
+                  tangents[index]?.[0] === 0 && tangents[index]?.[1] === 0 ? 'corner' : 'smooth'
+                }
+                onChange={(event) => {
+                  const handles = [...tangents]
+                  handles[index] = event.target.value === 'corner' ? [0, 0] : null
+                  update(path, handles)
+                }}
+              >
+                <option value="smooth">Smooth</option>
+                <option value="corner">Corner</option>
+              </select>
+            </label>
+          )}
           <div className="mt-2 flex gap-2">
             {index < path.length - 1 && (
               <button
@@ -193,28 +328,62 @@ export function FencePathEditor({
                       [b.x, b.y],
                     ],
                     2,
+                    [spanModes[index]!],
                   )
                   const midpoint = samples[1]!
                   const points = [...path]
                   points.splice(index + 1, 0, [midpoint.x, midpoint.y])
                   const handles = [...tangents]
                   handles.splice(index + 1, 0, null)
-                  update(points, handles)
+                  const modes = [...spanModes]
+                  modes.splice(index, 1, spanModes[index]!, spanModes[index]!)
+                  update(points, handles, modes)
                 }}
               >
                 Add point after
+              </button>
+            )}
+            {index === path.length - 1 && (
+              <button
+                type="button"
+                className="rounded border px-2 py-1"
+                onClick={() => {
+                  const previous = path[index - 1]!
+                  update(
+                    [
+                      ...path,
+                      [point[0] + point[0] - previous[0], point[1] + point[1] - previous[1]],
+                    ],
+                    [...tangents, null],
+                    [...spanModes, 'straight'],
+                  )
+                }}
+              >
+                Extend path
               </button>
             )}
             <button
               type="button"
               className="rounded border px-2 py-1 disabled:opacity-40"
               disabled={path.length <= 2}
-              onClick={() =>
+              onClick={() => {
+                const modes = [...spanModes]
+                if (index === 0) modes.shift()
+                else if (index === path.length - 1) modes.pop()
+                else
+                  modes.splice(
+                    index - 1,
+                    2,
+                    spanModes[index - 1] === 'straight' && spanModes[index] === 'straight'
+                      ? 'straight'
+                      : 'curve',
+                  )
                 update(
                   path.filter((_, i) => i !== index),
                   tangents.filter((_, i) => i !== index),
+                  modes,
                 )
-              }
+              }}
             >
               Remove point
             </button>

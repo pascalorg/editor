@@ -234,6 +234,7 @@ export { ElevatorInteractionSystem } from './systems/elevator/elevator-interacti
 // registry-driven fence definition's `def.system`. Removed in Phase 6
 // alongside the legacy fence mount point.
 export {
+  createFenceRailHeightSampler,
   FenceSystem,
   generateFenceGeometry,
   generateFenceSlotGeometries,

@@ -19,6 +19,9 @@ type FencePart = {
   // used for peaked post caps. Defaults to a box.
   shape?: 'box' | 'pyramid' | 'picket'
   picketTop?: FenceNode['picketTop']
+  startT?: number
+  endT?: number
+  heightOverride?: number
 }
 
 const MIN_CURVE_SEGMENT_LENGTH = 0.18
@@ -220,6 +223,8 @@ function createFenceCurveBlockPart(
     geometry,
     position: [0, 0, 0],
     scale: [1, 1, 1],
+    startT,
+    endT,
   }
 }
 
@@ -309,6 +314,52 @@ function getStyleDefaults(style: FenceNode['style']) {
   }
 
   return { spacingFactor: 0.3, postFactor: 0.55, baseFactor: 1, topFactor: 0.75 }
+}
+
+function distributePattern(
+  fence: FenceNode,
+  start: number,
+  end: number,
+  targetSpacing: number,
+  minimumSpacing: number,
+  minimumCount = 1,
+): number[] {
+  const length = Math.max(0, end - start)
+  if (length < 1e-5) return minimumCount > 1 ? [start, end] : [(start + end) / 2]
+  const target = Math.max(targetSpacing, minimumSpacing)
+  const maxCount = Math.max(minimumCount, Math.floor(length / minimumSpacing) + 1)
+  const mode = fence.patternDistribution
+  let count: number
+  if (mode === 'fixed-count') {
+    count = THREE.MathUtils.clamp(Math.round(fence.patternCount), minimumCount, maxCount)
+  } else if (mode === 'maximum-spacing') {
+    count = THREE.MathUtils.clamp(Math.ceil(length / target) + 1, minimumCount, maxCount)
+  } else if (mode === 'equal-fit') {
+    count = THREE.MathUtils.clamp(Math.round(length / target) + 1, minimumCount, maxCount)
+  } else {
+    count = THREE.MathUtils.clamp(Math.floor(length / target) + 1, minimumCount, maxCount)
+  }
+  if (count === 1) {
+    return [
+      mode === 'fixed-spacing' && fence.patternAlignment === 'start'
+        ? start
+        : mode === 'fixed-spacing' && fence.patternAlignment === 'end'
+          ? end
+          : (start + end) / 2,
+    ]
+  }
+  const fixed = mode === 'fixed-spacing' && fence.patternRemainder === 'leave'
+  const spacing = fixed ? target : length / (count - 1)
+  const extra = Math.max(0, length - spacing * (count - 1))
+  const origin = fixed
+    ? start +
+      (fence.patternAlignment === 'end'
+        ? extra
+        : fence.patternAlignment === 'center'
+          ? extra / 2
+          : 0)
+    : start
+  return Array.from({ length: count }, (_, index) => origin + index * spacing)
 }
 
 // Paint slots map 1:1 to the fence panel's build options (Structure + the
@@ -428,11 +479,25 @@ function createHorizontalFenceParts(fence: FenceNode): FenceSlotParts {
   // Posts at every `postSpacing`, anchored at both ends, each with a flat cap.
   const spacing = Math.max(fence.postSpacing, postWidth * 1.4)
   const postCount = Math.max(2, Math.floor(length / spacing) + 1)
+  const postDistances =
+    fence.patternDistribution === 'automatic'
+      ? Array.from({ length: postCount }, (_, index) => (length * index) / (postCount - 1))
+      : distributePattern(fence, 0, length, spacing, postWidth * 1.4, 2)
+  const anchoredPostDistances =
+    fence.patternDistribution === 'fixed-spacing'
+      ? [
+          0,
+          ...postDistances.filter(
+            (distance) => distance > postWidth * 1.4 && length - distance > postWidth * 1.4,
+          ),
+          length,
+        ]
+      : postDistances
   const postHeight = baseHeight + verticalHeight + topRailHeight + clearance
   const capHeight = Math.max(postWidth * 0.32, 0.03)
   const cap = fence.postCap ?? 'pyramid'
-  for (let index = 0; index < postCount; index += 1) {
-    const t = postCount === 1 ? 0.5 : index / (postCount - 1)
+  for (const distance of anchoredPostDistances) {
+    const t = distance / length
     const frame = getFencePointAt(fence, t)
     posts.push({
       position: [frame.point.x, postHeight / 2, frame.point.y],
@@ -474,7 +539,11 @@ function createFenceParts(fence: FenceNode): FenceSlotParts {
   const topRailHeight = Math.max(fence.topRailHeight * styleDefaults.topFactor, 0.01)
   const verticalHeight = Math.max(fence.height - baseHeight - topRailHeight, 0.08)
   const postWidth = Math.max(fence.postSize * styleDefaults.postFactor, 0.01)
-  const spacing = Math.max(fence.postSpacing * styleDefaults.spacingFactor, postWidth * 1.2)
+  const spacing = Math.max(
+    fence.postSpacing *
+      (fence.patternDistribution === 'automatic' ? styleDefaults.spacingFactor : 1),
+    postWidth * 1.2,
+  )
   const edgeInset = Math.max(fence.edgeInset ?? 0.015, 0.005)
   const isFloating = fence.baseStyle === 'floating'
   const showInfill = fence.showInfill ?? true
@@ -508,11 +577,27 @@ function createFenceParts(fence: FenceNode): FenceSlotParts {
   }
 
   const count = showInfill ? Math.max(2, Math.floor((length - edgeInset * 2) / spacing) + 1) : 2
+  const interiorStart = edgeInset + postWidth * 1.5
+  const interiorEnd = length - edgeInset - postWidth * 1.5
+  const positions =
+    !showInfill || fence.patternDistribution === 'automatic'
+      ? Array.from({ length: count }, (_, index) =>
+          count === 1 ? 0.5 : startInsetT + (endInsetT - startInsetT) * (index / (count - 1)),
+        )
+      : [
+          startInsetT,
+          ...(interiorEnd >= interiorStart
+            ? distributePattern(fence, interiorStart, interiorEnd, spacing, postWidth * 1.2).map(
+                (distance) => distance / length,
+              )
+            : []),
+          endInsetT,
+        ]
   const verticalY = baseY + effectiveBaseHeight + verticalHeight / 2
 
-  for (let index = 0; index < count; index += 1) {
-    const t = count === 1 ? 0.5 : startInsetT + (endInsetT - startInsetT) * (index / (count - 1))
-    const isEdgePost = index === 0 || index === count - 1
+  for (let index = 0; index < positions.length; index += 1) {
+    const t = positions[index]!
+    const isEdgePost = index === 0 || index === positions.length - 1
     const fullHeightPost = !showInfill || (isFloating && isEdgePost)
     const postHeight = fullHeightPost
       ? effectiveBaseHeight + verticalHeight + topRailHeight + clearance
@@ -658,14 +743,29 @@ function createPicketFenceParts(fence: FenceNode): FenceSlotParts {
   const bayLength = length / postCount
   const usableLength = bayLength - 2 * endInset - picketWidth
   if (fence.showInfill && usableLength >= 0) {
-    const picketCount = Math.max(1, Math.floor(usableLength / spacing) + 1)
-    const occupiedLength = (picketCount - 1) * spacing
     const faceOffset = getInfillOffset(fence, railDepth, picketDepth)
     for (let bay = 0; bay < postCount; bay += 1) {
-      for (let index = 0; index < picketCount; index += 1) {
-        const distance = bay * bayLength + (bayLength - occupiedLength) / 2 + index * spacing
+      const distances =
+        fence.patternDistribution === 'automatic'
+          ? (() => {
+              const count = Math.max(1, Math.floor(usableLength / spacing) + 1)
+              const occupied = (count - 1) * spacing
+              return Array.from(
+                { length: count },
+                (_, index) => bay * bayLength + (bayLength - occupied) / 2 + index * spacing,
+              )
+            })()
+          : distributePattern(
+              fence,
+              bay * bayLength + endInset + picketWidth / 2,
+              (bay + 1) * bayLength - endInset - picketWidth / 2,
+              fence.picketSpacing,
+              picketWidth + curveClearance + 0.01,
+            )
+      for (let index = 0; index < distances.length; index += 1) {
+        const distance = distances[index]!
         const frame = getFenceCenterlineFrameAt(fence, distance / length)
-        const u = picketCount === 1 ? 0.5 : index / (picketCount - 1)
+        const u = distances.length === 1 ? 0.5 : index / (distances.length - 1)
         const arch = Math.sin(Math.PI * u)
         const reduction =
           fence.picketProfile === 'arched'
@@ -693,6 +793,152 @@ function createPicketFenceParts(fence: FenceNode): FenceSlotParts {
   return { posts, infill, base, rail }
 }
 
+type HeightTransition = {
+  t: number
+  before: number
+  after: number
+}
+
+function fenceHeightTransitions(fence: FenceNode, heightAt: (x: number, z: number) => number) {
+  const length = getFenceCenterlineLength(fence)
+  const count = Math.max(2, Math.ceil(length / 0.06))
+  const transitions: HeightTransition[] = []
+  let previous = getFencePointAt(fence, 0).point
+  let previousHeight = heightAt(previous.x, previous.y)
+  for (let index = 1; index <= count; index += 1) {
+    const point = getFencePointAt(fence, index / count).point
+    const height = heightAt(point.x, point.y)
+    if (Math.abs(height - previousHeight) >= 0.12) {
+      const t = (index - 0.5) / count
+      const last = transitions.at(-1)
+      if (last && (t - last.t) * length < 0.18) {
+        last.after = height
+      } else {
+        transitions.push({ t, before: previousHeight, after: height })
+      }
+    }
+    previous = point
+    previousHeight = height
+  }
+  return transitions
+}
+
+function createFencePathProgress(fence: FenceNode) {
+  const length = getFenceCenterlineLength(fence)
+  const count = Math.max(2, Math.ceil(length / 0.15))
+  const points = Array.from(
+    { length: count + 1 },
+    (_, index) => getFencePointAt(fence, index / count).point,
+  )
+  return (x: number, z: number) => {
+    let bestT = 0
+    let bestDistance = Number.POSITIVE_INFINITY
+    for (let index = 1; index <= count; index += 1) {
+      const previous = points[index - 1]!
+      const next = points[index]!
+      const dx = next.x - previous.x
+      const dz = next.y - previous.y
+      const squared = dx * dx + dz * dz
+      const fraction =
+        squared > 1e-8
+          ? THREE.MathUtils.clamp(((x - previous.x) * dx + (z - previous.y) * dz) / squared, 0, 1)
+          : 0
+      const px = previous.x + dx * fraction
+      const pz = previous.y + dz * fraction
+      const distance = (x - px) ** 2 + (z - pz) ** 2
+      if (distance < bestDistance) {
+        bestDistance = distance
+        bestT = (index - 1 + fraction) / count
+      }
+    }
+    return bestT
+  }
+}
+
+function transitionRailHeight(
+  fence: FenceNode,
+  rawHeight: (x: number, z: number) => number,
+  transitions: HeightTransition[],
+) {
+  const length = getFenceCenterlineLength(fence)
+  const halfSpan = Math.max(0.1, fence.transitionWidth / 2) / Math.max(length, 0.01)
+  const progress = createFencePathProgress(fence)
+  const ramps = transitions.map((transition) => {
+    const left = Math.max(0, transition.t - halfSpan)
+    const right = Math.min(1, transition.t + halfSpan)
+    const beforePoint = getFencePointAt(fence, left).point
+    const afterPoint = getFencePointAt(fence, right).point
+    return {
+      left,
+      right,
+      before: rawHeight(beforePoint.x, beforePoint.y),
+      after: rawHeight(afterPoint.x, afterPoint.y),
+    }
+  })
+  return (x: number, z: number) => {
+    const t = progress(x, z)
+    for (const ramp of ramps) {
+      if (t < ramp.left || t > ramp.right) continue
+      return THREE.MathUtils.lerp(
+        ramp.before,
+        ramp.after,
+        (t - ramp.left) / Math.max(ramp.right - ramp.left, 1e-6),
+      )
+    }
+    return rawHeight(x, z)
+  }
+}
+
+export function createFenceRailHeightSampler(
+  fence: FenceNode,
+  heightAt: (x: number, z: number) => number,
+) {
+  if (fence.surfaceMode === 'level' || fence.transitionMode !== 'slope') return heightAt
+  const transitions = fenceHeightTransitions(fence, heightAt)
+  return transitions.length > 0 ? transitionRailHeight(fence, heightAt, transitions) : heightAt
+}
+
+function addTransitionPosts(
+  fence: FenceNode,
+  parts: FenceSlotParts,
+  transitions: HeightTransition[],
+) {
+  const length = getFenceCenterlineLength(fence)
+  const width = Math.max(fence.postSize, fence.transitionMode === 'step' ? 0.22 : 0.07)
+  const depth = Math.max(fence.thickness, width)
+  for (const transition of transitions) {
+    if (fence.transitionMode === 'break') {
+      const offset = Math.min(0.08 / Math.max(length, 0.01), 0.2)
+      for (const t of [Math.max(0, transition.t - offset), Math.min(1, transition.t + offset)]) {
+        const frame = getFencePointAt(fence, t)
+        parts.posts.push({
+          position: [frame.point.x, fence.height / 2, frame.point.y],
+          rotationY: -frame.tangentAngle,
+          scale: [width, fence.height, depth],
+        })
+      }
+    } else {
+      const frame = getFencePointAt(fence, transition.t)
+      const rise = Math.abs(transition.after - transition.before)
+      parts.posts.push({
+        position: [frame.point.x, (fence.height + rise) / 2, frame.point.y],
+        rotationY: -frame.tangentAngle,
+        scale: [width, fence.height + rise, depth],
+        heightOverride: Math.min(transition.before, transition.after),
+      })
+    }
+  }
+}
+
+function omitCrossingParts(parts: FencePart[], transitions: HeightTransition[]) {
+  return parts.filter(
+    (part) =>
+      part.startT === undefined ||
+      part.endT === undefined ||
+      !transitions.some((transition) => transition.t > part.startT! && transition.t < part.endT!),
+  )
+}
+
 function mergeFenceParts(
   parts: FencePart[],
   heightAt?: (x: number, z: number) => number,
@@ -709,7 +955,12 @@ function mergeFenceParts(
         for (let index = 0; index < positions.count; index += 1) {
           const x = positions.getX(index)
           const z = positions.getZ(index)
-          const lift = part.geometry ? heightAt(x, z) : heightAt(part.position[0], part.position[2])
+          const lift =
+            part.heightOverride !== undefined
+              ? part.heightOverride
+              : part.geometry
+                ? heightAt(x, z)
+                : heightAt(part.position[0], part.position[2])
           positions.setY(index, positions.getY(index) + lift)
         }
         positions.needsUpdate = true
@@ -744,11 +995,23 @@ export function generateFenceSlotGeometries(
   heightAt?: (x: number, z: number) => number,
 ): Record<FenceSlotId, THREE.BufferGeometry> {
   const parts = createFenceParts(fence)
+  const transitions =
+    heightAt && fence.surfaceMode !== 'level' ? fenceHeightTransitions(fence, heightAt) : []
+  if (heightAt && transitions.length > 0 && fence.transitionMode !== 'slope') {
+    addTransitionPosts(fence, parts, transitions)
+    parts.rail = omitCrossingParts(parts.rail, transitions)
+    parts.base = omitCrossingParts(parts.base, transitions)
+    if (fence.style === 'horizontal') parts.infill = omitCrossingParts(parts.infill, transitions)
+  }
+  const railHeightAt =
+    heightAt && transitions.length > 0 && fence.transitionMode === 'slope'
+      ? transitionRailHeight(fence, heightAt, transitions)
+      : heightAt
   return {
     posts: mergeFenceParts(parts.posts, heightAt),
-    infill: mergeFenceParts(parts.infill, heightAt),
-    base: mergeFenceParts(parts.base, heightAt),
-    rail: mergeFenceParts(parts.rail, heightAt),
+    infill: mergeFenceParts(parts.infill, fence.style === 'horizontal' ? railHeightAt : heightAt),
+    base: mergeFenceParts(parts.base, railHeightAt),
+    rail: mergeFenceParts(parts.rail, railHeightAt),
   }
 }
 
@@ -756,8 +1019,11 @@ export function generateFenceGeometry(
   fence: FenceNode,
   heightAt?: (x: number, z: number) => number,
 ) {
-  const { posts, infill, base, rail } = createFenceParts(fence)
-  return mergeFenceParts([...posts, ...infill, ...base, ...rail], heightAt)
+  const slots = generateFenceSlotGeometries(fence, heightAt)
+  const geometries = Object.values(slots).filter((geometry) => geometry.getAttribute('position'))
+  const merged = mergeGeometries(geometries, false) ?? new THREE.BufferGeometry()
+  for (const geometry of Object.values(slots)) geometry.dispose()
+  return merged
 }
 
 function updateFenceGeometry(fenceId: FenceNode['id']) {

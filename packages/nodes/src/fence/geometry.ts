@@ -117,7 +117,16 @@ export function buildFenceGeometry(
   const startSurface = surfaceAt?.(node.start[0], node.start[1]) ?? null
   const startBase = startSurface ?? startGround
   const followsTerrain = (node.path?.length ?? 0) >= 2 || Math.abs(node.curveOffset ?? 0) > 1e-4
-  const supportAt = followsTerrain ? ctx?.supportHeightAt : undefined
+  const chosenHost =
+    node.surfaceMode === 'selected'
+      ? ((node.supportSurfaceNodeId ?? node.supportSlabId) as AnyNodeId | undefined)
+      : undefined
+  const sampledSupport = followsTerrain
+    ? (x: number, z: number) => ctx?.supportHeightAt?.(x, z, chosenHost) ?? startBase
+    : undefined
+  const levelHeight =
+    node.surfaceMode === 'level' ? sampledSupport?.(node.start[0], node.start[1]) : undefined
+  const supportAt = levelHeight !== undefined ? () => levelHeight : sampledSupport
   const sampledStart = supportAt?.(node.start[0], node.start[1]) ?? startBase
   const sampledGround = new Map<string, number>()
   const geometries = generateFenceSlotGeometries(

@@ -12,11 +12,13 @@ import { createNodeTopSurfaceHeightSampler } from './node-top-surface-height'
 export function createSceneSupportHeightSampler(
   nodes: Readonly<Record<AnyNodeId, AnyNode>>,
   levelId: AnyNodeId,
+  selectedHostId?: AnyNodeId,
 ): (x: number, z: number) => number {
   const slabs = Object.values(nodes).filter(
     (node) =>
       node.type === 'slab' &&
       node.visible !== false &&
+      (!selectedHostId || node.id === selectedHostId) &&
       findLevelAncestorId(node.id as AnyNodeId, nodes) === levelId,
   )
   const shaped = Object.values(nodes)
@@ -25,6 +27,7 @@ export function createSceneSupportHeightSampler(
         node.type !== 'slab' &&
         node.type !== 'fence' &&
         node.visible !== false &&
+        (!selectedHostId || node.id === selectedHostId) &&
         findLevelAncestorId(node.id as AnyNodeId, nodes) === levelId &&
         !!nodeRegistry.get(node.type)?.capabilities.surfaces?.top,
     )

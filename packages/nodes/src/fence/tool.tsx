@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  type AnyNodeId,
   calculateLevelMiters,
   collectAlignmentAnchors,
   emitter,
@@ -54,6 +55,7 @@ import {
 } from '@pascal-app/editor'
 
 import {
+  createFenceRailHeightSampler,
   createSceneSupportHeightSampler,
   generateFenceGeometry,
   getSceneTheme,
@@ -1097,13 +1099,18 @@ const SplineFenceDraft: React.FC<{ freehand?: boolean }> = ({ freehand = false }
   }, [fenceDefaults, previewPoints])
   const previewGroundAt = useMemo(() => {
     if (!levelId || !previewNode) return null
-    const supportAt = createSceneSupportHeightSampler(sceneNodes, levelId)
+    const selectedHost =
+      previewNode.surfaceMode === 'selected'
+        ? ((previewNode.supportSurfaceNodeId ?? previewNode.supportSlabId) as AnyNodeId | undefined)
+        : undefined
+    const sampledSupport = createSceneSupportHeightSampler(sceneNodes, levelId, selectedHost)
+    const startHeight = sampledSupport(previewNode.start[0], previewNode.start[1])
     const samples = new Map<string, number>()
     return (x: number, z: number) => {
       const key = `${x},${z}`
       const cached = samples.get(key)
       if (cached !== undefined) return cached
-      const height = supportAt(x, z)
+      const height = previewNode.surfaceMode === 'level' ? startHeight : sampledSupport(x, z)
       samples.set(key, height)
       return height
     }
@@ -1128,21 +1135,25 @@ const SplineFenceDraft: React.FC<{ freehand?: boolean }> = ({ freehand = false }
   }, [previewNode])
   useEffect(() => () => usePlacementPreview.getState().clear(), [])
   const curveGeometry = useMemo(() => {
-    if (previewPoints.length < 2) return null
+    if (previewPoints.length < 2 || previewNode?.transitionMode !== 'slope') return null
     const sampled = sampleFenceSpline(previewPoints, undefined, SPLINE_PREVIEW_SEGMENTS)
+    const railHeightAt = previewGroundAt
+      ? createFenceRailHeightSampler(
+          previewNode,
+          (x, z) => previewGroundAt(x, z) - previewStartGround,
+        )
+      : null
     return new BufferGeometry().setFromPoints(
       sampled.map(
         (point) =>
           new Vector3(
             point.x,
-            previewLift +
-              previewHeight +
-              (previewGroundAt ? previewGroundAt(point.x, point.y) - previewStartGround : 0),
+            previewLift + previewHeight + (railHeightAt?.(point.x, point.y) ?? 0),
             point.y,
           ),
       ),
     )
-  }, [previewLift, previewGroundAt, previewHeight, previewPoints, previewStartGround])
+  }, [previewLift, previewGroundAt, previewHeight, previewNode, previewPoints, previewStartGround])
   useEffect(() => () => curveGeometry?.dispose(), [curveGeometry])
 
   return (
