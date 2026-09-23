@@ -170,6 +170,7 @@ export {
 export { EyebrowVentMaterialRole, EyebrowVentNode } from './nodes/eyebrow-vent'
 export { FenceBaseStyle, FenceGuardInfill, FenceNode, FenceStyle } from './nodes/fence'
 export { FloorOpeningNode } from './nodes/floor-opening'
+export { type FenceFeatureNode, FenceGateNode, FenceOpeningNode } from './nodes/fence-feature'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
 export {
   computeGutterEaveY,

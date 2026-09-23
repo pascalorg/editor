@@ -12,6 +12,7 @@ import {
 } from '@pascal-app/core'
 import {
   clearStructuralElevationGuide,
+  PANEL_MODEL_EXTENSION,
   publishStructuralElevationGuide,
   resolveStructuralElevationSnap,
 } from '@pascal-app/editor'
@@ -31,6 +32,7 @@ import { fenceFloorplanMoveTarget } from './floorplan-move'
 import { buildFenceGeometry } from './geometry'
 import { resolveFenceLiftElevation, resolveFenceLiftElevationForNodes } from './lift'
 import { fencePaint } from './paint'
+import { fencePanelModel } from './panel-model'
 import { fenceParametrics } from './parametrics'
 import { FenceNode } from './schema'
 import { fenceSlots } from './slots'
@@ -42,7 +44,7 @@ const SIDE_HANDLE_MIN_HEIGHT = 0.4
 const HEIGHT_HANDLE_OFFSET = 0.45
 const MIN_FENCE_HEIGHT = 0.3
 
-function fenceBaseElevation(
+export function fenceBaseElevation(
   n: FenceNodeType,
   sceneApi?: SceneApi,
   point: readonly [number, number] = n.start,
@@ -329,8 +331,9 @@ const fenceHandles = (
 export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
   kind: 'fence',
   snapProfile: 'structural',
-  schemaVersion: 2,
+  schemaVersion: 3,
   schema: FenceNode,
+  extensions: { [PANEL_MODEL_EXTENSION]: fencePanelModel },
   category: 'structure',
   surfaceRole: 'wall',
 
@@ -371,6 +374,7 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
     infillPlacement: 'center',
     color: '#ffffff',
     style: 'picket',
+    children: [],
   }),
 
   capabilities: {
@@ -389,7 +393,7 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
 
   relations: {
     linkedBy: 'endpoint-match',
-    cascadeDelete: 'none',
+    cascadeDelete: 'descendants',
   },
 
   parametrics: fenceParametrics,
@@ -405,6 +409,8 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
   // Stage B: pure geometry function. Generic <GeometrySystem> rebuilds
   // on dirtyNodes; <ParametricNodeRenderer> mounts the empty group.
   geometry: buildFenceGeometry,
+  geometryChildTypes: ['fence-gate', 'fence-opening'],
+  floorplanDependencies: (node) => (node.children ?? []) as AnyNodeId[],
   // Dependency tracker only — a hosted railing (`supportSlabId`) renders at
   // its slab's elevation, so host elevation edits must re-dirty the fence.
   system: {

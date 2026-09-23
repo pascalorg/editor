@@ -131,6 +131,7 @@ export function snapFenceDraftPoint(args: {
    */
   gridSnap?: (point: FencePlanPoint) => FencePlanPoint
 }): FencePlanPoint {
+  if (useEditor.getState().toolDefaults.fence?.featurePlacement) return args.point
   const {
     point,
     walls,

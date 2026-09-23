@@ -1,11 +1,19 @@
 'use client'
 
-import { RoofType as RoofTypeSchema, useRegistryVersion } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  isFenceFeatureNode,
+  RoofType as RoofTypeSchema,
+  useRegistryVersion,
+  useScene,
+} from '@pascal-app/core'
 import { type PanelToolOption, useEditor, useFloorplanMode } from '@pascal-app/editor'
 import { useLiquidLineToolOptions } from '@pascal-app/nodes'
+import { useViewer } from '@pascal-app/viewer'
 import type { XRWandBuildItem, XRWandBuildModel } from '@webxr/plugin'
 import {
   activateBuildTool,
+  activateFenceFeaturePlacement,
   activateModularCabinetTool,
   activatePaintMode,
   activateRoofFeatureTool,
@@ -70,6 +78,13 @@ export function useBuildToolOptions(): PanelToolOption[] {
 export function useBuildPanelModel(): XRWandBuildModel {
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
+  const selectedId = useViewer((state) => state.selection.selectedIds[0])
+  const selectedFence = useScene((state) => {
+    const node = selectedId ? state.nodes[selectedId as AnyNodeId] : undefined
+    const host =
+      isFenceFeatureNode(node) && node.parentId ? state.nodes[node.parentId as AnyNodeId] : node
+    return host?.type === 'fence' ? host : undefined
+  })
   const defaults = useEditor((state) => state.toolDefaults.roof)
   const floorplanMode = useFloorplanMode((state) => state.mode)
   useRegistryVersion()
@@ -77,6 +92,7 @@ export function useBuildPanelModel(): XRWandBuildModel {
   const roofActive =
     mode === 'build' && (tool === 'roof' || features.some((feature) => feature.kind === tool))
   const mepActive = mode === 'build' && !!tool && MEP_TOOL_KINDS.has(tool)
+  const fenceActive = !!selectedFence || (mode === 'build' && tool === 'fence')
   const kitchenActive = mode === 'build' && tool === 'cabinet'
   const duct = mode === 'build' && (tool === 'duct-segment' || tool === 'duct-fitting')
   const pipe =
@@ -92,12 +108,15 @@ export function useBuildPanelModel(): XRWandBuildModel {
         ? mode === type.mode
         : type.id === 'roof'
           ? roofActive
-          : type.id === 'mep'
-            ? mepActive
-            : type.id === 'kitchen'
-              ? kitchenActive
-              : mode === 'build' && tool === type.kind,
+          : type.id === 'fence' && selectedFence
+            ? true
+            : type.id === 'mep'
+              ? mepActive
+              : type.id === 'kitchen'
+                ? kitchenActive
+                : mode === 'build' && tool === type.kind,
       onSelect: () => {
+        if (type.id === 'fence' && selectedFence) return
         if (type.mode === 'material-paint') activatePaintMode()
         else if (type.mode === 'terrain-sculpt') activateTerrainSculptMode()
         else if (type.id === 'mep') activateBuildTool('duct-segment')
@@ -124,74 +143,94 @@ export function useBuildPanelModel(): XRWandBuildModel {
           onSelect: () => activateRoofFeatureTool(feature),
         })),
       ]
-    : mepActive
+    : fenceActive
       ? [
-          ...MEP_ITEMS.map((item) => ({
-            id: item.id,
-            label: item.label,
-            icon: { src: item.iconSrc },
-            section: 'MEP',
-            active:
-              item.kind === 'duct-segment'
-                ? duct
-                : item.kind === 'pipe-segment'
-                  ? pipe
-                  : item.kind === tool,
-            onSelect: () => activateBuildTool(item.kind),
-          })),
-          ...(duct
-            ? [
-                {
-                  id: 'duct-fitting',
-                  label: 'Add Fitting',
-                  section: 'Duct',
-                  icon: { src: '/icons/duct-fitting.webp' },
-                  active: tool === 'duct-fitting',
-                  onSelect: () =>
-                    activateBuildTool(tool === 'duct-fitting' ? 'duct-segment' : 'duct-fitting'),
-                },
-              ]
-            : []),
-          ...(pipe
-            ? [
-                {
-                  id: 'pipe-fitting',
-                  label: 'Add Fitting',
-                  section: 'DWV Pipe',
-                  icon: { src: '/icons/duct-fitting.webp' },
-                  active: tool === 'pipe-fitting',
-                  onSelect: () =>
-                    activateBuildTool(tool === 'pipe-fitting' ? 'pipe-segment' : 'pipe-fitting'),
-                },
-                {
-                  id: 'pipe-trap',
-                  label: 'Add Trap',
-                  section: 'DWV Pipe',
-                  icon: { src: '/icons/dwv-pipes.webp' },
-                  active: tool === 'pipe-trap',
-                  onSelect: () =>
-                    activateBuildTool(tool === 'pipe-trap' ? 'pipe-segment' : 'pipe-trap'),
-                },
-              ]
-            : []),
-        ]
-      : kitchenActive
-        ? [
-            {
-              id: 'modular-cabinet',
-              label: 'Modular Cabinet',
-              section: 'Kitchen',
-              icon: { src: MODULAR_CABINET_ICON },
-              active: true,
-              onSelect: activateModularCabinetTool,
+          ...(['gate', 'opening'] as const).map((kind) => ({
+            id: `fence-add-${kind}`,
+            label: kind === 'gate' ? 'Add Gate' : 'Add Open Passage',
+            section: 'Gates & openings',
+            active: false,
+            onSelect: () => {
+              activateFenceFeaturePlacement(kind)
             },
+          })),
+        ]
+      : mepActive
+        ? [
+            ...MEP_ITEMS.map((item) => ({
+              id: item.id,
+              label: item.label,
+              icon: { src: item.iconSrc },
+              section: 'MEP',
+              active:
+                item.kind === 'duct-segment'
+                  ? duct
+                  : item.kind === 'pipe-segment'
+                    ? pipe
+                    : item.kind === tool,
+              onSelect: () => activateBuildTool(item.kind),
+            })),
+            ...(duct
+              ? [
+                  {
+                    id: 'duct-fitting',
+                    label: 'Add Fitting',
+                    section: 'Duct',
+                    icon: { src: '/icons/duct-fitting.webp' },
+                    active: tool === 'duct-fitting',
+                    onSelect: () =>
+                      activateBuildTool(tool === 'duct-fitting' ? 'duct-segment' : 'duct-fitting'),
+                  },
+                ]
+              : []),
+            ...(pipe
+              ? [
+                  {
+                    id: 'pipe-fitting',
+                    label: 'Add Fitting',
+                    section: 'DWV Pipe',
+                    icon: { src: '/icons/duct-fitting.webp' },
+                    active: tool === 'pipe-fitting',
+                    onSelect: () =>
+                      activateBuildTool(tool === 'pipe-fitting' ? 'pipe-segment' : 'pipe-fitting'),
+                  },
+                  {
+                    id: 'pipe-trap',
+                    label: 'Add Trap',
+                    section: 'DWV Pipe',
+                    icon: { src: '/icons/dwv-pipes.webp' },
+                    active: tool === 'pipe-trap',
+                    onSelect: () =>
+                      activateBuildTool(tool === 'pipe-trap' ? 'pipe-segment' : 'pipe-trap'),
+                  },
+                ]
+              : []),
           ]
-        : []
-  const section = roofActive ? 'roof' : mepActive ? 'mep' : kitchenActive ? 'kitchen' : 'main'
+        : kitchenActive
+          ? [
+              {
+                id: 'modular-cabinet',
+                label: 'Modular Cabinet',
+                section: 'Kitchen',
+                icon: { src: MODULAR_CABINET_ICON },
+                active: true,
+                onSelect: activateModularCabinetTool,
+              },
+            ]
+          : []
+  const section = roofActive
+    ? 'roof'
+    : fenceActive
+      ? 'fence'
+      : mepActive
+        ? 'mep'
+        : kitchenActive
+          ? 'kitchen'
+          : 'main'
   return {
     items,
     secondaryItems,
-    secondaryTitle: roofActive ? 'Roof' : mepActive ? 'MEP' : 'Kitchen',
+    secondaryTitle: roofActive ? 'Roof' : fenceActive ? 'Fence' : mepActive ? 'MEP' : 'Kitchen',
     section,
     title: 'Build',
     mark: `${items.length} tools`,

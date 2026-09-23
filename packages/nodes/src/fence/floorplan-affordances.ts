@@ -50,7 +50,6 @@ type FenceEndpointPayload = { fenceId: AnyNodeId; endpoint: 'start' | 'end' }
 type FenceControlPointPayload = { fenceId: AnyNodeId; index: number }
 type FenceTangentPayload = { fenceId: AnyNodeId; index: number; side: 'in' | 'out' }
 type FenceThicknessPayload = { fenceId: AnyNodeId; side: 1 | -1 }
-
 // Must match the floorplan builder's TANGENT_HANDLE_ARM_SCALE: the on-screen
 // arm is this many times the raw tangent vector, so dividing the dragged
 // offset back out recovers the stored tangent.

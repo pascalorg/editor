@@ -469,6 +469,16 @@ export function ContextualHelperPanel({
   const inStack = useInRightStack()
   const modeChips = chipHints.filter((hint) => hint.chip)
   const hasChips = !!snapContext || !!continuationContext || modeChips.length > 0 || showPaintScope
+  const fenceFeature = useEditor((state) =>
+    state.mode === 'build' && state.tool === 'fence' ? state.toolDefaults.fence?.featurePlacement : null,
+  )
+  if (fenceFeature === 'gate' || fenceFeature === 'opening') return (
+    <div className={cn(CARD_CLASS, !inStack && FLOATING_CLASS)} data-hud-card>
+      {title ? <HudHeader title={title} /> : null}
+      <ChipRow shortcut="Left click" label={fenceFeature === 'gate' ? 'Place gate on a fence' : 'Place passage on a fence'} />
+      <ChipRow shortcut="Esc" label="Cancel placement" />
+    </div>
+  )
   if (hints.length === 0 && !hasChips) return null
 
   const actionHints = hints.filter((hint) => !isEscHint(hint))
