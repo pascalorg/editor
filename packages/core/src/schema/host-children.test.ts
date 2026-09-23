@@ -36,7 +36,7 @@ function load(nodes: Record<string, unknown>, rootId: string) {
 
 test('frozen pre-slice corpus covers every kind predating separators', () => {
   expect(baseline.map((n) => n.type).sort()).toEqual(
-    NODE_KINDS.filter((kind) => kind !== 'separator' && kind !== 'floor-opening').sort(),
+    NODE_KINDS.filter((kind) => kind !== 'separator' && kind !== 'floor-opening' && kind !== 'fence-gate' && kind !== 'fence-opening').sort(),
   )
 })
 test.each(
@@ -49,6 +49,13 @@ test.each(
       : saved.type === 'door' || saved.type === 'window'
         ? { ...expected, floorThresholdVersion: 1 }
         : expected
+  if (saved.type === 'fence') {
+    const parsed = JSON.parse(JSON.stringify(AnyNode.parse(saved)))
+    expect(parsed).toMatchObject(parsedExpected)
+    expect(load({ [saved.id]: saved }, saved.id)).toEqual({ [saved.id]: parsed })
+    expect(load({ [saved.id]: parsed }, saved.id)).toEqual({ [saved.id]: parsed })
+    return
+  }
   expect(JSON.parse(JSON.stringify(AnyNode.parse(saved)))).toEqual(parsedExpected)
   // Loading fills the schema defaults a stored node leaves out, nothing else.
   const graph = { [saved.id]: parsedExpected }

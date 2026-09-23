@@ -1,43 +1,78 @@
 import {
+  type AnyNodeId,
   DEFAULT_ANGLE_STEP,
   type FenceConstructionOptions as FenceCommitOptions,
   FenceNode,
   getFenceCenterlineLength,
   getFenceSplineLength,
   resolveFenceConstructionSupport,
+  type SceneApi,
   sampleFenceCenterline,
   snapPointAlongAngleRay,
-  useScene,
   type WallNode,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
-import { sfxEmitter } from '../../../lib/sfx-bus'
-import useEditor from '../../../store/use-editor'
 import {
   findWallSnapTarget,
   getSegmentGridStep,
   isSegmentLongEnough,
   snapPointToGrid,
+  triggerSFX,
+  useEditor,
   type WallPlanPoint,
-} from '../wall/wall-drafting'
+} from '@pascal-app/editor'
 
 export type FencePlanPoint = WallPlanPoint
 
+export type FenceDraftContext = {
+  sceneApi: SceneApi
+  levelId: AnyNodeId | null
+}
+
 const INHERITED_FENCE_FIELDS = [
-  'height', 'thickness', 'material', 'materialPreset', 'slots', 'baseHeight',
-  'postSpacing', 'picketSpacing', 'patternDistribution', 'patternAlignment',
-  'patternCount', 'patternRemainder', 'picketWidth', 'picketTop',
-  'picketRailCount', 'picketProfile', 'picketTopClearance', 'picketVariation',
-  'picketRailProjection', 'postSize', 'topRailHeight', 'groundClearance',
-  'edgeInset', 'slatGap', 'postCap', 'baseStyle', 'surfaceMode', 'supportOffset',
-  'transitionMode', 'transitionWidth', 'showInfill', 'infillPlacement',
-  'color', 'style',
+  'height',
+  'thickness',
+  'material',
+  'materialPreset',
+  'slots',
+  'baseHeight',
+  'postSpacing',
+  'picketSpacing',
+  'patternDistribution',
+  'patternAlignment',
+  'patternCount',
+  'patternRemainder',
+  'picketWidth',
+  'picketTop',
+  'picketRailCount',
+  'picketProfile',
+  'picketTopClearance',
+  'picketVariation',
+  'picketRailProjection',
+  'postSize',
+  'topRailHeight',
+  'groundClearance',
+  'edgeInset',
+  'slatGap',
+  'postCap',
+  'baseStyle',
+  'surfaceMode',
+  'supportOffset',
+  'transitionMode',
+  'transitionWidth',
+  'showInfill',
+  'infillPlacement',
+  'color',
+  'style',
 ] as const satisfies readonly (keyof FenceNode)[]
 
-export function getFenceInheritedDefaults(start: FencePlanPoint): Partial<FenceNode> | null {
-  const levelId = useViewer.getState().selection.levelId
+export function getFenceInheritedDefaults(
+  start: FencePlanPoint,
+  context: FenceDraftContext,
+  currentNodes: ReturnType<SceneApi['nodes']> = context.sceneApi.nodes(),
+): Partial<FenceNode> | null {
+  const { levelId } = context
   if (!levelId) return null
-  const nodes = useScene.getState().nodes
+  const nodes = currentNodes
   const source = Object.values(nodes).find(
     (node): node is FenceNode =>
       node.type === 'fence' &&
@@ -207,10 +242,11 @@ export function snapFenceDraftPoint(args: {
 export function createFenceOnCurrentLevel(
   start: FencePlanPoint,
   end: FencePlanPoint,
-  options?: FenceCommitOptions,
+  options: FenceCommitOptions | undefined,
+  context: FenceDraftContext,
 ): FenceNode | null {
-  const currentLevelId = useViewer.getState().selection.levelId
-  const { createNode, nodes } = useScene.getState()
+  const { sceneApi, levelId: currentLevelId } = context
+  const nodes = sceneApi.nodes()
 
   if (!(currentLevelId && isSegmentLongEnough(start, end))) {
     return null
@@ -222,7 +258,7 @@ export function createFenceOnCurrentLevel(
   // schema parse validates and drops anything unexpected.
   const defaults = {
     ...useEditor.getState().toolDefaults.fence,
-    ...getFenceInheritedDefaults(start),
+    ...getFenceInheritedDefaults(start, context),
   }
   const authoredFence = FenceNode.parse({
     ...defaults,
@@ -234,8 +270,8 @@ export function createFenceOnCurrentLevel(
   // lift (absent = level floor), so elect it at commit, pointer-capped.
   const fence = resolveFenceConstructionSupport(authoredFence, currentLevelId, nodes, options)
 
-  createNode(fence, currentLevelId)
-  sfxEmitter.emit('sfx:structure-build')
+  sceneApi.upsert(fence, currentLevelId)
+  triggerSFX('sfx:structure-build')
 
   return fence
 }
@@ -248,10 +284,11 @@ export function createFenceOnCurrentLevel(
  */
 export function createSplineFenceOnCurrentLevel(
   path: FencePlanPoint[],
-  tangents?: FenceNode['tangents'],
+  tangents: FenceNode['tangents'] | undefined,
+  context: FenceDraftContext,
 ): FenceNode | null {
-  const currentLevelId = useViewer.getState().selection.levelId
-  const { createNode, nodes } = useScene.getState()
+  const { sceneApi, levelId: currentLevelId } = context
+  const nodes = sceneApi.nodes()
 
   if (!currentLevelId || path.length < 2) {
     return null
@@ -267,7 +304,7 @@ export function createSplineFenceOnCurrentLevel(
   const fenceCount = Object.values(nodes).filter((node) => node.type === 'fence').length
   const defaults = {
     ...useEditor.getState().toolDefaults.fence,
-    ...getFenceInheritedDefaults(start),
+    ...getFenceInheritedDefaults(start, context),
   }
   const authoredFence = FenceNode.parse({
     ...defaults,
@@ -279,8 +316,8 @@ export function createSplineFenceOnCurrentLevel(
   })
   const fence = authoredFence
 
-  createNode(fence, currentLevelId)
-  sfxEmitter.emit('sfx:structure-build')
+  sceneApi.upsert(fence, currentLevelId)
+  triggerSFX('sfx:structure-build')
 
   return fence
 }

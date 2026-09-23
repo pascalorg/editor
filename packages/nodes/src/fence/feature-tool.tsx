@@ -2,7 +2,6 @@
 
 import {
   type AnyNodeId,
-  fenceFeaturePlacementIssue,
   emitter,
   type FenceEvent,
   type FenceFeatureData,
@@ -10,17 +9,22 @@ import {
   type FenceNode,
   FenceOpeningNode,
   FenceStyle,
+  fenceFeaturePlacementIssue,
   fenceWithFeatures,
   type GridEvent,
   useLiveNodeOverrides,
-  useScene,
 } from '@pascal-app/core'
-import { markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import {
+  markToolCancelConsumed,
+  triggerSFX,
+  useEditor,
+  useRegistryToolContext,
+} from '@pascal-app/editor'
 import { useEffect } from 'react'
 import { pickFenceTarget } from '../fence-feature/pick-target'
 
 export default function FenceFeatureTool({ kind }: { kind: 'gate' | 'opening' }) {
+  const { activeLevelId, sceneApi, selectNode } = useRegistryToolContext()
   useEffect(() => {
     let previewId: FenceNode['id'] | undefined
     let finished = false
@@ -28,7 +32,7 @@ export default function FenceFeatureTool({ kind }: { kind: 'gate' | 'opening' })
     const clear = () => {
       if (!previewId) return
       useLiveNodeOverrides.getState().clearFields(previewId, ['features'])
-      useScene.getState().markDirty(previewId)
+      sceneApi.markDirty(previewId)
       previewId = undefined
     }
     const setFeedback = (message?: string) => {
@@ -43,8 +47,8 @@ export default function FenceFeatureTool({ kind }: { kind: 'gate' | 'opening' })
       host?: FenceNode,
       ray?: GridEvent['localRay'],
     ) => {
-      const nodes = useScene.getState().nodes
-      const best = pickFenceTarget(point, host, ray)
+      const nodes = sceneApi.nodes()
+      const best = pickFenceTarget(point, host, ray, sceneApi, activeLevelId)
       if (!best) return { issue: 'Click on a fence to place the feature.' }
       const defaults = useEditor.getState().toolDefaults.fence
       const selectedStyle = FenceStyle.safeParse(defaults?.featureStyle)
@@ -104,7 +108,7 @@ export default function FenceFeatureTool({ kind }: { kind: 'gate' | 'opening' })
         setFeedback(undefined)
         previewId = hit.fence.id
         useLiveNodeOverrides.getState().set(previewId, { features: [hit.feature] })
-        useScene.getState().markDirty(previewId)
+        sceneApi.markDirty(previewId)
       }
       return { hit, issue }
     }
@@ -128,12 +132,12 @@ export default function FenceFeatureTool({ kind }: { kind: 'gate' | 'opening' })
         parentId: hit.fence.id,
         name: kind === 'gate' ? 'Gate' : 'Open passage',
       })
-      useScene.getState().createNode(child, hit.fence.id)
+      sceneApi.upsert(child, hit.fence.id)
       triggerSFX('sfx:item-place')
       useEditor.getState().setMode('select')
       useEditor.getState().setTool(null)
       useEditor.getState().setToolDefaults('fence', null)
-      useViewer.getState().setSelection({ selectedIds: [child.id] })
+      selectNode(child.id)
     }
     const onMove = (event: GridEvent) => {
       update([event.localPosition[0], event.localPosition[2]], undefined, event.localRay)
@@ -168,6 +172,6 @@ export default function FenceFeatureTool({ kind }: { kind: 'gate' | 'opening' })
       emitter.off('fence:click', onFenceClick)
       emitter.off('tool:cancel', cancel)
     }
-  }, [kind])
+  }, [activeLevelId, kind, sceneApi, selectNode])
   return null
 }

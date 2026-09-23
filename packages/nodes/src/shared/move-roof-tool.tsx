@@ -27,7 +27,6 @@ import {
   getFloorStackPreviewPosition,
   isMagneticSnapActive,
   resolvePlanarCursorPosition,
-  snapFenceDraftPoint,
   stripPlacementMetadataFlags,
   triggerSFX,
   useAlignmentGuides,
@@ -38,6 +37,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { snapFenceDraftPoint } from '../fence/drafting'
 
 /** Figma-style alignment-snap threshold (meters), matching the other tools. */
 const ALIGNMENT_THRESHOLD_M = 0.08

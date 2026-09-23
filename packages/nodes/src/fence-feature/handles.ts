@@ -11,8 +11,8 @@ import {
   projectPointToFence,
   type SceneApi,
 } from '@pascal-app/core'
-import { getFenceFeatureDimensions } from '@pascal-app/viewer'
 import { fenceBaseElevation } from '../fence/definition'
+import { getFenceFeatureDimensions } from '../fence/geometry-parts'
 
 export function featureHost(node: FenceFeatureNode, scene: SceneApi): FenceNode | undefined {
   const parent = node.parentId ? scene.get(node.parentId as AnyNodeId) : undefined

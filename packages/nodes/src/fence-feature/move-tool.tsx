@@ -5,13 +5,15 @@ import {
   markToolCancelConsumed,
   triggerSFX,
   useEditor,
+  useRegistryToolContext,
 } from '@pascal-app/editor'
 import { useEffect } from 'react'
 import { createFenceFeatureMoveSession } from './move-session'
 
 export default function MoveFenceFeatureTool({ node }: { node: FenceFeatureNode }) {
+  const { activeLevelId, sceneApi, selectNode } = useRegistryToolContext()
   useEffect(() => {
-    const session = createFenceFeatureMoveSession(node)
+    const session = createFenceFeatureMoveSession(node, sceneApi, activeLevelId, selectNode)
     let finished = false
     const finish = () => {
       if (finished || !session.canCommit()) return
@@ -58,6 +60,6 @@ export default function MoveFenceFeatureTool({ node }: { node: FenceFeatureNode 
       emitter.off('tool:cancel', cancel)
       window.removeEventListener('pointerup', release)
     }
-  }, [node])
+  }, [activeLevelId, node, sceneApi, selectNode])
   return null
 }

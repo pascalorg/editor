@@ -2,18 +2,18 @@
 import {
   type AnyNodeId,
   canPlaceFenceFeature,
-  FenceStyle,
   type FenceFeatureData,
   type FenceFeatureNode,
+  FenceStyle,
   fenceFeatureData,
   fenceWithFeatures,
   getFenceCenterlineLength,
   useScene,
 } from '@pascal-app/core'
 import { ActionButton, SliderControl, ToggleControl } from '@pascal-app/editor'
-import { getFenceFeatureDimensions } from '@pascal-app/viewer'
 import { useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { getFenceFeatureDimensions } from '../fence/geometry-parts'
 
 export function FenceFeatureEditor({
   node: child,

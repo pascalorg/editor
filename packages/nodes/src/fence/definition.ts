@@ -14,12 +14,14 @@ import {
   clearStructuralElevationGuide,
   PANEL_MODEL_EXTENSION,
   publishStructuralElevationGuide,
+  REGISTERED_DRAFT_SNAP_EXTENSION,
   resolveStructuralElevationSnap,
 } from '@pascal-app/editor'
 import {
   createNodeTopSurfaceHeightSampler,
   createSceneSupportHeightSampler,
 } from '@pascal-app/viewer'
+import { snapFenceDraftPoint } from './drafting'
 import { buildFenceFloorplan } from './floorplan'
 import {
   fenceControlPointAffordance,
@@ -333,7 +335,10 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
   snapProfile: 'structural',
   schemaVersion: 3,
   schema: FenceNode,
-  extensions: { [PANEL_MODEL_EXTENSION]: fencePanelModel },
+  extensions: {
+    [PANEL_MODEL_EXTENSION]: fencePanelModel,
+    [REGISTERED_DRAFT_SNAP_EXTENSION]: snapFenceDraftPoint,
+  },
   category: 'structure',
   surfaceRole: 'wall',
 
@@ -380,7 +385,7 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
   capabilities: {
     surfacePlacement: 'floor-only',
     selectable: { hitVolume: 'bbox' },
-    surfaces: { sides: { faces: 'all' } },
+    surfaces: { sides: { faces: 'all' }, hosting: false },
     duplicable: true,
     deletable: true,
     slots: (node) => fenceSlots(node as FenceNodeType),

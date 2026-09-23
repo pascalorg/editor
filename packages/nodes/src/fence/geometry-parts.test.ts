@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { FenceNode } from '@pascal-app/core'
-import { generateFenceGeometry, generateFenceSlotGeometries } from './fence-system'
+import { generateFenceGeometry, generateFenceSlotGeometries } from './geometry-parts'
 
 const IN = 0.0254
 

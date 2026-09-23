@@ -23,14 +23,10 @@ import {
 import {
   CursorSphere,
   clearPlacementSurface,
-  createFenceOnCurrentLevel,
-  createSplineFenceOnCurrentLevel,
   DraftMeasurementLabel,
   EDITOR_LAYER,
-  type FencePlanPoint,
   formatAngleRadians,
   formatLinearMeasurement,
-  getFenceInheritedDefaults,
   getAngleArcToSegmentReference,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
@@ -44,7 +40,6 @@ import {
   publishPlacementSurface,
   resolvePointerSupportSurface,
   type SegmentAngleReference,
-  snapFenceDraftPoint,
   snapScalarToGrid,
   triggerSFX,
   useAlignmentGuides,
@@ -52,16 +47,11 @@ import {
   useFenceCurveDraft,
   useFloorplanDraftPreview,
   usePlacementPreview,
+  useRegistryToolContext,
   useSegmentDraftChain,
 } from '@pascal-app/editor'
 
-import {
-  createFenceRailHeightSampler,
-  createSceneSupportHeightSampler,
-  generateFenceGeometry,
-  getSceneTheme,
-  useViewer,
-} from '@pascal-app/viewer'
+import { createSceneSupportHeightSampler, getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, type Camera, DoubleSide, type Group, type Mesh, Vector3 } from 'three'
@@ -72,7 +62,15 @@ import {
   DraftAxisGuides,
   getNearestAxisAngleLabel,
 } from '../shared/draft-axis-guides'
+import {
+  createFenceOnCurrentLevel,
+  createSplineFenceOnCurrentLevel,
+  type FencePlanPoint,
+  getFenceInheritedDefaults,
+  snapFenceDraftPoint,
+} from './drafting'
 import FenceFeatureTool from './feature-tool'
+import { createFenceRailHeightSampler, generateFenceGeometry } from './geometry-parts'
 
 const FENCE_PREVIEW_HEIGHT = 1.8
 const FENCE_PREVIEW_THICKNESS = 0.08
@@ -494,6 +492,11 @@ export const FenceTool: React.FC = () => {
 }
 
 const StraightFenceTool: React.FC = () => {
+  const { activeLevelId, sceneApi } = useRegistryToolContext()
+  const draftContext = useMemo(
+    () => ({ sceneApi, levelId: activeLevelId }),
+    [sceneApi, activeLevelId],
+  )
   const unit = useViewer((state) => state.unit)
   const metricNotation = useViewer((state) => state.metricNotation)
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
@@ -504,14 +507,17 @@ const StraightFenceTool: React.FC = () => {
   const fenceDefaults = useEditor((s) => s.toolDefaults.fence)
   const startingPoint = useRef(new Vector3(0, 0, 0))
   const buildingState = useRef(0)
-  const inheritedPreview = buildingState.current === 1
-    ? getFenceInheritedDefaults([startingPoint.current.x, startingPoint.current.z])
-    : null
+  const inheritedPreview =
+    buildingState.current === 1
+      ? getFenceInheritedDefaults([startingPoint.current.x, startingPoint.current.z], draftContext)
+      : null
   const effectiveDefaults = { ...fenceDefaults, ...inheritedPreview }
   const previewHeight =
     typeof effectiveDefaults.height === 'number' ? effectiveDefaults.height : FENCE_PREVIEW_HEIGHT
   const previewThickness =
-    typeof effectiveDefaults.thickness === 'number' ? effectiveDefaults.thickness : FENCE_PREVIEW_THICKNESS
+    typeof effectiveDefaults.thickness === 'number'
+      ? effectiveDefaults.thickness
+      : FENCE_PREVIEW_THICKNESS
   const previewHeightRef = useRef(previewHeight)
   previewHeightRef.current = previewHeight
   const previewThicknessRef = useRef(previewThickness)
@@ -750,6 +756,7 @@ const StraightFenceTool: React.FC = () => {
             preferredSupportSlabId: pointedSurface?.supportSlabId ?? null,
             constructionElevation: pointedSurface?.sourceNodeId ? pointedSurface.elevation : null,
           },
+          draftContext,
         )
         if (!createdFence) return
 
@@ -815,7 +822,7 @@ const StraightFenceTool: React.FC = () => {
       draftPreview.setFenceDraftStart(null)
       draftPreview.setFenceDraftEnd(null)
     }
-  }, [unit, metricNotation])
+  }, [unit, metricNotation, draftContext])
 
   return (
     <group>
@@ -921,13 +928,19 @@ function simplifyFreehandPath(
 }
 
 const SplineFenceDraft: React.FC<{ freehand?: boolean }> = ({ freehand = false }) => {
+  const { activeLevelId, sceneApi } = useRegistryToolContext()
+  const draftContext = useMemo(
+    () => ({ sceneApi, levelId: activeLevelId }),
+    [sceneApi, activeLevelId],
+  )
   const fenceDefaults = useEditor((state) => state.toolDefaults.fence)
   const sceneNodes = useScene((state) => state.nodes)
   const levelId = useViewer((state) => state.selection.levelId)
   const [draftPoints, setDraftPoints] = useState<FencePlanPoint[]>([])
   const inheritedPreview = useMemo(
-    () => draftPoints[0] ? getFenceInheritedDefaults(draftPoints[0]) : null,
-    [draftPoints[0], sceneNodes, levelId],
+    () =>
+      draftPoints[0] ? getFenceInheritedDefaults(draftPoints[0], draftContext, sceneNodes) : null,
+    [draftPoints[0], sceneNodes, draftContext],
   )
   const effectiveDefaults = useMemo(
     () => ({ ...fenceDefaults, ...inheritedPreview }),
@@ -974,7 +987,7 @@ const SplineFenceDraft: React.FC<{ freehand?: boolean }> = ({ freehand = false }
 
     const commit = (points = draftRef.current) => {
       if (points.length >= 2) {
-        const created = createSplineFenceOnCurrentLevel(points)
+        const created = createSplineFenceOnCurrentLevel(points, undefined, draftContext)
         if (created) {
           triggerSFX('sfx:item-place')
           // Once the new curve fence is selected for direct editing, leave
@@ -1108,7 +1121,7 @@ const SplineFenceDraft: React.FC<{ freehand?: boolean }> = ({ freehand = false }
       clearPlacementSurface()
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [freehand])
+  }, [freehand, draftContext])
 
   const previewPoints = useMemo(() => {
     const last = draftPoints.at(-1)
