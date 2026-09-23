@@ -167,8 +167,9 @@ export const WindowSystem = () => {
       // Rebuild the parent wall so its cutout reflects the updated window geometry
       // Avoid triggering expensive wall CSG rebuilds while the window is being interactively moved/duplicated.
       // The editor tools will request a final wall rebuild on commit.
-      const isTransient = !!(node.metadata as Record<string, unknown> | null)?.isTransient
-      if (!isTransient && effectiveNode.parentId) {
+      const metadata = effectiveNode.metadata as Record<string, unknown> | null
+      const deferParentRebuild = !!metadata?.isTransient || !!metadata?.deferParentRebuild
+      if (!deferParentRebuild && effectiveNode.parentId) {
         useScene.getState().dirtyNodes.add(effectiveNode.parentId as AnyNodeId)
       }
     }

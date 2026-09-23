@@ -4,6 +4,7 @@ import {
   getScaledDimensions,
   getSurfaceProvider,
   type HandleDescriptor,
+  type HandleDragModifiers,
   nodeRegistry,
   type SceneApi,
   surfaceRegionContainsFootprint,
@@ -179,7 +180,7 @@ export function withHostedChildren<N extends AnyNode>(
     )
   return {
     ...descriptor,
-    apply(node, value, sceneApi, modifiers) {
+    apply(node: N, value: number, sceneApi: SceneApi, modifiers?: HandleDragModifiers) {
       const patch = descriptor.apply(node, value, sceneApi, modifiers)
       if (!hasHostedChildren(sceneApi) || plan(node, patch, sceneApi, modifiers)) return patch
       const target = sceneApi.get(descriptor.overrideTarget?.(node, sceneApi) ?? node.id) ?? node

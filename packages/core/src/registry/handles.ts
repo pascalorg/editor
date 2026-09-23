@@ -79,6 +79,13 @@ export type HandleAnchor = 'center' | 'min' | 'max'
 /** Keyboard modifiers captured for a handle-resize tick. */
 export type HandleDragModifiers = {
   readonly altKey: boolean
+  readonly shiftKey?: boolean
+}
+
+export type HandlePreviewSession<N> = {
+  preview: (patch: Partial<N>) => void
+  commit: (patch?: Partial<N>) => void
+  cancel: () => void
 }
 
 /** 3D position + rotation of the arrow in its portal target's local space. */
@@ -295,6 +302,31 @@ export type RadialResizeHandle<N> = {
 }
 
 /**
+ * In-plane corner-radius knob. The editor places the knob diagonally inward
+ * from `corner` and converts its pointer position back into a radius. Holding
+ * Shift is exposed through `modifiers` so kinds can switch from a shared
+ * radius to per-corner radii without teaching the editor their schema.
+ */
+export type CornerRadiusHandle<N> = {
+  kind: 'corner-radius'
+  corner: readonly [x: -1 | 1, y: -1 | 1]
+  width: (node: N) => number
+  height: (node: N) => number
+  currentValue: (node: N) => number
+  max: number | ((node: N, sceneApi: SceneApi) => number)
+  apply: (
+    node: N,
+    newValue: number,
+    sceneApi: SceneApi,
+    modifiers: HandleDragModifiers,
+  ) => Partial<N>
+  createPreview?: (node: N) => HandlePreviewSession<N>
+  visible?: (node: N, sceneApi: SceneApi) => boolean
+  portal?: HandlePortal
+  portalTarget?: HandlePortalTarget<N>
+}
+
+/**
  * Curved / spiral stair sweep arrows. The renderer raycasts a horizontal
  * plane through the arrow's Y and emits the angular delta (radians,
  * signed, normalised to [-π, π]) around the node's local origin.
@@ -492,6 +524,7 @@ export type LatchHandle<N = any> = {
 export type HandleDescriptor<N = any> =
   | LinearResizeHandle<N>
   | RadialResizeHandle<N>
+  | CornerRadiusHandle<N>
   | ArcResizeHandle<N>
   | EndpointMoveHandle<N>
   | TapActionHandle<N>

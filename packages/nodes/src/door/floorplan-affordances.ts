@@ -3,10 +3,13 @@ import {
   type DoorNode,
   type FloorplanAffordance,
   type FloorplanAffordanceSession,
+  getWallCurveLength,
   useLiveNodeOverrides,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
+import { curtainOpeningLimits } from '../shared/curtain-opening-limits'
+import { projectPlanPointToWallLocalX } from '../shared/wall-attach-target'
 
 const MIN_DOOR_WIDTH = 0.3
 
@@ -45,23 +48,18 @@ export const doorWidthAffordance: FloorplanAffordance<DoorNode> = {
     const anchorX =
       side === 'end' ? initialDoorX - initialWidth / 2 : initialDoorX + initialWidth / 2
 
-    // Wall axis (level-local) for projecting pointer movement to a
-    // wall-local X delta.
-    const wallStart: readonly [number, number] = wall ? wall.start : [0, 0]
-    const wallEnd: readonly [number, number] = wall ? wall.end : [1, 0]
-    const dx = wallEnd[0] - wallStart[0]
-    const dz = wallEnd[1] - wallStart[1]
-    const wallLength = Math.hypot(dx, dz) || 1
-    const dirX = dx / wallLength
-    const dirZ = dz / wallLength
+    const wallLength = wall ? getWallCurveLength(wall) : 1
 
     // Max width keeps the dragged edge inside the wall span. With the
     // anchor fixed, the moving edge is `anchorX ± width`, so the largest
     // legal width is the headroom on the grow side.
-    const maxWidth = growDir > 0 ? wallLength - anchorX : anchorX
+    const limits = curtainOpeningLimits(node, nodes)
+    const margin = limits?.margin ?? 0
+    const maxWidth =
+      growDir > 0 ? (limits?.length ?? wallLength) - margin - anchorX : anchorX - margin
 
     const projectToWallLocalX = (planPoint: readonly [number, number]) => {
-      return (planPoint[0] - wallStart[0]) * dirX + (planPoint[1] - wallStart[1]) * dirZ
+      return wall ? projectPlanPointToWallLocalX(wall, planPoint) : planPoint[0]
     }
 
     // Initial pointer in wall-local X — anchored to where the user

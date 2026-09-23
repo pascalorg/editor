@@ -37,10 +37,12 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Spline } from 'lucide-react'
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
+import { CurtainWallPanel } from './curtain-wall-panel'
 import { hasWallCurveBlockingChildren } from './curve-eligibility'
 import { buildWallLengthPatch } from './length-patch'
+import { createWallPropertyPreview } from './property-preview'
 
 /**
  * Base half of the plane-bound repair: a stamped draft offset goes, and a
@@ -142,22 +144,30 @@ export default function WallPanel() {
   const nodeRef = useRef(node)
   nodeRef.current = node
 
-  const handleUpdate = useCallback(
-    (updates: Partial<WallNode>) => {
-      if (!selectedId) return
-      useScene.getState().updateNode(selectedId as AnyNode['id'], updates)
-    },
+  const propertyPreview = useMemo(
+    () => (selectedId ? createWallPropertyPreview(selectedId as AnyNodeId) : undefined),
     [selectedId],
   )
+  useEffect(() => () => propertyPreview?.cancel(), [propertyPreview])
+  const handleUpdate = useCallback(
+    (updates: Partial<WallNode>) => propertyPreview?.commit(updates),
+    [propertyPreview],
+  )
+  const handlePreview = useCallback(
+    (updates: Partial<WallNode>) => propertyPreview?.preview(updates),
+    [propertyPreview],
+  )
+  const handleCommit = useCallback(() => propertyPreview?.commit(), [propertyPreview])
+  const handleCancel = useCallback(() => propertyPreview?.cancel(), [propertyPreview])
 
   const handleUpdateLength = useCallback(
     (newLength: number) => {
       const n = nodeRef.current
       if (!n || newLength <= 0) return
 
-      handleUpdate(buildWallLengthPatch(n, newLength))
+      handlePreview(buildWallLengthPatch(n, newLength))
     },
-    [handleUpdate],
+    [handlePreview],
   )
 
   const handleTopModeChange = useCallback(
@@ -238,8 +248,22 @@ export default function WallPanel() {
       title={node.name || 'Wall'}
       width={280}
     >
+      <PanelSection title="Wall type">
+        <SegmentedControl
+          onChange={(wallType) => handleUpdate({ wallType })}
+          options={[
+            { label: 'Standard', value: 'standard' },
+            { label: 'Curtain wall', value: 'curtain' },
+          ]}
+          value={node.wallType ?? 'standard'}
+        />
+      </PanelSection>
       <PanelSection title="Dimensions">
         <SliderControl
+          onCommit={handleCommit}
+          onCancel={handleCancel}
+          restoreOnCommit={false}
+          previewWhileTyping
           label="Length"
           max={metersToLinearUnit(1000, unit)}
           min={metersToLinearUnit(0.1, unit)}
@@ -270,11 +294,15 @@ export default function WallPanel() {
           </div>
         ) : (
           <SliderControl
+            onCommit={handleCommit}
+            onCancel={handleCancel}
+            restoreOnCommit={false}
+            previewWhileTyping
             label="Height"
             max={metersToLinearUnit(1000, unit)}
             min={metersToLinearUnit(0.1, unit)}
             onChange={(v) =>
-              handleUpdate({
+              handlePreview({
                 height: linearControlValueToMeters(v, unit, { maxMeters: 1000, minMeters: 0.1 }),
               })
             }
@@ -301,11 +329,15 @@ export default function WallPanel() {
           </div>
         )}
         <SliderControl
-          label="Thickness"
+          onCommit={handleCommit}
+          onCancel={handleCancel}
+          restoreOnCommit={false}
+          previewWhileTyping
+          label={node.wallType === 'curtain' ? 'Frame depth' : 'Thickness'}
           max={metersToLinearUnit(1000, unit)}
           min={metersToLinearUnit(0.05, unit)}
           onChange={(v) =>
-            handleUpdate({
+            handlePreview({
               thickness: linearControlValueToMeters(v, unit, {
                 maxMeters: 1000,
                 minMeters: 0.05,
@@ -319,11 +351,15 @@ export default function WallPanel() {
         />
         {!hasWallChildrenBlockingCurve && (
           <SliderControl
+            onCommit={handleCommit}
+            onCancel={handleCancel}
+            restoreOnCommit={false}
+            previewWhileTyping
             label="Curve"
             max={Math.max(metersToLinearUnit(0.01, unit), displayMaxCurveOffset)}
             min={-Math.max(metersToLinearUnit(0.01, unit), displayMaxCurveOffset)}
             onChange={(v) =>
-              handleUpdate({
+              handlePreview({
                 curveOffset: normalizeWallCurveOffset(
                   node,
                   linearControlValueToMeters(v, unit, {
@@ -341,44 +377,59 @@ export default function WallPanel() {
         )}
       </PanelSection>
 
-      <WallFaceBandSection
-        node={node}
-        onUpdate={handleUpdate}
-        unit={unit}
-        unitLabel={unitLabel}
-        wallHeightMeters={wallHeightMeters}
-      />
+      {node.wallType === 'curtain' ? (
+        <CurtainWallPanel
+          height={height}
+          key={node.id}
+          node={node}
+          onUpdate={handleUpdate}
+          onPreview={handlePreview}
+          onCommit={handleCommit}
+          onCancel={handleCancel}
+          unit={unit}
+        />
+      ) : (
+        <>
+          <WallFaceBandSection
+            node={node}
+            onUpdate={handleUpdate}
+            unit={unit}
+            unitLabel={unitLabel}
+            wallHeightMeters={wallHeightMeters}
+          />
 
-      <WallTrimSection
-        node={node}
-        onUpdate={handleUpdate}
-        title="Skirting"
-        trimKey="skirting"
-        trimValue={skirting}
-        unit={unit}
-        unitLabel={unitLabel}
-        wallHeightMeters={wallHeightMeters}
-      />
-      <WallTrimSection
-        node={node}
-        onUpdate={handleUpdate}
-        title="Crown molding"
-        trimKey="crown"
-        trimValue={crown}
-        unit={unit}
-        unitLabel={unitLabel}
-        wallHeightMeters={wallHeightMeters}
-      />
-      <WallTrimSection
-        node={node}
-        onUpdate={handleUpdate}
-        title="Chair rail"
-        trimKey="chairRail"
-        trimValue={chairRail}
-        unit={unit}
-        unitLabel={unitLabel}
-        wallHeightMeters={wallHeightMeters}
-      />
+          <WallTrimSection
+            node={node}
+            onUpdate={handleUpdate}
+            title="Skirting"
+            trimKey="skirting"
+            trimValue={skirting}
+            unit={unit}
+            unitLabel={unitLabel}
+            wallHeightMeters={wallHeightMeters}
+          />
+          <WallTrimSection
+            node={node}
+            onUpdate={handleUpdate}
+            title="Crown molding"
+            trimKey="crown"
+            trimValue={crown}
+            unit={unit}
+            unitLabel={unitLabel}
+            wallHeightMeters={wallHeightMeters}
+          />
+          <WallTrimSection
+            node={node}
+            onUpdate={handleUpdate}
+            title="Chair rail"
+            trimKey="chairRail"
+            trimValue={chairRail}
+            unit={unit}
+            unitLabel={unitLabel}
+            wallHeightMeters={wallHeightMeters}
+          />
+        </>
+      )}
 
       {!hasWallChildrenBlockingCurve && (
         <PanelSection title="Actions">

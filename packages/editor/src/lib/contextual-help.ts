@@ -43,6 +43,7 @@ export type SelectModeHelpContext = {
   selectedCount: number
   hasMovableSelection: boolean
   hasRotatableSelection: boolean
+  hasOpeningRadiusSelection?: boolean
   commandPressed: boolean
   shiftPressed: boolean
   // When a single MEP node is selected its in-world handle rig (click a dot to
@@ -64,6 +65,7 @@ export function resolveSelectModeHelpHints({
   selectedCount,
   hasMovableSelection,
   hasRotatableSelection,
+  hasOpeningRadiusSelection = false,
   commandPressed,
   shiftPressed,
   mepSelection = null,
@@ -136,6 +138,14 @@ export function resolveSelectModeHelpHints({
     hints.push({
       keys: [COMMAND_KEY, RIGHT_CLICK],
       label: 'Drag left or right to rotate selected object',
+    })
+  }
+
+  if (hasOpeningRadiusSelection) {
+    hints.push({
+      keys: [SHIFT_KEY],
+      label: 'Adjust one side’s corner radius',
+      active: shiftPressed,
     })
   }
 

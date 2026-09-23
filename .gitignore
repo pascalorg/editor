@@ -28,6 +28,7 @@ supabase/.temp/
 
 # Build Outputs
 .next/
+.next-*/
 out/
 build
 dist

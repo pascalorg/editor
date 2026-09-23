@@ -60,6 +60,7 @@ type HandleDragSession = {
   commit?: (patch: Partial<AnyNode>) => void
   markDirty?: boolean
   onBegin?: () => void
+  onCancel?: () => void
   onEnd?: () => void
   overrideId?: AnyNodeId
 }
@@ -196,6 +197,7 @@ export function useHandleDrag(args: UseHandleDragArgs) {
     let historyPaused = true
     let releaseSpatialCapture: (() => void) | null = null
     let altKey = event.nativeEvent.altKey
+    let shiftKey = event.nativeEvent.shiftKey
     let pendingMoveEvent: PointerEvent | null = null
     let moveFrame = 0
 
@@ -208,7 +210,7 @@ export function useHandleDrag(args: UseHandleDragArgs) {
     const processMove = (moveEvent: PointerEvent) => {
       const patch = session.move({
         event: moveEvent,
-        modifiers: { altKey },
+        modifiers: { altKey, shiftKey },
         getPointerRay,
         intersectPlane,
       })
@@ -287,6 +289,7 @@ export function useHandleDrag(args: UseHandleDragArgs) {
     }
 
     const onCancel = () => {
+      session.onCancel?.()
       clearOverride()
       cleanup()
     }
@@ -298,6 +301,10 @@ export function useHandleDrag(args: UseHandleDragArgs) {
         altKey = true
         return
       }
+      if (e.key === 'Shift') {
+        shiftKey = true
+        return
+      }
       if (e.key !== 'Escape' && !isHistoryShortcut(e)) return
       e.preventDefault()
       e.stopPropagation()
@@ -306,6 +313,7 @@ export function useHandleDrag(args: UseHandleDragArgs) {
     }
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key === 'Alt') altKey = false
+      if (e.key === 'Shift') shiftKey = false
     }
 
     dragCleanupRef.current = onCancel

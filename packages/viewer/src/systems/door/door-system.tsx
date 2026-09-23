@@ -186,8 +186,9 @@ export const DoorSystem = () => {
       // Rebuild the parent wall so its cutout reflects the updated door geometry
       // Avoid triggering expensive wall CSG rebuilds while the door is being interactively moved/duplicated.
       // The editor tools will request a final wall rebuild on commit.
-      const isTransient = !!(node.metadata as Record<string, unknown> | null)?.isTransient
-      if (!isTransient && effectiveNode.parentId) {
+      const metadata = effectiveNode.metadata as Record<string, unknown> | null
+      const deferParentRebuild = !!metadata?.isTransient || !!metadata?.deferParentRebuild
+      if (!deferParentRebuild && effectiveNode.parentId) {
         useScene.getState().dirtyNodes.add(effectiveNode.parentId as AnyNodeId)
       }
     }
@@ -1327,18 +1328,21 @@ function addDoorLeaf(
     const hingeH = 0.1
     const hingeW = 0.024
     const hingeD = leafDepth + 0.016
-    addBox(mesh, hardwareMaterial, hingeW, hingeH, hingeD, hingeMarkerX, leafBottom + 0.25, 0)
-    addBox(
-      mesh,
-      hardwareMaterial,
-      hingeW,
-      hingeH,
-      hingeD,
-      hingeMarkerX,
-      (leafBottom + leafTop) / 2,
-      0,
-    )
-    addBox(mesh, hardwareMaterial, hingeW, hingeH, hingeD, hingeMarkerX, leafTop - 0.25, 0)
+    const hingeRadii = roundedBoundary?.radii ?? openingTopRadii
+    const cornerDrop =
+      openingShape === 'rounded'
+        ? hingeSide === 'left'
+          ? hingeRadii.topLeft
+          : hingeRadii.topRight
+        : openingShape === 'arch'
+          ? getClampedArchHeight(leafWidth, leafHeight, archHeight)
+          : 0
+    // Hinges need their full height supported by the straight jamb below the curve.
+    const straightEdgeTop = leafTop - cornerDrop
+    for (const hingeY of [leafBottom + 0.25, (leafBottom + leafTop) / 2, leafTop - 0.25]) {
+      if (hingeY + hingeH / 2 > straightEdgeTop + 1e-6) continue
+      addBox(mesh, hardwareMaterial, hingeW, hingeH, hingeD, hingeMarkerX, hingeY, 0)
+    }
   }
 
   // When the leaf is swung open it projects into the room and would otherwise

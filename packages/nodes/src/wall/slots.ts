@@ -1,4 +1,9 @@
-import { type SlotDeclaration, WALL_SURFACE_SLOT_DEFAULTS } from '@pascal-app/core'
+import {
+  getCurtainWallConfig,
+  type SlotDeclaration,
+  WALL_SURFACE_SLOT_DEFAULTS,
+  type WallNode,
+} from '@pascal-app/core'
 
 /**
  * A wall exposes two paintable faces — interior + exterior. Painting writes
@@ -7,7 +12,15 @@ import { type SlotDeclaration, WALL_SURFACE_SLOT_DEFAULTS } from '@pascal-app/co
  * keeps walls on the same `{ slotId, label, default }` contract. The defaults
  * come from core so the viewer's material resolver renders the identical value.
  */
-export function wallSlots(): SlotDeclaration[] {
+export function wallSlots(node?: WallNode): SlotDeclaration[] {
+  if (node?.wallType === 'curtain') {
+    const config = getCurtainWallConfig(node)
+    return [
+      { slotId: 'curtain-frame', label: 'Frame', default: config.frameColor },
+      { slotId: 'curtain-glass', label: 'Glass', default: config.glassColor },
+      { slotId: 'curtain-solid', label: 'Solid panels', default: config.solidColor },
+    ]
+  }
   return [
     { slotId: 'interior', label: 'Interior', default: WALL_SURFACE_SLOT_DEFAULTS.interior },
     { slotId: 'exterior', label: 'Exterior', default: WALL_SURFACE_SLOT_DEFAULTS.exterior },

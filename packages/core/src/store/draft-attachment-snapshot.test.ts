@@ -5,6 +5,12 @@ import type { AnyNode, AnyNodeId } from '../schema/types'
 import { subscribeSceneCommits } from './history-control'
 import useScene from './use-scene'
 
+globalThis.requestAnimationFrame ??= (callback) => {
+  callback(0)
+  return 0
+}
+globalThis.cancelAnimationFrame ??= () => {}
+
 test('draft snapshots do not enumerate unaffected procedural attachment maps', () => {
   const saved = useScene.getState()
   const level = LevelNode.parse({})

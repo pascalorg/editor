@@ -14,8 +14,8 @@ import {
 import { createConicalRoofSectorAboveWall } from '../roof/conical-roof'
 import { wallDefinition } from './definition'
 
-test('wallDefinition records the lean-to child schema migration', () => {
-  expect(wallDefinition.schemaVersion).toBe(8)
+test('wallDefinition records the curtain wall schema version', () => {
+  expect(wallDefinition.schemaVersion).toBe(9)
 })
 
 test('wall drafting surface classifies its top, ends, and two sides', () => {

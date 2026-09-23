@@ -195,10 +195,12 @@ export function HelperManager() {
         : single?.type === 'duct-fitting' || single?.type === 'pipe-fitting'
           ? 'fitting'
           : null
+    const hasOpeningRadiusSelection = single?.type === 'door' || single?.type === 'window'
     return resolveSelectModeHelpHints({
       selectedCount: selectedNodes.length,
       hasMovableSelection: selectedNodes.some((node) => canDirectMoveNode(node)),
       hasRotatableSelection: selectedNodes.some((node) => canDirectRotateNode(node)),
+      hasOpeningRadiusSelection,
       commandPressed: modifiers.command,
       shiftPressed: modifiers.shift,
       mepSelection,

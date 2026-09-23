@@ -2,6 +2,7 @@ import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
+import { CurtainWallConfig } from './curtain-wall'
 import { DoorNode } from './door'
 import { ItemNode } from './item'
 import { LeanToExtensionNode } from './lean-to-extension'
@@ -131,6 +132,8 @@ export type WallSurfaceSlotId = keyof typeof WALL_SURFACE_SLOT_DEFAULTS
 export const WallNode = BaseNode.extend({
   id: objectId('wall'),
   type: nodeType('wall'),
+  wallType: z.enum(['standard', 'curtain']).optional(),
+  curtainWall: CurtainWallConfig.optional(),
   children: z
     .array(
       z.union([

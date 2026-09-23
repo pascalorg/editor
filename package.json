@@ -5,6 +5,7 @@
     "build": "turbo run build",
     "dev": "dotenv -e ./.env -e ./.env.defaults -- turbo run dev --env-mode=loose",
     "lint": "biome lint",
+    "lints": "bun run lint",
     "lint:fix": "biome lint --write",
     "format": "biome format --write",
     "format:check": "biome format",

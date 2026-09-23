@@ -13,11 +13,14 @@ import {
   getDormerWallOpeningVerticalBounds,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import { curtainOpeningResizeMax } from '../shared/curtain-opening-limits'
 import {
   buildWindowFloorplanSchedule,
   computeWindowFloorplanLevelData,
 } from '../shared/opening-documentation'
 import { publishOpeningResizeGuides } from '../shared/opening-guides-runtime'
+import { createOpeningPropertyPreview } from '../shared/opening-property-preview'
+import { openingPropertyPreviewHost } from '../shared/opening-property-preview-host'
 import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-opening-host'
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
 import { readHostWallCeiling } from '../shared/wall-opening-ceiling'
@@ -121,7 +124,7 @@ function windowWidthHandle(side: 'left' | 'right'): HandleDescriptor<WindowNodeT
       // wall-based limits read Infinity when wallId is unset).
       const roofMax = readRoofFaceWidthMax(n, scene, sign)
       if (roofMax !== null) return Math.max(MIN_WINDOW_WIDTH, roofMax)
-      return readWallLength(n, scene)
+      return curtainOpeningResizeMax(n, scene.nodes(), 'x', sign) ?? readWallLength(n, scene)
     },
     currentValue: (n) => n.width,
     onDrag: (node) => publishOpeningResizeGuides(node, true),
@@ -169,6 +172,8 @@ function windowHeightHandle(edge: 'top' | 'bottom'): HandleDescriptor<WindowNode
       // Maximum: distance from the anchored edge to the wall's allowed Y
       // bounds. Top arrow caps at the wall's resolved ceiling - bottom;
       // bottom arrow caps at top (positive Y room above the floor).
+      const curtainMax = curtainOpeningResizeMax(n, scene.nodes(), 'y', sign)
+      if (curtainMax !== undefined) return curtainMax
       const wallH = readHostWallCeiling(n.wallId, scene)
       const anchored = edge === 'top' ? n.position[1] - n.height / 2 : n.position[1] + n.height / 2
       return edge === 'top'
@@ -197,11 +202,55 @@ function windowHeightHandle(edge: 'top' | 'bottom'): HandleDescriptor<WindowNode
   }
 }
 
+function windowRadiusHandle(index: 0 | 1 | 2 | 3): HandleDescriptor<WindowNodeType> {
+  const corners = [
+    [-1, 1],
+    [1, 1],
+    [1, -1],
+    [-1, -1],
+  ] as const
+  return {
+    kind: 'corner-radius',
+    corner: corners[index],
+    width: (node) => node.width,
+    height: (node) => node.height,
+    currentValue: (node) =>
+      node.openingRadiusMode === 'individual'
+        ? (node.openingCornerRadii[index] ?? 0)
+        : node.cornerRadius,
+    max: (node) => Math.min(node.width, node.height) / 2,
+    apply: (node, radius, _scene, modifiers) => {
+      if (!modifiers.shiftKey) {
+        return { openingShape: 'rounded', openingRadiusMode: 'all', cornerRadius: radius }
+      }
+      const radii =
+        node.openingRadiusMode === 'individual'
+          ? [...node.openingCornerRadii]
+          : [node.cornerRadius, node.cornerRadius, node.cornerRadius, node.cornerRadius]
+      radii[index] = radius
+      return {
+        openingShape: 'rounded',
+        openingRadiusMode: 'individual',
+        openingCornerRadii: radii as [number, number, number, number],
+      }
+    },
+    createPreview: (node) =>
+      createOpeningPropertyPreview<WindowNodeType>(node.id, openingPropertyPreviewHost),
+    visible: (node) => node.openingShape !== 'arch',
+    portal: 'grandparent',
+    portalTarget: resolveWindowHandlePortalTarget,
+  }
+}
+
 const windowHandles: HandleDescriptor<WindowNodeType>[] = [
   windowWidthHandle('left'),
   windowWidthHandle('right'),
   windowHeightHandle('top'),
   windowHeightHandle('bottom'),
+  windowRadiusHandle(0),
+  windowRadiusHandle(1),
+  windowRadiusHandle(2),
+  windowRadiusHandle(3),
 ]
 
 /**

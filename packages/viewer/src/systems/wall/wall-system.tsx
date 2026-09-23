@@ -665,15 +665,33 @@ export function getPendingWallRebuildCount(): number {
 
 let placeholderSweepCountdown = WALL_PLACEHOLDER_SWEEP_INTERVAL
 
-export const WallSystem = () => {
+export type WallGeometryAdapterContext = {
+  isLive: (id: AnyNodeId) => boolean
+}
+
+export type WallGeometryAdapter = {
+  prepareChildren?: (
+    wall: WallNode,
+    children: readonly AnyNode[],
+    context: WallGeometryAdapterContext,
+  ) => { envelopeChildren: AnyNode[]; renderChildren: AnyNode[] }
+  buildGeometry?: (
+    wall: WallNode,
+    envelope: THREE.BufferGeometry,
+    children: readonly AnyNode[],
+  ) => THREE.BufferGeometry
+  syncAuxiliaryGeometry?: (wall: WallNode, mesh: THREE.Mesh, geometry: THREE.BufferGeometry) => void
+}
+
+export const WallSystem = ({ geometryAdapter }: { geometryAdapter?: WallGeometryAdapter } = {}) => {
   useScene((state) => state.dirtyNodes)
   useLiveNodeOverrides((s) => s.overrides)
   useEffect(() => () => clearLevelMiterCache(), [])
-  useFrame(runWallBuildFrame, 4)
+  useFrame(() => runWallBuildFrame(geometryAdapter), 4)
   return null
 }
 
-export function runWallBuildFrame() {
+export function runWallBuildFrame(geometryAdapter?: WallGeometryAdapter) {
   const initialBuild = isWallInitialBuildActive()
   const token = useScene.getState().hydrationToken
   if (token !== stalledHydrationToken) {
@@ -682,13 +700,13 @@ export function runWallBuildFrame() {
   }
   drainStats.wallsConsumedThisFrame = 0
   try {
-    consumeWallBuildFrame(initialBuild)
+    consumeWallBuildFrame(initialBuild, geometryAdapter)
   } finally {
     publishWallDrainStats()
   }
 }
 
-function consumeWallBuildFrame(initialBuild: boolean) {
+function consumeWallBuildFrame(initialBuild: boolean, geometryAdapter?: WallGeometryAdapter) {
   const clearDirty = useScene.getState().clearDirty
   // Self-heal: any registered wall still on its mount-time placeholder
   // geometry with NO dirty mark gets re-marked, so a lost mark (system
@@ -788,7 +806,7 @@ function consumeWallBuildFrame(initialBuild: boolean) {
 
       const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
       if (mesh) {
-        timeSpan('wall-rebuild', () => updateWallGeometry(wallId, miterData), {
+        timeSpan('wall-rebuild', () => updateWallGeometry(wallId, miterData, geometryAdapter), {
           properties: [['node', wallId]],
         })
         clearDirty(wallId as AnyNodeId)
@@ -871,7 +889,7 @@ function consumeWallBuildFrame(initialBuild: boolean) {
 
         const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
         if (mesh) {
-          timeSpan('wall-rebuild', () => updateWallGeometry(wallId, miterData), {
+          timeSpan('wall-rebuild', () => updateWallGeometry(wallId, miterData, geometryAdapter), {
             properties: [['node', wallId]],
           })
           notifyWallRebuilt(wallId)
@@ -962,7 +980,11 @@ function getLevelWalls(levelId: string): WallNode[] {
  * (override-merged) so a 2D drag visibly moves the 3D mesh without
  * having touched `useScene` mid-drag.
  */
-function updateWallGeometry(wallId: string, miterData: WallMiterData) {
+function updateWallGeometry(
+  wallId: string,
+  miterData: WallMiterData,
+  geometryAdapter?: WallGeometryAdapter,
+) {
   const nodes = useScene.getState().nodes
   const sceneNode = nodes[wallId as WallNode['id']]
   if (sceneNode?.type !== 'wall') return
@@ -991,28 +1013,27 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
     : undefined
 
   const childrenIds = node.children || []
-  // Merge live overrides into door / window children so cutouts track an
-  // in-flight resize drag (door width arrow, window height arrow, etc.)
-  // without waiting on the scene store. Non-cutout children pass through
-  // unchanged.
   const childrenNodes = childrenIds
     .map((childId) => nodes[childId])
     .filter((n): n is AnyNode => n !== undefined)
     .map((child) => {
       if (child.type !== 'door' && child.type !== 'window') return child
-      // `getEffectiveNode` folds in resize overrides (width/height arrows).
-      // Position moves publish to `useLiveTransforms` instead, so fold that
-      // in too — opening cutout brushes are rebuilt directly from the
-      // effective node position rather than from the rendered proxy mesh.
       const effective = getEffectiveNode(child)
       const live = useLiveTransforms.getState().get(child.id)
-      if (!live?.position) return effective
-      return { ...effective, position: live.position }
+      return live?.position ? { ...effective, position: live.position } : effective
     })
+  const prepared = geometryAdapter?.prepareChildren?.(node, childrenNodes, {
+    isLive: (id) =>
+      useLiveNodeOverrides.getState().get(id) !== undefined ||
+      useLiveTransforms.getState().get(id) !== undefined,
+  }) ?? {
+    envelopeChildren: childrenNodes,
+    renderChildren: childrenNodes,
+  }
 
   const builtGeo = generateExtrudedWall(
     node,
-    childrenNodes,
+    prepared.envelopeChildren,
     miterData,
     slabElevation,
     slabSupport.baseElevation,
@@ -1029,13 +1050,16 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
     new THREE.Quaternion().setFromAxisAngle(WALL_UV_Y_AXIS, -wallAngle),
     WALL_UV_UNIT_SCALE,
   )
-  const newGeo = applyWorldPlanarWallUVs(builtGeo, wallWorldMatrix)
+  const renderedGeo =
+    geometryAdapter?.buildGeometry?.(node, builtGeo, prepared.renderChildren) ?? builtGeo
+  const newGeo = applyWorldPlanarWallUVs(renderedGeo, wallWorldMatrix)
 
   mesh.geometry.dispose()
   // A degenerate rebuild (zero-length or fully cut wall) yields as few vertices
   // as the mount-time placeholder; the stamp keeps the sweep from re-marking it.
   newGeo.userData.built = true
   mesh.geometry = newGeo
+  geometryAdapter?.syncAuxiliaryGeometry?.(node, mesh, newGeo)
   // Update collision mesh
   const collisionMesh = mesh.getObjectByName('collision-mesh') as THREE.Mesh
   if (collisionMesh) {

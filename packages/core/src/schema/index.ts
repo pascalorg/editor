@@ -109,6 +109,13 @@ export {
 } from './nodes/construction-dimension'
 export { CupolaMaterialRole, CupolaNode } from './nodes/cupola'
 export {
+  CurtainGrid,
+  CurtainPanelType,
+  CurtainWallConfig,
+  DEFAULT_CURTAIN_WALL,
+  getCurtainWallConfig,
+} from './nodes/curtain-wall'
+export {
   DoorNode,
   DoorSegment,
   OpeningConstructionType,

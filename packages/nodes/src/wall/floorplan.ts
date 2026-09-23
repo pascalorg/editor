@@ -6,6 +6,7 @@ import {
   type GeometryContext,
   getWallCurveFrameAt,
   getWallCurveLength,
+  getWallEffectiveHeightForNodes,
   getWallMidpointHandlePoint,
   getWallPlanFootprint,
   getWallThickness,
@@ -22,6 +23,7 @@ import {
   renderPlannedConstructionDimensions,
   type WallConstructionDimensionPlan,
 } from './construction-dimensions'
+import { buildCurtainWallFloorplan } from './curtain-wall-floorplan'
 import { hasWallCurveBlockingChildren } from './curve-eligibility'
 
 // Same constants the legacy `getFloorplanWall` uses (editor/lib/floorplan/walls.ts).
@@ -158,7 +160,8 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       : isHovered && palette
         ? palette.wallHoverStroke
         : '#1f2937'
-  const fill = showSelectedChrome ? '#ffffff' : '#374151'
+  const fill =
+    node.wallType === 'curtain' ? 'transparent' : showSelectedChrome ? '#ffffff' : '#374151'
 
   const children: FloorplanGeometry[] = [
     {
@@ -177,6 +180,17 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       cursor: isSelected ? 'default' : undefined,
     },
   ]
+
+  if (node.wallType === 'curtain') {
+    children.push(
+      ...buildCurtainWallFloorplan(
+        node,
+        getWallEffectiveHeightForNodes(node, ctx.sceneNodes ?? {}),
+        stroke,
+        ctx.children,
+      ),
+    )
+  }
 
   if (automaticDimensions) {
     const dimensionStroke =
