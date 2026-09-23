@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import 'fake-indexeddb/auto'
+import { describe, expect, test } from 'bun:test'
+import { deleteAsset, loadAssetUrl, saveAsset } from '@pascal-app/core'
 import { collectNodeAssetUrlList, runLocalAssetGc } from './local-asset-gc'
 
 type FetchHandler = (url: string) => Response | Promise<Response>
@@ -21,10 +23,6 @@ function json(body: unknown, ok = true, status = 200): Response {
   })
 }
 
-afterEach(() => {
-  // ensure no leftover mock if a test throws
-})
-
 describe('local-asset-gc collectors', () => {
   test('collectNodeAssetUrlList walks url and src', () => {
     const urls = collectNodeAssetUrlList({
@@ -44,7 +42,7 @@ describe('runLocalAssetGc safety', () => {
       return json({ graph: { nodes: {} } })
     })
     try {
-      const result = await runLocalAssetGc(() => ({}))
+      const result = await runLocalAssetGc(() => ({ nodes: {} }))
       expect(result).toBeNull()
     } finally {
       restore()
@@ -54,7 +52,7 @@ describe('runLocalAssetGc safety', () => {
   test('skips GC when listing scenes fails', async () => {
     const restore = mockFetch(() => json({ error: 'no' }, false, 500))
     try {
-      expect(await runLocalAssetGc(() => ({}))).toBeNull()
+      expect(await runLocalAssetGc(() => ({ nodes: {} }))).toBeNull()
     } finally {
       restore()
     }
@@ -74,7 +72,7 @@ describe('runLocalAssetGc safety', () => {
       return json({ graph: { nodes: {} } })
     })
     try {
-      const result = await runLocalAssetGc(() => live)
+      const result = await runLocalAssetGc(() => ({ nodes: live }))
       // Keep-set included the late upload, so sweep ran but did not need to
       // delete it (result is a count of removals — File itself is not present
       // in this unit test's IDB; the contract is "keep-set includes live URLs").
@@ -82,6 +80,25 @@ describe('runLocalAssetGc safety', () => {
       expect(collectNodeAssetUrlList(live)).toContain(lateAsset)
     } finally {
       restore()
+    }
+  })
+
+  test('keeps a material texture added to the live graph during inventory', async () => {
+    const assetUrl = await saveAsset(new File(['texture'], 'texture.png'))
+    let materials: unknown = {}
+    const restore = mockFetch((url) => {
+      if (url.includes('/api/scenes?')) {
+        materials = { floor: { texture: { url: assetUrl } } }
+        return json({ scenes: [] })
+      }
+      return json({ graph: { nodes: {} } })
+    })
+    try {
+      await runLocalAssetGc(() => ({ nodes: {}, materials }))
+      expect(await loadAssetUrl(assetUrl)).not.toBeNull()
+    } finally {
+      restore()
+      await deleteAsset(assetUrl)
     }
   })
 })

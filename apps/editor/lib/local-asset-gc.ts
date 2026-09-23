@@ -1,7 +1,6 @@
 import {
   collectGraphAssetUrlsFromParts,
   collectNodeAssetUrls,
-  collectSceneAssetUrls,
   sweepLocalAssetsExcept,
 } from '@pascal-app/core'
 
@@ -37,9 +36,9 @@ export function collectLocalStorageSceneAssetUrls(): string[] {
  * skip GC rather than sweep from a partial keep-set.
  */
 export async function collectAllPersistedAssetUrls(
-  currentNodes: Record<string, unknown>,
+  currentGraph: SceneGraphLike,
 ): Promise<string[] | null> {
-  const keep = new Set<string>(collectSceneAssetUrls(currentNodes as never))
+  const keep = new Set<string>(collectGraphAssetUrls(currentGraph))
   for (const url of collectLocalStorageSceneAssetUrls()) keep.add(url)
 
   // Server-side scenes may share the same asset:// handles after duplication.
@@ -92,18 +91,19 @@ export async function collectAllPersistedAssetUrls(
  * bucket used by autosave (#733 review). Call only when the host can prove:
  * no in-flight writes, a complete scene inventory, and spare rate budget.
  *
- * `getLiveNodes` is re-read immediately before sweeping.
+ * `getLiveGraph` is re-read immediately before sweeping so both nodes and
+ * unsaved material texture references survive.
  * No-ops when the full keep-set cannot be built (never partial-sweeps).
  */
 export async function runLocalAssetGc(
-  getLiveNodes: () => Record<string, unknown>,
+  getLiveGraph: () => SceneGraphLike,
   extraKeepUrls: Iterable<string> = [],
 ): Promise<number | null> {
-  const keep = await collectAllPersistedAssetUrls(getLiveNodes())
+  const keep = await collectAllPersistedAssetUrls(getLiveGraph())
   if (keep === null) return null
 
   const finalKeep = new Set<string>(keep)
-  for (const url of collectSceneAssetUrls(getLiveNodes() as never)) {
+  for (const url of collectGraphAssetUrls(getLiveGraph())) {
     finalKeep.add(url)
   }
   for (const url of extraKeepUrls) {
