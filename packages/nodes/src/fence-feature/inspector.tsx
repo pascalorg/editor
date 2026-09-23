@@ -11,6 +11,7 @@ import {
 } from '@pascal-app/core'
 import { ActionButton, SliderControl, ToggleControl } from '@pascal-app/editor'
 import { useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 
 export function FenceFeatureEditor({
   node: child,
@@ -20,13 +21,18 @@ export function FenceFeatureEditor({
   onUpdate: (patch: Partial<FenceFeatureNode>) => void
 }) {
   const [error, setError] = useState('')
-  const nodes = useScene((s) => s.nodes)
-  const parent = child.parentId ? nodes[child.parentId as AnyNodeId] : undefined
-  if (parent?.type !== 'fence') return <p>Fence unavailable.</p>
-  const node = fenceWithFeatures(
-    parent,
-    (parent.children ?? []).map((id) => nodes[id as AnyNodeId]).filter(Boolean),
+  const parentId = child.parentId as AnyNodeId | undefined
+  const parent = useScene((s) => (parentId ? s.nodes[parentId] : undefined))
+  const siblings = useScene(
+    useShallow((s) => {
+      const fence = parentId ? s.nodes[parentId] : undefined
+      return fence?.type === 'fence'
+        ? (fence.children ?? []).map((id) => s.nodes[id as AnyNodeId]).filter(Boolean)
+        : []
+    }),
   )
+  if (parent?.type !== 'fence') return <p>Fence unavailable.</p>
+  const node = fenceWithFeatures(parent, siblings)
   const features = [fenceFeatureData(child)]
   const length = getFenceCenterlineLength(node)
   const update = (id: string, patch: Partial<Omit<FenceFeatureData, 'id' | 'kind'>>) => {
@@ -136,7 +142,7 @@ export function FenceFeatureEditor({
                   label: 'Gate height',
                   value: height,
                   min: 0.3,
-                  max: 6,
+                  max: 1000,
                   step: 0.05,
                   unit: 'm',
                 },
@@ -145,7 +151,7 @@ export function FenceFeatureEditor({
                   label: 'Ground clearance',
                   value: feature.clearance ?? node.groundClearance,
                   min: 0,
-                  max: 2,
+                  max: 1000,
                   step: 0.01,
                   unit: 'm',
                 },
@@ -181,7 +187,7 @@ export function FenceFeatureEditor({
                   label: 'Infill spacing',
                   value: feature.spacing ?? 0.15,
                   min: 0.04,
-                  max: 1,
+                  max: 1000,
                   step: 0.01,
                   unit: 'm',
                 },

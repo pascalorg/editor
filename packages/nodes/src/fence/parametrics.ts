@@ -56,7 +56,7 @@ export const fenceParametrics: ParametricDescriptor<FenceNode> = {
           kind: 'number',
           unit: 'm',
           min: 0.2,
-          max: 5,
+          max: 1000,
           step: 0.05,
           visibleIf: (n) =>
             (isSplineFence(n) || Math.abs(n.curveOffset ?? 0) > 1e-4) &&
@@ -68,8 +68,6 @@ export const fenceParametrics: ParametricDescriptor<FenceNode> = {
           label: 'Vertical offset',
           kind: 'number',
           unit: 'm',
-          min: -10,
-          max: 10,
           step: 0.01,
         },
       ],

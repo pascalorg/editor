@@ -88,9 +88,9 @@ export { WallMoveSideHandles } from './components/editor/wall-move-side-handles'
 export { useFloorplanRender } from './components/editor-2d/floorplan-render-context'
 export { FloorplanDimensionRenderer } from './components/editor-2d/renderers/floorplan-dimension-renderer'
 export {
-  type DraftWallMeasurement,
-  FloorplanDraftWallMeasurement,
-} from './components/editor-2d/renderers/floorplan-draft-wall-measurement'
+  type DraftMeasurement,
+  FloorplanDraftMeasurement,
+} from './components/editor-2d/renderers/floorplan-draft-measurement'
 export { FloorplanGeometryRenderer } from './components/editor-2d/renderers/floorplan-geometry-renderer'
 export {
   FloorplanNodePreview,

@@ -147,7 +147,7 @@ import {
 import { FloorplanSnapBeaconLayer } from '../editor-2d/floorplan-snap-beacon-layer'
 import { FloorplanWallMoveGhostLayer } from '../editor-2d/floorplan-wall-move-ghost-layer'
 import { FloorplanDraftLayer } from '../editor-2d/renderers/floorplan-draft-layer'
-import { FloorplanDraftWallMeasurement } from '../editor-2d/renderers/floorplan-draft-wall-measurement'
+import { FloorplanDraftMeasurement } from '../editor-2d/renderers/floorplan-draft-measurement'
 import { FloorplanGeometryRenderer } from '../editor-2d/renderers/floorplan-geometry-renderer'
 import { FloorplanMarqueeLayer } from '../editor-2d/renderers/floorplan-marquee-layer'
 import { FloorplanPlacementPreviewLayer } from '../editor-2d/renderers/floorplan-placement-preview-layer'
@@ -4831,7 +4831,7 @@ function FloorplanLinearDraftLayer({
       )}
 
       {draftWallMeasurement && (
-        <FloorplanDraftWallMeasurement
+        <FloorplanDraftMeasurement
           labelBackground={isDark ? '#0f172a' : '#ffffff'}
           labelText={isDark ? '#e2e8f0' : '#171717'}
           measurement={draftWallMeasurement}
@@ -4858,7 +4858,7 @@ function FloorplanLinearDraftLayer({
       ))}
 
       {rectangleDraft?.measurements.map((measurement, index) => (
-        <FloorplanDraftWallMeasurement
+        <FloorplanDraftMeasurement
           key={index}
           labelBackground={isDark ? '#0f172a' : '#ffffff'}
           labelText={isDark ? '#e2e8f0' : '#171717'}
