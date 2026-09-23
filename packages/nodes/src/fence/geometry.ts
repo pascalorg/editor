@@ -1,4 +1,10 @@
-import { type AnyNodeId, type GeometryContext, getMaterialPresetByRef } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type FenceWithFeatures,
+  fenceWithFeatures,
+  type GeometryContext,
+  getMaterialPresetByRef,
+} from '@pascal-app/core'
 import {
   applyMaterialPresetToMaterials,
   type ColorPreset,
@@ -101,13 +107,16 @@ function getLegacyFenceMaterial(node: FenceNode, shading: RenderShading): Materi
 }
 
 export function buildFenceGeometry(
-  node: FenceNode,
+  node: FenceWithFeatures,
   ctx?: GeometryContext,
   shading: RenderShading = 'rendered',
   textures = true,
   colorPreset: ColorPreset = 'clay',
   sceneTheme?: string,
+  mode: 'body' | 'features' = 'body',
 ): Group {
+  const previewFeatures = node.features ?? []
+  if (mode === 'body') node = fenceWithFeatures(node, ctx?.children ?? [])
   const group = new Group()
   const startGround = ctx?.levelBaseAt?.(node.start[0], node.start[1]) ?? 0
   const surfaceId = node.supportSurfaceNodeId as AnyNodeId | undefined
@@ -141,6 +150,7 @@ export function buildFenceGeometry(
           return height
         }
       : undefined,
+    mode,
   )
 
   // A hosted railing (`supportSlabId`) stands on its slab's walking surface;
@@ -178,5 +188,18 @@ export function buildFenceGeometry(
     meshParent.add(mesh)
   }
 
+  if (mode === 'body' && previewFeatures.length > 0) {
+    group.add(
+      buildFenceGeometry(
+        { ...node, features: previewFeatures },
+        ctx,
+        shading,
+        textures,
+        colorPreset,
+        sceneTheme,
+        'features',
+      ),
+    )
+  }
   return group
 }

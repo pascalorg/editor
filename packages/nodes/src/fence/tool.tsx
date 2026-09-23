@@ -71,6 +71,7 @@ import {
   DraftAxisGuides,
   getNearestAxisAngleLabel,
 } from '../shared/draft-axis-guides'
+import FenceFeatureTool from './feature-tool'
 
 const FENCE_PREVIEW_HEIGHT = 1.8
 const FENCE_PREVIEW_THICKNESS = 0.08
@@ -482,6 +483,8 @@ function getCurrentLevelElements(): { walls: WallNode[]; fences: FenceNode[] } {
 
 export const FenceTool: React.FC = () => {
   const fenceMode = useEditor((s) => s.continuationByContext.fence)
+  const feature = useEditor((s) => s.toolDefaults.fence?.featurePlacement)
+  if (feature === 'gate' || feature === 'opening') return <FenceFeatureTool kind={feature} />
   if (fenceMode === 'curved') {
     return <SplineFenceDraft />
   }
@@ -525,7 +528,13 @@ const StraightFenceTool: React.FC = () => {
   // Scope seeded defaults to this tool session: clear on deactivation so a
   // later manual fence draw isn't drawn with a stale preset's parameters.
   // Unmount-only (empty deps) — the [unit] effect below must not clear it.
-  useEffect(() => () => useEditor.getState().setToolDefaults('fence', null), [])
+  useEffect(
+    () => () => {
+      if (!useEditor.getState().toolDefaults.fence?.featurePlacement)
+        useEditor.getState().setToolDefaults('fence', null)
+    },
+    [],
+  )
 
   useEffect(() => {
     let previousFenceEnd: FencePlanPoint | null = null
@@ -934,7 +943,13 @@ const SplineFenceDraft: React.FC<{ freehand?: boolean }> = ({ freehand = false }
   }, [cursor, draftPoints])
   useEffect(() => () => useFenceCurveDraft.getState().reset(), [])
 
-  useEffect(() => () => useEditor.getState().setToolDefaults('fence', null), [])
+  useEffect(
+    () => () => {
+      if (!useEditor.getState().toolDefaults.fence?.featurePlacement)
+        useEditor.getState().setToolDefaults('fence', null)
+    },
+    [],
+  )
 
   useEffect(() => {
     const snapPoint = (local: FencePlanPoint): FencePlanPoint => {

@@ -1,8 +1,12 @@
 import {
   type AnyNodeId,
   type FenceNode,
+  type FenceWithFeatures,
   getFenceCenterlineFrameAt,
   getFenceCenterlineLength,
+  getFenceGateLeaves,
+  type ResolvedFenceFeature,
+  resolveFenceFeatures,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -14,6 +18,7 @@ type FencePart = {
   geometry?: THREE.BufferGeometry
   position: [number, number, number]
   rotationY?: number
+  rotationZ?: number
   scale: [number, number, number]
   // A `pyramid` part is a 4-sided cone (square base aligned to the part axes),
   // used for peaked post caps. Defaults to a box.
@@ -22,6 +27,7 @@ type FencePart = {
   startT?: number
   endT?: number
   heightOverride?: number
+  curveBlock?: { centerY: number; height: number; depth: number; lateralOffset: number }
 }
 
 const MIN_CURVE_SEGMENT_LENGTH = 0.18
@@ -38,6 +44,7 @@ function createFencePartGeometry(part: FencePart) {
         ? createPicketGeometry(part.scale[0], part.scale[1], part.scale[2], part.picketTop)
         : new THREE.BoxGeometry(1, 1, 1)
   if (part.shape !== 'picket') geometry.scale(part.scale[0], part.scale[1], part.scale[2])
+  if (part.rotationZ) geometry.rotateZ(part.rotationZ)
   if (part.rotationY) {
     geometry.rotateY(part.rotationY)
   }
@@ -225,6 +232,7 @@ function createFenceCurveBlockPart(
     scale: [1, 1, 1],
     startT,
     endT,
+    curveBlock: { centerY, height, depth, lateralOffset },
   }
 }
 
@@ -939,6 +947,186 @@ function omitCrossingParts(parts: FencePart[], transitions: HeightTransition[]) 
   )
 }
 
+function cutFenceParts(
+  fence: FenceNode,
+  parts: FenceSlotParts,
+  features: ResolvedFenceFeature[],
+  heightAt?: (x: number, z: number) => number,
+  renderFeatures = true,
+) {
+  const progress = createFencePathProgress(fence)
+  for (const slot of ['posts', 'infill', 'base', 'rail'] as const) {
+    parts[slot] = parts[slot].flatMap((part) => {
+      if (part.startT === undefined || part.endT === undefined || !part.curveBlock) {
+        const t = progress(part.position[0], part.position[2])
+        return features.some((feature) => t >= feature.startT && t <= feature.endT) ? [] : [part]
+      }
+      const ranges: Array<[number, number]> = []
+      let cursor = part.startT
+      for (const feature of features) {
+        if (feature.endT <= cursor || feature.startT >= part.endT) continue
+        if (feature.startT > cursor) ranges.push([cursor, Math.min(feature.startT, part.endT)])
+        cursor = Math.max(cursor, feature.endT)
+        if (cursor >= part.endT) break
+      }
+      if (cursor < part.endT) ranges.push([cursor, part.endT])
+      if (ranges.length === 1 && ranges[0]![0] === part.startT && ranges[0]![1] === part.endT)
+        return [part]
+      part.geometry?.dispose()
+      return ranges.flatMap(([start, end]) => {
+        const block = part.curveBlock!
+        const clipped = createFenceCurveBlockPart(
+          fence,
+          start,
+          end,
+          block.centerY,
+          block.height,
+          block.depth,
+          block.lateralOffset,
+        )
+        return clipped ? [clipped] : []
+      })
+    })
+  }
+
+  if (!renderFeatures) return
+  const postWidth = Math.max(fence.postSize, 0.05)
+  const postDepth = Math.max(fence.thickness, postWidth)
+  for (const feature of features) {
+    const bottom = feature.clearance ?? fence.groundClearance
+    const height = feature.height ?? Math.max(0.3, fence.height - bottom - 0.08)
+    const top = bottom + height
+    if (feature.showPosts !== false)
+      for (const t of [feature.startT, feature.endT]) {
+        const frame = getFencePointAt(fence, t)
+        const postHeight = Math.max(
+          fence.height,
+          feature.kind === 'gate' ? top + 0.08 : fence.height,
+        )
+        parts.posts.push({
+          position: [frame.point.x, postHeight / 2, frame.point.y],
+          rotationY: -frame.tangentAngle,
+          scale: [postWidth, postHeight, postDepth],
+        })
+        if (fence.postCap !== 'none')
+          parts.posts.push({
+            position: [frame.point.x, postHeight + postWidth * 0.2, frame.point.y],
+            rotationY: -frame.tangentAngle,
+            scale: [postWidth * 1.25, postWidth * 0.4, postDepth * 1.25],
+            shape: fence.postCap === 'pyramid' ? 'pyramid' : 'box',
+          })
+      }
+    if (feature.kind !== 'gate') continue
+    const member = Math.min(feature.frameWidth ?? 0.055, height / 4)
+    const depth = feature.thickness ?? 0.06
+    const style = !feature.style || feature.style === 'match' ? fence.style : feature.style
+    const leaves = getFenceGateLeaves(fence, feature)
+    // A swinging leaf is rigid: both leaves share the higher jamb elevation.
+    const support = Math.max(
+      ...[feature.startT, feature.endT].map((t) => {
+        const point = getFencePointAt(fence, t).point
+        return heightAt?.(point.x, point.y) ?? 0
+      }),
+    )
+    for (const leaf of leaves) {
+      const width = leaf.width
+      const frame = Math.min(member, width / 4)
+      const innerWidth = width - frame * 2
+      const innerHeight = height - frame * 2
+      const cos = Math.cos(leaf.rotation)
+      const sin = Math.sin(leaf.rotation)
+      const add = (
+        x: number,
+        y: number,
+        z: number,
+        w: number,
+        h: number,
+        d: number,
+        rotationZ = 0,
+        picket = false,
+      ) => {
+        parts.infill.push({
+          position: [leaf.hinge.x + cos * x - sin * z, y, leaf.hinge.y + sin * x + cos * z],
+          rotationY: -leaf.rotation,
+          rotationZ,
+          scale: [w, h, d],
+          heightOverride: support,
+          shape: picket ? 'picket' : 'box',
+          picketTop: fence.picketTop,
+        })
+      }
+      for (const x of [frame / 2, width - frame / 2])
+        add(x, bottom + height / 2, 0, frame, height, depth)
+      for (const y of [bottom + frame / 2, top - frame / 2])
+        add(width / 2, y, 0, innerWidth, frame, depth)
+      const spacing = Math.max(feature.spacing ?? 0.15, 0.04)
+      const board = Math.min(feature.boardWidth ?? 0.055, innerWidth)
+      if (style === 'privacy')
+        add(width / 2, bottom + height / 2, 0, innerWidth, innerHeight, depth * 0.6)
+      else if (style === 'horizontal' || style === 'rail') {
+        const count = style === 'rail' ? 3 : Math.max(1, Math.floor(innerHeight / spacing))
+        const boardHeight = Math.min(style === 'rail' ? frame : board, (innerHeight / count) * 0.8)
+        for (let i = 0; i < count; i++)
+          add(
+            width / 2,
+            bottom + frame + (innerHeight * (i + 0.5)) / count,
+            0,
+            innerWidth,
+            boardHeight,
+            depth * 0.65,
+          )
+      } else {
+        const count = Math.max(1, Math.floor(innerWidth / Math.max(spacing, board + 0.015)))
+        for (let i = 0; i < count; i++)
+          add(
+            frame + (innerWidth * (i + 0.5)) / count,
+            bottom + height / 2,
+            0,
+            Math.min(board, (innerWidth / count) * 0.8),
+            innerHeight,
+            depth * 0.65,
+            0,
+            style === 'picket',
+          )
+      }
+      if (feature.brace && feature.brace !== 'none') {
+        const angle = Math.atan2(innerHeight, innerWidth)
+        add(
+          width / 2,
+          bottom + height / 2,
+          depth * 0.65,
+          Math.hypot(innerWidth, innerHeight),
+          frame * 0.7,
+          depth * 0.35,
+          angle,
+        )
+        if (feature.brace === 'cross')
+          add(
+            width / 2,
+            bottom + height / 2,
+            -depth * 0.65,
+            Math.hypot(innerWidth, innerHeight),
+            frame * 0.7,
+            depth * 0.35,
+            -angle,
+          )
+      }
+      if (feature.showHardware !== false) {
+        for (const y of [bottom + height * 0.25, bottom + height * 0.75])
+          add(0, y, depth * 0.7, frame * 1.3, 0.075, depth * 0.6)
+        add(
+          width - frame,
+          bottom + height * 0.55,
+          depth * 0.8,
+          Math.min(0.12, width / 4),
+          0.025,
+          depth * 0.6,
+        )
+      }
+    }
+  }
+}
+
 function mergeFenceParts(
   parts: FencePart[],
   heightAt?: (x: number, z: number) => number,
@@ -991,12 +1179,18 @@ function mergeFenceParts(
  * options 1:1.
  */
 export function generateFenceSlotGeometries(
-  fence: FenceNode,
+  fence: FenceWithFeatures,
   heightAt?: (x: number, z: number) => number,
+  mode: 'all' | 'body' | 'features' = 'all',
 ): Record<FenceSlotId, THREE.BufferGeometry> {
-  const parts = createFenceParts(fence)
+  const parts =
+    mode === 'features' ? { posts: [], infill: [], base: [], rail: [] } : createFenceParts(fence)
+  const features = resolveFenceFeatures(fence)
+  if (features.length > 0) cutFenceParts(fence, parts, features, heightAt, mode !== 'body')
   const transitions =
-    heightAt && fence.surfaceMode !== 'level' ? fenceHeightTransitions(fence, heightAt) : []
+    mode !== 'features' && heightAt && fence.surfaceMode !== 'level'
+      ? fenceHeightTransitions(fence, heightAt)
+      : []
   if (heightAt && transitions.length > 0 && fence.transitionMode !== 'slope') {
     addTransitionPosts(fence, parts, transitions)
     parts.rail = omitCrossingParts(parts.rail, transitions)

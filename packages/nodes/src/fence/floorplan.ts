@@ -1,5 +1,7 @@
 import {
+  type FenceWithFeatures,
   type FloorplanGeometry,
+  fenceWithFeatures,
   type GeometryContext,
   getFenceCenterlineFrameAt,
   getFenceCenterlineLength,
@@ -8,8 +10,10 @@ import {
   getWallMidpointHandlePoint,
   isCurvedWall,
   isSplineFence,
+  resolveFenceFeatures,
   sampleFenceCenterline,
 } from '@pascal-app/core'
+import { buildFenceFeatureSymbol } from '../fence-feature/floorplan'
 import type { FenceNode } from './schema'
 
 /**
@@ -250,7 +254,12 @@ function buildMarker(
   }
 }
 
-export function buildFenceFloorplan(node: FenceNode, ctx: GeometryContext): FloorplanGeometry {
+export function buildFenceFloorplan(
+  node: FenceWithFeatures,
+  ctx: GeometryContext,
+): FloorplanGeometry {
+  const drafts = node.features ?? []
+  node = fenceWithFeatures(node, ctx.children)
   const view = ctx.viewState
   const palette = view?.palette
   const isSelected = view?.selected ?? false
@@ -268,7 +277,28 @@ export function buildFenceFloorplan(node: FenceNode, ctx: GeometryContext): Floo
           { x: node.start[0], y: node.start[1] },
           { x: node.end[0], y: node.end[1] },
         ]
-  const pathD = buildCenterlinePathD(centerlinePoints)
+  const features = resolveFenceFeatures(node)
+  const visibleRanges: Array<[number, number]> = []
+  let rangeStart = 0
+  for (const feature of features) {
+    if (feature.startT > rangeStart) visibleRanges.push([rangeStart, feature.startT])
+    rangeStart = feature.endT
+  }
+  if (rangeStart < 1) visibleRanges.push([rangeStart, 1])
+  const strokePaths =
+    features.length === 0
+      ? [centerlinePoints]
+      : visibleRanges.map(([start, end]) => {
+          const count = Math.max(
+            2,
+            Math.ceil(((end - start) * getFenceCenterlineLength(node)) / 0.2) + 1,
+          )
+          return Array.from(
+            { length: count },
+            (_, index) =>
+              getFenceCenterlineFrameAt(node, start + ((end - start) * index) / (count - 1)).point,
+          )
+        })
 
   // Stroke shifts: selected wins; hover (not selected) → `wallHoverStroke`
   // (light blue from the legacy palette, same as walls); otherwise dark
@@ -300,7 +330,9 @@ export function buildFenceFloorplan(node: FenceNode, ctx: GeometryContext): Floo
 
   // Marker frames. Filter to first+last when infill is off so the user
   // still sees end posts (matches legacy).
-  const markerTs = getFloorplanFenceMarkerTs(node)
+  const markerTs = getFloorplanFenceMarkerTs(node).filter(
+    (t) => !features.some((feature) => t > feature.startT && t < feature.endT),
+  )
   const markerFrames = markerTs.map((t) => {
     const frame = getFenceCenterlineFrameAt(node, t)
     return {
@@ -319,43 +351,46 @@ export function buildFenceFloorplan(node: FenceNode, ctx: GeometryContext): Floo
   // low-opacity ring. Width steps with the interaction level so hover
   // is subtler than active.
   if (glowOpacity > 0) {
+    for (const points of strokePaths)
+      children.push({
+        kind: 'path',
+        d: buildCenterlinePathD(points),
+        fill: 'none',
+        stroke: glowStroke,
+        strokeWidth: isActive ? 9.5 : isHovered ? 8.8 : 8.2,
+        strokeOpacity: glowOpacity,
+        strokeLinecap: 'round',
+        strokeLinejoin: 'round',
+        vectorEffect: 'non-scaling-stroke',
+      })
+  }
+
+  // 2. White underlay — visible fence body base layer.
+  for (const points of strokePaths)
     children.push({
       kind: 'path',
-      d: pathD,
+      d: buildCenterlinePathD(points),
       fill: 'none',
-      stroke: glowStroke,
-      strokeWidth: isActive ? 9.5 : isHovered ? 8.8 : 8.2,
-      strokeOpacity: glowOpacity,
+      stroke: underlayStroke,
+      strokeOpacity: 0.98,
+      strokeWidth: underlayWidth,
       strokeLinecap: 'round',
       strokeLinejoin: 'round',
       vectorEffect: 'non-scaling-stroke',
     })
-  }
-
-  // 2. White underlay — visible fence body base layer.
-  children.push({
-    kind: 'path',
-    d: pathD,
-    fill: 'none',
-    stroke: underlayStroke,
-    strokeOpacity: 0.98,
-    strokeWidth: underlayWidth,
-    strokeLinecap: 'round',
-    strokeLinejoin: 'round',
-    vectorEffect: 'non-scaling-stroke',
-  })
 
   // 3. Dark accent on top.
-  children.push({
-    kind: 'path',
-    d: pathD,
-    fill: 'none',
-    stroke: accentStroke,
-    strokeWidth: accentWidth,
-    strokeLinecap: 'round',
-    strokeLinejoin: 'round',
-    vectorEffect: 'non-scaling-stroke',
-  })
+  for (const points of strokePaths)
+    children.push({
+      kind: 'path',
+      d: buildCenterlinePathD(points),
+      fill: 'none',
+      stroke: accentStroke,
+      strokeWidth: accentWidth,
+      strokeLinecap: 'round',
+      strokeLinejoin: 'round',
+      vectorEffect: 'non-scaling-stroke',
+    })
 
   // 4. Style-aware markers. Pass `showInteractiveChrome` so hover also
   // bumps marker stroke widths slightly (legacy panel does the same).
@@ -371,25 +406,25 @@ export function buildFenceFloorplan(node: FenceNode, ctx: GeometryContext): Floo
       ),
     )
   }
-
   // 5. Hit-line(s) for click detection. A straight/arc fence uses a single
   // chord-spanning line; a spline fence emits one short hit-line per sampled
   // span so the clickable region follows the curve instead of cutting the
   // chord (there's no curved `hit-path` primitive yet).
-  if (isSplineFence(node)) {
-    for (let i = 1; i < centerlinePoints.length; i += 1) {
-      const a = centerlinePoints[i - 1]!
-      const b = centerlinePoints[i]!
-      children.push({
-        kind: 'hit-line',
-        x1: a.x,
-        y1: a.y,
-        x2: b.x,
-        y2: b.y,
-        strokeWidthPx: 18,
-        cursor: 'pointer',
-      })
-    }
+  if (isSplineFence(node) || features.length > 0) {
+    for (const points of strokePaths)
+      for (let i = 1; i < points.length; i += 1) {
+        const a = points[i - 1]!
+        const b = points[i]!
+        children.push({
+          kind: 'hit-line',
+          x1: a.x,
+          y1: a.y,
+          x2: b.x,
+          y2: b.y,
+          strokeWidthPx: 18,
+          cursor: 'pointer',
+        })
+      }
   } else {
     children.push({
       kind: 'hit-line',
@@ -570,5 +605,6 @@ export function buildFenceFloorplan(node: FenceNode, ctx: GeometryContext): Floo
     }
   }
 
+  for (const feature of drafts) children.push(buildFenceFeatureSymbol(feature, node, ctx, false))
   return { kind: 'group', children }
 }

@@ -389,6 +389,13 @@ export function ContextualHelperPanel({
   showPaintScope?: boolean
   continuationContext?: ContinuationContext | null
 }) {
+  const fenceFeature = useEditor((state) => state.mode === 'build' && state.tool === 'fence' ? state.toolDefaults.fence?.featurePlacement : null)
+  if (fenceFeature === 'gate' || fenceFeature === 'opening') return (
+    <div className={CONTAINER_CLASS}>
+      <ChipRow shortcut="Left click" label={fenceFeature === 'gate' ? 'Place gate on a fence' : 'Place passage on a fence'} />
+      <ChipRow shortcut="Esc" label="Cancel placement" />
+    </div>
+  )
   if (
     hints.length === 0 &&
     chipHints.length === 0 &&

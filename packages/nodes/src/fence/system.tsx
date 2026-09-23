@@ -4,8 +4,10 @@ import {
   type AnyNode,
   type AnyNodeId,
   findLevelAncestorId,
+  isFenceFeatureNode,
   nodeRegistry,
   sceneRegistry,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
@@ -35,6 +37,14 @@ function supportLevels(nodes: Record<AnyNodeId, AnyNode>): Map<AnyNodeId, AnyNod
   return levels
 }
 
+function markFenceAndChildren(id: AnyNodeId) {
+  const state = useScene.getState()
+  state.markDirty(id)
+  const node = state.nodes[id]
+  if (node?.type === 'fence')
+    for (const childId of node.children ?? []) state.markDirty(childId as AnyNodeId)
+}
+
 const FenceSystems = () => {
   const outputs = useRef(new Map<AnyNodeId, Object3D | null>())
   const levels = useRef(supportLevels(useScene.getState().nodes))
@@ -58,13 +68,23 @@ const FenceSystems = () => {
         if (oldLevel) changedLevels.add(oldLevel)
         if (newLevel) changedLevels.add(newLevel)
       }
+      for (const id of new Set([...Object.keys(previousNodes), ...Object.keys(currentNodes)])) {
+        const before = previousNodes[id as AnyNodeId]
+        const after = currentNodes[id as AnyNodeId]
+        if (before === after) continue
+        if (after?.type === 'fence') markFenceAndChildren(after.id)
+        if (isFenceFeatureNode(before) && before.parentId)
+          markFenceAndChildren(before.parentId as AnyNodeId)
+        if (isFenceFeatureNode(after) && after.parentId)
+          markFenceAndChildren(after.parentId as AnyNodeId)
+      }
       levels.current = currentLevels
       for (const node of Object.values(currentNodes)) {
         if (node.type !== 'fence') continue
         const fence = node as FenceNode
         if (followsSurfaces(fence)) {
           const level = findLevelAncestorId(fence.id as AnyNodeId, currentNodes)
-          if (level && changedLevels.has(level as AnyNodeId)) state.markDirty(fence.id as AnyNodeId)
+          if (level && changedLevels.has(level as AnyNodeId)) markFenceAndChildren(fence.id)
         } else if (fence.supportSlabId || fence.supportSurfaceNodeId) {
           const previous = previousNodes[fence.id as AnyNodeId] as FenceNode | undefined
           if (
@@ -75,12 +95,31 @@ const FenceSystems = () => {
             resolveFenceLiftElevationForNodes(fence, currentNodes) !==
               resolveFenceLiftElevationForNodes(fence, previousNodes)
           )
-            state.markDirty(fence.id as AnyNodeId)
+            markFenceAndChildren(fence.id)
         }
       }
       previousNodes = currentNodes
     })
+    const unsubscribeLive = useLiveNodeOverrides.subscribe((state, previous) => {
+      for (const id of new Set([...state.overrides.keys(), ...previous.overrides.keys()])) {
+        if (state.overrides.get(id) === previous.overrides.get(id)) continue
+        const node = useScene.getState().nodes[id as AnyNodeId]
+        if (node?.type === 'fence') markFenceAndChildren(node.id)
+        if (isFenceFeatureNode(node) && node.parentId) {
+          const before = previous.overrides.get(id) ?? {}
+          const after = state.overrides.get(id) ?? {}
+          const changedFields = new Set([...Object.keys(before), ...Object.keys(after)])
+          const onlyGateAngle =
+            node.type === 'fence-gate' &&
+            [...changedFields].every((key) => key === 'openAngle' || before[key] === after[key])
+          // Swinging a leaf does not change the opening cut or its sibling gates.
+          if (onlyGateAngle) useScene.getState().markDirty(node.id)
+          else markFenceAndChildren(node.parentId as AnyNodeId)
+        }
+      }
+    })
     return () => {
+      unsubscribeLive()
       unsubscribe()
       outputs.current.clear()
     }
@@ -104,8 +143,7 @@ const FenceSystems = () => {
     for (const node of Object.values(nodes)) {
       if (node.type !== 'fence' || !followsSurfaces(node as FenceNode)) continue
       const level = findLevelAncestorId(node.id as AnyNodeId, nodes)
-      if (level && changedLevels.has(level as AnyNodeId))
-        useScene.getState().markDirty(node.id as AnyNodeId)
+      if (level && changedLevels.has(level as AnyNodeId)) markFenceAndChildren(node.id)
     }
   }, 3)
 

@@ -15,10 +15,32 @@ export const FencePatternDistribution = z.enum([
   'maximum-spacing',
   'equal-fit',
 ])
+export const FenceFeature = z.object({
+  id: z.string(),
+  kind: z.enum(['gate', 'opening']),
+  center: z.number().finite().nonnegative(),
+  width: z.number().finite().positive(),
+  leafType: z.enum(['single', 'double']).optional(),
+  style: z.enum(['match', 'picket', 'slat', 'horizontal', 'privacy', 'rail']).optional(),
+  height: z.number().finite().min(0.3).max(6).optional(),
+  clearance: z.number().finite().min(0).max(2).optional(),
+  thickness: z.number().finite().min(0.02).max(0.3).optional(),
+  frameWidth: z.number().finite().min(0.025).max(0.2).optional(),
+  spacing: z.number().finite().min(0.04).max(1).optional(),
+  boardWidth: z.number().finite().min(0.02).max(0.3).optional(),
+  hinge: z.enum(['left', 'right']).optional(),
+  swing: z.enum(['inward', 'outward']).optional(),
+  openAngle: z.number().finite().min(0).max(170).optional(),
+  leafSplit: z.number().finite().min(0.2).max(0.8).optional(),
+  brace: z.enum(['none', 'diagonal', 'cross']).optional(),
+  showHardware: z.boolean().optional(),
+  showPosts: z.boolean().optional(),
+})
 
 export const FenceNode = BaseNode.extend({
   id: objectId('fence'),
   type: nodeType('fence'),
+  children: z.array(z.string()).default([]),
   material: MaterialSchema.optional(),
   materialPreset: z.string().optional(),
   // Unified paint-slot refs (`scene:`/`library:` MaterialRef per slot id),
@@ -85,6 +107,8 @@ export const FenceNode = BaseNode.extend({
   Fence node - used to represent a fence segment in the building/site level coordinate system
   - start/end: fence endpoints in level coordinate system
   - path: optional list of [x, y] points; when set (>= 2) the centerline is a smooth spline through them
+  - spanModes: straight or curved choice for each path span
+  - children: independently selectable gates and open passages
   - tangents: optional per-point handle vectors (parallel to path); null entries fall back to the automatic tangent
   - height/thickness: overall fence dimensions in meters
   - supportSlabId: optional slab host; the fence stands on that slab's walking surface (elevation)
