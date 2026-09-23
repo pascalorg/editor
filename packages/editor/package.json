@@ -75,5 +75,10 @@
     "@types/three": "^0.184.0",
     "fast-xml-parser": "^5.4.2",
     "typescript": "6.0.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pascalorg/editor.git",
+    "directory": "packages/editor"
   }
 }
