@@ -8,6 +8,7 @@ import {
 import {
   isGridSnapActive,
   isMagneticSnapActive,
+  triggerSFX,
   useEditor,
   useInteractionScope,
 } from '@pascal-app/editor'
@@ -153,4 +154,5 @@ export function commitWallSplit() {
   const plan = planWallDivisions(current.nodes, wall.id, checked.preview.distances)
   runAsSingleSceneHistoryStep(useScene, () => current.applyNodeChanges(plan.changes))
   closeWallSplit()
+  triggerSFX('sfx:structure-build')
 }

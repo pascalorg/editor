@@ -5,7 +5,7 @@ import {
   runAsSingleSceneHistoryStep,
   useScene,
 } from '@pascal-app/core'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@pascal-app/editor'
+import { Tooltip, TooltipContent, TooltipTrigger, triggerSFX } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { FoldHorizontal, Scissors } from 'lucide-react'
 import { useMemo } from 'react'
@@ -79,6 +79,7 @@ function MergeWallsAction() {
           useScene.getState().applyNodeChanges(plan.changes),
         )
         useViewer.getState().setSelection({ selectedIds: [plan.wallId] })
+        triggerSFX('sfx:structure-build')
       }}
     >
       <FoldHorizontal className="size-4" />

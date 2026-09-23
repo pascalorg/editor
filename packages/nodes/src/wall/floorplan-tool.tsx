@@ -78,6 +78,7 @@ function RectangleFloorplanTool({ activeLevelId }: FloorplanToolContext) {
         )
         draft().setWallRectangleDraftStart(point)
         setError(null)
+        triggerSFX('sfx:structure-build-start')
         return
       }
       try {
@@ -97,11 +98,22 @@ function RectangleFloorplanTool({ activeLevelId }: FloorplanToolContext) {
     const stopDouble = (e: MouseEvent) => {
       if (e.button === 0) claim(e)
     }
+    // The panel publishes the snapped cursor only when it moves to a new
+    // point, so each change while a corner is down is the line draft's tick.
+    const stopTick = useFloorplanDraftPreview.subscribe((state, previous) => {
+      if (
+        state.wallRectangleDraftStart &&
+        state.cursorPoint &&
+        state.cursorPoint !== previous.cursorPoint
+      )
+        triggerSFX('sfx:grid-snap')
+    })
     svg.addEventListener('pointerdown', onDown, true)
     svg.addEventListener('click', onClick, true)
     svg.addEventListener('dblclick', stopDouble, true)
     emitter.on('tool:cancel', cancel)
     return () => {
+      stopTick()
       svg.removeEventListener('pointerdown', onDown, true)
       svg.removeEventListener('click', onClick, true)
       svg.removeEventListener('dblclick', stopDouble, true)

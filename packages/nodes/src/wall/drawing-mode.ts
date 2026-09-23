@@ -26,17 +26,14 @@ let owners = 0
 /**
  * R toggles line / rectangle drawing (the HUD's Shape chip cycles the same
  * store). Both wall tools mount this: the 3D tool only exists once the canvas
- * does, and split view mounts both, so one listener serves whichever is up and
- * the mode returns to line when the last one closes.
+ * does, and split view mounts both, so one listener serves whichever is up.
+ * The mode outlives the tool: re-arming walls resumes the last shape used.
  */
 export function useWallDrawingModeKeys() {
   useEffect(() => {
     if (owners++ === 0) window.addEventListener('keydown', onKeyDown)
     return () => {
-      if (--owners === 0) {
-        window.removeEventListener('keydown', onKeyDown)
-        useWallDrawingMode.setState({ mode: 'line' })
-      }
+      if (--owners === 0) window.removeEventListener('keydown', onKeyDown)
     }
   }, [])
 }
