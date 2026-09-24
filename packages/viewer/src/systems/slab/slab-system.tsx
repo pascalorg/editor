@@ -45,7 +45,8 @@ function signedArea2(polygon: ReadonlyArray<readonly [number, number]>): number 
 /**
  * A renderable polygon collapses when snapping its edges to wall faces or
  * sibling seams leaves fewer than three points or no area (a threshold strip
- * inside a wall band). Such a slab builds an empty geometry instead of a sliver.
+ * inside a wall band). Such a slab builds an empty geometry instead of a sliver;
+ * a hole or cut region that collapses the same way is skipped.
  */
 function isCollapsedPolygon(polygon: ReadonlyArray<readonly [number, number]>): boolean {
   return polygon.length < 3 || Math.abs(signedArea2(polygon)) / 2 < MIN_SLAB_REGION_AREA
@@ -80,7 +81,7 @@ function buildSlabRegions(contour: PolygonPoint2D[], holes: PolygonPoint2D[][]) 
   const edgeCutouts: PolygonPoint2D[][] = []
 
   for (const hole of holes) {
-    if (hole.length < 3) continue
+    if (isCollapsedPolygon(hole)) continue
     if (isStrictInteriorHole(contour, hole)) containedHoles.push(hole)
     else if (affectsContour(contour, hole)) edgeCutouts.push(hole)
   }
