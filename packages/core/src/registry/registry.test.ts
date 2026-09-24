@@ -305,6 +305,40 @@ describe('loadPlugin', () => {
     })
   })
 
+  // A rejected plugin must not stay partly active: its earlier kinds would
+  // render, save and publish although the plugin never loaded.
+  test.failing.each([
+    ['collides with a loaded kind', makeDefinition('shared')],
+    ['repeats one of its own kinds', makeDefinition('partial:a')],
+    ['has an invalid schemaVersion', makeDefinition('partial:bad', { schemaVersion: 0 })],
+  ])('a plugin whose later definition %s registers nothing', async (_label, invalid) => {
+    await inProduction(async () => {
+      await loadPlugin({ id: 'loaded', apiVersion: 1, nodes: [makeDefinition('shared')] })
+      await expect(
+        loadPlugin({
+          id: 'partial',
+          apiVersion: 1,
+          nodes: [makeDefinition('partial:a'), invalid],
+          inspectorExtensions: [
+            {
+              id: 'partial:eng',
+              pluginId: 'partial',
+              kinds: ['wall'],
+              icon: { kind: 'url', src: '/icons/test.png' },
+              title: 'Engineering',
+              component: async () => ({ default: () => null }),
+            },
+          ],
+        }),
+      ).rejects.toThrow()
+    })
+
+    expect(nodeRegistry.has('partial:a')).toBe(false)
+    expect(getNodePluginId('partial:a')).toBeUndefined()
+    expect(getNodePluginId('shared')).toBe('loaded')
+    expect(getInspectorExtensions('wall')).toEqual([])
+  })
+
   // GATE (late-plugin subscriptions): plugins register via async dynamic
   // imports AFTER consumers mount. The selection managers rebuild their
   // `getSelectableKinds()` emitter subscriptions off this change signal —
