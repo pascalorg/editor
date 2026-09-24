@@ -307,7 +307,7 @@ describe('loadPlugin', () => {
 
   // A rejected plugin must not stay partly active: its earlier kinds would
   // render, save and publish although the plugin never loaded.
-  test.failing.each([
+  test.each([
     ['collides with a loaded kind', makeDefinition('shared')],
     ['repeats one of its own kinds', makeDefinition('partial:a')],
     ['has an invalid schemaVersion', makeDefinition('partial:bad', { schemaVersion: 0 })],

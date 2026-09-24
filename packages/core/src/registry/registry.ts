@@ -73,6 +73,21 @@ function isDevMode(): boolean {
   return false
 }
 
+function assertValidDefinition(def: AnyNodeDefinition): void {
+  if (typeof def.kind !== 'string' || def.kind.length === 0) {
+    throw new Error('[registry] NodeDefinition.kind must be a non-empty string')
+  }
+  if (typeof def.schemaVersion !== 'number' || def.schemaVersion < 1) {
+    throw new Error(
+      `[registry] NodeDefinition.schemaVersion must be a positive integer (kind: "${def.kind}")`,
+    )
+  }
+}
+
+function duplicateKindError(kind: string): Error {
+  return new Error(`[registry] duplicate node kind: "${kind}" already registered`)
+}
+
 class NodeRegistryImpl implements NodeRegistry {
   private readonly defs = new Map<string, AnyNodeDefinition>()
 
@@ -98,14 +113,7 @@ class NodeRegistryImpl implements NodeRegistry {
 
   // Internal — exposed via registerNode below.
   _register(def: AnyNodeDefinition): void {
-    if (typeof def.kind !== 'string' || def.kind.length === 0) {
-      throw new Error('[registry] NodeDefinition.kind must be a non-empty string')
-    }
-    if (typeof def.schemaVersion !== 'number' || def.schemaVersion < 1) {
-      throw new Error(
-        `[registry] NodeDefinition.schemaVersion must be a positive integer (kind: "${def.kind}")`,
-      )
-    }
+    assertValidDefinition(def)
     // Duplicate-kind handling depends on environment:
     //   - **Production**: throw. The plugin-authoring contract
     //     (`wiki/architecture/plugin-authoring.md`) guarantees that two
@@ -118,7 +126,7 @@ class NodeRegistryImpl implements NodeRegistry {
       if (isDevMode()) {
         console.warn(`[registry] re-registering node kind "${def.kind}" (HMR)`)
       } else {
-        throw new Error(`[registry] duplicate node kind: "${def.kind}" already registered`)
+        throw duplicateKindError(def.kind)
       }
     }
     this.defs.set(def.kind, def)
@@ -361,6 +369,16 @@ export async function loadPlugin(plugin: Plugin): Promise<void> {
     throw new Error(
       `[registry] plugin "${plugin.id}" requires apiVersion ${plugin.apiVersion}; host supports ${HOST_API_VERSION}`,
     )
+  }
+  // Validate the whole plugin before registering any kind: a rejected plugin
+  // must not leave some of its kinds live.
+  const kinds = new Set<string>()
+  for (const def of plugin.nodes ?? []) {
+    assertValidDefinition(def)
+    if (!isDevMode() && (kinds.has(def.kind) || nodeRegistry.has(def.kind))) {
+      throw duplicateKindError(def.kind)
+    }
+    kinds.add(def.kind)
   }
   for (const def of plugin.nodes ?? []) {
     registerNode(def)
