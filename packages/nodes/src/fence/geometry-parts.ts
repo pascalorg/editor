@@ -29,6 +29,13 @@ type FencePart = {
   endpoint?: 'start' | 'end'
 }
 
+export type FenceGateLeafGeometry = {
+  geometry: THREE.BufferGeometry
+  hinge: { x: number; z: number }
+  rotationY: number
+  openRotationY: number
+}
+
 const MIN_CURVE_SEGMENT_LENGTH = 0.18
 const HORIZONTAL_FENCE_CURVE_SEGMENT_LENGTH = 0.2
 
@@ -1261,6 +1268,7 @@ function cutFenceParts(
   features: ResolvedFenceFeature[],
   heightAt?: (x: number, z: number) => number,
   renderFeatures = true,
+  gateLeafGeometries?: FenceGateLeafGeometry[],
 ) {
   const progress = createFencePathProgress(fence)
   for (const slot of ['posts', 'infill', 'base', 'rail'] as const) {
@@ -1379,7 +1387,11 @@ function cutFenceParts(
           ? Math.max(fence.thickness * 0.35, 0.011)
           : Math.max(fence.thickness, 0.03)
     const depth = matchesFence ? matchedDepth : (feature.thickness ?? 0.06)
-    const leaves = getFenceGateLeaves(fence, feature)
+    const animatedLeaves = getFenceGateLeaves(fence, feature)
+    const fullyOpenLeaves = getFenceGateLeaves(fence, { ...feature, openAngle: 90 })
+    const leaves = gateLeafGeometries
+      ? getFenceGateLeaves(fence, { ...feature, openAngle: 0 })
+      : animatedLeaves
     // A swinging leaf is rigid: both leaves share the higher jamb elevation.
     const support = Math.max(
       ...[feature.startT, feature.endT].map((t) => {
@@ -1387,7 +1399,8 @@ function cutFenceParts(
         return heightAt?.(point.x, point.y) ?? 0
       }),
     )
-    for (const leaf of leaves) {
+    for (const [leafIndex, leaf] of leaves.entries()) {
+      const leafParts: FencePart[] = []
       const width = leaf.width
       const frame = Math.min(member, width / 4)
       const innerWidth = width - frame * 2
@@ -1404,7 +1417,7 @@ function cutFenceParts(
         rotationZ = 0,
         picket = false,
       ) => {
-        parts.infill.push({
+        leafParts.push({
           position: [leaf.hinge.x + cos * x - sin * z, y, leaf.hinge.y + sin * x + cos * z],
           rotationY: -leaf.rotation,
           rotationZ,
@@ -1508,6 +1521,16 @@ function cutFenceParts(
           depth * 0.6,
         )
       }
+      if (gateLeafGeometries) {
+        gateLeafGeometries.push({
+          geometry: mergeFenceParts(leafParts, heightAt),
+          hinge: { x: leaf.hinge.x, z: leaf.hinge.y },
+          rotationY: -(animatedLeaves[leafIndex]!.rotation - leaf.rotation),
+          openRotationY: -(fullyOpenLeaves[leafIndex]!.rotation - leaf.rotation),
+        })
+      } else {
+        parts.infill.push(...leafParts)
+      }
     }
   }
 }
@@ -1569,6 +1592,7 @@ export function generateFenceSlotGeometries(
   mode: 'all' | 'body' | 'features' = 'all',
   omitEndpointPosts?: ReadonlySet<'start' | 'end'>,
   cornerNeighbors?: FenceCornerNeighbors,
+  gateLeafGeometries?: FenceGateLeafGeometry[],
 ): Record<FenceSlotId, THREE.BufferGeometry> {
   const parts =
     mode === 'features'
@@ -1591,7 +1615,8 @@ export function generateFenceSlotGeometries(
     }
   }
   const features = resolveFenceFeatures(fence)
-  if (features.length > 0) cutFenceParts(fence, parts, features, heightAt, mode !== 'body')
+  if (features.length > 0)
+    cutFenceParts(fence, parts, features, heightAt, mode !== 'body', gateLeafGeometries)
   const transitions =
     mode !== 'features' && heightAt && fence.surfaceMode !== 'level'
       ? fenceHeightTransitions(fence, heightAt)
