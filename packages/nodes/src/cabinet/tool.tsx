@@ -13,6 +13,7 @@ import {
   getWallThickness,
   isCurvedWall,
   movingFootprintAnchors,
+  type NodeEvent,
   nodeRegistry,
   resolveAlignment,
   resolveSupportSlabPatch,
@@ -24,16 +25,20 @@ import {
 import {
   clearPlacementSurface,
   EDITOR_LAYER,
+  formatLinearMeasurement,
   getFloorStackPreviewPosition,
   getSideFromNormal,
   isAlignmentGuideActive,
   isGridSnapActive,
   isMagneticSnapActive,
+  isPlacementTypingKey,
   isValidWallSideFace,
   markToolCancelConsumed,
   movementSfxStepKey,
   PlacementBox,
+  PlacementCoordinateInput,
   PlacementDimensionGuides,
+  type PlacementTypingState,
   parseMeasurement,
   publishPlacementSurface,
   triggerSFX,
@@ -41,6 +46,7 @@ import {
   useEditor,
   useFacingPose,
   usePlacementPreview,
+  usePlacementTyping,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
@@ -80,8 +86,10 @@ import { buildCabinetGeometry } from './geometry'
 import { applyCabinetModuleInsertion, cabinetModuleForRunInsertion } from './insertion'
 import {
   buildCabinetPlacementSizeDimensions,
+  getCabinetPlacementCoordinates,
   resolveCabinetPlacementDimensionPosition,
   resolveCabinetPlacementDimensions,
+  resolveCabinetTypedPlacementPosition,
 } from './placement-dimensions'
 import {
   resolveCabinetGridPosition,
@@ -408,6 +416,10 @@ const CabinetTool = () => {
   const metricNotation = useViewer((s) => s.metricNotation)
   const activeDimensionId = usePlacementPreview((s) => s.activeDimensionId)
   const dimensionInput = usePlacementPreview((s) => s.dimensionInput)
+  const typingActive = usePlacementTyping((s) => s.isActive)
+  const typingProjectedPosition = usePlacementTyping((s) => s.projectedPosition)
+  // HUD ownership: in 2d/split the floorplan pane owns the typed-entry HUD.
+  const viewMode = useEditor((s) => s.viewMode)
   const [placement, setPlacement] = useState<CabinetPlacement | null>(null)
   const [draftSegments, setDraftSegments] = useState<DraftSegment[]>([])
   const [yaw, setYaw] = useState(0)
@@ -427,6 +439,13 @@ const CabinetTool = () => {
   const previousTickFrameRef = useRef(-1)
   const draftAnchorRef = useRef<DraftAnchorState | null>(null)
   const lastRawPositionRef = useRef<[number, number, number] | null>(null)
+  const typedWallHitRef = useRef<WallHit | null>(null)
+  const typedCoordinateDefaultsRef = useRef<[number, number] | null>(null)
+  // Set while a code path intentionally ends the session *and* owns the
+  // placement afterwards (canvas-click commit, island toggle) so the
+  // restore-on-cancel logic stays out of the way.
+  const suppressTypedRestoreRef = useRef(false)
+  const lastPlacementEventRef = useRef<FloorPlacementClickTriggerEvent | null>(null)
   const activeGhostRef = useRef<Group | null>(null)
   const surfacePointRef = useRef(new Vector3())
   const surfaceNormalRef = useRef(new Vector3(0, 1, 0))
@@ -603,6 +622,10 @@ const CabinetTool = () => {
               levelId: activeLevelId,
               nodes: useScene.getState().nodes,
               position: previewPosition,
+              providedWallHit:
+                typedWallHitRef.current && next.wallLocalX != null
+                  ? { ...typedWallHitRef.current, localX: next.wallLocalX }
+                  : undefined,
               rotation: next.yaw,
               wallId: next.wallId,
               width: stretch?.length ?? livePreviewNode.width,
@@ -678,6 +701,10 @@ const CabinetTool = () => {
     previousWasWallSnapRef.current = false
     previousTickFrameRef.current = -1
     draftAnchorRef.current = null
+    typedWallHitRef.current = null
+    typedCoordinateDefaultsRef.current = null
+    lastPlacementEventRef.current = null
+    usePlacementTyping.getState().clear()
     let alignmentCandidates = collectAlignmentAnchors(
       useScene.getState().nodes,
       previewNodeRef.current.id,
@@ -718,6 +745,15 @@ const CabinetTool = () => {
         draftAnchorRef.current !== null || draftSegmentsRef.current.length > 0
       if (hasContinuousDraft) clearDraft()
       islandModeRef.current = nextIslandMode
+      // Island mode has no wall snapping, so a live typed session would be
+      // orphaned (frozen pointer + vanished HUD). End it — the toggle owns
+      // the placement afterwards, so suppress the pose restore.
+      if (nextIslandMode && usePlacementTyping.getState().isActive) {
+        suppressTypedRestoreRef.current = true
+        usePlacementTyping.getState().clear()
+        typedWallHitRef.current = null
+        typedCoordinateDefaultsRef.current = null
+      }
       if (hasContinuousDraft) return
       // Drop a stale wall-snapped preview so the next move re-resolves free.
       if (nextIslandMode && currentPlacement?.snappedToWall) {
@@ -1036,9 +1072,13 @@ const CabinetTool = () => {
     const resolveStretchedPlacement = (
       anchor: StretchAnchor,
       event: FloorPlacementClickTriggerEvent,
+      rawOverride?: [number, number, number],
     ): CabinetPlacement => {
       useAlignmentGuides.getState().clear()
-      const raw = resolveRawPosition(event)
+      // `rawOverride` lets callers seed the stretch geometry directly (typed
+      // entry commits at the typed pose — the reused pointer event's cursor
+      // position is stale and must not grow the run).
+      const raw = rawOverride ?? resolveRawPosition(event)
       let stretch = planCabinetContinuousStretch({
         anchor,
         previewWidth: previewNodeRef.current.width,
@@ -1130,6 +1170,8 @@ const CabinetTool = () => {
     const onGridMove = (event: GridEvent) => {
       const ts = event.nativeEvent?.timeStamp ?? -1
       if (ts === lastWallEventTime || wallOwnsPointer()) return
+      if (usePlacementTyping.getState().isActive) return
+      lastPlacementEventRef.current = event
       const anchor = resolveDraftAnchor()
       if (anchor) {
         publishPlacement(resolveActiveStretchPlacement(anchor, event), ts)
@@ -1141,6 +1183,11 @@ const CabinetTool = () => {
     const onWallMove = (event: WallEvent) => {
       lastWallEventTime = event.nativeEvent?.timeStamp ?? -1
       if (event.node.parentId !== activeLevelId) return
+      if (usePlacementTyping.getState().isActive) {
+        event.stopPropagation()
+        return
+      }
+      lastPlacementEventRef.current = event
       const anchor = resolveDraftAnchor()
       if (anchor) {
         markWallOwnedPointer()
@@ -1411,7 +1458,14 @@ const CabinetTool = () => {
       stopPlacementCommitPropagation(event)
     }
 
-    const onClick = (event: FloorPlacementClickTriggerEvent) => {
+    // Returns true when a cabinet (or insertion) was actually committed —
+    // `fromTypedCommit` marks the synthetic Enter-commit call, which manages
+    // the typing session itself in its caller.
+    const onClickInner = (
+      event: FloorPlacementClickTriggerEvent,
+      fromTypedCommit = false,
+      rawOverride?: [number, number, number],
+    ): boolean => {
       const anchor = resolveDraftAnchor()
       if (anchor) {
         const detail =
@@ -1421,17 +1475,17 @@ const CabinetTool = () => {
         if (isCabinetContinuousFollowUpClick(detail)) {
           clearDraft()
           stopPlacementCommitPropagation(event)
-          return
+          return false
         }
         const segment = resolveCurrentDraftSegment(anchor, event)
         if (!segment) {
           stopPlacementCommitPropagation(event)
-          return
+          return false
         }
         const committed = commitDraftSegment(segment)
         if (!committed) {
           stopPlacementCommitPropagation(event)
-          return
+          return false
         }
         chainRootRunRef.current ??= committed.run
         chainRunRef.current = committed.run
@@ -1446,20 +1500,20 @@ const CabinetTool = () => {
         publishPlacement(resolveActiveStretchPlacement(draftAnchorRef.current, event))
         triggerSFX('sfx:item-place')
         stopPlacementCommitPropagation(event)
-        return
+        return true
       }
       const next = isForcePlacementEvent(event)
         ? resolvePlacement(event)
         : (placementRef.current ?? resolvePlacement(event))
       if (!next.valid) {
         stopPlacementCommitPropagation(event)
-        return
+        return false
       }
       if (next.insertionPreview) {
         const insertedId = commitInsertion(next)
         if (!insertedId) {
           stopPlacementCommitPropagation(event)
-          return
+          return false
         }
         useViewer.getState().setSelection({ selectedIds: [insertedId] })
         useEditor.getState().setMode('select')
@@ -1469,7 +1523,7 @@ const CabinetTool = () => {
         clearPlacementSurface()
         useFacingPose.getState().clear()
         stopPlacementCommitPropagation(event)
-        return
+        return true
       }
       if (useEditor.getState().getContinuation('cabinet') === 'continuous') {
         draftSegmentsRef.current = []
@@ -1486,10 +1540,17 @@ const CabinetTool = () => {
           wallLocalX: next.wallLocalX,
           wallSurfaceNormal: next.wallSurfaceNormal,
         }
-        publishPlacement(resolveStretchedPlacement(draftAnchorRef.current, event))
+        // Typed entry commits at the typed pose: seed the stretch preview
+        // there (zero-length) instead of growing toward the stale cursor
+        // position carried by the reused pointer event.
+        publishPlacement(
+          rawOverride
+            ? resolveStretchedPlacement(draftAnchorRef.current, event, rawOverride)
+            : resolveStretchedPlacement(draftAnchorRef.current, event),
+        )
         triggerSFX('sfx:item-pick')
         stopPlacementCommitPropagation(event)
-        return
+        return true
       }
       const { cabinet, buildModule } = buildRunNodes(next.position, next.yaw)
       const module = buildModule(0, previewNodeRef.current.width, 0)
@@ -1508,10 +1569,208 @@ const CabinetTool = () => {
       triggerSFX('sfx:item-place')
       useAlignmentGuides.getState().clear()
       usePlacementPreview.getState().clear()
+      usePlacementTyping.getState().clear()
+      typedWallHitRef.current = null
+      typedCoordinateDefaultsRef.current = null
       clearPlacementSurface()
       useFacingPose.getState().clear()
       stopPlacementCommitPropagation(event)
+      return true
     }
+
+    // Canvas clicks land here. A click during typed entry commits the typed
+    // preview (what the user sees); the session is only ended when the
+    // commit actually succeeds — an invalid typed pose keeps the session
+    // alive so the values can still be edited.
+    const onClick = (
+      event: FloorPlacementClickTriggerEvent,
+      fromTypedCommit = false,
+      rawOverride?: [number, number, number],
+    ): boolean => {
+      const typingActive = !fromTypedCommit && usePlacementTyping.getState().isActive
+      const committed = onClickInner(event, fromTypedCommit, rawOverride)
+      if (typingActive && committed) {
+        suppressTypedRestoreRef.current = true
+        usePlacementTyping.getState().clear()
+        typedWallHitRef.current = null
+        typedCoordinateDefaultsRef.current = null
+      }
+      return committed
+    }
+
+    const applyTypedPlacement = () => {
+      const typing = usePlacementTyping.getState()
+      const current = placementRef.current
+      const hit = typedWallHitRef.current
+      const defaults = typedCoordinateDefaultsRef.current
+      if (!typing.isActive || !current || !hit || !defaults || current.stretch) return false
+
+      const bareUnit = unit === 'imperial' ? 'in' : metricNotation === 'millimeters' ? 'mm' : 'm'
+      const parseTypedValue = (raw: string, fallback: number) =>
+        raw.trim() ? parseMeasurement(raw, { kind: 'length', unitId: 'm' }, { bareUnit }) : fallback
+      const distance = parseTypedValue(typing.fields[0], defaults[0])
+      const offset = parseTypedValue(typing.fields[1], defaults[1])
+      if (distance == null || offset == null) return false
+
+      const resolved = resolveCabinetTypedPlacementPosition({
+        depth: previewNodeRef.current.depth,
+        distance,
+        hit,
+        levelId: activeLevelId,
+        nodes: useScene.getState().nodes,
+        offset,
+        position: current.position,
+        width: previewNodeRef.current.width,
+      })
+      if (!resolved) return false
+
+      // Typed entry targets an exact wall position. Drop any run-insertion
+      // preview captured by the pointer path — otherwise Enter re-enters the
+      // `onClick` insertion branch and commits the original run slot instead
+      // of the typed coordinates.
+      const {
+        conflictIds: _conflictIds,
+        insertionFailure: _insertionFailure,
+        insertionPreview: _insertionPreview,
+        valid: _valid,
+        ...placementBase
+      } = current
+      const next = withPlacementValidity(
+        {
+          ...placementBase,
+          position: resolved.position,
+          wallLocalX: resolved.wallLocalX,
+          yaw: resolved.yaw,
+          wallSurfaceNormal: [Math.sin(resolved.yaw), 0, Math.cos(resolved.yaw)],
+          snappedToWall: true,
+        },
+        false,
+      )
+      placementRef.current = next
+      setPlacement(next)
+      usePlacementTyping.getState().setProjectedPosition(next.position)
+      publishFloorplanPreview(next)
+      return true
+    }
+
+    const beginTypedPlacement = (key: string) => {
+      const current = placementRef.current
+      if (!current || current.stretch || !current.snappedToWall || !current.wallId) return false
+      const nodes = useScene.getState().nodes
+      const excludedWallIds = Object.values(nodes as Record<AnyNodeId, AnyNode>)
+        .filter((node): node is WallNode => node.type === 'wall' && node.id !== current.wallId)
+        .map((node) => node.id as AnyNodeId)
+      const hit = findClosestCabinetWallInPlan({
+        excludeIds: excludedWallIds,
+        // The placement already knows its wall; a typed perpendicular offset
+        // can push the cabinet center beyond the normal snap distance, so
+        // don't cap the projection — just make sure the closest wall is the
+        // one we're attached to.
+        maxDistance: Infinity,
+        nodes,
+        parentLevelId: activeLevelId,
+        planPoint: [current.position[0], current.position[2]],
+      })
+      if (!hit || hit.wall.id !== current.wallId) return false
+
+      const coordinates = getCabinetPlacementCoordinates({
+        depth: previewNodeRef.current.depth,
+        hit,
+        levelId: activeLevelId,
+        nodes,
+        position: current.position,
+        width: previewNodeRef.current.width,
+      })
+      typedWallHitRef.current = hit
+      typedCoordinateDefaultsRef.current = [coordinates.distance, coordinates.offset]
+      suppressTypedRestoreRef.current = false
+      usePlacementTyping
+        .getState()
+        .begin([
+          formatLinearMeasurement(coordinates.distance, unit, metricNotation),
+          formatLinearMeasurement(coordinates.offset, unit, metricNotation),
+        ])
+      usePlacementTyping.getState().append(key)
+      return true
+    }
+
+    let handledSubmitRevision = usePlacementTyping.getState().submitRevision
+    let previousTypingFields = usePlacementTyping.getState().fields
+    let previousTypingField = usePlacementTyping.getState().activeField
+    let previousTypingActive = usePlacementTyping.getState().isActive
+    const unsubscribePlacementTyping = usePlacementTyping.subscribe(
+      (state: PlacementTypingState) => {
+        const fieldsChanged =
+          state.fields[0] !== previousTypingFields[0] || state.fields[1] !== previousTypingFields[1]
+        const activeFieldChanged = state.activeField !== previousTypingField
+        const becameActive = state.isActive && !previousTypingActive
+        const becameInactive = !state.isActive && previousTypingActive
+        previousTypingFields = state.fields
+        previousTypingField = state.activeField
+        previousTypingActive = state.isActive
+
+        if (state.isActive && (fieldsChanged || activeFieldChanged || becameActive)) {
+          applyTypedPlacement()
+        }
+        // Any exit path (Escape in the HUD input, tool cancel, commit) must
+        // drop the frozen wall hit — otherwise pointer moves keep feeding it
+        // into `publishFloorplanPreview`. An uncommitted exit re-resolves
+        // placement from the last pointer event so `placementRef` does not
+        // stay stuck at the cancelled typed pose.
+        if (becameInactive) {
+          typedWallHitRef.current = null
+          typedCoordinateDefaultsRef.current = null
+          if (!suppressTypedRestoreRef.current && lastPlacementEventRef.current) {
+            const event = lastPlacementEventRef.current
+            const anchor = resolveDraftAnchor()
+            const next = anchor
+              ? resolveActiveStretchPlacement(anchor, event)
+              : resolvePlacement(event)
+            publishPlacement(next)
+          }
+          suppressTypedRestoreRef.current = false
+        }
+        if (state.submitRevision === handledSubmitRevision) return
+        handledSubmitRevision = state.submitRevision
+        if (!applyTypedPlacement()) return
+
+        // Typed commits must honor the typed pose. Reusing the last pointer
+        // event in continuous mode would replay a stale `altKey` into
+        // `isForcePlacementEvent` and re-resolve placement from the old
+        // cursor hit instead of the typed distance/offset. `node` is also
+        // stripped: `stopPlacementCommitPropagation` installs a 300ms
+        // window click swallow for real wall hits, which would eat the
+        // user's next real click after this keyboard commit.
+        const baseCommitEvent =
+          useEditor.getState().getContinuation('cabinet') === 'continuous'
+            ? (lastPlacementEventRef.current ??
+              ({ nativeEvent: {} } as FloorPlacementClickTriggerEvent))
+            : ({ nativeEvent: {} } as FloorPlacementClickTriggerEvent)
+        const { node: _node, ...baseEventWithoutNode } = baseCommitEvent as NodeEvent<AnyNode>
+        const commitEvent: FloorPlacementClickTriggerEvent = {
+          ...baseEventWithoutNode,
+          nativeEvent: { ...(baseCommitEvent.nativeEvent ?? {}), altKey: false },
+        }
+        // Seed any continuous-mode stretch at the typed position (zero-length
+        // span), not the stale cursor carried by the reused pointer event.
+        // Restore is suppressed: a successful commit owns the placement, and
+        // `onClick`'s internal `clear()` would otherwise re-trigger the
+        // restore logic below and revert the fresh stretch anchor.
+        const typedPosition = placementRef.current?.position
+        suppressTypedRestoreRef.current = true
+        const committed = onClick(commitEvent, true, typedPosition)
+        // Keep the typed values when the pose was rejected (e.g. collision)
+        // so Enter does not silently wipe the session — the user can adjust
+        // distance/offset and retry.
+        if (!committed) {
+          suppressTypedRestoreRef.current = false
+          return
+        }
+        typedWallHitRef.current = null
+        typedCoordinateDefaultsRef.current = null
+        usePlacementTyping.getState().clear()
+      },
+    )
 
     const applyTypedDimension = () => {
       const editor = usePlacementPreview.getState()
@@ -1659,6 +1918,55 @@ const CabinetTool = () => {
       const tag = (event.target as HTMLElement | null)?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
       const dimensionEditor = usePlacementPreview.getState()
+      const placementTyping = usePlacementTyping.getState()
+      if (placementTyping.isActive) {
+        if (event.key === 'Tab' || event.key === ',') {
+          placementTyping.toggleField()
+          event.preventDefault()
+          event.stopPropagation()
+          return
+        }
+        if (event.key === 'Enter') {
+          placementTyping.requestCommit()
+          event.preventDefault()
+          event.stopPropagation()
+          return
+        }
+        if (event.key === 'Escape') {
+          placementTyping.clear()
+          typedWallHitRef.current = null
+          typedCoordinateDefaultsRef.current = null
+          event.preventDefault()
+          event.stopPropagation()
+          return
+        }
+        if (event.key === 'Backspace' || event.key === 'Delete') {
+          if (event.key === 'Delete') placementTyping.setField(placementTyping.activeField, '')
+          else placementTyping.backspace()
+          event.preventDefault()
+          event.stopPropagation()
+          return
+        }
+        if (isPlacementTypingKey(event.key) && !event.metaKey && !event.ctrlKey && !event.altKey) {
+          placementTyping.append(event.key)
+          event.preventDefault()
+          event.stopPropagation()
+          return
+        }
+      }
+      if (
+        !dimensionEditor.activeDimensionId &&
+        isPlacementTypingKey(event.key) &&
+        /^[0-9.-]$/.test(event.key) &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        beginTypedPlacement(event.key)
+      ) {
+        event.preventDefault()
+        event.stopPropagation()
+        return
+      }
       if (event.key === 'Tab' && dimensionEditor.dimensions.length > 0) {
         const currentIndex = dimensionEditor.dimensions.findIndex(
           (dimension) => dimension.id === dimensionEditor.activeDimensionId,
@@ -1749,6 +2057,13 @@ const CabinetTool = () => {
     }
 
     const onCancel = () => {
+      if (usePlacementTyping.getState().isActive) {
+        markToolCancelConsumed()
+        usePlacementTyping.getState().clear()
+        typedWallHitRef.current = null
+        typedCoordinateDefaultsRef.current = null
+        return
+      }
       if (!draftAnchorRef.current) return
       markToolCancelConsumed()
       clearDraft()
@@ -1768,11 +2083,15 @@ const CabinetTool = () => {
       emitter.off('wall:move', onWallMove)
       emitter.off('tool:cancel', onCancel)
       unsubscribeCabinetPlacementType()
+      unsubscribePlacementTyping()
       unsubscribePlacementClicks()
       unsubscribePlacementDoubleClicks()
       window.removeEventListener('keydown', onKeyDown, true)
       draftAnchorRef.current = null
       usePlacementPreview.getState().clear()
+      usePlacementTyping.getState().clear()
+      typedWallHitRef.current = null
+      typedCoordinateDefaultsRef.current = null
       clearPlacementSurface()
       useFacingPose.getState().clear()
       useAlignmentGuides.getState().clear()
@@ -1910,6 +2229,25 @@ const CabinetTool = () => {
             </group>
           ))}
         </group>
+      ) : null}
+      {/* Render the typed-entry HUD from exactly one surface: the 2D pane
+          owns it whenever it is visible (2d / split); the 3D Html mounts it
+          only in 3d-only mode. Both instances share one store, so mounting
+          both in split view would show two HUDs and steal the caret on
+          Tab/activation. */}
+      {viewMode === '3d' && typingActive && !stretch && placement.snappedToWall ? (
+        <Html
+          center
+          position={[
+            typingProjectedPosition?.[0] ?? placement.position[0],
+            visualPosition[1] + previewNode.carcassHeight + 0.45,
+            typingProjectedPosition?.[2] ?? placement.position[2],
+          ]}
+          style={{ pointerEvents: 'auto', userSelect: 'none' }}
+          zIndexRange={[200, 0]}
+        >
+          <PlacementCoordinateInput />
+        </Html>
       ) : null}
       {placementLabel ? (
         <Html
