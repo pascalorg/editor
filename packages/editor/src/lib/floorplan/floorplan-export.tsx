@@ -778,13 +778,17 @@ export function collectFloorplanGeometry(
   const visit = (id: AnyNodeId) => {
     const node = nodes[id]
     if (!node) return
+    // Same install gate as the live layer: an uninstalled plugin's kinds draw
+    // nothing, while their hosted children keep their own gate.
+    const enabled = isNodeKindEnabled(node.type, installedPlugins)
     const def = nodeRegistry.get(node.type)
-    if (def?.computeFloorplanLevelData) {
+    if (enabled && def?.computeFloorplanLevelData) {
       const ids = levelNodeIdsByType.get(node.type)
       if (ids) ids.push(id)
       else levelNodeIdsByType.set(node.type, [id])
     }
     if (
+      enabled &&
       def?.floorplan &&
       isFloorplanNodeVisible(node) &&
       isFloorplanNodeInExportScope(def, scope)
@@ -802,7 +806,11 @@ export function collectFloorplanGeometry(
   if (activeLevelNode) {
     for (const linked of collectFloorplanLinkedLevelNodes(nodes, levelId, collectedIds)) {
       const definition = nodeRegistry.get(linked.node.type)
-      if (isFloorplanNodeVisible(linked.node) && isFloorplanNodeInExportScope(definition, scope)) {
+      if (
+        isNodeKindEnabled(linked.node.type, installedPlugins) &&
+        isFloorplanNodeVisible(linked.node) &&
+        isFloorplanNodeInExportScope(definition, scope)
+      ) {
         const drawingNode = resolveNodeForDrawingType(linked.node, nodes, drawingType)
         if (drawingNode) {
           entries.push({ id: linked.id, node: drawingNode, parentOverride: activeLevelNode })

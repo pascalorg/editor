@@ -91,9 +91,7 @@ describe('floor-plan output of a plugin kind', () => {
     expect(exportedIds([PLUGIN_ID])).toEqual([bed.id])
   })
 
-  // collectFloorplanGeometry gates only site-scoped nodes, so a level-scoped
-  // kind of an uninstalled plugin still reaches the PDF.
-  test.failing('the PDF export omits it while the plugin is not installed', () => {
+  test('the PDF export omits it while the plugin is not installed', () => {
     expect(exportedIds([])).toEqual([])
   })
 })
