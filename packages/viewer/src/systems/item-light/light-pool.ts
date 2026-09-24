@@ -109,7 +109,12 @@ export class ItemLightPool {
   private readonly prevCamPos = new Vector3()
   private readonly prevCamFwd = new Vector3(0, 0, -1)
 
-  constructor(private readonly keepVisible = false) {}
+  // The pool's lights turn visible together on the first allocation and stay
+  // visible; an unused slot only drops to zero intensity. three's lights cache
+  // key hashes the visible lights, so toggling `visible` on a re-score, a level
+  // switch or a light switch rebuilt every lit material (B8). A scene that
+  // never switches a light on keeps no lights at all.
+  private allocated = false
 
   /** The key each slot serves (or will serve once its fade-out ends). */
   assignedKeys(): Array<string | null> {
@@ -138,6 +143,7 @@ export class ItemLightPool {
       .slice(0, POOL_SIZE)
       .map((s) => s.key)
     const desiredSet = new Set(desired)
+    if (desired.length > 0) this.allocated = true
 
     const currentlyAssigned = new Map<string, number>()
     for (let i = 0; i < POOL_SIZE; i++) {
@@ -216,13 +222,12 @@ export class ItemLightPool {
       const light = this.lights[i]
       const slot = this.slots[i]!
       if (!light) continue
+      light.visible = this.allocated
 
       if (slot.isFadingOut) {
-        if (!this.keepVisible) light.visible = true
         light.intensity = MathUtils.lerp(light.intensity, 0, k)
         if (light.intensity < 0.01) {
           light.intensity = 0
-          if (!this.keepVisible) light.visible = false
           slot.isFadingOut = false
           slot.key = slot.pendingKey
           slot.pendingKey = null
@@ -231,33 +236,15 @@ export class ItemLightPool {
         continue
       }
 
-      if (!slot.key) {
-        this.fadeIdle(light, k)
-        continue
-      }
-
-      const target = place(slot.key, light)
+      const target = slot.key ? place(slot.key, light) : null
       if (target === null) {
         slot.key = null
-        this.fadeIdle(light, k)
+        light.intensity = 0
         continue
       }
 
-      if (target > 0 && !this.keepVisible) light.visible = true
       light.intensity = MathUtils.lerp(light.intensity, target, k)
-      if (target <= 0 && light.intensity < 0.01) {
-        light.intensity = 0
-        if (!this.keepVisible) light.visible = false
-      }
+      if (target <= 0 && light.intensity < 0.01) light.intensity = 0
     }
-  }
-
-  private fadeIdle(light: PointLight, k: number) {
-    if (this.keepVisible) {
-      light.intensity = MathUtils.lerp(light.intensity, 0, k)
-      return
-    }
-    light.intensity = 0
-    light.visible = false
   }
 }

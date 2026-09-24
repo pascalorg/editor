@@ -256,7 +256,7 @@ function GlbItemLights({
   levelIndexById: Map<string, number>
 }) {
   const pool = useRef<ItemLightPool | null>(null)
-  pool.current ??= new ItemLightPool(true)
+  pool.current ??= new ItemLightPool()
   const regByKey = useMemo(() => new Map(regs.map((r) => [r.key as string, r])), [regs])
 
   useFrame(({ camera }, delta) => {
@@ -296,6 +296,7 @@ function GlbItemLights({
           ref={(el) => {
             pool.current!.lights[i] = el
           }}
+          visible={false}
         />
       ))}
     </>
