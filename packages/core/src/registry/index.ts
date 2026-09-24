@@ -76,7 +76,6 @@ export type {
   CuttableConfig,
   DimensionTerminator,
   DimensionTextPosition,
-  DisplayState,
   DistributionRole,
   DragAction,
   DuplicableConfig,

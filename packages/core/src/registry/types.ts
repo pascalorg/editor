@@ -5,14 +5,7 @@ import type { MaterialSchema, MaterialTarget } from '../schema/material'
 import type { AssetInput, ItemNode } from '../schema/nodes/item'
 import type { MeasurementFeatureReference, MeasurementPoint } from '../schema/nodes/measurement'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
-import type {
-  AnyNode,
-  AnyNodeId,
-  Discipline,
-  DisplayFamily,
-  DisplayMode,
-  PartKey,
-} from '../schema/types'
+import type { AnyNode, AnyNodeId, Discipline, DisplayFamily, PartKey } from '../schema/types'
 import type { SurfaceProvider } from '../services/surface-hosting'
 import type { HandleList } from './handles'
 import type { CloneNodesIntoOptions, Subtree } from './subtree'
@@ -340,9 +333,13 @@ export type NodePort = {
 /**
  * One end of an explicit, persisted connection edge (F6). Proximity only
  * proposes a connection; an edge is declared in `capabilities.refs` with role
- * `connection` and stored by the end that joins.
+ * `connection` and stored by the end that joins. A `port` end names a declared
+ * port; a `tap` end is a station on a run's body, `at` metres of arc length
+ * from the run's start, where a branch joins midway along a duct or pipe.
  */
-export type PortRef = { nodeId: AnyNodeId; portId: string }
+export type PortRef =
+  | { kind: 'port'; nodeId: AnyNodeId; portId: string }
+  | { kind: 'tap'; nodeId: AnyNodeId; at: number }
 
 // ─── ToolHint ────────────────────────────────────────────────────────
 //
@@ -2535,27 +2532,7 @@ export type EvaluationContext = {
   overrides?: ReadonlyMap<AnyNodeId, Readonly<Record<string, unknown>>>
 }
 
-// ─── Display and export identity (F4; owner decision O3) ─────────────
-
-/**
- * Personal display state (O3, frozen): kept per project in this browser like
- * `showScans`, never shared with collaborators and never a geometry edit.
- * Additive to `levelMode` / `wallMode`, which keep their meaning. It composes
- * through a `display` layer-hold reason and never touches `object.visible`.
- * Inside it `isolate` wins over `families`, which win over the mode default.
- * "Save look" writes the project default to `site.presentation`; the
- * canonical bake is independent of both.
- */
-export type DisplayState = {
-  mode: DisplayMode
-  families?: Partial<Record<DisplayFamily, boolean>>
-  disciplines: Record<Discipline, boolean>
-  xray: boolean
-  /** 0..1 presentation offset. */
-  separation: number
-  colorBy: 'material' | 'service'
-  isolate?: { kind: 'system' | 'owner'; id: string }
-}
+// ─── Export identity (F4) ────────────────────────────────────────────
 
 /**
  * Per-mesh export identity (F4), `userData.pascalPart` / glTF
@@ -2587,12 +2564,19 @@ export type PascalPartTag = {
  */
 export type ExportProfile = 'canonical' | 'finished' | 'lightweight'
 
-/** Root glTF `extras.pascalBake`. The benchmark harness refuses non-canonical bakes. */
-export type PascalBakeExtras = {
-  profile: ExportProfile
-  families: 'all' | readonly DisplayFamily[]
-  omissions?: readonly string[]
-}
+/**
+ * Root glTF `extras.pascalBake`, one arm per profile. A canonical artifact
+ * always carries every family and declares no omissions; only `lightweight`
+ * may omit. The benchmark harness refuses non-canonical bakes.
+ */
+export type PascalBakeExtras =
+  | { profile: 'canonical'; families: 'all'; omissions?: never }
+  | { profile: 'finished'; families: readonly DisplayFamily[]; omissions?: never }
+  | {
+      profile: 'lightweight'
+      families: 'all' | readonly DisplayFamily[]
+      omissions: readonly string[]
+    }
 
 // ─── ParametricDescriptor ────────────────────────────────────────────
 

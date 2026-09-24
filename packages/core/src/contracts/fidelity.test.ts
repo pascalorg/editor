@@ -9,15 +9,19 @@
  * each one (F1, F4, F5a, F6, SI-R2) must reproduce these numbers.
  */
 import { describe, expect, test } from 'bun:test'
+import { createHash } from 'node:crypto'
 import type {
   Anchor,
+  DefinitionPin,
   DisplayFamily,
   DisplayMode,
   EndCut,
   FidelityV3,
   MaterialPattern,
   Mount,
+  PascalBakeExtras,
   PascalPartTag,
+  PortRef,
   ResolvedSectionProfile,
   SceneToolHost,
   SectionLibraryEntry,
@@ -418,6 +422,39 @@ describe('section library and definition pinning (owner decision O4, frozen)', (
     return entry ? entry.profile : { diagnostic: 'section-unresolved' }
   }
 
+  /** Content hash of a resolved definition: sha256 over its canonical JSON. */
+  const hashOf = (profile: ResolvedSectionProfile): `sha256:${string}` =>
+    `sha256:${createHash('sha256').update(JSON.stringify(profile)).digest('hex')}`
+
+  /** Both pin arms resolve offline against pinned entries, never to "latest". */
+  function resolvePin(pin: DefinitionPin): ResolvedSectionProfile | { diagnostic: string } {
+    let entry: SectionLibraryEntry | undefined
+    if ('hash' in pin) entry = library.find((e) => hashOf(e.profile) === pin.hash)
+    else if ('id' in pin) entry = library.find((e) => e.id === pin.id && e.v === pin.v)
+    else {
+      const unreachable: never = pin
+      return unreachable
+    }
+    return entry ? entry.profile : { diagnostic: 'definition-unresolved' }
+  }
+
+  test('both DefinitionPin arms resolve: { id, v } and { hash }', () => {
+    const byVersion: DefinitionPin = { id: 'casing/colonial', v: 1 }
+    const v1 = library[1]!.profile
+    const byHash: DefinitionPin = { hash: hashOf(v1) }
+    expect(resolvePin(byVersion)).toEqual(v1)
+    expect(resolvePin(byHash)).toEqual(v1)
+    // The hash names content: v2's correction has a different hash, so a
+    // scene pinned to v1's hash keeps v1's geometry.
+    expect(hashOf(library[2]!.profile)).not.toBe(byHash.hash)
+    expect(resolvePin({ hash: `sha256:${'0'.repeat(64)}` })).toEqual({
+      diagnostic: 'definition-unresolved',
+    })
+    expect(resolvePin({ id: 'casing/colonial', v: 3 })).toEqual({
+      diagnostic: 'definition-unresolved',
+    })
+  })
+
   test('pins by version; a correction never moves saved geometry', () => {
     expect(resolve({ kind: 'ref', id: 'casing/colonial', v: 1 })).toEqual({
       kind: 'rectangle',
@@ -431,6 +468,71 @@ describe('section library and definition pinning (owner decision O4, frozen)', (
     expect(resolve(inline)).toBe(inline)
     expect(Object.isFrozen(library)).toBe(true)
     expect(library.filter((e) => e.source === 'core').map((e) => e.id)).toEqual(['lumber/2x6'])
+  })
+})
+
+describe('connection ends (F6): declared ports and run-body taps', () => {
+  /** A run in level-local metres: three legs. */
+  const run: FidelityV3[] = [
+    [0, 2.7, 0],
+    [4, 2.7, 0],
+    [4, 2.7, 3],
+  ]
+  const ports: Record<string, FidelityV3> = { start: run[0]!, end: run[2]! }
+
+  /** A `tap` end sits `at` metres of arc length from the run's start. */
+  function stationPoint(path: readonly FidelityV3[], at: number): V3 | null {
+    let remaining = at
+    for (let i = 1; i < path.length; i++) {
+      const leg = sub(path[i]!, path[i - 1]!)
+      const length = Math.hypot(...leg)
+      if (remaining <= length) return add(path[i - 1]!, scale(leg, remaining / length))
+      remaining -= length
+    }
+    return null
+  }
+  function resolveEnd(end: PortRef): V3 | null {
+    switch (end.kind) {
+      case 'port':
+        return ports[end.portId] ? [...ports[end.portId]!] : null
+      case 'tap':
+        return stationPoint(run, end.at)
+    }
+  }
+
+  test('a branch tapped midway along a duct resolves to the body station', () => {
+    const tap: PortRef = { kind: 'tap', nodeId: 'duct-segment_a' as AnyNodeId, at: 5.5 }
+    const port: PortRef = { kind: 'port', nodeId: 'duct-segment_a' as AnyNodeId, portId: 'end' }
+    expect(resolveEnd(tap)).toEqual([4, 2.7, 1.5])
+    expect(resolveEnd(port)).toEqual([4, 2.7, 3])
+    expect(resolveEnd({ ...tap, at: 7.5 })).toBeNull()
+  })
+})
+
+describe('bake profiles (F4): canonical carries every family and omits nothing', () => {
+  const canonical: PascalBakeExtras = { profile: 'canonical', families: 'all' }
+  const lightweight: PascalBakeExtras = {
+    profile: 'lightweight',
+    families: 'all',
+    omissions: ['cmu-cores'],
+  }
+  // @ts-expect-error a canonical artifact cannot declare partial families
+  const partial: PascalBakeExtras = { profile: 'canonical', families: ['finish'] }
+  // @ts-expect-error a canonical artifact cannot declare omissions
+  const omitting: PascalBakeExtras = { profile: 'canonical', families: 'all', omissions: ['x'] }
+  // @ts-expect-error a lightweight artifact must declare its omissions
+  const undeclared: PascalBakeExtras = { profile: 'lightweight', families: 'all' }
+
+  /** The harness accepts only a complete canonical bake. */
+  const harnessAccepts = (extras: PascalBakeExtras) =>
+    extras.profile === 'canonical' && extras.families === 'all' && extras.omissions === undefined
+
+  test('the harness accepts canonical and refuses everything else', () => {
+    expect(harnessAccepts(canonical)).toBe(true)
+    expect(harnessAccepts(lightweight)).toBe(false)
+    expect(harnessAccepts({ profile: 'finished', families: ['finish', 'device'] })).toBe(false)
+    for (const invalid of [partial, omitting, undeclared])
+      expect(harnessAccepts(invalid)).toBe(false)
   })
 })
 
