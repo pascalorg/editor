@@ -16,7 +16,11 @@ import {
   resolveSlotDefaultMaterial,
 } from '@pascal-app/viewer'
 import { FrontSide, Group, type Material, Mesh, type Texture } from 'three'
-import { type FenceCornerNeighbors, generateFenceSlotGeometries } from './geometry-parts'
+import {
+  type FenceCornerNeighbors,
+  type FenceGateLeafGeometry,
+  generateFenceSlotGeometries,
+} from './geometry-parts'
 import { resolveFenceLiftElevation } from './lift'
 import type { FenceNode } from './schema'
 import { FENCE_SLOT_DEFAULTS, type FenceSlotId } from './slots'
@@ -159,6 +163,7 @@ export function buildFenceGeometry(
   const sampledStart = supportAt?.(node.start[0], node.start[1]) ?? startBase
   const sampledGround = new Map<string, number>()
   const corners = mode === 'body' && ctx ? sharedFenceCorners(node, ctx.siblings) : undefined
+  const gateLeaves: FenceGateLeafGeometry[] = []
   const geometries = generateFenceSlotGeometries(
     node,
     supportAt
@@ -174,6 +179,7 @@ export function buildFenceGeometry(
     mode,
     corners?.omittedPosts,
     corners?.neighbors,
+    mode === 'features' ? gateLeaves : undefined,
   )
 
   // A hosted railing (`supportSlabId`) stands on its slab's walking surface;
@@ -209,6 +215,31 @@ export function buildFenceGeometry(
     mesh.receiveShadow = true
     mesh.userData.slotId = slotId
     meshParent.add(mesh)
+  }
+
+  for (const leaf of gateLeaves) {
+    const pivot = new Group()
+    pivot.position.set(leaf.hinge.x, 0, leaf.hinge.z)
+    pivot.rotation.y = leaf.rotationY
+    pivot.userData.pascalFenceGateLeaf = { openRotationY: leaf.openRotationY }
+    const mesh = new Mesh(
+      leaf.geometry,
+      getFenceSlotMaterial(
+        node,
+        'infill',
+        shading,
+        textures,
+        colorPreset,
+        sceneTheme,
+        ctx?.materials,
+      ),
+    )
+    mesh.position.set(-leaf.hinge.x, 0, -leaf.hinge.z)
+    mesh.castShadow = true
+    mesh.receiveShadow = true
+    mesh.userData.slotId = 'infill'
+    pivot.add(mesh)
+    meshParent.add(pivot)
   }
 
   if (mode === 'body' && previewFeatures.length > 0) {

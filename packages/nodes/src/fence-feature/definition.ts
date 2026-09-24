@@ -9,6 +9,7 @@ import {
   type ParametricDescriptor,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { AnimationClip, QuaternionKeyframeTrack, type Object3D } from 'three'
 import { buildFenceFeatureFloorplan } from './floorplan'
 import { fenceFeatureAffordance } from './floorplan-affordances'
 import { buildFenceFeatureGeometry } from './geometry'
@@ -70,6 +71,8 @@ export const fenceGateDefinition: NodeDefinition<typeof FenceGateNode | typeof F
     },
   },
   schema: FenceGateNode,
+  exportAnimation: ({ node, object }) =>
+    node.type === 'fence-gate' ? bakeFenceGateClip(node.id, object) : null,
   defaults: () => {
     const { id, type, ...rest } = FenceGateNode.parse({})
     return rest
@@ -81,6 +84,30 @@ export const fenceGateDefinition: NodeDefinition<typeof FenceGateNode | typeof F
     paletteSection: 'structure',
     hidden: true,
   },
+}
+
+function bakeFenceGateClip(id: string, object: Object3D): AnimationClip | null {
+  const tracks: QuaternionKeyframeTrack[] = []
+  object.traverse((part) => {
+    const marker = part.userData.pascalFenceGateLeaf as { openRotationY?: number } | undefined
+    if (typeof marker?.openRotationY !== 'number' || Math.abs(marker.openRotationY) < 1e-5) return
+    part.rotation.y = 0
+    const closed = part.quaternion.clone()
+    part.rotation.y = marker.openRotationY
+    const open = part.quaternion.clone()
+    part.rotation.y = 0
+    tracks.push(
+      new QuaternionKeyframeTrack(
+        `${part.uuid}.quaternion`,
+        [0, 1],
+        [...closed.toArray(), ...open.toArray()],
+      ),
+    )
+  })
+  if (tracks.length === 0) return null
+  const clip = new AnimationClip(`${id}: open`, 1, tracks)
+  clip.userData = { loop: false }
+  return clip
 }
 export const fenceOpeningDefinition: NodeDefinition<
   typeof FenceGateNode | typeof FenceOpeningNode
