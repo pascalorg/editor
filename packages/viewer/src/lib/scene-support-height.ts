@@ -4,7 +4,6 @@ import {
   findLevelAncestorId,
   levelBaseElevationAt,
   nodeRegistry,
-  pointInPolygon2D,
 } from '@pascal-app/core'
 import { createNodeTopSurfaceHeightSampler } from './node-top-surface-height'
 
@@ -14,41 +13,34 @@ export function createSceneSupportHeightSampler(
   levelId: AnyNodeId,
   selectedHostId?: AnyNodeId,
 ): (x: number, z: number) => number {
-  const slabs = Object.values(nodes).filter(
-    (node) =>
-      node.type === 'slab' &&
-      node.visible !== false &&
-      (!selectedHostId || node.id === selectedHostId) &&
-      findLevelAncestorId(node.id as AnyNodeId, nodes) === levelId,
-  )
-  const shaped = Object.values(nodes)
+  const supports = Object.values(nodes)
     .filter(
       (node) =>
-        node.type !== 'slab' &&
-        node.type !== 'fence' &&
         node.visible !== false &&
         (!selectedHostId || node.id === selectedHostId) &&
         findLevelAncestorId(node.id as AnyNodeId, nodes) === levelId &&
         !!nodeRegistry.get(node.type)?.capabilities.surfaces?.top,
     )
-    .map((node) => createNodeTopSurfaceHeightSampler(node.id as AnyNodeId, levelId))
-    .filter((sample): sample is (x: number, z: number) => number | null => sample !== null)
+    .map((node) => {
+      const top = nodeRegistry.get(node.type)?.capabilities.surfaces?.top
+      const resolveSupportHeight = top?.supportHeight
+      return {
+        node,
+        resolveDataHeight: resolveSupportHeight
+          ? (x: number, z: number) => resolveSupportHeight(node, x, z, { nodes })
+          : null,
+        sampleRenderedHeight: resolveSupportHeight
+          ? null
+          : createNodeTopSurfaceHeightSampler(node.id as AnyNodeId, levelId),
+      }
+    })
 
   return (x, z) => {
     let height = levelBaseElevationAt(nodes, levelId, x, z)
-    for (const slab of slabs) {
-      if (slab.type !== 'slab' || slab.polygon.length < 3) continue
-      if (!pointInPolygon2D([x, z], slab.polygon, { includeBoundary: true })) continue
-      if (
-        slab.holes.some(
-          (hole) => hole.length >= 3 && pointInPolygon2D([x, z], hole, { includeBoundary: false }),
-        )
-      )
-        continue
-      height = Math.max(height, slab.elevation)
-    }
-    for (const sample of shaped) {
-      const top = sample(x, z)
+    for (const support of supports) {
+      const top = support.resolveDataHeight
+        ? support.resolveDataHeight(x, z)
+        : (support.sampleRenderedHeight?.(x, z) ?? null)
       if (top !== null) height = Math.max(height, top)
     }
     return height
