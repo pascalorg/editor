@@ -74,6 +74,10 @@ type InteractiveStore = {
   skylights: Record<AnyNodeId, SkylightInteractiveState>
   skylightAnimations: Record<AnyNodeId, SkylightAnimationState>
   elevators: Record<AnyNodeId, ElevatorInteractiveState>
+  procedural: Record<AnyNodeId, Record<string, boolean>>
+  toggleProceduralPart: (nodeId: AnyNodeId, partId: string) => void
+  setProceduralParts: (nodeId: AnyNodeId, partIds: string[], on: boolean) => void
+  removeProcedural: (nodeId: AnyNodeId) => void
 
   /** Initialize a node's interactive state from its asset definition (idempotent) */
   initItem: (itemId: AnyNodeId, interactive: Interactive) => void
@@ -152,6 +156,30 @@ export const useInteractive = create<InteractiveStore>((set, get) => ({
   skylights: {},
   skylightAnimations: {},
   elevators: {},
+  procedural: {},
+
+  toggleProceduralPart: (nodeId, partId) =>
+    set((state) => ({
+      procedural: {
+        ...state.procedural,
+        [nodeId]: { ...state.procedural[nodeId], [partId]: !state.procedural[nodeId]?.[partId] },
+      },
+    })),
+  setProceduralParts: (nodeId, partIds, on) =>
+    set((state) => ({
+      procedural: {
+        ...state.procedural,
+        [nodeId]: {
+          ...state.procedural[nodeId],
+          ...Object.fromEntries(partIds.map((id) => [id, on])),
+        },
+      },
+    })),
+  removeProcedural: (nodeId) =>
+    set((state) => {
+      const { [nodeId]: _, ...rest } = state.procedural
+      return { procedural: rest }
+    }),
 
   initItem: (itemId, interactive) => {
     const { controls } = interactive

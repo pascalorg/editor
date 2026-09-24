@@ -1,11 +1,11 @@
 import { z } from 'zod'
-import { rotateVector } from './spatial'
+import { boxCorners, frame, rotateVector, transformPoint } from './spatial'
 
 export type Expr =
   | number
   | string
   | { op: 'add' | 'sub' | 'mul' | 'div' | 'min' | 'max'; args: Expr[] }
-  | { op: 'floor' | 'ceil' | 'round' | 'abs'; args: [Expr] }
+  | { op: 'floor' | 'ceil' | 'round' | 'abs' | 'sin' | 'cos'; args: [Expr] }
   | { op: 'mod'; args: [Expr, Expr] }
 export type Vec3 = [number, number, number]
 const id = z.string().regex(/^[a-z][a-z0-9_]{0,47}$/)
@@ -19,7 +19,7 @@ const expression: z.ZodType<Expr> = z.lazy(() =>
       args: z.array(expression).min(2).max(8),
     }),
     z.strictObject({
-      op: z.enum(['floor', 'ceil', 'round', 'abs']),
+      op: z.enum(['floor', 'ceil', 'round', 'abs', 'sin', 'cos']),
       args: z.tuple([expression]),
     }),
     z.strictObject({
@@ -29,6 +29,21 @@ const expression: z.ZodType<Expr> = z.lazy(() =>
   ]),
 )
 const vector = z.tuple([expression, expression, expression])
+const motion = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('hinge'),
+    pivot: vector,
+    axis: z.enum(['x', 'y', 'z']),
+    angle: expression,
+  }),
+  z.strictObject({ kind: z.literal('slide'), axis: z.enum(['x', 'y', 'z']), distance: expression }),
+  z.strictObject({
+    kind: z.literal('spin'),
+    pivot: vector,
+    axis: z.enum(['x', 'y', 'z']),
+    radiansPerSecond: expression,
+  }),
+])
 export const RecipeSchema = z.strictObject({
   version: z.literal(1),
   name: z.string().min(1).max(100),
@@ -89,16 +104,18 @@ export const RecipeSchema = z.strictObject({
         id,
         label: z.string().min(1).max(60),
         count: expression,
+        motion: motion.optional(),
         shapes: z
           .array(
             z.strictObject({
               id,
-              primitive: z.enum(['box', 'roundedBox', 'cylinder']),
+              primitive: z.enum(['box', 'roundedBox', 'cylinder', 'ellipsoid']),
               slot: id,
               size: vector,
               position: vector,
               rotation: vector.optional(),
               radius: expression.optional(),
+              topScale: expression.optional(),
               support: z.boolean().optional(),
             }),
           )
@@ -123,12 +140,22 @@ export type Recipe = z.infer<typeof RecipeSchema>
 export type EvaluatedShape = {
   id: string
   partId: string
-  primitive: 'box' | 'roundedBox' | 'cylinder'
+  primitive: 'box' | 'roundedBox' | 'cylinder' | 'ellipsoid'
   slot: string
   size: Vec3
   position: Vec3
   rotation: Vec3
   radius: number
+  topScale: number
+  motionGroup?: string
+}
+export type EvaluatedMotion = {
+  id: string
+  partId: string
+  kind: 'hinge' | 'slide' | 'spin'
+  axis: 'x' | 'y' | 'z'
+  pivot: Vec3
+  amount: number
 }
 export type Surface = {
   id: string
@@ -140,6 +167,7 @@ export type Surface = {
 }
 export type Evaluation = {
   shapes: EvaluatedShape[]
+  motions: EvaluatedMotion[]
   surfaces: Surface[]
   min: Vec3
   max: Vec3
@@ -154,6 +182,8 @@ export const RECIPE_LIMITS = {
   shapes: 256,
   triangles: 100000,
   dimension: 30,
+  motionParts: 8,
+  motionGroups: 32,
 } as const
 
 function guardTree(value: unknown, depth = 0, budget = { count: 0 }) {
@@ -185,15 +215,27 @@ export function parseRecipe(input: unknown): Recipe {
   for (const part of recipe.parts) {
     if (new Set(part.shapes.map((s) => s.id)).size !== part.shapes.length)
       throw new Error(`Duplicate shape in ${part.id}`)
-    for (const shape of part.shapes)
+    for (const shape of part.shapes) {
       if (!recipe.slots.some((s) => s.id === shape.slot))
         throw new Error(`Unknown slot ${shape.slot}`)
+      if (shape.topScale !== undefined && shape.primitive !== 'cylinder')
+        throw new Error(`topScale is only allowed on cylinders (${part.id}/${shape.id})`)
+      if (part.motion && shape.support)
+        throw new Error(`Moving part ${part.id} cannot contain support shapes`)
+      if (shape.primitive === 'ellipsoid' && shape.support)
+        throw new Error(`Ellipsoid ${part.id}/${shape.id} cannot be a support surface`)
+    }
   }
+  if (recipe.parts.filter((part) => part.motion).length > RECIPE_LIMITS.motionParts)
+    throw new Error(`Recipe exceeds ${RECIPE_LIMITS.motionParts} moving parts`)
   const surfaceIds = (recipe.surfaces ?? []).map((s) => s.id)
   if (new Set(surfaceIds).size !== surfaceIds.length) throw new Error('Duplicate surface ID')
-  for (const surface of recipe.surfaces ?? [])
+  for (const surface of recipe.surfaces ?? []) {
     if (surface.part && !recipe.parts.some((p) => p.id === surface.part))
       throw new Error('Unknown surface part')
+    if (surface.part && recipe.parts.some((p) => p.id === surface.part && p.motion))
+      throw new Error(`Named surface ${surface.id} cannot belong to moving part ${surface.part}`)
+  }
   if (
     recipe.mounting &&
     !(recipe.surfaces ?? []).some((s) => s.id === recipe.mounting!.reference && !s.part)
@@ -206,7 +248,31 @@ export function parseRecipe(input: unknown): Recipe {
   return recipe
 }
 
+function shapeCorners(size: Vec3, position: Vec3, rotation: Vec3): Vec3[] {
+  const localMin = size.map((v) => -v / 2) as Vec3
+  const localMax = size.map((v) => v / 2) as Vec3
+  const shapeFrame = frame(position, rotation)
+  return boxCorners(localMin, localMax).map((point) => transformPoint(shapeFrame, point))
+}
+
+function movedPoint(point: Vec3, motion: EvaluatedMotion, fraction: number): Vec3 {
+  if (motion.kind === 'slide')
+    return point.map(
+      (value, i) => value + (['x', 'y', 'z'][i] === motion.axis ? motion.amount * fraction : 0),
+    ) as Vec3
+  const angle = motion.kind === 'spin' ? 2 * Math.PI * fraction : motion.amount * fraction
+  const rotation: Vec3 = [0, 0, 0]
+  rotation[{ x: 0, y: 1, z: 2 }[motion.axis]] = angle
+  const offset = point.map((value, i) => value - motion.pivot[i]!) as Vec3
+  return rotateVector(offset, rotation).map((value, i) => value + motion.pivot[i]!) as Vec3
+}
+
 export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = {}): Evaluation {
+  if (recipe.parts.filter((part) => part.motion).length > RECIPE_LIMITS.motionParts)
+    throw new Error(`Recipe exceeds ${RECIPE_LIMITS.motionParts} moving parts`)
+  for (const surface of recipe.surfaces ?? [])
+    if (surface.part && recipe.parts.some((part) => part.id === surface.part && part.motion))
+      throw new Error(`Named surface ${surface.id} cannot belong to moving part ${surface.part}`)
   const parameters: Record<string, number> = Object.create(null)
   for (const key of Object.keys(values))
     if (!recipe.parameters.some((p) => p.id === key)) throw new Error(`Unknown parameter ${key}`)
@@ -258,6 +324,12 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
       case 'abs':
         result = Math.abs(a[0]!)
         break
+      case 'sin':
+        result = Math.sin(a[0]!)
+        break
+      case 'cos':
+        result = Math.cos(a[0]!)
+        break
       case 'mod': {
         const divisor = a[1]!
         if (divisor <= 0) throw new Error('Modulo divisor must be positive')
@@ -284,7 +356,9 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
     if (c.relation === 'lte' ? a > b + 1e-8 : a < b - 1e-8) throw new Error(c.message)
   }
   const shapes: EvaluatedShape[] = [],
+    motions: EvaluatedMotion[] = [],
     surfaces: Surface[] = []
+  const motionSignatures = new Map<string, string>()
   const min: Vec3 = [Infinity, Infinity, Infinity],
     max: Vec3 = [-Infinity, -Infinity, -Infinity]
   let triangles = 0
@@ -292,10 +366,52 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
     const count = expr(part.count)
     if (!Number.isInteger(count) || count < 0 || count > 64)
       throw new Error(`Invalid repeat count for ${part.label}`)
-    for (let i = 0; i < count; i++)
+    for (let i = 0; i < count; i++) {
+      const vec = (v: Expr[]): Vec3 => v.map((x) => expr(x, i)) as Vec3
+      let motionGroup: string | undefined
+      if (part.motion) {
+        const motion = part.motion
+        const pivot: Vec3 = motion.kind === 'slide' ? [0, 0, 0] : vec(motion.pivot)
+        const amount = expr(
+          motion.kind === 'hinge'
+            ? motion.angle
+            : motion.kind === 'slide'
+              ? motion.distance
+              : motion.radiansPerSecond,
+          i,
+        )
+        const limit = motion.kind === 'hinge' ? Math.PI : motion.kind === 'slide' ? 5 : 20
+        if (Math.abs(amount) <= 0 || Math.abs(amount) > limit)
+          throw new Error(
+            `Invalid ${motion.kind} amount for ${part.id}: expected 0 < absolute value <= ${limit}`,
+          )
+        const rounded = (n: number) => Math.round(n * 1e6) / 1e6
+        const signature = JSON.stringify([
+          part.id,
+          motion.kind,
+          motion.axis,
+          ...pivot.map(rounded),
+          rounded(amount),
+        ])
+        motionGroup = motionSignatures.get(signature)
+        if (!motionGroup) {
+          if (motions.length >= RECIPE_LIMITS.motionGroups)
+            throw new Error(`Recipe exceeds ${RECIPE_LIMITS.motionGroups} evaluated motion groups`)
+          const ordinal = motions.filter((m) => m.partId === part.id).length
+          motionGroup = ordinal ? `${part.id}~${ordinal}` : part.id
+          motionSignatures.set(signature, motionGroup)
+          motions.push({
+            id: motionGroup,
+            partId: part.id,
+            kind: motion.kind,
+            axis: motion.axis,
+            pivot,
+            amount,
+          })
+        }
+      }
       for (const s of part.shapes) {
         if (shapes.length >= RECIPE_LIMITS.shapes) throw new Error('Expanded shape budget exceeded')
-        const vec = (v: Expr[]): Vec3 => v.map((x) => expr(x, i)) as Vec3
         const size = vec(s.size),
           position = vec(s.position),
           rotation = vec(s.rotation ?? [0, 0, 0])
@@ -304,6 +420,17 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
         const radius = s.primitive === 'roundedBox' ? expr(s.radius ?? 0.02, i) : 0
         if (radius < 0 || radius > Math.min(...size) / 2)
           throw new Error(`Invalid rounding for ${s.id}`)
+        if (s.topScale !== undefined && s.primitive !== 'cylinder')
+          throw new Error(`topScale is only allowed on cylinders (${part.id}/${s.id})`)
+        const topScale = s.topScale === undefined ? 1 : expr(s.topScale, i)
+        if (topScale < 0 || topScale > 1)
+          throw new Error(`topScale for ${part.id}/${s.id} must be within [0, 1]`)
+        if (s.support && (s.primitive === 'ellipsoid' || topScale < 1))
+          throw new Error(
+            `Support surface ${part.id}/${s.id} cannot be ellipsoid or tapered cylinder`,
+          )
+        if (s.support && motionGroup)
+          throw new Error(`Moving part ${part.id} cannot contain support shapes`)
         const shapeId = `${part.id}:${i}:${s.id}`
         shapes.push({
           id: shapeId,
@@ -314,28 +441,34 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
           position,
           rotation,
           radius,
+          topScale,
+          motionGroup,
         })
-        triangles += s.primitive === 'roundedBox' ? 588 : s.primitive === 'cylinder' ? 96 : 12
+        triangles +=
+          s.primitive === 'roundedBox'
+            ? 588
+            : s.primitive === 'cylinder'
+              ? 96
+              : s.primitive === 'ellipsoid'
+                ? 720
+                : 12
         if (triangles > RECIPE_LIMITS.triangles) throw new Error('Triangle budget exceeded')
-        // XYZ Euler rotations match Three.js; bounding corners remain pure domain math.
-        for (const x of [-size[0] / 2, size[0] / 2])
-          for (const y of [-size[1] / 2, size[1] / 2])
-            for (const z of [-size[2] / 2, size[2] / 2]) {
-              const [rx, ry, rz] = rotation
-              const x1 = x * Math.cos(rz) - y * Math.sin(rz),
-                y1 = x * Math.sin(rz) + y * Math.cos(rz)
-              const x2 = x1 * Math.cos(ry) + z * Math.sin(ry),
-                z2 = -x1 * Math.sin(ry) + z * Math.cos(ry)
-              const point = [
-                x2 + position[0],
-                y1 * Math.cos(rx) - z2 * Math.sin(rx) + position[1],
-                y1 * Math.sin(rx) + z2 * Math.cos(rx) + position[2],
-              ]
-              for (let k = 0; k < 3; k++) {
-                min[k] = Math.min(min[k]!, point[k]!)
-                max[k] = Math.max(max[k]!, point[k]!)
-              }
+        if (s.primitive === 'ellipsoid') {
+          const axes = [0, 1, 2].map((axis) =>
+            rotateVector([0, 1, 2].map((j) => (j === axis ? 1 : 0)) as Vec3, rotation),
+          )
+          for (let k = 0; k < 3; k++) {
+            const extent = Math.hypot(...axes.map((axis, j) => (axis[k]! * size[j]!) / 2))
+            min[k] = Math.min(min[k]!, position[k]! - extent)
+            max[k] = Math.max(max[k]!, position[k]! + extent)
+          }
+        } else {
+          for (const point of shapeCorners(size, position, rotation))
+            for (let k = 0; k < 3; k++) {
+              min[k] = Math.min(min[k]!, point[k]!)
+              max[k] = Math.max(max[k]!, point[k]!)
             }
+        }
         if (s.support) {
           if (rotation.some((v) => v !== 0))
             throw new Error('Support surfaces must be horizontal and unrotated in v1')
@@ -349,6 +482,7 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
           })
         }
       }
+    }
   }
   for (const surface of recipe.surfaces ?? []) {
     const part = recipe.parts.find((p) => p.id === surface.part)
@@ -381,12 +515,36 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
     } else if (Math.abs(reference.normal[2] + 1) > 1e-6)
       throw new Error('Wall-side mounting reference must face local -Z')
   }
+  const reference = recipe.mounting && surfaces.find((s) => s.id === recipe.mounting!.reference)
+  for (const shape of shapes) {
+    if (!shape.motionGroup) continue
+    const motion = motions.find((m) => m.id === shape.motionGroup)!
+    const steps = motion.kind === 'slide' ? 1 : motion.kind === 'hinge' ? 8 : 16
+    for (const corner of shapeCorners(shape.size, shape.position, shape.rotation))
+      for (let step = 0; step <= steps; step++) {
+        const point = movedPoint(corner, motion, step / steps)
+        if (!recipe.mounting && point[1] < -0.001)
+          throw new Error(`Motion envelope for ${shape.partId} extends below the floor`)
+        if (
+          recipe.mounting?.attachTo === 'wall-side' &&
+          reference &&
+          point[2] < reference.position[2] - 0.001
+        )
+          throw new Error(`Motion envelope for ${shape.partId} crosses behind the wall reference`)
+        if (
+          recipe.mounting?.attachTo === 'ceiling' &&
+          reference &&
+          point[1] > reference.position[1] + 0.001
+        )
+          throw new Error(`Motion envelope for ${shape.partId} rises above the ceiling reference`)
+      }
+  }
   if (!shapes.length) throw new Error('The item must contain geometry')
   const dimensions = max.map((x, i) => x - min[i]!) as Vec3
   if (dimensions.some((x) => x > 30) || [...min, ...max].some((x) => Math.abs(x) > 30))
     throw new Error('Item exceeds 30 m bounds')
   if (min[1] < -0.001) throw new Error('Geometry extends below the ground; base must be at y=0')
-  return { shapes, surfaces, min, max, dimensions, parameters, triangles }
+  return { shapes, motions, surfaces, min, max, dimensions, parameters, triangles }
 }
 
 export function sweepRecipe(recipe: Recipe) {

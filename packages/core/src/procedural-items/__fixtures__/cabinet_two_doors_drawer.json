@@ -1,0 +1,158 @@
+{
+  "version": 1,
+  "name": "Cabinet Two Doors Drawer",
+  "description": "cabinet two doors drawer",
+  "parameters": [
+    {
+      "id": "scale",
+      "label": "Scale",
+      "default": 1,
+      "min": 1,
+      "max": 1,
+      "step": 1,
+      "unit": "count"
+    }
+  ],
+  "slots": [
+    {
+      "id": "wood",
+      "label": "Wood",
+      "color": "#725338"
+    },
+    {
+      "id": "paint",
+      "label": "Paint",
+      "color": "#d1b993"
+    },
+    {
+      "id": "metal",
+      "label": "Metal",
+      "color": "#999999"
+    }
+  ],
+  "parts": [
+    {
+      "id": "body",
+      "label": "Body",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "case",
+          "primitive": "box",
+          "slot": "wood",
+          "size": [1.8, 1.3, 0.65],
+          "position": [0, 0.65, 0]
+        }
+      ]
+    },
+    {
+      "id": "doors",
+      "label": "Doors",
+      "count": 2,
+      "shapes": [
+        {
+          "id": "panel",
+          "primitive": "box",
+          "slot": "paint",
+          "size": [0.82, 0.78, 0.04],
+          "position": [
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "op": "sub",
+                  "args": ["index", 0.5]
+                },
+                0.86
+              ]
+            },
+            0.86,
+            0.36
+          ]
+        },
+        {
+          "id": "handle",
+          "primitive": "cylinder",
+          "slot": "metal",
+          "size": [0.025, 0.2, 0.025],
+          "position": [
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "op": "sub",
+                  "args": ["index", 0.5]
+                },
+                0.58
+              ]
+            },
+            0.86,
+            0.4
+          ]
+        }
+      ],
+      "motion": {
+        "kind": "hinge",
+        "pivot": [
+          {
+            "op": "mul",
+            "args": [
+              {
+                "op": "sub",
+                "args": ["index", 0.5]
+              },
+              1.72
+            ]
+          },
+          0.86,
+          0.36
+        ],
+        "axis": "y",
+        "angle": {
+          "op": "mul",
+          "args": [
+            {
+              "op": "sub",
+              "args": [
+                1,
+                {
+                  "op": "mul",
+                  "args": ["index", 2]
+                }
+              ]
+            },
+            1.35
+          ]
+        }
+      }
+    },
+    {
+      "id": "drawer",
+      "label": "Drawer",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "front",
+          "primitive": "box",
+          "slot": "paint",
+          "size": [1.65, 0.3, 0.04],
+          "position": [0, 0.29, 0.37]
+        },
+        {
+          "id": "pull",
+          "primitive": "cylinder",
+          "slot": "metal",
+          "size": [0.02, 0.22, 0.02],
+          "position": [0, 0.29, 0.42],
+          "rotation": [1.5707963267948966, 0, 0]
+        }
+      ],
+      "motion": {
+        "kind": "slide",
+        "axis": "z",
+        "distance": 0.35
+      }
+    }
+  ],
+  "constraints": []
+}

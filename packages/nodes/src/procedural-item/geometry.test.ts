@@ -1,5 +1,12 @@
 import { expect, test } from 'bun:test'
-import { bedRecipe, ProceduralItemNode, shelfRecipe } from '@pascal-app/core/procedural-items'
+import {
+  bedRecipe,
+  ProceduralItemNode,
+  parseRecipe,
+  shelfRecipe,
+} from '@pascal-app/core/procedural-items'
+import cabinetJson from '../../../core/src/procedural-items/__fixtures__/cabinet_two_doors_drawer.json'
+import deskJson from '../../../core/src/procedural-items/__fixtures__/desk_fan.json'
 import {
   acquireProceduralGeometry,
   buildProceduralGeometry,
@@ -39,4 +46,47 @@ test('moves and paint share geometry; changed parameters rebuild; leases dispose
   expect(proceduralMetrics.builds - before).toBe(2)
   c.release()
   expect(proceduralMetrics.liveEntries).toBe(0)
+})
+
+test('moving batches separate per group and keep pick ranges local to each mesh', () => {
+  const built = buildProceduralGeometry(
+    ProceduralItemNode.parse({ recipe: parseRecipe(cabinetJson) }),
+  )
+  expect(built.evaluation.motions.map((motion) => motion.id)).toEqual([
+    'doors',
+    'doors~1',
+    'drawer',
+  ])
+  expect(built.batches.filter((batch) => batch.motionGroup === 'doors').length).toBe(2)
+  for (const batch of built.batches) {
+    expect(partAtFace(batch.ranges, 0)).not.toBeNull()
+    expect(batch.ranges.at(-1)!.end).toBe(batch.geometry.getAttribute('position').count / 3)
+    if (batch.motionGroup) {
+      const pivot = built.evaluation.motions.find(
+        (motion) => motion.id === batch.motionGroup,
+      )!.pivot
+      expect(batch.motionGeometry).toBeDefined()
+      for (const axis of ['x', 'y', 'z'] as const)
+        expect(
+          batch.geometry.boundingBox!.min[axis] - batch.motionGeometry!.boundingBox!.min[axis],
+        ).toBeCloseTo(pivot[{ x: 0, y: 1, z: 2 }[axis]])
+      batch.motionGeometry!.dispose()
+    }
+    batch.geometry.dispose()
+  }
+})
+
+test('ellipsoid and tapered cylinder build curved geometry with bounded vertices', () => {
+  const built = buildProceduralGeometry(ProceduralItemNode.parse({ recipe: parseRecipe(deskJson) }))
+  expect(built.triangles).toBeGreaterThan(720)
+  for (const batch of built.batches) {
+    const points = batch.geometry.getAttribute('position')
+    for (let i = 0; i < points.count; i += Math.max(1, Math.floor(points.count / 20))) {
+      expect(Number.isFinite(points.getX(i))).toBe(true)
+      expect(Number.isFinite(points.getY(i))).toBe(true)
+      expect(Number.isFinite(points.getZ(i))).toBe(true)
+    }
+    batch.motionGeometry?.dispose()
+    batch.geometry.dispose()
+  }
 })

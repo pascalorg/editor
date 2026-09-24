@@ -2,6 +2,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  useInteractive,
   useLiveNodeOverrides,
   useLiveTransforms,
   useRegistry,
@@ -17,11 +18,16 @@ import {
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { type Group, Mesh } from 'three'
+import { PROCEDURAL_OPEN_DURATION } from './animation'
 import { acquireProceduralGeometry, type BuiltItem, geometrySignature } from './geometry'
 export default function ProceduralRenderer({ node }: { node: ProceduralItemNode }) {
   const ref = useRef<Group>(null!)
+  const progress = useRef(new Map<string, { value: number; speed: number; phase: number }>())
+  const awake = useRef(false)
+  const invalidate = useThree((state) => state.invalidate)
   const overrides = useLiveNodeOverrides((s) => s.overrides.get(node.id))
   const live = useLiveTransforms((s) => s.get(node.id as AnyNodeId))
   const effective = { ...node, ...overrides } as ProceduralItemNode
@@ -53,6 +59,74 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
     setBuilt(lease.value)
     return lease.release
   }, [key])
+  useEffect(() => () => useInteractive.getState().removeProcedural(node.id), [node.id])
+  useLayoutEffect(() => {
+    progress.current.clear()
+    for (const motion of built?.evaluation.motions ?? []) {
+      const group = ref.current?.getObjectByName(`${node.id}__motion__${motion.id}`)
+      if (!group) continue
+      group.position.set(...motion.pivot)
+      group.quaternion.identity()
+    }
+    if (built?.evaluation.motions.length) {
+      awake.current = true
+      invalidate()
+    }
+  }, [built, node.id, invalidate])
+  useEffect(
+    () =>
+      useInteractive.subscribe((state, previous) => {
+        if (state.procedural[node.id] === previous.procedural[node.id]) return
+        awake.current = true
+        invalidate()
+      }),
+    [node.id, invalidate],
+  )
+  useFrame((_, delta) => {
+    if (!awake.current || !built || !ref.current) return
+    let active = false
+    for (const motion of built.evaluation.motions) {
+      const group = ref.current.getObjectByName(`${node.id}__motion__${motion.id}`)
+      if (!group) continue
+      const state = progress.current.get(motion.id) ?? { value: 0, speed: 0, phase: 0 }
+      const on = useInteractive.getState().procedural[node.id]?.[motion.partId] ?? false
+      if (motion.kind === 'spin') {
+        const targetSpeed = on ? 1 : 0
+        if (state.speed !== targetSpeed) {
+          state.speed = Math.max(
+            0,
+            Math.min(1, state.speed + (Math.sign(targetSpeed - state.speed) * delta) / 0.35),
+          )
+          active = true
+        }
+        if (state.speed > 0) {
+          state.phase = (state.phase + motion.amount * state.speed * delta) % (2 * Math.PI)
+          group.rotation[motion.axis] = state.phase
+          active = true
+        }
+      } else {
+        const target = on ? 1 : 0
+        if (state.value !== target) {
+          state.value = Math.max(
+            0,
+            Math.min(
+              1,
+              state.value + (Math.sign(target - state.value) * delta) / PROCEDURAL_OPEN_DURATION,
+            ),
+          )
+          const eased = state.value * state.value * (3 - 2 * state.value)
+          if (motion.kind === 'hinge') group.rotation[motion.axis] = motion.amount * eased
+          else
+            group.position[motion.axis] =
+              motion.pivot[{ x: 0, y: 1, z: 2 }[motion.axis]]! + motion.amount * eased
+          active = true
+        }
+      }
+      progress.current.set(motion.id, state)
+    }
+    if (active) invalidate()
+    else awake.current = false
+  })
   const materialKey = JSON.stringify([effective.recipe.slots, effective.slots, libraryVersion])
   const materials = useMemo(() => {
     const [slots, overrides] = JSON.parse(materialKey) as [
@@ -80,12 +154,12 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
   const meshes = useMemo(
     () =>
       built?.batches.map((batch) => {
-        const mesh = new Mesh(batch.geometry, materials.get(batch.slot))
+        const mesh = new Mesh(batch.motionGeometry ?? batch.geometry, materials.get(batch.slot))
         mesh.name = `slot_${batch.slot}`
         mesh.userData = { slotId: batch.slot, proceduralRanges: batch.ranges }
         mesh.castShadow = true
         mesh.receiveShadow = true
-        return mesh
+        return { mesh, motionGroup: batch.motionGroup }
       }) ?? [],
     [built, materials],
   )
@@ -101,8 +175,31 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
       visible={effective.visible}
       {...handlers}
     >
-      {meshes.map((mesh) => (
-        <primitive key={mesh.uuid} object={mesh} dispose={null} />
+      {meshes
+        .filter((entry) => !entry.motionGroup)
+        .map(({ mesh }) => (
+          <primitive key={mesh.uuid} object={mesh} dispose={null} />
+        ))}
+      {built?.evaluation.motions.map((motion) => (
+        <group
+          key={motion.id}
+          name={`${node.id}__motion__${motion.id}`}
+          position={motion.pivot}
+          userData={{
+            proceduralMotion: {
+              nodeId: node.id,
+              partId: motion.partId,
+              groupId: motion.id,
+              kind: motion.kind,
+            },
+          }}
+        >
+          {meshes
+            .filter((entry) => entry.motionGroup === motion.id)
+            .map(({ mesh }) => (
+              <primitive key={mesh.uuid} object={mesh} dispose={null} />
+            ))}
+        </group>
       ))}
       {effective.children.map((id) => {
         const surface = built?.evaluation.surfaces.find((s) => s.id === effective.attachments[id])

@@ -493,6 +493,13 @@ function finishSceneExportPreparation(preparation: SceneExportPreparation): GlbE
   const animation = keepClips
     ? bakeAnimationClips(retainedCloneByOriginal, nodes, registryEntries)
     : { clips: [], clipNamesByNode: new Map<string, string[]>() }
+  if (!keepClips) {
+    for (const [id, original] of registryEntries) {
+      const node = nodes[id]
+      const clone = retainedCloneByOriginal.get(original)
+      if (node?.type === 'procedural-item' && clone) bakeRegistryAnimationClips(node, clone)
+    }
+  }
   stampIdentity(scene, retainedCloneByOriginal, nodes, animation.clipNamesByNode, registryEntries)
 
   let disposed = false
@@ -1695,8 +1702,20 @@ function stampIdentity(
   scene.traverse((object) => {
     const presentationId = object.userData.pascalPresentationId
     const label = object.userData.label
+    const motion = object.userData.proceduralMotion as
+      | { nodeId: string; partId: string; kind: 'hinge' | 'slide' | 'spin' }
+      | undefined
     object.userData =
       typeof presentationId === 'string' ? { pascalPresentationId: presentationId, label } : {}
+    if (motion) {
+      const clip = `${motion.nodeId}:${motion.partId}: ${motion.kind === 'spin' ? 'loop' : 'open'}`
+      object.userData.proceduralMotion = {
+        nodeId: motion.nodeId,
+        partId: motion.partId,
+        kind: motion.kind,
+        ...(clipNamesByNode.get(motion.nodeId)?.includes(clip) ? { clip } : {}),
+      }
+    }
   })
 
   for (const [id, original] of registryEntries) {
@@ -1733,7 +1752,7 @@ function stampIdentity(
     }
     // Items with a baked ambient clip (a fan's spin) carry the clip name but no
     // `openable` flag — nothing opens; the clip just loops.
-    if (node.type === 'item') {
+    if (node.type === 'item' || node.type === 'procedural-item') {
       const clipNames = clipNamesByNode.get(id)
       if (clipNames?.length) extras.clips = clipNames
     }
