@@ -150,7 +150,7 @@ export const stairParametrics: ParametricDescriptor<StairNode> = {
           label: 'Railing height',
           unit: 'm',
           min: 0.7,
-          max: 1.4,
+          max: 1000,
           step: 0.02,
           visibleIf: (node) => node.railingMode !== 'none',
         },
