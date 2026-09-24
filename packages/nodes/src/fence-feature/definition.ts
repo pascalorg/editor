@@ -9,7 +9,7 @@ import {
   type ParametricDescriptor,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { AnimationClip, QuaternionKeyframeTrack, type Object3D } from 'three'
+import { AnimationClip, type Object3D, QuaternionKeyframeTrack } from 'three'
 import { buildFenceFeatureFloorplan } from './floorplan'
 import { fenceFeatureAffordance } from './floorplan-affordances'
 import { buildFenceFeatureGeometry } from './geometry'
