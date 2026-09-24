@@ -134,6 +134,23 @@ describe('generateSlabGeometry', () => {
     }
   })
 
+  test('a zero-area interior hole cuts nothing and grows no hole-wall fins', () => {
+    const plain = generateSlabGeometry(SlabNode.parse({ polygon: SQUARE }), EMPTY_CONTEXT)
+    const sliverHole = SlabNode.parse({
+      polygon: SQUARE,
+      holes: [
+        [
+          [1, 1],
+          [2, 1],
+          [2, 1.0000005],
+          [1, 1.0000005],
+        ],
+      ],
+    })
+    const geometry = generateSlabGeometry(sliverHole, EMPTY_CONTEXT)
+    expect((geometry.index?.count ?? 0) / 3).toBe((plain.index?.count ?? 0) / 3)
+  })
+
   test('a hole covering the whole slab leaves no triangles', () => {
     const slab = SlabNode.parse({
       polygon: SQUARE,
