@@ -3,6 +3,7 @@
 import { Icon } from '@iconify/react'
 import {
   acquireSceneReadOnlyLease,
+  emitter,
   getCatalogMaterialById,
   getLibraryMaterialIdFromRef,
   getSceneMaterialIdFromRef,
@@ -35,6 +36,7 @@ import {
 } from 'react'
 import { ViewerOverlay } from '../../components/viewer-overlay'
 import { ViewerZoneSystem } from '../../components/viewer-zone-system'
+import { useAutoFrame } from '../../hooks/use-auto-frame'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
 import { useSaveShortcut } from '../../hooks/use-save-shortcut'
@@ -49,6 +51,7 @@ import {
   type SceneGraph,
   writePersistedSelection,
 } from '../../lib/scene'
+import { computeSceneBoundsXZ } from '../../lib/scene-bounds'
 import { disposeSFXBus, initSFXBus } from '../../lib/sfx-bus'
 import { useUnitFocusRules } from '../../lib/units'
 import { type CameraHintAction, useCameraHintFocus } from '../../store/use-camera-hint-focus'
@@ -1312,6 +1315,8 @@ function EditorContent({
 
   useKeyboard({ isVersionPreviewMode, disabled: isFirstPersonMode || isStudioMode })
 
+  useAutoFrame()
+
   const { isLoadingSceneRef, saveNow } = useAutoSave({
     guardAgainstSceneWipe,
     onSave,
@@ -1468,6 +1473,17 @@ function EditorContent({
 
     return () => window.clearTimeout(timer)
   }, [hasLoadedInitialScene, isLoading, isSceneLoading, isViewerSceneReady, sceneReadyKey])
+
+  // The useAutoFrame emit can be clobbered by the level-follow effect's
+  // first-run default pose on fast (client-side navigation) loads. Re-emitting
+  // here is the last word after every load-driven camera effect has run.
+  useEffect(() => {
+    if (!isViewerSceneReady) return
+    const nodes = useScene.getState().nodes
+    if (Object.keys(nodes).length === 0) return
+    const bounds = computeSceneBoundsXZ(nodes)
+    emitter.emit('camera-controls:fit-scene', bounds ? { bounds } : {})
+  }, [isViewerSceneReady, sceneReadyKey])
 
   const showLoader = isLoading || isSceneLoading || !hasLoadedInitialScene || !isViewerSceneReady
   const visibleLoader =
