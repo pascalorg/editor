@@ -20,8 +20,10 @@ import {
 } from '@pascal-app/viewer'
 import * as THREE from 'three'
 import type { GLTFWriter } from 'three/examples/jsm/exporters/GLTFExporter.js'
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
 import cabinetJson from '../../../core/src/procedural-items/__fixtures__/cabinet_two_doors_drawer.json'
 import ceilingFanJson from '../../../core/src/procedural-items/__fixtures__/ceiling_fan.json'
@@ -162,6 +164,52 @@ describe('prepareSceneForExport', () => {
       clips: [fan.name],
     })
     expect(scene.getObjectByName('procedural-item_fan:odd')?.userData.openable).toBeUndefined()
+    const originalFileReader = globalThis.FileReader
+    class ExportFileReader {
+      result: ArrayBuffer | null = null
+      onloadend: (() => void) | null = null
+      readAsArrayBuffer(blob: Blob) {
+        void blob.arrayBuffer().then((buffer) => {
+          this.result = buffer
+          this.onloadend?.()
+        })
+      }
+    }
+    globalThis.FileReader = ExportFileReader as unknown as typeof FileReader
+    let binary: ArrayBuffer
+    try {
+      binary = (await new GLTFExporter().parseAsync(scene, {
+        animations,
+        binary: true,
+      })) as ArrayBuffer
+    } finally {
+      globalThis.FileReader = originalFileReader
+    }
+    const loaded = await new GLTFLoader().parseAsync(binary, '')
+    expect(loaded.animations.map((clip) => clip.name).sort()).toEqual(
+      animations.map((clip) => clip.name).sort(),
+    )
+    for (const clip of loaded.animations) {
+      for (const track of clip.tracks) {
+        const target = loaded.scene.getObjectByName(
+          track.name.slice(0, track.name.lastIndexOf('.')),
+        )
+        expect(target?.userData.proceduralMotion.clip).toBe(clip.name)
+      }
+    }
+    const loadedById = new Map<string, THREE.Object3D>()
+    loaded.scene.traverse((object) => {
+      if (typeof object.userData.pascalId === 'string')
+        loadedById.set(object.userData.pascalId, object)
+    })
+    expect(loadedById.get('procedural-item_cabinet:odd')?.userData).toMatchObject({
+      kind: 'procedural-item',
+      clips: [doors.name, drawer.name],
+    })
+    expect(loadedById.get('procedural-item_fan:odd')?.userData).toMatchObject({
+      kind: 'procedural-item',
+      clips: [fan.name],
+    })
     expect(
       scene.getObjectByName('procedural-item_cabinet:odd__motion__drawer')?.position.toArray(),
     ).toEqual([0, 0, 0])

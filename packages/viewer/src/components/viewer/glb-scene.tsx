@@ -45,11 +45,11 @@ export type GlbIdentity = Record<string, { kind: string; label: string }>
 export type GlbHover = { kind: string; label: string } | null
 
 /** Walkthrough HUD state, reported each frame: the floor/room the camera is in
- *  and the openable door/window directly in view (for the reticle prompt). */
+ *  and the interactive part directly in view (for the reticle prompt). */
 export type GlbWalkthrough = {
   zoneLabel: string | null
   floorLabel: string | null
-  door: { label: string; isOpen: boolean } | null
+  door: { label: string; isOpen: boolean; verb?: string } | null
 } | null
 
 type GlbLevelEntry = { id: GlbLevel['id']; node: THREE.Object3D; baseY: number }
@@ -70,6 +70,12 @@ type PascalExtras = {
   label?: string
   openable?: boolean
   clips?: string[]
+  proceduralMotion?: {
+    nodeId: string
+    partId: string
+    kind: 'hinge' | 'slide' | 'spin'
+    clip?: string
+  }
   polygon?: [number, number][]
   color?: string
   camera?: { position: [number, number, number]; target: [number, number, number] }
@@ -93,7 +99,13 @@ type LookAtControls = {
 }
 
 /** The resolved drill target for a raycast hit, given the current selection. */
-type Target = { object: THREE.Object3D; id: string; kind: string; label: string }
+type Target = {
+  object: THREE.Object3D
+  hitObject?: THREE.Object3D
+  id: string
+  kind: string
+  label: string
+}
 type HitCandidate = { object: THREE.Object3D; point?: THREE.Vector3 }
 
 function findIdentityAncestor(object: THREE.Object3D): THREE.Object3D | null {
@@ -103,6 +115,16 @@ function findIdentityAncestor(object: THREE.Object3D): THREE.Object3D | null {
     current = current.parent
   }
   return null
+}
+
+function findProceduralMotionAncestor(object: THREE.Object3D): PascalExtras['proceduralMotion'] {
+  let current: THREE.Object3D | null = object
+  while (current) {
+    const motion = (current.userData as PascalExtras).proceduralMotion
+    if (motion) return motion
+    current = current.parent
+  }
+  return undefined
 }
 
 function findAncestorLevelId(object: THREE.Object3D): string | null {
@@ -130,7 +152,7 @@ const _camPoint = new THREE.Vector3()
 const _walkPos = new THREE.Vector3()
 const _reticleNdc = new THREE.Vector2(0, 0)
 const _reticleRaycaster = new THREE.Raycaster()
-/** How far ahead (metres) a door/window counts as "in view" for activation. */
+/** How far ahead (metres) an interactive part counts as "in view" for activation. */
 const WALK_REACH = 3
 const ZONE_FOOTPRINT_EPSILON = 0.05
 
@@ -681,22 +703,92 @@ export function GlbScene({
   }, [zoneEntries])
 
   useEffect(() => {
+    const proceduralLoops = new Set<string>()
+    gltf.scene.traverse((object) => {
+      const motion = (object.userData as PascalExtras).proceduralMotion
+      if (motion?.kind === 'spin' && motion.clip) proceduralLoops.add(motion.clip)
+    })
     for (const [name, action] of Object.entries(actions)) {
       if (!action) continue
-      // Ambient item loops (a fan's spin, `<id>: loop`) repeat; door/window
-      // open clips play once and hold their end pose. GlbInteractive plays the
-      // loops, gated on the item's toggle.
+      // Ambient item loops (a fan's spin, `<id>: loop`) repeat; open clips play
+      // once and hold their end pose. GlbInteractive gates item loops on their
+      // toggle, while procedural loops start with the scene.
       if (name.endsWith(': loop')) {
         action.loop = THREE.LoopRepeat
         action.clampWhenFinished = false
+        if (proceduralLoops.has(name)) {
+          action.enabled = true
+          action.paused = false
+          action.play()
+        }
       } else {
         action.loop = THREE.LoopOnce
         action.clampWhenFinished = true
       }
     }
-  }, [actions])
+  }, [actions, gltf.scene])
 
   const openIds = useRef(new Set<string>())
+  const activeProceduralClips = useRef(new Set<string>())
+  useEffect(() => {
+    activeProceduralClips.current.clear()
+    gltf.scene.traverse((object) => {
+      const motion = (object.userData as PascalExtras).proceduralMotion
+      if (motion?.kind === 'spin' && motion.clip && actions[motion.clip]) {
+        activeProceduralClips.current.add(motion.clip)
+      }
+    })
+  }, [actions, gltf.scene])
+  const toggleProceduralClip = useCallback(
+    (clipName: string) => {
+      const action = actions[clipName]
+      if (!action) return
+      const isLoop = clipName.endsWith(': loop')
+      const willActivate = !activeProceduralClips.current.has(clipName)
+      if (isLoop) {
+        if (willActivate) {
+          action.reset()
+          action.enabled = true
+          action.paused = false
+          action.loop = THREE.LoopRepeat
+          action.play()
+        } else {
+          action.stop()
+        }
+      } else {
+        if (!action.isRunning()) action.time = willActivate ? 0 : action.getClip().duration
+        action.enabled = true
+        action.paused = false
+        action.loop = THREE.LoopOnce
+        action.clampWhenFinished = true
+        action.timeScale = willActivate ? 1 : -1
+        action.play()
+      }
+      if (willActivate) activeProceduralClips.current.add(clipName)
+      else activeProceduralClips.current.delete(clipName)
+    },
+    [actions],
+  )
+
+  const toggleProcedural = useCallback(
+    (hit: THREE.Object3D, identityNode: THREE.Object3D) => {
+      const extras = identityNode.userData as PascalExtras
+      if (extras.kind !== 'procedural-item') return false
+      const part = findProceduralMotionAncestor(hit)
+      if (part?.clip) {
+        toggleProceduralClip(part.clip)
+        return true
+      }
+      const clips = extras.clips?.filter((clip) => actions[clip]) ?? []
+      if (!clips.length) return false
+      const turnOn = !clips.some((clip) => activeProceduralClips.current.has(clip))
+      for (const clip of clips) {
+        if (activeProceduralClips.current.has(clip) !== turnOn) toggleProceduralClip(clip)
+      }
+      return true
+    },
+    [actions, toggleProceduralClip],
+  )
   const toggleOpenable = useCallback(
     (node: THREE.Object3D) => {
       const extras = node.userData as PascalExtras
@@ -756,9 +848,13 @@ export function GlbScene({
   const resolveTarget = useCallback(
     (hits: HitCandidate[], ray: THREE.Ray): Target | null => {
       const firstNode = hits.length > 0 ? findIdentityAncestor(hits[0]!.object) : null
-      const toTarget = (object: THREE.Object3D, tid: string): Target => {
+      const toTarget = (
+        object: THREE.Object3D,
+        tid: string,
+        hitObject?: THREE.Object3D,
+      ): Target => {
         const e = object.userData as PascalExtras
-        return { object, id: tid, kind: e.kind ?? 'node', label: e.label ?? tid }
+        return { object, hitObject, id: tid, kind: e.kind ?? 'node', label: e.label ?? tid }
       }
       const { selection } = useViewer.getState()
 
@@ -797,10 +893,10 @@ export function GlbScene({
         const hitLevel = findAncestorLevelId(node)
         if (hitLevel !== selection.levelId) continue
         if (hit.point && worldPointInZoneFootprint(hit.point, activeZone)) {
-          return toTarget(node, id)
+          return toTarget(node, id, hit.object)
         }
         if (objectFootprintTouchesZone(node, activeZone)) {
-          return toTarget(node, id)
+          return toTarget(node, id, hit.object)
         }
       }
       return null
@@ -881,8 +977,8 @@ export function GlbScene({
     }
   })
 
-  // ── Walkthrough: first-person HUD + door/window interaction ────────────────
-  const walkDoorRef = useRef<THREE.Object3D | null>(null)
+  // ── Walkthrough: first-person HUD + interaction ────────────────────────────
+  const walkDoorRef = useRef<{ hit: THREE.Object3D; node: THREE.Object3D } | null>(null)
   const lastWalkKey = useRef<string | null>(null)
 
   // Each frame in walkthrough, report the floor + room the camera stands in and
@@ -903,14 +999,27 @@ export function GlbScene({
     _reticleRaycaster.far = WALK_REACH
     _reticleRaycaster.setFromCamera(_reticleNdc, camera)
     const hit = _reticleRaycaster.intersectObject(gltf.scene, true)[0]
-    let doorNode: THREE.Object3D | null = null
+    let doorNode: { hit: THREE.Object3D; node: THREE.Object3D } | null = null
     let doorId = ''
-    let door: { label: string; isOpen: boolean } | null = null
+    let door: { label: string; isOpen: boolean; verb?: string } | null = null
     if (hit) {
       const node = findIdentityAncestor(hit.object)
       const extras = node?.userData as PascalExtras | undefined
-      if (node && extras?.openable && extras.clips?.length) {
-        doorNode = node
+      if (node && extras?.kind === 'procedural-item' && extras.clips?.length) {
+        doorNode = { hit: hit.object, node }
+        const part = findProceduralMotionAncestor(hit.object)
+        const clips = part?.clip ? [part.clip] : extras.clips
+        const isOpen = clips.some((clip) => activeProceduralClips.current.has(clip))
+        const isSpin = part ? part.kind === 'spin' : clips.every((clip) => clip.endsWith(': loop'))
+        const label = part?.partId.replaceAll('_', ' ') ?? extras.label ?? 'Item'
+        door = {
+          label,
+          isOpen,
+          verb: isSpin ? (isOpen ? 'turn off' : 'turn on') : isOpen ? 'close' : 'open',
+        }
+        doorId = `${extras.pascalId}:${part?.partId ?? 'all'}`
+      } else if (node && extras?.openable && extras.clips?.length) {
+        doorNode = { hit: hit.object, node }
         doorId = extras.pascalId as string
         door = { label: extras.label ?? 'Door', isOpen: openIds.current.has(doorId) }
       }
@@ -927,8 +1036,10 @@ export function GlbScene({
   // E or click activates the openable in view. The click also re-locks the
   // pointer through the walkthrough controller; no selection happens.
   const activateWalkDoor = useCallback(() => {
-    if (walkDoorRef.current) toggleOpenable(walkDoorRef.current)
-  }, [toggleOpenable])
+    const target = walkDoorRef.current
+    if (!target) return
+    if (!toggleProcedural(target.hit, target.node)) toggleOpenable(target.node)
+  }, [toggleOpenable, toggleProcedural])
   useEffect(() => {
     if (!walkthroughMode) return
     const onKey = (event: KeyboardEvent) => {
@@ -1020,12 +1131,13 @@ export function GlbScene({
       // the level.
       if (target) {
         setSelection({ selectedIds: [target.id] })
-        toggleOpenable(target.object)
+        if (!toggleProcedural(target.hitObject ?? target.object, target.object))
+          toggleOpenable(target.object)
       } else {
         setSelection({ zoneId: null })
       }
     },
-    [resolveTarget, toggleOpenable, walkthroughMode],
+    [resolveTarget, toggleOpenable, toggleProcedural, walkthroughMode],
   )
 
   // A click that hits nothing (empty space) steps one level back up the drill
