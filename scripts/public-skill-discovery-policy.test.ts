@@ -29,6 +29,7 @@ describe('public skill discovery policy', () => {
     '.agents/skills/open-pr/SKILL.md',
     '.agents/skills/open-pr2/SKILL.md',
     '.agents/skills/review-architecture/SKILL.md',
+    '.agents/skills/repo-check/SKILL.md',
   ])('requires %s to remain internal', (path) => {
     const entries = replaceEntry(path, (content) => content.replace('  internal: true\n', ''))
     expect(validatePublicSkillDiscoverySurface(entries)).toContain(
