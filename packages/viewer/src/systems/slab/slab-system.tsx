@@ -30,18 +30,34 @@ export function generateSlabGeometry(
     : generateSolidSlabGeometry(slabNode, context)
 }
 
+/** Rings below this area (m²) have collapsed: a sliver cap would still grow full-height side walls. */
+const MIN_SLAB_REGION_AREA = 1e-6
+
+function signedArea2(polygon: ReadonlyArray<readonly [number, number]>): number {
+  let area2 = 0
+  for (let i = 0; i < polygon.length; i++) {
+    const j = (i + 1) % polygon.length
+    area2 += polygon[i]![0] * polygon[j]![1] - polygon[j]![0] * polygon[i]![1]
+  }
+  return area2
+}
+
+/**
+ * A renderable polygon collapses when snapping its edges to wall faces or
+ * sibling seams leaves fewer than three points or no area (a threshold strip
+ * inside a wall band). Such a slab builds an empty geometry instead of a sliver.
+ */
+function isCollapsedPolygon(polygon: ReadonlyArray<readonly [number, number]>): boolean {
+  return polygon.length < 3 || Math.abs(signedArea2(polygon)) / 2 < MIN_SLAB_REGION_AREA
+}
+
 // Earcut normalizes cap triangulation regardless of input winding, but the side
 // walls below assume a CCW contour (the unflipped quad's right-hand normal faces
 // outward only for CCW). outsetPolygon and the slab tool preserve the drawn
 // winding, so a CW-drawn slab gets inward-facing walls that FrontSide culls and
 // the slab reads as see-through from the front. Normalize to CCW first.
 function ensureCounterClockwisePolygon(polygon: Array<[number, number]>): Array<[number, number]> {
-  let area2 = 0
-  for (let i = 0; i < polygon.length; i++) {
-    const j = (i + 1) % polygon.length
-    area2 += polygon[i]![0] * polygon[j]![1] - polygon[j]![0] * polygon[i]![1]
-  }
-  return area2 < 0 ? [...polygon].reverse() : polygon
+  return signedArea2(polygon) < 0 ? [...polygon].reverse() : polygon
 }
 
 function isStrictInteriorHole(contour: PolygonPoint2D[], hole: PolygonPoint2D[]) {
@@ -101,7 +117,7 @@ function generateSolidSlabGeometry(
   const bottom = elevation - thickness
   const holePolygons = mergeSurfaceHolePolygons(slabNode.holes ?? [])
 
-  if (polygon.length < 3) return new THREE.BufferGeometry()
+  if (isCollapsedPolygon(polygon)) return new THREE.BufferGeometry()
 
   const positions: number[] = []
   const uvs: number[] = []
@@ -132,6 +148,7 @@ function generateSolidSlabGeometry(
   }
 
   for (const region of buildSlabRegions(polygon, holePolygons)) {
+    if (isCollapsedPolygon(region.contour)) continue
     const contour2d = ensureCounterClockwisePolygon(region.contour).map(
       ([x, z]) => new THREE.Vector2(x!, z!),
     )
@@ -203,7 +220,7 @@ function generatePoolGeometry(
   const depth = Math.max(0, (slabNode.recessedRimElevation ?? 0) - floor)
   const holePolygons = mergeSurfaceHolePolygons(slabNode.holes ?? [])
 
-  if (polygon.length < 3) return new THREE.BufferGeometry()
+  if (isCollapsedPolygon(polygon)) return new THREE.BufferGeometry()
 
   const positions: number[] = []
   const uvs: number[] = []
@@ -222,6 +239,7 @@ function generatePoolGeometry(
   }
 
   for (const region of buildSlabRegions(polygon, holePolygons)) {
+    if (isCollapsedPolygon(region.contour)) continue
     const contour = ensureCounterClockwisePolygon(region.contour)
     const floorBase = positions.length / 3
 
