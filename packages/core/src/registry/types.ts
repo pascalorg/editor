@@ -5,7 +5,14 @@ import type { MaterialSchema, MaterialTarget } from '../schema/material'
 import type { AssetInput, ItemNode } from '../schema/nodes/item'
 import type { MeasurementFeatureReference, MeasurementPoint } from '../schema/nodes/measurement'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
-import type { AnyNode, AnyNodeId } from '../schema/types'
+import type {
+  AnyNode,
+  AnyNodeId,
+  Discipline,
+  DisplayFamily,
+  DisplayMode,
+  PartKey,
+} from '../schema/types'
 import type { SurfaceProvider } from '../services/surface-hosting'
 import type { HandleList } from './handles'
 import type { CloneNodesIntoOptions, Subtree } from './subtree'
@@ -324,7 +331,18 @@ export type NodePort = {
    *  face at roll 0, height the vertical one. */
   width?: number
   height?: number
+  /** Ports sharing a group are one flow path of one system (F6). Unread until F6. */
+  group?: string
+  /** Membership label of this port's group; labels, never connects (F6). Unread until F6. */
+  systemId?: string
 }
+
+/**
+ * One end of an explicit, persisted connection edge (F6). Proximity only
+ * proposes a connection; an edge is declared in `capabilities.refs` with role
+ * `connection` and stored by the end that joins.
+ */
+export type PortRef = { nodeId: AnyNodeId; portId: string }
 
 // ─── ToolHint ────────────────────────────────────────────────────────
 //
@@ -1380,7 +1398,7 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * later slice, by the system graph for connectivity. Kinds with no
    * connectable geometry omit this.
    */
-  ports?: (node: z.infer<S>) => NodePort[]
+  ports?: (node: z.infer<S>, ctx?: EvaluationContext) => NodePort[]
   system?: SystemContribution
   tool?: LazyComponent
   /**
@@ -1754,6 +1772,14 @@ export type Capabilities = {
    *     `defaults()` or the dragging logic populates it dynamically.
    */
   hostRefFields?: string[]
+  /**
+   * Every reference this kind persists, declared once (R3, F5a), with its
+   * dependent fields. Frozen contract, not read yet: P-03's one extractor
+   * will serve clone, delete, split/merge, preset save and the reverse
+   * (host → dependents) index from it, replacing the hand-written remaps and
+   * `hostRefFields`. Existing references are declared before any new one.
+   */
+  refs?: readonly ReferenceDeclaration[]
   /**
    * Whether instances of this kind can be saved as a reusable preset
    * (unified `items` catalog, `kind='preset'`). The editor itself does
@@ -2382,10 +2408,190 @@ export type AlignmentFootprintConfig = (
 // ─── Relations ───────────────────────────────────────────────────────
 
 export type Relations = {
+  /**
+   * Derived, unpersisted junctions. Wall junctions are `endpoint-match` and
+   * enter the reference index as derived `connection` references (R3).
+   */
   linkedBy?: 'endpoint-match' | 'polygon-share' | { custom: (n: AnyNode) => AnyNodeId[] }
   hosts?: readonly string[]
   affectsSpatial?: readonly string[]
   cascadeDelete?: 'descendants' | 'children' | 'none'
+}
+
+// ─── References (R3; F5a, F8 typed reference policy) ─────────────────
+//
+// Frozen by A-02. A reference is a persisted value that names something
+// other than the literal it is: a scene node, a generated part of an owner,
+// a surface patch, an asset, a source-provenance id, a scene collection or a
+// scene material. Namespaces never mix: an `edgeBinding.edgeId` is a surface
+// id, not a node id, so a node remap must never touch it.
+
+/**
+ * - `node`: a scene node id.
+ * - `part`: a key inside one owner node (a generated `PartKey`, a gutter
+ *   outlet, a hanger slot, block topology); the owner is `owner`.
+ * - `surface`: a finite patch or named face of one owner node.
+ * - `asset`: content outside the graph by URL, catalog id or content hash.
+ * - `source`: provenance ids of an importer or capture (stable across re-import).
+ * - `collection`: a scene-root `collections` record.
+ * - `material`: a `MaterialRef` (`scene:<id>` palette entry, `library:<id>`)
+ *   or a library material/preset name.
+ * - `label`: an opaque key compared only for equality among peers (a join or
+ *   scope label). Producers may use a node id as the label, others a source
+ *   face id or any string; it is never dereferenced and never required to
+ *   resolve. A remap rewrites a label only where it equals a node id being
+ *   remapped in the same operation.
+ */
+export type ReferenceNamespace =
+  | 'node'
+  | 'part'
+  | 'surface'
+  | 'asset'
+  | 'source'
+  | 'collection'
+  | 'material'
+  | 'label'
+
+/**
+ * - `host`: the dependent resolves pose or geometry from the target (a mount,
+ *   support, hosting face, measurement anchor); follow or freeze.
+ * - `internal`: a reference inside the owner's own data or its generated
+ *   output (block topology, hanger slots, an owning generator).
+ * - `membership`: the target is a member of a set the owner labels (unit
+ *   zones, collection members, served levels, boundary walls).
+ * - `connection`: an explicit join between peers (ports, shed joints, wall
+ *   junctions).
+ * - `control`: a signal or driving relation, never flow (a collection's
+ *   control node, a controlling dimension, a switch's luminaires).
+ * - `hierarchy`: `parentId` / `children` and records keyed by a child id;
+ *   their consistency is protected separately from the typed policy.
+ * - `content`: the owner uses something outside the scene graph by
+ *   reference: an asset, a material, a pinned definition, provenance. Never
+ *   remapped by a clone.
+ */
+export type ReferenceRole =
+  | 'host'
+  | 'internal'
+  | 'membership'
+  | 'connection'
+  | 'control'
+  | 'hierarchy'
+  | 'content'
+
+/** When the target is deleted: freeze at the last resolved pose, drop the value, or delete the dependent. */
+export type ReferenceDeletePolicy = 'freeze' | 'drop' | 'cascade'
+
+/** When the owner is saved as a preset: strip the value, snapshot its resolved geometry then strip, or keep it. */
+export type ReferencePresetPolicy = 'strip' | 'materialize' | 'keep'
+
+/**
+ * A path into a node's persisted data. Dot-separated field names; `[]` visits
+ * every array or tuple element, `*` every record value and `@key` every record
+ * key. A path that does not resolve on a value (an absent optional, another
+ * union branch) yields no reference. Example: `measurement.points[].reference.nodeId`.
+ */
+export type ReferencePath = string
+
+export type ReferenceDeclaration = {
+  path: ReferencePath
+  namespace: ReferenceNamespace
+  role: ReferenceRole
+  onDelete: ReferenceDeletePolicy
+  onPreset: ReferencePresetPolicy
+  /** Node kinds the target may have (`node` namespace). Absent = any kind. */
+  targetKinds?: readonly string[]
+  /** Literal values that are not references (e.g. `supportSlabId: 'ground'`). */
+  sentinels?: readonly string[]
+  /** The value is `${prefix}${id}`; only values with this prefix are references. */
+  prefix?: string
+  /**
+   * `part` / `surface` namespaces: path to the owner node id, resolved in the
+   * same element as `path` (shared `[]` / `*` prefixes bind to one element).
+   * Absent = this node.
+   */
+  owner?: ReferencePath
+  /**
+   * Fields whose value is derived from, or only meaningful with, this
+   * reference: the side, face, station or UV of the host it names (`wallT`
+   * and `side` with `wallId`, `roofFace` with `roofSegmentId`). They share
+   * its lifecycle: a preset strip, a drop or a freeze applies to the
+   * reference and its dependents together. Paths absent on a kind are skipped.
+   */
+  dependents?: readonly ReferencePath[]
+}
+
+// ─── Evaluation context (F5a/§2.12; R2) ──────────────────────────────
+
+/**
+ * One model revision plus the live overrides of a gesture in flight (R2).
+ * Every reader of resolved geometry — meshes, bounds, ports, cuts, bake, MCP —
+ * resolves from the same context, so a device's ports never come from a
+ * different snapshot than its mesh. Frozen name; the evaluator lands in P-03.
+ */
+export type EvaluationContext = {
+  revision: number
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>
+  /** Preview-only values; never committed, never persisted. */
+  overrides?: ReadonlyMap<AnyNodeId, Readonly<Record<string, unknown>>>
+}
+
+// ─── Display and export identity (F4; owner decision O3) ─────────────
+
+/**
+ * Personal display state (O3, frozen): kept per project in this browser like
+ * `showScans`, never shared with collaborators and never a geometry edit.
+ * Additive to `levelMode` / `wallMode`, which keep their meaning. It composes
+ * through a `display` layer-hold reason and never touches `object.visible`.
+ * Inside it `isolate` wins over `families`, which win over the mode default.
+ * "Save look" writes the project default to `site.presentation`; the
+ * canonical bake is independent of both.
+ */
+export type DisplayState = {
+  mode: DisplayMode
+  families?: Partial<Record<DisplayFamily, boolean>>
+  disciplines: Record<Discipline, boolean>
+  xray: boolean
+  /** 0..1 presentation offset. */
+  separation: number
+  colorBy: 'material' | 'service'
+  isolate?: { kind: 'system' | 'owner'; id: string }
+}
+
+/**
+ * Per-mesh export identity (F4), `userData.pascalPart` / glTF
+ * `extras.pascalPart`, version 1. Validated live, in the raw bake, the
+ * optimised bake and the saved viewer. A missing tag means `finish`.
+ */
+export type PascalPartTag = {
+  v: 1
+  family: DisplayFamily
+  role: string
+  discipline?: Discipline
+  concealed?: boolean
+  layerId?: string
+  key?: PartKey
+  owner?: string
+  /** Envelope stand-in for a missing model: physical, exported. */
+  proxy?: boolean
+  /** Presentation-only solid: never in the canonical bake. */
+  presentation?: true
+  surfaceRole?: SurfaceRole
+  /** Source category when it differs from the owner's. */
+  source?: string
+}
+
+/**
+ * `canonical` holds every physical part exactly once, compiled from persisted
+ * state whatever was displayed; `finished` is what the visitor view shows;
+ * `lightweight` declares its omissions.
+ */
+export type ExportProfile = 'canonical' | 'finished' | 'lightweight'
+
+/** Root glTF `extras.pascalBake`. The benchmark harness refuses non-canonical bakes. */
+export type PascalBakeExtras = {
+  profile: ExportProfile
+  families: 'all' | readonly DisplayFamily[]
+  omissions?: readonly string[]
 }
 
 // ─── ParametricDescriptor ────────────────────────────────────────────
