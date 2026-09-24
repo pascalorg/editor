@@ -21,6 +21,7 @@ import {
 } from '@pascal-app/core'
 import {
   type ColorPreset,
+  catalogLightSource,
   configureKtx2Support,
   createDefaultMaterial,
   createSurfaceRoleMaterial,
@@ -832,7 +833,7 @@ const ItemLightRegistrar = ({
 }) => {
   useEffect(() => {
     const key = `${nodeId}:${index}`
-    useItemLightPool.getState().register(key, nodeId, effect, interactive)
+    useItemLightPool.getState().register(catalogLightSource(key, nodeId, effect, interactive))
     return () => useItemLightPool.getState().unregister(key)
   }, [nodeId, index, effect, interactive])
 

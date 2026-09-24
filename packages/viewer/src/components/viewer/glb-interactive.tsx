@@ -3,12 +3,16 @@
 import {
   type AnyNodeId,
   type Interactive,
-  type LightEffect,
   pointInPolygon,
   type SceneGraph,
   type SliderControl,
   useInteractive,
 } from '@pascal-app/core'
+import {
+  type EvaluatedLight,
+  evaluateRecipe,
+  type ProceduralItemNode,
+} from '@pascal-app/core/procedural-items'
 import { Html } from '@react-three/drei'
 import { createPortal, useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -21,8 +25,15 @@ import {
   Vector3,
 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
+import { SCENE_LAYER } from '../../lib/layers'
+import {
+  decorateProceduralEmission,
+  proceduralSlotMeshes,
+  setProceduralEmission,
+} from '../../lib/procedural-emission'
 import useViewer from '../../store/use-viewer'
 import { ControlWidget } from '../../systems/interactive/control-widget'
+import { proceduralControlDescriptors } from '../../systems/interactive/procedural-controls'
 
 /** An interactive item recovered from the scene graph so the baked GLB can be
  *  re-lit / re-animated by joining on `pascalId`. The GLB carries the geometry
@@ -33,6 +44,7 @@ export type GlbInteractiveItem = {
   /** Item height (world units) for placing the controls overlay above it. */
   height: number
   interactive: Interactive
+  procedural?: { lights: EvaluatedLight[]; parts: ProceduralItemNode['recipe']['parts'] }
 }
 
 /** A baked zone's identity node + its local floor polygon (from `extras`). */
@@ -57,6 +69,19 @@ export function buildGlbInteractiveItems(
       scale?: [number, number, number]
       asset?: { name?: string; dimensions?: [number, number, number]; interactive?: Interactive }
     }
+    if (node?.type === 'procedural-item') {
+      const procedural = raw as ProceduralItemNode
+      const evaluation = evaluateRecipe(procedural.recipe, procedural.parameters)
+      if (!evaluation.lights.length && !evaluation.motions.length) continue
+      items.push({
+        pascalId: id as AnyNodeId,
+        label: procedural.name ?? id,
+        height: evaluation.max[1],
+        interactive: { controls: [], effects: [] },
+        procedural: { lights: evaluation.lights, parts: procedural.recipe.parts },
+      })
+      continue
+    }
     if (node?.type !== 'item') continue
     const interactive = node.asset?.interactive
     if (!interactive?.effects?.length) continue
@@ -70,6 +95,76 @@ export function buildGlbInteractiveItems(
     })
   }
   return items
+}
+
+export function buildGlbLightRegs(
+  items: GlbInteractiveItem[],
+  identity: Map<string, Object3D>,
+): GlbLightReg[] {
+  const regs: GlbLightReg[] = []
+  for (const item of items) {
+    const object = identity.get(item.pascalId)
+    if (!object) continue
+    if (item.procedural) {
+      const groups = new Map<string, Object3D>()
+      object.traverse((child) => {
+        const motion = child.userData.proceduralMotion as { groupId?: string } | undefined
+        if (motion?.groupId) groups.set(motion.groupId, child)
+      })
+      for (const light of item.procedural.lights) {
+        const motion = light.motionGroup ? groups.get(light.motionGroup) : undefined
+        const local = new Vector3(...light.position)
+        if (motion) local.sub(motion.position)
+        regs.push({
+          key: `${item.pascalId}:procedural:${light.id}`,
+          nodeId: item.pascalId,
+          object,
+          color: light.color,
+          distance: light.distance,
+          getWorldPosition: (out) => {
+            const anchor = motion ?? object
+            anchor.updateWorldMatrix(true, false)
+            out.copy(local).applyMatrix4(anchor.matrixWorld)
+          },
+          getIntensity: () => light.intensity,
+          isOn: () => useInteractive.getState().procedural[item.pascalId]?.lightsOn ?? true,
+          levelId: findLevelId(object),
+        })
+      }
+    }
+    const controls = item.interactive.controls
+    const toggleIndex = controls.findIndex((control) => control.kind === 'toggle')
+    const sliderIndex = controls.findIndex((control) => control.kind === 'slider')
+    const slider = sliderIndex >= 0 ? (controls[sliderIndex] as SliderControl) : null
+    item.interactive.effects.forEach((effect, index) => {
+      if (effect.kind !== 'light') return
+      regs.push({
+        key: `${item.pascalId}:${index}`,
+        nodeId: item.pascalId,
+        object,
+        color: effect.color,
+        distance: effect.distance ?? 0,
+        getWorldPosition: (out) => {
+          object.updateWorldMatrix(true, false)
+          object.getWorldPosition(out)
+          out.set(out.x + effect.offset[0], out.y + effect.offset[1], out.z + effect.offset[2])
+        },
+        getIntensity: () => {
+          const values = useInteractive.getState().items[item.pascalId]?.controlValues
+          const raw = slider ? ((values?.[sliderIndex] as number) ?? slider.min) : 1
+          const fraction =
+            slider && slider.max > slider.min ? (raw - slider.min) / (slider.max - slider.min) : 1
+          return MathUtils.lerp(effect.intensityRange[0], effect.intensityRange[1], fraction)
+        },
+        isOn: () => {
+          const values = useInteractive.getState().items[item.pascalId]?.controlValues
+          return toggleIndex < 0 || Boolean(values?.[toggleIndex])
+        },
+        levelId: findLevelId(object),
+      })
+    })
+  }
+  return regs
 }
 
 const _itemPos = new Vector3()
@@ -122,35 +217,7 @@ export function GlbInteractive({
     [items],
   )
 
-  // Light registrations: one per item with a light effect, joined to its baked
-  // node. Fed to a fixed pool (below) rather than mounting a light per item.
-  const lightRegs = useMemo<GlbLightReg[]>(() => {
-    const regs: GlbLightReg[] = []
-    for (const item of items) {
-      const effect = item.interactive.effects.find((e) => e.kind === 'light') as
-        | LightEffect
-        | undefined
-      if (!effect) continue
-      const object = identity.get(item.pascalId)
-      if (!object) continue
-      const controls = item.interactive.controls
-      const toggleIndex = controls.findIndex((c) => c.kind === 'toggle')
-      const sliderIndex = controls.findIndex((c) => c.kind === 'slider')
-      const slider = sliderIndex >= 0 ? (controls[sliderIndex] as SliderControl) : null
-      regs.push({
-        key: item.pascalId,
-        object,
-        effect,
-        toggleIndex,
-        sliderIndex,
-        hasSlider: !!slider,
-        sliderMin: slider?.min ?? 0,
-        sliderMax: slider?.max ?? 1,
-        levelId: findLevelId(object),
-      })
-    }
-    return regs
-  }, [items, identity])
+  const lightRegs = useMemo(() => buildGlbLightRegs(items, identity), [items, identity])
   const levelIndexById = useMemo(
     () => new Map(levelOrder.map((id, i) => [id, i] as const)),
     [levelOrder],
@@ -177,6 +244,14 @@ export function GlbInteractive({
       {animationItems.map((item) => (
         <GlbItemAnimation actions={actions} item={item} key={item.pascalId} />
       ))}
+      {items
+        .filter((item) => item.procedural?.lights.length)
+        .map((item) => {
+          const object = identity.get(item.pascalId)
+          return object ? (
+            <GlbProceduralEmission item={item} key={item.pascalId} object={object} />
+          ) : null
+        })}
       {items.map((item) => {
         const object = identity.get(item.pascalId)
         return object ? (
@@ -190,6 +265,30 @@ export function GlbInteractive({
       })}
     </>
   )
+}
+
+function GlbProceduralEmission({ item, object }: { item: GlbInteractiveItem; object: Object3D }) {
+  useEffect(() => {
+    const lights = item.procedural?.lights ?? []
+    const restore = decorateProceduralEmission(object, lights, true)
+    const update = () => {
+      const on = useInteractive.getState().procedural[item.pascalId]?.lightsOn ?? true
+      const slots = new Set(lights.map((light) => light.emissiveSlot).filter(Boolean))
+      for (const mesh of proceduralSlotMeshes(object, slots as Set<string>)) {
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+        for (const material of materials) setProceduralEmission(material, on)
+      }
+    }
+    update()
+    const unsubscribe = useInteractive.subscribe((state, previous) => {
+      if (state.procedural[item.pascalId] !== previous.procedural[item.pascalId]) update()
+    })
+    return () => {
+      unsubscribe()
+      restore()
+    }
+  }, [item, object])
+  return null
 }
 
 // ── Pooled item lights ──────────────────────────────────────────────────────
@@ -206,15 +305,15 @@ const HYSTERESIS = 0.15
 const CAM_MOVE_DIST = 0.5
 const CAM_ROT_DOT = 0.995
 
-type GlbLightReg = {
-  key: AnyNodeId
+export type GlbLightReg = {
+  key: string
+  nodeId: AnyNodeId
   object: Object3D
-  effect: LightEffect
-  toggleIndex: number
-  sliderIndex: number
-  hasSlider: boolean
-  sliderMin: number
-  sliderMax: number
+  color: string
+  distance: number
+  getWorldPosition: (out: Vector3) => void
+  getIntensity: () => number
+  isOn: () => boolean
   levelId: string | null
 }
 
@@ -236,21 +335,25 @@ function findLevelId(object: Object3D): string | null {
   return null
 }
 
+function isRendered(object: Object3D): boolean {
+  let current: Object3D | null = object
+  while (current) {
+    if (!current.visible || !current.layers.isEnabled(SCENE_LAYER)) return false
+    current = current.parent
+  }
+  return true
+}
+
 function scoreReg(
   reg: GlbLightReg,
   selectedLevelId: string | null,
   levelMode: string,
   levelIndexById: Map<string, number>,
-  interactiveState: ReturnType<typeof useInteractive.getState>,
 ): number {
-  // Toggled-off lights contribute no illumination — drop them from the pool.
-  if (reg.toggleIndex >= 0 && !interactiveState.items[reg.key]?.controlValues?.[reg.toggleIndex]) {
+  if (!reg.isOn() || !isRendered(reg.object)) return Number.POSITIVE_INFINITY
+  if (selectedLevelId && reg.levelId !== selectedLevelId && levelMode === 'solo')
     return Number.POSITIVE_INFINITY
-  }
-  reg.object.getWorldPosition(_lightWorld)
-  _lightWorld.x += reg.effect.offset[0]
-  _lightWorld.y += reg.effect.offset[1]
-  _lightWorld.z += reg.effect.offset[2]
+  reg.getWorldPosition(_lightWorld)
   _dir.copy(_lightWorld).sub(_camPos).normalize()
   const angular = 1 - _camFwd.dot(_dir)
   const dist = _camPos.distanceTo(_lightWorld) / 200
@@ -281,7 +384,6 @@ function GlbItemLights({
 
   useFrame(({ camera }, delta) => {
     const dt = Math.min(delta, 0.1)
-    const interactiveState = useInteractive.getState()
     camera.getWorldPosition(_camPos)
     camera.getWorldDirection(_camFwd)
 
@@ -300,7 +402,7 @@ function GlbItemLights({
 
       const scored = regs.map((reg) => ({
         key: reg.key as string,
-        score: scoreReg(reg, selectedLevelId, levelMode, levelIndexById, interactiveState),
+        score: scoreReg(reg, selectedLevelId, levelMode, levelIndexById),
       }))
       scored.sort((a, b) => a.score - b.score)
       const scoreByKey = new Map(scored.map((s) => [s.key, s.score] as const))
@@ -356,8 +458,8 @@ function GlbItemLights({
             const light = lightRefs.current[freeSlot]
             const reg = regByKey.get(key)
             if (light && reg) {
-              light.color.set(reg.effect.color)
-              light.distance = reg.effect.distance ?? 0
+              light.color.set(reg.color)
+              light.distance = reg.distance
             }
           }
         }
@@ -397,8 +499,8 @@ function GlbItemLights({
           if (slot.key) {
             const reg = regByKey.get(slot.key)
             if (reg) {
-              light.color.set(reg.effect.color)
-              light.distance = reg.effect.distance ?? 0
+              light.color.set(reg.color)
+              light.distance = reg.distance
             }
           }
         }
@@ -415,29 +517,12 @@ function GlbItemLights({
         continue
       }
 
-      reg.object.getWorldPosition(_lightWorld)
-      light.position.set(
-        _lightWorld.x + reg.effect.offset[0],
-        _lightWorld.y + reg.effect.offset[1],
-        _lightWorld.z + reg.effect.offset[2],
-      )
-
-      const values = interactiveState.items[reg.key]?.controlValues
-      const isOn = reg.toggleIndex >= 0 ? Boolean(values?.[reg.toggleIndex]) : true
-      let t = 1
-      if (reg.hasSlider) {
-        const raw = (values?.[reg.sliderIndex] as number) ?? reg.sliderMin
-        t =
-          reg.sliderMax > reg.sliderMin
-            ? (raw - reg.sliderMin) / (reg.sliderMax - reg.sliderMin)
-            : 1
-      }
-      const targetIntensity = isOn
-        ? MathUtils.lerp(reg.effect.intensityRange[0], reg.effect.intensityRange[1], t)
-        : reg.effect.intensityRange[0]
+      reg.getWorldPosition(_lightWorld)
+      light.position.copy(_lightWorld)
+      const targetIntensity = reg.isOn() && isRendered(reg.object) ? reg.getIntensity() : 0
       light.intensity = MathUtils.lerp(light.intensity, targetIntensity, dt * 12)
     }
-  })
+  }, 6)
 
   return (
     <>
@@ -499,7 +584,24 @@ function GlbItemControls({
   worldPolygon: [number, number][] | null
 }) {
   const controlValues = useInteractive(useShallow((s) => s.items[item.pascalId]?.controlValues))
+  const proceduralState = useInteractive((s) => s.procedural[item.pascalId])
   const setControlValue = useInteractive((s) => s.setControlValue)
+  const togglePart = useInteractive((s) => s.toggleProceduralPart)
+  const toggleLights = useInteractive((s) => s.toggleProceduralLights)
+  const descriptors = item.procedural
+    ? proceduralControlDescriptors(
+        item.procedural.parts,
+        proceduralState,
+        (partId) => togglePart(item.pascalId, partId),
+        () => toggleLights(item.pascalId),
+      )
+    : item.interactive.controls.map((control, index) => ({
+        key: String(index),
+        control,
+        value: controlValues?.[index] ?? false,
+        onChange: (value: import('@pascal-app/core').ControlValue) =>
+          setControlValue(item.pascalId, index, value),
+      }))
 
   let visible = false
   if (worldPolygon?.length) {
@@ -527,7 +629,7 @@ function GlbItemControls({
     return () => clearTimeout(timeout)
   }, [visible])
 
-  if (!(mounted && controlValues)) return null
+  if (!(mounted && descriptors.length)) return null
 
   return createPortal(
     <Html
@@ -558,12 +660,12 @@ function GlbItemControls({
           transition: `opacity ${FADE_MS}ms ease`,
         }}
       >
-        {item.interactive.controls.map((control, i) => (
+        {descriptors.map((descriptor) => (
           <ControlWidget
-            control={control}
-            key={i}
-            onChange={(v) => setControlValue(item.pascalId, i, v)}
-            value={controlValues[i] ?? false}
+            control={descriptor.control}
+            key={descriptor.key}
+            onChange={descriptor.onChange}
+            value={descriptor.value}
           />
         ))}
       </div>

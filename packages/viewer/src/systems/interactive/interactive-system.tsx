@@ -9,6 +9,7 @@ import {
   useScene,
   type ZoneNode,
 } from '@pascal-app/core'
+import { evaluateRecipe, type ProceduralItemNode } from '@pascal-app/core/procedural-items'
 import { Html } from '@react-three/drei'
 import { createPortal, useFrame } from '@react-three/fiber'
 import { useEffect, useState } from 'react'
@@ -16,6 +17,7 @@ import { type Object3D, Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import useViewer from '../../store/use-viewer'
 import { ControlWidget } from './control-widget'
+import { type ControlDescriptor, proceduralControlDescriptors } from './procedural-controls'
 
 const _tempVec = new Vector3()
 
@@ -41,7 +43,12 @@ export const InteractiveSystem = () => {
   const interactiveNodeIds = useScene(
     useShallow((state) =>
       Object.values(state.nodes)
-        .filter((n): n is ItemNode => n.type === 'item' && n.asset.interactive != null)
+        .filter(
+          (n): n is ItemNode | ProceduralItemNode =>
+            (n.type === 'item' && n.asset.interactive != null) ||
+            (n.type === 'procedural-item' &&
+              n.recipe.parts.some((part) => part.motion || part.light)),
+        )
         .map((n) => n.id),
     ),
   )
@@ -66,7 +73,7 @@ const ItemControlsOverlay = ({
   nodeId: AnyNodeId
   zonePolygon: ZoneNode['polygon'] | null
 }) => {
-  const node = useScene((state) => state.nodes[nodeId] as ItemNode)
+  const node = useScene((state) => state.nodes[nodeId] as ItemNode | ProceduralItemNode)
   const [itemObj, setItemObj] = useState<Object3D | null>(null)
 
   useFrame(() => {
@@ -76,7 +83,30 @@ const ItemControlsOverlay = ({
   })
 
   const controlValues = useInteractive(useShallow((state) => state.items[nodeId]?.controlValues))
+  const proceduralState = useInteractive((state) => state.procedural[nodeId])
   const setControlValue = useInteractive((state) => state.setControlValue)
+  const togglePart = useInteractive((state) => state.toggleProceduralPart)
+  const toggleLights = useInteractive((state) => state.toggleProceduralLights)
+
+  let descriptors: ControlDescriptor[] = []
+  let height = 0
+  if (node?.type === 'item' && node.asset.interactive && controlValues) {
+    descriptors = node.asset.interactive.controls.map((control, i) => ({
+      key: String(i),
+      control,
+      value: controlValues[i] ?? false,
+      onChange: (value) => setControlValue(nodeId, i, value),
+    }))
+    height = node.asset.dimensions[1]
+  } else if (node?.type === 'procedural-item') {
+    descriptors = proceduralControlDescriptors(
+      node.recipe.parts,
+      proceduralState,
+      (partId) => togglePart(nodeId, partId),
+      () => toggleLights(nodeId),
+    )
+    height = evaluateRecipe(node.recipe, node.parameters).max[1]
+  }
 
   let visible = false
   if (itemObj && zonePolygon?.length) {
@@ -106,10 +136,7 @@ const ItemControlsOverlay = ({
     return () => clearTimeout(timeout)
   }, [visible])
 
-  if (!(mounted && itemObj && controlValues && node?.asset.interactive)) return null
-
-  const { controls } = node.asset.interactive
-  const [, height] = node.asset.dimensions
+  if (!(mounted && itemObj && descriptors.length)) return null
 
   return createPortal(
     // eps=-1 forces drei to re-apply translate/scale every frame: its mount
@@ -132,12 +159,12 @@ const ItemControlsOverlay = ({
           transition: `opacity ${FADE_MS}ms ease`,
         }}
       >
-        {controls.map((control, i) => (
+        {descriptors.map((descriptor) => (
           <ControlWidget
-            control={control}
-            key={i}
-            onChange={(v) => setControlValue(nodeId, i, v)}
-            value={controlValues[i] ?? false}
+            control={descriptor.control}
+            key={descriptor.key}
+            onChange={descriptor.onChange}
+            value={descriptor.value}
           />
         ))}
       </div>

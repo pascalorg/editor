@@ -853,7 +853,7 @@ export function GlbScene({
       }
     }
     proceduralPlayback.mixer.update(0)
-  })
+  }, -1)
 
   useEffect(() => {
     for (const [name, action] of Object.entries(actions)) {
@@ -883,6 +883,10 @@ export function GlbScene({
       const entry = proceduralPlayback.entries.get(nodeId)
       if (!entry) return false
       const parts = [...new Set(entry.controller.motions.map((motion) => motion.partId))]
+      if (parts.length === 0) {
+        useInteractive.getState().toggleProceduralLights(nodeId as AnyNodeId)
+        return true
+      }
       const active = useInteractive.getState().procedural[nodeId as AnyNodeId]?.parts
       useInteractive
         .getState()
@@ -1107,20 +1111,34 @@ export function GlbScene({
     if (hit) {
       const node = findIdentityAncestor(hit.object)
       const extras = node?.userData as PascalExtras | undefined
-      if (node && extras?.kind === 'procedural-item' && extras.clips?.length) {
+      const lightOnly =
+        extras?.pascalId &&
+        interactiveItems?.some(
+          (item) =>
+            item.pascalId === extras.pascalId &&
+            item.procedural?.lights.length &&
+            !item.procedural.parts.some((part) => part.motion),
+        )
+      if (node && extras?.kind === 'procedural-item' && (extras.clips?.length || lightOnly)) {
         doorNode = { hit: hit.object, node }
         const part = findProceduralMotionAncestor(hit.object)
         const state = useInteractive.getState().procedural[extras.pascalId as AnyNodeId]
-        const isOpen = part
-          ? Boolean(state?.parts[part.partId])
-          : Object.values(state?.parts ?? {}).some(Boolean)
+        const isOpen = lightOnly
+          ? (state?.lightsOn ?? true)
+          : part
+            ? Boolean(state?.parts[part.partId])
+            : Object.values(state?.parts ?? {}).some(Boolean)
         const clips = part?.clip ? [part.clip] : extras.clips
-        const isSpin = part ? part.kind === 'spin' : clips.every((clip) => clip.endsWith(': loop'))
-        const label = part?.partId.replaceAll('_', ' ') ?? extras.label ?? 'Item'
+        const isSpin = part
+          ? part.kind === 'spin'
+          : (clips?.every((clip) => clip.endsWith(': loop')) ?? false)
+        const label = lightOnly
+          ? (extras.label ?? 'Lights')
+          : (part?.partId.replaceAll('_', ' ') ?? extras.label ?? 'Item')
         door = {
           label,
           isOpen,
-          verb: isSpin ? (isOpen ? 'turn off' : 'turn on') : isOpen ? 'close' : 'open',
+          verb: lightOnly || isSpin ? (isOpen ? 'turn off' : 'turn on') : isOpen ? 'close' : 'open',
         }
         doorId = `${extras.pascalId}:${part?.partId ?? 'all'}`
       } else if (node && extras?.openable && extras.clips?.length) {

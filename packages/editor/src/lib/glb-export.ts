@@ -19,7 +19,9 @@ import {
   type WindowNode,
   type ZoneNode,
 } from '@pascal-app/core'
+import { evaluateRecipe } from '@pascal-app/core/procedural-items'
 import {
+  decorateProceduralEmission,
   getPascalTextureRef,
   isViewerPresentationTextureBorrowed,
   poseDoorMovingParts,
@@ -485,6 +487,14 @@ function finishSceneExportPreparation(preparation: SceneExportPreparation): GlbE
   pruneNonRenderableMeshes(scene, identityNodes)
   sanitizeMaterialGroups(scene, identityNodes)
   convertMaterials(scene, options.textures ?? 'embed', options.purpose ?? 'viewer')
+
+  for (const [id, original] of registryEntries) {
+    const node = nodes[id]
+    const clone = cloneByOriginal.get(original)
+    if (node?.type !== 'procedural-item' || !clone) continue
+    const lights = evaluateRecipe(node.recipe, node.parameters).lights
+    decorateProceduralEmission(clone, lights, true)
+  }
 
   const retainedCloneByOriginal = retainedClones(scene, cloneByOriginal)
   const keepClips = options.animations

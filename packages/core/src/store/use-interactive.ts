@@ -82,6 +82,8 @@ type InteractiveStore = {
   initProcedural: (nodeId: AnyNodeId, partIds: string[], spinPartIds?: string[]) => void
   toggleProceduralPart: (nodeId: AnyNodeId, partId: string) => void
   setProceduralParts: (nodeId: AnyNodeId, partIds: string[], on: boolean) => void
+  setProceduralLights: (nodeId: AnyNodeId, on: boolean) => void
+  toggleProceduralLights: (nodeId: AnyNodeId) => void
   removeProcedural: (nodeId: AnyNodeId) => void
 
   /** Initialize a node's interactive state from its asset definition (idempotent) */
@@ -165,13 +167,18 @@ export const useInteractive = create<InteractiveStore>((set, get) => ({
 
   initProcedural: (nodeId, partIds, spinPartIds = []) =>
     set((state) => {
-      if (state.procedural[nodeId]) return state
+      const current = state.procedural[nodeId]
+      const parts = Object.fromEntries(
+        partIds.map((id) => [id, current?.parts[id] ?? spinPartIds.includes(id)]),
+      )
+      if (current && partIds.every((id) => id in current.parts)) return state
       return {
         procedural: {
           ...state.procedural,
           [nodeId]: {
-            parts: Object.fromEntries(partIds.map((id) => [id, spinPartIds.includes(id)])),
-            lightsOn: true,
+            ...current,
+            parts,
+            lightsOn: current?.lightsOn ?? true,
           },
         },
       }
@@ -213,6 +220,19 @@ export const useInteractive = create<InteractiveStore>((set, get) => ({
         },
       },
     })),
+  setProceduralLights: (nodeId, on) =>
+    set((state) => ({
+      procedural: {
+        ...state.procedural,
+        [nodeId]: {
+          ...state.procedural[nodeId],
+          parts: state.procedural[nodeId]?.parts ?? {},
+          lightsOn: on,
+        },
+      },
+    })),
+  toggleProceduralLights: (nodeId) =>
+    get().setProceduralLights(nodeId, !(get().procedural[nodeId]?.lightsOn ?? true)),
   removeProcedural: (nodeId) =>
     set((state) => {
       const { [nodeId]: _, ...rest } = state.procedural

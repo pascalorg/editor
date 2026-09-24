@@ -17,6 +17,7 @@ import {
   transformPoint,
   validateProceduralRelations,
 } from '@pascal-app/core/procedural-items'
+import { decorateProceduralEmission } from '@pascal-app/viewer'
 import { itemPaint } from '../item/paint'
 import { restingFloorplanAffectedIds } from '../shared/resting-surface-plan'
 import { bakeProceduralAnimationClips } from './animation'
@@ -156,6 +157,22 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
       ...itemPaint,
       commit: ({ node, role, material, materialPreset }) =>
         setProceduralMaterial(node.id, role, materialPreset, material),
+      applyPreview: (args) => {
+        const restore = itemPaint.applyPreview?.(args)
+        if (!restore) return restore
+        const node = args.node
+        if (node?.type !== 'procedural-item') return restore
+        const lights = evaluateRecipe(node.recipe, node.parameters).lights
+        const restoreEmission = decorateProceduralEmission(
+          args.root,
+          lights,
+          useInteractive.getState().procedural[node.id]?.lightsOn ?? true,
+        )
+        return () => {
+          restoreEmission()
+          restore()
+        }
+      },
     },
   },
   relations: { hosts: ['item', 'procedural-item'], cascadeDelete: 'descendants' },
@@ -168,12 +185,17 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
   keyboardActions: {
     e: {
       appliesTo: (n) =>
-        (n as unknown as ProceduralItemNode).recipe.parts.some((part) => Boolean(part.motion)),
+        (n as unknown as ProceduralItemNode).recipe.parts.some((part) =>
+          Boolean(part.motion || part.light),
+        ),
       run: (n) => {
-        const parts = (n as unknown as ProceduralItemNode).recipe.parts
-          .filter((part) => part.motion)
-          .map((part) => part.id)
+        const recipeParts = (n as unknown as ProceduralItemNode).recipe.parts
+        const parts = recipeParts.filter((part) => part.motion).map((part) => part.id)
         const state = useInteractive.getState()
+        if (parts.length === 0) {
+          state.toggleProceduralLights(n.id)
+          return
+        }
         const on = !parts.some((partId) => state.procedural[n.id]?.parts[partId])
         state.setProceduralParts(n.id, parts, on)
       },

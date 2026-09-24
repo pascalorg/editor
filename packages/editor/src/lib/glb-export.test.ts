@@ -27,6 +27,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
 import cabinetJson from '../../../core/src/procedural-items/__fixtures__/cabinet_two_doors_drawer.json'
 import ceilingFanJson from '../../../core/src/procedural-items/__fixtures__/ceiling_fan.json'
+import pendantJson from '../../../core/src/procedural-items/__fixtures__/pendant_lamp.json'
 import {
   prepareSceneForExport,
   prepareSceneForExportAsync,
@@ -89,6 +90,35 @@ function sceneWithVisibleAndHiddenBoxes(): {
 }
 
 describe('prepareSceneForExport', () => {
+  test('exports procedural bulb emission on detached materials regardless of live state', async () => {
+    const definitionModule = '../../../nodes/src/procedural-item/definition'
+    const { proceduralItemDefinition } = await import(definitionModule)
+    registerNode(proceduralItemDefinition as AnyNodeDefinition)
+    const node = ProceduralItemNode.parse({
+      id: 'procedural-item_pendant_export',
+      recipe: parseRecipe(pendantJson),
+    })
+    const root = new THREE.Group()
+    const group = new THREE.Group()
+    const source = new THREE.MeshStandardMaterial({ color: '#3377aa' })
+    source.emissiveIntensity = 0
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), source)
+    mesh.userData.slotId = 'bulb'
+    group.add(mesh)
+    root.add(group)
+    sceneRegistry.nodes.set(node.id, group)
+
+    const result = prepareSceneForExport(root, { [node.id]: node as AnyNode })
+    const bakedMesh = result.scene.getObjectByName(node.id)?.children[0] as THREE.Mesh
+    const material = bakedMesh.material as THREE.MeshStandardMaterial
+    const light = evaluateRecipe(node.recipe).lights[0]!
+    expect(material).not.toBe(source)
+    expect(material.emissive.getHexString()).toBe(new THREE.Color(light.color).getHexString())
+    expect(material.emissiveIntensity).toBe(1)
+    expect(source.emissiveIntensity).toBe(0)
+    expect(result.scene.getObjectByProperty('type', 'PointLight')).toBeUndefined()
+    result.dispose()
+  })
   test('exports procedural door, drawer, and fan clips from rest-pose motion groups', async () => {
     const definitionModule = '../../../nodes/src/procedural-item/definition'
     const { proceduralItemDefinition } = await import(definitionModule)

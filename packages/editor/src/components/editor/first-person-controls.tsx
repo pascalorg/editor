@@ -363,6 +363,10 @@ function resolveHudInteract(target: FirstPersonInteractableTarget | null): Walkt
     if (node?.type !== 'procedural-item') return null
     const procedural = node as ProceduralItemNode
     const parts = procedural.recipe.parts.filter((part) => part.motion)
+    if (parts.length === 0 && procedural.recipe.parts.some((part) => part.light)) {
+      const isOn = useInteractive.getState().procedural[target.id]?.lightsOn ?? true
+      return { label: procedural.name ?? 'Lights', verb: isOn ? 'turn off' : 'turn on' }
+    }
     const part = target.partId ? parts.find((entry) => entry.id === target.partId) : undefined
     const active = useInteractive.getState().procedural[target.id]?.parts
     const isOn = part ? Boolean(active?.[part.id]) : parts.some((entry) => active?.[entry.id])
@@ -989,7 +993,7 @@ export const FirstPersonControls = () => {
       const node = nodes[id]
       if (node?.type !== 'procedural-item') continue
       const procedural = node as ProceduralItemNode
-      if (!procedural.recipe.parts.some((part) => part.motion)) continue
+      if (!procedural.recipe.parts.some((part) => part.motion || part.light)) continue
       const object = sceneRegistry.nodes.get(id)
       if (!object) continue
       for (const hit of proceduralInteractionRaycaster.intersectObject(object, true)) {
@@ -1036,6 +1040,10 @@ export const FirstPersonControls = () => {
         .filter((part) => part.motion)
         .map((part) => part.id)
       const state = useInteractive.getState()
+      if (parts.length === 0) {
+        state.toggleProceduralLights(target.id)
+        return
+      }
       if (target.partId) state.toggleProceduralPart(target.id, target.partId)
       else
         state.setProceduralParts(

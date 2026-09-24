@@ -14,17 +14,21 @@ import {
   proceduralLocalPose,
 } from '@pascal-app/core/procedural-items'
 import {
+  cloneWithProceduralEmission,
   createSurfaceRoleMaterial,
   NodeRenderer,
+  proceduralSlotMeshes,
   resolveMaterialRef,
   resolveSlotDefaultMaterial,
+  setProceduralEmission,
+  useItemLightPool,
   useLibraryMaterialsVersion,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { type Group, Mesh } from 'three'
+import { type Group, Mesh, Vector3 } from 'three'
 import { acquireProceduralGeometry, type BuiltItem, geometrySignature } from './geometry'
 export default function ProceduralRenderer({ node }: { node: ProceduralItemNode }) {
   const ref = useRef<Group>(null!)
@@ -51,6 +55,7 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
   const libraryVersion = useLibraryMaterialsVersion()
   const key = geometrySignature(effective)
   const [built, setBuilt] = useState<BuiltItem | null>(null)
+  const lightsOn = useInteractive((state) => state.procedural[node.id]?.lightsOn ?? true)
   const handlers = useNodeEvents(node as unknown as AnyNode, 'procedural-item' as AnyNode['type'])
   useRegistry(node.id as AnyNodeId, 'procedural-item', ref)
   useLayoutEffect(() => {
@@ -117,13 +122,54 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
     }
     if (frame.pending) invalidate()
     else awake.current = false
-  })
+  }, -1)
+  useLayoutEffect(() => {
+    if (!built || !ref.current) return
+    const pool = useItemLightPool.getState()
+    const keys: string[] = []
+    for (const light of built.evaluation.lights) {
+      const key = `${node.id}:procedural:${light.id}`
+      keys.push(key)
+      const local = new Vector3(...light.position)
+      const motion = built.evaluation.motions.find((entry) => entry.id === light.motionGroup)
+      if (motion) local.sub(new Vector3(...motion.pivot))
+      pool.register({
+        key,
+        nodeId: node.id,
+        color: light.color,
+        distance: light.distance,
+        getWorldPosition: (out) => {
+          const root = ref.current
+          if (!root) return false
+          const object = light.motionGroup
+            ? root.getObjectByName(`${node.id}__motion__${light.motionGroup}`)
+            : root
+          if (!object) return false
+          object.updateWorldMatrix(true, false)
+          out.copy(local).applyMatrix4(object.matrixWorld)
+          return true
+        },
+        getIntensity: () => light.intensity,
+        isEligible: () =>
+          effective.visible !== false &&
+          (useInteractive.getState().procedural[node.id]?.lightsOn ?? true),
+      })
+    }
+    return () => {
+      for (const key of keys) useItemLightPool.getState().unregister(key)
+    }
+  }, [built, node.id, effective.visible])
   const materialKey = JSON.stringify([effective.recipe.slots, effective.slots, libraryVersion])
   const materials = useMemo(() => {
     const [slots, overrides] = JSON.parse(materialKey) as [
       ProceduralItemNode['recipe']['slots'],
       ProceduralItemNode['slots'],
     ]
+    const emission = new Map(
+      built?.evaluation.lights
+        .filter((light) => light.emissiveSlot)
+        .map((light) => [light.emissiveSlot, light.color]) ?? [],
+    )
     return new Map(
       slots.map((s) => {
         const ref = overrides[s.id]
@@ -131,10 +177,29 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
           ? (resolveMaterialRef(ref, sceneMaterials, shading) ??
             resolveSlotDefaultMaterial(ref?.startsWith('#') ? ref : s.color, shading, 0.75))
           : createSurfaceRoleMaterial('furnishing', colorPreset, undefined, sceneTheme)
-        return [s.id, material] as const
+        return [
+          s.id,
+          emission.has(s.id)
+            ? cloneWithProceduralEmission(material, emission.get(s.id)!, true)
+            : material,
+        ] as const
       }),
     )
-  }, [materialKey, sceneMaterials, shading, textures, colorPreset, sceneTheme])
+  }, [materialKey, sceneMaterials, shading, textures, colorPreset, sceneTheme, built])
+  useLayoutEffect(() => {
+    const slots = new Set<string>()
+    for (const light of built?.evaluation.lights ?? []) {
+      if (light.emissiveSlot) {
+        slots.add(light.emissiveSlot)
+        const material = materials.get(light.emissiveSlot)
+        if (material) setProceduralEmission(material, lightsOn)
+      }
+    }
+    for (const mesh of ref.current ? proceduralSlotMeshes(ref.current, slots) : []) {
+      const active = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      for (const material of active) setProceduralEmission(material, lightsOn)
+    }
+  }, [built, materials, lightsOn])
   useLayoutEffect(
     () => () => {
       for (const material of materials.values())
@@ -161,6 +226,7 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
   return (
     <group
       ref={ref}
+      userData={{ pascalId: node.id }}
       position={live?.position ?? pose.position}
       rotation={rotation}
       visible={effective.visible}
