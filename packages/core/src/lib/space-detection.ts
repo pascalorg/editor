@@ -2113,6 +2113,174 @@ export function detectSpacesForLevel(levelId: string, walls: WallNode[]) {
   return detectSpacesFromWalls(levelId, walls)
 }
 
+type WallSegment = Pick<WallNode, 'start' | 'end'>
+type NodeUpdate = { id: AnyNodeId; data: Record<string, unknown> }
+
+export type WallLayoutDerivedChanges = {
+  /** Side changes by wall id, including walls the caller is about to create. */
+  wallSides: Map<string, Pick<WallNode, 'frontSide' | 'backSide'>>
+  update: NodeUpdate[]
+  create: Array<{ node: SlabNodeType | CeilingNodeType; parentId: AnyNodeId }>
+  delete: AnyNodeId[]
+}
+
+/**
+ * Everything a finished wall edit derives on its level, planned with one room detection over
+ * the final walls: wall sides, automatic zones, slabs and ceilings (ceiling children follow
+ * their room). Callers apply it in the same batch as the wall edit, so one undo step restores
+ * the derived state together with the walls.
+ */
+export function planWallLayoutDerivedChanges(
+  levelId: string,
+  finalWalls: WallNode[],
+  nodes: SceneNodes,
+): WallLayoutDerivedChanges {
+  const walls = finalWalls.filter((wall) => (wall.parentId ?? null) === levelId)
+  const { roomPolygons, spaces, wallUpdates } = detectSpacesFromWalls(levelId, walls)
+  const wallsById = new Map(walls.map((wall) => [wall.id as string, wall]))
+  const wallSides = new Map<string, Pick<WallNode, 'frontSide' | 'backSide'>>()
+  for (const { wallId, frontSide, backSide } of wallUpdates) {
+    const wall = wallsById.get(wallId)
+    if (wall && (wall.frontSide !== frontSide || wall.backSide !== backSide)) {
+      wallSides.set(wallId, { frontSide, backSide })
+    }
+  }
+
+  const children = Object.values(nodes).filter((node) => node?.parentId === levelId)
+  const slabs = planAutoSlabsForLevel(
+    roomPolygons,
+    children.filter((node) => node.type === 'slab').map((slab) => SlabNode.parse(slab)),
+  )
+  const level = nodes[levelId]
+  const ceilings = planAutoCeilingsForLevel(
+    roomPolygons,
+    children.filter((node) => node.type === 'ceiling').map((ceiling) => CeilingNode.parse(ceiling)),
+    {
+      storeyHeight: level?.type === 'level' ? getStoredLevelHeight(level as LevelNode) : undefined,
+      ceilingClampBound: (polygon) => getCeilingClampBound(levelId, nodes, polygon),
+      childPosition: (childId) => {
+        const child = nodes[childId]
+        return child && Array.isArray(child.position)
+          ? [child.position[0], child.position[2]]
+          : undefined
+      },
+    },
+  )
+  const zones = planAutoZonesForLevel(
+    spaces,
+    children.filter((node) => node.type === 'zone').map((zone) => ZoneNode.parse(zone)),
+  )
+
+  return {
+    wallSides,
+    update: [
+      ...slabs.update,
+      ...ceilings.update,
+      ...ceilings.reparent.map(({ id, parentId }) => ({ id, data: { parentId } })),
+      ...zones.update,
+    ] as NodeUpdate[],
+    create: [...slabs.create, ...ceilings.create].map((node) => ({
+      node,
+      parentId: levelId as AnyNodeId,
+    })),
+    delete: [...slabs.delete, ...ceilings.delete] as AnyNodeId[],
+  }
+}
+
+// Automatic surfaces come from centreline room detection, so their vertices sit on the walls.
+const WALL_BOUND_VERTEX_TOLERANCE = 1e-3
+
+function intersectWallLines(a: WallSegment, b: WallSegment): [number, number] | null {
+  const ax = a.end[0] - a.start[0]
+  const ay = a.end[1] - a.start[1]
+  const bx = b.end[0] - b.start[0]
+  const by = b.end[1] - b.start[1]
+  const cross = ax * by - ay * bx
+  if (Math.abs(cross) <= 1e-9 * Math.hypot(ax, ay) * Math.hypot(bx, by)) return null
+  const t = ((b.start[0] - a.start[0]) * by - (b.start[1] - a.start[1]) * bx) / cross
+  return [a.start[0] + ax * t, a.start[1] + ay * t]
+}
+
+/** Keeps a vertex at the same fraction of its wall as the wall moves. */
+function carryAlongWall(
+  vertex: [number, number],
+  from: WallSegment,
+  to: WallSegment,
+): [number, number] {
+  const dx = from.end[0] - from.start[0]
+  const dy = from.end[1] - from.start[1]
+  const lengthSq = dx * dx + dy * dy
+  if (lengthSq < 1e-12) {
+    return [vertex[0] + to.start[0] - from.start[0], vertex[1] + to.start[1] - from.start[1]]
+  }
+  const t = ((vertex[0] - from.start[0]) * dx + (vertex[1] - from.start[1]) * dy) / lengthSq
+  return [to.start[0] + (to.end[0] - to.start[0]) * t, to.start[1] + (to.end[1] - to.start[1]) * t]
+}
+
+/**
+ * Live preview of the automatic slabs and ceilings bounded by `movingWallIds`, with no room
+ * detection per tick. Boundary membership (the straight walls through each polygon vertex) is
+ * read once here; the returned function places each vertex where its walls now meet, or
+ * carries it along its one moving wall. New, merged or split rooms appear at commit.
+ */
+export function createWallBoundSurfaceFollower(
+  levelId: string,
+  nodes: SceneNodes,
+  movingWallIds: ReadonlySet<string>,
+): (moved: ReadonlyMap<string, WallSegment>) => Array<[AnyNodeId, Array<[number, number]>]> {
+  const walls = new Map<string, WallSegment>()
+  for (const node of Object.values(nodes)) {
+    if (node?.type === 'wall' && node.parentId === levelId && !isCurvedWall(node)) {
+      walls.set(node.id, { start: node.start, end: node.end })
+    }
+  }
+  const surfaces: Array<{
+    id: AnyNodeId
+    polygon: Array<[number, number]>
+    vertexWallIds: string[][]
+  }> = []
+  for (const node of Object.values(nodes)) {
+    if (node?.type !== 'slab' && node?.type !== 'ceiling') continue
+    if (node.parentId !== levelId || !node.autoFromWalls) continue
+    const polygon = node.polygon as Array<[number, number]>
+    const vertexWallIds = polygon.map((vertex) =>
+      [...walls]
+        .filter(
+          ([, wall]) =>
+            distanceToSegment(vertex, wall.start, wall.end) <= WALL_BOUND_VERTEX_TOLERANCE,
+        )
+        .map(([id]) => id),
+    )
+    if (vertexWallIds.some((ids) => ids.some((id) => movingWallIds.has(id)))) {
+      surfaces.push({ id: node.id, polygon, vertexWallIds })
+    }
+  }
+
+  const followVertex = (
+    vertex: [number, number],
+    wallIds: string[],
+    moved: ReadonlyMap<string, WallSegment>,
+  ): [number, number] => {
+    const movingIds = wallIds.filter((id) => moved.has(id))
+    if (movingIds.length === 0) return vertex
+    const current = (id: string) => moved.get(id) ?? walls.get(id)!
+    for (const movingId of movingIds) {
+      for (const otherId of wallIds) {
+        if (otherId === movingId) continue
+        const corner = intersectWallLines(current(movingId), current(otherId))
+        if (corner) return corner
+      }
+    }
+    return carryAlongWall(vertex, walls.get(movingIds[0]!)!, current(movingIds[0]!))
+  }
+
+  return (moved) =>
+    surfaces.map(({ id, polygon, vertexWallIds }) => [
+      id,
+      polygon.map((vertex, index) => followVertex(vertex, vertexWallIds[index] ?? [], moved)),
+    ])
+}
+
 function runSpaceDetection(
   levelIds: string[],
   sceneStore: any,

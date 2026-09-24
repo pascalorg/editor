@@ -192,6 +192,8 @@ Anything that subscribes to `useLiveTransforms` to inform 2D rendering needs to 
 
 **Writing `useScene.updateNodes`/`updateNode` per `grid:move` tick is a blocker:** it replaces the `nodes` map ref, so every `useScene(s => s.nodes)` subscriber app-wide (panels, HUD, tooltips, floor plan, catalog) re-renders each frame → FPS collapse. (`markDirty` per tick is fine for a bounded gesture — it never calls `set()` and the marks drain every frame; an animation loop that marks dirty for as long as it runs is not, see `node-definitions.md` § "`geometry` + `system`".) Reference: `packages/nodes/src/wall/{move-tool,move-endpoint-tool}.tsx`.
 
+**Room detection is a commit-time job, not a per-tick one.** A wall gesture that reshapes rooms previews the automatic slabs/ceilings it bounds with `createWallBoundSurfaceFollower` (boundary membership read once at arm time, a few line intersections per tick), then plans sides, zones, slabs and ceilings once from the final walls with `planWallLayoutDerivedChanges` and writes them in the same `runAsSingleSceneHistoryStep` batch as the walls. Hold history with `acquireSceneHistoryPause` so cancel and unmount release only the tool's own pause. Reference: the 3D `MoveWallTool`.
+
 ## Floorplan registry: per-node subscriptions, stable props
 
 `FloorplanRegistryLayer` draws one `FloorplanRegistryEntry` per node. The perf invariant — a live drag must re-render only the changed node(s), not all ~150 entries — rests on three things, and breaking any of them is a re-render-flood regression that still type-checks and passes tests (see `floorplan-registry-layer.tsx`):
