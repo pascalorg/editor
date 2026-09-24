@@ -8,7 +8,11 @@ import {
   useRegistry,
   useScene,
 } from '@pascal-app/core'
-import { type ProceduralItemNode, proceduralLocalPose } from '@pascal-app/core/procedural-items'
+import {
+  type ProceduralItemNode,
+  ProceduralMotionController,
+  proceduralLocalPose,
+} from '@pascal-app/core/procedural-items'
 import {
   createSurfaceRoleMaterial,
   NodeRenderer,
@@ -21,11 +25,11 @@ import {
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { type Group, Mesh } from 'three'
-import { PROCEDURAL_OPEN_DURATION } from './animation'
 import { acquireProceduralGeometry, type BuiltItem, geometrySignature } from './geometry'
 export default function ProceduralRenderer({ node }: { node: ProceduralItemNode }) {
   const ref = useRef<Group>(null!)
-  const progress = useRef(new Map<string, { value: number; speed: number; phase: number }>())
+  const controller = useRef<ProceduralMotionController | null>(null)
+  const lastCommand = useRef(0)
   const awake = useRef(false)
   const invalidate = useThree((state) => state.invalidate)
   const overrides = useLiveNodeOverrides((s) => s.overrides.get(node.id))
@@ -61,7 +65,14 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
   }, [key])
   useEffect(() => () => useInteractive.getState().removeProcedural(node.id), [node.id])
   useLayoutEffect(() => {
-    progress.current.clear()
+    controller.current = built ? new ProceduralMotionController(built.evaluation.motions) : null
+    lastCommand.current = 0
+    if (built)
+      useInteractive
+        .getState()
+        .initProcedural(node.id, [
+          ...new Set(built.evaluation.motions.map((motion) => motion.partId)),
+        ])
     for (const motion of built?.evaluation.motions ?? []) {
       const group = ref.current?.getObjectByName(`${node.id}__motion__${motion.id}`)
       if (!group) continue
@@ -84,47 +95,27 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
   )
   useFrame((_, delta) => {
     if (!awake.current || !built || !ref.current) return
-    let active = false
+    const state = useInteractive.getState().procedural[node.id]
+    if (state?.motionCommand && state.motionCommand.sequence > lastCommand.current) {
+      controller.current?.command(state.motionCommand)
+      lastCommand.current = state.motionCommand.sequence
+    }
+    const frame = controller.current?.tick(delta)
+    if (!frame) return
     for (const motion of built.evaluation.motions) {
       const group = ref.current.getObjectByName(`${node.id}__motion__${motion.id}`)
       if (!group) continue
-      const state = progress.current.get(motion.id) ?? { value: 0, speed: 0, phase: 0 }
-      const on = useInteractive.getState().procedural[node.id]?.[motion.partId] ?? false
       if (motion.kind === 'spin') {
-        const targetSpeed = on ? 1 : 0
-        if (state.speed !== targetSpeed) {
-          state.speed = Math.max(
-            0,
-            Math.min(1, state.speed + (Math.sign(targetSpeed - state.speed) * delta) / 0.35),
-          )
-          active = true
-        }
-        if (state.speed > 0) {
-          state.phase = (state.phase + motion.amount * state.speed * delta) % (2 * Math.PI)
-          group.rotation[motion.axis] = state.phase
-          active = true
-        }
+        group.rotation[motion.axis] = frame.spins[motion.id]?.phase ?? 0
       } else {
-        const target = on ? 1 : 0
-        if (state.value !== target) {
-          state.value = Math.max(
-            0,
-            Math.min(
-              1,
-              state.value + (Math.sign(target - state.value) * delta) / PROCEDURAL_OPEN_DURATION,
-            ),
-          )
-          const eased = state.value * state.value * (3 - 2 * state.value)
-          if (motion.kind === 'hinge') group.rotation[motion.axis] = motion.amount * eased
-          else
-            group.position[motion.axis] =
-              motion.pivot[{ x: 0, y: 1, z: 2 }[motion.axis]]! + motion.amount * eased
-          active = true
-        }
+        const fraction = frame.fractions[motion.id] ?? 0
+        if (motion.kind === 'hinge') group.rotation[motion.axis] = motion.amount * fraction
+        else
+          group.position[motion.axis] =
+            motion.pivot[{ x: 0, y: 1, z: 2 }[motion.axis]]! + motion.amount * fraction
       }
-      progress.current.set(motion.id, state)
     }
-    if (active) invalidate()
+    if (frame.pending) invalidate()
     else awake.current = false
   })
   const materialKey = JSON.stringify([effective.recipe.slots, effective.slots, libraryVersion])

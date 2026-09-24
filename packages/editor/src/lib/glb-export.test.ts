@@ -122,6 +122,7 @@ describe('prepareSceneForExport', () => {
           new THREE.BoxGeometry(0.02, 0.02, 0.02),
           new THREE.MeshStandardMaterial(),
         )
+        mesh.userData.slotId = shape.slot
         ;(shape.motionGroup ? groups.get(shape.motionGroup)! : object).add(mesh)
       }
       for (const group of groups.values()) group.rotation.y = 0.4
@@ -138,9 +139,29 @@ describe('prepareSceneForExport', () => {
     ])
     const doors = animations.find((clip) => clip.name.endsWith('doors: open'))!
     expect(doors.tracks).toHaveLength(2)
+    expect(doors.duration).toBeCloseTo(0.65)
     expect(doors.userData.loop).toBe(false)
     const drawer = animations.find((clip) => clip.name.endsWith('drawer: open'))!
     expect(drawer.tracks[0]).toBeInstanceOf(THREE.VectorKeyframeTrack)
+    for (const clip of [doors, drawer])
+      for (const track of clip.tracks) {
+        expect(track.times.length).toBeGreaterThanOrEqual(33)
+        expect(track.times[0]).toBe(0)
+        expect(track.times.at(-1)).toBeCloseTo(clip.duration)
+        for (let index = 1; index < track.times.length; index++)
+          expect(track.times[index]).toBeGreaterThan(track.times[index - 1]!)
+      }
+    expect(drawer.tracks[0]!.times.some((time) => Math.abs(time - 0.3) < 1e-6)).toBe(true)
+    expect(doors.tracks[0]!.times.some((time) => Math.abs(time - 0.55) < 1e-6)).toBe(true)
+    const drawerTrack = drawer.tracks[0]!
+    expect(Array.from(drawerTrack.values.slice(0, 3))).toEqual(
+      Array.from(drawerTrack.values.slice(3, 6)),
+    )
+    const doorTrack = doors.tracks[0]!
+    const last = doorTrack.values.length
+    expect(Array.from(doorTrack.values.slice(last - 8, last - 4))).toEqual(
+      Array.from(doorTrack.values.slice(last - 4)),
+    )
     const fan = animations.find((clip) => clip.name.endsWith('rotor: loop'))!
     expect(fan.tracks[0]!.times).toHaveLength(5)
     expect(fan.userData.loop).toBe(true)
@@ -154,6 +175,8 @@ describe('prepareSceneForExport', () => {
         expect(target!.quaternion.angleTo(new THREE.Quaternion())).toBeCloseTo(0)
         const marker = target!.userData.proceduralMotion
         expect(marker.clip).toBe(clip.name)
+        expect(marker.groupId).toBeDefined()
+        if (clip !== fan) expect(marker.activeWindow).toBeDefined()
         expect(target!.name).toContain('__motion__')
       }
     expect(scene.getObjectByName('procedural-item_cabinet:odd')?.userData).toMatchObject({
@@ -164,6 +187,19 @@ describe('prepareSceneForExport', () => {
       clips: [fan.name],
     })
     expect(scene.getObjectByName('procedural-item_fan:odd')?.userData.openable).toBeUndefined()
+    expect(
+      scene.getObjectByName('procedural-item_cabinet:odd__motion__doors')?.userData.proceduralMotion
+        .activeWindow,
+    ).toEqual([0, 0.63])
+    expect(
+      scene.getObjectByName('procedural-item_cabinet:odd__motion__drawer')?.userData
+        .proceduralMotion.activeWindow[0],
+    ).toBeCloseTo(0.3)
+    const exportedSlots: string[] = []
+    scene.traverse((object) => {
+      if (object.userData.slotId) exportedSlots.push(object.userData.slotId)
+    })
+    expect(exportedSlots).toContain('paint')
     const originalFileReader = globalThis.FileReader
     class ExportFileReader {
       result: ArrayBuffer | null = null
@@ -195,6 +231,7 @@ describe('prepareSceneForExport', () => {
           track.name.slice(0, track.name.lastIndexOf('.')),
         )
         expect(target?.userData.proceduralMotion.clip).toBe(clip.name)
+        expect(target?.userData.proceduralMotion.groupId).toBeDefined()
       }
     }
     const loadedById = new Map<string, THREE.Object3D>()
@@ -210,6 +247,11 @@ describe('prepareSceneForExport', () => {
       kind: 'procedural-item',
       clips: [fan.name],
     })
+    const loadedSlots: string[] = []
+    loaded.scene.traverse((object) => {
+      if (object.userData.slotId) loadedSlots.push(object.userData.slotId)
+    })
+    expect(loadedSlots).toContain('paint')
     expect(
       scene.getObjectByName('procedural-item_cabinet:odd__motion__drawer')?.position.toArray(),
     ).toEqual([0, 0, 0])

@@ -1703,17 +1703,29 @@ function stampIdentity(
     const presentationId = object.userData.pascalPresentationId
     const label = object.userData.label
     const motion = object.userData.proceduralMotion as
-      | { nodeId: string; partId: string; kind: 'hinge' | 'slide' | 'spin' }
+      | {
+          nodeId: string
+          partId: string
+          groupId: string
+          kind: 'hinge' | 'slide' | 'spin'
+          clip?: string
+          activeWindow?: [number, number]
+        }
       | undefined
+    const slotId = object.userData.slotId
     object.userData =
       typeof presentationId === 'string' ? { pascalPresentationId: presentationId, label } : {}
+    if (typeof slotId === 'string') object.userData.slotId = slotId
     if (motion) {
-      const clip = `${motion.nodeId}:${motion.partId}: ${motion.kind === 'spin' ? 'loop' : 'open'}`
       object.userData.proceduralMotion = {
         nodeId: motion.nodeId,
         partId: motion.partId,
+        groupId: motion.groupId,
         kind: motion.kind,
-        ...(clipNamesByNode.get(motion.nodeId)?.includes(clip) ? { clip } : {}),
+        ...(motion.clip && clipNamesByNode.get(motion.nodeId)?.includes(motion.clip)
+          ? { clip: motion.clip }
+          : {}),
+        ...(motion.activeWindow ? { activeWindow: motion.activeWindow } : {}),
       }
     }
   })

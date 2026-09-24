@@ -108,6 +108,9 @@
           0.36
         ],
         "axis": "y",
+        "delay": { "op": "mul", "args": ["index", 0.08] },
+        "duration": 0.55,
+        "easing": "smooth",
         "angle": {
           "op": "mul",
           "args": [
@@ -150,6 +153,9 @@
       "motion": {
         "kind": "slide",
         "axis": "z",
+        "delay": 0.3,
+        "duration": 0.35,
+        "easing": "soft",
         "distance": 0.35
       }
     }

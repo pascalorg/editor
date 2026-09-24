@@ -174,7 +174,7 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
           .filter((part) => part.motion)
           .map((part) => part.id)
         const state = useInteractive.getState()
-        const on = !parts.some((partId) => state.procedural[n.id]?.[partId])
+        const on = !parts.some((partId) => state.procedural[n.id]?.parts[partId])
         state.setProceduralParts(n.id, parts, on)
       },
     },

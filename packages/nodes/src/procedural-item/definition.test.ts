@@ -70,11 +70,20 @@ test('E toggles all procedural parts through transient interactive state', () =>
   const action = proceduralItemDefinition.keyboardActions!.e!
   expect(action.appliesTo(node)).toBe(true)
   action.run(node)
-  expect(useInteractive.getState().procedural[node.id]).toEqual({ doors: true, drawer: true })
+  expect(useInteractive.getState().procedural[node.id]?.parts).toEqual({
+    doors: true,
+    drawer: true,
+  })
   useInteractive.getState().toggleProceduralPart(node.id, 'doors')
-  expect(useInteractive.getState().procedural[node.id]).toEqual({ doors: false, drawer: true })
+  expect(useInteractive.getState().procedural[node.id]?.parts).toEqual({
+    doors: false,
+    drawer: true,
+  })
   action.run(node)
-  expect(useInteractive.getState().procedural[node.id]).toEqual({ doors: false, drawer: false })
+  expect(useInteractive.getState().procedural[node.id]?.parts).toEqual({
+    doors: false,
+    drawer: false,
+  })
   expect(node).not.toHaveProperty('motion')
   useInteractive.getState().removeProcedural(node.id)
   expect(useInteractive.getState().procedural[node.id]).toBeUndefined()

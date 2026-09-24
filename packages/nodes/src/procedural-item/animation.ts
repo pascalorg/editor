@@ -1,7 +1,11 @@
-import { evaluateRecipe, type ProceduralItemNode } from '@pascal-app/core/procedural-items'
+import {
+  type EvaluatedMotion,
+  evaluateRecipe,
+  finitePoseFraction,
+  motionTimeline,
+  type ProceduralItemNode,
+} from '@pascal-app/core/procedural-items'
 import * as THREE from 'three'
-
-export const PROCEDURAL_OPEN_DURATION = 0.45
 
 export function poseProceduralMotionsAtRest(
   node: ProceduralItemNode,
@@ -15,62 +19,91 @@ export function poseProceduralMotionsAtRest(
   }
 }
 
+function axisVector(motion: EvaluatedMotion): THREE.Vector3 {
+  return new THREE.Vector3(
+    Number(motion.axis === 'x'),
+    Number(motion.axis === 'y'),
+    Number(motion.axis === 'z'),
+  )
+}
+
 export function bakeProceduralAnimationClips(
   node: ProceduralItemNode,
   object: THREE.Object3D,
 ): THREE.AnimationClip[] {
-  const motions = evaluateRecipe(node.recipe, node.parameters).motions
+  const evaluation = evaluateRecipe(node.recipe, node.parameters)
+  const { T, perPart } = motionTimeline(evaluation)
   poseProceduralMotionsAtRest(node, object)
-  const tracksByPart = new Map<
-    string,
-    { kind: 'open' | 'loop'; tracks: THREE.KeyframeTrack[]; duration: number }
-  >()
-  for (const motion of motions) {
+  const clips: THREE.AnimationClip[] = []
+  const finiteByPart = new Map<string, EvaluatedMotion[]>()
+  const spinByPartAndPeriod = new Map<string, EvaluatedMotion[]>()
+  for (const motion of evaluation.motions) {
     const group = object.getObjectByName(`${node.id}__motion__${motion.id}`)
     if (!group) continue
-    const kind = motion.kind === 'spin' ? 'loop' : 'open'
-    const duration =
-      kind === 'loop' ? (2 * Math.PI) / Math.abs(motion.amount) : PROCEDURAL_OPEN_DURATION
-    const entry = tracksByPart.get(motion.partId) ?? { kind, tracks: [], duration }
-    const axis = new THREE.Vector3(
-      motion.axis === 'x' ? 1 : 0,
-      motion.axis === 'y' ? 1 : 0,
-      motion.axis === 'z' ? 1 : 0,
-    )
-    if (motion.kind === 'slide') {
-      const end = new THREE.Vector3(...motion.pivot).addScaledVector(axis, motion.amount)
-      entry.tracks.push(
-        new THREE.VectorKeyframeTrack(
-          `${group.uuid}.position`,
-          [0, duration],
-          [...motion.pivot, ...end.toArray()],
-        ),
+    if (motion.kind === 'spin') {
+      const key = `${motion.partId}:${Math.abs(motion.amount)}`
+      spinByPartAndPeriod.set(key, [...(spinByPartAndPeriod.get(key) ?? []), motion])
+    } else finiteByPart.set(motion.partId, [...(finiteByPart.get(motion.partId) ?? []), motion])
+  }
+  for (const [partId, motions] of finiteByPart) {
+    const tracks: THREE.KeyframeTrack[] = []
+    const clipName = `${node.id}:${partId}: open`
+    for (const motion of motions) {
+      const group = object.getObjectByName(`${node.id}__motion__${motion.id}`)!
+      const start = motion.delay
+      const times = [
+        ...new Set([
+          0,
+          ...Array.from({ length: 33 }, (_, i) => start + (motion.duration * i) / 32),
+          T,
+        ]),
+      ].sort((a, b) => a - b)
+      const values = times.flatMap((time) => {
+        const fraction = finitePoseFraction(motion, time)
+        if (motion.kind === 'slide')
+          return new THREE.Vector3(...motion.pivot)
+            .addScaledVector(axisVector(motion), motion.amount * fraction)
+            .toArray()
+        return new THREE.Quaternion()
+          .setFromAxisAngle(axisVector(motion), motion.amount * fraction)
+          .toArray()
+      })
+      tracks.push(
+        motion.kind === 'slide'
+          ? new THREE.VectorKeyframeTrack(`${group.uuid}.position`, times, values)
+          : new THREE.QuaternionKeyframeTrack(`${group.uuid}.quaternion`, times, values),
       )
-    } else {
-      const fractions = motion.kind === 'spin' ? [0, 0.25, 0.5, 0.75, 1] : [0, 1]
-      const times = fractions.map((fraction) => fraction * duration)
-      const values = fractions.flatMap((fraction) =>
+      group.userData.proceduralMotion = {
+        ...group.userData.proceduralMotion,
+        clip: clipName,
+        activeWindow: [perPart[partId]!.A, perPart[partId]!.B],
+      }
+    }
+    const clip = new THREE.AnimationClip(clipName, T, tracks)
+    clip.userData = { loop: false }
+    clips.push(clip)
+  }
+  const spinCounts = new Map<string, number>()
+  for (const motions of spinByPartAndPeriod.values()) {
+    const partId = motions[0]!.partId
+    const ordinal = spinCounts.get(partId) ?? 0
+    spinCounts.set(partId, ordinal + 1)
+    const clipName = `${node.id}:${partId}${ordinal ? `:${ordinal}` : ''}: loop`
+    const duration = (2 * Math.PI) / Math.abs(motions[0]!.amount)
+    const times = [0, 0.25, 0.5, 0.75, 1].map((fraction) => fraction * duration)
+    const tracks = motions.map((motion) => {
+      const group = object.getObjectByName(`${node.id}__motion__${motion.id}`)!
+      group.userData.proceduralMotion = { ...group.userData.proceduralMotion, clip: clipName }
+      const values = [0, 0.25, 0.5, 0.75, 1].flatMap((fraction) =>
         new THREE.Quaternion()
-          .setFromAxisAngle(
-            axis,
-            (motion.kind === 'spin' ? Math.sign(motion.amount) * 2 * Math.PI : motion.amount) *
-              fraction,
-          )
+          .setFromAxisAngle(axisVector(motion), Math.sign(motion.amount) * 2 * Math.PI * fraction)
           .toArray(),
       )
-      entry.tracks.push(
-        new THREE.QuaternionKeyframeTrack(`${group.uuid}.quaternion`, times, values),
-      )
-    }
-    tracksByPart.set(motion.partId, entry)
+      return new THREE.QuaternionKeyframeTrack(`${group.uuid}.quaternion`, times, values)
+    })
+    const clip = new THREE.AnimationClip(clipName, duration, tracks)
+    clip.userData = { loop: true }
+    clips.push(clip)
   }
-  return [...tracksByPart].map(([partId, entry]) => {
-    const clip = new THREE.AnimationClip(
-      `${node.id}:${partId}: ${entry.kind}`,
-      entry.duration,
-      entry.tracks,
-    )
-    clip.userData = { loop: entry.kind === 'loop' }
-    return clip
-  })
+  return clips
 }

@@ -1,15 +1,119 @@
 import { describe, expect, test } from 'bun:test'
 import cabinetJson from './__fixtures__/cabinet_two_doors_drawer.json'
 import ceilingJson from './__fixtures__/ceiling_fan.json'
+import chandelierJson from './__fixtures__/chandelier_six_arms.json'
 import deskJson from './__fixtures__/desk_fan.json'
+import pendantJson from './__fixtures__/pendant_lamp.json'
 import ballJson from './__fixtures__/soccer_ball.json'
 import skullJson from './__fixtures__/stylized_skull.json'
-import { evaluateRecipe, parseRecipe, RECIPE_LIMITS, sweepRecipe } from './recipe'
+import {
+  evaluateRecipe,
+  finitePoseFraction,
+  motionTimeline,
+  parseRecipe,
+  RECIPE_LIMITS,
+  sweepRecipe,
+} from './recipe'
 
-const fixtures = [cabinetJson, ceilingJson, deskJson, ballJson, skullJson]
+const fixtures = [
+  cabinetJson,
+  ceilingJson,
+  deskJson,
+  ballJson,
+  skullJson,
+  pendantJson,
+  chandelierJson,
+]
 const cabinet = () => parseRecipe(structuredClone(cabinetJson))
 
 describe('curved procedural shapes and motion', () => {
+  test('timing resolves per repeat and determines semantic windows', () => {
+    const evaluation = evaluateRecipe(cabinet())
+    expect(
+      evaluation.motions.map((motion) => [motion.delay, motion.duration, motion.easing]),
+    ).toEqual([
+      [0, 0.55, 'smooth'],
+      [0.08, 0.55, 'smooth'],
+      [0.3, 0.35, 'soft'],
+    ])
+    expect(motionTimeline(evaluation)).toEqual({
+      T: 0.6499999999999999,
+      perPart: {
+        doors: { A: 0, B: 0.63 },
+        drawer: { A: 0.3, B: 0.6499999999999999 },
+      },
+    })
+    expect(finitePoseFraction(evaluation.motions[2]!, 0.3)).toBe(0)
+    expect(finitePoseFraction(evaluation.motions[2]!, 0.475)).toBeCloseTo(0.5)
+    const recipe = cabinet()
+    recipe.parameters.push({
+      id: 'timing',
+      label: 'Timing',
+      default: 0.4,
+      min: 0.2,
+      max: 0.6,
+      step: 0.1,
+      unit: 's',
+    })
+    expect(parseRecipe(recipe).parameters.at(-1)?.unit).toBe('s')
+    recipe.parts[1]!.motion = {
+      kind: 'hinge',
+      pivot: [0, 0.86, 0.36],
+      axis: 'y',
+      angle: 1,
+      delay: 1.01,
+    }
+    expect(() => evaluateRecipe(recipe)).toThrow('Invalid timing')
+  })
+
+  test('defaults stay out of recipes and timing separates otherwise identical groups', () => {
+    const recipe = cabinet()
+    const doors = recipe.parts[1]!
+    if (doors.motion?.kind !== 'hinge') throw new Error('Expected hinge')
+    doors.motion.pivot = [0, 0.86, 0.36]
+    doors.motion.angle = 1
+    expect(
+      evaluateRecipe(recipe).motions.filter((motion) => motion.partId === 'doors'),
+    ).toHaveLength(2)
+    delete doors.motion.delay
+    delete doors.motion.duration
+    delete doors.motion.easing
+    const motions = evaluateRecipe(recipe).motions.filter((motion) => motion.partId === 'doors')
+    expect(motions).toHaveLength(1)
+    expect(motions[0]).toMatchObject({ delay: 0, duration: 0.45, easing: 'smooth' })
+    expect(doors.motion).not.toHaveProperty('duration')
+  })
+
+  test('lights expand per part instance without affecting bounds', () => {
+    const pendant = evaluateRecipe(parseRecipe(pendantJson))
+    expect(pendant.lights).toMatchObject([
+      { id: 'bulb:0', intensity: 2, distance: 4, emissiveSlot: 'bulb' },
+    ])
+    const chandelier = evaluateRecipe(parseRecipe(chandelierJson))
+    expect(chandelier.lights).toHaveLength(6)
+    expect(chandelier.shapes.length).toBe(7)
+    const unlit = parseRecipe(pendantJson)
+    delete unlit.parts[1]!.light
+    expect(evaluateRecipe(unlit).dimensions).toEqual(pendant.dimensions)
+    const changed = parseRecipe(chandelierJson)
+    const originalPosition = changed.parts[1]!.light!.position
+    changed.parts[1]!.light!.position = [20, 0.65, 0]
+    expect(() => evaluateRecipe(changed)).toThrow('outside its resting bounds')
+    changed.parts[1]!.light!.position = originalPosition
+    changed.parts[1]!.light!.emissiveSlot = 'unknown'
+    expect(() => evaluateRecipe(changed)).toThrow('Unknown emissive slot')
+    changed.parts[1]!.light!.emissiveSlot = 'bulb'
+    changed.parts.push({
+      ...structuredClone(changed.parts[1]!),
+      id: 'other_bulbs',
+      count: 1,
+      light: { ...changed.parts[1]!.light!, color: '#ffffff' },
+    })
+    expect(() => evaluateRecipe(changed)).toThrow('Conflicting light colors')
+    changed.parts.pop()
+    changed.parts[1]!.count = 13
+    expect(() => evaluateRecipe(changed)).toThrow('light budget')
+  })
   test('all example recipes pass the parameter sweep', () => {
     for (const fixture of fixtures) {
       const recipe = parseRecipe(fixture)

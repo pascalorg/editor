@@ -364,7 +364,7 @@ function resolveHudInteract(target: FirstPersonInteractableTarget | null): Walkt
     const procedural = node as ProceduralItemNode
     const parts = procedural.recipe.parts.filter((part) => part.motion)
     const part = target.partId ? parts.find((entry) => entry.id === target.partId) : undefined
-    const active = useInteractive.getState().procedural[target.id]
+    const active = useInteractive.getState().procedural[target.id]?.parts
     const isOn = part ? Boolean(active?.[part.id]) : parts.some((entry) => active?.[entry.id])
     const kind =
       part?.motion?.kind ??
@@ -1041,7 +1041,7 @@ export const FirstPersonControls = () => {
         state.setProceduralParts(
           target.id,
           parts,
-          !parts.some((id) => state.procedural[target.id]?.[id]),
+          !parts.some((id) => state.procedural[target.id]?.parts[id]),
         )
       return
     }

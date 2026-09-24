@@ -1,6 +1,13 @@
 'use client'
 
-import { type AnyNode, bakePolicyOf, type SurfaceRole } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  bakePolicyOf,
+  type SurfaceRole,
+  useInteractive,
+} from '@pascal-app/core'
+import { type EvaluatedMotion, ProceduralMotionController } from '@pascal-app/core/procedural-items'
 import { Html, useAnimations } from '@react-three/drei'
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
@@ -73,8 +80,10 @@ type PascalExtras = {
   proceduralMotion?: {
     nodeId: string
     partId: string
+    groupId: string
     kind: 'hinge' | 'slide' | 'spin'
     clip?: string
+    activeWindow?: [number, number]
   }
   polygon?: [number, number][]
   color?: string
@@ -335,6 +344,111 @@ export function GlbScene({
   }
   const rootRef = useRef<THREE.Group>(null!)
   const { actions } = useAnimations(gltf.animations, rootRef)
+  const proceduralPlayback = useMemo(() => {
+    const byNode = new Map<
+      string,
+      {
+        motions: EvaluatedMotion[]
+        clips: Map<string, { partId: string; kind: 'finite' | 'spin'; groupId: string }>
+      }
+    >()
+    gltf.scene.traverse((object) => {
+      const extras = object.userData as PascalExtras
+      if (extras.kind === 'procedural-item' && extras.pascalId && !byNode.has(extras.pascalId))
+        byNode.set(extras.pascalId, { motions: [], clips: new Map() })
+      const motion = extras.proceduralMotion
+      if (!motion?.clip) return
+      const clip = gltf.animations.find((entry) => entry.name === motion.clip)
+      if (!clip) return
+      const entry: {
+        motions: EvaluatedMotion[]
+        clips: Map<string, { partId: string; kind: 'finite' | 'spin'; groupId: string }>
+      } = byNode.get(motion.nodeId) ?? { motions: [], clips: new Map() }
+      if (motion.kind === 'spin') {
+        entry.motions.push({
+          id: motion.groupId,
+          partId: motion.partId,
+          kind: 'spin',
+          axis: 'y',
+          pivot: [0, 0, 0],
+          amount: (2 * Math.PI) / clip.duration,
+          delay: 0,
+          duration: 0,
+          easing: 'linear',
+        })
+        entry.clips.set(motion.clip, {
+          partId: motion.partId,
+          kind: 'spin',
+          groupId: entry.clips.get(motion.clip)?.groupId ?? motion.groupId,
+        })
+      } else if (
+        motion.activeWindow &&
+        !entry.motions.some((item) => item.partId === motion.partId)
+      ) {
+        entry.motions.push({
+          id: motion.groupId,
+          partId: motion.partId,
+          kind: 'hinge',
+          axis: 'y',
+          pivot: [0, 0, 0],
+          amount: 1,
+          delay: motion.activeWindow[0],
+          duration: motion.activeWindow[1] - motion.activeWindow[0],
+          easing: 'linear',
+        })
+        entry.clips.set(motion.clip, {
+          partId: motion.partId,
+          kind: 'finite',
+          groupId: motion.groupId,
+        })
+      }
+      byNode.set(motion.nodeId, entry)
+    })
+    // Procedural actions need a separate mixer so drei cannot advance their assigned times.
+    const mixer = new THREE.AnimationMixer(gltf.scene)
+    const entries = new Map<
+      string,
+      {
+        controller: ProceduralMotionController
+        clips: Map<string, { partId: string; kind: 'finite' | 'spin'; groupId: string }>
+        spinParts: string[]
+        sequence: number
+      }
+    >(
+      [...byNode].map(([nodeId, entry]) => {
+        const spinParts = [
+          ...new Set(
+            entry.motions.filter((motion) => motion.kind === 'spin').map((motion) => motion.partId),
+          ),
+        ]
+        const initial = Object.fromEntries(spinParts.map((partId) => [partId, true]))
+        return [
+          nodeId,
+          {
+            controller: new ProceduralMotionController(entry.motions, initial),
+            clips: entry.clips,
+            spinParts,
+            sequence: 0,
+          },
+        ]
+      }),
+    )
+    const proceduralActions = new Map(
+      gltf.animations
+        .filter((clip) => [...entries.values()].some((entry) => entry.clips.has(clip.name)))
+        .map((clip) => {
+          const action = mixer.clipAction(clip)
+          action.enabled = true
+          action.paused = true
+          action.loop = clip.name.endsWith(': loop') ? THREE.LoopRepeat : THREE.LoopOnce
+          action.clampWhenFinished = true
+          action.setEffectiveWeight(1)
+          action.play()
+          return [clip.name, action] as const
+        }),
+    )
+    return { entries, mixer, actions: proceduralActions }
+  }, [gltf.scene, gltf.animations])
   const camera = useThree((state) => state.camera)
   const raycaster = useThree((state) => state.raycaster)
   const controls = useThree((state) => state.controls) as LookAtControls | null
@@ -703,91 +817,79 @@ export function GlbScene({
   }, [zoneEntries])
 
   useEffect(() => {
-    const proceduralLoops = new Set<string>()
-    gltf.scene.traverse((object) => {
-      const motion = (object.userData as PascalExtras).proceduralMotion
-      if (motion?.kind === 'spin' && motion.clip) proceduralLoops.add(motion.clip)
-    })
+    for (const [nodeId, entry] of proceduralPlayback.entries)
+      useInteractive
+        .getState()
+        .initProcedural(
+          nodeId as AnyNodeId,
+          [...new Set(entry.controller.motions.map((motion) => motion.partId))],
+          entry.spinParts,
+        )
+    return () => {
+      for (const nodeId of proceduralPlayback.entries.keys())
+        useInteractive.getState().removeProcedural(nodeId as AnyNodeId)
+      proceduralPlayback.mixer.stopAllAction()
+    }
+  }, [proceduralPlayback])
+
+  useFrame((_, delta) => {
+    for (const [nodeId, entry] of proceduralPlayback.entries) {
+      const command = useInteractive.getState().procedural[nodeId as AnyNodeId]?.motionCommand
+      if (command && command.sequence > entry.sequence) {
+        entry.controller.command(command)
+        entry.sequence = command.sequence
+      }
+      const frame = entry.controller.tick(delta)
+      for (const [clipName, binding] of entry.clips) {
+        const action = proceduralPlayback.actions.get(clipName)
+        if (!action) continue
+        if (binding.kind === 'finite') action.time = frame.times[binding.partId] ?? 0
+        else {
+          const motion = entry.controller.motions.find((item) => item.id === binding.groupId)
+          if (motion)
+            action.time =
+              ((frame.spins[motion.id]?.phase ?? 0) / (2 * Math.PI)) * action.getClip().duration
+        }
+      }
+    }
+    proceduralPlayback.mixer.update(0)
+  })
+
+  useEffect(() => {
     for (const [name, action] of Object.entries(actions)) {
       if (!action) continue
-      // Ambient item loops (a fan's spin, `<id>: loop`) repeat; open clips play
-      // once and hold their end pose. GlbInteractive gates item loops on their
-      // toggle, while procedural loops start with the scene.
+      if (proceduralPlayback.actions.has(name)) continue
       if (name.endsWith(': loop')) {
         action.loop = THREE.LoopRepeat
         action.clampWhenFinished = false
-        if (proceduralLoops.has(name)) {
-          action.enabled = true
-          action.paused = false
-          action.play()
-        }
       } else {
         action.loop = THREE.LoopOnce
         action.clampWhenFinished = true
       }
     }
-  }, [actions, gltf.scene])
+  }, [actions, proceduralPlayback])
 
   const openIds = useRef(new Set<string>())
-  const activeProceduralClips = useRef(new Set<string>())
-  useEffect(() => {
-    activeProceduralClips.current.clear()
-    gltf.scene.traverse((object) => {
-      const motion = (object.userData as PascalExtras).proceduralMotion
-      if (motion?.kind === 'spin' && motion.clip && actions[motion.clip]) {
-        activeProceduralClips.current.add(motion.clip)
-      }
-    })
-  }, [actions, gltf.scene])
-  const toggleProceduralClip = useCallback(
-    (clipName: string) => {
-      const action = actions[clipName]
-      if (!action) return
-      const isLoop = clipName.endsWith(': loop')
-      const willActivate = !activeProceduralClips.current.has(clipName)
-      if (isLoop) {
-        if (willActivate) {
-          action.reset()
-          action.enabled = true
-          action.paused = false
-          action.loop = THREE.LoopRepeat
-          action.play()
-        } else {
-          action.stop()
-        }
-      } else {
-        if (!action.isRunning()) action.time = willActivate ? 0 : action.getClip().duration
-        action.enabled = true
-        action.paused = false
-        action.loop = THREE.LoopOnce
-        action.clampWhenFinished = true
-        action.timeScale = willActivate ? 1 : -1
-        action.play()
-      }
-      if (willActivate) activeProceduralClips.current.add(clipName)
-      else activeProceduralClips.current.delete(clipName)
-    },
-    [actions],
-  )
-
   const toggleProcedural = useCallback(
     (hit: THREE.Object3D, identityNode: THREE.Object3D) => {
       const extras = identityNode.userData as PascalExtras
       if (extras.kind !== 'procedural-item') return false
       const part = findProceduralMotionAncestor(hit)
       if (part?.clip) {
-        toggleProceduralClip(part.clip)
+        useInteractive.getState().toggleProceduralPart(part.nodeId as AnyNodeId, part.partId)
         return true
       }
-      const clips = extras.clips?.filter((clip) => actions[clip]) ?? []
-      if (!clips.length) return false
-      const turnOn = !clips.some((clip) => activeProceduralClips.current.has(clip))
-      for (const clip of clips) {
-        if (activeProceduralClips.current.has(clip) !== turnOn) toggleProceduralClip(clip)
-      }
+      const nodeId = extras.pascalId as string
+      const entry = proceduralPlayback.entries.get(nodeId)
+      if (!entry) return false
+      const parts = [...new Set(entry.controller.motions.map((motion) => motion.partId))]
+      const active = useInteractive.getState().procedural[nodeId as AnyNodeId]?.parts
+      useInteractive
+        .getState()
+        .setProceduralParts(nodeId as AnyNodeId, parts, !parts.some((partId) => active?.[partId]))
       return true
     },
-    [actions, toggleProceduralClip],
+    [proceduralPlayback],
   )
   const toggleOpenable = useCallback(
     (node: THREE.Object3D) => {
@@ -1008,8 +1110,11 @@ export function GlbScene({
       if (node && extras?.kind === 'procedural-item' && extras.clips?.length) {
         doorNode = { hit: hit.object, node }
         const part = findProceduralMotionAncestor(hit.object)
+        const state = useInteractive.getState().procedural[extras.pascalId as AnyNodeId]
+        const isOpen = part
+          ? Boolean(state?.parts[part.partId])
+          : Object.values(state?.parts ?? {}).some(Boolean)
         const clips = part?.clip ? [part.clip] : extras.clips
-        const isOpen = clips.some((clip) => activeProceduralClips.current.has(clip))
         const isSpin = part ? part.kind === 'spin' : clips.every((clip) => clip.endsWith(': loop'))
         const label = part?.partId.replaceAll('_', ' ') ?? extras.label ?? 'Item'
         door = {

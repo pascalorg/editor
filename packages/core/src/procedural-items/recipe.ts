@@ -29,14 +29,25 @@ const expression: z.ZodType<Expr> = z.lazy(() =>
   ]),
 )
 const vector = z.tuple([expression, expression, expression])
+const timing = {
+  delay: expression.optional(),
+  duration: expression.optional(),
+  easing: z.enum(['linear', 'smooth', 'soft']).optional(),
+}
 const motion = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('hinge'),
     pivot: vector,
     axis: z.enum(['x', 'y', 'z']),
     angle: expression,
+    ...timing,
   }),
-  z.strictObject({ kind: z.literal('slide'), axis: z.enum(['x', 'y', 'z']), distance: expression }),
+  z.strictObject({
+    kind: z.literal('slide'),
+    axis: z.enum(['x', 'y', 'z']),
+    distance: expression,
+    ...timing,
+  }),
   z.strictObject({
     kind: z.literal('spin'),
     pivot: vector,
@@ -80,7 +91,7 @@ export const RecipeSchema = z.strictObject({
         min: finite,
         max: finite,
         step: z.number().positive().max(100),
-        unit: z.enum(['m', 'count', 'rad']),
+        unit: z.enum(['m', 'count', 'rad', 's']),
         part: id.optional(),
         axis: z.enum(['x', 'y', 'z']).optional(),
       }),
@@ -105,6 +116,15 @@ export const RecipeSchema = z.strictObject({
         label: z.string().min(1).max(60),
         count: expression,
         motion: motion.optional(),
+        light: z
+          .strictObject({
+            position: vector,
+            color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+            intensity: z.number().finite().gt(0).max(10).optional(),
+            distance: z.number().finite().min(0.1).max(10).optional(),
+            emissiveSlot: id.optional(),
+          })
+          .optional(),
         shapes: z
           .array(
             z.strictObject({
@@ -156,6 +176,20 @@ export type EvaluatedMotion = {
   axis: 'x' | 'y' | 'z'
   pivot: Vec3
   amount: number
+  delay: number
+  duration: number
+  easing: 'linear' | 'smooth' | 'soft'
+}
+export type EvaluatedLight = {
+  id: string
+  partId: string
+  index: number
+  motionGroup?: string
+  position: Vec3
+  color: string
+  intensity: number
+  distance: number
+  emissiveSlot?: string
 }
 export type Surface = {
   id: string
@@ -168,6 +202,8 @@ export type Surface = {
 export type Evaluation = {
   shapes: EvaluatedShape[]
   motions: EvaluatedMotion[]
+  lights: EvaluatedLight[]
+  motionGroupByInstance: Record<string, string>
   surfaces: Surface[]
   min: Vec3
   max: Vec3
@@ -184,6 +220,7 @@ export const RECIPE_LIMITS = {
   dimension: 30,
   motionParts: 8,
   motionGroups: 32,
+  lights: 12,
 } as const
 
 function guardTree(value: unknown, depth = 0, budget = { count: 0 }) {
@@ -268,6 +305,26 @@ function movedPoint(point: Vec3, motion: EvaluatedMotion, fraction: number): Vec
 }
 
 export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = {}): Evaluation {
+  const slotColors = new Map<string, string>()
+  for (const part of recipe.parts) {
+    const light = part.light
+    if (!light) continue
+    if (
+      !/^#[0-9a-fA-F]{6}$/.test(light.color) ||
+      (light.intensity !== undefined &&
+        (!Number.isFinite(light.intensity) || light.intensity <= 0 || light.intensity > 10)) ||
+      (light.distance !== undefined &&
+        (!Number.isFinite(light.distance) || light.distance < 0.1 || light.distance > 10))
+    )
+      throw new Error(`Invalid light for ${part.id}`)
+    if (!light.emissiveSlot) continue
+    if (!recipe.slots.some((slot) => slot.id === light.emissiveSlot))
+      throw new Error(`Unknown emissive slot ${light.emissiveSlot}`)
+    const previous = slotColors.get(light.emissiveSlot)
+    if (previous && previous !== light.color.toLowerCase())
+      throw new Error(`Conflicting light colors on ${light.emissiveSlot}`)
+    slotColors.set(light.emissiveSlot, light.color.toLowerCase())
+  }
   if (recipe.parts.filter((part) => part.motion).length > RECIPE_LIMITS.motionParts)
     throw new Error(`Recipe exceeds ${RECIPE_LIMITS.motionParts} moving parts`)
   for (const surface of recipe.surfaces ?? [])
@@ -357,7 +414,9 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
   }
   const shapes: EvaluatedShape[] = [],
     motions: EvaluatedMotion[] = [],
+    lights: EvaluatedLight[] = [],
     surfaces: Surface[] = []
+  const motionGroupByInstance: Record<string, string> = Object.create(null)
   const motionSignatures = new Map<string, string>()
   const min: Vec3 = [Infinity, Infinity, Infinity],
     max: Vec3 = [-Infinity, -Infinity, -Infinity]
@@ -368,6 +427,8 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
       throw new Error(`Invalid repeat count for ${part.label}`)
     for (let i = 0; i < count; i++) {
       const vec = (v: Expr[]): Vec3 => v.map((x) => expr(x, i)) as Vec3
+      const instanceMin: Vec3 = [Infinity, Infinity, Infinity]
+      const instanceMax: Vec3 = [-Infinity, -Infinity, -Infinity]
       let motionGroup: string | undefined
       if (part.motion) {
         const motion = part.motion
@@ -386,12 +447,27 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
             `Invalid ${motion.kind} amount for ${part.id}: expected 0 < absolute value <= ${limit}`,
           )
         const rounded = (n: number) => Math.round(n * 1e6) / 1e6
+        const delay = motion.kind === 'spin' ? 0 : expr(motion.delay ?? 0, i)
+        const duration = motion.kind === 'spin' ? 0 : expr(motion.duration ?? 0.45, i)
+        const easing = motion.kind === 'spin' ? 'linear' : (motion.easing ?? 'smooth')
+        if (
+          !Number.isFinite(delay) ||
+          !Number.isFinite(duration) ||
+          delay < 0 ||
+          delay > 1 ||
+          !['linear', 'smooth', 'soft'].includes(easing) ||
+          (motion.kind !== 'spin' && (duration < 0.1 || duration > 2))
+        )
+          throw new Error(`Invalid timing for ${part.id}`)
         const signature = JSON.stringify([
           part.id,
           motion.kind,
           motion.axis,
           ...pivot.map(rounded),
           rounded(amount),
+          delay,
+          duration,
+          easing,
         ])
         motionGroup = motionSignatures.get(signature)
         if (!motionGroup) {
@@ -407,8 +483,12 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
             axis: motion.axis,
             pivot,
             amount,
+            delay,
+            duration,
+            easing,
           })
         }
+        motionGroupByInstance[`${part.id}:${i}`] = motionGroup
       }
       for (const s of part.shapes) {
         if (shapes.length >= RECIPE_LIMITS.shapes) throw new Error('Expanded shape budget exceeded')
@@ -461,12 +541,16 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
             const extent = Math.hypot(...axes.map((axis, j) => (axis[k]! * size[j]!) / 2))
             min[k] = Math.min(min[k]!, position[k]! - extent)
             max[k] = Math.max(max[k]!, position[k]! + extent)
+            instanceMin[k] = Math.min(instanceMin[k]!, position[k]! - extent)
+            instanceMax[k] = Math.max(instanceMax[k]!, position[k]! + extent)
           }
         } else {
           for (const point of shapeCorners(size, position, rotation))
             for (let k = 0; k < 3; k++) {
               min[k] = Math.min(min[k]!, point[k]!)
               max[k] = Math.max(max[k]!, point[k]!)
+              instanceMin[k] = Math.min(instanceMin[k]!, point[k]!)
+              instanceMax[k] = Math.max(instanceMax[k]!, point[k]!)
             }
         }
         if (s.support) {
@@ -481,6 +565,30 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
             size: [size[0], size[2]],
           })
         }
+      }
+      if (part.light) {
+        if (lights.length >= RECIPE_LIMITS.lights)
+          throw new Error('Evaluated light budget exceeded')
+        const position = vec(part.light.position)
+        if (position.some((value) => !Number.isFinite(value)))
+          throw new Error(`Invalid light position for ${part.id}`)
+        if (
+          position.some(
+            (value, axis) => value < instanceMin[axis]! - 0.02 || value > instanceMax[axis]! + 0.02,
+          )
+        )
+          throw new Error(`Light for ${part.id}:${i} is outside its resting bounds`)
+        lights.push({
+          id: `${part.id}:${i}`,
+          partId: part.id,
+          index: i,
+          motionGroup,
+          position,
+          color: part.light.color,
+          intensity: part.light.intensity ?? 2,
+          distance: part.light.distance ?? 5,
+          emissiveSlot: part.light.emissiveSlot,
+        })
       }
     }
   }
@@ -544,7 +652,48 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
   if (dimensions.some((x) => x > 30) || [...min, ...max].some((x) => Math.abs(x) > 30))
     throw new Error('Item exceeds 30 m bounds')
   if (min[1] < -0.001) throw new Error('Geometry extends below the ground; base must be at y=0')
-  return { shapes, motions, surfaces, min, max, dimensions, parameters, triangles }
+  return {
+    shapes,
+    motions,
+    lights,
+    motionGroupByInstance,
+    surfaces,
+    min,
+    max,
+    dimensions,
+    parameters,
+    triangles,
+  }
+}
+
+export const EASINGS = {
+  linear: (u: number) => u,
+  smooth: (u: number) => 3 * u * u - 2 * u * u * u,
+  soft: (u: number) => 6 * u ** 5 - 15 * u ** 4 + 10 * u ** 3,
+}
+
+export function finitePoseFraction(motion: EvaluatedMotion, time: number): number {
+  const u = Math.max(0, Math.min(1, (time - motion.delay) / motion.duration))
+  return EASINGS[motion.easing](u)
+}
+
+export function motionTimeline(evaluation: Pick<Evaluation, 'motions'>): {
+  T: number
+  perPart: Record<string, { A: number; B: number }>
+} {
+  const perPart: Record<string, { A: number; B: number }> = Object.create(null)
+  let T = 0
+  for (const motion of evaluation.motions) {
+    if (motion.kind === 'spin') continue
+    const end = motion.delay + motion.duration
+    T = Math.max(T, end)
+    const part = perPart[motion.partId]
+    perPart[motion.partId] = {
+      A: Math.min(part?.A ?? Infinity, motion.delay),
+      B: Math.max(part?.B ?? 0, end),
+    }
+  }
+  return { T, perPart }
 }
 
 export function sweepRecipe(recipe: Recipe) {

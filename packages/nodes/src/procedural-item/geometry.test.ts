@@ -6,6 +6,7 @@ import {
   shelfRecipe,
 } from '@pascal-app/core/procedural-items'
 import cabinetJson from '../../../core/src/procedural-items/__fixtures__/cabinet_two_doors_drawer.json'
+import chandelierJson from '../../../core/src/procedural-items/__fixtures__/chandelier_six_arms.json'
 import deskJson from '../../../core/src/procedural-items/__fixtures__/desk_fan.json'
 import {
   acquireProceduralGeometry,
@@ -89,4 +90,22 @@ test('ellipsoid and tapered cylinder build curved geometry with bounded vertices
     batch.motionGeometry?.dispose()
     batch.geometry.dispose()
   }
+})
+
+test('light descriptors leave geometry batches and bounds unchanged', () => {
+  const lit = parseRecipe(chandelierJson)
+  const unlit = structuredClone(lit)
+  delete unlit.parts[1]!.light
+  const a = buildProceduralGeometry(ProceduralItemNode.parse({ recipe: lit }))
+  const b = buildProceduralGeometry(ProceduralItemNode.parse({ recipe: unlit }))
+  expect(a.evaluation.lights).toHaveLength(6)
+  expect(b.evaluation.lights).toHaveLength(0)
+  expect(a.evaluation.min).toEqual(b.evaluation.min)
+  expect(a.evaluation.max).toEqual(b.evaluation.max)
+  expect(a.batches.map((batch) => batch.slot)).toEqual(b.batches.map((batch) => batch.slot))
+  for (const built of [a, b])
+    for (const batch of built.batches) {
+      batch.motionGeometry?.dispose()
+      batch.geometry.dispose()
+    }
 })

@@ -1,6 +1,7 @@
 'use client'
 
 import { create } from 'zustand'
+import type { MotionCommand } from '../procedural-items/motion-controller'
 import type { Interactive } from '../schema/nodes/item'
 import type { AnyNodeId } from '../schema/types'
 
@@ -74,7 +75,11 @@ type InteractiveStore = {
   skylights: Record<AnyNodeId, SkylightInteractiveState>
   skylightAnimations: Record<AnyNodeId, SkylightAnimationState>
   elevators: Record<AnyNodeId, ElevatorInteractiveState>
-  procedural: Record<AnyNodeId, Record<string, boolean>>
+  procedural: Record<
+    AnyNodeId,
+    { parts: Record<string, boolean>; lightsOn: boolean; motionCommand?: MotionCommand }
+  >
+  initProcedural: (nodeId: AnyNodeId, partIds: string[], spinPartIds?: string[]) => void
   toggleProceduralPart: (nodeId: AnyNodeId, partId: string) => void
   setProceduralParts: (nodeId: AnyNodeId, partIds: string[], on: boolean) => void
   removeProcedural: (nodeId: AnyNodeId) => void
@@ -158,11 +163,36 @@ export const useInteractive = create<InteractiveStore>((set, get) => ({
   elevators: {},
   procedural: {},
 
+  initProcedural: (nodeId, partIds, spinPartIds = []) =>
+    set((state) => {
+      if (state.procedural[nodeId]) return state
+      return {
+        procedural: {
+          ...state.procedural,
+          [nodeId]: {
+            parts: Object.fromEntries(partIds.map((id) => [id, spinPartIds.includes(id)])),
+            lightsOn: true,
+          },
+        },
+      }
+    }),
+
   toggleProceduralPart: (nodeId, partId) =>
     set((state) => ({
       procedural: {
         ...state.procedural,
-        [nodeId]: { ...state.procedural[nodeId], [partId]: !state.procedural[nodeId]?.[partId] },
+        [nodeId]: {
+          parts: {
+            ...state.procedural[nodeId]?.parts,
+            [partId]: !state.procedural[nodeId]?.parts[partId],
+          },
+          lightsOn: state.procedural[nodeId]?.lightsOn ?? true,
+          motionCommand: {
+            sequence: (state.procedural[nodeId]?.motionCommand?.sequence ?? 0) + 1,
+            scope: { partId },
+            target: !state.procedural[nodeId]?.parts[partId],
+          },
+        },
       },
     })),
   setProceduralParts: (nodeId, partIds, on) =>
@@ -170,8 +200,16 @@ export const useInteractive = create<InteractiveStore>((set, get) => ({
       procedural: {
         ...state.procedural,
         [nodeId]: {
-          ...state.procedural[nodeId],
-          ...Object.fromEntries(partIds.map((id) => [id, on])),
+          parts: {
+            ...state.procedural[nodeId]?.parts,
+            ...Object.fromEntries(partIds.map((id) => [id, on])),
+          },
+          lightsOn: state.procedural[nodeId]?.lightsOn ?? true,
+          motionCommand: {
+            sequence: (state.procedural[nodeId]?.motionCommand?.sequence ?? 0) + 1,
+            scope: 'all',
+            target: on,
+          },
         },
       },
     })),
