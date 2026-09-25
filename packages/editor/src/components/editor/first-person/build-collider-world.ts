@@ -358,6 +358,7 @@ function collectColliderGeometriesFromNode(
     // Prune hidden subtrees — children of an invisible group never render,
     // so they must not collide either (see isEffectivelyVisible).
     if (!object.visible) return
+    if (object.userData.proceduralMotion) return
 
     if (
       isMesh(object) &&

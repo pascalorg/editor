@@ -27,6 +27,7 @@ import {
   useInteractive,
   useScene,
 } from '@pascal-app/core'
+import type { ProceduralItemNode } from '@pascal-app/core/procedural-items'
 import {
   BVHEcctrl,
   type BVHEcctrlApi,
@@ -159,6 +160,8 @@ const standClearanceUp = new Vector3(0, 1, 0)
 const centerScreenPoint = new Vector2(0, 0)
 const doorInteractionRaycaster = new Raycaster()
 setSurfaceRaycastLayers(doorInteractionRaycaster.layers)
+const proceduralInteractionRaycaster = new Raycaster()
+setSurfaceRaycastLayers(proceduralInteractionRaycaster.layers)
 const doorLeafBox = new Box3()
 const doorLeafInverseMatrix = new Matrix4()
 const doorLeafLocalHit = new Vector3()
@@ -225,6 +228,16 @@ type FirstPersonInteractableTarget =
   | {
       id: AnyNodeId
       type: 'door' | 'window'
+    }
+  | {
+      id: AnyNodeId
+      type: 'item'
+    }
+  | {
+      id: AnyNodeId
+      partId?: string
+      kind?: 'hinge' | 'slide' | 'spin'
+      type: 'procedural'
     }
   | {
       action: 'open-door' | 'request-level'
@@ -350,6 +363,35 @@ function resolveHudInteract(target: FirstPersonInteractableTarget | null): Walkt
   }
 
   const node = useScene.getState().nodes[target.id]
+  if (target.type === 'item') {
+    if (node?.type !== 'item' || !node.asset.interactive) return null
+    const indices = node.asset.interactive.controls.flatMap((control, index) =>
+      control.kind === 'toggle' ? [index] : [],
+    )
+    const values = useInteractive.getState().items[target.id]?.controlValues
+    const isOn = indices.some((index) => Boolean(values?.[index]))
+    return { label: node.name ?? node.asset.name, verb: isOn ? 'turn off' : 'turn on' }
+  }
+  if (target.type === 'procedural') {
+    if (node?.type !== 'procedural-item') return null
+    const procedural = node as ProceduralItemNode
+    const parts = procedural.recipe.parts.filter((part) => part.motion)
+    if (parts.length === 0 && procedural.recipe.parts.some((part) => part.light)) {
+      const state = useInteractive.getState()
+      const isOn = state.procedural[target.id]?.lightsOn ?? state.lampDefault
+      return { label: procedural.name ?? 'Lights', verb: isOn ? 'turn off' : 'turn on' }
+    }
+    const part = target.partId ? parts.find((entry) => entry.id === target.partId) : undefined
+    const active = useInteractive.getState().procedural[target.id]?.parts
+    const isOn = part ? Boolean(active?.[part.id]) : parts.some((entry) => active?.[entry.id])
+    const kind =
+      part?.motion?.kind ??
+      (parts.every((entry) => entry.motion?.kind === 'spin') ? 'spin' : 'hinge')
+    return {
+      label: part?.label ?? procedural.name ?? 'item',
+      verb: kind === 'spin' ? (isOn ? 'turn off' : 'turn on') : isOn ? 'close' : 'open',
+    }
+  }
   if (target.type === 'window') {
     if (node?.type !== 'window') return null
     const isOpen = getDisplayedWindowValue(target.id, node.operationState) > 0
@@ -417,7 +459,9 @@ function getInteractableTargetKey(target: FirstPersonInteractableTarget | null) 
   if (!target) return null
   return target.type === 'elevator'
     ? `${target.type}:${target.id}:${target.levelId}`
-    : `${target.type}:${target.id}`
+    : target.type === 'procedural'
+      ? `${target.type}:${target.id}:${target.partId ?? 'all'}`
+      : `${target.type}:${target.id}`
 }
 
 function isDynamicElevatorCollider(kind: ElevatorColliderKind) {
@@ -952,8 +996,70 @@ export const FirstPersonControls = () => {
     const windowId = resolveInteractableWindowId()
     if (windowId) return { id: windowId, type: 'window' }
 
+    camera.updateMatrixWorld(true)
+    proceduralInteractionRaycaster.setFromCamera(centerScreenPoint, camera)
+    proceduralInteractionRaycaster.far = DOOR_INTERACTION_DISTANCE
+    let closest: FirstPersonInteractableTarget | null = null
+    let closestDistance = DOOR_INTERACTION_DISTANCE
+    const nodes = useScene.getState().nodes
+    for (const rawId of sceneRegistry.byType['procedural-item'] ?? []) {
+      const id = rawId as AnyNodeId
+      const node = nodes[id]
+      if (node?.type !== 'procedural-item') continue
+      const procedural = node as ProceduralItemNode
+      if (!procedural.recipe.parts.some((part) => part.motion || part.light)) continue
+      const object = sceneRegistry.nodes.get(id)
+      if (!object) continue
+      for (const hit of proceduralInteractionRaycaster.intersectObject(object, true)) {
+        if (hit.distance >= closestDistance) break
+        let ancestor: Object3D | null = hit.object
+        while (ancestor && ancestor !== object && !ancestor.userData.proceduralMotion)
+          ancestor = ancestor.parent
+        const motion = ancestor?.userData.proceduralMotion as
+          | { nodeId?: string; partId?: string; kind?: 'hinge' | 'slide' | 'spin' }
+          | undefined
+        closest =
+          motion?.nodeId === id && motion.partId
+            ? { id, partId: motion.partId, kind: motion.kind, type: 'procedural' }
+            : { id, type: 'procedural' }
+        closestDistance = hit.distance
+        break
+      }
+    }
+    for (const rawId of sceneRegistry.byType.item ?? []) {
+      const id = rawId as AnyNodeId
+      const node = nodes[id]
+      if (
+        node?.type !== 'item' ||
+        !node.asset.interactive?.controls.some((control) => control.kind === 'toggle')
+      )
+        continue
+      const object = sceneRegistry.nodes.get(id)
+      if (!object) continue
+      const hit = proceduralInteractionRaycaster.intersectObject(object, true)[0]
+      if (hit && hit.distance < closestDistance) {
+        closest = { id, type: 'item' }
+        closestDistance = hit.distance
+      }
+    }
+    if (!closest) {
+      const selectedId = useViewer.getState().selection.selectedIds.at(-1) as AnyNodeId | undefined
+      const selected = selectedId ? nodes[selectedId] : undefined
+      if (
+        selected?.type === 'item' &&
+        selected.asset.interactive?.controls.some((control) => control.kind === 'toggle')
+      )
+        return { id: selected.id, type: 'item' }
+    }
+    if (closest) return closest
+
     return null
-  }, [resolveInteractableDoorId, resolveInteractableElevatorTarget, resolveInteractableWindowId])
+  }, [
+    camera,
+    resolveInteractableDoorId,
+    resolveInteractableElevatorTarget,
+    resolveInteractableWindowId,
+  ])
 
   const toggleInteractableTarget = useCallback(() => {
     // Drone is a camera, not an avatar: the click that re-acquires pointer lock
@@ -965,6 +1071,33 @@ export const FirstPersonControls = () => {
 
     const target = interactableTargetRef.current ?? resolveInteractableTarget()
     if (!target) return
+    if (target.type === 'item') {
+      const node = useScene.getState().nodes[target.id]
+      if (node?.type === 'item' && node.asset.interactive)
+        useInteractive.getState().toggleItemToggles(target.id, node.asset.interactive)
+      return
+    }
+
+    if (target.type === 'procedural') {
+      const node = useScene.getState().nodes[target.id]
+      if (node?.type !== 'procedural-item') return
+      const parts = (node as ProceduralItemNode).recipe.parts
+        .filter((part) => part.motion)
+        .map((part) => part.id)
+      const state = useInteractive.getState()
+      if (parts.length === 0) {
+        state.toggleProceduralLights(target.id)
+        return
+      }
+      if (target.partId) state.toggleProceduralPart(target.id, target.partId)
+      else
+        state.setProceduralParts(
+          target.id,
+          parts,
+          !parts.some((id) => state.procedural[target.id]?.parts[id]),
+        )
+      return
+    }
 
     if (target.type === 'elevator') {
       if (target.buttonKind === 'cab') {
@@ -1023,6 +1156,18 @@ export const FirstPersonControls = () => {
 
     const target = interactableTargetRef.current ?? resolveInteractableTarget()
     if (!target) return
+
+    if (target.type === 'procedural') {
+      const node = useScene.getState().nodes[target.id]
+      if (node?.type !== 'procedural-item') return
+      const parts = target.partId
+        ? [target.partId]
+        : (node as ProceduralItemNode).recipe.parts
+            .filter((part) => part.motion)
+            .map((part) => part.id)
+      useInteractive.getState().setProceduralParts(target.id, parts, false)
+      return
+    }
 
     if (target.type === 'elevator') return
 

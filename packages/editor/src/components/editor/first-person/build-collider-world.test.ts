@@ -93,6 +93,26 @@ describe('buildFirstPersonColliderWorldFromRegistry', () => {
     world?.dispose()
   })
 
+  test('keeps a procedural static body but excludes moving groups', () => {
+    registerColliderDefinition('shelf', ShelfNode, 'furnish')
+    const shelf = ShelfNode.parse({ id: 'shelf_motion_test' })
+    setSceneNodes([shelf])
+    mountNode(shelf, [1, 1, 1], [0, 0.5, 0])
+    const root = sceneRegistry.nodes.get(shelf.id)!
+    const motion = new Group()
+    motion.userData.proceduralMotion = { nodeId: shelf.id, partId: 'drawer' }
+    const movingMesh = new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial())
+    movingMesh.position.set(5, 0.5, 0)
+    motion.add(movingMesh)
+    root.add(motion)
+    root.updateMatrixWorld(true)
+
+    const world = buildFirstPersonColliderWorldFromRegistry()!
+    expect(world.bounds?.min.x).toBeCloseTo(-0.5)
+    expect(world.bounds?.max.x).toBeCloseTo(0.5)
+    world.dispose()
+  })
+
   test('standing clearance and floor hits survive a slab source joining and leaving a batch', () => {
     registerColliderDefinition('slab', SlabNode, 'structure', 'floor')
     const slab = SlabNode.parse({ id: 'slab_clearance_batch', polygon: [] })

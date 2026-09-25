@@ -9,30 +9,29 @@ import {
   useScene,
   type ZoneNode,
 } from '@pascal-app/core'
+import { evaluateRecipe, type ProceduralItemNode } from '@pascal-app/core/procedural-items'
 import { Html } from '@react-three/drei'
 import { createPortal, useFrame } from '@react-three/fiber'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { type Object3D, Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import useViewer from '../../store/use-viewer'
 import { ControlWidget } from './control-widget'
+import { type ControlDescriptor, proceduralControlDescriptors } from './procedural-controls'
 
 const _tempVec = new Vector3()
 
-// ---- Parent: one overlay per interactive item inside the selected zone ----
+// ---- Parent: overlays for selected interactive items and the selected zone ----
 //
-// The <Html> overlays only exist while a zone is selected and the item sits
-// inside it. Mounting them unconditionally is not an option: each drei <Html>
+// Mounting <Html> overlays unconditionally is not an option: each drei <Html>
 // repositions and re-sorts its DOM element on every camera-move frame, and
 // with `occlude` it also raycasts the entire scene per overlay per frame. On
 // large scenes (hundreds of interactive items) that starves the frame budget
 // and the display/z-index churn makes the whole DOM UI flicker.
 //
-// The child components stay rendered (returning null) so an overlay can fade
-// out before its <Html> unmounts.
-
 export const InteractiveSystem = () => {
   const zoneId = useViewer((s) => s.selection.zoneId)
+  const selectedIds = useViewer((s) => s.selection.selectedIds)
   const zonePolygon = useScene((s) => {
     if (!zoneId) return null
     const z = s.nodes[zoneId] as ZoneNode | undefined
@@ -41,16 +40,28 @@ export const InteractiveSystem = () => {
   const interactiveNodeIds = useScene(
     useShallow((state) =>
       Object.values(state.nodes)
-        .filter((n): n is ItemNode => n.type === 'item' && n.asset.interactive != null)
+        .filter(
+          (n): n is ItemNode | ProceduralItemNode =>
+            (n.type === 'item' && n.asset.interactive != null) ||
+            (n.type === 'procedural-item' &&
+              n.recipe.parts.some((part) => part.motion || part.light)),
+        )
         .map((n) => n.id),
     ),
   )
 
   return (
     <>
-      {interactiveNodeIds.map((id) => (
-        <ItemControlsOverlay key={id} nodeId={id} zonePolygon={zonePolygon} />
-      ))}
+      {interactiveNodeIds
+        .filter((id) => zonePolygon?.length || selectedIds.includes(id))
+        .map((id) => (
+          <ItemControlsOverlay
+            isSelected={selectedIds.includes(id)}
+            key={id}
+            nodeId={id}
+            zonePolygon={zonePolygon}
+          />
+        ))}
     </>
   )
 }
@@ -62,11 +73,13 @@ const FADE_MS = 300
 const ItemControlsOverlay = ({
   nodeId,
   zonePolygon,
+  isSelected,
 }: {
   nodeId: AnyNodeId
   zonePolygon: ZoneNode['polygon'] | null
+  isSelected: boolean
 }) => {
-  const node = useScene((state) => state.nodes[nodeId] as ItemNode)
+  const node = useScene((state) => state.nodes[nodeId] as ItemNode | ProceduralItemNode)
   const [itemObj, setItemObj] = useState<Object3D | null>(null)
 
   useFrame(() => {
@@ -76,12 +89,45 @@ const ItemControlsOverlay = ({
   })
 
   const controlValues = useInteractive(useShallow((state) => state.items[nodeId]?.controlValues))
+  const proceduralState = useInteractive((state) => state.procedural[nodeId])
+  const lampDefault = useInteractive((state) => state.lampDefault)
   const setControlValue = useInteractive((state) => state.setControlValue)
+  const togglePart = useInteractive((state) => state.toggleProceduralPart)
+  const toggleLights = useInteractive((state) => state.toggleProceduralLights)
+  const proceduralHeight = useMemo(
+    () =>
+      node?.type === 'procedural-item' ? evaluateRecipe(node.recipe, node.parameters).max[1] : 0,
+    [
+      node?.type === 'procedural-item' ? node.recipe : null,
+      node?.type === 'procedural-item' ? node.parameters : null,
+    ],
+  )
 
-  let visible = false
+  let descriptors: ControlDescriptor[] = []
+  let height = 0
+  if (node?.type === 'item' && node.asset.interactive && controlValues) {
+    descriptors = node.asset.interactive.controls.map((control, i) => ({
+      key: String(i),
+      control,
+      value: controlValues[i] ?? false,
+      onChange: (value) => setControlValue(nodeId, i, value),
+    }))
+    height = node.asset.dimensions[1]
+  } else if (node?.type === 'procedural-item') {
+    descriptors = proceduralControlDescriptors(
+      node.recipe.parts,
+      proceduralState,
+      (partId) => togglePart(nodeId, partId),
+      () => toggleLights(nodeId),
+      lampDefault,
+    )
+    height = proceduralHeight
+  }
+
+  let visible = isSelected
   if (itemObj && zonePolygon?.length) {
     itemObj.getWorldPosition(_tempVec)
-    visible = pointInPolygon(_tempVec.x, _tempVec.z, zonePolygon)
+    visible = visible || pointInPolygon(_tempVec.x, _tempVec.z, zonePolygon)
   }
 
   // Fade in on mount and fade out before unmounting the <Html>.
@@ -106,10 +152,7 @@ const ItemControlsOverlay = ({
     return () => clearTimeout(timeout)
   }, [visible])
 
-  if (!(mounted && itemObj && controlValues && node?.asset.interactive)) return null
-
-  const { controls } = node.asset.interactive
-  const [, height] = node.asset.dimensions
+  if (!(mounted && itemObj && descriptors.length)) return null
 
   return createPortal(
     // eps=-1 forces drei to re-apply translate/scale every frame: its mount
@@ -132,12 +175,12 @@ const ItemControlsOverlay = ({
           transition: `opacity ${FADE_MS}ms ease`,
         }}
       >
-        {controls.map((control, i) => (
+        {descriptors.map((descriptor) => (
           <ControlWidget
-            control={control}
-            key={i}
-            onChange={(v) => setControlValue(nodeId, i, v)}
-            value={controlValues[i] ?? false}
+            control={descriptor.control}
+            key={descriptor.key}
+            onChange={descriptor.onChange}
+            value={descriptor.value}
           />
         ))}
       </div>

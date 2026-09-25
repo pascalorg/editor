@@ -166,6 +166,12 @@ export { type PerfBatchStats, publishPerfBatchStats } from './lib/perf-panel-sto
 export * from './lib/perf-tracks'
 export { markPureRaycast } from './lib/pointer-events'
 export {
+  cloneWithProceduralEmission,
+  decorateProceduralEmission,
+  proceduralSlotMeshes,
+  setProceduralEmission,
+} from './lib/procedural-emission'
+export {
   detectRendererCapability,
   initializeGpuRenderer,
   type RendererBackendParameters,
@@ -212,7 +218,8 @@ export {
   textureMapForSlot,
 } from './lib/texture-reference'
 export { packNormalToRGB, unpackRGBToNormal } from './lib/tsl-compat'
-export { useItemLightPool } from './store/use-item-light-pool'
+export type { LightSource } from './store/use-item-light-pool'
+export { catalogLightSource, useItemLightPool } from './store/use-item-light-pool'
 export {
   applyCountryUnitDefault,
   default as useViewer,

@@ -16,6 +16,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
+import { evaluateRecipe, ProceduralItemNode, parseRecipe } from '@pascal-app/core/procedural-items'
 import {
   buildDoorPreviewMesh,
   markViewerPresentationTextureBorrowed,
@@ -24,9 +25,14 @@ import {
 } from '@pascal-app/viewer'
 import * as THREE from 'three'
 import type { GLTFWriter } from 'three/examples/jsm/exporters/GLTFExporter.js'
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
+import cabinetJson from '../../../core/src/procedural-items/__fixtures__/cabinet_two_doors_drawer.json'
+import ceilingFanJson from '../../../core/src/procedural-items/__fixtures__/ceiling_fan.json'
+import pendantJson from '../../../core/src/procedural-items/__fixtures__/pendant_lamp.json'
 import {
   prepareSceneForExport,
   prepareSceneForExportAsync,
@@ -89,6 +95,212 @@ function sceneWithVisibleAndHiddenBoxes(): {
 }
 
 describe('prepareSceneForExport', () => {
+  test('exports procedural bulb emission on detached materials regardless of live state', async () => {
+    const definitionModule = '../../../nodes/src/procedural-item/definition'
+    const { proceduralItemDefinition } = await import(definitionModule)
+    registerNode(proceduralItemDefinition as AnyNodeDefinition)
+    const node = ProceduralItemNode.parse({
+      id: 'procedural-item_pendant_export',
+      recipe: parseRecipe(pendantJson),
+    })
+    const root = new THREE.Group()
+    const group = new THREE.Group()
+    const source = new THREE.MeshStandardMaterial({ color: '#3377aa' })
+    source.emissiveIntensity = 0
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), source)
+    mesh.userData.slotId = 'bulb'
+    group.add(mesh)
+    root.add(group)
+    sceneRegistry.nodes.set(node.id, group)
+
+    const result = prepareSceneForExport(root, { [node.id]: node as AnyNode })
+    const bakedMesh = result.scene.getObjectByName(node.id)?.children[0] as THREE.Mesh
+    const material = bakedMesh.material as THREE.MeshStandardMaterial
+    const light = evaluateRecipe(node.recipe).lights[0]!
+    expect(material).not.toBe(source)
+    expect(material.emissive.getHexString()).toBe(new THREE.Color(light.color).getHexString())
+    expect(material.emissiveIntensity).toBe(1)
+    expect(source.emissiveIntensity).toBe(0)
+    expect(result.scene.getObjectByProperty('type', 'PointLight')).toBeUndefined()
+    result.dispose()
+  })
+  test('exports procedural door, drawer, and fan clips from rest-pose motion groups', async () => {
+    const definitionModule = '../../../nodes/src/procedural-item/definition'
+    const { proceduralItemDefinition } = await import(definitionModule)
+    registerNode(proceduralItemDefinition as AnyNodeDefinition)
+    const root = new THREE.Group()
+    const nodes: Record<string, AnyNode> = {}
+    for (const [id, source] of [
+      ['procedural-item_cabinet:odd', cabinetJson],
+      ['procedural-item_fan:odd', ceilingFanJson],
+    ] as const) {
+      const node = ProceduralItemNode.parse({ id, recipe: parseRecipe(source) })
+      nodes[id] = node as AnyNode
+      const evaluation = evaluateRecipe(node.recipe)
+      const object = new THREE.Group()
+      const groups = new Map<string, THREE.Group>()
+      for (const motion of evaluation.motions) {
+        const group = new THREE.Group()
+        group.name = `${id}__motion__${motion.id}`
+        group.position.set(...motion.pivot)
+        group.userData.proceduralMotion = {
+          nodeId: id,
+          partId: motion.partId,
+          groupId: motion.id,
+          kind: motion.kind,
+        }
+        groups.set(motion.id, group)
+        object.add(group)
+      }
+      for (const shape of evaluation.shapes) {
+        const mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(0.02, 0.02, 0.02),
+          new THREE.MeshStandardMaterial(),
+        )
+        mesh.userData.slotId = shape.slot
+        ;(shape.motionGroup ? groups.get(shape.motionGroup)! : object).add(mesh)
+      }
+      for (const group of groups.values()) group.rotation.y = 0.4
+      groups.get('drawer')?.position.set(0, 0, 0.25)
+      root.add(object)
+      sceneRegistry.nodes.set(id, object)
+    }
+
+    const { scene, animations } = prepareSceneForExport(root, nodes, { animations: 'keep' })
+    expect(animations.map((clip) => clip.name).sort()).toEqual([
+      'procedural-item_cabinet:odd:doors: open',
+      'procedural-item_cabinet:odd:drawer: open',
+      'procedural-item_fan:odd:rotor: loop',
+    ])
+    const doors = animations.find((clip) => clip.name.endsWith('doors: open'))!
+    expect(doors.tracks).toHaveLength(2)
+    expect(doors.duration).toBeCloseTo(0.65)
+    expect(doors.userData.loop).toBe(false)
+    const drawer = animations.find((clip) => clip.name.endsWith('drawer: open'))!
+    expect(drawer.tracks[0]).toBeInstanceOf(THREE.VectorKeyframeTrack)
+    for (const clip of [doors, drawer])
+      for (const track of clip.tracks) {
+        expect(track.times.length).toBeGreaterThanOrEqual(33)
+        expect(track.times[0]).toBe(0)
+        expect(track.times.at(-1)).toBeCloseTo(clip.duration)
+        for (let index = 1; index < track.times.length; index++)
+          expect(track.times[index]).toBeGreaterThan(track.times[index - 1]!)
+      }
+    expect(drawer.tracks[0]!.times.some((time) => Math.abs(time - 0.3) < 1e-6)).toBe(true)
+    expect(doors.tracks[0]!.times.some((time) => Math.abs(time - 0.55) < 1e-6)).toBe(true)
+    const drawerTrack = drawer.tracks[0]!
+    expect(Array.from(drawerTrack.values.slice(0, 3))).toEqual(
+      Array.from(drawerTrack.values.slice(3, 6)),
+    )
+    const doorTrack = doors.tracks[0]!
+    const last = doorTrack.values.length
+    expect(Array.from(doorTrack.values.slice(last - 8, last - 4))).toEqual(
+      Array.from(doorTrack.values.slice(last - 4)),
+    )
+    const fan = animations.find((clip) => clip.name.endsWith('rotor: loop'))!
+    expect(fan.tracks[0]!.times).toHaveLength(5)
+    expect(fan.userData.loop).toBe(true)
+    for (const clip of animations)
+      for (const track of clip.tracks) {
+        const target = scene.getObjectByProperty(
+          'uuid',
+          track.name.slice(0, track.name.lastIndexOf('.')),
+        )
+        expect(target).toBeDefined()
+        expect(target!.quaternion.angleTo(new THREE.Quaternion())).toBeCloseTo(0)
+        const marker = target!.userData.proceduralMotion
+        expect(marker.clip).toBe(clip.name)
+        expect(marker.groupId).toBeDefined()
+        if (clip !== fan) expect(marker.activeWindow).toBeDefined()
+        expect(target!.name).toContain('__motion__')
+      }
+    expect(scene.getObjectByName('procedural-item_cabinet:odd')?.userData).toMatchObject({
+      openable: true,
+      clips: [doors.name, drawer.name],
+    })
+    expect(scene.getObjectByName('procedural-item_fan:odd')?.userData).toMatchObject({
+      clips: [fan.name],
+    })
+    expect(scene.getObjectByName('procedural-item_fan:odd')?.userData.openable).toBeUndefined()
+    expect(
+      scene.getObjectByName('procedural-item_cabinet:odd__motion__doors')?.userData.proceduralMotion
+        .activeWindow,
+    ).toEqual([0, 0.63])
+    expect(
+      scene.getObjectByName('procedural-item_cabinet:odd__motion__drawer')?.userData
+        .proceduralMotion.activeWindow[0],
+    ).toBeCloseTo(0.3)
+    const exportedSlots: string[] = []
+    scene.traverse((object) => {
+      if (object.userData.slotId) exportedSlots.push(object.userData.slotId)
+    })
+    expect(exportedSlots).toContain('paint')
+    const originalFileReader = globalThis.FileReader
+    class ExportFileReader {
+      result: ArrayBuffer | null = null
+      onloadend: (() => void) | null = null
+      readAsArrayBuffer(blob: Blob) {
+        void blob.arrayBuffer().then((buffer) => {
+          this.result = buffer
+          this.onloadend?.()
+        })
+      }
+    }
+    globalThis.FileReader = ExportFileReader as unknown as typeof FileReader
+    let binary: ArrayBuffer
+    try {
+      binary = (await new GLTFExporter().parseAsync(scene, {
+        animations,
+        binary: true,
+      })) as ArrayBuffer
+    } finally {
+      globalThis.FileReader = originalFileReader
+    }
+    const loaded = await new GLTFLoader().parseAsync(binary, '')
+    expect(loaded.animations.map((clip) => clip.name).sort()).toEqual(
+      animations.map((clip) => clip.name).sort(),
+    )
+    for (const clip of loaded.animations) {
+      for (const track of clip.tracks) {
+        const target = loaded.scene.getObjectByName(
+          track.name.slice(0, track.name.lastIndexOf('.')),
+        )
+        expect(target?.userData.proceduralMotion.clip).toBe(clip.name)
+        expect(target?.userData.proceduralMotion.groupId).toBeDefined()
+      }
+    }
+    const loadedById = new Map<string, THREE.Object3D>()
+    loaded.scene.traverse((object) => {
+      if (typeof object.userData.pascalId === 'string')
+        loadedById.set(object.userData.pascalId, object)
+    })
+    expect(loadedById.get('procedural-item_cabinet:odd')?.userData).toMatchObject({
+      kind: 'procedural-item',
+      clips: [doors.name, drawer.name],
+    })
+    expect(loadedById.get('procedural-item_fan:odd')?.userData).toMatchObject({
+      kind: 'procedural-item',
+      clips: [fan.name],
+    })
+    const loadedSlots: string[] = []
+    loaded.scene.traverse((object) => {
+      if (object.userData.slotId) loadedSlots.push(object.userData.slotId)
+    })
+    expect(loadedSlots).toContain('paint')
+    expect(
+      scene.getObjectByName('procedural-item_cabinet:odd__motion__drawer')?.position.toArray(),
+    ).toEqual([0, 0, 0])
+
+    const withoutClips = prepareSceneForExport(root, nodes, { animations: 'none' })
+    expect(withoutClips.animations).toEqual([])
+    for (const motion of ['doors', 'doors~1', 'drawer', 'rotor']) {
+      const id = motion === 'rotor' ? 'procedural-item_fan:odd' : 'procedural-item_cabinet:odd'
+      const target = withoutClips.scene.getObjectByName(`${id}__motion__${motion}`)!
+      expect(target.quaternion.angleTo(new THREE.Quaternion())).toBeCloseTo(0)
+      if (motion === 'drawer') expect(target.position.toArray()).toEqual([0, 0, 0])
+      expect(target.userData.proceduralMotion.clip).toBeUndefined()
+    }
+  })
   test('converts NodeMaterials to classic glTF-standard materials', () => {
     const root = new THREE.Group()
     root.name = 'scene-renderer'

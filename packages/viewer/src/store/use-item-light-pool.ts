@@ -1,53 +1,86 @@
-import type { AnyNodeId, Interactive, LightEffect, SliderControl } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type Interactive,
+  type LightEffect,
+  type SliderControl,
+  sceneRegistry,
+  useInteractive,
+} from '@pascal-app/core'
+import type { Object3D, Vector3 } from 'three'
 import { create } from 'zustand'
 
-export type LightRegistration = {
+export type LightSource = {
+  key: string
   nodeId: AnyNodeId
-  effect: LightEffect
-  toggleIndex: number
-  sliderIndex: number
-  sliderMin: number
-  sliderMax: number
-  hasSlider: boolean
+  color: string
+  distance: number
+  getWorldPosition: (out: Vector3) => boolean
+  getIntensity: () => number
+  isEligible: () => boolean
+}
+
+export function catalogLightSource(
+  key: string,
+  nodeId: AnyNodeId,
+  effect: LightEffect,
+  interactive: Interactive,
+): LightSource {
+  const toggleIndex = interactive.controls.findIndex((control) => control.kind === 'toggle')
+  const sliderIndex = interactive.controls.findIndex((control) => control.kind === 'slider')
+  const slider = sliderIndex >= 0 ? (interactive.controls[sliderIndex] as SliderControl) : null
+  return {
+    key,
+    nodeId,
+    color: effect.color,
+    distance: effect.distance ?? 0,
+    getWorldPosition: (out) => {
+      const object = sceneRegistry.nodes.get(nodeId)
+      if (!object) return false
+      object.getWorldPosition(out)
+      out.set(out.x + effect.offset[0], out.y + effect.offset[1], out.z + effect.offset[2])
+      return true
+    },
+    getIntensity: () => {
+      const values = useInteractive.getState().items[nodeId]?.controlValues
+      if (toggleIndex >= 0 && !values?.[toggleIndex]) return effect.intensityRange[0]
+      const raw = slider ? ((values?.[sliderIndex] as number) ?? slider.min) : 1
+      const fraction =
+        slider && slider.max > slider.min ? (raw - slider.min) / (slider.max - slider.min) : 1
+      return (
+        effect.intensityRange[0] + (effect.intensityRange[1] - effect.intensityRange[0]) * fraction
+      )
+    },
+    isEligible: () => {
+      const values = useInteractive.getState().items[nodeId]?.controlValues
+      return toggleIndex < 0 || Boolean(values?.[toggleIndex])
+    },
+  }
 }
 
 type ItemLightPoolStore = {
-  registrations: Map<string, LightRegistration>
-  register: (key: string, nodeId: AnyNodeId, effect: LightEffect, interactive: Interactive) => void
+  registrations: Map<string, LightSource>
+  bakedCanvases: Set<Object3D>
+  setBakedCanvas: (scene: Object3D, active: boolean) => void
+  register: (source: LightSource) => void
   unregister: (key: string) => void
 }
 
 export const useItemLightPool = create<ItemLightPoolStore>((set) => ({
   registrations: new Map(),
-
-  register: (key, nodeId, effect, interactive) => {
-    const toggleIndex = interactive.controls.findIndex((c) => c.kind === 'toggle')
-    const sliderIndex = interactive.controls.findIndex((c) => c.kind === 'slider')
-    const sliderControl =
-      sliderIndex >= 0 ? (interactive.controls[sliderIndex] as SliderControl) : null
-
-    const registration: LightRegistration = {
-      nodeId,
-      effect,
-      toggleIndex,
-      sliderIndex,
-      hasSlider: sliderControl !== null,
-      sliderMin: sliderControl?.min ?? 0,
-      sliderMax: sliderControl?.max ?? 1,
-    }
-
-    set((s) => {
-      const next = new Map(s.registrations)
-      next.set(key, registration)
-      return { registrations: next }
-    })
-  },
-
-  unregister: (key) => {
-    set((s) => {
-      const next = new Map(s.registrations)
-      next.delete(key)
-      return { registrations: next }
-    })
-  },
+  bakedCanvases: new Set(),
+  setBakedCanvas: (scene, active) =>
+    set((state) => {
+      const bakedCanvases = new Set(state.bakedCanvases)
+      if (active) bakedCanvases.add(scene)
+      else bakedCanvases.delete(scene)
+      return { bakedCanvases }
+    }),
+  register: (source) =>
+    set((state) => ({ registrations: new Map(state.registrations).set(source.key, source) })),
+  unregister: (key) =>
+    set((state) => {
+      const registrations = new Map(state.registrations)
+      registrations.delete(key)
+      return { registrations }
+    }),
 }))

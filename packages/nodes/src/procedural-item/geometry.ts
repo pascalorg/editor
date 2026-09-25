@@ -10,13 +10,16 @@ import {
   Euler,
   Matrix4,
   Quaternion,
+  SphereGeometry,
   Vector3,
 } from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 export type Batch = {
   slot: string
+  motionGroup?: string
   geometry: BufferGeometry
+  motionGeometry?: BufferGeometry
   ranges: { end: number; partId: string; shapeId: string }[]
 }
 export type BuiltItem = {
@@ -42,9 +45,11 @@ export function buildProceduralGeometry(node: ProceduralItemNode): BuiltItem {
       shape.primitive === 'roundedBox'
         ? new RoundedBoxGeometry(w, h, d, 2, shape.radius)
         : shape.primitive === 'cylinder'
-          ? new CylinderGeometry(0.5, 0.5, 1, 24, 1)
-          : new BoxGeometry(w, h, d)
-    if (shape.primitive === 'cylinder') source.scale(w, h, d)
+          ? new CylinderGeometry(0.5 * shape.topScale, 0.5, 1, 24, 1)
+          : shape.primitive === 'ellipsoid'
+            ? new SphereGeometry(0.5, 24, 16)
+            : new BoxGeometry(w, h, d)
+    if (shape.primitive === 'cylinder' || shape.primitive === 'ellipsoid') source.scale(w, h, d)
     const geometry = source.index ? source.toNonIndexed() : source
     if (geometry !== source) source.dispose()
     geometry.clearGroups()
@@ -67,20 +72,35 @@ export function buildProceduralGeometry(node: ProceduralItemNode): BuiltItem {
         new Vector3(1, 1, 1),
       ),
     )
-    const entry = bySlot.get(shape.slot) ?? { geometries: [], ranges: [], faces: 0 }
+    const key = JSON.stringify([shape.motionGroup ?? null, shape.slot])
+    const entry = bySlot.get(key) ?? { geometries: [], ranges: [], faces: 0 }
     entry.geometries.push(geometry)
     entry.faces += geometry.getAttribute('position').count / 3
     entry.ranges.push({ end: entry.faces, partId: shape.partId, shapeId: shape.id })
-    bySlot.set(shape.slot, entry)
+    bySlot.set(key, entry)
   }
   const batches: Batch[] = []
-  for (const [slot, entry] of bySlot) {
+  for (const [key, entry] of bySlot) {
+    const [motionGroup, slot] = JSON.parse(key) as [string | null, string]
     const geometry = mergeGeometries(entry.geometries, false)
     for (const g of entry.geometries) g.dispose()
     if (!geometry) throw new Error('Unable to batch procedural geometry')
     geometry.computeBoundingBox()
     geometry.computeBoundingSphere()
-    batches.push({ slot, geometry, ranges: entry.ranges })
+    // Catalog captures and placement previews consume geometry in design coordinates.
+    const pivot = evaluation.motions.find((motion) => motion.id === motionGroup)?.pivot
+    const motionGeometry = pivot
+      ? geometry.clone().translate(-pivot[0], -pivot[1], -pivot[2])
+      : undefined
+    motionGeometry?.computeBoundingBox()
+    motionGeometry?.computeBoundingSphere()
+    batches.push({
+      slot,
+      motionGroup: motionGroup ?? undefined,
+      geometry,
+      motionGeometry,
+      ranges: entry.ranges,
+    })
   }
   const milliseconds = performance.now() - start
   proceduralMetrics.builds++
@@ -110,7 +130,10 @@ export function acquireProceduralGeometry(node: ProceduralItemNode) {
       released = true
       const current = cache.get(key)
       if (current && --current.users === 0) {
-        for (const batch of current.value.batches) batch.geometry.dispose()
+        for (const batch of current.value.batches) {
+          batch.geometry.dispose()
+          batch.motionGeometry?.dispose()
+        }
         cache.delete(key)
       }
       proceduralMetrics.liveEntries = cache.size

@@ -21,6 +21,7 @@ import {
 } from '@pascal-app/core'
 import {
   type ColorPreset,
+  catalogLightSource,
   configureKtx2Support,
   createDefaultMaterial,
   createSurfaceRoleMaterial,
@@ -55,6 +56,7 @@ import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { positionLocal, smoothstep, time } from 'three/tsl'
 import { BlockFaceHostFrame } from '../shared/block-face-host'
+import { canRegisterItemLight } from '../shared/item-light-placement'
 import { RoofFaceHostFrame } from '../shared/roof-face-host'
 import { cancelItemModelLoad, getUnavailableItemAsset, ItemGLTFLoader } from './model-loader'
 
@@ -740,6 +742,7 @@ const LoadedModelRenderer = ({
           interactive={interactive!}
           key={i}
           nodeId={node.id}
+          canRegister={canRegisterItemLight(node.metadata)}
         />
       ))}
     </>
@@ -824,17 +827,20 @@ const ItemLightRegistrar = ({
   effect,
   interactive,
   index,
+  canRegister,
 }: {
   nodeId: AnyNodeId
   effect: LightEffect
   interactive: Interactive
   index: number
+  canRegister: boolean
 }) => {
   useEffect(() => {
+    if (!canRegister) return
     const key = `${nodeId}:${index}`
-    useItemLightPool.getState().register(key, nodeId, effect, interactive)
+    useItemLightPool.getState().register(catalogLightSource(key, nodeId, effect, interactive))
     return () => useItemLightPool.getState().unregister(key)
-  }, [nodeId, index, effect, interactive])
+  }, [nodeId, index, effect, interactive, canRegister])
 
   return null
 }

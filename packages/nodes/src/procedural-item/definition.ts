@@ -1,5 +1,5 @@
 import type { AnyNode, FloorplanGeometry, HandleDescriptor, NodeDefinition } from '@pascal-app/core'
-import { type AnyNodeId, useScene } from '@pascal-app/core'
+import { type AnyNodeId, useInteractive, useScene } from '@pascal-app/core'
 import {
   boundsOf,
   boxCorners,
@@ -17,8 +17,15 @@ import {
   transformPoint,
   validateProceduralRelations,
 } from '@pascal-app/core/procedural-items'
+import { decorateProceduralEmission } from '@pascal-app/viewer'
 import { itemPaint } from '../item/paint'
+import {
+  itemHasMechanisms,
+  toggleItemLights,
+  toggleItemMechanisms,
+} from '../shared/item-interactions'
 import { restingFloorplanAffectedIds } from '../shared/resting-surface-plan'
+import { bakeProceduralAnimationClips } from './animation'
 import { proceduralFloorplanMoveTarget } from './move-session'
 
 const GIZMO_SIDE_OFFSET = 0.3
@@ -31,10 +38,21 @@ function handleBounds(node: ProceduralItemNode, part?: string) {
   return shapes.length
     ? boundsOf(
         shapes.flatMap((shape) =>
-          boxCorners(
-            shape.size.map((v) => -v / 2) as [number, number, number],
-            shape.size.map((v) => v / 2) as [number, number, number],
-          ).map((point) => transformPoint(frame(shape.position, shape.rotation), point)),
+          shape.primitive === 'ellipsoid'
+            ? (() => {
+                const axes = frame(shape.position, shape.rotation).axes
+                const extent = [0, 1, 2].map((i) =>
+                  Math.hypot(...axes.map((axis, j) => (axis[i]! * shape.size[j]!) / 2)),
+                ) as [number, number, number]
+                return boxCorners(
+                  shape.position.map((v, i) => v - extent[i]!) as [number, number, number],
+                  shape.position.map((v, i) => v + extent[i]!) as [number, number, number],
+                )
+              })()
+            : boxCorners(
+                shape.size.map((v) => -v / 2) as [number, number, number],
+                shape.size.map((v) => v / 2) as [number, number, number],
+              ).map((point) => transformPoint(frame(shape.position, shape.rotation), point)),
         ),
       )
     : e
@@ -98,7 +116,12 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
     position: [0, 0, 0],
     rotation: [0, 0, 0],
   }),
-  extensions: { 'pascal:editor/floorplan': { directDrag: true } },
+  extensions: {
+    'pascal:editor/floorplan': {
+      directDrag: true,
+      actionMenu: { actions: () => import('../shared/item-interaction-actions') },
+    },
+  },
   capabilities: {
     selectable: { hitVolume: 'bbox' },
     dragBounds: (n) => {
@@ -144,15 +167,40 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
       ...itemPaint,
       commit: ({ node, role, material, materialPreset }) =>
         setProceduralMaterial(node.id, role, materialPreset, material),
+      applyPreview: (args) => {
+        const restore = itemPaint.applyPreview?.(args)
+        if (!restore) return restore
+        const node = args.node
+        if (node?.type !== 'procedural-item') return restore
+        const lights = evaluateRecipe(node.recipe, node.parameters).lights
+        const restoreEmission = decorateProceduralEmission(
+          args.root,
+          lights,
+          useInteractive.getState().procedural[node.id]?.lightsOn ??
+            useInteractive.getState().lampDefault,
+        )
+        return () => {
+          restoreEmission()
+          restore()
+        }
+      },
     },
   },
   relations: { hosts: ['item', 'procedural-item'], cascadeDelete: 'descendants' },
   renderer: { kind: 'parametric', module: () => import('./renderer') },
+  exportAnimation: ({ node, object }) => bakeProceduralAnimationClips(node, object),
   parametrics: { groups: [], customPanel: () => import('@pascal-app/editor/procedural-items') },
   affordanceTools: { move: () => import('./move-tool') },
   floorplanMoveTarget: proceduralFloorplanMoveTarget,
   floorplanAffectedIds: restingFloorplanAffectedIds,
   keyboardActions: {
+    e: {
+      appliesTo: (n) =>
+        (n as unknown as ProceduralItemNode).recipe.parts.some((part) =>
+          Boolean(part.motion || part.light),
+        ),
+      run: (n) => (itemHasMechanisms(n) ? toggleItemMechanisms(n) : toggleItemLights(n)),
+    },
     r: {
       appliesTo: (n) => Boolean((n as unknown as ProceduralItemNode).wallId),
       run: (n) => {

@@ -6,6 +6,12 @@ import {
   type NodeDefinition,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import {
+  itemHasLights,
+  itemHasMechanisms,
+  toggleItemLights,
+  toggleItemMechanisms,
+} from '../shared/item-interactions'
 import { restingFloorplanAffectedIds } from '../shared/resting-surface-plan'
 import { buildItemContextualDimensions, buildItemFloorplan } from './floorplan'
 import { itemFloorplanMoveTarget } from './floorplan-move'
@@ -177,6 +183,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   extensions: {
     'pascal:editor/floorplan': {
       contextualDimensions: buildItemContextualDimensions,
+      actionMenu: { actions: () => import('../shared/item-interaction-actions') },
     } satisfies FloorplanNodeExtension<ItemNodeType>,
   },
 
@@ -330,6 +337,14 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   // *transitions* (drop a wall item on a ceiling) remain canonical
   // in the 3D path; 2D only re-anchors within the same family.
   floorplanMoveTarget: itemFloorplanMoveTarget,
+  keyboardActions: {
+    e: {
+      appliesTo: (node) => itemHasMechanisms(node) || itemHasLights(node),
+      // Same as the action bar: mechanisms when the item has them, otherwise its light.
+      run: (node) =>
+        itemHasMechanisms(node) ? toggleItemMechanisms(node) : toggleItemLights(node),
+    },
+  },
 
   toolHints: [
     { key: 'Left click', label: 'Place item' },

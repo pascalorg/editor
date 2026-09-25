@@ -840,7 +840,6 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!isXRMode && <CustomCameraControls />}
       {!isXRMode && <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />}
       {!(isFirstPersonMode || isXRMode) && <SiteEdgeLabels />}
-      <InteractiveSystem />
       {presentationsReady ? <ViewerPresentations /> : null}
       {!noEditing && viewerSceneSlot}
     </>

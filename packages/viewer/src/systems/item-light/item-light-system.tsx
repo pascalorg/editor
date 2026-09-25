@@ -1,9 +1,10 @@
 import type { AnyNodeId, LevelNode } from '@pascal-app/core'
-import { findLevelAncestorId, sceneRegistry, useInteractive, useScene } from '@pascal-app/core'
-import { useFrame } from '@react-three/fiber'
+import { findLevelAncestorId, sceneRegistry, useScene } from '@pascal-app/core'
+import { useFrame, useThree } from '@react-three/fiber'
 import { useRef } from 'react'
 import { MathUtils, type PointLight, Vector3 } from 'three'
-import { useItemLightPool } from '../../store/use-item-light-pool'
+import { SCENE_LAYER } from '../../lib/layers'
+import { type LightSource, useItemLightPool } from '../../store/use-item-light-pool'
 import useViewer from '../../store/use-viewer'
 
 const POOL_SIZE = 12
@@ -33,30 +34,34 @@ const _camFwd = new Vector3()
 const _itemPos = new Vector3()
 
 type SceneNodes = ReturnType<typeof useScene.getState>['nodes']
-type InteractiveState = ReturnType<typeof useInteractive.getState>
+
+function isRendered(nodeId: AnyNodeId): boolean {
+  let object: ReturnType<typeof sceneRegistry.nodes.get> | null = sceneRegistry.nodes.get(nodeId)
+  if (!object?.layers.isEnabled(SCENE_LAYER)) return false
+  while (object) {
+    if (!object.visible) return false
+    object = object.parent
+  }
+  return true
+}
 
 function scoreRegistration(
-  reg: import('../../store/use-item-light-pool').LightRegistration,
+  reg: LightSource,
   nodes: SceneNodes,
   selectedLevelId: string | null,
   levelMode: string,
-  interactiveState: InteractiveState,
 ): number {
-  // Skip lights that are toggled off — they contribute no illumination
-  if (reg.toggleIndex >= 0) {
-    const values = interactiveState.items[reg.nodeId]?.controlValues
-    const isOn = Boolean(values?.[reg.toggleIndex])
-    if (!isOn) return Number.POSITIVE_INFINITY
+  if (!reg.isEligible() || !isRendered(reg.nodeId) || !reg.getWorldPosition(_itemPos))
+    return Number.POSITIVE_INFINITY
+  const { nodeId } = reg
+  let current = nodes[nodeId]
+  while (current) {
+    if (current.type !== 'site' && current.visible === false) return Number.POSITIVE_INFINITY
+    current = current.parentId ? nodes[current.parentId as AnyNodeId] : undefined
   }
-
-  const { nodeId, effect } = reg
-  const obj = sceneRegistry.nodes.get(nodeId)
-  if (!obj) return Number.POSITIVE_INFINITY
-
-  obj.getWorldPosition(_itemPos)
-  _itemPos.x += effect.offset[0]
-  _itemPos.y += effect.offset[1]
-  _itemPos.z += effect.offset[2]
+  const itemLevelId = findLevelAncestorId(nodeId, nodes)
+  if (selectedLevelId && itemLevelId !== selectedLevelId && levelMode === 'solo')
+    return Number.POSITIVE_INFINITY
 
   _dir.copy(_itemPos).sub(_camPos).normalize()
   const dot = _camFwd.dot(_dir) // 1 = ahead, -1 = behind
@@ -67,8 +72,6 @@ function scoreRegistration(
   const dist = _camPos.distanceTo(_itemPos) / 200
 
   // ── Level factor ──────────────────────────────────────────────────────────
-  const itemLevelId = findLevelAncestorId(nodeId, nodes)
-
   let levelPenalty = 0
   if (selectedLevelId) {
     if (itemLevelId !== selectedLevelId) {
@@ -86,6 +89,8 @@ function scoreRegistration(
 }
 
 export function ItemLightSystem() {
+  const scene = useThree((state) => state.scene)
+  const bakedOwner = useItemLightPool((state) => state.bakedCanvases.has(scene))
   const lightRefs = useRef<Array<PointLight | null>>(Array.from({ length: POOL_SIZE }, () => null))
   const slots = useRef<SlotRuntime[]>(
     Array.from({ length: POOL_SIZE }, () => ({ key: null, pendingKey: null, isFadingOut: false })),
@@ -97,9 +102,9 @@ export function ItemLightSystem() {
   const prevReassignCamFwd = useRef(new Vector3(0, 0, -1))
 
   useFrame(({ camera }, delta) => {
+    if (bakedOwner) return
     const dt = Math.min(delta, 0.1)
     const { registrations } = useItemLightPool.getState()
-    const interactiveState = useInteractive.getState()
 
     // ── 1. Throttled priority reassignment ──────────────────────────────────
     camera.getWorldPosition(_camPos)
@@ -128,7 +133,7 @@ export function ItemLightSystem() {
       for (const [key, reg] of registrations) {
         scored.push({
           key,
-          score: scoreRegistration(reg, nodes, selectedLevelId, levelMode, interactiveState),
+          score: scoreRegistration(reg, nodes, selectedLevelId, levelMode),
         })
       }
       scored.sort((a, b) => a.score - b.score)
@@ -196,8 +201,8 @@ export function ItemLightSystem() {
             const light = lightRefs.current[freeSlot]
             const reg = registrations.get(key)
             if (light && reg) {
-              light.color.set(reg.effect.color)
-              light.distance = reg.effect.distance ?? 0
+              light.color.set(reg.color)
+              light.distance = reg.distance
             }
           }
         }
@@ -226,11 +231,9 @@ export function ItemLightSystem() {
 
       // Fade-out phase: lerp intensity → 0, then complete the transition
       if (slot.isFadingOut) {
-        light.visible = true
         light.intensity = MathUtils.lerp(light.intensity, 0, dt * 12)
         if (light.intensity < 0.01) {
           light.intensity = 0
-          light.visible = false
           slot.isFadingOut = false
           slot.key = slot.pendingKey
           slot.pendingKey = null
@@ -238,8 +241,8 @@ export function ItemLightSystem() {
           if (slot.key) {
             const reg = registrations.get(slot.key)
             if (reg) {
-              light.color.set(reg.effect.color)
-              light.distance = reg.effect.distance ?? 0
+              light.color.set(reg.color)
+              light.distance = reg.distance
             }
           }
         }
@@ -249,7 +252,6 @@ export function ItemLightSystem() {
       if (!slot.key) {
         // Idle slot — keep dark
         light.intensity = 0
-        light.visible = false
         continue
       }
 
@@ -257,40 +259,20 @@ export function ItemLightSystem() {
       if (!reg) {
         slot.key = null
         light.intensity = 0
-        light.visible = false
         continue
       }
 
-      // Snap world position each frame
-      const obj = sceneRegistry.nodes.get(reg.nodeId)
-      if (obj) {
-        obj.getWorldPosition(_itemPos)
-        const [ox, oy, oz] = reg.effect.offset
-        light.position.set(_itemPos.x + ox, _itemPos.y + oy, _itemPos.z + oz)
-      }
+      if (reg.getWorldPosition(_itemPos)) light.position.copy(_itemPos)
+      const targetIntensity = reg.isEligible() && isRendered(reg.nodeId) ? reg.getIntensity() : 0
 
-      // Compute target intensity
-      const values = interactiveState.items[reg.nodeId]?.controlValues
-      const isOn = reg.toggleIndex >= 0 ? Boolean(values?.[reg.toggleIndex]) : true
-      let t = 1
-      if (reg.hasSlider) {
-        const raw = (values?.[reg.sliderIndex] as number) ?? reg.sliderMin
-        t = (raw - reg.sliderMin) / (reg.sliderMax - reg.sliderMin)
-      }
-      const targetIntensity = isOn
-        ? MathUtils.lerp(reg.effect.intensityRange[0], reg.effect.intensityRange[1], t)
-        : reg.effect.intensityRange[0]
-
-      if (targetIntensity > 0) {
-        light.visible = true
-      }
       light.intensity = MathUtils.lerp(light.intensity, targetIntensity, dt * 12)
       if (targetIntensity <= 0 && light.intensity < 0.01) {
         light.intensity = 0
-        light.visible = false
       }
     }
-  })
+  }, 6)
+
+  if (bakedOwner) return null
 
   return (
     <>
@@ -299,7 +281,7 @@ export function ItemLightSystem() {
           castShadow={false}
           intensity={0}
           key={i}
-          visible={false}
+          visible
           ref={(el: any) => {
             lightRefs.current[i] = el
           }}
