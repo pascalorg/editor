@@ -1,3 +1,5 @@
+import * as nodeFs from 'node:fs'
+import path from 'node:path'
 import ts from 'typescript'
 
 /**
@@ -262,4 +264,51 @@ function isMetadataExpression(node: ts.Node): boolean {
     )
   }
   return false
+}
+
+/** Build output, dependency and cache directories, never sources. Dot-directories are skipped too. */
+const SKIPPED_DIRS = new Set(['node_modules', 'dist', 'build', 'out', 'coverage', '__fixtures__'])
+
+/** Runs `read`; a file or directory that vanished mid-walk (ENOENT) yields `fallback`. */
+function tolerate<T>(read: () => T, fallback: T): T {
+  try {
+    return read()
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return fallback
+    throw error
+  }
+}
+
+/** The filesystem calls the source walk uses; injectable so tests can race it. */
+export type ScanFs = Pick<typeof nodeFs, 'readdirSync' | 'statSync' | 'readFileSync'>
+
+/**
+ * Metadata keys of every non-test `.ts`/`.tsx` source under `roots`, each
+ * mapped to the first file (relative to `base`) that reads or writes it.
+ * Skips build, dependency, cache and dot directories (`.turbo`, `.next`), and
+ * tolerates files other processes delete while the walk runs.
+ */
+export function scanMetadataSources(
+  base: string,
+  roots: readonly string[],
+  fs: ScanFs = nodeFs,
+): Map<string, string> {
+  const walk = (dir: string): string[] =>
+    tolerate(() => fs.readdirSync(dir), []).flatMap((entry) => {
+      if (SKIPPED_DIRS.has(entry) || entry.startsWith('.')) return []
+      const full = path.join(dir, entry)
+      const stat = tolerate(() => fs.statSync(full), null)
+      if (!stat) return []
+      if (stat.isDirectory()) return walk(full)
+      return /\.tsx?$/.test(entry) && !/\.(test|spec|bench)\.tsx?$/.test(entry) ? [full] : []
+    })
+  const keys = new Map<string, string>()
+  for (const root of roots)
+    for (const file of walk(path.join(base, root)))
+      for (const key of discoverMetadataKeys(
+        tolerate(() => fs.readFileSync(file, 'utf8'), ''),
+        file,
+      ))
+        if (!keys.has(key)) keys.set(key, path.relative(base, file))
+  return keys
 }
