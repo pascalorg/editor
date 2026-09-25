@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { resetSceneHistoryPauseDepth, useScene } from '@pascal-app/core'
 import { create } from '@react-three/test-renderer'
 import useViewer from '../../store/use-viewer'
@@ -8,6 +8,15 @@ type Probe = {
   history: () => { past: number; future: number; tracking: boolean; pauseDepth: number }
   selection: () => { levelId: string | null; selectedIds: string[] }
 }
+
+// Other test files share this process's scene store: start from clean history.
+function resetHistory() {
+  resetSceneHistoryPauseDepth()
+  useScene.temporal.getState().resume()
+  useScene.temporal.getState().clear()
+}
+
+beforeEach(resetHistory)
 
 afterEach(() => {
   resetSceneHistoryPauseDepth()

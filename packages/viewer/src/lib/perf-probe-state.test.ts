@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNodeId,
   BuildingNode,
@@ -20,11 +20,15 @@ type RafFn = (cb: (time: number) => void) => number
 ;(globalThis as unknown as { cancelAnimationFrame?: (id: number) => void }).cancelAnimationFrame ??=
   () => {}
 
-afterEach(() => {
+function resetHistory() {
   resetSceneHistoryPauseDepth()
   useScene.temporal.getState().resume()
   useScene.temporal.getState().clear()
-})
+}
+
+// Other test files share this process's scene store: start and end with clean history.
+beforeEach(resetHistory)
+afterEach(resetHistory)
 
 describe('readPerfHistory', () => {
   test('counts entries and reports refcounted pauses', () => {
