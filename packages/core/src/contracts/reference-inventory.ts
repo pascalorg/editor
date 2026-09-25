@@ -243,7 +243,7 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
     path: 'hostRoofSegmentId',
     ...policy('node', 'host', 'drop', 'strip'),
     targetKinds: ['roof-segment'],
-    dependents: ['hostRoofEdge', 'hostRoofEdgeRange'],
+    dependents: ['hostRoofEdge', 'hostRoofEdgeRange', 'hostKind', 'hostHeightOffset'],
     remaps: CLONES,
   }),
   row({
@@ -251,6 +251,7 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
     path: 'hostSlabId',
     ...policy('node', 'host', 'drop', 'strip'),
     targetKinds: ['slab'],
+    dependents: ['hostSlabEdgeIndex', 'hostSlabEdgeT', 'hostKind', 'hostHeightOffset'],
   }),
   row({
     kind: '*',
@@ -690,7 +691,7 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
   ),
   ...described('Print-export artifact metadata, not scene-node metadata.', ['status']),
   ...described('Registry extension key, not scene-node metadata.', ['pascal:editor/floorplan']),
-  ...described('Cabinet corner side literal (run-ops), an enum.', ['side']),
+  ...described('Next.js page metadata export, not scene-node metadata.', ['title']),
 ]
 
 const bare = (path: string) => path.replace(/^metadata\./, '').replace(/\[\]/g, '')

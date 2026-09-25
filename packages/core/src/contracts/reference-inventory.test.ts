@@ -16,7 +16,8 @@ import path from 'node:path'
 import { cloneNodesInto } from '../registry/subtree'
 import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema, nodeKindOf } from '../schema/types'
 import { cloneLevelSubtree, cloneSceneGraph } from '../utils/clone-scene-graph'
-import { discoverMetadataKeys, discoverReferenceCandidates } from './reference-discovery'
+import { discoverMetadataKeys } from './metadata-scan'
+import { discoverReferenceCandidates } from './reference-discovery'
 import {
   EXISTING_REFERENCES,
   type ExistingReference,
@@ -141,7 +142,7 @@ function sourceFiles(dir: string): string[] {
 const METADATA_KEYS = new Map<string, string>()
 for (const root of SOURCE_ROOTS)
   for (const file of sourceFiles(path.join(EDITOR_ROOT, root)))
-    for (const key of discoverMetadataKeys(readFileSync(file, 'utf8')))
+    for (const key of discoverMetadataKeys(readFileSync(file, 'utf8'), file))
       if (!METADATA_KEYS.has(key)) METADATA_KEYS.set(key, path.relative(EDITOR_ROOT, file))
 
 describe('metadata references (R3)', () => {
@@ -153,16 +154,28 @@ describe('metadata references (R3)', () => {
       const read = (n.metadata as Record<string, unknown>)?.proxyId
       const deep = n.metadata?.link.runIds
       // metadata.commentedOut
-      const text = 'metadata.inString'
+      const text = 'metadata.inString // not a comment'
+      const url = 'https://example.com'; const after = n.metadata.afterUrl
+      const tpl = \`\${n.metadata.inTemplate} metadata.inTemplateText\`
+      const has = 'role' in level.metadata
+      const record = metadataRecord(x.metadata).viaHelper
+      x.metadata = { assigned: 1 }
+      function seedMetadata() { return { returned: true } }
     `)
     expect(keys).toEqual([
+      'afterUrl',
+      'assigned',
       'debug',
       'debug.gap',
       'debug.wallId',
+      'inTemplate',
       'link.runIds',
       'ownerKey',
       'proxyId',
+      'returned',
+      'role',
       'sourceId',
+      'viaHelper',
     ])
   })
 
@@ -177,8 +190,11 @@ describe('metadata references (R3)', () => {
   test('no metadata row is stale', () => {
     const bare = (p: string) => p.replace(/^metadata\./, '').replace(/\[\]/g, '')
     const found = [...METADATA_KEYS.keys()]
-    const stale = [...METADATA_REFERENCES, ...METADATA_NON_REFERENCES]
-      .map((row) => bare(row.path))
+    const stale = [
+      ...METADATA_REFERENCES.flatMap((row) => [row.path, ...(row.dependents ?? [])]),
+      ...METADATA_NON_REFERENCES.map((row) => row.path),
+    ]
+      .map(bare)
       .filter((p) => !found.some((key) => p === key || p.startsWith(`${key}.`)))
     expect(stale).toEqual([])
   })
