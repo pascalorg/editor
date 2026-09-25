@@ -339,7 +339,7 @@ describe('loadPlugin', () => {
     expect(getInspectorExtensions('wall')).toEqual([])
   })
 
-  test.failing('a plugin with a malformed inspector extension registers nothing', async () => {
+  test('a plugin with a malformed inspector extension registers nothing', async () => {
     const malformed = {
       id: 'partial',
       apiVersion: 1,
@@ -356,14 +356,14 @@ describe('loadPlugin', () => {
       ],
     } as unknown as Plugin
 
-    await expect(loadPlugin(malformed)).rejects.toThrow()
+    await expect(loadPlugin(malformed)).rejects.toThrow(/invalid inspector extension "partial:eng"/)
     expect(nodeRegistry.has('partial:a')).toBe(false)
     expect(getNodePluginId('partial:a')).toBeUndefined()
   })
 
   // State commits before listeners run, so a throwing subscriber cannot leave a
   // kind registered without its plugin id or the plugin's other kinds missing.
-  test.failing('a throwing registry listener sees the whole plugin committed', async () => {
+  test('a throwing registry listener sees the whole plugin committed', async () => {
     const { onRegistryChange } = await import('./registry')
     let calls = 0
     const unsubscribe = onRegistryChange(() => {
@@ -415,7 +415,7 @@ describe('loadPlugin', () => {
     expect(notified).toBe(1) // unsubscribed — no further calls
   })
 
-  test('loadPlugin notifies once per registered kind', async () => {
+  test('loadPlugin notifies once per plugin, after all of its state is committed', async () => {
     const { getRegistryVersion } = await import('./registry')
     const before = getRegistryVersion()
     await loadPlugin({
@@ -423,7 +423,7 @@ describe('loadPlugin', () => {
       apiVersion: 1,
       nodes: [makeDefinition('pack:a'), makeDefinition('pack:b')],
     })
-    expect(getRegistryVersion()).toBe(before + 2)
+    expect(getRegistryVersion()).toBe(before + 1)
   })
 })
 
