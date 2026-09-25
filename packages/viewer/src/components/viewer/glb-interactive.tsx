@@ -14,8 +14,8 @@ import {
   type ProceduralItemNode,
 } from '@pascal-app/core/procedural-items'
 import { Html } from '@react-three/drei'
-import { createPortal, useFrame } from '@react-three/fiber'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal, useFrame, useThree } from '@react-three/fiber'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   type AnimationAction,
   LoopRepeat,
@@ -31,6 +31,7 @@ import {
   proceduralSlotMeshes,
   setProceduralEmission,
 } from '../../lib/procedural-emission'
+import { useItemLightPool } from '../../store/use-item-light-pool'
 import useViewer from '../../store/use-viewer'
 import { ControlWidget } from '../../systems/interactive/control-widget'
 import { proceduralControlDescriptors } from '../../systems/interactive/procedural-controls'
@@ -127,7 +128,9 @@ export function buildGlbLightRegs(
             out.copy(local).applyMatrix4(anchor.matrixWorld)
           },
           getIntensity: () => light.intensity,
-          isOn: () => useInteractive.getState().procedural[item.pascalId]?.lightsOn ?? true,
+          isOn: () =>
+            useInteractive.getState().procedural[item.pascalId]?.lightsOn ??
+            useInteractive.getState().lampDefault,
           levelId: findLevelId(object),
         })
       }
@@ -193,17 +196,23 @@ export function GlbInteractive({
    *  lights when nothing is focused (mirrors the parametric level factor). */
   levelOrder: string[]
 }) {
-  // Seed control state for every interactive item. The viewer shows a baked
-  // scene "lit": toggles default ON (the editor defaults them off) and sliders
-  // to their authored default, so lamps glow and fans spin on load. Explicit
-  // overlay toggles then win. Cleared on unmount so the global store never
-  // carries state across scenes.
+  const scene = useThree((state) => state.scene)
+  useLayoutEffect(() => {
+    useItemLightPool.getState().setBakedCanvas(scene, true)
+    return () => useItemLightPool.getState().setBakedCanvas(scene, false)
+  }, [scene])
+  // Baked animation toggles start on; light toggles follow the current theme.
+  // Clear per-item state on unmount so it cannot carry into another scene.
   useEffect(() => {
     const store = useInteractive.getState()
     for (const item of items) {
-      store.initItem(item.pascalId, item.interactive)
-      item.interactive.controls.forEach((control, i) => {
-        if (control.kind === 'toggle') store.setControlValue(item.pascalId, i, true)
+      store.initItem(item.pascalId, item.interactive, true)
+      const lampIndex = item.interactive.effects.some((effect) => effect.kind === 'light')
+        ? item.interactive.controls.findIndex((control) => control.kind === 'toggle')
+        : -1
+      item.interactive.controls.forEach((control, index) => {
+        if (control.kind === 'toggle' && index !== lampIndex)
+          store.setControlValue(item.pascalId, index, true)
       })
     }
     return () => {
@@ -223,10 +232,10 @@ export function GlbInteractive({
     [levelOrder],
   )
 
-  // Controls overlay is scoped to the focused zone (matches the parametric
-  // viewer). Project the zone's baked-local polygon into world space once so an
-  // item's world position can be point-tested regardless of level stacking.
+  // Project the zone's baked-local polygon into world space so focused zone
+  // membership still works after level stacking moves its parent.
   const focusedZoneId = useViewer((s) => s.selection.zoneId)
+  const selectedIds = useViewer((s) => s.selection.selectedIds)
   const worldPolygon = useMemo<[number, number][] | null>(() => {
     if (!focusedZoneId) return null
     const zone = zones.find((z) => z.id === focusedZoneId)
@@ -252,17 +261,20 @@ export function GlbInteractive({
             <GlbProceduralEmission item={item} key={item.pascalId} object={object} />
           ) : null
         })}
-      {items.map((item) => {
-        const object = identity.get(item.pascalId)
-        return object ? (
-          <GlbItemControls
-            item={item}
-            key={item.pascalId}
-            object={object}
-            worldPolygon={worldPolygon}
-          />
-        ) : null
-      })}
+      {items
+        .filter((item) => worldPolygon?.length || selectedIds.includes(item.pascalId))
+        .map((item) => {
+          const object = identity.get(item.pascalId)
+          return object ? (
+            <GlbItemControls
+              isSelected={selectedIds.includes(item.pascalId)}
+              item={item}
+              key={item.pascalId}
+              object={object}
+              worldPolygon={worldPolygon}
+            />
+          ) : null
+        })}
     </>
   )
 }
@@ -272,7 +284,9 @@ function GlbProceduralEmission({ item, object }: { item: GlbInteractiveItem; obj
     const lights = item.procedural?.lights ?? []
     const restore = decorateProceduralEmission(object, lights, true)
     const update = () => {
-      const on = useInteractive.getState().procedural[item.pascalId]?.lightsOn ?? true
+      const on =
+        useInteractive.getState().procedural[item.pascalId]?.lightsOn ??
+        useInteractive.getState().lampDefault
       const slots = new Set(lights.map((light) => light.emissiveSlot).filter(Boolean))
       for (const mesh of proceduralSlotMeshes(object, slots as Set<string>)) {
         const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
@@ -281,7 +295,11 @@ function GlbProceduralEmission({ item, object }: { item: GlbInteractiveItem; obj
     }
     update()
     const unsubscribe = useInteractive.subscribe((state, previous) => {
-      if (state.procedural[item.pascalId] !== previous.procedural[item.pascalId]) update()
+      if (
+        state.procedural[item.pascalId] !== previous.procedural[item.pascalId] ||
+        state.lampDefault !== previous.lampDefault
+      )
+        update()
     })
     return () => {
       unsubscribe()
@@ -572,19 +590,21 @@ function GlbItemAnimation({
 
 const FADE_MS = 300
 
-/** Controls overlay for one item — fades in while the item sits inside the
- *  focused zone, portaled above the baked node. */
+/** Controls overlay for a selected item or one inside the focused zone. */
 function GlbItemControls({
   item,
   object,
   worldPolygon,
+  isSelected,
 }: {
   item: GlbInteractiveItem
   object: Object3D
   worldPolygon: [number, number][] | null
+  isSelected: boolean
 }) {
   const controlValues = useInteractive(useShallow((s) => s.items[item.pascalId]?.controlValues))
   const proceduralState = useInteractive((s) => s.procedural[item.pascalId])
+  const lampDefault = useInteractive((s) => s.lampDefault)
   const setControlValue = useInteractive((s) => s.setControlValue)
   const togglePart = useInteractive((s) => s.toggleProceduralPart)
   const toggleLights = useInteractive((s) => s.toggleProceduralLights)
@@ -594,6 +614,7 @@ function GlbItemControls({
         proceduralState,
         (partId) => togglePart(item.pascalId, partId),
         () => toggleLights(item.pascalId),
+        lampDefault,
       )
     : item.interactive.controls.map((control, index) => ({
         key: String(index),
@@ -603,10 +624,10 @@ function GlbItemControls({
           setControlValue(item.pascalId, index, value),
       }))
 
-  let visible = false
+  let visible = isSelected
   if (worldPolygon?.length) {
     object.getWorldPosition(_itemPos)
-    visible = pointInPolygon(_itemPos.x, _itemPos.z, worldPolygon)
+    visible = visible || pointInPolygon(_itemPos.x, _itemPos.z, worldPolygon)
   }
 
   // Fade in on mount and fade out before unmounting the <Html>.

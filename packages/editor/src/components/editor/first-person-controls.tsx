@@ -231,6 +231,10 @@ type FirstPersonInteractableTarget =
     }
   | {
       id: AnyNodeId
+      type: 'item'
+    }
+  | {
+      id: AnyNodeId
       partId?: string
       kind?: 'hinge' | 'slide' | 'spin'
       type: 'procedural'
@@ -359,12 +363,22 @@ function resolveHudInteract(target: FirstPersonInteractableTarget | null): Walkt
   }
 
   const node = useScene.getState().nodes[target.id]
+  if (target.type === 'item') {
+    if (node?.type !== 'item' || !node.asset.interactive) return null
+    const indices = node.asset.interactive.controls.flatMap((control, index) =>
+      control.kind === 'toggle' ? [index] : [],
+    )
+    const values = useInteractive.getState().items[target.id]?.controlValues
+    const isOn = indices.some((index) => Boolean(values?.[index]))
+    return { label: node.name ?? node.asset.name, verb: isOn ? 'turn off' : 'turn on' }
+  }
   if (target.type === 'procedural') {
     if (node?.type !== 'procedural-item') return null
     const procedural = node as ProceduralItemNode
     const parts = procedural.recipe.parts.filter((part) => part.motion)
     if (parts.length === 0 && procedural.recipe.parts.some((part) => part.light)) {
-      const isOn = useInteractive.getState().procedural[target.id]?.lightsOn ?? true
+      const state = useInteractive.getState()
+      const isOn = state.procedural[target.id]?.lightsOn ?? state.lampDefault
       return { label: procedural.name ?? 'Lights', verb: isOn ? 'turn off' : 'turn on' }
     }
     const part = target.partId ? parts.find((entry) => entry.id === target.partId) : undefined
@@ -1012,6 +1026,31 @@ export const FirstPersonControls = () => {
         break
       }
     }
+    for (const rawId of sceneRegistry.byType.item ?? []) {
+      const id = rawId as AnyNodeId
+      const node = nodes[id]
+      if (
+        node?.type !== 'item' ||
+        !node.asset.interactive?.controls.some((control) => control.kind === 'toggle')
+      )
+        continue
+      const object = sceneRegistry.nodes.get(id)
+      if (!object) continue
+      const hit = proceduralInteractionRaycaster.intersectObject(object, true)[0]
+      if (hit && hit.distance < closestDistance) {
+        closest = { id, type: 'item' }
+        closestDistance = hit.distance
+      }
+    }
+    if (!closest) {
+      const selectedId = useViewer.getState().selection.selectedIds.at(-1) as AnyNodeId | undefined
+      const selected = selectedId ? nodes[selectedId] : undefined
+      if (
+        selected?.type === 'item' &&
+        selected.asset.interactive?.controls.some((control) => control.kind === 'toggle')
+      )
+        return { id: selected.id, type: 'item' }
+    }
     if (closest) return closest
 
     return null
@@ -1032,6 +1071,12 @@ export const FirstPersonControls = () => {
 
     const target = interactableTargetRef.current ?? resolveInteractableTarget()
     if (!target) return
+    if (target.type === 'item') {
+      const node = useScene.getState().nodes[target.id]
+      if (node?.type === 'item' && node.asset.interactive)
+        useInteractive.getState().toggleItemToggles(target.id, node.asset.interactive)
+      return
+    }
 
     if (target.type === 'procedural') {
       const node = useScene.getState().nodes[target.id]

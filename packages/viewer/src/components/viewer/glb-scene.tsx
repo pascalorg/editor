@@ -1124,7 +1124,7 @@ export function GlbScene({
         const part = findProceduralMotionAncestor(hit.object)
         const state = useInteractive.getState().procedural[extras.pascalId as AnyNodeId]
         const isOpen = lightOnly
-          ? (state?.lightsOn ?? true)
+          ? (state?.lightsOn ?? useInteractive.getState().lampDefault)
           : part
             ? Boolean(state?.parts[part.partId])
             : Object.values(state?.parts ?? {}).some(Boolean)
@@ -1141,6 +1141,21 @@ export function GlbScene({
           verb: lightOnly || isSpin ? (isOpen ? 'turn off' : 'turn on') : isOpen ? 'close' : 'open',
         }
         doorId = `${extras.pascalId}:${part?.partId ?? 'all'}`
+      } else if (node && extras?.kind === 'item') {
+        const item = interactiveItems?.find((entry) => entry.pascalId === extras.pascalId)
+        if (item?.interactive.controls.some((control) => control.kind === 'toggle')) {
+          doorNode = { hit: hit.object, node }
+          doorId = extras.pascalId as string
+          const values = useInteractive.getState().items[item.pascalId]?.controlValues
+          const isOpen = item.interactive.controls.some(
+            (control, index) => control.kind === 'toggle' && Boolean(values?.[index]),
+          )
+          door = {
+            label: item.label,
+            isOpen,
+            verb: isOpen ? 'turn off' : 'turn on',
+          }
+        }
       } else if (node && extras?.openable && extras.clips?.length) {
         doorNode = { hit: hit.object, node }
         doorId = extras.pascalId as string
@@ -1161,8 +1176,14 @@ export function GlbScene({
   const activateWalkDoor = useCallback(() => {
     const target = walkDoorRef.current
     if (!target) return
+    const extras = target.node.userData as PascalExtras
+    if (extras.kind === 'item' && extras.pascalId) {
+      const item = interactiveItems?.find((entry) => entry.pascalId === extras.pascalId)
+      if (item) useInteractive.getState().toggleItemToggles(item.pascalId, item.interactive)
+      return
+    }
     if (!toggleProcedural(target.hit, target.node)) toggleOpenable(target.node)
-  }, [toggleOpenable, toggleProcedural])
+  }, [interactiveItems, toggleOpenable, toggleProcedural])
   useEffect(() => {
     if (!walkthroughMode) return
     const onKey = (event: KeyboardEvent) => {

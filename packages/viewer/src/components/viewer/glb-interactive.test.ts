@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import type { AnyNodeId, SceneGraph } from '@pascal-app/core'
+import { type AnyNodeId, type SceneGraph, useInteractive } from '@pascal-app/core'
 import type { EvaluatedLight } from '@pascal-app/core/procedural-items'
 import { Group, Vector3 } from 'three'
 import chandelier from '../../../../core/src/procedural-items/__fixtures__/chandelier_six_arms.json'
@@ -40,6 +40,14 @@ test('baked catalog effects keep distinct emitter keys and one control owner', (
   const regs = buildGlbLightRegs([item], new Map([['lamp', new Group()]]))
   expect(regs.map((reg) => reg.key)).toEqual(['lamp:0', 'lamp:1'])
   expect(regs.map((reg) => reg.nodeId)).toEqual(['lamp', 'lamp'])
+  const store = useInteractive.getState()
+  store.setLampDefault(false)
+  store.initItem(item.pascalId, item.interactive, true)
+  expect(regs.every((reg) => !reg.isOn())).toBe(true)
+  store.setLampDefault(true)
+  expect(regs.every((reg) => reg.isOn())).toBe(true)
+  store.removeItem(item.pascalId)
+  store.setLampDefault(false)
 })
 
 test('baked moving emitter follows its motion group around the pivot', () => {

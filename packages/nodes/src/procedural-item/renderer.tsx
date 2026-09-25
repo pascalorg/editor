@@ -30,6 +30,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { type Group, Mesh, Vector3 } from 'three'
 import { acquireProceduralGeometry, type BuiltItem, geometrySignature } from './geometry'
+import { canRegisterItemLight } from '../shared/item-light-placement'
 export default function ProceduralRenderer({ node }: { node: ProceduralItemNode }) {
   const ref = useRef<Group>(null!)
   const controller = useRef<ProceduralMotionController | null>(null)
@@ -55,7 +56,9 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
   const libraryVersion = useLibraryMaterialsVersion()
   const key = geometrySignature(effective)
   const [built, setBuilt] = useState<BuiltItem | null>(null)
-  const lightsOn = useInteractive((state) => state.procedural[node.id]?.lightsOn ?? true)
+  const lightsOn = useInteractive(
+    (state) => state.procedural[node.id]?.lightsOn ?? state.lampDefault,
+  )
   const handlers = useNodeEvents(node as unknown as AnyNode, 'procedural-item' as AnyNode['type'])
   useRegistry(node.id as AnyNodeId, 'procedural-item', ref)
   useLayoutEffect(() => {
@@ -124,7 +127,7 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
     else awake.current = false
   }, -1)
   useLayoutEffect(() => {
-    if (!built || !ref.current) return
+    if (!built || !ref.current || !canRegisterItemLight(effective.metadata)) return
     const pool = useItemLightPool.getState()
     const keys: string[] = []
     for (const light of built.evaluation.lights) {
@@ -152,13 +155,14 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
         getIntensity: () => light.intensity,
         isEligible: () =>
           effective.visible !== false &&
-          (useInteractive.getState().procedural[node.id]?.lightsOn ?? true),
+          (useInteractive.getState().procedural[node.id]?.lightsOn ??
+            useInteractive.getState().lampDefault),
       })
     }
     return () => {
       for (const key of keys) useItemLightPool.getState().unregister(key)
     }
-  }, [built, node.id, effective.visible])
+  }, [built, node.id, effective.visible, effective.metadata?.isNew])
   const materialKey = JSON.stringify([effective.recipe.slots, effective.slots, libraryVersion])
   const materials = useMemo(() => {
     const [slots, overrides] = JSON.parse(materialKey) as [

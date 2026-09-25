@@ -13,6 +13,7 @@ export function proceduralControlDescriptors(
   state: { parts: Record<string, boolean>; lightsOn: boolean } | undefined,
   togglePart: (partId: string) => void,
   toggleLights: () => void,
+  lampDefault = false,
 ): ControlDescriptor[] {
   const controls = parts
     .filter((part) => part.motion)
@@ -26,7 +27,7 @@ export function proceduralControlDescriptors(
     controls.push({
       key: 'lights',
       control: { kind: 'toggle', label: 'Lights' },
-      value: state?.lightsOn ?? true,
+      value: state?.lightsOn ?? lampDefault,
       onChange: toggleLights,
     })
   return controls

@@ -166,7 +166,8 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
         const restoreEmission = decorateProceduralEmission(
           args.root,
           lights,
-          useInteractive.getState().procedural[node.id]?.lightsOn ?? true,
+          useInteractive.getState().procedural[node.id]?.lightsOn ??
+            useInteractive.getState().lampDefault,
         )
         return () => {
           restoreEmission()

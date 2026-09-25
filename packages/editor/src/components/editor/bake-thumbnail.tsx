@@ -45,7 +45,11 @@ export function BakeThumbnail({
         if (node.type !== 'procedural-item') continue
         const evaluation = evaluateRecipe(node.recipe, node.parameters)
         if (evaluation.lights.length) {
-          priorLights.set(node.id, useInteractive.getState().procedural[node.id]?.lightsOn ?? true)
+          priorLights.set(
+            node.id,
+            useInteractive.getState().procedural[node.id]?.lightsOn ??
+              useInteractive.getState().lampDefault,
+          )
           useInteractive.getState().setProceduralLights(node.id, true)
         }
         for (const motion of evaluation.motions)

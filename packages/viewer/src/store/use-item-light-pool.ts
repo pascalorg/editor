@@ -6,7 +6,7 @@ import {
   sceneRegistry,
   useInteractive,
 } from '@pascal-app/core'
-import type { Vector3 } from 'three'
+import type { Object3D, Vector3 } from 'three'
 import { create } from 'zustand'
 
 export type LightSource = {
@@ -59,12 +59,22 @@ export function catalogLightSource(
 
 type ItemLightPoolStore = {
   registrations: Map<string, LightSource>
+  bakedCanvases: Set<Object3D>
+  setBakedCanvas: (scene: Object3D, active: boolean) => void
   register: (source: LightSource) => void
   unregister: (key: string) => void
 }
 
 export const useItemLightPool = create<ItemLightPoolStore>((set) => ({
   registrations: new Map(),
+  bakedCanvases: new Set(),
+  setBakedCanvas: (scene, active) =>
+    set((state) => {
+      const bakedCanvases = new Set(state.bakedCanvases)
+      if (active) bakedCanvases.add(scene)
+      else bakedCanvases.delete(scene)
+      return { bakedCanvases }
+    }),
   register: (source) =>
     set((state) => ({ registrations: new Map(state.registrations).set(source.key, source) })),
   unregister: (key) =>

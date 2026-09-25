@@ -1,6 +1,6 @@
 import type { AnyNodeId, LevelNode } from '@pascal-app/core'
 import { findLevelAncestorId, sceneRegistry, useScene } from '@pascal-app/core'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { useRef } from 'react'
 import { MathUtils, type PointLight, Vector3 } from 'three'
 import { SCENE_LAYER } from '../../lib/layers'
@@ -37,9 +37,9 @@ type SceneNodes = ReturnType<typeof useScene.getState>['nodes']
 
 function isRendered(nodeId: AnyNodeId): boolean {
   let object: ReturnType<typeof sceneRegistry.nodes.get> | null = sceneRegistry.nodes.get(nodeId)
-  if (!object) return false
+  if (!object?.layers.isEnabled(SCENE_LAYER)) return false
   while (object) {
-    if (!object.visible || !object.layers.isEnabled(SCENE_LAYER)) return false
+    if (!object.visible) return false
     object = object.parent
   }
   return true
@@ -56,7 +56,7 @@ function scoreRegistration(
   const { nodeId } = reg
   let current = nodes[nodeId]
   while (current) {
-    if (current.visible === false) return Number.POSITIVE_INFINITY
+    if (current.type !== 'site' && current.visible === false) return Number.POSITIVE_INFINITY
     current = current.parentId ? nodes[current.parentId as AnyNodeId] : undefined
   }
   const itemLevelId = findLevelAncestorId(nodeId, nodes)
@@ -89,6 +89,8 @@ function scoreRegistration(
 }
 
 export function ItemLightSystem() {
+  const scene = useThree((state) => state.scene)
+  const bakedOwner = useItemLightPool((state) => state.bakedCanvases.has(scene))
   const lightRefs = useRef<Array<PointLight | null>>(Array.from({ length: POOL_SIZE }, () => null))
   const slots = useRef<SlotRuntime[]>(
     Array.from({ length: POOL_SIZE }, () => ({ key: null, pendingKey: null, isFadingOut: false })),
@@ -100,6 +102,7 @@ export function ItemLightSystem() {
   const prevReassignCamFwd = useRef(new Vector3(0, 0, -1))
 
   useFrame(({ camera }, delta) => {
+    if (bakedOwner) return
     const dt = Math.min(delta, 0.1)
     const { registrations } = useItemLightPool.getState()
 
@@ -228,11 +231,9 @@ export function ItemLightSystem() {
 
       // Fade-out phase: lerp intensity → 0, then complete the transition
       if (slot.isFadingOut) {
-        light.visible = true
         light.intensity = MathUtils.lerp(light.intensity, 0, dt * 12)
         if (light.intensity < 0.01) {
           light.intensity = 0
-          light.visible = false
           slot.isFadingOut = false
           slot.key = slot.pendingKey
           slot.pendingKey = null
@@ -251,7 +252,6 @@ export function ItemLightSystem() {
       if (!slot.key) {
         // Idle slot — keep dark
         light.intensity = 0
-        light.visible = false
         continue
       }
 
@@ -259,23 +259,20 @@ export function ItemLightSystem() {
       if (!reg) {
         slot.key = null
         light.intensity = 0
-        light.visible = false
         continue
       }
 
       if (reg.getWorldPosition(_itemPos)) light.position.copy(_itemPos)
       const targetIntensity = reg.isEligible() && isRendered(reg.nodeId) ? reg.getIntensity() : 0
 
-      if (targetIntensity > 0) {
-        light.visible = true
-      }
       light.intensity = MathUtils.lerp(light.intensity, targetIntensity, dt * 12)
       if (targetIntensity <= 0 && light.intensity < 0.01) {
         light.intensity = 0
-        light.visible = false
       }
     }
   }, 6)
+
+  if (bakedOwner) return null
 
   return (
     <>
@@ -284,7 +281,7 @@ export function ItemLightSystem() {
           castShadow={false}
           intensity={0}
           key={i}
-          visible={false}
+          visible
           ref={(el: any) => {
             lightRefs.current[i] = el
           }}

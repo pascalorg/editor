@@ -15,6 +15,7 @@ test('procedural Paint preview preserves authored bulb emission and restores the
   const mesh = new Mesh(new BoxGeometry(), original)
   mesh.userData.slotId = 'bulb'
   root.add(mesh)
+  useInteractive.getState().setLampDefault(true)
   useInteractive.getState().initProcedural(node.id, [])
   const restore = proceduralItemDefinition.capabilities.paint!.applyPreview({
     node,
@@ -41,6 +42,7 @@ test('procedural Paint preview preserves authored bulb emission and restores the
   expect((mesh.material as MeshStandardMaterial).emissiveIntensity).toBe(0)
   restoreOff?.()
   useInteractive.getState().removeProcedural(node.id)
+  useInteractive.getState().setLampDefault(false)
   mesh.geometry.dispose()
   original.dispose()
 })

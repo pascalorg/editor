@@ -4,6 +4,7 @@ import {
   type HandleDescriptor,
   type ItemNode as ItemNodeType,
   type NodeDefinition,
+  useInteractive,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { restingFloorplanAffectedIds } from '../shared/resting-surface-plan'
@@ -330,6 +331,21 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   // *transitions* (drop a wall item on a ceiling) remain canonical
   // in the 3D path; 2D only re-anchors within the same family.
   floorplanMoveTarget: itemFloorplanMoveTarget,
+  keyboardActions: {
+    e: {
+      appliesTo: (node) =>
+        (node as ItemNodeType).asset.interactive?.controls.some(
+          (control) => control.kind === 'toggle',
+        ) ?? false,
+      run: (node) => {
+        const item = node as ItemNodeType
+        if (!item.asset.interactive) return
+        const store = useInteractive.getState()
+        store.initItem(item.id, item.asset.interactive)
+        store.toggleItemToggles(item.id, item.asset.interactive)
+      },
+    },
+  },
 
   toolHints: [
     { key: 'Left click', label: 'Place item' },

@@ -6,6 +6,7 @@ import {
   RoofElevationSystem,
   StairOpeningSystem,
   sceneRegistry,
+  useInteractive,
   useScene,
 } from '@pascal-app/core'
 import { Canvas, extend, type ThreeElement, useFrame, useThree } from '@react-three/fiber'
@@ -477,6 +478,17 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
   const [rendererInitFailed, setRendererInitFailed] = useState(false)
 
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
+  const sceneTheme = useViewer((state) => state.sceneTheme)
+  const previousLampTheme = useRef(sceneTheme)
+  useEffect(() => {
+    useInteractive
+      .getState()
+      .setLampDefault(
+        getSceneTheme(sceneTheme).appearance === 'dark',
+        previousLampTheme.current !== sceneTheme,
+      )
+    previousLampTheme.current = sceneTheme
+  }, [sceneTheme])
   const transparentBackground = useViewer((state) => state.transparentBackground)
   // The shadows toggle drives `renderer.shadowMap.enabled` (via the Canvas
   // `shadows` prop) rather than the lights' `castShadow`: toggling castShadow
