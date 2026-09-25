@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { z } from 'zod'
 import {
   createWallBoundSurfaceFollower,
+  detectSpacesForLevel,
   initSpaceDetectionSync,
   type Space,
 } from '../lib/space-detection'
@@ -431,6 +432,76 @@ describe('scene commit boundary', () => {
     } finally {
       stopDetection()
     }
+  })
+
+  describe('wall-bound surface follower', () => {
+    const autoSlab = (polygon: Array<[number, number]>) =>
+      SlabNode.parse({ parentId: LEVEL_ID, polygon, autoFromWalls: true })
+    const nodesOf = (entries: AnyNode[]) =>
+      Object.fromEntries(entries.map((node) => [node.id, node])) as Record<string, AnyNode>
+
+    test('keeps a corner on the walls that bound it at a junction with a diagonal branch', () => {
+      // The diagonal leaves the divider's foot outside the room; it bounds no room vertex.
+      const diagonal = WallNode.parse({ parentId: LEVEL_ID, start: [2, 0], end: [1, -1] })
+      const south = WallNode.parse({ parentId: LEVEL_ID, start: [0, 0], end: [4, 0] })
+      const divider = WallNode.parse({ parentId: LEVEL_ID, start: [2, 0], end: [2, 4] })
+      const north = WallNode.parse({ parentId: LEVEL_ID, start: [4, 4], end: [0, 4] })
+      const west = WallNode.parse({ parentId: LEVEL_ID, start: [0, 4], end: [0, 0] })
+      const slab = autoSlab([
+        [0, 0],
+        [2, 0],
+        [2, 4],
+        [0, 4],
+      ])
+      const follow = createWallBoundSurfaceFollower(
+        LEVEL_ID,
+        nodesOf([diagonal, south, divider, north, west, slab]),
+        new Set([divider.id]),
+      )
+
+      const [[, polygon]] = follow(new Map([[divider.id, { start: [2.5, 0], end: [2.5, 4] }]])) as [
+        [string, Array<[number, number]>],
+      ]
+      expect(polygon).toEqual([
+        [0, 0],
+        [2.5, 0],
+        [2.5, 4],
+        [0, 4],
+      ])
+    })
+
+    test('carries the sampled arc of a curved wall with the wall', () => {
+      const walls = [
+        WallNode.parse({ parentId: LEVEL_ID, start: [0, 0], end: [4, 0] }),
+        WallNode.parse({ parentId: LEVEL_ID, start: [4, 0], end: [4, 4], curveOffset: 0.8 }),
+        WallNode.parse({ parentId: LEVEL_ID, start: [4, 4], end: [0, 4] }),
+        WallNode.parse({ parentId: LEVEL_ID, start: [0, 4], end: [0, 0] }),
+      ]
+      const [room] = detectSpacesForLevel(LEVEL_ID, walls).roomPolygons
+      const polygon = room!.map((point) => [point.x, point.y] as [number, number])
+      const arcVertices = polygon.filter(([x]) => x > 4 + 1e-6)
+      expect(arcVertices.length).toBeGreaterThan(0)
+      const slab = autoSlab(polygon)
+      const [south, east, north] = walls as [WallNode, WallNode, WallNode]
+      const follow = createWallBoundSurfaceFollower(
+        LEVEL_ID,
+        nodesOf([...walls, slab]),
+        new Set([east.id, south.id, north.id]),
+      )
+
+      const [[, moved]] = follow(
+        new Map([
+          [east.id, { start: [4.5, 0], end: [4.5, 4] }],
+          [south.id, { start: [0, 0], end: [4.5, 0] }],
+          [north.id, { start: [4.5, 4], end: [0, 4] }],
+        ]),
+      ) as [[string, Array<[number, number]>]]
+      polygon.forEach(([x, y], index) => {
+        const [mx, my] = moved[index]!
+        expect(my).toBeCloseTo(y, 6)
+        expect(mx).toBeCloseTo(x >= 4 - 1e-6 ? x + 0.5 : x, 6)
+      })
+    })
   })
 
   describe('wall move commit', () => {

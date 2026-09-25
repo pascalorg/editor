@@ -18,6 +18,7 @@ import {
 import { useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
+import { wallFloorplanMoveTarget } from './floorplan-move'
 import { MoveWallTool } from './move-tool'
 
 const LEVEL_ID = 'level_wall-move' as AnyNodeId
@@ -205,6 +206,27 @@ describe('3D wall move', () => {
     expect(useScene.getState().nodes).toEqual(before)
   })
 
+  test('a support change joins the wall batch: one reconcile pass at commit', async () => {
+    const [slab] = nodesOfType('slab')
+    useScene
+      .getState()
+      .updateNodes([{ id: DIVIDER_ID, data: { supportSlabId: slab!.id } as Partial<AnyNode> }])
+    clearSceneHistory()
+    const renderer = await armWall(DIVIDER_ID)
+    await dragFrom(2, 2.5)
+    reconcilePasses = 0
+    await act(async () => {
+      window.dispatchEvent(new Event('pointerup'))
+    })
+    await act(async () => renderer.unmount())
+
+    const divider = useScene.getState().nodes[DIVIDER_ID] as WallNode
+    expect(divider.start).toEqual([2.5, 0])
+    expect(divider.supportSlabId).not.toBe(slab!.id)
+    expect(reconcilePasses).toBe(1)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+  })
+
   test('split view: the 3D drop records one step while the 2D overlay co-owns the gesture', async () => {
     const before = sceneNodes()
     // FloorplanRegistryMoveOverlay holds a pause session keyed by the moving node.
@@ -227,14 +249,19 @@ describe('3D wall move', () => {
   test('split view: a 2D drop records one step while the 3D tool co-owns the gesture', async () => {
     const renderer = await armWall(DIVIDER_ID)
     await dragFrom(2, 2.5)
+    // FloorplanRegistryMoveOverlay's path: its pause session keyed by the moving node,
+    // the wall's floor-plan move target, and the commit inside `commitStep`.
     const overlay = beginSceneHistoryPauseSession(useScene, { gesture: DIVIDER_ID })
-    overlay.commitStep(() =>
-      useScene
-        .getState()
-        .updateNodes([
-          { id: DIVIDER_ID, data: { start: [3, 0], end: [3, 4] } as Partial<AnyNode> },
-        ]),
-    )
+    const session = wallFloorplanMoveTarget({
+      node: useScene.getState().nodes[DIVIDER_ID] as WallNode,
+      nodes: useScene.getState().nodes,
+      sceneApi: {} as never,
+    })
+    const modifiers = { shiftKey: false, altKey: false, ctrlKey: false, metaKey: false }
+    session.apply({ planPoint: [2, 2], modifiers })
+    session.apply({ planPoint: [3, 2], modifiers })
+    expect(session.canCommit?.()).toBe(true)
+    overlay.commitStep(() => session.commit?.())
     overlay.end()
     useEditor.getState().setMovingNodeOrigin('2d')
     await act(async () => renderer.unmount())
