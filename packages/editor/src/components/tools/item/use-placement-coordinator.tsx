@@ -21,6 +21,7 @@ import {
   type SceneHistoryPauseSession,
   type ShelfEvent,
   type SurfaceRejectReason,
+  sceneHistorySnapshot,
   sceneRegistry,
   useLiveNodeOverrides,
   useLiveTransforms,
@@ -538,8 +539,17 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   useEffect(() => {
     if (!asset) return
     // Refcounted, so another owner's balanced pause/resume mid-carry cannot resume history.
-    // Keyed by the moving node, which the 2D move overlay co-owns in split view.
-    const historyPause = beginSceneHistoryPauseSession(useScene, getMovingNode()?.id)
+    // Keyed by the moving node, which the 2D move overlay co-owns in split view. Local writes
+    // others make mid-carry (a wall edit, an agent op) stay their own undo step.
+    const movingNodeId = getMovingNode()?.id
+    const historyPause = beginSceneHistoryPauseSession(useScene, {
+      gesture: movingNodeId,
+      foreignWrites: {
+        store: useScene,
+        snapshot: sceneHistorySnapshot,
+        ownNodeIds: () => [movingNodeId, draftNode.current?.id].filter((id) => id !== undefined),
+      },
+    })
     unfinishedSetupPauseRef.current = historyPause
 
     const validators = { canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling }

@@ -324,6 +324,7 @@ export {
   type SceneCommitListener,
   type SceneCommitOrigin,
   type SceneHistoryPauseSession,
+  type SceneHistoryPauseSessionOptions,
   type SceneSnapshot,
   subscribeSceneCommits,
 } from './store/history-control'
@@ -364,6 +365,7 @@ export {
   type SceneNodeStructuralPatch,
   type SceneOperationPatch,
   type ScenePatch,
+  sceneHistorySnapshot,
 } from './store/use-scene'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'
 export {

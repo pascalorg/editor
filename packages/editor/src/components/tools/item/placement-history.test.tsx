@@ -31,7 +31,8 @@ import { usePlacementCoordinator } from './use-placement-coordinator'
 // The item move / placement history contract, driven through the real placement coordinator
 // with core's space-detection sync attached: history stays paused for the whole carry even when
 // another refcounted owner pauses and resumes mid-carry, the drop adds exactly one undo entry,
-// and every exit path releases only the coordinator's own pause.
+// every exit path releases only the coordinator's own pause, and a wall written mid-carry by
+// someone else stays its own undo step with its rooms reconciled.
 
 const level = LevelNode.parse({ id: 'level_placement_history', level: 0 })
 const wallA = WallNode.parse({
@@ -45,6 +46,18 @@ const wallB = WallNode.parse({
   parentId: level.id,
   start: [6, -6],
   end: [6, 6],
+})
+const wallC = WallNode.parse({
+  id: 'wall_placement_history_c',
+  parentId: level.id,
+  start: [6, 6],
+  end: [-6, 6],
+})
+const closingWall = WallNode.parse({
+  id: 'wall_placement_history_closing',
+  parentId: level.id,
+  start: [-6, 6],
+  end: [-6, -6],
 })
 const bathtub: AssetInput = {
   id: 'bathtub',
@@ -89,9 +102,10 @@ beforeEach(() => {
 
   useScene.setState({
     nodes: {
-      [level.id]: { ...level, children: [wallA.id, wallB.id, item.id] },
+      [level.id]: { ...level, children: [wallA.id, wallB.id, wallC.id, item.id] },
       [wallA.id]: structuredClone(wallA),
       [wallB.id]: structuredClone(wallB),
+      [wallC.id]: structuredClone(wallC),
       [item.id]: structuredClone(item),
     },
     rootNodeIds: [level.id],
@@ -210,18 +224,21 @@ async function carry(from: number, to: number) {
   for (let step = from; step <= to; step++) await grid('move', step * 0.1, 0.5)
 }
 
-/** A wall edit that lands mid-carry under another owner's balanced, refcounted pause. */
-function foreignWallWrite() {
-  const wall = useScene.getState().nodes[wallA.id as AnyNodeId] as WallNode
+/** Another refcounted owner's balanced pause/resume pair landing mid-carry. */
+function foreignPausePair() {
   pauseSceneHistory(useScene)
-  try {
-    useScene.getState().updateNode(wallA.id as AnyNodeId, {
-      start: [wall.start[0] + 0.01, wall.start[1]],
-    })
-  } finally {
-    resumeSceneHistory(useScene)
-  }
+  resumeSceneHistory(useScene)
 }
+
+/** Someone else closes the room mid-carry; the space-detection sync owes it a slab and ceiling. */
+function closeRoom() {
+  useScene.getState().createNode(structuredClone(closingWall), level.id as AnyNodeId)
+}
+const autoRoomNodes = () =>
+  Object.values(useScene.getState().nodes).filter(
+    (node) => (node.type === 'slab' || node.type === 'ceiling') && 'autoFromWalls' in node,
+  )
+const hasNode = (id: string) => Boolean(useScene.getState().nodes[id as AnyNodeId])
 
 describe('item move history pause', () => {
   test('a move adds one entry and one undo restores the item', async () => {
@@ -245,7 +262,7 @@ describe('item move history pause', () => {
     const renderer = await create(<Placement source={item} />)
     try {
       await carry(1, 3)
-      foreignWallWrite()
+      foreignPausePair()
       expect(history().tracking).toBe(false)
       await carry(4, 6)
       expect(history()).toMatchObject({ past: before.past, tracking: false })
@@ -264,7 +281,7 @@ describe('item move history pause', () => {
     const renderer = await create(<Placement source={item} />)
     try {
       await carry(1, 4)
-      foreignWallWrite()
+      foreignPausePair()
       await act(async () => {
         emitter.emit('tool:cancel')
       })
@@ -309,7 +326,7 @@ describe('item move history pause', () => {
       await grid('click', 1.4, 0.5)
       expect(history()).toMatchObject({ past: before.past + 1, tracking: false })
       await carry(20, 24)
-      foreignWallWrite()
+      foreignPausePair()
       expect(history().tracking).toBe(false)
       await grid('click', 2.4, 0.5)
       expect(history()).toMatchObject({ past: before.past + 2, tracking: false })
@@ -342,5 +359,57 @@ describe('item move history pause', () => {
       console.error = consoleError
     }
     expect(history()).toEqual({ past: before.past, tracking: true, depth: 0 })
+  })
+
+  test('a room closed mid-carry is its own undo step, reconciled, and the drop is one more', async () => {
+    const before = history()
+    const renderer = await create(<Placement source={item} />)
+    try {
+      await carry(1, 3)
+      closeRoom()
+      await carry(4, 6)
+      expect(history()).toMatchObject({ past: before.past, tracking: false })
+      await grid('click', 0.6, 0.5)
+    } finally {
+      await renderer.unmount()
+    }
+    expect(history()).toEqual({ past: before.past + 2, tracking: true, depth: 0 })
+    expect(
+      autoRoomNodes()
+        .map((node) => node.type)
+        .sort(),
+    ).toEqual(['ceiling', 'slab'])
+
+    useScene.temporal.getState().undo()
+    expect(liveItem()).toEqual(item)
+    expect(hasNode(closingWall.id)).toBe(true)
+    expect(autoRoomNodes()).toHaveLength(2)
+
+    useScene.temporal.getState().undo()
+    expect(liveItem()).toEqual(item)
+    expect(hasNode(closingWall.id)).toBe(false)
+    expect(autoRoomNodes()).toHaveLength(0)
+    expect(history().past).toBe(before.past)
+  })
+
+  test('a room closed during a cancelled carry is still one undo step, reconciled', async () => {
+    const before = history()
+    const renderer = await create(<Placement source={item} />)
+    try {
+      await carry(1, 3)
+      closeRoom()
+      await act(async () => {
+        emitter.emit('tool:cancel')
+      })
+    } finally {
+      await renderer.unmount()
+    }
+    expect(liveItem()).toEqual(item)
+    expect(history()).toEqual({ past: before.past + 1, tracking: true, depth: 0 })
+    expect(autoRoomNodes()).toHaveLength(2)
+    useScene.temporal.getState().undo()
+    expect(hasNode(closingWall.id)).toBe(false)
+    expect(autoRoomNodes()).toHaveLength(0)
+    expect(liveItem()).toEqual(item)
   })
 })

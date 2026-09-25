@@ -154,7 +154,7 @@ export function FloorplanRegistryMoveOverlay() {
 
       // Keyed by the moving node: the 3D mover co-owns this gesture's pause, so
       // whichever view drops lifts both and records the one step.
-      const historyPause = beginSceneHistoryPauseSession(useScene, movingNode.id)
+      const historyPause = beginSceneHistoryPauseSession(useScene, { gesture: movingNode.id })
       let historyPaused = true
 
       const clearLivePreviews = () => {

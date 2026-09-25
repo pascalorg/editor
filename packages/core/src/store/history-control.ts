@@ -234,8 +234,200 @@ export type SceneHistoryPauseSession = {
   end(): void
 }
 
+type SceneHistoryStoreLike = {
+  getState(): { nodes: Record<AnyNodeId, AnyNode> }
+  setState(partial: Record<string, never>): void
+  subscribe(
+    listener: (
+      state: { nodes: Record<AnyNodeId, AnyNode> },
+      previous: { nodes: Record<AnyNodeId, AnyNode> },
+    ) => void,
+  ): () => void
+  temporal: {
+    getState(): { pastStates: Partial<SceneSnapshot>[] }
+    setState(state: { pastStates: Partial<SceneSnapshot>[]; futureStates?: [] }): void
+  }
+}
+
+export type SceneHistoryPauseSessionOptions = {
+  /** Sessions with the same key co-own one gesture; see `beginSceneHistoryPauseSession`. */
+  gesture?: string
+  /**
+   * Keeps local writes that other code makes during the gesture undoable. A paused write that
+   * changes any node outside `ownNodeIds()` becomes one undo step of its own, recorded before
+   * the gesture's step (or on `end` if nothing was committed), and derived systems that stood
+   * down during the pause (space detection) reconcile it when the pause lifts. Remote (`host`)
+   * changes are never local undo steps.
+   */
+  foreignWrites?: {
+    store: SceneHistoryStoreLike
+    snapshot: () => SceneSnapshot
+    ownNodeIds: () => Iterable<AnyNodeId | string>
+  }
+}
+
 type GesturePauseHolder = { release: (() => void) | null; ended: boolean }
 const gesturePauseHolders = new Map<string, Set<GesturePauseHolder>>()
+const livePauseHolders = new Set<GesturePauseHolder>()
+let pauseHolderGeneration = 0
+
+const STRUCTURAL_BOOKKEEPING_KEYS = new Set(['children', 'attachments'])
+
+/** Nodes changed from `before`, minus parents whose only change is child/attachment lists. */
+function nodeIdsChangedSince(
+  before: Record<AnyNodeId, AnyNode>,
+  nodes: Record<AnyNodeId, AnyNode>,
+): Set<AnyNodeId> {
+  const changed = new Set<AnyNodeId>()
+  for (const [id, node] of Object.entries(nodes) as [AnyNodeId, AnyNode][]) {
+    const previous = before[id]
+    if (previous === node) continue
+    if (previous) {
+      const record = node as Record<string, unknown>
+      const previousRecord = previous as Record<string, unknown>
+      const keys = new Set([...Object.keys(record), ...Object.keys(previousRecord)])
+      const onlyBookkeeping = [...keys].every(
+        (key) =>
+          STRUCTURAL_BOOKKEEPING_KEYS.has(key) ||
+          areSemanticValuesEqual(record[key], previousRecord[key]),
+      )
+      if (onlyBookkeeping) continue
+    }
+    changed.add(id)
+  }
+  for (const id of Object.keys(before) as AnyNodeId[]) {
+    if (!(id in nodes)) changed.add(id)
+  }
+  return changed
+}
+
+type ForeignWriteLedger = {
+  commitStep<T>(write: () => T): T
+  end(): void
+}
+
+/**
+ * Remembers which nodes others wrote while the gesture paused history. Writes made while the
+ * gesture has its pause lifted (`commitStep`) are the gesture's own and are not classified.
+ */
+function trackForeignWrites(
+  foreignWrites: NonNullable<SceneHistoryPauseSessionOptions['foreignWrites']>,
+  isCurrent: () => boolean,
+): ForeignWriteLedger {
+  const { store, snapshot, ownNodeIds } = foreignWrites
+  let baseline = snapshot()
+  let foreignIds = new Set<AnyNodeId>()
+  let changedIds = new Set<AnyNodeId>()
+  let liftDepth = 0
+  let republishing = false
+
+  const inOwnSubtree = (id: AnyNodeId, own: Set<string>, nodes: Record<AnyNodeId, AnyNode>) => {
+    let current: AnyNodeId | null | undefined = id
+    for (let hops = 0; current && hops < 64; hops++) {
+      if (own.has(current)) return true
+      current = nodes[current]?.parentId as AnyNodeId | null | undefined
+    }
+    return false
+  }
+  // Ownership is settled when a step is recorded: a draft the gesture creates is often only
+  // known as its own after the write that created it.
+  const everOwn = new Set<string>()
+  const noteOwn = () => {
+    for (const id of ownNodeIds()) everOwn.add(id)
+  }
+  const stopWrites = store.subscribe((state, previous) => {
+    if (liftDepth > 0 || republishing || state.nodes === previous.nodes) return
+    noteOwn()
+    for (const id of nodeIdsChangedSince(previous.nodes, state.nodes)) changedIds.add(id)
+  })
+  const settleForeignIds = () => {
+    noteOwn()
+    const nodes = store.getState().nodes
+    // Compared as history records them, so drafts history never sees are nobody's step.
+    const recorded = snapshot().nodes
+    for (const id of changedIds) {
+      if (recorded[id] === baseline.nodes[id]) continue
+      if (!(inOwnSubtree(id, everOwn, nodes) || inOwnSubtree(id, everOwn, baseline.nodes))) {
+        foreignIds.add(id)
+      }
+    }
+    changedIds = new Set()
+  }
+  const stopHostCommits = subscribeSceneCommits((commit) => {
+    if (commit.origin === 'local') return
+    const nodes = { ...baseline.nodes }
+    for (const id of nodeIdsChangedSince(commit.before.nodes, commit.current.nodes)) {
+      changedIds.delete(id)
+      foreignIds.delete(id)
+      const node = commit.current.nodes[id]
+      if (node) nodes[id] = node
+      else delete nodes[id]
+    }
+    baseline = { ...baseline, nodes }
+  })
+
+  const canRecord = () => {
+    settleForeignIds()
+    return foreignIds.size > 0 && isCurrent() && getSceneHistoryPauseDepth() === 0
+  }
+  // Space detection saw no change for these nodes while it stood down. Republishing them while
+  // history is live lets it reconcile them before the next commit moves its baseline past them.
+  // Its reconciled writes join the foreign step (and its commit), not a step of their own.
+  const republish = () => {
+    const temporal = store.temporal
+    const pastStates = temporal.getState().pastStates
+    const outermost = sceneCommitTransactionDepth === 0
+    republishing = true
+    beginSceneCommitTransaction()
+    try {
+      runWithSceneCommitNodeIds(foreignIds, () => store.setState({}))
+    } finally {
+      if (outermost) pendingSceneCommit = null
+      endSceneCommitTransaction()
+      republishing = false
+    }
+    if (temporal.getState().pastStates !== pastStates) temporal.setState({ pastStates })
+  }
+  const record = (pastStates: Partial<SceneSnapshot>[], current: SceneSnapshot, end: boolean) => {
+    store.temporal.setState(
+      end
+        ? { pastStates: [...pastStates, baseline], futureStates: [] }
+        : { pastStates: [...pastStates.slice(0, -1), baseline, current] },
+    )
+    notifySceneCommit({ origin: 'local', before: baseline, current })
+    foreignIds = new Set()
+  }
+
+  return {
+    commitStep(write) {
+      liftDepth += 1
+      try {
+        const recording = liftDepth === 1 && canRecord()
+        if (recording) republish()
+        const pastBefore = store.temporal.getState().pastStates.length
+        const result = write()
+        const pastStates = store.temporal.getState().pastStates
+        if (pastStates.length > pastBefore) {
+          // History records whole snapshots; the store type only declares them partial.
+          if (recording) record(pastStates, pastStates.at(-1) as SceneSnapshot, false)
+          baseline = snapshot()
+          everOwn.clear()
+          foreignIds = new Set()
+        }
+        return result
+      } finally {
+        liftDepth -= 1
+      }
+    },
+    end() {
+      stopWrites()
+      stopHostCommits()
+      if (!canRecord()) return
+      republish()
+      record(store.temporal.getState().pastStates, snapshot(), true)
+    },
+  }
+}
 
 /**
  * Holds a refcounted pause for a whole gesture (carry, drag). Unlike a raw
@@ -249,18 +441,25 @@ const gesturePauseHolders = new Map<string, Set<GesturePauseHolder>>()
  */
 export function beginSceneHistoryPauseSession(
   sceneStore: TemporalStoreLike,
-  gesture?: string,
+  options: SceneHistoryPauseSessionOptions = {},
 ): SceneHistoryPauseSession {
+  const { gesture, foreignWrites } = options
   const holder: GesturePauseHolder = {
     release: acquireSceneHistoryPause(sceneStore),
     ended: false,
   }
+  livePauseHolders.add(holder)
+  const generation = pauseHolderGeneration
   let coOwners = new Set([holder])
   if (gesture) {
     coOwners = gesturePauseHolders.get(gesture) ?? new Set()
     coOwners.add(holder)
     gesturePauseHolders.set(gesture, coOwners)
   }
+  const ledger = foreignWrites
+    ? trackForeignWrites(foreignWrites, () => generation === pauseHolderGeneration)
+    : null
+
   return {
     commitStep(write) {
       const lifted = [...coOwners].filter((owner) => owner.release)
@@ -270,7 +469,7 @@ export function beginSceneHistoryPauseSession(
         release()
       }
       try {
-        return write()
+        return ledger ? ledger.commitStep(write) : write()
       } finally {
         for (const owner of lifted) {
           if (!owner.ended) owner.release = acquireSceneHistoryPause(sceneStore)
@@ -282,8 +481,10 @@ export function beginSceneHistoryPauseSession(
       holder.ended = true
       holder.release?.()
       holder.release = null
+      livePauseHolders.delete(holder)
       coOwners.delete(holder)
       if (gesture && coOwners.size === 0) gesturePauseHolders.delete(gesture)
+      ledger?.end()
     },
   }
 }
@@ -295,6 +496,11 @@ export function getSceneHistoryPauseDepth(): number {
 export function resetSceneHistoryPauseDepth(): void {
   sceneHistoryPauseDepth = 0
   sceneHistoryPauseLeases.clear()
+  // Open sessions no longer hold anything; a later commitStep must not re-take their pause.
+  for (const holder of livePauseHolders) holder.release = null
+  livePauseHolders.clear()
+  gesturePauseHolders.clear()
+  pauseHolderGeneration += 1
 }
 
 function retainedPastStateCount<TPastState>(before: TPastState[], after: TPastState[]): number {

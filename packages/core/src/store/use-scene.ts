@@ -2297,6 +2297,11 @@ export function applySceneSnapshot(
 let prevPastLength = 0
 let prevFutureLength = 0
 
+/** The scene as undo history records it (fresh-placement drafts excluded). */
+export function sceneHistorySnapshot(): SceneSnapshot {
+  return sceneHistorySnapshotFromState(useScene.getState())
+}
+
 export function clearSceneHistory() {
   resetSceneHistoryPauseDepth()
   // Resetting the pause-depth counter without resuming would strand the

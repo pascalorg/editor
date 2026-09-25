@@ -143,9 +143,9 @@ describe('scene history pause session', () => {
 
   test("co-owners of one gesture lift together; other owners' pauses still hold", () => {
     const { tracking, store } = trackingStore()
-    const overlay = beginSceneHistoryPauseSession(store, 'item_a')
-    const mover = beginSceneHistoryPauseSession(store, 'item_a')
-    const otherGesture = beginSceneHistoryPauseSession(store, 'item_b')
+    const overlay = beginSceneHistoryPauseSession(store, { gesture: 'item_a' })
+    const mover = beginSceneHistoryPauseSession(store, { gesture: 'item_a' })
+    const otherGesture = beginSceneHistoryPauseSession(store, { gesture: 'item_b' })
 
     expect(mover.commitStep(() => getSceneHistoryPauseDepth())).toBe(1)
     expect(getSceneHistoryPauseDepth()).toBe(3)
@@ -163,8 +163,8 @@ describe('scene history pause session', () => {
 
   test('a co-owner that ends inside the other one commitStep is not taken back', () => {
     const { tracking, store } = trackingStore()
-    const overlay = beginSceneHistoryPauseSession(store, 'item_a')
-    const mover = beginSceneHistoryPauseSession(store, 'item_a')
+    const overlay = beginSceneHistoryPauseSession(store, { gesture: 'item_a' })
+    const mover = beginSceneHistoryPauseSession(store, { gesture: 'item_a' })
 
     mover.commitStep(() => overlay.end())
     expect(getSceneHistoryPauseDepth()).toBe(1)
