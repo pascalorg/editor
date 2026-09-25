@@ -1,6 +1,7 @@
 import {
   type AnyNodeId,
   type AssetInput,
+  beginSceneHistoryDraft,
   ItemNode,
   pauseSceneHistory,
   resolveSupportSlabPatch,
@@ -25,6 +26,21 @@ import useInteractionScope, {
 } from '../../../store/use-interaction-scope'
 import usePlacementPreview from '../../../store/use-placement-preview'
 import { stripTransient } from './placement-math'
+
+function releaseHistoryDraft(end: { current: (() => void) | null }): void {
+  end.current?.()
+  end.current = null
+}
+
+/** A draft's own write, under a balanced pause so interaction-aware systems skip it. */
+function pausedDraftWrite(write: () => void): void {
+  pauseSceneHistory(useScene)
+  try {
+    write()
+  } finally {
+    resumeSceneHistory(useScene)
+  }
+}
 
 interface OriginalState {
   surfaceId: string | null
@@ -78,8 +94,11 @@ export interface DraftNodeHandle {
 
 /**
  * Hook that manages the lifecycle of a transient (draft) item node.
- * Draft writes stay out of undo under the caller's history pause; `commit`
- * keeps its bookkeeping writes out too, under its own balanced pause.
+ * The draft is registered with core's history drafts from create/adopt until
+ * commit/destroy, so history records it as absent (created) or as it was
+ * (adopted) and no draft write becomes an undo step; the draft's own writes
+ * also run under a short balanced pause. `commit` ends the registration right
+ * before its one tracked write.
  *
  * Supports two modes:
  * - Create mode (via `create()`): draft is a new transient node. Commit = delete+recreate (undo removes node).
@@ -90,6 +109,7 @@ export function useDraftNode(): DraftNodeHandle {
   const adoptedRef = useRef(false)
   const ownsSubtreeRef = useRef(false)
   const originalStateRef = useRef<OriginalState | null>(null)
+  const endHistoryDraftRef = useRef<(() => void) | null>(null)
 
   const create = useCallback(
     (
@@ -113,7 +133,9 @@ export function useDraftNode(): DraftNodeHandle {
         ...(slots ? { slots } : {}),
       })
 
-      useScene.getState().createNode(node, currentLevelId)
+      releaseHistoryDraft(endHistoryDraftRef)
+      endHistoryDraftRef.current = beginSceneHistoryDraft(node.id, null)
+      pausedDraftWrite(() => useScene.getState().createNode(node, currentLevelId))
       usePlacementPreview
         .getState()
         .set(node, useScene.getState().nodes[currentLevelId as AnyNodeId] ?? null)
@@ -127,6 +149,11 @@ export function useDraftNode(): DraftNodeHandle {
   )
 
   const adopt = useCallback((node: ItemNode): void => {
+    releaseHistoryDraft(endHistoryDraftRef)
+    endHistoryDraftRef.current = beginSceneHistoryDraft(
+      node.id,
+      isFreshPlacementMetadata(node.metadata) ? null : node,
+    )
     ownsSubtreeRef.current =
       useInteractionScope.getState().adoptSubtree(node.id) || isInteractionSubtreeDraft(node.id)
     // Save original state so destroy() can restore it
@@ -154,9 +181,11 @@ export function useDraftNode(): DraftNodeHandle {
     adoptedRef.current = true
 
     // Mark as transient so it renders as a draft
-    useScene.getState().updateNode(node.id, {
-      metadata: { ...meta, isTransient: true },
-    })
+    pausedDraftWrite(() =>
+      useScene.getState().updateNode(node.id, {
+        metadata: { ...meta, isTransient: true },
+      }),
+    )
     usePlacementPreview
       .getState()
       .set(
@@ -187,6 +216,7 @@ export function useDraftNode(): DraftNodeHandle {
       )
       finalUpdate = { ...finalUpdate, ...stored }
       if (isFreshPlacementMetadata(originalStateRef.current?.metadata)) {
+        releaseHistoryDraft(endHistoryDraftRef)
         const effectiveNode = ItemNode.parse({ ...draft, ...finalUpdate })
         const id = commitFreshPlacementSubtree(
           draft.id,
@@ -239,6 +269,7 @@ export function useDraftNode(): DraftNodeHandle {
         } finally {
           resumeSceneHistory(useScene)
         }
+        releaseHistoryDraft(endHistoryDraftRef)
 
         const effectiveNode = ItemNode.parse({
           ...draft,
@@ -297,6 +328,7 @@ export function useDraftNode(): DraftNodeHandle {
       } finally {
         resumeSceneHistory(useScene)
       }
+      releaseHistoryDraft(endHistoryDraftRef)
       draftRef.current = null
 
       const finalNode = ItemNode.parse({
@@ -351,6 +383,7 @@ export function useDraftNode(): DraftNodeHandle {
 
     const draftId = draftRef.current.id
     if (ownsSubtreeRef.current) {
+      releaseHistoryDraft(endHistoryDraftRef)
       draftRef.current = null
       adoptedRef.current = false
       originalStateRef.current = null
@@ -374,6 +407,7 @@ export function useDraftNode(): DraftNodeHandle {
           livePosition[1] !== original.position[1] ||
           livePosition[2] !== original.position[2])
       if (externallyMoved) {
+        releaseHistoryDraft(endHistoryDraftRef)
         draftRef.current = null
         adoptedRef.current = false
         originalStateRef.current = null
@@ -383,19 +417,21 @@ export function useDraftNode(): DraftNodeHandle {
         return
       }
 
-      updateSurfaceNode(
-        id,
-        {
-          position: original.position,
-          rotation: original.rotation,
-          side: original.side,
-          parentId: original.parentId,
-          roofSegmentId: original.roofSegmentId,
-          roofFace: original.roofFace,
-          blockFaceId: original.blockFaceId,
-          metadata: original.metadata,
-        },
-        original.surfaceId,
+      pausedDraftWrite(() =>
+        updateSurfaceNode(
+          id,
+          {
+            position: original.position,
+            rotation: original.rotation,
+            side: original.side,
+            parentId: original.parentId,
+            roofSegmentId: original.roofSegmentId,
+            roofFace: original.roofFace,
+            blockFaceId: original.blockFaceId,
+            metadata: original.metadata,
+          },
+          original.surfaceId,
+        ),
       )
 
       // Also reset the Three.js mesh directly — the store update triggers a React
@@ -409,10 +445,14 @@ export function useDraftNode(): DraftNodeHandle {
       }
     } else {
       // Create mode: delete the transient node
-      updateSurfaceNode(draftRef.current.id, {}, null)
-      useScene.getState().deleteNode(draftRef.current.id)
+      const id = draftRef.current.id
+      pausedDraftWrite(() => {
+        updateSurfaceNode(id, {}, null)
+        useScene.getState().deleteNode(id)
+      })
     }
 
+    releaseHistoryDraft(endHistoryDraftRef)
     draftRef.current = null
     adoptedRef.current = false
     originalStateRef.current = null
@@ -425,10 +465,12 @@ export function useDraftNode(): DraftNodeHandle {
     const draft = draftRef.current
     if (!draft) return
     const pose = { ...draft, ...data }
-    updateSurfaceNode(
-      draft.id,
-      { ...data, ...surfaceFramePose(pose.parentId, surfaceId, pose, true) },
-      surfaceId,
+    pausedDraftWrite(() =>
+      updateSurfaceNode(
+        draft.id,
+        { ...data, ...surfaceFramePose(pose.parentId, surfaceId, pose, true) },
+        surfaceId,
+      ),
     )
   }, [])
 

@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   type AssetInput,
   acquireSceneHistoryPause,
+  beginSceneHistoryPauseSession,
   clearSceneHistory,
   emitter,
   getSceneHistoryPauseDepth,
@@ -11,8 +12,10 @@ import {
   LevelNode,
   pauseSceneHistory,
   resumeSceneHistory,
+  type SceneCommit,
   sceneRegistry,
   spatialGridManager,
+  subscribeSceneCommits,
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
@@ -29,10 +32,10 @@ import { useDraftNode } from './use-draft-node'
 import { usePlacementCoordinator } from './use-placement-coordinator'
 
 // The item move / placement history contract, driven through the real placement coordinator
-// with core's space-detection sync attached: history stays paused for the whole carry even when
-// another refcounted owner pauses and resumes mid-carry, the drop adds exactly one undo entry,
-// every exit path releases only the coordinator's own pause, and a wall written mid-carry by
-// someone else stays its own undo step with its rooms reconciled.
+// with core's space-detection sync attached. The carry pauses no history: the draft is kept out
+// of history snapshots, so the drop is one ordinary tracked step, a write someone else makes
+// mid-carry is its own step (in commit order, reconciled by space detection), and undoing that
+// step mid-carry leaves the draft alone. Every exit path releases only its own pauses.
 
 const level = LevelNode.parse({ id: 'level_placement_history', level: 0 })
 const wallA = WallNode.parse({
@@ -240,13 +243,13 @@ const autoRoomNodes = () =>
   )
 const hasNode = (id: string) => Boolean(useScene.getState().nodes[id as AnyNodeId])
 
-describe('item move history pause', () => {
+describe('item move history', () => {
   test('a move adds one entry and one undo restores the item', async () => {
     const before = history()
     const renderer = await create(<Placement source={item} />)
     try {
       await carry(1, 6)
-      expect(history()).toMatchObject({ past: before.past, tracking: false })
+      expect(history().past).toBe(before.past)
       await grid('click', 0.6, 0.5)
     } finally {
       await renderer.unmount()
@@ -257,15 +260,14 @@ describe('item move history pause', () => {
     expect(liveItem()).toEqual(item)
   })
 
-  test('a foreign pause owner mid-carry cannot resume history before the drop', async () => {
+  test('a foreign pause owner mid-carry leaves the drop one entry', async () => {
     const before = history()
     const renderer = await create(<Placement source={item} />)
     try {
       await carry(1, 3)
       foreignPausePair()
-      expect(history().tracking).toBe(false)
       await carry(4, 6)
-      expect(history()).toMatchObject({ past: before.past, tracking: false })
+      expect(history().past).toBe(before.past)
       await grid('click', 0.6, 0.5)
     } finally {
       await renderer.unmount()
@@ -273,15 +275,81 @@ describe('item move history pause', () => {
     expect(history()).toEqual({ past: before.past + 1, tracking: true, depth: 0 })
     useScene.temporal.getState().undo()
     expect(liveItem()).toEqual(item)
+  })
+
+  test('a room closed mid-carry is its own step, in commit order, before the drop', async () => {
+    const before = history()
+    const commits: SceneCommit[] = []
+    const stop = subscribeSceneCommits((commit) => commits.push(commit))
+    const renderer = await create(<Placement source={item} />)
+    try {
+      await carry(1, 3)
+      closeRoom()
+      expect(history().past).toBe(before.past + 1)
+      await carry(4, 6)
+      await grid('click', 0.6, 0.5)
+    } finally {
+      await renderer.unmount()
+      stop()
+    }
+    expect(history()).toEqual({ past: before.past + 2, tracking: true, depth: 0 })
+    expect(
+      autoRoomNodes()
+        .map((node) => node.type)
+        .sort(),
+    ).toEqual(['ceiling', 'slab'])
+    const local = commits.filter((commit) => commit.origin === 'local')
+    expect(
+      local.map(
+        (commit) =>
+          Boolean(commit.current.nodes[closingWall.id as AnyNodeId]) &&
+          !commit.before.nodes[closingWall.id as AnyNodeId],
+      ),
+    ).toEqual([true, false])
+    const dropped = local[1]!.current.nodes[item.id as AnyNodeId] as ItemNode
+    expect(dropped.position.map((value) => Number(value.toFixed(6)))).toEqual([0.6, 0, 0.5])
+    // The draft never reaches history: every recorded snapshot has the item as it was.
+    expect(local[0]!.current.nodes[item.id as AnyNodeId]).toEqual(item)
+
+    useScene.temporal.getState().undo()
+    expect(liveItem()).toEqual(item)
+    expect(hasNode(closingWall.id)).toBe(true)
+    expect(autoRoomNodes()).toHaveLength(2)
+
+    useScene.temporal.getState().undo()
+    expect(liveItem()).toEqual(item)
+    expect(hasNode(closingWall.id)).toBe(false)
+    expect(autoRoomNodes()).toHaveLength(0)
     expect(history().past).toBe(before.past)
   })
 
-  test('cancel adds no entry, restores the item and resumes history', async () => {
+  test('undoing the foreign step mid-carry leaves the draft where it is', async () => {
     const before = history()
     const renderer = await create(<Placement source={item} />)
     try {
-      await carry(1, 4)
-      foreignPausePair()
+      await carry(1, 3)
+      closeRoom()
+      const carried = liveItem()
+      useScene.temporal.getState().undo()
+      expect(hasNode(closingWall.id)).toBe(false)
+      expect(liveItem()).toBe(carried)
+      await carry(4, 6)
+      await grid('click', 0.6, 0.5)
+    } finally {
+      await renderer.unmount()
+    }
+    expect(history()).toEqual({ past: before.past + 1, tracking: true, depth: 0 })
+    expect(liveItem().position.map((value) => Number(value.toFixed(6)))).toEqual([0.6, 0, 0.5])
+    useScene.temporal.getState().undo()
+    expect(liveItem()).toEqual(item)
+  })
+
+  test('a room closed during a cancelled carry is its own step and the item is unchanged', async () => {
+    const before = history()
+    const renderer = await create(<Placement source={item} />)
+    try {
+      await carry(1, 3)
+      closeRoom()
       await act(async () => {
         emitter.emit('tool:cancel')
       })
@@ -289,16 +357,60 @@ describe('item move history pause', () => {
       await renderer.unmount()
     }
     expect(liveItem()).toEqual(item)
-    expect(history()).toEqual({ past: before.past, tracking: true, depth: 0 })
+    expect(history()).toEqual({ past: before.past + 1, tracking: true, depth: 0 })
+    useScene.temporal.getState().undo()
+    expect(hasNode(closingWall.id)).toBe(false)
+    expect(liveItem()).toEqual(item)
   })
 
-  test('unmounting mid-carry adds no entry, restores the item and resumes history', async () => {
+  test('cancel and unmount add no entry and restore the item', async () => {
+    for (const exit of ['cancel', 'unmount'] as const) {
+      const before = history()
+      const renderer = await create(<Placement source={item} />)
+      await carry(1, 4)
+      if (exit === 'cancel') await act(async () => emitter.emit('tool:cancel'))
+      await renderer.unmount()
+      expect(liveItem()).toEqual(item)
+      expect(history()).toEqual({ past: before.past, tracking: true, depth: 0 })
+    }
+  })
+
+  test('with history at its 50-entry limit, the wall step and the drop still undo in order', async () => {
+    for (let index = 0; index < 60; index++) {
+      useScene.getState().updateNode(wallA.id as AnyNodeId, { thickness: 0.1 + index / 1000 })
+    }
+    expect(history().past).toBe(50)
+    const renderer = await create(<Placement source={item} />)
+    try {
+      await carry(1, 3)
+      closeRoom()
+      await grid('click', 0.3, 0.5)
+    } finally {
+      await renderer.unmount()
+    }
+    expect(history().past).toBe(50)
+    useScene.temporal.getState().undo()
+    expect(liveItem()).toEqual(item)
+    expect(hasNode(closingWall.id)).toBe(true)
+    useScene.temporal.getState().undo()
+    expect(hasNode(closingWall.id)).toBe(false)
+  })
+
+  test('in split view the 2D overlay co-owns the gesture, and the 3D drop is one step', async () => {
+    useEditor.getState().setMovingNode(item)
+    const overlay = beginSceneHistoryPauseSession(useScene, { gesture: item.id })
     const before = history()
     const renderer = await create(<Placement source={item} />)
-    await carry(1, 4)
-    await renderer.unmount()
+    try {
+      await carry(1, 6)
+      await grid('click', 0.6, 0.5)
+    } finally {
+      await renderer.unmount()
+      overlay.end()
+    }
+    expect(history()).toEqual({ past: before.past + 1, tracking: true, depth: 0 })
+    useScene.temporal.getState().undo()
     expect(liveItem()).toEqual(item)
-    expect(history()).toEqual({ past: before.past, tracking: true, depth: 0 })
   })
 
   test("never releases another owner's pause on commit or unmount", async () => {
@@ -317,19 +429,18 @@ describe('item move history pause', () => {
     expect(history()).toEqual({ past: before.past, tracking: true, depth: 0 })
   })
 
-  test('repeat placement adds one entry per drop and stays paused between drops', async () => {
+  test('repeat placement adds one entry per drop', async () => {
     const before = history()
     const itemsBefore = levelItems().length
     const renderer = await create(<Placement repeat />)
     try {
       await carry(10, 14)
       await grid('click', 1.4, 0.5)
-      expect(history()).toMatchObject({ past: before.past + 1, tracking: false })
+      expect(history().past).toBe(before.past + 1)
       await carry(20, 24)
       foreignPausePair()
-      expect(history().tracking).toBe(false)
       await grid('click', 2.4, 0.5)
-      expect(history()).toMatchObject({ past: before.past + 2, tracking: false })
+      expect(history().past).toBe(before.past + 2)
       await carry(30, 32)
     } finally {
       await renderer.unmount()
@@ -359,57 +470,5 @@ describe('item move history pause', () => {
       console.error = consoleError
     }
     expect(history()).toEqual({ past: before.past, tracking: true, depth: 0 })
-  })
-
-  test('a room closed mid-carry is its own undo step, reconciled, and the drop is one more', async () => {
-    const before = history()
-    const renderer = await create(<Placement source={item} />)
-    try {
-      await carry(1, 3)
-      closeRoom()
-      await carry(4, 6)
-      expect(history()).toMatchObject({ past: before.past, tracking: false })
-      await grid('click', 0.6, 0.5)
-    } finally {
-      await renderer.unmount()
-    }
-    expect(history()).toEqual({ past: before.past + 2, tracking: true, depth: 0 })
-    expect(
-      autoRoomNodes()
-        .map((node) => node.type)
-        .sort(),
-    ).toEqual(['ceiling', 'slab'])
-
-    useScene.temporal.getState().undo()
-    expect(liveItem()).toEqual(item)
-    expect(hasNode(closingWall.id)).toBe(true)
-    expect(autoRoomNodes()).toHaveLength(2)
-
-    useScene.temporal.getState().undo()
-    expect(liveItem()).toEqual(item)
-    expect(hasNode(closingWall.id)).toBe(false)
-    expect(autoRoomNodes()).toHaveLength(0)
-    expect(history().past).toBe(before.past)
-  })
-
-  test('a room closed during a cancelled carry is still one undo step, reconciled', async () => {
-    const before = history()
-    const renderer = await create(<Placement source={item} />)
-    try {
-      await carry(1, 3)
-      closeRoom()
-      await act(async () => {
-        emitter.emit('tool:cancel')
-      })
-    } finally {
-      await renderer.unmount()
-    }
-    expect(liveItem()).toEqual(item)
-    expect(history()).toEqual({ past: before.past + 1, tracking: true, depth: 0 })
-    expect(autoRoomNodes()).toHaveLength(2)
-    useScene.temporal.getState().undo()
-    expect(hasNode(closingWall.id)).toBe(false)
-    expect(autoRoomNodes()).toHaveLength(0)
-    expect(liveItem()).toEqual(item)
   })
 })

@@ -320,6 +320,7 @@ export {
   resetSceneHistoryPauseDepth,
   resumeSceneHistory,
   runAsSingleSceneHistoryStep,
+  runSceneHistoryGestureStep,
   type SceneCommit,
   type SceneCommitListener,
   type SceneCommitOrigin,
@@ -358,6 +359,7 @@ export {
   applySceneOperationPatch,
   applyScenePatch,
   applySceneSnapshot,
+  beginSceneHistoryDraft,
   clearSceneHistory,
   default as useScene,
   type SceneMaterialPatch,
@@ -365,7 +367,6 @@ export {
   type SceneNodeStructuralPatch,
   type SceneOperationPatch,
   type ScenePatch,
-  sceneHistorySnapshot,
 } from './store/use-scene'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'
 export {

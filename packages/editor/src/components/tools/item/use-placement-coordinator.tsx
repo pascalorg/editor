@@ -3,7 +3,6 @@ import {
   type AlignmentAnchor,
   type AnyNode,
   type AnyNodeId,
-  beginSceneHistoryPauseSession,
   type CeilingEvent,
   canHostSurfaceChild,
   collectAlignmentAnchors,
@@ -15,13 +14,14 @@ import {
   movingFootprintAnchors,
   type NodeEvent,
   nodeRegistry,
+  pauseSceneHistory,
   type RoofEvent,
   resolveFrozenFloorPlacementPatch,
   resolveLevelId,
-  type SceneHistoryPauseSession,
+  resumeSceneHistory,
+  runSceneHistoryGestureStep,
   type ShelfEvent,
   type SurfaceRejectReason,
-  sceneHistorySnapshot,
   sceneRegistry,
   useLiveNodeOverrides,
   useLiveTransforms,
@@ -58,7 +58,7 @@ import { sfxEmitter } from '../../../lib/sfx-bus'
 import {
   surfaceAttachmentId,
   surfaceFramePose,
-  updateSurfaceNode,
+  updateSurfaceNode as writeSurfaceNode,
 } from '../../../lib/surface-attachment'
 import {
   projectAlignmentGuidesWorldToActiveBuildingLocal,
@@ -530,27 +530,22 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     })
   }, [])
 
-  // A setup below that throws never returns its cleanup, so this ends the history pause it
-  // began; otherwise undo would stay paused. Declared first, so on a normal unmount it runs
-  // before that cleanup and finds nothing to end.
-  const unfinishedSetupPauseRef = useRef<SceneHistoryPauseSession | null>(null)
-  useEffect(() => () => unfinishedSetupPauseRef.current?.end(), [])
-
   useEffect(() => {
     if (!asset) return
-    // Refcounted, so another owner's balanced pause/resume mid-carry cannot resume history.
-    // Keyed by the moving node, which the 2D move overlay co-owns in split view. Local writes
-    // others make mid-carry (a wall edit, an agent op) stay their own undo step.
+    // The carry pauses no history: the draft stays out of history snapshots (core's
+    // history-drafts), so writes others make meanwhile record as their own steps, with space
+    // detection. The draft's own host changes still write under a short pause, so systems that
+    // stand down during interactions skip them. In split view the 2D move overlay co-owns the
+    // gesture, keyed by the moving node, and the drop lifts its pause too.
     const movingNodeId = getMovingNode()?.id
-    const historyPause = beginSceneHistoryPauseSession(useScene, {
-      gesture: movingNodeId,
-      foreignWrites: {
-        store: useScene,
-        snapshot: sceneHistorySnapshot,
-        ownNodeIds: () => [movingNodeId, draftNode.current?.id].filter((id) => id !== undefined),
-      },
-    })
-    unfinishedSetupPauseRef.current = historyPause
+    const updateSurfaceNode: typeof writeSurfaceNode = (...args) => {
+      pauseSceneHistory(useScene)
+      try {
+        writeSurfaceNode(...args)
+      } finally {
+        resumeSceneHistory(useScene)
+      }
+    }
 
     const validators = { canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling }
 
@@ -630,7 +625,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
 
       useAlignmentGuides.getState().clear()
-      historyPause.end()
       if (committedId) {
         useViewer.getState().setSelection({ selectedIds: [committedId as AnyNodeId] })
       }
@@ -653,7 +647,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     ) => {
       const draftId = draftNode.current?.id ?? null
       const wasAdopted = draftNode.isAdopted
-      const finalId = historyPause.commitStep(() =>
+      const finalId = runSceneHistoryGestureStep(useScene, movingNodeId, () =>
         draftNode.commit(nodeUpdate, {
           ...options,
           onReject: (reason) => {
@@ -2777,7 +2771,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     emitter.on('node:click', commitFloorOnSurfaceClick as never)
     if (dragMode) window.addEventListener('pointerup', onReleaseCommit)
 
-    unfinishedSetupPauseRef.current = null
     return () => {
       tearingDown = true
       feedback.clear()
@@ -2790,7 +2783,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         useLiveNodeOverrides.getState().clearFields(draftNode.current.id, ['rotation'])
       }
       draftNode.destroy()
-      historyPause.end()
       gridDispatch.cancel()
       emitter.off('grid:move', gridDispatch.schedule)
       emitter.off('grid:click', onGridClick)

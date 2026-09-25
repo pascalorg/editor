@@ -4,9 +4,9 @@ import type { AnyNodeId } from '../schema/types'
 import {
   beginSceneHistoryPauseSession,
   getSceneHistoryPauseDepth,
-  subscribeSceneCommits,
+  runSceneHistoryGestureStep,
 } from './history-control'
-import useScene, { applyScenePatch, clearSceneHistory, sceneHistorySnapshot } from './use-scene'
+import useScene, { beginSceneHistoryDraft, clearSceneHistory } from './use-scene'
 
 // `updateNodesAction` batches dirty-marking through requestAnimationFrame.
 type RafFn = (callback: (time: number) => void) => number
@@ -16,19 +16,20 @@ type RafFn = (callback: (time: number) => void) => number
 }
 ;(globalThis as { cancelAnimationFrame?: (id: number) => void }).cancelAnimationFrame ??= () => {}
 
-const level = LevelNode.parse({ id: 'level_pause_session', level: 0 })
+const level = LevelNode.parse({ id: 'level_history_drafts', level: 0 })
 const wall = WallNode.parse({
-  id: 'wall_pause_session',
+  id: 'wall_history_drafts',
   parentId: level.id,
   start: [0, 0],
   end: [4, 0],
 })
 const item = ItemNode.parse({
-  id: 'item_pause_session',
+  id: 'item_history_drafts',
   parentId: level.id,
   asset: { id: 'box', name: 'Box', category: 'decor', thumbnail: '', src: '/box.glb' },
   position: [1, 0, 1],
 })
+const levelId = level.id as AnyNodeId
 const wallId = wall.id as AnyNodeId
 const itemId = item.id as AnyNodeId
 
@@ -56,80 +57,56 @@ afterEach(() => {
 })
 
 const past = () => useScene.temporal.getState().pastStates.length
-const wallStart = () => (useScene.getState().nodes[wallId] as WallNode).start
-const itemX = () => (useScene.getState().nodes[itemId] as ItemNode).position[0]
-const session = (gesture?: string) =>
-  beginSceneHistoryPauseSession(useScene, {
-    gesture,
-    foreignWrites: { store: useScene, snapshot: sceneHistorySnapshot, ownNodeIds: () => [itemId] },
-  })
-/** The gesture's own drop: restore the baseline while paused, then the one tracked write. */
-const drop = (x: number) => {
-  useScene.getState().updateNode(itemId, { position: [x, 0, 1] })
-}
+const node = (id: AnyNodeId) => useScene.getState().nodes[id]
+const wallStart = () => (node(wallId) as WallNode).start
+const levelChildren = () => (node(levelId) as LevelNode).children
 
-describe('scene history pause session with foreign writes', () => {
-  test('a local write during the gesture is its own step, before the gesture step', () => {
-    const gesture = session()
-    useScene.getState().updateNode(wallId, { start: [0, 1] })
-    gesture.commitStep(() => drop(3))
-    gesture.end()
-
-    expect(past()).toBe(2)
-    useScene.temporal.getState().undo()
-    expect(itemX()).toBe(1)
-    expect(wallStart()).toEqual([0, 1])
-    useScene.temporal.getState().undo()
-    expect(wallStart()).toEqual([0, 0])
-  })
-
-  test("the gesture's own writes are never a foreign step, even if its commit restores them imperfectly", () => {
-    const gesture = session()
-    useScene.getState().updateNode(itemId, { position: [2, 0, 1], name: 'carried' })
-    gesture.commitStep(() => drop(3))
-    gesture.end()
-    expect(past()).toBe(1)
-
-    const cancelled = session()
-    useScene.getState().updateNode(itemId, { name: 'carried again' })
-    cancelled.end()
-    expect(past()).toBe(1)
-  })
-
-  test('a local write during a gesture that commits nothing is one step on end', () => {
-    const commits: string[] = []
-    const stop = subscribeSceneCommits((commit) => commits.push(commit.origin))
-    const gesture = session()
-    useScene.getState().updateNode(wallId, { start: [0, 1] })
-    gesture.end()
-    stop()
-
-    expect(past()).toBe(1)
-    expect(commits).toEqual(['local'])
-    useScene.temporal.getState().undo()
-    expect(wallStart()).toEqual([0, 0])
-  })
-
-  test('a remote (host) change during the gesture never becomes a local step', () => {
-    const gesture = session()
-    applyScenePatch({
-      materialChanges: [],
-      nodeUpdates: [{ id: wallId, data: { start: [0, 2] }, removeFields: [] }],
-    })
-    gesture.commitStep(() => drop(3))
-    gesture.end()
-    expect(past()).toBe(1)
-    useScene.temporal.getState().undo()
-    expect(itemX()).toBe(1)
-    expect(wallStart()).toEqual([0, 2])
-
-    const cancelled = session()
-    applyScenePatch({
-      materialChanges: [],
-      nodeUpdates: [{ id: wallId, data: { start: [0, 3] }, removeFields: [] }],
-    })
-    cancelled.end()
+describe('scene history drafts', () => {
+  test("an adopted draft's own writes record nothing; a foreign write records it as it was", () => {
+    const end = beginSceneHistoryDraft(itemId, node(itemId)!)
+    useScene.getState().updateNode(itemId, { metadata: { isTransient: true } })
+    useScene.getState().updateNode(itemId, { parentId: wall.id, position: [2, 1, 0] })
     expect(past()).toBe(0)
+
+    useScene.getState().updateNode(wallId, { start: [0, 1] })
+    expect(past()).toBe(1)
+    const recorded = useScene.temporal.getState().pastStates[0]!.nodes!
+    expect(recorded[itemId]).toEqual(item)
+
+    const carried = node(itemId)
+    useScene.temporal.getState().undo()
+    expect(wallStart()).toEqual([0, 0])
+    expect(node(itemId)).toBe(carried)
+    end()
+  })
+
+  test('a created draft never reaches history and survives an undo', () => {
+    useScene.getState().updateNode(wallId, { start: [0, 1] })
+    const draft = ItemNode.parse({
+      parentId: level.id,
+      asset: item.asset,
+      metadata: { isTransient: true },
+    })
+    const end = beginSceneHistoryDraft(draft.id as AnyNodeId, null)
+    useScene.getState().createNode(draft, levelId)
+    expect(past()).toBe(1)
+
+    useScene.temporal.getState().undo()
+    expect(wallStart()).toEqual([0, 0])
+    expect(node(draft.id as AnyNodeId)).toBeDefined()
+    expect(levelChildren()).toContain(draft.id)
+    end()
+  })
+
+  test("the gesture's step records the drop even while the draft is registered", () => {
+    const end = beginSceneHistoryDraft(itemId, node(itemId)!)
+    runSceneHistoryGestureStep(useScene, item.id, () =>
+      useScene.getState().updateNode(itemId, { position: [3, 0, 1] }),
+    )
+    expect(past()).toBe(1)
+    end()
+    useScene.temporal.getState().undo()
+    expect((node(itemId) as ItemNode).position).toEqual([1, 0, 1])
   })
 
   test('clearing history drops an abandoned keyed session, so no co-owner can re-take it', () => {
@@ -139,7 +116,7 @@ describe('scene history pause session with foreign writes', () => {
     expect(getSceneHistoryPauseDepth()).toBe(0)
     expect(useScene.temporal.getState().isTracking).toBe(true)
 
-    coOwner.commitStep(() => drop(2))
+    coOwner.commitStep(() => useScene.getState().updateNode(itemId, { position: [2, 0, 1] }))
     coOwner.end()
     expect(getSceneHistoryPauseDepth()).toBe(0)
     expect(useScene.temporal.getState().isTracking).toBe(true)

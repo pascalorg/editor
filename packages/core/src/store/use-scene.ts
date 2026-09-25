@@ -56,6 +56,13 @@ import {
   type SceneCommitOrigin,
   type SceneSnapshot,
 } from './history-control'
+import {
+  beginSceneHistoryDraft as beginSceneHistoryDraftIn,
+  clearSceneHistoryDrafts,
+  createdSceneHistoryDraftIds,
+  withAdoptedDraftsAsOriginal,
+  withDraftsRestored,
+} from './history-drafts'
 import { getHistoryDirtyNodeIds } from './history-invalidation'
 import {
   invalidatePendingHydration,
@@ -1291,8 +1298,11 @@ function sceneHistorySnapshotFromState(
 ): SceneSnapshot {
   const { nodes, rootNodeIds, collections, materials, installedPlugins } = state
   // Fresh placement nodes are renderable drafts, not document history. Excluding their
-  // entire subtree here protects both local undo and external commit subscribers.
-  const transientNodeIds = new Set<AnyNodeId>()
+  // entire subtree here protects both local undo and external commit subscribers. Carried
+  // drafts (history-drafts.ts) are kept out the same way.
+  const transientNodeIds = new Set<AnyNodeId>(
+    createdSceneHistoryDraftIds().filter((id) => Boolean(nodes[id])),
+  )
   for (const node of Object.values(nodes)) {
     const metadata = node.metadata
     if (
@@ -1306,7 +1316,13 @@ function sceneHistorySnapshotFromState(
   }
 
   if (transientNodeIds.size === 0) {
-    return { nodes, rootNodeIds, collections, materials, installedPlugins }
+    return {
+      nodes: withAdoptedDraftsAsOriginal(nodes, nodes),
+      rootNodeIds,
+      collections,
+      materials,
+      installedPlugins,
+    }
   }
 
   const childIdsByParentId = new Map<AnyNodeId, Set<AnyNodeId>>()
@@ -1368,7 +1384,7 @@ function sceneHistorySnapshotFromState(
   }
 
   return {
-    nodes: historyNodes,
+    nodes: withAdoptedDraftsAsOriginal(nodes, historyNodes),
     rootNodeIds: rootNodeIds.filter((id) => !transientNodeIds.has(id)),
     collections: historyCollections,
     materials,
@@ -1441,6 +1457,16 @@ function createSceneStore(config: TemporalSceneCreator): UseSceneStore {
 }
 
 function runTemporalJump(target: Partial<SceneSnapshot> | undefined, jump: () => void): void {
+  const draftsBefore = useScene.getState().nodes
+  const restoreDrafts = () => {
+    const nodes = withDraftsRestored(draftsBefore, useScene.getState().nodes)
+    if (nodes) useScene.setState({ nodes })
+  }
+  runTemporalJumpOnly(target, jump)
+  restoreDrafts()
+}
+
+function runTemporalJumpOnly(target: Partial<SceneSnapshot> | undefined, jump: () => void): void {
   if (!target?.nodes) {
     jump()
     return
@@ -2297,13 +2323,14 @@ export function applySceneSnapshot(
 let prevPastLength = 0
 let prevFutureLength = 0
 
-/** The scene as undo history records it (fresh-placement drafts excluded). */
-export function sceneHistorySnapshot(): SceneSnapshot {
-  return sceneHistorySnapshotFromState(useScene.getState())
+/** Registers a carried draft (see history-drafts.ts); returns the call that ends it. */
+export function beginSceneHistoryDraft(id: AnyNodeId, original: AnyNode | null): () => void {
+  return beginSceneHistoryDraftIn(id, original, useScene.getState().nodes)
 }
 
 export function clearSceneHistory() {
   resetSceneHistoryPauseDepth()
+  clearSceneHistoryDrafts()
   // Resetting the pause-depth counter without resuming would strand the
   // temporal store in `isTracking: false` if a pause window was active when
   // the scene was (re)loaded — every edit after the load would then be
