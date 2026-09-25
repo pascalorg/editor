@@ -1,15 +1,16 @@
 import { expect, test } from 'bun:test'
 import { useInteractive } from '@pascal-app/core'
-import type { ItemNode } from './schema'
 import { itemDefinition } from './definition'
+import type { ItemNode } from './schema'
 
-test('selected catalog items expose E for all toggle controls', () => {
+test('E on a selected catalog item runs its mechanisms, like the action bar', () => {
   const interactive = {
     controls: [{ kind: 'toggle' as const }, { kind: 'toggle' as const }],
     effects: [{ kind: 'animation' as const, clips: { on: 'On' } }],
   }
   const node = {
     id: 'item_keyboard_lamp',
+    type: 'item',
     asset: { interactive },
   } as ItemNode
   const action = itemDefinition.keyboardActions?.e

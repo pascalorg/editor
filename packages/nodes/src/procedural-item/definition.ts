@@ -19,6 +19,11 @@ import {
 } from '@pascal-app/core/procedural-items'
 import { decorateProceduralEmission } from '@pascal-app/viewer'
 import { itemPaint } from '../item/paint'
+import {
+  itemHasMechanisms,
+  toggleItemLights,
+  toggleItemMechanisms,
+} from '../shared/item-interactions'
 import { restingFloorplanAffectedIds } from '../shared/resting-surface-plan'
 import { bakeProceduralAnimationClips } from './animation'
 import { proceduralFloorplanMoveTarget } from './move-session'
@@ -111,7 +116,12 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
     position: [0, 0, 0],
     rotation: [0, 0, 0],
   }),
-  extensions: { 'pascal:editor/floorplan': { directDrag: true } },
+  extensions: {
+    'pascal:editor/floorplan': {
+      directDrag: true,
+      actionMenu: { actions: () => import('../shared/item-interaction-actions') },
+    },
+  },
   capabilities: {
     selectable: { hitVolume: 'bbox' },
     dragBounds: (n) => {
@@ -189,17 +199,7 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
         (n as unknown as ProceduralItemNode).recipe.parts.some((part) =>
           Boolean(part.motion || part.light),
         ),
-      run: (n) => {
-        const recipeParts = (n as unknown as ProceduralItemNode).recipe.parts
-        const parts = recipeParts.filter((part) => part.motion).map((part) => part.id)
-        const state = useInteractive.getState()
-        if (parts.length === 0) {
-          state.toggleProceduralLights(n.id)
-          return
-        }
-        const on = !parts.some((partId) => state.procedural[n.id]?.parts[partId])
-        state.setProceduralParts(n.id, parts, on)
-      },
+      run: (n) => (itemHasMechanisms(n) ? toggleItemMechanisms(n) : toggleItemLights(n)),
     },
     r: {
       appliesTo: (n) => Boolean((n as unknown as ProceduralItemNode).wallId),
