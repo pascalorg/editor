@@ -3,13 +3,13 @@ import { Group } from 'three'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../schema/base'
 import { LevelNode } from '../schema/nodes/level'
-import type { AnyNode, AnyNodeId } from '../schema/types'
+import type { AnyNode } from '../schema/types'
 import { getTopSurfaceHeight } from '../services/hosting'
 import { analyzePortConnectivity } from '../services/port-connectivity'
 import { canHostSurfaceChild, rendersHostedChildren } from '../services/surface-hosting'
 import { buildPortComponents } from '../services/system-graph'
 import useScene from '../store/use-scene'
-import { cloneSceneGraph } from '../utils/clone-scene-graph'
+import { cloneSceneGraph, type SceneGraph } from '../utils/clone-scene-graph'
 import { validateBuildJson } from '../validation/validate-build-json'
 import {
   bakePolicyOf,
@@ -25,7 +25,7 @@ import {
 import { cascadeDirty, collectDescendants } from './relations-resolver'
 import { createSceneApi } from './scene-api'
 import { cloneNodesInto } from './subtree'
-import type { AnyNodeDefinition, Plugin } from './types'
+import type { AnyNodeDefinition, NodeDefinition, NodePort, Plugin } from './types'
 
 // Plugin API v1 at the registry and scene-store level: capabilities, ports,
 // surfaces, relations, editing, reload and clone for synthetic plugin kinds.
@@ -40,37 +40,48 @@ globalThis.requestAnimationFrame ??= (callback) => {
 globalThis.cancelAnimationFrame ??= () => {}
 
 const Vec3 = z.tuple([z.number(), z.number(), z.number()])
-const node = <T extends string, P extends string>(prefix: P, type: T, shape: z.ZodRawShape = {}) =>
-  BaseNode.extend({ id: objectId(prefix), type: nodeType(type), ...shape })
-
-const Planter = node('fxplanter', 'fixture:planter', {
+const Planter = BaseNode.extend({
+  id: objectId('fxplanter'),
+  type: nodeType('fixture:planter'),
   size: Vec3.default([1.2, 0.6, 0.5]),
 })
-const Pump = node('fxpump', 'fixture:pump', { position: Vec3.default([0, 0, 0]) })
-const Pipe = node('fxpipe', 'fixture:pipe', { path: z.array(Vec3).default([]) })
-const Bench = node('fxbench', 'fixture:bench', {
+const Pump = BaseNode.extend({
+  id: objectId('fxpump'),
+  type: nodeType('fixture:pump'),
+  position: Vec3.default([0, 0, 0]),
+})
+const Pipe = BaseNode.extend({
+  id: objectId('fxpipe'),
+  type: nodeType('fixture:pipe'),
+  path: z.array(Vec3).default([]),
+})
+const Bench = BaseNode.extend({
+  id: objectId('fxbench'),
+  type: nodeType('fixture:bench'),
   seatHeight: z.number().default(0.45),
   children: z.array(z.string()).default([]),
 })
-const Sprout = node('fxsprout', 'fixture:sprout')
+const Sprout = BaseNode.extend({ id: objectId('fxsprout'), type: nodeType('fixture:sprout') })
 // Plugin-owned node references, like a shot's ordered camera list.
-const Marker = node('fxmarker', 'fixture:marker', { targetIds: z.array(z.string()).default([]) })
+const Marker = BaseNode.extend({
+  id: objectId('fxmarker'),
+  type: nodeType('fixture:marker'),
+  targetIds: z.array(z.string()).default([]),
+})
 
-type Fields = Record<string, any>
+// The only casts: API v1 cannot type these boundaries. `NodeDefinition<S>` does
+// not widen to `AnyNodeDefinition`, and plugin nodes are not members of the
+// closed `AnyNode` union, so every shipped plugin casts here too. Fixtures stay
+// typed against `NodeDefinition<S>` and their schemas, so a contract change
+// fails typecheck.
+const asPluginNode = <S extends z.ZodObject>(def: NodeDefinition<S>) =>
+  def as unknown as AnyNodeDefinition
+const asSceneNode = (node: { id: string; type: string }) => node as unknown as AnyNode
+const asScenePatch = <S extends z.ZodObject>(_schema: S, patch: Partial<z.infer<S>>) =>
+  patch as unknown as Partial<AnyNode>
 
-function def(kind: string, schema: AnyNodeDefinition['schema'], fields: Fields = {}) {
-  return {
-    kind,
-    schemaVersion: 1,
-    schema,
-    category: 'furnish',
-    defaults: () => ({}),
-    capabilities: {},
-    ...fields,
-  } as AnyNodeDefinition
-}
-
-const water = (id: string, position: readonly number[]) => ({
+const base = { object: 'node', parentId: null, visible: true, metadata: {} } as const
+const water = (id: string, position: NodePort['position']): NodePort => ({
   id,
   position,
   direction: [1, 0, 0],
@@ -78,60 +89,104 @@ const water = (id: string, position: readonly number[]) => ({
   system: 'water',
 })
 
+const planterDef: NodeDefinition<typeof Planter> = {
+  kind: 'fixture:planter',
+  schemaVersion: 1,
+  schema: Planter,
+  category: 'furnish',
+  defaults: () => ({ ...base, size: [1.2, 0.6, 0.5] }),
+  capabilities: {},
+}
+const pumpDef: NodeDefinition<typeof Pump> = {
+  kind: 'fixture:pump',
+  schemaVersion: 1,
+  schema: Pump,
+  category: 'utility',
+  defaults: () => ({ ...base, position: [0, 0, 0] }),
+  capabilities: {},
+  distributionRole: 'equipment',
+  ports: (node) => [water('outlet', [node.position[0] + 0.5, 0, 0])],
+}
+const pipeDef: NodeDefinition<typeof Pipe> = {
+  kind: 'fixture:pipe',
+  schemaVersion: 1,
+  schema: Pipe,
+  category: 'utility',
+  defaults: () => ({ ...base, path: [] }),
+  capabilities: {},
+  distributionRole: 'run',
+  ports: ({ path }) => {
+    const start = path[0]
+    const end = path.at(-1)
+    return start && end && path.length > 1 ? [water('start', start), water('end', end)] : []
+  },
+}
+const benchDef: NodeDefinition<typeof Bench> = {
+  kind: 'fixture:bench',
+  schemaVersion: 1,
+  schema: Bench,
+  category: 'furnish',
+  defaults: () => ({ ...base, seatHeight: 0.45, children: [] }),
+  capabilities: { surfaces: { top: { height: (node) => Bench.parse(node).seatHeight } } },
+  relations: { hosts: ['fixture:sprout'], cascadeDelete: 'descendants' },
+  renderer: { kind: 'parametric', module: async () => ({ default: () => null }) },
+}
+const sproutDef: NodeDefinition<typeof Sprout> = {
+  kind: 'fixture:sprout',
+  schemaVersion: 1,
+  schema: Sprout,
+  category: 'furnish',
+  defaults: () => base,
+  capabilities: {},
+  geometry: () => new Group(),
+}
+const markerDef: NodeDefinition<typeof Marker> = {
+  kind: 'fixture:marker',
+  schemaVersion: 1,
+  schema: Marker,
+  category: 'utility',
+  defaults: () => ({ ...base, targetIds: [] }),
+  capabilities: {},
+}
+
 const fixturePlugin = (): Plugin => ({
   id: 'fixture:pack',
   apiVersion: 1,
   nodes: [
-    def('fixture:planter', Planter),
-    def('fixture:pump', Pump, {
-      distributionRole: 'equipment',
-      ports: (n: Fields) => [water('outlet', [n.position[0] + 0.5, 0, 0])],
-    }),
-    def('fixture:pipe', Pipe, {
-      distributionRole: 'run',
-      ports: (n: Fields) =>
-        n.path.length < 2 ? [] : [water('start', n.path[0]), water('end', n.path.at(-1))],
-    }),
-    def('fixture:bench', Bench, {
-      capabilities: { surfaces: { top: { height: (n: Fields) => n.seatHeight } } },
-      relations: { hosts: ['fixture:sprout'], cascadeDelete: 'descendants' },
-      renderer: { kind: 'parametric', module: async () => ({ default: () => null }) },
-    }),
-    def('fixture:sprout', Sprout, { geometry: () => new Group() }),
-    def('fixture:marker', Marker),
+    asPluginNode(planterDef),
+    asPluginNode(pumpDef),
+    asPluginNode(pipeDef),
+    asPluginNode(benchDef),
+    asPluginNode(sproutDef),
+    asPluginNode(markerDef),
   ],
 })
 
-const parse = <N = AnyNode>(kind: string, data: Fields = {}) =>
-  nodeRegistry.get(kind)!.schema.parse({ ...data, type: kind }) as N
-const nid = (id: string) => id as AnyNodeId
-const at = (x: number, z: number) => [x, 0, z]
-const ofType = (nodes: Record<string, AnyNode>, type: string) =>
-  Object.values(nodes).find((n) => n.type === (type as AnyNode['type']))!
+const at = (x: number, z: number): [number, number, number] => [x, 0, z]
+const ofType = (nodes: Record<string, AnyNode>, type: string) => {
+  const found = Object.values(nodes).find((node) => node.type === type)
+  if (!found) throw new Error(`no ${type} node`)
+  return found
+}
 
 function loadLevel(nodes: AnyNode[], installedPlugins?: string[]) {
-  const level = LevelNode.parse({ children: nodes.map((n) => n.id) })
-  const record = Object.fromEntries([
-    [level.id, level],
-    ...nodes.map((n) => [n.id, { ...n, parentId: level.id }]),
-  ])
+  const level = LevelNode.parse({ children: nodes.map((node) => node.id) })
+  const levelNode = asSceneNode(level)
+  const record: Record<string, AnyNode> = { [levelNode.id]: levelNode }
+  for (const node of nodes) record[node.id] = { ...node, parentId: levelNode.id }
   useScene
     .getState()
     .setScene(
       record,
-      [nid(level.id)],
+      [levelNode.id],
       installedPlugins && { installedPlugins, hasExplicitPluginInstallState: true },
     )
-  return level
+  return levelNode
 }
 
-function saved() {
+function saved(): Required<Pick<SceneGraph, 'nodes' | 'rootNodeIds' | 'installedPlugins'>> {
   const { nodes, rootNodeIds, installedPlugins } = useScene.getState()
-  return JSON.parse(JSON.stringify({ nodes, rootNodeIds, installedPlugins })) as {
-    nodes: Record<AnyNodeId, AnyNode>
-    rootNodeIds: AnyNodeId[]
-    installedPlugins: string[]
-  }
+  return structuredClone({ nodes, rootNodeIds, installedPlugins })
 }
 
 const previousScene = useScene.getState()
@@ -153,39 +208,44 @@ afterEach(() => {
 
 describe('plugin API v1: capabilities', () => {
   test('every optional field has a safe default for a minimal plugin kind', async () => {
-    await loadPlugin({ id: 'fixture:min', apiVersion: 1, nodes: [def('fixture:min', Sprout)] })
-    const minimal = nodeRegistry.get('fixture:min')!
+    await loadPlugin({
+      id: 'fixture:min',
+      apiVersion: 1,
+      nodes: [asPluginNode({ ...markerDef, kind: 'fixture:min' })],
+    })
+    const minimal = nodeRegistry.get('fixture:min')
 
     expect(isRegistrySelectable('fixture:min')).toBe(false)
     expect(isRegistryMovable('fixture:min')).toBe(false)
     expect(isSelectionHighlightEnabled('fixture:min')).toBe(true)
-    expect(isPresettable(minimal)).toBe(false)
+    expect(minimal && isPresettable(minimal)).toBe(false)
     expect(bakePolicyOf('fixture:min')).toBe('static')
     expect(kindsWithFloorplanScope('level')).toEqual(['fixture:min'])
-    expect(rendersHostedChildren(minimal)).toBe(false)
+    expect(minimal && rendersHostedChildren(minimal)).toBe(false)
   })
 })
 
 describe('plugin API v1: ports, surfaces and relations', () => {
   test('plugin ports join the system graph and port connectivity', async () => {
     await loadPlugin(fixturePlugin())
-    const pump = parse<AnyNode>('fixture:pump')
-    const pipe = parse<Fields>('fixture:pipe', { path: [at(0.5, 0), at(3, 0)] })
-    const stray = parse<Fields>('fixture:pipe', { path: [at(9, 9), at(12, 9)] })
-    loadLevel([pump, pipe as AnyNode, stray as AnyNode])
+    const pump = asSceneNode(Pump.parse({}))
+    const pipe = Pipe.parse({ path: [at(0.5, 0), at(3, 0)] })
+    const pipeNode = asSceneNode(pipe)
+    const stray = asSceneNode(Pipe.parse({ path: [at(9, 9), at(12, 9)] }))
+    loadLevel([pump, pipeNode, stray])
     const nodes = useScene.getState().nodes
 
     const components = buildPortComponents(nodes).map((ids) => [...ids].sort())
-    expect(components).toContainEqual([nid(pipe.id), nid(pump.id)].sort())
-    expect(components).toContainEqual([nid(stray.id)])
+    expect(components).toContainEqual([pipeNode.id, pump.id].sort())
+    expect(components).toContainEqual([stray.id])
     expect(analyzePortConnectivity(pump, nodes).connections).toEqual([
-      { kind: 'run', nodeId: nid(pipe.id), startPath: pipe.path },
+      { kind: 'run', nodeId: pipeNode.id, startPath: pipe.path },
     ])
   })
 
   test('a plugin host publishes its top surface and accepts a plugin child', async () => {
     await loadPlugin(fixturePlugin())
-    const bench = parse<AnyNode>('fixture:bench', { seatHeight: 0.5 })
+    const bench = asSceneNode(Bench.parse({ seatHeight: 0.5 }))
 
     expect(getTopSurfaceHeight(bench)).toBe(0.5)
     expect(canHostSurfaceChild(bench, 'fixture:sprout')).toBe(true)
@@ -193,8 +253,8 @@ describe('plugin API v1: ports, surfaces and relations', () => {
 
   test('relations cascade dirty marks and deletion through a plugin host', async () => {
     await loadPlugin(fixturePlugin())
-    const sprout = parse<AnyNode>('fixture:sprout')
-    const bench = parse<AnyNode>('fixture:bench', { children: [sprout.id] })
+    const sprout = asSceneNode(Sprout.parse({}))
+    const bench = asSceneNode(Bench.parse({ children: [sprout.id] }))
     loadLevel([bench])
     useScene.getState().createNode({ ...sprout, parentId: bench.id }, bench.id)
     const scene = createSceneApi(useScene)
@@ -207,28 +267,45 @@ describe('plugin API v1: ports, surfaces and relations', () => {
 })
 
 describe('plugin API v1: editing and reload', () => {
-  test('plugin nodes create, update, delete and undo through the scene store', async () => {
+  test('creating, updating and deleting a plugin node each undo and redo in one step', async () => {
     await loadPlugin(fixturePlugin())
     const level = loadLevel([], ['fixture:pack'])
-    const planter = parse<AnyNode>('fixture:planter')
-    const size = () => (useScene.getState().nodes[planter.id] as unknown as Fields)?.size
+    const planter = asSceneNode(Planter.parse({}))
     const { temporal } = useScene
     temporal.getState().clear()
+    const children = (): string[] => {
+      const current = useScene.getState().nodes[level.id]
+      return current?.type === 'level' ? current.children : []
+    }
+    const size = () => {
+      const current = useScene.getState().nodes[planter.id]
+      return current && Planter.parse(current).size
+    }
 
-    useScene.getState().createNode(planter, nid(level.id))
+    useScene.getState().createNode(planter, level.id)
+    expect(children()).toEqual([planter.id])
     expect(useScene.getState().dirtyNodes.has(planter.id)).toBe(true)
-    useScene.getState().updateNode(planter.id, { size: [2, 1, 2] } as Partial<AnyNode>)
+    temporal.getState().undo()
+    expect(useScene.getState().nodes[planter.id]).toBeUndefined()
+    expect(children()).toEqual([])
+    temporal.getState().redo()
+    expect(children()).toEqual([planter.id])
+
+    useScene.getState().updateNode(planter.id, asScenePatch(Planter, { size: [2, 1, 2] }))
     expect(size()).toEqual([2, 1, 2])
     temporal.getState().undo()
     expect(size()).toEqual([1.2, 0.6, 0.5])
+
     useScene.getState().deleteNode(planter.id)
+    expect(children()).toEqual([])
     temporal.getState().undo()
+    expect(children()).toEqual([planter.id])
     expect(size()).toEqual([1.2, 0.6, 0.5])
   })
 
   test('save, validate and reload in a fresh registry keep plugin nodes and installs', async () => {
     await loadPlugin(fixturePlugin())
-    loadLevel([parse('fixture:planter', { position: [1, 0, 2] })], ['fixture:pack'])
+    loadLevel([asSceneNode(Planter.parse({ size: [1, 2, 3] }))], ['fixture:pack'])
     const before = saved()
 
     const validation = validateBuildJson(before)
@@ -245,11 +322,11 @@ describe('plugin API v1: editing and reload', () => {
     })
     expect(saved()).toEqual(before)
     const planter = ofType(before.nodes, 'fixture:planter')
-    expect(parse<AnyNode>('fixture:planter', planter)).toEqual(planter)
+    expect(nodeRegistry.get('fixture:planter')?.schema.parse(planter)).toEqual(planter)
   })
 
   test('a scene loaded before its plugin registers keeps build work for the late registration', async () => {
-    const planter = Planter.parse({}) as unknown as AnyNode
+    const planter = asSceneNode(Planter.parse({}))
     loadLevel([planter], ['fixture:pack'])
 
     await loadPlugin(fixturePlugin())
@@ -260,19 +337,19 @@ describe('plugin API v1: editing and reload', () => {
 
   test('duplicate and project clone mint prefixed ids, rewire children and keep installs', async () => {
     await loadPlugin(fixturePlugin())
-    const sprout = parse<AnyNode>('fixture:sprout')
-    const bench = parse<AnyNode>('fixture:bench', { children: [sprout.id] })
+    const sprout = asSceneNode(Sprout.parse({}))
+    const bench = asSceneNode(Bench.parse({ children: [sprout.id] }))
 
     const duplicate = cloneNodesInto([bench, { ...sprout, parentId: bench.id }], {
       rootId: bench.id,
     })
-    const [root, child] = duplicate.nodes as unknown as [Fields, AnyNode]
-    expect([root.id, child.id]).toEqual([
+    const [root, child] = duplicate.nodes
+    expect([root?.id, child?.id]).toEqual([
       expect.stringMatching(/^fxbench_/),
       expect.stringMatching(/^fxsprout_/),
     ])
-    expect(root.children).toEqual([child.id])
-    expect(child.parentId).toBe(root.id)
+    expect(root && Bench.parse(root).children).toEqual([String(child?.id)])
+    expect(child?.parentId).toBe(root?.id)
 
     loadLevel([bench, { ...sprout, parentId: bench.id }], ['fixture:pack'])
     const clone = cloneSceneGraph(saved())
@@ -285,28 +362,28 @@ describe('plugin API v1: editing and reload', () => {
   // copy them verbatim and they keep pointing at the source scene.
   test.failing('project clone remaps plugin-owned node references', async () => {
     await loadPlugin(fixturePlugin())
-    const planter = parse<AnyNode>('fixture:planter')
-    loadLevel([planter, parse('fixture:marker', { targetIds: [planter.id] })])
+    const planter = asSceneNode(Planter.parse({}))
+    loadLevel([planter, asSceneNode(Marker.parse({ targetIds: [planter.id] }))])
 
     const { nodes } = cloneSceneGraph(saved())
-    expect((ofType(nodes, 'fixture:marker') as unknown as Fields).targetIds).toEqual([
+    expect(Marker.parse(ofType(nodes, 'fixture:marker')).targetIds).toEqual([
       ofType(nodes, 'fixture:planter').id,
     ])
   })
 
   test.failing('subtree duplicate remaps plugin-owned node references', async () => {
     await loadPlugin(fixturePlugin())
-    const sprout = parse<AnyNode>('fixture:sprout')
-    const marker = parse<AnyNode>('fixture:marker', { targetIds: [sprout.id] })
-    const bench = parse<AnyNode>('fixture:bench', { children: [sprout.id, marker.id] })
+    const sprout = asSceneNode(Sprout.parse({}))
+    const marker = asSceneNode(Marker.parse({ targetIds: [sprout.id] }))
+    const bench = asSceneNode(Bench.parse({ children: [sprout.id, marker.id] }))
 
     const { nodes, idMap } = cloneNodesInto(
       [bench, { ...sprout, parentId: bench.id }, { ...marker, parentId: bench.id }],
       { rootId: bench.id },
     )
-    const record = Object.fromEntries(nodes.map((n) => [n.id, n]))
-    expect((ofType(record, 'fixture:marker') as unknown as Fields).targetIds).toEqual([
-      idMap.get(sprout.id),
+    const record = Object.fromEntries(nodes.map((node) => [node.id, node]))
+    expect(Marker.parse(ofType(record, 'fixture:marker')).targetIds).toEqual([
+      String(idMap.get(sprout.id)),
     ])
   })
 })
@@ -316,7 +393,7 @@ describe('plugin API v1: no install', () => {
   // (viewer, bake) must pass installedPlugins or every plugin kind is off.
   test('a host that omits install state disables plugin kinds; only a missing list is legacy', async () => {
     await loadPlugin(fixturePlugin())
-    loadLevel([parse('fixture:planter')])
+    loadLevel([asSceneNode(Planter.parse({}))])
 
     expect(useScene.getState().hasExplicitPluginInstallState).toBe(false)
     expect(isNodeKindEnabled('fixture:planter', useScene.getState().installedPlugins)).toBe(false)
@@ -324,7 +401,7 @@ describe('plugin API v1: no install', () => {
   })
 
   test('nodes of a plugin the host never loaded survive load, validation and save', () => {
-    const planter = Planter.parse({}) as unknown as AnyNode
+    const planter = asSceneNode(Planter.parse({}))
     loadLevel([planter], ['fixture:pack'])
     const after = saved()
 

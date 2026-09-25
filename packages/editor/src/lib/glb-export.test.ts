@@ -2,10 +2,15 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeDefinition,
+  BaseNode,
   DoorNode,
   type GeometryContext,
+  LevelNode,
   loadPlugin,
+  type NodeDefinition,
   nodeRegistry,
+  nodeType,
+  objectId,
   registerNode,
   SiteNode,
   sceneRegistry,
@@ -1977,37 +1982,58 @@ describe('plugin bake policies through export', () => {
     const restoreRegistry = nodeRegistry._snapshot()
     const previousScene = useScene.getState()
     const calls: string[] = []
-    const definition = (kind: string, fields: Partial<AnyNodeDefinition>) =>
-      ({
-        kind,
-        schemaVersion: 1,
-        schema: DoorNode,
-        category: 'site',
-        defaults: () => ({}) as never,
-        capabilities: {},
-        ...fields,
-      }) as AnyNodeDefinition
+    const Fixture = (prefix: 'fxoverlay' | 'fxmeadow' | 'fxrock') =>
+      BaseNode.extend({ id: objectId(prefix), type: nodeType(`fixture:${prefix.slice(2)}`) })
+    const Overlay = Fixture('fxoverlay')
+    const Meadow = Fixture('fxmeadow')
+    const Rock = Fixture('fxrock')
+    const base = { object: 'node', parentId: null, visible: true, metadata: {} } as const
+    const overlay: NodeDefinition<typeof Overlay> = {
+      kind: 'fixture:overlay',
+      schemaVersion: 1,
+      schema: Overlay,
+      category: 'site',
+      defaults: () => base,
+      capabilities: {},
+      bake: 'strip',
+    }
+    const meadow: NodeDefinition<typeof Meadow> = {
+      kind: 'fixture:meadow',
+      schemaVersion: 1,
+      schema: Meadow,
+      category: 'site',
+      defaults: () => base,
+      capabilities: {},
+      bake: 'replace',
+      bakeGeometry: () => {
+        calls.push('bakeGeometry')
+        return new THREE.Group().add(namedBox('meadow-bake'))
+      },
+      bakeGeometryAsync: async () => {
+        calls.push('bakeGeometryAsync')
+        await Promise.resolve()
+        return new THREE.Group().add(namedBox('meadow-bake-async'))
+      },
+      bakeReplaceRenderer: { module: async () => ({ default: () => null }) },
+    }
+    const rock: NodeDefinition<typeof Rock> = {
+      kind: 'fixture:rock',
+      schemaVersion: 1,
+      schema: Rock,
+      category: 'site',
+      defaults: () => base,
+      capabilities: {},
+    }
+    // API v1 boundary casts: typed definitions do not widen to AnyNodeDefinition
+    // and plugin nodes are outside the AnyNode union.
+    const asPluginNode = <S extends AnyNodeDefinition['schema']>(def: NodeDefinition<S>) =>
+      def as unknown as AnyNodeDefinition
+    const asSceneNode = (node: { id: string; type: string }) => node as unknown as AnyNode
     try {
       await loadPlugin({
         id: pluginId,
         apiVersion: 1,
-        nodes: [
-          definition('fixture:overlay', { bake: 'strip' }),
-          definition('fixture:meadow', {
-            bake: 'replace',
-            bakeGeometry: () => {
-              calls.push('bakeGeometry')
-              return new THREE.Group().add(namedBox('meadow-bake'))
-            },
-            bakeGeometryAsync: async () => {
-              calls.push('bakeGeometryAsync')
-              await Promise.resolve()
-              return new THREE.Group().add(namedBox('meadow-bake-async'))
-            },
-            bakeReplaceRenderer: { module: async () => ({ default: () => null }) },
-          }),
-          definition('fixture:rock', {}),
-        ],
+        nodes: [asPluginNode(overlay), asPluginNode(meadow), asPluginNode(rock)],
       })
       useScene.setState({ installedPlugins, hasExplicitPluginInstallState: true })
 
@@ -2016,15 +2042,22 @@ describe('plugin bake policies through export', () => {
       root.add(level)
       sceneRegistry.nodes.set(levelId, level)
       const live: Record<string, THREE.Group> = {}
-      const kinds = { [overlayId]: 'overlay', [meadowId]: 'meadow', [rockId]: 'rock' }
-      const nodes = {
-        [levelId]: { id: levelId, type: 'level', parentId: null, children: Object.keys(kinds) },
-      } as unknown as Record<string, AnyNode>
-      for (const [id, kind] of Object.entries(kinds)) {
-        live[id] = new THREE.Group().add(namedBox(`${id}-live`))
-        level.add(live[id])
-        sceneRegistry.nodes.set(id, live[id])
-        nodes[id] = { id, type: `fixture:${kind}`, parentId: levelId } as unknown as AnyNode
+      const pluginNodes = [
+        Overlay.parse({ id: overlayId, parentId: levelId }),
+        Meadow.parse({ id: meadowId, parentId: levelId }),
+        Rock.parse({ id: rockId, parentId: levelId }),
+      ].map(asSceneNode)
+      const nodes: Record<string, AnyNode> = {
+        [levelId]: asSceneNode(
+          LevelNode.parse({ id: levelId, children: pluginNodes.map((node) => node.id) }),
+        ),
+      }
+      for (const node of pluginNodes) {
+        const group = new THREE.Group().add(namedBox(`${node.id}-live`))
+        level.add(group)
+        sceneRegistry.nodes.set(node.id, group)
+        live[node.id] = group
+        nodes[node.id] = node
       }
       await run({ root, live, nodes, calls })
     } finally {
