@@ -40,7 +40,10 @@ test('batched ceiling lamps stay eligible; all twelve light objects remain visib
     [id]: { id, type: 'item', visible: true, parentId: 'ceiling' },
   } as unknown as Record<AnyNodeId, AnyNode>
   useScene.setState({ nodes })
-  useViewer.setState({ levelMode: 'stacked', selection: { ...useViewer.getState().selection, levelId: null } })
+  useViewer.setState({
+    levelMode: 'stacked',
+    selection: { ...useViewer.getState().selection, levelId: null },
+  })
   let on = true
   const pool = useItemLightPool.getState()
   pool.register({
@@ -48,13 +51,18 @@ test('batched ceiling lamps stay eligible; all twelve light objects remain visib
     nodeId: id,
     color: '#ffffff',
     distance: 6,
-    getWorldPosition: (out) => { out.set(1, 2, 3); return true },
+    getWorldPosition: (out) => {
+      out.set(1, 2, 3)
+      return true
+    },
     getIntensity: () => 2,
     isEligible: () => on,
   })
   const renderer = await create(createElement(ItemLightSystem))
   try {
-    const lights = renderer.scene.findAllByType('PointLight').map((entry) => entry.instance as PointLight)
+    const lights = renderer.scene
+      .findAllByType('PointLight')
+      .map((entry) => entry.instance as PointLight)
     expect(lights).toHaveLength(12)
     expect(lights.every((light) => light.visible)).toBe(true)
     await renderer.advanceFrames(5, 1 / 30)
@@ -103,7 +111,10 @@ test('batched ceiling lamps stay eligible; all twelve light objects remain visib
       nodeId: id,
       color: '#ff0000',
       distance: 4,
-      getWorldPosition: (out) => { out.set(4, 5, 6); return true },
+      getWorldPosition: (out) => {
+        out.set(4, 5, 6)
+        return true
+      },
       getIntensity: () => 1,
       isEligible: () => true,
     })
@@ -113,7 +124,9 @@ test('batched ceiling lamps stay eligible; all twelve light objects remain visib
     pool.unregister('lamp-next')
     await renderer.advanceFrames(30, 1 / 30)
     expect(lights.every((light) => light.intensity === 0 && light.visible)).toBe(true)
-    expect(renderer.scene.findAllByType('PointLight').map((entry) => entry.instance)).toEqual(lights)
+    expect(renderer.scene.findAllByType('PointLight').map((entry) => entry.instance)).toEqual(
+      lights,
+    )
   } finally {
     await renderer.unmount()
   }

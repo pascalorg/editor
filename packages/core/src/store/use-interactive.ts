@@ -155,11 +155,13 @@ const defaultControlValue = (
   if (!control) return false
   switch (control.kind) {
     case 'toggle':
-      return control.default ??
+      return (
+        control.default ??
         (interactive.effects.some((effect) => effect.kind === 'light') &&
         index === interactive.controls.findIndex((entry) => entry.kind === 'toggle')
           ? lampDefault
           : nonLightToggleDefault)
+      )
     case 'slider':
       return control.default ?? control.min
     case 'temperature':

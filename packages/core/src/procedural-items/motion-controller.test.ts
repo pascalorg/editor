@@ -59,7 +59,9 @@ test('unaffected delayed parts retain their collective schedule after detachment
 })
 
 test('a delayed collective transition remains pending before its first pose change', () => {
-  const motion = evaluateRecipe(parseRecipe(cabinetJson)).motions.find((entry) => entry.partId === 'drawer')!
+  const motion = evaluateRecipe(parseRecipe(cabinetJson)).motions.find(
+    (entry) => entry.partId === 'drawer',
+  )!
   const controller = new ProceduralMotionController([motion])
   controller.command({ sequence: 1, scope: 'all', target: true })
   const frame = controller.tick(0.1)

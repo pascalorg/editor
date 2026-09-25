@@ -7,7 +7,14 @@ const lamp = {
     { kind: 'toggle' as const, label: 'Power' },
     { kind: 'toggle' as const, label: 'Bulbs' },
   ],
-  effects: [{ kind: 'light' as const, color: '#ffffff', offset: [0, 0, 0] as [number, number, number], intensityRange: [0, 2] as [number, number] }],
+  effects: [
+    {
+      kind: 'light' as const,
+      color: '#ffffff',
+      offset: [0, 0, 0] as [number, number, number],
+      intensityRange: [0, 2] as [number, number],
+    },
+  ],
 }
 const fan = {
   controls: [{ kind: 'toggle' as const, label: 'Spin' }],

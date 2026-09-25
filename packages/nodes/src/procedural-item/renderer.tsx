@@ -29,8 +29,8 @@ import {
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { type Group, Mesh, Vector3 } from 'three'
-import { acquireProceduralGeometry, type BuiltItem, geometrySignature } from './geometry'
 import { canRegisterItemLight } from '../shared/item-light-placement'
+import { acquireProceduralGeometry, type BuiltItem, geometrySignature } from './geometry'
 export default function ProceduralRenderer({ node }: { node: ProceduralItemNode }) {
   const ref = useRef<Group>(null!)
   const controller = useRef<ProceduralMotionController | null>(null)

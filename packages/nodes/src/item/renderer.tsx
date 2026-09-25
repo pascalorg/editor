@@ -56,8 +56,8 @@ import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { positionLocal, smoothstep, time } from 'three/tsl'
 import { BlockFaceHostFrame } from '../shared/block-face-host'
-import { RoofFaceHostFrame } from '../shared/roof-face-host'
 import { canRegisterItemLight } from '../shared/item-light-placement'
+import { RoofFaceHostFrame } from '../shared/roof-face-host'
 import { cancelItemModelLoad, getUnavailableItemAsset, ItemGLTFLoader } from './model-loader'
 
 type MutableMaterial = Material & {
