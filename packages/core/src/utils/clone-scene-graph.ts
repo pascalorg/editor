@@ -28,6 +28,11 @@ function extractIdPrefix(id: string): string {
  * Deep clones a scene graph with all node IDs regenerated while preserving
  * parent-child relationships and other internal references.
  *
+ * The hand-written remaps here and in `cloneLevelSubtree` are inventoried in
+ * `contracts/reference-inventory.ts`, which records the references they miss;
+ * `contracts/fidelity.test.ts` fails when either drifts from the inventory.
+ * P-03 replaces both passes with the one extractor over `capabilities.refs`.
+ *
  * This is useful for:
  * - Duplicating a project (host app creates a new project record, then loads the cloned scene)
  * - Copying nodes between different projects
