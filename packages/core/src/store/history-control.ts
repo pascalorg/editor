@@ -224,6 +224,70 @@ export function acquireSceneHistoryPause(sceneStore: TemporalStoreLike): () => v
   }
 }
 
+export type SceneHistoryPauseSession = {
+  /**
+   * Runs one committing write with this gesture's pauses lifted, then takes them back.
+   * The write lands as tracked history only when no other owner is pausing it.
+   */
+  commitStep<T>(write: () => T): T
+  /** Releases this session's pause. Idempotent. */
+  end(): void
+}
+
+type GesturePauseHolder = { release: (() => void) | null; ended: boolean }
+const gesturePauseHolders = new Map<string, Set<GesturePauseHolder>>()
+
+/**
+ * Holds a refcounted pause for a whole gesture (carry, drag). Unlike a raw
+ * `temporal.pause()`, cooperating systems see the gesture through
+ * `getSceneHistoryPauseDepth()`, and their balanced pause/resume pairs cannot
+ * resume history under it.
+ *
+ * Sessions opened with the same `gesture` key co-own the gesture (the 3D mover
+ * and the 2D move overlay of one moving node): either one's `commitStep` lifts
+ * both pauses, so whichever view drops records the one step.
+ */
+export function beginSceneHistoryPauseSession(
+  sceneStore: TemporalStoreLike,
+  gesture?: string,
+): SceneHistoryPauseSession {
+  const holder: GesturePauseHolder = {
+    release: acquireSceneHistoryPause(sceneStore),
+    ended: false,
+  }
+  let coOwners = new Set([holder])
+  if (gesture) {
+    coOwners = gesturePauseHolders.get(gesture) ?? new Set()
+    coOwners.add(holder)
+    gesturePauseHolders.set(gesture, coOwners)
+  }
+  return {
+    commitStep(write) {
+      const lifted = [...coOwners].filter((owner) => owner.release)
+      for (const owner of lifted) {
+        const release = owner.release!
+        owner.release = null
+        release()
+      }
+      try {
+        return write()
+      } finally {
+        for (const owner of lifted) {
+          if (!owner.ended) owner.release = acquireSceneHistoryPause(sceneStore)
+        }
+      }
+    },
+    end() {
+      if (holder.ended) return
+      holder.ended = true
+      holder.release?.()
+      holder.release = null
+      coOwners.delete(holder)
+      if (gesture && coOwners.size === 0) gesturePauseHolders.delete(gesture)
+    },
+  }
+}
+
 export function getSceneHistoryPauseDepth(): number {
   return sceneHistoryPauseDepth + sceneHistoryPauseLeases.size
 }

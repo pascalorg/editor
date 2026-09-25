@@ -6,6 +6,7 @@ import {
   type AnyNodeId,
   bboxAnchors,
   bboxCornerAnchors,
+  beginSceneHistoryPauseSession,
   cascadeDirty,
   collectDescendants,
   createSceneApi,
@@ -15,8 +16,6 @@ import {
   getEffectiveNode,
   type MovableConfig,
   nodeRegistry,
-  pauseSceneHistory,
-  resumeSceneHistory,
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
@@ -153,7 +152,9 @@ export function FloorplanRegistryMoveOverlay() {
         .filter((n): n is AnyNode => !!n)
         .map((n) => snapshotNode(n))
 
-      pauseSceneHistory(useScene)
+      // Keyed by the moving node: the 3D mover co-owns this gesture's pause, so
+      // whichever view drops lifts both and records the one step.
+      const historyPause = beginSceneHistoryPauseSession(useScene, movingNode.id)
       let historyPaused = true
 
       const clearLivePreviews = () => {
@@ -319,7 +320,7 @@ export function FloorplanRegistryMoveOverlay() {
             }
           }
           if (historyPaused) {
-            resumeSceneHistory(useScene)
+            historyPause.end()
             historyPaused = false
           }
           if (committedId) {
@@ -331,11 +332,9 @@ export function FloorplanRegistryMoveOverlay() {
 
         if (commitValid && session.commit) {
           restoreSnapshots(snapshots)
-          if (historyPaused) {
-            resumeSceneHistory(useScene)
-            historyPaused = false
-          }
-          session.commit()
+          historyPause.commitStep(() => session.commit?.())
+          historyPause.end()
+          historyPaused = false
           sfxEmitter.emit('sfx:item-place')
           useViewer.getState().setSelection({ selectedIds: snapshots.map((s) => s.id) })
           return
@@ -382,11 +381,9 @@ export function FloorplanRegistryMoveOverlay() {
           //   2. Resume history.
           //   3. Re-apply the final state — recorded as one tracked change.
           restoreSnapshots(snapshots)
-          if (historyPaused) {
-            resumeSceneHistory(useScene)
-            historyPaused = false
-          }
-          useScene.getState().updateNodes(finalUpdates)
+          historyPause.commitStep(() => useScene.getState().updateNodes(finalUpdates))
+          historyPause.end()
+          historyPaused = false
           sfxEmitter.emit('sfx:item-place')
           // Re-select the moved node(s) — mirrors the legacy 3D move
           // tool. The action menu cleared selection on Move click so
@@ -397,7 +394,7 @@ export function FloorplanRegistryMoveOverlay() {
         } else {
           restoreSnapshots(snapshots)
           if (historyPaused) {
-            resumeSceneHistory(useScene)
+            historyPause.end()
             historyPaused = false
           }
         }
@@ -494,7 +491,7 @@ export function FloorplanRegistryMoveOverlay() {
           if (!ownsSubtree && !isInteractionSubtreeDraft(movingNode.id))
             useScene.getState().deleteNode(movingNode.id)
           if (historyPaused) {
-            resumeSceneHistory(useScene)
+            historyPause.end()
             historyPaused = false
           }
           clearLivePreviews()
@@ -505,7 +502,7 @@ export function FloorplanRegistryMoveOverlay() {
         // Revert untracked, then resume — no history entry.
         restoreSnapshots(snapshots)
         if (historyPaused) {
-          resumeSceneHistory(useScene)
+          historyPause.end()
           historyPaused = false
         }
         // Clear any live previews the session wrote. Slab / ceiling
@@ -535,7 +532,7 @@ export function FloorplanRegistryMoveOverlay() {
         window.removeEventListener('keydown', onKey, true)
         // Unmount cleanup. `historyPaused === true` here means none of
         // our terminal paths (commit, Esc) ran in this overlay — they
-        // each call `resumeSceneHistory` and flip the flag.
+        // each end `historyPause` and flip the flag.
         //
         // If `movingNodeOrigin === '3d'`, a 3D move tool finalised
         // while our overlay was still mounted (split view); the live
@@ -557,7 +554,7 @@ export function FloorplanRegistryMoveOverlay() {
               restoreSnapshots(snapshots)
             }
           }
-          resumeSceneHistory(useScene)
+          historyPause.end()
         }
         // Belt-and-suspenders: clear any live previews on abnormal
         // unmount paths too. Slab / ceiling sessions write to

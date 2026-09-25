@@ -2,7 +2,9 @@ import {
   type AnyNodeId,
   type AssetInput,
   ItemNode,
+  pauseSceneHistory,
   resolveSupportSlabPatch,
+  resumeSceneHistory,
   type SurfaceRejectReason,
   sceneRegistry,
   useScene,
@@ -56,6 +58,8 @@ export interface DraftNodeHandle {
   /** Take ownership of an existing scene node as the draft (for move mode). */
   adopt: (node: ItemNode) => void
   /** Commit the current draft. Create mode: delete+recreate. Move mode: update in place.
+   *  The final write is the one undo step, recorded only while no owner pauses history:
+   *  a caller holding a pause lifts it around this call (`SceneHistoryPauseSession.commitStep`).
    *  `supportElevationCap` (floor commits) is the pointer-decided surface
    *  elevation — it caps the persisted `supportSlabId` election so the
    *  commit lands on the surface the cursor pointed at. */
@@ -74,7 +78,8 @@ export interface DraftNodeHandle {
 
 /**
  * Hook that manages the lifecycle of a transient (draft) item node.
- * Handles temporal pause/resume for undo/redo isolation.
+ * Draft writes stay out of undo under the caller's history pause; `commit`
+ * keeps its bookkeeping writes out too, under its own balanced pause.
  *
  * Supports two modes:
  * - Create mode (via `create()`): draft is a new transient node. Commit = delete+recreate (undo removes node).
@@ -213,24 +218,27 @@ export function useDraftNode(): DraftNodeHandle {
           useViewer.getState().selection.levelId
         const original = originalStateRef.current!
 
-        // Restore original state while paused — so the undo baseline is clean
-        updateSurfaceNode(
-          draft.id,
-          {
-            position: original.position,
-            rotation: original.rotation,
-            side: original.side,
-            parentId: original.parentId,
-            roofSegmentId: original.roofSegmentId,
-            roofFace: original.roofFace,
-            blockFaceId: original.blockFaceId,
-            metadata: original.metadata,
-          },
-          original.surfaceId,
-        )
-
-        // Resume → tracked update (undo reverts to original)
-        useScene.temporal.getState().resume()
+        // Restore the original while paused, so the one tracked write below has the
+        // true baseline as its undo state.
+        pauseSceneHistory(useScene)
+        try {
+          updateSurfaceNode(
+            draft.id,
+            {
+              position: original.position,
+              rotation: original.rotation,
+              side: original.side,
+              parentId: original.parentId,
+              roofSegmentId: original.roofSegmentId,
+              roofFace: original.roofFace,
+              blockFaceId: original.blockFaceId,
+              metadata: original.metadata,
+            },
+            original.surfaceId,
+          )
+        } finally {
+          resumeSceneHistory(useScene)
+        }
 
         const effectiveNode = ItemNode.parse({
           ...draft,
@@ -266,8 +274,6 @@ export function useDraftNode(): DraftNodeHandle {
           surfaceId,
         )
 
-        useScene.temporal.getState().pause()
-
         const id = draft.id
         if (usePlacementPreview.getState().node?.id === id) {
           usePlacementPreview.getState().clear()
@@ -278,19 +284,20 @@ export function useDraftNode(): DraftNodeHandle {
         return id
       }
 
-      // Create mode: delete draft (paused), resume, create fresh node (tracked), re-pause
+      // Create mode: delete the draft (paused), then create the fresh node (the tracked write)
       const { parentId: newParentId, ...updateProps } = finalUpdate
       const parentId = (newParentId ?? useViewer.getState().selection.levelId) as AnyNodeId
       if (!parentId) return null
 
       beginPerfAction('place:item', draft.id)
-      // Delete draft while paused (invisible to undo)
-      updateSurfaceNode(draft.id, {}, null)
-      useScene.getState().deleteNode(draft.id)
+      pauseSceneHistory(useScene)
+      try {
+        updateSurfaceNode(draft.id, {}, null)
+        useScene.getState().deleteNode(draft.id)
+      } finally {
+        resumeSceneHistory(useScene)
+      }
       draftRef.current = null
-
-      // Briefly resume → create fresh node (the single undoable action)
-      useScene.temporal.getState().resume()
 
       const finalNode = ItemNode.parse({
         name: draft.name,
@@ -330,9 +337,6 @@ export function useDraftNode(): DraftNodeHandle {
       if (usePlacementPreview.getState().node?.id === draft.id) {
         usePlacementPreview.getState().clear()
       }
-
-      // Re-pause for next draft cycle
-      useScene.temporal.getState().pause()
 
       adoptedRef.current = false
       originalStateRef.current = null

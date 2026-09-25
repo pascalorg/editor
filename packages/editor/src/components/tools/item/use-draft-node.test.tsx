@@ -4,9 +4,12 @@ import {
   BlockNode,
   BuildingNode,
   getBlockFaceFrame,
+  getSceneHistoryPauseDepth,
   ItemNode,
   LevelNode,
   type NodeEvent,
+  pauseSceneHistory,
+  resumeSceneHistory,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -200,6 +203,42 @@ describe('useDraftNode block face commit', () => {
     expect((useScene.getState().nodes[LEVEL_ID as AnyNodeId] as LevelNode).children).not.toContain(
       hosted.id,
     )
+  })
+
+  test('never resumes history that another owner is pausing', () => {
+    const hosted = ItemNode.parse({
+      id: 'item_owned-pause-plant',
+      parentId: LEVEL_ID,
+      asset: {
+        id: 'potted-plant',
+        category: 'decor',
+        name: 'Potted plant',
+        thumbnail: '/potted-plant.png',
+        src: '/potted-plant.glb',
+        dimensions: [0.5, 0.39, 0.5],
+      },
+      position: [0, 0, 0],
+    })
+    useScene.getState().createNode(hosted, LEVEL_ID as AnyNodeId)
+    useScene.temporal.getState().clear()
+    pauseSceneHistory(useScene)
+    try {
+      const draft = draftNode!
+      draft.adopt(hosted)
+      draft.commit({ parentId: LEVEL_ID, position: [2, 0, 3] })
+      draft.create(new Vector3(1, 0, 1), hosted.asset)
+      draft.commit({ parentId: LEVEL_ID, position: [1, 0, 1] })
+
+      expect(useScene.getState().nodes[hosted.id as AnyNodeId]).toMatchObject({
+        position: [2, 0, 3],
+      })
+      expect(useScene.temporal.getState().isTracking).toBe(false)
+      expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+      expect(getSceneHistoryPauseDepth()).toBe(1)
+    } finally {
+      resumeSceneHistory(useScene)
+    }
+    expect(useScene.temporal.getState().isTracking).toBe(true)
   })
 
   test('keeps a hosted item visible through a block topology edit and its undo', () => {

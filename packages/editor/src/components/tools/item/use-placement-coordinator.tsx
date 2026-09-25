@@ -3,6 +3,7 @@ import {
   type AlignmentAnchor,
   type AnyNode,
   type AnyNodeId,
+  beginSceneHistoryPauseSession,
   type CeilingEvent,
   canHostSurfaceChild,
   collectAlignmentAnchors,
@@ -17,6 +18,7 @@ import {
   type RoofEvent,
   resolveFrozenFloorPlacementPatch,
   resolveLevelId,
+  type SceneHistoryPauseSession,
   type ShelfEvent,
   type SurfaceRejectReason,
   sceneRegistry,
@@ -68,6 +70,7 @@ import useEditor, {
   isMagneticSnapActive,
 } from '../../../store/use-editor'
 import useFacingPose from '../../../store/use-facing-pose'
+import { getMovingNode } from '../../../store/use-interaction-scope'
 import usePlacementPreview from '../../../store/use-placement-preview'
 import {
   createItemSurfaceGridDispatch,
@@ -526,9 +529,18 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     })
   }, [])
 
+  // A setup below that throws never returns its cleanup, so this ends the history pause it
+  // began; otherwise undo would stay paused. Declared first, so on a normal unmount it runs
+  // before that cleanup and finds nothing to end.
+  const unfinishedSetupPauseRef = useRef<SceneHistoryPauseSession | null>(null)
+  useEffect(() => () => unfinishedSetupPauseRef.current?.end(), [])
+
   useEffect(() => {
     if (!asset) return
-    useScene.temporal.getState().pause()
+    // Refcounted, so another owner's balanced pause/resume mid-carry cannot resume history.
+    // Keyed by the moving node, which the 2D move overlay co-owns in split view.
+    const historyPause = beginSceneHistoryPauseSession(useScene, getMovingNode()?.id)
+    unfinishedSetupPauseRef.current = historyPause
 
     const validators = { canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling }
 
@@ -608,7 +620,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
 
       useAlignmentGuides.getState().clear()
-      useScene.temporal.getState().resume()
+      historyPause.end()
       if (committedId) {
         useViewer.getState().setSelection({ selectedIds: [committedId as AnyNodeId] })
       }
@@ -631,14 +643,16 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     ) => {
       const draftId = draftNode.current?.id ?? null
       const wasAdopted = draftNode.isAdopted
-      const finalId = draftNode.commit(nodeUpdate, {
-        ...options,
-        onReject: (reason) => {
-          feedback.reject(reason)
-          edgeMaterial.color.setHex(0xef_44_44)
-          basePlaneMaterial.color.setHex(0xef_44_44)
-        },
-      })
+      const finalId = historyPause.commitStep(() =>
+        draftNode.commit(nodeUpdate, {
+          ...options,
+          onReject: (reason) => {
+            feedback.reject(reason)
+            edgeMaterial.color.setHex(0xef_44_44)
+            basePlaneMaterial.color.setHex(0xef_44_44)
+          },
+        }),
+      )
       if (finalId && draftId) {
         useLiveTransforms.getState().clear(draftId)
         useLiveNodeOverrides.getState().clearFields(draftId, faceHostClearFields(draftNode.current))
@@ -2753,6 +2767,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     emitter.on('node:click', commitFloorOnSurfaceClick as never)
     if (dragMode) window.addEventListener('pointerup', onReleaseCommit)
 
+    unfinishedSetupPauseRef.current = null
     return () => {
       tearingDown = true
       feedback.clear()
@@ -2765,7 +2780,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         useLiveNodeOverrides.getState().clearFields(draftNode.current.id, ['rotation'])
       }
       draftNode.destroy()
-      useScene.temporal.getState().resume()
+      historyPause.end()
       gridDispatch.cancel()
       emitter.off('grid:move', gridDispatch.schedule)
       emitter.off('grid:click', onGridClick)

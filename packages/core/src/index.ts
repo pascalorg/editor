@@ -314,6 +314,7 @@ export { isMovable, movePlanToward, moveToward, resolveMovable } from './service
 export {
   acquireSceneHistoryPause,
   activeSceneCommitNodeIds,
+  beginSceneHistoryPauseSession,
   getSceneHistoryPauseDepth,
   pauseSceneHistory,
   resetSceneHistoryPauseDepth,
@@ -322,6 +323,7 @@ export {
   type SceneCommit,
   type SceneCommitListener,
   type SceneCommitOrigin,
+  type SceneHistoryPauseSession,
   type SceneSnapshot,
   subscribeSceneCommits,
 } from './store/history-control'
