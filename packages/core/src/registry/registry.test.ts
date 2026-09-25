@@ -339,6 +339,55 @@ describe('loadPlugin', () => {
     expect(getInspectorExtensions('wall')).toEqual([])
   })
 
+  test.failing('a plugin with a malformed inspector extension registers nothing', async () => {
+    const malformed = {
+      id: 'partial',
+      apiVersion: 1,
+      nodes: [makeDefinition('partial:a')],
+      inspectorExtensions: [
+        {
+          id: 'partial:eng',
+          pluginId: 'partial',
+          kinds: null,
+          icon: { kind: 'url', src: '/icons/test.png' },
+          title: 'Engineering',
+          component: async () => ({ default: () => null }),
+        },
+      ],
+    } as unknown as Plugin
+
+    await expect(loadPlugin(malformed)).rejects.toThrow()
+    expect(nodeRegistry.has('partial:a')).toBe(false)
+    expect(getNodePluginId('partial:a')).toBeUndefined()
+  })
+
+  // State commits before listeners run, so a throwing subscriber cannot leave a
+  // kind registered without its plugin id or the plugin's other kinds missing.
+  test.failing('a throwing registry listener sees the whole plugin committed', async () => {
+    const { onRegistryChange } = await import('./registry')
+    let calls = 0
+    const unsubscribe = onRegistryChange(() => {
+      calls += 1
+      expect(getNodePluginId('pack:a')).toBe('pack')
+      expect(nodeRegistry.has('pack:b')).toBe(true)
+      throw new Error('listener failed')
+    })
+    try {
+      await expect(
+        loadPlugin({
+          id: 'pack',
+          apiVersion: 1,
+          nodes: [makeDefinition('pack:a'), makeDefinition('pack:b')],
+        }),
+      ).rejects.toThrow('listener failed')
+    } finally {
+      unsubscribe()
+    }
+
+    expect(calls).toBe(1)
+    expect(getNodePluginId('pack:b')).toBe('pack')
+  })
+
   // GATE (late-plugin subscriptions): plugins register via async dynamic
   // imports AFTER consumers mount. The selection managers rebuild their
   // `getSelectableKinds()` emitter subscriptions off this change signal —
