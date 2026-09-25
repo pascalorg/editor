@@ -3,7 +3,6 @@ import { z } from 'zod'
 import {
   createWallBoundSurfaceFollower,
   initSpaceDetectionSync,
-  planWallLayoutDerivedChanges,
   type Space,
 } from '../lib/space-detection'
 import { nodeRegistry } from '../registry/registry'
@@ -443,22 +442,32 @@ describe('scene commit boundary', () => {
       WallNode.parse({ id: 'wall_move_divider', parentId: LEVEL_ID, start: [2, 0], end: [2, 4] }),
     ]
     let stopDetection = () => {}
+    let reconcilePasses = 0
 
     // Two rooms built through the live sync, then a settled history floor.
     beforeEach(() => {
       let spaces: Record<string, Space> = {}
-      stopDetection = initSpaceDetectionSync(useScene, {
-        getState: () => ({
-          spaces,
-          setSpaces: (next: Record<string, Space>) => {
-            spaces = next
+      stopDetection = initSpaceDetectionSync(
+        useScene,
+        {
+          getState: () => ({
+            spaces,
+            setSpaces: (next: Record<string, Space>) => {
+              spaces = next
+            },
+          }),
+        },
+        {
+          onTopologyReconcile: () => {
+            reconcilePasses += 1
           },
-        }),
-      })
+        },
+      )
       useScene.getState().applyNodeChanges({
         create: roomWalls().map((wall) => ({ node: wall, parentId: LEVEL_ID })),
       })
       clearSceneHistory()
+      reconcilePasses = 0
     })
     afterEach(() => stopDetection())
 
@@ -467,25 +476,23 @@ describe('scene commit boundary', () => {
         node.type === type ? [node.polygon] : [],
       )
 
-    test('applies the walls and their planned rooms as one commit and one undo step', () => {
+    test('a wall batch derives its rooms in the same step with one detection pass', () => {
       const before = currentSnapshot()
       const commits: SceneCommit[] = []
       unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
-      const moved = { start: [2.5, 0] as [number, number], end: [2.5, 4] as [number, number] }
-      const finalWalls = roomWalls().map((wall) =>
-        wall.id === 'wall_move_divider' ? { ...wall, ...moved } : wall,
-      )
 
-      const derived = planWallLayoutDerivedChanges(LEVEL_ID, finalWalls, before.nodes)
-      expect(derived.create).toHaveLength(0)
-      expect(derived.delete).toHaveLength(0)
-      useScene.getState().applyNodeChanges({
-        update: [
-          { id: 'wall_move_divider' as AnyNodeId, data: moved },
-          ...(derived.update as Array<{ id: AnyNodeId; data: Partial<AnyNode> }>),
-        ],
+      runAsSingleSceneHistoryStep(useScene, () => {
+        useScene.getState().applyNodeChanges({
+          update: [
+            {
+              id: 'wall_move_divider' as AnyNodeId,
+              data: { start: [2.5, 0], end: [2.5, 4] } as Partial<AnyNode>,
+            },
+          ],
+        })
       })
 
+      expect(reconcilePasses).toBe(1)
       expect(commits).toHaveLength(1)
       expect(useScene.temporal.getState().pastStates).toHaveLength(1)
       for (const polygons of [polygonsOf('slab'), polygonsOf('ceiling')]) {

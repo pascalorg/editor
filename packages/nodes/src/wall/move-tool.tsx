@@ -3,13 +3,12 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  acquireSceneHistoryPause,
+  beginSceneHistoryPauseSession,
   createWallBoundSurfaceFollower,
   emitter,
   type GridEvent,
   getPerpendicularWallMoveAxis,
   getPlannedLinkedWallUpdates,
-  planWallLayoutDerivedChanges,
   planWallMoveJunctions,
   resolveMovedWallSupportSlabPatch,
   runAsSingleSceneHistoryStep,
@@ -58,9 +57,9 @@ import {
  *  - **Auto-slab live preview** — the automatic slabs and ceilings the
  *    moving walls bound follow them through live overrides, from boundary
  *    membership read once at arm time (no room detection per tick).
- *  - **One undo step** — history is paused during the drag; the commit
- *    detects rooms once and writes walls, sides, zones, slabs, ceilings
- *    and wall supports as one history step.
+ *  - **One undo step** — history is paused during the drag (a session
+ *    shared with the 2D move overlay); the commit writes walls, supports
+ *    and the sync's derived rooms as one history step.
  *  - **`isNew` metadata strip** — first commit after a fresh wall
  *    placement clears the placement marker.
  *  - **Activation grace** (150ms).
@@ -193,7 +192,9 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     const originalCenter = originalCenterRef.current
     const originalHalfVector = originalHalfVectorRef.current
     const levelId = node.parentId ?? null
-    const releaseHistoryPause = acquireSceneHistoryPause(useScene)
+    // Keyed by the moving wall: in split view the 2D move overlay co-owns this
+    // pause, so whichever view drops lifts both and records the one step.
+    const historyPause = beginSceneHistoryPauseSession(useScene, { gesture: nodeId })
     let shouldRestoreOnCleanup = true
     let active = true
 
@@ -492,62 +493,34 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
         wallCount: Object.values(sceneState.nodes).filter((entry) => entry?.type === 'wall').length,
       })
 
-      // Detect rooms once, over the final walls, and fold every derived change
-      // (sides, zones, slabs, ceilings) into the wall batch.
-      const derived = levelId
-        ? planWallLayoutDerivedChanges(
-            levelId,
-            [
-              ...existingWalls,
-              ...bridgeCreates.map(
-                (entry) => ({ ...entry.node, parentId: entry.parentId ?? null }) as WallNode,
-              ),
-            ],
-            sceneState.nodes,
-          )
-        : null
-      const sides = derived?.wallSides ?? new Map()
-      const wallUpdateIds = new Set<string>(commitUpdates.map((entry) => entry.id))
-      const wallUpdates = [
-        ...commitUpdates.map((entry) => ({
-          id: entry.id,
-          data: { ...entry.data, ...sides.get(entry.id) } as Partial<AnyNode>,
-        })),
-        ...[...sides]
-          .filter(([id]) => !wallUpdateIds.has(id) && sceneState.nodes[id as AnyNodeId])
-          .map(([id, data]) => ({ id: id as AnyNodeId, data: data as Partial<AnyNode> })),
-      ]
-      const wallCreates = bridgeCreates.map((entry) => ({
-        ...entry,
-        node: { ...entry.node, ...sides.get(entry.node.id) } as WallNode,
-      }))
       const affectedWallIds = [
         ...commitUpdates.map((entry) => entry.id),
-        ...wallCreates.map((entry) => entry.node.id as AnyNodeId),
+        ...bridgeCreates.map((entry) => entry.node.id as AnyNodeId),
       ]
 
-      // One history step: the batch, then the support election, which reads
-      // the spatial index the batch's slab changes have just updated.
-      releaseHistoryPause()
-      runAsSingleSceneHistoryStep(useScene, () => {
-        useScene.getState().applyNodeChanges({
-          update: [...wallUpdates, ...(derived?.update ?? [])] as Array<{
-            id: AnyNodeId
-            data: Partial<AnyNode>
-          }>,
-          create: [...wallCreates, ...(derived?.create ?? [])],
-          delete: Array.from(new Set([...collapsedLinkedWallIds, ...(derived?.delete ?? [])])),
-        })
-        const committedNodes = useScene.getState().nodes
-        useScene.getState().updateNodes(
-          affectedWallIds.flatMap((id) => {
+      // One history step. The live space-detection sync reconciles sides,
+      // zones, slabs and ceilings inside the batch write (its derived writes
+      // join this step), so rooms are detected once, incrementally. The support
+      // election reads the slab index that write updated; it is written only
+      // where it changes, so an unchanged support adds no second pass.
+      historyPause.commitStep(() =>
+        runAsSingleSceneHistoryStep(useScene, () => {
+          useScene.getState().applyNodeChanges({
+            update: commitUpdates as Array<{ id: AnyNodeId; data: Partial<AnyNode> }>,
+            create: bridgeCreates,
+            delete: Array.from(collapsedLinkedWallIds),
+          })
+          const committedNodes = useScene.getState().nodes
+          const supportPatches = affectedWallIds.flatMap((id) => {
             const wall = committedNodes[id]
-            return wall?.type === 'wall'
-              ? [{ id, data: resolveMovedWallSupportSlabPatch(wall, committedNodes) }]
-              : []
-          }),
-        )
-      })
+            if (wall?.type !== 'wall') return []
+            const patch = resolveMovedWallSupportSlabPatch(wall, committedNodes)
+            return patch.supportSlabId === wall.supportSlabId ? [] : [{ id, data: patch }]
+          })
+          if (supportPatches.length > 0) useScene.getState().updateNodes(supportPatches)
+        }),
+      )
+      historyPause.end()
       clearSurfaceOverrides()
       clearWallOverrides()
 
@@ -610,7 +583,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       shouldRestoreOnCleanup = false
       restoreOriginal()
       useViewer.getState().setSelection({ selectedIds: [nodeId] })
-      releaseHistoryPause()
+      historyPause.end()
       markToolCancelConsumed()
       // Claim teardown ownership so the 2D overlay doesn't redundantly
       // revert the same baseline on its own cleanup.
@@ -636,7 +609,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
           restoreOriginal()
         }
       }
-      releaseHistoryPause()
+      historyPause.end()
       emitter.off('grid:move', onGridMove)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('pointerup', onPointerUp)

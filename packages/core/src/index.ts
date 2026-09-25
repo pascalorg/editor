@@ -184,12 +184,10 @@ export {
   planAutoCeilingsForLevel,
   planAutoSlabsForLevel,
   planAutoZonesForLevel,
-  planWallLayoutDerivedChanges,
   resolveAutoZonePolygon,
   resumeSpaceDetection,
   type Space,
   type SpaceBoundaryFace,
-  type WallLayoutDerivedChanges,
   wallClosesRoom,
   wallTouchesOthers,
 } from './lib/space-detection'
