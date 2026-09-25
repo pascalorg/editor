@@ -169,8 +169,23 @@ export type FloorplanPageLayout = {
   planBox: { x: number; y: number; width: number; height: number }
 }
 
+/**
+ * Install list the PDF export gates plugin kinds with. Mirrors the GLB exporter:
+ * a scene without explicit install state is legacy, so every loaded plugin kind
+ * draws (`undefined`); the store's `installedPlugins` then only holds host
+ * defaults and would hide plugin nodes the project has always had.
+ */
+export function floorplanExportInstalledPlugins(scene: {
+  installedPlugins: readonly string[]
+  hasExplicitPluginInstallState: boolean
+}): readonly string[] | undefined {
+  return scene.hasExplicitPluginInstallState ? scene.installedPlugins : undefined
+}
+
 export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<void> {
-  const { nodes, installedPlugins } = useScene.getState()
+  const sceneState = useScene.getState()
+  const { nodes } = sceneState
+  const installedPlugins = floorplanExportInstalledPlugins(sceneState)
   const viewer = useViewer.getState()
   const unit = viewer.unit
   const metricNotation = viewer.metricNotation
@@ -769,7 +784,8 @@ export function collectFloorplanGeometry(
   annotationVisibility: FloorplanAnnotationVisibility,
   drawingType: ConstructionDrawingType,
   wallDimensionReference: FloorplanWallDimensionReference,
-  installedPlugins: readonly string[],
+  /** `undefined` = legacy scene without install state: every loaded kind draws. */
+  installedPlugins: readonly string[] | undefined,
 ): ExportGeometry[] {
   const noLiveOverrides = new Map<string, LiveNodeOverrides>()
   const levelNodeIdsByType = new Map<string, AnyNodeId[]>()
