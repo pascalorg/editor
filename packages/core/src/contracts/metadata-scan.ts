@@ -1,3 +1,5 @@
+import * as nodeFs from 'node:fs'
+import path from 'node:path'
 import ts from 'typescript'
 
 /**
@@ -262,4 +264,31 @@ function isMetadataExpression(node: ts.Node): boolean {
     )
   }
   return false
+}
+
+/** The filesystem calls the source walk uses; injectable so tests can race it. */
+export type ScanFs = Pick<typeof nodeFs, 'readdirSync' | 'statSync' | 'readFileSync'>
+
+/**
+ * Metadata keys of every non-test `.ts`/`.tsx` source under `roots`, each
+ * mapped to the first file (relative to `base`) that reads or writes it.
+ */
+export function scanMetadataSources(
+  base: string,
+  roots: readonly string[],
+  fs: ScanFs = nodeFs,
+): Map<string, string> {
+  const walk = (dir: string): string[] =>
+    fs.readdirSync(dir).flatMap((entry) => {
+      const full = path.join(dir, entry)
+      if (['node_modules', 'dist', '__fixtures__'].includes(entry)) return []
+      if (fs.statSync(full).isDirectory()) return walk(full)
+      return /\.tsx?$/.test(entry) && !/\.(test|spec|bench)\.tsx?$/.test(entry) ? [full] : []
+    })
+  const keys = new Map<string, string>()
+  for (const root of roots)
+    for (const file of walk(path.join(base, root)))
+      for (const key of discoverMetadataKeys(fs.readFileSync(file, 'utf8'), file))
+        if (!keys.has(key)) keys.set(key, path.relative(base, file))
+  return keys
 }

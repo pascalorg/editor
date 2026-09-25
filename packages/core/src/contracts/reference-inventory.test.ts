@@ -11,12 +11,22 @@
  * - Every rule R1–R9 names existing gates and existing tests.
  */
 import { describe, expect, test } from 'bun:test'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import * as fs from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { cloneNodesInto } from '../registry/subtree'
 import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema, nodeKindOf } from '../schema/types'
 import { cloneLevelSubtree, cloneSceneGraph } from '../utils/clone-scene-graph'
-import { discoverMetadataKeys } from './metadata-scan'
+import { discoverMetadataKeys, type ScanFs, scanMetadataSources } from './metadata-scan'
 import { discoverReferenceCandidates } from './reference-discovery'
 import {
   EXISTING_REFERENCES,
@@ -130,20 +140,7 @@ const SOURCE_ROOTS = [
   'apps/editor/lib',
 ].filter((root) => existsSync(path.join(EDITOR_ROOT, root)))
 
-function sourceFiles(dir: string): string[] {
-  return readdirSync(dir).flatMap((entry) => {
-    const full = path.join(dir, entry)
-    if (['node_modules', 'dist', '__fixtures__'].includes(entry)) return []
-    if (statSync(full).isDirectory()) return sourceFiles(full)
-    return /\.tsx?$/.test(entry) && !/\.(test|spec|bench)\.tsx?$/.test(entry) ? [full] : []
-  })
-}
-
-const METADATA_KEYS = new Map<string, string>()
-for (const root of SOURCE_ROOTS)
-  for (const file of sourceFiles(path.join(EDITOR_ROOT, root)))
-    for (const key of discoverMetadataKeys(readFileSync(file, 'utf8'), file))
-      if (!METADATA_KEYS.has(key)) METADATA_KEYS.set(key, path.relative(EDITOR_ROOT, file))
+const METADATA_KEYS = scanMetadataSources(EDITOR_ROOT, SOURCE_ROOTS)
 
 describe('metadata references (R3)', () => {
   test('the scanner reads and writes nested, computed and conditional keys', () => {
@@ -177,6 +174,30 @@ describe('metadata references (R3)', () => {
       'sourceId',
       'viaHelper',
     ])
+  })
+
+  test('the source walk survives files vanishing mid-scan and skips cache dirs', () => {
+    // Other suites (history.test.ts) create and delete `.turbo/history-*/probe.ts`
+    // while this walk runs: a listed file can be gone by the time it is read.
+    const root = mkdtempSync(path.join(tmpdir(), 'metadata-scan-'))
+    try {
+      mkdirSync(path.join(root, 'src/.turbo/history-1'), { recursive: true })
+      writeFileSync(path.join(root, 'src/a.ts'), 'const x = { metadata: { kept: 1 } }')
+      writeFileSync(path.join(root, 'src/.turbo/history-1/probe.ts'), 'n.metadata.cached')
+      const vanishing = path.join(root, 'src/vanishing.ts')
+      writeFileSync(vanishing, 'n.metadata.gone')
+      const racing: ScanFs = {
+        ...fs,
+        readdirSync: ((dir: string) => {
+          const entries = fs.readdirSync(dir)
+          if (dir.endsWith('src')) rmSync(vanishing, { force: true })
+          return entries
+        }) as ScanFs['readdirSync'],
+      }
+      expect([...scanMetadataSources(root, ['src'], racing).keys()]).toEqual(['kept'])
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   test('every metadata key an editor source reads or writes is classified', () => {
