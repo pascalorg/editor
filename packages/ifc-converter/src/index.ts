@@ -686,15 +686,15 @@ function extractImportedMeshPrimitives(
           ]
           // `GetFlatMesh` does not use the same axes as the STEP placement
           // data read by `resolveWorldTransform`: web-ifc has already mapped
-          // IFC Z-up coordinates to an X/Y-up/-Z frame. Applying the regular
-          // STEP `swapYZ` transform here a second time makes plan depth look
-          // like height (and height look like plan depth), exploding fallback
-          // walls and railings across the scene.
+          // IFC Z-up coordinates to (X, Z, -Y), which is Pascal's Y-up
+          // right-handed frame. The default preset only removes the origin
+          // offset and level elevation; negating the third axis again would
+          // mirror the mesh.
           const mappedPosition: [number, number, number] = swapYZ
             ? [
                 world[0]! - originOffset[0]! * unitFactor,
                 world[1]! - originOffset[2]! * unitFactor - levelElevation,
-                -(world[2]! + originOffset[1]! * unitFactor),
+                world[2]! + originOffset[1]! * unitFactor,
               ]
             : [
                 world[0]! - originOffset[0]! * unitFactor,
@@ -712,7 +712,7 @@ function extractImportedMeshPrimitives(
             matrix[2]! * nx + matrix[6]! * ny + matrix[10]! * nz,
           ]
           const mappedNormal = swapYZ
-            ? [worldNormal[0]!, worldNormal[1]!, -worldNormal[2]!]
+            ? worldNormal
             : [worldNormal[0]!, -worldNormal[2]!, worldNormal[1]!]
           const normalLength = Math.hypot(...mappedNormal) || 1
           normals.push(
@@ -723,13 +723,6 @@ function extractImportedMeshPrimitives(
         }
 
         const indices = Array.from(sourceIndices)
-        if (swapYZ) {
-          for (let index = 0; index + 2 < indices.length; index += 3) {
-            const second = indices[index + 1]!
-            indices[index + 1] = indices[index + 2]!
-            indices[index + 2] = second
-          }
-        }
         if (positions.length >= 9 && indices.length >= 3) {
           primitives.push({
             positions,
@@ -919,10 +912,16 @@ export async function convertIfcToPascal(
     /* keep zero offset */
   }
 
+  // Scene points keep IFC's axis order (plan [0] and [1], vertical [2]), but
+  // the plan's second axis is Pascal z. Pascal is Y-up right-handed, so seen
+  // from above IFC north (+Y) is Pascal -Z: the default preset negates IFC Y
+  // here, once, for every placement-derived wall, opening, slab, roof, space
+  // and column. Mapping +Y to +Z mirrors the whole model.
+  const planDepthSign = opts.swapYZ ? -1 : 1
   function worldToScene(worldPt: number[]): number[] {
     return [
       (worldPt[0] - originOffset[0]) * unitFactor,
-      (worldPt[1] - originOffset[1]) * unitFactor,
+      planDepthSign * (worldPt[1] - originOffset[1]) * unitFactor,
       (worldPt[2] - originOffset[2]) * unitFactor,
     ]
   }
@@ -1396,7 +1395,8 @@ export async function convertIfcToPascal(
           // IFC ground plane, which is also the mapping used for the
           // wall's start/end above.
           const axisX = (end[0] - start[0]) / wallLenM
-          const axisY = (end[1] - start[1]) / wallLenM
+          // Back to IFC world XY, the frame measureWallLocalExtents projects in.
+          const axisY = (planDepthSign * (end[1] - start[1])) / wallLenM
           const extents = measureWallLocalExtents(ifcApi, modelID, wallExpressID, axisX, axisY)
           const geom = extents
             ? wallHeightThicknessFromExtents(extents, wallLenM, unitFactor)
