@@ -24,7 +24,7 @@ import {
 } from '../schema/nodes/roof-segment'
 import { segmentPointToRoofWallFace } from '../schema/nodes/roof-segment-walls'
 import { ShelfNode as ShelfNodeSchema } from '../schema/nodes/shelf'
-import { SiteNode } from '../schema/nodes/site'
+import { DEFAULT_NORTH_DIRECTION_DEG, SiteNode } from '../schema/nodes/site'
 import {
   getEffectiveStairSurfaceMaterial,
   StairNode as StairNodeSchema,
@@ -729,6 +729,12 @@ function migrateNodes(nodes: Record<string, any>): {
       delete patchedNodes[id]
     }
     patchedNodes[nextId] = migrateBlockHostedItem(nextNode)
+    if (nextNode.type === 'site') {
+      patchedNodes[nextId] = {
+        ...patchedNodes[nextId],
+        northDirectionDeg: getFiniteNumber(nextNode.northDirectionDeg, DEFAULT_NORTH_DIRECTION_DEG),
+      }
+    }
   }
 
   // Pass 1: all node types except elevator.

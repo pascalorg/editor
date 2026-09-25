@@ -292,7 +292,7 @@ export {
   ScanNode,
 } from './nodes/scan'
 export { ShelfNode } from './nodes/shelf'
-export { SiteNode } from './nodes/site'
+export { DEFAULT_NORTH_DIRECTION_DEG, SiteNode } from './nodes/site'
 export {
   SKYLIGHT_TYPE_ORDER,
   SKYLIGHT_TYPE_PRESETS,

@@ -3,6 +3,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  DEFAULT_NORTH_DIRECTION_DEG,
   type FloorplanGeometry,
   type FloorplanPalette,
   type GeometryContext,
@@ -56,9 +57,10 @@ import {
 } from './floorplan-preview-geometry'
 import {
   cameraAzimuthFromFloorplanRotation,
+  compassRotationFromFloorplanRotation,
+  floorplanRotationForNorthUp,
   floorplanRotationFromCameraAzimuth,
   floorplanViewBoxFromNavigationPose,
-  nearestEquivalentDegrees,
   rotateFloorplanPoint,
   visibleFloorplanViewWidth,
 } from './floorplan-preview-navigation'
@@ -343,6 +345,17 @@ export function FloorplanPreview({
   const activeBuilding = activeLevel?.parentId
     ? nodes[activeLevel.parentId as AnyNodeId]
     : undefined
+  const parentSite = activeBuilding?.parentId
+    ? nodes[activeBuilding.parentId as AnyNodeId]
+    : undefined
+  const siteNode =
+    parentSite?.type === 'site'
+      ? parentSite
+      : Object.values(nodes).find((node: AnyNode) => node.type === 'site')
+  const northDirectionDeg =
+    siteNode?.type === 'site' && Number.isFinite(siteNode.northDirectionDeg)
+      ? siteNode.northDirectionDeg
+      : DEFAULT_NORTH_DIRECTION_DEG
   const buildingPosition = useMemo<[number, number, number]>(
     () => (activeBuilding?.type === 'building' ? activeBuilding.position : [0, 0, 0]),
     [activeBuilding],
@@ -424,9 +437,12 @@ export function FloorplanPreview({
         if (sceneRotationDeg === 0) sceneElement.removeAttribute('transform')
         else sceneElement.setAttribute('transform', `rotate(${sceneRotationDeg})`)
       }
-      setFloorplanCompassRotation(compassNeedleRef.current, nextRotationDeg)
+      setFloorplanCompassRotation(
+        compassNeedleRef.current,
+        compassRotationFromFloorplanRotation(nextRotationDeg, northDirectionDeg),
+      )
     },
-    [buildingRotationDeg],
+    [buildingRotationDeg, northDirectionDeg],
   )
 
   const commitPresentation = useCallback(
@@ -819,7 +835,7 @@ export function FloorplanPreview({
 
   const alignToNorth = useCallback(() => {
     const currentRotationDeg = rotationDegRef.current
-    const nextRotationDeg = nearestEquivalentDegrees(0, currentRotationDeg)
+    const nextRotationDeg = floorplanRotationForNorthUp(northDirectionDeg, currentRotationDeg)
     if (!navigationVisible) {
       const pose = latestNavigationPoseRef.current
       if (!pose) return
@@ -849,7 +865,13 @@ export function FloorplanPreview({
     }
     commitPresentation(nextViewBox, nextRotationDeg)
     publishNavigation(nextViewBox, nextRotationDeg)
-  }, [buildingRotationDeg, commitPresentation, navigationVisible, publishNavigation])
+  }, [
+    buildingRotationDeg,
+    commitPresentation,
+    navigationVisible,
+    northDirectionDeg,
+    publishNavigation,
+  ])
 
   const screenUnitsPerPixel = Math.max(
     viewBox.width / Math.max(viewportSize.width, 1),
@@ -859,7 +881,7 @@ export function FloorplanPreview({
   const compassControl = (
     <FloorplanCompassButton
       needleRef={compassNeedleRef}
-      northRotationDeg={rotationDeg}
+      northRotationDeg={compassRotationFromFloorplanRotation(rotationDeg, northDirectionDeg)}
       onAlignNorth={alignToNorth}
     />
   )

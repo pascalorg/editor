@@ -9,6 +9,7 @@ import {
   parseNode,
 } from './compiled-node-parsers'
 import { ColumnNode } from './nodes/column'
+import { DEFAULT_NORTH_DIRECTION_DEG } from './nodes/site'
 import { AnyNode } from './types'
 
 const hosts = ['shelf', 'cabinet', 'cabinet-module', 'block', 'item', 'column'] as const
@@ -40,7 +41,12 @@ test('frozen pre-slice corpus covers every existing kind', () => {
 test.each(
   baseline,
 )('pre-slice $type parses, saves and loads without changing existing fields', (saved) => {
-  const expected = saved.type === 'column' ? { ...saved, children: [] } : saved
+  const expected =
+    saved.type === 'column'
+      ? { ...saved, children: [] }
+      : saved.type === 'site'
+        ? { ...saved, northDirectionDeg: DEFAULT_NORTH_DIRECTION_DEG }
+        : saved
   expect(JSON.parse(JSON.stringify(AnyNode.parse(saved)))).toEqual(expected)
   const graph = { [saved.id]: expected }
   expect(load({ [saved.id]: saved }, saved.id)).toEqual(graph)
