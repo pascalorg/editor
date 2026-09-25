@@ -3,6 +3,7 @@ import * as core from '@pascal-app/core'
 import {
   type AnyNode,
   type AnyNodeId,
+  beginSceneHistoryPauseSession,
   clearSceneHistory,
   emitter,
   getSceneHistoryPauseDepth,
@@ -32,6 +33,7 @@ const walls = [
 ]
 
 let stopDetection = () => {}
+let reconcilePasses = 0
 let savedWindow: PropertyDescriptor | undefined
 let savedRaf: typeof requestAnimationFrame
 let savedCancelRaf: typeof cancelAnimationFrame
@@ -62,13 +64,18 @@ beforeEach(() => {
   } as never)
   clearSceneHistory()
   useLiveNodeOverrides.getState().clearAll()
-  stopDetection = initSpaceDetectionSync(useScene, useEditor)
+  stopDetection = initSpaceDetectionSync(useScene, useEditor, {
+    onTopologyReconcile: () => {
+      reconcilePasses += 1
+    },
+  })
   // Build the rooms through the live sync so the baseline already carries its derived
   // slabs, ceilings and wall sides: undo is then measured against a settled scene.
   useScene
     .getState()
     .applyNodeChanges({ create: walls.map((wall) => ({ node: wall, parentId: LEVEL_ID })) })
   clearSceneHistory()
+  reconcilePasses = 0
 
   useEditor.setState({ mode: 'build', movingNodeOrigin: null, gridSnapStep: 0.5 } as never)
   useEditor.getState().setSnappingMode('wall', 'grid')
@@ -134,10 +141,16 @@ describe('3D wall move', () => {
     expect(useScene.getState().nodes).toEqual(before)
     expect(useScene.temporal.getState().pastStates).toHaveLength(0)
 
+    const commitDetect = spyOn(core, 'detectSpacesForLevel')
+    reconcilePasses = 0
     await act(async () => {
       window.dispatchEvent(new Event('pointerup'))
     })
     await act(async () => renderer.unmount())
+    // Rooms are detected once at commit: the live sync's indexed pass, nothing else.
+    expect(commitDetect.mock.calls.length).toBe(0)
+    commitDetect.mockRestore()
+    expect(reconcilePasses).toBe(1)
 
     const moved = useScene.getState().nodes[DIVIDER_ID] as WallNode
     expect(moved.start).toEqual([2.5, 0])
@@ -190,6 +203,45 @@ describe('3D wall move', () => {
 
     useScene.temporal.getState().undo()
     expect(useScene.getState().nodes).toEqual(before)
+  })
+
+  test('split view: the 3D drop records one step while the 2D overlay co-owns the gesture', async () => {
+    const before = sceneNodes()
+    // FloorplanRegistryMoveOverlay holds a pause session keyed by the moving node.
+    const overlay = beginSceneHistoryPauseSession(useScene, { gesture: DIVIDER_ID })
+    const renderer = await armWall(DIVIDER_ID)
+    await dragFrom(2, 2.5)
+    await act(async () => {
+      window.dispatchEvent(new Event('pointerup'))
+    })
+    await act(async () => renderer.unmount())
+    overlay.end()
+
+    expect((useScene.getState().nodes[DIVIDER_ID] as WallNode).start).toEqual([2.5, 0])
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    expect(getSceneHistoryPauseDepth()).toBe(0)
+    useScene.temporal.getState().undo()
+    expect(useScene.getState().nodes).toEqual(before)
+  })
+
+  test('split view: a 2D drop records one step while the 3D tool co-owns the gesture', async () => {
+    const renderer = await armWall(DIVIDER_ID)
+    await dragFrom(2, 2.5)
+    const overlay = beginSceneHistoryPauseSession(useScene, { gesture: DIVIDER_ID })
+    overlay.commitStep(() =>
+      useScene
+        .getState()
+        .updateNodes([
+          { id: DIVIDER_ID, data: { start: [3, 0], end: [3, 4] } as Partial<AnyNode> },
+        ]),
+    )
+    overlay.end()
+    useEditor.getState().setMovingNodeOrigin('2d')
+    await act(async () => renderer.unmount())
+
+    expect((useScene.getState().nodes[DIVIDER_ID] as WallNode).start).toEqual([3, 0])
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    expect(getSceneHistoryPauseDepth()).toBe(0)
   })
 
   test('cancel adds no history, restores the preview and keeps a foreign pause', async () => {
