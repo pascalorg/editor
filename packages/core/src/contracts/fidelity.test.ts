@@ -423,8 +423,21 @@ describe('section library and definition pinning (owner decision O4, frozen)', (
   }
 
   /** Content hash of a resolved definition: sha256 over its canonical JSON. */
-  const hashOf = (profile: ResolvedSectionProfile): `sha256:${string}` =>
-    `sha256:${createHash('sha256').update(JSON.stringify(profile)).digest('hex')}`
+  /** RFC 8785 (JCS): sorted keys, no whitespace, ECMAScript numbers and strings. */
+  const canonicalJson = (value: unknown): string => {
+    if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
+    if (value !== null && typeof value === 'object')
+      return `{${Object.keys(value)
+        .sort()
+        .map(
+          (key) =>
+            `${JSON.stringify(key)}:${canonicalJson((value as Record<string, unknown>)[key])}`,
+        )
+        .join(',')}}`
+    return JSON.stringify(value)
+  }
+  const hashOf = (definition: unknown): `sha256:${string}` =>
+    `sha256:${createHash('sha256').update(canonicalJson(definition), 'utf8').digest('hex')}`
 
   /** Both pin arms resolve offline against pinned entries, never to "latest". */
   function resolvePin(pin: DefinitionPin): ResolvedSectionProfile | { diagnostic: string } {
@@ -453,6 +466,31 @@ describe('section library and definition pinning (owner decision O4, frozen)', (
     expect(resolvePin({ id: 'casing/colonial', v: 3 })).toEqual({
       diagnostic: 'definition-unresolved',
     })
+    // @ts-expect-error a pin is a version or a hash, never both
+    const both: DefinitionPin = { id: 'casing/colonial', v: 1, hash: byHash.hash }
+    expect(both).toBeDefined()
+  })
+
+  test('the hash serialization is canonical (RFC 8785): key order never changes it', () => {
+    const polygon = {
+      kind: 'polygon',
+      outer: [
+        [0, 0],
+        [0.07, 0],
+        [0.07, 0.018],
+      ],
+    }
+    const reordered = {
+      outer: [
+        [0, 0],
+        [0.07, 0],
+        [0.07, 0.018],
+      ],
+      kind: 'polygon',
+    }
+    expect(canonicalJson(polygon)).toBe('{"kind":"polygon","outer":[[0,0],[0.07,0],[0.07,0.018]]}')
+    expect(hashOf(reordered)).toBe(hashOf(polygon))
+    expect(hashOf({ ...polygon, outer: [[0, 0]] })).not.toBe(hashOf(polygon))
   })
 
   test('pins by version; a correction never moves saved geometry', () => {

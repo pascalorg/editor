@@ -276,9 +276,17 @@ export type FitTarget = {
  * A pinned definition (F1, F6 §Definitions are pinned). A saved scene names the
  * exact version or content hash it used, or carries the resolved payload
  * itself, so it resolves offline and a library correction never moves saved
- * geometry. Never a mutable global id or an account lookup.
+ * geometry. Never a mutable global id or an account lookup. Exactly one arm:
+ * a pin is a version or a hash, never both.
+ *
+ * `hash` is `sha256:` + lowercase hex SHA-256 of the UTF-8 bytes of the
+ * resolved definition serialized with RFC 8785 JSON Canonicalization (JCS):
+ * object keys sorted by UTF-16 code units, no whitespace, ECMAScript number
+ * and string serialization. Key order in the source never changes the hash.
  */
-export type DefinitionPin = { id: string; v: number } | { hash: `sha256:${string}` }
+export type DefinitionPin =
+  | { id: string; v: number; hash?: never }
+  | { hash: `sha256:${string}`; id?: never; v?: never }
 
 export type SectionFamily = 'I' | 'C' | 'L' | 'T' | 'Z' | 'rect-tube'
 

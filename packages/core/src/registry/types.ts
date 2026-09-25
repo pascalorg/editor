@@ -1393,7 +1393,9 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * returns LEVEL-LOCAL positions/directions (the kind applies its own
    * transform). Consumed by placement tools for port-snapping and, in a
    * later slice, by the system graph for connectivity. Kinds with no
-   * connectable geometry omit this.
+   * connectable geometry omit this. `ctx` stays optional for API v1 (R1):
+   * hosts must always pass it, and an implementation falls back to the
+   * stored pose only when it is absent.
    */
   ports?: (node: z.infer<S>, ctx?: EvaluationContext) => NodePort[]
   system?: SystemContribution
