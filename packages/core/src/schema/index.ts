@@ -364,6 +364,35 @@ export {
 export { ZoneNode } from './nodes/zone'
 export { generateSceneMaterialId, SceneMaterial, type SceneMaterialId } from './scene-material'
 export { MAX_TERRAIN_SIDE, TerrainData } from './terrain'
-export type { AnyNodeId, AnyNodeOption, AnyNodeType } from './types'
+export type {
+  Anchor,
+  AnchorPolicy,
+  AnyNodeId,
+  AnyNodeOption,
+  AnyNodeType,
+  DefinitionPin,
+  Discipline,
+  DisplayFamily,
+  DisplayMode,
+  EndCut,
+  FidelityV2,
+  FidelityV3,
+  FitTarget,
+  MaterialPattern,
+  MaterialPatternType,
+  Mount,
+  MountAlign,
+  MountHost,
+  PartKey,
+  ResolvedSectionProfile,
+  SectionFamily,
+  SectionLibraryEntry,
+  SectionProfile,
+  SitePresentation,
+  SurfaceAnchor,
+  SurfacePatchId,
+  SweepEndSpec,
+  WallMountDatum,
+} from './types'
 // Union types
 export { AnyNode, nodeKindOf } from './types'

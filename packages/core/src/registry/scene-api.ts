@@ -45,6 +45,27 @@ export type SceneStoreLike = {
 }
 
 /**
+ * The kernel host seam (frozen by A-02; `ai-surface-agnostic-scene-tools.md`
+ * Phase 0.2). The object every surface — chat, public and hosted MCP, REST,
+ * CLI, bench — hands the one tool kernel. It wraps this module's store seam
+ * instead of adding a second one; the program library's `Host` and MCP's
+ * `SceneOperations` become implementations. Optional capabilities (catalog,
+ * sampling, persistence receipts) join additively, and a missing one is a
+ * typed refusal, never an implicit cloud fallback. Nothing implements it yet.
+ */
+export type SceneToolHost = {
+  store: SceneStoreLike
+  getActiveLevelId: () => AnyNodeId | null
+  /** A host without a selection answers an empty list. */
+  getSelection?: () => readonly AnyNodeId[]
+  /**
+   * Runs `fn` as one logical transaction: validated against the proposed
+   * final graph, committed once and undone as one step (R2, R8).
+   */
+  transact?: <T>(label: string, fn: (scene: SceneApi) => T) => T
+}
+
+/**
  * Creates a {@link SceneApi} backed by a store.
  *
  * Snapshot semantics:
