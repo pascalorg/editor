@@ -11,7 +11,6 @@ import {
   getPlannedLinkedWallUpdates,
   planWallMoveJunctions,
   resolveMovedWallSupportSlabPatch,
-  runAsSingleSceneHistoryStep,
   useLiveNodeOverrides,
   useScene,
   type WallMoveAxis,
@@ -493,31 +492,36 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
         wallCount: Object.values(sceneState.nodes).filter((entry) => entry?.type === 'wall').length,
       })
 
-      const affectedWallIds = [
-        ...commitUpdates.map((entry) => entry.id),
-        ...bridgeCreates.map((entry) => entry.node.id as AnyNodeId),
-      ]
+      // Elect each moved wall's support from its final line (keeping its current
+      // slab while that still carries it) and put any change in the same batch,
+      // so the live sync reconciles the drop in one pass.
+      const withSupport = <T extends WallNode>(wall: T): Partial<WallNode> => {
+        const patch = resolveMovedWallSupportSlabPatch(wall, sceneState.nodes)
+        return patch.supportSlabId === wall.supportSlabId ? {} : patch
+      }
+      const wallUpdates = commitUpdates.map((entry) => ({
+        id: entry.id,
+        data: {
+          ...entry.data,
+          ...withSupport({ ...(sceneState.nodes[entry.id] as WallNode), ...entry.data }),
+        } as Partial<AnyNode>,
+      }))
+      const wallCreates = bridgeCreates.map((entry) => ({
+        ...entry,
+        node: {
+          ...entry.node,
+          ...withSupport({ ...entry.node, parentId: entry.parentId ?? null }),
+        } as WallNode,
+      }))
 
-      // One history step. The live space-detection sync reconciles sides,
-      // zones, slabs and ceilings inside the batch write (its derived writes
-      // join this step), so rooms are detected once, incrementally. The support
-      // election reads the slab index that write updated; it is written only
-      // where it changes, so an unchanged support adds no second pass.
+      // One history step, one write. The live space-detection sync reconciles
+      // sides, zones, slabs and ceilings inside it (once, incrementally), and
+      // its derived writes join the step.
       historyPause.commitStep(() =>
-        runAsSingleSceneHistoryStep(useScene, () => {
-          useScene.getState().applyNodeChanges({
-            update: commitUpdates as Array<{ id: AnyNodeId; data: Partial<AnyNode> }>,
-            create: bridgeCreates,
-            delete: Array.from(collapsedLinkedWallIds),
-          })
-          const committedNodes = useScene.getState().nodes
-          const supportPatches = affectedWallIds.flatMap((id) => {
-            const wall = committedNodes[id]
-            if (wall?.type !== 'wall') return []
-            const patch = resolveMovedWallSupportSlabPatch(wall, committedNodes)
-            return patch.supportSlabId === wall.supportSlabId ? [] : [{ id, data: patch }]
-          })
-          if (supportPatches.length > 0) useScene.getState().updateNodes(supportPatches)
+        useScene.getState().applyNodeChanges({
+          update: wallUpdates,
+          create: wallCreates,
+          delete: Array.from(collapsedLinkedWallIds),
         }),
       )
       historyPause.end()
