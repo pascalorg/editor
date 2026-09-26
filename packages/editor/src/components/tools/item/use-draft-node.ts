@@ -2,9 +2,9 @@ import {
   type AnyNodeId,
   type AssetInput,
   beginSceneHistoryDraft,
-  beginSceneHistoryPauseSession,
   ItemNode,
   resolveSupportSlabPatch,
+  runSceneHistoryDraftWrite,
   type SurfaceRejectReason,
   sceneRegistry,
   useScene,
@@ -31,15 +31,11 @@ function releaseHistoryDraft(end: { current: (() => void) | null }): void {
   end.current = null
 }
 
-/** A placement's own write, under a short pause so interaction-aware systems skip it. */
-export function pausedDraftWrite<T>(write: () => T): T {
-  const pause = beginSceneHistoryPauseSession(useScene)
-  try {
-    return write()
-  } finally {
-    pause.end()
-  }
-}
+/**
+ * A placement's own write: under a short pause, and the carried draft's fields it changes stay
+ * recorded as they were before the carry (core's `runSceneHistoryDraftWrite`).
+ */
+export const pausedDraftWrite = runSceneHistoryDraftWrite
 
 interface OriginalState {
   surfaceId: string | null
@@ -241,11 +237,19 @@ export function useDraftNode(): DraftNodeHandle {
       if (adoptedRef.current) {
         // Move mode: update in place (single undoable action)
         const { parentId: newParentId, ...updateProps } = finalUpdate
-        const parentId =
-          newParentId ??
-          originalStateRef.current?.parentId ??
-          useViewer.getState().selection.levelId
         const original = originalStateRef.current!
+        // A host deleted mid-carry (a collaborator, an agent) is never a parent again: the
+        // drop falls back to the draft's live parent, then the level.
+        const nodesNow = useScene.getState().nodes
+        const exists = (id: string | null | undefined): id is string =>
+          Boolean(id && nodesNow[id as AnyNodeId])
+        const levelId = useViewer.getState().selection.levelId
+        const originalHostGone = original.parentId != null && !exists(original.parentId)
+        const liveParentId = nodesNow[draft.id as AnyNodeId]?.parentId ?? draft.parentId
+        const parentId =
+          [newParentId, originalHostGone ? null : original.parentId, liveParentId, levelId].find(
+            exists,
+          ) ?? levelId
 
         // Restore the original while paused, so the one tracked write below has the
         // true baseline as its undo state.
@@ -256,13 +260,13 @@ export function useDraftNode(): DraftNodeHandle {
               position: original.position,
               rotation: original.rotation,
               side: original.side,
-              parentId: original.parentId,
+              parentId: originalHostGone ? (liveParentId ?? parentId) : original.parentId,
               roofSegmentId: original.roofSegmentId,
               roofFace: original.roofFace,
-              blockFaceId: original.blockFaceId,
+              blockFaceId: originalHostGone ? undefined : original.blockFaceId,
               metadata: original.metadata,
             },
-            original.surfaceId,
+            originalHostGone ? null : original.surfaceId,
           ),
         )
         releaseHistoryDraft(endHistoryDraftRef)

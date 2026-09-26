@@ -47,6 +47,7 @@ import { migrateVerticalSceneNodes } from '../utils/vertical-scene-migration'
 import * as nodeActions from './actions/node-actions'
 import {
   areSceneSnapshotsEqual,
+  beginSceneHistoryPauseSession,
   getSceneHistoryPauseDepth,
   notifySceneCommit,
   pauseSceneHistory,
@@ -60,6 +61,8 @@ import {
   beginSceneHistoryDraft as beginSceneHistoryDraftIn,
   clearSceneHistoryDrafts,
   createdSceneHistoryDraftIds,
+  hasSceneHistoryDrafts,
+  noteSceneHistoryDraftWrite,
   withAdoptedDraftsAsOriginal,
   withDraftsRestored,
 } from './history-drafts'
@@ -2295,7 +2298,7 @@ export function applySceneSnapshot(
 ): boolean {
   const before = sceneHistorySnapshotFromState(useScene.getState())
   const temporalState = useScene.temporal.getState()
-  if (!temporalState.isTracking || getSceneHistoryPauseDepth() > 0) {
+  if (!temporalState.isTracking || getSceneHistoryPauseDepth() > 0 || hasSceneHistoryDrafts()) {
     throw new Error('Cannot replace the scene snapshot during an active interaction')
   }
   useLiveNodeOverrides.getState().clearAll()
@@ -2323,9 +2326,19 @@ export function applySceneSnapshot(
 let prevPastLength = 0
 let prevFutureLength = 0
 
-/** Runs one of a carry's own writes to its drafts (see history-drafts.ts). */
+/**
+ * Runs one of a carry's own writes to its drafts (see history-drafts.ts) under a short pause,
+ * and marks the adopted drafts' fields it changed as carry-owned.
+ */
 export function runSceneHistoryDraftWrite<T>(write: () => T): T {
-  return write()
+  const before = useScene.getState().nodes
+  const pause = beginSceneHistoryPauseSession(useScene)
+  try {
+    return write()
+  } finally {
+    noteSceneHistoryDraftWrite(before, useScene.getState().nodes)
+    pause.end()
+  }
 }
 
 /** Registers a carried draft (see history-drafts.ts); returns the call that ends it. */

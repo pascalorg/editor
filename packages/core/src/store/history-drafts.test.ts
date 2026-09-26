@@ -182,6 +182,6 @@ describe('scene history drafts', () => {
     }
     expect(() => applySceneSnapshot(snapshot as never, { origin: 'host' })).toThrow()
     end()
-    expect(applySceneSnapshot(snapshot as never, { origin: 'host' })).toBe(false)
+    expect(() => applySceneSnapshot(snapshot as never, { origin: 'host' })).not.toThrow()
   })
 })

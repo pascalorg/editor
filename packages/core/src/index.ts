@@ -361,6 +361,7 @@ export {
   beginSceneHistoryDraft,
   clearSceneHistory,
   default as useScene,
+  runSceneHistoryDraftWrite,
   type SceneMaterialPatch,
   type SceneNodePatch,
   type SceneNodeStructuralPatch,

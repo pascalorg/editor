@@ -1,17 +1,19 @@
 import type { AnyNode, AnyNodeId } from '../schema/types'
 
 /**
- * Nodes an interaction is carrying (a placement or move draft). History never sees them: a
- * created draft is left out of every history snapshot, like a fresh-placement subtree, and an
- * adopted node is recorded as it was when the carry began. So the carry pauses no history,
- * writes others make meanwhile record as ordinary steps, and undoing one of those steps
- * mid-carry never resurrects or moves the draft.
+ * Nodes an interaction is carrying (a placement or move draft). History never sees the carry:
+ * a created draft is left out of every history snapshot, like a fresh-placement subtree, and
+ * an adopted node's fields the carry itself wrote (`runSceneHistoryDraftWrite`) are recorded as
+ * they were when the carry began. Its other fields, and writes others make meanwhile, record
+ * as ordinary steps; undoing one of those steps mid-carry never resurrects or moves the draft.
  */
 type SceneHistoryDraft = {
   /** The adopted node before the carry, or null for a draft the carry created. */
   original: AnyNode | null
   parentIndex: number
   attachment: unknown
+  /** Fields of the adopted node the carry's own writes changed. */
+  owned: Set<string>
   ended: boolean
 }
 
@@ -37,6 +39,7 @@ export function beginSceneHistoryDraft(
     original,
     parentIndex: childIdsOf(parent).indexOf(id),
     attachment: attachmentsOf(parent)?.[id],
+    owned: new Set(),
     ended: false,
   }
   sceneHistoryDrafts.set(id, draft)
@@ -59,6 +62,22 @@ export function withSceneHistoryDraftSuspended<T>(id: string | undefined, write:
   } finally {
     if (!(draft.ended || sceneHistoryDrafts.has(id as AnyNodeId))) {
       sceneHistoryDrafts.set(id as AnyNodeId, draft)
+    }
+  }
+}
+
+export function hasSceneHistoryDrafts(): boolean {
+  return sceneHistoryDrafts.size > 0
+}
+
+/** Marks the fields a carry's own write changed on each adopted draft as carry-owned. */
+export function noteSceneHistoryDraftWrite(before: NodeMap, after: NodeMap): void {
+  for (const [id, draft] of sceneHistoryDrafts) {
+    const previous = before[id] as Record<string, unknown> | undefined
+    const next = after[id] as Record<string, unknown> | undefined
+    if (!(draft.original && previous && next) || previous === next) continue
+    for (const key of new Set([...Object.keys(previous), ...Object.keys(next)])) {
+      if (previous[key] !== next[key]) draft.owned.add(key)
     }
   }
 }
@@ -119,23 +138,37 @@ function placeChild(
   })
 }
 
-/** Records adopted drafts as they were before the carry. `historyNodes` may be `nodes` itself. */
+/**
+ * Records the carry-owned fields of adopted drafts as they were before the carry. The original
+ * parent link is restored only while that parent still exists. `historyNodes` may be `nodes`.
+ */
 export function withAdoptedDraftsAsOriginal(nodes: NodeMap, historyNodes: NodeMap): NodeMap {
   let result: NodeMap | null = null
   for (const [id, draft] of sceneHistoryDrafts) {
-    if (!draft.original) continue
+    const original = draft.original as Record<string, unknown> | null
     const live = nodes[id]
-    if (live === draft.original) continue
+    if (!(original && live) || draft.owned.size === 0) continue
+    const originalParentId = original.parentId as AnyNodeId | undefined
+    const restoreParent =
+      draft.owned.has('parentId') && (!originalParentId || Boolean(nodes[originalParentId]))
+    const recorded = { ...live } as Record<string, unknown>
+    for (const key of draft.owned) {
+      if (key === 'parentId' && !restoreParent) continue
+      if (Object.hasOwn(original, key)) recorded[key] = original[key]
+      else delete recorded[key]
+    }
     result ??= { ...historyNodes }
-    result[id] = draft.original
-    placeChild(
-      result,
-      id,
-      live?.parentId as AnyNodeId | undefined,
-      draft.original.parentId as AnyNodeId | undefined,
-      draft.parentIndex,
-      draft.attachment,
-    )
+    result[id] = recorded as AnyNode
+    if (restoreParent) {
+      placeChild(
+        result,
+        id,
+        live.parentId as AnyNodeId | undefined,
+        originalParentId,
+        draft.parentIndex,
+        draft.attachment,
+      )
+    }
   }
   return result ?? historyNodes
 }

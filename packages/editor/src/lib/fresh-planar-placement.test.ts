@@ -191,6 +191,8 @@ describe('commitFreshPlacementSubtree', () => {
     } as Partial<AnyNode>)
     unsubscribe()
 
+    // A legacy caller's raw pause is kept after the one recorded step.
+    expect(useScene.temporal.getState().isTracking).toBe(false)
     expect(committedId).toBeTruthy()
     expect(committedId).not.toBe(SHELF_ID)
     const finalId = committedId as AnyNodeId

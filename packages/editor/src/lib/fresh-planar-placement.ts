@@ -1,13 +1,16 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  beginSceneHistoryPauseSession,
   cloneNodesInto,
   collectSubtree,
   createSceneApi,
   type DuplicableConfig,
+  getSceneHistoryPauseDepth,
   getSurfaceProvider,
   nodeRegistry,
   resolveSurfacePlacement,
+  runSceneHistoryDraftWrite,
   type SurfaceRejectReason,
   useScene,
 } from '@pascal-app/core'
@@ -203,6 +206,21 @@ function namedSurfaceRejection(
 }
 
 /**
+ * Runs a placement's one committing write as a history step. The moving node's gesture
+ * sessions (the 2D move overlay's) are lifted for it; any other owner's pause still holds, so
+ * the write then records nothing. A legacy caller's raw `temporal.pause()` is kept afterwards.
+ */
+function recordPlacementStep(rootId: AnyNodeId, wasTracking: boolean, write: () => void): void {
+  const step = beginSceneHistoryPauseSession(useScene, { gesture: rootId })
+  try {
+    step.commitStep(write)
+  } finally {
+    step.end()
+    if (!wasTracking && getSceneHistoryPauseDepth() === 0) useScene.temporal.getState().pause()
+  }
+}
+
+/**
  * Replace the draft in one validated write. History already excludes fresh
  * subtrees, so this records one creation without first deleting the preview.
  */
@@ -243,43 +261,43 @@ export function commitFreshPlacementSubtree(
   const wasTracking = temporal.isTracking
   if (!factoryCreated && descendants.length === 0 && surfaceId === null) {
     // Preserve the established root-only lifecycle for placements outside the subtree factory.
-    if (wasTracking) temporal.pause()
-    updateSurfaceNode(rootId, {}, null)
-    useScene.getState().deleteNode(rootId)
-    temporal.resume()
-    useScene.getState().applyNodeChanges({
-      create: cloned.nodes.map((node, index) =>
-        index === 0 && parentId ? { node, parentId } : { node },
-      ),
-      update: updates,
+    runSceneHistoryDraftWrite(() => {
+      updateSurfaceNode(rootId, {}, null)
+      useScene.getState().deleteNode(rootId)
     })
-    if (!wasTracking) temporal.pause()
-  } else {
-    temporal.resume()
-    try {
-      // applyNodeChanges validates the complete proposed graph before publishing any part of it.
-      scene.applyNodeChanges({
-        delete: [rootId],
+    recordPlacementStep(rootId, wasTracking, () =>
+      useScene.getState().applyNodeChanges({
         create: cloned.nodes.map((node, index) =>
           index === 0 && parentId ? { node, parentId } : { node },
         ),
         update: updates,
-      })
-      for (const node of [subtree.root, ...subtree.descendants]) scene.clearDirty(node.id)
-    } catch (error) {
-      // Zustand publishes before notifying subscribers. A subscriber error must restore
-      // the draft and its ownership/history, never masquerade as a placement refusal.
-      temporal.pause()
+      }),
+    )
+  } else {
+    recordPlacementStep(rootId, wasTracking, () => {
       try {
-        if (useScene.getState() !== scene) useScene.setState(scene, true)
-      } finally {
-        useInteractionScope.setState(scope)
-        useScene.temporal.setState(temporal)
+        // applyNodeChanges validates the complete proposed graph before publishing any part of it.
+        scene.applyNodeChanges({
+          delete: [rootId],
+          create: cloned.nodes.map((node, index) =>
+            index === 0 && parentId ? { node, parentId } : { node },
+          ),
+          update: updates,
+        })
+        for (const node of [subtree.root, ...subtree.descendants]) scene.clearDirty(node.id)
+      } catch (error) {
+        // Zustand publishes before notifying subscribers. A subscriber error must restore
+        // the draft and its ownership/history, never masquerade as a placement refusal.
+        useScene.temporal.getState().pause()
+        try {
+          if (useScene.getState() !== scene) useScene.setState(scene, true)
+        } finally {
+          useInteractionScope.setState(scope)
+          useScene.temporal.setState(temporal)
+        }
+        throw error
       }
-      throw error
-    } finally {
-      if (!wasTracking) temporal.pause()
-    }
+    })
   }
   useInteractionScope.getState().finishSubtree(rootId)
   if (usePlacementPreview.getState().node?.id === rootId) usePlacementPreview.getState().clear()
