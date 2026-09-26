@@ -325,7 +325,7 @@ captured by Zundo's temporal middleware as a single undoable step.
 | `get_level_summary` | Compact summary of one level with counts, wall/opening lists, zones, slabs, ceilings and items. | `{ levelId? }` | `{ levelId, counts, walls, zones, items, slabs, ceilings }` |
 | `get_walls` | Walls on a level with length and child doors/windows. | `{ levelId? }` | `{ levelId, walls[] }` |
 | `get_zones` | Room/zone polygons with approximate areas and bounds. | `{ levelId? }` | `{ levelId, zones[] }` |
-| `measure` | Distance between two nodes; area when applicable. | `{ fromId, toId }` | `{ distanceMeters, areaSqMeters?, units: 'meters' }` |
+| `measure` | Distance between two nodes' world-space reference points (hosted doors, windows and items resolved through their host; every node kind); area when applicable. | `{ fromId, toId }` | `{ distanceMeters, fromPoint?, toPoint?, areaSqMeters?, units: 'meters' }` |
 | `search_assets` | Search the built-in MCP item catalog. | `{ query, category? }` | `{ results, total }` |
 | `create_story_shell` | Create one level-owned story shell from a footprint: perimeter walls plus optional slab and ceiling. Use once per story. | `{ levelId, footprint, wallHeight?, wallThickness?, createSlab?, createCeiling? }` | `{ wallIds, slabId, ceilingId, createdIds }` |
 | `create_stair_between_levels` | Create a straight stair and one rectangular manual opening in the destination slab/source ceiling, with auto-opening disabled. | `{ fromLevelId, toLevelId, position, width?, runLength?, totalRise? }` | `{ stairId, stairSegmentId, openingPolygon }` |
