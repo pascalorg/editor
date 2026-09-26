@@ -245,6 +245,10 @@ export function useDraftNode(): DraftNodeHandle {
         true,
       )
       finalUpdate = { ...finalUpdate, ...stored }
+      // The drop ends the carry on the item's live metadata: placement strategies hand in the
+      // adoption-time snapshot, which would drop anything an agent wrote meanwhile.
+      const liveDraft = useScene.getState().nodes[draft.id]
+      if (liveDraft) finalUpdate.metadata = stripTransient(liveDraft.metadata)
       if (isFreshPlacementMetadata(originalStateRef.current?.metadata)) {
         releaseHistoryDraft(endHistoryDraftRef)
         const effectiveNode = ItemNode.parse({ ...draft, ...finalUpdate })

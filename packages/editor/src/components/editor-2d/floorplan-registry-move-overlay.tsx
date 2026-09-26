@@ -17,6 +17,7 @@ import {
   getEffectiveNode,
   type MovableConfig,
   nodeRegistry,
+  runAsSingleSceneHistoryStep,
   runSceneHistoryDraftWrite,
   sceneHistoryDraftRevertUpdates,
   settleSceneHistoryDrafts,
@@ -199,7 +200,8 @@ export function FloorplanRegistryMoveOverlay() {
         endDrafts()
         const drop = beginSceneHistoryPauseSession(useScene, { gesture: movingNode.id })
         try {
-          drop.commitStep(write)
+          // The move's write and its transient cleanup are one undo entry and one commit.
+          drop.commitStep(() => runAsSingleSceneHistoryStep(useScene, write))
         } finally {
           drop.end()
         }
