@@ -5,6 +5,7 @@ import {
   isNodeKindEnabled,
   nodeRegistry,
   type RendererSource,
+  useRegistryVersion,
   useScene,
 } from '@pascal-app/core'
 import { type ComponentType, lazy, Suspense } from 'react'
@@ -30,6 +31,9 @@ export function getRegistryRenderer(
 export const NodeRenderer = ({ nodeId }: { nodeId: AnyNode['id'] }) => {
   const node = useScene((state) => state.nodes[nodeId])
   const installedPlugins = useScene((state) => state.installedPlugins)
+  // Plugin kinds register asynchronously: re-render when one arrives, or a
+  // node whose kind registered after it mounted stays invisible.
+  useRegistryVersion()
   if (!node) return null
   if (!isNodeKindEnabled(node.type, installedPlugins)) return null
   const def = nodeRegistry.get(node.type)

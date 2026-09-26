@@ -223,10 +223,9 @@ test('a plugin that registers after the systems mounted still gets its system', 
   }
 })
 
-// Known gap: NodeRenderer reads the registry at render time without
-// subscribing to it, so nodes mounted before async plugin discovery stay
-// invisible (and their geometry unbuilt) until something else re-renders them.
-test.failing('nodes mounted before their plugin registers render once it registers', async () => {
+// NodeRenderer subscribes to the registry: nodes mounted before async plugin
+// discovery render (and build their geometry) once their kind registers.
+test('nodes mounted before their plugin registers render once it registers', async () => {
   nodeRegistry._reset()
   const { lamp, planter } = scene([PLUGIN_ID])
   const renderer = await mountDispatch(lamp, planter)
