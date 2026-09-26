@@ -101,8 +101,8 @@ describe('IFC beam import', () => {
       const level = graph.nodes[first.parentId!]
       const elevation = Number(level?.metadata.elevation)
       expectBounds(first, [
-        [4.2985, 2.797 - elevation, -17.4213],
-        [4.5015, 3.1 - elevation, -10],
+        [4.2985, 2.797 - elevation, 10],
+        [4.5015, 3.1 - elevation, 17.4213],
       ])
       expect(first.metadata.globalId).toBe('2OrWItJ6zAwBNp0OUxK_l8')
       expect(first.metadata.material).toBe('Metal - Steel - 345 MPa')
@@ -116,20 +116,30 @@ describe('IFC beam import', () => {
       expect(imported).toHaveLength(2)
       const horizontal = imported.find((node) => node.metadata.expressID === 100)!
       const sloped = imported.find((node) => node.metadata.expressID === 130)!
-      const expected = [
-        [7.8, 2.35, 21],
-        [8.2, 2.65, 25],
-      ]
-      expectBounds(horizontal, swapYZ ? expected : expected.map(([x, y, z]) => [x!, z!, y!]))
+      // Expected bounds in IFC axes [X, Y (north), Z (up)], relative to the site.
+      // The default preset maps them to Pascal [x, y, z] = [X, Z, -Y].
+      const toPascal = (bounds: number[][]) =>
+        swapYZ
+          ? [
+              [bounds[0]![0]!, bounds[0]![2]!, -bounds[1]![1]!],
+              [bounds[1]![0]!, bounds[1]![2]!, -bounds[0]![1]!],
+            ]
+          : bounds
+      expectBounds(
+        horizontal,
+        toPascal([
+          [7.8, 21, 2.35],
+          [8.2, 25, 2.65],
+        ]),
+      )
       const halfDepth = 0.15 / Math.SQRT2
       const rise = 4 / Math.SQRT2
-      const slopedExpected = [
-        [7.8, 2.5 - halfDepth, 23 - halfDepth],
-        [8.2, 2.5 + rise + halfDepth, 23 + rise + halfDepth],
-      ]
       expectBounds(
         sloped,
-        swapYZ ? slopedExpected : slopedExpected.map(([x, y, z]) => [x!, z!, y!]),
+        toPascal([
+          [7.8, 23 - halfDepth, 2.5 - halfDepth],
+          [8.2, 23 + rise + halfDepth, 2.5 + rise + halfDepth],
+        ]),
       )
       expect(sloped.metadata.ifcType).toBe('IFCBEAMSTANDARDCASE')
       expect(horizontal.name).toBe('Horizontal beam')
@@ -189,8 +199,8 @@ END-ISO`,
     assertAttached(graph, node)
     expect(node.topology.faces).toHaveLength(24)
     expectBounds(node, [
-      [7.8, 2.35, 22],
-      [8.2, 2.65, 31],
+      [7.8, 2.35, -31],
+      [8.2, 2.65, -22],
     ])
     expect(signedVolume(node)).toBeCloseTo(2 * 0.4 * 0.3 * 4, 5)
   })
@@ -202,8 +212,8 @@ END-ISO`,
     expect(node.parentId).toBeNull()
     expect(graph.rootNodeIds).toContain(node.id)
     expectBounds(node, [
-      [7.8, 8.35, 21],
-      [8.2, 8.65, 25],
+      [7.8, 8.35, -25],
+      [8.2, 8.65, -21],
     ])
   })
 
