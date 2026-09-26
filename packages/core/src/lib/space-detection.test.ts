@@ -2384,6 +2384,30 @@ describe('procedural zones', () => {
     expect(plan.update[0]?.data.polygon).toContainEqual([5, 0])
   })
 
+  test('follows its room when a wall move bridges a junction into its boundary', () => {
+    const walls = squareWalls()
+    const zone = ZoneNode.parse({
+      name: 'Kitchen',
+      polygon: square,
+      autoFromWalls: true,
+      boundaryWallIds: walls.map((wall) => wall.id),
+    })
+    // The east wall moved out to x = 5; a new bridge wall closes the corner it left.
+    const bridge = WallNode.parse({ start: [4, 0], end: [5, 0] })
+    const movedWalls = [
+      walls[0]!,
+      { ...walls[1]!, start: [5, 0] as [number, number], end: [5, 3] as [number, number] },
+      { ...walls[2]!, start: [5, 3] as [number, number] },
+      walls[3]!,
+      bridge,
+    ]
+    const plan = planAutoZonesForLevel(detectSpacesForLevel('level-1', movedWalls).spaces, [zone])
+
+    expect(plan.update).toHaveLength(1)
+    expect(plan.update[0]?.data.polygon).toContainEqual([5, 0])
+    expect(plan.update[0]?.data.boundaryWallIds).toContain(bridge.id)
+  })
+
   test('leaves an unrelated site zone manual', () => {
     const { spaces } = detectSpacesForLevel('level-1', squareWalls())
     const zone = ZoneNode.parse({

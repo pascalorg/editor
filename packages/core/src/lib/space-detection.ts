@@ -1700,12 +1700,31 @@ export function planAutoZonesForLevel(
   existingZones: readonly ZoneNodeType[],
 ): AutoZoneSyncPlan {
   const update: AutoZoneSyncPlan['update'] = []
+  const walledZones = existingZones.filter(
+    (zone) => zone.autoFromWalls && zone.boundaryWallIds.length >= 3,
+  )
+  const exactlyMatched = new Set(
+    spaces.filter((space) =>
+      walledZones.some((zone) => sameStringSet(space.wallIds, zone.boundaryWallIds)),
+    ),
+  )
+  // A wall edit can add a wall to a room without taking any away (a move bridging a junction):
+  // the zone then follows the one unclaimed room that still has all of its boundary walls.
+  const roomKeepingWalls = (zone: ZoneNodeType) => {
+    const candidates = spaces.filter(
+      (space) =>
+        !exactlyMatched.has(space) &&
+        zone.boundaryWallIds.every((wallId) => space.wallIds.includes(wallId)),
+    )
+    return candidates.length === 1 ? candidates[0] : undefined
+  }
 
   for (const zone of existingZones) {
     const storedSignature = polygonSignature(zone.polygon.map(pointFromTuple))
     const matchingSpace =
       zone.autoFromWalls && zone.boundaryWallIds.length >= 3
-        ? spaces.find((space) => sameStringSet(space.wallIds, zone.boundaryWallIds))
+        ? (spaces.find((space) => sameStringSet(space.wallIds, zone.boundaryWallIds)) ??
+          roomKeepingWalls(zone))
         : spaces.find(
             (space) => polygonSignature(space.polygon.map(pointFromTuple)) === storedSignature,
           )
@@ -2111,6 +2130,237 @@ function detectSpacesFromWalls(levelId: string, walls: WallNode[]) {
 
 export function detectSpacesForLevel(levelId: string, walls: WallNode[]) {
   return detectSpacesFromWalls(levelId, walls)
+}
+
+// Automatic surfaces come from centreline room detection, so their vertices sit on the walls.
+const WALL_BOUND_VERTEX_TOLERANCE = 1e-3
+// Arc vertices are exact curve samples; the search polyline below is finer than this.
+const CURVED_WALL_VERTEX_TOLERANCE = 5e-3
+const CURVE_SEARCH_SAMPLES = 256
+
+type WallMoveSegment = Pick<WallNode, 'start' | 'end'>
+type FollowedWall = WallMoveSegment & Pick<WallNode, 'curveOffset'>
+
+function intersectWallLines(a: WallMoveSegment, b: WallMoveSegment): [number, number] | null {
+  const ax = a.end[0] - a.start[0]
+  const ay = a.end[1] - a.start[1]
+  const bx = b.end[0] - b.start[0]
+  const by = b.end[1] - b.start[1]
+  const cross = ax * by - ay * bx
+  if (Math.abs(cross) <= 1e-9 * Math.hypot(ax, ay) * Math.hypot(bx, by)) return null
+  const t = ((b.start[0] - a.start[0]) * by - (b.start[1] - a.start[1]) * bx) / cross
+  return [a.start[0] + ax * t, a.start[1] + ay * t]
+}
+
+/** Keeps a vertex at the same fraction of its straight wall as the wall moves. */
+function carryAlongWall(
+  vertex: [number, number],
+  from: WallMoveSegment,
+  to: WallMoveSegment,
+): [number, number] {
+  const dx = from.end[0] - from.start[0]
+  const dy = from.end[1] - from.start[1]
+  const lengthSq = dx * dx + dy * dy
+  if (lengthSq < 1e-12) {
+    return [vertex[0] + to.start[0] - from.start[0], vertex[1] + to.start[1] - from.start[1]]
+  }
+  const t = ((vertex[0] - from.start[0]) * dx + (vertex[1] - from.start[1]) * dy) / lengthSq
+  return [to.start[0] + (to.end[0] - to.start[0]) * t, to.start[1] + (to.end[1] - to.start[1]) * t]
+}
+
+/** Curve parameter of a vertex on a curved wall's arc, or null when it is off the arc. */
+function curveParameterOf(vertex: [number, number], wall: FollowedWall): number | null {
+  let best: { distance: number; t: number } | null = null
+  let previous = getWallCurveFrameAt(wall, 0).point
+  for (let index = 1; index <= CURVE_SEARCH_SAMPLES; index += 1) {
+    const point = getWallCurveFrameAt(wall, index / CURVE_SEARCH_SAMPLES).point
+    const dx = point.x - previous.x
+    const dy = point.y - previous.y
+    const lengthSq = dx * dx + dy * dy
+    const local =
+      lengthSq > 0
+        ? Math.max(
+            0,
+            Math.min(1, ((vertex[0] - previous.x) * dx + (vertex[1] - previous.y) * dy) / lengthSq),
+          )
+        : 0
+    const distance = Math.hypot(
+      vertex[0] - (previous.x + dx * local),
+      vertex[1] - (previous.y + dy * local),
+    )
+    if (!best || distance < best.distance) {
+      best = { distance, t: (index - 1 + local) / CURVE_SEARCH_SAMPLES }
+    }
+    previous = point
+  }
+  return best && best.distance <= CURVED_WALL_VERTEX_TOLERANCE ? best.t : null
+}
+
+/** The straight wall that carries the polygon edge `from → to`, preferring a moving one. */
+function wallAlongEdge(
+  from: [number, number],
+  to: [number, number],
+  walls: ReadonlyMap<string, FollowedWall>,
+  movingWallIds: ReadonlySet<string>,
+): string | null {
+  let found: string | null = null
+  for (const [id, wall] of walls) {
+    if (isCurvedWall(wall)) continue
+    if (distanceToSegment(from, wall.start, wall.end) > WALL_BOUND_VERTEX_TOLERANCE) continue
+    // The edge lies on the wall's line (an edge may span a chain of collinear walls).
+    const dx = wall.end[0] - wall.start[0]
+    const dy = wall.end[1] - wall.start[1]
+    const length = Math.hypot(dx, dy)
+    if (length < 1e-9) continue
+    const offLine = Math.abs((to[0] - wall.start[0]) * dy - (to[1] - wall.start[1]) * dx) / length
+    if (offLine > WALL_BOUND_VERTEX_TOLERANCE) continue
+    if (movingWallIds.has(id)) return id
+    found ??= id
+  }
+  return found
+}
+
+type VertexBinding =
+  | { kind: 'fixed' }
+  | { kind: 'curve'; wallId: string; t: number; curveBefore: boolean }
+  | { kind: 'edges'; previous: string | null; next: string | null }
+
+/**
+ * Live preview of the automatic slabs and ceilings bounded by `movingWallIds`, with no room
+ * detection per tick. Boundary membership is read once here: each polygon vertex binds to the
+ * walls carrying its two edges (a corner is where they meet again), or to its place on a curved
+ * wall's arc. The returned function re-places the bound vertices for the moved walls; a vertex
+ * at a junction the move bridges (`bridges`, from `planWallMoveJunctions`: original point →
+ * moved endpoint) stays and gains the bridge's moved end, as the commit's rooms will. New,
+ * merged or split rooms appear at commit; rebuild the follower after a foreign topology change.
+ */
+export function createWallBoundSurfaceFollower(
+  levelId: string,
+  nodes: SceneNodes,
+  movingWallIds: ReadonlySet<string>,
+): (
+  moved: ReadonlyMap<string, WallMoveSegment>,
+  bridges?: ReadonlyArray<WallMoveSegment>,
+) => Array<[AnyNodeId, Array<[number, number]>]> {
+  const walls = new Map<string, FollowedWall>()
+  for (const node of Object.values(nodes)) {
+    if (node?.type === 'wall' && node.parentId === levelId) {
+      walls.set(node.id, { start: node.start, end: node.end, curveOffset: node.curveOffset })
+    }
+  }
+  const movingCurves = [...movingWallIds]
+    .map((id) => [id, walls.get(id)] as const)
+    .filter((entry): entry is readonly [string, FollowedWall] =>
+      Boolean(entry[1] && isCurvedWall(entry[1])),
+    )
+
+  const bindVertex = (polygon: Array<[number, number]>, index: number): VertexBinding => {
+    const vertex = polygon[index]!
+    for (const [wallId, wall] of movingCurves) {
+      const t = curveParameterOf(vertex, wall)
+      if (t === null) continue
+      // Only a polygon that runs along the arc rides it; one that just touches an arc end
+      // (a room beside the curved wall's junction) binds by its own edges below.
+      const curveBefore =
+        curveParameterOf(polygon[(index + polygon.length - 1) % polygon.length]!, wall) !== null
+      const curveAfter = curveParameterOf(polygon[(index + 1) % polygon.length]!, wall) !== null
+      if (curveBefore || curveAfter) return { kind: 'curve', wallId, t, curveBefore }
+    }
+    const previous = polygon[(index + polygon.length - 1) % polygon.length]!
+    const next = polygon[(index + 1) % polygon.length]!
+    const binding = {
+      kind: 'edges' as const,
+      previous: wallAlongEdge(vertex, previous, walls, movingWallIds),
+      next: wallAlongEdge(vertex, next, walls, movingWallIds),
+    }
+    return [binding.previous, binding.next].some((id) => id && movingWallIds.has(id))
+      ? binding
+      : { kind: 'fixed' }
+  }
+
+  const surfaces: Array<{
+    id: AnyNodeId
+    polygon: Array<[number, number]>
+    bindings: VertexBinding[]
+  }> = []
+  for (const node of Object.values(nodes)) {
+    if (node?.type !== 'slab' && node?.type !== 'ceiling') continue
+    if (node.parentId !== levelId || !node.autoFromWalls) continue
+    const polygon = node.polygon as Array<[number, number]>
+    const bindings = polygon.map((_, index) => bindVertex(polygon, index))
+    if (bindings.some((binding) => binding.kind !== 'fixed')) {
+      surfaces.push({ id: node.id, polygon, bindings })
+    }
+  }
+
+  const bridgedEnd = (
+    vertex: [number, number],
+    bridges: ReadonlyArray<WallMoveSegment>,
+  ): [number, number] | null => {
+    for (const bridge of bridges) {
+      if (
+        Math.hypot(bridge.start[0] - vertex[0], bridge.start[1] - vertex[1]) <=
+        WALL_BOUND_VERTEX_TOLERANCE
+      ) {
+        return [bridge.end[0], bridge.end[1]]
+      }
+    }
+    return null
+  }
+
+  const followVertex = (
+    vertex: [number, number],
+    binding: VertexBinding,
+    moved: ReadonlyMap<string, WallMoveSegment>,
+    bridges: ReadonlyArray<WallMoveSegment>,
+  ): Array<[number, number]> => {
+    if (binding.kind === 'fixed') return [vertex]
+    const current = (id: string): FollowedWall => {
+      const wall = walls.get(id)!
+      const next = moved.get(id)
+      return next ? { ...wall, start: next.start, end: next.end } : wall
+    }
+    if (binding.kind === 'curve') {
+      // An arc end at a junction the move bridges stays, and gains the bridge's moved end.
+      const atEnd = binding.t <= 1e-6 || binding.t >= 1 - 1e-6
+      const end = atEnd ? bridgedEnd(vertex, bridges) : null
+      if (end) return binding.curveBefore ? [end, vertex] : [vertex, end]
+      const point = getWallCurveFrameAt(current(binding.wallId), binding.t).point
+      return [[point.x, point.y]]
+    }
+    const { previous, next } = binding
+    const shifts = (id: string | null) => {
+      const to = id ? moved.get(id) : undefined
+      const from = id ? walls.get(id) : undefined
+      return Boolean(
+        to &&
+          from &&
+          (to.start[0] !== from.start[0] ||
+            to.start[1] !== from.start[1] ||
+            to.end[0] !== from.end[0] ||
+            to.end[1] !== from.end[1]),
+      )
+    }
+    const previousMoves = shifts(previous)
+    const nextMoves = shifts(next)
+    if (previousMoves !== nextMoves) {
+      const end = bridgedEnd(vertex, bridges)
+      // The stationary edge keeps the junction; the bridge joins it to the moved wall.
+      if (end) return previousMoves ? [end, vertex] : [vertex, end]
+    }
+    if (previous && next && previous !== next) {
+      const corner = intersectWallLines(current(previous), current(next))
+      if (corner) return [corner]
+    }
+    const carrier = [previous, next].find((id) => id && moved.has(id))
+    return [carrier ? carryAlongWall(vertex, walls.get(carrier)!, current(carrier)) : vertex]
+  }
+
+  return (moved, bridges = []) =>
+    surfaces.map(({ id, polygon, bindings }) => [
+      id,
+      polygon.flatMap((vertex, index) => followVertex(vertex, bindings[index]!, moved, bridges)),
+    ])
 }
 
 function runSpaceDetection(
