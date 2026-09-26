@@ -15,12 +15,13 @@ export function buildImportedMeshGeometry(node: ImportedMeshNode): Group {
     if (primitive.positions.length < 9) continue
     const geometry = new BufferGeometry()
     geometry.setAttribute('position', new Float32BufferAttribute(primitive.positions, 3))
+    // The index must be set first: computeVertexNormals reads triangles from it when present.
+    if (primitive.indices.length >= 3) geometry.setIndex(primitive.indices)
     if (primitive.normals?.length === primitive.positions.length) {
       geometry.setAttribute('normal', new Float32BufferAttribute(primitive.normals, 3))
     } else {
       geometry.computeVertexNormals()
     }
-    if (primitive.indices.length >= 3) geometry.setIndex(primitive.indices)
     geometry.computeBoundingBox()
     geometry.computeBoundingSphere()
 
