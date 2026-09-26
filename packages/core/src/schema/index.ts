@@ -364,6 +364,19 @@ export {
   WindowType,
 } from './nodes/window'
 export { ZoneNode } from './nodes/zone'
+// Typed source identity (D5)
+export {
+  PROVENANCE_MAX_ID_LENGTH,
+  PROVENANCE_MAX_LINEAGE_IDS,
+  PROVENANCE_MAX_NAMESPACE_LENGTH,
+  PROVENANCE_MAX_NODE_ID_LENGTH,
+  PROVENANCE_MAX_REFS,
+  Provenance,
+  ProvenanceLineage,
+  ProvenanceLineageOp,
+  ProvenanceRef,
+  ProvenanceRole,
+} from './provenance'
 export { generateSceneMaterialId, SceneMaterial, type SceneMaterialId } from './scene-material'
 export { MAX_TERRAIN_SIDE, TerrainData } from './terrain'
 export type {

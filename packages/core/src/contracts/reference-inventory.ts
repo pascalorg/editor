@@ -483,6 +483,20 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
       note: 'Capture provenance: stable across re-capture (R9).',
     }),
   ),
+
+  // ─── Typed provenance (D5) ────────────────────────────────────────
+  row({
+    kind: '*',
+    path: 'provenance.refs[].id',
+    ...policy('source', 'content', 'freeze', 'strip'),
+    note: 'Source element the node reproduces, scoped by `ns`; stripped with its whole ref so presets never claim it. Clones keep it today (I-04 re-roles copies).',
+  }),
+  row({
+    kind: '*',
+    path: 'provenance.lineage.fromIds[]',
+    ...policy('label', 'internal', 'freeze', 'strip'),
+    note: 'Node ids this node was split, merged or copied from. History: compared, never dereferenced, kept when those nodes are deleted.',
+  }),
 ]
 
 /** Candidate paths that are not references, with the reason. `kind: '*'` matches every kind. */
