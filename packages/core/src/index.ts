@@ -307,7 +307,7 @@ export * from './registry'
 // Exported here rather than from the registry barrel: that barrel is
 // reachable from server-safe graphs (schema → spatial grid → registry)
 // and must stay free of React imports.
-export { useRegistryVersion } from './registry/use-registry-version'
+export { useNodeDefinition, useRegistryVersion } from './registry/use-registry-version'
 export * from './schema'
 export * from './services'
 export { isMovable, movePlanToward, moveToward, resolveMovable } from './services/movement'
