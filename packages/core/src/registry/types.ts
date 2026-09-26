@@ -49,6 +49,10 @@ export type GeometryContext = {
    * in 2D.
    */
   levelBaseAt?: (x: number, z: number) => number
+  /** Height of a rendered node's upward-facing top at level-local XZ, or null outside it. */
+  surfaceHeightAt?: (hostId: AnyNodeId, x: number, z: number) => number | null
+  /** Highest terrain, slab, or shaped top at a level-local point. */
+  supportHeightAt?: (x: number, z: number, selectedHostId?: AnyNodeId) => number
   /**
    * Pre-computed level-batch data, populated by the dispatcher when the
    * kind declares `def.computeLevelData` (3D) or
@@ -2272,6 +2276,13 @@ export type SurfacesConfig = {
   hosting?: SurfaceProvider | false
   top?: {
     height: number | ((n: AnyNode, context: { nodes: Record<string, AnyNode> }) => number)
+    /** Resolve support from node data; null means this point is outside the support footprint. */
+    supportHeight?: (
+      node: AnyNode,
+      x: number,
+      z: number,
+      context: { nodes: Readonly<Record<AnyNodeId, AnyNode>> },
+    ) => number | null
   }
   sides?: { faces: 'all' | ReadonlyArray<readonly [number, number, number]> }
   custom?: SurfaceQuery

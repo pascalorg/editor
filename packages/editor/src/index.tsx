@@ -88,9 +88,9 @@ export { WallMoveSideHandles } from './components/editor/wall-move-side-handles'
 export { useFloorplanRender } from './components/editor-2d/floorplan-render-context'
 export { FloorplanDimensionRenderer } from './components/editor-2d/renderers/floorplan-dimension-renderer'
 export {
-  type DraftWallMeasurement,
-  FloorplanDraftWallMeasurement,
-} from './components/editor-2d/renderers/floorplan-draft-wall-measurement'
+  type DraftMeasurement,
+  FloorplanDraftMeasurement,
+} from './components/editor-2d/renderers/floorplan-draft-measurement'
 export { FloorplanGeometryRenderer } from './components/editor-2d/renderers/floorplan-geometry-renderer'
 export {
   FloorplanNodePreview,
@@ -110,16 +110,6 @@ export type {
   SelectionAffordanceInteractionApi,
   SelectionAffordanceProps,
 } from './components/systems/selection-affordance-services'
-// Phase 5 Stage D transitional exports — pure drafting / angle helpers
-// consumed by kind-owned drag actions in @pascal-app/nodes. Stage F
-// cleanup moves these into @pascal-app/nodes (fence/drafting.ts +
-// shared/segment-angle.ts) once every Stage D port is in.
-export {
-  createFenceOnCurrentLevel,
-  createSplineFenceOnCurrentLevel,
-  type FencePlanPoint,
-  snapFenceDraftPoint,
-} from './components/tools/fence/fence-drafting'
 export { MoveTool } from './components/tools/item/move-tool'
 // Placement-math helpers — shared by kind-owned placement tools in
 // `@pascal-app/nodes` (wall curve sagitta snap, door / window placement,
@@ -207,6 +197,7 @@ export { preloadRegistryToolModules, ToolManager } from './components/tools/tool
 export {
   chainEndJoinsExistingWall,
   createWallOnCurrentLevel,
+  findWallSnapTarget,
   getSegmentGridStep,
   isSegmentLongEnough,
   resolveEndpointWallSplit,
@@ -604,6 +595,10 @@ export {
   quickMeasurementContext,
   resolveQuickMeasurementReport,
 } from './lib/quick-measurement'
+export {
+  REGISTERED_DRAFT_SNAP_EXTENSION,
+  snapRegisteredDraftPoint,
+} from './lib/registered-draft-snap'
 export { clearRoofDuplicateMetadata, duplicateRoofSubtree } from './lib/roof-duplication'
 // Roof wall-face hit resolution + overlap guard — shared by the
 // kind-owned door / window tools in `@pascal-app/nodes` and the item

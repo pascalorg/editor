@@ -402,8 +402,25 @@ export {
   getFenceCenterlineLength,
   sampleFenceCenterline,
 } from './systems/fence/fence-centerline'
+export type {
+  FenceFeatureData,
+  FenceWithFeatures,
+  ResolvedFenceFeature,
+} from './systems/fence/fence-features'
+export {
+  canPlaceFenceFeature,
+  fenceFeatureData,
+  fenceFeaturePlacementIssue,
+  fenceWithFeatures,
+  getFenceGateLeaves,
+  isFenceFeatureNode,
+  projectPointToFence,
+  resolveFenceFeatures,
+} from './systems/fence/fence-features'
+export type { FenceSpanMode } from './systems/fence/fence-spline'
 export {
   getFenceControlHandle,
+  getFenceSpanMode,
   getFenceSplineFrameAt,
   getFenceSplineLength,
   getTwoPointFenceCurveTangents,

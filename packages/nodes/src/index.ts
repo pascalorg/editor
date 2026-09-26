@@ -17,6 +17,7 @@ import { ductTerminalDefinition } from './duct-terminal'
 import { elevatorDefinition } from './elevator'
 import { eyebrowVentDefinition } from './eyebrow-vent'
 import { fenceDefinition } from './fence'
+import { fenceGateDefinition, fenceOpeningDefinition } from './fence-feature/definition'
 import { guideDefinition } from './guide'
 import { gutterDefinition } from './gutter'
 import { hvacEquipmentDefinition } from './hvac-equipment'
@@ -77,6 +78,8 @@ export const builtinPlugin: Plugin = {
     wallDefinition as unknown as AnyNodeDefinition,
     leanToExtensionDefinition as unknown as AnyNodeDefinition,
     fenceDefinition as unknown as AnyNodeDefinition,
+    fenceGateDefinition as unknown as AnyNodeDefinition,
+    fenceOpeningDefinition as unknown as AnyNodeDefinition,
     slabDefinition as unknown as AnyNodeDefinition,
     ceilingDefinition as unknown as AnyNodeDefinition,
     doorDefinition as unknown as AnyNodeDefinition,
@@ -170,7 +173,8 @@ export { ductSegmentDefinition } from './duct-segment'
 export { ductTerminalDefinition } from './duct-terminal'
 export { elevatorDefinition } from './elevator'
 export { eyebrowVentDefinition } from './eyebrow-vent'
-export { fenceDefinition } from './fence'
+export { beginFenceFeaturePlacement, fenceDefinition } from './fence'
+export { fenceGateDefinition, fenceOpeningDefinition } from './fence-feature/definition'
 export { guideDefinition } from './guide'
 export { gutterDefinition } from './gutter'
 export { hvacEquipmentDefinition } from './hvac-equipment'

@@ -1,6 +1,12 @@
 'use client'
 
-import { RoofType as RoofTypeSchema, useRegistryVersion } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  isFenceFeatureNode,
+  RoofType as RoofTypeSchema,
+  useRegistryVersion,
+  useScene,
+} from '@pascal-app/core'
 import {
   MaterialPaintPanel,
   TerrainSculptPanel,
@@ -10,6 +16,7 @@ import {
   useFloorplanMode,
 } from '@pascal-app/editor'
 import { useLiquidLineToolOptions } from '@pascal-app/nodes'
+import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import {
@@ -20,6 +27,7 @@ import {
 } from '@/components/toolbar-tooltip'
 import {
   activateBuildTool,
+  activateFenceFeaturePlacement,
   activateModularCabinetTool,
   activatePaintMode,
   activateRoofFeatureTool,
@@ -48,8 +56,24 @@ const subscribeToClientMount = () => () => {}
 export function BuildTab() {
   const [mepOpen, setMepOpen] = useState(false)
   const activeTool = useEditor((s) => s.tool)
+  const selectedId = useViewer((s) => s.selection.selectedIds[0])
+  const selectedFenceFeature = useScene((s) => {
+    const selected = selectedId ? s.nodes[selectedId as AnyNodeId] : undefined
+    return isFenceFeatureNode(selected) ? selected : undefined
+  })
+  const selectedFence = useScene((s) => {
+    const selected = selectedId ? s.nodes[selectedId as AnyNodeId] : undefined
+    const host =
+      isFenceFeatureNode(selected) && selected.parentId
+        ? s.nodes[selected.parentId as AnyNodeId]
+        : selected
+    return host?.type === 'fence' ? host : undefined
+  })
   const mode = useEditor((s) => s.mode)
   const roofDefaults = useEditor((s) => s.toolDefaults.roof)
+  const fenceDefaults = useEditor((s) => s.toolDefaults.fence)
+  const placingFenceFeature =
+    mode === 'build' && activeTool === 'fence' ? fenceDefaults?.featurePlacement : undefined
   const floorplanMode = useFloorplanMode((s) => s.mode)
   const follow = useLiquidLineToolOptions((s) => s.follow)
   const toggleFollow = useLiquidLineToolOptions((s) => s.toggleFollow)
@@ -67,6 +91,7 @@ export function BuildTab() {
     mode === 'build' &&
     (activeTool === 'pipe-segment' || activeTool === 'pipe-fitting' || activeTool === 'pipe-trap')
   const liquidLineContext = mode === 'build' && activeTool === 'liquid-line'
+  const fenceContext = !!selectedFence || (mode === 'build' && activeTool === 'fence')
 
   const isMepItemActive = (item: MepItem) => mode === 'build' && activeTool === item.kind
 
@@ -95,28 +120,33 @@ export function BuildTab() {
     if (type.id === 'kitchen') return isKitchenActive
     if (type.id === 'roof')
       return mode === 'build' && (activeTool === 'roof' || isRoofFeatureActive)
+    if (type.id === 'fence' && selectedFence) return true
     return mode === 'build' && activeTool === type.kind
   }
 
-  const handleTypeClick = useCallback((type: BuildType) => {
-    setMepOpen(type.id === 'mep')
-    if (type.mode === 'material-paint') {
-      activatePaintMode()
-    } else if (type.mode === 'terrain-sculpt') {
-      activateTerrainSculptMode()
-    } else if (type.id === 'mep') {
-      const ed = useEditor.getState()
-      ed.setPhase('structure')
-      ed.setStructureLayer('elements')
-      ed.setCatalogCategory(null)
-      ed.setMode('build')
-      ed.setTool(null)
-    } else if (type.id === 'kitchen') {
-      activateModularCabinetTool()
-    } else if (type.kind) {
-      activateBuildTool(type.kind)
-    }
-  }, [])
+  const handleTypeClick = useCallback(
+    (type: BuildType) => {
+      setMepOpen(type.id === 'mep')
+      if (type.id === 'fence' && selectedFence) return
+      if (type.mode === 'material-paint') {
+        activatePaintMode()
+      } else if (type.mode === 'terrain-sculpt') {
+        activateTerrainSculptMode()
+      } else if (type.id === 'mep') {
+        const ed = useEditor.getState()
+        ed.setPhase('structure')
+        ed.setStructureLayer('elements')
+        ed.setCatalogCategory(null)
+        ed.setMode('build')
+        ed.setTool(null)
+      } else if (type.id === 'kitchen') {
+        activateModularCabinetTool()
+      } else if (type.kind) {
+        activateBuildTool(type.kind)
+      }
+    },
+    [selectedFence],
+  )
 
   // On open, land on the first build tool — parity with the community Build
   // sidebar, so switching to Build immediately arms a usable tool. Skip when a
@@ -126,12 +156,13 @@ export function BuildTab() {
   useEffect(() => {
     if (didInitRef.current) return
     didInitRef.current = true
+    if (selectedFence) return
     const ed = useEditor.getState()
     if (ed.mode === 'material-paint' || ed.mode === 'terrain-sculpt') return
     if (ed.mode === 'build' && ed.tool) return
     const firstType = buildTypes.find((t) => t.kind)
     if (firstType) handleTypeClick(firstType)
-  }, [buildTypes, handleTypeClick])
+  }, [buildTypes, handleTypeClick, selectedFence])
 
   return (
     <div className="flex h-full flex-col gap-3 p-3">
@@ -279,6 +310,152 @@ export function BuildTab() {
               </TooltipProvider>
             </div>
           ) : null}
+        </div>
+      ) : fenceContext ? (
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto border-border/50 border-t pt-3">
+          <div className="px-0.5 font-medium text-muted-foreground text-xs">Fence features</div>
+          <div
+            className="grid gap-1.5"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
+          >
+            {(['gate', 'opening'] as const).map((kind) => (
+              <button
+                aria-pressed={placingFenceFeature === kind}
+                className={cn(
+                  'group flex aspect-square items-center justify-center rounded-xl p-1 transition-all duration-200',
+                  placingFenceFeature === kind
+                    ? 'bg-primary/10 text-primary ring-1 ring-primary/50'
+                    : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
+                )}
+                key={kind}
+                aria-label={kind === 'gate' ? 'Add Gate' : 'Add Open Passage'}
+                title={kind === 'gate' ? 'Add Gate' : 'Add Open Passage'}
+                onClick={() => {
+                  triggerSFX('sfx:menu-click')
+                  activateFenceFeaturePlacement(kind)
+                }}
+                type="button"
+              >
+                <Image
+                  alt=""
+                  className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
+                  height={48}
+                  src={kind === 'gate' ? '/icons/gate.webp' : '/icons/open-passage.webp'}
+                  width={48}
+                />
+              </button>
+            ))}
+          </div>
+          {selectedFenceFeature && (
+            <label className="flex items-center justify-between text-xs">
+              Match fence style
+              <input
+                aria-label="Match fence style"
+                type="checkbox"
+                checked={selectedFenceFeature.matchFenceStyle !== false}
+                onChange={(event) =>
+                  useScene.getState().updateNode(selectedFenceFeature.id, {
+                    matchFenceStyle: event.currentTarget.checked,
+                  })
+                }
+              />
+            </label>
+          )}
+          {!!placingFenceFeature && (
+            <div className="space-y-2 text-xs">
+              <p>
+                Hover a fence to preview. Click to place. Esc cancels. Leave room between openings.
+              </p>
+              {typeof fenceDefaults?.featurePlacementFeedback === 'string' && (
+                <p role="status" className="text-amber-400">
+                  {fenceDefaults.featurePlacementFeedback}
+                </p>
+              )}
+              <label className="flex items-center justify-between">
+                Match fence style
+                <input
+                  type="checkbox"
+                  checked={fenceDefaults?.featureMatchStyle !== false}
+                  onChange={(event) =>
+                    useEditor.getState().setToolDefaults('fence', {
+                      ...fenceDefaults,
+                      featureMatchStyle: event.currentTarget.checked,
+                    })
+                  }
+                />
+              </label>
+              {fenceDefaults?.featureMatchStyle === false && placingFenceFeature === 'gate' && (
+                <label className="flex items-center justify-between">
+                  Gate style
+                  <select
+                    className="rounded border bg-background p-1"
+                    value={
+                      typeof fenceDefaults?.featureStyle === 'string'
+                        ? fenceDefaults.featureStyle
+                        : 'picket'
+                    }
+                    onChange={(event) =>
+                      useEditor.getState().setToolDefaults('fence', {
+                        ...fenceDefaults,
+                        featureStyle: event.currentTarget.value,
+                      })
+                    }
+                  >
+                    <option value="picket">Picket</option>
+                    <option value="slat">Vertical slats</option>
+                    <option value="horizontal">Horizontal boards</option>
+                    <option value="privacy">Solid privacy</option>
+                    <option value="rail">Open rails</option>
+                  </select>
+                </label>
+              )}
+              <label className="flex items-center justify-between">
+                Opening width (m)
+                <input
+                  className="w-20 rounded border bg-background p-1"
+                  type="number"
+                  min={0.35}
+                  max={12}
+                  step={0.05}
+                  value={
+                    typeof fenceDefaults?.featureWidth === 'number'
+                      ? fenceDefaults.featureWidth
+                      : 1.1
+                  }
+                  onChange={(event) => {
+                    const width = event.currentTarget.valueAsNumber
+                    if (Number.isFinite(width) && width >= 0.35)
+                      useEditor.getState().setToolDefaults('fence', {
+                        ...fenceDefaults,
+                        featureWidth: Math.min(12, width),
+                      })
+                  }}
+                />
+              </label>
+              {placingFenceFeature === 'gate' && (
+                <label className="flex items-center justify-between">
+                  Leaves
+                  <select
+                    className="rounded border bg-background p-1"
+                    value={fenceDefaults?.featureLeafType === 'double' ? 'double' : 'single'}
+                    onChange={(event) =>
+                      useEditor.getState().setToolDefaults('fence', {
+                        ...fenceDefaults,
+                        featureLeafType: event.target.value,
+                      })
+                    }
+                  >
+                    <option value="single">Single gate</option>
+                    <option value="double">Double gate</option>
+                  </select>
+                </label>
+              )}
+            </div>
+          )}
+          <p className="px-0.5 text-[11px] text-muted-foreground">
+            Choose Gate or Open Passage, then click its position on any fence. Find placed gates and
+            openings under their fence in the scene graph.
+          </p>
         </div>
       ) : isKitchenActive ? (
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">

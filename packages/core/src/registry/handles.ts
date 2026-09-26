@@ -140,6 +140,8 @@ export type LinearResizeHandle<N> = {
   kind: 'linear-resize'
   /** Local resize axis. */
   axis: HandleAxis
+  /** Local drag direction when the edited dimension follows a rotated path. */
+  dragAxis?: (node: N, sceneApi: SceneApi) => readonly [number, number, number]
   /** Arrow and clearance direction. Drag growth remains controlled by `anchor`. */
   direction?: 1 | -1
   anchor: HandleAnchor

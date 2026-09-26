@@ -1,10 +1,10 @@
 import { type AnyNodeId, type FenceNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
-import { memo, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import useEditor from '../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
-import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
+import { focusTreeNode, handleTreeSelection, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 
 interface FenceTreeNodeProps {
@@ -20,11 +20,19 @@ export const FenceTreeNode = memo(function FenceTreeNode({
 }: FenceTreeNodeProps) {
   const node = useScene((state) => state.nodes[nodeId]) as FenceNode | undefined
   const [isEditing, setIsEditing] = useState(false)
+  const [expanded, setExpanded] = useState(true)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const isSelected = selectedIds.includes(nodeId)
   const isHovered = useViewer((state) => state.hoveredId === nodeId)
   const setSelection = useViewer((state) => state.setSelection)
   const setHoveredId = useViewer((state) => state.setHoveredId)
+
+  const children = node?.children ?? []
+  const hasSelectedChild = children.some((id) => selectedIds.includes(id))
+
+  useEffect(() => {
+    if (hasSelectedChild) setExpanded(true)
+  }, [hasSelectedChild, node?.children])
 
   if (!node) return null
 
@@ -40,8 +48,8 @@ export const FenceTreeNode = memo(function FenceTreeNode({
     <TreeNodeWrapper
       actions={<TreeNodeActions nodeId={node.id} />}
       depth={depth}
-      expanded={false}
-      hasChildren={false}
+      expanded={expanded}
+      hasChildren={children.length > 0}
       icon={
         <Image alt="" className="object-contain" height={14} src="/icons/fence.webp" width={14} />
       }
@@ -63,7 +71,16 @@ export const FenceTreeNode = memo(function FenceTreeNode({
       onDoubleClick={() => focusTreeNode(nodeId)}
       onMouseEnter={() => setHoveredId(nodeId)}
       onMouseLeave={() => setHoveredId(null)}
-      onToggle={() => {}}
-    />
+      onToggle={() => setExpanded((value) => !value)}
+    >
+      {children.map((childId, index) => (
+        <TreeNode
+          depth={depth + 1}
+          isLast={index === children.length - 1}
+          key={childId}
+          nodeId={childId as AnyNodeId}
+        />
+      ))}
+    </TreeNodeWrapper>
   )
 })
