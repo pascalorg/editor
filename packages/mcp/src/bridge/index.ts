@@ -1,3 +1,4 @@
+export { PatchRefusedError } from './patch-refused-error'
 export type {
   ActiveSceneMeta,
   CreatePatch,
