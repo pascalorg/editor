@@ -233,4 +233,45 @@ describe('scene history drafts', () => {
     ])
     end()
   })
+
+  test('a same-host surface move cancelled mid-carry never comes back on undo', () => {
+    const shelfId = 'procedural-item_history_drafts' as AnyNodeId
+    useScene.setState({
+      nodes: {
+        ...useScene.getState().nodes,
+        [levelId]: { ...level, children: [wall.id, shelfId] },
+        [shelfId]: {
+          id: shelfId,
+          type: 'procedural-item',
+          parentId: levelId,
+          metadata: {},
+          children: [itemId],
+          attachments: { [itemId]: 'top' },
+        } as unknown as ItemNode,
+        [itemId]: { ...structuredClone(item), parentId: shelfId },
+      },
+    } as never)
+    clearSceneHistory()
+    const attachment = () =>
+      (node(shelfId) as unknown as { attachments: Record<string, string> }).attachments[itemId]
+    const end = beginSceneHistoryDraft(itemId, node(itemId)!)
+    runSceneHistoryDraftWrite(() => {
+      useScene.getState().updateNodes([
+        { id: itemId, data: { position: [0, 0.5, 0] } },
+        { id: shelfId, data: { attachments: { [itemId]: 'middle' } } as never },
+      ])
+    })
+    useScene.getState().updateNode(wallId, { start: [0, 1] })
+    // Cancel: the carry puts back what it holds, then ends.
+    runSceneHistoryDraftWrite(() => {
+      const updates = sceneHistoryDraftRevertUpdates([itemId])
+      useScene.getState().updateNodes(updates as never)
+    })
+    end()
+    expect(attachment()).toBe('top')
+    useScene.temporal.getState().undo()
+    expect(wallStart()).toEqual([0, 0])
+    expect(attachment()).toBe('top')
+    expect((node(itemId) as ItemNode).position).toEqual([1, 0, 1])
+  })
 })

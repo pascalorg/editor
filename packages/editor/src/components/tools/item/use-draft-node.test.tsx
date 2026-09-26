@@ -269,6 +269,44 @@ describe('useDraftNode block face commit', () => {
     expect((nodes[LEVEL_ID as AnyNodeId] as LevelNode).children).toContain(hosted.id)
   })
 
+  test("cancel and drop-then-undo keep a collaborator's later position", () => {
+    const plant = ItemNode.parse({
+      id: 'item_collab-position-plant',
+      parentId: LEVEL_ID,
+      asset: {
+        id: 'potted-plant',
+        category: 'decor',
+        name: 'Potted plant',
+        thumbnail: '/potted-plant.png',
+        src: '/potted-plant.glb',
+        dimensions: [0.5, 0.39, 0.5],
+      },
+      position: [0, 0, 0],
+    })
+    useScene.getState().createNode(plant, LEVEL_ID as AnyNodeId)
+    const id = plant.id as AnyNodeId
+    const position = () => (useScene.getState().nodes[id] as ItemNode).position
+
+    // Escape keeps the collaborator's position.
+    useScene.temporal.getState().clear()
+    const draft = draftNode!
+    draft.adopt(useScene.getState().nodes[id] as ItemNode)
+    draft.updateSurface({ position: [1, 0, 1] }, null)
+    useScene.getState().updateNode(id, { position: [7, 0, 7] })
+    draft.destroy()
+    expect(position()).toEqual([7, 0, 7])
+
+    // Drop, then undo, returns to the collaborator's position.
+    useScene.temporal.getState().clear()
+    draft.adopt(useScene.getState().nodes[id] as ItemNode)
+    draft.updateSurface({ position: [1, 0, 1] }, null)
+    useScene.getState().updateNode(id, { position: [5, 0, 5] })
+    draft.commit({ parentId: LEVEL_ID, position: [2, 0, 3] })
+    expect(position()).toEqual([2, 0, 3])
+    useScene.temporal.getState().undo()
+    expect(position()).toEqual([5, 0, 5])
+  })
+
   test('never resumes history that another owner is pausing', () => {
     const hosted = ItemNode.parse({
       id: 'item_owned-pause-plant',
