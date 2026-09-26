@@ -6,6 +6,7 @@ import useViewer from '../../store/use-viewer'
 type FrameLimiterProps = {
   fps?: number
   paused?: boolean
+  onFrameError?: (cause: unknown) => void
 }
 
 export type FrameClock = {
@@ -58,8 +59,10 @@ const DRAW_DISABLED =
       .map((s) => s.trim()),
   ).has('draw')
 
-const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50, paused = false }) => {
-  const { advance, set, frameloop: initFrameloop } = useThree()
+const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50, paused = false, onFrameError }) => {
+  const { advance: advanceFrame, set, frameloop: initFrameloop } = useThree()
+  const onFrameErrorRef = useRef(onFrameError)
+  onFrameErrorRef.current = onFrameError
   const nextFrameTimeRef = useRef(0)
   const renderer = useThree((state) => state.gl)
   const size = useThree((state) => state.size)
@@ -73,6 +76,19 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50, paused = false })
     let raf: number | null = null
     let timer: ReturnType<typeof setInterval> | null = null
     let sizeSynced = false
+    // A system that throws inside useFrame runs outside React's error
+    // boundaries: report the first failure to the host and keep the loop alive.
+    let frameErrorReported = false
+    function advance(frameTime: number) {
+      try {
+        advanceFrame(frameTime)
+      } catch (error) {
+        if (frameErrorReported) return
+        frameErrorReported = true
+        if (onFrameErrorRef.current) onFrameErrorRef.current(error)
+        else console.error('[viewer] a frame callback threw', error)
+      }
+    }
     const effectiveFps = Number.isFinite(fps) && fps > 0 ? fps : 50
     const interval = 1000 / effectiveFps
     function syncSize() {
@@ -129,7 +145,7 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50, paused = false })
       set({ frameloop: initFrameloop })
     }
   }, [
-    advance,
+    advanceFrame,
     dpr,
     fps,
     initFrameloop,

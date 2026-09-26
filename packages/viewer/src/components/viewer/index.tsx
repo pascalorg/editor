@@ -35,7 +35,6 @@ import { GeometrySystem } from '../../systems/geometry/geometry-system'
 import { PerfActionSettleSystem } from '../../systems/perf-action-settle/perf-action-settle-system'
 import { subscribeWallBuildInteractions } from '../../systems/wall/wall-build-lifecycle'
 import { ImmersiveXRPresentationProvider } from '../../xr/presentation-context'
-import { ErrorBoundary } from '../error-boundary'
 import { SceneRenderer } from '../renderers/scene-renderer'
 import { BATCH_SPIKE_ENABLED, BatchedMeshSpike } from './batched-mesh-spike'
 import FrameLimiter from './frame-limiter'
@@ -45,6 +44,7 @@ import { PerfPanel } from './perf-panel'
 import { PointerRaycastLayers } from './pointer-raycast-layers'
 import PostProcessing, { DEFAULT_HOVER_STYLES, type HoverStyles } from './post-processing'
 import { RegisteredSystems } from './registered-systems'
+import { composeRenderErrorHandlers, SceneErrorBoundary } from './render-error'
 import { useSceneAtmosphere } from './scene-atmosphere'
 import { SceneBvh } from './scene-bvh'
 import { SelectionManager } from './selection-manager'
@@ -378,6 +378,13 @@ interface ViewerProps {
   sceneReadyKey?: string | number | null
   onSceneReadyChange?: (ready: boolean) => void
   /**
+   * Called when something in the scene throws while rendering (a node
+   * renderer or system, such as a plugin's lazy chunk that failed to load).
+   * The scene boundary still renders nothing in its place; this lets a host
+   * that must not carry on silently (a bake) fail with its own error.
+   */
+  onRenderError?: (cause: unknown) => void
+  /**
    * Wall-clock give-up cap for scene readiness, replacing the default
    * frame-count cap. Set it on hosts whose frame cadence is decoupled from
    * real time (the headless bake page's timer-driven loop runs the default
@@ -435,6 +442,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     isolate,
     sceneReadyKey,
     onSceneReadyChange,
+    onRenderError,
     sceneReadyMaxWaitMs,
     maxFps = 50,
     disablePostFx = false,
@@ -647,7 +655,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
                 disablePostFx
                 hoverStyles={hoverStyles}
                 immersiveXR
-                onRenderError={immersive.onError}
+                renderErrorHandlers={[immersive.onError, onRenderError]}
                 onSceneReadyChange={onSceneReadyChange}
                 perf={perf}
                 sceneReadyKey={sceneReadyKey}
@@ -661,10 +669,15 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
             </ImmersiveSession>
           ) : (
             <>
-              <FrameLimiter fps={maxFps} paused={renderPaused} />
+              <FrameLimiter
+                fps={maxFps}
+                onFrameError={composeRenderErrorHandlers(onRenderError)}
+                paused={renderPaused}
+              />
               <ViewerScene
                 disablePostFx={disablePostFx}
                 hoverStyles={hoverStyles}
+                renderErrorHandlers={[onRenderError]}
                 onSceneReadyChange={onSceneReadyChange}
                 perf={perf}
                 sceneReadyKey={sceneReadyKey}
@@ -687,7 +700,7 @@ function ViewerScene({
   disablePostFx,
   hoverStyles,
   immersiveXR = false,
-  onRenderError,
+  renderErrorHandlers,
   onSceneReadyChange,
   perf,
   sceneReadyKey,
@@ -700,7 +713,7 @@ function ViewerScene({
   disablePostFx: boolean
   hoverStyles: HoverStyles
   immersiveXR?: boolean
-  onRenderError?: (cause: unknown) => void
+  renderErrorHandlers: (((cause: unknown) => void) | undefined)[]
   onSceneReadyChange?: (ready: boolean) => void
   perf: boolean
   sceneReadyKey?: string | number | null
@@ -741,14 +754,14 @@ function ViewerScene({
         sceneReadyKey={sceneReadyKey}
         sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
       />
-      <ErrorBoundary fallback={null} onError={onRenderError} scope="viewer-scene">
+      <SceneErrorBoundary handlers={renderErrorHandlers}>
         <Lights />
         {SceneWrapper ? <SceneWrapper>{spatialScene}</SceneWrapper> : spatialScene}
         {!immersiveXR && <PostProcessing disablePostFx={disablePostFx} hoverStyles={hoverStyles} />}
         {selectionManager === 'default' && <SelectionManager />}
         {(perf || PERF_OVERLAY_ENABLED) && <PerfMonitor />}
         {(perf || PERF_OVERLAY_ENABLED) && <PerfActionSettleSystem />}
-      </ErrorBoundary>
+      </SceneErrorBoundary>
     </>
   )
 }
