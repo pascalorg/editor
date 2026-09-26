@@ -621,6 +621,10 @@ export const METADATA_REFERENCES: readonly ExistingReference[] = [
       note: 'IFC provenance written by the IFC converter.',
     }),
   ),
+  meta('sourceIds[]', {
+    ...policy('source', 'content', 'freeze', 'strip'),
+    note: 'Import provenance: the source element ids an importer recorded (the /next converter writes them); find_nodes filters on them.',
+  }),
 ]
 
 const described = (reason: string, paths: readonly string[]) =>
