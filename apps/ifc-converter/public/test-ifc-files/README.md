@@ -1,6 +1,6 @@
 # IFC Test Files
 
-This directory contains 10 real-world IFC (Industry Foundation Classes) files for testing the IFC to Pascal converter. All files are from open-source repositories and represent actual BIM models exported from professional software like Revit, ArchiCAD, and other authoring tools.
+This list describes 10 real-world IFC (Industry Foundation Classes) files collected for testing the IFC to Pascal converter; four of them (01, 04, 05 and 10) are checked in here. See [Licence status](#licence-status) before using any of them. All files are from open-source repositories and represent actual BIM models exported from professional software like Revit, ArchiCAD, and other authoring tools.
 
 ## Files
 
@@ -75,12 +75,18 @@ These files cover:
 - **Complexity**: From simple houses (111 KB) to large complexes (47 MB)
 - **Geographic Origins**: European (Netherlands, France) and International models
 
-## License
+## Licence status
 
-All files are from open-source repositories and are used for testing purposes. Original licenses apply:
-- xeokit-sdk: [GPL-3.0 License](https://github.com/xeokit/xeokit-sdk/blob/master/LICENSE)
-- youshengCode/IfcSampleFiles: Public repository for testing use
-- buildingSMART samples: Community-provided test files
+Only 01, 04, 05 and 10 are in this directory; the other entries above describe where the rest of the original set came from. None of the four has a verified licence that allows redistributing the model or derived work. Use them as local converter test inputs: keep conversions, renders and scores made from them internal, do not publish them, and do not add another model here without a stated licence.
+
+| File | Origin | Licence status |
+|---|---|---|
+| 01-duplex.ifc | NIBS Common BIM Files "Duplex Apartment" (Revit export), copied from xeokit-sdk | Conflicting. The buildingSMART community sample-files repo relicenses the NIBS set as CC BY 4.0; the original NIBS page, now offline, reportedly carried a CC BY-ND 3.0 (no derivatives) footer. |
+| 04-ifc-open-house.ifc | Output of IfcOpenShell's `src/examples/IfcOpenHouse.cpp`, copied from xeokit-sdk | The generator code is LGPL-3.0. No licence is stated for the generated model. |
+| 05-paris-ground-floor.ifc | Copied from xeokit-sdk | No licence recorded for the model. |
+| 10-sample-house.ifc | youshengCode/IfcSampleFiles | The repository has no licence; its README says only that the files are for software testing. |
+
+xeokit-sdk is licensed AGPL-3.0, not GPL-3.0 as this file used to say, and that licence covers its code, not the models it bundles.
 
 ## References
 
