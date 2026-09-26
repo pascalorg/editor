@@ -72,6 +72,8 @@ test('a system that throws in a frame reaches onFrameError, once, and frames kee
     document: (globalThis as { document?: unknown }).document,
     raf: globalThis.requestAnimationFrame,
     caf: globalThis.cancelAnimationFrame,
+    addEventListener: globalThis.addEventListener,
+    removeEventListener: globalThis.removeEventListener,
   }
   const listeners = { addEventListener: () => {}, removeEventListener: () => {} }
   Object.assign(globalThis, {
@@ -104,6 +106,8 @@ test('a system that throws in a frame reaches onFrameError, once, and frames kee
       document: saved.document,
       requestAnimationFrame: saved.raf,
       cancelAnimationFrame: saved.caf,
+      addEventListener: saved.addEventListener,
+      removeEventListener: saved.removeEventListener,
     })
   }
 })
