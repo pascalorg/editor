@@ -89,7 +89,17 @@ beforeEach(() => {
   } as never)
 })
 
-afterEach(() => {
+afterEach(async () => {
+  // A failed split-view case must not leave its tools (and their history state) mounted.
+  const leftover = splitRenderer
+  splitRenderer = null
+  if (leftover) {
+    try {
+      await act(async () => leftover.unmount())
+    } catch {
+      // Already unmounted by the case itself.
+    }
+  }
   restoreDocument()
   restoreDocument = () => {}
   stopDetection()
@@ -154,6 +164,7 @@ function stubFloorplanScene() {
 }
 
 let restoreDocument = () => {}
+let splitRenderer: Awaited<ReturnType<typeof create>> | null = null
 
 // Split view: the 3D tool and the real FloorplanRegistryMoveOverlay, both on the moving wall.
 async function armSplitView() {
@@ -170,6 +181,7 @@ async function armSplitView() {
       </>,
     )
   })
+  splitRenderer = renderer
   return renderer!
 }
 
@@ -568,6 +580,49 @@ describe('3D wall move', () => {
     expect(useScene.temporal.getState().isTracking).toBe(true)
     useScene.temporal.getState().undo()
     expect(useScene.getState().nodes).toEqual(before)
+  })
+
+  test('split view: a wall added mid-drag is its own reconciled step', async () => {
+    const renderer = await armSplitView()
+    await moveCursor(2)
+    await moveCursor(2.5)
+    const foreignId = 'wall_wall-move-foreign' as AnyNodeId
+    useScene
+      .getState()
+      .createNode(
+        WallNode.parse({ id: foreignId, parentId: LEVEL_ID, start: [3, 0], end: [3, 4] }),
+        LEVEL_ID,
+      )
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    expect(nodesOfType('slab')).toHaveLength(3)
+    await act(async () => {
+      window.dispatchEvent(new Event('pointerup'))
+    })
+    await act(async () => renderer.unmount())
+    expect(useScene.temporal.getState().pastStates).toHaveLength(2)
+    expect(getSceneHistoryPauseDepth()).toBe(0)
+    useScene.temporal.getState().undo()
+    expect((useScene.getState().nodes[DIVIDER_ID] as WallNode).start).toEqual([2, 0])
+    expect(useScene.getState().nodes[foreignId]).toBeDefined()
+  })
+
+  test('split view: a 2D-carried wall edit lets a foreign write record at once', async () => {
+    const renderer = await armSplitView()
+    await floorplanPointer('pointermove', 2, 2)
+    await floorplanPointer('pointermove', 2.5, 2)
+    const foreignId = 'wall_wall-move-foreign' as AnyNodeId
+    useScene
+      .getState()
+      .createNode(
+        WallNode.parse({ id: foreignId, parentId: LEVEL_ID, start: [3, 0], end: [3, 4] }),
+        LEVEL_ID,
+      )
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    expect(nodesOfType('slab')).toHaveLength(3)
+    await floorplanPointer('pointerup', 2.5, 2)
+    await act(async () => renderer.unmount())
+    expect(useScene.temporal.getState().pastStates).toHaveLength(2)
+    expect(getSceneHistoryPauseDepth()).toBe(0)
   })
 
   test('split view: a 2D drop through the real overlay records one step', async () => {

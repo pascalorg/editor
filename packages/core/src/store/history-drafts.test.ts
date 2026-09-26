@@ -274,4 +274,21 @@ describe('scene history drafts', () => {
     expect(attachment()).toBe('top')
     expect((node(itemId) as ItemNode).position).toEqual([1, 0, 1])
   })
+
+  test('two holders share one draft; it ends with the last one', () => {
+    const endOverlay = beginSceneHistoryDraft(itemId, node(itemId)!)
+    const endMover = beginSceneHistoryDraft(itemId, node(itemId)!)
+    runSceneHistoryDraftWrite(() => useScene.getState().updateNode(itemId, { position: [3, 0, 3] }))
+    endOverlay()
+    endOverlay()
+    useScene.getState().updateNode(wallId, { start: [0, 1] })
+    expect(
+      (useScene.temporal.getState().pastStates[0]!.nodes![itemId] as ItemNode).position,
+    ).toEqual([1, 0, 1])
+    endMover()
+    useScene.getState().updateNode(wallId, { start: [0, 2] })
+    expect(
+      (useScene.temporal.getState().pastStates[1]!.nodes![itemId] as ItemNode).position,
+    ).toEqual([3, 0, 3])
+  })
 })

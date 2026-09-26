@@ -307,6 +307,41 @@ describe('useDraftNode block face commit', () => {
     expect(position()).toEqual([5, 0, 5])
   })
 
+  test("the 3D drop keeps an agent's metadata edit made during the carry, in one step", () => {
+    const plant = ItemNode.parse({
+      id: 'item_agent-metadata-plant',
+      parentId: LEVEL_ID,
+      asset: {
+        id: 'potted-plant',
+        category: 'decor',
+        name: 'Potted plant',
+        thumbnail: '/potted-plant.png',
+        src: '/potted-plant.glb',
+        dimensions: [0.5, 0.39, 0.5],
+      },
+      position: [0, 0, 0],
+    })
+    useScene.getState().createNode(plant, LEVEL_ID as AnyNodeId)
+    const id = plant.id as AnyNodeId
+    useScene.temporal.getState().clear()
+    const draft = draftNode!
+    draft.adopt(useScene.getState().nodes[id] as ItemNode)
+    draft.updateSurface({ position: [1, 0, 1] }, null)
+    const metadata = useScene.getState().nodes[id]!.metadata as Record<string, unknown>
+    useScene.getState().updateNode(id, { metadata: { ...metadata, tag: 'x' } })
+    const past = useScene.temporal.getState().pastStates.length
+    // Placement strategies hand the drop the adoption-time metadata.
+    draft.commit({ parentId: LEVEL_ID, position: [2, 0, 3], metadata: {} })
+
+    const live = useScene.getState().nodes[id] as ItemNode
+    expect(live.position).toEqual([2, 0, 3])
+    expect((live.metadata as Record<string, unknown>).tag).toBe('x')
+    expect((live.metadata as Record<string, unknown>).isTransient).toBeUndefined()
+    expect(useScene.temporal.getState().pastStates).toHaveLength(past + 1)
+    useScene.temporal.getState().undo()
+    expect((useScene.getState().nodes[id] as ItemNode).position).toEqual([0, 0, 0])
+  })
+
   test('never resumes history that another owner is pausing', () => {
     const hosted = ItemNode.parse({
       id: 'item_owned-pause-plant',

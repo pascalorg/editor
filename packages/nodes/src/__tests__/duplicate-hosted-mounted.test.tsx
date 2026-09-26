@@ -2574,11 +2574,15 @@ if (process.env.PASCAL_DUPLICATE_AUDIT_ISOLATED !== '1') {
           else await pointer.send(new Vector3(1, 2, 0), 'grid first', true)
           await settle(renderer)
           expect(getMovingNode()).toBeNull()
+          // The obstacle's create and delete are someone else's writes: with the 2D overlay and
+          // the placement coordinator pausing only their own writes, each records its own step.
+          // The generic 3D mover still pauses the whole gesture (raw), so there they stay unrecorded.
+          const foreignSteps = kind === 'procedural-generic' ? 0 : 2
           if (outcome === 'Escape') {
             expect(snapshot()).toBe(before)
-            expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+            expect(useScene.temporal.getState().pastStates).toHaveLength(foreignSteps)
           } else {
-            expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+            expect(useScene.temporal.getState().pastStates).toHaveLength(foreignSteps + 1)
             const committed = snapshot()
             const originalIds = new Set(Object.keys(JSON.parse(before).nodes))
             const copies = Object.values(useScene.getState().nodes).filter(

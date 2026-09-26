@@ -18,6 +18,8 @@ type SceneHistoryDraft = {
   owned: Map<string, OwnedField>
   /** Hosts' `attachments[id]` entries the carry wrote (a surface move on a shelf): before, and its value. */
   hostEntries: Map<AnyNodeId, { baseline: unknown; carried: unknown }>
+  /** Holders of this draft: the 3D mover and the 2D move overlay can carry one node together. */
+  refs: number
   ended: boolean
   /** A gesture's committing write is running: history sees the draft as it is. */
   suspended: boolean
@@ -49,12 +51,20 @@ const attachmentsOf = (node: AnyNode | undefined): Record<string, unknown> | und
     ? (node.attachments as Record<string, unknown>)
     : undefined
 
-/** Registers `id` as a carried draft; returns the call that ends it. */
+/**
+ * Registers `id` as a carried draft; returns the call that ends it. A second holder of a node
+ * already carried (split view) shares its registration, which ends with its last holder.
+ */
 export function beginSceneHistoryDraft(
   id: AnyNodeId,
   original: AnyNode | null,
   nodes: NodeMap,
 ): () => void {
+  const existing = sceneHistoryDrafts.get(id)
+  if (existing && !existing.ended) {
+    existing.refs += 1
+    return releaseOnce(id, existing)
+  }
   const parent = original?.parentId ? nodes[original.parentId as AnyNodeId] : undefined
   const draft: SceneHistoryDraft = {
     original,
@@ -62,11 +72,21 @@ export function beginSceneHistoryDraft(
     attachment: attachmentsOf(parent)?.[id],
     owned: new Map(),
     hostEntries: new Map(),
+    refs: 1,
     ended: false,
     suspended: false,
   }
   sceneHistoryDrafts.set(id, draft)
+  return releaseOnce(id, draft)
+}
+
+function releaseOnce(id: AnyNodeId, draft: SceneHistoryDraft): () => void {
+  let released = false
   return () => {
+    if (released) return
+    released = true
+    draft.refs -= 1
+    if (draft.refs > 0) return
     draft.ended = true
     if (sceneHistoryDrafts.get(id) === draft) sceneHistoryDrafts.delete(id)
   }
@@ -201,6 +221,19 @@ export function sceneHistoryDraftRevertUpdates(
     }
   }
   return updates
+}
+
+/**
+ * A drop committed these drafts' carried state: nothing the carry wrote is left to revert, so a
+ * co-holder's later cancel or cleanup (the 3D mover after a split-view 2D drop) keeps the drop.
+ */
+export function settleSceneHistoryDrafts(ids: Iterable<AnyNodeId>): void {
+  for (const id of ids) {
+    const draft = sceneHistoryDrafts.get(id)
+    if (!draft) continue
+    draft.owned.clear()
+    draft.hostEntries.clear()
+  }
 }
 
 export function clearSceneHistoryDrafts(): void {

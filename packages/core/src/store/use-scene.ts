@@ -64,6 +64,7 @@ import {
   hasSceneHistoryDrafts,
   noteSceneHistoryDraftWrite,
   sceneHistoryDraftRevertUpdates as sceneHistoryDraftRevertUpdatesIn,
+  settleSceneHistoryDrafts,
   withAdoptedDraftsAsOriginal,
   withDraftsRestored,
 } from './history-drafts'
@@ -2360,6 +2361,8 @@ export function sceneHistoryDraftRevertUpdates(
 export function beginSceneHistoryDraft(id: AnyNodeId, original: AnyNode | null): () => void {
   return beginSceneHistoryDraftIn(id, original, useScene.getState().nodes)
 }
+
+export { settleSceneHistoryDrafts }
 
 export function clearSceneHistory() {
   resetSceneHistoryPauseDepth()
