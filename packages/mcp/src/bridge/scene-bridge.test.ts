@@ -6,8 +6,10 @@ import {
   LevelNode,
   SiteNode,
   WallNode,
+  WindowNode,
   ZoneNode,
 } from '@pascal-app/core/schema'
+import { PatchRefusedError } from './patch-refused-error'
 import { SceneBridge } from './scene-bridge'
 
 function tick() {
@@ -296,6 +298,144 @@ describe('SceneBridge', () => {
 
     test('rejects undefined patch entry', () => {
       expect(() => bridge.applyPatch([undefined as any])).toThrow(/invalid patch/)
+    })
+  })
+
+  describe('applyPatch identity guards', () => {
+    async function wallWithWindows() {
+      const level = bridge.findNodes({ type: 'level' })[0]!
+      const wall = WallNode.parse({ id: 'wall_ground-exterior-01', start: [0, 0], end: [6, 0] })
+      const windows = [1, 3, 5].map((x) =>
+        WindowNode.parse({ wallId: wall.id, position: [x, 1.2, 0] }),
+      )
+      bridge.applyPatch([
+        { op: 'create', node: wall, parentId: level.id },
+        ...windows.map((w) => ({ op: 'create' as const, node: w, parentId: wall.id })),
+      ])
+      await tick()
+      return { level, wall, windowIds: windows.map((w) => w.id) }
+    }
+
+    test('create with an existing id is refused and keeps the node and its children', async () => {
+      const { level, wall, windowIds } = await wallWithWindows()
+      const extra = WallNode.parse({ start: [0, 0], end: [0, 4] })
+      const replacement = WallNode.parse({ id: wall.id, start: [0, 5], end: [4, 5] })
+
+      let thrown: unknown
+      try {
+        bridge.applyPatch([
+          { op: 'create', node: extra, parentId: level.id },
+          { op: 'create', node: replacement, parentId: level.id },
+        ])
+      } catch (err) {
+        thrown = err
+      }
+      expect(thrown).toBeInstanceOf(PatchRefusedError)
+      expect((thrown as PatchRefusedError).code).toBe('node_exists')
+      expect((thrown as PatchRefusedError).patchIndex).toBe(1)
+      expect((thrown as PatchRefusedError).nodeId).toBe(wall.id)
+
+      const kept = bridge.getNode(wall.id)
+      expect(kept?.type).toBe('wall')
+      if (kept?.type !== 'wall') return
+      expect(kept.end).toEqual([6, 0])
+      expect(kept.children).toEqual(windowIds)
+      // Atomic: the earlier create in the same patch did not land either.
+      expect(bridge.getNode(extra.id)).toBeNull()
+    })
+
+    test('create refuses a second create of the same id in one patch', () => {
+      const level = bridge.findNodes({ type: 'level' })[0]!
+      const first = WallNode.parse({ id: 'wall_twice', start: [0, 0], end: [1, 0] })
+      const second = WallNode.parse({ id: 'wall_twice', start: [0, 1], end: [1, 1] })
+      expect(() =>
+        bridge.applyPatch([
+          { op: 'create', node: first, parentId: level.id },
+          { op: 'create', node: second, parentId: level.id },
+        ]),
+      ).toThrow(/node_exists/)
+      expect(bridge.getNode(first.id)).toBeNull()
+    })
+
+    test('delete then create of the same ids in one patch is an explicit replace', async () => {
+      const { level, wall, windowIds } = await wallWithWindows()
+      const replacement = WallNode.parse({ id: wall.id, start: [0, 5], end: [4, 5] })
+      const keptWindow = WindowNode.parse({
+        id: windowIds[0],
+        wallId: wall.id,
+        position: [2, 1.2, 0],
+      })
+      bridge.applyPatch([
+        { op: 'delete', id: wall.id, cascade: true },
+        { op: 'create', node: replacement, parentId: level.id },
+        { op: 'create', node: keptWindow, parentId: wall.id },
+        { op: 'update', id: wall.id, data: { thickness: 0.25 } as any },
+      ])
+      await tick()
+      const stored = bridge.getNode(wall.id)
+      expect(stored?.type).toBe('wall')
+      if (stored?.type !== 'wall') return
+      expect(stored.end).toEqual([4, 5])
+      expect(stored.thickness).toBe(0.25)
+      expect(stored.children).toEqual([keptWindow.id])
+      expect(bridge.getNode(windowIds[1] as any)).toBeNull()
+    })
+
+    test('an op on a node removed by an earlier cascade delete is refused', async () => {
+      const { wall, windowIds } = await wallWithWindows()
+      expect(() =>
+        bridge.applyPatch([
+          { op: 'delete', id: wall.id, cascade: true },
+          { op: 'update', id: windowIds[0] as any, data: { width: 1 } as any },
+        ]),
+      ).toThrow(/not found/)
+      expect(bridge.getNode(wall.id)).not.toBeNull()
+    })
+
+    test('update refuses to change id', async () => {
+      const { wall } = await wallWithWindows()
+      let thrown: unknown
+      try {
+        bridge.applyPatch([{ op: 'update', id: wall.id, data: { id: 'wall_renamed' } as any }])
+      } catch (err) {
+        thrown = err
+      }
+      expect(thrown).toBeInstanceOf(PatchRefusedError)
+      expect((thrown as PatchRefusedError).code).toBe('identity_change')
+      expect(bridge.getNode(wall.id)?.id).toBe(wall.id)
+      expect(bridge.getNode('wall_renamed' as any)).toBeNull()
+    })
+
+    test('update refuses to change type', async () => {
+      const { wall } = await wallWithWindows()
+      expect(() =>
+        bridge.applyPatch([{ op: 'update', id: wall.id, data: { type: 'fence' } as any }]),
+      ).toThrow(/identity_change/)
+      expect(bridge.getNode(wall.id)?.type).toBe('wall')
+    })
+
+    test('update refuses to change the type of a node created earlier in the patch', () => {
+      const level = bridge.findNodes({ type: 'level' })[0]!
+      const wall = WallNode.parse({ start: [0, 0], end: [1, 0] })
+      expect(() =>
+        bridge.applyPatch([
+          { op: 'create', node: wall, parentId: level.id },
+          { op: 'update', id: wall.id, data: { type: 'fence' } as any },
+        ]),
+      ).toThrow(/identity_change/)
+      expect(bridge.getNode(wall.id)).toBeNull()
+    })
+
+    test('update may restate the current id and type', async () => {
+      const { wall } = await wallWithWindows()
+      bridge.applyPatch([
+        { op: 'update', id: wall.id, data: { id: wall.id, type: 'wall', thickness: 0.3 } as any },
+      ])
+      await tick()
+      const stored = bridge.getNode(wall.id)
+      expect(stored?.type).toBe('wall')
+      if (stored?.type !== 'wall') return
+      expect(stored.thickness).toBe(0.3)
     })
   })
 

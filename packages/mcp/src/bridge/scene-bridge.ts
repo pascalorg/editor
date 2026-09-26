@@ -12,6 +12,7 @@ import {
 // Per PLAN §0.6: `useScene` is the DEFAULT export from `@pascal-app/core/store`.
 import useScene from '@pascal-app/core/store'
 import type { SceneMeta } from '../storage/types'
+import { PatchRefusedError } from './patch-refused-error'
 
 export type ValidationError = { nodeId: string; path: string; message: string }
 export type ValidationResult = {
@@ -356,6 +357,8 @@ export class SceneBridge {
     // Zod-normalised copy (which has a generated id if the caller omitted one)
     // instead of the unparsed input.
     const parsedCreateNodes = new Map<number, AnyNode>()
+    // Type of each node created in this patch, for the update type guard.
+    const simCreatedTypes = new Map<string, AnyNodeType>()
 
     for (let i = 0; i < patches.length; i++) {
       const p = patches[i]
@@ -367,17 +370,44 @@ export class SceneBridge {
             `invalid patch: patches[${i}] create node failed schema: ${res.error.message}`,
           )
         }
+        if (simAvailable.has(res.data.id)) {
+          throw new PatchRefusedError(
+            'node_exists',
+            i,
+            res.data.id,
+            `create id "${res.data.id}" already exists. Use op "update" to change it, or delete it earlier in the same patch to replace it.`,
+          )
+        }
         if (p.parentId !== undefined && !simAvailable.has(p.parentId)) {
           throw new Error(`invalid patch: patches[${i}] create parentId "${p.parentId}" not found`)
         }
         parsedCreateNodes.set(i, res.data)
+        simCreatedTypes.set(res.data.id, res.data.type)
         simAvailable.add(res.data.id)
+        simDeleted.delete(res.data.id)
       } else if (p.op === 'update') {
         if (!simAvailable.has(p.id) || simDeleted.has(p.id)) {
           throw new Error(`invalid patch: patches[${i}] update id "${p.id}" not found`)
         }
         if (!p.data || typeof p.data !== 'object') {
           throw new Error(`invalid patch: patches[${i}] update data is not an object`)
+        }
+        if ('id' in p.data && p.data.id !== p.id) {
+          throw new PatchRefusedError(
+            'identity_change',
+            i,
+            p.id,
+            `update cannot change the id of "${p.id}" to ${JSON.stringify(p.data.id)}. Create a node with the new id and delete the old one instead.`,
+          )
+        }
+        const currentType = simCreatedTypes.get(p.id) ?? nodes[p.id]?.type
+        if ('type' in p.data && p.data.type !== currentType) {
+          throw new PatchRefusedError(
+            'identity_change',
+            i,
+            p.id,
+            `update cannot change the type of "${p.id}" from "${currentType}" to ${JSON.stringify(p.data.type)}. Create a node of the new type instead.`,
+          )
         }
       } else if (p.op === 'delete') {
         if (!simAvailable.has(p.id) || simDeleted.has(p.id)) {
@@ -395,8 +425,12 @@ export class SceneBridge {
             )
           }
         }
-        simAvailable.delete(p.id)
-        simDeleted.add(p.id)
+        // The store removes the whole subtree, so a later op in this patch may
+        // recreate any of those ids and must not touch the removed ones.
+        for (const id of [p.id, ...this._collectDescendants(p.id)]) {
+          simAvailable.delete(id)
+          simDeleted.add(id)
+        }
       } else {
         throw new Error(`invalid patch: patches[${i}] unknown op`)
       }
