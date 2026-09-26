@@ -518,9 +518,9 @@ function findExtrusionPosition(ifcApi: WebIFC.IfcAPI, modelID: number, item: any
 // world AABB. A world AABB conflates length and thickness for any wall
 // the placement rotates (a 37°-rotated 0.2m wall would read ~1.9m
 // thick); projecting onto the actual axis is rotation-invariant.
-// (axisX, axisY) is the unit wall direction in the converter's
-// horizontal frame, which is parallel to web-ifc world XY — both are IFC
-// world coords, differing only by origin/scale, which cancel in extents.
+// (axisX, axisY) is the unit wall direction in IFC world XY. web-ifc
+// meshes come in (X, Z, -Y), so a vertex's IFC plan point is (wx, -wz)
+// and its height is wy; origin and scale cancel in extents.
 // Returns extents in the geometry's native units (caller resolves
 // scale), or null on any failure.
 function measureWallLocalExtents(
@@ -562,14 +562,14 @@ function measureWallLocalExtents(
           const wx = m[0] * x + m[4] * y + m[8] * z + m[12]
           const wy = m[1] * x + m[5] * y + m[9] * z + m[13]
           const wz = m[2] * x + m[6] * y + m[10] * z + m[14]
-          const a = wx * axisX + wy * axisY
-          const p = wx * perpX + wy * perpY
+          const a = wx * axisX - wz * axisY
+          const p = wx * perpX - wz * perpY
           if (a < minA) minA = a
           if (a > maxA) maxA = a
           if (p < minP) minP = p
           if (p > maxP) maxP = p
-          if (wz < minV) minV = wz
-          if (wz > maxV) maxV = wz
+          if (wy < minV) minV = wy
+          if (wy > maxV) maxV = wy
           any = true
         }
       } finally {
