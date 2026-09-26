@@ -18,6 +18,7 @@ import {
   type MovableConfig,
   nodeRegistry,
   runSceneHistoryDraftWrite,
+  sceneHistoryDraftRevertUpdates,
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
@@ -172,6 +173,13 @@ export function FloorplanRegistryMoveOverlay() {
         historyPaused = false
       }
       const ownWrite = runSceneHistoryDraftWrite
+      // Puts back only the fields this move wrote and still holds; a rename or any other write
+      // someone made mid-move stays.
+      const revertOwnWrites = () =>
+        ownWrite(() => {
+          const updates = sceneHistoryDraftRevertUpdates(session.affectedIds)
+          if (updates.length > 0) useScene.getState().updateNodes(updates)
+        })
       const recordDrop = (write: () => void) => {
         endDrafts()
         const drop = beginSceneHistoryPauseSession(useScene, { gesture: movingNode.id })
@@ -355,7 +363,7 @@ export function FloorplanRegistryMoveOverlay() {
         }
 
         if (commitValid && session.commit) {
-          ownWrite(() => restoreSnapshots(snapshots))
+          revertOwnWrites()
           recordDrop(() => session.commit?.())
           sfxEmitter.emit('sfx:item-place')
           useViewer.getState().setSelection({ selectedIds: snapshots.map((s) => s.id) })
@@ -364,12 +372,20 @@ export function FloorplanRegistryMoveOverlay() {
 
         const sceneState = useScene.getState().nodes
         const finalUpdates: Array<{ id: AnyNodeId; data: Record<string, unknown> }> = []
+        // Only the fields this move wrote: anything others wrote meanwhile is already recorded.
+        const heldKeys = new Map(
+          sceneHistoryDraftRevertUpdates(session.affectedIds).map((update) => [
+            update.id,
+            new Set(Object.keys(update.data)),
+          ]),
+        )
         for (const snap of snapshots) {
           const current = sceneState[snap.id]
           if (!current) continue
           const data: Record<string, unknown> = {}
           let changed = false
           for (const [key, before] of Object.entries(snap.data)) {
+            if (!heldKeys.get(snap.id)?.has(key)) continue
             const after = (current as unknown as Record<string, unknown>)[key]
             if (!deepEqual(before, after)) {
               data[key] = Array.isArray(after) ? [...(after as unknown[])] : after
@@ -402,7 +418,7 @@ export function FloorplanRegistryMoveOverlay() {
           //   1. Revert to baseline while history is still paused.
           //   2. Resume history.
           //   3. Re-apply the final state — recorded as one tracked change.
-          ownWrite(() => restoreSnapshots(snapshots))
+          revertOwnWrites()
           recordDrop(() => useScene.getState().updateNodes(finalUpdates))
           sfxEmitter.emit('sfx:item-place')
           // Re-select the moved node(s) — mirrors the legacy 3D move
@@ -412,7 +428,7 @@ export function FloorplanRegistryMoveOverlay() {
           // brings them back at the new position.
           useViewer.getState().setSelection({ selectedIds: snapshots.map((s) => s.id) })
         } else {
-          ownWrite(() => restoreSnapshots(snapshots))
+          revertOwnWrites()
           endDrafts()
         }
       }
@@ -514,7 +530,7 @@ export function FloorplanRegistryMoveOverlay() {
           return
         }
         // Revert as the overlay's own write: no history entry.
-        ownWrite(() => restoreSnapshots(snapshots))
+        revertOwnWrites()
         endDrafts()
         // Clear any live previews the session wrote. Slab / ceiling
         // 2D move stages a translation delta in `useLiveTransforms`;
@@ -562,7 +578,7 @@ export function FloorplanRegistryMoveOverlay() {
           const finalisedBy3D = useEditor.getState().movingNodeOrigin === '3d'
           if (!finalisedBy3D && !freshPlacement) {
             if (hasMovedSinceStart) {
-              ownWrite(() => restoreSnapshots(snapshots))
+              revertOwnWrites()
             }
           }
           endDrafts()
@@ -988,17 +1004,6 @@ function snapshotNode(node: AnyNode): NodeSnapshot {
     data[key] = Array.isArray(value) ? [...(value as unknown[])] : value
   }
   return { id: node.id, data }
-}
-
-function restoreSnapshots(snapshots: NodeSnapshot[]) {
-  const updates = snapshots
-    .filter(
-      (s) =>
-        !useScene.getState().nodes[s.id] ||
-        !deepEqual(s.data, snapshotNode(useScene.getState().nodes[s.id]!).data),
-    )
-    .map((s) => ({ id: s.id, data: s.data }))
-  if (updates.length) useScene.getState().updateNodes(updates)
 }
 
 function deepEqual(a: unknown, b: unknown): boolean {
