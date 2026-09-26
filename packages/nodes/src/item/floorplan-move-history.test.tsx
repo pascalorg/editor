@@ -174,4 +174,30 @@ describe('2D item move history', () => {
     expect((useScene.getState().nodes[ITEM_ID] as ItemNode).position).toEqual([1, 0, 1])
     expect(useScene.getState().nodes[foreignId]).toBeDefined()
   })
+
+  test('a foreign rename of the carried item survives the drop and the cancel', async () => {
+    for (const outcome of ['drop', 'Escape'] as const) {
+      useEditor.getState().setMovingNode(useScene.getState().nodes[ITEM_ID]!)
+      await act(async () => {
+        renderer = await create(<FloorplanRegistryMoveOverlay />)
+      })
+      await pointer('pointermove', 1.5, 1.5)
+      await pointer('pointermove', 3, 3)
+      useScene.getState().updateNode(ITEM_ID, { name: `Renamed before ${outcome}` })
+      if (outcome === 'drop') await pointer('pointerup', 3, 3)
+      else
+        await act(async () => {
+          window.dispatchEvent(Object.assign(new Event('keydown'), { key: 'Escape' }))
+        })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      const current = useScene.getState().nodes[ITEM_ID] as ItemNode
+      expect(current.name).toBe(`Renamed before ${outcome}`)
+      if (outcome === 'Escape') expect(current.position).toEqual([1, 0, 1])
+      else expect(current.position).not.toEqual([1, 0, 1])
+      expect(getSceneHistoryPauseDepth()).toBe(0)
+      await act(async () => renderer!.unmount())
+      renderer = null
+      useScene.getState().updateNode(ITEM_ID, { position: [1, 0, 1] })
+    }
+  })
 })
