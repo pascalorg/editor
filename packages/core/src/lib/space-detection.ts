@@ -2222,7 +2222,7 @@ function wallAlongEdge(
 
 type VertexBinding =
   | { kind: 'fixed' }
-  | { kind: 'curve'; wallId: string; t: number }
+  | { kind: 'curve'; wallId: string; t: number; curveBefore: boolean }
   | { kind: 'edges'; previous: string | null; next: string | null }
 
 /**
@@ -2258,7 +2258,13 @@ export function createWallBoundSurfaceFollower(
     const vertex = polygon[index]!
     for (const [wallId, wall] of movingCurves) {
       const t = curveParameterOf(vertex, wall)
-      if (t !== null) return { kind: 'curve', wallId, t }
+      if (t === null) continue
+      // Only a polygon that runs along the arc rides it; one that just touches an arc end
+      // (a room beside the curved wall's junction) binds by its own edges below.
+      const curveBefore =
+        curveParameterOf(polygon[(index + polygon.length - 1) % polygon.length]!, wall) !== null
+      const curveAfter = curveParameterOf(polygon[(index + 1) % polygon.length]!, wall) !== null
+      if (curveBefore || curveAfter) return { kind: 'curve', wallId, t, curveBefore }
     }
     const previous = polygon[(index + polygon.length - 1) % polygon.length]!
     const next = polygon[(index + 1) % polygon.length]!
@@ -2315,6 +2321,10 @@ export function createWallBoundSurfaceFollower(
       return next ? { ...wall, start: next.start, end: next.end } : wall
     }
     if (binding.kind === 'curve') {
+      // An arc end at a junction the move bridges stays, and gains the bridge's moved end.
+      const atEnd = binding.t <= 1e-6 || binding.t >= 1 - 1e-6
+      const end = atEnd ? bridgedEnd(vertex, bridges) : null
+      if (end) return binding.curveBefore ? [end, vertex] : [vertex, end]
       const point = getWallCurveFrameAt(current(binding.wallId), binding.t).point
       return [[point.x, point.y]]
     }
