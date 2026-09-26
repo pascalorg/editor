@@ -1,40 +1,39 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { AnyNode, AnyNodeId, AnyNodeType } from '@pascal-app/core/schema'
+import { AnyNode, type AnyNodeId, type AnyNodeType, nodeKindOf } from '@pascal-app/core/schema'
 import { pointInPolygon } from '@pascal-app/core/spatial-grid'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 import { NodeIdSchema } from './schemas'
 
-const ALL_NODE_TYPES = [
-  'site',
-  'building',
-  'level',
-  'wall',
-  'fence',
-  'zone',
-  'slab',
-  'ceiling',
-  'roof',
-  'roof-segment',
-  'stair',
-  'stair-segment',
-  'item',
-  'door',
-  'window',
-  'scan',
-  'guide',
-] as const
+const ALL_NODE_TYPES = AnyNode.options.map(nodeKindOf) as [AnyNodeType, ...AnyNodeType[]]
 
 export const findNodesInput = {
   type: z.enum(ALL_NODE_TYPES).optional(),
   parentId: NodeIdSchema.optional(),
   levelId: NodeIdSchema.optional(),
   zoneId: NodeIdSchema.optional(),
+  sourceId: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Exact match on any entry of node.metadata.sourceIds (the import source ids).'),
+  sourceIdPrefix: z
+    .string()
+    .min(1)
+    .optional()
+    .describe('Prefix match on any entry of node.metadata.sourceIds.'),
 }
 
 export const findNodesOutput = {
   nodes: z.array(z.record(z.string(), z.unknown())),
+}
+
+function nodeSourceIds(node: AnyNode): string[] {
+  const sourceIds = node.metadata?.sourceIds
+  return Array.isArray(sourceIds)
+    ? sourceIds.filter((id): id is string => typeof id === 'string')
+    : []
 }
 
 /** Compute a representative 2D point (x, z) for zone-filtering. */
@@ -75,17 +74,19 @@ export function registerFindNodes(server: McpServer, bridge: SceneOperations): v
     {
       title: 'Find nodes',
       description:
-        'Find nodes matching any combination of type, parentId, levelId, or zoneId filters.',
+        'Find nodes matching any combination of type, parentId, levelId, zoneId, sourceId or sourceIdPrefix filters. sourceId / sourceIdPrefix match node.metadata.sourceIds, the ids an importer recorded for the source elements.',
       inputSchema: findNodesInput,
       outputSchema: findNodesOutput,
       annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async (args) => {
-      const { type, parentId, levelId, zoneId } = args as {
+      const { type, parentId, levelId, zoneId, sourceId, sourceIdPrefix } = args as {
         type?: AnyNodeType
         parentId?: string
         levelId?: string
         zoneId?: string
+        sourceId?: string
+        sourceIdPrefix?: string
       }
 
       // Delegate type/parent/level filtering to the bridge.
@@ -98,6 +99,17 @@ export function registerFindNodes(server: McpServer, bridge: SceneOperations): v
       if (parentId !== undefined) baseFilter.parentId = parentId as AnyNodeId
       if (levelId !== undefined) baseFilter.levelId = levelId as AnyNodeId
       let results = bridge.findNodes(baseFilter)
+
+      if (sourceId !== undefined || sourceIdPrefix !== undefined) {
+        results = results.filter((n) => {
+          const ids = nodeSourceIds(n)
+          if (sourceId !== undefined && !ids.includes(sourceId)) return false
+          if (sourceIdPrefix !== undefined && !ids.some((id) => id.startsWith(sourceIdPrefix))) {
+            return false
+          }
+          return true
+        })
+      }
 
       // Zone-polygon filter: point-in-polygon on a representative 2D point.
       if (zoneId) {
