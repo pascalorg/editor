@@ -9,6 +9,8 @@ import {
   LevelNode,
   nodeRegistry,
   registerNode,
+  type SceneCommit,
+  subscribeSceneCommits,
   useLiveNodeOverrides,
   useScene,
   WallNode,
@@ -224,7 +226,14 @@ describe('2D item move history', () => {
     await pointer('pointermove', 3, 3)
     const metadata = useScene.getState().nodes[ITEM_ID]!.metadata as Record<string, unknown>
     useScene.getState().updateNode(ITEM_ID, { metadata: { ...metadata, tag: 'x' } })
+    const past = useScene.temporal.getState().pastStates.length
+    const commits: SceneCommit[] = []
+    const stop = subscribeSceneCommits((commit) => commits.push(commit))
     await pointer('pointerup', 3, 3)
+    stop()
+    // The drop is one undo entry and one scene commit.
+    expect(useScene.temporal.getState().pastStates).toHaveLength(past + 1)
+    expect(commits).toHaveLength(1)
     await new Promise((resolve) => setTimeout(resolve, 0))
     draft!.destroy()
 
@@ -232,5 +241,9 @@ describe('2D item move history', () => {
     expect(current.position).not.toEqual([1, 0, 1])
     expect((current.metadata as Record<string, unknown>).tag).toBe('x')
     expect((current.metadata as Record<string, unknown>).isTransient).toBeUndefined()
+    useScene.temporal.getState().undo()
+    const undone = useScene.getState().nodes[ITEM_ID] as ItemNode
+    expect(undone.position).toEqual([1, 0, 1])
+    expect((undone.metadata as Record<string, unknown>).tag).toBe('x')
   })
 })
