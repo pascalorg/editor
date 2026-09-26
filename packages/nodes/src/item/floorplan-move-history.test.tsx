@@ -16,7 +16,12 @@ import {
 import { useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
+import { renderToString } from 'react-dom/server'
 import { FloorplanRegistryMoveOverlay } from '../../../editor/src/components/editor-2d/floorplan-registry-move-overlay'
+import {
+  type DraftNodeHandle,
+  useDraftNode,
+} from '../../../editor/src/components/tools/item/use-draft-node'
 import { itemDefinition } from './definition'
 
 const LEVEL_ID = 'level_item-2d-move' as AnyNodeId
@@ -199,5 +204,33 @@ describe('2D item move history', () => {
       renderer = null
       useScene.getState().updateNode(ITEM_ID, { position: [1, 0, 1] })
     }
+  })
+
+  test("a split-view 2D drop stays committed after an agent's metadata edit", async () => {
+    // The 3D placement coordinator's draft node adopts the item (split view) and cleans up
+    // after the 2D drop; an agent tags the item mid-carry and keeps its transient flag.
+    let draft: DraftNodeHandle | null = null
+    function DraftHarness() {
+      draft = useDraftNode()
+      return null
+    }
+    renderToString(<DraftHarness />)
+    draft!.adopt(useScene.getState().nodes[ITEM_ID] as ItemNode)
+    useEditor.getState().setMovingNode(useScene.getState().nodes[ITEM_ID]!)
+    await act(async () => {
+      renderer = await create(<FloorplanRegistryMoveOverlay />)
+    })
+    await pointer('pointermove', 1.5, 1.5)
+    await pointer('pointermove', 3, 3)
+    const metadata = useScene.getState().nodes[ITEM_ID]!.metadata as Record<string, unknown>
+    useScene.getState().updateNode(ITEM_ID, { metadata: { ...metadata, tag: 'x' } })
+    await pointer('pointerup', 3, 3)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    draft!.destroy()
+
+    const current = useScene.getState().nodes[ITEM_ID] as ItemNode
+    expect(current.position).not.toEqual([1, 0, 1])
+    expect((current.metadata as Record<string, unknown>).tag).toBe('x')
+    expect((current.metadata as Record<string, unknown>).isTransient).toBeUndefined()
   })
 })
