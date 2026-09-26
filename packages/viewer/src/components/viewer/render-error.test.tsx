@@ -18,6 +18,10 @@ function FailingSystem() {
 // React reports caught render errors to the page (console, reportError); keep
 // them quiet so what the handlers see is what the tests observe.
 const originalError = console.error
+const originalListeners = {
+  add: globalThis.addEventListener,
+  remove: globalThis.removeEventListener,
+}
 const originalReport = globalThis.reportError
 beforeEach(() => {
   console.error = () => {}
@@ -102,4 +106,9 @@ test('a system that throws in a frame reaches onFrameError, once, and frames kee
       cancelAnimationFrame: saved.caf,
     })
   }
+})
+
+test('the global listeners the frame test stubs are restored afterwards', () => {
+  expect(globalThis.addEventListener).toBe(originalListeners.add)
+  expect(globalThis.removeEventListener).toBe(originalListeners.remove)
 })
