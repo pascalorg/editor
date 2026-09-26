@@ -1,4 +1,4 @@
-import { getLevelElevations, getWallCurveFrameAt } from '@pascal-app/core'
+import { getLevelElevations, getWallCurveFrameAt, measurementCentroid } from '@pascal-app/core'
 import {
   composeFrames,
   type Frame,
@@ -34,15 +34,19 @@ function boundsCentre(points: readonly Vec3[]): Vec3 | null {
   return [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2]
 }
 
+/** Area centroid of a plan polygon at height `y`; the vertex average when degenerate. */
 function polygonCentre(polygon: unknown, y: number): Vec3 | null {
   if (!Array.isArray(polygon) || polygon.length === 0) return null
+  const points = (polygon as Array<[number, number]>).map(([x, z]) => [x, y, z] as Vec3)
+  const centroid = measurementCentroid(points)
+  if (centroid) return centroid
   let cx = 0
   let cz = 0
-  for (const point of polygon as Array<[number, number]>) {
-    cx += point[0]
-    cz += point[1]
+  for (const [x, , z] of points) {
+    cx += x
+    cz += z
   }
-  return [cx / polygon.length, y, cz / polygon.length]
+  return [cx / points.length, y, cz / points.length]
 }
 
 /** An anchor that is a tuple or a `{ fallback }` feature reference (measurements, dimensions). */
@@ -115,6 +119,39 @@ function stairSegmentFrame(node: AnyNode & { type: 'stair-segment' }, nodes: Nod
 }
 
 /**
+ * Why a node's point is not where its renderer draws it: kinds whose renderer
+ * derives the pose from data this resolver does not model. The point is then
+ * the stored placement in its host's frame.
+ */
+function approximationReason(node: AnyNode, nodes: Nodes): string | undefined {
+  const parent = node.parentId ? nodes[node.parentId] : undefined
+  switch (node.type) {
+    case 'downspout':
+      return 'rendered at its gutter outlet below the eave; the point is its gutter or host placement'
+    case 'gutter':
+      return 'rendered at the roof segment eave height, not its stored height'
+    case 'ridge-vent':
+      return 'rendered along its roof segment ridge; the point is its stored placement'
+    case 'door':
+    case 'window':
+      if (node.roofSegmentId || (node.type === 'window' && node.dormerId)) {
+        return 'hosted on a roof-segment or dormer wall face; the point ignores the face frame'
+      }
+      return undefined
+    case 'lean-to-extension':
+      return parent?.type === 'wall'
+        ? 'placed along its host wall centreline; the point uses a straight wall frame'
+        : undefined
+    case 'item':
+      return node.asset.attachTo === 'wall-side'
+        ? 'rendered on the wall face (± half the wall thickness); the point is on the wall centreline'
+        : undefined
+    default:
+      return undefined
+  }
+}
+
+/**
  * The node's reference point in its level's frame (or in world space when it
  * has no level ancestor), or null for a container with no geometry of its own.
  */
@@ -128,6 +165,14 @@ function levelLocalPoint(node: AnyNode, nodes: Nodes): Vec3 | null {
     if (segmentFrame) return segmentFrame.position
   }
   const parent = node.parentId ? nodes[node.parentId] : undefined
+  if (node.type === 'downspout' && node.gutterId && nodes[node.gutterId]?.type === 'gutter') {
+    return levelLocalPoint(nodes[node.gutterId]!, nodes)
+  }
+  if (node.type === 'chimney' && parent?.type === 'roof-segment') {
+    // The renderer ignores the stored Y and stands the chimney on the segment base.
+    const [x, , z] = node.position
+    return transformPoint(nodeLevelFrame(parent.id, nodes), [x, 0, z])
+  }
   if (
     (node.type === 'solar-panel' || node.type === 'skylight') &&
     parent?.type === 'roof-segment'
@@ -209,8 +254,23 @@ function childIdsOf(id: string, nodes: Nodes): string[] {
  * - a level: the plan centre of its content on its base plane;
  * - another container (a unit, …): the centre of its descendants' points,
  *   or its origin when it has none.
+ * Kinds whose renderer derives the pose elsewhere (a downspout at its gutter
+ * outlet, a gutter at the eave, …) are returned with an `approximate` reason.
  */
-export function resolveNodeWorldPoint(id: string, nodes: Nodes, depth = 0): Vec3 | null {
+export type NodeWorldPoint = {
+  point: Vec3
+  /** Set when the renderer derives this kind's pose from data not modelled here. */
+  approximate?: string
+}
+
+export function resolveNodeWorldPoint(id: string, nodes: Nodes): NodeWorldPoint | null {
+  const point = worldPoint(id, nodes, 0)
+  if (!point) return null
+  const approximate = approximationReason(nodes[id]!, nodes)
+  return approximate ? { point, approximate } : { point }
+}
+
+function worldPoint(id: string, nodes: Nodes, depth: number): Vec3 | null {
   const node = nodes[id]
   if (!node || depth > 32) return null
   if (node.type === 'level') {
@@ -224,7 +284,7 @@ export function resolveNodeWorldPoint(id: string, nodes: Nodes, depth = 0): Vec3
   if (local) return toWorld(local)
 
   const points = childIdsOf(id, nodes)
-    .map((childId) => resolveNodeWorldPoint(childId, nodes, depth + 1))
+    .map((childId) => worldPoint(childId, nodes, depth + 1))
     .filter((p): p is Vec3 => p !== null)
   if (points.length > 0) return boundsCentre(points)
   return toWorld(nodeLevelFrame(node.id, nodes).position)

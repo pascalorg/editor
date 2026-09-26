@@ -2,16 +2,19 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { shelfRecipe } from '@pascal-app/core/procedural-items'
 import * as schema from '@pascal-app/core/schema'
 import {
-  type AnyNode,
+  AnyNode,
   type AnyNodeId,
   BlockNode,
   CabinetModuleNode,
   CabinetNode,
   LevelNode,
+  nodeKindOf,
   RoofNode,
   RoofSegmentNode,
+  SlabNode,
   StairNode,
   StairSegmentNode,
   WallNode,
@@ -25,12 +28,14 @@ type Vec3 = [number, number, number]
 
 type MeasurePayload = {
   distanceMeters: number
+  approximate?: Array<{ id: string; reason: string }>
   fromPoint?: [number, number, number]
   toPoint?: [number, number, number]
 }
 
 /** Fields a kind needs beyond its schema defaults (mirrors core's node fixtures). */
 const REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
+  'procedural-item': { recipe: shelfRecipe },
   ceiling: {
     polygon: [
       [0, 0],
@@ -99,6 +104,34 @@ const REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
     ],
   },
 }
+
+const ROOF_ACCESSORIES = [
+  'box-vent',
+  'chimney',
+  'cupola',
+  'dormer',
+  'downspout',
+  'eyebrow-vent',
+  'gutter',
+  'ridge-vent',
+  'skylight',
+  'solar-panel',
+  'turbine-vent',
+]
+
+/** Kinds the viewer lifts onto the slab under them when they sit on a level. */
+const FLOOR_PLACED = new Set([
+  'block',
+  'cabinet',
+  'column',
+  'duct-terminal',
+  'hvac-equipment',
+  'item',
+  'procedural-item',
+  'shelf',
+  'spawn',
+  'stair',
+])
 
 /** One minimal node per kind the per-kind schemas can build from defaults. */
 function minimalNodes(): AnyNode[] {
@@ -254,30 +287,109 @@ describe('measure in world space', () => {
     expectPoint(await pointOf(block.id), [4, 1.2, 4])
   })
 
-  test('derives a finite point for every node kind', async () => {
-    const zone = ZoneNode.parse({
-      name: 'Ref',
+  test('a floor-placed block stands on the elevated slab under it', async () => {
+    seedRef()
+    const deck = SlabNode.parse({
+      elevation: 1,
       polygon: [
-        [10, 10],
-        [12, 10],
-        [12, 12],
-        [10, 12],
+        [-5, -5],
+        [5, -5],
+        [5, 5],
+        [-5, 5],
       ],
     })
-    const nodes = minimalNodes()
+    const block = BlockNode.parse({ position: [0, 0, 0] })
     bridge.applyPatch([
-      { op: 'create', node: zone, parentId: level.id as AnyNodeId },
-      ...nodes
-        .filter((n) => !['site', 'building', 'level'].includes(n.type))
-        .map((n) => ({ op: 'create' as const, node: n, parentId: level.id as AnyNodeId })),
+      { op: 'create', node: deck, parentId: level.id as AnyNodeId },
+      { op: 'create', node: block, parentId: level.id as AnyNodeId },
     ])
+    // Rendered: the 1 m deck plus the 1.2 m half-height of the default block.
+    expectPoint(await pointOf(block.id), [0, 2.2, 0])
+  })
+
+  test('polygons are measured at their area centroid', async () => {
+    seedRef()
+    // An L whose vertex average (1.667, 1.667) falls outside the shape.
+    const zone = ZoneNode.parse({
+      name: 'L',
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 1],
+        [1, 1],
+        [1, 4],
+        [0, 4],
+      ],
+    })
+    bridge.applyPatch([{ op: 'create', node: zone, parentId: level.id as AnyNodeId }])
+    expectPoint(await pointOf(zone.id), [1.357142857, 0, 1.357142857])
+  })
+
+  test('every kind resolves on its real host, with renderer-derived poses flagged', async () => {
+    const ref = seedRef()
+    const deck = SlabNode.parse({
+      elevation: 1,
+      polygon: [
+        [-50, -50],
+        [50, -50],
+        [50, 50],
+        [-50, 50],
+      ],
+    })
+    const wall = WallNode.parse({ start: [0, 0], end: [8, 0] })
+    const segment = RoofSegmentNode.parse({ position: [2, 0, 0], wallHeight: 3 })
+    const roof = RoofNode.parse({ position: [0, 3, 10], children: [segment.id] })
+    const cabinet = CabinetNode.parse({ position: [5, 0, 5] })
+    const stair = StairNode.parse({ position: [-5, 0, -5] })
+    const hosts: Record<string, AnyNode> = { wall, 'roof-segment': segment, cabinet, stair }
+    const hostOf: Record<string, string> = {
+      door: 'wall',
+      window: 'wall',
+      'cabinet-module': 'cabinet',
+      'stair-segment': 'stair',
+    }
+    for (const kind of ROOF_ACCESSORIES) hostOf[kind] = 'roof-segment'
+
+    const patches: Parameters<SceneBridge['applyPatch']>[0] = [
+      { op: 'create', node: deck, parentId: level.id as AnyNodeId },
+      { op: 'create', node: wall, parentId: level.id as AnyNodeId },
+      { op: 'create', node: roof, parentId: level.id as AnyNodeId },
+      { op: 'create', node: segment, parentId: roof.id as AnyNodeId },
+      { op: 'create', node: cabinet, parentId: level.id as AnyNodeId },
+      { op: 'create', node: stair, parentId: level.id as AnyNodeId },
+    ]
+    const covered = new Set(['site', 'building', 'level', 'zone', 'slab', 'wall', 'roof'])
+    for (const node of minimalNodes()) {
+      if (covered.has(node.type) || hosts[node.type]) continue
+      covered.add(node.type)
+      const host = hosts[hostOf[node.type] ?? ''] ?? level
+      const data = node as Record<string, unknown>
+      if (host.type === 'wall') data.wallId = host.id
+      if (host.type === 'roof-segment') data.roofSegmentId = host.id
+      patches.push({ op: 'create', node, parentId: host.id as AnyNodeId })
+    }
+    for (const kind of Object.keys(hosts)) covered.add(kind)
+    bridge.applyPatch(patches)
+    // Every kind of the node union is in the scene, none skipped.
+    expect([...covered].sort()).toEqual(AnyNode.options.map(nodeKindOf).sort())
+
     const failures: string[] = []
+    const approximate: string[] = []
+    const floorPlacedBelowDeck: string[] = []
     for (const node of Object.values(bridge.getNodes())) {
-      if (node.id === zone.id) continue
-      const { isError, text, payload } = await measure(node.id, zone.id)
-      if (isError || !Number.isFinite(payload?.distanceMeters))
+      if (node.id === ref.id) continue
+      const { isError, text, payload } = await measure(node.id, ref.id)
+      if (isError || !Number.isFinite(payload?.distanceMeters)) {
         failures.push(`${node.type}: ${text}`)
+        continue
+      }
+      if (payload?.approximate?.some((entry) => entry.id === node.id)) approximate.push(node.type)
+      if (FLOOR_PLACED.has(node.type) && node.parentId === level.id) {
+        if ((payload?.fromPoint?.[1] ?? 0) < 1 - 1e-6) floorPlacedBelowDeck.push(node.type)
+      }
     }
     expect(failures).toEqual([])
+    expect(floorPlacedBelowDeck).toEqual([])
+    expect(approximate.sort()).toEqual(['downspout', 'gutter', 'ridge-vent'])
   })
 })

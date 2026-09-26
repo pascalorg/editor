@@ -16,6 +16,7 @@ export const measureOutput = {
   distanceMeters: z.number(),
   fromPoint: z.array(z.number()).optional(),
   toPoint: z.array(z.number()).optional(),
+  approximate: z.array(z.object({ id: z.string(), reason: z.string() })).optional(),
   areaSqMeters: z.number().optional(),
   units: z.literal('meters'),
   areaUnits: z.literal('square_meters').optional(),
@@ -40,7 +41,7 @@ export function registerMeasure(server: McpServer, bridge: SceneOperations): voi
     {
       title: 'Measure',
       description:
-        "Measure the distance (in meters) between two nodes, or the net area of a polygon node when fromId === toId. Distance is between world-space reference points, returned as fromPoint/toPoint: a positioned node's origin in its host's frame (an item's base, a door's or window's centre in its wall), a wall's or fence's midpoint at its base, a slab's, ceiling's or zone's polygon centroid on its plane, a block's or imported mesh's vertex-bounds centre, a level's plan centre on its base plane, and another container's descendants' centre.",
+        "Measure the distance (in meters) between two nodes, or the net area of a polygon node when fromId === toId. Distance is between world-space reference points, returned as fromPoint/toPoint: a positioned node's origin in its host's frame (an item's base, a door's or window's centre in its wall), a wall's or fence's midpoint at its base, a slab's, ceiling's or zone's polygon centroid on its plane, a block's or imported mesh's vertex-bounds centre, a level's plan centre on its base plane, and another container's descendants' centre. `approximate` lists nodes whose renderer derives the pose from data not modelled here (a downspout at its gutter outlet, a gutter at the eave), with the reason.",
       inputSchema: measureInput,
       outputSchema: measureOutput,
       annotations: READ_ONLY_TOOL_ANNOTATIONS,
@@ -100,8 +101,14 @@ export function registerMeasure(server: McpServer, bridge: SceneOperations): voi
           `Cannot derive a world point for ${node.type} ${node.id}`,
         )
       }
-      const fromPoint = pointOf(from as AnyNode)
-      const toPoint = pointOf(to as AnyNode)
+      const fromResolved = pointOf(from as AnyNode)
+      const toResolved = pointOf(to as AnyNode)
+      const fromPoint = fromResolved.point
+      const toPoint = toResolved.point
+      const approximate: Array<{ id: string; reason: string }> = []
+      if (fromResolved.approximate)
+        approximate.push({ id: from.id, reason: fromResolved.approximate })
+      if (toResolved.approximate) approximate.push({ id: to.id, reason: toResolved.approximate })
 
       const dx = fromPoint[0] - toPoint[0]
       const dy = fromPoint[1] - toPoint[1]
@@ -112,6 +119,7 @@ export function registerMeasure(server: McpServer, bridge: SceneOperations): voi
         distanceMeters: distance,
         fromPoint,
         toPoint,
+        ...(approximate.length > 0 ? { approximate } : {}),
         units: 'meters' as const,
       }
       return {
