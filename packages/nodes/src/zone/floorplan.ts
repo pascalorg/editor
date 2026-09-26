@@ -32,6 +32,14 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
   const showSelectedChrome = isSelected || isHighlighted
 
   const points: FloorplanPoint[] = ring.map(([x, z]) => [x, z] as FloorplanPoint)
+  // A sheet drafts every zone's tag itself — name, number, area, placed
+  // clear of everything else — so on a sheet the zone prints nothing of its
+  // own: no wash, no outline, no zone-coloured name, whatever its role or
+  // wherever it came from. The invisible outline keeps the zone in the
+  // collection the sheet reads its rooms from.
+  if (floorplanContext.drafting) {
+    return { kind: 'group', children: [{ kind: 'polygon', points, fill: 'none', stroke: 'none' }] }
+  }
   const unit = owningUnitForZone(node, ctx.resolve)
   const tintColor = unit?.color ?? node.color
   const stroke = node.color

@@ -10,6 +10,8 @@ export type FloorplanViewState = {
   unit: 'metric' | 'imperial'
   metricNotation?: 'meters' | 'millimeters'
   purpose?: 'edit' | 'document'
+  /** Sheet drafting conventions (see `FloorplanContextExtension.drafting`). */
+  drafting?: boolean
   wallDimensionReference?: FloorplanWallDimensionReference
   highlighted: boolean
   hovered: boolean
@@ -59,6 +61,7 @@ export function buildFloorplanContext(
       automaticDimensions: viewState.automaticDimensions,
       metricNotation: viewState.metricNotation ?? 'meters',
       purpose: viewState.purpose ?? 'edit',
+      drafting: viewState.drafting === true,
       wallDimensionReference: viewState.wallDimensionReference,
     }),
     viewState: viewState.palette

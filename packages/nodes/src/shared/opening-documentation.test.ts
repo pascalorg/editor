@@ -6,6 +6,9 @@ import {
   buildWindowFloorplanSchedule,
   computeDoorFloorplanLevelData,
   computeWindowFloorplanLevelData,
+  OPENING_TAG_FONT_SIZE,
+  OPENING_TAG_HEIGHT,
+  OPENING_TAG_STROKE_WIDTH,
   resolveOpeningDimensionDocumentation,
 } from './opening-documentation'
 
@@ -201,5 +204,137 @@ describe('opening construction documentation', () => {
     const tag = annotation.children.find((child) => child.kind === 'text')
     expect(tag).toMatchObject({ kind: 'text', text: '101', x: 3 })
     expect(tag?.kind === 'text' ? tag.y : null).toBeLessThan(0)
+  })
+})
+
+describe('drafted sheet opening marks', () => {
+  const drafting = { drafting: true }
+
+  test('numbers doors and windows D101 / W101 by level', () => {
+    const { doorA, windowA, nodes } = fixture()
+    expect(
+      computeDoorFloorplanLevelData({ siblings: [doorA], nodes })
+        .draftingMarkById()
+        .get(doorA.id),
+    ).toBe('D101')
+    expect(
+      computeWindowFloorplanLevelData({ siblings: [windowA], nodes })
+        .draftingMarkById()
+        .get(windowA.id),
+    ).toBe('W101')
+    const schedule = buildDoorFloorplanSchedule({
+      siblings: [doorA],
+      nodes,
+      levelId: 'level_main',
+      unit: 'imperial',
+      drafting: true,
+    })
+    expect(schedule?.rows[0]?.cells.mark).toBe('D101')
+  })
+
+  test('places the tag on the exterior face of an exterior wall', () => {
+    const { doorA, nodes, wall } = fixture()
+    const levelData = computeDoorFloorplanLevelData({ siblings: [doorA], nodes })
+    const annotation = buildOpeningMarkAnnotation(doorA, wall, levelData, drafting)
+    if (annotation?.kind !== 'group') throw new Error('expected a group')
+    const tag = annotation.children.find((child) => child.kind === 'text')
+    expect(tag).toMatchObject({ kind: 'text', text: 'D101', x: 3 })
+    // frontSide is exterior, so the tag sits on the +normal side (z > 0).
+    expect(tag?.kind === 'text' ? tag.y : null).toBeGreaterThan(0)
+  })
+
+  test('door tags are hexagons and window tags are ellipses', () => {
+    const { doorA, nodes, wall, windowA } = fixture()
+    const doorTag = buildOpeningMarkAnnotation(
+      doorA,
+      wall,
+      computeDoorFloorplanLevelData({ siblings: [doorA], nodes }),
+      drafting,
+    )
+    const windowTag = buildOpeningMarkAnnotation(
+      windowA,
+      wall,
+      computeWindowFloorplanLevelData({ siblings: [windowA], nodes }),
+      drafting,
+    )
+    const outline = (annotation: typeof doorTag) =>
+      annotation?.kind === 'group'
+        ? annotation.children.find((child) => child.kind === 'polygon')
+        : undefined
+    expect(outline(doorTag)?.kind === 'polygon' ? outline(doorTag)?.points.length : 0).toBe(6)
+    expect(outline(windowTag)?.kind === 'polygon' ? outline(windowTag)?.points.length : 0).toBe(24)
+  })
+
+  /*
+   * TAG SIZE. The tag is emitted in world metres and read at a drawing scale,
+   * so the assertions below convert back to PAPER INCHES at 1/4" = 1'-0"
+   * (scale 48) — the size an architect actually judges a tag by.
+   */
+  const REFERENCE_SCALE = 48
+  const INCHES_PER_METRE = 39.37007874015748
+  const toPaperInches = (metres: number) => (metres * INCHES_PER_METRE) / REFERENCE_SCALE
+
+  test('the tag is 0.3 in tall with a 0.028 in outline at 1/4 inch scale', () => {
+    expect(toPaperInches(OPENING_TAG_HEIGHT)).toBeCloseTo(0.3, 6)
+    expect(toPaperInches(OPENING_TAG_STROKE_WIDTH)).toBeCloseTo(0.028, 6)
+    expect(toPaperInches(OPENING_TAG_FONT_SIZE)).toBeCloseTo(0.125, 6)
+  })
+
+  test('the drawn outline and mark text use those sizes', () => {
+    const { doorA, nodes, wall } = fixture()
+    const annotation = buildOpeningMarkAnnotation(
+      doorA,
+      wall,
+      computeDoorFloorplanLevelData({ siblings: [doorA], nodes }),
+      drafting,
+    )
+    if (annotation?.kind !== 'group') throw new Error('expected a group')
+    const outline = annotation.children.find((child) => child.kind === 'polygon')
+    expect(outline?.kind === 'polygon' ? outline.strokeWidth : null).toBeCloseTo(
+      OPENING_TAG_STROKE_WIDTH,
+      9,
+    )
+    // Flat-top hexagon: the vertical span is the tag height.
+    if (outline?.kind === 'polygon') {
+      const ys = outline.points.map((p) => p[1])
+      expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(OPENING_TAG_HEIGHT, 9)
+    }
+    const label = annotation.children.find((child) => child.kind === 'text')
+    expect(label?.kind === 'text' ? label.fontSize : null).toBeCloseTo(OPENING_TAG_FONT_SIZE, 9)
+    expect(label?.kind === 'text' ? label.fontWeight : null).toBe(700)
+  })
+
+  test('the tag clears the wall face rather than sitting on it', () => {
+    const { doorA, nodes, wall } = fixture()
+    const annotation = buildOpeningMarkAnnotation(
+      doorA,
+      wall,
+      computeDoorFloorplanLevelData({ siblings: [doorA], nodes }),
+      drafting,
+    )
+    if (annotation?.kind !== 'group') throw new Error('expected a group')
+    const outline = annotation.children.find((child) => child.kind === 'polygon')
+    if (outline?.kind !== 'polygon') throw new Error('expected an outline')
+    // Wall face is at z = thickness / 2 = 0.1; the tag's near edge stands off it.
+    expect(Math.min(...outline.points.map((p) => p[1]))).toBeGreaterThan(0.1)
+    expect(annotation.children.find((child) => child.kind === 'line')).toBeDefined()
+  })
+
+  test('a wide tag grows sideways, never taller', () => {
+    const { doorA, nodes, wall } = fixture()
+    const wide = { ...doorA, mark: 'D-101-EXT' }
+    const annotation = buildOpeningMarkAnnotation(
+      wide,
+      wall,
+      computeDoorFloorplanLevelData({ siblings: [wide], nodes }),
+      drafting,
+    )
+    if (annotation?.kind !== 'group') throw new Error('expected a group')
+    const outline = annotation.children.find((child) => child.kind === 'polygon')
+    if (outline?.kind !== 'polygon') throw new Error('expected an outline')
+    const xs = outline.points.map((p) => p[0])
+    const ys = outline.points.map((p) => p[1])
+    expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(OPENING_TAG_HEIGHT, 9)
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(OPENING_TAG_HEIGHT * 2)
   })
 })

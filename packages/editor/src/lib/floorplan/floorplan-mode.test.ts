@@ -62,6 +62,8 @@ describe('floor-plan mode', () => {
       openingMarks: false,
       structuralGrids: false,
       roomLabels: true,
+      roomDetails: false,
+      roofPlan: false,
       stairAnnotations: false,
     })
 
@@ -107,6 +109,8 @@ describe('floor-plan mode', () => {
       openingMarks: false,
       structuralGrids: false,
       roomLabels: true,
+      roomDetails: false,
+      roofPlan: false,
       stairAnnotations: false,
     })
   })

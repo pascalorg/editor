@@ -153,7 +153,7 @@ export {
   ElevatorShaftStyle,
 } from './nodes/elevator'
 export { EyebrowVentMaterialRole, EyebrowVentNode } from './nodes/eyebrow-vent'
-export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
+export { FenceBaseStyle, FenceGuardInfill, FenceNode, FenceStyle } from './nodes/fence'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
 export {
   computeGutterEaveY,
@@ -292,7 +292,14 @@ export {
   ScanNode,
 } from './nodes/scan'
 export { ShelfNode } from './nodes/shelf'
-export { SiteNode } from './nodes/site'
+export {
+  migrateSiteMetadata,
+  SiteAddress,
+  SiteDossier,
+  SiteNode,
+  SiteParcel,
+  SiteSetbacks,
+} from './nodes/site'
 export {
   SKYLIGHT_TYPE_ORDER,
   SKYLIGHT_TYPE_PRESETS,
@@ -314,6 +321,7 @@ export {
   getEffectiveStairSurfaceMaterial,
   StairNode,
   StairRailingMode,
+  StairRailingStyle,
   StairSlabOpeningMode,
   StairTopLandingMode,
   StairType,
@@ -351,6 +359,11 @@ export {
   WALL_SLOT_DEFAULT,
   WALL_SURFACE_SLOT_DEFAULTS,
   WALL_TRIM_DEFAULTS,
+  WallAssembly,
+  WallAssemblyExteriorFinish,
+  WallAssemblyFramingKind,
+  WallAssemblyInteriorFinish,
+  WallAssemblySheathingMaterial,
   WallNode,
   WallTreatmentSide,
   WallTrimProfile,

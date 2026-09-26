@@ -46,7 +46,7 @@ export function ParametricFieldControl({
     }
 
     case 'boolean': {
-      const checked = !mixed && value === true
+      const checked = !mixed && (value ?? field.default) === true
       return (
         <ToggleControl
           checked={checked}

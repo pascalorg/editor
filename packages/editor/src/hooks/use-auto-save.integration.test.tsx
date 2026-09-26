@@ -11,6 +11,7 @@ import { create } from '@react-three/test-renderer'
 import { type SaveStatus, useAutoSave } from './use-auto-save'
 
 const originalWindow = globalThis.window
+const originalRequestAnimationFrame = globalThis.requestAnimationFrame
 const previousScene = useScene.getState()
 let renderer: Awaited<ReturnType<typeof create>> | undefined
 
@@ -18,6 +19,7 @@ afterEach(async () => {
   await renderer?.unmount()
   renderer = undefined
   globalThis.window = originalWindow
+  globalThis.requestAnimationFrame = originalRequestAnimationFrame
   useScene.setState(previousScene, true)
   clearSceneHistory()
 })
@@ -42,11 +44,8 @@ function graph(count: number) {
   return { nodes: Object.fromEntries(nodes.map((node) => [node.id, node])), rootNodeIds: [site.id] }
 }
 
-async function mount(
-  loadedCount: number,
-  guardAgainstSceneWipe?: boolean,
-  save?: () => Promise<void>,
-) {
+/** Mounts the hook in its initial state: a scene load not yet completed. */
+async function mountBeforeLoad(guardAgainstSceneWipe?: boolean, save?: () => Promise<void>) {
   globalThis.window = new EventTarget() as unknown as Window & typeof globalThis
   useScene.setState({ ...graph(0), readOnly: false })
   clearSceneHistory()
@@ -65,10 +64,6 @@ async function mount(
     return null
   }
   renderer = await create(<Host guardAgainstSceneWipe={guardAgainstSceneWipe} />)
-  useScene.setState(graph(loadedCount))
-  clearSceneHistory()
-  controls!.isLoadingSceneRef.current = false
-  statuses.length = 0
   return {
     writes,
     statuses,
@@ -77,6 +72,125 @@ async function mount(
       renderer!.update(<Host {...props} />),
   }
 }
+
+async function mount(
+  loadedCount: number,
+  guardAgainstSceneWipe?: boolean,
+  save?: () => Promise<void>,
+) {
+  const mounted = await mountBeforeLoad(guardAgainstSceneWipe, save)
+  useScene.setState(graph(loadedCount))
+  clearSceneHistory()
+  mounted.controls.completeSceneLoad()
+  mounted.statuses.length = 0
+  return mounted
+}
+
+/** The Editor's load sequence: begin, unload, hydrate the store, complete. */
+function loadScene(controls: ReturnType<typeof useAutoSave>, count: number) {
+  controls.beginSceneLoad()
+  useScene.getState().unloadScene()
+  hydrate(count)
+  controls.completeSceneLoad()
+}
+
+function hydrate(count: number) {
+  const { nodes, rootNodeIds } = graph(count)
+  useScene.getState().setScene(nodes as never, rootNodeIds as never)
+  clearSceneHistory()
+}
+
+function agentAddsColumn() {
+  useScene
+    .getState()
+    .createNode(
+      ColumnNode.parse({ id: 'column_agent', parentId: 'level_autosave' }),
+      'level_autosave' as never,
+    )
+}
+
+/** A hidden tab: requestAnimationFrame callbacks never run. */
+function hideDocument() {
+  const frames: FrameRequestCallback[] = []
+  globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+    frames.push(callback)
+    return frames.length
+  }) as typeof requestAnimationFrame
+  return frames
+}
+
+test('a scene loaded in a hidden tab autosaves agent edits without waiting for a frame', async () => {
+  hideDocument()
+  const { writes, statuses, controls } = await mountBeforeLoad()
+  statuses.length = 0
+  // Pre-hydration document writes (the host-panel installedPlugins sync on
+  // mount) still must not arm a save of the empty store.
+  useScene.getState().setInstalledPlugins(['pre-hydration-default'], { explicit: false })
+  loadScene(controls, 12)
+  expect(statuses).toEqual([])
+
+  agentAddsColumn()
+  await Bun.sleep(1100)
+  expect(writes).toEqual([13])
+  expect(statuses.at(-1)).toBe('saved')
+})
+
+test('opening a scene and leaving it unchanged saves nothing', async () => {
+  const { writes, statuses, controls } = await mountBeforeLoad()
+  loadScene(controls, 12)
+  statuses.length = 0
+  // Mount-time writes after the load: systems re-marking nodes, and a plugin
+  // that registers late syncing the default plugin set.
+  useScene.getState().markDirty('level_autosave' as never)
+  useScene.getState().setInstalledPlugins(['late-default'], { explicit: false })
+  await Bun.sleep(1100)
+  window.dispatchEvent(new Event('pagehide'))
+  expect(writes).toEqual([])
+  expect(statuses).toEqual([])
+})
+
+test('installing a plugin by hand after the load is saved', async () => {
+  const { writes, controls } = await mountBeforeLoad()
+  loadScene(controls, 12)
+  useScene.getState().setInstalledPlugins(['chosen'], { explicit: true })
+  await Bun.sleep(1100)
+  expect(writes).toEqual([12])
+})
+
+test('the exit flush writes an agent edit made right after a hidden load', async () => {
+  hideDocument()
+  const { writes, statuses, controls } = await mountBeforeLoad()
+  loadScene(controls, 12)
+  agentAddsColumn()
+  window.dispatchEvent(new Event('pagehide'))
+  expect(writes).toEqual([13])
+  expect(statuses).not.toContain('error')
+})
+
+test('the exit flush still skips while a load is in flight', async () => {
+  const { writes, controls } = await mount(12)
+  agentAddsColumn()
+  controls.beginSceneLoad()
+  useScene.getState().unloadScene()
+  window.dispatchEvent(new Event('pagehide'))
+  expect(writes).toEqual([])
+})
+
+test('a save that came due mid-load is written once the load completes', async () => {
+  const { writes, statuses, controls } = await mount(12)
+  agentAddsColumn()
+  controls.beginSceneLoad()
+  useScene.getState().unloadScene()
+  await Bun.sleep(1100)
+  expect(writes).toEqual([])
+  expect(statuses.at(-1)).toBe('paused')
+
+  hydrate(12)
+  controls.completeSceneLoad()
+  await Bun.sleep(0)
+  expect(writes).toEqual([12])
+  expect(statuses.at(-1)).toBe('saved')
+})
 
 test.each([
   'undo',

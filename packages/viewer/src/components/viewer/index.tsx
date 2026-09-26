@@ -117,6 +117,39 @@ const warnedEmptyDraw = process.env.NODE_ENV === 'production' ? null : new WeakS
  * carry the same check inline).
  */
 function installEmptyDrawGuard(renderer: THREE.WebGPURenderer) {
+  // The render-object hook is one funnel; the post-processing passes and the
+  // outline node reach the backend by other paths, and a geometry whose
+  // draw range is empty still slips past a position count. The backend's
+  // own `draw` is the last gate before the command encoder — a zero-vertex
+  // draw leaves a vertex-buffer slot unbound ("Vertex buffer slot 1 required
+  // by [RenderPipeline "…MeshLambertNodeMaterial…"] was not set … Draw(0, …)",
+  // 2026-09-10) and poisons the whole encoder, so it is dropped here.
+  const backend = (
+    renderer as unknown as {
+      backend?: { draw?: (...args: unknown[]) => unknown; __pascalDrawGuard?: boolean }
+    }
+  ).backend
+  if (backend && typeof backend.draw === 'function' && !backend.__pascalDrawGuard) {
+    const draw = backend.draw.bind(backend)
+    backend.draw = (renderObject: unknown, ...rest: unknown[]) => {
+      const geometry = (renderObject as { geometry?: THREE.BufferGeometry } | null)?.geometry
+      const range = geometry?.drawRange
+      if (!hasDrawableGeometry(geometry) || (range && range.count === 0)) {
+        if (warnedEmptyDraw && geometry && !warnedEmptyDraw.has(geometry)) {
+          warnedEmptyDraw.add(geometry)
+          console.warn('[viewer] dropped a zero-vertex draw at the backend', {
+            name: (renderObject as { object?: { name?: string; type?: string } } | null)?.object
+              ?.name,
+            type: (renderObject as { object?: { name?: string; type?: string } } | null)?.object
+              ?.type,
+          })
+        }
+        return
+      }
+      return draw(renderObject, ...rest)
+    }
+    backend.__pascalDrawGuard = true
+  }
   renderer.setRenderObjectFunction(
     (
       object: any,
@@ -247,30 +280,51 @@ function ImmersiveXRBackground() {
   return <color args={[background]} attach="background" />
 }
 
+function isPendingSceneBuild(
+  id: AnyNodeId,
+  { nodes, rootNodeIds }: Pick<ReturnType<typeof useScene.getState>, 'nodes' | 'rootNodeIds'>,
+): boolean {
+  const node = nodes[id]
+  if (!node) return false
+  // Unreachable nodes (orphaned by a broken detach: the parent doesn't list
+  // them in `children`, or no parent and not a root) never render — every
+  // renderer enumerates the parent's `children` array — so no system will
+  // ever build them or clear their mark. They must not hold scene-ready
+  // hostage (observed in prod scene data: two dangling windows kept every
+  // bake of that scene waiting out the full readiness cap).
+  const parent = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
+  const reachable = parent
+    ? (parent as { children?: string[] }).children?.includes(id) === true
+    : rootNodeIds.includes(id)
+  if (!reachable) return false
+  const def = nodeRegistry.get(node.type)
+  return Boolean(
+    def?.geometry || def?.capabilities?.floorPlaced || DIRTY_BUILD_KINDS.has(node.type),
+  )
+}
+
 function hasPendingSceneBuildWork() {
-  const { dirtyNodes, nodes, rootNodeIds } = useScene.getState()
-
-  for (const id of dirtyNodes) {
-    const node = nodes[id]
-    if (!node) continue
-    // Unreachable nodes (orphaned by a broken detach: the parent doesn't list
-    // them in `children`, or no parent and not a root) never render — every
-    // renderer enumerates the parent's `children` array — so no system will
-    // ever build them or clear their mark. They must not hold scene-ready
-    // hostage (observed in prod scene data: two dangling windows kept every
-    // bake of that scene waiting out the full readiness cap).
-    const parent = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
-    const reachable = parent
-      ? (parent as { children?: string[] }).children?.includes(id) === true
-      : rootNodeIds.includes(id)
-    if (!reachable) continue
-    const def = nodeRegistry.get(node.type)
-    if (def?.geometry || def?.capabilities?.floorPlaced || DIRTY_BUILD_KINDS.has(node.type)) {
-      return true
-    }
+  const state = useScene.getState()
+  for (const id of state.dirtyNodes) {
+    if (isPendingSceneBuild(id, state)) return true
   }
-
   return false
+}
+
+/**
+ * The scene-ready gate's own test as a count — nodes still to build or load
+ * (an item holds its mark until its model settles), 1 while the graph has
+ * not mounted. A capture waits on it, and reads a count that stops moving
+ * as a node no system will ever settle.
+ */
+export function pendingSceneBuildCount(): number {
+  if (!hasCommittedSceneRoot()) return 1
+  const state = useScene.getState()
+  let count = 0
+  for (const id of state.dirtyNodes) {
+    if (isPendingSceneBuild(id, state)) count++
+  }
+  return count
 }
 
 function hasCommittedSceneRoot() {

@@ -173,14 +173,14 @@ beforeEach(() => {
         Object.assign(this, props)
       }
     },
-    document: {
+    document: Object.assign(new EventTarget(), {
       body: { style: {} },
       activeElement: null,
       querySelector: () => ({
         ownerSVGElement: svg,
         getScreenCTM: () => ({ inverse: () => ({}) }),
       }),
-    },
+    }),
     requestAnimationFrame: () => 0,
     cancelAnimationFrame: () => {},
   })

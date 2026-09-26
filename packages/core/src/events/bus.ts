@@ -243,6 +243,29 @@ export interface ThumbnailGenerateEvent {
    * any palette background.
    */
   transparent?: boolean
+  // ── a sheet's picture ──
+  /** The ink edges wanted for this frame, else the canvas' setting (off with alpha). */
+  edges?: 'off' | 'soft' | 'strong'
+  /** An orthographic view of the caller's own: the capture camera at `position` looking at `target`, `viewWidth` metres across. */
+  ortho?: {
+    position: [number, number, number]
+    target: [number, number, number]
+    viewWidth: number
+  }
+  /** Node types hidden for this capture besides the helpers (a sheet's elevation hides the terrain). */
+  hideTypes?: readonly string[]
+  /** A perspective view of the caller's own (a sheet's cover view); the user's camera never moves. */
+  perspective?: {
+    position: [number, number, number]
+    target: [number, number, number]
+    fov?: number
+  }
+  /** Re-aim the sun at the face the pose looks at, for this frame. */
+  lightFace?: boolean
+  /** World clipping planes for this frame (a section's cut). */
+  clip?: readonly { normal: [number, number, number]; constant: number }[]
+  /** Render the canvas at this multiple of its size for the frame (print-scale pictures). */
+  supersample?: number
 }
 
 export interface CameraControlFitSceneEvent {

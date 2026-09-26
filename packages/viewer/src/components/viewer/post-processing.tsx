@@ -33,6 +33,7 @@ import { inkedEdges } from '../../lib/ink-edges'
 import { refreshIsolation } from '../../lib/isolation'
 import { LayerPassIndex, LayerPassNode } from '../../lib/layer-pass'
 import { GRID_LAYER, OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
+import { isLiveFrameHeld } from '../../lib/live-frame-hold'
 import { mergedOutline } from '../../lib/merged-outline-node'
 import { recordPerfSample, timeSpan } from '../../lib/perf-tracks'
 import { PostProcessingResources } from '../../lib/post-processing-resources'
@@ -714,6 +715,9 @@ const PostProcessingPasses = ({
     if (size.width < 1 || size.height < 1) {
       return
     }
+
+    // A capture is working on the shared scene: the canvas keeps its last frame.
+    if (isLiveFrameHeld()) return
 
     // `?disable=draw`: nothing downstream wants pixels — render an EMPTY scene
     // instead of the real one. This is the only render call (positive-priority

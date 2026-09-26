@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { type FloorplanGeometry, type GeometryContext, ZoneNode } from '@pascal-app/core'
-import { readFloorplanGeometryMetadata } from '@pascal-app/editor'
+import { createFloorplanContextExtensions, readFloorplanGeometryMetadata } from '@pascal-app/editor'
 import { buildZoneFloorplan } from './floorplan'
 
 const context = {
@@ -63,5 +63,28 @@ describe('buildZoneFloorplan room documentation', () => {
     expect(
       labels.every((label) => readFloorplanGeometryMetadata(label).annotationRole === 'room-label'),
     ).toBe(true)
+  })
+
+  test('a drafted sheet gets only an invisible outline', () => {
+    const room = ZoneNode.parse({
+      id: 'zone_sheet',
+      name: 'Office',
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 3],
+        [0, 3],
+      ],
+      spaceRole: 'room',
+    })
+    const geometry = buildZoneFloorplan(room, {
+      ...context,
+      extensions: createFloorplanContextExtensions({ drafting: true }),
+    })
+    expect(textChildren(geometry)).toEqual([])
+    expect(geometry).toEqual({
+      kind: 'group',
+      children: [expect.objectContaining({ kind: 'polygon', fill: 'none', stroke: 'none' })],
+    })
   })
 })

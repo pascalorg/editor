@@ -17,6 +17,19 @@ export type EditorHostPanel = {
   }
   pluginUrl?: string
   defaultInstalled?: boolean
+  /** Short label shown next to the plugin name in the manager, e.g. "Pro". */
+  badge?: string
+}
+
+/**
+ * A host-owned reason why a plugin cannot be installed right now (a plan the
+ * account doesn't have, for instance). The manager swaps its Install button
+ * for `actionLabel`; uninstalling is never locked.
+ */
+export type PluginInstallLock = {
+  reason: string
+  actionLabel: string
+  onAction: () => void
 }
 
 function isDevMode(): boolean {
@@ -85,6 +98,32 @@ class EditorHostPanelRegistryImpl {
 }
 
 export const editorHostPanelRegistry = new EditorHostPanelRegistryImpl()
+
+class PluginInstallLocksImpl {
+  private locks: Readonly<Record<string, PluginInstallLock>> = {}
+  private readonly listeners = new Set<() => void>()
+
+  subscribe = (onChange: () => void): (() => void) => {
+    this.listeners.add(onChange)
+    return () => {
+      this.listeners.delete(onChange)
+    }
+  }
+
+  getSnapshot = (): Readonly<Record<string, PluginInstallLock>> => this.locks
+
+  set(locks: Record<string, PluginInstallLock>): void {
+    this.locks = { ...locks }
+    for (const listener of this.listeners) listener()
+  }
+}
+
+export const pluginInstallLocks = new PluginInstallLocksImpl()
+
+/** Replaces every install lock, keyed by `pluginId`. Pass `{}` to clear. */
+export function setPluginInstallLocks(locks: Record<string, PluginInstallLock>): void {
+  pluginInstallLocks.set(locks)
+}
 
 export function registerEditorHostPanel(panel: EditorHostPanel): void {
   editorHostPanelRegistry.registerPanel(panel)

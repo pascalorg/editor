@@ -14,6 +14,7 @@ import {
   createMaterial,
   createMaterialFromPresetRef,
   getRoofMaterialArray,
+  levelWallCladdingRef,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
@@ -52,6 +53,10 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
   //   slot 1 → 'wall'  (deck top & shingle eave bands)
   //   slot 2 → 'wall'  (interior)
   //   slot 3 → 'top'   (shingle / roof surface)
+  // The gable band is clad like the walls below it (their assemblies).
+  const wallCladdingRef = useScene((state) =>
+    parentNode ? levelWallCladdingRef(state.nodes, parentNode) : null,
+  )
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const customMaterial = useMemo(() => {
     const resolveSlot = (role: RoofSegmentSurfaceMaterialRole): THREE.Material | null => {
@@ -70,7 +75,14 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
     // Themed parent-roof array (per-role scene-theme colours) — used both as the
     // full fallback and to fill any individual untextured slot below.
     const themedArray = parentNode
-      ? getRoofMaterialArray(parentNode, shading, textures, colorPreset, sceneTheme)
+      ? getRoofMaterialArray(
+          parentNode,
+          shading,
+          textures,
+          colorPreset,
+          sceneTheme,
+          wallCladdingRef,
+        )
       : null
 
     const edge = resolveSlot('edge')
@@ -93,6 +105,7 @@ export const RoofSegmentRenderer = ({ node }: { node: RoofSegmentNode }) => {
     node.topMaterial,
     node.topMaterialPreset,
     node.edgeMaterial,
+    wallCladdingRef,
     node.edgeMaterialPreset,
     node.wallMaterial,
     node.wallMaterialPreset,
