@@ -2210,14 +2210,19 @@ type VertexBinding =
  * Live preview of the automatic slabs and ceilings bounded by `movingWallIds`, with no room
  * detection per tick. Boundary membership is read once here: each polygon vertex binds to the
  * walls carrying its two edges (a corner is where they meet again), or to its place on a curved
- * wall's arc. The returned function re-places the bound vertices for the moved walls. New,
- * merged or split rooms appear at commit.
+ * wall's arc. The returned function re-places the bound vertices for the moved walls; a vertex
+ * at a junction the move bridges (`bridges`, from `planWallMoveJunctions`: original point →
+ * moved endpoint) stays and gains the bridge's moved end, as the commit's rooms will. New,
+ * merged or split rooms appear at commit; rebuild the follower after a foreign topology change.
  */
 export function createWallBoundSurfaceFollower(
   levelId: string,
   nodes: SceneNodes,
   movingWallIds: ReadonlySet<string>,
-): (moved: ReadonlyMap<string, WallMoveSegment>) => Array<[AnyNodeId, Array<[number, number]>]> {
+): (
+  moved: ReadonlyMap<string, WallMoveSegment>,
+  bridges?: ReadonlyArray<WallMoveSegment>,
+) => Array<[AnyNodeId, Array<[number, number]>]> {
   const walls = new Map<string, FollowedWall>()
   for (const node of Object.values(nodes)) {
     if (node?.type === 'wall' && node.parentId === levelId) {
@@ -2263,12 +2268,28 @@ export function createWallBoundSurfaceFollower(
     }
   }
 
+  const bridgedEnd = (
+    vertex: [number, number],
+    bridges: ReadonlyArray<WallMoveSegment>,
+  ): [number, number] | null => {
+    for (const bridge of bridges) {
+      if (
+        Math.hypot(bridge.start[0] - vertex[0], bridge.start[1] - vertex[1]) <=
+        WALL_BOUND_VERTEX_TOLERANCE
+      ) {
+        return [bridge.end[0], bridge.end[1]]
+      }
+    }
+    return null
+  }
+
   const followVertex = (
     vertex: [number, number],
     binding: VertexBinding,
     moved: ReadonlyMap<string, WallMoveSegment>,
-  ): [number, number] => {
-    if (binding.kind === 'fixed') return vertex
+    bridges: ReadonlyArray<WallMoveSegment>,
+  ): Array<[number, number]> => {
+    if (binding.kind === 'fixed') return [vertex]
     const current = (id: string): FollowedWall => {
       const wall = walls.get(id)!
       const next = moved.get(id)
@@ -2276,21 +2297,40 @@ export function createWallBoundSurfaceFollower(
     }
     if (binding.kind === 'curve') {
       const point = getWallCurveFrameAt(current(binding.wallId), binding.t).point
-      return [point.x, point.y]
+      return [[point.x, point.y]]
     }
     const { previous, next } = binding
+    const shifts = (id: string | null) => {
+      const to = id ? moved.get(id) : undefined
+      const from = id ? walls.get(id) : undefined
+      return Boolean(
+        to &&
+          from &&
+          (to.start[0] !== from.start[0] ||
+            to.start[1] !== from.start[1] ||
+            to.end[0] !== from.end[0] ||
+            to.end[1] !== from.end[1]),
+      )
+    }
+    const previousMoves = shifts(previous)
+    const nextMoves = shifts(next)
+    if (previousMoves !== nextMoves) {
+      const end = bridgedEnd(vertex, bridges)
+      // The stationary edge keeps the junction; the bridge joins it to the moved wall.
+      if (end) return previousMoves ? [end, vertex] : [vertex, end]
+    }
     if (previous && next && previous !== next) {
       const corner = intersectWallLines(current(previous), current(next))
-      if (corner) return corner
+      if (corner) return [corner]
     }
     const carrier = [previous, next].find((id) => id && moved.has(id))
-    return carrier ? carryAlongWall(vertex, walls.get(carrier)!, current(carrier)) : vertex
+    return [carrier ? carryAlongWall(vertex, walls.get(carrier)!, current(carrier)) : vertex]
   }
 
-  return (moved) =>
+  return (moved, bridges = []) =>
     surfaces.map(({ id, polygon, bindings }) => [
       id,
-      polygon.map((vertex, index) => followVertex(vertex, bindings[index]!, moved)),
+      polygon.flatMap((vertex, index) => followVertex(vertex, bindings[index]!, moved, bridges)),
     ])
 }
 

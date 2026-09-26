@@ -229,27 +229,38 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     // at pre-drag values. Membership is read once here, so a tick costs a few
     // line intersections instead of a level-wide room detection. Surfaces a
     // new, merged or split room needs appear at commit.
-    const followSurfaces = levelId
-      ? createWallBoundSurfaceFollower(
-          levelId,
-          useScene.getState().nodes,
-          new Set([nodeId, ...linkedOriginalsRef.current.map((wall) => wall.id)]),
-        )
+    // The drag writes nothing to the store, so a new `nodes` reference means someone else
+    // changed the scene (a collaborator, an agent): membership is read again from it.
+    const movingWallIds = new Set([nodeId, ...linkedOriginalsRef.current.map((wall) => wall.id)])
+    let followerNodes = useScene.getState().nodes
+    let followSurfaces = levelId
+      ? createWallBoundSurfaceFollower(levelId, followerNodes, movingWallIds)
       : null
     const touchedSurfaceIds = new Set<AnyNodeId>()
 
     const publishLiveSurfaceOverrides = (
       updates: Array<{ id: WallNode['id']; start: [number, number]; end: [number, number] }>,
+      bridges: Array<{ start: [number, number]; end: [number, number] }>,
     ) => {
-      if (!followSurfaces) return
-      const entries = followSurfaces(new Map(updates.map((entry) => [entry.id, entry])))
-      if (entries.length === 0) return
-      useLiveNodeOverrides
-        .getState()
-        .setMany(
-          entries.map(([id, polygon]) => [id, { polygon }] as [string, Record<string, unknown>]),
-        )
+      if (!levelId) return
       const sceneState = useScene.getState()
+      if (sceneState.nodes !== followerNodes) {
+        followerNodes = sceneState.nodes
+        followSurfaces = createWallBoundSurfaceFollower(levelId, followerNodes, movingWallIds)
+      }
+      const entries = followSurfaces!(new Map(updates.map((entry) => [entry.id, entry])), bridges)
+      const followed = new Set(entries.map(([id]) => id))
+      const overrides = useLiveNodeOverrides.getState()
+      for (const id of touchedSurfaceIds) {
+        if (followed.has(id)) continue
+        overrides.clear(id)
+        if (sceneState.nodes[id]) sceneState.markDirty(id)
+        touchedSurfaceIds.delete(id)
+      }
+      if (entries.length === 0) return
+      overrides.setMany(
+        entries.map(([id, polygon]) => [id, { polygon }] as [string, Record<string, unknown>]),
+      )
       for (const [id] of entries) {
         touchedSurfaceIds.add(id)
         sceneState.markDirty(id)
@@ -355,7 +366,10 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       const nextGhostWalls = bridgePreviews.map((preview) => preview.ghost)
       setGhostWallPreviews(nextGhostWalls)
       applyNodePreview(previewUpdates)
-      publishLiveSurfaceOverrides(previewUpdates)
+      publishLiveSurfaceOverrides(
+        previewUpdates,
+        bridgePreviews.map(({ wall }) => ({ start: wall.start, end: wall.end })),
+      )
     }
 
     const restoreOriginal = () => {
