@@ -362,6 +362,37 @@ capabilities: {
 
 ---
 
+### `capabilities.cuts`
+
+Frozen contract (F5b cut intents), not read by any host yet. A kind that removes material from a host publishes what it removes, and each host kernel intersects the intents with its own faces. It replaces the reader-less `cuttable` flag.
+
+```ts
+cuts?: (node: AnyNode, ctx: { nodes: Record<AnyNodeId, AnyNode> }) => CutIntent[]
+
+type CutIntent = {                   // core/src/schema/cut.ts
+  host: { nodeId: string; surfaceId: string; partKey?: PartKey } // a face of the host
+  shape: { kind: 'polygon'; ring: [u, v][] } | { kind: 'circle'; center: [u, v]; radius: number }
+  depth: 'through' | number          // metres along −normal from that face
+  taper?: number                     // radians; positive narrows with depth
+}
+```
+
+`shape` is in the face's surface chart ([u, v] metres, v = normal × u): a wall's `front` is wall-local (x, y); its `back` runs from `end` (u = length − x); a ceiling's `underside` is ceiling-local [x, z]; a slab's `top` is [x, −z]; a roof facet's `facet:<id>:covering` has u along the eave and v up the slope. A numeric `depth` is a pocket that keeps the host's backing (walls keep at least 5 mm). Executable examples: `core/src/contracts/cut-intent.test.ts`.
+
+How today's cut sources map onto it (their consumers switch in DT-03b and RL-02):
+
+| Source today | Where it is consumed | Intent |
+|---|---|---|
+| Door and window on a wall | `collectCutoutBrushes` → `createOpeningCutoutBrush` (`viewer/systems/wall/wall-system.tsx`), outline from `buildOpeningCutoutShape` | wall, `front` or `back`; the rectangle, arch or rounded outline; `through` (the 2 × thickness brush) |
+| Item with a `cutout` mesh on a wall | same loop: the mesh's wall-local bounding rectangle | wall, the item's side; that rectangle; `through` today, a numeric depth for recessed cabinets and niches |
+| `roofAccessory.buildCut` (skylight, dormer) | `roof-system.tsx` subtracts the segment-local geometry from the shin, deck and wall brushes | roof segment, `facet:<id>:covering`; the framed opening in slope metres; `through`, applied per segment |
+| Door or window on a roof-segment wall face (`buildRoofWallOpeningCut`, `cutScope: 'wall'`) | same, wall brush only | roof segment, `face:<wall face>`; the opening outline; `through` |
+| `ceilingCut.buildCeilingHole` (recessed fixtures) | `CeilingSystem` merges the rings as holes | ceiling, `underside`; the same ring; `through` |
+| Stair and elevator openings | `stair-opening-sync` and `elevator-opening-sync` persist rings into `slab.holes` / `ceiling.holes` with `holeMetadata` | slab `top` or ceiling `underside`; `through`. The persisted holes stay as they are; intents are how a child cutter publishes |
+| Authored `slab.holes` / `ceiling.holes` | the host's own polygon | not an intent: host data |
+
+---
+
 ### `capabilities.paint`
 
 Per-kind paint dispatch. Lets the editor's `selection-manager` route paint hover / click / preview through a generic dispatcher instead of adding an `if (node.type === '<kind>')` arm for every paintable kind.

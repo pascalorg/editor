@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import type { AnimationClip, BufferGeometry, Object3D, Ray } from 'three'
 import type { ZodObject, z } from 'zod'
+import type { CutIntent } from '../schema/cut'
 import type { MaterialSchema, MaterialTarget } from '../schema/material'
 import type { AssetInput, ItemNode } from '../schema/nodes/item'
 import type { MeasurementFeatureReference, MeasurementPoint } from '../schema/nodes/measurement'
@@ -1661,7 +1662,13 @@ export type Capabilities = {
   scalable?: ScalableConfig
   hostable?: HostableConfig
   surfacePlacement?: 'floor-only'
-  cuttable?: CuttableConfig
+  /**
+   * What the node cuts out of its host(s), as cut intents (F5b). Frozen
+   * contract, not read yet: DT-03b (walls, ceilings, slabs) and RL-02 (roofs)
+   * consume it beside today's paths (`collectCutoutBrushes`,
+   * `roofAccessory.buildCut`, `ceilingCut`), which it later replaces.
+   */
+  cuts?: (node: AnyNode, ctx: CutsContext) => CutIntent[]
   snappable?: SnappableConfig
   surfaces?: SurfacesConfig
   faceHost?: FaceHostCapability<any>
@@ -2064,6 +2071,9 @@ export type CeilingCutCapability = {
 
 export type CapabilityCtx = { node: AnyNode }
 
+/** What a cut publisher may read: the scene, to find its host and the host's frame. */
+export type CutsContext = { nodes: Readonly<Record<AnyNodeId, AnyNode>> }
+
 export type MovableConfig = {
   axes: ReadonlyArray<'x' | 'y' | 'z'>
   gridSnap?: boolean
@@ -2254,11 +2264,6 @@ export type HostableConfig = {
   fromAsset?: 'attachTo'
   modes?: Record<string, Partial<HostableConfig>>
   override?: (ctx: CapabilityCtx) => HostableConfig | null
-}
-
-export type CuttableConfig = {
-  hostKinds: readonly string[]
-  override?: (ctx: CapabilityCtx) => CuttableConfig | null
 }
 
 export type SnappableConfig = {

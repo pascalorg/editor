@@ -20,6 +20,8 @@ export {
   enableCompiledNodeParsers,
   parseNode,
 } from './compiled-node-parsers'
+// Cut intents (F5b)
+export { CutIntent, CutShape } from './cut'
 export type {
   MaterialMapProperties,
   MaterialMaps,
