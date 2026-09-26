@@ -516,6 +516,42 @@ describe('3D wall move', () => {
     expect(nodes[north] as WallNode).toMatchObject({ start: [4.5, 4], end: [-1, 4] })
   })
 
+  test('a wall connected mid-drag is planned with the move, and its far end kept', async () => {
+    const east = 'wall_wall-move-east' as AnyNodeId
+    const spur = 'wall_wall-move-spur' as AnyNodeId
+    const renderer = await armWall(east)
+    await moveCursor(4)
+    await moveCursor(4.25)
+    useScene
+      .getState()
+      .createNode(
+        WallNode.parse({ id: spur, parentId: LEVEL_ID, start: [4, 4], end: [4, 6] }),
+        LEVEL_ID,
+      )
+    await moveCursor(4.5)
+    await act(async () => {
+      window.dispatchEvent(new Event('pointerup'))
+    })
+    await act(async () => renderer.unmount())
+
+    const nodes = useScene.getState().nodes
+    const moved = nodes[east] as WallNode
+    const connected = nodes[spur] as WallNode
+    expect(moved.end).toEqual([4.5, 4])
+    expect(connected.end).toEqual([4, 6])
+    // The spur stays joined to the move: at the moved corner or through a bridge wall.
+    const joined =
+      JSON.stringify(connected.start) === JSON.stringify(moved.end) ||
+      Object.values(nodes).some(
+        (wall) =>
+          wall.type === 'wall' &&
+          [JSON.stringify((wall as WallNode).start), JSON.stringify((wall as WallNode).end)]
+            .sort()
+            .join() === [JSON.stringify(connected.start), JSON.stringify(moved.end)].sort().join(),
+      )
+    expect(joined).toBe(true)
+  })
+
   test('split view: a 3D drop with the real 2D overlay mounted records one step', async () => {
     const before = sceneNodes()
     const renderer = await armSplitView()

@@ -232,6 +232,24 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     // The drag writes nothing to the store, so a new `nodes` reference means someone else
     // changed the scene (a collaborator, an agent): membership is read again from it.
     const movingWallIds = new Set([nodeId, ...linkedOriginalsRef.current.map((wall) => wall.id)])
+    // Linked walls are read from the live scene, again whenever someone else changed it: the
+    // drop must commit a linked wall's other end as it is now, and pick up a newly connected
+    // wall the same way the arm-time read would have.
+    let linkedNodes = useScene.getState().nodes
+    const refreshLinkedWalls = () => {
+      const nodes = useScene.getState().nodes
+      if (isNew || nodes === linkedNodes) return
+      linkedNodes = nodes
+      linkedOriginalsRef.current = getLinkedWallSnapshots({
+        wallId: nodeId,
+        wallParentId: node.parentId ?? null,
+        originalStart,
+        originalEnd,
+      })
+      movingWallIds.clear()
+      movingWallIds.add(nodeId)
+      for (const wall of linkedOriginalsRef.current) movingWallIds.add(wall.id)
+    }
     let followerNodes = useScene.getState().nodes
     let followSurfaces = levelId
       ? createWallBoundSurfaceFollower(levelId, followerNodes, movingWallIds)
@@ -244,6 +262,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     ) => {
       if (!levelId) return
       const sceneState = useScene.getState()
+      refreshLinkedWalls()
       if (sceneState.nodes !== followerNodes) {
         followerNodes = sceneState.nodes
         followSurfaces = createWallBoundSurfaceFollower(levelId, followerNodes, movingWallIds)
@@ -340,6 +359,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       const centerX = (nextStart[0] + nextEnd[0]) / 2
       const centerZ = (nextStart[1] + nextEnd[1]) / 2
       setCursorLocalPos([centerX, 0, centerZ])
+      refreshLinkedWalls()
       const previewPlan = getMovePlan(nextStart, nextEnd)
       const previewUpdates = [
         { id: nodeId, start: nextStart, end: nextEnd },
@@ -459,6 +479,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       shouldRestoreOnCleanup = false
       setGhostWallPreviews([])
 
+      refreshLinkedWalls()
       const commitPlan = getMovePlan(preview.start, preview.end)
       const linkedWallUpdates = getPlannedLinkedWallUpdates(
         commitPlan,
