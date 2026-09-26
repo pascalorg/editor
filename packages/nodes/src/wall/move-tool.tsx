@@ -56,9 +56,9 @@ import {
  *  - **Auto-slab live preview** — the automatic slabs and ceilings the
  *    moving walls bound follow them through live overrides, from boundary
  *    membership read once at arm time (no room detection per tick).
- *  - **One undo step** — history is paused during the drag (a session
- *    shared with the 2D move overlay); the commit writes walls, supports
- *    and the sync's derived rooms as one history step.
+ *  - **One undo step** — the drag writes no history; the drop writes walls,
+ *    supports and the sync's derived rooms as one step, through a pause
+ *    session shared with the 2D move overlay (`commitStep`).
  *  - **`isNew` metadata strip** — first commit after a fresh wall
  *    placement clears the placement marker.
  *  - **Activation grace** (150ms).
@@ -191,9 +191,6 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     const originalCenter = originalCenterRef.current
     const originalHalfVector = originalHalfVectorRef.current
     const levelId = node.parentId ?? null
-    // Keyed by the moving wall: in split view the 2D move overlay co-owns this
-    // pause, so whichever view drops lifts both and records the one step.
-    const historyPause = beginSceneHistoryPauseSession(useScene, { gesture: nodeId })
     let shouldRestoreOnCleanup = true
     let active = true
 
@@ -517,14 +514,21 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       // One history step, one write. The live space-detection sync reconciles
       // sides, zones, slabs and ceilings inside it (once, incrementally), and
       // its derived writes join the step.
-      historyPause.commitStep(() =>
-        useScene.getState().applyNodeChanges({
-          update: wallUpdates,
-          create: wallCreates,
-          delete: Array.from(collapsedLinkedWallIds),
-        }),
-      )
-      historyPause.end()
+      // The drag writes nothing to the store (the preview is live overrides), so history is
+      // paused only for this drop. Keyed by the moving wall: in split view the 2D move overlay
+      // co-owns the gesture, and commitStep lifts its pause too.
+      const drop = beginSceneHistoryPauseSession(useScene, { gesture: nodeId })
+      try {
+        drop.commitStep(() =>
+          useScene.getState().applyNodeChanges({
+            update: wallUpdates,
+            create: wallCreates,
+            delete: Array.from(collapsedLinkedWallIds),
+          }),
+        )
+      } finally {
+        drop.end()
+      }
       clearSurfaceOverrides()
       clearWallOverrides()
 
@@ -587,7 +591,6 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       shouldRestoreOnCleanup = false
       restoreOriginal()
       useViewer.getState().setSelection({ selectedIds: [nodeId] })
-      historyPause.end()
       markToolCancelConsumed()
       // Claim teardown ownership so the 2D overlay doesn't redundantly
       // revert the same baseline on its own cleanup.
@@ -613,7 +616,6 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
           restoreOriginal()
         }
       }
-      historyPause.end()
       emitter.off('grid:move', onGridMove)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('pointerup', onPointerUp)
