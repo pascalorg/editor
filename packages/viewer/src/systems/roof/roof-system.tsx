@@ -1464,7 +1464,7 @@ function buildFasciaBoards(
  * show between them.
  */
 function wearsFascia(node: RoofSegmentNode, parentRoof?: RoofNode): boolean {
-  if (!(node.fascia ?? true)) return false
+  if (node.fascia !== true) return false
   if (node.roofType !== 'shed') return true
   if (isLeanToShedSegment(node)) return false
   return !parentRoof || (parentRoof.children?.length ?? 0) <= 1
@@ -1506,6 +1506,7 @@ export function getRoofSegmentBrushes(
   // same ratio). A hardcoded 0.25 desyncs the gablet from the parameter.
   const baseI = Math.min(width, depth) * node.dutchHipWidthRatio
 
+  const plateSeated = wallHeight <= 0
   const getVol = (
     wExt: number,
     vOffset: number,
@@ -1519,16 +1520,15 @@ export function getRoofSegmentBrushes(
     const dV = Math.max(0.01, depth + 2 * wExt)
 
     const autoDrop = wExt * tanTheta
-    // The eave at this volume's outer plane sits `autoDrop` under the wall
-    // height, so the deck plane passes through the wall centre line at
-    // `wallHeight`. The wall shell and its cutter stand on the wall top
-    // (`onPlate`), and so does anything flat: those floor at 5 cm by raising
-    // the top, so a zero-height roof's shell stays on its base and hollow.
-    // The deck volumes carry the overhang, whose sloped eave a plate-seated
-    // roof (wallHeight 0) puts BELOW the origin: lifting it lifted the whole
-    // roof off its walls, so their base sinks instead (`safeBaseY`).
+    // Floor every prism at 5 cm so CSG never sees a degenerate volume — by
+    // raising the top, never by sinking the base (the base is the wall top).
+    // One floor for all volumes keeps each cutter level with the shell it carves.
+    // A plate-seated roof (wallHeight 0) is the exception for its sloped deck
+    // volumes: their eave hangs below the plate, and raising it lifted the
+    // whole roof off its walls, so their base sinks instead.
     const eaveY = wallHeight - autoDrop + vOffset
-    const whV = onPlate || autoDrop === 0 ? Math.max(0.05, eaveY) : eaveY
+    const sinkBase = plateSeated && !onPlate && autoDrop !== 0
+    const whV = sinkBase ? eaveY : Math.max(0.05, eaveY)
 
     let rhV = activeRh
     if (activeRh > 0) {
@@ -1536,7 +1536,7 @@ export function getRoofSegmentBrushes(
       if (roofType === 'shed') rhV = activeRh + 2 * autoDrop
     }
 
-    const safeBaseY = onPlate ? baseY : Math.min(baseY, whV - 0.05)
+    const safeBaseY = sinkBase ? Math.min(baseY, whV - 0.05) : baseY
 
     let structuralI = baseI
     if (isVoid) {
@@ -1568,9 +1568,10 @@ export function getRoofSegmentBrushes(
   const horizontalOverhang = overhang * cosTheta
   const deckExt = wallThickness / 2 + horizontalOverhang
 
-  // a lean-to's deck and shingle edges take the wall/trim slot (its only
-  // trim); a house shed's edges are fascia like a gable's — the deck slot
-  const shedRoofSideMaterialRule = isLeanToShedSegment(node)
+  // A shed's deck and shingle edges take the wall/trim slot, unless it wears
+  // fascia boards: then they are fascia like a gable's, in the deck slot.
+  const shedEdgesInTrimSlot = roofType === 'shed' && !options.fascia
+  const shedRoofSideMaterialRule = shedEdgesInTrimSlot
     ? (normal: THREE.Vector3) => (normal.y > SHINGLE_SURFACE_EPSILON ? 3 : ROOF_EDGE_MATERIAL_INDEX)
     : undefined
   const deckTopGeo = getVol(deckExt, verticalRt, 0, 1, false, shedRoofSideMaterialRule)
@@ -1578,9 +1579,9 @@ export function getRoofSegmentBrushes(
   // the deck's top edge at its outer plane, as `getVol` puts it
   const deckEaveDrop = deckExt * tanTheta
   const deckEaveTopY =
-    deckEaveDrop > 0
+    plateSeated && deckEaveDrop > 0
       ? wallHeight - deckEaveDrop + verticalRt
-      : Math.max(0.05, wallHeight + verticalRt)
+      : Math.max(0.05, wallHeight - deckEaveDrop + verticalRt)
   const fasciaGeo = options.fascia ? buildFasciaBoards(node, deckExt, deckEaveTopY, tanTheta) : null
 
   const stSin = shingleThickness * sinTheta
@@ -1701,7 +1702,7 @@ export function getRoofSegmentBrushes(
     )
   }
 
-  const shedRoofSideMaterialIndex = isLeanToShedSegment(node) ? ROOF_EDGE_MATERIAL_INDEX : 1
+  const shedRoofSideMaterialIndex = shedEdgesInTrimSlot ? ROOF_EDGE_MATERIAL_INDEX : 1
   const shinBotGeo = createGeometryFromFaces(botFaces, (normal) =>
     normal.y > SHINGLE_SURFACE_EPSILON ? 3 : shedRoofSideMaterialIndex,
   )

@@ -28,7 +28,10 @@ function fence(over: Partial<FenceNode> = {}): FenceNode {
   } as FenceNode
 }
 
-function yRange(geometry: { computeBoundingBox: () => void; boundingBox: { min: { y: number }; max: { y: number } } | null }) {
+function yRange(geometry: {
+  computeBoundingBox: () => void
+  boundingBox: { min: { y: number }; max: { y: number } } | null
+}) {
   geometry.computeBoundingBox()
   const box = geometry.boundingBox
   return box ? [box.min.y, box.max.y] : [Number.NaN, Number.NaN]
@@ -94,7 +97,9 @@ describe('the guard fence (AWC DCA 6)', () => {
   })
 
   test('cable infill: ½ in runs 3 in apart from 3 in up, no bottom rail', () => {
-    const parts = generateFenceSlotGeometries(guard({ guardInfill: 'cable', slatGap: 3 * IN, groundClearance: 3 * IN }))
+    const parts = generateFenceSlotGeometries(
+      guard({ guardInfill: 'cable', slatGap: 3 * IN, groundClearance: 3 * IN }),
+    )
     expect(parts.base.getAttribute('position')).toBeUndefined()
     const [infillMin] = yRange(parts.infill as never)
     expect(infillMin).toBeCloseTo(3 * IN, 6)

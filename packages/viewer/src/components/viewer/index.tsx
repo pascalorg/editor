@@ -124,8 +124,11 @@ function installEmptyDrawGuard(renderer: THREE.WebGPURenderer) {
   // draw leaves a vertex-buffer slot unbound ("Vertex buffer slot 1 required
   // by [RenderPipeline "…MeshLambertNodeMaterial…"] was not set … Draw(0, …)",
   // 2026-09-10) and poisons the whole encoder, so it is dropped here.
-  const backend = (renderer as unknown as { backend?: { draw?: (...args: unknown[]) => unknown; __pascalDrawGuard?: boolean } })
-    .backend
+  const backend = (
+    renderer as unknown as {
+      backend?: { draw?: (...args: unknown[]) => unknown; __pascalDrawGuard?: boolean }
+    }
+  ).backend
   if (backend && typeof backend.draw === 'function' && !backend.__pascalDrawGuard) {
     const draw = backend.draw.bind(backend)
     backend.draw = (renderObject: unknown, ...rest: unknown[]) => {
@@ -135,8 +138,10 @@ function installEmptyDrawGuard(renderer: THREE.WebGPURenderer) {
         if (warnedEmptyDraw && geometry && !warnedEmptyDraw.has(geometry)) {
           warnedEmptyDraw.add(geometry)
           console.warn('[viewer] dropped a zero-vertex draw at the backend', {
-            name: (renderObject as { object?: { name?: string; type?: string } } | null)?.object?.name,
-            type: (renderObject as { object?: { name?: string; type?: string } } | null)?.object?.type,
+            name: (renderObject as { object?: { name?: string; type?: string } } | null)?.object
+              ?.name,
+            type: (renderObject as { object?: { name?: string; type?: string } } | null)?.object
+              ?.type,
           })
         }
         return
@@ -293,7 +298,9 @@ function isPendingSceneBuild(
     : rootNodeIds.includes(id)
   if (!reachable) return false
   const def = nodeRegistry.get(node.type)
-  return Boolean(def?.geometry || def?.capabilities?.floorPlaced || DIRTY_BUILD_KINDS.has(node.type))
+  return Boolean(
+    def?.geometry || def?.capabilities?.floorPlaced || DIRTY_BUILD_KINDS.has(node.type),
+  )
 }
 
 function hasPendingSceneBuildWork() {

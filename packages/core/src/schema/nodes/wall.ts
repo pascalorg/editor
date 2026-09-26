@@ -140,8 +140,8 @@ export type WallSurfaceSlotId = keyof typeof WALL_SURFACE_SLOT_DEFAULTS
  * the concrete stemwall, painted through the `foundation` slot — `stem`
  * metres more to the ground (with `fillToTerrain`, to the terrain wherever
  * that is lower). The wall body, its top and its openings are unchanged,
- * and the framers ignore it (Bones pours its own stemwall from the
- * building's foundation record). `openings` are the holes through the
+ * and the framers ignore it (a framing plugin pours its own stemwall
+ * from the building's foundation record). `openings` are the holes through the
  * stem — a crawl space's vents and its access (IRC R408) — `u` metres
  * along the wall from its start (the opening's centre), `top` and `bottom`
  * in metres below the wall base.

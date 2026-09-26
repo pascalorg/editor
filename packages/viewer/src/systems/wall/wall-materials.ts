@@ -9,11 +9,11 @@ import {
   type SceneMaterialId,
   WALL_SLOT_DEFAULT,
   WALL_SURFACE_SLOT_DEFAULTS,
-  wallAssemblyFinishRef,
   type WallNode,
   type WallSurfaceMaterialSpec,
   type WallSurfaceSide,
   type WallSurfaceSlotId,
+  wallAssemblyFinishRef,
 } from '@pascal-app/core'
 import { Color, type Material } from 'three'
 import { Fn, float, fract, length, mix, positionLocal, smoothstep, step, vec2 } from 'three/tsl'

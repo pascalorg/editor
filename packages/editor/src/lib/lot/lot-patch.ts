@@ -4,9 +4,9 @@
  * decided (front edge, setbacks, notes). No store, no network, so every
  * rule here is unit-tested; `drop-in.ts` does the fetching and writing.
  *
- * Rules (PlanCrafters' site pipeline, ported):
+ * Rules:
  * - The lot ring, address, parcel provenance and zoning come straight from
- *   `/api/parcel/resolve`; a new ring invalidates any front edge picked on
+ *   the parcel `resolve` answer; a new ring invalidates any front edge picked on
  *   the old one.
  * - The FRONT edge is the lot edge the real street fronts
  *   (`detectFrontEdgeFromRoads`: parallel, outside, nearest, addressed
@@ -15,8 +15,8 @@
  * - With the parcel fabric's frontage (Pascal Map), the front is the fronting
  *   edge on the addressed street (`frontageFront`), else the longest fronting
  *   edge; the note says which rule decided.
- * - Setbacks: when the site has none, PlanCrafters' planning defaults
- *   (`SITE.DEFAULT_SETBACKS` — front 20 ft, side 5 ft, rear 15 ft) are
+ * - Setbacks: when the site has none, the planning defaults
+ *   (`DEFAULT_SETBACKS_FT` — front 20 ft, side 5 ft, rear 15 ft) are
  *   written with a `setbacksSource` that says they are defaults. Existing
  *   setbacks are never overwritten.
  * - `northRotation` is 0: the parcel frame is x east / z south, so plan up
@@ -54,7 +54,7 @@ export const STREET_CLASSES: ReadonlySet<string> = new Set([
   'unclassified',
 ])
 
-/** `/api/parcel/resolve`'s answer (the fields the drop-in reads). */
+/** The parcel provider's `resolve` answer (the fields the drop-in reads). */
 export interface ParcelResolveData {
   ok: boolean
   error?: string
@@ -72,7 +72,7 @@ export interface ParcelResolveData {
   address?: { street?: string; city?: string; state?: string; zip?: string } | null
 }
 
-/** A road from `/api/parcel/roads` (centerline in the lot's frame, metres). */
+/** A road from the parcel provider's `roads` (centerline in the lot's frame, metres). */
 export interface LotRoad extends RoadCenterline {
   id?: string
   klass?: string
@@ -243,7 +243,11 @@ export function sitePatchFromParcel(
   const cleanupNote = describeRingCleanup(raw.length, cleaned)
 
   const streets = (roads ?? []).filter((r) => !r.klass || STREET_CLASSES.has(r.klass))
-  const roadMatch = detectFrontEdgeFromRoads(polygon as readonly Pt[], streets, streetOf(input, data))
+  const roadMatch = detectFrontEdgeFromRoads(
+    polygon as readonly Pt[],
+    streets,
+    streetOf(input, data),
+  )
   // The parcel FABRIC beats the road match: the edges shared with no
   // neighbour are the street (or water) edges, and the one on the addressed
   // street (else the longest) is the front; the road match names the
@@ -276,12 +280,14 @@ export function sitePatchFromParcel(
   const notes = [...(data.notes ?? []), ...(cleanupNote ? [cleanupNote] : []), frontNote]
   if (zoned) notes.push(`Setbacks: ${dossier?.setbacksSource ?? 'zoning code via Pascal Map'}`)
   if (setbacksDefaulted) notes.push(`Setbacks: ${DEFAULT_SETBACKS_SOURCE}`)
-  if (dossier?.dimensionalNote) notes.push(`Zoning condition (verbatim, verify): ${dossier.dimensionalNote}`)
+  if (dossier?.dimensionalNote)
+    notes.push(`Zoning condition (verbatim, verify): ${dossier.dimensionalNote}`)
   if (dossier?.line) notes.push(dossier.line)
 
   // the street edges: the parcel fabric's frontage when it answered, else
   // every edge a mapped road runs along
-  const streetEdges: number[] = frontage && frontage.edges.length > 0 ? frontage.edges : (roadMatch?.streetEdges ?? [])
+  const streetEdges: number[] =
+    frontage && frontage.edges.length > 0 ? frontage.edges : (roadMatch?.streetEdges ?? [])
   // the street each of those edges runs along, from the mapped roads (the
   // site plan labels every street edge with its own street, not the address's)
   const streetNames: Record<string, string> = {}
@@ -320,9 +326,14 @@ export function sitePatchFromParcel(
     ...(streetEdges.length >= 2 ? { sightTriangleFt: 25 } : {}),
     // The parcel frame is x east / z south: plan up is true north.
     northRotation: 0,
-    ...((dossier?.zone ?? data.zoning) && !site?.zone ? { zone: dossier?.zone ?? data.zoning } : {}),
+    ...((dossier?.zone ?? data.zoning) && !site?.zone
+      ? { zone: dossier?.zone ?? data.zoning }
+      : {}),
     ...(zoned
-      ? { setbacks: { ...zoned }, setbacksSource: dossier?.setbacksSource ?? 'zoning code via Pascal Map' }
+      ? {
+          setbacks: { ...zoned },
+          setbacksSource: dossier?.setbacksSource ?? 'zoning code via Pascal Map',
+        }
       : setbacksDefaulted
         ? { setbacks: { ...DEFAULT_SETBACKS_M }, setbacksSource: DEFAULT_SETBACKS_SOURCE }
         : {}),
@@ -333,7 +344,9 @@ export function sitePatchFromParcel(
     // street; the previous lot's names never carry over
     metadata: (() => {
       const { streetNames: _previous, ...rest } = (
-        site?.metadata && typeof site.metadata === 'object' && !Array.isArray(site.metadata) ? site.metadata : {}
+        site?.metadata && typeof site.metadata === 'object' && !Array.isArray(site.metadata)
+          ? site.metadata
+          : {}
       ) as Record<string, unknown>
       return Object.keys(streetNames).length > 0 ? { ...rest, streetNames } : rest
     })(),
@@ -348,7 +361,11 @@ export function sitePatchFromParcel(
       lotAreaSqFt: data.lotAreaSqFt ?? 0,
       frontEdge: match ? match.index : null,
       frontStreet: match ? match.name || null : null,
-      frontEdgeSource: frontage ? 'frontage' : match ? `osm:${match.name || 'unnamed'}` : 'north-facing',
+      frontEdgeSource: frontage
+        ? 'frontage'
+        : match
+          ? `osm:${match.name || 'unnamed'}`
+          : 'north-facing',
       ...(frontage ? { frontingEdges: frontage.frontingEdges } : {}),
       ...(dossier?.line ? { dossierLine: dossier.line } : {}),
       setbacksDefaulted,

@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import { createTerrainField, quantize, surfaceHeightAt } from '@pascal-app/core'
-import { buildPatternedRibbon, PROPERTY_LINE_PATTERN, SETBACK_LINE_PATTERN, updateRibbonHeights } from './line-ribbon'
+import {
+  buildPatternedRibbon,
+  PROPERTY_LINE_PATTERN,
+  SETBACK_LINE_PATTERN,
+  updateRibbonHeights,
+} from './line-ribbon'
 import { classifyEdges, resolveFrontEdge, setbackEnvelope } from './setbacks'
 
 // a 20 × 30 m lot; edge 0 runs along z = −15 (north), 1 east, 2 south, 3 west
@@ -29,7 +34,10 @@ describe('setbacks (the 3D copy of the site plan rules)', () => {
     expect(Math.min(...zs)).toBeCloseTo(-10.5, 6) // the rear 4.5 m
     // left / right overrides
     const env2 = setbackEnvelope(LOT, { front: 6, side: 1.5, rear: 4.5, left: 3, right: 1 }, 2)
-    expect(Math.max(...env2.map((p) => p[0])) - Math.min(...env2.map((p) => p[0]))).toBeCloseTo(20 - 4, 6)
+    expect(Math.max(...env2.map((p) => p[0])) - Math.min(...env2.map((p) => p[0]))).toBeCloseTo(
+      20 - 4,
+      6,
+    )
     // setbacks bigger than the lot: nothing
     expect(setbackEnvelope(LOT, { front: 20, side: 1, rear: 20 }, 2)).toEqual([])
   })
@@ -58,7 +66,11 @@ describe('the patterned ribbon', () => {
   })
 
   test('degenerate input gives an empty geometry', () => {
-    expect(buildPatternedRibbon(new Float32Array([0, 0, 0]), PROPERTY_LINE_PATTERN, 0.2).getAttribute('position')).toBeUndefined()
+    expect(
+      buildPatternedRibbon(new Float32Array([0, 0, 0]), PROPERTY_LINE_PATTERN, 0.2).getAttribute(
+        'position',
+      ),
+    ).toBeUndefined()
   })
 })
 
@@ -69,7 +81,8 @@ describe('updateRibbonHeights (a sculpt stroke mid-flight)', () => {
     const before = Array.from(g.getAttribute('position').array as Float32Array)
     const field = createTerrainField({ origin: [-5, -5], spacing: 1, cols: 21, rows: 21 })
     const heights = new Int16Array(field.heights)
-    for (let row = 0; row < 21; row++) for (let col = 0; col < 21; col++) heights[row * 21 + col] = quantize(field, col * 0.1) // rises 0.1 m per metre east
+    for (let row = 0; row < 21; row++)
+      for (let col = 0; col < 21; col++) heights[row * 21 + col] = quantize(field, col * 0.1) // rises 0.1 m per metre east
     const sloped = { ...field, heights }
     updateRibbonHeights(g, sloped, 0.05)
     const pos = g.getAttribute('position')

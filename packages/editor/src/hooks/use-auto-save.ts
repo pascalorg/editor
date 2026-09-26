@@ -238,18 +238,23 @@ export function useAutoSave({
         return
       }
 
+      // A plugin set the user never chose is the host's defaults, re-derived on
+      // every load: a plugin registering after the load (hosted plugins arrive
+      // late) syncs it without anyone editing the scene.
+      const pluginsEdited =
+        state.installedPlugins !== lastInstalledPluginsRef && state.hasExplicitPluginInstallState
+      lastInstalledPluginsRef = state.installedPlugins
       const currentNodesSnapshot = JSON.stringify(state.nodes)
       const changed =
         currentNodesSnapshot !== lastNodesSnapshot ||
         state.collections !== lastCollectionsRef ||
         state.materials !== lastMaterialsRef ||
-        state.installedPlugins !== lastInstalledPluginsRef
+        pluginsEdited
       if (!changed) return
 
       lastNodesSnapshot = currentNodesSnapshot
       lastCollectionsRef = state.collections
       lastMaterialsRef = state.materials
-      lastInstalledPluginsRef = state.installedPlugins
       hasDirtyChangesRef.current = true
       onDirtyRef.current?.()
       setSaveStatus('pending')

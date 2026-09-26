@@ -291,16 +291,20 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
   // level-wide miter calc per wall; the dispatcher path is O(1) here, which is
   // what keeps a wall drag from being O(N²) across the level.
   const levelData = ctx.levelData as WallFloorplanLevelData | undefined
-  const purposeWalls = [
-    self,
-    ...ctx.siblings.filter((s): s is AnyNode & WallNode => s.type === 'wall').map(wallForPurpose),
-  ]
+  let purposeWalls: WallNode[] | undefined
+  const getPurposeWalls = () => {
+    purposeWalls ??= [
+      self,
+      ...ctx.siblings.filter((s): s is AnyNode & WallNode => s.type === 'wall').map(wallForPurpose),
+    ]
+    return purposeWalls
+  }
   const miters =
     (documentMode ? levelData?.documentMiters : levelData?.miters) ??
-    calculateLevelMiters(purposeWalls)
-  const layerMiters =
+    calculateLevelMiters(getPurposeWalls())
+  const getLayerMiters = () =>
     (documentMode ? levelData?.documentLayerMiters : levelData?.layerMiters) ??
-    calculateLevelLayerMiters(purposeWalls, miters, (wall) =>
+    calculateLevelLayerMiters(getPurposeWalls(), miters, (wall) =>
       wallLayerBoundaryOffsets(wall, getWallThickness(wall)),
     )
 
@@ -356,9 +360,11 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
         ctx.children,
       ),
     )
-  } else {
+  } else if (node.assembly) {
     // Assembly layer lines + framing poché, drawn inside the footprint.
-    children.push(...buildWallAssemblyLayers(self, node, layerMiters, ctx.children, documentMode))
+    children.push(
+      ...buildWallAssemblyLayers(self, node, getLayerMiters(), ctx.children, documentMode),
+    )
   }
 
   if (automaticDimensions) {

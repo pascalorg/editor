@@ -62,7 +62,9 @@ export type ScheduleResult<TRow> = {
   issues: string[]
 }
 
-export type ScheduleSceneInput = { nodes: Readonly<Record<string, AnyNode>> } | Readonly<Record<string, AnyNode>>
+export type ScheduleSceneInput =
+  | { nodes: Readonly<Record<string, AnyNode>> }
+  | Readonly<Record<string, AnyNode>>
 
 export type ScheduleOptions = {
   unit?: ScheduleUnit
@@ -126,7 +128,11 @@ function openingRow(
     remarks.push('VERIFY R.O.')
   }
   const wall = opening.wallId ? (nodes[opening.wallId] as WallNode | undefined) : undefined
-  if (wall && wall.type === 'wall' && (wall.frontSide === 'exterior' || wall.backSide === 'exterior')) {
+  if (
+    wall &&
+    wall.type === 'wall' &&
+    (wall.frontSide === 'exterior' || wall.backSide === 'exterior')
+  ) {
     remarks.push('Exterior')
   }
 
@@ -154,7 +160,14 @@ function openingRow(
 function groupOpeningRows(rows: readonly OpeningScheduleRow[]): OpeningScheduleRow[] {
   const grouped = new Map<string, OpeningScheduleRow>()
   for (const row of rows) {
-    const key = [row.type, row.sizeText, row.roughOpening, row.material, row.frame, row.hardware].join('|')
+    const key = [
+      row.type,
+      row.sizeText,
+      row.roughOpening,
+      row.material,
+      row.frame,
+      row.hardware,
+    ].join('|')
     const existing = grouped.get(key)
     if (existing) existing.count += row.count
     else grouped.set(key, { ...row })
@@ -302,10 +315,7 @@ function titleCase(value: string): string {
     .join(' ')
 }
 
-function collectSubtree(
-  nodes: Readonly<Record<string, AnyNode>>,
-  rootId: string,
-): AnyNode[] {
+function collectSubtree(nodes: Readonly<Record<string, AnyNode>>, rootId: string): AnyNode[] {
   const result: AnyNode[] = []
   const visit = (id: string) => {
     const node = nodes[id]

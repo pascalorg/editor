@@ -1,8 +1,8 @@
 /**
  * The Pascal Map location dossier, read for the lot drop-in.
  *
- * `fetchDossier` asks the editor's own `/api/parcel/dossier` route (the key
- * lives there); the rest is pure: the parcel polygon and the FRONTAGE
+ * `fetchDossier` asks the parcel provider's `dossier` (the key lives with
+ * the host); the rest is pure: the parcel polygon and the FRONTAGE
  * (the boundary shared with no neighbour — the street edges) projected
  * into the site plan frame, the front edge picked from the frontage, the
  * zoning setbacks read with their citation, and the facts the plan set
@@ -13,6 +13,7 @@
  * (the platform's additive-change policy).
  */
 import type { SiteDossier } from '@pascal-app/core'
+import type { ParcelProvider } from './parcel-provider'
 
 export type SectionStatus = 'available' | 'empty' | 'not_covered' | 'not_available'
 
@@ -44,7 +45,12 @@ export type ParcelData = {
   situs_address?: { line1?: string; city?: string | null; zip?: string | null } | null
   vintage?: string | null
   area_m2?: number | null
-  frontage?: { total_ft?: number; total_m?: number; segment_count?: number; geometry?: unknown } | null
+  frontage?: {
+    total_ft?: number
+    total_m?: number
+    segment_count?: number
+    geometry?: unknown
+  } | null
   geometry?: { type?: string; geometry?: { type?: string; coordinates?: unknown } } | null
 }
 
@@ -78,39 +84,59 @@ export type FloodData = {
   is_in_flood_zone?: boolean | null
   mapped?: boolean
   firm_panel?: { panel?: string; effective_date?: string | null } | null
-  zone_at_point?: { zone?: string; description?: string; is_in_flood_zone?: boolean; base_flood_elevation_ft?: number | null; bfe_datum?: string } | null
+  zone_at_point?: {
+    zone?: string
+    description?: string
+    is_in_flood_zone?: boolean
+    base_flood_elevation_ft?: number | null
+    bfe_datum?: string
+  } | null
   highest_risk_zone_on_parcel?: string | null
 }
 
-export type DossierResult = { ok: true; dossier: Dossier } | { ok: false; reason: string; code?: string; retryAfterS?: number }
+export type DossierResult =
+  | { ok: true; dossier: Dossier }
+  | { ok: false; reason: string; code?: string; retryAfterS?: number }
 
-/** Ask the editor's dossier route. Never throws: a failure is a reason. */
+/** Ask the provider's dossier. Never throws: a failure is a reason. */
 export async function fetchDossier(
-  fetchImpl: typeof fetch,
+  provider: ParcelProvider,
   input: { address?: string; latitude?: number; longitude?: number; layers?: string[] },
 ): Promise<DossierResult> {
   try {
-    const response = await fetchImpl('/api/parcel/dossier', {
-      body: JSON.stringify(input),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    const json = (await response.json()) as { ok: boolean; dossier?: Dossier; reason?: string; code?: string; retryAfterS?: number }
-    if (json.ok && json.dossier && json.dossier.layers) return { ok: true, dossier: json.dossier }
-    return { ok: false, reason: json.reason ?? `dossier route answered ${response.status}`, code: json.code, retryAfterS: json.retryAfterS }
+    const json = (await provider('dossier', input)) as {
+      ok: boolean
+      dossier?: Dossier
+      reason?: string
+      code?: string
+      retryAfterS?: number
+    }
+    if (json.ok && json.dossier?.layers) return { ok: true, dossier: json.dossier }
+    return {
+      ok: false,
+      reason: json.reason ?? 'no dossier in the answer',
+      code: json.code,
+      retryAfterS: json.retryAfterS,
+    }
   } catch (error) {
     return { ok: false, reason: error instanceof Error ? error.message : 'dossier lookup failed' }
   }
 }
 
 /** A section by layer name, or null when the dossier has none. */
-export function section<T = Record<string, unknown>>(dossier: Dossier | null | undefined, layer: string): DossierSection<T> | null {
+export function section<T = Record<string, unknown>>(
+  dossier: Dossier | null | undefined,
+  layer: string,
+): DossierSection<T> | null {
   const s = dossier?.layers?.[layer]
   return s && typeof s === 'object' ? (s as DossierSection<T>) : null
 }
 
 /** A section's data when it answered (`available`), else null. */
-export function answered<T = Record<string, unknown>>(dossier: Dossier | null | undefined, layer: string): T | null {
+export function answered<T = Record<string, unknown>>(
+  dossier: Dossier | null | undefined,
+  layer: string,
+): T | null {
   const s = section<T>(dossier, layer)
   return s && s.status === 'available' && s.data && typeof s.data === 'object' ? s.data : null
 }
@@ -126,11 +152,17 @@ const DEG2RAD = Math.PI / 180
 export function planPointFromLngLat(origin: LngLat, p: LngLat): Pt {
   const [oLng, oLat] = origin
   const ftPerDegLng = FEET_PER_DEG_LAT * Math.cos(oLat * DEG2RAD)
-  return [(p[0] - oLng) * ftPerDegLng * METRES_PER_FOOT, -(p[1] - oLat) * FEET_PER_DEG_LAT * METRES_PER_FOOT]
+  return [
+    (p[0] - oLng) * ftPerDegLng * METRES_PER_FOOT,
+    -(p[1] - oLat) * FEET_PER_DEG_LAT * METRES_PER_FOOT,
+  ]
 }
 
 const isLngLat = (v: unknown): v is [number, number] =>
-  Array.isArray(v) && v.length >= 2 && Number.isFinite(Number(v[0])) && Number.isFinite(Number(v[1]))
+  Array.isArray(v) &&
+  v.length >= 2 &&
+  Number.isFinite(Number(v[0])) &&
+  Number.isFinite(Number(v[1]))
 
 function ringArea(ring: readonly Pt[]): number {
   let a = 0
@@ -157,7 +189,8 @@ export function parcelRingMetres(parcel: ParcelData | null | undefined, origin: 
     rings.push((coords[0] as unknown[]).filter(isLngLat) as LngLat[])
   } else if (type === 'MultiPolygon' && Array.isArray(coords)) {
     for (const poly of coords as unknown[]) {
-      if (Array.isArray(poly) && Array.isArray(poly[0])) rings.push((poly[0] as unknown[]).filter(isLngLat) as LngLat[])
+      if (Array.isArray(poly) && Array.isArray(poly[0]))
+        rings.push((poly[0] as unknown[]).filter(isLngLat) as LngLat[])
     }
   }
   let best: Pt[] = []
@@ -172,7 +205,14 @@ export function parcelRingMetres(parcel: ParcelData | null | undefined, origin: 
     }
     const first = pts[0]
     const last = pts[pts.length - 1]
-    if (pts.length > 3 && first && last && Math.abs(first[0] - last[0]) < 1e-6 && Math.abs(first[1] - last[1]) < 1e-6) pts.pop()
+    if (
+      pts.length > 3 &&
+      first &&
+      last &&
+      Math.abs(first[0] - last[0]) < 1e-6 &&
+      Math.abs(first[1] - last[1]) < 1e-6
+    )
+      pts.pop()
     if (pts.length < 3) continue
     const area = ringArea(pts)
     if (area > bestArea) {
@@ -184,13 +224,18 @@ export function parcelRingMetres(parcel: ParcelData | null | undefined, origin: 
 }
 
 /** The frontage as plan-metre segments (every consecutive pair of a MultiLineString / LineString). */
-export function frontageSegmentsMetres(parcel: ParcelData | null | undefined, origin: LngLat): [Pt, Pt][] {
+export function frontageSegmentsMetres(
+  parcel: ParcelData | null | undefined,
+  origin: LngLat,
+): [Pt, Pt][] {
   const geom = parcel?.frontage?.geometry as { type?: string; coordinates?: unknown } | undefined
   if (!geom || typeof geom !== 'object') return []
   const lines: LngLat[][] = []
-  if (geom.type === 'LineString' && Array.isArray(geom.coordinates)) lines.push((geom.coordinates as unknown[]).filter(isLngLat) as LngLat[])
+  if (geom.type === 'LineString' && Array.isArray(geom.coordinates))
+    lines.push((geom.coordinates as unknown[]).filter(isLngLat) as LngLat[])
   else if (geom.type === 'MultiLineString' && Array.isArray(geom.coordinates)) {
-    for (const line of geom.coordinates as unknown[]) if (Array.isArray(line)) lines.push((line as unknown[]).filter(isLngLat) as LngLat[])
+    for (const line of geom.coordinates as unknown[])
+      if (Array.isArray(line)) lines.push((line as unknown[]).filter(isLngLat) as LngLat[])
   }
   const out: [Pt, Pt][] = []
   for (const line of lines) {
@@ -204,7 +249,8 @@ function pointSegmentDistance(p: Pt, a: Pt, b: Pt): number {
   const abx = b[0] - a[0]
   const abz = b[1] - a[1]
   const l2 = abx * abx + abz * abz
-  const t = l2 < 1e-12 ? 0 : Math.max(0, Math.min(1, ((p[0] - a[0]) * abx + (p[1] - a[1]) * abz) / l2))
+  const t =
+    l2 < 1e-12 ? 0 : Math.max(0, Math.min(1, ((p[0] - a[0]) * abx + (p[1] - a[1]) * abz) / l2))
   return Math.hypot(p[0] - (a[0] + abx * t), p[1] - (a[1] + abz * t))
 }
 
@@ -225,7 +271,11 @@ export type FrontageMatch = {
  * is generous). Of the fronting edges the LONGEST is the front (a corner
  * lot's long street). Null when no edge fronts.
  */
-export function detectFrontEdgeFromFrontage(ring: readonly Pt[], segments: readonly [Pt, Pt][], tolM = 1.5): FrontageMatch | null {
+export function detectFrontEdgeFromFrontage(
+  ring: readonly Pt[],
+  segments: readonly [Pt, Pt][],
+  tolM = 1.5,
+): FrontageMatch | null {
   if (ring.length < 3 || segments.length === 0) return null
   let best: FrontageMatch | null = null
   let fronting = 0
@@ -283,13 +333,19 @@ export function contourLinesFromDossier(dossier: Dossier, origin: LngLat): Conto
   const fc = terrain?.geometry as { type?: string; features?: unknown[] } | undefined
   if (!terrain || !fc || !Array.isArray(fc.features) || fc.features.length === 0) return null
   const lines: ContourLines['lines'] = []
-  for (const f of fc.features as { geometry?: { type?: string; coordinates?: unknown }; properties?: { elevation_ft?: unknown } }[]) {
+  for (const f of fc.features as {
+    geometry?: { type?: string; coordinates?: unknown }
+    properties?: { elevation_ft?: unknown }
+  }[]) {
     const ft = f?.properties?.elevation_ft
     if (typeof ft !== 'number' || !Number.isFinite(ft)) continue
     const geom = f.geometry
     const parts: unknown[][] = []
-    if (geom?.type === 'LineString' && Array.isArray(geom.coordinates)) parts.push(geom.coordinates as unknown[])
-    else if (geom?.type === 'MultiLineString' && Array.isArray(geom.coordinates)) for (const l of geom.coordinates as unknown[]) if (Array.isArray(l)) parts.push(l as unknown[])
+    if (geom?.type === 'LineString' && Array.isArray(geom.coordinates))
+      parts.push(geom.coordinates as unknown[])
+    else if (geom?.type === 'MultiLineString' && Array.isArray(geom.coordinates))
+      for (const l of geom.coordinates as unknown[])
+        if (Array.isArray(l)) parts.push(l as unknown[])
     for (const part of parts) {
       const pts: [number, number][] = []
       for (const ll of part) {
@@ -321,7 +377,9 @@ const FT = 0.3048
  * a conditional rule (a null side) or the section did not answer: the
  * default then stands and the `dimensional_note` prints beside it.
  */
-export function setbacksFromZoning(z: ZoningData | null | undefined): { front: number; side: number; rear: number } | null {
+export function setbacksFromZoning(
+  z: ZoningData | null | undefined,
+): { front: number; side: number; rear: number } | null {
   const s = z?.setbacks
   if (!s) return null
   const f = s.front_ft
@@ -333,14 +391,27 @@ export function setbacksFromZoning(z: ZoningData | null | undefined): { front: n
 
 /** The citation line for `setbacksSource`. */
 export function setbacksCitation(z: ZoningData, source?: DossierSection['source']): string {
-  const sec = z.dimensional_source?.section ? `${z.dimensional_source.section}` : 'land development code'
+  const sec = z.dimensional_source?.section
+    ? `${z.dimensional_source.section}`
+    : 'land development code'
   const url = z.dimensional_source?.url ?? z.land_development_code_url ?? ''
   return `Zoning ${z.district ?? ''} (${z.jurisdiction ?? 'jurisdiction'}) — ${sec}${url ? ` ${url}` : ''} — via Pascal Map${source?.vintage ? ` (${source.vintage})` : ''}`
 }
 
 /* ----------------------------------------------------------- facts */
 
-const FACT_LAYERS = ['parcel', 'flood', 'code_basis', 'zoning', 'utilities', 'soils', 'wetlands', 'structures', 'elevation', 'boundaries'] as const
+const FACT_LAYERS = [
+  'parcel',
+  'flood',
+  'code_basis',
+  'zoning',
+  'utilities',
+  'soils',
+  'wetlands',
+  'structures',
+  'elevation',
+  'boundaries',
+] as const
 
 /** A section's data with every geometry stripped (they go to the site polygon / overlays, not the record). */
 function stripGeometry(data: unknown): Record<string, unknown> | undefined {
@@ -370,7 +441,16 @@ export function siteFactsFromDossier(dossier: Dossier): SiteDossier {
     sections[layer] = {
       status: s.status,
       ...(s.summary ? { summary: s.summary } : {}),
-      ...(s.source ? { source: { name: s.source.name, kind: s.source.kind, vintage: s.source.vintage, attribution: s.source.attribution } } : {}),
+      ...(s.source
+        ? {
+            source: {
+              name: s.source.name,
+              kind: s.source.kind,
+              vintage: s.source.vintage,
+              attribution: s.source.attribution,
+            },
+          }
+        : {}),
       ...(s.reason ? { reason: s.reason } : {}),
     }
   }
@@ -378,7 +458,9 @@ export function siteFactsFromDossier(dossier: Dossier): SiteDossier {
     provider: 'Pascal Map',
     asOf: dossier.as_of,
     point: { lat: dossier.point?.lat, lng: dossier.point?.lng, source: dossier.point?.source },
-    ...(dossier.address ? { address: { formatted: dossier.address.formatted, precision: dossier.address.precision } } : {}),
+    ...(dossier.address
+      ? { address: { formatted: dossier.address.formatted, precision: dossier.address.precision } }
+      : {}),
     sections,
   }
   const key: Record<(typeof FACT_LAYERS)[number], keyof SiteDossier> = {

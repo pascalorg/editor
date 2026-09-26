@@ -64,9 +64,8 @@ export function parseDimensionInput(
   }
 
   // `12'-6` / `12-6` shorthand without the inch mark, feet-first.
-  const shorthand = /^([+-]?\d+(?:\.\d+)?)\s*(?:'|ft)\s*-?\s*(\d+(?:\.\d+)?)(?:\s+(\d+)\/(\d+))?$/.exec(
-    text,
-  )
+  const shorthand =
+    /^([+-]?\d+(?:\.\d+)?)\s*(?:'|ft)\s*-?\s*(\d+(?:\.\d+)?)(?:\s+(\d+)\/(\d+))?$/.exec(text)
   if (shorthand) {
     const feet = Number.parseFloat(shorthand[1]!)
     const inches = Number.parseFloat(shorthand[2]!)
@@ -74,7 +73,9 @@ export function parseDimensionInput(
     const denominator = shorthand[4] ? Number.parseFloat(shorthand[4]) : 1
     if (denominator === 0) return null
     const sign = feet < 0 ? -1 : 1
-    return positive((Math.abs(feet) * 12 + inches + numerator / denominator) * sign / INCHES_PER_METER)
+    return positive(
+      ((Math.abs(feet) * 12 + inches + numerator / denominator) * sign) / INCHES_PER_METER,
+    )
   }
 
   // Bare number — unit system decides.
@@ -202,7 +203,10 @@ function resolveWallDrive(
   const moving = endpoint === 'end' ? wall.end : wall.start
   const direction = unit(subtract(moving as DimensionPlanPoint, fixed as DimensionPlanPoint))
   if (!direction) return { drivable: false, reason: 'degenerate wall' }
-  return { drivable: true, target: { kind: 'wall-endpoint', wallId: wall.id as AnyNodeId, endpoint, direction } }
+  return {
+    drivable: true,
+    target: { kind: 'wall-endpoint', wallId: wall.id as AnyNodeId, endpoint, direction },
+  }
 }
 
 function resolveOpeningDrive(
@@ -211,7 +215,7 @@ function resolveOpeningDrive(
   dimDirection: DimensionPlanPoint,
 ): DimensionDriveResolution {
   const wall = opening.wallId ? query.nodes[opening.wallId] : undefined
-  if (!wall || wall.type !== 'wall') return { drivable: false, reason: 'opening has no host wall' }
+  if (wall?.type !== 'wall') return { drivable: false, reason: 'opening has no host wall' }
   if (isNodeLocked(wall)) return { drivable: false, reason: 'host wall is locked' }
   const wallDirection = unit(subtract((wall as WallNode).end, (wall as WallNode).start))
   if (!wallDirection) return { drivable: false, reason: 'degenerate wall' }
@@ -255,9 +259,7 @@ function measuresOpeningWidth(
   const endAlong = dot(subtract(query.end, origin), wallDirection)
   const span = Math.abs(endAlong - startAlong)
   const centre = (startAlong + endAlong) / 2
-  return (
-    Math.abs(span - opening.width) <= 0.02 && Math.abs(centre - opening.position[0]) <= 0.02
-  )
+  return Math.abs(span - opening.width) <= 0.02 && Math.abs(centre - opening.position[0]) <= 0.02
 }
 
 function resolveConstructionDimensionDrive(
@@ -378,8 +380,11 @@ export function planDimensionDrive(args: {
     const wall = args.nodes[args.target.wallId] as WallNode | undefined
     const node = opening as DoorNode | WindowNode
     const next = node.position[0] + delta * args.target.sign
-    const limit = wall ? length(subtract(wall.end as DimensionPlanPoint, wall.start as DimensionPlanPoint)) : null
-    const clamped = limit === null ? next : Math.min(Math.max(next, node.width / 2), limit - node.width / 2)
+    const limit = wall
+      ? length(subtract(wall.end as DimensionPlanPoint, wall.start as DimensionPlanPoint))
+      : null
+    const clamped =
+      limit === null ? next : Math.min(Math.max(next, node.width / 2), limit - node.width / 2)
     return {
       updates: [
         {
@@ -439,7 +444,9 @@ export function planDimensionDrive(args: {
  */
 function isNodeLocked(node: AnyNode): boolean {
   const metadata = (node as { metadata?: Record<string, unknown> | null }).metadata
-  return !!metadata && typeof metadata === 'object' && (metadata as { locked?: unknown }).locked === true
+  return (
+    !!metadata && typeof metadata === 'object' && (metadata as { locked?: unknown }).locked === true
+  )
 }
 
 // ── Vector helpers ───────────────────────────────────────────────────

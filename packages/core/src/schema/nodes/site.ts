@@ -25,7 +25,7 @@ export type SiteAddress = z.infer<typeof SiteAddress>
 
 /**
  * Provenance of the lot ring. Written by the site panel's "Find parcel" action
- * from `/api/parcel/resolve`. `originLngLat` is the geocoded point the polygon
+ * from the host's parcel service. `originLngLat` is the geocoded point the polygon
  * origin sits on (polygon points are metres, x east, z south).
  */
 export const SiteParcel = z.object({
@@ -84,8 +84,16 @@ export const SiteDossier = z
   .object({
     provider: z.string(),
     asOf: z.string(),
-    point: z.object({ lat: z.number().optional(), lng: z.number().optional(), source: z.string().optional() }).optional(),
-    address: z.object({ formatted: z.string().optional(), precision: z.string().optional() }).optional(),
+    point: z
+      .object({
+        lat: z.number().optional(),
+        lng: z.number().optional(),
+        source: z.string().optional(),
+      })
+      .optional(),
+    address: z
+      .object({ formatted: z.string().optional(), precision: z.string().optional() })
+      .optional(),
     sections: z.record(z.string(), DossierSectionRecord),
     parcel: Facts.optional(),
     flood: Facts.optional(),
@@ -194,7 +202,7 @@ export const SiteNode = BaseNode.extend({
  *
  * Only cheap, unambiguous lifts are done here: `metadata.setbacks` (already
  * metres), `metadata.setbacksSource`, `metadata.zone`, `metadata.apn` and
- * `metadata.source`. Anything richer (full PlanCrafters project records) is
+ * `metadata.source`. Anything richer (full imported project records) is
  * left in `metadata` for the workstream that owns it.
  */
 export function migrateSiteMetadata(node: {

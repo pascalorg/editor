@@ -9,7 +9,7 @@ import {
   subtractPolygonsFromPolygon,
   unionPolygons,
 } from '@pascal-app/core'
-import { floorplanGeometryMetadata } from '@pascal-app/editor'
+import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
 import { getConicalRoofPlanFootprint, getRoofSegmentPlanLinework } from '../roof-segment/floorplan'
 
 type Pt = [number, number]
@@ -115,7 +115,7 @@ function overlapEntry(entry: PlanEntry, ctx: GeometryContext) {
 }
 
 /** A segment's footprint + ridge/hip/break/slope linework, in world plan coords. */
-function buildSegPlan(roof: RoofNode, seg: RoofSegmentNode): SegPlan {
+function buildSegPlan(roof: RoofNode, seg: RoofSegmentNode, drafting: boolean): SegPlan {
   const cosRoof = Math.cos(-roof.rotation)
   const sinRoof = Math.sin(-roof.rotation)
   const segCx = roof.position[0] + seg.position[0] * cosRoof - seg.position[2] * sinRoof
@@ -134,15 +134,30 @@ function buildSegPlan(roof: RoofNode, seg: RoofSegmentNode): SegPlan {
     tp(s[0][0], s[0][1]),
     tp(s[1][0], s[1][1]),
   ]
+  const footprint =
+    seg.roofType === 'conical'
+      ? getConicalRoofPlanFootprint(seg).map(([x, z]) => tp(x, z))
+      : [tp(-hw, -hd), tp(hw, -hd), tp(hw, hd), tp(-hw, hd)]
+  const ridges = lw.ridges.map(mapSeg)
+  const hips = lw.hips.map(mapSeg)
+  const breaks = lw.breaks.map(mapSeg)
+  if (!drafting) {
+    const slopes = lw.slope
+      ? [
+          {
+            tail: tp(lw.slope.tail[0], lw.slope.tail[1]),
+            head: tp(lw.slope.head[0], lw.slope.head[1]),
+            pitch: '',
+          },
+        ]
+      : []
+    return { footprint, eave: footprint, ridges, hips, breaks, slopes }
+  }
   // The drip edge: core's own visible-top bounds, which add the horizontal
   // component of `overhang` (plus half the wall thickness and, on the sloped
   // faces, the shingle projection) to the footprint on each side.
   const edge = getRoofSegmentVisibleTopBounds(seg)
   const pitch = roofPitchLabel(seg.pitch)
-  const footprint =
-    seg.roofType === 'conical'
-      ? getConicalRoofPlanFootprint(seg).map(([x, z]) => tp(x, z))
-      : [tp(-hw, -hd), tp(hw, -hd), tp(hw, hd), tp(-hw, hd)]
   return {
     footprint,
     eave: [
@@ -151,9 +166,9 @@ function buildSegPlan(roof: RoofNode, seg: RoofSegmentNode): SegPlan {
       tp(edge.maxX, edge.maxZ),
       tp(edge.minX, edge.maxZ),
     ],
-    ridges: lw.ridges.map(mapSeg),
-    hips: lw.hips.map(mapSeg),
-    breaks: lw.breaks.map(mapSeg),
+    ridges,
+    hips,
+    breaks,
     slopes: slopeArrows(seg).map((arrow) => ({
       tail: tp(arrow.tail[0], arrow.tail[1]),
       head: tp(arrow.head[0], arrow.head[1]),
@@ -233,18 +248,21 @@ function clipLineByCutters(line: Seg, cutters: Pt[][]): Seg[] {
 export function buildRoofFloorplan(node: RoofNode, ctx: GeometryContext): FloorplanGeometry | null {
   const segments = ctx.children.filter((c): c is RoofSegmentNode => c.type === 'roof-segment')
   if (segments.length === 0) return null
+  // Eave outlines, an arrow per plane, pitch tags and the 'roof-plan' role are
+  // sheet drafting; the editor plan keeps its outline, linework and one arrow.
+  const drafting = readFloorplanContext(ctx).drafting
 
   const entries: PlanEntry[] = segments.map((segment) => ({
     roof: node,
     segment,
-    plan: buildSegPlan(node, segment),
+    plan: buildSegPlan(node, segment, drafting),
   }))
   for (const sibling of ctx.siblings) {
     if (sibling.type !== 'roof') continue
     for (const childId of sibling.children ?? []) {
       const segment = ctx.resolve<RoofSegmentNode>(childId)
       if (segment?.type !== 'roof-segment') continue
-      entries.push({ roof: sibling, segment, plan: buildSegPlan(sibling, segment) })
+      entries.push({ roof: sibling, segment, plan: buildSegPlan(sibling, segment, drafting) })
     }
   }
 
@@ -263,7 +281,8 @@ export function buildRoofFloorplan(node: RoofNode, ctx: GeometryContext): Floorp
       footprints: subtractPolygonsFromPolygon(entry.plan.footprint, cutters) as Pt[][],
       eaves: subtractPolygonsFromPolygon(entry.plan.eave, cutters) as Pt[][],
       /** True when the drip edge is far enough outside the wall line to draw. */
-      hasOverhang: polygonSpread(entry.plan.eave) - polygonSpread(entry.plan.footprint) > 0.04,
+      hasOverhang:
+        drafting && polygonSpread(entry.plan.eave) - polygonSpread(entry.plan.footprint) > 0.04,
     }
   })
   const rings = unionPolygons(visiblePlans.flatMap(({ footprints }) => footprints)) as Pt[][]
@@ -281,7 +300,7 @@ export function buildRoofFloorplan(node: RoofNode, ctx: GeometryContext): Floorp
   const hipWidth = showSelectedChrome ? 0.04 : 0.026
   const overhangWidth = showSelectedChrome ? 0.03 : 0.022
 
-  // Two strata: the REFERENCE a floor plan always carries (the dashed
+  // Drafted, two strata: the REFERENCE a floor plan always carries (the dashed
   // overhang line — the roof flying past the walls) and the ROOF PLAN
   // proper (outline, ridges, hips, arrows, pitches), which is the
   // 'roof-plan' annotation — off over a floor plan until the Roof plan
@@ -412,6 +431,7 @@ export function buildRoofFloorplan(node: RoofNode, ctx: GeometryContext): Floorp
     }
   }
 
+  if (!drafting) return children.length > 0 ? { kind: 'group', children } : null
   if (reference.length === 0 && children.length === 0) return null
   // A selected / highlighted roof shows its plan whatever the layer says —
   // the user is looking at the roof.

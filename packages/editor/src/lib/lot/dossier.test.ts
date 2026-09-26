@@ -1,12 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import miami from './__fixtures__/map-dossier-miami-shores.json'
 import stpete from './__fixtures__/map-dossier-stpete.json'
+import { cleanLotRing } from './clean-ring'
 import {
   answered,
   contourLinesFromDossier,
+  type Dossier,
   describeDossier,
   detectFrontEdgeFromFrontage,
-  type Dossier,
   frontageSegmentsMetres,
   type ParcelData,
   parcelRingMetres,
@@ -15,7 +16,6 @@ import {
   siteFactsFromDossier,
   type ZoningData,
 } from './dossier'
-import { cleanLotRing } from './clean-ring'
 import { DEFAULT_SETBACKS_M, type ParcelResolveData, sitePatchFromParcel } from './lot-patch'
 
 /**
@@ -110,14 +110,21 @@ describe('the St Petersburg dossier', () => {
     }
     const segments = frontageSegmentsMetres(parcel, origin)
     const facts = siteFactsFromDossier(STPETE)
-    const out = sitePatchFromParcel(null, { address: '501 5th Ave N' }, data, null, '2026-09-07T00:00:00Z', {
-      frontageSegmentsM: segments,
-      setbacks: null,
-      dimensionalNote: 'No minimum lot area',
-      zone: 'DC-3',
-      facts,
-      line: 'Pascal Map: 12 sections answered',
-    })!
+    const out = sitePatchFromParcel(
+      null,
+      { address: '501 5th Ave N' },
+      data,
+      null,
+      '2026-09-07T00:00:00Z',
+      {
+        frontageSegmentsM: segments,
+        setbacks: null,
+        dimensionalNote: 'No minimum lot area',
+        zone: 'DC-3',
+        facts,
+        line: 'Pascal Map: 12 sections answered',
+      },
+    )!
     expect(out.summary.frontEdgeSource).toBe('frontage')
     expect(out.summary.frontEdge).not.toBeNull()
     expect(out.patch.frontEdge).toBe(out.summary.frontEdge!)
@@ -143,11 +150,16 @@ describe('the Miami Shores dossier (no parcel plane)', () => {
   test('parcel not covered, flood and utilities answer; the ring is empty', () => {
     expect(answered(MIAMI, 'parcel')).toBeNull()
     expect(MIAMI.layers.parcel?.status).toBe('not_covered')
-    expect(parcelRingMetres(answered<ParcelData>(MIAMI, 'parcel'), [MIAMI.point.lng, MIAMI.point.lat])).toEqual([])
+    expect(
+      parcelRingMetres(answered<ParcelData>(MIAMI, 'parcel'), [MIAMI.point.lng, MIAMI.point.lat]),
+    ).toEqual([])
     const facts = siteFactsFromDossier(MIAMI)
     expect(facts.parcel).toBeUndefined()
     expect((facts.flood as { zone_at_point?: { zone?: string } }).zone_at_point?.zone).toBe('X')
-    expect(((facts.utilities as { electric_providers?: { name: string }[] }).electric_providers ?? [])[0]?.name).toContain('FLORIDA POWER')
+    expect(
+      ((facts.utilities as { electric_providers?: { name: string }[] }).electric_providers ?? [])[0]
+        ?.name,
+    ).toContain('FLORIDA POWER')
     expect(describeDossier(MIAMI)).toContain('parcel')
   })
 })

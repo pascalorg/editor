@@ -437,6 +437,17 @@ export type {
   FloorplanAnnotationCategory,
   FloorplanAnnotationVisibility,
 } from './lib/floorplan/annotation-visibility'
+// Annotations (WS3) — deterministic door/window marks, driving dimensions,
+// and construction-document schedule data.
+export {
+  type DimensionDrivePlan,
+  type DimensionDriveResolution,
+  type DimensionDriveTarget,
+  type DimensionPlanPoint,
+  parseDimensionInput,
+  planDimensionDrive,
+  resolveDimensionDrive,
+} from './lib/floorplan/dimension-drive'
 export {
   exportFloorplanPdf,
   type FloorplanExportScope,
@@ -466,7 +477,74 @@ export {
   type FloorplanMode,
   isFloorplanToolAvailableInMode,
 } from './lib/floorplan/floorplan-mode'
+export {
+  type MarkResolution,
+  type OpeningMarkKind,
+  orderedOpenings,
+  persistResolvedMarks,
+  resolveMarkDetail,
+  resolveMarks,
+} from './lib/floorplan/marks'
 export { clientToPlan } from './lib/floorplan/plan-coords'
+export {
+  doorSchedule,
+  floorplanSchedules,
+  formatScheduleLength,
+  type OpeningScheduleRow,
+  type RoomScheduleRow,
+  roomSchedule,
+  type ScheduleResult,
+  type ScheduleUnit,
+  windowSchedule,
+} from './lib/floorplan/schedules'
+// Sheets — headless floor-plan geometry collection + the multi-sheet vector
+// PDF writer.
+export {
+  collectFloorplanSchedules,
+  collectSheetGeometry,
+  exportSheetsToPdf,
+  POINTS_PER_INCH,
+  resolveSheetRotationDeg,
+  type SheetGeometryEntry,
+  type SheetGeometryOptions,
+  type SheetPdfPage,
+  type SheetPdfWindow,
+} from './lib/floorplan/sheet-export'
+// ── Site plan (WS1) ──────────────────────────────────────────────────
+export {
+  boundsInsidePolygon,
+  buildingRecentreOffset,
+  buildSitePlanDrawing,
+  castYardDimensions,
+  classifyEdges,
+  computeSiteCoverage,
+  describeSiteEdges,
+  detectFrontEdgeFromRoads,
+  FloorplanDrawingTypeSwitch,
+  FloorplanSitePlanLayer,
+  type FrontEdgeMatch,
+  flatworkKindOf,
+  formatCoveragePercent,
+  formatFeetInches,
+  formatSqFt,
+  formatStreetName,
+  type ImperviousRow,
+  type OutdoorPart,
+  type RoadCenterline,
+  registerSitePlanContributor,
+  type SiteCoverage,
+  type SitePlanContributor,
+  type SitePlanDrawing,
+  type SitePlanEdge,
+  type SitePlanServicePoint,
+  type SitePlanServiceRole,
+  type SitePlanServices,
+  serviceEntranceOf,
+  setbackEnvelope,
+  streetCore,
+  streetEdgeNames,
+  type YardDimension,
+} from './lib/floorplan/site-plan'
 export {
   commitFreshPlacementSubtree,
   createFreshPlacementSubtree,
@@ -507,6 +585,30 @@ export {
   scopeNodeId,
 } from './lib/interaction/scope'
 export { isEditableKeyboardTarget } from './lib/keyboard-pan'
+// Lot drop-in — address → parcel → streets → front edge → setbacks, on the
+// site node, through the parcel provider the host sets.
+export {
+  DEFAULT_SETBACKS_FT,
+  DEFAULT_SETBACKS_M,
+  DEFAULT_SETBACKS_SOURCE,
+  type DropInInput,
+  type DropInOptions,
+  describeFrontEdge,
+  describeLotSummary,
+  dropInLot,
+  findSiteNode,
+  getParcelProvider,
+  type LotDropInResult,
+  type LotRoad,
+  type LotSummary,
+  type ParcelEndpoint,
+  type ParcelProvider,
+  type ParcelResolveData,
+  STREET_CLASSES,
+  setParcelProvider,
+  sitePatchFromParcel,
+  useParcelProvider,
+} from './lib/lot'
 export { useMaterialCatalogModel } from './lib/material-catalog-model'
 export {
   type ActivePaintMaterial,
@@ -595,7 +697,10 @@ export {
   type EditorHostPanel,
   type EditorHostPanelWorkspace,
   editorHostPanelRegistry,
+  type PluginInstallLock,
+  pluginInstallLocks,
   registerEditorHostPanel,
+  setPluginInstallLocks,
 } from './lib/plugin-panels'
 export { configureManifoldRuntime } from './lib/print-shell-compiler-manifold-worker'
 export type { ManifoldRuntimeOptions } from './lib/print-shell-compiler-protocol'
@@ -684,6 +789,8 @@ export { type CommandAction, useCommandRegistry } from './store/use-command-regi
 export {
   DRAWING_TYPE_OPTIONS,
   default as useDrawingView,
+  EDITOR_DRAWING_TYPE_OPTIONS,
+  type EditorDrawingType,
 } from './store/use-drawing-view'
 export type {
   CaptureMode,
@@ -788,103 +895,3 @@ export {
   type WallSnapKind,
   type WallSnapPoint,
 } from './store/use-wall-snap-indicator'
-
-// ── Site plan (WS1) ──────────────────────────────────────────────────
-export {
-  boundsInsidePolygon,
-  buildingRecentreOffset,
-  buildSitePlanDrawing,
-  castYardDimensions,
-  classifyEdges,
-  computeSiteCoverage,
-  describeSiteEdges,
-  flatworkKindOf,
-  formatCoveragePercent,
-  formatSqFt,
-  formatStreetName,
-  type ImperviousRow,
-  type OutdoorPart,
-  serviceEntranceOf,
-  type SiteCoverage,
-  streetEdgeNames,
-  detectFrontEdgeFromRoads,
-  FloorplanDrawingTypeSwitch,
-  type FrontEdgeMatch,
-  type RoadCenterline,
-  streetCore,
-  FloorplanSitePlanLayer,
-  formatFeetInches,
-  registerSitePlanContributor,
-  type SitePlanContributor,
-  setbackEnvelope,
-  type SitePlanDrawing,
-  type SitePlanEdge,
-  type YardDimension,
-} from './lib/floorplan/site-plan'
-export {
-  EDITOR_DRAWING_TYPE_OPTIONS,
-  type EditorDrawingType,
-} from './store/use-drawing-view'
-// Lot drop-in — address → parcel → streets → front edge → setbacks, on the
-// site node. Consumed by @pascal-app/plugin-lot, plugin-generate and the
-// Site inspector.
-export {
-  DEFAULT_SETBACKS_FT,
-  DEFAULT_SETBACKS_M,
-  DEFAULT_SETBACKS_SOURCE,
-  describeFrontEdge,
-  describeLotSummary,
-  type DropInInput,
-  type DropInOptions,
-  dropInLot,
-  findSiteNode,
-  type LotDropInResult,
-  type LotRoad,
-  type LotSummary,
-  type ParcelResolveData,
-  sitePatchFromParcel,
-  STREET_CLASSES,
-} from './lib/lot'
-// Sheets (WS2) — headless floor-plan geometry collection + the multi-sheet
-// vector PDF writer. Consumed by @pascal-app/plugin-sheets.
-export {
-  collectFloorplanSchedules,
-  collectSheetGeometry,
-  exportSheetsToPdf,
-  POINTS_PER_INCH,
-  resolveSheetRotationDeg,
-  type SheetGeometryEntry,
-  type SheetGeometryOptions,
-  type SheetPdfPage,
-  type SheetPdfWindow,
-} from './lib/floorplan/sheet-export'
-// Annotations (WS3) — deterministic door/window marks, driving dimensions,
-// and construction-document schedule data.
-export {
-  type DimensionDrivePlan,
-  type DimensionDriveResolution,
-  type DimensionDriveTarget,
-  type DimensionPlanPoint,
-  parseDimensionInput,
-  planDimensionDrive,
-  resolveDimensionDrive,
-} from './lib/floorplan/dimension-drive'
-export {
-  type MarkResolution,
-  type OpeningMarkKind,
-  orderedOpenings,
-  persistResolvedMarks,
-  resolveMarkDetail,
-  resolveMarks,
-} from './lib/floorplan/marks'
-export {
-  doorSchedule,
-  floorplanSchedules,
-  formatScheduleLength,
-  type OpeningScheduleRow,
-  type RoomScheduleRow,
-  roomSchedule,
-  type ScheduleResult,
-  type ScheduleUnit,
-  windowSchedule,
-} from './lib/floorplan/schedules'

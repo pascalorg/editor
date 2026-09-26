@@ -8,6 +8,7 @@ const BOARD = 0.184
 /** A plate-seated segment the way the generator writes one (wallHeight 0, the eave hangs below the plate). */
 function segment(patch: Partial<RoofSegmentNode>): RoofSegmentNode {
   return RoofSegmentNode.parse({
+    fascia: true,
     roofType: 'gable',
     width: 5,
     depth: 8,
@@ -104,6 +105,12 @@ describe('roof fascia', () => {
 
   test('fascia off leaves the bare deck edge', () => {
     const node = segment({ fascia: false })
+    expect(boardPoints(node, 'z', 1)).toHaveLength(0)
+    expect(boardPoints(node, 'x', 1)).toHaveLength(0)
+  })
+
+  test('a saved segment without the field wears no boards', () => {
+    const node = segment({ fascia: undefined })
     expect(boardPoints(node, 'z', 1)).toHaveLength(0)
     expect(boardPoints(node, 'x', 1)).toHaveLength(0)
   })

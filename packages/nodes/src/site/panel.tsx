@@ -8,6 +8,7 @@ import {
   dropInLot,
   PanelSection,
   PanelWrapper,
+  useParcelProvider,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { MapPin, Search } from 'lucide-react'
@@ -30,16 +31,17 @@ interface Suggestion {
  * Site inspector — address → real parcel, plus the zoning inputs the site
  * plan draws from. Mounted through `siteParametrics.customPanel`.
  *
- * The parcel lookup runs entirely inside this app (`/api/parcel/*`, backed by
- * the vendored `server-parcel.cjs`); no key is required for the Census / Esri
- * / ArcGIS paths that serve US lots.
+ * The address lookup goes through the host's parcel provider
+ * (`setParcelProvider`) and is hidden when the host has none.
  */
 export function SiteNodePanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   // The selected site node, else THE site node: the sidebar's Site header
   // mounts this panel directly, where nothing may be selected.
   const node = useScene((s) => {
-    const selected = selectedId ? (s.nodes[selectedId as AnyNode['id']] as AnyNode | undefined) : undefined
+    const selected = selectedId
+      ? (s.nodes[selectedId as AnyNode['id']] as AnyNode | undefined)
+      : undefined
     if (selected?.type === 'site') return selected as SiteNode
     for (const id of s.rootNodeIds) {
       const n = s.nodes[id as AnyNode['id']] as AnyNode | undefined
@@ -54,6 +56,7 @@ export function SiteNodePanel() {
   const [status, setStatus] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const requestSeq = useRef(0)
+  const parcelProvider = useParcelProvider()
 
   const update = useCallback(
     (patch: Partial<SiteNode>) => {
@@ -75,24 +78,24 @@ export function SiteNodePanel() {
   // after a later one.
   useEffect(() => {
     const q = query.trim()
-    if (q.length < 4 || picked) {
+    if (!parcelProvider || q.length < 4 || picked) {
       setSuggestions([])
       return
     }
     const seq = ++requestSeq.current
     const timer = setTimeout(() => {
-      fetch(`/api/parcel/autocomplete?q=${encodeURIComponent(q)}`)
-        .then((r) => r.json())
-        .then((data: { suggestions?: Suggestion[] }) => {
+      parcelProvider('autocomplete', { q })
+        .then((data) => {
           if (seq !== requestSeq.current) return
-          setSuggestions(Array.isArray(data.suggestions) ? data.suggestions : [])
+          const list = (data as { suggestions?: Suggestion[] } | null)?.suggestions
+          setSuggestions(Array.isArray(list) ? list : [])
         })
         .catch(() => {
           if (seq === requestSeq.current) setSuggestions([])
         })
     }, 300)
     return () => clearTimeout(timer)
-  }, [query, picked])
+  }, [parcelProvider, query, picked])
 
   const edges = useMemo(() => describeSiteEdges(node ?? null), [node])
 
@@ -144,7 +147,9 @@ export function SiteNodePanel() {
         <input
           className="w-20 rounded-md border border-border/70 bg-background px-2 py-1 text-right text-foreground"
           defaultValue={
-            setbacks?.[key] != null ? String(Math.round((setbacks[key] / METRES_PER_FOOT) * 10) / 10) : ''
+            setbacks?.[key] != null
+              ? String(Math.round((setbacks[key] / METRES_PER_FOOT) * 10) / 10)
+              : ''
           }
           inputMode="decimal"
           onFocus={(event) => event.target.select()}
@@ -175,49 +180,51 @@ export function SiteNodePanel() {
 
   return (
     <PanelWrapper title="Site">
-      <PanelSection title="Address">
-        <label className="space-y-1 text-sm">
-          <span className="text-muted-foreground">Street address</span>
-          <input
-            className="w-full rounded-md border border-border/70 bg-background px-2 py-1.5 text-foreground"
-            onChange={(event) => {
-              setQuery(event.target.value)
-              setPicked(null)
-            }}
-            placeholder="1200 W Cass St, Tampa, FL"
-            value={query}
-          />
-        </label>
-        {suggestions.length > 0 ? (
-          <ul className="max-h-44 space-y-0.5 overflow-y-auto rounded-md border border-border/70 bg-card p-1">
-            {suggestions.map((s) => (
-              <li key={`${s.label}-${s.lat}-${s.lng}`}>
-                <button
-                  className="flex w-full items-start gap-2 rounded px-2 py-1.5 text-left text-foreground text-xs hover:bg-muted"
-                  onClick={() => {
-                    setPicked(s)
-                    setQuery(s.label ?? [s.line1, s.line2].filter(Boolean).join(', '))
-                    setSuggestions([])
-                  }}
-                  type="button"
-                >
-                  <MapPin className="mt-0.5 size-3 shrink-0 text-muted-foreground" />
-                  <span>{s.label ?? [s.line1, s.line2].filter(Boolean).join(', ')}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        <ActionGroup>
-          <ActionButton
-            disabled={busy}
-            icon={<Search className="size-4" />}
-            label={busy ? 'Finding…' : 'Find parcel'}
-            onClick={findParcel}
-          />
-        </ActionGroup>
-        {status ? <p className="text-muted-foreground text-xs">{status}</p> : null}
-      </PanelSection>
+      {parcelProvider ? (
+        <PanelSection title="Address">
+          <label className="space-y-1 text-sm">
+            <span className="text-muted-foreground">Street address</span>
+            <input
+              className="w-full rounded-md border border-border/70 bg-background px-2 py-1.5 text-foreground"
+              onChange={(event) => {
+                setQuery(event.target.value)
+                setPicked(null)
+              }}
+              placeholder="1200 W Cass St, Tampa, FL"
+              value={query}
+            />
+          </label>
+          {suggestions.length > 0 ? (
+            <ul className="max-h-44 space-y-0.5 overflow-y-auto rounded-md border border-border/70 bg-card p-1">
+              {suggestions.map((s) => (
+                <li key={`${s.label}-${s.lat}-${s.lng}`}>
+                  <button
+                    className="flex w-full items-start gap-2 rounded px-2 py-1.5 text-left text-foreground text-xs hover:bg-muted"
+                    onClick={() => {
+                      setPicked(s)
+                      setQuery(s.label ?? [s.line1, s.line2].filter(Boolean).join(', '))
+                      setSuggestions([])
+                    }}
+                    type="button"
+                  >
+                    <MapPin className="mt-0.5 size-3 shrink-0 text-muted-foreground" />
+                    <span>{s.label ?? [s.line1, s.line2].filter(Boolean).join(', ')}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <ActionGroup>
+            <ActionButton
+              disabled={busy}
+              icon={<Search className="size-4" />}
+              label={busy ? 'Finding…' : 'Find parcel'}
+              onClick={findParcel}
+            />
+          </ActionGroup>
+          {status ? <p className="text-muted-foreground text-xs">{status}</p> : null}
+        </PanelSection>
+      ) : null}
 
       {node.parcel ? (
         <PanelSection title="Parcel">
@@ -292,10 +299,13 @@ export function SiteNodePanel() {
         </label>
         {node.terrainContours ? (
           <p className="text-muted-foreground text-xs">
-            {node.terrainContours.lines.length} surveyed lines at {node.terrainContours.intervalFt} ft ({node.terrainContours.datum}) — {node.terrainContours.source ?? 'survey'}
+            {node.terrainContours.lines.length} surveyed lines at {node.terrainContours.intervalFt}{' '}
+            ft ({node.terrainContours.datum}) — {node.terrainContours.source ?? 'survey'}
           </p>
         ) : (
-          <p className="text-muted-foreground text-xs">No surveyed lines — contours are drawn from the sculpted ground.</p>
+          <p className="text-muted-foreground text-xs">
+            No surveyed lines — contours are drawn from the sculpted ground.
+          </p>
         )}
       </PanelSection>
 
@@ -325,10 +335,10 @@ export function SiteNodePanel() {
             <input
               className="w-20 rounded-md border border-border/70 bg-background px-2 py-1 text-right text-foreground"
               defaultValue={String(
-                Math.round(((node.northRotation ?? 0) * 180) / Math.PI * 10) / 10,
+                Math.round((((node.northRotation ?? 0) * 180) / Math.PI) * 10) / 10,
               )}
               inputMode="decimal"
-          onFocus={(event) => event.target.select()}
+              onFocus={(event) => event.target.select()}
               key={String(node.northRotation ?? 0)}
               onBlur={(event) => {
                 const deg = Number(event.target.value.trim())

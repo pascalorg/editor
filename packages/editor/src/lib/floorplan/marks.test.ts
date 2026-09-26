@@ -1,5 +1,5 @@
-import type { AnyNode, AnyNodeId } from '@pascal-app/core'
 import { describe, expect, test } from 'bun:test'
+import type { AnyNode, AnyNodeId } from '@pascal-app/core'
 import { persistResolvedMarks, resolveMarkDetail, resolveMarks } from './marks'
 
 /**
@@ -24,7 +24,12 @@ function fixture(levelOrdinal = 0): Record<string, AnyNode> {
     } as unknown as AnyNode
   }
 
-  node({ id: 'level_1', type: 'level', level: levelOrdinal, children: ['w_n', 'w_e', 'w_s', 'w_w'] })
+  node({
+    id: 'level_1',
+    type: 'level',
+    level: levelOrdinal,
+    children: ['w_n', 'w_e', 'w_s', 'w_w'],
+  })
   node({
     id: 'w_n',
     type: 'wall',

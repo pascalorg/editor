@@ -126,7 +126,24 @@ export function edgeHeadingDeg(points: readonly Pt[], i: number, northRotation =
   return ((deg % 360) + 360) % 360
 }
 
-const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW']
+const COMPASS = [
+  'N',
+  'NNE',
+  'NE',
+  'ENE',
+  'E',
+  'ESE',
+  'SE',
+  'SSE',
+  'S',
+  'SSW',
+  'SW',
+  'WSW',
+  'W',
+  'WNW',
+  'NW',
+  'NNW',
+]
 
 export function compassLabel(headingDeg: number): string {
   const idx = Math.round((((headingDeg % 360) + 360) % 360) / 22.5) % 16
@@ -189,7 +206,11 @@ export function resolveFrontEdge(
  *   projects behind the front-edge midpoint on that axis is `left`, ahead of
  *   it is `right`. Deterministic and independent of winding.
  */
-export function classifyEdges(points: readonly Pt[], frontIndex: number, streetEdges: readonly number[] = []): EdgeRole[] {
+export function classifyEdges(
+  points: readonly Pt[],
+  frontIndex: number,
+  streetEdges: readonly number[] = [],
+): EdgeRole[] {
   const n = points.length
   const roles: EdgeRole[] = new Array(n).fill('left')
   if (n === 0) return roles
@@ -251,8 +272,6 @@ export function setbackForRole(setbacks: SetbackInputs, role: EdgeRole): number 
   switch (role) {
     case 'front':
       return setbacks.front
-    case 'street':
-      return setbacks.streetSide ?? setbacks.front
     case 'street':
       return setbacks.streetSide ?? setbacks.front
     case 'rear':
@@ -320,7 +339,10 @@ export function setbackEnvelope(
   const distances: number[] = []
   for (let i = 0; i < n; i++) {
     const role = runRole.get(runs[i] as number) ?? (roles[i] as EdgeRole)
-    const d = setbackForRole(setbacks, role === 'left' || role === 'right' ? (roles[i] as EdgeRole) : role)
+    const d = setbackForRole(
+      setbacks,
+      role === 'left' || role === 'right' ? (roles[i] as EdgeRole) : role,
+    )
     if (!Number.isFinite(d) || d < 0) return []
     distances.push(d)
   }
@@ -386,10 +408,7 @@ export interface YardDimension {
  * out to the lot line. Sides whose ray misses the lot line (footprint outside
  * the lot) are omitted rather than faked.
  */
-export function castYardDimensions(
-  lot: readonly Pt[],
-  footprint: Bounds,
-): YardDimension[] {
+export function castYardDimensions(lot: readonly Pt[], footprint: Bounds): YardDimension[] {
   if (lot.length < 3) return []
   const midX = (footprint.minX + footprint.maxX) / 2
   const midY = (footprint.minY + footprint.maxY) / 2

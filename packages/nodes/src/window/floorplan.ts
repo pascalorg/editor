@@ -203,7 +203,7 @@ export function buildWindowFloorplan(
     node,
     wall,
     ctx.levelData as OpeningFloorplanLevelData | undefined,
-    { stroke: showSelectedChrome ? '#f97316' : '#334155' },
+    { stroke: showSelectedChrome ? '#f97316' : '#334155', drafting },
   )
   if (markAnnotation) children.push(markAnnotation)
 

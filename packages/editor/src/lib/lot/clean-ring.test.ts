@@ -10,7 +10,7 @@ import {
 } from './clean-ring'
 
 /**
- * 2600 Castro Way, Sacramento — the registry ring as `/api/parcel/resolve`
+ * 2600 Castro Way, Sacramento — the registry ring as the parcel `resolve`
  * returned it on 2026-09-06 (metres, x east, y south): a nine-segment
  * curb-return arc (edges 0–8), the rest of the Castro Way frontage (edge
  * 9), the two long sides and the rear.

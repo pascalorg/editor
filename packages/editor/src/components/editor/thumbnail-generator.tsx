@@ -79,17 +79,29 @@ type CaptureLimits = { passEdge: number; maxPixels: number; software: boolean }
  * frame takes minutes — fewer pixels.
  */
 function captureLimits(renderer: unknown): CaptureLimits {
-  const backend = (renderer as {
-    backend?: {
-      device?: { limits?: { maxTextureDimension2D?: number }; adapterInfo?: { architecture?: string; description?: string; vendor?: string } }
-      gl?: WebGL2RenderingContext
+  const backend = (
+    renderer as {
+      backend?: {
+        device?: {
+          limits?: { maxTextureDimension2D?: number }
+          adapterInfo?: { architecture?: string; description?: string; vendor?: string }
+        }
+        gl?: WebGL2RenderingContext
+      }
     }
-  }).backend
+  ).backend
   let gpuEdge = backend?.device?.limits?.maxTextureDimension2D ?? 0
-  let rendererName = [backend?.device?.adapterInfo?.vendor, backend?.device?.adapterInfo?.architecture, backend?.device?.adapterInfo?.description].join(' ')
+  let rendererName = [
+    backend?.device?.adapterInfo?.vendor,
+    backend?.device?.adapterInfo?.architecture,
+    backend?.device?.adapterInfo?.description,
+  ].join(' ')
   const gl = backend?.gl
   if (gl) {
-    gpuEdge = Math.min(gl.getParameter(gl.MAX_TEXTURE_SIZE) as number, gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) as number)
+    gpuEdge = Math.min(
+      gl.getParameter(gl.MAX_TEXTURE_SIZE) as number,
+      gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) as number,
+    )
     const info = gl.getExtension('WEBGL_debug_renderer_info')
     rendererName = String(gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER))
   }
@@ -101,7 +113,11 @@ function captureLimits(renderer: unknown): CaptureLimits {
   }
   // dev: `window.__pascalCaptureLimits = { passEdge: 2048 }` forces tiling (or a budget) for a probe
   if (process.env.NODE_ENV === 'production') return limits
-  return { ...limits, ...(window as unknown as { __pascalCaptureLimits?: Partial<CaptureLimits> }).__pascalCaptureLimits }
+  return {
+    ...limits,
+    ...(window as unknown as { __pascalCaptureLimits?: Partial<CaptureLimits> })
+      .__pascalCaptureLimits,
+  }
 }
 
 type Tile = {
@@ -149,7 +165,12 @@ export function tileGrid(width: number, height: number, passEdge: number): Tile[
  * targets — keep theirs. Only for renders into a render target: nothing may
  * draw to the screen while the stand-in is current.
  */
-export function atCaptureSize<T>(renderer: WebGPURenderer, width: number, height: number, render: () => T): T {
+export function atCaptureSize<T>(
+  renderer: WebGPURenderer,
+  width: number,
+  height: number,
+  render: () => T,
+): T {
   const live = renderer.getCanvasTarget()
   if (live.domElement.width === width && live.domElement.height === height) return render()
   const stand = document.createElement('canvas')
@@ -258,15 +279,18 @@ export async function pumpFrames(
 }
 
 /**
- * Bones' finished-house utility plant (the pole, the overhead drop, the pad
- * transformer — buckets tagged `userData.sourceId = 'utility-plant'`,
- * plugin-bones framing/renderer.tsx) hidden for a capture; the returned
- * function shows it again.
+ * Objects a renderer tagged `userData.excludeFromCapture` (a plugin's site
+ * context, e.g. a utility pole and its drop) hidden for a sheet's capture; the
+ * returned function shows them again.
  */
-export function hideUtilityPlant(scene: THREE.Scene): () => void {
+export function hideCaptureExcluded(scene: THREE.Scene): () => void {
   const hidden: THREE.Object3D[] = []
   scene.traverse((object) => {
-    if ((object.userData as { sourceId?: unknown }).sourceId !== 'utility-plant' || !object.visible) return
+    if (
+      (object.userData as { excludeFromCapture?: unknown }).excludeFromCapture !== true ||
+      !object.visible
+    )
+      return
     object.visible = false
     hidden.push(object)
   })
@@ -447,7 +471,13 @@ function clipSceneFor(
   planes: readonly { normal: [number, number, number]; constant: number }[],
 ): () => void {
   const group = new ClippingGroup()
-  group.clippingPlanes = planes.map((p) => new THREE.Plane(new THREE.Vector3(p.normal[0], p.normal[1], p.normal[2]).normalize(), p.constant))
+  group.clippingPlanes = planes.map(
+    (p) =>
+      new THREE.Plane(
+        new THREE.Vector3(p.normal[0], p.normal[1], p.normal[2]).normalize(),
+        p.constant,
+      ),
+  )
   group.enabled = true
   const children = [...scene.children]
   for (const child of children) group.add(child)
@@ -523,7 +553,10 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
   }, [gl, scene, atmosphere])
 
   /** The orthographic capture camera and its pipeline, built once per atmosphere. */
-  const orthoPipeline = useCallback(async (): Promise<{ camera: THREE.OrthographicCamera; pipeline: SnapshotPipeline | null }> => {
+  const orthoPipeline = useCallback(async (): Promise<{
+    camera: THREE.OrthographicCamera
+    pipeline: SnapshotPipeline | null
+  }> => {
     if (!orthoCameraRef.current) {
       const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000)
       cam.layers.disable(EDITOR_LAYER)
@@ -551,7 +584,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       const { captureMode, cropRegion, standardSize, cameraPose, requestId } = event
       const snapLevels = event.snapLevels === true
       const transparent = event.transparent === true
-      // A SHEET's capture (plugin-sheets capture.ts) asks for more than a
+      // A SHEET's capture asks for more than a
       // thumbnail: its own ink edges, an orthographic or perspective view of
       // its own (the user's camera never moves), node types hidden, the sun
       // re-aimed at the face, the scene clipped at a section's cut, and the
@@ -569,9 +602,15 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       const trace = (step: string, data?: unknown) => {
         if (process.env.NODE_ENV === 'production') return
         const w = window as unknown as { __pascalCaptureTrace?: unknown[] }
-        ;(w.__pascalCaptureTrace ??= []).push({ t: Math.round(performance.now()), step, data })
+        w.__pascalCaptureTrace ??= []
+        w.__pascalCaptureTrace.push({ t: Math.round(performance.now()), step, data })
       }
-      trace('generate', { captureMode, ortho: !!ortho, busy: isGenerating.current, callback: !!onThumbnailCaptureRef.current })
+      trace('generate', {
+        captureMode,
+        ortho: !!ortho,
+        busy: isGenerating.current,
+        callback: !!onThumbnailCaptureRef.current,
+      })
       await runSnapshotCapture(
         requestId,
         isGenerating,
@@ -623,8 +662,11 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             // captures orthographically; the auto-save hero shot and an authored
             // snapshot pose stay perspective.
             const wantOrtho =
-              !snapLevels && !cameraPose && (ortho !== undefined || mainCamera instanceof THREE.OrthographicCamera)
-            let thumbnailCamera: THREE.PerspectiveCamera | THREE.OrthographicCamera = perspectiveCamera
+              !snapLevels &&
+              !cameraPose &&
+              (ortho !== undefined || mainCamera instanceof THREE.OrthographicCamera)
+            let thumbnailCamera: THREE.PerspectiveCamera | THREE.OrthographicCamera =
+              perspectiveCamera
             let pipeline: SnapshotPipeline | null = pipelineRef.current
             if (wantOrtho) {
               // the orthographic capture goes through its own post-processed
@@ -665,9 +707,17 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               if (perspective && !snapLevels && !cameraPose) {
                 // a sheet's cover view: the capture camera stands where the
                 // sheet asks, the user's camera never moves
-                perspectiveCamera.position.set(perspective.position[0], perspective.position[1], perspective.position[2])
+                perspectiveCamera.position.set(
+                  perspective.position[0],
+                  perspective.position[1],
+                  perspective.position[2],
+                )
                 perspectiveCamera.up.set(0, 1, 0)
-                perspectiveCamera.lookAt(perspective.target[0], perspective.target[1], perspective.target[2])
+                perspectiveCamera.lookAt(
+                  perspective.target[0],
+                  perspective.target[1],
+                  perspective.target[2],
+                )
                 perspectiveCamera.fov = perspective.fov ?? 60
                 perspectiveCamera.near = 0.1
                 perspectiveCamera.far = 2000
@@ -743,7 +793,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               // a sheet's capture: the house as built — never a half-built scene
               // or an item's loading placeholder (the cover once showed striped
               // boxes through a white roof, 2026-09-23) — then the viewer's own
-              // systems (the wall materials, the Bones batches) take two real
+              // systems (the wall materials, a plugin's batches) take two real
               // frames — run by hand, never awaited from the animation loop: a
               // hidden tab gets no animation frames at all, and a capture that
               // waited on one hung the sheet's whole capture chain (2026-09-10)
@@ -767,11 +817,11 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               // they are excluded from the thumbnail regardless of whether the
               // system listeners are registered.
               restore(temporarilyHideNodeTypes(['scan', 'guide', 'spawn', ...hideTypes]))
-              // a sheet's picture is of the house: the utility's pole, drop and
-              // pad transformer (Bones' finished-house plant) stay out of it,
-              // and every storey stands at its true height
+              // a sheet's picture is of the house: what a renderer excluded
+              // from captures stays out of it, and every storey stands at its
+              // true height
               if (pose) {
-                restore(hideUtilityPlant(scene))
+                restore(hideCaptureExcluded(scene))
                 restore(snapLevelsToTruePositions())
               }
               if (lightFace && pose) restore(aimLightsAtFace(scene, pose.position, pose.target))
@@ -845,7 +895,9 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             // frame and the second returns the first's picture (2026-09-10:
             // the north elevation came back as the east). Advance it by hand.
             const advanceNodeFrame = () =>
-              (gl as unknown as { _nodes?: { nodeFrame?: { update?: () => void } } })._nodes?.nodeFrame?.update?.()
+              (
+                gl as unknown as { _nodes?: { nodeFrame?: { update?: () => void } } }
+              )._nodes?.nodeFrame?.update?.()
             // a sheet's picture goes to the sheets lossless: they pick its print encoding
             const mime = pose ? 'image/png' : undefined
             const tiles = pose && pipeline ? tileGrid(width, height, limits.passEdge) : []
@@ -855,7 +907,12 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               // picture renders tile by tile — each a view offset of the same
               // camera, the scene set up afresh for it (the frame loop runs
               // between the readbacks) — and the tiles land on one canvas.
-              trace('capture:tiles', { width, height, tiles: tiles.length, software: limits.software })
+              trace('capture:tiles', {
+                width,
+                height,
+                tiles: tiles.length,
+                software: limits.software,
+              })
               const picture = new OffscreenCanvas(width, height)
               const context = picture.getContext('2d')
               if (!context) throw new Error('The picture canvas could not be created')
@@ -874,7 +931,11 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
                   })
                   advanceNodeFrame()
                   return atCaptureSize(gl as unknown as WebGPURenderer, tile.w, tile.h, () =>
-                    pipeline.capture({ captureMode: 'standard', standardSize: { w: tile.w, h: tile.h }, mime }),
+                    pipeline.capture({
+                      captureMode: 'standard',
+                      standardSize: { w: tile.w, h: tile.h },
+                      mime,
+                    }),
                   )
                 })
                 const result = await within(
@@ -884,18 +945,35 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
                 )
                 const bitmap = await createImageBitmap(result.blob)
                 const { inner } = tile
-                context.drawImage(bitmap, inner.x - tile.x, inner.y - tile.y, inner.w, inner.h, inner.x, inner.y, inner.w, inner.h)
+                context.drawImage(
+                  bitmap,
+                  inner.x - tile.x,
+                  inner.y - tile.y,
+                  inner.w,
+                  inner.h,
+                  inner.x,
+                  inner.y,
+                  inner.w,
+                  inner.h,
+                )
                 bitmap.close()
               }
               const blob = await picture.convertToBlob({ type: 'image/png' })
               trace('capture:done', { w: width, h: height, bytes: blob.size, tiles: tiles.length })
               if (captureMode !== undefined) cameraData.captureMode = captureMode
               cameraData.resolution = { w: width, h: height }
-              if (version !== captureVersion.current || perspectiveCamera !== thumbnailCameraRef.current) {
+              if (
+                version !== captureVersion.current ||
+                perspectiveCamera !== thumbnailCameraRef.current
+              ) {
                 throw new Error('The scene changed during capture. Try again.')
               }
               trace('callback', { bytes: blob.size })
-              await within(Promise.resolve(onCapture(blob, cameraData)), CAPTURE_SETTLE_MS, 'The snapshot host never took the frame.')
+              await within(
+                Promise.resolve(onCapture(blob, cameraData)),
+                CAPTURE_SETTLE_MS,
+                'The snapshot host never took the frame.',
+              )
               return
             }
 
@@ -913,7 +991,9 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               if (pose || scale > 1) throw new Error('Snapshot renderer is not ready. Try again.')
               // Fallback: plain render directly to the canvas
               if (transparent) {
-                const clearColor = (gl as unknown as { getClearColor: (t: THREE.Color) => THREE.Color }).getClearColor(new THREE.Color())
+                const clearColor = (
+                  gl as unknown as { getClearColor: (t: THREE.Color) => THREE.Color }
+                ).getClearColor(new THREE.Color())
                 const clearAlpha = gl.getClearAlpha()
                 const sceneBackground = scene.background
                 restore(() => {
@@ -1026,7 +1106,11 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               throw new Error('The active project changed during capture')
             }
             trace('callback', { bytes: blob.size })
-            await within(Promise.resolve(onCapture(blob, cameraData)), CAPTURE_SETTLE_MS, 'The snapshot host never took the frame.')
+            await within(
+              Promise.resolve(onCapture(blob, cameraData)),
+              CAPTURE_SETTLE_MS,
+              'The snapshot host never took the frame.',
+            )
           } finally {
             releaseLiveFrame?.()
             // a sheet capture (transparent ground, ink edges, an orthographic
@@ -1054,7 +1138,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
     [gl, scene, getThree, orthoPipeline, advance, clock],
   )
 
-  // A sheet's run of captures (plugin-sheets capture.ts) sets the shared scene
+  // A sheet's run of captures sets the shared scene
   // up for its pictures — the finished presentation, the ground hidden — so
   // for the run the viewport keeps its last frame and the viewer shows the
   // finished house whatever view the user was in; `active: false` puts the

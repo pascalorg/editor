@@ -1,12 +1,15 @@
 import { describe, expect, test } from 'bun:test'
-import { createTerrainField, quantize, type SceneSnapshot } from '@pascal-app/core'
+import { createTerrainField, type LevelNode, quantize, type SceneSnapshot } from '@pascal-app/core'
 import { buildSitePlanDrawing, setbacksWarning } from './build-site-plan-drawing'
+import { registerSitePlanContributor } from './contributors'
 import { computeSiteCoverage } from './coverage'
 import { detectFrontEdgeFromRoads } from './front-edge'
 import {
   contourPrimitives,
   floorTops,
   formatStreetName,
+  serviceEntranceOf,
+  servicePoints,
   serviceRoute,
   streetEdgeNames,
   UNNAMED_STREET,
@@ -155,6 +158,34 @@ describe('service routes', () => {
     expect(end[1]).toBeCloseTo(-15, 6)
     // no leg passes through the house
     for (const p of route) expect(Math.abs(p[0]) < 5 && Math.abs(p[1]) < 5).toBe(false)
+  })
+})
+
+describe('registered service points', () => {
+  const level = { id: 'level_services', type: 'level' } as unknown as LevelNode
+  registerSitePlanContributor('test-services', null, {
+    points: (_scene, levelId) =>
+      levelId === level.id
+        ? [
+            { role: 'water', position: [6, 0, 2] },
+            { role: 'water', position: [9, 0, 9] },
+          ]
+        : [],
+    entrance: (_scene, levelId) => (levelId === level.id ? 'underground' : null),
+  })
+  const scene = { nodes: {} } as unknown as SceneSnapshot
+
+  test('the first point a plugin reports for a role is the one drawn', () => {
+    expect(servicePoints(scene, level, null, [])).toEqual([
+      { role: 'water', at: [6, 2], normal: null },
+    ])
+  })
+
+  test('the plugin decides the entrance; a storey it does not know keeps the default', () => {
+    expect(serviceEntranceOf(scene, level, null)).toEqual({ kind: 'underground', source: 'plugin' })
+    expect(
+      serviceEntranceOf(scene, { id: 'level_other', type: 'level' } as unknown as LevelNode, null),
+    ).toEqual({ kind: 'overhead', source: 'default' })
   })
 })
 

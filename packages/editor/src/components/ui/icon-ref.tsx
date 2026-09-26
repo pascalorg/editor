@@ -7,15 +7,16 @@ import { cn } from '../../lib/utils'
 
 const SVG_DATA_URI = /^data:image\/svg\+xml[^,]*,/
 
-/** The markup inside a `data:image/svg+xml` URI, or null for any other source. */
-function svgDataUri(src: string): string | null {
+/** Whether a `data:image/svg+xml` URI's markup paints with `currentColor`. */
+function isCurrentColorSvg(src: string): boolean {
   const head = SVG_DATA_URI.exec(src)
-  if (!head) return null
+  if (!head) return false
   const body = src.slice(head[0].length)
   try {
-    return head[0].includes(';base64') ? atob(body) : decodeURIComponent(body)
+    const markup = head[0].includes(';base64') ? atob(body) : decodeURIComponent(body)
+    return markup.includes('currentColor')
   } catch {
-    return null
+    return false
   }
 }
 
@@ -23,8 +24,8 @@ function svgDataUri(src: string): string | null {
  * A `url`-kind icon. An SVG behind an `<img>` renders in its own document, so
  * `currentColor` in the markup resolves to black rather than the surrounding
  * text colour — a monochrome plugin glyph then disappears against the dark
- * sidebar. Inline a data-URI SVG instead so it inherits the theme's text
- * token; raster and file-URL icons stay an `<img>`.
+ * sidebar. Such an SVG becomes a CSS mask over the text colour instead. Plugin
+ * manifests are third-party, so the markup is never inlined into the page.
  */
 export function IconRefImage({
   className,
@@ -35,16 +36,14 @@ export function IconRefImage({
   size?: number
   src: string
 }) {
-  const markup = svgDataUri(src)
   const style = size === undefined ? undefined : { height: size, width: size }
-  if (markup === null) return <img alt="" className={className} src={src} style={style} />
+  if (!isCurrentColorSvg(src)) return <img alt="" className={className} src={src} style={style} />
+  const mask = `url("${src.replace(/["\\\n\r]/g, encodeURIComponent)}") center / contain no-repeat`
   return (
     <span
       aria-hidden
-      className={cn('inline-flex items-center justify-center [&>svg]:h-full [&>svg]:w-full', className)}
-      // Plugin-authored icon markup, not user content.
-      dangerouslySetInnerHTML={{ __html: markup }}
-      style={style}
+      className={cn('inline-block bg-current', className)}
+      style={{ ...style, mask, WebkitMask: mask }}
     />
   )
 }

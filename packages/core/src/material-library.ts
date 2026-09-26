@@ -4196,10 +4196,10 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
       },
     },
   },
-  /* ── Siding (contributed by PlanCrafters, 2026-08-31) ─────────────────────
+  /* ── Siding ────────────────────────────────────────────────────────────────
    * The catalog shipped no siding finish at all — no lap, no clapboard, no
-   * board-and-batten — so exterior walls imported from PlanCrafters could be
-   * color-true only as flat paint. One white seamless albedo per profile,
+   * board-and-batten — so imported exterior walls could be color-true only as
+   * flat paint. One white seamless albedo per profile,
    * tinted per entry via mapProperties.color (same mechanism the flat color
    * presets use), keeps this to two textures for twelve finishes.
    */
@@ -4212,9 +4212,6 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     previewColor: '#e9e9e9',
     preset: {
       maps: {
-        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
-        // Donation form: '/material/siding/lap_albedo_512.webp' once the
-        // texture is hosted alongside the rest of the material CDN.
         albedoMap: '/material/siding/lap_albedo_512.webp',
       },
       mapProperties: {
@@ -4250,9 +4247,6 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     previewColor: '#c8c1b8',
     preset: {
       maps: {
-        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
-        // Donation form: '/material/siding/lap_albedo_512.webp' once the
-        // texture is hosted alongside the rest of the material CDN.
         albedoMap: '/material/siding/lap_albedo_512.webp',
       },
       mapProperties: {
@@ -4288,9 +4282,6 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     previewColor: '#8b8a86',
     preset: {
       maps: {
-        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
-        // Donation form: '/material/siding/lap_albedo_512.webp' once the
-        // texture is hosted alongside the rest of the material CDN.
         albedoMap: '/material/siding/lap_albedo_512.webp',
       },
       mapProperties: {
@@ -4326,9 +4317,6 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     previewColor: '#bcc5b2',
     preset: {
       maps: {
-        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
-        // Donation form: '/material/siding/lap_albedo_512.webp' once the
-        // texture is hosted alongside the rest of the material CDN.
         albedoMap: '/material/siding/lap_albedo_512.webp',
       },
       mapProperties: {
@@ -4364,9 +4352,6 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     previewColor: '#b5825a',
     preset: {
       maps: {
-        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
-        // Donation form: '/material/siding/lap_albedo_512.webp' once the
-        // texture is hosted alongside the rest of the material CDN.
         albedoMap: '/material/siding/lap_albedo_512.webp',
       },
       mapProperties: {
@@ -4402,9 +4387,6 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     previewColor: '#4f6b57',
     preset: {
       maps: {
-        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
-        // Donation form: '/material/siding/lap_albedo_512.webp' once the
-        // texture is hosted alongside the rest of the material CDN.
         albedoMap: '/material/siding/lap_albedo_512.webp',
       },
       mapProperties: {
@@ -4440,9 +4422,6 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     previewColor: '#2f4865',
     preset: {
       maps: {
-        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
-        // Donation form: '/material/siding/lap_albedo_512.webp' once the
-        // texture is hosted alongside the rest of the material CDN.
         albedoMap: '/material/siding/lap_albedo_512.webp',
       },
       mapProperties: {
@@ -4478,9 +4457,6 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     previewColor: '#f2e3b3',
     preset: {
       maps: {
-        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
-        // Donation form: '/material/siding/lap_albedo_512.webp' once the
-        // texture is hosted alongside the rest of the material CDN.
         albedoMap: '/material/siding/lap_albedo_512.webp',
       },
       mapProperties: {
@@ -4516,9 +4492,6 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     previewColor: '#232322',
     preset: {
       maps: {
-        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
-        // Donation form: '/material/siding/lap_albedo_512.webp' once the
-        // texture is hosted alongside the rest of the material CDN.
         albedoMap: '/material/siding/lap_albedo_512.webp',
       },
       mapProperties: {
@@ -4554,9 +4527,6 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     previewColor: '#8f4a2e',
     preset: {
       maps: {
-        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
-        // Donation form: '/material/siding/lap_albedo_512.webp' once the
-        // texture is hosted alongside the rest of the material CDN.
         albedoMap: '/material/siding/lap_albedo_512.webp',
       },
       mapProperties: {
@@ -4592,9 +4562,6 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     previewColor: '#efe3cc',
     preset: {
       maps: {
-        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
-        // Donation form: '/material/siding/batten_albedo_512.webp' once the
-        // texture is hosted alongside the rest of the material CDN.
         albedoMap: '/material/siding/batten_albedo_512.webp',
       },
       mapProperties: {
@@ -4630,9 +4597,6 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     previewColor: '#ddccae',
     preset: {
       maps: {
-        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
-        // Donation form: '/material/siding/batten_albedo_512.webp' once the
-        // texture is hosted alongside the rest of the material CDN.
         albedoMap: '/material/siding/batten_albedo_512.webp',
       },
       mapProperties: {
@@ -4668,9 +4632,6 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     previewColor: '#4e5257',
     preset: {
       maps: {
-        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
-        // Donation form: '/material/siding/batten_albedo_512.webp' once the
-        // texture is hosted alongside the rest of the material CDN.
         albedoMap: '/material/siding/batten_albedo_512.webp',
       },
       mapProperties: {
@@ -4706,9 +4667,6 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     previewColor: '#8d9368',
     preset: {
       maps: {
-        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
-        // Donation form: '/material/siding/batten_albedo_512.webp' once the
-        // texture is hosted alongside the rest of the material CDN.
         albedoMap: '/material/siding/batten_albedo_512.webp',
       },
       mapProperties: {

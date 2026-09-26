@@ -72,18 +72,18 @@ function fixture(levelNumber = 0) {
 describe('opening construction documentation', () => {
   test('assigns deterministic level-based door marks and skips explicit marks', () => {
     const { doorA, doorB, nodes } = fixture()
-    const explicit = DoorNode.parse({ ...doorA, mark: 'D101' })
+    const explicit = DoorNode.parse({ ...doorA, mark: '101' })
     const marks = computeDoorFloorplanLevelData({ siblings: [explicit, doorB], nodes })
 
-    expect(marks.markById.get(explicit.id)).toBe('D101')
-    expect(marks.markById.get(doorB.id)).toBe('D102')
+    expect(marks.markById.get(explicit.id)).toBe('101')
+    expect(marks.markById.get(doorB.id)).toBe('102')
 
     const upperFixture = fixture(1)
     const upperMarks = computeDoorFloorplanLevelData({
       siblings: [upperFixture.doorA],
       nodes: upperFixture.nodes,
     })
-    expect(upperMarks.markById.get(upperFixture.doorA.id)).toBe('D201')
+    expect(upperMarks.markById.get(upperFixture.doorA.id)).toBe('201')
   })
 
   test('assigns stable window marks in level order', () => {
@@ -93,8 +93,8 @@ describe('opening construction documentation', () => {
       nodes,
     })
 
-    expect(marks.markById.get(windowA.id)).toBe('W101')
-    expect(marks.markById.get(windowB.id)).toBe('W102')
+    expect(marks.markById.get(windowA.id)).toBe('W01')
+    expect(marks.markById.get(windowB.id)).toBe('W02')
   })
 
   test('builds U.S. door schedule dimensions without inventing a rough opening', () => {
@@ -107,7 +107,7 @@ describe('opening construction documentation', () => {
     })
 
     expect(schedule?.rows[0]?.cells).toMatchObject({
-      mark: 'D101',
+      mark: '101',
       size: `3'-0" x 7'-0"`,
       roughOpening: 'VERIFY',
     })
@@ -128,7 +128,7 @@ describe('opening construction documentation', () => {
     })
 
     expect(schedule?.rows[0]?.cells).toMatchObject({
-      mark: 'W101',
+      mark: 'W01',
       roughOpening: `4'-1 3/16" x 4'-2 3/8"`,
       sill: `3'-0"`,
       head: `7'-0"`,
@@ -194,15 +194,49 @@ describe('opening construction documentation', () => {
     expect(schedule?.issues).toEqual(['Duplicate door mark A1 (2 instances)'])
   })
 
-  // WS3: the tag moved to the EXTERIOR face and the outline is now a
-  // hexagon for doors / an ellipse (24-gon) for windows.
-  test('places the opening mark tag on the exterior face of an exterior wall', () => {
+  test('places the opening mark tag on the interior face of an exterior wall', () => {
     const { doorA, nodes, wall } = fixture()
     const levelData = computeDoorFloorplanLevelData({ siblings: [doorA], nodes })
     const annotation = buildOpeningMarkAnnotation(doorA, wall, levelData)
 
     expect(annotation?.kind).toBe('group')
     if (annotation?.kind !== 'group') return
+    const tag = annotation.children.find((child) => child.kind === 'text')
+    expect(tag).toMatchObject({ kind: 'text', text: '101', x: 3 })
+    expect(tag?.kind === 'text' ? tag.y : null).toBeLessThan(0)
+  })
+})
+
+describe('drafted sheet opening marks', () => {
+  const drafting = { drafting: true }
+
+  test('numbers doors and windows D101 / W101 by level', () => {
+    const { doorA, windowA, nodes } = fixture()
+    expect(
+      computeDoorFloorplanLevelData({ siblings: [doorA], nodes })
+        .draftingMarkById()
+        .get(doorA.id),
+    ).toBe('D101')
+    expect(
+      computeWindowFloorplanLevelData({ siblings: [windowA], nodes })
+        .draftingMarkById()
+        .get(windowA.id),
+    ).toBe('W101')
+    const schedule = buildDoorFloorplanSchedule({
+      siblings: [doorA],
+      nodes,
+      levelId: 'level_main',
+      unit: 'imperial',
+      drafting: true,
+    })
+    expect(schedule?.rows[0]?.cells.mark).toBe('D101')
+  })
+
+  test('places the tag on the exterior face of an exterior wall', () => {
+    const { doorA, nodes, wall } = fixture()
+    const levelData = computeDoorFloorplanLevelData({ siblings: [doorA], nodes })
+    const annotation = buildOpeningMarkAnnotation(doorA, wall, levelData, drafting)
+    if (annotation?.kind !== 'group') throw new Error('expected a group')
     const tag = annotation.children.find((child) => child.kind === 'text')
     expect(tag).toMatchObject({ kind: 'text', text: 'D101', x: 3 })
     // frontSide is exterior, so the tag sits on the +normal side (z > 0).
@@ -215,11 +249,13 @@ describe('opening construction documentation', () => {
       doorA,
       wall,
       computeDoorFloorplanLevelData({ siblings: [doorA], nodes }),
+      drafting,
     )
     const windowTag = buildOpeningMarkAnnotation(
       windowA,
       wall,
       computeWindowFloorplanLevelData({ siblings: [windowA], nodes }),
+      drafting,
     )
     const outline = (annotation: typeof doorTag) =>
       annotation?.kind === 'group'
@@ -239,7 +275,6 @@ describe('opening construction documentation', () => {
   const toPaperInches = (metres: number) => (metres * INCHES_PER_METRE) / REFERENCE_SCALE
 
   test('the tag is 0.3 in tall with a 0.028 in outline at 1/4 inch scale', () => {
-    // bolder since 2026-09-08 (window and door labels)
     expect(toPaperInches(OPENING_TAG_HEIGHT)).toBeCloseTo(0.3, 6)
     expect(toPaperInches(OPENING_TAG_STROKE_WIDTH)).toBeCloseTo(0.028, 6)
     expect(toPaperInches(OPENING_TAG_FONT_SIZE)).toBeCloseTo(0.125, 6)
@@ -251,9 +286,9 @@ describe('opening construction documentation', () => {
       doorA,
       wall,
       computeDoorFloorplanLevelData({ siblings: [doorA], nodes }),
+      drafting,
     )
-    expect(annotation?.kind).toBe('group')
-    if (annotation?.kind !== 'group') return
+    if (annotation?.kind !== 'group') throw new Error('expected a group')
     const outline = annotation.children.find((child) => child.kind === 'polygon')
     expect(outline?.kind === 'polygon' ? outline.strokeWidth : null).toBeCloseTo(
       OPENING_TAG_STROKE_WIDTH,
@@ -275,16 +310,14 @@ describe('opening construction documentation', () => {
       doorA,
       wall,
       computeDoorFloorplanLevelData({ siblings: [doorA], nodes }),
+      drafting,
     )
     if (annotation?.kind !== 'group') throw new Error('expected a group')
     const outline = annotation.children.find((child) => child.kind === 'polygon')
     if (outline?.kind !== 'polygon') throw new Error('expected an outline')
-    const nearEdge = Math.min(...outline.points.map((p) => p[1]))
     // Wall face is at z = thickness / 2 = 0.1; the tag's near edge stands off it.
-    expect(nearEdge).toBeGreaterThan(0.1)
-    // …and a leader is drawn across that gap.
-    const leader = annotation.children.find((child) => child.kind === 'line')
-    expect(leader).toBeDefined()
+    expect(Math.min(...outline.points.map((p) => p[1]))).toBeGreaterThan(0.1)
+    expect(annotation.children.find((child) => child.kind === 'line')).toBeDefined()
   })
 
   test('a wide tag grows sideways, never taller', () => {
@@ -294,6 +327,7 @@ describe('opening construction documentation', () => {
       wide,
       wall,
       computeDoorFloorplanLevelData({ siblings: [wide], nodes }),
+      drafting,
     )
     if (annotation?.kind !== 'group') throw new Error('expected a group')
     const outline = annotation.children.find((child) => child.kind === 'polygon')
@@ -301,7 +335,6 @@ describe('opening construction documentation', () => {
     const xs = outline.points.map((p) => p[0])
     const ys = outline.points.map((p) => p[1])
     expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(OPENING_TAG_HEIGHT, 9)
-    // Nine characters at 0.11 in each need well over the tag's own height.
     expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(OPENING_TAG_HEIGHT * 2)
   })
 })

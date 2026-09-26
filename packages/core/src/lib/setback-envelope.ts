@@ -16,8 +16,9 @@
  * same marching squares the site plan draws terrain with, then simplified
  * so a rectangle comes back as four corners and an arc keeps its vertices.
  */
-import { createTerrainField } from './terrain-field'
+
 import { terrainContours } from './terrain-contours'
+import { createTerrainField } from './terrain-field'
 
 export type Pt = readonly [number, number]
 
@@ -28,7 +29,8 @@ function pointInPolygon(points: readonly Pt[], x: number, y: number): boolean {
   for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
     const a = points[i] as Pt
     const b = points[j] as Pt
-    if (a[1] > y !== b[1] > y && x < ((b[0] - a[0]) * (y - a[1])) / (b[1] - a[1] || 1e-12) + a[0]) inside = !inside
+    if (a[1] > y !== b[1] > y && x < ((b[0] - a[0]) * (y - a[1])) / (b[1] - a[1] || 1e-12) + a[0])
+      inside = !inside
   }
   return inside
 }
@@ -128,7 +130,10 @@ function simplifyLoop(loop: Pt[], tol: number): Pt[] {
   let best = -1
   for (let i = 0; i < loop.length; i++) {
     for (let j = i + 1; j < loop.length; j++) {
-      const d = Math.hypot((loop[i] as Pt)[0] - (loop[j] as Pt)[0], (loop[i] as Pt)[1] - (loop[j] as Pt)[1])
+      const d = Math.hypot(
+        (loop[i] as Pt)[0] - (loop[j] as Pt)[0],
+        (loop[i] as Pt)[1] - (loop[j] as Pt)[1],
+      )
       if (d > best) {
         best = d
         i0 = i
@@ -234,7 +239,12 @@ function analyticInset(points: readonly Pt[], ds: readonly number[]): Pt[] | nul
     const q = out[(i + 1) % n] as Pt
     const l = lines[i] as (typeof lines)[number]
     if ((q[0] - p[0]) * l.dx + (q[1] - p[1]) * l.dy < -1e-9) return null
-    if (!pointInPolygon(points, p[0], p[1]) && (ds[i] as number) > 0 && (ds[(i - 1 + n) % n] as number) > 0) return null
+    if (
+      !pointInPolygon(points, p[0], p[1]) &&
+      (ds[i] as number) > 0 &&
+      (ds[(i - 1 + n) % n] as number) > 0
+    )
+      return null
   }
   if (polygonAreaAbs(out) < 1e-9) return null
   if (signedArea(out) > 0 !== area > 0) return null
@@ -305,7 +315,8 @@ export function insetPolygon(
         // outside: the signed distance continues through the lot line, so a
         // zero-setback edge's contour lands exactly on the line
         f = Number.POSITIVE_INFINITY
-        for (let i = 0; i < n; i++) f = Math.min(f, segDist(x, y, points[i] as Pt, points[(i + 1) % n] as Pt))
+        for (let i = 0; i < n; i++)
+          f = Math.min(f, segDist(x, y, points[i] as Pt, points[(i + 1) % n] as Pt))
         f = -Math.max(f, 1e-4)
       } else {
         f = Number.POSITIVE_INFINITY
@@ -367,7 +378,11 @@ export function insetPolygon(
  * nearest the lot front's midpoint (a pie lot's curved frontage has no
  * single parallel — its longest arc chord fronts the house).
  */
-export function envelopeFrontEdge(lot: readonly Pt[], frontIndex: number, envelope: readonly Pt[]): number {
+export function envelopeFrontEdge(
+  lot: readonly Pt[],
+  frontIndex: number,
+  envelope: readonly Pt[],
+): number {
   const n = lot.length
   const m = envelope.length
   if (n < 2 || m < 2) return 0
@@ -425,7 +440,12 @@ export function envelopeFrontEdge(lot: readonly Pt[], frontIndex: number, envelo
  * verify locally. `edgeA` and `edgeB` are the two street edges; null when
  * their lines are parallel or the corner lies far from both.
  */
-export function sightTriangle(points: readonly Pt[], edgeA: number, edgeB: number, legM: number): { corner: Pt; a: Pt; b: Pt } | null {
+export function sightTriangle(
+  points: readonly Pt[],
+  edgeA: number,
+  edgeB: number,
+  legM: number,
+): { corner: Pt; a: Pt; b: Pt } | null {
   const n = points.length
   const line = (i: number) => {
     const p = points[((i % n) + n) % n] as Pt
@@ -457,7 +477,10 @@ export function sightTriangle(points: readonly Pt[], edgeA: number, edgeB: numbe
  * The street corners of a lot: pairs of street edges that meet at a real
  * turn (40° or more) directly or across a curb-return run of short edges.
  */
-export function streetCorners(points: readonly Pt[], streetEdges: readonly number[]): [number, number][] {
+export function streetCorners(
+  points: readonly Pt[],
+  streetEdges: readonly number[],
+): [number, number][] {
   const n = points.length
   if (n < 3 || streetEdges.length < 2) return []
   const street = new Set(streetEdges.map((i) => ((i % n) + n) % n))
@@ -475,7 +498,11 @@ export function streetCorners(points: readonly Pt[], streetEdges: readonly numbe
     let steps = 0
     while (j !== i && steps < n) {
       const same = runs[j] === runs[i]
-      const short = Math.hypot((points[(j + 1) % n] as Pt)[0] - (points[j] as Pt)[0], (points[(j + 1) % n] as Pt)[1] - (points[j] as Pt)[1]) < 4
+      const short =
+        Math.hypot(
+          (points[(j + 1) % n] as Pt)[0] - (points[j] as Pt)[0],
+          (points[(j + 1) % n] as Pt)[1] - (points[j] as Pt)[1],
+        ) < 4
       if (!same && !short) break
       j = (j + 1) % n
       steps += 1

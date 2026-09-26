@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { decodeTerrainField, heightAt } from '@pascal-app/core'
+import type { ParcelProvider } from './parcel-provider'
 import {
   coarseHeightAt,
   DEFAULT_GRID_N,
@@ -23,18 +24,18 @@ const ORIGIN: [number, number] = [-121.4944, 38.5816]
 const FT = 0.3048
 
 /** A fake elevation route: the ground is a plane, `slopeFtPerM` feet per metre of x, `base` ft, optional holes. */
-function fakeFetch(slopeFtPerM: number, base = 30, holeEvery = 0, fail = false): typeof fetch {
-  return (async (_url: string | URL | Request, init?: RequestInit) => {
-    const body = JSON.parse(String(init?.body)) as { points: { lat: number; lng: number }[] }
-    if (fail) return new Response(JSON.stringify({ ok: false, error: 'USGS down' }))
+function fakeProvider(slopeFtPerM: number, base = 30, holeEvery = 0, fail = false): ParcelProvider {
+  return async (_endpoint, request) => {
+    const body = request as { points: { lat: number; lng: number }[] }
+    if (fail) return { ok: false, error: 'USGS down' }
     // invert the projection the way the sampler projected: lng → x metres
     const results = body.points.map((p, i) => {
       const xM = (p.lng - ORIGIN[0]) * 364000 * Math.cos((ORIGIN[1] * Math.PI) / 180) * FT
       const elevation = holeEvery > 0 && i % holeEvery === 3 ? null : base + slopeFtPerM * xM
       return { lat: p.lat, lng: p.lng, elevation }
     })
-    return new Response(JSON.stringify({ ok: true, results }))
-  }) as typeof fetch
+    return { ok: true, results }
+  }
 }
 
 describe('grid and projection', () => {
@@ -82,7 +83,7 @@ describe('grid and projection', () => {
 
 describe('sampleLotTerrain', () => {
   test('a sloping lot writes a heightfield with the datum at the lot centre and says how much fall', async () => {
-    const r = await sampleLotTerrain(LOT, ORIGIN, { fetchImpl: fakeFetch(0.3), now: () => 't' })
+    const r = await sampleLotTerrain(LOT, ORIGIN, { provider: fakeProvider(0.3), now: () => 't' })
     expect(r.ok).toBe(true)
     expect(r.terrain).toBeDefined()
     expect(r.summary?.flat).toBe(false)
@@ -99,22 +100,22 @@ describe('sampleLotTerrain', () => {
   })
 
   test('a flat lot writes nothing; holes are counted; failures say why', async () => {
-    const flat = await sampleLotTerrain(LOT, ORIGIN, { fetchImpl: fakeFetch(0.001) })
+    const flat = await sampleLotTerrain(LOT, ORIGIN, { provider: fakeProvider(0.001) })
     expect(flat.ok).toBe(true)
     expect(flat.terrain).toBeUndefined()
     expect(flat.summary?.flat).toBe(true)
     expect(flat.summary!.reliefFt * FT).toBeLessThan(MIN_RELIEF_M)
-    const holed = await sampleLotTerrain(LOT, ORIGIN, { fetchImpl: fakeFetch(0.3, 30, 7) })
+    const holed = await sampleLotTerrain(LOT, ORIGIN, { provider: fakeProvider(0.3, 30, 7) })
     expect(holed.ok).toBe(true)
     expect(holed.summary!.holes).toBeGreaterThan(0)
     expect(holed.summary!.sampled + holed.summary!.holes).toBe(81)
-    const down = await sampleLotTerrain(LOT, ORIGIN, { fetchImpl: fakeFetch(0.3, 30, 0, true) })
+    const down = await sampleLotTerrain(LOT, ORIGIN, { provider: fakeProvider(0.3, 30, 0, true) })
     expect(down.ok).toBe(false)
     expect(down.reason).toBe('USGS down')
     const thrown = await sampleLotTerrain(LOT, ORIGIN, {
-      fetchImpl: (async () => {
+      provider: async () => {
         throw new Error('offline')
-      }) as unknown as typeof fetch,
+      },
     })
     expect(thrown.ok).toBe(false)
     expect(thrown.reason).toBe('offline')

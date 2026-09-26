@@ -55,7 +55,7 @@ export function resolveFloorplanAnnotationVisibility(
     contextualDimensions: selected,
     manualDimensions: selected,
     measurements: selected,
-    openingMarks: true,
+    openingMarks: false,
     structuralGrids: false,
     roomLabels: true,
     roomDetails: false,

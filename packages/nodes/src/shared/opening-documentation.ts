@@ -39,24 +39,42 @@ export type OpeningDimensionDocumentation = {
 
 export type OpeningFloorplanLevelData = {
   markById: ReadonlyMap<string, string>
+  /** The drafted-sheet numbering, resolved on first use so the editor plan never pays for it. */
+  draftingMarkById: () => ReadonlyMap<string, string>
 }
 
-type MarkResolution = OpeningFloorplanLevelData & {
+type MarkResolution = {
+  markById: ReadonlyMap<string, string>
   issues: readonly string[]
+}
+
+function openingLevelData(
+  openings: ReadonlyArray<OpeningNode>,
+  nodes: Readonly<Record<string, AnyNode>>,
+  kind: OpeningKind,
+): OpeningFloorplanLevelData {
+  let drafted: ReadonlyMap<string, string> | undefined
+  return {
+    markById: resolveOpeningMarks(openings, nodes, kind).markById,
+    draftingMarkById: () => {
+      drafted ??= resolveOpeningMarks(openings, nodes, kind, undefined, true).markById
+      return drafted
+    },
+  }
 }
 
 export function computeDoorFloorplanLevelData(args: {
   siblings: ReadonlyArray<DoorNode>
   nodes: Record<string, AnyNode>
 }): OpeningFloorplanLevelData {
-  return resolveOpeningMarks(args.siblings, args.nodes, 'door')
+  return openingLevelData(args.siblings, args.nodes, 'door')
 }
 
 export function computeWindowFloorplanLevelData(args: {
   siblings: ReadonlyArray<WindowNode>
   nodes: Record<string, AnyNode>
 }): OpeningFloorplanLevelData {
-  return resolveOpeningMarks(args.siblings, args.nodes, 'window')
+  return openingLevelData(args.siblings, args.nodes, 'window')
 }
 
 export function buildDoorFloorplanSchedule(args: {
@@ -65,9 +83,16 @@ export function buildDoorFloorplanSchedule(args: {
   levelId: string
   unit: ConstructionLinearUnit
   profile?: ConstructionLengthProfile
+  drafting?: boolean
 }): FloorplanSchedule | null {
   if (args.siblings.length === 0) return null
-  const marks = resolveOpeningMarks(args.siblings, args.nodes, 'door', args.levelId)
+  const marks = resolveOpeningMarks(
+    args.siblings,
+    args.nodes,
+    'door',
+    args.levelId,
+    args.drafting === true,
+  )
   return {
     id: 'doors',
     title: 'DOOR SCHEDULE',
@@ -102,9 +127,16 @@ export function buildWindowFloorplanSchedule(args: {
   levelId: string
   unit: ConstructionLinearUnit
   profile?: ConstructionLengthProfile
+  drafting?: boolean
 }): FloorplanSchedule | null {
   if (args.siblings.length === 0) return null
-  const marks = resolveOpeningMarks(args.siblings, args.nodes, 'window', args.levelId)
+  const marks = resolveOpeningMarks(
+    args.siblings,
+    args.nodes,
+    'window',
+    args.levelId,
+    args.drafting === true,
+  )
   return {
     id: 'windows',
     title: 'WINDOW SCHEDULE',
@@ -148,7 +180,7 @@ export function buildWindowFloorplanSchedule(args: {
  * drawing scale, so a size only means something once you name the scale it is
  * read at. The reference is a 1/4" = 1'-0" plan (scale 48, i.e. 48 world
  * inches per paper inch), which is what a residential floor plan is drawn at,
- * and the targets are the ones a PlanCrafters sheet uses:
+ * and the targets are the ones a permit sheet uses:
  *
  *   tag height   0.28 in of paper  → 0.28 × 48 / 39.3701 = 0.341 m
  *   tag stroke   0.02 in of paper  → 0.024 m
@@ -177,9 +209,12 @@ export function buildOpeningMarkAnnotation(
   {
     preferredSide = -1,
     stroke = '#334155',
+    drafting = false,
   }: {
     preferredSide?: -1 | 1
     stroke?: string
+    /** Sheet drafting: tag outside the exterior face, door hexagon / window ellipse, paper sizes. */
+    drafting?: boolean
   } = {},
 ): FloorplanGeometry | null {
   const dx = wall.end[0] - wall.start[0]
@@ -191,15 +226,69 @@ export function buildOpeningMarkAnnotation(
   const dirZ = dz / wallLength
   const normalX = -dirZ
   const normalZ = dirX
-  // WS3: the tag sits just OUTSIDE the wall on the exterior side, the way a
-  // door/window tag is drawn on a construction document. `preferredSide` is
-  // the fallback when neither face is declared exterior.
-  const side = exteriorSide(wall, preferredSide)
   const openingCenterX = wall.start[0] + dirX * opening.position[0]
   const openingCenterZ = wall.start[1] + dirZ * opening.position[0]
   const halfDepth = (wall.thickness ?? 0.1) / 2
   const explicitMark = opening.mark?.trim()
-  const mark = levelData?.markById.get(opening.id) ?? (explicitMark || fallbackMark(opening))
+  const marks = drafting ? levelData?.draftingMarkById() : levelData?.markById
+  const mark = marks?.get(opening.id) ?? (explicitMark || fallbackMark(opening))
+
+  if (!drafting) {
+    const side = interiorSide(wall, preferredSide)
+    const bubbleOffset = halfDepth + 0.5
+    const bubbleX = openingCenterX + normalX * bubbleOffset * side
+    const bubbleZ = openingCenterZ + normalZ * bubbleOffset * side
+    const bubbleWidth = Math.max(0.38, mark.length * 0.105 + 0.18)
+    const bubbleHeight = 0.32
+    const leaderEndOffset = bubbleOffset - bubbleHeight / 2
+    return withFloorplanGeometryMetadata(
+      {
+        kind: 'group',
+        children: [
+          {
+            kind: 'line',
+            x1: openingCenterX + normalX * halfDepth * side,
+            y1: openingCenterZ + normalZ * halfDepth * side,
+            x2: openingCenterX + normalX * leaderEndOffset * side,
+            y2: openingCenterZ + normalZ * leaderEndOffset * side,
+            stroke,
+            strokeWidth: 0.018,
+          },
+          {
+            kind: 'rect',
+            x: bubbleX - bubbleWidth / 2,
+            y: bubbleZ - bubbleHeight / 2,
+            width: bubbleWidth,
+            height: bubbleHeight,
+            rx: bubbleHeight / 2,
+            ry: bubbleHeight / 2,
+            fill: '#ffffff',
+            stroke,
+            strokeWidth: 0.02,
+          },
+          {
+            kind: 'text',
+            x: bubbleX,
+            y: bubbleZ,
+            text: mark,
+            fontSize: 0.15,
+            fill: stroke,
+            fontWeight: 700,
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+            textAnchor: 'middle',
+            dominantBaseline: 'middle',
+            upright: true,
+          },
+        ],
+      },
+      { annotationRole: 'opening-mark' },
+    )
+  }
+
+  // A sheet sets the tag just OUTSIDE the wall on the exterior side, the way
+  // a door/window tag is drawn on a construction document. `preferredSide` is
+  // the fallback when neither face is declared exterior.
+  const side = exteriorSide(wall, preferredSide)
   const bubbleHeight = OPENING_TAG_HEIGHT
   // Monospace bold sets at roughly 0.62 em; the tag keeps 0.9 of its own
   // height as end padding so a four-character mark never touches the outline.
@@ -290,21 +379,23 @@ export function resolveOpeningDimensionDocumentation(
 }
 
 /**
- * WS3: numbering lives in `packages/editor/src/lib/floorplan/marks.ts` —
- * D101/W101 per level ordinal, clockwise from the NW-most exterior wall.
- * This wrapper keeps the node-side call sites unchanged and narrows the
- * result to one kind. When no level can be resolved (a detached opening in
- * a preview context) it falls back to a local sequence so previews still
- * label something.
+ * The editor plan numbers doors 101, 102… and windows W01, W02… in sibling
+ * order. A drafted sheet numbers through `resolveMarkDetail` in the editor
+ * package — D101/W101 per level ordinal, clockwise from the NW-most exterior
+ * wall. When no level can be resolved (a detached opening in a preview
+ * context) both fall back to a local sequence so previews still label
+ * something.
  */
 function resolveOpeningMarks<T extends OpeningNode>(
   openings: ReadonlyArray<T>,
   nodes: Readonly<Record<string, AnyNode>>,
   kind: OpeningKind,
   explicitLevelId?: string,
+  drafting = false,
 ): MarkResolution {
   const level = resolveLevel(openings[0], nodes, explicitLevelId)
-  if (level) {
+  const markFor = drafting ? sheetMark : automaticMark
+  if (drafting && level) {
     // Callers pass live sibling snapshots that may not be the objects in
     // `nodes` (mid-drag overrides, un-committed panel edits). Overlay them so
     // an explicit `mark` on the snapshot is honoured.
@@ -323,10 +414,7 @@ function resolveOpeningMarks<T extends OpeningNode>(
     for (const opening of openings) {
       if (markById.has(opening.id)) continue
       const explicit = opening.mark?.trim()
-      markById.set(
-        opening.id,
-        explicit || automaticMark(kind, level.level ?? 0, fallbackSequence++),
-      )
+      markById.set(opening.id, explicit || sheetMark(kind, level.level ?? 0, fallbackSequence++))
     }
     return { markById, issues }
   }
@@ -349,10 +437,10 @@ function resolveOpeningMarks<T extends OpeningNode>(
   let sequence = 1
   for (const opening of openings) {
     if (markById.has(opening.id)) continue
-    let candidate = automaticMark(kind, 0, sequence)
+    let candidate = markFor(kind, level?.level ?? 0, sequence)
     while (used.has(candidate.toLocaleUpperCase())) {
       sequence++
-      candidate = automaticMark(kind, 0, sequence)
+      candidate = markFor(kind, level?.level ?? 0, sequence)
     }
     markById.set(opening.id, candidate)
     used.add(candidate.toLocaleUpperCase())
@@ -385,6 +473,11 @@ function resolveLevel(
 }
 
 function automaticMark(kind: OpeningKind, level: number, sequence: number): string {
+  if (kind === 'door') return String((Math.max(0, level) + 1) * 100 + sequence)
+  return `W${String(sequence).padStart(2, '0')}`
+}
+
+function sheetMark(kind: OpeningKind, level: number, sequence: number): string {
   const base = (Math.max(0, level) + 1) * 100
   return `${kind === 'door' ? 'D' : 'W'}${base + sequence}`
 }

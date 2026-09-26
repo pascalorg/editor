@@ -20,8 +20,8 @@
  *    its sheet ("A2.0 Ground floor floor plan") — e-plan review portals
  *    require one bookmark per sheet.
  *
- * This module owns no layout opinions — `@pascal-app/plugin-sheets` builds
- * the pages and calls in here.
+ * This module owns no layout opinions — the caller builds the pages and
+ * calls in here.
  */
 import type {
   AnyNode,
@@ -59,14 +59,15 @@ import { renderFloorplanGeometryToPdfKit } from './floorplan-pdfkit-renderer'
 /** PDF user-space units per inch. */
 export const POINTS_PER_INCH = 72
 
+export type { FloorplanSchedule } from './floorplan-extension'
 /**
  * The schedules the kinds on a level contribute
  * (`def.extensions['pascal:editor/floorplan'].schedule`). Re-exported here so
  * a sheet's schedule viewport prints the SAME marks the plan's mark bubbles
- * do — both come from `resolveOpeningMarks` in `@pascal-app/nodes`.
+ * do — both come from `resolveOpeningMarks` in `@pascal-app/nodes`. A sheet
+ * passes `{ drafting: true }` so its schedules number like its drafted tags.
  */
 export { collectFloorplanSchedules }
-export type { FloorplanSchedule } from './floorplan-extension'
 
 export type SheetGeometryEntry = {
   id: AnyNodeId
@@ -279,6 +280,8 @@ export async function exportSheetsToPdf(
       if (win.annotations) {
         await renderFloorplanGeometryToPdfKit(doc, win.annotations, {
           annotationLayer: true,
+          // ~7 pt caps in the embedded mono: the 3/32 in dimension text a sheet is read at
+          dimensionTextSizePt: 10,
           placement,
           rotationDeg: win.rotationDeg,
           viewport: win.viewport,

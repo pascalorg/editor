@@ -70,7 +70,7 @@ export function levelWallCladdingRef(
   if (!levelId) return null
   const counts = new Map<string, number>()
   for (const node of Object.values(nodes)) {
-    if (!node || node.type !== 'wall' || node.parentId !== levelId) continue
+    if (node?.type !== 'wall' || node.parentId !== levelId) continue
     const ref = wallAssemblyFinishRef(node)
     if (ref) counts.set(ref, (counts.get(ref) ?? 0) + 1)
   }

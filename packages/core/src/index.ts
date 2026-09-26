@@ -154,6 +154,14 @@ export {
 } from './lib/roof-overlap'
 export { resolveSelectionProxyId, selectionProxyIdFromMetadata } from './lib/selection-proxy'
 export {
+  arcRuns,
+  envelopeFrontEdge,
+  insetPolygon,
+  type KeepOut,
+  sightTriangle,
+  streetCorners,
+} from './lib/setback-envelope'
+export {
   getRenderableSlabPolygon,
   prepareSlabPolygonContext,
   type SlabEdgeWallBandSnap,
@@ -216,6 +224,7 @@ export {
   encodeTerrainField,
   isDatumField,
 } from './lib/terrain-codec'
+export { type Contour, terrainContours } from './lib/terrain-contours'
 export {
   applyHeightPatch,
   createTerrainField,
@@ -241,17 +250,6 @@ export {
   terrainFieldForEdit,
   terrainFieldOf,
 } from './lib/terrain-source'
-export { type Contour, terrainContours } from './lib/terrain-contours'
-export { arcRuns, envelopeFrontEdge, insetPolygon, type KeepOut, sightTriangle, streetCorners } from './lib/setback-envelope'
-export {
-  type ConventionSite,
-  type ExteriorWallConvention,
-  type ExteriorWallSystem,
-  exteriorWallConvention,
-  FL_BLOCK_BELT_COUNTIES,
-  FL_BLOCK_BELT_NORTH_LAT,
-  FL_HVHZ_COUNTIES,
-} from './lib/regional-construction'
 export {
   isLevelBaseConsumer,
   isSiteDatum,
@@ -462,19 +460,19 @@ export {
   resolveWallAssembly,
   resolveWallExteriorSide,
   SIDING_LAP,
-  WALL_FINISH_LIBRARY_REF,
-  wallAssemblyFinishRef,
   STONE_VENEER_UNVERIFIED,
   STUCCO_3_COAT,
   STUD_2X4,
   STUD_2X6,
   WALL_ASSEMBLY_PRESETS,
+  WALL_FINISH_LIBRARY_REF,
   type WallAssemblyLayer,
   type WallAssemblyLayerRole,
   type WallAssemblyPreset,
   type WallLayerMiterData,
   type WallLayerPolyline,
   WSP_SHEATHING,
+  wallAssemblyFinishRef,
   wallAssemblyPatch,
   wallAssemblyUnverifiedNote,
   wallLayerBoundaryOffsets,

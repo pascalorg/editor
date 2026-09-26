@@ -2,7 +2,7 @@
  * VECTOR EDGES FROM THE VIEWER — the elevation's lines taken from the same
  * meshes the picture is rendered from, with hidden-line removal.
  *
- * A drawing built from a second model of the house (plugin-sections' solids)
+ * A drawing built from a second model of the house (a plugin's section solids)
  * never quite matches the render: its roof sat on the plate plane while the
  * 3D roof stacks a deck and shingles on it, its door was the opening while
  * the render showed the leaf. This is how Revit and Chief Architect avoid
@@ -10,7 +10,7 @@
  *
  *   1. every visible mesh's FEATURE EDGES (creases over `thresholdDeg`,
  *      boundaries — three's EdgesGeometry, cached per geometry), carried
- *      to world space, instance by instance for Bones' InstancedMeshes;
+ *      to world space, instance by instance for InstancedMeshes;
  *   2. a DEPTH pass of the scene through the capture camera — view-space
  *      depth as a float colour, read back once;
  *   3. each edge projected through that camera and SAMPLED along its length
@@ -38,22 +38,25 @@ export type VisibleEdges = {
   normals: boolean
 }
 
-const edgeCache = new WeakMap<THREE.BufferGeometry, Float32Array | null>()
+const edgeCache = new WeakMap<THREE.BufferGeometry, Map<number, Float32Array | null>>()
 
-/** The feature edges of a geometry, local space, as pairs of points (cached; null when the geometry is too heavy). */
-function featureEdgesOf(geometry: THREE.BufferGeometry, thresholdDeg: number, maxTriangles: number): Float32Array | null {
-  const cached = edgeCache.get(geometry)
-  if (cached !== undefined) return cached
+/** The feature edges of a geometry, local space, as pairs of points (cached per threshold; null when the geometry is too heavy). */
+function featureEdgesOf(
+  geometry: THREE.BufferGeometry,
+  thresholdDeg: number,
+  maxTriangles: number,
+): Float32Array | null {
   const position = geometry.getAttribute('position')
-  if (!position) {
-    edgeCache.set(geometry, null)
-    return null
-  }
+  if (!position) return null
   const triangles = geometry.index ? geometry.index.count / 3 : position.count / 3
-  if (triangles > maxTriangles) {
-    edgeCache.set(geometry, null)
-    return null
+  if (triangles > maxTriangles) return null
+  let byThreshold = edgeCache.get(geometry)
+  if (!byThreshold) {
+    byThreshold = new Map()
+    edgeCache.set(geometry, byThreshold)
   }
+  const cached = byThreshold.get(thresholdDeg)
+  if (cached !== undefined) return cached
   let edges: Float32Array | null = null
   try {
     const eg = new THREE.EdgesGeometry(geometry, thresholdDeg)
@@ -63,7 +66,7 @@ function featureEdgesOf(geometry: THREE.BufferGeometry, thresholdDeg: number, ma
   } catch {
     edges = null
   }
-  edgeCache.set(geometry, edges)
+  byThreshold.set(thresholdDeg, edges)
   return edges
 }
 
@@ -78,14 +81,15 @@ function isShown(object: THREE.Object3D): boolean {
 
 /**
  * Whether a material draws anything. `colorWrite: false` is how a pick-only
- * collider hides on the GPU (Bones' utility-pole proxy, 0.5 × 10.7 m, once
+ * collider hides on the GPU (a plugin's utility-pole proxy, 0.5 × 10.7 m, once
  * drew a tall rectangle through the elevations, 2026-09-23 — the rule
  * glb-export's `isRenderableMesh` already follows).
  */
 export function materialShows(material: THREE.Material | THREE.Material[]): boolean {
   const list = Array.isArray(material) ? material : [material]
   return list.some(
-    (m) => m && m.visible !== false && m.colorWrite !== false && !(m.transparent && m.opacity <= 0.02),
+    (m) =>
+      m && m.visible !== false && m.colorWrite !== false && !(m.transparent && m.opacity <= 0.02),
   )
 }
 
@@ -142,7 +146,13 @@ async function bufferPass(
     getClearAlpha: () => number
     setClearColor: (c: THREE.Color | number, a?: number) => void
     renderAsync: (s: THREE.Scene, c: THREE.Camera) => Promise<void>
-    readRenderTargetPixelsAsync: (t: unknown, x: number, y: number, w: number, h: number) => Promise<ArrayLike<number>>
+    readRenderTargetPixelsAsync: (
+      t: unknown,
+      x: number,
+      y: number,
+      w: number,
+      h: number,
+    ) => Promise<ArrayLike<number>>
     backend?: { device?: unknown }
   }
   const previousTarget = gl.getRenderTarget()
@@ -209,7 +219,9 @@ export function candidateEdges(
     for (const m of matrices) {
       for (let i = 0; i + 5 < edges.length; i += 6) {
         a.set(edges[i] as number, edges[i + 1] as number, edges[i + 2] as number).applyMatrix4(m)
-        b.set(edges[i + 3] as number, edges[i + 4] as number, edges[i + 5] as number).applyMatrix4(m)
+        b.set(edges[i + 3] as number, edges[i + 4] as number, edges[i + 5] as number).applyMatrix4(
+          m,
+        )
         world.push(a.x, a.y, a.z, b.x, b.y, b.z)
       }
     }
@@ -241,8 +253,16 @@ export async function extractVisibleEdges(
   let pass: Awaited<ReturnType<typeof bufferPass>>
   let normalPass: Awaited<ReturnType<typeof bufferPass>> = null
   try {
-    pass = await bufferPass(renderer, scene, camera, width, height, vec4(positionView.z.negate(), 0, 0, 1))
-    if (pass) normalPass = await bufferPass(renderer, scene, camera, width, height, vec4(normalView, 1))
+    pass = await bufferPass(
+      renderer,
+      scene,
+      camera,
+      width,
+      height,
+      vec4(positionView.z.negate(), 0, 0, 1),
+    )
+    if (pass)
+      normalPass = await bufferPass(renderer, scene, camera, width, height, vec4(normalView, 1))
   } finally {
     showUndrawn()
   }
@@ -303,7 +323,9 @@ export async function extractVisibleEdges(
   const tested = world.length / 6
   for (let i = 0; i + 5 < world.length; i += 6) {
     va.set(world[i] as number, world[i + 1] as number, world[i + 2] as number).applyMatrix4(view)
-    vb.set(world[i + 3] as number, world[i + 4] as number, world[i + 5] as number).applyMatrix4(view)
+    vb.set(world[i + 3] as number, world[i + 4] as number, world[i + 5] as number).applyMatrix4(
+      view,
+    )
     const da = -va.z
     const db = -vb.z
     if (da <= camera.near && db <= camera.near) continue
@@ -314,7 +336,12 @@ export async function extractVisibleEdges(
     const bx = ((pb.x + 1) / 2) * width
     const by = ((1 - pb.y) / 2) * height
     // wholly off the frame: nothing to test
-    if ((ax < 0 && bx < 0) || (ax >= width && bx >= width) || (ay < 0 && by < 0) || (ay >= height && by >= height)) {
+    if (
+      (ax < 0 && bx < 0) ||
+      (ax >= width && bx >= width) ||
+      (ay < 0 && by < 0) ||
+      (ay >= height && by >= height)
+    ) {
       continue
     }
     const lengthPx = Math.hypot(bx - ax, by - ay)

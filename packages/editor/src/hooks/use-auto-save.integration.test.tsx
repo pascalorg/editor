@@ -135,6 +135,28 @@ test('a scene loaded in a hidden tab autosaves agent edits without waiting for a
   expect(statuses.at(-1)).toBe('saved')
 })
 
+test('opening a scene and leaving it unchanged saves nothing', async () => {
+  const { writes, statuses, controls } = await mountBeforeLoad()
+  loadScene(controls, 12)
+  statuses.length = 0
+  // Mount-time writes after the load: systems re-marking nodes, and a plugin
+  // that registers late syncing the default plugin set.
+  useScene.getState().markDirty('level_autosave' as never)
+  useScene.getState().setInstalledPlugins(['late-default'], { explicit: false })
+  await Bun.sleep(1100)
+  window.dispatchEvent(new Event('pagehide'))
+  expect(writes).toEqual([])
+  expect(statuses).toEqual([])
+})
+
+test('installing a plugin by hand after the load is saved', async () => {
+  const { writes, controls } = await mountBeforeLoad()
+  loadScene(controls, 12)
+  useScene.getState().setInstalledPlugins(['chosen'], { explicit: true })
+  await Bun.sleep(1100)
+  expect(writes).toEqual([12])
+})
+
 test('the exit flush writes an agent edit made right after a hidden load', async () => {
   hideDocument()
   const { writes, statuses, controls } = await mountBeforeLoad()

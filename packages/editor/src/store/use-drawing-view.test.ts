@@ -10,7 +10,7 @@ describe('drawing type', () => {
     expect(useDrawingView.getState().drawingType).toBe('floor-plan')
   })
 
-  test('switches between the drawing types the editor can render (WS1)', () => {
+  test('switches between the drawing types the editor can render', () => {
     useDrawingView.getState().setDrawingType('site-plan')
     expect(useDrawingView.getState().drawingType).toBe('site-plan')
     useDrawingView.getState().setDrawingType('floor-plan')

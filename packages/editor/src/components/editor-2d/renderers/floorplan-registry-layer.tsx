@@ -1660,7 +1660,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         ))}
       </g>
       <FloorplanAnnotationLayoutResolver active={floorplanVisible} />
-      {/* WS3 — click-to-type dimension labels. Portals its HTML input to
+      {/* Click-to-type dimension labels. Portals its HTML input to
           document.body, so mounting it inside the SVG tree is safe. */}
       <FloorplanDimensionEditOverlay />
       {/* Dashed group bbox — shows what a group drag carries along while a

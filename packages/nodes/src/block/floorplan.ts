@@ -8,11 +8,10 @@ import { readFloorplanContext } from '@pascal-app/editor'
 
 /**
  * The plan cut: a floor plan is the storey sliced 4 ft above the floor and
- * looked at from above. A block standing wholly ABOVE that line — the
- * roof's fascia and rake boards, a gable ornament, a dormer, a ceiling fan —
- * is overhead trim: it is not on the plan (otherwise the generated fascia
- * blocks, one per roof segment, filled the roof footprint plus its overhang
- * over every room and the floor plan was illegible). Level-local metres.
+ * looked at from above. A block standing wholly ABOVE that line — fascia and
+ * rake boards, a gable ornament, a dormer, a ceiling fan — is overhead trim a
+ * drafted sheet leaves off (otherwise blocks modelled as roof trim filled the
+ * roof footprint plus its overhang over every room). Level-local metres.
  */
 export const PLAN_CUT_HEIGHT = 1.2
 
@@ -54,42 +53,20 @@ export function buildBlockFloorplan(
   )
   if (points.length < 3) return null
   const selected = ctx?.viewState?.selected ?? false
-  const onPaper = ctx ? readFloorplanContext(ctx).purpose === 'document' : false
-  const overhead = isOverheadBlock(node)
-  // Overhead trim is not on the printed plan at all.
-  if (onPaper && overhead) return null
-  const transform = { translate: [node.position[0], node.position[2]] as [number, number], rotate: -node.rotation }
-  if (overhead) {
-    // In the editor: a faint dashed outline says "something above you" and
-    // stays clickable through an invisible fill — never a wash over the rooms.
-    return {
-      kind: 'group',
-      transform,
-      children: [
-        {
-          kind: 'polygon',
-          points,
-          fill: selected ? '#fed7aa' : '#000000',
-          fillOpacity: selected ? 0.35 : 0,
-          stroke: selected ? (ctx?.viewState?.palette?.selectedStroke ?? '#f97316') : '#94a3b8',
-          strokeWidth: selected ? 0.03 : 0.012,
-          strokeDasharray: '0.12 0.08',
-          pointerEvents: 'all',
-        },
-      ],
-    }
-  }
+  const drafting = ctx ? readFloorplanContext(ctx).drafting : false
+  // Overhead trim is not on a drafted sheet at all.
+  if (drafting && isOverheadBlock(node)) return null
   return {
     kind: 'group',
-    transform,
+    transform: { translate: [node.position[0], node.position[2]], rotate: -node.rotation },
     children: [
       {
         kind: 'polygon',
         points,
-        // on paper a floor-standing block is an outline in plan ink, like a wall
-        fill: onPaper ? 'none' : selected ? '#fed7aa' : '#cbd5e1',
-        fillOpacity: onPaper ? 1 : selected ? 0.55 : 0.72,
-        stroke: onPaper
+        // on a sheet a floor-standing block is an outline in plan ink, like a wall
+        fill: drafting ? 'none' : selected ? '#fed7aa' : '#cbd5e1',
+        fillOpacity: drafting ? 1 : selected ? 0.55 : 0.72,
+        stroke: drafting
           ? '#111827'
           : selected
             ? (ctx?.viewState?.palette?.selectedStroke ?? '#f97316')

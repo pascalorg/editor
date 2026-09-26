@@ -6,7 +6,16 @@ import { buildBlockFloorplan, isOverheadBlock, PLAN_CUT_HEIGHT } from './floorpl
 /** A box block `w` × `h` × `d` with its bottom at local y = 0, placed at `y`. */
 function block(y: number, w = 4, h = 0.2, d = 3): BlockNode {
   const p = (x: number, yy: number, z: number) => [x, yy, z] as [number, number, number]
-  const corners = [p(-w / 2, 0, -d / 2), p(w / 2, 0, -d / 2), p(w / 2, 0, d / 2), p(-w / 2, 0, d / 2), p(-w / 2, h, -d / 2), p(w / 2, h, -d / 2), p(w / 2, h, d / 2), p(-w / 2, h, d / 2)]
+  const corners = [
+    p(-w / 2, 0, -d / 2),
+    p(w / 2, 0, -d / 2),
+    p(w / 2, 0, d / 2),
+    p(-w / 2, 0, d / 2),
+    p(-w / 2, h, -d / 2),
+    p(w / 2, h, -d / 2),
+    p(w / 2, h, d / 2),
+    p(-w / 2, h, d / 2),
+  ]
   return {
     id: 'block_1',
     type: 'block',
@@ -20,22 +29,22 @@ function block(y: number, w = 4, h = 0.2, d = 3): BlockNode {
   } as unknown as BlockNode
 }
 
-const ctxFor = (purpose: 'edit' | 'document', selected = false): GeometryContext =>
+const ctxFor = (drafting: boolean, selected = false): GeometryContext =>
   ({
     viewState: { selected },
-    extensions: createFloorplanContextExtensions({ purpose }),
+    extensions: createFloorplanContextExtensions({ purpose: 'document', drafting }),
   }) as unknown as GeometryContext
 
-describe('buildBlockFloorplan — overhead trim stays off the plan (2026-09-09)', () => {
+describe('buildBlockFloorplan — overhead trim stays off a drafted sheet', () => {
   test('a fascia block at roof height is overhead; a cabinet on the floor is not', () => {
     expect(isOverheadBlock(block(2.6))).toBe(true)
     expect(isOverheadBlock(block(0))).toBe(false)
     expect(isOverheadBlock(block(PLAN_CUT_HEIGHT - 0.05))).toBe(false)
   })
 
-  test('on paper an overhead block draws nothing; a floor block prints as an outline', () => {
-    expect(buildBlockFloorplan(block(2.6), ctxFor('document'))).toBeNull()
-    const floor = buildBlockFloorplan(block(0), ctxFor('document'))
+  test('on a sheet an overhead block draws nothing; a floor block prints as an outline', () => {
+    expect(buildBlockFloorplan(block(2.6), ctxFor(true))).toBeNull()
+    const floor = buildBlockFloorplan(block(0), ctxFor(true))
     expect(floor?.kind).toBe('group')
     const poly = floor?.kind === 'group' ? floor.children[0] : null
     expect(poly?.kind).toBe('polygon')
@@ -45,18 +54,15 @@ describe('buildBlockFloorplan — overhead trim stays off the plan (2026-09-09)'
     }
   })
 
-  test('in the editor an overhead block is a faint dashed outline with an invisible fill, still clickable', () => {
-    const g = buildBlockFloorplan(block(2.6), ctxFor('edit'))
-    const poly = g?.kind === 'group' ? g.children[0] : null
-    expect(poly?.kind).toBe('polygon')
-    if (poly?.kind === 'polygon') {
-      expect(poly.fillOpacity).toBe(0)
-      expect(poly.strokeDasharray).toBeDefined()
-      expect(poly.pointerEvents).toBe('all')
+  test('without drafting every block keeps its wash, overhead or not', () => {
+    for (const y of [0, 2.6]) {
+      const g = buildBlockFloorplan(block(y), ctxFor(false))
+      const poly = g?.kind === 'group' ? g.children[0] : null
+      expect(poly?.kind).toBe('polygon')
+      if (poly?.kind === 'polygon') {
+        expect(poly.fill).toBe('#cbd5e1')
+        expect(poly.strokeDasharray).toBeUndefined()
+      }
     }
-    // a floor block keeps its wash in the editor
-    const f = buildBlockFloorplan(block(0), ctxFor('edit'))
-    const fp = f?.kind === 'group' ? f.children[0] : null
-    if (fp?.kind === 'polygon') expect(fp.fill).toBe('#cbd5e1')
   })
 })

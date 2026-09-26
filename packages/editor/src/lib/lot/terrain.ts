@@ -1,8 +1,7 @@
 /**
- * Lot terrain from USGS elevations (PlanCrafters terrain.js `sampleGrid`,
- * ported): an N×N grid of points over the lot's bounding box
- * (padded a touch so the ground runs past the lines) goes to
- * `/api/parcel/elevation` (USGS EPQS, keyless, feet), the readings come
+ * Lot terrain from USGS elevations: an N×N grid of points over the lot's
+ * bounding box (padded a touch so the ground runs past the lines) goes to
+ * the parcel provider's `elevation` (USGS EPQS, feet), the readings come
  * back relative to a DATUM — the ground at the lot's centre, so the site
  * plane y = 0 is the ground where the house will stand — and are written
  * into the site's heightfield (`site.terrain`, the same field the sculpt
@@ -21,6 +20,7 @@ import {
   type TerrainData,
   type TerrainField,
 } from '@pascal-app/core'
+import { getParcelProvider, NO_PARCEL_SERVICE, type ParcelProvider } from './parcel-provider'
 
 export type Pt = readonly [number, number]
 
@@ -177,7 +177,8 @@ type ElevationResponse = {
 }
 
 export interface SampleOptions {
-  fetchImpl?: typeof fetch
+  /** Default = the provider the host set. */
+  provider?: ParcelProvider
   /** Grid side, default 9. */
   n?: number
   /** Passed to the route (USGS is slow; the route caps it). */
@@ -197,17 +198,16 @@ export async function sampleLotTerrain(
   options: SampleOptions = {},
 ): Promise<TerrainSampleResult> {
   if (ring.length < 3) return { ok: false, reason: 'no lot ring' }
-  const fetchImpl = options.fetchImpl ?? fetch
+  const provider = options.provider ?? getParcelProvider()
+  if (!provider) return { ok: false, reason: NO_PARCEL_SERVICE }
   const grid = gridOver(ring, options.n ?? DEFAULT_GRID_N)
   const points = grid.points.map((p) => localMetresToLngLat(p, originLngLat))
   let body: ElevationResponse
   try {
-    const response = await fetchImpl('/api/parcel/elevation', {
-      body: JSON.stringify({ points, deadlineMs: options.deadlineMs ?? 12000 }),
-      headers: { 'content-type': 'application/json' },
-      method: 'POST',
-    })
-    body = (await response.json()) as ElevationResponse
+    body = (await provider('elevation', {
+      points,
+      deadlineMs: options.deadlineMs ?? 12000,
+    })) as ElevationResponse
   } catch (error) {
     return { ok: false, reason: error instanceof Error ? error.message : 'elevation lookup failed' }
   }

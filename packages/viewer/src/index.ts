@@ -13,8 +13,8 @@ export { ErrorBoundary } from './components/error-boundary'
 // — no per-kind re-exports needed.
 export { NodeRenderer } from './components/renderers/node-renderer'
 export {
-  pendingSceneBuildCount,
   default as Viewer,
+  pendingSceneBuildCount,
   type ViewerHandle,
   type ViewerImmersiveSession,
 } from './components/viewer'

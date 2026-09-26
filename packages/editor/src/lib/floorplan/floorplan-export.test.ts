@@ -316,7 +316,7 @@ describe('floor plan export policy', () => {
     )
   })
 
-  test('exports model geometry, room labels and door/window marks in Default', () => {
+  test('exports only model geometry and room labels in Default', () => {
     expect(
       resolveFloorplanExportAnnotationVisibility(
         'default',
@@ -327,7 +327,7 @@ describe('floor plan export policy', () => {
       contextualDimensions: false,
       manualDimensions: false,
       measurements: false,
-      openingMarks: true,
+      openingMarks: false,
       structuralGrids: false,
       roomLabels: true,
       roomDetails: false,

@@ -88,12 +88,26 @@ export function mostNorthFacingEdge(points: readonly Pt[], northRotation = 0): n
   return best
 }
 
-export function resolveFrontEdge(points: readonly Pt[], frontEdge: number | undefined, northRotation = 0): number {
-  if (typeof frontEdge === 'number' && Number.isInteger(frontEdge) && frontEdge >= 0 && frontEdge < points.length) return frontEdge
+export function resolveFrontEdge(
+  points: readonly Pt[],
+  frontEdge: number | undefined,
+  northRotation = 0,
+): number {
+  if (
+    typeof frontEdge === 'number' &&
+    Number.isInteger(frontEdge) &&
+    frontEdge >= 0 &&
+    frontEdge < points.length
+  )
+    return frontEdge
   return mostNorthFacingEdge(points, northRotation)
 }
 
-export function classifyEdges(points: readonly Pt[], frontIndex: number, streetEdges: readonly number[] = []): EdgeRole[] {
+export function classifyEdges(
+  points: readonly Pt[],
+  frontIndex: number,
+  streetEdges: readonly number[] = [],
+): EdgeRole[] {
   const n = points.length
   const roles: EdgeRole[] = new Array(n).fill('left')
   if (n === 0) return roles
@@ -162,7 +176,12 @@ export function setbackForRole(setbacks: SetbackInputs, role: EdgeRole): number 
 }
 
 /** The buildable envelope: every edge pushed inward by its role's setback (see the editor's copy for the rules). */
-export function setbackEnvelope(points: readonly Pt[], setbacks: SetbackInputs, frontIndex: number, options: { streetEdges?: readonly number[]; sightTriangleM?: number } = {}): Pt[] {
+export function setbackEnvelope(
+  points: readonly Pt[],
+  setbacks: SetbackInputs,
+  frontIndex: number,
+  options: { streetEdges?: readonly number[]; sightTriangleM?: number } = {},
+): Pt[] {
   const n = points.length
   if (n < 3) return []
   const streetEdges = options.streetEdges ?? []
@@ -197,7 +216,10 @@ export function setbackEnvelope(points: readonly Pt[], setbacks: SetbackInputs, 
   const distances: number[] = []
   for (let i = 0; i < n; i++) {
     const role = runRole.get(runs[i] as number) ?? (roles[i] as EdgeRole)
-    const d = setbackForRole(setbacks, role === 'left' || role === 'right' ? (roles[i] as EdgeRole) : role)
+    const d = setbackForRole(
+      setbacks,
+      role === 'left' || role === 'right' ? (roles[i] as EdgeRole) : role,
+    )
     if (!Number.isFinite(d) || d < 0) return []
     distances.push(d)
   }

@@ -9,8 +9,8 @@ import {
   METRES_PER_FOOT,
   mostNorthFacingEdge,
   outwardNormal,
-  polygonArea,
   type Pt,
+  polygonArea,
   rayToPolygon,
   resolveFrontEdge,
   setbackEnvelope,
@@ -101,11 +101,16 @@ describe('setbackEnvelope', () => {
     expect(roles[2]).toBe('rear')
     expect(setbackForRole({ front: 7.5, side: 2, rear: 5 }, 'street')).toBe(7.5)
     expect(setbackForRole({ front: 7.5, side: 2, rear: 5, streetSide: 4 }, 'street')).toBe(4)
-    const plain = setbackEnvelope(LOT, { front: 7.5, side: 2, rear: 5, streetSide: 4 }, 0, { streetEdges: [0, 1] })
+    const plain = setbackEnvelope(LOT, { front: 7.5, side: 2, rear: 5, streetSide: 4 }, 0, {
+      streetEdges: [0, 1],
+    })
     const xs = plain.map((p) => p[0])
     expect(Math.max(...xs)).toBeCloseTo(26, 6) // the east street side in 4, not the 2 ft side yard
     // the 25 ft (7.62 m) sight triangle at the NE corner: its hypotenuse from (22.38, 0) to (30, 7.62) keeps the envelope out
-    const clipped = setbackEnvelope(LOT, { front: 7.5, side: 2, rear: 5, streetSide: 4 }, 0, { streetEdges: [0, 1], sightTriangleM: 7.62 })
+    const clipped = setbackEnvelope(LOT, { front: 7.5, side: 2, rear: 5, streetSide: 4 }, 0, {
+      streetEdges: [0, 1],
+      sightTriangleM: 7.62,
+    })
     expect(clipped.length).toBeGreaterThanOrEqual(4)
     for (const v of clipped) {
       // outside the triangle: x + y ≥ 30 − 7.62 ... the hypotenuse is x − y = 22.38 ... points with x − y > 22.38 are inside it
@@ -120,8 +125,20 @@ describe('setbackEnvelope', () => {
 
   it('a cul-de-sac corner (a run of short arc edges) is offset as one chord — no vertex runs away', () => {
     const cape: [number, number][] = [
-      [-2, 0], [-2, 30.1], [-40, 32.7], [-40, -5.6], [-10.1, -7.6], [-8.9, -7.6], [-7.7, -7.3], [-6.5, -6.9],
-      [-5.4, -6.3], [-4.4, -5.5], [-3.6, -4.6], [-2.9, -3.6], [-2.4, -2.4], [-2.1, -1.2],
+      [-2, 0],
+      [-2, 30.1],
+      [-40, 32.7],
+      [-40, -5.6],
+      [-10.1, -7.6],
+      [-8.9, -7.6],
+      [-7.7, -7.3],
+      [-6.5, -6.9],
+      [-5.4, -6.3],
+      [-4.4, -5.5],
+      [-3.6, -4.6],
+      [-2.9, -3.6],
+      [-2.4, -2.4],
+      [-2.1, -1.2],
     ]
     const env = setbackEnvelope(cape, { front: 6.096, side: 1.524, rear: 4.572 }, 0)
     expect(env.length).toBeGreaterThanOrEqual(6)
@@ -129,7 +146,10 @@ describe('setbackEnvelope', () => {
     const segDist = (p: readonly number[], a: readonly number[], b: readonly number[]) => {
       const abx = b[0]! - a[0]!
       const aby = b[1]! - a[1]!
-      const t = Math.max(0, Math.min(1, ((p[0]! - a[0]!) * abx + (p[1]! - a[1]!) * aby) / (abx * abx + aby * aby)))
+      const t = Math.max(
+        0,
+        Math.min(1, ((p[0]! - a[0]!) * abx + (p[1]! - a[1]!) * aby) / (abx * abx + aby * aby)),
+      )
       return Math.hypot(p[0]! - (a[0]! + abx * t), p[1]! - (a[1]! + aby * t))
     }
     // the curb return (edges 4–13) is street frontage: it takes the FRONT setback, never a side yard

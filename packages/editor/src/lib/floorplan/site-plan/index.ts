@@ -1,4 +1,3 @@
-export { FloorplanDrawingTypeSwitch } from './drawing-type-switch'
 export {
   buildingRecentreOffset,
   buildSitePlanDrawing,
@@ -7,6 +6,35 @@ export {
   type SitePlanDrawing,
   type SitePlanEdge,
 } from './build-site-plan-drawing'
+export {
+  hasSitePlanContributors,
+  registerSitePlanContributor,
+  type SitePlanContributor,
+  type SitePlanServicePoint,
+  type SitePlanServiceRole,
+  type SitePlanServices,
+  sitePlanContributions,
+  subscribeSitePlanContributors,
+} from './contributors'
+export {
+  computeSiteCoverage,
+  formatCoveragePercent,
+  formatSqFt,
+  type ImperviousRow,
+  type SiteCoverage,
+} from './coverage'
+export {
+  FloorplanDrawingTypeSwitch,
+  isSitePlanAvailable,
+  useSitePlanAvailable,
+} from './drawing-type-switch'
+export {
+  detectFrontEdgeFromRoads,
+  FRONT_EDGE_PARALLEL_DEG,
+  type FrontEdgeMatch,
+  type RoadCenterline,
+  streetCore,
+} from './front-edge'
 export {
   type Bounds,
   boundsInsidePolygon,
@@ -20,34 +48,24 @@ export {
   METRES_PER_FOOT,
   mostNorthFacingEdge,
   outwardNormal,
+  type Pt,
   pointInPolygon,
   polygonArea,
   polygonBounds,
   polygonCentroid,
-  type Pt,
   rayToPolygon,
   resolveFrontEdge,
+  type SetbackInputs,
   setbackEnvelope,
   setbackForRole,
-  type SetbackInputs,
   type YardDimension,
   type YardSide,
 } from './geometry'
 export {
-  detectFrontEdgeFromRoads,
-  FRONT_EDGE_PARALLEL_DEG,
-  type FrontEdgeMatch,
-  type RoadCenterline,
-  streetCore,
-} from './front-edge'
-export { FloorplanSitePlanLayer } from './site-plan-layer'
-export {
-  computeSiteCoverage,
-  formatCoveragePercent,
-  formatSqFt,
-  type ImperviousRow,
-  type SiteCoverage,
-} from './coverage'
+  formatStreetName,
+  serviceEntranceOf,
+  streetEdgeNames,
+  UNNAMED_STREET,
+} from './site-annotations'
 export { flatworkKindOf, type OutdoorPart } from './site-parts'
-export { formatStreetName, serviceEntranceOf, streetEdgeNames, UNNAMED_STREET } from './site-annotations'
-export { registerSitePlanContributor, sitePlanContributions, type SitePlanContributor } from './contributors'
+export { FloorplanSitePlanLayer } from './site-plan-layer'

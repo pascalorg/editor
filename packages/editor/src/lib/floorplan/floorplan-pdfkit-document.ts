@@ -28,6 +28,14 @@ const PDF_FONT_FILES = {
 export type FloorplanPdfFace = keyof typeof PDF_FONT_FILES
 export type FloorplanPdfFonts = Record<FloorplanPdfFace, ArrayBuffer>
 
+/** pdfkit's built-in faces, used when the embedded ones could not be fetched. */
+const STANDARD_FACES: Record<FloorplanPdfFace, string> = {
+  sans: 'Helvetica',
+  'sans-bold': 'Helvetica-Bold',
+  mono: 'Courier',
+  'mono-bold': 'Courier-Bold',
+}
+
 /** A glyph the face lacks is taken from the other family at the same weight. */
 const OTHER_FAMILY: Record<FloorplanPdfFace, FloorplanPdfFace> = {
   sans: 'mono',
@@ -132,15 +140,18 @@ export class FloorplanPdfDocument {
   private currentFace: FloorplanPdfFace = 'sans'
   private readonly defaultPageSize: readonly [number, number]
   private readonly faces = new Map<FloorplanPdfFace, EmbeddedFace>()
+  private readonly embedded: boolean
 
+  /** `fonts` null sets every face in pdfkit's standard fonts (WinAnsi only). */
   constructor(
     raw: PdfKitDocumentInstance,
     defaultPageSize: readonly [number, number],
-    fonts: FloorplanPdfFonts,
+    fonts: FloorplanPdfFonts | null,
   ) {
     this.raw = raw
     this.defaultPageSize = defaultPageSize
-    for (const [face, bytes] of Object.entries(fonts)) raw.registerFont(face, bytes)
+    this.embedded = fonts !== null
+    for (const [face, bytes] of Object.entries(fonts ?? {})) raw.registerFont(face, bytes)
     this.internal = {
       pageSize: {
         getWidth: () => this.raw.page?.width ?? this.defaultPageSize[0],
@@ -316,10 +327,14 @@ export class FloorplanPdfDocument {
     return this
   }
 
+  private setFace(face: FloorplanPdfFace) {
+    return this.raw.font(this.embedded ? face : STANDARD_FACES[face])
+  }
+
   private face(face: FloorplanPdfFace): EmbeddedFace {
     let embedded = this.faces.get(face)
     if (!embedded) {
-      this.raw.font(face)
+      this.setFace(face)
       embedded = (this.raw as unknown as { _font: EmbeddedFace })._font
       this.faces.set(face, embedded)
     }
@@ -328,8 +343,8 @@ export class FloorplanPdfDocument {
 
   /** Splits `text` into runs each face can set, plus the symbols drawn as linework. */
   private textRuns(text: string, face: FloorplanPdfFace): TextRun[] {
-    // printable ASCII is in every face
-    if (/^[\x20-\x7e]*$/.test(text)) return [{ kind: 'text', face, text }]
+    // printable ASCII is in every face; the standard fonts have no glyph table to consult
+    if (!this.embedded || /^[\x20-\x7e]*$/.test(text)) return [{ kind: 'text', face, text }]
     const runs: TextRun[] = []
     for (const char of text) {
       const codePoint = char.codePointAt(0) ?? 0
@@ -356,7 +371,7 @@ export class FloorplanPdfDocument {
     for (const run of runs) {
       width +=
         run.kind === 'text'
-          ? this.raw.font(run.face).fontSize(fontSize).widthOfString(run.text)
+          ? this.setFace(run.face).fontSize(fontSize).widthOfString(run.text)
           : run.advanceEm * fontSize
     }
     return width
@@ -366,7 +381,7 @@ export class FloorplanPdfDocument {
     let cursor = x
     for (const run of runs) {
       if (run.kind === 'text') {
-        this.raw.font(run.face).fontSize(fontSize)
+        this.setFace(run.face).fontSize(fontSize)
         this.raw.text(run.text, cursor, baselineY, { baseline: 'alphabetic', lineBreak: false })
         cursor += this.raw.widthOfString(run.text)
       } else {
@@ -434,7 +449,7 @@ export class FloorplanPdfDocument {
       .polygon(...inner)
       .fill('even-odd')
       .restore()
-    raw.font('sans-bold').fontSize(0.55 * fontSize)
+    this.setFace('sans-bold').fontSize(0.55 * fontSize)
     raw.text('!', centre[0] - raw.widthOfString('!') / 2, baselineY, {
       baseline: 'alphabetic',
       lineBreak: false,
@@ -449,7 +464,11 @@ export async function createFloorplanPdfDocument(
   const [{ default: PDFDocument }, { default: blobStream }, fonts] = await Promise.all([
     import('pdfkit/js/pdfkit.standalone'),
     import('blob-stream'),
-    loadFloorplanPdfFonts(),
+    // an export in the standard fonts beats no export when the font files are unreachable
+    loadFloorplanPdfFonts().catch((error: unknown) => {
+      console.warn('[floorplan-export] Falling back to the standard PDF fonts', error)
+      return null
+    }),
   ])
   const raw = new PDFDocument({
     autoFirstPage: false,

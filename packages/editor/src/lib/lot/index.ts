@@ -21,6 +21,13 @@ export {
   sitePatchFromParcel,
 } from './lot-patch'
 export {
+  getParcelProvider,
+  type ParcelEndpoint,
+  type ParcelProvider,
+  setParcelProvider,
+  useParcelProvider,
+} from './parcel-provider'
+export {
   coarseHeightAt,
   DEFAULT_GRID_N,
   describeTerrainSample,

@@ -11,6 +11,7 @@ import {
   resolveDimensionDrive,
 } from '../../../lib/floorplan/dimension-drive'
 import { formatScheduleLength } from '../../../lib/floorplan/schedules'
+import useEditor from '../../../store/use-editor'
 
 /**
  * Click-to-type dimensions — WS3.
@@ -30,6 +31,35 @@ import { formatScheduleLength } from '../../../lib/floorplan/schedules'
  * sheets, which mount the same renderer.
  */
 
+type EditGateEditorState = Pick<
+  ReturnType<typeof useEditor.getState>,
+  'workspaceMode' | 'mode' | 'isPreviewMode' | 'isCaptureMode' | 'isFirstPersonMode'
+>
+
+/**
+ * Typing a dimension moves geometry, so it is only offered on an editable
+ * scene in idle select mode — never in studio, sheets, preview, capture or
+ * read-only (which is how version preview locks the graph).
+ */
+export function isDimensionEditAllowed(
+  editor: EditGateEditorState,
+  scene: { readOnly: boolean },
+): boolean {
+  return (
+    editor.workspaceMode === 'edit' &&
+    editor.mode === 'select' &&
+    !editor.isPreviewMode &&
+    !editor.isCaptureMode &&
+    !editor.isFirstPersonMode &&
+    !scene.readOnly
+  )
+}
+
+export function useDimensionEditAllowed(): boolean {
+  const readOnly = useScene((state) => state.readOnly)
+  return useEditor((state) => isDimensionEditAllowed(state, { readOnly }))
+}
+
 type EditTarget = {
   ownerNodeId: AnyNodeId
   text: string
@@ -40,6 +70,7 @@ type EditTarget = {
 }
 
 const MIN_INPUT_WIDTH_PX = 76
+const CLICK_SLOP_PX = 4
 
 export function FloorplanDimensionEditOverlay(): React.ReactElement | null {
   const [target, setTarget] = useState<EditTarget | null>(null)
@@ -49,7 +80,18 @@ export function FloorplanDimensionEditOverlay(): React.ReactElement | null {
   const unit = useViewer((state) => state.unit)
 
   useEffect(() => {
+    let down: { x: number; y: number } | null = null
+    const onPointerDown = (event: PointerEvent) => {
+      down = { x: event.clientX, y: event.clientY }
+    }
     const onClick = (event: MouseEvent) => {
+      if (event.button !== 0 || event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) {
+        return
+      }
+      if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) > CLICK_SLOP_PX) {
+        return
+      }
+      if (!isDimensionEditAllowed(useEditor.getState(), useScene.getState())) return
       const origin = event.target as Element | null
       const hit = origin?.closest?.('[data-floorplan-dimension-hit]')
       if (!hit) return
@@ -90,8 +132,15 @@ export function FloorplanDimensionEditOverlay(): React.ReactElement | null {
       setError(null)
     }
 
-    window.addEventListener('click', onClick, true)
-    return () => window.removeEventListener('click', onClick, true)
+    // Document, not window: drag and marquee handlers swallow the click that
+    // ends them with a window capture listener registered after this one, and
+    // only a listener further down the capture path is skipped by it.
+    document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('click', onClick, true)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      document.removeEventListener('click', onClick, true)
+    }
   }, [])
 
   useEffect(() => {

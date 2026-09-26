@@ -286,8 +286,8 @@ function stairTreads(
 /**
  * The setbacks line the site plan prints when the yards are not the zoning
  * code's own: worded for a plans examiner from the site's numbers — never the
- * internal source tag a lot drop-in stored (QA 2026-09-23 printed
- * "PlanCrafters SITE.DEFAULT_SETBACKS" on A1.0). A cited code prints nothing.
+ * internal source tag a lot drop-in stored (QA 2026-09-23 printed the
+ * internal defaults tag on A1.0). A cited code prints nothing.
  */
 export function setbacksWarning(
   site: Pick<SiteNode, 'setbacks' | 'setbacksSource'> | null,
@@ -611,7 +611,7 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
   }
   primitives.push(...stairTreads(scene, level, building))
 
-  // ── The utility services Bones placed, run schematically to the street ─
+  // ── The utility services a plugin located, run schematically to the street ─
   const streetSide = [...new Set([frontEdge, ...streetEdges])]
   const services = servicePrimitives({
     scene,

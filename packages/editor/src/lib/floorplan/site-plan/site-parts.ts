@@ -250,8 +250,7 @@ export interface OutdoorPart {
 /**
  * Flatwork: a slab that is site paving, not part of the building — the
  * generator's driveway and walks (`metadata.flatwork`), and a hand-drawn slab
- * named like one (the floor plans leave the same slabs out:
- * plugin-sheets `isSiteHardscape`).
+ * named like one (the floor plans leave the same slabs out).
  */
 const HARDSCAPE =
   /driveway|drive\s*way|\bdrive\b|approach|walkway|sidewalk|\bwalk\b|\bpath\b|apron|parking|\bpavers?\b/i

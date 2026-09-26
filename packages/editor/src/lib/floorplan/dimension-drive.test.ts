@@ -1,10 +1,6 @@
-import type { AnyNode, AnyNodeId } from '@pascal-app/core'
 import { describe, expect, test } from 'bun:test'
-import {
-  parseDimensionInput,
-  planDimensionDrive,
-  resolveDimensionDrive,
-} from './dimension-drive'
+import type { AnyNode, AnyNodeId } from '@pascal-app/core'
+import { parseDimensionInput, planDimensionDrive, resolveDimensionDrive } from './dimension-drive'
 
 const FOOT = 0.3048
 
@@ -96,7 +92,11 @@ describe('driving a wall length', () => {
     })
     expect(resolution.drivable).toBe(true)
     if (!resolution.drivable) return
-    expect(resolution.target).toMatchObject({ kind: 'wall-endpoint', wallId: 'wall_a', endpoint: 'end' })
+    expect(resolution.target).toMatchObject({
+      kind: 'wall-endpoint',
+      wallId: 'wall_a',
+      endpoint: 'end',
+    })
 
     const plan = planDimensionDrive({
       nodes,
@@ -355,8 +355,6 @@ describe('an opening width tag resizes the opening', () => {
       currentLength: 0.9144,
       nextLength: 1.2192,
     })
-    expect(plan?.updates).toEqual([
-      { id: 'win_1' as AnyNodeId, data: { width: 1.2192 } },
-    ])
+    expect(plan?.updates).toEqual([{ id: 'win_1' as AnyNodeId, data: { width: 1.2192 } }])
   })
 })

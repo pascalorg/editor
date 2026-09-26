@@ -3,13 +3,17 @@
 import {
   type AnyNodeId,
   type SiteNode,
+  sightTriangle,
+  streetCorners,
   type TerrainField,
+  terrainContours,
   terrainFieldOf,
   unionPolygons,
   useLiveNodeOverrides,
   useLiveTerrain,
   useRegistry,
-  useScene, terrainContours } from '@pascal-app/core'
+  useScene,
+} from '@pascal-app/core'
 import {
   backdropGradient,
   deepSkyColor,
@@ -23,10 +27,15 @@ import {
   useViewer,
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
-import { BufferAttribute, BufferGeometry, DoubleSide, type Group, Path, Shape, ShapeGeometry } from 'three'
-import { buildPatternedRibbon, PROPERTY_LINE_PATTERN, SETBACK_LINE_PATTERN, updateRibbonHeights } from './line-ribbon'
-import { resolveFrontEdge, setbackEnvelope } from './setbacks'
-import { sightTriangle, streetCorners } from '@pascal-app/core'
+import {
+  BufferAttribute,
+  BufferGeometry,
+  DoubleSide,
+  type Group,
+  Path,
+  Shape,
+  ShapeGeometry,
+} from 'three'
 import {
   cameraPosition,
   color,
@@ -37,7 +46,14 @@ import {
   vec2,
 } from 'three/tsl'
 import { MeshLambertNodeMaterial } from 'three/webgpu'
+import {
+  buildPatternedRibbon,
+  PROPERTY_LINE_PATTERN,
+  SETBACK_LINE_PATTERN,
+  updateRibbonHeights,
+} from './line-ribbon'
 import { getRecessedSlabGroundHoles } from './recessed-slab-ground-holes'
+import { resolveFrontEdge, setbackEnvelope } from './setbacks'
 import {
   buildDrapedPolyline,
   type DrapedPolyline,
@@ -91,6 +107,19 @@ const createBoundaryLineGeometry = (
  * is a disc, the ring is a loop, and the two intersect in up to four arcs), so a
  * range would either be the whole buffer or a list. The whole buffer is a few KB.
  */
+type Ribbons = {
+  property: BufferGeometry
+  envelope: BufferGeometry | null
+  triangles: BufferGeometry[]
+}
+
+function redrapeRibbons(r: Ribbons | null, field: TerrainField | null): void {
+  if (!r) return
+  updateRibbonHeights(r.property, field, Y_OFFSET)
+  if (r.envelope) updateRibbonHeights(r.envelope, field, Y_OFFSET + 0.01)
+  for (const g of r.triangles) updateRibbonHeights(g, field, Y_OFFSET + 0.012)
+}
+
 function markPositionsDirty(geometry: BufferGeometry): void {
   const attribute = geometry.getAttribute('position') as BufferAttribute
   attribute.needsUpdate = true
@@ -336,41 +365,63 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   useEffect(() => () => boundary?.geometry.dispose(), [boundary])
   const lineGeometry = boundary?.geometry ?? null
 
-  // The PROPERTY LINE as the standard line — dark, thick, a long dash and
-  // two dots — and the SETBACK lines in black dashes, both ribbons lying on
-  // the draped ground (line-ribbon.ts). Keyed on the same grid as the
+  // A site with drafted setbacks draws the PROPERTY LINE as the standard line —
+  // dark, thick, a long dash and two dots — and the SETBACK lines in black
+  // dashes, both ribbons lying on the draped ground (line-ribbon.ts). Any other
+  // site keeps the plain amber boundary. Keyed on the same grid as the
   // boundary; a dab mid-stroke moves the thin ring only, the ribbons follow
   // on the commit.
   // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the grid, not the field — see above.
   const ribbons = useMemo(() => {
-    if (!boundary || !polygonPoints || polygonPoints.length < 3) return null
+    const setbacks = node.setbacks
+    if (!setbacks || !boundary || !polygonPoints || polygonPoints.length < 3) return null
     const field = useLiveTerrain.getState().fieldOf(node.id) ?? persistedField
     const property = buildPatternedRibbon(boundary.ring.positions, PROPERTY_LINE_PATTERN, 0.22)
-    const setbacks = node.setbacks
     let envelopeGeometry: BufferGeometry | null = null
     const triangleGeometries: BufferGeometry[] = []
-    if (setbacks) {
-      const points = polygonPoints.map(([x, z]) => [x ?? 0, z ?? 0] as [number, number])
-      const front = resolveFrontEdge(points, node.frontEdge, node.northRotation ?? 0)
-      const streetEdges = node.streetEdges ?? []
-      const sightTriangleM = typeof node.sightTriangleFt === 'number' && node.sightTriangleFt > 0 ? node.sightTriangleFt * 0.3048 : 0
-      const envelope = setbackEnvelope(points, setbacks, front, { streetEdges, sightTriangleM })
-      if (envelope.length >= 3) {
-        const draped = buildDrapedPolyline({ points: envelope, field, lift: Y_OFFSET + 0.01, closed: true })
-        envelopeGeometry = buildPatternedRibbon(draped.positions, SETBACK_LINE_PATTERN, 0.1)
-      }
-      // the corner sight triangles, dashed like the setbacks
-      if (sightTriangleM > 0) {
-        for (const [a, b] of streetCorners(points, [front, ...streetEdges])) {
-          const tri = sightTriangle(points, a, b, sightTriangleM)
-          if (!tri) continue
-          const draped = buildDrapedPolyline({ points: [tri.corner, tri.a, tri.b], field, lift: Y_OFFSET + 0.012, closed: true })
-          triangleGeometries.push(buildPatternedRibbon(draped.positions, SETBACK_LINE_PATTERN, 0.08))
-        }
+    const points = polygonPoints.map(([x, z]) => [x ?? 0, z ?? 0] as [number, number])
+    const front = resolveFrontEdge(points, node.frontEdge, node.northRotation ?? 0)
+    const streetEdges = node.streetEdges ?? []
+    const sightTriangleM =
+      typeof node.sightTriangleFt === 'number' && node.sightTriangleFt > 0
+        ? node.sightTriangleFt * 0.3048
+        : 0
+    const envelope = setbackEnvelope(points, setbacks, front, { streetEdges, sightTriangleM })
+    if (envelope.length >= 3) {
+      const draped = buildDrapedPolyline({
+        points: envelope,
+        field,
+        lift: Y_OFFSET + 0.01,
+        closed: true,
+      })
+      envelopeGeometry = buildPatternedRibbon(draped.positions, SETBACK_LINE_PATTERN, 0.1)
+    }
+    // the corner sight triangles, dashed like the setbacks
+    if (sightTriangleM > 0) {
+      for (const [a, b] of streetCorners(points, [front, ...streetEdges])) {
+        const tri = sightTriangle(points, a, b, sightTriangleM)
+        if (!tri) continue
+        const draped = buildDrapedPolyline({
+          points: [tri.corner, tri.a, tri.b],
+          field,
+          lift: Y_OFFSET + 0.012,
+          closed: true,
+        })
+        triangleGeometries.push(buildPatternedRibbon(draped.positions, SETBACK_LINE_PATTERN, 0.08))
       }
     }
     return { property, envelope: envelopeGeometry, triangles: triangleGeometries }
-  }, [boundary, polygonPoints, node.setbacks, node.frontEdge, node.streetEdges, node.sightTriangleFt, node.northRotation, terrainKey, node.id])
+  }, [
+    boundary,
+    polygonPoints,
+    node.setbacks,
+    node.frontEdge,
+    node.streetEdges,
+    node.sightTriangleFt,
+    node.northRotation,
+    terrainKey,
+    node.id,
+  ])
   useEffect(
     () => () => {
       ribbons?.property.dispose()
@@ -389,15 +440,8 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   // polygon edit without resubscribing.
   const boundaryRef = useRef<{ geometry: BufferGeometry; ring: DrapedPolyline } | null>(null)
   boundaryRef.current = boundary
-  const ribbonsRef = useRef<{ property: BufferGeometry; envelope: BufferGeometry | null; triangles: BufferGeometry[] } | null>(null)
+  const ribbonsRef = useRef<Ribbons | null>(null)
   ribbonsRef.current = ribbons
-  const redrapeRibbons = (field: TerrainField | null) => {
-    const r = ribbonsRef.current
-    if (!r) return
-    updateRibbonHeights(r.property, field, Y_OFFSET)
-    if (r.envelope) updateRibbonHeights(r.envelope, field, Y_OFFSET + 0.01)
-    for (const g of r.triangles) updateRibbonHeights(g, field, Y_OFFSET + 0.012)
-  }
   useEffect(() => {
     let lastPatch = useLiveTerrain.getState().strokeOf(node.id)?.lastPatch ?? null
     return useLiveTerrain.subscribe((state) => {
@@ -413,7 +457,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
           const field = terrainFieldOf({ id: node.id, terrain: node.terrain })
           updateDrapedHeights(current.ring, field, Y_OFFSET)
           markPositionsDirty(current.geometry)
-          redrapeRibbons(field)
+          redrapeRibbons(ribbonsRef.current, field)
         }
         return
       }
@@ -422,7 +466,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       updateDrapedHeights(current.ring, stroke.field, Y_OFFSET)
       markPositionsDirty(current.geometry)
       // the property and setback ribbons follow the same dab
-      redrapeRibbons(stroke.field)
+      redrapeRibbons(ribbonsRef.current, stroke.field)
     })
   }, [node.id, node.terrain])
 
@@ -539,39 +583,85 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
         />
       )}
 
-      {showSiteSurfaces && (
+      {showSiteSurfaces && ribbons && (
         <>
-        {/* The property line: dark, thick, long dash + two dots, on the ground */}
-        {ribbons?.property && (
-          <mesh frustumCulled={false} geometry={ribbons.property} raycast={noopRaycast} renderOrder={9}>
-            <meshBasicMaterial color="#1c1917" depthWrite={false} side={DoubleSide} toneMapped={false} />
+          {/* The property line: dark, thick, long dash + two dots, on the ground */}
+          <mesh
+            frustumCulled={false}
+            geometry={ribbons.property}
+            raycast={noopRaycast}
+            renderOrder={9}
+          >
+            <meshBasicMaterial
+              color="#1c1917"
+              depthWrite={false}
+              side={DoubleSide}
+              toneMapped={false}
+            />
           </mesh>
-        )}
-        {/* The setback envelope: black dashes */}
-        {ribbons?.envelope && (
-          <mesh frustumCulled={false} geometry={ribbons.envelope} raycast={noopRaycast} renderOrder={9}>
-            <meshBasicMaterial color="#000000" depthWrite={false} opacity={0.85} side={DoubleSide} toneMapped={false} transparent />
-          </mesh>
-        )}
-        {/* The contour lines: thin, translucent, barely black, on the ground */}
-        {contourGeometry && (
-          // @ts-ignore
-          <lineSegments frustumCulled={false} geometry={contourGeometry} raycast={noopRaycast} renderOrder={8}>
-            <lineBasicMaterial color="#000000" depthWrite={false} opacity={0.22} toneMapped={false} transparent />
-          </lineSegments>
-        )}
-        {/* The corner sight triangles */}
-        {ribbons?.triangles.map((g, i) => (
-          <mesh frustumCulled={false} geometry={g} key={i} raycast={noopRaycast} renderOrder={9}>
-            <meshBasicMaterial color="#000000" depthWrite={false} opacity={0.85} side={DoubleSide} toneMapped={false} transparent />
-          </mesh>
-        ))}
-        {/* The thin ring the sculpt tool moves live */}
-        {/* @ts-ignore */}
-        <line frustumCulled={false} geometry={lineGeometry} renderOrder={8}>
-          <lineBasicMaterial color="#1c1917" opacity={0.5} transparent />
-        </line>
+          {/* The setback envelope: black dashes */}
+          {ribbons.envelope && (
+            <mesh
+              frustumCulled={false}
+              geometry={ribbons.envelope}
+              raycast={noopRaycast}
+              renderOrder={9}
+            >
+              <meshBasicMaterial
+                color="#000000"
+                depthWrite={false}
+                opacity={0.85}
+                side={DoubleSide}
+                toneMapped={false}
+                transparent
+              />
+            </mesh>
+          )}
+          {/* The corner sight triangles */}
+          {ribbons.triangles.map((g, i) => (
+            <mesh frustumCulled={false} geometry={g} key={i} raycast={noopRaycast} renderOrder={9}>
+              <meshBasicMaterial
+                color="#000000"
+                depthWrite={false}
+                opacity={0.85}
+                side={DoubleSide}
+                toneMapped={false}
+                transparent
+              />
+            </mesh>
+          ))}
+          {/* The thin ring the sculpt tool moves live */}
+          {/* @ts-expect-error */}
+          <line frustumCulled={false} geometry={lineGeometry} renderOrder={8}>
+            <lineBasicMaterial color="#1c1917" opacity={0.5} transparent />
+          </line>
         </>
+      )}
+
+      {/* Simple boundary line */}
+      {showSiteSurfaces && !ribbons && (
+        // @ts-expect-error
+        <line frustumCulled={false} geometry={lineGeometry} renderOrder={9}>
+          <lineBasicMaterial color="#f59e0b" linewidth={2} opacity={0.6} transparent />
+        </line>
+      )}
+
+      {/* The contour lines: thin, translucent, barely black, on the ground */}
+      {showSiteSurfaces && contourGeometry && (
+        <lineSegments
+          frustumCulled={false}
+          geometry={contourGeometry}
+          raycast={noopRaycast}
+          renderOrder={8}
+        >
+          <lineBasicMaterial
+            color="#000000"
+            depthWrite={false}
+            opacity={0.22}
+            toneMapped={false}
+            transparent
+          />
+        </lineSegments>
       )}
     </group>
   )

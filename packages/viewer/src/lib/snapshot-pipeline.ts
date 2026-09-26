@@ -296,7 +296,13 @@ export async function createSnapshotPipeline({
         // after the render, before the asynchronous GPU readback begins.
         await Promise.resolve()
 
-        return encodeCapture(renderer, renderTarget, captureWidth, captureHeight, { captureMode, cropRegion, standardW, standardH, mime })
+        return encodeCapture(renderer, renderTarget, captureWidth, captureHeight, {
+          captureMode,
+          cropRegion,
+          standardW,
+          standardH,
+          mime,
+        })
       },
       dispose: () => {
         pipeline.dispose()
@@ -380,10 +386,7 @@ async function encodeCapture(
       tightPixels = new Uint8ClampedArray(tightTotal)
       for (let row = 0; row < captureHeight; row++) {
         tightPixels.set(
-          pixels.subarray(
-            row * paddedBytesPerRow,
-            row * paddedBytesPerRow + actualBytesPerRow,
-          ),
+          pixels.subarray(row * paddedBytesPerRow, row * paddedBytesPerRow + actualBytesPerRow),
           row * actualBytesPerRow,
         )
       }
@@ -448,9 +451,7 @@ async function encodeCapture(
     outW = standardW
     outH = standardH
     const offscreen = new OffscreenCanvas(outW, outH)
-    offscreen
-      .getContext('2d')!
-      .drawImage(srcCanvas, sx, sy, sWidth, sHeight, 0, 0, outW, outH)
+    offscreen.getContext('2d')!.drawImage(srcCanvas, sx, sy, sWidth, sHeight, 0, 0, outW, outH)
     blob = await offscreen.convertToBlob(encoding)
   }
 
@@ -492,7 +493,9 @@ export async function createPlainSnapshotPipeline({
           renderTarget.setSize(captureWidth, captureHeight)
         }
         const previousBackground = scene.background
-        const previousClear = (renderer as unknown as { getClearColor: (target: Color) => Color }).getClearColor(new Color())
+        const previousClear = (
+          renderer as unknown as { getClearColor: (target: Color) => Color }
+        ).getClearColor(new Color())
         const previousAlpha = renderer.getClearAlpha()
         try {
           scene.background = null
@@ -500,7 +503,9 @@ export async function createPlainSnapshotPipeline({
           renderer.setRenderTarget(renderTarget)
           // outside the frame loop the async render is the one that submits
           // its work and settles once the GPU took it
-          const asyncRender = (renderer as unknown as { renderAsync?: (s: Scene, c: Camera) => Promise<void> }).renderAsync
+          const asyncRender = (
+            renderer as unknown as { renderAsync?: (s: Scene, c: Camera) => Promise<void> }
+          ).renderAsync
           if (asyncRender) await asyncRender.call(renderer, scene, camera)
           else renderer.render(scene, camera)
         } finally {
@@ -511,9 +516,17 @@ export async function createPlainSnapshotPipeline({
         await Promise.resolve()
         // a readback that never returns must not hold a caller for the session
         return Promise.race([
-          encodeCapture(renderer, renderTarget, captureWidth, captureHeight, { captureMode, cropRegion, standardW, standardH }),
+          encodeCapture(renderer, renderTarget, captureWidth, captureHeight, {
+            captureMode,
+            cropRegion,
+            standardW,
+            standardH,
+          }),
           new Promise<SnapshotCaptureResult>((_, reject) =>
-            setTimeout(() => reject(new Error('the plain capture readback did not return within 12 s')), 12000),
+            setTimeout(
+              () => reject(new Error('the plain capture readback did not return within 12 s')),
+              12000,
+            ),
           ),
         ])
       },

@@ -46,7 +46,11 @@ function sample(positions: Float32Array, cum: number[], s: number): { p: V3; d: 
  * Re-drape a ribbon on a changed field: every vertex keeps its XZ and takes
  * the ground's height there plus `lift` (a sculpt stroke mid-flight).
  */
-export function updateRibbonHeights(geometry: BufferGeometry, field: TerrainField | null, lift: number): void {
+export function updateRibbonHeights(
+  geometry: BufferGeometry,
+  field: TerrainField | null,
+  lift: number,
+): void {
   const attribute = geometry.getAttribute('position') as BufferAttribute | undefined
   if (!attribute) return
   const array = attribute.array as Float32Array

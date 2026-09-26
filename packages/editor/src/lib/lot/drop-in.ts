@@ -2,9 +2,9 @@
  * Lot drop-in — the store-aware half. One call does what "click a button,
  * the lot drops in" needs:
  *
- *   1. `/api/parcel/resolve` — address (or a picked suggestion's
+ *   1. `resolve` — address (or a picked suggestion's
  *      coordinates) → the real parcel ring, APN, county, zoning.
- *   2. `/api/parcel/roads` — the streets around the lot from OpenStreetMap,
+ *   2. `roads` — the streets around the lot from OpenStreetMap,
  *      in the lot's own frame (fail-soft: no roads is not an error).
  *   3. `sitePatchFromParcel` — the site node patch: ring, address,
  *      provenance, the street-facing front edge, planning-default setbacks
@@ -12,14 +12,14 @@
  *   4. The scene's site node is updated (created at the root when the scene
  *      has none) and a building that fell outside the new ring is
  *      re-centred on it — `building.position` only, never the walls.
- *   5. `/api/parcel/elevation` — USGS ground over the lot into the site's
+ *   5. `elevation` — USGS ground over the lot into the site's
  *      heightfield (`site.terrain`, terrain.ts; fail-soft, flat lots write
- *      nothing), so the generator's foundation and Bones' footings can read
- *      the hill.
+ *      nothing), so a foundation can read the hill.
  *
  * Used by the Lot rail panel, the Generate panel (drop in, then generate)
  * and the Site inspector's "Find parcel", so every path behaves the same.
  * Nothing here is invented: a lookup that fails says why and writes nothing.
+ * The calls go to the host's parcel provider (`setParcelProvider`).
  */
 import {
   type AnyNode,
@@ -34,28 +34,14 @@ import {
   buildSitePlanDrawing,
 } from '../floorplan/site-plan/build-site-plan-drawing'
 import {
-  type DropInInput,
-  describeLotSummary,
-  type LotRoad,
-  type LotSummary,
-  type ParcelResolveData,
-  sitePatchFromParcel,
-} from './lot-patch'
-import {
-  describeTerrainSample,
-  sampleLotTerrain,
-  type TerrainSampleResult,
-  type TerrainSampleSummary,
-} from './terrain'
-import {
   answered,
   type CodeBasisData,
   contourLinesFromDossier,
+  type Dossier,
   describeDossier,
   type ElevationData,
-  type Dossier,
-  fetchDossier,
   type FloodData,
+  fetchDossier,
   frontageSegmentsMetres,
   type ParcelData,
   parcelRingMetres,
@@ -64,6 +50,21 @@ import {
   siteFactsFromDossier,
   type ZoningData,
 } from './dossier'
+import {
+  type DropInInput,
+  describeLotSummary,
+  type LotRoad,
+  type LotSummary,
+  type ParcelResolveData,
+  sitePatchFromParcel,
+} from './lot-patch'
+import { getParcelProvider, NO_PARCEL_SERVICE, type ParcelProvider } from './parcel-provider'
+import {
+  describeTerrainSample,
+  sampleLotTerrain,
+  type TerrainSampleResult,
+  type TerrainSampleSummary,
+} from './terrain'
 
 export interface LotDropInResult {
   ok: boolean
@@ -96,19 +97,11 @@ export interface DropInOptions {
   terrainDeadlineMs?: number
   /** Skip the Pascal Map dossier (the parcel / roads / elevation routes alone). */
   dossier?: boolean
-  fetchImpl?: typeof fetch
+  /** Default = the provider the host set. */
+  provider?: ParcelProvider
 }
 
 type RoadsResponse = { ok: boolean; reason?: string; roads?: LotRoad[] }
-
-async function postJson<T>(fetchImpl: typeof fetch, url: string, body: unknown): Promise<T> {
-  const response = await fetchImpl(url, {
-    body: JSON.stringify(body),
-    headers: { 'content-type': 'application/json' },
-    method: 'POST',
-  })
-  return (await response.json()) as T
-}
 
 /** The scene's site node — the requested one, else the first root site. */
 export function findSiteNode(siteId?: string): SiteNode | null {
@@ -129,7 +122,8 @@ export async function dropInLot(
   input: DropInInput,
   options: DropInOptions = {},
 ): Promise<LotDropInResult> {
-  const fetchImpl = options.fetchImpl ?? fetch
+  const provider = options.provider ?? getParcelProvider()
+  if (!provider) return { ok: false, error: 'no parcel service', message: NO_PARCEL_SERVICE }
   const address = (input.address ?? '').trim()
   const hasCoords = Number.isFinite(input.latitude) && Number.isFinite(input.longitude)
   if (!address && !hasCoords)
@@ -143,7 +137,7 @@ export async function dropInLot(
   let dossier: Dossier | null = null
   let dossierFailure = ''
   if (options.dossier !== false) {
-    const read = await fetchDossier(fetchImpl, {
+    const read = await fetchDossier(provider, {
       address,
       ...(hasCoords ? { latitude: input.latitude, longitude: input.longitude } : {}),
     })
@@ -156,13 +150,16 @@ export async function dropInLot(
     const el = dossier ? answered<ElevationData>(dossier, 'elevation') : null
     if (dossier && el?.terrain_status === 'computing' && options.terrainDeadlineMs !== 0) {
       await new Promise((r) => setTimeout(r, Math.min(30_000, options.terrainDeadlineMs ?? 20_000)))
-      const again = await fetchDossier(fetchImpl, {
+      const again = await fetchDossier(provider, {
         address,
         ...(hasCoords ? { latitude: input.latitude, longitude: input.longitude } : {}),
         layers: ['elevation'],
       })
       if (again.ok && again.dossier.layers?.elevation) {
-        dossier = { ...dossier, layers: { ...dossier.layers, elevation: again.dossier.layers.elevation } }
+        dossier = {
+          ...dossier,
+          layers: { ...dossier.layers, elevation: again.dossier.layers.elevation },
+        }
       }
     }
   } else dossierFailure = 'skipped'
@@ -171,11 +168,16 @@ export async function dropInLot(
     dossier && Number.isFinite(dossier.point?.lng) && Number.isFinite(dossier.point?.lat)
       ? [dossier.point.lng, dossier.point.lat]
       : null
-  const dossierRing = dossierParcel && dossierOrigin ? parcelRingMetres(dossierParcel, dossierOrigin) : []
+  const dossierRing =
+    dossierParcel && dossierOrigin ? parcelRingMetres(dossierParcel, dossierOrigin) : []
 
   let data: ParcelResolveData
   if (dossier && dossierParcel && dossierOrigin && dossierRing.length >= 3) {
-    const boundaries = answered<{ state?: string | null; zip?: string | null; county?: { name?: string | null } }>(dossier, 'boundaries')
+    const boundaries = answered<{
+      state?: string | null
+      zip?: string | null
+      county?: { name?: string | null }
+    }>(dossier, 'boundaries')
     const zoning = answered<ZoningData>(dossier, 'zoning')
     const state = boundaries?.state ?? input.state
     data = {
@@ -185,7 +187,8 @@ export async function dropInLot(
       state: state ?? undefined,
       zip: dossierParcel.situs_address?.zip ?? boundaries?.zip ?? undefined,
       zoning: zoning?.district,
-      lotAreaSqFt: typeof dossierParcel.area_m2 === 'number' ? dossierParcel.area_m2 * 10.7639 : undefined,
+      lotAreaSqFt:
+        typeof dossierParcel.area_m2 === 'number' ? dossierParcel.area_m2 * 10.7639 : undefined,
       originLngLat: dossierOrigin,
       geocodedBy: 'pascal-map',
       matchPrecision: dossier.address?.precision,
@@ -202,12 +205,12 @@ export async function dropInLot(
     }
   } else {
     try {
-      data = await postJson<ParcelResolveData>(fetchImpl, '/api/parcel/resolve', {
+      data = (await provider('resolve', {
         address,
         ...(hasCoords
           ? { latitude: input.latitude, longitude: input.longitude, state: input.state }
           : {}),
-      })
+      })) as ParcelResolveData
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Parcel lookup failed.'
       return { ok: false, error: message, message }
@@ -229,7 +232,8 @@ export async function dropInLot(
               ? frontageSegmentsMetres(dossierParcel, dossierOrigin)
               : [],
           setbacks,
-          setbacksSource: zoning && setbacks ? setbacksCitation(zoning, zoningSection?.source) : undefined,
+          setbacksSource:
+            zoning && setbacks ? setbacksCitation(zoning, zoningSection?.source) : undefined,
           dimensionalNote: zoning?.dimensional_note ?? null,
           zone: zoning?.district,
           facts: siteFactsFromDossier(dossier),
@@ -248,12 +252,12 @@ export async function dropInLot(
     for (let attempt = 0; attempt < 2 && !roads; attempt++) {
       try {
         const [lng, lat] = data.originLngLat
-        const r = await postJson<RoadsResponse>(fetchImpl, '/api/parcel/roads', {
+        const r = (await provider('roads', {
           latitude: lat,
           longitude: lng,
           originLngLat: data.originLngLat,
           radiusM: options.roadsRadiusM,
-        })
+        })) as RoadsResponse
         if (r.ok && Array.isArray(r.roads)) {
           roads = r.roads
           roadsFailure = ''
@@ -282,7 +286,12 @@ export async function dropInLot(
   // the surveyed contour lines ride the site with the patch (the site plan
   // draws them over the heightfield's own); absent without 3DEP lines
   const contours = dossier && dossierOrigin ? contourLinesFromDossier(dossier, dossierOrigin) : null
-  useScene.getState().updateNode(site.id as AnyNodeId, { ...computed.patch, terrainContours: contours ?? undefined } as Partial<AnyNode>)
+  useScene
+    .getState()
+    .updateNode(
+      site.id as AnyNodeId,
+      { ...computed.patch, terrainContours: contours ?? undefined } as Partial<AnyNode>,
+    )
 
   // The ground over the lot — fail-soft. A sloping lot writes the
   // heightfield; a flat one (or a failed read) clears any terrain the
@@ -292,7 +301,7 @@ export async function dropInLot(
   if (options.terrain !== false) {
     const read: TerrainSampleResult = data.originLngLat
       ? await sampleLotTerrain(computed.patch.polygon?.points ?? [], data.originLngLat, {
-          fetchImpl,
+          provider,
           ...(options.terrainDeadlineMs ? { deadlineMs: options.terrainDeadlineMs } : {}),
         })
       : { ok: false, reason: 'no parcel origin' }
@@ -355,7 +364,9 @@ export async function dropInLot(
     recentred ? 'building re-centred' : '',
     roadsFailure && roadsFailure !== 'skipped' ? `roads unavailable (${roadsFailure})` : '',
     describeTerrainSample(terrain, terrainFailure),
-    dossierFailure && dossierFailure !== 'skipped' ? `Pascal Map unavailable (${dossierFailure})` : '',
+    dossierFailure && dossierFailure !== 'skipped'
+      ? `Pascal Map unavailable (${dossierFailure})`
+      : '',
     ...(dossier ? dossierHeadline(dossier) : []),
   ]
   return {
@@ -384,7 +395,9 @@ function dossierHeadline(dossier: Dossier): string[] {
   }
   const code = answered<CodeBasisData>(dossier, 'code_basis')
   if (typeof code?.wind_speed_mph === 'number') {
-    out.push(`wind ${code.wind_speed_mph} mph${code.wind_borne_debris_region ? ' (debris region)' : ''}${code.climate_zone_iecc ? `, zone ${code.climate_zone_iecc}` : ''}`)
+    out.push(
+      `wind ${code.wind_speed_mph} mph${code.wind_borne_debris_region ? ' (debris region)' : ''}${code.climate_zone_iecc ? `, zone ${code.climate_zone_iecc}` : ''}`,
+    )
   }
   return out
 }

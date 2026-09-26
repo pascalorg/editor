@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { useViewer } from '@pascal-app/viewer'
 import { Vector2 } from 'three'
 import { CanvasTarget, type WebGPURenderer } from 'three/webgpu'
-import { useViewer } from '@pascal-app/viewer'
 import { atCaptureSize, presentFinished, pumpFrames, tileGrid } from './thumbnail-generator'
 
 type FakeCanvas = { width: number; height: number; style: Record<string, string> }

@@ -1,5 +1,5 @@
-import type { AnyNode, AnyNodeId } from '@pascal-app/core'
 import { describe, expect, test } from 'bun:test'
+import type { AnyNode, AnyNodeId } from '@pascal-app/core'
 import { doorSchedule, formatScheduleLength, roomSchedule, windowSchedule } from './schedules'
 
 function fixture(): Record<string, AnyNode> {

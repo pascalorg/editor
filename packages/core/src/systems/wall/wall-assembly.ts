@@ -5,31 +5,22 @@
  *
  * ## Where the numbers come from
  *
- * Every thickness below is copied from the assembly data that
- * `@pascal-app/plugin-bones` already ships (read-only):
- *   - `node_modules/@pascal-app/plugin-bones/data/wall-assemblies.json`
- *     (`version` 2026-08-14, keyed to the 2021 IRC), consumed by
- *     `src/engines/wall-layers.ts`.
- *   - `node_modules/@pascal-app/plugin-bones/src/engines/cmu.ts:59-60` for the
- *     actual CMU unit depth.
- * Each constant carries its citation. Anything NOT found in bones and not
- * covered by a standard we can name is marked `unverified` on the preset and
- * surfaced in the inspector — we do not invent thicknesses.
+ * Every thickness below is keyed to the 2021 IRC (ASTM C90 for the CMU unit
+ * depth), and each constant carries its citation. Anything not covered by a
+ * standard we can name is marked `unverified` on the preset and surfaced in
+ * the inspector — we do not invent thicknesses.
  *
- * bones' own disclaimer applies and is repeated here: this is a drafting aid,
- * not engineering. Values are typical/approximate — verify with the AHJ.
+ * This is a drafting aid, not engineering. Values are typical/approximate — verify with the AHJ.
  *
  * ## Stack order
  *
  * Outside → inside: exterior finish, [air space], sheathing, framing, interior
- * finish. That is bones' `exterior.stackOrderInsideOut` read backwards
- * (2021 IRC R703.1 / R703.2 / R703.3).
+ * finish (2021 IRC R703.1 / R703.2 / R703.3).
  *
- * The weather-resistive barrier (IRC R703.2) is deliberately NOT a layer: bones
- * models it at 0.01 in actual (rendered 1/16 in "symbolic"). It has no drawable
- * thickness at plan scale and adding a symbolic one would make `wall.thickness`
- * disagree with reality. Same for the vapour retarder (bones records it at
- * thickness 0).
+ * The weather-resistive barrier (IRC R703.2) is deliberately NOT a layer: at
+ * about 0.01 in it has no drawable thickness at plan scale, and adding a
+ * symbolic one would make `wall.thickness` disagree with reality. Same for the
+ * vapour retarder.
  *
  * ## Which side is exterior
  *
@@ -69,41 +60,41 @@ const inches = (value: number) => value * IN
 // CITED LAYER THICKNESSES (metres)
 // ============================================================================
 
-/** 1/2 in gypsum board. 2021 IRC R702.3.5 + Table R702.3.5 (bones interior.layers). */
+/** 1/2 in gypsum board. 2021 IRC R702.3.5 + Table R702.3.5. */
 export const GYPSUM_HALF = inches(0.5)
-/** 5/8 in gypsum board. 2021 IRC Table R702.3.5 (bones interior.gypsumThicknessOptionsIn). */
+/** 5/8 in gypsum board. 2021 IRC Table R702.3.5. */
 export const GYPSUM_FIVE_EIGHTHS = inches(0.625)
-/** 7/16 in wood structural panel, field default. 2021 IRC Table R602.3(3) (bones exterior.sheathing). */
+/** 7/16 in wood structural panel, field default. 2021 IRC Table R602.3(3). */
 export const WSP_SHEATHING = inches(0.4375)
-/** 1/2 in glass-mat gypsum sheathing. bones exterior.sheathing.gypsumSheathingOption (IRC R702.3.5 + Table R703.3(1)). */
+/** 1/2 in glass-mat gypsum sheathing. 2021 IRC R702.3.5 + Table R703.3(1). */
 export const GYPSUM_SHEATHING = inches(0.5)
-/** 2x4 stud, actual 3-1/2 in. 2021 IRC R602.3 / Table R602.3(5) (bones interior.layers framing row). */
+/** 2x4 stud, actual 3-1/2 in. 2021 IRC R602.3 / Table R602.3(5). */
 export const STUD_2X4 = inches(3.5)
-/** 2x6 stud, actual 5-1/2 in. Same source as STUD_2X4 (bones exterior.baseLayers insulation row cites 5.5 in 2x6 bays). */
+/** 2x6 stud, actual 5-1/2 in. Same source as STUD_2X4. */
 export const STUD_2X6 = inches(5.5)
-/** Vinyl / wood lap siding bounding depth, 3/4 in. 2021 IRC R703.11 / R703.5 + Table R703.3(1) (bones claddings.vinyl / .wood). */
+/** Vinyl / wood lap siding bounding depth, 3/4 in. 2021 IRC R703.11 / R703.5 + Table R703.3(1). */
 export const SIDING_LAP = inches(0.75)
-/** Fiber cement lap board, 5/16 in board. 2021 IRC R703.10.2 + Table R703.3(1) (bones claddings.fiberCement). */
+/** Fiber cement lap board, 5/16 in board. 2021 IRC R703.10.2 + Table R703.3(1). */
 export const FIBER_CEMENT = inches(0.3125)
-/** 3-coat cement plaster, 7/8 in. 2021 IRC R703.7 + Table R702.1(1) (bones claddings.stucco). */
+/** 3-coat cement plaster, 7/8 in. 2021 IRC R703.7 + Table R702.1(1). */
 export const STUCCO_3_COAT = inches(0.875)
-/** Anchored brick wythe, nominal 4 in = 3-5/8 actual. 2021 IRC R703.8 + Table R703.3(1) (bones claddings.brickVeneer). */
+/** Anchored brick wythe, nominal 4 in = 3-5/8 actual. 2021 IRC R703.8 + Table R703.3(1). */
 export const BRICK_VENEER = inches(3.625)
-/** Nominal 1 in air space behind brick. 2021 IRC Table R703.8.4(1) + R703.8.4.2 (bones claddings.brickVeneer). */
+/** Nominal 1 in air space behind brick. 2021 IRC Table R703.8.4(1) + R703.8.4.2. */
 export const BRICK_AIR_SPACE = inches(1.0)
-/** Actual depth of a nominal 8 in CMU unit, 7-5/8 in. ASTM C90 — bones `src/engines/cmu.ts:59-60` (`BLOCK_DEPTH_ACTUAL`). */
+/** Actual depth of a nominal 8 in CMU unit, 7-5/8 in. ASTM C90. */
 export const CMU_8_ACTUAL = inches(7.625)
 /**
  * 1x3 furring strip laid flat, 3/4 in. UNVERIFIED as an assembly thickness:
- * bones only names 3/4 in vertical furring in passing, as a cladding
- * attachment over foam (R703.15), not as a CMU furring layer. 3/4 in is the
- * actual thickness of nominal 1x lumber.
+ * the code names 3/4 in vertical furring only as a cladding attachment over
+ * foam (R703.15), not as a CMU furring layer. 3/4 in is the actual thickness
+ * of nominal 1x lumber.
  */
 export const FURRING_1X = inches(0.75)
 /**
- * Adhered stone veneer, 2-5/8 in. UNVERIFIED: bones ships no stone cladding
- * entry. 2-5/8 in is the maximum unit thickness for adhered masonry veneer,
- * but we have no cited bones value, so any preset using it is flagged.
+ * Adhered stone veneer, 2-5/8 in. UNVERIFIED: 2-5/8 in is the maximum unit
+ * thickness for adhered masonry veneer, not a cited assembly value, so any
+ * preset using it is flagged.
  */
 export const STONE_VENEER_UNVERIFIED = inches(2.625)
 
@@ -331,7 +322,7 @@ export type WallAssemblyPreset = {
   assembly: WallAssembly
   /**
    * Present when at least one thickness in this preset could not be cited to
-   * bones or to a named standard. The inspector shows this verbatim.
+   * a named standard. The inspector shows this verbatim.
    */
   unverified?: string
 }
@@ -370,8 +361,8 @@ export const WALL_ASSEMBLY_PRESETS: readonly WallAssemblyPreset[] = [
     assembly: {
       preset: 'exterior-2x6-stucco',
       exterior: { finish: 'stucco', thickness: STUCCO_3_COAT },
-      // bones flags glass-mat gypsum sheathing as the typical substrate under
-      // stucco; kept structural (7/16 WSP) here because bracing normally is.
+      // Glass-mat gypsum sheathing is the typical substrate under stucco;
+      // kept structural (7/16 WSP) here because bracing normally is.
       sheathing: { material: 'osb', thickness: WSP_SHEATHING },
       framing: { kind: 'wood', depth: STUD_2X6 },
       interior: { finish: 'drywall', thickness: GYPSUM_HALF },
@@ -384,7 +375,7 @@ export const WALL_ASSEMBLY_PRESETS: readonly WallAssemblyPreset[] = [
     category: 'exterior',
     assembly: {
       preset: 'exterior-2x6-brick',
-      // 3-5/8 wythe + 1 in air space = bones' assemblyOffsetIn 4.625.
+      // 3-5/8 wythe + 1 in air space = a 4.625 in assembly offset.
       exterior: { finish: 'brick', thickness: BRICK_VENEER + BRICK_AIR_SPACE },
       sheathing: { material: 'osb', thickness: WSP_SHEATHING },
       framing: { kind: 'wood', depth: STUD_2X6 },
@@ -396,7 +387,7 @@ export const WALL_ASSEMBLY_PRESETS: readonly WallAssemblyPreset[] = [
     id: 'interior-2x4-drywall',
     label: 'Interior 2x4 — drywall both sides',
     category: 'interior',
-    // bones interior.totalThicknessIn = 4.5 in — this preset reproduces it.
+    // 4.5 in total, the typical 2x4 partition.
     assembly: {
       preset: 'interior-2x4-drywall',
       framing: { kind: 'wood', depth: STUD_2X4 },
@@ -427,7 +418,7 @@ export const WALL_ASSEMBLY_PRESETS: readonly WallAssemblyPreset[] = [
       interior: { finish: 'drywall', thickness: FURRING_1X + GYPSUM_HALF },
     },
     unverified:
-      '1x3 furring at 3/4 in is nominal-lumber practice, not a bones-cited assembly layer; the furring and the 1/2 in board are drawn as one 1-1/4 in interior finish.',
+      '1x3 furring at 3/4 in is nominal-lumber practice, not a code-cited assembly layer; the furring and the 1/2 in board are drawn as one 1-1/4 in interior finish.',
   },
   {
     id: 'cmu-8-furred-drywall',
@@ -443,7 +434,7 @@ export const WALL_ASSEMBLY_PRESETS: readonly WallAssemblyPreset[] = [
       interior: { finish: 'drywall', thickness: FURRING_1X + GYPSUM_HALF },
     },
     unverified:
-      '1x3 furring at 3/4 in is nominal-lumber practice, not a bones-cited assembly layer; the furring and the 1/2 in board are drawn as one 1-1/4 in interior finish.',
+      '1x3 furring at 3/4 in is nominal-lumber practice, not a code-cited assembly layer; the furring and the 1/2 in board are drawn as one 1-1/4 in interior finish.',
   },
 ] as const
 
@@ -604,6 +595,7 @@ export function calculateLevelLayerMiters(
   getOffsets: (wall: WallNode) => number[],
 ): WallLayerMiterData {
   const byWall: WallLayerMiterData['byWall'] = new Map()
+  if (!walls.some((wall) => wall.assembly)) return { byWall }
   const offsetCache = new Map<string, number[]>()
   const offsetsFor = (wall: WallNode) => {
     let cached = offsetCache.get(wall.id)

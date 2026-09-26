@@ -1,4 +1,11 @@
-import type { AnyNode, AnyNodeId, DoorNode, LevelNode, WallNode, WindowNode } from '@pascal-app/core'
+import type {
+  AnyNode,
+  AnyNodeId,
+  DoorNode,
+  LevelNode,
+  WallNode,
+  WindowNode,
+} from '@pascal-app/core'
 
 /**
  * Deterministic door / window marks per level — WS3.

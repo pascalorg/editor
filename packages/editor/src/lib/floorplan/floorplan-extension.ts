@@ -90,6 +90,8 @@ export type FloorplanNodeExtension<N extends AnyNode = AnyNode> = {
     nodes: Readonly<Record<string, AnyNode>>
     levelId: AnyNodeId
     unit: 'metric' | 'imperial'
+    /** A drafted sheet's schedule: marks match the sheet's tags. */
+    drafting?: boolean
   }) => FloorplanSchedule | null
   linkedLevelIds?: (node: N) => readonly AnyNodeId[]
   resolveForDrawing?: (args: {

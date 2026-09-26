@@ -481,8 +481,26 @@ function createGuardFenceParts(fence: FenceNode): FenceSlotParts {
   }
 
   // the cap rail flat over the posts and the 2x4 top rail on edge under it
-  rail.push(...createFenceCurveBlockParts(fence, 0, 1, capBottom + GUARD_CAP_T / 2, GUARD_CAP_T, GUARD_CAP_W))
-  rail.push(...createFenceCurveBlockParts(fence, 0, 1, topRailBottom + GUARD_RAIL_D / 2, GUARD_RAIL_D, GUARD_RAIL_T))
+  rail.push(
+    ...createFenceCurveBlockParts(
+      fence,
+      0,
+      1,
+      capBottom + GUARD_CAP_T / 2,
+      GUARD_CAP_T,
+      GUARD_CAP_W,
+    ),
+  )
+  rail.push(
+    ...createFenceCurveBlockParts(
+      fence,
+      0,
+      1,
+      topRailBottom + GUARD_RAIL_D / 2,
+      GUARD_RAIL_D,
+      GUARD_RAIL_T,
+    ),
+  )
 
   const postHalfT = postW / 2 / length
   const clearOfPosts = (t: number, halfT: number) =>
@@ -491,26 +509,46 @@ function createGuardFenceParts(fence: FenceNode): FenceSlotParts {
   if (infillKind === 'balusters') {
     // the 2x4 bottom rail `clearance` over the deck, the balusters on it
     const bottomRailTop = clearance + GUARD_RAIL_D
-    base.push(...createFenceCurveBlockParts(fence, 0, 1, clearance + GUARD_RAIL_D / 2, GUARD_RAIL_D, GUARD_RAIL_T))
+    base.push(
+      ...createFenceCurveBlockParts(
+        fence,
+        0,
+        1,
+        clearance + GUARD_RAIL_D / 2,
+        GUARD_RAIL_D,
+        GUARD_RAIL_T,
+      ),
+    )
     const balH = Math.max(topRailBottom - bottomRailTop, 0.05)
     const pitch = GUARD_BALUSTER + gap
     const halfT = GUARD_BALUSTER / 2 / length
     for (let s = pitch; s < length - GUARD_BALUSTER; s += pitch) {
       const t = s / length
       if (!clearOfPosts(t, halfT)) continue
-      const part = createFenceCurveBlockPart(fence, t - halfT, t + halfT, bottomRailTop + balH / 2, balH, GUARD_BALUSTER)
+      const part = createFenceCurveBlockPart(
+        fence,
+        t - halfT,
+        t + halfT,
+        bottomRailTop + balH / 2,
+        balH,
+        GUARD_BALUSTER,
+      )
       if (part) infill.push(part)
     }
   } else if (infillKind === 'cable') {
     // ½ in cables `gap` apart from `clearance` up to under the top rail
     for (let y = clearance; y < topRailBottom - GUARD_CABLE; y += gap) {
-      infill.push(...createFenceCurveBlockParts(fence, 0, 1, y + GUARD_CABLE / 2, GUARD_CABLE, GUARD_CABLE))
+      infill.push(
+        ...createFenceCurveBlockParts(fence, 0, 1, y + GUARD_CABLE / 2, GUARD_CABLE, GUARD_CABLE),
+      )
     }
   } else {
     // boards `gap` apart from `clearance` up to under the top rail
     const boardT = Math.max(fence.thickness, 0.012)
     for (let y = clearance; y + GUARD_BOARD_D <= topRailBottom + 1e-6; y += GUARD_BOARD_D + gap) {
-      infill.push(...createFenceCurveBlockParts(fence, 0, 1, y + GUARD_BOARD_D / 2, GUARD_BOARD_D, boardT))
+      infill.push(
+        ...createFenceCurveBlockParts(fence, 0, 1, y + GUARD_BOARD_D / 2, GUARD_BOARD_D, boardT),
+      )
     }
   }
 

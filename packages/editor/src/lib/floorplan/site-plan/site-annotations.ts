@@ -1,7 +1,7 @@
 /**
  * The permit-set layers of the site plan (A1.0) beyond the lot, the yards
  * and the house: the street each street edge fronts, the contour labels,
- * the driveway and walks, the utility services Bones placed, the drainage
+ * the driveway and walks, the utility services a plugin located, the drainage
  * arrows, and the finish-floor and spot elevations. Every function is pure
  * and returns site-metre primitives (x east, y south) for
  * `buildSitePlanDrawing`, which owns the order they stack in.
@@ -18,6 +18,11 @@ import {
   type TerrainField,
   terrainContours,
 } from '@pascal-app/core'
+import {
+  type SitePlanServicePoint,
+  type SitePlanServiceRole,
+  sitePlanServiceAnswers,
+} from './contributors'
 import {
   formatFeetInches,
   METRES_PER_FOOT,
@@ -517,11 +522,11 @@ export function flatworkPrimitives(
 
 /* ========================================================= utilities */
 
-export type ServiceRole = 'electric' | 'water' | 'sewer'
+export type ServiceRole = SitePlanServiceRole
 
-type ServicePoint = { role: ServiceRole | 'ac' | 'pole'; at: Pt; normal: Pt | null }
+type ServicePoint = { role: SitePlanServicePoint['role']; at: Pt; normal: Pt | null }
 
-/** The Bones service points of the building's ground storey, in site metres. */
+/** The registered service points of the building's ground storey, in site metres. */
 export function servicePoints(
   scene: SceneSnapshot,
   level: LevelNode | null,
@@ -531,20 +536,15 @@ export function servicePoints(
   if (!level) return []
   const toSite = siteFrame(building)
   const out: ServicePoint[] = []
-  const byType = new Map<string, Record<string, unknown>[]>()
-  for (const node of Object.values(scene.nodes) as unknown as Record<string, unknown>[]) {
-    if (node?.type !== 'bones:service' || node.parentId !== level.id || node.visible === false)
-      continue
-    const type = String(node.serviceType ?? '')
-    const list = byType.get(type)
-    if (list) list.push(node)
-    else byType.set(type, [node])
+  const byRole = new Map<ServicePoint['role'], SitePlanServicePoint>()
+  for (const points of sitePlanServiceAnswers((services) => services.points?.(scene, level.id))) {
+    for (const point of points) if (!byRole.has(point.role)) byRole.set(point.role, point)
   }
-  const place = (node: Record<string, unknown>): { at: Pt; normal: Pt | null } | null => {
-    const pos = Array.isArray(node.position) ? (node.position as number[]) : [0, 0, 0]
+  const place = (node: SitePlanServicePoint): { at: Pt; normal: Pt | null } | null => {
+    const pos = node.position
     const placed = Math.abs(pos[0] ?? 0) > 1e-6 || Math.abs(pos[2] ?? 0) > 1e-6
     if (!placed && typeof node.wallId === 'string') {
-      const wall = scene.nodes[node.wallId as AnyNodeId] as
+      const wall = scene.nodes[node.wallId] as
         | { start?: number[]; end?: number[]; thickness?: number }
         | undefined
       if (!wall?.start || !wall.end) return null
@@ -576,22 +576,8 @@ export function servicePoints(
       ? { at: add(near.foot, mul(near.n, 0.02)), normal: near.n }
       : { at, normal: null }
   }
-  const first = (...types: string[]) => {
-    for (const t of types) {
-      const node = byType.get(t)?.[0]
-      if (node) return node
-    }
-    return undefined
-  }
-  const roles: [ServicePoint['role'], string[]][] = [
-    ['electric', ['electric-meter', 'power-entry']],
-    ['water', ['water-entry']],
-    ['sewer', ['sewer-exit']],
-    ['ac', ['heat-pump']],
-    ['pole', ['utility-pole']],
-  ]
-  for (const [role, types] of roles) {
-    const node = first(...types)
+  for (const role of ['electric', 'water', 'sewer', 'ac', 'pole'] as const) {
+    const node = byRole.get(role)
     if (!node) continue
     const spot = place(node)
     if (spot) out.push({ role, ...spot })
@@ -599,19 +585,18 @@ export function servicePoints(
   return out
 }
 
-/** The service entrance Bones frames for the storey: its framing node's choice, else the building's, else Bones' default (overhead). */
+/** The storey's electric service entrance: a registered plugin's choice, else the building's, else overhead. */
 export function serviceEntranceOf(
   scene: SceneSnapshot,
   level: LevelNode | null,
   building: BuildingNode | null,
 ): {
   kind: 'overhead' | 'underground'
-  source: 'bones' | 'building' | 'default'
+  source: 'plugin' | 'building' | 'default'
 } {
-  for (const node of Object.values(scene.nodes) as unknown as Record<string, unknown>[]) {
-    if (node?.type !== 'bones:framing' || node.parentId !== level?.id) continue
-    if (node.serviceEntrance === 'overhead' || node.serviceEntrance === 'underground')
-      return { kind: node.serviceEntrance, source: 'bones' }
+  if (level) {
+    const [kind] = sitePlanServiceAnswers((services) => services.entrance?.(scene, level.id))
+    if (kind === 'overhead' || kind === 'underground') return { kind, source: 'plugin' }
   }
   const services = (building?.metadata as { services?: { serviceEntrance?: unknown } } | undefined)
     ?.services
@@ -672,7 +657,7 @@ export function serviceRoute(
 }
 
 /**
- * The utility services Bones placed, drawn schematically to the street:
+ * The utility services a plugin located, drawn schematically to the street:
  * the electric service from the meter (to the utility pole overhead, or
  * underground to the street), the water service from its entry to a meter
  * box at the property line, the sewer lateral from its exit to a cleanout at
@@ -699,9 +684,10 @@ export function servicePrimitives(args: {
   const entrance = serviceEntranceOf(scene, level, building)
   const out: FloorplanGeometry[] = []
   const drawn: ServiceRole[] = []
-  // a utility the scene already runs as its own line (plugin-utilities) is not drawn twice
-  const hasLine = (type: string) =>
-    Object.values(scene.nodes).some((n) => (n as { type?: string }).type === type)
+  // a utility a plugin already runs as its own line is not drawn twice
+  const drawnRuns = new Set(
+    sitePlanServiceAnswers((services) => services.drawnRuns?.(scene)).flat(),
+  )
   const pole = points.find((p) => p.role === 'pole')
 
   const labels: Record<ServiceRole, string> = {
@@ -711,17 +697,7 @@ export function servicePrimitives(args: {
   }
   for (const role of ['electric', 'water', 'sewer'] as const) {
     const point = points.find((p) => p.role === role)
-    if (!point) continue
-    if (
-      hasLine(
-        role === 'electric'
-          ? 'utilities:electric-line'
-          : role === 'water'
-            ? 'utilities:water-line'
-            : 'utilities:sewer-line',
-      )
-    )
-      continue
+    if (!point || drawnRuns.has(role)) continue
     const route =
       role === 'electric' && pole
         ? entrance.kind === 'overhead'

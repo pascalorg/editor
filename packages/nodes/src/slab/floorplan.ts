@@ -55,10 +55,13 @@ export function buildSlabFloorplan(node: SlabNode, ctx: GeometryContext): Floorp
   }
 
   const stroke = showSelectedChrome && palette ? palette.selectedStroke : '#475569'
-  // On paper the slab is its edge: the translucent wash is editor chrome, and
-  // printed it tinted every room the colour of wet concrete.
-  const onPaper = readFloorplanContext(ctx).purpose === 'document'
-  const fill = onPaper ? 'none' : showSelectedChrome ? '#ffffff' : '#cbd5e1'
+  // On a sheet the slab is its edge: printed, the wash tinted every room the
+  // colour of wet concrete.
+  const fill = readFloorplanContext(ctx).drafting
+    ? 'none'
+    : showSelectedChrome
+      ? '#ffffff'
+      : '#cbd5e1'
 
   // Slab body. Uses `fillOpacity` / `strokeOpacity` independently so the
   // outline stays crisp while the fill stays translucent — zones under

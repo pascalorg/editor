@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { type AnyNodeId, type SiteNode, useScene } from '@pascal-app/core'
 import { dropInLot } from './drop-in'
 import type { ParcelResolveData } from './lot-patch'
+import type { ParcelProvider } from './parcel-provider'
 
 type RafFn = (callback: (time: number) => void) => number
 ;(globalThis as { requestAnimationFrame?: RafFn }).requestAnimationFrame ??= (callback) => {
@@ -20,7 +21,7 @@ const rect = (w: number, d: number): [number, number][] => [
   [-w / 2, d / 2],
 ]
 
-// `/api/parcel/resolve` as the route answers it: `address` is null (the
+// The `resolve` answer as the provider gives it: `address` is null (the
 // parcel service returns no situs line), apn / county / state / zip set.
 const RESOLVED: Record<string, ParcelResolveData> = {
   [LAKELAND]: {
@@ -125,45 +126,35 @@ const lakelandDossier = () => {
 }
 
 /**
- * The editor's parcel routes, faked: the dossier answers only for
- * `dossierFor`; the elevation route reads a 40 ft west-to-east fall, or
- * fails when `elevation` is 'down'.
+ * The parcel provider, faked: the dossier answers only for `dossierFor`;
+ * the elevation reads a 40 ft west-to-east fall, or fails when `elevation`
+ * is 'down'.
  */
-function fakeRoutes(
+function fakeProvider(
   dossierFor: string | null,
   elevation: 'sloped' | 'down' = 'down',
-): typeof fetch {
-  return (async (url: string | URL | Request, init?: RequestInit) => {
-    const body = JSON.parse(String(init?.body ?? '{}')) as {
-      address?: string
-      points?: { lat: number; lng: number }[]
-    }
-    const path = String(url)
-    if (path === '/api/parcel/elevation') {
-      if (elevation === 'down')
-        return new Response(JSON.stringify({ ok: false, error: 'USGS down' }))
+): ParcelProvider {
+  return async (endpoint, request) => {
+    const body = request as { address?: string; points?: { lat: number; lng: number }[] }
+    if (endpoint === 'elevation') {
+      if (elevation === 'down') return { ok: false, error: 'USGS down' }
       const west = Math.min(...(body.points ?? []).map((p) => p.lng))
       const results = (body.points ?? []).map((p) => ({
         ...p,
         elevation: 150 + (p.lng - west) * 100_000,
       }))
-      return new Response(JSON.stringify({ ok: true, results }))
+      return { ok: true, results }
     }
-    if (path === '/api/parcel/dossier') {
-      return new Response(
-        JSON.stringify(
-          body.address === dossierFor
-            ? { ok: true, dossier: lakelandDossier() }
-            : { ok: false, reason: 'no MAP_API_KEY on the server' },
-        ),
-      )
+    if (endpoint === 'dossier') {
+      return body.address === dossierFor
+        ? { ok: true, dossier: lakelandDossier() }
+        : { ok: false, reason: 'no MAP_API_KEY on the server' }
     }
-    if (path === '/api/parcel/resolve') {
-      const data = RESOLVED[body.address ?? '']
-      return new Response(JSON.stringify(data ?? { ok: false, error: 'no parcel found' }))
+    if (endpoint === 'resolve') {
+      return RESOLVED[body.address ?? ''] ?? { ok: false, error: 'no parcel found' }
     }
-    return new Response(JSON.stringify({ ok: false, reason: 'not faked' }))
-  }) as typeof fetch
+    return { ok: false, reason: 'not faked' }
+  }
 }
 
 const site = (id: string) => useScene.getState().nodes[id as AnyNodeId] as SiteNode
@@ -204,17 +195,14 @@ const QA_ROADS = [
   },
 ]
 
-/** The parcel routes for the QA lot: the resolver with its ring, the roads route with its two streets. */
-function qaRoutes(): typeof fetch {
-  const rest = fakeRoutes(null)
-  return (async (url: string | URL | Request, init?: RequestInit) => {
-    const path = String(url)
-    if (path === '/api/parcel/resolve')
-      return new Response(JSON.stringify({ ...RESOLVED[GAINESVILLE], polygonM: QA_RING }))
-    if (path === '/api/parcel/roads')
-      return new Response(JSON.stringify({ ok: true, roads: QA_ROADS }))
-    return rest(url, init)
-  }) as typeof fetch
+/** The parcel provider for the QA lot: the resolver with its ring, the roads with its two streets. */
+function qaProvider(): ParcelProvider {
+  const rest = fakeProvider(null)
+  return async (endpoint, body) => {
+    if (endpoint === 'resolve') return { ...RESOLVED[GAINESVILLE], polygonM: QA_RING }
+    if (endpoint === 'roads') return { ok: true, roads: QA_ROADS }
+    return rest(endpoint, body)
+  }
 }
 
 describe('dropInLot on a through lot', () => {
@@ -225,7 +213,7 @@ describe('dropInLot on a through lot', () => {
   test('4121 NW 34th St fronts NW 34th Street (east), not the nearer NW 34th Terrace (west)', async () => {
     const r = await dropInLot(
       { address: GAINESVILLE },
-      { dossier: false, terrain: false, terrainDeadlineMs: 0, fetchImpl: qaRoutes() },
+      { dossier: false, terrain: false, terrainDeadlineMs: 0, provider: qaProvider() },
     )
     expect(r.ok).toBe(true)
     const s = site(r.siteId!)
@@ -258,12 +246,12 @@ describe('dropInLot onto a site that already has a lot', () => {
   })
 
   test('the second lot replaces the first lot’s address, APN and county', async () => {
-    const fetchImpl = fakeRoutes(null)
-    const first = await dropInLot({ address: LAKELAND }, { ...offline, fetchImpl })
+    const provider = fakeProvider(null)
+    const first = await dropInLot({ address: LAKELAND }, { ...offline, provider })
     expect(first.ok).toBe(true)
     expect(site(first.siteId!).parcel?.county).toBe('Polk')
 
-    const second = await dropInLot({ address: GAINESVILLE }, { ...offline, fetchImpl })
+    const second = await dropInLot({ address: GAINESVILLE }, { ...offline, provider })
     expect(second.ok).toBe(true)
     expect(second.siteId).toBe(first.siteId)
     const s = site(second.siteId!)
@@ -279,14 +267,14 @@ describe('dropInLot onto a site that already has a lot', () => {
   })
 
   test('a second lot the dossier does not answer drops the first lot’s situs and dossier facts', async () => {
-    const fetchImpl = fakeRoutes(LAKELAND)
-    const first = await dropInLot({ address: LAKELAND }, { ...offline, fetchImpl })
+    const provider = fakeProvider(LAKELAND)
+    const first = await dropInLot({ address: LAKELAND }, { ...offline, provider })
     expect(first.ok).toBe(true)
     const before = site(first.siteId!)
     expect(before.address?.city).toBe('LAKELAND')
     expect(before.dossier?.flood).toBeDefined()
 
-    const second = await dropInLot({ address: GAINESVILLE }, { ...offline, fetchImpl })
+    const second = await dropInLot({ address: GAINESVILLE }, { ...offline, provider })
     expect(second.ok).toBe(true)
     const s = site(second.siteId!)
     expect(s.address).toEqual({
@@ -303,7 +291,7 @@ describe('dropInLot onto a site that already has a lot', () => {
   test('a second lot whose ground read fails keeps none of the first lot’s terrain', async () => {
     const first = await dropInLot(
       { address: LAKELAND },
-      { roads: false, terrainDeadlineMs: 0, fetchImpl: fakeRoutes(LAKELAND, 'sloped') },
+      { roads: false, terrainDeadlineMs: 0, provider: fakeProvider(LAKELAND, 'sloped') },
     )
     expect(first.ok).toBe(true)
     expect(first.terrain?.flat).toBe(false)
@@ -314,7 +302,7 @@ describe('dropInLot onto a site that already has a lot', () => {
 
     const second = await dropInLot(
       { address: GAINESVILLE },
-      { roads: false, terrainDeadlineMs: 0, fetchImpl: fakeRoutes(null, 'down') },
+      { roads: false, terrainDeadlineMs: 0, provider: fakeProvider(null, 'down') },
     )
     expect(second.ok).toBe(true)
     expect(second.terrain).toBeNull()
@@ -327,4 +315,12 @@ describe('dropInLot onto a site that already has a lot', () => {
     expect((s.metadata as Record<string, unknown>).terrainSample).toBeUndefined()
     expect(s.terrainContours).toBeUndefined()
   })
+})
+
+test('without a parcel provider the drop-in says so and writes nothing', async () => {
+  useScene.setState({ nodes: {}, rootNodeIds: [], dirtyNodes: new Set() } as never)
+  const r = await dropInLot({ address: LAKELAND })
+  expect(r.ok).toBe(false)
+  expect(r.message).toBe('No parcel service is available.')
+  expect(useScene.getState().rootNodeIds).toEqual([])
 })

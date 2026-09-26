@@ -65,7 +65,7 @@ describe('assemblyThickness', () => {
     expect(assemblyThickness(EXT_2X6)).toBeCloseTo(7.1875 * IN, 12)
   })
 
-  test('partition applies the interior finish to both faces (bones: 4.5 in on 2x4)', () => {
+  test('partition applies the interior finish to both faces (4.5 in on 2x4)', () => {
     expect(assemblyThickness(PARTITION_2X4)).toBeCloseTo(4.5 * IN, 12)
   })
 

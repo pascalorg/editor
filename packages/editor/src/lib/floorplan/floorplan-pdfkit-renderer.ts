@@ -16,9 +16,7 @@ import type { FloorplanPdfBaseline, FloorplanPdfDocument } from './floorplan-pdf
 const DIMENSION_LINE_WIDTH_PT = 0.5
 const DIMENSION_TICK_WIDTH_PT = 0.75
 const DIMENSION_TEXT_FONT_FAMILY = 'monospace'
-// 10 pt of the embedded mono has a ~7 pt cap height — the 3/32 in dimension
-// text an architectural sheet is read at; 8 pt printed at 5 pt caps on ARCH D.
-const DIMENSION_TEXT_FONT_SIZE_PT = 10
+const DIMENSION_TEXT_FONT_SIZE_PT = 8
 const DIMENSION_TEXT_FONT_WEIGHT = 400
 const DIMENSION_BASELINE_OFFSET_PT = 5
 const DEFAULT_ANNOTATION_FONT_SIZE_PT = 8
@@ -37,6 +35,7 @@ type RenderContext = {
   annotationLabelShiftIndex: number
   annotationLabelShifts: readonly FloorplanPoint[]
   annotationLayer: boolean
+  dimensionTextSizePt: number
   sceneRotationDeg: number
   unitsPerPoint: number
 }
@@ -54,6 +53,8 @@ export async function renderFloorplanGeometryToPdfKit(
   options: {
     annotationLabelShifts?: readonly FloorplanPoint[]
     annotationLayer: boolean
+    /** Paper size of dimension strings; a drafted sheet prints them larger. */
+    dimensionTextSizePt?: number
     placement: FloorplanPdfKitPlacement
     rotationDeg: number
     viewport: FloorplanExportBounds
@@ -72,6 +73,7 @@ export async function renderFloorplanGeometryToPdfKit(
     annotationLabelShiftIndex: 0,
     annotationLabelShifts: options.annotationLabelShifts ?? [],
     annotationLayer: options.annotationLayer,
+    dimensionTextSizePt: options.dimensionTextSizePt ?? DIMENSION_TEXT_FONT_SIZE_PT,
     sceneRotationDeg: options.rotationDeg,
     unitsPerPoint: 1 / pointsPerUnit,
   })
@@ -220,7 +222,13 @@ function paintStyledGeometry(
 function isPaint(value: unknown): boolean {
   if (typeof value !== 'string') return false
   const v = value.trim().toLowerCase()
-  return v !== '' && v !== 'none' && v !== 'transparent' && !v.startsWith('url(') && !v.startsWith('var(')
+  return (
+    v !== '' &&
+    v !== 'none' &&
+    v !== 'transparent' &&
+    !v.startsWith('url(') &&
+    !v.startsWith('var(')
+  )
 }
 
 function resolveStrokeWidth(geometry: StyledGeometry, context: RenderContext): number {
@@ -258,7 +266,7 @@ function drawGeometryText(
   const dimensionValue =
     readFloorplanGeometryMetadata(geometry).annotationRole === 'automatic-dimension'
   const fontSize = context.annotationLayer
-    ? (dimensionValue ? DIMENSION_TEXT_FONT_SIZE_PT : annotationTextSizePt(geometry)) *
+    ? (dimensionValue ? context.dimensionTextSizePt : annotationTextSizePt(geometry)) *
       context.unitsPerPoint
     : geometry.fontSize
   const outlinedForScreen = geometry.paintOrder === 'stroke' && !!geometry.stroke
@@ -495,7 +503,7 @@ function drawDimensionText(
   stroke: string,
   context: RenderContext,
 ): void {
-  const fontSize = DIMENSION_TEXT_FONT_SIZE_PT * context.unitsPerPoint
+  const fontSize = context.dimensionTextSizePt * context.unitsPerPoint
   const y =
     geometry.textPosition === 'centered'
       ? fontSize * 0.35
@@ -528,7 +536,7 @@ function drawDimensionLabel(
   context: RenderContext,
 ): void {
   const unitsPerPoint = context.unitsPerPoint
-  const fontSize = DIMENSION_TEXT_FONT_SIZE_PT * unitsPerPoint
+  const fontSize = context.dimensionTextSizePt * unitsPerPoint
   const padX = 6 * unitsPerPoint
   const padY = 3 * unitsPerPoint
   const textWidth = geometry.text.length * 6.2 * unitsPerPoint

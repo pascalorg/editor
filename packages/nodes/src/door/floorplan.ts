@@ -799,6 +799,7 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
     {
       preferredSide: swingSign === 1 ? -1 : 1,
       stroke: showSelectedChrome ? '#f97316' : '#334155',
+      drafting: readFloorplanContext(ctx).drafting,
     },
   )
   if (markAnnotation) children.push(markAnnotation)

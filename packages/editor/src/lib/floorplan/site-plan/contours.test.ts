@@ -5,7 +5,8 @@ import { createTerrainField, quantize, terrainContours } from '@pascal-app/core'
 function ramp() {
   const field = createTerrainField({ origin: [-10, -10], spacing: 1, cols: 21, rows: 21 })
   const heights = new Int16Array(field.heights)
-  for (let row = 0; row < 21; row++) for (let col = 0; col < 21; col++) heights[row * 21 + col] = quantize(field, (col / 20) * 2)
+  for (let row = 0; row < 21; row++)
+    for (let col = 0; col < 21; col++) heights[row * 21 + col] = quantize(field, (col / 20) * 2)
   return { ...field, heights }
 }
 

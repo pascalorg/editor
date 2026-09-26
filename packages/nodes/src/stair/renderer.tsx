@@ -211,7 +211,11 @@ function StairRailings({ stair, material }: { stair: StairNode; material: THREE.
   const postAndRail =
     (stair.railingStyle ?? 'balusters') !== 'balusters' && stair.stairType === 'straight'
   const guardInfill: GuardInfill =
-    stair.railingStyle === 'cable' ? 'cable' : stair.railingStyle === 'boards' ? 'boards' : 'balusters'
+    stair.railingStyle === 'cable'
+      ? 'cable'
+      : stair.railingStyle === 'boards'
+        ? 'boards'
+        : 'balusters'
 
   if ((stair.railingMode ?? 'none') === 'none') {
     return null
@@ -235,9 +239,7 @@ function StairRailings({ stair, material }: { stair: StairNode; material: THREE.
                 infill={guardInfill}
                 key={`${segmentPath.layout.segment.id}-${sidePath.side}-${sideIndex}`}
                 material={material}
-                points={sidePath.points.map(
-                  (p) => [p[2], p[1], p[0]] as [number, number, number],
-                )}
+                points={sidePath.points.map((p) => [p[2], p[1], p[0]] as [number, number, number])}
                 postThrough={stair.railingPostThrough === true}
                 railHeight={railHeight}
                 reach={stair.railingTopReach ?? 0}
@@ -292,7 +294,7 @@ function StairRailings({ stair, material }: { stair: StairNode; material: THREE.
                 <mesh
                   castShadow
                   dispose={null}
-              geometry={BALUSTER_GEOMETRY}
+                  geometry={BALUSTER_GEOMETRY}
                   key={`${stair.id}-curved-baluster-${sideIndex}-${pointIndex}`}
                   material={material}
                   name="stair-railing-baluster"
@@ -352,7 +354,7 @@ function StairRailings({ stair, material }: { stair: StairNode; material: THREE.
                 <mesh
                   castShadow
                   dispose={null}
-              geometry={BALUSTER_GEOMETRY}
+                  geometry={BALUSTER_GEOMETRY}
                   key={`${segmentPath.layout.segment.id}-${sidePath.side}-baluster-${pointIndex}`}
                   material={material}
                   name="stair-railing-baluster"
@@ -653,7 +655,13 @@ function StairGuard({
         balusters.push(at(s))
       }
     }
-    return { a: at(sBottom), b: at(sTop), posts: postS.map(at), balusters, slopeLen: Math.hypot(1, slope) }
+    return {
+      a: at(sBottom),
+      b: at(sTop),
+      posts: postS.map(at),
+      balusters,
+      slopeLen: Math.hypot(1, slope),
+    }
   }, [points, topPost, reach, infill])
   if (!parts) return null
   const { a, b, posts, balusters, slopeLen } = parts
@@ -677,7 +685,9 @@ function StairGuard({
   runs.push(bar('cap', railHeight - GUARD_CAP_T / 2, GUARD_CAP_W, GUARD_CAP_T))
   runs.push(bar('top-rail', centreOver(topRailBottom, GUARD_RAIL_D), GUARD_RAIL_T, GUARD_RAIL_D))
   if (infill === 'balusters') {
-    runs.push(bar('bottom-rail', centreOver(GUARD_BOTTOM_CLEAR, GUARD_RAIL_D), GUARD_RAIL_T, GUARD_RAIL_D))
+    runs.push(
+      bar('bottom-rail', centreOver(GUARD_BOTTOM_CLEAR, GUARD_RAIL_D), GUARD_RAIL_T, GUARD_RAIL_D),
+    )
   } else if (infill === 'cable') {
     for (let y = CABLE_BOTTOM; y < topRailBottom - CABLE_D; y += CABLE_PITCH)
       runs.push(bar(`cable-${y.toFixed(4)}`, y + CABLE_D / 2, CABLE_D, CABLE_D))
@@ -766,7 +776,7 @@ function RailSegment({
     <mesh
       castShadow
       dispose={null}
-              geometry={RAIL_GEOMETRY}
+      geometry={RAIL_GEOMETRY}
       material={material}
       name="stair-railing-rail"
       position={[midpoint.x, midpoint.y, midpoint.z]}

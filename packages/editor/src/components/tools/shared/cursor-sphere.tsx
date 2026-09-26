@@ -126,7 +126,12 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
       {/* Bright marker dot at the tip of the line — the actual placement
           point, riding at the cursor while the line drops to the floor. */}
       {dotAtTip && height > 0 && (
-        <mesh geometry={TIP_GEOMETRY} layers={EDITOR_LAYER} position={[0, height, 0]} renderOrder={2}>
+        <mesh
+          geometry={TIP_GEOMETRY}
+          layers={EDITOR_LAYER}
+          position={[0, height, 0]}
+          renderOrder={2}
+        >
           <meshBasicMaterial color={color} depthTest={false} depthWrite={false} />
         </mesh>
       )}

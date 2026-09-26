@@ -6,8 +6,8 @@
  *
  * Runs inside the Canvas next to the ThumbnailGenerator so it shares the
  * renderer and the scene; hides what the picture hides (scan / guide /
- * spawn, the caller's types, Bones' utility plant) for the length of the
- * extraction.
+ * spawn, the caller's types, objects tagged `userData.excludeFromCapture`)
+ * for the length of the extraction.
  */
 import { emitter } from '@pascal-app/core'
 import { GRID_LAYER, holdLiveFrame, temporarilyHideNodeTypes } from '@pascal-app/viewer'
@@ -16,7 +16,7 @@ import { useEffect } from 'react'
 import * as THREE from 'three'
 import { EDITOR_LAYER } from '../../lib/constants'
 import { extractVisibleEdges, type VisibleEdges } from '../../lib/vector-edges'
-import { hideUtilityPlant } from './thumbnail-generator'
+import { hideCaptureExcluded } from './thumbnail-generator'
 
 export type ExtractEdgesRequest = {
   /** Echoed on the `pascal:edges` event so a caller matches its own answer. */
@@ -48,7 +48,7 @@ export function VectorEdgeExtractor() {
       window.dispatchEvent(new CustomEvent('pascal:edges', { detail }))
     }
     const handle = async (event: ExtractEdgesRequest) => {
-      if (!event || !event.ortho) return
+      if (!event?.ortho) return
       // a background tab never finishes the passes' readbacks (the WebGL
       // backend polls them on animation frames): say so at once
       if (document.visibilityState === 'hidden') {
@@ -73,8 +73,13 @@ export function VectorEdgeExtractor() {
       // scene across each GPU readback: the viewport keeps its last frame
       // meanwhile, or it draws the house in them (black, then colours)
       const releaseLiveFrame = holdLiveFrame()
-      const restoreTypes = temporarilyHideNodeTypes(['scan', 'guide', 'spawn', ...(event.hideTypes ?? [])])
-      const restorePlant = hideUtilityPlant(scene)
+      const restoreTypes = temporarilyHideNodeTypes([
+        'scan',
+        'guide',
+        'spawn',
+        ...(event.hideTypes ?? []),
+      ])
+      const restoreExcluded = hideCaptureExcluded(scene)
       let result: VisibleEdges | null = null
       try {
         result = await extractVisibleEdges(gl as unknown as THREE.WebGLRenderer, scene, camera, {
@@ -84,7 +89,7 @@ export function VectorEdgeExtractor() {
       } catch (error) {
         console.error('[vector-edges] extraction failed', error)
       } finally {
-        restorePlant()
+        restoreExcluded()
         restoreTypes()
         releaseLiveFrame()
       }

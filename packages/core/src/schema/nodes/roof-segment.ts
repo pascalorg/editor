@@ -248,7 +248,7 @@ export const RoofSegmentNode = BaseNode.extend({
   - wallThickness/deckThickness: structural thicknesses
   - overhang: eave overhang distance
   - shingleThickness: outer shingle layer thickness
-  - fascia: plumb fascia and rake boards on the eaves and rakes (gable, hip, shed, flat) (on when absent)
+  - fascia: plumb fascia and rake boards on the eaves and rakes (gable, hip, shed, flat) (off when absent)
   - fasciaHighEdge: shed only — a board on the high edge (off when it meets a wall; on when absent)
   - gambrelLowerWidthRatio / gambrelLowerHeightRatio: kink position on gambrel roofs
   - mansardSteepWidthRatio / mansardSteepHeightRatio: waist position on mansard roofs

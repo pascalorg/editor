@@ -1,4 +1,5 @@
 import type { FloorplanGeometry, FloorplanPoint } from '@pascal-app/core'
+import { useDimensionEditAllowed } from './floorplan-dimension-edit-overlay'
 import { resolveFloorplanLabelAngle } from './floorplan-label-angle'
 
 const EXTENSION_START_GAP = 0.075
@@ -547,6 +548,7 @@ function DimensionLabel({
   const plateWidth = width + fontSize * 0.5
   const plateHeight = fontSize * 1.2
   const plateY = y - fontSize * 0.82
+  const editable = useDimensionEditAllowed()
 
   return (
     <>
@@ -596,7 +598,7 @@ function DimensionLabel({
           override
         </text>
       ) : null}
-      {renderMode === 'pdf' ? null : (
+      {renderMode === 'pdf' || !editable ? null : (
         // Invisible click target on the plate. `pointer-events` is inherited
         // from the dimension group (`none`), so it is re-enabled here only.
         <rect

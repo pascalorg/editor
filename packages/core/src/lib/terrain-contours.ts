@@ -22,7 +22,8 @@ function pointInPolygon(points: readonly Pt[], x: number, y: number): boolean {
   for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
     const a = points[i] as Pt
     const b = points[j] as Pt
-    if (a[1] > y !== b[1] > y && x < ((b[0] - a[0]) * (y - a[1])) / (b[1] - a[1] || 1e-12) + a[0]) inside = !inside
+    if (a[1] > y !== b[1] > y && x < ((b[0] - a[0]) * (y - a[1])) / (b[1] - a[1] || 1e-12) + a[0])
+      inside = !inside
   }
   return inside
 }
@@ -38,7 +39,15 @@ export type Contour = {
 type Seg = [Pt, Pt]
 
 /** Interpolate the crossing of `level` between two corners. */
-function cross(ax: number, az: number, ah: number, bx: number, bz: number, bh: number, level: number): Pt {
+function cross(
+  ax: number,
+  az: number,
+  ah: number,
+  bx: number,
+  bz: number,
+  bh: number,
+  level: number,
+): Pt {
   const t = bh === ah ? 0.5 : (level - ah) / (bh - ah)
   return [ax + (bx - ax) * t, az + (bz - az) * t]
 }
@@ -55,7 +64,11 @@ function levelSegments(field: TerrainField, level: number, lot: readonly Pt[]): 
       const hb = heightAtSample(field, col + 1, row)
       const hc = heightAtSample(field, col + 1, row + 1)
       const hd = heightAtSample(field, col, row + 1)
-      const code = (ha >= level ? 8 : 0) | (hb >= level ? 4 : 0) | (hc >= level ? 2 : 0) | (hd >= level ? 1 : 0)
+      const code =
+        (ha >= level ? 8 : 0) |
+        (hb >= level ? 4 : 0) |
+        (hc >= level ? 2 : 0) |
+        (hd >= level ? 1 : 0)
       if (code === 0 || code === 15) continue
       const x0 = ox + col * spacing
       const x1 = x0 + spacing
@@ -171,7 +184,11 @@ function chain(segments: Seg[]): Pt[][] {
  * The contours of a field at `intervalM`, clipped to the lot. Every fifth
  * level (counted from zero) is an index contour.
  */
-export function terrainContours(field: TerrainField, intervalM: number, lot: readonly Pt[]): Contour[] {
+export function terrainContours(
+  field: TerrainField,
+  intervalM: number,
+  lot: readonly Pt[],
+): Contour[] {
   if (!(intervalM > 0)) return []
   let lo = Number.POSITIVE_INFINITY
   let hi = Number.NEGATIVE_INFINITY

@@ -1,6 +1,6 @@
 /**
- * The street-facing lot edge from the mapped roads — PlanCrafters'
- * `SITE.detectFrontEdge` (site.js), ported. Pure: no store, no network.
+ * The street-facing lot edge from the mapped roads. Pure: no store, no
+ * network.
  *
  * For every lot edge, score how well a road fronts it:
  *   1. PARALLELISM — the edge direction must be within `FRONT_EDGE_PARALLEL_DEG`
@@ -147,7 +147,10 @@ export function detectFrontEdgeFromRoads(
         name: pick.name,
         named: pick.named,
         streetEdges: streetEdges.includes(pick.index) ? streetEdges : [pick.index, ...streetEdges],
-        streetNames: pick.name && !streetNames[String(pick.index)] ? { ...streetNames, [String(pick.index)]: pick.name } : streetNames,
+        streetNames:
+          pick.name && !streetNames[String(pick.index)]
+            ? { ...streetNames, [String(pick.index)]: pick.name }
+            : streetNames,
       }
     : null
 }

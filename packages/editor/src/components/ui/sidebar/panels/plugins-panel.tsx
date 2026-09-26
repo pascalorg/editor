@@ -2,14 +2,22 @@
 
 import { Icon } from '@iconify/react'
 import { type IconRef, useScene } from '@pascal-app/core'
-import { ChevronLeft, ChevronRight, ExternalLink, Puzzle } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ExternalLink, Lock, Puzzle } from 'lucide-react'
 import { lazy, type ReactNode, Suspense, useState, useSyncExternalStore } from 'react'
-import { editorHostPanelRegistry } from '../../../../lib/plugin-panels'
+import { editorHostPanelRegistry, pluginInstallLocks } from '../../../../lib/plugin-panels'
 import { IconRefImage } from '../../icon-ref'
 import { Button } from '../../primitives/button'
 
 const PLUGIN_AUTHORING_URL =
   'https://editor.pascal.app/docs/developers/plugins'
+
+function PluginBadge({ label }: { label: string }) {
+  return (
+    <span className="rounded-full border border-border/70 px-2 py-0.5 font-medium text-[10px] text-sidebar-foreground/70 uppercase tracking-wider">
+      {label}
+    </span>
+  )
+}
 
 function renderPluginIcon(ref: IconRef): ReactNode {
   if (ref.kind === 'url') {
@@ -43,6 +51,11 @@ export function PluginsPanel() {
   const installedPlugins = useScene((state) => state.installedPlugins)
   const setInstalledPlugins = useScene((state) => state.setInstalledPlugins)
   const readOnly = useScene((state) => state.readOnly)
+  const installLocks = useSyncExternalStore(
+    pluginInstallLocks.subscribe,
+    pluginInstallLocks.getSnapshot,
+    pluginInstallLocks.getSnapshot,
+  )
   const plugins = Array.from(
     new Map(
       panels
@@ -57,6 +70,7 @@ export function PluginsPanel() {
   if (selectedPlugin) {
     const [pluginId, panel] = selectedPlugin
     const installed = installedPlugins.includes(pluginId)
+    const lock = installed ? undefined : installLocks[pluginId]
 
     return (
       <div className="flex h-full flex-col overflow-y-auto p-4">
@@ -76,7 +90,10 @@ export function PluginsPanel() {
               {renderPluginIcon(panel.icon)}
             </div>
             <div className="min-w-0 pt-1">
-              <h2 className="font-semibold text-lg text-sidebar-foreground">{panel.label}</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold text-lg text-sidebar-foreground">{panel.label}</h2>
+                {panel.badge && <PluginBadge label={panel.badge} />}
+              </div>
               <p className="text-sidebar-foreground/50 text-sm">
                 {installed ? 'Installed' : 'Not installed'}
               </p>
@@ -130,19 +147,31 @@ export function PluginsPanel() {
             )}
           </dl>
 
-          <Button
-            className="mt-5 rounded-full"
-            disabled={readOnly}
-            onClick={() => {
-              const next = installed
-                ? installedPlugins.filter((id) => id !== pluginId)
-                : [...installedPlugins, pluginId]
-              setInstalledPlugins(next, { explicit: true })
-            }}
-            variant={installed ? 'outline' : 'default'}
-          >
-            {installed ? 'Uninstall' : 'Install'}
-          </Button>
+          {lock ? (
+            <div className="mt-5">
+              <p className="flex items-start gap-2 text-sidebar-foreground/70 text-sm">
+                <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                {lock.reason}
+              </p>
+              <Button className="mt-3 rounded-full" onClick={lock.onAction}>
+                {lock.actionLabel}
+              </Button>
+            </div>
+          ) : (
+            <Button
+              className="mt-5 rounded-full"
+              disabled={readOnly}
+              onClick={() => {
+                const next = installed
+                  ? installedPlugins.filter((id) => id !== pluginId)
+                  : [...installedPlugins, pluginId]
+                setInstalledPlugins(next, { explicit: true })
+              }}
+              variant={installed ? 'outline' : 'default'}
+            >
+              {installed ? 'Uninstall' : 'Install'}
+            </Button>
+          )}
         </div>
 
         <div className="mt-auto pt-6">
@@ -186,7 +215,10 @@ export function PluginsPanel() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <h3 className="font-medium text-sidebar-foreground">{panel.label}</h3>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-medium text-sidebar-foreground">{panel.label}</h3>
+                        {panel.badge && <PluginBadge label={panel.badge} />}
+                      </div>
                       <p className="text-sidebar-foreground/50 text-xs">
                         {installed ? 'Installed' : 'Not installed'}
                       </p>

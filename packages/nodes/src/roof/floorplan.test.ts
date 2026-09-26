@@ -7,6 +7,7 @@ import {
   RoofNode,
   RoofSegmentNode,
 } from '@pascal-app/core'
+import { createFloorplanContextExtensions } from '@pascal-app/editor'
 import { buildRoofFloorplan } from './floorplan'
 
 function buildContext(
@@ -14,20 +15,17 @@ function buildContext(
   children: AnyNode[],
   siblings: AnyNode[],
   nodes: Record<string, AnyNode>,
+  drafting = false,
 ): GeometryContext {
   return {
     resolve: <N = AnyNode>(id: AnyNodeId) => nodes[id] as N | undefined,
     children,
     siblings,
     parent: null,
+    ...(drafting ? { extensions: createFloorplanContextExtensions({ drafting: true }) } : {}),
   }
 }
 
-/**
- * The SOLID merged outline — the wall line under the roof. The dashed ring
- * outside it is the drip edge (footprint + overhang); it is excluded here by
- * its dash pattern so this stays a test about footprint clipping.
- */
 /** Every primitive in the group, nested groups (the 'roof-plan' stratum) flattened. */
 function flat(geometry: FloorplanGeometry | null): FloorplanGeometry[] {
   if (!geometry) return []
@@ -35,6 +33,11 @@ function flat(geometry: FloorplanGeometry | null): FloorplanGeometry[] {
   return geometry.children.flatMap((child) => flat(child))
 }
 
+/**
+ * The SOLID merged outline — the wall line under the roof. The dashed ring
+ * a sheet draws outside it is the drip edge (footprint + overhang); it is
+ * excluded here by its dash pattern so this stays a test about footprint clipping.
+ */
 function outlinePoints(geometry: FloorplanGeometry | null): [number, number][] {
   return flat(geometry).flatMap((child) =>
     child.kind === 'polygon' && child.fill === 'none' && !child.strokeDasharray
@@ -172,8 +175,8 @@ describe('buildRoofFloorplan roof intersections', () => {
   })
 })
 
-/** The PlanCrafters cottage's auto roof: 46' × 32' gable at a 7:12 pitch. */
-function cottageRoof(overrides: Record<string, unknown> = {}) {
+/** A 46' × 32' gable at a 7:12 pitch. */
+function cottageRoof(overrides: Record<string, unknown> = {}, drafting = true) {
   const roof = RoofNode.parse({ id: 'roof_c', type: 'roof', children: ['rseg_c'] })
   const segment = RoofSegmentNode.parse({
     id: 'rseg_c',
@@ -187,10 +190,22 @@ function cottageRoof(overrides: Record<string, unknown> = {}) {
     ...overrides,
   })
   const nodes = { [roof.id]: roof, [segment.id]: segment }
-  return buildRoofFloorplan(roof, buildContext(roof, [segment], [], nodes))
+  return buildRoofFloorplan(roof, buildContext(roof, [segment], [], nodes, drafting))
 }
 
 describe('roof plan slope annotation', () => {
+  test('the editor plan keeps its linework without arrows, pitch tags, eave line or roof-plan role', () => {
+    const geometry = cottageRoof({}, false)
+    expect(geometry?.kind).toBe('group')
+    if (geometry?.kind !== 'group') return
+    expect(geometry.metadata).toBeUndefined()
+    expect(geometry.children.some((child) => child.kind === 'group')).toBe(false)
+    expect(arrowHeads(geometry)).toHaveLength(0)
+    expect(labels(geometry)).toHaveLength(0)
+    expect(eavePoints(geometry)).toHaveLength(0)
+    expect(arrowHeads(cottageRoof({ roofType: 'shed' }, false))).toHaveLength(1)
+  })
+
   test('every slope gets a down-slope arrow tagged with the pitch in 12ths', () => {
     const geometry = cottageRoof()
     // A gable has two planes falling away from the ridge, so two arrows.
