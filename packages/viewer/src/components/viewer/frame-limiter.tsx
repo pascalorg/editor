@@ -6,6 +6,7 @@ import useViewer from '../../store/use-viewer'
 type FrameLimiterProps = {
   fps?: number
   paused?: boolean
+  onFrameError?: (cause: unknown) => void
 }
 
 export type FrameClock = {
