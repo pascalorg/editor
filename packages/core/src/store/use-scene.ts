@@ -63,6 +63,7 @@ import {
   createdSceneHistoryDraftIds,
   hasSceneHistoryDrafts,
   noteSceneHistoryDraftWrite,
+  sceneHistoryDraftRevertUpdates as sceneHistoryDraftRevertUpdatesIn,
   withAdoptedDraftsAsOriginal,
   withDraftsRestored,
 } from './history-drafts'
@@ -2346,6 +2347,13 @@ export function runSceneHistoryDraftWrite<T>(write: () => T): T {
     noteSceneHistoryDraftWrite(before, useScene.getState().nodes)
     pause.end()
   }
+}
+
+/** Updates that revert the fields a carry still holds on `ids` (see history-drafts.ts). */
+export function sceneHistoryDraftRevertUpdates(
+  ids: Iterable<AnyNodeId>,
+): Array<{ id: AnyNodeId; data: Record<string, unknown> }> {
+  return sceneHistoryDraftRevertUpdatesIn(useScene.getState().nodes, ids)
 }
 
 /** Registers a carried draft (see history-drafts.ts); returns the call that ends it. */

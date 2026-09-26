@@ -12,6 +12,7 @@ import useScene, {
   beginSceneHistoryDraft,
   clearSceneHistory,
   runSceneHistoryDraftWrite,
+  sceneHistoryDraftRevertUpdates,
 } from './use-scene'
 
 // `updateNodesAction` batches dirty-marking through requestAnimationFrame.
@@ -218,6 +219,18 @@ describe('scene history drafts', () => {
     expect(
       (useScene.temporal.getState().pastStates[1]!.nodes![itemId] as ItemNode).position,
     ).toEqual([5, 0, 5])
+    end()
+  })
+
+  test('revert updates cover only the fields the carry still holds', () => {
+    const end = beginSceneHistoryDraft(itemId, node(itemId)!)
+    runSceneHistoryDraftWrite(() =>
+      useScene.getState().updateNode(itemId, { position: [3, 0, 3], rotation: [0, 1, 0] }),
+    )
+    useScene.getState().updateNode(itemId, { name: 'Renamed', rotation: [0, 2, 0] })
+    expect(sceneHistoryDraftRevertUpdates([itemId])).toEqual([
+      { id: itemId, data: { position: [1, 0, 1] } },
+    ])
     end()
   })
 })
