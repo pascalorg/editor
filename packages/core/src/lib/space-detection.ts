@@ -1700,12 +1700,31 @@ export function planAutoZonesForLevel(
   existingZones: readonly ZoneNodeType[],
 ): AutoZoneSyncPlan {
   const update: AutoZoneSyncPlan['update'] = []
+  const walledZones = existingZones.filter(
+    (zone) => zone.autoFromWalls && zone.boundaryWallIds.length >= 3,
+  )
+  const exactlyMatched = new Set(
+    spaces.filter((space) =>
+      walledZones.some((zone) => sameStringSet(space.wallIds, zone.boundaryWallIds)),
+    ),
+  )
+  // A wall edit can add a wall to a room without taking any away (a move bridging a junction):
+  // the zone then follows the one unclaimed room that still has all of its boundary walls.
+  const roomKeepingWalls = (zone: ZoneNodeType) => {
+    const candidates = spaces.filter(
+      (space) =>
+        !exactlyMatched.has(space) &&
+        zone.boundaryWallIds.every((wallId) => space.wallIds.includes(wallId)),
+    )
+    return candidates.length === 1 ? candidates[0] : undefined
+  }
 
   for (const zone of existingZones) {
     const storedSignature = polygonSignature(zone.polygon.map(pointFromTuple))
     const matchingSpace =
       zone.autoFromWalls && zone.boundaryWallIds.length >= 3
-        ? spaces.find((space) => sameStringSet(space.wallIds, zone.boundaryWallIds))
+        ? (spaces.find((space) => sameStringSet(space.wallIds, zone.boundaryWallIds)) ??
+          roomKeepingWalls(zone))
         : spaces.find(
             (space) => polygonSignature(space.polygon.map(pointFromTuple)) === storedSignature,
           )

@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   clearSceneHistory,
+  detectSpacesForLevel,
   emitter,
   getSceneHistoryPauseDepth,
   initSpaceDetectionSync,
@@ -15,6 +16,7 @@ import {
   useLiveNodeOverrides,
   useScene,
   WallNode,
+  ZoneNode,
 } from '@pascal-app/core'
 import { useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
@@ -395,6 +397,17 @@ describe('3D wall move', () => {
         },
       ],
     })
+    const eastRoom = detectSpacesForLevel(LEVEL_ID, nodesOfType('wall') as WallNode[]).spaces.find(
+      (space) => space.polygon.some(([x]) => x === 4),
+    )!
+    const zone = ZoneNode.parse({
+      name: 'East room',
+      parentId: LEVEL_ID,
+      polygon: eastRoom.polygon,
+      autoFromWalls: true,
+      boundaryWallIds: eastRoom.wallIds,
+    })
+    useScene.getState().createNode(zone, LEVEL_ID)
     clearSceneHistory()
     const renderer = await armWall(east)
     await dragFrom(4, 4.5)
@@ -411,6 +424,15 @@ describe('3D wall move', () => {
     await act(async () => renderer.unmount())
 
     expect(useScene.getState().nodes[east] as WallNode).toMatchObject({ start: [4.5, 0] })
+    const eastSlab = (nodesOfType('slab') as Array<{ polygon: [number, number][] }>).find((slab) =>
+      slab.polygon.some(([x]) => x === 4.5),
+    )!
+    expect(
+      normalizedPolygon(
+        (useScene.getState().nodes[zone.id as AnyNodeId] as { polygon: [number, number][] })
+          .polygon,
+      ),
+    ).toEqual(normalizedPolygon(eastSlab.polygon))
     for (const slab of nodesOfType('slab') as Array<{
       id: AnyNodeId
       polygon: [number, number][]
