@@ -1,7 +1,7 @@
 'use client'
 
 import { useSyncExternalStore } from 'react'
-import { getRegistryVersion, onRegistryChange } from './registry'
+import { getRegistryVersion, nodeRegistry, onRegistryChange } from './registry'
 
 /**
  * React binding for the node registry's change counter. Re-renders the
@@ -14,4 +14,15 @@ import { getRegistryVersion, onRegistryChange } from './registry'
  */
 export function useRegistryVersion(): number {
   return useSyncExternalStore(onRegistryChange, getRegistryVersion, getRegistryVersion)
+}
+
+/**
+ * The registered definition of `kind`, kept current as plugins register. The
+ * snapshot is the definition itself, so a registration of any other kind
+ * leaves it identity-stable and re-renders nothing: only nodes of a kind that
+ * registers (or changes) update.
+ */
+export function useNodeDefinition(kind: string | undefined) {
+  const read = () => (kind === undefined ? undefined : nodeRegistry.get(kind))
+  return useSyncExternalStore(onRegistryChange, read, read)
 }

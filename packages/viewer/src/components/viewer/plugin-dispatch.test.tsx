@@ -223,10 +223,9 @@ test('a plugin that registers after the systems mounted still gets its system', 
   }
 })
 
-// Known gap: NodeRenderer reads the registry at render time without
-// subscribing to it, so nodes mounted before async plugin discovery stay
-// invisible (and their geometry unbuilt) until something else re-renders them.
-test.failing('nodes mounted before their plugin registers render once it registers', async () => {
+// NodeRenderer subscribes to the registry: nodes mounted before async plugin
+// discovery render (and build their geometry) once their kind registers.
+test('nodes mounted before their plugin registers render once it registers', async () => {
   nodeRegistry._reset()
   const { lamp, planter } = scene([PLUGIN_ID])
   const renderer = await mountDispatch(lamp, planter)
@@ -240,6 +239,60 @@ test.failing('nodes mounted before their plugin registers render once it registe
 
     expect(named(renderer, `lamp:${lamp.id}`)).toBe(1)
     expect(sceneRegistry.nodes.get(planter.id)?.getObjectByName('planter-body')).toBeDefined()
+  } finally {
+    await renderer.unmount()
+  }
+})
+
+test('a registration of an unrelated kind re-renders no existing node', async () => {
+  let renders = 0
+  const Counted = BaseNode.extend({ id: objectId('fxcounted'), type: nodeType('fixture:counted') })
+  const countedDef: NodeDefinition<typeof Counted> = {
+    kind: 'fixture:counted',
+    schemaVersion: 1,
+    schema: Counted,
+    category: 'furnish',
+    defaults: () => base,
+    capabilities: {},
+    renderer: {
+      kind: 'parametric',
+      module: async () => ({
+        default: ({ node }: { node: { id: string } }) => {
+          renders += 1
+          return <group name={`counted:${node.id}`} />
+        },
+      }),
+    },
+  }
+  const Other = BaseNode.extend({ id: objectId('fxother'), type: nodeType('fixture:other') })
+  const otherDef: NodeDefinition<typeof Other> = {
+    kind: 'fixture:other',
+    schemaVersion: 1,
+    schema: Other,
+    category: 'furnish',
+    defaults: () => base,
+    capabilities: {},
+    geometry: () => new Group(),
+  }
+  await loadPlugin({ id: 'fixture:counted', apiVersion: 1, nodes: [asPluginNode(countedDef)] })
+  const counted = asSceneNode(Counted.parse({}))
+  const level = asSceneNode(LevelNode.parse({ children: [counted.id] }))
+  useScene
+    .getState()
+    .setScene({ [level.id]: level, [counted.id]: { ...counted, parentId: level.id } }, [level.id], {
+      installedPlugins: ['fixture:counted', 'fixture:other'],
+      hasExplicitPluginInstallState: true,
+    })
+  const renderer = await create(<NodeRenderer nodeId={counted.id} />)
+  try {
+    await settle(renderer)
+    expect(named(renderer, `counted:${counted.id}`)).toBe(1)
+    const before = renders
+    await act(async () => {
+      await loadPlugin({ id: 'fixture:other', apiVersion: 1, nodes: [asPluginNode(otherDef)] })
+    })
+    await settle(renderer)
+    expect(renders).toBe(before)
   } finally {
     await renderer.unmount()
   }
