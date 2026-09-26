@@ -1,12 +1,12 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
-import { PatchRefusedError } from '../bridge/patch-refused-error'
 import type { Patch as BridgePatch } from '../bridge/scene-bridge'
 import type { SceneOperations } from '../operations'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS } from './annotations'
 import { ErrorCode, throwMcpError } from './errors'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
+import { assertPatchKeepsIdentity, PatchRefusedError } from './patch-guards'
 import { PatchSchema } from './schemas'
 
 export const applyPatchInput = {
@@ -26,7 +26,7 @@ export function registerApplyPatch(server: McpServer, bridge: SceneOperations): 
     {
       title: 'Apply patch',
       description:
-        'Apply a batch of create/update/delete operations atomically. All patches are validated before any are applied; the entire batch forms a single undo step. Batch-first is the default: prefer one apply_patch call containing all create/update/delete ops for a build step, in stable order so later ops can reference ids created by earlier ops. A single call is atomic (all or nothing) and pays the snapshot and save cost once; do not loop one-op calls. A create whose id already exists fails the whole patch with node_exists; to replace a node, delete it earlier in the same patch. An update cannot change the id or type of a node (identity_change).',
+        "Apply a batch of create/update/delete operations atomically. All patches are validated before any are applied; the entire batch forms a single undo step. Batch-first is the default: prefer one apply_patch call containing all create/update/delete ops for a build step, in stable order so later ops can reference ids created by earlier ops. A single call is atomic (all or nothing) and pays the snapshot and save cost once; do not loop one-op calls. A create whose id already exists fails the whole patch with node_exists; to replace a node, delete it earlier in the same patch. An update cannot change id, type, object or children (immutable_field; restating the current value is fine, reparent through the child's parentId), and cannot add schema issues to a node (invalid_update).",
       inputSchema: applyPatchInput,
       outputSchema: applyPatchOutput,
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
@@ -55,6 +55,7 @@ export function registerApplyPatch(server: McpServer, bridge: SceneOperations): 
       })
 
       try {
+        assertPatchKeepsIdentity(bridgePatches, bridge.getNodes(), bridge.getRootNodeIds())
         const result = bridge.applyPatch(bridgePatches)
         const persistence = await publishLiveSceneSnapshot(bridge, 'apply_patch')
         const payload = {

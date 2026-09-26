@@ -1,0 +1,247 @@
+import { beforeEach, describe, expect, test } from 'bun:test'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { type AnyNode, type AnyNodeId, WallNode, WindowNode } from '@pascal-app/core/schema'
+import { SceneBridge } from '../bridge/scene-bridge'
+import { createSceneOperations } from '../operations'
+import { registerApplyPatch } from './apply-patch'
+
+type Patch = Record<string, unknown>
+
+describe('apply_patch identity and validation guards', () => {
+  let client: Client
+  let bridge: SceneBridge
+  let level: AnyNode
+
+  async function apply(patches: Patch[]) {
+    const result = await client.callTool({ name: 'apply_patch', arguments: { patches } })
+    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text
+    return { isError: result.isError === true, text }
+  }
+
+  async function wallWithWindow(id = 'wall_host', start = [0, 0], end = [6, 0]) {
+    const wall = WallNode.parse({ id, start, end })
+    const window = WindowNode.parse({ wallId: wall.id, position: [2, 1.2, 0] })
+    const seeded = await apply([
+      { op: 'create', node: wall, parentId: level.id },
+      { op: 'create', node: window, parentId: wall.id },
+    ])
+    expect(seeded.isError).toBe(false)
+    return { wall, window }
+  }
+
+  beforeEach(async () => {
+    bridge = new SceneBridge()
+    bridge.setScene({}, [])
+    bridge.loadDefault()
+    level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const server = new McpServer({ name: 'test', version: '0.0.0' })
+    // The tool layer is what the hosted server shares; drive it through the facade.
+    registerApplyPatch(server, createSceneOperations({ bridge }))
+    const [srvT, cliT] = InMemoryTransport.createLinkedPair()
+    client = new Client({ name: 'test-client', version: '0.0.0' })
+    await Promise.all([server.connect(srvT), client.connect(cliT)])
+  })
+
+  test('a children update cannot detach a node so a later create overwrites it', async () => {
+    const { wall, window } = await wallWithWindow()
+    const other = WallNode.parse({ start: [0, 3], end: [6, 3] })
+    await apply([{ op: 'create', node: other, parentId: level.id }])
+
+    const result = await apply([
+      { op: 'update', id: wall.id, data: { children: [] } },
+      { op: 'delete', id: wall.id, cascade: true },
+      {
+        op: 'create',
+        node: WindowNode.parse({ id: window.id, wallId: other.id, position: [4, 1, 0] }),
+        parentId: other.id,
+      },
+    ])
+    expect(result.isError).toBe(true)
+    expect(result.text).toContain('immutable_field')
+    const kept = bridge.getNode(window.id as AnyNodeId)
+    expect(kept?.type === 'window' && [kept.parentId, kept.position]).toEqual([
+      wall.id,
+      [2, 1.2, 0],
+    ])
+  })
+
+  test('the dry run sees walls the real delete merges away', async () => {
+    // Deleting the spur leaves two collinear walls meeting at [2, 0]; the core
+    // delete merges them and removes the secondary one.
+    const a = WallNode.parse({ id: 'wall_a', start: [0, 0], end: [2, 0] })
+    const b = WallNode.parse({ id: 'wall_b', start: [2, 0], end: [4, 0] })
+    const spur = WallNode.parse({ id: 'wall_spur', start: [2, 0], end: [2, 2] })
+    await apply([a, b, spur].map((node) => ({ op: 'create', node, parentId: level.id })))
+
+    const result = await apply([
+      { op: 'delete', id: spur.id },
+      { op: 'update', id: b.id, data: { thickness: 0.3 } },
+    ])
+    expect(result.isError).toBe(true)
+    expect(result.text).toContain(`update id "${b.id}" not found`)
+    expect(bridge.getNode(spur.id as AnyNodeId)).not.toBeNull()
+    expect(bridge.getNode(b.id as AnyNodeId)).not.toBeNull()
+  })
+
+  test('the real cascade frees ids so a subtree can be deleted and recreated', async () => {
+    const { wall, window } = await wallWithWindow()
+    const result = await apply([
+      { op: 'delete', id: wall.id, cascade: true },
+      {
+        op: 'create',
+        node: WallNode.parse({ id: wall.id, start: [0, 5], end: [4, 5] }),
+        parentId: level.id,
+      },
+      {
+        op: 'create',
+        node: WindowNode.parse({ id: window.id, wallId: wall.id, position: [1, 1, 0] }),
+        parentId: wall.id,
+      },
+    ])
+    expect(result.isError).toBe(false)
+    const stored = bridge.getNode(window.id as AnyNodeId)
+    expect(stored?.type === 'window' && stored.position).toEqual([1, 1, 0])
+  })
+
+  test('a second create of the same id in one patch is refused atomically', async () => {
+    const first = WallNode.parse({ id: 'wall_twice', start: [0, 0], end: [1, 0] })
+    const second = WallNode.parse({ id: 'wall_twice', start: [0, 1], end: [1, 1] })
+    const result = await apply([
+      { op: 'create', node: first, parentId: level.id },
+      { op: 'create', node: second, parentId: level.id },
+    ])
+    expect(result.isError).toBe(true)
+    expect(result.text).toContain('node_exists: patches[1]')
+    expect(bridge.getNode(first.id as AnyNodeId)).toBeNull()
+  })
+
+  test('a node created earlier in the patch cannot change type', async () => {
+    const wall = WallNode.parse({ start: [0, 0], end: [1, 0] })
+    const result = await apply([
+      { op: 'create', node: wall, parentId: level.id },
+      { op: 'update', id: wall.id, data: { type: 'fence' } },
+    ])
+    expect(result.isError).toBe(true)
+    expect(result.text).toContain('immutable_field: patches[1]')
+    expect(bridge.getNode(wall.id as AnyNodeId)).toBeNull()
+  })
+
+  test('a cascade also removes children created earlier in the same patch', async () => {
+    const wall = WallNode.parse({ start: [0, 0], end: [4, 0] })
+    const window = WindowNode.parse({ wallId: wall.id, position: [2, 1.2, 0] })
+    const result = await apply([
+      { op: 'create', node: wall, parentId: level.id },
+      { op: 'create', node: window, parentId: wall.id },
+      { op: 'delete', id: wall.id, cascade: true },
+      {
+        op: 'create',
+        node: WallNode.parse({ id: wall.id, start: [0, 2], end: [4, 2] }),
+        parentId: level.id,
+      },
+      {
+        op: 'create',
+        node: WindowNode.parse({ id: window.id, wallId: wall.id, position: [1, 1.2, 0] }),
+        parentId: wall.id,
+      },
+    ])
+    expect(result.isError).toBe(false)
+    const stored = bridge.getNode(window.id as AnyNodeId)
+    expect(stored?.type === 'window' && stored.position).toEqual([1, 1.2, 0])
+  })
+
+  test('a node reparented earlier in the patch survives its old parent’s delete', async () => {
+    const { wall, window } = await wallWithWindow()
+    const other = WallNode.parse({ start: [0, 3], end: [6, 3] })
+    await apply([{ op: 'create', node: other, parentId: level.id }])
+    const move = { op: 'update', id: window.id, data: { parentId: other.id, wallId: other.id } }
+
+    const clash = await apply([
+      move,
+      { op: 'delete', id: wall.id, cascade: true },
+      {
+        op: 'create',
+        node: WindowNode.parse({ id: window.id, wallId: other.id, position: [4, 1.2, 0] }),
+        parentId: other.id,
+      },
+    ])
+    expect(clash.isError).toBe(true)
+    expect(clash.text).toContain('node_exists: patches[2]')
+
+    const edit = await apply([
+      move,
+      { op: 'delete', id: wall.id, cascade: true },
+      { op: 'update', id: window.id, data: { width: 1.1 } },
+    ])
+    expect(edit.isError).toBe(false)
+    const moved = bridge.getNode(window.id as AnyNodeId)
+    expect(moved?.type === 'window' && [moved.parentId, moved.width]).toEqual([other.id, 1.1])
+    expect(bridge.getNode(wall.id as AnyNodeId)).toBeNull()
+  })
+
+  test('an op on a node removed by an earlier cascade is refused', async () => {
+    const { wall, window } = await wallWithWindow()
+    const result = await apply([
+      { op: 'delete', id: wall.id, cascade: true },
+      { op: 'update', id: window.id, data: { width: 1 } },
+    ])
+    expect(result.isError).toBe(true)
+    expect(result.text).toContain(`update id "${window.id}" not found`)
+    expect(bridge.getNode(wall.id as AnyNodeId)).not.toBeNull()
+  })
+
+  test('updates cannot change object or children; echoing current values passes', async () => {
+    const { wall, window } = await wallWithWindow()
+    const objectChange = await apply([{ op: 'update', id: wall.id, data: { object: 'group' } }])
+    expect(objectChange.isError).toBe(true)
+    expect(objectChange.text).toContain('immutable_field')
+
+    const echo = await apply([
+      {
+        op: 'update',
+        id: wall.id,
+        data: { id: wall.id, type: 'wall', object: 'node', children: [window.id], thickness: 0.25 },
+      },
+    ])
+    expect(echo.isError).toBe(false)
+    const stored = bridge.getNode(wall.id as AnyNodeId)
+    expect(stored?.type === 'wall' && stored.thickness).toBe(0.25)
+  })
+
+  test('an update that adds schema issues is refused; one on an already invalid node is not', async () => {
+    const { wall } = await wallWithWindow()
+    const invalid = await apply([{ op: 'update', id: wall.id, data: { thickness: 'thick' } }])
+    expect(invalid.isError).toBe(true)
+    expect(invalid.text).toContain('invalid_update')
+    const stored = bridge.getNode(wall.id as AnyNodeId)
+    expect(stored?.type === 'wall' && stored.thickness).not.toBe('thick')
+
+    // A legacy node that already fails its schema can still be edited elsewhere.
+    const nodes = { ...bridge.getNodes() } as Record<string, unknown>
+    nodes[wall.id] = { ...(nodes[wall.id] as object), height: 'legacy' }
+    bridge.loadJSON({ nodes, rootNodeIds: bridge.getRootNodeIds() } as never)
+    const unrelated = await apply([{ op: 'update', id: wall.id, data: { thickness: 0.3 } }])
+    expect(unrelated.isError).toBe(false)
+  })
+
+  test('an unregistered plugin kind is updated without schema validation', async () => {
+    const pluginNode = {
+      object: 'node',
+      id: 'bench_plugin-1',
+      type: 'fixture:bench',
+      parentId: level.id,
+      visible: true,
+      metadata: {},
+      position: [0, 0, 0],
+    }
+    const nodes = { ...bridge.getNodes(), [pluginNode.id]: pluginNode } as Record<string, unknown>
+    bridge.loadJSON({ nodes, rootNodeIds: bridge.getRootNodeIds() } as never)
+
+    const result = await apply([{ op: 'update', id: pluginNode.id, data: { position: [1, 0, 0] } }])
+    expect(result.isError).toBe(false)
+    expect(
+      (bridge.getNode(pluginNode.id as AnyNodeId) as { position?: unknown })?.position,
+    ).toEqual([1, 0, 0])
+  })
+})

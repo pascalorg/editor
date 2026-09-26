@@ -12,7 +12,6 @@ import {
 // Per PLAN §0.6: `useScene` is the DEFAULT export from `@pascal-app/core/store`.
 import useScene from '@pascal-app/core/store'
 import type { SceneMeta } from '../storage/types'
-import { PatchRefusedError } from './patch-refused-error'
 
 export type ValidationError = { nodeId: string; path: string; message: string }
 export type ValidationResult = {
@@ -357,11 +356,6 @@ export class SceneBridge {
     // Zod-normalised copy (which has a generated id if the caller omitted one)
     // instead of the unparsed input.
     const parsedCreateNodes = new Map<number, AnyNode>()
-    // Type of each node created in this patch, for the update type guard.
-    const simCreatedTypes = new Map<string, AnyNodeType>()
-    // Parent of each node created or reparented in this patch, so a cascade
-    // delete follows the tree as the patch leaves it.
-    const simParents = new Map<string, string | null>()
 
     for (let i = 0; i < patches.length; i++) {
       const p = patches[i]
@@ -373,22 +367,11 @@ export class SceneBridge {
             `invalid patch: patches[${i}] create node failed schema: ${res.error.message}`,
           )
         }
-        if (simAvailable.has(res.data.id)) {
-          throw new PatchRefusedError(
-            'node_exists',
-            i,
-            res.data.id,
-            `create id "${res.data.id}" already exists. Use op "update" to change it, or delete it earlier in the same patch to replace it.`,
-          )
-        }
         if (p.parentId !== undefined && !simAvailable.has(p.parentId)) {
           throw new Error(`invalid patch: patches[${i}] create parentId "${p.parentId}" not found`)
         }
         parsedCreateNodes.set(i, res.data)
-        simCreatedTypes.set(res.data.id, res.data.type)
-        simParents.set(res.data.id, p.parentId ?? res.data.parentId ?? null)
         simAvailable.add(res.data.id)
-        simDeleted.delete(res.data.id)
       } else if (p.op === 'update') {
         if (!simAvailable.has(p.id) || simDeleted.has(p.id)) {
           throw new Error(`invalid patch: patches[${i}] update id "${p.id}" not found`)
@@ -396,24 +379,6 @@ export class SceneBridge {
         if (!p.data || typeof p.data !== 'object') {
           throw new Error(`invalid patch: patches[${i}] update data is not an object`)
         }
-        if ('id' in p.data && p.data.id !== p.id) {
-          throw new PatchRefusedError(
-            'identity_change',
-            i,
-            p.id,
-            `update cannot change the id of "${p.id}" to ${JSON.stringify(p.data.id)}. Create a node with the new id and delete the old one instead.`,
-          )
-        }
-        const currentType = simCreatedTypes.get(p.id) ?? nodes[p.id]?.type
-        if ('type' in p.data && p.data.type !== currentType) {
-          throw new PatchRefusedError(
-            'identity_change',
-            i,
-            p.id,
-            `update cannot change the type of "${p.id}" from "${currentType}" to ${JSON.stringify(p.data.type)}. Create a node of the new type instead.`,
-          )
-        }
-        if (p.data.parentId !== undefined) simParents.set(p.id, p.data.parentId ?? null)
       } else if (p.op === 'delete') {
         if (!simAvailable.has(p.id) || simDeleted.has(p.id)) {
           throw new Error(`invalid patch: patches[${i}] delete id "${p.id}" not found`)
@@ -430,13 +395,8 @@ export class SceneBridge {
             )
           }
         }
-        // A later op in this patch may recreate any id the cascade removes and
-        // must not touch the removed ones.
-        for (const id of this._simulateCascade(p.id, simParents)) {
-          simAvailable.delete(id)
-          simDeleted.add(id)
-          simParents.delete(id)
-        }
+        simAvailable.delete(p.id)
+        simDeleted.add(p.id)
       } else {
         throw new Error(`invalid patch: patches[${i}] unknown op`)
       }
@@ -592,41 +552,6 @@ export class SceneBridge {
       }
     }
     return null
-  }
-
-  /**
-   * Ids the core delete cascade removes with `rootId`, on the tree as the
-   * patch leaves it: the store's `children` arrays (what `deleteNodes` walks),
-   * minus children moved elsewhere earlier in the patch, plus children
-   * created or moved under a removed node.
-   */
-  private _simulateCascade(
-    rootId: string,
-    simParents: ReadonlyMap<string, string | null>,
-  ): string[] {
-    const nodes = useScene.getState().nodes
-    const removed = new Set<string>([rootId])
-    const queue = [rootId]
-    const visit = (childId: string, parentId: string) => {
-      if (removed.has(childId)) return
-      if (simParents.has(childId) && simParents.get(childId) !== parentId) return
-      removed.add(childId)
-      queue.push(childId)
-    }
-    while (queue.length > 0) {
-      const id = queue.pop()!
-      const node = nodes[id as AnyNodeId]
-      if (node && 'children' in node && Array.isArray(node.children)) {
-        for (const child of node.children as unknown[]) {
-          const childId = typeof child === 'string' ? child : (child as { id?: unknown })?.id
-          if (typeof childId === 'string') visit(childId, id)
-        }
-      }
-      for (const [childId, parentId] of simParents) {
-        if (parentId === id) visit(childId, id)
-      }
-    }
-    return [...removed]
   }
 
   /**
