@@ -187,6 +187,61 @@ async function floorplanPointer(type: 'pointermove' | 'pointerup', x: number, z:
   })
 }
 
+function polygonArea(polygon: Array<[number, number]>) {
+  let sum = 0
+  for (let index = 0; index < polygon.length; index += 1) {
+    const [x1, y1] = polygon[index]!
+    const [x2, y2] = polygon[(index + 1) % polygon.length]!
+    sum += x1 * y2 - x2 * y1
+  }
+  return Math.abs(sum) / 2
+}
+
+/** Floor area the viewer shows: each slab's live preview polygon, else its stored one. */
+function effectiveSlabArea() {
+  return nodesOfType('slab').reduce((total, slab) => {
+    const preview = useLiveNodeOverrides.getState().get(slab.id)?.polygon
+    return (
+      total +
+      polygonArea(
+        (preview ?? (slab as { polygon: [number, number][] }).polygon) as Array<[number, number]>,
+      )
+    )
+  }, 0)
+}
+
+/** A polygon without its collinear vertices, from its lowest-left vertex, counter-clockwise. */
+function normalizedPolygon(polygon: Array<[number, number]>) {
+  const round = ([x, y]: [number, number]): [number, number] => [
+    Math.round(x * 1e6) / 1e6,
+    Math.round(y * 1e6) / 1e6,
+  ]
+  let points = polygon.map(round)
+  points = points.filter((point, index) => {
+    const previous = points[(index + points.length - 1) % points.length]!
+    const next = points[(index + 1) % points.length]!
+    const cross =
+      (point[0] - previous[0]) * (next[1] - point[1]) -
+      (point[1] - previous[1]) * (next[0] - point[0])
+    return Math.abs(cross) > 1e-9
+  })
+  let signed = 0
+  for (let index = 0; index < points.length; index += 1) {
+    const [x1, y1] = points[index]!
+    const [x2, y2] = points[(index + 1) % points.length]!
+    signed += x1 * y2 - x2 * y1
+  }
+  if (signed < 0) points.reverse()
+  const start = points.reduce(
+    (best, point, index) =>
+      point[0] < points[best]![0] || (point[0] === points[best]![0] && point[1] < points[best]![1])
+        ? index
+        : best,
+    0,
+  )
+  return [...points.slice(start), ...points.slice(0, start)]
+}
+
 describe('3D wall move', () => {
   test('commits one undo step that restores the walls and every derived surface', async () => {
     expect(nodesOfType('slab')).toHaveLength(2)
@@ -309,6 +364,8 @@ describe('3D wall move', () => {
     expect(nodesOfType('slab')).toHaveLength(3)
 
     await moveCursor(2.5)
+    // The preview follows the new rooms: the floors still tile the 4 × 4 box, no overlap.
+    expect(effectiveSlabArea()).toBeCloseTo(16, 6)
     await act(async () => {
       window.dispatchEvent(new Event('pointerup'))
     })
@@ -319,6 +376,48 @@ describe('3D wall move', () => {
     expect((useScene.getState().nodes[DIVIDER_ID] as WallNode).start).toEqual([2, 0])
     expect(useScene.getState().nodes[foreignId]).toBeDefined()
     expect(nodesOfType('slab')).toHaveLength(3)
+  })
+
+  test('a bridged junction previews the floor the drop commits', async () => {
+    // A diagonal boundary meets the east wall at (4, 0): moving the east wall bridges that
+    // junction along the south wall instead of stretching the diagonal.
+    const east = 'wall_wall-move-east' as AnyNodeId
+    useScene.getState().applyNodeChanges({
+      create: [
+        {
+          node: WallNode.parse({
+            id: 'wall_wall-move-diagonal',
+            parentId: LEVEL_ID,
+            start: [2, 1],
+            end: [4, 0],
+          }),
+          parentId: LEVEL_ID,
+        },
+      ],
+    })
+    clearSceneHistory()
+    const renderer = await armWall(east)
+    await dragFrom(4, 4.5)
+    const previews = new Map(
+      nodesOfType('slab').map((slab) => [
+        slab.id,
+        (useLiveNodeOverrides.getState().get(slab.id)?.polygon ??
+          (slab as { polygon: [number, number][] }).polygon) as Array<[number, number]>,
+      ]),
+    )
+    await act(async () => {
+      window.dispatchEvent(new Event('pointerup'))
+    })
+    await act(async () => renderer.unmount())
+
+    expect(useScene.getState().nodes[east] as WallNode).toMatchObject({ start: [4.5, 0] })
+    for (const slab of nodesOfType('slab') as Array<{
+      id: AnyNodeId
+      polygon: [number, number][]
+    }>) {
+      expect(previews.has(slab.id)).toBe(true)
+      expect(normalizedPolygon(previews.get(slab.id)!)).toEqual(normalizedPolygon(slab.polygon))
+    }
   })
 
   test('split view: a 3D drop with the real 2D overlay mounted records one step', async () => {
