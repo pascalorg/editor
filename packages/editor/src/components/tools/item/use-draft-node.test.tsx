@@ -240,6 +240,35 @@ describe('useDraftNode block face commit', () => {
     }
   })
 
+  test('cancel after the original host was deleted mid-carry keeps the item on the level', () => {
+    const hosted = ItemNode.parse({
+      id: 'item_host-deleted-cancel',
+      parentId: BLOCK_ID,
+      asset: {
+        id: 'potted-plant',
+        category: 'decor',
+        name: 'Potted plant',
+        thumbnail: '/potted-plant.png',
+        src: '/potted-plant.glb',
+        dimensions: [0.5, 0.39, 0.5],
+      },
+      position: [0.5, 0, 0],
+      blockFaceId: 'face-top',
+    })
+    useScene.getState().createNode(hosted, BLOCK_ID as AnyNodeId)
+    useScene.temporal.getState().clear()
+
+    const draft = draftNode!
+    draft.adopt(hosted)
+    draft.updateSurface({ parentId: LEVEL_ID, position: [1, 0, 1], blockFaceId: undefined }, null)
+    useScene.getState().deleteNode(BLOCK_ID as AnyNodeId)
+    draft.destroy()
+
+    const nodes = useScene.getState().nodes
+    expect(nodes[hosted.id as AnyNodeId]?.parentId).toBe(LEVEL_ID)
+    expect((nodes[LEVEL_ID as AnyNodeId] as LevelNode).children).toContain(hosted.id)
+  })
+
   test('never resumes history that another owner is pausing', () => {
     const hosted = ItemNode.parse({
       id: 'item_owned-pause-plant',

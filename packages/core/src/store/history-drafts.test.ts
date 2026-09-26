@@ -184,4 +184,39 @@ describe('scene history drafts', () => {
     end()
     expect(() => applySceneSnapshot(snapshot as never, { origin: 'host' })).not.toThrow()
   })
+
+  test('undoing a foreign rename mid-carry reverts only the rename and keeps redo', () => {
+    const end = beginSceneHistoryDraft(itemId, node(itemId)!)
+    runSceneHistoryDraftWrite(() => useScene.getState().updateNode(itemId, { position: [3, 0, 3] }))
+    useScene.getState().updateNode(itemId, { name: 'Renamed by a collaborator' })
+    expect(past()).toBe(1)
+
+    useScene.temporal.getState().undo()
+    expect((node(itemId) as ItemNode).name).toBe(item.name)
+    expect((node(itemId) as ItemNode).position).toEqual([3, 0, 3])
+    expect(useScene.temporal.getState().futureStates).toHaveLength(1)
+
+    useScene.temporal.getState().redo()
+    expect((node(itemId) as ItemNode).name).toBe('Renamed by a collaborator')
+    expect((node(itemId) as ItemNode).position).toEqual([3, 0, 3])
+    end()
+  })
+
+  test('a foreign write to a field the carry wrote is its own step, not masked', () => {
+    const end = beginSceneHistoryDraft(itemId, node(itemId)!)
+    runSceneHistoryDraftWrite(() => useScene.getState().updateNode(itemId, { position: [3, 0, 3] }))
+    const commits: SceneCommit[] = []
+    const stop = subscribeSceneCommits((commit) => commits.push(commit))
+    useScene.getState().updateNode(itemId, { position: [5, 0, 5] })
+    stop()
+    expect(past()).toBe(1)
+    expect((commits.at(-1)!.current.nodes[itemId] as ItemNode).position).toEqual([5, 0, 5])
+    // The carry writing the field again owns it again, from the foreign value.
+    runSceneHistoryDraftWrite(() => useScene.getState().updateNode(itemId, { position: [2, 0, 2] }))
+    useScene.getState().updateNode(wallId, { start: [0, 1] })
+    expect(
+      (useScene.temporal.getState().pastStates[1]!.nodes![itemId] as ItemNode).position,
+    ).toEqual([5, 0, 5])
+    end()
+  })
 })
