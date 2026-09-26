@@ -483,6 +483,20 @@ describe('3D wall move', () => {
     }
   })
 
+  test('after a drop that merges rooms, nothing deleted stays marked dirty', async () => {
+    expect(nodesOfType('slab')).toHaveLength(2)
+    const renderer = await armWall(DIVIDER_ID)
+    await dragFrom(2, 0)
+    await act(async () => {
+      window.dispatchEvent(new Event('pointerup'))
+    })
+    await act(async () => renderer.unmount())
+
+    const nodes = useScene.getState().nodes
+    expect(nodesOfType('slab').length).toBeLessThan(2)
+    expect([...useScene.getState().dirtyNodes].filter((id) => !nodes[id as AnyNodeId])).toEqual([])
+  })
+
   test('split view: a 3D drop with the real 2D overlay mounted records one step', async () => {
     const before = sceneNodes()
     const renderer = await armSplitView()
