@@ -106,6 +106,15 @@ export {
   isOperationDoorType,
   SECTIONAL_GARAGE_RENDER_OPEN_SCALE,
 } from './lib/door-operation'
+export {
+  blockFloorPlaced,
+  columnFloorPlaced,
+  ductTerminalFloorPlaced,
+  floorPlacedConfig,
+  hvacEquipmentFloorPlaced,
+  spawnFloorPlaced,
+  stairFloorPlaced,
+} from './lib/floor-placed-builtins'
 export { getDefaultLevelName, getLevelDisplayName } from './lib/level-name'
 export {
   areMeasurementPointsCoplanar,
@@ -429,6 +438,11 @@ export {
   createStairFlightFromStair,
   type StairFlightOverrides,
 } from './systems/stair/stair-flight'
+export {
+  computeStairSegmentFloorStackTransforms,
+  getStairFloorPlacedFootprints,
+  getStairSegmentFloorPlacedFootprints,
+} from './systems/stair/stair-floor-stack'
 export { type StairFootprintAABB, stairFootprintAABB } from './systems/stair/stair-footprint'
 export { createSurfaceOpeningPreviewController } from './systems/stair/stair-opening-preview'
 export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'

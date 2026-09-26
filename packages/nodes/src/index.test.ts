@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { AnyNode, loadPlugin, nodeKindOf, nodeRegistry } from '@pascal-app/core'
+import { AnyNode, floorPlacedConfig, loadPlugin, nodeKindOf, nodeRegistry } from '@pascal-app/core'
 import { builtinPlugin } from './index'
 
 describe('builtinPlugin', () => {
@@ -37,5 +37,16 @@ describe('builtinPlugin', () => {
     const missingFromUnion = [...registryKinds].filter((k) => !unionKinds.has(k))
     expect(missingFromRegistry).toEqual([])
     expect(missingFromUnion).toEqual([])
+  })
+  test('headless floor lift uses the same floorPlaced capability as each definition', () => {
+    // With the registry empty, as in MCP and the hosted scene API, core's
+    // nodeLevelFrame reads floorPlacedConfig. Item-like kinds get their box
+    // footprint from core's own query path instead.
+    const itemLike = new Set(['item', 'shelf', 'cabinet', 'cabinet-module', 'procedural-item'])
+    const drifted = (builtinPlugin.nodes ?? [])
+      .filter((def) => def.capabilities.floorPlaced && !itemLike.has(def.kind))
+      .filter((def) => floorPlacedConfig(def.kind) !== def.capabilities.floorPlaced)
+      .map((def) => def.kind)
+    expect(drifted).toEqual([])
   })
 })

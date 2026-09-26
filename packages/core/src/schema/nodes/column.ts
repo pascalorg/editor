@@ -996,3 +996,38 @@ export const COLUMN_PRESETS = {
 export type ColumnPresetId = keyof typeof COLUMN_PRESETS
 
 export type ColumnNode = z.infer<typeof ColumnNode>
+
+const COLUMN_ROUND_CROSS_SECTIONS = new Set<ColumnNode['crossSection']>([
+  'round',
+  'octagonal',
+  'sixteen-sided',
+])
+
+/** Whether a column's cross-section is sized by its radius. */
+export function isRoundColumnCrossSection(crossSection: ColumnNode['crossSection']): boolean {
+  return COLUMN_ROUND_CROSS_SECTIONS.has(crossSection)
+}
+
+/**
+ * A column's visible XZ footprint half-extents per supportStyle and
+ * crossSection. Vertical supports use the shaft geometry (radius for round /
+ * octagonal / sixteen-sided, width/depth for square / rectangular);
+ * non-vertical supports fall back to the widest sensible brace bound so the
+ * rotation handle clears the splay.
+ */
+export function columnFootprintHalf(n: ColumnNode): { halfX: number; halfZ: number } {
+  if (n.supportStyle === 'vertical') {
+    if (isRoundColumnCrossSection(n.crossSection)) {
+      return { halfX: n.radius, halfZ: n.radius }
+    }
+    if (n.crossSection === 'square') {
+      return { halfX: n.width / 2, halfZ: n.width / 2 }
+    }
+    return { halfX: n.width / 2, halfZ: n.depth / 2 }
+  }
+  return {
+    halfX:
+      Math.max(n.width, n.braceWidth ?? 0, n.braceBottomSpread ?? 0, n.braceTopSpread ?? 0) / 2,
+    halfZ: Math.max(n.depth, n.braceDepth ?? 0) / 2,
+  }
+}

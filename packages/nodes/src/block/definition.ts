@@ -1,5 +1,7 @@
 import {
   type BlockNode as BlockNodeType,
+  blockBounds,
+  blockFloorPlaced,
   createBoxBlockTopology,
   type NodeDefinition,
 } from '@pascal-app/core'
@@ -13,38 +15,6 @@ import { blockParametrics } from './parametrics'
 import { BlockNode } from './schema'
 import { blockSlots } from './slots'
 import { blockSurfaceProvider } from './surface'
-
-export function blockBounds(node: BlockNodeType) {
-  const xs = node.topology.vertices.map((vertex) => vertex.position[0])
-  const ys = node.topology.vertices.map((vertex) => vertex.position[1])
-  const zs = node.topology.vertices.map((vertex) => vertex.position[2])
-  if (xs.length === 0) {
-    return {
-      size: [0, 0, 0] as [number, number, number],
-      center: [0, 0, 0] as [number, number, number],
-    }
-  }
-  const minX = Math.min(...xs)
-  const maxX = Math.max(...xs)
-  const minY = Math.min(...ys)
-  const maxY = Math.max(...ys)
-  const minZ = Math.min(...zs)
-  const maxZ = Math.max(...zs)
-  return {
-    size: [maxX - minX, maxY - minY, maxZ - minZ] as [number, number, number],
-    center: [(minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2] as [number, number, number],
-  }
-}
-
-function footprintPosition(node: BlockNodeType, center: [number, number, number]) {
-  const cos = Math.cos(node.rotation)
-  const sin = Math.sin(node.rotation)
-  return [
-    node.position[0] + center[0] * cos + center[2] * sin,
-    node.position[1],
-    node.position[2] - center[0] * sin + center[2] * cos,
-  ] as [number, number, number]
-}
 
 export const blockDefinition: NodeDefinition<typeof BlockNode> = {
   kind: 'block',
@@ -91,18 +61,7 @@ export const blockDefinition: NodeDefinition<typeof BlockNode> = {
     duplicable: { subtree: true },
     deletable: true,
     dragBounds: (rawNode) => blockBounds(rawNode as BlockNodeType),
-    floorPlaced: {
-      footprint: (rawNode) => {
-        const node = rawNode as BlockNodeType
-        const { size, center } = blockBounds(node)
-        return {
-          dimensions: size,
-          position: footprintPosition(node, center),
-          rotation: [0, node.rotation, 0] as [number, number, number],
-        }
-      },
-      collides: true,
-    },
+    floorPlaced: blockFloorPlaced,
     paint: blockPaint,
     slots: (rawNode) => blockSlots(rawNode as BlockNodeType),
     faceHost: blockFaceHost,

@@ -1,4 +1,4 @@
-import type { NodeDefinition } from '@pascal-app/core'
+import { ductTerminalFloorPlaced, type NodeDefinition } from '@pascal-app/core'
 import { buildDuctTerminalFloorplan } from './floorplan'
 import { buildDuctTerminalGeometry } from './geometry'
 import { ductTerminalParametrics } from './parametrics'
@@ -49,13 +49,7 @@ export const ductTerminalDefinition: NodeDefinition<typeof DuctTerminalNode> = {
     // generic FloorElevationSystem lifts its mesh Y by the slab's elevation
     // so the face sits on the slab surface instead of sinking into it.
     // Ceiling / wall mounts derive their Y elsewhere, so `applies` skips them.
-    floorPlaced: {
-      footprint: (node) => {
-        const t = node as DuctTerminalNode
-        return { dimensions: [t.width, 0, t.depth], rotation: [0, t.rotation, 0] }
-      },
-      applies: (node) => (node as DuctTerminalNode).mount === 'floor',
-    },
+    floorPlaced: ductTerminalFloorPlaced,
   },
 
   parametrics: ductTerminalParametrics,

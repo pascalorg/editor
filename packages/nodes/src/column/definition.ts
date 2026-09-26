@@ -1,9 +1,12 @@
 import {
   ColumnNode as ColumnNodeSchema,
   type ColumnNode as ColumnNodeType,
+  columnFloorPlaced,
+  columnFootprintHalf,
   type GroupMoveSnapArgs,
   type GroupMoveSnapResult,
   type HandleDescriptor,
+  isRoundColumnCrossSection,
   type NodeDefinition,
 } from '@pascal-app/core'
 import { withHostedChildren } from '../shared/hosted-resize'
@@ -38,12 +41,6 @@ const MIN_COLUMN_RADIUS = 0.05
 const MIN_BRACE_DIMENSION = 0.04
 const MIN_BRACE_BOTTOM_SPREAD = 0.2
 const MIN_BRACE_TOP_SPREAD = 0
-
-const ROUND_CROSS_SECTIONS = new Set<ColumnNodeType['crossSection']>([
-  'round',
-  'octagonal',
-  'sixteen-sided',
-])
 
 function columnHeightHandle(): HandleDescriptor<ColumnNodeType> {
   return {
@@ -206,28 +203,6 @@ function isLeanToManagedColumn(node: ColumnNodeType): boolean {
   )
 }
 
-// Resolve the column's visible XZ footprint half-extents per supportStyle
-// + crossSection. Vertical supports use the shaft geometry (radius for
-// round / octagonal / sixteen-sided, width/depth for square / rectangular);
-// non-vertical supports fall back to the widest sensible brace bound so
-// the rotation handle clears the splay.
-function columnFootprintHalf(n: ColumnNodeType): { halfX: number; halfZ: number } {
-  if (n.supportStyle === 'vertical') {
-    if (ROUND_CROSS_SECTIONS.has(n.crossSection)) {
-      return { halfX: n.radius, halfZ: n.radius }
-    }
-    if (n.crossSection === 'square') {
-      return { halfX: n.width / 2, halfZ: n.width / 2 }
-    }
-    return { halfX: n.width / 2, halfZ: n.depth / 2 }
-  }
-  return {
-    halfX:
-      Math.max(n.width, n.braceWidth ?? 0, n.braceBottomSpread ?? 0, n.braceTopSpread ?? 0) / 2,
-    halfZ: Math.max(n.depth, n.braceDepth ?? 0) / 2,
-  }
-}
-
 // Whole-column rotation gizmo — same pattern as the elevator. Curved
 // two-headed arrow at the +X / +Z corner of the footprint, a guide ring
 // at the corner-diagonal radius on hover/drag. `apply` negates the
@@ -309,7 +284,7 @@ function columnHandles(node: ColumnNodeType): HandleDescriptor<ColumnNodeType>[]
   } else if (managedByLeanTo) {
     // Lean-to sync owns the post's structural height and footprint. Keep
     // rotation user-owned so asymmetric styles such as K-braces can be flipped.
-  } else if (ROUND_CROSS_SECTIONS.has(node.crossSection)) {
+  } else if (isRoundColumnCrossSection(node.crossSection)) {
     handles.push(columnRadiusHandle())
   } else if (node.crossSection === 'square') {
     handles.push(columnUniformHandle())
@@ -389,19 +364,7 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
     // square → width, rectangular → width/depth, plus brace spread) so the
     // box, slab-overlap, and collision all track the real column size rather
     // than the raw width/depth (stale for a round column resized by radius).
-    floorPlaced: {
-      footprint: (node) => {
-        const column = node as ColumnNodeType
-        const { halfX, halfZ } = columnFootprintHalf(column)
-        return {
-          dimensions: [halfX * 2, column.height, halfZ * 2] as [number, number, number],
-          // Column stores Y rotation as a scalar; the slab-overlap query
-          // expects the full Euler tuple.
-          rotation: [0, column.rotation, 0] as [number, number, number],
-        }
-      },
-      collides: true,
-    },
+    floorPlaced: columnFloorPlaced,
   },
 
   parametrics: columnParametrics,

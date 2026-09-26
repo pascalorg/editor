@@ -54,6 +54,7 @@ export {
   BlockTopology,
   type BlockTopologyIssue,
   BlockVertex,
+  blockBounds,
   blockUndirectedEdgeKey,
   createBoxBlockTopology,
   getBlockFaceCentroid,
@@ -86,6 +87,8 @@ export {
   ColumnShaftProfile,
   ColumnStyle,
   ColumnSupportStyle,
+  columnFootprintHalf,
+  isRoundColumnCrossSection,
 } from './nodes/column'
 export {
   CONSTRUCTION_DRAWING_TYPES,

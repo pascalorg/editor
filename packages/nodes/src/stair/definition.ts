@@ -1,5 +1,6 @@
 import {
   type AnyNodeId,
+  computeStairSegmentFloorStackTransforms,
   type HandleDescriptor,
   type NodeDefinition,
   resolveStairTotalRise,
@@ -7,6 +8,7 @@ import {
   StairNode as StairNodeSchema,
   type StairNode as StairNodeType,
   type StairSegmentNode,
+  stairFloorPlaced,
   stairFootprintAABB,
   useScene,
 } from '@pascal-app/core'
@@ -400,10 +402,6 @@ function stairHandles(node: StairNodeType): HandleDescriptor<StairNodeType>[] {
   return handles
 }
 
-import {
-  computeStairSegmentFloorStackTransforms,
-  getStairFloorPlacedFootprints,
-} from './floor-stack'
 import { buildStairFloorplan } from './floorplan'
 import {
   curvedStairInnerRadiusAffordance,
@@ -471,10 +469,7 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
     },
     duplicable: { subtree: true },
     deletable: true,
-    floorPlaced: {
-      footprints: (node, ctx) =>
-        ctx ? getStairFloorPlacedFootprints(node as StairNodeType, ctx.nodes) : [],
-    },
+    floorPlaced: stairFloorPlaced,
     slots: (node) => stairSlots(node as StairNodeType),
     paint: stairPaint,
   },

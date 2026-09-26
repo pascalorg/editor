@@ -1,10 +1,7 @@
-import type {
-  AnyNode,
-  AnyNodeId,
-  FloorPlacedFootprint,
-  StairNode,
-  StairSegmentNode,
-} from '@pascal-app/core'
+import type { FloorPlacedFootprint } from '../../registry/types'
+import type { StairNode } from '../../schema/nodes/stair'
+import type { StairSegmentNode } from '../../schema/nodes/stair-segment'
+import type { AnyNode, AnyNodeId } from '../../schema/types'
 
 type SegmentTransform = {
   position: [number, number, number]

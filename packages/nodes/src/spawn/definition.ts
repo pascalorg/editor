@@ -1,4 +1,9 @@
-import type { HandleDescriptor, NodeDefinition, SpawnNode as SpawnNodeType } from '@pascal-app/core'
+import {
+  type HandleDescriptor,
+  type NodeDefinition,
+  type SpawnNode as SpawnNodeType,
+  spawnFloorPlaced,
+} from '@pascal-app/core'
 import { buildSpawnFloorplan } from './floorplan'
 import { spawnRotateAffordance } from './floorplan-affordances'
 import { spawnFloorplanMoveTarget } from './floorplan-move'
@@ -74,9 +79,7 @@ export const spawnDefinition: NodeDefinition<typeof SpawnNode> = {
     presettable: false,
     // Slab elevation lift via the generic `<FloorElevationSystem>`. The
     // spawn marker is a 1.8m-tall figure with a ~0.6m ring footprint.
-    floorPlaced: {
-      footprint: () => ({ dimensions: [0.6, 1.8, 0.6], rotation: [0, 0, 0] }),
-    },
+    floorPlaced: spawnFloorPlaced,
   },
 
   parametrics: spawnParametrics,

@@ -246,6 +246,29 @@ export function createBoxBlockTopology(width = 2, height = 2.4, depth = 2): Bloc
   }
 }
 
+/** Axis-aligned bounds of a block's vertices in its own frame. */
+export function blockBounds(node: Pick<BlockNode, 'topology'>): {
+  size: [number, number, number]
+  center: [number, number, number]
+} {
+  const xs = node.topology.vertices.map((vertex) => vertex.position[0])
+  const ys = node.topology.vertices.map((vertex) => vertex.position[1])
+  const zs = node.topology.vertices.map((vertex) => vertex.position[2])
+  if (xs.length === 0) {
+    return { size: [0, 0, 0], center: [0, 0, 0] }
+  }
+  const minX = Math.min(...xs)
+  const maxX = Math.max(...xs)
+  const minY = Math.min(...ys)
+  const maxY = Math.max(...ys)
+  const minZ = Math.min(...zs)
+  const maxZ = Math.max(...zs)
+  return {
+    size: [maxX - minX, maxY - minY, maxZ - minZ],
+    center: [(minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2],
+  }
+}
+
 export const BlockNode = BaseNode.extend({
   id: objectId('block'),
   type: nodeType('block'),

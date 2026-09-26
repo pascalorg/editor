@@ -1,4 +1,5 @@
 import { getFloorPlacedFootprints } from '../hooks/spatial-grid/floor-placed-footprints'
+import { floorPlacedConfig } from '../lib/floor-placed-builtins'
 import { itemOverlapsPolygon } from '../lib/item-polygon-overlap'
 import {
   pointInPolygon as containsPoint,
@@ -7,7 +8,6 @@ import {
 } from '../lib/polygon-relations'
 import { getRenderableSlabPolygon } from '../lib/slab-polygon'
 import { levelBaseElevationAt } from '../lib/terrain-support'
-import { nodeRegistry } from '../registry/registry'
 import { getBlockFaceFrame } from '../schema/nodes/block'
 import type { ItemNode } from '../schema/nodes/item'
 import { getRoofWallFaceFrame, roofFacePointToSegment } from '../schema/nodes/roof-segment-walls'
@@ -84,7 +84,7 @@ function floorLift(node: AnyNode | ProceduralItemNode, nodes: QueryNodes): numbe
   if (!node.parentId || nodes[node.parentId]?.type !== 'level' || !('position' in node)) return 0
   const position = node.position as Vec3
   const supportSlabId = (node as { supportSlabId?: string }).supportSlabId
-  const capability = nodeRegistry.get(node.type)?.capabilities.floorPlaced
+  const capability = floorPlacedConfig(node.type)
   const { slabs, walls } = levelSurfaces(nodes, node.parentId)
   const ground = levelBaseElevationAt(
     nodes as Record<string, AnyNode>,
@@ -217,7 +217,7 @@ export function nodeLevelFrame(id: string, nodes: QueryNodes, seen = new Set<str
         ? ([0, transform.rotation, 0] as Vec3)
         : transform.rotation
     const position = [...(transform.position ?? [0, 0, 0])] as Vec3
-    const capability = nodeRegistry.get(node.type)?.capabilities.floorPlaced
+    const capability = floorPlacedConfig(node.type)
     if (!capability?.applies || capability.applies(node as AnyNode)) {
       position[1] += floorLift(node, nodes)
     }

@@ -2,6 +2,7 @@
 
 import {
   BlockNode,
+  blockBounds,
   collectAlignmentAnchors,
   emitter,
   type GridEvent,
@@ -34,7 +35,7 @@ import {
   stopPlacementCommitPropagation,
   subscribeFloorPlacementClicks,
 } from '../shared/floor-placement'
-import { blockBounds, blockDefinition } from './definition'
+import { blockDefinition } from './definition'
 import BlockPreview from './preview'
 
 const BlockTool = () => {

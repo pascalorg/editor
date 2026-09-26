@@ -1,4 +1,4 @@
-import type { NodeDefinition } from '@pascal-app/core'
+import { hvacEquipmentFloorPlaced, type NodeDefinition } from '@pascal-app/core'
 import { buildHvacEquipmentFloorplan } from './floorplan'
 import { buildHvacEquipmentGeometry } from './geometry'
 import { hvacEquipmentParametrics } from './parametrics'
@@ -49,15 +49,7 @@ export const hvacEquipmentDefinition: NodeDefinition<typeof HvacEquipmentNode> =
     rotatable: { axes: ['y'], snapAngles: [Math.PI / 4] },
     duplicable: true,
     deletable: true,
-    floorPlaced: {
-      footprint: (node) => {
-        const n = node as HvacEquipmentNode
-        return {
-          dimensions: [n.width, n.height, n.depth],
-          rotation: [0, n.rotation, 0],
-        }
-      },
-    },
+    floorPlaced: hvacEquipmentFloorPlaced,
   },
 
   parametrics: hvacEquipmentParametrics,
