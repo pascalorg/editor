@@ -13,8 +13,12 @@ test('a render error in the viewer scene reaches both the immersive session and 
     (cause) => seen.push(`immersive: ${String(cause)}`),
     (cause) => seen.push(`host: ${String(cause)}`),
   )
+  // React reports caught render errors to the page (console, reportError);
+  // silence both so the boundary's own handling is what the test observes.
   const original = console.error
+  const originalReport = globalThis.reportError
   console.error = () => {}
+  globalThis.reportError = () => {}
   try {
     const renderer = await create(
       <ErrorBoundary fallback={null} onError={onError} scope="viewer-scene">
@@ -24,6 +28,7 @@ test('a render error in the viewer scene reaches both the immersive session and 
     await renderer.unmount()
   } finally {
     console.error = original
+    globalThis.reportError = originalReport
   }
   expect(seen).toEqual([
     'immersive: Error: Failed to fetch dynamically imported module: /plugin-renderer.js',
