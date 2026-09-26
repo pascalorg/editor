@@ -442,6 +442,47 @@ describe('3D wall move', () => {
     }
   })
 
+  test('a curved wall at a bridged junction previews the floor the drop commits', async () => {
+    const east = 'wall_wall-move-east' as AnyNodeId
+    useScene.getState().applyNodeChanges({
+      update: [{ id: east, data: { curveOffset: 0.5 } as Partial<AnyNode> }],
+      create: [
+        {
+          node: WallNode.parse({
+            id: 'wall_wall-move-diagonal',
+            parentId: LEVEL_ID,
+            start: [2, 1],
+            end: [4, 0],
+          }),
+          parentId: LEVEL_ID,
+        },
+      ],
+    })
+    clearSceneHistory()
+    const renderer = await armWall(east)
+    await dragFrom(4, 4.5)
+    const previews = new Map(
+      nodesOfType('slab').map((slab) => [
+        slab.id,
+        (useLiveNodeOverrides.getState().get(slab.id)?.polygon ??
+          (slab as { polygon: [number, number][] }).polygon) as Array<[number, number]>,
+      ]),
+    )
+    await act(async () => {
+      window.dispatchEvent(new Event('pointerup'))
+    })
+    await act(async () => renderer.unmount())
+
+    expect(useScene.getState().nodes[east] as WallNode).toMatchObject({ start: [4.5, 0] })
+    for (const slab of nodesOfType('slab') as Array<{
+      id: AnyNodeId
+      polygon: [number, number][]
+    }>) {
+      expect(previews.has(slab.id)).toBe(true)
+      expect(normalizedPolygon(previews.get(slab.id)!)).toEqual(normalizedPolygon(slab.polygon))
+    }
+  })
+
   test('split view: a 3D drop with the real 2D overlay mounted records one step', async () => {
     const before = sceneNodes()
     const renderer = await armSplitView()
