@@ -1,4 +1,4 @@
-import { get, set } from 'idb-keyval'
+import { del, get, keys, set } from 'idb-keyval'
 import { customAlphabet } from 'nanoid'
 
 export const ASSET_PREFIX = 'asset_data:'
@@ -8,6 +8,19 @@ const urlCache = new Map<string, string>()
 
 // Unlike crypto.randomUUID(), nanoid works outside secure contexts.
 const nanoAssetId = customAlphabet('0123456789abcdefghijklmnopqrstuvwxyz', 16)
+
+function assetIdFromUrl(url: string): string | null {
+  if (!url.startsWith('asset://')) return null
+  return url.replace('asset://', '') || null
+}
+
+function revokeCachedObjectUrl(id: string) {
+  const objectUrl = urlCache.get(id)
+  if (objectUrl) {
+    URL.revokeObjectURL(objectUrl)
+    urlCache.delete(id)
+  }
+}
 
 /**
  * Save a file to IndexedDB and return a custom protocol URL
@@ -31,9 +44,8 @@ export async function loadAssetUrl(url: string): Promise<string | null> {
   }
 
   // Handle our custom asset protocol
-  if (url.startsWith('asset://')) {
-    const id = url.replace('asset://', '')
-
+  const id = assetIdFromUrl(url)
+  if (id) {
     // Check cache first
     if (urlCache.has(id)) {
       return urlCache.get(id)!
@@ -56,4 +68,68 @@ export async function loadAssetUrl(url: string): Promise<string | null> {
 
   // Legacy data URLs are returned as is
   return url
+}
+
+/**
+ * Delete a locally stored `asset://` file from IndexedDB and drop any cached
+ * object URL. No-op for non-asset URLs.
+ *
+ * Callers must only invoke this when no *persisted* scene still references
+ * the URL — IndexedDB is origin-global and not scoped by project (#733).
+ */
+export async function deleteAsset(url: string): Promise<boolean> {
+  const id = assetIdFromUrl(url)
+  if (!id) return false
+  revokeCachedObjectUrl(id)
+  try {
+    await del(`${ASSET_PREFIX}${id}`)
+    return true
+  } catch (error) {
+    console.error('Failed to delete asset:', error)
+    return false
+  }
+}
+
+/** Every `asset://` id currently stored in IndexedDB. */
+export async function listLocalAssetUrls(): Promise<string[]> {
+  try {
+    const allKeys = await keys()
+    const urls: string[] = []
+    for (const key of allKeys) {
+      if (typeof key === 'string' && key.startsWith(ASSET_PREFIX)) {
+        urls.push(`asset://${key.slice(ASSET_PREFIX.length)}`)
+      }
+    }
+    return urls
+  } catch (error) {
+    console.error('Failed to list local assets:', error)
+    return []
+  }
+}
+
+/**
+ * Explicit garbage collection: delete every local asset URL not in
+ * `keepUrls`.
+ *
+ * `keepUrls` MUST be the union of asset references across **every persisted
+ * graph** the origin can still open (current scene, localStorage scene,
+ * server scenes). A keep-set built from only the active graph will corrupt
+ * other projects that share an `asset://` handle after duplication (#733).
+ */
+export async function sweepLocalAssetsExcept(keepUrls: Iterable<string>): Promise<number> {
+  const keep = new Set<string>()
+  for (const url of keepUrls) {
+    if (typeof url === 'string' && url.startsWith('asset://')) keep.add(url)
+  }
+
+  let removed = 0
+  try {
+    for (const url of await listLocalAssetUrls()) {
+      if (keep.has(url)) continue
+      if (await deleteAsset(url)) removed += 1
+    }
+  } catch (error) {
+    console.error('Failed to sweep local assets:', error)
+  }
+  return removed
 }
