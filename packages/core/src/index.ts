@@ -369,6 +369,7 @@ export {
   type SceneOperationPatch,
   type ScenePatch,
   sceneHistoryDraftRevertUpdates,
+  settleSceneHistoryDrafts,
 } from './store/use-scene'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'
 export {

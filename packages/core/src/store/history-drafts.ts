@@ -223,6 +223,19 @@ export function sceneHistoryDraftRevertUpdates(
   return updates
 }
 
+/**
+ * A drop committed these drafts' carried state: nothing the carry wrote is left to revert, so a
+ * co-holder's later cancel or cleanup (the 3D mover after a split-view 2D drop) keeps the drop.
+ */
+export function settleSceneHistoryDrafts(ids: Iterable<AnyNodeId>): void {
+  for (const id of ids) {
+    const draft = sceneHistoryDrafts.get(id)
+    if (!draft) continue
+    draft.owned.clear()
+    draft.hostEntries.clear()
+  }
+}
+
 export function clearSceneHistoryDrafts(): void {
   sceneHistoryDrafts.clear()
 }

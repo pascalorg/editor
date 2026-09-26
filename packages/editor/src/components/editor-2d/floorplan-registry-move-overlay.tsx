@@ -19,6 +19,7 @@ import {
   nodeRegistry,
   runSceneHistoryDraftWrite,
   sceneHistoryDraftRevertUpdates,
+  settleSceneHistoryDrafts,
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
@@ -175,12 +176,26 @@ export function FloorplanRegistryMoveOverlay() {
       const ownWrite = runSceneHistoryDraftWrite
       // Puts back only the fields this move wrote and still holds; a rename or any other write
       // someone made mid-move stays.
+      // The drop ends the carry: a transient marker (the 3D mover's, in split view) goes even
+      // when someone else edited the metadata meanwhile and the move no longer holds it.
+      const endTransientMarkers = () => {
+        const nodes = useScene.getState().nodes
+        const updates = session.affectedIds.flatMap((id) => {
+          const metadata = nodes[id]?.metadata as Record<string, unknown> | undefined
+          if (!metadata?.isTransient) return []
+          const { isTransient: _transient, ...rest } = metadata
+          return [{ id, data: { metadata: rest } }]
+        })
+        if (updates.length > 0) useScene.getState().updateNodes(updates)
+      }
       const revertOwnWrites = () =>
         ownWrite(() => {
           const updates = sceneHistoryDraftRevertUpdates(session.affectedIds)
           if (updates.length > 0) useScene.getState().updateNodes(updates)
         })
       const recordDrop = (write: () => void) => {
+        // The drop decides committed-ness: a co-holder's cleanup must not revert it.
+        settleSceneHistoryDrafts(session.affectedIds)
         endDrafts()
         const drop = beginSceneHistoryPauseSession(useScene, { gesture: movingNode.id })
         try {
@@ -364,7 +379,10 @@ export function FloorplanRegistryMoveOverlay() {
 
         if (commitValid && session.commit) {
           revertOwnWrites()
-          recordDrop(() => session.commit?.())
+          recordDrop(() => {
+            session.commit?.()
+            endTransientMarkers()
+          })
           sfxEmitter.emit('sfx:item-place')
           useViewer.getState().setSelection({ selectedIds: snapshots.map((s) => s.id) })
           return
@@ -419,7 +437,10 @@ export function FloorplanRegistryMoveOverlay() {
           //   2. Resume history.
           //   3. Re-apply the final state — recorded as one tracked change.
           revertOwnWrites()
-          recordDrop(() => useScene.getState().updateNodes(finalUpdates))
+          recordDrop(() => {
+            useScene.getState().updateNodes(finalUpdates)
+            endTransientMarkers()
+          })
           sfxEmitter.emit('sfx:item-place')
           // Re-select the moved node(s) — mirrors the legacy 3D move
           // tool. The action menu cleared selection on Move click so
