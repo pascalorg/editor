@@ -72,7 +72,7 @@
     "origin": null,
     "past": [],
     "future": [],
-    "tracking": false
+    "tracking": true
   },
   {
     "stage": "pointer",
@@ -147,7 +147,7 @@
     "origin": null,
     "past": [],
     "future": [],
-    "tracking": false
+    "tracking": true
   },
   {
     "stage": "unmount",
