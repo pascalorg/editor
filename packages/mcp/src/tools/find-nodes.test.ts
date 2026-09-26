@@ -7,6 +7,7 @@ import {
   type AnyNodeId,
   BlockNode,
   ColumnNode,
+  ImportedMeshNode,
   nodeKindOf,
   WallNode,
   WindowNode,
@@ -163,6 +164,48 @@ describe('find_nodes', () => {
     const blocks = await client.callTool({ name: 'find_nodes', arguments: { type: 'block' } })
     const parsed = JSON.parse((blocks.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(parsed.nodes.map((n: { id: string }) => n.id)).toEqual([block.id])
+  })
+
+  test('zoneId places the newly filterable kinds that sit on the level', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const zone = ZoneNode.parse({
+      name: 'Lanai',
+      polygon: [
+        [-5, -5],
+        [5, -5],
+        [5, 5],
+        [-5, 5],
+      ],
+    })
+    const inColumn = ColumnNode.parse({ position: [1, 0, 1] })
+    const outColumn = ColumnNode.parse({ position: [20, 0, 20] })
+    // Default topology is centred on the block origin.
+    const block = BlockNode.parse({ position: [2, 0, 2] })
+    // Converter meshes keep their origin at zero and the geometry in the vertices.
+    const mesh = ImportedMeshNode.parse({
+      primitives: [{ positions: [2, 0, 2, 4, 0, 2, 4, 0, 4] }],
+    })
+    const farMesh = ImportedMeshNode.parse({
+      primitives: [{ positions: [30, 0, 30, 32, 0, 30, 32, 0, 32] }],
+    })
+    bridge.applyPatch(
+      [zone, inColumn, outColumn, block, mesh, farMesh].map((node) => ({
+        op: 'create' as const,
+        node,
+        parentId: level.id as AnyNodeId,
+      })),
+    )
+    const idsFor = async (type: string) => {
+      const result = await client.callTool({
+        name: 'find_nodes',
+        arguments: { type, zoneId: zone.id },
+      })
+      const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+      return parsed.nodes.map((n: { id: string }) => n.id)
+    }
+    expect(await idsFor('column')).toEqual([inColumn.id])
+    expect(await idsFor('block')).toEqual([block.id])
+    expect(await idsFor('imported-mesh')).toEqual([mesh.id])
   })
 
   test('invalid type is rejected', async () => {
