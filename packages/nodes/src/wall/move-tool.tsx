@@ -272,7 +272,8 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       const sceneState = useScene.getState()
       for (const id of touchedSurfaceIds) {
         overrides.clear(id)
-        sceneState.markDirty(id)
+        // A surface the commit deleted (rooms merged) has nothing left to rebuild.
+        if (sceneState.nodes[id]) sceneState.markDirty(id)
       }
       touchedSurfaceIds.clear()
     }
@@ -285,7 +286,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       const sceneState = useScene.getState()
       for (const id of touchedWallIds) {
         overrides.clear(id)
-        sceneState.markDirty(id)
+        if (sceneState.nodes[id]) sceneState.markDirty(id)
       }
       touchedWallIds.clear()
     }
