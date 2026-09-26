@@ -398,6 +398,40 @@ describe('SceneBridge', () => {
       expect(stored?.type === 'window' && stored.position).toEqual([1, 1.2, 0])
     })
 
+    test('a node reparented earlier in the patch survives its old parent’s cascade', async () => {
+      const { level, wall, windowIds } = await wallWithWindows()
+      const other = WallNode.parse({ start: [0, 3], end: [6, 3] })
+      bridge.applyPatch([{ op: 'create', node: other, parentId: level.id }])
+      await tick()
+      const movedId = windowIds[0]!
+      const clash = WindowNode.parse({ id: movedId, wallId: other.id, position: [4, 1.2, 0] })
+
+      // The moved window still exists after the delete: recreating it must be refused.
+      expect(() =>
+        bridge.applyPatch([
+          {
+            op: 'update',
+            id: movedId as any,
+            data: { parentId: other.id, wallId: other.id } as any,
+          },
+          { op: 'delete', id: wall.id, cascade: true },
+          { op: 'create', node: clash, parentId: other.id },
+        ]),
+      ).toThrow(/node_exists/)
+      expect(bridge.getNode(wall.id)).not.toBeNull()
+
+      // And it can still be edited after the delete.
+      bridge.applyPatch([
+        { op: 'update', id: movedId as any, data: { parentId: other.id, wallId: other.id } as any },
+        { op: 'delete', id: wall.id, cascade: true },
+        { op: 'update', id: movedId as any, data: { width: 1.1 } as any },
+      ])
+      await tick()
+      const moved = bridge.getNode(movedId as any)
+      expect(moved?.type === 'window' && [moved.parentId, moved.width]).toEqual([other.id, 1.1])
+      expect(bridge.getNode(wall.id)).toBeNull()
+    })
+
     test('an op on a node removed by an earlier cascade delete is refused', async () => {
       const { wall, windowIds } = await wallWithWindows()
       expect(() =>
