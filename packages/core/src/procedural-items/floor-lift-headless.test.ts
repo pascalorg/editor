@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { nodeRegistry } from '../registry/registry'
 import { BlockNode } from '../schema/nodes/block'
+import { CabinetModuleNode, CabinetNode } from '../schema/nodes/cabinet'
 import { ColumnNode } from '../schema/nodes/column'
 import { DuctTerminalNode } from '../schema/nodes/duct-terminal'
 import { HvacEquipmentNode } from '../schema/nodes/hvac-equipment'
@@ -48,6 +49,8 @@ test('floor-placed kinds stand on the slab under them without a registered plugi
   expect(liftOf(SpawnNode.parse({ ...onDeck }))).toBeCloseTo(1)
   expect(liftOf(HvacEquipmentNode.parse({ ...onDeck }))).toBeCloseTo(1)
   expect(liftOf(DuctTerminalNode.parse({ ...onDeck, mount: 'floor' }))).toBeCloseTo(1)
+  expect(liftOf(CabinetNode.parse({ ...onDeck }))).toBeCloseTo(1)
+  expect(liftOf(CabinetModuleNode.parse({ ...onDeck }))).toBeCloseTo(1)
 
   const segment = StairSegmentNode.parse({ id: 'sseg_deck' })
   const stair = StairNode.parse({ ...onDeck, children: [segment.id] })

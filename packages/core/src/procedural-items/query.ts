@@ -94,9 +94,18 @@ function floorLift(node: AnyNode | ProceduralItemNode, nodes: QueryNodes): numbe
   )
   if (supportSlabId === 'ground') return ground
   if (capability || node.type === 'cabinet' || node.type === 'cabinet-module') {
+    // Without its registered plugin a cabinet or module stands on its own
+    // width × depth box, the footprint the definition uses without a scene.
+    const box = node as { width: number; depth: number; rotation: number }
     const footprints = capability
       ? getFloorPlacedFootprints(capability, node, { nodes: nodes as Record<string, AnyNode> })
-      : []
+      : [
+          {
+            position,
+            dimensions: [box.width, 0, box.depth] as Vec3,
+            rotation: [0, box.rotation, 0] as Vec3,
+          },
+        ]
     const candidatesFor = (footprint: (typeof footprints)[number]) =>
       slabs.filter((slab) => {
         const footprintPosition = footprint.position ?? position
