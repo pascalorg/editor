@@ -1,8 +1,18 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { ItemNode, LevelNode, WallNode } from '../schema'
 import type { AnyNodeId } from '../schema/types'
-import { beginSceneHistoryPauseSession, getSceneHistoryPauseDepth } from './history-control'
-import useScene, { beginSceneHistoryDraft, clearSceneHistory } from './use-scene'
+import {
+  beginSceneHistoryPauseSession,
+  getSceneHistoryPauseDepth,
+  type SceneCommit,
+  subscribeSceneCommits,
+} from './history-control'
+import useScene, {
+  applySceneSnapshot,
+  beginSceneHistoryDraft,
+  clearSceneHistory,
+  runSceneHistoryDraftWrite,
+} from './use-scene'
 
 // `updateNodesAction` batches dirty-marking through requestAnimationFrame.
 type RafFn = (callback: (time: number) => void) => number
@@ -60,8 +70,10 @@ const levelChildren = () => (node(levelId) as LevelNode).children
 describe('scene history drafts', () => {
   test("an adopted draft's own writes record nothing; a foreign write records it as it was", () => {
     const end = beginSceneHistoryDraft(itemId, node(itemId)!)
-    useScene.getState().updateNode(itemId, { metadata: { isTransient: true } })
-    useScene.getState().updateNode(itemId, { parentId: wall.id, position: [2, 1, 0] })
+    runSceneHistoryDraftWrite(() => {
+      useScene.getState().updateNode(itemId, { metadata: { isTransient: true } })
+      useScene.getState().updateNode(itemId, { parentId: wall.id, position: [2, 1, 0] })
+    })
     expect(past()).toBe(0)
 
     useScene.getState().updateNode(wallId, { start: [0, 1] })
@@ -119,5 +131,57 @@ describe('scene history drafts', () => {
     expect(past()).toBe(1)
     abandoned.end()
     expect(getSceneHistoryPauseDepth()).toBe(0)
+  })
+  test("a foreign edit to a carried item's other fields is recorded, not masked", () => {
+    const end = beginSceneHistoryDraft(itemId, node(itemId)!)
+    runSceneHistoryDraftWrite(() => useScene.getState().updateNode(itemId, { position: [3, 0, 3] }))
+    const commits: SceneCommit[] = []
+    const stop = subscribeSceneCommits((commit) => commits.push(commit))
+    useScene.getState().updateNode(itemId, { name: 'Renamed by a collaborator' })
+    stop()
+    expect(past()).toBe(1)
+    const current = commits.at(-1)!.current.nodes[itemId] as ItemNode
+    expect(current.name).toBe('Renamed by a collaborator')
+    // The carry's own field is still recorded as it was before the pickup.
+    expect(current.position).toEqual([1, 0, 1])
+    end()
+  })
+
+  test('a carried item whose original host is deleted mid-carry is never recorded under it', () => {
+    useScene.setState({
+      nodes: {
+        ...useScene.getState().nodes,
+        [levelId]: { ...level, children: [wall.id] },
+        [wallId]: { ...structuredClone(wall), children: [item.id] },
+        [itemId]: { ...structuredClone(item), parentId: wall.id },
+      },
+    } as never)
+    clearSceneHistory()
+    const end = beginSceneHistoryDraft(itemId, node(itemId)!)
+    // The carry detaches the item to the level, then a collaborator deletes the wall.
+    runSceneHistoryDraftWrite(() => useScene.getState().updateNode(itemId, { parentId: levelId }))
+    const commits: SceneCommit[] = []
+    const stop = subscribeSceneCommits((commit) => commits.push(commit))
+    useScene.getState().deleteNode(wallId)
+    stop()
+    const current = commits.at(-1)!.current.nodes
+    expect(current[wallId]).toBeUndefined()
+    expect(current[itemId]?.parentId).toBe(levelId)
+    expect((current[levelId] as LevelNode).children).toContain(itemId)
+    end()
+  })
+
+  test('a host snapshot cannot replace the scene while a draft is carried', () => {
+    const end = beginSceneHistoryDraft(itemId, node(itemId)!)
+    const snapshot = {
+      nodes: useScene.getState().nodes,
+      rootNodeIds: useScene.getState().rootNodeIds,
+      collections: {},
+      materials: {},
+      installedPlugins: [],
+    }
+    expect(() => applySceneSnapshot(snapshot as never, { origin: 'host' })).toThrow()
+    end()
+    expect(applySceneSnapshot(snapshot as never, { origin: 'host' })).toBe(false)
   })
 })

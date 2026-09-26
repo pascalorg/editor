@@ -2323,6 +2323,11 @@ export function applySceneSnapshot(
 let prevPastLength = 0
 let prevFutureLength = 0
 
+/** Runs one of a carry's own writes to its drafts (see history-drafts.ts). */
+export function runSceneHistoryDraftWrite<T>(write: () => T): T {
+  return write()
+}
+
 /** Registers a carried draft (see history-drafts.ts); returns the call that ends it. */
 export function beginSceneHistoryDraft(id: AnyNodeId, original: AnyNode | null): () => void {
   return beginSceneHistoryDraftIn(id, original, useScene.getState().nodes)

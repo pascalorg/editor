@@ -3,11 +3,15 @@ import {
   type AnyNode,
   type AnyNodeDefinition,
   type AnyNodeId,
+  beginSceneHistoryPauseSession,
   CabinetModuleNode,
   CabinetNode,
   findLevelAncestorId,
+  getSceneHistoryPauseDepth,
   nodeRegistry,
+  pauseSceneHistory,
   registerNode,
+  resumeSceneHistory,
   type SceneCommit,
   subscribeSceneCommits,
   useScene,
@@ -215,6 +219,36 @@ describe('commitFreshPlacementSubtree', () => {
     expect(useScene.getState().nodes[finalId]).toBeUndefined()
     expect(useScene.getState().nodes[SHELF_ID]).toBeUndefined()
     expect((useScene.getState().nodes[LEVEL_ID] as { children: AnyNodeId[] }).children).toEqual([])
+  })
+
+  test("never records inside another owner's pause", () => {
+    pauseSceneHistory(useScene)
+    try {
+      const committedId = commitFreshPlacementSubtree(SHELF_ID, {
+        position: [2, 0, 3],
+        visible: true,
+      } as Partial<AnyNode>)
+      expect(committedId).toBeTruthy()
+      expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+      expect(useScene.temporal.getState().isTracking).toBe(false)
+      expect(getSceneHistoryPauseDepth()).toBe(1)
+    } finally {
+      resumeSceneHistory(useScene)
+    }
+  })
+
+  test("lifts the moving node's gesture session for its one step and keeps it after", () => {
+    const overlay = beginSceneHistoryPauseSession(useScene, { gesture: SHELF_ID })
+    const committedId = commitFreshPlacementSubtree(SHELF_ID, {
+      position: [2, 0, 3],
+      visible: true,
+    } as Partial<AnyNode>)
+    expect(committedId).toBeTruthy()
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    expect(useScene.temporal.getState().isTracking).toBe(false)
+    overlay.end()
+    expect(getSceneHistoryPauseDepth()).toBe(0)
+    expect(useScene.temporal.getState().isTracking).toBe(true)
   })
 
   test('uses the subtree contract for childless variants and never aliases root-only children', () => {

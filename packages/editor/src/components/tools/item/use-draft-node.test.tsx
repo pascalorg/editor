@@ -205,6 +205,41 @@ describe('useDraftNode block face commit', () => {
     )
   })
 
+  test('drops onto the level when the original host was deleted mid-carry', () => {
+    const hosted = ItemNode.parse({
+      id: 'item_host-deleted-plant',
+      parentId: BLOCK_ID,
+      asset: {
+        id: 'potted-plant',
+        category: 'decor',
+        name: 'Potted plant',
+        thumbnail: '/potted-plant.png',
+        src: '/potted-plant.glb',
+        dimensions: [0.5, 0.39, 0.5],
+      },
+      position: [0.5, 0, 0],
+      blockFaceId: 'face-top',
+    })
+    useScene.getState().createNode(hosted, BLOCK_ID as AnyNodeId)
+    useScene.temporal.getState().clear()
+
+    const draft = draftNode!
+    draft.adopt(hosted)
+    draft.updateSurface({ parentId: LEVEL_ID, position: [1, 0, 1], blockFaceId: undefined }, null)
+    // A collaborator deletes the block the item came from.
+    useScene.getState().deleteNode(BLOCK_ID as AnyNodeId)
+    draft.commit({ position: [2, 0, 3] })
+
+    const nodes = useScene.getState().nodes
+    expect(nodes[BLOCK_ID as AnyNodeId]).toBeUndefined()
+    expect(nodes[hosted.id as AnyNodeId]).toMatchObject({ parentId: LEVEL_ID, position: [2, 0, 3] })
+    expect((nodes[LEVEL_ID as AnyNodeId] as LevelNode).children).toContain(hosted.id)
+    for (const state of useScene.temporal.getState().pastStates) {
+      const recorded = state.nodes?.[hosted.id as AnyNodeId]
+      if (recorded?.parentId) expect(state.nodes?.[recorded.parentId as AnyNodeId]).toBeDefined()
+    }
+  })
+
   test('never resumes history that another owner is pausing', () => {
     const hosted = ItemNode.parse({
       id: 'item_owned-pause-plant',
