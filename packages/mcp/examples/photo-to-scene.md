@@ -52,7 +52,10 @@ Optional knobs:
    `sampling_response_invalid` MCP errors.
 3. A fresh `SceneGraph` is built using the core schema factories: a
    `site` → `building` → `level 0` skeleton, then one `WallNode` per
-   vision wall and one `ZoneNode` per vision room. Each node is
+   vision wall and one `ZoneNode` per vision room. Detected doors and windows
+   are attached to the nearest wall, stairs get a stair plus segment node, and
+   detected furniture is matched to the built-in catalog and placed with
+   clearance checks. Each node is
    re-parsed with `AnyNode.safeParse`; invalid ones are dropped with a
    warning appended to `notes`.
 4. `bridge.setScene(...)` swaps the live scene so any follow-up MCP call
@@ -69,6 +72,10 @@ Optional knobs:
   "url": "/scene/scene_01hx8a...",
   "walls": 4,
   "rooms": 1,
+  "doors": 2,
+  "windows": 4,
+  "stairs": 1,
+  "furniture": 6,
   "confidence": 0.82
 }
 ```
@@ -116,4 +123,6 @@ wall, and issues `cut_opening` — no extra wiring needed.
 
 - `photo_to_scene` is a one-shot primitive: one call, one scene.
 - Vision confidence is surfaced so the agent can warn the user.
-- v0.1 covers walls + zones; doors, windows, items are follow-up tools.
+- The one-shot builder returns walls, rooms, openings, stairs, and matched
+  catalog furniture. Items that cannot be matched or placed are reported in
+  `notes` rather than silently dropped.
