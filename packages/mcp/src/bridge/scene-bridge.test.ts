@@ -381,6 +381,23 @@ describe('SceneBridge', () => {
       expect(bridge.getNode(windowIds[1] as any)).toBeNull()
     })
 
+    test('a cascade delete also frees children created earlier in the same patch', () => {
+      const level = bridge.findNodes({ type: 'level' })[0]!
+      const wall = WallNode.parse({ start: [0, 0], end: [4, 0] })
+      const window = WindowNode.parse({ wallId: wall.id, position: [2, 1.2, 0] })
+      const again = WindowNode.parse({ id: window.id, wallId: wall.id, position: [1, 1.2, 0] })
+      const replacement = WallNode.parse({ id: wall.id, start: [0, 2], end: [4, 2] })
+      bridge.applyPatch([
+        { op: 'create', node: wall, parentId: level.id },
+        { op: 'create', node: window, parentId: wall.id },
+        { op: 'delete', id: wall.id, cascade: true },
+        { op: 'create', node: replacement, parentId: level.id },
+        { op: 'create', node: again, parentId: wall.id },
+      ])
+      const stored = bridge.getNode(window.id)
+      expect(stored?.type === 'window' && stored.position).toEqual([1, 1.2, 0])
+    })
+
     test('an op on a node removed by an earlier cascade delete is refused', async () => {
       const { wall, windowIds } = await wallWithWindows()
       expect(() =>

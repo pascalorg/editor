@@ -357,8 +357,10 @@ export class SceneBridge {
     // Zod-normalised copy (which has a generated id if the caller omitted one)
     // instead of the unparsed input.
     const parsedCreateNodes = new Map<number, AnyNode>()
-    // Type of each node created in this patch, for the update type guard.
+    // Type and parent of each node created in this patch, for the update type
+    // guard and for cascade deletes of in-patch children.
     const simCreatedTypes = new Map<string, AnyNodeType>()
+    const simCreatedParents = new Map<string, string>()
 
     for (let i = 0; i < patches.length; i++) {
       const p = patches[i]
@@ -383,6 +385,8 @@ export class SceneBridge {
         }
         parsedCreateNodes.set(i, res.data)
         simCreatedTypes.set(res.data.id, res.data.type)
+        const createdParent = p.parentId ?? res.data.parentId
+        if (createdParent) simCreatedParents.set(res.data.id, createdParent)
         simAvailable.add(res.data.id)
         simDeleted.delete(res.data.id)
       } else if (p.op === 'update') {
@@ -425,11 +429,23 @@ export class SceneBridge {
             )
           }
         }
-        // The store removes the whole subtree, so a later op in this patch may
-        // recreate any of those ids and must not touch the removed ones.
-        for (const id of [p.id, ...this._collectDescendants(p.id)]) {
+        // The store removes the whole subtree, including children created
+        // earlier in this patch, so a later op may recreate any of those ids
+        // and must not touch the removed ones.
+        const removed = new Set<string>([p.id, ...this._collectDescendants(p.id)])
+        for (let grew = true; grew; ) {
+          grew = false
+          for (const [childId, parentId] of simCreatedParents) {
+            if (removed.has(parentId) && !removed.has(childId)) {
+              removed.add(childId)
+              grew = true
+            }
+          }
+        }
+        for (const id of removed) {
           simAvailable.delete(id)
           simDeleted.add(id)
+          simCreatedParents.delete(id)
         }
       } else {
         throw new Error(`invalid patch: patches[${i}] unknown op`)
