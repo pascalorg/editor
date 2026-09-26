@@ -314,6 +314,7 @@ export { isMovable, movePlanToward, moveToward, resolveMovable } from './service
 export {
   acquireSceneHistoryPause,
   activeSceneCommitNodeIds,
+  beginSceneHistoryPauseSession,
   getSceneHistoryPauseDepth,
   pauseSceneHistory,
   resetSceneHistoryPauseDepth,
@@ -322,6 +323,8 @@ export {
   type SceneCommit,
   type SceneCommitListener,
   type SceneCommitOrigin,
+  type SceneHistoryPauseSession,
+  type SceneHistoryPauseSessionOptions,
   type SceneSnapshot,
   subscribeSceneCommits,
 } from './store/history-control'
@@ -355,13 +358,16 @@ export {
   applySceneOperationPatch,
   applyScenePatch,
   applySceneSnapshot,
+  beginSceneHistoryDraft,
   clearSceneHistory,
   default as useScene,
+  runSceneHistoryDraftWrite,
   type SceneMaterialPatch,
   type SceneNodePatch,
   type SceneNodeStructuralPatch,
   type SceneOperationPatch,
   type ScenePatch,
+  sceneHistoryDraftRevertUpdates,
 } from './store/use-scene'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'
 export {

@@ -1,6 +1,7 @@
 import type { Collection, CollectionId } from '../schema/collections'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import { withSceneHistoryDraftSuspended } from './history-drafts'
 
 let sceneHistoryPauseDepth = 0
 const sceneHistoryPauseLeases = new Set<symbol>()
@@ -224,6 +225,90 @@ export function acquireSceneHistoryPause(sceneStore: TemporalStoreLike): () => v
   }
 }
 
+export type SceneHistoryPauseSession = {
+  /**
+   * Runs one committing write with this gesture's pauses lifted, then takes them back.
+   * The write lands as tracked history only when no other owner is pausing it.
+   */
+  commitStep<T>(write: () => T): T
+  /** Releases this session's pause. Idempotent. */
+  end(): void
+}
+
+export type SceneHistoryPauseSessionOptions = {
+  /** Sessions with the same key co-own one gesture; see `beginSceneHistoryPauseSession`. */
+  gesture?: string
+}
+
+type GesturePauseHolder = { release: (() => void) | null; ended: boolean }
+const gesturePauseHolders = new Map<string, Set<GesturePauseHolder>>()
+const livePauseHolders = new Set<GesturePauseHolder>()
+
+/** Lifts `holders`' pauses for `write`, then takes back those that have not ended. */
+function runWithHoldersLifted<T>(
+  sceneStore: TemporalStoreLike,
+  holders: Iterable<GesturePauseHolder>,
+  write: () => T,
+): T {
+  const lifted = [...holders].filter((holder) => holder.release)
+  for (const holder of lifted) {
+    const release = holder.release!
+    holder.release = null
+    release()
+  }
+  try {
+    return write()
+  } finally {
+    for (const holder of lifted) {
+      if (!holder.ended) holder.release = acquireSceneHistoryPause(sceneStore)
+    }
+  }
+}
+
+/**
+ * Holds a refcounted pause for a whole gesture (drag). Unlike a raw
+ * `temporal.pause()`, cooperating systems see the gesture through
+ * `getSceneHistoryPauseDepth()`, and their balanced pause/resume pairs cannot
+ * resume history under it.
+ *
+ * Sessions opened with the same `gesture` key co-own the gesture (the 3D mover
+ * and the 2D move overlay of one moving node): either one's `commitStep` lifts
+ * both pauses, so whichever view drops records the one step.
+ */
+export function beginSceneHistoryPauseSession(
+  sceneStore: TemporalStoreLike,
+  options: SceneHistoryPauseSessionOptions = {},
+): SceneHistoryPauseSession {
+  const { gesture } = options
+  const holder: GesturePauseHolder = {
+    release: acquireSceneHistoryPause(sceneStore),
+    ended: false,
+  }
+  livePauseHolders.add(holder)
+  let coOwners = new Set([holder])
+  if (gesture) {
+    coOwners = gesturePauseHolders.get(gesture) ?? new Set()
+    coOwners.add(holder)
+    gesturePauseHolders.set(gesture, coOwners)
+  }
+  return {
+    commitStep(write) {
+      return runWithHoldersLifted(sceneStore, coOwners, () =>
+        withSceneHistoryDraftSuspended(gesture, write),
+      )
+    },
+    end() {
+      if (holder.ended) return
+      holder.ended = true
+      holder.release?.()
+      holder.release = null
+      livePauseHolders.delete(holder)
+      coOwners.delete(holder)
+      if (gesture && coOwners.size === 0) gesturePauseHolders.delete(gesture)
+    },
+  }
+}
+
 export function getSceneHistoryPauseDepth(): number {
   return sceneHistoryPauseDepth + sceneHistoryPauseLeases.size
 }
@@ -231,6 +316,10 @@ export function getSceneHistoryPauseDepth(): number {
 export function resetSceneHistoryPauseDepth(): void {
   sceneHistoryPauseDepth = 0
   sceneHistoryPauseLeases.clear()
+  // Open sessions no longer hold anything; a later commitStep must not re-take their pause.
+  for (const holder of livePauseHolders) holder.release = null
+  livePauseHolders.clear()
+  gesturePauseHolders.clear()
 }
 
 function retainedPastStateCount<TPastState>(before: TPastState[], after: TPastState[]): number {
