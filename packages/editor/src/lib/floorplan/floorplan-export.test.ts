@@ -37,7 +37,7 @@ import {
   rotateFloorplanExportBounds,
 } from './floorplan-export'
 import { floorplanGeometryMetadata } from './floorplan-extension'
-import { FloorplanPdfDocument } from './floorplan-pdfkit-document'
+import { FloorplanPdfDocument, loadFloorplanPdfFonts } from './floorplan-pdfkit-document'
 import { renderFloorplanGeometryToPdfKit } from './floorplan-pdfkit-renderer'
 
 type GroupGeometry = Extract<FloorplanGeometry, { kind: 'group' }>
@@ -306,6 +306,8 @@ describe('floor plan export policy', () => {
       openingMarks: true,
       structuralGrids: false,
       roomLabels: false,
+      roomDetails: true,
+      roofPlan: true,
       stairAnnotations: true,
     }
 
@@ -314,7 +316,7 @@ describe('floor plan export policy', () => {
     )
   })
 
-  test('exports only model geometry and room labels in Default', () => {
+  test('exports model geometry, room labels and door/window marks in Default', () => {
     expect(
       resolveFloorplanExportAnnotationVisibility(
         'default',
@@ -325,9 +327,11 @@ describe('floor plan export policy', () => {
       contextualDimensions: false,
       manualDimensions: false,
       measurements: false,
-      openingMarks: false,
+      openingMarks: true,
       structuralGrids: false,
       roomLabels: true,
+      roomDetails: false,
+      roofPlan: false,
       stairAnnotations: false,
     })
   })
@@ -730,7 +734,7 @@ describe('collectFloorplanGeometry', () => {
       rawPdf.on('data', (chunk: Buffer) => chunks.push(chunk))
       const completedPdf = Promise.withResolvers<string>()
       rawPdf.on('end', () => completedPdf.resolve(Buffer.concat(chunks).toString('latin1')))
-      const pdf = new FloorplanPdfDocument(rawPdf, [200, 200])
+      const pdf = new FloorplanPdfDocument(rawPdf, [200, 200], await loadFloorplanPdfFonts())
       pdf.addPage()
       for (const { model } of full) {
         if (!model) continue

@@ -13,8 +13,13 @@ import {
   roofFacePointToSegment,
   useLiveTransforms,
 } from '@pascal-app/core'
-import { formatLinearMeasurement, readFloorplanMetricNotationOverride } from '@pascal-app/editor'
+import {
+  formatLinearMeasurement,
+  readFloorplanContext,
+  readFloorplanMetricNotationOverride,
+} from '@pascal-app/editor'
 import { restingNodePlanFrame } from '../shared/resting-surface-plan'
+import { buildPlanItemSymbol, classifyPlanItem, PLAN_SYMBOL_METADATA_KEY } from './plan-symbols'
 
 /**
  * Stage C floor-plan builder for item.
@@ -346,6 +351,34 @@ export function buildItemFloorplan(node: ItemNode, ctx: GeometryContext): Floorp
     const [rx, ry] = rotateVec(x, y, transform.rotation)
     return [cx + rx, cy + ry] as FloorplanPoint
   })
+
+  // A sheet (drafting) draws the permit-set symbol — fixtures as labelled
+  // linework, furniture as a light outline — never the sprite or the
+  // editor's amber footprint. Ceiling items and decor draw nothing.
+  if (readFloorplanContext(ctx).drafting) {
+    const planClass = classifyPlanItem(node.asset)
+    const symbol = buildPlanItemSymbol(planClass, {
+      map: (x, y) => {
+        const [rx, ry] = rotateVec(x, y, transform.rotation)
+        return [cx + rx, cy + ry]
+      },
+      width,
+      depth,
+    })
+    // the sheet lays its tags out around fixtures and (more loosely)
+    // furniture; the mark rides on the outline itself, which the sheet's
+    // model / annotation split passes through untouched (it rebuilds groups)
+    const [outline, ...rest] = symbol
+    if (!outline) return null
+    const marked = {
+      ...outline,
+      metadata: {
+        ...(outline as { metadata?: object }).metadata,
+        [PLAN_SYMBOL_METADATA_KEY]: planClass.kind,
+      },
+    } as FloorplanGeometry
+    return { kind: 'group', children: [marked, ...rest] }
+  }
 
   const isSelected = ctx.viewState?.selected ?? false
   // Marquee preview — the about-to-be-selected tint every other kind shows.

@@ -105,6 +105,12 @@ export const CeilingSelectionAffordanceSystem = () => {
   // scope, so it can't unmount itself.
   const scopeIdle = useInteractionScope((state) => state.scope.kind === 'idle')
   const currentLevelId = useViewer((state) => state.selection.levelId)
+  // Only the ceiling the pointer is on, or the selected one, shows its
+  // corner brackets. A generated house carries a ceiling in every room, and
+  // brackets on all of them at once read as grey blocks sitting on every wall
+  // junction — the affordance is for the ceiling you are about to grab.
+  const hoveredId = useViewer((state) => state.hoveredId)
+  const selectedIds = useViewer((state) => state.selection.selectedIds)
 
   const ceilings = useScene(
     useShallow((state) =>
@@ -113,6 +119,7 @@ export const CeilingSelectionAffordanceSystem = () => {
           node.type === 'ceiling' &&
           node.visible !== false &&
           currentLevelId !== null &&
+          (node.id === hoveredId || selectedIds.includes(node.id)) &&
           resolveLevelId(node, state.nodes) === currentLevelId
         )
       }),

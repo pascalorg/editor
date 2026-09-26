@@ -788,3 +788,103 @@ export {
   type WallSnapKind,
   type WallSnapPoint,
 } from './store/use-wall-snap-indicator'
+
+// ── Site plan (WS1) ──────────────────────────────────────────────────
+export {
+  boundsInsidePolygon,
+  buildingRecentreOffset,
+  buildSitePlanDrawing,
+  castYardDimensions,
+  classifyEdges,
+  computeSiteCoverage,
+  describeSiteEdges,
+  flatworkKindOf,
+  formatCoveragePercent,
+  formatSqFt,
+  formatStreetName,
+  type ImperviousRow,
+  type OutdoorPart,
+  serviceEntranceOf,
+  type SiteCoverage,
+  streetEdgeNames,
+  detectFrontEdgeFromRoads,
+  FloorplanDrawingTypeSwitch,
+  type FrontEdgeMatch,
+  type RoadCenterline,
+  streetCore,
+  FloorplanSitePlanLayer,
+  formatFeetInches,
+  registerSitePlanContributor,
+  type SitePlanContributor,
+  setbackEnvelope,
+  type SitePlanDrawing,
+  type SitePlanEdge,
+  type YardDimension,
+} from './lib/floorplan/site-plan'
+export {
+  EDITOR_DRAWING_TYPE_OPTIONS,
+  type EditorDrawingType,
+} from './store/use-drawing-view'
+// Lot drop-in — address → parcel → streets → front edge → setbacks, on the
+// site node. Consumed by @pascal-app/plugin-lot, plugin-generate and the
+// Site inspector.
+export {
+  DEFAULT_SETBACKS_FT,
+  DEFAULT_SETBACKS_M,
+  DEFAULT_SETBACKS_SOURCE,
+  describeFrontEdge,
+  describeLotSummary,
+  type DropInInput,
+  type DropInOptions,
+  dropInLot,
+  findSiteNode,
+  type LotDropInResult,
+  type LotRoad,
+  type LotSummary,
+  type ParcelResolveData,
+  sitePatchFromParcel,
+  STREET_CLASSES,
+} from './lib/lot'
+// Sheets (WS2) — headless floor-plan geometry collection + the multi-sheet
+// vector PDF writer. Consumed by @pascal-app/plugin-sheets.
+export {
+  collectFloorplanSchedules,
+  collectSheetGeometry,
+  exportSheetsToPdf,
+  POINTS_PER_INCH,
+  resolveSheetRotationDeg,
+  type SheetGeometryEntry,
+  type SheetGeometryOptions,
+  type SheetPdfPage,
+  type SheetPdfWindow,
+} from './lib/floorplan/sheet-export'
+// Annotations (WS3) — deterministic door/window marks, driving dimensions,
+// and construction-document schedule data.
+export {
+  type DimensionDrivePlan,
+  type DimensionDriveResolution,
+  type DimensionDriveTarget,
+  type DimensionPlanPoint,
+  parseDimensionInput,
+  planDimensionDrive,
+  resolveDimensionDrive,
+} from './lib/floorplan/dimension-drive'
+export {
+  type MarkResolution,
+  type OpeningMarkKind,
+  orderedOpenings,
+  persistResolvedMarks,
+  resolveMarkDetail,
+  resolveMarks,
+} from './lib/floorplan/marks'
+export {
+  doorSchedule,
+  floorplanSchedules,
+  formatScheduleLength,
+  type OpeningScheduleRow,
+  type RoomScheduleRow,
+  roomSchedule,
+  type ScheduleResult,
+  type ScheduleUnit,
+  windowSchedule,
+} from './lib/floorplan/schedules'

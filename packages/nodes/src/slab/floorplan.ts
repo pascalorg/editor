@@ -6,6 +6,7 @@ import {
   type SlabNode,
   slabPolygonContextFromGeometry,
 } from '@pascal-app/core'
+import { readFloorplanContext } from '@pascal-app/editor'
 
 /**
  * Stage C floor-plan builder for slab. Renders the slab polygon as a
@@ -54,7 +55,10 @@ export function buildSlabFloorplan(node: SlabNode, ctx: GeometryContext): Floorp
   }
 
   const stroke = showSelectedChrome && palette ? palette.selectedStroke : '#475569'
-  const fill = showSelectedChrome ? '#ffffff' : '#cbd5e1'
+  // On paper the slab is its edge: the translucent wash is editor chrome, and
+  // printed it tinted every room the colour of wet concrete.
+  const onPaper = readFloorplanContext(ctx).purpose === 'document'
+  const fill = onPaper ? 'none' : showSelectedChrome ? '#ffffff' : '#cbd5e1'
 
   // Slab body. Uses `fillOpacity` / `strokeOpacity` independently so the
   // outline stays crisp while the fill stays translucent — zones under

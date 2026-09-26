@@ -27,6 +27,11 @@ export type FloorplanAnnotationRole =
   | 'structural-grid'
   | 'column-center'
   | 'room-label'
+  /** A room's finish / ceiling-height lines — detail under the name, off in the clean plan. */
+  | 'room-detail'
+  /** The roof plan proper: outline, ridges, hips, slope arrows. Off over a floor plan unless asked. */
+  | 'roof-plan'
+  | 'roof-pitch'
   | 'stair-annotation'
 
 export type FloorplanSchedule = {
@@ -98,11 +103,24 @@ type FloorplanGeometryMetadata = {
   annotationRole?: FloorplanAnnotationRole
   annotationObstacle?: 'bounds' | 'outline'
   renderPass?: 'overlay'
+  /**
+   * Annotation text only: the size to print at, in paper points, instead of
+   * the size its role implies. Lets a sheet set a room tag's name larger than
+   * its number without inventing a role per size.
+   */
+  textSizePt?: number
 }
 
 type FloorplanContextExtension = {
   automaticDimensions: boolean
   purpose: FloorplanRenderPurpose
+  /**
+   * Sheet drafting (the Sheets plan viewports): kinds draw the permit-set
+   * convention — fixtures as labelled linework, furniture as light outlines,
+   * no raster sprites. Only `collectSheetGeometry` sets it; the editor and the
+   * read-only viewer never do, so their plans keep today's look.
+   */
+  drafting: boolean
   metricNotation: FloorplanMetricNotation
   wallDimensionReference: FloorplanWallDimensionReference
 }
@@ -156,6 +174,7 @@ export function createFloorplanContextExtensions(
     [FLOORPLAN_CONTEXT_EXTENSION_KEY]: {
       automaticDimensions: values.automaticDimensions !== false,
       purpose: values.purpose === 'document' ? 'document' : 'edit',
+      drafting: values.drafting === true,
       metricNotation: values.metricNotation === 'millimeters' ? 'millimeters' : 'meters',
       wallDimensionReference: normalizeFloorplanWallDimensionReference(
         values.wallDimensionReference,
@@ -171,6 +190,7 @@ export function readFloorplanContext(ctx: GeometryContext): FloorplanContextExte
     return {
       automaticDimensions: extension.automaticDimensions !== false,
       purpose: extension.purpose === 'document' ? 'document' : 'edit',
+      drafting: extension.drafting === true,
       metricNotation: extension.metricNotation === 'millimeters' ? 'millimeters' : 'meters',
       wallDimensionReference: normalizeFloorplanWallDimensionReference(
         extension.wallDimensionReference,
@@ -180,6 +200,7 @@ export function readFloorplanContext(ctx: GeometryContext): FloorplanContextExte
   return {
     automaticDimensions: true,
     purpose: 'edit',
+    drafting: false,
     metricNotation: 'meters',
     wallDimensionReference: DEFAULT_FLOORPLAN_WALL_DIMENSION_REFERENCE,
   }

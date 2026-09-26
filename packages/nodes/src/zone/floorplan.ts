@@ -32,6 +32,14 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
   const showSelectedChrome = isSelected || isHighlighted
 
   const points: FloorplanPoint[] = ring.map(([x, z]) => [x, z] as FloorplanPoint)
+  // A sheet drafts every zone's tag itself — name, number, area, placed
+  // clear of everything else — so on a sheet the zone prints nothing of its
+  // own: no wash, no outline, no zone-coloured name, whatever its role or
+  // wherever it came from. The invisible outline keeps the zone in the
+  // collection the sheet reads its rooms from.
+  if (floorplanContext.drafting) {
+    return { kind: 'group', children: [{ kind: 'polygon', points, fill: 'none', stroke: 'none' }] }
+  }
   const unit = owningUnitForZone(node, ctx.resolve)
   const tintColor = unit?.color ?? node.color
   const stroke = node.color
@@ -39,12 +47,15 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
     view?.focusedUnitId && !view.focusedUnitMemberIds?.includes(node.id) ? 0.35 : 1
   const isRoom = node.spaceRole === 'room'
   const fillOpacity = isRoom ? (isSelected ? 0.12 : 0.04) : isSelected ? 0.28 : 0.16
+  // On paper a room is its label, not a colour: the wash and the zone-coloured
+  // text are editor chrome. Same ink the wall kind prints in.
+  const onPaper = floorplanContext.purpose === 'document'
 
   const children: FloorplanGeometry[] = [
     {
       kind: 'polygon',
       points,
-      fill: tintColor,
+      fill: onPaper && isRoom ? 'none' : tintColor,
       fillOpacity: fillOpacity * focusOpacity,
       stroke,
       strokeWidth: showSelectedChrome ? 0.08 : 0.05,
@@ -112,7 +123,8 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
         view?.unit ?? 'metric',
         floorplanContext.purpose === 'document' ? 'document' : 'editor',
         floorplanContext.metricNotation,
-        stroke,
+        DOCUMENT_INK,
+        ring,
         unit?.name,
       ),
     )
@@ -154,12 +166,23 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
   return { kind: 'group', children }
 }
 
+/** Plan ink on paper — the same hex `wall/floorplan.ts` prints in. */
+const DOCUMENT_INK = '#111827'
 const ZONE_LABEL_FONT_SIZE = 0.2
 const ZONE_UNIT_LABEL_FONT_SIZE = 0.13
 const ROOM_NAME_FONT_SIZE = 0.2
-const ROOM_NUMBER_FONT_SIZE = 0.16
-const ROOM_DETAIL_FONT_SIZE = 0.11
+/** The smallest the name shrinks to fit a narrow room before it simply overflows. */
+const ROOM_NAME_MIN_FONT_SIZE = 0.12
+const ROOM_NUMBER_FONT_SIZE = 0.14
+const ROOM_DETAIL_FONT_SIZE = 0.1
+/** Line pitch as a multiple of the line's font size. */
+const ROOM_LABEL_LEADING = 1.3
+/** Line pitch of a plain zone's stacked labels (name over its unit), plan metres. */
 const ROOM_LABEL_LINE_SPACING = 0.18
+/** Bold sans sets at about this many ems per character. */
+const ROOM_LABEL_EM_PER_CHAR = 0.62
+/** The label may use this much of the room's width / height. */
+const ROOM_LABEL_FIT = 0.86
 
 function buildRoomLabels(
   node: ZoneNode,
@@ -169,51 +192,98 @@ function buildRoomLabels(
   profile: ConstructionLengthProfile,
   metricNotation: 'meters' | 'millimeters',
   color: string,
+  ring: readonly (readonly [number, number])[] = [],
   unitName?: string,
 ): FloorplanGeometry[] {
-  const lines: Array<{ text: string; fontSize: number; fontWeight: number }> = []
-  const name = node.name.trim()
-  if (name) lines.push({ text: name, fontSize: ROOM_NAME_FONT_SIZE, fontWeight: 700 })
+  // The room's plan extent: what the label has to fit into, so room labels
+  // stop overlapping each other.
+  let minX = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let minY = Number.POSITIVE_INFINITY
+  let maxY = Number.NEGATIVE_INFINITY
+  for (const [px, py] of ring) {
+    minX = Math.min(minX, px)
+    maxX = Math.max(maxX, px)
+    minY = Math.min(minY, py)
+    maxY = Math.max(maxY, py)
+  }
+  const roomW = ring.length >= 3 ? (maxX - minX) * ROOM_LABEL_FIT : Number.POSITIVE_INFINITY
+  const roomH = ring.length >= 3 ? (maxY - minY) * ROOM_LABEL_FIT : Number.POSITIVE_INFINITY
+  const widthOf = (text: string, fontSize: number) => text.length * fontSize * ROOM_LABEL_EM_PER_CHAR
+  const fits = (text: string, fontSize: number) => widthOf(text, fontSize) <= roomW
+
+  type Line = { text: string; fontSize: number; fontWeight: number; detail: boolean }
+  const lines: Line[] = []
+  // The name: bold, upper-case, in plan ink. A long compound name
+  // ("Great room / Kitchen") breaks at its slash when one line will not
+  // fit; a name still too wide shrinks toward the minimum size.
+  const name = node.name.trim().toUpperCase()
+  if (name) {
+    const parts =
+      fits(name, ROOM_NAME_FONT_SIZE) || !name.includes('/')
+        ? [name]
+        : name.split('/').map((part) => part.trim()).filter(Boolean)
+    const widest = parts.reduce((w, part) => Math.max(w, widthOf(part, 1)), 0)
+    const size = Math.max(
+      ROOM_NAME_MIN_FONT_SIZE,
+      Math.min(ROOM_NAME_FONT_SIZE, widest > 0 ? roomW / widest : ROOM_NAME_FONT_SIZE),
+    )
+    for (const part of parts) lines.push({ text: part, fontSize: size, fontWeight: 700, detail: false })
+  }
   if (unitName?.trim()) {
-    lines.push({ text: unitName.trim(), fontSize: ROOM_NUMBER_FONT_SIZE, fontWeight: 600 })
+    lines.push({ text: unitName.trim(), fontSize: ROOM_NUMBER_FONT_SIZE, fontWeight: 600, detail: false })
   }
   if (node.roomNumber) {
-    lines.push({ text: node.roomNumber, fontSize: ROOM_NUMBER_FONT_SIZE, fontWeight: 600 })
+    lines.push({ text: node.roomNumber, fontSize: ROOM_NUMBER_FONT_SIZE, fontWeight: 600, detail: false })
   }
 
+  // The detail lines carry the 'room-detail' role — the clean plan hides
+  // them (the finish schedule has them); the Expert plan and the sheets
+  // choose. They are only set where they fit the room at all.
   const finishes = [
     node.floorFinish ? `FL: ${node.floorFinish}` : '',
     node.wallFinish ? `WL: ${node.wallFinish}` : '',
     node.ceilingFinish ? `CL: ${node.ceilingFinish}` : '',
   ].filter(Boolean)
-  if (finishes.length > 0) {
-    lines.push({ text: finishes.join(' · '), fontSize: ROOM_DETAIL_FONT_SIZE, fontWeight: 500 })
-  }
-
+  const detailLines: string[] = []
+  if (finishes.length > 0) detailLines.push(finishes.join(' · '))
   const roomDetails = [
     `CH: ${formatConstructionLength(node.ceilingHeight, unit, profile, { metricNotation })}`,
   ]
   if (node.occupancy) roomDetails.push(node.occupancy)
-  lines.push({ text: roomDetails.join(' · '), fontSize: ROOM_DETAIL_FONT_SIZE, fontWeight: 500 })
+  detailLines.push(roomDetails.join(' · '))
+  const stackH = (all: Line[]) => all.reduce((h, l) => h + l.fontSize * ROOM_LABEL_LEADING, 0)
+  for (const text of detailLines) {
+    const candidate: Line = { text, fontSize: ROOM_DETAIL_FONT_SIZE, fontWeight: 500, detail: true }
+    if (fits(text, ROOM_DETAIL_FONT_SIZE) && stackH([...lines, candidate]) <= roomH) lines.push(candidate)
+  }
 
-  const startY = y - ((lines.length - 1) * ROOM_LABEL_LINE_SPACING) / 2
-  return lines.map((line, index) => ({
-    kind: 'text',
-    x,
-    y: startY + index * ROOM_LABEL_LINE_SPACING,
-    text: line.text,
-    fontSize: line.fontSize,
-    fill: color,
-    stroke: '#ffffff',
-    strokeWidth: line.fontSize * 0.18,
-    paintOrder: 'stroke',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-    fontWeight: line.fontWeight,
-    textAnchor: 'middle',
-    dominantBaseline: 'central',
-    upright: true,
-    metadata: floorplanGeometryMetadata({ annotationRole: 'room-label' }),
-  }))
+  const total = stackH(lines)
+  let cursor = y - total / 2
+  return lines.map((line) => {
+    const pitch = line.fontSize * ROOM_LABEL_LEADING
+    const lineY = cursor + pitch / 2
+    cursor += pitch
+    return {
+      kind: 'text',
+      x,
+      y: lineY,
+      text: line.text,
+      fontSize: line.fontSize,
+      fill: color,
+      stroke: '#ffffff',
+      strokeWidth: line.fontSize * 0.22,
+      paintOrder: 'stroke',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+      fontWeight: line.fontWeight,
+      textAnchor: 'middle',
+      dominantBaseline: 'central',
+      upright: true,
+      metadata: floorplanGeometryMetadata({
+        annotationRole: line.detail ? 'room-detail' : 'room-label',
+      }),
+    }
+  })
 }
 
 /**

@@ -96,44 +96,68 @@ export function buildWindowFloorplan(
   const mullionStart: FloorplanPoint = [cx - dirX * halfWidth, cz - dirZ * halfWidth]
   const mullionEnd: FloorplanPoint = [cx + dirX * halfWidth, cz + dirZ * halfWidth]
 
-  const children: FloorplanGeometry[] = [
-    // Outer footprint — white fill so the wall hatch underneath
-    // doesn't bleed through.
-    {
-      kind: 'polygon',
-      points,
-      fill: fillColor,
-      stroke: accentColor,
-      strokeWidth: showSelectedChrome ? 1.9 : 1.25,
-      vectorEffect: 'non-scaling-stroke',
-      strokeLinejoin: 'round',
-      metadata: floorplanGeometryMetadata({ annotationObstacle: 'bounds' }),
-    },
-    // Inset glass-pane outline.
-    {
-      kind: 'polygon',
-      points: [innerStartA, innerEndA, innerEndB, innerStartB],
-      fill: 'none',
-      stroke: accentColor,
-      strokeOpacity: 0.6,
-      strokeWidth: showSelectedChrome ? 1.3 : 0.9,
-      vectorEffect: 'non-scaling-stroke',
-      strokeLinejoin: 'round',
-    },
-    // Center mullion.
-    {
-      kind: 'line',
-      x1: mullionStart[0],
-      y1: mullionStart[1],
-      x2: mullionEnd[0],
-      y2: mullionEnd[1],
-      stroke: accentColor,
-      strokeWidth: showSelectedChrome ? 1.6 : 1.1,
-      strokeOpacity: 0.85,
-      strokeLinecap: 'round',
-      vectorEffect: 'non-scaling-stroke',
-    },
-  ]
+  // A sheet draws the standard window symbol in plan-metre ink, so it prints
+  // the same in every back end: the two wall faces carried across the opening
+  // (the outline, which closes on the jambs) and the glass line between them.
+  const drafting = readFloorplanContext(ctx).drafting
+  const children: FloorplanGeometry[] = drafting
+    ? [
+        {
+          kind: 'polygon',
+          points,
+          fill: '#ffffff',
+          stroke: '#1f2937',
+          strokeWidth: 0.01,
+          strokeLinejoin: 'miter',
+        },
+        {
+          kind: 'line',
+          x1: mullionStart[0],
+          y1: mullionStart[1],
+          x2: mullionEnd[0],
+          y2: mullionEnd[1],
+          stroke: '#1f2937',
+          strokeWidth: 0.008,
+        },
+      ]
+    : [
+        // Outer footprint — white fill so the wall hatch underneath
+        // doesn't bleed through.
+        {
+          kind: 'polygon',
+          points,
+          fill: fillColor,
+          stroke: accentColor,
+          strokeWidth: showSelectedChrome ? 1.9 : 1.25,
+          vectorEffect: 'non-scaling-stroke',
+          strokeLinejoin: 'round',
+          metadata: floorplanGeometryMetadata({ annotationObstacle: 'bounds' }),
+        },
+        // Inset glass-pane outline.
+        {
+          kind: 'polygon',
+          points: [innerStartA, innerEndA, innerEndB, innerStartB],
+          fill: 'none',
+          stroke: accentColor,
+          strokeOpacity: 0.6,
+          strokeWidth: showSelectedChrome ? 1.3 : 0.9,
+          vectorEffect: 'non-scaling-stroke',
+          strokeLinejoin: 'round',
+        },
+        // Center mullion.
+        {
+          kind: 'line',
+          x1: mullionStart[0],
+          y1: mullionStart[1],
+          x2: mullionEnd[0],
+          y2: mullionEnd[1],
+          stroke: accentColor,
+          strokeWidth: showSelectedChrome ? 1.6 : 1.1,
+          strokeOpacity: 0.85,
+          strokeLinecap: 'round',
+          vectorEffect: 'non-scaling-stroke',
+        },
+      ]
 
   // Move handle — orange dot at the window center. Only when selected.
   if (isSelected) {

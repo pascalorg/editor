@@ -173,6 +173,13 @@ export const RoofSegmentNode = BaseNode.extend({
   managedByParent: z.boolean().default(false),
   wallShell: z.enum(['auto', 'include', 'omit']).default('auto'),
   shedInsetEndPanels: z.boolean().default(false),
+  // Plumb 1x8 fascia and rake boards on the eaves and rakes (gable, hip,
+  // shed, flat), built from the segment itself so they follow its pitch,
+  // size, overhang and type.
+  fascia: z.boolean().optional(),
+  // Shed only: the board on the high edge. Off when that edge meets a wall
+  // (a porch cover on a ledger); a lean-to never has one.
+  fasciaHighEdge: z.boolean().optional(),
   // Shape-specific ratios. Only the pair matching `roofType` is read; the
   // rest are inert. Defined on every segment so the panel can flip
   // roofType without losing the previous shape's tuning.
@@ -241,6 +248,8 @@ export const RoofSegmentNode = BaseNode.extend({
   - wallThickness/deckThickness: structural thicknesses
   - overhang: eave overhang distance
   - shingleThickness: outer shingle layer thickness
+  - fascia: plumb fascia and rake boards on the eaves and rakes (gable, hip, shed, flat) (on when absent)
+  - fasciaHighEdge: shed only — a board on the high edge (off when it meets a wall; on when absent)
   - gambrelLowerWidthRatio / gambrelLowerHeightRatio: kink position on gambrel roofs
   - mansardSteepWidthRatio / mansardSteepHeightRatio: waist position on mansard roofs
   - dutchHipWidthRatio / dutchHipHeightRatio: hip-to-gable split on dutch roofs
