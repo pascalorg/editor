@@ -497,6 +497,25 @@ describe('3D wall move', () => {
     expect([...useScene.getState().dirtyNodes].filter((id) => !nodes[id as AnyNodeId])).toEqual([])
   })
 
+  test("a linked wall's endpoint changed mid-drag survives the drop", async () => {
+    const east = 'wall_wall-move-east' as AnyNodeId
+    const north = 'wall_wall-move-north' as AnyNodeId
+    const renderer = await armWall(east)
+    await moveCursor(4)
+    await moveCursor(4.25)
+    // An agent moves the north wall's free end (the east wall shares its other end).
+    useScene.getState().updateNode(north, { end: [-1, 4] })
+    await moveCursor(4.5)
+    await act(async () => {
+      window.dispatchEvent(new Event('pointerup'))
+    })
+    await act(async () => renderer.unmount())
+
+    const nodes = useScene.getState().nodes
+    expect((nodes[east] as WallNode).start).toEqual([4.5, 0])
+    expect(nodes[north] as WallNode).toMatchObject({ start: [4.5, 4], end: [-1, 4] })
+  })
+
   test('split view: a 3D drop with the real 2D overlay mounted records one step', async () => {
     const before = sceneNodes()
     const renderer = await armSplitView()
