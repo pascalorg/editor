@@ -1,15 +1,24 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { measurementCentroid, nodeRegistry } from '@pascal-app/core'
+import { nodeLevelFrame, transformPoint } from '@pascal-app/core/procedural-items'
 import { AnyNode, type AnyNodeId, type AnyNodeType, nodeKindOf } from '@pascal-app/core/schema'
 import { pointInPolygon } from '@pascal-app/core/spatial-grid'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
+import { ErrorCode, throwMcpError } from './errors'
 import { NodeIdSchema } from './schemas'
 
-const ALL_NODE_TYPES = AnyNode.options.map(nodeKindOf) as [AnyNodeType, ...AnyNodeType[]]
+const CORE_NODE_KINDS = AnyNode.options.map(nodeKindOf)
 
 export const findNodesInput = {
-  type: z.enum(ALL_NODE_TYPES).optional(),
+  type: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      `Node kind: a core kind (${CORE_NODE_KINDS.join(', ')}) or a plugin kind such as "fixture:bench".`,
+    ),
   parentId: NodeIdSchema.optional(),
   levelId: NodeIdSchema.optional(),
   zoneId: NodeIdSchema.optional(),
@@ -36,42 +45,20 @@ function nodeSourceIds(node: AnyNode): string[] {
     : []
 }
 
-/** Compute a representative 2D point (x, z) for zone-filtering. */
-function getPointForZoneFilter(
-  node: AnyNode,
-  nodes: Record<string, AnyNode>,
-): [number, number] | null {
-  if (node.type === 'wall' || node.type === 'fence') {
-    const [x1, z1] = node.start
-    const [x2, z2] = node.end
-    return [(x1 + x2) / 2, (z1 + z2) / 2]
+function centre(points: ReadonlyArray<readonly [number, number]>): [number, number] | null {
+  if (points.length === 0) return null
+  const area = measurementCentroid(points.map(([x, z]) => [x, 0, z] as [number, number, number]))
+  if (area) return [area[0], area[2]]
+  let cx = 0
+  let cz = 0
+  for (const [x, z] of points) {
+    cx += x
+    cz += z
   }
-  if (
-    node.type === 'item' ||
-    node.type === 'door' ||
-    node.type === 'window' ||
-    node.type === 'building' ||
-    node.type === 'stair' ||
-    node.type === 'roof'
-  ) {
-    const [x, , z] = node.position
-    return [x, z]
-  }
-  if (node.type === 'slab' || node.type === 'ceiling' || node.type === 'zone') {
-    const poly = node.polygon as Array<[number, number]> | undefined
-    if (!poly || poly.length === 0) return null
-    let cx = 0
-    let cz = 0
-    for (const [x, z] of poly) {
-      cx += x
-      cz += z
-    }
-    return [cx / poly.length, cz / poly.length]
-  }
-  return genericPlanPoint(node, nodes)
+  return [cx / points.length, cz / points.length]
 }
 
-function planBoundsCentre(points: Array<[number, number]>): [number, number] | null {
+function boundsCentre(points: ReadonlyArray<readonly [number, number]>): [number, number] | null {
   if (points.length === 0) return null
   const xs = points.map((p) => p[0])
   const zs = points.map((p) => p[1])
@@ -79,32 +66,35 @@ function planBoundsCentre(points: Array<[number, number]>): [number, number] | n
 }
 
 /**
- * Level-local plan point for the remaining kinds: a segment's midpoint, a
- * polygon's or path's centre, or the position of a node placed directly on a
- * level (a block or imported mesh adds its rotated vertex-bounds centre). A
- * node placed on another host (a roof segment, a cabinet) stores host-local
- * coordinates, so it has no point here and never matches a zone.
+ * The node's plan point in its level's frame, for zone filtering: a polygon's
+ * area centroid, a segment's midpoint, a path's centre, or the origin of a
+ * positioned node resolved through its hosts by core's `nodeLevelFrame` (a
+ * window in its wall, a module in its cabinet); blocks and imported meshes use
+ * their vertex-bounds centre.
  */
-function genericPlanPoint(node: AnyNode, nodes: Record<string, AnyNode>): [number, number] | null {
+function levelPlanPoint(node: AnyNode, nodes: Record<string, AnyNode>): [number, number] | null {
   const n = node as Record<string, unknown>
+  if (Array.isArray(n.polygon)) return centre(n.polygon as Array<[number, number]>)
   if (Array.isArray(n.start) && Array.isArray(n.end)) {
     const [x1, z1] = n.start as [number, number]
     const [x2, z2] = n.end as [number, number]
     return [(x1 + x2) / 2, (z1 + z2) / 2]
   }
-  if (Array.isArray(n.polygon)) {
-    return planBoundsCentre(n.polygon as Array<[number, number]>)
-  }
   if (Array.isArray(n.path)) {
-    return planBoundsCentre((n.path as Array<[number, number, number]>).map((p) => [p[0], p[2]]))
+    return boundsCentre((n.path as Array<[number, number, number]>).map((p) => [p[0], p[2]]))
   }
-  const position = n.position as [number, number, number] | undefined
-  if (!Array.isArray(position) || nodes[node.parentId ?? '']?.type !== 'level') return null
+  if (!Array.isArray(n.position)) return null
+  let frame: ReturnType<typeof nodeLevelFrame>
+  try {
+    frame = nodeLevelFrame(node.id, nodes)
+  } catch {
+    return null
+  }
   const local =
     node.type === 'block'
-      ? planBoundsCentre(node.topology.vertices.map((v) => [v.position[0], v.position[2]]))
+      ? boundsCentre(node.topology.vertices.map((v) => [v.position[0], v.position[2]]))
       : node.type === 'imported-mesh'
-        ? planBoundsCentre(
+        ? boundsCentre(
             node.primitives.flatMap((primitive) => {
               const out: Array<[number, number]> = []
               for (let i = 0; i + 2 < primitive.positions.length; i += 3) {
@@ -114,15 +104,15 @@ function genericPlanPoint(node: AnyNode, nodes: Record<string, AnyNode>): [numbe
             }),
           )
         : null
-  if (!local) return [position[0], position[2]]
-  const rotation = n.rotation
-  const yaw = typeof rotation === 'number' ? rotation : Array.isArray(rotation) ? rotation[1] : 0
-  const cos = Math.cos(yaw)
-  const sin = Math.sin(yaw)
-  return [
-    position[0] + local[0] * cos + local[1] * sin,
-    position[2] - local[0] * sin + local[1] * cos,
-  ]
+  const [x, , z] = transformPoint(frame, local ? [local[0], 0, local[1]] : [0, 0, 0])
+  return [x, z]
+}
+
+/** Node kinds `type` accepts: core kinds, registered plugin kinds, and kinds in the scene. */
+function knownNodeKinds(nodes: Record<string, AnyNode>): Set<string> {
+  const kinds = new Set<string>(CORE_NODE_KINDS)
+  for (const node of Object.values(nodes)) kinds.add(node.type)
+  return kinds
 }
 
 export function registerFindNodes(server: McpServer, bridge: SceneOperations): void {
@@ -138,7 +128,7 @@ export function registerFindNodes(server: McpServer, bridge: SceneOperations): v
     },
     async (args) => {
       const { type, parentId, levelId, zoneId, sourceId, sourceIdPrefix } = args as {
-        type?: AnyNodeType
+        type?: string
         parentId?: string
         levelId?: string
         zoneId?: string
@@ -152,7 +142,15 @@ export function registerFindNodes(server: McpServer, bridge: SceneOperations): v
         parentId?: AnyNodeId
         levelId?: AnyNodeId
       } = {}
-      if (type !== undefined) baseFilter.type = type
+      if (type !== undefined) {
+        if (!(knownNodeKinds(bridge.getNodes()).has(type) || nodeRegistry.get(type))) {
+          throwMcpError(
+            ErrorCode.InvalidParams,
+            `unknown node type "${type}": not a core kind, a registered plugin kind or a kind in this scene`,
+          )
+        }
+        baseFilter.type = type as AnyNodeType
+      }
       if (parentId !== undefined) baseFilter.parentId = parentId as AnyNodeId
       if (levelId !== undefined) baseFilter.levelId = levelId as AnyNodeId
       let results = bridge.findNodes(baseFilter)
@@ -168,7 +166,8 @@ export function registerFindNodes(server: McpServer, bridge: SceneOperations): v
         })
       }
 
-      // Zone-polygon filter: point-in-polygon on a representative 2D point.
+      // Zone filter: nodes on the zone's level whose level-frame plan point
+      // falls inside the zone polygon.
       if (zoneId) {
         const zone = bridge.getNode(zoneId as AnyNodeId)
         if (zone?.type !== 'zone') {
@@ -176,11 +175,12 @@ export function registerFindNodes(server: McpServer, bridge: SceneOperations): v
           // typical "filter" semantics.
           results = []
         } else {
-          const poly = zone.polygon
+          const nodes = bridge.getNodes()
+          const zoneLevelId = bridge.resolveLevelId(zone.id as AnyNodeId)
           results = results.filter((n) => {
-            const pt = getPointForZoneFilter(n, bridge.getNodes())
-            if (!pt) return false
-            return pointInPolygon(pt[0], pt[1], poly)
+            if (bridge.resolveLevelId(n.id as AnyNodeId) !== zoneLevelId) return false
+            const pt = levelPlanPoint(n, nodes)
+            return pt !== null && pointInPolygon(pt[0], pt[1], zone.polygon)
           })
         }
       }

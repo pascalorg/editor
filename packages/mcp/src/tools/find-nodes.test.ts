@@ -8,6 +8,7 @@ import {
   BlockNode,
   ColumnNode,
   ImportedMeshNode,
+  LevelNode,
   nodeKindOf,
   WallNode,
   WindowNode,
@@ -206,6 +207,89 @@ describe('find_nodes', () => {
     expect(await idsFor('column')).toEqual([inColumn.id])
     expect(await idsFor('block')).toEqual([block.id])
     expect(await idsFor('imported-mesh')).toEqual([mesh.id])
+  })
+
+  test('type accepts a plugin kind present in the scene', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const pluginNode = {
+      object: 'node',
+      id: 'bench_plugin-1',
+      type: 'fixture:bench',
+      parentId: level.id,
+      visible: true,
+      metadata: {},
+      position: [0, 0, 0],
+    }
+    const nodes = { ...bridge.getNodes(), [pluginNode.id]: pluginNode } as Record<string, unknown>
+    bridge.loadJSON({ nodes, rootNodeIds: bridge.getRootNodeIds() } as never)
+
+    const result = await client.callTool({
+      name: 'find_nodes',
+      arguments: { type: 'fixture:bench' },
+    })
+    expect(result.isError).toBeFalsy()
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    expect(parsed.nodes.map((n: { id: string }) => n.id)).toEqual([pluginNode.id])
+  })
+
+  test('zoneId only returns nodes on the zone’s level', async () => {
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
+    const ground = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const upper = LevelNode.parse({ level: 1 })
+    const zone = ZoneNode.parse({
+      name: 'Kitchen',
+      polygon: [
+        [-5, -5],
+        [5, -5],
+        [5, 5],
+        [-5, 5],
+      ],
+    })
+    const groundWall = WallNode.parse({ start: [-2, 0], end: [2, 0] })
+    const upperWall = WallNode.parse({ start: [-2, 0], end: [2, 0] })
+    bridge.applyPatch([
+      { op: 'create', node: upper, parentId: building.id as AnyNodeId },
+      { op: 'create', node: zone, parentId: ground.id as AnyNodeId },
+      { op: 'create', node: groundWall, parentId: ground.id as AnyNodeId },
+      { op: 'create', node: upperWall, parentId: upper.id as AnyNodeId },
+    ])
+    const result = await client.callTool({
+      name: 'find_nodes',
+      arguments: { type: 'wall', zoneId: zone.id },
+    })
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    expect(parsed.nodes.map((n: { id: string }) => n.id)).toEqual([groundWall.id])
+  })
+
+  test('zoneId places a hosted window where its wall puts it', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const zone = ZoneNode.parse({
+      name: 'Origin room',
+      polygon: [
+        [-3, -3],
+        [3, -3],
+        [3, 3],
+        [-3, 3],
+      ],
+    })
+    // Wall-local x = 1 on a wall starting at x = 20: the window is at x = 21.
+    const farWall = WallNode.parse({ start: [20, 0], end: [26, 0] })
+    const farWindow = WindowNode.parse({ wallId: farWall.id, position: [1, 1.2, 0] })
+    const nearWall = WallNode.parse({ start: [-2, 0], end: [2, 0] })
+    const nearWindow = WindowNode.parse({ wallId: nearWall.id, position: [1, 1.2, 0] })
+    bridge.applyPatch([
+      { op: 'create', node: zone, parentId: level.id as AnyNodeId },
+      { op: 'create', node: farWall, parentId: level.id as AnyNodeId },
+      { op: 'create', node: farWindow, parentId: farWall.id as AnyNodeId },
+      { op: 'create', node: nearWall, parentId: level.id as AnyNodeId },
+      { op: 'create', node: nearWindow, parentId: nearWall.id as AnyNodeId },
+    ])
+    const result = await client.callTool({
+      name: 'find_nodes',
+      arguments: { type: 'window', zoneId: zone.id },
+    })
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    expect(parsed.nodes.map((n: { id: string }) => n.id)).toEqual([nearWindow.id])
   })
 
   test('invalid type is rejected', async () => {
