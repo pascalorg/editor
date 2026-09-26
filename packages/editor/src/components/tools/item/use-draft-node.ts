@@ -6,6 +6,7 @@ import {
   resolveSupportSlabPatch,
   runSceneHistoryDraftWrite,
   type SurfaceRejectReason,
+  sceneHistoryDraftRevertUpdates,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -38,9 +39,10 @@ function releaseHistoryDraft(end: { current: (() => void) | null }): void {
 export const pausedDraftWrite = runSceneHistoryDraftWrite
 
 /**
- * Puts an adopted item back where it was picked up, as a carry write. A host deleted mid-carry
- * (a collaborator, an agent) is never a parent again: the item falls back to its live parent,
- * then the level. Returns the parent the item now has.
+ * Puts back what the carry still holds on an adopted item (its own writes, core's
+ * `sceneHistoryDraftRevertUpdates`), as a carry write: a position, name or host a collaborator
+ * wrote meanwhile stays. A host deleted mid-carry is never a parent again (nor its face, roof
+ * or surface): the item stays on its live parent, else the level. Returns its parent after.
  */
 function restoreOriginalState(
   id: AnyNodeId,
@@ -51,30 +53,23 @@ function restoreOriginalState(
   const exists = (parentId: string | null | undefined): parentId is string =>
     Boolean(parentId && nodes[parentId as AnyNodeId])
   const hostGone = original.parentId != null && !exists(original.parentId)
-  const parentId = hostGone
-    ? ([
-        nodes[id as AnyNodeId]?.parentId,
-        draftParentId,
-        useViewer.getState().selection.levelId,
-      ].find(exists) ?? null)
-    : original.parentId
-  pausedDraftWrite(() =>
-    updateSurfaceNode(
-      id,
-      {
-        position: original.position,
-        rotation: original.rotation,
-        side: original.side,
-        parentId: parentId ?? undefined,
-        roofSegmentId: hostGone ? undefined : original.roofSegmentId,
-        roofFace: hostGone ? undefined : original.roofFace,
-        blockFaceId: hostGone ? undefined : original.blockFaceId,
-        metadata: original.metadata,
-      },
-      hostGone ? null : original.surfaceId,
-    ),
-  )
-  return parentId
+  const updates = sceneHistoryDraftRevertUpdates([id])
+  const own = updates.find((update) => update.id === id)
+  if (hostGone && own) {
+    for (const key of ['roofSegmentId', 'roofFace', 'blockFaceId']) delete own.data[key]
+  }
+  const liveParentId = nodes[id]?.parentId
+  if (!exists(liveParentId)) {
+    const fallback = [draftParentId, useViewer.getState().selection.levelId].find(exists)
+    if (fallback) {
+      if (own) own.data.parentId = fallback
+      else updates.push({ id, data: { parentId: fallback } })
+    }
+  }
+  if (updates.length > 0) {
+    pausedDraftWrite(() => useScene.getState().updateNodes(updates as never))
+  }
+  return useScene.getState().nodes[id]?.parentId ?? null
 }
 
 interface OriginalState {
@@ -437,9 +432,10 @@ export function useDraftNode(): DraftNodeHandle {
       // re-render but the mesh position was mutated by useFrame and may not reset
       // until the next render cycle, leaving a visual glitch.
       const mesh = sceneRegistry.nodes.get(id as AnyNodeId)
-      if (mesh) {
-        mesh.position.set(original.position[0], original.position[1], original.position[2])
-        mesh.rotation.y = original.rotation[1] ?? 0
+      const restored = useScene.getState().nodes[id as AnyNodeId] as ItemNode | undefined
+      if (mesh && restored) {
+        mesh.position.set(restored.position[0], restored.position[1], restored.position[2])
+        mesh.rotation.y = restored.rotation[1] ?? 0
         mesh.visible = true
       }
     } else {

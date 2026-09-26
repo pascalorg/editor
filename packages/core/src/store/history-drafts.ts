@@ -16,7 +16,11 @@ type SceneHistoryDraft = {
   attachment: unknown
   /** Fields of the adopted node the carry holds: the value before its writes, and its value. */
   owned: Map<string, OwnedField>
+  /** Hosts' `attachments[id]` entries the carry wrote (a surface move on a shelf): before, and its value. */
+  hostEntries: Map<AnyNodeId, { baseline: unknown; carried: unknown }>
   ended: boolean
+  /** A gesture's committing write is running: history sees the draft as it is. */
+  suspended: boolean
 }
 
 /** Structural equality for node field values (plain data: arrays, objects, primitives). */
@@ -57,7 +61,9 @@ export function beginSceneHistoryDraft(
     parentIndex: childIdsOf(parent).indexOf(id),
     attachment: attachmentsOf(parent)?.[id],
     owned: new Map(),
+    hostEntries: new Map(),
     ended: false,
+    suspended: false,
   }
   sceneHistoryDrafts.set(id, draft)
   return () => {
@@ -73,14 +79,40 @@ export function beginSceneHistoryDraft(
 export function withSceneHistoryDraftSuspended<T>(id: string | undefined, write: () => T): T {
   const draft = id ? sceneHistoryDrafts.get(id as AnyNodeId) : undefined
   if (!(id && draft)) return write()
-  sceneHistoryDrafts.delete(id as AnyNodeId)
+  // Visible to history for this write, but still the carry's: its own restore can revert it.
+  const wasSuspended = draft.suspended
+  draft.suspended = true
   try {
     return write()
   } finally {
-    if (!(draft.ended || sceneHistoryDrafts.has(id as AnyNodeId))) {
-      sceneHistoryDrafts.set(id as AnyNodeId, draft)
-    }
+    draft.suspended = wasSuspended
   }
+}
+
+/** A host's attachment entry for `id`, or ABSENT. */
+const ABSENT = Symbol('absent')
+function hostEntry(nodes: NodeMap, hostId: AnyNodeId, id: AnyNodeId): unknown {
+  const attachments = attachmentsOf(nodes[hostId])
+  return attachments && Object.hasOwn(attachments, id) ? attachments[id] : ABSENT
+}
+
+/** `host` with its attachment entry for `id` set to `value` (ABSENT removes it). */
+function withHostEntry(host: AnyNode, id: AnyNodeId, value: unknown): AnyNode {
+  const { [id]: _previous, ...rest } = attachmentsOf(host) ?? {}
+  return {
+    ...host,
+    attachments: value === ABSENT ? rest : { ...rest, [id]: value },
+  } as AnyNode
+}
+
+function heldHostEntries(
+  draft: SceneHistoryDraft,
+  id: AnyNodeId,
+  nodes: NodeMap,
+): Array<[AnyNodeId, { baseline: unknown; carried: unknown }]> {
+  return [...draft.hostEntries].filter(
+    ([hostId, entry]) => nodes[hostId] && sameValue(hostEntry(nodes, hostId, id), entry.carried),
+  )
 }
 
 export function hasSceneHistoryDrafts(): boolean {
@@ -96,7 +128,25 @@ export function noteSceneHistoryDraftWrite(before: NodeMap, after: NodeMap): voi
   for (const [id, draft] of sceneHistoryDrafts) {
     const previous = before[id] as Record<string, unknown> | undefined
     const next = after[id] as Record<string, unknown> | undefined
-    if (!(draft.original && previous && next) || previous === next) continue
+    if (!(draft.original && previous && next)) continue
+    const hosts = new Set<AnyNodeId>(
+      [
+        previous.parentId,
+        next.parentId,
+        draft.original.parentId,
+        ...draft.hostEntries.keys(),
+      ].filter((hostId): hostId is AnyNodeId => typeof hostId === 'string'),
+    )
+    for (const hostId of hosts) {
+      const was = hostEntry(before, hostId, id)
+      const now = hostEntry(after, hostId, id)
+      if (sameValue(was, now)) continue
+      const held = draft.hostEntries.get(hostId)
+      const baseline = held && sameValue(held.carried, was) ? held.baseline : was
+      if (sameValue(baseline, now)) draft.hostEntries.delete(hostId)
+      else draft.hostEntries.set(hostId, { baseline, carried: now })
+    }
+    if (previous === next) continue
     for (const key of new Set([...Object.keys(previous), ...Object.keys(next)])) {
       if (sameValue(previous[key], next[key])) continue
       const held = draft.owned.get(key)
@@ -141,6 +191,14 @@ export function sceneHistoryDraftRevertUpdates(
       data[key] = baseline.present ? baseline.value : undefined
     }
     if (Object.keys(data).length > 0) updates.push({ id, data })
+    for (const [hostId, { baseline }] of heldHostEntries(draft, id, nodes)) {
+      const pending = updates.find((update) => update.id === hostId)
+      const host = { ...nodes[hostId]!, ...(pending?.data ?? {}) } as AnyNode
+      const attachments = (withHostEntry(host, id, baseline) as { attachments: unknown })
+        .attachments
+      if (pending) pending.data.attachments = attachments
+      else updates.push({ id: hostId, data: { attachments } })
+    }
   }
   return updates
 }
@@ -151,7 +209,9 @@ export function clearSceneHistoryDrafts(): void {
 
 /** Created drafts: history excludes them (and their subtrees) like fresh-placement nodes. */
 export function createdSceneHistoryDraftIds(): AnyNodeId[] {
-  return [...sceneHistoryDrafts].filter(([, draft]) => !draft.original).map(([id]) => id)
+  return [...sceneHistoryDrafts]
+    .filter(([, draft]) => !(draft.original || draft.suspended))
+    .map(([id]) => id)
 }
 
 /** Moves `id` from wherever it lives in `nodes` to `parentId` (at `index`), with `attachment`. */
@@ -208,9 +268,11 @@ function placeChild(
 export function withAdoptedDraftsAsOriginal(nodes: NodeMap, historyNodes: NodeMap): NodeMap {
   let result: NodeMap | null = null
   for (const [id, draft] of sceneHistoryDrafts) {
+    if (draft.suspended) continue
     const live = nodes[id]
     const held = draft.original && live ? heldFields(draft, live) : []
-    if (!(draft.original && live) || held.length === 0) continue
+    const heldHosts = draft.original && live ? heldHostEntries(draft, id, nodes) : []
+    if (!(draft.original && live) || held.length + heldHosts.length === 0) continue
     const heldParent = held.find(([key]) => key === 'parentId')?.[1].baseline
     const originalParentId = heldParent?.value as AnyNodeId | undefined
     const restoreParent =
@@ -233,6 +295,9 @@ export function withAdoptedDraftsAsOriginal(nodes: NodeMap, historyNodes: NodeMa
         originalParentId === draft.original.parentId ? draft.attachment : undefined,
       )
     }
+    for (const [hostId, { baseline }] of heldHosts) {
+      if (result[hostId]) result[hostId] = withHostEntry(result[hostId]!, id, baseline)
+    }
   }
   return result ?? historyNodes
 }
@@ -245,11 +310,18 @@ export function withAdoptedDraftsAsOriginal(nodes: NodeMap, historyNodes: NodeMa
 export function withDraftsRestored(before: NodeMap, after: NodeMap): NodeMap | null {
   let result: NodeMap | null = null
   for (const [id, draft] of sceneHistoryDrafts) {
+    if (draft.suspended) continue
     const live = before[id]
     if (!live) continue
     if (draft.original) {
       const jumped = after[id]
       if (!jumped) continue
+      for (const [hostId, { carried }] of heldHostEntries(draft, id, before)) {
+        const host = (result ?? after)[hostId]
+        if (!host || sameValue(hostEntry(result ?? after, hostId, id), carried)) continue
+        result ??= { ...after }
+        result[hostId] = withHostEntry(host, id, carried)
+      }
       const values = live as unknown as Record<string, unknown>
       const held = heldFields(draft, live)
         .map(([key]) => key)
