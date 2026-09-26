@@ -227,6 +227,34 @@ describe('3D wall move', () => {
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
   })
 
+  test('a wall added mid-drag is its own reconciled step; one undo reverts only the drop', async () => {
+    const renderer = await armWall(DIVIDER_ID)
+    await moveCursor(2)
+    await moveCursor(2.25)
+    // A foreign write (a collaborator, an agent op) splits the east room while the drag runs.
+    const foreignId = 'wall_wall-move-foreign' as AnyNodeId
+    useScene
+      .getState()
+      .createNode(
+        WallNode.parse({ id: foreignId, parentId: LEVEL_ID, start: [3, 0], end: [3, 4] }),
+        LEVEL_ID,
+      )
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    expect(nodesOfType('slab')).toHaveLength(3)
+
+    await moveCursor(2.5)
+    await act(async () => {
+      window.dispatchEvent(new Event('pointerup'))
+    })
+    await act(async () => renderer.unmount())
+    expect(useScene.temporal.getState().pastStates).toHaveLength(2)
+
+    useScene.temporal.getState().undo()
+    expect((useScene.getState().nodes[DIVIDER_ID] as WallNode).start).toEqual([2, 0])
+    expect(useScene.getState().nodes[foreignId]).toBeDefined()
+    expect(nodesOfType('slab')).toHaveLength(3)
+  })
+
   test('split view: the 3D drop records one step while the 2D overlay co-owns the gesture', async () => {
     const before = sceneNodes()
     // FloorplanRegistryMoveOverlay holds a pause session keyed by the moving node.
