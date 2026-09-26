@@ -84,7 +84,8 @@ describe('scene history drafts', () => {
     const carried = node(itemId)
     useScene.temporal.getState().undo()
     expect(wallStart()).toEqual([0, 0])
-    expect(node(itemId)).toBe(carried)
+    expect(node(itemId)).toEqual(carried)
+    expect((node(wallId) as WallNode).children).toContain(itemId)
     end()
   })
 

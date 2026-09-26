@@ -37,6 +37,46 @@ function releaseHistoryDraft(end: { current: (() => void) | null }): void {
  */
 export const pausedDraftWrite = runSceneHistoryDraftWrite
 
+/**
+ * Puts an adopted item back where it was picked up, as a carry write. A host deleted mid-carry
+ * (a collaborator, an agent) is never a parent again: the item falls back to its live parent,
+ * then the level. Returns the parent the item now has.
+ */
+function restoreOriginalState(
+  id: AnyNodeId,
+  original: OriginalState,
+  draftParentId: string | null | undefined,
+): string | null {
+  const nodes = useScene.getState().nodes
+  const exists = (parentId: string | null | undefined): parentId is string =>
+    Boolean(parentId && nodes[parentId as AnyNodeId])
+  const hostGone = original.parentId != null && !exists(original.parentId)
+  const parentId = hostGone
+    ? ([
+        nodes[id as AnyNodeId]?.parentId,
+        draftParentId,
+        useViewer.getState().selection.levelId,
+      ].find(exists) ?? null)
+    : original.parentId
+  pausedDraftWrite(() =>
+    updateSurfaceNode(
+      id,
+      {
+        position: original.position,
+        rotation: original.rotation,
+        side: original.side,
+        parentId: parentId ?? undefined,
+        roofSegmentId: hostGone ? undefined : original.roofSegmentId,
+        roofFace: hostGone ? undefined : original.roofFace,
+        blockFaceId: hostGone ? undefined : original.blockFaceId,
+        metadata: original.metadata,
+      },
+      hostGone ? null : original.surfaceId,
+    ),
+  )
+  return parentId
+}
+
 interface OriginalState {
   surfaceId: string | null
   position: [number, number, number]
@@ -238,37 +278,14 @@ export function useDraftNode(): DraftNodeHandle {
         // Move mode: update in place (single undoable action)
         const { parentId: newParentId, ...updateProps } = finalUpdate
         const original = originalStateRef.current!
-        // A host deleted mid-carry (a collaborator, an agent) is never a parent again: the
-        // drop falls back to the draft's live parent, then the level.
         const nodesNow = useScene.getState().nodes
-        const exists = (id: string | null | undefined): id is string =>
-          Boolean(id && nodesNow[id as AnyNodeId])
-        const levelId = useViewer.getState().selection.levelId
-        const originalHostGone = original.parentId != null && !exists(original.parentId)
-        const liveParentId = nodesNow[draft.id as AnyNodeId]?.parentId ?? draft.parentId
+        const restoredParentId = restoreOriginalState(draft.id, original, draft.parentId)
         const parentId =
-          [newParentId, originalHostGone ? null : original.parentId, liveParentId, levelId].find(
-            exists,
-          ) ?? levelId
+          [newParentId, restoredParentId].find((id) => id && nodesNow[id as AnyNodeId]) ??
+          restoredParentId
 
-        // Restore the original while paused, so the one tracked write below has the
-        // true baseline as its undo state.
-        pausedDraftWrite(() =>
-          updateSurfaceNode(
-            draft.id,
-            {
-              position: original.position,
-              rotation: original.rotation,
-              side: original.side,
-              parentId: originalHostGone ? (liveParentId ?? parentId) : original.parentId,
-              roofSegmentId: original.roofSegmentId,
-              roofFace: original.roofFace,
-              blockFaceId: originalHostGone ? undefined : original.blockFaceId,
-              metadata: original.metadata,
-            },
-            originalHostGone ? null : original.surfaceId,
-          ),
-        )
+        // The original is restored above (a carry write), so the one tracked write below has
+        // the true baseline as its undo state.
         releaseHistoryDraft(endHistoryDraftRef)
 
         const effectiveNode = ItemNode.parse({
@@ -414,22 +431,7 @@ export function useDraftNode(): DraftNodeHandle {
         return
       }
 
-      pausedDraftWrite(() =>
-        updateSurfaceNode(
-          id,
-          {
-            position: original.position,
-            rotation: original.rotation,
-            side: original.side,
-            parentId: original.parentId,
-            roofSegmentId: original.roofSegmentId,
-            roofFace: original.roofFace,
-            blockFaceId: original.blockFaceId,
-            metadata: original.metadata,
-          },
-          original.surfaceId,
-        ),
-      )
+      restoreOriginalState(id, original, draftRef.current.parentId)
 
       // Also reset the Three.js mesh directly — the store update triggers a React
       // re-render but the mesh position was mutated by useFrame and may not reset

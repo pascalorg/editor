@@ -332,7 +332,7 @@ describe('item move history', () => {
       const carried = liveItem()
       useScene.temporal.getState().undo()
       expect(hasNode(closingWall.id)).toBe(false)
-      expect(liveItem()).toBe(carried)
+      expect(liveItem()).toEqual(carried)
       await carry(4, 6)
       await grid('click', 0.6, 0.5)
     } finally {

@@ -1463,7 +1463,14 @@ function runTemporalJump(target: Partial<SceneSnapshot> | undefined, jump: () =>
   const draftsBefore = useScene.getState().nodes
   const restoreDrafts = () => {
     const nodes = withDraftsRestored(draftsBefore, useScene.getState().nodes)
-    if (nodes) useScene.setState({ nodes })
+    if (!nodes) return
+    // The carry's own state, not a new step: a tracked write here would clear redo.
+    const pause = beginSceneHistoryPauseSession(useScene)
+    try {
+      useScene.setState({ nodes })
+    } finally {
+      pause.end()
+    }
   }
   runTemporalJumpOnly(target, jump)
   restoreDrafts()
