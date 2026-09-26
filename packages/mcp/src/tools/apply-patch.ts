@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
+import { PatchRefusedError } from '../bridge/patch-refused-error'
 import type { Patch as BridgePatch } from '../bridge/scene-bridge'
 import type { SceneOperations } from '../operations'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS } from './annotations'
@@ -25,7 +26,7 @@ export function registerApplyPatch(server: McpServer, bridge: SceneOperations): 
     {
       title: 'Apply patch',
       description:
-        'Apply a batch of create/update/delete operations atomically. All patches are validated before any are applied; the entire batch forms a single undo step. Batch-first is the default: prefer one apply_patch call containing all create/update/delete ops for a build step, in stable order so later ops can reference ids created by earlier ops. A single call is atomic (all or nothing) and pays the snapshot and save cost once; do not loop one-op calls.',
+        'Apply a batch of create/update/delete operations atomically. All patches are validated before any are applied; the entire batch forms a single undo step. Batch-first is the default: prefer one apply_patch call containing all create/update/delete ops for a build step, in stable order so later ops can reference ids created by earlier ops. A single call is atomic (all or nothing) and pays the snapshot and save cost once; do not loop one-op calls. A create whose id already exists fails the whole patch with node_exists; to replace a node, delete it earlier in the same patch. An update cannot change the id or type of a node (identity_change).',
       inputSchema: applyPatchInput,
       outputSchema: applyPatchOutput,
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
@@ -67,6 +68,13 @@ export function registerApplyPatch(server: McpServer, bridge: SceneOperations): 
           structuredContent: payload,
         }
       } catch (err) {
+        if (err instanceof PatchRefusedError) {
+          throwMcpError(ErrorCode.InvalidParams, err.message, {
+            code: err.code,
+            patchIndex: err.patchIndex,
+            id: err.nodeId,
+          })
+        }
         const msg = err instanceof Error ? err.message : String(err)
         throwMcpError(ErrorCode.InvalidParams, msg)
       }
