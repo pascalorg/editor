@@ -91,7 +91,10 @@ export function assertPatchKeepsIdentity(
 
   patches.forEach((patch, index) => {
     if (patch.op === 'create') {
-      const node = patch.node as AnyNode & { id?: unknown }
+      // Parse like the store does, so defaults such as an empty `children`
+      // list exist for later ops in the patch; the bridge reports schema errors.
+      const parsed = parseNode(patch.node)
+      const node = (parsed.success ? parsed.data : patch.node) as AnyNode & { id?: unknown }
       if (typeof node?.id !== 'string') return
       if (at(node.id)) {
         throw new PatchRefusedError(

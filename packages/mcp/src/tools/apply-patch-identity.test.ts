@@ -151,6 +151,29 @@ describe('apply_patch identity and validation guards', () => {
     expect(stored?.type === 'window' && stored.position).toEqual([1, 1.2, 0])
   })
 
+  test('a host created without a children array still cascades to its new children', async () => {
+    // A raw payload without `children`: the store parses it and starts an
+    // empty list, so the child created next is removed with it.
+    const rawWall = { object: 'node', type: 'wall', id: 'wall_raw', start: [0, 0], end: [4, 0] }
+    const window = WindowNode.parse({ wallId: rawWall.id, position: [2, 1.2, 0] })
+    const result = await apply([
+      { op: 'create', node: rawWall, parentId: level.id },
+      { op: 'create', node: window, parentId: rawWall.id },
+      { op: 'delete', id: rawWall.id, cascade: true },
+      {
+        op: 'create',
+        node: WindowNode.parse({ id: window.id, position: [1, 1.2, 0] }),
+        parentId: level.id,
+      },
+    ])
+    expect(result.isError).toBe(false)
+    const stored = bridge.getNode(window.id as AnyNodeId)
+    expect(stored?.type === 'window' && [stored.parentId, stored.position]).toEqual([
+      level.id,
+      [1, 1.2, 0],
+    ])
+  })
+
   test('a node reparented earlier in the patch survives its old parent’s delete', async () => {
     const { wall, window } = await wallWithWindow()
     const other = WallNode.parse({ start: [0, 3], end: [6, 3] })
