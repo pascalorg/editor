@@ -3,13 +3,14 @@ import * as core from '@pascal-app/core'
 import {
   type AnyNode,
   type AnyNodeId,
-  beginSceneHistoryPauseSession,
   clearSceneHistory,
   emitter,
   getSceneHistoryPauseDepth,
   initSpaceDetectionSync,
   LevelNode,
+  nodeRegistry,
   pauseSceneHistory,
+  registerNode,
   resumeSceneHistory,
   useLiveNodeOverrides,
   useScene,
@@ -18,7 +19,8 @@ import {
 import { useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
-import { wallFloorplanMoveTarget } from './floorplan-move'
+import { FloorplanRegistryMoveOverlay } from '../../../editor/src/components/editor-2d/floorplan-registry-move-overlay'
+import { wallDefinition } from './definition'
 import { MoveWallTool } from './move-tool'
 
 const LEVEL_ID = 'level_wall-move' as AnyNodeId
@@ -86,6 +88,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  restoreDocument()
+  restoreDocument = () => {}
   stopDetection()
   useLiveNodeOverrides.getState().clearAll()
   clearSceneHistory()
@@ -119,6 +123,68 @@ async function dragFrom(from: number, to: number) {
   // The first sample anchors the drag; later samples carry the wall.
   await moveCursor(from)
   for (let index = 1; index <= 5; index += 1) await moveCursor(from + ((to - from) * index) / 5)
+}
+
+// The floor-plan pane for the real 2D move overlay: client coordinates are plan meters.
+function stubFloorplanScene() {
+  const svg = {
+    createSVGPoint: () => {
+      const point = { x: 0, y: 0, matrixTransform: () => ({ x: point.x, y: point.y }) }
+      return point
+    },
+    getBoundingClientRect: () => ({ left: -100, right: 100, top: -100, bottom: 100 }),
+  }
+  const scene = {
+    ownerSVGElement: svg,
+    getScreenCTM: () => ({ inverse: () => ({}) }),
+    appendChild: () => {},
+    querySelector: () => null,
+  }
+  const saved = Object.getOwnPropertyDescriptor(globalThis, 'document')
+  globalThis.document = {
+    querySelector: (selector: string) => (selector === '[data-floorplan-scene]' ? scene : null),
+    body: { style: { cursor: '' } },
+  } as unknown as Document
+  return () => {
+    if (saved) Object.defineProperty(globalThis, 'document', saved)
+    else Reflect.deleteProperty(globalThis, 'document')
+  }
+}
+
+let restoreDocument = () => {}
+
+// Split view: the 3D tool and the real FloorplanRegistryMoveOverlay, both on the moving wall.
+async function armSplitView() {
+  if (!nodeRegistry.get('wall')) registerNode(wallDefinition)
+  restoreDocument = stubFloorplanScene()
+  const wall = useScene.getState().nodes[DIVIDER_ID] as WallNode
+  useEditor.getState().setMovingNode(wall)
+  let renderer: Awaited<ReturnType<typeof create>> | null = null
+  await act(async () => {
+    renderer = await create(
+      <>
+        <FloorplanRegistryMoveOverlay />
+        <MoveWallTool node={wall} />
+      </>,
+    )
+  })
+  return renderer!
+}
+
+async function floorplanPointer(type: 'pointermove' | 'pointerup', x: number, z: number) {
+  await act(async () => {
+    window.dispatchEvent(
+      Object.assign(new Event(type), {
+        button: 0,
+        clientX: x,
+        clientY: z,
+        shiftKey: false,
+        altKey: false,
+        ctrlKey: false,
+        metaKey: false,
+      }),
+    )
+  })
 }
 
 describe('3D wall move', () => {
@@ -255,48 +321,42 @@ describe('3D wall move', () => {
     expect(nodesOfType('slab')).toHaveLength(3)
   })
 
-  test('split view: the 3D drop records one step while the 2D overlay co-owns the gesture', async () => {
+  test('split view: a 3D drop with the real 2D overlay mounted records one step', async () => {
     const before = sceneNodes()
-    // FloorplanRegistryMoveOverlay holds a pause session keyed by the moving node.
-    const overlay = beginSceneHistoryPauseSession(useScene, { gesture: DIVIDER_ID })
-    const renderer = await armWall(DIVIDER_ID)
+    const renderer = await armSplitView()
     await dragFrom(2, 2.5)
     await act(async () => {
+      // A 3D pointer-up: no floor-plan button, so the overlay leaves it to the 3D tool.
       window.dispatchEvent(new Event('pointerup'))
     })
     await act(async () => renderer.unmount())
-    overlay.end()
 
     expect((useScene.getState().nodes[DIVIDER_ID] as WallNode).start).toEqual([2.5, 0])
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
     expect(getSceneHistoryPauseDepth()).toBe(0)
+    expect(useScene.temporal.getState().isTracking).toBe(true)
     useScene.temporal.getState().undo()
     expect(useScene.getState().nodes).toEqual(before)
   })
 
-  test('split view: a 2D drop records one step while the 3D tool co-owns the gesture', async () => {
-    const renderer = await armWall(DIVIDER_ID)
-    await dragFrom(2, 2.5)
-    // FloorplanRegistryMoveOverlay's path: its pause session keyed by the moving node,
-    // the wall's floor-plan move target, and the commit inside `commitStep`.
-    const overlay = beginSceneHistoryPauseSession(useScene, { gesture: DIVIDER_ID })
-    const session = wallFloorplanMoveTarget({
-      node: useScene.getState().nodes[DIVIDER_ID] as WallNode,
-      nodes: useScene.getState().nodes,
-      sceneApi: {} as never,
-    })
-    const modifiers = { shiftKey: false, altKey: false, ctrlKey: false, metaKey: false }
-    session.apply({ planPoint: [2, 2], modifiers })
-    session.apply({ planPoint: [3, 2], modifiers })
-    expect(session.canCommit?.()).toBe(true)
-    overlay.commitStep(() => session.commit?.())
-    overlay.end()
-    useEditor.getState().setMovingNodeOrigin('2d')
+  test('split view: a 2D drop through the real overlay records one step', async () => {
+    const before = sceneNodes()
+    const renderer = await armSplitView()
+    await floorplanPointer('pointermove', 2, 2)
+    await floorplanPointer('pointermove', 3, 2)
+    await floorplanPointer('pointerup', 3, 2)
+    expect(useEditor.getState().movingNodeOrigin).toBe('2d')
     await act(async () => renderer.unmount())
 
-    expect((useScene.getState().nodes[DIVIDER_ID] as WallNode).start).toEqual([3, 0])
+    const divider = useScene.getState().nodes[DIVIDER_ID] as WallNode
+    expect(divider.start).toEqual([3, 0])
+    expect(divider.end).toEqual([3, 4])
+    expect(useLiveNodeOverrides.getState().overrides.size).toBe(0)
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
     expect(getSceneHistoryPauseDepth()).toBe(0)
+    expect(useScene.temporal.getState().isTracking).toBe(true)
+    useScene.temporal.getState().undo()
+    expect(useScene.getState().nodes).toEqual(before)
   })
 
   test('cancel adds no history, restores the preview and keeps a foreign pause', async () => {
