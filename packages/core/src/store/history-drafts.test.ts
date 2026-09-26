@@ -1,11 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { ItemNode, LevelNode, WallNode } from '../schema'
 import type { AnyNodeId } from '../schema/types'
-import {
-  beginSceneHistoryPauseSession,
-  getSceneHistoryPauseDepth,
-  runSceneHistoryGestureStep,
-} from './history-control'
+import { beginSceneHistoryPauseSession, getSceneHistoryPauseDepth } from './history-control'
 import useScene, { beginSceneHistoryDraft, clearSceneHistory } from './use-scene'
 
 // `updateNodesAction` batches dirty-marking through requestAnimationFrame.
@@ -98,11 +94,11 @@ describe('scene history drafts', () => {
     end()
   })
 
-  test("the gesture's step records the drop even while the draft is registered", () => {
+  test("the gesture's commitStep records the drop even while the draft is registered", () => {
     const end = beginSceneHistoryDraft(itemId, node(itemId)!)
-    runSceneHistoryGestureStep(useScene, item.id, () =>
-      useScene.getState().updateNode(itemId, { position: [3, 0, 1] }),
-    )
+    const drop = beginSceneHistoryPauseSession(useScene, { gesture: item.id })
+    drop.commitStep(() => useScene.getState().updateNode(itemId, { position: [3, 0, 1] }))
+    drop.end()
     expect(past()).toBe(1)
     end()
     useScene.temporal.getState().undo()

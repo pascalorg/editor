@@ -3,6 +3,7 @@ import {
   type AlignmentAnchor,
   type AnyNode,
   type AnyNodeId,
+  beginSceneHistoryPauseSession,
   type CeilingEvent,
   canHostSurfaceChild,
   collectAlignmentAnchors,
@@ -14,12 +15,9 @@ import {
   movingFootprintAnchors,
   type NodeEvent,
   nodeRegistry,
-  pauseSceneHistory,
   type RoofEvent,
   resolveFrozenFloorPlacementPatch,
   resolveLevelId,
-  resumeSceneHistory,
-  runSceneHistoryGestureStep,
   type ShelfEvent,
   type SurfaceRejectReason,
   sceneRegistry,
@@ -120,7 +118,7 @@ import {
 } from './placement-strategies'
 import { resolveItemPlacementSurfaceNormal } from './placement-surface'
 import type { PlacementState, TransitionResult } from './placement-types'
-import type { DraftNodeHandle } from './use-draft-node'
+import { type DraftNodeHandle, pausedDraftWrite } from './use-draft-node'
 
 const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
 
@@ -532,20 +530,14 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
   useEffect(() => {
     if (!asset) return
-    // The carry pauses no history: the draft stays out of history snapshots (core's
-    // history-drafts), so writes others make meanwhile record as their own steps, with space
-    // detection. The draft's own host changes still write under a short pause, so systems that
-    // stand down during interactions skip them. In split view the 2D move overlay co-owns the
-    // gesture, keyed by the moving node, and the drop lifts its pause too.
+    // History is paused only around the placement's own writes, never for the whole carry:
+    // the draft stays out of history snapshots (core's history-drafts), so writes others make
+    // mid-carry record as their own steps, with space detection. In split view the 2D move
+    // overlay co-owns the gesture (keyed by the moving node), and the drop's commitStep lifts
+    // its pause too.
     const movingNodeId = getMovingNode()?.id
-    const updateSurfaceNode: typeof writeSurfaceNode = (...args) => {
-      pauseSceneHistory(useScene)
-      try {
-        writeSurfaceNode(...args)
-      } finally {
-        resumeSceneHistory(useScene)
-      }
-    }
+    const updateSurfaceNode: typeof writeSurfaceNode = (...args) =>
+      pausedDraftWrite(() => writeSurfaceNode(...args))
 
     const validators = { canPlaceOnFloor, canPlaceOnWall, canPlaceOnCeiling }
 
@@ -647,16 +639,22 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     ) => {
       const draftId = draftNode.current?.id ?? null
       const wasAdopted = draftNode.isAdopted
-      const finalId = runSceneHistoryGestureStep(useScene, movingNodeId, () =>
-        draftNode.commit(nodeUpdate, {
-          ...options,
-          onReject: (reason) => {
-            feedback.reject(reason)
-            edgeMaterial.color.setHex(0xef_44_44)
-            basePlaneMaterial.color.setHex(0xef_44_44)
-          },
-        }),
-      )
+      const drop = beginSceneHistoryPauseSession(useScene, { gesture: movingNodeId })
+      let finalId: string | null
+      try {
+        finalId = drop.commitStep(() =>
+          draftNode.commit(nodeUpdate, {
+            ...options,
+            onReject: (reason) => {
+              feedback.reject(reason)
+              edgeMaterial.color.setHex(0xef_44_44)
+              basePlaneMaterial.color.setHex(0xef_44_44)
+            },
+          }),
+        )
+      } finally {
+        drop.end()
+      }
       if (finalId && draftId) {
         useLiveTransforms.getState().clear(draftId)
         useLiveNodeOverrides.getState().clearFields(draftId, faceHostClearFields(draftNode.current))
@@ -1658,10 +1656,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         applyTransition(result)
         const draft = draftNode.current
         if (draft) {
-          useScene.getState().updateNode(draft.id, {
-            parentId: result.nodeUpdate.parentId as string,
-            roofSegmentId: undefined,
-          })
+          pausedDraftWrite(() =>
+            useScene.getState().updateNode(draft.id, {
+              parentId: result.nodeUpdate.parentId as string,
+              roofSegmentId: undefined,
+            }),
+          )
         }
       } else {
         // Create mode: destroy transient and reset state
@@ -1776,7 +1776,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
       if (draftNode.isAdopted) {
         applyTransition(result)
-        if (draft) useScene.getState().updateNode(draft.id, result.nodeUpdate)
+        if (draft)
+          pausedDraftWrite(() => useScene.getState().updateNode(draft.id, result.nodeUpdate))
       } else {
         draftNode.destroy()
         gridPosition.current.set(...result.gridPosition)
@@ -2680,8 +2681,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         const draft = draftNode.current
         if (draft === null) return
         if (draft.id in useScene.getState().nodes) return
-        // Temporal is paused during placement, createNode won't be tracked
-        useScene.getState().createNode(draft, draft.parentId as AnyNodeId)
+        pausedDraftWrite(() => useScene.getState().createNode(draft, draft.parentId as AnyNodeId))
       })
     })
 
@@ -2879,7 +2879,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     )
       return
     draft.parentId = viewerLevelId
-    useScene.getState().updateNode(draft.id as AnyNodeId, { parentId: viewerLevelId })
+    pausedDraftWrite(() =>
+      useScene.getState().updateNode(draft.id as AnyNodeId, { parentId: viewerLevelId }),
+    )
   }, [viewerLevelId, draftNode, asset])
 
   // Restore the draft mesh's raycast when the coordinator unmounts (tool change).

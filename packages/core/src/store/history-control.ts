@@ -266,23 +266,6 @@ function runWithHoldersLifted<T>(
 }
 
 /**
- * Runs a gesture's committing write with every pause its co-owners hold for `gesture` lifted
- * (for example the 2D move overlay's, when the 3D mover drops in split view). Other owners'
- * pauses still hold. Without a key it simply runs the write.
- */
-export function runSceneHistoryGestureStep<T>(
-  sceneStore: TemporalStoreLike,
-  gesture: string | undefined,
-  write: () => T,
-): T {
-  return runWithHoldersLifted(
-    sceneStore,
-    gesture ? (gesturePauseHolders.get(gesture) ?? []) : [],
-    () => withSceneHistoryDraftSuspended(gesture, write),
-  )
-}
-
-/**
  * Holds a refcounted pause for a whole gesture (drag). Unlike a raw
  * `temporal.pause()`, cooperating systems see the gesture through
  * `getSceneHistoryPauseDepth()`, and their balanced pause/resume pairs cannot

@@ -2,10 +2,9 @@ import {
   type AnyNodeId,
   type AssetInput,
   beginSceneHistoryDraft,
+  beginSceneHistoryPauseSession,
   ItemNode,
-  pauseSceneHistory,
   resolveSupportSlabPatch,
-  resumeSceneHistory,
   type SurfaceRejectReason,
   sceneRegistry,
   useScene,
@@ -32,13 +31,13 @@ function releaseHistoryDraft(end: { current: (() => void) | null }): void {
   end.current = null
 }
 
-/** A draft's own write, under a balanced pause so interaction-aware systems skip it. */
-function pausedDraftWrite(write: () => void): void {
-  pauseSceneHistory(useScene)
+/** A placement's own write, under a short pause so interaction-aware systems skip it. */
+export function pausedDraftWrite<T>(write: () => T): T {
+  const pause = beginSceneHistoryPauseSession(useScene)
   try {
-    write()
+    return write()
   } finally {
-    resumeSceneHistory(useScene)
+    pause.end()
   }
 }
 
@@ -250,8 +249,7 @@ export function useDraftNode(): DraftNodeHandle {
 
         // Restore the original while paused, so the one tracked write below has the
         // true baseline as its undo state.
-        pauseSceneHistory(useScene)
-        try {
+        pausedDraftWrite(() =>
           updateSurfaceNode(
             draft.id,
             {
@@ -265,10 +263,8 @@ export function useDraftNode(): DraftNodeHandle {
               metadata: original.metadata,
             },
             original.surfaceId,
-          )
-        } finally {
-          resumeSceneHistory(useScene)
-        }
+          ),
+        )
         releaseHistoryDraft(endHistoryDraftRef)
 
         const effectiveNode = ItemNode.parse({
@@ -321,13 +317,10 @@ export function useDraftNode(): DraftNodeHandle {
       if (!parentId) return null
 
       beginPerfAction('place:item', draft.id)
-      pauseSceneHistory(useScene)
-      try {
+      pausedDraftWrite(() => {
         updateSurfaceNode(draft.id, {}, null)
         useScene.getState().deleteNode(draft.id)
-      } finally {
-        resumeSceneHistory(useScene)
-      }
+      })
       releaseHistoryDraft(endHistoryDraftRef)
       draftRef.current = null
 

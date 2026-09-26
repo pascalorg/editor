@@ -320,7 +320,6 @@ export {
   resetSceneHistoryPauseDepth,
   resumeSceneHistory,
   runAsSingleSceneHistoryStep,
-  runSceneHistoryGestureStep,
   type SceneCommit,
   type SceneCommitListener,
   type SceneCommitOrigin,
