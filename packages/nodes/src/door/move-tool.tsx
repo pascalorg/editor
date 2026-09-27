@@ -43,6 +43,7 @@ import {
   isWallMeshHidden,
   shouldIgnoreWallEventForOpeningMove,
 } from '../shared/opening-move-wall-gate'
+import { openingPlaneOffsetOnWall } from '../shared/opening-plane-offset'
 import {
   getRoofWallOpeningCursorPose,
   type RoofWallOpeningTarget,
@@ -148,6 +149,9 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         metadata: { ...meta, isTransient: true },
       })
     }
+
+    // Same-wall moves keep the wall-local plane offset; another host resets it.
+    const planeOffsetOn = (wallId: string) => openingPlaneOffsetOnWall(movingDoorNode, wallId)
 
     let currentHostId: string | null = movingDoorNode.parentId
     let dragAnchor: { wallId: string; rawX: number; startX: number } | null = null
@@ -381,7 +385,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       // `visible:false` keeps the pale solid mesh from competing with the ghost.
       if (currentHostId !== target.wallId) {
         useScene.getState().updateNode(movingDoorNode.id, {
-          position: [target.clampedX, target.clampedY, 0],
+          position: [target.clampedX, target.clampedY, planeOffsetOn(target.wallId)],
           rotation: [0, target.itemRotation, 0],
           side: target.side,
           parentId: target.wallId,
@@ -395,13 +399,13 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       } else {
         const doorMesh = sceneRegistry.nodes.get(movingDoorNode.id as AnyNodeId)
         if (doorMesh) {
-          doorMesh.position.set(target.clampedX, target.clampedY, 0)
+          doorMesh.position.set(target.clampedX, target.clampedY, planeOffsetOn(target.wallId))
           doorMesh.rotation.set(0, target.itemRotation, 0)
           doorMesh.updateMatrixWorld(true)
         }
       }
       useLiveTransforms.getState().set(movingDoorNode.id, {
-        position: [target.clampedX, target.clampedY, 0],
+        position: [target.clampedX, target.clampedY, planeOffsetOn(target.wallId)],
         rotation: target.itemRotation,
       })
       markHostDirtyThrottled(target.wallId)
@@ -431,6 +435,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         target.clampedY,
         getLevelYOffset(),
         getSlabElevation(target.event),
+        planeOffsetOn(target.wallId),
       )
       const ghostYaw = target.itemRotation - wallAngle
       setGhostPose({
@@ -542,7 +547,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         cloned.metadata = stripPlacementMetadataFlags(cloned.metadata)
         const node = DoorNode.parse({
           ...cloned,
-          position: [target.clampedX, target.clampedY, 0],
+          position: [target.clampedX, target.clampedY, planeOffsetOn(target.wallId)],
           rotation: [0, target.itemRotation, 0],
           side: target.side,
           wallId: target.wallId,
@@ -575,7 +580,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
 
         history.commitStep(() => {
           commitOpeningMove(movingDoorNode.id, {
-            position: [target.clampedX, target.clampedY, 0],
+            position: [target.clampedX, target.clampedY, planeOffsetOn(target.wallId)],
             rotation: [0, target.itemRotation, 0],
             side: target.side,
             parentId: target.wallId,

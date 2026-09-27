@@ -22,7 +22,8 @@ export function scaleHandleHeight(
 }
 
 /**
- * Converts wall-local (X along wall, Y = height above wall base) to world XYZ.
+ * Converts wall-local (X along wall, Y = height above wall base, Z = offset
+ * from the wall centre plane along its normal) to world XYZ.
  */
 export function wallLocalToWorld(
   wallNode: WallNode,
@@ -30,10 +31,15 @@ export function wallLocalToWorld(
   localY: number,
   levelYOffset = 0,
   slabElevation = 0,
+  localZ = 0,
 ): [number, number, number] {
   const wallLength = getWallCurveLength(wallNode)
   const frame = getWallCurveFrameAt(wallNode, wallLength > 1e-6 ? localX / wallLength : 0)
-  return [frame.point.x, slabElevation + localY + levelYOffset, frame.point.y]
+  return [
+    frame.point.x + frame.normal.x * localZ,
+    slabElevation + localY + levelYOffset,
+    frame.point.y + frame.normal.y * localZ,
+  ]
 }
 
 /**
