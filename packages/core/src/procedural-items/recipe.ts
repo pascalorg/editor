@@ -56,7 +56,8 @@ const motion = z.discriminatedUnion('kind', [
   }),
 ])
 export const RecipeSchema = z.strictObject({
-  version: z.literal(1),
+  // Version 2 marks content that older readers cannot evaluate; v2-only fields require it.
+  version: z.union([z.literal(1), z.literal(2)]),
   name: z.string().min(1).max(100),
   description: z.string().max(600),
   classification: z
@@ -69,6 +70,8 @@ export const RecipeSchema = z.strictObject({
   mounting: z
     .strictObject({ attachTo: z.enum(['wall-side', 'ceiling']), reference: id })
     .optional(),
+  // v2, floor designs: the design-space height that rests on the host floor.
+  base: expression.optional(),
   surfaces: z
     .array(
       z.strictObject({
@@ -233,10 +236,20 @@ function guardTree(value: unknown, depth = 0, budget = { count: 0 }) {
     }
   }
 }
+function requireVersion2(recipe: Recipe, feature: string) {
+  if (recipe.version !== 2) throw new Error(`${feature} requires recipe version 2`)
+}
 export function parseRecipe(input: unknown): Recipe {
   guardTree(input)
   if (JSON.stringify(input).length > RECIPE_LIMITS.bytes) throw new Error('Recipe is too large')
   const recipe = RecipeSchema.parse(input)
+  if (recipe.base !== undefined) {
+    requireVersion2(recipe, 'A declared base')
+    if (recipe.mounting)
+      throw new Error(
+        'A declared base applies to floor designs; mounted designs use their reference',
+      )
+  }
   for (const list of [recipe.parameters, recipe.slots, recipe.parts]) {
     if (new Set(list.map((x) => x.id)).size !== list.length)
       throw new Error('IDs must be unique within each section')
@@ -412,6 +425,10 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
       b = expr(c.right)
     if (c.relation === 'lte' ? a > b + 1e-8 : a < b - 1e-8) throw new Error(c.message)
   }
+  // The datum that rests on the host: design y = 0, or a v2 floor design's declared base.
+  // v2 ceiling designs hang from their top reference; their host bounds them against the floor.
+  const base = recipe.version === 2 && recipe.base !== undefined ? expr(recipe.base) : 0
+  const hangsFromCeiling = recipe.version === 2 && recipe.mounting?.attachTo === 'ceiling'
   const shapes: EvaluatedShape[] = [],
     motions: EvaluatedMotion[] = [],
     lights: EvaluatedLight[] = [],
@@ -631,7 +648,7 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
     for (const corner of shapeCorners(shape.size, shape.position, shape.rotation))
       for (let step = 0; step <= steps; step++) {
         const point = movedPoint(corner, motion, step / steps)
-        if (!recipe.mounting && point[1] < -0.001)
+        if (!recipe.mounting && point[1] < base - 0.001)
           throw new Error(`Motion envelope for ${shape.partId} extends below the floor`)
         if (
           recipe.mounting?.attachTo === 'wall-side' &&
@@ -648,10 +665,26 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
       }
   }
   if (!shapes.length) throw new Error('The item must contain geometry')
+  if (base !== 0) {
+    // Consumers keep reading design space with the resting datum at y = 0.
+    const lower = (point: Vec3): Vec3 => [point[0], point[1] - base, point[2]]
+    for (const shape of shapes) shape.position = lower(shape.position)
+    for (const light of lights) light.position = lower(light.position)
+    for (const surface of surfaces) surface.position = lower(surface.position)
+    // A slide's pivot is the origin of its group, not a point of the design.
+    for (const motion of motions) if (motion.kind !== 'slide') motion.pivot = lower(motion.pivot)
+    min[1] -= base
+    max[1] -= base
+  }
   const dimensions = max.map((x, i) => x - min[i]!) as Vec3
   if (dimensions.some((x) => x > 30) || [...min, ...max].some((x) => Math.abs(x) > 30))
     throw new Error('Item exceeds 30 m bounds')
-  if (min[1] < -0.001) throw new Error('Geometry extends below the ground; base must be at y=0')
+  if (!hangsFromCeiling && min[1] < -0.001)
+    throw new Error(
+      recipe.base === undefined
+        ? 'Geometry extends below the ground; base must be at y=0'
+        : 'Geometry extends below the declared base',
+    )
   return {
     shapes,
     motions,
