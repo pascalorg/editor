@@ -26,6 +26,7 @@ import {
   type WallNode,
 } from '../../schema'
 import type { CollectionId } from '../../schema/collections'
+import { Provenance } from '../../schema/provenance'
 import { constrainWallCurveOffsetToAvoidIntersections } from '../../systems/wall/wall-curve'
 import {
   areWallStylesCompatible,
@@ -540,28 +541,27 @@ function warnSanitizedNodeMutation(
 
 /**
  * Source ids cannot be repaired the way the numeric fallback repairs a value:
- * any fix would drop or rewrite them (D5). A write whose `provenance` fails its
- * schema throws, so the mutation applies nothing.
+ * any fix would drop or rewrite them (D5). A write that sets an invalid
+ * `provenance` throws, whatever the node's kind (a plain plugin kind never
+ * reaches a schema that knows the field), so the mutation applies nothing.
  */
-function refuseInvalidProvenance(
-  nodeId: string,
-  issues: readonly { path: PropertyKey[]; message: string }[],
-): void {
-  const issue = issues.find((candidate) => candidate.path[0] === 'provenance')
-  if (!issue) return
-  throw new Error(
-    `Node "${nodeId}": provenance refused at ${issue.path.join('.')}: ${issue.message}`,
-  )
+function assertProvenanceWrite(nodeId: string, value: unknown): void {
+  if (value === undefined) return
+  const parsed = Provenance.safeParse(value)
+  if (parsed.success) return
+  const issue = parsed.error.issues[0]
+  const at = ['provenance', ...(issue?.path ?? [])].join('.')
+  throw new Error(`Node "${nodeId}": provenance refused at ${at}: ${issue?.message}`)
 }
 
 function parseCreatedNode(node: AnyNode, parentId: AnyNodeId | null): AnyNode {
   const candidate = { ...node, parentId }
+  assertProvenanceWrite(candidate.id, (candidate as { provenance?: unknown }).provenance)
   const registered = nodeRegistry.get(candidate.type)?.schema
   // Generated definitions must reject invalid geometry instead of retaining a failed parse.
   if (registered?.meta?.()?.strictMutations === true) return registered.parse(candidate) as AnyNode
   const parsed = parseNode(candidate)
   if (parsed.success) return parsed.data
-  refuseInvalidProvenance(candidate.id, parsed.error.issues)
 
   const schema = getNodeSchemaForType(candidate.type)
   const sanitized = sanitizeNumericValue(schema, candidate, undefined, [])
@@ -589,6 +589,9 @@ function mergeNodeUpdate(currentNode: AnyNode, patch: Partial<AnyNode>): AnyNode
 }
 
 function parseUpdatedNode(currentNode: AnyNode, data: Partial<AnyNode>): AnyNode {
+  // Only a write of the field is checked: a stored over-cap value stays editable.
+  if (Object.hasOwn(data, 'provenance'))
+    assertProvenanceWrite(currentNode.id, (data as { provenance?: unknown }).provenance)
   const candidate = mergeNodeUpdate(currentNode, data)
   // Graph links survive schemas that omit children; only an explicit patch may change them.
   const preserveChildren = (updated: AnyNode): AnyNode =>
@@ -603,9 +606,6 @@ function parseUpdatedNode(currentNode: AnyNode, data: Partial<AnyNode>): AnyNode
     return preserveChildren(registered.parse(candidate) as AnyNode)
   const parsed = parseNode(candidate)
   if (parsed.success) return preserveChildren(parsed.data)
-  // Only a write of the field is refused: a stored over-cap value stays editable.
-  if (Object.hasOwn(data, 'provenance'))
-    refuseInvalidProvenance(currentNode.id, parsed.error.issues)
 
   const schema = getNodeSchemaForType(candidate.type)
   const sanitized = sanitizeNumericValue(schema, data, currentNode, [])

@@ -1,5 +1,15 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { type AnyNode, type AnyNodeId, PROVENANCE_MAX_REFS, type Provenance } from '../schema'
+import { z } from 'zod'
+import { nodeRegistry, registerNode } from '../registry/registry'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  BaseNode,
+  nodeType,
+  objectId,
+  PROVENANCE_MAX_REFS,
+  type Provenance,
+} from '../schema'
 import useScene from './use-scene'
 
 const node = (id: string, type: string, parentId: string | null, fields = {}) => ({
@@ -135,5 +145,77 @@ describe('provenance through the scene store (D5)', () => {
       (useScene.getState().nodes['wall_over' as AnyNodeId] as { height?: number }).height,
     ).toBe(3)
     expect(provenanceOf('wall_over')).toEqual(OVER_CAP)
+  })
+})
+
+describe('provenance refusal on a plain API-v1 plugin kind (D5)', () => {
+  let restoreRegistry: () => void
+  let savedRaf: typeof requestAnimationFrame
+  let savedCancelRaf: typeof cancelAnimationFrame
+  const schema = BaseNode.extend({
+    id: objectId('widget'),
+    type: nodeType('acme:widget'),
+    size: z.number().positive().default(1),
+  })
+  const writers = {
+    updateNode: (data: Partial<AnyNode>) =>
+      useScene.getState().updateNode('widget_a' as AnyNodeId, data),
+    updateNodes: (data: Partial<AnyNode>) =>
+      useScene.getState().updateNodes([{ id: 'widget_a' as AnyNodeId, data }]),
+    applyNodeChanges: (data: Partial<AnyNode>) =>
+      useScene.getState().applyNodeChanges({ update: [{ id: 'widget_a' as AnyNodeId, data }] }),
+  }
+
+  beforeEach(() => {
+    savedRaf = globalThis.requestAnimationFrame
+    savedCancelRaf = globalThis.cancelAnimationFrame
+    globalThis.requestAnimationFrame = () => 0
+    globalThis.cancelAnimationFrame = () => {}
+    restoreRegistry = nodeRegistry._snapshot()
+    registerNode({
+      kind: 'acme:widget',
+      schemaVersion: 1,
+      schema,
+      category: 'furnish',
+      defaults: () => ({}),
+      capabilities: {},
+    })
+    const widget = schema.parse({ id: 'widget_a', provenance: WALL })
+    useScene.setState({
+      nodes: { widget_a: widget },
+      rootNodeIds: ['widget_a'],
+      dirtyNodes: new Set(),
+      readOnly: false,
+    } as never)
+    useScene.temporal.getState().clear()
+  })
+  afterEach(() => {
+    restoreRegistry()
+    globalThis.requestAnimationFrame = savedRaf
+    globalThis.cancelAnimationFrame = savedCancelRaf
+  })
+
+  test('every writer refuses an over-cap provenance, whatever the kind', () => {
+    for (const [name, write] of Object.entries(writers)) {
+      expect(() => write({ provenance: OVER_CAP } as Partial<AnyNode>), name).toThrow(
+        'provenance.refs',
+      )
+      expect(provenanceOf('widget_a'), name).toEqual(WALL)
+    }
+    const create = () =>
+      useScene.getState().createNode({
+        ...schema.parse({ id: 'widget_b' }),
+        provenance: OVER_CAP,
+      } as unknown as AnyNode)
+    expect(create).toThrow('provenance.refs')
+    expect(useScene.getState().nodes['widget_b' as AnyNodeId]).toBeUndefined()
+  })
+
+  test('a valid provenance and unrelated edits still apply', () => {
+    const next: Provenance = { refs: [{ ns: 'al', id: 'ground-exterior-01', role: 'piece' }] }
+    writers.updateNode({ provenance: next } as Partial<AnyNode>)
+    expect(provenanceOf('widget_a')).toEqual(next)
+    writers.updateNode({ size: 2 } as Partial<AnyNode>)
+    expect(provenanceOf('widget_a')).toEqual(next)
   })
 })
