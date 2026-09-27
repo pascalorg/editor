@@ -185,3 +185,4 @@ export type {
   ToolOptionChoice,
   Vec2,
 } from './types'
+export { validateNodeRelations } from './validate-relations'

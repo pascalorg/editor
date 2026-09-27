@@ -1480,16 +1480,28 @@ export type NodeDeletionPlan = NodeDeletionScene & {
   deletedIds: Set<AnyNodeId>
   parentsToMarkDirty: Set<AnyNodeId>
   nodesToMarkDirty: Set<AnyNodeId>
+  /** Preview only: existing default gutters and downspouts the refresh may keep or replace. */
+  unsettledIds: Set<AnyNodeId>
 }
 
 /**
  * The delete store action's planner, without committing: the requested ids,
  * their `children` subtrees and kind `onDeleteCascade` companions, collinear
  * walls merged across a deleted junction, neighbour patches, support and unit
- * cleanup, and default gutters. Pure over `scene`, so a caller can preview a
- * delete (the MCP patch dry run) with exactly the store's semantics.
+ * cleanup, and the default gutter and downspout refresh.
+ *
+ * The refresh mints gutters, downspouts and outlets with random ids, and which
+ * existing defaults it keeps can depend on them. With `mintDefaults: false`
+ * (a preview, such as the MCP patch dry run) the refresh does not run: the
+ * existing defaults it would touch are listed in `unsettledIds`, and the plan
+ * is deterministic and equals the commit for every other existing id. The
+ * delete action mints.
  */
-export function planNodeDeletion(scene: NodeDeletionScene, ids: AnyNodeId[]): NodeDeletionPlan {
+export function planNodeDeletion(
+  scene: NodeDeletionScene,
+  ids: AnyNodeId[],
+  { mintDefaults = true }: { mintDefaults?: boolean } = {},
+): NodeDeletionPlan {
   const parentsToMarkDirty = new Set<AnyNodeId>()
   const nodesToMarkDirty = new Set<AnyNodeId>()
   const deletedIds = new Set<AnyNodeId>()
@@ -1646,7 +1658,12 @@ export function planNodeDeletion(scene: NodeDeletionScene, ids: AnyNodeId[]): No
     delete nextNodes[id]
   }
 
-  refreshDefaultGuttersForRoofIds(nextNodes, affectedRoofIds, nodesToMarkDirty, deletedIds)
+  const unsettledIds = new Set<AnyNodeId>()
+  if (mintDefaults) {
+    refreshDefaultGuttersForRoofIds(nextNodes, affectedRoofIds, nodesToMarkDirty, deletedIds)
+  } else {
+    collectRefreshedDefaults(nextNodes, affectedRoofIds, unsettledIds)
+  }
 
   return {
     nodes: nextNodes,
@@ -1655,6 +1672,39 @@ export function planNodeDeletion(scene: NodeDeletionScene, ids: AnyNodeId[]): No
     deletedIds,
     parentsToMarkDirty,
     nodesToMarkDirty,
+    unsettledIds,
+  }
+}
+
+/**
+ * The existing nodes the default gutter refresh of `roofIds` may keep, move or
+ * replace: each roof's default gutters and the downspouts on them. Which of
+ * them survive depends on the gutters the refresh mints, whose ids are random.
+ */
+function collectRefreshedDefaults(
+  nodes: Record<AnyNodeId, AnyNode>,
+  roofIds: Iterable<AnyNodeId>,
+  out: Set<AnyNodeId>,
+) {
+  const gutterIds = new Set<AnyNodeId>()
+  for (const roofId of new Set(roofIds)) {
+    const roof = nodes[roofId]
+    if (roof?.type !== 'roof') continue
+    for (const segmentId of roof.children ?? []) {
+      const segment = nodes[segmentId as AnyNodeId]
+      if (segment?.type !== 'roof-segment') continue
+      for (const childId of segment.children ?? []) {
+        if (isDefaultGutterNode(nodes[childId as AnyNodeId], segment.id)) {
+          gutterIds.add(childId as AnyNodeId)
+        }
+      }
+    }
+  }
+  for (const id of gutterIds) out.add(id)
+  for (const node of Object.values(nodes)) {
+    if (node?.type === 'downspout' && node.gutterId && gutterIds.has(node.gutterId as AnyNodeId)) {
+      out.add(node.id as AnyNodeId)
+    }
   }
 }
 
