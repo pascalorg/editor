@@ -73,6 +73,7 @@ export type {
   BakeReplaceRenderer,
   Capabilities,
   CapabilityCtx,
+  CutsContext,
   CuttableConfig,
   DimensionTerminator,
   DimensionTextPosition,
