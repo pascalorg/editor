@@ -7,6 +7,8 @@ export type Expr =
   | { op: 'add' | 'sub' | 'mul' | 'div' | 'min' | 'max'; args: Expr[] }
   | { op: 'floor' | 'ceil' | 'round' | 'abs' | 'sin' | 'cos'; args: [Expr] }
   | { op: 'mod'; args: [Expr, Expr] }
+  // v2: select(i, v0, …, vn-1) is v_i for an integral i in [0, n).
+  | { op: 'select'; args: Expr[] }
 export type Vec3 = [number, number, number]
 const id = z.string().regex(/^[a-z][a-z0-9_]{0,47}$/)
 const finite = z.number().finite().min(-1000).max(1000)
@@ -25,6 +27,10 @@ const expression: z.ZodType<Expr> = z.lazy(() =>
     z.strictObject({
       op: z.literal('mod'),
       args: z.tuple([expression, expression]),
+    }),
+    z.strictObject({
+      op: z.literal('select'),
+      args: z.array(expression).min(2).max(65),
     }),
   ]),
 )
@@ -128,7 +134,9 @@ const RecipeObject = z.strictObject({
         min: finite,
         max: finite,
         step: z.number().positive().max(100),
-        unit: z.enum(['m', 'count', 'rad', 's']),
+        // v2: 'bool' is 0 | 1; 'choice' is an index into `options`.
+        unit: z.enum(['m', 'count', 'rad', 's', 'bool', 'choice']),
+        options: z.array(z.string().min(1).max(60)).min(2).max(16).optional(),
         part: id.optional(),
         axis: z.enum(['x', 'y', 'z']).optional(),
       }),
@@ -152,6 +160,8 @@ const RecipeObject = z.strictObject({
         id,
         label: z.string().min(1).max(60),
         count: expression,
+        // v2: a repeat is built only where this evaluates to nonzero.
+        when: expression.optional(),
         motion: motion.optional(),
         light: z
           .strictObject({
@@ -174,6 +184,7 @@ const RecipeObject = z.strictObject({
               radius: expression.optional(),
               topScale: expression.optional(),
               support: z.boolean().optional(),
+              when: expression.optional(),
             }),
           )
           .min(1)
@@ -271,6 +282,23 @@ function guardTree(value: unknown, depth = 0, budget = { count: 0 }) {
     }
   }
 }
+function findV2Feature(recipe: Recipe): string | null {
+  if (recipe.parameters.some((p) => p.unit === 'bool' || p.unit === 'choice' || p.options))
+    return 'Bool and choice parameters'
+  if (
+    recipe.parts.some(
+      (part) => part.when !== undefined || part.shapes.some((s) => s.when !== undefined),
+    )
+  )
+    return 'when'
+  const selects = (value: unknown): boolean =>
+    Array.isArray(value)
+      ? value.some(selects)
+      : Boolean(value && typeof value === 'object') &&
+        ((value as { op?: unknown }).op === 'select' ||
+          Object.values(value as object).some(selects))
+  return selects(recipe) ? 'select' : null
+}
 /**
  * Version rules the exported schema, parseRecipe and evaluateRecipe all enforce: content
  * only a v2 reader understands must say `version: 2`.
@@ -280,6 +308,10 @@ function versionIssue(recipe: Recipe): string | null {
     if (recipe.version !== 2) return 'A declared base requires recipe version 2'
     if (recipe.mounting)
       return 'A declared base applies to floor designs; mounted designs use their reference'
+  }
+  if (recipe.version === 1) {
+    const feature = findV2Feature(recipe)
+    if (feature) return `${feature} requires recipe version 2`
   }
   if (recipe.version === 1 && recipe.parts.length > 16)
     return 'More than 16 parts requires recipe version 2'
@@ -306,6 +338,19 @@ export function parseRecipe(input: unknown): Recipe {
       throw new Error(`Invalid parameter ${p.id}`)
     if (p.unit === 'count' && ![p.min, p.max, p.default, p.step].every(Number.isInteger))
       throw new Error(`Count ${p.id} must be integral`)
+    if (
+      (p.unit === 'bool' || p.unit === 'choice') &&
+      (p.min !== 0 ||
+        p.step !== 1 ||
+        p.axis ||
+        !Number.isInteger(p.default) ||
+        p.max !== (p.unit === 'bool' ? 1 : (p.options?.length ?? 0) - 1))
+    )
+      throw new Error(
+        `${p.unit === 'bool' ? 'Bool' : 'Choice'} ${p.id} must run 0..${p.unit === 'bool' ? 1 : 'options - 1'} in steps of 1 with no handle`,
+      )
+    if (p.options && p.unit !== 'choice')
+      throw new Error(`Only choice parameters have options (${p.id})`)
     if (p.part && !recipe.parts.some((part) => part.id === p.part))
       throw new Error(`Unknown part ${p.part}`)
   }
@@ -460,7 +505,7 @@ export function evaluateRecipe(
       !Number.isFinite(v) ||
       v < p.min ||
       v > p.max ||
-      (p.unit === 'count' && !Number.isInteger(v))
+      ((p.unit === 'count' || p.unit === 'bool' || p.unit === 'choice') && !Number.isInteger(v))
     )
       throw new Error(`${p.label} must be between ${p.min} and ${p.max}`)
     parameters[p.id] = v
@@ -474,6 +519,12 @@ export function evaluateRecipe(
       if (e === 'index') return index
       if (!Object.hasOwn(parameters, e)) throw new Error(`Unknown expression reference ${e}`)
       return parameters[e]!
+    }
+    if (e.op === 'select') {
+      const i = expr(e.args[0]!, index, depth + 1)
+      if (!Number.isInteger(i) || i < 0 || i >= e.args.length - 1)
+        throw new Error(`select index ${i} is outside 0..${e.args.length - 2}`)
+      return expr(e.args[i + 1]!, index, depth + 1)
     }
     const a = e.args.map((x) => expr(x, index, depth + 1))
     let result: number
@@ -554,6 +605,7 @@ export function evaluateRecipe(
     if (!Number.isInteger(count) || count < 0 || count > 64)
       throw new Error(`Invalid repeat count for ${part.label}`)
     for (let i = 0; i < count; i++) {
+      if (part.when !== undefined && expr(part.when, i) === 0) continue
       const vec = (v: Expr[]): Vec3 => v.map((x) => expr(x, i)) as Vec3
       const instanceMin: Vec3 = [Infinity, Infinity, Infinity]
       const instanceMax: Vec3 = [-Infinity, -Infinity, -Infinity]
@@ -619,6 +671,7 @@ export function evaluateRecipe(
         motionGroupByInstance[`${part.id}:${i}`] = motionGroup
       }
       for (const s of part.shapes) {
+        if (s.when !== undefined && expr(s.when, i) === 0) continue
         if (shapes.length >= shapeLimit) throw new Error('Expanded shape budget exceeded')
         inTime()
         const size = vec(s.size),
@@ -722,6 +775,7 @@ export function evaluateRecipe(
     const part = recipe.parts.find((p) => p.id === surface.part)
     const count = part ? expr(part.count) : 1
     for (let i = 0; i < count; i++) {
+      if (part?.when !== undefined && expr(part.when, i) === 0) continue
       if (surfaces.length >= 256) throw new Error('Surface budget exceeded')
       const rotation = (surface.rotation ?? [0, 0, 0]).map((e) => expr(e, i)) as Vec3
       const size = surface.size.map((e) => expr(e, i)) as [number, number]
