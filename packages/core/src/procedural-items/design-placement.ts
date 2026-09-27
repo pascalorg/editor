@@ -30,13 +30,13 @@ export type DesignPlacementRequest = {
   parameters?: Record<string, number>
   slots?: Record<string, string>
   name?: string
+  /** A new id; whether it is free is the writer's check (the MCP patch guards). */
   id?: string
 }
 
 export type DesignPlacementRefusal =
   | 'invalid_design'
   | 'invalid_placement'
-  | 'node_exists'
   | 'host_not_found'
   | 'wrong_host'
   | 'unknown_surface'
@@ -97,11 +97,6 @@ export function planDesignPlacement(
   const recipe = parseRecipe(
     typeof request.design === 'string' ? JSON.parse(request.design) : request.design,
   )
-  if (request.id !== undefined && nodes[request.id])
-    throw new DesignPlacementError(
-      'node_exists',
-      `${request.id} already exists; omit id to create a new node`,
-    )
   let host = nodes[hostId]
   if (!host) throw new DesignPlacementError('host_not_found', `No node ${hostId}`)
 

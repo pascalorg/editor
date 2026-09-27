@@ -107,20 +107,30 @@ describe('place_design', () => {
     await client.close()
   })
 
-  test('refusals are coded and leave the scene unchanged', async () => {
-    const { bridge, client, ceilingId, wallId } = await connect()
+  test('refusals are coded tool errors and leave the scene unchanged', async () => {
+    const { bridge, client, ceilingId, levelId, wallId } = await connect()
+    const table = await place(client, {
+      design: DESIGN_EXAMPLE,
+      hostId: levelId,
+      position: [1, 0, 1],
+    })
+    const tableId = (table.structuredContent as { designId: string }).designId
     const before = JSON.stringify(bridge.getNodes())
     for (const [args, code] of [
       [{ design: louverJson, hostId: ceilingId, position: [0, 0, 0] }, 'wrong_host'],
       [{ design: louverJson, hostId: wallId, position: [2, 2.5, 0] }, 'does_not_fit'],
       [{ design: '{"version":1}', hostId: wallId, position: [2, 1.5, 0] }, 'invalid_design'],
-      [{ design: DESIGN_EXAMPLE, hostId: wallId, position: [0, 0, 0], id: wallId }, 'node_exists'],
+      // An explicit id that exists is refused by the shared apply_patch identity guard.
+      [
+        { design: DESIGN_EXAMPLE, hostId: levelId, position: [3, 0, 3], id: tableId },
+        'node_exists',
+      ],
     ] as const) {
-      const result = await place(client, args as Record<string, unknown>).catch(
-        (error: Error) => error,
-      )
-      const message = result instanceof Error ? result.message : JSON.stringify(result.content)
-      expect(message).toContain(`${code}: `)
+      const result = await place(client, args as Record<string, unknown>)
+      expect(result.isError).toBe(true)
+      const refusal = JSON.parse((result.content as [{ text: string }])[0].text)
+      expect(refusal.code).toBe(code)
+      expect(refusal.message).toContain(`${code}: `)
     }
     expect(JSON.stringify(bridge.getNodes())).toBe(before)
     await client.close()

@@ -192,10 +192,6 @@ describe('planDesignPlacement', () => {
         parameters: { slat_count: 40 },
       },
     ],
-    [
-      'node_exists',
-      { design: DESIGN_EXAMPLE, hostId: 'level_place', position: [0, 0, 0], id: 'wall_place' },
-    ],
     ['host_not_found', { design: DESIGN_EXAMPLE, hostId: 'level_missing', position: [0, 0, 0] }],
     ['wrong_host', { design: DESIGN_EXAMPLE, hostId: 'wall_place', position: [0, 0, 0] }],
     ['wrong_host', { design: airHandlerJson, hostId: 'level_place', position: [0, 0, 0] }],

@@ -2,11 +2,12 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { DesignPlacementError, planDesignPlacement } from '@pascal-app/core/procedural-items'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
+import type { Patch } from '../bridge/scene-bridge'
 import type { SceneOperations } from '../operations'
 import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
-import { ErrorCode, throwMcpError } from './errors'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { measurement } from './measurement'
+import { assertPatchKeepsIdentity, PatchRefusedError } from './patch-guards'
 import { NodeIdSchema, Vec3Schema } from './schemas'
 import { validateDesignInput } from './validate-design'
 
@@ -55,12 +56,16 @@ export function registerPlaceDesign(server: McpServer, bridge: SceneOperations):
     {
       title: 'Place design',
       description:
-        'Create one instance of a design (procedural item recipe, object or JSON string) in the scene. The design must pass validate_design. Its mounting picks the host: floor designs go on a level (or a slab or zone of it) or on a named surface of a placed design; wall-side designs on a straight wall face; ceiling designs under a ceiling. Only creates: refusals are coded (invalid_design, invalid_placement, node_exists, host_not_found, wrong_host, unknown_surface, does_not_fit) and change nothing.',
+        'Create one instance of a design (procedural item recipe, object or JSON string) in the scene. The design must pass validate_design. Its mounting picks the host: floor designs go on a level (or a slab or zone of it) or on a named surface of a placed design; wall-side designs on a straight wall face; ceiling designs under a ceiling. Only creates: refusals are tool errors whose JSON carries a code (invalid_design with diagnostics, invalid_placement, host_not_found, wrong_host, unknown_surface, does_not_fit, or an apply_patch guard code such as node_exists) and change nothing.',
       inputSchema: placeDesignInput,
       outputSchema: placeDesignOutput,
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
     async (args) => {
+      const refuse = (refusal: Record<string, unknown>) => ({
+        content: [{ type: 'text' as const, text: JSON.stringify(refusal) }],
+        isError: true as const,
+      })
       let placement: ReturnType<typeof planDesignPlacement>
       try {
         placement = planDesignPlacement(bridge.getNodes(), {
@@ -68,20 +73,16 @@ export function registerPlaceDesign(server: McpServer, bridge: SceneOperations):
           position: args.position as [number, number, number],
         })
       } catch (error) {
-        if (error instanceof DesignPlacementError)
-          throwMcpError(ErrorCode.InvalidParams, error.message, {
-            code: error.code,
-            diagnostics: error.diagnostics,
-          })
-        throw error
+        if (!(error instanceof DesignPlacementError)) throw error
+        return refuse({
+          code: error.code,
+          message: error.message,
+          ...(error.diagnostics.length > 0 && { diagnostics: error.diagnostics.slice(0, 8) }),
+        })
       }
       const { node, parentId, hostUpdate } = placement
-      bridge.applyPatch([
-        {
-          op: 'create',
-          node: node as unknown as AnyNode,
-          parentId: parentId as AnyNodeId,
-        },
+      const patches: Patch[] = [
+        { op: 'create', node: node as unknown as AnyNode, parentId: parentId as AnyNodeId },
         ...(hostUpdate
           ? [
               {
@@ -91,7 +92,22 @@ export function registerPlaceDesign(server: McpServer, bridge: SceneOperations):
               },
             ]
           : []),
-      ])
+      ]
+      // The same identity guards as apply_patch: an explicit id must be new.
+      try {
+        const planDeletion = (bridge as { planDeletion?: SceneOperations['planDeletion'] })
+          .planDeletion
+        assertPatchKeepsIdentity(
+          patches,
+          bridge.getNodes(),
+          bridge.getRootNodeIds(),
+          typeof planDeletion === 'function' ? planDeletion.bind(bridge) : undefined,
+        )
+      } catch (error) {
+        if (!(error instanceof PatchRefusedError)) throw error
+        return refuse({ code: error.code, id: error.nodeId, message: error.message })
+      }
+      bridge.applyPatch(patches)
       const persistence = await publishLiveSceneSnapshot(bridge, 'place_design')
       const payload = {
         designId: node.id,
