@@ -49,13 +49,13 @@ describe('cylinder segments, open, inner and arc (recipe version 2)', () => {
     expect(evaluateRecipe(parseRecipe(one({ segments: 6 }))).shapes[0]!.segments).toBe(6)
   })
 
-  test('open drops the caps; inner makes a tube; arc closes its wedge sides', () => {
-    expect(triangles({ open: true })).toBe(48)
+  test('open drops the caps and draws both wall faces; inner makes a tube; arc closes its wedge sides', () => {
+    expect(triangles({ open: true })).toBe(96)
     expect(triangles({ inner: 0.8 })).toBe(24 * 8)
     expect(triangles({ inner: 0.8, open: true })).toBe(24 * 4)
     expect(triangles({ inner: 0.8, topScale: 0.5 })).toBe(24 * 8)
     expect(triangles({ arc: Math.PI })).toBe(96 + 4)
-    expect(triangles({ arc: Math.PI, open: true })).toBe(48)
+    expect(triangles({ arc: Math.PI, open: true })).toBe(96)
     expect(triangles({ arc: Math.PI, inner: 0.9, segments: 12 })).toBe(12 * 8 + 4)
     const [tube] = evaluateRecipe(parseRecipe(one({ inner: 0.8, arc: Math.PI / 2 }))).shapes
     expect([tube!.inner, tube!.arc]).toEqual([0.8, Math.PI / 2])

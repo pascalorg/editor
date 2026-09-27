@@ -86,6 +86,9 @@ function cylinderSource(shape: Evaluation['shapes'][number]): BufferGeometry {
   ]
   const at = (radius: number, theta: number, y: number) =>
     new Vector3(radius * Math.sin(theta), y, radius * Math.cos(theta))
+  // Materials are front-sided, so an open solid also draws the back of its wall.
+  if (open && !hollow)
+    pieces.push(flipped(new CylinderGeometry(top, 0.5, 1, segments, 1, true, 0, arc)))
   if (hollow) {
     pieces.push(
       flipped(new CylinderGeometry(top * inner, 0.5 * inner, 1, segments, 1, true, 0, arc)),

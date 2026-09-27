@@ -492,8 +492,11 @@ export function shapeTriangles(
       const n = shape.segments ?? 24,
         ends = shape.topScale > 0 ? 2 : 1
       const wedges = shape.arc !== undefined && shape.arc < 2 * Math.PI - 1e-9 && !shape.open
-      const walls = shape.inner === undefined ? 1 : 2
-      return walls * n * ends + (shape.open ? 0 : walls * n * ends) + (wedges ? 4 : 0)
+      // A hollow wall draws its inner face; an open solid draws its back face instead, since
+      // materials are front-sided.
+      const walls = shape.inner !== undefined || shape.open ? 2 : 1
+      const caps = shape.open ? 0 : (shape.inner === undefined ? 1 : 2) * n * ends
+      return walls * n * ends + caps + (wedges ? 4 : 0)
     }
     case 'ellipsoid':
       return 720 // SphereGeometry(…, 24, 16) without the degenerate pole triangles
