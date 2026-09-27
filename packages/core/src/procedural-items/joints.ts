@@ -174,7 +174,8 @@ export function placeParts(
         // Design-space axis at rest; a principal axis keeps today's flat form exactly.
         let direction = unit(poseDirection(frame, axis), part.id)
         const principal = direction.findIndex((v) => Math.abs(v) > 1 - 1e-9)
-        if (principal >= 0 && direction[principal]! < 0) amount = -amount
+        const flipped = principal >= 0 && direction[principal]! < 0
+        if (flipped) amount = -amount
         const letter = (['x', 'y', 'z'] as const)[
           principal >= 0
             ? principal
@@ -195,7 +196,12 @@ export function placeParts(
           easing,
           ...(principal < 0 && { direction }),
           ...(parent.group && { parent: parent.group }),
-          ...(range && { range: range.map((v) => v - rest) as [number, number] }),
+          // Relative to rest, and about the stored (positive) axis when the joint's was negative.
+          ...(range && {
+            range: (flipped
+              ? [rest - range[1]!, rest - range[0]!]
+              : [range[0]! - rest, range[1]! - rest]) as [number, number],
+          }),
         }
       }
     }

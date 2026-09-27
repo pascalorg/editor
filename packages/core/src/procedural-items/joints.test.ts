@@ -282,4 +282,34 @@ describe('joint tree (recipe version 2)', () => {
     expect(() => parseRecipe(recipe)).toThrow('rises above the ceiling reference')
     expect(lens.id).toBe('lens')
   })
+
+  test('a range about a negative axis flips with the stored amount', () => {
+    const e = evaluateRecipe(
+      parseRecipe(
+        cabinet((r) => {
+          r.joints![0] = { ...r.joints![0]!, axis: [0, -1, 0], open: 1.6, rest: 0.2, range: [0, 2] }
+        }),
+      ),
+    )
+    const door = e.motions.find((m) => m.id === 'door')!
+    expect(door.axis).toBe('y')
+    expect(door.amount).toBeCloseTo(-1.4)
+    expect(door.range![0]).toBeCloseTo(-1.8)
+    expect(door.range![1]).toBeCloseTo(0.2)
+  })
+  test('a pull whose range swings it through the floor is refused even if it opens upward', () => {
+    const flap = cabinet((r) => {
+      r.joints![3] = {
+        child: 'pull',
+        kind: 'revolute',
+        origin: [0.2, 0.02, 0.255],
+        axis: [-1, 0, 0],
+        open: -1.5,
+        range: [-1.5, 3],
+      }
+      r.parts[4]!.shapes[0]!.position = [0.2, 0.05, 0.255]
+      r.parts[4]!.shapes[0]!.size = [0.1, 0.06, 0.01]
+    })
+    expect(() => parseRecipe(flap)).toThrow('extends below the floor')
+  })
 })
