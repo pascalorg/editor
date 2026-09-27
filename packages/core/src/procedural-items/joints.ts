@@ -302,3 +302,16 @@ export function motionAxis(motion: EvaluatedMotion): Vec3 {
     motion.direction ?? ([0, 1, 2].map((k) => (['x', 'y', 'z'][k] === motion.axis ? 1 : 0)) as Vec3)
   )
 }
+/** The operable part that moves `partId`: itself, or its nearest operable ancestor. */
+export function operablePartFor(
+  recipe: Pick<Recipe, 'parts' | 'joints'>,
+  partId: string,
+): OperablePart | undefined {
+  const operable = new Map(operableParts(recipe).map((part) => [part.id, part]))
+  const parts = new Map(recipe.parts.map((part) => [part.id, part]))
+  for (let id: string | undefined = partId, depth = 0; id && depth <= 8; depth++) {
+    if (operable.has(id)) return operable.get(id)
+    id = parts.get(id)?.parent
+  }
+  return undefined
+}

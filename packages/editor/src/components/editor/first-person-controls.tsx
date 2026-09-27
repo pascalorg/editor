@@ -27,7 +27,11 @@ import {
   useInteractive,
   useScene,
 } from '@pascal-app/core'
-import { operableParts, type ProceduralItemNode } from '@pascal-app/core/procedural-items'
+import {
+  operablePartFor,
+  operableParts,
+  type ProceduralItemNode,
+} from '@pascal-app/core/procedural-items'
 import {
   BVHEcctrl,
   type BVHEcctrlApi,
@@ -1017,9 +1021,19 @@ export const FirstPersonControls = () => {
         let ancestor: Object3D | null = hit.object
         while (ancestor && ancestor !== object && !ancestor.userData.proceduralMotion)
           ancestor = ancestor.parent
-        const motion = ancestor?.userData.proceduralMotion as
+        let motion = ancestor?.userData.proceduralMotion as
           | { nodeId?: string; partId?: string; kind?: 'hinge' | 'slide' | 'spin' }
           | undefined
+        // An idle joint tree draws one merged mesh per slot; its face ranges name the part.
+        const ranges = hit.object.userData.proceduralRanges as
+          | { end: number; partId: string }[]
+          | undefined
+        if (!motion && ranges && hit.faceIndex != null) {
+          const face = hit.faceIndex
+          const partId = ranges.find((range) => face < range.end)?.partId
+          const part = partId ? operablePartFor(procedural.recipe, partId) : undefined
+          if (part) motion = { nodeId: id, partId: part.id, kind: part.kind }
+        }
         closest =
           motion?.nodeId === id && motion.partId
             ? { id, partId: motion.partId, kind: motion.kind, type: 'procedural' }

@@ -3,6 +3,7 @@ import {
   type EvaluatedMotion,
   evaluateRecipe,
   motionRestOffset,
+  operablePartFor,
   ProceduralItemNode,
   parseRecipe,
   type Recipe,
@@ -102,4 +103,13 @@ test('an off-axis joint bakes its rotation about its own direction', () => {
   const end = new THREE.Quaternion().fromArray(Array.from(clip.tracks[0]!.values.slice(-4)))
   const expected = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0.6, 0.8), 1.2)
   expect(end.angleTo(expected)).toBeCloseTo(0)
+})
+
+test('a face of the idle merged mesh resolves to the operable part that moves it', () => {
+  const recipe = parseRecipe(jointJson)
+  const built = buildProceduralGeometry(ProceduralItemNode.parse({ recipe }))
+  const metal = built.rest!.find((batch) => batch.slot === 'metal')!
+  const parts = metal.ranges.map((range) => operablePartFor(recipe, range.partId)?.id)
+  expect(new Set(parts)).toEqual(new Set(['knob', 'pull']))
+  expect(operablePartFor(recipe, 'body')).toBeUndefined()
 })
