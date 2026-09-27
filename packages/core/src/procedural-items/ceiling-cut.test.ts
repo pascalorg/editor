@@ -106,4 +106,32 @@ describe('recipe ceiling cuts (version 2)', () => {
       proceduralCeilingHole({ ...node, recipe: parseRecipe(structuredClone(pendantJson)) }),
     ).toBe(null)
   })
+
+  test('a round can fits a circle cut of its own diameter', () => {
+    const recipe = downlight()
+    recipe.cuts = [{ shape: 'circle', diameter: 'size' }]
+    const can = recipe.parts.find((part) => part.id === 'can')!
+    can.shapes = [
+      {
+        id: 'can',
+        primitive: 'cylinder',
+        slot: 'can',
+        size: ['size', 'depth', 'size'],
+        position: [0, { op: 'add', args: [0.01, { op: 'div', args: ['depth', 2] }] }, 0],
+      },
+    ]
+    recipe.parts = recipe.parts.filter((part) => part.id !== 'lens')
+    expect(() => parseRecipe(recipe)).not.toThrow()
+    can.shapes[0]!.size = [{ op: 'mul', args: ['size', 1.1] }, 'depth', 'size']
+    expect(() => parseRecipe(recipe)).toThrow('outside its cut')
+  })
+
+  test('a moving part may swing inside the cut, not outside it', () => {
+    const recipe = downlight()
+    const lens = recipe.parts.find((part) => part.id === 'lens')!
+    lens.motion = { kind: 'hinge', pivot: [0, 0.05, 0], axis: 'x', angle: 0.4 }
+    expect(() => parseRecipe(recipe)).not.toThrow()
+    lens.motion.pivot = [0, 0.05, 0.3]
+    expect(() => parseRecipe(recipe)).toThrow('rises above the ceiling reference')
+  })
 })

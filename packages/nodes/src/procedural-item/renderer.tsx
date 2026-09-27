@@ -74,7 +74,14 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
   useEffect(() => () => useInteractive.getState().removeProcedural(node.id), [node.id])
   // A recessed design's host ceiling re-cuts its hole whenever the committed cut can move.
   const cutKey = node.recipe.cuts
-    ? JSON.stringify([node.parentId, node.position, node.rotation, node.parameters])
+    ? JSON.stringify([
+        node.parentId,
+        node.position,
+        node.rotation,
+        node.parameters,
+        node.recipe.cuts,
+        node.recipe.surfaces,
+      ])
     : ''
   useEffect(() => {
     const parentId = node.parentId as AnyNodeId | null

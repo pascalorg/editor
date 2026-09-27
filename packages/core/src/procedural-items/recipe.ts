@@ -348,6 +348,25 @@ function shapeBounds(shape: Pick<EvaluatedShape, 'primitive' | 'size' | 'positio
   ])
 }
 
+// Points whose hull contains the shape: a cylinder's rim vertices (as rendered), otherwise the
+// corners of its oriented box (exact for boxes, conservative for the rest).
+function shapeFootprint(shape: EvaluatedShape): Vec3[] {
+  if (shape.primitive !== 'cylinder')
+    return shapeCorners(shape.size, shape.position, shape.rotation)
+  const f = frame(shape.position, shape.rotation)
+  return [-0.5, 0.5].flatMap((y) =>
+    Array.from({ length: 24 }, (_, k) => {
+      const r = y > 0 ? 0.5 * shape.topScale : 0.5
+      const theta = (2 * Math.PI * k) / 24
+      return transformPoint(f, [
+        r * Math.sin(theta) * shape.size[0],
+        y * shape.size[1],
+        r * Math.cos(theta) * shape.size[2],
+      ])
+    }),
+  )
+}
+
 function movedPoint(point: Vec3, motion: EvaluatedMotion, fraction: number): Vec3 {
   if (motion.kind === 'slide')
     return point.map(
@@ -679,6 +698,8 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
     }
   }
   const cuts: EvaluatedCut[] = []
+  // Recessed designs: whether a design-space [x, z] lies inside one of their cuts.
+  let insideCut: ((x: number, z: number) => boolean) | null = null
   if (recipe.mounting) {
     const reference = surfaces.find((s) => s.id === recipe.mounting!.reference)
     if (!reference || reference.id.includes(':')) throw new Error('Missing mounting reference')
@@ -730,12 +751,12 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
           })
         }
         for (const shape of shapes) {
-          const b = shapeBounds(shape)
-          if (b.max[1] <= reference.position[1] + 1e-6) continue
-          const corners = boxCorners(b.min, b.max)
-          if (!inside.some((test) => corners.every(([x, , z]) => test(x, z))))
+          if (shapeBounds(shape).max[1] <= reference.position[1] + 1e-6) continue
+          const footprint = shapeFootprint(shape)
+          if (!inside.some((test) => footprint.every(([x, , z]) => test(x, z))))
             throw new Error(`${shape.partId} rises above the ceiling reference outside its cut`)
         }
+        insideCut = (x, z) => inside.some((test) => test(x, z))
       }
     } else if (Math.abs(reference.normal[2] + 1) > 1e-6)
       throw new Error('Wall-side mounting reference must face local -Z')
@@ -759,7 +780,8 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
         if (
           recipe.mounting?.attachTo === 'ceiling' &&
           reference &&
-          point[1] > reference.position[1] + 0.001
+          point[1] > reference.position[1] + 0.001 &&
+          !insideCut?.(point[0], point[2])
         )
           throw new Error(`Motion envelope for ${shape.partId} rises above the ceiling reference`)
       }
