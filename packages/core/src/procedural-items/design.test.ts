@@ -97,6 +97,7 @@ describe('validateDesign on trial elements', () => {
       expect.objectContaining({
         severity: 'error',
         message: expect.stringContaining('below the ground'),
+        hint: expect.stringContaining('y >= 0'),
       }),
     ])
     expect(result.measurements!.datum.balanced).toBe(false)
@@ -140,13 +141,29 @@ describe('validateDesign diagnostics', () => {
     slats.count = 64
     slats.shapes = [0, 1, 2, 3, 4].map((i) => ({ ...slats.shapes[0], id: `slat_${i}` }))
     expect(validateDesign(design).diagnostics).toEqual([
-      { severity: 'error', code: 'rule', message: 'Expanded shape budget exceeded' },
+      {
+        severity: 'error',
+        code: 'rule',
+        message: 'Expanded shape budget exceeded',
+        hint: expect.stringContaining('At most 256 shapes'),
+      },
     ])
     const unknownSlot = louver()
     unknownSlot.parts[0].shapes[0].slot = 'paint'
     expect(validateDesign(unknownSlot).diagnostics[0]).toMatchObject({
       code: 'rule',
       message: 'Unknown slot paint',
+      hint: 'Declared slots: frame.',
+    })
+    // A wall-side design whose reference names a surface that is not declared.
+    const unmounted = louver()
+    unmounted.mounting.reference = 'rear'
+    expect(validateDesign(unmounted).diagnostics[0]).toMatchObject({
+      code: 'rule',
+      message: 'Mounting requires one named, non-repeated reference surface',
+      hint: expect.stringMatching(
+        /^mounting\.reference is "rear"; surfaces without part: back\. Declare surfaces: .*"reference":"back"/,
+      ),
     })
   })
 

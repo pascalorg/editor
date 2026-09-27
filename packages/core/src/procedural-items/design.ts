@@ -40,6 +40,8 @@ export const DesignDiagnosticSchema = z.object({
   ]),
   path: z.string().optional(),
   message: z.string(),
+  /** How to fix it, for rule errors whose message alone does not say. */
+  hint: z.string().optional(),
 })
 
 export const DesignMeasurementsSchema = z.object({
@@ -330,6 +332,38 @@ function schemaDiagnostics(error: z.ZodError, raw: unknown): DesignDiagnostic[] 
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
+const ids = (list: unknown) =>
+  Array.isArray(list)
+    ? list.flatMap((entry) => (typeof entry?.id === 'string' ? [entry.id] : [])).join(', ') ||
+      'none'
+    : 'none'
+
+/** A concrete repair for the rule errors authors hit most, from the design they sent. */
+function ruleHint(text: string, raw: unknown): string | undefined {
+  const design = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const mounting = design.mounting as { attachTo?: string; reference?: string } | undefined
+  if (/mounting reference|Mounting requires/i.test(text)) {
+    const plain = Array.isArray(design.surfaces)
+      ? design.surfaces.filter((s) => s && typeof s === 'object' && !('part' in s))
+      : []
+    const declared = `mounting.reference is ${JSON.stringify(mounting?.reference)}; surfaces without part: ${ids(plain)}.`
+    return mounting?.attachTo === 'ceiling'
+      ? `${declared} Declare surfaces: [{"id":"top","label":"Top","position":[0,<highest y of the geometry>,0],"size":[<w>,<d>]}] (no part, no rotation) and mounting: {"attachTo":"ceiling","reference":"top"}.`
+      : `${declared} Declare surfaces: [{"id":"back","label":"Back","position":[0,<half height>,0],"rotation":[-1.5707963267948966,0,0],"size":[<width>,<height>]}] (no part) and mounting: {"attachTo":"wall-side","reference":"back"}; keep all geometry at z >= 0.`
+  }
+  if (/below the ground|below the floor/.test(text))
+    return 'Every shape must stay at y >= 0 for every parameter value: an unrotated box rests at position.y = size.y / 2; use max/min expressions where a parameter moves a part down.'
+  if (/^Unknown slot /.test(text)) return `Declared slots: ${ids(design.slots)}.`
+  if (/^Unknown (part|surface part)/.test(text)) return `Declared parts: ${ids(design.parts)}.`
+  if (/^Unknown expression reference /.test(text))
+    return `Expressions may name declared parameters (${ids(design.parameters)}) or "index".`
+  if (/^Invalid dimensions /.test(text))
+    return 'Every size component must evaluate to 0.001–30 m at every parameter value.'
+  if (/^Expanded shape budget/.test(text))
+    return 'At most 256 shapes after repetition (count × shapes, summed over parts): merge repeated small pieces into fewer, larger shapes.'
+  return undefined
+}
+
 const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? '' : 's'}`
 // `|| 0` folds -0 so results survive a JSON round trip unchanged.
 const round = (value: number) => Math.round(value * 1e6) / 1e6 || 0
@@ -596,7 +630,14 @@ export function validateDesign(
     return failed(
       error instanceof z.ZodError
         ? schemaDiagnostics(error, raw)
-        : [{ severity: 'error', code: 'rule', message: message(error) }],
+        : [
+            {
+              severity: 'error',
+              code: 'rule',
+              message: message(error),
+              ...(ruleHint(message(error), raw) && { hint: ruleHint(message(error), raw) }),
+            },
+          ],
     )
   }
 
@@ -611,6 +652,7 @@ export function validateDesign(
       severity: 'error',
       code: 'sweep',
       message: `${error}: fails for ${list.length} of ${cases.length} parameter sets, e.g. ${JSON.stringify(list[0]!.values)}`,
+      ...(ruleHint(error, raw) && { hint: ruleHint(error, raw) }),
     })
 
   let evaluation: Evaluation | undefined
