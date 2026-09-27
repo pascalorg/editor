@@ -1,7 +1,19 @@
 import { z } from 'zod'
 import type { ResolvedSectionProfile } from '../schema/types'
+import { jointReach, partMoves, placeParts, usesPartTree, validatePartTree } from './joints'
 import { extrusionTriangles, sectionRings, sectionThickness } from './section'
-import { boundsOf, boxCorners, frame, rotateVector, transformPoint } from './spatial'
+import {
+  boundsOf,
+  boxCorners,
+  composePoses,
+  eulerPose,
+  frame,
+  IDENTITY_POSE,
+  matrixEuler,
+  posePoint,
+  rotateVector,
+  transformPoint,
+} from './spatial'
 
 export type Expr =
   | number
@@ -273,6 +285,10 @@ const RecipeObject = z.strictObject({
         id,
         label: z.string().min(1).max(60),
         count: expression,
+        // v2 part tree: the part moves with `parent` (repeating once, or exactly as often,
+        // bound by index) and its shapes, light and joint are authored in `frame`.
+        parent: id.optional(),
+        frame: z.strictObject({ position: vector, rotation: vector.optional() }).optional(),
         // v2: a repeat is built only where this evaluates to nonzero.
         when: expression.optional(),
         motion: motion.optional(),
@@ -293,6 +309,24 @@ const RecipeObject = z.strictObject({
     )
     .min(1)
     .max(RECIPE_V2_LIMITS.parts),
+  // v2: at most one joint per part, keyed by the child part; origin and axis are in the part's
+  // frame. Values are radians (revolute, continuous speed per second) or metres (prismatic).
+  joints: z
+    .array(
+      z.strictObject({
+        child: id,
+        kind: z.enum(['fixed', 'revolute', 'continuous', 'prismatic']),
+        origin: vector,
+        axis: vector,
+        open: expression.optional(),
+        rest: expression.optional(),
+        range: z.tuple([expression, expression]).optional(),
+        speed: expression.optional(),
+        ...timing,
+      }),
+    )
+    .max(64)
+    .optional(),
   constraints: z
     .array(
       z.strictObject({
@@ -340,6 +374,12 @@ export type EvaluatedMotion = {
   delay: number
   duration: number
   easing: 'linear' | 'smooth' | 'soft'
+  /** v2 joints: the unit design-space axis when it is not a principal one (`axis` is nearest). */
+  direction?: Vec3
+  /** v2 joints: the motion group this one rides in. */
+  parent?: string
+  /** v2 joints: the joint's range relative to its rest value. */
+  range?: [number, number]
 }
 export type EvaluatedLight = {
   id: string
@@ -391,6 +431,12 @@ function guardTree(value: unknown, depth = 0, budget = { count: 0 }) {
     }
   }
 }
+function movingParts(recipe: Recipe) {
+  return (
+    recipe.parts.filter((part) => part.motion).length +
+    (recipe.joints ?? []).filter((joint) => joint.kind !== 'fixed').length
+  )
+}
 function findV2Feature(recipe: Recipe): string | null {
   for (const primitive of ['extrude', 'revolve'] as const)
     if (recipe.parts.some((part) => part.shapes.some((shape) => shape.primitive === primitive)))
@@ -408,6 +454,7 @@ function findV2Feature(recipe: Recipe): string | null {
     )
   )
     return 'Cylinder segments, open, inner and arc'
+  if (usesPartTree(recipe)) return 'Part trees and joints'
   if (recipe.parameters.some((p) => p.unit === 'bool' || p.unit === 'choice' || p.options))
     return 'Bool and choice parameters'
   if (
@@ -454,6 +501,7 @@ export function parseRecipe(input: unknown): Recipe {
   guardTree(input)
   if (JSON.stringify(input).length > RECIPE_LIMITS.bytes) throw new Error('Recipe is too large')
   const recipe = RecipeSchema.parse(input)
+  if (usesPartTree(recipe)) validatePartTree(recipe)
   for (const list of [recipe.parameters, recipe.slots, recipe.parts]) {
     if (new Set(list.map((x) => x.id)).size !== list.length)
       throw new Error('IDs must be unique within each section')
@@ -499,20 +547,20 @@ export function parseRecipe(input: unknown): Recipe {
         if (shape.support && (f.inner !== undefined || f.arc !== undefined || f.open))
           throw new Error(`Support shape ${part.id}/${shape.id} cannot be hollow, open or partial`)
       }
-      if (part.motion && shape.support)
+      if (shape.support && partMoves(recipe, part.id))
         throw new Error(`Moving part ${part.id} cannot contain support shapes`)
       if (shape.primitive === 'ellipsoid' && shape.support)
         throw new Error(`Ellipsoid ${part.id}/${shape.id} cannot be a support surface`)
     }
   }
-  if (recipe.parts.filter((part) => part.motion).length > RECIPE_LIMITS.motionParts)
+  if (movingParts(recipe) > RECIPE_LIMITS.motionParts)
     throw new Error(`Recipe exceeds ${RECIPE_LIMITS.motionParts} moving parts`)
   const surfaceIds = (recipe.surfaces ?? []).map((s) => s.id)
   if (new Set(surfaceIds).size !== surfaceIds.length) throw new Error('Duplicate surface ID')
   for (const surface of recipe.surfaces ?? []) {
     if (surface.part && !recipe.parts.some((p) => p.id === surface.part))
       throw new Error('Unknown surface part')
-    if (surface.part && recipe.parts.some((p) => p.id === surface.part && p.motion))
+    if (surface.part && partMoves(recipe, surface.part))
       throw new Error(`Named surface ${surface.id} cannot belong to moving part ${surface.part}`)
   }
   if (
@@ -751,10 +799,10 @@ export function evaluateRecipe(
       throw new Error(`Conflicting light colors on ${light.emissiveSlot}`)
     slotColors.set(light.emissiveSlot, light.color.toLowerCase())
   }
-  if (recipe.parts.filter((part) => part.motion).length > RECIPE_LIMITS.motionParts)
+  if (movingParts(recipe) > RECIPE_LIMITS.motionParts)
     throw new Error(`Recipe exceeds ${RECIPE_LIMITS.motionParts} moving parts`)
   for (const surface of recipe.surfaces ?? [])
-    if (surface.part && recipe.parts.some((part) => part.id === surface.part && part.motion))
+    if (surface.part && partMoves(recipe, surface.part))
       throw new Error(`Named surface ${surface.id} cannot belong to moving part ${surface.part}`)
   const parameters: Record<string, number> = Object.create(null)
   for (const key of Object.keys(values))
@@ -859,6 +907,8 @@ export function evaluateRecipe(
   let triangles = 0,
     charged = 0
   const shapeLimit = recipe.version === 2 ? RECIPE_V2_LIMITS.shapes : RECIPE_LIMITS.shapes
+  const placements = recipe.version === 2 && usesPartTree(recipe) ? placeParts(recipe, expr) : null
+  const jointGroups = new Set<string>()
   for (const part of recipe.parts) {
     inTime()
     const count = expr(part.count)
@@ -870,10 +920,26 @@ export function evaluateRecipe(
       // are all skipped leaves nothing behind.
       const kept = part.shapes.filter((s) => s.when === undefined || expr(s.when, i) !== 0)
       if (!kept.length) continue
+      const placement = placements?.get(`${part.id}:${i}`)
+      if (placements && !placement) continue
+      // A part-tree pose re-expresses the part's frame in design space.
+      const pose = placement?.pose ?? IDENTITY_POSE
+      const place = (position: Vec3, rotation: Vec3) => {
+        if (pose === IDENTITY_POSE) return { position, rotation }
+        const placed = composePoses(pose, eulerPose(position, rotation))
+        return { position: placed.t, rotation: matrixEuler(placed.r) }
+      }
       const vec = (v: Expr[]): Vec3 => v.map((x) => expr(x, i)) as Vec3
       const instanceMin: Vec3 = [Infinity, Infinity, Infinity]
       const instanceMax: Vec3 = [-Infinity, -Infinity, -Infinity]
-      let motionGroup: string | undefined
+      let motionGroup: string | undefined = placement?.group
+      if (placement?.motion) {
+        if (motions.length >= RECIPE_LIMITS.motionGroups)
+          throw new Error(`Recipe exceeds ${RECIPE_LIMITS.motionGroups} evaluated motion groups`)
+        motions.push(placement.motion)
+        jointGroups.add(placement.motion.id)
+        motionGroupByInstance[`${part.id}:${i}`] = placement.motion.id
+      }
       if (part.motion) {
         const motion = part.motion
         const pivot: Vec3 = motion.kind === 'slide' ? [0, 0, 0] : vec(motion.pivot)
@@ -942,7 +1008,7 @@ export function evaluateRecipe(
         if (shapes.length >= shapeLimit) throw new Error('Expanded shape budget exceeded')
         inTime()
         let position = vec(s.position)
-        const rotation = vec(s.rotation ?? [0, 0, 0])
+        let rotation = vec(s.rotation ?? [0, 0, 0])
         let size: Vec3
         let extrusion: Pick<EvaluatedShape, 'section' | 'bevel' | 'profile'> = {}
         if (s.primitive === 'revolve') {
@@ -1031,6 +1097,7 @@ export function evaluateRecipe(
         const arc = f.arc === undefined ? undefined : expr(f.arc, i)
         if (arc !== undefined && !(arc > 0 && arc <= 2 * Math.PI + 1e-9))
           throw new Error(`arc for ${part.id}/${s.id} must be within (0, 2π]`)
+        ;({ position, rotation } = place(position, rotation))
         const shapeId = `${part.id}:${i}:${s.id}`
         shapes.push({
           id: shapeId,
@@ -1095,7 +1162,10 @@ export function evaluateRecipe(
       if (part.light && instanceMin[0] !== Infinity) {
         if (lights.length >= RECIPE_LIMITS.lights)
           throw new Error('Evaluated light budget exceeded')
-        const position = vec(part.light.position)
+        const position =
+          pose === IDENTITY_POSE
+            ? vec(part.light.position)
+            : posePoint(pose, vec(part.light.position))
         if (position.some((value) => !Number.isFinite(value)))
           throw new Error(`Invalid light position for ${part.id}`)
         if (
@@ -1209,8 +1279,28 @@ export function evaluateRecipe(
   }
   const reference = recipe.mounting && surfaces.find((s) => s.id === recipe.mounting!.reference)
   const reach = insideCut ? { min: [...min] as Vec3, max: [...max] as Vec3 } : undefined
+  for (const { motion, bounds } of jointReach(
+    motions.filter((m) => jointGroups.has(m.id)),
+    shapes,
+    shapeBounds,
+  )) {
+    if (!recipe.mounting && bounds.min[1] < base - 0.001)
+      throw new Error(`Motion envelope for ${motion.partId} extends below the floor`)
+    if (
+      recipe.mounting?.attachTo === 'wall-side' &&
+      reference &&
+      bounds.min[2] < reference.position[2] - 0.001
+    )
+      throw new Error(`Motion envelope for ${motion.partId} crosses behind the wall reference`)
+    if (
+      recipe.mounting?.attachTo === 'ceiling' &&
+      reference &&
+      bounds.max[1] > reference.position[1] + 0.001
+    )
+      throw new Error(`Motion envelope for ${motion.partId} rises above the ceiling reference`)
+  }
   for (const shape of shapes) {
-    if (!shape.motionGroup) continue
+    if (!shape.motionGroup || jointGroups.has(shape.motionGroup)) continue
     const motion = motions.find((m) => m.id === shape.motionGroup)!
     const steps = motion.kind === 'slide' ? 1 : motion.kind === 'hinge' ? 8 : 16
     // Inside a cut, sample the rendered footprint so round parts may turn in round cuts.
