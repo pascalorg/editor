@@ -139,4 +139,25 @@ describe('extrude (recipe version 2)', () => {
     expect(() => parseRecipe(box)).toThrow('extrude')
     expect(() => parseRecipe(design({ primitive: 'box' }))).toThrow('size')
   })
+
+  test('a bevel must stay under the thinnest wall of the section', () => {
+    // The sink slot sits 5 mm from the counter's front and back edges.
+    expect(() => parseRecipe(design({ ...counter, bevel: 0.002 }))).not.toThrow()
+    expect(() => parseRecipe(design({ ...counter, bevel: 0.0025 }))).toThrow('thinnest wall')
+    const ell = {
+      kind: 'polygon',
+      outer: [
+        [0, 0],
+        [0.4, 0],
+        [0.4, 0.01],
+        [0.01, 0.01],
+        [0.01, 0.3],
+        [0, 0.3],
+      ],
+    }
+    expect(() => parseRecipe(design({ section: ell, length: 0.5, bevel: 0.005 }))).toThrow(
+      'thinnest wall',
+    )
+    expect(() => parseRecipe(design({ section: ell, length: 0.5, bevel: 0.003 }))).not.toThrow()
+  })
 })

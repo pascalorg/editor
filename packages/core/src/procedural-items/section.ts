@@ -124,3 +124,33 @@ export function extrusionTriangles(rings: SectionRings, bevelSegments: number): 
   const vertices = rings.outer.length + rings.holes.reduce((n, hole) => n + hole.length, 0)
   return 2 * (vertices + 2 * rings.holes.length - 2) + 2 * vertices * (1 + 2 * bevelSegments)
 }
+
+function segmentDistance(
+  [px, py]: [number, number],
+  [ax, ay]: [number, number],
+  [bx, by]: [number, number],
+) {
+  const dx = bx - ax,
+    dy = by - ay
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)))
+  return Math.hypot(px - ax - t * dx, py - ay - t * dy)
+}
+/**
+ * The thinnest wall of a section: the least distance from any vertex to an edge it does not
+ * touch, across the outline and holes (at most 256 points).
+ */
+export function sectionThickness(rings: SectionRings): number {
+  const all = [rings.outer, ...rings.holes]
+  if (all.reduce((n, ring) => n + ring.length, 0) > 256)
+    throw new Error('A bevelled section may have at most 256 points')
+  let thinnest = Infinity
+  for (const [r, ring] of all.entries())
+    for (const [i, point] of ring.entries())
+      for (const [q, other] of all.entries())
+        for (let j = 0; j < other.length; j++) {
+          const k = (j + 1) % other.length
+          if (q === r && (j === i || k === i)) continue
+          thinnest = Math.min(thinnest, segmentDistance(point, other[j]!, other[k]!))
+        }
+  return thinnest
+}

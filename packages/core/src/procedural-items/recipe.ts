@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { ResolvedSectionProfile } from '../schema/types'
-import { extrusionTriangles, sectionRings } from './section'
+import { extrusionTriangles, sectionRings, sectionThickness } from './section'
 import { boundsOf, boxCorners, frame, rotateVector, transformPoint } from './spatial'
 
 export type Expr =
@@ -849,14 +849,16 @@ export function evaluateRecipe(
           const center = b.min.map((v, k) => (v + b.max[k]!) / 2) as Vec3
           const length = expr(s.length!, i)
           const bevel = s.bevel === undefined ? 0 : expr(s.bevel, i)
+          // The bevel insets every contour, so it must stay under the section's thinnest wall.
           if (
             !(
               bevel >= 0 &&
-              bevel <= Math.min(length / 4, b.dimensions[0] / 4, b.dimensions[1] / 4, 0.05)
+              bevel <= Math.min(length / 4, 0.05) &&
+              (bevel === 0 || bevel <= sectionThickness(rings) / 2.5 + 1e-9)
             )
           )
             throw new Error(
-              `bevel for ${part.id}/${s.id} must be within 0..min(length, width, depth)/4 and 5 cm`,
+              `bevel for ${part.id}/${s.id} must be within 0..min(length / 4, 5 cm, thinnest wall / 2.5)`,
             )
           size = [b.dimensions[0], b.dimensions[1], length]
           // Evaluated shapes are centred in their box, so bounds and handles read them as boxes.
