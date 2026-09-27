@@ -269,7 +269,7 @@ function toWorldPlanPoint(
   return [stair.position[0] + worldX, stair.position[2] + worldZ]
 }
 
-function computeSegmentTransforms(segments: StairSegmentLike[]): SegmentTransform[] {
+export function computeSegmentTransforms(segments: StairSegmentLike[]): SegmentTransform[] {
   const transforms: SegmentTransform[] = []
   let currentX = 0
   let currentY = 0
