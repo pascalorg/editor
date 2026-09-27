@@ -1,5 +1,6 @@
 import dedent from 'dedent'
 import { z } from 'zod'
+import { Assembly } from '../assembly'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 import { CurtainWallConfig } from './curtain-wall'
@@ -162,17 +163,12 @@ export const WallUnderpinning = z.object({
 export type WallUnderpinning = z.infer<typeof WallUnderpinning>
 
 // ---------------------------------------------------------------------------
-// Wall assembly (WS5)
+// Wall assembly (WS5), legacy shape
 // ---------------------------------------------------------------------------
-// A real layered wall stack. Every thickness is in METRES.
-//
-// SINGLE SOURCE OF TRUTH: when `assembly` is present it OWNS the wall's total
-// thickness. `wall.thickness` stays the TOTAL for every existing consumer
-// (footprint, miters, 3D viewer, dimensions) and must be re-derived from the
-// stack — `assemblyThickness(assembly)` in
-// `packages/core/src/systems/wall/wall-assembly.ts` — and written back to
-// `thickness` on EVERY assembly edit. Never edit `thickness` directly while an
-// assembly is present; edit the assembly and re-derive.
+// The four-slot stack #937 stored in `wall.assembly`. Walls now store F2
+// layers (`Assembly`, schema/assembly.ts); scenes saved with this shape are
+// converted on load (`migrateWallAssemblies`, `wallAssemblyFromLegacy`), and
+// the inspector edits F2 stacks through this view (`wallAssemblyToLegacy`).
 
 export const WallAssemblyExteriorFinish = z.enum([
   'siding',
@@ -193,6 +189,7 @@ export type WallAssemblyFramingKind = z.infer<typeof WallAssemblyFramingKind>
 export const WallAssemblyInteriorFinish = z.enum(['drywall', 'plaster', 'none'])
 export type WallAssemblyInteriorFinish = z.infer<typeof WallAssemblyInteriorFinish>
 
+/** @deprecated The WS5 shape, kept for the load migration and the inspector view. */
 export const WallAssembly = z
   .object({
     /** Id of a `WALL_ASSEMBLY_PRESETS` entry this stack was seeded from. */
@@ -273,11 +270,12 @@ export const WallNode = BaseNode.extend({
   // in a follow-up once migrated scenes are the norm.
   slots: z.record(z.string(), z.string()).optional(),
   // TOTAL wall thickness in metres — the one number every consumer reads.
-  // Derived from `assembly` (see WallAssembly) whenever an assembly is present.
+  // The sum of `assembly`'s layers whenever an assembly is present.
   thickness: z.number().optional(),
-  // Layered construction stack. Optional: absent = a single unspecified slab of
-  // `thickness`. Present = `thickness` is derived and must not be hand-edited.
-  assembly: WallAssembly.optional(),
+  // Layered construction stack (F2). Optional: absent = a single unspecified
+  // slab of `thickness`. Present = the stack sets `thickness`: edit the layers
+  // and write their sum (`wallAssemblyPatch`), never `thickness` alone.
+  assembly: Assembly.optional(),
   height: z.number().optional(),
   curveOffset: z.number().optional(),
   // Persisted slab-support host — see ItemNode.supportSlabId for the rules.

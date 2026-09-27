@@ -37,7 +37,9 @@ import {
   type WallNode,
   type WallTrimProfile,
   WSP_SHEATHING,
+  wallAssemblyFromLegacy,
   wallAssemblyPatch,
+  wallAssemblyToLegacy,
   wallAssemblyUnverifiedNote,
 } from '@pascal-app/core'
 import {
@@ -867,13 +869,16 @@ function WallAssemblySection({
   onUpdate: (updates: Partial<WallNode>) => void
   unit: 'metric' | 'imperial'
 }) {
-  const assembly = node.assembly
+  const stack = node.assembly
+  // The cladding / sheathing / framing / interior editor works on the WS5 view
+  // of the F2 stack; a stack it cannot express is listed read-only.
+  const assembly = stack ? (wallAssemblyToLegacy(stack) ?? undefined) : undefined
   const resolved = resolveWallAssembly(node)
   const presetNote = wallAssemblyUnverifiedNote(node)
 
   // Every write goes through wallAssemblyPatch so `thickness` is re-derived.
   // Changing any layer clears `preset` — the stack is no longer that preset.
-  const apply = (next: WallAssembly) => onUpdate(wallAssemblyPatch(next))
+  const apply = (next: WallAssembly) => onUpdate(wallAssemblyPatch(wallAssemblyFromLegacy(next)))
   const edit = (mutate: (draft: WallAssembly) => WallAssembly) => {
     if (!assembly) return
     const next = mutate({ ...assembly })
@@ -892,11 +897,11 @@ function WallAssemblySection({
               return
             }
             const preset = getWallAssemblyPreset(id)
-            if (preset) apply({ ...preset.assembly })
+            if (preset) onUpdate(wallAssemblyPatch(preset.assembly))
           }}
-          value={assembly?.preset ?? ''}
+          value={stack?.presetId ?? ''}
         >
-          <option value="">{assembly ? 'Custom' : 'None (single layer)'}</option>
+          <option value="">{stack ? 'Custom' : 'None (single layer)'}</option>
           {WALL_ASSEMBLY_PRESETS.map((preset) => (
             <option key={preset.id} value={preset.id}>
               {preset.label}
@@ -1048,7 +1053,7 @@ function WallAssemblySection({
               Total thickness
             </span>
             <span className="font-medium text-[11px] text-foreground tabular-nums">
-              {formatLayerThickness(assemblyThickness(assembly), unit)}
+              {formatLayerThickness(assemblyThickness(stack!), unit)}
             </span>
           </div>
 
@@ -1071,6 +1076,25 @@ function WallAssemblySection({
           <div className="px-2 pb-2 text-[10px] text-muted-foreground">
             Layer thicknesses follow the 2021 IRC assembly data. Drafting aid, not engineering —
             verify with the authority having jurisdiction.
+          </div>
+        </>
+      )}
+      {stack && !assembly && (
+        <>
+          {resolved.layers.map((layer, index) => (
+            <LayerRow key={`${layer.role}-${index}`} label={layer.material}>
+              <span className="text-[11px] text-muted-foreground tabular-nums">
+                {formatLayerThickness(layer.thickness, unit)}
+              </span>
+            </LayerRow>
+          ))}
+          <div className="flex items-center justify-between px-2 py-1.5">
+            <span className="font-medium text-[10px] text-muted-foreground uppercase tracking-wide">
+              Total thickness
+            </span>
+            <span className="font-medium text-[11px] text-foreground tabular-nums">
+              {formatLayerThickness(assemblyThickness(stack), unit)}
+            </span>
           </div>
         </>
       )}

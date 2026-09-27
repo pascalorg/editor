@@ -14,8 +14,17 @@ import {
 import { createConicalRoofSectorAboveWall } from '../roof/conical-roof'
 import { wallDefinition } from './definition'
 
-test('wallDefinition records the curtain wall schema version', () => {
-  expect(wallDefinition.schemaVersion).toBe(9)
+test('wallDefinition records the F2 assembly schema version', () => {
+  expect(wallDefinition.schemaVersion).toBe(10)
+})
+
+test('walls host F2 assembly layers whose sum is the stored thickness', () => {
+  const host = wallDefinition.capabilities?.assembly
+  const wall = wallDefinition.schema.parse({ id: 'wall_layers', start: [0, 0], end: [4, 0] })
+  expect(host).toMatchObject({ reference: 'front', measure: 'normal' })
+  expect(host?.backing).toBeUndefined()
+  expect(host?.body(wall)).toBe(0.1)
+  expect(host?.body({ ...wall, thickness: 0.2032 })).toBe(0.2032)
 })
 
 test('wall drafting surface classifies its top, ends, and two sides', () => {

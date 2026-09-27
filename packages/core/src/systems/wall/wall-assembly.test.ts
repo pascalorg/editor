@@ -15,6 +15,7 @@ import {
   STUD_2X6,
   WALL_ASSEMBLY_PRESETS,
   WSP_SHEATHING,
+  wallAssemblyFromLegacy,
   wallAssemblyPatch,
   wallLayerBoundaryOffsets,
 } from './wall-assembly'
@@ -22,11 +23,14 @@ import { calculateLevelMiters } from './wall-mitering'
 
 const IN = 0.0254
 
+/** The WS5 fixtures below, stored the way walls store them now: as F2 layers. */
+const f2 = wallAssemblyFromLegacy
+
 function wall(
   id: string,
   start: [number, number],
   end: [number, number],
-  extra: Partial<WallNode> = {},
+  { assembly, ...extra }: Omit<Partial<WallNode>, 'assembly'> & { assembly?: WallAssembly } = {},
 ): WallNode {
   return {
     id: id as WallNode['id'],
@@ -37,6 +41,7 @@ function wall(
     frontSide: 'exterior',
     backSide: 'interior',
     thickness: 0.2,
+    ...(assembly ? { assembly: f2(assembly) } : {}),
     ...extra,
   } as WallNode
 }
@@ -62,21 +67,23 @@ const PARTITION_2X4: WallAssembly = {
 describe('assemblyThickness', () => {
   test('envelope stack sums exterior + sheathing + framing + interior', () => {
     // 3/4 + 7/16 + 5-1/2 + 1/2 = 7-3/16 in
-    expect(assemblyThickness(EXT_2X6)).toBeCloseTo(7.1875 * IN, 12)
+    expect(assemblyThickness(f2(EXT_2X6))).toBeCloseTo(7.1875 * IN, 12)
   })
 
   test('partition applies the interior finish to both faces (4.5 in on 2x4)', () => {
-    expect(assemblyThickness(PARTITION_2X4)).toBeCloseTo(4.5 * IN, 12)
+    expect(assemblyThickness(f2(PARTITION_2X4))).toBeCloseTo(4.5 * IN, 12)
   })
 
   test("'none' layers contribute nothing", () => {
     expect(
-      assemblyThickness({
-        exterior: { finish: 'none', thickness: 0.3 },
-        sheathing: { material: 'none', thickness: 0.3 },
-        framing: { kind: 'wood', depth: STUD_2X4 },
-        interior: { finish: 'none', thickness: 0.3 },
-      }),
+      assemblyThickness(
+        f2({
+          exterior: { finish: 'none', thickness: 0.3 },
+          sheathing: { material: 'none', thickness: 0.3 },
+          framing: { kind: 'wood', depth: STUD_2X4 },
+          interior: { finish: 'none', thickness: 0.3 },
+        }),
+      ),
     ).toBeCloseTo(STUD_2X4, 12)
   })
 
@@ -95,9 +102,10 @@ describe('assemblyThickness', () => {
   })
 
   test('wallAssemblyPatch derives thickness from the assembly', () => {
-    const patch = wallAssemblyPatch(EXT_2X6)
-    expect(patch.thickness).toBeCloseTo(assemblyThickness(EXT_2X6), 12)
-    expect(patch.assembly).toBe(EXT_2X6)
+    const stack = f2(EXT_2X6)
+    const patch = wallAssemblyPatch(stack)
+    expect(patch.thickness).toBeCloseTo(assemblyThickness(stack), 12)
+    expect(patch.assembly).toBe(stack)
   })
 })
 
@@ -191,7 +199,7 @@ describe('resolveWallAssembly', () => {
       expect(back[i]!).toBeCloseTo(-front[front.length - 1 - i]!, 12)
     }
     // Descending from +normal, spanning the whole total.
-    const total = assemblyThickness(EXT_2X6)
+    const total = assemblyThickness(f2(EXT_2X6))
     expect(front[0]!).toBeCloseTo(total / 2, 12)
     expect(front[front.length - 1]!).toBeCloseTo(-total / 2, 12)
   })
@@ -261,7 +269,7 @@ describe('offset miters', () => {
 
   test('two identical walls at 90 degrees: every layer line meets at one point', () => {
     const assembly = EXT_2X6
-    const total = assemblyThickness(assembly)
+    const total = assemblyThickness(f2(assembly))
     // Exterior on the outside of the left turn for both walls.
     const a = wall('a', [0, 0], [5, 0], {
       assembly,
@@ -297,7 +305,7 @@ describe('offset miters', () => {
 
   test('two walls at 45 degrees still share one point per boundary', () => {
     const assembly = EXT_2X6
-    const total = assemblyThickness(assembly)
+    const total = assemblyThickness(f2(assembly))
     const a = wall('a', [0, 0], [5, 0], {
       assembly,
       thickness: total,
@@ -327,8 +335,8 @@ describe('offset miters', () => {
   })
 
   test('walls with different assemblies still meet: pairing is by index from the shared face', () => {
-    const thick = assemblyThickness(EXT_2X6)
-    const thin = assemblyThickness(PARTITION_2X4)
+    const thick = assemblyThickness(f2(EXT_2X6))
+    const thin = assemblyThickness(f2(PARTITION_2X4))
     expect(thick).not.toBeCloseTo(thin, 6)
     const a = wall('a', [0, 0], [5, 0], {
       assembly: EXT_2X6,
@@ -384,11 +392,11 @@ describe('offset miters', () => {
   })
 
   test('T-junction: the through wall runs unbroken, the stem terminates on it', () => {
-    const total = assemblyThickness(EXT_2X6)
+    const total = assemblyThickness(f2(EXT_2X6))
     const through = wall('through', [0, 0], [10, 0], { assembly: EXT_2X6, thickness: total })
     const stem = wall('stem', [5, 0], [5, 5], {
       assembly: PARTITION_2X4,
-      thickness: assemblyThickness(PARTITION_2X4),
+      thickness: assemblyThickness(f2(PARTITION_2X4)),
       frontSide: 'interior',
       backSide: 'interior',
     })
@@ -418,7 +426,7 @@ describe('offset miters', () => {
   })
 
   test('closed room: every corner resolves each boundary to a single point', () => {
-    const total = assemblyThickness(EXT_2X6)
+    const total = assemblyThickness(f2(EXT_2X6))
     const mk = (id: string, s: [number, number], e: [number, number]) =>
       wall(id, s, e, {
         assembly: EXT_2X6,

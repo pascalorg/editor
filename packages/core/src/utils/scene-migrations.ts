@@ -11,3 +11,7 @@ export {
   migrateVerticalSceneNodes,
   type VerticalSceneMigration,
 } from './vertical-scene-migration'
+export {
+  migrateLegacyWallAssemblies,
+  type WallAssemblyMigration,
+} from './wall-assembly-migration'
