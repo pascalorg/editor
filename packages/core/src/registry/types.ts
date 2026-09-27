@@ -7,6 +7,7 @@ import type { MeasurementFeatureReference, MeasurementPoint } from '../schema/no
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId, Discipline, DisplayFamily, PartKey } from '../schema/types'
 import type { SurfaceProvider } from '../services/surface-hosting'
+import type { InteractiveState } from '../store/use-interactive'
 import type { HandleList } from './handles'
 import type { CloneNodesIntoOptions, Subtree } from './subtree'
 
@@ -1723,6 +1724,12 @@ export type Capabilities = {
    */
   sceneAction?: SceneActionCapability
   /**
+   * Moving parts people run: Play/Stop in the action menu, E, and the
+   * walkthrough read this instead of a kind name, so any kind (plugins
+   * included) gets them by declaring it. See `MechanismCapability`.
+   */
+  mechanism?: MechanismCapability
+  /**
    * Declares the kind's paintable slots — the `{ slotId, label, default }`
    * contract shared by items (scanned from the GLB) and procedural kinds
    * (declared here). Procedural generators tag their emitted geometry with
@@ -1922,6 +1929,23 @@ export type SceneActionCapability<T = unknown> = {
   resolveTarget: (object: { userData: Record<string, unknown> }) => T | null
   /** Run the action. Return `true` to consume the click (skip selection). */
   activate: (node: AnyNode, target: T, sceneApi: SceneApi) => boolean
+}
+
+/**
+ * A kind's moving parts (a fan's spin, doors, an articulated asset's joints).
+ * Operating state is transient: `set` writes `useInteractive`, never the node,
+ * so running a mechanism never enters undo, autosave or collaboration. A kind
+ * with a single switch keeps it in `useInteractive.mechanisms`.
+ */
+export type MechanismCapability = {
+  /** Whether this node has anything to run. */
+  has: (node: AnyNode) => boolean
+  /** Whether any of its mechanisms is running. */
+  isOn: (node: AnyNode, state: InteractiveState) => boolean
+  /** Starts or stops all of them. */
+  set: (node: AnyNode, on: boolean) => void
+  /** Walkthrough wording: `open` parts open and close; `run` parts (the default) turn on and off. */
+  verb?: 'open' | 'run'
 }
 
 export type NodeQuickActionIcon = 'add-left' | 'add-right' | 'add' | 'convert'
