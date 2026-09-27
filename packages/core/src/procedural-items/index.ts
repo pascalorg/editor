@@ -1,3 +1,4 @@
+export * from './design'
 export * from './fixtures'
 export * from './integration'
 export * from './library-colors'

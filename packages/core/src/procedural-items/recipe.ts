@@ -28,6 +28,7 @@ const expression: z.ZodType<Expr> = z.lazy(() =>
     }),
   ]),
 )
+export const ExpressionSchema = expression
 const vector = z.tuple([expression, expression, expression])
 const timing = {
   delay: expression.optional(),
@@ -292,6 +293,33 @@ function shapeCorners(size: Vec3, position: Vec3, rotation: Vec3): Vec3[] {
   return boxCorners(localMin, localMax).map((point) => transformPoint(shapeFrame, point))
 }
 
+/** Axis-aligned bounds of one evaluated shape in the design frame. */
+export function shapeBounds(
+  shape: Pick<EvaluatedShape, 'primitive' | 'size' | 'position' | 'rotation'>,
+): { min: Vec3; max: Vec3 } {
+  const { primitive, size, position, rotation } = shape
+  if (primitive === 'ellipsoid') {
+    const axes = [0, 1, 2].map((axis) =>
+      rotateVector([0, 1, 2].map((j) => (j === axis ? 1 : 0)) as Vec3, rotation),
+    )
+    const extent = [0, 1, 2].map((k) =>
+      Math.hypot(...axes.map((axis, j) => (axis[k]! * size[j]!) / 2)),
+    )
+    return {
+      min: position.map((v, k) => v - extent[k]!) as Vec3,
+      max: position.map((v, k) => v + extent[k]!) as Vec3,
+    }
+  }
+  const min: Vec3 = [Infinity, Infinity, Infinity]
+  const max: Vec3 = [-Infinity, -Infinity, -Infinity]
+  for (const point of shapeCorners(size, position, rotation))
+    for (let k = 0; k < 3; k++) {
+      min[k] = Math.min(min[k]!, point[k]!)
+      max[k] = Math.max(max[k]!, point[k]!)
+    }
+  return { min, max }
+}
+
 function movedPoint(point: Vec3, motion: EvaluatedMotion, fraction: number): Vec3 {
   if (motion.kind === 'slide')
     return point.map(
@@ -533,25 +561,12 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
                 ? 720
                 : 12
         if (triangles > RECIPE_LIMITS.triangles) throw new Error('Triangle budget exceeded')
-        if (s.primitive === 'ellipsoid') {
-          const axes = [0, 1, 2].map((axis) =>
-            rotateVector([0, 1, 2].map((j) => (j === axis ? 1 : 0)) as Vec3, rotation),
-          )
-          for (let k = 0; k < 3; k++) {
-            const extent = Math.hypot(...axes.map((axis, j) => (axis[k]! * size[j]!) / 2))
-            min[k] = Math.min(min[k]!, position[k]! - extent)
-            max[k] = Math.max(max[k]!, position[k]! + extent)
-            instanceMin[k] = Math.min(instanceMin[k]!, position[k]! - extent)
-            instanceMax[k] = Math.max(instanceMax[k]!, position[k]! + extent)
-          }
-        } else {
-          for (const point of shapeCorners(size, position, rotation))
-            for (let k = 0; k < 3; k++) {
-              min[k] = Math.min(min[k]!, point[k]!)
-              max[k] = Math.max(max[k]!, point[k]!)
-              instanceMin[k] = Math.min(instanceMin[k]!, point[k]!)
-              instanceMax[k] = Math.max(instanceMax[k]!, point[k]!)
-            }
+        const bounds = shapeBounds({ primitive: s.primitive, size, position, rotation })
+        for (let k = 0; k < 3; k++) {
+          min[k] = Math.min(min[k]!, bounds.min[k]!)
+          max[k] = Math.max(max[k]!, bounds.max[k]!)
+          instanceMin[k] = Math.min(instanceMin[k]!, bounds.min[k]!)
+          instanceMax[k] = Math.max(instanceMax[k]!, bounds.max[k]!)
         }
         if (s.support) {
           if (rotation.some((v) => v !== 0))

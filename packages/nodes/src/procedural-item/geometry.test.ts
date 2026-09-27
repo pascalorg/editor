@@ -3,11 +3,18 @@ import {
   bedRecipe,
   ProceduralItemNode,
   parseRecipe,
+  type Recipe,
   shelfRecipe,
+  validateDesign,
 } from '@pascal-app/core/procedural-items'
 import cabinetJson from '../../../core/src/procedural-items/__fixtures__/cabinet_two_doors_drawer.json'
+import ceilingFanJson from '../../../core/src/procedural-items/__fixtures__/ceiling_fan.json'
 import chandelierJson from '../../../core/src/procedural-items/__fixtures__/chandelier_six_arms.json'
 import deskJson from '../../../core/src/procedural-items/__fixtures__/desk_fan.json'
+import condenserJson from '../../../core/src/procedural-items/__fixtures__/trial-e1-condenser.json'
+import airHandlerJson from '../../../core/src/procedural-items/__fixtures__/trial-e2-air-handler.json'
+import louverJson from '../../../core/src/procedural-items/__fixtures__/trial-e5-louver.json'
+import stairGuardJson from '../../../core/src/procedural-items/__fixtures__/trial-e8-stair-guard.json'
 import {
   acquireProceduralGeometry,
   buildProceduralGeometry,
@@ -108,4 +115,71 @@ test('light descriptors leave geometry batches and bounds unchanged', () => {
       batch.motionGeometry?.dispose()
       batch.geometry.dispose()
     }
+})
+
+test('validateDesign reports the triangles and draw groups this builder produces', () => {
+  const primitives = parseRecipe({
+    version: 1,
+    name: 'Primitives',
+    description: 'One of each primitive, including a cone.',
+    parameters: [
+      { id: 'size', label: 'Size', default: 0.2, min: 0.1, max: 0.4, step: 0.1, unit: 'm' },
+    ],
+    slots: [{ id: 'paint', label: 'Paint', color: '#888888' }],
+    parts: [
+      {
+        id: 'row',
+        label: 'Row',
+        count: 1,
+        shapes: (['box', 'roundedBox', 'cylinder', 'ellipsoid'] as const).map((primitive, i) => ({
+          id: `s${i}`,
+          primitive,
+          slot: 'paint',
+          size: ['size', 'size', 'size'],
+          position: [i * 0.5, 0.2, 0],
+        })),
+      },
+      {
+        id: 'cone',
+        label: 'Cone',
+        count: 1,
+        shapes: [
+          {
+            id: 'tip',
+            primitive: 'cylinder',
+            slot: 'paint',
+            size: [0.2, 0.2, 0.2],
+            position: [2, 0.1, 0],
+            topScale: 0,
+          },
+        ],
+      },
+    ],
+    constraints: [],
+  } satisfies Recipe)
+  const recipes = [
+    primitives,
+    shelfRecipe,
+    bedRecipe,
+    ...[cabinetJson, ceilingFanJson, chandelierJson, deskJson].map(parseRecipe),
+    ...[condenserJson, airHandlerJson, louverJson, stairGuardJson].map(parseRecipe),
+  ]
+  for (const recipe of recipes) {
+    const built = buildProceduralGeometry(ProceduralItemNode.parse({ recipe }))
+    const measured = validateDesign(recipe).measurements!
+    expect(measured.triangles.actual).toBe(built.triangles)
+    expect(
+      measured.drawGroups.map(({ slot, motionGroup, triangles }) => [slot, motionGroup, triangles]),
+    ).toEqual(
+      built.batches.map((batch) => [
+        batch.slot,
+        batch.motionGroup ?? null,
+        batch.geometry.getAttribute('position').count / 3,
+      ]),
+    )
+    for (const batch of built.batches) {
+      batch.motionGeometry?.dispose()
+      batch.geometry.dispose()
+    }
+  }
 })

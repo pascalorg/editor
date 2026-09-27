@@ -27,6 +27,7 @@ import { registerSetUnitMembers } from './set-unit-members'
 import { registerSetZone } from './set-zone'
 import { registerTemplateTools } from './templates'
 import { registerUndo } from './undo'
+import { registerValidateDesign } from './validate-design'
 import { registerValidateScene } from './validate-scene'
 import { registerVariantTools } from './variants'
 
@@ -63,6 +64,7 @@ export function registerTools(server: McpServer, operations: SceneOperations): v
   registerExportJson(server, operations)
   registerExportGlb(server, operations)
   registerValidateScene(server, operations)
+  registerValidateDesign(server, operations)
   registerCheckCollisions(server, operations)
   registerTemplateTools(server, operations)
   if (operations.hasStore) {
