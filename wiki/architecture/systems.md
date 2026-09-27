@@ -33,12 +33,18 @@ clears the marks it owns (floor-placed kinds with no `geometry` or `system`, suc
 columns and procedural items) at priority 2. A definition's
 `system.priority` orders mounted components; it does not set `useFrame` priority.
 
-Items, columns, ceiling undersides and slab bodies directly under a level, plus
-wall-hosted doors/windows, can join the level's `BatchedMesh` containers. Sources
-stay mounted and draw-hidden. Ceiling grids and hosted child subtrees are excluded;
-containers preserve source shadow flags. Selection (including external selection),
-live transforms and each slot paint preview target release sources until settled.
-Level mode/selected-level changes re-offer sources rejected while shadow-only.
+A kind joins by declaring `capabilities.batchable` (`BatchableConfig`): its scope
+(`'level'` children, or `'wall'`-hosted openings that follow their wall), transient
+exclusions, a settled test on the mounted root and, for geometry rebuilt in place, a
+per-mesh allocation key. Items, columns, ceiling undersides, slab bodies, procedural
+items, imported meshes and blocks directly under a level, plus wall-hosted
+doors/windows, can join the level's `BatchedMesh` containers. Sources stay mounted and
+draw-hidden. Only opaque single-material meshes join. Ceiling grids and hosted child
+subtrees are excluded; containers preserve source shadow flags. Selection (including
+external selection), live transforms and each slot paint preview target release
+sources until settled; a playing procedural motion releases its item, and part
+lights keep it out. Level mode/selected-level changes re-offer sources rejected while
+shadow-only.
 
 ### Initial wall build
 

@@ -50,6 +50,11 @@ function runSourceTest(body: string) {
     }
     await importShared('react')
     await importShared('three')
+    // The batch reads each kind's \`capabilities.batchable\` from the registry.
+    const registryCore = await importShared('@pascal-app/core')
+    const batchable = await import(${sourcePath('packages/nodes/src/shared/node-batch/batchable.ts')})
+    for (const [kind, config] of [['ceiling', batchable.surfaceBatchable], ['slab', batchable.surfaceBatchable], ['item', batchable.itemBatchable]])
+      registryCore.nodeRegistry._register({ kind, schemaVersion: 1, capabilities: { batchable: config } })
     ${body}
   `,
     )
@@ -224,7 +229,7 @@ test('a column whose dirty mark the floor-elevation pass consumes first still le
     let now = 0
     performance.now = () => now
     // Columns render without a geometry builder or system, so floor elevation owns their marks.
-    core.registerNode({ kind: 'column', schemaVersion: 1, capabilities: { floorPlaced: { footprint: () => ({ dimensions: [0.3, 3, 0.3] }) } } })
+    core.registerNode({ kind: 'column', schemaVersion: 1, capabilities: { batchable: batchable.columnBatchable, floorPlaced: { footprint: () => ({ dimensions: [0.3, 3, 0.3] }) } } })
     const root = new Group()
     const material = new MeshBasicMaterial()
     const nodes = { level_test: { id: 'level_test', type: 'level', children: [] } }
@@ -289,7 +294,8 @@ const slabCacheFixture = `
   const { captureChangedNodes, runBatchFrame, subscribeBatchInteractions, resetNodeBatchState } = await import(${sourcePath('packages/nodes/src/shared/node-batch/system.tsx')})
   const preset = { ...core.MATERIAL_CATALOG[0], id: 'slab-cache-fixture', preset: { ...core.MATERIAL_CATALOG[0].preset, maps: {} } }
   core.registerLibraryMaterials([preset])
-  core.registerNode({ kind: 'slab', schemaVersion: 1, schema: core.SlabNode, geometry: buildSlabGeometry, capabilities: {} })
+  core.nodeRegistry._reset()
+  core.registerNode({ kind: 'slab', schemaVersion: 1, schema: core.SlabNode, geometry: buildSlabGeometry, capabilities: { batchable: batchable.surfaceBatchable } })
   const level = core.LevelNode.parse({ id: 'level_test', children: ['slab_0', 'slab_1', 'slab_2'] })
   const nodes = { [level.id]: level }
   const root = new Group()

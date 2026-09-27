@@ -1691,6 +1691,13 @@ export type Capabilities = {
   interactive?: boolean
   floorPlaced?: FloorPlacedConfig
   /**
+   * Opt this kind into node draw batching. Its opaque single-material meshes
+   * join its level's shared `BatchedMesh` containers while the node is
+   * static; the sources stay mounted, pickable and exported. See
+   * `BatchableConfig`.
+   */
+  batchable?: BatchableConfig
+  /**
    * Plan footprint this kind exposes to the alignment-anchor pool when it
    * isn't `floorPlaced` and isn't a structural primitive the bridge handles
    * directly (wall, slab). Lets a kind self-describe where it sits in plan
@@ -2390,6 +2397,35 @@ export type FloorPlacedConfig = {
    * neither block nor get blocked. Default off.
    */
   collides?: boolean
+}
+
+/**
+ * How the node batch treats a kind (`capabilities.batchable`). Selection,
+ * hover, live transforms, live overrides and slot paint previews release any
+ * batched node; these fields declare what is specific to the kind.
+ */
+export type BatchableConfig = {
+  /**
+   * Where the node's batches live. `'level'`: the node is a direct child of a
+   * level; hosted or mounted nodes draw themselves, because their host moves
+   * them without a signal the batch sees. `'wall'`: the node is hosted by a
+   * visible wall that is a level child; the wall's edits, tint and gestures
+   * release it.
+   */
+  scope: 'level' | 'wall'
+  /** Transient states in which the node draws its own meshes, such as a running animation. */
+  excluded?: (node: AnyNode) => boolean
+  /** Whether the node's mounted object is final, read from its registered root's `userData`. */
+  settled?: (userData: Readonly<Record<string, unknown>>) => boolean
+  /**
+   * Allocation key for the node's `meshIndex`-th batchable mesh when the kind
+   * rebuilds its geometry in place (slabs, ceilings): a rebuild then replaces
+   * its packed slot instead of adding one. Without it, meshes that share a
+   * geometry share one allocation.
+   */
+  batchKey?: (node: AnyNode, meshIndex: number) => string
+  /** Joins wait until wall rebuilds and wall drags on the node's level have settled. */
+  waitsForWalls?: boolean
 }
 
 /**

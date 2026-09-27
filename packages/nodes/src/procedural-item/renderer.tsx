@@ -30,6 +30,8 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { type Group, Mesh, Vector3 } from 'three'
 import { canRegisterItemLight } from '../shared/item-light-placement'
+import { releaseFromBatch } from '../shared/node-batch/release'
+import { setProceduralMotionPlaying } from './animation'
 import { acquireProceduralGeometry, type BuiltItem, geometrySignature } from './geometry'
 export default function ProceduralRenderer({ node }: { node: ProceduralItemNode }) {
   const ref = useRef<Group>(null!)
@@ -71,7 +73,13 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
     setBuilt(lease.value)
     return lease.release
   }, [key])
-  useEffect(() => () => useInteractive.getState().removeProcedural(node.id), [node.id])
+  useEffect(
+    () => () => {
+      useInteractive.getState().removeProcedural(node.id)
+      setProceduralMotionPlaying(node.id, false)
+    },
+    [node.id],
+  )
   useLayoutEffect(() => {
     controller.current = built ? new ProceduralMotionController(built.evaluation.motions) : null
     lastCommand.current = 0
@@ -123,6 +131,8 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
             motion.pivot[{ x: 0, y: 1, z: 2 }[motion.axis]]! + motion.amount * fraction
       }
     }
+    // A playing motion draws its own meshes; it rejoins the node batch at the settled pose.
+    if (setProceduralMotionPlaying(node.id, frame.pending)) releaseFromBatch(node.id)
     if (frame.pending) invalidate()
     else awake.current = false
   }, -1)

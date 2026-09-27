@@ -8,7 +8,8 @@ import type { BufferGeometry, Material, Matrix4, Mesh, Object3D } from 'three'
  * `(levelId, material, attribute-signature, castShadow, receiveShadow)`;
  * membership changes are incremental instance adds/deletes.
  *
- * Batched kinds: items, columns, ceilings and slabs (level-parented), doors
+ * Batched kinds declare `capabilities.batchable`: items, columns, ceilings,
+ * slabs, procedural items, imported meshes and blocks (level-parented), doors
  * and windows (wall-hosted, resolved to the host wall's level). Walls keep
  * their own merged-geometry batch and cutaway lifecycle.
  *
@@ -28,6 +29,8 @@ import type { BufferGeometry, Material, Matrix4, Mesh, Object3D } from 'three'
  *   openings (their level-space transforms move with the wall).
  * - Doors/windows with an active animation record are excluded while it
  *   runs; the completion dirty mark re-joins them at the settled pose.
+ *   Procedural items are excluded while a motion plays and whenever they
+ *   carry part lights.
  */
 
 /** One batchable mesh of one node. */
