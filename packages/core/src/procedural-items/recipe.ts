@@ -745,7 +745,8 @@ export function evaluateRecipe(
           })
         }
       }
-      if (part.light) {
+      // A repeat whose shapes `when` all skipped builds no light either.
+      if (part.light && instanceMin[0] !== Infinity) {
         if (lights.length >= RECIPE_LIMITS.lights)
           throw new Error('Evaluated light budget exceeded')
         const position = vec(part.light.position)

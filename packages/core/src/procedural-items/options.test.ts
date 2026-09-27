@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import cabinetJson from './__fixtures__/cabinet_two_doors_drawer.json'
+import pendantJson from './__fixtures__/pendant_lamp.json'
 import { shelfRecipe } from './fixtures'
 import { type Expr, evaluateRecipe, parseRecipe, type Recipe } from './recipe'
 
@@ -167,5 +168,14 @@ describe('select, bool and choice parameters, and when (recipe version 2)', () =
     const when = structuredClone(shelfRecipe)
     when.parts[0]!.when = 1
     expect(() => parseRecipe(when)).toThrow('version 2')
+  })
+
+  test('a repeat whose shapes are all skipped builds no light', () => {
+    const recipe = v2(parseRecipe(structuredClone(pendantJson)))
+    const bulb = recipe.parts.find((part) => part.light)!
+    for (const shape of bulb.shapes) shape.when = 0
+    const e = evaluateRecipe(parseRecipe(recipe))
+    expect(e.lights).toEqual([])
+    expect(e.shapes.some((shape) => shape.partId === bulb.id)).toBe(false)
   })
 })
