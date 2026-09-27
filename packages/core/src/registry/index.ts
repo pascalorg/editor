@@ -74,6 +74,7 @@ export type {
   Capabilities,
   CapabilityCtx,
   CutsContext,
+  CuttableConfig,
   DimensionTerminator,
   DimensionTextPosition,
   DistributionRole,

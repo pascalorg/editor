@@ -7,16 +7,17 @@ import { z } from 'zod'
  * intersects the intents with its own faces. No host reads them yet (DT-03b
  * walls, ceilings and slabs; RL-02 roofs); today's cut paths are unchanged.
  *
- * Frames. `shape` is in the named patch's surface chart (F0 `SurfaceAnchor`):
- * [u, v] metres, u along the patch frame's +X and v = normal × u.
+ * Frames (frozen). `shape` is in the named patch's surface chart (F0
+ * `SurfaceAnchor`): [u, v] metres, u along the patch frame's +X and
+ * v = normal × u.
  * - wall `front`: u = wall-local x (from `start`), v = wall-local y (the frame
  *   door and window `position` use); the normal is +n.
  * - wall `back`: the normal is −n, so u runs from `end`: u = length − x.
- * - ceiling `underside`: [u, v] = ceiling-local [x, z], the space of
- *   `ceiling.polygon` and `holes`.
- * - slab `top`: [u, v] = [x, −z] of slab-local plan.
  * - roof `facet:<id>:covering`: u along the facet's eave, v up the slope, both
  *   measured on the slope.
+ * - Horizontal hosts are the one exception: a slab `top` and a ceiling
+ *   `underside` take plan [x, z] in the host's local plan, the space of its
+ *   `polygon` and stored `holes`, never the chart's mirrored [x, −z].
  */
 
 const V2 = z.tuple([z.number().finite(), z.number().finite()])

@@ -364,7 +364,7 @@ capabilities: {
 
 ### `capabilities.cuts`
 
-Frozen contract (F5b cut intents), not read by any host yet. A kind that removes material from a host publishes what it removes, and each host kernel intersects the intents with its own faces. It replaces the reader-less `cuttable` flag.
+Frozen contract (F5b cut intents), not read by any host yet. A kind that removes material from a host publishes what it removes, and each host kernel intersects the intents with its own faces. It supersedes `cuttable`, which nothing ever read: that field stays as a deprecated, ignored alias until plugin API v2.
 
 ```ts
 cuts?: (node: AnyNode, ctx: { nodes: Record<AnyNodeId, AnyNode> }) => CutIntent[]
@@ -377,7 +377,7 @@ type CutIntent = {                   // core/src/schema/cut.ts
 }
 ```
 
-`shape` is in the face's surface chart ([u, v] metres, v = normal × u): a wall's `front` is wall-local (x, y); its `back` runs from `end` (u = length − x); a ceiling's `underside` is ceiling-local [x, z]; a slab's `top` is [x, −z]; a roof facet's `facet:<id>:covering` has u along the eave and v up the slope. A numeric `depth` is a pocket that keeps the host's backing (walls keep at least 5 mm). Executable examples: `core/src/contracts/cut-intent.test.ts`.
+`shape` is in the face's surface chart ([u, v] metres, v = normal × u): a wall's `front` is wall-local (x, y); its `back` runs from `end` (u = length − x); a roof facet's `facet:<id>:covering` has u along the eave and v up the slope. Horizontal hosts are the one exception: a slab's `top` and a ceiling's `underside` take plan [x, z] in the host's local plan, like their `polygon` and stored `holes`, never the chart's mirrored [x, −z] for a top face. A numeric `depth` is a pocket that keeps the host's backing (walls keep at least 5 mm). Executable examples: `core/src/contracts/cut-intent.test.ts`.
 
 How today's cut sources map onto it (their consumers switch in DT-03b and RL-02):
 

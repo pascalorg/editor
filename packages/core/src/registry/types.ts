@@ -1663,6 +1663,11 @@ export type Capabilities = {
   hostable?: HostableConfig
   surfacePlacement?: 'floor-only'
   /**
+   * @deprecated Ignored: nothing has ever read it. Declare {@link Capabilities.cuts}
+   * instead. Kept so plugin API v1 definitions still compile; removed in v2.
+   */
+  cuttable?: CuttableConfig
+  /**
    * What the node cuts out of its host(s), as cut intents (F5b). Frozen
    * contract, not read yet: DT-03b (walls, ceilings, slabs) and RL-02 (roofs)
    * consume it beside today's paths (`collectCutoutBrushes`,
@@ -2264,6 +2269,12 @@ export type HostableConfig = {
   fromAsset?: 'attachTo'
   modes?: Record<string, Partial<HostableConfig>>
   override?: (ctx: CapabilityCtx) => HostableConfig | null
+}
+
+/** @deprecated See {@link Capabilities.cuttable}. */
+export type CuttableConfig = {
+  hostKinds: readonly string[]
+  override?: (ctx: CapabilityCtx) => CuttableConfig | null
 }
 
 export type SnappableConfig = {

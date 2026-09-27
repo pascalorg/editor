@@ -139,10 +139,25 @@ describe('depth pocket: a niche keeps the backing', () => {
   })
 })
 
-describe('ceiling hole: ceilingCut rings are underside rings as they are', () => {
-  test('the underside chart is ceiling-local [x, z]; the slab top chart is [x, −z]', () => {
+describe('ceiling and slab holes: stored plan rings are intent rings as they are', () => {
+  test('horizontal hosts take plan [x, z], never the chart mirrored for a slab top', () => {
+    // The F0 rule gives the underside [x, z] but a slab top [x, −z]: the
+    // exception keeps both in the space of stored `holes`.
     expect(cross([0, -1, 0], [1, 0, 0])).toEqual([0, 0, 1])
     expect(cross([0, 1, 0], [1, 0, 0])).toEqual([0, 0, -1])
+    // A stair opening's stored slab hole is published as it is on `top`.
+    const hole: V2[] = [
+      [1, 2],
+      [2, 2],
+      [2, 4.5],
+      [1, 4.5],
+    ]
+    const intent = CutIntent.parse({
+      host: { nodeId: 'slab_a', surfaceId: 'top' },
+      shape: { kind: 'polygon', ring: hole },
+      depth: 'through',
+    })
+    expect(intent.shape).toEqual({ kind: 'polygon', ring: hole })
   })
 
   test('a recessed downlight: buildCeilingHole → one underside intent', () => {
