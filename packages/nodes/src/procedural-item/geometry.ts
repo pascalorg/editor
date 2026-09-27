@@ -2,16 +2,21 @@ import {
   type Evaluation,
   evaluateRecipe,
   type ProceduralItemNode,
+  sectionRings,
 } from '@pascal-app/core/procedural-items'
 import {
   BoxGeometry,
   BufferGeometry,
   CylinderGeometry,
   Euler,
+  ExtrudeGeometry,
   Float32BufferAttribute,
   Matrix4,
+  Path,
   Quaternion,
+  Shape,
   SphereGeometry,
+  Vector2,
   Vector3,
 } from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
@@ -181,6 +186,27 @@ function faceFrameUvs(geometry: BufferGeometry) {
   }
   uv.needsUpdate = true
 }
+// The evaluated section, centred in its box, extruded along z over size[2]. A bevel shrinks the
+// outline by its size, then bevels back out, so the box does not grow.
+function extrudeSource(shape: Evaluation['shapes'][number]): BufferGeometry {
+  const { outer, holes } = sectionRings(shape.section!)
+  const outline = new Shape(outer.map(([x, y]) => new Vector2(x, y)))
+  outline.holes = holes.map((hole) => new Path(hole.map(([x, y]) => new Vector2(x, y))))
+  const bevel = shape.bevel ?? 0
+  const depth = shape.size[2] - 2 * bevel
+  const geometry = new ExtrudeGeometry(outline, {
+    depth,
+    steps: 1,
+    curveSegments: 1,
+    bevelEnabled: bevel > 0,
+    bevelThickness: bevel,
+    bevelSize: bevel,
+    bevelOffset: -bevel,
+    bevelSegments: 2,
+  })
+  geometry.translate(0, 0, -depth / 2)
+  return geometry
+}
 export const proceduralMetrics = { builds: 0, cacheHits: 0, lastBuildMs: 0, liveEntries: 0 }
 const cache = new Map<string, { value: BuiltItem; users: number }>()
 export const geometrySignature = (node: ProceduralItemNode) =>
@@ -199,9 +225,11 @@ export function buildProceduralGeometry(node: ProceduralItemNode): BuiltItem {
         ? new RoundedBoxGeometry(w, h, d, 2, shape.radius)
         : shape.primitive === 'cylinder'
           ? cylinderSource(shape)
-          : shape.primitive === 'ellipsoid'
-            ? new SphereGeometry(0.5, 24, 16)
-            : new BoxGeometry(w, h, d)
+          : shape.primitive === 'extrude'
+            ? extrudeSource(shape)
+            : shape.primitive === 'ellipsoid'
+              ? new SphereGeometry(0.5, 24, 16)
+              : new BoxGeometry(w, h, d)
     if (shape.primitive === 'cylinder' || shape.primitive === 'ellipsoid') source.scale(w, h, d)
     const geometry = source.index ? source.toNonIndexed() : source
     if (geometry !== source) source.dispose()

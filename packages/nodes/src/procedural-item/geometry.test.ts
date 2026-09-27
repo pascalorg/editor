@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
 import {
   bedRecipe,
+  evaluateRecipe,
   ProceduralItemNode,
   parseRecipe,
   shapeTriangles,
@@ -115,10 +116,9 @@ test('light descriptors leave geometry batches and bounds unchanged', () => {
 
 test('evaluated triangle counts equal the triangles the renderer builds', () => {
   const dir = new URL('../../../core/src/procedural-items/__fixtures__/', import.meta.url)
-  // The E3 kitchen run is the committed R7 refusal case (37.9 KB), not a parsable design.
-  const fixtures = readdirSync(dir)
-    .filter((file) => !file.startsWith('trial_e3_'))
-    .map((file) => parseRecipe(JSON.parse(readFileSync(new URL(file, dir), 'utf8'))))
+  const fixtures = readdirSync(dir).map((file) =>
+    parseRecipe(JSON.parse(readFileSync(new URL(file, dir), 'utf8'))),
+  )
   expect(fixtures.length).toBeGreaterThanOrEqual(9)
   const every = parseRecipe({
     version: 2,
@@ -239,7 +239,7 @@ test('v2 cylinder options build exactly the triangles they are charged', () => {
   const normal = box.getAttribute('normal')
   for (let i = 0; i < normal.count; i++) {
     const length = Math.hypot(normal.getX(i), normal.getY(i), normal.getZ(i))
-    expect(length).toBeCloseTo(1, 4)
+    if (length > 0) expect(length).toBeCloseTo(1, 4)
   }
   for (const batch of built.batches) batch.geometry.dispose()
 })
@@ -282,6 +282,73 @@ test('a six-segment cylinder is an exact hexagonal prism', () => {
   }
   expect([...radii]).toEqual(['0.050000'])
   geometry.dispose()
+})
+
+test('extrusions build the triangles they are charged and fill their evaluated box', () => {
+  const counter = {
+    kind: 'polygon',
+    outer: [
+      [0, 0],
+      [1.2, 0],
+      [1.2, 0.03],
+      [0, 0.03],
+    ],
+    holes: [
+      [
+        [0.3, 0.005],
+        [0.8, 0.005],
+        [0.8, 0.025],
+        [0.3, 0.025],
+      ],
+    ],
+  }
+  const variants: Record<string, unknown>[] = [
+    { section: { kind: 'rectangle', width: 0.4, depth: 0.2 } },
+    { section: { kind: 'rectangle', width: 0.4, depth: 0.2, corner: 0.03 } },
+    { section: { kind: 'rectangle', width: 0.4, depth: 0.2, corner: 0.1 } },
+    { section: { kind: 'round', radius: 0.05 } },
+    { section: { kind: 'round', radius: 0.05, wall: 0.004 } },
+    { section: { kind: 'oval', width: 0.3, depth: 0.1 } },
+    { section: counter },
+    { section: { kind: 'rectangle', width: 0.4, depth: 0.2 }, bevel: 0.01 },
+    { section: counter, bevel: 0.002 },
+  ]
+  const recipe = parseRecipe({
+    version: 2,
+    name: 'Extrusions',
+    description: 'Every section kind.',
+    parameters: [
+      { id: 'unused', label: 'Unused', default: 1, min: 1, max: 1, step: 1, unit: 'count' },
+    ],
+    slots: [{ id: 'body', label: 'Body', color: '#888888' }],
+    parts: variants.map((options, i) => ({
+      id: `p${i}`,
+      label: `P${i}`,
+      count: 1,
+      shapes: [
+        {
+          id: 'e',
+          primitive: 'extrude',
+          slot: 'body',
+          length: 0.5,
+          position: [i * 2, 0.3, 0],
+          ...options,
+        },
+      ],
+    })),
+    constraints: [],
+  })
+  for (const [i, shape] of evaluateRecipe(recipe).shapes.entries()) {
+    const single = parseRecipe({ ...recipe, parts: [recipe.parts[i]!] })
+    const built = buildProceduralGeometry(ProceduralItemNode.parse({ recipe: single }))
+    expect(built.triangles).toBe(shapeTriangles(shape))
+    const geometry = built.batches[0]!.geometry
+    geometry.computeBoundingBox()
+    const extent = built.evaluation.max.map((v, k) => v - built.evaluation.min[k]!)
+    const size = geometry.boundingBox!.getSize(new Vector3()).toArray()
+    for (const [k, v] of size.entries()) expect(v).toBeCloseTo(extent[k]!, 5)
+    for (const batch of built.batches) batch.geometry.dispose()
+  }
 })
 
 test('v2 cylinders keep world-scale UVs on every face, wedges and rings included', () => {

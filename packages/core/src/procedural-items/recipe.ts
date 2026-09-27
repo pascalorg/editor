@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import type { ResolvedSectionProfile } from '../schema/types'
+import { extrusionTriangles, sectionRings } from './section'
 import { boundsOf, boxCorners, frame, rotateVector, transformPoint } from './spatial'
 
 export type Expr =
@@ -47,6 +49,26 @@ const expressionV2: z.ZodType<ExprV2> = z.lazy(() =>
 // The schema reads v2 expressions; the public Recipe type keeps the v1 Expr (R1).
 const expression = expressionV2 as unknown as z.ZodType<Expr>
 const vector = z.tuple([expression, expression, expression])
+const sectionRing = z
+  .array(z.tuple([expression, expression]))
+  .min(3)
+  .max(64)
+// An F1 section whose numbers may be expressions; it evaluates to a ResolvedSectionProfile.
+const section = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('rectangle'),
+    width: expression,
+    depth: expression,
+    corner: expression.optional(),
+  }),
+  z.strictObject({ kind: z.literal('round'), radius: expression, wall: expression.optional() }),
+  z.strictObject({ kind: z.literal('oval'), width: expression, depth: expression }),
+  z.strictObject({
+    kind: z.literal('polygon'),
+    outer: sectionRing,
+    holes: z.array(sectionRing).max(16).optional(),
+  }),
+])
 const timing = {
   delay: expression.optional(),
   duration: expression.optional(),
@@ -188,9 +210,14 @@ const RecipeObject = z.strictObject({
           .array(
             z.strictObject({
               id,
-              primitive: z.enum(['box', 'roundedBox', 'cylinder', 'ellipsoid']),
+              primitive: z.enum(['box', 'roundedBox', 'cylinder', 'ellipsoid', 'extrude']),
               slot: id,
-              size: vector,
+              // Every primitive but extrude (v2), which takes section and length instead.
+              size: vector.optional(),
+              // v2 extrude: a section in local x/y, extruded along local z by length, centred.
+              section: section.optional(),
+              length: expression.optional(),
+              bevel: expression.optional(),
               position: vector,
               rotation: vector.optional(),
               radius: expression.optional(),
@@ -231,7 +258,7 @@ export type Recipe = z.infer<typeof RecipeSchema>
 export type EvaluatedShape = {
   id: string
   partId: string
-  primitive: 'box' | 'roundedBox' | 'cylinder' | 'ellipsoid'
+  primitive: 'box' | 'roundedBox' | 'cylinder' | 'ellipsoid' | 'extrude'
   slot: string
   size: Vec3
   position: Vec3
@@ -242,6 +269,9 @@ export type EvaluatedShape = {
   open?: boolean
   inner?: number
   arc?: number
+  /** Extrude: the evaluated section, centred on the shape; its length is size[2]. */
+  section?: ResolvedSectionProfile
+  bevel?: number
   motionGroup?: string
 }
 export type EvaluatedMotion = {
@@ -393,6 +423,15 @@ export function parseRecipe(input: unknown): Recipe {
         throw new Error(`Unknown slot ${shape.slot}`)
       if (shape.topScale !== undefined && shape.primitive !== 'cylinder')
         throw new Error(`topScale is only allowed on cylinders (${part.id}/${shape.id})`)
+      if (shape.primitive === 'extrude') {
+        requireVersion2(recipe, 'extrude')
+        if (!shape.section || shape.length === undefined || shape.size)
+          throw new Error(`extrude ${part.id}/${shape.id} takes a section and a length, not a size`)
+        if (shape.support)
+          throw new Error(`Extrude ${part.id}/${shape.id} cannot be a support surface`)
+      } else if (!shape.size) throw new Error(`${part.id}/${shape.id} needs a size`)
+      else if ([shape.section, shape.length, shape.bevel].some((field) => field !== undefined))
+        throw new Error(`section, length and bevel apply to extrude (${part.id}/${shape.id})`)
       const cylinderOptions = [shape.segments, shape.open, shape.inner, shape.arc]
       if (cylinderOptions.some((option) => option !== undefined)) {
         if (shape.primitive !== 'cylinder')
@@ -495,9 +534,13 @@ function movedPoint(point: Vec3, motion: EvaluatedMotion, fraction: number): Vec
 }
 
 const LEGACY_TRIANGLE_CHARGE = { box: 12, roundedBox: 588, cylinder: 96, ellipsoid: 720 } as const
+type RecipeSection = NonNullable<Recipe['parts'][number]['shapes'][number]['section']>
 /** Triangles of the geometry the renderer builds for an evaluated shape (non-indexed). */
 export function shapeTriangles(
-  shape: Pick<EvaluatedShape, 'primitive' | 'topScale' | 'segments' | 'open' | 'inner' | 'arc'>,
+  shape: Pick<
+    EvaluatedShape,
+    'primitive' | 'topScale' | 'segments' | 'open' | 'inner' | 'arc' | 'section' | 'bevel'
+  >,
 ): number {
   switch (shape.primitive) {
     case 'box':
@@ -518,6 +561,56 @@ export function shapeTriangles(
     }
     case 'ellipsoid':
       return 720 // SphereGeometry(…, 24, 16) without the degenerate pole triangles
+    case 'extrude':
+      return extrusionTriangles(sectionRings(shape.section!), shape.bevel ? 2 : 0)
+  }
+}
+function resolveSection(
+  section: RecipeSection,
+  value: (e: Expr) => number,
+): ResolvedSectionProfile {
+  const length = (e: Expr, what: string) => {
+    const v = value(e)
+    if (!(v >= 0.001 && v <= RECIPE_LIMITS.dimension)) throw new Error(`Invalid section ${what}`)
+    return v
+  }
+  switch (section.kind) {
+    case 'rectangle': {
+      const width = length(section.width, 'width'),
+        depth = length(section.depth, 'depth')
+      const corner = section.corner === undefined ? 0 : value(section.corner)
+      if (!(corner >= 0 && corner <= Math.min(width, depth) / 2))
+        throw new Error('A section corner must be within 0..half its smaller side')
+      return corner
+        ? { kind: 'rectangle', width, depth, corner }
+        : { kind: 'rectangle', width, depth }
+    }
+    case 'round': {
+      const radius = length(section.radius, 'radius')
+      const wall = section.wall === undefined ? undefined : value(section.wall)
+      if (wall !== undefined && !(wall > 0 && wall < radius))
+        throw new Error('A round section wall must be within (0, radius)')
+      return wall === undefined ? { kind: 'round', radius } : { kind: 'round', radius, wall }
+    }
+    case 'oval':
+      return {
+        kind: 'oval',
+        width: length(section.width, 'width'),
+        depth: length(section.depth, 'depth'),
+      }
+    case 'polygon': {
+      const point = ([x, y]: [Expr, Expr]) => {
+        const p = [value(x), value(y)] as const
+        if (p.some((v) => Math.abs(v) > RECIPE_LIMITS.dimension))
+          throw new Error('Invalid section point')
+        return p
+      }
+      return {
+        kind: 'polygon',
+        outer: section.outer.map(point),
+        ...(section.holes && { holes: section.holes.map((hole) => hole.map(point)) }),
+      }
+    }
   }
 }
 export function evaluateRecipe(
@@ -745,9 +838,45 @@ export function evaluateRecipe(
       for (const s of kept) {
         if (shapes.length >= shapeLimit) throw new Error('Expanded shape budget exceeded')
         inTime()
-        const size = vec(s.size),
-          position = vec(s.position),
-          rotation = vec(s.rotation ?? [0, 0, 0])
+        let position = vec(s.position)
+        const rotation = vec(s.rotation ?? [0, 0, 0])
+        let size: Vec3
+        let extrusion: Pick<EvaluatedShape, 'section' | 'bevel'> = {}
+        if (s.primitive === 'extrude') {
+          const resolved = resolveSection(s.section!, (e) => expr(e, i))
+          const rings = sectionRings(resolved)
+          const b = boundsOf(rings.outer.map(([x, y]) => [x, y, 0] as Vec3))
+          const center = b.min.map((v, k) => (v + b.max[k]!) / 2) as Vec3
+          const length = expr(s.length!, i)
+          const bevel = s.bevel === undefined ? 0 : expr(s.bevel, i)
+          if (
+            !(
+              bevel >= 0 &&
+              bevel <= Math.min(length / 4, b.dimensions[0] / 4, b.dimensions[1] / 4, 0.05)
+            )
+          )
+            throw new Error(
+              `bevel for ${part.id}/${s.id} must be within 0..min(length, width, depth)/4 and 5 cm`,
+            )
+          size = [b.dimensions[0], b.dimensions[1], length]
+          // Evaluated shapes are centred in their box, so bounds and handles read them as boxes.
+          position = position.map((v, k) => v + rotateVector(center, rotation)[k]!) as Vec3
+          extrusion = {
+            section:
+              resolved.kind === 'polygon'
+                ? {
+                    kind: 'polygon',
+                    outer: resolved.outer.map(([x, y]) => [x - center[0], y - center[1]] as const),
+                    ...(resolved.holes && {
+                      holes: resolved.holes.map((hole) =>
+                        hole.map(([x, y]) => [x - center[0], y - center[1]] as const),
+                      ),
+                    }),
+                  }
+                : resolved,
+            ...(bevel > 0 && { bevel }),
+          }
+        } else size = vec(s.size!)
         if (size.some((x) => x < 0.001 || x > RECIPE_LIMITS.dimension))
           throw new Error(`Invalid dimensions for ${part.id}/${s.id}`)
         const radius = s.primitive === 'roundedBox' ? expr(s.radius ?? 0.02, i) : 0
@@ -785,12 +914,16 @@ export function evaluateRecipe(
           ...(s.open ? { open: true } : {}),
           ...(inner === undefined ? {} : { inner }),
           ...(arc === undefined ? {} : { arc }),
+          ...extrusion,
           motionGroup,
         })
         const built = shapeTriangles(shapes.at(-1)!)
         triangles += built
         // v1 keeps its original, conservative charges so its acceptance never changes.
-        charged += recipe.version === 1 ? LEGACY_TRIANGLE_CHARGE[s.primitive] : built
+        charged +=
+          recipe.version === 1
+            ? LEGACY_TRIANGLE_CHARGE[s.primitive as keyof typeof LEGACY_TRIANGLE_CHARGE]
+            : built
         if (charged > RECIPE_LIMITS.triangles) throw new Error('Triangle budget exceeded')
         if (s.primitive === 'ellipsoid') {
           const axes = [0, 1, 2].map((axis) =>
