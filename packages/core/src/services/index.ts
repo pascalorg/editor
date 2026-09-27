@@ -111,6 +111,7 @@ export {
   findLevelAboveId,
   findLevelBelowId,
   getCeilingClampBound,
+  getCeilingMinHeight,
   getCoveringSlabUndersideAt,
   getLevelAbove,
   getLevelBelow,

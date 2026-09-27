@@ -1,12 +1,6 @@
 'use client'
 
-import {
-  type AnyNode,
-  type CeilingNode,
-  getCeilingClampBound,
-  resolveCeilingHeight,
-  useScene,
-} from '@pascal-app/core'
+import { type AnyNode, type CeilingNode, resolveCeilingHeight, useScene } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
@@ -24,6 +18,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Edit, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef } from 'react'
+import { CEILING_PANEL_MIN_HEIGHT, ceilingHeightRange, clampCeilingHeight } from './height-bounds'
 
 /**
  * Phase 5 Stage E — ceiling inspector (kind-owned).
@@ -48,15 +43,18 @@ export function CeilingPanel() {
   // Ceilings no longer drive the storey height — the stored level height
   // does — so height writes clamp under min(storey plane, lowest covering
   // slab underside from the level above) − margin instead of poking into
-  // the level above or a deck hanging from it (clamp, never ask).
-  // Selector returns a primitive, so recomputing per store update is
-  // re-render-safe.
-  const maxHeight = useScene((s) => {
-    const parent = node?.parentId ? s.nodes[node.parentId as AnyNode['id']] : undefined
-    return parent?.type === 'level'
-      ? getCeilingClampBound(parent.id, s.nodes, node?.polygon ?? [])
-      : Number.POSITIVE_INFINITY
-  })
+  // the level above or a deck hanging from it (clamp, never ask). On a
+  // level above grade the floor is grade, not the level floor, so roof-level
+  // soffits keep their negative heights. Selectors return primitives, so
+  // recomputing per store update is re-render-safe.
+  const maxHeight = useScene((s) =>
+    node ? ceilingHeightRange(node, s.nodes, CEILING_PANEL_MIN_HEIGHT).max : Infinity,
+  )
+  const minHeight = useScene((s) =>
+    node
+      ? ceilingHeightRange(node, s.nodes, CEILING_PANEL_MIN_HEIGHT).min
+      : CEILING_PANEL_MIN_HEIGHT,
+  )
 
   // Effective height: the stored custom height, or — for follows-mode
   // ceilings (absent `height`) — the live level-top bound. Primitive
@@ -76,6 +74,9 @@ export function CeilingPanel() {
   const maxHeightRef = useRef(maxHeight)
   maxHeightRef.current = maxHeight
 
+  const minHeightRef = useRef(minHeight)
+  minHeightRef.current = minHeight
+
   const resolvedHeightRef = useRef(resolvedHeight)
   resolvedHeightRef.current = resolvedHeight
 
@@ -89,7 +90,12 @@ export function CeilingPanel() {
 
   const handleHeightChange = useCallback(
     (proposed: number) => {
-      handleUpdate({ height: Math.min(proposed, maxHeightRef.current) })
+      handleUpdate({
+        height: clampCeilingHeight(proposed, {
+          min: minHeightRef.current,
+          max: maxHeightRef.current,
+        }),
+      })
     },
     [handleUpdate],
   )
@@ -261,7 +267,7 @@ export function CeilingPanel() {
           <SliderControl
             label="Height"
             max={Math.min(1000, maxHeight)}
-            min={0}
+            min={minHeight}
             onChange={handleHeightChange}
             precision={3}
             step={0.01}

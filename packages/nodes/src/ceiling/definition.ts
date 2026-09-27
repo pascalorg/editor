@@ -1,7 +1,5 @@
 import {
-  type AnyNodeId,
   type CeilingNode as CeilingNodeType,
-  getCeilingClampBound,
   type HandleDescriptor,
   type NodeDefinition,
   resolveCeilingHeight,
@@ -26,24 +24,22 @@ import {
   ceilingMoveVertexAffordance,
 } from './floorplan-affordances'
 import { ceilingFloorplanMoveTarget } from './floorplan-move'
+import { CEILING_HANDLE_MIN_HEIGHT, ceilingHeightRange } from './height-bounds'
 import { ceilingPaint } from './paint'
 import { ceilingParametrics } from './parametrics'
 import { CeilingNode } from './schema'
 import { ceilingSlots } from './slots'
 
 const HEIGHT_HANDLE_OFFSET = 0.22
-const MIN_CEILING_HEIGHT = 0.5
 
 // Ceilings no longer drive the storey height; the stored level height
 // does. Height writes clamp under min(storey plane, lowest underside of
 // any covering slab from the level above) − CEILING_CLAMP_MARGIN, so a
 // ceiling can poke into neither the level above nor a deck hanging from
-// it (clamp, never ask).
-function ceilingHeightBound(n: CeilingNodeType, sceneApi: SceneApi): number {
-  const parent = n.parentId ? sceneApi.get(n.parentId as AnyNodeId) : undefined
-  return parent?.type === 'level'
-    ? getCeilingClampBound(parent.id, sceneApi.nodes(), n.polygon ?? [])
-    : Number.POSITIVE_INFINITY
+// it (clamp, never ask). On a level above grade the ceiling may hang below
+// the level floor down to grade (soffits owned by a roof level).
+function ceilingHeightBounds(n: CeilingNodeType, sceneApi: SceneApi) {
+  return ceilingHeightRange(n, sceneApi.nodes(), CEILING_HANDLE_MIN_HEIGHT)
 }
 
 function ceilingPolygonCenter(n: CeilingNodeType): [number, number] {
@@ -85,8 +81,8 @@ function ceilingHeightHandle(): HandleDescriptor<CeilingNodeType> {
     kind: 'linear-resize',
     axis: 'y',
     anchor: 'min',
-    min: MIN_CEILING_HEIGHT,
-    max: ceilingHeightBound,
+    min: (n, sceneApi) => ceilingHeightBounds(n, sceneApi).min,
+    max: (n, sceneApi) => ceilingHeightBounds(n, sceneApi).max,
     currentValue: (n) => resolveCeilingHeight(n, useScene.getState().nodes),
     magneticSnap: (n, newValue, sceneApi) =>
       resolveStructuralElevationSnap(ceilingElevationGuideSource(n), newValue, sceneApi.nodes()),
