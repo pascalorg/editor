@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { measurementCentroid, nodeRegistry } from '@pascal-app/core'
-import { nodeLevelFrame, transformPoint } from '@pascal-app/core/procedural-items'
+import { type Frame, nodeLevelFrame, transformPoint } from '@pascal-app/core/procedural-items'
 import { AnyNode, type AnyNodeId, type AnyNodeType, nodeKindOf } from '@pascal-app/core/schema'
 import { pointInPolygon } from '@pascal-app/core/spatial-grid'
 import { z } from 'zod'
@@ -45,6 +45,8 @@ function nodeSourceIds(node: AnyNode): string[] {
     : []
 }
 
+type Vec3 = [number, number, number]
+
 function centre(points: ReadonlyArray<readonly [number, number]>): [number, number] | null {
   if (points.length === 0) return null
   const area = measurementCentroid(points.map(([x, z]) => [x, 0, z] as [number, number, number]))
@@ -58,21 +60,30 @@ function centre(points: ReadonlyArray<readonly [number, number]>): [number, numb
   return [cx / points.length, cz / points.length]
 }
 
-function boundsCentre(points: ReadonlyArray<readonly [number, number]>): [number, number] | null {
+function boundsCentre3(points: ReadonlyArray<readonly [number, number, number]>): Vec3 | null {
   if (points.length === 0) return null
-  const xs = points.map((p) => p[0])
-  const zs = points.map((p) => p[1])
-  return [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...zs) + Math.max(...zs)) / 2]
+  const centre: Vec3 = [0, 0, 0]
+  for (let axis = 0; axis < 3; axis++) {
+    const values = points.map((p) => p[axis]!)
+    centre[axis] = (Math.min(...values) + Math.max(...values)) / 2
+  }
+  return centre
 }
 
 /**
  * The node's plan point in its level's frame, for zone filtering: a polygon's
  * area centroid, a segment's midpoint, a path's centre, or the origin of a
  * positioned node resolved through its hosts by core's `nodeLevelFrame` (a
- * window in its wall, a module in its cabinet); blocks and imported meshes use
- * their vertex-bounds centre.
+ * window in its wall, a module in its cabinet); blocks and imported meshes
+ * use their vertex-bounds centre, transformed in 3D before projecting.
+ * Frames are plan-only (no slab support or floor lift, which only move
+ * heights) and `frames` is shared across one query, so each host resolves once.
  */
-function levelPlanPoint(node: AnyNode, nodes: Record<string, AnyNode>): [number, number] | null {
+function levelPlanPoint(
+  node: AnyNode,
+  nodes: Record<string, AnyNode>,
+  frames: Map<string, Frame>,
+): [number, number] | null {
   const n = node as Record<string, unknown>
   if (Array.isArray(n.polygon)) return centre(n.polygon as Array<[number, number]>)
   if (Array.isArray(n.start) && Array.isArray(n.end)) {
@@ -81,30 +92,35 @@ function levelPlanPoint(node: AnyNode, nodes: Record<string, AnyNode>): [number,
     return [(x1 + x2) / 2, (z1 + z2) / 2]
   }
   if (Array.isArray(n.path)) {
-    return boundsCentre((n.path as Array<[number, number, number]>).map((p) => [p[0], p[2]]))
+    const path = boundsCentre3(n.path as Array<[number, number, number]>)
+    return path ? [path[0], path[2]] : null
   }
   if (!Array.isArray(n.position)) return null
-  let frame: ReturnType<typeof nodeLevelFrame>
+  let frame: Frame
   try {
-    frame = nodeLevelFrame(node.id, nodes)
+    frame = nodeLevelFrame(node.id, nodes, undefined, { cache: frames, planOnly: true })
   } catch {
     return null
   }
   const local =
     node.type === 'block'
-      ? boundsCentre(node.topology.vertices.map((v) => [v.position[0], v.position[2]]))
+      ? boundsCentre3(node.topology.vertices.map((v) => v.position as Vec3))
       : node.type === 'imported-mesh'
-        ? boundsCentre(
+        ? boundsCentre3(
             node.primitives.flatMap((primitive) => {
-              const out: Array<[number, number]> = []
+              const out: Vec3[] = []
               for (let i = 0; i + 2 < primitive.positions.length; i += 3) {
-                out.push([primitive.positions[i]!, primitive.positions[i + 2]!])
+                out.push([
+                  primitive.positions[i]!,
+                  primitive.positions[i + 1]!,
+                  primitive.positions[i + 2]!,
+                ])
               }
               return out
             }),
           )
         : null
-  const [x, , z] = transformPoint(frame, local ? [local[0], 0, local[1]] : [0, 0, 0])
+  const [x, , z] = transformPoint(frame, local ?? [0, 0, 0])
   return [x, z]
 }
 
@@ -176,10 +192,11 @@ export function registerFindNodes(server: McpServer, bridge: SceneOperations): v
           results = []
         } else {
           const nodes = bridge.getNodes()
+          const frames = new Map<string, Frame>()
           const zoneLevelId = bridge.resolveLevelId(zone.id as AnyNodeId)
           results = results.filter((n) => {
             if (bridge.resolveLevelId(n.id as AnyNodeId) !== zoneLevelId) return false
-            const pt = levelPlanPoint(n, nodes)
+            const pt = levelPlanPoint(n, nodes, frames)
             return pt !== null && pointInPolygon(pt[0], pt[1], zone.polygon)
           })
         }

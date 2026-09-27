@@ -292,6 +292,40 @@ describe('find_nodes', () => {
     expect(parsed.nodes.map((n: { id: string }) => n.id)).toEqual([nearWindow.id])
   })
 
+  test('zoneId places an imported mesh by its fully rotated vertex bounds', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const zone = ZoneNode.parse({
+      name: 'Origin room',
+      polygon: [
+        [-3, -3],
+        [3, -3],
+        [3, 3],
+        [-3, 3],
+      ],
+    })
+    // Geometry around local y = 10; a quarter turn about X swings it to plan z = 10.
+    const tilted = ImportedMeshNode.parse({
+      rotation: [Math.PI / 2, 0, 0],
+      primitives: [{ positions: [-1, 9, -1, 1, 11, -1, 1, 11, 1] }],
+    })
+    const upright = ImportedMeshNode.parse({
+      primitives: [{ positions: [-1, 9, -1, 1, 11, -1, 1, 11, 1] }],
+    })
+    bridge.applyPatch(
+      [zone, tilted, upright].map((node) => ({
+        op: 'create' as const,
+        node,
+        parentId: level.id as AnyNodeId,
+      })),
+    )
+    const result = await client.callTool({
+      name: 'find_nodes',
+      arguments: { type: 'imported-mesh', zoneId: zone.id },
+    })
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    expect(parsed.nodes.map((n: { id: string }) => n.id)).toEqual([upright.id])
+  })
+
   test('invalid type is rejected', async () => {
     const result = await client.callTool({
       name: 'find_nodes',
