@@ -2,6 +2,7 @@ import {
   type Evaluation,
   evaluateRecipe,
   type ProceduralItemNode,
+  revolveIsClosed,
   sectionRings,
 } from '@pascal-app/core/procedural-items'
 import {
@@ -11,6 +12,7 @@ import {
   Euler,
   ExtrudeGeometry,
   Float32BufferAttribute,
+  LatheGeometry,
   Matrix4,
   Path,
   Quaternion,
@@ -208,6 +210,26 @@ function extrudeSource(shape: Evaluation['shapes'][number]): BufferGeometry {
   geometry.translate(0, 0, -depth / 2)
   return geometry
 }
+// The profile turned about local Y. LatheGeometry's normals face away from the region the
+// profile encloses with the axis, so the profile runs counter-clockwise around it. An open
+// surface (off the axis at an end, or a partial turn) also draws its back face.
+function revolveSource(shape: Evaluation['shapes'][number]): BufferGeometry {
+  const { segments = 24, arc = TAU } = shape
+  const points = shape.profile!.map(([r, y]) => new Vector2(r, y))
+  const closure = [...points, new Vector2(0, points.at(-1)!.y), new Vector2(0, points[0]!.y)]
+  let twice = 0
+  for (let k = 0; k < closure.length; k++)
+    twice += closure[k]!.cross(closure[(k + 1) % closure.length]!)
+  if (twice < 0) points.reverse()
+  const outer = new LatheGeometry(points, segments, 0, arc).toNonIndexed()
+  if (revolveIsClosed(shape)) return outer
+  const both = mergeGeometries(
+    [outer, flipped(new LatheGeometry(points, segments, 0, arc))],
+    false,
+  )!
+  outer.dispose()
+  return both
+}
 export const proceduralMetrics = { builds: 0, cacheHits: 0, lastBuildMs: 0, liveEntries: 0 }
 const cache = new Map<string, { value: BuiltItem; users: number }>()
 export const geometrySignature = (node: ProceduralItemNode) =>
@@ -228,9 +250,11 @@ export function buildProceduralGeometry(node: ProceduralItemNode): BuiltItem {
           ? cylinderSource(shape)
           : shape.primitive === 'extrude'
             ? extrudeSource(shape)
-            : shape.primitive === 'ellipsoid'
-              ? new SphereGeometry(0.5, 24, 16)
-              : new BoxGeometry(w, h, d)
+            : shape.primitive === 'revolve'
+              ? revolveSource(shape)
+              : shape.primitive === 'ellipsoid'
+                ? new SphereGeometry(0.5, 24, 16)
+                : new BoxGeometry(w, h, d)
     if (shape.primitive === 'cylinder' || shape.primitive === 'ellipsoid') source.scale(w, h, d)
     const geometry = source.index ? source.toNonIndexed() : source
     if (geometry !== source) source.dispose()

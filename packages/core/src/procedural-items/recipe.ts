@@ -172,7 +172,26 @@ const extrudeShape = z.strictObject({
   rotation: vector.optional(),
   ...shapeTail,
 })
-type RecipeShape = z.infer<typeof solidShape> | z.infer<typeof extrudeShape>
+// v2 revolve: [radius, height] points turned about local Y (segments and arc as on
+// cylinders); the shape is closed where the profile meets the axis at both ends.
+const revolveShape = z.strictObject({
+  id,
+  primitive: z.literal('revolve'),
+  slot: id,
+  profile: z
+    .array(z.tuple([expression, expression]))
+    .min(2)
+    .max(64),
+  segments: z.number().int().min(3).max(64).optional(),
+  arc: expression.optional(),
+  position: vector,
+  rotation: vector.optional(),
+  ...shapeTail,
+})
+type RecipeShape =
+  | z.infer<typeof solidShape>
+  | z.infer<typeof extrudeShape>
+  | z.infer<typeof revolveShape>
 /** The sized-primitive fields of a shape (none for an extrude). */
 function solidFields(
   shape: RecipeShape,
@@ -182,7 +201,9 @@ function solidFields(
     'size' | 'radius' | 'topScale' | 'segments' | 'open' | 'inner' | 'arc'
   >
 > {
-  return shape.primitive === 'extrude' ? {} : shape
+  if (shape.primitive === 'extrude') return {}
+  if (shape.primitive === 'revolve') return { segments: shape.segments, arc: shape.arc }
+  return shape
 }
 const RecipeObject = z.strictObject({
   // Version 2 marks content that older readers cannot evaluate; v2-only fields require it.
@@ -265,7 +286,7 @@ const RecipeObject = z.strictObject({
           })
           .optional(),
         shapes: z
-          .array(z.discriminatedUnion('primitive', [solidShape, extrudeShape]))
+          .array(z.discriminatedUnion('primitive', [solidShape, extrudeShape, revolveShape]))
           .min(1)
           .max(RECIPE_V2_LIMITS.partShapes),
       }),
@@ -291,7 +312,7 @@ export type Recipe = z.infer<typeof RecipeSchema>
 export type EvaluatedShape = {
   id: string
   partId: string
-  primitive: 'box' | 'roundedBox' | 'cylinder' | 'ellipsoid' | 'extrude'
+  primitive: 'box' | 'roundedBox' | 'cylinder' | 'ellipsoid' | 'extrude' | 'revolve'
   slot: string
   size: Vec3
   position: Vec3
@@ -305,6 +326,8 @@ export type EvaluatedShape = {
   /** Extrude: the evaluated section, centred on the shape; its length is size[2]. */
   section?: ResolvedSectionProfile
   bevel?: number
+  /** Revolve: [radius, height] points, centred vertically on the shape. */
+  profile?: [number, number][]
   motionGroup?: string
 }
 export type EvaluatedMotion = {
@@ -369,8 +392,9 @@ function guardTree(value: unknown, depth = 0, budget = { count: 0 }) {
   }
 }
 function findV2Feature(recipe: Recipe): string | null {
-  if (recipe.parts.some((part) => part.shapes.some((shape) => shape.primitive === 'extrude')))
-    return 'extrude'
+  for (const primitive of ['extrude', 'revolve'] as const)
+    if (recipe.parts.some((part) => part.shapes.some((shape) => shape.primitive === primitive)))
+      return primitive
   if (
     recipe.parts.some((part) =>
       part.shapes.some((shape) =>
@@ -464,11 +488,11 @@ export function parseRecipe(input: unknown): Recipe {
       const f = solidFields(shape)
       if (f.topScale !== undefined && shape.primitive !== 'cylinder')
         throw new Error(`topScale is only allowed on cylinders (${part.id}/${shape.id})`)
-      if (shape.primitive === 'extrude' && shape.support)
-        throw new Error(`Extrude ${part.id}/${shape.id} cannot be a support surface`)
+      if ((shape.primitive === 'extrude' || shape.primitive === 'revolve') && shape.support)
+        throw new Error(`${shape.primitive} ${part.id}/${shape.id} cannot be a support surface`)
       const cylinderOptions = [f.segments, f.open, f.inner, f.arc]
       if (cylinderOptions.some((option) => option !== undefined)) {
-        if (shape.primitive !== 'cylinder')
+        if (shape.primitive !== 'cylinder' && shape.primitive !== 'revolve')
           throw new Error(
             `segments, open, inner and arc apply to cylinders (${part.id}/${shape.id})`,
           )
@@ -568,12 +592,29 @@ function movedPoint(point: Vec3, motion: EvaluatedMotion, fraction: number): Vec
 }
 
 const LEGACY_TRIANGLE_CHARGE = { box: 12, roundedBox: 588, cylinder: 96, ellipsoid: 720 } as const
+/** A revolve that meets the axis at both ends over a full turn encloses a solid. */
+export function revolveIsClosed(shape: Pick<EvaluatedShape, 'profile' | 'arc'>): boolean {
+  const profile = shape.profile!
+  return (
+    profile[0]![0] <= 1e-9 &&
+    profile.at(-1)![0] <= 1e-9 &&
+    (shape.arc === undefined || shape.arc >= 2 * Math.PI - 1e-9)
+  )
+}
 type RecipeSection = z.infer<typeof section>
 /** Triangles of the geometry the renderer builds for an evaluated shape (non-indexed). */
 export function shapeTriangles(
   shape: Pick<
     EvaluatedShape,
-    'primitive' | 'topScale' | 'segments' | 'open' | 'inner' | 'arc' | 'section' | 'bevel'
+    | 'primitive'
+    | 'topScale'
+    | 'segments'
+    | 'open'
+    | 'inner'
+    | 'arc'
+    | 'section'
+    | 'bevel'
+    | 'profile'
   >,
 ): number {
   switch (shape.primitive) {
@@ -597,6 +638,12 @@ export function shapeTriangles(
       return 720 // SphereGeometry(…, 24, 16) without the degenerate pole triangles
     case 'extrude':
       return extrusionTriangles(sectionRings(shape.section!), shape.bevel ? 2 : 0)
+    case 'revolve': {
+      // LatheGeometry: two per segment per profile edge; an open surface also draws its back.
+      const n = shape.segments ?? 24,
+        profile = shape.profile!
+      return 2 * n * (profile.length - 1) * (revolveIsClosed(shape) ? 1 : 2)
+    }
   }
 }
 function resolveSection(
@@ -884,8 +931,34 @@ export function evaluateRecipe(
         let position = vec(s.position)
         const rotation = vec(s.rotation ?? [0, 0, 0])
         let size: Vec3
-        let extrusion: Pick<EvaluatedShape, 'section' | 'bevel'> = {}
-        if (s.primitive === 'extrude') {
+        let extrusion: Pick<EvaluatedShape, 'section' | 'bevel' | 'profile'> = {}
+        if (s.primitive === 'revolve') {
+          // Points that coincide with the previous one (a feature collapsed to zero) are dropped.
+          const points: [number, number][] = []
+          for (const [re, ye] of s.profile) {
+            const [r, y] = [expr(re, i), expr(ye, i)]
+            if (
+              !(
+                r >= 0 &&
+                r <= RECIPE_LIMITS.dimension / 2 &&
+                Math.abs(y) <= RECIPE_LIMITS.dimension
+              )
+            )
+              throw new Error(`Invalid revolve profile for ${part.id}/${s.id}`)
+            const last = points.at(-1)
+            if (!last || Math.hypot(r - last[0], y - last[1]) > 1e-6) points.push([r, y])
+          }
+          if (points.length < 2) throw new Error(`Invalid revolve profile for ${part.id}/${s.id}`)
+          const radius = Math.max(...points.map(([r]) => r))
+          const low = Math.min(...points.map(([, y]) => y)),
+            high = Math.max(...points.map(([, y]) => y))
+          size = [2 * radius, high - low, 2 * radius]
+          const middle = (low + high) / 2
+          position = position.map((v, k) => v + rotateVector([0, middle, 0], rotation)[k]!) as Vec3
+          extrusion = { profile: points.map(([r, y]) => [r, y - middle]) }
+          if (!(size[0] >= 0.001))
+            throw new Error(`Revolve profile for ${part.id}/${s.id} needs a radius`)
+        } else if (s.primitive === 'extrude') {
           const resolved = resolveSection(s.section, (e) => expr(e, i))
           const rings = sectionRings(resolved)
           const b = boundsOf(rings.outer.map(([x, y]) => [x, y, 0] as Vec3))

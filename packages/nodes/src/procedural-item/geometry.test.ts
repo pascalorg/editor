@@ -5,6 +5,7 @@ import {
   evaluateRecipe,
   ProceduralItemNode,
   parseRecipe,
+  revolveIsClosed,
   shapeTriangles,
   shelfRecipe,
 } from '@pascal-app/core/procedural-items'
@@ -460,4 +461,79 @@ test('extrusions keep world-scale UVs on angled walls', () => {
     }
   }
   geometry.dispose()
+})
+
+test('revolves build the triangles they are charged, with outward normals on solids', () => {
+  const baluster = [
+    [0, 0],
+    [0.02, 0],
+    [0.02, 0.08],
+    [0.012, 0.12],
+    [0.016, 0.4],
+    [0.02, 0.7],
+    [0.012, 0.75],
+    [0.02, 0.8],
+    [0.02, 0.86],
+    [0, 0.86],
+  ]
+  const shade = [
+    [0.082, 0],
+    [0.102, 0.014],
+    [0.115, 0.05],
+    [0.119, 0.091],
+    [0.114, 0.149],
+    [0.092, 0.192],
+    [0.058, 0.224],
+    [0.025, 0.235],
+  ]
+  const variants: Record<string, unknown>[] = [
+    { profile: baluster },
+    { profile: [...baluster].reverse(), segments: 12 },
+    { profile: shade },
+    { profile: shade, arc: Math.PI, segments: 8 },
+    { profile: baluster, arc: Math.PI / 2 },
+  ]
+  for (const options of variants) {
+    const recipe = parseRecipe({
+      version: 2,
+      name: 'Revolve',
+      description: 'A turned shape.',
+      parameters: [
+        { id: 'unused', label: 'Unused', default: 1, min: 1, max: 1, step: 1, unit: 'count' },
+      ],
+      slots: [{ id: 'body', label: 'Body', color: '#888888' }],
+      parts: [
+        {
+          id: 'p',
+          label: 'P',
+          count: 1,
+          shapes: [
+            { id: 'r', primitive: 'revolve', slot: 'body', position: [0, 0, 0], ...options },
+          ],
+        },
+      ],
+      constraints: [],
+    })
+    const built = buildProceduralGeometry(ProceduralItemNode.parse({ recipe }))
+    expect(built.triangles).toBe(built.evaluation.triangles)
+    const geometry = built.batches[0]!.geometry
+    geometry.computeBoundingBox()
+    const size = geometry.boundingBox!.getSize(new Vector3())
+    expect(size.y).toBeCloseTo(built.evaluation.shapes[0]!.size[1], 6)
+    if (revolveIsClosed(built.evaluation.shapes[0]!)) {
+      // Solid: every side-wall normal points away from the axis.
+      const position = geometry.getAttribute('position'),
+        normal = geometry.getAttribute('normal')
+      let outward = 0,
+        inward = 0
+      for (let i = 0; i < position.count; i++) {
+        const dot = position.getX(i) * normal.getX(i) + position.getZ(i) * normal.getZ(i)
+        if (dot > 1e-6) outward++
+        else if (dot < -1e-6) inward++
+      }
+      expect(inward).toBe(0)
+      expect(outward).toBeGreaterThan(0)
+    }
+    for (const batch of built.batches) batch.geometry.dispose()
+  }
 })
