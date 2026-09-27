@@ -6,6 +6,7 @@ import type {
   FloorplanPoint,
   GeometryContext,
 } from '@pascal-app/core'
+import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
 import { GAS_HOB_BURNER_RADIUS, gasHobBurners, inductionZones } from './geometry/cooktop'
 import { FAUCET_SETBACK, sinkBowls } from './geometry/sink'
 import { getRunSpanEnds, getRunSpans } from './run-layout'
@@ -27,6 +28,13 @@ const LABEL_FILL = '#6f675b'
 // cabinets, hoods) draw with a dashed outline; floor-standing units solid.
 const ABOVE_CUT_DASH = '0.08 0.06'
 const SYMBOL_STROKE_WIDTH = 0.014
+// Sheet drafting (permit set): casework in near-black ink — the countertop
+// line the heavier one, module divisions light, appliance labels bold.
+const DRAFT_STROKE = '#1f2937'
+const DRAFT_DIVISION_STROKE = '#6b7280'
+const DRAFT_LABEL_FILL = '#111827'
+const DRAFT_LABEL_SIZE = 0.11
+const DRAFT_LABEL_PT = 6.5
 
 export function buildCabinetFloorplan(
   node: CabinetNode,
@@ -64,6 +72,9 @@ export function buildCabinetFloorplan(
   const backOverhang = node.withCountertop && barEdge !== 'back' ? node.countertopBackOverhang : 0
   const spanEnds = getRunSpanEnds(node, ctx, spans)
   const children: FloorplanGeometry[] = []
+  const drafting = readFloorplanContext(ctx).drafting
+  const runStroke = drafting ? DRAFT_STROKE : stroke
+  const runStrokeWidth = drafting ? 0.014 : showSelectedChrome ? 0.03 : 0.022
 
   for (const span of spans) {
     const spanIndex = spans.indexOf(span)
@@ -89,10 +100,10 @@ export function buildCabinetFloorplan(
       width: Math.max(0.01, right - left),
       height: Math.max(0.01, front - back),
       fill: node.runTier === 'wall' ? 'none' : BODY_FILL,
-      stroke,
-      strokeWidth: showSelectedChrome ? 0.03 : 0.022,
+      stroke: runStroke,
+      strokeWidth: runStrokeWidth,
       strokeDasharray: node.runTier === 'wall' ? ABOVE_CUT_DASH : undefined,
-      opacity: 0.95,
+      opacity: drafting ? 1 : 0.95,
     })
 
     // Raised bar slab reads as its own counter band along the chosen edge
@@ -124,9 +135,9 @@ export function buildCabinetFloorplan(
         kind: 'rect',
         ...bar,
         fill: BODY_FILL,
-        stroke,
-        strokeWidth: showSelectedChrome ? 0.03 : 0.022,
-        opacity: 0.95,
+        stroke: runStroke,
+        strokeWidth: runStrokeWidth,
+        opacity: drafting ? 1 : 0.95,
       })
     }
   }
@@ -146,6 +157,7 @@ export function buildCabinetModuleFloorplan(
       parent?.type === 'cabinet-module'
         ? true
         : parent?.type === 'cabinet' && parent.runTier === 'wall',
+    vanity: isVanityModule(node, parent),
   })
 }
 
@@ -231,9 +243,10 @@ function buildModuleSymbol(
   position: readonly [number, number, number],
   rotation: number,
   ctx: GeometryContext,
-  opts: { aboveCutPlane: boolean },
+  opts: { aboveCutPlane: boolean; vanity?: boolean },
 ): FloorplanGeometry {
   const showSelectedChrome = (ctx.viewState?.selected || ctx.viewState?.highlighted) ?? false
+  const drafting = readFloorplanContext(ctx).drafting
   const stroke =
     showSelectedChrome && ctx.viewState?.palette
       ? ctx.viewState.palette.selectedStroke
@@ -246,6 +259,7 @@ function buildModuleSymbol(
 
   const hw = node.width / 2
   const hd = node.depth / 2
+  const appliance = moduleLabel(stack) !== null && !stack.some((c) => c.type === 'pull-out-pantry')
   const children: FloorplanGeometry[] = [
     {
       kind: 'rect',
@@ -256,35 +270,75 @@ function buildModuleSymbol(
       // Above-cut-plane units draw as a dashed open outline so the base
       // cabinet underneath stays readable.
       fill: dashed ? 'none' : BODY_FILL,
-      stroke,
-      strokeWidth: showSelectedChrome ? 0.03 : 0.018,
+      // On a sheet the countertop line (the run) carries the weight; module
+      // divisions are light, an appliance's box and anything above the cut
+      // (wall cabinets, dashed) print in full ink.
+      stroke: drafting ? (dashed || appliance ? DRAFT_STROKE : DRAFT_DIVISION_STROKE) : stroke,
+      strokeWidth: drafting
+        ? dashed || appliance
+          ? 0.01
+          : 0.006
+        : showSelectedChrome
+          ? 0.03
+          : 0.018,
       strokeDasharray: dashed ? ABOVE_CUT_DASH : undefined,
-      opacity: dashed ? 0.85 : 0.95,
+      opacity: drafting ? 1 : dashed ? 0.85 : 0.95,
     },
   ]
 
   if (!dashed && showCompartments) {
-    // Cabinet front edge, inset from the countertop line the run draws.
-    children.push({
-      kind: 'line',
-      x1: -hw,
-      y1: hd,
-      x2: hw,
-      y2: hd,
-      stroke,
-      strokeWidth: 0.03,
-      opacity: 0.5,
-    })
+    // Cabinet front edge, inset from the countertop line the run draws. A
+    // sheet shows the countertop line alone.
+    if (!drafting) {
+      children.push({
+        kind: 'line',
+        x1: -hw,
+        y1: hd,
+        x2: hw,
+        y2: hd,
+        stroke,
+        strokeWidth: 0.03,
+        opacity: 0.5,
+      })
+    }
     for (const compartment of stack) {
-      children.push(...compartmentSymbol(compartment, node))
+      children.push(
+        ...compartmentSymbol(compartment, node, drafting ? DRAFT_STROKE : SYMBOL_STROKE),
+      )
     }
   }
 
   // Appliance labels live in world space with `upright` so they read
   // horizontally regardless of run rotation and plan-view rotation.
   const worldChildren: FloorplanGeometry[] = []
-  const label = dashed || !showCompartments ? null : moduleLabel(stack)
-  if (label) {
+  const label =
+    dashed || !showCompartments
+      ? null
+      : drafting
+        ? draftingModuleLabel(stack, opts.vanity === true)
+        : moduleLabel(stack)
+  if (label && drafting) {
+    // a sheet prints the label at a fixed paper size, like every fixture label,
+    // in the FRONT half of the module — clear of the wall-cabinet line above
+    // the back half — on the (first) bowl of a sink, before the burners of a range
+    const [lx, ly] = draftingLabelOffset(label, stack, node)
+    const cos = Math.cos(rotation)
+    const sin = Math.sin(rotation)
+    worldChildren.push({
+      kind: 'text',
+      x: position[0] + lx * cos + ly * sin,
+      y: position[2] - lx * sin + ly * cos,
+      text: label,
+      fontSize: DRAFT_LABEL_SIZE,
+      fill: DRAFT_LABEL_FILL,
+      fontWeight: 700,
+      fontFamily: 'Helvetica, Arial, sans-serif',
+      textAnchor: 'middle',
+      dominantBaseline: 'central',
+      upright: true,
+      metadata: floorplanGeometryMetadata({ textSizePt: DRAFT_LABEL_PT }),
+    })
+  } else if (label) {
     worldChildren.push({
       kind: 'text',
       x: position[0],
@@ -307,6 +361,7 @@ function buildModuleSymbol(
 function compartmentSymbol(
   compartment: CabinetCompartment,
   node: Pick<CabinetModuleNode, 'width' | 'depth' | 'boardThickness'>,
+  symbolStroke: string = SYMBOL_STROKE,
 ): FloorplanGeometry[] {
   if (compartment.type === 'sink') {
     const innerWidth = Math.max(0.01, node.width - 2 * node.boardThickness)
@@ -320,7 +375,7 @@ function compartmentSymbol(
       rx: 0.04,
       ry: 0.04,
       fill: 'none',
-      stroke: SYMBOL_STROKE,
+      stroke: symbolStroke,
       strokeWidth: SYMBOL_STROKE_WIDTH,
       opacity: 0.9,
     }))
@@ -332,7 +387,7 @@ function compartmentSymbol(
       cy: -(bowls[0]?.depth ?? node.depth * 0.6) / 2 - FAUCET_SETBACK,
       r: 0.02,
       fill: 'none',
-      stroke: SYMBOL_STROKE,
+      stroke: symbolStroke,
       strokeWidth: SYMBOL_STROKE_WIDTH,
       opacity: 0.9,
     })
@@ -356,7 +411,7 @@ function compartmentSymbol(
         cy: ring.y,
         r: ring.r,
         fill: 'none',
-        stroke: SYMBOL_STROKE,
+        stroke: symbolStroke,
         strokeWidth: SYMBOL_STROKE_WIDTH,
         opacity: 0.9,
       },
@@ -366,7 +421,7 @@ function compartmentSymbol(
         cy: ring.y,
         r: ring.r * 0.45,
         fill: 'none',
-        stroke: SYMBOL_STROKE,
+        stroke: symbolStroke,
         strokeWidth: SYMBOL_STROKE_WIDTH * 0.8,
         opacity: 0.7,
       },
@@ -374,6 +429,55 @@ function compartmentSymbol(
   }
 
   return []
+}
+
+/** Where a drafting label sits in module-local plan metres (front = +y). */
+function draftingLabelOffset(
+  label: string,
+  stack: CabinetCompartment[],
+  node: Pick<CabinetModuleNode, 'width' | 'depth' | 'boardThickness'>,
+): [number, number] {
+  const hd = node.depth / 2
+  if (label === 'R' || label === 'CT') return [0, Math.max(0, hd - 0.065)]
+  const sink = stack.find((c) => c.type === 'sink')
+  if (sink) {
+    const innerWidth = Math.max(0.01, node.width - 2 * node.boardThickness)
+    const bowl = sinkBowls(compartmentSinkLayout(sink), innerWidth, node.depth)[0]
+    const front = bowl ? bowl.depth / 2 - DRAFT_LABEL_SIZE * 0.6 : 0
+    return [bowl?.centerX ?? 0, Math.max(0, Math.min(node.depth * 0.12, front))]
+  }
+  return [0, node.depth >= 0.45 ? node.depth * 0.12 : 0]
+}
+
+/**
+ * The permit-set label for a module: what `moduleLabel` names, plus the
+ * plumbing a plans examiner looks for — a sink is LAV in a vanity, SINK in a
+ * kitchen — and an oven under a cooktop is the range, R.
+ */
+function draftingModuleLabel(stack: CabinetCompartment[], vanity: boolean): string | null {
+  if (stack.some((c) => c.type === 'sink')) return vanity ? 'LAV' : 'SINK'
+  const hasCooktop = stack.some((c) => isCooktopCompartmentType(c.type))
+  const hasOven = stack.some((c) => c.type === 'oven')
+  if (hasCooktop && hasOven) return 'R'
+  if (hasCooktop) return 'CT'
+  return moduleLabel(stack)
+}
+
+/** A bathroom vanity's module, not a kitchen's: its run is a vanity, or it is vanity-shallow. */
+function isVanityModule(
+  node: CabinetModuleNode,
+  parent: CabinetNode | CabinetModuleNode | null,
+): boolean {
+  const roles = [node.metadata, parent?.metadata].map((metadata) => {
+    const m = (metadata ?? {}) as Record<string, unknown>
+    const kitchen = m.kitchen as { role?: unknown } | undefined
+    const furnish = m.furnish as { role?: unknown } | undefined
+    return `${kitchen?.role ?? ''} ${furnish?.role ?? ''}`
+  })
+  if (roles.some((role) => /vanity/i.test(role))) return true
+  if (/vanity|\bbath/i.test(`${parent?.name ?? ''} ${node.name ?? ''}`)) return true
+  // a kitchen base is 24 in deep; a vanity 21 in
+  return node.depth < 0.575
 }
 
 /** Standard plan abbreviation for the module's appliance content. */

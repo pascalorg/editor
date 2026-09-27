@@ -4,6 +4,16 @@ import type {
   FloorplanPoint,
   GeometryContext,
 } from '@pascal-app/core'
+import { readFloorplanContext } from '@pascal-app/editor'
+
+/**
+ * The plan cut: a floor plan is the storey sliced 4 ft above the floor and
+ * looked at from above. A block standing wholly ABOVE that line — fascia and
+ * rake boards, a gable ornament, a dormer, a ceiling fan — is overhead trim a
+ * drafted sheet leaves off (otherwise blocks modelled as roof trim filled the
+ * roof footprint plus its overhang over every room). Level-local metres.
+ */
+export const PLAN_CUT_HEIGHT = 1.2
 
 function cross(origin: FloorplanPoint, a: FloorplanPoint, b: FloorplanPoint) {
   return (a[0] - origin[0]) * (b[1] - origin[1]) - (a[1] - origin[1]) * (b[0] - origin[0])
@@ -26,6 +36,14 @@ function convexHull(points: FloorplanPoint[]): FloorplanPoint[] {
   return [...lower.slice(0, -1), ...upper.slice(0, -1)]
 }
 
+/** True when the block's lowest vertex stands above the plan cut. */
+export function isOverheadBlock(node: Pick<BlockNode, 'position' | 'topology'>): boolean {
+  let minY = Number.POSITIVE_INFINITY
+  for (const vertex of node.topology.vertices) minY = Math.min(minY, vertex.position[1])
+  if (!Number.isFinite(minY)) return false
+  return node.position[1] + minY > PLAN_CUT_HEIGHT
+}
+
 export function buildBlockFloorplan(
   node: BlockNode,
   ctx?: GeometryContext,
@@ -35,6 +53,9 @@ export function buildBlockFloorplan(
   )
   if (points.length < 3) return null
   const selected = ctx?.viewState?.selected ?? false
+  const drafting = ctx ? readFloorplanContext(ctx).drafting : false
+  // Overhead trim is not on a drafted sheet at all.
+  if (drafting && isOverheadBlock(node)) return null
   return {
     kind: 'group',
     transform: { translate: [node.position[0], node.position[2]], rotate: -node.rotation },
@@ -42,9 +63,14 @@ export function buildBlockFloorplan(
       {
         kind: 'polygon',
         points,
-        fill: selected ? '#fed7aa' : '#cbd5e1',
-        fillOpacity: selected ? 0.55 : 0.72,
-        stroke: selected ? (ctx?.viewState?.palette?.selectedStroke ?? '#f97316') : '#475569',
+        // on a sheet a floor-standing block is an outline in plan ink, like a wall
+        fill: drafting ? 'none' : selected ? '#fed7aa' : '#cbd5e1',
+        fillOpacity: drafting ? 1 : selected ? 0.55 : 0.72,
+        stroke: drafting
+          ? '#111827'
+          : selected
+            ? (ctx?.viewState?.palette?.selectedStroke ?? '#f97316')
+            : '#475569',
         strokeWidth: selected ? 0.03 : 0.018,
         pointerEvents: 'all',
       },

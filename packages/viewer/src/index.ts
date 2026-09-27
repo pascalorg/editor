@@ -14,6 +14,7 @@ export { ErrorBoundary } from './components/error-boundary'
 export { NodeRenderer } from './components/renderers/node-renderer'
 export {
   default as Viewer,
+  pendingSceneBuildCount,
   type ViewerHandle,
   type ViewerImmersiveSession,
 } from './components/viewer'
@@ -130,6 +131,7 @@ export {
   setSurfaceRaycastLayers,
   ZONE_LAYER,
 } from './lib/layers'
+export { holdLiveFrame } from './lib/live-frame-hold'
 export {
   applyMaterialPresetToMaterials,
   BLUEPRINT_PALETTE,
@@ -193,6 +195,7 @@ export {
   temporarilyShowShadowOnly,
 } from './lib/scene-visibility'
 export {
+  createPlainSnapshotPipeline,
   createSnapshotPipeline,
   SNAPSHOT_MAX_EDGE,
   SNAPSHOT_MIME,
@@ -262,7 +265,7 @@ export {
   getLevelPresentationY,
   snapLevelsToTruePositions,
 } from './systems/level/level-utils'
-export { getRoofMaterialArray } from './systems/roof/roof-materials'
+export { getRoofMaterialArray, levelWallCladdingRef } from './systems/roof/roof-materials'
 // Generic roof-segment primitives. Kinds that compose CSG against
 // the roof shell (chimney's self-trim, dormer's virtual-segment cut)
 // read these through the public surface. No kind-specific helpers

@@ -343,6 +343,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     !isPreviewMode && allowUndergroundCamera ? DEBUG_MAX_POLAR_ANGLE : DEFAULT_MAX_POLAR_ANGLE
 
   const camera = useThree((state) => state.camera)
+  const scene = useThree((state) => state.scene)
   const gl = useThree((state) => state.gl)
   const raycaster = useThree((state) => state.raycaster)
   const viewportSize = useThree((state) => state.size)
@@ -484,12 +485,31 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     if (process.env.NODE_ENV !== 'development') return
     const w = window as typeof window & {
       __pascalCameraControls?: (() => CameraControlsImpl | null) | null
+      __pascalScene?: (() => unknown) | null
+      __pascalCapture?: (() => Promise<string>) | null
     }
     w.__pascalCameraControls = () => controls.current
+    // the live three.js scene, for the same tooling (a probe can walk the
+    // meshes for an empty geometry the WebGPU validator complains about)
+    w.__pascalScene = () => scene
+    // a fresh frame read back as a PNG data URL: the canvas is cleared after
+    // each presented frame, so a capture has to render and read in one task
+    w.__pascalCapture = async () => {
+      const r = gl as unknown as {
+        renderAsync?: (s: unknown, c: unknown) => Promise<void>
+        render: (s: unknown, c: unknown) => void
+        domElement: HTMLCanvasElement
+      }
+      if (r.renderAsync) await r.renderAsync(scene, camera)
+      else r.render(scene, camera)
+      return r.domElement.toDataURL('image/png')
+    }
     return () => {
       w.__pascalCameraControls = null
+      w.__pascalScene = null
+      w.__pascalCapture = null
     }
-  }, [])
+  }, [scene, gl, camera])
 
   useEffect(() => {
     if (isPreviewMode || isFirstPersonMode || isRestoringFirstPersonPose()) return
