@@ -1,4 +1,10 @@
-import { getLevelElevations, getWallCurveFrameAt, measurementCentroid } from '@pascal-app/core'
+import {
+  getFenceCenterlineFrameAt,
+  getLevelElevations,
+  getWallCurveFrameAt,
+  measurementCentroid,
+  resolveFenceLiftElevationForNodes,
+} from '@pascal-app/core'
 import {
   composeFrames,
   type Frame,
@@ -160,6 +166,15 @@ function levelLocalPoint(node: AnyNode, nodes: Nodes): Vec3 | null {
     const { point } = getWallCurveFrameAt(node, 0.5)
     return [point.x, nodeLevelFrame(node.id, nodes).position[1], point.y]
   }
+  if (node.type === 'fence') {
+    // Arc or spline midpoint, at the slab or ground the fence renderer lifts it to.
+    const { point } = getFenceCenterlineFrameAt(node, 0.5)
+    return [
+      point.x,
+      resolveFenceLiftElevationForNodes(node, nodes as Record<string, AnyNode>),
+      point.y,
+    ]
+  }
   if (node.type === 'stair-segment') {
     const segmentFrame = stairSegmentFrame(node, nodes)
     if (segmentFrame) return segmentFrame.position
@@ -247,7 +262,8 @@ function childIdsOf(id: string, nodes: Nodes): string[] {
  * building transform):
  * - a positioned node: its origin (an item's or column's base, a door's or
  *   window's centre), inside its host's frame;
- * - a wall, fence or grid line: its midpoint at its base;
+ * - a wall or fence: the midpoint of its centreline (arc or spline) at its base;
+ * - a grid line: its midpoint;
  * - a slab, ceiling, zone or site: its polygon centroid on its own plane;
  * - a block or imported mesh: the centre of its vertex bounds;
  * - a path or measurement: the centre of its points;

@@ -10,6 +10,7 @@ import {
   BlockNode,
   CabinetModuleNode,
   CabinetNode,
+  FenceNode,
   LevelNode,
   nodeKindOf,
   RoofNode,
@@ -305,6 +306,33 @@ describe('measure in world space', () => {
     ])
     // Rendered: the 1 m deck plus the 1.2 m half-height of the default block.
     expectPoint(await pointOf(block.id), [0, 2.2, 0])
+  })
+
+  test('a curved railing on a deck is measured on its arc at the deck height', async () => {
+    seedRef()
+    const deck = SlabNode.parse({
+      elevation: 1,
+      polygon: [
+        [-5, -5],
+        [5, -5],
+        [5, 5],
+        [-5, 5],
+      ],
+    })
+    const railing = FenceNode.parse({
+      start: [0, 0],
+      end: [4, 0],
+      curveOffset: 1,
+      supportSlabId: deck.id,
+    })
+    bridge.applyPatch([
+      { op: 'create', node: deck, parentId: level.id as AnyNodeId },
+      { op: 'create', node: railing, parentId: level.id as AnyNodeId },
+    ])
+    const point = await pointOf(railing.id)
+    expect(point![0]).toBeCloseTo(2, 6)
+    expect(point![1]).toBeCloseTo(1, 6)
+    expect(Math.abs(point![2]!)).toBeCloseTo(1, 6)
   })
 
   test('polygons are measured at their area centroid', async () => {
