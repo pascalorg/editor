@@ -6,6 +6,7 @@ import { DEFAULT_LEVEL_HEIGHT } from './level-height'
 import {
   CEILING_CLAMP_MARGIN,
   getCeilingClampBound,
+  getCeilingMinHeight,
   getCoveringSlabUndersideAt,
   getLevelAbove,
   getLevelBelow,
@@ -599,5 +600,32 @@ describe('getCeilingClampBound', () => {
     expect(getCeilingClampBound('level_0', nodes, maxSideStrip)).toBeCloseTo(
       2.2 - CEILING_CLAMP_MARGIN,
     )
+  })
+})
+
+describe('getCeilingMinHeight', () => {
+  // Ground 3.2 m + upper 3.2 m: the roof level's floor sits 6.4 m above grade.
+  const roofStack = () =>
+    buildNodes([
+      building('building_a', ['level_0', 'level_1', 'level_roof']),
+      level('level_0', 0, { height: 3.2, parentId: 'building_a' }),
+      level('level_1', 1, { height: 3.2, parentId: 'building_a' }),
+      level('level_roof', 2, { height: 2.5, parentId: 'building_a' }),
+    ])
+
+  test('a level above grade lets a ceiling hang down to grade', () => {
+    const nodes = roofStack()
+    expect(getCeilingMinHeight('level_roof', nodes, 0.5)).toBeCloseTo(-6.4)
+    expect(getCeilingMinHeight('level_1', nodes, 0)).toBeCloseTo(-3.2)
+  })
+
+  test('the ground storey keeps the caller floor unchanged', () => {
+    const nodes = roofStack()
+    expect(getCeilingMinHeight('level_0', nodes, 0.5)).toBe(0.5)
+    expect(getCeilingMinHeight('level_0', nodes, 0)).toBe(0)
+  })
+
+  test('an unresolvable level keeps the caller floor', () => {
+    expect(getCeilingMinHeight('level_missing', roofStack(), 0.5)).toBe(0.5)
   })
 })
