@@ -2387,9 +2387,11 @@ export type FloorPlacedConfig = {
    * placement/move refuses to overlap another colliding footprint (red ghost,
    * Alt to force). Solid furniture-like kinds (item / shelf / column) set this;
    * markers and port-mated kinds (spawn / MEP / stair) leave it off so they
-   * neither block nor get blocked. Default off.
+   * neither block nor get blocked. Default off. A predicate decides per node
+   * (a block collides only while it rests on the floor); read it through
+   * `floorPlacedCollides`.
    */
-  collides?: boolean
+  collides?: boolean | ((node: AnyNode) => boolean)
 }
 
 /**
