@@ -1482,6 +1482,8 @@ export type NodeDeletionPlan = NodeDeletionScene & {
   nodesToMarkDirty: Set<AnyNodeId>
   /** Preview only: existing default gutters and downspouts the refresh may keep or replace. */
   unsettledIds: Set<AnyNodeId>
+  /** Preview only: roof segments whose `children` the refresh rewrites. */
+  regeneratedHostIds: Set<AnyNodeId>
 }
 
 /**
@@ -1659,10 +1661,11 @@ export function planNodeDeletion(
   }
 
   const unsettledIds = new Set<AnyNodeId>()
+  const regeneratedHostIds = new Set<AnyNodeId>()
   if (mintDefaults) {
     refreshDefaultGuttersForRoofIds(nextNodes, affectedRoofIds, nodesToMarkDirty, deletedIds)
   } else {
-    collectRefreshedDefaults(nextNodes, affectedRoofIds, unsettledIds)
+    collectRefreshedDefaults(nextNodes, affectedRoofIds, unsettledIds, regeneratedHostIds)
   }
 
   return {
@@ -1673,6 +1676,7 @@ export function planNodeDeletion(
     parentsToMarkDirty,
     nodesToMarkDirty,
     unsettledIds,
+    regeneratedHostIds,
   }
 }
 
@@ -1680,11 +1684,13 @@ export function planNodeDeletion(
  * The existing nodes the default gutter refresh of `roofIds` may keep, move or
  * replace: each roof's default gutters and the downspouts on them. Which of
  * them survive depends on the gutters the refresh mints, whose ids are random.
+ * `hosts` receives the roof segments whose `children` the refresh rewrites.
  */
 function collectRefreshedDefaults(
   nodes: Record<AnyNodeId, AnyNode>,
   roofIds: Iterable<AnyNodeId>,
   out: Set<AnyNodeId>,
+  hosts: Set<AnyNodeId>,
 ) {
   const gutterIds = new Set<AnyNodeId>()
   for (const roofId of new Set(roofIds)) {
@@ -1693,6 +1699,7 @@ function collectRefreshedDefaults(
     for (const segmentId of roof.children ?? []) {
       const segment = nodes[segmentId as AnyNodeId]
       if (segment?.type !== 'roof-segment') continue
+      hosts.add(segment.id as AnyNodeId)
       for (const childId of segment.children ?? []) {
         if (isDefaultGutterNode(nodes[childId as AnyNodeId], segment.id)) {
           gutterIds.add(childId as AnyNodeId)

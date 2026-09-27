@@ -384,6 +384,38 @@ describe('apply_patch identity and validation guards', () => {
     expect((await apply([{ op: 'delete', id: b.id }])).isError).toBe(false)
   })
 
+  test('a host whose default children a delete regenerates cannot be updated in the same patch', async () => {
+    const roof = RoofNode.parse({})
+    const segment = (x: number) =>
+      RoofSegmentNode.parse({
+        position: [x, 0, 0],
+        width: 4,
+        depth: 4,
+        roofType: 'hip',
+        metadata: { autoGutter: true },
+      })
+    const [a, b] = [segment(0), segment(4)]
+    bridge.applyPatch([
+      { op: 'create', node: roof, parentId: level.id as AnyNodeId },
+      { op: 'create', node: a, parentId: roof.id as AnyNodeId },
+      { op: 'create', node: b, parentId: roof.id as AnyNodeId },
+    ])
+    const staleChildren = (bridge.getNode(a.id as AnyNodeId) as { children: string[] }).children
+
+    // Restating the pre-delete children would restore obsolete gutter ids.
+    const restated = await refusal([
+      { op: 'delete', id: b.id },
+      { op: 'update', id: a.id, data: { children: staleChildren, name: 'Front slope' } },
+    ])
+    expect(restated).toMatchObject({ code: 'regenerated_default', patchIndex: 1, id: a.id })
+    const renamed = await refusal([
+      { op: 'delete', id: b.id },
+      { op: 'update', id: a.id, data: { name: 'Front slope' } },
+    ])
+    expect(renamed).toMatchObject({ code: 'regenerated_default', patchIndex: 1, id: a.id })
+    expect(bridge.getNode(b.id as AnyNodeId)).not.toBeNull()
+  })
+
   test('an unregistered plugin kind is updated without schema validation', async () => {
     const pluginNode = {
       object: 'node',

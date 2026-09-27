@@ -89,7 +89,8 @@ function withoutChild(parent: AnyNode, childId: string): AnyNode {
  * - an update whose merged node has schema issues the node did not have
  *   before (`invalid_update`); kinds without a schema in this runtime pass;
  * - any op on a node an earlier delete in the patch removed, or on a default
- *   gutter or downspout that delete regenerates (`regenerated_default`).
+ *   gutter or downspout that delete regenerates, and any update of the roof
+ *   segment holding them (`regenerated_default`).
  *
  * Deletes run through core's `planNodeDeletion`, the store's own planner, one
  * call per run of consecutive deletes as the bridge batches them, so kind
@@ -115,6 +116,9 @@ export function assertPatchKeepsIdentity(
   // move or replace them with freshly minted ids, so later ops in the same
   // patch cannot address them reliably.
   const regenerated = new Map<string, number>()
+  // Roof segments whose `children` that refresh rewrites: an update restating
+  // their pre-delete children would bring back obsolete ids.
+  const regeneratedHosts = new Map<string, number>()
   const refuseRegenerated = (index: number, id: string) => {
     const deleteIndex = regenerated.get(id)
     if (deleteIndex === undefined) return
@@ -129,6 +133,7 @@ export function assertPatchKeepsIdentity(
   const flushDeletes = (index: number) => {
     const plan = planNodeDeletion(scene, pendingDeletes, { mintDefaults: false })
     for (const id of plan.unsettledIds) regenerated.set(id, index)
+    for (const id of plan.regeneratedHostIds) regeneratedHosts.set(id, index)
     scene = { nodes: plan.nodes, rootNodeIds: plan.rootNodeIds, collections: plan.collections }
     pendingDeletes = []
   }
@@ -164,6 +169,15 @@ export function assertPatchKeepsIdentity(
 
     if (patch.op === 'update') {
       refuseRegenerated(index, patch.id)
+      const hostDeleteIndex = regeneratedHosts.get(patch.id)
+      if (hostDeleteIndex !== undefined) {
+        throw new PatchRefusedError(
+          'regenerated_default',
+          index,
+          patch.id,
+          `the delete at patches[${hostDeleteIndex}] regenerates the default gutters and downspouts under "${patch.id}", so its children are not known yet. Update it in a separate apply_patch call.`,
+        )
+      }
       if (typeof patch.data?.parentId === 'string') refuseRegenerated(index, patch.data.parentId)
       const current = at(patch.id)
       if (!current)

@@ -90,6 +90,8 @@ describe('planNodeDeletion', () => {
     for (const id of first.unsettledIds) {
       expect(['gutter', 'downspout']).toContain(before.nodes[id]!.type)
     }
+    // The surviving segment's children are rewritten by the refresh.
+    expect([...first.regeneratedHostIds]).toEqual([a.id])
 
     useScene.getState().deleteNodes([b.id])
     const committed = useScene.getState().nodes
