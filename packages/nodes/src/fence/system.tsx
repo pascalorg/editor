@@ -1,8 +1,12 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  resolveFenceLiftElevationForNodes,
+  useScene,
+} from '@pascal-app/core'
 import { useEffect } from 'react'
-import { resolveFenceLiftElevationForNodes } from './lift'
 import type { FenceNode } from './schema'
 
 /**

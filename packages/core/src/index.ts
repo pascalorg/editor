@@ -412,6 +412,10 @@ export {
   sampleFenceCenterline,
 } from './systems/fence/fence-centerline'
 export {
+  resolveFenceLiftElevation,
+  resolveFenceLiftElevationForNodes,
+} from './systems/fence/fence-lift'
+export {
   getFenceControlHandle,
   getFenceSplineFrameAt,
   getFenceSplineLength,

@@ -4,6 +4,8 @@ import {
   type HandleDescriptor,
   isSplineFence,
   type NodeDefinition,
+  resolveFenceLiftElevation,
+  resolveFenceLiftElevationForNodes,
   type SceneApi,
 } from '@pascal-app/core'
 import {
@@ -21,7 +23,6 @@ import {
 } from './floorplan-affordances'
 import { fenceFloorplanMoveTarget } from './floorplan-move'
 import { buildFenceGeometry } from './geometry'
-import { resolveFenceLiftElevation, resolveFenceLiftElevationForNodes } from './lift'
 import { fencePaint } from './paint'
 import { fenceParametrics } from './parametrics'
 import { FenceNode } from './schema'

@@ -1,16 +1,12 @@
 import { describe, expect, test } from 'bun:test'
-import {
-  type AnyNode,
-  applyHeightPatch,
-  BuildingNode,
-  createTerrainField,
-  encodeTerrainField,
-  FenceNode,
-  flattenPatch,
-  LevelNode,
-  SlabNode,
-} from '@pascal-app/core'
-import { resolveFenceLiftElevation, resolveFenceLiftElevationForNodes } from '../lift'
+import { encodeTerrainField } from '../../lib/terrain-codec'
+import { applyHeightPatch, createTerrainField, flattenPatch } from '../../lib/terrain-field'
+import { BuildingNode } from '../../schema/nodes/building'
+import { FenceNode } from '../../schema/nodes/fence'
+import { LevelNode } from '../../schema/nodes/level'
+import { SlabNode } from '../../schema/nodes/slab'
+import type { AnyNode } from '../../schema/types'
+import { resolveFenceLiftElevation, resolveFenceLiftElevationForNodes } from './fence-lift'
 
 const LEVEL_ID = 'level-1'
 

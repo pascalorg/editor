@@ -1,4 +1,9 @@
-import { type AnyNodeId, type GeometryContext, getMaterialPresetByRef } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type GeometryContext,
+  getMaterialPresetByRef,
+  resolveFenceLiftElevation,
+} from '@pascal-app/core'
 import {
   applyMaterialPresetToMaterials,
   type ColorPreset,
@@ -11,7 +16,6 @@ import {
   resolveSlotDefaultMaterial,
 } from '@pascal-app/viewer'
 import { FrontSide, Group, type Material, Mesh, type Texture } from 'three'
-import { resolveFenceLiftElevation } from './lift'
 import type { FenceNode } from './schema'
 import { FENCE_SLOT_DEFAULTS, type FenceSlotId } from './slots'
 

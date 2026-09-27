@@ -1,11 +1,8 @@
-import {
-  type AnyNode,
-  type AnyNodeId,
-  findLevelAncestorId,
-  levelBaseElevationAt,
-  type SlabNode,
-} from '@pascal-app/core'
-import type { FenceNode } from './schema'
+import { findLevelAncestorId } from '../../hooks/spatial-grid/spatial-grid-sync'
+import { levelBaseElevationAt } from '../../lib/terrain-support'
+import type { FenceNode } from '../../schema/nodes/fence'
+import type { SlabNode } from '../../schema/nodes/slab'
+import type { AnyNode, AnyNodeId } from '../../schema/types'
 
 /**
  * Elevation (meters above the level plane) a hosted fence stands at.
