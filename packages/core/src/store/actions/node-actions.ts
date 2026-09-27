@@ -26,6 +26,7 @@ import {
   type WallNode,
 } from '../../schema'
 import type { CollectionId } from '../../schema/collections'
+import { Provenance } from '../../schema/provenance'
 import { constrainWallCurveOffsetToAvoidIntersections } from '../../systems/wall/wall-curve'
 import {
   areWallStylesCompatible,
@@ -538,11 +539,40 @@ function warnSanitizedNodeMutation(
   }
 }
 
+/**
+ * Source ids cannot be repaired the way the numeric fallback repairs a value:
+ * any fix would drop or rewrite them (D5). A write that sets an invalid
+ * `provenance` throws, whatever the node's kind (a plain plugin kind never
+ * reaches a schema that knows the field), so the mutation applies nothing.
+ */
+function assertProvenanceWrite(nodeId: string, value: unknown): void {
+  if (value === undefined) return
+  const parsed = Provenance.safeParse(value)
+  if (parsed.success) return
+  const issue = parsed.error.issues[0]
+  const at = ['provenance', ...(issue?.path ?? [])].join('.')
+  throw new Error(`Node "${nodeId}": provenance refused at ${at}: ${issue?.message}`)
+}
+
+/**
+ * A strict kind parses everything but `provenance`, which core checks on write
+ * and carries verbatim: a stored over-cap value (kept at load) must not make
+ * the node uneditable, and a schema that never declared the base field must
+ * not drop it.
+ */
+function parseStrict(schema: { parse: (value: unknown) => unknown }, candidate: AnyNode): AnyNode {
+  if (!Object.hasOwn(candidate, 'provenance')) return schema.parse(candidate) as AnyNode
+  const { provenance, ...rest } = candidate as AnyNode & { provenance?: unknown }
+  const parsed = schema.parse(rest) as AnyNode
+  return provenance === undefined ? parsed : ({ ...parsed, provenance } as AnyNode)
+}
+
 function parseCreatedNode(node: AnyNode, parentId: AnyNodeId | null): AnyNode {
   const candidate = { ...node, parentId }
+  assertProvenanceWrite(candidate.id, (candidate as { provenance?: unknown }).provenance)
   const registered = nodeRegistry.get(candidate.type)?.schema
   // Generated definitions must reject invalid geometry instead of retaining a failed parse.
-  if (registered?.meta?.()?.strictMutations === true) return registered.parse(candidate) as AnyNode
+  if (registered?.meta?.()?.strictMutations === true) return parseStrict(registered, candidate)
   const parsed = parseNode(candidate)
   if (parsed.success) return parsed.data
 
@@ -572,6 +602,9 @@ function mergeNodeUpdate(currentNode: AnyNode, patch: Partial<AnyNode>): AnyNode
 }
 
 function parseUpdatedNode(currentNode: AnyNode, data: Partial<AnyNode>): AnyNode {
+  // Only a write of the field is checked: a stored over-cap value stays editable.
+  if (Object.hasOwn(data, 'provenance'))
+    assertProvenanceWrite(currentNode.id, (data as { provenance?: unknown }).provenance)
   const candidate = mergeNodeUpdate(currentNode, data)
   // Graph links survive schemas that omit children; only an explicit patch may change them.
   const preserveChildren = (updated: AnyNode): AnyNode =>
@@ -583,7 +616,7 @@ function parseUpdatedNode(currentNode: AnyNode, data: Partial<AnyNode>): AnyNode
   const registered = nodeRegistry.get(currentNode.type)?.schema
   // Generated definitions must reject invalid geometry instead of retaining a failed parse.
   if (registered?.meta?.()?.strictMutations === true)
-    return preserveChildren(registered.parse(candidate) as AnyNode)
+    return preserveChildren(parseStrict(registered, candidate))
   const parsed = parseNode(candidate)
   if (parsed.success) return preserveChildren(parsed.data)
 
