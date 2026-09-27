@@ -320,7 +320,7 @@ captured by Zundo's temporal middleware as a single undoable step.
 | `get_scene` | Return the full scene graph. | — | `{ nodes, rootNodeIds, collections }` |
 | `get_node` | Fetch a node by id. | `{ id }` | the node, or `InvalidParams` if not found |
 | `describe_node` | Node summary with ancestry, children count and properties. | `{ id }` | `{ id, type, parentId, ancestry[], childrenCount, properties, description }` |
-| `find_nodes` | Filter nodes by type / parent / zone / level. | `{ type?, parentId?, zoneId?, levelId? }` | `{ nodes: AnyNode[] }` |
+| `find_nodes` | Filter nodes by type (any node kind) / parent / zone / level, or by import source id (`metadata.sourceIds`, exact or prefix). | `{ type?, parentId?, zoneId?, levelId?, sourceId?, sourceIdPrefix? }` | `{ nodes: AnyNode[] }` |
 | `list_levels` | List levels with ids, floor indices, parent ids and child counts. | — | `{ activeSceneId, levels[] }` |
 | `get_level_summary` | Compact summary of one level with counts, wall/opening lists, zones, slabs, ceilings and items. | `{ levelId? }` | `{ levelId, counts, walls, zones, items, slabs, ceilings }` |
 | `get_walls` | Walls on a level with length and child doors/windows. | `{ levelId? }` | `{ levelId, walls[] }` |

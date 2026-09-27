@@ -155,9 +155,14 @@ function floorLift(node: AnyNode | ProceduralItemNode, nodes: QueryNodes): numbe
       ? Math.max(...candidates.map((s) => s.elevation ?? 0.05))
       : ground
 }
-function nodeParentFrame(node: AnyNode | ProceduralItemNode, nodes: QueryNodes, seen: Set<string>) {
+function nodeParentFrame(
+  node: AnyNode | ProceduralItemNode,
+  nodes: QueryNodes,
+  seen: Set<string>,
+  options: LevelFrameOptions,
+) {
   if (!node.parentId) return IDENTITY_FRAME
-  let parentFrame = nodeLevelFrame(node.parentId, nodes, seen)
+  let parentFrame = nodeLevelFrame(node.parentId, nodes, seen, options)
   const parent = nodes[node.parentId]
   if (isProceduralItem(parent) && parent.attachments[node.id] !== undefined) {
     const surface = evaluateRecipe(parent.recipe, parent.parameters).surfaces.find(
@@ -168,7 +173,41 @@ function nodeParentFrame(node: AnyNode | ProceduralItemNode, nodes: QueryNodes, 
   }
   return parentFrame
 }
-export function nodeLevelFrame(id: string, nodes: QueryNodes, seen = new Set<string>()): Frame {
+export type LevelFrameOptions = {
+  /**
+   * Frames already resolved over the same unchanged `nodes` record, filled as
+   * hosts resolve, so a query over many nodes resolves each host once. Keep
+   * one cache per `planOnly` setting.
+   */
+  cache?: Map<string, Frame>
+  /**
+   * Resolve only the plan (XZ) placement: heights that need the scene (wall
+   * slab support, ceiling height, floor lift) are taken as 0, which skips
+   * their cost. Rotations and plan positions are exact.
+   */
+  planOnly?: boolean
+}
+
+/** A node's frame in its level's coordinates. */
+export function nodeLevelFrame(
+  id: string,
+  nodes: QueryNodes,
+  seen = new Set<string>(),
+  options: LevelFrameOptions = {},
+): Frame {
+  const cached = options.cache?.get(id)
+  if (cached) return cached
+  const resolved = resolveNodeLevelFrame(id, nodes, seen, options)
+  options.cache?.set(id, resolved)
+  return resolved
+}
+
+function resolveNodeLevelFrame(
+  id: string,
+  nodes: QueryNodes,
+  seen: Set<string>,
+  options: LevelFrameOptions,
+): Frame {
   if (seen.has(id) || seen.size > 32) throw new Error('Cyclic or excessively deep hosting graph')
   const node = nodes[id]
   if (!node) throw new Error(`Missing node ${id}`)
@@ -176,12 +215,19 @@ export function nodeLevelFrame(id: string, nodes: QueryNodes, seen = new Set<str
   seen.add(id)
   if (node.type === 'ceiling') {
     // Match the ceiling renderer's underside frame, including its 1 cm inset.
+    if (options.planOnly) return IDENTITY_FRAME
     return frame(
       [0, resolveCeilingHeight(node, nodes as Record<string, AnyNode>) - 0.01, 0],
       [0, 0, 0],
     )
   }
   if (node.type === 'wall') {
+    const rotation: Vec3 = [
+      0,
+      -Math.atan2(node.end[1] - node.start[1], node.end[0] - node.start[0]),
+      0,
+    ]
+    if (options.planOnly) return frame([node.start[0], 0, node.start[1]], rotation)
     const { slabs, walls } = levelSurfaces(nodes, node.parentId ?? '')
     const ground = levelBaseElevationAt(
       nodes as Record<string, AnyNode>,
@@ -199,7 +245,7 @@ export function nodeLevelFrame(id: string, nodes: QueryNodes, seen = new Set<str
     )
     return frame(
       [node.start[0], support.elevation + (node.supportOffset ?? 0), node.start[1]],
-      [0, -Math.atan2(node.end[1] - node.start[1], node.end[0] - node.start[0]), 0],
+      rotation,
     )
   }
   if (
@@ -219,10 +265,10 @@ export function nodeLevelFrame(id: string, nodes: QueryNodes, seen = new Set<str
     const position = [...(transform.position ?? [0, 0, 0])] as Vec3
     const capability = nodeRegistry.get(node.type)?.capabilities.floorPlaced
     if (!capability?.applies || capability.applies(node as AnyNode)) {
-      position[1] += floorLift(node, nodes)
+      if (!options.planOnly) position[1] += floorLift(node, nodes)
     }
     const local = node.type === 'slab' ? IDENTITY_FRAME : frame(position, rotation ?? [0, 0, 0])
-    return node.parentId ? composeFrames(nodeParentFrame(node, nodes, seen), local) : local
+    return node.parentId ? composeFrames(nodeParentFrame(node, nodes, seen, options), local) : local
   }
   const pose = isProceduralItem(node)
     ? proceduralLocalPose(node, nodes)
@@ -240,12 +286,12 @@ export function nodeLevelFrame(id: string, nodes: QueryNodes, seen = new Set<str
       frame([0, 0, 0], [0, face.yaw, 0]),
       frame([0, 0, 0], pose.rotation),
     ).axes
-    return composeFrames(nodeLevelFrame(parent.id, nodes, seen), local)
+    return composeFrames(nodeLevelFrame(parent.id, nodes, seen, options), local)
   }
   if (node.type === 'item' && parent?.type === 'block' && node.blockFaceId) {
     const face = getBlockFaceFrame(parent.topology, node.blockFaceId)
     if (face) {
-      const host = nodeLevelFrame(parent.id, nodes, seen)
+      const host = nodeLevelFrame(parent.id, nodes, seen, options)
       return composeFrames(
         host,
         composeFrames(
@@ -255,8 +301,8 @@ export function nodeLevelFrame(id: string, nodes: QueryNodes, seen = new Set<str
       )
     }
   }
-  const parentFrame = nodeParentFrame(node, nodes, seen)
-  if (parent?.type === 'level') pose.position[1] += floorLift(node, nodes)
+  const parentFrame = nodeParentFrame(node, nodes, seen, options)
+  if (parent?.type === 'level' && !options.planOnly) pose.position[1] += floorLift(node, nodes)
   return composeFrames(parentFrame, frame(pose.position, pose.rotation))
 }
 function localBounds(node: ProceduralItemNode | ItemNode) {
