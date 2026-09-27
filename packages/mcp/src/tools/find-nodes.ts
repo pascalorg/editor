@@ -26,7 +26,9 @@ export const findNodesInput = {
     .string()
     .min(1)
     .optional()
-    .describe('Exact match on any entry of node.metadata.sourceIds (the import source ids).'),
+    .describe(
+      'Exact match on any entry of node.metadata.sourceIds (the import source ids). Characters outside printable ASCII also match their percent-encoded form.',
+    ),
   sourceIdPrefix: z
     .string()
     .min(1)
@@ -36,6 +38,24 @@ export const findNodesInput = {
 
 export const findNodesOutput = {
   nodes: z.array(z.record(z.string(), z.unknown())),
+}
+
+/**
+ * A source id as importers must write it for typed provenance: printable
+ * ASCII kept, every other character percent-encoded as UTF-8 bytes.
+ */
+function encodeSourceId(id: string): string {
+  let out = ''
+  for (const char of id) {
+    if (/^[\x20-\x7E]$/.test(char)) {
+      out += char
+      continue
+    }
+    for (const byte of new TextEncoder().encode(char)) {
+      out += `%${byte.toString(16).toUpperCase().padStart(2, '0')}`
+    }
+  }
+  return out
 }
 
 function nodeSourceIds(node: AnyNode): string[] {
@@ -172,10 +192,17 @@ export function registerFindNodes(server: McpServer, bridge: SceneOperations): v
       let results = bridge.findNodes(baseFilter)
 
       if (sourceId !== undefined || sourceIdPrefix !== undefined) {
+        // Legacy ids may be stored raw, typed-provenance ones percent-encoded.
+        const exact = sourceId === undefined ? [] : [sourceId, encodeSourceId(sourceId)]
+        const prefixes =
+          sourceIdPrefix === undefined ? [] : [sourceIdPrefix, encodeSourceId(sourceIdPrefix)]
         results = results.filter((n) => {
           const ids = nodeSourceIds(n)
-          if (sourceId !== undefined && !ids.includes(sourceId)) return false
-          if (sourceIdPrefix !== undefined && !ids.some((id) => id.startsWith(sourceIdPrefix))) {
+          if (sourceId !== undefined && !ids.some((id) => exact.includes(id))) return false
+          if (
+            sourceIdPrefix !== undefined &&
+            !ids.some((id) => prefixes.some((prefix) => id.startsWith(prefix)))
+          ) {
             return false
           }
           return true

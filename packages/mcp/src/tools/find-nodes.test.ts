@@ -140,6 +140,28 @@ describe('find_nodes', () => {
       expect(await findIds({ sourceIdPrefix: 'screen/' })).toEqual([block.id, column.id].sort())
     })
 
+    test('source ids outside printable ASCII match raw and percent-encoded entries', async () => {
+      const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+      // A legacy converter id kept raw, and one written the way typed
+      // provenance requires (printable ASCII, the rest percent-encoded).
+      const legacy = WallNode.parse({
+        start: [0, 0],
+        end: [1, 0],
+        metadata: { sourceIds: ['Küche/Fenster-1'] },
+      })
+      const encoded = WallNode.parse({
+        start: [0, 1],
+        end: [1, 1],
+        metadata: { sourceIds: ['K%C3%BCche/Fenster-2'] },
+      })
+      bridge.applyPatch([
+        { op: 'create', node: legacy, parentId: level.id as AnyNodeId },
+        { op: 'create', node: encoded, parentId: level.id as AnyNodeId },
+      ])
+      expect(await findIds({ sourceIdPrefix: 'Küche/' })).toEqual([legacy.id, encoded.id].sort())
+      expect(await findIds({ sourceId: 'Küche/Fenster-2' })).toEqual([encoded.id])
+    })
+
     test('source filters combine with type and parentId', async () => {
       const { wall, window } = seedSourceFixture()
       expect(await findIds({ sourceIdPrefix: 'ground/', type: 'window' })).toEqual([window.id])
