@@ -192,6 +192,22 @@ describe('validateDesign diagnostics', () => {
     expect(result.measurements!.components.list[1]!.nearestGap).toBeCloseTo(0.249, 3)
   })
 
+  test('wall-side geometry behind the wall reference is flagged', () => {
+    const design = louver()
+    design.parts[0].shapes[0].position[2] = -0.02
+    const result = validateDesign(design)
+    expect(result.valid).toBe(true)
+    expect(result.measurements!.datum.gap).toBeCloseTo(-0.0455, 4)
+    expect(result.diagnostics).toEqual([
+      {
+        severity: 'warning',
+        code: 'behind_wall',
+        message:
+          'trim reaches 0.0455 m behind the wall reference "back" and would pass into the wall',
+      },
+    ])
+  })
+
   test('library designs with detached pieces are flagged', () => {
     const result = validateDesign(chandelierJson)
     expect(result.valid).toBe(true)

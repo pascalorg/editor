@@ -36,6 +36,7 @@ export const DesignDiagnosticSchema = z.object({
     'sweep',
     'floating_component',
     'unbalanced',
+    'behind_wall',
   ]),
   path: z.string().optional(),
   message: z.string(),
@@ -153,7 +154,7 @@ const DESIGN_RULES = [
   'Parameters need min ≤ default ≤ max. unit "count" needs integer min, max, default and step.',
   'part.count evaluates to an integer from 0 to 64. Shape sizes evaluate to 0.001–30 m, and the design stays within 30 m of its origin.',
   'No geometry goes below y = 0, whatever the mounting. Without mounting the design stands on the floor at y = 0 and no motion may sweep below it.',
-  'mounting "wall-side" needs a named surface without part whose normal is local -Z (rotation [-π/2, 0, 0]). It is the plane that meets the wall: keep geometry in front of it (larger z); no motion may cross behind it.',
+  'mounting "wall-side" needs a named surface without part whose normal is local -Z (rotation [-π/2, 0, 0]). It is the plane that meets the wall: keep geometry in front of it (larger z; geometry behind it passes into the wall and is warned about); no motion may cross behind it.',
   'mounting "ceiling" needs a named surface without part facing +Y (no rotation) at the highest point of the design. No motion may rise above it.',
   'radius applies to roundedBox (at most half the smallest size, default 0.02). topScale applies to cylinders only (0–1). support: true offers a shape top to hosted items; it must be an unrotated box, roundedBox or untapered cylinder outside moving parts.',
   'Motion: hinge 0 < |angle| ≤ π, slide 0 < |distance| ≤ 5 m, spin 0 < |radiansPerSecond| ≤ 20; delay 0–1 s and duration 0.1–2 s. At most 8 moving parts and 32 evaluated motion groups. Named surfaces cannot belong to moving parts.',
@@ -488,6 +489,16 @@ function measureDesign(recipe: Recipe, evaluation: Evaluation, diagnostics: Desi
       code: 'floating_component',
       message: `${subject} neither the rest of the design nor ${datumName} (${distances.join(', ')})`,
     })
+  }
+
+  if (kind === 'wall') {
+    const behind = shapes.filter((entry) => datumGap(entry.min, entry.max) < -CONTACT_TOLERANCE)
+    if (behind.length)
+      diagnostics.push({
+        severity: 'warning',
+        code: 'behind_wall',
+        message: `${[...new Set(behind.map(({ shape }) => shape.partId))].join(', ')} reach${behind.length === 1 ? 'es' : ''} ${round(-Math.min(...behind.map((e) => datumGap(e.min, e.max))))} m behind the wall reference "${recipe.mounting!.reference}" and would pass into the wall`,
+      })
   }
 
   const contactShapes = shapes.filter((entry) => touches(entry.min, entry.max))
