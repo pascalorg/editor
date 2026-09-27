@@ -18,6 +18,7 @@ import { DuctTerminalNode } from './nodes/duct-terminal'
 import { ElevatorNode } from './nodes/elevator'
 import { EyebrowVentNode } from './nodes/eyebrow-vent'
 import { FenceNode } from './nodes/fence'
+import { FenceGateNode, FenceOpeningNode } from './nodes/fence-feature'
 import { GuideNode } from './nodes/guide'
 import { GutterNode } from './nodes/gutter'
 import { HvacEquipmentNode } from './nodes/hvac-equipment'
@@ -97,6 +98,8 @@ export const AnyNode = nodeUnion([
   StructuralGridNode,
   WallNode,
   FenceNode,
+  FenceGateNode,
+  FenceOpeningNode,
   CabinetNode,
   CabinetModuleNode,
   ItemNode,

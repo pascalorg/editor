@@ -7,6 +7,7 @@ import {
   useEditor,
   useFloorplanMode,
 } from '@pascal-app/editor'
+import { beginFenceFeaturePlacement } from '@pascal-app/nodes'
 import { useViewer } from '@pascal-app/viewer'
 import { getRoofFootprintSource, type RoofFootprintSource } from '@/lib/build-tab-state'
 
@@ -126,6 +127,10 @@ export function activateBuildTool(kind: string): void {
   editor.setToolDefaults(kind, null)
   editor.setMode('build')
   editor.setTool(kind)
+}
+
+export function activateFenceFeaturePlacement(kind: 'gate' | 'opening'): void {
+  beginFenceFeaturePlacement(kind)
 }
 
 export function activateSelectMode(): void {

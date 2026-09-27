@@ -1,16 +1,26 @@
-import { type AnyNodeId, type GeometryContext, getMaterialPresetByRef } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type FenceWithFeatures,
+  fenceWithFeatures,
+  type GeometryContext,
+  getMaterialPresetByRef,
+} from '@pascal-app/core'
 import {
   applyMaterialPresetToMaterials,
   type ColorPreset,
   createDefaultMaterial,
   createMaterial,
   createSurfaceRoleMaterial,
-  generateFenceSlotGeometries,
   type RenderShading,
   resolveMaterialRef,
   resolveSlotDefaultMaterial,
 } from '@pascal-app/viewer'
 import { FrontSide, Group, type Material, Mesh, type Texture } from 'three'
+import {
+  type FenceCornerNeighbors,
+  type FenceGateLeafGeometry,
+  generateFenceSlotGeometries,
+} from './geometry-parts'
 import { resolveFenceLiftElevation } from './lift'
 import type { FenceNode } from './schema'
 import { FENCE_SLOT_DEFAULTS, type FenceSlotId } from './slots'
@@ -26,10 +36,6 @@ import { FENCE_SLOT_DEFAULTS, type FenceSlotId } from './slots'
  * (pre-slot-model scenes, applied to every part) → the declared slot default.
  * Textures-off collapses every part to the themed joinery role.
  *
- * Phase 6 cleanup moves the geometry math out of the legacy
- * `viewer/src/systems/fence/fence-system.tsx` into this folder once the legacy
- * system file is deleted. Until then `generateFenceSlotGeometries` is publicly
- * re-exported from viewer.
  */
 type FenceMaterial = Material & {
   alphaMap?: Texture | null
@@ -41,6 +47,30 @@ type FenceMaterial = Material & {
 const FENCE_SLOT_ORDER: FenceSlotId[] = ['posts', 'infill', 'base', 'rail']
 
 const fenceMaterialCache = new Map<string, Material>()
+
+function sharedFenceCorners(
+  node: FenceNode,
+  siblings: GeometryContext['siblings'],
+): { omittedPosts: Set<'start' | 'end'>; neighbors: FenceCornerNeighbors } {
+  const omitted = new Set<'start' | 'end'>()
+  const neighbors: FenceCornerNeighbors = {}
+  for (const sibling of siblings) {
+    if (sibling.type !== 'fence' || sibling.visible === false) continue
+    for (const endpoint of ['start', 'end'] as const) {
+      const point = node[endpoint]
+      if (
+        ![sibling.start, sibling.end].some(
+          (other) => Math.hypot(point[0] - other[0], point[1] - other[1]) < 0.001,
+        )
+      )
+        continue
+      if (sibling.height > node.height || (sibling.height === node.height && sibling.id < node.id))
+        omitted.add(endpoint)
+      if (!neighbors[endpoint]) neighbors[endpoint] = sibling
+    }
+  }
+  return { omittedPosts: omitted, neighbors }
+}
 
 function getFenceSlotMaterial(
   node: FenceNode,
@@ -101,30 +131,69 @@ function getLegacyFenceMaterial(node: FenceNode, shading: RenderShading): Materi
 }
 
 export function buildFenceGeometry(
-  node: FenceNode,
+  node: FenceWithFeatures,
   ctx?: GeometryContext,
   shading: RenderShading = 'rendered',
   textures = true,
   colorPreset: ColorPreset = 'clay',
   sceneTheme?: string,
+  mode: 'body' | 'features' = 'body',
 ): Group {
+  const previewFeatures = node.features ?? []
+  if (mode === 'body') node = fenceWithFeatures(node, ctx?.children ?? [])
   const group = new Group()
-  const geometries = generateFenceSlotGeometries(node)
+  const startGround = ctx?.levelBaseAt?.(node.start[0], node.start[1]) ?? 0
+  const surfaceId = node.supportSurfaceNodeId as AnyNodeId | undefined
+  const surfaceAt = surfaceId
+    ? (x: number, z: number) => ctx?.surfaceHeightAt?.(surfaceId, x, z) ?? null
+    : undefined
+  const startSurface = surfaceAt?.(node.start[0], node.start[1]) ?? null
+  const startBase = startSurface ?? startGround
+  const followsTerrain = (node.path?.length ?? 0) >= 2 || Math.abs(node.curveOffset ?? 0) > 1e-4
+  const chosenHost =
+    node.surfaceMode === 'selected'
+      ? ((node.supportSurfaceNodeId ?? node.supportSlabId) as AnyNodeId | undefined)
+      : undefined
+  const sampledSupport = followsTerrain
+    ? (x: number, z: number) => ctx?.supportHeightAt?.(x, z, chosenHost) ?? startBase
+    : undefined
+  const levelHeight =
+    node.surfaceMode === 'level' ? sampledSupport?.(node.start[0], node.start[1]) : undefined
+  const supportAt = levelHeight !== undefined ? () => levelHeight : sampledSupport
+  const sampledStart = supportAt?.(node.start[0], node.start[1]) ?? startBase
+  const sampledGround = new Map<string, number>()
+  const corners = mode === 'body' && ctx ? sharedFenceCorners(node, ctx.siblings) : undefined
+  const gateLeaves: FenceGateLeafGeometry[] = []
+  const geometries = generateFenceSlotGeometries(
+    node,
+    supportAt
+      ? (x, z) => {
+          const key = `${x},${z}`
+          const cached = sampledGround.get(key)
+          if (cached !== undefined) return cached
+          const height = supportAt(x, z) - sampledStart
+          sampledGround.set(key, height)
+          return height
+        }
+      : undefined,
+    mode,
+    corners?.omittedPosts,
+    corners?.neighbors,
+    mode === 'features' ? gateLeaves : undefined,
+  )
 
   // A hosted railing (`supportSlabId`) stands on its slab's walking surface;
-  // an unhosted one stands on the ground, which `ctx.levelBaseAt` resolves at
-  // the fence's own start point — the anchor its plan geometry is measured
-  // from, so the resolver and the mesh cannot disagree about where the ground
-  // is under this fence. The builder emits local-space children, so the lift
-  // lives on an inner group rather than the registered (React-transformed)
-  // root.
-  const lift = ctx
-    ? resolveFenceLiftElevation(
-        node,
-        (id) => ctx.resolve(id as AnyNodeId),
-        ctx.levelBaseAt?.(node.start[0], node.start[1]) ?? 0,
-      )
-    : 0
+  // an unhosted one starts at the ground height under its first point.
+  // Curved and freehand runs add the sampled height difference along their
+  // path in each slot geometry. The builder emits local-space children, so
+  // the starting lift lives on an inner group.
+  const lift = supportAt
+    ? sampledStart + (node.supportOffset ?? 0)
+    : startSurface !== null
+      ? startSurface + (node.supportOffset ?? 0)
+      : ctx
+        ? resolveFenceLiftElevation(node, (id) => ctx.resolve(id as AnyNodeId), startGround)
+        : 0
   const meshParent = new Group()
   meshParent.position.y = lift
   group.add(meshParent)
@@ -148,5 +217,43 @@ export function buildFenceGeometry(
     meshParent.add(mesh)
   }
 
+  for (const leaf of gateLeaves) {
+    const pivot = new Group()
+    pivot.position.set(leaf.hinge.x, 0, leaf.hinge.z)
+    pivot.rotation.y = leaf.rotationY
+    pivot.userData.pascalFenceGateLeaf = { openRotationY: leaf.openRotationY }
+    const mesh = new Mesh(
+      leaf.geometry,
+      getFenceSlotMaterial(
+        node,
+        'infill',
+        shading,
+        textures,
+        colorPreset,
+        sceneTheme,
+        ctx?.materials,
+      ),
+    )
+    mesh.position.set(-leaf.hinge.x, 0, -leaf.hinge.z)
+    mesh.castShadow = true
+    mesh.receiveShadow = true
+    mesh.userData.slotId = 'infill'
+    pivot.add(mesh)
+    meshParent.add(pivot)
+  }
+
+  if (mode === 'body' && previewFeatures.length > 0) {
+    group.add(
+      buildFenceGeometry(
+        { ...node, features: previewFeatures },
+        ctx,
+        shading,
+        textures,
+        colorPreset,
+        sceneTheme,
+        'features',
+      ),
+    )
+  }
   return group
 }

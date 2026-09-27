@@ -16,6 +16,7 @@ import {
   getDormerDefaultWindowFace,
 } from '../schema/nodes/dormer'
 import { ElevatorNode as ElevatorNodeSchema } from '../schema/nodes/elevator'
+import { FenceGateNode, FenceOpeningNode } from '../schema/nodes/fence-feature'
 import { LevelNode, normalizeLevelBaseElevation } from '../schema/nodes/level'
 import {
   getPitchFromActiveRoofHeight,
@@ -918,6 +919,20 @@ function migrateNodes(nodes: Record<string, any>): {
     }
 
     if (node.type === 'fence') {
+      const children = getStringArray(node.children)
+      for (const feature of node.features ?? []) {
+        const schema = feature.kind === 'gate' ? FenceGateNode : FenceOpeningNode
+        const { id: _featureId, kind: _kind, ...data } = feature
+        const child = schema.parse({
+          ...data,
+          parentId: id,
+          name: `${feature.kind === 'gate' ? 'Gate' : 'Open passage'} ${children.length + 1}`,
+        })
+        patchedNodes[child.id] = child
+        children.push(child.id)
+      }
+      const { features: _features, ...fence } = patchedNodes[id]
+      patchedNodes[id] = { ...fence, children }
       patchedNodes[id] = migrateSingleMaterialSlots(
         patchedNodes[id],
         ['posts', 'infill', 'base', 'rail'],

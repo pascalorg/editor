@@ -35,16 +35,18 @@ function load(nodes: Record<string, unknown>, rootId: string) {
 }
 
 test('frozen pre-slice corpus covers every existing kind', () => {
-  expect(baseline.map((n) => n.type).sort()).toEqual([...NODE_KINDS].sort())
+  expect(baseline.map((n) => n.type).sort()).toEqual(
+    [...NODE_KINDS].filter((kind) => kind !== 'fence-gate' && kind !== 'fence-opening').sort(),
+  )
 })
 test.each(
   baseline,
 )('pre-slice $type parses, saves and loads without changing existing fields', (saved) => {
-  const expected = saved.type === 'column' ? { ...saved, children: [] } : saved
-  expect(JSON.parse(JSON.stringify(AnyNode.parse(saved)))).toEqual(expected)
-  const graph = { [saved.id]: expected }
-  expect(load({ [saved.id]: saved }, saved.id)).toEqual(graph)
-  expect(load(graph, saved.id)).toEqual(graph)
+  const expected = JSON.parse(JSON.stringify(AnyNode.parse(saved)))
+  expect(expected).toMatchObject(saved)
+  const loaded = load({ [saved.id]: saved }, saved.id)
+  expect(loaded[saved.id]).toMatchObject(saved)
+  expect(load(loaded, saved.id)).toEqual(loaded)
 })
 
 describe.each([false, true])('host children with compiled parsers = %s', (compiled) => {

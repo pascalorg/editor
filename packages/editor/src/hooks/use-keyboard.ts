@@ -361,7 +361,10 @@ export const useKeyboard = ({
           const current = useEditor.getState().getContinuation('fence')
           useEditor
             .getState()
-            .setContinuation('fence', current === 'curved' ? 'continuous' : 'curved')
+            .setContinuation(
+              'fence',
+              current === 'curved' ? 'freehand' : current === 'freehand' ? 'continuous' : 'curved',
+            )
           sfxEmitter.emit('sfx:grid-snap')
           return
         }
@@ -380,7 +383,7 @@ export const useKeyboard = ({
           e.preventDefault()
           if (context === 'fence') {
             const current = useEditor.getState().getContinuation('fence')
-            if (current !== 'curved') {
+            if (current !== 'curved' && current !== 'freehand') {
               useEditor
                 .getState()
                 .setContinuation('fence', current === 'single' ? 'continuous' : 'single')

@@ -21,7 +21,9 @@ import type {
   DuctTerminalNode,
   ElevatorNode,
   EyebrowVentNode,
+  FenceGateNode,
   FenceNode,
+  FenceOpeningNode,
   GuideNode,
   GutterNode,
   HvacEquipmentNode,
@@ -352,6 +354,8 @@ type EditorEvents = GridEvents &
   NodeEvents<'procedural-item', NodeEvent<ProceduralItemNode>> &
   NodeEvents<'wall', WallEvent> &
   NodeEvents<'fence', FenceEvent> &
+  NodeEvents<'fence-gate', NodeEvent<FenceGateNode>> &
+  NodeEvents<'fence-opening', NodeEvent<FenceOpeningNode>> &
   NodeEvents<'cabinet', CabinetEvent> &
   NodeEvents<'cabinet-module', CabinetModuleEvent> &
   NodeEvents<'item', ItemEvent> &
