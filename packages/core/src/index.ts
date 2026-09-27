@@ -315,6 +315,7 @@ export {
   type NodeDeletionPlan,
   type NodeDeletionScene,
   planNodeDeletion,
+  previewDefaultGutterRefresh,
 } from './store/actions/node-actions'
 export {
   acquireSceneHistoryPause,

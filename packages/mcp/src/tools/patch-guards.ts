@@ -1,7 +1,9 @@
 import {
+  type NodeDeletionPlan,
   type NodeDeletionScene,
   nodeRegistry,
   planNodeDeletion,
+  previewDefaultGutterRefresh,
   validateNodeRelations,
 } from '@pascal-app/core'
 import { AnyNode, type AnyNodeId, nodeKindOf, parseNode } from '@pascal-app/core/schema'
@@ -92,16 +94,22 @@ function withoutChild(parent: AnyNode, childId: string): AnyNode {
  *   gutter or downspout that delete regenerates, and any update of the roof
  *   segment holding them (`regenerated_default`).
  *
- * Deletes run through core's `planNodeDeletion`, the store's own planner, one
- * call per run of consecutive deletes as the bridge batches them, so kind
- * cascades and walls merged across a deleted junction are seen exactly.
+ * Deletes run through the bridge's own deletion preview (`planDeletion`; the
+ * local bridge uses core's store planner), one call per run of consecutive
+ * deletes as the bridge batches them, so cascades and wall merges are seen as
+ * that bridge applies them. A bridge without a preview gets a stricter rule:
+ * a create may not reuse any id present at the start of the patch.
+ * An update of a roof segment unsettles the default gutters its refresh may
+ * regenerate, as a delete does.
  * Lives in the tool layer so every bridge behind `apply_patch` inherits it.
  */
 export function assertPatchKeepsIdentity(
   patches: readonly Patch[],
   nodes: Readonly<Record<string, AnyNode>>,
   rootNodeIds: readonly AnyNodeId[],
+  planDeletion?: (scene: NodeDeletionScene, ids: AnyNodeId[]) => NodeDeletionPlan,
 ): void {
+  const initialIds = new Set(Object.keys(nodes))
   let scene: NodeDeletionScene = {
     nodes: { ...nodes } as NodeDeletionScene['nodes'],
     rootNodeIds: [...rootNodeIds],
@@ -126,12 +134,24 @@ export function assertPatchKeepsIdentity(
       'regenerated_default',
       index,
       id,
-      `"${id}" is a default gutter or downspout that the delete at patches[${deleteIndex}] regenerates. Address it in a separate apply_patch call.`,
+      `"${id}" is a default gutter or downspout that the edit at patches[${deleteIndex}] regenerates. Address it in a separate apply_patch call.`,
     )
+  }
+  // Updating a roof or roof segment makes the store refresh that roof's
+  // default gutters, with the same effect on ids as a delete's refresh.
+  const unsettleRoofRefresh = (node: AnyNode, index: number) => {
+    const roofId =
+      node.type === 'roof' ? node.id : node.type === 'roof-segment' ? node.parentId : null
+    if (!roofId) return
+    const preview = previewDefaultGutterRefresh(scene.nodes, [roofId as AnyNodeId])
+    for (const id of preview.unsettledIds) regenerated.set(id, index)
+    for (const id of preview.regeneratedHostIds) regeneratedHosts.set(id, index)
   }
   let pendingDeletes: AnyNodeId[] = []
   const flushDeletes = (index: number) => {
-    const plan = planNodeDeletion(scene, pendingDeletes, { mintDefaults: false })
+    const plan = planDeletion
+      ? planDeletion(scene, pendingDeletes)
+      : planNodeDeletion(scene, pendingDeletes, { mintDefaults: false })
     for (const id of plan.unsettledIds) regenerated.set(id, index)
     for (const id of plan.regeneratedHostIds) regeneratedHosts.set(id, index)
     scene = { nodes: plan.nodes, rootNodeIds: plan.rootNodeIds, collections: plan.collections }
@@ -148,12 +168,14 @@ export function assertPatchKeepsIdentity(
       refuseRegenerated(index, node.id)
       const effectiveParentId = patch.parentId ?? (node.parentId as string | null | undefined)
       if (effectiveParentId) refuseRegenerated(index, effectiveParentId)
-      if (at(node.id)) {
+      if (at(node.id) || (!planDeletion && initialIds.has(node.id))) {
         throw new PatchRefusedError(
           'node_exists',
           index,
           node.id,
-          `create id "${node.id}" already exists. Use op "update" to change it, or delete it earlier in the same patch to replace it.`,
+          planDeletion || at(node.id)
+            ? `create id "${node.id}" already exists. Use op "update" to change it, or delete it earlier in the same patch to replace it.`
+            : `create id "${node.id}" existed when the patch started, and this bridge cannot preview its deletes. Delete it in one apply_patch call and create it in the next.`,
         )
       }
       const parentId = patch.parentId ?? (node.parentId as string | null | undefined) ?? null
@@ -176,7 +198,7 @@ export function assertPatchKeepsIdentity(
           'regenerated_default',
           index,
           patch.id,
-          `the delete at patches[${hostDeleteIndex}] regenerates the default gutters and downspouts under "${patch.id}", so its children are not known yet. Update it in a separate apply_patch call.`,
+          `the edit at patches[${hostDeleteIndex}] regenerates the default gutters and downspouts under "${patch.id}", so its children are not known yet. Update it in a separate apply_patch call.`,
         )
       }
       if (typeof patch.data?.parentId === 'string') refuseRegenerated(index, patch.data.parentId)
@@ -225,6 +247,7 @@ export function assertPatchKeepsIdentity(
         if (oldParent) put(withoutChild(oldParent, patch.id))
         put(withChild(newParent, patch.id))
         put(merged)
+        unsettleRoofRefresh(merged, index)
         try {
           validateNodeRelations(before, scene.nodes, [patch.id as AnyNodeId])
         } catch (err) {
@@ -238,6 +261,7 @@ export function assertPatchKeepsIdentity(
         return
       }
       put(merged)
+      unsettleRoofRefresh(merged, index)
       return
     }
 

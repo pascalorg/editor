@@ -423,6 +423,62 @@ describe('apply_patch identity and validation guards', () => {
     expect(bridge.getNode(b.id as AnyNodeId)).not.toBeNull()
   })
 
+  test('without a bridge deletion planner, a create of an id present at the start is refused', async () => {
+    // A bridge that cannot preview its own deletes (the hosted one today) may
+    // not merge walls like core does, so the guard cannot assume wall_b is gone.
+    const hostedLike = Object.create(bridge) as SceneBridge
+    ;(hostedLike as { planDeletion?: unknown }).planDeletion = undefined
+    const server = new McpServer({ name: 'hosted-like', version: '0.0.0' })
+    registerApplyPatch(server, createSceneOperations({ bridge: hostedLike }))
+    const [srvT, cliT] = InMemoryTransport.createLinkedPair()
+    const hostedClient = new Client({ name: 'hosted-client', version: '0.0.0' })
+    await Promise.all([server.connect(srvT), hostedClient.connect(cliT)])
+
+    const a = WallNode.parse({ id: 'wall_a', start: [0, 0], end: [2, 0] })
+    const b = WallNode.parse({ id: 'wall_b', start: [2, 0], end: [4, 0] })
+    const spur = WallNode.parse({ id: 'wall_spur', start: [2, 0], end: [2, 2] })
+    await apply([a, b, spur].map((node) => ({ op: 'create', node, parentId: level.id })))
+
+    const result = await hostedClient.callTool({
+      name: 'apply_patch',
+      arguments: {
+        patches: [
+          { op: 'delete', id: spur.id },
+          {
+            op: 'create',
+            node: WallNode.parse({ id: b.id, start: [2, 0], end: [5, 0] }),
+            parentId: level.id,
+          },
+        ],
+      },
+    })
+    expect(result.isError).toBe(true)
+    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text
+    expect(JSON.parse(text)).toMatchObject({ code: 'node_exists', patchIndex: 1, id: b.id })
+  })
+
+  test('an update of an auto-gutter roof segment unsettles its default gutters', async () => {
+    const roof = RoofNode.parse({})
+    const segment = RoofSegmentNode.parse({
+      width: 4,
+      depth: 4,
+      roofType: 'hip',
+      metadata: { autoGutter: true },
+    })
+    bridge.applyPatch([
+      { op: 'create', node: roof, parentId: level.id as AnyNodeId },
+      { op: 'create', node: segment, parentId: roof.id as AnyNodeId },
+    ])
+    const gutter = Object.values(bridge.getNodes()).find(
+      (n) => n.type === 'gutter' && n.parentId === segment.id,
+    )!
+    const result = await refusal([
+      { op: 'update', id: segment.id, data: { roofType: 'gable' } },
+      { op: 'update', id: gutter.id, data: { name: 'Front gutter' } },
+    ])
+    expect(result).toMatchObject({ code: 'regenerated_default', patchIndex: 1, id: gutter.id })
+  })
+
   test('an unregistered plugin kind is updated without schema validation', async () => {
     const pluginNode = {
       object: 'node',

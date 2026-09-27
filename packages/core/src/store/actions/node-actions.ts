@@ -1812,3 +1812,19 @@ export const deleteNodesAction = (
   get: Parameters<typeof deleteNodesActionImpl>[1],
   ids: AnyNodeId[],
 ) => runWithSceneCommitNodeIds(ids, () => deleteNodesActionImpl(validatedSet(set), get, ids))
+
+/**
+ * What the default gutter refresh of `roofIds` would touch, without running
+ * it: the existing default gutters and downspouts it may keep or replace, and
+ * the roof segments whose `children` it rewrites. For previews of edits that
+ * trigger the refresh (a roof segment update, a delete).
+ */
+export function previewDefaultGutterRefresh(
+  nodes: Record<AnyNodeId, AnyNode>,
+  roofIds: Iterable<AnyNodeId>,
+): { unsettledIds: Set<AnyNodeId>; regeneratedHostIds: Set<AnyNodeId> } {
+  const unsettledIds = new Set<AnyNodeId>()
+  const regeneratedHostIds = new Set<AnyNodeId>()
+  collectRefreshedDefaults(nodes, roofIds, unsettledIds, regeneratedHostIds)
+  return { unsettledIds, regeneratedHostIds }
+}
