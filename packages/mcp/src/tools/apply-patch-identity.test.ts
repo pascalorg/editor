@@ -85,6 +85,32 @@ describe('apply_patch identity and validation guards', () => {
     expect(bridge.getNode(b.id as AnyNodeId)).not.toBeNull()
   })
 
+  test('consecutive deletes are planned as one batch, like the store applies them', async () => {
+    const a = WallNode.parse({ id: 'wall_a', start: [0, 0], end: [2, 0] })
+    const b = WallNode.parse({ id: 'wall_b', start: [2, 0], end: [4, 0] })
+    const spur = WallNode.parse({ id: 'wall_spur', start: [2, 0], end: [2, 2] })
+    await apply([a, b, spur].map((node) => ({ op: 'create', node, parentId: level.id })))
+
+    // One deleteNodes([spur, b]) call: with b going too, nothing merges into a.
+    const result = await apply([
+      { op: 'delete', id: spur.id },
+      { op: 'delete', id: b.id },
+    ])
+    expect(result.isError).toBe(false)
+    expect(bridge.getNode(b.id as AnyNodeId)).toBeNull()
+    const kept = bridge.getNode(a.id as AnyNodeId)
+    expect(kept?.type === 'wall' && kept.end).toEqual([2, 0])
+
+    // A child listed after its host in the same run is accepted, as the store does.
+    const { wall, window } = await wallWithWindow()
+    const nested = await apply([
+      { op: 'delete', id: wall.id, cascade: true },
+      { op: 'delete', id: window.id },
+    ])
+    expect(nested.isError).toBe(false)
+    expect(bridge.getNode(window.id as AnyNodeId)).toBeNull()
+  })
+
   test('the real cascade frees ids so a subtree can be deleted and recreated', async () => {
     const { wall, window } = await wallWithWindow()
     const result = await apply([

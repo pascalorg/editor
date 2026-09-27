@@ -70,8 +70,9 @@ function withoutChild(parent: AnyNode, childId: string): AnyNode {
  *   before (`invalid_update`); kinds without a schema in this runtime pass;
  * - any op on a node an earlier delete in the patch removed.
  *
- * Deletes run through core's `planNodeDeletion`, the store's own planner, so
- * kind cascades and walls merged across a deleted junction are seen exactly.
+ * Deletes run through core's `planNodeDeletion`, the store's own planner, one
+ * call per run of consecutive deletes as the bridge batches them, so kind
+ * cascades and walls merged across a deleted junction are seen exactly.
  * Lives in the tool layer so every bridge behind `apply_patch` inherits it.
  */
 export function assertPatchKeepsIdentity(
@@ -87,6 +88,13 @@ export function assertPatchKeepsIdentity(
   const at = (id: string) => scene.nodes[id as AnyNodeId]
   const put = (node: AnyNode) => {
     scene.nodes[node.id as AnyNodeId] = node
+  }
+
+  let pendingDeletes: AnyNodeId[] = []
+  const flushDeletes = () => {
+    const plan = planNodeDeletion(scene, pendingDeletes)
+    scene = { nodes: plan.nodes, rootNodeIds: plan.rootNodeIds, collections: plan.collections }
+    pendingDeletes = []
   }
 
   patches.forEach((patch, index) => {
@@ -158,10 +166,14 @@ export function assertPatchKeepsIdentity(
     }
 
     if (patch.op === 'delete') {
-      if (!at(patch.id))
+      if (!at(patch.id) || pendingDeletes.includes(patch.id as AnyNodeId)) {
         throw new Error(`invalid patch: patches[${index}] delete id "${patch.id}" not found`)
-      const plan = planNodeDeletion(scene, [patch.id])
-      scene = { nodes: plan.nodes, rootNodeIds: plan.rootNodeIds, collections: plan.collections }
+      }
+      pendingDeletes.push(patch.id as AnyNodeId)
+      // The bridge applies a run of consecutive deletes as one deleteNodes
+      // call, and wall merges and kind cascades depend on the whole id list,
+      // so plan the run together once it ends.
+      if (patches[index + 1]?.op !== 'delete') flushDeletes()
     }
   })
 }
