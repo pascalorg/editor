@@ -60,6 +60,7 @@ export {
   cloneNodesInto,
   collectSubtree,
   type Subtree,
+  withoutSourceIdentity,
 } from './subtree'
 export type {
   Affordance,

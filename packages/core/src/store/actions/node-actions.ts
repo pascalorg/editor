@@ -538,6 +538,22 @@ function warnSanitizedNodeMutation(
   }
 }
 
+/**
+ * Source ids cannot be repaired the way the numeric fallback repairs a value:
+ * any fix would drop or rewrite them (D5). A write whose `provenance` fails its
+ * schema throws, so the mutation applies nothing.
+ */
+function refuseInvalidProvenance(
+  nodeId: string,
+  issues: readonly { path: PropertyKey[]; message: string }[],
+): void {
+  const issue = issues.find((candidate) => candidate.path[0] === 'provenance')
+  if (!issue) return
+  throw new Error(
+    `Node "${nodeId}": provenance refused at ${issue.path.join('.')}: ${issue.message}`,
+  )
+}
+
 function parseCreatedNode(node: AnyNode, parentId: AnyNodeId | null): AnyNode {
   const candidate = { ...node, parentId }
   const registered = nodeRegistry.get(candidate.type)?.schema
@@ -545,6 +561,7 @@ function parseCreatedNode(node: AnyNode, parentId: AnyNodeId | null): AnyNode {
   if (registered?.meta?.()?.strictMutations === true) return registered.parse(candidate) as AnyNode
   const parsed = parseNode(candidate)
   if (parsed.success) return parsed.data
+  refuseInvalidProvenance(candidate.id, parsed.error.issues)
 
   const schema = getNodeSchemaForType(candidate.type)
   const sanitized = sanitizeNumericValue(schema, candidate, undefined, [])
@@ -586,6 +603,9 @@ function parseUpdatedNode(currentNode: AnyNode, data: Partial<AnyNode>): AnyNode
     return preserveChildren(registered.parse(candidate) as AnyNode)
   const parsed = parseNode(candidate)
   if (parsed.success) return preserveChildren(parsed.data)
+  // Only a write of the field is refused: a stored over-cap value stays editable.
+  if (Object.hasOwn(data, 'provenance'))
+    refuseInvalidProvenance(currentNode.id, parsed.error.issues)
 
   const schema = getNodeSchemaForType(candidate.type)
   const sanitized = sanitizeNumericValue(schema, data, currentNode, [])

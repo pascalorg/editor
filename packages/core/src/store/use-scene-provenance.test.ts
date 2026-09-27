@@ -104,4 +104,36 @@ describe('provenance through the scene store (D5)', () => {
     useScene.temporal.getState().undo()
     expect(provenanceOf('wall_a')).toEqual(WALL)
   })
+
+  test('a write of an invalid provenance is refused and changes nothing', () => {
+    loadScene()
+    const update = () =>
+      useScene
+        .getState()
+        .updateNode('wall_a' as AnyNodeId, { provenance: OVER_CAP } as Partial<AnyNode>)
+    expect(update).toThrow('provenance.refs')
+    expect(provenanceOf('wall_a')).toEqual(WALL)
+
+    const create = () =>
+      useScene.getState().createNode(
+        node('wall_new', 'wall', 'level_l', {
+          children: [],
+          start: [0, 4],
+          end: [4, 4],
+          provenance: { refs: [{ id: '壁'.repeat(8) }] },
+        }) as unknown as AnyNode,
+        'level_l' as AnyNodeId,
+      )
+    expect(create).toThrow('provenance.refs.0.id')
+    expect(useScene.getState().nodes['wall_new' as AnyNodeId]).toBeUndefined()
+  })
+
+  test('an unrelated edit of a stored over-cap node applies and truncates nothing', () => {
+    loadScene()
+    useScene.getState().updateNode('wall_over' as AnyNodeId, { height: 3 } as Partial<AnyNode>)
+    expect(
+      (useScene.getState().nodes['wall_over' as AnyNodeId] as { height?: number }).height,
+    ).toBe(3)
+    expect(provenanceOf('wall_over')).toEqual(OVER_CAP)
+  })
 })

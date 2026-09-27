@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { AnyNode, AnyNodeId } from '../schema/types'
-import { cloneNodesInto, collectSubtree } from './subtree'
+import { cloneNodesInto, collectSubtree, withoutSourceIdentity } from './subtree'
 
 function makeNode(id: string, type: string, extra: Record<string, unknown> = {}): AnyNode {
   return {
@@ -251,5 +251,59 @@ describe('cloneNodesInto', () => {
   test('throws if rootId is missing from the input array', () => {
     const orig = makeNode('shelf_1', 'shelf', {})
     expect(() => cloneNodesInto([orig], { rootId: 'shelf_other' as AnyNodeId })).toThrow(/rootId/)
+  })
+})
+
+describe('withoutSourceIdentity (preset save, D5)', () => {
+  const wallProvenance = {
+    refs: [{ ns: 'al', id: 'ground-exterior-01' }],
+    lineage: { op: 'split', fromIds: ['wall_before'] },
+  }
+  const windowProvenance = {
+    refs: [
+      { ns: 'al', id: 'roof-native-134755-83', role: 'absorbed' },
+      { ns: 'al', id: 'roof-native-135186-86', role: 'absorbed' },
+    ],
+  }
+  const imported = (): Record<AnyNodeId, AnyNode> => ({
+    ['level_l' as AnyNodeId]: makeNode('level_l', 'level', { children: ['wall_a'] }),
+    ['wall_a' as AnyNodeId]: makeNode('wall_a', 'wall', {
+      parentId: 'level_l',
+      children: ['window_a'],
+      metadata: { sourceIds: ['ground-exterior-01'], expressID: 42 },
+      provenance: wallProvenance,
+    }),
+    ['window_a' as AnyNodeId]: makeNode('window_a', 'window', {
+      parentId: 'wall_a',
+      wallId: 'wall_a',
+      provenance: windowProvenance,
+    }),
+  })
+
+  test('an imported node saved as a preset and placed again claims no source element', () => {
+    const scene = imported()
+    const subtree = collectSubtree(scene, 'wall_a' as AnyNodeId)!
+    const stored = JSON.stringify({
+      root: withoutSourceIdentity(subtree.root),
+      descendants: subtree.descendants.map(withoutSourceIdentity),
+    })
+
+    const preset = JSON.parse(stored) as { root: AnyNode; descendants: AnyNode[] }
+    const placed = cloneNodesInto([preset.root, ...preset.descendants], {
+      rootId: preset.root.id,
+      parentId: 'level_l' as AnyNodeId,
+    })
+    expect(placed.nodes).toHaveLength(2)
+    for (const node of placed.nodes) expect(Object.hasOwn(node, 'provenance')).toBe(false)
+    // The saved-from nodes keep their identity.
+    expect((scene['wall_a' as AnyNodeId] as any).provenance).toEqual(wallProvenance)
+    expect((scene['window_a' as AnyNodeId] as any).provenance).toEqual(windowProvenance)
+  })
+
+  test('keeps every other field, including provenance a preset keeps', () => {
+    const wall = imported()['wall_a' as AnyNodeId]!
+    const { provenance: _, ...rest } = wall as AnyNode & { provenance?: unknown }
+    expect(withoutSourceIdentity(wall)).toEqual(rest as AnyNode)
+    expect((withoutSourceIdentity(wall) as any).metadata.expressID).toBe(42)
   })
 })

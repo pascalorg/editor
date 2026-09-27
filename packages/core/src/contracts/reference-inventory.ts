@@ -54,7 +54,8 @@ export type ExistingReference = ReferenceDeclaration & {
  * The private benchmark copy with source locations
  * (`bench/next-house/design/existing-references.json`) is generated from it.
  *
- * Not exported from the package: consumed by tests, P-03 and the generator.
+ * Not exported from the package: consumed by tests, P-03, the generator and
+ * the preset strip (`withoutSourceIdentity`, its `source` + `strip` rows).
  */
 
 type Row = Omit<ExistingReference, 'extractor' | 'remaps'> & {

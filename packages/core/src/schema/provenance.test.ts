@@ -4,10 +4,10 @@ import { healSceneNodes } from '../utils/heal-scene-graph'
 import { NODE_KINDS, nodeFixtures } from './__fixtures__/node-fixtures'
 import { BaseNode } from './base'
 import {
-  PROVENANCE_MAX_ID_LENGTH,
+  PROVENANCE_MAX_ID_BYTES,
   PROVENANCE_MAX_LINEAGE_IDS,
-  PROVENANCE_MAX_NAMESPACE_LENGTH,
-  PROVENANCE_MAX_NODE_ID_LENGTH,
+  PROVENANCE_MAX_NAMESPACE_BYTES,
+  PROVENANCE_MAX_NODE_ID_BYTES,
   PROVENANCE_MAX_REFS,
   Provenance,
 } from './provenance'
@@ -69,12 +69,12 @@ describe('provenance caps refuse, never truncate', () => {
     expect(issuePaths({ refs: refs(PROVENANCE_MAX_REFS + 1) })).toEqual(['refs'])
 
     const id = (length: number) => ({ refs: [{ id: 'x'.repeat(length) }] })
-    expect(issuePaths(id(PROVENANCE_MAX_ID_LENGTH))).toEqual([])
-    expect(issuePaths(id(PROVENANCE_MAX_ID_LENGTH + 1))).toEqual(['refs.0.id'])
+    expect(issuePaths(id(PROVENANCE_MAX_ID_BYTES))).toEqual([])
+    expect(issuePaths(id(PROVENANCE_MAX_ID_BYTES + 1))).toEqual(['refs.0.id'])
 
     const ns = (length: number) => ({ refs: [{ ns: 'n'.repeat(length), id: 'a' }] })
-    expect(issuePaths(ns(PROVENANCE_MAX_NAMESPACE_LENGTH))).toEqual([])
-    expect(issuePaths(ns(PROVENANCE_MAX_NAMESPACE_LENGTH + 1))).toEqual(['refs.0.ns'])
+    expect(issuePaths(ns(PROVENANCE_MAX_NAMESPACE_BYTES))).toEqual([])
+    expect(issuePaths(ns(PROVENANCE_MAX_NAMESPACE_BYTES + 1))).toEqual(['refs.0.ns'])
 
     const from = (count: number, length = 8) => ({
       refs: [],
@@ -82,8 +82,8 @@ describe('provenance caps refuse, never truncate', () => {
     })
     expect(issuePaths(from(PROVENANCE_MAX_LINEAGE_IDS))).toEqual([])
     expect(issuePaths(from(PROVENANCE_MAX_LINEAGE_IDS + 1))).toEqual(['lineage.fromIds'])
-    expect(issuePaths(from(1, PROVENANCE_MAX_NODE_ID_LENGTH))).toEqual([])
-    expect(issuePaths(from(1, PROVENANCE_MAX_NODE_ID_LENGTH + 1))).toEqual(['lineage.fromIds.0'])
+    expect(issuePaths(from(1, PROVENANCE_MAX_NODE_ID_BYTES))).toEqual([])
+    expect(issuePaths(from(1, PROVENANCE_MAX_NODE_ID_BYTES + 1))).toEqual(['lineage.fromIds.0'])
   })
 
   test('empty ids, unknown roles and unknown ops are refused', () => {
@@ -108,22 +108,37 @@ describe('provenance caps refuse, never truncate', () => {
     expect(healed.nodes[wall.id]).toEqual(wall)
   })
 
-  test('a full ASCII value stays under half the 24 KiB F8 field cap', () => {
+  test('caps are UTF-8 bytes: ids are printable ASCII, one byte per character', () => {
+    for (const id of ['壁'.repeat(8), 'café', 'a\nb', '\u0000', '\ud800'])
+      expect(issuePaths({ refs: [{ id }] })).toEqual(['refs.0.id'])
+    expect(issuePaths({ refs: [{ ns: 'ifc:Maison-Été.ifc', id: 'a' }] })).toEqual(['refs.0.ns'])
+    expect(issuePaths({ refs: [], lineage: { op: 'split', fromIds: ['wall_é'] } })).toEqual([
+      'lineage.fromIds.0',
+    ])
+    // An importer percent-encodes anything else; the id stays exactly recoverable.
+    const encoded = encodeURIComponent('壁-01/仕上げ')
+    expect(issuePaths({ refs: [{ id: encoded }] })).toEqual([])
+    expect(decodeURIComponent(encoded)).toBe('壁-01/仕上げ')
+  })
+
+  test('a maximal value serialises within the 24 KiB F8 field cap, JSON escapes included', () => {
+    // `"` and `\` are the only printable ASCII characters JSON escapes, to two bytes each.
+    const worst = (bytes: number) => '"\\'.repeat(bytes).slice(0, bytes)
     const full: Provenance = {
-      refs: Array.from({ length: PROVENANCE_MAX_REFS }, (_, i) => ({
-        ns: 'n'.repeat(PROVENANCE_MAX_NAMESPACE_LENGTH),
-        id: String(i).padStart(PROVENANCE_MAX_ID_LENGTH, 'x'),
+      refs: Array.from({ length: PROVENANCE_MAX_REFS }, () => ({
+        ns: worst(PROVENANCE_MAX_NAMESPACE_BYTES),
+        id: worst(PROVENANCE_MAX_ID_BYTES),
         role: 'absorbed' as const,
       })),
       lineage: {
         op: 'make-independent',
-        fromIds: Array.from({ length: PROVENANCE_MAX_LINEAGE_IDS }, (_, i) =>
-          String(i).padStart(PROVENANCE_MAX_NODE_ID_LENGTH, 'w'),
+        fromIds: Array.from({ length: PROVENANCE_MAX_LINEAGE_IDS }, () =>
+          worst(PROVENANCE_MAX_NODE_ID_BYTES),
         ),
       },
     }
     expect(Provenance.safeParse(full).success).toBe(true)
     const bytes = new TextEncoder().encode(JSON.stringify(full)).byteLength
-    expect(bytes).toBeLessThanOrEqual(12 * 1024)
+    expect(bytes).toBeLessThanOrEqual(24 * 1024)
   })
 })

@@ -23,7 +23,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { cloneNodesInto } from '../registry/subtree'
+import { cloneNodesInto, withoutSourceIdentity } from '../registry/subtree'
 import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema, nodeKindOf } from '../schema/types'
 import { cloneLevelSubtree, cloneSceneGraph } from '../utils/clone-scene-graph'
 import { discoverMetadataKeys, type ScanFs, scanMetadataSources } from './metadata-scan'
@@ -331,6 +331,33 @@ describe('source-namespace provenance (R9)', () => {
       ]),
     )
     for (const row of sources) expect(row.remaps).toEqual([])
+  })
+
+  test('every source reference a preset strips is gone from the preset copy (D5)', () => {
+    const rows = [...EXISTING_REFERENCES, ...METADATA_REFERENCES].filter(
+      (r) => r.namespace === 'source' && r.kind !== '#scene',
+    )
+    expect(rows.some((r) => r.onPreset === 'strip')).toBe(true)
+    for (const row of rows) {
+      const kind =
+        row.kind === '*'
+          ? (KINDS.find((k) => CANDIDATES.get(k)?.includes(row.path)) ?? 'wall')
+          : row.kind
+      const node: Loose = { id: `${kind}_a`, type: kind, metadata: {} }
+      setAt(node, row.path, 'source-1')
+      const copy = withoutSourceIdentity(node as unknown as AnyNode)
+      expect({ path: row.path, kept: getAt(copy, row.path) }).toEqual({
+        path: row.path,
+        kept: row.onPreset === 'strip' ? [] : getAt(node, row.path),
+      })
+    }
+    const lineage = { provenance: { refs: [], lineage: { op: 'split', fromIds: ['wall_b'] } } }
+    expect(
+      getAt(
+        withoutSourceIdentity({ ...lineage, id: 'wall_a', type: 'wall' } as never),
+        'provenance.lineage.fromIds[]',
+      ),
+    ).toEqual([])
   })
 
   test('typed provenance refs are stripped from presets so copies never claim them (D5)', () => {
