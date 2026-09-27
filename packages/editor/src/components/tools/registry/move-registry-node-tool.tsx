@@ -13,6 +13,7 @@ import {
   createSceneApi,
   emitter,
   findLevelAncestorId,
+  floorPlacedCollides,
   footprintAABBFrom,
   type GridEvent,
   type GroupMoveSnapResult,
@@ -340,7 +341,8 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
   // position isn't in the level frame the spatial grid indexes. They may
   // still provide a parent-frame collision check and use the same bounds box.
   const collides =
-    !frameParent && nodeRegistry.get(node.type)?.capabilities?.floorPlaced?.collides === true
+    !frameParent &&
+    floorPlacedCollides(nodeRegistry.get(node.type)?.capabilities?.floorPlaced, node)
   // Snapshot the scene once at drag-start — bounds depend on `node` (locked
   // for the lifetime of this tool) and any sibling state the kind reads. If a
   // future kind needs live sibling state mid-drag, switch to a subscribed

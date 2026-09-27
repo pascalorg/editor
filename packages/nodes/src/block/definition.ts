@@ -15,6 +15,22 @@ import { BlockNode } from './schema'
 import { blockSlots } from './slots'
 import { blockSurfaceProvider } from './surface'
 
+/** Bottom within this of the floor (and top above it): the block stands on the floor. */
+const BLOCK_ON_FLOOR_MAX_BOTTOM = 0.1
+const BLOCK_ON_FLOOR_MIN_TOP = 0.01
+
+/**
+ * Floor collision is for blocks standing on the floor. Soffits, vaults,
+ * gutters and mantels hang above floor placements, and foundation pads sit
+ * under the floor, so neither blocks furniture nor gets refused when moved.
+ */
+function blockRestsOnFloor(node: BlockNodeType): boolean {
+  const { size, center } = blockBounds(node)
+  const bottom = node.position[1] + center[1] - size[1] / 2
+  const top = node.position[1] + center[1] + size[1] / 2
+  return bottom <= BLOCK_ON_FLOOR_MAX_BOTTOM && top > BLOCK_ON_FLOOR_MIN_TOP
+}
+
 export function blockBounds(node: BlockNodeType) {
   const xs = node.topology.vertices.map((vertex) => vertex.position[0])
   const ys = node.topology.vertices.map((vertex) => vertex.position[1])
@@ -103,7 +119,7 @@ export const blockDefinition: NodeDefinition<typeof BlockNode> = {
           rotation: [0, node.rotation, 0] as [number, number, number],
         }
       },
-      collides: true,
+      collides: (rawNode) => blockRestsOnFloor(rawNode as BlockNodeType),
     },
     paint: blockPaint,
     slots: (rawNode) => blockSlots(rawNode as BlockNodeType),

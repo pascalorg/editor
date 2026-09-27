@@ -22,6 +22,7 @@ export {
   bakePolicyOf,
   discoverPlugins,
   extendPluginDiscovery,
+  floorPlacedCollides,
   getHostRefFields,
   getInspectorExtensions,
   getNodePluginId,
