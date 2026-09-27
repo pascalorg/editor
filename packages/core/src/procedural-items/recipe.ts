@@ -1295,7 +1295,8 @@ export function evaluateRecipe(
     if (
       recipe.mounting?.attachTo === 'ceiling' &&
       reference &&
-      bounds.max[1] > reference.position[1] + 0.001
+      bounds.max[1] > reference.position[1] + 0.001 &&
+      !boxCorners(bounds.min, bounds.max).every(([x, , z]) => insideCut?.(x, z))
     )
       throw new Error(`Motion envelope for ${motion.partId} rises above the ceiling reference`)
   }

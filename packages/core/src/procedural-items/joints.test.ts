@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import cabinetJson from './__fixtures__/cabinet_two_doors_drawer.json'
+import downlightJson from './__fixtures__/recessed_downlight.json'
 import { ProceduralMotionController } from './motion-controller'
 import { evaluateRecipe, parseRecipe, type Recipe } from './recipe'
 
@@ -268,5 +269,17 @@ describe('joint tree (recipe version 2)', () => {
       r.parts[2]!.shapes[0]!.support = true
     })
     expect(() => parseRecipe(withSupport)).toThrow('support')
+  })
+
+  test('a recessed design may move a jointed part inside its ceiling cut', () => {
+    const recipe = structuredClone(downlightJson) as Recipe
+    const lens = recipe.parts.find((part) => part.id === 'lens')!
+    recipe.joints = [
+      { child: 'lens', kind: 'revolute', origin: [0, 0.05, 0], axis: [1, 0, 0], open: 0.4 },
+    ]
+    expect(() => parseRecipe(recipe)).not.toThrow()
+    recipe.joints[0]!.origin = [0, 0.05, 0.3]
+    expect(() => parseRecipe(recipe)).toThrow('rises above the ceiling reference')
+    expect(lens.id).toBe('lens')
   })
 })
