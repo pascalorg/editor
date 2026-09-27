@@ -321,6 +321,12 @@ export * from './schema'
 export * from './services'
 export { isMovable, movePlanToward, moveToward, resolveMovable } from './services/movement'
 export {
+  type NodeDeletionPlan,
+  type NodeDeletionScene,
+  planNodeDeletion,
+  previewDefaultGutterRefresh,
+} from './store/actions/node-actions'
+export {
   acquireSceneHistoryPause,
   activeSceneCommitNodeIds,
   getSceneHistoryPauseDepth,

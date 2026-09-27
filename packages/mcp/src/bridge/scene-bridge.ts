@@ -1,6 +1,11 @@
 // Side-effect import MUST come first: installs RAF polyfill before core loads.
 import './node-shims'
-import { HIDDEN_SITE_NOTE } from '@pascal-app/core'
+import {
+  HIDDEN_SITE_NOTE,
+  type NodeDeletionPlan,
+  type NodeDeletionScene,
+  planNodeDeletion,
+} from '@pascal-app/core'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import type { AnyNode } from '@pascal-app/core/schema'
 import {
@@ -456,6 +461,15 @@ export class SceneBridge {
       deletedIds,
       createdIds,
     }
+  }
+
+  /**
+   * Preview what deleting `ids` does to `scene` with this bridge's semantics
+   * (core's store planner), without committing or minting default gutters.
+   * The apply_patch guard runs its dry run through this.
+   */
+  planDeletion(scene: NodeDeletionScene, ids: AnyNodeId[]): NodeDeletionPlan {
+    return planNodeDeletion(scene, ids, { mintDefaults: false })
   }
 
   /** Undo. Returns the number of steps actually undone. */

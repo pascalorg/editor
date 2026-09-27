@@ -1504,175 +1504,269 @@ const updateNodesActionImpl = (
   })
 }
 
+/** The scene record a node deletion reads and rewrites. */
+export type NodeDeletionScene = Pick<SceneState, 'nodes' | 'rootNodeIds' | 'collections'>
+
+/** What deleting `ids` does to a scene, before anything is committed. */
+export type NodeDeletionPlan = NodeDeletionScene & {
+  /** Every removed id: the requested ids, their subtrees, kind cascades, merged-away walls. */
+  deletedIds: Set<AnyNodeId>
+  parentsToMarkDirty: Set<AnyNodeId>
+  nodesToMarkDirty: Set<AnyNodeId>
+  /** Preview only: existing default gutters and downspouts the refresh may keep or replace. */
+  unsettledIds: Set<AnyNodeId>
+  /** Preview only: roof segments whose `children` the refresh rewrites. */
+  regeneratedHostIds: Set<AnyNodeId>
+}
+
+/**
+ * The delete store action's planner, without committing: the requested ids,
+ * their `children` subtrees and kind `onDeleteCascade` companions, collinear
+ * walls merged across a deleted junction, neighbour patches, support and unit
+ * cleanup, and the default gutter and downspout refresh.
+ *
+ * The refresh mints gutters, downspouts and outlets with random ids, and which
+ * existing defaults it keeps can depend on them. With `mintDefaults: false`
+ * (a preview, such as the MCP patch dry run) the refresh does not run: the
+ * existing defaults it would touch are listed in `unsettledIds`, and the plan
+ * is deterministic and equals the commit for every other existing id. The
+ * delete action mints.
+ */
+export function planNodeDeletion(
+  scene: NodeDeletionScene,
+  ids: AnyNodeId[],
+  { mintDefaults = true }: { mintDefaults?: boolean } = {},
+): NodeDeletionPlan {
+  const parentsToMarkDirty = new Set<AnyNodeId>()
+  const nodesToMarkDirty = new Set<AnyNodeId>()
+  const deletedIds = new Set<AnyNodeId>()
+  const mergePlans = buildWallMergePlans(scene.nodes, ids)
+  const requestedDeleteIds = new Set(ids)
+  const nextNodes = { ...scene.nodes }
+  const nextCollections = { ...scene.collections }
+  let nextRootIds = [...scene.rootNodeIds]
+
+  // Collect all ids to delete (the requested ids + all their descendants) before
+  // mutating anything, so the recursive walk reads consistent state.
+  const allIds = new Set<AnyNodeId>()
+  const collect = (id: AnyNodeId) => {
+    if (allIds.has(id)) return
+    allIds.add(id)
+    const node = nextNodes[id]
+    const cascadeDeletes = node
+      ? nodeRegistry
+          .get(node.type)
+          ?.parametrics?.onDeleteCascade?.(node, nextNodes, allIds, requestedDeleteIds)
+      : null
+    if (cascadeDeletes) {
+      for (const companionId of cascadeDeletes) collect(companionId)
+    }
+    if (node && 'children' in node) {
+      for (const cid of node.children as AnyNodeId[]) collect(cid)
+    }
+  }
+  for (const id of ids) collect(id)
+  for (const plan of mergePlans) {
+    allIds.add(plan.secondaryWallId)
+  }
+  const affectedRoofIds = new Set<AnyNodeId>()
+  for (const id of allIds) {
+    const node = nextNodes[id]
+    addLeanToHostRoofId(node, nextNodes, affectedRoofIds)
+    if (node?.type === 'roof-segment' && node.parentId) {
+      affectedRoofIds.add(node.parentId as AnyNodeId)
+    }
+  }
+  for (const id of allIds) deletedIds.add(id)
+
+  // Let each deleted kind undo what it imposed on its neighbours (e.g. an
+  // auto-inserted elbow re-extends the duct runs it trimmed back onto the
+  // corner it replaced). Read against pre-deletion `nextNodes`; skip
+  // patches that target a node also being deleted.
+  for (const id of allIds) {
+    const node = nextNodes[id]
+    if (!node) continue
+    const onDelete = nodeRegistry.get(node.type)?.parametrics?.onDelete
+    if (!onDelete) continue
+    for (const { id: targetId, data } of onDelete(node, nextNodes, allIds, requestedDeleteIds)) {
+      if (allIds.has(targetId)) continue
+      const target = nextNodes[targetId]
+      if (!target) continue
+      nextNodes[targetId] = { ...target, ...data } as AnyNode
+      nodesToMarkDirty.add(targetId)
+    }
+  }
+
+  for (const plan of mergePlans) {
+    const primaryWall = nextNodes[plan.primaryWallId]
+    if (!(primaryWall && primaryWall.type === 'wall') || allIds.has(plan.primaryWallId)) {
+      continue
+    }
+
+    nextNodes[plan.primaryWallId] = {
+      ...primaryWall,
+      start: plan.mergedStart,
+      end: plan.mergedEnd,
+      children: plan.mergedChildren,
+    }
+    nodesToMarkDirty.add(plan.primaryWallId)
+
+    for (const update of plan.attachmentUpdates) {
+      if (allIds.has(update.id)) continue
+      const child = nextNodes[update.id]
+      if (!child) continue
+      nextNodes[update.id] = { ...child, ...update.data } as AnyNode
+      nodesToMarkDirty.add(update.id)
+    }
+  }
+
+  // Deleting a slab strips `supportSlabId` / `deckSlabId` references from
+  // surviving nodes in the same undo commit (mirrors the collectionIds
+  // cleanup below), so those nodes re-elect their support / re-derive
+  // their rise. Deletion is the ONLY writer — a host merely reshaped away
+  // keeps the field and the read path falls back, letting hosting resume
+  // if the slab returns.
+  const deletedSlabIds = new Set<string>()
+  for (const id of allIds) {
+    if (nextNodes[id]?.type === 'slab') deletedSlabIds.add(id)
+  }
+  if (deletedSlabIds.size > 0) {
+    for (const [nodeId, node] of Object.entries(nextNodes)) {
+      if (allIds.has(nodeId as AnyNodeId)) continue
+      const patch: { supportSlabId?: undefined; deckSlabId?: undefined } = {}
+      const hostId = (node as { supportSlabId?: string }).supportSlabId
+      if (hostId && deletedSlabIds.has(hostId)) patch.supportSlabId = undefined
+      const deckId = (node as { deckSlabId?: string }).deckSlabId
+      if (deckId && deletedSlabIds.has(deckId)) patch.deckSlabId = undefined
+      if (Object.keys(patch).length > 0) {
+        nextNodes[nodeId as AnyNodeId] = { ...node, ...patch } as AnyNode
+        nodesToMarkDirty.add(nodeId as AnyNodeId)
+      }
+    }
+  }
+
+  const deletedZoneIds = new Set<string>()
+  for (const id of allIds) {
+    if (nextNodes[id]?.type === 'zone') deletedZoneIds.add(id)
+  }
+  if (deletedZoneIds.size > 0) {
+    for (const node of Object.values(nextNodes)) {
+      if (node.type !== 'unit' || allIds.has(node.id)) continue
+      const members = node.members.filter((id) => !deletedZoneIds.has(id))
+      if (members.length === node.members.length) continue
+      nextNodes[node.id] = { ...node, members }
+      nodesToMarkDirty.add(node.id)
+    }
+  }
+
+  for (const id of allIds) {
+    const node = nextNodes[id]
+    if (!node) continue
+
+    // 1. Remove reference from parent — only if the parent itself is NOT also being deleted
+    const parentId = node.parentId as AnyNodeId | null
+    if (parentId && nextNodes[parentId] && !allIds.has(parentId)) {
+      const parent = nextNodes[parentId] as AnyContainerNode
+      if (parent.children) {
+        nextNodes[parent.id] = {
+          ...parent,
+          children: parent.children.filter((cid) => cid !== id),
+        } as AnyNode
+        parentsToMarkDirty.add(parent.id)
+      }
+    }
+
+    // 2. Remove from root list
+    nextRootIds = nextRootIds.filter((rid) => rid !== id)
+
+    // 3. Remove from any collections it belongs to
+    if ('collectionIds' in node && node.collectionIds) {
+      for (const cid of node.collectionIds as CollectionId[]) {
+        const col = nextCollections[cid]
+        if (col) {
+          nextCollections[cid] = { ...col, nodeIds: col.nodeIds.filter((nid) => nid !== id) }
+        }
+      }
+    }
+
+    // 4. Delete the node itself
+    delete nextNodes[id]
+  }
+
+  const unsettledIds = new Set<AnyNodeId>()
+  const regeneratedHostIds = new Set<AnyNodeId>()
+  if (mintDefaults) {
+    refreshDefaultGuttersForRoofIds(nextNodes, affectedRoofIds, nodesToMarkDirty, deletedIds)
+  } else {
+    collectRefreshedDefaults(nextNodes, affectedRoofIds, unsettledIds, regeneratedHostIds)
+  }
+
+  return {
+    nodes: nextNodes,
+    rootNodeIds: nextRootIds,
+    collections: nextCollections,
+    deletedIds,
+    parentsToMarkDirty,
+    nodesToMarkDirty,
+    unsettledIds,
+    regeneratedHostIds,
+  }
+}
+
+/**
+ * The existing nodes the default gutter refresh of `roofIds` may keep, move or
+ * replace: each roof's default gutters and the downspouts on them. Which of
+ * them survive depends on the gutters the refresh mints, whose ids are random.
+ * `hosts` receives the roof segments whose `children` the refresh rewrites.
+ */
+function collectRefreshedDefaults(
+  nodes: Record<AnyNodeId, AnyNode>,
+  roofIds: Iterable<AnyNodeId>,
+  out: Set<AnyNodeId>,
+  hosts: Set<AnyNodeId>,
+) {
+  const gutterIds = new Set<AnyNodeId>()
+  for (const roofId of new Set(roofIds)) {
+    const roof = nodes[roofId]
+    if (roof?.type !== 'roof') continue
+    for (const segmentId of roof.children ?? []) {
+      const segment = nodes[segmentId as AnyNodeId]
+      if (segment?.type !== 'roof-segment') continue
+      hosts.add(segment.id as AnyNodeId)
+      for (const childId of segment.children ?? []) {
+        if (isDefaultGutterNode(nodes[childId as AnyNodeId], segment.id)) {
+          gutterIds.add(childId as AnyNodeId)
+        }
+      }
+    }
+  }
+  for (const id of gutterIds) out.add(id)
+  for (const node of Object.values(nodes)) {
+    if (node?.type === 'downspout' && node.gutterId && gutterIds.has(node.gutterId as AnyNodeId)) {
+      out.add(node.id as AnyNodeId)
+    }
+  }
+}
+
 const deleteNodesActionImpl = (
   set: (fn: (state: SceneState) => Partial<SceneState>) => void,
   get: () => SceneState,
   ids: AnyNodeId[],
 ) => {
   if (get().readOnly) return
-  const parentsToMarkDirty = new Set<AnyNodeId>()
-  const nodesToMarkDirty = new Set<AnyNodeId>()
-  const deletedIds = new Set<AnyNodeId>()
-  const mergePlans = buildWallMergePlans(get().nodes, ids)
-  const requestedDeleteIds = new Set(ids)
+  let deletedIds = new Set<AnyNodeId>()
+  let parentsToMarkDirty = new Set<AnyNodeId>()
+  let nodesToMarkDirty = new Set<AnyNodeId>()
 
   set((state) => {
-    const nextNodes = { ...state.nodes }
-    const nextCollections = { ...state.collections }
-    let nextRootIds = [...state.rootNodeIds]
-
-    // Collect all ids to delete (the requested ids + all their descendants) before
-    // mutating anything, so the recursive walk reads consistent state.
-    const allIds = new Set<AnyNodeId>()
-    const collect = (id: AnyNodeId) => {
-      if (allIds.has(id)) return
-      allIds.add(id)
-      const node = nextNodes[id]
-      const cascadeDeletes = node
-        ? nodeRegistry
-            .get(node.type)
-            ?.parametrics?.onDeleteCascade?.(node, nextNodes, allIds, requestedDeleteIds)
-        : null
-      if (cascadeDeletes) {
-        for (const companionId of cascadeDeletes) collect(companionId)
-      }
-      if (node && 'children' in node) {
-        for (const cid of node.children as AnyNodeId[]) collect(cid)
-      }
-    }
-    for (const id of ids) collect(id)
-    for (const plan of mergePlans) {
-      allIds.add(plan.secondaryWallId)
-    }
-    const affectedRoofIds = new Set<AnyNodeId>()
-    for (const id of allIds) {
-      const node = nextNodes[id]
-      addLeanToHostRoofId(node, nextNodes, affectedRoofIds)
-      if (node?.type === 'roof-segment' && node.parentId) {
-        affectedRoofIds.add(node.parentId as AnyNodeId)
-      }
-    }
-    for (const id of allIds) deletedIds.add(id)
-
-    // Let each deleted kind undo what it imposed on its neighbours (e.g. an
-    // auto-inserted elbow re-extends the duct runs it trimmed back onto the
-    // corner it replaced). Read against pre-deletion `nextNodes`; skip
-    // patches that target a node also being deleted.
-    for (const id of allIds) {
-      const node = nextNodes[id]
-      if (!node) continue
-      const onDelete = nodeRegistry.get(node.type)?.parametrics?.onDelete
-      if (!onDelete) continue
-      for (const { id: targetId, data } of onDelete(node, nextNodes, allIds, requestedDeleteIds)) {
-        if (allIds.has(targetId)) continue
-        const target = nextNodes[targetId]
-        if (!target) continue
-        nextNodes[targetId] = { ...target, ...data } as AnyNode
-        nodesToMarkDirty.add(targetId)
-      }
-    }
-
-    for (const plan of mergePlans) {
-      const primaryWall = nextNodes[plan.primaryWallId]
-      if (!(primaryWall && primaryWall.type === 'wall') || allIds.has(plan.primaryWallId)) {
-        continue
-      }
-
-      nextNodes[plan.primaryWallId] = {
-        ...primaryWall,
-        start: plan.mergedStart,
-        end: plan.mergedEnd,
-        children: plan.mergedChildren,
-      }
-      nodesToMarkDirty.add(plan.primaryWallId)
-
-      for (const update of plan.attachmentUpdates) {
-        if (allIds.has(update.id)) continue
-        const child = nextNodes[update.id]
-        if (!child) continue
-        nextNodes[update.id] = { ...child, ...update.data } as AnyNode
-        nodesToMarkDirty.add(update.id)
-      }
-    }
-
-    // Deleting a slab strips `supportSlabId` / `deckSlabId` references from
-    // surviving nodes in the same undo commit (mirrors the collectionIds
-    // cleanup below), so those nodes re-elect their support / re-derive
-    // their rise. Deletion is the ONLY writer — a host merely reshaped away
-    // keeps the field and the read path falls back, letting hosting resume
-    // if the slab returns.
-    const deletedSlabIds = new Set<string>()
-    for (const id of allIds) {
-      if (nextNodes[id]?.type === 'slab') deletedSlabIds.add(id)
-    }
-    if (deletedSlabIds.size > 0) {
-      for (const [nodeId, node] of Object.entries(nextNodes)) {
-        if (allIds.has(nodeId as AnyNodeId)) continue
-        const patch: { supportSlabId?: undefined; deckSlabId?: undefined } = {}
-        const hostId = (node as { supportSlabId?: string }).supportSlabId
-        if (hostId && deletedSlabIds.has(hostId)) patch.supportSlabId = undefined
-        const deckId = (node as { deckSlabId?: string }).deckSlabId
-        if (deckId && deletedSlabIds.has(deckId)) patch.deckSlabId = undefined
-        if (Object.keys(patch).length > 0) {
-          nextNodes[nodeId as AnyNodeId] = { ...node, ...patch } as AnyNode
-          nodesToMarkDirty.add(nodeId as AnyNodeId)
-        }
-      }
-    }
-
-    const deletedZoneIds = new Set<string>()
-    for (const id of allIds) {
-      if (nextNodes[id]?.type === 'zone') deletedZoneIds.add(id)
-    }
-    if (deletedZoneIds.size > 0) {
-      for (const node of Object.values(nextNodes)) {
-        if (node.type !== 'unit' || allIds.has(node.id)) continue
-        const members = node.members.filter((id) => !deletedZoneIds.has(id))
-        if (members.length === node.members.length) continue
-        nextNodes[node.id] = { ...node, members }
-        nodesToMarkDirty.add(node.id)
-      }
-    }
-
-    for (const id of allIds) {
-      const node = nextNodes[id]
-      if (!node) continue
-
-      // 1. Remove reference from parent — only if the parent itself is NOT also being deleted
-      const parentId = node.parentId as AnyNodeId | null
-      if (parentId && nextNodes[parentId] && !allIds.has(parentId)) {
-        const parent = nextNodes[parentId] as AnyContainerNode
-        if (parent.children) {
-          nextNodes[parent.id] = {
-            ...parent,
-            children: parent.children.filter((cid) => cid !== id),
-          } as AnyNode
-          parentsToMarkDirty.add(parent.id)
-        }
-      }
-
-      // 2. Remove from root list
-      nextRootIds = nextRootIds.filter((rid) => rid !== id)
-
-      // 3. Remove from any collections it belongs to
-      if ('collectionIds' in node && node.collectionIds) {
-        for (const cid of node.collectionIds as CollectionId[]) {
-          const col = nextCollections[cid]
-          if (col) {
-            nextCollections[cid] = { ...col, nodeIds: col.nodeIds.filter((nid) => nid !== id) }
-          }
-        }
-      }
-
-      // 4. Delete the node itself
-      delete nextNodes[id]
-    }
-
-    refreshDefaultGuttersForRoofIds(nextNodes, affectedRoofIds, nodesToMarkDirty, deletedIds)
+    const plan = planNodeDeletion(state, ids)
+    deletedIds = plan.deletedIds
+    parentsToMarkDirty = plan.parentsToMarkDirty
+    nodesToMarkDirty = plan.nodesToMarkDirty
 
     addActiveSceneCommitNodeIds([...deletedIds, ...parentsToMarkDirty, ...nodesToMarkDirty])
 
-    return { nodes: nextNodes, rootNodeIds: nextRootIds, collections: nextCollections }
+    return { nodes: plan.nodes, rootNodeIds: plan.rootNodeIds, collections: plan.collections }
   })
 
   // Deleted ids must leave the dirty set: every consumer skips missing
@@ -1751,3 +1845,19 @@ export const deleteNodesAction = (
   get: Parameters<typeof deleteNodesActionImpl>[1],
   ids: AnyNodeId[],
 ) => runWithSceneCommitNodeIds(ids, () => deleteNodesActionImpl(validatedSet(set), get, ids))
+
+/**
+ * What the default gutter refresh of `roofIds` would touch, without running
+ * it: the existing default gutters and downspouts it may keep or replace, and
+ * the roof segments whose `children` it rewrites. For previews of edits that
+ * trigger the refresh (a roof segment update, a delete).
+ */
+export function previewDefaultGutterRefresh(
+  nodes: Record<AnyNodeId, AnyNode>,
+  roofIds: Iterable<AnyNodeId>,
+): { unsettledIds: Set<AnyNodeId>; regeneratedHostIds: Set<AnyNodeId> } {
+  const unsettledIds = new Set<AnyNodeId>()
+  const regeneratedHostIds = new Set<AnyNodeId>()
+  collectRefreshedDefaults(nodes, roofIds, unsettledIds, regeneratedHostIds)
+  return { unsettledIds, regeneratedHostIds }
+}
