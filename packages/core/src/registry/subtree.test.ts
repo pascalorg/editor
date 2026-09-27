@@ -300,10 +300,10 @@ describe('withoutSourceIdentity (preset save, D5)', () => {
     expect((scene['window_a' as AnyNodeId] as any).provenance).toEqual(windowProvenance)
   })
 
-  test('keeps every other field, including provenance a preset keeps', () => {
+  test('drops the importer source ids too and keeps every other field, IFC ids included', () => {
     const wall = imported()['wall_a' as AnyNodeId]!
     const { provenance: _, ...rest } = wall as AnyNode & { provenance?: unknown }
-    expect(withoutSourceIdentity(wall)).toEqual(rest as AnyNode)
-    expect((withoutSourceIdentity(wall) as any).metadata.expressID).toBe(42)
+    // `metadata.sourceIds[]` is a `source` row the inventory strips on preset; `expressID` keeps.
+    expect(withoutSourceIdentity(wall)).toEqual({ ...rest, metadata: { expressID: 42 } } as AnyNode)
   })
 })
