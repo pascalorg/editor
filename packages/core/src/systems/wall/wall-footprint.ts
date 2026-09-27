@@ -11,7 +11,7 @@ export { calculateLevelMiters, type Point2D, type WallMiterData } from './wall-m
 
 export const DEFAULT_WALL_THICKNESS = 0.1
 export const DEFAULT_WALL_HEIGHT = 2.5
-const CURVED_WALL_SURFACE_SEGMENTS = 24
+export const CURVED_WALL_SURFACE_SEGMENTS = 24
 
 export function getWallThickness(wallNode: WallNode): number {
   return wallNode.thickness ?? DEFAULT_WALL_THICKNESS

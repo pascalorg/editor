@@ -5,6 +5,7 @@ import {
   RoofNode as RoofNodeSchema,
   type RoofNode as RoofNodeType,
   type RoofSegmentNode,
+  roofAssemblyHost,
   type SceneApi,
 } from '@pascal-app/core'
 import {
@@ -117,7 +118,7 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
   // Drafted as a 2-corner footprint (axis-aligned bbox), not a directional
   // edge → no angle-lock mode (grid / lines / off only).
   snapDraftDirectional: false,
-  schemaVersion: 3,
+  schemaVersion: 4,
   schema: RoofNode,
   category: 'structure',
   surfaceRole: 'roof',
@@ -138,6 +139,7 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    assembly: roofAssemblyHost,
     // Contribute a plan AABB to the alignment-guide candidate pool so a roof
     // (and any moving sibling) snaps against the roof's outer silhouette.
     // Roof has no centred-box footprint — it's the union of its

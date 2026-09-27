@@ -1,5 +1,6 @@
 import dedent from 'dedent'
 import { z } from 'zod'
+import { Assembly } from '../assembly'
 import { BaseNode, nodeType, objectId } from '../base'
 import type { MaterialSchema as MaterialSchemaType } from '../material'
 import { MaterialSchema } from '../material'
@@ -41,6 +42,8 @@ export const RoofNode = BaseNode.extend({
   // Rotation around Y axis in radians
   rotation: z.number().default(0),
   support: RoofSupport,
+  // Layer build-up inward from the covering-top plane of every segment (F2).
+  assembly: Assembly.optional(),
   // Child roof segment IDs
   children: z.array(RoofSegmentNode.shape.id).default([]),
 }).describe(

@@ -67,6 +67,8 @@ export type {
   AlignmentFootprint,
   AlignmentFootprintConfig,
   AnyNodeDefinition,
+  AssemblyHostConfig,
+  AssemblyReference,
   AssetRef,
   BakeGeometryAsyncBuilder,
   BakeGeometryBuilder,

@@ -7,6 +7,8 @@ export {
   type SolarPanelPresetDims,
   SolarPanelPresetKey,
 } from '../solar-panel-presets'
+// Assembly layers (F2)
+export { Assembly, AssemblyLayer, AssemblyLayerId, LayerRole } from './assembly'
 // Asset URL allowlist
 export { ALLOWED_ORIGINS_ENV, ALLOWED_SCHEMES, AssetUrl } from './asset-url'
 export { BaseNode, generateId, Material, nodeType, objectId } from './base'
@@ -391,6 +393,8 @@ export {
   ProvenanceRole,
 } from './provenance'
 export { generateSceneMaterialId, SceneMaterial, type SceneMaterialId } from './scene-material'
+// Source references in string form (`<ns>:<id>[::<sub>]`, D5)
+export { type ParsedSourceRef, parseSourceRef, SourceRefString } from './source-ref'
 export { MAX_TERRAIN_SIDE, TerrainData } from './terrain'
 export type {
   Anchor,

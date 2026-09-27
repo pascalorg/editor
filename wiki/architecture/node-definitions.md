@@ -426,6 +426,30 @@ capabilities: {
 
 ---
 
+### `capabilities.assembly`
+
+Frozen contract (F2 assembly layers), not read by any renderer yet. A kind that declares it stores an optional `assembly` field (`Assembly` in `core/src/schema/assembly.ts`): body `layers` from the reference face inward, each with a stable `id` (its `#layer:<id>` address), a `role`, a `thickness`, an optional `material` kind (`stucco`, `osb`, `wood`, …), `slot` and provenance `src`, one source reference `<ns>:<id>[::<sub>]` (`SourceRefString`: printable ASCII, ns ≤ 48 bytes, id ≤ 160 bytes, the `ProvenanceRef` caps). At most one body layer is the `core` (the structural layer); `inset`, `bottom` and `lift` belong to `backing` layers only. Preset capture removes every `src` with `provenance` through `withoutSourceIdentity`.
+
+**The stack sets the body.** A host's thickness is the sum of its layers; a writer that edits the layers writes the sum to the host's thickness in the same patch (the WS5 rule). `face: 'exterior'` lists the layers from the outside, resolved from `frontSide` / `backSide` with the front face as fallback.
+
+```ts
+type AssemblyHostConfig = {
+  reference: 'front' | 'top' | 'underside' | 'covering'
+  measure: 'normal' | 'vertical'
+  body: (node: AnyNode) => number | null // the thickness the host stores; null = none (roofs)
+  backing?: boolean                        // absent = assembly.backing refused
+}
+```
+
+| Host | `reference` | `body` | Rule |
+|---|---|---|---|
+| `roof` (`roofAssemblyHost`) | `covering` top plane | `null` | One contiguous stack along the facet normal; `air` for gaps. |
+| `wall` (`wallAssemblyHost`) | `front` (+n) or the exterior face | `thickness` | Declared once walls move from WS5's `WallAssembly` onto F2. |
+
+`resolveAssemblyStack(assembly, host)` returns each layer's depth and thickness exactly as declared, never throwing; a stored thickness that disagrees with the sum is reported as `assembly.thickness-mismatch`. `getWallLayerBands(wall, assembly, miters)` slices the mitred plan footprint into one band per layer (`back`/`front` offsets from the centreline along +n, and the footprint ∩ strip rings); it draws no bands on a mismatch.
+
+---
+
 ### `keyboardActions`
 
 Registry-driven R / T key handlers. A kind that wants to override the R (`rotate clockwise`) or T (`rotate counter-clockwise`) keystroke sets this field on its `NodeDefinition` instead of extending the hand-written `if/else` chain in `use-keyboard.ts`.
