@@ -554,12 +554,25 @@ function assertProvenanceWrite(nodeId: string, value: unknown): void {
   throw new Error(`Node "${nodeId}": provenance refused at ${at}: ${issue?.message}`)
 }
 
+/**
+ * A strict kind parses everything but `provenance`, which core checks on write
+ * and carries verbatim: a stored over-cap value (kept at load) must not make
+ * the node uneditable, and a schema that never declared the base field must
+ * not drop it.
+ */
+function parseStrict(schema: { parse: (value: unknown) => unknown }, candidate: AnyNode): AnyNode {
+  if (!Object.hasOwn(candidate, 'provenance')) return schema.parse(candidate) as AnyNode
+  const { provenance, ...rest } = candidate as AnyNode & { provenance?: unknown }
+  const parsed = schema.parse(rest) as AnyNode
+  return provenance === undefined ? parsed : ({ ...parsed, provenance } as AnyNode)
+}
+
 function parseCreatedNode(node: AnyNode, parentId: AnyNodeId | null): AnyNode {
   const candidate = { ...node, parentId }
   assertProvenanceWrite(candidate.id, (candidate as { provenance?: unknown }).provenance)
   const registered = nodeRegistry.get(candidate.type)?.schema
   // Generated definitions must reject invalid geometry instead of retaining a failed parse.
-  if (registered?.meta?.()?.strictMutations === true) return registered.parse(candidate) as AnyNode
+  if (registered?.meta?.()?.strictMutations === true) return parseStrict(registered, candidate)
   const parsed = parseNode(candidate)
   if (parsed.success) return parsed.data
 
@@ -603,7 +616,7 @@ function parseUpdatedNode(currentNode: AnyNode, data: Partial<AnyNode>): AnyNode
   const registered = nodeRegistry.get(currentNode.type)?.schema
   // Generated definitions must reject invalid geometry instead of retaining a failed parse.
   if (registered?.meta?.()?.strictMutations === true)
-    return preserveChildren(registered.parse(candidate) as AnyNode)
+    return preserveChildren(parseStrict(registered, candidate))
   const parsed = parseNode(candidate)
   if (parsed.success) return preserveChildren(parsed.data)
 

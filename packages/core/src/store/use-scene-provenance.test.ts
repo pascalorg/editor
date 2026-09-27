@@ -219,3 +219,85 @@ describe('provenance refusal on a plain API-v1 plugin kind (D5)', () => {
     expect(provenanceOf('widget_a')).toEqual(next)
   })
 })
+
+describe('provenance on a strictMutations plugin kind (D5)', () => {
+  let restoreRegistry: () => void
+  let savedRaf: typeof requestAnimationFrame
+  let savedCancelRaf: typeof cancelAnimationFrame
+  // A strict schema that never declared the base field, like a plugin built on an older core.
+  const schema = BaseNode.omit({ provenance: true })
+    .extend({
+      id: objectId('gadget'),
+      type: nodeType('acme:gadget'),
+      size: z.number().positive().default(1),
+    })
+    .meta({ strictMutations: true })
+  // One that declares it through `BaseNode`: its parse would refuse a stored over-cap value.
+  const declaring = BaseNode.extend({
+    id: objectId('gizmo'),
+    type: nodeType('acme:gizmo'),
+    size: z.number().positive().default(1),
+  }).meta({ strictMutations: true })
+
+  beforeEach(() => {
+    savedRaf = globalThis.requestAnimationFrame
+    savedCancelRaf = globalThis.cancelAnimationFrame
+    globalThis.requestAnimationFrame = () => 0
+    globalThis.cancelAnimationFrame = () => {}
+    restoreRegistry = nodeRegistry._snapshot()
+    registerNode({
+      kind: 'acme:gadget',
+      schemaVersion: 1,
+      schema,
+      category: 'furnish',
+      defaults: () => ({}),
+      capabilities: {},
+    })
+    registerNode({
+      kind: 'acme:gizmo',
+      schemaVersion: 1,
+      schema: declaring,
+      category: 'furnish',
+      defaults: () => ({}),
+      capabilities: {},
+    })
+    useScene.setState({
+      nodes: {
+        gadget_over: { ...schema.parse({ id: 'gadget_over' }), provenance: OVER_CAP },
+        gizmo_over: { ...declaring.parse({ id: 'gizmo_over' }), provenance: OVER_CAP },
+      },
+      rootNodeIds: ['gadget_over', 'gizmo_over'],
+      dirtyNodes: new Set(),
+      readOnly: false,
+    } as never)
+    useScene.temporal.getState().clear()
+  })
+  afterEach(() => {
+    restoreRegistry()
+    globalThis.requestAnimationFrame = savedRaf
+    globalThis.cancelAnimationFrame = savedCancelRaf
+  })
+
+  test('a stored over-cap node stays editable and keeps its refs', () => {
+    for (const id of ['gadget_over', 'gizmo_over']) {
+      useScene.getState().updateNode(id as AnyNodeId, { size: 2 } as Partial<AnyNode>)
+      expect((useScene.getState().nodes[id as AnyNodeId] as { size?: number }).size, id).toBe(2)
+      expect(provenanceOf(id), id).toEqual(OVER_CAP)
+    }
+  })
+
+  test('the strict schema cannot drop a valid provenance on create or update', () => {
+    useScene
+      .getState()
+      .createNode({ ...schema.parse({ id: 'gadget_b' }), provenance: WALL } as unknown as AnyNode)
+    expect(provenanceOf('gadget_b')).toEqual(WALL)
+    useScene.getState().updateNode('gadget_b' as AnyNodeId, { size: 3 } as Partial<AnyNode>)
+    expect(provenanceOf('gadget_b')).toEqual(WALL)
+    expect(() =>
+      useScene
+        .getState()
+        .updateNode('gadget_b' as AnyNodeId, { provenance: OVER_CAP } as Partial<AnyNode>),
+    ).toThrow('provenance.refs')
+    expect(provenanceOf('gadget_b')).toEqual(WALL)
+  })
+})
