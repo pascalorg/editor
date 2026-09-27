@@ -227,6 +227,25 @@ describe('planDesignPlacement', () => {
     expect(result.message.startsWith(`${code}: `)).toBe(true)
   })
 
+  test('node refusals name the field', () => {
+    expect(
+      refusal(scene, {
+        design: DESIGN_EXAMPLE,
+        hostId: level.id,
+        position: [0, 0, 0],
+        slots: { paint: '#ffffff' },
+      }).message,
+    ).toBe('invalid_placement: node: Unknown slot paint')
+    expect(
+      refusal(scene, {
+        design: DESIGN_EXAMPLE,
+        hostId: level.id,
+        position: [0, 0, 0],
+        id: 'item_x',
+      }).message,
+    ).toStartWith('invalid_placement: id: ')
+  })
+
   test('invalid designs carry their diagnostics', () => {
     try {
       planDesignPlacement(scene, { design: stairGuardJson, hostId: level.id, position: [0, 0, 0] })

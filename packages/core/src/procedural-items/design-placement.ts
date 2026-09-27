@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import type { WallNode } from '../schema/nodes/wall'
 import { type DesignDiagnostic, validateDesign } from './design'
 import { ProceduralItemNode } from './node'
@@ -170,7 +171,9 @@ export function planDesignPlacement(
   } catch (error) {
     throw new DesignPlacementError(
       'invalid_placement',
-      error instanceof Error ? error.message : String(error),
+      error instanceof z.ZodError
+        ? error.issues.map((i) => `${i.path.join('.') || 'node'}: ${i.message}`).join('; ')
+        : String(error),
     )
   }
 
