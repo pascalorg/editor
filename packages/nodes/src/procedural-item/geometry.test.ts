@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import { readdirSync, readFileSync } from 'node:fs'
 import {
   bedRecipe,
   ProceduralItemNode,
@@ -108,4 +109,74 @@ test('light descriptors leave geometry batches and bounds unchanged', () => {
       batch.motionGeometry?.dispose()
       batch.geometry.dispose()
     }
+})
+
+test('evaluated triangle counts equal the triangles the renderer builds', () => {
+  const dir = new URL('../../../core/src/procedural-items/__fixtures__/', import.meta.url)
+  const fixtures = readdirSync(dir).map((file) =>
+    parseRecipe(JSON.parse(readFileSync(new URL(file, dir), 'utf8'))),
+  )
+  expect(fixtures.length).toBeGreaterThanOrEqual(9)
+  const every = parseRecipe({
+    version: 2,
+    name: 'Every primitive',
+    description: 'One of each primitive, including a cone.',
+    parameters: [
+      { id: 'unused', label: 'Unused', default: 1, min: 1, max: 1, step: 1, unit: 'count' },
+    ],
+    slots: [{ id: 'body', label: 'Body', color: '#888888' }],
+    parts: [
+      {
+        id: 'all',
+        label: 'All',
+        count: 2,
+        shapes: [
+          {
+            id: 'box',
+            primitive: 'box',
+            slot: 'body',
+            size: [0.1, 0.1, 0.1],
+            position: [0, 0.05, 0],
+          },
+          {
+            id: 'round',
+            primitive: 'roundedBox',
+            slot: 'body',
+            size: [0.1, 0.1, 0.1],
+            position: [0.2, 0.05, 0],
+            radius: 0.01,
+          },
+          {
+            id: 'tube',
+            primitive: 'cylinder',
+            slot: 'body',
+            size: [0.1, 0.1, 0.1],
+            position: [0.4, 0.05, 0],
+            topScale: 0.5,
+          },
+          {
+            id: 'cone',
+            primitive: 'cylinder',
+            slot: 'body',
+            size: [0.1, 0.1, 0.1],
+            position: [0.6, 0.05, 0],
+            topScale: 0,
+          },
+          {
+            id: 'ball',
+            primitive: 'ellipsoid',
+            slot: 'body',
+            size: [0.1, 0.1, 0.1],
+            position: [0.8, 0.05, 0],
+          },
+        ],
+      },
+    ],
+    constraints: [],
+  })
+  for (const recipe of [every, shelfRecipe, bedRecipe, ...fixtures]) {
+    const built = buildProceduralGeometry(ProceduralItemNode.parse({ recipe }))
+    expect(built.evaluation.triangles).toBe(built.triangles)
+    for (const batch of built.batches) batch.geometry.dispose()
+  }
 })

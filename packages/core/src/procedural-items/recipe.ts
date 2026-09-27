@@ -64,6 +64,20 @@ const motion = z.discriminatedUnion('kind', [
     radiansPerSecond: expression,
   }),
 ])
+// Version 2 lifts the part caps; triangles (counted as three.js builds them), bytes, the
+// structural budget and evaluation time bound the rest.
+export const RECIPE_V2_LIMITS = { parts: 64, partShapes: 512, shapes: 512 } as const
+export const RECIPE_LIMITS = {
+  bytes: 131072,
+  depth: 24,
+  expressions: 50000,
+  shapes: 256,
+  triangles: 100000,
+  dimension: 30,
+  motionParts: 8,
+  motionGroups: 32,
+  lights: 12,
+} as const
 const RecipeObject = z.strictObject({
   // Version 2 marks content that older readers cannot evaluate; v2-only fields require it.
   version: z.union([z.literal(1), z.literal(2)]),
@@ -155,11 +169,11 @@ const RecipeObject = z.strictObject({
             }),
           )
           .min(1)
-          .max(24),
+          .max(RECIPE_V2_LIMITS.partShapes),
       }),
     )
     .min(1)
-    .max(16),
+    .max(RECIPE_V2_LIMITS.parts),
   constraints: z
     .array(
       z.strictObject({
@@ -238,17 +252,6 @@ export type Evaluation = {
   /** Recessed ceiling designs with motion: the rest bounds grown by every motion sample. */
   reach?: { min: Vec3; max: Vec3 }
 }
-export const RECIPE_LIMITS = {
-  bytes: 131072,
-  depth: 24,
-  expressions: 50000,
-  shapes: 256,
-  triangles: 100000,
-  dimension: 30,
-  motionParts: 8,
-  motionGroups: 32,
-  lights: 12,
-} as const
 
 function guardTree(value: unknown, depth = 0, budget = { count: 0 }) {
   if (++budget.count > 12000 || depth > RECIPE_LIMITS.depth)
@@ -270,6 +273,10 @@ function versionIssue(recipe: Recipe): string | null {
     if (recipe.mounting)
       return 'A declared base applies to floor designs; mounted designs use their reference'
   }
+  if (recipe.version === 1 && recipe.parts.length > 16)
+    return 'More than 16 parts requires recipe version 2'
+  if (recipe.version === 1 && recipe.parts.some((part) => part.shapes.length > 24))
+    return 'More than 24 shapes in a part requires recipe version 2'
   if (recipe.cuts !== undefined) {
     if (recipe.version !== 2) return 'Cuts require recipe version 2'
     if (recipe.mounting?.attachTo !== 'ceiling') return 'Cuts need a ceiling-mounted design'
@@ -381,6 +388,20 @@ function movedPoint(point: Vec3, motion: EvaluatedMotion, fraction: number): Vec
   return rotateVector(offset, rotation).map((value, i) => value + motion.pivot[i]!) as Vec3
 }
 
+const LEGACY_TRIANGLE_CHARGE = { box: 12, roundedBox: 588, cylinder: 96, ellipsoid: 720 } as const
+/** Triangles of the three.js geometry the renderer builds for a shape (non-indexed). */
+export function shapeTriangles(primitive: EvaluatedShape['primitive'], topScale = 1): number {
+  switch (primitive) {
+    case 'box':
+      return 12
+    case 'roundedBox':
+      return 300 // RoundedBoxGeometry(…, 2): a 5 × 5 grid on each face
+    case 'cylinder':
+      return topScale > 0 ? 96 : 48 // 24 sides × 2, plus a cap for each nonzero radius
+    case 'ellipsoid':
+      return 720 // SphereGeometry(…, 24, 16) without the degenerate pole triangles
+  }
+}
 export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = {}): Evaluation {
   const issue = versionIssue(recipe)
   if (issue) throw new Error(issue)
@@ -503,7 +524,9 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
   const motionSignatures = new Map<string, string>()
   const min: Vec3 = [Infinity, Infinity, Infinity],
     max: Vec3 = [-Infinity, -Infinity, -Infinity]
-  let triangles = 0
+  let triangles = 0,
+    charged = 0
+  const shapeLimit = recipe.version === 2 ? RECIPE_V2_LIMITS.shapes : RECIPE_LIMITS.shapes
   for (const part of recipe.parts) {
     const count = expr(part.count)
     if (!Number.isInteger(count) || count < 0 || count > 64)
@@ -574,7 +597,7 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
         motionGroupByInstance[`${part.id}:${i}`] = motionGroup
       }
       for (const s of part.shapes) {
-        if (shapes.length >= RECIPE_LIMITS.shapes) throw new Error('Expanded shape budget exceeded')
+        if (shapes.length >= shapeLimit) throw new Error('Expanded shape budget exceeded')
         const size = vec(s.size),
           position = vec(s.position),
           rotation = vec(s.rotation ?? [0, 0, 0])
@@ -607,15 +630,11 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
           topScale,
           motionGroup,
         })
-        triangles +=
-          s.primitive === 'roundedBox'
-            ? 588
-            : s.primitive === 'cylinder'
-              ? 96
-              : s.primitive === 'ellipsoid'
-                ? 720
-                : 12
-        if (triangles > RECIPE_LIMITS.triangles) throw new Error('Triangle budget exceeded')
+        const built = shapeTriangles(s.primitive, topScale)
+        triangles += built
+        // v1 keeps its original, conservative charges so its acceptance never changes.
+        charged += recipe.version === 1 ? LEGACY_TRIANGLE_CHARGE[s.primitive] : built
+        if (charged > RECIPE_LIMITS.triangles) throw new Error('Triangle budget exceeded')
         if (s.primitive === 'ellipsoid') {
           const axes = [0, 1, 2].map((axis) =>
             rotateVector([0, 1, 2].map((j) => (j === axis ? 1 : 0)) as Vec3, rotation),
