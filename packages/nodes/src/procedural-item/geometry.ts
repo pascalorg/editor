@@ -58,7 +58,10 @@ function facing(triangles: Vector3[][], normal: (triangle: Vector3[]) => Vector3
     const face = ab
       .subVectors(triangle[1]!, triangle[0]!)
       .cross(ac.subVectors(triangle[2]!, triangle[0]!))
-    const [a, b, c] = face.dot(want) < 0 ? [triangle[0]!, triangle[2]!, triangle[1]!] : triangle
+    const [a, b, c] =
+      face.dot(want) < 0
+        ? [triangle[0]!, triangle[2]!, triangle[1]!]
+        : [triangle[0]!, triangle[1]!, triangle[2]!]
     for (const v of [a, b, c]) {
       position.push(v.x, v.y, v.z)
       normals.push(want.x, want.y, want.z)
