@@ -451,17 +451,24 @@ function shapeFootprint(shape: EvaluatedShape): Vec3[] {
   if (shape.primitive !== 'cylinder')
     return shapeCorners(shape.size, shape.position, shape.rotation)
   const f = frame(shape.position, shape.rotation)
-  return [-0.5, 0.5].flatMap((y) =>
-    Array.from({ length: 24 }, (_, k) => {
-      const r = y > 0 ? 0.5 * shape.topScale : 0.5
-      const theta = (2 * Math.PI * k) / 24
+  const n = shape.segments ?? 24,
+    arc = shape.arc ?? 2 * Math.PI
+  const partial = arc < 2 * Math.PI - 1e-9
+  // Rim vertices as rendered (segments along the arc); a partial solid also reaches its axis.
+  return [-0.5, 0.5].flatMap((y) => {
+    const r = y > 0 ? 0.5 * shape.topScale : 0.5
+    const rim = Array.from({ length: partial ? n + 1 : n }, (_, k) => {
+      const theta = (arc * k) / n
       return transformPoint(f, [
         r * Math.sin(theta) * shape.size[0],
         y * shape.size[1],
         r * Math.cos(theta) * shape.size[2],
       ])
-    }),
-  )
+    })
+    return partial && shape.inner === undefined
+      ? [...rim, transformPoint(f, [0, y * shape.size[1], 0])]
+      : rim
+  })
 }
 
 function movedPoint(point: Vec3, motion: EvaluatedMotion, fraction: number): Vec3 {

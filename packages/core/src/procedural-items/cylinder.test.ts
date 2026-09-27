@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import cabinetJson from './__fixtures__/cabinet_two_doors_drawer.json'
+import downlightJson from './__fixtures__/recessed_downlight.json'
 import { evaluateRecipe, parseRecipe, type Recipe } from './recipe'
 
 type Shape = Recipe['parts'][number]['shapes'][number]
@@ -77,5 +78,25 @@ describe('cylinder segments, open, inner and arc (recipe version 2)', () => {
     expect(() => parseRecipe(one({ segments: 6 }, 1))).toThrow('version 2')
     expect(() => parseRecipe(one({ open: true }, 1))).toThrow('version 2')
     expect(() => parseRecipe(one({ primitive: 'box', segments: 6 }))).toThrow('cylinder')
+  })
+
+  test('a recessed hexagonal can fits a cut its round 24-gon would not', () => {
+    const recipe = structuredClone(downlightJson) as Recipe
+    recipe.cuts = [{ shape: 'rect', size: [0.1, 0.1] }]
+    recipe.parts = recipe.parts.filter((part) => part.id !== 'lens')
+    recipe.parts.find((part) => part.id === 'can')!.shapes = [
+      {
+        id: 'can',
+        primitive: 'cylinder',
+        slot: 'can',
+        segments: 4,
+        rotation: [0, Math.PI / 4, 0],
+        size: [0.14, 0.1, 0.14],
+        position: [0, 0.06, 0],
+      },
+    ]
+    expect(() => parseRecipe(recipe)).not.toThrow()
+    delete recipe.parts.find((part) => part.id === 'can')!.shapes[0]!.segments
+    expect(() => parseRecipe(recipe)).toThrow('outside its cut')
   })
 })
