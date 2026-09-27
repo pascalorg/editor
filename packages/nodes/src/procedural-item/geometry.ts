@@ -5,9 +5,10 @@ import {
 } from '@pascal-app/core/procedural-items'
 import {
   BoxGeometry,
-  type BufferGeometry,
+  BufferGeometry,
   CylinderGeometry,
   Euler,
+  Float32BufferAttribute,
   Matrix4,
   Quaternion,
   SphereGeometry,
@@ -28,6 +29,114 @@ export type BuiltItem = {
   milliseconds: number
   triangles: number
 }
+const TAU = 2 * Math.PI
+function flipped(geometry: BufferGeometry) {
+  const flat = geometry.toNonIndexed()
+  geometry.dispose()
+  for (const name of ['position', 'normal', 'uv']) {
+    const attribute = flat.getAttribute(name)
+    for (let i = 0; i < attribute.count; i += 3)
+      for (let k = 0; k < attribute.itemSize; k++) {
+        const a = attribute.getComponent(i + 1, k)
+        attribute.setComponent(i + 1, k, attribute.getComponent(i + 2, k))
+        attribute.setComponent(i + 2, k, a)
+      }
+  }
+  const normal = flat.getAttribute('normal')
+  for (let i = 0; i < normal.count; i++)
+    normal.setXYZ(i, -normal.getX(i), -normal.getY(i), -normal.getZ(i))
+  return flat
+}
+/** Flat triangles facing `normal` (winding fixed per triangle), with placeholder UVs. */
+function facing(triangles: Vector3[][], normal: (triangle: Vector3[]) => Vector3) {
+  const position: number[] = [],
+    normals: number[] = []
+  const ab = new Vector3(),
+    ac = new Vector3()
+  for (const triangle of triangles) {
+    const want = normal(triangle)
+    const face = ab
+      .subVectors(triangle[1]!, triangle[0]!)
+      .cross(ac.subVectors(triangle[2]!, triangle[0]!))
+    const [a, b, c] = face.dot(want) < 0 ? [triangle[0]!, triangle[2]!, triangle[1]!] : triangle
+    for (const v of [a, b, c]) {
+      position.push(v.x, v.y, v.z)
+      normals.push(want.x, want.y, want.z)
+    }
+  }
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new Float32BufferAttribute(position, 3))
+  geometry.setAttribute('normal', new Float32BufferAttribute(normals, 3))
+  geometry.setAttribute(
+    'uv',
+    new Float32BufferAttribute(new Float32Array((position.length / 3) * 2), 2),
+  )
+  return geometry
+}
+// A unit cylinder (diameter 1, height 1, centred) with v2's segments, open, inner and arc.
+// Counts match `shapeTriangles`; with no options this is exactly today's 24-gon.
+function cylinderSource(shape: Evaluation['shapes'][number]): BufferGeometry {
+  const { segments = 24, open = false, inner, arc = TAU } = shape
+  const top = 0.5 * shape.topScale
+  if (shape.segments === undefined && !open && inner === undefined && shape.arc === undefined)
+    return new CylinderGeometry(top, 0.5, 1, 24, 1)
+  const hollow = inner !== undefined
+  const pieces: BufferGeometry[] = [
+    new CylinderGeometry(top, 0.5, 1, segments, 1, open || hollow, 0, arc).toNonIndexed(),
+  ]
+  const at = (radius: number, theta: number, y: number) =>
+    new Vector3(radius * Math.sin(theta), y, radius * Math.cos(theta))
+  if (hollow) {
+    pieces.push(
+      flipped(new CylinderGeometry(top * inner, 0.5 * inner, 1, segments, 1, true, 0, arc)),
+    )
+    if (!open)
+      for (const [y, outer] of [
+        [-0.5, 0.5],
+        [0.5, top],
+      ] as const) {
+        if (outer === 0) continue
+        const rings: Vector3[][] = []
+        for (let i = 0; i < segments; i++) {
+          const a = (arc * i) / segments,
+            b = (arc * (i + 1)) / segments
+          const quad = [
+            at(outer * inner, a, y),
+            at(outer, a, y),
+            at(outer, b, y),
+            at(outer * inner, b, y),
+          ]
+          rings.push([quad[0]!, quad[1]!, quad[2]!], [quad[0]!, quad[2]!, quad[3]!])
+        }
+        pieces.push(facing(rings, () => new Vector3(0, Math.sign(y), 0)))
+      }
+  }
+  if (arc < TAU - 1e-9 && !open)
+    for (const theta of [0, arc]) {
+      const from = hollow ? inner : 0
+      const quad = [
+        at(0.5 * from, theta, -0.5),
+        at(0.5, theta, -0.5),
+        at(top, theta, 0.5),
+        at(top * from, theta, 0.5),
+      ]
+      const outward = new Vector3(Math.cos(theta), 0, -Math.sin(theta)).multiplyScalar(
+        theta === 0 ? -1 : 1,
+      )
+      pieces.push(
+        facing(
+          [
+            [quad[0]!, quad[1]!, quad[2]!],
+            [quad[0]!, quad[2]!, quad[3]!],
+          ],
+          () => outward,
+        ),
+      )
+    }
+  const merged = mergeGeometries(pieces, false)!
+  for (const piece of pieces) piece.dispose()
+  return merged
+}
 export const proceduralMetrics = { builds: 0, cacheHits: 0, lastBuildMs: 0, liveEntries: 0 }
 const cache = new Map<string, { value: BuiltItem; users: number }>()
 export const geometrySignature = (node: ProceduralItemNode) =>
@@ -45,7 +154,7 @@ export function buildProceduralGeometry(node: ProceduralItemNode): BuiltItem {
       shape.primitive === 'roundedBox'
         ? new RoundedBoxGeometry(w, h, d, 2, shape.radius)
         : shape.primitive === 'cylinder'
-          ? new CylinderGeometry(0.5 * shape.topScale, 0.5, 1, 24, 1)
+          ? cylinderSource(shape)
           : shape.primitive === 'ellipsoid'
             ? new SphereGeometry(0.5, 24, 16)
             : new BoxGeometry(w, h, d)

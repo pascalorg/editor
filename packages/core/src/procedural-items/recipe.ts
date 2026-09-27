@@ -195,6 +195,13 @@ const RecipeObject = z.strictObject({
               rotation: vector.optional(),
               radius: expression.optional(),
               topScale: expression.optional(),
+              // v2 cylinders: side count (absent = 24), no end caps, hollow wall
+              // (inner radius as a fraction of the outer), and a partial sweep in radians
+              // from local +Z toward +X, closed by flat wedge sides unless open.
+              segments: z.number().int().min(3).max(64).optional(),
+              open: z.boolean().optional(),
+              inner: expression.optional(),
+              arc: expression.optional(),
               support: z.boolean().optional(),
               when: expression.optional(),
             }),
@@ -231,6 +238,10 @@ export type EvaluatedShape = {
   rotation: Vec3
   radius: number
   topScale: number
+  segments?: number
+  open?: boolean
+  inner?: number
+  arc?: number
   motionGroup?: string
 }
 export type EvaluatedMotion = {
@@ -374,6 +385,16 @@ export function parseRecipe(input: unknown): Recipe {
         throw new Error(`Unknown slot ${shape.slot}`)
       if (shape.topScale !== undefined && shape.primitive !== 'cylinder')
         throw new Error(`topScale is only allowed on cylinders (${part.id}/${shape.id})`)
+      const cylinderOptions = [shape.segments, shape.open, shape.inner, shape.arc]
+      if (cylinderOptions.some((option) => option !== undefined)) {
+        requireVersion2(recipe, 'Cylinder segments, open, inner and arc')
+        if (shape.primitive !== 'cylinder')
+          throw new Error(
+            `segments, open, inner and arc apply to cylinders (${part.id}/${shape.id})`,
+          )
+        if (shape.support && (shape.inner !== undefined || shape.arc !== undefined))
+          throw new Error(`Support shape ${part.id}/${shape.id} cannot be hollow or partial`)
+      }
       if (part.motion && shape.support)
         throw new Error(`Moving part ${part.id} cannot contain support shapes`)
       if (shape.primitive === 'ellipsoid' && shape.support)
@@ -456,15 +477,24 @@ function movedPoint(point: Vec3, motion: EvaluatedMotion, fraction: number): Vec
 }
 
 const LEGACY_TRIANGLE_CHARGE = { box: 12, roundedBox: 588, cylinder: 96, ellipsoid: 720 } as const
-/** Triangles of the three.js geometry the renderer builds for a shape (non-indexed). */
-export function shapeTriangles(primitive: EvaluatedShape['primitive'], topScale = 1): number {
-  switch (primitive) {
+/** Triangles of the geometry the renderer builds for an evaluated shape (non-indexed). */
+export function shapeTriangles(
+  shape: Pick<EvaluatedShape, 'primitive' | 'topScale' | 'segments' | 'open' | 'inner' | 'arc'>,
+): number {
+  switch (shape.primitive) {
     case 'box':
       return 12
     case 'roundedBox':
       return 300 // RoundedBoxGeometry(…, 2): a 5 × 5 grid on each face
-    case 'cylinder':
-      return topScale > 0 ? 96 : 48 // 24 sides × 2, plus a cap for each nonzero radius
+    case 'cylinder': {
+      // Per side: one torso triangle per nonzero radius, one cap triangle per nonzero radius
+      // (two for a tube's ring), plus two triangles per wedge side of a closed partial sweep.
+      const n = shape.segments ?? 24,
+        ends = shape.topScale > 0 ? 2 : 1
+      const wedges = shape.arc !== undefined && shape.arc < 2 * Math.PI - 1e-9 && !shape.open
+      const walls = shape.inner === undefined ? 1 : 2
+      return walls * n * ends + (shape.open ? 0 : walls * n * ends) + (wedges ? 4 : 0)
+    }
     case 'ellipsoid':
       return 720 // SphereGeometry(…, 24, 16) without the degenerate pole triangles
   }
@@ -713,6 +743,12 @@ export function evaluateRecipe(
           )
         if (s.support && motionGroup)
           throw new Error(`Moving part ${part.id} cannot contain support shapes`)
+        const inner = s.inner === undefined ? undefined : expr(s.inner, i)
+        if (inner !== undefined && !(inner > 0 && inner < 1))
+          throw new Error(`inner for ${part.id}/${s.id} must be within (0, 1)`)
+        const arc = s.arc === undefined ? undefined : expr(s.arc, i)
+        if (arc !== undefined && !(arc > 0 && arc <= 2 * Math.PI + 1e-9))
+          throw new Error(`arc for ${part.id}/${s.id} must be within (0, 2π]`)
         const shapeId = `${part.id}:${i}:${s.id}`
         shapes.push({
           id: shapeId,
@@ -724,9 +760,13 @@ export function evaluateRecipe(
           rotation,
           radius,
           topScale,
+          ...(s.segments === undefined ? {} : { segments: s.segments }),
+          ...(s.open ? { open: true } : {}),
+          ...(inner === undefined ? {} : { inner }),
+          ...(arc === undefined ? {} : { arc }),
           motionGroup,
         })
-        const built = shapeTriangles(s.primitive, topScale)
+        const built = shapeTriangles(shapes.at(-1)!)
         triangles += built
         // v1 keeps its original, conservative charges so its acceptance never changes.
         charged += recipe.version === 1 ? LEGACY_TRIANGLE_CHARGE[s.primitive] : built

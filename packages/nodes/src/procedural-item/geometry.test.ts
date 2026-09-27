@@ -4,6 +4,7 @@ import {
   bedRecipe,
   ProceduralItemNode,
   parseRecipe,
+  shapeTriangles,
   shelfRecipe,
 } from '@pascal-app/core/procedural-items'
 import cabinetJson from '../../../core/src/procedural-items/__fixtures__/cabinet_two_doors_drawer.json'
@@ -180,4 +181,104 @@ test('evaluated triangle counts equal the triangles the renderer builds', () => 
     expect(built.evaluation.triangles).toBe(built.triangles)
     for (const batch of built.batches) batch.geometry.dispose()
   }
+})
+
+test('v2 cylinder options build exactly the triangles they are charged', () => {
+  const variants: Record<string, unknown>[] = [
+    { segments: 6 },
+    { segments: 8, topScale: 0.6 },
+    { segments: 4, topScale: 0 },
+    { open: true },
+    { inner: 0.8 },
+    { inner: 0.8, open: true },
+    { inner: 0.7, topScale: 0.5, segments: 12 },
+    { inner: 0.7, topScale: 0 },
+    { arc: Math.PI },
+    { arc: Math.PI, open: true },
+    { arc: Math.PI / 2, topScale: 0 },
+    { arc: Math.PI, inner: 0.9, segments: 16 },
+  ]
+  const recipe = parseRecipe({
+    version: 2,
+    name: 'Cylinder options',
+    description: 'Every cylinder option.',
+    parameters: [
+      { id: 'unused', label: 'Unused', default: 1, min: 1, max: 1, step: 1, unit: 'count' },
+    ],
+    slots: [{ id: 'body', label: 'Body', color: '#888888' }],
+    parts: [
+      {
+        id: 'all',
+        label: 'All',
+        count: 1,
+        shapes: variants.map((options, i) => ({
+          id: `c${i}`,
+          primitive: 'cylinder',
+          slot: 'body',
+          size: [0.1, 0.2, 0.1],
+          position: [i * 0.2, 0.1, 0],
+          ...options,
+        })),
+      },
+    ],
+    constraints: [],
+  })
+  const built = buildProceduralGeometry(ProceduralItemNode.parse({ recipe }))
+  expect(built.triangles).toBe(built.evaluation.triangles)
+  // Each shape's triangles, read back from the batch ranges, match its own count.
+  const ranges = built.batches[0]!.ranges
+  const counts = ranges.map((range, i) => range.end - (ranges[i - 1]?.end ?? 0))
+  const expected = built.evaluation.shapes.map((shape) => shapeTriangles(shape))
+  expect(counts).toEqual(expected)
+  // Every vertex stays inside its evaluated box; normals are unit length.
+  const box = built.batches[0]!.geometry
+  box.computeBoundingBox()
+  expect(box.boundingBox!.min.y).toBeGreaterThanOrEqual(-1e-6)
+  expect(box.boundingBox!.max.y).toBeLessThanOrEqual(0.2 + 1e-6)
+  const normal = box.getAttribute('normal')
+  for (let i = 0; i < normal.count; i++) {
+    const length = Math.hypot(normal.getX(i), normal.getY(i), normal.getZ(i))
+    if (length > 0) expect(length).toBeCloseTo(1, 4)
+  }
+  for (const batch of built.batches) batch.geometry.dispose()
+})
+
+test('a six-segment cylinder is an exact hexagonal prism', () => {
+  const recipe = parseRecipe({
+    version: 2,
+    name: 'Hex',
+    description: 'A hexagonal bolt head.',
+    parameters: [
+      { id: 'unused', label: 'Unused', default: 1, min: 1, max: 1, step: 1, unit: 'count' },
+    ],
+    slots: [{ id: 'body', label: 'Body', color: '#888888' }],
+    parts: [
+      {
+        id: 'head',
+        label: 'Head',
+        count: 1,
+        shapes: [
+          {
+            id: 'hex',
+            primitive: 'cylinder',
+            slot: 'body',
+            size: [0.1, 0.04, 0.1],
+            position: [0, 0.02, 0],
+            segments: 6,
+          },
+        ],
+      },
+    ],
+    constraints: [],
+  })
+  const geometry = buildProceduralGeometry(ProceduralItemNode.parse({ recipe })).batches[0]!
+    .geometry
+  const position = geometry.getAttribute('position')
+  const radii = new Set<string>()
+  for (let i = 0; i < position.count; i++) {
+    const r = Math.hypot(position.getX(i), position.getZ(i))
+    if (r > 1e-6) radii.add(r.toFixed(6))
+  }
+  expect([...radii]).toEqual(['0.050000'])
+  geometry.dispose()
 })
