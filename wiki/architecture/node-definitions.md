@@ -438,6 +438,33 @@ Door and window still use legacy direct calls in `use-keyboard.ts`; migrating th
 
 ---
 
+### `capabilities.mechanism`
+
+Moving parts people run (a fan's spin, a cabinet's doors, an articulated asset's joints). The action menu's Play/Stop button, E (after the kind's own `keyboardActions.e`), the walkthrough and the baked viewer read it instead of a kind name, so a plugin kind gets all of them by declaring it.
+
+```ts
+type MechanismCapability = {
+  has: (node: AnyNode) => boolean                            // anything to run?
+  isOn: (node: AnyNode, state: InteractiveState) => boolean  // any of it running?
+  set: (node: AnyNode, on: boolean) => void                  // start or stop all of it
+  verb?: 'open' | 'run'                                      // walkthrough wording, default 'run'
+}
+```
+
+Operating state is transient: `set` writes `useInteractive`, never the node, so running a mechanism never enters undo, autosave or collaboration. A kind with one switch keeps it in `useInteractive.mechanisms`:
+
+```ts
+mechanism: {
+  has: (node) => node.joints.some((joint) => joint.type !== 'fixed'),
+  isOn: (node, state) => Boolean(state.mechanisms[node.id]),
+  set: (node, on) => useInteractive.getState().setMechanism(node.id, on),
+},
+```
+
+`item` and `procedural-item` declare it over their own interactive state (`nodes/src/shared/item-interactions.ts`). Its GLB clips come from `exportAnimation`: every node that bakes clips lists them in `extras.clips`, and the baked viewer runs `: loop` clips no other controller owns on click and E, stopped at start. Lights are not part of it yet.
+
+---
+
 ## See also
 
 - [renderers.md](renderers.md) — the legacy renderer pattern (still authoritative for kinds with custom `def.renderer`).
