@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { nodeRegistry, registerNode } from '@pascal-app/core'
 import { shelfRecipe } from '@pascal-app/core/procedural-items'
 import * as schema from '@pascal-app/core/schema'
 import {
@@ -15,6 +16,7 @@ import {
   CabinetNode,
   FenceNode,
   LevelNode,
+  MeasurementNode,
   nodeKindOf,
   RoofNode,
   RoofSegmentNode,
@@ -372,6 +374,88 @@ describe('measure in world space', () => {
     expect(point![1]).toBeCloseTo(0, 6)
     expect(Math.abs(point![2]!)).toBeCloseTo(1, 6)
     expect(await approximateOf(railing.id)).toContain('floor-lift-unresolved-headless')
+  })
+
+  test('area, perimeter and volume measurements are measured from their base', async () => {
+    seedRef()
+    const base = [
+      [10, 0, 10],
+      [12, 0, 10],
+      [12, 0, 12],
+      [10, 0, 12],
+    ]
+    const area = MeasurementNode.parse({ measurement: { kind: 'area', base } })
+    const perimeter = MeasurementNode.parse({ measurement: { kind: 'perimeter', base } })
+    const volume = MeasurementNode.parse({
+      measurement: { kind: 'volume', base, extrusion: [0, 3, 0] },
+    })
+    bridge.applyPatch(
+      [area, perimeter, volume].map((node) => ({
+        op: 'create' as const,
+        node,
+        parentId: level.id as AnyNodeId,
+      })),
+    )
+    expectPoint(await pointOf(area.id), [11, 0, 11])
+    expectPoint(await pointOf(perimeter.id), [11, 0, 11])
+    // A prism's centre: the base centroid plus half the extrusion.
+    expectPoint(await pointOf(volume.id), [11, 1.5, 11])
+  })
+
+  test('semantic anchors resolve from the referenced node, or are flagged', async () => {
+    seedRef()
+    const wall = WallNode.parse({ start: [10, 0], end: [14, 0] })
+    const anchorAt = (t: number, fallback: [number, number, number]) => ({
+      kind: 'feature',
+      reference: { nodeId: wall.id, featureId: 'centerline', parameters: { t } },
+      fallback,
+    })
+    // Fallbacks recorded before the wall moved from x 0–4 to x 10–14.
+    const distance = MeasurementNode.parse({
+      measurement: { kind: 'distance', points: [anchorAt(0.25, [1, 0, 0]), [14, 0, 0]] },
+    })
+    bridge.applyPatch([
+      { op: 'create', node: wall, parentId: level.id as AnyNodeId },
+      { op: 'create', node: distance, parentId: level.id as AnyNodeId },
+    ])
+
+    // Headless: no registered measurement contribution for walls, so the
+    // fallback is used and flagged.
+    expectPoint(await pointOf(distance.id), [7.5, 0, 0])
+    expect(await approximateOf(distance.id)).toContain('anchor-fallback')
+
+    // With a contribution registered (as a host that loads the definitions
+    // does), the anchor follows the wall: t 0.25 of x 10–14 is x 11.
+    const restore = nodeRegistry._snapshot()
+    try {
+      registerNode({
+        kind: 'wall',
+        schemaVersion: 1,
+        schema: WallNode,
+        capabilities: {},
+        measurement: {
+          features: (node: AnyNode) => {
+            const w = node as WallNode
+            return [
+              {
+                id: 'centerline',
+                label: 'Centerline',
+                snapKind: 'edge',
+                geometry: {
+                  kind: 'segment',
+                  start: [w.start[0], 0, w.start[1]],
+                  end: [w.end[0], 0, w.end[1]],
+                },
+              },
+            ]
+          },
+        },
+      } as never)
+      expectPoint(await pointOf(distance.id), [12.5, 0, 0])
+      expect(await approximateOf(distance.id)).toBeUndefined()
+    } finally {
+      restore()
+    }
   })
 
   test('polygons are measured at their area centroid', async () => {

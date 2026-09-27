@@ -1,7 +1,9 @@
 import {
+  type GeometryContext,
   getFenceCenterlineFrameAt,
   getLevelElevations,
   getWallCurveFrameAt,
+  type MeasurementFeature,
   measurementCentroid,
   nodeRegistry,
 } from '@pascal-app/core'
@@ -60,18 +62,127 @@ function polygonCentre(polygon: unknown, y: number): Vec3 | null {
   return [cx / points.length, y, cz / points.length]
 }
 
-/** An anchor that is a tuple or a `{ fallback }` feature reference (measurements, dimensions). */
-function anchorPoint(anchor: unknown): Vec3 | null {
-  if (isVec3(anchor)) return anchor
-  const fallback = (anchor as { fallback?: unknown } | null)?.fallback
-  return isVec3(fallback) ? fallback : null
+type FeatureReference = {
+  nodeId: string
+  featureId: string
+  parameters?: Record<string, string | number | boolean>
+}
+
+function geometryContext(node: AnyNode, nodes: Nodes): GeometryContext {
+  const lookup = (id: string) => nodes[id]
+  const childIds = (n: AnyNode) =>
+    'children' in n && Array.isArray(n.children) ? (n.children as string[]) : []
+  const parent = node.parentId ? (lookup(node.parentId) ?? null) : null
+  return {
+    resolve: (<N = AnyNode>(id: AnyNodeId) =>
+      lookup(id) as N | undefined) as GeometryContext['resolve'],
+    parent,
+    children: childIds(node)
+      .map(lookup)
+      .filter((child): child is AnyNode => child !== undefined),
+    siblings: parent
+      ? childIds(parent)
+          .map(lookup)
+          .filter((s): s is AnyNode => s !== undefined && s.type === node.type)
+      : [],
+  }
+}
+
+/** The point at parameter `t` (default 0.5) along a feature, by arc length. */
+function featurePoint(feature: MeasurementFeature, reference: FeatureReference): Vec3 | null {
+  const t = typeof reference.parameters?.t === 'number' ? reference.parameters.t : 0.5
+  const geometry = feature.geometry
+  if (geometry.kind === 'point') return geometry.point
+  const points = geometry.kind === 'segment' ? [geometry.start, geometry.end] : geometry.points
+  const closed =
+    geometry.kind === 'polygon' || (geometry.kind === 'path' && geometry.closed === true)
+  if (points.length === 0) return null
+  const count = closed ? points.length : points.length - 1
+  const lengths = Array.from({ length: Math.max(0, count) }, (_, i) => {
+    const a = points[i]!
+    const b = points[(i + 1) % points.length]!
+    return Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])
+  })
+  const total = lengths.reduce((sum, length) => sum + length, 0)
+  if (total <= 1e-9) return points[0]!
+  let remaining = Math.max(0, Math.min(1, t)) * total
+  for (let i = 0; i < count; i++) {
+    const length = lengths[i]!
+    if (remaining <= length || i === count - 1) {
+      const a = points[i]!
+      const b = points[(i + 1) % points.length]!
+      const u = length <= 1e-9 ? 0 : remaining / length
+      return [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u]
+    }
+    remaining -= length
+  }
+  return points[points.length - 1]!
+}
+
+/**
+ * A measurement or dimension anchor as the viewer resolves it: a tuple is a
+ * free point; a feature anchor follows its referenced node through that kind's
+ * registered measurement contribution, and falls back to its stored point when
+ * the node or the contribution is missing (`fallback: true`).
+ */
+function resolveAnchor(anchor: unknown, nodes: Nodes): { point: Vec3; fallback: boolean } | null {
+  if (isVec3(anchor)) return { point: anchor, fallback: false }
+  const feature = anchor as { reference?: FeatureReference; fallback?: unknown } | null
+  if (!(feature?.reference && isVec3(feature.fallback))) return null
+  const reference = feature.reference
+  const referenced = nodes[reference.nodeId]
+  const contribution = referenced ? nodeRegistry.get(referenced.type)?.measurement : undefined
+  if (referenced && contribution) {
+    const context = geometryContext(referenced, nodes)
+    const resolved =
+      contribution.resolve?.(referenced as never, context, reference as never) ??
+      contribution.features(referenced as never, context).find((c) => c.id === reference.featureId)
+    const point = resolved ? featurePoint(resolved, reference) : null
+    if (point) return { point, fallback: false }
+  }
+  return { point: feature.fallback, fallback: true }
+}
+
+type AnchorSet = { anchors: unknown[]; shape: 'points' | 'area' | 'volume'; extrusion?: Vec3 }
+
+/** The anchors a measurement or construction dimension draws from. */
+function anchorSet(node: AnyNode): AnchorSet | null {
+  if (node.type === 'construction-dimension') return { anchors: node.anchors, shape: 'points' }
+  if (node.type !== 'measurement') return null
+  const m = node.measurement as {
+    kind: string
+    points?: unknown[]
+    base?: unknown[]
+    extrusion?: unknown
+  }
+  if (m.kind === 'distance' || m.kind === 'angle')
+    return { anchors: m.points ?? [], shape: 'points' }
+  if (m.kind === 'volume' && isVec3(m.extrusion)) {
+    return { anchors: m.base ?? [], shape: 'volume', extrusion: m.extrusion }
+  }
+  return { anchors: m.base ?? [], shape: 'area' }
+}
+
+/** Centre of a measurement or dimension: its points' centre, a base's area centroid, a prism's centre. */
+function anchorCentre(set: AnchorSet, nodes: Nodes): Vec3 | null {
+  const points = set.anchors
+    .map((anchor) => resolveAnchor(anchor, nodes)?.point)
+    .filter((p): p is Vec3 => p !== undefined)
+  if (set.shape === 'points') return boundsCentre(points)
+  const base = (measurementCentroid(points) as Vec3 | null) ?? boundsCentre(points)
+  if (!base || set.shape === 'area' || !set.extrusion) return base
+  return [
+    base[0] + set.extrusion[0] / 2,
+    base[1] + set.extrusion[1] / 2,
+    base[2] + set.extrusion[2] / 2,
+  ]
 }
 
 /**
  * Centre of the geometry a node stores in its own frame, before its transform:
  * mesh vertices, a segment, a path, a polygon or measurement anchors.
  */
-function ownGeometryCentre(node: AnyNode): Vec3 | null {
+function ownGeometryCentre(node: AnyNode, nodes: Nodes): Vec3 | null {
   const n = node as Record<string, unknown>
   if (node.type === 'block') {
     return boundsCentre(node.topology.vertices.map((v) => v.position as Vec3))
@@ -98,16 +209,8 @@ function ownGeometryCentre(node: AnyNode): Vec3 | null {
     return [(x1 + x2) / 2, 0, (z1 + z2) / 2]
   }
   if (Array.isArray(n.path)) return boundsCentre((n.path as unknown[]).filter(isVec3))
-  const anchors =
-    node.type === 'measurement'
-      ? (node.measurement as { points?: unknown[] }).points
-      : node.type === 'construction-dimension'
-        ? node.anchors
-        : undefined
-  if (Array.isArray(anchors)) {
-    return boundsCentre(anchors.map(anchorPoint).filter((p): p is Vec3 => p !== null))
-  }
-  return null
+  const anchors = anchorSet(node)
+  return anchors ? anchorCentre(anchors, nodes) : null
 }
 
 /**
@@ -185,6 +288,10 @@ function unresolvedFloorLiftHost(node: AnyNode, nodes: Nodes): AnyNode | undefin
  */
 function approximationReason(node: AnyNode, nodes: Nodes): string | undefined {
   if (unresolvedFloorLiftHost(node, nodes)) return FLOOR_LIFT_UNRESOLVED
+  const anchors = anchorSet(node)
+  if (anchors?.anchors.some((anchor) => resolveAnchor(anchor, nodes)?.fallback)) {
+    return 'anchor-fallback: an anchor follows a referenced node whose measurement features are not registered here (or the node is gone); its stored fallback point is used'
+  }
   const parent = node.parentId ? nodes[node.parentId] : undefined
   switch (node.type) {
     case 'downspout':
@@ -260,7 +367,7 @@ function levelLocalPoint(node: AnyNode, nodes: Nodes): Vec3 | null {
     ])
   }
   const own = nodeLevelFrame(node.id, nodes)
-  const geometry = ownGeometryCentre(node)
+  const geometry = ownGeometryCentre(node, nodes)
   if (geometry) return transformPoint(own, geometry)
   if (isVec3((node as { position?: unknown }).position)) return own.position
   return null
@@ -408,7 +515,7 @@ function levelPlanCentre(levelId: string, nodes: Nodes): Vec3 {
         : isVec3(transform.rotation)
           ? transform.rotation
           : [0, 0, 0]
-    const geometry = ownGeometryCentre(child)
+    const geometry = ownGeometryCentre(child, nodes)
     if (geometry) points.push(transformPoint(frame(position, rotation), geometry))
     else if (isVec3(transform.position)) points.push(position)
   }
