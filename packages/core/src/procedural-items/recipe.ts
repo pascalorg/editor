@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { boxCorners, frame, rotateVector, transformPoint } from './spatial'
+import { boundsOf, boxCorners, frame, rotateVector, transformPoint } from './spatial'
 
 export type Expr =
   | number
@@ -34,6 +34,15 @@ const timing = {
   duration: expression.optional(),
   easing: z.enum(['linear', 'smooth', 'soft']).optional(),
 }
+const cutCenter = z.tuple([expression, expression]).optional()
+const cut = z.discriminatedUnion('shape', [
+  z.strictObject({
+    shape: z.literal('rect'),
+    size: z.tuple([expression, expression]),
+    center: cutCenter,
+  }),
+  z.strictObject({ shape: z.literal('circle'), diameter: expression, center: cutCenter }),
+])
 const motion = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('hinge'),
@@ -72,6 +81,9 @@ const RecipeObject = z.strictObject({
     .optional(),
   // v2, floor designs: the design-space height that rests on the host floor.
   base: expression.optional(),
+  // v2, ceiling designs: an opening in the host ceiling, drawn in the mounting reference's x/z
+  // plane around it. The design may rise above the reference only inside its cut.
+  cuts: z.array(cut).min(1).max(1).optional(),
   surfaces: z
     .array(
       z.strictObject({
@@ -198,6 +210,11 @@ export type EvaluatedLight = {
   distance: number
   emissiveSlot?: string
 }
+export type EvaluatedCut = {
+  host: 'ceiling'
+  /** Closed ring in design-space [x, z], at the mounting reference. */
+  ring: [number, number][]
+}
 export type Surface = {
   id: string
   label: string
@@ -212,6 +229,7 @@ export type Evaluation = {
   lights: EvaluatedLight[]
   motionGroupByInstance: Record<string, string>
   surfaces: Surface[]
+  cuts: EvaluatedCut[]
   min: Vec3
   max: Vec3
   dimensions: Vec3
@@ -249,6 +267,10 @@ function versionIssue(recipe: Recipe): string | null {
     if (recipe.version !== 2) return 'A declared base requires recipe version 2'
     if (recipe.mounting)
       return 'A declared base applies to floor designs; mounted designs use their reference'
+  }
+  if (recipe.cuts !== undefined) {
+    if (recipe.version !== 2) return 'Cuts require recipe version 2'
+    if (recipe.mounting?.attachTo !== 'ceiling') return 'Cuts need a ceiling-mounted design'
   }
   return null
 }
@@ -309,6 +331,21 @@ function shapeCorners(size: Vec3, position: Vec3, rotation: Vec3): Vec3[] {
   const localMax = size.map((v) => v / 2) as Vec3
   const shapeFrame = frame(position, rotation)
   return boxCorners(localMin, localMax).map((point) => transformPoint(shapeFrame, point))
+}
+
+function shapeBounds(shape: Pick<EvaluatedShape, 'primitive' | 'size' | 'position' | 'rotation'>) {
+  if (shape.primitive !== 'ellipsoid')
+    return boundsOf(shapeCorners(shape.size, shape.position, shape.rotation))
+  const axes = [0, 1, 2].map((axis) =>
+    rotateVector([0, 1, 2].map((j) => (j === axis ? 1 : 0)) as Vec3, shape.rotation),
+  )
+  const extent = [0, 1, 2].map((k) =>
+    Math.hypot(...axes.map((axis, j) => (axis[k]! * shape.size[j]!) / 2)),
+  ) as Vec3
+  return boundsOf([
+    shape.position.map((v, k) => v - extent[k]!) as Vec3,
+    shape.position.map((v, k) => v + extent[k]!) as Vec3,
+  ])
 }
 
 function movedPoint(point: Vec3, motion: EvaluatedMotion, fraction: number): Vec3 {
@@ -641,14 +678,65 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
       })
     }
   }
+  const cuts: EvaluatedCut[] = []
   if (recipe.mounting) {
     const reference = surfaces.find((s) => s.id === recipe.mounting!.reference)
     if (!reference || reference.id.includes(':')) throw new Error('Missing mounting reference')
     if (recipe.mounting.attachTo === 'ceiling') {
       if (Math.abs(reference.normal[1] - 1) > 1e-6)
         throw new Error('Ceiling mounting reference must face local +Y')
-      if (Math.abs(reference.position[1] - max[1]) > 1e-6)
+      const recessed = recipe.version === 2 && recipe.cuts !== undefined
+      if (
+        recessed
+          ? reference.position[1] > max[1] + 1e-6
+          : Math.abs(reference.position[1] - max[1]) > 1e-6
+      )
         throw new Error('Ceiling mounting reference must lie at the top of the design')
+      if (recessed) {
+        const u = rotateVector([1, 0, 0], reference.rotation),
+          v = rotateVector([0, 0, 1], reference.rotation)
+        const inside: ((x: number, z: number) => boolean)[] = []
+        for (const c of recipe.cuts!) {
+          const [cu, cv] = (c.center ?? [0, 0]).map((e) => expr(e)) as [number, number]
+          const cx = reference.position[0] + u[0] * cu + v[0] * cv,
+            cz = reference.position[2] + u[2] * cu + v[2] * cv
+          const half =
+            c.shape === 'rect'
+              ? (c.size.map((e) => expr(e) / 2) as [number, number])
+              : ([expr(c.diameter) / 2, expr(c.diameter) / 2] as [number, number])
+          if (half.some((h) => !(h >= 0.005 && h <= 15))) throw new Error('Invalid cut size')
+          const local: [number, number][] =
+            c.shape === 'rect'
+              ? [
+                  [-half[0], -half[1]],
+                  [half[0], -half[1]],
+                  [half[0], half[1]],
+                  [-half[0], half[1]],
+                ]
+              : Array.from({ length: 32 }, (_, k) => [
+                  half[0] * Math.cos((k * Math.PI) / 16),
+                  half[0] * Math.sin((k * Math.PI) / 16),
+                ])
+          cuts.push({
+            host: 'ceiling',
+            ring: local.map(([a, b]) => [cx + u[0] * a + v[0] * b, cz + u[2] * a + v[2] * b]),
+          })
+          inside.push((x, z) => {
+            const a = (x - cx) * u[0] + (z - cz) * u[2],
+              b = (x - cx) * v[0] + (z - cz) * v[2]
+            return c.shape === 'rect'
+              ? Math.abs(a) <= half[0] + 1e-6 && Math.abs(b) <= half[1] + 1e-6
+              : Math.hypot(a, b) <= half[0] + 1e-6
+          })
+        }
+        for (const shape of shapes) {
+          const b = shapeBounds(shape)
+          if (b.max[1] <= reference.position[1] + 1e-6) continue
+          const corners = boxCorners(b.min, b.max)
+          if (!inside.some((test) => corners.every(([x, , z]) => test(x, z))))
+            throw new Error(`${shape.partId} rises above the ceiling reference outside its cut`)
+        }
+      }
     } else if (Math.abs(reference.normal[2] + 1) > 1e-6)
       throw new Error('Wall-side mounting reference must face local -Z')
   }
@@ -703,6 +791,7 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
     lights,
     motionGroupByInstance,
     surfaces,
+    cuts,
     min,
     max,
     dimensions,

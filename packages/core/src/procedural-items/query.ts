@@ -74,6 +74,20 @@ export function proceduralLocalPose(node: ProceduralItemNode, nodes: QueryNodes)
   position[2] = sign * (getWallThickness(wall) / 2 - reference.position[2] + node.position[2])
   return { position, rotation }
 }
+/** A ceiling design's cut as a hole ring in its ceiling's local [x, z], or null. */
+export function proceduralCeilingHole(node: ProceduralItemNode): [number, number][] | null {
+  if (node.recipe.mounting?.attachTo !== 'ceiling') return null
+  const e = evaluateRecipe(node.recipe, node.parameters)
+  const cut = e.cuts.find((c) => c.host === 'ceiling')
+  const reference = e.surfaces.find((s) => s.id === node.recipe.mounting?.reference)
+  if (!(cut && reference)) return null
+  // Same pose as proceduralLocalPose: the reference sits at the node's ceiling position.
+  const f = frame(node.position, node.rotation)
+  return cut.ring.map(([x, z]) => {
+    const p = transformPoint(f, [x - reference.position[0], 0, z - reference.position[2]])
+    return [p[0], p[2]]
+  })
+}
 export function proceduralFootprint(node: ProceduralItemNode) {
   const e = evaluateRecipe(node.recipe, node.parameters)
   const center = e.min.map((v, i) => (v + e.max[i]!) / 2) as Vec3
@@ -329,9 +343,11 @@ export function validateProceduralRelations(raw: AnyNode | ProceduralItemNode, n
     const b = boundsOf(boxCorners(evaluation.min, evaluation.max).map((p) => transformPoint(f, p)))
     const height = nodeLevelFrame(ceiling.id, nodes).position[1]
     const level = ceiling.parentId ? nodes[ceiling.parentId] : undefined
+    // A recessed design rises into the plenum through its own cut.
+    const recessed = evaluation.cuts.length > 0
     if (
       b.min[1] + height < -1e-6 ||
-      b.max[1] > 1e-6 ||
+      (!recessed && b.max[1] > 1e-6) ||
       b.max[1] + height > getStoredLevelHeight(level?.type === 'level' ? level : {}) + 1e-6
     )
       throw new Error('The hanging design must fit below the ceiling within the level height')

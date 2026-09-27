@@ -7,6 +7,7 @@ import {
   frame,
   ProceduralItemNode,
   parameterPatch,
+  proceduralCeilingHole,
   proceduralFootprint,
   proceduralSlotColor,
   queryProceduralItem,
@@ -137,6 +138,10 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
       align: 'face',
     },
     hostRefFields: ['wallId', 'side', 'supportSlabId'],
+    // A v2 ceiling design with `cuts` opens its host ceiling (CeilingSystem dispatch).
+    ceilingCut: {
+      buildCeilingHole: (n) => proceduralCeilingHole(n as unknown as ProceduralItemNode),
+    },
     floorPlaced: {
       footprint: (n) => proceduralFootprint(n as unknown as ProceduralItemNode),
       applies: (n) => !(n as unknown as ProceduralItemNode).recipe.mounting,
