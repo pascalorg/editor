@@ -27,13 +27,15 @@ export const findNodesInput = {
     .min(1)
     .optional()
     .describe(
-      'Exact match on any entry of node.metadata.sourceIds (the import source ids). Characters outside printable ASCII also match their percent-encoded form.',
+      'Exact match on any import source id of the node: provenance.refs[].id or legacy metadata.sourceIds. Characters outside printable ASCII also match their percent-encoded form.',
     ),
   sourceIdPrefix: z
     .string()
     .min(1)
     .optional()
-    .describe('Prefix match on any entry of node.metadata.sourceIds.'),
+    .describe(
+      'Prefix match on any import source id of the node (provenance.refs[].id or legacy metadata.sourceIds).',
+    ),
 }
 
 export const findNodesOutput = {
@@ -58,11 +60,13 @@ function encodeSourceId(id: string): string {
   return out
 }
 
+/** A node's import source ids: typed `provenance.refs[].id`, then legacy `metadata.sourceIds`. */
 function nodeSourceIds(node: AnyNode): string[] {
-  const sourceIds = node.metadata?.sourceIds
-  return Array.isArray(sourceIds)
-    ? sourceIds.filter((id): id is string => typeof id === 'string')
-    : []
+  const typed = (node.provenance?.refs ?? []).map((ref) => ref.id)
+  const legacy = node.metadata?.sourceIds
+  return Array.isArray(legacy)
+    ? [...typed, ...legacy.filter((id): id is string => typeof id === 'string')]
+    : typed
 }
 
 type Vec3 = [number, number, number]
@@ -157,7 +161,7 @@ export function registerFindNodes(server: McpServer, bridge: SceneOperations): v
     {
       title: 'Find nodes',
       description:
-        'Find nodes matching any combination of type, parentId, levelId, zoneId, sourceId or sourceIdPrefix filters. sourceId / sourceIdPrefix match node.metadata.sourceIds, the ids an importer recorded for the source elements.',
+        'Find nodes matching any combination of type, parentId, levelId, zoneId, sourceId or sourceIdPrefix filters. sourceId / sourceIdPrefix match the ids an importer recorded for the source elements: provenance.refs[].id, or legacy metadata.sourceIds.',
       inputSchema: findNodesInput,
       outputSchema: findNodesOutput,
       annotations: READ_ONLY_TOOL_ANNOTATIONS,
