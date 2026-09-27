@@ -7,7 +7,11 @@ import {
   type SurfaceRole,
   useInteractive,
 } from '@pascal-app/core'
-import { type EvaluatedMotion, ProceduralMotionController } from '@pascal-app/core/procedural-items'
+import {
+  type EvaluatedMotion,
+  operableParts,
+  ProceduralMotionController,
+} from '@pascal-app/core/procedural-items'
 import { Html, useAnimations } from '@react-three/drei'
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
@@ -1117,7 +1121,7 @@ export function GlbScene({
           (item) =>
             item.pascalId === extras.pascalId &&
             item.procedural?.lights.length &&
-            !item.procedural.parts.some((part) => part.motion),
+            operableParts(item.procedural.recipe).length === 0,
         )
       if (node && extras?.kind === 'procedural-item' && (extras.clips?.length || lightOnly)) {
         doorNode = { hit: hit.object, node }

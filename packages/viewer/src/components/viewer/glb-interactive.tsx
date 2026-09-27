@@ -45,7 +45,10 @@ export type GlbInteractiveItem = {
   /** Item height (world units) for placing the controls overlay above it. */
   height: number
   interactive: Interactive
-  procedural?: { lights: EvaluatedLight[]; parts: ProceduralItemNode['recipe']['parts'] }
+  procedural?: {
+    lights: EvaluatedLight[]
+    recipe: Pick<ProceduralItemNode['recipe'], 'parts' | 'joints'>
+  }
 }
 
 /** A baked zone's identity node + its local floor polygon (from `extras`). */
@@ -79,7 +82,7 @@ export function buildGlbInteractiveItems(
         label: procedural.name ?? id,
         height: evaluation.max[1],
         interactive: { controls: [], effects: [] },
-        procedural: { lights: evaluation.lights, parts: procedural.recipe.parts },
+        procedural: { lights: evaluation.lights, recipe: procedural.recipe },
       })
       continue
     }
@@ -610,7 +613,7 @@ function GlbItemControls({
   const toggleLights = useInteractive((s) => s.toggleProceduralLights)
   const descriptors = item.procedural
     ? proceduralControlDescriptors(
-        item.procedural.parts,
+        item.procedural.recipe,
         proceduralState,
         (partId) => togglePart(item.pascalId, partId),
         () => toggleLights(item.pascalId),

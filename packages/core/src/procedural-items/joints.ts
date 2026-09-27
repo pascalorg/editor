@@ -257,9 +257,7 @@ export function jointReach(
       }
     if (!points.length) return null
     const box = boundsOf(points)
-    const axis =
-      motion.direction ??
-      ([0, 1, 2].map((k) => (['x', 'y', 'z'][k] === motion.axis ? 1 : 0)) as Vec3)
+    const axis = motionAxis(motion)
     const travel = [0, motion.amount, ...(motion.range ?? [])]
     const [from, to] = [Math.min(...travel), Math.max(...travel)]
     if (motion.kind === 'slide') {
@@ -278,4 +276,29 @@ export function jointReach(
       const bounds = reach(motion)
       return bounds ? [{ motion, bounds }] : []
     })
+}
+
+export type OperablePart = { id: string; label: string; kind: EvaluatedMotion['kind'] }
+/** Parts a person can operate (Play, E, controls): a flat motion or a non-fixed joint. */
+export function operableParts(recipe: Pick<Recipe, 'parts' | 'joints'>): OperablePart[] {
+  return recipe.parts.flatMap((part) => {
+    const joint = recipe.joints?.find((entry) => entry.child === part.id)
+    const kind =
+      part.motion?.kind ?? (joint && joint.kind !== 'fixed' ? KIND[joint.kind] : undefined)
+    return kind ? [{ id: part.id, label: part.label, kind }] : []
+  })
+}
+/** Where a motion group sits in its parent group at rest: its pivot less the parent's. */
+export function motionRestOffset(
+  motion: EvaluatedMotion,
+  motions: readonly EvaluatedMotion[],
+): Vec3 {
+  const parent = motion.parent ? motions.find((entry) => entry.id === motion.parent) : undefined
+  return motion.pivot.map((v, i) => v - (parent?.pivot[i] ?? 0)) as Vec3
+}
+/** A motion's unit axis in its parent group's frame, which has design axes at rest. */
+export function motionAxis(motion: EvaluatedMotion): Vec3 {
+  return (
+    motion.direction ?? ([0, 1, 2].map((k) => (['x', 'y', 'z'][k] === motion.axis ? 1 : 0)) as Vec3)
+  )
 }

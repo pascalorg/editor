@@ -71,7 +71,7 @@ test('baked moving emitter follows its motion group around the pivot', () => {
     label: 'Fixture',
     height: 1,
     interactive: { controls: [], effects: [] },
-    procedural: { lights: [light], parts: [] },
+    procedural: { lights: [light], recipe: { parts: [] } },
   }
   const [reg] = buildGlbLightRegs([item], new Map([['fixture', root]]))
   const position = new Vector3()

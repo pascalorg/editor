@@ -5,6 +5,7 @@ import {
   boxCorners,
   evaluateRecipe,
   frame,
+  operableParts,
   ProceduralItemNode,
   parameterPatch,
   proceduralCeilingHole,
@@ -209,10 +210,10 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
   floorplanAffectedIds: restingFloorplanAffectedIds,
   keyboardActions: {
     e: {
-      appliesTo: (n) =>
-        (n as unknown as ProceduralItemNode).recipe.parts.some((part) =>
-          Boolean(part.motion || part.light),
-        ),
+      appliesTo: (n) => {
+        const recipe = (n as unknown as ProceduralItemNode).recipe
+        return operableParts(recipe).length > 0 || recipe.parts.some((part) => part.light)
+      },
       run: (n) => (itemHasMechanisms(n) ? toggleItemMechanisms(n) : toggleItemLights(n)),
     },
     r: {

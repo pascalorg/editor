@@ -4,6 +4,7 @@ import {
   type ProceduralItemNode,
   revolveIsClosed,
   sectionRings,
+  usesPartTree,
 } from '@pascal-app/core/procedural-items'
 import {
   BoxGeometry,
@@ -32,6 +33,8 @@ export type Batch = {
 }
 export type BuiltItem = {
   batches: Batch[]
+  /** Part-tree designs: the whole rest pose merged per slot, drawn while no joint moves. */
+  rest?: Batch[]
   evaluation: Evaluation
   milliseconds: number
   triangles: number
@@ -286,6 +289,26 @@ export function buildProceduralGeometry(node: ProceduralItemNode): BuiltItem {
     entry.ranges.push({ end: entry.faces, partId: shape.partId, shapeId: shape.id })
     bySlot.set(key, entry)
   }
+  // Joint trees split into many groups; idle, they draw as one mesh per slot instead.
+  let rest: Batch[] | undefined
+  if (usesPartTree(node.recipe) && evaluation.motions.length) {
+    const restBySlot = new Map<string, { geometries: BufferGeometry[]; ranges: Batch['ranges'] }>()
+    for (const [key, entry] of bySlot) {
+      const slot = (JSON.parse(key) as [string | null, string])[1]
+      const merged = restBySlot.get(slot) ?? { geometries: [], ranges: [] }
+      const offset = merged.ranges.at(-1)?.end ?? 0
+      merged.geometries.push(...entry.geometries)
+      merged.ranges.push(...entry.ranges.map((range) => ({ ...range, end: range.end + offset })))
+      restBySlot.set(slot, merged)
+    }
+    rest = [...restBySlot].map(([slot, entry]) => {
+      const geometry = mergeGeometries(entry.geometries, false)
+      if (!geometry) throw new Error('Unable to batch procedural geometry')
+      geometry.computeBoundingBox()
+      geometry.computeBoundingSphere()
+      return { slot, geometry, ranges: entry.ranges }
+    })
+  }
   const batches: Batch[] = []
   for (const [key, entry] of bySlot) {
     const [motionGroup, slot] = JSON.parse(key) as [string | null, string]
@@ -314,6 +337,7 @@ export function buildProceduralGeometry(node: ProceduralItemNode): BuiltItem {
   proceduralMetrics.lastBuildMs = milliseconds
   return {
     batches,
+    ...(rest && { rest }),
     evaluation,
     milliseconds,
     triangles: batches.reduce((n, b) => n + b.geometry.getAttribute('position').count / 3, 0),
@@ -337,7 +361,7 @@ export function acquireProceduralGeometry(node: ProceduralItemNode) {
       released = true
       const current = cache.get(key)
       if (current && --current.users === 0) {
-        for (const batch of current.value.batches) {
+        for (const batch of [...current.value.batches, ...(current.value.rest ?? [])]) {
           batch.geometry.dispose()
           batch.motionGeometry?.dispose()
         }

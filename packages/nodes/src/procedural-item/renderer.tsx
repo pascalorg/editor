@@ -9,6 +9,9 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  type EvaluatedMotion,
+  motionAxis,
+  motionRestOffset,
   type ProceduralItemNode,
   ProceduralMotionController,
   proceduralLocalPose,
@@ -28,12 +31,17 @@ import {
   useViewer,
 } from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { type Group, Mesh, Vector3 } from 'three'
 import { canRegisterItemLight } from '../shared/item-light-placement'
 import { acquireProceduralGeometry, type BuiltItem, geometrySignature } from './geometry'
+
+const axis = new Vector3()
 export default function ProceduralRenderer({ node }: { node: ProceduralItemNode }) {
   const ref = useRef<Group>(null!)
+  // Part-tree designs draw their merged rest pose while idle and their joint groups while moving.
+  const restRef = useRef<Group>(null)
+  const splitRef = useRef<Group>(null)
   const controller = useRef<ProceduralMotionController | null>(null)
   const lastCommand = useRef(0)
   const awake = useRef(false)
@@ -114,9 +122,11 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
     for (const motion of built?.evaluation.motions ?? []) {
       const group = ref.current?.getObjectByName(`${node.id}__motion__${motion.id}`)
       if (!group) continue
-      group.position.set(...motion.pivot)
+      group.position.set(...motionRestOffset(motion, built!.evaluation.motions))
       group.quaternion.identity()
     }
+    if (restRef.current) restRef.current.visible = true
+    if (splitRef.current) splitRef.current.visible = false
     if (built?.evaluation.motions.length) {
       awake.current = true
       invalidate()
@@ -143,15 +153,25 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
     for (const motion of built.evaluation.motions) {
       const group = ref.current.getObjectByName(`${node.id}__motion__${motion.id}`)
       if (!group) continue
-      if (motion.kind === 'spin') {
-        group.rotation[motion.axis] = frame.spins[motion.id]?.phase ?? 0
-      } else {
-        const fraction = frame.fractions[motion.id] ?? 0
-        if (motion.kind === 'hinge') group.rotation[motion.axis] = motion.amount * fraction
-        else
-          group.position[motion.axis] =
-            motion.pivot[{ x: 0, y: 1, z: 2 }[motion.axis]]! + motion.amount * fraction
-      }
+      const angle =
+        motion.kind === 'spin'
+          ? (frame.spins[motion.id]?.phase ?? 0)
+          : motion.amount * (frame.fractions[motion.id] ?? 0)
+      if (motion.kind === 'slide')
+        group.position
+          .set(...motionRestOffset(motion, built.evaluation.motions))
+          .addScaledVector(axis.set(...motionAxis(motion)), angle)
+      else if (motion.direction)
+        group.quaternion.setFromAxisAngle(axis.set(...motion.direction), angle)
+      else group.rotation[motion.axis] = angle
+    }
+    if (restRef.current && splitRef.current) {
+      const moving =
+        frame.pending ||
+        Object.values(frame.fractions).some((fraction) => fraction > 0) ||
+        Object.values(frame.spins).some((spin) => spin.speed > 0)
+      restRef.current.visible = !moving
+      splitRef.current.visible = moving
     }
     if (frame.pending) invalidate()
     else awake.current = false
@@ -241,17 +261,53 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
     },
     [materials],
   )
-  const meshes = useMemo(
-    () =>
-      built?.batches.map((batch) => {
-        const mesh = new Mesh(batch.motionGeometry ?? batch.geometry, materials.get(batch.slot))
-        mesh.name = `slot_${batch.slot}`
-        mesh.userData = { slotId: batch.slot, proceduralRanges: batch.ranges }
-        mesh.castShadow = true
-        mesh.receiveShadow = true
-        return { mesh, motionGroup: batch.motionGroup }
-      }) ?? [],
-    [built, materials],
+  const meshes = useMemo(() => {
+    const make = (batch: NonNullable<BuiltItem['rest']>[number], geometry = batch.geometry) => {
+      const mesh = new Mesh(geometry, materials.get(batch.slot))
+      mesh.name = `slot_${batch.slot}`
+      mesh.userData = { slotId: batch.slot, proceduralRanges: batch.ranges }
+      mesh.castShadow = true
+      mesh.receiveShadow = true
+      return { mesh, motionGroup: batch.motionGroup }
+    }
+    return {
+      split:
+        built?.batches.map((batch) => make(batch, batch.motionGeometry ?? batch.geometry)) ?? [],
+      rest: built?.rest?.map((batch) => make(batch)) ?? [],
+    }
+  }, [built, materials])
+  const motions = built?.evaluation.motions ?? []
+  const motionGroup = (motion: EvaluatedMotion): ReactNode => (
+    <group
+      key={motion.id}
+      name={`${node.id}__motion__${motion.id}`}
+      position={motionRestOffset(motion, motions)}
+      userData={{
+        proceduralMotion: {
+          nodeId: node.id,
+          partId: motion.partId,
+          groupId: motion.id,
+          kind: motion.kind,
+        },
+      }}
+    >
+      {meshes.split
+        .filter((entry) => entry.motionGroup === motion.id)
+        .map(({ mesh }) => (
+          <primitive key={mesh.uuid} object={mesh} dispose={null} />
+        ))}
+      {motions.filter((child) => child.parent === motion.id).map(motionGroup)}
+    </group>
+  )
+  const split = (
+    <>
+      {meshes.split
+        .filter((entry) => !entry.motionGroup)
+        .map(({ mesh }) => (
+          <primitive key={mesh.uuid} object={mesh} dispose={null} />
+        ))}
+      {motions.filter((motion) => !motion.parent).map(motionGroup)}
+    </>
   )
   const rotation =
     live?.rotation === undefined
@@ -266,32 +322,20 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
       visible={effective.visible}
       {...handlers}
     >
-      {meshes
-        .filter((entry) => !entry.motionGroup)
-        .map(({ mesh }) => (
-          <primitive key={mesh.uuid} object={mesh} dispose={null} />
-        ))}
-      {built?.evaluation.motions.map((motion) => (
-        <group
-          key={motion.id}
-          name={`${node.id}__motion__${motion.id}`}
-          position={motion.pivot}
-          userData={{
-            proceduralMotion: {
-              nodeId: node.id,
-              partId: motion.partId,
-              groupId: motion.id,
-              kind: motion.kind,
-            },
-          }}
-        >
-          {meshes
-            .filter((entry) => entry.motionGroup === motion.id)
-            .map(({ mesh }) => (
+      {meshes.rest.length ? (
+        <>
+          <group ref={restRef} userData={{ pascalProceduralRest: true }}>
+            {meshes.rest.map(({ mesh }) => (
               <primitive key={mesh.uuid} object={mesh} dispose={null} />
             ))}
-        </group>
-      ))}
+          </group>
+          <group ref={splitRef} userData={{ pascalProceduralSplit: true }} visible={false}>
+            {split}
+          </group>
+        </>
+      ) : (
+        split
+      )}
       {effective.children.map((id) => {
         const surface = built?.evaluation.surfaces.find((s) => s.id === effective.attachments[id])
         return (
