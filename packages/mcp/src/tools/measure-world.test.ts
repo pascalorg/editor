@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
@@ -8,6 +10,7 @@ import {
   AnyNode,
   type AnyNodeId,
   BlockNode,
+  BuildingNode,
   CabinetModuleNode,
   CabinetNode,
   FenceNode,
@@ -16,6 +19,7 @@ import {
   RoofNode,
   RoofSegmentNode,
   SlabNode,
+  SolarPanelNode,
   StairNode,
   StairSegmentNode,
   WallNode,
@@ -24,6 +28,7 @@ import {
 } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { registerMeasure } from './measure'
+import { HEADLESS_UNRESOLVED_FLOOR_LIFT_KINDS, resolveNodeWorldPoint } from './node-world-point'
 
 type Vec3 = [number, number, number]
 
@@ -120,19 +125,8 @@ const ROOF_ACCESSORIES = [
   'turbine-vent',
 ]
 
-/** Kinds the viewer lifts onto the slab under them when they sit on a level. */
-const FLOOR_PLACED = new Set([
-  'block',
-  'cabinet',
-  'column',
-  'duct-terminal',
-  'hvac-equipment',
-  'item',
-  'procedural-item',
-  'shelf',
-  'spawn',
-  'stair',
-])
+/** Floor-placed kinds whose lift core resolves from the node itself, registry or not. */
+const CORE_LIFTED = new Set(['item', 'procedural-item', 'shelf'])
 
 /** One minimal node per kind the per-kind schemas can build from defaults. */
 function minimalNodes(): AnyNode[] {
@@ -180,6 +174,12 @@ describe('measure in world space', () => {
   function expectPoint(actual: number[] | undefined, expected: Vec3) {
     expect(actual).toHaveLength(3)
     for (let i = 0; i < 3; i++) expect(actual![i]!).toBeCloseTo(expected[i]!, 6)
+  }
+
+  async function approximateOf(id: string): Promise<string | undefined> {
+    const zone = Object.values(bridge.getNodes()).find((n) => n.type === 'zone' && n.name === 'Ref')
+    const { payload } = await measure(id, zone!.id)
+    return payload?.approximate?.find((entry) => entry.id === id)?.reason
   }
 
   async function pointOf(id: string): Promise<number[] | undefined> {
@@ -288,7 +288,7 @@ describe('measure in world space', () => {
     expectPoint(await pointOf(block.id), [4, 1.2, 4])
   })
 
-  test('a floor-placed block stands on the elevated slab under it', async () => {
+  test('a floor-placed block is flagged when its floor lift cannot be resolved headless', async () => {
     seedRef()
     const deck = SlabNode.parse({
       elevation: 1,
@@ -300,15 +300,53 @@ describe('measure in world space', () => {
       ],
     })
     const block = BlockNode.parse({ position: [0, 0, 0] })
+    const cabinet = CabinetNode.parse({ position: [2, 0, 2] })
+    const module = CabinetModuleNode.parse({ position: [0.5, 0, 0] })
     bridge.applyPatch([
       { op: 'create', node: deck, parentId: level.id as AnyNodeId },
       { op: 'create', node: block, parentId: level.id as AnyNodeId },
+      { op: 'create', node: cabinet, parentId: level.id as AnyNodeId },
+      { op: 'create', node: module, parentId: cabinet.id as AnyNodeId },
     ])
-    // Rendered: the 1 m deck plus the 1.2 m half-height of the default block.
-    expectPoint(await pointOf(block.id), [0, 2.2, 0])
+    // The viewer lifts it onto the 1 m deck through its registered definition,
+    // which headless MCP does not load: the point stays on the level plane.
+    expectPoint(await pointOf(block.id), [0, 1.2, 0])
+    expect(await approximateOf(block.id)).toContain('floor-lift-unresolved-headless')
+    expect(await approximateOf(cabinet.id)).toContain('floor-lift-unresolved-headless')
+    expect(await approximateOf(module.id)).toContain('floor-lift-unresolved-headless')
   })
 
-  test('a curved railing on a deck is measured on its arc at the deck height', async () => {
+  test('solar panels are flagged: the viewer seats them on the finished roof surface', async () => {
+    seedRef()
+    const segment = RoofSegmentNode.parse({ position: [0, 0, 0], wallHeight: 3 })
+    const roof = RoofNode.parse({ children: [segment.id] })
+    const panel = SolarPanelNode.parse({ roofSegmentId: segment.id, position: [0.5, 0, 0.5] })
+    bridge.applyPatch([
+      { op: 'create', node: roof, parentId: level.id as AnyNodeId },
+      { op: 'create', node: segment, parentId: roof.id as AnyNodeId },
+      { op: 'create', node: panel, parentId: segment.id as AnyNodeId },
+    ])
+    expect(await approximateOf(panel.id)).toContain('roof-surface')
+  })
+
+  test('scenes linked only through children arrays still resolve upper levels', () => {
+    // The store heals parentId on load, but a bridge may hand over a record
+    // whose hierarchy lives only in `children` (SceneBridge's ancestry allows it).
+    const wall = WallNode.parse({ start: [10, 0], end: [16, 0], parentId: null })
+    const ground = LevelNode.parse({ level: 0, height: 3, parentId: null })
+    const upper = LevelNode.parse({ level: 1, height: 3, parentId: null, children: [wall.id] })
+    const building = BuildingNode.parse({
+      position: [100, 0, 0],
+      parentId: null,
+      children: [ground.id, upper.id],
+    })
+    const nodes = Object.fromEntries(
+      [building, ground, upper, wall].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+    expectPoint(resolveNodeWorldPoint(wall.id, nodes)?.point, [113, 3, 0])
+  })
+
+  test('a curved railing is measured on its arc, its deck height flagged', async () => {
     seedRef()
     const deck = SlabNode.parse({
       elevation: 1,
@@ -331,8 +369,9 @@ describe('measure in world space', () => {
     ])
     const point = await pointOf(railing.id)
     expect(point![0]).toBeCloseTo(2, 6)
-    expect(point![1]).toBeCloseTo(1, 6)
+    expect(point![1]).toBeCloseTo(0, 6)
     expect(Math.abs(point![2]!)).toBeCloseTo(1, 6)
+    expect(await approximateOf(railing.id)).toContain('floor-lift-unresolved-headless')
   })
 
   test('polygons are measured at their area centroid', async () => {
@@ -351,6 +390,25 @@ describe('measure in world space', () => {
     })
     bridge.applyPatch([{ op: 'create', node: zone, parentId: level.id as AnyNodeId }])
     expectPoint(await pointOf(zone.id), [1.357142857, 0, 1.357142857])
+  })
+
+  test('the floor-lift flag list matches the built-in definitions that declare floorPlaced', () => {
+    // Source scan, like core's metadata-reference inventory: MCP cannot load
+    // @pascal-app/nodes (React, three), so keep this list in step with it.
+    const nodesSrc = join(import.meta.dir, '../../../nodes/src')
+    const declared: string[] = []
+    for (const dir of readdirSync(nodesSrc)) {
+      const file = join(nodesSrc, dir, 'definition.ts')
+      if (!existsSync(file)) continue
+      const source = readFileSync(file, 'utf8')
+      const sections = source.split(/\n\s+kind: '/).slice(1)
+      for (const section of sections) {
+        if (/\bfloorPlaced\s*:/.test(section)) declared.push(section.slice(0, section.indexOf("'")))
+      }
+    }
+    expect(declared.sort()).toEqual(
+      [...HEADLESS_UNRESOLVED_FLOOR_LIFT_KINDS, ...CORE_LIFTED].sort(),
+    )
   })
 
   test('every kind resolves on its real host, with renderer-derived poses flagged', async () => {
@@ -403,7 +461,7 @@ describe('measure in world space', () => {
 
     const failures: string[] = []
     const approximate: string[] = []
-    const floorPlacedBelowDeck: string[] = []
+    const coreLiftedBelowDeck: string[] = []
     for (const node of Object.values(bridge.getNodes())) {
       if (node.id === ref.id) continue
       const { isError, text, payload } = await measure(node.id, ref.id)
@@ -412,12 +470,30 @@ describe('measure in world space', () => {
         continue
       }
       if (payload?.approximate?.some((entry) => entry.id === node.id)) approximate.push(node.type)
-      if (FLOOR_PLACED.has(node.type) && node.parentId === level.id) {
-        if ((payload?.fromPoint?.[1] ?? 0) < 1 - 1e-6) floorPlacedBelowDeck.push(node.type)
+      if (CORE_LIFTED.has(node.type) && node.parentId === level.id) {
+        if ((payload?.fromPoint?.[1] ?? 0) < 1 - 1e-6) coreLiftedBelowDeck.push(node.type)
       }
     }
     expect(failures).toEqual([])
-    expect(floorPlacedBelowDeck).toEqual([])
-    expect(approximate.sort()).toEqual(['downspout', 'gutter', 'ridge-vent'])
+    expect(coreLiftedBelowDeck).toEqual([])
+    expect(approximate.sort()).toEqual([
+      // Floor lift resolved by definitions headless MCP does not load, and
+      // nodes hosted on them.
+      'block',
+      'cabinet',
+      'cabinet-module',
+      'column',
+      'downspout',
+      'duct-terminal',
+      'fence',
+      'gutter',
+      'hvac-equipment',
+      'ridge-vent',
+      'skylight',
+      'solar-panel',
+      'spawn',
+      'stair',
+      'stair-segment',
+    ])
   })
 })

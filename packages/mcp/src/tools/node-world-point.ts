@@ -3,7 +3,7 @@ import {
   getLevelElevations,
   getWallCurveFrameAt,
   measurementCentroid,
-  resolveFenceLiftElevationForNodes,
+  nodeRegistry,
 } from '@pascal-app/core'
 import {
   composeFrames,
@@ -13,7 +13,12 @@ import {
   nodeLevelFrame,
   transformPoint,
 } from '@pascal-app/core/procedural-items'
-import { type AnyNode, type AnyNodeId, getRoofSegmentSurfaceY } from '@pascal-app/core/schema'
+import {
+  AnyNode,
+  type AnyNodeId,
+  getRoofSegmentSurfaceY,
+  nodeKindOf,
+} from '@pascal-app/core/schema'
 import type { Vec3 } from './geometry'
 import { computeSegmentTransforms } from './scene-query'
 
@@ -125,11 +130,61 @@ function stairSegmentFrame(node: AnyNode & { type: 'stair-segment' }, nodes: Nod
 }
 
 /**
+ * Built-in kinds the viewer lifts onto the slab under them through the
+ * `floorPlaced` capability of their registered definition, and whose footprint
+ * core cannot derive without it (core derives item, shelf and procedural-item
+ * footprints from the node itself). Headless MCP does not load
+ * `@pascal-app/nodes`, so their lift is unresolved and flagged, not guessed. A
+ * test keeps this list in step with the definitions.
+ */
+export const HEADLESS_UNRESOLVED_FLOOR_LIFT_KINDS = [
+  'block',
+  'cabinet',
+  'cabinet-module',
+  'column',
+  'duct-terminal',
+  'hvac-equipment',
+  'spawn',
+  'stair',
+] as const
+
+const UNRESOLVED_FLOOR_LIFT = new Set<string>(HEADLESS_UNRESOLVED_FLOOR_LIFT_KINDS)
+const CORE_KINDS = new Set<string>(AnyNode.options.map(nodeKindOf))
+
+const FLOOR_LIFT_UNRESOLVED =
+  'floor-lift-unresolved-headless: the viewer lifts this onto the slab or ground under it through a node definition this runtime has not registered; the point is on the level plane'
+
+/**
+ * The node on a level that carries `node`'s floor lift (itself or the host it
+ * sits on), when that lift is resolved by a definition this runtime lacks: a
+ * built-in floor-placed kind or a plugin kind, unregistered.
+ */
+function unresolvedFloorLiftHost(node: AnyNode, nodes: Nodes): AnyNode | undefined {
+  const seen = new Set<string>()
+  let current: AnyNode | undefined = node
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id)
+    const parent: AnyNode | undefined = current.parentId ? nodes[current.parentId] : undefined
+    if (parent?.type === 'level') {
+      if (nodeRegistry.get(current.type)) return undefined
+      const unresolved =
+        UNRESOLVED_FLOOR_LIFT.has(current.type) ||
+        (!CORE_KINDS.has(current.type) && 'position' in current)
+      return unresolved ? current : undefined
+    }
+    current = parent
+  }
+  return undefined
+}
+
+/**
  * Why a node's point is not where its renderer draws it: kinds whose renderer
- * derives the pose from data this resolver does not model. The point is then
- * the stored placement in its host's frame.
+ * derives the pose from data this resolver does not model, and floor lifts
+ * owned by definitions not registered here. The point is then the stored
+ * placement in its host's frame.
  */
 function approximationReason(node: AnyNode, nodes: Nodes): string | undefined {
+  if (unresolvedFloorLiftHost(node, nodes)) return FLOOR_LIFT_UNRESOLVED
   const parent = node.parentId ? nodes[node.parentId] : undefined
   switch (node.type) {
     case 'downspout':
@@ -138,6 +193,13 @@ function approximationReason(node: AnyNode, nodes: Nodes): string | undefined {
       return 'rendered at the roof segment eave height, not its stored height'
     case 'ridge-vent':
       return 'rendered along its roof segment ridge; the point is its stored placement'
+    case 'fence':
+      return 'floor-lift-unresolved-headless: the fence renderer lifts it onto its host slab or the ground; the point is on the level plane'
+    case 'solar-panel':
+    case 'skylight':
+      return parent?.type === 'roof-segment'
+        ? 'roof-surface: the viewer seats it on the finished outer roof surface (deck and shingles); the point is on the structural roof surface'
+        : undefined
     case 'door':
     case 'window':
       if (node.roofSegmentId || (node.type === 'window' && node.dormerId)) {
@@ -167,13 +229,9 @@ function levelLocalPoint(node: AnyNode, nodes: Nodes): Vec3 | null {
     return [point.x, nodeLevelFrame(node.id, nodes).position[1], point.y]
   }
   if (node.type === 'fence') {
-    // Arc or spline midpoint, at the slab or ground the fence renderer lifts it to.
+    // Arc or spline midpoint on the level plane; its lift is flagged.
     const { point } = getFenceCenterlineFrameAt(node, 0.5)
-    return [
-      point.x,
-      resolveFenceLiftElevationForNodes(node, nodes as Record<string, AnyNode>),
-      point.y,
-    ]
+    return [point.x, 0, point.y]
   }
   if (node.type === 'stair-segment') {
     const segmentFrame = stairSegmentFrame(node, nodes)
@@ -192,7 +250,8 @@ function levelLocalPoint(node: AnyNode, nodes: Nodes): Vec3 | null {
     (node.type === 'solar-panel' || node.type === 'skylight') &&
     parent?.type === 'roof-segment'
   ) {
-    // Both renderers ignore the stored Y and sit on the roof surface.
+    // Both renderers ignore the stored Y and sit on the roof surface; the
+    // finished surface (deck and shingles) is the viewer's, so this is flagged.
     const [x, , z] = node.position
     return transformPoint(nodeLevelFrame(parent.id, nodes), [
       x,
@@ -280,10 +339,36 @@ export type NodeWorldPoint = {
 }
 
 export function resolveNodeWorldPoint(id: string, nodes: Nodes): NodeWorldPoint | null {
-  const point = worldPoint(id, nodes, 0)
+  const linked = withParentIds(nodes)
+  const point = worldPoint(id, linked, 0)
   if (!point) return null
-  const approximate = approximationReason(nodes[id]!, nodes)
+  const approximate = approximationReason(linked[id]!, linked)
   return approximate ? { point, approximate } : { point }
+}
+
+/**
+ * `nodes` with every missing `parentId` filled from the parent's `children`
+ * array. The frame walk follows `parentId`, but scenes may link a subtree only
+ * through `children` (the default site → building → level assembly does), as
+ * SceneBridge's ancestry allows. Returns `nodes` itself when nothing is missing.
+ */
+function withParentIds(nodes: Nodes): Nodes {
+  const parentOf = new Map<string, string>()
+  for (const node of Object.values(nodes)) {
+    if (!('children' in node) || !Array.isArray(node.children)) continue
+    for (const child of node.children as unknown[]) {
+      const childId = typeof child === 'string' ? child : (child as { id?: unknown } | null)?.id
+      if (typeof childId === 'string' && !parentOf.has(childId)) parentOf.set(childId, node.id)
+    }
+  }
+  let linked: Record<string, AnyNode> | null = null
+  for (const node of Object.values(nodes)) {
+    const parentId = parentOf.get(node.id)
+    if (node.parentId || !parentId) continue
+    linked ??= { ...nodes }
+    linked[node.id] = { ...node, parentId } as AnyNode
+  }
+  return linked ?? nodes
 }
 
 function worldPoint(id: string, nodes: Nodes, depth: number): Vec3 | null {
