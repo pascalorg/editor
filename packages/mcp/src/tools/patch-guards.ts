@@ -146,7 +146,8 @@ export function assertPatchKeepsIdentity(
       const node = (parsed.success ? parsed.data : patch.node) as AnyNode & { id?: unknown }
       if (typeof node?.id !== 'string') return
       refuseRegenerated(index, node.id)
-      if (patch.parentId !== undefined) refuseRegenerated(index, patch.parentId)
+      const effectiveParentId = patch.parentId ?? (node.parentId as string | null | undefined)
+      if (effectiveParentId) refuseRegenerated(index, effectiveParentId)
       if (at(node.id)) {
         throw new PatchRefusedError(
           'node_exists',

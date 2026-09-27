@@ -380,6 +380,13 @@ describe('apply_patch identity and validation guards', () => {
     expect(result).toMatchObject({ code: 'regenerated_default', patchIndex: 1, id: gutter.id })
     expect(bridge.getNode(b.id as AnyNodeId)).not.toBeNull()
 
+    // Naming the regenerated gutter as parent on the node itself is refused too.
+    const nested = await refusal([
+      { op: 'delete', id: b.id },
+      { op: 'create', node: DoorNode.parse({ parentId: gutter.id }) },
+    ])
+    expect(nested).toMatchObject({ code: 'regenerated_default', patchIndex: 1, id: gutter.id })
+
     // In its own patch the delete goes through.
     expect((await apply([{ op: 'delete', id: b.id }])).isError).toBe(false)
   })
