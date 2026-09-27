@@ -1,4 +1,5 @@
 export * from './design'
+export * from './design-placement'
 export * from './fixtures'
 export * from './integration'
 export * from './library-colors'

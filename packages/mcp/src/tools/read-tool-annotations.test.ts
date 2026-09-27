@@ -67,6 +67,7 @@ const TOOL_POLICIES = [
       'duplicate_level',
       'furnish_room',
       'generate_variants',
+      'place_design',
       'place_item',
       'set_zone',
     ],

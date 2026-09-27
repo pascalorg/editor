@@ -338,6 +338,7 @@ captured by Zundo's temporal middleware as a single undoable step.
 | `create_level` | Add a new level to a building. | `{ buildingId, elevation, height, label? }` | `{ levelId }` |
 | `create_wall` | Add a wall to a level. | `{ levelId, start, end, thickness?, height? }` | `{ wallId }` |
 | `place_item` | Place a catalog item on a level/slab/zone, ceiling, wall, or site. Slab/zone targets resolve to the parent level so floor items render and validate. | `{ catalogItemId, targetNodeId, position, rotation? }` | `{ itemId, status }` |
+| `place_design` | Create one design (procedural item recipe, object or JSON string) that passes `validate_design`. Its mounting picks the host: level/slab/zone or a design surface (`surfaceId`), a straight wall face, or a ceiling. Create-only, with coded refusals. | `{ design, hostId, position, rotation?, side?, surfaceId?, parameters?, slots?, name?, id? }` | `{ designId, parentId, surfaceId }` |
 | `cut_opening` | Cut a door or window opening into a wall. `position` is 0..1 along the wall and is stored as wall-local meters. | `{ wallId, type: 'door' \| 'window', position, width, height }` | `{ openingId }` |
 | `set_zone` | Create a zone/room polygon on a level. | `{ levelId, polygon, label, properties? }` | `{ zoneId }` |
 | `duplicate_level` | Clone a level and all of its descendants. | `{ levelId }` | `{ newLevelId, newNodeIds[] }` |

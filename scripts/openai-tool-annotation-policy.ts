@@ -53,6 +53,7 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   load_scene: policy(false, true, false),
   measure: policy(true, false, false),
   photo_to_scene: policy(false, true, true),
+  place_design: policy(false, false, false),
   place_item: policy(false, false, false),
   redo: policy(false, true, false),
   rename_scene: policy(false, true, false),
