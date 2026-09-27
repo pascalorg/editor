@@ -7,6 +7,18 @@ import {
 } from '@pascal-app/core/procedural-items'
 import * as THREE from 'three'
 
+const playingMotions = new Set<string>()
+
+/** Procedural items whose motion is playing draw their own meshes (node batch). */
+export const isProceduralMotionPlaying = (nodeId: string) => playingMotions.has(nodeId)
+
+export function setProceduralMotionPlaying(nodeId: string, playing: boolean): boolean {
+  if (playingMotions.has(nodeId) === playing) return false
+  if (playing) playingMotions.add(nodeId)
+  else playingMotions.delete(nodeId)
+  return true
+}
+
 export function poseProceduralMotionsAtRest(
   node: ProceduralItemNode,
   object: THREE.Object3D,

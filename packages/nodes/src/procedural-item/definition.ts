@@ -25,7 +25,7 @@ import {
   toggleItemMechanisms,
 } from '../shared/item-interactions'
 import { restingFloorplanAffectedIds } from '../shared/resting-surface-plan'
-import { bakeProceduralAnimationClips } from './animation'
+import { bakeProceduralAnimationClips, isProceduralMotionPlaying } from './animation'
 import { proceduralFloorplanMoveTarget } from './move-session'
 
 const GIZMO_SIDE_OFFSET = 0.3
@@ -123,6 +123,14 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
     },
   },
   capabilities: {
+    batchable: {
+      scope: 'level',
+      // Part lights clone their emissive slot per node, and a playing motion
+      // moves meshes under the static copy.
+      excluded: (n) =>
+        (n as unknown as ProceduralItemNode).recipe.parts.some((part) => part.light) ||
+        isProceduralMotionPlaying(n.id),
+    },
     selectable: { hitVolume: 'bbox' },
     dragBounds: (n) => {
       const node = n as unknown as ProceduralItemNode
