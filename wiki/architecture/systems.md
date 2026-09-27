@@ -27,7 +27,10 @@ Slab geometry has no dedicated system: it renders through the registry `def.geom
 
 Ceiling geometry consumes dirty marks at frame priority 2, like `GeometrySystem` (slabs).
 The node batch snapshots marks at priority 1 and processes membership at priority 5,
-so it releases old geometry and collects replacements after rebuilds. A definition's
+so it releases old geometry and collects replacements after rebuilds. No consumer
+clears a mark before priority 2: `FloorElevationSystem` lifts at priority 1 but
+clears the marks it owns (floor-placed kinds with no `geometry` or `system`, such as
+columns and procedural items) at priority 2. A definition's
 `system.priority` orders mounted components; it does not set `useFrame` priority.
 
 Items, columns, ceiling undersides and slab bodies directly under a level, plus
