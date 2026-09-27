@@ -2,7 +2,16 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { type AnyNode, type AnyNodeId, WallNode, WindowNode } from '@pascal-app/core/schema'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  DoorNode,
+  RoofNode,
+  RoofSegmentNode,
+  WallNode,
+  WindowNode,
+  ZoneNode,
+} from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { createSceneOperations } from '../operations'
 import { registerApplyPatch } from './apply-patch'
@@ -18,6 +27,13 @@ describe('apply_patch identity and validation guards', () => {
     const result = await client.callTool({ name: 'apply_patch', arguments: { patches } })
     const text = (result.content as Array<{ type: string; text: string }>)[0]!.text
     return { isError: result.isError === true, text }
+  }
+
+  /** A refusal is a tool error whose text is JSON: { code, patchIndex, id, message }. */
+  async function refusal(patches: Patch[]) {
+    const { isError, text } = await apply(patches)
+    expect(isError).toBe(true)
+    return JSON.parse(text) as { code: string; patchIndex: number; id: string; message: string }
   }
 
   async function wallWithWindow(id = 'wall_host', start = [0, 0], end = [6, 0]) {
@@ -150,7 +166,7 @@ describe('apply_patch identity and validation guards', () => {
       { op: 'update', id: wall.id, data: { type: 'fence' } },
     ])
     expect(result.isError).toBe(true)
-    expect(result.text).toContain('immutable_field: patches[1]')
+    expect(result.text).toContain('identity_change: patches[1]')
     expect(bridge.getNode(wall.id as AnyNodeId)).toBeNull()
   })
 
@@ -272,6 +288,100 @@ describe('apply_patch identity and validation guards', () => {
     bridge.loadJSON({ nodes, rootNodeIds: bridge.getRootNodeIds() } as never)
     const unrelated = await apply([{ op: 'update', id: wall.id, data: { thickness: 0.3 } }])
     expect(unrelated.isError).toBe(false)
+  })
+
+  test('refusals reach the client as structured data', async () => {
+    const { wall, window } = await wallWithWindow()
+    expect(
+      await refusal([
+        { op: 'create', node: WallNode.parse({ id: wall.id, start: [0, 0], end: [1, 0] }) },
+      ]),
+    ).toMatchObject({ code: 'node_exists', patchIndex: 0, id: wall.id })
+    expect(
+      await refusal([{ op: 'update', id: wall.id, data: { id: 'wall_other' } }]),
+    ).toMatchObject({
+      code: 'identity_change',
+      patchIndex: 0,
+      id: wall.id,
+    })
+    expect(await refusal([{ op: 'update', id: wall.id, data: { type: 'fence' } }])).toMatchObject({
+      code: 'identity_change',
+    })
+    const children = await refusal([
+      { op: 'update', id: window.id, data: { width: 1.1 } },
+      { op: 'update', id: wall.id, data: { children: [] } },
+    ])
+    expect(children).toMatchObject({ code: 'immutable_field', patchIndex: 1, id: wall.id })
+    expect(children.message).toContain('children')
+  })
+
+  test('an invalid value in a core union field is refused, not skipped as a plugin kind', async () => {
+    const { wall } = await wallWithWindow()
+    const door = DoorNode.parse({ wallId: wall.id, position: [4, 1, 0] })
+    await apply([{ op: 'create', node: door, parentId: wall.id }])
+    const result = await refusal([{ op: 'update', id: door.id, data: { leafCount: 5 } }])
+    expect(result).toMatchObject({ code: 'invalid_update', id: door.id })
+    const stored = bridge.getNode(door.id as AnyNodeId)
+    expect(stored?.type === 'door' && stored.leafCount).toBe(1)
+    expect(bridge.validateScene().valid).toBe(true)
+  })
+
+  test('a reparent must name an existing parent that can hold children', async () => {
+    const { wall, window } = await wallWithWindow()
+    const missing = await refusal([
+      { op: 'update', id: window.id, data: { parentId: 'wall_missing', wallId: 'wall_missing' } },
+    ])
+    expect(missing).toMatchObject({ code: 'invalid_parent', patchIndex: 0, id: window.id })
+
+    const zone = ZoneNode.parse({
+      name: 'Room',
+      polygon: [
+        [0, 0],
+        [1, 0],
+        [1, 1],
+      ],
+    })
+    await apply([{ op: 'create', node: zone, parentId: level.id }])
+    const childless = await refusal([{ op: 'update', id: window.id, data: { parentId: zone.id } }])
+    expect(childless).toMatchObject({ code: 'invalid_parent', id: window.id })
+
+    const detached = await refusal([{ op: 'update', id: window.id, data: { parentId: null } }])
+    expect(detached).toMatchObject({ code: 'invalid_parent', id: window.id })
+
+    const kept = bridge.getNode(window.id as AnyNodeId)
+    expect(kept?.parentId).toBe(wall.id)
+    const host = bridge.getNode(wall.id as AnyNodeId)
+    expect(host?.type === 'wall' && host.children).toEqual([window.id])
+  })
+
+  test('default gutters a delete regenerates cannot be addressed later in the same patch', async () => {
+    const roof = RoofNode.parse({})
+    const segment = (x: number) =>
+      RoofSegmentNode.parse({
+        position: [x, 0, 0],
+        width: 4,
+        depth: 4,
+        roofType: 'hip',
+        metadata: { autoGutter: true },
+      })
+    const [a, b] = [segment(0), segment(4)]
+    bridge.applyPatch([
+      { op: 'create', node: roof, parentId: level.id as AnyNodeId },
+      { op: 'create', node: a, parentId: roof.id as AnyNodeId },
+      { op: 'create', node: b, parentId: roof.id as AnyNodeId },
+    ])
+    const gutter = Object.values(bridge.getNodes()).find(
+      (n) => n.type === 'gutter' && n.parentId === a.id,
+    )!
+    const result = await refusal([
+      { op: 'delete', id: b.id },
+      { op: 'update', id: gutter.id, data: { name: 'Front gutter' } },
+    ])
+    expect(result).toMatchObject({ code: 'regenerated_default', patchIndex: 1, id: gutter.id })
+    expect(bridge.getNode(b.id as AnyNodeId)).not.toBeNull()
+
+    // In its own patch the delete goes through.
+    expect((await apply([{ op: 'delete', id: b.id }])).isError).toBe(false)
   })
 
   test('an unregistered plugin kind is updated without schema validation', async () => {

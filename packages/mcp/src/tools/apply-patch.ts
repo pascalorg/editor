@@ -26,7 +26,7 @@ export function registerApplyPatch(server: McpServer, bridge: SceneOperations): 
     {
       title: 'Apply patch',
       description:
-        "Apply a batch of create/update/delete operations atomically. All patches are validated before any are applied; the entire batch forms a single undo step. Batch-first is the default: prefer one apply_patch call containing all create/update/delete ops for a build step, in stable order so later ops can reference ids created by earlier ops. A single call is atomic (all or nothing) and pays the snapshot and save cost once; do not loop one-op calls. A create whose id already exists fails the whole patch with node_exists; to replace a node, delete it earlier in the same patch. An update cannot change id, type, object or children (immutable_field; restating the current value is fine, reparent through the child's parentId), and cannot add schema issues to a node (invalid_update).",
+        "Apply a batch of create/update/delete operations atomically. All patches are validated before any are applied; the entire batch forms a single undo step. Batch-first is the default: prefer one apply_patch call containing all create/update/delete ops for a build step, in stable order so later ops can reference ids created by earlier ops. A single call is atomic (all or nothing) and pays the snapshot and save cost once; do not loop one-op calls. A create whose id already exists fails the whole patch with node_exists; to replace a node, delete it earlier in the same patch. An update cannot change id or type (identity_change) or object or children (immutable_field); restating the current value is fine. A parentId change must name an existing node that holds children (invalid_parent). An update cannot add schema issues to a node (invalid_update). After a delete that regenerates a roof's default gutters, those gutters and their downspouts are addressable only in a later call (regenerated_default). Refusals come back as a tool error whose text is JSON {code, patchIndex, id, message}.",
       inputSchema: applyPatchInput,
       outputSchema: applyPatchOutput,
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
@@ -70,11 +70,18 @@ export function registerApplyPatch(server: McpServer, bridge: SceneOperations): 
         }
       } catch (err) {
         if (err instanceof PatchRefusedError) {
-          throwMcpError(ErrorCode.InvalidParams, err.message, {
+          // A tool error, not an McpError: the SDK keeps only an McpError's
+          // message, and clients need the code, index and id to act on it.
+          const refusal = {
             code: err.code,
             patchIndex: err.patchIndex,
             id: err.nodeId,
-          })
+            message: err.message,
+          }
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(refusal) }],
+            isError: true,
+          }
         }
         const msg = err instanceof Error ? err.message : String(err)
         throwMcpError(ErrorCode.InvalidParams, msg)

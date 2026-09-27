@@ -164,7 +164,7 @@ describe('apply_patch', () => {
       })
       expect(result.isError).toBe(true)
       const text = (result.content as Array<{ type: string; text: string }>)[0]!.text
-      expect(text).toContain('immutable_field')
+      expect(text).toContain('identity_change')
     }
     const stored = bridge.getNode(wall.id)
     expect(stored?.id).toBe(wall.id)

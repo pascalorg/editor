@@ -1,13 +1,24 @@
-import { type NodeDeletionScene, nodeRegistry, planNodeDeletion } from '@pascal-app/core'
-import { type AnyNode, type AnyNodeId, parseNode } from '@pascal-app/core/schema'
+import {
+  type NodeDeletionScene,
+  nodeRegistry,
+  planNodeDeletion,
+  validateNodeRelations,
+} from '@pascal-app/core'
+import { AnyNode, type AnyNodeId, nodeKindOf, parseNode } from '@pascal-app/core/schema'
 import type { Patch } from '../bridge/scene-bridge'
 
-export type PatchRefusalCode = 'node_exists' | 'immutable_field' | 'invalid_update'
+export type PatchRefusalCode =
+  | 'node_exists'
+  | 'identity_change'
+  | 'immutable_field'
+  | 'invalid_parent'
+  | 'invalid_update'
+  | 'regenerated_default'
 
 /**
- * A patch op refused because it would break node identity or add schema
- * issues. The message starts with the code because MCP clients only see the
- * message; the code, patch index and node id also travel as `McpError` data.
+ * A patch op refused because it would break node identity, the hierarchy or
+ * the node's schema. apply_patch returns it as a tool error whose text is
+ * JSON `{ code, patchIndex, id, message }`.
  */
 export class PatchRefusedError extends Error {
   constructor(
@@ -22,17 +33,26 @@ export class PatchRefusedError extends Error {
 }
 
 /**
- * Fields an update may restate but not change. `parentId` stays writable:
- * the store reconciles both parents' `children` on a reparent.
+ * Fields an update may restate but not change: `id` and `type` are the node's
+ * identity, `object` and `children` its place in the graph. `parentId` stays
+ * writable, checked below: the store reconciles both parents' `children`.
  */
-const IMMUTABLE_FIELDS = ['id', 'type', 'object', 'children'] as const
+const IMMUTABLE_FIELDS = [
+  ['id', 'identity_change'],
+  ['type', 'identity_change'],
+  ['object', 'immutable_field'],
+  ['children', 'immutable_field'],
+] as const
+
+const CORE_KINDS = new Set<string>(AnyNode.options.map(nodeKindOf))
 
 const sameValue = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 /**
  * Schema issues of a node, keyed `path: message`, from its kind's schema: the
- * core per-kind schema, or the registered plugin definition's. `null` for a
- * kind this runtime has no schema for, which is then not validated.
+ * registered definition's, or the core per-kind schema. `null` only for a kind
+ * with neither (a plugin kind this runtime has not registered), which is then
+ * not validated.
  */
 function schemaIssues(node: Record<string, unknown>): Set<string> | null {
   const type = node.type
@@ -40,9 +60,9 @@ function schemaIssues(node: Record<string, unknown>): Set<string> | null {
   const schema = nodeRegistry.get(type)?.schema as
     | { safeParse: (value: unknown) => { success: boolean; error?: { issues: ZodIssueLike[] } } }
     | undefined
+  if (!(schema || CORE_KINDS.has(type))) return null
   const result = schema ? schema.safeParse(node) : parseNode(node)
   const issues = result.success ? [] : (result.error?.issues ?? [])
-  if (!schema && issues.some((issue) => issue.code === 'invalid_union')) return null
   return new Set(issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`))
 }
 
@@ -68,7 +88,8 @@ function withoutChild(parent: AnyNode, childId: string): AnyNode {
  *   (`immutable_field`); restating the current value passes;
  * - an update whose merged node has schema issues the node did not have
  *   before (`invalid_update`); kinds without a schema in this runtime pass;
- * - any op on a node an earlier delete in the patch removed.
+ * - any op on a node an earlier delete in the patch removed, or on a default
+ *   gutter or downspout that delete regenerates (`regenerated_default`).
  *
  * Deletes run through core's `planNodeDeletion`, the store's own planner, one
  * call per run of consecutive deletes as the bridge batches them, so kind
@@ -90,9 +111,24 @@ export function assertPatchKeepsIdentity(
     scene.nodes[node.id as AnyNodeId] = node
   }
 
+  // Default gutters and downspouts a delete run refreshes: the store may keep,
+  // move or replace them with freshly minted ids, so later ops in the same
+  // patch cannot address them reliably.
+  const regenerated = new Map<string, number>()
+  const refuseRegenerated = (index: number, id: string) => {
+    const deleteIndex = regenerated.get(id)
+    if (deleteIndex === undefined) return
+    throw new PatchRefusedError(
+      'regenerated_default',
+      index,
+      id,
+      `"${id}" is a default gutter or downspout that the delete at patches[${deleteIndex}] regenerates. Address it in a separate apply_patch call.`,
+    )
+  }
   let pendingDeletes: AnyNodeId[] = []
-  const flushDeletes = () => {
-    const plan = planNodeDeletion(scene, pendingDeletes)
+  const flushDeletes = (index: number) => {
+    const plan = planNodeDeletion(scene, pendingDeletes, { mintDefaults: false })
+    for (const id of plan.unsettledIds) regenerated.set(id, index)
     scene = { nodes: plan.nodes, rootNodeIds: plan.rootNodeIds, collections: plan.collections }
     pendingDeletes = []
   }
@@ -104,6 +140,8 @@ export function assertPatchKeepsIdentity(
       const parsed = parseNode(patch.node)
       const node = (parsed.success ? parsed.data : patch.node) as AnyNode & { id?: unknown }
       if (typeof node?.id !== 'string') return
+      refuseRegenerated(index, node.id)
+      if (patch.parentId !== undefined) refuseRegenerated(index, patch.parentId)
       if (at(node.id)) {
         throw new PatchRefusedError(
           'node_exists',
@@ -125,16 +163,18 @@ export function assertPatchKeepsIdentity(
     }
 
     if (patch.op === 'update') {
+      refuseRegenerated(index, patch.id)
+      if (typeof patch.data?.parentId === 'string') refuseRegenerated(index, patch.data.parentId)
       const current = at(patch.id)
       if (!current)
         throw new Error(`invalid patch: patches[${index}] update id "${patch.id}" not found`)
       if (!patch.data || typeof patch.data !== 'object') return
       const data = patch.data as Record<string, unknown>
-      for (const field of IMMUTABLE_FIELDS) {
+      for (const [field, code] of IMMUTABLE_FIELDS) {
         const before = (current as Record<string, unknown>)[field]
         if (field in data && !sameValue(data[field], before)) {
           throw new PatchRefusedError(
-            'immutable_field',
+            code,
             index,
             patch.id,
             `update cannot change "${field}" of "${patch.id}" (${JSON.stringify(before)} → ${JSON.stringify(data[field])}). Create a new node, delete the old one, or reparent children through their own parentId.`,
@@ -156,16 +196,38 @@ export function assertPatchKeepsIdentity(
         }
       }
       if ('parentId' in data && data.parentId !== current.parentId) {
+        const newParent = typeof data.parentId === 'string' ? at(data.parentId) : undefined
+        if (!(newParent && Array.isArray((newParent as { children?: unknown }).children))) {
+          throw new PatchRefusedError(
+            'invalid_parent',
+            index,
+            patch.id,
+            `update cannot move "${patch.id}" under ${JSON.stringify(data.parentId)}: ${newParent ? `a ${newParent.type} holds no children` : 'no such node'}.`,
+          )
+        }
+        const before = { ...scene.nodes }
         const oldParent = current.parentId ? at(current.parentId) : undefined
         if (oldParent) put(withoutChild(oldParent, patch.id))
-        const newParent = typeof data.parentId === 'string' ? at(data.parentId) : undefined
-        if (newParent) put(withChild(newParent, patch.id))
+        put(withChild(newParent, patch.id))
+        put(merged)
+        try {
+          validateNodeRelations(before, scene.nodes, [patch.id as AnyNodeId])
+        } catch (err) {
+          throw new PatchRefusedError(
+            'invalid_parent',
+            index,
+            patch.id,
+            `${newParent.type} "${newParent.id}" does not accept "${patch.id}": ${err instanceof Error ? err.message : String(err)}`,
+          )
+        }
+        return
       }
       put(merged)
       return
     }
 
     if (patch.op === 'delete') {
+      refuseRegenerated(index, patch.id)
       if (!at(patch.id) || pendingDeletes.includes(patch.id as AnyNodeId)) {
         throw new Error(`invalid patch: patches[${index}] delete id "${patch.id}" not found`)
       }
@@ -173,7 +235,7 @@ export function assertPatchKeepsIdentity(
       // The bridge applies a run of consecutive deletes as one deleteNodes
       // call, and wall merges and kind cascades depend on the whole id list,
       // so plan the run together once it ends.
-      if (patches[index + 1]?.op !== 'delete') flushDeletes()
+      if (patches[index + 1]?.op !== 'delete') flushDeletes(index)
     }
   })
 }
