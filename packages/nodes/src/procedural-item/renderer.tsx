@@ -37,6 +37,14 @@ import { canRegisterItemLight } from '../shared/item-light-placement'
 import { acquireProceduralGeometry, type BuiltItem, geometrySignature } from './geometry'
 
 const axis = new Vector3()
+const noRaycast = () => {}
+// Hidden mesh sets are skipped by raycasts too (three raycasts invisible objects).
+function setDrawn(container: Group, drawn: boolean) {
+  container.visible = drawn
+  container.traverse((child) => {
+    if (child instanceof Mesh) child.raycast = drawn ? Mesh.prototype.raycast : noRaycast
+  })
+}
 export default function ProceduralRenderer({ node }: { node: ProceduralItemNode }) {
   const ref = useRef<Group>(null!)
   // Part-tree designs draw their merged rest pose while idle and their joint groups while moving.
@@ -111,22 +119,35 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
     }
   }, [cutKey, node.parentId, node.id])
   useLayoutEffect(() => {
-    controller.current = built ? new ProceduralMotionController(built.evaluation.motions) : null
+    // Continuous joints start running, as in the baked viewer; flat spins keep #930's default.
+    const running = new Set(
+      (node.recipe.joints ?? [])
+        .filter((joint) => joint.kind === 'continuous')
+        .map((joint) => joint.child),
+    )
+    controller.current = built
+      ? new ProceduralMotionController(
+          built.evaluation.motions,
+          Object.fromEntries([...running].map((partId) => [partId, true])),
+        )
+      : null
     lastCommand.current = 0
     if (built)
       useInteractive
         .getState()
-        .initProcedural(node.id, [
-          ...new Set(built.evaluation.motions.map((motion) => motion.partId)),
-        ])
+        .initProcedural(
+          node.id,
+          [...new Set(built.evaluation.motions.map((motion) => motion.partId))],
+          [...running],
+        )
     for (const motion of built?.evaluation.motions ?? []) {
       const group = ref.current?.getObjectByName(`${node.id}__motion__${motion.id}`)
       if (!group) continue
       group.position.set(...motionRestOffset(motion, built!.evaluation.motions))
       group.quaternion.identity()
     }
-    if (restRef.current) restRef.current.visible = true
-    if (splitRef.current) splitRef.current.visible = false
+    if (restRef.current) setDrawn(restRef.current, true)
+    if (splitRef.current) setDrawn(splitRef.current, false)
     if (built?.evaluation.motions.length) {
       awake.current = true
       invalidate()
@@ -170,8 +191,10 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
         frame.pending ||
         Object.values(frame.fractions).some((fraction) => fraction > 0) ||
         Object.values(frame.spins).some((spin) => spin.speed > 0)
-      restRef.current.visible = !moving
-      splitRef.current.visible = moving
+      if (restRef.current.visible === moving) {
+        setDrawn(restRef.current, !moving)
+        setDrawn(splitRef.current, moving)
+      }
     }
     if (frame.pending) invalidate()
     else awake.current = false

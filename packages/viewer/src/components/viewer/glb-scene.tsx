@@ -1121,7 +1121,7 @@ export function GlbScene({
           (item) =>
             item.pascalId === extras.pascalId &&
             item.procedural?.lights.length &&
-            operableParts(item.procedural.recipe).length === 0,
+            operableParts(item.procedural.recipe ?? { parts: item.procedural.parts }).length === 0,
         )
       if (node && extras?.kind === 'procedural-item' && (extras.clips?.length || lightOnly)) {
         doorNode = { hit: hit.object, node }

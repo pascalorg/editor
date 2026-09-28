@@ -1018,6 +1018,11 @@ export const FirstPersonControls = () => {
       if (!object) continue
       for (const hit of proceduralInteractionRaycaster.intersectObject(object, true)) {
         if (hit.distance >= closestDistance) break
+        // Skip what is not drawn: a joint tree's inactive rest or joint meshes.
+        let drawn = true
+        for (let at: Object3D | null = hit.object; at && at !== object; at = at.parent)
+          if (!at.visible) drawn = false
+        if (!drawn) continue
         let ancestor: Object3D | null = hit.object
         while (ancestor && ancestor !== object && !ancestor.userData.proceduralMotion)
           ancestor = ancestor.parent

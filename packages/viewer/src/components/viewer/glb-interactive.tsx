@@ -47,7 +47,9 @@ export type GlbInteractiveItem = {
   interactive: Interactive
   procedural?: {
     lights: EvaluatedLight[]
-    recipe: Pick<ProceduralItemNode['recipe'], 'parts' | 'joints'>
+    parts: ProceduralItemNode['recipe']['parts']
+    /** v2: the recipe's parts and joints, so non-fixed joints get controls too. */
+    recipe?: Pick<ProceduralItemNode['recipe'], 'parts' | 'joints'>
   }
 }
 
@@ -82,7 +84,11 @@ export function buildGlbInteractiveItems(
         label: procedural.name ?? id,
         height: evaluation.max[1],
         interactive: { controls: [], effects: [] },
-        procedural: { lights: evaluation.lights, recipe: procedural.recipe },
+        procedural: {
+          lights: evaluation.lights,
+          parts: procedural.recipe.parts,
+          recipe: procedural.recipe,
+        },
       })
       continue
     }
@@ -118,7 +124,10 @@ export function buildGlbLightRegs(
       for (const light of item.procedural.lights) {
         const motion = light.motionGroup ? groups.get(light.motionGroup) : undefined
         const local = new Vector3(...light.position)
-        if (motion) local.sub(motion.position)
+        // A nested group's position is relative to its parent group: the design-space pivot
+        // is the sum along its chain of motion groups.
+        for (let group = motion; group && group !== object; group = group.parent ?? undefined)
+          if (group.userData.proceduralMotion) local.sub(group.position)
         regs.push({
           key: `${item.pascalId}:procedural:${light.id}`,
           nodeId: item.pascalId,
@@ -613,7 +622,7 @@ function GlbItemControls({
   const toggleLights = useInteractive((s) => s.toggleProceduralLights)
   const descriptors = item.procedural
     ? proceduralControlDescriptors(
-        item.procedural.recipe,
+        item.procedural.recipe ?? { parts: item.procedural.parts },
         proceduralState,
         (partId) => togglePart(item.pascalId, partId),
         () => toggleLights(item.pascalId),
