@@ -365,3 +365,64 @@ describe('benchmark-house fixtures', () => {
     )
   })
 })
+
+describe('review round d (rev-943-d)', () => {
+  test('backing resolves on a zero-body host: ceiling insulation', () => {
+    const ceiling = Assembly.parse({
+      layers: [],
+      backing: [
+        { id: 'insulation', role: 'insulation', thickness: 0.2, material: 'batt' },
+        { id: 'fill', role: 'fill', thickness: 0.05, inset: 0.1 },
+      ],
+    })
+    const stack = resolveAssemblyStack(ceiling, { body: 0, backing: true })
+    expect(stack.diagnostics).toEqual([])
+    expect(stack.layers).toEqual([])
+    expect(stack.total).toBe(0)
+    expect(stack.backing.map((layer) => [layer.id, layer.depth, layer.thickness])).toEqual([
+      ['insulation', 0, 0.2],
+      ['fill', 0.2, 0.05],
+    ])
+    expect(stack.backing[1]!.inset).toBe(0.1)
+    // A host that refuses backing still gets none, with the diagnostic.
+    const refused = resolveAssemblyStack(ceiling, { body: 0 })
+    expect(refused.backing).toEqual([])
+    expect(refused.diagnostics.map((d) => d.code)).toEqual(['assembly.backing-refused'])
+    // An assembly with neither body nor backing is still refused.
+    expect(Assembly.safeParse({ layers: [] }).success).toBe(false)
+  })
+
+  test('core marks a structural layer only', () => {
+    const core = (role: string) =>
+      Assembly.safeParse({ layers: [{ id: 'a', role, thickness: 0.1, core: true }] }).success
+    expect(core('structure')).toBe(true)
+    expect(core('deck')).toBe(true)
+    expect(core('shell')).toBe(true)
+    expect(core('finish')).toBe(false)
+    expect(core('lining')).toBe(false)
+    expect(core('air')).toBe(false)
+  })
+
+  test('a layer slot is inventoried as a key into its own host slots', () => {
+    for (const path of ['assembly.layers[].slot', 'assembly.backing[].slot']) {
+      expect(EXISTING_REFERENCES.find((row) => row.path === path)).toMatchObject({
+        namespace: 'part',
+      })
+    }
+  })
+
+  test('a roof keeps its slots, so a layer slot has something to resolve against', () => {
+    const roof = RoofNode.parse({
+      id: 'roof_slots',
+      slots: { 'layer:covering': 'library:roof-shingles-grey' },
+      assembly: { layers: [{ id: 'covering', role: 'covering', thickness: 0.009 }] },
+    })
+    expect(roof.slots).toEqual({ 'layer:covering': 'library:roof-shingles-grey' })
+  })
+
+  test('core declares no built-in host: each kind declares its own capability', async () => {
+    const core = await import('../index')
+    expect('wallAssemblyHost' in core).toBe(false)
+    expect('roofAssemblyHost' in core).toBe(false)
+  })
+})
