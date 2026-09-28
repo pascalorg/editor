@@ -44,6 +44,9 @@ export const RoofNode = BaseNode.extend({
   support: RoofSupport,
   // Layer build-up inward from the covering-top plane of every segment (F2).
   assembly: Assembly.optional(),
+  // Per-slot material overrides, as on walls and slabs: `layer:<id>` keys
+  // (or a layer's own `slot`) paint an assembly layer.
+  slots: z.record(z.string(), z.string()).optional(),
   // Child roof segment IDs
   children: z.array(RoofSegmentNode.shape.id).default([]),
 }).describe(

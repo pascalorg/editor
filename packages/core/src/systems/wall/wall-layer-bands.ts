@@ -1,8 +1,4 @@
-import {
-  type ResolvedAssembly,
-  resolveAssemblyStack,
-  wallAssemblyHost,
-} from '../../lib/assembly-stack'
+import { type ResolvedAssembly, resolveAssemblyStack } from '../../lib/assembly-stack'
 import { type Point2D as PlanTuple, subtractPolygonsFromPolygon } from '../../lib/polygon-union'
 import type { Assembly, WallNode } from '../../schema'
 import { resolveWallExteriorSide } from './wall-assembly'
@@ -55,10 +51,8 @@ export function getWallLayerBands(
   miterData: WallMiterData,
 ): WallLayerBands {
   const thickness = getWallThickness(wall)
-  const stack = resolveAssemblyStack(assembly, {
-    body: wallAssemblyHost.body(wall),
-    backing: wallAssemblyHost.backing,
-  })
+  // Walls store the body as `thickness` and take no backing.
+  const stack = resolveAssemblyStack(assembly, { body: thickness })
   if (stack.diagnostics.some((d) => d.code === 'assembly.thickness-mismatch')) {
     return { ...stack, bands: [] }
   }

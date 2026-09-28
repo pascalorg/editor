@@ -5,7 +5,6 @@ import {
   RoofNode as RoofNodeSchema,
   type RoofNode as RoofNodeType,
   type RoofSegmentNode,
-  roofAssemblyHost,
   type SceneApi,
 } from '@pascal-app/core'
 import {
@@ -139,7 +138,9 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
-    assembly: roofAssemblyHost,
+    // F2 layers stack inward from the covering-top plane along the facet
+    // normal; the body is their sum and the roof stores no thickness.
+    assembly: { reference: 'covering', measure: 'normal', body: () => null },
     // Contribute a plan AABB to the alignment-guide candidate pool so a roof
     // (and any moving sibling) snaps against the roof's outer silhouette.
     // Roof has no centred-box footprint — it's the union of its

@@ -76,11 +76,14 @@ export const AssemblyLayer = z.object({
 export type AssemblyLayer = z.infer<typeof AssemblyLayer>
 
 const BACKING_ONLY = ['inset', 'bottom', 'lift'] as const
+/** Roles a `core` layer may take: framing or block, a deck, a basin shell. */
+const STRUCTURAL_ROLES = new Set<LayerRole>(['structure', 'deck', 'shell'])
 
 export const Assembly = z
   .object({
-    /** Body layers, from the reference face inward. */
-    layers: z.array(AssemblyLayer).min(1).max(12),
+    /** Body layers, from the reference face inward. Empty only when `backing` carries the stack. */
+    layers: z.array(AssemblyLayer).max(12),
+    /** Layers behind the body, from its far face outward (slab fill, ceiling insulation). */
     backing: z.array(AssemblyLayer).max(8).optional(),
     /**
      * Which face `layers` start from: `front` (+n, the default) or `exterior`,
@@ -93,6 +96,13 @@ export const Assembly = z
     cavityInsulation: z.string().min(1).max(120).optional(),
   })
   .superRefine((assembly, ctx) => {
+    if (assembly.layers.length === 0 && !assembly.backing?.length) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'An assembly needs at least one body or backing layer',
+        path: ['layers'],
+      })
+    }
     const seen = new Set<string>()
     const lists = [
       ['layers', assembly.layers],
@@ -111,6 +121,15 @@ export const Assembly = z
       })
     }
 
+    assembly.layers.forEach((layer, index) => {
+      if (layer.core && !STRUCTURAL_ROLES.has(layer.role)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `The core is the structural layer: role ${[...STRUCTURAL_ROLES].join(', ')}`,
+          path: ['layers', index, 'core'],
+        })
+      }
+    })
     const cores = assembly.layers.flatMap((layer, index) => (layer.core ? [index] : []))
     for (const index of cores.slice(1)) {
       ctx.addIssue({

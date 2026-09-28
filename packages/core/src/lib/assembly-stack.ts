@@ -1,20 +1,4 @@
-import type { AssemblyHostConfig } from '../registry/types'
 import { ASSEMBLY_TOLERANCE, type Assembly, type LayerRole } from '../schema/assembly'
-import { getWallThickness } from '../systems/wall/wall-footprint'
-
-/** Walls: layers stack from the front (or exterior) face; `thickness` holds their sum. */
-export const wallAssemblyHost: AssemblyHostConfig = {
-  reference: 'front',
-  measure: 'normal',
-  body: (node) => (node.type === 'wall' ? getWallThickness(node) : null),
-}
-
-/** Roofs: one contiguous stack inward from the covering-top plane; nothing stores the sum. */
-export const roofAssemblyHost: AssemblyHostConfig = {
-  reference: 'covering',
-  measure: 'normal',
-  body: () => null,
-}
 
 export type AssemblyDiagnosticCode =
   /**
@@ -23,7 +7,7 @@ export type AssemblyDiagnosticCode =
    * thickness keep their plain body until a writer re-derives it.
    */
   | 'assembly.thickness-mismatch'
-  /** Nothing to stack: the layers sum to 0. */
+  /** Nothing to stack: body and backing both sum to 0. */
   | 'assembly.empty'
   /** `backing` on a host that refuses it: ignored. */
   | 'assembly.backing-refused'
@@ -40,12 +24,21 @@ export type ResolvedAssemblyLayer = {
   material?: string
   slot?: string
   src?: string
+  /** Backing only: as declared (`inset`, `bottom`, `lift`). */
+  inset?: number
+  bottom?: number
+  lift?: number
 }
 
 export type ResolvedAssembly = {
   layers: ResolvedAssemblyLayer[]
   /** Σ layer thickness: the host's body, which a wall stores as `thickness`. */
   total: number
+  /**
+   * Backing layers on a host that accepts them, `depth` measured from the
+   * body's far face outward; empty otherwise.
+   */
+  backing: ResolvedAssemblyLayer[]
   diagnostics: AssemblyDiagnostic[]
 }
 
@@ -68,8 +61,27 @@ export function resolveAssemblyStack(
     })
   }
 
+  const layers = stackLayers(assembly.layers)
+  const total = layers.reduce((sum, layer) => sum + layer.thickness, 0)
+  const backing = host.backing ? stackLayers(assembly.backing ?? []) : []
+  const backingTotal = backing.reduce((sum, layer) => sum + layer.thickness, 0)
+
+  if (!(total > 0) && !(backingTotal > 0)) {
+    diagnostics.push({ code: 'assembly.empty', message: 'The layers sum to 0.' })
+    return { layers: [], total: 0, backing: [], diagnostics }
+  }
+  if (host.body !== null && Math.abs(host.body - total) > ASSEMBLY_TOLERANCE) {
+    diagnostics.push({
+      code: 'assembly.thickness-mismatch',
+      message: `The layers sum to ${total} m but the host stores ${host.body} m.`,
+    })
+  }
+  return { layers, total, backing, diagnostics }
+}
+
+function stackLayers(layers: readonly Assembly['layers'][number][]): ResolvedAssemblyLayer[] {
   let depth = 0
-  const layers = assembly.layers.map((layer): ResolvedAssemblyLayer => {
+  return layers.map((layer): ResolvedAssemblyLayer => {
     const resolved: ResolvedAssemblyLayer = {
       id: layer.id,
       role: layer.role,
@@ -79,20 +91,11 @@ export function resolveAssemblyStack(
       ...(layer.material === undefined ? {} : { material: layer.material }),
       ...(layer.slot === undefined ? {} : { slot: layer.slot }),
       ...(layer.src === undefined ? {} : { src: layer.src }),
+      ...(layer.inset === undefined ? {} : { inset: layer.inset }),
+      ...(layer.bottom === undefined ? {} : { bottom: layer.bottom }),
+      ...(layer.lift === undefined ? {} : { lift: layer.lift }),
     }
     depth += layer.thickness
     return resolved
   })
-
-  if (!(depth > 0)) {
-    diagnostics.push({ code: 'assembly.empty', message: 'The layers sum to 0.' })
-    return { layers: [], total: 0, diagnostics }
-  }
-  if (host.body !== null && Math.abs(host.body - depth) > ASSEMBLY_TOLERANCE) {
-    diagnostics.push({
-      code: 'assembly.thickness-mismatch',
-      message: `The layers sum to ${depth} m but the host stores ${host.body} m.`,
-    })
-  }
-  return { layers, total: depth, diagnostics }
 }

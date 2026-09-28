@@ -104,8 +104,6 @@ export {
   type ResolvedAssembly,
   type ResolvedAssemblyLayer,
   resolveAssemblyStack,
-  roofAssemblyHost,
-  wallAssemblyHost,
 } from './lib/assembly-stack'
 export { loadAssetUrl, saveAsset } from './lib/asset-storage'
 export {

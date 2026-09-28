@@ -492,6 +492,14 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
       note: 'Layer provenance (F2): a preset strips it so it never claims a source element.',
     }),
   ),
+  ...(['assembly.layers[].slot', 'assembly.backing[].slot'] as const).map((path) =>
+    row({
+      kind: '*',
+      path,
+      ...policy('part', 'internal', 'drop', 'keep'),
+      note: "A key into the host's own `slots`; a missing key falls back to `layer:<id>`, then the role default.",
+    }),
+  ),
   row({
     kind: '*',
     path: 'assembly.presetId',

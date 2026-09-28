@@ -10,7 +10,7 @@
  */
 import { describe, expect, test } from 'bun:test'
 import { z } from 'zod'
-import { resolveAssemblyStack, roofAssemblyHost, wallAssemblyHost } from '../lib/assembly-stack'
+import { resolveAssemblyStack } from '../lib/assembly-stack'
 import { Assembly, type AssemblyLayer } from '../schema/assembly'
 import { RoofNode } from '../schema/nodes/roof'
 import { WallNode } from '../schema/nodes/wall'
@@ -52,7 +52,8 @@ describe('a stucco exterior wall (2×6 frame)', () => {
   })
 
   test('the stack sets the body: the layers sum to the wall thickness', () => {
-    const stack = resolveAssemblyStack(assembly, { body: wallAssemblyHost.body(wall) })
+    // A wall stores its body as `thickness`.
+    const stack = resolveAssemblyStack(assembly, { body: wall.thickness! })
     expect(stack.diagnostics).toEqual([])
     expect(stack.layers.map((layer) => [layer.id, layer.depth, layer.thickness])).toEqual([
       ['drywall', 0, 0.0127],
@@ -125,8 +126,8 @@ describe('a shingle roof (covering, underlay, sheathing)', () => {
   })
 
   test('one contiguous stack inward from the covering-top plane; the body is the sum', () => {
-    expect(roofAssemblyHost.body(roof)).toBeNull()
-    const stack = resolveAssemblyStack(roof.assembly!, { body: roofAssemblyHost.body(roof) })
+    // A roof stores no body thickness.
+    const stack = resolveAssemblyStack(roof.assembly!, { body: null })
     expect(stack.diagnostics).toEqual([])
     expect(stack.layers.map((layer) => [layer.id, layer.depth])).toEqual([
       ['covering', 0],
@@ -178,10 +179,11 @@ describe('the schema refuses ambiguous stacks', () => {
   })
 
   test('one core, in the body only; backing-only fields stay in backing', () => {
-    expect(issues({ layers: [layer('a', { core: true }), layer('b', { core: true })] })).toEqual([
+    const structure = { role: 'structure', core: true } as const
+    expect(issues({ layers: [layer('a', structure), layer('b', structure)] })).toEqual([
       'layers.1.core',
     ])
-    expect(issues({ layers: [layer('a')], backing: [layer('b', { core: true })] })).toEqual([
+    expect(issues({ layers: [layer('a')], backing: [layer('b', structure)] })).toEqual([
       'backing.0.core',
     ])
     expect(issues({ layers: [layer('a', { inset: 0.1, lift: 0.2 })] })).toEqual([
@@ -387,7 +389,10 @@ describe('review round d (rev-943-d)', () => {
     // A host that refuses backing still gets none, with the diagnostic.
     const refused = resolveAssemblyStack(ceiling, { body: 0 })
     expect(refused.backing).toEqual([])
-    expect(refused.diagnostics.map((d) => d.code)).toEqual(['assembly.backing-refused'])
+    expect(refused.diagnostics.map((d) => d.code)).toEqual([
+      'assembly.backing-refused',
+      'assembly.empty',
+    ])
     // An assembly with neither body nor backing is still refused.
     expect(Assembly.safeParse({ layers: [] }).success).toBe(false)
   })
