@@ -106,7 +106,9 @@ function edgesCross(rings: Ring[]) {
 function structural(profile: Extract<ResolvedSectionProfile, { kind: 'section' }>): SectionRings {
   const { width: w, depth: d, web: t, flange: f } = profile
   const [x, y] = [w / 2, d / 2]
-  if (!(t > 0 && f > 0 && t < w && 2 * f < d))
+  // A rect-tube insets both sides by its web, as it insets top and bottom by its flange.
+  const webLimit = profile.family === 'rect-tube' ? w / 2 : w
+  if (!(t > 0 && f > 0 && t < webLimit && 2 * f < d))
     throw new Error('A structural section needs web and flange thinner than its size')
   const outer: Ring = {
     I: [

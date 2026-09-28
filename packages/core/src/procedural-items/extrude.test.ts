@@ -221,4 +221,21 @@ describe('extrude review fixes (AK-03b round 2)', () => {
     })
     expect(beam.shapes[0]!.size).toEqual([0.2, 0.3, 2])
   })
+
+  test('a rect-tube web of half its width or more is refused, not turned inside out', () => {
+    const tube = (web: number) =>
+      sectionRings({
+        kind: 'section',
+        family: 'rect-tube',
+        width: 0.2,
+        depth: 0.3,
+        web,
+        flange: 0.02,
+      })
+    expect(tube(0.09).holes[0]!.map(([x]) => x)).toEqual(
+      [-0.01, 0.01, 0.01, -0.01].map((v) => expect.closeTo(v)),
+    )
+    expect(() => tube(0.1)).toThrow('thinner than its size')
+    expect(() => tube(0.15)).toThrow('thinner than its size')
+  })
 })
