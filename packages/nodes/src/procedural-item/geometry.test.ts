@@ -537,3 +537,51 @@ test('revolves build the triangles they are charged, with outward normals on sol
     for (const batch of built.batches) batch.geometry.dispose()
   }
 })
+
+test('a revolve puts every vertex on its profile: radius and height as authored', () => {
+  const profile: [number, number][] = [
+    [0, 0],
+    [0.03, 0],
+    [0.02, 0.2],
+    [0.05, 0.5],
+    [0, 0.6],
+  ]
+  const recipe = parseRecipe({
+    version: 2,
+    name: 'Turned',
+    description: 'A turned profile.',
+    parameters: [
+      { id: 'unused', label: 'Unused', default: 1, min: 1, max: 1, step: 1, unit: 'count' },
+    ],
+    slots: [{ id: 'body', label: 'Body', color: '#888888' }],
+    parts: [
+      {
+        id: 'p',
+        label: 'P',
+        count: 1,
+        shapes: [
+          {
+            id: 'r',
+            primitive: 'revolve',
+            slot: 'body',
+            profile,
+            position: [0, 0, 0],
+            segments: 12,
+          },
+        ],
+      },
+    ],
+    constraints: [],
+  })
+  const geometry = buildProceduralGeometry(ProceduralItemNode.parse({ recipe })).batches[0]!
+    .geometry
+  const position = geometry.getAttribute('position')
+  for (let i = 0; i < position.count; i++) {
+    const r = Math.hypot(position.getX(i), position.getZ(i)),
+      y = position.getY(i)
+    expect(profile.some(([pr, py]) => Math.abs(pr - r) < 1e-6 && Math.abs(py - y) < 1e-6)).toBe(
+      true,
+    )
+  }
+  geometry.dispose()
+})

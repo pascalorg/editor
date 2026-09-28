@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import downlightJson from './__fixtures__/recessed_downlight.json'
 import { evaluateRecipe, parseRecipe, type Recipe } from './recipe'
 
 const design = (shape: Record<string, unknown>, version: 1 | 2 = 2): Recipe =>
@@ -122,5 +123,31 @@ describe('revolve (recipe version 2)', () => {
     expect(() =>
       parseRecipe(design({ primitive: 'box', size: [1, 1, 1], profile: baluster })),
     ).toThrow('profile')
+  })
+})
+
+describe('revolve review fixes (AK-03c round 2)', () => {
+  test('a revolve fits a circle cut of its own diameter', () => {
+    const recipe = structuredClone(downlightJson) as Recipe
+    recipe.cuts = [{ shape: 'circle', diameter: 0.12 }]
+    recipe.parts = recipe.parts.filter((part) => part.id !== 'lens')
+    recipe.parts.find((part) => part.id === 'can')!.shapes = [
+      {
+        id: 'can',
+        primitive: 'revolve',
+        slot: 'can',
+        profile: [
+          [0, 0.01],
+          [0.06, 0.01],
+          [0.06, 0.1],
+          [0, 0.1],
+        ],
+        position: [0, 0, 0],
+      },
+    ]
+    expect(() => parseRecipe(recipe)).not.toThrow()
+  })
+  test('a stray radius on a revolve is refused', () => {
+    expect(() => parseRecipe(design({ profile: baluster, radius: 0.02 }))).toThrow('radius')
   })
 })
