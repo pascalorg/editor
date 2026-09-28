@@ -108,6 +108,25 @@ describe('WS5 → F2 wall assembly migration', () => {
     }
   })
 
+  test('the inspector view refuses a stack whose layers carry what WS5 would drop', () => {
+    const base = wallAssemblyFromLegacy({
+      framing: { kind: 'wood', depth: 0.1397 },
+      exterior: { finish: 'stucco', thickness: 0.0222 },
+      sheathing: { material: 'osb', thickness: 0.0111 },
+      interior: { finish: 'drywall', thickness: 0.0127 },
+    })
+    expect(wallAssemblyToLegacy(base)).not.toBeNull()
+    const with1 = (index: number, patch: Record<string, unknown>) => ({
+      ...base,
+      layers: base.layers.map((layer, i) => (i === index ? { ...layer, ...patch } : layer)),
+    })
+    expect(wallAssemblyToLegacy(with1(0, { src: 'al:wall-01/outside-finish' }))).toBeNull()
+    expect(wallAssemblyToLegacy(with1(0, { id: 'stucco-coat' }))).toBeNull()
+    expect(wallAssemblyToLegacy(with1(2, { slot: 'exterior' }))).toBeNull()
+    expect(wallAssemblyToLegacy(with1(0, { returns: true }))).toBeNull()
+    expect(wallAssemblyToLegacy(with1(3, { display: 'construction' }))).toBeNull()
+  })
+
   test('a stack WS5 cannot express has no inspector view', () => {
     const generic = Assembly.parse({
       layers: [
