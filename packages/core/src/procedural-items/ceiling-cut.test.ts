@@ -175,7 +175,7 @@ describe('ceiling cut review fixes (AK-D2 round 2)', () => {
       [0.3, 0.3],
       [0.02, 0.3],
     ]
-    expect(place(downlight(), ceilingOf(2, [hole]))).toThrow('cut')
+    expect(place(downlight(), ceilingOf(2, [hole]))).toThrow('holes')
   })
   test('a recessed part may not move up through the storey above', () => {
     const recipe = downlight()

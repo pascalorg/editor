@@ -13,6 +13,7 @@ import {
   ProceduralMotionController,
   proceduralLocalPose,
 } from '@pascal-app/core/procedural-items'
+import { usePlacementPreview } from '@pascal-app/editor'
 import {
   cloneWithProceduralEmission,
   createSurfaceRoleMaterial,
@@ -72,15 +73,17 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
     return lease.release
   }, [key])
   useEffect(() => () => useInteractive.getState().removeProcedural(node.id), [node.id])
-  // A recessed design's host ceiling re-cuts its hole whenever the committed cut can move.
-  const cutKey = node.recipe.cuts
+  // A recessed design's host ceiling re-cuts whenever its cut can move, live values included.
+  const cutKey = effective.recipe.cuts
     ? JSON.stringify([
         node.parentId,
-        node.position,
-        node.rotation,
-        node.parameters,
-        node.recipe.cuts,
-        node.recipe.surfaces,
+        effective.position,
+        effective.rotation,
+        effective.parameters,
+        effective.visible,
+        effective.recipe.cuts,
+        effective.recipe.surfaces,
+        effective.recipe.mounting?.reference,
       ])
     : ''
   useEffect(() => {
@@ -90,8 +93,15 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
       if (useScene.getState().nodes[parentId]) useScene.getState().markDirty(parentId)
     }
     recut()
-    return recut
-  }, [cutKey, node.parentId])
+    // A move preview of this design re-cuts its ceiling on every step.
+    const unsubscribe = usePlacementPreview.subscribe((state, previous) => {
+      if (state.node?.id === node.id || previous.node?.id === node.id) recut()
+    })
+    return () => {
+      unsubscribe()
+      recut()
+    }
+  }, [cutKey, node.parentId, node.id])
   useLayoutEffect(() => {
     controller.current = built ? new ProceduralMotionController(built.evaluation.motions) : null
     lastCommand.current = 0

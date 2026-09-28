@@ -340,7 +340,9 @@ export function validateProceduralRelations(raw: AnyNode | ProceduralItemNode, n
       throw new Error('The top reference must be flush with the ceiling')
     const pose = proceduralLocalPose(node, nodes)
     const f = frame(pose.position, pose.rotation)
-    const b = boundsOf(boxCorners(evaluation.min, evaluation.max).map((p) => transformPoint(f, p)))
+    // Moving parts of a recessed design must stay within the storey through their whole travel.
+    const extent = evaluation.reach ?? evaluation
+    const b = boundsOf(boxCorners(extent.min, extent.max).map((p) => transformPoint(f, p)))
     const height = nodeLevelFrame(ceiling.id, nodes).position[1]
     const level = ceiling.parentId ? nodes[ceiling.parentId] : undefined
     // A recessed design rises into the plenum through its own cut.
@@ -365,6 +367,13 @@ export function validateProceduralRelations(raw: AnyNode | ProceduralItemNode, n
       ceiling.holes.some((hole) => polygonsOverlap(hole, footprint))
     )
       throw new Error('The hanging design must fit inside the ceiling, outside its holes')
+    const ring = proceduralCeilingHole(node)
+    if (
+      ring &&
+      (!ceilingContainsFootprint(ceiling.polygon, ring) ||
+        ceiling.holes.some((hole) => polygonsOverlap(hole, ring)))
+    )
+      throw new Error('The design’s ceiling cut must fit inside the ceiling, outside its holes')
   } else if (node.recipe.mounting?.attachTo === 'wall-side' && !awaitingHost) {
     const wall = node.wallId ? nodes[node.wallId] : undefined
     if (wall?.type !== 'wall' || node.parentId !== wall.id)

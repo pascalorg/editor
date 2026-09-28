@@ -1,5 +1,5 @@
 import type { AnyNode, FloorplanGeometry, HandleDescriptor, NodeDefinition } from '@pascal-app/core'
-import { type AnyNodeId, useInteractive, useScene } from '@pascal-app/core'
+import { type AnyNodeId, getEffectiveNode, useInteractive, useScene } from '@pascal-app/core'
 import {
   boundsOf,
   boxCorners,
@@ -18,6 +18,7 @@ import {
   transformPoint,
   validateProceduralRelations,
 } from '@pascal-app/core/procedural-items'
+import { usePlacementPreview } from '@pascal-app/editor'
 import { decorateProceduralEmission } from '@pascal-app/viewer'
 import { itemPaint } from '../item/paint'
 import {
@@ -140,7 +141,15 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
     hostRefFields: ['wallId', 'side', 'supportSlabId'],
     // A v2 ceiling design with `cuts` opens its host ceiling (CeilingSystem dispatch).
     ceilingCut: {
-      buildCeilingHole: (n) => proceduralCeilingHole(n as unknown as ProceduralItemNode),
+      // Follows the live gesture (R2): a move preview cuts where it sits; handle and slider
+      // overrides cut at their live values; a hidden design (the move's source) cuts nothing.
+      buildCeilingHole: (n) => {
+        const preview = usePlacementPreview.getState().node
+        if (preview?.id === n.id && preview.type === 'procedural-item')
+          return preview.parentId === n.parentId ? proceduralCeilingHole(preview) : null
+        const node = getEffectiveNode(n as unknown as ProceduralItemNode)
+        return node.visible === false ? null : proceduralCeilingHole(node)
+      },
     },
     floorPlaced: {
       footprint: (n) => proceduralFootprint(n as unknown as ProceduralItemNode),

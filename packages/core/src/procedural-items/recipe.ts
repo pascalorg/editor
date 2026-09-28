@@ -235,6 +235,8 @@ export type Evaluation = {
   dimensions: Vec3
   parameters: Record<string, number>
   triangles: number
+  /** Recessed ceiling designs with motion: the rest bounds grown by every motion sample. */
+  reach?: { min: Vec3; max: Vec3 }
 }
 export const RECIPE_LIMITS = {
   bytes: 131072,
@@ -762,13 +764,23 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
       throw new Error('Wall-side mounting reference must face local -Z')
   }
   const reference = recipe.mounting && surfaces.find((s) => s.id === recipe.mounting!.reference)
+  const reach = insideCut ? { min: [...min] as Vec3, max: [...max] as Vec3 } : undefined
   for (const shape of shapes) {
     if (!shape.motionGroup) continue
     const motion = motions.find((m) => m.id === shape.motionGroup)!
     const steps = motion.kind === 'slide' ? 1 : motion.kind === 'hinge' ? 8 : 16
-    for (const corner of shapeCorners(shape.size, shape.position, shape.rotation))
+    // Inside a cut, sample the rendered footprint so round parts may turn in round cuts.
+    const points = insideCut
+      ? shapeFootprint(shape)
+      : shapeCorners(shape.size, shape.position, shape.rotation)
+    for (const corner of points)
       for (let step = 0; step <= steps; step++) {
         const point = movedPoint(corner, motion, step / steps)
+        if (reach)
+          for (let k = 0; k < 3; k++) {
+            reach.min[k] = Math.min(reach.min[k]!, point[k]!)
+            reach.max[k] = Math.max(reach.max[k]!, point[k]!)
+          }
         if (!recipe.mounting && point[1] < base - 0.001)
           throw new Error(`Motion envelope for ${shape.partId} extends below the floor`)
         if (
@@ -819,6 +831,7 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
     dimensions,
     parameters,
     triangles,
+    ...(reach && motions.length > 0 && { reach }),
   }
 }
 
