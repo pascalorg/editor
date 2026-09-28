@@ -7,7 +7,6 @@ import type { SceneOperations } from '../operations'
 import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { measurement } from './measurement'
-import { assertPatchKeepsIdentity, PatchRefusedError } from './patch-guards'
 import { NodeIdSchema, Vec3Schema } from './schemas'
 import { validateDesignInput } from './validate-design'
 
@@ -56,7 +55,7 @@ export function registerPlaceDesign(server: McpServer, bridge: SceneOperations):
     {
       title: 'Place design',
       description:
-        'Create one instance of a design (procedural item recipe, object or JSON string) in the scene. The design must pass validate_design. Its mounting picks the host: floor designs go on a level (or a slab or zone of it) or on a named surface of a placed design; wall-side designs on a straight wall face; ceiling designs under a ceiling. Only creates: refusals are tool errors whose JSON carries a code (invalid_design with diagnostics, design_version_not_enabled for version 2 designs until the next release, design_too_large above 24 KiB, invalid_placement, node_exists, host_not_found, wrong_host, unknown_surface, does_not_fit, or an apply_patch guard code) and change nothing.',
+        'Create one instance of a design (procedural item recipe, object or JSON string) in the scene. The design must pass validate_design. Its mounting picks the host: floor designs go on a level (or a slab or zone of it) or on a named surface of a placed design; wall-side designs on a straight wall face; ceiling designs under a ceiling. Only creates: refusals are tool errors whose JSON carries a code (invalid_design with diagnostics, design_version_not_enabled for version 2 designs until the next release, design_too_large above 24 KiB, invalid_placement, node_exists, host_not_found, wrong_host, unknown_surface, does_not_fit) and change nothing.',
       inputSchema: placeDesignInput,
       outputSchema: placeDesignOutput,
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
@@ -93,20 +92,6 @@ export function registerPlaceDesign(server: McpServer, bridge: SceneOperations):
             ]
           : []),
       ]
-      // The same identity guards as apply_patch: an explicit id must be new.
-      try {
-        const planDeletion = (bridge as { planDeletion?: SceneOperations['planDeletion'] })
-          .planDeletion
-        assertPatchKeepsIdentity(
-          patches,
-          bridge.getNodes(),
-          bridge.getRootNodeIds(),
-          typeof planDeletion === 'function' ? planDeletion.bind(bridge) : undefined,
-        )
-      } catch (error) {
-        if (!(error instanceof PatchRefusedError)) throw error
-        return refuse({ code: error.code, id: error.nodeId, message: error.message })
-      }
       bridge.applyPatch(patches)
       const persistence = await publishLiveSceneSnapshot(bridge, 'place_design')
       const payload = {

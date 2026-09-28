@@ -149,7 +149,7 @@ describe('place_design', () => {
         { design: jointCabinetJson, hostId: levelId, position: [3, 0, 3] },
         'design_version_not_enabled',
       ],
-      // An explicit id that exists is refused by the shared apply_patch identity guard.
+      // An explicit id that exists is refused before anything is applied.
       [
         { design: DESIGN_EXAMPLE, hostId: levelId, position: [3, 0, 3], id: tableId },
         'node_exists',
