@@ -176,7 +176,7 @@ const DESIGN_RULES = [
   'IDs are lowercase snake_case. Parameter, slot, part and surface ids are unique; shape ids are unique within their part; "index" is not a parameter id.',
   'Each shape.slot names a declared slot; parameter.part and surface.part name declared parts. At most one parameter binds a resize handle (axis) per axis, per part or per design.',
   'Parameters need min ≤ default ≤ max. unit "count" needs integer min, max, default and step. v2: unit "bool" runs 0..1 and "choice" indexes its options (2–16 labels), both in steps of 1, with an integer default and no axis.',
-  'v2: part.when and shape.when build a repeat or a shape only where they evaluate to nonzero; a repeat whose shapes are all skipped builds nothing (no light, motion or named surface).',
+  'v2: part.when and shape.when build a repeat or a shape only where they evaluate to nonzero; a repeat whose shapes are all skipped builds nothing (no light, motion or named surface), except that a jointed part keeps its joint while it still moves visible children.',
   'part.count evaluates to an integer from 0 to 64. Shape sizes evaluate to 0.001–30 m, and the design stays within 30 m of its origin.',
   'No geometry goes below y = 0, except in v2 ceiling designs, which hang from their reference and may reach below it. Without mounting the design stands on the floor at y = 0 (or its v2 base) and no motion may sweep below it.',
   'mounting "wall-side" needs a named surface without part whose normal is local -Z (rotation [-π/2, 0, 0]). It is the plane that meets the wall: keep geometry in front of it (larger z; geometry behind it passes into the wall and is warned about); no motion may cross behind it.',
@@ -715,8 +715,12 @@ export function validateDesign(
       ])
     }
   }
-  // Nothing above the inline cap can be placed, whatever else is wrong with it.
-  const bytes = recipeBytes(raw)
+  // Nothing above the inline cap can be placed, whatever else is wrong with it. Input JSON
+  // cannot serialize (cycles, BigInt) skips the check and is refused by parseRecipe below.
+  let bytes = 0
+  try {
+    bytes = recipeBytes(raw)
+  } catch {}
   if (bytes > RECIPE_V2_LIMITS.bytes)
     return failed([
       {

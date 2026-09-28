@@ -151,6 +151,8 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
     return () => {
       unsubscribe()
       recut()
+      const preview = usePlacementPreview.getState().node
+      if (preview?.id === node.id && preview.parentId !== parentId) recut(preview.parentId)
     }
   }, [cutKey, node.parentId, node.id])
   useLayoutEffect(() => {

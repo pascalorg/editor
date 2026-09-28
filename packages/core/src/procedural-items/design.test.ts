@@ -185,6 +185,17 @@ describe('validateDesign diagnostics', () => {
     })
   })
 
+  test('inputs JSON cannot serialize are refused, not thrown', () => {
+    const cyclic: Record<string, unknown> = louver()
+    cyclic.self = cyclic
+    const withBigInt = { ...louver(), version: 1n }
+    for (const input of [cyclic, withBigInt]) {
+      const result = validateDesign(input)
+      expect(result.valid).toBe(false)
+      expect(result.diagnostics[0]?.code).toBe('rule')
+    }
+  })
+
   test('parameter values outside the declared ranges are refused', () => {
     for (const parameters of [{ slat_count: 20 }, { width: 1 }]) {
       const result = validateDesign(louverJson, { parameters })
