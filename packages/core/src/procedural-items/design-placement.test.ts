@@ -3,6 +3,7 @@ import { CeilingNode } from '../schema/nodes/ceiling'
 import { LevelNode } from '../schema/nodes/level'
 import { SlabNode } from '../schema/nodes/slab'
 import { WallNode } from '../schema/nodes/wall'
+import jointCabinetJson from './__fixtures__/joint_cabinet.json'
 import airHandlerJson from './__fixtures__/trial-e2-air-handler.json'
 import louverJson from './__fixtures__/trial-e5-louver.json'
 import stairGuardJson from './__fixtures__/trial-e8-stair-guard.json'
@@ -282,6 +283,16 @@ describe('planDesignPlacement', () => {
         id: 'item_x',
       }).message,
     ).toStartWith('invalid_placement: id: ')
+  })
+
+  test('refuses version 2 designs until writers are enabled', () => {
+    const result = refusal(scene, {
+      design: jointCabinetJson,
+      hostId: level.id,
+      position: [0, 0, 0],
+    })
+    expect(result.code).toBe('design_version_not_enabled')
+    expect(result.message).toContain('next release')
   })
 
   test('invalid designs carry their diagnostics', () => {

@@ -9,6 +9,7 @@ import louverJson from './__fixtures__/trial-e5-louver.json'
 import stairGuardJson from './__fixtures__/trial-e8-stair-guard.json'
 import {
   DESIGN_EXAMPLE,
+  DESIGN_WRITE_VERSION,
   DesignValidationSchema,
   describeDesignSchema,
   validateDesign,
@@ -422,7 +423,8 @@ describe('validateDesign on version 2 designs', () => {
   test('extrude, revolve, cylinder options and when are validated and measured', () => {
     const result = validateDesign(lamp())
     expect(DesignValidationSchema.parse(result)).toEqual(result)
-    expect(result).toMatchObject({ valid: true, diagnostics: [] })
+    expect(result.valid).toBe(true)
+    expect(result.diagnostics.map((d) => d.code)).toEqual(['design_version_not_enabled'])
     const m = result.measurements!
     expect(m.triangles.actual).toBe(evaluateRecipe(parseRecipe(lamp())).triangles)
     expect(m.triangles.budget).toBe(m.triangles.actual)
@@ -453,6 +455,19 @@ describe('validateDesign on version 2 designs', () => {
     const result = validateDesign(downlightJson)
     expect(result.valid).toBe(true)
     expect(result.measurements!.datum).toMatchObject({ kind: 'ceiling', gap: expect.any(Number) })
+  })
+
+  test('version 2 validates fully but warns that placement accepts version 1 only', () => {
+    expect(DESIGN_WRITE_VERSION).toBe(1)
+    expect(validateDesign(lamp()).diagnostics).toEqual([
+      {
+        severity: 'warning',
+        code: 'design_version_not_enabled',
+        path: 'version',
+        message: expect.stringContaining('placement accepts version 1 only'),
+      },
+    ])
+    expect(validateDesign(DESIGN_EXAMPLE).diagnostics).toEqual([])
   })
 
   test('v2 content in a version 1 design says to set version 2', () => {

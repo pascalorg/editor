@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { DESIGN_EXAMPLE, validateDesign } from '@pascal-app/core/procedural-items'
+import jointCabinetJson from '../../../core/src/procedural-items/__fixtures__/joint_cabinet.json'
 import airHandlerJson from '../../../core/src/procedural-items/__fixtures__/trial-e2-air-handler.json'
 import louverJson from '../../../core/src/procedural-items/__fixtures__/trial-e5-louver.json'
 import { SceneBridge } from '../bridge/scene-bridge'
@@ -39,6 +40,20 @@ describe('validate_design', () => {
       expect(result.structuredContent).toMatchObject({ valid: true, diagnostics: [] })
     }
     expect(JSON.stringify(bridge.getNodes())).toBe(before)
+    await client.close()
+  })
+
+  test('validates version 2 designs and warns that placement accepts version 1 only', async () => {
+    const { client } = await connect()
+    const result = await client.callTool({
+      name: 'validate_design',
+      arguments: { design: jointCabinetJson },
+    })
+    expect(result.structuredContent).toMatchObject({
+      valid: true,
+      diagnostics: [{ severity: 'warning', code: 'design_version_not_enabled', path: 'version' }],
+    })
+    expect((result.structuredContent as { measurements: unknown }).measurements).not.toBeNull()
     await client.close()
   })
 

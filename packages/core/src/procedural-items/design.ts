@@ -42,6 +42,7 @@ export const DesignDiagnosticSchema = z.object({
     'unbalanced',
     'behind_wall',
     'draw_budget',
+    'design_version_not_enabled',
   ]),
   path: z.string().optional(),
   message: z.string(),
@@ -153,9 +154,20 @@ export type DesignDiagnostic = z.infer<typeof DesignDiagnosticSchema>
 export type DesignMeasurements = z.infer<typeof DesignMeasurementsSchema>
 export type DesignValidation = z.infer<typeof DesignValidationSchema>
 
+/**
+ * The highest design version writers (placement, Studio, converters, agents) may emit. Readers
+ * ship one release before writers, so version 2 designs validate and render now and become
+ * placeable in the next release.
+ */
+export const DESIGN_WRITE_VERSION = 1
+
+const notWritable = (version: number) =>
+  `Version ${version} designs validate and render, but placement accepts version ${DESIGN_WRITE_VERSION} only; writing version ${version} opens in the next release`
+
 const DESIGN_RULES = [
   'Validation is the authority. It enforces these rules, which JSON Schema cannot express, and evaluates the defaults, each parameter at its min and max, and 20 seeded samples. Only a design without errors can be placed.',
   'version 1 covers box, roundedBox, cylinder and ellipsoid shapes, flat part motions and at most 16 parts of 24 shapes. Everything marked "v2" below needs "version": 2, and a v2 design stays under 24 KiB of JSON.',
+  `${notWritable(2)}.`,
   'Units are metres and radians, +Y is up. A shape position is its centre and size its full extent; rotation is XYZ Euler about the centre. Cylinders run along Y; an ellipsoid fills its size box.',
   'An expression is a number, a parameter id, "index" (the 0-based repeat inside part.count) or {op, args}. Arithmetic strings such as "width / 2" are not supported. Results stay finite and within ±10000, nesting depth ≤ 16, and mod needs a positive divisor. v2 adds {op: "select", args: [i, v0, …]}, which is v_i for an integral i from 0 to n - 1.',
   'IDs are lowercase snake_case. Parameter, slot, part and surface ids are unique; shape ids are unique within their part; "index" is not a parameter id.',
@@ -743,6 +755,14 @@ export function validateDesign(
       code: 'sweep',
       message: `${error}: fails for ${list.length} of ${cases.length} parameter sets, e.g. ${JSON.stringify(list[0]!.values)}`,
       ...(ruleHint(error, raw) && { hint: ruleHint(error, raw) }),
+    })
+
+  if (recipe.version > DESIGN_WRITE_VERSION)
+    diagnostics.push({
+      severity: 'warning',
+      code: 'design_version_not_enabled',
+      path: 'version',
+      message: notWritable(recipe.version),
     })
 
   let evaluation: Evaluation | undefined

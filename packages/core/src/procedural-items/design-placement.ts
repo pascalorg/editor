@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { WallNode } from '../schema/nodes/wall'
-import { type DesignDiagnostic, validateDesign } from './design'
+import { DESIGN_WRITE_VERSION, type DesignDiagnostic, validateDesign } from './design'
 import { ProceduralItemNode } from './node'
 import {
   isProceduralItem,
@@ -37,6 +37,7 @@ export type DesignPlacementRequest = {
 export type DesignPlacementRefusal =
   | 'invalid_design'
   | 'design_too_large'
+  | 'design_version_not_enabled'
   | 'node_exists'
   | 'invalid_placement'
   | 'host_not_found'
@@ -110,6 +111,11 @@ export function planDesignPlacement(
   const recipe = parseRecipe(
     typeof request.design === 'string' ? JSON.parse(request.design) : request.design,
   )
+  if (recipe.version > DESIGN_WRITE_VERSION)
+    throw new DesignPlacementError(
+      'design_version_not_enabled',
+      `Placement accepts version ${DESIGN_WRITE_VERSION} designs only; writing version ${recipe.version} opens in the next release`,
+    )
   if (request.id !== undefined && nodes[request.id])
     throw new DesignPlacementError(
       'node_exists',

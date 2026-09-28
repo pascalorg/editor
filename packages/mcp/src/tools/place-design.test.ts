@@ -3,6 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { DESIGN_EXAMPLE } from '@pascal-app/core/procedural-items'
 import { CeilingNode, WallNode } from '@pascal-app/core/schema'
+import jointCabinetJson from '../../../core/src/procedural-items/__fixtures__/joint_cabinet.json'
 import airHandlerJson from '../../../core/src/procedural-items/__fixtures__/trial-e2-air-handler.json'
 import louverJson from '../../../core/src/procedural-items/__fixtures__/trial-e5-louver.json'
 import { SceneBridge } from '../bridge/scene-bridge'
@@ -144,6 +145,10 @@ describe('place_design', () => {
       [{ design: louverJson, hostId: ceilingId, position: [0, 0, 0] }, 'wrong_host'],
       [{ design: louverJson, hostId: wallId, position: [2, 2.5, 0] }, 'does_not_fit'],
       [{ design: '{"version":1}', hostId: wallId, position: [2, 1.5, 0] }, 'invalid_design'],
+      [
+        { design: jointCabinetJson, hostId: levelId, position: [3, 0, 3] },
+        'design_version_not_enabled',
+      ],
       // An explicit id that exists is refused by the shared apply_patch identity guard.
       [
         { design: DESIGN_EXAMPLE, hostId: levelId, position: [3, 0, 3], id: tableId },
