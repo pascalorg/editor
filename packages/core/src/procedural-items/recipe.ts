@@ -293,6 +293,35 @@ function shapeCorners(size: Vec3, position: Vec3, rotation: Vec3): Vec3[] {
   return boxCorners(localMin, localMax).map((point) => transformPoint(shapeFrame, point))
 }
 
+/**
+ * Tessellation the procedural-item renderer builds each primitive with (nodes
+ * `buildProceduralGeometry` reads it from here), so triangle counts have one source.
+ */
+export const PRIMITIVE_TESSELLATION = {
+  roundedBoxSegments: 2,
+  cylinderRadialSegments: 24,
+  ellipsoidWidthSegments: 24,
+  ellipsoidHeightSegments: 16,
+} as const
+
+/** Triangles of the geometry the renderer builds for one shape (non-indexed). */
+export function shapeTriangles(primitive: EvaluatedShape['primitive'], topScale = 1): number {
+  const t = PRIMITIVE_TESSELLATION
+  switch (primitive) {
+    case 'box':
+      return 12
+    case 'roundedBox':
+      // RoundedBoxGeometry is a box with 2 × segments + 1 subdivisions per axis.
+      return 12 * (2 * t.roundedBoxSegments + 1) ** 2
+    case 'cylinder':
+      // Side and two caps; a cone (topScale 0) has no top cap and half the side.
+      return topScale > 0 ? 4 * t.cylinderRadialSegments : 2 * t.cylinderRadialSegments
+    case 'ellipsoid':
+      // SphereGeometry without the degenerate triangles at both poles.
+      return 2 * t.ellipsoidWidthSegments * (t.ellipsoidHeightSegments - 1)
+  }
+}
+
 /** Axis-aligned bounds of one evaluated shape in the design frame. */
 export function shapeBounds(
   shape: Pick<EvaluatedShape, 'primitive' | 'size' | 'position' | 'rotation'>,

@@ -10,6 +10,7 @@ import {
   type Recipe,
   RecipeSchema,
   shapeBounds,
+  shapeTriangles,
   sweepRecipe,
   type Vec3,
 } from './recipe'
@@ -37,6 +38,7 @@ export const DesignDiagnosticSchema = z.object({
     'floating_component',
     'unbalanced',
     'behind_wall',
+    'draw_budget',
   ]),
   path: z.string().optional(),
   message: z.string(),
@@ -55,7 +57,8 @@ export const DesignMeasurementsSchema = z.object({
     budget: z.number(),
     limit: z.number(),
   }),
-  /** One draw call per slot and motion group, in build order. */
+  /** One draw call per slot and motion group, in build order; `draw_budget` warns above `drawBudget`. */
+  drawBudget: z.number(),
   drawGroups: z.array(
     z.object({
       slot: z.string(),
@@ -385,27 +388,21 @@ function unionBounds(entries: { min: Vec3; max: Vec3 }[]) {
   return boundsFrom(min, max)
 }
 
-/** Triangles the procedural-item builder emits for one shape (see nodes `buildProceduralGeometry`). */
-export function shapeTriangles(shape: Pick<EvaluatedShape, 'primitive' | 'topScale'>) {
-  switch (shape.primitive) {
-    case 'box':
-      return 12
-    case 'roundedBox':
-      return 300
-    case 'cylinder':
-      return shape.topScale > 0 ? 96 : 48
-    case 'ellipsoid':
-      return 720
-  }
+/** Volume of a shape's primitive as a fraction of its size box; a tapered cylinder is a frustum. */
+function volumeFraction(shape: Pick<EvaluatedShape, 'primitive' | 'topScale'>) {
+  const t = shape.topScale
+  if (shape.primitive === 'cylinder') return ((Math.PI / 4) * (1 + t + t * t)) / 3
+  return shape.primitive === 'ellipsoid' ? Math.PI / 6 : 1
 }
 
-const SHAPE_VOLUME = { box: 1, roundedBox: 1, cylinder: Math.PI / 4, ellipsoid: Math.PI / 6 }
+/** Draw calls per design above which rendering many instances gets costly. */
+const DRAW_BUDGET = 16
 
 function measureDesign(recipe: Recipe, evaluation: Evaluation, diagnostics: DesignDiagnostic[]) {
   const shapes = evaluation.shapes.map((shape) => ({
     shape,
     ...shapeBounds(shape),
-    triangles: shapeTriangles(shape),
+    triangles: shapeTriangles(shape.primitive, shape.topScale),
   }))
   const reference = recipe.mounting
     ? evaluation.surfaces.find((surface) => surface.id === recipe.mounting!.reference)
@@ -422,7 +419,10 @@ function measureDesign(recipe: Recipe, evaluation: Evaluation, diagnostics: Desi
   // their plane (+Y, +Z), ceiling designs hang below theirs.
   const datumGap = (min: Vec3, max: Vec3) =>
     kind === 'ceiling' ? value - max[axis]! : min[axis]! - value
-  const touches = (min: Vec3, max: Vec3) => datumGap(min, max) <= CONTACT_TOLERANCE
+  // Real contact: the shape reaches the datum plane from the design side, within tolerance.
+  // Geometry entirely beyond the plane (behind the wall, above the ceiling) does not touch it.
+  const touches = (min: Vec3, max: Vec3) =>
+    min[axis]! <= value + CONTACT_TOLERANCE && max[axis]! >= value - CONTACT_TOLERANCE
   const planeAxes = kind === 'wall' ? ([0, 1] as const) : ([0, 2] as const)
 
   const drawGroups = new Map<
@@ -441,6 +441,13 @@ function measureDesign(recipe: Recipe, evaluation: Evaluation, diagnostics: Desi
     group.triangles += triangles
     drawGroups.set(key, group)
   }
+
+  if (drawGroups.size > DRAW_BUDGET)
+    diagnostics.push({
+      severity: 'warning',
+      code: 'draw_budget',
+      message: `${drawGroups.size} draw calls per instance (one per slot and motion group); the budget is ${DRAW_BUDGET}. Share slots across parts, or fold moving parts into fewer motion groups.`,
+    })
 
   const parts = recipe.parts.map((part) => {
     const own = shapes.filter(({ shape }) => shape.partId === part.id)
@@ -555,7 +562,7 @@ function measureDesign(recipe: Recipe, evaluation: Evaluation, diagnostics: Desi
     let mass = 0
     const centre: [number, number] = [0, 0]
     for (const { shape } of shapes) {
-      const volume = SHAPE_VOLUME[shape.primitive] * shape.size[0] * shape.size[1] * shape.size[2]
+      const volume = volumeFraction(shape) * shape.size[0] * shape.size[1] * shape.size[2]
       mass += volume
       centre[0] += volume * shape.position[0]
       centre[1] += volume * shape.position[2]
@@ -582,6 +589,7 @@ function measureDesign(recipe: Recipe, evaluation: Evaluation, diagnostics: Desi
       limit: RECIPE_LIMITS.triangles,
     },
     drawGroups: [...drawGroups.values()],
+    drawBudget: DRAW_BUDGET,
     parts,
     datum: {
       kind,

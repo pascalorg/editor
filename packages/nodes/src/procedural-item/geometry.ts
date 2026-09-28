@@ -1,6 +1,7 @@
 import {
   type Evaluation,
   evaluateRecipe,
+  PRIMITIVE_TESSELLATION,
   type ProceduralItemNode,
 } from '@pascal-app/core/procedural-items'
 import {
@@ -43,11 +44,21 @@ export function buildProceduralGeometry(node: ProceduralItemNode): BuiltItem {
     const [w, h, d] = shape.size
     const source =
       shape.primitive === 'roundedBox'
-        ? new RoundedBoxGeometry(w, h, d, 2, shape.radius)
+        ? new RoundedBoxGeometry(w, h, d, PRIMITIVE_TESSELLATION.roundedBoxSegments, shape.radius)
         : shape.primitive === 'cylinder'
-          ? new CylinderGeometry(0.5 * shape.topScale, 0.5, 1, 24, 1)
+          ? new CylinderGeometry(
+              0.5 * shape.topScale,
+              0.5,
+              1,
+              PRIMITIVE_TESSELLATION.cylinderRadialSegments,
+              1,
+            )
           : shape.primitive === 'ellipsoid'
-            ? new SphereGeometry(0.5, 24, 16)
+            ? new SphereGeometry(
+                0.5,
+                PRIMITIVE_TESSELLATION.ellipsoidWidthSegments,
+                PRIMITIVE_TESSELLATION.ellipsoidHeightSegments,
+              )
             : new BoxGeometry(w, h, d)
     if (shape.primitive === 'cylinder' || shape.primitive === 'ellipsoid') source.scale(w, h, d)
     const geometry = source.index ? source.toNonIndexed() : source
