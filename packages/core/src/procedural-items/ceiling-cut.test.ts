@@ -135,3 +135,73 @@ describe('recipe ceiling cuts (version 2)', () => {
     expect(() => parseRecipe(recipe)).toThrow('rises above the ceiling reference')
   })
 })
+
+describe('ceiling cut review fixes (AK-D2 round 2)', () => {
+  const level = LevelNode.parse({ id: 'level_cut2', height: 3 })
+  const ceilingOf = (half: number, holes: [number, number][][] = []) =>
+    CeilingNode.parse({
+      id: 'ceiling_cut2',
+      parentId: level.id,
+      height: 2.7,
+      polygon: [
+        [-half, -half],
+        [half, -half],
+        [half, half],
+        [-half, half],
+      ],
+      holes,
+    })
+  const place = (recipe: Recipe, ceiling: ReturnType<typeof ceilingOf>) => {
+    const node = ProceduralItemNode.parse({
+      id: 'procedural-item_cut2',
+      recipe,
+      parentId: ceiling.id,
+    })
+    return () =>
+      validateProceduralRelations(node, {
+        [level.id]: level,
+        [ceiling.id]: ceiling,
+        [node.id]: node,
+      })
+  }
+  test('the cut ring must lie inside the ceiling and clear of its holes', () => {
+    const wide = downlight()
+    wide.cuts = [{ shape: 'rect', size: [1, 1] }]
+    expect(place(wide, ceilingOf(0.25))).toThrow('cut')
+    expect(place(downlight(), ceilingOf(2))).not.toThrow()
+    const hole: [number, number][] = [
+      [0.02, 0.02],
+      [0.3, 0.02],
+      [0.3, 0.3],
+      [0.02, 0.3],
+    ]
+    expect(place(downlight(), ceilingOf(2, [hole]))).toThrow('cut')
+  })
+  test('a recessed part may not move up through the storey above', () => {
+    const recipe = downlight()
+    recipe.parts.find((part) => part.id === 'lens')!.motion = {
+      kind: 'slide',
+      axis: 'y',
+      distance: 1,
+    }
+    expect(() => parseRecipe(recipe)).not.toThrow()
+    expect(place(recipe, ceilingOf(2))).toThrow('level height')
+  })
+  test('a round can spinning inside a circle cut of its own diameter is accepted', () => {
+    const recipe = downlight()
+    recipe.cuts = [{ shape: 'circle', diameter: 'size' }]
+    recipe.parts = recipe.parts.filter((part) => part.id !== 'lens')
+    const can = recipe.parts.find((part) => part.id === 'can')!
+    can.shapes = [
+      {
+        id: 'can',
+        primitive: 'cylinder',
+        slot: 'can',
+        size: ['size', 'depth', 'size'],
+        position: [0, { op: 'add', args: [0.01, { op: 'div', args: ['depth', 2] }] }, 0],
+      },
+    ]
+    can.motion = { kind: 'spin', pivot: [0, 0.07, 0], axis: 'y', radiansPerSecond: 1 }
+    expect(() => parseRecipe(recipe)).not.toThrow()
+  })
+})

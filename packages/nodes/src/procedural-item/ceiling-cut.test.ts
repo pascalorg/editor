@@ -1,11 +1,19 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { type AnyNode, CeilingNode, nodeRegistry, registerNode } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  CeilingNode,
+  nodeRegistry,
+  registerNode,
+  useLiveNodeOverrides,
+} from '@pascal-app/core'
 import {
   ProceduralItemNode,
   parseRecipe,
   type Recipe,
   shelfRecipe,
 } from '@pascal-app/core/procedural-items'
+import { usePlacementPreview } from '@pascal-app/editor'
 import { proceduralItemDefinition } from './definition'
 
 // A 0.2 m square trim flush with the ceiling and a can recessed 0.1 m above it, inside the cut.
@@ -86,4 +94,24 @@ test('a recessed design publishes its ceiling hole through the registry capabili
 
   const flush = ProceduralItemNode.parse({ ...node, recipe: shelfRecipe, parentId: null })
   expect(cut?.buildCeilingHole(flush as unknown as AnyNode)).toBe(null)
+})
+
+test('the hole follows live overrides and the move preview, and hides with its design', () => {
+  const node = ProceduralItemNode.parse({
+    id: 'procedural-item_live',
+    recipe: recessed,
+    parentId: 'ceiling_live',
+    position: [0, 0, 0],
+  })
+  const cut = nodeRegistry.get('procedural-item')!.capabilities.ceilingCut!
+  const centre = (ring: [number, number][] | null) =>
+    ring!.reduce((sum, [x, z]) => [sum[0] + x / ring!.length, sum[1] + z / ring!.length], [0, 0])
+  useLiveNodeOverrides.getState().set(node.id as AnyNodeId, { position: [1, 0, 0.5] } as never)
+  expect(centre(cut.buildCeilingHole(node as unknown as AnyNode))[0]).toBeCloseTo(1)
+  useLiveNodeOverrides.getState().set(node.id as AnyNodeId, { visible: false } as never)
+  expect(cut.buildCeilingHole(node as unknown as AnyNode)).toBe(null)
+  usePlacementPreview.getState().set({ ...node, position: [-1, 0, 0] } as unknown as AnyNode)
+  expect(centre(cut.buildCeilingHole(node as unknown as AnyNode))[0]).toBeCloseTo(-1)
+  usePlacementPreview.getState().clear()
+  useLiveNodeOverrides.getState().clear(node.id as AnyNodeId)
 })
