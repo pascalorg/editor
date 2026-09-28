@@ -5159,6 +5159,25 @@ export function FloorplanPanel({
   // Walls committed by the current 2D-only chain — exclusion set for the
   // T-junction chain-termination test (mirrors the 3D tool's `chainWallIds`).
   const wallChainWallIdsRef = useRef<string[]>([])
+  // Split view: the 3D wall tool owns the commit and publishes each segment's
+  // resolved end as the chain start. Re-base this panel's draft onto it so a
+  // typed Enter in the plan projects from the segment the 3D chain is
+  // actually drafting — without this, `draftStart` stays on the last point
+  // the panel itself placed and the typed commit uses a stale origin
+  // (Bugbot cb434c3d). In 2D-only the panel is the committer and never
+  // publishes, so this subscription stays dormant there.
+  useEffect(() => {
+    if (!(mode === 'build' && tool === 'wall')) return
+    return useSegmentDraftChain.subscribe((state, previousState) => {
+      const next = state.wall
+      if (next === previousState.wall) return
+      if (!next) return
+      setDraftStart((current) =>
+        current && current[0] === next[0] && current[1] === next[1] ? current : next,
+      )
+      setWallChainFirstVertex((current) => current ?? next)
+    })
+  }, [mode, tool])
   const setDraftEnd = useCallback(
     (next: WallPlanPoint | null | ((prev: WallPlanPoint | null) => WallPlanPoint | null)) => {
       const store = useFloorplanDraftPreview.getState()

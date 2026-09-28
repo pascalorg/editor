@@ -952,6 +952,15 @@ export const WallTool: React.FC = () => {
     // Enter commits at the typed length along the current draft direction.
     const onKeyDown = (event: KeyboardEvent) => {
       if (buildingState.current !== 1) return
+      // 2D-only view: the floor-plan panel owns the wall commit there — this
+      // tool's `grid:click` pipeline never commits while the canvas is
+      // `display:none`, so capture-consuming the typing keys here would leave
+      // a typed Enter with no owner and commit nothing (Bugbot cb434c3d:
+      // "Enter skips 2D wall commit"). Let the panel's bubble-phase handler
+      // see them instead. The panel re-bases its draft onto the chain start
+      // this tool publishes, so split view keeps a single owner (this tool)
+      // while 2D-only hands the keyboard to the view that commits.
+      if (useEditor.getState().viewMode === '2d') return
       const target = event.target as HTMLElement | null
       if (
         target instanceof HTMLInputElement ||
