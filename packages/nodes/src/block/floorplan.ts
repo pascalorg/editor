@@ -47,7 +47,7 @@ const planRingsByTopology = new WeakMap<BlockTopology, [number, number][][]>()
 /**
  * The block's plan footprint: the union of every non-vertical face projected
  * onto the level, so L-shapes keep their notch, rings keep their opening and
- * separate parts stay apart. A topology without faces falls back to the
+ * separate parts stay apart. A topology with no such faces falls back to the
  * convex hull of its vertices. Cached per topology: selection and hover
  * rebuild the plan without re-running the union.
  */
@@ -66,7 +66,7 @@ function blockPlanRings(topology: BlockTopology): [number, number][][] {
     if (ring.length === face.vertexIds.length) projected.push(ring)
   }
   let rings = unionPolygons(projected)
-  if (rings.length === 0 && topology.faces.length === 0) {
+  if (rings.length === 0) {
     const hull = convexHull(topology.vertices.map((v) => [v.position[0], v.position[2]]))
     rings = hull.length >= 3 ? [hull] : []
   }

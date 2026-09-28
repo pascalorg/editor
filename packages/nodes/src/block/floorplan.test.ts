@@ -154,6 +154,19 @@ describe('buildBlockFloorplan', () => {
     expect(fills(plan, [1.5, 1.5])).toBe(false)
   })
 
+  test('a block with only vertical faces still draws its hull, so it stays selectable', () => {
+    const walls = prism([
+      [
+        [0, 0],
+        [2, 0],
+        [2, 1],
+        [0, 1],
+      ],
+    ])
+    walls.topology.faces = walls.topology.faces.filter((face) => !/top|bottom/.test(face.id))
+    expect(fills(buildBlockFloorplan(walls), [1, 0.5])).toBe(true)
+  })
+
   test('draws a ring-shaped block with its hole and separate parts apart', () => {
     const square = (x: number, z: number, size: number): [number, number][] => [
       [x, z],
