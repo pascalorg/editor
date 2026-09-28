@@ -1,5 +1,4 @@
 import { expect, test } from 'bun:test'
-import { Vector3 } from 'three'
 import { readdirSync, readFileSync } from 'node:fs'
 import {
   bedRecipe,
@@ -8,6 +7,7 @@ import {
   shapeTriangles,
   shelfRecipe,
 } from '@pascal-app/core/procedural-items'
+import { Vector3 } from 'three'
 import cabinetJson from '../../../core/src/procedural-items/__fixtures__/cabinet_two_doors_drawer.json'
 import chandelierJson from '../../../core/src/procedural-items/__fixtures__/chandelier_six_arms.json'
 import deskJson from '../../../core/src/procedural-items/__fixtures__/desk_fan.json'

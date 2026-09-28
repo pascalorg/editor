@@ -127,6 +127,6 @@ describe('cylinder review fixes (AK-03a round 2)', () => {
     expect(() => parseRecipe(quarter({ inner: 0.5 }))).toThrow('outside its cut')
   })
   test('an open cylinder cannot be a support surface', () => {
-    expect(() => parseRecipe(one({ open: true, support: true }))).toThrow('support')
+    expect(() => parseRecipe(one({ open: true, support: true }))).toThrow('Support')
   })
 })

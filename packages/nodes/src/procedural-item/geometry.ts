@@ -143,6 +143,44 @@ function cylinderSource(shape: Evaluation['shapes'][number]): BufferGeometry {
   for (const piece of pieces) piece.dispose()
   return merged
 }
+/** v2 geometry (cylinder options and later primitives); v1 shapes keep their projection. */
+function usesV2Geometry(shape: Evaluation['shapes'][number]) {
+  return (
+    shape.primitive === 'cylinder' &&
+    [shape.segments, shape.open, shape.inner, shape.arc].some((v) => v !== undefined)
+  )
+}
+/**
+ * World-scale UVs from each triangle's own frame, in metres: u runs horizontally across the
+ * face (or along x on a level face), v = normal × u. Same contract as block faces.
+ */
+function faceFrameUvs(geometry: BufferGeometry) {
+  const position = geometry.getAttribute('position'),
+    uv = geometry.getAttribute('uv')
+  const a = new Vector3(),
+    b = new Vector3(),
+    c = new Vector3(),
+    n = new Vector3(),
+    u = new Vector3(),
+    v = new Vector3()
+  const up = new Vector3(0, 1, 0)
+  for (let t = 0; t < position.count; t += 3) {
+    a.fromBufferAttribute(position, t)
+    b.fromBufferAttribute(position, t + 1)
+    c.fromBufferAttribute(position, t + 2)
+    n.subVectors(b, a).cross(v.subVectors(c, a))
+    if (n.lengthSq() < 1e-20) n.set(0, 0, 1)
+    n.normalize()
+    if (Math.abs(n.y) > 0.99) u.set(1, 0, 0)
+    else u.crossVectors(up, n).normalize()
+    v.crossVectors(n, u)
+    for (let k = 0; k < 3; k++) {
+      const p = [a, b, c][k]!
+      uv.setXY(t + k, p.dot(u), p.dot(v))
+    }
+  }
+  uv.needsUpdate = true
+}
 export const proceduralMetrics = { builds: 0, cacheHits: 0, lastBuildMs: 0, liveEntries: 0 }
 const cache = new Map<string, { value: BuiltItem; users: number }>()
 export const geometrySignature = (node: ProceduralItemNode) =>
@@ -168,17 +206,20 @@ export function buildProceduralGeometry(node: ProceduralItemNode): BuiltItem {
     const geometry = source.index ? source.toNonIndexed() : source
     if (geometry !== source) source.dispose()
     geometry.clearGroups()
-    const vertices = geometry.getAttribute('position'),
-      normals = geometry.getAttribute('normal'),
-      uv = geometry.getAttribute('uv')
-    for (let i = 0; i < vertices.count; i++) {
-      const x = vertices.getX(i),
-        y = vertices.getY(i),
-        z = vertices.getZ(i)
-      const nx = Math.abs(normals.getX(i)),
-        ny = Math.abs(normals.getY(i)),
-        nz = Math.abs(normals.getZ(i))
-      uv.setXY(i, nx > ny && nx > nz ? z : x, ny > nx && ny > nz ? z : y)
+    if (usesV2Geometry(shape)) faceFrameUvs(geometry)
+    else {
+      const vertices = geometry.getAttribute('position'),
+        normals = geometry.getAttribute('normal'),
+        uv = geometry.getAttribute('uv')
+      for (let i = 0; i < vertices.count; i++) {
+        const x = vertices.getX(i),
+          y = vertices.getY(i),
+          z = vertices.getZ(i)
+        const nx = Math.abs(normals.getX(i)),
+          ny = Math.abs(normals.getY(i)),
+          nz = Math.abs(normals.getZ(i))
+        uv.setXY(i, nx > ny && nx > nz ? z : x, ny > nx && ny > nz ? z : y)
+      }
     }
     geometry.applyMatrix4(
       new Matrix4().compose(

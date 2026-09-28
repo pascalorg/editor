@@ -399,8 +399,8 @@ export function parseRecipe(input: unknown): Recipe {
           throw new Error(
             `segments, open, inner and arc apply to cylinders (${part.id}/${shape.id})`,
           )
-        if (shape.support && (shape.inner !== undefined || shape.arc !== undefined))
-          throw new Error(`Support shape ${part.id}/${shape.id} cannot be hollow or partial`)
+        if (shape.support && (shape.inner !== undefined || shape.arc !== undefined || shape.open))
+          throw new Error(`Support shape ${part.id}/${shape.id} cannot be hollow, open or partial`)
       }
       if (part.motion && shape.support)
         throw new Error(`Moving part ${part.id} cannot contain support shapes`)
@@ -461,20 +461,24 @@ function shapeFootprint(shape: EvaluatedShape): Vec3[] {
   const n = shape.segments ?? 24,
     arc = shape.arc ?? 2 * Math.PI
   const partial = arc < 2 * Math.PI - 1e-9
-  // Rim vertices as rendered (segments along the arc); a partial solid also reaches its axis.
+  // Rim vertices as rendered, along the arc; a hollow arc adds its inner rim; a closed
+  // partial solid (wedge sides through the axis) adds the axis.
+  const rims = shape.inner === undefined ? [1] : [1, shape.inner]
   return [-0.5, 0.5].flatMap((y) => {
     const r = y > 0 ? 0.5 * shape.topScale : 0.5
-    const rim = Array.from({ length: partial ? n + 1 : n }, (_, k) => {
-      const theta = (arc * k) / n
-      return transformPoint(f, [
-        r * Math.sin(theta) * shape.size[0],
-        y * shape.size[1],
-        r * Math.cos(theta) * shape.size[2],
-      ])
-    })
-    return partial && shape.inner === undefined
-      ? [...rim, transformPoint(f, [0, y * shape.size[1], 0])]
-      : rim
+    const points = rims.flatMap((scale) =>
+      Array.from({ length: partial ? n + 1 : n }, (_, k) => {
+        const theta = (arc * k) / n
+        return transformPoint(f, [
+          scale * r * Math.sin(theta) * shape.size[0],
+          y * shape.size[1],
+          scale * r * Math.cos(theta) * shape.size[2],
+        ])
+      }),
+    )
+    return partial && shape.inner === undefined && !shape.open
+      ? [...points, transformPoint(f, [0, y * shape.size[1], 0])]
+      : points
   })
 }
 
