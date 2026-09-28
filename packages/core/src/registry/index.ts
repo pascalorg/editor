@@ -18,6 +18,7 @@ export type {
   TapActionHandle,
   TranslateHandle,
 } from './handles'
+export { nodeMechanism, toggleMechanism, toggleNodeMechanism } from './mechanism'
 export {
   bakePolicyOf,
   discoverPlugins,
@@ -130,6 +131,7 @@ export type {
   MeasurementFeatureBinding,
   MeasurementFeatureGeometry,
   MeasurementSnapKind,
+  MechanismCapability,
   Modifiers,
   MovableConfig,
   MovableParentFrame,

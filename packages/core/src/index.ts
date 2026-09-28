@@ -354,6 +354,7 @@ export {
   type DoorInteractiveState,
   type ElevatorInteractiveState,
   type ElevatorPhase,
+  type InteractiveState,
   type ItemInteractiveState,
   type SkylightAnimationState,
   type SkylightInteractiveState,

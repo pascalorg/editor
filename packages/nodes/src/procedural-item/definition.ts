@@ -1,5 +1,11 @@
 import type { AnyNode, FloorplanGeometry, HandleDescriptor, NodeDefinition } from '@pascal-app/core'
-import { type AnyNodeId, getEffectiveNode, useInteractive, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  getEffectiveNode,
+  toggleMechanism,
+  useInteractive,
+  useScene,
+} from '@pascal-app/core'
 import {
   boundsOf,
   boxCorners,
@@ -22,11 +28,7 @@ import {
 import { usePlacementPreview } from '@pascal-app/editor'
 import { decorateProceduralEmission } from '@pascal-app/viewer'
 import { itemPaint } from '../item/paint'
-import {
-  itemHasMechanisms,
-  toggleItemLights,
-  toggleItemMechanisms,
-} from '../shared/item-interactions'
+import { proceduralMechanism, toggleItemLights } from '../shared/item-interactions'
 import { restingFloorplanAffectedIds } from '../shared/resting-surface-plan'
 import { bakeProceduralAnimationClips, isProceduralMotionPlaying } from './animation'
 import { proceduralFloorplanMoveTarget } from './move-session'
@@ -135,6 +137,7 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
         isProceduralMotionPlaying(n.id),
     },
     selectable: { hitVolume: 'bbox' },
+    mechanism: proceduralMechanism,
     dragBounds: (n) => {
       const node = n as unknown as ProceduralItemNode
       const e = evaluateRecipe(node.recipe, node.parameters)
@@ -222,7 +225,8 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
         const recipe = (n as unknown as ProceduralItemNode).recipe
         return operableParts(recipe).length > 0 || recipe.parts.some((part) => part.light)
       },
-      run: (n) => (itemHasMechanisms(n) ? toggleItemMechanisms(n) : toggleItemLights(n)),
+      run: (n) =>
+        proceduralMechanism.has(n) ? toggleMechanism(proceduralMechanism, n) : toggleItemLights(n),
     },
     r: {
       appliesTo: (n) => Boolean((n as unknown as ProceduralItemNode).wallId),

@@ -4,14 +4,10 @@ import {
   type HandleDescriptor,
   type ItemNode as ItemNodeType,
   type NodeDefinition,
+  toggleMechanism,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
-import {
-  itemHasLights,
-  itemHasMechanisms,
-  toggleItemLights,
-  toggleItemMechanisms,
-} from '../shared/item-interactions'
+import { itemHasLights, itemMechanism, toggleItemLights } from '../shared/item-interactions'
 import { itemBatchable } from '../shared/node-batch/batchable'
 import { restingFloorplanAffectedIds } from '../shared/resting-surface-plan'
 import { buildItemContextualDimensions, buildItemFloorplan } from './floorplan'
@@ -227,6 +223,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
     duplicable: { subtree: 'with-children' },
     deletable: true,
     paint: itemPaint,
+    mechanism: itemMechanism,
     // Items participate in compositions — e.g. "table-with-plants",
     // "shelf-with-books-on-top" — so they're presettable in their own
     // right (and as descendants of presettable parents). The GLB-kind
@@ -341,10 +338,10 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   floorplanMoveTarget: itemFloorplanMoveTarget,
   keyboardActions: {
     e: {
-      appliesTo: (node) => itemHasMechanisms(node) || itemHasLights(node),
+      appliesTo: (node) => itemMechanism.has(node) || itemHasLights(node),
       // Same as the action bar: mechanisms when the item has them, otherwise its light.
       run: (node) =>
-        itemHasMechanisms(node) ? toggleItemMechanisms(node) : toggleItemLights(node),
+        itemMechanism.has(node) ? toggleMechanism(itemMechanism, node) : toggleItemLights(node),
     },
   },
 

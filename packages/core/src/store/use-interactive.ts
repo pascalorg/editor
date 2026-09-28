@@ -79,8 +79,12 @@ type InteractiveStore = {
     AnyNodeId,
     { parts: Record<string, boolean>; lightsOn: boolean; motionCommand?: MotionCommand }
   >
+  /** On/off of kinds whose mechanism is one switch (`capabilities.mechanism`). */
+  mechanisms: Record<AnyNodeId, boolean>
   lampDefault: boolean
   lampItems: Record<AnyNodeId, number[]>
+  setMechanism: (nodeId: AnyNodeId, on: boolean) => void
+  removeMechanism: (nodeId: AnyNodeId) => void
   setLampDefault: (on: boolean, resetOverrides?: boolean) => void
   initProcedural: (nodeId: AnyNodeId, partIds: string[], spinPartIds?: string[]) => void
   toggleProceduralPart: (nodeId: AnyNodeId, partId: string) => void
@@ -145,6 +149,9 @@ type InteractiveStore = {
   removeElevator: (elevatorId: AnyNodeId) => void
 }
 
+/** What `useInteractive.getState()` returns; mechanism capabilities read it. */
+export type InteractiveState = InteractiveStore
+
 const defaultControlValue = (
   interactive: Interactive,
   index: number,
@@ -179,8 +186,21 @@ export const useInteractive = create<InteractiveStore>((set, get) => ({
   skylightAnimations: {},
   elevators: {},
   procedural: {},
+  mechanisms: {},
   lampDefault: false,
   lampItems: {},
+  setMechanism: (nodeId, on) =>
+    set((state) =>
+      state.mechanisms[nodeId] === on
+        ? state
+        : { mechanisms: { ...state.mechanisms, [nodeId]: on } },
+    ),
+  removeMechanism: (nodeId) =>
+    set((state) => {
+      if (!(nodeId in state.mechanisms)) return state
+      const { [nodeId]: _, ...rest } = state.mechanisms
+      return { mechanisms: rest }
+    }),
   setLampDefault: (on, resetOverrides = false) =>
     set((state) => {
       if (state.lampDefault === on && !resetOverrides) return state
