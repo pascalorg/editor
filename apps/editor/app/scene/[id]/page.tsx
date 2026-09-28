@@ -2,6 +2,7 @@ import type { SceneGraph } from '@pascal-app/editor'
 import { headers } from 'next/headers'
 import Link from 'next/link'
 import { SceneLoader, type SceneMeta } from '@/components/scene-loader'
+import { isAgentManagedScene } from '@/lib/scene-agent-server'
 
 export const dynamic = 'force-dynamic'
 
@@ -69,5 +70,5 @@ export default async function ScenePage({ params }: { params: Promise<{ id: stri
   }
 
   const { graph, ...meta } = scene
-  return <SceneLoader initialScene={graph} meta={meta} />
+  return <SceneLoader agentManaged={isAgentManagedScene(id)} initialScene={graph} meta={meta} />
 }

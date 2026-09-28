@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { countGraphNodes, isEmptyGraphOverwrite } from '@/lib/empty-graph-guard'
 import { apiGraphSchema } from '@/lib/graph-schema'
+import { forwardSceneAgentRequest, isAgentManagedScene } from '@/lib/scene-agent-server'
 import {
   guardSceneApiRequest,
   sceneApiJson,
@@ -19,6 +20,7 @@ const putSceneSchema = z.object({
   graph: apiGraphSchema,
   thumbnailUrl: z.string().url().nullable().optional(),
   expectedVersion: z.number().int().nonnegative().optional(),
+  agentRunId: z.string().min(1).max(200).optional(),
   /**
    * Overwriting a populated scene with a 0-node graph is rejected (409
    * `empty_graph_rejected`) unless this is set: an empty PUT is a hydration
@@ -106,6 +108,28 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         { status: 409 },
       )
     }
+    if (isAgentManagedScene(id)) {
+      if (!parsed.data.agentRunId || expectedVersion === undefined) {
+        return sceneApiJson(request, { error: 'agent_handoff_required' }, { status: 409 })
+      }
+      const result = await forwardSceneAgentRequest(request, id, 'human-edit', {
+        runId: parsed.data.agentRunId,
+        expectedRevision: expectedVersion,
+        graph: parsed.data.graph,
+      })
+      if (!result.ok) return result
+      const receipt = (await result.json()) as { revision: number }
+      return sceneApiJson(
+        request,
+        {
+          ...existing,
+          graph: undefined,
+          version: receipt.revision,
+          nodeCount: countGraphNodes(parsed.data.graph),
+        },
+        { headers: { ETag: `"${receipt.revision}"` } },
+      )
+    }
     const meta = await operations.saveScene({
       id,
       name: parsed.data.name ?? existing.name,
@@ -129,6 +153,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
   if (guard) return guard
 
   const { id } = await params
+  if (isAgentManagedScene(id)) {
+    return sceneApiJson(request, { error: 'agent_managed_scene' }, { status: 409 })
+  }
   const ifMatch = parseIfMatch(request.headers.get('If-Match'))
 
   const operations = await getSceneOperations()
@@ -148,6 +175,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   if (guard) return guard
 
   const { id } = await params
+  if (isAgentManagedScene(id)) {
+    return sceneApiJson(request, { error: 'agent_managed_scene' }, { status: 409 })
+  }
 
   let body: unknown
   try {

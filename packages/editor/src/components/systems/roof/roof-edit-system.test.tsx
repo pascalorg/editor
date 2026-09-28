@@ -1,5 +1,11 @@
-import { expect, test } from 'bun:test'
-import { RoofSegmentNode, sceneRegistry, useLiveNodeOverrides, useScene } from '@pascal-app/core'
+import { expect, spyOn, test } from 'bun:test'
+import {
+  emitter,
+  RoofSegmentNode,
+  sceneRegistry,
+  useLiveNodeOverrides,
+  useScene,
+} from '@pascal-app/core'
 import { hideFromScene, showInScene, useViewer } from '@pascal-app/viewer'
 import { _roots, act, createRoot, extend, type Instance, type ThreeEvent } from '@react-three/fiber'
 import { createElement } from 'react'
@@ -9,7 +15,12 @@ import { RoofEditSystem } from './roof-edit-system'
 
 extend({ Group: THREE.Group, Mesh: THREE.Mesh, LineSegments: THREE.LineSegments })
 
-test('roof trim drag keeps its plane hit over a surface joining and leaving a batch', async () => {
+test.each([
+  'pointercancel',
+  'tool:cancel',
+  'read-only',
+  'unmount',
+] as const)('roof trim drag retains its hit across batching and cancels through %s', async (cancelThrough) => {
   const previousViewer = useViewer.getState()
   const previousScene = useScene.getState()
   const previousScope = useInteractionScope.getState().scope
@@ -17,6 +28,7 @@ test('roof trim drag keeps its plane hit over a surface joining and leaving a ba
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
   const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
   const events = Object.assign(new EventTarget(), { setTimeout, clearTimeout })
+  const removeListener = spyOn(events, 'removeEventListener')
   Object.defineProperty(globalThis, 'window', { configurable: true, value: events })
   Object.defineProperty(globalThis, 'document', {
     configurable: true,
@@ -95,14 +107,45 @@ test('roof trim drag keeps its plane hit over a surface joining and leaving a ba
     expect(await move()).toEqual(before)
     showInScene(surface, 'batched')
     expect(await move()).toEqual(before)
+    expect(useScene.temporal.getState().isTracking).toBe(false)
     await act(async () => {
-      events.dispatchEvent(new Event('pointercancel'))
+      if (cancelThrough === 'tool:cancel') emitter.emit('tool:cancel')
+      else if (cancelThrough === 'read-only') useScene.setState({ readOnly: true })
+      else if (cancelThrough === 'unmount') root.render(null)
+      else events.dispatchEvent(new Event('pointercancel'))
+      if (cancelThrough !== 'unmount') {
+        expect(useLiveNodeOverrides.getState().overrides.has(segment.id)).toBe(false)
+      }
     })
     expect(useLiveNodeOverrides.getState().overrides.has(segment.id)).toBe(false)
+    expect(useViewer.getState().inputDragging).toBe(false)
+    expect(useInteractionScope.getState().scope.kind).toBe('idle')
+    expect(useScene.temporal.getState().isTracking).toBe(true)
+    for (const name of ['pointermove', 'pointerup', 'pointercancel', 'keydown']) {
+      expect(removeListener.mock.calls.some(([type]) => type === name)).toBe(true)
+    }
+    if (cancelThrough === 'read-only') {
+      await act(async () => {
+        pointerDown!({
+          button: 0,
+          clientX: 50,
+          clientY: 50,
+          stopPropagation() {},
+        } as ThreeEvent<PointerEvent>)
+      })
+      expect(useLiveNodeOverrides.getState().overrides.has(segment.id)).toBe(false)
+      expect(useScene.temporal.getState().isTracking).toBe(true)
+      await act(async () => useScene.setState({ readOnly: false }))
+    }
+    await move()
+    await act(async () => events.dispatchEvent(new Event('pointerup')))
+    expect(useLiveNodeOverrides.getState().overrides.has(segment.id)).toBe(false)
+    expect(useScene.getState().nodes[segment.id]).toEqual(segment)
   } finally {
     await act(async () => {
       root.render(null)
     })
+    removeListener.mockRestore()
     _roots.delete(canvas)
     sceneRegistry.nodes.delete(segment.id)
     surface.geometry.dispose()

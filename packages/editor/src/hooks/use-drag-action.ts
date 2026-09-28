@@ -120,6 +120,7 @@ export function useDragAction<Ctx, Draft>(args: UseDragActionArgs<Ctx, Draft>) {
 
     emitter.on('grid:move', onMove)
     emitter.on('grid:click', onClick)
+    emitter.on('tool:cancel', session.cancel)
     if (typeof window !== 'undefined') {
       window.addEventListener('keydown', onKeyDown)
     }
@@ -127,6 +128,7 @@ export function useDragAction<Ctx, Draft>(args: UseDragActionArgs<Ctx, Draft>) {
     return () => {
       emitter.off('grid:move', onMove)
       emitter.off('grid:click', onClick)
+      emitter.off('tool:cancel', session.cancel)
       if (typeof window !== 'undefined') {
         window.removeEventListener('keydown', onKeyDown)
       }

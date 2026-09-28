@@ -16,6 +16,11 @@
       "import": "./dist/server.js",
       "default": "./dist/server.js"
     },
+    "./activity": {
+      "types": "./dist/activity/controller.d.ts",
+      "import": "./dist/activity/controller.js",
+      "default": "./dist/activity/controller.js"
+    },
     "./storage": {
       "types": "./dist/storage/index.d.ts",
       "import": "./dist/storage/index.js",

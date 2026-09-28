@@ -18,6 +18,7 @@ import { countGraphNodes, isEmptyGraphOverwrite } from '@/lib/empty-graph-guard'
 import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signature'
 import { cn } from '@/lib/utils'
 import { BuildTab } from './build-tab'
+import { useSceneAgent } from './use-scene-agent'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
 export interface SceneMeta {
@@ -85,6 +86,7 @@ const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
 ]
 
 interface SceneLoaderProps {
+  agentManaged?: boolean
   initialScene: SceneGraph
   meta: SceneMeta
 }
@@ -108,7 +110,7 @@ function isLightPreviewQuery(searchParams: URLSearchParams): boolean {
   return disable.split(',').some((p) => p.trim() === 'postFx')
 }
 
-export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
+export function SceneLoader({ initialScene, meta, agentManaged = false }: SceneLoaderProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const versionRef = useRef(meta.version)
@@ -120,6 +122,11 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const suppressRemoteSaveUntilRef = useRef(0)
   const [conflict, setConflict] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const agent = useSceneAgent({
+    enabled: agentManaged,
+    sceneId: meta.id,
+    initialRevision: meta.version,
+  })
 
   const lightPreview = isLightPreviewQuery(searchParams)
 
@@ -127,6 +134,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
 
   const handleSave = useCallback(
     async (graph: SceneGraph, options?: { keepalive?: boolean }) => {
+      if (agentManaged) return agent.save(graph, options)
       const graphJson = sceneGraphSignature(graph)
       const isRecentRemoteApply = Date.now() < suppressRemoteSaveUntilRef.current
       if (lastRemoteGraphJsonRef.current === graphJson) {
@@ -192,10 +200,11 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         setSaveError(error instanceof Error ? error.message : 'Save failed')
       }
     },
-    [meta.id, meta.name],
+    [agentManaged, agent.save, meta.id, meta.name],
   )
 
   useEffect(() => {
+    if (agentManaged) return
     const source = new EventSource(`/api/scenes/${meta.id}/events`)
 
     source.addEventListener('scene', (event) => {
@@ -224,7 +233,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
     })
 
     return () => source.close()
-  }, [meta.id])
+  }, [agentManaged, meta.id])
 
   const handleThumb = useCallback(
     async (_blob: Blob) => {
@@ -294,6 +303,8 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         </Link>
       </div>
       <Editor
+        interactionLocked={agent.interactionLocked}
+        viewerBanner={agent.banner}
         disablePostFx={lightPreview}
         layoutVersion="v2"
         onLoad={handleLoad}

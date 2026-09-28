@@ -49,22 +49,28 @@ export function installHistoryCommandDelegate(delegate: HistoryCommandDelegate):
 }
 
 export function getHistoryCommandState(): HistoryCommandState {
-  if (historyCommandDelegate) return historyCommandDelegate.getState()
   const temporal = useScene.temporal.getState()
-  return {
+  const state: HistoryCommandState = historyCommandDelegate?.getState() ?? {
     canRedo: temporal.futureStates.length > 0,
     canUndo: temporal.pastStates.length > 0,
     mode: 'standalone',
     status: 'ready',
   }
+  return useScene.getState().readOnly
+    ? { ...state, canRedo: false, canUndo: false, status: 'unavailable' }
+    : state
 }
 
 export function subscribeHistoryCommandState(listener: () => void): () => void {
   historyCommandListeners.add(listener)
   const unsubscribeTemporal = useScene.temporal.subscribe(listener)
+  const unsubscribeScene = useScene.subscribe((state, previous) => {
+    if (state.readOnly !== previous.readOnly) listener()
+  })
   return () => {
     historyCommandListeners.delete(listener)
     unsubscribeTemporal()
+    unsubscribeScene()
   }
 }
 
@@ -130,6 +136,7 @@ export function shouldCancelDraftOnHistoryJump(): boolean {
 }
 
 export function runUndo(): HistoryCommandResult {
+  if (useScene.getState().readOnly) return { kind: 'unavailable' }
   if (shouldCancelDraftOnHistoryJump()) emitter.emit('tool:cancel')
   if (historyCommandDelegate) {
     const result = historyCommandDelegate.undo()
@@ -147,6 +154,7 @@ export function runUndo(): HistoryCommandResult {
 }
 
 export function runRedo(): HistoryCommandResult {
+  if (useScene.getState().readOnly) return { kind: 'unavailable' }
   if (shouldCancelDraftOnHistoryJump()) emitter.emit('tool:cancel')
   if (historyCommandDelegate) {
     const result = historyCommandDelegate.redo()

@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  emitter,
   getActiveRoofHeight,
   getDutchRoofMetrics,
   getEffectiveNode,
@@ -1228,6 +1229,7 @@ function RoofTrimHandles() {
   }
 
   const resetDiagonalTrim = (side: RoofTrimSide, event: ThreeEvent<MouseEvent>) => {
+    if (useScene.getState().readOnly) return
     event.stopPropagation()
     const corner = getDiagonalResetCorner(side)
     if (!corner) return
@@ -1252,7 +1254,8 @@ function RoofTrimHandles() {
   }
 
   const startDrag = (side: RoofTrimSide, event: ThreeEvent<PointerEvent>) => {
-    if (event.button !== 0) return
+    if (event.button !== 0 || useScene.getState().readOnly) return
+    dragCleanupRef.current?.()
     event.stopPropagation()
     const source = sceneRegistry.nodes.get(segment.id)
     if (!source) return
@@ -1268,6 +1271,8 @@ function RoofTrimHandles() {
     let pendingTrim = baseTrim
     let lastDirtyMarkAt = 0
     let pendingDirtyTimeout: number | null = null
+    let active = true
+    let unsubscribeReadOnly = () => {}
 
     const clearPendingDirtyTimeout = () => {
       if (pendingDirtyTimeout === null) return
@@ -1336,10 +1341,11 @@ function RoofTrimHandles() {
       scheduleDirtyMark()
     }
 
-    updateFromPointer(event.clientX, event.clientY)
-
     const cleanup = () => {
+      active = false
       clearPendingDirtyTimeout()
+      unsubscribeReadOnly()
+      emitter.off('tool:cancel', onCancel)
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onCancel)
@@ -1363,10 +1369,20 @@ function RoofTrimHandles() {
     }
 
     const onMove = (moveEvent: PointerEvent) => {
+      if (!active) return
+      if (useScene.getState().readOnly) {
+        onCancel()
+        return
+      }
       updateFromPointer(moveEvent.clientX, moveEvent.clientY)
     }
 
     const onUp = () => {
+      if (!active) return
+      if (useScene.getState().readOnly) {
+        onCancel()
+        return
+      }
       swallowNextClick()
       if (!trimEquals(pendingTrim, baseTrim)) {
         commitSegmentTrim(baseSegment, pendingTrim)
@@ -1377,9 +1393,10 @@ function RoofTrimHandles() {
     }
 
     const onCancel = () => {
+      if (!active) return
+      cleanup()
       useLiveNodeOverrides.getState().clear(segmentId)
       flushDirtyMark()
-      cleanup()
     }
 
     // Escape / ⌘Z abort the trim drag — capture phase so they win over the
@@ -1392,11 +1409,17 @@ function RoofTrimHandles() {
       onCancel()
     }
 
-    dragCleanupRef.current = cleanup
+    dragCleanupRef.current = onCancel
+    emitter.on('tool:cancel', onCancel)
+    unsubscribeReadOnly = useScene.subscribe((state) => {
+      if (state.readOnly) onCancel()
+    })
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onCancel)
     window.addEventListener('keydown', onKeyDown, true)
+    if (useScene.getState().readOnly) onCancel()
+    else updateFromPointer(event.clientX, event.clientY)
   }
 
   const renderTrimPlane = (

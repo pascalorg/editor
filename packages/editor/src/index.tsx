@@ -18,6 +18,13 @@ export {
   useScene,
 } from '@pascal-app/core'
 export { useViewer } from '@pascal-app/viewer'
+export {
+  AgentActivity,
+  type AgentActivityCategory,
+  type AgentActivityProps,
+  type AgentActivityState,
+  type AgentActivityStatus,
+} from './components/agent-activity'
 export type { EditorProps } from './components/editor'
 export { default as Editor } from './components/editor'
 // Headless component aliases: the implementation files keep their
@@ -362,6 +369,7 @@ export {
   nextContinuation,
 } from './lib/continuation'
 export { createEditorApi } from './lib/editor-api'
+export { acquireEditorInteractionLock } from './lib/editor-interaction-lock'
 export {
   clearStructuralElevationGuide,
   collectElevationSnapTargets,

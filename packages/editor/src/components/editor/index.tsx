@@ -37,6 +37,7 @@ import { ViewerZoneSystem } from '../../components/viewer-zone-system'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
 import { useSaveShortcut } from '../../hooks/use-save-shortcut'
+import { acquireEditorInteractionLock } from '../../lib/editor-interaction-lock'
 import {
   createLocalProjectPresentationPersistence,
   type LocalProjectPresentationPersistence,
@@ -79,6 +80,7 @@ import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/set
 import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
+import { FloorplanPreview } from '../viewer/floorplan-preview'
 import { ViewerStage } from '../viewer/viewer-stage'
 import type { ViewerStageMode } from '../viewer/viewer-stage-modes'
 import { CaptureCameraRig } from './capture-camera-rig'
@@ -165,6 +167,9 @@ function initializeEditorRuntime(): () => void {
 export interface EditorProps {
   // Layout version — 'v1' (default) or 'v2' (navbar + two-column)
   layoutVersion?: 'v1' | 'v2'
+
+  /** Blocks local scene edits while the host owns writing; camera navigation stays available. */
+  interactionLocked?: boolean
 
   // UI slots (v1)
   appMenuButton?: ReactNode
@@ -781,7 +786,7 @@ function SnapAwareGrid() {
 // ── Viewer scene content: memoized so <Viewer> doesn't re-render on mode/viewMode changes ──
 
 const ViewerSceneContent = memo(function ViewerSceneContent({
-  isVersionPreviewMode,
+  editingDisabled,
   isLoading,
   isFirstPersonMode,
   isStudioMode,
@@ -789,7 +794,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   viewerSceneSlot,
   presentationsReady,
 }: {
-  isVersionPreviewMode: boolean
+  editingDisabled: boolean
   isLoading: boolean
   isFirstPersonMode: boolean
   isStudioMode: boolean
@@ -803,11 +808,11 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   // selection, editing handles, and the tool manager (which mounts the site
   // boundary flags) so the framed shot stays clean.
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
-  const noEditing = isVersionPreviewMode || isFirstPersonMode || isStudioMode || isCaptureMode
+  const noEditing = editingDisabled || isFirstPersonMode || isStudioMode || isCaptureMode
   return (
     <>
       <SceneEnvironment />
-      {!(isFirstPersonMode || isStudioMode || isCaptureMode) && <SelectionManager />}
+      {!noEditing && <SelectionManager />}
       {!noEditing && <BoxSelectTool />}
       {!noEditing && <NodeArrowHandles />}
       {!noEditing && <GroupRotateHandle />}
@@ -819,11 +824,11 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!noEditing && <FloatingActionMenu />}
       {!noEditing && <GroupFloatingActionMenu />}
       {!noEditing && <FloatingBuildingActionMenu />}
-      {!isFirstPersonMode && <WallMeasurementLabel />}
+      {!(isFirstPersonMode || editingDisabled) && <WallMeasurementLabel />}
       <ExportManager />
-      {isFirstPersonMode ? <ViewerZoneSystem /> : <ZoneSystem />}
+      {isFirstPersonMode || editingDisabled ? <ViewerZoneSystem /> : <ZoneSystem />}
       <CeilingSystem />
-      <CeilingSelectionAffordanceSystem />
+      {!noEditing && <CeilingSelectionAffordanceSystem />}
       {!noEditing && <SelectionAffordanceManager />}
       <RoofEditSystem />
       <StairEditSystem />
@@ -833,7 +838,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {isCaptureMode && <CaptureCameraRig />}
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
-      {!isFirstPersonMode && <SiteEdgeLabels />}
+      {!(isFirstPersonMode || editingDisabled) && <SiteEdgeLabels />}
       <InteractiveSystem />
       {presentationsReady ? <ViewerPresentations /> : null}
       {!noEditing && viewerSceneSlot}
@@ -846,14 +851,14 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
 
 function DeleteCursorLayer({
   containerRef,
-  isVersionPreviewMode,
+  editingDisabled,
 }: {
   containerRef: React.RefObject<HTMLDivElement | null>
-  isVersionPreviewMode: boolean
+  editingDisabled: boolean
 }) {
   const mode = useEditor((s) => s.mode)
   const badgeRef = useRef<HTMLDivElement>(null)
-  const active = mode === 'delete' && !isVersionPreviewMode
+  const active = mode === 'delete' && !editingDisabled
 
   useEffect(() => {
     if (!active) {
@@ -920,10 +925,10 @@ function DeleteCursorLayer({
 
 function PaintCursorLayer({
   containerRef,
-  isVersionPreviewMode,
+  editingDisabled,
 }: {
   containerRef: React.RefObject<HTMLDivElement | null>
-  isVersionPreviewMode: boolean
+  editingDisabled: boolean
 }) {
   const mode = useEditor((s) => s.mode)
   const activePaintMaterial = useEditor((s) => s.activePaintMaterial)
@@ -931,7 +936,7 @@ function PaintCursorLayer({
   const paintHover = useEditor((s) => s.paintHover)
   const sceneMaterials = useScene((s) => s.materials)
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null)
-  const active = mode === 'material-paint' && !isVersionPreviewMode
+  const active = mode === 'material-paint' && !editingDisabled
 
   useEffect(() => {
     if (!active) {
@@ -1010,7 +1015,8 @@ function PaintCursorLayer({
 // This prevents Editor from re-rendering when those values change.
 
 const ViewerCanvas = memo(function ViewerCanvas({
-  isVersionPreviewMode,
+  editingDisabled,
+  interactionLocked,
   isLoading,
   isFirstPersonMode,
   isStudioMode,
@@ -1024,7 +1030,8 @@ const ViewerCanvas = memo(function ViewerCanvas({
   floorplanSceneSlot,
   disablePostFx = false,
 }: {
-  isVersionPreviewMode: boolean
+  editingDisabled: boolean
+  interactionLocked: boolean
   isLoading: boolean
   isFirstPersonMode: boolean
   isStudioMode: boolean
@@ -1039,6 +1046,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   disablePostFx?: boolean
 }) {
   const viewMode = useEditor((s) => s.viewMode)
+  const levelId = useViewer((s) => s.selection.levelId)
   const floorplanPaneRatio = useEditor((s) => s.floorplanPaneRatio)
   const setFloorplanPaneRatio = useEditor((s) => s.setFloorplanPaneRatio)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
@@ -1109,7 +1117,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
           2d / 3d / split alike) can anchor to this container's bottom-left. */}
       <div className="relative flex h-full" ref={setViewerAreaNode}>
         <QuickMeasurementHud />
-        <DeleteConfirmationDialog />
+        {!editingDisabled && <DeleteConfirmationDialog />}
         {/* 2D floorplan — always mounted once shown, hidden via CSS to preserve state */}
         <div
           className="relative h-full flex-shrink-0"
@@ -1119,7 +1127,31 @@ const ViewerCanvas = memo(function ViewerCanvas({
           }}
         >
           <div className="h-full w-full overflow-hidden">
-            <FloorplanPanel compassHost={viewerAreaEl} floorplanSceneSlot={floorplanSceneSlot} />
+            {interactionLocked ? (
+              <FloorplanPreview
+                className="h-full w-full"
+                compassHost={viewerAreaEl}
+                levelId={levelId}
+                navigationVisible={show2d}
+                onLevelChange={(nextLevelId) => {
+                  const nodes = useScene.getState().nodes
+                  const nextLevel = Object.values(nodes).find((node) => node.id === nextLevelId)
+                  if (nextLevel?.type !== 'level') return
+                  const building = Object.values(nodes).find(
+                    (node) => node.id === nextLevel.parentId,
+                  )
+                  useViewer.getState().setSelection({
+                    levelId: nextLevel.id,
+                    ...(building?.type === 'building' ? { buildingId: building.id } : {}),
+                    zoneId: null,
+                    selectedIds: [],
+                  })
+                }}
+                synchronizeNavigation
+              />
+            ) : (
+              <FloorplanPanel compassHost={viewerAreaEl} floorplanSceneSlot={floorplanSceneSlot} />
+            )}
           </div>
           {viewMode === 'split' && (
             <div
@@ -1138,14 +1170,8 @@ const ViewerCanvas = memo(function ViewerCanvas({
           ref={viewer3dRef}
           style={{ display: show3d ? undefined : 'none' }}
         >
-          <DeleteCursorLayer
-            containerRef={viewer3dRef}
-            isVersionPreviewMode={isVersionPreviewMode}
-          />
-          <PaintCursorLayer
-            containerRef={viewer3dRef}
-            isVersionPreviewMode={isVersionPreviewMode}
-          />
+          <DeleteCursorLayer containerRef={viewer3dRef} editingDisabled={editingDisabled} />
+          <PaintCursorLayer containerRef={viewer3dRef} editingDisabled={editingDisabled} />
           {!showLoader && isCameraControlsHintVisible && !isFirstPersonMode ? (
             <ViewerCanvasControlsHint
               isPreviewMode={isPreviewMode}
@@ -1174,7 +1200,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
               isFirstPersonMode={isFirstPersonMode}
               isLoading={showLoader}
               isStudioMode={isStudioMode}
-              isVersionPreviewMode={isVersionPreviewMode}
+              editingDisabled={editingDisabled}
               onThumbnailCapture={onThumbnailCapture}
               presentationsReady={presentationsReady}
               viewerSceneSlot={viewerSceneSlot}
@@ -1182,7 +1208,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
           </Viewer>
         </div>
       </div>
-      {!(showLoader || isVersionPreviewMode) && <ZoneLabelEditorSystem />}
+      {!(showLoader || editingDisabled) && <ZoneLabelEditorSystem />}
     </ErrorBoundary>
   )
 })
@@ -1193,12 +1219,14 @@ function PreviewStage({
   onModeChange,
   showLoader,
   viewerContent,
+  viewerBanner,
 }: {
   isFirstPersonMode: boolean
   mode: ViewerStageMode
   onModeChange: (mode: ViewerStageMode) => void
   showLoader: boolean
   viewerContent: ReactNode
+  viewerBanner?: ReactNode
 }) {
   const hasFloorplan = useScene((state) =>
     Object.values(state.nodes).some((node) => node.type === 'level'),
@@ -1237,6 +1265,9 @@ function PreviewStage({
       >
         {viewerContent}
       </ViewerStage>
+      {viewerBanner && (
+        <div className="pointer-events-none absolute inset-0 z-30">{viewerBanner}</div>
+      )}
     </div>
   )
 }
@@ -1244,6 +1275,7 @@ function PreviewStage({
 function EditorContent({
   guardAgainstSceneWipe,
   layoutVersion = 'v1',
+  interactionLocked = false,
   appMenuButton,
   sidebarTop,
   navbarSlot,
@@ -1274,6 +1306,7 @@ function EditorContent({
   extraSidebarPanels,
   commandPaletteEmptyAction,
 }: EditorProps) {
+  const editingDisabled = isVersionPreviewMode || interactionLocked
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const isStudioMode = useEditor((s) => s.workspaceMode === 'studio')
   const presentationProjectId = projectId ?? null
@@ -1299,7 +1332,15 @@ function EditorContent({
     setRestoredPresentationProjectId(presentationProjectId)
   }, [presentationProjectId])
 
-  useKeyboard({ isVersionPreviewMode, disabled: isFirstPersonMode || isStudioMode })
+  useClientLayoutEffect(() => {
+    if (!interactionLocked) return
+    return acquireEditorInteractionLock()
+  }, [interactionLocked])
+
+  useKeyboard({
+    isVersionPreviewMode: editingDisabled,
+    disabled: isFirstPersonMode || isStudioMode,
+  })
 
   const { isLoadingSceneRef, saveNow } = useAutoSave({
     guardAgainstSceneWipe,
@@ -1537,7 +1578,8 @@ function EditorContent({
       isFirstPersonMode={isFirstPersonMode}
       isLoading={isLoading}
       isStudioMode={isStudioMode}
-      isVersionPreviewMode={isVersionPreviewMode}
+      editingDisabled={editingDisabled}
+      interactionLocked={interactionLocked}
       onSceneReadyChange={handleSceneReadyChange}
       onThumbnailCapture={onThumbnailCapture}
       presentationsReady={presentationsReady}
@@ -1562,6 +1604,9 @@ function EditorContent({
     }
 
     const renderTabContent = (tabId: string) => {
+      if (interactionLocked) {
+        return <p className="p-4 text-muted-foreground text-sm">Editing is temporarily locked.</p>
+      }
       // Built-in panels
       if (tabId === 'site') {
         return <SitePanel {...sitePanelProps} />
@@ -1616,6 +1661,7 @@ function EditorContent({
             onModeChange={setPreviewStageMode}
             showLoader={visibleLoader}
             viewerContent={previewViewerContent}
+            viewerBanner={viewerBanner}
           />
         ) : (
           <>
@@ -1623,13 +1669,13 @@ function EditorContent({
               navbarSlot={navbarSlot}
               overlays={
                 <>
-                  {!(isCaptureMode || stageOverlay) && <FloatingLevelSelector />}
-                  {!(isVersionPreviewMode || isCaptureMode || isStudioMode) && (
+                  {!(editingDisabled || isCaptureMode || stageOverlay) && <FloatingLevelSelector />}
+                  {!(editingDisabled || isCaptureMode || isStudioMode) && (
                     <div className="pointer-events-auto">
                       <ActionMenu />
                     </div>
                   )}
-                  {!(isVersionPreviewMode || isCaptureMode || isStudioMode) && (
+                  {!(editingDisabled || isCaptureMode || isStudioMode) && (
                     <div className="pointer-events-auto">
                       <PanelManager
                         inspectorFooter={inspectorFooter}
@@ -1637,7 +1683,7 @@ function EditorContent({
                       />
                     </div>
                   )}
-                  {!isCaptureMode && (
+                  {!(editingDisabled || isCaptureMode) && (
                     <div className="pointer-events-auto">
                       <HelperManager />
                     </div>
@@ -1662,8 +1708,12 @@ function EditorContent({
               viewerToolbarLeft={viewerToolbarLeft}
               viewerToolbarRight={viewerToolbarRight}
             />
-            <EditorCommands />
-            <CommandPalette emptyAction={commandPaletteEmptyAction} />
+            {!editingDisabled && (
+              <>
+                <EditorCommands />
+                <CommandPalette emptyAction={commandPaletteEmptyAction} />
+              </>
+            )}
           </>
         )}
       </>
@@ -1696,19 +1746,28 @@ function EditorContent({
           onModeChange={setPreviewStageMode}
           showLoader={visibleLoader}
           viewerContent={previewViewerContent}
+          viewerBanner={viewerBanner}
         />
       ) : (
         <>
           {/* Sidebar */}
           <SidebarSlot>
-            <AppSidebar
-              appMenuButton={appMenuButton}
-              commandPaletteEmptyAction={commandPaletteEmptyAction}
-              extraPanels={extraSidebarPanels}
-              settingsPanelProps={settingsPanelProps}
-              sidebarTop={sidebarTop}
-              sitePanelProps={sitePanelProps}
-            />
+            {interactionLocked ? (
+              <div className="h-full bg-sidebar p-4 text-muted-foreground text-sm">
+                {appMenuButton}
+                {sidebarTop}
+                <p>Editing is temporarily locked.</p>
+              </div>
+            ) : (
+              <AppSidebar
+                appMenuButton={appMenuButton}
+                commandPaletteEmptyAction={commandPaletteEmptyAction}
+                extraPanels={extraSidebarPanels}
+                settingsPanelProps={settingsPanelProps}
+                sidebarTop={sidebarTop}
+                sitePanelProps={sitePanelProps}
+              />
+            )}
           </SidebarSlot>
 
           {/* Viewer area */}
@@ -1716,16 +1775,21 @@ function EditorContent({
 
           {/* Fixed UI overlays scoped to the viewer area */}
           <ViewerOverlays left={overlayLeft}>
-            <div className="pointer-events-auto">
-              <ActionMenu />
-            </div>
-            <div className="pointer-events-auto">
-              <PanelManager />
-            </div>
-            <div className="pointer-events-auto">
-              <HelperManager />
-            </div>
-            <RiserDiagramPanel />
+            {!editingDisabled && (
+              <>
+                <div className="pointer-events-auto">
+                  <ActionMenu />
+                </div>
+                <div className="pointer-events-auto">
+                  <PanelManager />
+                </div>
+                <div className="pointer-events-auto">
+                  <HelperManager />
+                </div>
+                <RiserDiagramPanel />
+              </>
+            )}
+            {viewerBanner}
             {isFirstPersonMode && (
               <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
             )}

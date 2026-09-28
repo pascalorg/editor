@@ -40,6 +40,12 @@ const nextConfig: NextConfig = {
     '@pascal-app/plugin-environment',
     '@dgreenheck/ez-tree',
   ],
+  webpack(config) {
+    if (process.env.PASCAL_DEV_DIAGNOSTICS !== '1') {
+      config.resolve.alias['react-scan'] = false
+    }
+    return config
+  },
   turbopack: {
     resolveAlias: {
       react: './node_modules/react',

@@ -1,13 +1,14 @@
 import {
   type AnyNodeId,
   type AssetInput,
+  emitter,
   ItemNode,
   resolveSupportSlabPatch,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
 import { beginPerfAction, commitPerfAction, useViewer } from '@pascal-app/viewer'
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { Vector3 } from 'three'
 import {
   surfaceAttachmentId,
@@ -388,6 +389,13 @@ export function useDraftNode(): DraftNodeHandle {
       surfaceId,
     )
   }, [])
+
+  useEffect(() => {
+    // Ownership can change before React unmounts the placement coordinator.
+    // Restore or remove its draft while committed writes are still allowed.
+    emitter.on('tool:cancel', destroy)
+    return () => emitter.off('tool:cancel', destroy)
+  }, [destroy])
 
   return useMemo(
     () => ({
