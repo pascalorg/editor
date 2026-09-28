@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
 import {
   type AnyNode,
   type BatchableConfig,
+  BlockNode,
   itemClipRegistry,
   nodeRegistry,
   sceneRegistry,
@@ -29,6 +30,7 @@ import { commitPaintScopeFanout } from '../../../../editor/src/lib/paint-scope'
 import { applyShadowOnly, clearShadowOnly } from '../../../../viewer/src/lib/shadow-only'
 import { isWallInitialBuildActive } from '../../../../viewer/src/systems/wall/wall-system'
 import { blockDefinition } from '../../block/definition'
+import { buildBlockGeometry } from '../../block/geometry'
 import { getCeilingMaterials } from '../../ceiling/materials'
 import { ceilingPaint } from '../../ceiling/paint'
 import { importedMeshDefinition } from '../../imported-mesh/definition'
@@ -837,4 +839,29 @@ test.each([
   // A multi-slot block draws with a material array and keeps its own draw.
   meshes[1]!.material = [material, material]
   expect(collectBatchCandidate(`${kind}_1`)).toBeNull()
+})
+
+test('a built single-slot block joins the batch; a painted multi-slot block keeps its own draw', () => {
+  registerBatchable({ block: blockDefinition.capabilities.batchable! })
+  const { root, meshes } = setup('block', 2)
+  const plain = BlockNode.parse({ id: 'block_0', name: 'Plain' })
+  const painted = BlockNode.parse({
+    id: 'block_1',
+    name: 'Painted',
+    topology: {
+      ...plain.topology,
+      faces: plain.topology.faces.map((face, index) =>
+        index === 0 ? { ...face, materialSlot: 'accent' } : face,
+      ),
+    },
+    slotNames: { body: 'Body', accent: 'Accent' },
+  })
+  for (const [index, node] of [plain, painted].entries()) {
+    const group = buildBlockGeometry(node)
+    root.remove(meshes[index]!)
+    root.add(group)
+    sceneRegistry.nodes.set(node.id, group)
+  }
+  expect(candidate('block_0').entries).toHaveLength(1)
+  expect(collectBatchCandidate('block_1')).toBeNull()
 })
