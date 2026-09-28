@@ -306,6 +306,14 @@ function guardTree(value: unknown, depth = 0, budget = { count: 0 }) {
   }
 }
 function findV2Feature(recipe: Recipe): string | null {
+  if (
+    recipe.parts.some((part) =>
+      part.shapes.some((shape) =>
+        [shape.segments, shape.open, shape.inner, shape.arc].some((v) => v !== undefined),
+      ),
+    )
+  )
+    return 'Cylinder segments, open, inner and arc'
   if (recipe.parameters.some((p) => p.unit === 'bool' || p.unit === 'choice' || p.options))
     return 'Bool and choice parameters'
   if (
@@ -387,7 +395,6 @@ export function parseRecipe(input: unknown): Recipe {
         throw new Error(`topScale is only allowed on cylinders (${part.id}/${shape.id})`)
       const cylinderOptions = [shape.segments, shape.open, shape.inner, shape.arc]
       if (cylinderOptions.some((option) => option !== undefined)) {
-        requireVersion2(recipe, 'Cylinder segments, open, inner and arc')
         if (shape.primitive !== 'cylinder')
           throw new Error(
             `segments, open, inner and arc apply to cylinders (${part.id}/${shape.id})`,
