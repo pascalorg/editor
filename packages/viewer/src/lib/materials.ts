@@ -634,11 +634,29 @@ export function resolveMaterialRef(
  * procedural kinds whose colored-mode unpainted appearance comes from a
  * declarative default (slab, wall).
  */
+let slotDefaultOverrides: Readonly<Record<string, string>> | null = null
+
+/**
+ * Swaps declared slot DEFAULTS (never painted refs) for another finish, e.g.
+ * the worker thumbnail renders unpainted walls as plaster instead of the
+ * prepared-drywall default. Must be set before the scene builds its
+ * materials; `null` restores the declared defaults.
+ */
+export function setSlotDefaultOverrides(overrides: Readonly<Record<string, string>> | null) {
+  slotDefaultOverrides = overrides
+}
+
+/** A declared slot default after `setSlotDefaultOverrides`. */
+export function resolveSlotDefaultRef(slotDefault: string): string {
+  return slotDefaultOverrides?.[slotDefault] ?? slotDefault
+}
+
 export function resolveSlotDefaultMaterial(
   slotDefault: string,
   shading: RenderShading = 'rendered',
   roughness = 0.9,
 ): THREE.Material {
+  slotDefault = resolveSlotDefaultRef(slotDefault)
   if (parseMaterialRef(slotDefault)?.kind === 'library') {
     return (
       createMaterialFromPresetRef(slotDefault, shading) ??
