@@ -94,6 +94,8 @@ export function ReferencePanel() {
 
       try {
         const assetUrl = await saveAsset(file)
+        // Previous local File cleanup is scheduled by core updateNodes after
+        // the url change commits — never before updateNode (#733 review).
         updateNode(
           selectedReferenceId as AnyNode['id'],
           {
@@ -112,7 +114,7 @@ export function ReferencePanel() {
         setIsReplacing(false)
       }
     },
-    [node?.type, selectedReferenceId, setGuideScaleReferenceVisible, updateNode],
+    [node?.type, node?.url, selectedReferenceId, setGuideScaleReferenceVisible, updateNode],
   )
 
   const handleDeleteGuide = useCallback(() => {
@@ -120,11 +122,12 @@ export function ReferencePanel() {
       return
     }
 
+    // Local asset:// cleanup runs in core deleteNodes (#733).
     deleteNode(selectedReferenceId as AnyNode['id'])
     guideEmitter.emit('guide:deleted', { guideId: selectedReferenceId as GuideNode['id'] })
     clearGuideUi(selectedReferenceId)
     setSelectedReferenceId(null)
-  }, [clearGuideUi, deleteNode, node?.type, selectedReferenceId, setSelectedReferenceId])
+  }, [clearGuideUi, deleteNode, node?.type, node?.url, selectedReferenceId, setSelectedReferenceId])
 
   const handleStartScale = useCallback(() => {
     if (node?.type !== 'guide') {
