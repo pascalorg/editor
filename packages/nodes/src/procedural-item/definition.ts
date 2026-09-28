@@ -1,12 +1,14 @@
 import type { AnyNode, FloorplanGeometry, HandleDescriptor, NodeDefinition } from '@pascal-app/core'
-import { type AnyNodeId, useInteractive, useScene } from '@pascal-app/core'
+import { type AnyNodeId, getEffectiveNode, useInteractive, useScene } from '@pascal-app/core'
 import {
   boundsOf,
   boxCorners,
   evaluateRecipe,
   frame,
+  operableParts,
   ProceduralItemNode,
   parameterPatch,
+  proceduralCeilingHole,
   proceduralFootprint,
   proceduralSlotColor,
   queryProceduralItem,
@@ -17,6 +19,7 @@ import {
   transformPoint,
   validateProceduralRelations,
 } from '@pascal-app/core/procedural-items'
+import { usePlacementPreview } from '@pascal-app/editor'
 import { decorateProceduralEmission } from '@pascal-app/viewer'
 import { itemPaint } from '../item/paint'
 import {
@@ -145,6 +148,18 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
       align: 'face',
     },
     hostRefFields: ['wallId', 'side', 'supportSlabId'],
+    // A v2 ceiling design with `cuts` opens its host ceiling (CeilingSystem dispatch).
+    ceilingCut: {
+      // Follows the live gesture (R2): a move preview cuts where it sits; handle and slider
+      // overrides cut at their live values; a hidden design (the move's source) cuts nothing.
+      buildCeilingHole: (n) => {
+        const preview = usePlacementPreview.getState().node
+        if (preview?.id === n.id && preview.type === 'procedural-item')
+          return preview.parentId === n.parentId ? proceduralCeilingHole(preview) : null
+        const node = getEffectiveNode(n as unknown as ProceduralItemNode)
+        return node.visible === false ? null : proceduralCeilingHole(node)
+      },
+    },
     floorPlaced: {
       footprint: (n) => proceduralFootprint(n as unknown as ProceduralItemNode),
       applies: (n) => !(n as unknown as ProceduralItemNode).recipe.mounting,
@@ -203,10 +218,10 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
   floorplanAffectedIds: restingFloorplanAffectedIds,
   keyboardActions: {
     e: {
-      appliesTo: (n) =>
-        (n as unknown as ProceduralItemNode).recipe.parts.some((part) =>
-          Boolean(part.motion || part.light),
-        ),
+      appliesTo: (n) => {
+        const recipe = (n as unknown as ProceduralItemNode).recipe
+        return operableParts(recipe).length > 0 || recipe.parts.some((part) => part.light)
+      },
       run: (n) => (itemHasMechanisms(n) ? toggleItemMechanisms(n) : toggleItemLights(n)),
     },
     r: {

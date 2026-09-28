@@ -1,4 +1,5 @@
 import { type AnyNode, type Interactive, useInteractive } from '@pascal-app/core'
+import { operableParts } from '@pascal-app/core/procedural-items'
 
 type InteractiveState = ReturnType<typeof useInteractive.getState>
 
@@ -18,9 +19,7 @@ function catalogToggles(interactive: Interactive) {
 }
 
 function motionPartIds(node: AnyNode) {
-  return node.type === 'procedural-item'
-    ? node.recipe.parts.filter((part) => part.motion).map((part) => part.id)
-    : []
+  return node.type === 'procedural-item' ? operableParts(node.recipe).map((part) => part.id) : []
 }
 
 export function itemHasMechanisms(node: AnyNode | undefined): boolean {

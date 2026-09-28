@@ -9,10 +9,14 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  type EvaluatedMotion,
+  motionAxis,
+  motionRestOffset,
   type ProceduralItemNode,
   ProceduralMotionController,
   proceduralLocalPose,
 } from '@pascal-app/core/procedural-items'
+import { usePlacementPreview } from '@pascal-app/editor'
 import {
   cloneWithProceduralEmission,
   createSurfaceRoleMaterial,
@@ -27,14 +31,27 @@ import {
   useViewer,
 } from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { type Group, Mesh, Vector3 } from 'three'
 import { canRegisterItemLight } from '../shared/item-light-placement'
 import { releaseFromBatch } from '../shared/node-batch/release'
 import { setProceduralMotionPlaying } from './animation'
 import { acquireProceduralGeometry, type BuiltItem, geometrySignature } from './geometry'
+
+const axis = new Vector3()
+const noRaycast = () => {}
+// Hidden mesh sets are skipped by raycasts too (three raycasts invisible objects).
+function setDrawn(container: Group, drawn: boolean) {
+  container.visible = drawn
+  container.traverse((child) => {
+    if (child instanceof Mesh) child.raycast = drawn ? Mesh.prototype.raycast : noRaycast
+  })
+}
 export default function ProceduralRenderer({ node }: { node: ProceduralItemNode }) {
   const ref = useRef<Group>(null!)
+  // Part-tree designs draw their merged rest pose while idle and their joint groups while moving.
+  const restRef = useRef<Group>(null)
+  const splitRef = useRef<Group>(null)
   const controller = useRef<ProceduralMotionController | null>(null)
   const lastCommand = useRef(0)
   const awake = useRef(false)
@@ -80,21 +97,65 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
     },
     [node.id],
   )
+  // A recessed design's host ceiling re-cuts whenever its cut can move, live values included.
+  const cutKey = effective.recipe.cuts
+    ? JSON.stringify([
+        node.parentId,
+        effective.position,
+        effective.rotation,
+        effective.parameters,
+        effective.visible,
+        effective.recipe.cuts,
+        effective.recipe.surfaces,
+        effective.recipe.mounting?.reference,
+      ])
+    : ''
+  useEffect(() => {
+    const parentId = node.parentId as AnyNodeId | null
+    if (!(cutKey && parentId)) return
+    const recut = () => {
+      if (useScene.getState().nodes[parentId]) useScene.getState().markDirty(parentId)
+    }
+    recut()
+    // A move preview of this design re-cuts its ceiling on every step.
+    const unsubscribe = usePlacementPreview.subscribe((state, previous) => {
+      if (state.node?.id === node.id || previous.node?.id === node.id) recut()
+    })
+    return () => {
+      unsubscribe()
+      recut()
+    }
+  }, [cutKey, node.parentId, node.id])
   useLayoutEffect(() => {
-    controller.current = built ? new ProceduralMotionController(built.evaluation.motions) : null
+    // Continuous joints start running, as in the baked viewer; flat spins keep #930's default.
+    const running = new Set(
+      (node.recipe.joints ?? [])
+        .filter((joint) => joint.kind === 'continuous')
+        .map((joint) => joint.child),
+    )
+    controller.current = built
+      ? new ProceduralMotionController(
+          built.evaluation.motions,
+          Object.fromEntries([...running].map((partId) => [partId, true])),
+        )
+      : null
     lastCommand.current = 0
     if (built)
       useInteractive
         .getState()
-        .initProcedural(node.id, [
-          ...new Set(built.evaluation.motions.map((motion) => motion.partId)),
-        ])
+        .initProcedural(
+          node.id,
+          [...new Set(built.evaluation.motions.map((motion) => motion.partId))],
+          [...running],
+        )
     for (const motion of built?.evaluation.motions ?? []) {
       const group = ref.current?.getObjectByName(`${node.id}__motion__${motion.id}`)
       if (!group) continue
-      group.position.set(...motion.pivot)
+      group.position.set(...motionRestOffset(motion, built!.evaluation.motions))
       group.quaternion.identity()
     }
+    if (restRef.current) setDrawn(restRef.current, true)
+    if (splitRef.current) setDrawn(splitRef.current, false)
     if (built?.evaluation.motions.length) {
       awake.current = true
       invalidate()
@@ -121,14 +182,26 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
     for (const motion of built.evaluation.motions) {
       const group = ref.current.getObjectByName(`${node.id}__motion__${motion.id}`)
       if (!group) continue
-      if (motion.kind === 'spin') {
-        group.rotation[motion.axis] = frame.spins[motion.id]?.phase ?? 0
-      } else {
-        const fraction = frame.fractions[motion.id] ?? 0
-        if (motion.kind === 'hinge') group.rotation[motion.axis] = motion.amount * fraction
-        else
-          group.position[motion.axis] =
-            motion.pivot[{ x: 0, y: 1, z: 2 }[motion.axis]]! + motion.amount * fraction
+      const angle =
+        motion.kind === 'spin'
+          ? (frame.spins[motion.id]?.phase ?? 0)
+          : motion.amount * (frame.fractions[motion.id] ?? 0)
+      if (motion.kind === 'slide')
+        group.position
+          .set(...motionRestOffset(motion, built.evaluation.motions))
+          .addScaledVector(axis.set(...motionAxis(motion)), angle)
+      else if (motion.direction)
+        group.quaternion.setFromAxisAngle(axis.set(...motion.direction), angle)
+      else group.rotation[motion.axis] = angle
+    }
+    if (restRef.current && splitRef.current) {
+      const moving =
+        frame.pending ||
+        Object.values(frame.fractions).some((fraction) => fraction > 0) ||
+        Object.values(frame.spins).some((spin) => spin.speed > 0)
+      if (restRef.current.visible === moving) {
+        setDrawn(restRef.current, !moving)
+        setDrawn(splitRef.current, moving)
       }
     }
     // A playing motion draws its own meshes; it rejoins the node batch at the settled pose.
@@ -221,17 +294,53 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
     },
     [materials],
   )
-  const meshes = useMemo(
-    () =>
-      built?.batches.map((batch) => {
-        const mesh = new Mesh(batch.motionGeometry ?? batch.geometry, materials.get(batch.slot))
-        mesh.name = `slot_${batch.slot}`
-        mesh.userData = { slotId: batch.slot, proceduralRanges: batch.ranges }
-        mesh.castShadow = true
-        mesh.receiveShadow = true
-        return { mesh, motionGroup: batch.motionGroup }
-      }) ?? [],
-    [built, materials],
+  const meshes = useMemo(() => {
+    const make = (batch: NonNullable<BuiltItem['rest']>[number], geometry = batch.geometry) => {
+      const mesh = new Mesh(geometry, materials.get(batch.slot))
+      mesh.name = `slot_${batch.slot}`
+      mesh.userData = { slotId: batch.slot, proceduralRanges: batch.ranges }
+      mesh.castShadow = true
+      mesh.receiveShadow = true
+      return { mesh, motionGroup: batch.motionGroup }
+    }
+    return {
+      split:
+        built?.batches.map((batch) => make(batch, batch.motionGeometry ?? batch.geometry)) ?? [],
+      rest: built?.rest?.map((batch) => make(batch)) ?? [],
+    }
+  }, [built, materials])
+  const motions = built?.evaluation.motions ?? []
+  const motionGroup = (motion: EvaluatedMotion): ReactNode => (
+    <group
+      key={motion.id}
+      name={`${node.id}__motion__${motion.id}`}
+      position={motionRestOffset(motion, motions)}
+      userData={{
+        proceduralMotion: {
+          nodeId: node.id,
+          partId: motion.partId,
+          groupId: motion.id,
+          kind: motion.kind,
+        },
+      }}
+    >
+      {meshes.split
+        .filter((entry) => entry.motionGroup === motion.id)
+        .map(({ mesh }) => (
+          <primitive key={mesh.uuid} object={mesh} dispose={null} />
+        ))}
+      {motions.filter((child) => child.parent === motion.id).map(motionGroup)}
+    </group>
+  )
+  const split = (
+    <>
+      {meshes.split
+        .filter((entry) => !entry.motionGroup)
+        .map(({ mesh }) => (
+          <primitive key={mesh.uuid} object={mesh} dispose={null} />
+        ))}
+      {motions.filter((motion) => !motion.parent).map(motionGroup)}
+    </>
   )
   const rotation =
     live?.rotation === undefined
@@ -246,32 +355,20 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
       visible={effective.visible}
       {...handlers}
     >
-      {meshes
-        .filter((entry) => !entry.motionGroup)
-        .map(({ mesh }) => (
-          <primitive key={mesh.uuid} object={mesh} dispose={null} />
-        ))}
-      {built?.evaluation.motions.map((motion) => (
-        <group
-          key={motion.id}
-          name={`${node.id}__motion__${motion.id}`}
-          position={motion.pivot}
-          userData={{
-            proceduralMotion: {
-              nodeId: node.id,
-              partId: motion.partId,
-              groupId: motion.id,
-              kind: motion.kind,
-            },
-          }}
-        >
-          {meshes
-            .filter((entry) => entry.motionGroup === motion.id)
-            .map(({ mesh }) => (
+      {meshes.rest.length ? (
+        <>
+          <group ref={restRef} userData={{ pascalProceduralRest: true }}>
+            {meshes.rest.map(({ mesh }) => (
               <primitive key={mesh.uuid} object={mesh} dispose={null} />
             ))}
-        </group>
-      ))}
+          </group>
+          <group ref={splitRef} userData={{ pascalProceduralSplit: true }} visible={false}>
+            {split}
+          </group>
+        </>
+      ) : (
+        split
+      )}
       {effective.children.map((id) => {
         const surface = built?.evaluation.surfaces.find((s) => s.id === effective.attachments[id])
         return (
