@@ -927,7 +927,7 @@ export function evaluateRecipe(
   const placements = recipe.version === 2 && usesPartTree(recipe) ? placeParts(recipe, expr) : null
   const jointGroups = new Set<string>()
   // Part repeats that built geometry; only these carry the part's named surfaces.
-  const built = new Set<string>()
+  const builtRepeats = new Set<string>()
   for (const part of recipe.parts) {
     inTime()
     const count = expr(part.count)
@@ -941,7 +941,7 @@ export function evaluateRecipe(
       if (!kept.length) continue
       const placement = placements?.get(`${part.id}:${i}`)
       if (placements && !placement) continue
-      built.add(`${part.id}:${i}`)
+      builtRepeats.add(`${part.id}:${i}`)
       // A part-tree pose re-expresses the part's frame in design space.
       const pose = placement?.pose ?? IDENTITY_POSE
       const place = (position: Vec3, rotation: Vec3) => {
@@ -1195,7 +1195,7 @@ export function evaluateRecipe(
     const part = recipe.parts.find((p) => p.id === surface.part)
     const count = part ? expr(part.count) : 1
     for (let i = 0; i < count; i++) {
-      if (part && !built.has(`${part.id}:${i}`)) continue
+      if (part && !builtRepeats.has(`${part.id}:${i}`)) continue
       if (surfaces.length >= 256) throw new Error('Surface budget exceeded')
       const rotation = (surface.rotation ?? [0, 0, 0]).map((e) => expr(e, i)) as Vec3
       const size = surface.size.map((e) => expr(e, i)) as [number, number]
