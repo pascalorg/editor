@@ -315,9 +315,12 @@ function schemaDiagnostics(error: z.ZodError, raw: unknown): DesignDiagnostic[] 
     const got = (JSON.stringify(value) ?? 'nothing').slice(0, 80)
     let message = issue.message
     if (issue.code === 'invalid_format' && issue.format === 'regex')
-      message = issue.path.some((key) => typeof key === 'string' && EXPRESSION_KEYS.has(key))
-        ? 'expressions are a number, a parameter id, "index" or {op, args}; arithmetic strings are not supported'
-        : 'IDs and references are lowercase snake_case matching ^[a-z][a-z0-9_]{0,47}$'
+      message =
+        issue.path.at(-1) === 'color'
+          ? 'colors are 6-digit hex strings like "#a47148"'
+          : issue.path.some((key) => typeof key === 'string' && EXPRESSION_KEYS.has(key))
+            ? 'expressions are a number, a parameter id, "index" or {op, args}; arithmetic strings are not supported'
+            : 'IDs and references are lowercase snake_case matching ^[a-z][a-z0-9_]{0,47}$'
     return {
       severity: 'error',
       code: 'schema',

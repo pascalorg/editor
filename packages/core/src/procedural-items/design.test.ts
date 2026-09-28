@@ -135,6 +135,19 @@ describe('validateDesign diagnostics', () => {
     expect(byPath.parts).toContain('<=16')
   })
 
+  test('a bad slot or light color is reported as a color, not an id', () => {
+    const design = louver()
+    design.slots[0].color = 'white'
+    const result = validateDesign(design)
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'schema',
+        path: 'slots[0].color',
+        message: expect.stringContaining('6-digit hex'),
+      }),
+    ])
+  })
+
   test('rules JSON Schema cannot express come back as rule errors', () => {
     const design = louver()
     const slats = design.parts[2]
