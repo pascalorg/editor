@@ -33,6 +33,7 @@ const TOOL_POLICIES = [
       'list_units',
       'measure',
       'search_assets',
+      'validate_design',
       'validate_scene',
       'verify_scene',
     ],

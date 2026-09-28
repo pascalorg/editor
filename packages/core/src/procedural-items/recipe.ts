@@ -60,6 +60,7 @@ const expressionV2: z.ZodType<ExprV2> = z.lazy(() =>
 )
 // The schema reads v2 expressions; the public Recipe type keeps the v1 Expr (R1).
 const expression = expressionV2 as unknown as z.ZodType<Expr>
+export const ExpressionSchema = expression
 const vector = z.tuple([expression, expression, expression])
 const sectionRing = z
   .array(z.tuple([expression, expression]))
@@ -582,7 +583,10 @@ function shapeCorners(size: Vec3, position: Vec3, rotation: Vec3): Vec3[] {
   return boxCorners(localMin, localMax).map((point) => transformPoint(shapeFrame, point))
 }
 
-function shapeBounds(shape: Pick<EvaluatedShape, 'primitive' | 'size' | 'position' | 'rotation'>) {
+/** Axis-aligned bounds of one evaluated shape in the design frame. */
+export function shapeBounds(
+  shape: Pick<EvaluatedShape, 'primitive' | 'size' | 'position' | 'rotation'>,
+) {
   if (shape.primitive !== 'ellipsoid')
     return boundsOf(shapeCorners(shape.size, shape.position, shape.rotation))
   const axes = [0, 1, 2].map((axis) =>
@@ -706,6 +710,19 @@ export function shapeTriangles(
       return 2 * n * (profile.length - 1) * (revolveIsClosed(shape) ? 1 : 2)
     }
   }
+}
+/**
+ * Triangles a shape charges against the recipe budget: v1 keeps its original, conservative
+ * charges so its acceptance never changes; v2 charges what the renderer builds.
+ */
+export function triangleCharge(
+  recipe: Pick<Recipe, 'version'>,
+  shape: Parameters<typeof shapeTriangles>[0],
+  built = shapeTriangles(shape),
+): number {
+  return recipe.version === 1
+    ? LEGACY_TRIANGLE_CHARGE[shape.primitive as keyof typeof LEGACY_TRIANGLE_CHARGE]
+    : built
 }
 function resolveSection(
   section: RecipeSection,
@@ -1118,31 +1135,14 @@ export function evaluateRecipe(
         })
         const built = shapeTriangles(shapes.at(-1)!)
         triangles += built
-        // v1 keeps its original, conservative charges so its acceptance never changes.
-        charged +=
-          recipe.version === 1
-            ? LEGACY_TRIANGLE_CHARGE[s.primitive as keyof typeof LEGACY_TRIANGLE_CHARGE]
-            : built
+        charged += triangleCharge(recipe, shapes.at(-1)!, built)
         if (charged > RECIPE_LIMITS.triangles) throw new Error('Triangle budget exceeded')
-        if (s.primitive === 'ellipsoid') {
-          const axes = [0, 1, 2].map((axis) =>
-            rotateVector([0, 1, 2].map((j) => (j === axis ? 1 : 0)) as Vec3, rotation),
-          )
-          for (let k = 0; k < 3; k++) {
-            const extent = Math.hypot(...axes.map((axis, j) => (axis[k]! * size[j]!) / 2))
-            min[k] = Math.min(min[k]!, position[k]! - extent)
-            max[k] = Math.max(max[k]!, position[k]! + extent)
-            instanceMin[k] = Math.min(instanceMin[k]!, position[k]! - extent)
-            instanceMax[k] = Math.max(instanceMax[k]!, position[k]! + extent)
-          }
-        } else {
-          for (const point of shapeCorners(size, position, rotation))
-            for (let k = 0; k < 3; k++) {
-              min[k] = Math.min(min[k]!, point[k]!)
-              max[k] = Math.max(max[k]!, point[k]!)
-              instanceMin[k] = Math.min(instanceMin[k]!, point[k]!)
-              instanceMax[k] = Math.max(instanceMax[k]!, point[k]!)
-            }
+        const bounds = shapeBounds({ primitive: s.primitive, size, position, rotation })
+        for (let k = 0; k < 3; k++) {
+          min[k] = Math.min(min[k]!, bounds.min[k]!)
+          max[k] = Math.max(max[k]!, bounds.max[k]!)
+          instanceMin[k] = Math.min(instanceMin[k]!, bounds.min[k]!)
+          instanceMax[k] = Math.max(instanceMax[k]!, bounds.max[k]!)
         }
         if (s.support) {
           if (surfaces.length >= 256) throw new Error('Surface budget exceeded')

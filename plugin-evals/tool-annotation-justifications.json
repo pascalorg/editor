@@ -618,6 +618,19 @@
       }
     },
     {
+      "name": "validate_design",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It validates and measures a design supplied in the call without reading or changing the connected Pascal scene.",
+        "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
+        "openWorldHint": "It operates only on the design supplied in the call and does not access the public internet."
+      }
+    },
+    {
       "name": "validate_scene",
       "annotations": {
         "readOnlyHint": true,
