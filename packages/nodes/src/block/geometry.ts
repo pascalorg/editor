@@ -1,4 +1,10 @@
-import type { BlockFace, BlockNode, BlockTopology, GeometryContext } from '@pascal-app/core'
+import {
+  type BlockFace,
+  type BlockNode,
+  type BlockTopology,
+  type GeometryContext,
+  getBlockFaceNormal,
+} from '@pascal-app/core'
 import {
   type ColorPreset,
   createSurfaceRoleMaterial,
@@ -15,7 +21,6 @@ import {
   Vector2,
   Vector3,
 } from 'three'
-import { blockFaceNormal } from './commands'
 import { BLOCK_BODY_SLOT_ID, blockMaterialSlotIds } from './material-slots'
 
 type Point = [number, number, number]
@@ -33,12 +38,14 @@ function projectedPoint(point: Point, normal: Point): Vector2 {
 export function triangulateBlockFace(
   topology: BlockTopology,
   face: BlockFace,
+  vertexById: Map<string, Point> = new Map(
+    topology.vertices.map((vertex) => [vertex.id, vertex.position]),
+  ),
 ): { triangles: [Point, Point, Point][]; normal: Point } | null {
-  const vertexById = new Map(topology.vertices.map((vertex) => [vertex.id, vertex.position]))
   const contour = face.vertexIds
     .map((id) => vertexById.get(id))
     .filter((point): point is Point => !!point)
-  const normal = blockFaceNormal(topology, face)
+  const normal = getBlockFaceNormal(topology, face, vertexById)
   if (!normal || contour.length !== face.vertexIds.length) return null
 
   const triangleIndices = ShapeUtils.triangulateShape(
@@ -81,10 +88,13 @@ export function buildBlockGeometry(
   const uvs: number[] = []
   const faceRanges: { faceId: string; start: number; count: number }[] = []
   const slotIds = blockMaterialSlotIds(node.topology, node.slots, node.slotNames)
-  const materialIndexBySlotId = new Map(slotIds.map((slotId, index) => [slotId, index]))
+  // One id map for the whole build: a per-face map made every rebuild O(faces × vertices).
+  const vertexById = new Map(
+    node.topology.vertices.map((vertex) => [vertex.id, vertex.position] as const),
+  )
   const faceNormals = new Map(
     node.topology.faces.flatMap((face) => {
-      const normal = blockFaceNormal(node.topology, face)
+      const normal = getBlockFaceNormal(node.topology, face, vertexById)
       return normal ? [[face.id, normal] as const] : []
     }),
   )
@@ -119,26 +129,35 @@ export function buildBlockGeometry(
     node.topology.vertices.map((vertex) => [vertex.position, vertex.id] as const),
   )
 
+  // Faces are laid out slot by slot so each material slot is one draw group; the
+  // per-face ranges stay contiguous for picking and paint.
+  const facesBySlot = new Map(slotIds.map((slotId) => [slotId, [] as BlockFace[]]))
   for (const face of node.topology.faces) {
-    const triangulated = triangulateBlockFace(node.topology, face)
-    if (!triangulated) continue
-    const start = positions.length / 3
-    for (const triangle of triangulated.triangles) {
-      for (const point of triangle) {
-        positions.push(...point)
-        const vertexId = vertexIdByPosition.get(point)
-        normals.push(
-          ...(vertexId
-            ? (cornerNormals.get(`${face.id}\u0000${vertexId}`) ?? triangulated.normal)
-            : triangulated.normal),
-        )
-        const uv = projectedPoint(point, triangulated.normal)
-        uvs.push(uv.x, uv.y)
+    ;(facesBySlot.get(face.materialSlot) ?? facesBySlot.get(slotIds[0]!))?.push(face)
+  }
+  for (const [materialIndex, slotId] of slotIds.entries()) {
+    const slotStart = positions.length / 3
+    for (const face of facesBySlot.get(slotId) ?? []) {
+      const triangulated = triangulateBlockFace(node.topology, face, vertexById)
+      if (!triangulated) continue
+      const start = positions.length / 3
+      for (const triangle of triangulated.triangles) {
+        for (const point of triangle) {
+          positions.push(...point)
+          const vertexId = vertexIdByPosition.get(point)
+          normals.push(
+            ...(vertexId
+              ? (cornerNormals.get(`${face.id}\u0000${vertexId}`) ?? triangulated.normal)
+              : triangulated.normal),
+          )
+          const uv = projectedPoint(point, triangulated.normal)
+          uvs.push(uv.x, uv.y)
+        }
       }
+      faceRanges.push({ faceId: face.id, start, count: positions.length / 3 - start })
     }
-    const count = positions.length / 3 - start
-    geometry.addGroup(start, count, materialIndexBySlotId.get(face.materialSlot) ?? 0)
-    faceRanges.push({ faceId: face.id, start, count })
+    const slotCount = positions.length / 3 - slotStart
+    if (slotCount > 0) geometry.addGroup(slotStart, slotCount, materialIndex)
   }
 
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
@@ -167,7 +186,8 @@ export function buildBlockGeometry(
     bodyFallbackSlotIds.push(slotId)
     return bodyMaterial
   })
-  const mesh = new Mesh(geometry, materials)
+  // A single-slot block draws with one material, so node batching can pack it.
+  const mesh = new Mesh(geometry, materials.length === 1 ? materials[0]! : materials)
   mesh.name = 'block-body'
   mesh.castShadow = true
   mesh.receiveShadow = true
