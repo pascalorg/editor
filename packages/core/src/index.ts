@@ -98,6 +98,13 @@ export {
   type WallConstructionResolution,
 } from './hooks/spatial-grid/support-host-patch'
 export { useSpatialQuery } from './hooks/spatial-grid/use-spatial-query'
+export {
+  type AssemblyDiagnostic,
+  type AssemblyDiagnosticCode,
+  type ResolvedAssembly,
+  type ResolvedAssemblyLayer,
+  resolveAssemblyStack,
+} from './lib/assembly-stack'
 export { loadAssetUrl, saveAsset } from './lib/asset-storage'
 export {
   clampDoorOperationState,
@@ -504,6 +511,11 @@ export {
   getWallPlanFootprint,
   getWallThickness,
 } from './systems/wall/wall-footprint'
+export {
+  getWallLayerBands,
+  type WallLayerBand,
+  type WallLayerBands,
+} from './systems/wall/wall-layer-bands'
 export { planWallMerge } from './systems/wall/wall-merge'
 export {
   calculateLevelMiters,

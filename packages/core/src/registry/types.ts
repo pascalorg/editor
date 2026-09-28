@@ -1798,6 +1798,12 @@ export type Capabilities = {
    */
   refs?: readonly ReferenceDeclaration[]
   /**
+   * The kind stores assembly layers in an optional `assembly` field (F2) and
+   * says how they stack. Frozen contract, not read yet: WL-02 compiles wall
+   * layers and RL-01 roof layers from it.
+   */
+  assembly?: AssemblyHostConfig
+  /**
    * Whether instances of this kind can be saved as a reusable preset
    * (unified `items` catalog, `kind='preset'`). The editor itself does
    * not act on this flag — host apps read it to gate "save as preset"
@@ -2078,6 +2084,31 @@ export type RoofAccessoryConfig = {
  */
 export type CeilingCutCapability = {
   buildCeilingHole: (node: AnyNode) => Array<[number, number]> | null
+}
+
+/**
+ * The face body layers stack inward from: a wall's `front` face (+n), a
+ * slab's `top`, a ceiling's `underside`, or a roof's `covering`-top plane
+ * (every facet's `facet:<id>:covering` patch).
+ */
+export type AssemblyReference = 'front' | 'top' | 'underside' | 'covering'
+
+/**
+ * Host declaration for assembly layers (F2, `editor-fidelity-foundations.md`
+ * §2.3). Each host keeps its own datum rule instead of one offset equation.
+ */
+export type AssemblyHostConfig = {
+  reference: AssemblyReference
+  /** The axis layer thickness runs along: the reference face's normal, or vertical. */
+  measure: 'normal' | 'vertical'
+  /**
+   * The body thickness the host stores (a wall's `thickness`), which must
+   * equal the sum of its layers: the stack sets it and writers re-derive it.
+   * `null` when the host stores none (roofs).
+   */
+  body: (node: AnyNode) => number | null
+  /** Accepts `assembly.backing` (slabs, ceilings). Absent = refused. */
+  backing?: boolean
 }
 
 export type CapabilityCtx = { node: AnyNode }
