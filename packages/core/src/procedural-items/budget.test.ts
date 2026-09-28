@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { evaluateRecipe, parseRecipe, type Recipe } from './recipe'
+import e3Json from './__fixtures__/trial_e3_kitchen_direct.json'
+import { evaluateRecipe, parseRecipe, type Recipe, RecipeSchema } from './recipe'
 
 type Shape = Recipe['parts'][number]['shapes'][number]
 const box = (id: string, x: number, primitive: Shape['primitive'] = 'box'): Shape => ({
@@ -57,24 +58,66 @@ describe('triangle budgets from evaluated counts', () => {
   })
 
   test('v2 lifts the 16 x 24 part caps and the 256 expanded-shape cap', () => {
-    // The trial's E3 kitchen run: 26 parts, one of them holding 185 backsplash tiles.
-    const tiles = Array.from({ length: 185 }, (_, i) => box(`tile_${i}`, i * 0.02))
-    const cabinets = Array.from({ length: 25 }, (_, p) =>
-      Array.from({ length: 5 }, (_, i) => box(`s${i}`, p * 0.2 + i * 0.02)),
-    )
-    const kitchen = [...cabinets, tiles]
-    expect(evaluateRecipe(parseRecipe(design(2, kitchen))).shapes).toHaveLength(310)
-    expect(() => parseRecipe(design(1, kitchen))).toThrow('version 2')
-    expect(() => parseRecipe(design(1, [tiles.slice(0, 25)]))).toThrow('version 2')
+    const parts = Array.from({ length: 20 }, (_, p) => [box('s', p * 0.2)])
+    const long = Array.from({ length: 30 }, (_, i) => box(`s${i}`, 5 + i * 0.02))
+    expect(evaluateRecipe(parseRecipe(design(2, [...parts, long]))).shapes).toHaveLength(50)
+    expect(() => parseRecipe(design(1, parts))).toThrow('version 2')
+    expect(() => parseRecipe(design(1, [long]))).toThrow('version 2')
     expect(() => parseRecipe(many(1, 257, 'box'))).toThrow()
+    const counted = design(2, [[box('s', 0)]])
+    counted.parts[0]!.count = 64
+    counted.parts.push(
+      ...structuredClone(counted.parts).map((part, i) => ({ ...part, id: `p${i}` })),
+    )
+    expect(evaluateRecipe(parseRecipe(counted)).shapes).toHaveLength(128)
   })
 
   test('v2 still refuses more than 64 parts, 512 shapes per part or 512 expanded shapes', () => {
     expect(() => parseRecipe(many(2, 65, 'box', 1))).toThrow()
     expect(() => parseRecipe(many(2, 513, 'box', 513))).toThrow()
-    expect(() => parseRecipe(many(2, 512, 'box', 512))).not.toThrow()
-    const repeated = many(2, 64, 'box', 64)
-    repeated.parts[0]!.count = 9
+    const repeated = design(
+      2,
+      Array.from({ length: 9 }, (_, p) => [box('s', p)]),
+    )
+    for (const part of repeated.parts) part.count = 64
     expect(() => parseRecipe(repeated)).toThrow('Expanded shape budget exceeded')
+  })
+})
+
+describe('budget review fixes (AK-10a round 2)', () => {
+  test('R7: a v2 recipe above 24 KiB needs pinned definitions (the real E3 run, 37.9 KB)', () => {
+    const e3 = structuredClone(e3Json) as Recipe
+    expect(e3.parts.reduce((n, part) => n + part.shapes.length, 0)).toBe(323)
+    expect(JSON.stringify(e3).length).toBeGreaterThan(24 * 1024)
+    expect(() => parseRecipe(e3)).toThrow('24 KiB')
+    expect(RecipeSchema.safeParse(e3).success).toBe(false)
+  })
+
+  test('support shapes count toward the 256-surface budget', () => {
+    const supports = design(2, [
+      Array.from({ length: 4 }, (_, i) => ({ ...box(`s${i}`, i * 0.02), support: true })),
+    ])
+    supports.parts[0]!.count = 64
+    supports.parts[0]!.shapes = supports.parts[0]!.shapes.map((shape) => ({
+      ...shape,
+      position: [
+        { op: 'add', args: [shape.position[0], { op: 'mul', args: ['index', 0.1] }] },
+        0.005,
+        0,
+      ],
+    }))
+    expect(() => parseRecipe(supports)).toThrow('Surface budget exceeded')
+  })
+
+  test('the exported schema keeps v1 at 16 parts x 24 shapes', () => {
+    expect(RecipeSchema.safeParse(many(1, 25, 'box', 25)).success).toBe(false)
+    expect(RecipeSchema.safeParse(many(1, 24, 'box', 24)).success).toBe(true)
+  })
+
+  test('evaluation stops at its time budget', () => {
+    let clock = 0
+    const now = () => (clock += 30)
+    expect(() => evaluateRecipe(many(2, 40, 'box', 40), {}, { now })).toThrow('time budget')
+    expect(() => evaluateRecipe(many(2, 40, 'box', 40))).not.toThrow()
   })
 })
