@@ -47,6 +47,7 @@
   },
   "devDependencies": {
     "@pascal/typescript-config": "*",
+    "@types/clipper-lib": "^6.4.0",
     "@types/howler": "^2.2.12",
     "@types/node": "^22.19.12",
     "@types/react": "19.2.2",
