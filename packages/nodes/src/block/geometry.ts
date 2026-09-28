@@ -3,6 +3,7 @@ import {
   type BlockNode,
   type BlockTopology,
   type GeometryContext,
+  getBlockFaceFrame,
   getBlockFaceNormal,
 } from '@pascal-app/core'
 import {
@@ -139,7 +140,12 @@ export function buildBlockGeometry(
     const slotStart = positions.length / 3
     for (const face of facesBySlot.get(slotId) ?? []) {
       const triangulated = triangulateBlockFace(node.topology, face, vertexById)
-      if (!triangulated) continue
+      // UVs in metres along the face's own frame (level U, up-slope V), the frame
+      // face hosting uses; a dominant-axis projection turned X-facing sides 90°,
+      // mirrored some faces and stretched slopes.
+      const frame = getBlockFaceFrame(node.topology, face.id)
+      if (!(triangulated && frame)) continue
+      const { xAxis, yAxis } = frame
       const start = positions.length / 3
       for (const triangle of triangulated.triangles) {
         for (const point of triangle) {
@@ -150,8 +156,10 @@ export function buildBlockGeometry(
               ? (cornerNormals.get(`${face.id}\u0000${vertexId}`) ?? triangulated.normal)
               : triangulated.normal),
           )
-          const uv = projectedPoint(point, triangulated.normal)
-          uvs.push(uv.x, uv.y)
+          uvs.push(
+            point[0] * xAxis[0] + point[1] * xAxis[1] + point[2] * xAxis[2],
+            point[0] * yAxis[0] + point[1] * yAxis[1] + point[2] * yAxis[2],
+          )
         }
       }
       faceRanges.push({ faceId: face.id, start, count: positions.length / 3 - start })

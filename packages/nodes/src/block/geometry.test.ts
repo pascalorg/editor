@@ -134,6 +134,68 @@ describe('buildBlockGeometry', () => {
     expect(mesh.geometry.groups).toHaveLength(1)
   })
 
+  test('face UVs follow each face frame: metres along the face, U level, V up-slope, unmirrored', () => {
+    const base = BlockNode.parse({ name: 'Ramp' })
+    // Raise the back of the top so it becomes a 45° slope facing +Y/-Z.
+    const topology = structuredClone(base.topology)
+    for (const vertex of topology.vertices) {
+      if (vertex.position[1] > 1 && vertex.position[2] > 0) vertex.position[1] += 2
+    }
+    const mesh = buildBlockGeometry({ ...base, topology }).getObjectByName('block-body') as Mesh
+    const position = mesh.geometry.getAttribute('position')
+    const uv = mesh.geometry.getAttribute('uv')
+    const normal = mesh.geometry.getAttribute('normal')
+    const point = (i: number) => new Vector3().fromBufferAttribute(position, i)
+    for (const range of mesh.geometry.userData.blockFaces as BlockFaceRange[]) {
+      for (let a = range.start; a < range.start + range.count; a += 1) {
+        for (let b = a + 1; b < range.start + range.count; b += 1) {
+          const metres = point(a).distanceTo(point(b))
+          const uvDistance = Math.hypot(uv.getX(b) - uv.getX(a), uv.getY(b) - uv.getY(a))
+          // 1 UV unit = 1 m on every face, the 45° slope included.
+          expect(Math.abs(metres - uvDistance)).toBeLessThan(1e-5)
+          // U is level: two points at one height differ only in U on walls.
+          const faceNormalY = normal.getY(a)
+          if (Math.abs(faceNormalY) < 1e-6 && Math.abs(point(a).y - point(b).y) < 1e-6) {
+            expect(Math.abs(uv.getY(b) - uv.getY(a))).toBeLessThan(1e-6)
+          }
+        }
+      }
+      // The texture reads unmirrored from outside: (dP/dU × dP/dV) points out of the face.
+      const [p0, p1, p2] = [0, 1, 2].map((k) => point(range.start + k))
+      const [u0, u1, u2] = [0, 1, 2].map((k) => [
+        uv.getX(range.start + k),
+        uv.getY(range.start + k),
+      ])
+      const e1 = p1!.clone().sub(p0!)
+      const e2 = p2!.clone().sub(p0!)
+      const [du1, dv1, du2, dv2] = [
+        u1![0]! - u0![0]!,
+        u1![1]! - u0![1]!,
+        u2![0]! - u0![0]!,
+        u2![1]! - u0![1]!,
+      ]
+      const tangent = e1.clone().multiplyScalar(dv2).sub(e2.clone().multiplyScalar(dv1))
+      const bitangent = e2.clone().multiplyScalar(du1).sub(e1.clone().multiplyScalar(du2))
+      const outward = e1.clone().cross(e2)
+      expect(tangent.cross(bitangent).dot(outward)).toBeGreaterThan(0)
+    }
+  })
+
+  test('side faces keep V vertical, so siding and brick courses stay level on every side', () => {
+    const mesh = buildBlockGeometry(BlockNode.parse({ name: 'Box' })).getObjectByName(
+      'block-body',
+    ) as Mesh
+    const position = mesh.geometry.getAttribute('position')
+    const uv = mesh.geometry.getAttribute('uv')
+    for (const range of mesh.geometry.userData.blockFaces as BlockFaceRange[]) {
+      if (range.faceId === 'f-top' || range.faceId === 'f-bottom') continue
+      for (let i = range.start; i < range.start + range.count; i += 1) {
+        // V is the height above the block origin on every wall face (X- and Z-facing alike).
+        expect(uv.getY(i)).toBeCloseTo(position.getY(i), 6)
+      }
+    }
+  })
+
   test('resolves every default-box surface to its assigned material slot', () => {
     const base = BlockNode.parse({ name: 'Raycast mesh' })
     const node = {
