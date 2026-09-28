@@ -612,6 +612,8 @@ export function evaluateRecipe(
   let triangles = 0,
     charged = 0
   const shapeLimit = recipe.version === 2 ? RECIPE_V2_LIMITS.shapes : RECIPE_LIMITS.shapes
+  // Part repeats that built geometry; only these carry the part's named surfaces.
+  const built = new Set<string>()
   for (const part of recipe.parts) {
     inTime()
     const count = expr(part.count)
@@ -623,6 +625,7 @@ export function evaluateRecipe(
       // are all skipped leaves nothing behind.
       const kept = part.shapes.filter((s) => s.when === undefined || expr(s.when, i) !== 0)
       if (!kept.length) continue
+      built.add(`${part.id}:${i}`)
       const vec = (v: Expr[]): Vec3 => v.map((x) => expr(x, i)) as Vec3
       const instanceMin: Vec3 = [Infinity, Infinity, Infinity]
       const instanceMax: Vec3 = [-Infinity, -Infinity, -Infinity]
@@ -796,7 +799,7 @@ export function evaluateRecipe(
     const part = recipe.parts.find((p) => p.id === surface.part)
     const count = part ? expr(part.count) : 1
     for (let i = 0; i < count; i++) {
-      if (part?.when !== undefined && expr(part.when, i) === 0) continue
+      if (part && !built.has(`${part.id}:${i}`)) continue
       if (surfaces.length >= 256) throw new Error('Surface budget exceeded')
       const rotation = (surface.rotation ?? [0, 0, 0]).map((e) => expr(e, i)) as Vec3
       const size = surface.size.map((e) => expr(e, i)) as [number, number]

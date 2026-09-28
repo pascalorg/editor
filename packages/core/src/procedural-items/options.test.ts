@@ -151,6 +151,25 @@ describe('select, bool and choice parameters, and when (recipe version 2)', () =
     )
   })
 
+  test('a repeat whose shapes are all skipped leaves no named surface behind', () => {
+    const recipe = v2(shelfRecipe)
+    const shelves = recipe.parts.find((part) => part.id === 'shelves')!
+    shelves.shapes = shelves.shapes.map((shape) => ({
+      ...shape,
+      when: { op: 'mod', args: [{ op: 'add', args: ['index', 1] }, 2] },
+    }))
+    recipe.surfaces = [
+      { id: 'row', label: 'Row', part: 'shelves', position: [0, 'index', 0], size: [0.2, 0.2] },
+    ]
+    const evaluation = evaluateRecipe(parseRecipe(recipe))
+    const kept = new Set(
+      evaluation.shapes.filter((s) => s.partId === 'shelves').map((s) => s.id.split(':')[1]),
+    )
+    const rows = evaluation.surfaces.filter((s) => s.id.startsWith('row:'))
+    expect(rows.length).toBeGreaterThan(0)
+    expect(rows.map((s) => s.id.split(':')[1])).toEqual([...kept])
+  })
+
   test('bool and choice parameters are validated and v2-only', () => {
     const bool = { id: 'b', label: 'B', default: 1, min: 0, max: 1, step: 1, unit: 'bool' as const }
     const withParam = (parameter: Record<string, unknown>, version: 1 | 2 = 2) =>
