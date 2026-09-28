@@ -116,9 +116,10 @@ test('light descriptors leave geometry batches and bounds unchanged', () => {
 
 test('evaluated triangle counts equal the triangles the renderer builds', () => {
   const dir = new URL('../../../core/src/procedural-items/__fixtures__/', import.meta.url)
-  const fixtures = readdirSync(dir).map((file) =>
-    parseRecipe(JSON.parse(readFileSync(new URL(file, dir), 'utf8'))),
-  )
+  // The E3 kitchen run is the committed R7 refusal case (37.9 KB), not a parsable design.
+  const fixtures = readdirSync(dir)
+    .filter((file) => !file.startsWith('trial_e3_'))
+    .map((file) => parseRecipe(JSON.parse(readFileSync(new URL(file, dir), 'utf8'))))
   expect(fixtures.length).toBeGreaterThanOrEqual(9)
   const every = parseRecipe({
     version: 2,
@@ -401,5 +402,62 @@ test('v2 cylinders keep world-scale UVs on every face, wedges and rings included
   }
   for (let i = 0; i < normal.count; i++)
     expect(Math.hypot(normal.getX(i), normal.getY(i), normal.getZ(i))).toBeCloseTo(1, 4)
+  geometry.dispose()
+})
+
+test('extrusions keep world-scale UVs on angled walls', () => {
+  const recipe = parseRecipe({
+    version: 2,
+    name: 'Chamfer',
+    description: 'A section with a 45° wall.',
+    parameters: [
+      { id: 'unused', label: 'Unused', default: 1, min: 1, max: 1, step: 1, unit: 'count' },
+    ],
+    slots: [{ id: 'body', label: 'Body', color: '#888888' }],
+    parts: [
+      {
+        id: 'p',
+        label: 'P',
+        count: 1,
+        shapes: [
+          {
+            id: 'e',
+            primitive: 'extrude',
+            slot: 'body',
+            section: {
+              kind: 'polygon',
+              outer: [
+                [0, 0],
+                [0.4, 0],
+                [0.4, 0.2],
+                [0.2, 0.4],
+                [0, 0.4],
+              ],
+            },
+            length: 0.5,
+            position: [0, 0.5, 0],
+          },
+        ],
+      },
+    ],
+    constraints: [],
+  })
+  const geometry = buildProceduralGeometry(ProceduralItemNode.parse({ recipe })).batches[0]!
+    .geometry
+  const position = geometry.getAttribute('position'),
+    uv = geometry.getAttribute('uv')
+  const p = [new Vector3(), new Vector3(), new Vector3()]
+  for (let t = 0; t < position.count; t += 3) {
+    for (let k = 0; k < 3; k++) p[k]!.fromBufferAttribute(position, t + k)
+    for (const [a, b] of [
+      [0, 1],
+      [1, 2],
+      [2, 0],
+    ] as const) {
+      const metres = p[a]!.distanceTo(p[b]!)
+      const uvs = Math.hypot(uv.getX(t + a) - uv.getX(t + b), uv.getY(t + a) - uv.getY(t + b))
+      if (metres > 1e-6) expect(uvs / metres).toBeCloseTo(1, 4)
+    }
+  }
   geometry.dispose()
 })

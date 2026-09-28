@@ -161,3 +161,64 @@ describe('extrude (recipe version 2)', () => {
     expect(() => parseRecipe(design({ section: ell, length: 0.5, bevel: 0.003 }))).not.toThrow()
   })
 })
+
+describe('extrude review fixes (AK-03b round 2)', () => {
+  test('a hole whose edges cross the outline is refused even with its vertices inside', () => {
+    // A U-shaped outline; the hole's corners sit in both arms but its edges cross the notch.
+    const u = {
+      kind: 'polygon',
+      outer: [
+        [0, 0],
+        [0.6, 0],
+        [0.6, 0.4],
+        [0.4, 0.4],
+        [0.4, 0.1],
+        [0.2, 0.1],
+        [0.2, 0.4],
+        [0, 0.4],
+      ],
+      holes: [
+        [
+          [0.05, 0.2],
+          [0.55, 0.2],
+          [0.55, 0.3],
+          [0.05, 0.3],
+        ],
+      ],
+    }
+    expect(() => parseRecipe(design({ section: u, length: 0.1 }))).toThrow('cross')
+    const bowtie = {
+      kind: 'polygon',
+      outer: [
+        [0, 0],
+        [1, 1],
+        [1, 0],
+        [0, 1],
+      ],
+    }
+    expect(() => parseRecipe(design({ section: bowtie, length: 0.1 }))).toThrow('cross')
+  })
+
+  test('every F1 section kind, structural families included, turns into rings', () => {
+    for (const family of ['I', 'C', 'L', 'T', 'Z', 'rect-tube'] as const) {
+      const rings = sectionRings({
+        kind: 'section',
+        family,
+        width: 0.2,
+        depth: 0.3,
+        web: 0.01,
+        flange: 0.015,
+      })
+      const xs = rings.outer.map(([x]) => x)
+      const ys = rings.outer.map(([, y]) => y)
+      expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(0.2)
+      expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(0.3)
+      expect(rings.holes.length).toBe(family === 'rect-tube' ? 1 : 0)
+    }
+    const beam = one({
+      section: { kind: 'section', family: 'I', width: 0.2, depth: 0.3, web: 0.01, flange: 0.015 },
+      length: 2,
+    })
+    expect(beam.shapes[0]!.size).toEqual([0.2, 0.3, 2])
+  })
+})
