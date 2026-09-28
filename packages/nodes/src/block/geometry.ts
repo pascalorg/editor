@@ -167,7 +167,8 @@ export function buildBlockGeometry(
     bodyFallbackSlotIds.push(slotId)
     return bodyMaterial
   })
-  const mesh = new Mesh(geometry, materials)
+  // A single-slot block draws with one material, so node batching can pack it.
+  const mesh = new Mesh(geometry, materials.length === 1 ? materials[0]! : materials)
   mesh.name = 'block-body'
   mesh.castShadow = true
   mesh.receiveShadow = true
