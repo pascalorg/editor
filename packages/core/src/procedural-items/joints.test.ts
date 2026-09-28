@@ -313,3 +313,46 @@ describe('joint tree (recipe version 2)', () => {
     expect(() => parseRecipe(flap)).toThrow('extends below the floor')
   })
 })
+
+describe('joint review fixes (AK-04a round 2)', () => {
+  test('a single child on a repeated parent attaches to repeat 0', () => {
+    const e = evaluateRecipe(
+      parseRecipe(
+        cabinet((r) => {
+          r.parts[1]!.count = 2
+          r.parts[1]!.shapes[0]!.position = [
+            { op: 'sub', args: [{ op: 'mul', args: ['index', 0.4] }, 0.2] },
+            0.6,
+            0.26,
+          ]
+          r.joints![0]!.origin = [
+            { op: 'sub', args: [{ op: 'mul', args: ['index', 0.4] }, 0.395] },
+            0.6,
+            0.26,
+          ]
+        }),
+      ),
+    )
+    expect(e.motions.filter((m) => m.partId === 'knob').map((m) => [m.id, m.parent])).toEqual([
+      ['knob', 'door'],
+    ])
+  })
+
+  test('range endpoints stay within the joint limits', () => {
+    const wild = cabinet((r) => {
+      r.joints![2] = { ...r.joints![2]!, range: [-100, 100] }
+    })
+    expect(() => parseRecipe(wild)).toThrow('range')
+    const hinge = cabinet((r) => {
+      r.joints![1] = { ...r.joints![1]!, range: [-4, 4] }
+    })
+    expect(() => parseRecipe(hinge)).toThrow('range')
+  })
+
+  test('an explicitly empty joints array needs version 2', () => {
+    expect(() => parseRecipe({ ...structuredClone(cabinetJson), joints: [] })).toThrow('version 2')
+    expect(() =>
+      parseRecipe({ ...structuredClone(cabinetJson), version: 2, joints: [] }),
+    ).not.toThrow()
+  })
+})
