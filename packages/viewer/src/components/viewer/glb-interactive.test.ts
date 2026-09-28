@@ -82,3 +82,40 @@ test('baked moving emitter follows its motion group around the pivot', () => {
   expect(position.x).toBeCloseTo(1)
   expect(position.y).toBeCloseTo(0.5)
 })
+
+test('baked lights in nested motion groups anchor at their design-space pivot', () => {
+  const object = new Group()
+  const door = new Group()
+  door.position.set(2, 0, 0)
+  door.userData.proceduralMotion = { groupId: 'door' }
+  const knob = new Group()
+  knob.position.set(1, 0, 0)
+  knob.userData.proceduralMotion = { groupId: 'knob' }
+  object.add(door)
+  door.add(knob)
+  const light = {
+    id: 'knob:0',
+    partId: 'knob',
+    index: 0,
+    motionGroup: 'knob',
+    position: [3.5, 0, 0] as [number, number, number],
+    color: '#ffffff',
+    intensity: 1,
+    distance: 5,
+  }
+  const [reg] = buildGlbLightRegs(
+    [
+      {
+        pascalId: 'n' as never,
+        label: 'n',
+        height: 1,
+        interactive: { controls: [], effects: [] },
+        procedural: { lights: [light], parts: [] },
+      },
+    ],
+    new Map([['n', object]]),
+  )
+  const out = new Vector3()
+  reg!.getWorldPosition(out)
+  expect(out.x).toBeCloseTo(3.5)
+})
