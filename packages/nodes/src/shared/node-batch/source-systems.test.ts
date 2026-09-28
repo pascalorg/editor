@@ -50,6 +50,11 @@ function runSourceTest(body: string) {
     }
     await importShared('react')
     await importShared('three')
+    // The batch reads each kind's \`capabilities.batchable\` from the registry.
+    const registryCore = await importShared('@pascal-app/core')
+    const batchable = await import(${sourcePath('packages/nodes/src/shared/node-batch/batchable.ts')})
+    for (const [kind, config] of [['ceiling', batchable.surfaceBatchable], ['slab', batchable.surfaceBatchable], ['item', batchable.itemBatchable]])
+      registryCore.nodeRegistry._register({ kind, schemaVersion: 1, capabilities: { batchable: config } })
     ${body}
   `,
     )
@@ -205,6 +210,64 @@ test('priority-1 dirty snapshot sees the priority-2 ceiling rebuild and batches 
   `)
 })
 
+test('a column whose dirty mark the floor-elevation pass consumes first still leaves its batch', () => {
+  runSourceTest(`
+    const react = await importShared('react')
+    mockShared('react', () => ({ ...react, useEffect: () => {}, useMemo: (factory) => factory(), useRef: (value) => ({ current: value }) }))
+    const callbacks = []
+    const fiber = await importShared('@react-three/fiber')
+    mockShared('@react-three/fiber', () => ({ ...fiber, useThree: (selector) => selector({ invalidate: () => {} }), useFrame: (callback, priority = 0) => callbacks.push({ callback, priority }) }))
+    const core = await importShared('@pascal-app/core')
+    const scene = core.useScene
+    mockShared('@pascal-app/core', () => ({ ...core, useScene: Object.assign((selector) => selector(scene.getState()), scene) }))
+    const viewer = await importShared('@pascal-app/viewer')
+    const viewerStore = viewer.useViewer
+    mock.module(${sourcePath('packages/viewer/src/store/use-viewer.ts')}, () => ({ default: Object.assign((selector) => selector(viewerStore.getState()), viewerStore) }))
+    const { BoxGeometry, Group, Mesh, MeshBasicMaterial } = await importShared('three')
+    const { FloorElevationSystem } = await import(${sourcePath('packages/viewer/src/systems/floor-elevation/floor-elevation-system.tsx')})
+    const { NodeBatchSystem, resetNodeBatchState } = await import(${sourcePath('packages/nodes/src/shared/node-batch/system.tsx')})
+    let now = 0
+    performance.now = () => now
+    // Columns render without a geometry builder or system, so floor elevation owns their marks.
+    core.registerNode({ kind: 'column', schemaVersion: 1, capabilities: { batchable: batchable.columnBatchable, floorPlaced: { footprint: () => ({ dimensions: [0.3, 3, 0.3] }) } } })
+    const root = new Group()
+    const material = new MeshBasicMaterial()
+    const nodes = { level_test: { id: 'level_test', type: 'level', children: [] } }
+    const meshes = []
+    core.sceneRegistry.nodes.set('level_test', root)
+    core.sceneRegistry.byType.level.add('level_test')
+    for (let i = 0; i < 3; i++) {
+      const id = 'column_' + i
+      nodes[id] = { id, type: 'column', parentId: 'level_test', visible: true, children: [], position: [i, 0, 0], rotation: [0, 0, 0] }
+      const mesh = new Mesh(new BoxGeometry(), material)
+      mesh.position.x = i
+      root.add(mesh)
+      meshes.push(mesh)
+      core.sceneRegistry.nodes.set(id, mesh)
+      core.sceneRegistry.byType.column.add(id)
+    }
+    scene.setState({ nodes, dirtyNodes: new Set() })
+    viewerStore.setState({ externalSelectedIds: [], previewSelectedIds: [], hoveredId: null, selection: { ...viewerStore.getState().selection, selectedIds: [], levelId: null } })
+    // The viewer mounts FloorElevationSystem before the lazily loaded node batch.
+    FloorElevationSystem()
+    NodeBatchSystem().type()
+    const pipeline = callbacks.sort((a, b) => a.priority - b.priority)
+    const frame = () => { for (const pass of pipeline) pass.callback({}, 0.016) }
+    frame(); now = 181; frame()
+    assert.equal(meshes[0].layers.isEnabled(viewer.SCENE_LAYER), false)
+    // An undo (or an MCP or collaborator write) moves the column: a store write plus a dirty mark.
+    scene.setState({ nodes: { ...scene.getState().nodes, column_0: { ...nodes.column_0, position: [5, 0, 0] } } })
+    meshes[0].position.x = 5
+    scene.getState().markDirty('column_0')
+    frame()
+    assert.equal(scene.getState().dirtyNodes.has('column_0'), false)
+    assert.equal(meshes[0].layers.isEnabled(viewer.SCENE_LAYER), true, 'the moved column must draw itself, not its stale batch copy')
+    now += 181; frame()
+    assert.equal(meshes[0].layers.isEnabled(viewer.SCENE_LAYER), false)
+    resetNodeBatchState()
+  `)
+})
+
 const slabCacheFixture = `
   let effects = []
   let refs = []
@@ -231,7 +294,8 @@ const slabCacheFixture = `
   const { captureChangedNodes, runBatchFrame, subscribeBatchInteractions, resetNodeBatchState } = await import(${sourcePath('packages/nodes/src/shared/node-batch/system.tsx')})
   const preset = { ...core.MATERIAL_CATALOG[0], id: 'slab-cache-fixture', preset: { ...core.MATERIAL_CATALOG[0].preset, maps: {} } }
   core.registerLibraryMaterials([preset])
-  core.registerNode({ kind: 'slab', schemaVersion: 1, schema: core.SlabNode, geometry: buildSlabGeometry, capabilities: {} })
+  core.nodeRegistry._reset()
+  core.registerNode({ kind: 'slab', schemaVersion: 1, schema: core.SlabNode, geometry: buildSlabGeometry, capabilities: { batchable: batchable.surfaceBatchable } })
   const level = core.LevelNode.parse({ id: 'level_test', children: ['slab_0', 'slab_1', 'slab_2'] })
   const nodes = { [level.id]: level }
   const root = new Group()

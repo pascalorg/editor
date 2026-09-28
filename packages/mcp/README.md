@@ -338,6 +338,7 @@ captured by Zundo's temporal middleware as a single undoable step.
 | `create_level` | Add a new level to a building. | `{ buildingId, elevation, height, label? }` | `{ levelId }` |
 | `create_wall` | Add a wall to a level. | `{ levelId, start, end, thickness?, height? }` | `{ wallId }` |
 | `place_item` | Place a catalog item on a level/slab/zone, ceiling, wall, or site. Slab/zone targets resolve to the parent level so floor items render and validate. | `{ catalogItemId, targetNodeId, position, rotation? }` | `{ itemId, status }` |
+| `place_design` | Create one design (procedural item recipe, object or JSON string) that passes `validate_design`. Its mounting picks the host: level/slab/zone or a design surface (`surfaceId`), a straight wall face, or a ceiling. Create-only, one undo step, inline designs up to 24 KiB, with coded refusals. | `{ design, hostId, position, rotation?, side?, surfaceId?, parameters?, slots?, name?, id? }` | `{ designId, parentId, surfaceId }` |
 | `cut_opening` | Cut a door or window opening into a wall. `position` is 0..1 along the wall and is stored as wall-local meters. | `{ wallId, type: 'door' \| 'window', position, width, height }` | `{ openingId }` |
 | `set_zone` | Create a zone/room polygon on a level. | `{ levelId, polygon, label, properties? }` | `{ zoneId }` |
 | `duplicate_level` | Clone a level and all of its descendants. | `{ levelId }` | `{ newLevelId, newNodeIds[] }` |
@@ -347,6 +348,7 @@ captured by Zundo's temporal middleware as a single undoable step.
 | `export_json` | Serialize the scene graph as JSON. | `{ pretty? }` | `{ json: string }` |
 | `export_glb` | Stubbed: GLB export requires the browser renderer. | — | throws `not_implemented` |
 | `validate_scene` | Zod-validate every node and parent-child integrity. | — | `{ valid, errors: { nodeId, path, message }[] }` |
+| `validate_design` | Read-only: validate a design (procedural item recipe, object or JSON string) and measure it. The authority over `pascal://schema/design`. | `{ design, parameters? }` | `{ valid, diagnostics[], design, sweep, measurements }` |
 | `verify_scene` | High-level layout check with validation status, per-level counts, empty levels and practical issues. | — | `{ valid, levels[], issues, hasIssues }` |
 | `check_collisions` | Find overlapping items and out-of-bounds placements. | `{ levelId? }` | `{ collisions: { aId, bId, kind }[] }` |
 | `analyze_floorplan_image` | Vision tool: extract walls, rooms, and approximate dimensions from a floorplan image. | `{ image, scaleHint? }` | `{ walls, rooms, approximateDimensions, confidence }` |
@@ -365,6 +367,7 @@ The vision tools require the MCP host to support the sampling capability
 | `pascal://agent/guide` | `text/markdown` | MCP-first construction workflow, scene invariants, and tool preferences for agents. |
 | `pascal://catalog/items` | `application/json` | Dependency-free built-in catalog subset for common residential furniture and fixtures. |
 | `pascal://constraints/{levelId}` | `application/json` | Slab footprints and wall polygons for the given level — useful as planner context. |
+| `pascal://schema/design` | `application/json` | Design contract: JSON Schema generated from core's `RecipeSchema`, limits, rules only `validate_design` checks, and an example. |
 
 ## Prompts
 

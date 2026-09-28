@@ -14,6 +14,7 @@ import {
   publishStructuralElevationGuide,
   resolveStructuralElevationSnap,
 } from '@pascal-app/editor'
+import { surfaceBatchable } from '../shared/node-batch/batchable'
 import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
 import { sameOutlineSurfaceCounterparts } from '../shared/surface-counterparts'
 import { buildCeilingFloorplan } from './floorplan'
@@ -155,6 +156,7 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
   }),
 
   capabilities: {
+    batchable: surfaceBatchable,
     selectable: { hitVolume: 'bbox' },
     surfaces: {
       hosting: false,

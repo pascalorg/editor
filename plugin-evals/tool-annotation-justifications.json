@@ -514,6 +514,19 @@
       }
     },
     {
+      "name": "place_design",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it creates a design node on a level, wall, ceiling or design surface in the connected Pascal scene.",
+        "destructiveHint": "It only creates: it refuses existing ids and never deletes or replaces existing Pascal scene or project state.",
+        "openWorldHint": "It operates on the connected Pascal scene and the design supplied in the call without accessing the public internet."
+      }
+    },
+    {
       "name": "place_item",
       "annotations": {
         "readOnlyHint": false,
@@ -615,6 +628,19 @@
         "readOnlyHint": "It is not read-only because reverses a recorded change and mutates the active Pascal scene and history state.",
         "destructiveHint": "Reversing history changes the active scene and can remove changes currently present in it.",
         "openWorldHint": "It operates on the connected Pascal scene or project service without accessing the public internet."
+      }
+    },
+    {
+      "name": "validate_design",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It validates and measures a design supplied in the call without reading or changing the connected Pascal scene.",
+        "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
+        "openWorldHint": "It operates only on the design supplied in the call and does not access the public internet."
       }
     },
     {
