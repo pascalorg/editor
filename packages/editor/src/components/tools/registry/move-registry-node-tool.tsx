@@ -14,7 +14,6 @@ import {
   emitter,
   findLevelAncestorId,
   floorPlacedCollides,
-  getFloorPlacedElevation,
   footprintAABBFrom,
   type GridEvent,
   type GroupMoveSnapResult,
