@@ -64,6 +64,14 @@ const section = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('round'), radius: expression, wall: expression.optional() }),
   z.strictObject({ kind: z.literal('oval'), width: expression, depth: expression }),
   z.strictObject({
+    kind: z.literal('section'),
+    family: z.enum(['I', 'C', 'L', 'T', 'Z', 'rect-tube']),
+    width: expression,
+    depth: expression,
+    web: expression,
+    flange: expression,
+  }),
+  z.strictObject({
     kind: z.literal('polygon'),
     outer: sectionRing,
     holes: z.array(sectionRing).max(16).optional(),
@@ -126,6 +134,45 @@ export const RECIPE_LIMITS = {
   motionGroups: 32,
   lights: 12,
 } as const
+const shapeCommon = {
+  id,
+  slot: id,
+  position: vector,
+  rotation: vector.optional(),
+  support: z.boolean().optional(),
+  // v2: the shape is built only where this evaluates to nonzero.
+  when: expression.optional(),
+}
+// Sized primitives keep a required size (R1: v1 consumers narrow on primitive and read it).
+const solidShape = z.strictObject({
+  ...shapeCommon,
+  primitive: z.enum(['box', 'roundedBox', 'cylinder', 'ellipsoid']),
+  size: vector,
+  radius: expression.optional(),
+  topScale: expression.optional(),
+  // v2 cylinders: side count (absent = 24), no end caps, hollow wall (inner radius as a
+  // fraction of the outer), and a partial sweep in radians from local +Z toward +X, closed
+  // by flat wedge sides unless open.
+  segments: z.number().int().min(3).max(64).optional(),
+  open: z.boolean().optional(),
+  inner: expression.optional(),
+  arc: expression.optional(),
+})
+// v2 extrude: a section in local x/y, extruded along local z by length, centred.
+const extrudeShape = z.strictObject({
+  ...shapeCommon,
+  primitive: z.literal('extrude'),
+  section,
+  length: expression,
+  bevel: expression.optional(),
+})
+type RecipeShape = z.infer<typeof solidShape> | z.infer<typeof extrudeShape>
+/** The sized-primitive fields of a shape (none for an extrude). */
+function solidFields(
+  shape: RecipeShape,
+): Partial<Omit<z.infer<typeof solidShape>, 'primitive' | keyof typeof shapeCommon>> {
+  return shape.primitive === 'extrude' ? {} : shape
+}
 const RecipeObject = z.strictObject({
   // Version 2 marks content that older readers cannot evaluate; v2-only fields require it.
   version: z.union([z.literal(1), z.literal(2)]),
@@ -207,32 +254,7 @@ const RecipeObject = z.strictObject({
           })
           .optional(),
         shapes: z
-          .array(
-            z.strictObject({
-              id,
-              primitive: z.enum(['box', 'roundedBox', 'cylinder', 'ellipsoid', 'extrude']),
-              slot: id,
-              // Every primitive but extrude (v2), which takes section and length instead.
-              size: vector.optional(),
-              // v2 extrude: a section in local x/y, extruded along local z by length, centred.
-              section: section.optional(),
-              length: expression.optional(),
-              bevel: expression.optional(),
-              position: vector,
-              rotation: vector.optional(),
-              radius: expression.optional(),
-              topScale: expression.optional(),
-              // v2 cylinders: side count (absent = 24), no end caps, hollow wall
-              // (inner radius as a fraction of the outer), and a partial sweep in radians
-              // from local +Z toward +X, closed by flat wedge sides unless open.
-              segments: z.number().int().min(3).max(64).optional(),
-              open: z.boolean().optional(),
-              inner: expression.optional(),
-              arc: expression.optional(),
-              support: z.boolean().optional(),
-              when: expression.optional(),
-            }),
-          )
+          .array(z.discriminatedUnion('primitive', [solidShape, extrudeShape]))
           .min(1)
           .max(RECIPE_V2_LIMITS.partShapes),
       }),
@@ -341,7 +363,12 @@ function findV2Feature(recipe: Recipe): string | null {
   if (
     recipe.parts.some((part) =>
       part.shapes.some((shape) =>
-        [shape.segments, shape.open, shape.inner, shape.arc].some((v) => v !== undefined),
+        [
+          solidFields(shape).segments,
+          solidFields(shape).open,
+          solidFields(shape).inner,
+          solidFields(shape).arc,
+        ].some((v) => v !== undefined),
       ),
     )
   )
@@ -423,23 +450,18 @@ export function parseRecipe(input: unknown): Recipe {
     for (const shape of part.shapes) {
       if (!recipe.slots.some((s) => s.id === shape.slot))
         throw new Error(`Unknown slot ${shape.slot}`)
-      if (shape.topScale !== undefined && shape.primitive !== 'cylinder')
+      const f = solidFields(shape)
+      if (f.topScale !== undefined && shape.primitive !== 'cylinder')
         throw new Error(`topScale is only allowed on cylinders (${part.id}/${shape.id})`)
-      if (shape.primitive === 'extrude') {
-        if (!shape.section || shape.length === undefined || shape.size)
-          throw new Error(`extrude ${part.id}/${shape.id} takes a section and a length, not a size`)
-        if (shape.support)
-          throw new Error(`Extrude ${part.id}/${shape.id} cannot be a support surface`)
-      } else if (!shape.size) throw new Error(`${part.id}/${shape.id} needs a size`)
-      else if ([shape.section, shape.length, shape.bevel].some((field) => field !== undefined))
-        throw new Error(`section, length and bevel apply to extrude (${part.id}/${shape.id})`)
-      const cylinderOptions = [shape.segments, shape.open, shape.inner, shape.arc]
+      if (shape.primitive === 'extrude' && shape.support)
+        throw new Error(`Extrude ${part.id}/${shape.id} cannot be a support surface`)
+      const cylinderOptions = [f.segments, f.open, f.inner, f.arc]
       if (cylinderOptions.some((option) => option !== undefined)) {
         if (shape.primitive !== 'cylinder')
           throw new Error(
             `segments, open, inner and arc apply to cylinders (${part.id}/${shape.id})`,
           )
-        if (shape.support && (shape.inner !== undefined || shape.arc !== undefined || shape.open))
+        if (shape.support && (f.inner !== undefined || f.arc !== undefined || f.open))
           throw new Error(`Support shape ${part.id}/${shape.id} cannot be hollow, open or partial`)
       }
       if (part.motion && shape.support)
@@ -535,7 +557,7 @@ function movedPoint(point: Vec3, motion: EvaluatedMotion, fraction: number): Vec
 }
 
 const LEGACY_TRIANGLE_CHARGE = { box: 12, roundedBox: 588, cylinder: 96, ellipsoid: 720 } as const
-type RecipeSection = NonNullable<Recipe['parts'][number]['shapes'][number]['section']>
+type RecipeSection = z.infer<typeof section>
 /** Triangles of the geometry the renderer builds for an evaluated shape (non-indexed). */
 export function shapeTriangles(
   shape: Pick<
@@ -598,6 +620,15 @@ function resolveSection(
         kind: 'oval',
         width: length(section.width, 'width'),
         depth: length(section.depth, 'depth'),
+      }
+    case 'section':
+      return {
+        kind: 'section',
+        family: section.family,
+        width: length(section.width, 'width'),
+        depth: length(section.depth, 'depth'),
+        web: length(section.web, 'web'),
+        flange: length(section.flange, 'flange'),
       }
     case 'polygon': {
       const point = ([x, y]: [Expr, Expr]) => {
@@ -844,11 +875,11 @@ export function evaluateRecipe(
         let size: Vec3
         let extrusion: Pick<EvaluatedShape, 'section' | 'bevel'> = {}
         if (s.primitive === 'extrude') {
-          const resolved = resolveSection(s.section!, (e) => expr(e, i))
+          const resolved = resolveSection(s.section, (e) => expr(e, i))
           const rings = sectionRings(resolved)
           const b = boundsOf(rings.outer.map(([x, y]) => [x, y, 0] as Vec3))
           const center = b.min.map((v, k) => (v + b.max[k]!) / 2) as Vec3
-          const length = expr(s.length!, i)
+          const length = expr(s.length, i)
           const bevel = s.bevel === undefined ? 0 : expr(s.bevel, i)
           // The bevel insets every contour, so it must stay under the section's thinnest wall.
           if (
@@ -879,15 +910,16 @@ export function evaluateRecipe(
                 : resolved,
             ...(bevel > 0 && { bevel }),
           }
-        } else size = vec(s.size!)
+        } else size = vec(s.size)
+        const f = solidFields(s)
         if (size.some((x) => x < 0.001 || x > RECIPE_LIMITS.dimension))
           throw new Error(`Invalid dimensions for ${part.id}/${s.id}`)
-        const radius = s.primitive === 'roundedBox' ? expr(s.radius ?? 0.02, i) : 0
+        const radius = s.primitive === 'roundedBox' ? expr(f.radius ?? 0.02, i) : 0
         if (radius < 0 || radius > Math.min(...size) / 2)
           throw new Error(`Invalid rounding for ${s.id}`)
-        if (s.topScale !== undefined && s.primitive !== 'cylinder')
+        if (f.topScale !== undefined && s.primitive !== 'cylinder')
           throw new Error(`topScale is only allowed on cylinders (${part.id}/${s.id})`)
-        const topScale = s.topScale === undefined ? 1 : expr(s.topScale, i)
+        const topScale = f.topScale === undefined ? 1 : expr(f.topScale, i)
         if (topScale < 0 || topScale > 1)
           throw new Error(`topScale for ${part.id}/${s.id} must be within [0, 1]`)
         if (s.support && (s.primitive === 'ellipsoid' || topScale < 1))
@@ -896,10 +928,10 @@ export function evaluateRecipe(
           )
         if (s.support && motionGroup)
           throw new Error(`Moving part ${part.id} cannot contain support shapes`)
-        const inner = s.inner === undefined ? undefined : expr(s.inner, i)
+        const inner = f.inner === undefined ? undefined : expr(f.inner, i)
         if (inner !== undefined && !(inner > 0 && inner < 1))
           throw new Error(`inner for ${part.id}/${s.id} must be within (0, 1)`)
-        const arc = s.arc === undefined ? undefined : expr(s.arc, i)
+        const arc = f.arc === undefined ? undefined : expr(f.arc, i)
         if (arc !== undefined && !(arc > 0 && arc <= 2 * Math.PI + 1e-9))
           throw new Error(`arc for ${part.id}/${s.id} must be within (0, 2π]`)
         const shapeId = `${part.id}:${i}:${s.id}`
@@ -913,8 +945,8 @@ export function evaluateRecipe(
           rotation,
           radius,
           topScale,
-          ...(s.segments === undefined ? {} : { segments: s.segments }),
-          ...(s.open ? { open: true } : {}),
+          ...(f.segments === undefined ? {} : { segments: f.segments }),
+          ...(f.open ? { open: true } : {}),
           ...(inner === undefined ? {} : { inner }),
           ...(arc === undefined ? {} : { arc }),
           ...extrusion,

@@ -136,7 +136,7 @@ describe('extrude (recipe version 2)', () => {
     ])
       expect(() => parseRecipe(design(bad as Partial<Shape>))).toThrow()
     const box = design({ primitive: 'box', size: [1, 1, 1], section: rect.section })
-    expect(() => parseRecipe(box)).toThrow('extrude')
+    expect(() => parseRecipe(box)).toThrow('section')
     expect(() => parseRecipe(design({ primitive: 'box' }))).toThrow('size')
   })
 
@@ -193,7 +193,7 @@ describe('extrude review fixes (AK-03b round 2)', () => {
         [0, 0],
         [1, 1],
         [1, 0],
-        [0, 1],
+        [0, 2],
       ],
     }
     expect(() => parseRecipe(design({ section: bowtie, length: 0.1 }))).toThrow('cross')

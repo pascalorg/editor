@@ -151,8 +151,9 @@ function cylinderSource(shape: Evaluation['shapes'][number]): BufferGeometry {
 /** v2 geometry (cylinder options and later primitives); v1 shapes keep their projection. */
 function usesV2Geometry(shape: Evaluation['shapes'][number]) {
   return (
-    shape.primitive === 'cylinder' &&
-    [shape.segments, shape.open, shape.inner, shape.arc].some((v) => v !== undefined)
+    shape.primitive === 'extrude' ||
+    (shape.primitive === 'cylinder' &&
+      [shape.segments, shape.open, shape.inner, shape.arc].some((v) => v !== undefined))
   )
 }
 /**
