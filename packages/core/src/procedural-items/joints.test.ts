@@ -338,6 +338,35 @@ describe('joint review fixes (AK-04a round 2)', () => {
     ])
   })
 
+  test('a child of a parent repeated zero times is not built', () => {
+    const e = evaluateRecipe(
+      parseRecipe(
+        cabinet((r) => {
+          r.parts[1]!.count = 0
+        }),
+      ),
+    )
+    expect(e.shapes.filter((s) => s.partId === 'door' || s.partId === 'knob')).toEqual([])
+    expect(e.motions.map((m) => m.id)).toEqual(['drawer', 'pull'])
+  })
+
+  test("a recessed design's reach includes its joints' travel", () => {
+    const recipe = structuredClone(downlightJson) as Recipe
+    recipe.parts.push({
+      id: 'flap',
+      label: 'Flap',
+      count: 1,
+      shapes: [box('plate', [0.1, 0.1, 0.02], [0, -0.05, 0], 'trim')],
+    } as Part)
+    recipe.joints = [
+      { child: 'flap', kind: 'revolute', origin: [0, 0, 0], axis: [1, 0, 0], open: 1.2 },
+    ]
+    const e = evaluateRecipe(parseRecipe(recipe))
+    // At rest the design spans z = ±(size / 2 + 0.02) = ±0.08; the flap swings to z ≈ -0.1 sin 1.2.
+    expect(e.min[2]).toBeCloseTo(-0.08)
+    expect(e.reach!.min[2]).toBeLessThan(-0.09)
+  })
+
   test('range endpoints stay within the joint limits', () => {
     const wild = cabinet((r) => {
       r.joints![2] = { ...r.joints![2]!, range: [-100, 100] }

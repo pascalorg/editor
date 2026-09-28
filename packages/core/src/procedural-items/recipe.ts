@@ -1284,6 +1284,11 @@ export function evaluateRecipe(
     shapes,
     shapeBounds,
   )) {
+    if (reach)
+      for (let k = 0; k < 3; k++) {
+        reach.min[k] = Math.min(reach.min[k]!, bounds.min[k]!)
+        reach.max[k] = Math.max(reach.max[k]!, bounds.max[k]!)
+      }
     if (!recipe.mounting && bounds.min[1] < base - 0.001)
       throw new Error(`Motion envelope for ${motion.partId} extends below the floor`)
     if (
