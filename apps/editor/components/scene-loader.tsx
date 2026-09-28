@@ -10,6 +10,7 @@ import {
   type SidebarTab,
 } from '@pascal-app/editor'
 import { Hammer, Layers, Settings } from 'lucide-react'
+import { PoolSectionBar } from '@pascal-app/plugin-pool'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -303,6 +304,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         sidebarTabs={SIDEBAR_TABS}
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
         viewerToolbarRight={<CommunityViewerToolbarRight />}
+        viewerBanner={<div data-pool-section-global><PoolSectionBar /></div>}
       />
     </div>
   )

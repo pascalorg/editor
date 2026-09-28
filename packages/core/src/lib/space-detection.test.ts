@@ -2416,6 +2416,16 @@ describe('procedural zones', () => {
 })
 
 describe('wallClosesRoom', () => {
+  test('retaining walls do not enclose rooms, even in a closed loop', () => {
+    const walls = squareWalls().map((wall) => WallNode.parse({
+      ...wall,
+      metadata: { ...wall.metadata, landscapeRetainingWall: true, roomBoundary: false },
+    }))
+    expect(detectSpacesForLevel('level-1', walls).rooms).toHaveLength(0)
+    expect(wallClosesRoom(walls, walls[3]!)).toBe(false)
+    expect(detectSpacesForLevel('level-1', squareWalls()).rooms).toHaveLength(1)
+  })
+
   test('is false while a chain is still open, true once it encloses a room', () => {
     const open = [
       WallNode.parse({ start: [0, 0], end: [4, 0] }),

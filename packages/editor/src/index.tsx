@@ -895,3 +895,6 @@ export {
   type WallSnapKind,
   type WallSnapPoint,
 } from './store/use-wall-snap-indicator'
+
+export { resolveLandscapeStairSnap } from './components/tools/stair/landscape-snap'
+export type { LandscapeStairSnap } from './components/tools/stair/landscape-snap'

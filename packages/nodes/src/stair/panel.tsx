@@ -280,6 +280,14 @@ export default function StairPanel() {
   const deckNode = node.deckSlabId ? nodes[node.deckSlabId as AnyNodeId] : undefined
   const attachedDeck = deckNode?.type === 'slab' ? deckNode : undefined
   const resolvedRise = resolveStairTotalRise(node, nodes)
+  const landscapeLevelId = node.landscapeSurfaceId && node.parentId === node.landscapeSurfaceId
+    ? nodes[node.parentId as AnyNodeId]?.parentId : node.parentId
+  const landscapeSurfaces = Object.values(nodes).filter((candidate) =>
+    candidate.parentId === landscapeLevelId &&
+    ['landscape:deck', 'landscape:patio', 'landscape:concrete-slab', 'landscape:landing']
+      .includes(candidate.type as string))
+  const connectedSurface = node.landscapeSurfaceId
+    ? nodes[node.landscapeSurfaceId as AnyNodeId] : undefined
 
   return (
     <PanelWrapper
@@ -295,6 +303,21 @@ export default function StairPanel() {
           value={node.stairType ?? 'straight'}
         />
       </PanelSection>
+
+      {node.stairType === 'straight' && (landscapeSurfaces.length > 0 || node.landscapeSurfaceId) && (
+        <PanelSection title="Landscape connection">
+          <div className="space-y-2">
+            <ToggleControl checked={node.autoLandscapeSnap !== false} label="Snap to nearby surfaces"
+              onChange={(checked) => handleUpdate({ autoLandscapeSnap: checked })} />
+            <p className="px-1 text-[11px] text-muted-foreground">
+              {node.autoLandscapeSnap !== false
+                ? connectedSurface ? `Connected to ${connectedSurface.name || 'landscape surface'}. Move the stair to connect to another edge.`
+                  : 'Drag near a deck, patio, concrete slab, or landing edge to fit the stair.'
+                : 'Moving this stair keeps its current rise, steps, and run.'}
+            </p>
+          </div>
+        </PanelSection>
+      )}
 
       <PanelSection title="Opening">
         <div className="space-y-3">
@@ -606,7 +629,7 @@ export default function StairPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title="Railing">
+      {!node.landscapeSurfaceId && <PanelSection title="Railing">
         <SegmentedControl
           onChange={(value) => handleUpdate({ railingMode: value })}
           options={RAILING_MODE_OPTIONS}
@@ -631,7 +654,7 @@ export default function StairPanel() {
             />
           </>
         )}
-      </PanelSection>
+      </PanelSection>}
 
       <PanelSection title="Actions">
         <ActionGroup>

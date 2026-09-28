@@ -16,6 +16,7 @@ import {
   environmentPresentation,
 } from '@pascal-app/plugin-environment'
 import { poolHostPanel, poolPlugin } from '@pascal-app/plugin-pool'
+import { landscapeHostPanel, landscapePlugin } from '@pascal-app/plugin-landscape'
 import { streetscapeHostPanel, streetscapePlugin } from '@pascal-app/plugin-streetscape'
 import { treesHostPanel, treesPlugin } from '@pascal-app/plugin-trees'
 import { registerViewerPresentation } from '@pascal-app/viewer'
@@ -107,6 +108,8 @@ extendPluginDiscovery(async () => [mintPlugin])
 registerEditorHostPanel(mintHostPanel)
 extendPluginDiscovery(async () => [poolPlugin])
 registerEditorHostPanel(poolHostPanel)
+extendPluginDiscovery(async () => [landscapePlugin])
+registerEditorHostPanel(landscapeHostPanel)
 extendPluginDiscovery(async () => [streetscapePlugin])
 // The upstream manifest still names 'Pascal' as creator; credit the author.
 registerEditorHostPanel({

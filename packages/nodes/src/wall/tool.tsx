@@ -951,7 +951,15 @@ const LineWallTool: React.FC = () => {
 export const WallTool: React.FC = () => {
   // Clear preset-seeded defaults on deactivation so a later manual wall draw
   // isn't built with a stale preset's parameters. Unmount-only.
-  useEffect(() => () => useEditor.getState().setToolDefaults('wall', null), [])
+  useEffect(() => {
+    return () => {
+      const editor = useEditor.getState()
+      // React can replay effects or remount the tool without deactivating it.
+      // Defaults belong to the active wall session, including repeated presets.
+      if (editor.tool === 'wall') return
+      editor.setToolDefaults('wall', null)
+    }
+  }, [])
 
   useWallDrawingModeKeys()
 
