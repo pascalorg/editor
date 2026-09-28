@@ -52,8 +52,13 @@ describe('ceiling panel height bounds', () => {
     expect(panelClamp(nodes, 'ceiling_soffit', -3.409)).toBeCloseTo(-3.409)
   })
 
-  test('nothing goes below grade', () => {
-    expect(panelClamp(nodes, 'ceiling_soffit', -10)).toBeCloseTo(-6.4)
+  test('nothing renders below grade', () => {
+    // The ceiling renderers draw the surface 1 cm under the stored height
+    // (ceiling-system.tsx, ceiling/renderer.tsx); the drawn world Y must stay at or above grade.
+    const baseY = 6.4
+    const clamped = panelClamp(nodes, 'ceiling_soffit', -10)
+    expect(baseY + clamped - 0.01).toBeGreaterThanOrEqual(-1e-9)
+    expect(baseY + clamped - 0.01).toBeCloseTo(0)
   })
 
   test('the upper bound is unchanged', () => {
