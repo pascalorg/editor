@@ -4,6 +4,7 @@ import {
   type NodeDefinition,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import { perNodeGeometryBatchable } from '../shared/node-batch/batchable'
 import { blockContextualHelp } from './contextual-help'
 import { blockFaceHost } from './face-host'
 import { buildBlockFloorplan } from './floorplan'
@@ -91,6 +92,7 @@ export const blockDefinition: NodeDefinition<typeof BlockNode> = {
   }),
 
   capabilities: {
+    batchable: perNodeGeometryBatchable,
     selectable: { hitVolume: 'bbox' },
     surfaces: {
       hosting: blockSurfaceProvider,

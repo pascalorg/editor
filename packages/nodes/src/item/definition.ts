@@ -12,6 +12,7 @@ import {
   toggleItemLights,
   toggleItemMechanisms,
 } from '../shared/item-interactions'
+import { itemBatchable } from '../shared/node-batch/batchable'
 import { restingFloorplanAffectedIds } from '../shared/resting-surface-plan'
 import { buildItemContextualDimensions, buildItemFloorplan } from './floorplan'
 import { itemFloorplanMoveTarget } from './floorplan-move'
@@ -213,6 +214,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
     }) as unknown as Omit<ItemNodeType, 'id' | 'type'>,
 
   capabilities: {
+    batchable: itemBatchable,
     selectable: { hitVolume: 'bbox' },
     surfaces: {
       top: {

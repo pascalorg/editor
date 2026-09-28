@@ -75,6 +75,7 @@ export type {
   BakeGeometryBuilder,
   BakePolicy,
   BakeReplaceRenderer,
+  BatchableConfig,
   Capabilities,
   CapabilityCtx,
   CutsContext,

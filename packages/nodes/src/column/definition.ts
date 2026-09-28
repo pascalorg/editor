@@ -7,6 +7,7 @@ import {
   type NodeDefinition,
 } from '@pascal-app/core'
 import { withHostedChildren } from '../shared/hosted-resize'
+import { columnBatchable } from '../shared/node-batch/batchable'
 import {
   collectStructuralGridAxes,
   resolveStructuralGridSnap,
@@ -366,6 +367,7 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
   },
 
   capabilities: {
+    batchable: columnBatchable,
     surfacePlacement: 'floor-only',
     selectable: { hitVolume: 'bbox' },
     surfaces: {

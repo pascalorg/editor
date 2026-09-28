@@ -1,4 +1,5 @@
 import type { NodeDefinition } from '@pascal-app/core'
+import { perNodeGeometryBatchable } from '../shared/node-batch/batchable'
 import { buildImportedMeshFloorplan } from './floorplan'
 import { buildImportedMeshGeometry } from './geometry'
 import { ImportedMeshNode } from './schema'
@@ -20,6 +21,7 @@ export const importedMeshDefinition: NodeDefinition<typeof ImportedMeshNode> = {
     primitives: [],
   }),
   capabilities: {
+    batchable: perNodeGeometryBatchable,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
