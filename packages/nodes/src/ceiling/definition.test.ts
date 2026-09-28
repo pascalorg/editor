@@ -67,7 +67,7 @@ describe('ceiling height handle bounds', () => {
   })
 
   test('nothing goes below grade', () => {
-    expect(handleClamp(nodes, 'ceiling_soffit', -10)).toBeCloseTo(-6.4)
+    expect(handleClamp(nodes, 'ceiling_soffit', -10)).toBeCloseTo(-6.39)
   })
 
   test('the upper bound is unchanged', () => {

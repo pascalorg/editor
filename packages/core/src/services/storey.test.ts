@@ -615,8 +615,8 @@ describe('getCeilingMinHeight', () => {
 
   test('a level above grade lets a ceiling hang down to grade', () => {
     const nodes = roofStack()
-    expect(getCeilingMinHeight('level_roof', nodes, 0.5)).toBeCloseTo(-6.4)
-    expect(getCeilingMinHeight('level_1', nodes, 0)).toBeCloseTo(-3.2)
+    expect(getCeilingMinHeight('level_roof', nodes, 0.5)).toBeCloseTo(-6.39)
+    expect(getCeilingMinHeight('level_1', nodes, 0)).toBeCloseTo(-3.19)
   })
 
   test('the ground storey keeps the caller floor unchanged', () => {

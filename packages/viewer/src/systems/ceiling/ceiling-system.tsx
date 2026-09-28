@@ -1,5 +1,6 @@
 import {
   type AnyNodeId,
+  CEILING_DRAW_OFFSET,
   type CeilingNode,
   getEffectiveNode,
   nodeRegistry,
@@ -114,7 +115,8 @@ function updateCeilingGeometry(
   // follows-mode ceiling re-parks under the current plane on every rebuild
   // (level-height edits / covering-slab changes dirty-mark ceilings).
   // Slight offset to avoid z-fighting with upper-level slabs.
-  mesh.position.y = resolveCeilingHeight(node, nodes) - 0.01 + (liveTransform?.position[1] ?? 0)
+  mesh.position.y =
+    resolveCeilingHeight(node, nodes) - CEILING_DRAW_OFFSET + (liveTransform?.position[1] ?? 0)
 }
 
 /**

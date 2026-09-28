@@ -402,15 +402,22 @@ export function getCeilingClampBound(
  * A ceiling on a level above grade may hang below that level's floor, down
  * to grade (world Y 0, the building's lowest floor): eave soffits and porch
  * ceilings that belong to a roof level explode with it, so they live there
- * with negative heights. The bound is `-baseY`, or `atGrade` when that is
- * lower. On a level at grade, or one that doesn't resolve, the caller's
+ * with negative heights. The bound is `-baseY + CEILING_DRAW_OFFSET`, so the
+ * drawn surface lands at grade, or `atGrade` when that is lower. On a level at grade, or one that doesn't resolve, the caller's
  * `atGrade` floor applies unchanged.
  */
+/**
+ * The ceiling renderers draw the surface this far under the stored height
+ * (so it never z-fights the slab above); height bounds that promise a drawn
+ * position must add it back.
+ */
+export const CEILING_DRAW_OFFSET = 0.01
+
 export function getCeilingMinHeight(
   levelId: string,
   nodes: Record<AnyNodeId, AnyNode>,
   atGrade: number,
 ): number {
   const baseY = getLevelElevations(nodes).get(levelId)?.baseY ?? 0
-  return baseY > 0 ? Math.min(atGrade, -baseY) : atGrade
+  return baseY > 0 ? Math.min(atGrade, -baseY + CEILING_DRAW_OFFSET) : atGrade
 }
