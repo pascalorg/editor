@@ -157,6 +157,15 @@ function isLegacyPartition(assembly: WallAssembly): boolean {
   return !(hasExterior || hasSheathing)
 }
 
+/** The ids `wallAssemblyFromLegacy` gives each role. */
+const LEGACY_LAYER_IDS: Partial<Record<AssemblyLayer['role'], readonly string[]>> = {
+  finish: ['exterior'],
+  air: ['air-space'],
+  sheathing: ['sheathing'],
+  structure: ['framing'],
+  lining: ['interior', 'interior-back'],
+}
+
 /** Whether a stored value is a WS5 `WallAssembly` (the shape #937 wrote) rather than F2. */
 export function isLegacyWallAssembly(value: unknown): value is WallAssembly {
   if (value === null || typeof value !== 'object') return false
@@ -232,10 +241,23 @@ export function wallAssemblyFromLegacy(legacy: WallAssembly): Assembly {
 /**
  * The WS5 view of an F2 stack that has one (what `wallAssemblyFromLegacy`
  * produces), for the inspector's cladding / sheathing / framing / interior
- * editor; `null` for any other stack. Round-trips with `wallAssemblyFromLegacy`.
+ * editor and for plugins written against WS5; `null` for any other stack.
+ * Round-trips with `wallAssemblyFromLegacy` without loss.
  */
 export function wallAssemblyToLegacy(assembly: Assembly): WallAssembly | null {
   if (assembly.face !== 'exterior' || assembly.backing?.length) return null
+  // Only a stack WS5 fully describes round-trips: every layer with its
+  // canonical id and nothing WS5 would drop (a source ref, a slot, returns,
+  // display). Anything else is shown read-only instead of rebuilt.
+  const lossless = assembly.layers.every(
+    (layer) =>
+      LEGACY_LAYER_IDS[layer.role]?.includes(layer.id) &&
+      layer.src === undefined &&
+      layer.slot === undefined &&
+      layer.returns === undefined &&
+      layer.display === undefined,
+  )
+  if (!lossless) return null
   const layers = [...assembly.layers]
   const take = (role: AssemblyLayer['role']) =>
     layers[0]?.role === role ? layers.shift() : undefined
