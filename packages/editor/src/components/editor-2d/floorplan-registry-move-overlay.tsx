@@ -77,8 +77,9 @@ const ALIGNMENT_THRESHOLD_M = 0.08
  */
 export function FloorplanRegistryMoveOverlay() {
   const source = useMovingNode()
-  const currentStair = useScene((state) => source?.type === 'stair'
-    ? state.nodes[source.id] : undefined)
+  const currentStair = useScene((state) =>
+    source?.type === 'stair' ? state.nodes[source.id] : undefined,
+  )
   const movingNode = useMemo(
     () =>
       source && (source.type === 'stair' || isInteractionSubtreeDraft(source.id))
@@ -912,7 +913,8 @@ export function FloorplanRegistryMoveOverlay() {
             position: [sx, oldY, sz],
             ...rotationPatch,
             ...(movingNode.type === 'stair' && movingNode.landscapeSurfaceId
-              ? { landscapeSurfaceId: undefined } : {}),
+              ? { landscapeSurfaceId: undefined }
+              : {}),
           } as Partial<AnyNode>,
         )
       }

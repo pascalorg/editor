@@ -293,7 +293,9 @@ export class SqliteSceneStore implements SceneStore {
 
   constructor(opts: SqliteSceneStoreOptions = {}) {
     const env = opts.env ?? process.env
-    this.databasePath = path.resolve(opts.databasePath ?? resolveDefaultDatabasePath(env))
+    this.databasePath = path.resolve(
+      /* turbopackIgnore: true */ opts.databasePath ?? resolveDefaultDatabasePath(env),
+    )
     this.maxSceneBytes = resolveMaxSceneBytes(env, opts.maxSceneBytes)
   }
 

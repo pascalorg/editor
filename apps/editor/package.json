@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "dotenv -e ../../.env.local -e ../../.env.defaults -- next dev",
-    "build": "dotenv -e ../../.env.local -- next build",
+    "build": "dotenv -e ../../.env.local -- next build --webpack",
     "start": "next start",
     "lint": "biome lint",
     "check-types": "next typegen && tsc --noEmit",

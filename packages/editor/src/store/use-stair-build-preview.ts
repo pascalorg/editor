@@ -23,7 +23,12 @@ type StairBuildPreviewState = {
    *  don't re-render) when the point is unchanged — `grid:move` fires far more
    *  often than the snapped cell actually changes. */
   setPoint(point: StairPreviewPoint | null): void
-  setPreview(point: StairPreviewPoint | null, rotation: number, length?: number | null, stepCount?: number | null): void
+  setPreview(
+    point: StairPreviewPoint | null,
+    rotation: number,
+    length?: number | null,
+    stepCount?: number | null,
+  ): void
   rotateBy(deltaRadians: number): void
   reset(): void
 }
@@ -45,14 +50,21 @@ export const useStairBuildPreview = create<StairBuildPreviewState>((set) => ({
       const samePoint =
         (!point && !state.point) ||
         Boolean(point && state.point && state.point[0] === point[0] && state.point[1] === point[1])
-      return samePoint && state.rotation === rotation && state.length === length && state.stepCount === stepCount
+      return samePoint &&
+        state.rotation === rotation &&
+        state.length === length &&
+        state.stepCount === stepCount
         ? state
         : { point: point ? [point[0], point[1]] : null, rotation, length, stepCount }
     }),
   rotateBy: (deltaRadians) => set((state) => ({ rotation: state.rotation + deltaRadians })),
   reset: () =>
     set((state) =>
-      state.point === null && state.rotation === 0 && state.length === null && state.stepCount === null
-        ? state : { point: null, rotation: 0, length: null, stepCount: null },
+      state.point === null &&
+      state.rotation === 0 &&
+      state.length === null &&
+      state.stepCount === null
+        ? state
+        : { point: null, rotation: 0, length: null, stepCount: null },
     ),
 }))

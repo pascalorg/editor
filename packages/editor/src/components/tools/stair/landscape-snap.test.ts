@@ -1,12 +1,21 @@
 import { expect, test } from 'bun:test'
-import { StairNode, type AnyNode } from '@pascal-app/core'
+import { type AnyNode, StairNode } from '@pascal-app/core'
 import { resolveLandscapeStairSnap } from './landscape-snap'
 
 const stair = StairNode.parse({ parentId: 'level_1', position: [0, 0, -2], width: 1 })
-const surface = (type: string, extra: Record<string, unknown> = {}) => ({
-  id: `${type}_1`, type, parentId: 'level_1', position: [0, 0, 0], rotation: [0, 0, 0],
-  width: 4, depth: 3, thickness: 0.35, shape: 'rectangle', ...extra,
-}) as unknown as AnyNode
+const surface = (type: string, extra: Record<string, unknown> = {}) =>
+  ({
+    id: `${type}_1`,
+    type,
+    parentId: 'level_1',
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    width: 4,
+    depth: 3,
+    thickness: 0.35,
+    shape: 'rectangle',
+    ...extra,
+  }) as unknown as AnyNode
 
 test('connects native stairs to a deck and sizes the flight', () => {
   const deck = surface('landscape:deck')
@@ -21,8 +30,9 @@ test('connects native stairs to a deck and sizes the flight', () => {
 
 test('reads patio elevation and rotates toward a landing', () => {
   const patio = surface('landscape:patio', { thickness: 0.12, elevation: 0.2 })
-  expect(resolveLandscapeStairSnap(stair, { [patio.id]: patio }, [0, 0, -2], 3)?.totalRise)
-    .toBeCloseTo(0.36)
+  expect(
+    resolveLandscapeStairSnap(stair, { [patio.id]: patio }, [0, 0, -2], 3)?.totalRise,
+  ).toBeCloseTo(0.36)
   const landing = surface('landscape:landing', { rotation: [0, Math.PI / 2, 0] })
   const result = resolveLandscapeStairSnap(stair, { [landing.id]: landing }, [-2, 0, 0], 3)
   expect(result?.rotation).toBeCloseTo(Math.PI / 2)
@@ -45,17 +55,27 @@ test('per-stair switch disables magnetic attachment', () => {
   const deck = surface('landscape:deck')
   const disabled = StairNode.parse({ ...stair, autoLandscapeSnap: false })
   expect(resolveLandscapeStairSnap(disabled, { [deck.id]: deck }, [0, 0, -2], 3)).toBeNull()
-  expect(StairNode.parse({}).autoLandscapeSnap).toBe(true)
+  expect(StairNode.parse({}).autoLandscapeSnap).toBeUndefined()
 })
 
 test('reconnects a placed stair after its deck height changes', () => {
   const deck = surface('landscape:deck', { thickness: 0.35 })
   const first = resolveLandscapeStairSnap(stair, { [deck.id]: deck }, [0, 0, -2], 3)!
-  const placed = StairNode.parse({ ...stair, position: first.position, rotation: first.rotation,
-    landscapeSurfaceId: deck.id, totalRise: first.totalRise, stepCount: first.stepCount })
+  const placed = StairNode.parse({
+    ...stair,
+    position: first.position,
+    rotation: first.rotation,
+    landscapeSurfaceId: deck.id,
+    totalRise: first.totalRise,
+    stepCount: first.stepCount,
+  })
   const tallerDeck = surface('landscape:deck', { thickness: 1.2 })
-  const result = resolveLandscapeStairSnap(placed, { [tallerDeck.id]: tallerDeck },
-    [first.position[0], 0, first.position[2] - 0.4], first.length)
+  const result = resolveLandscapeStairSnap(
+    placed,
+    { [tallerDeck.id]: tallerDeck },
+    [first.position[0], 0, first.position[2] - 0.4],
+    first.length,
+  )
   expect(result?.totalRise).toBeCloseTo(1.2)
   expect(result?.stepCount).toBe(8)
   expect(result?.length).toBeGreaterThan(first.length)
@@ -64,8 +84,7 @@ test('reconnects a placed stair after its deck height changes', () => {
 
 test('reconnects by the rotated high end of an existing stair', () => {
   const deck = surface('landscape:deck', { thickness: 0.8 })
-  const rotated = StairNode.parse({ ...stair, rotation: Math.PI / 2,
-    landscapeSurfaceId: deck.id })
+  const rotated = StairNode.parse({ ...stair, rotation: Math.PI / 2, landscapeSurfaceId: deck.id })
   const result = resolveLandscapeStairSnap(rotated, { [deck.id]: deck }, [-2.3, 0, 0], 0.8)
   expect(result?.totalRise).toBeCloseTo(0.8)
   expect(result?.rotation).toBeCloseTo(Math.PI / 2)
@@ -77,7 +96,6 @@ test('fits from the supported stair base when the deck height changes', () => {
   expect(result?.totalRise).toBeCloseTo(1)
   expect(result?.stepCount).toBe(6)
 })
-
 
 test('aligns to the actual curved edge of a circular patio', () => {
   const patio = surface('landscape:patio', { shape: 'circle', width: 4, depth: 4 })

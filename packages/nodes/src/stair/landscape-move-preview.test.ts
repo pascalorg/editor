@@ -1,19 +1,38 @@
 import { afterEach, expect, test } from 'bun:test'
-import { getEffectiveNode, StairNode, StairSegmentNode, useLiveNodeOverrides } from '@pascal-app/core'
+import {
+  getEffectiveNode,
+  StairNode,
+  StairSegmentNode,
+  useLiveNodeOverrides,
+} from '@pascal-app/core'
 import { clearStairMovePreview, publishStairMovePreview } from './landscape-move-preview'
 
-const flight = StairSegmentNode.parse({ id: 'sseg_preview', height: 0.35,
-  length: 0.84, stepCount: 2 })
-const stair = StairNode.parse({ id: 'stair_preview', children: [flight.id],
-  position: [0, 0, -2.34], totalRise: 0.35, stepCount: 2, railingMode: 'both' })
+const flight = StairSegmentNode.parse({
+  id: 'sseg_preview',
+  height: 0.35,
+  length: 0.84,
+  stepCount: 2,
+})
+const stair = StairNode.parse({
+  id: 'stair_preview',
+  children: [flight.id],
+  position: [0, 0, -2.34],
+  totalRise: 0.35,
+  stepCount: 2,
+  railingMode: 'both',
+})
 
 afterEach(() => useLiveNodeOverrides.getState().clearAll())
 
 test('the visible stair model receives live pose and flight geometry during a snap', () => {
   const position: [number, number, number] = [1, 0, -3]
   publishStairMovePreview(stair.id, flight.id, position, Math.PI / 2, {
-    position, rotation: Math.PI / 2, totalRise: 1.2, stepCount: 8,
-    length: 2.24, surfaceId: 'deck_1',
+    position,
+    rotation: Math.PI / 2,
+    totalRise: 1.2,
+    stepCount: 8,
+    length: 2.24,
+    surfaceId: 'deck_1',
   })
 
   const visibleStair = getEffectiveNode(stair)

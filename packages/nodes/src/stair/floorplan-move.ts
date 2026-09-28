@@ -16,8 +16,8 @@ import {
   getSegmentGridStep,
   isGridSnapActive,
   isMagneticSnapActive,
-  resolveLandscapeStairSnap,
   type LandscapeStairSnap,
+  resolveLandscapeStairSnap,
 } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 
@@ -42,8 +42,12 @@ export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({ node,
   // Alignment candidates gathered once — the scene is stable during the drag.
   const candidates = collectAlignmentAnchors(nodes, node.id)
   let lastValid: { position: [number, number, number]; rotation?: number } | null = null
-  const flight = node.children.map((id) => nodes[id])
-    .find((child): child is StairSegmentNode => child?.type === 'stair-segment' && child.segmentType === 'stair')
+  const flight = node.children
+    .map((id) => nodes[id])
+    .find(
+      (child): child is StairSegmentNode =>
+        child?.type === 'stair-segment' && child.segmentType === 'stair',
+    )
   let landscapeSnap: LandscapeStairSnap | null = null
 
   const session: FloorplanMoveTargetSession = {
@@ -67,23 +71,48 @@ export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({ node,
       const sz = aligned[1]
 
       const sceneNodes = useScene.getState().nodes
-      const baseElevation = getFloorStackedPosition({ node, nodes: sceneNodes,
-        position: [sx, startY, sz], rotation: node.rotation, levelId: node.parentId })[1]
-      landscapeSnap = resolveLandscapeStairSnap(node, sceneNodes, [sx, startY, sz],
-        flight?.length ?? 3, baseElevation)
-      const position = landscapeSnap?.position ?? [sx, startY, sz] as [number, number, number]
-      if (lastValid && lastValid.position[0] === position[0] && lastValid.position[2] === position[2] &&
-        lastValid.rotation === landscapeSnap?.rotation) return
+      const baseElevation = getFloorStackedPosition({
+        node,
+        nodes: sceneNodes,
+        position: [sx, startY, sz],
+        rotation: node.rotation,
+        levelId: node.parentId,
+      })[1]
+      landscapeSnap = resolveLandscapeStairSnap(
+        node,
+        sceneNodes,
+        [sx, startY, sz],
+        flight?.length ?? 3,
+        baseElevation,
+      )
+      const position = landscapeSnap?.position ?? ([sx, startY, sz] as [number, number, number])
+      if (
+        lastValid &&
+        lastValid.position[0] === position[0] &&
+        lastValid.position[2] === position[2] &&
+        lastValid.rotation === landscapeSnap?.rotation
+      )
+        return
       lastValid = { position, ...(landscapeSnap ? { rotation: landscapeSnap.rotation } : {}) }
       if (!landscapeSnap) useLiveNodeOverrides.getState().clear(node.id as AnyNodeId)
-      useLiveNodeOverrides.getState().set(node.id as AnyNodeId, { ...lastValid,
-        ...(landscapeSnap ? { totalRise: landscapeSnap.totalRise, stepCount: landscapeSnap.stepCount,
-          landscapeSurfaceId: landscapeSnap.surfaceId, railingMode: 'none' as const }
-          : { landscapeSurfaceId: undefined }) })
+      useLiveNodeOverrides.getState().set(node.id as AnyNodeId, {
+        ...lastValid,
+        ...(landscapeSnap
+          ? {
+              totalRise: landscapeSnap.totalRise,
+              stepCount: landscapeSnap.stepCount,
+              landscapeSurfaceId: landscapeSnap.surfaceId,
+              railingMode: 'none' as const,
+            }
+          : { landscapeSurfaceId: undefined }),
+      })
       if (flight) {
-        if (landscapeSnap) useLiveNodeOverrides.getState().set(flight.id as AnyNodeId, {
-          height: landscapeSnap.totalRise, length: landscapeSnap.length, stepCount: landscapeSnap.stepCount,
-        })
+        if (landscapeSnap)
+          useLiveNodeOverrides.getState().set(flight.id as AnyNodeId, {
+            height: landscapeSnap.totalRise,
+            length: landscapeSnap.length,
+            stepCount: landscapeSnap.stepCount,
+          })
         else useLiveNodeOverrides.getState().clear(flight.id as AnyNodeId)
       }
       useScene.getState().markDirty(node.id as AnyNodeId)
@@ -103,14 +132,35 @@ export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({ node,
       if (flight) useLiveNodeOverrides.getState().clear(flight.id as AnyNodeId)
       const sceneNodes = useScene.getState().nodes
       useScene.getState().updateNodes([
-        { id: node.id as AnyNodeId, data: { ...lastValid,
-          ...(landscapeSnap ? { totalRise: landscapeSnap.totalRise, stepCount: landscapeSnap.stepCount,
-            slabOpeningMode: 'none' as const, landscapeSurfaceId: landscapeSnap.surfaceId,
-              railingMode: 'none' as const }
-            : node.landscapeSurfaceId ? { landscapeSurfaceId: undefined } : {}) } },
-        ...(landscapeSnap && flight ? [{ id: flight.id as AnyNodeId, data: {
-          height: landscapeSnap.totalRise, length: landscapeSnap.length, stepCount: landscapeSnap.stepCount,
-        } }] : []),
+        {
+          id: node.id as AnyNodeId,
+          data: {
+            ...lastValid,
+            ...(landscapeSnap
+              ? {
+                  totalRise: landscapeSnap.totalRise,
+                  stepCount: landscapeSnap.stepCount,
+                  slabOpeningMode: 'none' as const,
+                  landscapeSurfaceId: landscapeSnap.surfaceId,
+                  railingMode: 'none' as const,
+                }
+              : node.landscapeSurfaceId
+                ? { landscapeSurfaceId: undefined }
+                : {}),
+          },
+        },
+        ...(landscapeSnap && flight
+          ? [
+              {
+                id: flight.id as AnyNodeId,
+                data: {
+                  height: landscapeSnap.totalRise,
+                  length: landscapeSnap.length,
+                  stepCount: landscapeSnap.stepCount,
+                },
+              },
+            ]
+          : []),
       ])
     },
   }

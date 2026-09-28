@@ -18,6 +18,7 @@ import {
   footprintAABBFrom,
   type GridEvent,
   type GroupMoveSnapResult,
+  getFloorPlacedElevation,
   getFloorPlacedFootprints,
   type MovableConfig,
   movingFootprintAnchors,
@@ -498,7 +499,9 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
     }
 
     const currentLevelId = () =>
-      (preserveLevelAndElevation ? findLevelAncestorId(node.id, useScene.getState().nodes) : null) ??
+      (preserveLevelAndElevation
+        ? findLevelAncestorId(node.id, useScene.getState().nodes)
+        : null) ??
       useViewer.getState().selection.levelId ??
       (itemSurfaceMove ? findLevelAncestorId(node.id, useScene.getState().nodes) : node.parentId)
 
@@ -824,7 +827,7 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
       // test are plane-height independent, so the elected surface is a
       // single fixed point per pointer ray.
       const pointed = resolvePointerSupportSurface(cameraRef.current, event.position)
-      supportCapRef.current = preserveLevelAndElevation ? null : pointed?.elevation ?? null
+      supportCapRef.current = preserveLevelAndElevation ? null : (pointed?.elevation ?? null)
       supportSurfaceRef.current = preserveLevelAndElevation ? null : pointed
       const rawX = preserveLevelAndElevation
         ? event.localPosition[0]
@@ -1131,18 +1134,20 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
           // The pointer cap makes the persisted host reproduce the capped
           // election — a drop under a deck stores the aimed-at lower slab
           // (or the ground), not the deck hanging above.
-          ...(preserveLevelAndElevation ? {} : resolveSupportSlabPatch(
-            effectiveNode,
-            {
-              ...useScene.getState().nodes,
-              [node.id]: effectiveNode,
-            },
-            {
-              maxElevation: supportCapRef.current,
-              preferredSlabId: supportSurfaceRef.current?.supportSlabId,
-              pinSupport: supportSurfaceRef.current?.sourceNodeId != null,
-            },
-          )),
+          ...(preserveLevelAndElevation
+            ? {}
+            : resolveSupportSlabPatch(
+                effectiveNode,
+                {
+                  ...useScene.getState().nodes,
+                  [node.id]: effectiveNode,
+                },
+                {
+                  maxElevation: supportCapRef.current,
+                  preferredSlabId: supportSurfaceRef.current?.supportSlabId,
+                  pinSupport: supportSurfaceRef.current?.sourceNodeId != null,
+                },
+              )),
           ...(isNew
             ? {
                 metadata: stripPlacementMetadataFlags(node.metadata),
@@ -1215,18 +1220,20 @@ export function MoveRegistryNodeTool({ node: source }: { node: AnyNode }) {
           const committedNode = def.schema.parse({
             ...reparsed,
             parentId: node.parentId,
-            ...(preserveLevelAndElevation ? {} : resolveSupportSlabPatch(
-              { ...reparsed, parentId: node.parentId } as AnyNode,
-              {
-                ...useScene.getState().nodes,
-                [reparsed.id]: reparsed,
-              },
-              {
-                maxElevation: supportCapRef.current,
-                preferredSlabId: supportSurfaceRef.current?.supportSlabId,
-                pinSupport: supportSurfaceRef.current?.sourceNodeId != null,
-              },
-            )),
+            ...(preserveLevelAndElevation
+              ? {}
+              : resolveSupportSlabPatch(
+                  { ...reparsed, parentId: node.parentId } as AnyNode,
+                  {
+                    ...useScene.getState().nodes,
+                    [reparsed.id]: reparsed,
+                  },
+                  {
+                    maxElevation: supportCapRef.current,
+                    preferredSlabId: supportSurfaceRef.current?.supportSlabId,
+                    pinSupport: supportSurfaceRef.current?.sourceNodeId != null,
+                  },
+                )),
           }) as AnyNode
           useScene.temporal.getState().resume()
           useScene.getState().createNode(committedNode, node.parentId as AnyNodeId)

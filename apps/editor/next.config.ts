@@ -44,14 +44,21 @@ const nextConfig: NextConfig = {
     '@pascal-app/plugin-environment',
     '@dgreenheck/ez-tree',
   ],
+  webpack(config, { dev }) {
+    if (!dev) config.resolve.alias['react-scan'] = false
+    return config
+  },
   turbopack: {
-    root: path.resolve(appDirectory, "../../.."),
+    root: path.resolve(appDirectory, '../../..'),
     resolveAlias: {
       react: '../../node_modules/react',
       three: '../../node_modules/three',
       '@react-three/fiber': '../../node_modules/@react-three/fiber',
       '@react-three/drei': '../../node_modules/@react-three/drei',
-      '@pascal-app/nodes': path.relative(appDirectory, path.join(editorRoot, 'packages/nodes/src/index.ts')),
+      '@pascal-app/nodes': path.relative(
+        appDirectory,
+        path.join(editorRoot, 'packages/nodes/src/index.ts'),
+      ),
     },
   },
   experimental: {

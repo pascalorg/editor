@@ -4290,8 +4290,11 @@ function FloorplanStairBuildPreviewLayer({
       children: [FLOORPLAN_PREVIEW_STAIR_SEGMENT.id],
       metadata: { isTransient: true, isFloorplanPreview: true },
     })
-    const segment = { ...FLOORPLAN_PREVIEW_STAIR_SEGMENT,
-      length: length ?? DEFAULT_STAIR_LENGTH, stepCount: stepCount ?? DEFAULT_STAIR_STEP_COUNT }
+    const segment = {
+      ...FLOORPLAN_PREVIEW_STAIR_SEGMENT,
+      length: length ?? DEFAULT_STAIR_LENGTH,
+      stepCount: stepCount ?? DEFAULT_STAIR_STEP_COUNT,
+    }
     const entry = buildSharedFloorplanStairEntry(previewStair, [segment])
     if (!entry) {
       return null

@@ -38,13 +38,13 @@ import useEditor, {
 
 import useFacingPose from '../../../store/use-facing-pose'
 import { useStairBuildPreview } from '../../../store/use-stair-build-preview'
-import { resolveLandscapeStairSnap, type LandscapeStairSnap } from './landscape-snap'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
 import {
   type PointerSupportSurface,
   resolvePointerSupportSurface,
 } from '../shared/pointer-support-cap'
+import { type LandscapeStairSnap, resolveLandscapeStairSnap } from './landscape-snap'
 import { createStairCommitGate, swallowFollowUpBrowserClick } from './stair-click-guard'
 import {
   DEFAULT_CURVED_STAIR_INNER_RADIUS,
@@ -75,7 +75,11 @@ type MoveTriggerEvent = GridEvent | NodeEvent<AnyNode>
  * Generates the step-profile geometry for the ghost preview.
  * Same algorithm as StairSystem's generateStairSegmentGeometry.
  */
-function createStairPreviewGeometry(rise: number, count: number, length: number): THREE.BufferGeometry {
+function createStairPreviewGeometry(
+  rise: number,
+  count: number,
+  length: number,
+): THREE.BufferGeometry {
   const riserHeight = rise / count
   const treadDepth = length / count
 
@@ -180,8 +184,13 @@ function createDefaultStairNode({
     showCenterColumn: DEFAULT_SPIRAL_SHOW_CENTER_COLUMN,
     showStepSupports: DEFAULT_SPIRAL_SHOW_STEP_SUPPORTS,
     railingHeight: DEFAULT_STAIR_RAILING_HEIGHT,
-    railingMode: railingMode === 'none' || railingMode === 'left' ||
-      railingMode === 'right' || railingMode === 'both' ? railingMode : DEFAULT_STAIR_RAILING_MODE,
+    railingMode:
+      railingMode === 'none' ||
+      railingMode === 'left' ||
+      railingMode === 'right' ||
+      railingMode === 'both'
+        ? railingMode
+        : DEFAULT_STAIR_RAILING_MODE,
     children: [segmentId],
   })
 }
@@ -208,11 +217,13 @@ function commitStairPlacement(
   const name = `Staircase ${stairCount + 1}`
   const seed = createSeedStairSegment(getLevelFloorToFloorHeight(placementLevelId, nodes))
 
-  const destinationPlan = landscapeSnap ? null : resolveStairDestinationLevel({
-    createMissing: true,
-    fromLevelId: placementLevelId,
-    nodes,
-  })
+  const destinationPlan = landscapeSnap
+    ? null
+    : resolveStairDestinationLevel({
+        createMissing: true,
+        fromLevelId: placementLevelId,
+        nodes,
+      })
   const nextLevelId = destinationPlan?.toLevel.id ?? placementLevelId
 
   const stair = StairNode.parse({
@@ -225,13 +236,21 @@ function commitStairPlacement(
       segmentId: seed.id,
     }),
     parentId: placementLevelId,
-    ...(landscapeSnap ? { totalRise: landscapeSnap.totalRise, stepCount: landscapeSnap.stepCount,
-      slabOpeningMode: 'none' as const, landscapeSurfaceId: landscapeSnap.surfaceId,
-      railingMode: 'none' as const } : {}),
+    ...(landscapeSnap
+      ? {
+          totalRise: landscapeSnap.totalRise,
+          stepCount: landscapeSnap.stepCount,
+          slabOpeningMode: 'none' as const,
+          landscapeSurfaceId: landscapeSnap.surfaceId,
+          railingMode: 'none' as const,
+        }
+      : {}),
   })
   const segment = {
     ...seed,
-    height: landscapeSnap?.totalRise ?? resolvePlacedStairRise(nodes, placementLevelId, stair, supportSurface),
+    height:
+      landscapeSnap?.totalRise ??
+      resolvePlacedStairRise(nodes, placementLevelId, stair, supportSurface),
     length: landscapeSnap?.length ?? seed.length,
     stepCount: landscapeSnap?.stepCount ?? seed.stepCount,
   }
@@ -240,19 +259,21 @@ function commitStairPlacement(
     [stair.id]: stair,
     [segment.id]: { ...segment, parentId: stair.id },
   } as Record<string, AnyNode>
-  const placementPatch = landscapeSnap ? { position } : supportSurface?.sourceNodeId
-    ? resolveFrozenFloorPlacementPatch(stair, prospectiveNodes, {
-        position,
-        rotation,
-        elevation: supportSurface.elevation,
-        preferredSlabId: supportSurface.supportSlabId,
-      })
-    : {
-        position,
-        ...resolveSupportSlabPatch(stair, prospectiveNodes, {
-          maxElevation: supportSurface?.elevation,
-        }),
-      }
+  const placementPatch = landscapeSnap
+    ? { position }
+    : supportSurface?.sourceNodeId
+      ? resolveFrozenFloorPlacementPatch(stair, prospectiveNodes, {
+          position,
+          rotation,
+          elevation: supportSurface.elevation,
+          preferredSlabId: supportSurface.supportSlabId,
+        })
+      : {
+          position,
+          ...resolveSupportSlabPatch(stair, prospectiveNodes, {
+            maxElevation: supportSurface?.elevation,
+          }),
+        }
   const committedStair = StairNode.parse({
     ...stair,
     ...placementPatch,
@@ -292,10 +313,13 @@ export const StairTool: React.FC = () => {
   const previewRiseRef = useRef(previewRise)
   previewRiseRef.current = previewRise
   const [previewProfile, setPreviewProfile] = useState({
-    count: DEFAULT_STAIR_STEP_COUNT, length: DEFAULT_STAIR_LENGTH,
+    count: DEFAULT_STAIR_STEP_COUNT,
+    length: DEFAULT_STAIR_LENGTH,
   })
-  const previewGeometry = useMemo(() => createStairPreviewGeometry(previewRise,
-    previewProfile.count, previewProfile.length), [previewRise, previewProfile])
+  const previewGeometry = useMemo(
+    () => createStairPreviewGeometry(previewRise, previewProfile.count, previewProfile.length),
+    [previewRise, previewProfile],
+  )
   useEffect(() => () => previewGeometry.dispose(), [previewGeometry])
 
   useEffect(() => {
@@ -331,11 +355,13 @@ export const StairTool: React.FC = () => {
       )
       if (!placementLevelId) return null
 
-      const destinationPlan = landscapeSnap ? null : resolveStairDestinationLevel({
-        createMissing: true,
-        fromLevelId: placementLevelId,
-        nodes,
-      })
+      const destinationPlan = landscapeSnap
+        ? null
+        : resolveStairDestinationLevel({
+            createMissing: true,
+            fromLevelId: placementLevelId,
+            nodes,
+          })
       const nextLevelId = destinationPlan?.toLevel.id ?? placementLevelId
       const seed = createSeedStairSegment(getLevelFloorToFloorHeight(placementLevelId, nodes))
       const stair = createDefaultStairNode({
@@ -347,13 +373,20 @@ export const StairTool: React.FC = () => {
         segmentId: seed.id,
       })
       const previewStair = landscapeSnap
-        ? StairNode.parse({ ...stair, totalRise: landscapeSnap.totalRise,
-            stepCount: landscapeSnap.stepCount, slabOpeningMode: 'none',
-            landscapeSurfaceId: landscapeSnap.surfaceId, railingMode: 'none' })
+        ? StairNode.parse({
+            ...stair,
+            totalRise: landscapeSnap.totalRise,
+            stepCount: landscapeSnap.stepCount,
+            slabOpeningMode: 'none',
+            landscapeSurfaceId: landscapeSnap.surfaceId,
+            railingMode: 'none',
+          })
         : stair
       const segment = {
         ...seed,
-        height: landscapeSnap?.totalRise ?? resolvePlacedStairRise(nodes, placementLevelId, stair, supportSurface),
+        height:
+          landscapeSnap?.totalRise ??
+          resolvePlacedStairRise(nodes, placementLevelId, stair, supportSurface),
         length: landscapeSnap?.length ?? seed.length,
         stepCount: landscapeSnap?.stepCount ?? seed.stepCount,
       }
@@ -389,10 +422,17 @@ export const StairTool: React.FC = () => {
       const landscapeSnap = landscapeSnapRef.current
       const count = landscapeSnap?.stepCount ?? DEFAULT_STAIR_STEP_COUNT
       const length = landscapeSnap?.length ?? DEFAULT_STAIR_LENGTH
-      setPreviewProfile((current) => current.count === count && current.length === length
-        ? current : { count, length })
-      useStairBuildPreview.getState().setPreview([position[0], position[2]], rotation,
-        landscapeSnap?.length, landscapeSnap?.stepCount)
+      setPreviewProfile((current) =>
+        current.count === count && current.length === length ? current : { count, length },
+      )
+      useStairBuildPreview
+        .getState()
+        .setPreview(
+          [position[0], position[2]],
+          rotation,
+          landscapeSnap?.length,
+          landscapeSnap?.stepCount,
+        )
       const preview = buildPreviewScene(position, rotation, supportSurface, landscapeSnap)
       const frozenPatch =
         preview && supportSurface?.sourceNodeId && !landscapeSnap
@@ -415,7 +455,11 @@ export const StairTool: React.FC = () => {
               rotation,
               levelId: preview.placementLevelId,
               nodes: preview.previewNodes,
-              maxElevation: landscapeSnap ? null : supportSurface?.sourceNodeId ? null : supportSurface?.elevation,
+              maxElevation: landscapeSnap
+                ? null
+                : supportSurface?.sourceNodeId
+                  ? null
+                  : supportSurface?.elevation,
             })
           : previewPosition
       if (cursorRef.current) {
@@ -466,7 +510,12 @@ export const StairTool: React.FC = () => {
       z: number,
       rotation: number,
     ): ReturnType<typeof resolveAlignment> | null => {
-      const preview = buildPreviewScene([x, 0, z], rotation, supportSurfaceRef.current, landscapeSnapRef.current)
+      const preview = buildPreviewScene(
+        [x, 0, z],
+        rotation,
+        supportSurfaceRef.current,
+        landscapeSnapRef.current,
+      )
       const moving = preview
         ? movingAlignmentAnchors(preview.stair, preview.previewNodes, x, z, rotation)
         : []
@@ -537,17 +586,35 @@ export const StairTool: React.FC = () => {
         isMagneticSnapActive(),
       )
       const nodes = useScene.getState().nodes
-      const levelId = resolveStairPlacementLevelId(nodes, currentLevelId,
-        useViewer.getState().selection.buildingId)
+      const levelId = resolveStairPlacementLevelId(
+        nodes,
+        currentLevelId,
+        useViewer.getState().selection.buildingId,
+      )
       const candidate: [number, number, number] = [gridX, 0, gridZ]
-      const draft = StairNode.parse({ parentId: levelId, position: candidate,
-        width: DEFAULT_STAIR_WIDTH, stairType: 'straight' })
-      const baseElevation = levelId ? getFloorStackedPosition({ node: draft, nodes,
-        position: candidate, rotation: rotationRef.current, levelId })[1] : candidate[1]
-      const snap = event.nativeEvent?.altKey ? null
+      const draft = StairNode.parse({
+        parentId: levelId,
+        position: candidate,
+        width: DEFAULT_STAIR_WIDTH,
+        stairType: 'straight',
+      })
+      const baseElevation = levelId
+        ? getFloorStackedPosition({
+            node: draft,
+            nodes,
+            position: candidate,
+            rotation: rotationRef.current,
+            levelId,
+          })[1]
+        : candidate[1]
+      const snap = event.nativeEvent?.altKey
+        ? null
         : resolveLandscapeStairSnap(draft, nodes, candidate, DEFAULT_STAIR_LENGTH, baseElevation)
       landscapeSnapRef.current = snap
-      if (snap) { rotationRef.current = snap.rotation; return snap.position }
+      if (snap) {
+        rotationRef.current = snap.rotation
+        return snap.position
+      }
       return candidate
     }
 
@@ -590,8 +657,13 @@ export const StairTool: React.FC = () => {
       const position = resolveStairPosition(event)
       if (!position) return
 
-      commitStairPlacement(currentLevelId, position, rotationRef.current, supportSurfaceRef.current,
-        landscapeSnapRef.current)
+      commitStairPlacement(
+        currentLevelId,
+        position,
+        rotationRef.current,
+        supportSurfaceRef.current,
+        landscapeSnapRef.current,
+      )
       openingPreview.clear()
       // Commit cleared the opening preview, so force the next hover (even on the
       // same cell) to rebuild rather than dedupe against the just-placed key.

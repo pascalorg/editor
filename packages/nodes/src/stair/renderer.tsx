@@ -177,43 +177,101 @@ export const StairRenderer = ({ node: rawNode }: { node: StairNode }) => {
   )
 }
 
-function StairLandscapeTransition({ stair, materials }: { stair: StairNode; materials: StairBodyMaterials }) {
+function StairLandscapeTransition({
+  stair,
+  materials,
+}: {
+  stair: StairNode
+  materials: StairBodyMaterials
+}) {
   const surface = useScene((state) => state.nodes[stair.landscapeSurfaceId as AnyNodeId])
   const flightId = stair.children[0]
-  const flight = useScene((state) => flightId ? state.nodes[flightId] : undefined)
-  const flightOverride = useLiveNodeOverrides((state) => flightId ? state.overrides.get(flightId) : undefined)
-  const length = (flightOverride?.length as number | undefined) ??
-    (flight as StairSegmentNode | undefined)?.length ?? 0
+  const flight = useScene((state) => (flightId ? state.nodes[flightId] : undefined))
+  const flightOverride = useLiveNodeOverrides((state) =>
+    flightId ? state.overrides.get(flightId) : undefined,
+  )
+  const length =
+    (flightOverride?.length as number | undefined) ??
+    (flight as StairSegmentNode | undefined)?.length ??
+    0
   const segment = flight as StairSegmentNode | undefined
-  const fillToFloor = (flightOverride?.fillToFloor as boolean | undefined) ??
-    segment?.fillToFloor ?? stair.fillToFloor ?? true
-  const thickness = (flightOverride?.thickness as number | undefined) ??
-    segment?.thickness ?? stair.thickness ?? 0.25
+  const fillToFloor =
+    (flightOverride?.fillToFloor as boolean | undefined) ??
+    segment?.fillToFloor ??
+    stair.fillToFloor ??
+    true
+  const thickness =
+    (flightOverride?.thickness as number | undefined) ??
+    segment?.thickness ??
+    stair.thickness ??
+    0.25
   const segmentHeight = (flightOverride?.height as number | undefined) ?? segment?.height ?? 0
-  const profile = useMemo(() => surface
-    ? landscapeTransitionProfile(stair, surface as Parameters<typeof landscapeTransitionProfile>[1], length)
-    : null, [stair, surface, length])
+  const profile = useMemo(
+    () =>
+      surface
+        ? landscapeTransitionProfile(
+            stair,
+            surface as Parameters<typeof landscapeTransitionProfile>[1],
+            length,
+          )
+        : null,
+    [stair, surface, length],
+  )
   const geometry = useMemo(() => {
     if (!profile) return null
     const vertices: number[] = []
     const indices: number[] = []
     const top = stair.totalRise ?? 0
-    const undersideOffset = segment?.segmentType === 'landing'
-      ? thickness
-      : thickness / Math.cos(Math.atan2(segmentHeight, length || 1))
+    const undersideOffset =
+      segment?.segmentType === 'landing'
+        ? thickness
+        : thickness / Math.cos(Math.atan2(segmentHeight, length || 1))
     const bottom = fillToFloor ? 0 : top - undersideOffset
     for (const [x, boundary] of profile.samples) {
-      vertices.push(x, top, length + profile.frontZ,
-        x, top, length + boundary,
-        x, bottom, length + profile.frontZ,
-        x, bottom, length + boundary)
+      vertices.push(
+        x,
+        top,
+        length + profile.frontZ,
+        x,
+        top,
+        length + boundary,
+        x,
+        bottom,
+        length + profile.frontZ,
+        x,
+        bottom,
+        length + boundary,
+      )
     }
     for (let i = 0; i < profile.samples.length - 1; i++) {
-      const a = i * 4, b = (i + 1) * 4
-      indices.push(a, a + 1, b, b, a + 1, b + 1,
-        a + 2, b + 2, a + 3, b + 2, b + 3, a + 3,
-        a, b, a + 2, b, b + 2, a + 2,
-        a + 1, a + 3, b + 1, b + 1, a + 3, b + 3)
+      const a = i * 4,
+        b = (i + 1) * 4
+      indices.push(
+        a,
+        a + 1,
+        b,
+        b,
+        a + 1,
+        b + 1,
+        a + 2,
+        b + 2,
+        a + 3,
+        b + 2,
+        b + 3,
+        a + 3,
+        a,
+        b,
+        a + 2,
+        b,
+        b + 2,
+        a + 2,
+        a + 1,
+        a + 3,
+        b + 1,
+        b + 1,
+        a + 3,
+        b + 3,
+      )
     }
     const last = (profile.samples.length - 1) * 4
     indices.push(0, 2, 1, 1, 2, 3, last, last + 1, last + 2, last + 1, last + 3, last + 2)
@@ -232,27 +290,47 @@ function StairLandscapeTransition({ stair, materials }: { stair: StairNode; mate
       const nx = Math.abs(normals.getX(i))
       const ny = Math.abs(normals.getY(i))
       const nz = Math.abs(normals.getZ(i))
-      const materialIndex = normals.getY(i) > 0.75 ? STAIR_TREAD_MATERIAL_INDEX : STAIR_SIDE_MATERIAL_INDEX
+      const materialIndex =
+        normals.getY(i) > 0.75 ? STAIR_TREAD_MATERIAL_INDEX : STAIR_SIDE_MATERIAL_INDEX
       if (materialIndex !== currentMaterial) {
         if (i > groupStart) result.addGroup(groupStart, i - groupStart, currentMaterial)
         groupStart = i
         currentMaterial = materialIndex
       }
       for (let vertex = i; vertex < i + 3; vertex++) {
-        const x = position.getX(vertex), y = position.getY(vertex), z = position.getZ(vertex)
+        const x = position.getX(vertex),
+          y = position.getY(vertex),
+          z = position.getZ(vertex)
         if (ny >= nx && ny >= nz) uvs.push(x, z)
         else if (nx >= nz) uvs.push(z, y)
         else uvs.push(x, y)
       }
     }
-    if (position.count > groupStart) result.addGroup(groupStart, position.count - groupStart, currentMaterial)
+    if (position.count > groupStart)
+      result.addGroup(groupStart, position.count - groupStart, currentMaterial)
     result.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
     result.setAttribute('uv2', new THREE.Float32BufferAttribute(uvs.slice(), 2))
     return result
-  }, [profile, length, stair.totalRise, fillToFloor, thickness, segmentHeight, segment?.segmentType])
+  }, [
+    profile,
+    length,
+    stair.totalRise,
+    fillToFloor,
+    thickness,
+    segmentHeight,
+    segment?.segmentType,
+  ])
   useEffect(() => () => geometry?.dispose(), [geometry])
-  return geometry ? <mesh castShadow geometry={geometry} material={materials}
-    name="landscape-stair-transition" receiveShadow userData={STAIR_BODY_SLOT_USER_DATA} /> : null
+  return geometry ? (
+    <mesh
+      castShadow
+      geometry={geometry}
+      material={materials}
+      name="landscape-stair-transition"
+      receiveShadow
+      userData={STAIR_BODY_SLOT_USER_DATA}
+    />
+  ) : null
 }
 
 function StairRailings({ stair, material }: { stair: StairNode; material: THREE.Material }) {
