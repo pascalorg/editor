@@ -8,7 +8,7 @@ export const validateDesignInput = {
   design: z
     .union([z.string(), z.record(z.string(), z.unknown())])
     .describe(
-      'The design (procedural recipe v1) as an object, or as a JSON string for clients that cannot send recursive objects. Schema: pascal://schema/design.',
+      'The design (procedural recipe, version 1 or 2) as an object, or as a JSON string for clients that cannot send recursive objects. Schema: pascal://schema/design.',
     ),
   parameters: z
     .record(z.string(), z.number())

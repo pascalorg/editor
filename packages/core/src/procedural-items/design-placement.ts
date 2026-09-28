@@ -8,7 +8,7 @@ import {
   type QueryNodes,
   validateProceduralRelations,
 } from './query'
-import { evaluateRecipe, parseRecipe, type Vec3 } from './recipe'
+import { evaluateRecipe, parseRecipe, RECIPE_V2_LIMITS, type Vec3 } from './recipe'
 import { boundsOf, boxCorners, frame, transformPoint } from './spatial'
 
 /**
@@ -64,7 +64,7 @@ export type DesignPlacement = {
 }
 
 /** R7: designs above this are stored once by hash (AK-01/P-05), not inline in each node. */
-export const INLINE_DESIGN_MAX_BYTES = 24 * 1024
+export const INLINE_DESIGN_MAX_BYTES = RECIPE_V2_LIMITS.bytes
 
 const round = (value: number) => Math.round(value * 1000) / 1000
 

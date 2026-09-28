@@ -7,6 +7,7 @@ import {
   evaluateRecipe,
   parseRecipe,
   RECIPE_LIMITS,
+  RECIPE_V2_LIMITS,
   type Recipe,
   RecipeSchema,
   shapeBounds,
@@ -15,6 +16,7 @@ import {
   triangleCharge,
   type Vec3,
 } from './recipe'
+import { type Ring, sectionRings } from './section'
 
 // Agent-facing design capabilities: the schema a design must follow and the validation that
 // is the authority over it. Every surface (MCP, chat, scene programs) wraps these functions.
@@ -153,20 +155,29 @@ export type DesignValidation = z.infer<typeof DesignValidationSchema>
 
 const DESIGN_RULES = [
   'Validation is the authority. It enforces these rules, which JSON Schema cannot express, and evaluates the defaults, each parameter at its min and max, and 20 seeded samples. Only a design without errors can be placed.',
+  'version 1 covers box, roundedBox, cylinder and ellipsoid shapes, flat part motions and at most 16 parts of 24 shapes. Everything marked "v2" below needs "version": 2, and a v2 design stays under 24 KiB of JSON.',
   'Units are metres and radians, +Y is up. A shape position is its centre and size its full extent; rotation is XYZ Euler about the centre. Cylinders run along Y; an ellipsoid fills its size box.',
-  'An expression is a number, a parameter id, "index" (the 0-based repeat inside part.count) or {op, args}. Arithmetic strings such as "width / 2" are not supported. Results stay finite and within ±10000, nesting depth ≤ 16, and mod needs a positive divisor.',
+  'An expression is a number, a parameter id, "index" (the 0-based repeat inside part.count) or {op, args}. Arithmetic strings such as "width / 2" are not supported. Results stay finite and within ±10000, nesting depth ≤ 16, and mod needs a positive divisor. v2 adds {op: "select", args: [i, v0, …]}, which is v_i for an integral i from 0 to n - 1.',
   'IDs are lowercase snake_case. Parameter, slot, part and surface ids are unique; shape ids are unique within their part; "index" is not a parameter id.',
   'Each shape.slot names a declared slot; parameter.part and surface.part name declared parts. At most one parameter binds a resize handle (axis) per axis, per part or per design.',
-  'Parameters need min ≤ default ≤ max. unit "count" needs integer min, max, default and step.',
+  'Parameters need min ≤ default ≤ max. unit "count" needs integer min, max, default and step. v2: unit "bool" runs 0..1 and "choice" indexes its options (2–16 labels), both in steps of 1, with an integer default and no axis.',
+  'v2: part.when and shape.when build a repeat or a shape only where they evaluate to nonzero; a repeat whose shapes are all skipped builds nothing (no light, motion or named surface).',
   'part.count evaluates to an integer from 0 to 64. Shape sizes evaluate to 0.001–30 m, and the design stays within 30 m of its origin.',
   'No geometry goes below y = 0, whatever the mounting. Without mounting the design stands on the floor at y = 0 and no motion may sweep below it.',
   'mounting "wall-side" needs a named surface without part whose normal is local -Z (rotation [-π/2, 0, 0]). It is the plane that meets the wall: keep geometry in front of it (larger z; geometry behind it passes into the wall and is warned about); no motion may cross behind it.',
   'mounting "ceiling" needs a named surface without part facing +Y (no rotation) at the highest point of the design. No motion may rise above it.',
-  'radius applies to roundedBox (at most half the smallest size, default 0.02). topScale applies to cylinders only (0–1). support: true offers a shape top to hosted items; it must be an unrotated box, roundedBox or untapered cylinder outside moving parts.',
-  'Motion: hinge 0 < |angle| ≤ π, slide 0 < |distance| ≤ 5 m, spin 0 < |radiansPerSecond| ≤ 20; delay 0–1 s and duration 0.1–2 s. At most 8 moving parts and 32 evaluated motion groups. Named surfaces cannot belong to moving parts.',
+  'radius applies to roundedBox (at most half the smallest size, default 0.02). topScale applies to cylinders only (0–1). support: true offers a shape top to hosted items; it must be an unrotated box, roundedBox or untapered, solid, full cylinder outside moving parts.',
+  'v2 cylinders: segments (3–64 sides, default 24), open (no end caps), inner (hollow wall, inner radius as a fraction 0–1 of the outer) and arc (a partial sweep in (0, 2π] from local +Z toward +X).',
+  'v2 extrude: a section in local x/y extruded along local z by length, centred. Sections: rectangle {width, depth, corner?}, round {radius, wall?}, oval {width, depth}, section {family I|C|L|T|Z|rect-tube, width, depth, web, flange} (web and flange thinner than the size; a rect-tube web under half its width) or polygon {outer, holes?} of 3–64 points that must not self-intersect. bevel ≤ min(length / 4, 5 cm, thinnest wall / 2.5).',
+  'v2 revolve: profile [radius, height] points (2–64, radius ≥ 0) turned about local Y, with segments and arc as on cylinders. It is closed where the profile meets the axis at both ends over a full turn; otherwise it is a surface drawn from both sides.',
+  "v2 part trees: part.parent makes a part move with its parent; it repeats once (riding the parent's repeat 0) or exactly as often as the parent (bound by index), at most 8 levels deep. part.frame {position, rotation} is where its shapes, light and joint are authored.",
+  'v2 joints: at most one per part, keyed by joints[].child, with origin and axis in the part frame. fixed takes no values; revolute (radians) and prismatic (metres) need open and may give rest and a range [low, high] containing rest and open; continuous needs speed (radians per second) and no open, range or timing. A part has a flat motion or a joint, not both, and a part with a flat motion cannot sit in a tree.',
+  'v2 base (floor designs only): the design-space height that rests on the floor; no geometry or motion may go below it.',
+  'v2 cuts (ceiling designs): one rect {size, center?} or circle {diameter, center?} opening in the host ceiling, in the mounting reference plane. The design may rise above the reference only inside its cut, moving parts included.',
+  'Motion: hinge 0 < |angle| ≤ π, slide 0 < |distance| ≤ 5 m, spin 0 < |radiansPerSecond| ≤ 20 (joints alike: |open - rest| and range ends within those of rest); delay 0–1 s and duration 0.1–2 s. At most 8 moving parts (flat motions and non-fixed joints) and 32 evaluated motion groups. Named surfaces cannot belong to moving parts or their children.',
   'Lights: at most 12 evaluated. Each light lies within its part instance at rest (±2 cm); lights sharing an emissiveSlot share one color.',
   'Surfaces evaluate to 0.001–30 m sizes within 30 m of the origin, at most 256 in all.',
-  'Budgets: 256 expanded shapes (count × shapes, summed over parts), 100000 budget triangles (box 12, roundedBox 588, cylinder 96, ellipsoid 720), 50000 expression evaluations, 131072 characters of JSON, 12000 JSON values nested at most 24 deep.',
+  'Budgets: 256 expanded shapes (count × shapes, summed over parts; 512 in v2), 100000 budget triangles (v1 charges box 12, roundedBox 588, cylinder 96, ellipsoid 720; v2 charges what the renderer builds, reported as measurements.triangles.actual), 50000 expression evaluations, 131072 characters of JSON (24 KiB in v2), 12000 JSON values nested at most 24 deep, and 250 ms of evaluation in v2.',
   'constraints: each {left, relation, right} must hold (lte: left ≤ right; gte: left ≥ right); message is the error shown when it fails.',
 ]
 
@@ -243,10 +254,13 @@ export const DESIGN_EXAMPLE: Recipe = {
 }
 
 export type DesignSchemaDescription = {
-  version: 1
+  /** The newest design version the schema covers; version 1 designs stay valid. */
+  version: 2
   /** JSON Schema (2020-12) of a design; `$defs.Expr` is the recursive expression type. */
   schema: Record<string, unknown>
   limits: typeof RECIPE_LIMITS
+  /** Version 2 caps that replace or add to `limits`. */
+  limitsV2: typeof RECIPE_V2_LIMITS
   /** Rules JSON Schema cannot express; `validateDesign` enforces them. */
   rules: string[]
   example: Recipe
@@ -264,9 +278,9 @@ export function describeDesignSchema(): DesignSchemaDescription {
         'A number, a parameter id, "index" (the 0-based repeat inside part.count) or {op, args}.',
     })
     jsonSchema = {
-      title: 'Pascal design v1',
+      title: 'Pascal design',
       description:
-        'A procedural design: parameters, material slots and parts made of box, roundedBox, cylinder and ellipsoid shapes. Validation enforces rules this schema cannot express and is the authority.',
+        'A procedural design: parameters, material slots and parts made of box, roundedBox, cylinder and ellipsoid shapes, and in version 2 extrude and revolve shapes, part trees and joints. Validation enforces rules this schema cannot express and is the authority.',
       ...(z.toJSONSchema(RecipeSchema, { io: 'input', metadata: registry }) as Record<
         string,
         unknown
@@ -274,9 +288,10 @@ export function describeDesignSchema(): DesignSchemaDescription {
     }
   }
   return structuredClone({
-    version: 1,
+    version: 2,
     schema: jsonSchema,
     limits: RECIPE_LIMITS,
+    limitsV2: RECIPE_V2_LIMITS,
     rules: DESIGN_RULES,
     example: DESIGN_EXAMPLE,
   })
@@ -297,6 +312,29 @@ const EXPRESSION_KEYS = new Set([
   'duration',
   'left',
   'right',
+  'when',
+  'base',
+  'length',
+  'bevel',
+  'width',
+  'depth',
+  'corner',
+  'wall',
+  'web',
+  'flange',
+  'outer',
+  'holes',
+  'profile',
+  'inner',
+  'arc',
+  'origin',
+  'axis',
+  'open',
+  'rest',
+  'range',
+  'speed',
+  'center',
+  'diameter',
 ])
 
 function formatPath(path: readonly PropertyKey[]) {
@@ -326,6 +364,9 @@ function schemaDiagnostics(error: z.ZodError, raw: unknown): DesignDiagnostic[] 
       code: 'schema',
       path: formatPath(issue.path) || undefined,
       message: `${message} (got ${got})`,
+      ...(/requires recipe version 2/.test(message) && {
+        hint: 'Set "version": 2 (and keep the design under 24 KiB), or leave out the v2 feature.',
+      }),
     }
   })
   if (error.issues.length > ISSUE_LIMIT)
@@ -392,11 +433,46 @@ function unionBounds(entries: { min: Vec3; max: Vec3 }[]) {
   return boundsFrom(min, max)
 }
 
-/** Volume of a shape's primitive as a fraction of its size box; a tapered cylinder is a frustum. */
-function volumeFraction(shape: Pick<EvaluatedShape, 'primitive' | 'topScale'>) {
-  const t = shape.topScale
-  if (shape.primitive === 'cylinder') return ((Math.PI / 4) * (1 + t + t * t)) / 3
-  return shape.primitive === 'ellipsoid' ? Math.PI / 6 : 1
+const ringArea = (ring: Ring) =>
+  Math.abs(
+    ring.reduce((sum, [x, y], i) => {
+      const [nx, ny] = ring[(i + 1) % ring.length]!
+      return sum + x * ny - nx * y
+    }, 0),
+  ) / 2
+
+/** Volume of a shape for the centre of mass (a tapered cylinder is a frustum). */
+function shapeVolume(shape: EvaluatedShape) {
+  const [w, h, d] = shape.size
+  const sweep = (shape.arc ?? 2 * Math.PI) / (2 * Math.PI)
+  switch (shape.primitive) {
+    case 'cylinder': {
+      const t = shape.topScale
+      const hollow = shape.inner === undefined ? 1 : 1 - shape.inner ** 2
+      return (((Math.PI / 4) * (1 + t + t * t)) / 3) * w * h * d * hollow * sweep
+    }
+    case 'ellipsoid':
+      return (Math.PI / 6) * w * h * d
+    case 'extrude': {
+      const rings = sectionRings(shape.section!)
+      const area =
+        ringArea(rings.outer) - rings.holes.reduce((sum, hole) => sum + ringArea(hole), 0)
+      return area * d
+    }
+    case 'revolve': {
+      // Pappus over the profile closed along the axis: arc · Σ (r1² + r1 r2 + r2²) Δy / 6.
+      const profile = shape.profile!
+      let sum = 0
+      for (let i = 1; i < profile.length; i++) {
+        const [r1, y1] = profile[i - 1]!,
+          [r2, y2] = profile[i]!
+        sum += ((r1 * r1 + r1 * r2 + r2 * r2) * (y2 - y1)) / 6
+      }
+      return Math.abs(sum) * 2 * Math.PI * sweep
+    }
+    default:
+      return w * h * d
+  }
 }
 
 /** Draw calls per design above which rendering many instances gets costly. */
@@ -458,11 +534,12 @@ function measureDesign(recipe: Recipe, evaluation: Evaluation, diagnostics: Desi
     const own = shapes.filter(({ shape }) => shape.partId === part.id)
     return {
       id: part.id,
-      instances: own.length / part.shapes.length,
+      // Shape ids are `${part}:${index}:${shape}`; `when` may skip shapes or whole repeats.
+      instances: new Set(own.map(({ shape }) => shape.id.split(':')[1])).size,
       shapes: own.length,
       triangles: own.reduce((sum, entry) => sum + entry.triangles, 0),
       slots: [...new Set(own.map(({ shape }) => shape.slot))],
-      motion: part.motion?.kind ?? null,
+      motion: evaluation.motions.find((motion) => motion.partId === part.id)?.kind ?? null,
       lights: evaluation.lights.filter((light) => light.partId === part.id).length,
       bounds: own.length ? unionBounds(own) : null,
     }
@@ -567,7 +644,7 @@ function measureDesign(recipe: Recipe, evaluation: Evaluation, diagnostics: Desi
     let mass = 0
     const centre: [number, number] = [0, 0]
     for (const { shape } of shapes) {
-      const volume = volumeFraction(shape) * shape.size[0] * shape.size[1] * shape.size[2]
+      const volume = shapeVolume(shape)
       mass += volume
       centre[0] += volume * shape.position[0]
       centre[1] += volume * shape.position[2]

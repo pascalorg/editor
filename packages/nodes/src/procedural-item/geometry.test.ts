@@ -16,6 +16,8 @@ import cabinetJson from '../../../core/src/procedural-items/__fixtures__/cabinet
 import ceilingFanJson from '../../../core/src/procedural-items/__fixtures__/ceiling_fan.json'
 import chandelierJson from '../../../core/src/procedural-items/__fixtures__/chandelier_six_arms.json'
 import deskJson from '../../../core/src/procedural-items/__fixtures__/desk_fan.json'
+import jointCabinetJson from '../../../core/src/procedural-items/__fixtures__/joint_cabinet.json'
+import downlightJson from '../../../core/src/procedural-items/__fixtures__/recessed_downlight.json'
 import condenserJson from '../../../core/src/procedural-items/__fixtures__/trial-e1-condenser.json'
 import airHandlerJson from '../../../core/src/procedural-items/__fixtures__/trial-e2-air-handler.json'
 import louverJson from '../../../core/src/procedural-items/__fixtures__/trial-e5-louver.json'
@@ -639,6 +641,7 @@ test('validateDesign reports the triangles and draw groups this builder produces
     bedRecipe,
     ...[cabinetJson, ceilingFanJson, chandelierJson, deskJson].map(parseRecipe),
     ...[condenserJson, airHandlerJson, louverJson, stairGuardJson].map(parseRecipe),
+    ...[jointCabinetJson, downlightJson].map(parseRecipe),
   ]
   for (const recipe of recipes) {
     const built = buildProceduralGeometry(ProceduralItemNode.parse({ recipe }))

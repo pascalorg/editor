@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import ceilingFanJson from './__fixtures__/ceiling_fan.json'
 import chandelierJson from './__fixtures__/chandelier_six_arms.json'
+import jointCabinetJson from './__fixtures__/joint_cabinet.json'
+import downlightJson from './__fixtures__/recessed_downlight.json'
 import condenserJson from './__fixtures__/trial-e1-condenser.json'
 import airHandlerJson from './__fixtures__/trial-e2-air-handler.json'
 import louverJson from './__fixtures__/trial-e5-louver.json'
@@ -11,6 +13,7 @@ import {
   describeDesignSchema,
   validateDesign,
 } from './design'
+import { evaluateRecipe, parseRecipe, type Recipe } from './recipe'
 
 // Trial fixtures: recipes of real /next elements from the asset-kernel trial, with the
 // renderer's triangle and batch counts and the sweep results recorded there.
@@ -18,9 +21,11 @@ const louver = () => structuredClone(louverJson) as any
 
 describe('describeDesignSchema', () => {
   test('is JSON Schema generated from RecipeSchema with a named recursive expression', () => {
-    const { schema, rules, limits, example } = describeDesignSchema()
+    const { version, schema, rules, limits, limitsV2, example } = describeDesignSchema()
     const text = JSON.stringify(schema)
-    expect(text.length).toBeLessThan(12_000)
+    expect(version).toBe(2)
+    expect(text.length).toBeLessThan(16_000)
+    for (const v2 of ['extrude', 'revolve', 'joints', 'select', 'cuts']) expect(text).toContain(v2)
     expect(text).not.toContain('__schema')
     expect(Object.keys(schema.$defs as object)).toEqual(['Expr'])
     expect(schema.required).toEqual([
@@ -33,6 +38,7 @@ describe('describeDesignSchema', () => {
       'constraints',
     ])
     expect(limits.shapes).toBe(256)
+    expect(limitsV2.shapes).toBe(512)
     expect(rules.length).toBeGreaterThan(10)
     expect(validateDesign(example)).toMatchObject({ valid: true, diagnostics: [] })
   })
@@ -43,7 +49,7 @@ describe('describeDesignSchema', () => {
     ;(first.schema as { title?: string }).title = 'changed'
     const second = describeDesignSchema()
     expect(second.rules.length).toBeGreaterThan(10)
-    expect(second.schema.title).toBe('Pascal design v1')
+    expect(second.schema.title).toBe('Pascal design')
   })
 })
 
@@ -126,13 +132,11 @@ describe('validateDesign diagnostics', () => {
     const design = louver()
     design.parts[2].count = 'slat_count - 1'
     design.parts[0].shapes[0].slot = 'Frame'
-    for (let i = 0; i < 14; i++) design.parts.push({ ...design.parts[0], id: `extra_${i}` })
     const result = validateDesign(design)
     expect(result.valid).toBe(false)
     const byPath = Object.fromEntries(result.diagnostics.map((d) => [d.path, d.message]))
     expect(byPath['parts[2].count']).toContain('arithmetic strings are not supported')
     expect(byPath['parts[0].shapes[0].slot']).toContain('lowercase snake_case')
-    expect(byPath.parts).toContain('<=16')
   })
 
   test('a bad slot or light color is reported as a color, not an id', () => {
@@ -340,5 +344,131 @@ describe('validateDesign diagnostics', () => {
     expect(m.datum.contact).toMatchObject({ parts: ['legs'], shapes: 4, min: [-0.44, -0.44] })
     expect(m.datum.balanced).toBe(true)
     expect(m.surfaces).toEqual(['top:0:board:top'])
+  })
+})
+
+// A v2 floor lamp: a revolved base, an extruded stem, an open faceted shade and an optional
+// finial gated by a bool parameter.
+const lamp = (): Recipe => ({
+  version: 2,
+  name: 'Floor lamp',
+  description: 'Revolved base, extruded stem, open shade, optional finial.',
+  parameters: [
+    { id: 'finial', label: 'Finial', default: 1, min: 0, max: 1, step: 1, unit: 'bool' },
+  ],
+  slots: [
+    { id: 'metal', label: 'Metal', color: '#444444', finish: 'metal' },
+    { id: 'shade', label: 'Shade', color: '#f0e8d8' },
+  ],
+  parts: [
+    {
+      id: 'base',
+      label: 'Base',
+      count: 1,
+      shapes: [
+        {
+          id: 'foot',
+          primitive: 'revolve',
+          slot: 'metal',
+          profile: [
+            [0, 0],
+            [0.12, 0],
+            [0.1, 0.03],
+            [0, 0.03],
+          ],
+          position: [0, 0, 0],
+        },
+        {
+          id: 'stem',
+          primitive: 'extrude',
+          slot: 'metal',
+          section: { kind: 'round', radius: 0.01 },
+          length: 0.5,
+          position: [0, 0.28, 0],
+          rotation: [-Math.PI / 2, 0, 0],
+        },
+        {
+          id: 'shade',
+          primitive: 'cylinder',
+          slot: 'shade',
+          size: [0.3, 0.2, 0.3],
+          position: [0, 0.6, 0],
+          topScale: 0.7,
+          segments: 12,
+          open: true,
+        },
+      ],
+    },
+    {
+      id: 'finial',
+      label: 'Finial',
+      count: 1,
+      when: 'finial',
+      shapes: [
+        {
+          id: 'knob',
+          primitive: 'ellipsoid',
+          slot: 'metal',
+          size: [0.03, 0.03, 0.03],
+          position: [0, 0.715, 0],
+        },
+      ],
+    },
+  ],
+  constraints: [],
+})
+
+describe('validateDesign on version 2 designs', () => {
+  test('extrude, revolve, cylinder options and when are validated and measured', () => {
+    const result = validateDesign(lamp())
+    expect(DesignValidationSchema.parse(result)).toEqual(result)
+    expect(result).toMatchObject({ valid: true, diagnostics: [] })
+    const m = result.measurements!
+    expect(m.triangles.actual).toBe(evaluateRecipe(parseRecipe(lamp())).triangles)
+    expect(m.triangles.budget).toBe(m.triangles.actual)
+    expect(m.components.count).toBe(1)
+    expect(m.datum).toMatchObject({ kind: 'floor', gap: 0, balanced: true })
+    expect(m.parts.find((part) => part.id === 'finial')!.instances).toBe(1)
+    const without = validateDesign(lamp(), { parameters: { finial: 0 } }).measurements!
+    expect(without.parts.find((part) => part.id === 'finial')).toMatchObject({
+      instances: 0,
+      shapes: 0,
+      bounds: null,
+    })
+  })
+
+  test('jointed parts report the motion their joint evaluates to', () => {
+    const result = validateDesign(jointCabinetJson)
+    expect(result.valid).toBe(true)
+    const recipe = parseRecipe(jointCabinetJson)
+    const motions = evaluateRecipe(recipe).motions
+    expect(motions.length).toBeGreaterThan(0)
+    for (const motion of motions)
+      expect(result.measurements!.parts.find((part) => part.id === motion.partId)!.motion).toBe(
+        motion.kind,
+      )
+  })
+
+  test('a recessed ceiling design measures against its reference', () => {
+    const result = validateDesign(downlightJson)
+    expect(result.valid).toBe(true)
+    expect(result.measurements!.datum).toMatchObject({ kind: 'ceiling', gap: expect.any(Number) })
+  })
+
+  test('v2 content in a version 1 design says to set version 2', () => {
+    const design = { ...lamp(), version: 1 }
+    const diagnostic = validateDesign(design).diagnostics[0]!
+    expect(diagnostic).toMatchObject({ severity: 'error', code: 'schema' })
+    expect(diagnostic.message).toContain('requires recipe version 2')
+    expect(diagnostic.hint).toContain('"version": 2')
+  })
+
+  test('arithmetic strings in v2 expression fields get the expression hint', () => {
+    const design = lamp() as any
+    design.parts[0].shapes[1].length = 'height - 0.1'
+    const byPath = Object.fromEntries(
+      validateDesign(design).diagnostics.map((d) => [d.path, d.message]),
+    )
+    expect(byPath['parts[0].shapes[1].length']).toContain('arithmetic strings are not supported')
   })
 })

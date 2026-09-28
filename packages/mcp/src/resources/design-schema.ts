@@ -3,7 +3,7 @@ import { describeDesignSchema } from '@pascal-app/core/procedural-items'
 import type { SceneOperations } from '../operations'
 
 /**
- * `pascal://schema/design` — the design (procedural recipe v1) contract: JSON Schema generated
+ * `pascal://schema/design` — the design (procedural recipe, versions 1 and 2) contract: JSON Schema generated
  * from core's `RecipeSchema`, the limits and rules only `validate_design` can check, and one
  * valid example.
  */
