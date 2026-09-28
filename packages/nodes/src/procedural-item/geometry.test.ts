@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import { Vector3 } from 'three'
 import { readdirSync, readFileSync } from 'node:fs'
 import {
   bedRecipe,
@@ -238,7 +239,7 @@ test('v2 cylinder options build exactly the triangles they are charged', () => {
   const normal = box.getAttribute('normal')
   for (let i = 0; i < normal.count; i++) {
     const length = Math.hypot(normal.getX(i), normal.getY(i), normal.getZ(i))
-    if (length > 0) expect(length).toBeCloseTo(1, 4)
+    expect(length).toBeCloseTo(1, 4)
   }
   for (const batch of built.batches) batch.geometry.dispose()
 })
@@ -280,5 +281,58 @@ test('a six-segment cylinder is an exact hexagonal prism', () => {
     if (r > 1e-6) radii.add(r.toFixed(6))
   }
   expect([...radii]).toEqual(['0.050000'])
+  geometry.dispose()
+})
+
+test('v2 cylinders keep world-scale UVs on every face, wedges and rings included', () => {
+  const recipe = parseRecipe({
+    version: 2,
+    name: 'Wedge',
+    description: 'A hollow quarter sweep.',
+    parameters: [
+      { id: 'unused', label: 'Unused', default: 1, min: 1, max: 1, step: 1, unit: 'count' },
+    ],
+    slots: [{ id: 'body', label: 'Body', color: '#888888' }],
+    parts: [
+      {
+        id: 'p',
+        label: 'P',
+        count: 1,
+        shapes: [
+          {
+            id: 'c',
+            primitive: 'cylinder',
+            slot: 'body',
+            size: [0.4, 0.3, 0.4],
+            position: [0, 0.15, 0],
+            arc: Math.PI / 4,
+            inner: 0.5,
+            segments: 8,
+          },
+        ],
+      },
+    ],
+    constraints: [],
+  })
+  const geometry = buildProceduralGeometry(ProceduralItemNode.parse({ recipe })).batches[0]!
+    .geometry
+  const position = geometry.getAttribute('position'),
+    uv = geometry.getAttribute('uv'),
+    normal = geometry.getAttribute('normal')
+  const p = [new Vector3(), new Vector3(), new Vector3()]
+  for (let t = 0; t < position.count; t += 3) {
+    for (let k = 0; k < 3; k++) p[k]!.fromBufferAttribute(position, t + k)
+    for (const [a, b] of [
+      [0, 1],
+      [1, 2],
+      [2, 0],
+    ] as const) {
+      const metres = p[a]!.distanceTo(p[b]!)
+      const uvs = Math.hypot(uv.getX(t + a) - uv.getX(t + b), uv.getY(t + a) - uv.getY(t + b))
+      if (metres > 1e-6) expect(uvs / metres).toBeCloseTo(1, 4)
+    }
+  }
+  for (let i = 0; i < normal.count; i++)
+    expect(Math.hypot(normal.getX(i), normal.getY(i), normal.getZ(i))).toBeCloseTo(1, 4)
   geometry.dispose()
 })

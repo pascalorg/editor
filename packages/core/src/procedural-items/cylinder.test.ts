@@ -100,3 +100,33 @@ describe('cylinder segments, open, inner and arc (recipe version 2)', () => {
     expect(() => parseRecipe(recipe)).toThrow('outside its cut')
   })
 })
+
+describe('cylinder review fixes (AK-03a round 2)', () => {
+  // A quarter sweep centred on +Z (yaw -45°), raised into a cut that covers its rim, not its axis.
+  const quarter = (options: Partial<Shape>) => {
+    const recipe = structuredClone(downlightJson) as Recipe
+    recipe.cuts = [{ shape: 'rect', size: [0.17, 0.05], center: [0, 0.1] }]
+    recipe.parts = recipe.parts.filter((part) => part.id !== 'lens')
+    recipe.parts.find((part) => part.id === 'can')!.shapes = [
+      {
+        id: 'can',
+        primitive: 'cylinder',
+        slot: 'can',
+        size: [0.24, 0.1, 0.24],
+        position: [0, 0.07, 0],
+        rotation: [0, -Math.PI / 4, 0],
+        arc: Math.PI / 2,
+        ...options,
+      } as Shape,
+    ]
+    return recipe
+  }
+  test('an open arc has no axis in its footprint; closed solids and hollow arcs keep theirs', () => {
+    expect(() => parseRecipe(quarter({ open: true }))).not.toThrow()
+    expect(() => parseRecipe(quarter({}))).toThrow('outside its cut')
+    expect(() => parseRecipe(quarter({ inner: 0.5 }))).toThrow('outside its cut')
+  })
+  test('an open cylinder cannot be a support surface', () => {
+    expect(() => parseRecipe(one({ open: true, support: true }))).toThrow('support')
+  })
+})
