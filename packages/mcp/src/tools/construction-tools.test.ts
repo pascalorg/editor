@@ -2,10 +2,49 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { LevelNode } from '@pascal-app/core/schema'
+import { type AnyNodeId, LevelNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { registerConstructionTools } from './construction-tools'
+import { pointInPolygon, type Vec2 } from './geometry'
 import { registerSceneQueryTools } from './scene-query'
+
+const concaveFootprint: Vec2[] = [
+  [0, 0],
+  [6, 0],
+  [6, 2],
+  [2, 2],
+  [2, 6],
+  [0, 6],
+]
+
+const shellFootprints: Array<{ name: string; points: Vec2[] }> = [
+  {
+    name: 'rectangular',
+    points: [
+      [-4, -3],
+      [4, -3],
+      [4, 3],
+      [-4, 3],
+    ],
+  },
+  { name: 'concave', points: concaveFootprint },
+  {
+    name: 'narrow',
+    points: [
+      [0, 0],
+      [6, 0],
+      [6, 0.1],
+      [0, 0.1],
+    ],
+  },
+  {
+    name: 'rotated concave with shifted start and large coordinates',
+    points: [...concaveFootprint.slice(3), ...concaveFootprint.slice(0, 3)].map(([x, z]) => [
+      1e9 + x * Math.cos(Math.PI / 7) - z * Math.sin(Math.PI / 7),
+      -1e9 + x * Math.sin(Math.PI / 7) + z * Math.cos(Math.PI / 7),
+    ]),
+  },
+]
 
 describe('construction tools', () => {
   let client: Client
@@ -28,6 +67,61 @@ describe('construction tools', () => {
     await client.close()
     await server.close()
   })
+
+  for (const { name, points } of shellFootprints) {
+    for (const winding of ['counterclockwise', 'clockwise'] as const) {
+      test(`create_story_shell classifies ${winding} ${name} walls without reordering edges`, async () => {
+        const level = Object.values(bridge.getNodes()).find((node) => node.type === 'level')!
+        const footprint = winding === 'counterclockwise' ? points : [...points].reverse()
+        const result = await client.callTool({
+          name: 'create_story_shell',
+          arguments: { levelId: level.id, footprint, namePrefix: 'Perimeter', wallThickness: 0.02 },
+        })
+        expect(result.isError).toBeFalsy()
+        const parsed = JSON.parse(
+          (result.content as Array<{ type: string; text: string }>)[0]!.text,
+        )
+        expect(parsed.wallIds).toHaveLength(footprint.length)
+
+        for (const [index, wallId] of (parsed.wallIds as AnyNodeId[]).entries()) {
+          const wall = bridge.getNode(wallId)
+          expect(wall?.type).toBe('wall')
+          if (wall?.type !== 'wall') throw new Error('Expected perimeter wall')
+          expect(wall.parentId).toBe(level.id)
+          expect(wall.name).toBe(`Perimeter Wall ${index + 1}`)
+          expect(wall.start).toEqual(footprint[index]!)
+          expect(wall.end).toEqual(footprint[(index + 1) % footprint.length]!)
+          expect(wall.frontSide).toBe(winding === 'counterclockwise' ? 'interior' : 'exterior')
+          expect(wall.backSide).toBe(winding === 'counterclockwise' ? 'exterior' : 'interior')
+
+          const dx = wall.end[0] - wall.start[0]
+          const dz = wall.end[1] - wall.start[1]
+          const length = Math.hypot(dx, dz)
+          const midpoint: Vec2 = [
+            (wall.start[0] + wall.end[0]) / 2,
+            (wall.start[1] + wall.end[1]) / 2,
+          ]
+          const frontPoint: Vec2 = [
+            midpoint[0] - (dz / length) * 0.01,
+            midpoint[1] + (dx / length) * 0.01,
+          ]
+          const backPoint: Vec2 = [
+            midpoint[0] + (dz / length) * 0.01,
+            midpoint[1] - (dx / length) * 0.01,
+          ]
+          expect(pointInPolygon(frontPoint, footprint, false)).toBe(wall.frontSide === 'interior')
+          expect(pointInPolygon(backPoint, footprint, false)).toBe(wall.backSide === 'interior')
+        }
+
+        const slab = bridge.getNode(parsed.slabId)
+        const ceiling = bridge.getNode(parsed.ceilingId)
+        expect(slab?.type).toBe('slab')
+        expect(ceiling?.type).toBe('ceiling')
+        if (slab?.type === 'slab') expect(slab.polygon).toEqual(footprint)
+        if (ceiling?.type === 'ceiling') expect(ceiling.polygon).toEqual(footprint)
+      })
+    }
+  }
 
   test('create_story_shell creates level-owned walls plus slab and ceiling', async () => {
     const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
