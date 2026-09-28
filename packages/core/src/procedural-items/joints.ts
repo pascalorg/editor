@@ -115,6 +115,8 @@ export function placeParts(
   const place = (part: Part, i: number): PartPlacement | null => {
     const key = `${part.id}:${i}`
     if (placed.has(key)) return placed.get(key)!
+    // A parent repeat that does not exist (count 0, or fewer repeats) carries no children.
+    if (i >= counts.get(part.id)!) return null
     let parent: PartPlacement | null = { pose: IDENTITY_POSE }
     if (part.parent) {
       const host = parts.get(part.parent)!
