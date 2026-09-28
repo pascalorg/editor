@@ -8,8 +8,10 @@ import {
   composePoses,
   eulerPose,
   frame,
+  hingePose,
   IDENTITY_POSE,
   matrixEuler,
+  type Pose,
   posePoint,
   rotateVector,
   transformPoint,
@@ -125,16 +127,14 @@ const motion = z.discriminatedUnion('kind', [
     radiansPerSecond: expression,
   }),
 ])
-// Version 2 lifts the part caps; triangles (counted as three.js builds them), bytes, the
-// structural budget and evaluation time bound the rest.
-// Inline v2 designs stay under R7's 24 KiB until pinned definitions (P-05) store larger ones;
-// one evaluation may take at most `milliseconds` (a guard, far above real recipes' cost).
+// Version 2 lifts the part caps; triangles (counted as three.js builds them), bytes, repeat
+// counts, expressions and the structural budget bound the rest.
+// Inline v2 designs stay under R7's 24 KiB until pinned definitions (P-05) store larger ones.
 export const RECIPE_V2_LIMITS = {
   parts: 64,
   partShapes: 512,
   shapes: 512,
   bytes: 24 * 1024,
-  milliseconds: 250,
 } as const
 export const RECIPE_LIMITS = {
   bytes: 131072,
@@ -644,16 +644,13 @@ function shapeFootprint(shape: EvaluatedShape): Vec3[] {
   })
 }
 
-function movedPoint(point: Vec3, motion: EvaluatedMotion, fraction: number): Vec3 {
+/** Where a flat motion has carried its group at `fraction` of its travel. */
+function motionPose(motion: EvaluatedMotion, fraction: number): Pose {
+  const axis = [0, 1, 2].map((k) => (['x', 'y', 'z'][k] === motion.axis ? 1 : 0)) as Vec3
   if (motion.kind === 'slide')
-    return point.map(
-      (value, i) => value + (['x', 'y', 'z'][i] === motion.axis ? motion.amount * fraction : 0),
-    ) as Vec3
+    return { r: IDENTITY_POSE.r, t: axis.map((v) => v * motion.amount * fraction) as Vec3 }
   const angle = motion.kind === 'spin' ? 2 * Math.PI * fraction : motion.amount * fraction
-  const rotation: Vec3 = [0, 0, 0]
-  rotation[{ x: 0, y: 1, z: 2 }[motion.axis]] = angle
-  const offset = point.map((value, i) => value - motion.pivot[i]!) as Vec3
-  return rotateVector(offset, rotation).map((value, i) => value + motion.pivot[i]!) as Vec3
+  return hingePose(motion.pivot, axis, angle)
 }
 
 const LEGACY_TRIANGLE_CHARGE = { box: 12, roundedBox: 588, cylinder: 96, ellipsoid: 720 } as const
@@ -781,18 +778,7 @@ function resolveSection(
     }
   }
 }
-export function evaluateRecipe(
-  recipe: Recipe,
-  values: Record<string, number> = {},
-  { now = () => performance.now() }: { now?: () => number } = {},
-): Evaluation {
-  const started = now()
-  const inTime = () => {
-    if (recipe.version === 2 && now() - started > RECIPE_V2_LIMITS.milliseconds)
-      throw new Error(
-        `Recipe evaluation exceeded its ${RECIPE_V2_LIMITS.milliseconds} ms time budget`,
-      )
-  }
+export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = {}): Evaluation {
   const issue = versionIssue(recipe)
   if (issue) throw new Error(issue)
   const slotColors = new Map<string, string>()
@@ -924,15 +910,21 @@ export function evaluateRecipe(
   let triangles = 0,
     charged = 0
   const shapeLimit = recipe.version === 2 ? RECIPE_V2_LIMITS.shapes : RECIPE_LIMITS.shapes
-  const placements = recipe.version === 2 && usesPartTree(recipe) ? placeParts(recipe, expr) : null
+  // Counts are settled before anything is expanded, so a huge count costs one expression.
+  const counts = new Map<string, number>()
+  for (const part of recipe.parts) {
+    const count = expr(part.count)
+    if (!Number.isInteger(count) || count < 0 || count > 64)
+      throw new Error(`Invalid repeat count for ${part.label}`)
+    counts.set(part.id, count)
+  }
+  const placements =
+    recipe.version === 2 && usesPartTree(recipe) ? placeParts(recipe, expr, counts) : null
   const jointGroups = new Set<string>()
   // Part repeats that built geometry; only these carry the part's named surfaces.
   const builtRepeats = new Set<string>()
   for (const part of recipe.parts) {
-    inTime()
-    const count = expr(part.count)
-    if (!Number.isInteger(count) || count < 0 || count > 64)
-      throw new Error(`Invalid repeat count for ${part.label}`)
+    const count = counts.get(part.id)!
     for (let i = 0; i < count; i++) {
       if (part.when !== undefined && expr(part.when, i) === 0) continue
       const placement = placements?.get(`${part.id}:${i}`)
@@ -1026,7 +1018,6 @@ export function evaluateRecipe(
       }
       for (const s of kept) {
         if (shapes.length >= shapeLimit) throw new Error('Expanded shape budget exceeded')
-        inTime()
         let position = vec(s.position)
         let rotation = vec(s.rotation ?? [0, 0, 0])
         let size: Vec3
@@ -1209,7 +1200,7 @@ export function evaluateRecipe(
   }
   for (const surface of recipe.surfaces ?? []) {
     const part = recipe.parts.find((p) => p.id === surface.part)
-    const count = part ? expr(part.count) : 1
+    const count = part ? counts.get(part.id)! : 1
     for (let i = 0; i < count; i++) {
       if (part && !builtRepeats.has(`${part.id}:${i}`)) continue
       if (surfaces.length >= 256) throw new Error('Surface budget exceeded')
@@ -1327,6 +1318,7 @@ export function evaluateRecipe(
   for (const motion of motions) {
     if (jointGroups.has(motion.id)) continue
     const steps = motion.kind === 'slide' ? 1 : motion.kind === 'hinge' ? 8 : 16
+    const poses = Array.from({ length: steps + 1 }, (_, step) => motionPose(motion, step / steps))
     for (const shape of shapes) {
       if (shape.motionGroup !== motion.id) continue
       // Inside a cut, sample the rendered footprint so round parts may turn in round cuts.
@@ -1334,8 +1326,13 @@ export function evaluateRecipe(
         ? shapeFootprint(shape)
         : shapeCorners(shape.size, shape.position, shape.rotation)
       for (const corner of points)
-        for (let step = 0; step <= steps; step++) {
-          const point = movedPoint(corner, motion, step / steps)
+        for (const { r, t } of poses) {
+          const [x, y, z] = corner
+          const point: Vec3 = [
+            r[0]! * x + r[1]! * y + r[2]! * z + t[0],
+            r[3]! * x + r[4]! * y + r[5]! * z + t[1],
+            r[6]! * x + r[7]! * y + r[8]! * z + t[2],
+          ]
           if (reach)
             for (let k = 0; k < 3; k++) {
               reach.min[k] = Math.min(reach.min[k]!, point[k]!)

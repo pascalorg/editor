@@ -415,6 +415,14 @@ describe('joint review fixes (AK-04a round 2)', () => {
     expect(Object.keys(empty.motionGroupByInstance)).toEqual(['drawer:0', 'pull:0'])
   })
 
+  test('repeat counts are checked before the part tree expands them', () => {
+    const huge = cabinet((r) => {
+      r.parts[1]!.count = { op: 'mul', args: [100, 100] }
+      r.parts[2]!.count = 2
+    })
+    expect(() => parseRecipe(huge)).toThrow('Invalid repeat count for Door')
+  })
+
   test('an explicitly empty joints array needs version 2', () => {
     expect(() => parseRecipe({ ...structuredClone(cabinetJson), joints: [] })).toThrow('version 2')
     expect(() =>

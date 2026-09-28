@@ -125,11 +125,4 @@ describe('budget review fixes (AK-10a round 2)', () => {
     expect(RecipeSchema.safeParse(many(1, 25, 'box', 25)).success).toBe(false)
     expect(RecipeSchema.safeParse(many(1, 24, 'box', 24)).success).toBe(true)
   })
-
-  test('evaluation stops at its time budget', () => {
-    let clock = 0
-    const now = () => (clock += 30)
-    expect(() => evaluateRecipe(many(2, 40, 'box', 40), {}, { now })).toThrow('time budget')
-    expect(() => evaluateRecipe(many(2, 40, 'box', 40))).not.toThrow()
-  })
 })

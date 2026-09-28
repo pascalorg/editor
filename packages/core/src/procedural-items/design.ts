@@ -177,7 +177,7 @@ const DESIGN_RULES = [
   'Motion: hinge 0 < |angle| ≤ π, slide 0 < |distance| ≤ 5 m, spin 0 < |radiansPerSecond| ≤ 20 (joints alike: |open - rest| and range ends within those of rest); delay 0–1 s and duration 0.1–2 s. At most 8 moving parts (flat motions and non-fixed joints) and 32 evaluated motion groups. Named surfaces cannot belong to moving parts or their children.',
   'Lights: at most 12 evaluated. Each light lies within its part instance at rest (±2 cm); lights sharing an emissiveSlot share one color.',
   'Surfaces evaluate to 0.001–30 m sizes within 30 m of the origin, at most 256 in all.',
-  'Budgets: 256 expanded shapes (count × shapes, summed over parts; 512 in v2), 100000 budget triangles (v1 charges box 12, roundedBox 588, cylinder 96, ellipsoid 720; v2 charges what the renderer builds, reported as measurements.triangles.actual), 50000 expression evaluations, 131072 characters of JSON (24 KiB in v2), 12000 JSON values nested at most 24 deep, and 250 ms of evaluation in v2.',
+  'Budgets: 256 expanded shapes (count × shapes, summed over parts; 512 in v2), 100000 budget triangles (v1 charges box 12, roundedBox 588, cylinder 96, ellipsoid 720; v2 charges what the renderer builds, reported as measurements.triangles.actual), 50000 expression evaluations, 131072 characters of JSON (24 KiB in v2), 12000 JSON values nested at most 24 deep, and repeat counts of at most 64.',
   'constraints: each {left, relation, right} must hold (lte: left ≤ right; gte: left ≥ right); message is the error shown when it fails.',
 ]
 

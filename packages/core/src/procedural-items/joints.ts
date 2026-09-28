@@ -106,10 +106,10 @@ function unit(axis: Vec3, part: string): Vec3 {
 export function placeParts(
   recipe: Recipe,
   value: (e: Expr, index: number) => number,
+  counts: ReadonlyMap<string, number>,
 ): Map<string, PartPlacement> {
   const parts = new Map(recipe.parts.map((part) => [part.id, part]))
   const joints = new Map((recipe.joints ?? []).map((joint) => [joint.child, joint]))
-  const counts = new Map(recipe.parts.map((part) => [part.id, value(part.count, 0)]))
   const placed = new Map<string, PartPlacement | null>()
   const vec = (v: readonly Expr[], i: number) => v.map((e) => value(e, i)) as Vec3
   const place = (part: Part, i: number): PartPlacement | null => {
