@@ -2155,6 +2155,8 @@ export type CutsContext = { nodes: Readonly<Record<AnyNodeId, AnyNode>> }
 export type MovableConfig = {
   axes: ReadonlyArray<'x' | 'y' | 'z'>
   gridSnap?: boolean
+  /** Keep an existing floor-placed node on its current level and visual elevation while dragging. */
+  preserveLevelAndElevation?: boolean
   /** Allow an ordinary primary-button body drag to enter the move tool. */
   directDrag?: boolean
   /**
