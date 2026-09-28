@@ -385,6 +385,7 @@ export {
   type SceneNodeStructuralPatch,
   type SceneOperationPatch,
   type ScenePatch,
+  type ScenePluginInstallPatch,
 } from './store/use-scene'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'
 export {
