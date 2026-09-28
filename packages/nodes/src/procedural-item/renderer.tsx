@@ -40,11 +40,20 @@ import { acquireProceduralGeometry, type BuiltItem, geometrySignature } from './
 
 const axis = new Vector3()
 const noRaycast = () => {}
+// What a hidden mesh raycast with, which may be SceneBVH's accelerated raycast.
+const hiddenRaycasts = new WeakMap<Mesh, Mesh['raycast']>()
 // Hidden mesh sets are skipped by raycasts too (three raycasts invisible objects).
 function setDrawn(container: Group, drawn: boolean) {
   container.visible = drawn
   container.traverse((child) => {
-    if (child instanceof Mesh) child.raycast = drawn ? Mesh.prototype.raycast : noRaycast
+    if (!(child instanceof Mesh)) return
+    if (drawn) {
+      child.raycast = hiddenRaycasts.get(child) ?? child.raycast
+      hiddenRaycasts.delete(child)
+    } else if (child.raycast !== noRaycast) {
+      hiddenRaycasts.set(child, child.raycast)
+      child.raycast = noRaycast
+    }
   })
 }
 export default function ProceduralRenderer({ node }: { node: ProceduralItemNode }) {
@@ -59,7 +68,11 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
   const overrides = useLiveNodeOverrides((s) => s.overrides.get(node.id))
   const live = useLiveTransforms((s) => s.get(node.id as AnyNodeId))
   const effective = { ...node, ...overrides } as ProceduralItemNode
-  const host = useScene((s) => (node.parentId ? s.nodes[node.parentId as AnyNodeId] : undefined))
+  // Only wall and ceiling hosts pose a design; a level host changes with every child it gains.
+  const host = useScene((s) => {
+    const parent = node.parentId ? s.nodes[node.parentId as AnyNodeId] : undefined
+    return parent?.type === 'wall' || parent?.type === 'ceiling' ? parent : undefined
+  })
   const hostOverride = useLiveNodeOverrides((s) =>
     node.parentId ? s.overrides.get(node.parentId) : undefined,
   )
@@ -80,10 +93,18 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
   )
   const handlers = useNodeEvents(node as unknown as AnyNode, 'procedural-item' as AnyNode['type'])
   useRegistry(node.id as AnyNodeId, 'procedural-item', ref)
+  const rotation =
+    live?.rotation === undefined
+      ? pose.rotation
+      : ([pose.rotation[0], live.rotation, pose.rotation[2]] as [number, number, number])
+  const position = live?.position ?? pose.position
+  const poseKey = JSON.stringify([position, rotation])
+  // biome-ignore lint/correctness/useExhaustiveDependencies: poseKey is the rendered pose
   useLayoutEffect(() => {
-    // React can restore base Y after the previous frame consumed the elevation mark.
+    // Re-rendering a changed pose restores base Y after the previous frame consumed the
+    // elevation mark; an unchanged one is not reapplied, and a mark would release the batch.
     useScene.getState().markDirty(node.id as AnyNodeId)
-  })
+  }, [poseKey, node.id])
   useLayoutEffect(() => {
     const [recipe, parameters] = JSON.parse(key)
     const lease = acquireProceduralGeometry({ recipe, parameters } as ProceduralItemNode)
@@ -342,15 +363,11 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
       {motions.filter((motion) => !motion.parent).map(motionGroup)}
     </>
   )
-  const rotation =
-    live?.rotation === undefined
-      ? pose.rotation
-      : ([pose.rotation[0], live.rotation, pose.rotation[2]] as [number, number, number])
   return (
     <group
       ref={ref}
       userData={{ pascalId: node.id }}
-      position={live?.position ?? pose.position}
+      position={position}
       rotation={rotation}
       visible={effective.visible}
       {...handlers}

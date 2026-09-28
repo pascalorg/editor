@@ -10,8 +10,8 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { ProceduralItemNode, parseRecipe, type Recipe } from '@pascal-app/core/procedural-items'
-import { create } from '@react-three/test-renderer'
-import { type Object3D, Raycaster, Vector3 } from 'three'
+import { act, create } from '@react-three/test-renderer'
+import { Mesh, type Object3D, Raycaster, Vector3 } from 'three'
 import jointJson from '../../../core/src/procedural-items/__fixtures__/joint_cabinet.json'
 import { proceduralItemDefinition } from './definition'
 import ProceduralRenderer from './renderer'
@@ -91,6 +91,49 @@ test('a continuous joint starts running in the editor', async () => {
     expect(useInteractive.getState().procedural[node.id]?.parts.knob).toBe(true)
     const knob = sceneRegistry.nodes.get(node.id)!.getObjectByName(`${node.id}__motion__knob`)!
     expect(Math.abs(knob.rotation.z)).toBeGreaterThan(0.01)
+  } finally {
+    await renderer.unmount()
+    useInteractive.getState().removeProcedural(node.id)
+  }
+})
+
+test('hiding and redrawing the rest pose keeps each mesh its own raycast', async () => {
+  const node = install(structuredClone(jointJson) as Recipe)
+  const renderer = await create(<ProceduralRenderer node={node} />)
+  try {
+    await renderer.advanceFrames(2, 1 / 60)
+    const root = sceneRegistry.nodes.get(node.id)!
+    // As SceneBVH installs its accelerated raycast on drawn meshes.
+    const accelerated = () => {}
+    const meshes: Mesh[] = []
+    root.traverse((child) => {
+      if (child instanceof Mesh && child.raycast === Mesh.prototype.raycast) meshes.push(child)
+    })
+    expect(meshes.length).toBeGreaterThan(0)
+    for (const mesh of meshes) mesh.raycast = accelerated
+    useInteractive.getState().setProceduralParts(node.id as AnyNodeId, ['door'], true)
+    await renderer.advanceFrames(90, 1 / 60)
+    useInteractive.getState().setProceduralParts(node.id as AnyNodeId, ['door'], false)
+    await renderer.advanceFrames(90, 1 / 60)
+    expect(meshes.every((mesh) => mesh.raycast === accelerated)).toBe(true)
+  } finally {
+    await renderer.unmount()
+    useInteractive.getState().removeProcedural(node.id)
+  }
+})
+
+test('a sibling added to its level neither re-renders nor re-dirties a floor design', async () => {
+  const node = install(structuredClone(jointJson) as Recipe)
+  const renderer = await create(<ProceduralRenderer node={node} />)
+  try {
+    await renderer.advanceFrames(2, 1 / 60)
+    useScene.getState().clearDirty(node.id as AnyNodeId)
+    await act(async () => {
+      useScene.setState((state) => ({
+        nodes: { ...state.nodes, [level.id]: { ...level, children: ['item_sibling'] } as AnyNode },
+      }))
+    })
+    expect(useScene.getState().dirtyNodes.has(node.id as AnyNodeId)).toBe(false)
   } finally {
     await renderer.unmount()
     useInteractive.getState().removeProcedural(node.id)
