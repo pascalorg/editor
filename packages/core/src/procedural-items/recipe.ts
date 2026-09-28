@@ -336,6 +336,8 @@ function guardTree(value: unknown, depth = 0, budget = { count: 0 }) {
   }
 }
 function findV2Feature(recipe: Recipe): string | null {
+  if (recipe.parts.some((part) => part.shapes.some((shape) => shape.primitive === 'extrude')))
+    return 'extrude'
   if (
     recipe.parts.some((part) =>
       part.shapes.some((shape) =>
@@ -424,7 +426,6 @@ export function parseRecipe(input: unknown): Recipe {
       if (shape.topScale !== undefined && shape.primitive !== 'cylinder')
         throw new Error(`topScale is only allowed on cylinders (${part.id}/${shape.id})`)
       if (shape.primitive === 'extrude') {
-        requireVersion2(recipe, 'extrude')
         if (!shape.section || shape.length === undefined || shape.size)
           throw new Error(`extrude ${part.id}/${shape.id} takes a section and a length, not a size`)
         if (shape.support)
