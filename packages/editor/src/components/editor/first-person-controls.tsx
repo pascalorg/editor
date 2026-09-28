@@ -18,12 +18,14 @@ import {
   getLevelDisplayName,
   getLevelElevations,
   getResolvedElevatorDoorStyle,
+  nodeMechanism,
   openElevatorDoor,
   pointInPolygon2D,
   requestElevatorLevel,
   resolveElevatorDispatchTarget,
   resolveElevatorLevels,
   sceneRegistry,
+  toggleNodeMechanism,
   useInteractive,
   useScene,
 } from '@pascal-app/core'
@@ -92,6 +94,7 @@ import {
   type FirstPersonColliderWorld,
   type FirstPersonSpawn,
 } from './first-person/build-collider-world'
+import { mechanismHudInteract, mechanismTargetIds } from './first-person/mechanism-targets'
 
 const CAMERA_EYE_OFFSET = 0.45
 const LOOK_SENSITIVITY = 0.002
@@ -244,6 +247,10 @@ type FirstPersonInteractableTarget =
       type: 'procedural'
     }
   | {
+      id: AnyNodeId
+      type: 'mechanism'
+    }
+  | {
       action: 'open-door' | 'request-level'
       buttonKind: 'cab' | 'landing'
       id: AnyNodeId
@@ -367,6 +374,7 @@ function resolveHudInteract(target: FirstPersonInteractableTarget | null): Walkt
   }
 
   const node = useScene.getState().nodes[target.id]
+  if (target.type === 'mechanism') return node ? mechanismHudInteract(node) : null
   if (target.type === 'item') {
     if (node?.type !== 'item' || !node.asset.interactive) return null
     const indices = node.asset.interactive.controls.flatMap((control, index) =>
@@ -1004,7 +1012,9 @@ export const FirstPersonControls = () => {
     let closest: FirstPersonInteractableTarget | null = null
     let closestDistance = DOOR_INTERACTION_DISTANCE
     const nodes = useScene.getState().nodes
+    const covered = new Set<string>()
     for (const rawId of sceneRegistry.byType['procedural-item'] ?? []) {
+      covered.add(rawId)
       const id = rawId as AnyNodeId
       const node = nodes[id]
       if (node?.type !== 'procedural-item') continue
@@ -1048,6 +1058,7 @@ export const FirstPersonControls = () => {
       }
     }
     for (const rawId of sceneRegistry.byType.item ?? []) {
+      covered.add(rawId)
       const id = rawId as AnyNodeId
       const node = nodes[id]
       if (
@@ -1060,6 +1071,14 @@ export const FirstPersonControls = () => {
       const hit = proceduralInteractionRaycaster.intersectObject(object, true)[0]
       if (hit && hit.distance < closestDistance) {
         closest = { id, type: 'item' }
+        closestDistance = hit.distance
+      }
+    }
+    for (const id of mechanismTargetIds(covered)) {
+      const object = sceneRegistry.nodes.get(id)
+      const hit = object && proceduralInteractionRaycaster.intersectObject(object, true)[0]
+      if (hit && hit.distance < closestDistance) {
+        closest = { id, type: 'mechanism' }
         closestDistance = hit.distance
       }
     }
@@ -1092,6 +1111,11 @@ export const FirstPersonControls = () => {
 
     const target = interactableTargetRef.current ?? resolveInteractableTarget()
     if (!target) return
+    if (target.type === 'mechanism') {
+      const node = useScene.getState().nodes[target.id]
+      if (node) toggleNodeMechanism(node)
+      return
+    }
     if (target.type === 'item') {
       const node = useScene.getState().nodes[target.id]
       if (node?.type === 'item' && node.asset.interactive)
@@ -1175,6 +1199,12 @@ export const FirstPersonControls = () => {
 
     const target = interactableTargetRef.current ?? resolveInteractableTarget()
     if (!target) return
+
+    if (target.type === 'mechanism') {
+      const node = useScene.getState().nodes[target.id]
+      if (node) nodeMechanism(node)?.set(node, false)
+      return
+    }
 
     if (target.type === 'procedural') {
       const node = useScene.getState().nodes[target.id]
