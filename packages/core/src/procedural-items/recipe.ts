@@ -134,20 +134,21 @@ export const RECIPE_LIMITS = {
   motionGroups: 32,
   lights: 12,
 } as const
-const shapeCommon = {
-  id,
-  slot: id,
-  position: vector,
-  rotation: vector.optional(),
+// Shape keys keep v1's order (id, primitive, slot, size, position, …), so parsed v1 recipes
+// serialize byte for byte as before.
+const shapeTail = {
   support: z.boolean().optional(),
   // v2: the shape is built only where this evaluates to nonzero.
   when: expression.optional(),
 }
 // Sized primitives keep a required size (R1: v1 consumers narrow on primitive and read it).
 const solidShape = z.strictObject({
-  ...shapeCommon,
+  id,
   primitive: z.enum(['box', 'roundedBox', 'cylinder', 'ellipsoid']),
+  slot: id,
   size: vector,
+  position: vector,
+  rotation: vector.optional(),
   radius: expression.optional(),
   topScale: expression.optional(),
   // v2 cylinders: side count (absent = 24), no end caps, hollow wall (inner radius as a
@@ -157,20 +158,30 @@ const solidShape = z.strictObject({
   open: z.boolean().optional(),
   inner: expression.optional(),
   arc: expression.optional(),
+  ...shapeTail,
 })
 // v2 extrude: a section in local x/y, extruded along local z by length, centred.
 const extrudeShape = z.strictObject({
-  ...shapeCommon,
+  id,
   primitive: z.literal('extrude'),
+  slot: id,
   section,
   length: expression,
   bevel: expression.optional(),
+  position: vector,
+  rotation: vector.optional(),
+  ...shapeTail,
 })
 type RecipeShape = z.infer<typeof solidShape> | z.infer<typeof extrudeShape>
 /** The sized-primitive fields of a shape (none for an extrude). */
 function solidFields(
   shape: RecipeShape,
-): Partial<Omit<z.infer<typeof solidShape>, 'primitive' | keyof typeof shapeCommon>> {
+): Partial<
+  Pick<
+    z.infer<typeof solidShape>,
+    'size' | 'radius' | 'topScale' | 'segments' | 'open' | 'inner' | 'arc'
+  >
+> {
   return shape.primitive === 'extrude' ? {} : shape
 }
 const RecipeObject = z.strictObject({
