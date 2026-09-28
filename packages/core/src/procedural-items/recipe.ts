@@ -55,7 +55,7 @@ const motion = z.discriminatedUnion('kind', [
     radiansPerSecond: expression,
   }),
 ])
-export const RecipeSchema = z.strictObject({
+const RecipeObject = z.strictObject({
   // Version 2 marks content that older readers cannot evaluate; v2-only fields require it.
   version: z.union([z.literal(1), z.literal(2)]),
   name: z.string().min(1).max(100),
@@ -159,6 +159,10 @@ export const RecipeSchema = z.strictObject({
     )
     .max(24),
 })
+export const RecipeSchema = RecipeObject.superRefine((recipe, ctx) => {
+  const issue = versionIssue(recipe)
+  if (issue) ctx.addIssue({ code: 'custom', message: issue })
+})
 export type Recipe = z.infer<typeof RecipeSchema>
 export type EvaluatedShape = {
   id: string
@@ -236,20 +240,22 @@ function guardTree(value: unknown, depth = 0, budget = { count: 0 }) {
     }
   }
 }
-function requireVersion2(recipe: Recipe, feature: string) {
-  if (recipe.version !== 2) throw new Error(`${feature} requires recipe version 2`)
+/**
+ * Version rules the exported schema, parseRecipe and evaluateRecipe all enforce: content
+ * only a v2 reader understands must say `version: 2`.
+ */
+function versionIssue(recipe: Recipe): string | null {
+  if (recipe.base !== undefined) {
+    if (recipe.version !== 2) return 'A declared base requires recipe version 2'
+    if (recipe.mounting)
+      return 'A declared base applies to floor designs; mounted designs use their reference'
+  }
+  return null
 }
 export function parseRecipe(input: unknown): Recipe {
   guardTree(input)
   if (JSON.stringify(input).length > RECIPE_LIMITS.bytes) throw new Error('Recipe is too large')
   const recipe = RecipeSchema.parse(input)
-  if (recipe.base !== undefined) {
-    requireVersion2(recipe, 'A declared base')
-    if (recipe.mounting)
-      throw new Error(
-        'A declared base applies to floor designs; mounted designs use their reference',
-      )
-  }
   for (const list of [recipe.parameters, recipe.slots, recipe.parts]) {
     if (new Set(list.map((x) => x.id)).size !== list.length)
       throw new Error('IDs must be unique within each section')
@@ -318,6 +324,8 @@ function movedPoint(point: Vec3, motion: EvaluatedMotion, fraction: number): Vec
 }
 
 export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = {}): Evaluation {
+  const issue = versionIssue(recipe)
+  if (issue) throw new Error(issue)
   const slotColors = new Map<string, string>()
   for (const part of recipe.parts) {
     const light = part.light
@@ -617,7 +625,11 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
       const rotation = (surface.rotation ?? [0, 0, 0]).map((e) => expr(e, i)) as Vec3
       const size = surface.size.map((e) => expr(e, i)) as [number, number]
       const position = surface.position.map((e) => expr(e, i)) as Vec3
-      if (size.some((v) => v < 0.001 || v > 30) || position.some((v) => Math.abs(v) > 30))
+      // Bounded where consumers read it: design space with the resting datum at y = 0.
+      if (
+        size.some((v) => v < 0.001 || v > 30) ||
+        position.some((v, k) => Math.abs(k === 1 ? v - base : v) > 30)
+      )
         throw new Error('Invalid surface region')
       surfaces.push({
         id: part ? `${surface.id}:${i}` : surface.id,
