@@ -17,7 +17,8 @@ import {
   triangleCharge,
   type Vec3,
 } from './recipe'
-import { type Ring, sectionRings } from './section'
+import { ringArea, sectionRings } from './section'
+import { boundsOf } from './spatial'
 
 // Agent-facing design capabilities: the schema a design must follow and the validation that
 // is the authority over it. Every surface (MCP, chat, scene programs) wraps these functions.
@@ -437,23 +438,9 @@ const boundsFrom = (min: Vec3, max: Vec3) => ({
 })
 
 function unionBounds(entries: { min: Vec3; max: Vec3 }[]) {
-  const min: Vec3 = [Infinity, Infinity, Infinity]
-  const max: Vec3 = [-Infinity, -Infinity, -Infinity]
-  for (const entry of entries)
-    for (let k = 0; k < 3; k++) {
-      min[k] = Math.min(min[k]!, entry.min[k]!)
-      max[k] = Math.max(max[k]!, entry.max[k]!)
-    }
+  const { min, max } = boundsOf(entries.flatMap((entry) => [entry.min, entry.max]))
   return boundsFrom(min, max)
 }
-
-const ringArea = (ring: Ring) =>
-  Math.abs(
-    ring.reduce((sum, [x, y], i) => {
-      const [nx, ny] = ring[(i + 1) % ring.length]!
-      return sum + x * ny - nx * y
-    }, 0),
-  ) / 2
 
 /** Volume of a shape for the centre of mass (a tapered cylinder is a frustum). */
 function shapeVolume(shape: EvaluatedShape) {
@@ -470,7 +457,8 @@ function shapeVolume(shape: EvaluatedShape) {
     case 'extrude': {
       const rings = sectionRings(shape.section!)
       const area =
-        ringArea(rings.outer) - rings.holes.reduce((sum, hole) => sum + ringArea(hole), 0)
+        Math.abs(ringArea(rings.outer)) -
+        rings.holes.reduce((sum, hole) => sum + Math.abs(ringArea(hole)), 0)
       return area * d
     }
     case 'revolve': {
