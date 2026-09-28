@@ -32,6 +32,18 @@ const many = (version: 1 | 2, n: number, primitive: Shape['primitive'], perPart 
       ),
     ),
   )
+// n shapes as repeated parts (count up to 64), compact enough for any byte cap.
+const counted = (version: 1 | 2, n: number, primitive: Shape['primitive']): Recipe => {
+  const recipe = design(
+    version,
+    Array.from({ length: Math.ceil(n / 64) }, () => [box('s', 0, primitive)]),
+  )
+  recipe.parts.forEach((part, p) => {
+    part.count = Math.min(64, n - p * 64)
+    part.shapes[0]!.position = [{ op: 'mul', args: ['index', 0.02] }, 0.005, p * 0.1]
+  })
+  return recipe
+}
 
 describe('triangle budgets from evaluated counts', () => {
   test('each primitive reports the triangles its three.js generator builds', () => {
@@ -45,16 +57,16 @@ describe('triangle budgets from evaluated counts', () => {
   })
 
   test('v1 acceptance is unchanged: the legacy charges still gate v1', () => {
-    expect(() => parseRecipe(many(1, 170, 'roundedBox'))).not.toThrow()
-    expect(() => parseRecipe(many(1, 171, 'roundedBox'))).toThrow('Triangle budget exceeded')
-    expect(evaluateRecipe(many(1, 170, 'roundedBox')).triangles).toBe(170 * 300)
+    expect(() => parseRecipe(counted(1, 170, 'roundedBox'))).not.toThrow()
+    expect(() => parseRecipe(counted(1, 171, 'roundedBox'))).toThrow('Triangle budget exceeded')
+    expect(evaluateRecipe(counted(1, 170, 'roundedBox')).triangles).toBe(170 * 300)
   })
 
   test('v2 is gated by real counts, so more rounded boxes and cones fit', () => {
-    expect(() => parseRecipe(many(2, 171, 'roundedBox', 64))).not.toThrow()
-    expect(() => parseRecipe(many(2, 334, 'roundedBox', 64))).toThrow('Triangle budget exceeded')
-    expect(() => parseRecipe(many(2, 138, 'ellipsoid', 64))).not.toThrow()
-    expect(() => parseRecipe(many(2, 139, 'ellipsoid', 64))).toThrow('Triangle budget exceeded')
+    expect(() => parseRecipe(counted(2, 171, 'roundedBox'))).not.toThrow()
+    expect(() => parseRecipe(counted(2, 334, 'roundedBox'))).toThrow('Triangle budget exceeded')
+    expect(() => parseRecipe(counted(2, 138, 'ellipsoid'))).not.toThrow()
+    expect(() => parseRecipe(counted(2, 139, 'ellipsoid'))).toThrow('Triangle budget exceeded')
   })
 
   test('v2 lifts the 16 x 24 part caps and the 256 expanded-shape cap', () => {
@@ -95,7 +107,7 @@ describe('budget review fixes (AK-10a round 2)', () => {
 
   test('support shapes count toward the 256-surface budget', () => {
     const supports = design(2, [
-      Array.from({ length: 4 }, (_, i) => ({ ...box(`s${i}`, i * 0.02), support: true })),
+      Array.from({ length: 5 }, (_, i) => ({ ...box(`s${i}`, i * 0.02), support: true })),
     ])
     supports.parts[0]!.count = 64
     supports.parts[0]!.shapes = supports.parts[0]!.shapes.map((shape) => ({

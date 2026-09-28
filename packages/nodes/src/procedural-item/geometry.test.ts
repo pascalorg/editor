@@ -113,9 +113,10 @@ test('light descriptors leave geometry batches and bounds unchanged', () => {
 
 test('evaluated triangle counts equal the triangles the renderer builds', () => {
   const dir = new URL('../../../core/src/procedural-items/__fixtures__/', import.meta.url)
-  const fixtures = readdirSync(dir).map((file) =>
-    parseRecipe(JSON.parse(readFileSync(new URL(file, dir), 'utf8'))),
-  )
+  // The E3 kitchen run is the committed R7 refusal case (37.9 KB), not a parsable design.
+  const fixtures = readdirSync(dir)
+    .filter((file) => !file.startsWith('trial_e3_'))
+    .map((file) => parseRecipe(JSON.parse(readFileSync(new URL(file, dir), 'utf8'))))
   expect(fixtures.length).toBeGreaterThanOrEqual(9)
   const every = parseRecipe({
     version: 2,

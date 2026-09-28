@@ -66,7 +66,15 @@ const motion = z.discriminatedUnion('kind', [
 ])
 // Version 2 lifts the part caps; triangles (counted as three.js builds them), bytes, the
 // structural budget and evaluation time bound the rest.
-export const RECIPE_V2_LIMITS = { parts: 64, partShapes: 512, shapes: 512 } as const
+// Inline v2 designs stay under R7's 24 KiB until pinned definitions (P-05) store larger ones;
+// one evaluation may take at most `milliseconds` (a guard, far above real recipes' cost).
+export const RECIPE_V2_LIMITS = {
+  parts: 64,
+  partShapes: 512,
+  shapes: 512,
+  bytes: 24 * 1024,
+  milliseconds: 250,
+} as const
 export const RECIPE_LIMITS = {
   bytes: 131072,
   depth: 24,
@@ -277,6 +285,8 @@ function versionIssue(recipe: Recipe): string | null {
     return 'More than 16 parts requires recipe version 2'
   if (recipe.version === 1 && recipe.parts.some((part) => part.shapes.length > 24))
     return 'More than 24 shapes in a part requires recipe version 2'
+  if (recipe.version === 2 && JSON.stringify(recipe).length > RECIPE_V2_LIMITS.bytes)
+    return 'A version 2 recipe above 24 KiB needs a pinned definition (P-05); keep it inline under 24 KiB'
   if (recipe.cuts !== undefined) {
     if (recipe.version !== 2) return 'Cuts require recipe version 2'
     if (recipe.mounting?.attachTo !== 'ceiling') return 'Cuts need a ceiling-mounted design'
@@ -402,7 +412,18 @@ export function shapeTriangles(primitive: EvaluatedShape['primitive'], topScale 
       return 720 // SphereGeometry(…, 24, 16) without the degenerate pole triangles
   }
 }
-export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = {}): Evaluation {
+export function evaluateRecipe(
+  recipe: Recipe,
+  values: Record<string, number> = {},
+  { now = () => performance.now() }: { now?: () => number } = {},
+): Evaluation {
+  const started = now()
+  const inTime = () => {
+    if (recipe.version === 2 && now() - started > RECIPE_V2_LIMITS.milliseconds)
+      throw new Error(
+        `Recipe evaluation exceeded its ${RECIPE_V2_LIMITS.milliseconds} ms time budget`,
+      )
+  }
   const issue = versionIssue(recipe)
   if (issue) throw new Error(issue)
   const slotColors = new Map<string, string>()
@@ -528,6 +549,7 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
     charged = 0
   const shapeLimit = recipe.version === 2 ? RECIPE_V2_LIMITS.shapes : RECIPE_LIMITS.shapes
   for (const part of recipe.parts) {
+    inTime()
     const count = expr(part.count)
     if (!Number.isInteger(count) || count < 0 || count > 64)
       throw new Error(`Invalid repeat count for ${part.label}`)
@@ -598,6 +620,7 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
       }
       for (const s of part.shapes) {
         if (shapes.length >= shapeLimit) throw new Error('Expanded shape budget exceeded')
+        inTime()
         const size = vec(s.size),
           position = vec(s.position),
           rotation = vec(s.rotation ?? [0, 0, 0])
@@ -656,6 +679,7 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
             }
         }
         if (s.support) {
+          if (surfaces.length >= 256) throw new Error('Surface budget exceeded')
           if (rotation.some((v) => v !== 0))
             throw new Error('Support surfaces must be horizontal and unrotated in v1')
           surfaces.push({
