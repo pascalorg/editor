@@ -11,6 +11,7 @@ import {
   describeDesignSchema,
   validateDesign,
 } from './design'
+import { PRIMITIVE_TESSELLATION, shapeTriangles } from './recipe'
 
 // Trial fixtures: recipes of real /next elements from the asset-kernel trial, with the
 // renderer's triangle and batch counts and the sweep results recorded there.
@@ -223,6 +224,100 @@ describe('validateDesign diagnostics', () => {
           'trim reaches 0.0455 m behind the wall reference "back" and would pass into the wall',
       },
     ])
+  })
+
+  test('geometry far behind the wall does not count as touching it', () => {
+    const design = louver()
+    // The trim ring, 1 m behind the wall reference: it touches nothing.
+    for (const shape of design.parts[0].shapes) shape.position[2] = -1
+    const m = validateDesign(design).measurements!
+    const trim = m.components.list.find((c) => c.parts.includes('trim'))!
+    expect(trim.touchesDatum).toBe(false)
+    expect(m.datum.contact!.parts).not.toContain('trim')
+    expect(validateDesign(design).diagnostics.map((d) => d.code)).toContain('floating_component')
+  })
+
+  test('designs over the draw budget get a draw_budget warning', () => {
+    const design = louver()
+    design.slots = Array.from({ length: 8 }, (_, i) => ({
+      id: `s${i}`,
+      label: `S${i}`,
+      color: '#888888',
+    }))
+    design.parts = Array.from({ length: 8 }, (_, p) => ({
+      id: `p${p}`,
+      label: `P${p}`,
+      count: 1,
+      ...(p > 0 && { motion: { kind: 'slide', axis: 'z', distance: 0.1 } }),
+      shapes: Array.from({ length: 8 }, (_, s) => ({
+        id: `b${s}`,
+        primitive: 'box',
+        slot: `s${s}`,
+        size: [0.05, 0.05, 0.05],
+        position: [p * 0.06 - 0.2, 0.1 + s * 0.06, 0.03],
+      })),
+    }))
+    design.surfaces[0].size = [0.634, 0.94]
+    const result = validateDesign(design)
+    expect(result.measurements!.drawGroups.length).toBe(64)
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({ severity: 'warning', code: 'draw_budget' }),
+    )
+  })
+
+  test('balance weighs a cone as a cone', () => {
+    const recipe = structuredClone(DESIGN_EXAMPLE) as any
+    recipe.parts = [
+      {
+        id: 'base',
+        label: 'Base',
+        count: 1,
+        shapes: [
+          {
+            id: 'plate',
+            primitive: 'box',
+            slot: 'wood',
+            size: [1.6, 0.02, 1.6],
+            position: [0, 0.01, 0],
+          },
+        ],
+      },
+      {
+        id: 'cone',
+        label: 'Cone',
+        count: 1,
+        shapes: [
+          {
+            id: 'tip',
+            primitive: 'cylinder',
+            slot: 'wood',
+            size: [0.4, 1.2, 0.4],
+            position: [1.6, 0.62, 0],
+            topScale: 0,
+          },
+        ],
+      },
+    ]
+    // With the true cone volume (a third of the cylinder) the centre of mass is x ≈ 0.72,
+    // inside the plate; weighing it as a full cylinder moves it outside.
+    const m = validateDesign(recipe).measurements!
+    expect(m.datum.balanced).toBe(true)
+  })
+
+  test('triangle counts derive from the tessellation the renderer builds with', () => {
+    const {
+      roundedBoxSegments,
+      cylinderRadialSegments,
+      ellipsoidWidthSegments,
+      ellipsoidHeightSegments,
+    } = PRIMITIVE_TESSELLATION
+    expect(shapeTriangles('box')).toBe(12)
+    expect(shapeTriangles('roundedBox')).toBe(12 * (2 * roundedBoxSegments + 1) ** 2)
+    expect(shapeTriangles('cylinder', 1)).toBe(4 * cylinderRadialSegments)
+    expect(shapeTriangles('cylinder', 0)).toBe(2 * cylinderRadialSegments)
+    expect(shapeTriangles('ellipsoid')).toBe(
+      2 * ellipsoidWidthSegments * (ellipsoidHeightSegments - 1),
+    )
   })
 
   test('library designs with detached pieces are flagged', () => {
