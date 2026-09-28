@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import cabinetJson from './__fixtures__/cabinet_two_doors_drawer.json'
 import pendantJson from './__fixtures__/pendant_lamp.json'
+import e3CompactJson from './__fixtures__/trial_e3_kitchen_compact.json'
+import e3DirectJson from './__fixtures__/trial_e3_kitchen_direct.json'
+import e7Json from './__fixtures__/trial_e7_pendant_fixed_top.json'
 import { shelfRecipe } from './fixtures'
 import { type Expr, evaluateRecipe, parseRecipe, type Recipe } from './recipe'
 
@@ -177,5 +180,86 @@ describe('select, bool and choice parameters, and when (recipe version 2)', () =
     const e = evaluateRecipe(parseRecipe(recipe))
     expect(e.lights).toEqual([])
     expect(e.shapes.some((shape) => shape.partId === bulb.id)).toBe(false)
+  })
+})
+
+describe('options review fixes (AK-10b round 2)', () => {
+  test('a skipped repeat allocates no motion group and survivors keep their ids', () => {
+    const recipe = v2(parseRecipe(structuredClone(cabinetJson)))
+    const doors = recipe.parts.find((part) => part.id === 'doors')!
+    for (const shape of doors.shapes)
+      shape.when = { op: 'sub', args: [1, { op: 'mod', args: ['index', 2] }] } as Expr
+    const e = evaluateRecipe(parseRecipe(recipe))
+    const all = evaluateRecipe(parseRecipe(structuredClone(cabinetJson)))
+    expect(e.motions.filter((m) => m.partId === 'doors').map((m) => m.id)).toEqual(['doors'])
+    for (const shape of doors.shapes) shape.when = { op: 'mod', args: ['index', 2] } as Expr
+    const odd = evaluateRecipe(parseRecipe(recipe))
+    expect(odd.motions.filter((m) => m.partId === 'doors').map((m) => m.id)).toEqual(
+      all.motions
+        .filter((m) => m.partId === 'doors')
+        .slice(1)
+        .map((m) => m.id),
+    )
+    expect(new Set(odd.shapes.map((s) => s.motionGroup).filter(Boolean))).toEqual(
+      new Set(odd.motions.map((m) => m.id)),
+    )
+  })
+
+  test('mutually exclusive variants may use one emissive slot in different colors', () => {
+    const recipe = v2(parseRecipe(structuredClone(pendantJson)))
+    recipe.parameters.push({
+      id: 'warm',
+      label: 'Warm',
+      default: 1,
+      min: 0,
+      max: 1,
+      step: 1,
+      unit: 'bool',
+    })
+    const bulb = recipe.parts.find((part) => part.light)!
+    const cold = structuredClone(bulb)
+    cold.id = 'cold_bulb'
+    cold.light!.color = '#dfefff'
+    bulb.when = 'warm'
+    cold.when = { op: 'sub', args: [1, 'warm'] }
+    recipe.parts.push(cold)
+    const parsed = parseRecipe(recipe)
+    expect(evaluateRecipe(parsed).lights.map((l) => l.color)).toEqual([bulb.light!.color])
+    expect(evaluateRecipe(parsed, { warm: 0 }).lights.map((l) => l.color)).toEqual(['#dfefff'])
+  })
+
+  test('the trial E7 pendant with select evaluates exactly like its delta-sum form', () => {
+    const e7 = structuredClone(e7Json) as Recipe
+    const delta = e7.parts[1]!.shapes[0]!.size[1]
+    const table = {
+      op: 'select',
+      args: ['index', 'drop_1', 'drop_2', 'drop_3', 'drop_4', 'drop_5'],
+    }
+    const swap = (value: unknown): unknown =>
+      JSON.stringify(value) === JSON.stringify(delta)
+        ? table
+        : Array.isArray(value)
+          ? value.map(swap)
+          : value && typeof value === 'object'
+            ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, swap(v)]))
+            : value
+    const compact = { ...(swap(e7) as Recipe), version: 2 as const }
+    expect(JSON.stringify(compact).length).toBeLessThan(JSON.stringify(e7).length / 1.8)
+    const a = evaluateRecipe(parseRecipe({ ...e7, version: 2 }))
+    const b = evaluateRecipe(parseRecipe(compact))
+    expect(b.shapes).toEqual(a.shapes)
+    expect(b.lights).toEqual(a.lights)
+  })
+
+  test('the real E3 run compacts under 24 KiB with count and select, box for box', () => {
+    const direct = structuredClone(e3DirectJson) as Recipe
+    const compact = structuredClone(e3CompactJson) as Recipe
+    expect(JSON.stringify(compact).length).toBeLessThan(24 * 1024)
+    const key = (s: { size: number[]; position: number[]; slot: string }) =>
+      [...s.size, ...s.position].map((v) => v.toFixed(4)).join(',') + s.slot
+    const expected = direct.parts.flatMap((part) => part.shapes.map((s) => key(s as never))).sort()
+    const evaluation = evaluateRecipe(parseRecipe(compact))
+    expect(evaluation.shapes.map(key).sort()).toEqual(expected)
+    expect(expected).toHaveLength(323)
   })
 })
