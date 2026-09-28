@@ -490,13 +490,17 @@ function versionIssue(recipe: Recipe): string | null {
     return 'More than 16 parts requires recipe version 2'
   if (recipe.version === 1 && recipe.parts.some((part) => part.shapes.length > 24))
     return 'More than 24 shapes in a part requires recipe version 2'
-  if (recipe.version === 2 && JSON.stringify(recipe).length > RECIPE_V2_LIMITS.bytes)
+  if (recipe.version === 2 && recipeBytes(recipe) > RECIPE_V2_LIMITS.bytes)
     return 'A version 2 recipe above 24 KiB needs a pinned definition (P-05); keep it inline under 24 KiB'
   if (recipe.cuts !== undefined) {
     if (recipe.version !== 2) return 'Cuts require recipe version 2'
     if (recipe.mounting?.attachTo !== 'ceiling') return 'Cuts need a ceiling-mounted design'
   }
   return null
+}
+/** UTF-8 bytes of a recipe's compact JSON: what every inline size cap measures. */
+export function recipeBytes(recipe: unknown): number {
+  return new TextEncoder().encode(JSON.stringify(recipe)).length
 }
 export function parseRecipe(input: unknown): Recipe {
   guardTree(input)

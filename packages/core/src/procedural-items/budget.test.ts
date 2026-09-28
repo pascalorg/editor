@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
+import e3CompactJson from './__fixtures__/trial_e3_kitchen_compact.json'
 import e3Json from './__fixtures__/trial_e3_kitchen_direct.json'
-import { evaluateRecipe, parseRecipe, type Recipe, RecipeSchema } from './recipe'
+import { evaluateRecipe, parseRecipe, type Recipe, RecipeSchema, recipeBytes } from './recipe'
 
 type Shape = Recipe['parts'][number]['shapes'][number]
 const box = (id: string, x: number, primitive: Shape['primitive'] = 'box'): Shape => ({
@@ -103,6 +104,16 @@ describe('budget review fixes (AK-10a round 2)', () => {
     expect(JSON.stringify(e3).length).toBeGreaterThan(24 * 1024)
     expect(() => parseRecipe(e3)).toThrow('24 KiB')
     expect(RecipeSchema.safeParse(e3).success).toBe(false)
+  })
+
+  test('the 24 KiB cap counts UTF-8 bytes, not UTF-16 characters', () => {
+    const e3 = structuredClone(e3CompactJson) as Recipe
+    expect(() => parseRecipe(e3)).not.toThrow()
+    e3.description = '界'.repeat(600)
+    for (const part of e3.parts) part.label = '界'.repeat(60)
+    expect(JSON.stringify(e3).length).toBeLessThan(24 * 1024)
+    expect(recipeBytes(e3)).toBeGreaterThan(24 * 1024)
+    expect(() => parseRecipe(e3)).toThrow('24 KiB')
   })
 
   test('support shapes count toward the 256-surface budget', () => {

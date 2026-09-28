@@ -10,6 +10,7 @@ import {
   RECIPE_V2_LIMITS,
   type Recipe,
   RecipeSchema,
+  recipeBytes,
   shapeBounds,
   shapeTriangles,
   sweepRecipe,
@@ -43,6 +44,7 @@ export const DesignDiagnosticSchema = z.object({
     'behind_wall',
     'draw_budget',
     'design_version_not_enabled',
+    'design_too_large',
   ]),
   path: z.string().optional(),
   message: z.string(),
@@ -725,6 +727,16 @@ export function validateDesign(
       ])
     }
   }
+  // Nothing above the inline cap can be placed, whatever else is wrong with it.
+  const bytes = recipeBytes(raw)
+  if (bytes > RECIPE_V2_LIMITS.bytes)
+    return failed([
+      {
+        severity: 'error',
+        code: 'design_too_large',
+        message: `The design is ${Math.ceil(bytes / 1024)} KiB of compact JSON; inline designs stay under ${RECIPE_V2_LIMITS.bytes / 1024} KiB (R7) until pinned definitions store larger ones. Merge repeated shapes with count and index, or shorten ids and labels`,
+      },
+    ])
   let recipe: Recipe
   try {
     recipe = parseRecipe(raw)

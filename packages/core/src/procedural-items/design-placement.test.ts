@@ -7,7 +7,7 @@ import jointCabinetJson from './__fixtures__/joint_cabinet.json'
 import airHandlerJson from './__fixtures__/trial-e2-air-handler.json'
 import louverJson from './__fixtures__/trial-e5-louver.json'
 import stairGuardJson from './__fixtures__/trial-e8-stair-guard.json'
-import { DESIGN_EXAMPLE } from './design'
+import { DESIGN_EXAMPLE, validateDesign } from './design'
 import {
   type DesignPlacement,
   DesignPlacementError,
@@ -192,6 +192,20 @@ describe('planDesignPlacement', () => {
     const result = refusal(scene, { design: big, hostId: level.id, position: [0, 0, 0] })
     expect(result.code).toBe('design_too_large')
     expect(result.message).toContain('24 KiB')
+    // validate_design reports the same refusal.
+    expect(validateDesign(big)).toMatchObject({
+      valid: false,
+      diagnostics: [
+        { code: 'design_too_large', message: result.message.slice('design_too_large: '.length) },
+      ],
+    })
+  })
+
+  test('measures the compact design, so whitespace in a JSON string does not count', () => {
+    const padded = `${JSON.stringify(vase, null, 2)}${' '.repeat(30 * 1024)}`
+    expect(() =>
+      planDesignPlacement(scene, { design: padded, hostId: level.id, position: [1, 0, 1] }),
+    ).not.toThrow()
   })
 
   test('rests a design on a named design surface and refuses an occupied spot', () => {
