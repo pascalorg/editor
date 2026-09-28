@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test'
-import type { Expr, ExprV2 } from '../procedural-items/recipe'
+import type { Expr } from '../procedural-items/recipe'
 
-// R1: v1 consumers that switch exhaustively over Expr keep compiling; v2 ops live in ExprV2.
-function v1Ops(e: Exclude<Expr, number | string>): string {
+// Expr is what parsed recipes carry: consumers that switch exhaustively must handle select.
+function ops(e: Exclude<Expr, number | string>): string {
   switch (e.op) {
     case 'add':
     case 'sub':
@@ -17,6 +17,7 @@ function v1Ops(e: Exclude<Expr, number | string>): string {
     case 'sin':
     case 'cos':
     case 'mod':
+    case 'select':
       return e.op
     default: {
       const unreachable: never = e
@@ -25,8 +26,7 @@ function v1Ops(e: Exclude<Expr, number | string>): string {
   }
 }
 
-test('Expr stays the v1 union; ExprV2 adds select', () => {
-  const select: ExprV2 = { op: 'select', args: ['index', 1, 2] }
-  expect(v1Ops({ op: 'mod', args: [1, 2] })).toBe('mod')
-  expect(select.op).toBe('select')
+test('Expr includes the version 2 select', () => {
+  expect(ops({ op: 'select', args: ['index', 1, 2] })).toBe('select')
+  expect(ops({ op: 'mod', args: [1, 2] })).toBe('mod')
 })

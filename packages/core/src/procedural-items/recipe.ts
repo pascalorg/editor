@@ -17,51 +17,39 @@ import {
   transformPoint,
 } from './spatial'
 
+/** An expression; version 2 adds select(i, v0, …, vn-1), which is v_i for an integral i in [0, n). */
 export type Expr =
   | number
   | string
   | { op: 'add' | 'sub' | 'mul' | 'div' | 'min' | 'max'; args: Expr[] }
   | { op: 'floor' | 'ceil' | 'round' | 'abs' | 'sin' | 'cos'; args: [Expr] }
   | { op: 'mod'; args: [Expr, Expr] }
-/**
- * Version 2 expressions: Expr plus select(i, v0, …, vn-1), which is v_i for an integral i in
- * [0, n). Recipe fields stay typed as the v1 Expr so v1 consumers keep compiling; v2 content
- * may carry these at runtime.
- */
-export type ExprV2 =
-  | number
-  | string
-  | { op: 'add' | 'sub' | 'mul' | 'div' | 'min' | 'max'; args: ExprV2[] }
-  | { op: 'floor' | 'ceil' | 'round' | 'abs' | 'sin' | 'cos'; args: [ExprV2] }
-  | { op: 'mod'; args: [ExprV2, ExprV2] }
-  | { op: 'select'; args: ExprV2[] }
+  | { op: 'select'; args: Expr[] }
 export type Vec3 = [number, number, number]
 const id = z.string().regex(/^[a-z][a-z0-9_]{0,47}$/)
 const finite = z.number().finite().min(-1000).max(1000)
-const expressionV2: z.ZodType<ExprV2> = z.lazy(() =>
+const expression: z.ZodType<Expr> = z.lazy(() =>
   z.union([
     finite,
     id,
     z.strictObject({
       op: z.enum(['add', 'sub', 'mul', 'div', 'min', 'max']),
-      args: z.array(expressionV2).min(2).max(8),
+      args: z.array(expression).min(2).max(8),
     }),
     z.strictObject({
       op: z.enum(['floor', 'ceil', 'round', 'abs', 'sin', 'cos']),
-      args: z.tuple([expressionV2]),
+      args: z.tuple([expression]),
     }),
     z.strictObject({
       op: z.literal('mod'),
-      args: z.tuple([expressionV2, expressionV2]),
+      args: z.tuple([expression, expression]),
     }),
     z.strictObject({
       op: z.literal('select'),
-      args: z.array(expressionV2).min(2).max(65),
+      args: z.array(expression).min(2).max(65),
     }),
   ]),
 )
-// The schema reads v2 expressions; the public Recipe type keeps the v1 Expr (R1).
-const expression = expressionV2 as unknown as z.ZodType<Expr>
 export const ExpressionSchema = expression
 const vector = z.tuple([expression, expression, expression])
 const sectionRing = z
@@ -826,7 +814,7 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
     parameters[p.id] = v
   }
   let work = 0
-  const expr = (e: ExprV2, index = 0, depth = 0): number => {
+  const expr = (e: Expr, index = 0, depth = 0): number => {
     if (++work > RECIPE_LIMITS.expressions || depth > 16)
       throw new Error('Expression budget exceeded')
     if (typeof e === 'number') return e
