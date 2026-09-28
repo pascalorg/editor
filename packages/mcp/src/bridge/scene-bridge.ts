@@ -5,6 +5,7 @@ import {
   type NodeDeletionPlan,
   type NodeDeletionScene,
   planNodeDeletion,
+  runAsSingleSceneHistoryStep,
 } from '@pascal-app/core'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import type { AnyNode } from '@pascal-app/core/schema'
@@ -432,22 +433,26 @@ export class SceneBridge {
       }
     }
 
-    for (let i = 0; i < patches.length; i++) {
-      const p = patches[i]!
-      if (p.op === 'create') {
-        flush('create')
-        const parsedNode = parsedCreateNodes.get(i)!
-        createOps.push({ node: parsedNode, parentId: p.parentId })
-        createdIds.push(parsedNode.id as AnyNodeId)
-      } else if (p.op === 'update') {
-        flush('update')
-        updateOps.push({ id: p.id, data: p.data })
-      } else {
-        flush('delete')
-        deleteIds.push(p.id)
+    // One history step for the whole patch, as its description promises: a create and
+    // the host update it needs (a design-surface attachment) undo together.
+    runAsSingleSceneHistoryStep(useScene, () => {
+      for (let i = 0; i < patches.length; i++) {
+        const p = patches[i]!
+        if (p.op === 'create') {
+          flush('create')
+          const parsedNode = parsedCreateNodes.get(i)!
+          createOps.push({ node: parsedNode, parentId: p.parentId })
+          createdIds.push(parsedNode.id as AnyNodeId)
+        } else if (p.op === 'update') {
+          flush('update')
+          updateOps.push({ id: p.id, data: p.data })
+        } else {
+          flush('delete')
+          deleteIds.push(p.id)
+        }
       }
-    }
-    flush('none')
+      flush('none')
+    })
 
     // Compute actual deleted ids by diffing pre/post snapshots.
     const postNodes = useScene.getState().nodes

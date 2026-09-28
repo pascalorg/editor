@@ -65,7 +65,8 @@ describe('place_design', () => {
       position: [1, 0, 1],
     })
     const tableId = (table.structuredContent as { designId: string }).designId
-    const before = bridge.getHistory().pastCount
+    // Start from empty history: at zundo's cap, a new entry evicts the oldest one.
+    bridge.clearHistory()
     const onTop = await place(client, {
       design: vase,
       hostId: tableId,
@@ -73,7 +74,7 @@ describe('place_design', () => {
       position: [0.2, 0, 0],
     })
     const vaseId = (onTop.structuredContent as { designId: string }).designId
-    expect(bridge.getHistory().pastCount - before).toBe(1)
+    expect(bridge.getHistory().pastCount).toBe(1)
     bridge.undo(1)
     expect(bridge.getNode(vaseId as never)).toBeNull()
     expect(bridge.getNode(tableId as never)).toMatchObject({ children: [], attachments: {} })

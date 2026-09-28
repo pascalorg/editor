@@ -30,12 +30,14 @@ export type DesignPlacementRequest = {
   parameters?: Record<string, number>
   slots?: Record<string, string>
   name?: string
-  /** A new id; whether it is free is the writer's check (the MCP patch guards). */
+  /** A new id; refused with node_exists when the scene already has it. */
   id?: string
 }
 
 export type DesignPlacementRefusal =
   | 'invalid_design'
+  | 'design_too_large'
+  | 'node_exists'
   | 'invalid_placement'
   | 'host_not_found'
   | 'wrong_host'
@@ -60,6 +62,9 @@ export type DesignPlacement = {
   /** The surface host's attachment map after placement, when the design rests on a design surface. */
   hostUpdate?: { id: string; attachments: Record<string, string> }
 }
+
+/** R7: designs above this are stored once by hash (AK-01/P-05), not inline in each node. */
+export const INLINE_DESIGN_MAX_BYTES = 24 * 1024
 
 const round = (value: number) => Math.round(value * 1000) / 1000
 
@@ -94,9 +99,22 @@ export function planDesignPlacement(
       errors,
     )
   }
+  const bytes = new TextEncoder().encode(
+    typeof request.design === 'string' ? request.design : JSON.stringify(request.design),
+  ).length
+  if (bytes > INLINE_DESIGN_MAX_BYTES)
+    throw new DesignPlacementError(
+      'design_too_large',
+      `The design is ${Math.ceil(bytes / 1024)} KiB; inline designs stay under ${INLINE_DESIGN_MAX_BYTES / 1024} KiB (R7) until pinned definitions store larger ones. Merge repeated shapes with count and index, or shorten ids and labels`,
+    )
   const recipe = parseRecipe(
     typeof request.design === 'string' ? JSON.parse(request.design) : request.design,
   )
+  if (request.id !== undefined && nodes[request.id])
+    throw new DesignPlacementError(
+      'node_exists',
+      `create id "${request.id}" already exists; omit id to create a new node`,
+    )
   let host = nodes[hostId]
   if (!host) throw new DesignPlacementError('host_not_found', `No node ${hostId}`)
 

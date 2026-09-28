@@ -173,11 +173,20 @@ describe('planDesignPlacement', () => {
 
   test('refuses inline designs above the 24 KiB cap (R7) with a code', () => {
     const big = structuredClone(DESIGN_EXAMPLE) as any
-    big.description = 'x'.repeat(600)
-    big.parts[1].shapes = Array.from({ length: 24 }, (_, i) => ({
-      ...big.parts[1].shapes[0],
-      id: `leg_${i}_${'n'.repeat(40)}`,
-    }))
+    // Ten decorative parts of 24 small studs each: valid, and about 60 KiB of JSON.
+    for (let p = 0; p < 10; p++)
+      big.parts.push({
+        id: `studs_${p}`,
+        label: `Studs ${p}`,
+        count: 1,
+        shapes: Array.from({ length: 24 }, (_, i) => ({
+          id: `stud_${i}`,
+          primitive: 'box',
+          slot: 'wood',
+          size: [0.01, 0.01, 0.01],
+          position: [-0.2 + i * 0.015, { op: 'sub', args: ['height', 0.035 + p * 0.001] }, 0],
+        })),
+      })
     expect(JSON.stringify(big).length).toBeGreaterThan(24 * 1024)
     const result = refusal(scene, { design: big, hostId: level.id, position: [0, 0, 0] })
     expect(result.code).toBe('design_too_large')

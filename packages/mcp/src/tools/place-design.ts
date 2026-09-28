@@ -56,7 +56,7 @@ export function registerPlaceDesign(server: McpServer, bridge: SceneOperations):
     {
       title: 'Place design',
       description:
-        'Create one instance of a design (procedural item recipe, object or JSON string) in the scene. The design must pass validate_design. Its mounting picks the host: floor designs go on a level (or a slab or zone of it) or on a named surface of a placed design; wall-side designs on a straight wall face; ceiling designs under a ceiling. Only creates: refusals are tool errors whose JSON carries a code (invalid_design with diagnostics, invalid_placement, host_not_found, wrong_host, unknown_surface, does_not_fit, or an apply_patch guard code such as node_exists) and change nothing.',
+        'Create one instance of a design (procedural item recipe, object or JSON string) in the scene. The design must pass validate_design. Its mounting picks the host: floor designs go on a level (or a slab or zone of it) or on a named surface of a placed design; wall-side designs on a straight wall face; ceiling designs under a ceiling. Only creates: refusals are tool errors whose JSON carries a code (invalid_design with diagnostics, design_too_large above 24 KiB, invalid_placement, node_exists, host_not_found, wrong_host, unknown_surface, does_not_fit, or an apply_patch guard code) and change nothing.',
       inputSchema: placeDesignInput,
       outputSchema: placeDesignOutput,
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
