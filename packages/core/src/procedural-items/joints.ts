@@ -33,7 +33,10 @@ const LIMITS = { hinge: Math.PI, slide: 5, spin: 20 } as const
 const KIND = { revolute: 'hinge', prismatic: 'slide', continuous: 'spin' } as const
 
 export function usesPartTree(recipe: Recipe): boolean {
-  return Boolean(recipe.joints?.length || recipe.parts.some((part) => part.parent || part.frame))
+  // An explicitly present joints array, even empty, is v2 content.
+  return Boolean(
+    recipe.joints !== undefined || recipe.parts.some((part) => part.parent || part.frame),
+  )
 }
 
 /** Structural checks that need no parameter values. */
@@ -115,9 +118,13 @@ export function placeParts(
     let parent: PartPlacement | null = { pose: IDENTITY_POSE }
     if (part.parent) {
       const host = parts.get(part.parent)!
-      if (counts.get(part.id) !== counts.get(host.id))
-        throw new Error(`Part ${part.id} must repeat exactly as often as its parent ${host.id}`)
-      parent = place(host, i)
+      // A single child rides repeat 0 of its parent; equal counts bind by index.
+      const single = counts.get(part.id) === 1
+      if (!single && counts.get(part.id) !== counts.get(host.id))
+        throw new Error(
+          `Part ${part.id} must repeat once or exactly as often as its parent ${host.id}`,
+        )
+      parent = place(host, single ? 0 : i)
     }
     if (!parent || (part.when !== undefined && value(part.when, i) === 0)) {
       placed.set(key, null)
@@ -155,6 +162,14 @@ export function placeParts(
           )
         )
           throw new Error(`Joint ${part.id} rest and open values must lie within its range`)
+        if (
+          range &&
+          joint.kind !== 'continuous' &&
+          range.some((end) => Math.abs(end - rest) > LIMITS[kind] + 1e-9)
+        )
+          throw new Error(
+            `Joint ${part.id} range must lie within ${LIMITS[kind]} of its rest value`,
+          )
         let amount = joint.kind === 'continuous' ? open : open - rest
         if (!(Math.abs(amount) > 0 && Math.abs(amount) <= LIMITS[kind]))
           throw new Error(
