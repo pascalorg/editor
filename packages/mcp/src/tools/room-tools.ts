@@ -10,9 +10,11 @@ import {
   ZoneNode,
 } from '@pascal-app/core/schema'
 import { z } from 'zod'
+import { bundledCatalog } from '../catalog/bundled'
+import type { AssetCatalog } from '../catalog/types'
 import type { SceneOperations } from '../operations'
 import { ADDITIVE_TOOL_ANNOTATIONS, READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
-import { findCatalogItem, searchCatalogItems } from './asset-catalog'
+import { findCatalogItem } from './asset-catalog'
 import { keepoutCoversPlanned, keepoutForPolygonEdge } from './door-clearance'
 import { ErrorCode, throwMcpError } from './errors'
 import { polygonArea, polygonBounds, type Vec2, wallLength, wallLocalXFromT } from './geometry'
@@ -30,6 +32,7 @@ import {
   publishLiveSceneSnapshot,
 } from './live-sync'
 import { measurement } from './measurement'
+import { doorPropertiesSchema, windowPropertiesSchema } from './opening-properties'
 import { NodeIdSchema, Vec2Schema } from './schemas'
 
 const ROOM_TYPES = [
@@ -47,11 +50,15 @@ const ROOM_TYPES = [
 export const searchAssetsInput = {
   query: z.string().min(1),
   category: z.string().optional(),
+  source: z.enum(['all', 'bundled', 'library', 'community']).default('all'),
+  limit: z.number().int().min(1).max(50).default(20),
+  offset: z.number().int().min(0).default(0),
 }
 
 export const searchAssetsOutput = {
   results: z.array(z.record(z.string(), z.unknown())),
   total: z.number(),
+  catalog: z.record(z.string(), z.unknown()),
 }
 
 export const createRoomInput = {
@@ -86,6 +93,11 @@ export const addDoorInput = {
   height: measurement('length', 'm', { positive: true, description: 'Door height.' }).optional(),
   hingesSide: z.enum(['left', 'right']).optional(),
   swingDirection: z.enum(['inward', 'outward']).optional(),
+  properties: doorPropertiesSchema
+    .optional()
+    .describe(
+      'Native design parameters from get_node_catalog({kind:"door"}). Placement and overall size belong in the top-level arguments.',
+    ),
 }
 
 export const addDoorOutput = {
@@ -109,6 +121,11 @@ export const addWindowInput = {
     min: 0,
     description: 'Sill height above floor.',
   }).optional(),
+  properties: windowPropertiesSchema
+    .optional()
+    .describe(
+      'Native design parameters from get_node_catalog({kind:"window"}). Placement and overall size belong in the top-level arguments.',
+    ),
 }
 
 export const addWindowOutput = {
@@ -404,27 +421,43 @@ function buildRoomPlacements(
   return { placements, bounds }
 }
 
-export function registerSearchAssets(server: McpServer): void {
+export function registerSearchAssets(
+  server: McpServer,
+  assetCatalog: AssetCatalog = bundledCatalog,
+): void {
   server.registerTool(
     'search_assets',
     {
       title: 'Search assets',
       description:
-        'Search the built-in MCP item catalog by keyword. Call before place_item when you need a valid catalogItemId.',
+        'Search available bundled and optionally connected catalog items by keyword. Returns real IDs, dimensions, provenance, and catalog connection status. Call before place_item; compare several fitting candidates for the design brief.',
       inputSchema: searchAssetsInput,
       outputSchema: searchAssetsOutput,
-      annotations: READ_ONLY_TOOL_ANNOTATIONS,
+      annotations: { ...READ_ONLY_TOOL_ANNOTATIONS, openWorldHint: assetCatalog.usesNetwork },
     },
-    async ({ query, category }) => {
-      const results = searchCatalogItems({ query, category }).map((item) => ({
+    async ({ query, category, source, limit, offset }) => {
+      const snapshot = await assetCatalog.snapshot()
+      const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+      const matches = snapshot.items.filter((item) => {
+        if (category && item.category !== category) return false
+        const catalogSource = findCatalogItem(item.id) ? 'bundled' : item.source
+        if (source !== 'all' && catalogSource !== source) return false
+        const text = [item.id, item.name, item.category, ...(item.tags ?? [])]
+          .join(' ')
+          .toLowerCase()
+        return terms.every((term) => text.includes(term))
+      })
+      const results = matches.slice(offset, offset + limit).map((item) => ({
         id: item.id,
         name: item.name,
         category: item.category,
         tags: item.tags ?? [],
         dimensions: item.dimensions,
         attachTo: item.attachTo ?? null,
+        source: findCatalogItem(item.id) ? 'bundled' : 'online',
+        catalogSource: findCatalogItem(item.id) ? 'bundled' : (item.source ?? null),
       }))
-      return textResult({ results, total: results.length })
+      return textResult({ results, total: matches.length, catalog: snapshot.status })
     },
   )
 }
@@ -492,12 +525,21 @@ export function registerAddDoor(server: McpServer, bridge: SceneOperations): voi
     {
       title: 'Add door',
       description:
-        'Add a door to an existing wall. t/position is 0..1 along the wall: 0 = start, 0.5 = center, 1 = end.',
+        'Add a door to an existing wall. t/position is 0..1 along the wall: 0 = start, 0.5 = center, 1 = end. Use properties for native operation, shape, leaf, segment, frame and hardware choices; get_node_catalog describes allowed values.',
       inputSchema: addDoorInput,
       outputSchema: addDoorOutput,
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
-    async ({ wallId, t, position, width = 0.9, height = 2.1, hingesSide, swingDirection }) => {
+    async ({
+      wallId,
+      t,
+      position,
+      width = 0.9,
+      height = 2.1,
+      hingesSide,
+      swingDirection,
+      properties,
+    }) => {
       const wall = assertWall(bridge, wallId)
       const length = wallLength(wall)
       if (length < width) {
@@ -509,6 +551,7 @@ export function registerAddDoor(server: McpServer, bridge: SceneOperations): voi
       const wallT = resolveWallT('add_door', t, position)
       const localX = wallLocalXFromT(wall, wallT, width)
       const door = DoorNode.parse({
+        ...properties,
         wallId,
         parentId: wallId,
         position: [localX, height / 2, 0],
@@ -539,12 +582,12 @@ export function registerAddWindow(server: McpServer, bridge: SceneOperations): v
     {
       title: 'Add window',
       description:
-        'Add a window to an existing wall. t/position is 0..1 along the wall; sillHeight is the height from floor to window bottom.',
+        'Add a window to an existing wall. t/position is 0..1 along the wall; sillHeight is the height from floor to window bottom. Use properties for native operation, shape, pane ratios and frame choices; get_node_catalog describes allowed values.',
       inputSchema: addWindowInput,
       outputSchema: addWindowOutput,
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
-    async ({ wallId, t, position, width = 1.5, height = 1.5, sillHeight = 0.9 }) => {
+    async ({ wallId, t, position, width = 1.5, height = 1.5, sillHeight = 0.9, properties }) => {
       const wall = assertWall(bridge, wallId)
       const length = wallLength(wall)
       if (length < width) {
@@ -556,6 +599,7 @@ export function registerAddWindow(server: McpServer, bridge: SceneOperations): v
       const wallT = resolveWallT('add_window', t, position)
       const localX = wallLocalXFromT(wall, wallT, width)
       const windowNode = WindowNode.parse({
+        ...properties,
         wallId,
         parentId: wallId,
         position: [localX, sillHeight + height / 2, 0],
@@ -703,8 +747,12 @@ export function registerFurnishRoom(server: McpServer, bridge: SceneOperations):
   )
 }
 
-export function registerRoomTools(server: McpServer, bridge: SceneOperations): void {
-  registerSearchAssets(server)
+export function registerRoomTools(
+  server: McpServer,
+  bridge: SceneOperations,
+  assetCatalog: AssetCatalog = bundledCatalog,
+): void {
+  registerSearchAssets(server, assetCatalog)
   registerCreateRoom(server, bridge)
   registerAddDoor(server, bridge)
   registerAddWindow(server, bridge)

@@ -1,28 +1,29 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { bundledCatalog } from '../catalog/bundled'
+import type { AssetCatalog } from '../catalog/types'
 import type { SceneOperations } from '../operations'
-import { MCP_CATALOG_ITEMS } from '../tools/asset-catalog'
 
-/**
- * `pascal://catalog/items` — small built-in item catalog for standalone MCP.
- *
- * The editor UI owns the full catalog. MCP intentionally keeps a dependency-free
- * subset so headless agents can still place realistic furniture and fixtures.
- */
-export function registerCatalogItems(server: McpServer, _bridge: SceneOperations): void {
+export function registerCatalogItems(
+  server: McpServer,
+  _bridge: SceneOperations,
+  assetCatalog: AssetCatalog = bundledCatalog,
+): void {
   server.registerResource(
     'catalog-items',
     'pascal://catalog/items',
     {
       title: 'Item catalog',
       description:
-        'Dependency-free catalog subset of placeable items available in standalone MCP mode.',
+        'Available item catalog and connection status. Bundled items work locally; a host can optionally connect an online catalog.',
       mimeType: 'application/json',
     },
     async (uri) => {
+      const snapshot = await assetCatalog.snapshot()
       const payload = {
         status: 'ok' as const,
-        items: MCP_CATALOG_ITEMS,
-        note: 'Standalone MCP catalog subset; host applications can still expose a larger catalog separately.',
+        items: snapshot.items,
+        catalog: snapshot.status,
+        note: 'Read connection status before offering online access. Catalog access does not link an account or upload the scene. Use get_node_catalog for native parametric choices.',
       }
       return {
         contents: [

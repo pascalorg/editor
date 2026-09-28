@@ -152,6 +152,9 @@ downloaded the web runtime.
 | `pascal project open <id-or-name>` | Explicit form of `pascal open <project>`. |
 | `pascal agent claim [--no-open] [--json]` | Link an autonomous hosted agent to the person accountable for it. |
 | `pascal agent status [--json]` | Verify the hosted agent credential and inspect its claim and organization scope. |
+| `pascal catalog connect [--json]` | Enable and check the free public online item catalog. |
+| `pascal catalog status [--json]` | Show the saved preference and current availability. |
+| `pascal catalog disconnect [--json]` | Return to bundled items without a network request. |
 | `pascal mcp connect` | Stable local connector for MCP clients; starts the bundled MCP service without the web runtime. |
 | `pascal mcp status [--json]` | Show managed MCP health. |
 | `pascal mcp config [--json]` | Print generic MCP client configuration. |
@@ -171,6 +174,7 @@ directory; client configuration never contains that token.
 ~/.pascal/
   runtime/<version>/           installed web editor runtimes
   data/pascal.db               projects and scenes
+  data/catalog.json            optional public-catalog preference
   logs/editor.log              detached editor and MCP output
   run/editor.json              managed editor process identity
   run/mcp.json                 managed MCP service identity
@@ -200,6 +204,34 @@ Or use `pascal mcp config` for JSON-based clients. Ask the agent to read
 `pascal://agent-guide`, list or load a scene, edit it, and return the `editorUrl`. Those
 `editorUrl` values point at the local editor; run `pascal editor` to open one, which is
 also when the web runtime is downloaded.
+
+## Optional online catalog
+
+Local MCP starts with a small bundled item catalog. You can add Pascal's free public
+online items when you want more choices:
+
+```bash
+pascal catalog connect
+pascal catalog status --json
+pascal catalog disconnect
+```
+
+No account or sign-in is required for this public catalog. Connecting does not link an
+account, upload a project, open a browser, or restart the editor or MCP service. The
+preference belongs to the current `PASCAL_HOME`; running MCP sessions read it on their next
+catalog request. `search_assets`, `place_item`, and `pascal://catalog/items` use the same
+validated catalog, with bundled IDs taking precedence. The `catalog` field in `search_assets`
+and `pascal://catalog/items` reports which source is available and whether entries were excluded.
+
+The default and disconnected modes make no catalog network request. Connect and an enabled
+status check probe availability without starting a service. If online access fails, the
+preference stays enabled and the commands report unavailable with exit code 1; bundled items
+remain usable. Disconnect clears the preference even if its saved file is malformed.
+
+Online model files need network access. The small bundled models are included in the web
+runtime for offline display; the MCP-only package contains their metadata. Public catalog
+browsing and placement do not spend generation credits. Creating new AI assets is a separate
+hosted feature with its own credit rules. Private-account linking is not part of these commands.
 
 ## Hosted autonomous agents
 

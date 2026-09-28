@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process'
 import { parseArgs } from 'node:util'
 import { agentClaimHandoffUrl, getAgentStatus, startAgentClaim } from '../agent-account.js'
 import { openBrowser } from '../browser.js'
+import { getCatalogStatus, setCatalogPreference } from '../catalog.js'
 import { installGlobalPascalCommand, isNpxInvocation } from '../command-install.js'
 import { collectInfo, runDoctor } from '../diagnostics.js'
 import {
@@ -54,6 +55,7 @@ USAGE:
   pascal project resume [id-or-name]
   pascal agent claim [--no-open] [--json]
   pascal agent status [--json]
+  pascal catalog connect | status | disconnect [--json]
   pascal mcp connect | status | config | setup <client>
   pascal plugin list [--json]
 
@@ -106,6 +108,19 @@ account's private projects.
 Documentation: https://editor.pascal.app/docs/developers/mcp
 `
 
+const CATALOG_HELP = `Pascal catalog — optional public online items
+
+USAGE:
+  pascal catalog connect [--json]     Enable and check the free public catalog
+  pascal catalog status [--json]      Show the preference and online availability
+  pascal catalog disconnect [--json]  Return to bundled items without network access
+
+No account is required. These commands do not link an account, upload projects,
+open a browser, or restart Pascal. The running MCP service reads the preference
+on its next catalog request. Online models need network access; the bundled
+models ship with the web runtime. Generation uses separate credits.
+`
+
 const paths = resolvePascalPaths()
 const agentApiKey = process.env.PASCAL_API_KEY
 Reflect.deleteProperty(process.env, 'PASCAL_API_KEY')
@@ -115,7 +130,15 @@ async function main(): Promise<void> {
   if (command === '--version' || command === '-v') return print(version)
   if (command === '--help' || command === '-h' || command === 'help') return print(HELP)
   if (args.includes('--help') || args.includes('-h')) {
-    return print(command === 'mcp' ? MCP_HELP : command === 'agent' ? AGENT_HELP : HELP)
+    return print(
+      command === 'mcp'
+        ? MCP_HELP
+        : command === 'agent'
+          ? AGENT_HELP
+          : command === 'catalog'
+            ? CATALOG_HELP
+            : HELP,
+    )
   }
 
   switch (command) {
@@ -147,6 +170,8 @@ async function main(): Promise<void> {
       return runProject(args)
     case 'agent':
       return runAgent(args, agentApiKey)
+    case 'catalog':
+      return runCatalog(args)
     case 'plugin':
       return runPlugin(args)
     case 'mcp':
@@ -676,6 +701,23 @@ async function runMcp(args: string[]): Promise<void> {
     undefined,
     2,
   )
+}
+
+async function runCatalog(args: string[]): Promise<void> {
+  const [command, ...rest] = args
+  if (command !== 'connect' && command !== 'status' && command !== 'disconnect') {
+    throw new CliError(
+      'unknown_command',
+      'Use "pascal catalog connect", "pascal catalog status", or "pascal catalog disconnect".',
+      undefined,
+      2,
+    )
+  }
+  const json = booleanOption(rest, 'json')
+  if (command !== 'status') await setCatalogPreference(paths, command === 'connect')
+  const status = await getCatalogStatus(paths)
+  output(json, status, status.message)
+  if (status.mode === 'unavailable') process.exitCode = 1
 }
 
 async function runAgent(args: string[], apiKey: string | undefined): Promise<void> {

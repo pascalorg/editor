@@ -24,6 +24,7 @@ const TOOL_POLICIES = [
       'find_nodes',
       'get_level_summary',
       'get_node',
+      'get_node_catalog',
       'get_scene',
       'get_walls',
       'get_zones',

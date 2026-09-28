@@ -3,11 +3,14 @@
 import '../bridge/node-shims'
 
 import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import { parseArgs } from 'node:util'
 import { SceneBridge } from '../bridge/scene-bridge'
+import { createPascalOnlineCatalog } from '../catalog/online'
 import { version } from '../index'
 import { createPascalMcpServer } from '../server'
 import { createSceneStore } from '../storage'
+import { resolveDefaultDatabasePath } from '../storage/sqlite-scene-store'
 import { connectHttp } from '../transports/http'
 import { connectStdio } from '../transports/stdio'
 
@@ -24,6 +27,7 @@ OPTIONS:
   --auth-token <t> Bearer token required for HTTP calls
   --cors-origin <o> Repeatable allowed HTTP CORS origin
   --scene <path>   Initial scene JSON to load
+  --catalog-status Read catalog availability as JSON without starting a service
   --version        Print version
   --help           Print this help
 `
@@ -38,6 +42,7 @@ async function main(): Promise<void> {
       'auth-token': { type: 'string' },
       'cors-origin': { type: 'string', multiple: true, default: [] },
       scene: { type: 'string' },
+      'catalog-status': { type: 'boolean', default: false },
       help: { type: 'boolean', default: false },
       version: { type: 'boolean', default: false },
     },
@@ -53,12 +58,20 @@ async function main(): Promise<void> {
     process.exit(0)
   }
 
+  const assetCatalog = createPascalOnlineCatalog({
+    dataDir: process.env.PASCAL_DATA_DIR || path.dirname(resolveDefaultDatabasePath()),
+  })
+  if (values['catalog-status']) {
+    console.log(JSON.stringify((await assetCatalog.snapshot()).status))
+    return
+  }
+
   const store = await createSceneStore()
   const createServer = () => {
     const bridge = new SceneBridge()
     if (values.scene) bridge.loadJSON(readFileSync(values.scene, 'utf8'))
     else bridge.loadDefault()
-    return createPascalMcpServer({ bridge, store })
+    return createPascalMcpServer({ bridge, store, assetCatalog })
   }
 
   if (values.http) {

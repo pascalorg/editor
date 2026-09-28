@@ -1,5 +1,7 @@
 import { McpServer, type RegisteredTool } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneBridge } from './bridge/scene-bridge'
+import { bundledCatalog } from './catalog/bundled'
+import type { AssetCatalog } from './catalog/types'
 import { createSceneOperations, type SceneOperations } from './operations'
 import { registerPrompts } from './prompts'
 import { registerResources } from './resources'
@@ -20,6 +22,7 @@ export type CreatePascalMcpServerOptions = {
   operations?: SceneOperations
   /** Required for persistence tools. Hosted apps and CLIs inject their own store. */
   store?: SceneStore
+  assetCatalog?: AssetCatalog
   name?: string
   version?: string
   /**
@@ -38,9 +41,10 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
   if (opts.executeTool) installToolExecutor(server, opts.executeTool)
   const operations =
     opts.operations ?? createSceneOperations({ bridge: opts.bridge, store: opts.store })
-  registerTools(server, operations)
+  const assetCatalog = opts.assetCatalog ?? bundledCatalog
+  registerTools(server, operations, assetCatalog)
   registerVisionTools(server, operations)
-  registerResources(server, operations)
+  registerResources(server, operations, assetCatalog)
   registerPrompts(server, operations)
   normalizeToolSchemaDialect(server)
   return server

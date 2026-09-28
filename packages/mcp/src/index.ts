@@ -1,4 +1,5 @@
 export { SceneBridge } from './bridge/scene-bridge'
+export type { AssetCatalog, CatalogSnapshot, CatalogStatus } from './catalog/types'
 export { createSceneOperations, type SceneOperations } from './operations'
 export { type CreatePascalMcpServerOptions, createPascalMcpServer } from './server'
 export { version } from './version'

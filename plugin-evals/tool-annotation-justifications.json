@@ -371,6 +371,19 @@
       }
     },
     {
+      "name": "get_node_catalog",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It reads native and already registered node schemas without changing scene, plugin, or account state.",
+        "destructiveHint": "It does not create, update, delete, load, or save nodes and does not install plugins.",
+        "openWorldHint": "It enumerates schemas already loaded in this process and performs no network requests."
+      }
+    },
+    {
       "name": "get_project_status",
       "annotations": {
         "readOnlyHint": false,

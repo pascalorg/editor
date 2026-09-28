@@ -2,9 +2,10 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AnyNodeId } from '@pascal-app/core/schema'
 import { ItemNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
+import { bundledCatalog } from '../catalog/bundled'
+import type { AssetCatalog } from '../catalog/types'
 import type { SceneOperations } from '../operations'
 import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
-import { findCatalogItem } from './asset-catalog'
 import { ErrorCode, throwMcpError } from './errors'
 import { projectWorldPointToWallLocalX, wallLength } from './geometry'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
@@ -24,7 +25,11 @@ export const placeItemOutput = {
   ...liveSyncOutput,
 }
 
-export function registerPlaceItem(server: McpServer, bridge: SceneOperations): void {
+export function registerPlaceItem(
+  server: McpServer,
+  bridge: SceneOperations,
+  assetCatalog: AssetCatalog = bundledCatalog,
+): void {
   server.registerTool(
     'place_item',
     {
@@ -33,9 +38,10 @@ export function registerPlaceItem(server: McpServer, bridge: SceneOperations): v
         'Place a catalog item into the scene. Target a level/slab/zone for floor items, a wall for wall-attached items, or a ceiling for ceiling-attached items. Do not target the site node directly.',
       inputSchema: placeItemInput,
       outputSchema: placeItemOutput,
-      annotations: ADDITIVE_TOOL_ANNOTATIONS,
+      annotations: { ...ADDITIVE_TOOL_ANNOTATIONS, openWorldHint: assetCatalog.usesNetwork },
     },
     async ({ catalogItemId, targetNodeId, position, rotation }) => {
+      const snapshot = await assetCatalog.snapshot()
       const target = bridge.getNode(targetNodeId as AnyNodeId)
       if (!target) {
         throwMcpError(ErrorCode.InvalidParams, `Target node not found: ${targetNodeId}`)
@@ -54,17 +60,12 @@ export function registerPlaceItem(server: McpServer, bridge: SceneOperations): v
         )
       }
 
-      const catalogAsset = findCatalogItem(catalogItemId)
-      const baseAsset = catalogAsset ?? {
-        id: catalogItemId,
-        name: catalogItemId,
-        category: 'unknown',
-        thumbnail: '',
-        src: 'asset://placeholder',
-        dimensions: [0.5, 0.5, 0.5] as [number, number, number],
-        offset: [0, 0, 0] as [number, number, number],
-        rotation: [0, 0, 0] as [number, number, number],
-        scale: [1, 1, 1] as [number, number, number],
+      const catalogAsset = snapshot.items.find((item) => item.id === catalogItemId)
+      if (!catalogAsset) {
+        throwMcpError(
+          ErrorCode.InvalidParams,
+          `Catalog item is not available: ${catalogItemId}. Search the current catalog before placing it. ${snapshot.status.message}`,
+        )
       }
 
       const requestedPosition = position as [number, number, number]
@@ -96,14 +97,14 @@ export function registerPlaceItem(server: McpServer, bridge: SceneOperations): v
       const item = ItemNode.parse({
         position: itemPosition,
         rotation: [0, rotation ?? 0, 0],
-        asset: baseAsset,
+        asset: catalogAsset,
         ...wallExtras,
       })
       const id = bridge.createNode(item, parentId as AnyNodeId)
       const persistence = await publishLiveSceneSnapshot(bridge, 'place_item')
       const payload = {
         itemId: id as string,
-        status: catalogAsset ? 'ok' : 'catalog_unavailable',
+        status: 'ok',
         ...persistencePayload(persistence),
       }
       return {
