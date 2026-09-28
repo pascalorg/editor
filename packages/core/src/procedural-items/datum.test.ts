@@ -4,10 +4,19 @@ import { LevelNode } from '../schema/nodes/level'
 import cabinetJson from './__fixtures__/cabinet_two_doors_drawer.json'
 import chandelierJson from './__fixtures__/chandelier_six_arms.json'
 import deskFanJson from './__fixtures__/desk_fan.json'
-import { shelfRecipe } from './fixtures'
+import e7Json from './__fixtures__/trial_e7_pendant_fixed_top.json'
+import e8Json from './__fixtures__/trial_e8_stair_guard.json'
+import { radiatorRecipe, shelfRecipe } from './fixtures'
 import { ProceduralItemNode } from './node'
 import { validateProceduralRelations } from './query'
-import { type Expr, evaluateRecipe, parseRecipe, type Recipe, sweepRecipe } from './recipe'
+import {
+  type Expr,
+  evaluateRecipe,
+  parseRecipe,
+  type Recipe,
+  RecipeSchema,
+  sweepRecipe,
+} from './recipe'
 
 // Trial E7 (/next elec-p13-symbol-22244): a five-drop pendant whose canopy top is fixed at the
 // ceiling. Longer drops hang below design y = 0, which the ceiling relation check already bounds.
@@ -266,5 +275,61 @@ describe('design-level datum (recipe version 2)', () => {
     expect(() => parseRecipe({ ...pendant(2), base: 0 })).toThrow('floor designs')
     expect(() => parseRecipe({ ...shelfRecipe, version: 3 })).toThrow()
     expect(parseRecipe({ ...shelfRecipe, version: 2 }).version).toBe(2)
+  })
+})
+
+describe('datum review fixes (AK-D1 round 2)', () => {
+  const lowest = { op: 'min', args: [0, { op: 'sub', args: ['riser', 0.194] }] } as Expr
+  test('the trial fixtures: E7 15/33 → 33/33 and E8 14/29 → 29/29', () => {
+    const valid = (recipe: Recipe) => sweepRecipe(recipe).filter((entry) => entry.valid).length
+    const e7 = structuredClone(e7Json) as Recipe
+    const e8 = structuredClone(e8Json) as Recipe
+    expect([valid(e7), sweepRecipe(e7).length]).toEqual([15, 33])
+    expect([valid(parseRecipe({ ...e7, version: 2 })), sweepRecipe(e7).length]).toEqual([33, 33])
+    expect([valid(e8), sweepRecipe(e8).length]).toEqual([14, 29])
+    expect(valid(parseRecipe({ ...e8, version: 2, base: lowest }))).toBe(29)
+  })
+
+  test('named surfaces are bounded in the based design space', () => {
+    const raised = (surfaceY: number) =>
+      ({
+        ...structuredClone(shelfRecipe),
+        version: 2,
+        base: 100,
+        parts: [
+          {
+            id: 'block',
+            label: 'Block',
+            count: 1,
+            shapes: [
+              {
+                id: 'b',
+                primitive: 'box',
+                slot: 'frame',
+                size: [1, 1, 1],
+                position: [0, 100.5, 0],
+              },
+            ],
+          },
+        ],
+        parameters: [
+          { id: 'unused', label: 'Unused', default: 1, min: 1, max: 1, step: 1, unit: 'count' },
+        ],
+        surfaces: [{ id: 'top', label: 'Top', position: [0, surfaceY, 0], size: [0.5, 0.5] }],
+      }) as Recipe
+    expect(evaluateRecipe(parseRecipe(raised(101))).surfaces[0]!.position[1]).toBeCloseTo(1)
+    expect(() => parseRecipe(raised(0))).toThrow('surface')
+  })
+
+  test('the exported schema and the evaluator refuse a v1 or mounted base', () => {
+    expect(RecipeSchema.safeParse({ ...structuredClone(shelfRecipe), base: 0 }).success).toBe(false)
+    expect(
+      RecipeSchema.safeParse({ ...structuredClone(shelfRecipe), version: 2, base: 0 }).success,
+    ).toBe(true)
+    const mounted = { ...structuredClone(radiatorRecipe), version: 2, base: 0 }
+    expect(RecipeSchema.safeParse(mounted).success).toBe(false)
+    expect(() => evaluateRecipe({ ...structuredClone(shelfRecipe), base: 0.1 } as Recipe)).toThrow(
+      'version 2',
+    )
   })
 })
