@@ -514,6 +514,19 @@
       }
     },
     {
+      "name": "place_design",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it creates a design node on a level, wall, ceiling or design surface in the connected Pascal scene.",
+        "destructiveHint": "It only creates: it refuses existing ids and never deletes or replaces existing Pascal scene or project state.",
+        "openWorldHint": "It operates on the connected Pascal scene and the design supplied in the call without accessing the public internet."
+      }
+    },
+    {
       "name": "place_item",
       "annotations": {
         "readOnlyHint": false,

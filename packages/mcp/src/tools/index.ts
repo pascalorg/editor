@@ -18,6 +18,7 @@ import { registerGetScene } from './get-scene'
 import { registerListUnits } from './list-units'
 import { registerMeasure } from './measure'
 import { registerPhotoToSceneTool } from './photo-to-scene'
+import { registerPlaceDesign } from './place-design'
 import { registerPlaceItem } from './place-item'
 import { registerRedo } from './redo'
 import { registerRoomTools } from './room-tools'
@@ -55,6 +56,7 @@ export function registerTools(server: McpServer, operations: SceneOperations): v
   registerListUnits(server, operations)
   registerCreateWall(server, operations)
   registerPlaceItem(server, operations)
+  registerPlaceDesign(server, operations)
   registerCutOpening(server, operations)
   registerSetZone(server, operations)
   registerDuplicateLevel(server, operations)

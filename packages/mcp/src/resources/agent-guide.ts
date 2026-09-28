@@ -47,6 +47,7 @@ export const AGENT_GUIDE = [
   '',
   '- A design (procedural item) is a JSON recipe: parameters, material slots and parts built from box, roundedBox, cylinder and ellipsoid shapes. Read `pascal://schema/design` for its JSON Schema, rules and a worked example.',
   '- Call `validate_design` after every edit until `valid` is true. It is the authority: it checks the rules JSON Schema cannot express, sweeps the parameter ranges, and measures bounds, parts, triangles, draw groups, datum contact and floating parts.',
+  "- Then call `place_design` with a host that matches the design's mounting: a level (or slab or zone) or a design surface (`surfaceId`) for floor designs, a straight wall and `side` for wall-side designs, a ceiling for ceiling designs. It only creates; a refusal names what to change.",
   '',
   '## Required Final Checks',
   '',
