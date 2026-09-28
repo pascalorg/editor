@@ -134,13 +134,19 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
   useEffect(() => {
     const parentId = node.parentId as AnyNodeId | null
     if (!(cutKey && parentId)) return
-    const recut = () => {
-      if (useScene.getState().nodes[parentId]) useScene.getState().markDirty(parentId)
+    const recut = (id: string | null | undefined = parentId) => {
+      if (id && useScene.getState().nodes[id as AnyNodeId])
+        useScene.getState().markDirty(id as AnyNodeId)
     }
     recut()
-    // A move preview of this design re-cuts its ceiling on every step.
+    // A move preview of this design re-cuts its ceiling, and the ceiling it previews on, on
+    // every step.
     const unsubscribe = usePlacementPreview.subscribe((state, previous) => {
-      if (state.node?.id === node.id || previous.node?.id === node.id) recut()
+      if (state.node?.id !== node.id && previous.node?.id !== node.id) return
+      recut()
+      for (const id of new Set([state.node?.parentId, previous.node?.parentId]))
+        if (id !== parentId && useScene.getState().nodes[id as AnyNodeId]?.type === 'ceiling')
+          recut(id)
     })
     return () => {
       unsubscribe()

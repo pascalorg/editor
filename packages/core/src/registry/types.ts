@@ -2115,6 +2115,11 @@ export type RoofAccessoryConfig = {
  */
 export type CeilingCutCapability = {
   buildCeilingHole: (node: AnyNode) => Array<[number, number]> | null
+  /**
+   * Holes this kind cuts in `ceiling` that no child of it reports, such as a node
+   * whose live move preview sits on this ceiling while it still belongs to another.
+   */
+  holesFor?: (ceiling: AnyNode) => Array<Array<[number, number]>>
 }
 
 /**

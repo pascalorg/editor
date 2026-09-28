@@ -162,6 +162,15 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
         const node = getEffectiveNode(n as unknown as ProceduralItemNode)
         return node.visible === false ? null : proceduralCeilingHole(node)
       },
+      // A design being moved onto another ceiling cuts it before it becomes its child.
+      holesFor: (ceiling) => {
+        const preview = usePlacementPreview.getState().node
+        if (preview?.type !== 'procedural-item' || preview.parentId !== ceiling.id) return []
+        const moving = useScene.getState().nodes[preview.id as AnyNodeId]
+        if (!moving || moving.parentId === ceiling.id) return []
+        const hole = proceduralCeilingHole(preview)
+        return hole ? [hole] : []
+      },
     },
     floorPlaced: {
       footprint: (n) => proceduralFootprint(n as unknown as ProceduralItemNode),

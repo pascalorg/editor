@@ -6,6 +6,7 @@ import {
   nodeRegistry,
   registerNode,
   useLiveNodeOverrides,
+  useScene,
 } from '@pascal-app/core'
 import {
   ProceduralItemNode,
@@ -114,4 +115,46 @@ test('the hole follows live overrides and the move preview, and hides with its d
   expect(centre(cut.buildCeilingHole(node as unknown as AnyNode))[0]).toBeCloseTo(-1)
   usePlacementPreview.getState().clear()
   useLiveNodeOverrides.getState().clear(node.id as AnyNodeId)
+})
+
+test('a design moved onto another ceiling cuts that ceiling, not its own', () => {
+  const square = (id: string) =>
+    CeilingNode.parse({
+      id,
+      polygon: [
+        [-2, -2],
+        [2, -2],
+        [2, 2],
+        [-2, 2],
+      ],
+    })
+  const from = square('ceiling_from'),
+    to = square('ceiling_to')
+  const node = ProceduralItemNode.parse({
+    id: 'procedural-item_moving',
+    recipe: recessed,
+    parentId: from.id,
+    position: [0, 0, 0],
+  })
+  const oldNodes = useScene.getState().nodes
+  useScene.setState({
+    nodes: { [from.id]: { ...from, children: [node.id] }, [to.id]: to, [node.id]: node } as Record<
+      AnyNodeId,
+      AnyNode
+    >,
+  })
+  const cut = nodeRegistry.get('procedural-item')!.capabilities.ceilingCut!
+  try {
+    usePlacementPreview
+      .getState()
+      .set({ ...node, parentId: to.id, position: [1, 0, 1] } as unknown as AnyNode)
+    expect(cut.buildCeilingHole(node as unknown as AnyNode)).toBe(null)
+    expect(cut.holesFor!(from as unknown as AnyNode)).toEqual([])
+    const [hole] = cut.holesFor!(to as unknown as AnyNode)
+    expect(hole).toHaveLength(4)
+    for (const [x, z] of hole!) expect(Math.hypot(x - 1, z - 1)).toBeCloseTo(0.08 * Math.SQRT2)
+  } finally {
+    usePlacementPreview.getState().clear()
+    useScene.setState({ nodes: oldNodes })
+  }
 })
