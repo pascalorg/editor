@@ -935,12 +935,19 @@ export function evaluateRecipe(
       throw new Error(`Invalid repeat count for ${part.label}`)
     for (let i = 0; i < count; i++) {
       if (part.when !== undefined && expr(part.when, i) === 0) continue
-      // `when` is settled before any group or light is allocated, so a repeat whose shapes
-      // are all skipped leaves nothing behind.
-      const kept = part.shapes.filter((s) => s.when === undefined || expr(s.when, i) !== 0)
-      if (!kept.length) continue
       const placement = placements?.get(`${part.id}:${i}`)
       if (placements && !placement) continue
+      // A joint is kept even where `when` skips all its part's shapes, since its children
+      // still ride it; joints that end up carrying nothing are dropped after the loop.
+      if (placement?.motion) {
+        if (motions.length >= RECIPE_LIMITS.motionGroups)
+          throw new Error(`Recipe exceeds ${RECIPE_LIMITS.motionGroups} evaluated motion groups`)
+        motions.push(placement.motion)
+        jointGroups.add(placement.motion.id)
+        motionGroupByInstance[`${part.id}:${i}`] = placement.motion.id
+      }
+      const kept = part.shapes.filter((s) => s.when === undefined || expr(s.when, i) !== 0)
+      if (!kept.length) continue
       builtRepeats.add(`${part.id}:${i}`)
       // A part-tree pose re-expresses the part's frame in design space.
       const pose = placement?.pose ?? IDENTITY_POSE
@@ -953,13 +960,6 @@ export function evaluateRecipe(
       const instanceMin: Vec3 = [Infinity, Infinity, Infinity]
       const instanceMax: Vec3 = [-Infinity, -Infinity, -Infinity]
       let motionGroup: string | undefined = placement?.group
-      if (placement?.motion) {
-        if (motions.length >= RECIPE_LIMITS.motionGroups)
-          throw new Error(`Recipe exceeds ${RECIPE_LIMITS.motionGroups} evaluated motion groups`)
-        motions.push(placement.motion)
-        jointGroups.add(placement.motion.id)
-        motionGroupByInstance[`${part.id}:${i}`] = placement.motion.id
-      }
       if (part.motion) {
         const motion = part.motion
         const pivot: Vec3 = motion.kind === 'slide' ? [0, 0, 0] : vec(motion.pivot)
@@ -1191,6 +1191,22 @@ export function evaluateRecipe(
       }
     }
   }
+  if (jointGroups.size) {
+    const carrying = new Set<string>()
+    for (let group of shapes.map((shape) => shape.motionGroup))
+      while (group && !carrying.has(group)) {
+        carrying.add(group)
+        group = motions.find((motion) => motion.id === group)?.parent
+      }
+    for (let k = motions.length - 1; k >= 0; k--) {
+      const id = motions[k]!.id
+      if (carrying.has(id)) continue
+      motions.splice(k, 1)
+      jointGroups.delete(id)
+      for (const [instance, group] of Object.entries(motionGroupByInstance))
+        if (group === id) delete motionGroupByInstance[instance]
+    }
+  }
   for (const surface of recipe.surfaces ?? []) {
     const part = recipe.parts.find((p) => p.id === surface.part)
     const count = part ? expr(part.count) : 1
@@ -1308,38 +1324,40 @@ export function evaluateRecipe(
     )
       throw new Error(`Motion envelope for ${motion.partId} rises above the ceiling reference`)
   }
-  for (const shape of shapes) {
-    if (!shape.motionGroup || jointGroups.has(shape.motionGroup)) continue
-    const motion = motions.find((m) => m.id === shape.motionGroup)!
+  for (const motion of motions) {
+    if (jointGroups.has(motion.id)) continue
     const steps = motion.kind === 'slide' ? 1 : motion.kind === 'hinge' ? 8 : 16
-    // Inside a cut, sample the rendered footprint so round parts may turn in round cuts.
-    const points = insideCut
-      ? shapeFootprint(shape)
-      : shapeCorners(shape.size, shape.position, shape.rotation)
-    for (const corner of points)
-      for (let step = 0; step <= steps; step++) {
-        const point = movedPoint(corner, motion, step / steps)
-        if (reach)
-          for (let k = 0; k < 3; k++) {
-            reach.min[k] = Math.min(reach.min[k]!, point[k]!)
-            reach.max[k] = Math.max(reach.max[k]!, point[k]!)
-          }
-        if (!recipe.mounting && point[1] < base - 0.001)
-          throw new Error(`Motion envelope for ${shape.partId} extends below the floor`)
-        if (
-          recipe.mounting?.attachTo === 'wall-side' &&
-          reference &&
-          point[2] < reference.position[2] - 0.001
-        )
-          throw new Error(`Motion envelope for ${shape.partId} crosses behind the wall reference`)
-        if (
-          recipe.mounting?.attachTo === 'ceiling' &&
-          reference &&
-          point[1] > reference.position[1] + 0.001 &&
-          !insideCut?.(point[0], point[2])
-        )
-          throw new Error(`Motion envelope for ${shape.partId} rises above the ceiling reference`)
-      }
+    for (const shape of shapes) {
+      if (shape.motionGroup !== motion.id) continue
+      // Inside a cut, sample the rendered footprint so round parts may turn in round cuts.
+      const points = insideCut
+        ? shapeFootprint(shape)
+        : shapeCorners(shape.size, shape.position, shape.rotation)
+      for (const corner of points)
+        for (let step = 0; step <= steps; step++) {
+          const point = movedPoint(corner, motion, step / steps)
+          if (reach)
+            for (let k = 0; k < 3; k++) {
+              reach.min[k] = Math.min(reach.min[k]!, point[k]!)
+              reach.max[k] = Math.max(reach.max[k]!, point[k]!)
+            }
+          if (!recipe.mounting && point[1] < base - 0.001)
+            throw new Error(`Motion envelope for ${shape.partId} extends below the floor`)
+          if (
+            recipe.mounting?.attachTo === 'wall-side' &&
+            reference &&
+            point[2] < reference.position[2] - 0.001
+          )
+            throw new Error(`Motion envelope for ${shape.partId} crosses behind the wall reference`)
+          if (
+            recipe.mounting?.attachTo === 'ceiling' &&
+            reference &&
+            point[1] > reference.position[1] + 0.001 &&
+            !insideCut?.(point[0], point[2])
+          )
+            throw new Error(`Motion envelope for ${shape.partId} rises above the ceiling reference`)
+        }
+    }
   }
   if (!shapes.length) throw new Error('The item must contain geometry')
   const emitted = new Map<string, string>()

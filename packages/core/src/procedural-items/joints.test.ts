@@ -378,6 +378,43 @@ describe('joint review fixes (AK-04a round 2)', () => {
     expect(() => parseRecipe(hinge)).toThrow('range')
   })
 
+  test('a jointed part whose shapes `when` skips still swings its children', () => {
+    const optional = (edit: (recipe: Recipe) => void = () => {}) =>
+      parseRecipe(
+        cabinet((r) => {
+          r.parameters.push({
+            id: 'show',
+            label: 'Show',
+            default: 0,
+            min: 0,
+            max: 1,
+            step: 1,
+            unit: 'bool',
+          })
+          r.parts[1]!.shapes[0]!.when = 'show'
+          edit(r)
+        }),
+      )
+    const knob = (e: ReturnType<typeof evaluateRecipe>) => e.shapes.find((s) => s.partId === 'knob')
+    const shown = evaluateRecipe(optional(), { show: 1 })
+    const hidden = evaluateRecipe(optional(), { show: 0 })
+    expect(hidden.shapes.some((s) => s.partId === 'door')).toBe(false)
+    expect(hidden.motions).toEqual(shown.motions)
+    expect(knob(hidden)).toEqual(knob(shown)!)
+    // A knob without its own joint rides the door's group.
+    const fixedKnob = optional((r) => r.joints!.splice(1, 1))
+    expect(knob(evaluateRecipe(fixedKnob, { show: 0 }))!.motionGroup).toBe('door')
+    // With nothing left to move, the door's joint is dropped with its subtree.
+    const empty = evaluateRecipe(
+      optional((r) => {
+        r.parts[2]!.shapes[0]!.when = 'show'
+      }),
+      { show: 0 },
+    )
+    expect(empty.motions.map((m) => m.id)).toEqual(['drawer', 'pull'])
+    expect(Object.keys(empty.motionGroupByInstance)).toEqual(['drawer:0', 'pull:0'])
+  })
+
   test('an explicitly empty joints array needs version 2', () => {
     expect(() => parseRecipe({ ...structuredClone(cabinetJson), joints: [] })).toThrow('version 2')
     expect(() =>
