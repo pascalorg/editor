@@ -559,6 +559,12 @@ export type { SceneGraph } from './utils/clone-scene-graph'
 export { cloneLevelSubtree, cloneSceneGraph, forkSceneGraph } from './utils/clone-scene-graph'
 export { isObject } from './utils/types'
 export {
+  checkOpeningWithinWall,
+  formatOpeningBoundsIssue,
+  OPENING_BOUNDS_TOLERANCE,
+  type OpeningBoundsIssue,
+} from './validation/opening-bounds'
+export {
   type BuildStats,
   type ParsedBuildJson,
   type SchemaIssue,

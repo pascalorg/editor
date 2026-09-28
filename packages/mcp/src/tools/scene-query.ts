@@ -1,6 +1,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
+  checkOpeningWithinWall,
   DEFAULT_LEVEL_HEIGHT,
+  formatOpeningBoundsIssue,
   getStoredLevelHeight,
   getWallPlaneTop,
   resolveStairTotalRise,
@@ -17,7 +19,6 @@ import {
   polygonArea,
   polygonContainsPolygon,
   type Vec2,
-  wallLength,
 } from './geometry'
 import { layoutIssuesFromScene } from './layout-clearance'
 import { NodeIdSchema } from './schemas'
@@ -726,20 +727,9 @@ export function registerVerifyScene(server: McpServer, bridge: SceneOperations):
           if (!parentListsChild(parent, node.id)) {
             issues.push(`${node.type} ${node.id} is not listed in wall ${parent.id} children`)
           }
-          const length = wallLength(parent)
-          const width = node.width ?? (node.type === 'door' ? 0.9 : 1.5)
-          const height = node.height ?? (node.type === 'door' ? 2.1 : 1.5)
-          const localX = node.position[0]
-          if (localX - width / 2 < -0.01 || localX + width / 2 > length + 0.01) {
-            issues.push(`${node.type} ${node.id} extends outside wall ${parent.id}`)
-          }
           const wallHeight = resolveReportedWallHeight(bridge, parent)
-          const bottom = node.position[1] - height / 2
-          const top = node.position[1] + height / 2
-          if (bottom < -0.01 || top > wallHeight + 0.01) {
-            issues.push(
-              `${node.type} ${node.id} vertical bounds [${bottom.toFixed(2)}, ${top.toFixed(2)}] exceed wall ${parent.id} height ${wallHeight.toFixed(2)}m`,
-            )
+          for (const issue of checkOpeningWithinWall(node, parent, wallHeight)) {
+            issues.push(formatOpeningBoundsIssue(issue))
           }
         }
       }
