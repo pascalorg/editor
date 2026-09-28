@@ -151,6 +151,39 @@ describe('planDesignPlacement', () => {
     }
   })
 
+  test('refuses an explicit id that exists before checking the host surface', () => {
+    const table = planDesignPlacement(scene, {
+      design: DESIGN_EXAMPLE,
+      hostId: level.id,
+      position: [1, 0, 1],
+      parameters: { width: 0.9 },
+    })
+    const withTable = commit(scene, table)
+    // Reusing the surface host's own id must say node_exists, not does_not_fit.
+    expect(
+      refusal(withTable, {
+        design: vase,
+        hostId: table.node.id,
+        surfaceId: 'top:0:board:top',
+        position: [0, 0, 0],
+        id: table.node.id,
+      }).code,
+    ).toBe('node_exists')
+  })
+
+  test('refuses inline designs above the 24 KiB cap (R7) with a code', () => {
+    const big = structuredClone(DESIGN_EXAMPLE) as any
+    big.description = 'x'.repeat(600)
+    big.parts[1].shapes = Array.from({ length: 24 }, (_, i) => ({
+      ...big.parts[1].shapes[0],
+      id: `leg_${i}_${'n'.repeat(40)}`,
+    }))
+    expect(JSON.stringify(big).length).toBeGreaterThan(24 * 1024)
+    const result = refusal(scene, { design: big, hostId: level.id, position: [0, 0, 0] })
+    expect(result.code).toBe('design_too_large')
+    expect(result.message).toContain('24 KiB')
+  })
+
   test('rests a design on a named design surface and refuses an occupied spot', () => {
     const table = planDesignPlacement(scene, {
       design: DESIGN_EXAMPLE,

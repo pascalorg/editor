@@ -57,6 +57,29 @@ const place = (client: Client, args: Record<string, unknown>) =>
   client.callTool({ name: 'place_design', arguments: args })
 
 describe('place_design', () => {
+  test('a design-surface placement is one undo step', async () => {
+    const { bridge, client, levelId } = await connect()
+    const table = await place(client, {
+      design: DESIGN_EXAMPLE,
+      hostId: levelId,
+      position: [1, 0, 1],
+    })
+    const tableId = (table.structuredContent as { designId: string }).designId
+    const before = bridge.getHistory().pastCount
+    const onTop = await place(client, {
+      design: vase,
+      hostId: tableId,
+      surfaceId: 'top:0:board:top',
+      position: [0.2, 0, 0],
+    })
+    const vaseId = (onTop.structuredContent as { designId: string }).designId
+    expect(bridge.getHistory().pastCount - before).toBe(1)
+    bridge.undo(1)
+    expect(bridge.getNode(vaseId as never)).toBeNull()
+    expect(bridge.getNode(tableId as never)).toMatchObject({ children: [], attachments: {} })
+    await client.close()
+  })
+
   test('creates trial designs on a wall, under a ceiling and on a design surface', async () => {
     const { bridge, client, levelId, wallId, ceilingId } = await connect()
     const louver = await place(client, {
