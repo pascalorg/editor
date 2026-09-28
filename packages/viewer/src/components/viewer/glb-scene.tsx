@@ -914,6 +914,16 @@ export function GlbScene({
         useInteractive.getState().removeMechanism(id as AnyNodeId)
     }
   }, [actions, loopMechanisms])
+  // Items the walkthrough operates through their toggles; others fall through to loop clips.
+  const toggleableItem = useCallback(
+    (pascalId: string | undefined) =>
+      interactiveItems?.find(
+        (item) =>
+          item.pascalId === pascalId &&
+          item.interactive.controls.some((control) => control.kind === 'toggle'),
+      ),
+    [interactiveItems],
+  )
   const toggleLoopMechanism = useCallback(
     (identityNode: THREE.Object3D) => {
       const id = (identityNode.userData as PascalExtras).pascalId as AnyNodeId | undefined
@@ -1175,6 +1185,7 @@ export function GlbScene({
             item.procedural?.lights.length &&
             operableParts(item.procedural.recipe ?? { parts: item.procedural.parts }).length === 0,
         )
+      const item = extras?.kind === 'item' ? toggleableItem(extras.pascalId) : undefined
       if (node && extras?.kind === 'procedural-item' && (extras.clips?.length || lightOnly)) {
         doorNode = { hit: hit.object, node }
         const part = findProceduralMotionAncestor(hit.object)
@@ -1197,20 +1208,17 @@ export function GlbScene({
           verb: lightOnly || isSpin ? (isOpen ? 'turn off' : 'turn on') : isOpen ? 'close' : 'open',
         }
         doorId = `${extras.pascalId}:${part?.partId ?? 'all'}`
-      } else if (node && extras?.kind === 'item') {
-        const item = interactiveItems?.find((entry) => entry.pascalId === extras.pascalId)
-        if (item?.interactive.controls.some((control) => control.kind === 'toggle')) {
-          doorNode = { hit: hit.object, node }
-          doorId = extras.pascalId as string
-          const values = useInteractive.getState().items[item.pascalId]?.controlValues
-          const isOpen = item.interactive.controls.some(
-            (control, index) => control.kind === 'toggle' && Boolean(values?.[index]),
-          )
-          door = {
-            label: item.label,
-            isOpen,
-            verb: isOpen ? 'turn off' : 'turn on',
-          }
+      } else if (node && item) {
+        doorNode = { hit: hit.object, node }
+        doorId = item.pascalId
+        const values = useInteractive.getState().items[item.pascalId]?.controlValues
+        const isOpen = item.interactive.controls.some(
+          (control, index) => control.kind === 'toggle' && Boolean(values?.[index]),
+        )
+        door = {
+          label: item.label,
+          isOpen,
+          verb: isOpen ? 'turn off' : 'turn on',
         }
       } else if (node && extras?.openable && extras.clips?.length) {
         doorNode = { hit: hit.object, node }
@@ -1238,14 +1246,14 @@ export function GlbScene({
     const target = walkDoorRef.current
     if (!target) return
     const extras = target.node.userData as PascalExtras
-    if (extras.kind === 'item' && extras.pascalId) {
-      const item = interactiveItems?.find((entry) => entry.pascalId === extras.pascalId)
-      if (item) useInteractive.getState().toggleItemToggles(item.pascalId, item.interactive)
+    const item = extras.kind === 'item' ? toggleableItem(extras.pascalId) : undefined
+    if (item) {
+      useInteractive.getState().toggleItemToggles(item.pascalId, item.interactive)
       return
     }
     if (!(toggleProcedural(target.hit, target.node) || toggleLoopMechanism(target.node)))
       toggleOpenable(target.node)
-  }, [interactiveItems, toggleLoopMechanism, toggleOpenable, toggleProcedural])
+  }, [toggleableItem, toggleLoopMechanism, toggleOpenable, toggleProcedural])
   useEffect(() => {
     if (!walkthroughMode) return
     const onKey = (event: KeyboardEvent) => {
