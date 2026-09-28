@@ -38,8 +38,8 @@ export type BuiltItem = {
 }
 const TAU = 2 * Math.PI
 function flipped(geometry: BufferGeometry) {
-  const flat = geometry.toNonIndexed()
-  geometry.dispose()
+  const flat = geometry.index ? geometry.toNonIndexed() : geometry.clone()
+  if (geometry.index) geometry.dispose()
   for (const name of ['position', 'normal', 'uv']) {
     const attribute = flat.getAttribute(name)
     for (let i = 0; i < attribute.count; i += 3)
@@ -154,6 +154,7 @@ function cylinderSource(shape: Evaluation['shapes'][number]): BufferGeometry {
 function usesV2Geometry(shape: Evaluation['shapes'][number]) {
   return (
     shape.primitive === 'extrude' ||
+    shape.primitive === 'revolve' ||
     (shape.primitive === 'cylinder' &&
       [shape.segments, shape.open, shape.inner, shape.arc].some((v) => v !== undefined))
   )
@@ -223,10 +224,7 @@ function revolveSource(shape: Evaluation['shapes'][number]): BufferGeometry {
   if (twice < 0) points.reverse()
   const outer = new LatheGeometry(points, segments, 0, arc).toNonIndexed()
   if (revolveIsClosed(shape)) return outer
-  const both = mergeGeometries(
-    [outer, flipped(new LatheGeometry(points, segments, 0, arc))],
-    false,
-  )!
+  const both = mergeGeometries([outer, flipped(outer)], false)!
   outer.dispose()
   return both
 }

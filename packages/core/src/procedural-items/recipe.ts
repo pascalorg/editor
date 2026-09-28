@@ -552,6 +552,19 @@ function shapeBounds(shape: Pick<EvaluatedShape, 'primitive' | 'size' | 'positio
 // Points whose hull contains the shape: a cylinder's rim vertices (as rendered), otherwise the
 // corners of its oriented box (exact for boxes, conservative for the rest).
 function shapeFootprint(shape: EvaluatedShape): Vec3[] {
+  if (shape.primitive === 'revolve') {
+    // Each profile point's ring as rendered, along the arc.
+    const f = frame(shape.position, shape.rotation)
+    const n = shape.segments ?? 24,
+      arc = shape.arc ?? 2 * Math.PI
+    const steps = arc < 2 * Math.PI - 1e-9 ? n + 1 : n
+    return shape.profile!.flatMap(([r, y]) =>
+      Array.from({ length: steps }, (_, k) => {
+        const theta = (arc * k) / n
+        return transformPoint(f, [r * Math.sin(theta), y, r * Math.cos(theta)])
+      }),
+    )
+  }
   if (shape.primitive !== 'cylinder')
     return shapeCorners(shape.size, shape.position, shape.rotation)
   const f = frame(shape.position, shape.rotation)
