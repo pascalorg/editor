@@ -3,7 +3,11 @@ import { nodeRegistry } from '../registry'
 import type { Collection } from '../schema/collections'
 import { SceneMaterial } from '../schema/scene-material'
 import { AnyNode, type AnyNodeType, nodeKindOf } from '../schema/types'
+import { DEFAULT_LEVEL_HEIGHT } from '../services/level-height'
+import { getStoredLevelHeight } from '../services/storey'
+import { resolveWallEffectiveHeight } from '../systems/wall/wall-top'
 import { healSceneNodes } from '../utils/heal-scene-graph'
+import { checkOpeningWithinWall, formatOpeningBoundsIssue } from './opening-bounds'
 
 export type ValidationSeverity = 'error' | 'warning'
 
@@ -309,6 +313,9 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
   let validRootCount = 0
   let mismatchedKeyCount = 0
   let schemaFailureCount = 0
+  // Schema-shaped copies of the nodes that passed, for the cross-node
+  // geometry pass below (defaults applied, so width/height are numbers).
+  const parsedNodes = new Map<string, AnyNode>()
 
   for (const [key, value] of Object.entries(nodes)) {
     if (!isPlainObject(value)) {
@@ -346,7 +353,9 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
       stats.byType[t] = (stats.byType[t] ?? 0) + 1
 
       const parseResult = AnyNode.safeParse(withoutNonSchemaChildren(value))
-      if (!parseResult.success) {
+      if (parseResult.success) {
+        parsedNodes.set(key, parseResult.data)
+      } else {
         schemaFailureCount += 1
         const issue = parseResult.error.issues[0]
         schemaIssues.push({
@@ -400,6 +409,29 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
         severity: 'warning',
         code: 'orphan_parent',
         message: `Node "${key}" has parentId "${parentId}" which is not in the file (will be dropped on import).`,
+        nodeId: key,
+      })
+    }
+  }
+
+  // Wall-hosted openings must sit inside their wall. Schema validation
+  // cannot see this (each node parses alone), and an agent authoring the
+  // file by hand is the likeliest source of a door past the end of its
+  // wall. Warning, not error: the scene still loads, it just looks wrong.
+  for (const [key, opening] of parsedNodes) {
+    if (opening.type !== 'door' && opening.type !== 'window') continue
+    const hostId = opening.parentId ?? opening.wallId
+    const wall = hostId ? parsedNodes.get(hostId) : undefined
+    if (wall?.type !== 'wall') continue
+    const level = wall.parentId ? parsedNodes.get(wall.parentId) : undefined
+    const storeyHeight =
+      level?.type === 'level' ? getStoredLevelHeight(level) : DEFAULT_LEVEL_HEIGHT
+    const wallHeight = resolveWallEffectiveHeight(wall, storeyHeight, 0)
+    for (const issue of checkOpeningWithinWall(opening, wall, wallHeight)) {
+      warnings.push({
+        severity: 'warning',
+        code: 'opening_outside_wall',
+        message: `${formatOpeningBoundsIssue(issue)}.`,
         nodeId: key,
       })
     }
