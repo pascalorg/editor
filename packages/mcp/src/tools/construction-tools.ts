@@ -283,6 +283,18 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         )
       }
       const points = footprint as [number, number][]
+      // Wall-local +Z faces left, so a counterclockwise ring has its interior at the front.
+      // Anchor the area calculation to keep the classification stable far from the origin.
+      const [originX, originZ] = points[0]!
+      let signedDoubleArea = 0
+      for (let i = 1; i < points.length - 1; i++) {
+        const current = points[i]!
+        const next = points[i + 1]!
+        signedDoubleArea +=
+          (current[0] - originX) * (next[1] - originZ) -
+          (next[0] - originX) * (current[1] - originZ)
+      }
+      const frontIsInterior = signedDoubleArea > 0
       const wallIds: string[] = []
       const patches: Array<{ op: 'create'; node: AnyNode; parentId: AnyNodeId }> = []
 
@@ -293,8 +305,8 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
           end: points[(i + 1) % points.length],
           thickness: wallThickness,
           ...(wallHeight !== undefined ? { height: wallHeight } : {}),
-          frontSide: 'exterior',
-          backSide: 'interior',
+          frontSide: frontIsInterior ? 'interior' : 'exterior',
+          backSide: frontIsInterior ? 'exterior' : 'interior',
           ...(wallMaterialPreset ? { materialPreset: wallMaterialPreset } : {}),
           metadata: { role: 'exterior', storyShell: true },
         })

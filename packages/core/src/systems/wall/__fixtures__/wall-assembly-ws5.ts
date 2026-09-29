@@ -1,4 +1,9 @@
 /**
+ * TEST FIXTURE: the WS5 wall-assembly module exactly as #937 shipped it
+ * (editor b53a907b7), kept only as the reference the F2 migration's parity
+ * tests compare against. Never import it from runtime code.
+ */
+/**
  * Wall assemblies — real layered stacks with true thicknesses, plus the
  * offset-miter geometry that lets the layer boundaries be drawn on the 2D plan
  * with clean corners.
@@ -43,11 +48,13 @@
  * faces and no cladding or sheathing is drawn (see `resolveWallAssembly`).
  */
 
-import type { WallNode } from '../../schema'
-import type { Assembly, AssemblyLayer } from '../../schema/assembly'
-import { WallAssembly } from '../../schema/nodes/wall'
-import { DEFAULT_WALL_THICKNESS } from './wall-footprint'
-import { type Point2D, pointToKey, type WallMiterData } from './wall-mitering'
+import type { WallNode as F2WallNode } from '../../../schema'
+import type { WallAssembly } from '../../../schema/nodes/wall'
+import { DEFAULT_WALL_THICKNESS } from '../wall-footprint'
+import { type Point2D, pointToKey, type WallMiterData } from '../wall-mitering'
+
+/** A wall as #937 stored it: the WS5 stack in `assembly`. */
+type WallNode = Omit<F2WallNode, 'assembly'> & { assembly?: WallAssembly }
 
 // ============================================================================
 // UNITS
@@ -148,8 +155,8 @@ export function resolveWallExteriorSide(wall: WallAssemblySideSource): 1 | -1 | 
   return null
 }
 
-/** WS5's rule: a stack with neither cladding nor sheathing is a partition (finish both faces). */
-function isLegacyPartition(assembly: WallAssembly): boolean {
+/** A stack with neither cladding nor sheathing is a partition (finish both faces). */
+function isPartitionAssembly(assembly: WallAssembly): boolean {
   const hasExterior =
     (assembly.exterior?.thickness ?? 0) > 0 && assembly.exterior?.finish !== 'none'
   const hasSheathing =
@@ -157,174 +164,31 @@ function isLegacyPartition(assembly: WallAssembly): boolean {
   return !(hasExterior || hasSheathing)
 }
 
-/** The ids `wallAssemblyFromLegacy` gives each role. */
-const LEGACY_LAYER_IDS: Partial<Record<AssemblyLayer['role'], readonly string[]>> = {
-  finish: ['exterior'],
-  air: ['air-space'],
-  sheathing: ['sheathing'],
-  structure: ['framing'],
-  lining: ['interior', 'interior-back'],
-}
-
-/** Whether a stored value is a WS5 `WallAssembly` (the shape #937 wrote) rather than F2. */
-export function isLegacyWallAssembly(value: unknown): value is WallAssembly {
-  if (value === null || typeof value !== 'object') return false
-  const record = value as Record<string, unknown>
-  return !Array.isArray(record.layers) && WallAssembly.safeParse(value).success
+function interiorThickness(assembly: WallAssembly): number {
+  if (!assembly.interior || assembly.interior.finish === 'none') return 0
+  return Math.max(0, assembly.interior.thickness)
 }
 
 /**
- * A WS5 `WallAssembly` as F2 layers (owner ruling 2026-09-27): exterior →
- * `finish`, sheathing → `sheathing`, framing → the `core` structure layer,
- * interior → `lining`, listed from the exterior face (`face: 'exterior'`) so the
- * stack keeps following the outside when rooms are re-detected. A brick
- * exterior thicker than one wythe splits into the veneer and its air space,
- * and a partition carries its interior finish on both faces, as WS5 drew them.
- * `'none'` slots are dropped; zero-thickness ones are kept (they draw nothing).
- * The layer sum is the WS5 total, so the wall's `thickness` does not change.
+ * Total thickness of a stack, in metres. THE definition of `wall.thickness`
+ * whenever an assembly is present.
+ *
+ * - envelope: exterior + sheathing + framing + interior
+ * - partition (no exterior, no sheathing): interior + framing + interior
  */
-export function wallAssemblyFromLegacy(legacy: WallAssembly): Assembly {
-  const layers: AssemblyLayer[] = []
-  const exterior = legacy.exterior
-  if (exterior && exterior.finish !== 'none') {
-    if (exterior.finish === 'brick' && exterior.thickness > BRICK_VENEER) {
-      layers.push({ id: 'exterior', role: 'finish', material: 'brick', thickness: BRICK_VENEER })
-      layers.push({
-        id: 'air-space',
-        role: 'air',
-        thickness: exterior.thickness - BRICK_VENEER,
-      })
-    } else {
-      layers.push({
-        id: 'exterior',
-        role: 'finish',
-        material: exterior.finish,
-        thickness: exterior.thickness,
-      })
-    }
-  }
-  const sheathing = legacy.sheathing
-  if (sheathing && sheathing.material !== 'none') {
-    layers.push({
-      id: 'sheathing',
-      role: 'sheathing',
-      material: sheathing.material,
-      thickness: sheathing.thickness,
-    })
-  }
-  const interior =
-    legacy.interior && legacy.interior.finish !== 'none'
-      ? ({
-          role: 'lining',
-          material: legacy.interior.finish,
-          thickness: legacy.interior.thickness,
-        } as const)
-      : null
-  const partition = isLegacyPartition(legacy)
-  if (partition && interior) layers.push({ id: 'interior-back', ...interior })
-  layers.push({
-    id: 'framing',
-    role: 'structure',
-    core: true,
-    material: legacy.framing.kind,
-    thickness: legacy.framing.depth,
-  })
-  if (interior) layers.push({ id: 'interior', ...interior })
-  return {
-    layers,
-    face: 'exterior',
-    ...(legacy.preset !== undefined ? { presetId: legacy.preset } : {}),
-    ...(legacy.cavityInsulation !== undefined ? { cavityInsulation: legacy.cavityInsulation } : {}),
-  }
-}
-
-/**
- * The WS5 view of an F2 stack that has one (what `wallAssemblyFromLegacy`
- * produces), for the inspector's cladding / sheathing / framing / interior
- * editor and for plugins written against WS5; `null` for any other stack.
- * Round-trips with `wallAssemblyFromLegacy` without loss.
- */
-export function wallAssemblyToLegacy(assembly: Assembly): WallAssembly | null {
-  if (assembly.face !== 'exterior' || assembly.backing?.length) return null
-  // Only a stack WS5 fully describes round-trips: every layer with its
-  // canonical id and nothing WS5 would drop (a source ref, a slot, returns,
-  // display). Anything else is shown read-only instead of rebuilt.
-  const lossless = assembly.layers.every(
-    (layer) =>
-      LEGACY_LAYER_IDS[layer.role]?.includes(layer.id) &&
-      layer.src === undefined &&
-      layer.slot === undefined &&
-      layer.returns === undefined &&
-      layer.display === undefined,
-  )
-  if (!lossless) return null
-  const layers = [...assembly.layers]
-  const take = (role: AssemblyLayer['role']) =>
-    layers[0]?.role === role ? layers.shift() : undefined
-  const legacy: WallAssembly = {
-    framing: { kind: 'wood', depth: 0 },
-    ...(assembly.presetId !== undefined ? { preset: assembly.presetId } : {}),
-    ...(assembly.cavityInsulation !== undefined
-      ? { cavityInsulation: assembly.cavityInsulation }
-      : {}),
-  }
-  const finish = take('finish')
-  if (finish) {
-    const air = finish.material === 'brick' ? take('air') : undefined
-    legacy.exterior = {
-      finish: finish.material as NonNullable<WallAssembly['exterior']>['finish'],
-      thickness: finish.thickness + (air?.thickness ?? 0),
-    }
-  }
-  const sheathing = take('sheathing')
-  if (sheathing) {
-    legacy.sheathing = {
-      material: sheathing.material as NonNullable<WallAssembly['sheathing']>['material'],
-      thickness: sheathing.thickness,
-    }
-  }
-  const outerLining = take('lining')
-  const framing = take('structure')
-  if (!framing?.core) return null
-  legacy.framing = {
-    kind: framing.material as WallAssembly['framing']['kind'],
-    depth: framing.thickness,
-  }
-  const lining = take('lining')
-  if (layers.length > 0) return null
-  if (lining) {
-    legacy.interior = {
-      finish: lining.material as NonNullable<WallAssembly['interior']>['finish'],
-      thickness: lining.thickness,
-    }
-  }
-  if (outerLining) {
-    const same =
-      lining?.material === outerLining.material && lining?.thickness === outerLining.thickness
-    if (!same || !isLegacyPartition(legacy)) return null
-  }
-  if (!WallAssembly.safeParse(legacy).success) return null
-  // A familiar role sequence can still gain a partition lining, split brick
-  // differently or rename a layer when edited through the WS5 controls.
-  const roundTrip = wallAssemblyFromLegacy(legacy)
-  if (roundTrip.layers.length !== assembly.layers.length) return null
-  const sameLayers = assembly.layers.every((layer, index) => {
-    const restored = roundTrip.layers[index]!
-    return (
-      restored.id === layer.id &&
-      restored.role === layer.role &&
-      restored.core === layer.core &&
-      restored.material === layer.material &&
-      Math.abs(restored.thickness - layer.thickness) < 1e-12
-    )
-  })
-  if (!sameLayers) return null
-  return legacy
-}
-
-/** Total thickness of a stack, in metres: THE value `wall.thickness` holds. */
-export function assemblyThickness(assembly: Assembly): number {
-  return assembly.layers.reduce((total, layer) => total + Math.max(0, layer.thickness), 0)
+export function assemblyThickness(assembly: WallAssembly): number {
+  const framing = Math.max(0, assembly.framing?.depth ?? 0)
+  const interior = interiorThickness(assembly)
+  if (isPartitionAssembly(assembly)) return framing + interior * 2
+  const exterior =
+    assembly.exterior && assembly.exterior.finish !== 'none'
+      ? Math.max(0, assembly.exterior.thickness)
+      : 0
+  const sheathing =
+    assembly.sheathing && assembly.sheathing.material !== 'none'
+      ? Math.max(0, assembly.sheathing.thickness)
+      : 0
+  return exterior + sheathing + framing + interior
 }
 
 const EXTERIOR_FINISH_LABEL: Record<string, string> = {
@@ -353,54 +217,6 @@ const INTERIOR_FINISH_LABEL: Record<string, string> = {
   none: 'none',
 }
 
-/** An F2 layer as the WS5 drawing role and its inspector / poché label. */
-function drawnLayer(layer: AssemblyLayer): { role: WallAssemblyLayerRole; material: string } {
-  const material = layer.material
-  switch (layer.role) {
-    case 'finish':
-      return {
-        role: 'exterior-finish',
-        material: (material && EXTERIOR_FINISH_LABEL[material]) ?? material ?? 'finish',
-      }
-    case 'air':
-      return { role: 'air-gap', material: 'air space' }
-    case 'lining':
-      return {
-        role: 'interior-finish',
-        material: (material && INTERIOR_FINISH_LABEL[material]) ?? 'finish',
-      }
-    case 'sheathing':
-    case 'substrate':
-    case 'membrane':
-    case 'underlay':
-      return {
-        role: 'sheathing',
-        material: (material && SHEATHING_LABEL[material]) ?? material ?? layer.role,
-      }
-    default:
-      return {
-        role: 'framing',
-        material:
-          (material && FRAMING_LABEL[material]) ??
-          material ??
-          (layer.core ? 'framing' : layer.role),
-      }
-  }
-}
-
-/** The wall's F2 layers ordered from the exterior face, with the side that faces out. */
-function layersOutsideIn(wall: Pick<WallNode, 'assembly' | 'frontSide' | 'backSide'>) {
-  const exteriorSide = resolveWallExteriorSide(wall)
-  const exteriorSideResolved: 1 | -1 = exteriorSide ?? 1
-  const listed = wall.assembly?.layers ?? []
-  // A front-listed stack reads outside-in when the exterior is the front face.
-  const layers =
-    wall.assembly?.face === 'exterior' || exteriorSideResolved === 1
-      ? listed
-      : [...listed].reverse()
-  return { layers, exteriorSide, exteriorSideResolved }
-}
-
 /**
  * Resolve a wall into its ordered layer stack, outside → inside.
  *
@@ -411,9 +227,11 @@ function layersOutsideIn(wall: Pick<WallNode, 'assembly' | 'frontSide' | 'backSi
 export function resolveWallAssembly(
   wall: Pick<WallNode, 'thickness' | 'assembly' | 'frontSide' | 'backSide'>,
 ): ResolvedWallAssembly {
-  const { layers: f2, exteriorSide, exteriorSideResolved } = layersOutsideIn(wall)
+  const exteriorSide = resolveWallExteriorSide(wall)
+  const exteriorSideResolved: 1 | -1 = exteriorSide ?? 1
+  const assembly = wall.assembly
 
-  if (!wall.assembly) {
+  if (!assembly) {
     const total = wall.thickness ?? DEFAULT_WALL_THICKNESS
     return {
       layers: [
@@ -433,19 +251,58 @@ export function resolveWallAssembly(
 
   const layers: WallAssemblyLayer[] = []
   let cursor = 0
-  let envelope = false
-  for (const layer of f2) {
-    if (!(layer.thickness > 0)) continue
-    const drawn = drawnLayer(layer)
-    if (drawn.role === 'exterior-finish' || drawn.role === 'sheathing') envelope = true
-    layers.push({ ...drawn, thickness: layer.thickness, offsetFromExteriorFace: cursor })
-    cursor += layer.thickness
+  const push = (role: WallAssemblyLayerRole, material: string, thickness: number) => {
+    if (thickness <= 0) return
+    layers.push({ role, material, thickness, offsetFromExteriorFace: cursor })
+    cursor += thickness
+  }
+
+  const partition = isPartitionAssembly(assembly)
+  const interior = interiorThickness(assembly)
+  const interiorMaterial = INTERIOR_FINISH_LABEL[assembly.interior?.finish ?? 'none'] ?? 'finish'
+
+  if (partition) {
+    // Both faces are interior: finish, framing, finish. No sheathing, no cladding.
+    push('interior-finish', interiorMaterial, interior)
+    push('framing', FRAMING_LABEL[assembly.framing.kind] ?? 'framing', assembly.framing.depth)
+    push('interior-finish', interiorMaterial, interior)
+  } else {
+    if (
+      assembly.exterior &&
+      assembly.exterior.finish !== 'none' &&
+      assembly.exterior.thickness > 0
+    ) {
+      const finish = assembly.exterior.finish
+      const material = EXTERIOR_FINISH_LABEL[finish] ?? finish
+      if (finish === 'brick' && assembly.exterior.thickness > BRICK_VENEER) {
+        // Brick veneer is drawn as two layers: the wythe and the air space
+        // behind it (IRC Table R703.8.4(1)). The stored thickness is the whole
+        // assembly offset, so the remainder over 3-5/8 in is the air space.
+        push('exterior-finish', material, BRICK_VENEER)
+        push('air-gap', 'air space', assembly.exterior.thickness - BRICK_VENEER)
+      } else {
+        push('exterior-finish', material, assembly.exterior.thickness)
+      }
+    }
+    if (
+      assembly.sheathing &&
+      assembly.sheathing.material !== 'none' &&
+      assembly.sheathing.thickness > 0
+    ) {
+      push(
+        'sheathing',
+        SHEATHING_LABEL[assembly.sheathing.material] ?? assembly.sheathing.material,
+        assembly.sheathing.thickness,
+      )
+    }
+    push('framing', FRAMING_LABEL[assembly.framing.kind] ?? 'framing', assembly.framing.depth)
+    push('interior-finish', interiorMaterial, interior)
   }
 
   return {
     layers,
     total: cursor,
-    kind: envelope ? 'envelope' : 'partition',
+    kind: partition ? 'partition' : 'envelope',
     exteriorSide,
     exteriorSideResolved,
   }
@@ -455,8 +312,8 @@ export function resolveWallAssembly(
  * The patch to apply when any layer changes: the assembly plus the re-derived
  * TOTAL thickness. Callers must never write one without the other.
  */
-export function wallAssemblyPatch(assembly: Assembly): {
-  assembly: Assembly
+export function wallAssemblyPatch(assembly: WallAssembly): {
+  assembly: WallAssembly
   thickness: number
 } {
   return { assembly, thickness: assemblyThickness(assembly) }
@@ -466,7 +323,7 @@ export function wallAssemblyPatch(assembly: Assembly): {
 // PRESETS
 // ============================================================================
 
-type LegacyWallAssemblyPreset = {
+export type WallAssemblyPreset = {
   id: string
   label: string
   category: 'exterior' | 'interior' | 'masonry'
@@ -478,7 +335,7 @@ type LegacyWallAssemblyPreset = {
   unverified?: string
 }
 
-const LEGACY_WALL_ASSEMBLY_PRESETS: readonly LegacyWallAssemblyPreset[] = [
+export const WALL_ASSEMBLY_PRESETS: readonly WallAssemblyPreset[] = [
   {
     id: 'exterior-2x4-siding',
     label: 'Exterior 2x4 — lap siding',
@@ -589,18 +446,6 @@ const LEGACY_WALL_ASSEMBLY_PRESETS: readonly LegacyWallAssemblyPreset[] = [
   },
 ] as const
 
-export type WallAssemblyPreset = Omit<LegacyWallAssemblyPreset, 'assembly'> & {
-  /** The stack as F2 layers, listed from the exterior face. */
-  assembly: Assembly
-}
-
-/** WS5's cited presets, as F2 stacks (`wallAssemblyFromLegacy`). */
-export const WALL_ASSEMBLY_PRESETS: readonly WallAssemblyPreset[] =
-  LEGACY_WALL_ASSEMBLY_PRESETS.map((preset) => ({
-    ...preset,
-    assembly: wallAssemblyFromLegacy(preset.assembly),
-  }))
-
 /**
  * The catalog material the 3D exterior face is skinned with for each
  * assembly cladding, when the wall has no painted exterior slot of its own.
@@ -618,27 +463,9 @@ export const WALL_FINISH_LIBRARY_REF: Record<string, string | null> = {
   none: null,
 }
 
-/** The material kind of the wall's outermost cladding (`siding`, `stucco`, …), if it declares one. */
-export function wallAssemblyExteriorFinish(
-  wall: Pick<WallNode, 'assembly' | 'frontSide' | 'backSide'>,
-): string | undefined {
-  return layersOutsideIn(wall).layers.find((layer) => layer.role === 'finish')?.material
-}
-
-/** The wall's structural core: its depth and framing kind (`wood`, `lgs`, `cmu`, `icf`), if declared. */
-export function wallAssemblyFraming(
-  wall: Pick<WallNode, 'assembly'>,
-): { depth: number; kind?: string } | undefined {
-  const core = wall.assembly?.layers.find((layer) => layer.core)
-  if (!core) return undefined
-  return { depth: core.thickness, ...(core.material ? { kind: core.material } : {}) }
-}
-
 /** `library:` ref for the wall's assembly cladding, or null when it has none. */
-export function wallAssemblyFinishRef(
-  wall: Pick<WallNode, 'assembly' | 'frontSide' | 'backSide'>,
-): string | null {
-  const finish = wallAssemblyExteriorFinish(wall)
+export function wallAssemblyFinishRef(wall: Pick<WallNode, 'assembly'>): string | null {
+  const finish = wall.assembly?.exterior?.finish
   if (!finish) return null
   return WALL_FINISH_LIBRARY_REF[finish] ?? null
 }
@@ -650,7 +477,7 @@ export function getWallAssemblyPreset(id: string | undefined): WallAssemblyPrese
 
 /** True when the wall's assembly came from a preset we could not fully cite. */
 export function wallAssemblyUnverifiedNote(wall: Pick<WallNode, 'assembly'>): string | undefined {
-  return getWallAssemblyPreset(wall.assembly?.presetId)?.unverified
+  return getWallAssemblyPreset(wall.assembly?.preset)?.unverified
 }
 
 // ============================================================================
@@ -793,7 +620,7 @@ export function calculateLevelLayerMiters(
 
     for (const { wall, endType } of junction.connectedWalls) {
       if (!known.has(wall.id)) continue
-      const offsets = offsetsFor(wall)
+      const offsets = offsetsFor(wall as unknown as WallNode)
       if (offsets.length < 2) continue
       const halfThickness = Math.abs(offsets[0]!)
       const d = { x: wall.end[0] - wall.start[0], y: wall.end[1] - wall.start[1] }

@@ -1,5 +1,6 @@
 import {
   type AnyNodeId,
+  DEFAULT_WALL_THICKNESS,
   getWallBaseElevationForNodes,
   getWallEffectiveHeightForNodes,
   type NodeDefinition,
@@ -60,7 +61,7 @@ const SPLIT_CUT_COUNTS = Array.from({ length: WALL_SPLIT_MAX_CUTS }, (_, index) 
 export const wallDefinition: NodeDefinition<typeof WallNode> = {
   kind: 'wall',
   snapProfile: 'structural',
-  schemaVersion: 9,
+  schemaVersion: 10,
   schema: WallNode,
   category: 'structure',
   surfaceRole: 'wall',
@@ -143,6 +144,13 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     // Paint still writes the legacy inline fields for base faces via
     // `wallPaint`; migrating those fully into `node.slots` is a later step.
     slots: (node) => wallSlots(node as WallNodeType),
+    // F2 layers stack from the front face (or the exterior with
+    // `face: 'exterior'`); `thickness` holds their sum.
+    assembly: {
+      reference: 'front',
+      measure: 'normal',
+      body: (node) => (node as WallNodeType).thickness ?? DEFAULT_WALL_THICKNESS,
+    },
   },
 
   relations: {

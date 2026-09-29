@@ -193,12 +193,27 @@ describe('the schema refuses ambiguous stacks', () => {
     expect(issues({ layers: [layer('a')], backing: [layer('b', { inset: 0.1 })] })).toEqual([])
   })
 
-  test('bounds: 1–12 body layers, ≤ 5 m each', () => {
+  test('bounds: finite nonnegative thickness and bounded layer counts', () => {
     expect(issues({ layers: [] })).toEqual(['layers'])
     expect(issues({ layers: Array.from({ length: 13 }, (_, i) => layer(`l${i}`)) })).toEqual([
       'layers',
     ])
-    expect(issues({ layers: [layer('a', { thickness: 5.1 })] })).toEqual(['layers.0.thickness'])
+    for (const thickness of [0, 5.001, 100]) {
+      expect(issues({ layers: [layer('a', { thickness })] })).toEqual([])
+    }
+    for (const thickness of [-0.001, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(issues({ layers: [layer('a', { thickness })] })).toEqual(['layers.0.thickness'])
+    }
+    expect(
+      issues({ layers: [], backing: Array.from({ length: 9 }, (_, i) => layer(`b${i}`)) }),
+    ).toEqual(['backing'])
+  })
+
+  test('preset and insulation fields preserve empty text but reject other types', () => {
+    for (const field of ['presetId', 'cavityInsulation']) {
+      expect(issues({ layers: [layer('a')], [field]: '' })).toEqual([])
+      expect(issues({ layers: [layer('a')], [field]: 123 })).toEqual([field])
+    }
   })
 })
 

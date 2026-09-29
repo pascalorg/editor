@@ -118,7 +118,8 @@ function splitSlabFacesByFacing(geometry: BufferGeometry): {
   const position = geometry.getAttribute('position')
   const uv = geometry.getAttribute('uv')
   const index = geometry.getIndex()
-  const triangleCount = index ? index.count / 3 : position.count / 3
+  // A collapsed slab builds an empty geometry with no position attribute.
+  const triangleCount = index ? index.count / 3 : (position?.count ?? 0) / 3
 
   const top = { pos: [] as number[], uv: [] as number[] }
   const side = { pos: [] as number[], uv: [] as number[] }
@@ -301,6 +302,12 @@ export function buildSlabGeometry(
     ['surface', top],
     ['side', side],
   ] as const) {
+    // A slot with no triangles (collapsed or fully holed polygon) gets no mesh,
+    // so the build settles instead of emitting empty buffers.
+    if (geometry.getAttribute('position').count === 0) {
+      geometry.dispose()
+      continue
+    }
     const material = getSlabSlotMaterial(
       node,
       slotId,
@@ -321,7 +328,7 @@ export function buildSlabGeometry(
     group.add(mesh)
   }
 
-  if (node.fillToTerrain && !node.recessed) {
+  if (node.fillToTerrain && !node.recessed && group.children.length > 0) {
     const terrainFill = buildSlabTerrainFillGeometry(
       node,
       getRenderableSlabPolygon(node, polygonContext),

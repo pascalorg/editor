@@ -44,6 +44,7 @@ import { syncStairRises } from '../systems/stair/stair-rise'
 import { healSceneNodes } from '../utils/heal-scene-graph'
 import { removeRetiredDrawingSheetNodes } from '../utils/retired-scene-nodes'
 import { migrateVerticalSceneNodes } from '../utils/vertical-scene-migration'
+import { migrateLegacyWallAssemblies } from '../utils/wall-assembly-migration'
 import * as nodeActions from './actions/node-actions'
 import {
   areSceneSnapshotsEqual,
@@ -1149,7 +1150,8 @@ function migrateNodes(nodes: Record<string, any>): {
     }
   }
 
-  const vertical = migrateVerticalSceneNodes(patchedNodes)
+  const walls = migrateLegacyWallAssemblies(patchedNodes)
+  const vertical = migrateVerticalSceneNodes(walls.nodes)
   return { nodes: vertical.nodes as Record<string, AnyNode>, mintedMaterials }
 }
 

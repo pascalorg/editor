@@ -518,9 +518,9 @@ function findExtrusionPosition(ifcApi: WebIFC.IfcAPI, modelID: number, item: any
 // world AABB. A world AABB conflates length and thickness for any wall
 // the placement rotates (a 37°-rotated 0.2m wall would read ~1.9m
 // thick); projecting onto the actual axis is rotation-invariant.
-// (axisX, axisY) is the unit wall direction in the converter's
-// horizontal frame, which is parallel to web-ifc world XY — both are IFC
-// world coords, differing only by origin/scale, which cancel in extents.
+// (axisX, axisY) is the unit wall direction in IFC world XY. web-ifc
+// meshes come in (X, Z, -Y), so a vertex's IFC plan point is (wx, -wz)
+// and its height is wy; origin and scale cancel in extents.
 // Returns extents in the geometry's native units (caller resolves
 // scale), or null on any failure.
 function measureWallLocalExtents(
@@ -562,14 +562,14 @@ function measureWallLocalExtents(
           const wx = m[0] * x + m[4] * y + m[8] * z + m[12]
           const wy = m[1] * x + m[5] * y + m[9] * z + m[13]
           const wz = m[2] * x + m[6] * y + m[10] * z + m[14]
-          const a = wx * axisX + wy * axisY
-          const p = wx * perpX + wy * perpY
+          const a = wx * axisX - wz * axisY
+          const p = wx * perpX - wz * perpY
           if (a < minA) minA = a
           if (a > maxA) maxA = a
           if (p < minP) minP = p
           if (p > maxP) maxP = p
-          if (wz < minV) minV = wz
-          if (wz > maxV) maxV = wz
+          if (wy < minV) minV = wy
+          if (wy > maxV) maxV = wy
           any = true
         }
       } finally {
@@ -686,15 +686,15 @@ function extractImportedMeshPrimitives(
           ]
           // `GetFlatMesh` does not use the same axes as the STEP placement
           // data read by `resolveWorldTransform`: web-ifc has already mapped
-          // IFC Z-up coordinates to an X/Y-up/-Z frame. Applying the regular
-          // STEP `swapYZ` transform here a second time makes plan depth look
-          // like height (and height look like plan depth), exploding fallback
-          // walls and railings across the scene.
+          // IFC Z-up coordinates to (X, Z, -Y), which is Pascal's Y-up
+          // right-handed frame. The default preset only removes the origin
+          // offset and level elevation; negating the third axis again would
+          // mirror the mesh.
           const mappedPosition: [number, number, number] = swapYZ
             ? [
                 world[0]! - originOffset[0]! * unitFactor,
                 world[1]! - originOffset[2]! * unitFactor - levelElevation,
-                -(world[2]! + originOffset[1]! * unitFactor),
+                world[2]! + originOffset[1]! * unitFactor,
               ]
             : [
                 world[0]! - originOffset[0]! * unitFactor,
@@ -712,7 +712,7 @@ function extractImportedMeshPrimitives(
             matrix[2]! * nx + matrix[6]! * ny + matrix[10]! * nz,
           ]
           const mappedNormal = swapYZ
-            ? [worldNormal[0]!, worldNormal[1]!, -worldNormal[2]!]
+            ? worldNormal
             : [worldNormal[0]!, -worldNormal[2]!, worldNormal[1]!]
           const normalLength = Math.hypot(...mappedNormal) || 1
           normals.push(
@@ -723,13 +723,6 @@ function extractImportedMeshPrimitives(
         }
 
         const indices = Array.from(sourceIndices)
-        if (swapYZ) {
-          for (let index = 0; index + 2 < indices.length; index += 3) {
-            const second = indices[index + 1]!
-            indices[index + 1] = indices[index + 2]!
-            indices[index + 2] = second
-          }
-        }
         if (positions.length >= 9 && indices.length >= 3) {
           primitives.push({
             positions,
@@ -919,10 +912,16 @@ export async function convertIfcToPascal(
     /* keep zero offset */
   }
 
+  // Scene points keep IFC's axis order (plan [0] and [1], vertical [2]), but
+  // the plan's second axis is Pascal z. Pascal is Y-up right-handed, so seen
+  // from above IFC north (+Y) is Pascal -Z: the default preset negates IFC Y
+  // here, once, for every placement-derived wall, opening, slab, roof, space
+  // and column. Mapping +Y to +Z mirrors the whole model.
+  const planDepthSign = opts.swapYZ ? -1 : 1
   function worldToScene(worldPt: number[]): number[] {
     return [
       (worldPt[0] - originOffset[0]) * unitFactor,
-      (worldPt[1] - originOffset[1]) * unitFactor,
+      planDepthSign * (worldPt[1] - originOffset[1]) * unitFactor,
       (worldPt[2] - originOffset[2]) * unitFactor,
     ]
   }
@@ -1396,7 +1395,8 @@ export async function convertIfcToPascal(
           // IFC ground plane, which is also the mapping used for the
           // wall's start/end above.
           const axisX = (end[0] - start[0]) / wallLenM
-          const axisY = (end[1] - start[1]) / wallLenM
+          // Back to IFC world XY, the frame measureWallLocalExtents projects in.
+          const axisY = (planDepthSign * (end[1] - start[1])) / wallLenM
           const extents = measureWallLocalExtents(ifcApi, modelID, wallExpressID, axisX, axisY)
           const geom = extents
             ? wallHeightThicknessFromExtents(extents, wallLenM, unitFactor)

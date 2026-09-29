@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { WallNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../../bridge/scene-bridge'
 import { registerSaveScene } from './save-scene'
 import {
@@ -143,12 +144,71 @@ describe('save_scene', () => {
     expect(result.isError).toBe(true)
   })
 
+  test('migrates a provided legacy wall assembly before validating and saving it', async () => {
+    const wall = WallNode.parse({ id: 'wall_legacysave', start: [0, 0], end: [4, 0] })
+    const assembly = { framing: { kind: 'wood', depth: 0.14 } }
+    const graph = { nodes: { [wall.id]: { ...wall, assembly } }, rootNodeIds: [wall.id] }
+    const result = await client.callTool({
+      name: 'save_scene',
+      arguments: { name: 'Legacy wall', includeCurrentScene: false, graph },
+    })
+
+    expect(result.isError).toBeFalsy()
+    const payload = parseToolText(result.content as StoredTextContent[])
+    const saved = await store.load(payload.id as string)
+    expect((saved?.graph.nodes[wall.id] as WallNode).assembly).toEqual({
+      face: 'exterior',
+      layers: [{ id: 'framing', role: 'structure', thickness: 0.14, core: true, material: 'wood' }],
+    })
+    expect(graph.nodes[wall.id]).toEqual({ ...wall, assembly })
+  })
+
   test('errors when includeCurrentScene is false and no graph is provided', async () => {
     const result = await client.callTool({
       name: 'save_scene',
       arguments: { name: 'No Graph', includeCurrentScene: false },
     })
     expect(result.isError).toBe(true)
+  })
+
+  test.each([
+    ['long', 'a'.repeat(81), 'a'.repeat(121)],
+    ['empty', '', ''],
+  ])('saves %s legacy text and layers above the former F2 caps without loss', async (_, preset, cavityInsulation) => {
+    const wall = WallNode.parse({ id: 'wall_unboundedsave', start: [0, 0], end: [4, 0] })
+    const graph = {
+      nodes: {
+        [wall.id]: {
+          ...wall,
+          assembly: {
+            preset,
+            cavityInsulation,
+            exterior: { finish: 'stone', thickness: 5.001 },
+            sheathing: { material: 'osb', thickness: 5.001 },
+            framing: { kind: 'wood', depth: 5.001 },
+            interior: { finish: 'drywall', thickness: 5.001 },
+          },
+        },
+      },
+      rootNodeIds: [wall.id],
+    }
+    const result = await client.callTool({
+      name: 'save_scene',
+      arguments: { name: 'Unbounded legacy wall', includeCurrentScene: false, graph },
+    })
+
+    expect(result.isError).toBeFalsy()
+    const payload = parseToolText(result.content as StoredTextContent[])
+    const saved = await store.load(payload.id as string)
+    const assembly = WallNode.parse(saved?.graph.nodes[wall.id]).assembly!
+    expect(assembly.presetId).toBe(preset)
+    expect(assembly.cavityInsulation).toBe(cavityInsulation)
+    expect(assembly.layers.map(({ id, thickness }) => [id, thickness])).toEqual([
+      ['exterior', 5.001],
+      ['sheathing', 5.001],
+      ['framing', 5.001],
+      ['interior', 5.001],
+    ])
   })
 
   test('returns version_conflict when expectedVersion mismatches', async () => {

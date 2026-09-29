@@ -59,11 +59,16 @@ function LampSystem({ sceneApi }: { sceneApi: { get: unknown } }) {
   return null
 }
 
+const renders = new Map<string, number>()
+
 function tagged(tag: string) {
   return {
     kind: 'parametric',
     module: async () => ({
-      default: ({ node }: { node: { id: string } }) => <group name={`${tag}:${node.id}`} />,
+      default: ({ node }: { node: { id: string } }) => {
+        renders.set(tag, (renders.get(tag) ?? 0) + 1)
+        return <group name={`${tag}:${node.id}`} />
+      },
     }),
   } as const
 }
@@ -173,6 +178,7 @@ beforeEach(async () => {
   nodeRegistry._reset()
   await loadPlugin(dispatchPlugin())
   systemTicks = 0
+  renders.clear()
 })
 
 afterEach(() => {
@@ -223,10 +229,9 @@ test('a plugin that registers after the systems mounted still gets its system', 
   }
 })
 
-// Known gap: NodeRenderer reads the registry at render time without
-// subscribing to it, so nodes mounted before async plugin discovery stay
-// invisible (and their geometry unbuilt) until something else re-renders them.
-test.failing('nodes mounted before their plugin registers render once it registers', async () => {
+// Hosts discover plugins asynchronously, so a scene can mount before its
+// plugin kinds register; those nodes must appear once the plugin loads.
+test('nodes mounted before their plugin registers render once it registers', async () => {
   nodeRegistry._reset()
   const { lamp, planter } = scene([PLUGIN_ID])
   const renderer = await mountDispatch(lamp, planter)
@@ -240,6 +245,34 @@ test.failing('nodes mounted before their plugin registers render once it registe
 
     expect(named(renderer, `lamp:${lamp.id}`)).toBe(1)
     expect(sceneRegistry.nodes.get(planter.id)?.getObjectByName('planter-body')).toBeDefined()
+  } finally {
+    await renderer.unmount()
+  }
+})
+
+test('registering an unrelated kind does not re-render mounted plugin nodes', async () => {
+  const { lamp, planter } = scene([PLUGIN_ID])
+  const renderer = await mountDispatch(lamp, planter)
+  try {
+    await settle(renderer)
+    const before = renders.get('lamp')
+    expect(before).toBeGreaterThan(0)
+
+    const Other = BaseNode.extend({ id: objectId('fxother'), type: nodeType('fixture:other') })
+    const otherDef: NodeDefinition<typeof Other> = {
+      kind: 'fixture:other',
+      schemaVersion: 1,
+      schema: Other,
+      category: 'furnish',
+      defaults: () => base,
+      capabilities: {},
+    }
+    await act(async () => {
+      await loadPlugin({ id: 'fixture:other', apiVersion: 1, nodes: [asPluginNode(otherDef)] })
+    })
+    await settle(renderer)
+
+    expect(renders.get('lamp')).toBe(before)
   } finally {
     await renderer.unmount()
   }

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Breaking
+
+- **`wall.assembly` is now F2 assembly layers** (owner-accepted exception to the additive plugin v1 contract; the WS5 shape shipped days earlier in #937). Walls store `{ layers: [{ id, role, thickness, core?, material?, … }], face?, presetId?, cavityInsulation? }` instead of `{ exterior, sheathing, framing, interior, preset }`. Scenes saved with the old shape are converted on load and at the scene API boundary, so `thickness` and every drawing stay the same. Plugins that read `wall.assembly.exterior` / `.framing` / `.preset` directly should read `wallAssemblyToLegacy(wall.assembly)` (the old shape, or `null` for a stack it cannot express), `wallAssemblyFraming(wall)` or `wallAssemblyExteriorFinish(wall)`; `WALL_ASSEMBLY_PRESETS[i].assembly` is F2 too.
+
 ## 1.0.0 (2026-09-12)
 
 ### Features
