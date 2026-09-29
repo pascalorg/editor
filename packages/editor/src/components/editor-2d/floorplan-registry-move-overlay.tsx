@@ -188,13 +188,13 @@ export function FloorplanRegistryMoveOverlay() {
           if (updates.length > 0) useScene.getState().updateNodes(updates)
         })
       const recordDrop = (write: () => void) => {
-        // The drop decides committed-ness: a co-holder's cleanup must not revert it.
-        settleSceneHistoryDrafts(session.affectedIds)
-        endDrafts()
         const drop = beginSceneHistoryPauseSession(useScene, { gesture: movingNode.id })
         try {
           // The move's write and its transient cleanup are one undo entry and one commit.
           drop.commitStep(() => runAsSingleSceneHistoryStep(useScene, write))
+          // Only a successful drop ends ownership; a rejected write can still be retried.
+          settleSceneHistoryDrafts(session.affectedIds)
+          endDrafts()
         } finally {
           drop.end()
         }
