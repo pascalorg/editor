@@ -391,8 +391,8 @@ export {
   type SceneNodeStructuralPatch,
   type SceneOperationPatch,
   type ScenePatch,
-  sceneHistoryDraftRevertUpdates,
   type ScenePluginInstallPatch,
+  sceneHistoryDraftRevertUpdates,
   settleSceneHistoryDrafts,
 } from './store/use-scene'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'
