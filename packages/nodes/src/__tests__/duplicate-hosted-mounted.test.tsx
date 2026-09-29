@@ -87,6 +87,7 @@ import { builtinPlugin } from '../index'
 import { ItemGLTFLoader } from '../item/model-loader'
 import { MoveItemTool } from '../item/move-tool'
 import ItemTool from '../item/tool'
+import MoveProceduralItem from '../procedural-item/move-tool'
 import { getDefaultPanelMaterial } from '../solar-panel/geometry'
 
 // Other node tests install process-global renderer mocks; this audit must observe production modules.
@@ -2525,6 +2526,13 @@ if (process.env.PASCAL_DUPLICATE_AUDIT_ISOLATED !== '1') {
           kind === 'procedural-generic' ? 'procedural-item' : kind,
           false,
         )
+        const usesRawMover = kind !== 'item'
+        if (usesRawMover) {
+          expect(root.type).toBe('procedural-item')
+          const procedural = root as ProceduralItemNode
+          expect(procedural.recipe.mounting).toBeUndefined()
+          expect(MoveProceduralItem({ node: procedural }).type).toBe(MoveRegistryNodeTool)
+        }
         if (kind === 'procedural-generic') {
           genericPlanDOM()
           const definition = nodeRegistry.get('procedural-item')!
@@ -2535,8 +2543,11 @@ if (process.env.PASCAL_DUPLICATE_AUDIT_ISOLATED !== '1') {
         const renderer = await create(<Scene menu panes={{ plan: true, spatial: true }} />)
         try {
           const copy = await duplicate(renderer)
+          expect(useScene.temporal.getState().isTracking).toBe(!usesRawMover)
+          expect(Core.getSceneHistoryPauseDepth()).toBe(0)
           const origin = useEditor.getState().movingNodeOrigin
           await planPointer(1, 0)
+          expect(useScene.temporal.getState().isTracking).toBe(!usesRawMover)
           const obstacle = ItemNode.parse({ parentId: host.id, asset, position: [1, 0, 0] })
           useScene.getState().applyNodeChanges({
             create: [{ node: obstacle }],
@@ -2558,6 +2569,7 @@ if (process.env.PASCAL_DUPLICATE_AUDIT_ISOLATED !== '1') {
           expect(getMovingNode()?.id).toBe(copy.id)
           expect(snapshot()).toBe(atRelease)
           expect(useEditor.getState().movingNodeOrigin).toBe(origin)
+          expect(useScene.temporal.getState().isTracking).toBe(!usesRawMover)
           const attachments = {
             ...(useScene.getState().nodes[host.id] as ProceduralItemNode).attachments,
           }
@@ -2574,10 +2586,9 @@ if (process.env.PASCAL_DUPLICATE_AUDIT_ISOLATED !== '1') {
           else await pointer.send(new Vector3(1, 2, 0), 'grid first', true)
           await settle(renderer)
           expect(getMovingNode()).toBeNull()
-          // The obstacle's create and delete are someone else's writes: with the 2D overlay and
-          // the placement coordinator pausing only their own writes, each records its own step.
-          // The generic 3D mover still pauses the whole gesture (raw), so there they stay unrecorded.
-          const foreignSteps = kind === 'procedural-generic' ? 0 : 2
+          // Items pause only their own writes. These unmounted recipes delegate to the generic
+          // 3D mover, whose raw lifetime pause applies with either 2D overlay path.
+          const foreignSteps = usesRawMover ? 0 : 2
           if (outcome === 'Escape') {
             expect(snapshot()).toBe(before)
             expect(useScene.temporal.getState().pastStates).toHaveLength(foreignSteps)
