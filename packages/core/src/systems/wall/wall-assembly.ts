@@ -233,8 +233,8 @@ export function wallAssemblyFromLegacy(legacy: WallAssembly): Assembly {
   return {
     layers,
     face: 'exterior',
-    ...(legacy.preset ? { presetId: legacy.preset } : {}),
-    ...(legacy.cavityInsulation ? { cavityInsulation: legacy.cavityInsulation } : {}),
+    ...(legacy.preset !== undefined ? { presetId: legacy.preset } : {}),
+    ...(legacy.cavityInsulation !== undefined ? { cavityInsulation: legacy.cavityInsulation } : {}),
   }
 }
 
@@ -263,8 +263,10 @@ export function wallAssemblyToLegacy(assembly: Assembly): WallAssembly | null {
     layers[0]?.role === role ? layers.shift() : undefined
   const legacy: WallAssembly = {
     framing: { kind: 'wood', depth: 0 },
-    ...(assembly.presetId ? { preset: assembly.presetId } : {}),
-    ...(assembly.cavityInsulation ? { cavityInsulation: assembly.cavityInsulation } : {}),
+    ...(assembly.presetId !== undefined ? { preset: assembly.presetId } : {}),
+    ...(assembly.cavityInsulation !== undefined
+      ? { cavityInsulation: assembly.cavityInsulation }
+      : {}),
   }
   const finish = take('finish')
   if (finish) {

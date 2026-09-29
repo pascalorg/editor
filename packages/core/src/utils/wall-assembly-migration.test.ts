@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import type { AnyNode, AnyNodeId, WallAssembly, WallNode } from '../schema'
+import { type AnyNode, type AnyNodeId, WallAssembly, WallNode } from '../schema'
 import { Assembly } from '../schema/assembly'
 import useScene from '../store/use-scene'
 import * as ws5 from '../systems/wall/__fixtures__/wall-assembly-ws5'
@@ -28,6 +28,32 @@ const stored = fixture.nodes as unknown as Record<string, LegacyWall | AnyNode>
 const legacyWalls = Object.values(stored).filter((n): n is LegacyWall => n.type === 'wall')
 const migrated = migrateLegacyWallAssemblies(stored)
 const f2Walls = legacyWalls.map((w) => migrated.nodes[w.id] as WallNode)
+const unboundedLegacyStacks: [string, WallAssembly][] = [
+  [
+    'long cavity note',
+    { framing: { kind: 'wood', depth: 0.14 }, cavityInsulation: 'a'.repeat(121) },
+  ],
+  ['long preset id', { framing: { kind: 'wood', depth: 0.14 }, preset: 'a'.repeat(81) }],
+  ['empty cavity note', { framing: { kind: 'wood', depth: 0.14 }, cavityInsulation: '' }],
+  ['empty preset id', { framing: { kind: 'wood', depth: 0.14 }, preset: '' }],
+  ['deep framing', { framing: { kind: 'wood', depth: 5.001 } }],
+  [
+    'thick exterior',
+    { framing: { kind: 'wood', depth: 0.14 }, exterior: { finish: 'stone', thickness: 5.001 } },
+  ],
+  [
+    'deep brick air space',
+    { framing: { kind: 'wood', depth: 0.14 }, exterior: { finish: 'brick', thickness: 5.2 } },
+  ],
+  [
+    'thick sheathing',
+    { framing: { kind: 'wood', depth: 0.14 }, sheathing: { material: 'osb', thickness: 5.001 } },
+  ],
+  [
+    'thick partition linings',
+    { framing: { kind: 'wood', depth: 0.14 }, interior: { finish: 'drywall', thickness: 5.001 } },
+  ],
+]
 const SIDES = [
   undefined,
   { frontSide: 'exterior', backSide: 'interior' },
@@ -62,6 +88,35 @@ describe('WS5 → F2 wall assembly migration', () => {
     const again = migrateLegacyWallAssemblies(migrated.nodes)
     expect(again.changed).toBe(false)
     expect(again.nodes).toBe(migrated.nodes)
+  })
+
+  test.each(
+    unboundedLegacyStacks,
+  )('preserves valid WS5 values without upper caps: %s', (_, assembly) => {
+    expect(WallAssembly.safeParse(assembly).success).toBe(true)
+    const legacy = {
+      ...WallNode.parse({ id: 'wall_unbounded', start: [0, 0], end: [4, 0] }),
+      assembly,
+      thickness: ws5.assemblyThickness(assembly),
+    }
+    const nodes = { [legacy.id]: legacy }
+    const result = migrateLegacyWallAssemblies(nodes)
+    const wall = WallNode.parse(result.nodes[legacy.id])
+    const stack = wall.assembly!
+
+    expect(result.changed).toBe(true)
+    expect(nodes[legacy.id]).toBe(legacy)
+    expect(nodes[legacy.id].assembly).toBe(assembly)
+    expect(wall.thickness).toBe(legacy.thickness)
+    expect(assemblyThickness(stack)).toBeCloseTo(legacy.thickness, 12)
+    expect(stack.presetId).toBe(assembly.preset)
+    expect(stack.cavityInsulation).toBe(assembly.cavityInsulation)
+    expect(wallAssemblyToLegacy(stack)).toEqual(assembly)
+    expect(resolveWallAssembly(wall)).toEqual(ws5.resolveWallAssembly(legacy))
+    expect(migrateLegacyWallAssemblies(result.nodes)).toEqual({
+      changed: false,
+      nodes: result.nodes,
+    })
   })
 
   test('the Architect reads the same stack: layers, sides, finish and preset note', () => {
@@ -233,6 +288,29 @@ describe('the scene loader migrates stored WS5 walls', () => {
         migrated.nodes[legacy.id] ? (migrated.nodes[legacy.id] as WallNode).assembly : undefined,
       )
       expect(resolveWallAssembly(loaded)).toEqual(ws5.resolveWallAssembly(legacy))
+    }
+  })
+
+  test('load and serialize retain legacy values above the former F2 caps', () => {
+    const walls = unboundedLegacyStacks.map(([_, assembly], index) => ({
+      ...WallNode.parse({ id: `wall_unbounded${index}`, start: [0, index], end: [4, index] }),
+      assembly,
+      thickness: ws5.assemblyThickness(assembly),
+    }))
+    useScene
+      .getState()
+      .setScene(
+        Object.fromEntries(walls.map((wall) => [wall.id, wall])) as unknown as Record<
+          AnyNodeId,
+          AnyNode
+        >,
+        [],
+      )
+    const persisted = JSON.parse(JSON.stringify(useScene.getState().nodes))
+    for (const legacy of walls) {
+      const wall = WallNode.parse(persisted[legacy.id])
+      expect(wall.thickness).toBe(legacy.thickness)
+      expect(wallAssemblyToLegacy(wall.assembly!)).toEqual(legacy.assembly)
     }
   })
 })

@@ -171,6 +171,46 @@ describe('save_scene', () => {
     expect(result.isError).toBe(true)
   })
 
+  test.each([
+    ['long', 'a'.repeat(81), 'a'.repeat(121)],
+    ['empty', '', ''],
+  ])('saves %s legacy text and layers above the former F2 caps without loss', async (_, preset, cavityInsulation) => {
+    const wall = WallNode.parse({ id: 'wall_unboundedsave', start: [0, 0], end: [4, 0] })
+    const graph = {
+      nodes: {
+        [wall.id]: {
+          ...wall,
+          assembly: {
+            preset,
+            cavityInsulation,
+            exterior: { finish: 'stone', thickness: 5.001 },
+            sheathing: { material: 'osb', thickness: 5.001 },
+            framing: { kind: 'wood', depth: 5.001 },
+            interior: { finish: 'drywall', thickness: 5.001 },
+          },
+        },
+      },
+      rootNodeIds: [wall.id],
+    }
+    const result = await client.callTool({
+      name: 'save_scene',
+      arguments: { name: 'Unbounded legacy wall', includeCurrentScene: false, graph },
+    })
+
+    expect(result.isError).toBeFalsy()
+    const payload = parseToolText(result.content as StoredTextContent[])
+    const saved = await store.load(payload.id as string)
+    const assembly = WallNode.parse(saved?.graph.nodes[wall.id]).assembly!
+    expect(assembly.presetId).toBe(preset)
+    expect(assembly.cavityInsulation).toBe(cavityInsulation)
+    expect(assembly.layers.map(({ id, thickness }) => [id, thickness])).toEqual([
+      ['exterior', 5.001],
+      ['sheathing', 5.001],
+      ['framing', 5.001],
+      ['interior', 5.001],
+    ])
+  })
+
   test('returns version_conflict when expectedVersion mismatches', async () => {
     const first = await client.callTool({
       name: 'save_scene',
