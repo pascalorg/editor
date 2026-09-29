@@ -153,7 +153,13 @@ export function PanelWrapper({
   // expands it to reveal the inspector body. Keep the desktop value shared
   // across inspector swaps (roof ↔ segment, etc.) so navigating between
   // related panels preserves whether the user left the inspector open.
-  const [collapsed, setCollapsedState] = useState(desktopInspectorCollapsed)
+  const landscapeSelection = Boolean(selectedNode && (
+    (selectedNode.type as string).startsWith('landscape:') ||
+    (selectedNode.type === 'wall' && selectedNode.metadata?.landscapeRetainingWall === true)
+  ))
+  const [collapsed, setCollapsedState] = useState(
+    landscapeSelection ? false : desktopInspectorCollapsed,
+  )
 
   const setCollapsed = useCallback(
     (next: boolean | ((previous: boolean) => boolean)) => {
@@ -165,6 +171,10 @@ export function PanelWrapper({
     },
     [],
   )
+
+  useEffect(() => {
+    if (landscapeSelection) setCollapsed(false)
+  }, [landscapeSelection, selectedId, setCollapsed])
 
   const applyMode = useCallback(
     (next: { collapsed: boolean; activeExtensionId: string | null }) => {
