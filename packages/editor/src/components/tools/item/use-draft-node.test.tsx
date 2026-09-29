@@ -4,9 +4,12 @@ import {
   BlockNode,
   BuildingNode,
   getBlockFaceFrame,
+  getSceneHistoryPauseDepth,
   ItemNode,
   LevelNode,
   type NodeEvent,
+  pauseSceneHistory,
+  resumeSceneHistory,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
@@ -200,6 +203,144 @@ describe('useDraftNode block face commit', () => {
     expect((useScene.getState().nodes[LEVEL_ID as AnyNodeId] as LevelNode).children).not.toContain(
       hosted.id,
     )
+  })
+
+  test('drops onto the level when the original host was deleted mid-carry', () => {
+    const hosted = ItemNode.parse({
+      id: 'item_host-deleted-plant',
+      parentId: BLOCK_ID,
+      asset: {
+        id: 'potted-plant',
+        category: 'decor',
+        name: 'Potted plant',
+        thumbnail: '/potted-plant.png',
+        src: '/potted-plant.glb',
+        dimensions: [0.5, 0.39, 0.5],
+      },
+      position: [0.5, 0, 0],
+      blockFaceId: 'face-top',
+    })
+    useScene.getState().createNode(hosted, BLOCK_ID as AnyNodeId)
+    useScene.temporal.getState().clear()
+
+    const draft = draftNode!
+    draft.adopt(hosted)
+    draft.updateSurface({ parentId: LEVEL_ID, position: [1, 0, 1], blockFaceId: undefined }, null)
+    // A collaborator deletes the block the item came from.
+    useScene.getState().deleteNode(BLOCK_ID as AnyNodeId)
+    draft.commit({ position: [2, 0, 3] })
+
+    const nodes = useScene.getState().nodes
+    expect(nodes[BLOCK_ID as AnyNodeId]).toBeUndefined()
+    expect(nodes[hosted.id as AnyNodeId]).toMatchObject({ parentId: LEVEL_ID, position: [2, 0, 3] })
+    expect((nodes[LEVEL_ID as AnyNodeId] as LevelNode).children).toContain(hosted.id)
+    for (const state of useScene.temporal.getState().pastStates) {
+      const recorded = state.nodes?.[hosted.id as AnyNodeId]
+      if (recorded?.parentId) expect(state.nodes?.[recorded.parentId as AnyNodeId]).toBeDefined()
+    }
+  })
+
+  test('cancel after the original host was deleted mid-carry keeps the item on the level', () => {
+    const hosted = ItemNode.parse({
+      id: 'item_host-deleted-cancel',
+      parentId: BLOCK_ID,
+      asset: {
+        id: 'potted-plant',
+        category: 'decor',
+        name: 'Potted plant',
+        thumbnail: '/potted-plant.png',
+        src: '/potted-plant.glb',
+        dimensions: [0.5, 0.39, 0.5],
+      },
+      position: [0.5, 0, 0],
+      blockFaceId: 'face-top',
+    })
+    useScene.getState().createNode(hosted, BLOCK_ID as AnyNodeId)
+    useScene.temporal.getState().clear()
+
+    const draft = draftNode!
+    draft.adopt(hosted)
+    draft.updateSurface({ parentId: LEVEL_ID, position: [1, 0, 1], blockFaceId: undefined }, null)
+    useScene.getState().deleteNode(BLOCK_ID as AnyNodeId)
+    draft.destroy()
+
+    const nodes = useScene.getState().nodes
+    expect(nodes[hosted.id as AnyNodeId]?.parentId).toBe(LEVEL_ID)
+    expect((nodes[LEVEL_ID as AnyNodeId] as LevelNode).children).toContain(hosted.id)
+  })
+
+  test("cancel and drop-then-undo keep a collaborator's later position", () => {
+    const plant = ItemNode.parse({
+      id: 'item_collab-position-plant',
+      parentId: LEVEL_ID,
+      asset: {
+        id: 'potted-plant',
+        category: 'decor',
+        name: 'Potted plant',
+        thumbnail: '/potted-plant.png',
+        src: '/potted-plant.glb',
+        dimensions: [0.5, 0.39, 0.5],
+      },
+      position: [0, 0, 0],
+    })
+    useScene.getState().createNode(plant, LEVEL_ID as AnyNodeId)
+    const id = plant.id as AnyNodeId
+    const position = () => (useScene.getState().nodes[id] as ItemNode).position
+
+    // Escape keeps the collaborator's position.
+    useScene.temporal.getState().clear()
+    const draft = draftNode!
+    draft.adopt(useScene.getState().nodes[id] as ItemNode)
+    draft.updateSurface({ position: [1, 0, 1] }, null)
+    useScene.getState().updateNode(id, { position: [7, 0, 7] })
+    draft.destroy()
+    expect(position()).toEqual([7, 0, 7])
+
+    // Drop, then undo, returns to the collaborator's position.
+    useScene.temporal.getState().clear()
+    draft.adopt(useScene.getState().nodes[id] as ItemNode)
+    draft.updateSurface({ position: [1, 0, 1] }, null)
+    useScene.getState().updateNode(id, { position: [5, 0, 5] })
+    draft.commit({ parentId: LEVEL_ID, position: [2, 0, 3] })
+    expect(position()).toEqual([2, 0, 3])
+    useScene.temporal.getState().undo()
+    expect(position()).toEqual([5, 0, 5])
+  })
+
+  test('never resumes history that another owner is pausing', () => {
+    const hosted = ItemNode.parse({
+      id: 'item_owned-pause-plant',
+      parentId: LEVEL_ID,
+      asset: {
+        id: 'potted-plant',
+        category: 'decor',
+        name: 'Potted plant',
+        thumbnail: '/potted-plant.png',
+        src: '/potted-plant.glb',
+        dimensions: [0.5, 0.39, 0.5],
+      },
+      position: [0, 0, 0],
+    })
+    useScene.getState().createNode(hosted, LEVEL_ID as AnyNodeId)
+    useScene.temporal.getState().clear()
+    pauseSceneHistory(useScene)
+    try {
+      const draft = draftNode!
+      draft.adopt(hosted)
+      draft.commit({ parentId: LEVEL_ID, position: [2, 0, 3] })
+      draft.create(new Vector3(1, 0, 1), hosted.asset)
+      draft.commit({ parentId: LEVEL_ID, position: [1, 0, 1] })
+
+      expect(useScene.getState().nodes[hosted.id as AnyNodeId]).toMatchObject({
+        position: [2, 0, 3],
+      })
+      expect(useScene.temporal.getState().isTracking).toBe(false)
+      expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+      expect(getSceneHistoryPauseDepth()).toBe(1)
+    } finally {
+      resumeSceneHistory(useScene)
+    }
+    expect(useScene.temporal.getState().isTracking).toBe(true)
   })
 
   test('keeps a hosted item visible through a block topology edit and its undo', () => {

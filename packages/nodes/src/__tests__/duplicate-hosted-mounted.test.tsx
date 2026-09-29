@@ -8,6 +8,7 @@ import {
   CabinetModuleNode,
   CabinetNode,
   ColumnNode,
+  clearSceneHistory,
   createBoxBlockTopology,
   emitter,
   getEffectiveNode,
@@ -276,8 +277,8 @@ if (process.env.PASCAL_DUPLICATE_AUDIT_ISOLATED !== '1') {
     spatialGridManager.clear()
     useLiveNodeOverrides.getState().clearAll()
     useLiveTransforms.getState().clearAll()
-    useScene.temporal.getState().resume()
-    useScene.temporal.getState().clear()
+    // Also drops refcounted pauses a failed-setup case leaves behind (the 2D move overlay's).
+    clearSceneHistory()
     useScene.setState(savedScene)
     useEditor.setState(savedEditor)
     useViewer.setState(savedViewer)
@@ -1459,6 +1460,35 @@ if (process.env.PASCAL_DUPLICATE_AUDIT_ISOLATED !== '1') {
             await renderer.unmount()
           }
         })
+
+  // Split view mounts both movers for a 3D-started move, and the 2D overlay pauses history for
+  // the whole gesture too. The two co-own that pause, so the 3D drop still records one step.
+  test('split view item 3d drop records one undo step', async () => {
+    const { root } = lifecycleFixture('item', true, false)
+    select(root)
+    const before = snapshot()
+    const renderer = await create(<Scene menu panes={{ plan: true, spatial: true }} />)
+    try {
+      await settle(renderer)
+      await act(async () => menuAction('onMove')!({ stopPropagation() {} }))
+      await settle(renderer)
+      const pointer = pointerDispatcher()
+      await pointer.send(new Vector3(6, 0, 5), 'grid first')
+      await settle(renderer)
+      await pointer.send(new Vector3(6, 0, 5), 'grid first', true)
+      await settle(renderer)
+      expect(getMovingNode()).toBeNull()
+      expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+      const after = snapshot()
+      expect(after).not.toBe(before)
+      await act(async () => useScene.temporal.getState().undo())
+      expect(snapshot()).toBe(before)
+      await act(async () => useScene.temporal.getState().redo())
+      expect(snapshot()).toBe(after)
+    } finally {
+      await renderer.unmount()
+    }
+  })
 
   for (const kind of ['procedural-item', 'shelf', 'cabinet', 'column', 'block'])
     for (const strict of [false, true])

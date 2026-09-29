@@ -1,9 +1,12 @@
 import {
   type AnyNodeId,
   type AssetInput,
+  beginSceneHistoryDraft,
   ItemNode,
   resolveSupportSlabPatch,
+  runSceneHistoryDraftWrite,
   type SurfaceRejectReason,
+  sceneHistoryDraftRevertUpdates,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -23,6 +26,51 @@ import useInteractionScope, {
 } from '../../../store/use-interaction-scope'
 import usePlacementPreview from '../../../store/use-placement-preview'
 import { stripTransient } from './placement-math'
+
+function releaseHistoryDraft(end: { current: (() => void) | null }): void {
+  end.current?.()
+  end.current = null
+}
+
+/**
+ * A placement's own write: under a short pause, and the carried draft's fields it changes stay
+ * recorded as they were before the carry (core's `runSceneHistoryDraftWrite`).
+ */
+export const pausedDraftWrite = runSceneHistoryDraftWrite
+
+/**
+ * Puts back what the carry still holds on an adopted item (its own writes, core's
+ * `sceneHistoryDraftRevertUpdates`), as a carry write: a position, name or host a collaborator
+ * wrote meanwhile stays. A host deleted mid-carry is never a parent again (nor its face, roof
+ * or surface): the item stays on its live parent, else the level. Returns its parent after.
+ */
+function restoreOriginalState(
+  id: AnyNodeId,
+  original: OriginalState,
+  draftParentId: string | null | undefined,
+): string | null {
+  const nodes = useScene.getState().nodes
+  const exists = (parentId: string | null | undefined): parentId is string =>
+    Boolean(parentId && nodes[parentId as AnyNodeId])
+  const hostGone = original.parentId != null && !exists(original.parentId)
+  const updates = sceneHistoryDraftRevertUpdates([id])
+  const own = updates.find((update) => update.id === id)
+  if (hostGone && own) {
+    for (const key of ['roofSegmentId', 'roofFace', 'blockFaceId']) delete own.data[key]
+  }
+  const liveParentId = nodes[id]?.parentId
+  if (!exists(liveParentId)) {
+    const fallback = [draftParentId, useViewer.getState().selection.levelId].find(exists)
+    if (fallback) {
+      if (own) own.data.parentId = fallback
+      else updates.push({ id, data: { parentId: fallback } })
+    }
+  }
+  if (updates.length > 0) {
+    pausedDraftWrite(() => useScene.getState().updateNodes(updates as never))
+  }
+  return useScene.getState().nodes[id]?.parentId ?? null
+}
 
 interface OriginalState {
   surfaceId: string | null
@@ -56,6 +104,8 @@ export interface DraftNodeHandle {
   /** Take ownership of an existing scene node as the draft (for move mode). */
   adopt: (node: ItemNode) => void
   /** Commit the current draft. Create mode: delete+recreate. Move mode: update in place.
+   *  The final write is the one undo step, recorded only while no owner pauses history:
+   *  a caller holding a pause lifts it around this call (`SceneHistoryPauseSession.commitStep`).
    *  `supportElevationCap` (floor commits) is the pointer-decided surface
    *  elevation — it caps the persisted `supportSlabId` election so the
    *  commit lands on the surface the cursor pointed at. */
@@ -74,7 +124,11 @@ export interface DraftNodeHandle {
 
 /**
  * Hook that manages the lifecycle of a transient (draft) item node.
- * Handles temporal pause/resume for undo/redo isolation.
+ * The draft is registered with core's history drafts from create/adopt until
+ * commit/destroy, so history records it as absent (created) or as it was
+ * (adopted) and no draft write becomes an undo step; the draft's own writes
+ * also run under a short balanced pause. `commit` ends the registration right
+ * before its one tracked write.
  *
  * Supports two modes:
  * - Create mode (via `create()`): draft is a new transient node. Commit = delete+recreate (undo removes node).
@@ -85,6 +139,7 @@ export function useDraftNode(): DraftNodeHandle {
   const adoptedRef = useRef(false)
   const ownsSubtreeRef = useRef(false)
   const originalStateRef = useRef<OriginalState | null>(null)
+  const endHistoryDraftRef = useRef<(() => void) | null>(null)
 
   const create = useCallback(
     (
@@ -108,7 +163,9 @@ export function useDraftNode(): DraftNodeHandle {
         ...(slots ? { slots } : {}),
       })
 
-      useScene.getState().createNode(node, currentLevelId)
+      releaseHistoryDraft(endHistoryDraftRef)
+      endHistoryDraftRef.current = beginSceneHistoryDraft(node.id, null)
+      pausedDraftWrite(() => useScene.getState().createNode(node, currentLevelId))
       usePlacementPreview
         .getState()
         .set(node, useScene.getState().nodes[currentLevelId as AnyNodeId] ?? null)
@@ -122,6 +179,11 @@ export function useDraftNode(): DraftNodeHandle {
   )
 
   const adopt = useCallback((node: ItemNode): void => {
+    releaseHistoryDraft(endHistoryDraftRef)
+    endHistoryDraftRef.current = beginSceneHistoryDraft(
+      node.id,
+      isFreshPlacementMetadata(node.metadata) ? null : node,
+    )
     ownsSubtreeRef.current =
       useInteractionScope.getState().adoptSubtree(node.id) || isInteractionSubtreeDraft(node.id)
     // Save original state so destroy() can restore it
@@ -149,9 +211,11 @@ export function useDraftNode(): DraftNodeHandle {
     adoptedRef.current = true
 
     // Mark as transient so it renders as a draft
-    useScene.getState().updateNode(node.id, {
-      metadata: { ...meta, isTransient: true },
-    })
+    pausedDraftWrite(() =>
+      useScene.getState().updateNode(node.id, {
+        metadata: { ...meta, isTransient: true },
+      }),
+    )
     usePlacementPreview
       .getState()
       .set(
@@ -182,6 +246,7 @@ export function useDraftNode(): DraftNodeHandle {
       )
       finalUpdate = { ...finalUpdate, ...stored }
       if (isFreshPlacementMetadata(originalStateRef.current?.metadata)) {
+        releaseHistoryDraft(endHistoryDraftRef)
         const effectiveNode = ItemNode.parse({ ...draft, ...finalUpdate })
         const id = commitFreshPlacementSubtree(
           draft.id,
@@ -207,30 +272,16 @@ export function useDraftNode(): DraftNodeHandle {
       if (adoptedRef.current) {
         // Move mode: update in place (single undoable action)
         const { parentId: newParentId, ...updateProps } = finalUpdate
-        const parentId =
-          newParentId ??
-          originalStateRef.current?.parentId ??
-          useViewer.getState().selection.levelId
         const original = originalStateRef.current!
+        const nodesNow = useScene.getState().nodes
+        const restoredParentId = restoreOriginalState(draft.id, original, draft.parentId)
+        const parentId =
+          [newParentId, restoredParentId].find((id) => id && nodesNow[id as AnyNodeId]) ??
+          restoredParentId
 
-        // Restore original state while paused — so the undo baseline is clean
-        updateSurfaceNode(
-          draft.id,
-          {
-            position: original.position,
-            rotation: original.rotation,
-            side: original.side,
-            parentId: original.parentId,
-            roofSegmentId: original.roofSegmentId,
-            roofFace: original.roofFace,
-            blockFaceId: original.blockFaceId,
-            metadata: original.metadata,
-          },
-          original.surfaceId,
-        )
-
-        // Resume → tracked update (undo reverts to original)
-        useScene.temporal.getState().resume()
+        // The original is restored above (a carry write), so the one tracked write below has
+        // the true baseline as its undo state.
+        releaseHistoryDraft(endHistoryDraftRef)
 
         const effectiveNode = ItemNode.parse({
           ...draft,
@@ -266,8 +317,6 @@ export function useDraftNode(): DraftNodeHandle {
           surfaceId,
         )
 
-        useScene.temporal.getState().pause()
-
         const id = draft.id
         if (usePlacementPreview.getState().node?.id === id) {
           usePlacementPreview.getState().clear()
@@ -278,19 +327,18 @@ export function useDraftNode(): DraftNodeHandle {
         return id
       }
 
-      // Create mode: delete draft (paused), resume, create fresh node (tracked), re-pause
+      // Create mode: delete the draft (paused), then create the fresh node (the tracked write)
       const { parentId: newParentId, ...updateProps } = finalUpdate
       const parentId = (newParentId ?? useViewer.getState().selection.levelId) as AnyNodeId
       if (!parentId) return null
 
       beginPerfAction('place:item', draft.id)
-      // Delete draft while paused (invisible to undo)
-      updateSurfaceNode(draft.id, {}, null)
-      useScene.getState().deleteNode(draft.id)
+      pausedDraftWrite(() => {
+        updateSurfaceNode(draft.id, {}, null)
+        useScene.getState().deleteNode(draft.id)
+      })
+      releaseHistoryDraft(endHistoryDraftRef)
       draftRef.current = null
-
-      // Briefly resume → create fresh node (the single undoable action)
-      useScene.temporal.getState().resume()
 
       const finalNode = ItemNode.parse({
         name: draft.name,
@@ -331,9 +379,6 @@ export function useDraftNode(): DraftNodeHandle {
         usePlacementPreview.getState().clear()
       }
 
-      // Re-pause for next draft cycle
-      useScene.temporal.getState().pause()
-
       adoptedRef.current = false
       originalStateRef.current = null
       commitPerfAction()
@@ -347,6 +392,7 @@ export function useDraftNode(): DraftNodeHandle {
 
     const draftId = draftRef.current.id
     if (ownsSubtreeRef.current) {
+      releaseHistoryDraft(endHistoryDraftRef)
       draftRef.current = null
       adoptedRef.current = false
       originalStateRef.current = null
@@ -370,6 +416,7 @@ export function useDraftNode(): DraftNodeHandle {
           livePosition[1] !== original.position[1] ||
           livePosition[2] !== original.position[2])
       if (externallyMoved) {
+        releaseHistoryDraft(endHistoryDraftRef)
         draftRef.current = null
         adoptedRef.current = false
         originalStateRef.current = null
@@ -379,36 +426,28 @@ export function useDraftNode(): DraftNodeHandle {
         return
       }
 
-      updateSurfaceNode(
-        id,
-        {
-          position: original.position,
-          rotation: original.rotation,
-          side: original.side,
-          parentId: original.parentId,
-          roofSegmentId: original.roofSegmentId,
-          roofFace: original.roofFace,
-          blockFaceId: original.blockFaceId,
-          metadata: original.metadata,
-        },
-        original.surfaceId,
-      )
+      restoreOriginalState(id, original, draftRef.current.parentId)
 
       // Also reset the Three.js mesh directly — the store update triggers a React
       // re-render but the mesh position was mutated by useFrame and may not reset
       // until the next render cycle, leaving a visual glitch.
       const mesh = sceneRegistry.nodes.get(id as AnyNodeId)
-      if (mesh) {
-        mesh.position.set(original.position[0], original.position[1], original.position[2])
-        mesh.rotation.y = original.rotation[1] ?? 0
+      const restored = useScene.getState().nodes[id as AnyNodeId] as ItemNode | undefined
+      if (mesh && restored) {
+        mesh.position.set(restored.position[0], restored.position[1], restored.position[2])
+        mesh.rotation.y = restored.rotation[1] ?? 0
         mesh.visible = true
       }
     } else {
       // Create mode: delete the transient node
-      updateSurfaceNode(draftRef.current.id, {}, null)
-      useScene.getState().deleteNode(draftRef.current.id)
+      const id = draftRef.current.id
+      pausedDraftWrite(() => {
+        updateSurfaceNode(id, {}, null)
+        useScene.getState().deleteNode(id)
+      })
     }
 
+    releaseHistoryDraft(endHistoryDraftRef)
     draftRef.current = null
     adoptedRef.current = false
     originalStateRef.current = null
@@ -421,10 +460,12 @@ export function useDraftNode(): DraftNodeHandle {
     const draft = draftRef.current
     if (!draft) return
     const pose = { ...draft, ...data }
-    updateSurfaceNode(
-      draft.id,
-      { ...data, ...surfaceFramePose(pose.parentId, surfaceId, pose, true) },
-      surfaceId,
+    pausedDraftWrite(() =>
+      updateSurfaceNode(
+        draft.id,
+        { ...data, ...surfaceFramePose(pose.parentId, surfaceId, pose, true) },
+        surfaceId,
+      ),
     )
   }, [])
 

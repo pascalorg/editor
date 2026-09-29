@@ -48,6 +48,7 @@ import { migrateLegacyWallAssemblies } from '../utils/wall-assembly-migration'
 import * as nodeActions from './actions/node-actions'
 import {
   areSceneSnapshotsEqual,
+  beginSceneHistoryPauseSession,
   getSceneHistoryPauseDepth,
   notifySceneCommit,
   pauseSceneHistory,
@@ -57,6 +58,16 @@ import {
   type SceneCommitOrigin,
   type SceneSnapshot,
 } from './history-control'
+import {
+  beginSceneHistoryDraft as beginSceneHistoryDraftIn,
+  clearSceneHistoryDrafts,
+  createdSceneHistoryDraftIds,
+  hasSceneHistoryDrafts,
+  noteSceneHistoryDraftWrite,
+  sceneHistoryDraftRevertUpdates as sceneHistoryDraftRevertUpdatesIn,
+  withAdoptedDraftsAsOriginal,
+  withDraftsRestored,
+} from './history-drafts'
 import { getHistoryDirtyNodeIds } from './history-invalidation'
 import {
   invalidatePendingHydration,
@@ -1293,8 +1304,11 @@ function sceneHistorySnapshotFromState(
 ): SceneSnapshot {
   const { nodes, rootNodeIds, collections, materials, installedPlugins } = state
   // Fresh placement nodes are renderable drafts, not document history. Excluding their
-  // entire subtree here protects both local undo and external commit subscribers.
-  const transientNodeIds = new Set<AnyNodeId>()
+  // entire subtree here protects both local undo and external commit subscribers. Carried
+  // drafts (history-drafts.ts) are kept out the same way.
+  const transientNodeIds = new Set<AnyNodeId>(
+    createdSceneHistoryDraftIds().filter((id) => Boolean(nodes[id])),
+  )
   for (const node of Object.values(nodes)) {
     const metadata = node.metadata
     if (
@@ -1308,7 +1322,13 @@ function sceneHistorySnapshotFromState(
   }
 
   if (transientNodeIds.size === 0) {
-    return { nodes, rootNodeIds, collections, materials, installedPlugins }
+    return {
+      nodes: withAdoptedDraftsAsOriginal(nodes, nodes),
+      rootNodeIds,
+      collections,
+      materials,
+      installedPlugins,
+    }
   }
 
   const childIdsByParentId = new Map<AnyNodeId, Set<AnyNodeId>>()
@@ -1370,7 +1390,7 @@ function sceneHistorySnapshotFromState(
   }
 
   return {
-    nodes: historyNodes,
+    nodes: withAdoptedDraftsAsOriginal(nodes, historyNodes),
     rootNodeIds: rootNodeIds.filter((id) => !transientNodeIds.has(id)),
     collections: historyCollections,
     materials,
@@ -1443,6 +1463,23 @@ function createSceneStore(config: TemporalSceneCreator): UseSceneStore {
 }
 
 function runTemporalJump(target: Partial<SceneSnapshot> | undefined, jump: () => void): void {
+  const draftsBefore = useScene.getState().nodes
+  const restoreDrafts = () => {
+    const nodes = withDraftsRestored(draftsBefore, useScene.getState().nodes)
+    if (!nodes) return
+    // The carry's own state, not a new step: a tracked write here would clear redo.
+    const pause = beginSceneHistoryPauseSession(useScene)
+    try {
+      useScene.setState({ nodes })
+    } finally {
+      pause.end()
+    }
+  }
+  runTemporalJumpOnly(target, jump)
+  restoreDrafts()
+}
+
+function runTemporalJumpOnly(target: Partial<SceneSnapshot> | undefined, jump: () => void): void {
   if (!target?.nodes) {
     jump()
     return
@@ -2313,7 +2350,7 @@ export function applySceneSnapshot(
 ): boolean {
   const before = sceneHistorySnapshotFromState(useScene.getState())
   const temporalState = useScene.temporal.getState()
-  if (!temporalState.isTracking || getSceneHistoryPauseDepth() > 0) {
+  if (!temporalState.isTracking || getSceneHistoryPauseDepth() > 0 || hasSceneHistoryDrafts()) {
     throw new Error('Cannot replace the scene snapshot during an active interaction')
   }
   useLiveNodeOverrides.getState().clearAll()
@@ -2342,8 +2379,36 @@ export function applySceneSnapshot(
 let prevPastLength = 0
 let prevFutureLength = 0
 
+/**
+ * Runs one of a carry's own writes to its drafts (see history-drafts.ts) under a short pause,
+ * and marks the adopted drafts' fields it changed as carry-owned.
+ */
+export function runSceneHistoryDraftWrite<T>(write: () => T): T {
+  const before = useScene.getState().nodes
+  const pause = beginSceneHistoryPauseSession(useScene)
+  try {
+    return write()
+  } finally {
+    noteSceneHistoryDraftWrite(before, useScene.getState().nodes)
+    pause.end()
+  }
+}
+
+/** Updates that revert the fields a carry still holds on `ids` (see history-drafts.ts). */
+export function sceneHistoryDraftRevertUpdates(
+  ids: Iterable<AnyNodeId>,
+): Array<{ id: AnyNodeId; data: Record<string, unknown> }> {
+  return sceneHistoryDraftRevertUpdatesIn(useScene.getState().nodes, ids)
+}
+
+/** Registers a carried draft (see history-drafts.ts); returns the call that ends it. */
+export function beginSceneHistoryDraft(id: AnyNodeId, original: AnyNode | null): () => void {
+  return beginSceneHistoryDraftIn(id, original, useScene.getState().nodes)
+}
+
 export function clearSceneHistory() {
   resetSceneHistoryPauseDepth()
+  clearSceneHistoryDrafts()
   // Resetting the pause-depth counter without resuming would strand the
   // temporal store in `isTracking: false` if a pause window was active when
   // the scene was (re)loaded — every edit after the load would then be
