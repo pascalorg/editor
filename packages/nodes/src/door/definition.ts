@@ -8,6 +8,7 @@ import type {
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { curtainOpeningResizeMax } from '../shared/curtain-opening-limits'
+import { doorBatchable } from '../shared/node-batch/batchable'
 import {
   buildDoorFloorplanSchedule,
   computeDoorFloorplanLevelData,
@@ -232,6 +233,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   },
 
   capabilities: {
+    batchable: doorBatchable,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,

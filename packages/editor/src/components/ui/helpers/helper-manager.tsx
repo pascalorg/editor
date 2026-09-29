@@ -3,6 +3,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  floorPlacedCollides,
   nodeRegistry,
   type TerrainVerb,
   useScene,
@@ -282,8 +283,10 @@ export function HelperManager() {
     const movingContinuationContext = isFreshPlacementMetadata(movingNode.metadata)
       ? continuationContextOf(movingNode.type)
       : null
-    const collisionValidatesDrop =
-      nodeRegistry.get(movingNode.type)?.capabilities.floorPlaced?.collides === true
+    const collisionValidatesDrop = floorPlacedCollides(
+      nodeRegistry.get(movingNode.type)?.capabilities.floorPlaced,
+      movingNode,
+    )
     return (
       <ItemHelper
         continuationContext={movingContinuationContext}

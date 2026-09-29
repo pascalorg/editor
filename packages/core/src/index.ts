@@ -98,6 +98,13 @@ export {
   type WallConstructionResolution,
 } from './hooks/spatial-grid/support-host-patch'
 export { useSpatialQuery } from './hooks/spatial-grid/use-spatial-query'
+export {
+  type AssemblyDiagnostic,
+  type AssemblyDiagnosticCode,
+  type ResolvedAssembly,
+  type ResolvedAssemblyLayer,
+  resolveAssemblyStack,
+} from './lib/assembly-stack'
 export { loadAssetUrl, saveAsset } from './lib/asset-storage'
 export {
   clampDoorOperationState,
@@ -153,6 +160,14 @@ export {
   roofPlanOverlapEntryOwns,
 } from './lib/roof-overlap'
 export { resolveSelectionProxyId, selectionProxyIdFromMetadata } from './lib/selection-proxy'
+export {
+  arcRuns,
+  envelopeFrontEdge,
+  insetPolygon,
+  type KeepOut,
+  sightTriangle,
+  streetCorners,
+} from './lib/setback-envelope'
 export {
   getRenderableSlabPolygon,
   prepareSlabPolygonContext,
@@ -217,6 +232,7 @@ export {
   encodeTerrainField,
   isDatumField,
 } from './lib/terrain-codec'
+export { type Contour, terrainContours } from './lib/terrain-contours'
 export {
   applyHeightPatch,
   createTerrainField,
@@ -313,6 +329,12 @@ export * from './schema'
 export * from './services'
 export { isMovable, movePlanToward, moveToward, resolveMovable } from './services/movement'
 export {
+  type NodeDeletionPlan,
+  type NodeDeletionScene,
+  planNodeDeletion,
+  previewDefaultGutterRefresh,
+} from './store/actions/node-actions'
+export {
   acquireSceneHistoryPause,
   activeSceneCommitNodeIds,
   beginSceneHistoryPauseSession,
@@ -336,6 +358,7 @@ export {
   type DoorInteractiveState,
   type ElevatorInteractiveState,
   type ElevatorPhase,
+  type InteractiveState,
   type ItemInteractiveState,
   type SkylightAnimationState,
   type SkylightInteractiveState,
@@ -369,6 +392,7 @@ export {
   type SceneOperationPatch,
   type ScenePatch,
   sceneHistoryDraftRevertUpdates,
+  type ScenePluginInstallPatch,
 } from './store/use-scene'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'
 export {
@@ -442,6 +466,40 @@ export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
 export { StairOpeningSystem } from './systems/stair/stair-opening-system'
 export { resolveStairTotalRise, syncStairRises } from './systems/stair/stair-rise'
 export {
+  assemblyThickness,
+  BRICK_AIR_SPACE,
+  BRICK_VENEER,
+  CMU_8_ACTUAL,
+  calculateLevelLayerMiters,
+  FIBER_CEMENT,
+  FURRING_1X,
+  GYPSUM_FIVE_EIGHTHS,
+  GYPSUM_HALF,
+  GYPSUM_SHEATHING,
+  getWallAssemblyPreset,
+  getWallLayerPolylines,
+  type ResolvedWallAssembly,
+  resolveWallAssembly,
+  resolveWallExteriorSide,
+  SIDING_LAP,
+  STONE_VENEER_UNVERIFIED,
+  STUCCO_3_COAT,
+  STUD_2X4,
+  STUD_2X6,
+  WALL_ASSEMBLY_PRESETS,
+  WALL_FINISH_LIBRARY_REF,
+  type WallAssemblyLayer,
+  type WallAssemblyLayerRole,
+  type WallAssemblyPreset,
+  type WallLayerMiterData,
+  type WallLayerPolyline,
+  WSP_SHEATHING,
+  wallAssemblyFinishRef,
+  wallAssemblyPatch,
+  wallAssemblyUnverifiedNote,
+  wallLayerBoundaryOffsets,
+} from './systems/wall/wall-assembly'
+export {
   constrainWallCurveOffsetToAvoidIntersections,
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
@@ -462,6 +520,11 @@ export {
   getWallPlanFootprint,
   getWallThickness,
 } from './systems/wall/wall-footprint'
+export {
+  getWallLayerBands,
+  type WallLayerBand,
+  type WallLayerBands,
+} from './systems/wall/wall-layer-bands'
 export { planWallMerge } from './systems/wall/wall-merge'
 export {
   calculateLevelMiters,
@@ -502,6 +565,12 @@ export {
 export type { SceneGraph } from './utils/clone-scene-graph'
 export { cloneLevelSubtree, cloneSceneGraph, forkSceneGraph } from './utils/clone-scene-graph'
 export { isObject } from './utils/types'
+export {
+  checkOpeningWithinWall,
+  formatOpeningBoundsIssue,
+  OPENING_BOUNDS_TOLERANCE,
+  type OpeningBoundsIssue,
+} from './validation/opening-bounds'
 export {
   type BuildStats,
   type ParsedBuildJson,

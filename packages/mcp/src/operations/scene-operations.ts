@@ -1,3 +1,4 @@
+import type { NodeDeletionPlan, NodeDeletionScene } from '@pascal-app/core'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import type { AnyNode, AnyNodeId, AnyNodeType } from '@pascal-app/core/schema'
 import type { ActiveSceneMeta, Patch, SceneBridge, ValidationResult } from '../bridge/scene-bridge'
@@ -57,6 +58,11 @@ export interface SceneOperations {
     deletedIds: AnyNodeId[]
     createdIds: AnyNodeId[]
   }
+  /**
+   * The active bridge's deletion preview, when it has one. Absent for bridges
+   * that cannot preview their own deletes; the apply_patch guard is then stricter.
+   */
+  readonly planDeletion?: (scene: NodeDeletionScene, ids: AnyNodeId[]) => NodeDeletionPlan
   undo(steps?: number): number
   redo(steps?: number): number
   validateScene(): ValidationResult
@@ -83,9 +89,17 @@ class SceneOperationsFacade implements SceneOperations {
   readonly #bridge?: SceneBridge
   readonly #store?: SceneStore
 
+  readonly planDeletion?: (scene: NodeDeletionScene, ids: AnyNodeId[]) => NodeDeletionPlan
+
   constructor(options: CreateSceneOperationsOptions) {
     this.#bridge = options.bridge
     this.#store = options.store
+    const bridge = options.bridge as
+      | { planDeletion?: (scene: NodeDeletionScene, ids: AnyNodeId[]) => NodeDeletionPlan }
+      | undefined
+    if (typeof bridge?.planDeletion === 'function') {
+      this.planDeletion = (scene, ids) => bridge.planDeletion!(scene, ids)
+    }
   }
 
   get hasBridge(): boolean {

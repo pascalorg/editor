@@ -11,11 +11,11 @@ import {
 import { resolveFloorplanLabelAngle } from '../../components/editor-2d/renderers/floorplan-label-angle'
 import type { FloorplanExportBounds } from './floorplan-export'
 import { readFloorplanGeometryMetadata } from './floorplan-extension'
-import type { FloorplanPdfDocument } from './floorplan-pdfkit-document'
+import type { FloorplanPdfBaseline, FloorplanPdfDocument } from './floorplan-pdfkit-document'
 
 const DIMENSION_LINE_WIDTH_PT = 0.5
 const DIMENSION_TICK_WIDTH_PT = 0.75
-const DIMENSION_TEXT_FONT_FAMILY = 'Courier'
+const DIMENSION_TEXT_FONT_FAMILY = 'monospace'
 const DIMENSION_TEXT_FONT_SIZE_PT = 8
 const DIMENSION_TEXT_FONT_WEIGHT = 400
 const DIMENSION_BASELINE_OFFSET_PT = 5
@@ -35,6 +35,7 @@ type RenderContext = {
   annotationLabelShiftIndex: number
   annotationLabelShifts: readonly FloorplanPoint[]
   annotationLayer: boolean
+  dimensionTextSizePt: number
   sceneRotationDeg: number
   unitsPerPoint: number
 }
@@ -52,6 +53,8 @@ export async function renderFloorplanGeometryToPdfKit(
   options: {
     annotationLabelShifts?: readonly FloorplanPoint[]
     annotationLayer: boolean
+    /** Paper size of dimension strings; a drafted sheet prints them larger. */
+    dimensionTextSizePt?: number
     placement: FloorplanPdfKitPlacement
     rotationDeg: number
     viewport: FloorplanExportBounds
@@ -70,6 +73,7 @@ export async function renderFloorplanGeometryToPdfKit(
     annotationLabelShiftIndex: 0,
     annotationLabelShifts: options.annotationLabelShifts ?? [],
     annotationLayer: options.annotationLayer,
+    dimensionTextSizePt: options.dimensionTextSizePt ?? DIMENSION_TEXT_FONT_SIZE_PT,
     sceneRotationDeg: options.rotationDeg,
     unitsPerPoint: 1 / pointsPerUnit,
   })
@@ -186,8 +190,11 @@ function paintStyledGeometry(
   geometry: StyledGeometry,
   context: RenderContext,
 ): void {
-  const fill = geometry.fill && geometry.fill !== 'none' ? geometry.fill : null
-  const stroke = geometry.stroke && geometry.stroke !== 'none' ? geometry.stroke : null
+  // SVG's `transparent` / `none` mean "no paint" — pdfkit would read either
+  // as a colour name it does not know and paint black (the furniture sprites'
+  // hit-target polygons printed as black boxes).
+  const fill = isPaint(geometry.fill) ? (geometry.fill as string) : null
+  const stroke = isPaint(geometry.stroke) ? (geometry.stroke as string) : null
   const opacity = geometry.opacity ?? 1
   const fillOpacity = (geometry.fillOpacity ?? 1) * opacity
   const strokeOpacity = (geometry.strokeOpacity ?? 1) * opacity
@@ -210,6 +217,18 @@ function paintStyledGeometry(
   if (fill && stroke) raw.fillAndStroke(fill, stroke, fillRule)
   else if (fill) raw.fill(fill, fillRule)
   else if (stroke) raw.stroke(stroke)
+}
+
+function isPaint(value: unknown): boolean {
+  if (typeof value !== 'string') return false
+  const v = value.trim().toLowerCase()
+  return (
+    v !== '' &&
+    v !== 'none' &&
+    v !== 'transparent' &&
+    !v.startsWith('url(') &&
+    !v.startsWith('var(')
+  )
 }
 
 function resolveStrokeWidth(geometry: StyledGeometry, context: RenderContext): number {
@@ -247,7 +266,7 @@ function drawGeometryText(
   const dimensionValue =
     readFloorplanGeometryMetadata(geometry).annotationRole === 'automatic-dimension'
   const fontSize = context.annotationLayer
-    ? (dimensionValue ? DIMENSION_TEXT_FONT_SIZE_PT : annotationTextSizePt(geometry)) *
+    ? (dimensionValue ? context.dimensionTextSizePt : annotationTextSizePt(geometry)) *
       context.unitsPerPoint
     : geometry.fontSize
   const outlinedForScreen = geometry.paintOrder === 'stroke' && !!geometry.stroke
@@ -258,6 +277,7 @@ function drawGeometryText(
   drawNativeText(doc, {
     angleDeg: geometry.upright ? -context.sceneRotationDeg : 0,
     anchor: geometry.textAnchor ?? 'start',
+    baseline: geometry.dominantBaseline ?? 'middle',
     fill,
     fontFamily: dimensionValue ? DIMENSION_TEXT_FONT_FAMILY : geometry.fontFamily,
     fontSize,
@@ -270,7 +290,10 @@ function drawGeometryText(
 }
 
 function annotationTextSizePt(geometry: Extract<FloorplanGeometry, { kind: 'text' }>): number {
-  switch (readFloorplanGeometryMetadata(geometry).annotationRole) {
+  const metadata = readFloorplanGeometryMetadata(geometry)
+  // an explicit paper size wins over the role's (a sheet's room tag sets its own)
+  if (typeof metadata.textSizePt === 'number' && metadata.textSizePt > 0) return metadata.textSizePt
+  switch (metadata.annotationRole) {
     case 'room-label':
       if (geometry.fontSize >= 0.18) return DEFAULT_ANNOTATION_FONT_SIZE_PT
       if (geometry.fontSize >= 0.145) return ROOM_NUMBER_FONT_SIZE_PT
@@ -480,7 +503,7 @@ function drawDimensionText(
   stroke: string,
   context: RenderContext,
 ): void {
-  const fontSize = DIMENSION_TEXT_FONT_SIZE_PT * context.unitsPerPoint
+  const fontSize = context.dimensionTextSizePt * context.unitsPerPoint
   const y =
     geometry.textPosition === 'centered'
       ? fontSize * 0.35
@@ -495,6 +518,7 @@ function drawDimensionText(
     .translate(shift[0], shift[1])
   drawNativeText(doc, {
     anchor: 'middle',
+    baseline: 'alphabetic',
     fill: stroke,
     fontFamily: DIMENSION_TEXT_FONT_FAMILY,
     fontSize,
@@ -512,7 +536,7 @@ function drawDimensionLabel(
   context: RenderContext,
 ): void {
   const unitsPerPoint = context.unitsPerPoint
-  const fontSize = DIMENSION_TEXT_FONT_SIZE_PT * unitsPerPoint
+  const fontSize = context.dimensionTextSizePt * unitsPerPoint
   const padX = 6 * unitsPerPoint
   const padY = 3 * unitsPerPoint
   const textWidth = geometry.text.length * 6.2 * unitsPerPoint
@@ -538,6 +562,7 @@ function drawDimensionLabel(
     .fill()
   drawNativeText(doc, {
     anchor: 'middle',
+    baseline: 'middle',
     fill: '#111827',
     fontFamily: DIMENSION_TEXT_FONT_FAMILY,
     fontSize,
@@ -569,8 +594,9 @@ function drawEqualSpacingBadge(
     .fill()
   drawNativeText(doc, {
     anchor: 'middle',
+    baseline: 'middle',
     fill: '#334155',
-    fontFamily: 'Courier',
+    fontFamily: DIMENSION_TEXT_FONT_FAMILY,
     fontSize,
     fontWeight: 600,
     text: geometry.text,
@@ -585,6 +611,7 @@ function drawNativeText(
   options: {
     angleDeg?: number
     anchor: 'start' | 'middle' | 'end'
+    baseline: FloorplanPdfBaseline
     fill: string
     fontFamily?: string
     fontSize: number
@@ -596,24 +623,17 @@ function drawNativeText(
   },
 ): void {
   const raw = doc.raw
-  const normalizedFamily = options.fontFamily?.toLocaleLowerCase() ?? ''
-  const family =
-    normalizedFamily.includes('mono') || normalizedFamily.includes('courier')
-      ? 'Courier'
-      : 'Helvetica'
-  const numericWeight = Number.parseInt(String(options.fontWeight ?? 400), 10)
-  const bold =
-    options.fontWeight === 'bold' || (Number.isFinite(numericWeight) && numericWeight >= 500)
   raw.save().translate(options.x, options.y)
   if (options.angleDeg) raw.rotate(options.angleDeg)
-  raw
-    .font(bold ? `${family}-Bold` : family)
-    .fontSize(options.fontSize)
-    .fillColor(options.fill)
+  raw.fillColor(options.fill)
   raw.fillOpacity(options.opacity ?? 1)
-  const width = raw.widthOfString(options.text, { lineBreak: false })
-  const x = options.anchor === 'middle' ? -width / 2 : options.anchor === 'end' ? -width : 0
-  raw.text(options.text, x, -options.fontSize * 0.42, { lineBreak: false })
+  doc.drawText(
+    options.text,
+    0,
+    0,
+    { fontFamily: options.fontFamily, fontSize: options.fontSize, fontWeight: options.fontWeight },
+    { anchor: options.anchor, baseline: options.baseline },
+  )
   raw.restore()
 }
 
@@ -653,7 +673,18 @@ async function drawImage(
   raw.restore()
 }
 
-function blobToDataUrl(blob: Blob): Promise<string> {
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  // FileReader exists only in browsers; the headless export (scripts/demo/
+  // print-set.ts) runs the same renderer under Bun, where the bytes are
+  // base64-encoded directly instead.
+  if (typeof FileReader === 'undefined') {
+    const bytes = new Uint8Array(await blob.arrayBuffer())
+    let binary = ''
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+    }
+    return `data:${blob.type || 'image/png'};base64,${btoa(binary)}`
+  }
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onerror = () => reject(reader.error)

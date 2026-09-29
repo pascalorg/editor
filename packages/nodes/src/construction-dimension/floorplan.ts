@@ -565,6 +565,10 @@ function dimensionGeometry(
     textPosition: node.textPosition,
     text,
     stroke,
+    // A typed value that could not drive geometry falls back to
+    // `textOverride`; the renderer badges it so the drawing never lies
+    // about being associative.
+    overridden: node.textOverride !== null,
   }
 }
 

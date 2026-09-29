@@ -33,7 +33,12 @@ type BracketHarness = {
   sounds: string[]
 }
 
-async function withMountedBrackets(run: (harness: BracketHarness) => Promise<void>) {
+// Brackets only mount for the hovered or selected ceiling, so the harness
+// selects its ceiling unless a test opts out.
+async function withMountedBrackets(
+  run: (harness: BracketHarness) => Promise<void>,
+  { selected = true } = {},
+) {
   const previousScene = useScene.getState()
   const previousViewer = useViewer.getState()
   const previousEditor = useEditor.getState()
@@ -79,7 +84,12 @@ async function withMountedBrackets(run: (harness: BracketHarness) => Promise<voi
     })
     useViewer.setState({
       hoveredId: null,
-      selection: { buildingId: building.id, levelId: level.id, zoneId: null, selectedIds: [] },
+      selection: {
+        buildingId: building.id,
+        levelId: level.id,
+        zoneId: null,
+        selectedIds: selected ? [ceiling.id] : [],
+      },
     })
     useEditor.setState({ phase: 'structure', mode: 'select', structureLayer: 'elements' })
     useInteractionScope.setState({ scope: { kind: 'idle' } })
@@ -205,6 +215,9 @@ test('mounted brackets preserve hover, clicks, drags, capture visibility, overri
             ...Object.fromEntries(additions.map((node) => [node.id, node])),
           },
         })
+        useViewer.getState().setSelection({
+          selectedIds: [ceiling.id, ...additions.map((node) => node.id)],
+        })
       })
       expect(meshes()).toHaveLength(2)
       expect(meshes().find((mesh) => mesh.renderOrder === 1000)).not.toBe(oldNormal)
@@ -289,11 +302,12 @@ test('coincident ceiling corners keep the same hover, click, and drag owner acro
         [0, -4],
       ],
     })
-    await act(async () =>
+    await act(async () => {
       useScene.setState({
         nodes: { ...useScene.getState().nodes, [adjacent.id]: adjacent },
-      }),
-    )
+      })
+      useViewer.getState().setSelection({ selectedIds: [ceiling.id, adjacent.id] })
+    })
     const owner = ceiling.id < adjacent.id ? ceiling : adjacent
     const other = owner === ceiling ? adjacent : ceiling
     for (let move = 0; move < 20; move++) {
@@ -343,5 +357,36 @@ test('same-id registry replacement rebinds the portal and drag plane without rew
       expect(preview[0]![1]).toBeCloseTo(0.5, 6)
       await dispatchWindow('pointercancel', 10.5, 20)
     },
+  )
+})
+
+test('brackets mount only for the hovered ceiling and the selected ones', async () => {
+  await withMountedBrackets(
+    async ({ ceiling, dispatch, meshes }) => {
+      const other = CeilingNode.parse({
+        ...ceiling,
+        id: undefined,
+        polygon: [
+          [10, 0],
+          [14, 0],
+          [14, 4],
+          [10, 4],
+        ],
+      })
+      await act(async () =>
+        useScene.setState({ nodes: { ...useScene.getState().nodes, [other.id]: other } }),
+      )
+      const instances = () => meshes().reduce((sum, mesh) => sum + mesh.count, 0)
+      expect(instances()).toBe(0)
+      await act(async () => useViewer.getState().setHoveredId(ceiling.id))
+      expect(instances()).toBe(12)
+      await dispatch('onPointerMove', 10, 0)
+      expect(useViewer.getState().hoveredId).toBe(ceiling.id)
+      await act(async () => useViewer.getState().setSelection({ selectedIds: [other.id] }))
+      expect(instances()).toBe(24)
+      await dispatch('onPointerMove', 10, 0)
+      expect(useViewer.getState().hoveredId).toBe(other.id)
+    },
+    { selected: false },
   )
 })

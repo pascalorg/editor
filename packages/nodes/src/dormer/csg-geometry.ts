@@ -138,6 +138,8 @@ export function generateDormerGeometry(
     managedByParent: false,
     wallShell: 'auto',
     shedInsetEndPanels: false,
+    fascia: false,
+    fasciaHighEdge: false,
   }
 
   const dormerBrushes = getRoofSegmentBrushes(virtualSegment)
