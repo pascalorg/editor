@@ -239,6 +239,8 @@ describe('useDraftNode block face commit', () => {
       dimensions: [0.5, 0.39, 0.5],
     })!
 
+    expect(useScene.temporal.getState().isTracking).toBe(false)
+    useScene.temporal.getState().resume()
     const committedId = draft.commit({
       parentId: BLOCK_ID,
       position: [0.5, 0, 0],
@@ -288,6 +290,8 @@ describe('useDraftNode block face commit', () => {
 
     const draft = draftNode!
     draft.adopt(hosted)
+    expect(useScene.temporal.getState().isTracking).toBe(false)
+    useScene.temporal.getState().resume()
     draft.commit({
       parentId: LEVEL_ID,
       position: [2, 0, 3],

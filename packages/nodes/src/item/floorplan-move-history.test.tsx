@@ -5,6 +5,7 @@ import {
   applySceneSnapshot,
   CeilingNode,
   clearSceneHistory,
+  emitter,
   type FloorplanMoveTargetSession,
   getSceneHistoryPauseDepth,
   ItemNode,
@@ -15,6 +16,7 @@ import {
   objectId,
   registerNode,
   type SceneCommit,
+  ShelfNode,
   SlabNode,
   subscribeSceneCommits,
   useLiveNodeOverrides,
@@ -33,8 +35,10 @@ import {
   type DraftNodeHandle,
   useDraftNode,
 } from '../../../editor/src/components/tools/item/use-draft-node'
+import { MoveRegistryNodeTool } from '../../../editor/src/components/tools/registry/move-registry-node-tool'
 import { updateSurfaceNode } from '../../../editor/src/lib/surface-attachment'
 import { ceilingDefinition } from '../ceiling/definition'
+import { shelfDefinition } from '../shelf/definition'
 import { slabDefinition } from '../slab/definition'
 import { zoneDefinition } from '../zone/definition'
 import { itemDefinition } from './definition'
@@ -285,6 +289,38 @@ describe('registered staged move history', () => {
 })
 
 describe('2D item move history', () => {
+  test('a 2D tick preserves the co-mounted registry mover raw pause until cancellation', async () => {
+    if (!nodeRegistry.get('shelf')) registerNode(shelfDefinition)
+    const shelf = ShelfNode.parse({ parentId: LEVEL_ID, position: [6, 0, 6] })
+    useScene.getState().createNode(shelf, LEVEL_ID)
+    clearSceneHistory()
+    useEditor.getState().setMovingNode(shelf)
+    await act(async () => {
+      renderer = await create(
+        <>
+          <FloorplanRegistryMoveOverlay />
+          <MoveRegistryNodeTool node={shelf} />
+        </>,
+      )
+    })
+    expect(useScene.temporal.getState().isTracking).toBe(false)
+    await pointer('pointermove', 6, 6)
+    await pointer('pointermove', 8, 8)
+    const trackingAfterTick = useScene.temporal.getState().isTracking
+    useScene.getState().updateNode(ITEM_ID, { name: 'Edit during legacy carry' })
+    const stepsDuringCarry = useScene.temporal.getState().pastStates.length
+    await act(async () => {
+      emitter.emit('tool:cancel')
+    })
+    await act(async () => renderer!.unmount())
+    renderer = null
+    expect(useScene.temporal.getState().isTracking).toBe(true)
+    expect((useScene.getState().nodes[shelf.id] as ShelfNode).position).toEqual(shelf.position)
+    expect(stepsDuringCarry).toBe(0)
+    expect(trackingAfterTick).toBe(false)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+  })
+
   test('a refused fresh drop retains both the mover and its history draft', async () => {
     useScene.getState().updateNode(ITEM_ID, { metadata: { isNew: true } })
     clearSceneHistory()

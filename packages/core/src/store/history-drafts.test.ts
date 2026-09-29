@@ -4,6 +4,8 @@ import type { AnyNodeId } from '../schema/types'
 import {
   beginSceneHistoryPauseSession,
   getSceneHistoryPauseDepth,
+  pauseSceneHistory,
+  resumeSceneHistory,
   type SceneCommit,
   subscribeSceneCommits,
 } from './history-control'
@@ -69,6 +71,51 @@ const wallStart = () => (node(wallId) as WallNode).start
 const levelChildren = () => (node(levelId) as LevelNode).children
 
 describe('scene history drafts', () => {
+  test.each([
+    [true, false],
+    [true, true],
+    [false, false],
+    [false, true],
+  ])('nested draft writes preserve their outer pause (raw=%s, throws=%s)', (raw, throws) => {
+    const endDraft = beginSceneHistoryDraft(itemId, node(itemId)!)
+    const owner = raw ? null : beginSceneHistoryPauseSession(useScene)
+    if (raw) useScene.temporal.getState().pause()
+    const write = () =>
+      runSceneHistoryDraftWrite(() =>
+        runSceneHistoryDraftWrite(() => {
+          pauseSceneHistory(useScene)
+          try {
+            useScene.getState().updateNode(itemId, { position: [3, 0, 3] })
+          } finally {
+            resumeSceneHistory(useScene)
+          }
+          if (throws) throw new Error('Draft callback failed')
+        }),
+      )
+    if (throws) expect(write).toThrow('Draft callback failed')
+    else write()
+    expect(getSceneHistoryPauseDepth()).toBe(raw ? 0 : 1)
+    expect(useScene.temporal.getState().isTracking).toBe(false)
+    expect(past()).toBe(0)
+    expect(sceneHistoryDraftRevertUpdates([itemId])).toEqual([
+      { id: itemId, data: { position: item.position } },
+    ])
+    endDraft()
+    if (owner) owner.end()
+    else useScene.temporal.getState().resume()
+    expect(getSceneHistoryPauseDepth()).toBe(0)
+    expect(useScene.temporal.getState().isTracking).toBe(true)
+    useScene.getState().updateNode(wallId, { name: 'After owner release' })
+    expect(past()).toBe(1)
+  })
+
+  test('ending a counted owner during a draft write does not leave a raw pause', () => {
+    const owner = beginSceneHistoryPauseSession(useScene)
+    runSceneHistoryDraftWrite(() => owner.end())
+    expect(getSceneHistoryPauseDepth()).toBe(0)
+    expect(useScene.temporal.getState().isTracking).toBe(true)
+  })
+
   test.each([
     true,
     false,

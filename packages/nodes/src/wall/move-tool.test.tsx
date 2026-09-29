@@ -14,6 +14,7 @@ import {
   pauseSceneHistory,
   registerNode,
   resumeSceneHistory,
+  sceneHistoryDraftRevertUpdates,
   useLiveNodeOverrides,
   useScene,
   WallNode,
@@ -169,10 +170,10 @@ let restoreDocument = () => {}
 let splitRenderer: Awaited<ReturnType<typeof create>> | null = null
 
 // Split view: the 3D tool and the real FloorplanRegistryMoveOverlay, both on the moving wall.
-async function armSplitView() {
+async function armSplitView(id: AnyNodeId = DIVIDER_ID) {
   if (!nodeRegistry.get('wall')) registerNode(wallDefinition)
   restoreDocument = stubFloorplanScene()
-  const wall = useScene.getState().nodes[DIVIDER_ID] as WallNode
+  const wall = useScene.getState().nodes[id] as WallNode
   useEditor.getState().setMovingNode(wall)
   let renderer: Awaited<ReturnType<typeof create>> | null = null
   await act(async () => {
@@ -602,6 +603,36 @@ describe('3D wall move', () => {
             .join() === [JSON.stringify(connected.start), JSON.stringify(moved.end)].sort().join(),
       )
     expect(joined).toBe(true)
+  })
+
+  test('split view: 2D preview then 3D drop retains linked wall history', async () => {
+    const westId = 'wall_wall-move-west' as AnyNodeId
+    const before = sceneNodes()
+    const renderer = await armSplitView(westId)
+    await floorplanPointer('pointermove', 0, 2)
+    await floorplanPointer('pointermove', -1, 2)
+    expect(useLiveNodeOverrides.getState().get('wall_wall-move-north' as AnyNodeId)?.end).toEqual([
+      -1, 4,
+    ])
+    expect(useLiveNodeOverrides.getState().get('wall_wall-move-south' as AnyNodeId)?.start).toEqual(
+      [-1, 0],
+    )
+    expect(sceneHistoryDraftRevertUpdates(Object.keys(before) as AnyNodeId[])).toEqual([])
+    await dragFrom(0, -1)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+    await act(async () => {
+      window.dispatchEvent(new Event('pointerup'))
+    })
+    await act(async () => renderer.unmount())
+    const after = sceneNodes()
+    expect(after[westId]).toMatchObject({ start: [-1, 4], end: [-1, 0] })
+    expect(after['wall_wall-move-north' as AnyNodeId]).toMatchObject({ end: [-1, 4] })
+    expect(after['wall_wall-move-south' as AnyNodeId]).toMatchObject({ start: [-1, 0] })
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    useScene.temporal.getState().undo()
+    expect(useScene.getState().nodes).toEqual(before)
+    useScene.temporal.getState().redo()
+    expect(useScene.getState().nodes).toEqual(after)
   })
 
   test('split view: a 3D drop with the real 2D overlay mounted records one step', async () => {

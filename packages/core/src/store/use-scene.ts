@@ -2384,12 +2384,15 @@ let prevFutureLength = 0
  */
 export function runSceneHistoryDraftWrite<T>(write: () => T): T {
   const before = useScene.getState().nodes
+  const wasRawPaused = !useScene.temporal.getState().isTracking && getSceneHistoryPauseDepth() === 0
   const pause = beginSceneHistoryPauseSession(useScene)
   try {
     return write()
   } finally {
     noteSceneHistoryDraftWrite(before, useScene.getState().nodes)
     pause.end()
+    // Legacy movers can co-mount with the overlay without owning a counted pause.
+    if (wasRawPaused && getSceneHistoryPauseDepth() === 0) useScene.temporal.getState().pause()
   }
 }
 
