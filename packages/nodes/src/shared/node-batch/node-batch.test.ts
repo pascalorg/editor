@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
 import {
   type AnyNode,
+  type BatchableConfig,
+  BlockNode,
   itemClipRegistry,
+  nodeRegistry,
   sceneRegistry,
   useInteractive,
   useLiveNodeOverrides,
@@ -26,14 +29,27 @@ import {
 import { commitPaintScopeFanout } from '../../../../editor/src/lib/paint-scope'
 import { applyShadowOnly, clearShadowOnly } from '../../../../viewer/src/lib/shadow-only'
 import { isWallInitialBuildActive } from '../../../../viewer/src/systems/wall/wall-system'
+import { blockDefinition } from '../../block/definition'
+import { buildBlockGeometry } from '../../block/geometry'
 import { getCeilingMaterials } from '../../ceiling/materials'
 import { ceilingPaint } from '../../ceiling/paint'
+import { importedMeshDefinition } from '../../imported-mesh/definition'
+import { setProceduralMotionPlaying } from '../../procedural-item/animation'
+import { proceduralItemDefinition } from '../../procedural-item/definition'
 import {
   createSlotPaintCapability,
   isSlotPaintPreviewActive,
   subscribeSlotPaintPreviews,
 } from '../slot-paint'
+import {
+  columnBatchable,
+  doorBatchable,
+  itemBatchable,
+  surfaceBatchable,
+  windowBatchable,
+} from './batchable'
 import { collectBatchCandidate, collectTintedNodes } from './candidates'
+import { releaseFromBatch } from './release'
 import { NodeBatchStore } from './store'
 import {
   captureChangedNodes,
@@ -50,8 +66,27 @@ const originalViewer = useViewer.getState()
 const stores: NodeBatchStore[] = []
 const restores: Array<() => void> = []
 
+/** The batch reads each kind's `capabilities.batchable` from the registry. */
+const BATCHABLE_KINDS: Record<string, BatchableConfig> = {
+  item: itemBatchable,
+  column: columnBatchable,
+  door: doorBatchable,
+  window: windowBatchable,
+  ceiling: surfaceBatchable,
+  slab: surfaceBatchable,
+}
+
+let restoreRegistry: (() => void) | null = null
+function registerBatchable(kinds: Record<string, BatchableConfig>) {
+  restoreRegistry ??= nodeRegistry._snapshot()
+  for (const [kind, batchable] of Object.entries(kinds)) {
+    nodeRegistry._register({ kind, schemaVersion: 1, capabilities: { batchable } } as never)
+  }
+}
+
 beforeEach(() => {
   now = 0
+  registerBatchable(BATCHABLE_KINDS)
   const clock = spyOn(performance, 'now').mockImplementation(() => now)
   restoreClock = () => clock.mockRestore()
   sceneRegistry.clear()
@@ -68,6 +103,8 @@ beforeEach(() => {
 
 afterEach(() => {
   for (const restore of restores.splice(0).reverse()) restore()
+  restoreRegistry?.()
+  restoreRegistry = null
   unsubscribe()
   useLiveTransforms.getState().clearAll()
   useLiveNodeOverrides.getState().clearAll()
@@ -730,4 +767,101 @@ test.each([
   now = 481
   frame()
   expect(batches(root)).toHaveLength(1)
+})
+
+function patchNodes(patch: (node: AnyNode) => Partial<AnyNode> | null) {
+  const nodes = useScene.getState().nodes
+  useScene.setState({
+    nodes: Object.fromEntries(
+      Object.entries(nodes).map(([id, node]) => [id, { ...node, ...patch(node as AnyNode) }]),
+    ),
+  } as never)
+}
+
+test('procedural items batch while static; a playing motion or part lights draw themselves', () => {
+  registerBatchable({ 'procedural-item': proceduralItemDefinition.capabilities.batchable! })
+  const { meshes } = setup('procedural-item', 5)
+  // Part lights clone their emissive slot per node; mounted items move with their host.
+  patchNodes((node) =>
+    node.type !== 'procedural-item'
+      ? null
+      : node.id === 'procedural-item_1'
+        ? ({ recipe: { parts: [{ id: 'bulb', light: { color: '#ffffff' } }] } } as never)
+        : node.id === 'procedural-item_2'
+          ? ({ parentId: 'item_host', recipe: { parts: [{ id: 'body' }] } } as never)
+          : ({ recipe: { parts: [{ id: 'body' }] } } as never),
+  )
+  expect(collectBatchCandidate('procedural-item_1')).toBeNull()
+  expect(collectBatchCandidate('procedural-item_2')).toBeNull()
+  settle()
+  expect(meshes.map((mesh) => mesh.layers.isEnabled(SCENE_LAYER))).toEqual([
+    false,
+    true,
+    true,
+    false,
+    false,
+  ])
+
+  // A motion starting inside a frame reveals the sources at once and keeps them out while it plays.
+  setProceduralMotionPlaying('procedural-item_0', true)
+  releaseFromBatch('procedural-item_0')
+  expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
+  settle()
+  expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
+  setProceduralMotionPlaying('procedural-item_0', false)
+  releaseFromBatch('procedural-item_0')
+  settle()
+  expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
+})
+
+test.each([
+  'block',
+  'imported-mesh',
+])('%s batches per node and a rebuild replaces its slot', (kind) => {
+  registerBatchable({
+    block: blockDefinition.capabilities.batchable!,
+    'imported-mesh': importedMeshDefinition.capabilities.batchable!,
+  })
+  const { root, meshes, material } = setup(kind)
+  const store = new NodeBatchStore(() => root)
+  stores.push(store)
+  store.join(
+    meshes.map((_, i) => candidate(`${kind}_${i}`)),
+    1,
+  )
+  expect(candidate(`${kind}_0`).entries[0]!.allocationKey).toBe(`${kind}_0:0`)
+  expect(batches(root)).toHaveLength(1)
+  store.release(`${kind}_0`)
+  meshes[0]!.geometry = new BoxGeometry()
+  store.join([candidate(`${kind}_0`)], 1)
+  expect(store.stats().geometryReplacements).toBe(1)
+  expect(store.stats().overflowRebuilds).toBe(0)
+  // A multi-slot block draws with a material array and keeps its own draw.
+  meshes[1]!.material = [material, material]
+  expect(collectBatchCandidate(`${kind}_1`)).toBeNull()
+})
+
+test('a built single-slot block joins the batch; a painted multi-slot block keeps its own draw', () => {
+  registerBatchable({ block: blockDefinition.capabilities.batchable! })
+  const { root, meshes } = setup('block', 2)
+  const plain = BlockNode.parse({ id: 'block_0', name: 'Plain' })
+  const painted = BlockNode.parse({
+    id: 'block_1',
+    name: 'Painted',
+    topology: {
+      ...plain.topology,
+      faces: plain.topology.faces.map((face, index) =>
+        index === 0 ? { ...face, materialSlot: 'accent' } : face,
+      ),
+    },
+    slotNames: { body: 'Body', accent: 'Accent' },
+  })
+  for (const [index, node] of [plain, painted].entries()) {
+    const group = buildBlockGeometry(node)
+    root.remove(meshes[index]!)
+    root.add(group)
+    sceneRegistry.nodes.set(node.id, group)
+  }
+  expect(candidate('block_0').entries).toHaveLength(1)
+  expect(collectBatchCandidate('block_1')).toBeNull()
 })

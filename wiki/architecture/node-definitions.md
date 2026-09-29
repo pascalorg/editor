@@ -426,6 +426,30 @@ capabilities: {
 
 ---
 
+### `capabilities.assembly`
+
+Frozen contract (F2 assembly layers), not read by any renderer yet. A kind that declares it stores an optional `assembly` field (`Assembly` in `core/src/schema/assembly.ts`): body `layers` from the reference face inward, each with a stable `id` (its `#layer:<id>` address), a `role`, a `thickness`, an optional `material` kind (`stucco`, `osb`, `wood`, …), `slot` and provenance `src`, one source reference `<ns>:<id>[::<sub>]` (`SourceRefString`: printable ASCII, ns ≤ 48 bytes, id ≤ 160 bytes, the `ProvenanceRef` caps). At most one body layer is the `core`, and only a structural role (`structure`, `deck`, `shell`) may be; a layer `slot` is a key into the host's own `slots` (roofs carry a `slots` record for it); `inset`, `bottom` and `lift` belong to `backing` layers only. Preset capture removes every `src` with `provenance` through `withoutSourceIdentity`.
+
+**The stack sets the body.** A host's thickness is the sum of its layers; a writer that edits the layers writes the sum to the host's thickness in the same patch (the WS5 rule). `face: 'exterior'` lists the layers from the outside, resolved from `frontSide` / `backSide` with the front face as fallback.
+
+```ts
+type AssemblyHostConfig = {
+  reference: 'front' | 'top' | 'underside' | 'covering'
+  measure: 'normal' | 'vertical'
+  body: (node: AnyNode) => number | null // the thickness the host stores; null = none (roofs)
+  backing?: boolean                        // absent = assembly.backing refused
+}
+```
+
+| Host | `reference` | `body` | Rule |
+|---|---|---|---|
+| `roof` (declared in `nodes/src/roof/definition.ts`) | `covering` top plane | `null` | One contiguous stack along the facet normal; `air` for gaps. |
+| `wall` | `front` (+n) or the exterior face | `thickness` | Declared once walls move from WS5's `WallAssembly` onto F2. |
+
+Each kind declares its own host in its definition; core ships none. `resolveAssemblyStack(assembly, host)` returns each layer's depth and thickness exactly as declared, and, on a host that accepts backing, the backing layers with their depth from the body's far face (a ceiling with no body and insulation backing resolves), never throwing; a stored thickness that disagrees with the sum is reported as `assembly.thickness-mismatch`. `getWallLayerBands(wall, assembly, miters)` slices the mitred plan footprint into one band per layer (`back`/`front` offsets from the centreline along +n, and the footprint ∩ strip rings); it draws no bands on a mismatch.
+
+---
+
 ### `keyboardActions`
 
 Registry-driven R / T key handlers. A kind that wants to override the R (`rotate clockwise`) or T (`rotate counter-clockwise`) keystroke sets this field on its `NodeDefinition` instead of extending the hand-written `if/else` chain in `use-keyboard.ts`.
@@ -466,6 +490,33 @@ keyboardActions: {
 ```
 
 Door and window still use legacy direct calls in `use-keyboard.ts`; migrating them under this capability is a follow-up.
+
+---
+
+### `capabilities.mechanism`
+
+Moving parts people run (a fan's spin, a cabinet's doors, an articulated asset's joints). The action menu's Play/Stop button, E (after the kind's own `keyboardActions.e`), the walkthrough and the baked viewer read it instead of a kind name, so a plugin kind gets all of them by declaring it.
+
+```ts
+type MechanismCapability = {
+  has: (node: AnyNode) => boolean                            // anything to run?
+  isOn: (node: AnyNode, state: InteractiveState) => boolean  // any of it running?
+  set: (node: AnyNode, on: boolean) => void                  // start or stop all of it
+  verb?: 'open' | 'run'                                      // walkthrough wording, default 'run'
+}
+```
+
+Operating state is transient: `set` writes `useInteractive`, never the node, so running a mechanism never enters undo, autosave or collaboration. A kind with one switch keeps it in `useInteractive.mechanisms`:
+
+```ts
+mechanism: {
+  has: (node) => node.joints.some((joint) => joint.type !== 'fixed'),
+  isOn: (node, state) => Boolean(state.mechanisms[node.id]),
+  set: (node, on) => useInteractive.getState().setMechanism(node.id, on),
+},
+```
+
+`item` and `procedural-item` declare it over their own interactive state (`nodes/src/shared/item-interactions.ts`). Its GLB clips come from `exportAnimation`: every node that bakes clips lists them in `extras.clips`, and the baked viewer runs `: loop` clips no other controller owns on click and E, stopped at start. Lights are not part of it yet.
 
 ---
 

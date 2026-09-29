@@ -162,6 +162,24 @@ describe('find_nodes', () => {
       expect(await findIds({ sourceId: 'Küche/Fenster-2' })).toEqual([encoded.id])
     })
 
+    test('source filters also match typed provenance refs', async () => {
+      const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+      const typed = WallNode.parse({
+        start: [0, 2],
+        end: [1, 2],
+        provenance: {
+          refs: [
+            { ns: 'sketchup', id: 'K%C3%BCche/Fenster-3', role: 'primary' },
+            { id: 'kitchen/alias-3', role: 'alias' },
+          ],
+        },
+      })
+      bridge.applyPatch([{ op: 'create', node: typed, parentId: level.id as AnyNodeId }])
+      expect(await findIds({ sourceId: 'Küche/Fenster-3' })).toEqual([typed.id])
+      expect(await findIds({ sourceId: 'kitchen/alias-3' })).toEqual([typed.id])
+      expect(await findIds({ sourceIdPrefix: 'Küche/' })).toEqual([typed.id])
+    })
+
     test('source filters combine with type and parentId', async () => {
       const { wall, window } = seedSourceFixture()
       expect(await findIds({ sourceIdPrefix: 'ground/', type: 'window' })).toEqual([window.id])

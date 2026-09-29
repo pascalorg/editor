@@ -10,6 +10,8 @@ import {
   nodeRegistry,
   PipeFittingNode,
   PipeSegmentNode,
+  registerNode,
+  useInteractive,
   useScene,
 } from '@pascal-app/core'
 import { runRedo, runUndo } from '../lib/history'
@@ -24,6 +26,7 @@ import {
   isToolOwnedRotation,
   markToolCancelConsumed,
   runHistoryShortcut,
+  runNodeInteraction,
 } from './use-keyboard'
 
 type RafFn = (callback: (time: number) => void) => number
@@ -248,4 +251,57 @@ describe('history while drawing distribution runs', () => {
       }
     })
   }
+})
+
+describe('E on a single selected node', () => {
+  function registerKind(overrides: Record<string, unknown>) {
+    const kind = `test:e-${crypto.randomUUID()}`
+    registerNode({
+      kind,
+      schemaVersion: 1,
+      category: 'furnish',
+      defaults: () => ({}),
+      capabilities: {},
+      ...overrides,
+    } as never)
+    return { object: 'node', id: `${kind}_1`, type: kind } as unknown as AnyNode
+  }
+
+  const switchMechanism = {
+    has: () => true,
+    isOn: (node: AnyNode, state: ReturnType<typeof useInteractive.getState>) =>
+      Boolean(state.mechanisms[node.id]),
+    set: (node: AnyNode, on: boolean) => useInteractive.getState().setMechanism(node.id, on),
+  }
+
+  test('runs the mechanism of a kind that declares only the capability', () => {
+    const node = registerKind({ capabilities: { mechanism: switchMechanism } })
+    try {
+      expect(runNodeInteraction(node)).toBe(true)
+      expect(useInteractive.getState().mechanisms[node.id]).toBe(true)
+      expect(runNodeInteraction(node)).toBe(true)
+      expect(useInteractive.getState().mechanisms[node.id]).toBe(false)
+    } finally {
+      useInteractive.getState().removeMechanism(node.id)
+    }
+  })
+
+  test("prefers the kind's own E action over its mechanism", () => {
+    let ran = 0
+    const node = registerKind({
+      capabilities: { mechanism: switchMechanism },
+      keyboardActions: { e: { appliesTo: () => true, run: () => (ran += 1) } },
+    })
+    expect(runNodeInteraction(node)).toBe(true)
+    expect(ran).toBe(1)
+    expect(useInteractive.getState().mechanisms[node.id]).toBeUndefined()
+  })
+
+  test('leaves E to the door and window fallbacks when nothing applies', () => {
+    const node = registerKind({
+      capabilities: { mechanism: { ...switchMechanism, has: () => false } },
+    })
+    expect(runNodeInteraction(node)).toBe(false)
+    expect(runNodeInteraction(registerKind({}))).toBe(false)
+  })
 })

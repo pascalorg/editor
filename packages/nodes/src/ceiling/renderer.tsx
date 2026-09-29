@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  CEILING_DRAW_OFFSET,
   type CeilingNode,
   getMaterialPresetByRef,
   resolveCeilingHeight,
@@ -53,7 +54,7 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   // (primitive selector, so follows-mode ceilings track level-height edits
   // and covering-slab changes without a node write).
   const resolvedHeight = useScene((s) => resolveCeilingHeight(node, s.nodes))
-  const ceilingY = resolvedHeight - 0.01 + (liveTransform?.position[1] ?? 0)
+  const ceilingY = resolvedHeight - CEILING_DRAW_OFFSET + (liveTransform?.position[1] ?? 0)
   const position: [number, number, number] = [
     liveTransform?.position[0] ?? 0,
     ceilingY,

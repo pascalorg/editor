@@ -18,10 +18,12 @@ export type {
   TapActionHandle,
   TranslateHandle,
 } from './handles'
+export { nodeMechanism, toggleMechanism, toggleNodeMechanism } from './mechanism'
 export {
   bakePolicyOf,
   discoverPlugins,
   extendPluginDiscovery,
+  floorPlacedCollides,
   getHostRefFields,
   getInspectorExtensions,
   getNodePluginId,
@@ -67,11 +69,14 @@ export type {
   AlignmentFootprint,
   AlignmentFootprintConfig,
   AnyNodeDefinition,
+  AssemblyHostConfig,
+  AssemblyReference,
   AssetRef,
   BakeGeometryAsyncBuilder,
   BakeGeometryBuilder,
   BakePolicy,
   BakeReplaceRenderer,
+  BatchableConfig,
   Capabilities,
   CapabilityCtx,
   CutsContext,
@@ -126,6 +131,7 @@ export type {
   MeasurementFeatureBinding,
   MeasurementFeatureGeometry,
   MeasurementSnapKind,
+  MechanismCapability,
   Modifiers,
   MovableConfig,
   MovableParentFrame,
@@ -186,3 +192,4 @@ export type {
   ToolOptionChoice,
   Vec2,
 } from './types'
+export { validateNodeRelations } from './validate-relations'

@@ -1,0 +1,380 @@
+{
+  "version": 1,
+  "name": "Horizontal air handler",
+  "description": "Suspended horizontal air handler with pan, channels, rods, plenum, vent and gas line.",
+  "classification": {
+    "category": "hvac",
+    "functionTags": ["air-handler"],
+    "tags": ["garage"]
+  },
+  "parameters": [
+    {
+      "id": "cabinet_length",
+      "label": "Cabinet length",
+      "default": 1.52,
+      "min": 1.2,
+      "max": 1.8,
+      "step": 0.01,
+      "unit": "m",
+      "part": "cabinet",
+      "axis": "x"
+    }
+  ],
+  "slots": [
+    {
+      "id": "dark",
+      "label": "Cabinet",
+      "color": "#2b2d30",
+      "finish": "metal"
+    },
+    {
+      "id": "steel",
+      "label": "Steel",
+      "color": "#9ea3a8",
+      "finish": "metal"
+    },
+    {
+      "id": "insulation",
+      "label": "Duct board",
+      "color": "#c9c2a8"
+    },
+    {
+      "id": "red",
+      "label": "Brand plate",
+      "color": "#b3202a"
+    }
+  ],
+  "parts": [
+    {
+      "id": "cabinet",
+      "label": "cabinet",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "s",
+          "primitive": "box",
+          "slot": "dark",
+          "size": ["cabinet_length", 0.654, 0.747],
+          "position": [-0.25029, 0.570559, -0.7316]
+        }
+      ]
+    },
+    {
+      "id": "access_panel_1",
+      "label": "access-panel-1",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "s",
+          "primitive": "box",
+          "slot": "dark",
+          "size": [0.72, 0.55, 0.008],
+          "position": [-0.63029, 0.570559, -0.3541]
+        }
+      ]
+    },
+    {
+      "id": "access_panel_2",
+      "label": "access-panel-2",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "s",
+          "primitive": "box",
+          "slot": "dark",
+          "size": [0.72, 0.55, 0.008],
+          "position": [0.12971, 0.570559, -0.3541]
+        }
+      ]
+    },
+    {
+      "id": "support_channel_1",
+      "label": "support-channel-1",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "s",
+          "primitive": "box",
+          "slot": "steel",
+          "size": [0.041, 0.041, 1.3342],
+          "position": [-0.81529, 0.223059, -0.438]
+        }
+      ]
+    },
+    {
+      "id": "support_channel_2",
+      "label": "support-channel-2",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "s",
+          "primitive": "box",
+          "slot": "steel",
+          "size": [0.041, 0.041, 1.3342],
+          "position": [0.31471, 0.223059, -0.438]
+        }
+      ]
+    },
+    {
+      "id": "support_pan",
+      "label": "support-pan",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "s",
+          "primitive": "box",
+          "slot": "steel",
+          "size": [1.98, 0.06, 0.86],
+          "position": [-0.08529, 0.260559, -0.5609]
+        }
+      ]
+    },
+    {
+      "id": "suspension_rod_1_1",
+      "label": "suspension_rod_1_1",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "s",
+          "primitive": "cylinder",
+          "slot": "steel",
+          "size": [0.009, 0.88, 0.009],
+          "position": [-0.81529, 0.695559, -0.9909]
+        }
+      ]
+    },
+    {
+      "id": "suspension_rod_1_2",
+      "label": "suspension_rod_1_2",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "s",
+          "primitive": "cylinder",
+          "slot": "steel",
+          "size": [0.009, 0.88, 0.009],
+          "position": [-0.81529, 0.695559, -0.1709]
+        }
+      ]
+    },
+    {
+      "id": "suspension_rod_2_1",
+      "label": "suspension_rod_2_1",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "s",
+          "primitive": "cylinder",
+          "slot": "steel",
+          "size": [0.009, 0.88, 0.009],
+          "position": [0.68471, 0.695559, -0.9909]
+        }
+      ]
+    },
+    {
+      "id": "suspension_rod_2_2",
+      "label": "suspension_rod_2_2",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "s",
+          "primitive": "cylinder",
+          "slot": "steel",
+          "size": [0.009, 0.88, 0.009],
+          "position": [0.68471, 0.695559, -0.1709]
+        }
+      ]
+    },
+    {
+      "id": "duct_board_plenum",
+      "label": "duct-board-plenum",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "s",
+          "primitive": "box",
+          "slot": "insulation",
+          "size": [0.38, 0.55, 0.74],
+          "position": [0.79471, 0.545559, -0.7309]
+        }
+      ]
+    },
+    {
+      "id": "visible_metal_vent",
+      "label": "visible_metal_vent",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "seg0",
+          "primitive": "cylinder",
+          "slot": "steel",
+          "size": [0.11, 0.27313, 0.11],
+          "position": [0.23471, 0.740559, -0.5459],
+          "rotation": [1.15629, 0, 0]
+        },
+        {
+          "id": "seg1",
+          "primitive": "cylinder",
+          "slot": "steel",
+          "size": [0.11, 0.24166, 0.11],
+          "position": [0.23471, 0.905559, -0.3709],
+          "rotation": [0.42663, 0, 0]
+        },
+        {
+          "id": "seg2",
+          "primitive": "cylinder",
+          "slot": "steel",
+          "size": [0.11, 0.13, 0.11],
+          "position": [0.23471, 1.080559, -0.3209],
+          "rotation": [0, 0, 0]
+        },
+        {
+          "id": "joint1",
+          "primitive": "ellipsoid",
+          "slot": "steel",
+          "size": [0.11, 0.11, 0.11],
+          "position": [0.23471, 0.795559, -0.4209]
+        },
+        {
+          "id": "joint2",
+          "primitive": "ellipsoid",
+          "slot": "steel",
+          "size": [0.11, 0.11, 0.11],
+          "position": [0.23471, 1.015559, -0.3209]
+        }
+      ]
+    },
+    {
+      "id": "visible_insulated_line",
+      "label": "visible_insulated_line",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "seg0",
+          "primitive": "cylinder",
+          "slot": "dark",
+          "size": [0.052, 0.62129, 0.052],
+          "position": [-0.42529, 0.405559, -0.1509],
+          "rotation": [0, 0, -1.50637]
+        },
+        {
+          "id": "seg1",
+          "primitive": "cylinder",
+          "slot": "dark",
+          "size": [0.052, 0.70007, 0.052],
+          "position": [0.23471, 0.430559, -0.1509],
+          "rotation": [0, 0, -1.55651]
+        },
+        {
+          "id": "seg2",
+          "primitive": "cylinder",
+          "slot": "dark",
+          "size": [0.052, 0.34655, 0.052],
+          "position": [0.68471, 0.315559, -0.0759],
+          "rotation": [0.83653, -0.94828, -1.71401]
+        },
+        {
+          "id": "seg3",
+          "primitive": "cylinder",
+          "slot": "dark",
+          "size": [0.052, 0.97324, 0.052],
+          "position": [0.78471, 0.115559, 0.4791],
+          "rotation": [1.73595, 0, 0]
+        },
+        {
+          "id": "seg4",
+          "primitive": "cylinder",
+          "slot": "dark",
+          "size": [0.052, 0.13892, 0.052],
+          "position": [0.81971, 0.035559, 1.0191],
+          "rotation": [1.28492, -0.4503, -0.59397]
+        },
+        {
+          "id": "seg5",
+          "primitive": "cylinder",
+          "slot": "dark",
+          "size": [0.052, 0.1, 0.052],
+          "position": [0.90471, 0.035559, 1.0791],
+          "rotation": [0, 0, -1.5708]
+        },
+        {
+          "id": "seg6",
+          "primitive": "cylinder",
+          "slot": "dark",
+          "size": [0.052, 0.09458, 0.052],
+          "position": [1.002, 0.035559, 1.0791],
+          "rotation": [0, 0, -1.5708]
+        },
+        {
+          "id": "joint1",
+          "primitive": "ellipsoid",
+          "slot": "dark",
+          "size": [0.052, 0.052, 0.052],
+          "position": [-0.11529, 0.425559, -0.1509]
+        },
+        {
+          "id": "joint2",
+          "primitive": "ellipsoid",
+          "slot": "dark",
+          "size": [0.052, 0.052, 0.052],
+          "position": [0.58471, 0.435559, -0.1509]
+        },
+        {
+          "id": "joint3",
+          "primitive": "ellipsoid",
+          "slot": "dark",
+          "size": [0.052, 0.052, 0.052],
+          "position": [0.78471, 0.195559, -0.0009]
+        },
+        {
+          "id": "joint4",
+          "primitive": "ellipsoid",
+          "slot": "dark",
+          "size": [0.052, 0.052, 0.052],
+          "position": [0.78471, 0.035559, 0.9591]
+        },
+        {
+          "id": "joint5",
+          "primitive": "ellipsoid",
+          "slot": "dark",
+          "size": [0.052, 0.052, 0.052],
+          "position": [0.85471, 0.035559, 1.0791]
+        },
+        {
+          "id": "joint6",
+          "primitive": "ellipsoid",
+          "slot": "dark",
+          "size": [0.052, 0.052, 0.052],
+          "position": [0.95471, 0.035559, 1.0791]
+        }
+      ]
+    },
+    {
+      "id": "brand_plate",
+      "label": "brand-plate",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "s",
+          "primitive": "box",
+          "slot": "red",
+          "size": [0.09, 0.17, 0.005],
+          "position": [-0.51529, 0.605559, -0.3459]
+        }
+      ]
+    }
+  ],
+  "constraints": [],
+  "mounting": {
+    "attachTo": "ceiling",
+    "reference": "ceiling_ref"
+  },
+  "surfaces": [
+    {
+      "id": "ceiling_ref",
+      "label": "Ceiling",
+      "position": [0, 1.145559, 0],
+      "size": [1, 0.8]
+    }
+  ]
+}

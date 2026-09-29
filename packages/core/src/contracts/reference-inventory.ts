@@ -484,6 +484,28 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
       note: 'Capture provenance: stable across re-capture (R9).',
     }),
   ),
+  ...(['assembly.layers[].src', 'assembly.backing[].src'] as const).map((path) =>
+    row({
+      kind: '*',
+      path,
+      ...policy('source', 'content', 'freeze', 'strip'),
+      note: 'Layer provenance (F2): a preset strips it so it never claims a source element.',
+    }),
+  ),
+  ...(['assembly.layers[].slot', 'assembly.backing[].slot'] as const).map((path) =>
+    row({
+      kind: '*',
+      path,
+      ...policy('part', 'internal', 'drop', 'keep'),
+      note: "A key into the host's own `slots`; a missing key falls back to `layer:<id>`, then the role default.",
+    }),
+  ),
+  row({
+    kind: '*',
+    path: 'assembly.presetId',
+    ...policy('asset', 'content', 'freeze', 'keep'),
+    note: 'The assembly preset a layer stack was made from.',
+  }),
 
   // ─── Typed provenance (D5) ────────────────────────────────────────
   row({
@@ -520,6 +542,11 @@ export const NON_REFERENCES: readonly { kind: string; path: string; reason: stri
   { kind: 'block', path: 'topology.vertices[].id', reason: 'Defines a topology key.' },
   { kind: 'block', path: 'topology.edges[].id', reason: 'Defines a topology key.' },
   { kind: 'block', path: 'topology.faces[].id', reason: 'Defines a topology key.' },
+  ...(['assembly.layers[].id', 'assembly.backing[].id'] as const).map((path) => ({
+    kind: '*',
+    path,
+    reason: 'Defines an assembly layer key (the `#layer:<id>` address).',
+  })),
   {
     kind: 'gutter',
     path: 'outlets[].id',
