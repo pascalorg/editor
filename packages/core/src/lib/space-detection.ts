@@ -2214,6 +2214,13 @@ function wallAlongEdge(
     if (length < 1e-9) continue
     const offLine = Math.abs((to[0] - wall.start[0]) * dy - (to[1] - wall.start[1]) * dx) / length
     if (offLine > WALL_BOUND_VERTEX_TOLERANCE) continue
+    const edgeX = to[0] - from[0]
+    const edgeY = to[1] - from[1]
+    const reach = Math.max(
+      (wall.start[0] - from[0]) * edgeX + (wall.start[1] - from[1]) * edgeY,
+      (wall.end[0] - from[0]) * edgeX + (wall.end[1] - from[1]) * edgeY,
+    )
+    if (reach <= WALL_BOUND_VERTEX_TOLERANCE * Math.hypot(edgeX, edgeY)) continue
     if (movingWallIds.has(id)) return id
     found ??= id
   }
