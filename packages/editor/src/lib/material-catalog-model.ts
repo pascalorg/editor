@@ -25,6 +25,8 @@ export function useMaterialCatalogModel(
   selectedMaterialPreset?: string,
   onSelectMaterialPreset?: (ref: string) => void,
   disabled = false,
+  /** Paint mode arms the tab's first material; a finish row only writes on a tile click. */
+  selectOnCategoryChange = true,
 ) {
   const [selectedCategory, setCategory] = useState<(typeof MATERIAL_CATEGORIES)[number]>(
     MATERIAL_CATEGORIES[0],
@@ -57,7 +59,7 @@ export function useMaterialCatalogModel(
   const setSelectedCategory = (category: typeof selectedCategory) => {
     setCategory(category)
     const first = itemsFor(category)[0]
-    if (first) select(first.id)
+    if (first && selectOnCategoryChange) select(first.id)
   }
   return {
     selectedCategory,

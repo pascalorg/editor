@@ -64,6 +64,20 @@ const withSides = <T extends { frontSide?: string; backSide?: string }>(
   sides: (typeof SIDES)[number],
 ) => (sides ? { ...wall, ...sides } : wall)
 
+/**
+ * F2 draws an undetermined outside on side B, where the 3D cladding goes; WS5
+ * drew it on the front. The WS5 reference pins only that choice to side B, so
+ * every other part of the stack and the drawing is compared as WS5 made it.
+ */
+const outsideOnB = <T extends { frontSide?: string; backSide?: string }>(wall: T): T =>
+  ws5.resolveWallExteriorSide(wall as ws5.WallAssemblySideSource) === null
+    ? { ...wall, frontSide: 'interior', backSide: 'exterior' }
+    : wall
+const ws5Resolved = (wall: Parameters<typeof ws5.resolveWallAssembly>[0]) => {
+  const resolved = ws5.resolveWallAssembly(wall)
+  return { ...resolved, exteriorSideResolved: resolved.exteriorSide ?? -1 }
+}
+
 describe('WS5 → F2 wall assembly migration', () => {
   test('converts every WS5 stack to valid F2 layers and keeps every other field', () => {
     expect(migrated.changed).toBe(true)
@@ -111,7 +125,7 @@ describe('WS5 → F2 wall assembly migration', () => {
     expect(stack.presetId).toBe(assembly.preset)
     expect(stack.cavityInsulation).toBe(assembly.cavityInsulation)
     expect(wallAssemblyToLegacy(stack)).toEqual(assembly)
-    expect(resolveWallAssembly(wall)).toEqual(ws5.resolveWallAssembly(legacy))
+    expect(resolveWallAssembly(wall)).toEqual(ws5Resolved(legacy))
     expect(migrateLegacyWallAssemblies(result.nodes)).toEqual({
       changed: false,
       nodes: result.nodes,
@@ -124,9 +138,11 @@ describe('WS5 → F2 wall assembly migration', () => {
       for (const sides of SIDES) {
         const was = withSides(legacy, sides)
         const now = withSides(next, sides)
-        expect(resolveWallAssembly(now)).toEqual(ws5.resolveWallAssembly(was))
-        expect(wallLayerBoundaryOffsets(now)).toEqual(ws5.wallLayerBoundaryOffsets(was))
-        expect(wallLayerBoundaryOffsets(now, 0.3)).toEqual(ws5.wallLayerBoundaryOffsets(was, 0.3))
+        expect(resolveWallAssembly(now)).toEqual(ws5Resolved(was))
+        expect(wallLayerBoundaryOffsets(now)).toEqual(ws5.wallLayerBoundaryOffsets(outsideOnB(was)))
+        expect(wallLayerBoundaryOffsets(now, 0.3)).toEqual(
+          ws5.wallLayerBoundaryOffsets(outsideOnB(was), 0.3),
+        )
       }
       expect(wallAssemblyFinishRef(next)).toBe(ws5.wallAssemblyFinishRef(legacy))
       expect(wallAssemblyUnverifiedNote(next)).toBe(ws5.wallAssemblyUnverifiedNote(legacy))
@@ -134,15 +150,16 @@ describe('WS5 → F2 wall assembly migration', () => {
   })
 
   test('the 2D layer lines are identical, corners and junctions included', () => {
+    const legacyOnB = legacyWalls.map(outsideOnB)
     const before = ws5.calculateLevelLayerMiters(
-      legacyWalls,
-      calculateLevelMiters(legacyWalls as unknown as WallNode[]),
+      legacyOnB,
+      calculateLevelMiters(legacyOnB as unknown as WallNode[]),
       (w) => ws5.wallLayerBoundaryOffsets(w),
     )
     const after = calculateLevelLayerMiters(f2Walls, calculateLevelMiters(f2Walls), (w) =>
       wallLayerBoundaryOffsets(w),
     )
-    for (const [index, legacy] of legacyWalls.entries()) {
+    for (const [index, legacy] of legacyOnB.entries()) {
       const next = f2Walls[index]!
       expect(getWallLayerPolylines(next, after, wallLayerBoundaryOffsets(next))).toEqual(
         ws5.getWallLayerPolylines(legacy, before, ws5.wallLayerBoundaryOffsets(legacy)),
@@ -286,7 +303,14 @@ describe('the scene loader migrates stored WS5 walls', () => {
       expect(loaded.assembly).toEqual(
         migrated.nodes[legacy.id] ? (migrated.nodes[legacy.id] as WallNode).assembly : undefined,
       )
-      expect(resolveWallAssembly(loaded)).toEqual(ws5.resolveWallAssembly(legacy))
+      // Load re-derives wall sides from the detected rooms; the stack follows them.
+      expect(resolveWallAssembly(loaded)).toEqual(
+        ws5Resolved({
+          ...legacy,
+          frontSide: loaded.frontSide,
+          backSide: loaded.backSide,
+        }),
+      )
     }
   })
 

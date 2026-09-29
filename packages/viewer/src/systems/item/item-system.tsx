@@ -1,5 +1,8 @@
 import {
   type AnyNodeId,
+  getEffectiveNode,
+  getWallBodyCenterOffset,
+  getWallLocalFaceZ,
   type ItemNode,
   sceneRegistry,
   useScene,
@@ -35,6 +38,11 @@ export const ItemSystem = () => {
       const mesh = sceneRegistry.nodes.get(id) as THREE.Object3D
       if (!mesh) return
 
+      const host = item.parentId ? nodes[item.parentId as AnyNodeId] : undefined
+      if (item.asset.attachTo === 'wall' && host?.type === 'wall') {
+        mesh.position.z = item.position[2] + getWallBodyCenterOffset(getEffectiveNode(host))
+      }
+
       if (item.asset.attachTo === 'wall-side') {
         // Wall-attached item: offset Z by half the host wall's thickness.
         // Roof-segment wall faces share the convention — the face frame's
@@ -48,8 +56,10 @@ export const ItemSystem = () => {
               ? (parent.wallThickness ?? 0.1)
               : undefined
         if (thickness !== undefined) {
-          const side = item.side === 'front' ? 1 : -1
-          mesh.position.z = (thickness / 2) * side
+          mesh.position.z = getWallLocalFaceZ(
+            parent?.type === 'wall' ? getEffectiveNode(parent) : { thickness },
+            item.side === 'front' ? 'a' : 'b',
+          )
         }
       }
 

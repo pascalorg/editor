@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { resolveOverlayPolicy } from '../../../lib/interaction/overlay-policy'
+import { selectZoneOrRoom, useZoneSelected } from '../../../lib/room-zone-routing'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import useInteractionScope from '../../../store/use-interaction-scope'
@@ -18,14 +19,13 @@ function ZoneLabelEditor({ zoneId }: { zoneId: ZoneNode['id'] }) {
   const updateNode = useScene((s) => s.updateNode)
   const deleteNode = useScene((s) => s.deleteNode)
   const setSelection = useViewer((s) => s.setSelection)
-  const selectedZoneId = useViewer((s) => s.selection.zoneId)
+  const isSelected = useZoneSelected(zoneId)
   const hoveredId = useViewer((s) => s.hoveredId)
   const mode = useEditor((s) => s.mode)
   // During an active interaction the zone label is a context badge that steps
   // back: faded + non-interactive so it can't be hovered/clicked mid-action.
   const scope = useInteractionScope((s) => s.scope)
   const labelStepBack = resolveOverlayPolicy(scope).contextBadges === 'faded'
-  const isSelected = selectedZoneId === zoneId
   const isDeleteHovered = mode === 'delete' && hoveredId === zoneId
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState('')
@@ -113,8 +113,8 @@ function ZoneLabelEditor({ zoneId }: { zoneId: ZoneNode['id'] }) {
     useEditor.getState().setPhase('structure')
     useEditor.getState().setStructureLayer('zones')
     useEditor.getState().setMode('select')
-    setSelection({ zoneId })
-  }, [zoneId, setSelection])
+    selectZoneOrRoom(zoneId)
+  }, [zoneId])
 
   // Enter text editing
   const enterTextEditing = useCallback(() => {

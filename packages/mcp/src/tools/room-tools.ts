@@ -1,14 +1,12 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { AnyNode, AnyNodeId, AssetInput } from '@pascal-app/core/schema'
-import {
-  CeilingNode,
-  DoorNode,
-  ItemNode,
-  SlabNode,
-  WallNode,
-  WindowNode,
-  ZoneNode,
+import { createZone, generateId, runAsSingleSceneHistoryStep, useScene } from '@pascal-app/core'
+import type {
+  AnyNode,
+  AnyNodeId,
+  AssetInput,
+  WallNode as WallNodeType,
 } from '@pascal-app/core/schema'
+import { DoorNode, ItemNode, WindowNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { ADDITIVE_TOOL_ANNOTATIONS, READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
@@ -67,14 +65,27 @@ export const createRoomInput = {
     positive: true,
     description: 'Wall thickness.',
   }).optional(),
+  outdoor: z
+    .boolean()
+    .optional()
+    .describe(
+      'true for an outdoor room (a terrace): closed with separators where no wall runs, no walls of its own and no ceiling.',
+    ),
 }
 
 export const createRoomOutput = {
   zoneId: z.string(),
-  slabId: z.string(),
-  ceilingId: z.string(),
-  wallIds: z.array(z.string()),
+  /** Derived floor plate. `null` when the bridge has not reconciled yet. */
+  slabId: z.string().nullable(),
+  /** Derived ceiling. `null` when the bridge has not reconciled yet. */
+  ceilingId: z.string().nullable(),
+  /** One entry per polygon edge; `null` where no wall covers that edge. */
+  wallIds: z.array(z.string().nullable()),
+  reusedWalls: z.number(),
   areaSqMeters: z.number(),
+  conflicts: z
+    .array(z.object({ code: z.string(), nodeIds: z.array(z.string()), message: z.string() }))
+    .optional(),
   ...liveSyncOutput,
 }
 
@@ -429,56 +440,120 @@ export function registerSearchAssets(server: McpServer): void {
   )
 }
 
+const WALL_EDGE_TOLERANCE = 0.2
+
+function pointToEdgeDistance(a: Vec2, b: Vec2, point: readonly [number, number]) {
+  const dx = b[0] - a[0]
+  const dz = b[1] - a[1]
+  const length = Math.hypot(dx, dz)
+  if (length < 1e-9) return Math.hypot(point[0] - a[0], point[1] - a[1])
+  return Math.abs((point[0] - a[0]) * dz - (point[1] - a[1]) * dx) / length
+}
+
+function wallCoversEdge(wall: AnyNode & { type: 'wall' }, start: Vec2, end: Vec2) {
+  const dx = end[0] - start[0],
+    dz = end[1] - start[1]
+  const lengthSq = dx * dx + dz * dz
+  const station = (p: Vec2) => ((p[0] - start[0]) * dx + (p[1] - start[1]) * dz) / lengthSq
+  const a = station(wall.start),
+    b = station(wall.end)
+  return (
+    Math.min(1, Math.max(a, b)) - Math.max(0, Math.min(a, b)) > 1e-6 &&
+    pointToEdgeDistance(start, end, wall.start) < WALL_EDGE_TOLERANCE &&
+    pointToEdgeDistance(start, end, wall.end) < WALL_EDGE_TOLERANCE
+  )
+}
+
+/** The construction the reconciler derived for a room, for the tool payload. */
+function derivedRoomSurfaces(bridge: SceneOperations, levelId: string, zoneId: string) {
+  const children = Object.values(bridge.getNodes()).filter((node) => node.parentId === levelId)
+  const plate = children.find(
+    (node) => node.type === 'slab' && node.boundary === 'auto' && node.zoneIds?.includes(zoneId),
+  )
+  const ceiling = children.find(
+    (node) => node.type === 'ceiling' && node.boundary === 'auto' && node.zoneId === zoneId,
+  )
+  return { slabId: plate?.id ?? null, ceilingId: ceiling?.id ?? null }
+}
+
 export function registerCreateRoom(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'create_room',
     {
       title: 'Create room',
       description:
-        'Create a room on a level: zone, slab, ceiling, and one wall per polygon edge. Returns wallIds in polygon edge order.',
+        'Create a room on a level from a polygon: one wall per edge (reusing or splitting the walls already there) plus the room zone that names it. The floor plate and the ceiling are DERIVED from the room — never author a slab or a ceiling for a room, and never pass boundary/autoFromWalls. Returns wallIds in polygon edge order and the derived slabId / ceilingId. outdoor: true draws a terrace instead: separators where no wall runs and no ceiling (wallIds are null for its own sides).',
       inputSchema: createRoomInput,
       outputSchema: createRoomOutput,
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
-    async ({ levelId, name, polygon, color, wallHeight, wallThickness }) => {
+    async ({ levelId, name, polygon, color, wallHeight, wallThickness, outdoor }) => {
       assertLevel(bridge, levelId)
       const points = polygon as Vec2[]
-      const zone = ZoneNode.parse({
-        name,
-        polygon: points,
-        color: color ?? '#60a5fa',
-        metadata: { mcpTool: 'create_room' },
-      })
-      const slab = SlabNode.parse({ polygon: points, metadata: { mcpTool: 'create_room' } })
-      const ceiling = CeilingNode.parse({ polygon: points, metadata: { mcpTool: 'create_room' } })
-      const walls = points.map((start, index) =>
-        WallNode.parse({
-          name: `${name} wall ${index + 1}`,
-          start,
-          end: points[(index + 1) % points.length],
-          ...(wallHeight !== undefined ? { height: wallHeight } : {}),
-          ...(wallThickness !== undefined ? { thickness: wallThickness } : {}),
-          metadata: { mcpTool: 'create_room', roomName: name, edgeIndex: index },
-        }),
-      )
+      const wallDefaults: Partial<WallNodeType> = {
+        ...(wallHeight !== undefined ? { height: wallHeight } : {}),
+        ...(wallThickness !== undefined ? { thickness: wallThickness } : {}),
+        metadata: { mcpTool: 'create_room', roomName: name },
+      }
 
-      bridge.applyPatch([
-        { op: 'create', node: zone, parentId: levelId as AnyNodeId },
-        { op: 'create', node: slab, parentId: levelId as AnyNodeId },
-        { op: 'create', node: ceiling, parentId: levelId as AnyNodeId },
-        ...walls.map((wall) => ({
-          op: 'create' as const,
-          node: wall,
-          parentId: levelId as AnyNodeId,
-        })),
-      ])
+      const before = bridge.getNodes()
+      const plan = createZone(before, {
+        levelId,
+        polygon: points,
+        name,
+        enclose: !outdoor,
+        ...(outdoor ? { intent: { hasCeiling: false } } : { wall: wallDefaults }),
+        mintId: generateId,
+      })
+      if (plan.conflicts?.length)
+        return textResult({
+          zoneId: '',
+          slabId: null,
+          ceilingId: null,
+          wallIds: [],
+          reusedWalls: 0,
+          areaSqMeters: 0,
+          conflicts: plan.conflicts,
+        })
+      runAsSingleSceneHistoryStep(useScene, () => {
+        bridge.applyPatch(
+          plan.changes.map((change) =>
+            change.op === 'create'
+              ? {
+                  ...change,
+                  node:
+                    change.node.type === 'zone'
+                      ? {
+                          ...change.node,
+                          color: color ?? '#60a5fa',
+                          metadata: { mcpTool: 'create_room' },
+                        }
+                      : change.node,
+                  parentId: change.node.parentId as AnyNodeId,
+                }
+              : change,
+          ),
+        )
+        bridge.deriveStructure([levelId as AnyNodeId])
+      })
+      const wallIds = points.map(
+        (start, i) =>
+          Object.values(bridge.getNodes()).find(
+            (node) =>
+              node.type === 'wall' &&
+              node.parentId === levelId &&
+              wallCoversEdge(node, start, points[(i + 1) % points.length]!),
+          )?.id ?? null,
+      )
+      const reusedWalls = wallIds.filter((id) => id && before[id as AnyNodeId]).length
+
       const persistence = await publishLiveSceneSnapshot(bridge, 'create_room')
 
       return textResult({
-        zoneId: zone.id,
-        slabId: slab.id,
-        ceilingId: ceiling.id,
-        wallIds: walls.map((wall) => wall.id),
+        zoneId: plan.zoneId,
+        ...derivedRoomSurfaces(bridge, levelId, plan.zoneId),
+        wallIds,
+        reusedWalls,
         areaSqMeters: Math.round(polygonArea(points) * 100) / 100,
         ...persistencePayload(persistence),
       })

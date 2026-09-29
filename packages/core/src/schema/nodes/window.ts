@@ -39,6 +39,8 @@ export const WindowNode = BaseNode.extend({
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   side: z.enum(['front', 'back']).optional(),
+  verticalAnchor: z.enum(['wall', 'floor']).optional(),
+  floorThresholdVersion: z.union([z.literal(0), z.literal(1)]).default(1),
 
   // Wall reference
   wallId: z.string().optional(),

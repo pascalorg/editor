@@ -1,4 +1,4 @@
-import { sceneRegistry, useScene, type ZoneNode } from '@pascal-app/core'
+import { sceneRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
@@ -248,17 +248,7 @@ function collectNodeIdsInScreenRect(
 
 function commitBoxSelection(ids: string[], event: PointerEvent) {
   const shouldAppend = event.metaKey || event.ctrlKey || event.shiftKey
-  const { phase, structureLayer } = useEditor.getState()
   const viewer = useViewer.getState()
-
-  if (phase === 'structure' && structureLayer === 'zones') {
-    if (ids.length > 0) {
-      viewer.setSelection({ zoneId: ids[0] as ZoneNode['id'] })
-    } else if (!shouldAppend) {
-      viewer.setSelection({ zoneId: null })
-    }
-    return
-  }
 
   if (shouldAppend) {
     viewer.setSelection({

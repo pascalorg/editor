@@ -221,3 +221,59 @@ export function stairFootprintAABB(
   }
   return arcStairAABB(stair)
 }
+
+export function stairArrivalOpening(
+  stair: StairNode,
+  nodes: Readonly<Record<string, AnyNode>>,
+): [number, number][] {
+  let start: [number, number]
+  let end: [number, number]
+  if (stair.stairType === 'straight') {
+    const segments = stair.children
+      .map((id) => nodes[id])
+      .filter(
+        (node): node is StairSegmentNode =>
+          node?.type === 'stair-segment' && node.visible !== false,
+      )
+    const segment = segments.at(-1)
+    const transform = computeSegmentTransforms(segments).at(-1)
+    if (!segment || !transform) return []
+    const point = (x: number): [number, number] => {
+      const [dx, dz] = rotateXZ(x, segment.length, transform.rotation)
+      return [transform.position[0] + dx, transform.position[2] + dz]
+    }
+    start = point(-segment.width / 2)
+    end = point(segment.width / 2)
+  } else {
+    const spiral = stair.stairType === 'spiral'
+    const inner = Math.max(spiral ? 0.05 : 0.2, stair.innerRadius ?? (spiral ? 0.2 : 0.9))
+    const sweep = stair.sweepAngle ?? (spiral ? Math.PI * 2 : Math.PI / 2)
+    const angle = sweep / 2 + (spiral ? getSpiralLandingSweep(stair, sweep) : 0)
+    const outer = inner + Math.max(stair.width ?? 1, 0.4)
+    start = [Math.cos(angle) * inner, Math.sin(angle) * inner]
+    end = [Math.cos(angle) * outer, Math.sin(angle) * outer]
+  }
+  // Straddle the arrival line so wall-face clipping and edge tolerances do not close the gap.
+  const length = Math.hypot(end[0] - start[0], end[1] - start[1])
+  const nx = (-(end[1] - start[1]) / length) * 0.15
+  const nz = ((end[0] - start[0]) / length) * 0.15
+  return [
+    [start[0] + nx, start[1] + nz],
+    [end[0] + nx, end[1] + nz],
+    [end[0] - nx, end[1] - nz],
+    [start[0] - nx, start[1] - nz],
+  ].map(([x, z]) => {
+    const [dx, dz] = rotateXZ(x!, z!, stair.rotation)
+    return [stair.position[0] + dx, stair.position[2] + dz]
+  })
+}
+
+export function stairDeckLevelId(
+  nodes: Readonly<Record<string, AnyNode>>,
+  node?: AnyNode,
+): string | undefined {
+  const stair = node?.type === 'stair-segment' ? nodes[node.parentId ?? ''] : node
+  if (stair?.type !== 'stair' || !stair.deckSlabId) return undefined
+  const deck = nodes[stair.deckSlabId]
+  return deck?.type === 'slab' && deck.support === 'open' ? (deck.parentId ?? undefined) : undefined
+}

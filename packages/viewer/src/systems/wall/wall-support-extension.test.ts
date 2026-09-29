@@ -25,14 +25,14 @@ describe('wall support extension', () => {
     geometry.dispose()
   })
 
-  test('retains the existing negative-slab top constraint', () => {
+  test('explicit wall retains its authored height on negative support', () => {
     const wall = WallNode.parse({ start: [0, 0], end: [4, 0], height: 2.5, thickness: 0.1 })
     const geometry = generateExtrudedWall(wall, [], calculateLevelMiters([wall]), -0.4, -0.4)
     geometry.computeBoundingBox()
 
     expect(geometry.boundingBox?.min.y).toBeCloseTo(0)
-    expect(geometry.boundingBox?.max.y).toBeCloseTo(2.9)
-    expect((geometry.boundingBox?.max.y ?? 0) - 0.4).toBeCloseTo(2.5)
+    expect(geometry.boundingBox?.max.y).toBeCloseTo(2.5)
+    expect((geometry.boundingBox?.max.y ?? 0) - 0.4).toBeCloseTo(2.1)
 
     geometry.dispose()
   })

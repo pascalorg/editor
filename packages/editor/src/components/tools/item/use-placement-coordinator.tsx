@@ -11,6 +11,8 @@ import {
   findLevelAncestorId,
   type GridEvent,
   getScaledDimensions,
+  getWallBodyCenterOffset,
+  getWallLocalFaceZ,
   type ItemEvent,
   movingFootprintAnchors,
   type NodeEvent,
@@ -26,7 +28,6 @@ import {
   useScene,
   useSpatialQuery,
   type WallEvent,
-  type WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
@@ -264,20 +265,20 @@ basePlaneMaterial.opacityNode = radialOpacity
 
 export interface PlacementCoordinatorConfig {
   asset: AssetInput | null
-  draftNode: DraftNodeHandle
-  initDraft: (gridPosition: Vector3) => void
-  onCommitted: () => boolean
-  onCancel?: () => void
-  initialState?: PlacementState
   /** Scale to use when lazily creating a draft (e.g. for wall/ceiling duplicates). Defaults to [1,1,1]. */
   defaultScale?: [number, number, number]
-  /** Painted slot overrides to seed onto a lazily-created draft (wall/ceiling
-   *  duplicates) so the duplicate keeps its materials. */
-  slots?: ItemNode['slots']
+  draftNode: DraftNodeHandle
+  initDraft: (gridPosition: Vector3) => void
+  initialState?: PlacementState
+  onCancel?: () => void
+  onCommitted: () => boolean
   /** Move-mode sessions keep the grabbed item offset from the first surface hit
    *  (floor / wall / ceiling / item-surface / shelf) instead of snapping the
    *  item's origin under the cursor. */
   preserveDragOffset?: boolean
+  /** Painted slot overrides to seed onto a lazily-created draft (wall/ceiling
+   *  duplicates) so the duplicate keeps its materials. */
+  slots?: ItemNode['slots']
 }
 
 export function usePlacementCoordinator(config: PlacementCoordinatorConfig): React.ReactNode {
@@ -855,9 +856,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (draft) {
         Object.assign(draft, result.nodeUpdate)
         // One-time setup: put node in the right parent so it renders correctly
-        if (result.surfaceId !== undefined)
-          draftNode.updateSurface(result.nodeUpdate, result.surfaceId)
-        else updateSurfaceNode(draft.id, result.nodeUpdate)
+        if (result.surfaceId === undefined) updateSurfaceNode(draft.id, result.nodeUpdate)
+        else draftNode.updateSurface(result.nodeUpdate, result.surfaceId)
         disableDraftRaycastNow()
       }
 
@@ -1443,12 +1443,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           const rot = result.nodeUpdate?.rotation
           if (rot) mesh.rotation.y = rot[1]
 
-          // Push wall-side items out by half the parent wall's thickness
-          if (asset.attachTo === 'wall-side' && placementState.current.wallId) {
+          if (placementState.current.wallId) {
             const parentWall = useScene.getState().nodes[placementState.current.wallId as AnyNodeId]
             if (parentWall?.type === 'wall') {
-              const wallThickness = (parentWall as WallNode).thickness ?? 0.1
-              mesh.position.z = (wallThickness / 2) * (draft.side === 'front' ? 1 : -1)
+              mesh.position.z =
+                asset.attachTo === 'wall-side'
+                  ? getWallLocalFaceZ(parentWall, draft.side === 'front' ? 'a' : 'b')
+                  : draft.position[2] + getWallBodyCenterOffset(parentWall)
             }
           }
         }
@@ -1616,7 +1617,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
             const segment =
               useScene.getState().nodes[placementState.current.roofSegmentId as AnyNodeId]
             if (segment?.type === 'roof-segment') {
-              mesh.position.z = (segment.wallThickness ?? 0.1) / 2
+              mesh.position.z = getWallLocalFaceZ({ thickness: segment.wallThickness ?? 0.1 }, 'a')
             }
           }
           const rot = result.nodeUpdate?.rotation
@@ -1950,9 +1951,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
 
       const surfaceWorld =
-        ctx.state.surfaceItemId !== null
-          ? resolveHostSurfaceWorld(ctx.state.surfaceItemId, event.position)
-          : null
+        ctx.state.surfaceItemId === null
+          ? null
+          : resolveHostSurfaceWorld(ctx.state.surfaceItemId, event.position)
       const itemMoveEvent = surfaceWorld ? { ...event, position: surfaceWorld } : event
       lastRawPos.current.set(
         itemMoveEvent.position[0],
@@ -2328,9 +2329,9 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         return
       }
       const shelfWorld =
-        ctx.state.shelfId !== null
-          ? resolveHostSurfaceWorld(ctx.state.shelfId, event.position)
-          : null
+        ctx.state.shelfId === null
+          ? null
+          : resolveHostSurfaceWorld(ctx.state.shelfId, event.position)
       const shelfMoveEvent = shelfWorld ? { ...event, position: shelfWorld } : event
       const result = shelfSurfaceStrategy.move(ctx, shelfMoveEvent)
       if (!result) return
@@ -2632,7 +2633,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (event.button !== 2) return
       const down = rightDown
       rightDown = null
-      if (!down || !configRef.current.onCancel) return
+      if (!(down && configRef.current.onCancel)) return
       const movedSq = (event.clientX - down.x) ** 2 + (event.clientY - down.y) ** 2
       const elapsed = performance.now() - down.t
       if (movedSq <= RIGHT_CLICK_CANCEL_MAX_MOVE_PX ** 2 && elapsed <= RIGHT_CLICK_CANCEL_MAX_MS) {

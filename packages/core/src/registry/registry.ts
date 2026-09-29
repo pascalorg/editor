@@ -233,7 +233,7 @@ export function isNodeKindEnabled(kind: string, installedPlugins?: readonly stri
 export function getSelectableKinds(): string[] {
   const result: string[] = []
   for (const [kind, def] of nodeRegistry.entries()) {
-    if (def.capabilities.selectable !== undefined) {
+    if (def.capabilities.selectable) {
       result.push(kind)
     }
   }
@@ -245,7 +245,7 @@ export function getSelectableKinds(): string[] {
  * in expression chains like `if (node.type === 'wall' || isRegistrySelectable(node.type))`.
  */
 export function isRegistrySelectable(kind: string): boolean {
-  return nodeRegistry.get(kind)?.capabilities.selectable !== undefined
+  return Boolean(nodeRegistry.get(kind)?.capabilities.selectable)
 }
 
 /** Whether `node` takes part in floor-placement collision (`FloorPlacedConfig.collides`). */

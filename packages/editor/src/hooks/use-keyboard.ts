@@ -24,15 +24,21 @@ import {
   rotateGroupPatches,
 } from '../components/editor/group-transform-shared'
 import { steppedRotation } from '../components/tools/item/placement-math'
+import { keyCyclableContinuationContext } from '../lib/continuation'
 import { resolveDirectManipulationNode } from '../lib/direct-manipulation'
 import { toggleDoorOpenState } from '../lib/door-interaction'
+import { cancelGestures } from '../lib/gesture-lifecycle'
 import { guideEmitter } from '../lib/guide-events'
 import { isHistoryShortcut, runRedo, runUndo, shouldCancelDraftOnHistoryJump } from '../lib/history'
 import { isActive } from '../lib/interaction/scope'
+import { paintRegionModeActive } from '../lib/paint-region-mode'
+import { popRoomSelection } from '../lib/room-selection-commands'
 import { copySelectedNodesToEditorClipboard } from '../lib/scene-clipboard'
 import { sfxEmitter } from '../lib/sfx-bus'
+import { openSidebarPanel } from '../lib/sidebar-panel'
 import { activeSiteNode, clampBrushRadius } from '../lib/terrain-sculpt'
 import { leaveUnitFocus } from '../lib/units'
+import { selectWallDrawVariant } from '../lib/wall-draw-variant'
 import { toggleWindowOpenState } from '../lib/window-interaction'
 import useDeleteConfirmation from '../store/use-delete-confirmation'
 import useEditor, { getActiveContinuationContext, getActiveSnapContext } from '../store/use-editor'
@@ -109,6 +115,13 @@ export const markToolCancelConsumed = () => {
 // preset/item placement rely on this — they pass no coordinator onCancel, and
 // it is the mode switch unmounting them that destroys the draft.
 const exitToSelectAfterUnconsumedCancel = () => {
+  const editor = useEditor.getState()
+  if (
+    editor.mode === 'select' &&
+    useInteractionScope.getState().scope.kind === 'idle' &&
+    popRoomSelection()
+  )
+    return
   const currentPhase = useEditor.getState().phase
   const currentStructureLayer = useEditor.getState().structureLayer
 
@@ -161,6 +174,11 @@ const cancelInteractionForHistoryShortcut = () => {
     guideEmitter.emit('guide:cancel-reference-scale')
     return true
   }
+  // A live gesture reads ⌘Z as "abort", never as a jump under the pointer.
+  if (cancelGestures('history')) {
+    cancelPerfAction()
+    return true
+  }
   const activeScope = useInteractionScope.getState().scope
   if (shouldCancelDraftOnHistoryJump()) return false
   if (activeScope.kind === 'mesh-editing' && activeScope.phase === 'selecting') return false
@@ -192,8 +210,31 @@ export const runHistoryShortcut = (direction: 'undo' | 'redo') => {
   return true
 }
 
-/** Whether an armed tool owns the rotation key (`R` or `T`) instead of the selection. */
-export const isToolOwnedRotation = (key: 'r' | 't' = 'r') => {
+/**
+ * B: the wall tool on Rectangle — the quickest room — with the Build panel
+ * showing, so the lit tile says what is in hand. The panel's tiles still pick
+ * another shape for the session.
+ */
+export const armWallToolFromShortcut = () => {
+  selectWallDrawVariant('rectangle')
+  const editor = useEditor.getState()
+  editor.setPhase('structure')
+  editor.setStructureLayer('elements')
+  editor.armToolMode({ mode: 'build', tool: 'wall' })
+  openSidebarPanel(['build'])
+}
+
+/** P: paint mode, with the Paint panel showing (the Build panel where a host has no Paint tab). */
+export const armPaintFromShortcut = () => {
+  const editor = useEditor.getState()
+  editor.setPhase('structure')
+  editor.setStructureLayer('elements')
+  editor.armMaterialPaint()
+  openSidebarPanel(['paint', 'build'])
+}
+
+/** Whether an armed tool owns the rotation keys (`R` / `T`) instead of the selection. */
+export const isToolOwnedRotation = () => {
   const editor = useEditor.getState()
   const moving = getMovingNode()
   if (
@@ -213,10 +254,7 @@ export const isToolOwnedRotation = (key: 'r' | 't' = 'r') => {
       // exist. Without this check, selecting an existing item in the 2D plan
       // while the item tool is armed silently drops the global rotate key.
       (editor.tool === 'item' && editor.selectedItem !== null) ||
-      editor.tool === 'lean-to-extension' ||
-      // R toggles the wall tool between line and rectangle drawing; T stays
-      // the selection's.
-      (editor.tool === 'wall' && key === 'r'))
+      editor.tool === 'lean-to-extension')
   )
 }
 
@@ -320,7 +358,12 @@ export const useKeyboard = ({
         return
       }
 
-      if (e.key === 'Shift' && !e.repeat && useEditor.getState().mode === 'material-paint') {
+      if (
+        e.key === 'Shift' &&
+        !e.repeat &&
+        useEditor.getState().mode === 'material-paint' &&
+        !paintRegionModeActive('material-paint')
+      ) {
         // In paint mode Shift cycles the application scope (this surface →
         // whole item / all matching / room) — the paint-mode analogue of the
         // snapping-mode cycle below. The scope chip mirrors this key.
@@ -386,7 +429,8 @@ export const useKeyboard = ({
         !e.shiftKey &&
         !e.altKey
       ) {
-        const context = getActiveContinuationContext()
+        // The wall's drawing mode is picked in the Build panel, not cycled here.
+        const context = keyCyclableContinuationContext(getActiveContinuationContext())
         if (context) {
           e.preventDefault()
           if (context === 'fence') {
@@ -459,9 +503,7 @@ export const useKeyboard = ({
       } else if (e.key === 'b' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
-        useEditor.getState().setPhase('structure')
-        useEditor.getState().setStructureLayer('elements')
-        useEditor.getState().armToolMode({ mode: 'build', tool: 'wall' })
+        armWallToolFromShortcut()
       } else if (e.key === 'x' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
@@ -469,9 +511,7 @@ export const useKeyboard = ({
       } else if (e.key === 'p' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
-        useEditor.getState().setPhase('structure')
-        useEditor.getState().setStructureLayer('elements')
-        useEditor.getState().armMaterialPaint()
+        armPaintFromShortcut()
       } else if (e.key === 'g' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
@@ -643,7 +683,7 @@ export const useKeyboard = ({
       } else if (
         (e.key === 't' || e.key === 'T') &&
         !isVersionPreviewMode &&
-        !isToolOwnedRotation('t') &&
+        !isToolOwnedRotation() &&
         canRunGlobalRotationShortcut()
       ) {
         // Rotate selected node counter-clockwise

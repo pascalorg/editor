@@ -7,6 +7,7 @@ import {
   getWallBaseElevationForNodes,
   getWallCurveFrameAt,
   getWallEffectiveHeightForNodes,
+  getWallLocalFaceZ,
   getWallThickness,
   type PipeSegmentNode,
   pointInPolygon,
@@ -67,7 +68,7 @@ export function planRunHangerSlots(
   run: SupportedRun,
   nodes: Record<AnyNodeId, AnyNode>,
 ): RunHangerSlot[] {
-  if (!run.autoHangers || !run.parentId) return []
+  if (!(run.autoHangers && run.parentId)) return []
   const spacing = run.hangerSpacing ?? 1.5
   const reach = run.hangerMaxReach ?? 2
   if (!(Number.isFinite(spacing) && spacing > 0 && Number.isFinite(reach) && reach > 0)) return []
@@ -115,12 +116,13 @@ export function planRunHangerSlots(
           if (hasWallChildOverlap(host.id, nodes, hit.localX, center.y - base, 0.08, 0.08)) continue
           const frame = getWallCurveFrameAt(host, hit.localX / hit.wallLength)
           const side = hit.perpDistance >= 0 ? 1 : -1
+          const faceOffset = getWallLocalFaceZ(host, side > 0 ? 'a' : 'b')
           anchor = new Vector3(
-            frame.point.x - (hit.dirY * side * thickness) / 2,
+            frame.point.x - hit.dirY * faceOffset,
             center.y,
-            frame.point.y + (hit.dirX * side * thickness) / 2,
+            frame.point.y + hit.dirX * faceOffset,
           )
-          if (Math.abs(hit.perpDistance) < thickness / 2 - 0.001) continue
+          if (Math.abs(hit.perpDistance) < faceOffset * side - 0.001) continue
         } else continue
         const d = anchor.distanceTo(center)
         // A support along the run would overlap its body instead of holding it.

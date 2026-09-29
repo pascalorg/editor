@@ -1,7 +1,16 @@
-import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
-import type { SlabNode, WallNode } from '../../schema'
+import { floorConstructionLift, liftedManualSlab } from '../../lib/floor-construction-lift'
+import { floorRoomFaces, roomPolygonKey } from '../../lib/floor-room-faces'
+import { area, intersection, type MultiPolygon, union } from '../../lib/polygon-boolean'
+import {
+  getRenderableSlabPolygon,
+  prepareSlabPolygonContext,
+  scopeSlabPolygonContext,
+} from '../../lib/slab-polygon'
+import { levelBaseElevationAt } from '../../lib/terrain-support-query'
+import type { AnyNode, SeparatorNode, SlabNode, WallNode, ZoneNode } from '../../schema'
 import { getWallCurveFrameAt, isCurvedWall } from '../wall/wall-curve'
 import { DEFAULT_WALL_THICKNESS } from '../wall/wall-footprint'
+import { getWallFaceOffsets, type WallJustification } from '../wall/wall-frame'
 import { MIN_WALL_HEIGHT } from '../wall/wall-top'
 
 export type SlabElevationClamp = {
@@ -15,7 +24,7 @@ export type SlabElevationClamp = {
  * rises past `storeyHeight - MIN_WALL_HEIGHT` while electing as that
  * wall's base would squeeze the wall body below its minimum (and at the
  * plane, to nothing). Walls with explicit heights don't constrain — their
- * top rides the elected base, not the plane. Negative proposals (the
+ * top is an explicit level-local height rather than the storey plane. Negative proposals (the
  * drag-through-zero path that commits the `recessed` intent) pass
  * through untouched: this is a purely numeric upper bound.
  *
@@ -30,6 +39,7 @@ export function clampSlabElevationForWalls(
   levelWalls: WallNode[],
   levelSlabs: readonly SlabNode[],
   storeyHeight: number,
+  nodes?: Readonly<Record<string, AnyNode>>,
 ): SlabElevationClamp {
   const bound = storeyHeight - MIN_WALL_HEIGHT
   if (proposedElevation <= bound) return { elevation: proposedElevation, clamped: false }
@@ -48,11 +58,20 @@ export function clampSlabElevationForWalls(
       end: wall.end,
       curveOffset: wall.curveOffset,
       thickness: wall.thickness,
+      justification: wall.justification,
     }
     // Cheap pre-filter: a wall that never reaches the slab's footprint
     // can't elect it, whatever the election says about sibling slabs.
     if (!wallOverlapsPolygon(wallLike, slab.polygon)) continue
-    const support = computeWallSlabSupport(wallLike, substituted, levelWalls)
+    const support = computeWallSlabSupport(
+      wallLike,
+      substituted,
+      levelWalls,
+      undefined,
+      undefined,
+      0,
+      nodes,
+    )
     if (Math.abs(support.elevation - proposedElevation) <= WALL_SLAB_ELEVATION_POOL_EPSILON) {
       return { elevation: bound, clamped: true }
     }
@@ -72,10 +91,12 @@ export function getSlabElevationUpperBound(
   levelWalls: WallNode[],
   levelSlabs: readonly SlabNode[],
   storeyHeight: number,
+  nodes?: Readonly<Record<string, AnyNode>>,
 ): number {
   const probe =
     Math.max(storeyHeight, ...levelSlabs.map((candidate) => candidate.elevation ?? 0.05)) + 1
-  return clampSlabElevationForWalls(probe, slab, levelWalls, levelSlabs, storeyHeight).clamped
+  return clampSlabElevationForWalls(probe, slab, levelWalls, levelSlabs, storeyHeight, nodes)
+    .clamped
     ? storeyHeight - MIN_WALL_HEIGHT
     : Number.POSITIVE_INFINITY
 }
@@ -274,6 +295,8 @@ export type WallOverlapInput = {
   end: [number, number]
   curveOffset?: number
   thickness?: number
+  justification?: WallJustification
+  supportOffset?: number
 }
 
 // Minimum length of wall that must lie on/inside a slab polygon before the
@@ -292,9 +315,13 @@ function wallTestPolylines(
   start: [number, number],
   end: [number, number],
   curveOffset: number,
-  halfThickness: number,
+  wall: WallOverlapInput,
 ): Array<Array<{ x: number; y: number }>> {
   const wallLike = { start, end, curveOffset }
+  const { a, b } = getWallFaceOffsets({
+    ...wall,
+    thickness: Math.max(wall.thickness ?? DEFAULT_WALL_THICKNESS, 0),
+  })
   if (curveOffset !== 0 && isCurvedWall(wallLike)) {
     const count = 16
     const center: Array<{ x: number; y: number }> = []
@@ -304,15 +331,15 @@ function wallTestPolylines(
       const frame = getWallCurveFrameAt(wallLike, i / count)
       center.push(frame.point)
       left.push({
-        x: frame.point.x + frame.normal.x * halfThickness,
-        y: frame.point.y + frame.normal.y * halfThickness,
+        x: frame.point.x + frame.normal.x * a,
+        y: frame.point.y + frame.normal.y * a,
       })
       right.push({
-        x: frame.point.x - frame.normal.x * halfThickness,
-        y: frame.point.y - frame.normal.y * halfThickness,
+        x: frame.point.x - frame.normal.x * -b,
+        y: frame.point.y - frame.normal.y * -b,
       })
     }
-    return halfThickness > 0 ? [center, left, right] : [center]
+    return a - b > 0 ? [center, left, right] : [center]
   }
 
   const center = [
@@ -322,9 +349,11 @@ function wallTestPolylines(
   const dx = end[0] - start[0]
   const dz = end[1] - start[1]
   const len = Math.hypot(dx, dz)
-  if (len < 1e-10 || halfThickness <= 0) return [center]
-  const nx = (-dz / len) * halfThickness
-  const nz = (dx / len) * halfThickness
+  if (len < 1e-10 || a - b <= 0) return [center]
+  const nx = (-dz / len) * a
+  const nz = (dx / len) * a
+  const rx = (-dz / len) * -b
+  const rz = (dx / len) * -b
   return [
     center,
     [
@@ -332,8 +361,8 @@ function wallTestPolylines(
       { x: end[0] + nx, y: end[1] + nz },
     ],
     [
-      { x: start[0] - nx, y: start[1] - nz },
-      { x: end[0] - nx, y: end[1] - nz },
+      { x: start[0] - rx, y: start[1] - rz },
+      { x: end[0] - rx, y: end[1] - rz },
     ],
   ]
 }
@@ -365,6 +394,7 @@ export function wallOverlapsPolygon(
   let polygon: Array<[number, number]>
   let curveOffset = 0
   let thickness = DEFAULT_WALL_THICKNESS
+  let justification: WallJustification | undefined
   if (Array.isArray(startOrWall)) {
     start = startOrWall as [number, number]
     end = endOrPolygon as [number, number]
@@ -374,9 +404,10 @@ export function wallOverlapsPolygon(
     end = startOrWall.end
     curveOffset = startOrWall.curveOffset ?? 0
     thickness = startOrWall.thickness ?? DEFAULT_WALL_THICKNESS
+    justification = startOrWall.justification
     polygon = endOrPolygon as Array<[number, number]>
   }
-  return wallOverlapsSlabFootprint({ start, end, curveOffset, thickness }, polygon)
+  return wallOverlapsSlabFootprint({ start, end, curveOffset, thickness, justification }, polygon)
 }
 
 /**
@@ -392,10 +423,9 @@ export function wallOverlapsSlabFootprint(
   polygon: Array<[number, number]>,
   holes?: ReadonlyArray<Array<[number, number]>>,
 ): boolean {
-  const { start, end, curveOffset = 0, thickness = DEFAULT_WALL_THICKNESS } = wallLike
-  const halfThickness = Math.max(thickness / 2, 0)
+  const { start, end, curveOffset = 0 } = wallLike
 
-  const polylines = wallTestPolylines(start, end, curveOffset, halfThickness)
+  const polylines = wallTestPolylines(start, end, curveOffset, wallLike)
   const centerLength = polylineLength(polylines[0]!)
   if (centerLength < 1e-9) return false
 
@@ -448,6 +478,10 @@ const WALL_SLAB_ELEVATION_POOL_EPSILON = 1e-4
  * than `WALL_SLAB_MIN_OVERLAP` of the wall is ignored entirely (point
  * contact, endpoint grazes).
  *
+ * Auto plates use their zones' reference footprints from `nodes` before this
+ * adoption step; their full stored wall coverage must not own both wall faces.
+ * Pass the scene snapshot when querying plates.
+ *
  * Same-elevation slabs pool their coverage. `elevation` is elected from
  * the wall's carrying profile: per arc segment, the highest support on
  * each face, then the min across supported faces — so a slab that only
@@ -472,12 +506,17 @@ export type WallSlabSupport = {
   baseElevation: number
   /** Piecewise bottom elevation along the wall centerline, in normalized arc-length units. */
   baseSegments: WallSlabSupportSegment[]
+  /** Room-facing bottoms; independent of the hosted-child support datum. */
+  faceDatum: { a: WallSlabSupportSegment[]; b: WallSlabSupportSegment[] }
+  faceBottom: { a: WallSlabSupportSegment[]; b: WallSlabSupportSegment[] }
 }
 
 export type WallSlabSupportSegment = {
   start: number
   end: number
   elevation: number
+  /** Terrain runs interpolate linearly; omitted for flat room/support spans. */
+  endElevation?: number
 }
 
 /**
@@ -510,6 +549,10 @@ export type WallSlabSupportSegment = {
  * recessed slab up to `0` so a wall over a pool didn't sink — generalizes to
  * "never below the ground", which is the same rule with the ground no longer
  * assumed flat.
+ *
+ * `baseAt` optionally supplies the live level-base sampler for geometry face
+ * profiles. The spatial grid keeps it stable until its support inputs change;
+ * pure callers default to persisted terrain from `nodes`.
  */
 // A rendered slab polygon depends only on the slab set and the level's walls,
 // never on the wall being tested — but a per-frame pass asks for support once
@@ -519,27 +562,237 @@ export type WallSlabSupportSegment = {
 // live preview changes, so a hit means the inputs are the same objects.
 let polygonMemoSlabs: readonly SlabNode[] | null = null
 let polygonMemoWalls: readonly WallNode[] | null = null
-let polygonMemo = new Map<string, Array<[number, number]>>()
+let polygonMemoNodes: Readonly<Record<string, AnyNode>> | undefined
+const polygonSets = new Map<
+  string,
+  {
+    polygons: Map<string, MultiPolygon>
+    slabs: SlabNode[]
+    prepared: ReturnType<typeof prepareSlabPolygonContext>
+  }
+>()
+let polygonMemo = new Map<string, MultiPolygon>()
+let supportSlabs: SlabNode[] = []
+let preparedPolygons: ReturnType<typeof prepareSlabPolygonContext>
 
 function renderedSlabPolygon(
   slab: SlabNode,
   slabs: readonly SlabNode[],
   levelWalls: WallNode[],
-): Array<[number, number]> {
-  if (polygonMemoSlabs !== slabs || polygonMemoWalls !== levelWalls) {
+  nodes?: Readonly<Record<string, AnyNode>>,
+): MultiPolygon {
+  if (polygonMemoSlabs !== slabs || polygonMemoWalls !== levelWalls || polygonMemoNodes !== nodes) {
     polygonMemoSlabs = slabs
     polygonMemoWalls = levelWalls
-    polygonMemo = new Map()
+    polygonMemoNodes = nodes
+    const signature = JSON.stringify([
+      slabs,
+      levelWalls.map((wall) => [
+        wall.id,
+        wall.start,
+        wall.end,
+        wall.curveOffset,
+        wall.thickness,
+        wall.justification,
+      ]),
+      slabs.flatMap((slab) =>
+        slab.boundary === 'auto' && !slab.plateRole
+          ? (slab.zoneIds ?? []).map((id) => {
+              const zone = nodes?.[id]
+              return zone?.type === 'zone' ? [id, zone.polygon, zone.holes] : id
+            })
+          : [],
+      ),
+    ])
+    const hit = polygonSets.get(signature)
+    if (hit) {
+      polygonMemo = hit.polygons
+      supportSlabs = hit.slabs
+      preparedPolygons = hit.prepared
+    } else {
+      polygonMemo = new Map()
+      supportSlabs = slabs.flatMap((source) => {
+        if (
+          source.support === 'open' ||
+          source.plateRole === 'platform' ||
+          source.plateRole === 'sunken'
+        )
+          return []
+        if (source.plateRole === 'base') return [source]
+        const zones =
+          source.boundary === 'auto'
+            ? (source.zoneIds ?? []).flatMap((id) => {
+                const zone = nodes?.[id]
+                return zone?.type === 'zone'
+                  ? [{ outer: zone.polygon, holes: zone.holes ?? [] }]
+                  : []
+              })
+            : []
+        if (!zones.length) return [source]
+        return intersection({ outer: source.polygon, holes: source.holes ?? [] }, union(zones)).map(
+          (part) => ({
+            ...source,
+            boundary: undefined,
+            polygon: part.outer,
+            holes: part.holes,
+          }),
+        )
+      })
+      preparedPolygons = prepareSlabPolygonContext({
+        walls: levelWalls,
+        siblingSlabs: supportSlabs,
+      })
+      if (polygonSets.size >= 64) polygonSets.delete(polygonSets.keys().next().value!)
+      polygonSets.set(signature, {
+        polygons: polygonMemo,
+        slabs: supportSlabs,
+        prepared: preparedPolygons,
+      })
+    }
   }
   const cached = polygonMemo.get(slab.id)
   if (cached) return cached
+  if (slab.plateRole === 'base') {
+    const polygon = [{ outer: slab.polygon, holes: slab.holes ?? [] }]
+    polygonMemo.set(slab.id, polygon)
+    return polygon
+  }
+  // Keep the pre-plate face/seam election. Full wall coverage belongs to rendering.
+  const polygons = supportSlabs
+    .filter((source) => source.id === slab.id)
+    .map((source) => ({
+      outer: getRenderableSlabPolygon(source, scopeSlabPolygonContext(source, preparedPolygons)),
+      holes: source.holes ?? [],
+    }))
+  polygonMemo.set(slab.id, polygons)
+  return polygons
+}
 
-  const polygon = getRenderableSlabPolygon(slab, {
-    walls: levelWalls,
-    siblingSlabs: slabs.filter((other) => other.id !== slab.id),
-  })
-  polygonMemo.set(slab.id, polygon)
-  return polygon
+function appendBaseSegment(
+  segments: WallSlabSupportSegment[],
+  start: number,
+  end: number,
+  elevation: number,
+) {
+  const previous = segments.at(-1)
+  if (
+    previous &&
+    previous.endElevation === undefined &&
+    Math.abs(previous.elevation - elevation) <= WALL_SLAB_ELEVATION_POOL_EPSILON
+  )
+    previous.end = end
+  else segments.push({ start, end, elevation })
+}
+
+type RoomFaceBases = Record<'a' | 'b', Array<WallSlabSupportSegment & { thickness: number }>>
+
+type SupportMemo = {
+  slabs: readonly SlabNode[]
+  nodes: Readonly<Record<string, AnyNode>> | undefined
+  results: Map<string, WallSlabSupport>
+  terrainResults?: { revision: object; results: Map<string, WallSlabSupport> }
+  baseAt?: (x: number, z: number) => number
+  roomBases?: Map<string, RoomFaceBases>
+}
+const supportMemo = new WeakMap<WallNode[], SupportMemo>()
+
+function roomFaceBases(
+  slabs: readonly SlabNode[],
+  walls: WallNode[],
+  nodes: Readonly<Record<string, AnyNode>> | undefined,
+  memo: SupportMemo,
+) {
+  if (memo.roomBases) return memo.roomBases
+  const result = new Map<string, RoomFaceBases>()
+  memo.roomBases = result
+  if (!nodes || !walls.length) return result
+  const levels = new Set(walls.map((wall) => wall.parentId))
+  const zones = Object.values(nodes).filter(
+    (node): node is ZoneNode =>
+      node.type === 'zone' &&
+      node.spaceRole === 'room' &&
+      node.floor?.support !== 'open' &&
+      levels.has(node.parentId),
+  )
+  if (!zones.length) return result
+  const separators = Object.values(nodes).filter(
+    (node): node is SeparatorNode => node.type === 'separator' && levels.has(node.parentId),
+  )
+  const exactZones = new Map(
+    [...zones]
+      .sort((a, b) => b.id.localeCompare(a.id))
+      .map((zone) => [roomPolygonKey(zone.polygon, zone.holes), zone]),
+  )
+  const zoneBounds = new Map(
+    zones.map((zone) => [zone.id, polygonBounds([{ outer: zone.polygon, holes: [] }])]),
+  )
+  for (const room of floorRoomFaces([...walls, ...separators])) {
+    const polygon = { outer: room.referencePolygon, holes: room.holes }
+    const bounds = polygonBounds([polygon])
+    const zone =
+      exactZones.get(roomPolygonKey(room.referencePolygon, room.holes)) ??
+      zones
+        .filter((zone) => {
+          const other = zoneBounds.get(zone.id)!
+          return (
+            bounds.minX < other.maxX &&
+            other.minX < bounds.maxX &&
+            bounds.minZ < other.maxZ &&
+            other.minZ < bounds.maxZ
+          )
+        })
+        .map((zone) => ({
+          zone,
+          overlap: area(intersection(polygon, { outer: zone.polygon, holes: zone.holes ?? [] })),
+        }))
+        .filter(({ overlap }) => overlap > 1e-6)
+        .sort((a, b) => b.overlap - a.overlap || a.zone.id.localeCompare(b.zone.id))[0]?.zone
+    if (!zone) continue
+    const plate =
+      slabs.find(
+        (slab) =>
+          slab.boundary === 'auto' && slab.plateRole !== 'base' && slab.zoneIds?.includes(zone.id),
+      ) ?? slabs.find((slab) => slab.plateRole === 'base' && slab.zoneIds?.includes(zone.id))
+    const elevation = plate
+      ? plate.plateRole
+        ? (zone.floor?.elevation ?? plate.elevation)
+        : plate.elevation
+      : undefined
+    if (elevation === undefined || zone.hasFloor === false) continue
+    for (const span of room.spans) {
+      const wall = walls.find((wall) => wall.id === span.boundaryId)
+      if (!wall) continue
+      // Topology stations are chord parameters; support profiles use arc parameters.
+      const station = (t: number) => {
+        if (!isCurvedWall(wall) || t <= 0 || t >= 1) return t
+        const dx = wall.end[0] - wall.start[0],
+          dz = wall.end[1] - wall.start[1]
+        let low = 0,
+          high = 1
+        for (let i = 0; i < 40; i++) {
+          const mid = (low + high) / 2,
+            point = getWallCurveFrameAt(wall, mid).point
+          if (
+            ((point.x - wall.start[0]) * dx + (point.y - wall.start[1]) * dz) /
+              (dx * dx + dz * dz) <
+            t
+          )
+            low = mid
+          else high = mid
+        }
+        return (low + high) / 2
+      }
+      const bases = result.get(wall.id) ?? { a: [], b: [] }
+      bases[span.face].push({
+        start: station(span.t0),
+        end: station(span.t1),
+        elevation,
+        thickness: plate?.thickness ?? 0.05,
+      })
+      result.set(wall.id, bases)
+    }
+  }
+  return result
 }
 
 export function computeWallSlabSupport(
@@ -549,10 +802,134 @@ export function computeWallSlabSupport(
   preferredSlabId?: string | null,
   maxElevation?: number | null,
   levelBase = 0,
+  nodes?: Readonly<Record<string, AnyNode>>,
+  baseAt?: (x: number, z: number) => number,
+  terrainRevision?: object,
 ): WallSlabSupport {
-  const { start, end, curveOffset = 0, thickness = DEFAULT_WALL_THICKNESS } = wallLike
-  const halfThickness = Math.max(thickness / 2, 0)
-  const polylines = wallTestPolylines(start, end, curveOffset, halfThickness)
+  let memo = supportMemo.get(levelWalls)
+  if (!memo || memo.slabs !== slabs || memo.nodes !== nodes || memo.baseAt !== baseAt) {
+    memo = { slabs, nodes, baseAt, results: new Map() }
+    supportMemo.set(levelWalls, memo)
+  }
+  const key = JSON.stringify([
+    wallLike.start,
+    wallLike.end,
+    wallLike.curveOffset,
+    wallLike.thickness,
+    wallLike.justification,
+    wallLike.supportOffset,
+    preferredSlabId,
+    maxElevation,
+    levelBase,
+  ])
+  if (terrainRevision && memo.terrainResults?.revision !== terrainRevision)
+    memo.terrainResults = { revision: terrainRevision, results: new Map() }
+  const results = terrainRevision ? memo.terrainResults!.results : memo.results
+  const cached = results.get(key)
+  if (cached) return cached
+  let support = computeWallSlabSupportUncached(
+    memo,
+    wallLike,
+    slabs,
+    levelWalls,
+    preferredSlabId,
+    maxElevation,
+    levelBase,
+    nodes,
+  )
+  const groundWall =
+    preferredSlabId === 'ground' && nodes && slabs.some((slab) => slab.plateRole === 'base')
+      ? levelWalls.find(
+          (wall) =>
+            wall.start[0] === wallLike.start[0] &&
+            wall.start[1] === wallLike.start[1] &&
+            wall.end[0] === wallLike.end[0] &&
+            wall.end[1] === wallLike.end[1],
+        )
+      : undefined
+  const offset =
+    (wallLike.supportOffset ?? 0) + (groundWall ? floorConstructionLift(nodes!, groundWall) : 0)
+  if (offset || preferredSlabId === 'ground') {
+    const raw = support
+    const ground = preferredSlabId === 'ground'
+    const elevation = (ground ? levelBase : raw.elevation) + offset
+    const shift = (segments: readonly WallSlabSupportSegment[]) =>
+      segments.map((run) => ({
+        ...run,
+        elevation: run.elevation + offset,
+        ...(run.endElevation === undefined ? {} : { endElevation: run.endElevation + offset }),
+      }))
+    const baseSegments = ground ? [{ start: 0, end: 1, elevation }] : shift(raw.baseSegments)
+    const wall = levelWalls.find(
+      (wall) =>
+        wall.start[0] === wallLike.start[0] &&
+        wall.start[1] === wallLike.start[1] &&
+        wall.end[0] === wallLike.end[0] &&
+        wall.end[1] === wallLike.end[1],
+    )
+    const rooms =
+      wall && slabs.some((slab) => slab.plateRole === 'base')
+        ? roomFaceBases(slabs, levelWalls, nodes, memo).get(wall.id)
+        : undefined
+    const datum = (face: 'a' | 'b') =>
+      raw.faceDatum[face].map((run) => {
+        const room = rooms?.[face].find(
+          (room) =>
+            room.start <= (run.start + run.end) / 2 && room.end >= (run.start + run.end) / 2,
+        )
+        return room
+          ? { ...run, elevation: room.elevation, endElevation: undefined }
+          : ground
+            ? { ...run, elevation, endElevation: undefined }
+            : shift([run])[0]!
+      })
+    const faceDatum = { a: datum('a'), b: datum('b') }
+    support = {
+      elevation,
+      electedSlabId: ground ? null : raw.electedSlabId,
+      baseElevation: Math.min(...baseSegments.map((run) => run.elevation)),
+      baseSegments,
+      faceDatum,
+      faceBottom: {
+        a: resolveWallFaceBottom(faceDatum.a, baseSegments, elevation),
+        b: resolveWallFaceBottom(faceDatum.b, baseSegments, elevation),
+      },
+    }
+  }
+  if (results.size >= 512) results.clear()
+  results.set(key, support)
+  return support
+}
+
+type SupportBounds = { minX: number; minZ: number; maxX: number; maxZ: number }
+const supportBounds = new WeakMap<MultiPolygon, SupportBounds>()
+function polygonBounds(polygon: MultiPolygon): SupportBounds {
+  const cached = supportBounds.get(polygon)
+  if (cached) return cached
+  const bounds = { minX: Infinity, minZ: Infinity, maxX: -Infinity, maxZ: -Infinity }
+  for (const part of polygon)
+    for (const [x, z] of part.outer) {
+      bounds.minX = Math.min(bounds.minX, x)
+      bounds.maxX = Math.max(bounds.maxX, x)
+      bounds.minZ = Math.min(bounds.minZ, z)
+      bounds.maxZ = Math.max(bounds.maxZ, z)
+    }
+  supportBounds.set(polygon, bounds)
+  return bounds
+}
+
+function computeWallSlabSupportUncached(
+  memo: SupportMemo,
+  wallLike: WallOverlapInput,
+  slabs: readonly SlabNode[],
+  levelWalls: WallNode[],
+  preferredSlabId?: string | null,
+  maxElevation?: number | null,
+  levelBase = 0,
+  nodes?: Readonly<Record<string, AnyNode>>,
+): WallSlabSupport {
+  const { start, end, curveOffset = 0 } = wallLike
+  const polylines = wallTestPolylines(start, end, curveOffset, wallLike)
   const polylineLengths = polylines.map(polylineLength)
   const wallLength = polylineLengths[0]!
   if (wallLength < 1e-9) {
@@ -561,9 +938,18 @@ export function computeWallSlabSupport(
       electedSlabId: null,
       baseElevation: levelBase,
       baseSegments: [],
+      faceDatum: { a: [], b: [] },
+      faceBottom: { a: [], b: [] },
     }
   }
 
+  const points = polylines.flat()
+  const band = {
+    minX: Math.min(...points.map((point) => point.x)) - ON_BOUNDARY_EPSILON,
+    maxX: Math.max(...points.map((point) => point.x)) + ON_BOUNDARY_EPSILON,
+    minZ: Math.min(...points.map((point) => point.y)) - ON_BOUNDARY_EPSILON,
+    maxZ: Math.max(...points.map((point) => point.y)) + ON_BOUNDARY_EPSILON,
+  }
   const minSupport = Math.max(1e-3, Math.min(WALL_SLAB_MIN_OVERLAP, wallLength * 0.5))
 
   type ElevationGroup = {
@@ -576,23 +962,44 @@ export function computeWallSlabSupport(
   let preferredElectedSlabId: string | null = null
 
   for (const slab of slabs) {
-    if (slab.polygon.length < 3) continue
-    const renderedPolygon = renderedSlabPolygon(slab, slabs, levelWalls)
+    if (
+      slab.support === 'open' ||
+      ((slab.plateRole === 'platform' || slab.plateRole === 'sunken') &&
+        slab.id !== preferredSlabId) ||
+      slab.polygon.length < 3
+    )
+      continue
+    const renderedPolygon = renderedSlabPolygon(slab, slabs, levelWalls, nodes)
+    const bounds = polygonBounds(renderedPolygon)
+    if (
+      bounds.minX > band.maxX ||
+      bounds.maxX < band.minX ||
+      bounds.minZ > band.maxZ ||
+      bounds.maxZ < band.minZ
+    )
+      continue
 
     let supported = 0
     const perPolyline = polylines.map((line) => {
-      let intervals = polylineInsideIntervals(line, renderedPolygon)
-      for (const hole of slab.holes || []) {
-        if (intervals.length === 0) break
-        if (hole.length < 3) continue
-        intervals = subtractIntervals(intervals, polylineInsideIntervals(line, hole, false))
-      }
+      const intervals = mergeIntervals(
+        renderedPolygon.flatMap(({ outer, holes }) => {
+          let covered = polylineInsideIntervals(line, outer)
+          for (const hole of holes) {
+            if (hole.length >= 3)
+              covered = subtractIntervals(covered, polylineInsideIntervals(line, hole, false))
+          }
+          return covered
+        }),
+      )
       supported = Math.max(supported, intervalsLength(intervals))
       return intervals
     })
     if (supported < minSupport) continue
 
-    const elevation = slab.elevation ?? 0.05
+    const elevation =
+      nodes && slabs.some((slab) => slab.plateRole === 'base')
+        ? liftedManualSlab(nodes, slab).elevation
+        : (slab.elevation ?? 0.05)
     if (preferredSlabId != null && slab.id === preferredSlabId) {
       preferredElevation = elevation
       preferredElectedSlabId = slab.id
@@ -668,6 +1075,7 @@ export function computeWallSlabSupport(
           (group) => group.elevation <= maxElevation + SUPPORT_ELEVATION_EPSILON,
         )
 
+  const faceDatum: WallSlabSupport['faceDatum'] = { a: [], b: [] }
   const baseSegments: WallSlabSupportSegment[] = []
   type CarryCandidate = { elevation: number; length: number }
   const carryCandidates: CarryCandidate[] = []
@@ -694,6 +1102,18 @@ export function computeWallSlabSupport(
     const faceElevations = [leftElevation, rightElevation].filter(Number.isFinite)
     const segmentElevation =
       faceElevations.length > 0 ? Math.min(...faceElevations) : Math.max(centerElevation, levelBase)
+
+    for (const [face, value] of [
+      ['a', leftElevation],
+      ['b', rightElevation],
+    ] as const) {
+      appendBaseSegment(
+        faceDatum[face],
+        start,
+        end,
+        Number.isFinite(value) ? value : segmentElevation,
+      )
+    }
 
     if (electableNormalizedGroups === normalizedByGroup) {
       if (faceElevations.length > 0 || Number.isFinite(centerElevation)) {
@@ -746,13 +1166,13 @@ export function computeWallSlabSupport(
   }
 
   const elevation =
-    preferredElevation !== null
-      ? preferredElevation
-      : majorityElevation !== Number.NEGATIVE_INFINITY
-        ? majorityElevation
-        : bestElevation === Number.NEGATIVE_INFINITY
+    preferredElevation === null
+      ? majorityElevation === Number.NEGATIVE_INFINITY
+        ? bestElevation === Number.NEGATIVE_INFINITY
           ? levelBase
           : bestElevation
+        : majorityElevation
+      : preferredElevation
   const electedSlabId =
     preferredElectedSlabId ??
     evaluatedGroups
@@ -767,13 +1187,168 @@ export function computeWallSlabSupport(
 
   if (baseSegments.length === 0) baseSegments.push({ start: 0, end: 1, elevation })
   const baseElevation = Math.min(...baseSegments.map((segment) => segment.elevation))
-  return { elevation, electedSlabId, baseElevation, baseSegments }
+  let resolvedFaceDatum: WallSlabSupport['faceDatum'] | undefined
+  const resolveFaceDatum = () => {
+    const wall = levelWalls.find(
+      (candidate) =>
+        candidate.start[0] === start[0] &&
+        candidate.start[1] === start[1] &&
+        candidate.end[0] === end[0] &&
+        candidate.end[1] === end[1] &&
+        (candidate.curveOffset ?? 0) === curveOffset &&
+        candidate.justification === wallLike.justification,
+    )
+    const roomBases = wall ? roomFaceBases(slabs, levelWalls, nodes, memo).get(wall.id) : undefined
+    if (roomBases)
+      for (const face of ['a', 'b'] as const) {
+        const spans = roomBases[face]
+        const cuts = [
+          ...new Set([
+            0,
+            1,
+            ...faceDatum[face].flatMap((segment) => [segment.start, segment.end]),
+            ...spans.flatMap((segment) => [segment.start, segment.end]),
+            ...roomBases[face === 'a' ? 'b' : 'a'].flatMap((segment) => [
+              segment.start,
+              segment.end,
+            ]),
+          ]),
+        ].sort((a, b) => a - b)
+        const result: WallSlabSupportSegment[] = []
+        for (let i = 1; i < cuts.length; i++) {
+          const start = cuts[i - 1]!,
+            end = cuts[i]!,
+            mid = (start + end) / 2
+          const room = spans.find((span) => span.start <= mid && mid < span.end)
+          const elected = faceDatum[face].find((span) => span.start <= mid && mid < span.end)
+          if (!elected) continue
+          const opposite = roomBases[face === 'a' ? 'b' : 'a'].find(
+            (span) => span.start <= mid && mid < span.end,
+          )
+          const groundAt = (t: number) => {
+            const frame = getWallCurveFrameAt(wall!, t)
+            const offset = getWallFaceOffsets(wall!)[face]
+            const x = frame.point.x + frame.normal.x * offset
+            const z = frame.point.y + frame.normal.y * offset
+            if (memo.baseAt) return memo.baseAt(x, z)
+            return nodes && wall!.parentId && nodes[wall!.parentId]
+              ? levelBaseElevationAt(nodes, wall!.parentId, x, z)
+              : levelBase
+          }
+          // Raised and sunken rooms never carry their exterior face with them.
+          // A flush floor follows depressed terrain only when explicitly opted in.
+          const count = Math.max(1, Math.ceil(((end - start) * wallLength) / 0.25))
+          const ground =
+            !slabs.some((slab) => slab.plateRole === 'base') &&
+            !room &&
+            opposite &&
+            (opposite.elevation - opposite.thickness > 1e-4 || opposite.elevation < -1e-4)
+              ? Array.from({ length: count + 1 }, (_, i) =>
+                  groundAt(start + ((end - start) * i) / count),
+                )
+              : []
+          if (ground.length) {
+            for (let j = 0; j < count; j++) {
+              const from = start + ((end - start) * j) / count
+              const to = start + ((end - start) * (j + 1)) / count
+              const elevation = ground[j]!,
+                endElevation = ground[j + 1]!
+              if (Math.abs(elevation - endElevation) < 1e-6)
+                appendBaseSegment(result, from, to, elevation)
+              else {
+                const previous = result.at(-1)
+                if (
+                  previous?.endElevation !== undefined &&
+                  Math.abs(previous.endElevation - elevation) < 1e-6 &&
+                  Math.abs(
+                    (previous.endElevation - previous.elevation) / (previous.end - previous.start) -
+                      (endElevation - elevation) / (to - from),
+                  ) < 1e-6
+                ) {
+                  previous.end = to
+                  previous.endElevation = endElevation
+                } else result.push({ start: from, end: to, elevation, endElevation })
+              }
+            }
+          } else
+            appendBaseSegment(
+              result,
+              start,
+              end,
+              slabs.some((slab) => slab.plateRole === 'base')
+                ? (room?.elevation ?? elected.elevation)
+                : Math.min(room?.elevation ?? elected.elevation, elected.elevation),
+            )
+        }
+        faceDatum[face] = result
+      }
+    return faceDatum
+  }
+  let faceBottom: WallSlabSupport['faceBottom'] | undefined
+  const datum = () => (resolvedFaceDatum ??= resolveFaceDatum())
+  const bottom = (segments: WallSlabSupportSegment[]) =>
+    resolveWallFaceBottom(segments, baseSegments, elevation)
+  return Object.defineProperties(
+    { elevation, electedSlabId, baseElevation, baseSegments },
+    {
+      faceDatum: { get: datum },
+      faceBottom: { get: () => (faceBottom ??= { a: bottom(datum().a), b: bottom(datum().b) }) },
+    },
+  ) as WallSlabSupport
 }
 
 export function computeWallSlabElevation(
   wallLike: WallOverlapInput,
   slabs: readonly SlabNode[],
   levelWalls: WallNode[],
+  nodes?: Readonly<Record<string, AnyNode>>,
 ): number {
-  return computeWallSlabSupport(wallLike, slabs, levelWalls).elevation
+  return computeWallSlabSupport(wallLike, slabs, levelWalls, undefined, undefined, 0, nodes)
+    .elevation
+}
+
+export function resolveWallFaceBottom(
+  datums: readonly WallSlabSupportSegment[],
+  support: readonly WallSlabSupportSegment[],
+  fallback: number,
+): WallSlabSupportSegment[] {
+  const at = (run: WallSlabSupportSegment, t: number) =>
+    run.elevation +
+    ((t - run.start) / (run.end - run.start)) *
+      ((run.endElevation ?? run.elevation) - run.elevation)
+  const cuts = [...new Set([...datums, ...support].flatMap((run) => [run.start, run.end]))].sort(
+    (a, b) => a - b,
+  )
+  const result: WallSlabSupportSegment[] = []
+  for (let i = 1; i < cuts.length; i++) {
+    const start = cuts[i - 1]!,
+      end = cuts[i]!,
+      mid = (start + end) / 2
+    const datum = datums.find((run) => run.start <= mid && run.end >= mid)
+    if (!datum) continue
+    const carrier = support.find((run) => run.start <= mid && run.end >= mid)
+    const d0 = at(datum, start),
+      d1 = at(datum, end),
+      w0 = carrier ? at(carrier, start) : fallback,
+      w1 = carrier ? at(carrier, end) : fallback
+    const crossing =
+      (d0 - w0) * (d1 - w1) < 0
+        ? start + ((end - start) * (w0 - d0)) / (d1 - d0 - w1 + w0)
+        : undefined
+    const pieces = crossing === undefined ? [start, end] : [start, crossing, end]
+    for (let j = 1; j < pieces.length; j++) {
+      const from = pieces[j - 1]!,
+        to = pieces[j]!
+      const height = (t: number) => Math.min(at(datum, t), carrier ? at(carrier, t) : fallback)
+      const elevation = height(from),
+        endElevation = height(to)
+      result.push({
+        start: from,
+        end: to,
+        elevation,
+        ...(Math.abs(elevation - endElevation) < 1e-9 ? {} : { endElevation }),
+      })
+    }
+  }
+  return result
 }

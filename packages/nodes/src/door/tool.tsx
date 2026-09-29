@@ -171,6 +171,7 @@ const DoorTool: React.FC = () => {
         wall.curveOffset ?? 0,
         wall.thickness,
         wall.supportSlabId,
+        wall.justification,
       )
 
     const markHostDirty = (hostId: string) => {

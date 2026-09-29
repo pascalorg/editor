@@ -15,6 +15,7 @@ import {
   FLOORPLAN_NODE_EXTENSION_KEY,
   floorplanGeometryMetadata,
 } from '../../../lib/floorplan/floorplan-extension'
+import type { SessionWrites } from '../../../lib/session-writes'
 import {
   buildFloorplanEntryGeometry,
   cancelFloorplanAffordanceDrag,
@@ -30,6 +31,7 @@ import {
   isFloorplanOpeningPlacementState,
   resolveFloorplanHandleUnitsPerPixel,
   siteToFloorplanTransform,
+  splitFloorplanHandles,
   splitFloorplanOverlay,
   subscribeFloorplanAffordanceToolCancel,
 } from './floorplan-registry-layer'
@@ -385,7 +387,13 @@ describe('floorplan affordance cancellation', () => {
       canCommit: () => true,
       commit,
     }
-    const snapshots = [{ id: 'wall_a' as AnyNodeId, data: { width: 1 } }]
+    const revert = mock(() => {})
+    const writes = {
+      record: (run: () => unknown) => run(),
+      revert,
+      changes: () => ({ create: [], update: [], delete: [] }),
+      size: 0,
+    } as unknown as SessionWrites
     const drag = {
       pointerId: 7,
       captureTarget: {
@@ -394,12 +402,11 @@ describe('floorplan affordance cancellation', () => {
       } as unknown as Element,
       handleId: 'wall_a:endpoint',
       session,
-      snapshots,
+      writes,
       historyPaused: true,
       lastPlanPoint: [0, 0] as [number, number],
     }
     const dragRef = { current: drag }
-    const restoreSnapshots = mock(() => {})
     const resumeHistory = mock(() => {})
     const clearPreview = mock(() => {})
     const clearSnapFeedback = mock(() => {})
@@ -410,7 +417,6 @@ describe('floorplan affordance cancellation', () => {
     const unsubscribe = subscribeFloorplanAffordanceToolCancel(
       () =>
         cancelFloorplanAffordanceDrag(dragRef, {
-          restoreSnapshots,
           resumeHistory,
           clearPreview,
           clearSnapFeedback,
@@ -429,7 +435,7 @@ describe('floorplan affordance cancellation', () => {
 
     expect(dragRef.current).toBeNull()
     expect(releasePointerCapture).toHaveBeenCalledWith(7)
-    expect(restoreSnapshots).toHaveBeenCalledWith(snapshots)
+    expect(revert).toHaveBeenCalledTimes(1)
     expect(resumeHistory).toHaveBeenCalledTimes(1)
     expect(clearPreview).toHaveBeenCalledTimes(2)
     expect(clearPreview).toHaveBeenNthCalledWith(1, 'wall_a')
@@ -827,5 +833,32 @@ describe('isFloorplanHierarchyVisible', () => {
     // A level plan is scoped to its level: the walk stops at the root and
     // never consults the building above it.
     expect(visibleUnder(nodes, 'level_a', 'wall_a')).toBe(true)
+  })
+})
+
+describe('the handles pass', () => {
+  test('grabbable handles leave the overlay for a pass of their own, under the same transform', () => {
+    const label = { kind: 'text', x: 0, y: 0, text: 'Wall 1' } as FloorplanGeometry
+    const corner = {
+      kind: 'endpoint-handle',
+      point: [1, 0],
+      state: 'idle',
+      affordance: 'move-endpoint',
+      payload: { wallId: 'wall_a', endpoint: 'end' },
+    } as FloorplanGeometry
+    const tree = {
+      kind: 'group',
+      transform: 'rotate(30)',
+      children: [label, { kind: 'group', children: [corner] }],
+    } as FloorplanGeometry
+    expect(splitFloorplanHandles(tree)).toEqual({
+      rest: { kind: 'group', transform: 'rotate(30)', children: [label] },
+      handles: {
+        kind: 'group',
+        transform: 'rotate(30)',
+        children: [{ kind: 'group', children: [corner] }],
+      },
+    } as never)
+    expect(splitFloorplanHandles(label)).toEqual({ rest: label, handles: null })
   })
 })

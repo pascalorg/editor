@@ -201,6 +201,7 @@ const WindowTool: React.FC = () => {
         wall.curveOffset ?? 0,
         wall.thickness,
         wall.supportSlabId,
+        wall.justification,
       )
 
     const markHostDirty = (hostId: string) => {
@@ -327,19 +328,7 @@ const WindowTool: React.FC = () => {
       const itemRotation = sideFlip ? Math.PI : 0
 
       if (draftRef.current && draftRef.current.parentId !== event.node.id) destroyDraft()
-      if (!draftRef.current) {
-        const node = WindowNode.parse({
-          position: target.position,
-          rotation: [0, itemRotation, 0],
-          side,
-          parentId: event.node.id,
-          dormerId: event.node.id,
-          dormerFace: target.face,
-          metadata: { isTransient: true },
-        })
-        useScene.getState().createNode(node, event.node.id as AnyNodeId)
-        draftRef.current = node
-      } else {
+      if (draftRef.current) {
         useLiveNodeOverrides.getState().set(draftRef.current.id, {
           position: target.position,
           rotation: [0, itemRotation, 0],
@@ -351,6 +340,18 @@ const WindowTool: React.FC = () => {
           roofSegmentId: undefined,
           roofFace: undefined,
         })
+      } else {
+        const node = WindowNode.parse({
+          position: target.position,
+          rotation: [0, itemRotation, 0],
+          side,
+          parentId: event.node.id,
+          dormerId: event.node.id,
+          dormerFace: target.face,
+          metadata: { isTransient: true },
+        })
+        useScene.getState().createNode(node, event.node.id as AnyNodeId)
+        draftRef.current = node
       }
 
       publishDraftPreview(event.node)

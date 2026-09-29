@@ -6,6 +6,7 @@ const decide = (
 ): ReturnType<typeof resolveLevelVisibility> =>
   resolveLevelVisibility({
     levelMode: 'stacked',
+    hideAbove: false,
     hasSelectedLevel: false,
     isSelected: false,
     index: 0,
@@ -42,6 +43,20 @@ describe('resolveLevelVisibility', () => {
     expect(
       decide({ levelMode: 'solo', hasSelectedLevel: true, index: 2, selectedIndex: undefined }),
     ).toEqual({ visible: false, shadowOnly: false })
+  })
+
+  test('the level display hides the levels above the selected one as shadow casters', () => {
+    const base = { hideAbove: true, hasSelectedLevel: true, selectedIndex: 1 }
+    expect(decide({ ...base, index: 2 })).toEqual({ visible: true, shadowOnly: true })
+    expect(decide({ ...base, index: 1, isSelected: true })).toEqual({
+      visible: true,
+      shadowOnly: false,
+    })
+    expect(decide({ ...base, index: 0 })).toEqual({ visible: true, shadowOnly: false })
+    expect(decide({ ...base, index: 2, nodeVisible: false })).toEqual({
+      visible: false,
+      shadowOnly: false,
+    })
   })
 
   test('a level the author hid is hidden outright, never a shadow caster', () => {

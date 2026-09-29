@@ -236,6 +236,14 @@ export {
   ViewToggles as ToolbarLeft,
   ViewToggles as ViewerToolbarLeft,
 } from './components/ui/action-menu/view-toggles'
+// The Build panel's grouped layout, shared by the community and standalone tabs.
+export {
+  BuildPanelAdvancedSection,
+  BuildPanelRoomsSection,
+  BuildPanelSection,
+  BuildToolGrid,
+  BuildToolTile,
+} from './components/ui/build-panel/build-panel'
 export { useCommandPalette } from './components/ui/command-palette'
 export { ActionButton, ActionGroup } from './components/ui/controls/action-button'
 export {
@@ -258,6 +266,9 @@ export { FloatingLevelSelector } from './components/ui/floating-level-selector'
 export { CATALOG_ITEMS } from './components/ui/item-catalog/catalog-items'
 // Item collections UI — used by the kind-owned ItemPanel in nodes/.
 export { CollectionsPopover } from './components/ui/panels/collections/collections-popover'
+// A base plate's panel (one connected footprint's floor and foundation); the
+// slab kind's panel hands base plates to it.
+export { FloorFoundationPanel } from './components/ui/panels/floor-foundation-panel'
 export {
   resolveHomogeneousSelection,
   resolveUniqueSelectionIds,
@@ -276,6 +287,8 @@ export { applyMultiHeightMode } from './components/ui/panels/multi-height-mode'
 // a kind-owned panel and need PanelWrapper for the chrome.
 export { PanelWrapper } from './components/ui/panels/panel-wrapper'
 export { ParametricInspector as Inspector } from './components/ui/panels/parametric-inspector'
+export { ShapeChoice } from './components/ui/panels/shape-choice'
+export { WallPaintRegionList } from './components/ui/panels/wall-region-list'
 export { PALETTE_COLORS } from './components/ui/primitives/color-dot'
 export {
   DropdownMenu,
@@ -357,6 +370,7 @@ export { type UseDragActionArgs, useDragAction } from './hooks/use-drag-action'
 // Phase 5 Stage D — extras for kind-owned placement tools (FenceTool etc.).
 export { cancelActiveTool, markToolCancelConsumed } from './hooks/use-keyboard'
 export { useReducedMotion } from './hooks/use-reduced-motion'
+export { useSelectedRoom } from './hooks/use-selected-room'
 export { type Selection, useSelection } from './hooks/use-selection'
 export {
   clearPlacementSurface,
@@ -369,6 +383,16 @@ export {
   filterCatalogItems,
   isCatalogItemSelected,
 } from './lib/catalog-panel-model'
+export {
+  type CeilingEditSession,
+  endCeilingEdit,
+  exitCeilingEditToRoom,
+  getCeilingEditSession,
+  setCeilingHoles,
+  startCeilingEdit,
+  useCeilingEditCeilingId,
+  useCeilingEditSession,
+} from './lib/ceiling-edit-session'
 export {
   CEILING_ALIGNMENT_THRESHOLD_M,
   type CeilingPlanSnapInput,
@@ -413,6 +437,7 @@ export {
 } from './lib/elevator-support'
 export type { ExportTextureUtils } from './lib/export-texture-utils'
 export { getFloatingMenuScale } from './lib/floating-menu-scale'
+export { startOpeningDraft } from './lib/floor-opening-draft'
 // Floor-plan stair helpers — the cumulative-transform walk
 // (`computeFloorplanStairSegmentTransforms`) and the rich segment-entry
 // builder (`buildFloorplanStairEntry`) used by the kind-owned stair
@@ -666,6 +691,7 @@ export type {
   ModelExportFormat,
   ModelExportOptions,
 } from './lib/model-export'
+export { eyedropperMaterial } from './lib/paint-eyedropper'
 export {
   cyclePaintScope,
   type PaintHoverInfo,
@@ -714,8 +740,22 @@ export { clearRoofDuplicateMetadata, duplicateRoofSubtree } from './lib/roof-dup
 // kind-owned door / window tools in `@pascal-app/nodes` and the item
 // placement coordinator's roof-wall strategy.
 export { hasRoofFaceChildOverlap, type RoofWallHit, resolveRoofWallHit } from './lib/roof-wall-hit'
+export { WALL_PUSH_AFFORDANCE, type WallPushArrowPayload } from './lib/room-handle-drag'
+export type { RoomKey, RoomSelectionRecord } from './lib/room-selection'
+export { popRoomSelection, selectRoom } from './lib/room-selection-commands'
+export {
+  captureElementActionOrigin,
+  completeElementAction,
+  type ElementActionOrigin,
+} from './lib/room-zone-routing'
 export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor } from './lib/scene'
+export {
+  forEachSceneMaterialRef,
+  referencedSceneMaterialIds,
+  remapSceneMaterialRefs,
+  sceneMaterialUsageCounts,
+} from './lib/scene-material-refs'
 export { movementSfxStepKey } from './lib/sfx/movement-tick'
 export { emitDeleteSFX, triggerSFX } from './lib/sfx-bus'
 export { playSFX, type SFXName, type SFXPlaybackOptions } from './lib/sfx-player'
@@ -755,6 +795,12 @@ export {
   type SurfacePlanSnapInput,
   type SurfacePlanSnapResult,
 } from './lib/surface-plan-snap'
+// The Build panel's Outdoor → Terrace tool (an outdoor room: no walls, no ceiling).
+export {
+  cancelTerraceDraft,
+  startTerraceDraft,
+  useTerraceDraft,
+} from './lib/terrace-draft'
 export { useTerrainPanelRows } from './lib/terrain-panel-model'
 export {
   brushRadiusRange,
@@ -773,6 +819,19 @@ export { useLinearDisplay } from './lib/use-linear-display'
 // nodes` so they don't need their own copy / their own tailwind-merge
 // dependency.
 export { cn } from './lib/utils'
+export {
+  getWallDrawVariant,
+  selectWallDrawVariant,
+  useWallDrawVariant,
+  type WallDrawVariant,
+} from './lib/wall-draw-variant'
+export {
+  addWallPolygonDraftCorner,
+  commitWallPolygonDraft,
+  discardWallPolygonDraft,
+  startWallPolygonDraft,
+  wallPolygonDraftWalls,
+} from './lib/wall-polygon-draft'
 export {
   getActiveBuildingPose,
   projectAlignmentGuidesWorldToActiveBuildingLocal,

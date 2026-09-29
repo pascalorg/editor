@@ -357,10 +357,9 @@ describe('plugin API v1: editing and reload', () => {
     expect(ofType(clone.nodes, 'fixture:bench').id).not.toBe(bench.id)
   })
 
-  // Known v1 gap (R1 portable clone hook, owner P-03): a plugin cannot declare
-  // which of its fields hold node ids, so project clone and subtree duplicate
-  // copy them verbatim and they keep pointing at the source scene.
-  test.failing('project clone remaps plugin-owned node references', async () => {
+  // A whole-graph clone rewrites every string that is exactly a cloned node id,
+  // so plugin-owned references follow the clone without a declaration.
+  test('project clone remaps plugin-owned node references', async () => {
     await loadPlugin(fixturePlugin())
     const planter = asSceneNode(Planter.parse({}))
     loadLevel([planter, asSceneNode(Marker.parse({ targetIds: [planter.id] }))])
@@ -371,6 +370,9 @@ describe('plugin API v1: editing and reload', () => {
     ])
   })
 
+  // Known v1 gap (R1 portable clone hook, owner P-03): a plugin cannot declare
+  // which of its fields hold node ids, so subtree duplicate copies them verbatim
+  // and they keep pointing at the source nodes.
   test.failing('subtree duplicate remaps plugin-owned node references', async () => {
     await loadPlugin(fixturePlugin())
     const sprout = asSceneNode(Sprout.parse({}))

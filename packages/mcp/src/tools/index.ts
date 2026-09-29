@@ -26,6 +26,7 @@ import { registerSceneLifecycleTools } from './scene-lifecycle'
 import { registerSceneQueryTools } from './scene-query'
 import { registerSetUnitMembers } from './set-unit-members'
 import { registerSetZone } from './set-zone'
+import { registerStructureTools } from './structure-tools'
 import { registerTemplateTools } from './templates'
 import { registerUndo } from './undo'
 import { registerValidateDesign } from './validate-design'
@@ -59,6 +60,7 @@ export function registerTools(server: McpServer, operations: SceneOperations): v
   registerPlaceDesign(server, operations)
   registerCutOpening(server, operations)
   registerSetZone(server, operations)
+  registerStructureTools(server, operations)
   registerDuplicateLevel(server, operations)
   registerDeleteNode(server, operations)
   registerUndo(server, operations)

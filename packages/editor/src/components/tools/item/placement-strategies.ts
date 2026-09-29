@@ -20,6 +20,8 @@ import {
   createSceneApi,
   getRoofSegmentWallFace,
   getScaledDimensions,
+  getWallBodyCenterOffset,
+  getWallLocalFaceZ,
   nodeRegistry,
   resolveSurfacePlacement,
   roofFacePointToSegment,
@@ -168,7 +170,9 @@ function resolveWallPlacementPose(
   cursorRotationY: number
 } {
   const localZ =
-    attachTo === 'wall-side' ? ((event.node.thickness ?? 0.1) / 2) * (side === 'front' ? 1 : -1) : 0
+    attachTo === 'wall-side'
+      ? getWallLocalFaceZ(event.node, side === 'front' ? 'a' : 'b')
+      : getWallBodyCenterOffset(event.node)
   event.object.updateWorldMatrix(true, false)
   const world = event.object.localToWorld(new Vector3(localX, localY, localZ))
   const wallYaw = -Math.atan2(
@@ -176,7 +180,7 @@ function resolveWallPlacementPose(
     event.node.end[0] - event.node.start[0],
   )
   return {
-    position: [localX, localY, localZ],
+    position: [localX, localY, attachTo === 'wall' ? 0 : localZ],
     cursorPosition: [world.x, world.y, world.z],
     // Same composition the 2D floorplan resolves a wall child with
     // (`resolveItemTransform`): the cursor frame IS the item frame.
@@ -428,7 +432,7 @@ function resolveRoofWallTarget(
   const u = snapToHalf(hit.u)
   const centerV = snapToHalf(hit.v) + height / 2
   const fitted = freePlace ? null : clampRectToRoofWallFace(hit.face, u, centerV, width, height)
-  if (!fitted && !freePlace) return null
+  if (!(fitted || freePlace)) return null
   const finalU = fitted?.u ?? u
   const finalV = fitted?.v ?? centerV
 
@@ -559,7 +563,7 @@ export const roofWallStrategy = {
     if (!(ctx.draftItem && ctx.state.roofSegmentId)) return null
     // Alt mirrors the wall flow's stubbed validators: skip profile-fit
     // and overlap checks entirely.
-    if (!freePlace && !canPlaceOnRoofWall(ctx)) return null
+    if (!(freePlace || canPlaceOnRoofWall(ctx))) return null
 
     return {
       nodeUpdate: {

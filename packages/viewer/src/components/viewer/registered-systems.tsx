@@ -8,7 +8,7 @@ import {
   useRegistryVersion,
   useScene,
 } from '@pascal-app/core'
-import { type ComponentType, lazy, Suspense, useMemo } from 'react'
+import { Component, type ComponentType, lazy, type ReactNode, Suspense, useMemo } from 'react'
 
 const DEFAULT_PRIORITY = 5
 
@@ -27,6 +27,27 @@ function loadSystem(def: AnyNodeDefinition): ComponentType<RegisteredSystemProps
   const Comp = lazy(def.system.module)
   lazyCache.set(def.system.module, Comp)
   return Comp
+}
+
+class SystemErrorBoundary extends Component<
+  { systemId: string; children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  componentDidCatch(error: Error) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.error(`[viewer] Disabled system ${this.props.systemId}`, error)
+    }
+  }
+
+  render() {
+    return this.state.failed ? null : this.props.children
+  }
 }
 
 /**
@@ -73,9 +94,11 @@ export function RegisteredSystems() {
         const Comp = loadSystem(def)
         if (!Comp) return null
         return (
-          <Suspense fallback={null} key={`registered-system:${kind}`}>
-            <Comp sceneApi={sceneApi} />
-          </Suspense>
+          <SystemErrorBoundary key={`registered-system:${kind}`} systemId={kind}>
+            <Suspense fallback={null}>
+              <Comp sceneApi={sceneApi} />
+            </Suspense>
+          </SystemErrorBoundary>
         )
       })}
     </>

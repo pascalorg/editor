@@ -130,6 +130,10 @@ describe('snapContextOf (profile-driven, node-declared)', () => {
     tool: string | null = null,
   ) => snapContextOf({ scope, mode, tool, profileOf, profileOfNode })
 
+  it('dividing a room draws like a wall draft (wall, with angles)', () => {
+    expect(ctx({ kind: 'room-divide' })).toBe('wall')
+  })
+
   it('translating a whole structural node has no angle (polygon, not wall)', () => {
     expect(ctx({ kind: 'moving', nodeType: 'wall' })).toBe('polygon')
     expect(ctx({ kind: 'moving', nodeType: 'slab' })).toBe('polygon')

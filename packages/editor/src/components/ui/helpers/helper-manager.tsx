@@ -21,10 +21,50 @@ import {
   resolveSelectModeHelpHints,
 } from '../../../lib/contextual-help'
 import { getContextualHelpNodeExtension } from '../../../lib/contextual-help-extension'
-import { continuationContextOf } from '../../../lib/continuation'
+import { continuationContextOf, keyCyclableContinuationContext } from '../../../lib/continuation'
 import { canDirectMoveNode, canDirectRotateNode } from '../../../lib/direct-manipulation'
+import {
+  DIVIDE_ROOM_HUD_TITLE,
+  MEZZANINE_HUD_TITLE,
+  OPENING_HUD_TITLE,
+  TERRACE_HUD_TITLE,
+  MOVE_ROOM_HUD_TITLE,
+  MOVE_SELECTION_HUD_TITLE,
+  nodeKindHudTitle,
+  ERASE_HUD_TITLE,
+  PAINT_HUD_TITLE,
+  PICK_MATERIAL_HUD_TITLE,
+  paintRegionHudTitle,
+  RESIZE_HUD_TITLE,
+  ROTATE_HUD_TITLE,
+  SELECT_HUD_TITLE,
+  SMART_MEASURE_HUD_TITLE,
+  terrainHudTitle,
+  toolHudTitle,
+} from '../../../lib/hud-title'
 import type { ReshapeKind } from '../../../lib/interaction/scope'
+import {
+  type MezzanineShape,
+  useMezzanineDraft,
+} from '../../../lib/mezzanine-draft'
+import {
+  TERRACE_SHAPE_HINT,
+  type TerraceShape,
+  useTerraceDraft,
+} from '../../../lib/terrace-draft'
+import {
+  type OpeningShape,
+  useOpeningDraft,
+} from '../../../lib/floor-opening-draft'
 import { isFreshPlacementMetadata } from '../../../lib/placement-metadata'
+import { MEZZANINE_EDGE_DRAG_LABEL, ROOM_ELEVATION_DRAG_LABEL } from '../../../lib/room-handle-drag'
+import { ROOM_MOVE_DRAG_LABEL } from '../../../lib/room-transform-session'
+import { usePaintRegionHovering } from '../../../lib/paint-region-hover'
+import {
+  type PaintMode,
+  paintRegionHoverHint,
+  usePaintRegionMode,
+} from '../../../lib/paint-region-mode'
 import { snapContextOf } from '../../../lib/snapping-mode'
 import useEditor, { getActiveContinuationContext } from '../../../store/use-editor'
 import useInteractionScope, {
@@ -92,6 +132,89 @@ type ActiveModifierKeys = {
 }
 
 const EMPTY_CONTEXTUAL_HINTS: ContextualShortcutHint[] = []
+
+// The paint tool's region sub-modes: what one gesture draws, then Esc. A
+// refused gesture (the per-face cap) shows as the first row.
+/** What a click does in each whole-surface sub-mode; only painting teaches the held eyedropper. */
+export function paintHints(mode: PaintMode): ContextualShortcutHint[] {
+  if (mode === 'pick')
+    return [
+      { keys: ['Left click'], label: 'Paint with this material' },
+      { keys: ['Esc'], label: 'Cancel' },
+    ]
+  if (mode === 'erase')
+    return [{ keys: ['Left click'], label: 'Remove a painted part, or reset a surface' }]
+  if (mode === 'surface') return [{ keys: [['Alt', 'Option']], label: 'Hold to pick a material' }]
+  return []
+}
+
+export function paintRegionHints(
+  mode: 'rectangle' | 'polygon',
+  notice: string | null,
+  hovering = true,
+): ContextualShortcutHint[] {
+  const gesture: Record<typeof mode, ContextualShortcutHint> = {
+    rectangle: { keys: ['Drag'], label: 'Press anywhere, drag to the opposite corner' },
+    polygon: { keys: ['Left click'], label: 'Add point · click the first to close' },
+  }
+  // Off anything the sub-mode draws on, the HUD says where to go instead.
+  if (!hovering)
+    return [
+      ...(notice ? [{ keys: ['!'], label: notice, active: true }] : []),
+      { keys: ['Hover'], label: paintRegionHoverHint(mode), active: true },
+      { keys: ['Esc'], label: 'Cancel' },
+    ]
+  return [
+    ...(notice ? [{ keys: ['!'], label: notice, active: true }] : []),
+    gesture[mode],
+    ...(mode === 'polygon' ? [{ keys: ['Backspace'], label: 'Remove last point' }] : []),
+    { keys: ['Esc'], label: 'Cancel' },
+  ]
+}
+// "Add mezzanine": the outline gesture for the shape picked in the room panel,
+// then Esc; the snapping chip sits below.
+export function mezzanineHints(shape: MezzanineShape): ContextualShortcutHint[] {
+  return shape === 'rectangle'
+    ? [
+        { keys: ['Left click'], label: 'Set one corner, then the opposite' },
+        { keys: ['Drag'], label: 'Draw the mezzanine' },
+        { keys: ['Esc'], label: 'Cancel' },
+      ]
+    : [
+        { keys: ['Left click'], label: 'Add point · click the first to close' },
+        { keys: ['Backspace'], label: 'Remove last point' },
+        { keys: ['Enter'], label: 'Finish' },
+        { keys: ['Esc'], label: 'Cancel' },
+      ]
+}
+/** "Cut opening": the outline gesture for the chosen shape, then Esc. */
+export function openingHints(shape: OpeningShape): ContextualShortcutHint[] {
+  return mezzanineHints(shape).map((hint) =>
+    hint.label === 'Draw the mezzanine' ? { ...hint, label: 'Draw the opening' } : hint,
+  )
+}
+const TERRACE_CHIP_HINTS = [TERRACE_SHAPE_HINT]
+// The terrace tool: the outline gesture for the chosen shape, then Esc.
+export function terraceHints(shape: TerraceShape): ContextualShortcutHint[] {
+  return shape === 'rectangle'
+    ? [
+        { keys: ['Left click'], label: 'Set one corner, then the opposite' },
+        { keys: ['Drag'], label: 'Draw the terrace' },
+        { keys: ['Esc'], label: 'Done' },
+      ]
+    : [
+        { keys: ['Left click'], label: 'Add point · click the first to close' },
+        { keys: ['Backspace'], label: 'Remove last point' },
+        { keys: ['Enter'], label: 'Finish' },
+        { keys: ['Esc'], label: 'Done' },
+      ]
+}
+export const ROOM_DIVIDE_HINTS: ContextualShortcutHint[] = [
+  { keys: ['Left click'], label: 'Add point' },
+  { keys: ['Backspace'], label: 'Remove last point' },
+  { keys: ['Enter'], label: 'Finish at the edge' },
+  { keys: ['Esc'], label: 'Cancel' },
+]
 const NO_CONTEXTUAL_HELP_SUBSCRIPTION = () => () => {}
 
 function useActiveModifierKeys(): ActiveModifierKeys {
@@ -130,6 +253,43 @@ function useActiveModifierKeys(): ActiveModifierKeys {
   return modifiers
 }
 
+export type MezzanineGesture = 'raise' | 'resize' | 'move'
+
+/**
+ * A handle drag on a mezzanine — its floor handle, an edge arrow, or its pick-up
+ * (Move / Duplicate) — or null. Its HUD names the mezzanine, not "Resize" or
+ * "Move room".
+ */
+export function mezzanineGesture(
+  drag: { nodeId: string; label: string } | null,
+  nodes: Readonly<Record<string, AnyNode>>,
+): MezzanineGesture | null {
+  if (!drag) return null
+  const zone = nodes[drag.nodeId]
+  if (zone?.type !== 'zone' || zone.floor?.support !== 'open') return null
+  if (drag.label === ROOM_ELEVATION_DRAG_LABEL) return 'raise'
+  if (drag.label === MEZZANINE_EDGE_DRAG_LABEL) return 'resize'
+  if (drag.label === ROOM_MOVE_DRAG_LABEL) return 'move'
+  return null
+}
+
+export const MEZZANINE_GESTURE_HINTS: Record<MezzanineGesture, ContextualShortcutHint[]> = {
+  raise: [
+    { keys: ['Drag'], label: 'Raise or lower' },
+    { keys: ['Esc'], label: 'Cancel' },
+  ],
+  resize: [
+    { keys: ['Drag'], label: 'Resize' },
+    { keys: ['Esc'], label: 'Cancel' },
+  ],
+  move: [
+    { keys: ['Left click'], label: 'Place inside the room' },
+    { keys: [['R', 'T']], label: 'Rotate ±45°' },
+    { keys: ['Alt'], label: 'Free move' },
+    { keys: ['Esc'], label: 'Cancel' },
+  ],
+}
+
 export function HelperManager() {
   const mode = useEditor((s) => s.mode)
   const tool = useEditor((s) => s.tool)
@@ -137,11 +297,20 @@ export function HelperManager() {
   const terrainSampling = useEditor((s) => s.terrainSampling)
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const measurementToolKind = useEditor((s) => s.toolDefaults.measurement?.kind)
+  const wallMode = useEditor((s) => s.continuationByContext.wall)
   const workspaceMode = useEditor((s) => s.workspaceMode)
   const scope = useInteractionScope((s) => s.scope)
+  const paintRegionMode = usePaintRegionMode((s) => s.mode)
+  const paintRegionDrawing = paintRegionMode === 'rectangle' || paintRegionMode === 'polygon'
+  const paintRegionNotice = usePaintRegionMode((s) => s.notice)
+  const paintRegionHovering = usePaintRegionHovering()
+  const mezzanineShape = useMezzanineDraft((s) => (s.host ? s.shape : null))
+  const openingShape = useOpeningDraft((s) => (s.host ? s.shape : null))
+  const terraceShape = useTerraceDraft((s) => (s.host ? s.shape : null))
   const movingNode = useMovingNode()
   const reshapingNode = useReshapingNode()
   const activeHandleDrag = useActiveHandleDrag()
+  const mezzanineHandle = useScene((s) => mezzanineGesture(activeHandleDrag, s.nodes))
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const isMobile = useIsMobile()
   const modifiers = useActiveModifierKeys()
@@ -181,11 +350,14 @@ export function HelperManager() {
           return node ? nodeRegistry.get(node.type)?.snapProfile : undefined
         },
         draftDirectionalOf: (typeOrTool) => nodeRegistry.get(typeOrTool)?.snapDraftDirectional ?? true,
+        paintRegion: mode === 'material-paint' && paintRegionDrawing,
       }),
-    [scope, mode, tool],
+    [scope, mode, tool, paintRegionDrawing],
   )
+  // Contexts whose mode is picked in the Build panel (the wall's Rooms variant)
+  // get no HUD chip: the header names the variant instead.
   const continuationContext = useMemo(
-    () => getActiveContinuationContext(),
+    () => keyCyclableContinuationContext(getActiveContinuationContext()),
     [scope, mode, tool],
   )
   const selectModeHints = useMemo(() => {
@@ -227,6 +399,7 @@ export function HelperManager() {
       <ContextualHelperPanel
         hints={resolveRotateHandleHelpHints(modifiers.alt)}
         snapContext={snapContext}
+        title={ROTATE_HUD_TITLE}
       />
     )
   }
@@ -239,6 +412,79 @@ export function HelperManager() {
       <ContextualHelperPanel
         hints={[{ keys: ['R / T'], label: 'Rotate the selection ±45°' }]}
         snapContext={snapContext}
+        title={MOVE_SELECTION_HUD_TITLE}
+      />
+    )
+  }
+
+  if (mezzanineHandle) {
+    return (
+      <ContextualHelperPanel
+        hints={MEZZANINE_GESTURE_HINTS[mezzanineHandle]}
+        snapContext={snapContext}
+        title={MEZZANINE_HUD_TITLE}
+      />
+    )
+  }
+
+  // A picked-up room (Move / Duplicate / Rotate from its pill): the same keys
+  // as a group pick-up.
+  if (activeHandleDrag?.label === ROOM_MOVE_DRAG_LABEL) {
+    return (
+      <ContextualHelperPanel
+        hints={[
+          { keys: ['Left click'], label: 'Place' },
+          { keys: [['R', 'T']], label: 'Rotate ±45°' },
+          { keys: ['Alt'], label: 'Free move · slide doors and windows' },
+          { keys: ['Esc'], label: 'Cancel' },
+        ]}
+        snapContext={snapContext}
+        title={MOVE_ROOM_HUD_TITLE}
+      />
+    )
+  }
+  // A paint region gesture holds a handle-drag scope while it draws; its HUD
+  // stays the region one (Backspace / close hints for a polygon mid-draft).
+  if (mode === 'material-paint' && paintRegionDrawing) {
+    return (
+      <ContextualHelperPanel
+        hints={paintRegionHints(paintRegionMode, paintRegionNotice, paintRegionHovering)}
+        snapContext={snapContext}
+        title={paintRegionHudTitle(paintRegionMode)}
+      />
+    )
+  }
+
+  // The terrace tool draws like "Add mezzanine": same outline gestures and chip.
+  if (terraceShape) {
+    return (
+      <ContextualHelperPanel
+        chipHints={TERRACE_CHIP_HINTS}
+        hints={terraceHints(terraceShape)}
+        snapContext={snapContext}
+        title={TERRACE_HUD_TITLE}
+      />
+    )
+  }
+
+  if (openingShape) {
+    return (
+      <ContextualHelperPanel
+        hints={openingHints(openingShape)}
+        snapContext={snapContext}
+        title={OPENING_HUD_TITLE}
+      />
+    )
+  }
+
+  // "Add mezzanine" holds a handle-drag scope on its host room for the whole
+  // tool, so it must win over the generic resize HUD below.
+  if (mezzanineShape) {
+    return (
+      <ContextualHelperPanel
+        hints={mezzanineHints(mezzanineShape)}
+        snapContext={snapContext}
+        title={MEZZANINE_HUD_TITLE}
       />
     )
   }
@@ -255,6 +501,7 @@ export function HelperManager() {
           { keys: ['Esc'], label: 'Cancel' },
         ]}
         snapContext={snapContext}
+        title={RESIZE_HUD_TITLE}
       />
     )
   }
@@ -267,21 +514,37 @@ export function HelperManager() {
     const hints = reshapingNode
       ? nodeRegistry.get(reshapingNode.type)?.affordanceHints?.[scope.reshape]
       : undefined
+    const title = reshapingNode
+      ? nodeKindHudTitle(reshapingNode.type, scope.reshape === 'split' ? 'Split' : 'Edit')
+      : null
     if (hints) {
       return (
-        <RegisteredToolHelper hints={hints} shiftPressed={modifiers.shift} snapContext={snapContext} />
+        <RegisteredToolHelper
+          hints={hints}
+          shiftPressed={modifiers.shift}
+          snapContext={snapContext}
+          title={title}
+        />
       )
     }
-    return <ContextualHelperPanel hints={reshapingHints(scope.reshape)} snapContext={snapContext} />
+    return (
+      <ContextualHelperPanel
+        hints={reshapingHints(scope.reshape)}
+        snapContext={snapContext}
+        title={title}
+      />
+    )
   }
 
   if (movingNode) {
-    if (movingNode.type === 'building') return <BuildingHelper showRotate />
     // A fresh placement (e.g. a positioned preset like a shelf) advertises its
     // once/repeat continuation, exactly like the GLB item tool — but an existing
     // node being *moved* is not a placement, so it gets no continuation chip.
-    const movingContinuationContext = isFreshPlacementMetadata(movingNode.metadata)
-      ? continuationContextOf(movingNode.type)
+    const isFreshPlacement = isFreshPlacementMetadata(movingNode.metadata)
+    const movingTitle = nodeKindHudTitle(movingNode.type, isFreshPlacement ? undefined : 'Move')
+    if (movingNode.type === 'building') return <BuildingHelper showRotate title={movingTitle} />
+    const movingContinuationContext = isFreshPlacement
+      ? keyCyclableContinuationContext(continuationContextOf(movingNode.type))
       : null
     const collisionValidatesDrop = floorPlacedCollides(
       nodeRegistry.get(movingNode.type)?.capabilities.floorPlaced,
@@ -293,6 +556,7 @@ export function HelperManager() {
         showEsc
         showForce={collisionValidatesDrop}
         snapContext={snapContext}
+        title={movingTitle}
       />
     )
   }
@@ -301,7 +565,19 @@ export function HelperManager() {
   // only contextual control here. The chip hides itself for targets that only
   // paint one surface, so this renders nothing until a scoped target is active.
   if (mode === 'material-paint') {
-    return <ContextualHelperPanel hints={[]} showPaintScope />
+    return (
+      <ContextualHelperPanel
+        hints={paintHints(paintRegionMode)}
+        showPaintScope
+        title={
+          paintRegionMode === 'pick'
+            ? PICK_MATERIAL_HUD_TITLE
+            : paintRegionMode === 'erase'
+              ? ERASE_HUD_TITLE
+              : PAINT_HUD_TITLE
+        }
+      />
+    )
   }
 
   // Sculpt mode. The HUD is what makes a sustained brush mode legible: it names
@@ -310,18 +586,41 @@ export function HelperManager() {
   // mode-specific — bracket resize, and an Esc that abandons the stroke rather
   // than exiting the mode.
   if (mode === 'terrain-sculpt') {
-    return <ContextualHelperPanel hints={terrainSculptHints(terrainVerb, terrainSampling)} />
+    return (
+      <ContextualHelperPanel
+        hints={terrainSculptHints(terrainVerb, terrainSampling)}
+        title={terrainHudTitle(terrainVerb)}
+      />
+    )
   }
 
   if (scope.kind === 'mesh-editing') {
-    return <ContextualHelperPanel hints={contextualEditHints} snapContext={snapContext} />
+    return (
+      <ContextualHelperPanel
+        hints={contextualEditHints}
+        snapContext={snapContext}
+        title={contextualHelpNode ? nodeKindHudTitle(contextualHelpNode.type, 'Edit') : null}
+      />
+    )
   }
 
+
+  // Divide draws a separator path across the selected room — it reads as a
+  // wall draft: the wall's snapping chips (Shift / Ctrl) plus the path keys.
+  if (scope.kind === 'room-divide') {
+    return (
+      <ContextualHelperPanel
+        hints={ROOM_DIVIDE_HINTS}
+        snapContext={snapContext}
+        title={DIVIDE_ROOM_HUD_TITLE}
+      />
+    )
+  }
 
   // Idle select only — an active scope (handle-drag, box-select, …) must not show
   // the idle selection hints.
   if (mode === 'select' && scope.kind === 'idle') {
-    return <ContextualHelperPanel hints={selectModeHints} />
+    return <ContextualHelperPanel hints={selectModeHints} title={SELECT_HUD_TITLE} />
   }
 
   if (tool === 'measurement' && measurementToolKind === 'smart') {
@@ -332,6 +631,7 @@ export function HelperManager() {
           { keys: ['Click'], label: 'Pin measurement lens' },
           { keys: ['Esc'], label: 'Exit smart measure' },
         ]}
+        title={SMART_MEASURE_HUD_TITLE}
       />
     )
   }
@@ -351,6 +651,7 @@ export function HelperManager() {
           hints={hints}
           shiftPressed={modifiers.shift}
           snapContext={snapContext}
+          title={toolHudTitle(tool, wallMode)}
         />
       )
     }

@@ -1,21 +1,19 @@
 import { describe, expect, test } from 'bun:test'
-import { BuildingNode, CeilingNode, LevelNode, SlabNode, WallNode, ZoneNode } from '../schema'
+import { readFileSync } from 'node:fs'
+import { BuildingNode, CeilingNode, LevelNode, SlabNode, WallNode } from '../schema'
 import type { AnyNode, AnyNodeId } from '../schema/types'
-import { resolveCeilingHeight } from '../services/level-height'
-import { getCeilingClampBound } from '../services/storey'
 import {
   runWithSceneCommitNodeIds,
   type SceneCommit,
   subscribeSceneCommits,
 } from '../store/history-control'
 import useScene, { clearSceneHistory } from '../store/use-scene'
+import { migrateCeilingRoomLinks, migrateRoomZones } from '../utils/room-zone-migration'
+import { area } from './polygon-boolean'
+import { extractRooms } from './room-graph'
 import {
   detectSpacesForLevel,
   initSpaceDetectionSync,
-  planAutoCeilingsForLevel,
-  planAutoSlabsForLevel,
-  planAutoZonesForLevel,
-  resolveAutoZonePolygon,
   type SpaceTopologyReconcileEvent,
   wallClosesRoom,
 } from './space-detection'
@@ -39,10 +37,6 @@ const square: Array<[number, number]> = [
   [0, 3],
 ]
 
-function roomPolygon() {
-  return square.map(([x, y]) => ({ x, y }))
-}
-
 function squareWalls(height = 2.5) {
   return [
     WallNode.parse({ start: [0, 0], end: [4, 0], height }),
@@ -50,14 +44,6 @@ function squareWalls(height = 2.5) {
     WallNode.parse({ start: [4, 3], end: [0, 3], height }),
     WallNode.parse({ start: [0, 3], end: [0, 0], height }),
   ]
-}
-
-function slab(elevation: number) {
-  return SlabNode.parse({
-    polygon: square,
-    elevation,
-    autoFromWalls: true,
-  })
 }
 
 describe('space detection scene commit boundary', () => {
@@ -168,549 +154,30 @@ describe('space detection scene commit boundary', () => {
   })
 })
 
-describe('planAutoCeilingsForLevel', () => {
-  test('creates auto ceilings height-less so they follow the level top', () => {
-    const created = planAutoCeilingsForLevel([roomPolygon()], [], {
-      storeyHeight: 2.7,
-    }).create[0]
-
-    expect(created).toBeDefined()
-    // Follows-mode: no stored height — the effective height derives from
-    // the clamp bound at read time via resolveCeilingHeight.
-    expect('height' in created!).toBe(false)
-    expect(created?.autoFromWalls).toBe(true)
-  })
-
-  test('never writes a height onto a matched auto ceiling', () => {
-    const ceiling = CeilingNode.parse({
-      polygon: square,
-      autoFromWalls: true,
-    })
-
-    const plan = planAutoCeilingsForLevel([roomPolygon()], [ceiling], {
-      storeyHeight: 3,
-    })
-
-    // Same polygon, follows-mode height — nothing to update.
-    expect(plan.create).toHaveLength(0)
-    expect(plan.update).toHaveLength(0)
-    expect(plan.delete).toHaveLength(0)
-  })
-
-  test('creates and reconciles an auto ceiling at the enclosing wall top', () => {
-    const context = {
-      heightForRoom: () => 3.09,
-    }
-    const created = planAutoCeilingsForLevel([roomPolygon()], [], context).create[0]
-
-    expect(created?.height).toBeCloseTo(3.09)
-
-    const existing = CeilingNode.parse({
-      polygon: square,
-      height: 2.49,
-      autoFromWalls: true,
-    })
-    const update = planAutoCeilingsForLevel([roomPolygon()], [existing], context).update[0]
-
-    expect(update?.id).toBe(existing.id)
-    expect(update?.data.height).toBeCloseTo(3.09)
-  })
-
-  test('a leftover explicit height on a matched auto ceiling is not rewritten', () => {
-    const ceiling = CeilingNode.parse({
-      polygon: square,
-      height: 2.55,
-      autoFromWalls: true,
-    })
-
-    const plan = planAutoCeilingsForLevel([roomPolygon()], [ceiling], {
-      storeyHeight: 3,
-    })
-
-    // The sync no longer re-derives auto heights; a user-set explicit
-    // height survives (still under the bound, so no clamp either).
-    expect(plan.update).toHaveLength(0)
-  })
-
-  test('does not replace a manual ceiling with an auto ceiling', () => {
-    const manualCeiling = CeilingNode.parse({
-      polygon: square,
-      height: 2.5,
-      autoFromWalls: false,
-    })
-
-    // Storey plane above the stored 2.5 so the stage 3-B manual re-clamp
-    // stays out of this test's scope (suppression only).
-    const plan = planAutoCeilingsForLevel([roomPolygon()], [manualCeiling], {
-      storeyHeight: 2.7,
-    })
-
-    expect(plan.create).toHaveLength(0)
-    expect(plan.update).toHaveLength(0)
-  })
-
-  test('demotes an orphaned auto ceiling to manual with its polygon untouched', () => {
-    const ceiling = CeilingNode.parse({
-      polygon: square,
-      height: 2.55,
-      autoFromWalls: true,
-    })
-
-    const plan = planAutoCeilingsForLevel([], [ceiling])
-
-    expect(plan.create).toHaveLength(0)
-    expect(plan.delete).toHaveLength(0)
-    expect(plan.update).toHaveLength(1)
-    expect(plan.update[0]?.id).toBe(ceiling.id)
-    // Ceilings render the stored polygon in both modes, so no polygon bake.
-    expect(plan.update[0]?.data).toEqual({ autoFromWalls: false })
-  })
-
-  test('deletes an unmatched auto ceiling absorbed by a room merge', () => {
-    const leftCeiling = CeilingNode.parse({
-      polygon: [
-        [0, 0],
-        [4, 0],
-        [4, 3],
-        [0, 3],
-      ],
-      autoFromWalls: true,
-    })
-    const rightCeiling = CeilingNode.parse({
-      polygon: [
-        [4, 0],
-        [8, 0],
-        [8, 3],
-        [4, 3],
-      ],
-      autoFromWalls: true,
-    })
-    const mergedRoom = [
-      { x: 0, y: 0 },
-      { x: 8, y: 0 },
-      { x: 8, y: 3 },
-      { x: 0, y: 3 },
-    ]
-
-    const plan = planAutoCeilingsForLevel([mergedRoom], [leftCeiling, rightCeiling])
-
-    expect(plan.create).toHaveLength(0)
-    expect(plan.delete).toHaveLength(1)
-    const survivorId = plan.update[0]?.id
-    expect([leftCeiling.id, rightCeiling.id]).toContain(plan.delete[0]!)
-    expect(plan.delete[0]).not.toBe(survivorId)
-  })
-
-  test('preserves incompatible merged ceilings as separate manual surfaces', () => {
-    const leftCeiling = CeilingNode.parse({
-      polygon: [
-        [0, 0],
-        [4, 0],
-        [4, 3],
-        [0, 3],
-      ],
-      height: 2.4,
-      slots: { surface: 'library:red' },
-      autoFromWalls: true,
-    })
-    const rightCeiling = CeilingNode.parse({
-      polygon: [
-        [4, 0],
-        [8, 0],
-        [8, 3],
-        [4, 3],
-      ],
-      slots: { surface: 'library:blue' },
-      autoFromWalls: true,
-    })
-    const mergedRoom = [
-      { x: 0, y: 0 },
-      { x: 8, y: 0 },
-      { x: 8, y: 3 },
-      { x: 0, y: 3 },
-    ]
-
-    const plan = planAutoCeilingsForLevel([mergedRoom], [leftCeiling, rightCeiling])
-
-    expect(plan.create).toHaveLength(0)
-    expect(plan.delete).toHaveLength(0)
-    expect(plan.update).toEqual(
-      expect.arrayContaining([
-        { id: leftCeiling.id, data: { autoFromWalls: false } },
-        { id: rightCeiling.id, data: { autoFromWalls: false } },
-      ]),
-    )
-  })
-
-  test('keeps and reparents hosted children when compatible ceilings merge', () => {
-    const leftCeiling = CeilingNode.parse({
-      id: 'ceiling_host_left',
-      polygon: [
-        [0, 0],
-        [4, 0],
-        [4, 3],
-        [0, 3],
-      ],
-      children: ['item_left'],
-      autoFromWalls: true,
-    })
-    const rightCeiling = CeilingNode.parse({
-      id: 'ceiling_host_right',
-      polygon: [
-        [4, 0],
-        [8, 0],
-        [8, 3],
-        [4, 3],
-      ],
-      children: ['item_right'],
-      autoFromWalls: true,
-    })
-    const mergedRoom = [
-      { x: 0, y: 0 },
-      { x: 8, y: 0 },
-      { x: 8, y: 3 },
-      { x: 0, y: 3 },
-    ]
-
-    const plan = planAutoCeilingsForLevel([mergedRoom], [leftCeiling, rightCeiling])
-    const deletedId = plan.delete[0]
-    const survivor = [leftCeiling, rightCeiling].find((ceiling) => ceiling.id !== deletedId)
-    const survivorUpdate = plan.update.find((update) => update.id === survivor?.id)
-    const deletedChild = deletedId === leftCeiling.id ? 'item_left' : 'item_right'
-
-    expect(plan.create).toHaveLength(0)
-    expect(plan.delete).toHaveLength(1)
-    expect(survivorUpdate?.data.children).toEqual(
-      expect.arrayContaining(['item_left', 'item_right']),
-    )
-    expect(plan.reparent).toEqual([{ id: deletedChild, parentId: survivor?.id }])
-  })
-
-  test('unions openings when compatible ceilings merge', () => {
-    const leftHole: Array<[number, number]> = [
-      [1, 1],
-      [2, 1],
-      [2, 2],
-      [1, 2],
-    ]
-    const rightHole: Array<[number, number]> = [
-      [6, 1],
-      [7, 1],
-      [7, 2],
-      [6, 2],
-    ]
-    const leftCeiling = CeilingNode.parse({
-      polygon: [
-        [0, 0],
-        [4, 0],
-        [4, 3],
-        [0, 3],
-      ],
-      holes: [leftHole],
-      holeMetadata: [{ source: 'manual' }],
-      autoFromWalls: true,
-    })
-    const rightCeiling = CeilingNode.parse({
-      polygon: [
-        [4, 0],
-        [8, 0],
-        [8, 3],
-        [4, 3],
-      ],
-      holes: [rightHole],
-      holeMetadata: [{ source: 'stair', stairId: 'stair_right' }],
-      autoFromWalls: true,
-    })
-    const mergedRoom = [
-      { x: 0, y: 0 },
-      { x: 8, y: 0 },
-      { x: 8, y: 3 },
-      { x: 0, y: 3 },
-    ]
-
-    const plan = planAutoCeilingsForLevel([mergedRoom], [leftCeiling, rightCeiling])
-    const survivor = [leftCeiling, rightCeiling].find(
-      (ceiling) => ceiling.id === plan.update[0]?.id,
-    )
-    const merged = CeilingNode.parse({ ...survivor, ...plan.update[0]?.data })
-
-    expect(plan.delete).toHaveLength(1)
-    expect(merged.holes).toEqual(expect.arrayContaining([leftHole, rightHole]))
-    expect(merged.holeMetadata).toEqual(
-      expect.arrayContaining([{ source: 'manual' }, { source: 'stair', stairId: 'stair_right' }]),
-    )
-  })
-
-  test('a split ceiling inherits customization and assigns each opening to its room', () => {
-    const leftHole: Array<[number, number]> = [
-      [0.5, 0.5],
-      [1, 0.5],
-      [1, 1],
-      [0.5, 1],
-    ]
-    const rightHole: Array<[number, number]> = [
-      [3, 0.5],
-      [3.5, 0.5],
-      [3.5, 1],
-      [3, 1],
-    ]
-    const ceiling = CeilingNode.parse({
-      polygon: square,
-      height: 2.2,
-      materialPreset: 'custom-ceiling',
-      slots: { surface: 'library:blue' },
-      holes: [leftHole, rightHole],
-      holeMetadata: [{ source: 'manual' }, { source: 'stair', stairId: 'stair_right' }],
-      autoFromWalls: true,
-    })
-    const rooms = [
-      [
-        { x: 0, y: 0 },
-        { x: 2, y: 0 },
-        { x: 2, y: 3 },
-        { x: 0, y: 3 },
-      ],
-      [
-        { x: 2, y: 0 },
-        { x: 4, y: 0 },
-        { x: 4, y: 3 },
-        { x: 2, y: 3 },
-      ],
-    ]
-
-    const plan = planAutoCeilingsForLevel(rooms, [ceiling], { storeyHeight: 2.5 })
-    const updated = CeilingNode.parse({ ...ceiling, ...plan.update[0]?.data })
-    const surfaces = [updated, ...plan.create]
-    const left = surfaces.find((surface) => surface.polygon.some(([x]) => x === 0))
-    const right = surfaces.find((surface) => surface.polygon.some(([x]) => x === 4))
-
-    expect(plan.create).toHaveLength(1)
-    expect(plan.update).toHaveLength(1)
-    expect(surfaces.every((surface) => surface.height === 2.2)).toBe(true)
-    expect(surfaces.every((surface) => surface.materialPreset === 'custom-ceiling')).toBe(true)
-    expect(surfaces.every((surface) => surface.slots?.surface === 'library:blue')).toBe(true)
-    expect(left?.holes).toEqual([leftHole])
-    expect(left?.holeMetadata).toEqual([{ source: 'manual' }])
-    expect(right?.holes).toEqual([rightHole])
-    expect(right?.holeMetadata).toEqual([{ source: 'stair', stairId: 'stair_right' }])
-  })
-
-  test('a split ceiling reparents hosted items to the ceiling that contains them', () => {
-    const ceiling = CeilingNode.parse({
-      id: 'ceiling_with_items',
-      polygon: square,
-      children: ['item_left', 'item_right', 'item_on_divider'],
-      autoFromWalls: true,
-    })
-    const rooms = [
-      [
-        { x: 0, y: 0 },
-        { x: 2, y: 0 },
-        { x: 2, y: 3 },
-        { x: 0, y: 3 },
-      ],
-      [
-        { x: 2, y: 0 },
-        { x: 4, y: 0 },
-        { x: 4, y: 3 },
-        { x: 2, y: 3 },
-      ],
-    ]
-    const positions: Record<string, [number, number]> = {
-      item_left: [1, 1],
-      item_right: [3, 1],
-      item_on_divider: [2, 1],
-    }
-
-    const plan = planAutoCeilingsForLevel(rooms, [ceiling], {
-      childPosition: (id) => positions[id],
-    })
-    const sourceUpdate = plan.update.find((update) => update.id === ceiling.id)
-    const created = plan.create[0]
-
-    expect(sourceUpdate?.data.children).toEqual(['item_left', 'item_on_divider'])
-    expect(created?.children).toEqual(['item_right'])
-    expect(plan.reparent).toEqual([{ id: 'item_right', parentId: created?.id }])
-  })
-
-  test('clips a stair opening across both sides of a ceiling split', () => {
-    const crossingHole: Array<[number, number]> = [
-      [1.5, 1],
-      [2.5, 1],
-      [2.5, 2],
-      [1.5, 2],
-    ]
-    const ceiling = CeilingNode.parse({
-      polygon: square,
-      holes: [crossingHole],
-      holeMetadata: [{ source: 'stair', stairId: 'stair_crossing' }],
-      autoFromWalls: true,
-    })
-    const rooms = [
-      [
-        { x: 0, y: 0 },
-        { x: 2, y: 0 },
-        { x: 2, y: 3 },
-        { x: 0, y: 3 },
-      ],
-      [
-        { x: 2, y: 0 },
-        { x: 4, y: 0 },
-        { x: 4, y: 3 },
-        { x: 2, y: 3 },
-      ],
-    ]
-
-    const plan = planAutoCeilingsForLevel(rooms, [ceiling])
-    const surfaces = [CeilingNode.parse({ ...ceiling, ...plan.update[0]?.data }), ...plan.create]
-    const holes = surfaces.flatMap((surface) => surface.holes)
-
-    expect(holes).toHaveLength(2)
-    expect(holes).toEqual(
-      expect.arrayContaining([
-        expect.arrayContaining([
-          [1.5, 1],
-          [2, 1],
-          [2, 2],
-          [1.5, 2],
-        ]),
-        expect.arrayContaining([
-          [2, 1],
-          [2.5, 1],
-          [2.5, 2],
-          [2, 2],
-        ]),
-      ]),
-    )
-    expect(
-      surfaces.every(
-        (surface) =>
-          surface.holeMetadata.length === 1 &&
-          surface.holeMetadata[0]?.source === 'stair' &&
-          surface.holeMetadata[0]?.stairId === 'stair_crossing',
-      ),
-    ).toBe(true)
-  })
-
-  test('a demoted ceiling suppresses re-creating an auto ceiling when the room re-forms', () => {
-    const ceiling = CeilingNode.parse({
-      polygon: square,
-      height: 2.55,
-      autoFromWalls: true,
-    })
-
-    const demotion = planAutoCeilingsForLevel([], [ceiling]).update[0]
-    const demoted = CeilingNode.parse({ ...ceiling, ...demotion?.data })
-    expect(demoted.autoFromWalls).toBe(false)
-
-    // Storey plane above the stored 2.55 so the stage 3-B manual re-clamp
-    // stays out of this test's scope (suppression only).
-    const plan = planAutoCeilingsForLevel([roomPolygon()], [demoted], {
-      storeyHeight: 2.7,
-    })
-
-    expect(plan.create).toHaveLength(0)
-    expect(plan.update).toHaveLength(0)
-    expect(plan.delete).toHaveLength(0)
-  })
-})
-
-// Two stacked levels; the deck slab (occupying [-0.3, 0] over the upper
-// level's plane) covers the queried level below, so the clamp bound is
-// 2.5 - 0.3 - 0.01 = 2.19 (scenario gate 11's flush deck).
-function stackedDeckNodes(): Record<AnyNodeId, AnyNode> {
-  const deck = SlabNode.parse({
-    id: 'slab_deck',
-    parentId: 'level_1',
-    polygon: square,
-    elevation: 0,
-    thickness: 0.3,
-  })
-  const list: AnyNode[] = [
-    BuildingNode.parse({ id: 'building_a', children: ['level_0', 'level_1'] }),
-    LevelNode.parse({ id: 'level_0', level: 0, height: 2.5, parentId: 'building_a' }),
-    LevelNode.parse({
-      id: 'level_1',
-      level: 1,
-      height: 2.5,
-      parentId: 'building_a',
-      children: ['slab_deck'],
-    }),
-    deck,
-  ]
-  return Object.fromEntries(list.map((node) => [node.id, node])) as Record<AnyNodeId, AnyNode>
-}
-
-describe('stage 3-B ceiling clamp bound', () => {
-  test('height-less auto ceilings resolve under the covering-slab bound at read time', () => {
-    const nodes = stackedDeckNodes()
-    const created = planAutoCeilingsForLevel([roomPolygon()], [], {
-      storeyHeight: 2.5,
-      ceilingClampBound: (polygon) => getCeilingClampBound('level_0', nodes, polygon),
-    }).create[0]
-
-    expect(created).toBeDefined()
-    expect('height' in created!).toBe(false)
-    // Follows-mode: the effective height is the deck-limited bound.
-    expect(resolveCeilingHeight({ ...created!, parentId: 'level_0' }, nodes)).toBeCloseTo(2.19)
-  })
-
-  test('clamps a manual ceiling above the bound down to it (plane-only degradation)', () => {
-    const manual = CeilingNode.parse({ polygon: square, height: 2.6, autoFromWalls: false })
-
-    const plan = planAutoCeilingsForLevel([roomPolygon()], [manual], { storeyHeight: 2.5 })
-
-    expect(plan.update).toHaveLength(1)
-    expect(plan.update[0]?.id).toBe(manual.id)
-    expect(plan.update[0]?.data.polygon).toBeUndefined()
-    expect(plan.update[0]?.data.height).toBeCloseTo(2.49)
-  })
-
-  test('never raises a manual ceiling sitting below the bound', () => {
-    const manual = CeilingNode.parse({ polygon: square, height: 2.0, autoFromWalls: false })
-
-    const plan = planAutoCeilingsForLevel([roomPolygon()], [manual], { storeyHeight: 2.5 })
-
-    expect(plan.update).toHaveLength(0)
-  })
-
-  test('skips follows-mode manual ceilings (never converts them to explicit)', () => {
-    const nodes = stackedDeckNodes()
-    const manual = CeilingNode.parse({ polygon: square, autoFromWalls: false })
-
-    const plan = planAutoCeilingsForLevel([roomPolygon()], [manual], {
-      storeyHeight: 2.5,
-      ceilingClampBound: (polygon) => getCeilingClampBound('level_0', nodes, polygon),
-    })
-
-    expect(plan.update).toHaveLength(0)
-  })
-
-  test('a flush deck above clamps a manual ceiling at the plane margin to its underside', () => {
-    // Scenario gate 11: manual ceiling at storeyHeight - 0.01 (the no-deck
-    // bound) → deck occupying [-0.3, 0] above → clamps to 2.5 - 0.3 - 0.01.
-    const nodes = stackedDeckNodes()
-    const manual = CeilingNode.parse({ polygon: square, height: 2.49, autoFromWalls: false })
-
-    const plan = planAutoCeilingsForLevel([roomPolygon()], [manual], {
-      storeyHeight: 2.5,
-      ceilingClampBound: (polygon) => getCeilingClampBound('level_0', nodes, polygon),
-    })
-
-    expect(plan.create).toHaveLength(0)
-    expect(plan.update).toHaveLength(1)
-    expect(plan.update[0]?.id).toBe(manual.id)
-    expect(plan.update[0]?.data.height).toBeCloseTo(2.19)
-  })
-})
-
 // Minimal store stand-ins for initSpaceDetectionSync: a zustand-shaped
 // scene store (getState/subscribe/temporal) whose write methods mutate the
 // nodes record and re-notify, and an editor store carrying `spaces`.
 function createSceneStoreStub(initialNodes: Record<string, AnyNode>) {
   const listeners = new Set<(state: unknown) => void>()
   const state: Record<string, unknown> & { nodes: Record<string, AnyNode> } = {
-    nodes: initialNodes,
+    nodes: migrateCeilingRoomLinks(migrateRoomZones(initialNodes).nodes).nodes as Record<
+      string,
+      AnyNode
+    >,
+  }
+  for (const node of Object.values(state.nodes)) {
+    if (node.type !== 'slab' || node.boundary !== 'auto') continue
+    state.nodes[node.id] = {
+      ...node,
+      zoneIds: Object.values(state.nodes)
+        .filter(
+          (zone) =>
+            zone.type === 'zone' &&
+            zone.parentId === node.parentId &&
+            JSON.stringify(zone.polygon) === JSON.stringify(node.polygon),
+        )
+        .map((zone) => zone.id),
+    }
   }
   const notify = () => {
     for (const listener of [...listeners]) listener(state)
@@ -719,7 +186,11 @@ function createSceneStoreStub(initialNodes: Record<string, AnyNode>) {
     const next: Record<string, AnyNode> = { ...state.nodes }
     for (const { id, data } of updates) {
       const existing = next[id]
-      if (existing) next[id] = { ...existing, ...data } as AnyNode
+      if (existing) {
+        next[id] = { ...existing, ...data } as AnyNode
+        for (const key of Object.keys(data))
+          if (data[key] === undefined) delete (next[id] as unknown as Record<string, unknown>)[key]
+      }
     }
     state.nodes = next
     notify()
@@ -880,6 +351,7 @@ describe('live room topology reconciliation', () => {
       polygon: square,
       elevation: 0.05,
       autoFromWalls: true,
+      boundary: 'auto',
     })
     const autoCeiling = CeilingNode.parse({
       id: 'ceiling_custom_split',
@@ -887,6 +359,7 @@ describe('live room topology reconciliation', () => {
       polygon: square,
       height: 2.49,
       autoFromWalls: true,
+      boundary: 'auto',
     })
     const level = LevelNode.parse({
       id: 'level_custom_split',
@@ -905,8 +378,10 @@ describe('live room topology reconciliation', () => {
     })
 
     try {
+      const room = Object.values(sceneStore.getState().nodes).find((node) => node.type === 'zone')!
       sceneStore.setNodes({
         ...sceneStore.getState().nodes,
+        [room.id]: { ...room, floor: { elevation: 0.42 } } as AnyNode,
         [autoSlab.id]: {
           ...autoSlab,
           elevation: 0.42,
@@ -955,22 +430,24 @@ describe('live room topology reconciliation', () => {
       )
 
       expect(Object.values(editorStore.getState().spaces)).toHaveLength(2)
-      expect(slabs).toHaveLength(2)
+      expect(slabs).toHaveLength(3)
       expect(ceilings).toHaveLength(2)
       expect(
         slabs.every(
           (slab) =>
-            slab.elevation === 0.42 &&
-            slab.thickness === 0.18 &&
+            slab.elevation === (slab.plateRole === 'base' ? 0.05 : 0.42) &&
+            Math.abs(slab.thickness - (slab.plateRole === 'base' ? 0.18 : 0.37)) < 1e-6 &&
             slab.materialPreset === 'custom-floor' &&
-            slab.slots?.surface === 'library:oak' &&
+            (slab.plateRole !== 'base' || slab.slots?.surface === 'library:oak') &&
             slab.visible === false,
         ),
       ).toBe(true)
       expect(
         ceilings.every(
           (ceiling) =>
-            ceiling.height === 2.1 &&
+            (ceiling.id === autoCeiling.id
+              ? ceiling.height === 2.1
+              : ceiling.height === undefined) &&
             ceiling.materialPreset === 'custom-ceiling' &&
             ceiling.slots?.surface === 'library:blue' &&
             ceiling.visible === false,
@@ -997,17 +474,16 @@ describe('live room topology reconciliation', () => {
         (node): node is CeilingNode => node.type === 'ceiling' && node.autoFromWalls,
       )
       expect(Object.values(editorStore.getState().spaces)).toHaveLength(1)
-      expect(mergedSlabs).toHaveLength(1)
+      expect(mergedSlabs).toHaveLength(2)
       expect(mergedCeilings).toHaveLength(1)
-      expect(mergedSlabs[0]).toMatchObject({
+      expect(mergedSlabs.find((slab) => slab.plateRole === 'platform')).toMatchObject({
         elevation: 0.42,
-        thickness: 0.18,
+        thickness: 0.37,
         materialPreset: 'custom-floor',
-        slots: { surface: 'library:oak' },
         visible: false,
       })
+      expect(mergedSlabs.find((slab) => slab.plateRole === 'platform')!.slots).toBeUndefined()
       expect(mergedCeilings[0]).toMatchObject({
-        height: 2.1,
         materialPreset: 'custom-ceiling',
         slots: { surface: 'library:blue' },
         visible: false,
@@ -1029,7 +505,7 @@ describe('live room topology reconciliation', () => {
       expect(Object.values(editorStore.getState().spaces)).toHaveLength(2)
       expect(
         resplitNodes.filter((node) => node.type === 'slab' && node.autoFromWalls),
-      ).toHaveLength(2)
+      ).toHaveLength(3)
       expect(
         resplitNodes.filter((node) => node.type === 'ceiling' && node.autoFromWalls),
       ).toHaveLength(2)
@@ -1071,12 +547,14 @@ describe('live room topology reconciliation', () => {
         parentId: levelId,
         polygon: leftPolygon,
         autoFromWalls: true,
+        boundary: 'auto',
       }),
       SlabNode.parse({
         id: 'slab_b',
         parentId: levelId,
         polygon: rightPolygon,
         autoFromWalls: true,
+        boundary: 'auto',
       }),
       CeilingNode.parse({
         id: 'ceiling_a',
@@ -1130,7 +608,7 @@ describe('live room topology reconciliation', () => {
 
       const nodes = Object.values(indexedStore.getState().nodes)
       expect(Object.values(indexedEditor.getState().spaces)).toHaveLength(3)
-      expect(nodes.filter((node) => node.type === 'slab' && node.autoFromWalls)).toHaveLength(3)
+      expect(nodes.filter((node) => node.type === 'slab' && node.autoFromWalls)).toHaveLength(1)
       expect(nodes.filter((node) => node.type === 'ceiling' && node.autoFromWalls)).toHaveLength(3)
       expect(
         topologyOutcome(indexedStore.getState().nodes, indexedEditor.getState().spaces),
@@ -1175,6 +653,7 @@ describe('live room topology reconciliation', () => {
       thickness: 0.12,
       slots: { surface: 'library:wood-floorplank1' },
       autoFromWalls: true,
+      boundary: 'auto',
     })
     const autoCeiling = CeilingNode.parse({
       id: 'ceiling_compound',
@@ -1183,6 +662,7 @@ describe('live room topology reconciliation', () => {
       height: 2.55,
       slots: { surface: 'library:concrete-polished' },
       autoFromWalls: true,
+      boundary: 'auto',
     })
     const level = LevelNode.parse({
       id: levelId,
@@ -1283,7 +763,7 @@ describe('live room topology reconciliation', () => {
       const reconciled = Object.values(sceneStore.getState().nodes)
       expect(Object.values(editorStore.getState().spaces)).toHaveLength(4)
       expect(reconciled.filter((node) => node.type === 'slab' && node.autoFromWalls)).toHaveLength(
-        4,
+        1,
       )
       expect(
         reconciled.filter((node) => node.type === 'ceiling' && node.autoFromWalls),
@@ -1383,6 +863,7 @@ describe('live room topology reconciliation', () => {
       thickness: 0.18,
       slots: { surface: 'library:wood-floorplank1' },
       autoFromWalls: true,
+      boundary: 'auto',
     })
     const leftCeiling = CeilingNode.parse({
       id: 'ceiling_sequence_left',
@@ -1399,6 +880,7 @@ describe('live room topology reconciliation', () => {
       polygon: rightPolygon,
       elevation: 0.1,
       autoFromWalls: true,
+      boundary: 'auto',
     })
     const rightCeiling = CeilingNode.parse({
       id: 'ceiling_sequence_right',
@@ -1515,6 +997,7 @@ describe('live room topology reconciliation', () => {
       polygon: initialRoom!.polygon,
       elevation: 0.3,
       autoFromWalls: true,
+      boundary: 'auto',
     })
     const ceiling = CeilingNode.parse({
       id: 'ceiling_curve',
@@ -1522,6 +1005,7 @@ describe('live room topology reconciliation', () => {
       polygon: initialRoom!.polygon,
       height: 2.2,
       autoFromWalls: true,
+      boundary: 'auto',
     })
     const level = LevelNode.parse({
       id: levelId,
@@ -1666,6 +1150,7 @@ describe('live room topology reconciliation', () => {
       parentId: 'level_restore',
       polygon: square,
       autoFromWalls: true,
+      boundary: 'auto',
     })
     const level = LevelNode.parse({
       id: 'level_restore',
@@ -1700,8 +1185,8 @@ describe('live room topology reconciliation', () => {
   })
 })
 
-describe('reactive ceiling re-clamp through the detection sync', () => {
-  test('a flush deck created on the level above clamps the existing manual ceiling below', () => {
+describe('manual ceilings through the detection sync', () => {
+  test('a flush deck clamps explicit manual ceiling height downward', () => {
     const walls = [
       WallNode.parse({ start: [0, 0], end: [4, 0], parentId: 'level_0' }),
       WallNode.parse({ start: [4, 0], end: [4, 3], parentId: 'level_0' }),
@@ -1755,7 +1240,7 @@ describe('reactive ceiling re-clamp through the detection sync', () => {
       })
 
       const ceiling = sceneStore.getState().nodes.ceiling_main as CeilingNode
-      expect(ceiling.height).toBeCloseTo(2.5 - 0.3 - 0.01)
+      expect(ceiling.height).toBeCloseTo(2.19)
     } finally {
       unsubscribe()
     }
@@ -1763,7 +1248,7 @@ describe('reactive ceiling re-clamp through the detection sync', () => {
 })
 
 describe('raised auto-room surfaces', () => {
-  test('inherits the enclosing walls construction plane when the room closes', () => {
+  test('follows boundary wall bases when the room has no floor elevation intent', () => {
     const wallData = [
       { id: 'wall_bottom', start: [0, 0], end: [4, 0] },
       { id: 'wall_right', start: [4, 0], end: [4, 3] },
@@ -1822,7 +1307,7 @@ describe('raised auto-room surfaces', () => {
 
       expect(autoSlab?.elevation).toBeCloseTo(0.65)
       expect(autoSlab?.thickness).toBeCloseTo(0.05)
-      expect(autoCeiling?.height).toBeCloseTo(3.09)
+      expect(autoCeiling?.height).toBeUndefined()
 
       const raisedAgain = { ...sceneStore.getState().nodes }
       for (const wall of walls) {
@@ -1841,7 +1326,7 @@ describe('raised auto-room surfaces', () => {
         (node): node is CeilingNode => node.type === 'ceiling' && node.autoFromWalls,
       )
       expect(reconciledSlab?.elevation).toBeCloseTo(0.85)
-      expect(reconciledCeiling?.height).toBeCloseTo(3.29)
+      expect(reconciledCeiling?.height).toBeUndefined()
     } finally {
       unsubscribe()
     }
@@ -1864,6 +1349,8 @@ describe('generated surface deletion memory', () => {
       [level, ...walls].map((node) => [node.id, node]),
     ) as Record<string, AnyNode>
     const sceneStore = createSceneStoreStub(initialNodes)
+    for (const node of Object.values(sceneStore.getState().nodes))
+      if (node.type === 'zone') sceneStore.getState().nodes[node.id] = { ...node, hasFloor: false }
     const editorStore = createEditorStoreStub()
     const unsubscribe = initSpaceDetectionSync(sceneStore, editorStore)
 
@@ -1882,7 +1369,7 @@ describe('generated surface deletion memory', () => {
 
       expect(
         Object.values(sceneStore.getState().nodes).filter(
-          (node) => (node.type === 'slab' || node.type === 'ceiling') && node.autoFromWalls,
+          (node) => node.type === 'slab' && node.autoFromWalls && !!node.zoneIds?.length,
         ),
       ).toHaveLength(0)
       expect(Object.values(editorStore.getState().spaces)).toHaveLength(1)
@@ -1902,12 +1389,14 @@ describe('generated surface deletion memory', () => {
       parentId: 'level_delete_memory',
       polygon: square,
       autoFromWalls: true,
+      boundary: 'auto',
     })
     const autoCeiling = CeilingNode.parse({
       id: 'ceiling_delete_memory',
       parentId: 'level_delete_memory',
       polygon: square,
       autoFromWalls: true,
+      boundary: 'auto',
     })
     const level = LevelNode.parse({
       id: 'level_delete_memory',
@@ -1932,7 +1421,9 @@ describe('generated surface deletion memory', () => {
 
       const afterDelete = sceneStore.getState().nodes
       expect(
-        Object.values(afterDelete).filter((node) => node.type === 'slab' && node.autoFromWalls),
+        Object.values(afterDelete).filter(
+          (node) => node.type === 'slab' && node.autoFromWalls && !!node.zoneIds?.length,
+        ),
       ).toHaveLength(0)
 
       sceneStore.setNodes({
@@ -1948,11 +1439,14 @@ describe('generated surface deletion memory', () => {
 
       const afterReshape = Object.values(sceneStore.getState().nodes)
       expect(
-        afterReshape.filter((node) => node.type === 'slab' && node.autoFromWalls),
+        afterReshape.filter(
+          (node) => node.type === 'slab' && node.autoFromWalls && !!node.zoneIds?.length,
+        ),
       ).toHaveLength(0)
       const ceiling = afterReshape.find(
         (node): node is CeilingNode => node.type === 'ceiling' && node.autoFromWalls,
       )
+      // Explicit-height walls may not reach the ceiling, so it spans them to the reference line.
       expect(ceiling?.polygon).toContainEqual([5, 0])
       expect(ceiling?.polygon).toContainEqual([5, 3])
     } finally {
@@ -1960,7 +1454,7 @@ describe('generated surface deletion memory', () => {
     }
   })
 
-  test('a deleted generated ceiling stays absent while the slab follows a later room reshape', () => {
+  test('deleting a generated ceiling records a persistent zone opt-out', () => {
     const walls = squareWalls().map((wall, index) => ({
       ...wall,
       id: `wall_ceiling_memory_${index}`,
@@ -1971,12 +1465,14 @@ describe('generated surface deletion memory', () => {
       parentId: 'level_ceiling_memory',
       polygon: square,
       autoFromWalls: true,
+      boundary: 'auto',
     })
     const autoCeiling = CeilingNode.parse({
       id: 'ceiling_ceiling_memory',
       parentId: 'level_ceiling_memory',
       polygon: square,
       autoFromWalls: true,
+      boundary: 'auto',
     })
     const level = LevelNode.parse({
       id: 'level_ceiling_memory',
@@ -2019,11 +1515,12 @@ describe('generated surface deletion memory', () => {
       expect(
         afterReshape.filter((node) => node.type === 'ceiling' && node.autoFromWalls),
       ).toHaveLength(0)
+      expect(afterReshape.find((node) => node.type === 'zone')).toMatchObject({ hasCeiling: false })
       const slab = afterReshape.find(
         (node): node is SlabNode => node.type === 'slab' && node.autoFromWalls,
       )
-      expect(slab?.polygon).toContainEqual([5, 0])
-      expect(slab?.polygon).toContainEqual([5, 3])
+      expect(Math.max(...slab!.polygon.map(([x]) => x))).toBeCloseTo(5.05)
+      expect(slab?.polygon).toContainEqual([5.05, 3.05])
     } finally {
       unsubscribe()
     }
@@ -2159,7 +1656,7 @@ function autoSurfacesOf(sceneStore: ReturnType<typeof createSceneStoreStub>) {
 }
 
 describe('auto-room surfaces over terrain', () => {
-  test('a room on a slope takes its floor from the HIGHEST wall base', () => {
+  test('a room on a slope follows the highest boundary wall base', () => {
     // Walls on bare terrain: no `supportSlabId`, no `supportOffset` — exactly
     // what a stamped room preset or a 3D draw over untouched ground produces.
     // Bases run 0 → 1 across the ramp, so a floor at the lowest base would
@@ -2178,7 +1675,7 @@ describe('auto-room surfaces over terrain', () => {
       // Lowest wall top = the LOWEST base + 2.5 (explicit-height walls ride
       // their own base), −the 1 cm clamp margin. Bottom/left walls start at
       // x = 0, i.e. ground 0.
-      expect(ceiling?.height).toBeCloseTo(2.49)
+      expect(ceiling?.height).toBeUndefined()
     } finally {
       unsubscribe()
     }
@@ -2193,13 +1690,13 @@ describe('auto-room surfaces over terrain', () => {
       closeRoom(sceneStore, closingWall)
       const { slab, ceiling } = autoSurfacesOf(sceneStore)
       expect(slab?.elevation).toBeCloseTo(0.05)
-      expect(ceiling?.height).toBeCloseTo(2.49)
+      expect(ceiling?.height).toBeUndefined()
     } finally {
       unsubscribe()
     }
   })
 
-  test('sculpting under an existing room re-derives its floor and ceiling', () => {
+  test('sculpting under an existing room re-derives an unauthored floor', () => {
     // The trigger half of the bug: a sculpt writes only `site.terrain`, so
     // without a terrain term in the structure signature every level hashes
     // identically and the sync early-exits.
@@ -2229,7 +1726,7 @@ describe('auto-room surfaces over terrain', () => {
 
       const { slab, ceiling } = autoSurfacesOf(sceneStore)
       expect(slab?.elevation).toBeCloseTo(2.05)
-      expect(ceiling?.height).toBeCloseTo(4.49)
+      expect(ceiling?.height).toBeUndefined()
     } finally {
       unsubscribe()
     }
@@ -2340,102 +1837,202 @@ describe('detectSpacesForLevel', () => {
     expect(roomPolygons).toHaveLength(2)
     expect(roomPolygons.map(areaOf).sort((a, b) => a - b)).toEqual([12, 12])
   })
+
+  // Prod "Wawa House": walls drawn a few centimetres short of their corner read as
+  // joined (their bodies overlap) but left Living Room and Master Bedroom undetected.
+  test('joins a corner whose wall ends stop a few centimetres apart', () => {
+    const walls = [
+      WallNode.parse({ start: [0, 0], end: [4, 0] }),
+      WallNode.parse({ start: [4.0091, 0.0012], end: [4, 3] }),
+      WallNode.parse({ start: [4, 3], end: [0, 3] }),
+      WallNode.parse({ start: [0, 3], end: [0, 0.0384] }),
+    ]
+    const { roomPolygons, spaces } = detectSpacesForLevel('level-1', walls)
+    expect(roomPolygons).toHaveLength(1)
+    expect(areaOf(roomPolygons[0]!)).toBeCloseTo(12, 1)
+    expect(new Set(spaces[0]?.wallIds)).toEqual(new Set(walls.map((wall) => wall.id)))
+  })
+
+  test('joins a wall end that lands on another wall close to its end', () => {
+    // The right wall stops 1 mm off the top wall, 3 cm from the top wall's end.
+    const walls = [
+      WallNode.parse({ start: [0, 0], end: [4, 0] }),
+      WallNode.parse({ start: [4, 0], end: [4, 2.999] }),
+      WallNode.parse({ start: [4.03, 3], end: [0, 3] }),
+      WallNode.parse({ start: [0, 3], end: [0, 0] }),
+    ]
+    const { roomPolygons } = detectSpacesForLevel('level-1', walls)
+    expect(roomPolygons).toHaveLength(1)
+    expect(areaOf(roomPolygons[0]!)).toBeCloseTo(12, 1)
+  })
+
+  test('keeps a short jog wall and distinct junctions beyond the tolerance', () => {
+    // A 5 cm jog joins two walls; both of its ends are real junctions.
+    const walls = [
+      WallNode.parse({ start: [0, 0], end: [2, 0] }),
+      WallNode.parse({ start: [2, 0], end: [2, 0.05] }),
+      WallNode.parse({ start: [2, 0.05], end: [4, 0.05] }),
+      WallNode.parse({ start: [4, 0.05], end: [4, 3] }),
+      WallNode.parse({ start: [4, 3], end: [0, 3] }),
+      WallNode.parse({ start: [0, 3], end: [0, 0] }),
+    ]
+    const { spaces } = detectSpacesForLevel('level-1', walls)
+    expect(spaces).toHaveLength(1)
+    expect(new Set(spaces[0]?.wallIds)).toEqual(new Set(walls.map((wall) => wall.id)))
+    // A 10 cm gap stays open.
+    const open = [
+      WallNode.parse({ start: [0, 0], end: [4, 0] }),
+      WallNode.parse({ start: [4, 0.1], end: [4, 3] }),
+      WallNode.parse({ start: [4, 3], end: [0, 3] }),
+      WallNode.parse({ start: [0, 3], end: [0, 0] }),
+    ]
+    expect(detectSpacesForLevel('level-1', open).roomPolygons).toHaveLength(0)
+  })
 })
 
-describe('procedural zones', () => {
-  test('adopts an exact room footprint and records its enclosing walls', () => {
-    const walls = squareWalls()
-    const { spaces } = detectSpacesForLevel('level-1', walls)
-    const zone = ZoneNode.parse({ name: 'Kitchen', polygon: square })
-
-    const plan = planAutoZonesForLevel(spaces, [zone])
-
-    expect(plan.update).toHaveLength(1)
-    expect(plan.update[0]?.data.autoFromWalls).toBe(true)
-    expect(new Set(plan.update[0]?.data.boundaryWallIds)).toEqual(
-      new Set(walls.map((wall) => wall.id)),
-    )
-  })
-
-  test('derives the live polygon from effective wall endpoints', () => {
-    const walls = squareWalls()
-    const zone = ZoneNode.parse({
-      name: 'Kitchen',
-      polygon: square,
-      autoFromWalls: true,
-      boundaryWallIds: walls.map((wall) => wall.id),
-    })
-    const movedWalls = [
-      { ...walls[0]!, end: [5, 0] as [number, number] },
-      { ...walls[1]!, start: [5, 0] as [number, number], end: [5, 3] as [number, number] },
-      { ...walls[2]!, start: [5, 3] as [number, number] },
-      walls[3]!,
+describe('near-miss joints follow the drawn wall bodies', () => {
+  const rectangleWith = (gapWall: WallNode) => [
+    WallNode.parse({ start: [0, 0], end: [4, 0], thickness: gapWall.thickness }),
+    WallNode.parse({ start: [4, 0], end: [4, 3], thickness: gapWall.thickness }),
+    WallNode.parse({ start: [4, 3], end: [0, 3], thickness: gapWall.thickness }),
+    gapWall,
+  ]
+  test.each([
+    ['a 5 cm gap between 1 cm walls', 0.01, 0.05],
+    ['a 5 cm gap between 10 cm walls', 0.1, 0.05],
+    ['an 80 cm doorway', 0.1, 0.8],
+  ])('%s along one side stays open', (_label, thickness, gap) => {
+    const walls = [
+      WallNode.parse({ start: [0, 0], end: [2, 0], thickness }),
+      WallNode.parse({ start: [2 + gap, 0], end: [4, 0], thickness }),
+      WallNode.parse({ start: [4, 0], end: [4, 3], thickness }),
+      WallNode.parse({ start: [4, 3], end: [0, 3], thickness }),
+      WallNode.parse({ start: [0, 3], end: [0, 0], thickness }),
     ]
-    const byId = new Map(movedWalls.map((wall) => [wall.id, wall]))
-
-    const polygon = resolveAutoZonePolygon(zone, (id) =>
-      byId.get(id as (typeof walls)[number]['id']),
+    expect(detectSpacesForLevel('level-1', walls).roomPolygons).toHaveLength(0)
+    // A 5 mm hairline between 10 cm walls reads as one wall.
+    if (thickness === 0.1 && gap < 0.1) {
+      const hairline = walls.map((wall, i) =>
+        i === 1 ? { ...wall, start: [2.005, 0] as [number, number] } : wall,
+      )
+      expect(detectSpacesForLevel('level-1', hairline).roomPolygons).toHaveLength(1)
+    }
+  })
+  test('a corner a few centimetres short closes when the bodies overlap', () => {
+    const walls = rectangleWith(WallNode.parse({ start: [0, 3], end: [0, 0.04], thickness: 0.1 }))
+    expect(detectSpacesForLevel('level-1', walls).roomPolygons).toHaveLength(1)
+    const thin = rectangleWith(WallNode.parse({ start: [0, 3], end: [0, 0.04], thickness: 0.01 }))
+    expect(detectSpacesForLevel('level-1', thin).roomPolygons).toHaveLength(0)
+  })
+  test('stays near-linear on 2,000 isolated walls', () => {
+    const walls = Array.from({ length: 2000 }, (_, i) =>
+      WallNode.parse({
+        start: [(i % 50) * 3, Math.floor(i / 50) * 3],
+        end: [(i % 50) * 3 + 2, Math.floor(i / 50) * 3 + 1],
+      }),
     )
-    const plan = planAutoZonesForLevel(detectSpacesForLevel('level-1', movedWalls).spaces, [zone])
+    const started = performance.now()
+    expect(extractRooms(walls)).toHaveLength(0)
+    // HEAD took ~75 ms; the unbounded scan took 7.8 s.
+    expect(performance.now() - started).toBeLessThan(1500)
+  })
+})
 
-    expect(polygon).toContainEqual([5, 0])
-    expect(polygon).toContainEqual([5, 3])
-    expect(polygon).not.toContainEqual([4, 0])
-    expect(plan.update[0]?.data.polygon).toContainEqual([5, 0])
+describe('wall ends that stand inside another wall body', () => {
+  // A 4 × 3 room whose right wall stops inside a 30 cm wall, 10 cm off its line.
+  const room = (thickness: number, end: [number, number] = [4, 2.9]) => [
+    WallNode.parse({ id: 'wall_a', start: [0, 0], end: [4, 0], thickness: 0.1 }),
+    WallNode.parse({ id: 'wall_b', start: [4, 0], end, thickness: 0.1 }),
+    WallNode.parse({ id: 'wall_c', start: [5, 3], end: [-1, 3], thickness }),
+    WallNode.parse({ id: 'wall_d', start: [0, 3], end: [0, 0], thickness: 0.1 }),
+  ]
+
+  test('prod "Structure test 06": the right half closes where its wall stops inside a thick wall', () => {
+    const walls = (
+      JSON.parse(
+        readFileSync(
+          new URL('./__fixtures__/structure-test-06-walls.json', import.meta.url),
+          'utf8',
+        ),
+      ) as Partial<WallNode>[]
+    ).map((wall) => WallNode.parse({ ...wall, parentId: 'level-1' }))
+    const areas = detectSpacesForLevel('level-1', walls)
+      .spaces.map((space) => area([{ outer: space.polygon, holes: space.holes }]))
+      .sort((a, b) => b - a)
+    expect(areas).toHaveLength(2)
+    expect(areas[0]).toBeGreaterThan(50)
   })
 
-  test('follows its room when a wall move bridges a junction into its boundary', () => {
-    const walls = squareWalls()
-    const zone = ZoneNode.parse({
-      name: 'Kitchen',
-      polygon: square,
-      autoFromWalls: true,
-      boundaryWallIds: walls.map((wall) => wall.id),
-    })
-    // The east wall moved out to x = 5; a new bridge wall closes the corner it left.
-    const bridge = WallNode.parse({ start: [4, 0], end: [5, 0] })
-    const movedWalls = [
-      walls[0]!,
-      { ...walls[1]!, start: [5, 0] as [number, number], end: [5, 3] as [number, number] },
-      { ...walls[2]!, start: [5, 3] as [number, number] },
-      walls[3]!,
-      bridge,
+  test('joins at the foot of the thick wall’s line; a thin wall there leaves the gap open', () => {
+    const { spaces } = detectSpacesForLevel('level-1', room(0.3))
+    expect(spaces).toHaveLength(1)
+    expect(area([{ outer: spaces[0]!.polygon, holes: [] }])).toBeCloseTo(12, 1)
+    // A 10 cm wall's body ends 5 cm short of the end: a visible gap.
+    expect(detectSpacesForLevel('level-1', room(0.1)).spaces).toHaveLength(0)
+    // Metre-thick "walls" are blocks, not joints.
+    expect(detectSpacesForLevel('level-1', room(1.2, [4, 2.6])).spaces).toHaveLength(0)
+  })
+
+  test('a thick corner a few centimetres further than the junction tolerance closes', () => {
+    const walls = [
+      WallNode.parse({ start: [0, 0], end: [4, 0], thickness: 0.3 }),
+      WallNode.parse({ start: [4, 0], end: [4, 3], thickness: 0.3 }),
+      WallNode.parse({ start: [4, 3], end: [0.092, 3], thickness: 0.3 }),
+      WallNode.parse({ start: [0, 3], end: [0, 0], thickness: 0.3 }),
     ]
-    const plan = planAutoZonesForLevel(detectSpacesForLevel('level-1', movedWalls).spaces, [zone])
-
-    expect(plan.update).toHaveLength(1)
-    expect(plan.update[0]?.data.polygon).toContainEqual([5, 0])
-    expect(plan.update[0]?.data.boundaryWallIds).toContain(bridge.id)
+    expect(detectSpacesForLevel('level-1', walls).spaces).toHaveLength(1)
   })
 
-  test('keeps a stored ring that only starts at another vertex', () => {
-    const walls = squareWalls()
-    const { spaces } = detectSpacesForLevel('level-1', walls)
-    const detected = spaces[0]!.polygon
-    const rotated = [...detected.slice(1), detected[0]!]
-    const zone = ZoneNode.parse({
-      name: 'Kitchen',
-      polygon: rotated,
-      autoFromWalls: true,
-      boundaryWallIds: walls.map((wall) => wall.id),
-    })
+  test('a stub inside a body, an overshoot past a corner and nearly aligned ends change nothing', () => {
+    const square = [
+      WallNode.parse({ id: 'wall_1', start: [0, 0], end: [4, 0], thickness: 0.3 }),
+      WallNode.parse({ id: 'wall_2', start: [4, 0], end: [4, 3], thickness: 0.3 }),
+      WallNode.parse({ id: 'wall_3', start: [4, 3], end: [0, 3], thickness: 0.3 }),
+      WallNode.parse({ id: 'wall_4', start: [0, 3], end: [0, 0], thickness: 0.3 }),
+    ]
+    const areaOf = (walls: WallNode[]) =>
+      detectSpacesForLevel('level-1', walls).spaces.map((space) =>
+        area([{ outer: space.polygon, holes: space.holes }]),
+      )
+    expect(areaOf(square)).toEqual([12])
+    // A corner filler drawn entirely inside the bodies.
+    const stub = WallNode.parse({ id: 'wall_5', start: [4, 0], end: [4.08, 0.12], thickness: 0.3 })
+    expect(areaOf([...square, stub])).toEqual([12])
+    // A thin wall running 10 cm past the corner it already crosses.
+    const overshoot = [
+      WallNode.parse({ id: 'wall_1', start: [0, 0], end: [4, 0] }),
+      WallNode.parse({ id: 'wall_2', start: [4, -0.01], end: [4, 3] }),
+      WallNode.parse({ id: 'wall_3', start: [4.1, 3], end: [0, 3] }),
+      WallNode.parse({ id: 'wall_4', start: [0, 3], end: [0, 0] }),
+      WallNode.parse({ id: 'wall_6', start: [4, 3], end: [4, 5] }),
+    ]
+    expect(areaOf(overshoot).map((value) => Math.round(value))).toEqual([12])
+  })
+})
 
-    expect(planAutoZonesForLevel(spaces, [zone]).update).toHaveLength(0)
+describe('joints never cost a room the plain rules found', () => {
+  const load = (file: string) =>
+    (
+      JSON.parse(
+        readFileSync(new URL(`./__fixtures__/${file}`, import.meta.url), 'utf8'),
+      ) as Partial<WallNode>[]
+    ).map((wall) => WallNode.parse({ ...wall, parentId: 'level-1' }))
+  const areas = (walls: WallNode[]) =>
+    extractRooms(walls)
+      .map((room) => area([{ outer: room.referencePolygon, holes: room.holes }]))
+      .sort((a, b) => b - a)
+
+  test('a room walled by a span drawn twice survives a joint elsewhere on it', () => {
+    // Wall vcums lies exactly on part of lv02j; joining 9q8u1 at the room's corner used to
+    // make the face walk cross the doubled span and lose the 618 m² room.
+    expect(areas(load('stacked-walls-doubled-span.json'))[0]).toBeCloseTo(618.52, 1)
   })
 
-  test('leaves an unrelated site zone manual', () => {
-    const { spaces } = detectSpacesForLevel('level-1', squareWalls())
-    const zone = ZoneNode.parse({
-      name: 'Lawn',
-      polygon: [
-        [10, 10],
-        [12, 10],
-        [12, 12],
-        [10, 12],
-      ],
-    })
-
-    expect(planAutoZonesForLevel(spaces, [zone]).update).toHaveLength(0)
+  test('a joint that would merge two rooms keeps them apart', () => {
+    const rooms = areas(load('joint-merge-rooms.json'))
+    expect(rooms).toHaveLength(20)
+    expect(rooms).toContainEqual(expect.closeTo(15.38, 1))
+    expect(rooms).toContainEqual(expect.closeTo(4.78, 1))
   })
 })
 
@@ -2467,439 +2064,5 @@ describe('wallClosesRoom', () => {
     expect(wallClosesRoom([...bigRoom, bayLeft, bayBottom], bayBottom)).toBe(false)
     // The final side lands on the interior of the big room's bottom wall.
     expect(wallClosesRoom([...bigRoom, bayLeft, bayBottom, bayRight], bayRight)).toBe(true)
-  })
-})
-
-describe('planAutoSlabsForLevel', () => {
-  test('creates and reconciles an auto slab on the enclosing wall plane', () => {
-    const context = {
-      elevationForRoom: () => 0.65,
-    }
-    const created = planAutoSlabsForLevel([roomPolygon()], [], context).create[0]
-
-    expect(created?.elevation).toBeCloseTo(0.65)
-
-    const existing = slab(0.05)
-    const update = planAutoSlabsForLevel([roomPolygon()], [existing], context).update[0]
-
-    expect(update?.id).toBe(existing.id)
-    expect(update?.data.elevation).toBeCloseTo(0.65)
-  })
-
-  test('matches two identical rooms to their own existing auto-slabs without churn', () => {
-    // Two rooms with identical polygon signatures previously collided in a
-    // signature-keyed Map, so one detected room never matched an existing slab
-    // and churned (delete + recreate) on every pass.
-    const slabA = slab(0.05)
-    const slabB = slab(0.05)
-
-    const plan = planAutoSlabsForLevel([roomPolygon(), roomPolygon()], [slabA, slabB])
-
-    expect(plan.create).toHaveLength(0)
-    expect(plan.delete).toHaveLength(0)
-    expect(plan.update).toHaveLength(0)
-  })
-
-  test('deletes an extra auto-slab when only one identical room is detected', () => {
-    const plan = planAutoSlabsForLevel([roomPolygon()], [slab(0.05), slab(0.05)])
-
-    expect(plan.create).toHaveLength(0)
-    expect(plan.delete).toHaveLength(1)
-  })
-
-  test('demotes an orphaned auto slab to manual when its room disappears', () => {
-    const painted = SlabNode.parse({
-      polygon: square,
-      elevation: 0.4,
-      autoFromWalls: true,
-    })
-
-    const plan = planAutoSlabsForLevel([], [painted])
-
-    expect(plan.create).toHaveLength(0)
-    expect(plan.delete).toHaveLength(0)
-    expect(plan.update).toHaveLength(1)
-
-    const update = plan.update[0]
-    expect(update?.id).toBe(painted.id)
-    // Demotion flips only the flag — the stored polygon stays untouched
-    // (render offsets derive from level context at geometry build time).
-    expect(update?.data).toEqual({ autoFromWalls: false })
-  })
-
-  test('deletes an unmatched auto slab whose area was absorbed by a room merge', () => {
-    const leftSlab = SlabNode.parse({
-      polygon: [
-        [0, 0],
-        [4, 0],
-        [4, 3],
-        [0, 3],
-      ],
-      autoFromWalls: true,
-    })
-    const rightSlab = SlabNode.parse({
-      polygon: [
-        [4, 0],
-        [8, 0],
-        [8, 3],
-        [4, 3],
-      ],
-      autoFromWalls: true,
-    })
-    const mergedRoom = [
-      { x: 0, y: 0 },
-      { x: 8, y: 0 },
-      { x: 8, y: 3 },
-      { x: 0, y: 3 },
-    ]
-
-    const plan = planAutoSlabsForLevel([mergedRoom], [leftSlab, rightSlab])
-
-    expect(plan.create).toHaveLength(0)
-    expect(plan.delete).toHaveLength(1)
-    expect(plan.update).toHaveLength(1)
-    const survivorId = plan.update[0]?.id
-    expect([leftSlab.id, rightSlab.id]).toContain(plan.delete[0]!)
-    expect(plan.delete[0]).not.toBe(survivorId)
-    // The survivor stays auto — updated to the merged polygon, not demoted.
-    expect(plan.update[0]?.data.autoFromWalls).toBeUndefined()
-  })
-
-  test('preserves incompatible merged slabs as separate manual surfaces', () => {
-    const leftSlab = SlabNode.parse({
-      polygon: [
-        [0, 0],
-        [4, 0],
-        [4, 3],
-        [0, 3],
-      ],
-      elevation: 0.15,
-      thickness: 0.15,
-      slots: { surface: 'library:red' },
-      autoFromWalls: true,
-    })
-    const rightSlab = SlabNode.parse({
-      polygon: [
-        [4, 0],
-        [8, 0],
-        [8, 3],
-        [4, 3],
-      ],
-      elevation: -0.15,
-      thickness: 0.1,
-      slots: { surface: 'library:blue' },
-      autoFromWalls: true,
-    })
-    const mergedRoom = [
-      { x: 0, y: 0 },
-      { x: 8, y: 0 },
-      { x: 8, y: 3 },
-      { x: 0, y: 3 },
-    ]
-
-    const plan = planAutoSlabsForLevel([mergedRoom], [leftSlab, rightSlab])
-
-    expect(plan.create).toHaveLength(0)
-    expect(plan.delete).toHaveLength(0)
-    expect(plan.update).toEqual(
-      expect.arrayContaining([
-        { id: leftSlab.id, data: { autoFromWalls: false } },
-        { id: rightSlab.id, data: { autoFromWalls: false } },
-      ]),
-    )
-  })
-
-  test('unions openings when compatible slabs merge', () => {
-    const leftHole: Array<[number, number]> = [
-      [1, 1],
-      [2, 1],
-      [2, 2],
-      [1, 2],
-    ]
-    const rightHole: Array<[number, number]> = [
-      [6, 1],
-      [7, 1],
-      [7, 2],
-      [6, 2],
-    ]
-    const leftSlab = SlabNode.parse({
-      polygon: [
-        [0, 0],
-        [4, 0],
-        [4, 3],
-        [0, 3],
-      ],
-      holes: [leftHole],
-      holeMetadata: [{ source: 'manual' }],
-      autoFromWalls: true,
-    })
-    const rightSlab = SlabNode.parse({
-      polygon: [
-        [4, 0],
-        [8, 0],
-        [8, 3],
-        [4, 3],
-      ],
-      holes: [rightHole],
-      holeMetadata: [{ source: 'elevator', elevatorId: 'elevator_right' }],
-      autoFromWalls: true,
-    })
-    const mergedRoom = [
-      { x: 0, y: 0 },
-      { x: 8, y: 0 },
-      { x: 8, y: 3 },
-      { x: 0, y: 3 },
-    ]
-
-    const plan = planAutoSlabsForLevel([mergedRoom], [leftSlab, rightSlab])
-    const survivor = [leftSlab, rightSlab].find((slab) => slab.id === plan.update[0]?.id)
-    const merged = SlabNode.parse({ ...survivor, ...plan.update[0]?.data })
-
-    expect(plan.delete).toHaveLength(1)
-    expect(merged.holes).toEqual(expect.arrayContaining([leftHole, rightHole]))
-    expect(merged.holeMetadata).toEqual(
-      expect.arrayContaining([
-        { source: 'manual' },
-        { source: 'elevator', elevatorId: 'elevator_right' },
-      ]),
-    )
-  })
-
-  test('a split slab inherits customization and assigns each opening to its room', () => {
-    const leftHole: Array<[number, number]> = [
-      [0.5, 0.5],
-      [1, 0.5],
-      [1, 1],
-      [0.5, 1],
-    ]
-    const rightHole: Array<[number, number]> = [
-      [3, 0.5],
-      [3.5, 0.5],
-      [3.5, 1],
-      [3, 1],
-    ]
-    const customized = SlabNode.parse({
-      polygon: square,
-      elevation: 0.2,
-      thickness: 0.1,
-      fillToTerrain: true,
-      materialPreset: 'custom-floor',
-      slots: { surface: 'library:oak' },
-      holes: [leftHole, rightHole],
-      holeMetadata: [{ source: 'manual' }, { source: 'stair', stairId: 'stair_right' }],
-      autoFromWalls: true,
-    })
-    const rooms = [
-      [
-        { x: 0, y: 0 },
-        { x: 2, y: 0 },
-        { x: 2, y: 3 },
-        { x: 0, y: 3 },
-      ],
-      [
-        { x: 2, y: 0 },
-        { x: 4, y: 0 },
-        { x: 4, y: 3 },
-        { x: 2, y: 3 },
-      ],
-    ]
-
-    const plan = planAutoSlabsForLevel(rooms, [customized])
-    const updated = SlabNode.parse({ ...customized, ...plan.update[0]?.data })
-    const surfaces = [updated, ...plan.create]
-    const left = surfaces.find((surface) => surface.polygon.some(([x]) => x === 0))
-    const right = surfaces.find((surface) => surface.polygon.some(([x]) => x === 4))
-
-    expect(plan.create).toHaveLength(1)
-    expect(plan.update).toHaveLength(1)
-    expect(surfaces.every((surface) => surface.elevation === 0.2)).toBe(true)
-    expect(surfaces.every((surface) => surface.thickness === 0.1)).toBe(true)
-    expect(surfaces.every((surface) => surface.fillToTerrain === true)).toBe(true)
-    expect(surfaces.every((surface) => surface.materialPreset === 'custom-floor')).toBe(true)
-    expect(surfaces.every((surface) => surface.slots?.surface === 'library:oak')).toBe(true)
-    expect(left?.holes).toEqual([leftHole])
-    expect(left?.holeMetadata).toEqual([{ source: 'manual' }])
-    expect(right?.holes).toEqual([rightHole])
-    expect(right?.holeMetadata).toEqual([{ source: 'stair', stairId: 'stair_right' }])
-  })
-
-  test('a split recessed slab preserves its rim elevation', () => {
-    const recessed = SlabNode.parse({
-      polygon: square,
-      elevation: -0.2,
-      thickness: 0.25,
-      recessed: true,
-      recessedRimElevation: 0.15,
-      autoFromWalls: true,
-    })
-    const rooms = [
-      [
-        { x: 0, y: 0 },
-        { x: 2, y: 0 },
-        { x: 2, y: 3 },
-        { x: 0, y: 3 },
-      ],
-      [
-        { x: 2, y: 0 },
-        { x: 4, y: 0 },
-        { x: 4, y: 3 },
-        { x: 2, y: 3 },
-      ],
-    ]
-
-    const plan = planAutoSlabsForLevel(rooms, [recessed])
-    const surfaces = [SlabNode.parse({ ...recessed, ...plan.update[0]?.data }), ...plan.create]
-
-    expect(surfaces).toHaveLength(2)
-    expect(
-      surfaces.every(
-        (surface) =>
-          surface.elevation === -0.2 &&
-          surface.thickness === 0.25 &&
-          surface.recessed === true &&
-          surface.recessedRimElevation === 0.15,
-      ),
-    ).toBe(true)
-  })
-
-  test('preserves slabs with conflicting terrain-fill settings instead of merging them', () => {
-    const leftSlab = SlabNode.parse({
-      id: 'slab_fill_left',
-      polygon: [
-        [0, 0],
-        [4, 0],
-        [4, 3],
-        [0, 3],
-      ],
-      fillToTerrain: true,
-      autoFromWalls: true,
-    })
-    const rightSlab = SlabNode.parse({
-      id: 'slab_fill_right',
-      polygon: [
-        [4, 0],
-        [8, 0],
-        [8, 3],
-        [4, 3],
-      ],
-      autoFromWalls: true,
-    })
-    const mergedRoom = [
-      { x: 0, y: 0 },
-      { x: 8, y: 0 },
-      { x: 8, y: 3 },
-      { x: 0, y: 3 },
-    ]
-
-    const plan = planAutoSlabsForLevel([mergedRoom], [leftSlab, rightSlab])
-
-    expect(plan.create).toHaveLength(0)
-    expect(plan.delete).toHaveLength(0)
-    expect(plan.update).toEqual(
-      expect.arrayContaining([
-        { id: leftSlab.id, data: { autoFromWalls: false } },
-        { id: rightSlab.id, data: { autoFromWalls: false } },
-      ]),
-    )
-  })
-
-  test('clips an elevator opening across both sides of a slab split', () => {
-    const crossingHole: Array<[number, number]> = [
-      [1.5, 1],
-      [2.5, 1],
-      [2.5, 2],
-      [1.5, 2],
-    ]
-    const auto = SlabNode.parse({
-      polygon: square,
-      holes: [crossingHole],
-      holeMetadata: [{ source: 'elevator', elevatorId: 'elevator_crossing' }],
-      autoFromWalls: true,
-    })
-    const rooms = [
-      [
-        { x: 0, y: 0 },
-        { x: 2, y: 0 },
-        { x: 2, y: 3 },
-        { x: 0, y: 3 },
-      ],
-      [
-        { x: 2, y: 0 },
-        { x: 4, y: 0 },
-        { x: 4, y: 3 },
-        { x: 2, y: 3 },
-      ],
-    ]
-
-    const plan = planAutoSlabsForLevel(rooms, [auto])
-    const surfaces = [SlabNode.parse({ ...auto, ...plan.update[0]?.data }), ...plan.create]
-    const holes = surfaces.flatMap((surface) => surface.holes)
-
-    expect(holes).toHaveLength(2)
-    expect(holes).toEqual(
-      expect.arrayContaining([
-        expect.arrayContaining([
-          [1.5, 1],
-          [2, 1],
-          [2, 2],
-          [1.5, 2],
-        ]),
-        expect.arrayContaining([
-          [2, 1],
-          [2.5, 1],
-          [2.5, 2],
-          [2, 2],
-        ]),
-      ]),
-    )
-    expect(
-      surfaces.every(
-        (surface) =>
-          surface.holeMetadata.length === 1 &&
-          surface.holeMetadata[0]?.source === 'elevator' &&
-          surface.holeMetadata[0]?.elevatorId === 'elevator_crossing',
-      ),
-    ).toBe(true)
-  })
-
-  test('a demoted slab suppresses re-creating an auto slab when the room re-forms', () => {
-    const auto = slab(0.05)
-
-    const demotion = planAutoSlabsForLevel([], [auto]).update[0]
-    const demoted = SlabNode.parse({ ...auto, ...demotion?.data })
-    expect(demoted.autoFromWalls).toBe(false)
-
-    const plan = planAutoSlabsForLevel([roomPolygon()], [demoted])
-
-    expect(plan.create).toHaveLength(0)
-    expect(plan.update).toHaveLength(0)
-    expect(plan.delete).toHaveLength(0)
-  })
-
-  test('manual slabs that split one room suppress a replacement full-room slab', () => {
-    const left = SlabNode.parse({
-      polygon: [
-        [0, 0],
-        [2, 0],
-        [2, 3],
-        [0, 3],
-      ],
-      autoFromWalls: false,
-    })
-    const right = SlabNode.parse({
-      polygon: [
-        [2, 0],
-        [4, 0],
-        [4, 3],
-        [2, 3],
-      ],
-      autoFromWalls: false,
-    })
-
-    const plan = planAutoSlabsForLevel([roomPolygon()], [left, right])
-
-    expect(plan.create).toHaveLength(0)
-    expect(plan.update).toHaveLength(0)
-    expect(plan.delete).toHaveLength(0)
   })
 })

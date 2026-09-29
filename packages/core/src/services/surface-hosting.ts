@@ -85,6 +85,8 @@ export const NON_PHYSICAL_HOST_KINDS: readonly string[] = [
   'construction-dimension',
   'lineset',
   'structural-grid',
+  'separator',
+  'floor-opening',
   'spawn',
   'zone',
   'unit',

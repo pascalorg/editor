@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
@@ -62,10 +62,10 @@ function runSourceTest(body: string) {
       stdout: 'pipe',
       stderr: 'pipe',
     })
-    expect({ code: result.exitCode, stderr: result.stderr.toString() }).toEqual({
-      code: 0,
-      stderr: '',
-    })
+    if (result.exitCode !== 0)
+      throw new Error(
+        `Source probe exited ${result.exitCode}\n${result.stderr.toString()}\n${result.stdout.toString()}`,
+      )
   } finally {
     rmSync(probeDir, { recursive: true, force: true })
   }

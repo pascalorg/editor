@@ -6,6 +6,7 @@ import type {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
+import { getOpeningFloorDatum, getWallLocalFaceZ, wallSupportForNodes } from '@pascal-app/core'
 import {
   type FloorplanSchedule,
   resolveMarkDetail,
@@ -157,12 +158,15 @@ export function buildWindowFloorplanSchedule(args: {
         size: formatSize(window.width, window.height, args.unit, args.profile ?? 'document'),
         roughOpening: formatRoughOpening(window, args.unit, args.profile ?? 'document'),
         sill: formatConstructionLength(
-          Math.max(0, window.position[1] - window.height / 2),
+          Math.max(
+            0,
+            window.position[1] - window.height / 2 + openingDatumOffset(window, args.nodes),
+          ),
           args.unit,
           args.profile ?? 'document',
         ),
         head: formatConstructionLength(
-          window.position[1] + window.height / 2,
+          window.position[1] + window.height / 2 + openingDatumOffset(window, args.nodes),
           args.unit,
           args.profile ?? 'document',
         ),
@@ -228,13 +232,15 @@ export function buildOpeningMarkAnnotation(
   const normalZ = dirX
   const openingCenterX = wall.start[0] + dirX * opening.position[0]
   const openingCenterZ = wall.start[1] + dirZ * opening.position[0]
-  const halfDepth = (wall.thickness ?? 0.1) / 2
   const explicitMark = opening.mark?.trim()
   const marks = drafting ? levelData?.draftingMarkById() : levelData?.markById
   const mark = marks?.get(opening.id) ?? (explicitMark || fallbackMark(opening))
 
   if (!drafting) {
     const side = interiorSide(wall, preferredSide)
+    // Distance from the reference line to that face: a justified wall's
+    // faces are not symmetric about it.
+    const halfDepth = getWallLocalFaceZ(wall, side > 0 ? 'a' : 'b') * side
     const bubbleOffset = halfDepth + 0.5
     const bubbleX = openingCenterX + normalX * bubbleOffset * side
     const bubbleZ = openingCenterZ + normalZ * bubbleOffset * side
@@ -289,6 +295,7 @@ export function buildOpeningMarkAnnotation(
   // a door/window tag is drawn on a construction document. `preferredSide` is
   // the fallback when neither face is declared exterior.
   const side = exteriorSide(wall, preferredSide)
+  const halfDepth = getWallLocalFaceZ(wall, side > 0 ? 'a' : 'b') * side
   const bubbleHeight = OPENING_TAG_HEIGHT
   // Monospace bold sets at roughly 0.62 em; the tag keeps 0.9 of its own
   // height as end padding so a four-character mark never touches the outline.
@@ -469,7 +476,7 @@ function resolveLevel(
     current = nodes[current.parentId]
     if (current?.type === 'level') return current
   }
-  return undefined
+  return
 }
 
 function automaticMark(kind: OpeningKind, level: number, sequence: number): string {
@@ -634,4 +641,14 @@ function titleCase(value: string): string {
     .split('-')
     .map((part) => part.charAt(0).toLocaleUpperCase() + part.slice(1))
     .join(' ')
+}
+
+function openingDatumOffset(
+  opening: OpeningNode,
+  nodes: Readonly<Record<string, AnyNode>>,
+): number {
+  const wall = nodes[opening.parentId ?? '']
+  return wall?.type === 'wall'
+    ? getOpeningFloorDatum(wall, opening, nodes) - wallSupportForNodes(wall, nodes).elevation
+    : 0
 }

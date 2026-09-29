@@ -32,7 +32,7 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       { keys: ['2'], action: 'Switch to Structure phase' },
       { keys: ['3'], action: 'Switch to Furnish phase' },
       { keys: ['F'], action: 'Switch to Furnish layer' },
-      { keys: ['Z'], action: 'Switch to Zones layer' },
+      { keys: ['Z'], action: 'Switch to Rooms layer' },
       {
         keys: ['Cmd/Ctrl', 'Arrow Up'],
         action: 'Select next level in the active building',

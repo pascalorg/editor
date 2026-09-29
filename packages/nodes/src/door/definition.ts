@@ -107,7 +107,7 @@ function doorHeightHandle(): HandleDescriptor<DoorNodeType> {
       const curtainMax = curtainOpeningResizeMax(n, scene.nodes(), 'y', 1)
       if (curtainMax !== undefined) return curtainMax
       const bottom = n.position[1] - n.height / 2
-      return Math.max(MIN_DOOR_HEIGHT, readHostWallCeiling(n.wallId, scene) - bottom)
+      return Math.max(MIN_DOOR_HEIGHT, readHostWallCeiling(n.wallId, scene, n) - bottom)
     },
     currentValue: (n) => n.height,
     onDrag: (node) => publishOpeningResizeGuides(node, false),

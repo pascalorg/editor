@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { SlabNode } from '../schema'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { resetSceneHistoryPauseDepth } from '../store/history-control'
 import { createSceneApi, type SceneStoreLike } from './scene-api'
@@ -202,4 +203,55 @@ describe('SceneApi snapshot / restore', () => {
     expect(nodes(store)['a']).toMatchObject({ visible: true }) // the *first* pre-pause value
     api.resumeHistory()
   })
+})
+
+test('SceneApi sanitizes writes over an unguarded store, including batches', () => {
+  const hole: [number, number][] = [
+    [1, 1],
+    [2, 1],
+    [2, 2],
+    [1, 2],
+  ]
+  const plate = SlabNode.parse({
+    id: 'slab_api',
+    polygon: [
+      [0, 0],
+      [4, 0],
+      [4, 4],
+      [0, 4],
+    ],
+    boundary: 'auto',
+    zoneIds: ['zone_room'],
+    holes: [hole],
+    holeMetadata: [{ source: 'room' }],
+  })
+  const store = makeFakeStore({ [plate.id]: plate })
+  let batches = 0
+  store.getState().applyNodeChanges = (changes) => {
+    batches++
+    for (const { node } of changes.create ?? []) store.getState().createNode(node)
+    for (const { id, data } of changes.update ?? []) store.getState().updateNode(id, data)
+  }
+  const api = createSceneApi(store)
+  api.update(plate.id, { polygon: [] })
+  api.upsert({ ...plate, polygon: [] })
+  api.applyChanges!({ update: [{ id: plate.id, data: { holeMetadata: [{ source: 'manual' }] } }] })
+  expect(store.getState().nodes[plate.id]).toBe(plate)
+  expect(batches).toBe(0)
+  api.applyChanges!({ update: [{ id: plate.id, data: { polygon: [], materialPreset: 'oak' } }] })
+  expect(store.getState().nodes[plate.id]).toMatchObject({
+    polygon: plate.polygon,
+    materialPreset: 'oak',
+  })
+  expect(batches).toBe(1)
+  api.upsert({ ...plate, id: 'slab_api_created' })
+  api.createMany!([{ node: { ...plate, id: 'slab_api_many' } }])
+  api.applyChanges!({ create: [{ node: { ...plate, id: 'slab_api_batch' } }] })
+  for (const id of ['slab_api_created', 'slab_api_many', 'slab_api_batch'] as const) {
+    const node = store.getState().nodes[id] as SlabNode
+    expect(node.polygon).toEqual(plate.polygon)
+    expect(node.boundary).toBeUndefined()
+    expect(node.zoneIds).toBeUndefined()
+    expect(node.autoFromWalls).not.toBe(true)
+  }
 })

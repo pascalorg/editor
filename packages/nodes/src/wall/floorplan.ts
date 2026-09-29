@@ -5,10 +5,13 @@ import {
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
+  getWallBodyCenterOffset,
   getWallCurveFrameAt,
   getWallCurveLength,
   getWallEffectiveHeightForNodes,
+  getWallFaceOffsets,
   getWallLayerPolylines,
+  getWallLocalFaceZ,
   getWallMidpointHandlePoint,
   getWallPlanFootprint,
   getWallThickness,
@@ -19,7 +22,12 @@ import {
   type WallNode,
   wallLayerBoundaryOffsets,
 } from '@pascal-app/core'
-import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
+import {
+  floorplanGeometryMetadata,
+  readFloorplanContext,
+  WALL_PUSH_AFFORDANCE,
+  type WallPushArrowPayload,
+} from '@pascal-app/editor'
 import { constructionDimensionStandard } from '../shared/construction-dimension-standards'
 import {
   buildCurvedWallConstructionDimensions,
@@ -55,6 +63,13 @@ function floorplanWallThickness(wall: WallNode): number {
 
 function exaggerateWallThickness(wall: WallNode): WallNode {
   return { ...wall, thickness: floorplanWallThickness(wall) }
+}
+
+// Assembly offsets are measured from the body centre; a justified wall's body
+// sits off its reference line, so the layer lines move with it.
+function wallLayerOffsets(wall: WallNode): number[] {
+  const centre = getWallBodyCenterOffset(wall)
+  return wallLayerBoundaryOffsets(wall, getWallThickness(wall)).map((offset) => offset + centre)
 }
 
 export type WallFloorplanLevelData = {
@@ -162,7 +177,7 @@ function buildWallAssemblyLayers(
   documentMode: boolean,
 ): FloorplanGeometry[] {
   if (!source.assembly || isCurvedWall(source)) return []
-  const offsets = wallLayerBoundaryOffsets(wall, getWallThickness(wall))
+  const offsets = wallLayerOffsets(wall)
   if (offsets.length < 3) return []
   const lines = getWallLayerPolylines(wall, layerMiters, offsets)
   if (lines.length < 3) return []
@@ -253,12 +268,11 @@ export function computeWallFloorplanLevelData({
   const documentWalls = [...siblings]
   const miters = calculateLevelMiters(walls)
   const documentMiters = calculateLevelMiters(documentWalls)
-  const layerOffsets = (wall: WallNode) => wallLayerBoundaryOffsets(wall, getWallThickness(wall))
   return {
     miters,
     documentMiters,
-    layerMiters: calculateLevelLayerMiters(walls, miters, layerOffsets),
-    documentLayerMiters: calculateLevelLayerMiters(documentWalls, documentMiters, layerOffsets),
+    layerMiters: calculateLevelLayerMiters(walls, miters, wallLayerOffsets),
+    documentLayerMiters: calculateLevelLayerMiters(documentWalls, documentMiters, wallLayerOffsets),
     constructionDimensionsByReference,
   }
 }
@@ -304,9 +318,7 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
     calculateLevelMiters(getPurposeWalls())
   const getLayerMiters = () =>
     (documentMode ? levelData?.documentLayerMiters : levelData?.layerMiters) ??
-    calculateLevelLayerMiters(getPurposeWalls(), miters, (wall) =>
-      wallLayerBoundaryOffsets(wall, getWallThickness(wall)),
-    )
+    calculateLevelLayerMiters(getPurposeWalls(), miters, wallLayerOffsets)
 
   const polygon = getWallPlanFootprint(self, miters)
   if (!polygon || polygon.length < 3) return null
@@ -457,8 +469,8 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
     })
 
     const thicknessFrame = getWallCurveFrameAt(self, 0.5)
-    const halfVisibleThickness = getWallThickness(self) / 2
     for (const side of [1, -1] as const) {
+      const halfVisibleThickness = getWallLocalFaceZ(self, side > 0 ? 'a' : 'b') * side
       children.push({
         kind: 'endpoint-handle',
         point: [
@@ -471,11 +483,10 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       })
     }
 
-    // Side move arrows — two directional arrows at the wall midpoint,
-    // pointing outward perpendicular to the wall. Mirrors the 3D
-    // `WallMoveSideHandles` arrows so users can grab the wall body
-    // from the floor plan. PointerDown on either arrow activates
-    // `wallFloorplanMoveTarget` via the registry-layer dispatcher.
+    // Side push arrows — two directional arrows at the wall midpoint,
+    // pointing outward perpendicular to the wall. They are the 3D side
+    // arrows' push (same handle, drag and commit, run by the floor plan for
+    // `WALL_PUSH_AFFORDANCE`); only their placement is plan-specific.
     {
       const dx = node.end[0] - node.start[0]
       const dz = node.end[1] - node.start[1]
@@ -484,16 +495,22 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
         const midpoint = getWallMidpointHandlePoint(node)
         const nx = -dz / wallLength
         const nz = dx / wallLength
-        const offset = floorplanWallThickness(node) / 2 + 0.05
+        const offsets = getWallFaceOffsets({ ...node, thickness: floorplanWallThickness(node) })
+        const offset = offsets.a + 0.05
+        const backOffset = -offsets.b + 0.05
         children.push({
           kind: 'move-arrow',
           point: [midpoint.x + nx * offset, midpoint.y + nz * offset],
           angle: Math.atan2(nz, nx),
+          affordance: WALL_PUSH_AFFORDANCE,
+          payload: { wallId: node.id, side: 'a' } satisfies WallPushArrowPayload,
         })
         children.push({
           kind: 'move-arrow',
-          point: [midpoint.x - nx * offset, midpoint.y - nz * offset],
+          point: [midpoint.x - nx * backOffset, midpoint.y - nz * backOffset],
           angle: Math.atan2(-nz, -nx),
+          affordance: WALL_PUSH_AFFORDANCE,
+          payload: { wallId: node.id, side: 'b' } satisfies WallPushArrowPayload,
         })
       }
     }
@@ -522,8 +539,8 @@ function buildSelectedWallHatchLines(wall: WallNode, stroke: string): FloorplanG
   const length = getWallCurveLength(wall)
   if (length <= 1e-6) return []
 
-  const halfAcross = getWallThickness(wall) / 2
-  const halfAlong = halfAcross
+  const offsets = getWallFaceOffsets(wall)
+  const halfAlong = offsets.a - getWallBodyCenterOffset(wall)
   const count = Math.max(1, Math.floor(length / FLOORPLAN_SELECTION_HATCH_SPACING))
   const spacing = length / count
   const lines: FloorplanGeometry[] = []
@@ -533,10 +550,10 @@ function buildSelectedWallHatchLines(wall: WallNode, stroke: string): FloorplanG
     const frame = getWallCurveFrameAt(wall, along / length)
     lines.push({
       kind: 'line',
-      x1: frame.point.x - frame.tangent.x * halfAlong - frame.normal.x * halfAcross,
-      y1: frame.point.y - frame.tangent.y * halfAlong - frame.normal.y * halfAcross,
-      x2: frame.point.x + frame.tangent.x * halfAlong + frame.normal.x * halfAcross,
-      y2: frame.point.y + frame.tangent.y * halfAlong + frame.normal.y * halfAcross,
+      x1: frame.point.x - frame.tangent.x * halfAlong - frame.normal.x * -offsets.b,
+      y1: frame.point.y - frame.tangent.y * halfAlong - frame.normal.y * -offsets.b,
+      x2: frame.point.x + frame.tangent.x * halfAlong + frame.normal.x * offsets.a,
+      y2: frame.point.y + frame.tangent.y * halfAlong + frame.normal.y * offsets.a,
       stroke,
       strokeWidth: FLOORPLAN_SELECTION_HATCH_STROKE_WIDTH,
       pointerEvents: 'none',

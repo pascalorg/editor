@@ -31,7 +31,6 @@ import {
   Redo2,
   Sparkles,
   Square,
-  SquareStack,
   Sun,
   Trash2,
   Undo2,
@@ -314,19 +313,6 @@ export function EditorCommands() {
         },
         navigate: true,
         execute: () => navigateTo('wall-mode'),
-      },
-      {
-        id: 'editor.viewer.level-mode',
-        label: 'Level Mode',
-        group: 'Viewer Controls',
-        icon: <SquareStack className="h-4 w-4" />,
-        keywords: ['level', 'floor', 'exploded', 'stacked', 'solo'],
-        badge: () => {
-          const mode = useViewer.getState().levelMode
-          return { manual: 'Manual', stacked: 'Stacked', exploded: 'Exploded', solo: 'Solo' }[mode]
-        },
-        navigate: true,
-        execute: () => navigateTo('level-mode'),
       },
       {
         id: 'editor.viewer.camera-mode',

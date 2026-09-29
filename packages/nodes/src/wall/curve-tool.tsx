@@ -89,6 +89,9 @@ export const CurveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     }
 
     const onGridMove = (event: GridEvent) => {
+      // A move between the cancel and the unmount would republish an override
+      // nothing clears any more.
+      if (wasFinalized) return
       const snapStep = getSegmentGridStep()
       // Snap the cursor on the WORLD XZ grid (still in building-local
       // coords for the rest of the math) so a rotated building doesn't

@@ -12,6 +12,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { _roots, act, createRoot, events, extend, type RootState } from '@react-three/fiber'
 import { createElement } from 'react'
 import { Group, InstancedMesh, OrthographicCamera, Vector3, type WebGLRenderer } from 'three'
+import { endCeilingEdit, startCeilingEdit } from '../../../lib/ceiling-edit-session'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import useInteractionScope from '../../../store/use-interaction-scope'
@@ -33,11 +34,12 @@ type BracketHarness = {
   sounds: string[]
 }
 
-// Brackets only mount for the hovered or selected ceiling, so the harness
-// selects its ceiling unless a test opts out.
 async function withMountedBrackets(
   run: (harness: BracketHarness) => Promise<void>,
-  { selected = true } = {},
+  {
+    ceilingData = {},
+    session = true,
+  }: { ceilingData?: Partial<CeilingNode>; session?: boolean } = {},
 ) {
   const previousScene = useScene.getState()
   const previousViewer = useViewer.getState()
@@ -59,6 +61,7 @@ async function withMountedBrackets(
   const building = BuildingNode.parse({})
   const level = LevelNode.parse({ parentId: building.id, height: 3 })
   const ceiling = CeilingNode.parse({
+    ...ceilingData,
     parentId: level.id,
     height: 3,
     polygon: [
@@ -84,15 +87,11 @@ async function withMountedBrackets(
     })
     useViewer.setState({
       hoveredId: null,
-      selection: {
-        buildingId: building.id,
-        levelId: level.id,
-        zoneId: null,
-        selectedIds: selected ? [ceiling.id] : [],
-      },
+      selection: { buildingId: building.id, levelId: level.id, zoneId: null, selectedIds: [] },
     })
     useEditor.setState({ phase: 'structure', mode: 'select', structureLayer: 'elements' })
     useInteractionScope.setState({ scope: { kind: 'idle' } })
+    if (session) startCeilingEdit(ceiling.id)
     const camera = Object.assign(new OrthographicCamera(-1, 5, 5, -1, 0.1, 100), { manual: true })
     camera.position.set(0, 10, 0)
     camera.up.set(0, 0, -1)
@@ -155,7 +154,10 @@ async function withMountedBrackets(
       sounds,
     })
   } finally {
-    await act(async () => root.render(null))
+    await act(async () => {
+      endCeilingEdit()
+      root.render(null)
+    })
     clearBoxSelectHandled()
     emitter.off('ceiling:click', onClick)
     sfxEmitter.off('*', onSound)
@@ -196,6 +198,7 @@ test('mounted brackets preserve hover, clicks, drags, capture visibility, overri
       await dispatch('onPointerDown', 4, 0)
 
       const oldNormal = meshes().find((mesh) => mesh.renderOrder === 1000)
+      // Ceilings outside the session get no brackets.
       await act(async () => {
         const additions = Array.from({ length: 8 }, (_, index) =>
           CeilingNode.parse({
@@ -215,16 +218,44 @@ test('mounted brackets preserve hover, clicks, drags, capture visibility, overri
             ...Object.fromEntries(additions.map((node) => [node.id, node])),
           },
         })
-        useViewer.getState().setSelection({
-          selectedIds: [ceiling.id, ...additions.map((node) => node.id)],
-        })
       })
+      expect(meshes().find((mesh) => mesh.renderOrder === 1000)).toBe(oldNormal)
+      expect(meshes().reduce((sum, mesh) => sum + mesh.count, 0)).toBe(12)
+      // Twelve corners overflow the initial capacity: the batch meshes are replaced
+      // while the pressed corner keeps its index.
+      await act(async () =>
+        useScene.setState({
+          nodes: {
+            ...useScene.getState().nodes,
+            [ceiling.id]: CeilingNode.parse({
+              ...ceiling,
+              polygon: [
+                [0, 0],
+                [4, 0],
+                [4, 1],
+                [4, 2],
+                [4, 3],
+                [4, 4],
+                [3, 4],
+                [2, 4],
+                [1, 4],
+                [0, 4],
+                [0, 3],
+                [0, 2],
+              ],
+            }),
+          },
+        }),
+      )
       expect(meshes()).toHaveLength(2)
       expect(meshes().find((mesh) => mesh.renderOrder === 1000)).not.toBe(oldNormal)
       expect(useViewer.getState().hoveredId).toBe(ceiling.id)
       await dispatch('onClick', 4, 0)
       expect(clicks).toHaveLength(2)
       expect(clicks[1].position).toEqual([4, 3, 0])
+      await act(async () =>
+        useScene.setState({ nodes: { ...useScene.getState().nodes, [ceiling.id]: ceiling } }),
+      )
       await dispatch('onPointerLeave', 4, 0)
       expect(useViewer.getState().hoveredId).toBeNull()
 
@@ -290,7 +321,7 @@ test('mounted brackets preserve hover, clicks, drags, capture visibility, overri
   )
 })
 
-test('coincident ceiling corners keep the same hover, click, and drag owner across batch transfers', async () => {
+test('an adjacent ceiling outside the session has no brackets at a shared corner', async () => {
   await withMountedBrackets(async ({ ceiling, dispatch, dispatchWindow, meshes, clicks }) => {
     const adjacent = CeilingNode.parse({
       ...ceiling,
@@ -302,29 +333,67 @@ test('coincident ceiling corners keep the same hover, click, and drag owner acro
         [0, -4],
       ],
     })
-    await act(async () => {
+    await act(async () =>
       useScene.setState({
         nodes: { ...useScene.getState().nodes, [adjacent.id]: adjacent },
-      })
-      useViewer.getState().setSelection({ selectedIds: [ceiling.id, adjacent.id] })
-    })
-    const owner = ceiling.id < adjacent.id ? ceiling : adjacent
-    const other = owner === ceiling ? adjacent : ceiling
-    for (let move = 0; move < 20; move++) {
-      await dispatch('onPointerMove', 0, 0)
-      expect(useViewer.getState().hoveredId).toBe(owner.id)
-      expect(meshes().find((mesh) => mesh.renderOrder === 1001)!.count).toBe(7)
-    }
+      }),
+    )
+    expect(meshes().reduce((sum, mesh) => sum + mesh.count, 0)).toBe(12)
+    await dispatch('onPointerMove', 0, 0)
+    expect(useViewer.getState().hoveredId).toBe(ceiling.id)
     await dispatch('onPointerDown', 0, 0)
     await dispatch('onClick', 0, 0)
-    expect(clicks[0].node.id).toBe(owner.id)
+    expect(clicks[0].node.id).toBe(ceiling.id)
     await dispatchWindow('pointermove', 0.5, 0.5)
-    expect(useLiveNodeOverrides.getState().overrides.has(owner.id)).toBe(true)
-    expect(useLiveNodeOverrides.getState().overrides.has(other.id)).toBe(false)
+    expect(useLiveNodeOverrides.getState().overrides.has(ceiling.id)).toBe(true)
+    expect(useLiveNodeOverrides.getState().overrides.has(adjacent.id)).toBe(false)
     await dispatchWindow('pointercancel', 0.5, 0.5)
     await dispatch('onPointerLeave', 0, 0)
     expect(useViewer.getState().hoveredId).toBeNull()
   })
+})
+
+test('brackets and their hit boxes exist only inside the Edit ceiling session', async () => {
+  await withMountedBrackets(
+    async ({ ceiling, dispatch, meshes, levelObject }) => {
+      // A canvas selection of the ceiling alone shows nothing.
+      await act(async () => useViewer.getState().setSelection({ selectedIds: [ceiling.id] }))
+      expect(meshes()).toHaveLength(0)
+      expect(levelObject.children).toHaveLength(0)
+      await dispatch('onPointerMove', 0, 0)
+      expect(useViewer.getState().hoveredId).toBeNull()
+
+      await act(async () => {
+        startCeilingEdit(ceiling.id)
+      })
+      expect(meshes().reduce((sum, mesh) => sum + mesh.count, 0)).toBe(12)
+
+      await act(async () => useViewer.getState().setSelection({ selectedIds: [] }))
+      expect(meshes()).toHaveLength(0)
+      expect(levelObject.children).toHaveLength(0)
+    },
+    { session: false },
+  )
+})
+
+test('a corner drag detaches an auto ceiling; the session stays open', async () => {
+  await withMountedBrackets(
+    async ({ ceiling, dispatch, dispatchWindow, meshes }) => {
+      expect(ceiling.boundary).toBe('auto')
+      await dispatch('onPointerDown', 0, 0)
+      await dispatchWindow('pointermove', 0.5, 0.5)
+      const preview = useLiveNodeOverrides.getState().overrides.get(ceiling.id)
+        ?.polygon as CeilingNode['polygon']
+      await dispatchWindow('pointerup', 0.5, 0.5)
+      const committed = useScene.getState().nodes[ceiling.id] as CeilingNode
+      expect(committed.polygon).toEqual(preview)
+      expect(committed.boundary).toBeUndefined()
+      expect(committed.zoneId).toBeUndefined()
+      expect(useViewer.getState().selection.selectedIds).toEqual([ceiling.id])
+      expect(meshes().reduce((sum, mesh) => sum + mesh.count, 0)).toBe(12)
+    },
+    { ceilingData: { boundary: 'auto', zoneId: 'zone_auto_ceiling' } },
+  )
 })
 
 test('same-id registry replacement rebinds the portal and drag plane without rewriting instance data', async () => {
@@ -357,36 +426,5 @@ test('same-id registry replacement rebinds the portal and drag plane without rew
       expect(preview[0]![1]).toBeCloseTo(0.5, 6)
       await dispatchWindow('pointercancel', 10.5, 20)
     },
-  )
-})
-
-test('brackets mount only for the hovered ceiling and the selected ones', async () => {
-  await withMountedBrackets(
-    async ({ ceiling, dispatch, meshes }) => {
-      const other = CeilingNode.parse({
-        ...ceiling,
-        id: undefined,
-        polygon: [
-          [10, 0],
-          [14, 0],
-          [14, 4],
-          [10, 4],
-        ],
-      })
-      await act(async () =>
-        useScene.setState({ nodes: { ...useScene.getState().nodes, [other.id]: other } }),
-      )
-      const instances = () => meshes().reduce((sum, mesh) => sum + mesh.count, 0)
-      expect(instances()).toBe(0)
-      await act(async () => useViewer.getState().setHoveredId(ceiling.id))
-      expect(instances()).toBe(12)
-      await dispatch('onPointerMove', 10, 0)
-      expect(useViewer.getState().hoveredId).toBe(ceiling.id)
-      await act(async () => useViewer.getState().setSelection({ selectedIds: [other.id] }))
-      expect(instances()).toBe(24)
-      await dispatch('onPointerMove', 10, 0)
-      expect(useViewer.getState().hoveredId).toBe(other.id)
-    },
-    { selected: false },
   )
 })

@@ -103,6 +103,12 @@ type ViewerState = {
 
   levelMode: 'stacked' | 'exploded' | 'solo' | 'manual'
   setLevelMode: (mode: 'stacked' | 'exploded' | 'solo' | 'manual') => void
+  /**
+   * The editor's level display: stacked, with every level above the selected
+   * one hidden (the selected level and those below stay). Set by the host
+   * while editing; never persisted, so the viewer app keeps its own mode.
+   */
+  hideLevelsAboveSelection: boolean
 
   wallMode: WallMode
   setWallMode: (mode: WallMode) => void
@@ -417,6 +423,7 @@ const useViewer = create<ViewerState>()(
 
       levelMode: 'stacked',
       setLevelMode: (mode) => set({ levelMode: mode }),
+      hideLevelsAboveSelection: false,
 
       wallMode: 'up',
       setWallMode: (mode) => set({ wallMode: mode }),

@@ -5,6 +5,7 @@ import type {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
+import { getWallBodyCenterOffset } from '@pascal-app/core'
 import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
 import {
   buildOpeningMarkAnnotation,
@@ -50,14 +51,18 @@ export function buildWindowFloorplan(
   const wallDepth = wall.thickness ?? 0.1
   const plane = resolveOpeningPlanPlane(node, wallDepth)
   const depth = plane.depth
-  const cx = x1 + dirX * distance + perpX * plane.offset
-  const cz = z1 + dirZ * distance + perpZ * plane.offset
+  // The plane offset is measured from the body centre, which a justified wall
+  // sets off its reference line.
+  const bodyOffset = getWallBodyCenterOffset(wall)
+  const across = bodyOffset + plane.offset
+  const cx = x1 + dirX * distance + perpX * across
+  const cz = z1 + dirZ * distance + perpZ * across
   const halfWidth = width / 2
   const halfDepth = depth / 2
   // An offset frame stands clear of the wall centre, but the wall is still
   // cut through its whole thickness: that hole is drawn too.
-  const wallX = x1 + dirX * distance
-  const wallZ = z1 + dirZ * distance
+  const wallX = x1 + dirX * distance + perpX * bodyOffset
+  const wallZ = z1 + dirZ * distance + perpZ * bodyOffset
   const halfWallDepth = wallDepth / 2
   const cutoutPoints: readonly FloorplanPoint[] | null =
     plane.offset === 0

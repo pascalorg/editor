@@ -1,4 +1,5 @@
 import type { ContinuationContext } from '../../../lib/continuation'
+import type { HudTitle } from '../../../lib/hud-title'
 import type { SnapContext } from '../../../lib/snapping-mode'
 import { ContextualHelperPanel } from './contextual-helper-panel'
 
@@ -11,6 +12,7 @@ interface ItemHelperProps {
   // Set for a fresh point-kind placement (e.g. a positioned preset) so the
   // once/repeat continuation chip shows; null for an existing-node move.
   continuationContext?: ContinuationContext | null
+  title?: HudTitle | null
 }
 
 // Snapping mode is the chip on the right (Shift cycles it), so it's not repeated
@@ -20,6 +22,7 @@ export function ItemHelper({
   snapContext,
   showForce,
   continuationContext = null,
+  title = null,
 }: ItemHelperProps) {
   return (
     <ContextualHelperPanel
@@ -31,6 +34,7 @@ export function ItemHelper({
         { keys: [showEsc ? 'Esc' : 'Right click'], label: 'Cancel' },
       ]}
       snapContext={snapContext}
+      title={title}
     />
   )
 }

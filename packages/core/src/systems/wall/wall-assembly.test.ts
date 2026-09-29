@@ -168,7 +168,7 @@ describe('resolveWallAssembly', () => {
       'interior-finish',
     ])
     expect(resolved.exteriorSide).toBeNull()
-    expect(resolved.exteriorSideResolved).toBe(1)
+    expect(resolved.exteriorSideResolved).toBe(-1)
   })
 
   test('a wall with no assembly resolves to one framing layer of its thickness', () => {
@@ -184,6 +184,21 @@ describe('resolveWallAssembly', () => {
     expect(resolveWallExteriorSide({ frontSide: 'interior', backSide: 'interior' })).toBeNull()
     expect(resolveWallExteriorSide({ frontSide: 'exterior', backSide: 'exterior' })).toBeNull()
     expect(resolveWallExteriorSide({ frontSide: 'unknown', backSide: 'unknown' })).toBeNull()
+  })
+
+  test('an undetermined outside draws the exterior layers on side B, like the 3D cladding', () => {
+    const unknown = wall('w', [0, 0], [4, 0], {
+      assembly: EXT_2X6,
+      frontSide: 'unknown',
+      backSide: 'unknown',
+    })
+    const back = wall('w', [0, 0], [4, 0], {
+      assembly: EXT_2X6,
+      frontSide: 'interior',
+      backSide: 'exterior',
+    })
+    expect(resolveWallAssembly(unknown).exteriorSideResolved).toBe(-1)
+    expect(wallLayerBoundaryOffsets(unknown)).toEqual(wallLayerBoundaryOffsets(back))
   })
 
   test('flipping the exterior side mirrors the boundary offsets', () => {

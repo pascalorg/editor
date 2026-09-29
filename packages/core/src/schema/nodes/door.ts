@@ -58,6 +58,8 @@ export const DoorNode = BaseNode.extend({
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   side: z.enum(['front', 'back']).optional(),
+  verticalAnchor: z.enum(['wall', 'floor']).optional(),
+  floorThresholdVersion: z.union([z.literal(0), z.literal(1)]).default(1),
   wallId: z.string().optional(),
   // Alternative host: a roof-segment's generated wall face (base wall
   // under the roof or a coplanar gable end). When set, `position` is

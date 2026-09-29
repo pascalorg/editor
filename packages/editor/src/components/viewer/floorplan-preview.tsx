@@ -6,6 +6,7 @@ import {
   type FloorplanGeometry,
   type FloorplanPalette,
   type GeometryContext,
+  getLevelDisplayName,
   isNodeKindEnabled,
   nodeRegistry,
   useScene,
@@ -143,12 +144,10 @@ function boundsToViewBox(bounds: FloorplanBounds): FloorplanViewBox {
 }
 
 function levelLabel(level: AnyNode): string {
-  const named = (level as { name?: string }).name?.trim()
-  if (named) return named
-  const ordinal = (level as { level?: number }).level ?? 0
-  if (ordinal === 0) return 'Ground floor'
-  if (ordinal < 0) return `Basement ${Math.abs(ordinal)}`
-  return `Level ${ordinal}`
+  return getLevelDisplayName({
+    name: (level as { name?: string }).name,
+    level: (level as { level?: number }).level ?? 0,
+  })
 }
 
 function collectLevelTree(root: AnyNode, nodes: Record<string, AnyNode>): AnyNode[] {

@@ -36,8 +36,9 @@
  *
  * Fallback when it is `null`: the stack is still drawn at its true total
  * thickness (thickness must never change because a room was not detected), the
- * exterior face is pinned to the +normal side, and `exteriorSideResolved`
- * reports the fallback so callers can say so. A wall with both sides interior
+ * exterior face is pinned to the -normal side (face b, the legacy exterior
+ * slot the 3D materials already use), and `exteriorSideResolved` reports the
+ * fallback so callers can say so. A wall with both sides interior
  * is a PARTITION and should carry a partition assembly — one with neither
  * `exterior` nor `sheathing`, whose interior finish is then applied to BOTH
  * faces and no cladding or sheathing is drawn (see `resolveWallAssembly`).
@@ -130,7 +131,7 @@ export type ResolvedWallAssembly = {
   kind: 'envelope' | 'partition' | 'unspecified'
   /** +1 = exterior on the +normal (front) side, -1 = -normal (back), null = undetermined. */
   exteriorSide: 1 | -1 | null
-  /** `exteriorSide` with the +normal fallback applied. Always a usable sign. */
+  /** `exteriorSide` with the -normal (face b) fallback applied. Always a usable sign. */
   exteriorSideResolved: 1 | -1
 }
 
@@ -391,7 +392,7 @@ function drawnLayer(layer: AssemblyLayer): { role: WallAssemblyLayerRole; materi
 /** The wall's F2 layers ordered from the exterior face, with the side that faces out. */
 function layersOutsideIn(wall: Pick<WallNode, 'assembly' | 'frontSide' | 'backSide'>) {
   const exteriorSide = resolveWallExteriorSide(wall)
-  const exteriorSideResolved: 1 | -1 = exteriorSide ?? 1
+  const exteriorSideResolved: 1 | -1 = exteriorSide ?? -1
   const listed = wall.assembly?.layers ?? []
   // A front-listed stack reads outside-in when the exterior is the front face.
   const layers =

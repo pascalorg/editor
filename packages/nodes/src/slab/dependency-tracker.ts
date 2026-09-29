@@ -1,24 +1,31 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  floorConstructionLift,
   getRenderableSlabPolygon,
+  isFloorPlate,
+  plateLevelContext,
   prepareSlabPolygonContext,
   type SlabNode,
   type SlabPolygonContext,
   scopeSlabPolygonContext,
   slabPolygonContextChanges,
   slabPolygonContextForLevel,
+  type ZoneNode,
 } from '@pascal-app/core'
 
 type LevelContext = { slabs: SlabNode[] }
 type CachedLevel = {
   prepared: ReturnType<typeof prepareSlabPolygonContext>
   transform: string
-  slabs: Map<AnyNodeId, { node: SlabNode; signature: string }>
+  partitionRevision: number
+  slabs: Map<AnyNodeId, { node: SlabNode; signature: string; lift: number }>
   references: {
     level: AnyNode | undefined
     building: AnyNode | undefined
     slabs: SlabNode[]
+    zones: ZoneNode[]
+    openings: AnyNode[]
     context: SlabPolygonContext
   }
 }
@@ -35,17 +42,49 @@ export function createSlabDependencyTracker(initialNodes: Record<string, AnyNode
     if (value !== undefined) return value
     value = JSON.stringify(
       node.type === 'wall'
-        ? [node.id, node.start, node.end, node.thickness, node.curveOffset]
+        ? [
+            node.id,
+            node.start,
+            node.end,
+            node.thickness,
+            node.justification,
+            node.curveOffset,
+            node.supportSlabId,
+            node.supportOffset,
+            node.height,
+          ]
         : node.type === 'slab'
           ? [
               node.id,
               node.polygon,
+              node.holes,
               node.elevation,
               node.thickness,
               node.recessed,
+              node.support,
+              node.plateRole,
               node.fillToTerrain,
+              node.floorHeight,
+              node.foundation,
+              node.boundary,
+              node.zoneIds,
+              node.slots,
             ]
-          : null,
+          : node.type === 'door' || node.type === 'window'
+            ? [node.id, node.parentId, node.position, node.width, node.height, node.verticalAnchor]
+            : node.type === 'zone'
+              ? [
+                  node.id,
+                  node.spaceRole,
+                  node.hasFloor,
+                  node.polygon,
+                  node.holes,
+                  node.floor,
+                  node.floorStepFinish,
+                  node.floorStepOverrides,
+                  node.floorEdgeFinish,
+                ]
+              : null,
     )
     nodeInputs.set(node, value)
     return value
@@ -75,12 +114,24 @@ export function createSlabDependencyTracker(initialNodes: Record<string, AnyNode
       )
       const building = level?.parentId ? nodes[level.parentId] : undefined
       const cached = previous.get(levelId)
-      const references = { level, building, slabs: context.slabs, context: polygonContext }
+      // Plates carry room finishes, so a zone edit changes what they draw even
+      // when nothing about their own polygon moved.
+      const { zones, openings = [] } = plateLevelContext(level ?? null, (id) => nodes[id])
+      const references = {
+        level,
+        building,
+        slabs: context.slabs,
+        zones,
+        openings,
+        context: polygonContext,
+      }
       if (
         cached &&
         cached.references.level === level &&
         cached.references.building === building &&
         sameReferences(cached.references.slabs, context.slabs) &&
+        sameReferences(cached.references.zones, zones) &&
+        sameReferences(cached.references.openings, openings) &&
         sameReferences(cached.references.context.walls, polygonContext.walls) &&
         sameReferences(cached.references.context.siblingSlabs, polygonContext.siblingSlabs)
       ) {
@@ -98,6 +149,8 @@ export function createSlabDependencyTracker(initialNodes: Record<string, AnyNode
         cached.transform === transformSignature &&
         sameValues(cached.references.context.walls, polygonContext.walls) &&
         sameValues(cached.references.slabs, context.slabs) &&
+        sameValues(cached.references.zones, zones) &&
+        sameValues(cached.references.openings, openings) &&
         sameValues(cached.references.context.siblingSlabs, polygonContext.siblingSlabs)
       ) {
         current.set(levelId, { ...cached, references })
@@ -106,10 +159,17 @@ export function createSlabDependencyTracker(initialNodes: Record<string, AnyNode
       const slabs: CachedLevel['slabs'] = new Map()
       const prepared = prepareSlabPolygonContext(polygonContext, cached?.prepared)
       const affected = cached ? slabPolygonContextChanges(cached.prepared, prepared) : () => true
+      // Reaching here means a wall, zone or slab on this level changed by value,
+      // and a plate's top partition and side exposure read all three — so a
+      // plate never takes the per-slab shortcut, whatever its own fields say.
+      const partitionRevision = (cached?.partitionRevision ?? 0) + 1
       for (const slab of context.slabs) {
         const previousSlab = cached?.slabs.get(slab.id)
+        const lift = isFloorPlate(slab) ? 0 : floorConstructionLift(nodes, slab)
         if (
           previousSlab &&
+          previousSlab.lift === lift &&
+          !isFloorPlate(slab) &&
           (previousSlab.node === slab || sign(previousSlab.node) === sign(slab)) &&
           (!slab.fillToTerrain || slab.recessed || cached?.transform === transformSignature) &&
           !affected(slab)
@@ -123,15 +183,22 @@ export function createSlabDependencyTracker(initialNodes: Record<string, AnyNode
         // level context without changing this slab's geometry.
         const signature = JSON.stringify([
           polygon,
-          slab.elevation,
+          slab.elevation + lift,
           slab.thickness,
           slab.recessed,
           slab.fillToTerrain && !slab.recessed ? transform : null,
+          isFloorPlate(slab) ? partitionRevision : null,
         ])
-        slabs.set(slab.id, { node: slab, signature })
+        slabs.set(slab.id, { node: slab, signature, lift })
         if (previousSlab?.signature !== signature) dirty.push(slab.id)
       }
-      current.set(levelId, { prepared, transform: transformSignature, slabs, references })
+      current.set(levelId, {
+        prepared,
+        transform: transformSignature,
+        slabs,
+        references,
+        partitionRevision,
+      })
     }
     previous = current
     return dirty

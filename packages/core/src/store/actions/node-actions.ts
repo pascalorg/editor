@@ -1,3 +1,7 @@
+import { planWallDeletion } from '../../commands/structure/plan-wall-deletion'
+import type { StructurePlan } from '../../commands/structure/shared'
+import { withoutFloorStepOverrideKeys } from '../../lib/floor-step-finish'
+import { isSpaceDetectionPaused } from '../../lib/space-detection'
 import { nodeRegistry } from '../../registry/registry'
 import { validateNodeRelations } from '../../registry/validate-relations'
 import {
@@ -33,9 +37,20 @@ import {
   areWallsCollinearAcrossPoint,
   buildMergedWallAttachmentUpdates,
   getWallEndpointAtPoint,
+  mergeWallFaceRegions,
+  planMergedZoneReferences,
   resolveMergedWallEndpoints,
   type WallAttachmentUpdate,
 } from '../../systems/wall/wall-merge'
+import {
+  convertDerivedPlateHoleWrites,
+  DERIVED_WRITER_TOKEN,
+  type DerivedWriteOptions,
+  derivedDeletionIntent,
+  derivedDetachPatch,
+  filterDerivedNodeWrites,
+  isDerivedNode,
+} from '../derived-node-guard'
 import {
   activeSceneCommitNodeIds,
   addActiveSceneCommitNodeIds,
@@ -53,7 +68,9 @@ type WallMergePlan = {
   mergedStart: [number, number]
   mergedEnd: [number, number]
   mergedChildren: WallNode['children']
+  mergedFaceRegions: WallNode['faceRegions']
   attachmentUpdates: WallAttachmentUpdate[]
+  zoneUpdates: Array<{ id: AnyNodeId; data: Partial<AnyNode> }>
 }
 
 const DEFAULT_RIDGE_VENT_REFRESH_FIELDS = new Set<string>([
@@ -1092,6 +1109,10 @@ function buildWallMergePlans(
       }
 
       const { start, end } = resolveMergedWallEndpoints(primary, secondary, junction)
+      // A heal that would repaint a room or overflow a side's regions leaves the walls split.
+      const mergedFaceRegions = mergeWallFaceRegions([primary, secondary], start, end)
+      const zoneUpdates = planMergedZoneReferences(nodes, primary, secondary, start, end)
+      if (!(mergedFaceRegions && zoneUpdates)) continue
       const mergedChildren = Array.from(
         new Set([...(primary.children ?? []), ...(secondary.children ?? [])]),
       ) as WallNode['children']
@@ -1110,7 +1131,9 @@ function buildWallMergePlans(
         mergedStart: start,
         mergedEnd: end,
         mergedChildren,
+        mergedFaceRegions: mergedFaceRegions.length > 0 ? mergedFaceRegions : undefined,
         attachmentUpdates,
+        zoneUpdates,
       })
       usedWallIds.add(primary.id)
       usedWallIds.add(secondary.id)
@@ -1124,8 +1147,11 @@ const createNodesActionImpl = (
   set: (fn: (state: SceneState) => Partial<SceneState>) => void,
   get: () => SceneState,
   ops: NodeCreateOp[],
+  options?: DerivedWriteOptions,
 ) => {
   if (get().readOnly) return
+  ops = filterDerivedNodeWrites(get().nodes, { create: ops }, options).create
+  if (!ops.length) return
   const extraNodesToMarkDirty = new Set<AnyNodeId>()
   const extraNodesToClearDirty = new Set<AnyNodeId>()
   set((state) => {
@@ -1200,11 +1226,19 @@ const applyNodeChangesActionImpl = (
   set: (fn: (state: SceneState) => Partial<SceneState>) => void,
   get: () => SceneState,
   changes: { create?: NodeCreateOp[]; update?: NodeUpdateOp[]; delete?: NodeDeleteOp[] },
+  options?: DerivedWriteOptions,
 ) => {
   if (get().readOnly) return
+  changes = convertDerivedPlateHoleWrites(get().nodes, changes, options)
+  changes = filterDerivedNodeWrites(get().nodes, changes, options)
+  if (!changes.create?.length && !changes.update?.length && !changes.delete?.length) return
 
   const createOps = changes.create ?? []
-  const updateOps = changes.update ?? []
+  const deletionIntent =
+    options?.derivedWriter === DERIVED_WRITER_TOKEN
+      ? []
+      : derivedDeletionIntent(get().nodes, changes.delete ?? [])
+  const updateOps = [...(changes.update ?? []), ...deletionIntent]
   const deleteOps = changes.delete ?? []
   const nodesToMarkDirty = new Set<AnyNodeId>()
   const nodesToClearDirty = new Set<AnyNodeId>()
@@ -1374,8 +1408,17 @@ const updateNodesActionImpl = (
   set: (fn: (state: SceneState) => Partial<SceneState>) => void,
   get: () => SceneState,
   updates: { id: AnyNodeId; data: Partial<AnyNode> }[],
+  options?: DerivedWriteOptions,
+  deferDirty = true,
 ) => {
   if (get().readOnly) return
+  const converted = convertDerivedPlateHoleWrites(get().nodes, { update: updates }, options)
+  if (converted.create?.length || converted.delete?.length) {
+    applyNodeChangesActionImpl(set, get, converted, options)
+    return
+  }
+  updates = filterDerivedNodeWrites(get().nodes, { update: converted.update ?? [] }, options).update
+  if (!updates.length) return
   const parentsToUpdate = new Set<AnyNodeId>()
   const extraNodesToUpdate = new Set<AnyNodeId>()
   const extraNodesToDelete = new Set<AnyNodeId>()
@@ -1473,6 +1516,12 @@ const updateNodesActionImpl = (
     return { nodes: nextNodes }
   })
 
+  if (!deferDirty) {
+    for (const id of [...updates.map((u) => u.id), ...parentsToUpdate, ...extraNodesToUpdate])
+      get().markDirty(id)
+    for (const id of extraNodesToDelete) get().clearDirty(id)
+    return
+  }
   // Batch dirty-marking into a single RAF to avoid redundant callbacks during rapid updates
   for (const u of updates) {
     // Visibility is applied by React before the deferred dirty callback. Mark
@@ -1522,8 +1571,10 @@ export type NodeDeletionPlan = NodeDeletionScene & {
 /**
  * The delete store action's planner, without committing: the requested ids,
  * their `children` subtrees and kind `onDeleteCascade` companions, collinear
- * walls merged across a deleted junction, neighbour patches, support and unit
- * cleanup, and the default gutter and downspout refresh.
+ * walls merged across a deleted junction, the separators that keep two rooms
+ * apart when the wall between them goes, derived-construction deletion intent,
+ * neighbour patches, support and unit cleanup, and the default gutter and
+ * downspout refresh.
  *
  * The refresh mints gutters, downspouts and outlets with random ids, and which
  * existing defaults it keeps can depend on them. With `mintDefaults: false`
@@ -1535,13 +1586,35 @@ export type NodeDeletionPlan = NodeDeletionScene & {
 export function planNodeDeletion(
   scene: NodeDeletionScene,
   ids: AnyNodeId[],
-  { mintDefaults = true }: { mintDefaults?: boolean } = {},
+  {
+    mintDefaults = true,
+    options,
+    wallDeletionPlan,
+  }: {
+    mintDefaults?: boolean
+    options?: DerivedWriteOptions
+    /** A caller-owned room-preserving plan; otherwise planned here unless detection is paused. */
+    wallDeletionPlan?: StructurePlan
+  } = {},
 ): NodeDeletionPlan {
   const parentsToMarkDirty = new Set<AnyNodeId>()
   const nodesToMarkDirty = new Set<AnyNodeId>()
   const deletedIds = new Set<AnyNodeId>()
   const mergePlans = buildWallMergePlans(scene.nodes, ids)
   const requestedDeleteIds = new Set(ids)
+  // Deleting derived construction is an intent edit ("this room has no
+  // ceiling"), not a refusal — the reconciler must not rebuild it.
+  const deletionIntent =
+    options?.derivedWriter === DERIVED_WRITER_TOKEN ? [] : derivedDeletionIntent(scene.nodes, ids)
+  // A preview names the separators a room-preserving delete adds without random ids.
+  let previewCount = 0
+  const previewId = (kind: string) => {
+    let id: string
+    do id = `${kind}_preview${++previewCount}`
+    while (id in scene.nodes)
+    return id
+  }
+
   const nextNodes = { ...scene.nodes }
   const nextCollections = { ...scene.collections }
   let nextRootIds = [...scene.rootNodeIds]
@@ -1566,6 +1639,34 @@ export function planNodeDeletion(
     }
   }
   for (const id of ids) collect(id)
+  if (
+    wallDeletionPlan ||
+    (options?.derivedWriter !== DERIVED_WRITER_TOKEN && !isSpaceDetectionPaused())
+  ) {
+    const plan =
+      wallDeletionPlan ??
+      planWallDeletion(scene.nodes, {
+        nodeIds: [...allIds],
+        mintId: mintDefaults ? generateId : previewId,
+      })
+    for (const change of plan.changes) {
+      if (change.op === 'delete') collect(change.id)
+      else if (change.op === 'update') {
+        const current = nextNodes[change.id]
+        if (current) nextNodes[change.id] = parseUpdatedNode(current, change.data)
+        nodesToMarkDirty.add(change.id)
+      } else {
+        const node = change.node
+        nextNodes[node.id] = node
+        nodesToMarkDirty.add(node.id)
+        const parent = node.parentId ? nextNodes[node.parentId as AnyNodeId] : undefined
+        if (parent && 'children' in parent && Array.isArray(parent.children)) {
+          nextNodes[parent.id] = { ...parent, children: [...parent.children, node.id] } as AnyNode
+          parentsToMarkDirty.add(parent.id)
+        }
+      }
+    }
+  }
   for (const plan of mergePlans) {
     allIds.add(plan.secondaryWallId)
   }
@@ -1603,13 +1704,21 @@ export function planNodeDeletion(
       continue
     }
 
+    const { faceRegions: _regions, ...keptWall } = primaryWall
     nextNodes[plan.primaryWallId] = {
-      ...primaryWall,
+      ...keptWall,
+      ...(plan.mergedFaceRegions ? { faceRegions: plan.mergedFaceRegions } : {}),
       start: plan.mergedStart,
       end: plan.mergedEnd,
       children: plan.mergedChildren,
     }
     nodesToMarkDirty.add(plan.primaryWallId)
+
+    for (const update of plan.zoneUpdates) {
+      if (allIds.has(update.id)) continue
+      const zone = nextNodes[update.id]
+      if (zone) nextNodes[update.id] = { ...zone, ...update.data } as AnyNode
+    }
 
     for (const update of plan.attachmentUpdates) {
       if (allIds.has(update.id)) continue
@@ -1645,6 +1754,16 @@ export function planNodeDeletion(
     }
   }
 
+  // A deleted door takes its step paint with it, in the same undo step; every
+  // other doorway keeps its own.
+  for (const node of Object.values(nextNodes)) {
+    if (node.type !== 'zone' || allIds.has(node.id)) continue
+    const pruned = withoutFloorStepOverrideKeys(node, allIds as ReadonlySet<string>)
+    if (!pruned) continue
+    nextNodes[node.id] = pruned
+    nodesToMarkDirty.add(node.id)
+  }
+
   const deletedZoneIds = new Set<string>()
   for (const id of allIds) {
     if (nextNodes[id]?.type === 'zone') deletedZoneIds.add(id)
@@ -1663,8 +1782,12 @@ export function planNodeDeletion(
     const node = nextNodes[id]
     if (!node) continue
 
-    // 1. Remove reference from parent — only if the parent itself is NOT also being deleted
-    const parentId = node.parentId as AnyNodeId | null
+    // Legacy graphs can link children without a reciprocal parentId.
+    const parentId = (node.parentId ??
+      Object.values(nextNodes).find(
+        (candidate) =>
+          'children' in candidate && candidate.children?.some((childId) => childId === id),
+      )?.id) as AnyNodeId | undefined
     if (parentId && nextNodes[parentId] && !allIds.has(parentId)) {
       const parent = nextNodes[parentId] as AnyContainerNode
       if (parent.children) {
@@ -1691,6 +1814,13 @@ export function planNodeDeletion(
 
     // 4. Delete the node itself
     delete nextNodes[id]
+  }
+
+  for (const { id, data } of deletionIntent) {
+    const zone = nextNodes[id]
+    if (!zone) continue
+    nextNodes[id] = { ...zone, ...data } as AnyNode
+    nodesToMarkDirty.add(id)
   }
 
   const unsettledIds = new Set<AnyNodeId>()
@@ -1752,6 +1882,8 @@ const deleteNodesActionImpl = (
   set: (fn: (state: SceneState) => Partial<SceneState>) => void,
   get: () => SceneState,
   ids: AnyNodeId[],
+  options?: DerivedWriteOptions,
+  wallDeletionPlan?: StructurePlan,
 ) => {
   if (get().readOnly) return
   let deletedIds = new Set<AnyNodeId>()
@@ -1759,7 +1891,7 @@ const deleteNodesActionImpl = (
   let nodesToMarkDirty = new Set<AnyNodeId>()
 
   set((state) => {
-    const plan = planNodeDeletion(state, ids)
+    const plan = planNodeDeletion(state, ids, { options, wallDeletionPlan })
     deletedIds = plan.deletedIds
     parentsToMarkDirty = plan.parentsToMarkDirty
     nodesToMarkDirty = plan.nodesToMarkDirty
@@ -1800,23 +1932,56 @@ function validatedSet(set: Parameters<typeof createNodesActionImpl>[0]): typeof 
     })
 }
 
+/** Runs the same deletion hooks and update constraints for headless scene owners. */
+export function planSceneNodeChanges(
+  snapshot: Pick<SceneState, 'nodes' | 'rootNodeIds' | 'collections'>,
+  changes: { update?: NodeUpdateOp[]; delete?: AnyNodeId[]; wallDeletionPlan?: StructurePlan },
+) {
+  const dirtyIds = new Set<AnyNodeId>()
+  let state = {
+    ...snapshot,
+    readOnly: false,
+    markDirty: (id: AnyNodeId) => {
+      dirtyIds.add(id)
+    },
+    clearDirty: (id: AnyNodeId) => {
+      dirtyIds.delete(id)
+    },
+  } as SceneState
+  const set = (update: (state: SceneState) => Partial<SceneState>) => {
+    state = { ...state, ...update(state) }
+  }
+  if (changes.update?.length)
+    updateNodesActionImpl(set, () => state, changes.update, undefined, false)
+  if (changes.delete?.length)
+    deleteNodesActionImpl(set, () => state, changes.delete, undefined, changes.wallDeletionPlan)
+  return {
+    nodes: state.nodes,
+    rootNodeIds: state.rootNodeIds,
+    collections: state.collections,
+    dirtyIds: [...dirtyIds],
+  }
+}
+
 export const createNodesAction = (
   set: Parameters<typeof createNodesActionImpl>[0],
   get: Parameters<typeof createNodesActionImpl>[1],
   ops: NodeCreateOp[],
+  options?: DerivedWriteOptions,
 ) =>
   runWithSceneCommitNodeIds(
     ops.flatMap(({ node, parentId }) => {
       const effectiveParentId = parentId ?? (node.parentId as AnyNodeId | null)
       return effectiveParentId ? [node.id, effectiveParentId] : [node.id]
     }),
-    () => createNodesActionImpl(validatedSet(set), get, ops),
+    () => createNodesActionImpl(validatedSet(set), get, ops, options),
   )
 
 export const applyNodeChangesAction = (
   set: Parameters<typeof applyNodeChangesActionImpl>[0],
   get: Parameters<typeof applyNodeChangesActionImpl>[1],
   changes: Parameters<typeof applyNodeChangesActionImpl>[2],
+  options?: DerivedWriteOptions,
 ) =>
   runWithSceneCommitNodeIds(
     [
@@ -1827,24 +1992,80 @@ export const applyNodeChangesAction = (
       ...(changes.update ?? []).map(({ id }) => id),
       ...(changes.delete ?? []),
     ],
-    () => applyNodeChangesActionImpl(validatedSet(set), get, changes),
+    () => applyNodeChangesActionImpl(validatedSet(set), get, changes, options),
   )
 
 export const updateNodesAction = (
   set: Parameters<typeof updateNodesActionImpl>[0],
   get: Parameters<typeof updateNodesActionImpl>[1],
   updates: Parameters<typeof updateNodesActionImpl>[2],
+  options?: DerivedWriteOptions,
 ) =>
   runWithSceneCommitNodeIds(
     updates.map(({ id }) => id),
-    () => updateNodesActionImpl(validatedSet(set), get, updates),
+    () => updateNodesActionImpl(validatedSet(set), get, updates, options),
   )
 
 export const deleteNodesAction = (
   set: Parameters<typeof deleteNodesActionImpl>[0],
   get: Parameters<typeof deleteNodesActionImpl>[1],
   ids: AnyNodeId[],
-) => runWithSceneCommitNodeIds(ids, () => deleteNodesActionImpl(validatedSet(set), get, ids))
+  options?: DerivedWriteOptions,
+) =>
+  runWithSceneCommitNodeIds(ids, () => deleteNodesActionImpl(validatedSet(set), get, ids, options))
+
+/**
+ * The sanctioned conversion from derived construction to an authored surface:
+ * the boundary editors' polygon edit, a 2D reshape, a manual move. Clears the
+ * derived markers (and the zone link) in the same update that carries the
+ * caller's own change, so the reconciler stops owning the surface from this
+ * commit on.
+ */
+export const detachDerivedNodeAction = (
+  set: Parameters<typeof updateNodesActionImpl>[0],
+  get: Parameters<typeof updateNodesActionImpl>[1],
+  id: AnyNodeId,
+  data?: Partial<AnyNode>,
+) => {
+  const node = get().nodes[id]
+  if (!node) return
+  // An automatic ceiling draws its room's paint regions; once it is its own it
+  // keeps them on itself.
+  const zone = node.type === 'ceiling' && node.zoneId ? get().nodes[node.zoneId as AnyNodeId] : null
+  const keptRegions =
+    node.type === 'ceiling' &&
+    isDerivedNode(node) &&
+    zone?.type === 'zone' &&
+    zone.ceiling?.regions?.length &&
+    !(data && 'regions' in data)
+      ? { regions: zone.ceiling.regions }
+      : {}
+  // Spread through a plain record: merging two `Partial<AnyNode>` unions
+  // explodes into a union TypeScript cannot represent.
+  const patch = {
+    ...(data as Record<string, unknown>),
+    ...keptRegions,
+    ...(isDerivedNode(node) ? (derivedDetachPatch(node) as Record<string, unknown>) : {}),
+    ...(node.type === 'slab' && isDerivedNode(node)
+      ? { associatedZoneIds: node.zoneIds ?? [] }
+      : {}),
+  } as Partial<AnyNode>
+  if (Object.keys(patch).length === 0) return
+  const ownerUpdates =
+    node.type === 'slab' && isDerivedNode(node)
+      ? (node.zoneIds ?? []).flatMap((zoneId) => {
+          const zone = get().nodes[zoneId as AnyNodeId]
+          return zone?.type === 'zone'
+            ? [{ id: zone.id, data: { floor: { ...zone.floor, sourceSlabId: node.id } } }]
+            : []
+        })
+      : []
+  runWithSceneCommitNodeIds([id, ...ownerUpdates.map(({ id }) => id)], () =>
+    updateNodesActionImpl(validatedSet(set), get, [{ id, data: patch }, ...ownerUpdates], {
+      derivedWriter: DERIVED_WRITER_TOKEN,
+    }),
+  )
+}
 
 /**
  * What the default gutter refresh of `roofIds` would touch, without running

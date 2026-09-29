@@ -1,12 +1,14 @@
 import { Icon } from '@iconify/react'
 import type { ToolHint } from '@pascal-app/core'
-import { Fragment, useSyncExternalStore } from 'react'
+import { Fragment, useEffect, useSyncExternalStore } from 'react'
 import {
   CONTINUATION_PROFILES,
   type ContinuationContext,
 } from '../../../lib/continuation'
 import type { ContextualShortcutHint } from '../../../lib/contextual-help'
+import type { HudTitle } from '../../../lib/hud-title'
 import { hasActivePaintMaterial } from '../../../lib/material-paint'
+import { usePaintRegionMode } from '../../../lib/paint-region-mode'
 import { paintScopeLabel, type PaintScope } from '../../../lib/paint-scope'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import {
@@ -17,19 +19,23 @@ import {
 import { cn } from '../../../lib/utils'
 import useEditor, { type GridSnapStep } from '../../../store/use-editor'
 import useFenceCurveDraft from '../../../store/use-fence-curve-draft'
+import { IconRefGlyph } from '../icon-ref'
 import { ShortcutToken } from '../primitives/shortcut-token'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
+import { useInRightStack } from '../right-stack'
 
 // One muted container holds every row — passive key hints and interactive chips
-// alike — so the HUD reads as a single panel, not a stack of floating pills. The
-// background is near-opaque (`bg-background/95`) with a single backdrop blur so
-// active rows stay readable over the 3D scene even while a modifier is held.
+// alike — so the HUD reads as a single panel, not a stack of floating pills. It
+// opens with the tool in hand (icon, name, arming key), then the gesture rows,
+// then — past a hairline — the mode chips (snapping, continuation, …) and Esc.
 // A 2-track grid: column 1 sizes to `max-content` (the widest key across ALL
 // rows), column 2 (`1fr`) is the label. Every row is a subgrid sharing those
 // tracks, so labels align even when keys differ in width (⌘ vs Shift) or wrap to
 // two lines. Near-opaque bg + single backdrop blur keeps active rows readable.
-const CONTAINER_CLASS =
-  'pointer-events-none fixed top-1/2 right-4 z-40 grid max-w-[260px] -translate-y-1/2 grid-cols-[max-content_1fr] gap-x-2.5 gap-y-1.5 rounded-lg border border-border bg-background/95 px-3 py-2.5 shadow-lg backdrop-blur-md'
+const CARD_CLASS =
+  'pointer-events-none grid w-[252px] grid-cols-[max-content_1fr] gap-x-2.5 gap-y-1.5 rounded-xl border border-border bg-background/95 p-3 shadow-lg backdrop-blur-md'
+// On its own (no shared right column) it floats centred on the right edge.
+const FLOATING_CLASS = 'fixed top-1/2 right-4 z-40 -translate-y-1/2'
 
 const TOKEN_CLASS = 'h-5 px-1.5 text-[10px]'
 
@@ -314,6 +320,15 @@ const PAINT_SCOPE_ICONS: Record<PaintScope, string> = {
   room: 'lucide:scan',
 }
 
+// Why the last paint click did nothing (a surface that has no finish of its
+// own to paint), in the same "!" row the region gestures use for a refusal.
+function PaintNotice() {
+  const notice = usePaintRegionMode((s) => s.notice)
+  // Leaving the painter forgets it.
+  useEffect(() => () => usePaintRegionMode.getState().setNotice(null), [])
+  return notice ? <HintRow hint={{ keys: ['!'], label: notice, active: true }} /> : null
+}
+
 // The painter's application-scope chip. Driven entirely by the hovered node's
 // derived `paintHover` (scopes + labels), so it works for any kind without a
 // per-target table.
@@ -324,18 +339,31 @@ function PaintScopeChip() {
   const paintScope = useEditor((s) => s.paintScope)
   const cyclePaintScope = useEditor((s) => s.cyclePaintScope)
   const activePaintMaterial = useEditor((s) => s.activePaintMaterial)
-  const paintEraser = useEditor((s) => s.paintEraser)
+  const paintMode = usePaintRegionMode((s) => s.mode)
+  const paintEraser = paintMode === 'erase'
+  const picking = paintMode === 'pick'
+  const verb = picking ? 'Pick' : paintEraser ? 'Erase' : 'Paint'
 
   // Nothing to paint with yet (no material picked, not erasing) → the first step
   // is choosing a material, so say that before anything about scope or hovering.
-  if (!(paintEraser || hasActivePaintMaterial(activePaintMaterial))) {
+  if (!(paintEraser || picking || hasActivePaintMaterial(activePaintMaterial))) {
     return <ChipRow icon="lucide:palette" label="Select a material to paint" />
   }
 
   // Not over anything paintable → guide the user to hover, still teaching Shift.
   if (!paintHover) {
     return (
-      <ChipRow icon="lucide:mouse-pointer-click" label="Hover a surface to paint" shortcut="Shift" />
+      <ChipRow
+        icon="lucide:mouse-pointer-click"
+        label={
+          picking
+            ? 'Hover a surface to pick its material'
+            : paintEraser
+              ? 'Hover a painted surface to erase'
+              : 'Hover a surface to paint'
+        }
+        shortcut={picking ? undefined : 'Shift'}
+      />
     )
   }
 
@@ -346,26 +374,72 @@ function PaintScopeChip() {
 
   // Paintable but with no scope choice (roof, a one-slot node, …) → a passive
   // row that still names the surface, so the user always sees what they'll paint.
-  if (scopes.length <= 1) {
+  if (scopes.length <= 1 || picking) {
     return (
       <ChipRow
-        icon={PAINT_SCOPE_ICONS[effective]}
-        label={`Paint: ${paintScopeLabel(effective, paintHover)}`}
+        icon={picking ? 'lucide:pipette' : PAINT_SCOPE_ICONS[effective]}
+        label={`${verb}: ${paintScopeLabel(picking ? 'single' : effective, paintHover)}`}
       />
     )
   }
 
   return (
     <ChipRow
-      ariaLabel={`Paint scope: ${paintScopeLabel(effective, paintHover)}`}
+      ariaLabel={`${verb} scope: ${paintScopeLabel(effective, paintHover)}`}
       icon={PAINT_SCOPE_ICONS[effective]}
-      label={`Paint: ${paintScopeLabel(effective, paintHover)}`}
+      label={`${verb}: ${paintScopeLabel(effective, paintHover)}`}
       onClick={() => cyclePaintScope()}
       shortcut="Shift"
-      tooltip="Paint scope — click or press Shift to cycle"
+      tooltip={`${verb} scope — click or press Shift to cycle`}
     />
   )
 }
+
+// The tool in hand: its icon, name and arming key, over a hairline.
+function HudHeader({ title }: { title: HudTitle }) {
+  return (
+    <div
+      className="col-span-2 mb-0.5 flex items-center gap-2.5 border-border border-b pb-2.5"
+      data-hud-title={title.label}
+    >
+      {title.icon ? (
+        <span className="flex size-7 shrink-0 items-center justify-center">
+          <IconRefGlyph icon={title.icon} size={26} />
+        </span>
+      ) : null}
+      <span className="min-w-0 flex-1 truncate font-medium text-[13px] text-foreground leading-tight">
+        {title.label}
+      </span>
+      {title.shortcut ? <ShortcutToken className={TOKEN_CLASS} value={title.shortcut} /> : null}
+    </div>
+  )
+}
+
+const isEscHint = (hint: ContextualShortcutHint) =>
+  hint.keys.length === 1 && hint.keys[0] === 'Esc'
+
+function HintRow({ hint }: { hint: ContextualShortcutHint }) {
+  return (
+    <div className={cn(ROW_CLASS, 'items-start')}>
+      <ShortcutSequence active={hint.active} keys={hint.keys} />
+      <div className="min-w-0">
+        <div
+          className={cn(
+            'text-xs leading-5',
+            hint.active ? 'font-medium text-white' : 'text-muted-foreground',
+          )}
+        >
+          {hint.label}
+        </div>
+        {hint.subtitle ? (
+          <div className="text-[10px] text-muted-foreground/70 leading-snug">{hint.subtitle}</div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+const hintKey = (hint: ContextualShortcutHint) => `${hint.keys.join('+')}:${hint.label}`
 
 export function ContextualHelperPanel({
   hints,
@@ -373,6 +447,7 @@ export function ContextualHelperPanel({
   snapContext = null,
   showPaintScope = false,
   continuationContext = null,
+  title = null,
 }: {
   hints: ContextualShortcutHint[]
   // Kind-owned live mode chips (`ToolHint.chip`), rendered alongside the
@@ -383,54 +458,44 @@ export function ContextualHelperPanel({
   snapContext?: SnapContext | null
   showPaintScope?: boolean
   continuationContext?: ContinuationContext | null
+  // The tool or gesture in hand, shown as the panel's header.
+  title?: HudTitle | null
 }) {
-  if (
-    hints.length === 0 &&
-    chipHints.length === 0 &&
-    !snapContext &&
-    !showPaintScope &&
-    !continuationContext
-  )
-    return null
+  const inStack = useInRightStack()
+  const modeChips = chipHints.filter((hint) => hint.chip)
+  const hasChips = !!snapContext || !!continuationContext || modeChips.length > 0 || showPaintScope
+  if (hints.length === 0 && !hasChips) return null
+
+  const actionHints = hints.filter((hint) => !isEscHint(hint))
+  const escHints = hints.filter(isEscHint)
 
   return (
-    <div className={CONTAINER_CLASS}>
+    <div
+      className={cn(CARD_CLASS, !inStack && FLOATING_CLASS)}
+      data-hud-card
+    >
+      {title ? <HudHeader title={title} /> : null}
+      {actionHints.map((hint) => (
+        <HintRow hint={hint} key={hintKey(hint)} />
+      ))}
+      {actionHints.length > 0 && (hasChips || escHints.length > 0) ? (
+        <div className="col-span-2 my-0.5 h-px bg-border" />
+      ) : null}
       {snapContext ? <SnappingChips context={snapContext} /> : null}
       {continuationContext === 'fence' ? <FenceContinuationChips /> : null}
       {continuationContext && continuationContext !== 'fence' ? (
         <ContinuationChip context={continuationContext} />
       ) : null}
-      {chipHints.map((hint) =>
-        hint.chip ? (
-          <ToolHintChipRow
-            hint={hint as ToolHint & { chip: NonNullable<ToolHint['chip']> }}
-            key={`${hint.key}:${hint.label}`}
-          />
-        ) : null,
-      )}
+      {modeChips.map((hint) => (
+        <ToolHintChipRow
+          hint={hint as ToolHint & { chip: NonNullable<ToolHint['chip']> }}
+          key={`${hint.key}:${hint.label}`}
+        />
+      ))}
+      {showPaintScope ? <PaintNotice /> : null}
       {showPaintScope ? <PaintScopeChip /> : null}
-      {hints.map((hint) => (
-        <div
-          className={cn(ROW_CLASS, 'items-start')}
-          key={`${hint.keys.join('+')}:${hint.label}`}
-        >
-          <ShortcutSequence active={hint.active} keys={hint.keys} />
-          <div className="min-w-0">
-            <div
-              className={cn(
-                'text-xs leading-5',
-                hint.active ? 'font-medium text-white' : 'text-muted-foreground',
-              )}
-            >
-              {hint.label}
-            </div>
-            {hint.subtitle ? (
-              <div className="text-[10px] text-muted-foreground/70 leading-snug">
-                {hint.subtitle}
-              </div>
-            ) : null}
-          </div>
-        </div>
+      {escHints.map((hint) => (
+        <HintRow hint={hint} key={hintKey(hint)} />
       ))}
     </div>
   )

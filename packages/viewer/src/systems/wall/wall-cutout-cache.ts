@@ -4,12 +4,7 @@ import {
   type AnyNodeId,
   getEffectiveNode,
   getLibraryMaterialsVersion,
-  getWallFaceBandConfig,
-  getWallPlaneTop,
-  resolveLevelId,
-  resolveWallEffectiveHeight,
   sceneRegistry,
-  spatialGridManager,
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
@@ -17,7 +12,9 @@ import {
 } from '@pascal-app/core'
 import { type Camera, type Material, Matrix4, type Mesh, type Object3D, Vector3 } from 'three'
 import { getMaterialTextureVersion } from '../../lib/materials'
+import { hasMaterialsForGroups } from '../../lib/pointer-events'
 import useViewer, { type WallMode } from '../../store/use-viewer'
+import { getWallFinishRefs } from './wall-finish-data'
 import { resolveWallMaterialVariant, type WallMaterialVariant } from './wall-material-variant'
 import {
   getHoverHighlightMaterials,
@@ -74,6 +71,12 @@ type CachedWall = {
   assignedMaterials: Material | Material[] | undefined
   visibleVariant: Variant
   hiddenVariant: Variant
+  /** Finish refs the material palette was built for; the geometry's groups index them. */
+  paletteKey: string
+}
+
+function wallPaletteKey(mesh: Mesh): string {
+  return getWallFinishRefs(mesh.geometry).join('|')
 }
 
 // About 0.06 degrees: retain the previous side at edge-on poses without
@@ -196,7 +199,7 @@ export class WallCutoutCache {
       state && state.hoverHighlightMode !== 'default' && state.hoverHighlightMode !== 'delete'
         ? state.hoveredId
         : null
-    const releasedPreview = previewId(previous) !== previewId(viewer) ? previewId(previous) : null
+    const releasedPreview = previewId(previous) === previewId(viewer) ? null : previewId(previous)
     this.viewer = viewer
     const invalidated =
       overridesChanged ||
@@ -207,16 +210,17 @@ export class WallCutoutCache {
       this.transformed.size > 0 ||
       releasedPreview !== null
 
-    if (!invalidated && viewer.wallMode !== 'cutaway') return
+    const cutaway = viewer.wallMode === 'cutaway'
+    if (!invalidated && !cutaway) return
 
     camera.getWorldDirection(this.cameraDirection)
     this.cameraTarget.copy(this.cameraDirection).add(camera.position)
     const cameraChanged =
-      viewer.wallMode === 'cutaway' &&
+      cutaway &&
       time - this.lastUpdateTime > 0.1 &&
       (camera.position.distanceTo(this.lastCameraPosition) > 0.5 ||
         this.cameraTarget.distanceTo(this.lastCameraTarget) > 0.3)
-    if (!invalidated && !cameraChanged) return
+    if (!(invalidated || cameraChanged)) return
 
     if (registryChanged || nodesChanged) {
       for (const [id, wall] of this.walls) {
@@ -263,6 +267,7 @@ export class WallCutoutCache {
             assignedMaterials: undefined,
             visibleVariant: { key: 'visible', materials: [] },
             hiddenVariant: { key: 'invisible', materials: [] },
+            paletteKey: '',
           }
           this.walls.set(id, wall)
         }
@@ -271,8 +276,10 @@ export class WallCutoutCache {
         if (added || changed || rebuilt) this.refreshNormal(wall, visited)
         const overrideChanged = this.overrides.get(id) !== overrides.get(id)
         wall.node = getEffectiveNode(node)
-        if (added || appearanceChanged || overrideChanged || (nodesChanged && changed))
-          this.refreshAppearance(wall)
+        const repaletted = rebuilt && wallPaletteKey(wall.mesh) !== wall.paletteKey
+        const refresh =
+          added || appearanceChanged || overrideChanged || (nodesChanged && changed) || repaletted
+        if (refresh) this.refreshAppearance(wall)
         if (
           added ||
           appearanceChanged ||
@@ -282,11 +289,7 @@ export class WallCutoutCache {
           releasedPreview === id ||
           cameraChanged
         ) {
-          this.apply(
-            wall,
-            viewer.wallMode,
-            added || appearanceChanged || overrideChanged || (nodesChanged && changed),
-          )
+          this.apply(wall, viewer.wallMode, refresh)
         }
       }
     } else {
@@ -308,29 +311,33 @@ export class WallCutoutCache {
     }
   }
 
+  /**
+   * A rebuilt wall whose finish palette changed must swap materials in the same
+   * frame: its new groups already index the new palette.
+   */
+  handleRebuilt(id: string): void {
+    this.rebuilt.add(id)
+    const wall = this.walls.get(id)
+    const viewer = this.viewer
+    if (!(wall && viewer) || wall.mesh !== sceneRegistry.nodes.get(id)) return
+    if (wallPaletteKey(wall.mesh) === wall.paletteKey) return
+    const node = useScene.getState().nodes[id as AnyNodeId]
+    if (node?.type !== 'wall') return
+    wall.node = getEffectiveNode(node)
+    this.refreshAppearance(wall)
+    this.apply(wall, viewer.wallMode, true)
+  }
+
   private refreshAppearance(wall: CachedWall): void {
     const viewer = this.viewer!
     const scene = useScene.getState()
     const node = wall.node
     const deleted = viewer.hoverHighlightMode === 'delete' && viewer.hoveredId === node.id
-    let selectionHighlighted = !deleted && this.selected.has(node.id)
-    if (selectionHighlighted) {
-      const levelId = resolveLevelId(node, scene.nodes)
-      const support = spatialGridManager.getSlabSupportForWall(
-        levelId,
-        node.start,
-        node.end,
-        node.curveOffset ?? 0,
-        node.thickness,
-        node.supportSlabId,
-      )
-      const height = resolveWallEffectiveHeight(
-        node,
-        getWallPlaneTop(node, levelId, scene.nodes),
-        support.elevation,
-      )
-      selectionHighlighted = !getWallFaceBandConfig(node, height).enabled
-    }
+    // Painted parts stay readable while their wall is selected for editing.
+    const selectionHighlighted =
+      !deleted && this.selected.has(node.id) && !(node.faceRegions?.length ?? 0)
+    const finishRefs = getWallFinishRefs(wall.mesh.geometry)
+    wall.paletteKey = finishRefs.join('|')
     const materials = this.materialResolver(
       node,
       viewer.shading,
@@ -338,6 +345,7 @@ export class WallCutoutCache {
       viewer.colorPreset,
       viewer.sceneTheme,
       scene.materials,
+      finishRefs,
     )
     const variant = (hidden: boolean): Variant => {
       const key = resolveWallMaterialVariant({
@@ -381,12 +389,16 @@ export class WallCutoutCache {
     const stamp = mode !== 'translucent' && hidden
     if (wall.mesh.userData.wallHidden !== stamp) wall.mesh.userData.wallHidden = stamp
     const variant = hidden ? wall.hiddenVariant : wall.visibleVariant
-    // Non-highlight hover owns a temporary material until its restore callback runs.
+    // Non-highlight hover (a paint preview) owns a temporary material until its
+    // restore callback runs — unless the rebuilt geometry now draws a finish that
+    // array has no entry for (a click just added one): then the new palette goes
+    // on and the preview is dropped, rather than leaving groups with no material.
     const viewer = this.viewer!
     if (
       viewer.hoveredId === wall.node.id &&
       viewer.hoverHighlightMode !== 'default' &&
-      viewer.hoverHighlightMode !== 'delete'
+      viewer.hoverHighlightMode !== 'delete' &&
+      hasMaterialsForGroups(wall.mesh)
     ) {
       if (refresh) wall.variantKey = undefined
       return

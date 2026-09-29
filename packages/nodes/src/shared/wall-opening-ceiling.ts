@@ -1,8 +1,12 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  getWallEffectiveHeightForNodes,
+  type DoorNode,
+  getOpeningFloorDatum,
+  getWallPlaneTop,
+  resolveWallTop,
   type WallNode,
+  wallSupportForNodes,
 } from '@pascal-app/core'
 
 /**
@@ -31,7 +35,14 @@ export function resolveWallOpeningCeiling(
   wall: WallNode,
   nodes: Readonly<Record<AnyNodeId, AnyNode>>,
 ): number {
-  return getWallEffectiveHeightForNodes(wall, nodes as Record<string, AnyNode>)
+  const support = wallSupportForNodes(wall, nodes)
+  return (
+    resolveWallTop(
+      wall,
+      getWallPlaneTop(wall, wall.parentId ?? '', nodes as Record<string, AnyNode>),
+      support.elevation,
+    ) - support.elevation
+  )
 }
 
 /**
@@ -42,9 +53,14 @@ export function resolveWallOpeningCeiling(
 export function readHostWallCeiling(
   wallId: string | null | undefined,
   scene: WallCeilingSceneReader,
+  opening?: Pick<DoorNode, 'position' | 'width' | 'height'>,
 ): number {
   if (!wallId) return Number.POSITIVE_INFINITY
   const wall = scene.get(wallId as AnyNodeId) as WallNode | undefined
   if (!wall) return Number.POSITIVE_INFINITY
-  return resolveWallOpeningCeiling(wall, scene.nodes())
+  const nodes = scene.nodes()
+  const lift = opening
+    ? getOpeningFloorDatum(wall, opening, nodes) - wallSupportForNodes(wall, nodes).elevation
+    : 0
+  return resolveWallOpeningCeiling(wall, nodes) - lift
 }

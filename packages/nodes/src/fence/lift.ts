@@ -2,7 +2,9 @@ import {
   type AnyNode,
   type AnyNodeId,
   findLevelAncestorId,
+  floorConstructionLift,
   levelBaseElevationAt,
+  liftedManualSlab,
   type SlabNode,
 } from '@pascal-app/core'
 import type { FenceNode } from './schema'
@@ -60,5 +62,12 @@ export function resolveFenceLiftElevationForNodes(
 ): number {
   const levelId = findLevelAncestorId(node.id as AnyNodeId, nodes)
   const levelBase = levelId ? levelBaseElevationAt(nodes, levelId, node.start[0], node.start[1]) : 0
-  return resolveFenceLiftElevation(node, (id) => nodes[id], levelBase)
+  return resolveFenceLiftElevation(
+    node,
+    (id) => {
+      const host = nodes[id]
+      return host?.type === 'slab' ? liftedManualSlab(nodes, host) : host
+    },
+    levelBase + (nodes[node.id] ? floorConstructionLift(nodes, nodes[node.id]!) : 0),
+  )
 }

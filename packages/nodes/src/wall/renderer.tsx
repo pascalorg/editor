@@ -10,6 +10,7 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import {
+  getWallFinishRefs,
   NodeRenderer,
   SHADOW_ONLY_LAYER,
   useLibraryMaterialsVersion,
@@ -157,6 +158,8 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
   // register after mount, and a dangling ref cached as the slot default must
   // re-resolve when they land.
   const libraryMaterialsVersion = useLibraryMaterialsVersion()
+  // Built geometry's groups index its finish palette; WallCutout swaps the
+  // array whenever a rebuild changes that palette.
   const baseMaterials = getCurtainAwareWallMaterials(
     treatmentNode,
     shading,
@@ -164,6 +167,7 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
     colorPreset,
     sceneTheme,
     sceneMaterials,
+    getWallFinishRefs(ref.current?.geometry),
   ).visible
   // biome-ignore lint/correctness/useExhaustiveDependencies: libraryMaterialsVersion invalidates the ref resolution inside createWallExtraSlotMaterials
   const extraMaterials = useMemo(

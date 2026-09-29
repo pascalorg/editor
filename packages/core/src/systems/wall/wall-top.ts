@@ -14,12 +14,8 @@ export const MIN_WALL_HEIGHT = 0.5
  * `height` is plane-bound — its top sits at the storey plane (level-local
  * Y = the level's stored height), so a slab lifting the wall's base makes
  * the wall shorter, never taller, and no gap can open at the top of a
- * level. A wall WITH `height` is an explicit exception (half wall,
- * parapet) and keeps the legacy semantics: the top rides a raised elected
- * base (`electedBase + height`), while a zero or sunken slab base leaves
- * the top at `height` (the legacy negative-slab constraint). Explicit
- * ground-hosted walls are the terrain exception: `height` is always body
- * height, including below datum, so sculpting cannot stretch the wall.
+ * level. Explicit walls stand on their elected support; room floor datums do not
+ * change their tops. Ground-hosted walls retain their authored body height.
  *
  * Returns the top in level-local Y (same frame as `electedBase`).
  */
@@ -29,8 +25,7 @@ export function resolveWallTop(
   electedBase: number,
 ): number {
   if (wall.height == null) return storeyHeight
-  if (wall.supportSlabId === 'ground') return electedBase + wall.height
-  return electedBase > 0 ? electedBase + wall.height : wall.height
+  return electedBase + wall.height
 }
 
 /**

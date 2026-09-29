@@ -23,8 +23,12 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useState } from 'react'
+import { useSelectedRoom, useZoneRoom } from '../../../hooks/use-selected-room'
+import { FloorOpeningPanel } from './floor-opening-panel'
+import { OpenRoomPanel, RoomPanel } from './room-panel'
 import { useIsMobile } from '../../../hooks/use-mobile'
 import { shouldShowEditingControls } from '../../../lib/interaction/overlay-policy'
+import { captureElementActionOrigin, completeElementAction } from '../../../lib/room-zone-routing'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { deleteSelection, duplicateSelectionAndPickUp, startGroupPickUp } from '../../editor/group-actions'
@@ -34,7 +38,6 @@ import { MobileSelectionBar } from './mobile-selection-bar'
 import { MultiParametricInspector } from './multi-parametric-inspector'
 import { MultiSelectionPanel } from './multi-selection-panel'
 import { getNodeDisplay, getTypeDisplay } from './node-display'
-import { resetDesktopInspectorCollapsed } from './panel-wrapper'
 import { ParametricInspector } from './parametric-inspector'
 import { ReferencePanel } from './reference-panel'
 import { formatSelectionBreakdown } from './selection-breakdown'
@@ -142,9 +145,11 @@ function MobilePanelLayer({
 
   const handleDelete = useCallback(() => {
     if (!node) return
+    const origin = captureElementActionOrigin([node.id])
     sfxEmitter.emit('sfx:item-delete')
     deleteNode(node.id)
     clearSelection()
+    completeElementAction(origin)
   }, [node, deleteNode, clearSelection])
 
   if (!(node || isReference)) return null
@@ -222,6 +227,7 @@ export function PanelManager({
   multiSelectionFooter?: React.ReactNode
 }) {
   const isMobile = useIsMobile()
+  const room = useSelectedRoom()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const selectedZoneId = useViewer((s) => s.selection.zoneId)
   const setSelection = useViewer((s) => s.setSelection)
@@ -248,6 +254,16 @@ export function PanelManager({
       : '',
   )
 
+  // A room reached as a zone (a unit's member, a zone kept by a route that is not
+  // room-first) still gets the room panel.
+  const panelZoneId =
+    selectedIds.length === 0
+      ? selectedZoneId
+      : selectedNodeType === 'zone'
+        ? (selectedIds[0] ?? null)
+        : null
+  const zoneRoom = useZoneRoom(panelZoneId)
+
   // Node and reference selection are mutually exclusive: selecting a guide
   // clears the node selection (handleGuideSelect), but node selection never
   // cleared a lingering reference — so clicking a wall with a floorplan
@@ -255,21 +271,24 @@ export function PanelManager({
   // moment a scene selection appears.
   const setSelectedReferenceId = useEditor((s) => s.setSelectedReferenceId)
   useEffect(() => {
-    if (selectedIds.length > 0 || selectedZoneId) {
+    if (selectedIds.length > 0 || selectedZoneId || room) {
       setSelectedReferenceId(null)
     }
-  }, [selectedIds, selectedZoneId, setSelectedReferenceId])
-
-  // The inspector's expanded state is shared across panel swaps, but a fresh
-  // selection after everything was deselected should open collapsed again.
-  const hasAnySelection = selectedIds.length > 0 || Boolean(selectedZoneId) || Boolean(selectedReferenceId)
-  useEffect(() => {
-    if (!hasAnySelection) {
-      resetDesktopInspectorCollapsed()
-    }
-  }, [hasAnySelection])
+  }, [selectedIds, selectedZoneId, room, setSelectedReferenceId])
 
   if (!shouldShowEditingControls(readOnly)) return null
+
+  if (room && selectedIds.length === 0) return <RoomPanel room={room} />
+  if (selectedNodeType === 'floor-opening' && selectedIds[0])
+    return <FloorOpeningPanel key={selectedIds[0]} openingId={selectedIds[0]} />
+  if (zoneRoom && panelZoneId) {
+    const closeZone = () => setSelection({ selectedIds: [], zoneId: null })
+    return zoneRoom.record ? (
+      <RoomPanel onClose={closeZone} room={zoneRoom.record} />
+    ) : (
+      <OpenRoomPanel key={panelZoneId} onClose={closeZone} zoneId={panelZoneId} />
+    )
+  }
 
   if (isMobile) {
     if (selectedReferenceId) {

@@ -79,7 +79,7 @@ describe('buildUnitReport', () => {
     })
   })
 
-  test('measures the resolved auto zone polygon', () => {
+  test('measures the authoritative auto zone polygon without re-deriving walls', () => {
     const level = LevelNode.parse({ level: 0 })
     const polygon: [number, number][] = [
       [0, 0],
@@ -95,12 +95,17 @@ describe('buildUnitReport', () => {
       parentId: level.id,
       autoFromWalls: true,
       boundaryWallIds: walls.map((wall) => wall.id),
-      polygon: [],
+      polygon: [
+        [0, 0],
+        [6, 0],
+        [6, 3],
+        [0, 3],
+      ],
     })
     const nodes: Record<AnyNodeId, AnyNode> = Object.fromEntries(
       [level, zone, ...walls].map((node) => [node.id, node]),
     )
     const report = buildUnitReport(UnitNode.parse({ members: [zone.id] }), nodes)
-    expect(report.grossAreaM2).toBeCloseTo(12)
+    expect(report.grossAreaM2).toBeCloseTo(18)
   })
 })

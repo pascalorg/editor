@@ -7,7 +7,7 @@ import {
   getWallBaseElevationForNodes,
   getWallCurveFrameAt,
   getWallEffectiveHeightForNodes,
-  getWallThickness,
+  getWallFaceOffsets,
   nodeRegistry,
   validateDwv,
 } from '@pascal-app/core'
@@ -131,7 +131,9 @@ export function checkDistributionSystems(nodes: Record<AnyNodeId, AnyNode>): Sys
         world(wall, [frame.point.x, top, frame.point.y]),
       )
     }
-    const box = new Box3().setFromPoints(points).expandByScalar(getWallThickness(wall) / 2)
+    const box = new Box3()
+      .setFromPoints(points)
+      .expandByScalar(Math.max(getWallFaceOffsets(wall).a, -getWallFaceOffsets(wall).b))
     for (const segment of segments) {
       if (segment.run.wallAttachment?.wallId === wall.id) continue
       if (segmentHitsBox(segment.a, segment.b, box.clone().expandByScalar(segment.radius)))
@@ -143,7 +145,7 @@ export function checkDistributionSystems(nodes: Record<AnyNodeId, AnyNode>): Sys
     }
   }
   for (const run of runs) {
-    const missing = planRunHangerSlots(run, nodes).filter((slot) => !slot.skipped && !slot.hanger)
+    const missing = planRunHangerSlots(run, nodes).filter((slot) => !(slot.skipped || slot.hanger))
     if (missing.length)
       findings.push({
         code: 'unsupported-hanger',

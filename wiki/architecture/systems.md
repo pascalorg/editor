@@ -50,10 +50,15 @@ shadow-only.
 
 `setScene` assigns a non-persisted hydration identity, then publishes its eligible
 `hydrationToken` after synchronous reconciliation and hydration-owned deferred
-normalization finish. Elevator openings and reconciliation of replaced levels run
-inside the synchronous boundary; queued stair rise/opening normalization extends
-that boundary through its microtask. The store owns these opening passes even if
-their reactive systems mount after hydration, and honors the scene mutation lock.
+normalization finish. The shared, server-safe `ensureSceneOpenings(nodes)` runs
+in `migrateNodes` immediately after M4/M5. It derives stair rises from the supplied
+graph (including persisted slab/terrain support), then ensures openings. Hydration
+and system mounts reuse that function; a queued pass covers reconciliation during
+the store transition. Existing slab polygons and metadata are preserved: a saved
+hole owned by that stair/elevator, or holes covering at least 99.9% of the proposed
+opening, count as present. Stair/elevator edits still recalculate openings.
+Read-only snapshots receive the pure migration before publication; reactive writes
+continue to honor the scene mutation lock.
 Ordinary document writes cancel pending publication or invalidate an issued token atomically before subscribers run,
 including paused, remote and undo/redo writes. History pausing alone grants no
 exemption. Dirty marks alone do not invalidate it, so opening completion can still

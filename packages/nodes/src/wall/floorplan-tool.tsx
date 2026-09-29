@@ -13,16 +13,14 @@ import {
   useFloorplanDraftPreview,
   useFloorplanRender,
   useInteractionScope,
+  useWallDrawVariant,
 } from '@pascal-app/editor'
 import { useEffect, useRef, useState } from 'react'
-import { useWallDrawingMode, useWallDrawingModeKeys } from './drawing-mode'
 import { createWallRectangle } from './rectangle-command'
 
 /** The wall's plan tool: line drafting stays with the panel; rectangle mode mounts its own tool. */
 export default function WallFloorplanTool(props: FloorplanToolContext) {
-  useWallDrawingModeKeys()
-  const mode = useWallDrawingMode((s) => s.mode)
-  return mode === 'rectangle' ? <RectangleFloorplanTool {...props} /> : null
+  return useWallDrawVariant() === 'rectangle' ? <RectangleFloorplanTool {...props} /> : null
 }
 
 /**
@@ -98,13 +96,15 @@ function RectangleFloorplanTool({ activeLevelId }: FloorplanToolContext) {
     const stopDouble = (e: MouseEvent) => {
       if (e.button === 0) claim(e)
     }
-    // The panel publishes the snapped cursor only when it moves to a new
-    // point, so each change while a corner is down is the line draft's tick.
-    const stopTick = useFloorplanDraftPreview.subscribe((state, previous) => {
+    // The panel moves the snapped cursor; the wall draft's tick as the dragged
+    // corner steps to a new spot.
+    const stopTicks = useFloorplanDraftPreview.subscribe((state, previous) => {
+      const [now, before] = [state.cursorPoint, previous.cursorPoint]
       if (
         state.wallRectangleDraftStart &&
-        state.cursorPoint &&
-        state.cursorPoint !== previous.cursorPoint
+        now &&
+        before &&
+        (now[0] !== before[0] || now[1] !== before[1])
       )
         triggerSFX('sfx:grid-snap')
     })
@@ -113,7 +113,7 @@ function RectangleFloorplanTool({ activeLevelId }: FloorplanToolContext) {
     svg.addEventListener('dblclick', stopDouble, true)
     emitter.on('tool:cancel', cancel)
     return () => {
-      stopTick()
+      stopTicks()
       svg.removeEventListener('pointerdown', onDown, true)
       svg.removeEventListener('click', onClick, true)
       svg.removeEventListener('dblclick', stopDouble, true)

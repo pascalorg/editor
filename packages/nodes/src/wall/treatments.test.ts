@@ -53,18 +53,14 @@ function treatmentLevelData(walls: WallNode[]) {
   )
 }
 
-function cornerXs(
-  side: 'interior' | 'exterior',
-  kind: 'skirting' | 'crown' | 'chairRail',
-  outerOffset: number,
-) {
+function cornerXs(side: 'a' | 'b', kind: 'skirting' | 'crown' | 'chairRail', outerOffset: number) {
   const walls = [wall('A', [0, 0], [3, 0]), wall('B', [0, 0], [0, 3])]
   const geometry = buildTrimGeometry(walls[0]!, side, trim, kind, [], treatmentLevelData(walls))
   expect(geometry).not.toBeNull()
   if (!geometry) throw new Error('expected trim geometry')
 
   const positions = geometry.getAttribute('position')
-  const outerZ = side === 'interior' ? outerOffset : -outerOffset
+  const outerZ = side === 'a' ? outerOffset : -outerOffset
   const xs: number[] = []
   for (let index = 0; index < positions.count; index += 1) {
     if (Math.abs(positions.getZ(index) - outerZ) < 1e-5) xs.push(positions.getX(index))
@@ -131,7 +127,7 @@ describe('wall treatment miters', () => {
         ...useWallTreatmentLevelData.getState(),
         byLevelId: new Map([['level_test', data]]),
       })!
-      for (const side of ['interior', 'exterior'] as const) {
+      for (const side of ['a', 'b'] as const) {
         const openings = [
           {
             type: 'door',
@@ -162,28 +158,26 @@ describe('wall treatment miters', () => {
     ['crown', 0.0604],
     ['chairRail', 0.0616],
   ] as const)('preserves the %s outer miter endpoint on both sides', (kind, outerOffset) => {
-    const interiorXs = cornerXs('interior', kind, outerOffset)
-    const exteriorXs = cornerXs('exterior', kind, outerOffset)
+    const aXs = cornerXs('a', kind, outerOffset)
+    const bXs = cornerXs('b', kind, outerOffset)
 
-    expect(interiorXs.length).toBeGreaterThan(0)
-    expect(exteriorXs.length).toBeGreaterThan(0)
-    expect(Math.min(...interiorXs)).toBeCloseTo(outerOffset, 5)
-    expect(Math.min(...exteriorXs)).toBeCloseTo(-outerOffset, 5)
+    expect(aXs.length).toBeGreaterThan(0)
+    expect(bXs.length).toBeGreaterThan(0)
+    expect(Math.min(...aXs)).toBeCloseTo(outerOffset, 5)
+    expect(Math.min(...bXs)).toBeCloseTo(-outerOffset, 5)
   })
 
   test('keeps each treatment on one physical side of an isolated wall', () => {
     const node = wall('A', [0, 0], [3, 0])
     const levelData = treatmentLevelData([node])
 
-    for (const side of ['interior', 'exterior'] as const) {
+    for (const side of ['a', 'b'] as const) {
       const geometry = buildTrimGeometry(node, side, trim, 'skirting', [], levelData)
       expect(geometry).not.toBeNull()
       if (!geometry) throw new Error('expected trim geometry')
       const positions = allPositions(geometry)
 
-      expect(positions.every((point) => (side === 'interior' ? point.z > 0 : point.z < 0))).toBe(
-        true,
-      )
+      expect(positions.every((point) => (side === 'a' ? point.z > 0 : point.z < 0))).toBe(true)
       expect(Math.min(...positions.map((point) => point.x))).toBeCloseTo(0, 6)
       expect(Math.max(...positions.map((point) => point.x))).toBeCloseTo(3, 6)
       geometry.dispose()
@@ -193,8 +187,8 @@ describe('wall treatment miters', () => {
   test('joins the outer profile at an end-to-start room corner', () => {
     const walls = [wall('A', [0, 0], [3, 0]), wall('B', [3, 0], [3, 3])]
     const levelData = treatmentLevelData(walls)
-    const a = buildTrimGeometry(walls[0]!, 'interior', trim, 'skirting', [], levelData)
-    const b = buildTrimGeometry(walls[1]!, 'interior', trim, 'skirting', [], levelData)
+    const a = buildTrimGeometry(walls[0]!, 'a', trim, 'skirting', [], levelData)
+    const b = buildTrimGeometry(walls[1]!, 'a', trim, 'skirting', [], levelData)
     expect(a).not.toBeNull()
     expect(b).not.toBeNull()
     if (!(a && b)) throw new Error('expected trim geometry')
@@ -212,7 +206,7 @@ describe('wall treatment miters', () => {
     const node = wall('A', [0, 0], [3, 0])
     const geometry = buildTrimGeometry(
       node,
-      'interior',
+      'a',
       trim,
       'skirting',
       [{ type: 'door', width: 1, height: 2, position: [1.5, 1, 0] }],

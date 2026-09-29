@@ -391,6 +391,14 @@ describe('syncAutoStairOpenings', () => {
 
     expect(updates.find((update) => update.id === landingSlab.id)).toBeUndefined()
     expect(updates.find((update) => update.id === sourceCeiling.id)).toBeUndefined()
+    const onlyFloorCovered = syncAutoStairOpenings({
+      ...nodes,
+      [sourceCeiling.id]: { ...sourceCeiling, holes: [], holeMetadata: [] },
+    })
+    expect(onlyFloorCovered.find((update) => update.id === landingSlab.id)).toBeUndefined()
+    expect(
+      onlyFloorCovered.find((update) => update.id === sourceCeiling.id)?.data.holeMetadata,
+    ).toEqual([{ source: 'stair', stairId: stair.id }])
   })
 
   test('adds stair holes when an existing manual hole is too small', () => {

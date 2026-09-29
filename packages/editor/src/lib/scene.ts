@@ -2,6 +2,7 @@
 
 import {
   clearSceneHistory,
+  materializeRegisteredNodeDefaults,
   nodeRegistry,
   resolveLevelId,
   sceneRegistry,
@@ -9,8 +10,8 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import useEditor, {
+  editorUiStateOnOpen,
   hasCustomPersistedEditorUiState,
-  normalizePersistedEditorUiState,
   type PersistedEditorUiState,
 } from '../store/use-editor'
 import { editorHostPanelRegistry } from './plugin-panels'
@@ -284,7 +285,10 @@ export function syncEditorSelectionFromCurrentScene() {
       .flatMap((node) => (Array.isArray(node.children) ? node.children.map(resolve) : []))
       .find((node) => node?.type === 'building')
   const firstLevel = firstBuilding?.children?.map(resolve).find((n: any) => n?.type === 'level')
-  const restoredEditorUiState = normalizePersistedEditorUiState(useEditor.getState())
+  // Every project open lands in select mode, a mid-session switch included: this
+  // runs on each scene load, so it reads the live state the last project left
+  // behind and would otherwise re-arm that project's tool over the new scene.
+  const restoredEditorUiState = editorUiStateOnOpen(useEditor.getState())
   const shouldRestoreEditorUiState = hasCustomPersistedEditorUiState(restoredEditorUiState)
   const restoredSelection = getRestoredSelectionForScene(sceneNodes)
   const selectionDrivenEditorUiState = restoredSelection
@@ -400,30 +404,18 @@ function hasUsableSceneGraph(sceneGraph?: SceneGraph | null): sceneGraph is Scen
   )
 }
 
-export function normalizeSceneGraphNodes(
-  nodes: Readonly<Record<string, unknown>>,
-): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(nodes).map(([id, value]) => {
-      if (!value || typeof value !== 'object' || Array.isArray(value)) return [id, value]
-      const type = (value as { type?: unknown }).type
-      if (typeof type !== 'string') return [id, value]
-      const parsed = nodeRegistry.get(type)?.schema.safeParse(value)
-      return [id, parsed?.success ? parsed.data : value]
-    }),
-  )
-}
-
 export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
   const defaultInstalledPlugins = editorHostPanelRegistry.getDefaultInstalledPluginIds()
   if (hasUsableSceneGraph(sceneGraph)) {
     const { nodes, rootNodeIds, collections, materials, installedPlugins } = sceneGraph
-    useScene.getState().setScene(normalizeSceneGraphNodes(nodes) as any, rootNodeIds as any, {
-      collections: collections as any,
-      materials: materials as any,
-      installedPlugins: installedPlugins ?? defaultInstalledPlugins,
-      hasExplicitPluginInstallState: installedPlugins !== undefined,
-    })
+    useScene
+      .getState()
+      .setScene(materializeRegisteredNodeDefaults(nodes) as any, rootNodeIds as any, {
+        collections: collections as any,
+        materials: materials as any,
+        installedPlugins: installedPlugins ?? defaultInstalledPlugins,
+        hasExplicitPluginInstallState: installedPlugins !== undefined,
+      })
   } else {
     useScene.getState().clearScene()
     useScene.getState().setInstalledPlugins(defaultInstalledPlugins, { explicit: false })

@@ -17,6 +17,11 @@ export type BuildType = {
   kind?: string
   paletteOrder?: number
   mode?: 'material-paint' | 'terrain-sculpt'
+  /**
+   * The Build panel group listing the tile; registry-discovered kinds land in
+   * Advanced. The wall has none: the Rooms group's variant tiles arm it.
+   */
+  section?: 'add' | 'outdoor' | 'advanced'
 }
 
 export type MepItem = {
@@ -35,21 +40,59 @@ export type RoofFeature = {
 
 export const BASE_BUILD_TYPES: BuildType[] = [
   { id: 'wall', label: 'Wall', iconSrc: '/icons/wall.webp', kind: 'wall' },
-  { id: 'fence', label: 'Fence', iconSrc: '/icons/fence.webp', kind: 'fence' },
-  { id: 'slab', label: 'Slab', iconSrc: '/icons/floor.webp', kind: 'slab' },
-  { id: 'ceiling', label: 'Ceiling', iconSrc: '/icons/ceiling.webp', kind: 'ceiling' },
-  { id: 'roof', label: 'Roof', iconSrc: '/icons/roof.webp', kind: 'roof' },
-  { id: 'stair', label: 'Stairs', iconSrc: '/icons/stairs.webp', kind: 'stair' },
-  { id: 'elevator', label: 'Elevator', iconSrc: '/icons/elevator.webp', kind: 'elevator' },
-  { id: 'door', label: 'Door', iconSrc: '/icons/door.webp', kind: 'door' },
-  { id: 'window', label: 'Window', iconSrc: '/icons/window.webp', kind: 'window' },
-  { id: 'column', label: 'Column', iconSrc: '/icons/column.webp', kind: 'column' },
-  { id: 'shelf', label: 'Shelf', iconSrc: '/icons/shelf.webp', kind: 'shelf' },
-  { id: 'spawn', label: 'Spawn Point', iconSrc: '/icons/spawn-point.webp', kind: 'spawn' },
-  { id: 'kitchen', label: 'Kitchen', iconSrc: '/icons/kitchen.webp' },
-  { id: 'mep', label: 'MEP', iconSrc: '/icons/HVAC.webp' },
-  { id: 'painting', label: 'Painting', iconSrc: '/icons/paint.webp', mode: 'material-paint' },
-  { id: 'terrain', label: 'Terrain', iconSrc: '/icons/mesh.webp', mode: 'terrain-sculpt' },
+  { id: 'fence', label: 'Fence', iconSrc: '/icons/fence.webp', kind: 'fence', section: 'outdoor' },
+  { id: 'slab', label: 'Slab', iconSrc: '/icons/floor.webp', kind: 'slab', section: 'advanced' },
+  {
+    id: 'ceiling',
+    label: 'Ceiling',
+    iconSrc: '/icons/ceiling.webp',
+    kind: 'ceiling',
+    section: 'advanced',
+  },
+  { id: 'roof', label: 'Roof', iconSrc: '/icons/roof.webp', kind: 'roof', section: 'add' },
+  { id: 'stair', label: 'Stairs', iconSrc: '/icons/stairs.webp', kind: 'stair', section: 'add' },
+  {
+    id: 'elevator',
+    label: 'Elevator',
+    iconSrc: '/icons/elevator.webp',
+    kind: 'elevator',
+    section: 'advanced',
+  },
+  { id: 'door', label: 'Door', iconSrc: '/icons/door.webp', kind: 'door', section: 'add' },
+  { id: 'window', label: 'Window', iconSrc: '/icons/window.webp', kind: 'window', section: 'add' },
+  {
+    id: 'column',
+    label: 'Column',
+    iconSrc: '/icons/column.webp',
+    kind: 'column',
+    section: 'advanced',
+  },
+  { id: 'shelf', label: 'Shelf', iconSrc: '/icons/shelf.webp', kind: 'shelf', section: 'add' },
+  {
+    id: 'spawn',
+    label: 'Spawn point',
+    iconSrc: '/icons/spawn-point.webp',
+    kind: 'spawn',
+    section: 'advanced',
+  },
+  { id: 'kitchen', label: 'Kitchen', iconSrc: '/icons/kitchen.webp', section: 'add' },
+  { id: 'mep', label: 'MEP', iconSrc: '/icons/HVAC.webp', section: 'advanced' },
+  {
+    id: 'painting',
+    label: 'Painting',
+    iconSrc: '/icons/paint.webp',
+    mode: 'material-paint',
+    section: 'advanced',
+  },
+  {
+    id: 'terrain',
+    label: 'Terrain',
+    iconSrc: '/icons/mesh.webp',
+    mode: 'terrain-sculpt',
+    section: 'outdoor',
+  },
+  // An outdoor room (no walls, no ceiling), drawn like a room; see `startTerraceDraft`.
+  { id: 'terrace', label: 'Terrace', iconSrc: '/icons/floor.webp', section: 'outdoor' },
 ]
 
 export const MEP_ITEMS: MepItem[] = [
@@ -102,6 +145,7 @@ export function collectBuildTypes(floorplanMode: FloorplanMode): BuildType[] {
       label: presentation.label,
       iconSrc: presentation.icon.kind === 'url' ? presentation.icon.src : '/icons/spawn-point.webp',
       paletteOrder: presentation.paletteOrder ?? Number.MAX_SAFE_INTEGER,
+      section: 'advanced',
     })
   }
   tools.sort((left, right) => (left.paletteOrder ?? 0) - (right.paletteOrder ?? 0))

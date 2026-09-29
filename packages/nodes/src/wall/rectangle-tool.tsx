@@ -22,6 +22,7 @@ import {
   snapWallDraftPointDetailed,
   triggerSFX,
   useEditor,
+  useFloorplanDraftPreview,
   useInteractionScope,
   useLinearDisplay,
   useRegistryToolContext,
@@ -58,7 +59,7 @@ export default function RectangleWallTool() {
     setDraft(null)
     setMessage('')
     let start: WallPlanPoint | null = null
-    let end: WallPlanPoint | null = null
+    let corner: WallPlanPoint | null = null
     let plane: ReturnType<typeof resolveEventConstructionPlane> | null = null
     useInteractionScope.getState().begin({ kind: 'drafting', tool: 'wall' })
     const pointFor = (e: GridEvent) => {
@@ -89,19 +90,26 @@ export default function RectangleWallTool() {
       setCursor([point[0], hoverPlane.localY, point[1]])
       setMessage('')
       if (!start) return
-      // The line draft's tick: once per snapped corner position.
-      if (end && (end[0] !== point[0] || end[1] !== point[1])) triggerSFX('sfx:grid-snap')
-      end = point
+      // The wall draft's tick as the dragged corner steps to a new snapped spot.
+      if (corner && (corner[0] !== point[0] || corner[1] !== point[1])) triggerSFX('sfx:grid-snap')
+      corner = point
       setDraft({ start, end: point, y: hoverPlane.localY })
     }
     const leave = () => {
       setCursor(null)
       useWallSnapIndicator.getState().clear()
     }
+    // The first corner is mirrored out of tree, like the wall chain's origin,
+    // for consumers outside the tool (the plan view, onboarding hints).
+    const publishStart = (point: WallPlanPoint | null) =>
+      useFloorplanDraftPreview.getState().setWallRectangleDraftStart(point)
     const cancel = () => {
-      if (start) markToolCancelConsumed()
+      if (start) {
+        markToolCancelConsumed()
+        publishStart(null)
+      }
       start = null
-      end = null
+      corner = null
       plane = null
       setDraft(null)
       setMessage('')
@@ -114,10 +122,11 @@ export default function RectangleWallTool() {
       const point = pointFor(e)
       if (!start) {
         start = point
-        end = point
+        publishStart(point)
         plane = resolveEventConstructionPlane(e, null)
         publishHorizontalConstructionPlane(e, plane)
         setCursor([point[0], plane.localY, point[1]])
+        corner = point
         setDraft({ start, end: point, y: plane.localY })
         setMessage('')
         triggerSFX('sfx:structure-build-start')
@@ -141,15 +150,25 @@ export default function RectangleWallTool() {
         setMessage((error as Error).message)
       }
     }
+    // The plan view finishing or dropping the same rectangle (split view) ends it here too.
+    const stopMirror = useFloorplanDraftPreview.subscribe((state, previous) => {
+      if (!start || !previous.wallRectangleDraftStart || state.wallRectangleDraftStart) return
+      start = null
+      corner = null
+      plane = null
+      setDraft(null)
+    })
     emitter.on('grid:move', move)
     emitter.on('grid:click', click)
     emitter.on('tool:cancel', cancel)
     canvas.addEventListener('pointerleave', leave)
     return () => {
+      stopMirror()
       emitter.off('grid:move', move)
       emitter.off('grid:click', click)
       emitter.off('tool:cancel', cancel)
       canvas.removeEventListener('pointerleave', leave)
+      if (start) publishStart(null)
       useWallSnapIndicator.getState().clear()
       clearPlacementSurface()
       useInteractionScope.getState().endIf((s) => s.kind === 'drafting' && s.tool === 'wall')

@@ -38,11 +38,16 @@ import { ViewerZoneSystem } from '../../components/viewer-zone-system'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
 import { useSaveShortcut } from '../../hooks/use-save-shortcut'
+import { useCeilingEditSessionOwner } from '../../lib/ceiling-edit-session'
+import { showsWholeBuilding, useEditorLevelDisplay } from '../../lib/editor-level-display'
+import { useGestureLifecycleOwner } from '../../lib/gesture-lifecycle'
 import {
   createLocalProjectPresentationPersistence,
   type LocalProjectPresentationPersistence,
 } from '../../lib/local-project-presentation-persistence'
 import { type ActivePaintMaterial, hasActivePaintMaterial } from '../../lib/material-paint'
+import { usePaintRegionHovering } from '../../lib/paint-region-hover'
+import { resetPaintMode, usePaintRegionMode } from '../../lib/paint-region-mode'
 import {
   applySceneGraphToEditor,
   loadSceneFromLocalStorage,
@@ -73,6 +78,7 @@ import { PanelManager } from '../ui/panels/panel-manager'
 import { ErrorBoundary } from '../ui/primitives/error-boundary'
 import { useSidebarStore } from '../ui/primitives/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/tooltip'
+import { RightStack } from '../ui/right-stack'
 import { SceneLoader, SceneLoadFailed } from '../ui/scene-loader'
 import { AppSidebar } from '../ui/sidebar/app-sidebar'
 import type { ExtraPanel } from '../ui/sidebar/icon-rail'
@@ -93,10 +99,12 @@ import { FloatingActionMenu } from './floating-action-menu'
 import { FloatingBuildingActionMenu } from './floating-building-action-menu'
 import { FloorplanModeCoordinator } from './floorplan-mode-coordinator'
 import { FloorplanPanel } from './floorplan-panel'
+import { FootprintHeightHandle } from './footprint-height-handle'
 import { Grid } from './grid'
 import { GroupFloatingActionMenu } from './group-floating-action-menu'
 import { GroupRotateHandle } from './group-rotate-handle'
 import { GroupSelectionBox3D } from './group-selection-box-3d'
+import { EditorHandleHitPriority } from './handles/handle-hit-priority'
 import { NodeArrowHandles } from './node-arrow-handles'
 import { QuickMeasurementHud } from './quick-measurement-hud'
 import { RiserDiagramPanel } from './riser-diagram-panel'
@@ -109,6 +117,7 @@ import { VectorEdgeExtractor } from './vector-edge-extractor'
 import { WallMeasurementLabel } from './wall-measurement-label'
 import { WallMoveSideHandles } from './wall-move-side-handles'
 import { WallOpeningHighlights } from './wall-opening-highlights'
+import { WallRegionHandles } from './wall-region-handles'
 
 const CAMERA_CONTROLS_HINT_DISMISSED_STORAGE_KEY = 'editor-camera-controls-hint-dismissed:v1'
 const PREVIEW_STAGE_SWITCHER_POSITION =
@@ -118,12 +127,16 @@ const DELETE_CURSOR_BADGE_OFFSET_X = 14
 const DELETE_CURSOR_BADGE_OFFSET_Y = 14
 const PAINT_CURSOR_BADGE_COLOR = '#818cf8'
 const PAINT_CURSOR_BADGE_DISABLED_COLOR = '#94a3b8'
+// Neutral: erasing paints no colour.
+const ERASE_CURSOR_BADGE_COLOR = '#e4e4e7'
 const PAINT_CURSOR_BADGE_OFFSET_X = 14
 const PAINT_CURSOR_BADGE_OFFSET_Y = 14
 const SCENE_READY_FALLBACK_MS = 8000
 const PRESENTATION_PROJECT_NOT_RESTORED = Symbol('presentation-project-not-restored')
 const useClientLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
-type PaintCursorBadgeState = 'empty' | 'ready' | 'blocked'
+// `aim`: a region sub-mode off what it draws on — the HUD says where to go; no
+// forbidden sign, since nothing is refused.
+type PaintCursorBadgeState = 'empty' | 'ready' | 'aim' | 'blocked'
 const recordEditorRender: ProfilerOnRenderCallback = (_id, _phase, actualDuration) => {
   if (PERF_OVERLAY_ENABLED) recordPerfSample('react-render', actualDuration)
 }
@@ -131,6 +144,8 @@ const EDITOR_HOVER_STYLES: HoverStyles = {
   default: { visibleColor: 0x00_aa_ff, hiddenColor: 0xf3_ff_47, strength: 5, pulse: true },
   delete: { visibleColor: 0xef_44_44, hiddenColor: 0x99_1b_1b, strength: 6, pulse: false },
   'paint-ready': { visibleColor: 0xf5_9e_0b, hiddenColor: 0xfd_e0_68, strength: 5, pulse: true },
+  // Erasing paints nothing: a neutral outline, no paint colour.
+  'erase-ready': { visibleColor: 0xe4_e4_e7, hiddenColor: 0xa1_a1_aa, strength: 5, pulse: false },
   'paint-disabled': {
     visibleColor: 0x94_a3_b8,
     hiddenColor: 0x47_55_69,
@@ -681,26 +696,31 @@ function PaintCursorBadge({
   swatchColor,
   swatchImageUrl,
   isEraser,
+  isPicker = false,
 }: {
   position: { x: number; y: number }
   state: PaintCursorBadgeState
   swatchColor: string
   swatchImageUrl?: string
   isEraser: boolean
+  /** The eyedropper: the swatch is what a click would take. */
+  isPicker?: boolean
 }) {
   const accentColor =
     state === 'ready'
       ? isEraser
-        ? PAINT_CURSOR_BADGE_COLOR
+        ? ERASE_CURSOR_BADGE_COLOR
         : swatchColor
       : PAINT_CURSOR_BADGE_DISABLED_COLOR
-  const iconOpacity = state === 'ready' ? 1 : state === 'blocked' ? 0.62 : 0.42
+  const iconOpacity = state === 'ready' ? 1 : state === 'blocked' || state === 'aim' ? 0.62 : 0.42
   const lineHeight = 18
 
   return (
     <div
       aria-hidden="true"
       className="pointer-events-none absolute z-40"
+      data-paint-cursor-state={state}
+      data-paint-cursor-tool={isEraser ? 'erase' : isPicker ? 'pick' : 'paint'}
       style={{
         left: position.x,
         top: position.y,
@@ -722,29 +742,32 @@ function PaintCursorBadge({
           transform: `translate(-50%, calc(-100% - ${lineHeight}px))`,
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          alt=""
-          aria-hidden="true"
-          className="h-5 w-5 object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
-          src="/icons/paint.webp"
-          style={{
-            filter: state === 'ready' ? undefined : 'grayscale(1)',
-            opacity: iconOpacity,
-          }}
-        />
-        {state === 'ready' ? (
-          isEraser ? (
-            <span className="-right-1 -bottom-1 absolute flex h-3.5 w-3.5 items-center justify-center rounded-full border border-white/35 bg-zinc-950 text-white shadow-[0_2px_6px_rgba(0,0,0,0.45)]">
-              <Icon
-                aria-hidden="true"
-                color="currentColor"
-                height={10}
-                icon="mdi:eraser-variant"
-                width={10}
-              />
-            </span>
-          ) : (
+        {isPicker || isEraser ? (
+          // The eyedropper and the eraser carry their own tool, never a paint colour.
+          <Icon
+            aria-hidden="true"
+            className="text-white"
+            color="currentColor"
+            height={18}
+            icon={isEraser ? 'mdi:eraser-variant' : 'lucide:pipette'}
+            style={{ opacity: iconOpacity }}
+            width={18}
+          />
+        ) : (
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
+            alt=""
+            aria-hidden="true"
+            className="h-5 w-5 object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]"
+            src="/icons/paint.webp"
+            style={{
+              filter: state === 'ready' ? undefined : 'grayscale(1)',
+              opacity: iconOpacity,
+            }}
+          />
+        )}
+        {state === 'ready' || state === 'aim' ? (
+          isEraser ? null : (
             <span
               className="-right-1 -bottom-1 absolute h-3.5 w-3.5 rounded-full border border-white/70 bg-cover bg-center shadow-[0_2px_6px_rgba(0,0,0,0.45)]"
               style={{
@@ -752,6 +775,7 @@ function PaintCursorBadge({
                 backgroundImage: swatchImageUrl
                   ? `url(${JSON.stringify(swatchImageUrl)})`
                   : undefined,
+                opacity: state === 'aim' ? 0.55 : 1,
               }}
             />
           )
@@ -816,12 +840,15 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       <SceneEnvironment />
       {!(isFirstPersonMode || isStudioMode || isCaptureMode) && <SelectionManager />}
       {!(noEditing || isXRMode) && <BoxSelectTool />}
+      {!noEditing && <EditorHandleHitPriority />}
       {!noEditing && <NodeArrowHandles />}
+      {!noEditing && <FootprintHeightHandle />}
       {!noEditing && <GroupRotateHandle />}
       {!noEditing && <GroupSelectionBox3D />}
       {!noEditing && <WallOpeningHighlights />}
       {!noEditing && <SlabHoleHighlights />}
       {!noEditing && <WallMoveSideHandles />}
+      {!noEditing && <WallRegionHandles />}
       {!noEditing && <FenceTangentLines3D />}
       {!(noEditing || isXRMode) && <FloatingActionMenu />}
       {!(noEditing || isXRMode) && <GroupFloatingActionMenu />}
@@ -934,7 +961,10 @@ function PaintCursorLayer({
 }) {
   const mode = useEditor((s) => s.mode)
   const activePaintMaterial = useEditor((s) => s.activePaintMaterial)
-  const paintEraser = useEditor((s) => s.paintEraser)
+  const paintMode = usePaintRegionMode((s) => s.mode)
+  const picked = usePaintRegionMode((s) => s.picked)
+  const paintEraser = paintMode === 'erase'
+  const picking = paintMode === 'pick'
   const paintHover = useEditor((s) => s.paintHover)
   const sceneMaterials = useScene((s) => s.materials)
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null)
@@ -986,14 +1016,26 @@ function PaintCursorLayer({
     }
   }, [active, containerRef])
 
-  const hasPaint = paintEraser || hasActivePaintMaterial(activePaintMaterial)
+  const hasPaint = paintEraser || picking || hasActivePaintMaterial(activePaintMaterial)
+  // A region sub-mode reads its own surfaces (walls, floors), not the whole-surface hover.
+  const regionMode = paintMode === 'rectangle' || paintMode === 'polygon'
+  const regionHovering = usePaintRegionHovering()
   const badgeState: PaintCursorBadgeState = !hasPaint
     ? 'empty'
-    : paintHover != null
-      ? 'ready'
-      : 'blocked'
-  const swatchColor = getActivePaintMaterialSwatchColor(activePaintMaterial, sceneMaterials)
-  const swatchImageUrl = getActivePaintMaterialSwatchImageUrl(activePaintMaterial, sceneMaterials)
+    : picking
+      ? picked
+        ? 'ready'
+        : 'aim'
+      : regionMode
+        ? regionHovering
+          ? 'ready'
+          : 'aim'
+        : paintHover != null
+          ? 'ready'
+          : 'blocked'
+  const swatchMaterial = picking ? picked : activePaintMaterial
+  const swatchColor = getActivePaintMaterialSwatchColor(swatchMaterial, sceneMaterials)
+  const swatchImageUrl = getActivePaintMaterialSwatchImageUrl(swatchMaterial, sceneMaterials)
 
   if (!active || !position) return null
 
@@ -1004,6 +1046,7 @@ function PaintCursorLayer({
     >
       <PaintCursorBadge
         isEraser={paintEraser}
+        isPicker={picking}
         position={{ x: 0, y: 0 }}
         state={badgeState}
         swatchColor={swatchColor}
@@ -1053,6 +1096,15 @@ const ViewerCanvas = memo(function ViewerCanvas({
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
   useUnitFocusRules()
+  const wholeBuilding = useEditor((s) =>
+    showsWholeBuilding({
+      isPreviewMode: s.isPreviewMode,
+      isFirstPersonMode,
+      captureMode: s.captureMode,
+      captureLevelId: s.captureLevelId,
+    }),
+  )
+  useEditorLevelDisplay(wholeBuilding)
   const presetIsolation = useEditor((s) =>
     s.captureMode.mode === 'preset' ? s.captureMode.isolated : null,
   )
@@ -1312,6 +1364,7 @@ function EditorContent({
   }, [presentationProjectId])
 
   useKeyboard({ isVersionPreviewMode, disabled: isFirstPersonMode || isStudioMode })
+  useGestureLifecycleOwner()
 
   const { beginSceneLoad, completeSceneLoad, saveNow } = useAutoSave({
     guardAgainstSceneWipe,
@@ -1353,6 +1406,7 @@ function EditorContent({
     const teardown = initializeEditorRuntime()
     return teardown
   }, [])
+  useCeilingEditSessionOwner()
 
   useEffect(() => {
     void useEditor.persist.rehydrate()
@@ -1362,6 +1416,7 @@ function EditorContent({
   useEffect(() => {
     useViewer.getState().setProjectId(projectId ?? null)
     useFloorplanMode.getState().setProjectId(projectId ?? null)
+    resetPaintMode()
 
     return () => {
       useViewer.getState().setProjectId(null)
@@ -1406,7 +1461,14 @@ function EditorContent({
       } finally {
         if (!cancelled) {
           setIsSceneLoading(false)
-          if (!failed) setHasLoadedInitialScene(true)
+          if (!failed) {
+            setHasLoadedInitialScene(true)
+            // A project opens in select mode. Rehydrate already drops the
+            // persisted tool, but rail panels arm their own mode when they
+            // mount (Build arms its first tool, Paint arms the brush), and
+            // with a restored rail tab that mount can land after rehydrate.
+            useEditor.getState().armToolMode({ mode: 'select' })
+          }
         }
       }
     }
@@ -1641,19 +1703,18 @@ function EditorContent({
                       <ActionMenu />
                     </div>
                   )}
-                  {!(isVersionPreviewMode || isCaptureMode || isStudioMode) && (
-                    <div className="pointer-events-auto">
-                      <PanelManager
-                        inspectorFooter={inspectorFooter}
-                        multiSelectionFooter={multiSelectionFooter}
-                      />
-                    </div>
-                  )}
-                  {!isCaptureMode && (
-                    <div className="pointer-events-auto">
-                      <HelperManager />
-                    </div>
-                  )}
+                  {/* The inspector and the shortcuts card share one right column. */}
+                  <RightStack
+                    helper={isCaptureMode ? null : <HelperManager />}
+                    inspector={
+                      isVersionPreviewMode || isCaptureMode || isStudioMode ? null : (
+                        <PanelManager
+                          inspectorFooter={inspectorFooter}
+                          multiSelectionFooter={multiSelectionFooter}
+                        />
+                      )
+                    }
+                  />
                   {/* Capture mode drives walk / drone from its own overlay, which
                       owns the framing chrome — the walkthrough HUD would both
                       clutter the frame and offer a second, conflicting exit. */}
@@ -1731,12 +1792,7 @@ function EditorContent({
             <div className="pointer-events-auto">
               <ActionMenu />
             </div>
-            <div className="pointer-events-auto">
-              <PanelManager />
-            </div>
-            <div className="pointer-events-auto">
-              <HelperManager />
-            </div>
+            <RightStack helper={<HelperManager />} inspector={<PanelManager />} />
             <RiserDiagramPanel />
             {isFirstPersonMode && (
               <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />

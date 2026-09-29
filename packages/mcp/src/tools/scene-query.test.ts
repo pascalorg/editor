@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { useScene } from '@pascal-app/core'
 import {
   CeilingNode,
   DoorNode,
@@ -296,7 +297,8 @@ describe('scene query tools', () => {
       width: 1,
       height: 1,
     })
-    bridge.createNode(window, hostWall.id)
+    // Loaded over-limit scenes remain inspectable; authoring a new overload is refused.
+    useScene.getState().createNode(window, hostWall.id)
 
     const result = await client.callTool({ name: 'verify_scene', arguments: {} })
     expect(result.isError).toBeFalsy()

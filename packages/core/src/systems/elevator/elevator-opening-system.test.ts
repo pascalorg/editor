@@ -83,12 +83,16 @@ function resetScene() {
 }
 
 function getOpeningCenter(nodes: Record<AnyNodeId, AnyNode>): [number, number] | null {
-  const slab = nodes[UPPER_SLAB_ID] as { holes?: [number, number][][] }
-  const opening = slab.holes?.[0]
+  const opening = Object.values(nodes).find(
+    (node) => node.type === 'floor-opening' && node.ownerId === ELEVATOR_ID,
+  )?.polygon
   if (!opening || opening.length === 0) return null
 
   const [x, z] = opening.reduce(([sumX, sumZ], point) => [sumX + point[0], sumZ + point[1]], [0, 0])
-  return [x / opening.length, z / opening.length]
+  return [
+    Math.round((x / opening.length) * 1e6) / 1e6,
+    Math.round((z / opening.length) * 1e6) / 1e6,
+  ]
 }
 
 function getElevatorPosition(nodes: Record<AnyNodeId, AnyNode>) {
@@ -111,7 +115,7 @@ describe('ElevatorOpeningSystem scene commit boundary', () => {
     stopCommitSubscription = () => {}
   })
 
-  test('includes the elevator edit and derived slab opening in one commit and undo step', () => {
+  test('includes the elevator edit and owned opening intent in one commit and undo step', () => {
     const commits: SceneCommit[] = []
     stopOpeningSync = initializeElevatorOpeningSync()
     stopCommitSubscription = subscribeSceneCommits((commit) => commits.push(commit))
@@ -123,18 +127,19 @@ describe('ElevatorOpeningSystem scene commit boundary', () => {
     expect(commits[0]?.before.nodes[ELEVATOR_ID]?.visible).toBe(false)
     expect(commits[0]?.current.nodes[ELEVATOR_ID]?.visible).toBe(true)
     expect((commits[0]?.before.nodes[UPPER_SLAB_ID] as { holes?: unknown[] }).holes).toEqual([])
-    expect((commits[0]?.current.nodes[UPPER_SLAB_ID] as { holes?: unknown[] }).holes).toHaveLength(
-      1,
-    )
+    expect(getOpeningCenter(commits[0]!.current.nodes)).toEqual([2, 1.5])
     expect(
-      (commits[0]?.current.nodes[UPPER_SLAB_ID] as { holeMetadata?: unknown[] }).holeMetadata,
-    ).toEqual([{ elevatorId: ELEVATOR_ID, source: 'elevator' }])
+      Object.values(commits[0]!.current.nodes).some(
+        (node) => node.type === 'floor-opening' && node.ownerId === ELEVATOR_ID,
+      ),
+    ).toBe(true)
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
 
     useScene.temporal.getState().undo()
 
     expect(useScene.getState().nodes[ELEVATOR_ID]?.visible).toBe(false)
     expect((useScene.getState().nodes[UPPER_SLAB_ID] as { holes?: unknown[] }).holes).toEqual([])
+    expect(getOpeningCenter(useScene.getState().nodes)).toBeNull()
   })
 
   test('processes a second relevant elevator mutation in the same turn', () => {

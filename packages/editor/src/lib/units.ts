@@ -4,7 +4,8 @@ import {
   type BuildingNode,
   type LevelNode,
   pointInPolygon2D,
-  resolveAutoZonePolygon,
+  runAsSingleSceneHistoryStep,
+  sceneRegistry,
   snapWorldXZToBuildingLocal,
   UnitNode,
   useScene,
@@ -124,28 +125,75 @@ export function assignZoneToUnit(zoneId: ZoneNode['id'], unitId: UnitNode['id'] 
   if (updates.length > 0) updateNodes(updates)
 }
 
+/** The units of the building a zone's level belongs to, and the one listing the zone. */
+export function zoneUnits(
+  nodes: Nodes,
+  zoneId: string,
+): { buildingId: BuildingNode['id'] | null; units: UnitNode[]; current: UnitNode | null } {
+  const zone = nodes[zoneId as AnyNodeId]
+  const level = zone?.parentId ? nodes[zone.parentId as AnyNodeId] : undefined
+  const building = level?.parentId ? nodes[level.parentId as AnyNodeId] : undefined
+  if (building?.type !== 'building') return { buildingId: null, units: [], current: null }
+  const units = building.children.flatMap((id) => {
+    const child = nodes[id as AnyNodeId]
+    return child?.type === 'unit' ? [child] : []
+  })
+  return {
+    buildingId: building.id,
+    units,
+    current: units.find((unit) => unit.members.includes(zoneId as ZoneNode['id'])) ?? null,
+  }
+}
+
+/** Puts a zone in a new unit of its building (named "Unit N"), in one undo step, without focusing it. */
+export function addZoneToNewUnit(zoneId: ZoneNode['id']): UnitNode['id'] | null {
+  const { buildingId, units } = zoneUnits(useScene.getState().nodes, zoneId)
+  if (!buildingId) return null
+  const unit = UnitNode.parse({ name: `Unit ${units.length + 1}` })
+  runAsSingleSceneHistoryStep(useScene, () => {
+    useScene.getState().createNode(unit, buildingId)
+    assignZoneToUnit(zoneId, unit.id)
+  })
+  return unit.id
+}
+
 export function toggleZoneMembership(unitId: UnitNode['id'], zoneId: ZoneNode['id']): void {
   const unit = useScene.getState().nodes[unitId]
   if (unit?.type !== 'unit') return
   assignZoneToUnit(zoneId, unit.members.includes(zoneId) ? null : unitId)
 }
 
+/** How far (m) below a mezzanine's walking surface a hit still counts as on it (its plate and underside). */
+const MEZZANINE_HIT_TOLERANCE = 0.05
+
 /**
  * The zone under a point on the current level, in building-local XZ. A 3D
  * click lands on whatever surface is closest (a floor slab sits above the
  * zone fill), so painting resolves the zone from the hit point instead of the
- * hit mesh. Nested zones resolve to the smallest one.
+ * hit mesh. Nested zones resolve to the smallest one, except that a mezzanine
+ * the hit may be on always wins over its host. With the hit's height (`y`,
+ * level-local) a mezzanine counts only when the hit is on or above its plate —
+ * the host floor under it is the host's; without one (the plan, seen from
+ * above) the mezzanine on top wins.
  */
-export function zoneAtLevelPoint(x: number, z: number): ZoneNode | null {
+export function zoneAtLevelPoint(x: number, z: number, y?: number): ZoneNode | null {
   const levelId = useViewer.getState().selection.levelId
   if (!levelId) return null
   const nodes = useScene.getState().nodes
-  const resolve = (id: AnyNodeId) => nodes[id]
   let best: ZoneNode | null = null
   let bestArea = Number.POSITIVE_INFINITY
+  let bestOnTop = false
   for (const node of Object.values(nodes)) {
     if (node.type !== 'zone' || node.parentId !== levelId) continue
-    const polygon = resolveAutoZonePolygon(node, resolve)
+    // An eligible mezzanine is the surface on top: it beats its host whatever
+    // their areas (a mezzanine may cover its whole host).
+    const onTop = node.floor?.support === 'open'
+    if (y !== undefined && onTop) {
+      const underside = (node.floor!.elevation ?? 0) - (node.floor!.thickness ?? 0.2)
+      if (y < underside - MEZZANINE_HIT_TOLERANCE) continue
+    }
+    if (bestOnTop && !onTop) continue
+    const polygon = node.polygon
     if (!pointInPolygon2D([x, z], polygon)) continue
     let area = 0
     for (let i = 0; i < polygon.length; i++) {
@@ -154,20 +202,30 @@ export function zoneAtLevelPoint(x: number, z: number): ZoneNode | null {
       area += a[0] * b[1] - b[0] * a[1]
     }
     area = Math.abs(area) / 2
-    if (area < bestArea) {
+    if (area < bestArea || (onTop && !bestOnTop)) {
       best = node
       bestArea = area
+      bestOnTop = onTop
     }
   }
   return best
 }
 
-export function zoneAtWorldPoint(worldX: number, worldZ: number): ZoneNode | null {
+/** `worldY` (optional): the hit's height, so a click under a mezzanine picks the host. */
+export function zoneAtWorldPoint(worldX: number, worldZ: number, worldY?: number): ZoneNode | null {
   const pose = getActiveBuildingPose()
   const [x, z] = pose
     ? snapWorldXZToBuildingLocal(worldX, worldZ, pose.position, pose.rotationY, 0).local
     : [worldX, worldZ]
-  return zoneAtLevelPoint(x, z)
+  return zoneAtLevelPoint(x, z, worldY === undefined ? undefined : levelLocalY(worldY))
+}
+
+function levelLocalY(worldY: number): number {
+  const levelId = useViewer.getState().selection.levelId
+  const level = levelId ? sceneRegistry.nodes.get(levelId) : undefined
+  if (!level) return worldY
+  level.updateWorldMatrix(true, false)
+  return worldY - level.matrixWorld.elements[13]!
 }
 
 export const ZONE_PAINT_DELAY_MS = 250
