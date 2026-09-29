@@ -69,6 +69,43 @@ const wallStart = () => (node(wallId) as WallNode).start
 const levelChildren = () => (node(levelId) as LevelNode).children
 
 describe('scene history drafts', () => {
+  test('foreign metadata remains undoable while carry metadata stays out of history', () => {
+    const end = beginSceneHistoryDraft(itemId, node(itemId)!)
+    runSceneHistoryDraftWrite(() =>
+      useScene.getState().updateNode(itemId, { metadata: { isTransient: true } }),
+    )
+    useScene.getState().updateNode(itemId, { metadata: { isTransient: true, tag: 'agent' } })
+    useScene.getState().updateNode(wallId, { name: 'Agent wall' })
+    const recorded = useScene.temporal.getState().pastStates[1]!.nodes![itemId]!
+    expect(recorded.metadata).toEqual({ tag: 'agent' })
+    useScene.temporal.getState().undo(2)
+    expect(node(itemId)?.metadata).toEqual({ isTransient: true })
+    expect(useScene.temporal.getState().futureStates).toHaveLength(2)
+    end()
+  })
+
+  test.each([
+    false,
+    true,
+  ])('undoing a new host keeps the carried draft attached (created=%s)', (created) => {
+    const host = WallNode.parse({ parentId: levelId, start: [0, 2], end: [4, 2] })
+    useScene.getState().createNode(host, levelId)
+    const carried = created ? ItemNode.parse({ parentId: levelId, asset: item.asset }) : item
+    const end = beginSceneHistoryDraft(carried.id as AnyNodeId, created ? null : node(itemId)!)
+    runSceneHistoryDraftWrite(() => {
+      if (created) useScene.getState().createNode(carried, levelId)
+      useScene.getState().updateNode(carried.id as AnyNodeId, { parentId: host.id })
+    })
+
+    useScene.temporal.getState().undo()
+
+    expect(node(host.id as AnyNodeId)).toBeUndefined()
+    expect(node(carried.id as AnyNodeId)?.parentId).toBe(levelId)
+    expect(levelChildren()).toContain(carried.id)
+    expect(useScene.temporal.getState().futureStates).toHaveLength(1)
+    end()
+  })
+
   test("an adopted draft's own writes record nothing; a foreign write records it as it was", () => {
     const end = beginSceneHistoryDraft(itemId, node(itemId)!)
     runSceneHistoryDraftWrite(() => {

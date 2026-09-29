@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import {
   type AnyNodeId,
+  applySceneSnapshot,
   BlockNode,
   BuildingNode,
   getBlockFaceFrame,
@@ -79,6 +80,67 @@ beforeEach(() => {
 })
 
 describe('useDraftNode block face commit', () => {
+  test('a failed create releases its history draft so host snapshots still load', () => {
+    const createNode = spyOn(useScene.getState(), 'createNode').mockImplementation(() => {
+      throw new Error('create rejected')
+    })
+    try {
+      expect(() =>
+        draftNode!.create(new Vector3(), {
+          id: 'box',
+          name: 'Box',
+          category: 'decor',
+          thumbnail: '',
+          src: '/box.glb',
+        }),
+      ).toThrow('create rejected')
+    } finally {
+      createNode.mockRestore()
+    }
+    draftNode!.destroy()
+    const state = useScene.getState()
+    expect(() =>
+      applySceneSnapshot(
+        {
+          nodes: state.nodes,
+          rootNodeIds: state.rootNodeIds,
+          collections: state.collections,
+          materials: state.materials,
+          installedPlugins: state.installedPlugins,
+        },
+        { origin: 'host' },
+      ),
+    ).not.toThrow()
+  })
+
+  test('a rejected fresh drop keeps its draft registered until cancel', () => {
+    const fresh = ItemNode.parse({
+      parentId: LEVEL_ID,
+      metadata: { isNew: true },
+      asset: { id: 'box', name: 'Box', category: 'decor', thumbnail: '', src: '/box.glb' },
+    })
+    useScene.getState().createNode(fresh, LEVEL_ID as AnyNodeId)
+    const draft = draftNode!
+    draft.adopt(fresh)
+    useScene.setState({ readOnly: true })
+    expect(draft.commit({ position: [2, 0, 3] })).toBeNull()
+    useScene.setState({ readOnly: false })
+    const state = useScene.getState()
+    expect(() =>
+      applySceneSnapshot(
+        {
+          nodes: state.nodes,
+          rootNodeIds: state.rootNodeIds,
+          collections: state.collections,
+          materials: state.materials,
+          installedPlugins: state.installedPlugins,
+        },
+        { origin: 'host' },
+      ),
+    ).toThrow()
+    draft.destroy()
+  })
+
   test('persists the face host used by the placement preview', () => {
     const draft = draftNode!
     draft.create(new Vector3(0, 0, 0), {
@@ -340,6 +402,7 @@ describe('useDraftNode block face commit', () => {
     expect(useScene.temporal.getState().pastStates).toHaveLength(past + 1)
     useScene.temporal.getState().undo()
     expect((useScene.getState().nodes[id] as ItemNode).position).toEqual([0, 0, 0])
+    expect(useScene.getState().nodes[id]?.metadata?.isTransient).toBeUndefined()
   })
 
   test('never resumes history that another owner is pausing', () => {

@@ -318,7 +318,8 @@ export function FloorplanRegistryMoveOverlay() {
       }
 
       const commitFinalStateOrRevert = () => {
-        const commitValid = session.canCommit()
+        // Some registered sessions stage their final polygon from canCommit.
+        const commitValid = ownWrite(() => session.canCommit())
         const freshPlacement = isFreshPlacementMetadata(
           (useScene.getState().nodes[movingNode.id] as { metadata?: unknown } | undefined)
             ?.metadata,
@@ -346,7 +347,7 @@ export function FloorplanRegistryMoveOverlay() {
         if (commitValid && freshPlacement) {
           // Subtrees finalize from the preview. Staging a session commit would publish
           // an unvalidated graph, including for presets created outside our factory.
-          if (!atomicPreview) session.commit?.()
+          if (!atomicPreview) ownWrite(() => session.commit?.())
           const stagedNode = useScene.getState().nodes[movingNode.id]
           const preview = usePlacementPreview.getState().node
           const effective = stagedNode ? getEffectiveNode(stagedNode) : null
@@ -363,7 +364,7 @@ export function FloorplanRegistryMoveOverlay() {
                 showRejection,
               )
             : null
-          if (!committedId && atomicPreview) return false
+          if (!committedId) return false
           if (atomicPreview) {
             setMovingNodeOrigin('2d')
             for (const id of session.affectedIds) {
@@ -371,11 +372,12 @@ export function FloorplanRegistryMoveOverlay() {
               useLiveNodeOverrides.getState().clear(id)
             }
           }
-          endDrafts()
           if (committedId) {
+            settleSceneHistoryDrafts(session.affectedIds)
             sfxEmitter.emit('sfx:item-place')
             useViewer.getState().setSelection({ selectedIds: [committedId] })
           }
+          endDrafts()
           return
         }
 
@@ -527,7 +529,7 @@ export function FloorplanRegistryMoveOverlay() {
           }
           event.preventDefault()
           event.stopImmediatePropagation()
-          session.flipSide()
+          ownWrite(() => session.flipSide?.())
           sfxEmitter.emit('sfx:item-rotate')
           return
         }

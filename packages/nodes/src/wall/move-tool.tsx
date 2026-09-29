@@ -211,6 +211,13 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       // the final plan is written once, atomically, on commit.
       const overrides = useLiveNodeOverrides.getState()
       const sceneState = useScene.getState()
+      const previewIds = new Set(updates.map((entry) => entry.id as AnyNodeId))
+      for (const id of touchedWallIds) {
+        if (previewIds.has(id)) continue
+        overrides.clear(id)
+        if (sceneState.nodes[id]) sceneState.markDirty(id)
+        touchedWallIds.delete(id)
+      }
       overrides.setMany(
         updates.map(
           (entry) =>
@@ -348,6 +355,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     const applyPreview = (nextStart: [number, number], nextEnd: [number, number]) => {
       const previous = previewRef.current ?? { start: originalStart, end: originalEnd }
       if (
+        useScene.getState().nodes === linkedNodes &&
         nextStart[0] === previous.start[0] &&
         nextStart[1] === previous.start[1] &&
         nextEnd[0] === previous.end[0] &&

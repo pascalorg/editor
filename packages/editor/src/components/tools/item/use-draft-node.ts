@@ -165,7 +165,12 @@ export function useDraftNode(): DraftNodeHandle {
 
       releaseHistoryDraft(endHistoryDraftRef)
       endHistoryDraftRef.current = beginSceneHistoryDraft(node.id, null)
-      pausedDraftWrite(() => useScene.getState().createNode(node, currentLevelId))
+      try {
+        pausedDraftWrite(() => useScene.getState().createNode(node, currentLevelId))
+      } catch (error) {
+        releaseHistoryDraft(endHistoryDraftRef)
+        throw error
+      }
       usePlacementPreview
         .getState()
         .set(node, useScene.getState().nodes[currentLevelId as AnyNodeId] ?? null)
@@ -250,7 +255,6 @@ export function useDraftNode(): DraftNodeHandle {
       const liveDraft = useScene.getState().nodes[draft.id]
       if (liveDraft) finalUpdate.metadata = stripTransient(liveDraft.metadata)
       if (isFreshPlacementMetadata(originalStateRef.current?.metadata)) {
-        releaseHistoryDraft(endHistoryDraftRef)
         const effectiveNode = ItemNode.parse({ ...draft, ...finalUpdate })
         const id = commitFreshPlacementSubtree(
           draft.id,
@@ -265,6 +269,7 @@ export function useDraftNode(): DraftNodeHandle {
           options?.onReject,
         )
         if (!id) return null
+        releaseHistoryDraft(endHistoryDraftRef)
         if (usePlacementPreview.getState().node?.id === draft.id) {
           usePlacementPreview.getState().clear()
         }

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
+  CeilingNode,
   clearSceneHistory,
   getSceneHistoryPauseDepth,
   ItemNode,
@@ -10,10 +11,12 @@ import {
   nodeRegistry,
   registerNode,
   type SceneCommit,
+  SlabNode,
   subscribeSceneCommits,
   useLiveNodeOverrides,
   useScene,
   WallNode,
+  ZoneNode,
 } from '@pascal-app/core'
 import { useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
@@ -24,6 +27,9 @@ import {
   type DraftNodeHandle,
   useDraftNode,
 } from '../../../editor/src/components/tools/item/use-draft-node'
+import { ceilingDefinition } from '../ceiling/definition'
+import { slabDefinition } from '../slab/definition'
+import { zoneDefinition } from '../zone/definition'
 import { itemDefinition } from './definition'
 
 const LEVEL_ID = 'level_item-2d-move' as AnyNodeId
@@ -150,6 +156,49 @@ async function pointer(type: 'pointermove' | 'pointerup', x: number, z: number) 
 }
 
 describe('2D item move history', () => {
+  test.each([
+    [SlabNode, slabDefinition],
+    [CeilingNode, ceilingDefinition],
+    [ZoneNode, zoneDefinition],
+  ] as const)('a polygon drop restores selection and records one undo step (%s)', async (schema, definition) => {
+    if (!nodeRegistry.get(definition.type)) registerNode(definition)
+    const polygon = [
+      [6, 6],
+      [8, 6],
+      [8, 8],
+      [6, 8],
+    ]
+    const node = schema.parse({
+      name: 'Moved polygon',
+      parentId: LEVEL_ID,
+      polygon,
+      autoFromWalls: false,
+    })
+    useScene.getState().createNode(node, LEVEL_ID)
+    clearSceneHistory()
+    useEditor.getState().setMovingNode(node)
+    await act(async () => {
+      renderer = await create(<FloorplanRegistryMoveOverlay />)
+    })
+    await pointer('pointermove', 7, 7)
+    await pointer('pointermove', 9, 9)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+    await pointer('pointerup', 9, 9)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(useViewer.getState().selection.selectedIds).toEqual([node.id])
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    expect(useScene.getState().nodes[node.id]).toMatchObject({
+      polygon: [
+        [8, 8],
+        [10, 8],
+        [10, 10],
+        [8, 10],
+      ],
+    })
+    useScene.temporal.getState().undo()
+    expect(useScene.getState().nodes[node.id]).toMatchObject({ polygon })
+  })
+
   test('a wall added mid-carry is its own reconciled step; one undo reverts only the drop', async () => {
     expect(nodesOfType('slab')).toHaveLength(1)
     useEditor.getState().setMovingNode(useScene.getState().nodes[ITEM_ID]!)
@@ -245,5 +294,6 @@ describe('2D item move history', () => {
     const undone = useScene.getState().nodes[ITEM_ID] as ItemNode
     expect(undone.position).toEqual([1, 0, 1])
     expect((undone.metadata as Record<string, unknown>).tag).toBe('x')
+    expect((undone.metadata as Record<string, unknown>).isTransient).toBeUndefined()
   })
 })

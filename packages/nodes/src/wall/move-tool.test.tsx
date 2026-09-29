@@ -6,6 +6,7 @@ import {
   clearSceneHistory,
   detectSpacesForLevel,
   emitter,
+  GROUND_SUPPORT_ID,
   getSceneHistoryPauseDepth,
   initSpaceDetectionSync,
   LevelNode,
@@ -105,6 +106,7 @@ afterEach(async () => {
   stopDetection()
   useLiveNodeOverrides.getState().clearAll()
   clearSceneHistory()
+  await new Promise((resolve) => setTimeout(resolve, 0))
   if (savedWindow) Object.defineProperty(globalThis, 'window', savedWindow)
   else Reflect.deleteProperty(globalThis, 'window')
   globalThis.requestAnimationFrame = savedRaf
@@ -257,6 +259,44 @@ function normalizedPolygon(polygon: Array<[number, number]>) {
 }
 
 describe('3D wall move', () => {
+  test('a wall detached mid-drag loses its old preview even at the same snapped cursor', async () => {
+    const east = 'wall_wall-move-east' as AnyNodeId
+    const north = 'wall_wall-move-north' as AnyNodeId
+    const renderer = await armWall(east)
+    try {
+      await dragFrom(4, 4.5)
+      expect(useLiveNodeOverrides.getState().get(north)).toBeDefined()
+      useScene.getState().updateNode(north, { start: [6, 6], end: [0, 6] })
+      await moveCursor(4.5)
+      expect(useLiveNodeOverrides.getState().get(north)).toBeUndefined()
+      expect(useScene.getState().nodes[north]).toMatchObject({ start: [6, 6], end: [0, 6] })
+    } finally {
+      await act(async () => renderer.unmount())
+    }
+  })
+
+  test.each([0, 4])('a room merge leaves no wall supported by a deleted slab (x=%s)', async (x) => {
+    const slabs = nodesOfType('slab')
+    useScene.getState().updateNode(DIVIDER_ID, { supportSlabId: slabs[0]!.id } as Partial<AnyNode>)
+    clearSceneHistory()
+    const renderer = await armWall(DIVIDER_ID)
+    try {
+      await dragFrom(2, x)
+      await act(async () => {
+        window.dispatchEvent(new Event('pointerup'))
+      })
+      const nodes = useScene.getState().nodes
+      for (const wall of nodesOfType('wall') as WallNode[]) {
+        if (wall.supportSlabId && wall.supportSlabId !== GROUND_SUPPORT_ID) {
+          expect(nodes[wall.supportSlabId as AnyNodeId]?.type).toBe('slab')
+        }
+      }
+      expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    } finally {
+      await act(async () => renderer.unmount())
+    }
+  })
+
   test('commits one undo step that restores the walls and every derived surface', async () => {
     expect(nodesOfType('slab')).toHaveLength(2)
     expect(nodesOfType('ceiling')).toHaveLength(2)
