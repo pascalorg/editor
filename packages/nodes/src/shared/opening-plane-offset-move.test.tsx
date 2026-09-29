@@ -24,9 +24,9 @@ import MoveDoorTool from '../door/move-tool'
 import { windowFloorplanMoveTarget } from '../window/floorplan-move'
 import MoveWindowTool from '../window/move-tool'
 
-// A photo-profiled opening can stand proud of its wall: `position[2]` is its
-// wall-local plane offset (the /next great-room slider sits at z = -0.205,
-// frame wholly outside the 0.2032 m wall). Moving it ALONG that wall must keep
+// An opening can stand proud of its wall: `position[2]` is its wall-local
+// plane offset. This fixture sits at z = -0.3, with its frame wholly outside
+// the 0.2 m wall. Moving it ALONG that wall must keep
 // the offset; moving it to ANOTHER wall resets it to the centre plane, because
 // the offset belongs to the original wall's face.
 
@@ -35,7 +35,7 @@ const WALL_A_ID = 'wall_plane-offset-own' as AnyNodeId
 const WALL_B_ID = 'wall_plane-offset-other' as AnyNodeId
 const OPENING_ID_DOOR = 'door_plane-offset' as AnyNodeId
 const OPENING_ID_WINDOW = 'window_plane-offset' as AnyNodeId
-const OFFSET = -0.205
+const OFFSET = -0.3
 
 let savedWindow: PropertyDescriptor | undefined
 let savedDocument: typeof document
@@ -54,7 +54,7 @@ function opening(kind: 'door' | 'window'): DoorNode | WindowNode {
         position: [2, 1.05, OFFSET],
         width: 1.2,
         height: 2.1,
-        frameDepth: 0.2068,
+        frameDepth: 0.2,
       })
     : WindowNode.parse({
         id: OPENING_ID_WINDOW,
@@ -63,7 +63,7 @@ function opening(kind: 'door' | 'window'): DoorNode | WindowNode {
         position: [2, 1.5, OFFSET],
         width: 1.2,
         height: 1.2,
-        frameDepth: 0.2068,
+        frameDepth: 0.2,
       })
 }
 
@@ -74,7 +74,7 @@ function seedScene(kind: 'door' | 'window'): DoorNode | WindowNode {
     parentId: LEVEL_ID,
     start: [0, 0],
     end: [6, 0],
-    thickness: 0.2032,
+    thickness: 0.2,
     height: 3,
     children: [node.id],
   })
@@ -83,7 +83,7 @@ function seedScene(kind: 'door' | 'window'): DoorNode | WindowNode {
     parentId: LEVEL_ID,
     start: [0, 4],
     end: [6, 4],
-    thickness: 0.2032,
+    thickness: 0.2,
     height: 3,
     children: [],
   })
