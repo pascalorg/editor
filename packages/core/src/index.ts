@@ -191,6 +191,7 @@ export {
   type AutoSlabPlanningContext,
   type AutoSlabSyncPlan,
   type AutoZoneSyncPlan,
+  createWallBoundSurfaceFollower,
   detectSpacesForLevel,
   initSpaceDetectionSync,
   isSpaceDetectionPaused,
