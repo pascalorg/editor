@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { CabinetModuleNode, CabinetNode } from '@pascal-app/core/schema'
+import { CabinetModuleNode, CabinetNode, WallNode } from '@pascal-app/core/schema'
 import { apiGraphSchema } from './graph-schema'
 
 function buildGraph(nodes: Record<string, unknown>, rootNodeIds: string[] = []) {
@@ -166,6 +166,28 @@ test('still rejects invalid builtin nodes', () => {
   const graph = buildGraph({
     wall_bad: { object: 'node', id: 'wall_a1b2c3d4e5f6g7h8', type: 'wall' },
   })
+
+  expect(apiGraphSchema.safeParse(graph).success).toBe(false)
+})
+
+test('migrates legacy wall assemblies before validation and persists canonical layers', () => {
+  const wall = WallNode.parse({ id: 'wall_legacygraph', start: [0, 0], end: [4, 0] })
+  const assembly = { framing: { kind: 'wood', depth: 0.14 } }
+  const graph = buildGraph({ [wall.id]: { ...wall, assembly } }, [wall.id])
+
+  const result = apiGraphSchema.safeParse(graph)
+
+  expect(result.success).toBe(true)
+  expect((result.data?.nodes[wall.id] as WallNode).assembly).toEqual({
+    face: 'exterior',
+    layers: [{ id: 'framing', role: 'structure', thickness: 0.14, core: true, material: 'wood' }],
+  })
+  expect(graph.nodes[wall.id]).toEqual({ ...wall, assembly })
+})
+
+test('reports malformed legacy wall assemblies as validation issues', () => {
+  const wall = WallNode.parse({ id: 'wall_malformedgraph', start: [0, 0], end: [4, 0] })
+  const graph = buildGraph({ [wall.id]: { ...wall, assembly: { framing: null } } })
 
   expect(apiGraphSchema.safeParse(graph).success).toBe(false)
 })

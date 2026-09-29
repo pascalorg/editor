@@ -137,6 +137,62 @@ describe('WS5 → F2 wall assembly migration', () => {
     })
     expect(wallAssemblyToLegacy(generic)).toBeNull()
   })
+
+  test('the inspector refuses canonical-looking stacks that would change on write', () => {
+    const partition = wallAssemblyFromLegacy({
+      framing: { kind: 'wood', depth: 0.0889 },
+      interior: { finish: 'drywall', thickness: 0.0127 },
+    })
+    const brick = wallAssemblyFromLegacy({
+      exterior: { finish: 'brick', thickness: 0.13 },
+      framing: { kind: 'wood', depth: 0.1397 },
+    })
+    const stacks = [
+      { ...partition, layers: partition.layers.filter((layer) => layer.id !== 'interior-back') },
+      {
+        ...partition,
+        layers: partition.layers.map((layer) => ({
+          ...layer,
+          id:
+            layer.id === 'interior'
+              ? 'interior-back'
+              : layer.id === 'interior-back'
+                ? 'interior'
+                : layer.id,
+        })),
+      },
+      {
+        ...partition,
+        layers: partition.layers.map((layer) =>
+          layer.core ? { ...layer, material: 'concrete' } : layer,
+        ),
+      },
+      {
+        ...brick,
+        layers: brick.layers
+          .filter((layer) => layer.role !== 'air')
+          .map((layer) => (layer.role === 'finish' ? { ...layer, thickness: 0.13 } : layer)),
+      },
+      {
+        ...brick,
+        layers: brick.layers.map((layer) =>
+          layer.role === 'air' ? { ...layer, material: 'ventilated' } : layer,
+        ),
+      },
+    ]
+    for (const stack of stacks) {
+      expect(Assembly.safeParse(stack).success).toBe(true)
+      expect(wallAssemblyToLegacy(stack)).toBeNull()
+    }
+  })
+
+  test('malformed legacy candidates remain available for normal validation without throwing', () => {
+    for (const assembly of [{ framing: null }, { framing: [] }, { framing: { kind: 'wood' } }]) {
+      const nodes = { wall_invalid: { type: 'wall', assembly } }
+      expect(() => migrateLegacyWallAssemblies(nodes)).not.toThrow()
+      expect(migrateLegacyWallAssemblies(nodes)).toEqual({ changed: false, nodes })
+    }
+  })
 })
 
 describe('the scene loader migrates stored WS5 walls', () => {

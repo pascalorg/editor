@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { WallNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../../bridge/scene-bridge'
 import { registerSaveScene } from './save-scene'
 import {
@@ -141,6 +142,25 @@ describe('save_scene', () => {
       arguments: { name: 'Evil', includeCurrentScene: false, graph },
     })
     expect(result.isError).toBe(true)
+  })
+
+  test('migrates a provided legacy wall assembly before validating and saving it', async () => {
+    const wall = WallNode.parse({ id: 'wall_legacysave', start: [0, 0], end: [4, 0] })
+    const assembly = { framing: { kind: 'wood', depth: 0.14 } }
+    const graph = { nodes: { [wall.id]: { ...wall, assembly } }, rootNodeIds: [wall.id] }
+    const result = await client.callTool({
+      name: 'save_scene',
+      arguments: { name: 'Legacy wall', includeCurrentScene: false, graph },
+    })
+
+    expect(result.isError).toBeFalsy()
+    const payload = parseToolText(result.content as StoredTextContent[])
+    const saved = await store.load(payload.id as string)
+    expect((saved?.graph.nodes[wall.id] as WallNode).assembly).toEqual({
+      face: 'exterior',
+      layers: [{ id: 'framing', role: 'structure', thickness: 0.14, core: true, material: 'wood' }],
+    })
+    expect(graph.nodes[wall.id]).toEqual({ ...wall, assembly })
   })
 
   test('errors when includeCurrentScene is false and no graph is provided', async () => {

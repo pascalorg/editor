@@ -45,7 +45,7 @@
 
 import type { WallNode } from '../../schema'
 import type { Assembly, AssemblyLayer } from '../../schema/assembly'
-import type { WallAssembly } from '../../schema/nodes/wall'
+import { WallAssembly } from '../../schema/nodes/wall'
 import { DEFAULT_WALL_THICKNESS } from './wall-footprint'
 import { type Point2D, pointToKey, type WallMiterData } from './wall-mitering'
 
@@ -170,7 +170,7 @@ const LEGACY_LAYER_IDS: Partial<Record<AssemblyLayer['role'], readonly string[]>
 export function isLegacyWallAssembly(value: unknown): value is WallAssembly {
   if (value === null || typeof value !== 'object') return false
   const record = value as Record<string, unknown>
-  return !Array.isArray(record.layers) && typeof record.framing === 'object'
+  return !Array.isArray(record.layers) && WallAssembly.safeParse(value).success
 }
 
 /**
@@ -301,6 +301,22 @@ export function wallAssemblyToLegacy(assembly: Assembly): WallAssembly | null {
       lining?.material === outerLining.material && lining?.thickness === outerLining.thickness
     if (!same || !isLegacyPartition(legacy)) return null
   }
+  if (!WallAssembly.safeParse(legacy).success) return null
+  // A familiar role sequence can still gain a partition lining, split brick
+  // differently or rename a layer when edited through the WS5 controls.
+  const roundTrip = wallAssemblyFromLegacy(legacy)
+  if (roundTrip.layers.length !== assembly.layers.length) return null
+  const sameLayers = assembly.layers.every((layer, index) => {
+    const restored = roundTrip.layers[index]!
+    return (
+      restored.id === layer.id &&
+      restored.role === layer.role &&
+      restored.core === layer.core &&
+      restored.material === layer.material &&
+      Math.abs(restored.thickness - layer.thickness) < 1e-12
+    )
+  })
+  if (!sameLayers) return null
   return legacy
 }
 
