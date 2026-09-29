@@ -48,6 +48,8 @@ const sceneHistoryDrafts = new Map<AnyNodeId, SceneHistoryDraft>()
 
 type NodeMap = Record<AnyNodeId, AnyNode>
 
+const faceHostFields = ['roofSegmentId', 'roofFace', 'blockFaceId']
+
 const childIdsOf = (node: AnyNode | undefined): AnyNodeId[] =>
   node && 'children' in node && Array.isArray(node.children) ? (node.children as AnyNodeId[]) : []
 const attachmentsOf = (node: AnyNode | undefined): Record<string, unknown> | undefined =>
@@ -394,8 +396,10 @@ export function withDraftsRestored(before: NodeMap, after: NodeMap): NodeMap | n
       if (held.length === 0) continue
       result ??= { ...after }
       const restored = { ...jumped } as Record<string, unknown>
+      const lostParent = live.parentId && !result[live.parentId as AnyNodeId]
       for (const key of held) {
-        if (key === 'parentId' && values[key] && !result[values[key] as AnyNodeId]) continue
+        // A missing host's binding must not replace the jumped-to parent's valid binding.
+        if (lostParent && (key === 'parentId' || faceHostFields.includes(key))) continue
         const heldKeys = heldEntries.get(key)?.heldKeys
         if (heldKeys) {
           const metadata = { ...(restored[key] as Record<string, unknown>) }
@@ -438,7 +442,11 @@ export function withDraftsRestored(before: NodeMap, after: NodeMap): NodeMap | n
       visited.add(parentId)
       parentId = before[parentId]?.parentId as AnyNodeId | undefined
     }
-    if (parentId !== live.parentId) result[id] = { ...live, parentId: parentId ?? null }
+    if (parentId !== live.parentId) {
+      const restored = { ...live, parentId: parentId ?? null } as Record<string, unknown>
+      for (const key of faceHostFields) delete restored[key]
+      result[id] = restored as AnyNode
+    }
     const previousParentId = after[id]?.parentId as AnyNodeId | undefined
     const beforeParent = parentId ? before[parentId] : undefined
     placeChild(

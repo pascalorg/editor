@@ -3,6 +3,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   applySceneSnapshot,
+  BlockNode,
   CeilingNode,
   clearSceneHistory,
   emitter,
@@ -14,6 +15,8 @@ import {
   nodeRegistry,
   nodeType,
   objectId,
+  RoofNode,
+  RoofSegmentNode,
   registerNode,
   type SceneCommit,
   ShelfNode,
@@ -187,6 +190,141 @@ async function mountStagedMove(
   })
   return node.id
 }
+
+describe('carried face-host history fallback', () => {
+  const fields = (host: BlockNode | RoofSegmentNode, alternate = false): Partial<ItemNode> =>
+    host.type === 'roof-segment'
+      ? { roofSegmentId: host.id, roofFace: alternate ? 'back' : 'front' }
+      : { blockFaceId: alternate ? 'f-top' : 'f-front' }
+  const makeHost = (kind: 'roof' | 'block', parentId: AnyNodeId) =>
+    kind === 'roof' ? RoofSegmentNode.parse({ parentId }) : BlockNode.parse({ parentId })
+  const makeParent = (kind: 'roof' | 'block'): AnyNodeId => {
+    if (kind === 'block') return LEVEL_ID
+    const roof = RoofNode.parse({ parentId: LEVEL_ID })
+    useScene.getState().createNode(roof, LEVEL_ID)
+    return roof.id
+  }
+  const adopt = (node: ItemNode) => {
+    let draft!: DraftNodeHandle
+    function Harness() {
+      draft = useDraftNode()
+      return null
+    }
+    renderToString(<Harness />)
+    draft.adopt(node)
+    return draft
+  }
+
+  for (const kind of ['roof', 'block'] as const) {
+    for (const fresh of [false, true]) {
+      test(`undoing a ${kind} host clears its carried binding before cancellation (fresh=${fresh})`, () => {
+        const parentId = makeParent(kind)
+        clearSceneHistory()
+        const host = makeHost(kind, parentId)
+        const carried = fresh
+          ? ItemNode.parse({
+              parentId: host.id,
+              asset: item.asset,
+              metadata: { isNew: true },
+              ...fields(host),
+            })
+          : (useScene.getState().nodes[ITEM_ID] as ItemNode)
+        let draft = fresh ? null : adopt(carried)
+        useScene.getState().createNode(host, parentId)
+        if (fresh) {
+          useScene.getState().createNode(carried, host.id)
+          draft = adopt(carried)
+        } else {
+          draft!.updateSurface({ parentId: host.id, position: [0.5, 0, 0], ...fields(host) }, null)
+        }
+        expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+        useScene.temporal.getState().undo()
+        const fallback = fresh ? parentId : LEVEL_ID
+        const assertFallback = () => {
+          const restored = useScene.getState().nodes[carried.id] as ItemNode
+          expect(restored.parentId).toBe(fallback)
+          expect(useScene.getState().nodes[fallback]!.children).toContain(carried.id)
+          expect(restored.roofSegmentId).toBeUndefined()
+          expect(restored.roofFace).toBeUndefined()
+          expect(restored.blockFaceId).toBeUndefined()
+        }
+        expect(useScene.getState().nodes[host.id]).toBeUndefined()
+        assertFallback()
+        expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+        expect(useScene.temporal.getState().futureStates).toHaveLength(1)
+        useScene.temporal.getState().redo()
+        expect(useScene.getState().nodes[host.id]).toBeDefined()
+        assertFallback()
+        useScene.temporal.getState().undo()
+        draft!.destroy()
+        assertFallback()
+        expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+        expect(getSceneHistoryPauseDepth()).toBe(0)
+      })
+    }
+
+    test(`undoing a new ${kind} host preserves the adopted item's surviving host binding`, () => {
+      const parentId = makeParent(kind)
+      const original = makeHost(kind, parentId)
+      const target = makeHost(kind, parentId)
+      useScene.getState().createNode(original, parentId)
+      useScene.getState().updateNode(ITEM_ID, { parentId: original.id, ...fields(original) })
+      clearSceneHistory()
+      const draft = adopt(useScene.getState().nodes[ITEM_ID] as ItemNode)
+      useScene.getState().createNode(target, parentId)
+      draft.updateSurface(
+        { parentId: target.id, position: [0.5, 0, 0], ...fields(target, true) },
+        null,
+      )
+      useScene.temporal.getState().undo()
+      expect(useScene.getState().nodes[target.id]).toBeUndefined()
+      expect(useScene.getState().nodes[ITEM_ID]).toMatchObject({
+        parentId: original.id,
+        ...fields(original),
+      })
+      expect(useScene.getState().nodes[original.id]!.children).toContain(ITEM_ID)
+      draft.destroy()
+      expect(useScene.getState().nodes[ITEM_ID]).toMatchObject({
+        parentId: original.id,
+        ...fields(original),
+      })
+      expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+    })
+
+    test(`a fresh carry keeps a valid foreign ${kind} binding when its first host is undone`, () => {
+      const parentId = makeParent(kind)
+      const surviving = makeHost(kind, parentId)
+      useScene.getState().createNode(surviving, parentId)
+      clearSceneHistory()
+      const removed = makeHost(kind, parentId)
+      useScene.getState().createNode(removed, parentId)
+      const carried = ItemNode.parse({
+        parentId: removed.id,
+        asset: item.asset,
+        metadata: { isNew: true },
+        ...fields(removed),
+      })
+      useScene.getState().createNode(carried, removed.id)
+      const draft = adopt(carried)
+      useScene
+        .getState()
+        .updateNode(carried.id, { parentId: surviving.id, ...fields(surviving, true) })
+      useScene.temporal.getState().undo()
+      const assertBinding = () => {
+        expect(useScene.getState().nodes[removed.id]).toBeUndefined()
+        expect(useScene.getState().nodes[carried.id]).toMatchObject({
+          parentId: surviving.id,
+          ...fields(surviving, true),
+        })
+        expect(useScene.getState().nodes[surviving.id]!.children).toContain(carried.id)
+      }
+      assertBinding()
+      draft.destroy()
+      assertBinding()
+      expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+    })
+  }
+})
 
 describe('registered staged move history', () => {
   test('deleting the mover cancels held writes on surviving affected nodes', async () => {
