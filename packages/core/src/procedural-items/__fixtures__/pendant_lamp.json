@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "name": "Pendant lamp",
+  "description": "A suspended shade with one warm emitter.",
+  "parameters": [
+    {
+      "id": "drop",
+      "label": "Drop",
+      "default": 1,
+      "min": 0.8,
+      "max": 1.2,
+      "step": 0.05,
+      "unit": "m"
+    }
+  ],
+  "slots": [
+    { "id": "shade", "label": "Shade", "color": "#d8c4a4" },
+    { "id": "bulb", "label": "Bulb", "color": "#fff1cf" }
+  ],
+  "surfaces": [
+    { "id": "top", "label": "Ceiling mount", "position": [0, "drop", 0], "size": [0.16, 0.16] }
+  ],
+  "mounting": { "attachTo": "ceiling", "reference": "top" },
+  "parts": [
+    {
+      "id": "stem",
+      "label": "Stem",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "cord",
+          "primitive": "cylinder",
+          "slot": "shade",
+          "size": [0.02, "drop", 0.02],
+          "position": [0, { "op": "div", "args": ["drop", 2] }, 0]
+        }
+      ]
+    },
+    {
+      "id": "bulb",
+      "label": "Bulb",
+      "count": 1,
+      "light": {
+        "position": [0, 0.12, 0],
+        "color": "#ffdfad",
+        "intensity": 2,
+        "distance": 4,
+        "emissiveSlot": "bulb"
+      },
+      "shapes": [
+        {
+          "id": "glass",
+          "primitive": "ellipsoid",
+          "slot": "bulb",
+          "size": [0.12, 0.18, 0.12],
+          "position": [0, 0.12, 0]
+        }
+      ]
+    }
+  ],
+  "constraints": []
+}

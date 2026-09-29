@@ -6,6 +6,7 @@ import {
   type HandleDescriptor,
   ItemNode,
   LevelNode,
+  useInteractive,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -17,6 +18,7 @@ import {
   radiatorRecipe,
 } from '@pascal-app/core/procedural-items'
 import { Euler, Vector3 } from 'three'
+import cabinetJson from '../../../core/src/procedural-items/__fixtures__/cabinet_two_doors_drawer.json'
 import {
   resolveLinearHandlePosition,
   resolveLinearHandleRotation,
@@ -61,6 +63,30 @@ const recipe = parseRecipe({
     },
   ],
   constraints: [],
+})
+
+test('E toggles all procedural parts through transient interactive state', () => {
+  const node = ProceduralItemNode.parse({ recipe: parseRecipe(cabinetJson) })
+  const action = proceduralItemDefinition.keyboardActions!.e!
+  expect(action.appliesTo(node)).toBe(true)
+  action.run(node)
+  expect(useInteractive.getState().procedural[node.id]?.parts).toEqual({
+    doors: true,
+    drawer: true,
+  })
+  useInteractive.getState().toggleProceduralPart(node.id, 'doors')
+  expect(useInteractive.getState().procedural[node.id]?.parts).toEqual({
+    doors: false,
+    drawer: true,
+  })
+  action.run(node)
+  expect(useInteractive.getState().procedural[node.id]?.parts).toEqual({
+    doors: false,
+    drawer: false,
+  })
+  expect(node).not.toHaveProperty('motion')
+  useInteractive.getState().removeProcedural(node.id)
+  expect(useInteractive.getState().procedural[node.id]).toBeUndefined()
 })
 
 for (const size of [0.12, 2.4]) {

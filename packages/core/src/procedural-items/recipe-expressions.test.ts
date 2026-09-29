@@ -21,6 +21,8 @@ describe('bounded recipe arithmetic', () => {
     ['abs', -1.5, 1.5],
     ['abs', 1.5, 1.5],
     ['abs', -0, 0],
+    ['sin', Math.PI / 2, 1],
+    ['cos', Math.PI, -1],
   ] as const)('%s(%s) = %s', (op, value, expected) => {
     const recipe = parseRecipe(withExpression({ op, args: [value] }))
     expect(evaluateRecipe(recipe).shapes[0]!.position[0]).toBe(expected)
@@ -51,6 +53,8 @@ describe('bounded recipe arithmetic', () => {
       'ceil',
       'round',
       'abs',
+      'sin',
+      'cos',
       'mod',
       'add',
       'sub',
@@ -62,7 +66,7 @@ describe('bounded recipe arithmetic', () => {
       for (const count of [0, 1, 2, 3, 8, 9]) {
         const recipe = structuredClone(gridTable)
         recipe.parts[0]!.count = { op, args: Array(count).fill(1) } as never
-        const valid = ['floor', 'ceil', 'round', 'abs'].includes(op)
+        const valid = ['floor', 'ceil', 'round', 'abs', 'sin', 'cos'].includes(op)
           ? count === 1
           : op === 'mod'
             ? count === 2
@@ -73,7 +77,7 @@ describe('bounded recipe arithmetic', () => {
   })
 
   test('new operators still reject invalid intermediate results', () => {
-    for (const op of ['floor', 'ceil', 'round', 'abs'] as const) {
+    for (const op of ['floor', 'ceil', 'round', 'abs', 'sin', 'cos'] as const) {
       for (const args of [
         [1, 0],
         [1000, 0.001],
@@ -93,7 +97,22 @@ describe('bounded recipe arithmetic', () => {
       args: [
         {
           op: 'ceil',
-          args: [{ op: 'round', args: [{ op: 'abs', args: [{ op: 'mod', args: [0, 2] }] }] }],
+          args: [
+            {
+              op: 'round',
+              args: [
+                {
+                  op: 'abs',
+                  args: [
+                    {
+                      op: 'sin',
+                      args: [{ op: 'cos', args: [{ op: 'mod', args: [Math.PI / 2, 2] }] }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
         },
       ],
     }
