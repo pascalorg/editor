@@ -1,9 +1,19 @@
 // @ts-expect-error — bun:test is provided by the Bun runtime.
 import { describe, expect, test } from 'bun:test'
-import { DoorNode, sceneRegistry, useScene, WallNode } from '@pascal-app/core'
+import {
+  calculateLevelMiters,
+  DoorNode,
+  getWallBodyCenterOffset,
+  getWallCurveFrameAt,
+  getWallCurveLength,
+  sceneRegistry,
+  useScene,
+  WallNode,
+} from '@pascal-app/core'
 import { act, create } from '@react-three/test-renderer'
 import { createElement } from 'react'
 import * as THREE from 'three'
+import { generateExtrudedWall } from '../wall/wall-system'
 import { buildDoorPreviewMesh, DoorSystem } from './door-system'
 
 const WALL_THICKNESS = 0.24
@@ -132,6 +142,132 @@ describe('offset door opening hit proxy', () => {
       f.dispose()
     }
   })
+
+  for (const curveOffset of [0, -0.9, 0.9]) {
+    for (const justification of ['a', 'b'] as const) {
+      for (const flipped of [false, true]) {
+        test(`live proxy follows the wall body: curve ${curveOffset}, side ${justification}, flipped ${flipped}`, async () => {
+          const wall = WallNode.parse({
+            id: 'wall_proxy_curve',
+            parentId: 'level_proxy_curve',
+            start: [3, -2],
+            end: [9, 1],
+            height: 3.5,
+            thickness: WALL_THICKNESS,
+            curveOffset,
+            justification,
+          })
+          const station = 0.23
+          const node = DoorNode.parse({
+            id: 'door_proxy_curve',
+            parentId: wall.id,
+            wallId: wall.id,
+            position: [getWallCurveLength(wall) * station, 1.4, 0],
+            rotation: [0, flipped ? Math.PI : 0, 0],
+            openingKind: 'opening',
+            width: 0.9,
+            height: 2.8,
+          })
+          const previous = useScene.getState()
+          const oldDoorMesh = sceneRegistry.nodes.get(node.id)
+          const oldWallMesh = sceneRegistry.nodes.get(wall.id)
+          const collision = new THREE.Mesh(
+            generateExtrudedWall(wall, [], calculateLevelMiters([wall])),
+            new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }),
+          )
+          collision.position.set(wall.start[0], 0, wall.start[1])
+          collision.rotation.y = -Math.atan2(
+            wall.end[1] - wall.start[1],
+            wall.end[0] - wall.start[0],
+          )
+          collision.visible = false
+          const door = new THREE.Mesh()
+          collision.add(door)
+          const world = new THREE.Group()
+          world.position.set(-4, 2, 7)
+          world.rotation.y = -Math.PI / 5
+          world.add(collision)
+          sceneRegistry.nodes.set(node.id, door)
+          sceneRegistry.nodes.set(wall.id, collision)
+          useScene.setState({
+            nodes: { ...previous.nodes, [wall.id]: wall, [node.id]: node },
+            dirtyNodes: new Set([node.id]),
+          })
+          let renderer: Awaited<ReturnType<typeof create>> | undefined
+          try {
+            renderer = await create(createElement(DoorSystem))
+            const frame = getWallCurveFrameAt(wall, station)
+            const bodyOffset = getWallBodyCenterOffset(wall)
+            world.updateMatrixWorld(true)
+            const center = world.localToWorld(
+              new THREE.Vector3(
+                frame.point.x + frame.normal.x * bodyOffset,
+                node.position[1],
+                frame.point.y + frame.normal.y * bodyOffset,
+              ),
+            )
+            const normal = new THREE.Vector3(frame.normal.x, 0, frame.normal.y).transformDirection(
+              world.matrixWorld,
+            )
+            const tangent = new THREE.Vector3(
+              frame.tangent.x,
+              0,
+              frame.tangent.y,
+            ).transformDirection(world.matrixWorld)
+            let proxy: THREE.Object3D | undefined
+            for (const offset of [-0.36, 0.31, 0]) {
+              await act(async () => {
+                useScene.setState({
+                  nodes: {
+                    ...useScene.getState().nodes,
+                    [node.id]: { ...node, position: [node.position[0], node.position[1], offset] },
+                  },
+                  dirtyNodes: new Set([node.id]),
+                })
+              })
+              await renderer.advanceFrames(1, 1 / 60)
+              world.updateMatrixWorld(true)
+              proxy ??= door.getObjectByName('cutout')!
+              expect(door.getObjectByName('cutout')).toBe(proxy)
+              for (const side of [-1, 1]) {
+                for (const along of [-0.4, 0, 0.4]) {
+                  const raycaster = new THREE.Raycaster(
+                    center
+                      .clone()
+                      .addScaledVector(normal, side * 2)
+                      .addScaledVector(tangent, along),
+                    normal.clone().multiplyScalar(-side),
+                  )
+                  const hits = raycaster.intersectObject(collision, true)
+                  expect(hits.some((hit) => hit.object === collision)).toBe(true)
+                  expect(ownsDoorHit(hits[0]!.object, door)).toBe(true)
+                }
+              }
+              expect(proxy.getWorldPosition(new THREE.Vector3()).distanceTo(center)).toBeLessThan(
+                1e-8,
+              )
+              expect(
+                door
+                  .getWorldPosition(new THREE.Vector3())
+                  .distanceTo(center.clone().addScaledVector(normal, offset)),
+              ).toBeLessThan(1e-8)
+            }
+          } finally {
+            await renderer?.unmount()
+            useScene.setState({ nodes: previous.nodes, dirtyNodes: previous.dirtyNodes })
+            if (oldDoorMesh) sceneRegistry.nodes.set(node.id, oldDoorMesh)
+            else sceneRegistry.nodes.delete(node.id)
+            if (oldWallMesh) sceneRegistry.nodes.set(wall.id, oldWallMesh)
+            else sceneRegistry.nodes.delete(wall.id)
+            collision.traverse((object) => {
+              if (object instanceof THREE.Mesh) object.geometry.dispose()
+            })
+            collision.material.dispose()
+          }
+        })
+      }
+    }
+  }
 
   test('reuses and recenters the live proxy through offset changes and host removal', async () => {
     const f = fixture({ position: [2.5, 1.4, -0.36], rotation: [0, Math.PI, 0] }, Math.PI / 3)

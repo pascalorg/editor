@@ -2713,10 +2713,15 @@ function syncDoorCutout(node: DoorNode, mesh: THREE.Mesh) {
     mesh.add(cutout)
   }
   cutout.geometry.dispose()
-  const { depth, normalOffset } = resolveOpeningCutoutProxy(node)
-  // The visual frame can sit off the wall plane; the hit target must still clear
-  // both wall faces. Express the host-normal correction in the rotated door frame.
-  cutout.position.set(0, 0, -normalOffset).applyQuaternion(mesh.quaternion.clone().invert())
+  const { depth, center } = resolveOpeningCutoutProxy(node)
+  cutout.position.set(0, 0, 0)
+  if (center) {
+    // Curved and justified walls place openings off the reference line. Remove
+    // only the visual plane offset, preserving the frame's resolved floor datum.
+    cutout.position
+      .set(center[0] - mesh.position.x, 0, center[2] - mesh.position.z)
+      .applyQuaternion(mesh.quaternion.clone().invert())
+  }
   const openingShape = getEffectiveOpeningShape(node)
   if (openingShape === 'arch') {
     cutout.geometry = new THREE.ExtrudeGeometry(
@@ -2760,14 +2765,25 @@ function syncDoorCutout(node: DoorNode, mesh: THREE.Mesh) {
 // the proxy stays proud of both wall faces (front/back selection) without the
 // old 1m depth that blanketed the floor. Falls back to the default thickness
 // when the parent wall isn't a resolvable wall node.
-function resolveOpeningCutoutProxy(node: DoorNode): { depth: number; normalOffset: number } {
+function resolveOpeningCutoutProxy(node: DoorNode): {
+  depth: number
+  center: [number, number, number] | undefined
+} {
   const parentId = node.parentId
-  const parent = parentId ? useScene.getState().nodes[parentId as AnyNodeId] : undefined
-  const wallThickness =
-    parent?.type === 'wall' ? getWallThickness(parent as WallNode) : DEFAULT_WALL_THICKNESS
+  const nodes = useScene.getState().nodes
+  const parent = parentId ? nodes[parentId as AnyNodeId] : undefined
+  const wall = parent?.type === 'wall' ? getEffectiveNode(parent as WallNode) : undefined
+  const wallThickness = wall ? getWallThickness(wall) : DEFAULT_WALL_THICKNESS
   return {
     depth: getOpeningCutoutProxyDepth(wallThickness),
-    normalOffset: parent?.type === 'wall' ? node.position[2] : 0,
+    center:
+      wall && !node.roofSegmentId && node.position[2] !== 0
+        ? getOpeningWallPlacement(
+            wall,
+            { ...node, position: [node.position[0], node.position[1], 0] },
+            nodes,
+          ).position
+        : undefined,
   }
 }
 
