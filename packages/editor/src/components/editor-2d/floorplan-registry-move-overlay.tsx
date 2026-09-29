@@ -150,25 +150,18 @@ export function FloorplanRegistryMoveOverlay() {
         }) => FloorplanMoveTargetSession
       )({ node: movingNode, nodes: sceneNodes, sceneApi })
 
-      // Capture snapshots of every affected node BEFORE the first apply
-      // so the single-undo dance has a clean baseline to revert to.
-      const snapshots = session.affectedIds
-        .map((id) => sceneNodes[id])
-        .filter((n): n is AnyNode => !!n)
-        .map((n) => snapshotNode(n))
+      const initialAffectedIds = session.affectedIds.filter((id) => sceneNodes[id])
 
       // History is paused only around this overlay's own writes (`ownWrite`): every affected
       // node is a carried draft (core's history-drafts), so writes others make mid-move record
       // as their own steps and space detection reconciles them. The drop writes through a
       // session keyed by the moving node, which the 3D mover shares in split view.
-      const draftEnds = session.affectedIds
-        .filter((id) => sceneNodes[id])
-        .map((id) =>
-          beginSceneHistoryDraft(
-            id,
-            isFreshPlacementMetadata(sceneNodes[id]!.metadata) ? null : sceneNodes[id]!,
-          ),
-        )
+      const draftEnds = initialAffectedIds.map((id) =>
+        beginSceneHistoryDraft(
+          id,
+          isFreshPlacementMetadata(sceneNodes[id]!.metadata) ? null : sceneNodes[id]!,
+        ),
+      )
       let historyPaused = true
       const endDrafts = () => {
         for (const end of draftEnds) end()
@@ -319,6 +312,7 @@ export function FloorplanRegistryMoveOverlay() {
 
       const commitFinalStateOrRevert = () => {
         if (!useScene.getState().nodes[movingNode.id]) {
+          revertOwnWrites()
           endDrafts()
           clearLivePreviews()
           return
@@ -393,48 +387,42 @@ export function FloorplanRegistryMoveOverlay() {
             endTransientMarkers()
           })
           sfxEmitter.emit('sfx:item-place')
-          useViewer.getState().setSelection({ selectedIds: snapshots.map((s) => s.id) })
+          useViewer.getState().setSelection({ selectedIds: initialAffectedIds })
           return
         }
 
         const sceneState = useScene.getState().nodes
         const finalUpdates: Array<{ id: AnyNodeId; data: Record<string, unknown> }> = []
-        // Only the fields this move wrote: anything others wrote meanwhile is already recorded.
-        const heldKeys = new Map(
-          sceneHistoryDraftRevertUpdates(session.affectedIds).map((update) => [
-            update.id,
-            new Set(Object.keys(update.data)),
-          ]),
-        )
-        for (const snap of snapshots) {
-          const current = sceneState[snap.id]
+        // Reapply everything the revert removes, including newly introduced fields and
+        // attachment entries held on hosts outside affectedIds. Foreign writes stay recorded.
+        for (const update of sceneHistoryDraftRevertUpdates(session.affectedIds)) {
+          const current = sceneState[update.id]
           if (!current) continue
           const data: Record<string, unknown> = {}
           let changed = false
-          for (const [key, before] of Object.entries(snap.data)) {
-            if (!heldKeys.get(snap.id)?.has(key)) continue
+          for (const [key, before] of Object.entries(update.data)) {
             const after = (current as unknown as Record<string, unknown>)[key]
             if (!deepEqual(before, after)) {
               data[key] = Array.isArray(after) ? [...(after as unknown[])] : after
               changed = true
             }
           }
-          if (changed) finalUpdates.push({ id: snap.id, data })
+          if (changed) finalUpdates.push({ id: update.id, data })
         }
 
-        for (const snap of snapshots) {
-          const current = sceneState[snap.id]
+        for (const id of initialAffectedIds) {
+          const current = sceneState[id]
           if (!current || !isFreshPlacementMetadata((current as { metadata?: unknown }).metadata)) {
             continue
           }
-          const existing = finalUpdates.find((update) => update.id === snap.id)
+          const existing = finalUpdates.find((update) => update.id === id)
           const metadata = stripPlacementMetadataFlags((current as { metadata?: unknown }).metadata)
           if (existing) {
             existing.data.metadata = metadata
             existing.data.visible = true
           } else {
             finalUpdates.push({
-              id: snap.id,
+              id,
               data: { metadata, visible: true },
             })
           }
@@ -456,7 +444,7 @@ export function FloorplanRegistryMoveOverlay() {
           // selection-gated affordances (slab/ceiling boundary editor,
           // etc.) would unmount during the drag; restoring it here
           // brings them back at the new position.
-          useViewer.getState().setSelection({ selectedIds: snapshots.map((s) => s.id) })
+          useViewer.getState().setSelection({ selectedIds: initialAffectedIds })
         } else {
           revertOwnWrites()
           endDrafts()
@@ -570,7 +558,7 @@ export function FloorplanRegistryMoveOverlay() {
         // position.
         clearLivePreviews()
         // Restore selection cleared by the action menu's Move click.
-        useViewer.getState().setSelection({ selectedIds: snapshots.map((s) => s.id) })
+        useViewer.getState().setSelection({ selectedIds: initialAffectedIds })
         setMovingNode(null)
       }
 
@@ -1018,22 +1006,6 @@ export function FloorplanRegistryMoveOverlay() {
   }, [isActive, movingNode, setMovingNode, setMovingNodeOrigin, hasMoveTarget, def])
 
   return null
-}
-
-// ── Snapshot helpers (shared shape with floorplan-registry-layer) ───
-//
-// Kept inline here to avoid a circular dependency through a shared
-// utility module. If a third call site shows up, extract.
-
-type NodeSnapshot = { id: AnyNodeId; data: Record<string, unknown> }
-
-function snapshotNode(node: AnyNode): NodeSnapshot {
-  const data: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(node)) {
-    if (key === 'id' || key === 'type' || key === 'object') continue
-    data[key] = Array.isArray(value) ? [...(value as unknown[])] : value
-  }
-  return { id: node.id, data }
 }
 
 function deepEqual(a: unknown, b: unknown): boolean {

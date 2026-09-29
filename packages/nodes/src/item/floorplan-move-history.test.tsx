@@ -5,11 +5,14 @@ import {
   applySceneSnapshot,
   CeilingNode,
   clearSceneHistory,
+  type FloorplanMoveTargetSession,
   getSceneHistoryPauseDepth,
   ItemNode,
   initSpaceDetectionSync,
   LevelNode,
   nodeRegistry,
+  nodeType,
+  objectId,
   registerNode,
   type SceneCommit,
   SlabNode,
@@ -19,15 +22,18 @@ import {
   WallNode,
   ZoneNode,
 } from '@pascal-app/core'
+import { ProceduralItemNode } from '@pascal-app/core/procedural-items'
 import { useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
 import { renderToString } from 'react-dom/server'
+import gridTableRecipe from '../../../core/src/procedural-items/__fixtures__/grid-table.json'
 import { FloorplanRegistryMoveOverlay } from '../../../editor/src/components/editor-2d/floorplan-registry-move-overlay'
 import {
   type DraftNodeHandle,
   useDraftNode,
 } from '../../../editor/src/components/tools/item/use-draft-node'
+import { updateSurfaceNode } from '../../../editor/src/lib/surface-attachment'
 import { ceilingDefinition } from '../ceiling/definition'
 import { slabDefinition } from '../slab/definition'
 import { zoneDefinition } from '../zone/definition'
@@ -155,6 +161,128 @@ async function pointer(type: 'pointermove' | 'pointerup', x: number, z: number) 
     )
   })
 }
+
+async function mountStagedMove(
+  name: string,
+  session: (id: AnyNodeId) => FloorplanMoveTargetSession,
+) {
+  const kind = `test:staged-${name}`
+  const schema = ItemNode.extend({ id: objectId(kind), type: nodeType(kind) })
+  registerNode({
+    ...itemDefinition,
+    kind,
+    schema,
+    floorplanMoveTarget: ({ node }: { node: AnyNode }) => session(node.id),
+  } as never)
+  const node = schema.parse({ ...item, id: `${kind}_root`, type: kind }) as AnyNode
+  useScene.getState().createNode(node, LEVEL_ID)
+  clearSceneHistory()
+  useEditor.getState().setMovingNode(useScene.getState().nodes[node.id]!)
+  await act(async () => {
+    renderer = await create(<FloorplanRegistryMoveOverlay />)
+  })
+  return node.id
+}
+
+describe('registered staged move history', () => {
+  test('deleting the mover cancels held writes on surviving affected nodes', async () => {
+    const id = await mountStagedMove('deleted-root', (id) => ({
+      affectedIds: [id, ITEM_ID],
+      apply: ({ planPoint: [x, z] }) =>
+        useScene.getState().updateNodes([
+          { id, data: { position: [x, 0, z] } },
+          { id: ITEM_ID, data: { position: [x + 1, 0, z] } },
+        ]),
+      canCommit: () => true,
+    }))
+    await pointer('pointermove', 3, 3)
+    expect(useScene.getState().nodes[ITEM_ID]).toMatchObject({ position: [4, 0, 3] })
+    expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+    useScene.getState().updateNode(ITEM_ID, { name: 'Renamed by another editor' })
+    useScene.getState().deleteNode(id)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(2)
+
+    await pointer('pointerup', 3, 3)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(useScene.getState().nodes[id]).toBeUndefined()
+    expect(useScene.getState().nodes[LEVEL_ID]!.children).not.toContain(id)
+    expect(useScene.getState().nodes[ITEM_ID]).toMatchObject({
+      position: item.position,
+      name: 'Renamed by another editor',
+    })
+    expect(useScene.temporal.getState().pastStates).toHaveLength(2)
+    expect(getSceneHistoryPauseDepth()).toBe(0)
+    useScene.temporal.getState().undo()
+    expect(useScene.getState().nodes[id]).toMatchObject({ position: item.position })
+    expect(useScene.getState().nodes[ITEM_ID]).toMatchObject({
+      position: item.position,
+      name: 'Renamed by another editor',
+    })
+  })
+
+  test('drop preserves a held field absent from the original node through undo and redo', async () => {
+    const slab = nodesOfType('slab')[0]!
+    const id = await mountStagedMove('added-field', (id) => ({
+      affectedIds: [id],
+      apply: ({ planPoint: [x, z] }) =>
+        useScene.getState().updateNode(id, { position: [x, 0, z], supportSlabId: slab.id }),
+      canCommit: () => true,
+    }))
+    expect(useScene.getState().nodes[id]).not.toHaveProperty('supportSlabId')
+    await pointer('pointermove', 3, 3)
+    expect(useScene.getState().nodes[id]).toMatchObject({ supportSlabId: slab.id })
+    expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+    await pointer('pointerup', 3, 3)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(useScene.getState().nodes[id]).toMatchObject({
+      position: [3, 0, 3],
+      supportSlabId: slab.id,
+    })
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    useScene.temporal.getState().undo()
+    expect(useScene.getState().nodes[id]).toMatchObject({ position: item.position })
+    expect((useScene.getState().nodes[id] as ItemNode).supportSlabId).toBeUndefined()
+    useScene.temporal.getState().redo()
+    expect(useScene.getState().nodes[id]).toMatchObject({
+      position: [3, 0, 3],
+      supportSlabId: slab.id,
+    })
+  })
+
+  test('drop preserves a named attachment held on a host outside affectedIds', async () => {
+    const host = ProceduralItemNode.parse({
+      parentId: LEVEL_ID,
+      recipe: {
+        ...gridTableRecipe,
+        surfaces: [{ id: 'top', label: 'Top', position: [0, 0.74, 0], size: [0.45, 0.6] }],
+      },
+    })
+    useScene.getState().createNode(host, LEVEL_ID)
+    const id = await mountStagedMove('host-attachment', (id) => ({
+      affectedIds: [id],
+      apply: () => updateSurfaceNode(id, { parentId: host.id, position: [0, 0, 0] }, 'top'),
+      canCommit: () => true,
+    }))
+    await pointer('pointermove', 3, 3)
+    expect((useScene.getState().nodes[host.id] as ProceduralItemNode).attachments[id]).toBe('top')
+    expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+    useScene.getState().updateNode(host.id, { name: 'Renamed host' })
+    await pointer('pointerup', 3, 3)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(useScene.getState().nodes[id]).toMatchObject({ parentId: host.id })
+    expect((useScene.getState().nodes[host.id] as ProceduralItemNode).attachments[id]).toBe('top')
+    expect(useScene.temporal.getState().pastStates).toHaveLength(2)
+    useScene.temporal.getState().undo()
+    expect(useScene.getState().nodes[id]).toMatchObject({ parentId: LEVEL_ID })
+    expect(
+      (useScene.getState().nodes[host.id] as ProceduralItemNode).attachments[id],
+    ).toBeUndefined()
+    expect(useScene.getState().nodes[host.id]).toMatchObject({ name: 'Renamed host' })
+    useScene.temporal.getState().redo()
+    expect(useScene.getState().nodes[id]).toMatchObject({ parentId: host.id })
+    expect((useScene.getState().nodes[host.id] as ProceduralItemNode).attachments[id]).toBe('top')
+  })
+})
 
 describe('2D item move history', () => {
   test('a refused fresh drop retains both the mover and its history draft', async () => {
