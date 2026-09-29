@@ -6,10 +6,12 @@ test('deferred click cleanup removes the listener from its original window', () 
   const target = new EventTarget()
   const remove = spyOn(target, 'removeEventListener')
   let cleanup: (() => void) | undefined
-  const timer = spyOn(globalThis, 'setTimeout').mockImplementation((callback) => {
+  const timer = spyOn(globalThis, 'setTimeout').mockImplementation(((
+    callback: Parameters<typeof setTimeout>[0],
+  ) => {
     cleanup = callback as () => void
     return undefined as unknown as ReturnType<typeof setTimeout>
-  })
+  }) as typeof setTimeout)
   try {
     Object.defineProperty(globalThis, 'window', { configurable: true, value: target })
     swallowNextClick()
