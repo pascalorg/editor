@@ -82,13 +82,14 @@ type UseHandleDragArgs =
     }
 
 export function swallowNextClick() {
+  const target = window
   const swallow = (clickEvent: Event) => {
     clickEvent.stopPropagation()
     clickEvent.preventDefault()
   }
-  window.addEventListener('click', swallow, { capture: true, once: true })
+  target.addEventListener('click', swallow, { capture: true, once: true })
   setTimeout(() => {
-    window.removeEventListener('click', swallow, { capture: true })
+    target.removeEventListener('click', swallow, { capture: true })
   }, 300)
 }
 
