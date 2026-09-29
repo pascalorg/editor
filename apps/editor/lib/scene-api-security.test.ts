@@ -80,13 +80,15 @@ test('gracefully handles malformed forwarded headers', async () => {
   const response = guardSceneApiRequest(request)
   expect(response?.status).toBe(503)
 })
-test('does not let a spoofed configured origin bypass a token', async () => {
+test('strictly requires token when configured, even for genuine same-origin proxy requests', async () => {
   process.env.PASCAL_SCENE_API_TOKEN = 'secret'
   process.env.PASCAL_SCENE_API_ORIGINS = 'https://app.example'
-  const request = new Request('https://editor.example/api/scenes', {
+  const request = new Request('http://127.0.0.1:3000/api/scenes', {
     headers: {
-      host: 'editor.example',
+      host: '127.0.0.1:3000',
       origin: 'https://app.example',
+      'x-forwarded-host': 'app.example',
+      'x-forwarded-proto': 'https',
     },
   })
 

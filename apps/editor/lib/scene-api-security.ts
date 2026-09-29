@@ -64,17 +64,15 @@ function validateOrigin(request: Request): NextResponse | null {
 
 function validateAuth(request: Request): NextResponse | null {
   const token = process.env.PASCAL_SCENE_API_TOKEN
-  const origin = request.headers.get('origin')
-
-  // Only a browser request whose origin matches the trusted proxy's
-  // forwarded request origin may use same-origin authentication. The Origin
-  // header alone is spoofable and must never bypass an API token.
-  if (origin && isSameOrigin(request, origin) && configuredOrigins().has(normalizeOrigin(new URL(origin)))) {
-    return null
-  }
-
   if (!token) {
+    const origin = request.headers.get('origin')
+    // When no API token is configured, allow local loopback callers as well as
+    // same-origin browser requests routed through a reverse proxy whose origin
+    // is explicitly listed in PASCAL_SCENE_API_ORIGINS.
     if (isLoopbackRequest(request)) return null
+    if (origin && isSameOrigin(request, origin) && configuredOrigins().has(normalizeOrigin(new URL(origin)))) {
+      return null
+    }
     return sceneApiJson(request, { error: 'scene_api_token_required' }, { status: 503 })
   }
 
