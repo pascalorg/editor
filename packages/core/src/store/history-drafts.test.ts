@@ -69,6 +69,36 @@ const wallStart = () => (node(wallId) as WallNode).start
 const levelChildren = () => (node(levelId) as LevelNode).children
 
 describe('scene history drafts', () => {
+  test.each([
+    true,
+    false,
+  ])('a co-holder never re-records carry metadata after restoration (metadata present=%s)', (present) => {
+    if (!present) {
+      const { metadata: _metadata, ...withoutMetadata } = node(itemId)!
+      useScene.setState({
+        nodes: { ...useScene.getState().nodes, [itemId]: withoutMetadata },
+      } as never)
+      clearSceneHistory()
+    }
+    const endMover = beginSceneHistoryDraft(itemId, node(itemId)!)
+    const endOverlay = beginSceneHistoryDraft(itemId, node(itemId)!)
+    runSceneHistoryDraftWrite(() =>
+      useScene.getState().updateNode(itemId, { metadata: { isTransient: true } }),
+    )
+    useScene.getState().updateNode(itemId, { metadata: { isTransient: true, tag: 'agent' } })
+    runSceneHistoryDraftWrite(() =>
+      useScene.getState().updateNodes(sceneHistoryDraftRevertUpdates([itemId]) as never),
+    )
+    endMover()
+    useScene.getState().updateNode(wallId, { name: 'Foreign wall edit' })
+    expect(useScene.temporal.getState().pastStates.at(-1)!.nodes![itemId]?.metadata).toEqual({
+      tag: 'agent',
+    })
+    endOverlay()
+    useScene.temporal.getState().undo()
+    expect(node(itemId)?.metadata).toEqual({ tag: 'agent' })
+  })
+
   test('foreign metadata remains undoable while carry metadata stays out of history', () => {
     const end = beginSceneHistoryDraft(itemId, node(itemId)!)
     runSceneHistoryDraftWrite(() =>

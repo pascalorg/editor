@@ -245,8 +245,9 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     let linkedNodes = useScene.getState().nodes
     const refreshLinkedWalls = () => {
       const nodes = useScene.getState().nodes
-      if (isNew || nodes === linkedNodes) return
+      if (nodes === linkedNodes) return
       linkedNodes = nodes
+      if (isNew) return
       linkedOriginalsRef.current = getLinkedWallSnapshots({
         wallId: nodeId,
         wallParentId: node.parentId ?? null,

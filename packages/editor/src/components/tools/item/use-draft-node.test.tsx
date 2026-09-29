@@ -12,6 +12,7 @@ import {
   pauseSceneHistory,
   resumeSceneHistory,
   useScene,
+  WallNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { renderToString } from 'react-dom/server'
@@ -80,6 +81,64 @@ beforeEach(() => {
 })
 
 describe('useDraftNode block face commit', () => {
+  test('a drop on an undone host waits for a new valid placement target', () => {
+    const item = ItemNode.parse({
+      parentId: LEVEL_ID,
+      position: [1, 0, 1],
+      asset: { id: 'box', name: 'Box', category: 'decor', thumbnail: '', src: '/box.glb' },
+    })
+    useScene.getState().createNode(item, LEVEL_ID as AnyNodeId)
+    useScene.temporal.getState().clear()
+    const wall = WallNode.parse({ parentId: LEVEL_ID, start: [10, 10], end: [14, 10] })
+    useScene.getState().createNode(wall, LEVEL_ID as AnyNodeId)
+    const draft = draftNode!
+    draft.adopt(item)
+    draft.updateSurface({ parentId: wall.id, position: [2, 1, 0] }, null)
+    useScene.temporal.getState().undo()
+    expect(useScene.getState().nodes[wall.id]).toBeUndefined()
+    expect(draft.commit({ parentId: wall.id, position: [2, 1, 0] })).toBeNull()
+    expect(draft.current).not.toBeNull()
+    expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+    expect(draft.commit({ parentId: LEVEL_ID, position: [12, 1, 10] })).toBe(item.id)
+    expect(useScene.getState().nodes[item.id]).toMatchObject({
+      parentId: LEVEL_ID,
+      position: [12, 1, 10],
+    })
+  })
+
+  test('a subscriber failure after create cannot strand a transient node', () => {
+    let createdId: AnyNodeId | undefined
+    const unsubscribe = useScene.subscribe((state) => {
+      if (createdId) return
+      const created = Object.values(state.nodes).find(
+        (node) => node.type === 'item' && node.metadata?.isTransient,
+      )
+      if (!created) return
+      createdId = created.id
+      throw new Error('subscriber rejected published draft')
+    })
+    try {
+      expect(() =>
+        draftNode!.create(new Vector3(), {
+          id: 'box',
+          name: 'Box',
+          category: 'decor',
+          thumbnail: '',
+          src: '/box.glb',
+        }),
+      ).toThrow('subscriber rejected published draft')
+    } finally {
+      unsubscribe()
+    }
+    expect(createdId).toBeDefined()
+    expect(useScene.getState().nodes[createdId!]).toBeUndefined()
+    expect((useScene.getState().nodes[LEVEL_ID as AnyNodeId] as LevelNode).children).not.toContain(
+      createdId!,
+    )
+    expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+    draftNode!.destroy()
+  })
+
   test('a failed create releases its history draft so host snapshots still load', () => {
     const createNode = spyOn(useScene.getState(), 'createNode').mockImplementation(() => {
       throw new Error('create rejected')

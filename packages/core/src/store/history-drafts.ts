@@ -173,7 +173,10 @@ export function noteSceneHistoryDraftWrite(before: NodeMap, after: NodeMap): voi
     if (previous === next) continue
     for (const key of new Set([...Object.keys(previous), ...Object.keys(next)])) {
       if (sameValue(previous[key], next[key])) continue
-      const held = draft.owned.get(key)
+      const held =
+        key === 'metadata'
+          ? heldFields(draft, before[id]!).find(([name]) => name === key)?.[1]
+          : draft.owned.get(key)
       const baseline =
         held && sameValue(held.carried, previous[key])
           ? held.baseline
@@ -198,7 +201,9 @@ function heldFields(draft: SceneHistoryDraft, live: AnyNode): Array<[string, Own
     if (key !== 'metadata') return []
     const current = values[key] as Record<string, unknown> | undefined
     const carried = field.carried as Record<string, unknown> | undefined
-    const baseline = field.baseline.value as Record<string, unknown> | undefined
+    const baseline = (field.baseline.present ? field.baseline.value : {}) as
+      | Record<string, unknown>
+      | undefined
     if (!(current && carried && baseline)) return []
     // Metadata writers commonly spread the current record before adding their own key.
     // Retain ownership of unchanged carry keys without masking that writer's additions.

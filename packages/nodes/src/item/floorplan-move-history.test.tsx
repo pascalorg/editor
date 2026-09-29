@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
+  applySceneSnapshot,
   CeilingNode,
   clearSceneHistory,
   getSceneHistoryPauseDepth,
@@ -156,6 +157,38 @@ async function pointer(type: 'pointermove' | 'pointerup', x: number, z: number) 
 }
 
 describe('2D item move history', () => {
+  test('a refused fresh drop retains both the mover and its history draft', async () => {
+    useScene.getState().updateNode(ITEM_ID, { metadata: { isNew: true } })
+    clearSceneHistory()
+    useEditor.getState().setMovingNode(useScene.getState().nodes[ITEM_ID]!)
+    await act(async () => {
+      renderer = await create(<FloorplanRegistryMoveOverlay />)
+    })
+    await pointer('pointermove', 1.5, 1.5)
+    await pointer('pointermove', 3, 3)
+    useScene.setState({ readOnly: true })
+    await pointer('pointerup', 3, 3)
+    expect(useEditor.getState().movingNodeOrigin).toBeNull()
+    useScene.setState({ readOnly: false })
+    const state = useScene.getState()
+    expect(() =>
+      applySceneSnapshot(
+        {
+          nodes: state.nodes,
+          rootNodeIds: state.rootNodeIds,
+          collections: state.collections,
+          materials: state.materials,
+          installedPlugins: state.installedPlugins,
+        },
+        { origin: 'host' },
+      ),
+    ).toThrow()
+    await pointer('pointerup', 3, 3)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    expect(useEditor.getState().movingNodeOrigin).toBe('2d')
+  })
+
   test.each([
     [SlabNode, slabDefinition],
     [CeilingNode, ceilingDefinition],

@@ -318,6 +318,11 @@ export function FloorplanRegistryMoveOverlay() {
       }
 
       const commitFinalStateOrRevert = () => {
+        if (!useScene.getState().nodes[movingNode.id]) {
+          endDrafts()
+          clearLivePreviews()
+          return
+        }
         // Some registered sessions stage their final polygon from canCommit.
         const commitValid = ownWrite(() => session.canCommit())
         const freshPlacement = isFreshPlacementMetadata(
@@ -337,7 +342,7 @@ export function FloorplanRegistryMoveOverlay() {
 
         // Keep ordinary teardown order. Validated replacements can refuse, so they
         // claim teardown only after success, before clearing the moving node.
-        if (!atomicPreview) setMovingNodeOrigin('2d')
+        if (!freshPlacement) setMovingNodeOrigin('2d')
 
         // Sessions with a `commit` hook own their atomic write (e.g.
         // wall move emits creates + deletes + updates via the junction
@@ -365,8 +370,8 @@ export function FloorplanRegistryMoveOverlay() {
               )
             : null
           if (!committedId) return false
+          setMovingNodeOrigin('2d')
           if (atomicPreview) {
-            setMovingNodeOrigin('2d')
             for (const id of session.affectedIds) {
               useLiveTransforms.getState().clear(id)
               useLiveNodeOverrides.getState().clear(id)

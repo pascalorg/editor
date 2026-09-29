@@ -168,7 +168,13 @@ export function useDraftNode(): DraftNodeHandle {
       try {
         pausedDraftWrite(() => useScene.getState().createNode(node, currentLevelId))
       } catch (error) {
-        releaseHistoryDraft(endHistoryDraftRef)
+        try {
+          if (useScene.getState().nodes[node.id]) {
+            pausedDraftWrite(() => useScene.getState().deleteNode(node.id))
+          }
+        } finally {
+          releaseHistoryDraft(endHistoryDraftRef)
+        }
         throw error
       }
       usePlacementPreview
@@ -241,6 +247,10 @@ export function useDraftNode(): DraftNodeHandle {
     ): string | null => {
       const draft = draftRef.current
       if (!draft) return null
+      if (finalUpdate.parentId && !useScene.getState().nodes[finalUpdate.parentId as AnyNodeId]) {
+        options?.onReject?.('no-surface')
+        return null
+      }
 
       const surfaceId = surfaceAttachmentId(useScene.getState().nodes[draft.id] ?? draft)
       const stored = surfaceFramePose(
