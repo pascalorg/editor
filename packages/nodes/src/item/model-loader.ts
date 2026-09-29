@@ -4,6 +4,12 @@ import { type GLTF, GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 const ITEM_ASSET_UNAVAILABLE_KEY = 'pascalItemAssetUnavailable'
 const DEFAULT_RETRY_DELAYS_MS = [1_000, 3_000] as const
 const itemLoadGenerations = new Map<string, number>()
+const pendingItemModelLoads = new WeakMap<LoadingManager, number>()
+
+/** Active item transactions on this host manager, including their retry waits. */
+export function getPendingItemModelLoadCount(manager = DefaultLoadingManager): number {
+  return pendingItemModelLoads.get(manager) ?? 0
+}
 
 type HttpErrorLike = Error & {
   response?: { status?: number }
@@ -87,11 +93,18 @@ export class ItemGLTFLoader extends GLTFLoader {
     let finished = false
 
     const wasCancelled = () => (itemLoadGenerations.get(url) ?? 0) !== generation
+    const end = () => {
+      pendingItemModelLoads.set(
+        this.hostManager,
+        getPendingItemModelLoadCount(this.hostManager) - 1,
+      )
+      this.hostManager.itemEnd(url)
+    }
 
     const cancel = () => {
       if (finished) return
       finished = true
-      this.hostManager.itemEnd(url)
+      end()
     }
 
     const complete = (gltf: GLTF) => {
@@ -104,7 +117,7 @@ export class ItemGLTFLoader extends GLTFLoader {
       try {
         onLoad(gltf)
       } finally {
-        this.hostManager.itemEnd(url)
+        end()
       }
     }
 
@@ -119,8 +132,11 @@ export class ItemGLTFLoader extends GLTFLoader {
         if (onError) onError(error)
         else console.error(error)
       } finally {
-        this.hostManager.itemError(url)
-        this.hostManager.itemEnd(url)
+        try {
+          this.hostManager.itemError(url)
+        } finally {
+          end()
+        }
       }
     }
 
@@ -129,28 +145,41 @@ export class ItemGLTFLoader extends GLTFLoader {
         cancel()
         return
       }
-      super.load(url, complete, onProgress, (error) => {
-        if (wasCancelled()) {
-          cancel()
-          return
-        }
-        const kind = classifyItemModelLoadFailure(error)
-        if (kind === 'unexpected') {
-          fail(error)
-          return
-        }
-        if (kind === 'unavailable' || retryCount >= this.retryDelaysMs.length) {
-          complete(createUnavailableItemGltf(url, error))
-          return
-        }
+      try {
+        super.load(url, complete, onProgress, (error) => {
+          if (finished) return
+          if (wasCancelled()) {
+            cancel()
+            return
+          }
+          const kind = classifyItemModelLoadFailure(error)
+          if (kind === 'unexpected') {
+            fail(error)
+            return
+          }
+          if (kind === 'unavailable' || retryCount >= this.retryDelaysMs.length) {
+            complete(createUnavailableItemGltf(url, error))
+            return
+          }
 
-        const delay = this.retryDelaysMs[retryCount] ?? 0
-        retryCount += 1
-        setTimeout(attempt, delay)
-      })
+          const delay = this.retryDelaysMs[retryCount] ?? 0
+          retryCount += 1
+          setTimeout(attempt, delay)
+        })
+      } catch (error) {
+        if (finished) throw error
+        fail(error)
+      }
     }
 
-    this.hostManager.itemStart(url)
+    pendingItemModelLoads.set(this.hostManager, getPendingItemModelLoadCount(this.hostManager) + 1)
+    try {
+      this.hostManager.itemStart(url)
+    } catch (error) {
+      finished = true
+      end()
+      throw error
+    }
     attempt()
   }
 }
