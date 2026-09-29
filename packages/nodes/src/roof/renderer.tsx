@@ -9,7 +9,13 @@ import {
   useRegistry,
   useScene,
 } from '@pascal-app/core'
-import { getRoofMaterialArray, NodeRenderer, useNodeEvents, useViewer } from '@pascal-app/viewer'
+import {
+  getRoofMaterialArray,
+  levelWallCladdingRef,
+  NodeRenderer,
+  useNodeEvents,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
@@ -84,9 +90,11 @@ export const RoofRenderer = ({ node: rawNode }: { node: RoofNode }) => {
   // 4 groups map 1:1 to the roof's 4-material array (see getRoofMaterialArray).
   const placeholderGeometry = useMemo(() => createPlaceholderGeometry(4), [])
 
+  // The gable band is clad like the walls below it (their assemblies).
+  const wallCladdingRef = useScene((state) => levelWallCladdingRef(state.nodes, node))
   const customMaterial = useMemo(
-    () => getRoofMaterialArray(node, shading, textures, colorPreset, sceneTheme),
-    [node, shading, textures, colorPreset, sceneTheme],
+    () => getRoofMaterialArray(node, shading, textures, colorPreset, sceneTheme, wallCladdingRef),
+    [node, shading, textures, colorPreset, sceneTheme, wallCladdingRef],
   )
 
   const material = debugColors

@@ -2,7 +2,7 @@ import { itemOverlapsPolygon } from '../../lib/item-polygon-overlap'
 import { type PlanAabb, planFootprintAABB, planFootprintCorners } from '../../lib/plan-footprint'
 import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
 import { levelBaseElevationAt } from '../../lib/terrain-support'
-import { nodeRegistry } from '../../registry'
+import { floorPlacedCollides, nodeRegistry } from '../../registry'
 import type { AnyNode, AnyNodeId, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
 import { getScaledDimensions, isLowProfileItemSurface } from '../../schema'
 import { getWallPlaneTop } from '../../services/storey'
@@ -592,7 +592,7 @@ export class SpatialGridManager {
     for (const node of Object.values(nodes)) {
       if (ignoreSet.has(node.id)) continue
       const floorPlaced = nodeRegistry.get(node.type)?.capabilities?.floorPlaced
-      if (!floorPlaced?.collides) continue
+      if (!floorPlaced || !floorPlacedCollides(floorPlaced, node)) continue
       if (floorPlaced.applies && !floorPlaced.applies(node)) continue
       // Low-profile item surfaces (rugs, mats) are stack-on targets, not
       // obstacles — keep the long-standing item-only exemption.

@@ -1,12 +1,14 @@
 import type { ComponentType } from 'react'
 import type { AnimationClip, BufferGeometry, Object3D, Ray } from 'three'
 import type { ZodObject, z } from 'zod'
+import type { CutIntent } from '../schema/cut'
 import type { MaterialSchema, MaterialTarget } from '../schema/material'
 import type { AssetInput, ItemNode } from '../schema/nodes/item'
 import type { MeasurementFeatureReference, MeasurementPoint } from '../schema/nodes/measurement'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId, Discipline, DisplayFamily, PartKey } from '../schema/types'
 import type { SurfaceProvider } from '../services/surface-hosting'
+import type { InteractiveState } from '../store/use-interactive'
 import type { HandleList } from './handles'
 import type { CloneNodesIntoOptions, Subtree } from './subtree'
 
@@ -755,6 +757,12 @@ export type FloorplanGeometry =
       text: string
       /** Optional override for the line/text colour. Defaults to the palette accent. */
       stroke?: string
+      /**
+       * WS3: the text is an author override rather than the measured value.
+       * Set when a typed dimension could not drive geometry and fell back to
+       * `textOverride`; the 2D renderer draws a small "override" badge.
+       */
+      overridden?: boolean
     }
   | {
       kind: 'dimension-string'
@@ -1661,7 +1669,18 @@ export type Capabilities = {
   scalable?: ScalableConfig
   hostable?: HostableConfig
   surfacePlacement?: 'floor-only'
+  /**
+   * @deprecated Ignored: nothing has ever read it. Declare {@link Capabilities.cuts}
+   * instead. Kept so plugin API v1 definitions still compile; removed in v2.
+   */
   cuttable?: CuttableConfig
+  /**
+   * What the node cuts out of its host(s), as cut intents (F5b). Frozen
+   * contract, not read yet: DT-03b (walls, ceilings, slabs) and RL-02 (roofs)
+   * consume it beside today's paths (`collectCutoutBrushes`,
+   * `roofAccessory.buildCut`, `ceilingCut`), which it later replaces.
+   */
+  cuts?: (node: AnyNode, ctx: CutsContext) => CutIntent[]
   snappable?: SnappableConfig
   surfaces?: SurfacesConfig
   faceHost?: FaceHostCapability<any>
@@ -1678,6 +1697,13 @@ export type Capabilities = {
   selectionHighlight?: boolean
   interactive?: boolean
   floorPlaced?: FloorPlacedConfig
+  /**
+   * Opt this kind into node draw batching. Its opaque single-material meshes
+   * join its level's shared `BatchedMesh` containers while the node is
+   * static; the sources stay mounted, pickable and exported. See
+   * `BatchableConfig`.
+   */
+  batchable?: BatchableConfig
   /**
    * Plan footprint this kind exposes to the alignment-anchor pool when it
    * isn't `floorPlaced` and isn't a structural primitive the bridge handles
@@ -1722,6 +1748,12 @@ export type Capabilities = {
    * in the editor.
    */
   sceneAction?: SceneActionCapability
+  /**
+   * Moving parts people run: Play/Stop in the action menu, E, and the
+   * walkthrough read this instead of a kind name, so any kind (plugins
+   * included) gets them by declaring it. See `MechanismCapability`.
+   */
+  mechanism?: MechanismCapability
   /**
    * Declares the kind's paintable slots — the `{ slotId, label, default }`
    * contract shared by items (scanned from the GLB) and procedural kinds
@@ -1779,6 +1811,12 @@ export type Capabilities = {
    * `hostRefFields`. Existing references are declared before any new one.
    */
   refs?: readonly ReferenceDeclaration[]
+  /**
+   * The kind stores assembly layers in an optional `assembly` field (F2) and
+   * says how they stack. Frozen contract, not read yet: WL-02 compiles wall
+   * layers and RL-01 roof layers from it.
+   */
+  assembly?: AssemblyHostConfig
   /**
    * Whether instances of this kind can be saved as a reusable preset
    * (unified `items` catalog, `kind='preset'`). The editor itself does
@@ -1924,6 +1962,23 @@ export type SceneActionCapability<T = unknown> = {
   activate: (node: AnyNode, target: T, sceneApi: SceneApi) => boolean
 }
 
+/**
+ * A kind's moving parts (a fan's spin, doors, an articulated asset's joints).
+ * Operating state is transient: `set` writes `useInteractive`, never the node,
+ * so running a mechanism never enters undo, autosave or collaboration. A kind
+ * with a single switch keeps it in `useInteractive.mechanisms`.
+ */
+export type MechanismCapability = {
+  /** Whether this node has anything to run. */
+  has: (node: AnyNode) => boolean
+  /** Whether any of its mechanisms is running. */
+  isOn: (node: AnyNode, state: InteractiveState) => boolean
+  /** Starts or stops all of them. */
+  set: (node: AnyNode, on: boolean) => void
+  /** Walkthrough wording: `open` parts open and close; `run` parts (the default) turn on and off. */
+  verb?: 'open' | 'run'
+}
+
 export type NodeQuickActionIcon = 'add-left' | 'add-right' | 'add' | 'convert'
 
 export type NodeQuickActionResult = {
@@ -2060,9 +2115,42 @@ export type RoofAccessoryConfig = {
  */
 export type CeilingCutCapability = {
   buildCeilingHole: (node: AnyNode) => Array<[number, number]> | null
+  /**
+   * Holes this kind cuts in `ceiling` that no child of it reports, such as a node
+   * whose live move preview sits on this ceiling while it still belongs to another.
+   */
+  holesFor?: (ceiling: AnyNode) => Array<Array<[number, number]>>
+}
+
+/**
+ * The face body layers stack inward from: a wall's `front` face (+n), a
+ * slab's `top`, a ceiling's `underside`, or a roof's `covering`-top plane
+ * (every facet's `facet:<id>:covering` patch).
+ */
+export type AssemblyReference = 'front' | 'top' | 'underside' | 'covering'
+
+/**
+ * Host declaration for assembly layers (F2, `editor-fidelity-foundations.md`
+ * §2.3). Each host keeps its own datum rule instead of one offset equation.
+ */
+export type AssemblyHostConfig = {
+  reference: AssemblyReference
+  /** The axis layer thickness runs along: the reference face's normal, or vertical. */
+  measure: 'normal' | 'vertical'
+  /**
+   * The body thickness the host stores (a wall's `thickness`), which must
+   * equal the sum of its layers: the stack sets it and writers re-derive it.
+   * `null` when the host stores none (roofs).
+   */
+  body: (node: AnyNode) => number | null
+  /** Accepts `assembly.backing` (slabs, ceilings). Absent = refused. */
+  backing?: boolean
 }
 
 export type CapabilityCtx = { node: AnyNode }
+
+/** What a cut publisher may read: the scene, to find its host and the host's frame. */
+export type CutsContext = { nodes: Readonly<Record<AnyNodeId, AnyNode>> }
 
 export type MovableConfig = {
   axes: ReadonlyArray<'x' | 'y' | 'z'>
@@ -2256,6 +2344,7 @@ export type HostableConfig = {
   override?: (ctx: CapabilityCtx) => HostableConfig | null
 }
 
+/** @deprecated See {@link Capabilities.cuttable}. */
 export type CuttableConfig = {
   hostKinds: readonly string[]
   override?: (ctx: CapabilityCtx) => CuttableConfig | null
@@ -2371,9 +2460,40 @@ export type FloorPlacedConfig = {
    * placement/move refuses to overlap another colliding footprint (red ghost,
    * Alt to force). Solid furniture-like kinds (item / shelf / column) set this;
    * markers and port-mated kinds (spawn / MEP / stair) leave it off so they
-   * neither block nor get blocked. Default off.
+   * neither block nor get blocked. Default off. A predicate decides per node
+   * (a block collides only while it rests on the floor); read it through
+   * `floorPlacedCollides`.
    */
-  collides?: boolean
+  collides?: boolean | ((node: AnyNode) => boolean)
+}
+
+/**
+ * How the node batch treats a kind (`capabilities.batchable`). Selection,
+ * hover, live transforms, live overrides and slot paint previews release any
+ * batched node; these fields declare what is specific to the kind.
+ */
+export type BatchableConfig = {
+  /**
+   * Where the node's batches live. `'level'`: the node is a direct child of a
+   * level; hosted or mounted nodes draw themselves, because their host moves
+   * them without a signal the batch sees. `'wall'`: the node is hosted by a
+   * visible wall that is a level child; the wall's edits, tint and gestures
+   * release it.
+   */
+  scope: 'level' | 'wall'
+  /** Transient states in which the node draws its own meshes, such as a running animation. */
+  excluded?: (node: AnyNode) => boolean
+  /** Whether the node's mounted object is final, read from its registered root's `userData`. */
+  settled?: (userData: Readonly<Record<string, unknown>>) => boolean
+  /**
+   * Allocation key for the node's `meshIndex`-th batchable mesh when the kind
+   * rebuilds its geometry in place (slabs, ceilings): a rebuild then replaces
+   * its packed slot instead of adding one. Without it, meshes that share a
+   * geometry share one allocation.
+   */
+  batchKey?: (node: AnyNode, meshIndex: number) => string
+  /** Joins wait until wall rebuilds and wall drags on the node's level have settled. */
+  waitsForWalls?: boolean
 }
 
 /**
@@ -2687,7 +2807,14 @@ export type ParamField<N> =
       visibleIf?: (n: N) => boolean
       customEditor?: ComponentType
     }
-  | { key: keyof N; label?: string; kind: 'boolean'; visibleIf?: (n: N) => boolean }
+  | {
+      key: keyof N
+      label?: string
+      kind: 'boolean'
+      /** Shown when the node omits the key (an optional field that reads as on). */
+      default?: boolean
+      visibleIf?: (n: N) => boolean
+    }
   | {
       key: keyof N
       label?: string

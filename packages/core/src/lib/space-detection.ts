@@ -1716,7 +1716,7 @@ export function planAutoZonesForLevel(
     if (!sameStringSet(zone.boundaryWallIds, matchingSpace.wallIds)) {
       data.boundaryWallIds = matchingSpace.wallIds
     }
-    if (!sameTuplePolygon(zone.polygon, matchingSpace.polygon)) {
+    if (!sameTuplePolygonRotation(zone.polygon, matchingSpace.polygon)) {
       data.polygon = matchingSpace.polygon
     }
     if (Object.keys(data).length > 0) update.push({ id: zone.id, data })
