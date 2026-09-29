@@ -4,6 +4,7 @@ import {
   applySceneSnapshot,
   BlockNode,
   BuildingNode,
+  beginSceneHistoryPauseSession,
   getBlockFaceFrame,
   getSceneHistoryPauseDepth,
   ItemNode,
@@ -81,6 +82,113 @@ beforeEach(() => {
 })
 
 describe('useDraftNode block face commit', () => {
+  test.each(
+    (['parse', 'write'] as const).flatMap((failure) =>
+      (['retry', 'cancel', 'foreign move then cancel'] as const).map((finish) => ({
+        failure,
+        finish,
+      })),
+    ),
+  )('an adopted $failure rejection retains owned history through $finish', ({
+    failure,
+    finish,
+  }) => {
+    const item = ItemNode.parse({
+      parentId: LEVEL_ID,
+      position: [1, 0, 1],
+      asset: { id: 'box', name: 'Box', category: 'decor', thumbnail: '', src: '/box.glb' },
+    })
+    useScene.getState().createNode(item, LEVEL_ID as AnyNodeId)
+    useScene.temporal.getState().clear()
+    const originalNodes = structuredClone(useScene.getState().nodes)
+    const draft = draftNode!
+    draft.adopt(item)
+    draft.updateSurface({ position: [2, 0, 2] }, null)
+    const commit = (position: ItemNode['position']) => {
+      const drop = beginSceneHistoryPauseSession(useScene, { gesture: item.id })
+      try {
+        return drop.commitStep(() => draft.commit({ parentId: LEVEL_ID, position }))
+      } finally {
+        drop.end()
+      }
+    }
+    const updateNodes = useScene.getState().updateNodes
+    try {
+      if (failure === 'write') {
+        useScene.setState({
+          updateNodes: (updates) => {
+            if (
+              useScene.temporal.getState().isTracking &&
+              updates.some(
+                (update) =>
+                  update.id === item.id &&
+                  'position' in update.data &&
+                  update.data.position?.[0] === 3,
+              )
+            ) {
+              throw new Error('Rejected tracked write before publication')
+            }
+            return updateNodes(updates)
+          },
+        })
+      }
+      expect(() => commit(failure === 'parse' ? [Number.NaN, 0, 3] : [3, 0, 3])).toThrow()
+      useScene.setState({ updateNodes })
+      expect(draft.current?.id).toBe(item.id)
+      expect(useScene.getState().nodes).toEqual(originalNodes)
+      expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+      expect(useScene.temporal.getState().isTracking).toBe(true)
+      expect(getSceneHistoryPauseDepth()).toBe(0)
+
+      draft.updateSurface({ position: [4, 0, 4] }, null)
+      useScene.getState().updateNode(item.id, { name: 'Foreign rename' })
+      expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+      expect(useScene.temporal.getState().pastStates[0]?.nodes).toEqual(originalNodes)
+      const renamedNodes = {
+        ...originalNodes,
+        [item.id]: { ...originalNodes[item.id]!, name: 'Foreign rename' },
+      }
+
+      if (finish === 'retry') {
+        expect(commit([5, 0, 5])).toBe(item.id)
+        expect(draft.current).toBeNull()
+        const committedNodes = structuredClone(useScene.getState().nodes)
+        expect(committedNodes[item.id]).toMatchObject({
+          name: 'Foreign rename',
+          position: [5, 0, 5],
+        })
+        expect(useScene.temporal.getState().pastStates).toHaveLength(2)
+        useScene.temporal.getState().undo()
+        expect(useScene.getState().nodes).toEqual(renamedNodes)
+        useScene.temporal.getState().redo()
+        expect(useScene.getState().nodes).toEqual(committedNodes)
+      } else if (finish === 'cancel') {
+        draft.destroy()
+        expect(useScene.getState().nodes).toEqual(renamedNodes)
+        expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+        useScene.temporal.getState().undo()
+        expect(useScene.getState().nodes).toEqual(originalNodes)
+        useScene.temporal.getState().redo()
+        expect(useScene.getState().nodes).toEqual(renamedNodes)
+      } else {
+        useScene.getState().updateNode(item.id, { position: [7, 0, 7] })
+        const foreignNodes = structuredClone(useScene.getState().nodes)
+        draft.destroy()
+        expect(useScene.getState().nodes).toEqual(foreignNodes)
+        expect(useScene.temporal.getState().pastStates).toHaveLength(2)
+        useScene.temporal.getState().undo()
+        expect(useScene.getState().nodes).toEqual(renamedNodes)
+        useScene.temporal.getState().redo()
+        expect(useScene.getState().nodes).toEqual(foreignNodes)
+      }
+      expect(useScene.temporal.getState().isTracking).toBe(true)
+      expect(getSceneHistoryPauseDepth()).toBe(0)
+    } finally {
+      useScene.setState({ updateNodes })
+      draft.destroy()
+    }
+  })
+
   test('a drop on an undone host waits for a new valid placement target', () => {
     const item = ItemNode.parse({
       parentId: LEVEL_ID,

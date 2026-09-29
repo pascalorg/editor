@@ -351,6 +351,7 @@ export {
   type SceneSnapshot,
   subscribeSceneCommits,
 } from './store/history-control'
+export { withSceneHistoryDraftSuspended } from './store/history-drafts'
 export { getHistoryDirtyNodeIds } from './store/history-invalidation'
 export {
   type ControlValue,
