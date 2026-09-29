@@ -9,7 +9,11 @@ import {
   useScene,
   type ZoneNode,
 } from '@pascal-app/core'
-import { evaluateRecipe, type ProceduralItemNode } from '@pascal-app/core/procedural-items'
+import {
+  evaluateRecipe,
+  operableParts,
+  type ProceduralItemNode,
+} from '@pascal-app/core/procedural-items'
 import { Html } from '@react-three/drei'
 import { createPortal, useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useState } from 'react'
@@ -44,7 +48,7 @@ export const InteractiveSystem = () => {
           (n): n is ItemNode | ProceduralItemNode =>
             (n.type === 'item' && n.asset.interactive != null) ||
             (n.type === 'procedural-item' &&
-              n.recipe.parts.some((part) => part.motion || part.light)),
+              (operableParts(n.recipe).length > 0 || n.recipe.parts.some((part) => part.light))),
         )
         .map((n) => n.id),
     ),
@@ -115,7 +119,7 @@ const ItemControlsOverlay = ({
     height = node.asset.dimensions[1]
   } else if (node?.type === 'procedural-item') {
     descriptors = proceduralControlDescriptors(
-      node.recipe.parts,
+      node.recipe,
       proceduralState,
       (partId) => togglePart(nodeId, partId),
       () => toggleLights(nodeId),

@@ -1,7 +1,9 @@
 import type { ZodObject } from 'zod'
+import type { AnyNode } from '../schema'
 import type {
   AnyNodeDefinition,
   BakePolicy,
+  FloorPlacedConfig,
   FloorplanScope,
   InspectorExtension,
   NodeRegistry,
@@ -244,6 +246,15 @@ export function getSelectableKinds(): string[] {
  */
 export function isRegistrySelectable(kind: string): boolean {
   return nodeRegistry.get(kind)?.capabilities.selectable !== undefined
+}
+
+/** Whether `node` takes part in floor-placement collision (`FloorPlacedConfig.collides`). */
+export function floorPlacedCollides(
+  floorPlaced: FloorPlacedConfig | undefined,
+  node: AnyNode,
+): boolean {
+  const collides = floorPlaced?.collides
+  return typeof collides === 'function' ? collides(node) : collides === true
 }
 
 /**

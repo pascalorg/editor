@@ -54,7 +54,8 @@ export type ExistingReference = ReferenceDeclaration & {
  * The private benchmark copy with source locations
  * (`bench/next-house/design/existing-references.json`) is generated from it.
  *
- * Not exported from the package: consumed by tests, P-03 and the generator.
+ * Not exported from the package: consumed by tests, P-03, the generator and
+ * the preset strip (`withoutSourceIdentity`, its `source` + `strip` rows).
  */
 
 type Row = Omit<ExistingReference, 'extractor' | 'remaps'> & {
@@ -483,6 +484,42 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
       note: 'Capture provenance: stable across re-capture (R9).',
     }),
   ),
+  ...(['assembly.layers[].src', 'assembly.backing[].src'] as const).map((path) =>
+    row({
+      kind: '*',
+      path,
+      ...policy('source', 'content', 'freeze', 'strip'),
+      note: 'Layer provenance (F2): a preset strips it so it never claims a source element.',
+    }),
+  ),
+  ...(['assembly.layers[].slot', 'assembly.backing[].slot'] as const).map((path) =>
+    row({
+      kind: '*',
+      path,
+      ...policy('part', 'internal', 'drop', 'keep'),
+      note: "A key into the host's own `slots`; a missing key falls back to `layer:<id>`, then the role default.",
+    }),
+  ),
+  row({
+    kind: '*',
+    path: 'assembly.presetId',
+    ...policy('asset', 'content', 'freeze', 'keep'),
+    note: 'The assembly preset a layer stack was made from.',
+  }),
+
+  // ─── Typed provenance (D5) ────────────────────────────────────────
+  row({
+    kind: '*',
+    path: 'provenance.refs[].id',
+    ...policy('source', 'content', 'freeze', 'strip'),
+    note: 'Source element the node reproduces, scoped by `ns`; stripped with its whole ref so presets never claim it. Clones keep it today (I-04 re-roles copies).',
+  }),
+  row({
+    kind: '*',
+    path: 'provenance.lineage.fromIds[]',
+    ...policy('label', 'internal', 'freeze', 'strip'),
+    note: 'Node ids this node was split, merged or copied from. History: compared, never dereferenced, kept when those nodes are deleted.',
+  }),
 ]
 
 /** Candidate paths that are not references, with the reason. `kind: '*'` matches every kind. */
@@ -505,6 +542,11 @@ export const NON_REFERENCES: readonly { kind: string; path: string; reason: stri
   { kind: 'block', path: 'topology.vertices[].id', reason: 'Defines a topology key.' },
   { kind: 'block', path: 'topology.edges[].id', reason: 'Defines a topology key.' },
   { kind: 'block', path: 'topology.faces[].id', reason: 'Defines a topology key.' },
+  ...(['assembly.layers[].id', 'assembly.backing[].id'] as const).map((path) => ({
+    kind: '*',
+    path,
+    reason: 'Defines an assembly layer key (the `#layer:<id>` address).',
+  })),
   {
     kind: 'gutter',
     path: 'outlets[].id',
@@ -518,6 +560,24 @@ export const NON_REFERENCES: readonly { kind: string; path: string; reason: stri
   },
   { kind: 'procedural-item', path: 'parameters.@key', reason: 'Recipe parameter name.' },
   { kind: 'scan', path: 'layers.@key', reason: 'Layer visibility flag name.' },
+  { kind: 'site', path: 'frontEdge', reason: "Index of the lot polygon's street-facing edge." },
+  ...[
+    'boundaries',
+    'codeBasis',
+    'elevation',
+    'flood',
+    'parcel',
+    'soils',
+    'structures',
+    'utilities',
+    'wetlands',
+    'zoning',
+  ].flatMap((section) => [
+    { kind: 'site', path: `dossier.${section}.@key`, reason: 'Pascal Map dossier fact name.' },
+    { kind: 'site', path: `dossier.${section}.*`, reason: 'Pascal Map dossier fact value.' },
+  ]),
+  { kind: 'site', path: 'dossier.sections.@key', reason: 'Pascal Map dossier section name.' },
+  { kind: 'roof-segment', path: 'fasciaHighEdge', reason: 'Flag for the shed high-edge board.' },
   ...(['measurement.points[]', 'measurement.base[]', 'anchors[]'] as const).flatMap((prefix) => [
     { kind: '*', path: `${prefix}.reference.parameters.@key`, reason: 'Feature parameter name.' },
     { kind: '*', path: `${prefix}.reference.parameters.*`, reason: 'Feature parameter value.' },
@@ -621,6 +681,10 @@ export const METADATA_REFERENCES: readonly ExistingReference[] = [
       note: 'IFC provenance written by the IFC converter.',
     }),
   ),
+  meta('sourceIds[]', {
+    ...policy('source', 'content', 'freeze', 'strip'),
+    note: 'Import provenance: the source element ids an importer recorded (the /next converter writes them); find_nodes filters on them.',
+  }),
 ]
 
 const described = (reason: string, paths: readonly string[]) =>
@@ -639,6 +703,7 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'cabinetPresetNominalWidth',
     'deferParentRebuild',
     'drawingCoordinationLocked',
+    'floor',
     'footprintApproximated',
     'generatedBy',
     'isFloorplanPreview',
@@ -652,8 +717,10 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'leanToPostSide',
     'leanToRole',
     'leanToRoofPlane',
+    'locked',
     'openingManaged',
     'placementAdjusted',
+    'porch',
     'renderPass',
     'role',
     'showTrimPlanes',
@@ -690,6 +757,20 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     ['stairId', 'elevatorId', 'source', 'metadata'],
   ),
   ...described('Print-export artifact metadata, not scene-node metadata.', ['status']),
+  ...described('Derived floorplan drawing metadata, not scene-node metadata.', [
+    'at',
+    'buildingId',
+    'levelM',
+    'side',
+    'sitePlan',
+    'textSizePt',
+  ]),
+  ...described('Site-plan facts kept on the node: values, not ids.', [
+    'flatworkDims',
+    'services',
+    'streetNames',
+    'terrainSample',
+  ]),
   ...described('Registry extension key, not scene-node metadata.', ['pascal:editor/floorplan']),
   ...described('Next.js page metadata export, not scene-node metadata.', ['title']),
 ]
