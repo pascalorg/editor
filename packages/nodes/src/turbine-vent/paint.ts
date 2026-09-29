@@ -1,6 +1,7 @@
 import type { AnyNode, MaterialSchema, TurbineVentMaterialRole } from '@pascal-app/core'
 import type { Mesh, Object3D } from 'three'
 import { buildSlotPreviewMaterial, createSlotPaintCapability } from '../shared/slot-paint'
+import { swapPreviewMaterial } from '../shared/swap-preview-material'
 
 type LegacyTurbineVent = AnyNode & { material?: MaterialSchema; materialPreset?: string }
 
@@ -19,11 +20,7 @@ export const turbineVentPaint = createSlotPaintCapability({
     ;(root as Object3D).traverse((object) => {
       const mesh = object as Mesh
       if (!mesh.isMesh || mesh.name !== targetName) return
-      const previous = mesh.material
-      mesh.material = preview
-      restores.push(() => {
-        mesh.material = previous
-      })
+      restores.push(swapPreviewMaterial(mesh, preview))
     })
     if (restores.length === 0) return null
     return () => {

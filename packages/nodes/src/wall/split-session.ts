@@ -6,6 +6,9 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import {
+  captureElementActionOrigin,
+  completeElementAction,
+  type ElementActionOrigin,
   isGridSnapActive,
   isMagneticSnapActive,
   triggerSFX,
@@ -42,6 +45,8 @@ const withPreview = (draft: Omit<WallSplitDraft, 'preview'>, wall: WallNode): Wa
 })
 
 let teardown: (() => void) | null = null
+// The room the wall was drilled from: a committed split lands back on it.
+let origin: ElementActionOrigin | null = null
 
 /**
  * A split session: the wall's `reshaping` scope (so the snapping chip and the
@@ -52,6 +57,7 @@ let teardown: (() => void) | null = null
 export function openWallSplit(wall: WallNode) {
   if (useScene.getState().readOnly) return
   closeWallSplit()
+  origin = captureElementActionOrigin([wall.id])
   useEditor.getState().setMode('select')
   useInteractionScope
     .getState()
@@ -99,6 +105,7 @@ export function openWallSplit(wall: WallNode) {
 export function closeWallSplit() {
   const stop = teardown
   teardown = null
+  origin = null
   stop?.()
   useWallSplit.getState().setDraft(null)
   useInteractionScope
@@ -152,7 +159,9 @@ export function commitWallSplit() {
   const checked = withPreview(draft, wall)
   if (!checked.preview.valid) return useWallSplit.getState().setDraft(checked)
   const plan = planWallDivisions(current.nodes, wall.id, checked.preview.distances)
+  const from = origin
   runAsSingleSceneHistoryStep(useScene, () => current.applyNodeChanges(plan.changes))
   closeWallSplit()
   triggerSFX('sfx:structure-build')
+  completeElementAction(from)
 }

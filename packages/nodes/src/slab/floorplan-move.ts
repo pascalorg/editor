@@ -15,8 +15,7 @@ export const slabFloorplanMoveTarget: FloorplanMoveTarget<SlabNode> = ({ node, n
     node,
     nodes,
     meshY: 0,
-    // A user-dragged slab is a manual edit. Clear `autoFromWalls` so the
-    // space-detection sync doesn't recompute the polygon from the wall loop
-    // and snap the slab back to its original position.
-    extraCommitData: node.autoFromWalls ? { autoFromWalls: false } : undefined,
+    // A user-dragged plate detaches from the reconciler (the shared mover
+    // commits through `detachDerivedNode`), so the wall loop no longer
+    // recomputes the polygon and snaps the slab back.
   })

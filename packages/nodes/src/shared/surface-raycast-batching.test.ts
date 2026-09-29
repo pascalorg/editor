@@ -44,11 +44,11 @@ test.each([
   }
 })
 
-test('wall paint resolves a batched face band before hover release', () => {
+test('wall paint resolves a batched trim before hover release', () => {
   const node = WallNode.parse({ id: 'wall_paint_batch', start: [0, 0], end: [1, 0] })
   const root = new Group()
   const mesh = new Mesh(new BoxGeometry(1, 1, 0.1), new MeshBasicMaterial())
-  mesh.userData.slotId = 'lowerInterior'
+  mesh.userData.slotId = 'aSkirting'
   root.add(mesh)
   root.updateMatrixWorld(true)
   sceneRegistry.nodes.set(node.id, root)
@@ -62,7 +62,7 @@ test('wall paint resolves a batched face band before hover release', () => {
         localPosition: undefined,
         ray: new Ray(new Vector3(0, 0, 2), new Vector3(0, 0, -1)),
       }),
-    ).toBe('lowerInterior')
+    ).toBe('aSkirting')
   } finally {
     sceneRegistry.nodes.delete(node.id)
     mesh.geometry.dispose()

@@ -97,8 +97,8 @@ describe('a stucco exterior wall (2×6 frame)', () => {
     close(at({})['stucco']!.back, -0.09285)
     // Rooms re-detected with the exterior on the front: the stucco follows it.
     close(at({ frontSide: 'exterior', backSide: 'interior' })['stucco']!.front, 0.09285)
-    // Undetermined sides fall back to the front face.
-    close(at({ frontSide: 'unknown', backSide: 'unknown' })['stucco']!.front, 0.09285)
+    // Undetermined sides fall back to side B, where the 3D cladding goes.
+    close(at({ frontSide: 'unknown', backSide: 'unknown' })['stucco']!.back, -0.09285)
   })
 
   test('a stored thickness that is not the layer sum is reported, and draws no bands', () => {

@@ -1,12 +1,26 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  area,
   type BuildingNode,
+  computePlateSurfacePartition,
+  FenceNode,
   type GeometryContext,
   getLevelElevations,
   getMaterialPresetByRef,
   getRenderableSlabPolygon,
+  intersection,
+  isFloorPlate,
   type LevelNode,
+  levelBaseElevationAt,
+  liftedManualSlab,
+  type MaterialSchema,
+  type PlateSurfacePartition,
+  type PlateTopCell,
+  parseFloorStepRole,
+  plateFinishKey,
+  plateLevelContext,
+  resolveFloorStepFinish,
   type SiteNode,
   type SlabNode,
   slabPolygonContextFromGeometry,
@@ -21,24 +35,22 @@ import {
   createDefaultMaterial,
   createMaterial,
   createSurfaceRoleMaterial,
+  generateFenceSlotGeometries,
   generateSlabGeometry,
   type RenderShading,
   registerMaterialCacheCleanup,
   resolveMaterialRef,
   resolveSlotDefaultMaterial,
 } from '@pascal-app/viewer'
-import {
-  BufferGeometry,
-  Float32BufferAttribute,
-  FrontSide,
-  Group,
-  type Material,
-  Mesh,
-  type Texture,
-  Vector3,
-} from 'three'
+import { type BufferGeometry, FrontSide, Group, type Material, Mesh, type Texture } from 'three'
 import { creaseCrossings } from '../site/terrain-drape'
-import { SLAB_SIDE_SLOT_DEFAULT, SLAB_TOP_SLOT_DEFAULT, type SlabSlotId } from './slots'
+import {
+  FOUNDATION_SLOT_DEFAULT,
+  SLAB_SIDE_SLOT_DEFAULT,
+  SLAB_TOP_SLOT_DEFAULT,
+  type SlabSlotId,
+} from './slots'
+import { clipPlateTerrainFill, splitPlateFaces, splitSlabFacesByFacing } from './surface-split'
 
 /**
  * Stage B builder for slab. Reuses `generateSlabGeometry` (pure
@@ -89,8 +101,21 @@ function getSlabSlotMaterial(
     return createSurfaceRoleMaterial('floor', colorPreset, FrontSide, sceneTheme)
   }
 
+  if (slotId === 'foundation') {
+    const finish = node.foundation?.material ?? FOUNDATION_SLOT_DEFAULT
+    return typeof finish === 'string'
+      ? (resolveMaterialRef(finish, sceneMaterials, shading) ??
+          resolveSlotDefaultMaterial(finish, shading, 0.8))
+      : createMaterial(finish, shading)
+  }
+
   // Unified slot override — shared scene material or catalog `library:` finish.
-  const slotRef = node.slots?.[slotId]
+  // `side` is the pre-split key: it answers for any face when it is the only
+  // one set, and each split key answers for its own face when it is.
+  const slotRef =
+    slotId === 'side'
+      ? (node.slots?.side ?? node.slots?.edge ?? node.slots?.riser ?? node.slots?.underside)
+      : (node.slots?.[slotId] ?? (slotId === 'surface' ? undefined : node.slots?.side))
   if (slotRef) {
     const resolved = resolveMaterialRef(slotRef, sceneMaterials, shading)
     if (resolved) return resolved
@@ -103,64 +128,8 @@ function getSlabSlotMaterial(
   }
 
   // Declared slot default — a catalog `library:` finish or a flat colour.
-  const slotDefault = slotId === 'side' ? SLAB_SIDE_SLOT_DEFAULT : SLAB_TOP_SLOT_DEFAULT
+  const slotDefault = slotId === 'surface' ? SLAB_TOP_SLOT_DEFAULT : SLAB_SIDE_SLOT_DEFAULT
   return resolveSlotDefaultMaterial(slotDefault, shading, 0.8)
-}
-
-// Split the merged slab buffer into top-facing (floor) and everything-else
-// (vertical walls + underside) sub-geometries by per-triangle face normal, so
-// the two paintable slots get distinct materials + raycast tags. De-indexes
-// into per-face triangles (slabs are flat-shaded, so no shared-vertex seams).
-function splitSlabFacesByFacing(geometry: BufferGeometry): {
-  top: BufferGeometry
-  side: BufferGeometry
-} {
-  const position = geometry.getAttribute('position')
-  const uv = geometry.getAttribute('uv')
-  const index = geometry.getIndex()
-  // A collapsed slab builds an empty geometry with no position attribute.
-  const triangleCount = index ? index.count / 3 : (position?.count ?? 0) / 3
-
-  const top = { pos: [] as number[], uv: [] as number[] }
-  const side = { pos: [] as number[], uv: [] as number[] }
-  const a = new Vector3()
-  const b = new Vector3()
-  const c = new Vector3()
-  const ab = new Vector3()
-  const ac = new Vector3()
-  const normal = new Vector3()
-
-  for (let t = 0; t < triangleCount; t += 1) {
-    const i0 = index ? index.getX(t * 3) : t * 3
-    const i1 = index ? index.getX(t * 3 + 1) : t * 3 + 1
-    const i2 = index ? index.getX(t * 3 + 2) : t * 3 + 2
-    a.fromBufferAttribute(position, i0)
-    b.fromBufferAttribute(position, i1)
-    c.fromBufferAttribute(position, i2)
-    ab.subVectors(b, a)
-    ac.subVectors(c, a)
-    normal.crossVectors(ab, ac)
-    const lengthSq = normal.lengthSq()
-    const isTop = lengthSq > 1e-12 && normal.y / Math.sqrt(lengthSq) > 0.5
-    const target = isTop ? top : side
-    for (const i of [i0, i1, i2]) {
-      target.pos.push(position.getX(i), position.getY(i), position.getZ(i))
-      if (uv) target.uv.push(uv.getX(i), uv.getY(i))
-    }
-  }
-
-  const build = (data: { pos: number[]; uv: number[] }) => {
-    const geo = new BufferGeometry()
-    geo.setAttribute('position', new Float32BufferAttribute(data.pos, 3))
-    if (data.uv.length > 0) {
-      geo.setAttribute('uv', new Float32BufferAttribute(data.uv, 2))
-      geo.setAttribute('uv2', new Float32BufferAttribute(data.uv.slice(), 2))
-    }
-    geo.computeVertexNormals()
-    return geo
-  }
-
-  return { top: build(top), side: build(side) }
 }
 
 function getLegacySlabMaterial(node: SlabNode, shading: RenderShading): Material {
@@ -202,7 +171,7 @@ function getLegacySlabMaterial(node: SlabNode, shading: RenderShading): Material
   return material
 }
 
-function terrainFillContext(ctx: GeometryContext | undefined) {
+function terrainFillContext(ctx: GeometryContext | undefined, foundation: boolean) {
   if (!ctx) return null
   const level = ctx.parent
   if (level?.type !== 'level' || !level.parentId) return null
@@ -224,7 +193,7 @@ function terrainFillContext(ctx: GeometryContext | undefined) {
   const elevation = getLevelElevations(nodes).get(level.id)
   if (!elevation) return null
   const baseWorldY = (building.position?.[1] ?? 0) + elevation.baseY
-  if (Math.abs(baseWorldY) >= 1e-4) return null
+  if (Math.abs(baseWorldY) >= 1e-4 && !(foundation && level.level === 0)) return null
 
   return {
     baseWorldY,
@@ -237,8 +206,9 @@ function buildSlabTerrainFillGeometry(
   node: SlabNode,
   polygon: Array<[number, number]>,
   ctx: GeometryContext | undefined,
+  partition: PlateSurfacePartition | null,
 ): BufferGeometry | null {
-  const terrain = terrainFillContext(ctx)
+  const terrain = terrainFillContext(ctx, node.plateRole === 'base')
   if (!terrain || polygon.length < 3) return null
 
   let area2 = 0
@@ -278,7 +248,60 @@ function buildSlabTerrainFillGeometry(
     const ground = terrain.field ? surfaceHeightAt(terrain.field, siteX, siteZ) : 0
     return Math.min(top, ground - terrain.baseWorldY)
   })
-  return buildTerrainPerimeterFillGeometry(localPoints, bottomY, top, 1e-4)
+  const geometry = buildTerrainPerimeterFillGeometry(localPoints, bottomY, top, 1e-4)
+  if (!geometry || !partition?.sides.some((side) => side.dropTo !== undefined)) return geometry
+  const clipped = clipPlateTerrainFill(geometry, partition)
+  geometry.dispose()
+  return clipped
+}
+
+/**
+ * Material for one partition cell of a plate top: the room's finish when the
+ * cell has one, the plate's own `surface` slot when it does not. Identical
+ * finishes resolve to the same cached instance, so two rooms painted alike stay
+ * in one batch bucket.
+ */
+function getPlateCellMaterial(
+  node: SlabNode,
+  cell: PlateTopCell,
+  shading: RenderShading,
+  textures: boolean,
+  colorPreset: ColorPreset,
+  sceneTheme: string | undefined,
+  sceneMaterials: GeometryContext['materials'],
+): Material {
+  if (!textures) return createSurfaceRoleMaterial('floor', colorPreset, FrontSide, sceneTheme)
+  const finish = cell.finish
+  if (typeof finish === 'string') {
+    const resolved = resolveMaterialRef(finish, sceneMaterials, shading)
+    if (resolved) return resolved
+  } else if (finish) {
+    return createMaterial(finish as MaterialSchema, shading)
+  }
+  return getSlabSlotMaterial(
+    node,
+    'surface',
+    shading,
+    textures,
+    colorPreset,
+    sceneTheme,
+    sceneMaterials,
+  )
+}
+
+/**
+ * A floor plate's partition, or `null` when this slab is not a plate (or the
+ * level neighbourhood is unavailable, as in a bare geometry test). Memoised in
+ * core on the topology + finish signature; never recomputed per frame.
+ */
+function platePartitionOf(
+  node: SlabNode,
+  ctx: GeometryContext | undefined,
+  platform: boolean,
+): PlateSurfacePartition | null {
+  if (!isFloorPlate(node) || !ctx) return null
+  const context = plateLevelContext(ctx.parent, ctx.resolve)
+  return computePlateSurfacePartition(node, { ...context, platform })
 }
 
 export function buildSlabGeometry(
@@ -289,38 +312,68 @@ export function buildSlabGeometry(
   colorPreset: ColorPreset = 'clay',
   sceneTheme?: string,
 ): Group {
+  if (ctx && !node.plateRole && !node.autoFromWalls)
+    node = liftedManualSlab(plateLevelContext(ctx.parent, ctx.resolve).nodes ?? {}, node)
   const group = new Group()
   const polygonContext = slabPolygonContextFromGeometry(ctx)
-  const merged = generateSlabGeometry(node, polygonContext)
-  const { top, side } = splitSlabFacesByFacing(merged)
-  merged.dispose()
-
+  const polygon = getRenderableSlabPolygon(node, polygonContext)
+  const baseNodes: Record<string, AnyNode> = {}
+  if (ctx?.parent && !ctx.levelBaseAt && isFloorPlate(node)) {
+    let ancestor: AnyNode | undefined = ctx.parent
+    while (ancestor && !baseNodes[ancestor.id]) {
+      baseNodes[ancestor.id] = ancestor
+      if ('children' in ancestor)
+        for (const id of ancestor.children) {
+          const child = ctx.resolve<AnyNode>(id as AnyNodeId)
+          if (child?.type === 'level') baseNodes[id] = child
+        }
+      ancestor = ancestor.parentId
+        ? ctx.resolve<AnyNode>(ancestor.parentId as AnyNodeId)
+        : undefined
+    }
+  }
+  const levelBaseAt =
+    ctx?.levelBaseAt ??
+    ((x: number, z: number) =>
+      node.parentId ? levelBaseElevationAt(baseNodes, node.parentId, x, z) : 0)
+  const platform =
+    isFloorPlate(node) &&
+    node.support !== 'open' &&
+    !node.plateRole &&
+    !node.recessed &&
+    node.elevation - node.thickness > 1e-4 &&
+    [polygon, ...(node.holes ?? [])].some((ring) =>
+      ring.some(([x, z], i) => {
+        const [endX, endZ] = ring[(i + 1) % ring.length]!
+        const count = Math.max(1, Math.ceil(Math.hypot(endX - x, endZ - z) / 0.25))
+        for (let j = 0; j < count; j++)
+          if (
+            node.elevation - node.thickness >
+            levelBaseAt(x + ((endX - x) * j) / count, z + ((endZ - z) * j) / count) + 1e-4
+          )
+            return true
+        return false
+      }),
+    )
+  const merged = generateSlabGeometry(node, polygonContext, platform ? levelBaseAt : undefined)
   const elevation = node.elevation ?? 0.05
-  // One mesh per slot, each tagged with its slot id so the unified slot paint
-  // resolves the hit (`resolveRole` reads `userData.slotId`) and previews it.
-  for (const [slotId, geometry] of [
-    ['surface', top],
-    ['side', side],
-  ] as const) {
+  const partition = platePartitionOf(node, ctx, platform || node.plateRole === 'platform')
+
+  const addMesh = (geometry: BufferGeometry, slotId: string, material: Material) => {
     // A slot with no triangles (collapsed or fully holed polygon) gets no mesh,
     // so the build settles instead of emitting empty buffers.
     if (geometry.getAttribute('position').count === 0) {
       geometry.dispose()
-      continue
+      return
     }
-    const material = getSlabSlotMaterial(
-      node,
-      slotId,
-      shading,
-      textures,
-      colorPreset,
-      sceneTheme,
-      ctx?.materials,
-    )
     const mesh = new Mesh(geometry, material)
     mesh.castShadow = true
     mesh.receiveShadow = true
-    mesh.userData.slotId = slotId
+    const step = parseFloorStepRole(slotId)
+    const edgeOwner = /^edge:(.+)$/.exec(slotId)?.[1]
+    mesh.userData.slotId = step ? 'riser' : edgeOwner ? 'edge' : slotId
+    mesh.userData.paintRole = slotId
+    if (step || edgeOwner) mesh.userData.ownerZoneId = step?.zoneId ?? edgeOwner
     // Solid slabs bake [elevation − thickness, elevation] into the geometry;
     // recessed shells are authored from floor to rim and translated so the
     // floor sits at `elevation`.
@@ -328,18 +381,86 @@ export function buildSlabGeometry(
     group.add(mesh)
   }
 
-  if (node.fillToTerrain && !node.recessed && group.children.length > 0) {
-    const terrainFill = buildSlabTerrainFillGeometry(
-      node,
-      getRenderableSlabPolygon(node, polygonContext),
-      ctx,
-    )
-    if (terrainFill) {
-      const mesh = new Mesh(
-        terrainFill,
+  if (partition) {
+    // A plate draws one mesh per partition cell and one per exposure role. Each
+    // mesh keeps a single material, so node batching still buckets them by
+    // material uuid and repeated finishes share one bucket.
+    const cellByRole = new Map(partition.cells.map((cell) => [cell.role, cell]))
+    const levelZones = ctx ? plateLevelContext(ctx.parent, ctx.resolve).zones : []
+    for (const { role, geometry } of splitPlateFaces(merged, partition, node)) {
+      const step = parseFloorStepRole(role)
+      const zoneId = step?.zoneId ?? /^edge:(.+)$/.exec(role)?.[1]
+      const zone = zoneId ? ctx?.resolve<AnyNode>(zoneId as AnyNodeId) : undefined
+      const base = ctx
+        ? plateLevelContext(ctx.parent, ctx.resolve)
+            .slabs.filter((slab) => slab.plateRole === 'base')
+            .sort(
+              (a, b) =>
+                area(
+                  intersection(
+                    { outer: b.polygon, holes: b.holes },
+                    { outer: node.polygon, holes: node.holes },
+                  ),
+                ) -
+                  area(
+                    intersection(
+                      { outer: a.polygon, holes: a.holes },
+                      { outer: node.polygon, holes: node.holes },
+                    ),
+                  ) || a.id.localeCompare(b.id),
+            )[0]
+        : undefined
+      const finish =
+        zone?.type === 'zone'
+          ? step
+            ? resolveFloorStepFinish(zone, step.key, step.step, levelZones)
+            : (zone.floorEdgeFinish ?? base?.slots?.edge)
+          : undefined
+      const cell =
+        cellByRole.get(role) ??
+        (zone?.type === 'zone' && (step || finish !== undefined)
+          ? {
+              role,
+              finish: finish ?? SLAB_TOP_SLOT_DEFAULT,
+              materialKey: plateFinishKey(finish ?? SLAB_TOP_SLOT_DEFAULT),
+              polygons: [],
+            }
+          : undefined)
+      const material = cell
+        ? getPlateCellMaterial(
+            node,
+            cell,
+            shading,
+            textures,
+            colorPreset,
+            sceneTheme,
+            ctx?.materials,
+          )
+        : getSlabSlotMaterial(
+            node,
+            role as SlabSlotId,
+            shading,
+            textures,
+            colorPreset,
+            sceneTheme,
+            ctx?.materials,
+          )
+      addMesh(geometry, role, material)
+    }
+  } else {
+    const { top, side } = splitSlabFacesByFacing(merged)
+    // One mesh per slot, each tagged with its slot id so the unified slot paint
+    // resolves the hit (`resolveRole` reads `userData.slotId`) and previews it.
+    for (const [slotId, geometry] of [
+      ['surface', top],
+      ['side', side],
+    ] as const) {
+      addMesh(
+        geometry,
+        slotId,
         getSlabSlotMaterial(
           node,
-          'side',
+          slotId,
           shading,
           textures,
           colorPreset,
@@ -347,10 +468,72 @@ export function buildSlabGeometry(
           ctx?.materials,
         ),
       )
-      mesh.castShadow = true
-      mesh.receiveShadow = true
-      mesh.userData.slotId = 'side'
-      group.add(mesh)
+    }
+  }
+  merged.dispose()
+
+  const foundation = node.plateRole === 'base' && node.foundation?.type === 'solid'
+  if (
+    (foundation || (!node.plateRole && node.fillToTerrain)) &&
+    !node.recessed &&
+    !platform &&
+    group.children.length > 0
+  ) {
+    const terrainFill = buildSlabTerrainFillGeometry(
+      node,
+      getRenderableSlabPolygon(node, polygonContext),
+      ctx,
+      partition,
+    )
+    if (terrainFill) {
+      // The skirt hangs below the plate perimeter and always faces out.
+      const slotId: SlabSlotId = foundation ? 'foundation' : partition ? 'edge' : 'side'
+      addMesh(
+        terrainFill,
+        slotId,
+        getSlabSlotMaterial(
+          node,
+          slotId,
+          shading,
+          textures,
+          colorPreset,
+          sceneTheme,
+          ctx?.materials,
+        ),
+      )
+    }
+  }
+  for (const [index, segment] of (node.railing ?? []).entries()) {
+    const geometries = generateFenceSlotGeometries(
+      FenceNode.parse({
+        id: `fence_${index}`,
+        ...segment,
+        height: 1.1,
+        style: 'rail',
+        baseStyle: 'floating',
+        baseHeight: 0,
+        postCap: 'none',
+      }),
+    )
+    for (const geometry of Object.values(geometries)) {
+      if (!geometry.getAttribute('position')) {
+        geometry.dispose()
+        continue
+      }
+      geometry.translate(0, elevation, 0)
+      addMesh(
+        geometry,
+        'edge',
+        getSlabSlotMaterial(
+          node,
+          'edge',
+          shading,
+          textures,
+          colorPreset,
+          sceneTheme,
+          ctx?.materials,
+        ),
+      )
     }
   }
   return group

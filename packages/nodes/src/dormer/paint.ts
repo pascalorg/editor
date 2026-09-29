@@ -7,6 +7,7 @@ import type {
 import { getEffectiveDormerSurfaceMaterial } from '@pascal-app/core'
 import { createMaterial, createMaterialFromPresetRef } from '@pascal-app/viewer'
 import type { Material, Mesh } from 'three'
+import { swapPreviewMaterial } from '../shared/swap-preview-material'
 
 /**
  * Resolve a dormer face click to its logical surface role.
@@ -80,15 +81,11 @@ function applyDormerPreview(
     if (mesh.name !== 'dormer-body') return
     const current = mesh.material as Material | Material[]
     if (!Array.isArray(current)) return
-    const previousArray = [...current]
     const nextArray = [...current]
     for (const idx of slotsToPaint) {
       if (current[idx]) nextArray[idx] = previewMaterial
     }
-    mesh.material = nextArray
-    restores.push(() => {
-      mesh.material = previousArray
-    })
+    restores.push(swapPreviewMaterial(mesh, nextArray))
   })
   if (restores.length === 0) return null
   return () => {

@@ -1,5 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { resolveCeilingHeight } from '@pascal-app/core'
+import { floorFootprintName, getLevelDisplayName, resolveCeilingHeight } from '@pascal-app/core'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
@@ -36,7 +36,7 @@ function describe(node: AnyNode, bridge: SceneOperations): string {
       return `Wall from (${x1},${z1}) to (${x2},${z2}), thickness ${t.toFixed(2)}m, height ${h.toFixed(2)}m`
     }
     case 'level':
-      return `Level ${node.level}`
+      return getLevelDisplayName(node)
     case 'building': {
       const [x, y, z] = node.position
       return `Building at (${x},${y},${z})`
@@ -46,7 +46,9 @@ function describe(node: AnyNode, bridge: SceneOperations): string {
     case 'zone':
       return `Zone "${node.name}" with ${node.polygon.length} vertices`
     case 'slab':
-      return `Slab with ${node.polygon.length} vertices`
+      return node.plateRole === 'base'
+        ? `Floor footprint "${floorFootprintName(bridge.getNodes(), node)}" with ${node.polygon.length} vertices`
+        : `Slab with ${node.polygon.length} vertices`
     case 'ceiling':
       return `Ceiling with ${node.polygon.length} vertices, height ${resolveCeilingHeight(node, bridge.getNodes()).toFixed(2)}m`
     case 'door':

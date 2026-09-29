@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  type AnyNode,
   type AnyNodeId,
   buildUnitReport,
   getLevelDisplayName,
@@ -134,7 +135,7 @@ export default function UnitPanel({ node }: { node: UnitNode }) {
       <PanelSection title="Members">
         {report.members.length === 0 ? (
           <p className="text-muted-foreground text-xs leading-snug">
-            No zones yet. Draw zones while this unit is focused, or pick it from a zone's inspector.
+            No rooms yet. Pick this unit from a room's panel, or draw zones while it is focused.
           </p>
         ) : (
           report.members.map((member) => (
@@ -143,7 +144,7 @@ export default function UnitPanel({ node }: { node: UnitNode }) {
               key={member.zoneId}
             >
               <span className="min-w-0 flex-1 truncate text-foreground">
-                {member.name || 'Zone'}
+                {member.name || memberFallbackName(nodes, member.zoneId)}
               </span>
               <span className="shrink-0 truncate text-muted-foreground">
                 {member.levelId ? levelNameById.get(member.levelId) : ''}
@@ -196,4 +197,10 @@ export default function UnitPanel({ node }: { node: UnitNode }) {
       </PanelSection>
     </PanelWrapper>
   )
+}
+
+/** An unnamed member reads as what it is: a room, or another zone. */
+function memberFallbackName(nodes: Record<string, AnyNode>, zoneId: string) {
+  const zone = nodes[zoneId]
+  return zone?.type === 'zone' && zone.spaceRole === 'room' ? 'Room' : 'Zone'
 }

@@ -1,5 +1,6 @@
 import type { WallNode } from '../../schema'
 import { getWallSurfacePolygon, isCurvedWall } from './wall-curve'
+import { getWallFaceOffsets } from './wall-frame'
 import {
   getWallMiterBoundaryPoints,
   type Point2D,
@@ -7,7 +8,9 @@ import {
   type WallMiterData,
 } from './wall-mitering'
 
+export { faceOnLine, justificationForFaceOnLine } from './wall-frame'
 export { calculateLevelMiters, type Point2D, type WallMiterData } from './wall-mitering'
+export { roomSideFaces } from './wall-room-sides'
 
 export const DEFAULT_WALL_THICKNESS = 0.1
 export const DEFAULT_WALL_HEIGHT = 2.5
@@ -21,8 +24,7 @@ export function getWallPlanFootprint(wallNode: WallNode, miterData: WallMiterDat
   const { junctionData } = miterData
   const wallStart: Point2D = { x: wallNode.start[0], y: wallNode.start[1] }
   const wallEnd: Point2D = { x: wallNode.end[0], y: wallNode.end[1] }
-  const thickness = getWallThickness(wallNode)
-  const halfT = thickness / 2
+  const { a, b } = getWallFaceOffsets(wallNode)
   const v = { x: wallEnd.x - wallStart.x, y: wallEnd.y - wallStart.y }
   const L = Math.sqrt(v.x * v.x + v.y * v.y)
 
@@ -52,29 +54,29 @@ export function getWallPlanFootprint(wallNode: WallNode, miterData: WallMiterDat
   }
 
   const pStartLeft: Point2D = startJunction?.left || {
-    x: wallStart.x + nUnit.x * halfT,
-    y: wallStart.y + nUnit.y * halfT,
+    x: wallStart.x + nUnit.x * a,
+    y: wallStart.y + nUnit.y * a,
   }
   const pStartRight: Point2D = startJunction?.right || {
-    x: wallStart.x - nUnit.x * halfT,
-    y: wallStart.y - nUnit.y * halfT,
+    x: wallStart.x - nUnit.x * -b,
+    y: wallStart.y - nUnit.y * -b,
   }
   const pEndLeft: Point2D = endJunction?.right || {
-    x: wallEnd.x + nUnit.x * halfT,
-    y: wallEnd.y + nUnit.y * halfT,
+    x: wallEnd.x + nUnit.x * a,
+    y: wallEnd.y + nUnit.y * a,
   }
   const pEndRight: Point2D = endJunction?.left || {
-    x: wallEnd.x - nUnit.x * halfT,
-    y: wallEnd.y - nUnit.y * halfT,
+    x: wallEnd.x - nUnit.x * -b,
+    y: wallEnd.y - nUnit.y * -b,
   }
 
   const polygon: Point2D[] = [pStartRight, pEndRight]
   if (endJunction) {
-    polygon.push(wallEnd)
+    polygon.push(endJunction.closing ?? wallEnd)
   }
   polygon.push(pEndLeft, pStartLeft)
   if (startJunction) {
-    polygon.push(wallStart)
+    polygon.push(startJunction.closing ?? wallStart)
   }
 
   return polygon

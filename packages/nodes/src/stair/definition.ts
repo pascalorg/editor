@@ -403,7 +403,7 @@ function stairHandles(node: StairNodeType): HandleDescriptor<StairNodeType>[] {
 import {
   computeStairSegmentFloorStackTransforms,
   getStairFloorPlacedFootprints,
-} from './floor-stack'
+} from '@pascal-app/core'
 import { buildStairFloorplan } from './floorplan'
 import {
   curvedStairInnerRadiusAffordance,

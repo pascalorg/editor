@@ -5,6 +5,7 @@ import type {
   GeometryContext,
   WallNode,
 } from '@pascal-app/core'
+import { getWallBodyCenterOffset } from '@pascal-app/core'
 import {
   readFloorplanContext,
   readFloorplanGeometryMetadata,
@@ -72,8 +73,12 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
   const wallDepth = wall.thickness ?? 0.1
   const plane = resolveOpeningPlanPlane(node, wallDepth)
   const depth = plane.depth
-  const cx = x1 + dirX * distance + perpX * plane.offset
-  const cz = z1 + dirZ * distance + perpZ * plane.offset
+  // The plane offset is measured from the body centre, which a justified wall
+  // sets off its reference line.
+  const bodyOffset = getWallBodyCenterOffset(wall)
+  const across = bodyOffset + plane.offset
+  const cx = x1 + dirX * distance + perpX * across
+  const cz = z1 + dirZ * distance + perpZ * across
   const halfWidth = width / 2
   const halfDepth = depth / 2
 
@@ -131,7 +136,10 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
       : [
           {
             kind: 'polygon' as const,
-            points: openingCutoutPoints(x1 + dirX * distance, z1 + dirZ * distance),
+            points: openingCutoutPoints(
+              x1 + dirX * distance + perpX * bodyOffset,
+              z1 + dirZ * distance + perpZ * bodyOffset,
+            ),
             fill: fillColor,
             stroke: accentMuted,
             strokeWidth: showSelectedChrome ? 2 : 1.25,

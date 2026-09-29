@@ -75,6 +75,8 @@ describe('history dependency closure', () => {
     { thickness: 0.4 },
     { height: 4 },
     { curveOffset: 0.8 },
+    { justification: 'a' as const },
+    { justification: 'b' as const },
   ])('host shape change %j includes opening proxies and wall-side items', (patch) => {
     const door = DoorNode.parse({ parentId: wall.id })
     const window = WindowNode.parse({ parentId: wall.id })
@@ -236,6 +238,61 @@ describe('consecutive temporal wall moves', () => {
   afterEach(() => {
     clearSceneHistory()
     restore()
+  })
+
+  test('justification-only undo and redo dirty hosted children', async () => {
+    const door = DoorNode.parse({ parentId: wall.id })
+    const window = WindowNode.parse({ parentId: wall.id })
+    const item = ItemNode.parse({ parentId: wall.id, asset: { ...asset, attachTo: 'wall-side' } })
+    const other = ItemNode.parse({ parentId: remote.id, asset })
+    useScene.setState({
+      nodes: nodes(level, wall, remote, door, window, item, other),
+      rootNodeIds: [level.id],
+      collections: {},
+      installedPlugins: [],
+      dirtyNodes: new Set(),
+      readOnly: false,
+    })
+    clearSceneHistory()
+    const justified = { ...wall, justification: 'a' as const }
+    useScene.setState({ nodes: { ...useScene.getState().nodes, [wall.id]: justified } })
+
+    for (const direction of ['undo', 'redo'] as const) {
+      useScene.getState().dirtyNodes.clear()
+      useScene.temporal.getState()[direction]()
+      await Promise.resolve()
+      expect(useScene.getState().nodes[wall.id]).toBe(direction === 'undo' ? wall : justified)
+      expect([...useScene.getState().dirtyNodes].sort()).toEqual(
+        [level.id, wall.id, door.id, window.id, item.id].sort(),
+      )
+    }
+  })
+
+  test('a new edit after an undo is an edit, not a redo', async () => {
+    const moved = { ...wall, start: [0, 2], end: [4, 2] } as WallNode
+    useScene.setState({
+      nodes: nodes(level, wall, remote),
+      rootNodeIds: [level.id],
+      collections: {},
+      installedPlugins: [],
+      dirtyNodes: new Set(),
+      readOnly: false,
+    })
+    clearSceneHistory()
+    useScene.setState({ nodes: { ...useScene.getState().nodes, [wall.id]: moved } })
+    useScene.temporal.getState().undo()
+    await Promise.resolve()
+    expect(useScene.temporal.getState().futureStates).toHaveLength(1)
+
+    useScene.getState().dirtyNodes.clear()
+    // The edit drops the redo stack and grows the past, as a redo would.
+    useScene.setState({
+      nodes: { ...useScene.getState().nodes, [remote.id]: { ...remote, end: [26, 0] } as WallNode },
+    })
+    await Promise.resolve()
+    expect(useScene.temporal.getState().futureStates).toHaveLength(0)
+    // Only the edit's own writer marks what it changed; no history diff ran.
+    expect([...useScene.getState().dirtyNodes]).toEqual([])
   })
 
   test('three undos and redos mark exactly the neighbours in each pre/post-jump layout', async () => {

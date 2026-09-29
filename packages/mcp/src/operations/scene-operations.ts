@@ -63,12 +63,14 @@ export interface SceneOperations {
    * that cannot preview their own deletes; the apply_patch guard is then stricter.
    */
   readonly planDeletion?: (scene: NodeDeletionScene, ids: AnyNodeId[]) => NodeDeletionPlan
+  deriveStructure(levelIds?: AnyNodeId[]): { createdIds: AnyNodeId[]; deletedIds: AnyNodeId[] }
   undo(steps?: number): number
   redo(steps?: number): number
   validateScene(): ValidationResult
   flushDirty(): string[]
   getHistory(): { pastCount: number; futureCount: number }
   clearHistory(): void
+  runAsSingleHistoryStep<T>(run: () => T): T
 
   createProject(options: ProjectCreateOptions): Promise<ProjectStatus>
   getProjectStatus(id: string): Promise<ProjectStatus | null>
@@ -225,6 +227,15 @@ class SceneOperationsFacade implements SceneOperations {
     return this.requireBridge().applyPatch(patches)
   }
 
+  /**
+   * Derive construction from the intent the tools just wrote. The hosted
+   * bridge reconciles inside every mutation and exposes no hook, so the call
+   * is optional: there it is already done by the time a tool builds its result.
+   */
+  deriveStructure(levelIds?: AnyNodeId[]): { createdIds: AnyNodeId[]; deletedIds: AnyNodeId[] } {
+    return this.requireBridge().deriveStructure?.(levelIds) ?? { createdIds: [], deletedIds: [] }
+  }
+
   undo(steps?: number): number {
     return this.requireBridge().undo(steps)
   }
@@ -247,6 +258,10 @@ class SceneOperationsFacade implements SceneOperations {
 
   clearHistory(): void {
     this.requireBridge().clearHistory()
+  }
+
+  runAsSingleHistoryStep<T>(run: () => T): T {
+    return this.requireBridge().runAsSingleHistoryStep(run)
   }
 
   async createProject(options: ProjectCreateOptions): Promise<ProjectStatus> {

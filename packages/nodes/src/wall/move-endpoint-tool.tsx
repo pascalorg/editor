@@ -2,16 +2,15 @@
 
 import {
   type AnyNodeId,
+  acquireSceneHistoryPause,
   collectAlignmentAnchors,
   emitter,
   type GridEvent,
   getWallBaseElevationForNodes,
   getWallCurveLength,
   getWallThickness,
-  pauseSceneHistory,
   resolveAlignment,
   resolveMovedWallSupportSlabPatch,
-  resumeSceneHistory,
   runAsSingleSceneHistoryStep,
   useLiveNodeOverrides,
   useScene,
@@ -270,8 +269,13 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       (anchor) => !movingLinkedIdSet.has(anchor.nodeId),
     )
 
-    pauseSceneHistory(useScene)
+    // A lease, so a cancel and the unmount that follows it release it once.
+    const releaseHistory = acquireSceneHistoryPause(useScene)
     let wasCommitted = false
+    // Ends with the drop, the dismiss or the cancel: the window listeners stay
+    // until the unmount, and a release after Escape must not commit the
+    // cancelled preview (nor a late pointer move republish it).
+    let live = true
     // Last RAW cursor point from `grid:move` — lets the Alt keydown/keyup
     // handlers re-run the FULL snap pipeline immediately on a modifier change
     // instead of waiting for the next mousemove. The raw point (not the
@@ -469,6 +473,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     }
 
     const onGridMove = (event: GridEvent) => {
+      if (!live) return
       const planPoint: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
       lastRawPoint = planPoint
       // The keydown listener can't observe an Alt press that predates the
@@ -483,6 +488,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     }
 
     const onPointerUp = () => {
+      if (!live) return
       useAlignmentGuides.getState().clear()
       useWallSnapIndicator.getState().clear()
       // The handle sits on the wall body, so the browser fires a click on the
@@ -509,12 +515,14 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
           hasReleasedOnce = true
           return
         }
+        live = false
         restoreOriginal()
         useViewer.getState().setSelection({ selectedIds: [nodeId] })
         exitMoveMode()
         return
       }
 
+      live = false
       if (isSegmentLongEnough(preview.start, preview.end)) {
         wasCommitted = true
 
@@ -535,7 +543,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
         // ops (create halves, migrate attachments, delete host) would each
         // push their own entry, so the whole commit runs as one history step.
         clearPreviewOverrides()
-        resumeSceneHistory(useScene)
+        releaseHistory()
         runAsSingleSceneHistoryStep(useScene, () => {
           // Dropping the endpoint on another wall's interior splits that host
           // like the draw path does. Linked walls updated in this commit share
@@ -581,7 +589,6 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
             useScene.getState().markDirty(u.id as AnyNodeId)
           }
         })
-        pauseSceneHistory(useScene)
         triggerSFX('sfx:item-place')
       }
 
@@ -591,11 +598,13 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     }
 
     const onCancel = () => {
+      if (!live) return
+      live = false
       useAlignmentGuides.getState().clear()
       useWallSnapIndicator.getState().clear()
       restoreOriginal()
       useViewer.getState().setSelection({ selectedIds: [nodeId] })
-      resumeSceneHistory(useScene)
+      releaseHistory()
       setAngleLabel(null)
       markToolCancelConsumed()
       exitMoveMode()
@@ -607,7 +616,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     // re-snaps against their (now live) corners, re-attach drops them from
     // the candidate set again — without waiting for the next mousemove.
     const setAltState = (pressed: boolean) => {
-      if (altPressedRef.current === pressed) return
+      if (!live || altPressedRef.current === pressed) return
       altPressedRef.current = pressed
       setAltPressed(pressed)
       if (lastRawPoint) {
@@ -647,7 +656,7 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       if (!wasCommitted) {
         restoreOriginal(false)
       }
-      resumeSceneHistory(useScene)
+      releaseHistory()
       emitter.off('grid:move', onGridMove)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('pointerup', onPointerUp)

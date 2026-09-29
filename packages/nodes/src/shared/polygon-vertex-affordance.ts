@@ -122,6 +122,19 @@ function buildRingPatch(
   return { holes: nextHoles }
 }
 
+/**
+ * Commit a ring edit. A BOUNDARY reshape is the sanctioned conversion of a
+ * reconciler-owned slab or ceiling into an authored surface, so it goes
+ * through `detachDerivedNode` (which also carries the kind's own
+ * `boundaryCommitData`). A HOLE edit only touches authored cut-outs, so it
+ * stays an ordinary update and leaves the derivation in place.
+ */
+function commitRingPatch(id: AnyNodeId, holeIndex: number | undefined, patch: unknown) {
+  const scene = useScene.getState()
+  if (holeIndex === undefined) scene.detachDerivedNode(id, patch as Partial<AnyNode>)
+  else scene.updateNodes([{ id, data: patch as Partial<unknown> as never }])
+}
+
 function resolveAffordancePlanPoint<N extends PolygonShape & { id: AnyNodeId }>(
   options: PolygonAffordanceOptions<N> | undefined,
   context: PolygonAffordanceSnapContext<N>,
@@ -169,9 +182,7 @@ export function createPolygonVertexAffordance<N extends PolygonShape & { id: Any
             i === vertexIndex ? [snapped[0], snapped[1]] : p,
           )
           const patch = buildRingPatch(node, holeIndex, nextRing, options?.boundaryCommitData)
-          useScene
-            .getState()
-            .updateNodes([{ id: node.id, data: patch as Partial<unknown> as never }])
+          commitRingPatch(node.id, holeIndex, patch)
         },
         canCommit() {
           const final = useScene.getState().nodes[node.id] as N | undefined
@@ -231,9 +242,7 @@ export function createPolygonAddVertexAffordance<N extends PolygonShape & { id: 
       // Apply the insert immediately so the user sees the new vertex
       // before they even move.
       const initialPatch = buildRingPatch(node, holeIndex, initialRing, options?.boundaryCommitData)
-      useScene
-        .getState()
-        .updateNodes([{ id: node.id, data: initialPatch as Partial<unknown> as never }])
+      commitRingPatch(node.id, holeIndex, initialPatch)
 
       return {
         affectedIds: [node.id],
@@ -257,9 +266,7 @@ export function createPolygonAddVertexAffordance<N extends PolygonShape & { id: 
             i === newVertexIndex ? [snapped[0], snapped[1]] : p,
           )
           const patch = buildRingPatch(node, holeIndex, nextRing, options?.boundaryCommitData)
-          useScene
-            .getState()
-            .updateNodes([{ id: node.id, data: patch as Partial<unknown> as never }])
+          commitRingPatch(node.id, holeIndex, patch)
         },
         canCommit() {
           const final = useScene.getState().nodes[node.id] as N | undefined
@@ -311,9 +318,7 @@ export function createPolygonDeleteVertexAffordance<N extends PolygonShape & { i
           }
           const nextRing = ring.filter((_, index) => index !== vertexIndex)
           const patch = buildRingPatch(current, holeIndex, nextRing, options?.boundaryCommitData)
-          useScene
-            .getState()
-            .updateNodes([{ id: node.id, data: patch as Partial<unknown> as never }])
+          commitRingPatch(node.id, holeIndex, patch)
         },
       }
     },
@@ -439,9 +444,7 @@ export function createPolygonMoveEdgeAffordance<N extends PolygonShape & { id: A
             return [p[0], p[1]] as [number, number]
           })
           const patch = buildRingPatch(node, holeIndex, nextRing, options?.boundaryCommitData)
-          useScene
-            .getState()
-            .updateNodes([{ id: node.id, data: patch as Partial<unknown> as never }])
+          commitRingPatch(node.id, holeIndex, patch)
         },
         canCommit() {
           const final = useScene.getState().nodes[node.id] as N | undefined

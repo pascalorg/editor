@@ -24,10 +24,11 @@ import { mergeSurfaceHolePolygons } from '../surface-hole-geometry'
 export function generateSlabGeometry(
   slabNode: SlabNode,
   context: SlabPolygonContext,
+  platformBaseAt?: (x: number, z: number) => number,
 ): THREE.BufferGeometry {
   return slabNode.recessed
     ? generatePoolGeometry(slabNode, context)
-    : generateSolidSlabGeometry(slabNode, context)
+    : generateSolidSlabGeometry(slabNode, context, platformBaseAt)
 }
 
 /** Rings below this area (m²) have collapsed: a sliver cap would still grow full-height side walls. */
@@ -111,11 +112,28 @@ function buildSlabRegions(contour: PolygonPoint2D[], holes: PolygonPoint2D[][]) 
 function generateSolidSlabGeometry(
   slabNode: SlabNode,
   context: SlabPolygonContext,
+  platformBaseAt?: (x: number, z: number) => number,
 ): THREE.BufferGeometry {
   const polygon = ensureCounterClockwisePolygon(getRenderableSlabPolygon(slabNode, context))
   const elevation = slabNode.elevation ?? 0.05
   const thickness = slabNode.thickness ?? 0.05
   const bottom = elevation - thickness
+  const bottomAt = (x: number, z: number) =>
+    platformBaseAt ? Math.min(bottom, platformBaseAt(x, z)) : bottom
+  const sampleRing = (ring: PolygonPoint2D[]) =>
+    !platformBaseAt
+      ? ring
+      : ring.flatMap((a, i) => {
+          const b = ring[(i + 1) % ring.length]!
+          const count = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 0.25))
+          return Array.from(
+            { length: count },
+            (_, j): PolygonPoint2D => [
+              a[0] + ((b[0] - a[0]) * j) / count,
+              a[1] + ((b[1] - a[1]) * j) / count,
+            ],
+          )
+        })
   const holePolygons = mergeSurfaceHolePolygons(slabNode.holes ?? [])
 
   if (isCollapsedPolygon(polygon)) return new THREE.BufferGeometry()
@@ -131,10 +149,10 @@ function generateSolidSlabGeometry(
   const addWall = (a: THREE.Vector2, b: THREE.Vector2, flipped: boolean) => {
     const base = positions.length / 3
     const len = Math.max(Math.hypot(b.x - a.x, b.y - a.y), 0.001)
-    positions.push(a.x, bottom, a.y)
-    uvs.push(0, 0)
-    positions.push(b.x, bottom, b.y)
-    uvs.push(len, 0)
+    positions.push(a.x, bottomAt(a.x, a.y), a.y)
+    uvs.push(0, bottomAt(a.x, a.y) - bottom)
+    positions.push(b.x, bottomAt(b.x, b.y), b.y)
+    uvs.push(len, bottomAt(b.x, b.y) - bottom)
     positions.push(b.x, elevation, b.y)
     uvs.push(len, thickness)
     positions.push(a.x, elevation, a.y)
@@ -150,12 +168,12 @@ function generateSolidSlabGeometry(
 
   for (const region of buildSlabRegions(polygon, holePolygons)) {
     if (isCollapsedPolygon(region.contour)) continue
-    const contour2d = ensureCounterClockwisePolygon(region.contour).map(
+    const contour2d = sampleRing(ensureCounterClockwisePolygon(region.contour)).map(
       ([x, z]) => new THREE.Vector2(x!, z!),
     )
     const holes2d = region.holes
       .filter((h) => h.length >= 3)
-      .map((h) => h.map(([x, z]) => new THREE.Vector2(x!, z!)))
+      .map((h) => sampleRing(h).map(([x, z]) => new THREE.Vector2(x!, z!)))
 
     // --- Top & bottom caps ---
     // capPoints order (contour then holes) matches triangulateShape's index space.
@@ -178,7 +196,7 @@ function generateSolidSlabGeometry(
       const [a, b, c] = [tri[0]!, tri[1]!, tri[2]!]
       // Reversed winding → +Y normal on top; standard winding → -Y on bottom.
       indices.push(topBase + a, topBase + c, topBase + b)
-      indices.push(bottomBase + a, bottomBase + b, bottomBase + c)
+      if (!platformBaseAt) indices.push(bottomBase + a, bottomBase + b, bottomBase + c)
     }
 
     for (let i = 0; i < contour2d.length; i++) {

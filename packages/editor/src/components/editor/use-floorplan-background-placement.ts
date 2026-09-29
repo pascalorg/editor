@@ -17,6 +17,7 @@ import { resolveCeilingPlanPointSnap } from '../../lib/ceiling-plan-snap'
 import { alignFloorplanDraftPoint, getPlanPointDistance } from '../../lib/floorplan'
 import { resolveGenericFloorplanGridEventPoint } from '../../lib/floorplan-grid-event-point'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
+import { commitWallPolygonDraft, wallPolygonDraftWalls } from '../../lib/wall-polygon-draft'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useEditor, { isAngleSnapActive, isMagneticSnapActive } from '../../store/use-editor'
 import usePlacementPreview from '../../store/use-placement-preview'
@@ -352,7 +353,7 @@ export function useFloorplanBackgroundPlacement({
         const wallAngleSnap = draftStart !== null && isAngleSnapActive()
         const wallSnapped = snapWallDraftPoint({
           point: planPoint,
-          walls,
+          walls: [...walls, ...wallPolygonDraftWalls()],
           start: draftStart ?? undefined,
           angleSnap: wallAngleSnap,
           gridSnap: (p) => worldGridSnap(p, wallStep),
@@ -377,6 +378,9 @@ export function useFloorplanBackgroundPlacement({
         // 2D draft too — otherwise it stays open against a closed 3D tool
         // and the next previewed segment is silently never created.
         if (draftStart && event.detail >= 2) {
+          // …and keeps an open Polygon room (2D-only owns it; in split view the
+          // 3D tool already committed it on the same click).
+          commitWallPolygonDraft()
           clearWallPlacementDraft()
           setCursorPoint(snappedPoint)
           return true

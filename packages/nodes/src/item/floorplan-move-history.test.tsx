@@ -621,7 +621,7 @@ describe('2D item move history', () => {
   })
 
   test('a wall added mid-carry is its own reconciled step; one undo reverts only the drop', async () => {
-    expect(nodesOfType('slab')).toHaveLength(1)
+    expect(nodesOfType('zone')).toHaveLength(1)
     useEditor.getState().setMovingNode(useScene.getState().nodes[ITEM_ID]!)
     await act(async () => {
       renderer = await create(<FloorplanRegistryMoveOverlay />)
@@ -636,7 +636,9 @@ describe('2D item move history', () => {
         LEVEL_ID,
       )
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
-    expect(nodesOfType('slab')).toHaveLength(2)
+    // The dividing wall splits the room; both rooms keep standing on one base plate.
+    expect(nodesOfType('zone')).toHaveLength(2)
+    expect(nodesOfType('slab')).toHaveLength(1)
 
     await pointer('pointerup', 3, 3)
     // Let the overlay's swallow-next-click timer run while `window` is still stubbed.

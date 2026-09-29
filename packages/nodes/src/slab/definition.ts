@@ -249,6 +249,10 @@ function slabBaseElevationHandle(): HandleDescriptor<SlabNodeType> {
 }
 
 function slabHandles(node: SlabNodeType): HandleDescriptor<SlabNodeType>[] {
+  // A footprint's floor (base plate) has one control, its height above the
+  // ground, drawn by the editor's footprint height handle; room plates are
+  // reached through their room. Only user-drawn slabs keep these handles.
+  if (node.plateRole) return []
   return node.recessed
     ? [slabRecessedDepthHandle()]
     : [slabThicknessHandle(), slabBaseElevationHandle()]

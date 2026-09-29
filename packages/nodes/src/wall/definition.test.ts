@@ -10,6 +10,7 @@ import {
   DRAFTING_SURFACE_EXTENSION_KEY,
   type DraftingSurfaceExtension,
   getFloorplanNodeExtension,
+  selectWallDrawVariant,
 } from '@pascal-app/editor'
 import { createConicalRoofSectorAboveWall } from '../roof/conical-roof'
 import { wallDefinition } from './definition'
@@ -327,4 +328,30 @@ test('curved wall roof builder rejects walls more than one level below', () => {
     createConicalRoofSectorAboveWall(wall, nodes, sceneApi, activeLevel.id as AnyNodeId),
   ).toBeNull()
   expect(created).toEqual([])
+})
+
+describe('wall tool hints', () => {
+  const visibleClickHints = () =>
+    (wallDefinition.toolHints ?? [])
+      .filter((hint) => hint.key === 'Left click' && (hint.visible?.value() ?? true))
+      .map((hint) => hint.label)
+
+  test('carry no Shape chip and no R key: the variant is picked in the Build panel', () => {
+    const hints = wallDefinition.toolHints ?? []
+    expect(hints.some((hint) => hint.chip)).toBe(false)
+    expect(hints.some((hint) => hint.key === 'R')).toBe(false)
+  })
+
+  test('describe the gesture of the variant in hand', () => {
+    try {
+      selectWallDrawVariant('rectangle')
+      expect(visibleClickHints()).toEqual(['Set one corner, then the opposite'])
+      selectWallDrawVariant('polygon')
+      expect(visibleClickHints()).toEqual(['Add a corner · click the first to close'])
+      selectWallDrawVariant('walls')
+      expect(visibleClickHints()).toEqual(['Set wall start / end'])
+    } finally {
+      selectWallDrawVariant('polygon')
+    }
+  })
 })

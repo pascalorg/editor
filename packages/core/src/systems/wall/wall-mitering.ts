@@ -1,5 +1,6 @@
 import type { WallNode } from '../../schema'
 import { getWallCurveFrameAt, isCurvedWall } from './wall-curve'
+import { getWallBodyCenterOffset, getWallFaceOffsets } from './wall-frame'
 
 // ============================================================================
 // TYPES
@@ -11,10 +12,10 @@ export interface Point2D {
 }
 
 export interface WallMiterBoundaryPoints {
-  startLeft: Point2D
-  startRight: Point2D
   endLeft: Point2D
   endRight: Point2D
+  startLeft: Point2D
+  startRight: Point2D
 }
 
 interface LineEquation {
@@ -24,7 +25,7 @@ interface LineEquation {
 }
 
 // Map of wallId -> { left?: Point2D, right?: Point2D } for each junction
-type WallIntersections = Map<string, { left?: Point2D; right?: Point2D }>
+type WallIntersections = Map<string, { left?: Point2D; right?: Point2D; closing?: Point2D }>
 
 // Map of junctionKey -> WallIntersections
 type JunctionData = Map<string, WallIntersections>
@@ -96,8 +97,8 @@ function pointOnWallSegment(point: Point2D, wall: WallNode, tolerance = TOLERANC
 // ============================================================================
 
 interface Junction {
-  meetingPoint: Point2D
   connectedWalls: Array<{ wall: WallNode; endType: 'start' | 'end' | 'passthrough' }>
+  meetingPoint: Point2D
 }
 
 // --- Uniform grid used to prefilter T-junction candidates --------------------
@@ -286,23 +287,26 @@ function getWallBoundaryFrame(wall: WallNode, endType: 'start' | 'end') {
 // ============================================================================
 
 interface ProcessedWall {
-  wallId: string
   angle: number
   edgeA: LineEquation // Left edge
   edgeB: LineEquation // Right edge
-  isPassthrough: boolean // True if wall passes through junction (T-junction)
   halfThickness: number // Used to bound the miter joint against runaway spikes
+  isPassthrough: boolean // True if wall passes through junction (T-junction)
+  wallId: string
 }
 
 function calculateJunctionIntersections(
   junction: Junction,
-  getThickness: (wall: WallNode) => number,
+  facePadding: number,
 ): WallIntersections {
   const { meetingPoint, connectedWalls } = junction
   const processedWalls: ProcessedWall[] = []
 
   for (const { wall, endType } of connectedWalls) {
-    const halfT = getThickness(wall) / 2
+    const faces = getWallFaceOffsets(wall)
+    const offsets =
+      facePadding === 0 ? faces : { a: faces.a + facePadding, b: faces.b - facePadding }
+    const halfT = Math.max(offsets.a, -offsets.b)
 
     if (endType === 'passthrough') {
       // For passthrough walls (T-junctions), add both directions
@@ -315,8 +319,10 @@ function calculateJunctionIntersections(
         if (L < 1e-9) continue
 
         const nUnit = { x: -v.y / L, y: v.x / L }
-        const pA = { x: meetingPoint.x + nUnit.x * halfT, y: meetingPoint.y + nUnit.y * halfT }
-        const pB = { x: meetingPoint.x - nUnit.x * halfT, y: meetingPoint.y - nUnit.y * halfT }
+        const a = v === v1 ? offsets.a : -offsets.b
+        const b = v === v1 ? offsets.b : -offsets.a
+        const pA = { x: meetingPoint.x + nUnit.x * a, y: meetingPoint.y + nUnit.y * a }
+        const pB = { x: meetingPoint.x - nUnit.x * -b, y: meetingPoint.y - nUnit.y * -b }
 
         const edgeA = createLineFromPointAndVector(pA, v)
         const edgeB = createLineFromPointAndVector(pB, v)
@@ -339,8 +345,10 @@ function calculateJunctionIntersections(
       if (L < 1e-9) continue
 
       const nUnit = { x: -v.y / L, y: v.x / L }
-      const pA = { x: meetingPoint.x + nUnit.x * halfT, y: meetingPoint.y + nUnit.y * halfT }
-      const pB = { x: meetingPoint.x - nUnit.x * halfT, y: meetingPoint.y - nUnit.y * halfT }
+      const a = endType === 'start' ? offsets.a : -offsets.b
+      const b = endType === 'start' ? offsets.b : -offsets.a
+      const pA = { x: meetingPoint.x + nUnit.x * a, y: meetingPoint.y + nUnit.y * a }
+      const pB = { x: meetingPoint.x - nUnit.x * -b, y: meetingPoint.y - nUnit.y * -b }
 
       const edgeA = createLineFromPointAndVector(pA, v)
       const edgeB = createLineFromPointAndVector(pB, v)
@@ -365,7 +373,7 @@ function calculateJunctionIntersections(
     return a.wallId < b.wallId ? -1 : a.wallId > b.wallId ? 1 : 0
   })
 
-  const wallIntersections = new Map<string, { left?: Point2D; right?: Point2D }>()
+  const wallIntersections: WallIntersections = new Map()
   const n = processedWalls.length
 
   if (n < 2) return wallIntersections
@@ -420,6 +428,49 @@ function calculateJunctionIntersections(
     }
   }
 
+  if (connectedWalls.some(({ wall }) => wall.justification !== undefined)) {
+    const host = connectedWalls.find(({ endType }) => endType === 'passthrough')
+    for (const entry of connectedWalls) {
+      if (entry.endType === 'passthrough') continue
+      const edges = wallIntersections.get(entry.wall.id)
+      if (!edges) continue
+      if (host && edges.left && edges.right) {
+        // Both edges already meet the host's near face. Closing through the
+        // reference vertex would add a triangular sliver inside the host.
+        edges.closing = {
+          x: (edges.left.x + edges.right.x) / 2,
+          y: (edges.left.y + edges.right.y) / 2,
+        }
+      } else if (connectedWalls.length === 2) {
+        const other = connectedWalls.find((candidate) => candidate !== entry)!
+        if (other.endType === 'passthrough') continue
+        const bodyLine = (candidate: typeof entry) => {
+          const frame = getWallBoundaryFrame(candidate.wall, candidate.endType as 'start' | 'end')
+          const offset = getWallBodyCenterOffset(candidate.wall)
+          return createLineFromPointAndVector(
+            {
+              x: frame.point.x + frame.normal.x * offset,
+              y: frame.point.y + frame.normal.y * offset,
+            },
+            frame.tangent,
+          )
+        }
+        const first = bodyLine(entry)
+        const second = bodyLine(other)
+        const det = first.a * second.b - second.a * first.b
+        if (Math.abs(det) < 1e-9) continue
+        const closing = {
+          x: (first.b * second.c - second.b * first.c) / det,
+          y: (second.a * first.c - first.a * second.c) / det,
+        }
+        const limit = MITER_LIMIT * Math.max(...processedWalls.map((wall) => wall.halfThickness))
+        if (Math.hypot(closing.x - meetingPoint.x, closing.y - meetingPoint.y) <= limit) {
+          edges.closing = closing
+        }
+      }
+    }
+  }
+
   return wallIntersections
 }
 
@@ -437,13 +488,12 @@ export interface WallMiterData {
 /**
  * Calculates miter data for all walls on a level
  */
-export function calculateLevelMiters(walls: WallNode[]): WallMiterData {
-  const getThickness = (wall: WallNode) => wall.thickness ?? 0.1
+export function calculateLevelMiters(walls: WallNode[], facePadding = 0): WallMiterData {
   const junctions = findJunctions(walls)
   const junctionData: JunctionData = new Map()
 
   for (const [key, junction] of junctions.entries()) {
-    const wallIntersections = calculateJunctionIntersections(junction, getThickness)
+    const wallIntersections = calculateJunctionIntersections(junction, facePadding)
     junctionData.set(key, wallIntersections)
   }
 
@@ -453,9 +503,11 @@ export function calculateLevelMiters(walls: WallNode[]): WallMiterData {
 export function getWallMiterBoundaryPoints(
   wall: WallNode,
   miterData: WallMiterData,
+  facePadding = 0,
 ): WallMiterBoundaryPoints | null {
-  const thickness = wall.thickness ?? 0.1
-  const halfThickness = thickness / 2
+  const faces = getWallFaceOffsets(wall)
+  const { a, b } =
+    facePadding === 0 ? faces : { a: faces.a + facePadding, b: faces.b - facePadding }
   const startFrame = getWallBoundaryFrame(wall, 'start')
   const endFrame = getWallBoundaryFrame(wall, 'end')
   const startJunction = miterData.junctionData.get(pointToKey(startFrame.point))?.get(wall.id)
@@ -463,20 +515,20 @@ export function getWallMiterBoundaryPoints(
 
   return {
     startLeft: startJunction?.left ?? {
-      x: startFrame.point.x + startFrame.normal.x * halfThickness,
-      y: startFrame.point.y + startFrame.normal.y * halfThickness,
+      x: startFrame.point.x + startFrame.normal.x * a,
+      y: startFrame.point.y + startFrame.normal.y * a,
     },
     startRight: startJunction?.right ?? {
-      x: startFrame.point.x - startFrame.normal.x * halfThickness,
-      y: startFrame.point.y - startFrame.normal.y * halfThickness,
+      x: startFrame.point.x - startFrame.normal.x * -b,
+      y: startFrame.point.y - startFrame.normal.y * -b,
     },
     endLeft: endJunction?.right ?? {
-      x: endFrame.point.x + endFrame.normal.x * halfThickness,
-      y: endFrame.point.y + endFrame.normal.y * halfThickness,
+      x: endFrame.point.x + endFrame.normal.x * a,
+      y: endFrame.point.y + endFrame.normal.y * a,
     },
     endRight: endJunction?.left ?? {
-      x: endFrame.point.x - endFrame.normal.x * halfThickness,
-      y: endFrame.point.y - endFrame.normal.y * halfThickness,
+      x: endFrame.point.x - endFrame.normal.x * -b,
+      y: endFrame.point.y - endFrame.normal.y * -b,
     },
   }
 }

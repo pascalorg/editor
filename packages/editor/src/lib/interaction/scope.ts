@@ -31,6 +31,23 @@ export type ReshapeKind =
 
 export type InteractionScope =
   | { kind: 'idle' }
+  | {
+      kind: 'room-divide'
+      nodeId: string
+      levelId: string
+      // The placed points. The first lies on the room's boundary (an open cut)
+      // or inside the room (an island loop); the rest are free points.
+      points: [number, number][]
+      // The boundary the first point sits on, when it sits on one.
+      startBoundaryId?: string
+      // The live point under the pointer and what clicking it would do: start
+      // the path, add a point, finish on the boundary (`edge`), or close the loop.
+      end: [number, number] | null
+      endKind?: 'start' | 'point' | 'edge' | 'close'
+      endBoundaryId?: string
+      valid: boolean
+      message?: string
+    }
   // Placing a fresh node (catalog/preset/build tool). `pressDrag` is the
   // gizmo press-drag flavour (commit on release) vs click-to-place.
   | {
@@ -113,6 +130,7 @@ export function isActive(scope: InteractionScope): scope is ActiveInteractionSco
 // target no single existing node.
 export function scopeNodeId(scope: InteractionScope): string | null {
   switch (scope.kind) {
+    case 'room-divide':
     case 'placing':
     case 'moving':
     case 'handle-drag':

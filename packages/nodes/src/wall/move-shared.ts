@@ -126,22 +126,22 @@ function resolveWallSlotRefColor(ref: string | undefined): string | undefined {
 }
 
 export function getWallGhostColor(wall: WallNode) {
-  const slotColor =
-    resolveWallSlotRefColor(wall.slots?.interior) ?? resolveWallSlotRefColor(wall.slots?.exterior)
+  const slotColor = resolveWallSlotRefColor(wall.slots?.a) ?? resolveWallSlotRefColor(wall.slots?.b)
   if (slotColor) {
     return slotColor
   }
 
+  const legacy = wall.legacyFaceMaterials
   const presetColor =
     getMaterialPresetByRef(wall.materialPreset)?.mapProperties.color ??
-    getMaterialPresetByRef(wall.interiorMaterialPreset)?.mapProperties.color ??
-    getMaterialPresetByRef(wall.exteriorMaterialPreset)?.mapProperties.color
+    getMaterialPresetByRef(legacy?.a?.materialPreset)?.mapProperties.color ??
+    getMaterialPresetByRef(legacy?.b?.materialPreset)?.mapProperties.color
 
   if (presetColor) {
     return presetColor
   }
 
-  return resolveMaterial(wall.material ?? wall.interiorMaterial ?? wall.exteriorMaterial).color
+  return resolveMaterial(wall.material ?? legacy?.a?.material ?? legacy?.b?.material).color
 }
 
 export function getWallsAfterUpdates(

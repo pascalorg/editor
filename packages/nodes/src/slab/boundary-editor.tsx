@@ -35,7 +35,7 @@ import { useCallback, useEffect } from 'react'
  */
 export const SlabBoundaryEditor: React.FC<{ slabId: SlabNode['id'] }> = ({ slabId }) => {
   const slabNode = useScene((s) => s.nodes[slabId])
-  const updateNode = useScene((s) => s.updateNode)
+  const detachDerivedNode = useScene((s) => s.detachDerivedNode)
   const markDirty = useScene((s) => s.markDirty)
   const setSelection = useViewer((s) => s.setSelection)
 
@@ -45,10 +45,12 @@ export const SlabBoundaryEditor: React.FC<{ slabId: SlabNode['id'] }> = ({ slabI
   const handlePolygonChange = useCallback(
     (newPolygon: Array<[number, number]>) => {
       clearSlabSnapFeedback()
-      updateNode(slabId, { polygon: newPolygon, autoFromWalls: false })
+      // Reshaping the boundary is the sanctioned conversion of a derived floor
+      // plate into an authored slab — the reconciler stops owning it here.
+      detachDerivedNode(slabId, { polygon: newPolygon })
       setSelection({ selectedIds: [slabId] })
     },
-    [slabId, updateNode, setSelection],
+    [slabId, detachDerivedNode, setSelection],
   )
 
   const handlePolygonPreview = useCallback(
@@ -138,16 +140,17 @@ export const SlabBoundaryEditor: React.FC<{ slabId: SlabNode['id'] }> = ({ slabI
   // Guarantee the override clears if the editor unmounts mid-drag
   // (selection change, mode switch) so the slab mesh doesn't get stuck
   // on a stale polygon.
-  useEffect(() => {
-    return () => {
+  useEffect(
+    () => () => {
       clearSlabSnapFeedback()
       useLiveNodeOverrides.getState().clear(slabId)
       useScene.getState().markDirty(slabId)
       useInteractionScope
         .getState()
         .endIf((s) => s.kind === 'reshaping' && s.reshape === 'boundary')
-    }
-  }, [slabId])
+    },
+    [slabId],
+  )
 
   if (!slab?.polygon || slab.polygon.length < 3) return null
 

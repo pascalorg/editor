@@ -1,3 +1,6 @@
+import { footprintLift } from '../lib/floor-foundation-datum'
+import { levelConstructionDisplacements } from '../lib/floor-foundation-stack'
+import { area, intersection } from '../lib/polygon-boolean'
 import type { BuildingNode, LevelNode, SlabNode, WallNode } from '../schema'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import {
@@ -61,9 +64,25 @@ function resolveLevelBuildingId(
 // frame (WallCutout), which rebuilt an identical Map 1000+ times a frame. Weakly
 // keyed so a closed project's node graph is not pinned by the memo.
 const elevationMemo = new WeakMap<object, Map<string, LevelElevation>>()
+const authoredElevationMemo = new WeakMap<object, Map<string, LevelElevation>>()
 
 export function getLevelElevations(nodes: Record<AnyNodeId, AnyNode>): Map<string, LevelElevation> {
-  const memoized = elevationMemo.get(nodes)
+  const hit = elevationMemo.get(nodes)
+  if (hit) return hit
+  const elevations = new Map(getAuthoredLevelElevations(nodes))
+  if (Object.values(nodes).some((node) => node.type === 'slab' && node.plateRole === 'base'))
+    for (const [id, lift] of levelConstructionDisplacements(nodes)) {
+      const entry = elevations.get(id)!
+      if (lift) elevations.set(id, { ...entry, baseY: entry.baseY + lift })
+    }
+  elevationMemo.set(nodes, elevations)
+  return elevations
+}
+
+export function getAuthoredLevelElevations(
+  nodes: Readonly<Record<string, AnyNode>>,
+): Map<string, LevelElevation> {
+  const memoized = authoredElevationMemo.get(nodes)
   if (memoized) return memoized
 
   const buildings = Object.values(nodes).filter(
@@ -97,7 +116,7 @@ export function getLevelElevations(nodes: Record<AnyNodeId, AnyNode>): Map<strin
     cumulativeYByBuilding.set(entry.buildingId, baseY + entry.height)
   }
 
-  elevationMemo.set(nodes, elevations)
+  authoredElevationMemo.set(nodes, elevations)
   return elevations
 }
 
@@ -205,7 +224,14 @@ type CoveringSlabContext = {
   floorToFloorHeight: number
   /** Non-recessed slab children of the level above. */
   slabs: SlabNode[]
+  planeHeight: number
+  footprintPlanes: Array<{ slab: SlabNode; top: number }>
 }
+
+const coveringMemo = new WeakMap<
+  object,
+  Map<string, { sources: AnyNode[]; context: CoveringSlabContext }>
+>()
 
 /**
  * Storey height of the queried level plus the level-above's covering
@@ -217,6 +243,20 @@ function resolveCoveringSlabContext(
   levelId: string,
   nodes: Record<AnyNodeId, AnyNode>,
 ): CoveringSlabContext | null {
+  const sources = Object.values(nodes)
+  let memo = coveringMemo.get(nodes)
+  if (!memo) {
+    memo = new Map()
+    coveringMemo.set(nodes, memo)
+  }
+  const cached = memo.get(levelId)
+  // Reconciliation replaces entries in its working graph before returning it.
+  if (
+    cached &&
+    sources.length === cached.sources.length &&
+    sources.every((node, i) => node === cached.sources[i])
+  )
+    return cached.context
   const level = nodes[levelId as LevelNode['id']]
   if (level?.type !== 'level') return null
 
@@ -235,12 +275,28 @@ function resolveCoveringSlabContext(
     slabs.push(slab)
   }
 
-  return {
-    floorToFloorHeight:
-      resolveLevelFloorToFloorHeight(levelId, elevations) ??
-      getStoredLevelHeight(level as LevelNode),
+  const floorToFloorHeight =
+    resolveLevelFloorToFloorHeight(levelId, elevations) ?? getStoredLevelHeight(level)
+  const footprints = Object.values(nodes).flatMap((slab) =>
+    slab.type === 'slab' && slab.parentId === levelId && slab.plateRole === 'base'
+      ? [{ slab, lift: footprintLift(nodes, slab) }]
+      : [],
+  )
+  const authoredHeight =
+    resolveLevelFloorToFloorHeight(levelId, getAuthoredLevelElevations(nodes)) ??
+    getStoredLevelHeight(level)
+  const context = {
+    floorToFloorHeight,
+    planeHeight: authoredHeight,
     slabs,
+    footprintPlanes: footprints.map(({ slab, lift }) => ({
+      slab,
+      top: authoredHeight + lift,
+    })),
   }
+
+  memo.set(levelId, { sources, context })
+  return context
 }
 
 /**
@@ -340,10 +396,43 @@ export function getWallPlaneTop(
   levelId: string,
   nodes: Record<AnyNodeId, AnyNode>,
 ): number {
+  return wallPlaneTop(wall, resolveCoveringSlabContext(levelId, nodes))
+}
+
+export function getWallCoveringSlabUnderside(
+  wall: Pick<WallNode, 'start' | 'end'> & Partial<Pick<WallNode, 'thickness' | 'curveOffset'>>,
+  levelId: string,
+  nodes: Record<AnyNodeId, AnyNode>,
+): number | null {
   const context = resolveCoveringSlabContext(levelId, nodes)
+  if (!context) return null
+  const undersides = context.slabs
+    .filter((slab) => wallOverlapsSlabFootprint(wall, slab.polygon, slab.holes))
+    .map((slab) => coveringUndersideY(context.floorToFloorHeight, slab))
+  return undersides.length ? Math.min(...undersides) : null
+}
+
+export function getWallPlaneTops(
+  walls: readonly WallNode[],
+  levelId: string,
+  nodes: Record<AnyNodeId, AnyNode>,
+): Map<string, number> {
+  const context = resolveCoveringSlabContext(levelId, nodes)
+  return new Map(walls.map((wall) => [wall.id, wallPlaneTop(wall, context)]))
+}
+
+function wallPlaneTop(
+  wall: Pick<WallNode, 'start' | 'end'> & Partial<Pick<WallNode, 'thickness' | 'curveOffset'>>,
+  context: CoveringSlabContext | null,
+): number {
   if (!context) return DEFAULT_LEVEL_HEIGHT
 
-  let plane = context.floorToFloorHeight
+  const footprints = context.footprintPlanes.filter(({ slab }) =>
+    wallOverlapsSlabFootprint(wall, slab.polygon),
+  )
+  let plane = footprints.length
+    ? Math.max(...footprints.map(({ top }) => top))
+    : context.planeHeight
   for (const slab of context.slabs) {
     const underside = coveringUndersideY(context.floorToFloorHeight, slab)
     if (underside >= plane) continue
@@ -371,11 +460,18 @@ export function getCeilingClampBound(
   levelId: string,
   nodes: Record<AnyNodeId, AnyNode>,
   polygon: ReadonlyArray<[number, number]>,
+  wallTop?: number,
 ): number {
   const context = resolveCoveringSlabContext(levelId, nodes)
   if (!context) return Number.POSITIVE_INFINITY
 
-  let bound = context.floorToFloorHeight
+  const footprints = context.footprintPlanes.filter(
+    ({ slab }) => area(intersection(slab.polygon, [...polygon])) > 1e-6,
+  )
+  let bound = footprints.length
+    ? Math.min(...footprints.map(({ top }) => top))
+    : context.planeHeight
+  if (wallTop !== undefined) bound = Math.max(bound, wallTop)
   if (polygon.length > 0) {
     let cx = 0
     let cz = 0

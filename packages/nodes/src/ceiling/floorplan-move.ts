@@ -15,5 +15,4 @@ export const ceilingFloorplanMoveTarget: FloorplanMoveTarget<CeilingNode> = ({ n
     node,
     nodes,
     meshY: resolveCeilingHeight(node, nodes) - 0.01,
-    extraCommitData: node.autoFromWalls ? { autoFromWalls: false } : undefined,
   })

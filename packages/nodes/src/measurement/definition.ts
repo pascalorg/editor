@@ -64,7 +64,7 @@ export const measurementDefinition: NodeDefinition<typeof MeasurementNode> = {
   presentation: {
     label: 'Measurement',
     description: 'A persistent distance, angle, area, perimeter, or volume annotation.',
-    icon: { kind: 'iconify', name: 'lucide:ruler' },
+    icon: { kind: 'url', src: '/icons/measure.webp' },
     hidden: true,
     actionMenu: false,
   },

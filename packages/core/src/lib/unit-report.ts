@@ -1,6 +1,5 @@
 import type { AnyNode, AnyNodeId, LevelNode, UnitNode, ZoneNode } from '../schema'
-import { measurementArea } from './measurement-geometry'
-import { resolveAutoZonePolygon } from './space-detection'
+import { area } from './polygon-boolean'
 
 export type UnitReport = {
   memberCount: number
@@ -25,14 +24,17 @@ export function buildUnitReport(
     if (zone?.type !== 'zone') return []
     const level = zone.parentId ? nodes[zone.parentId as AnyNodeId] : undefined
     if (level?.type === 'level') levels.set(level.id, level.level)
-    const polygon = resolveAutoZonePolygon(zone, (nodeId) => nodes[nodeId])
+    const { polygon, holes } = zone
     return [
       {
         zoneId: zone.id,
         name: zone.name,
         levelId: level?.type === 'level' ? level.id : null,
         levelOrdinal: level?.type === 'level' ? level.level : null,
-        areaM2: measurementArea(polygon.map(([x, z]) => [x, 0, z])),
+        areaM2:
+          zone.autoFromWalls && zone.enclosureStatus === 'open'
+            ? 0
+            : area([{ outer: polygon, holes }]),
       },
     ]
   })

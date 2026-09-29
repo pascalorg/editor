@@ -3,6 +3,41 @@ import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { withSceneHistoryDraftSuspended } from './history-drafts'
 
+let sceneHistoryRestoreDepth = 0
+
+export function isRestoringSceneHistory(): boolean {
+  return sceneHistoryRestoreDepth > 0
+}
+
+export function runAsSceneHistoryRestore<T>(run: () => T): T {
+  sceneHistoryRestoreDepth += 1
+  try {
+    return run()
+  } finally {
+    sceneHistoryRestoreDepth -= 1
+  }
+}
+
+let remoteSceneOperationDepth = 0
+
+/**
+ * Whether the scene is being written by a collaborator's change (a shared
+ * operation or snapshot applied from the host), not by this client — what a
+ * live session that takes back its own writes must leave alone.
+ */
+export function isApplyingRemoteSceneChange(): boolean {
+  return remoteSceneOperationDepth > 0
+}
+
+export function runAsRemoteSceneChange<T>(run: () => T): T {
+  remoteSceneOperationDepth += 1
+  try {
+    return run()
+  } finally {
+    remoteSceneOperationDepth -= 1
+  }
+}
+
 let sceneHistoryPauseDepth = 0
 const sceneHistoryPauseLeases = new Set<symbol>()
 

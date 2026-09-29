@@ -1,20 +1,17 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
 import { z } from 'zod'
-import {
-  createWallBoundSurfaceFollower,
-  detectSpacesForLevel,
-  initSpaceDetectionSync,
-  type Space,
-} from '../lib/space-detection'
+import { initSpaceDetectionSync, type Space } from '../lib/space-detection'
 import { nodeRegistry } from '../registry/registry'
 import type { AnyNodeDefinition } from '../registry/types'
 import { BuildingNode } from '../schema/nodes/building'
 import { CeilingNode } from '../schema/nodes/ceiling'
+import { ItemNode } from '../schema/nodes/item'
 import { LevelNode } from '../schema/nodes/level'
 import { SlabNode } from '../schema/nodes/slab'
 import { WallNode } from '../schema/nodes/wall'
 import { SceneMaterial, type SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import { migrateCeilingRoomLinks, migrateRoomZones } from '../utils/room-zone-migration'
 import {
   areSceneSnapshotsEqual,
   pauseSceneHistory,
@@ -396,6 +393,7 @@ describe('scene commit boundary', () => {
         'ceiling',
         'slab',
         'wall',
+        'zone',
       ])
 
       stopDetection()
@@ -425,7 +423,7 @@ describe('scene commit boundary', () => {
       expect(Object.values(spaces)).toHaveLength(2)
       expect(
         receiverNodes.filter((node) => node.type === 'slab' && node.autoFromWalls),
-      ).toHaveLength(2)
+      ).toHaveLength(1)
       expect(
         receiverNodes.filter((node) => node.type === 'ceiling' && node.autoFromWalls),
       ).toHaveLength(2)
@@ -434,74 +432,74 @@ describe('scene commit boundary', () => {
     }
   })
 
-  describe('wall-bound surface follower', () => {
-    const autoSlab = (polygon: Array<[number, number]>) =>
-      SlabNode.parse({ parentId: LEVEL_ID, polygon, autoFromWalls: true })
-    const nodesOf = (entries: AnyNode[]) =>
-      Object.fromEntries(entries.map((node) => [node.id, node])) as Record<string, AnyNode>
-
-    test('keeps a corner on the walls that bound it at a junction with a diagonal branch', () => {
-      // The diagonal leaves the divider's foot outside the room; it bounds no room vertex.
-      const diagonal = WallNode.parse({ parentId: LEVEL_ID, start: [2, 0], end: [1, -1] })
-      const south = WallNode.parse({ parentId: LEVEL_ID, start: [0, 0], end: [4, 0] })
-      const divider = WallNode.parse({ parentId: LEVEL_ID, start: [2, 0], end: [2, 4] })
-      const north = WallNode.parse({ parentId: LEVEL_ID, start: [4, 4], end: [0, 4] })
-      const west = WallNode.parse({ parentId: LEVEL_ID, start: [0, 4], end: [0, 0] })
-      const slab = autoSlab([
-        [0, 0],
-        [2, 0],
-        [2, 4],
-        [0, 4],
-      ])
-      const follow = createWallBoundSurfaceFollower(
-        LEVEL_ID,
-        nodesOf([diagonal, south, divider, north, west, slab]),
-        new Set([divider.id]),
+  test('host split and merge patches reparent ceiling children without deriving or losing identities', () => {
+    const polygon: [number, number][] = [
+      [0, 0],
+      [8, 0],
+      [8, 4],
+      [0, 4],
+    ]
+    const editor = {
+      spaces: {},
+      setSpaces(spaces: Record<string, Space>) {
+        this.spaces = spaces
+      },
+    }
+    let stop = initSpaceDetectionSync(useScene, { getState: () => editor })
+    try {
+      useScene.getState().createNodes(
+        polygon.map((start, i) => ({
+          node: WallNode.parse({
+            id: `wall_host_${i}`,
+            parentId: LEVEL_ID,
+            start,
+            end: polygon[(i + 1) % 4],
+          }),
+          parentId: LEVEL_ID,
+        })),
       )
-
-      const [[, polygon]] = follow(new Map([[divider.id, { start: [2.5, 0], end: [2.5, 4] }]])) as [
-        [string, Array<[number, number]>],
-      ]
-      expect(polygon).toEqual([
-        [0, 0],
-        [2.5, 0],
-        [2.5, 4],
-        [0, 4],
-      ])
-    })
-
-    test('carries the sampled arc of a curved wall with the wall', () => {
-      const walls = [
-        WallNode.parse({ parentId: LEVEL_ID, start: [0, 0], end: [4, 0] }),
-        WallNode.parse({ parentId: LEVEL_ID, start: [4, 0], end: [4, 4], curveOffset: 0.8 }),
-        WallNode.parse({ parentId: LEVEL_ID, start: [4, 4], end: [0, 4] }),
-        WallNode.parse({ parentId: LEVEL_ID, start: [0, 4], end: [0, 0] }),
-      ]
-      const [room] = detectSpacesForLevel(LEVEL_ID, walls).roomPolygons
-      const polygon = room!.map((point) => [point.x, point.y] as [number, number])
-      const arcVertices = polygon.filter(([x]) => x > 4 + 1e-6)
-      expect(arcVertices.length).toBeGreaterThan(0)
-      const slab = autoSlab(polygon)
-      const [south, east, north] = walls as [WallNode, WallNode, WallNode]
-      const follow = createWallBoundSurfaceFollower(
-        LEVEL_ID,
-        nodesOf([...walls, slab]),
-        new Set([east.id, south.id, north.id]),
-      )
-
-      const [[, moved]] = follow(
-        new Map([
-          [east.id, { start: [4.5, 0], end: [4.5, 4] }],
-          [south.id, { start: [0, 0], end: [4.5, 0] }],
-          [north.id, { start: [4.5, 4], end: [0, 4] }],
-        ]),
-      ) as [[string, Array<[number, number]>]]
-      polygon.forEach(([x, y], index) => {
-        const [mx, my] = moved[index]!
-        expect(my).toBeCloseTo(y, 6)
-        expect(mx).toBeCloseTo(x >= 4 - 1e-6 ? x + 0.5 : x, 6)
+      const ceiling = Object.values(useScene.getState().nodes).find(
+        (node): node is CeilingNode => node.type === 'ceiling',
+      )!
+      const item = ItemNode.parse({
+        id: 'item_host_light',
+        parentId: ceiling.id,
+        position: [1, 0, 2],
+        asset: {
+          id: 'light',
+          name: 'Light',
+          category: 'lighting',
+          thumbnail: '',
+          src: '/light.glb',
+        },
       })
-    })
+      useScene.getState().createNode(item, ceiling.id)
+      const commits: SceneCommit[] = []
+      unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
+      const divider = WallNode.parse({
+        id: 'wall_host_divider',
+        parentId: LEVEL_ID,
+        start: [2, 0],
+        end: [2, 4],
+      })
+      useScene.getState().createNode(divider, LEVEL_ID)
+      useScene.getState().deleteNode(divider.id)
+      const originals = [...commits]
+      expect(originals).toHaveLength(2)
+      for (const commit of originals) {
+        stop()
+        useScene.setState({ ...commit.before, readOnly: true })
+        clearSceneHistory()
+        stop = initSpaceDetectionSync(useScene, { getState: () => editor })
+        commits.length = 0
+        expect(applySceneOperationPatch(operationPatchFromCommit(commit))).toBe(true)
+        expect(areSceneSnapshotsEqual(currentSnapshot(), commit.current)).toBe(true)
+        expect(commits.map((value) => value.origin)).toEqual(['host'])
+        expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+      }
+    } finally {
+      stop()
+    }
   })
 
   describe('wall move commit', () => {
@@ -542,7 +540,7 @@ describe('scene commit boundary', () => {
     })
     afterEach(() => stopDetection())
 
-    const polygonsOf = (type: 'slab' | 'ceiling') =>
+    const polygonsOf = (type: 'zone' | 'ceiling') =>
       Object.values(useScene.getState().nodes).flatMap((node) =>
         node.type === type ? [node.polygon] : [],
       )
@@ -566,69 +564,17 @@ describe('scene commit boundary', () => {
       expect(reconcilePasses).toBe(1)
       expect(commits).toHaveLength(1)
       expect(useScene.temporal.getState().pastStates).toHaveLength(1)
-      for (const polygons of [polygonsOf('slab'), polygonsOf('ceiling')]) {
-        expect(polygons.flat()).toContainEqual([2.5, 0])
-        expect(polygons.flat()).not.toContainEqual([2, 0])
-      }
+      // Rooms sit on wall centrelines, their ceilings on the wall faces.
+      expect(polygonsOf('zone').flat()).toContainEqual([2.5, 0])
+      expect(polygonsOf('zone').flat()).not.toContainEqual([2, 0])
+      const ceilingXs = polygonsOf('ceiling')
+        .flat()
+        .map(([x]) => x)
+      expect(ceilingXs.some((x) => Math.abs(x - 2.5) < 0.2)).toBe(true)
+      expect(ceilingXs.some((x) => Math.abs(x - 2) < 0.2)).toBe(false)
 
       useScene.temporal.getState().undo()
       expect(areSceneSnapshotsEqual(currentSnapshot(), before)).toBe(true)
-    })
-
-    test('follows wall-bound automatic surfaces from membership read once', () => {
-      const nodes = useScene.getState().nodes
-      const slabIds = Object.values(nodes).flatMap((node) =>
-        node.type === 'slab' ? [node.id] : [],
-      )
-      const manual = SlabNode.parse({
-        parentId: LEVEL_ID,
-        polygon: [
-          [2, 0],
-          [3, 0],
-          [3, 1],
-          [2, 1],
-        ],
-      })
-      const follow = createWallBoundSurfaceFollower(
-        LEVEL_ID,
-        { ...nodes, [manual.id]: manual },
-        new Set(['wall_move_east', 'wall_move_south', 'wall_move_north']),
-      )
-
-      // The east wall moves out; its neighbours stretch along their own lines.
-      const polygons = new Map(
-        follow(
-          new Map([
-            ['wall_move_east', { start: [5, 0], end: [5, 4] }],
-            ['wall_move_south', { start: [0, 0], end: [5, 0] }],
-            ['wall_move_north', { start: [5, 4], end: [0, 4] }],
-          ]),
-        ),
-      )
-
-      expect(polygons.has(manual.id)).toBe(false)
-      const eastRoom = slabIds
-        .map((id) => polygons.get(id))
-        .find((polygon) => polygon?.some(([x]) => x === 5))
-      expect(eastRoom).toEqual(
-        expect.arrayContaining([
-          [2, 0],
-          [5, 0],
-          [5, 4],
-          [2, 4],
-        ]),
-      )
-      const westRoom = slabIds
-        .map((id) => polygons.get(id))
-        .find((polygon) => polygon?.some(([x]) => x === 0))
-      expect(westRoom).toEqual(
-        expect.arrayContaining([
-          [0, 0],
-          [2, 0],
-          [2, 4],
-          [0, 4],
-        ]),
-      )
     })
   })
 
@@ -648,6 +594,7 @@ describe('scene commit boundary', () => {
       parentId: LEVEL_ID,
       polygon,
       autoFromWalls: true,
+      boundary: 'auto',
     })
     const ceiling = CeilingNode.parse({
       id: 'ceiling_curve_triangle',
@@ -676,6 +623,11 @@ describe('scene commit boundary', () => {
         },
       }),
     }
+    useScene.setState({
+      nodes: migrateCeilingRoomLinks(migrateRoomZones(useScene.getState().nodes).nodes)
+        .nodes as Record<AnyNodeId, AnyNode>,
+    })
+    clearSceneHistory()
     const stopDetection = initSpaceDetectionSync(useScene, editorStore)
 
     try {
@@ -714,6 +666,7 @@ describe('scene commit boundary', () => {
       parentId: LEVEL_ID,
       polygon,
       autoFromWalls: true,
+      boundary: 'auto',
     })
     const ceiling = CeilingNode.parse({
       id: 'ceiling_curve_square',
@@ -734,6 +687,11 @@ describe('scene commit boundary', () => {
     clearSceneHistory()
 
     let spaces: Record<string, Space> = {}
+    useScene.setState({
+      nodes: migrateCeilingRoomLinks(migrateRoomZones(useScene.getState().nodes).nodes)
+        .nodes as Record<AnyNodeId, AnyNode>,
+    })
+    clearSceneHistory()
     const stopDetection = initSpaceDetectionSync(useScene, {
       getState: () => ({
         spaces,
@@ -1359,7 +1317,7 @@ describe('scene commit boundary', () => {
 
   test('semantic equality short-circuits shared nodes in a large scene', () => {
     const nodes: Record<AnyNodeId, AnyNode> = {}
-    for (let index = 0; index < 1_000; index += 1) {
+    for (let index = 0; index < 1000; index += 1) {
       const id = `level_${index}` as AnyNodeId
       nodes[id] = { id, type: 'level', level: index, children: [] } as unknown as AnyNode
     }

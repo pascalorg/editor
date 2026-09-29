@@ -2,6 +2,7 @@ import {
   type AnyNodeId,
   DEFAULT_WALL_THICKNESS,
   getEffectiveNode,
+  getOpeningWallPlacement,
   getWallThickness,
   type SceneMaterial,
   type SceneMaterialId,
@@ -3379,8 +3380,13 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
   mesh.material = hitboxMaterial
 
   // Sync transform from node (React may lag behind the system by a frame during drag)
-  mesh.position.set(node.position[0], node.position[1], node.position[2])
-  mesh.rotation.set(node.rotation[0], node.rotation[1], node.rotation[2])
+  const parent = node.parentId ? useScene.getState().nodes[node.parentId as AnyNodeId] : undefined
+  const placement =
+    parent?.type === 'wall' && !node.roofSegmentId
+      ? getOpeningWallPlacement(getEffectiveNode(parent), node, useScene.getState().nodes)
+      : node
+  mesh.position.set(...placement.position)
+  mesh.rotation.set(...placement.rotation)
 
   // Dispose and remove all old visual children; preserve 'cutout'
   for (const child of [...mesh.children]) {

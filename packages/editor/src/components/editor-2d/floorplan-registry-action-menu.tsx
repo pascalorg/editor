@@ -38,6 +38,7 @@ import useInteractionScope, {
   useMovingNode,
 } from '../../store/use-interaction-scope'
 import { NodeActionMenu } from '../editor/node-action-menu'
+import { startZoneRoomTransform } from '../editor/room-controls'
 import { IconRefGlyph } from '../ui/icon-ref'
 
 function SideAddGlyph({ direction }: { direction: 'left' | 'right' }) {
@@ -258,6 +259,7 @@ export function FloorplanRegistryActionMenu() {
   const canAddHole = node.type === 'slab' || node.type === 'ceiling'
 
   const handleMove = () => {
+    if (startZoneRoomTransform(node, 'move')) return
     sfxEmitter.emit('sfx:item-pick')
     const sceneNodes = useScene.getState().nodes
     setMovingNode(resolveMoveActionNode(node, sceneNodes) as never)
@@ -321,6 +323,7 @@ export function FloorplanRegistryActionMenu() {
 
   const handleDuplicate = () => {
     if (!node.parentId) return
+    if (startZoneRoomTransform(node, 'duplicate')) return
     sfxEmitter.emit('sfx:item-pick')
     if (registryMoveDisabled(node)) {
       try {

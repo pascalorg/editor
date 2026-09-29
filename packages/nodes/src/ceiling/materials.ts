@@ -1,4 +1,5 @@
 import {
+  getCatalogMaterialById,
   getMaterialPresetByRef,
   parseMaterialRef,
   resolveMaterial,
@@ -71,7 +72,13 @@ export function ceilingColorFromRef(
   const parsed = parseMaterialRef(ref)
   if (!parsed) return null
   if (parsed.kind === 'library') {
-    return getMaterialPresetByRef(ref)?.mapProperties.color ?? null
+    // A flat tint: the catalog's preview colour reads as the finish (a textured
+    // preset's map colour is often plain white).
+    return (
+      getCatalogMaterialById(parsed.id)?.previewColor ??
+      getMaterialPresetByRef(ref)?.mapProperties.color ??
+      null
+    )
   }
   const sceneMaterial = sceneMaterials?.[parsed.id as SceneMaterialId]
   if (!sceneMaterial) return null

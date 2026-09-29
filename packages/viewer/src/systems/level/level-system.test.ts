@@ -84,6 +84,7 @@ afterEach(() => {
   useScene.setState({ nodes: {} as Record<AnyNodeId, AnyNode> })
   useViewer.setState({
     levelMode: previousViewerState.levelMode,
+    hideLevelsAboveSelection: false,
     selection: previousViewerState.selection,
   })
 })
@@ -135,6 +136,39 @@ describe('updateLevelPresentation', () => {
 
     expect(objects[0]!.visible).toBe(true)
     expect(objects[1]!.visible).toBe(false)
+  })
+})
+
+describe("the editor's level display", () => {
+  test('stacked, hiding every level above the selected one', async () => {
+    const { levels, objects } = setupLevels([0, 0, 0])
+    setLevelMode('stacked', levels[1]!.id)
+    useViewer.setState({ hideLevelsAboveSelection: true })
+    await updateLevelPresentation(1 / 12)
+    // Stacked positions, no exploded gap.
+    expect(objects.map((object) => object.position.y)).toEqual([0, 2.5, 5])
+    // Below and the selected level show; the one above casts shadows only.
+    expect(objects.map((object) => object.visible)).toEqual([true, true, true])
+    expect(objects[2]!.layers.isEnabled(0)).toBe(false)
+    expect(objects[0]!.layers.isEnabled(0)).toBe(true)
+    expect(objects[1]!.layers.isEnabled(0)).toBe(true)
+
+    // The top level selected: everything shows again.
+    setLevelMode('stacked', levels[2]!.id)
+    await updateLevelPresentation(1 / 12)
+    expect(objects.every((object) => object.visible && object.layers.isEnabled(0))).toBe(true)
+  })
+
+  test('a full-building capture shows the hidden upper levels for its render', async () => {
+    const { levels, objects } = setupLevels([0, 0])
+    setLevelMode('stacked', levels[0]!.id)
+    useViewer.setState({ hideLevelsAboveSelection: true })
+    await updateLevelPresentation(1 / 12)
+    expect(objects[1]!.layers.isEnabled(0)).toBe(false)
+    const restore = snapLevelsToTruePositions()
+    expect(objects[1]!.layers.isEnabled(0)).toBe(true)
+    restore()
+    expect(objects[1]!.layers.isEnabled(0)).toBe(false)
   })
 })
 

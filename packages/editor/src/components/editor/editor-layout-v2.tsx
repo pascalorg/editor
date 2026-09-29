@@ -2,13 +2,13 @@
 
 import { type ReactNode, useCallback, useEffect, useRef } from 'react'
 import { useIsMobile } from '../../hooks/use-mobile'
+import { SIDEBAR_MIN_WIDTH, setSidebarTabIds } from '../../lib/sidebar-panel'
 import useEditor from '../../store/use-editor'
 
 import { useSidebarStore } from '../ui/primitives/sidebar'
 import { IconRail, type SidebarTab } from '../ui/sidebar/tab-bar'
 import { EditorLayoutMobile } from './editor-layout-mobile'
 
-const SIDEBAR_MIN_WIDTH = 300
 const SIDEBAR_MAX_WIDTH = 800
 const SIDEBAR_COLLAPSE_THRESHOLD = 220
 // Matches the `w-14` rail in <IconRail>; the resize math is relative to it.
@@ -35,6 +35,12 @@ function LeftColumn({
   const setActivePanel = useEditor((s) => s.setActiveSidebarPanel)
 
   const isResizing = useRef(false)
+
+  // Publish the rail's tabs so keyboard shortcuts (B, P) can open a panel.
+  useEffect(() => {
+    setSidebarTabIds(tabs.map((tab) => tab.id))
+    return () => setSidebarTabIds([])
+  }, [tabs])
 
   // Ensure active panel is a valid tab
   useEffect(() => {

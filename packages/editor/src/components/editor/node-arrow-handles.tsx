@@ -42,6 +42,7 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { useCeilingEditCeilingId } from '../../lib/ceiling-edit-session'
 import { EDITOR_LAYER } from '../../lib/constants'
 import { RESIZE_HANDLE_DRAG_LABEL, ROTATE_HANDLE_DRAG_LABEL } from '../../lib/contextual-help'
 import { createEditorApi } from '../../lib/editor-api'
@@ -241,7 +242,12 @@ export function NodeArrowHandles() {
   const activeGroup = useHandleGroup((s) =>
     s.active && s.active.nodeId === node?.id ? s.active.group : null,
   )
-  const def = node ? nodeRegistry.get(node.type) : null
+  // A ceiling's handles belong to its Edit ceiling session; a plain selection shows none.
+  const editCeilingId = useCeilingEditCeilingId()
+  const def =
+    node && (node.type !== 'ceiling' || node.id === editCeilingId)
+      ? nodeRegistry.get(node.type)
+      : null
   const descriptorSceneApi = useMemo(() => createSceneApi(useScene), [])
   const descriptors = useMemo(() => {
     if (!(node && def?.handles)) return null

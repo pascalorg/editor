@@ -14,6 +14,8 @@ export type MaterialPickerProps = {
   nodeType?: MaterialTarget
   hideSideControl?: boolean
   onCreateMaterialRequest?: () => void
+  /** Whether switching category tabs selects the tab's first material (paint mode does). */
+  selectOnCategoryChange?: boolean
 }
 
 function getCategoryLabel(category: string) {
@@ -31,8 +33,9 @@ export function MaterialPicker({
   onSelectMaterialPreset,
   disabled = false,
   onCreateMaterialRequest,
+  selectOnCategoryChange = true,
 }: MaterialPickerProps) {
-  const { selectedCategory, setSelectedCategory, sourceFilter, setSourceFilter, visibleSourceFilters, availableCategories, catalogItems, select: handleCatalogSelect } = useMaterialCatalogModel(selectedMaterialPreset, onSelectMaterialPreset, disabled)
+  const { selectedCategory, setSelectedCategory, sourceFilter, setSourceFilter, visibleSourceFilters, availableCategories, catalogItems, select: handleCatalogSelect } = useMaterialCatalogModel(selectedMaterialPreset, onSelectMaterialPreset, disabled, selectOnCategoryChange)
 
   return (
     <div

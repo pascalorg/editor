@@ -4,6 +4,8 @@ import {
   type AnyNodeDefinition,
   getFloorPlacedElevation,
   getFloorStackedPosition,
+  getStairFloorPlacedFootprints,
+  getStairSegmentFloorPlacedFootprints,
   nodeRegistry,
   registerNode,
   resolveSupportSlabPatch,
@@ -13,7 +15,6 @@ import {
   spatialGridManager,
 } from '@pascal-app/core'
 import { stairDefinition } from './definition'
-import { getStairFloorPlacedFootprints, getStairSegmentFloorPlacedFootprints } from './floor-stack'
 
 const LEVEL_ID = 'level_test'
 

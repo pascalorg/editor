@@ -201,6 +201,7 @@ export function planWallSplitAtPoint(
     point: WallPlanPoint
     radius: number
     ignoreWallIds?: readonly string[]
+    mintId?: () => string
   },
 ): WallPointSplitResult {
   if (!args.levelId) return { ok: false, reason: 'no-host' }
@@ -221,7 +222,7 @@ export function planWallSplitAtPoint(
     }
   }
 
-  const split = splitWall(projection.wall, [projection.wallT], nodes)
+  const split = splitWall(projection.wall, [projection.wallT], nodes, args.mintId)
   if (!split) {
     return {
       ok: true,
@@ -410,6 +411,7 @@ function splitWall(
   wall: WallNode,
   splitParameters: number[],
   nodes: Record<AnyNodeId, AnyNode>,
+  mintId?: () => string,
 ): { create: WallNode[]; update: WallTopologyChanges['update'] } | null {
   const parameters = [
     0,
@@ -423,6 +425,7 @@ function splitWall(
     const endT = parameters[index + 1]!
     return WallSchema.parse({
       ...properties,
+      id: mintId?.(),
       start: wallPointAt(wall, startT),
       end: wallPointAt(wall, endT),
       curveOffset: segmentCurveOffset(wall, startT, endT),
@@ -483,6 +486,7 @@ export function planWallInsertion(
     end: WallPlanPoint
     joinRadius: number
     wallDefaults?: Partial<WallNode>
+    mintId?: () => string
   },
 ): WallInsertionResult {
   const walls = Object.values(nodes).filter(
@@ -533,6 +537,7 @@ export function planWallInsertion(
   const insertedWalls = vertices.slice(0, -1).map((start, index) =>
     WallSchema.parse({
       ...wallProperties,
+      id: args.mintId?.(),
       name: `Wall ${existingWallCount + index + 1}`,
       start,
       end: vertices[index + 1]!,
@@ -562,7 +567,7 @@ export function planWallInsertion(
   }
   const splitPlans = [...splitWalls].flatMap(([wallId, parameters]) => {
     const wall = walls.find((candidate) => candidate.id === wallId)
-    const split = wall ? splitWall(wall, parameters, nodes) : null
+    const split = wall ? splitWall(wall, parameters, nodes, args.mintId) : null
     return split ? [[wallId, split] as const] : []
   })
   const replacementWalls = splitPlans.flatMap(([, split]) => split.create)

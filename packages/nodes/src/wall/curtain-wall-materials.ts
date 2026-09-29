@@ -72,10 +72,20 @@ export function getCurtainAwareWallMaterials(
   colorPreset: Parameters<typeof getMaterialsForWall>[3] = 'clay',
   sceneTheme?: string,
   materials?: Record<SceneMaterialId, SceneMaterial>,
+  finishRefs: readonly string[] = [],
 ): WallMaterials {
   const override =
     textures && wall.wallType === 'curtain'
       ? createCurtainWallMaterials(wall, shading, materials)
       : undefined
-  return getMaterialsForWall(wall, shading, textures, colorPreset, sceneTheme, materials, override)
+  return getMaterialsForWall(
+    wall,
+    shading,
+    textures,
+    colorPreset,
+    sceneTheme,
+    materials,
+    finishRefs,
+    override,
+  )
 }

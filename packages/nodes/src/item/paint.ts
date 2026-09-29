@@ -13,6 +13,7 @@ import {
 } from '@pascal-app/core'
 import { createMaterial, createMaterialFromPresetRef, useViewer } from '@pascal-app/viewer'
 import type { Material, Mesh } from 'three'
+import { swapPreviewMaterial } from '../shared/swap-preview-material'
 
 type SlotTag = string | null | (string | null)[]
 
@@ -200,7 +201,6 @@ function applyItemPreview(
     if (Array.isArray(tag)) {
       const current = mesh.material as Material | Material[]
       if (Array.isArray(current)) {
-        const previousArray = [...current]
         const nextArray = [...current]
         let changed = false
         for (let index = 0; index < tag.length; index += 1) {
@@ -209,20 +209,13 @@ function applyItemPreview(
           changed = true
         }
         if (!changed) return
-        mesh.material = nextArray
-        restores.push(() => {
-          mesh.material = previousArray
-        })
+        restores.push(swapPreviewMaterial(mesh, nextArray))
         return
       }
       if (tag[0] !== role) return
     }
 
-    const previous = mesh.material
-    mesh.material = previewMaterial
-    restores.push(() => {
-      mesh.material = previous
-    })
+    restores.push(swapPreviewMaterial(mesh, previewMaterial))
   })
 
   if (restores.length === 0) return null

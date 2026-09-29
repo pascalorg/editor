@@ -841,9 +841,9 @@ describe('resolveExportLevels', () => {
     selectLevel(ground.id)
 
     expect(resolveExportLevels(nodes)).toEqual([
-      { id: ground.id, label: 'Level 0' },
-      { id: upper.id, label: 'Level 1' },
-      { id: attic.id, label: 'Level 3' },
+      { id: ground.id, label: 'Ground floor' },
+      { id: upper.id, label: 'Floor 1' },
+      { id: attic.id, label: 'Floor 3' },
     ])
   })
 
@@ -851,9 +851,9 @@ describe('resolveExportLevels', () => {
     selectLevel(roof.id)
 
     expect(resolveExportLevels(nodes)).toEqual([
-      { id: ground.id, label: 'Level 0' },
-      { id: upper.id, label: 'Level 1' },
-      { id: attic.id, label: 'Level 3' },
+      { id: ground.id, label: 'Ground floor' },
+      { id: upper.id, label: 'Floor 1' },
+      { id: attic.id, label: 'Floor 3' },
     ])
   })
 })

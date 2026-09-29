@@ -1,4 +1,5 @@
 import type { Point2D } from '@pascal-app/core'
+import { getWallFaceOffsets, type WallJustification } from '@pascal-app/core'
 import type { FloorplanLineSegment, FloorplanSelectionBounds } from './types'
 
 // Baseline rotation (deg) that orients the plan-local scene "north up" on
@@ -107,7 +108,11 @@ export function movePlanPointTowards(start: Point2D, end: Point2D, distance: num
   return interpolatePlanPoint(start, end, Math.min(1, distance / totalDistance))
 }
 
-export function getThickPlanLinePolygon(line: FloorplanLineSegment, thickness: number): Point2D[] {
+export function getThickPlanLinePolygon(
+  line: FloorplanLineSegment,
+  thickness: number,
+  justification?: WallJustification,
+): Point2D[] {
   const dx = line.end.x - line.start.x
   const dy = line.end.y - line.start.y
   const length = Math.hypot(dx, dy)
@@ -116,15 +121,17 @@ export function getThickPlanLinePolygon(line: FloorplanLineSegment, thickness: n
     return [line.start, line.end, line.end, line.start]
   }
 
-  const halfThickness = thickness / 2
-  const normalX = (-dy / length) * halfThickness
-  const normalY = (dx / length) * halfThickness
+  const { a, b } = getWallFaceOffsets({ thickness, justification })
+  const normalX = (-dy / length) * a
+  const normalY = (dx / length) * a
 
+  const backX = (-dy / length) * -b
+  const backY = (dx / length) * -b
   return [
     { x: line.start.x + normalX, y: line.start.y + normalY },
     { x: line.end.x + normalX, y: line.end.y + normalY },
-    { x: line.end.x - normalX, y: line.end.y - normalY },
-    { x: line.start.x - normalX, y: line.start.y - normalY },
+    { x: line.end.x - backX, y: line.end.y - backY },
+    { x: line.start.x - backX, y: line.start.y - backY },
   ]
 }
 

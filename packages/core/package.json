@@ -16,6 +16,11 @@
       "import": "./dist/utils/clone-scene-graph.js",
       "default": "./dist/utils/clone-scene-graph.js"
     },
+    "./structure-kernel": {
+      "types": "./dist/lib/structure-kernel.d.ts",
+      "import": "./dist/lib/structure-kernel.js",
+      "default": "./dist/lib/structure-kernel.js"
+    },
     "./scene-migrations": {
       "types": "./dist/utils/scene-migrations.d.ts",
       "import": "./dist/utils/scene-migrations.js",
@@ -97,6 +102,7 @@
     "idb-keyval": "^6.2.2",
     "mitt": "^3.0.1",
     "nanoid": "^5.1.6",
+    "polygon-clipping": "0.15.7",
     "zod": ">=4.5.4 <4.6",
     "zundo": "^2.3.0",
     "zustand": "^5"

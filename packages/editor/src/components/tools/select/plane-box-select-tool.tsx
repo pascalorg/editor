@@ -1,14 +1,7 @@
 import '../../../three-types'
 
 import { Icon } from '@iconify/react'
-import {
-  type AnyNodeId,
-  emitter,
-  type GridEvent,
-  sceneRegistry,
-  useScene,
-  type ZoneNode,
-} from '@pascal-app/core'
+import { type AnyNodeId, emitter, type GridEvent, sceneRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
@@ -26,9 +19,10 @@ import {
   Vector2,
   Vector3,
 } from 'three'
+import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
-import useEditor from '../../../store/use-editor'
+import useInteractionScope from '../../../store/use-interaction-scope'
 import { CursorSphere } from '../shared/cursor-sphere'
 import { isBoxSelectPointerSuppressed, markBoxSelectHandled } from './box-select-state'
 import { collectSelectableCandidateIds } from './select-candidates'
@@ -297,6 +291,7 @@ export const PlaneBoxSelectTool: React.FC = () => {
   const currentPoint = useRef(new Vector3())
   const pointerDown = useRef(false)
   const isDragging = useRef(false)
+  const ownedGesture = useRef<object | null>(null)
   const startClientX = useRef(0)
   const startClientY = useRef(0)
   const gridY = useRef(0)
@@ -320,10 +315,35 @@ export const PlaneBoxSelectTool: React.FC = () => {
   const resetDrag = useCallback(() => {
     pointerDown.current = false
     isDragging.current = false
-    rectFillRef.current.visible = false
+    const gesture = ownedGesture.current
+    if (gesture)
+      useInteractionScope.getState().endIf(() => useInteractionScope.getState().gesture === gesture)
+    ownedGesture.current = null
+    previousGridPosition.current = null
+    if (rectFillRef.current) rectFillRef.current.visible = false
     outlineRef.current.visible = false
     syncPreviewSelectedIds([])
   }, [syncPreviewSelectedIds])
+
+  useEffect(() => {
+    const onCancel = () => {
+      if (!pointerDown.current) return
+      if (
+        (!ownedGesture.current && useInteractionScope.getState().scope.kind === 'idle') ||
+        (ownedGesture.current && useInteractionScope.getState().gesture === ownedGesture.current)
+      ) {
+        markToolCancelConsumed()
+      }
+      resetDrag()
+    }
+    emitter.on('tool:cancel', onCancel)
+    window.addEventListener('pointercancel', resetDrag)
+    return () => {
+      emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('pointercancel', resetDrag)
+      resetDrag()
+    }
+  }, [resetDrag])
 
   const raycastToGround = useCallback(
     (event: PointerEvent): Vector3 | null => {
@@ -342,12 +362,11 @@ export const PlaneBoxSelectTool: React.FC = () => {
   useEffect(() => {
     const outline = outlineRef.current
     return () => {
-      previewSelectedIdsRef.current = []
-      setPreviewSelectedIds([])
+      resetDrag()
       outline.geometry.dispose()
       ;(outline.material as LineBasicMaterial).dispose()
     }
-  }, [setPreviewSelectedIds])
+  }, [resetDrag])
 
   useEffect(() => {
     const unsubscribe = useViewer.subscribe((state) => {
@@ -440,15 +459,7 @@ export const PlaneBoxSelectTool: React.FC = () => {
 
         const ids = collectNodeIdsInPlaneBounds(bounds)
         const shouldAppend = event.metaKey || event.ctrlKey || event.shiftKey
-        const { phase, structureLayer } = useEditor.getState()
-
-        if (phase === 'structure' && structureLayer === 'zones') {
-          if (ids.length > 0) {
-            useViewer.getState().setSelection({ zoneId: ids[0] as ZoneNode['id'] })
-          } else if (!shouldAppend) {
-            useViewer.getState().setSelection({ zoneId: null })
-          }
-        } else if (shouldAppend) {
+        if (shouldAppend) {
           const currentIds = useViewer.getState().selection.selectedIds
           useViewer.getState().setSelection({
             selectedIds: Array.from(new Set([...currentIds, ...ids])),
@@ -507,6 +518,8 @@ export const PlaneBoxSelectTool: React.FC = () => {
       const dy = nativeEvent.clientY - startClientY.current
       if (!isDragging.current && Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX) {
         isDragging.current = true
+        useInteractionScope.getState().begin({ kind: 'box-select' })
+        ownedGesture.current = useInteractionScope.getState().gesture
       }
 
       if (isDragging.current && rectFillRef.current && outlineRef.current) {

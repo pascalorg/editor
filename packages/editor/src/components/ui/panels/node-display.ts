@@ -21,6 +21,7 @@ const TYPE_DEFAULTS: Record<string, NodeDisplay> = {
   'stair-segment': { icon: '/icons/stairs.webp', label: 'Stair segment' },
   scan: { icon: '/icons/mesh.webp', label: '3D Scan' },
   guide: { icon: '/icons/floorplan.webp', label: 'Guide image' },
+  zone: { icon: '/icons/zone.webp', label: 'Zone' },
 }
 
 export function getTypeDisplay(type: string): NodeDisplay {
@@ -36,6 +37,9 @@ export function getNodeDisplay(node: AnyNode | null | undefined): NodeDisplay {
       icon: node.asset?.thumbnail || fallback.icon,
       label: node.name || node.asset?.name || fallback.label,
     }
+  }
+  if (node.type === 'zone' && node.spaceRole === 'room') {
+    return { icon: '/icons/kitchen.webp', label: node.name || 'Room' }
   }
   return {
     icon: fallback.icon,

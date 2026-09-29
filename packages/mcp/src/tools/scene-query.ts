@@ -1,25 +1,22 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
+  area,
   checkOpeningWithinWall,
   DEFAULT_LEVEL_HEIGHT,
   formatOpeningBoundsIssue,
+  getLevelDisplayName,
   getStoredLevelHeight,
   getWallPlaneTop,
   resolveStairTotalRise,
   resolveWallEffectiveHeight,
+  roomFloorChoices,
 } from '@pascal-app/core'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { computeWallSlabSupport } from '@pascal-app/core/spatial-grid'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
-import {
-  distance2D,
-  pointInPolygon,
-  polygonArea,
-  polygonContainsPolygon,
-  type Vec2,
-} from './geometry'
+import { distance2D, pointInPolygon, polygonContainsPolygon, type Vec2 } from './geometry'
 import { layoutIssuesFromScene } from './layout-clearance'
 import { NodeIdSchema } from './schemas'
 
@@ -53,6 +50,7 @@ export const getLevelSummaryOutput = {
   items: z.array(jsonObject),
   slabs: z.array(jsonObject),
   ceilings: z.array(jsonObject),
+  openings: z.array(jsonObject),
 }
 
 export const getWallsOutput = {
@@ -140,7 +138,15 @@ export function resolveReportedWallHeight(
   const walls = levelNodes.filter(
     (node): node is Extract<AnyNode, { type: 'wall' }> => node.type === 'wall',
   )
-  const support = computeWallSlabSupport(wall, slabs, walls, wall.supportSlabId)
+  const support = computeWallSlabSupport(
+    wall,
+    slabs,
+    walls,
+    wall.supportSlabId,
+    undefined,
+    0,
+    bridge.getNodes(),
+  )
   return resolveWallEffectiveHeight(wall, planeTop, support.elevation)
 }
 
@@ -216,7 +222,8 @@ function zoneSummary(zone: AnyNode) {
     name: zone.name,
     color: zone.color,
     polygon: zone.polygon,
-    areaSqMeters: Math.round(polygonArea(zone.polygon) * 100) / 100,
+    holes: zone.holes ?? [],
+    areaSqMeters: Math.round(area([{ outer: zone.polygon, holes: zone.holes ?? [] }]) * 100) / 100,
     bounds: {
       width: Math.round((Math.max(...xs) - Math.min(...xs)) * 100) / 100,
       depth: Math.round((Math.max(...zs) - Math.min(...zs)) * 100) / 100,
@@ -381,7 +388,7 @@ function getLevelNumber(
   levelId: string | null | undefined,
   nodes: Record<string, AnyNode>,
 ): number | undefined {
-  if (!levelId) return undefined
+  if (!levelId) return
   const node = nodes[levelId as AnyNodeId]
   return node?.type === 'level' ? node.level : undefined
 }
@@ -439,7 +446,14 @@ function levelSummary(bridge: SceneOperations, levelId: AnyNodeId) {
   const walls = nodes
     .map((n) => wallSummary(bridge, n))
     .filter((n): n is NonNullable<typeof n> => !!n)
-  const zones = nodes.map(zoneSummary).filter((n): n is NonNullable<typeof n> => !!n)
+  const zones = nodes
+    .map((node) => {
+      const summary = zoneSummary(node)
+      return summary
+        ? { ...summary, floor_choices: roomFloorChoices(bridge.getNodes(), node.id) }
+        : null
+    })
+    .filter((n): n is NonNullable<typeof n> => !!n)
   const items = nodes.map(itemSummary).filter((n): n is NonNullable<typeof n> => !!n)
   const slabs = nodes
     .filter((node) => node.type === 'slab')
@@ -458,6 +472,17 @@ function levelSummary(bridge: SceneOperations, levelId: AnyNodeId) {
       holes: node.holes ?? [],
       holeMetadata: node.holeMetadata ?? [],
       height: node.height,
+    }))
+  const openings = nodes
+    .filter((node) => node.type === 'floor-opening')
+    .map((node) => ({
+      id: node.id,
+      polygon: node.polygon,
+      hostZoneId: node.hostZoneId ?? null,
+      source: node.source,
+      drawnOn: node.drawnOn,
+      cutsPrimary: node.cutsPrimary,
+      cutsAdjacent: node.cutsAdjacent,
     }))
   const doors = nodes.filter((node) => node.type === 'door')
   const windows = nodes.filter((node) => node.type === 'window')
@@ -493,6 +518,7 @@ function levelSummary(bridge: SceneOperations, levelId: AnyNodeId) {
     items,
     slabs,
     ceilings,
+    openings,
   }
 }
 
@@ -546,7 +572,7 @@ export function registerGetLevelSummary(server: McpServer, bridge: SceneOperatio
     {
       title: 'Get level summary',
       description:
-        'Get a compact model-friendly summary of one level: counts plus walls, zones, slabs, ceilings, and items. Omit levelId to use the first level.',
+        'Get a compact model-friendly summary of one level: counts plus walls, zones (including floor_choices with creator-based keyed floor names), slabs, ceilings, and items. Omit levelId to use the first level.',
       inputSchema: levelScopedInput,
       outputSchema: getLevelSummaryOutput,
       annotations: READ_ONLY_TOOL_ANNOTATIONS,
@@ -587,7 +613,7 @@ export function registerGetZones(server: McpServer, bridge: SceneOperations): vo
     {
       title: 'Get zones',
       description:
-        'Get room/zone polygons on a level with names, colors, bounds, and approximate areas. Omit levelId to use the first level.',
+        'Get room/zone polygons on a level with names, colors, bounds, approximate areas, and floor_choices (key, plateId, name, current; drawn/mezzanine flags). Keyed names follow the creator room while it remains on that floor, falling back to the largest named room; user-given plate names win. Omit levelId to use the first level.',
       inputSchema: levelScopedInput,
       outputSchema: getZonesOutput,
       annotations: READ_ONLY_TOOL_ANNOTATIONS,
@@ -624,7 +650,7 @@ export function registerVerifyScene(server: McpServer, bridge: SceneOperations):
         )
         return {
           levelId: level.id,
-          levelName: level.name ?? `Level ${summary.floorIndex}`,
+          levelName: getLevelDisplayName({ name: level.name, level: summary.floorIndex }),
           floorIndex: summary.floorIndex,
           role: summary.role,
           metadataRole: summary.metadataRole,

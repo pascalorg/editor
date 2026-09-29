@@ -1,7 +1,6 @@
 'use client'
 
 import {
-  type AnyNode,
   type AnyNodeId,
   type FenceNode,
   getFenceCenterlineFrameAt,
@@ -10,6 +9,7 @@ import {
   getWallCurveFrameAt,
   getWallCurveLength,
   getWallEffectiveHeightForNodes,
+  getWallLocalFaceZ,
   getWallThickness,
   isCurvedWall,
   MIN_WALL_HEIGHT,
@@ -48,6 +48,7 @@ import {
 } from '../../lib/elevation-guides'
 import { isHistoryShortcut } from '../../lib/history'
 import { endpointReshapeScope } from '../../lib/interaction/scope'
+import { useRoomHandleDrag, wallPushHandles } from '../../lib/room-handle-drag'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { intersectSpatialDragPlane, spatialDragLocalY } from '../../lib/spatial-drag-plane'
 import { getSpatialPointerId, spatialPointerInput } from '../../lib/spatial-pointer-input'
@@ -69,6 +70,7 @@ import {
   NO_RAYCAST,
   useInvisibleHitAreaMaterial,
 } from './node-arrow-handles'
+import { WallPushArrow } from './wall-push-arrow'
 
 const HANDLE_OFFSET = 0.27
 const HANDLE_MIN_OFFSET = 0.33
@@ -149,6 +151,7 @@ export function WallMoveSideHandles() {
   const movingNode = useMovingNode()
   const endpointReshape = useEndpointReshape()
   const isCurveReshape = useIsCurveReshape()
+  const isPushing = useRoomHandleDrag((state) => state.drag?.kind === 'push')
 
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
   // Walls still use this legacy handle renderer. Fences retain their registry
@@ -164,9 +167,10 @@ export function WallMoveSideHandles() {
     mode !== 'delete' &&
     !movingNode &&
     !endpointReshape &&
-    !isCurveReshape
+    !isCurveReshape &&
+    !isPushing
 
-  if (!shouldRender || !selectedNode) return null
+  if (!(shouldRender && selectedNode)) return null
 
   return selectedNode.type === 'wall' ? (
     <WallMoveSideHandlesForWall wall={selectedNode} />
@@ -221,16 +225,17 @@ function WallMoveSideHandlesForWall({ wall }: { wall: WallNode }) {
   }, [wall.parentId])
 
   const baseElevation = getWallBaseElevationForNodes(effectiveWall, nodes)
-  const handles = useMemo(() => getWallMoveHandles(effectiveWall, nodes), [effectiveWall, nodes])
+  const handles = useMemo(() => wallPushHandles(effectiveWall, nodes), [effectiveWall, nodes])
 
-  if (!levelObject || handles.length === 0) return null
+  const levelId = wall.parentId
+  if (!(levelObject && levelId) || handles.length === 0) return null
 
   return createPortal(
     <>
+      {handles.map((handle) => (
+        <WallPushArrow handle={handle} key={handle.key} levelId={levelId} />
+      ))}
       <group position={[0, baseElevation, 0]}>
-        {handles.map((handle) => (
-          <WallMoveArrowHandle handle={handle} key={handle.key} wall={effectiveWall} />
-        ))}
         <WallHeightArrowHandle wall={effectiveWall} />
         <StructureThicknessHandle
           baseElevation={baseElevation}
@@ -294,7 +299,7 @@ function StructureThicknessHandle({
       ? (node.height ?? 1.8)
       : getWallEffectiveHeightForNodes(node, useScene.getState().nodes)
   const outward = new Vector2(frame.normal.x * side, frame.normal.y * side)
-  const faceOffset = thickness / 2 + 0.006
+  const faceOffset = getWallLocalFaceZ({ ...node, thickness }, side > 0 ? 'a' : 'b') * side + 0.006
   const position: [number, number, number] = [
     frame.point.x + outward.x * faceOffset,
     structureHeight / 2,
@@ -371,11 +376,18 @@ function StructureThicknessHandle({
         initialNode.type === 'fence'
           ? (initialNode.thickness ?? 0.08)
           : getWallThickness(initialNode)
+      const initialFaceOffset =
+        getWallLocalFaceZ(
+          { ...initialNode, thickness: initialStructureThickness },
+          side > 0 ? 'a' : 'b',
+        ) *
+          side +
+        0.006
       const minimumThickness = initialNode.type === 'fence' ? 0.03 : MIN_WALL_THICKNESS
       const localOrigin = new Vector3(
-        initialFrame.point.x + localAxis.x * (initialStructureThickness / 2 + 0.006),
+        initialFrame.point.x + localAxis.x * initialFaceOffset,
         baseElevation + initialStructureHeight / 2,
-        initialFrame.point.y + localAxis.z * (initialStructureThickness / 2 + 0.006),
+        initialFrame.point.y + localAxis.z * initialFaceOffset,
       )
       const worldOrigin = localOrigin.clone().applyMatrix4(rideObject.matrixWorld)
       const worldAxisEnd = localOrigin.clone().add(localAxis).applyMatrix4(rideObject.matrixWorld)
@@ -641,13 +653,14 @@ function WallCornerLeaderHandle({ wall, endpoint }: { wall: WallNode; endpoint: 
     }
   })
 
-  useEffect(() => {
-    return () => {
+  useEffect(
+    () => () => {
       if (document.body.style.cursor === 'grab' || document.body.style.cursor === 'grabbing') {
         document.body.style.cursor = ''
       }
-    }
-  }, [])
+    },
+    [],
+  )
 
   const activateEndpointMove = (event: ThreeEvent<PointerEvent>) => {
     if (event.button !== 0) return
@@ -877,14 +890,15 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
     arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
   }, [arrowMaterial, isHovered])
 
-  useEffect(() => {
-    return () => {
+  useEffect(
+    () => () => {
       if (document.body.style.cursor === 'ns-resize') {
         document.body.style.cursor = ''
       }
       dragCleanupRef.current?.()
-    }
-  }, [])
+    },
+    [],
+  )
 
   useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
   useEffect(() => () => hitGeometry.dispose(), [hitGeometry])
@@ -893,7 +907,7 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
   // Sit on the visual centre of the wall — for curved walls that's the
   // arc apex at t=0.5, not the chord midpoint. Use the curve tangent for
   // the yaw so the arrow's local frame matches the wall direction at the
-  // apex, consistent with `getWallMoveHandles`.
+  // apex, consistent with `wallPushHandles`.
   const curveFrame = isCurvedWall(wall) ? getWallCurveFrameAt(wall, 0.5) : null
   const midX = curveFrame ? curveFrame.point.x : (wall.start[0] + wall.end[0]) / 2
   const midZ = curveFrame ? curveFrame.point.y : (wall.start[1] + wall.end[1]) / 2
@@ -1085,7 +1099,10 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
           scale={baseScale}
         />
         <mesh
-          // Geometry-as-prop + frustumCulled={false} — see WallMoveArrowHandle.
+          // Pass geometry as a prop (not `<primitive attach="geometry">`): with
+          // `frustumCulled={false}` the attach path draws R3F's empty default
+          // geometry on the first frame and WebGPU flags "Vertex buffer slot 0
+          // ... was not set".
           frustumCulled={false}
           geometry={arrowGeometry}
           material={arrowMaterial}
@@ -1094,97 +1111,6 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
           scale={scale}
         />
       </group>
-    </group>
-  )
-}
-
-function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMoveHandle }) {
-  const [isHovered, setIsHovered] = useState(false)
-  const arrowGeometry = useMemo(() => createArrowHandleGeometry(), [])
-  const hitGeometry = useMemo(() => createArrowHitAreaGeometry(), [])
-  const hitMaterial = useInvisibleHitAreaMaterial()
-  const arrowMaterial = useMemo(
-    () =>
-      new MeshBasicNodeMaterial({
-        color: new Color(ARROW_COLOR),
-        side: DoubleSide,
-        depthTest: false,
-        depthWrite: false,
-        transparent: true,
-        opacity: 1,
-      }),
-    [],
-  )
-  const { camera } = useThree()
-
-  const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
-
-  const baseScale = zoom * ARROW_SCALE
-  const scale = (isHovered ? 1.12 : 1) * baseScale
-
-  useEffect(() => {
-    arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
-  }, [arrowMaterial, isHovered])
-
-  useEffect(() => {
-    return () => {
-      if (document.body.style.cursor === 'grab' || document.body.style.cursor === 'grabbing') {
-        document.body.style.cursor = ''
-      }
-    }
-  }, [])
-
-  useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
-  useEffect(() => () => hitGeometry.dispose(), [hitGeometry])
-  useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
-
-  const activateWallMove = (event: ThreeEvent<PointerEvent>) => {
-    if (event.button !== 0) return
-    event.stopPropagation()
-    suppressBoxSelectForPointer(event)
-    document.body.style.cursor = 'grabbing'
-
-    sfxEmitter.emit('sfx:item-pick')
-    useEditor.getState().setMovingNode(wall)
-    useInteractionScope.getState().endIf((s) => s.kind === 'reshaping' && s.reshape === 'endpoint')
-    useInteractionScope.getState().endIf((s) => s.kind === 'reshaping' && s.reshape === 'curve')
-    // Keep the wall selected so it stays the active item once the move
-    // commits; the `!movingNode` guard on the handles hides them mid-drag.
-  }
-
-  return (
-    <group position={handle.position} rotation={[0, handle.rotationY, 0]}>
-      <InvisibleHandleHitArea
-        geometry={hitGeometry}
-        material={hitMaterial}
-        onPointerDown={activateWallMove}
-        onPointerEnter={(event) => {
-          event.stopPropagation()
-          setIsHovered(true)
-          document.body.style.cursor = 'grab'
-        }}
-        onPointerLeave={(event) => {
-          event.stopPropagation()
-          setIsHovered(false)
-          if (document.body.style.cursor === 'grab') {
-            document.body.style.cursor = ''
-          }
-        }}
-        scale={baseScale}
-      />
-      <mesh
-        // Pass geometry as a prop (not `<primitive attach="geometry">`)
-        // so the mesh is never rendered with R3F's default empty
-        // `BufferGeometry`. Combined with `frustumCulled={false}`, the
-        // primitive-attach path emits a `Draw(0, 1, 0, 0)` on the first
-        // frame and WebGPU flags "Vertex buffer slot 0 ... was not set".
-        frustumCulled={false}
-        geometry={arrowGeometry}
-        material={arrowMaterial}
-        raycast={NO_RAYCAST}
-        renderOrder={1002}
-        scale={scale}
-      />
     </group>
   )
 }
@@ -1216,13 +1142,14 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
     arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
   }, [arrowMaterial, isHovered])
 
-  useEffect(() => {
-    return () => {
+  useEffect(
+    () => () => {
       if (document.body.style.cursor === 'grab' || document.body.style.cursor === 'grabbing') {
         document.body.style.cursor = ''
       }
-    }
-  }, [])
+    },
+    [],
+  )
 
   useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
   useEffect(() => () => hitGeometry.dispose(), [hitGeometry])
@@ -1262,7 +1189,7 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
         scale={baseScale}
       />
       <mesh
-        // Pass geometry as a prop — see WallMoveArrowHandle for the
+        // Pass geometry as a prop — see WallHeightArrowHandle for the
         // WebGPU "Vertex buffer slot 0 ... was not set" rationale.
         frustumCulled={false}
         geometry={arrowGeometry}
@@ -1273,32 +1200,6 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
       />
     </group>
   )
-}
-
-function getWallMoveHandles(wall: WallNode, nodes: Record<string, AnyNode>): WallMoveHandle[] {
-  const dx = wall.end[0] - wall.start[0]
-  const dz = wall.end[1] - wall.start[1]
-  const length = Math.hypot(dx, dz)
-
-  if (length < 1e-6) {
-    return []
-  }
-
-  const frame = isCurvedWall(wall) ? getWallCurveFrameAt(wall, 0.5) : null
-  const normal: [number, number] = frame
-    ? [frame.normal.x, frame.normal.y]
-    : [-dz / length, dx / length]
-  const midpoint: [number, number] = frame
-    ? [frame.point.x, frame.point.y]
-    : [(wall.start[0] + wall.end[0]) / 2, (wall.start[1] + wall.end[1]) / 2]
-  const wallHeight = getWallEffectiveHeightForNodes(wall, nodes)
-  const handleHeight = Math.max(wallHeight - HANDLE_TOP_INSET, HANDLE_MIN_HEIGHT)
-  const offset = Math.max(getWallThickness(wall) / 2 + HANDLE_OFFSET, HANDLE_MIN_OFFSET)
-
-  return [
-    buildWallMoveHandle('front', midpoint, normal, offset, handleHeight),
-    buildWallMoveHandle('back', midpoint, [-normal[0], -normal[1]], offset, handleHeight),
-  ]
 }
 
 function WallMoveSideHandlesForFence({ fence }: { fence: FenceNode }) {

@@ -70,7 +70,7 @@ describe('construction tools', () => {
 
   for (const { name, points } of shellFootprints) {
     for (const winding of ['counterclockwise', 'clockwise'] as const) {
-      test(`create_story_shell classifies ${winding} ${name} walls without reordering edges`, async () => {
+      test(`create_story_shell faces ${winding} ${name} walls' interior sides into the room`, async () => {
         const level = Object.values(bridge.getNodes()).find((node) => node.type === 'level')!
         const footprint = winding === 'counterclockwise' ? points : [...points].reverse()
         const result = await client.callTool({
@@ -82,17 +82,14 @@ describe('construction tools', () => {
           (result.content as Array<{ type: string; text: string }>)[0]!.text,
         )
         expect(parsed.wallIds).toHaveLength(footprint.length)
+        expect(
+          (parsed.wallIds as AnyNodeId[]).map((wallId) => bridge.getNode(wallId)?.name),
+        ).toEqual(footprint.map((_, index) => `Perimeter Wall ${index + 1}`))
 
-        for (const [index, wallId] of (parsed.wallIds as AnyNodeId[]).entries()) {
+        for (const wallId of parsed.wallIds as AnyNodeId[]) {
           const wall = bridge.getNode(wallId)
-          expect(wall?.type).toBe('wall')
           if (wall?.type !== 'wall') throw new Error('Expected perimeter wall')
           expect(wall.parentId).toBe(level.id)
-          expect(wall.name).toBe(`Perimeter Wall ${index + 1}`)
-          expect(wall.start).toEqual(footprint[index]!)
-          expect(wall.end).toEqual(footprint[(index + 1) % footprint.length]!)
-          expect(wall.frontSide).toBe(winding === 'counterclockwise' ? 'interior' : 'exterior')
-          expect(wall.backSide).toBe(winding === 'counterclockwise' ? 'exterior' : 'interior')
 
           const dx = wall.end[0] - wall.start[0]
           const dz = wall.end[1] - wall.start[1]
@@ -112,16 +109,76 @@ describe('construction tools', () => {
           expect(pointInPolygon(frontPoint, footprint, false)).toBe(wall.frontSide === 'interior')
           expect(pointInPolygon(backPoint, footprint, false)).toBe(wall.backSide === 'interior')
         }
-
-        const slab = bridge.getNode(parsed.slabId)
-        const ceiling = bridge.getNode(parsed.ceilingId)
-        expect(slab?.type).toBe('slab')
-        expect(ceiling?.type).toBe('ceiling')
-        if (slab?.type === 'slab') expect(slab.polygon).toEqual(footprint)
-        if (ceiling?.type === 'ceiling') expect(ceiling.polygon).toEqual(footprint)
       })
     }
   }
+
+  test('create_story_shell writes walls only; the shell floor and ceiling are derived', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const result = await client.callTool({
+      name: 'create_story_shell',
+      arguments: {
+        levelId: level.id,
+        footprint: [
+          [-4, -3],
+          [4, -3],
+          [4, 3],
+          [-4, 3],
+        ],
+      },
+    })
+    expect(result.isError).toBeFalsy()
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const children = Object.values(bridge.getNodes()).filter((n) => n.parentId === level.id)
+    expect(children.filter((n) => n.type === 'wall')).toHaveLength(4)
+    expect(parsed.zoneIds).toHaveLength(1)
+    const slabs = children.filter((n) => n.type === 'slab')
+    const ceilings = children.filter((n) => n.type === 'ceiling')
+    expect(slabs).toHaveLength(2)
+    expect(slabs.find((slab) => slab.plateRole === 'platform')).toMatchObject({
+      id: parsed.slabId,
+      boundary: 'auto',
+      elevation: 0.1,
+      thickness: 0.05,
+    })
+    expect(slabs.find((slab) => slab.plateRole === 'base')).toMatchObject({
+      elevation: 0.05,
+      thickness: 0.05,
+    })
+    expect(ceilings).toHaveLength(1)
+    expect(ceilings[0]).toMatchObject({ id: parsed.ceilingId, boundary: 'auto' })
+    expect((ceilings[0] as { zoneId?: string }).zoneId).toBe(parsed.zoneIds[0])
+    expect(bridge.validateScene().valid).toBe(true)
+  })
+
+  test('create_story_shell records hasFloor / hasCeiling when they are declined', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const result = await client.callTool({
+      name: 'create_story_shell',
+      arguments: {
+        levelId: level.id,
+        footprint: [
+          [-4, -3],
+          [4, -3],
+          [4, 3],
+          [-4, 3],
+        ],
+        createSlab: false,
+        createCeiling: false,
+      },
+    })
+    expect(result.isError).toBeFalsy()
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    expect(parsed.slabId).toBeNull()
+    expect(parsed.ceilingId).toBeNull()
+    const children = Object.values(bridge.getNodes()).filter((n) => n.parentId === level.id)
+    expect(children.filter((n) => n.type === 'slab')).toHaveLength(0)
+    expect(children.filter((n) => n.type === 'ceiling')).toHaveLength(0)
+    expect(bridge.getNode(parsed.zoneIds[0])).toMatchObject({
+      hasFloor: false,
+      hasCeiling: false,
+    })
+  })
 
   test('create_story_shell creates level-owned walls plus slab and ceiling', async () => {
     const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
@@ -154,7 +211,7 @@ describe('construction tools', () => {
     expect(bridge.validateScene().valid).toBe(true)
   })
 
-  test('create_stair_between_levels creates one rectangular manual opening', async () => {
+  test('create_stair_between_levels creates one persistent floor opening', async () => {
     const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
     const ground = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
     const upper = LevelNode.parse({ name: 'Second Floor', level: 1, metadata: { height: 2.8 } })
@@ -192,6 +249,14 @@ describe('construction tools', () => {
     expect(result.isError).toBeFalsy()
     const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(parsed.openingPolygon).toHaveLength(4)
+    expect(parsed.openingIds).toHaveLength(1)
+    expect(bridge.getNode(parsed.openingIds[0])).toMatchObject({
+      type: 'floor-opening',
+      source: 'stair',
+      polygon: parsed.openingPolygon,
+      cutsPrimary: true,
+      cutsAdjacent: true,
+    })
 
     const stair = bridge.getNode(parsed.stairId)
     expect(stair?.type).toBe('stair')
@@ -202,7 +267,9 @@ describe('construction tools', () => {
     if (destinationSlab?.type === 'slab') {
       expect(destinationSlab.holes).toHaveLength(1)
       expect(destinationSlab.holes[0]).toHaveLength(4)
-      expect(destinationSlab.holeMetadata).toEqual([{ source: 'manual' }])
+      expect(destinationSlab.holeMetadata).toEqual([
+        { source: 'floor-opening', openingId: parsed.openingIds[0] },
+      ])
     }
 
     const sourceCeiling = bridge.getNode(parsed.sourceCeilingId)
@@ -210,8 +277,23 @@ describe('construction tools', () => {
     if (sourceCeiling?.type === 'ceiling') {
       expect(sourceCeiling.holes).toHaveLength(1)
       expect(sourceCeiling.holes[0]).toHaveLength(4)
-      expect(sourceCeiling.holeMetadata).toEqual([{ source: 'manual' }])
+      expect(sourceCeiling.holeMetadata).toEqual([
+        { source: 'floor-opening', openingId: parsed.openingIds[0] },
+      ])
     }
+    bridge.clearHistory()
+    bridge.updateNode(parsed.stairId, { position: [1, 0, -1] })
+    const movedOpening = bridge.getNode(parsed.openingIds[0])
+    expect(movedOpening?.type).toBe('floor-opening')
+    if (movedOpening?.type === 'floor-opening')
+      expect(movedOpening.polygon[0]?.[0]).toBeCloseTo(parsed.openingPolygon[0][0] + 1)
+    expect(bridge.getHistory().pastCount).toBe(1)
+    expect(bridge.undo()).toBe(1)
+    const restored = bridge.getNode(parsed.openingIds[0])
+    if (restored?.type === 'floor-opening') expect(restored.polygon).toEqual(parsed.openingPolygon)
+    expect(bridge.redo()).toBe(1)
+    bridge.deleteNode(parsed.stairId, true)
+    expect(bridge.getNode(parsed.openingIds[0])).toBeNull()
     expect(bridge.validateScene().valid).toBe(true)
   })
 

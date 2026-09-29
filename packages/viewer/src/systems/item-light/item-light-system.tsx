@@ -50,6 +50,7 @@ function scoreRegistration(
   nodes: SceneNodes,
   selectedLevelId: string | null,
   levelMode: string,
+  hideAbove: boolean,
 ): number {
   if (!reg.isEligible() || !isRendered(reg.nodeId) || !reg.getWorldPosition(_itemPos))
     return Number.POSITIVE_INFINITY
@@ -75,8 +76,13 @@ function scoreRegistration(
   let levelPenalty = 0
   if (selectedLevelId) {
     if (itemLevelId !== selectedLevelId) {
-      // In solo mode items on other levels are invisible — deprioritize strongly
-      levelPenalty = levelMode === 'solo' ? 100 : 0.8
+      // Items on hidden levels (every other one in solo, those above the
+      // selected one while editing) are invisible — deprioritize strongly
+      const itemIndex = (nodes[itemLevelId as AnyNodeId] as LevelNode | undefined)?.level ?? 0
+      const selectedIndex =
+        (nodes[selectedLevelId as AnyNodeId] as LevelNode | undefined)?.level ?? 0
+      const hidden = levelMode === 'solo' || (hideAbove && itemIndex > selectedIndex)
+      levelPenalty = hidden ? 100 : 0.8
     }
   } else if (itemLevelId) {
     // No level selected — lightly prefer items on level index 0
@@ -127,13 +133,14 @@ export function ItemLightSystem() {
       const viewerState = useViewer.getState()
       const selectedLevelId = viewerState.selection.levelId
       const levelMode = viewerState.levelMode
+      const hideAbove = viewerState.hideLevelsAboveSelection
 
       // Score every registration
       const scored: Array<{ key: string; score: number }> = []
       for (const [key, reg] of registrations) {
         scored.push({
           key,
-          score: scoreRegistration(reg, nodes, selectedLevelId, levelMode),
+          score: scoreRegistration(reg, nodes, selectedLevelId, levelMode, hideAbove),
         })
       }
       scored.sort((a, b) => a.score - b.score)

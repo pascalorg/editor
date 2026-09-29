@@ -557,7 +557,9 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       ))}
 
       {/* Sculpted ground, when the site has terrain */}
-      {showSiteSurfaces && showTerrain && <TerrainRenderer material={groundMaterial} site={node} />}
+      {showSiteSurfaces && showTerrain && (
+        <TerrainRenderer holes={slabPolygons} material={groundMaterial} site={node} />
+      )}
 
       {/* Ground fill: site polygon with slab holes, occludes below-grade geometry */}
       {showSiteSurfaces && groundGeometry && !showTerrain && (

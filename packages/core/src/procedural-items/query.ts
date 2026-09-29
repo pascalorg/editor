@@ -6,7 +6,7 @@ import {
   polygonsOverlap,
 } from '../lib/polygon-relations'
 import { getRenderableSlabPolygon } from '../lib/slab-polygon'
-import { levelBaseElevationAt } from '../lib/terrain-support'
+import { levelBaseElevationAt } from '../lib/terrain-support-query'
 import { nodeRegistry } from '../registry/registry'
 import { getBlockFaceFrame } from '../schema/nodes/block'
 import type { ItemNode } from '../schema/nodes/item'
@@ -18,7 +18,7 @@ import { resolveCeilingHeight } from '../services/level-height'
 import { getStoredLevelHeight } from '../services/storey'
 import { surfaceRegionContainsPoint } from '../services/surface-region'
 import { computeWallSlabSupport, pointInPolygon } from '../systems/slab/slab-support'
-import { getWallThickness } from '../systems/wall/wall-footprint'
+import { getWallLocalFaceZ } from '../systems/wall/wall-frame'
 import type { ProceduralItemNode } from './node'
 import { evaluateRecipe, type Surface, type Vec3 } from './recipe'
 import {
@@ -71,7 +71,11 @@ export function proceduralLocalPose(node: ProceduralItemNode, nodes: QueryNodes)
   rotation[1] = sign < 0 ? Math.PI : 0
   position[0] -= reference.position[0] * sign
   position[1] -= reference.position[1]
-  position[2] = sign * (getWallThickness(wall) / 2 - reference.position[2] + node.position[2])
+  position[2] =
+    sign *
+    (getWallLocalFaceZ(wall, sign > 0 ? 'a' : 'b') * sign -
+      reference.position[2] +
+      node.position[2])
   return { position, rotation }
 }
 /** A ceiling design's cut as a hole ring in its ceiling's local [x, z], or null. */
@@ -142,7 +146,7 @@ function floorLift(node: AnyNode | ProceduralItemNode, nodes: QueryNodes): numbe
   const footprint = isProceduralItem(node)
     ? proceduralFootprint(node)
     : {
-        position: position,
+        position,
         dimensions:
           node.type === 'shelf'
             ? ([node.width, node.height, node.depth] as Vec3)
@@ -256,6 +260,7 @@ function resolveNodeLevelFrame(
       node.supportSlabId,
       undefined,
       ground,
+      nodes as Record<string, AnyNode>,
     )
     return frame(
       [node.start[0], support.elevation + (node.supportOffset ?? 0), node.start[1]],

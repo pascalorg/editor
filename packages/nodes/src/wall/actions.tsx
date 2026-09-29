@@ -5,7 +5,14 @@ import {
   runAsSingleSceneHistoryStep,
   useScene,
 } from '@pascal-app/core'
-import { Tooltip, TooltipContent, TooltipTrigger, triggerSFX } from '@pascal-app/editor'
+import {
+  captureElementActionOrigin,
+  completeElementAction,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  triggerSFX,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { FoldHorizontal, Scissors } from 'lucide-react'
 import { useMemo } from 'react'
@@ -75,11 +82,14 @@ function MergeWallsAction() {
       onClick={(event) => {
         event.stopPropagation()
         const plan = planWallMerge(useScene.getState().nodes, selected)
+        // Walls drilled from one room go back to it; otherwise the merged wall stays selected.
+        const origin = captureElementActionOrigin(selected)
         runAsSingleSceneHistoryStep(useScene, () =>
           useScene.getState().applyNodeChanges(plan.changes),
         )
-        useViewer.getState().setSelection({ selectedIds: [plan.wallId] })
         triggerSFX('sfx:structure-build')
+        if (origin) completeElementAction(origin)
+        else useViewer.getState().setSelection({ selectedIds: [plan.wallId] })
       }}
     >
       <FoldHorizontal className="size-4" />

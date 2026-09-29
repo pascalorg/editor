@@ -1,3 +1,4 @@
+import { floorConstructionLift } from '../../lib/floor-construction-lift'
 import { levelBaseElevationAt } from '../../lib/terrain-support'
 import { nodeRegistry } from '../../registry'
 import type {
@@ -5,7 +6,7 @@ import type {
   FloorPlacedFootprintContext,
   FloorPlacedFootprintsResolver,
 } from '../../registry/types'
-import type { AnyNode, AnyNodeId } from '../../schema'
+import type { AnyNode, AnyNodeId, SlabNode } from '../../schema'
 import { getFloorPlacedFootprints } from './floor-placed-footprints'
 
 export { getFloorPlacedFootprints } from './floor-placed-footprints'
@@ -99,7 +100,9 @@ export function getFloorPlacedElevation({
    */
   let groundLiftCache: number | null = null
   const groundLift = (): number => {
-    groundLiftCache ??= levelBaseElevationAt(nodes, resolvedLevelId, position[0], position[2])
+    groundLiftCache ??=
+      levelBaseElevationAt(nodes, resolvedLevelId, position[0], position[2]) +
+      floorConstructionLift(nodes, effectiveNode)
     return groundLiftCache
   }
 
@@ -112,7 +115,25 @@ export function getFloorPlacedElevation({
   const supportSlabId = (effectiveNode as { supportSlabId?: string | null }).supportSlabId
   if (maxElevation == null && supportSlabId) {
     if (supportSlabId === GROUND_SUPPORT_ID) return groundLift()
+    const host = nodes[supportSlabId]
     for (const footprint of footprints) {
+      if (host?.type === 'slab' && host.plateRole === 'base') {
+        const coverings = spatialGridManager
+          .getSupportCandidatesForFootprint(
+            resolvedLevelId,
+            footprint.position ?? position,
+            footprint.dimensions,
+            footprint.rotation,
+          )
+          .map((candidate) => nodes[candidate.slabId])
+          .filter(
+            (candidate): candidate is SlabNode =>
+              candidate?.type === 'slab' && candidate.plateRole === 'platform',
+          )
+          .sort((a, b) => b.elevation - a.elevation)
+        const covering = coverings[0]
+        if (covering) return finiteSlabElevation(covering.elevation)
+      }
       const hosted = spatialGridManager.getHostSlabElevationForFootprint(
         resolvedLevelId,
         supportSlabId,

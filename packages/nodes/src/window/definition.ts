@@ -175,7 +175,7 @@ function windowHeightHandle(edge: 'top' | 'bottom'): HandleDescriptor<WindowNode
       // bottom arrow caps at top (positive Y room above the floor).
       const curtainMax = curtainOpeningResizeMax(n, scene.nodes(), 'y', sign)
       if (curtainMax !== undefined) return curtainMax
-      const wallH = readHostWallCeiling(n.wallId, scene)
+      const wallH = readHostWallCeiling(n.wallId, scene, n)
       const anchored = edge === 'top' ? n.position[1] - n.height / 2 : n.position[1] + n.height / 2
       return edge === 'top'
         ? Math.max(MIN_WINDOW_HEIGHT, wallH - anchored)

@@ -136,7 +136,7 @@ export function resolveFrozenFloorPlacementPatch(
   const effectiveNode = {
     ...(node as Record<string, unknown>),
     position: options.position,
-    ...(options.rotation !== undefined ? { rotation: options.rotation } : {}),
+    ...(options.rotation === undefined ? {} : { rotation: options.rotation }),
   } as AnyNode
   const floorPlaced = nodeRegistry.get(effectiveNode.type)?.capabilities?.floorPlaced
   if (!floorPlaced || (floorPlaced.applies && !floorPlaced.applies(effectiveNode))) {
@@ -187,6 +187,8 @@ export function resolveWallSupportSlabPatch(
     wall.thickness,
     options?.preferredSlabId,
     options?.maxElevation,
+    undefined,
+    wall.justification,
   )
   const candidateElevations = new Set<number>()
   for (const node of Object.values(nodes)) {
@@ -199,6 +201,9 @@ export function resolveWallSupportSlabPatch(
       wall.curveOffset,
       wall.thickness,
       candidate.id,
+      undefined,
+      undefined,
+      wall.justification,
     )
     if (preferred.electedSlabId === candidate.id) {
       candidateElevations.add(candidate.elevation)
@@ -412,7 +417,7 @@ export function resolveTerrainWallConstructionOptions(
   defaults?: Record<string, unknown>,
 ): WallConstructionOptions | undefined {
   const constructionElevation = terrainSupportLift(nodes, levelId, point[0], point[1])
-  if (constructionElevation == null) return undefined
+  if (constructionElevation == null) return
 
   const level = nodes[levelId]
   const constructionHeight =
@@ -498,6 +503,8 @@ export function resolveWallConstruction(
       createdWall.thickness,
       supportPatch.supportSlabId,
       wallOptions?.supportCap ?? null,
+      undefined,
+      createdWall.justification,
     )
     const groundDraft =
       preferredSupportSlabId === GROUND_SUPPORT_ID && (terrainBase != null || flatConstructionBase)

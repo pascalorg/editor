@@ -1,3 +1,4 @@
+import { getWallFaceOffsets, type WallJustification } from '../systems/wall/wall-frame'
 /**
  * Node → alignment-anchor adapters.
  *
@@ -204,6 +205,7 @@ export function wallSegmentAnchors(
   start: readonly [number, number],
   end: readonly [number, number],
   thickness?: number,
+  justification?: WallJustification,
 ): AlignmentAnchor[] {
   const anchors: AlignmentAnchor[] = [
     { nodeId: id, kind: 'corner', x: start[0], z: start[1] },
@@ -217,12 +219,14 @@ export function wallSegmentAnchors(
     const len = Math.hypot(dx, dz)
     if (len > 1e-6) {
       // Perpendicular to the wall axis, scaled to half-thickness.
-      const half = thickness / 2
-      const px = (-dz / len) * half
-      const pz = (dx / len) * half
+      const { a, b } = getWallFaceOffsets({ thickness, justification })
+      const px = (-dz / len) * a
+      const pz = (dx / len) * a
+      const rx = (-dz / len) * -b
+      const rz = (dx / len) * -b
       for (const [bx, bz] of [start, end] as const) {
         anchors.push({ nodeId: id, kind: 'corner', x: bx + px, z: bz + pz })
-        anchors.push({ nodeId: id, kind: 'corner', x: bx - px, z: bz - pz })
+        anchors.push({ nodeId: id, kind: 'corner', x: bx - rx, z: bz - rz })
       }
     }
   }
@@ -263,7 +267,13 @@ export function nodeAlignmentAnchors(
     }
     // Wall thickness is schema-optional (falls back to the geometry default);
     // fence always carries one. Either way, pass it through so faces align.
-    return wallSegmentAnchors(seg.id, seg.start, seg.end, seg.thickness ?? DEFAULT_WALL_THICKNESS)
+    return wallSegmentAnchors(
+      seg.id,
+      seg.start,
+      seg.end,
+      seg.thickness ?? DEFAULT_WALL_THICKNESS,
+      node.type === 'wall' ? node.justification : undefined,
+    )
   }
   if (node.type === 'slab' || node.type === 'ceiling') {
     const poly = (node as { polygon?: [number, number][] }).polygon

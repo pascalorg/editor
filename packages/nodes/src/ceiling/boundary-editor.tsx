@@ -34,7 +34,7 @@ export const CeilingBoundaryEditor: React.FC<{ ceilingId: CeilingNode['id'] }> =
   ceilingId,
 }) => {
   const ceilingNode = useScene((s) => s.nodes[ceilingId])
-  const updateNode = useScene((s) => s.updateNode)
+  const detachDerivedNode = useScene((s) => s.detachDerivedNode)
   const markDirty = useScene((s) => s.markDirty)
   const setSelection = useViewer((s) => s.setSelection)
   const setHoveredId = useViewer((s) => s.setHoveredId)
@@ -57,10 +57,12 @@ export const CeilingBoundaryEditor: React.FC<{ ceilingId: CeilingNode['id'] }> =
   const handlePolygonChange = useCallback(
     (newPolygon: Array<[number, number]>) => {
       clearCeilingSnapFeedback()
-      updateNode(ceilingId, { polygon: newPolygon })
+      // Reshaping the boundary is the sanctioned conversion of a derived
+      // ceiling into an authored one — the reconciler stops owning it here.
+      detachDerivedNode(ceilingId, { polygon: newPolygon })
       setSelection({ selectedIds: [ceilingId] })
     },
-    [ceilingId, updateNode, setSelection],
+    [ceilingId, detachDerivedNode, setSelection],
   )
 
   const handlePolygonPreview = useCallback(

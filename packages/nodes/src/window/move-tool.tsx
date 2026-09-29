@@ -4,6 +4,7 @@ import {
   dormerWallFacePointToDormer,
   emitter,
   type GridEvent,
+  getOpeningWallPlacement,
   holdHiddenWallPointerEvents,
   isCurvedWall,
   type RoofEvent,
@@ -304,6 +305,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         wallEvent.node.curveOffset ?? 0,
         wallEvent.node.thickness,
         wallEvent.node.supportSlabId,
+        wallEvent.node.justification,
       )
 
     const hideCursor = () => {
@@ -363,7 +365,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
 
       const faceSide = getSideFromNormal(event.normal)
       const side = sideOverride ?? faceSide
-      const rotationOffset = side !== faceSide ? Math.PI : 0
+      const rotationOffset = side === faceSide ? 0 : Math.PI
       const itemRotation = calculateItemRotation(event.normal) + rotationOffset
 
       const rawLocalX = event.localPosition[0]
@@ -457,7 +459,25 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       // its stale parent (no on-wall preview at all). A stale override from a
       // free-follow / dormer hop would shadow those scene fields, so drop it.
       useLiveNodeOverrides.getState().clear(movingWindowNode.id)
-      if (currentHostId !== target.wallId) {
+      if (currentHostId === target.wallId) {
+        const windowMesh = sceneRegistry.nodes.get(movingWindowNode.id as AnyNodeId)
+        if (windowMesh) {
+          // Where the opening system will put it: the body centre plane of a
+          // justified wall plus the opening's own plane offset, on the arc.
+          const placement = getOpeningWallPlacement(
+            target.wallNode,
+            {
+              ...movingWindowNode,
+              position: [target.clampedX, target.clampedY, planeOffsetOn(target.wallId)],
+              rotation: [0, target.itemRotation, 0],
+            },
+            useScene.getState().nodes,
+          )
+          windowMesh.position.set(...placement.position)
+          windowMesh.rotation.set(...placement.rotation)
+          windowMesh.updateMatrixWorld(true)
+        }
+      } else {
         useScene.getState().updateNode(movingWindowNode.id, {
           position: [target.clampedX, target.clampedY, planeOffsetOn(target.wallId)],
           rotation: [0, target.itemRotation, 0],
@@ -472,13 +492,6 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         })
         markHostDirty(currentHostId)
         currentHostId = target.wallId
-      } else {
-        const windowMesh = sceneRegistry.nodes.get(movingWindowNode.id as AnyNodeId)
-        if (windowMesh) {
-          windowMesh.position.set(target.clampedX, target.clampedY, planeOffsetOn(target.wallId))
-          windowMesh.rotation.set(0, target.itemRotation, 0)
-          windowMesh.updateMatrixWorld(true)
-        }
       }
       useLiveTransforms.getState().set(movingWindowNode.id, {
         position: [target.clampedX, target.clampedY, planeOffsetOn(target.wallId)],
@@ -741,7 +754,14 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       // Scene writes, not overrides: leaving the wall must actually remove the
       // window from the wall's `children` or the CSG cut trails the ghost
       // around the old wall (see the wall-branch note in `applyPreview`).
-      if (currentHostId !== levelId) {
+      if (currentHostId === levelId) {
+        useScene.getState().updateNode(movingWindowNode.id, {
+          position: [localX, sillCenterY, localZ],
+          rotation: [0, yaw, 0],
+          side: sideOverride,
+          visible: false,
+        })
+      } else {
         if (currentHostId && currentHostId !== levelId) markHostDirty(currentHostId)
         useScene.getState().updateNode(movingWindowNode.id, {
           position: [localX, sillCenterY, localZ],
@@ -756,13 +776,6 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           visible: false,
         })
         currentHostId = levelId
-      } else {
-        useScene.getState().updateNode(movingWindowNode.id, {
-          position: [localX, sillCenterY, localZ],
-          rotation: [0, yaw, 0],
-          side: sideOverride,
-          visible: false,
-        })
       }
       // Float the red (invalid — no wall) ghost at the cursor, level-Y lifted to
       // the sill center (sideOverride carries the R-flip so the ghost matches).
@@ -1029,7 +1042,13 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       clearOpeningGuides3D()
       // On a roof face the real mesh is the preview — drop the ghost + reveal.
       revealRealNode()
-      if (currentHostId !== target.segment.id) {
+      if (currentHostId === target.segment.id) {
+        useLiveNodeOverrides.getState().set(movingWindowNode.id, {
+          position: target.position,
+          rotation: [0, 0, 0],
+          roofFace: target.face.id,
+        })
+      } else {
         markHostDirty(currentHostId)
         currentHostId = target.segment.id
         useLiveNodeOverrides.getState().set(movingWindowNode.id, {
@@ -1041,12 +1060,6 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           roofSegmentId: target.segment.id,
           roofFace: target.face.id,
           visible: true,
-        })
-      } else {
-        useLiveNodeOverrides.getState().set(movingWindowNode.id, {
-          position: target.position,
-          rotation: [0, 0, 0],
-          roofFace: target.face.id,
         })
       }
       updateRoofCursor(target, event.node as RoofNode)
@@ -1291,6 +1304,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
             hostWall.curveOffset ?? 0,
             hostWall.thickness,
             hostWall.supportSlabId,
+            hostWall.justification,
           ),
           planeOffsetOn(hostWall.id),
         )
