@@ -19,6 +19,7 @@ import {
 } from './../../../lib/surface-plan-snap'
 import { focusedUnitNode } from './../../../lib/units'
 import { snapWorldXZForActiveBuilding } from './../../../lib/world-grid-snap'
+import { nextZoneName } from '../../../lib/zone-name'
 import useEditor, { isAngleSnapActive, isGridSnapActive } from './../../../store/use-editor'
 import { useFloorplanDraftPreview } from './../../../store/use-floorplan-draft-preview'
 import { CursorSphere } from '../shared/cursor-sphere'
@@ -31,9 +32,7 @@ const Y_OFFSET = 0.02
 const commitZoneDrawing = (levelId: LevelNode['id'], points: Array<[number, number]>) => {
   const { createNode, updateNode, nodes } = useScene.getState()
 
-  // Count existing zones for naming and color cycling
-  const zoneCount = Object.values(nodes).filter((n) => n.type === 'zone').length
-  const name = `Zone ${zoneCount + 1}`
+  const name = nextZoneName(nodes)
 
   // Default to blue, cycle through palette for subsequent zones
   const color = '#3b82f6'

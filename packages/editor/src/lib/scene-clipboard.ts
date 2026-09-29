@@ -12,6 +12,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { referencedSceneMaterialIds, remapSceneMaterialRefs } from './scene-material-refs'
 
 type ClipboardPayload = {
   copiedAt: number
@@ -195,10 +196,7 @@ function remapNodeReferences(
   rootIds: Set<AnyNodeId>,
   nodes: Record<AnyNodeId, AnyNode>,
 ) {
-  const clone = remapSceneMaterialReferences(
-    JSON.parse(JSON.stringify(node)),
-    materialIdMap,
-  ) as AnyNode
+  const clone = remapSceneMaterialRefs(JSON.parse(JSON.stringify(node)) as AnyNode, materialIdMap)
   ;(clone as Record<string, unknown>).id = idMap.get(oldId)
 
   if (rootIds.has(oldId)) {
@@ -215,6 +213,11 @@ function remapNodeReferences(
     }
   } else if (clone.parentId && typeof clone.parentId === 'string') {
     clone.parentId = idMap.get(clone.parentId as AnyNodeId) ?? clone.parentId
+  }
+
+  if (clone.type === 'zone' && node.parentId !== clone.parentId && clone.floor?.footprint) {
+    const { footprint: _footprint, ...floor } = clone.floor
+    clone.floor = floor
   }
 
   if ('children' in clone && Array.isArray(clone.children)) {
@@ -253,43 +256,6 @@ function remapNodeReferences(
   return AnyNode.parse(clone)
 }
 
-function remapSceneMaterialReferences(
-  value: unknown,
-  materialIdMap: Map<SceneMaterialId, SceneMaterialId>,
-): unknown {
-  if (typeof value === 'string' && value.startsWith('scene:')) {
-    const oldId = value.slice('scene:'.length) as SceneMaterialId
-    const nextId = materialIdMap.get(oldId)
-    return nextId ? `scene:${nextId}` : value
-  }
-  if (Array.isArray(value)) {
-    return value.map((entry) => remapSceneMaterialReferences(entry, materialIdMap))
-  }
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [
-        key,
-        remapSceneMaterialReferences(entry, materialIdMap),
-      ]),
-    )
-  }
-  return value
-}
-
-function collectReferencedSceneMaterialIds(value: unknown, ids: Set<SceneMaterialId>) {
-  if (typeof value === 'string' && value.startsWith('scene:')) {
-    ids.add(value.slice('scene:'.length) as SceneMaterialId)
-    return
-  }
-  if (Array.isArray(value)) {
-    for (const entry of value) collectReferencedSceneMaterialIds(entry, ids)
-    return
-  }
-  if (value && typeof value === 'object') {
-    for (const entry of Object.values(value)) collectReferencedSceneMaterialIds(entry, ids)
-  }
-}
-
 function buildClipboardPayload(ids: AnyNodeId[]): ClipboardPayload | null {
   const scene = useScene.getState()
   const selectedIdSet = new Set(ids)
@@ -321,8 +287,7 @@ function buildClipboardPayload(ids: AnyNodeId[]): ClipboardPayload | null {
     .map((id) => scene.nodes[id])
     .filter((node): node is AnyNode => !!node)
     .map((node) => JSON.parse(JSON.stringify(node)) as AnyNode)
-  const materialIds = new Set<SceneMaterialId>()
-  collectReferencedSceneMaterialIds(copiedNodes, materialIds)
+  const materialIds = referencedSceneMaterialIds(copiedNodes)
 
   return {
     copiedAt: Date.now(),

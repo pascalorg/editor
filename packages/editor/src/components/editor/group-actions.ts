@@ -18,6 +18,8 @@ import { markPerfAction, useViewer } from '@pascal-app/viewer'
 import { Plane, Vector2, Vector3 } from 'three'
 import { GROUP_MOVE_DRAG_LABEL } from '../../lib/contextual-help'
 import { clientToPlan } from '../../lib/floorplan/plan-coords'
+import { deleteSelectedSeparator, requestRoomDeletion } from '../../lib/room-structure-commands'
+import { captureElementActionOrigin, completeElementAction } from '../../lib/room-zone-routing'
 import {
   copySelectedNodesToEditorClipboard,
   duplicateNodesToLevel,
@@ -547,7 +549,16 @@ export function cutSelectionToEditorClipboard(): boolean {
  */
 export function deleteSelection(): boolean {
   const selectedIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
-  if (selectedIds.length === 0) return false
+  if (selectedIds.length === 0) {
+    const room = useEditor.getState().room
+    if (!room) return false
+    requestRoomDeletion(room.zoneId)
+    return true
+  }
+  // A drilled piece of a room (a wall, a separator, its ceiling) deleted: back to the room.
+  const origin = captureElementActionOrigin(selectedIds)
+  if (selectedIds.length === 1 && useScene.getState().nodes[selectedIds[0]!]?.type === 'separator')
+    return deleteSelectedSeparator(selectedIds[0]!, origin)
 
   const commitDelete = () => {
     const detail =
@@ -562,6 +573,7 @@ export function deleteSelection(): boolean {
     }
     useScene.getState().deleteNodes(selectedIds)
     useViewer.getState().setSelection({ selectedIds: [] })
+    completeElementAction(origin)
   }
 
   if (selectedIds.length >= BULK_DELETE_THRESHOLD) {

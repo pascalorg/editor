@@ -4,7 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   beginSceneHistoryPauseSession,
-  createWallBoundSurfaceFollower,
+  createLevelStructurePreview,
   emitter,
   type GridEvent,
   getPerpendicularWallMoveAxis,
@@ -53,9 +53,8 @@ import {
  *    move with the dragged wall via `planWallMoveJunctions`.
  *  - **Bridge wall ghost previews** — when a corner separates, a
  *    translucent ghost shows the new wall that would be inserted.
- *  - **Auto-slab live preview** — the automatic slabs and ceilings the
- *    moving walls bound follow them through live overrides, from boundary
- *    membership read once at arm time (no room detection per tick).
+ *  - **Auto-slab live preview** — the structure kernel previews the level's
+ *    rooms every tick, so room slabs adapt to the new wall layout live.
  *  - **One undo step** — the drag writes no history; the drop writes walls,
  *    supports and the sync's derived rooms as one step, through a pause
  *    session shared with the 2D move overlay (`commitStep`).
@@ -101,9 +100,10 @@ function GhostWallPreviewMesh({ preview }: { preview: GhostWallPreview }) {
   const dz = preview.end[1] - preview.start[1]
   const length = Math.hypot(dx, dz)
   const angle = -Math.atan2(dz, dx)
-  const geometry = useMemo(() => {
-    return length < 0.01 ? null : createWallPreviewGeometry(length, preview.height)
-  }, [length, preview.height])
+  const geometry = useMemo(
+    () => (length < 0.01 ? null : createWallPreviewGeometry(length, preview.height)),
+    [length, preview.height],
+  )
 
   useEffect(() => () => geometry?.dispose(), [geometry])
 
@@ -230,23 +230,30 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       }
     }
 
-    // Live auto-slab / auto-ceiling preview: polygon overrides for the
-    // surfaces the moving walls bound, so `GeometrySystem` / `CeilingSystem`
-    // rebuild them through the `getEffectiveNode` merge while the store stays
-    // at pre-drag values. Membership is read once here, so a tick costs a few
-    // line intersections instead of a level-wide room detection. Surfaces a
-    // new, merged or split room needs appear at commit.
+    // Live auto-slab / auto-ceiling preview: the structure kernel's plan for the
+    // moved walls, published as polygon overrides so `GeometrySystem` /
+    // `CeilingSystem` rebuild through the `getEffectiveNode` merge while the
+    // store stays at pre-drag values. Surfaces a new, merged or split room
+    // needs appear at commit.
     // The drag writes nothing to the store, so a new `nodes` reference means someone else
-    // changed the scene (a collaborator, an agent): membership is read again from it.
-    const movingWallIds = new Set([nodeId, ...linkedOriginalsRef.current.map((wall) => wall.id)])
-    // Linked walls are read from the live scene, again whenever someone else changed it: the
-    // drop must commit a linked wall's other end as it is now, and pick up a newly connected
-    // wall the same way the arm-time read would have.
+    // changed the scene (a collaborator, an agent). Linked walls and the structure preview
+    // are read again from it: the drop must commit a linked wall's other end as it is now,
+    // and pick up a newly connected wall the same way the arm-time read would have.
+    const levelNodesOf = (nodes: Record<AnyNodeId, AnyNode>) =>
+      Object.fromEntries(
+        Object.values(nodes)
+          .filter((entry) => entry.parentId === levelId)
+          .map((entry) => [entry.id, entry]),
+      )
     let linkedNodes = useScene.getState().nodes
+    let previewStructure = levelId ? createLevelStructurePreview(levelId, linkedNodes) : null
+    let dragNodes = levelNodesOf(linkedNodes)
     const refreshLinkedWalls = () => {
       const nodes = useScene.getState().nodes
       if (nodes === linkedNodes) return
       linkedNodes = nodes
+      previewStructure = levelId ? createLevelStructurePreview(levelId, nodes) : null
+      dragNodes = levelNodesOf(nodes)
       if (isNew) return
       linkedOriginalsRef.current = getLinkedWallSnapshots({
         wallId: nodeId,
@@ -254,55 +261,48 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
         originalStart,
         originalEnd,
       })
-      movingWallIds.clear()
-      movingWallIds.add(nodeId)
-      for (const wall of linkedOriginalsRef.current) movingWallIds.add(wall.id)
     }
-    let followerNodes = useScene.getState().nodes
-    let followSurfaces = levelId
-      ? createWallBoundSurfaceFollower(levelId, followerNodes, movingWallIds)
-      : null
-    const touchedSurfaceIds = new Set<AnyNodeId>()
+    const touchedStructureIds = new Set<AnyNodeId>()
 
-    const publishLiveSurfaceOverrides = (
-      updates: Array<{ id: WallNode['id']; start: [number, number]; end: [number, number] }>,
-      bridges: Array<{ start: [number, number]; end: [number, number] }>,
-    ) => {
-      if (!levelId) return
+    const publishLiveSurfaceOverrides = (walls: WallNode[]) => {
+      if (!(levelId && previewStructure)) return
+
+      const levelWalls = walls.filter((wall) => (wall.parentId ?? null) === levelId)
       const sceneState = useScene.getState()
-      refreshLinkedWalls()
-      if (sceneState.nodes !== followerNodes) {
-        followerNodes = sceneState.nodes
-        followSurfaces = createWallBoundSurfaceFollower(levelId, followerNodes, movingWallIds)
+
+      const structurePlan = previewStructure(levelWalls)
+
+      const overrideEntries: Array<[string, Record<string, unknown>]> = []
+      for (const update of structurePlan) {
+        if (!('polygon' in update.data || 'holes' in update.data)) continue
+        overrideEntries.push([update.id, update.data as Record<string, unknown>])
+        touchedStructureIds.add(update.id as AnyNodeId)
       }
-      const entries = followSurfaces!(new Map(updates.map((entry) => [entry.id, entry])), bridges)
-      const followed = new Set(entries.map(([id]) => id))
-      const overrides = useLiveNodeOverrides.getState()
-      for (const id of touchedSurfaceIds) {
-        if (followed.has(id)) continue
-        overrides.clear(id)
+
+      const previewIds = new Set(overrideEntries.map(([id]) => id))
+      for (const id of touchedStructureIds) {
+        if (previewIds.has(id)) continue
+        useLiveNodeOverrides.getState().clear(id)
         if (sceneState.nodes[id]) sceneState.markDirty(id)
-        touchedSurfaceIds.delete(id)
+        touchedStructureIds.delete(id)
       }
-      if (entries.length === 0) return
-      overrides.setMany(
-        entries.map(([id, polygon]) => [id, { polygon }] as [string, Record<string, unknown>]),
-      )
-      for (const [id] of entries) {
-        touchedSurfaceIds.add(id)
-        sceneState.markDirty(id)
+      if (overrideEntries.length > 0) {
+        useLiveNodeOverrides.getState().setMany(overrideEntries)
+        for (const [id] of overrideEntries) {
+          sceneState.markDirty(id as AnyNodeId)
+        }
       }
     }
 
     const clearSurfaceOverrides = () => {
       const overrides = useLiveNodeOverrides.getState()
       const sceneState = useScene.getState()
-      for (const id of touchedSurfaceIds) {
+      for (const id of touchedStructureIds) {
         overrides.clear(id)
         // A surface the commit deleted (rooms merged) has nothing left to rebuild.
         if (sceneState.nodes[id]) sceneState.markDirty(id)
       }
-      touchedSurfaceIds.clear()
+      touchedStructureIds.clear()
     }
 
     // Drop the wall position overrides and mark the walls dirty so they rebuild
@@ -381,7 +381,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
         ...previewPlan.wallsToDelete.map((wall) => wall.id as AnyNodeId),
       ])
       const previewSceneWalls = getWallsAfterUpdates(
-        useScene.getState().nodes,
+        dragNodes,
         previewUpdates.map((entry) => ({
           id: entry.id as AnyNodeId,
           data: { start: entry.start, end: entry.end },
@@ -396,10 +396,10 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       const nextGhostWalls = bridgePreviews.map((preview) => preview.ghost)
       setGhostWallPreviews(nextGhostWalls)
       applyNodePreview(previewUpdates)
-      publishLiveSurfaceOverrides(
-        previewUpdates,
-        bridgePreviews.map(({ wall }) => ({ start: wall.start, end: wall.end })),
-      )
+      publishLiveSurfaceOverrides([
+        ...previewSceneWalls,
+        ...bridgePreviews.map((preview) => preview.wall),
+      ])
     }
 
     const restoreOriginal = () => {
@@ -556,9 +556,8 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
         } as WallNode,
       }))
 
-      // One history step, one write. The live space-detection sync reconciles
-      // sides, zones, slabs and ceilings inside it (once, incrementally), and
-      // its derived writes join the step.
+      // One history step, one write. The live structure sync reconciles sides,
+      // rooms, slabs and ceilings inside it, and its derived writes join the step.
       // The drag writes nothing to the store (the preview is live overrides), so history is
       // paused only for this drop. Keyed by the moving wall: in split view the 2D move overlay
       // co-owns the gesture, and commitStep lifts its pause too.
@@ -603,6 +602,7 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (!active) return
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
         return
       }

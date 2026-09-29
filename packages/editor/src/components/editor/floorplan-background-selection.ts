@@ -102,7 +102,7 @@ export function resolveFloorplanBackgroundSelection({
   }
 
   if (!isWallBuildActive) {
-    if (structureLayer === 'zones') {
+    if (structureLayer === 'zones' && canSelectFloorplanZones) {
       return {
         handled: true,
         kind: 'clear-zones',

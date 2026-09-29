@@ -1,7 +1,8 @@
 import {
   getWallArcData,
   getWallCurveFrameAt,
-  getWallThickness,
+  getWallFaceOffsets,
+  getWallLocalFaceZ,
   type MeasurementFeature,
   type MeasurementFeatureBinding,
   type MeasurementFeatureReference,
@@ -18,22 +19,14 @@ export function wallMeasurementFeatures(wall: WallNode): MeasurementFeature[] {
   const arc = getWallArcData(wall)
   const centerline = sampleWallCenterline(wall).map(({ x, y }) => point(x, 0, y))
   const midpoint = getWallCurveFrameAt(wall, 0.5).point
-  const halfThickness = getWallThickness(wall) / 2
+  const { a, b } = getWallFaceOffsets(wall)
   const leftFace = centerline.map((_center, index) => {
     const frame = getWallCurveFrameAt(wall, index / Math.max(1, centerline.length - 1))
-    return point(
-      frame.point.x + frame.normal.x * halfThickness,
-      0,
-      frame.point.y + frame.normal.y * halfThickness,
-    )
+    return point(frame.point.x + frame.normal.x * a, 0, frame.point.y + frame.normal.y * a)
   })
   const rightFace = centerline.map((_center, index) => {
     const frame = getWallCurveFrameAt(wall, index / Math.max(1, centerline.length - 1))
-    return point(
-      frame.point.x - frame.normal.x * halfThickness,
-      0,
-      frame.point.y - frame.normal.y * halfThickness,
-    )
+    return point(frame.point.x - frame.normal.x * -b, 0, frame.point.y - frame.normal.y * -b)
   })
 
   return [
@@ -176,7 +169,7 @@ export function matchWallMeasurementFeature(
       (hit[0] - frame.point.x) * frame.normal.x + (hit[2] - frame.point.y) * frame.normal.y >= 0
         ? 1
         : -1
-    const halfThickness = getWallThickness(wall) / 2
+    const halfThickness = getWallLocalFaceZ(wall, side > 0 ? 'a' : 'b') * side
     const faceX = frame.point.x + frame.normal.x * halfThickness * side
     const faceZ = frame.point.y + frame.normal.y * halfThickness * side
     const faceDistance = Math.hypot(hit[0] - faceX, hit[2] - faceZ)

@@ -9,7 +9,11 @@ import { ItemNode } from './item'
 import { LeanToExtensionNode } from './lean-to-extension'
 import { WindowNode } from './window'
 
-export const WallTreatmentSide = z.enum(['interior', 'exterior', 'both'])
+// Geometric faces: `a` is left of start → end, `b` is right (wall-frame convention).
+// `interior` / `exterior` are legacy semantic values the M1 load migration maps
+// onto a face; a runtime writer that still sends one renders on its canonical
+// face (interior → a, exterior → b).
+export const WallTreatmentSide = z.enum(['a', 'b', 'both', 'interior', 'exterior'])
 export type WallTreatmentSide = z.infer<typeof WallTreatmentSide>
 
 export const WallTrimProfile = z.enum([
@@ -74,58 +78,19 @@ export const WALL_TRIM_DEFAULTS = {
   chairRail: WALL_CHAIR_RAIL_DEFAULT,
 } as const
 
-const WallFaceBandConfigShape = z.object({
-  enabled: z.boolean().default(false),
-  count: z.number().int().min(1).max(4).default(1),
-  lowerHeight: z.number().default(0.84),
-  middleHeight: z.number().default(0.61),
-  upperHeight: z.number().default(0.61),
-})
-
-export const WallFaceBandConfig = z.preprocess((value) => {
-  if (value && typeof value === 'object' && !Array.isArray(value) && !('count' in value)) {
-    const enabled = (value as { enabled?: unknown }).enabled === true
-    return { ...value, count: enabled ? 3 : 1 }
-  }
-  return value
-}, WallFaceBandConfigShape)
-export type WallFaceBandConfig = z.infer<typeof WallFaceBandConfig>
-
-export const WALL_FACE_BAND_DEFAULT: WallFaceBandConfig = {
-  enabled: false,
-  count: 1,
-  lowerHeight: 0.84,
-  middleHeight: 0.61,
-  upperHeight: 0.61,
-}
-
 export const WALL_SKIRTING_SLOT_DEFAULT = 'library:preset-softwhite'
 export const WALL_CROWN_SLOT_DEFAULT = 'library:preset-white'
 export const WALL_CHAIR_RAIL_SLOT_DEFAULT = 'library:preset-cream'
-export const WALL_FACE_BAND_SOLID_SLOT_DEFAULTS = {
-  lower: 'library:preset-white',
-  middle: 'library:preset-lightgrey',
-  upper: 'library:preset-greige',
-  top: 'library:preset-softwhite',
-} as const satisfies Record<WallFaceBand, string>
 
 export const WALL_SURFACE_SLOT_DEFAULTS = {
-  interior: 'library:concrete-drywall',
-  exterior: 'library:concrete-drywall',
-  lowerInterior: 'library:concrete-drywall',
-  middleInterior: 'library:concrete-drywall',
-  upperInterior: 'library:concrete-drywall',
-  topInterior: 'library:concrete-drywall',
-  lowerExterior: 'library:concrete-drywall',
-  middleExterior: 'library:concrete-drywall',
-  upperExterior: 'library:concrete-drywall',
-  topExterior: 'library:concrete-drywall',
-  skirtingInterior: WALL_SKIRTING_SLOT_DEFAULT,
-  skirtingExterior: WALL_SKIRTING_SLOT_DEFAULT,
-  crownInterior: WALL_CROWN_SLOT_DEFAULT,
-  crownExterior: WALL_CROWN_SLOT_DEFAULT,
-  chairRailInterior: WALL_CHAIR_RAIL_SLOT_DEFAULT,
-  chairRailExterior: WALL_CHAIR_RAIL_SLOT_DEFAULT,
+  a: 'library:concrete-drywall',
+  b: 'library:concrete-drywall',
+  aSkirting: WALL_SKIRTING_SLOT_DEFAULT,
+  bSkirting: WALL_SKIRTING_SLOT_DEFAULT,
+  aCrown: WALL_CROWN_SLOT_DEFAULT,
+  bCrown: WALL_CROWN_SLOT_DEFAULT,
+  aChairRail: WALL_CHAIR_RAIL_SLOT_DEFAULT,
+  bChairRail: WALL_CHAIR_RAIL_SLOT_DEFAULT,
   // The foundation under a wall's underpinning (see WallNode.underpinning):
   // the concrete stemwall between the finish carried down over the floor
   // platform and the ground.
@@ -133,6 +98,29 @@ export const WALL_SURFACE_SLOT_DEFAULTS = {
 } as const
 
 export type WallSurfaceSlotId = keyof typeof WALL_SURFACE_SLOT_DEFAULTS
+export type WallFace = 'a' | 'b'
+
+export const WALL_FACE_REGION_LIMIT = 8
+
+// A paint region overrides one face's finish inside a rectangle without cutting
+// the wall. `u` is metres from the wall start along the reference line (along
+// the chord for curved walls); `v` is metres above the face's own base. An
+// absent bound runs to that edge, so a wainscot stretches with the wall.
+export const WallFaceRegion = z.object({
+  id: z.string(),
+  face: z.enum(['a', 'b']),
+  u0: z.number().finite().optional(),
+  u1: z.number().finite().optional(),
+  v0: z.number().finite().optional(),
+  v1: z.number().finite().optional(),
+  finish: z.string(),
+})
+export type WallFaceRegion = z.infer<typeof WallFaceRegion>
+
+const WallSurfaceMaterialSpecSchema = z.object({
+  material: MaterialSchema.optional(),
+  materialPreset: z.string().optional(),
+})
 
 /**
  * What a wall carries BELOW its base on a house standing above the ground:
@@ -263,12 +251,33 @@ export const WallNode = BaseNode.extend({
   exteriorMaterial: MaterialSchema.optional(),
   exteriorMaterialPreset: z.string().optional(),
   // Per-slot material overrides on the unified slot model, mirroring
-  // `SlabNode.slots`. Key = slot id (`interior` / `exterior`), value = a
-  // `MaterialRef` (`library:<id>` / `scene:<id>`). Absent = the declared slot
-  // default (`WALL_SLOT_DEFAULT`). The legacy `*Material*` fields above are
-  // read only by the load migration that moves them into `slots`; delete them
-  // in a follow-up once migrated scenes are the norm.
+  // `SlabNode.slots`. Key = geometric slot id (`a` / `b` faces, `aSkirting` …
+  // trims), value = a `MaterialRef` (`library:<id>` / `scene:<id>`). Absent =
+  // the declared slot default (`WALL_SLOT_DEFAULT`). Legacy `interior` /
+  // `exterior` keys are rewritten by the M1 load migration.
   slots: z.record(z.string(), z.string()).optional(),
+  // Legacy per-face inline finish, written only by the M1 load migration from
+  // `interiorMaterial*` / `exteriorMaterial*` so a face keeps the fallback it
+  // rendered with. Read after `slots[face]`, before `material` / `materialPreset`.
+  legacyFaceMaterials: z
+    .object({
+      a: WallSurfaceMaterialSpecSchema.optional(),
+      b: WallSurfaceMaterialSpecSchema.optional(),
+    })
+    .optional(),
+  // Later entries win; at most WALL_FACE_REGION_LIMIT per face.
+  faceRegions: z
+    .array(WallFaceRegion)
+    .superRefine((regions, ctx) => {
+      for (const face of ['a', 'b'] as const) {
+        if (regions.filter((region) => region.face === face).length > WALL_FACE_REGION_LIMIT)
+          ctx.addIssue({
+            code: 'custom',
+            message: `At most ${WALL_FACE_REGION_LIMIT} paint regions per wall face`,
+          })
+      }
+    })
+    .optional(),
   // TOTAL wall thickness in metres — the one number every consumer reads.
   // The sum of `assembly`'s layers whenever an assembly is present.
   thickness: z.number().optional(),
@@ -276,6 +285,8 @@ export const WallNode = BaseNode.extend({
   // slab of `thickness`. Present = the stack sets `thickness`: edit the layers
   // and write their sum (`wallAssemblyPatch`), never `thickness` alone.
   assembly: Assembly.optional(),
+  // Absent centers the body; a/b place it left/right of the stored start → end line.
+  justification: z.enum(['a', 'b']).optional(),
   height: z.number().optional(),
   curveOffset: z.number().optional(),
   // Persisted slab-support host — see ItemNode.supportSlabId for the rules.
@@ -288,14 +299,14 @@ export const WallNode = BaseNode.extend({
   fillToTerrain: z.boolean().optional(),
   // The finish and the foundation carried below the base — see WallUnderpinning.
   underpinning: WallUnderpinning.optional(),
-  faceBands: WallFaceBandConfig.optional(),
   skirting: WallTrimConfig.optional(),
   crown: WallTrimConfig.optional(),
   chairRail: WallTrimConfig.optional(),
   // e.g., start/end points for path
   start: z.tuple([z.number(), z.number()]),
   end: z.tuple([z.number(), z.number()]),
-  // Space detection for cutaway mode
+  // Derived room classification per face, still written by the structure
+  // kernel for cutaway and dimension readers. Wall finishes never read it.
   frontSide: z.enum(['interior', 'exterior', 'unknown']).default('unknown'),
   backSide: z.enum(['interior', 'exterior', 'unknown']).default('unknown'),
 }).describe(
@@ -318,187 +329,31 @@ export const WallNode = BaseNode.extend({
 )
 export type WallNode = z.infer<typeof WallNode>
 
+/** Legacy semantic side, read only by load migrations. */
 export type WallSurfaceSide = 'interior' | 'exterior'
-export type WallFaceBand = 'lower' | 'middle' | 'upper' | 'top'
-export type WallBandSurfaceSlotId =
-  | 'lowerInterior'
-  | 'middleInterior'
-  | 'upperInterior'
-  | 'topInterior'
-  | 'lowerExterior'
-  | 'middleExterior'
-  | 'upperExterior'
-  | 'topExterior'
 
 // Declared default appearance for an unpainted wall face in colored mode —
 // visual parity with the retired DEFAULT_WALL_MATERIAL. Lives in core so the
 // slot declaration (nodes) and the material resolver (viewer) share one value.
 // May be a `#rrggbb` colour or a `library:<id>` ref. Textures-off still
 // collapses to the themed wall role (the escape hatch).
-export const WALL_SLOT_DEFAULT: Record<WallSurfaceSide, string> = {
-  interior: WALL_SURFACE_SLOT_DEFAULTS.interior,
-  exterior: WALL_SURFACE_SLOT_DEFAULTS.exterior,
+export const WALL_SLOT_DEFAULT: Record<WallFace, string> = {
+  a: WALL_SURFACE_SLOT_DEFAULTS.a,
+  b: WALL_SURFACE_SLOT_DEFAULTS.b,
 }
 
-export function getWallFaceBandConfig(
-  wall: Pick<WallNode, 'height' | 'faceBands'>,
-  effectiveWallHeight: number,
-) {
-  const wallHeight = Math.max(0, effectiveWallHeight)
-  const raw = { ...WALL_FACE_BAND_DEFAULT, ...(wall.faceBands ?? {}) }
-  const count = raw.enabled ? Math.max(1, Math.min(4, Math.round(raw.count ?? 3))) : 1
-  const lowerHeight = count >= 2 ? Math.max(0, Math.min(wallHeight, raw.lowerHeight)) : 0
-  const middleHeight =
-    count >= 3 ? Math.max(0, Math.min(wallHeight - lowerHeight, raw.middleHeight)) : 0
-  const upperHeight =
-    count >= 4 ? Math.max(0, Math.min(wallHeight - lowerHeight - middleHeight, raw.upperHeight)) : 0
+export type WallTrimKind = 'skirting' | 'crown' | 'chairRail'
+export type WallTrimSlotId = `${WallFace}${'Skirting' | 'Crown' | 'ChairRail'}`
 
-  return {
-    enabled: raw.enabled && count > 1,
-    count,
-    lowerHeight,
-    middleHeight,
-    upperHeight,
-    lowerTop: lowerHeight,
-    middleTop: lowerHeight + middleHeight,
-    upperTop: lowerHeight + middleHeight + upperHeight,
-  }
+export function getWallTrimSlotId(face: WallFace, kind: WallTrimKind): WallTrimSlotId {
+  return `${face}${kind === 'skirting' ? 'Skirting' : kind === 'crown' ? 'Crown' : 'ChairRail'}`
 }
 
-export function getWallFaceBandForHeight(
-  wall: Pick<WallNode, 'height' | 'faceBands'>,
-  y: number,
-  effectiveWallHeight: number,
-): WallFaceBand {
-  const bands = getWallFaceBandConfig(wall, effectiveWallHeight)
-  if (!bands.enabled) return 'upper'
-  if (y < bands.lowerTop) return 'lower'
-  if (y < bands.middleTop) return 'middle'
-  if (bands.count >= 4 && y < bands.upperTop) return 'upper'
-  if (bands.count >= 4) return 'top'
-  return 'upper'
-}
-
-export function getWallBandSlotId(
-  side: WallSurfaceSide,
-  band: WallFaceBand,
-): WallBandSurfaceSlotId {
-  const suffix = side === 'interior' ? 'Interior' : 'Exterior'
-  return `${band}${suffix}` as WallBandSurfaceSlotId
-}
-
-const WALL_FACE_BAND_SLOTS_BY_SIDE = {
-  interior: ['lowerInterior', 'middleInterior', 'upperInterior', 'topInterior'],
-  exterior: ['lowerExterior', 'middleExterior', 'upperExterior', 'topExterior'],
-} as const satisfies Record<WallSurfaceSide, readonly WallBandSurfaceSlotId[]>
-
-function getWallFaceBandSlotsForCount(
-  side: WallSurfaceSide,
-  count: number,
-): readonly WallBandSurfaceSlotId[] {
-  if (count <= 1) return []
-  if (side === 'interior') {
-    if (count === 2) return ['lowerInterior', 'upperInterior']
-    if (count === 3) return ['lowerInterior', 'middleInterior', 'upperInterior']
-    return ['lowerInterior', 'middleInterior', 'upperInterior', 'topInterior']
-  }
-
-  if (count === 2) return ['lowerExterior', 'upperExterior']
-  if (count === 3) return ['lowerExterior', 'middleExterior', 'upperExterior']
-  return ['lowerExterior', 'middleExterior', 'upperExterior', 'topExterior']
-}
-
-function getWallFaceBandDefaultSlot(slotId: WallBandSurfaceSlotId): string {
-  if (slotId.startsWith('lower')) return WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.lower
-  if (slotId.startsWith('middle')) return WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.middle
-  if (slotId.startsWith('top')) return WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.top
-  return WALL_FACE_BAND_SOLID_SLOT_DEFAULTS.upper
-}
-
-function getWallFaceTopBandSlot(
-  side: WallSurfaceSide,
-  count: number,
-): WallBandSurfaceSlotId | null {
-  const slots = getWallFaceBandSlotsForCount(side, count)
-  return slots[slots.length - 1] ?? null
-}
-
-export function buildWallFaceBandCountPatch(
-  wall: Pick<WallNode, 'faceBands' | 'slots'>,
-  count: number,
-): Pick<WallNode, 'faceBands' | 'slots'> {
-  const slots = { ...(wall.slots ?? {}) }
-  const nextCount = Math.max(1, Math.min(4, Math.round(count)))
-  const previousCount = wall.faceBands?.enabled
-    ? Math.max(1, Math.min(4, Math.round(wall.faceBands.count ?? 3)))
-    : 1
-
-  for (const side of ['interior', 'exterior'] as const) {
-    const nextSlots = getWallFaceBandSlotsForCount(side, nextCount)
-    const activeSlots = new Set(nextSlots)
-    const previouslyActiveSlots = new Set(getWallFaceBandSlotsForCount(side, previousCount))
-    const previousTopSlot = getWallFaceTopBandSlot(side, previousCount)
-    const nextTopSlot = getWallFaceTopBandSlot(side, nextCount)
-    const topMaterial =
-      (previousTopSlot ? slots[previousTopSlot] : undefined) ??
-      slots[side] ??
-      WALL_SURFACE_SLOT_DEFAULTS[side]
-    for (const slotId of WALL_FACE_BAND_SLOTS_BY_SIDE[side]) {
-      if (activeSlots.has(slotId)) {
-        if (slotId === nextTopSlot) {
-          slots[slotId] = topMaterial
-          continue
-        }
-        const wasActive = previouslyActiveSlots.has(slotId)
-        const wasPreviousTop = slotId === previousTopSlot
-        if (!wasActive || wasPreviousTop || !slots[slotId]) {
-          slots[slotId] = getWallFaceBandDefaultSlot(slotId)
-        }
-      } else {
-        delete slots[slotId]
-      }
-    }
-  }
-
-  return {
-    faceBands: {
-      ...WALL_FACE_BAND_DEFAULT,
-      ...(wall.faceBands ?? {}),
-      enabled: nextCount > 1,
-      count: nextCount,
-      lowerHeight: wall.faceBands?.lowerHeight ?? WALL_FACE_BAND_DEFAULT.lowerHeight,
-      middleHeight: wall.faceBands?.middleHeight ?? WALL_FACE_BAND_DEFAULT.middleHeight,
-      upperHeight: wall.faceBands?.upperHeight ?? WALL_FACE_BAND_DEFAULT.upperHeight,
-    },
-    slots,
-  }
-}
-
-export function buildEnabledWallFaceBandPatch(
-  wall: Pick<WallNode, 'faceBands' | 'slots'>,
-): Pick<WallNode, 'faceBands' | 'slots'> {
-  return buildWallFaceBandCountPatch(wall, 2)
-}
-
-export function getWallSurfaceSideFromBandSlot(slotId: string): WallSurfaceSide | null {
-  if (slotId === 'interior' || slotId === 'exterior') return slotId
-  if (
-    slotId === 'lowerInterior' ||
-    slotId === 'middleInterior' ||
-    slotId === 'upperInterior' ||
-    slotId === 'topInterior'
-  ) {
-    return 'interior'
-  }
-  if (
-    slotId === 'lowerExterior' ||
-    slotId === 'middleExterior' ||
-    slotId === 'upperExterior' ||
-    slotId === 'topExterior'
-  ) {
-    return 'exterior'
-  }
-  return null
+/** Faces a trim config draws on. Legacy semantic values use their canonical face. */
+export function getWallTrimFaces(sides: WallTreatmentSide | undefined): WallFace[] {
+  if (sides === 'a' || sides === 'interior') return ['a']
+  if (sides === 'b' || sides === 'exterior') return ['b']
+  return ['a', 'b']
 }
 
 export type WallSurfaceMaterialSpec = {
@@ -549,6 +404,22 @@ export function getEffectiveWallSurfaceMaterial(
     material: wall.material,
     materialPreset: wall.materialPreset,
   }
+}
+
+type WallFaceMaterialSource = WallSurfaceMaterialSource & {
+  legacyFaceMaterials?: WallNode['legacyFaceMaterials']
+}
+
+/** A face's legacy inline finish: its migrated per-face spec, else the wall-wide legacy fields. */
+export function getEffectiveWallFaceMaterial(
+  wall: WallFaceMaterialSource,
+  face: WallFace,
+): WallSurfaceMaterialSpec {
+  const configured = wall.legacyFaceMaterials?.[face]
+  if (configured && hasSurfaceMaterial(configured)) {
+    return { material: configured.material, materialPreset: configured.materialPreset }
+  }
+  return { material: wall.material, materialPreset: wall.materialPreset }
 }
 
 export function getWallSurfaceMaterialSignature(spec: WallSurfaceMaterialSpec): string {

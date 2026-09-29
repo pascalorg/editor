@@ -9,6 +9,7 @@ import {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
+import * as Bun from 'bun'
 import * as THREE from 'three'
 import { shouldDeferWallRebuild } from './wall-system'
 
@@ -233,12 +234,12 @@ function buildingWithOpenings() {
   return { building, slab, segment, walls, nodes: Object.fromEntries([building, ground, upper, slab, elevator, stair, segment, ...walls].map(node => [node.id, node])) }
 }
 
-test('elevator reconciliation finishes before publishing hydration and the first wall frame', async () => {
+test('elevator hydration ensures slab holes before the first wall frame', async () => {
   const scene = buildingWithOpenings()
   const stop = initializeElevatorOpeningSync()
   try {
     useScene.getState().setScene(scene.nodes, [scene.building.id])
-    expect((useScene.getState().nodes[scene.slab.id] as SlabNode).holes).toHaveLength(1)
+    expect((useScene.getState().nodes[scene.slab.id] as SlabNode).holes).toHaveLength(2)
     await new Promise<void>(resolve => queueMicrotask(resolve))
     expect(useScene.getState().hydrationToken).not.toBeNull()
     for (const wall of scene.walls) register(wall)
@@ -268,7 +269,7 @@ test.each(['none', 'edit', 'host', 'remote', 'wheel'])('deferred stair normaliza
   } finally { stop() }
 })
 
-test('opening normalization belongs to hydration even when the systems mount after setScene', async () => {
+test('hydration and late opening-system mounts preserve saved floor cutouts', async () => {
   const scene = buildingWithOpenings()
   useScene.getState().setScene(scene.nodes, [scene.building.id])
   expect(useScene.getState().hydrationToken).toBeNull()
@@ -276,15 +277,20 @@ test('opening normalization belongs to hydration even when the systems mount aft
   const token = useScene.getState().hydrationToken
   expect(token).not.toBeNull()
   expect((useScene.getState().nodes[scene.segment.id] as StairSegmentNode).height).toBe(3)
-  expect((useScene.getState().nodes[scene.slab.id] as SlabNode).holes!.length).toBe(2)
+  const storedHoles = (useScene.getState().nodes[scene.slab.id] as SlabNode).holes
+  expect(storedHoles).toHaveLength(2)
   const stopStair = initializeStairOpeningSync()
   const stopElevator = initializeElevatorOpeningSync()
   try {
     await new Promise<void>(resolve => queueMicrotask(resolve))
     expect(useScene.getState().hydrationToken).toBe(token)
+    expect((useScene.getState().nodes[scene.slab.id] as SlabNode).holes).toEqual(storedHoles)
     for (const wall of scene.walls) register(wall)
     runWallBuildFrame()
     expect(stats().wallsConsumedThisFrame).toBe(12)
+    useScene.getState().updateNode(scene.segment.id, { width: 2 })
+    await new Promise<void>(resolve => queueMicrotask(resolve))
+    expect((useScene.getState().nodes[scene.slab.id] as SlabNode).holes!.length).toBeGreaterThan(0)
   } finally { stopStair(); stopElevator() }
 })
 
@@ -293,11 +299,13 @@ test('locked snapshot hydration does not defer derived writes beyond the mutatio
   useScene.setState({ readOnly: true })
   useScene.getState().setScene(scene.nodes, [scene.building.id])
   useScene.setState({ readOnly: false })
+  const normalizedNodes = useScene.getState().nodes
   const token = useScene.getState().hydrationToken
   await new Promise<void>(resolve => queueMicrotask(resolve))
   expect(useScene.getState().hydrationToken).toBe(token)
-  expect((useScene.getState().nodes[scene.segment.id] as StairSegmentNode).height).toBe(1)
-  expect((useScene.getState().nodes[scene.slab.id] as SlabNode).holes).toEqual([])
+  expect((useScene.getState().nodes[scene.segment.id] as StairSegmentNode).height).toBe(3)
+  expect((useScene.getState().nodes[scene.slab.id] as SlabNode).holes).toHaveLength(2)
+  expect(useScene.getState().nodes).toBe(normalizedNodes)
 })
 
 test('replacing a hydration before its normalization runs cannot publish an obsolete token', async () => {
@@ -316,16 +324,18 @@ test('replacing an already-known level completes space reconciliation before iss
   const level = LevelNode.parse({ height: 3 })
   const points = [[0, 0], [12, 0], [12, 8], [0, 8]]
   const walls = points.map((start, index) => WallNode.parse({ parentId: level.id, start, end: points[(index + 1) % 4] }))
-  const slab = SlabNode.parse({ parentId: level.id, polygon: points, autoFromWalls: true })
+  const slab = SlabNode.parse({ parentId: level.id, polygon: points, boundary: 'auto', autoFromWalls: true })
   level.children = [...walls.map(wall => wall.id), slab.id]
   const nodes = Object.fromEntries([level, slab, ...walls].map(node => [node.id, node]))
   useScene.getState().setScene(nodes, [level.id])
   const editorState = { spaces: {}, setSpaces(spaces: object) { this.spaces = spaces } }
   const stop = initSpaceDetectionSync(useScene, { getState: () => editorState })
   try {
+    const priorSpaces = structuredClone(editorState.spaces)
     const next = { ...nodes, [walls[0]!.id]: { ...walls[0]!, end: [12, 1] }, [walls[1]!.id]: { ...walls[1]!, start: [12, 1] } }
     useScene.getState().setScene(next as Record<string, AnyNode>, [level.id])
-    expect((useScene.getState().nodes[slab.id] as SlabNode).polygon).not.toEqual(slab.polygon)
+    expect(editorState.spaces).not.toEqual(priorSpaces)
+    expect((useScene.getState().nodes[slab.id] as SlabNode).polygon).toEqual(slab.polygon)
     expect(isWallInitialBuildActive()).toBe(true)
     for (const wall of walls) register(wall)
     runWallBuildFrame()
@@ -603,13 +613,20 @@ test.each([false, true])('a drained scene keeps its first endpoint edit local (t
   }).flat()
   level.children = [...walls, ...surfaces].map((node) => node.id)
   useScene.getState().setScene(Object.fromEntries([level, ...walls, ...surfaces].map((node) => [node.id, node])), [level.id])
-  for (const wall of walls) register(wall)
+  const built = walls.map(register)
   const editorState = { spaces: {}, setSpaces(spaces: object) { this.spaces = spaces } }
   const stopDetection = initSpaceDetectionSync(useScene, { getState: () => editorState })
   try {
     runWallBuildFrame()
     expect(isWallInitialBuildActive()).toBe(false)
     expect(getPendingWallRebuildCount()).toBe(0)
+    const initialGeometry = built.map(mesh => mesh.geometry)
+    const rebuiltIds = () => walls.filter((_, index) => built[index]!.geometry !== initialGeometry[index]).map(wall => wall.id).sort()
+    // Load reconciliation already classified these walls; the edit must not rely on side-tag writes.
+    for (const wall of walls) {
+      const loaded = useScene.getState().nodes[wall.id] as WallNode
+      expect([loaded.frontSide, loaded.backSide]).toEqual(['interior', 'exterior'])
+    }
     if (invalidated) useScene.setState({ hydrationToken: null })
     useScene.getState().dirtyNodes.clear()
     useScene.getState().updateNodes([
@@ -618,11 +635,19 @@ test.each([false, true])('a drained scene keeps its first endpoint edit local (t
     ])
     for (const [id, callback] of rafs) { rafs.delete(id); callback(now) }
     const dirtyWalls = [...useScene.getState().dirtyNodes].filter((id) => useScene.getState().nodes[id]?.type === 'wall')
-    expect(dirtyWalls.length).toBe(4)
+    const editedIds = walls.slice(0, 2).map(wall => wall.id).sort()
+    expect(dirtyWalls.sort()).toEqual(editedIds)
     const before = stats().reinvalidationBuilds
     runWallBuildFrame()
-    now += 80
+    expect(rebuiltIds()).toEqual(editedIds)
+    expect(getPendingWallRebuildCount()).toBe(2)
+    now += 79
     runWallBuildFrame()
+    expect(rebuiltIds()).toEqual(editedIds)
+    expect(getPendingWallRebuildCount()).toBe(2)
+    now += 1
+    runWallBuildFrame()
+    expect(rebuiltIds()).toEqual(walls.slice(0, 4).map(wall => wall.id).sort())
     expect(stats().reinvalidationBuilds - before).toBe(4)
     expect(getPendingWallRebuildCount()).toBe(0)
   } finally {
@@ -773,4 +798,4 @@ test('canvas and live-state owner precede the lazy wall consumer; remount retain
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }
-}, 10000)
+}, 10_000)

@@ -8,6 +8,8 @@ import {
   getEffectiveNode,
   getRoofWallFaceFrame,
   getScaledDimensions,
+  getWallBodyCenterOffset,
+  getWallLocalFaceZ,
   type ItemNode,
   type RoofSegmentNode,
   roofFacePointToSegment,
@@ -131,8 +133,9 @@ export function resolveItemTransform(
     const wallRotation = -Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
     const wallLocalZ =
       item.asset.attachTo === 'wall-side'
-        ? ((wall.thickness ?? 0.1) / 2) * (item.side === 'front' ? 1 : -1)
-        : item.position[2]
+        ? getWallLocalFaceZ(parentNode, item.side === 'front' ? 'a' : 'b')
+        : item.position[2] +
+          (item.asset.attachTo === 'wall' ? getWallBodyCenterOffset(parentNode) : 0)
     const [offsetX, offsetY] = rotateVec(item.position[0], wallLocalZ, wallRotation)
     result = {
       x: wall.start[0] + offsetX,

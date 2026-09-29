@@ -10,7 +10,7 @@ import type {
 import { pointOnPolygonBoundary, wallOverlapsSlabFootprint } from '../systems/slab/slab-support'
 import { measurementCentroid } from './measurement-geometry'
 import { type Point2D, pointInPolygon } from './polygon-relations'
-import { detectSpacesForLevel, resolveAutoZonePolygon } from './space-detection'
+import { detectSpacesForLevel } from './space-detection'
 
 export type UnitDerivation = {
   unitId: UnitNode['id']
@@ -80,7 +80,7 @@ export function deriveUnit(unit: UnitNode, nodes: Nodes): UnitDerivation {
     if (level?.type !== 'level') continue
     levels.set(level.id, level)
     const polygons = polygonsByLevel.get(level.id) ?? []
-    polygons.push(resolveAutoZonePolygon(zone, (id) => nodes[id]))
+    polygons.push(zone.polygon)
     polygonsByLevel.set(level.id, polygons)
   }
   const levelIds = [...levels.values()]

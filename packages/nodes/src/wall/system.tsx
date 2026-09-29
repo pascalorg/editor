@@ -1,6 +1,15 @@
 'use client'
 
-import { type AnyNodeId, useLiveNodeOverrides, useScene, type WallNode } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  spatialGridManager,
+  useLiveNodeOverrides,
+  useLiveTerrain,
+  useScene,
+  type WallNode,
+  type WallSlabSupport,
+} from '@pascal-app/core'
 import { timeSpan, WallCutout, WallSystem } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { useEffect } from 'react'
@@ -16,7 +25,17 @@ import {
 import { wallTreatmentProudOffsets } from './treatments'
 import { WallBatchSystem } from './wall-batch-system'
 
-const levelInputs = new Map<string, { walls: readonly WallNode[]; proudKey: string }>()
+const levelInputs = new Map<
+  string,
+  {
+    walls: readonly WallNode[]
+    proudKey: string
+    supportKey: string
+    terrain: object
+    supportInputs: readonly unknown[]
+    supports: Map<WallNode['id'], WallSlabSupport>
+  }
+>()
 let effectiveWalls = new WeakMap<
   WallNode,
   { override: ReturnType<ReturnType<typeof useLiveNodeOverrides.getState>['get']>; wall: WallNode }
@@ -60,6 +79,12 @@ export function updateWallTreatmentLevels(): void {
     previousOverrides = overrides
   }
 
+  const terrain = useLiveTerrain.getState()
+  const ancestors = dirtyLevelIds.size
+    ? Object.values(nodes).filter(
+        (node) => node.type === 'site' || node.type === 'building' || node.type === 'level',
+      )
+    : []
   for (const levelId of dirtyLevelIds) {
     const level = nodes[levelId as AnyNodeId]
     if (level?.type !== 'level') {
@@ -75,13 +100,56 @@ export function updateWallTreatmentLevels(): void {
     const proudOffsets = walls.flatMap(wallTreatmentProudOffsets)
     const proudKey = treatmentProudKeys(proudOffsets).join(',')
     const previous = levelInputs.get(levelId)
-    if (previous?.proudKey === proudKey && sameTreatmentWalls(previous.walls, walls)) continue
+    const sameWalls = previous?.proudKey === proudKey && sameTreatmentWalls(previous.walls, walls)
+    const supportInputs = [
+      ...ancestors,
+      ...level.children.flatMap((id) => {
+        const node: AnyNode | undefined = nodes[id]
+        return node && (node.type === 'slab' || node.type === 'zone' || node.type === 'separator')
+          ? [node, overrides.get(id)]
+          : []
+      }),
+    ]
+    const sameSupportInputs =
+      previous?.supportInputs.length === supportInputs.length &&
+      supportInputs.every((input, i) => input === previous.supportInputs[i])
+    const sameTerrain = previous?.terrain === terrain
+    if (sameWalls && sameSupportInputs && sameTerrain) continue
+    const supports = new Map(
+      walls.map((wall) => {
+        const cached =
+          sameSupportInputs &&
+          (sameTerrain || !dirtyNodes.has(wall.id)) &&
+          previous?.walls.includes(wall)
+            ? previous.supports.get(wall.id)
+            : undefined
+        return [
+          wall.id,
+          cached ??
+            spatialGridManager.getSlabSupportForWall(
+              levelId,
+              wall.start,
+              wall.end,
+              wall.curveOffset ?? 0,
+              wall.thickness,
+              wall.supportSlabId,
+              undefined,
+              wall.supportOffset,
+              wall.justification,
+            ),
+        ]
+      }),
+    )
+    const supportKey = JSON.stringify(
+      [...supports].map(([id, support]) => [id, support.elevation, support.faceDatum]),
+    )
+    levelInputs.set(levelId, { walls, proudKey, supportKey, supportInputs, supports, terrain })
+    if (sameWalls && previous.supportKey === supportKey) continue
 
     timeSpan('wall-treatment-level', () => {
       useWallTreatmentLevelData
         .getState()
-        .setLevelData(levelId, buildWallTreatmentLevelData(levelId, walls, proudOffsets))
-      levelInputs.set(levelId, { walls, proudKey })
+        .setLevelData(levelId, buildWallTreatmentLevelData(levelId, walls, proudOffsets, supports))
     })
   }
 }

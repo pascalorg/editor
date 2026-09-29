@@ -1,5 +1,6 @@
 import {
   getCurtainWallConfig,
+  getWallBodyCenterOffset,
   getWallCurveFrameAt,
   getWallCurveLength,
   type WallNode,
@@ -35,10 +36,13 @@ export function wallLocalToWorld(
 ): [number, number, number] {
   const wallLength = getWallCurveLength(wallNode)
   const frame = getWallCurveFrameAt(wallNode, wallLength > 1e-6 ? localX / wallLength : 0)
+  // `localZ` is measured from the body's centre plane, which a justified wall
+  // sets off its reference line.
+  const across = getWallBodyCenterOffset(wallNode) + localZ
   return [
-    frame.point.x + frame.normal.x * localZ,
+    frame.point.x + frame.normal.x * across,
     slabElevation + localY + levelYOffset,
-    frame.point.y + frame.normal.y * localZ,
+    frame.point.y + frame.normal.y * across,
   ]
 }
 

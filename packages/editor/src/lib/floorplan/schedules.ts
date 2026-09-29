@@ -1,5 +1,5 @@
 import type { AnyNode, AnyNodeId, DoorNode, WallNode, WindowNode, ZoneNode } from '@pascal-app/core'
-import { deriveZoneQuantityReport, resolveAutoZonePolygon } from '@pascal-app/core'
+import { deriveZoneQuantityReport } from '@pascal-app/core'
 import { collectFloorplanSchedules } from './floorplan-export'
 import type { FloorplanSchedule } from './floorplan-extension'
 import { resolveMarkDetail } from './marks'
@@ -226,9 +226,7 @@ export function roomSchedule(
       if (node.type !== 'zone') continue
       const zone = node as ZoneNode
       if (zone.spaceRole !== 'room') continue
-      const polygon = resolveAutoZonePolygon(zone, (nodeId) => nodes[nodeId])
-      const resolved = polygon === zone.polygon ? zone : { ...zone, polygon }
-      const report = deriveZoneQuantityReport(resolved, nodes as Record<string, AnyNode>)
+      const report = deriveZoneQuantityReport(zone, nodes as Record<string, AnyNode>)
       const number = zone.roomNumber.trim()
       if (!number) issues.push(`Room ${zone.name.trim() || zone.id} has no room number`)
       else {

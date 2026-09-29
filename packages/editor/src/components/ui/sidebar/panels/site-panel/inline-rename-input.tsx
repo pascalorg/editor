@@ -8,6 +8,8 @@ interface InlineRenameInputProps {
   isEditing: boolean
   onStopEditing: () => void
   defaultName: string
+  /** Shown instead of the stored name when not editing (a level's display name). */
+  displayName?: string
   className?: string
   onStartEditing?: () => void
 }
@@ -17,6 +19,7 @@ export const InlineRenameInput = memo(function InlineRenameInput({
   isEditing,
   onStopEditing,
   defaultName,
+  displayName,
   className,
   onStartEditing,
 }: InlineRenameInputProps) {
@@ -61,7 +64,7 @@ export const InlineRenameInput = memo(function InlineRenameInput({
     return (
       <div className="group/rename flex h-5 min-w-0 items-center gap-1">
         <span className={cn('truncate border-transparent border-b', className)}>
-          {name || defaultName}
+          {displayName ?? (name || defaultName)}
         </span>
         {onStartEditing && (
           <button

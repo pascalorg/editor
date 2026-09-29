@@ -1,6 +1,7 @@
 import type { AnyNode, PaintPreviewArgs, PaintResolveArgs, StairNode } from '@pascal-app/core'
 import type { Mesh, Object3D } from 'three'
 import { buildSlotPreviewMaterial, createSlotPaintCapability } from '../shared/slot-paint'
+import { swapPreviewMaterial } from '../shared/swap-preview-material'
 import type { StairSlotId } from './slots'
 
 function isStairSlotId(value: unknown): value is StairSlotId {
@@ -36,11 +37,7 @@ function previewStairSlot(args: PaintPreviewArgs): (() => void) | null {
 
     const userData = mesh.userData as { slotId?: unknown; slotIds?: unknown }
     if (userData.slotId === role) {
-      const previous = mesh.material
-      mesh.material = preview
-      restores.push(() => {
-        mesh.material = previous
-      })
+      restores.push(swapPreviewMaterial(mesh, preview))
       return
     }
 
@@ -49,13 +46,9 @@ function previewStairSlot(args: PaintPreviewArgs): (() => void) | null {
     if (materialIndex < 0) return
     if (!Array.isArray(mesh.material)) return
 
-    const previous = mesh.material
-    const next = previous.slice()
+    const next = mesh.material.slice()
     next[materialIndex] = preview
-    mesh.material = next
-    restores.push(() => {
-      mesh.material = previous
-    })
+    restores.push(swapPreviewMaterial(mesh, next))
   })
 
   if (restores.length === 0) return null

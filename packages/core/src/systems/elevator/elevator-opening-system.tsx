@@ -1,10 +1,13 @@
 'use client'
 
 import { useEffect } from 'react'
+import { structureChangeBatch } from '../../commands/structure/shared'
 import type { AnyNode } from '../../schema'
 import { pauseSceneHistory, resumeSceneHistory } from '../../store/history-control'
+import { isHydrationNormalization } from '../../store/scene-hydration'
 import useScene from '../../store/use-scene'
-import { syncAutoElevatorOpenings } from './elevator-opening-sync'
+import { planOwnedFloorOpenings } from '../owned-floor-openings'
+import { reconcileOwnedFloorOpeningChanges } from '../reconcile-owned-floor-openings'
 
 function isOpeningRelevantNode(node: AnyNode | undefined) {
   return (
@@ -36,24 +39,27 @@ function hasOpeningRelevantNodeChange(
 export function initializeElevatorOpeningSync() {
   let syncingAutoOpenings = false
 
-  const applyUpdates = (updates: ReturnType<typeof syncAutoElevatorOpenings>) => {
-    if (updates.length === 0) return
+  const applyChanges = (skipExistingSurfaces = false) => {
+    const changes = planOwnedFloorOpenings(useScene.getState().nodes, { skipExistingSurfaces })
+    if (changes.length === 0) return
     syncingAutoOpenings = true
     pauseSceneHistory(useScene)
     try {
-      useScene.getState().updateNodes(updates)
+      const before = useScene.getState().nodes
+      useScene.getState().applyNodeChanges(structureChangeBatch(changes))
+      reconcileOwnedFloorOpeningChanges(before, changes)
     } finally {
       resumeSceneHistory(useScene)
       syncingAutoOpenings = false
     }
   }
 
-  applyUpdates(syncAutoElevatorOpenings(useScene.getState().nodes))
+  applyChanges(true)
 
   return useScene.subscribe((state, prevState) => {
     if (syncingAutoOpenings) return
     if (!hasOpeningRelevantNodeChange(state.nodes, prevState.nodes)) return
-    applyUpdates(syncAutoElevatorOpenings(state.nodes))
+    applyChanges(isHydrationNormalization() || state.hydrationId !== prevState.hydrationId)
   })
 }
 

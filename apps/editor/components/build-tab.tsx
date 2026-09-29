@@ -2,12 +2,21 @@
 
 import { RoofType as RoofTypeSchema, useRegistryVersion } from '@pascal-app/core'
 import {
+  BuildPanelAdvancedSection,
+  BuildPanelRoomsSection,
+  BuildPanelSection,
+  BuildToolGrid,
+  BuildToolTile,
   MaterialPaintPanel,
+  selectWallDrawVariant,
+  startTerraceDraft,
   TerrainSculptPanel,
   ToolOptionsPanel,
   triggerSFX,
   useEditor,
   useFloorplanMode,
+  useTerraceDraft,
+  useWallDrawVariant,
 } from '@pascal-app/editor'
 import { useLiquidLineToolOptions } from '@pascal-app/nodes'
 import Image from 'next/image'
@@ -49,8 +58,10 @@ export function BuildTab() {
   const [mepOpen, setMepOpen] = useState(false)
   const activeTool = useEditor((s) => s.tool)
   const mode = useEditor((s) => s.mode)
+  const isTerraceActive = useTerraceDraft((s) => !!s.host)
   const roofDefaults = useEditor((s) => s.toolDefaults.roof)
   const floorplanMode = useFloorplanMode((s) => s.mode)
+  const wallVariant = useWallDrawVariant()
   const follow = useLiquidLineToolOptions((s) => s.follow)
   const toggleFollow = useLiquidLineToolOptions((s) => s.toggleFollow)
   useRegistryVersion()
@@ -93,6 +104,7 @@ export function BuildTab() {
     if (type.mode) return mode === type.mode
     if (type.id === 'mep') return isMepActive
     if (type.id === 'kitchen') return isKitchenActive
+    if (type.id === 'terrace') return isTerraceActive
     if (type.id === 'roof')
       return mode === 'build' && (activeTool === 'roof' || isRoofFeatureActive)
     return mode === 'build' && activeTool === type.kind
@@ -113,6 +125,8 @@ export function BuildTab() {
       ed.setTool(null)
     } else if (type.id === 'kitchen') {
       activateModularCabinetTool()
+    } else if (type.id === 'terrace') {
+      startTerraceDraft()
     } else if (type.kind) {
       activateBuildTool(type.kind)
     }
@@ -133,60 +147,63 @@ export function BuildTab() {
     if (firstType) handleTypeClick(firstType)
   }, [buildTypes, handleTypeClick])
 
+  const renderTile = (type: BuildType) => (
+    <BuildToolTile
+      active={isTypeActive(type)}
+      data-build-tool={type.id}
+      iconSrc={type.iconSrc}
+      key={type.id}
+      label={type.label}
+      onClick={() => {
+        triggerSFX('sfx:menu-click')
+        handleTypeClick(type)
+      }}
+      onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+      title={type.label}
+    />
+  )
+  const typesIn = (section: NonNullable<BuildType['section']>) =>
+    buildTypes.filter((type) => type.section === section)
+  const advancedTypes = typesIn('advanced')
+
   return (
-    <div className="flex h-full flex-col gap-3 p-3">
-      <TooltipProvider delayDuration={0} disableHoverableContent>
-        <div
-          className="grid gap-1.5"
-          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
+    <div className="flex h-full flex-col gap-3 overflow-y-auto p-3">
+      <div className="flex flex-col gap-3 [&>section+section]:border-border/60 [&>section+section]:border-t [&>section+section]:pt-3">
+        <BuildPanelRoomsSection
+          activeVariant={mode === 'build' && activeTool === 'wall' ? wallVariant : null}
+          onHover={() => triggerSFX('sfx:menu-hover')}
+          onSelect={(variant) => {
+            triggerSFX('sfx:menu-click')
+            selectWallDrawVariant(variant)
+            const editor = useEditor.getState()
+            if (!(editor.mode === 'build' && editor.tool === 'wall')) activateBuildTool('wall')
+          }}
+        />
+        <BuildPanelSection id="add" title="Add to rooms">
+          <BuildToolGrid columns={4}>{typesIn('add').map(renderTile)}</BuildToolGrid>
+        </BuildPanelSection>
+        <BuildPanelSection id="outdoor" title="Outdoor">
+          <BuildToolGrid columns={4}>{typesIn('outdoor').map(renderTile)}</BuildToolGrid>
+        </BuildPanelSection>
+        <BuildPanelAdvancedSection
+          containsActiveTool={advancedTypes.some(isTypeActive)}
+          description="Rooms already create their floor and ceiling. Use these for platforms and one-off structure."
+          hint="Slab, ceiling, column…"
         >
-          {buildTypes.map((type) => {
-            const active = isTypeActive(type)
-            return (
-              <Tooltip key={type.id}>
-                <TooltipTrigger asChild>
-                  <button
-                    className={cn(
-                      'group relative flex aspect-square items-center justify-center rounded-xl p-1 transition-all duration-200',
-                      active
-                        ? 'bg-primary/10 ring-1 ring-primary/50'
-                        : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
-                    )}
-                    onClick={() => {
-                      triggerSFX('sfx:menu-click')
-                      handleTypeClick(type)
-                    }}
-                    onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-                    type="button"
-                  >
-                    <Image
-                      alt={type.label}
-                      className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
-                      height={48}
-                      src={type.iconSrc}
-                      width={48}
-                    />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent className="pointer-events-none" side="top">
-                  {type.label}
-                </TooltipContent>
-              </Tooltip>
-            )
-          })}
-        </div>
-      </TooltipProvider>
+          <BuildToolGrid columns={4}>{advancedTypes.map(renderTile)}</BuildToolGrid>
+        </BuildPanelAdvancedSection>
+      </div>
 
       {mode === 'material-paint' ? (
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="border-border/60 border-t pt-3">
           <MaterialPaintPanel />
         </div>
       ) : mode === 'terrain-sculpt' ? (
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="border-border/60 border-t pt-3">
           <TerrainSculptPanel />
         </div>
       ) : mode === 'build' && (activeTool === 'roof' || isRoofFeatureActive) ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+        <div className="flex flex-col gap-3 border-border/60 border-t pt-3">
           <div className="flex flex-col gap-2">
             <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">Roof type</div>
             <div className="grid grid-cols-2 gap-1.5">
@@ -281,7 +298,7 @@ export function BuildTab() {
           ) : null}
         </div>
       ) : isKitchenActive ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+        <div className="flex flex-col gap-2 border-border/60 border-t pt-3">
           <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">Kitchen</div>
           <TooltipProvider delayDuration={0} disableHoverableContent>
             <div
@@ -316,7 +333,7 @@ export function BuildTab() {
           </TooltipProvider>
         </div>
       ) : isMepActive ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+        <div className="flex flex-col gap-2 border-border/60 border-t pt-3">
           <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">MEP</div>
           <TooltipProvider delayDuration={0} disableHoverableContent>
             <div

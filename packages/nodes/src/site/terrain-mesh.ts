@@ -1,4 +1,4 @@
-import type { HeightPatch, TerrainField } from '@pascal-app/core'
+import type { HeightPatch, Ring, TerrainField } from '@pascal-app/core'
 import { BufferAttribute, BufferGeometry, DynamicDrawUsage, Sphere } from 'three'
 import {
   buildTerrainMesh,
@@ -10,6 +10,12 @@ import {
   updateTerrainMesh,
   updateTerrainSkirt,
 } from './terrain-geometry'
+
+import {
+  cutTerrainHoles,
+  type TerrainHoleBoundary,
+  updateTerrainHoleBoundary,
+} from './terrain-holes'
 
 /**
  * The Three.js side of the terrain heightfield: owns the `BufferGeometry` and the
@@ -31,6 +37,7 @@ import {
 /** A terrain geometry plus the CPU buffers backing it. */
 export type TerrainGeometry = {
   readonly geometry: BufferGeometry
+  readonly holeBoundary: TerrainHoleBoundary | null
   readonly buffers: TerrainMeshBuffers
   /** Expands during live edits; a committed-field rebuild tightens it again. */
   readonly heightBounds: { minY: number; maxY: number }
@@ -38,8 +45,9 @@ export type TerrainGeometry = {
   readonly skirt: { readonly geometry: BufferGeometry; readonly buffers: TerrainSkirtBuffers }
 }
 
-export function createTerrainGeometry(field: TerrainField): TerrainGeometry {
+export function createTerrainGeometry(field: TerrainField, holes: Ring[] = []): TerrainGeometry {
   const buffers = buildTerrainMesh(field)
+  const holeBoundary = cutTerrainHoles(buffers, holes)
   const geometry = new BufferGeometry()
   geometry.setAttribute(
     'position',
@@ -72,6 +80,7 @@ export function createTerrainGeometry(field: TerrainField): TerrainGeometry {
 
   return {
     geometry,
+    holeBoundary,
     buffers,
     heightBounds: span,
     skirt: { geometry: skirtGeometry, buffers: skirtBuffers },
@@ -94,6 +103,7 @@ export function applyTerrainPatch(
   const range = patchUpdateRange(field, patch, 3)
   if (!range) return
   updateTerrainMesh(field, target.buffers, patch)
+  if (target.holeBoundary) updateTerrainHoleBoundary(target.holeBoundary, target.buffers)
   if (
     patch.col0 <= 0 ||
     patch.row0 <= 0 ||
@@ -219,5 +229,6 @@ export function needsRebuild(target: TerrainGeometry, field: TerrainField): bool
 
 export function disposeTerrainGeometry(target: TerrainGeometry): void {
   target.geometry.dispose()
+  target.holeBoundary?.geometry.dispose()
   target.skirt.geometry.dispose()
 }

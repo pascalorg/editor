@@ -1,3 +1,4 @@
+import { getWallFaceOffsets } from '../../systems/wall/wall-frame'
 import type { RoofSegmentNode } from './roof-segment'
 import { getDutchRoofMetrics, getSegmentSlopeFrame } from './roof-segment'
 
@@ -75,7 +76,7 @@ type WallVolumeFrame = {
 function getWallVolumeFrame(node: SegmentWallInputs): WallVolumeFrame {
   const { activeRh, tanTheta } = getSegmentSlopeFrame(node)
   const wallThickness = node.wallThickness ?? 0.1
-  const autoDrop = (wallThickness / 2) * tanTheta
+  const autoDrop = getWallFaceOffsets({ thickness: wallThickness }).a * tanTheta
   const wV = Math.max(0.01, node.width + wallThickness)
   const dV = Math.max(0.01, node.depth + wallThickness)
   const eaveY = Math.max(0.05, node.wallHeight - autoDrop)

@@ -12,6 +12,7 @@ import {
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { type Material, Matrix4, Mesh, type Object3D } from 'three'
+import { isSlotPaintPreviewActive } from '../shared/slot-paint'
 import {
   applyWallBatchGroups,
   buildWallBatch,
@@ -221,10 +222,38 @@ export function collectTintedWalls(wallIds: ReadonlySet<string>): Set<string> {
   const hovered = viewer.hoveredId
   if (hovered && wallIds.has(hovered)) tinted.add(hovered)
 
+  // A paint preview spreads past the hovered wall (a room's walls): each one it
+  // repaints has to draw itself, or the merged copy hides the preview.
+  for (const id of wallIds) if (isSlotPaintPreviewActive(id)) tinted.add(id)
+
   return tinted
 }
 
-function materialSetKey(materials: readonly Material[]): string {
+/**
+ * The materials a wall actually draws, in canonical (uuid) order. Two walls
+ * showing the same finishes batch together however their palettes are laid out
+ * — a room's finish on side a of one wall and side b of the next is one set.
+ */
+export function canonicalWallMaterials(
+  mesh: Pick<Mesh, 'geometry'>,
+  materials: readonly Material[],
+): Material[] {
+  const groups = mesh.geometry.groups
+  const used = new Set<Material>()
+  if (groups.length === 0) {
+    if (materials[0]) used.add(materials[0])
+  } else {
+    for (const group of groups) {
+      const material = materials[group.materialIndex ?? 0]
+      if (material) used.add(material)
+    }
+  }
+  return [...used].sort((left, right) =>
+    left.uuid < right.uuid ? -1 : left.uuid > right.uuid ? 1 : 0,
+  )
+}
+
+export function materialSetKey(materials: readonly Material[]): string {
   return materials.map((material) => material.uuid).join('|')
 }
 
@@ -244,7 +273,7 @@ export function collectWallBatchCandidates(
     const candidate = toCandidate(childId, child as WallNode, excludedNodeIds)
     if (!candidate) continue
 
-    const key = materialSetKey(candidate.materials)
+    const key = materialSetKey(canonicalWallMaterials(candidate.mesh, candidate.materials))
     const bucket = grouped.get(key)
     if (bucket) bucket.push(candidate)
     else grouped.set(key, [candidate])
@@ -298,19 +327,24 @@ function mergeLevel(levelId: string, excludedNodeIds: ReadonlySet<string> = EMPT
   for (const candidates of collectWallBatchCandidates(levelId, excludedNodeIds).values()) {
     if (candidates.length < MIN_BATCH_WALLS) continue
 
+    const canonical = canonicalWallMaterials(candidates[0]!.mesh, candidates[0]!.materials)
     const sources = candidates.map((candidate) => {
       candidate.mesh.updateWorldMatrix(true, false)
       return {
         nodeId: candidate.nodeId,
         geometry: candidate.mesh.geometry,
         matrix: localMatrix.multiplyMatrices(rootInverse, candidate.mesh.matrixWorld).clone(),
+        materialIndexMap: candidate.materials.map((material) => {
+          const index = canonical.indexOf(material)
+          return index < 0 ? undefined : index
+        }),
       }
     })
 
     const batch = buildWallBatch(sources)
     if (!batch) continue
 
-    const mesh = new Mesh(batch.geometry, candidates[0]!.materials)
+    const mesh = new Mesh(batch.geometry, canonical)
     mesh.name = 'wall-batch'
     mesh.userData.pascalExport = 'strip'
     mesh.castShadow = true

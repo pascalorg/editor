@@ -1,5 +1,6 @@
 import type { ToolHint } from '@pascal-app/core'
 import type { ContinuationContext } from '../../../lib/continuation'
+import type { HudTitle } from '../../../lib/hud-title'
 import type { SnapContext } from '../../../lib/snapping-mode'
 import { useVisibleToolHints } from '../../../lib/panel-tool-options'
 import { ContextualHelperPanel } from './contextual-helper-panel'
@@ -18,11 +19,13 @@ export function RegisteredToolHelper({
   shiftPressed = false,
   snapContext = null,
   continuationContext = null,
+  title = null,
 }: {
   hints: ToolHint[]
   shiftPressed?: boolean
   snapContext?: SnapContext | null
   continuationContext?: ContinuationContext | null
+  title?: HudTitle | null
 }) {
   const visible = useVisibleToolHints(hints)
   if (visible.length === 0 && !snapContext && !continuationContext) return null
@@ -45,6 +48,7 @@ export function RegisteredToolHelper({
       })}
       continuationContext={continuationContext}
       snapContext={snapContext}
+      title={title}
     />
   )
 }

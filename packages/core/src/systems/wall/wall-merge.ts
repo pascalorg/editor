@@ -2,10 +2,17 @@ import { getWallEffectiveHeightForNodes } from '../../hooks/spatial-grid/spatial
 import {
   type AnyNode,
   type AnyNodeId,
-  getEffectiveWallSurfaceMaterial,
-  getWallSurfaceMaterialSignature,
+  getWallTrimFaces,
+  getWallTrimSlotId,
+  WALL_FACE_REGION_LIMIT,
+  WALL_TRIM_DEFAULTS,
+  type WallFace,
+  type WallFaceRegion,
   type WallNode,
+  type ZoneNode,
 } from '../../schema'
+import { getWallZoneSpans, resolveWallFaceChain } from './wall-finish'
+import { reverseWallDirection } from './wall-frame'
 import type { WallTopologyChanges } from './wall-topology'
 
 // Joining two walls that continue each other at a shared end: the delete heal
@@ -51,6 +58,12 @@ export function wallStyleMismatch(
   if ((a.parentId ?? null) !== (b.parentId ?? null)) return 'floor'
   if (Math.abs((a.curveOffset ?? 0) - (b.curveOffset ?? 0)) > 1e-6) return 'curve'
   if (Math.abs((a.thickness ?? 0.2) - (b.thickness ?? 0.2)) > 1e-6) return 'thickness'
+  const opposite =
+    (a.end[0] - a.start[0]) * (b.end[0] - b.start[0]) +
+      (a.end[1] - a.start[1]) * (b.end[1] - b.start[1]) <
+    0
+  const alignedB = opposite ? { ...b, ...reverseWallDirection(b) } : b
+  if (a.justification !== alignedB.justification) return 'justification'
   const { heightOf } = options
   if (
     heightOf
@@ -59,17 +72,205 @@ export function wallStyleMismatch(
         Math.abs((a.height ?? 0) - (b.height ?? 0)) > 1e-6
   )
     return 'height'
-  for (const side of ['interior', 'exterior'] as const) {
+  // Faces are compared as the merged wall will carry them: b read in a's direction.
+  for (const face of ['a', 'b'] as const) {
     if (
-      getWallSurfaceMaterialSignature(getEffectiveWallSurfaceMaterial(a, side)) !==
-      getWallSurfaceMaterialSignature(getEffectiveWallSurfaceMaterial(b, side))
+      JSON.stringify(resolveWallFaceChain(a, face)) !==
+      JSON.stringify(resolveWallFaceChain(alignedB, face))
     )
-      return `${side} finish`
+      return `side ${face.toUpperCase()} finish`
   }
+  if (wallTrimSignature(a) !== wallTrimSignature(alignedB)) return 'trim'
   if (options.sides && (a.frontSide !== b.frontSide || a.backSide !== b.backSide))
     return 'room sides'
   if (a.visible !== b.visible) return 'visibility'
   return null
+}
+
+/** Every trim as it draws: which faces, which profile and size, which finish per face. */
+function wallTrimSignature(wall: WallNode): string {
+  return JSON.stringify(
+    (['skirting', 'crown', 'chairRail'] as const).map((kind) => {
+      const trim = { ...WALL_TRIM_DEFAULTS[kind], ...(wall[kind] ?? {}) }
+      if (!trim.enabled) return null
+      const faces = getWallTrimFaces(trim.sides)
+      return {
+        faces,
+        profile: trim.profile,
+        height: trim.height,
+        proud: trim.proud,
+        offsetY: trim.offsetY ?? null,
+        finishes: faces.map((face) => wall.slots?.[getWallTrimSlotId(face, kind)] ?? null),
+      }
+    }),
+  )
+}
+
+function readsBackwards(
+  wall: Pick<WallNode, 'start' | 'end'>,
+  start: [number, number],
+  end: [number, number],
+) {
+  return (
+    (wall.end[0] - wall.start[0]) * (end[0] - start[0]) +
+      (wall.end[1] - wall.start[1]) * (end[1] - start[1]) <
+    0
+  )
+}
+
+const REGION_EPSILON = 1e-6
+
+function sameRegionBody(left: WallFaceRegion, right: WallFaceRegion) {
+  return (
+    left.face === right.face &&
+    left.finish === right.finish &&
+    left.v0 === right.v0 &&
+    left.v1 === right.v1
+  )
+}
+
+/**
+ * Both walls' paint regions in the merged wall's coordinates: faces read in its
+ * direction, stations measured from its start, each region clipped to the stretch
+ * its own wall covered (an open bound stays open only at a merged-wall end), and
+ * matching regions that meet at the joint joined into one. Null when a face would
+ * exceed the region limit.
+ */
+export function mergeWallFaceRegions(
+  walls: readonly WallNode[],
+  mergedStart: [number, number],
+  mergedEnd: [number, number],
+): WallFaceRegion[] | null {
+  const mergedLength = Math.hypot(mergedEnd[0] - mergedStart[0], mergedEnd[1] - mergedStart[1])
+  if (mergedLength < 1e-9) return []
+  const tx = (mergedEnd[0] - mergedStart[0]) / mergedLength
+  const tz = (mergedEnd[1] - mergedStart[1]) / mergedLength
+  const station = (point: [number, number]) =>
+    (point[0] - mergedStart[0]) * tx + (point[1] - mergedStart[1]) * tz
+  const seenIds = new Set<string>()
+  const out: WallFaceRegion[] = []
+  for (const wall of walls) {
+    const regions = wall.faceRegions ?? []
+    if (regions.length === 0) continue
+    const length = wallLength(wall)
+    const backwards = readsBackwards(wall, mergedStart, mergedEnd)
+    const from = Math.min(station(wall.start), station(wall.end))
+    const to = Math.max(station(wall.start), station(wall.end))
+    const toMerged = (u: number) => (backwards ? to - u : from + u)
+    for (const region of regions) {
+      const low = backwards ? region.u1 : region.u0
+      const high = backwards ? region.u0 : region.u1
+      const u0 = Math.max(from, low === undefined ? from : toMerged(low))
+      const u1 = Math.min(to, high === undefined ? to : toMerged(high))
+      if (u1 - u0 <= REGION_EPSILON && length > REGION_EPSILON) continue
+      let id = region.id
+      if (seenIds.has(id)) id = `${region.id}-${wall.id}`
+      seenIds.add(id)
+      const { u0: _u0, u1: _u1, ...body } = region
+      out.push({
+        ...body,
+        id,
+        face: backwards ? (region.face === 'a' ? 'b' : 'a') : region.face,
+        ...(u0 <= REGION_EPSILON ? {} : { u0 }),
+        ...(u1 >= mergedLength - REGION_EPSILON ? {} : { u1 }),
+      })
+    }
+  }
+  // Coalesce a region that continues another across the joint.
+  const merged: WallFaceRegion[] = []
+  for (const region of out) {
+    const joined = merged.findIndex(
+      (other) =>
+        sameRegionBody(other, region) &&
+        ((other.u1 !== undefined &&
+          Math.abs(other.u1 - (region.u0 ?? 0)) <= REGION_EPSILON &&
+          region.u0 !== undefined) ||
+          (region.u1 !== undefined &&
+            Math.abs(region.u1 - (other.u0 ?? 0)) <= REGION_EPSILON &&
+            other.u0 !== undefined)),
+    )
+    if (joined < 0) {
+      merged.push(region)
+      continue
+    }
+    const other = merged[joined]!
+    const u0 =
+      other.u0 === undefined || region.u0 === undefined ? undefined : Math.min(other.u0, region.u0)
+    const u1 =
+      other.u1 === undefined || region.u1 === undefined ? undefined : Math.max(other.u1, region.u1)
+    const { u0: _a, u1: _b, ...body } = other
+    merged[joined] = {
+      ...body,
+      ...(u0 === undefined ? {} : { u0 }),
+      ...(u1 === undefined ? {} : { u1 }),
+    }
+  }
+  for (const face of ['a', 'b'] as const) {
+    if (merged.filter((region) => region.face === face).length > WALL_FACE_REGION_LIMIT) return null
+  }
+  return merged
+}
+
+/**
+ * Zone references after `secondary` is absorbed into `primary` (which spans
+ * `mergedStart → mergedEnd`): boundary ids follow the kept wall, and override
+ * entries move onto it with their face read in its direction. Null when the two
+ * walls disagree on a room's override for a face they both border — joining
+ * would repaint part of that room.
+ */
+export function planMergedZoneReferences(
+  nodes: Record<AnyNodeId, AnyNode>,
+  primary: WallNode,
+  secondary: WallNode,
+  mergedStart: [number, number],
+  mergedEnd: [number, number],
+): Array<{ id: AnyNodeId; data: Partial<ZoneNode> }> | null {
+  const faceOf = (wall: WallNode, face: WallFace): WallFace =>
+    readsBackwards(wall, mergedStart, mergedEnd) ? (face === 'a' ? 'b' : 'a') : face
+  const updates: Array<{ id: AnyNodeId; data: Partial<ZoneNode> }> = []
+  for (const node of Object.values(nodes)) {
+    if (node?.type !== 'zone') continue
+    const touchesBoundary = node.boundaryWallIds?.includes(secondary.id as never) ?? false
+    const entries = node.wallOverrides ?? []
+    const touchesOverrides = entries.some(
+      (entry) => entry.wallId === secondary.id || entry.wallId === primary.id,
+    )
+    if (!(touchesBoundary || touchesOverrides)) continue
+    const data: Partial<ZoneNode> = {}
+    if (touchesBoundary)
+      data.boundaryWallIds = [
+        ...new Set(node.boundaryWallIds.map((id) => (id === secondary.id ? primary.id : id))),
+      ]
+    if (touchesOverrides) {
+      const byFace = new Map<WallFace, Map<WallNode['id'], string>>()
+      for (const entry of entries) {
+        const wall =
+          entry.wallId === primary.id ? primary : entry.wallId === secondary.id ? secondary : null
+        if (!wall) continue
+        const face = faceOf(wall, entry.face)
+        const faces = byFace.get(face) ?? new Map()
+        faces.set(wall.id, entry.finish)
+        byFace.set(face, faces)
+      }
+      const merged: NonNullable<ZoneNode['wallOverrides']> = entries.filter(
+        (entry) => entry.wallId !== primary.id && entry.wallId !== secondary.id,
+      )
+      for (const [face, finishes] of byFace) {
+        const values = [...new Set(finishes.values())]
+        if (values.length > 1) return null
+        for (const wall of [primary, secondary]) {
+          if (finishes.has(wall.id)) continue
+          // The other wall borders this room on the same face without the override.
+          const spans = getWallZoneSpans(wall, [node])
+          if (spans.some((span) => faceOf(wall, span.face) === face)) return null
+        }
+        merged.push({ wallId: primary.id, face, finish: values[0]! })
+      }
+      data.wallOverrides = merged
+    }
+    updates.push({ id: node.id as AnyNodeId, data })
+  }
+  return updates
 }
 
 export function areWallStylesCompatible(a: WallNode, b: WallNode) {
@@ -115,10 +316,10 @@ export function resolveMergedWallEndpoints(
   // where they are. Meeting start-to-start or end-to-end, the absorbed wall is
   // the one read backwards.
   if (primaryEndpoint === 'start' && secondaryEndpoint === 'start') {
-    return { start: secondary.end, end: primary.end }
+    return { start: reverseWallDirection(secondary).start!, end: primary.end }
   }
 
-  return { start: primary.start, end: secondary.start }
+  return { start: primary.start, end: reverseWallDirection(secondary).end! }
 }
 
 /**
@@ -267,6 +468,13 @@ export function planWallMerge(
     if (mismatch) throw Error(`These walls have a different ${mismatch}.`)
 
     const { start, end } = resolveMergedWallEndpoints(merged, next, joint)
+    const faceRegions = mergeWallFaceRegions([merged, next], start, end)
+    if (!faceRegions)
+      throw Error(
+        `Merging would leave more than ${WALL_FACE_REGION_LIMIT} paint regions on a side.`,
+      )
+    const zoneUpdates = planMergedZoneReferences(virtual, merged, next, start, end)
+    if (!zoneUpdates) throw Error('These walls have a different room finish.')
     for (const update of buildMergedWallAttachmentUpdates(
       merged,
       next,
@@ -277,8 +485,10 @@ export function planWallMerge(
     )) {
       virtual[update.id] = { ...virtual[update.id]!, ...update.data } as AnyNode
     }
+    const { faceRegions: _regions, ...kept } = merged
     merged = {
-      ...merged,
+      ...kept,
+      ...(faceRegions.length > 0 ? { faceRegions } : {}),
       start,
       end,
       // Ids without a node are dropped rather than carried onto the kept wall.
@@ -291,15 +501,8 @@ export function planWallMerge(
     } as WallNode
     virtual[merged.id] = merged
     delete virtual[next.id]
-    for (const node of Object.values(virtual)) {
-      if (node?.type !== 'zone' || !node.boundaryWallIds?.includes(next.id)) continue
-      virtual[node.id] = {
-        ...node,
-        boundaryWallIds: [
-          ...new Set(node.boundaryWallIds.map((id) => (id === next.id ? merged.id : id))),
-        ],
-      }
-    }
+    for (const update of zoneUpdates)
+      virtual[update.id] = { ...virtual[update.id]!, ...update.data } as AnyNode
     remaining = remaining.filter((wall) => wall !== next)
   }
 

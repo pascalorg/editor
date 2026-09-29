@@ -1,7 +1,7 @@
 {
   "name": "@pascal-app/nodes",
   "version": "1.0.3",
-  "description": "Built-in node bundles for the Pascal 3D editor — one folder per kind, exported as `builtinPlugin`",
+  "description": "Built-in node bundles for the Pascal 3D editor \u2014 one folder per kind, exported as `builtinPlugin`",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -22,7 +22,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc --build",
+    "build": "NODE_OPTIONS=--max-old-space-size=6144 tsc --build",
     "dev": "tsgo --build --watch",
     "test": "bun test",
     "prepublishOnly": "bun run build && bun test"

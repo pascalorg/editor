@@ -2,8 +2,9 @@
 
 import {
   type AnyNodeId,
+  containsPoint,
   type Interactive,
-  pointInPolygon,
+  type Polygon,
   type SceneGraph,
   type SliderControl,
   useInteractive,
@@ -58,6 +59,7 @@ export type GlbZoneRef = {
   id: string
   node: Object3D
   polygon: [number, number][]
+  holes?: [number, number][][]
 }
 
 /** Pull the interactive items out of a scene graph. Only items that actually
@@ -248,15 +250,17 @@ export function GlbInteractive({
   // membership still works after level stacking moves its parent.
   const focusedZoneId = useViewer((s) => s.selection.zoneId)
   const selectedIds = useViewer((s) => s.selection.selectedIds)
-  const worldPolygon = useMemo<[number, number][] | null>(() => {
+  const worldPolygon = useMemo<Polygon | null>(() => {
     if (!focusedZoneId) return null
     const zone = zones.find((z) => z.id === focusedZoneId)
     if (!zone) return null
     zone.node.updateWorldMatrix(true, false)
-    return zone.polygon.map(([x, z]) => {
-      const v = new Vector3(x, 0, z).applyMatrix4(zone.node.matrixWorld)
-      return [v.x, v.z]
-    })
+    const project = (ring: [number, number][]) =>
+      ring.map(([x, z]): [number, number] => {
+        const v = new Vector3(x, 0, z).applyMatrix4(zone.node.matrixWorld)
+        return [v.x, v.z]
+      })
+    return { outer: project(zone.polygon), holes: (zone.holes ?? []).map(project) }
   }, [focusedZoneId, zones])
 
   return (
@@ -274,7 +278,7 @@ export function GlbInteractive({
           ) : null
         })}
       {items
-        .filter((item) => worldPolygon?.length || selectedIds.includes(item.pascalId))
+        .filter((item) => worldPolygon || selectedIds.includes(item.pascalId))
         .map((item) => {
           const object = identity.get(item.pascalId)
           return object ? (
@@ -611,7 +615,7 @@ function GlbItemControls({
 }: {
   item: GlbInteractiveItem
   object: Object3D
-  worldPolygon: [number, number][] | null
+  worldPolygon: Polygon | null
   isSelected: boolean
 }) {
   const controlValues = useInteractive(useShallow((s) => s.items[item.pascalId]?.controlValues))
@@ -637,9 +641,9 @@ function GlbItemControls({
       }))
 
   let visible = isSelected
-  if (worldPolygon?.length) {
+  if (worldPolygon) {
     object.getWorldPosition(_itemPos)
-    visible = visible || pointInPolygon(_itemPos.x, _itemPos.z, worldPolygon)
+    visible = visible || containsPoint([worldPolygon], [_itemPos.x, _itemPos.z])
   }
 
   // Fade in on mount and fade out before unmounting the <Html>.

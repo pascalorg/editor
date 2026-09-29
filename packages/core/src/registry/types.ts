@@ -1687,7 +1687,7 @@ export type Capabilities = {
   duplicable?: boolean | DuplicableConfig
   deletable?: boolean
   groupable?: boolean
-  selectable?: SelectableConfig
+  selectable?: SelectableConfig | false
   /**
    * Whether selecting this kind should replace its rendered mesh materials
    * with the editor's selection tint. Defaults to `true`. Set to `false` for
@@ -1902,6 +1902,12 @@ export type PaintCapability = {
    */
   resolveRole: (args: PaintResolveArgs) => string | null
   /**
+   * Optional: label for a role that is NOT one of the kind's declared slots.
+   * A slab plate resolves per-room roles carrying a zone id, which would read
+   * back to the user as the raw id. Return `null` to keep the derived label.
+   */
+  roleLabel?: (node: AnyNode, role: string) => string | null
+  /**
    * Build the node-update patch that applies the new material at
    * `role`. Returned partial is merged into the node by the editor.
    */
@@ -2056,6 +2062,12 @@ export type PaintEffectiveMaterialArgs = {
   role: string
   /** Snapshot of the scene `nodes` map — kinds whose effective material walks the parent chain (roof-segment → roof) read parents through it. */
   nodes: Record<AnyNodeId, AnyNode>
+  /**
+   * Resolve what the surface shows, falling through to the finish an unpainted
+   * derived role draws with (the eyedropper). A slot role's declared `default`
+   * stays the caller's to apply.
+   */
+  rendered?: boolean
 }
 
 /**

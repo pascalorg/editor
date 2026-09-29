@@ -1,11 +1,23 @@
 // Side-effect import MUST come first: installs RAF polyfill before core loads.
 import './node-shims'
 import {
+  adjacentLevelId,
+  applyStructureReconciliation,
+  assertDerivedNodeWrites,
+  floorOpeningTargets,
   HIDDEN_SITE_NOTE,
   type NodeDeletionPlan,
   type NodeDeletionScene,
+  pauseSceneHistory,
+  pauseSpaceDetection,
   planNodeDeletion,
+  planOwnedFloorOpenings,
+  planWallDeletion,
+  resumeSceneHistory,
+  resumeSpaceDetection,
   runAsSingleSceneHistoryStep,
+  stairDeckLevelId,
+  structureChangeBatch,
 } from '@pascal-app/core'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import type { AnyNode } from '@pascal-app/core/schema'
@@ -13,6 +25,7 @@ import {
   type AnyNodeId,
   AnyNode as AnyNodeSchema,
   type AnyNodeType,
+  generateId,
   parseNode,
 } from '@pascal-app/core/schema'
 // Per PLAN §0.6: `useScene` is the DEFAULT export from `@pascal-app/core/store`.
@@ -298,7 +311,12 @@ export class SceneBridge {
    * Returns the generated id.
    */
   createNode(node: AnyNode, parentId?: AnyNodeId): AnyNodeId {
-    useScene.getState().createNode(node, parentId)
+    const before = useScene.getState().nodes
+    assertDerivedNodeWrites(before, { create: [{ node: parentId ? { ...node, parentId } : node }] })
+    runAsSingleSceneHistoryStep(useScene, () => {
+      useScene.getState().createNode(node, parentId)
+      this.reconcileDependentStructure(before)
+    })
     return node.id as AnyNodeId
   }
 
@@ -307,7 +325,12 @@ export class SceneBridge {
     if (!useScene.getState().nodes[id]) {
       throw new Error(`node not found: ${id}`)
     }
-    useScene.getState().updateNode(id, data)
+    const before = useScene.getState().nodes
+    assertDerivedNodeWrites(before, { update: [{ id, data }] })
+    runAsSingleSceneHistoryStep(useScene, () => {
+      useScene.getState().updateNode(id, data)
+      this.reconcileDependentStructure(before)
+    })
   }
 
   /**
@@ -332,7 +355,19 @@ export class SceneBridge {
     }
 
     const before = new Set(Object.keys(state.nodes))
-    useScene.getState().deleteNode(id)
+    const wallLevels = [
+      ...new Set(
+        descendants.flatMap((nodeId) => {
+          const deleted = state.nodes[nodeId]
+          return deleted?.type === 'wall' && deleted.parentId ? [deleted.parentId as AnyNodeId] : []
+        }),
+      ),
+    ]
+    runAsSingleSceneHistoryStep(useScene, () => {
+      useScene.getState().deleteNode(id)
+      if (wallLevels.length) this.deriveStructure(wallLevels)
+      this.reconcileDependentStructure(state.nodes)
+    })
     const afterNodes = useScene.getState().nodes
     const removed: string[] = []
     for (const prevId of before) {
@@ -343,8 +378,8 @@ export class SceneBridge {
 
   /**
    * Atomic multi-op patch. Validates EVERY patch first (dry run); only if all
-   * pass does it apply in a single batch via `createNodes` / `updateNodes` /
-   * `deleteNodes`. Throws on any validation failure without mutating state.
+   * pass does it apply through the store actions in one history step. Throws on
+   * validation failure without mutating state.
    */
   applyPatch(patches: Patch[]): {
     appliedOps: number
@@ -376,7 +411,7 @@ export class SceneBridge {
         if (p.parentId !== undefined && !simAvailable.has(p.parentId)) {
           throw new Error(`invalid patch: patches[${i}] create parentId "${p.parentId}" not found`)
         }
-        parsedCreateNodes.set(i, res.data)
+        parsedCreateNodes.set(i, p.parentId ? { ...res.data, parentId: p.parentId } : res.data)
         simAvailable.add(res.data.id)
       } else if (p.op === 'update') {
         if (!simAvailable.has(p.id) || simDeleted.has(p.id)) {
@@ -408,51 +443,76 @@ export class SceneBridge {
       }
     }
 
-    // Dry-run succeeded — apply in order, batching adjacent ops of the same
-    // op type so Zundo groups them tightly.
-    const createOps: { node: AnyNode; parentId?: AnyNodeId }[] = []
-    const updateOps: { id: AnyNodeId; data: Partial<AnyNode> }[] = []
-    const deleteIds: AnyNodeId[] = []
-    const createdIds: AnyNodeId[] = []
+    // Derived construction is refused BEFORE anything is applied, so a patch
+    // that tries to author a floor plate or an auto ceiling leaves the scene
+    // untouched like any other invalid patch.
+    assertDerivedNodeWrites(nodes, {
+      create: [...parsedCreateNodes.values()].map((node) => ({ node })),
+      update: patches.flatMap((patch) =>
+        patch.op === 'update' ? [{ id: patch.id, data: patch.data }] : [],
+      ),
+    })
 
-    // Simple approach: queue by type, flush in original order by walking
-    // patches and interleaving flushes when the op type changes, so ids
-    // created/updated/deleted stay temporally consistent.
-    const flush = (kind: 'create' | 'update' | 'delete' | 'none') => {
-      if (kind !== 'create' && createOps.length > 0) {
-        useScene.getState().createNodes(createOps)
-        createOps.length = 0
-      }
-      if (kind !== 'update' && updateOps.length > 0) {
-        useScene.getState().updateNodes(updateOps)
-        updateOps.length = 0
-      }
-      if (kind !== 'delete' && deleteIds.length > 0) {
-        useScene.getState().deleteNodes(deleteIds)
-        deleteIds.length = 0
+    const createOps = new Map<AnyNodeId, { node: AnyNode; parentId?: AnyNodeId }>()
+    const updateOps = new Map<AnyNodeId, Partial<AnyNode>>()
+    const deleteIds = new Set<AnyNodeId>()
+    const nextNodes = { ...nodes }
+    for (const [index, patch] of patches.entries()) {
+      if (patch.op === 'create') {
+        const parsed = parsedCreateNodes.get(index)!
+        const node = { ...parsed, parentId: patch.parentId ?? parsed.parentId } as AnyNode
+        createOps.set(node.id, { node, parentId: patch.parentId })
+        deleteIds.delete(node.id)
+        nextNodes[node.id] = node
+      } else if (patch.op === 'update') {
+        nextNodes[patch.id] = { ...nextNodes[patch.id], ...patch.data } as AnyNode
+        const created = createOps.get(patch.id)
+        if (created) {
+          created.node = nextNodes[patch.id]!
+          if (patch.data.parentId !== undefined) created.parentId = patch.data.parentId as AnyNodeId
+        } else
+          updateOps.set(patch.id, { ...updateOps.get(patch.id), ...patch.data } as Partial<AnyNode>)
+      } else {
+        deleteIds.add(patch.id)
+        createOps.delete(patch.id)
+        updateOps.delete(patch.id)
+        delete nextNodes[patch.id]
       }
     }
-
-    // One history step for the whole patch, as its description promises: a create and
-    // the host update it needs (a design-surface attachment) undo together.
+    // Plan the entire deletion selection before applying anything. Interleaved
+    // update operations must not turn an all-boundaries deletion into balconies.
+    const planned = structureChangeBatch(
+      planWallDeletion(nodes, {
+        nodeIds: [...deleteIds],
+        nextNodes,
+        mintId: generateId,
+      }).changes,
+    )
+    for (const { id, data } of planned.update)
+      updateOps.set(id, { ...updateOps.get(id), ...data } as Partial<AnyNode>)
+    const wallLevels = [
+      ...new Set(
+        planned.delete.flatMap((id) => {
+          const node = nodes[id]
+          return node?.type === 'wall' && node.parentId ? [node.parentId as AnyNodeId] : []
+        }),
+      ),
+    ]
     runAsSingleSceneHistoryStep(useScene, () => {
-      for (let i = 0; i < patches.length; i++) {
-        const p = patches[i]!
-        if (p.op === 'create') {
-          flush('create')
-          const parsedNode = parsedCreateNodes.get(i)!
-          createOps.push({ node: parsedNode, parentId: p.parentId })
-          createdIds.push(parsedNode.id as AnyNodeId)
-        } else if (p.op === 'update') {
-          flush('update')
-          updateOps.push({ id: p.id, data: p.data })
-        } else {
-          flush('delete')
-          deleteIds.push(p.id)
-        }
+      pauseSpaceDetection()
+      try {
+        useScene.getState().createNodes([...createOps.values(), ...planned.create])
+        useScene.getState().updateNodes([...updateOps].map(([id, data]) => ({ id, data })))
+        useScene.getState().deleteNodes(planned.delete)
+      } finally {
+        resumeSpaceDetection()
       }
-      flush('none')
+      if (wallLevels.length) this.deriveStructure(wallLevels)
+      this.reconcileDependentStructure(nodes)
     })
+    const createdIds = Object.keys(useScene.getState().nodes).filter(
+      (id) => !nodes[id as AnyNodeId],
+    ) as AnyNodeId[]
 
     // Compute actual deleted ids by diffing pre/post snapshots.
     const postNodes = useScene.getState().nodes
@@ -475,6 +535,34 @@ export class SceneBridge {
    */
   planDeletion(scene: NodeDeletionScene, ids: AnyNodeId[]): NodeDeletionPlan {
     return planNodeDeletion(scene, ids, { mintDefaults: false })
+  }
+
+  /**
+   * Derive this scene's construction the way the browser's commit subscriber
+   * does: one pass of the shared kernel writes the room zones, the auto
+   * ceilings, the wall side classification and the floor plates.
+   *
+   * The headless bridge has no space-detection subscriber, so the semantic
+   * tools that state room intent call this to materialise the construction
+   * they report. Writes are history-paused, so undo returns to the state
+   * before the triggering tool call rather than stranding derived nodes.
+   */
+  deriveStructure(levelIds?: AnyNodeId[]): { createdIds: AnyNodeId[]; deletedIds: AnyNodeId[] } {
+    pauseSceneHistory(useScene)
+    try {
+      const patches = applyStructureReconciliation(useScene, {
+        levelIds,
+        mintId: (kind) => generateId(kind),
+      })
+      return {
+        createdIds: patches.flatMap((patch) =>
+          patch.op === 'create' ? [patch.node.id as AnyNodeId] : [],
+        ),
+        deletedIds: patches.flatMap((patch) => (patch.op === 'delete' ? [patch.id] : [])),
+      }
+    } finally {
+      resumeSceneHistory(useScene)
+    }
   }
 
   /** Undo. Returns the number of steps actually undone. */
@@ -543,6 +631,65 @@ export class SceneBridge {
   /** Clear the temporal undo/redo history. */
   clearHistory(): void {
     useScene.temporal.getState().clear()
+  }
+
+  runAsSingleHistoryStep<T>(run: () => T): T {
+    return runAsSingleSceneHistoryStep(useScene, run)
+  }
+
+  private reconcileDependentStructure(before: Record<string, AnyNode>): void {
+    const currentNodes: Record<string, AnyNode> = this.getNodes()
+    const authoredInputChanged = [
+      ...new Set([...Object.keys(before), ...Object.keys(currentNodes)]),
+    ].some((id) => {
+      if (before[id] === currentNodes[id]) return false
+      const type = (currentNodes[id] ?? before[id])?.type
+      return type === 'stair' || type === 'stair-segment' || type === 'elevator' || type === 'level'
+    })
+    if (authoredInputChanged) {
+      const owned = planOwnedFloorOpenings(this.getNodes())
+      if (owned.length) {
+        pauseSpaceDetection()
+        try {
+          useScene.getState().applyNodeChanges(structureChangeBatch(owned))
+        } finally {
+          resumeSpaceDetection()
+        }
+      }
+    }
+    const current: Record<string, AnyNode> = this.getNodes()
+    const levels = new Set<AnyNodeId>()
+    for (const id of new Set([...Object.keys(before), ...Object.keys(current)])) {
+      if (before[id] === current[id]) continue
+      for (const nodes of [before, current]) {
+        const level = stairDeckLevelId(nodes, nodes[id])
+        if (level) levels.add(level as AnyNodeId)
+        const node = nodes[id]
+        if (node?.type === 'level') {
+          levels.add(node.id as AnyNodeId)
+          const lower = adjacentLevelId(nodes, node.id, -1)
+          if (lower) levels.add(lower as AnyNodeId)
+        }
+        if (node?.type === 'stair')
+          for (const opening of Object.values(nodes))
+            if (opening.type === 'floor-opening' && opening.ownerId === node.id)
+              for (const target of floorOpeningTargets(nodes, opening))
+                levels.add(target.levelId as AnyNodeId)
+        if (node?.type === 'floor-opening')
+          for (const target of floorOpeningTargets(nodes, node))
+            levels.add(target.levelId as AnyNodeId)
+        if (node?.type === 'door' || node?.type === 'window') {
+          const wall = nodes[node.parentId!]
+          if (wall?.type === 'wall' && wall.parentId) levels.add(wall.parentId as AnyNodeId)
+        } else if (
+          (node?.type === 'zone' || node?.type === 'slab' || node?.type === 'wall') &&
+          node.parentId
+        ) {
+          levels.add(node.parentId as AnyNodeId)
+        }
+      }
+    }
+    if (levels.size) this.deriveStructure([...levels])
   }
 
   // ---- internal helpers ----

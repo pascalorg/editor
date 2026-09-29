@@ -57,7 +57,6 @@ import {
   wallClosesRoom,
   wallRectangleCorners,
   ZoneNode as ZoneNodeSchema,
-  type ZoneNode as ZoneNodeType,
 } from '@pascal-app/core'
 import { useSegmentDraftChain, useWallSnapIndicator } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
@@ -78,6 +77,11 @@ import {
 import { createPortal } from 'react-dom'
 import { Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
+import {
+  hoverRoomFromHit,
+  resolvePlanRoomHit,
+  roomPickingEnabled,
+} from '../../hooks/use-selected-room'
 import { resolveCeilingPlanPointSnap } from '../../lib/ceiling-plan-snap'
 import {
   alignFloorplanDraftPoint,
@@ -113,12 +117,27 @@ import {
 } from '../../lib/keyboard-pan'
 import { measurementHint, parseMeasurement } from '../../lib/measurement-parser'
 import { formatLinearMeasurement, linearUnitToMeters } from '../../lib/measurements'
+import { selectRoomFromHit } from '../../lib/room-selection-commands'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { SITE_BOUNDARY_DRAG_LABEL, siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
-import { cancelPendingZonePaint, focusedUnitNode, paintZoneMembership } from '../../lib/units'
+import {
+  cancelPendingZonePaint,
+  focusedUnitNode,
+  paintZoneMembership,
+  zoneAtLevelPoint,
+} from '../../lib/units'
 import { cn } from '../../lib/utils'
+import { getWallDrawVariant } from '../../lib/wall-draw-variant'
+import {
+  addWallPolygonDraftCorner,
+  commitWallPolygonDraft,
+  discardWallPolygonDraft,
+  startWallPolygonDraft,
+  wallPolygonDraftWalls,
+} from '../../lib/wall-polygon-draft'
 import { snapBuildingLocalToWorldGrid } from '../../lib/world-grid-snap'
+import { nextZoneName } from '../../lib/zone-name'
 import { subscribeNavigationSyncPose } from '../../store/navigation-sync-pose-store'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useDrawingView from '../../store/use-drawing-view'
@@ -4538,6 +4557,7 @@ function FloorplanLinearDraftLayer({
   const roofDraftEnd = useFloorplanDraftPreview((s) => s.roofDraftEnd)
   const roofDraftQuarterTurn = useFloorplanDraftPreview((s) => s.roofDraftQuarterTurn)
   const wallRectangleDraftStart = useFloorplanDraftPreview((s) => s.wallRectangleDraftStart)
+  const wallPolygonDraftPoints = useFloorplanDraftPreview((s) => s.wallPolygonDraftPoints)
   // The live cursor is the rectangle's opposite corner; select it only while a
   // rectangle draft is open so idle moves don't re-render this layer.
   const wallRectangleDraftEnd = useFloorplanDraftPreview((s) =>
@@ -4606,6 +4626,20 @@ function FloorplanLinearDraftLayer({
     wallRectangleDraftEnd,
     wallRectangleDraftStart,
   ])
+
+  // An open Polygon room's placed sides — draft state, drawn like the
+  // rectangle draft (mitered together) until the polygon is written.
+  const polygonRoomDraft = useMemo(() => {
+    if (!(levelId && isWallBuildActive && wallPolygonDraftPoints.length >= 2)) return null
+    const draftWalls = wallPolygonDraftPoints.slice(1).map((end, index) =>
+      getSharedFloorplanWall({
+        ...buildDraftWall(levelId, wallPolygonDraftPoints[index]!, end),
+        id: `wall_polygon_draft_${index}` as WallNode['id'],
+      }),
+    )
+    const miterData = calculateLevelMiters(draftWalls)
+    return draftWalls.map((wall) => formatPolygonPoints(getWallPlanFootprint(wall, miterData)))
+  }, [isWallBuildActive, levelId, wallPolygonDraftPoints])
 
   const draftPolygonPoints = useMemo(() => {
     if (isRoofBuildActive && roofDraftStart && roofDraftEnd) {
@@ -4848,6 +4882,22 @@ function FloorplanLinearDraftLayer({
           unitsPerPixel={unitsPerPixel}
         />
       )}
+
+      {polygonRoomDraft?.map((points, index) => (
+        <FloorplanDraftLayer
+          anchorFill={draftStroke}
+          draftAnchorPoints={EMPTY_DRAFT_ANCHOR_POINTS}
+          draftFill={draftFill}
+          draftPolygonPoints={points}
+          draftStroke={draftStroke}
+          key={`polygon-room-${index}`}
+          linearDraftSegment={null}
+          polygonDraftClosingSegment={null}
+          polygonDraftPolygonPoints={null}
+          polygonDraftPolylinePoints={null}
+          unitsPerPixel={unitsPerPixel}
+        />
+      ))}
 
       {rectangleDraft?.polygons.map((points, index) => (
         <FloorplanDraftLayer
@@ -5286,12 +5336,6 @@ export function FloorplanPanel({
     width: number
     height: number
   } | null>(null)
-
-  useEffect(() => {
-    if (structureLayer === 'zones' && floorplanSelectionTool === 'marquee') {
-      setFloorplanSelectionTool('click')
-    }
-  }, [floorplanSelectionTool, setFloorplanSelectionTool, structureLayer])
 
   useEffect(() => {
     setIsMacPlatform(navigator.platform.toUpperCase().includes('MAC'))
@@ -5946,8 +5990,7 @@ export function FloorplanPanel({
     mode === 'select' &&
     floorplanSelectionTool === 'marquee' &&
     !movingNode &&
-    !isFenceEndpointMoveActive &&
-    structureLayer !== 'zones'
+    !isFenceEndpointMoveActive
   const isScreenSelectionToolActive =
     mode === 'select' &&
     floorplanSelectionTool === 'click' &&
@@ -5961,8 +6004,7 @@ export function FloorplanPanel({
     mode === 'select' &&
     floorplanSelectionTool === 'click' &&
     !movingNode &&
-    !isFenceEndpointMoveActive &&
-    structureLayer !== 'zones'
+    !isFenceEndpointMoveActive
   const canInteractElementFloorplanGeometry = isDeleteMode || canSelectElementFloorplanGeometry
   const canInteractFloorplanSlabs = isDeleteMode || canSelectElementFloorplanGeometry
   const canInteractWithGuides =
@@ -5977,7 +6019,7 @@ export function FloorplanPanel({
     !isFenceEndpointMoveActive &&
     structureLayer === 'zones'
   const canInteractFloorplanZones = isDeleteMode || canSelectFloorplanZones
-  const isFloorplanStructureContextActive = phase === 'structure' && structureLayer !== 'zones'
+  const isFloorplanStructureContextActive = phase === 'structure'
   const isFloorplanFurnishContextActive = phase === 'furnish'
   const isFloorplanItemContextActive =
     isFloorplanFurnishContextActive || isFloorplanStructureContextActive
@@ -7894,7 +7936,10 @@ export function FloorplanPanel({
     }
   }, [isFloorplanOpen, stopFloorplanViewAnimation])
 
+  // Clearing an open wall draft drops a Polygon room in progress (nothing of
+  // it was written); paths that keep it commit first.
   const clearWallPlacementDraft = useCallback(() => {
+    discardWallPolygonDraft()
     setDraftStart(null)
     setWallChainFirstVertex(null)
     wallConstructionOptionsRef.current = undefined
@@ -8019,7 +8064,7 @@ export function FloorplanPanel({
       const zoneCount = Object.values(nodes).filter((node) => node.type === 'zone').length
       const zone = ZoneNodeSchema.parse({
         color: PALETTE_COLORS[zoneCount % PALETTE_COLORS.length],
-        name: `Zone ${zoneCount + 1}`,
+        name: nextZoneName(nodes),
         polygon: points.map(([x, z]) => [x, z] as [number, number]),
       })
 
@@ -9556,7 +9601,7 @@ export function FloorplanPanel({
       const wallAngleSnap = draftStart !== null && isAngleSnapActive()
       const wallSnap = snapWallDraftPointDetailed({
         point: planPoint,
-        walls,
+        walls: [...walls, ...wallPolygonDraftWalls()],
         start: draftStart ?? undefined,
         angleSnap: wallAngleSnap,
         magnetic: isMagneticSnapActive(),
@@ -9829,6 +9874,14 @@ export function FloorplanPanel({
               useEditor.getState().toolDefaults.wall,
             )
           : undefined
+        // 2D-only owns a Polygon room's draft; split view leaves it to the 3D tool.
+        if (
+          levelId &&
+          useEditor.getState().viewMode === '2d' &&
+          getWallDrawVariant() === 'polygon'
+        ) {
+          startWallPolygonDraft(levelId as AnyNodeId, point, wallConstructionOptionsRef.current)
+        }
         setDraftStart(point)
         setWallChainFirstVertex(point)
         setDraftEnd(point)
@@ -9856,6 +9909,20 @@ export function FloorplanPanel({
       // view, so split / 3D keep their single-owner tool commit.
       const viewIs2DOnly = useEditor.getState().viewMode === '2d'
       let createdWall: WallNode | null = null
+      // 2D-only Polygon room: the corner joins the draft; nothing is written
+      // until it closes, seals or tees (then every wall at once).
+      if (viewIs2DOnly && getWallDrawVariant() === 'polygon') {
+        if (addWallPolygonDraftCorner(point) !== 'open') {
+          commitWallPolygonDraft()
+          clearWallPlacementDraft()
+          setCursorPoint(null)
+          return
+        }
+        setDraftStart(point)
+        setDraftEnd(point)
+        setCursorPoint(point)
+        return
+      }
       if (viewIs2DOnly) {
         createdWall = createWallOnCurrentLevel(
           draftStart,
@@ -10059,14 +10126,21 @@ export function FloorplanPanel({
         return
       }
 
+      if (useInteractionScope.getState().scope.kind !== 'idle') return
       const modifierKeys = getSelectionModifierKeys(event)
 
+      if (roomPickingEnabled()) {
+        const hitId = getFloorplanHitIdAtPoint(planPoint)
+        if (selectRoomFromHit(resolvePlanRoomHit(hitId, planPoint), modifierKeys, hitId)) return
+      }
       const backgroundSelection = resolveFloorplanBackgroundSelection({
         canSelectElementFloorplanGeometry,
-        canSelectFloorplanZones,
+        canSelectFloorplanZones: canSelectFloorplanZones && !!useViewer.getState().focusedUnitId,
         currentSelectedIds: useViewer.getState().selection.selectedIds,
         expandIdsForNode: expandSessionSelectionForNode,
-        getFloorplanHitIdAtPoint,
+        getFloorplanHitIdAtPoint: useViewer.getState().focusedUnitId
+          ? (point) => zoneAtLevelPoint(point[0], point[1])?.id ?? null
+          : getFloorplanHitIdAtPoint,
         isWallBuildActive,
         modifierKeys,
         planPoint,
@@ -10118,15 +10192,14 @@ export function FloorplanPanel({
         }
 
         if (backgroundSelection.kind === 'clear-zones') {
-          setSelection({ zoneId: null })
-          // Return to structure select (same as 3D grid click)
-          useEditor.getState().setStructureLayer('elements')
-          useEditor.getState().setMode('select')
+          useEditor.getState().clearRoom()
+          setSelection({ selectedIds: [], zoneId: null })
           return
         }
 
         if (!backgroundSelection.preserveSelection) {
-          setSelection({ selectedIds: [] })
+          useEditor.getState().clearRoom()
+          setSelection({ selectedIds: [], zoneId: null })
         }
         return
       }
@@ -10314,28 +10387,18 @@ export function FloorplanPanel({
     if (floorplanScreenSelectionOwnsInputDraggingRef.current) {
       useViewer.getState().setInputDragging(false)
       floorplanScreenSelectionOwnsInputDraggingRef.current = false
+      useInteractionScope.getState().endIf((scope) => scope.kind === 'box-select')
     }
   }, [syncPreviewSelectedIds])
 
   const commitFloorplanScreenSelection = useCallback(
     (nextSelectedIds: string[], event: PointerEvent) => {
       const modifierKeys = getSelectionModifierKeys(event)
-      const shouldAppend = modifierKeys.meta || modifierKeys.ctrl || modifierKeys.shift
-
       setSelectedReferenceId(null)
-
-      if (phase === 'structure' && structureLayer === 'zones') {
-        if (nextSelectedIds.length > 0) {
-          setSelection({ zoneId: nextSelectedIds[0] as ZoneNodeType['id'] })
-        } else if (!shouldAppend) {
-          setSelection({ zoneId: null })
-        }
-        return
-      }
 
       addFloorplanSelection(nextSelectedIds, modifierKeys)
     },
-    [addFloorplanSelection, phase, setSelectedReferenceId, setSelection, structureLayer],
+    [addFloorplanSelection, setSelectedReferenceId],
   )
 
   useEffect(() => {
@@ -10385,6 +10448,7 @@ export function FloorplanPanel({
       if (!state.isDragging && dragDistance >= SCREEN_RECTANGLE_SELECTION_DRAG_THRESHOLD_PX) {
         state.isDragging = true
         floorplanScreenSelectionOwnsInputDraggingRef.current = true
+        useInteractionScope.getState().begin({ kind: 'box-select' })
         useViewer.getState().setInputDragging(true)
         markBoxSelectHandled()
 
@@ -10789,11 +10853,16 @@ export function FloorplanPanel({
   const hasFloorplanCursorIndicator =
     Boolean(movingOpeningType) ||
     (mode === 'build' && tool !== null) ||
-    (mode === 'select' && floorplanSelectionTool === 'marquee' && structureLayer !== 'zones') ||
+    (mode === 'select' && floorplanSelectionTool === 'marquee') ||
     mode === 'delete'
 
   const handleSvgPointerMove = useCallback(
     (event: ReactPointerEvent<SVGSVGElement>) => {
+      if (roomPickingEnabled() && !(event.target as Element).closest('.floorplan-registry-entry')) {
+        const point = getPlanPointFromClientPoint(event.clientX, event.clientY)
+        if (point)
+          hoverRoomFromHit(resolvePlanRoomHit(null, point), getSelectionModifierKeys(event), null)
+      }
       if (
         hasFloorplanCursorIndicator &&
         !isSpacePanPressed &&
@@ -10826,6 +10895,7 @@ export function FloorplanPanel({
     [
       handlePointerMove,
       hasFloorplanCursorIndicator,
+      getPlanPointFromClientPoint,
       isSpacePanPressed,
       siteVertexDragState,
       setFloorplanCursorPosition,
@@ -10833,6 +10903,7 @@ export function FloorplanPanel({
   )
 
   const handleSvgPointerLeave = useCallback(() => {
+    useEditor.getState().setHoveredRoom(null)
     setFloorplanCursorPosition(null)
     setHoveredGuideCorner(null)
     handlePointerLeave()

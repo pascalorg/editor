@@ -5,6 +5,7 @@ import { CircleGeometry, CylinderGeometry, type Group, SphereGeometry } from 'th
 import { furnishTools } from '../../../components/ui/action-menu/furnish-tools'
 import { tools } from '../../../components/ui/action-menu/structure-tools'
 import { EDITOR_LAYER } from '../../../lib/constants'
+import { wallCursorIcon } from '../../../lib/tool-cursor-icon'
 import useEditor from '../../../store/use-editor'
 import useWallSnapIndicator from '../../../store/use-wall-snap-indicator'
 
@@ -58,11 +59,14 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
   // (green square at a corner); hide the cursor's ground dot/ring so it
   // doesn't sit on top of that glyph.
   const isSnapping = useWallSnapIndicator((s) => s.point !== null)
+  const wallMode = useEditor((s) => s.continuationByContext.wall)
 
-  // Find the icon for the current tool
-  let activeToolConfig = null
+  // Find the icon for the current tool — the wall shows its Rooms variant.
+  let activeToolConfig: { label: string; iconSrc: string } | null | undefined = null
   if (mode === 'build' && tool) {
-    if (tool === 'item' && catalogCategory) {
+    if (tool === 'wall') {
+      activeToolConfig = wallCursorIcon(wallMode)
+    } else if (tool === 'item' && catalogCategory) {
       activeToolConfig = furnishTools.find((t) => t.catalogCategory === catalogCategory)
     } else {
       activeToolConfig = tools.find((t) => t.id === tool)

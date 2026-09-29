@@ -34,15 +34,24 @@ function load(nodes: Record<string, unknown>, rootId: string) {
   return JSON.parse(JSON.stringify(useScene.getState().nodes))
 }
 
-test('frozen pre-slice corpus covers every existing kind', () => {
-  expect(baseline.map((n) => n.type).sort()).toEqual([...NODE_KINDS].sort())
+test('frozen pre-slice corpus covers every kind predating separators', () => {
+  expect(baseline.map((n) => n.type).sort()).toEqual(
+    NODE_KINDS.filter((kind) => kind !== 'separator' && kind !== 'floor-opening').sort(),
+  )
 })
 test.each(
   baseline,
 )('pre-slice $type parses, saves and loads without changing existing fields', (saved) => {
   const expected = saved.type === 'column' ? { ...saved, children: [] } : saved
-  expect(JSON.parse(JSON.stringify(AnyNode.parse(saved)))).toEqual(expected)
-  const graph = { [saved.id]: expected }
+  const parsedExpected =
+    saved.type === 'zone'
+      ? { ...expected, boundarySeparatorIds: [], holes: [] }
+      : saved.type === 'door' || saved.type === 'window'
+        ? { ...expected, floorThresholdVersion: 1 }
+        : expected
+  expect(JSON.parse(JSON.stringify(AnyNode.parse(saved)))).toEqual(parsedExpected)
+  // Loading fills the schema defaults a stored node leaves out, nothing else.
+  const graph = { [saved.id]: parsedExpected }
   expect(load({ [saved.id]: saved }, saved.id)).toEqual(graph)
   expect(load(graph, saved.id)).toEqual(graph)
 })

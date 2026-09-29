@@ -121,6 +121,7 @@ export function ControlModes() {
               // A static hook for a host app that wants to point a first-run
               // tour at this button. Nothing here reads it.
               data-guide-target={c.id === 'select' ? 'mode-select' : undefined}
+              isActive={isActive}
               label={c.label}
               onClick={() => handleClick(c.id)}
               shortcut={c.shortcut}

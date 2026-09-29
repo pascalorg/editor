@@ -7,6 +7,7 @@ import {
   type FloorplanGeometry,
   type FloorplanPalette,
   type FloorplanPoint,
+  getLevelDisplayName,
   isNodeKindEnabled,
   type LiveNodeOverrides,
   type NodeCategory,
@@ -1085,9 +1086,7 @@ function levelIndexOf(node: AnyNode): number {
 }
 
 function levelLabelOf(node: AnyNode): string {
-  const name = node.name?.trim()
-  if (name) return name
-  return `Level ${levelIndexOf(node)}`
+  return getLevelDisplayName({ name: node.name, level: levelIndexOf(node) })
 }
 
 function nextFrames(count: number): Promise<void> {

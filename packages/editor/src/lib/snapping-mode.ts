@@ -161,8 +161,12 @@ export function snapContextOf(args: {
   // like `profileOf` so `snapping-mode` need not import the registry; defaults
   // to `true` (the structural draw default) when not supplied.
   draftDirectionalOf?: (typeOrTool: string) => boolean
+  // The paint tool's region sub-mode draws lines and boxes on a surface: the
+  // no-angle 'polygon' set (grid / lines / off), idle or mid-gesture.
+  paintRegion?: boolean
 }): SnapContext | null {
-  const { scope, mode, tool, profileOf, profileOfNode, draftDirectionalOf } = args
+  const { scope, mode, tool, profileOf, profileOfNode, draftDirectionalOf, paintRegion } = args
+  if (paintRegion && mode === 'material-paint') return 'polygon'
   // The group-move gizmo translates the whole selection — same no-angle
   // treatment as a single-node move, so Shift cycles the 'item' modes and the
   // HUD shows the item snapping chips for the drag.
@@ -170,6 +174,9 @@ export function snapContextOf(args: {
     return 'item'
   }
   switch (scope.kind) {
+    // Dividing a room draws a segment like a wall draft: same modes, same keys.
+    case 'room-divide':
+      return 'wall'
     case 'mesh-editing':
       return scope.nodeId
         ? contextForProfile(profileOfNode?.(scope.nodeId), scope.operator === 'rotate')

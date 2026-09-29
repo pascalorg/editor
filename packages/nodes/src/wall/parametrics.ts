@@ -18,6 +18,9 @@ export const wallParametrics: ParametricDescriptor<WallNode> = {
     {
       label: 'Dimensions',
       fields: [
+        // Reference is not a raw field: its labels depend on each wall's rooms
+        // (`wallReferenceModel` in panel-model), so generic inspectors never
+        // show the stored a / b value.
         { key: 'thickness', kind: 'number', unit: 'm', min: 0.05, max: 1000, step: 0.01 },
         // `height` may be absent (plane-bound top); the custom panel owns the
         // Follows storey / Custom height mode switch, so this is metadata only.

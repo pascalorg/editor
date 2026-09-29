@@ -79,24 +79,9 @@ describe('Wall shared inspector', () => {
     expect(f.node.start).toEqual([1, 2])
   })
 
-  test('bands reveal lower, middle and upper controls and preserve previous values', () => {
+  test('offers no band controls: bands became paint regions', () => {
     const f = fixture()
-    for (const count of [2, 3, 4]) {
-      f.change('wall-band-count', count)
-      expect(f.rows().filter((r) => r.id.startsWith('wall-band-'))).toHaveLength(count)
-    }
-    f.change('wall-band-lowerHeight', 0.3)
-    f.change('wall-band-middleHeight', 0.4)
-    f.change('wall-band-upperHeight', 0.5)
-    expect(f.node.faceBands).toMatchObject({
-      count: 4,
-      enabled: true,
-      lowerHeight: 0.3,
-      middleHeight: 0.4,
-      upperHeight: 0.5,
-    })
-    f.change('wall-band-count', 1)
-    expect(f.rows().filter((r) => r.id.startsWith('wall-band-'))).toHaveLength(1)
+    expect(f.rows().filter((r) => r.id.startsWith('wall-band-'))).toEqual([])
   })
   for (const key of ['skirting', 'crown', 'chairRail'] as const)
     test(`${key}: every side/profile and dimension works without losing nested values`, () => {

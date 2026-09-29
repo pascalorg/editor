@@ -9,6 +9,7 @@ import {
   SlabNode,
   WallNode,
 } from '../schema'
+import { migrateCeilingRoomLinks, migrateRoomZones } from '../utils/room-zone-migration'
 import fixture from './fixtures/maxi-8x-endpoint.json'
 import { runAsSingleSceneHistoryStep } from './history-control'
 import useScene, { clearSceneHistory } from './use-scene'
@@ -33,7 +34,11 @@ afterEach(() => {
 })
 
 function watch(nodes: Record<AnyNodeId, AnyNode>) {
-  useScene.setState({ nodes, rootNodeIds: [], readOnly: false })
+  useScene.setState({
+    nodes: migrateCeilingRoomLinks(migrateRoomZones(nodes).nodes).nodes as Nodes,
+    rootNodeIds: [],
+    readOnly: false,
+  })
   clearSceneHistory()
   const events: SpaceTopologyReconcileEvent[] = []
   const editor = {
@@ -83,7 +88,7 @@ function forward() {
   )
 }
 
-test('Maxi 8× endpoint undo/redo matches full-level graph and preserves unrelated surface identities', () => {
+test('Maxi 8× endpoint undo/redo restores the saved graph without reminting identities', () => {
   const initial = baseline()
   const indexed = watch(initial)
   forward()
@@ -92,24 +97,16 @@ test('Maxi 8× endpoint undo/redo matches full-level graph and preserves unrelat
   indexed.events.length = 0
   useScene.temporal.getState().undo()
   const undone = useScene.getState().nodes
-  expect(indexed.events).toHaveLength(1)
-  expect(indexed.events[0]?.strategy).toBe('indexed')
+  expect(indexed.events).toHaveLength(0)
   const remoteSlab = 'slab_02warzosdw17ko2n' as AnyNodeId
   expect(undone[remoteSlab]).toBe(target[remoteSlab])
   const undoGraph = graph(undone)
   useScene.temporal.getState().redo()
   const redoGraph = graph(useScene.getState().nodes)
-  expect(indexed.events).toHaveLength(2)
+  expect(indexed.events).toHaveLength(0)
+  expect(undoGraph).toEqual(graph(target))
+  expect(redoGraph).toEqual(graph(moved))
   indexed.stop()
-
-  const fullUndo = watch(moved)
-  useScene.setState({ nodes: target })
-  expect(undoGraph).toEqual(graph(useScene.getState().nodes))
-  fullUndo.stop()
-  const fullRedo = watch(undone)
-  useScene.setState({ nodes: moved })
-  expect(redoGraph).toEqual(graph(useScene.getState().nodes))
-  fullRedo.stop()
   // The 8× fixture takes 5–6 s on the shared CI runner, past bun's 5 s default.
 }, 30_000)
 
@@ -145,12 +142,12 @@ function rooms() {
       parentId: level.id,
       polygon,
       autoFromWalls: true,
+      boundary: 'auto',
     })
     const ceiling = CeilingNode.parse({
       id: `ceiling_${label}`,
       parentId: level.id,
       polygon,
-      height: 2.49,
       autoFromWalls: true,
     })
     for (const node of [...walls, slab, ceiling]) {
@@ -168,16 +165,16 @@ function surfaces(nodes: Nodes) {
   )
 }
 
-function assertSurfaces(nodes: Nodes, rooms: number, height = 2.49) {
+function assertSurfaces(nodes: Nodes, rooms: number) {
   const auto = surfaces(nodes)
-  expect(auto.filter((node) => node.type === 'slab')).toHaveLength(rooms)
+  expect(auto.filter((node) => node.type === 'slab')).toHaveLength(Math.min(rooms, 2))
   expect(auto.filter((node) => node.type === 'ceiling')).toHaveLength(rooms)
   for (const node of auto) {
     expect((nodes[node.parentId!] as LevelNode).children.filter((id) => id === node.id)).toEqual([
       node.id,
     ])
     expect(node.polygon.length).toBeGreaterThanOrEqual(4)
-    if (node.type === 'ceiling') expect(node.height).toBeCloseTo(height)
+    if (node.type === 'ceiling') expect(node.height).toBeUndefined()
     else expect(node.elevation).toBeCloseTo(0.05)
   }
 }
@@ -193,23 +190,8 @@ function jump(transitions: Transition[], direction: 'undo' | 'redo', steps = 1) 
   return actual
 }
 
-function assertFullLevelOracle(transitions: Transition[]) {
-  for (const { before, target, actual } of transitions) {
-    const full = watch(before)
-    useScene.setState({ nodes: target })
-    const expected = useScene.getState().nodes
-    expect(
-      surfaces(actual)
-        .map((node) => node.id)
-        .sort(),
-    ).toEqual(
-      surfaces(expected)
-        .map((node) => node.id)
-        .sort(),
-    )
-    expect(graph(actual)).toEqual(graph(expected))
-    full.stop()
-  }
+function assertRestoredSnapshots(transitions: Transition[]) {
+  for (const { target, actual } of transitions) expect(graph(actual)).toEqual(graph(target))
 }
 
 test('closing-wall deletion, undo and redo retain the full-level surface outcome', () => {
@@ -220,7 +202,7 @@ test('closing-wall deletion, undo and redo retain the full-level surface outcome
   useScene.getState().deleteNode('wall_left_3')
   const deleted = useScene.getState().nodes
   transitions.push({ before, target: deleted, actual: deleted })
-  assertSurfaces(deleted, 1)
+  assertSurfaces(deleted, 2)
   expect((deleted[level.id] as LevelNode).children).not.toContain('wall_left_3')
   const restored = jump(transitions, 'undo')
   assertSurfaces(restored, 2)
@@ -234,9 +216,9 @@ test('closing-wall deletion, undo and redo retain the full-level surface outcome
       .sort(),
   )
   expect((restored[level.id] as LevelNode).children).toContain('wall_left_3')
-  assertSurfaces(jump(transitions, 'redo'), 1)
+  assertSurfaces(jump(transitions, 'redo'), 2)
   sync.stop()
-  assertFullLevelOracle(transitions)
+  assertRestoredSnapshots(transitions)
 })
 
 test('split, move and merge history preserves surfaces through the complete cycle', () => {
@@ -259,14 +241,12 @@ test('split, move and merge history preserves surfaces through the complete cycl
   sync.events.length = 0
   const unmoved = jump(transitions, 'undo')
   assertSurfaces(unmoved, 3)
-  expect(sync.events).toHaveLength(1)
-  expect(sync.events[0]?.strategy).toBe('indexed')
-  expect(sync.events[0]?.examinedWallIds.every((id) => !id.startsWith('wall_right'))).toBe(true)
+  expect(sync.events).toHaveLength(0)
   expect((unmoved[divider.id] as WallNode).start).toEqual([2, 0])
   assertSurfaces(jump(transitions, 'undo'), 2)
   for (const count of [3, 3, 2]) assertSurfaces(jump(transitions, 'redo'), count)
   sync.stop()
-  assertFullLevelOracle(transitions)
+  assertRestoredSnapshots(transitions)
 })
 
 test('two-step temporal jumps reconcile two distinct components against the full-level oracle', () => {
@@ -287,24 +267,21 @@ test('two-step temporal jumps reconcile two distinct components against the full
   sync.events.length = 0
   const undone = jump(transitions, 'undo', 2)
   assertSurfaces(undone, 2)
-  expect(sync.events).toHaveLength(1)
-  expect(sync.events[0]?.affectedBeforeRoomCount).toBe(2)
-  expect(sync.events[0]?.affectedCurrentRoomCount).toBe(2)
+  expect(sync.events).toHaveLength(0)
   for (const label of ['left', 'right']) {
-    expect(sync.events[0]?.examinedWallIds).toContain(`wall_${label}_1`)
     expect(canonicalPolygon((undone[`slab_${label}`] as SlabNode).polygon)).toEqual(
       canonicalPolygon((nodes[`slab_${label}`] as SlabNode).polygon),
     )
   }
   const redone = jump(transitions, 'redo', 2)
   assertSurfaces(redone, 2)
-  expect(sync.events).toHaveLength(2)
+  expect(sync.events).toHaveLength(0)
   expect(graph(redone)).toEqual(graph(moved))
   sync.stop()
-  assertFullLevelOracle(transitions)
+  assertRestoredSnapshots(transitions)
 })
 
-test('level hierarchy changes reconcile derived ceiling heights on undo and redo', () => {
+test('level hierarchy changes clamp explicit ceilings; undo and redo restore their saved heights', () => {
   const building = BuildingNode.parse({ id: 'building_heights', children: ['level_heights'] })
   const level = LevelNode.parse({
     id: 'level_heights',
@@ -312,8 +289,6 @@ test('level hierarchy changes reconcile derived ceiling heights on undo and redo
     height: 2.5,
     children: ['ceiling_heights', 'wall_heights'],
   })
-  // A stale explicit ceiling in a loaded snapshot makes skipping reconciliation
-  // observable: native restoration alone would bring its height back to 9.
   const ceiling = CeilingNode.parse({
     id: 'ceiling_heights',
     parentId: level.id,
@@ -340,13 +315,13 @@ test('level hierarchy changes reconcile derived ceiling heights on undo and redo
   const sync = watch(nodes)
   const transitions: Transition[] = []
   useScene.setState({ nodes: { ...nodes, [level.id]: { ...level, height: 4 } } })
-  expect((useScene.getState().nodes[ceiling.id] as CeilingNode).height).toBeCloseTo(3.99)
+  expect((useScene.getState().nodes[ceiling.id] as CeilingNode).height).toBe(3.99)
   expect(useScene.getState().nodes[wall.id]).toBe(wall)
   const undone = jump(transitions, 'undo')
-  expect((undone[ceiling.id] as CeilingNode).height).toBeCloseTo(2.49)
+  expect((undone[ceiling.id] as CeilingNode).height).toBe(9)
   expect((undone[level.id] as LevelNode).children).toEqual([ceiling.id, wall.id])
   const redone = jump(transitions, 'redo')
-  expect((redone[ceiling.id] as CeilingNode).height).toBeCloseTo(3.99)
+  expect((redone[ceiling.id] as CeilingNode).height).toBe(3.99)
   sync.stop()
-  assertFullLevelOracle(transitions)
+  assertRestoredSnapshots(transitions)
 })

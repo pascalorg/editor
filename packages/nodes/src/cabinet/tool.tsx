@@ -10,7 +10,7 @@ import {
   emitter,
   type GridEvent,
   getFloorPlacedFootprints,
-  getWallThickness,
+  getWallLocalFaceZ,
   isCurvedWall,
   movingFootprintAnchors,
   nodeRegistry,
@@ -382,7 +382,7 @@ function bumpCabinetRunsNearNewRun(runId: AnyNodeId) {
 }
 
 function wallHitFromWallEvent(event: WallEvent): WallHit | null {
-  if (!event.normal || !isValidWallSideFace(event.normal) || isCurvedWall(event.node)) return null
+  if (!(event.normal && isValidWallSideFace(event.normal)) || isCurvedWall(event.node)) return null
   const wall = event.node as WallNode
   const dx = wall.end[0] - wall.start[0]
   const dy = wall.end[1] - wall.start[1]
@@ -393,7 +393,7 @@ function wallHitFromWallEvent(event: WallEvent): WallHit | null {
   return {
     wall,
     localX: event.localPosition[0],
-    perpDistance: (side === 'front' ? 1 : -1) * (getWallThickness(wall) / 2),
+    perpDistance: getWallLocalFaceZ(wall, side === 'front' ? 'a' : 'b'),
     side,
     dirX: dx / wallLength,
     dirY: dy / wallLength,
@@ -609,15 +609,15 @@ const CabinetTool = () => {
             })
           : []
       const sizeDimensions =
-        !stretch && !island
-          ? buildCabinetPlacementSizeDimensions({
+        stretch || island
+          ? []
+          : buildCabinetPlacementSizeDimensions({
               depth: livePreviewNode.depth,
               height: livePreviewNode.carcassHeight,
               position: previewPosition,
               rotation: next.yaw,
               width: livePreviewNode.width,
             })
-          : []
       // A stretched span can exceed the schema's width cap — override post-parse.
       usePlacementPreview
         .getState()
@@ -634,7 +634,7 @@ const CabinetTool = () => {
   useFrame(() => {
     const ghostGroup = activeGhostRef.current
     const current = placementRef.current
-    if (!ghostGroup || !current) {
+    if (!(ghostGroup && current)) {
       clearPlacementSurface()
       useFacingPose.getState().clear()
       return
@@ -740,11 +740,8 @@ const CabinetTool = () => {
       return anchor
     }
 
-    const resolveRawPosition = (
-      event: FloorPlacementClickTriggerEvent,
-    ): [number, number, number] => {
-      return getLevelLocalSnappedPosition(activeLevelId, event, 0, true)
-    }
+    const resolveRawPosition = (event: FloorPlacementClickTriggerEvent): [number, number, number] =>
+      getLevelLocalSnappedPosition(activeLevelId, event, 0, true)
 
     const resolveGridPosition = (
       raw: [number, number, number],
@@ -796,7 +793,7 @@ const CabinetTool = () => {
       const moving = movingFootprintAnchors(
         {
           ...alignmentNode,
-          ...(width != null ? { width } : null),
+          ...(width == null ? null : { width }),
         } as AnyNode,
         position[0],
         position[2],
@@ -814,7 +811,7 @@ const CabinetTool = () => {
       })
       useAlignmentGuides.getState().set(result.guides)
 
-      if (!applyAlignmentSnap || !result.snap) return position
+      if (!(applyAlignmentSnap && result.snap)) return position
       return [position[0] + result.snap.dx, position[1], position[2] + result.snap.dz]
     }
 
@@ -1207,7 +1204,7 @@ const CabinetTool = () => {
       const sceneApi = createSceneApi(useScene)
       sceneApi.pauseHistory()
       try {
-        if (!chainRunRef.current || !chainEndModuleRef.current || !chainCornerSideRef.current) {
+        if (!(chainRunRef.current && chainEndModuleRef.current && chainCornerSideRef.current)) {
           const { cabinet, buildModule } = buildRunNodes(
             segment.anchor.position,
             segment.anchor.yaw,
@@ -1242,7 +1239,7 @@ const CabinetTool = () => {
         const nextRun = connectedModule?.parentId
           ? sceneApi.get<CabinetNode>(connectedModule.parentId as AnyNodeId)
           : null
-        if (!connectedModule || !nextRun) throw new Error('Unable to resolve connected corner run')
+        if (!(connectedModule && nextRun)) throw new Error('Unable to resolve connected corner run')
 
         const plannedConnectedWidths = segment.stretch.modules
           .slice(1)
@@ -1303,7 +1300,7 @@ const CabinetTool = () => {
         placementRef.current?.stretch && placementRef.current.stretchAnchor
           ? placementRef.current
           : resolveActiveStretchPlacement(anchor, event)
-      if (!currentPlacement.valid || !currentPlacement.stretch || !currentPlacement.stretchAnchor) {
+      if (!(currentPlacement.valid && currentPlacement.stretch && currentPlacement.stretchAnchor)) {
         return null
       }
       return { anchor: currentPlacement.stretchAnchor, stretch: currentPlacement.stretch }
@@ -1516,7 +1513,7 @@ const CabinetTool = () => {
     const applyTypedDimension = () => {
       const editor = usePlacementPreview.getState()
       const current = placementRef.current
-      if (!editor.activeDimensionId || !editor.dimensionInput || !current) {
+      if (!(editor.activeDimensionId && editor.dimensionInput && current)) {
         return false
       }
       const value = parseMeasurement(
@@ -1570,7 +1567,7 @@ const CabinetTool = () => {
             {
               ...placementBase,
               position,
-              ...(wallLocalX != null ? { wallLocalX } : {}),
+              ...(wallLocalX == null ? {} : { wallLocalX }),
             },
             false,
           )
@@ -1780,7 +1777,7 @@ const CabinetTool = () => {
     }
   }, [activeLevelId, metricNotation, previewNode, publishFloorplanPreview, toolDefaults, unit])
 
-  if (!activeLevelId || !placement) return null
+  if (!(activeLevelId && placement)) return null
   const stretch = placement.stretch
   const draftModuleOffsets = draftSegments.map((segment, segmentIndex) =>
     draftSegments
@@ -1797,15 +1794,15 @@ const CabinetTool = () => {
       ? placement.valid
         ? `${draftSegments.length + 1} leg${draftSegments.length + 1 === 1 ? '' : 's'} · ${stretch.modules.length} module${stretch.modules.length === 1 ? '' : 's'} · Click to continue · Double-click/Esc to finish`
         : null
-      : !placement.valid
-        ? null
-        : placement.snappedToWall
+      : placement.valid
+        ? placement.snappedToWall
           ? placement.snapReason === 'cabinet-edge'
             ? 'Edge snap'
             : placement.snapReason === 'corner'
               ? 'Corner snap'
               : 'Wall snap'
           : null
+        : null
   const labelPosition = stretch
     ? runLocalToPlan({ position: placement.position, rotation: placement.yaw }, [
         stretch.centerLocalX,
@@ -1847,8 +1844,8 @@ const CabinetTool = () => {
       {placement.guide && <WallSnapGuide blocked={!placement.valid} guide={placement.guide} />}
       <PlacementBox
         activeDimensionId={stretch ? null : activeDimensionId}
-        dimensions={placementBoxDimensions}
         dimensionInput={dimensionInput}
+        dimensions={placementBoxDimensions}
         measurements={{ unit, metricNotation }}
         measurementValues={
           stretch ? undefined : [previewNode.width, previewNode.carcassHeight, previewNode.depth]
@@ -1878,7 +1875,7 @@ const CabinetTool = () => {
           ))}
         </group>
       ))}
-      <group ref={activeGhostRef} position={visualPosition} rotation={[0, placementRotationY, 0]}>
+      <group position={visualPosition} ref={activeGhostRef} rotation={[0, placementRotationY, 0]}>
         {placement.insertionPreview ? (
           <primitive object={insertionGhost as Group} />
         ) : stretch ? (

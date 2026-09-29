@@ -6,7 +6,12 @@ import type {
   GeometryContext,
   WallNode,
 } from '@pascal-app/core'
-import { resolveLevelId } from '@pascal-app/core'
+import {
+  getWallBodyCenterOffset,
+  getWallBodyLine,
+  getWallFaceOffsets,
+  resolveLevelId,
+} from '@pascal-app/core'
 
 /**
  * Straight-line run layout math — the single home for the "modules sit on the
@@ -146,11 +151,18 @@ function wallConstraintAtRunEnd({
     const wallAxis: readonly [number, number] = [dx / length, dz / length]
     const axisDot = runAxis[0] * wallAxis[0] + runAxis[1] * wallAxis[1]
     if (Math.abs(axisDot) > 0.2) continue
-    const closest = closestPointOnSegment(point, wall.start, wall.end)
+    const bodyWall = { ...wall, thickness: wall.thickness ?? 0.2 }
+    const body = getWallBodyLine(bodyWall)
+    const closest = closestPointOnSegment(
+      point,
+      [body.start.x, body.start.y],
+      [body.end.x, body.end.y],
+    )
+    const bodyHalfWidth = getWallFaceOffsets(bodyWall).a - getWallBodyCenterOffset(bodyWall)
     const offsetX = (closest[0] - point[0]) * runAxis[0] + (closest[1] - point[1]) * runAxis[1]
-    const halfThickness = ((wall.thickness ?? 0.2) / 2) * Math.sqrt(1 - axisDot * axisDot)
+    const halfThickness = bodyHalfWidth * Math.sqrt(1 - axisDot * axisDot)
     const distance = Math.hypot(point[0] - closest[0], point[1] - closest[1])
-    if (distance > maxDistance + (wall.thickness ?? 0.2) / 2 + RUN_ADJACENCY_EPSILON) continue
+    if (distance > maxDistance + bodyHalfWidth + RUN_ADJACENCY_EPSILON) continue
     if (direction * offsetX < -halfThickness - RUN_ADJACENCY_EPSILON) continue
     const slack = Math.max(0, direction * offsetX - halfThickness)
     closestSlack = Math.min(closestSlack, slack)
@@ -740,7 +752,7 @@ export function reflowRunModules<T extends ModuleLike>(
     nextLeft = runMaxX(sorted) + consumedRightSlack - totalWidth
   } else if (preserveRightEdge) {
     nextLeft = runMaxX(sorted) - totalWidth
-  } else if (preserveLeftEdge || (!leftConstrained && !rightConstrained && selectedIndex === 0)) {
+  } else if (preserveLeftEdge || (!(leftConstrained || rightConstrained) && selectedIndex === 0)) {
     nextLeft = preserveLeftEdge ? runMinX(sorted) - consumedLeftSlack : runMaxX(sorted) - totalWidth
   }
   return sorted.map((module, index) => {

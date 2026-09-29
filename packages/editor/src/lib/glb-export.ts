@@ -1778,6 +1778,7 @@ function stampIdentity(
       // `onlyVisible` keeps it even when the editor had zones hidden at export.
       const zone = node as ZoneNode
       extras.polygon = zone.polygon
+      if (zone.holes?.length) extras.holes = zone.holes
       extras.color = zone.color
       target.visible = true
     }

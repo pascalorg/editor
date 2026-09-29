@@ -305,6 +305,25 @@ describe('WallCutoutCache', () => {
     normal.mockRestore()
   })
 
+  test('a paint preview that cannot draw the rebuilt geometry gives way to the palette', () => {
+    viewerStore.setState({ wallMode: 'up' })
+    const { node, mesh } = addWall()
+    cache.update(camera, 1)
+    const preview = [new MeshBasicMaterial()]
+    viewerStore.setState({ hoveredId: node.id, hoverHighlightMode: 'paint-ready' })
+    mesh.material = preview
+    // A click added a finish: the rebuilt geometry draws a group the preview has no entry for.
+    mesh.geometry.addGroup(0, 3, 2)
+    viewerStore.setState({ colorPreset: 'white' })
+    cache.update(camera, 1.01)
+    expect(mesh.material).not.toBe(preview)
+    const cached = cache.walls.get(node.id)!
+    expect([cached.visibleVariant.materials, cached.hiddenVariant.materials]).toContain(
+      mesh.material as Material[],
+    )
+    expect((mesh.material as Material[])[2]).toBeDefined()
+  })
+
   test('appearance changes during preview are applied when temporary ownership ends', () => {
     viewerStore.setState({ wallMode: 'up' })
     const { node, mesh } = addWall()
@@ -544,7 +563,7 @@ describe('WallCutoutCache', () => {
     })
     const painted = WallNode.parse({
       ...node,
-      slots: { interior: `scene:${material.id}`, exterior: 'library:mtl_row14_test' },
+      slots: { a: `scene:${material.id}`, b: 'library:mtl_row14_test' },
     })
     useScene.setState({ nodes: { [node.id]: painted }, materials: { [material.id]: material } })
     viewerStore.setState({ wallMode: 'up', textures: true })
@@ -631,7 +650,7 @@ describe('WallCutoutCache', () => {
     }
   })
 
-  test('face-band changes remove whole-wall selection highlighting immediately', () => {
+  test('paint regions remove whole-wall selection highlighting immediately', () => {
     const { node } = addWall()
     viewerStore.setState({
       wallMode: 'up',
@@ -640,7 +659,12 @@ describe('WallCutoutCache', () => {
     cache.update(camera, 1)
     expect(cache.walls.get(node.id)?.variantKey).toBe('selection-visible')
     useScene.setState({
-      nodes: { [node.id]: WallNode.parse({ ...node, faceBands: { enabled: true, count: 3 } }) },
+      nodes: {
+        [node.id]: WallNode.parse({
+          ...node,
+          faceRegions: [{ id: 'wainscot', face: 'a', v1: 0.9, finish: 'library:x' }],
+        }),
+      },
     })
     cache.update(camera, 1.01)
     expect(cache.walls.get(node.id)?.variantKey).toBe('visible')

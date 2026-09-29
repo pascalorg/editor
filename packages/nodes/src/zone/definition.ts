@@ -1,8 +1,4 @@
-import {
-  type NodeDefinition,
-  resolveAutoZonePolygon,
-  ZoneNode as ZoneNodeSchema,
-} from '@pascal-app/core'
+import { type NodeDefinition, ZoneNode as ZoneNodeSchema } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
 import { buildZoneContextualDimensions } from './contextual-dimensions'
@@ -61,9 +57,9 @@ export const zoneDefinition: NodeDefinition<typeof ZoneNode> = {
         featurePrefix: 'zone',
         height: 0,
         label: 'Zone',
-        polygon: resolveAutoZonePolygon(node, ctx.resolve),
+        polygon: node.polygon,
       }),
-    quickMeasure: (node, ctx) => zoneQuickMeasurement(node, ctx),
+    quickMeasure: (node) => zoneQuickMeasurement(node),
   },
   // No dirty consumer rebuilds this kind — see NodeDefinition.dirtyTracking.
   dirtyTracking: false,

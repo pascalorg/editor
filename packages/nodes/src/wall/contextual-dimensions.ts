@@ -4,7 +4,7 @@ import {
   type GeometryContext,
   getWallCurveFrameAt,
   getWallCurveLength,
-  getWallThickness,
+  getWallFaceOffsets,
   isCurvedWall,
   type WallNode,
 } from '@pascal-app/core'
@@ -104,8 +104,8 @@ function structuralFaceProjections(
   if (Math.abs(denominator) <= 1e-6) return []
   const normal: FloorplanPoint = [-direction[1], direction[0]]
 
-  const halfThickness = getWallThickness(connectedWall) / 2
-  return [-halfThickness, halfThickness].map((offset) => {
+  const { a, b } = getWallFaceOffsets(connectedWall)
+  return [b, a].map((offset) => {
     const facePoint: FloorplanPoint = [
       connectedWall.start[0] + normal[0] * offset,
       connectedWall.start[1] + normal[1] * offset,
@@ -246,7 +246,7 @@ export function buildWallHostedOpeningContextualDimensions(
   }
 
   const offsetNormal = contextualWallDimensionNormal(wall, [-dirY, dirX], ctx.siblings)
-  if (!options.showClearancesWhileMoving || !ctx.viewState?.moving) {
+  if (!(options.showClearancesWhileMoving && ctx.viewState?.moving)) {
     return {
       kind: 'dimension',
       start: openingStart,

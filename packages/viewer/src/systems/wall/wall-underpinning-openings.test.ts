@@ -1,8 +1,9 @@
 // @ts-expect-error — bun:test is provided by the Bun runtime; viewer does not
 // depend on @types/bun so the import type is unresolved at compile time.
 import { describe, expect, test } from 'bun:test'
-import { calculateLevelMiters, WallNode } from '@pascal-app/core'
+import { calculateLevelMiters, WALL_SURFACE_SLOT_DEFAULTS, WallNode } from '@pascal-app/core'
 import * as THREE from 'three'
+import { getWallFinishRefs } from './wall-finish-data'
 import { generateExtrudedWall } from './wall-system'
 
 const IN = 0.0254
@@ -47,6 +48,33 @@ describe('wall underpinning openings', () => {
     const wall = stemWall()
     const geometry = generateExtrudedWall(wall, [], calculateLevelMiters([wall]))
     for (const u of [1, 2.5, 4]) expect(solidAt(geometry, u, -0.5)).toBe(true)
+    geometry.dispose()
+  })
+
+  test('the stem draws with the foundation finish, the rim with the face above it', () => {
+    const wall = stemWall()
+    const geometry = generateExtrudedWall(wall, [], calculateLevelMiters([wall]))
+    const refs = getWallFinishRefs(geometry)
+    const foundation = 3 + refs.indexOf(WALL_SURFACE_SLOT_DEFAULTS.foundation)
+    expect(foundation).toBeGreaterThanOrEqual(3)
+    const position = geometry.getAttribute('position')
+    const vertex = (at: number) => geometry.index?.getX(at) ?? at
+    const seen = { stem: new Set<number>(), rim: new Set<number>() }
+    for (const group of geometry.groups) {
+      for (let at = group.start; at < group.start + group.count; at += 3) {
+        const y =
+          (position.getY(vertex(at)) +
+            position.getY(vertex(at + 1)) +
+            position.getY(vertex(at + 2))) /
+          3
+        if (group.materialIndex === 0) continue
+        if (y < -0.35) seen.stem.add(group.materialIndex!)
+        else if (y < -0.05) seen.rim.add(group.materialIndex!)
+      }
+    }
+    expect([...seen.stem]).toEqual([foundation])
+    expect(seen.rim.has(foundation)).toBe(false)
+    expect(seen.rim.size).toBeGreaterThan(0)
     geometry.dispose()
   })
 })

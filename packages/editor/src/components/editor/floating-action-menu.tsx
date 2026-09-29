@@ -18,6 +18,7 @@ import {
   getWallThickness,
   ItemNode,
   isCurvedWall,
+  isDerivedNode,
   isRegistryMovable,
   isRegistrySelectable,
   isSplineFence,
@@ -56,6 +57,8 @@ import { duplicateWithoutMove, registryMoveDisabled } from '../../lib/node-actio
 import { playBlockedQuickActionFeedback } from '../../lib/quick-action-feedback'
 import { collectQuickActionNodeScope } from '../../lib/quick-action-nodes'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
+import { deleteSelectedSeparator } from '../../lib/room-structure-commands'
+import { captureElementActionOrigin, completeElementAction } from '../../lib/room-zone-routing'
 import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
 import { cn } from '../../lib/utils'
 import useEditor from '../../store/use-editor'
@@ -67,6 +70,7 @@ import useInteractionScope, {
 import { IconRefGlyph } from '../ui/icon-ref'
 import { formatMeasurement, MeasurementPill } from './measurement-pill'
 import { NodeActionMenu } from './node-action-menu'
+import { startZoneRoomTransform } from './room-controls'
 
 /**
  * A kind shows the system pill when it exposes typed ports — `def.ports`
@@ -127,6 +131,8 @@ const MENU_Y_OFFSETS: Record<string, number> = {
   // Slab: clears the height arrow that sits at elevation + 0.22 plus the
   // chevron's own visual reach, so the menu floats just above it.
   slab: 0.7,
+  // Room: measured from the top of its walls, with a wall's clearance.
+  zone: 0.5,
   // Ceiling: clears the upward height arrow that sits ~0.22 above the
   // ceiling plane, plus extra headroom so the menu doesn't crowd the
   // chevron at any zoom level.
@@ -136,7 +142,7 @@ const MENU_Y_OFFSETS: Record<string, number> = {
   shelf: 0.6,
 }
 
-function getMenuYOffset(node: AnyNode | null): number {
+export function getMenuYOffset(node: AnyNode | null): number {
   if (!node) return MENU_Y_OFFSET_DEFAULT + EXTRA_MENU_LIFT
   if (node.type === 'stair-segment') {
     return (MENU_Y_OFFSETS[`stair-${node.segmentType}`] ?? MENU_Y_OFFSET_DEFAULT) + EXTRA_MENU_LIFT
@@ -490,6 +496,7 @@ export function FloatingActionMenu() {
     (e: React.MouseEvent) => {
       e.stopPropagation()
       if (!node) return
+      if (startZoneRoomTransform(node, 'move')) return
       sfxEmitter.emit('sfx:item-pick')
       const sceneNodes = useScene.getState().nodes
       setMovingNode(resolveMoveActionNode(node, sceneNodes) as any)
@@ -501,6 +508,7 @@ export function FloatingActionMenu() {
     (e: React.MouseEvent) => {
       e.stopPropagation()
       if (!node?.parentId) return
+      if (startZoneRoomTransform(node, 'duplicate')) return
       sfxEmitter.emit('sfx:item-pick')
 
       if (registryMoveDisabled(node)) {
@@ -730,9 +738,15 @@ export function FloatingActionMenu() {
     (e: React.MouseEvent) => {
       e.stopPropagation()
       if (!selectedId) return
+      const origin = captureElementActionOrigin([selectedId])
+      if (node?.type === 'separator') {
+        deleteSelectedSeparator(selectedId as AnyNodeId, origin)
+        return
+      }
       emitDeleteSFX(node?.type)
       setSelection({ selectedIds: [] })
       useScene.getState().deleteNode(selectedId as AnyNodeId)
+      completeElementAction(origin)
     },
     [node?.type, selectedId, setSelection],
   )
@@ -771,6 +785,8 @@ export function FloatingActionMenu() {
 
   if (
     !(selectedId && node && isValidType && !isFloorplanHovered && mode !== 'delete') ||
+    // A footprint's floor has one control, its height handle; no pill.
+    (node.type === 'slab' && node.plateRole === 'base') ||
     endpointReshape ||
     isCurveReshape ||
     !menuVisibility.root
@@ -802,7 +818,11 @@ export function FloatingActionMenu() {
                     ? handleFind
                     : undefined
                 }
-                onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
+                onAddHole={
+                  node && HOLE_TYPES.includes(node.type) && !isDerivedNode(node)
+                    ? handleAddHole
+                    : undefined
+                }
                 onCurve={
                   (node?.type === 'fence' && !isSplineFence(node) && !isCurvedWall(node)) ||
                   (node?.type === 'wall' && canCurveSelectedWall)

@@ -62,12 +62,33 @@ export type PanelRow = { section?: string } & (
 
 export const PANEL_MODEL_EXTENSION = 'pascal:editor/panel-model'
 
+/**
+ * A control the multi-selection inspector renders for every selected node of
+ * a kind at once (derived settings the raw parametrics can't express). `value`
+ * null means the selection is mixed: no option shows as active.
+ */
+export type MultiPanelControl = {
+  id: string
+  kind: 'segmented'
+  /** The parametrics group title the control sits in. */
+  section: string
+  label: string
+  options: ReadonlyArray<{ value: string; label: string }>
+  value: string | null
+  /** Applies to every selected node in one undo step. */
+  onChange: (value: string) => void
+}
+
 export type NodePanelModel<N extends AnyNode = AnyNode> = {
   rows: (context: {
     node: N
     nodes: Record<AnyNodeId, AnyNode>
     update: (patch: Partial<N>) => void
   }) => PanelRow[]
+  multiControls?: (context: {
+    selection: N[]
+    nodes: Record<AnyNodeId, AnyNode>
+  }) => MultiPanelControl[]
 }
 
 export function getNodePanelModel(definition: AnyNodeDefinition | undefined) {

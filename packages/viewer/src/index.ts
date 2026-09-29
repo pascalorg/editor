@@ -168,7 +168,7 @@ export { mergedOutline } from './lib/merged-outline-node'
 export * from './lib/perf-actions'
 export { type PerfBatchStats, publishPerfBatchStats } from './lib/perf-panel-store'
 export * from './lib/perf-tracks'
-export { markPureRaycast } from './lib/pointer-events'
+export { hasMaterialsForGroups, markPureRaycast } from './lib/pointer-events'
 export {
   cloneWithProceduralEmission,
   decorateProceduralEmission,
@@ -224,6 +224,7 @@ export {
   textureMapForSlot,
 } from './lib/texture-reference'
 export { packNormalToRGB, unpackRGBToNormal } from './lib/tsl-compat'
+export { createZoneShape, createZoneWallGeometry } from './lib/zone-geometry'
 export type { LightSource } from './store/use-item-light-pool'
 export { catalogLightSource, useItemLightPool } from './store/use-item-light-pool'
 export {
@@ -232,7 +233,11 @@ export {
   type MetricNotation,
   type WallMode,
 } from './store/use-viewer'
-export { CeilingSystem } from './systems/ceiling/ceiling-system'
+export {
+  CEILING_REGION_MESH,
+  type CeilingRegionMaterial,
+  CeilingSystem,
+} from './systems/ceiling/ceiling-system'
 export {
   createColumnBoxGeometry,
   createColumnCylinderGeometry,
@@ -311,6 +316,12 @@ export {
   type WallCutoutViewerState,
   type WallCutoutViewerStore,
 } from './systems/wall/wall-cutout-cache'
+export {
+  getWallFaceBaseAt,
+  getWallFinishData,
+  getWallFinishRefs,
+  type WallFinishGeometryData,
+} from './systems/wall/wall-finish-data'
 export {
   getMaterialsForWall,
   getVisibleWallMaterials,

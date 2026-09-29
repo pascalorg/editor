@@ -2,6 +2,28 @@ import { describe, expect, test } from 'bun:test'
 import { healSceneNodes } from './heal-scene-graph'
 
 describe('healSceneNodes', () => {
+  test('repairs missing reverse child links on saved hosts without mutating source nodes', () => {
+    const input = {
+      site_a: { id: 'site_a', type: 'site', parentId: null },
+      building_a: { id: 'building_a', type: 'building', parentId: 'site_a' },
+      level_a: { id: 'level_a', type: 'level', parentId: 'building_a', children: ['item_a'] },
+      item_a: { id: 'item_a', type: 'item', parentId: 'level_a', children: [] },
+      item_b: { id: 'item_b', type: 'item', parentId: 'item_a' },
+    }
+    const snapshot = structuredClone(input)
+    const healed = healSceneNodes(input)
+    expect(healed.nodes.site_a).toMatchObject({ children: ['building_a'] })
+    expect(healed.nodes.building_a).toMatchObject({ children: ['level_a'] })
+    expect(healed.nodes.item_a).toMatchObject({ children: ['item_b'] })
+    expect(healed.nodes.level_a).toBe(input.level_a)
+    expect(input).toEqual(snapshot)
+    expect(healSceneNodes(healed.nodes).repairedChildLinkNodeIds).toEqual([])
+    expect(healSceneNodes(healed.nodes).nodes).toEqual(healed.nodes)
+    expect(healSceneNodes(Object.fromEntries(Object.entries(input).reverse())).nodes).toEqual(
+      healed.nodes,
+    )
+  })
+
   test('strips non-string (null) children entries', () => {
     const { nodes, strippedChildRefs } = healSceneNodes({
       wall_a: {

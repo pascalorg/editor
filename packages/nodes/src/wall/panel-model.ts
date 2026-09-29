@@ -1,17 +1,19 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  buildWallFaceBandCountPatch,
+  faceOnLine,
   GROUND_SUPPORT_ID,
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
   getWallCurveLength,
-  getWallFaceBandConfig,
+  justificationForFaceOnLine,
   normalizeWallCurveOffset,
+  planWallJustification,
+  roomSideFaces,
   terrainSupportLift,
+  useScene,
   WALL_CHAIR_RAIL_DEFAULT,
   WALL_CROWN_DEFAULT,
-  WALL_FACE_BAND_DEFAULT,
   WALL_SKIRTING_DEFAULT,
   type WallNode,
   type WallTrimProfile,
@@ -37,6 +39,72 @@ const pretty = (value: string) =>
   value
     .replace(/^(base|crown|rail)-/, '')
     .replace(/(^|[- ])\w/g, (s) => s.replace('-', ' ').toUpperCase())
+
+export type WallReferenceValue = 'outside' | 'center' | 'inside' | 'left' | 'right'
+export type WallReferenceOption = { label: string; value: WallReferenceValue }
+
+const ROOM_REFERENCE_OPTIONS: WallReferenceOption[] = [
+  { label: 'Outside face', value: 'outside' },
+  { label: 'Center', value: 'center' },
+  { label: 'Inside face', value: 'inside' },
+]
+const DIRECTION_REFERENCE_OPTIONS: WallReferenceOption[] = [
+  { label: 'Left', value: 'left' },
+  { label: 'Center', value: 'center' },
+  { label: 'Right', value: 'right' },
+]
+
+/** Faces a wall's reference choices name: its room sides when a room is on exactly one side. */
+function referenceFaces(wall: WallNode, nodes: Record<AnyNodeId, AnyNode>) {
+  const sides = roomSideFaces(nodes, wall.id)
+  return sides.inside && sides.outside
+    ? ({ kind: 'room', outside: sides.outside, inside: sides.inside } as const)
+    : ({ kind: 'direction' } as const)
+}
+
+/**
+ * The Reference control for one or more walls. The drawn line never moves; the
+ * choice picks which face sits on it. Walls with a room on exactly one side read
+ * Outside face / Center / Inside face; otherwise Left / Center / Right along the
+ * drawing direction (left is face a). A selection shows the room labels only
+ * when every wall has them, applies each choice to each wall's own faces, and
+ * shows no active option when the walls disagree.
+ */
+export function wallReferenceModel(walls: readonly WallNode[], nodes: Record<AnyNodeId, AnyNode>) {
+  const faces = walls.map((wall) => referenceFaces(wall, nodes))
+  const room = faces.length > 0 && faces.every((entry) => entry.kind === 'room')
+  const options = room ? ROOM_REFERENCE_OPTIONS : DIRECTION_REFERENCE_OPTIONS
+  const faceFor = (index: number, value: WallReferenceValue): 'a' | 'b' | 'center' => {
+    if (value === 'center') return 'center'
+    if (value === 'left') return 'a'
+    if (value === 'right') return 'b'
+    const entry = faces[index]!
+    return entry.kind === 'room' ? entry[value] : 'center'
+  }
+  const current = walls.map((wall, index): WallReferenceValue => {
+    const face = faceOnLine(wall)
+    if (face === 'center') return 'center'
+    const entry = faces[index]!
+    if (room && entry.kind === 'room') return face === entry.outside ? 'outside' : 'inside'
+    return face === 'a' ? 'left' : 'right'
+  })
+  const value = current.every((entry) => entry === current[0]) ? (current[0] ?? null) : null
+  return {
+    options,
+    value,
+    apply: (next: WallReferenceValue) => {
+      const scene = useScene.getState()
+      const updates = walls.flatMap((wall, index) =>
+        planWallJustification(
+          scene.nodes,
+          wall.id,
+          justificationForFaceOnLine(faceFor(index, next)),
+        ),
+      )
+      if (updates.length > 0) scene.updateNodes(updates)
+    },
+  }
+}
 
 export function wallSettings(
   node: WallNode,
@@ -109,6 +177,20 @@ export function wallSettings(
       previous: () => change(-1),
     })
   }
+  const reference = wallReferenceModel([node], nodes)
+  const step = (by: number) => {
+    const index = reference.options.findIndex((option) => option.value === reference.value)
+    reference.apply(reference.options[(index + by + 3) % 3]!.value)
+  }
+  rows.push({
+    section: 'Dimensions',
+    id: 'wall-reference',
+    kind: 'cycle',
+    label: 'Reference',
+    value: reference.options.find((option) => option.value === reference.value)?.label ?? 'Mixed',
+    next: () => step(1),
+    previous: () => step(-1),
+  })
   const length = getWallCurveLength(node)
   number('Dimensions', 'wall-length', 'Length', length, 0.1, 1000, 0.05, (next) => {
     update(buildWallLengthPatch(node, next))
@@ -179,42 +261,6 @@ export function wallSettings(
         onSelect: reshape,
       })
   }
-  const bands = getWallFaceBandConfig(node, height)
-  number(
-    'Wall bands',
-    'wall-band-count',
-    'Bands',
-    bands.count,
-    1,
-    4,
-    1,
-    (count) => update(buildWallFaceBandCountPatch(node, Math.round(count))),
-    '',
-  )
-  const band = (key: 'lowerHeight' | 'middleHeight' | 'upperHeight', label: string, max: number) =>
-    number(
-      'Wall bands',
-      `wall-band-${key}`,
-      label,
-      bands[key],
-      0,
-      Math.max(0, max),
-      0.01,
-      (value) =>
-        update({
-          faceBands: {
-            ...WALL_FACE_BAND_DEFAULT,
-            ...node.faceBands,
-            enabled: bands.count > 1,
-            count: bands.count,
-            [key]: value,
-          },
-        }),
-    )
-  if (bands.count >= 2) band('lowerHeight', 'Lower', height)
-  if (bands.count >= 3) band('middleHeight', 'Middle', height - bands.lowerHeight)
-  if (bands.count >= 4)
-    band('upperHeight', 'Upper', height - bands.lowerHeight - bands.middleHeight)
   for (const [key, title, defaults] of [
     ['skirting', 'Skirting', WALL_SKIRTING_DEFAULT],
     ['crown', 'Crown molding', WALL_CROWN_DEFAULT],
@@ -226,8 +272,9 @@ export function wallSettings(
       patch({ enabled: !trim.enabled }),
     )
     if (!trim.enabled) continue
-    cycle(title, `${key}-sides`, 'Sides', trim.sides, ['interior', 'exterior', 'both'], (sides) =>
-      patch({ sides: sides as typeof trim.sides }),
+    const sides = trim.sides === 'interior' ? 'a' : trim.sides === 'exterior' ? 'b' : trim.sides
+    cycle(title, `${key}-sides`, 'Sides', sides, ['a', 'b', 'both'], (next) =>
+      patch({ sides: next as typeof trim.sides }),
     )
     cycle(title, `${key}-profile`, 'Profile', trim.profile, profiles[key], (profile) =>
       patch({ profile: profile as WallTrimProfile }),

@@ -149,7 +149,6 @@ function OptionItem({
 // ---------------------------------------------------------------------------
 const PAGE_LABEL: Record<string, string> = {
   'wall-mode': 'Wall Mode',
-  'level-mode': 'Level Mode',
   'rename-level': 'Rename Level',
   'goto-level': 'Go to Level',
 }
@@ -204,8 +203,6 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
 
   const wallMode = useViewer((s) => s.wallMode)
   const setWallMode = useViewer((s) => s.setWallMode)
-  const levelMode = useViewer((s) => s.levelMode)
-  const setLevelMode = useViewer((s) => s.setLevelMode)
 
   const allLevels = useScene(
     useShallow((s) =>
@@ -249,12 +246,6 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
     up: 'Up',
     down: 'Down',
     translucent: 'Translucent',
-  }
-  const levelModeLabel: Record<'manual' | 'stacked' | 'exploded' | 'solo', string> = {
-    manual: 'Manual',
-    stacked: 'Stacked',
-    exploded: 'Exploded',
-    solo: 'Solo',
   }
 
   const confirmRename = () => {
@@ -384,20 +375,6 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
                       key={mode}
                       label={wallModeLabel[mode]}
                       onSelect={() => run(() => setWallMode(mode))}
-                    />
-                  ))}
-                </Command.Group>
-              )}
-
-              {/* ── Level Mode sub-page ───────────────────────────────────── */}
-              {page === 'level-mode' && (
-                <Command.Group heading="Level Mode">
-                  {(['stacked', 'exploded', 'solo'] as const).map((mode) => (
-                    <OptionItem
-                      isActive={levelMode === mode}
-                      key={mode}
-                      label={levelModeLabel[mode]}
-                      onSelect={() => run(() => setLevelMode(mode))}
                     />
                   ))}
                 </Command.Group>

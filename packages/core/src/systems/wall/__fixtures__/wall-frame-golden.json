@@ -1,0 +1,2402 @@
+[
+  {
+    "walls": [
+      {
+        "object": "node",
+        "id": "wall_v6wfghqmnpwksoqr",
+        "type": "wall",
+        "parentId": null,
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "thickness": 0.1,
+        "start": [0, 0],
+        "end": [4, 0],
+        "frontSide": "unknown",
+        "backSide": "unknown"
+      },
+      {
+        "object": "node",
+        "id": "wall_10usrztobrbkfqj8",
+        "type": "wall",
+        "parentId": null,
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "thickness": 0.1,
+        "start": [4, 0],
+        "end": [8, 0],
+        "frontSide": "unknown",
+        "backSide": "unknown"
+      },
+      {
+        "object": "node",
+        "id": "wall_itzhe3m4h9er75yb",
+        "type": "wall",
+        "parentId": null,
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "thickness": 0.1,
+        "start": [8, 0],
+        "end": [8, 3],
+        "frontSide": "unknown",
+        "backSide": "unknown"
+      },
+      {
+        "object": "node",
+        "id": "wall_05jeqzxhxtvqw2q7",
+        "type": "wall",
+        "parentId": null,
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "thickness": 0.1,
+        "start": [8, 3],
+        "end": [4, 3],
+        "frontSide": "unknown",
+        "backSide": "unknown"
+      },
+      {
+        "object": "node",
+        "id": "wall_4tujenozv0ovwh6e",
+        "type": "wall",
+        "parentId": null,
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "thickness": 0.1,
+        "start": [4, 3],
+        "end": [0, 3],
+        "frontSide": "unknown",
+        "backSide": "unknown"
+      },
+      {
+        "object": "node",
+        "id": "wall_uk11r2ommw87mlt7",
+        "type": "wall",
+        "parentId": null,
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "thickness": 0.1,
+        "start": [0, 3],
+        "end": [0, 0],
+        "frontSide": "unknown",
+        "backSide": "unknown"
+      },
+      {
+        "object": "node",
+        "id": "wall_hyhbb4wtsu9si4lv",
+        "type": "wall",
+        "parentId": null,
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "thickness": 0.1,
+        "start": [4, 0],
+        "end": [4, 3],
+        "frontSide": "unknown",
+        "backSide": "unknown"
+      }
+    ],
+    "slabs": [
+      {
+        "object": "node",
+        "id": "slab_8iidf8weskkvq5z4",
+        "type": "slab",
+        "parentId": null,
+        "visible": true,
+        "metadata": {},
+        "polygon": [[0, 0], [4, 0], [4, 3], [0, 3]],
+        "holes": [],
+        "holeMetadata": [],
+        "elevation": 0.05,
+        "thickness": 0.05,
+        "recessed": false,
+        "autoFromWalls": true
+      },
+      {
+        "object": "node",
+        "id": "slab_ldunjvnzb98jq1r5",
+        "type": "slab",
+        "parentId": null,
+        "visible": true,
+        "metadata": {},
+        "polygon": [[4, 0], [8, 0], [8, 3], [4, 3]],
+        "holes": [],
+        "holeMetadata": [],
+        "elevation": 0.05,
+        "thickness": 0.05,
+        "recessed": false,
+        "autoFromWalls": true
+      }
+    ],
+    "output": {
+      "miters": {
+        "junctionData": [
+          [
+            "0,0",
+            [
+              [
+                "wall_v6wfghqmnpwksoqr",
+                {
+                  "left": {
+                    "x": 0.05000000000000001,
+                    "y": 0.05000000000000001
+                  },
+                  "right": {
+                    "x": -0.05000000000000001,
+                    "y": -0.05000000000000001
+                  }
+                }
+              ],
+              [
+                "wall_uk11r2ommw87mlt7",
+                {
+                  "right": {
+                    "x": 0.05000000000000001,
+                    "y": 0.05000000000000001
+                  },
+                  "left": {
+                    "x": -0.05000000000000001,
+                    "y": -0.05000000000000001
+                  }
+                }
+              ]
+            ]
+          ],
+          [
+            "4000,0",
+            [
+              [
+                "wall_10usrztobrbkfqj8",
+                {
+                  "left": {
+                    "x": 4.05,
+                    "y": 0.05000000000000001
+                  }
+                }
+              ],
+              [
+                "wall_hyhbb4wtsu9si4lv",
+                {
+                  "right": {
+                    "x": 4.05,
+                    "y": 0.05000000000000001
+                  },
+                  "left": {
+                    "x": 3.9500000000000006,
+                    "y": 0.05000000000000001
+                  }
+                }
+              ],
+              [
+                "wall_v6wfghqmnpwksoqr",
+                {
+                  "right": {
+                    "x": 3.9500000000000006,
+                    "y": 0.05000000000000001
+                  }
+                }
+              ]
+            ]
+          ],
+          [
+            "8000,0",
+            [
+              [
+                "wall_itzhe3m4h9er75yb",
+                {
+                  "left": {
+                    "x": 7.95,
+                    "y": 0.05000000000000001
+                  },
+                  "right": {
+                    "x": 8.05,
+                    "y": -0.05000000000000001
+                  }
+                }
+              ],
+              [
+                "wall_10usrztobrbkfqj8",
+                {
+                  "right": {
+                    "x": 7.95,
+                    "y": 0.05000000000000001
+                  },
+                  "left": {
+                    "x": 8.05,
+                    "y": -0.05000000000000001
+                  }
+                }
+              ]
+            ]
+          ],
+          [
+            "8000,3000",
+            [
+              [
+                "wall_itzhe3m4h9er75yb",
+                {
+                  "left": {
+                    "x": 8.05,
+                    "y": 3.0499999999999994
+                  },
+                  "right": {
+                    "x": 7.95,
+                    "y": 2.9500000000000006
+                  }
+                }
+              ],
+              [
+                "wall_05jeqzxhxtvqw2q7",
+                {
+                  "right": {
+                    "x": 8.05,
+                    "y": 3.0499999999999994
+                  },
+                  "left": {
+                    "x": 7.95,
+                    "y": 2.9500000000000006
+                  }
+                }
+              ]
+            ]
+          ],
+          [
+            "4000,3000",
+            [
+              [
+                "wall_hyhbb4wtsu9si4lv",
+                {
+                  "left": {
+                    "x": 4.05,
+                    "y": 2.9500000000000006
+                  },
+                  "right": {
+                    "x": 3.9500000000000006,
+                    "y": 2.9500000000000006
+                  }
+                }
+              ],
+              [
+                "wall_05jeqzxhxtvqw2q7",
+                {
+                  "right": {
+                    "x": 4.05,
+                    "y": 2.9500000000000006
+                  }
+                }
+              ],
+              [
+                "wall_4tujenozv0ovwh6e",
+                {
+                  "left": {
+                    "x": 3.9500000000000006,
+                    "y": 2.9500000000000006
+                  }
+                }
+              ]
+            ]
+          ],
+          [
+            "0,3000",
+            [
+              [
+                "wall_uk11r2ommw87mlt7",
+                {
+                  "left": {
+                    "x": 0.05000000000000001,
+                    "y": 2.9500000000000006
+                  },
+                  "right": {
+                    "x": -0.05000000000000001,
+                    "y": 3.0499999999999994
+                  }
+                }
+              ],
+              [
+                "wall_4tujenozv0ovwh6e",
+                {
+                  "right": {
+                    "x": 0.05000000000000001,
+                    "y": 2.9500000000000006
+                  },
+                  "left": {
+                    "x": -0.05000000000000001,
+                    "y": 3.0499999999999994
+                  }
+                }
+              ]
+            ]
+          ]
+        ],
+        "junctions": [
+          [
+            "0,0",
+            {
+              "meetingPoint": {
+                "x": 0,
+                "y": 0
+              },
+              "connectedWalls": [
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_v6wfghqmnpwksoqr",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [0, 0],
+                    "end": [4, 0],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "start"
+                },
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_uk11r2ommw87mlt7",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [0, 3],
+                    "end": [0, 0],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "end"
+                }
+              ]
+            }
+          ],
+          [
+            "4000,0",
+            {
+              "meetingPoint": {
+                "x": 4,
+                "y": 0
+              },
+              "connectedWalls": [
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_v6wfghqmnpwksoqr",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [0, 0],
+                    "end": [4, 0],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "end"
+                },
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_10usrztobrbkfqj8",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [4, 0],
+                    "end": [8, 0],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "start"
+                },
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_hyhbb4wtsu9si4lv",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [4, 0],
+                    "end": [4, 3],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "start"
+                }
+              ]
+            }
+          ],
+          [
+            "8000,0",
+            {
+              "meetingPoint": {
+                "x": 8,
+                "y": 0
+              },
+              "connectedWalls": [
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_10usrztobrbkfqj8",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [4, 0],
+                    "end": [8, 0],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "end"
+                },
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_itzhe3m4h9er75yb",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [8, 0],
+                    "end": [8, 3],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "start"
+                }
+              ]
+            }
+          ],
+          [
+            "8000,3000",
+            {
+              "meetingPoint": {
+                "x": 8,
+                "y": 3
+              },
+              "connectedWalls": [
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_itzhe3m4h9er75yb",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [8, 0],
+                    "end": [8, 3],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "end"
+                },
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_05jeqzxhxtvqw2q7",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [8, 3],
+                    "end": [4, 3],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "start"
+                }
+              ]
+            }
+          ],
+          [
+            "4000,3000",
+            {
+              "meetingPoint": {
+                "x": 4,
+                "y": 3
+              },
+              "connectedWalls": [
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_05jeqzxhxtvqw2q7",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [8, 3],
+                    "end": [4, 3],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "end"
+                },
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_4tujenozv0ovwh6e",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [4, 3],
+                    "end": [0, 3],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "start"
+                },
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_hyhbb4wtsu9si4lv",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [4, 0],
+                    "end": [4, 3],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "end"
+                }
+              ]
+            }
+          ],
+          [
+            "0,3000",
+            {
+              "meetingPoint": {
+                "x": 0,
+                "y": 3
+              },
+              "connectedWalls": [
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_4tujenozv0ovwh6e",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [4, 3],
+                    "end": [0, 3],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "end"
+                },
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_uk11r2ommw87mlt7",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [0, 3],
+                    "end": [0, 0],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "start"
+                }
+              ]
+            }
+          ]
+        ]
+      },
+      "footprints": [
+        [
+          {
+            "x": -0.05000000000000001,
+            "y": -0.05000000000000001
+          },
+          {
+            "x": 4,
+            "y": -0.05
+          },
+          {
+            "x": 4,
+            "y": 0
+          },
+          {
+            "x": 3.9500000000000006,
+            "y": 0.05000000000000001
+          },
+          {
+            "x": 0.05000000000000001,
+            "y": 0.05000000000000001
+          },
+          {
+            "x": 0,
+            "y": 0
+          }
+        ],
+        [
+          {
+            "x": 4,
+            "y": -0.05
+          },
+          {
+            "x": 8.05,
+            "y": -0.05000000000000001
+          },
+          {
+            "x": 8,
+            "y": 0
+          },
+          {
+            "x": 7.95,
+            "y": 0.05000000000000001
+          },
+          {
+            "x": 4.05,
+            "y": 0.05000000000000001
+          },
+          {
+            "x": 4,
+            "y": 0
+          }
+        ],
+        [
+          {
+            "x": 8.05,
+            "y": -0.05000000000000001
+          },
+          {
+            "x": 8.05,
+            "y": 3.0499999999999994
+          },
+          {
+            "x": 8,
+            "y": 3
+          },
+          {
+            "x": 7.95,
+            "y": 2.9500000000000006
+          },
+          {
+            "x": 7.95,
+            "y": 0.05000000000000001
+          },
+          {
+            "x": 8,
+            "y": 0
+          }
+        ],
+        [
+          {
+            "x": 8.05,
+            "y": 3.0499999999999994
+          },
+          {
+            "x": 4,
+            "y": 3.05
+          },
+          {
+            "x": 4,
+            "y": 3
+          },
+          {
+            "x": 4.05,
+            "y": 2.9500000000000006
+          },
+          {
+            "x": 7.95,
+            "y": 2.9500000000000006
+          },
+          {
+            "x": 8,
+            "y": 3
+          }
+        ],
+        [
+          {
+            "x": 4,
+            "y": 3.05
+          },
+          {
+            "x": -0.05000000000000001,
+            "y": 3.0499999999999994
+          },
+          {
+            "x": 0,
+            "y": 3
+          },
+          {
+            "x": 0.05000000000000001,
+            "y": 2.9500000000000006
+          },
+          {
+            "x": 3.9500000000000006,
+            "y": 2.9500000000000006
+          },
+          {
+            "x": 4,
+            "y": 3
+          }
+        ],
+        [
+          {
+            "x": -0.05000000000000001,
+            "y": 3.0499999999999994
+          },
+          {
+            "x": -0.05000000000000001,
+            "y": -0.05000000000000001
+          },
+          {
+            "x": 0,
+            "y": 0
+          },
+          {
+            "x": 0.05000000000000001,
+            "y": 0.05000000000000001
+          },
+          {
+            "x": 0.05000000000000001,
+            "y": 2.9500000000000006
+          },
+          {
+            "x": 0,
+            "y": 3
+          }
+        ],
+        [
+          {
+            "x": 4.05,
+            "y": 0.05000000000000001
+          },
+          {
+            "x": 4.05,
+            "y": 2.9500000000000006
+          },
+          {
+            "x": 4,
+            "y": 3
+          },
+          {
+            "x": 3.9500000000000006,
+            "y": 2.9500000000000006
+          },
+          {
+            "x": 3.9500000000000006,
+            "y": 0.05000000000000001
+          },
+          {
+            "x": 4,
+            "y": 0
+          }
+        ]
+      ],
+      "polygons": [
+        [
+          [4, -0.05],
+          [4, 3.05],
+          [-0.04999999999999982, 3.05],
+          [-0.05, -0.04999999999999982]
+        ],
+        [[8.05, -0.05], [8.05, 3.05], [4, 3.05], [4, -0.04999999999999982]]
+      ],
+      "support": [
+        {
+          "elevation": 0.05,
+          "electedSlabId": "slab_8iidf8weskkvq5z4",
+          "baseElevation": 0.05,
+          "baseSegments": [
+            {
+              "start": 0,
+              "end": 1,
+              "elevation": 0.05
+            }
+          ]
+        },
+        {
+          "elevation": 0.05,
+          "electedSlabId": "slab_ldunjvnzb98jq1r5",
+          "baseElevation": 0.05,
+          "baseSegments": [
+            {
+              "start": 0,
+              "end": 1,
+              "elevation": 0.05
+            }
+          ]
+        },
+        {
+          "elevation": 0.05,
+          "electedSlabId": "slab_ldunjvnzb98jq1r5",
+          "baseElevation": 0.05,
+          "baseSegments": [
+            {
+              "start": 0,
+              "end": 1,
+              "elevation": 0.05
+            }
+          ]
+        },
+        {
+          "elevation": 0.05,
+          "electedSlabId": "slab_ldunjvnzb98jq1r5",
+          "baseElevation": 0.05,
+          "baseSegments": [
+            {
+              "start": 0,
+              "end": 1,
+              "elevation": 0.05
+            }
+          ]
+        },
+        {
+          "elevation": 0.05,
+          "electedSlabId": "slab_8iidf8weskkvq5z4",
+          "baseElevation": 0.05,
+          "baseSegments": [
+            {
+              "start": 0,
+              "end": 1,
+              "elevation": 0.05
+            }
+          ]
+        },
+        {
+          "elevation": 0.05,
+          "electedSlabId": "slab_8iidf8weskkvq5z4",
+          "baseElevation": 0.05,
+          "baseSegments": [
+            {
+              "start": 0,
+              "end": 1,
+              "elevation": 0.05
+            }
+          ]
+        },
+        {
+          "elevation": 0.05,
+          "electedSlabId": "slab_8iidf8weskkvq5z4",
+          "baseElevation": 0.05,
+          "baseSegments": [
+            {
+              "start": 0,
+              "end": 1,
+              "elevation": 0.05
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "walls": [
+      {
+        "object": "node",
+        "id": "wall_v6wfghqmnpwksoqr",
+        "type": "wall",
+        "parentId": null,
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "thickness": 0.1,
+        "start": [0, 0],
+        "end": [4, 0],
+        "frontSide": "unknown",
+        "backSide": "unknown"
+      },
+      {
+        "object": "node",
+        "id": "wall_10usrztobrbkfqj8",
+        "type": "wall",
+        "parentId": null,
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "thickness": 0.1,
+        "start": [4, 0],
+        "end": [8, 0],
+        "frontSide": "unknown",
+        "backSide": "unknown"
+      },
+      {
+        "object": "node",
+        "id": "wall_itzhe3m4h9er75yb",
+        "type": "wall",
+        "parentId": null,
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "thickness": 0.1,
+        "start": [8, 0],
+        "end": [8, 3],
+        "frontSide": "unknown",
+        "backSide": "unknown"
+      },
+      {
+        "object": "node",
+        "id": "wall_05jeqzxhxtvqw2q7",
+        "type": "wall",
+        "parentId": null,
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "thickness": 0.1,
+        "start": [8, 3],
+        "end": [4, 3],
+        "frontSide": "unknown",
+        "backSide": "unknown"
+      },
+      {
+        "object": "node",
+        "id": "wall_4tujenozv0ovwh6e",
+        "type": "wall",
+        "parentId": null,
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "thickness": 0.1,
+        "start": [4, 3],
+        "end": [0, 3],
+        "frontSide": "unknown",
+        "backSide": "unknown"
+      },
+      {
+        "object": "node",
+        "id": "wall_uk11r2ommw87mlt7",
+        "type": "wall",
+        "parentId": null,
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "thickness": 0.1,
+        "start": [0, 3],
+        "end": [0, 0],
+        "frontSide": "unknown",
+        "backSide": "unknown"
+      },
+      {
+        "object": "node",
+        "id": "wall_hyhbb4wtsu9si4lv",
+        "type": "wall",
+        "parentId": null,
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "thickness": 0.1,
+        "start": [4, 0],
+        "end": [4, 3],
+        "frontSide": "unknown",
+        "backSide": "unknown"
+      }
+    ],
+    "slabs": [
+      {
+        "object": "node",
+        "id": "slab_8iidf8weskkvq5z4",
+        "type": "slab",
+        "parentId": null,
+        "visible": true,
+        "metadata": {},
+        "polygon": [[0, 0], [4, 0], [4, 3], [0, 3]],
+        "holes": [],
+        "holeMetadata": [],
+        "elevation": 0.4,
+        "thickness": 0.4,
+        "recessed": false,
+        "autoFromWalls": true
+      },
+      {
+        "object": "node",
+        "id": "slab_ldunjvnzb98jq1r5",
+        "type": "slab",
+        "parentId": null,
+        "visible": true,
+        "metadata": {},
+        "polygon": [[4, 0], [8, 0], [8, 3], [4, 3]],
+        "holes": [],
+        "holeMetadata": [],
+        "elevation": 0.05,
+        "thickness": 0.05,
+        "recessed": false,
+        "autoFromWalls": true
+      }
+    ],
+    "output": {
+      "miters": {
+        "junctionData": [
+          [
+            "0,0",
+            [
+              [
+                "wall_v6wfghqmnpwksoqr",
+                {
+                  "left": {
+                    "x": 0.05000000000000001,
+                    "y": 0.05000000000000001
+                  },
+                  "right": {
+                    "x": -0.05000000000000001,
+                    "y": -0.05000000000000001
+                  }
+                }
+              ],
+              [
+                "wall_uk11r2ommw87mlt7",
+                {
+                  "right": {
+                    "x": 0.05000000000000001,
+                    "y": 0.05000000000000001
+                  },
+                  "left": {
+                    "x": -0.05000000000000001,
+                    "y": -0.05000000000000001
+                  }
+                }
+              ]
+            ]
+          ],
+          [
+            "4000,0",
+            [
+              [
+                "wall_10usrztobrbkfqj8",
+                {
+                  "left": {
+                    "x": 4.05,
+                    "y": 0.05000000000000001
+                  }
+                }
+              ],
+              [
+                "wall_hyhbb4wtsu9si4lv",
+                {
+                  "right": {
+                    "x": 4.05,
+                    "y": 0.05000000000000001
+                  },
+                  "left": {
+                    "x": 3.9500000000000006,
+                    "y": 0.05000000000000001
+                  }
+                }
+              ],
+              [
+                "wall_v6wfghqmnpwksoqr",
+                {
+                  "right": {
+                    "x": 3.9500000000000006,
+                    "y": 0.05000000000000001
+                  }
+                }
+              ]
+            ]
+          ],
+          [
+            "8000,0",
+            [
+              [
+                "wall_itzhe3m4h9er75yb",
+                {
+                  "left": {
+                    "x": 7.95,
+                    "y": 0.05000000000000001
+                  },
+                  "right": {
+                    "x": 8.05,
+                    "y": -0.05000000000000001
+                  }
+                }
+              ],
+              [
+                "wall_10usrztobrbkfqj8",
+                {
+                  "right": {
+                    "x": 7.95,
+                    "y": 0.05000000000000001
+                  },
+                  "left": {
+                    "x": 8.05,
+                    "y": -0.05000000000000001
+                  }
+                }
+              ]
+            ]
+          ],
+          [
+            "8000,3000",
+            [
+              [
+                "wall_itzhe3m4h9er75yb",
+                {
+                  "left": {
+                    "x": 8.05,
+                    "y": 3.0499999999999994
+                  },
+                  "right": {
+                    "x": 7.95,
+                    "y": 2.9500000000000006
+                  }
+                }
+              ],
+              [
+                "wall_05jeqzxhxtvqw2q7",
+                {
+                  "right": {
+                    "x": 8.05,
+                    "y": 3.0499999999999994
+                  },
+                  "left": {
+                    "x": 7.95,
+                    "y": 2.9500000000000006
+                  }
+                }
+              ]
+            ]
+          ],
+          [
+            "4000,3000",
+            [
+              [
+                "wall_hyhbb4wtsu9si4lv",
+                {
+                  "left": {
+                    "x": 4.05,
+                    "y": 2.9500000000000006
+                  },
+                  "right": {
+                    "x": 3.9500000000000006,
+                    "y": 2.9500000000000006
+                  }
+                }
+              ],
+              [
+                "wall_05jeqzxhxtvqw2q7",
+                {
+                  "right": {
+                    "x": 4.05,
+                    "y": 2.9500000000000006
+                  }
+                }
+              ],
+              [
+                "wall_4tujenozv0ovwh6e",
+                {
+                  "left": {
+                    "x": 3.9500000000000006,
+                    "y": 2.9500000000000006
+                  }
+                }
+              ]
+            ]
+          ],
+          [
+            "0,3000",
+            [
+              [
+                "wall_uk11r2ommw87mlt7",
+                {
+                  "left": {
+                    "x": 0.05000000000000001,
+                    "y": 2.9500000000000006
+                  },
+                  "right": {
+                    "x": -0.05000000000000001,
+                    "y": 3.0499999999999994
+                  }
+                }
+              ],
+              [
+                "wall_4tujenozv0ovwh6e",
+                {
+                  "right": {
+                    "x": 0.05000000000000001,
+                    "y": 2.9500000000000006
+                  },
+                  "left": {
+                    "x": -0.05000000000000001,
+                    "y": 3.0499999999999994
+                  }
+                }
+              ]
+            ]
+          ]
+        ],
+        "junctions": [
+          [
+            "0,0",
+            {
+              "meetingPoint": {
+                "x": 0,
+                "y": 0
+              },
+              "connectedWalls": [
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_v6wfghqmnpwksoqr",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [0, 0],
+                    "end": [4, 0],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "start"
+                },
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_uk11r2ommw87mlt7",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [0, 3],
+                    "end": [0, 0],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "end"
+                }
+              ]
+            }
+          ],
+          [
+            "4000,0",
+            {
+              "meetingPoint": {
+                "x": 4,
+                "y": 0
+              },
+              "connectedWalls": [
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_v6wfghqmnpwksoqr",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [0, 0],
+                    "end": [4, 0],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "end"
+                },
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_10usrztobrbkfqj8",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [4, 0],
+                    "end": [8, 0],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "start"
+                },
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_hyhbb4wtsu9si4lv",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [4, 0],
+                    "end": [4, 3],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "start"
+                }
+              ]
+            }
+          ],
+          [
+            "8000,0",
+            {
+              "meetingPoint": {
+                "x": 8,
+                "y": 0
+              },
+              "connectedWalls": [
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_10usrztobrbkfqj8",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [4, 0],
+                    "end": [8, 0],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "end"
+                },
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_itzhe3m4h9er75yb",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [8, 0],
+                    "end": [8, 3],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "start"
+                }
+              ]
+            }
+          ],
+          [
+            "8000,3000",
+            {
+              "meetingPoint": {
+                "x": 8,
+                "y": 3
+              },
+              "connectedWalls": [
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_itzhe3m4h9er75yb",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [8, 0],
+                    "end": [8, 3],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "end"
+                },
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_05jeqzxhxtvqw2q7",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [8, 3],
+                    "end": [4, 3],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "start"
+                }
+              ]
+            }
+          ],
+          [
+            "4000,3000",
+            {
+              "meetingPoint": {
+                "x": 4,
+                "y": 3
+              },
+              "connectedWalls": [
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_05jeqzxhxtvqw2q7",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [8, 3],
+                    "end": [4, 3],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "end"
+                },
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_4tujenozv0ovwh6e",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [4, 3],
+                    "end": [0, 3],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "start"
+                },
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_hyhbb4wtsu9si4lv",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [4, 0],
+                    "end": [4, 3],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "end"
+                }
+              ]
+            }
+          ],
+          [
+            "0,3000",
+            {
+              "meetingPoint": {
+                "x": 0,
+                "y": 3
+              },
+              "connectedWalls": [
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_4tujenozv0ovwh6e",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [4, 3],
+                    "end": [0, 3],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "end"
+                },
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_uk11r2ommw87mlt7",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [0, 3],
+                    "end": [0, 0],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "start"
+                }
+              ]
+            }
+          ]
+        ]
+      },
+      "footprints": [
+        [
+          {
+            "x": -0.05000000000000001,
+            "y": -0.05000000000000001
+          },
+          {
+            "x": 4,
+            "y": -0.05
+          },
+          {
+            "x": 4,
+            "y": 0
+          },
+          {
+            "x": 3.9500000000000006,
+            "y": 0.05000000000000001
+          },
+          {
+            "x": 0.05000000000000001,
+            "y": 0.05000000000000001
+          },
+          {
+            "x": 0,
+            "y": 0
+          }
+        ],
+        [
+          {
+            "x": 4,
+            "y": -0.05
+          },
+          {
+            "x": 8.05,
+            "y": -0.05000000000000001
+          },
+          {
+            "x": 8,
+            "y": 0
+          },
+          {
+            "x": 7.95,
+            "y": 0.05000000000000001
+          },
+          {
+            "x": 4.05,
+            "y": 0.05000000000000001
+          },
+          {
+            "x": 4,
+            "y": 0
+          }
+        ],
+        [
+          {
+            "x": 8.05,
+            "y": -0.05000000000000001
+          },
+          {
+            "x": 8.05,
+            "y": 3.0499999999999994
+          },
+          {
+            "x": 8,
+            "y": 3
+          },
+          {
+            "x": 7.95,
+            "y": 2.9500000000000006
+          },
+          {
+            "x": 7.95,
+            "y": 0.05000000000000001
+          },
+          {
+            "x": 8,
+            "y": 0
+          }
+        ],
+        [
+          {
+            "x": 8.05,
+            "y": 3.0499999999999994
+          },
+          {
+            "x": 4,
+            "y": 3.05
+          },
+          {
+            "x": 4,
+            "y": 3
+          },
+          {
+            "x": 4.05,
+            "y": 2.9500000000000006
+          },
+          {
+            "x": 7.95,
+            "y": 2.9500000000000006
+          },
+          {
+            "x": 8,
+            "y": 3
+          }
+        ],
+        [
+          {
+            "x": 4,
+            "y": 3.05
+          },
+          {
+            "x": -0.05000000000000001,
+            "y": 3.0499999999999994
+          },
+          {
+            "x": 0,
+            "y": 3
+          },
+          {
+            "x": 0.05000000000000001,
+            "y": 2.9500000000000006
+          },
+          {
+            "x": 3.9500000000000006,
+            "y": 2.9500000000000006
+          },
+          {
+            "x": 4,
+            "y": 3
+          }
+        ],
+        [
+          {
+            "x": -0.05000000000000001,
+            "y": 3.0499999999999994
+          },
+          {
+            "x": -0.05000000000000001,
+            "y": -0.05000000000000001
+          },
+          {
+            "x": 0,
+            "y": 0
+          },
+          {
+            "x": 0.05000000000000001,
+            "y": 0.05000000000000001
+          },
+          {
+            "x": 0.05000000000000001,
+            "y": 2.9500000000000006
+          },
+          {
+            "x": 0,
+            "y": 3
+          }
+        ],
+        [
+          {
+            "x": 4.05,
+            "y": 0.05000000000000001
+          },
+          {
+            "x": 4.05,
+            "y": 2.9500000000000006
+          },
+          {
+            "x": 4,
+            "y": 3
+          },
+          {
+            "x": 3.9500000000000006,
+            "y": 2.9500000000000006
+          },
+          {
+            "x": 3.9500000000000006,
+            "y": 0.05000000000000001
+          },
+          {
+            "x": 4,
+            "y": 0
+          }
+        ]
+      ],
+      "polygons": [
+        [
+          [4.05, -0.05],
+          [4.05, 3.05],
+          [-0.04999999999999982, 3.05],
+          [-0.05, -0.04999999999999982]
+        ],
+        [
+          [8.05, -0.05],
+          [8.05, 3.05],
+          [4.049999999999999, 3.05],
+          [4.05, -0.04999999999999982]
+        ]
+      ],
+      "support": [
+        {
+          "elevation": 0.4,
+          "electedSlabId": "slab_8iidf8weskkvq5z4",
+          "baseElevation": 0.4,
+          "baseSegments": [
+            {
+              "start": 0,
+              "end": 1,
+              "elevation": 0.4
+            }
+          ]
+        },
+        {
+          "elevation": 0.05,
+          "electedSlabId": "slab_ldunjvnzb98jq1r5",
+          "baseElevation": 0,
+          "baseSegments": [
+            {
+              "start": 0,
+              "end": 0.012499999999999947,
+              "elevation": 0
+            },
+            {
+              "start": 0.012499999999999947,
+              "end": 1,
+              "elevation": 0.05
+            }
+          ]
+        },
+        {
+          "elevation": 0.05,
+          "electedSlabId": "slab_ldunjvnzb98jq1r5",
+          "baseElevation": 0.05,
+          "baseSegments": [
+            {
+              "start": 0,
+              "end": 1,
+              "elevation": 0.05
+            }
+          ]
+        },
+        {
+          "elevation": 0.05,
+          "electedSlabId": "slab_ldunjvnzb98jq1r5",
+          "baseElevation": 0,
+          "baseSegments": [
+            {
+              "start": 0,
+              "end": 0.9875000000000004,
+              "elevation": 0.05
+            },
+            {
+              "start": 0.9875000000000004,
+              "end": 1,
+              "elevation": 0
+            }
+          ]
+        },
+        {
+          "elevation": 0.4,
+          "electedSlabId": "slab_8iidf8weskkvq5z4",
+          "baseElevation": 0.4,
+          "baseSegments": [
+            {
+              "start": 0,
+              "end": 1,
+              "elevation": 0.4
+            }
+          ]
+        },
+        {
+          "elevation": 0.4,
+          "electedSlabId": "slab_8iidf8weskkvq5z4",
+          "baseElevation": 0.4,
+          "baseSegments": [
+            {
+              "start": 0,
+              "end": 1,
+              "elevation": 0.4
+            }
+          ]
+        },
+        {
+          "elevation": 0.4,
+          "electedSlabId": "slab_8iidf8weskkvq5z4",
+          "baseElevation": 0.4,
+          "baseSegments": [
+            {
+              "start": 0,
+              "end": 1,
+              "elevation": 0.4
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "walls": [
+      {
+        "object": "node",
+        "id": "wall_avig3bvkfsy5nam1",
+        "type": "wall",
+        "parentId": null,
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "thickness": 0.3,
+        "curveOffset": 0.4,
+        "start": [10, 10],
+        "end": [14, 12],
+        "frontSide": "unknown",
+        "backSide": "unknown"
+      },
+      {
+        "object": "node",
+        "id": "wall_v5697vc9uc6v70jj",
+        "type": "wall",
+        "parentId": null,
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "thickness": 0.2,
+        "start": [14, 12],
+        "end": [16, 9],
+        "frontSide": "unknown",
+        "backSide": "unknown"
+      },
+      {
+        "object": "node",
+        "id": "wall_gadr3d6ptj839lwa",
+        "type": "wall",
+        "parentId": null,
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "thickness": 0.1,
+        "start": [16, 9],
+        "end": [20, 9],
+        "frontSide": "unknown",
+        "backSide": "unknown"
+      },
+      {
+        "object": "node",
+        "id": "wall_se8453eb6nymm4dl",
+        "type": "wall",
+        "parentId": null,
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "start": [22, 0],
+        "end": [23, 2],
+        "frontSide": "unknown",
+        "backSide": "unknown"
+      }
+    ],
+    "slabs": [],
+    "output": {
+      "miters": {
+        "junctionData": [
+          [
+            "14000,12000",
+            [
+              [
+                "wall_avig3bvkfsy5nam1",
+                {
+                  "left": {
+                    "x": 14.015212481907616,
+                    "y": 11.796903713365376
+                  },
+                  "right": {
+                    "x": 13.984787518092386,
+                    "y": 12.203096286634624
+                  }
+                }
+              ],
+              [
+                "wall_v5697vc9uc6v70jj",
+                {
+                  "right": {
+                    "x": 14.015212481907616,
+                    "y": 11.796903713365376
+                  },
+                  "left": {
+                    "x": 13.984787518092386,
+                    "y": 12.203096286634624
+                  }
+                }
+              ]
+            ]
+          ],
+          [
+            "16000,9000",
+            [
+              [
+                "wall_gadr3d6ptj839lwa",
+                {
+                  "left": {
+                    "x": 16.086851709182135,
+                    "y": 9.05
+                  },
+                  "right": {
+                    "x": 15.913148290817865,
+                    "y": 8.95
+                  }
+                }
+              ],
+              [
+                "wall_v5697vc9uc6v70jj",
+                {
+                  "right": {
+                    "x": 16.086851709182135,
+                    "y": 9.05
+                  },
+                  "left": {
+                    "x": 15.913148290817865,
+                    "y": 8.95
+                  }
+                }
+              ]
+            ]
+          ]
+        ],
+        "junctions": [
+          [
+            "14000,12000",
+            {
+              "meetingPoint": {
+                "x": 14,
+                "y": 12
+              },
+              "connectedWalls": [
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_avig3bvkfsy5nam1",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.3,
+                    "curveOffset": 0.4,
+                    "start": [10, 10],
+                    "end": [14, 12],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "end"
+                },
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_v5697vc9uc6v70jj",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.2,
+                    "start": [14, 12],
+                    "end": [16, 9],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "start"
+                }
+              ]
+            }
+          ],
+          [
+            "16000,9000",
+            {
+              "meetingPoint": {
+                "x": 16,
+                "y": 9
+              },
+              "connectedWalls": [
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_v5697vc9uc6v70jj",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.2,
+                    "start": [14, 12],
+                    "end": [16, 9],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "end"
+                },
+                {
+                  "wall": {
+                    "object": "node",
+                    "id": "wall_gadr3d6ptj839lwa",
+                    "type": "wall",
+                    "parentId": null,
+                    "visible": true,
+                    "metadata": {},
+                    "children": [],
+                    "thickness": 0.1,
+                    "start": [16, 9],
+                    "end": [20, 9],
+                    "frontSide": "unknown",
+                    "backSide": "unknown"
+                  },
+                  "endType": "start"
+                }
+              ]
+            }
+          ]
+        ]
+      },
+      "footprints": [
+        [
+          {
+            "x": 10.01641028494825,
+            "y": 9.850900360336059
+          },
+          {
+            "x": 10.209613708378917,
+            "y": 9.875054206242964
+          },
+          {
+            "x": 10.402020569773539,
+            "y": 9.90489663887997
+          },
+          {
+            "x": 10.59346341433503,
+            "y": 9.940401685896267
+          },
+          {
+            "x": 10.783775626265705,
+            "y": 9.981538446676355
+          },
+          {
+            "x": 10.97279157377571,
+            "y": 10.028271119233338
+          },
+          {
+            "x": 11.160346753235045,
+            "y": 10.08055903136799
+          },
+          {
+            "x": 11.346277932343716,
+            "y": 10.138356676066403
+          },
+          {
+            "x": 11.530423292195447,
+            "y": 10.201613751105489
+          },
+          {
+            "x": 11.71262256811129,
+            "y": 10.270275202831813
+          },
+          {
+            "x": 11.892717189120553,
+            "y": 10.344281274075689
+          },
+          {
+            "x": 12.070550415967686,
+            "y": 10.423567556158783
+          },
+          {
+            "x": 12.245967477524978,
+            "y": 10.508065044950046
+          },
+          {
+            "x": 12.418815705492364,
+            "y": 10.597700200921121
+          },
+          {
+            "x": 12.588944667267118,
+            "y": 10.692395013148973
+          },
+          {
+            "x": 12.756206296867777,
+            "y": 10.79206706721006
+          },
+          {
+            "x": 12.920455023798343,
+            "y": 10.896629616906935
+          },
+          {
+            "x": 13.081547899740649,
+            "y": 11.005991659764868
+          },
+          {
+            "x": 13.239344722964582,
+            "y": 11.120058016232758
+          },
+          {
+            "x": 13.393708160347902,
+            "y": 11.238729412519435
+          },
+          {
+            "x": 13.544503866899495,
+            "y": 11.361902566993248
+          },
+          {
+            "x": 13.69160060268197,
+            "y": 11.489470280069737
+          },
+          {
+            "x": 13.834870347031899,
+            "y": 11.621321527509151
+          },
+          {
+            "x": 13.974188409978279,
+            "y": 11.757341557042645
+          },
+          {
+            "x": 14.015212481907616,
+            "y": 11.796903713365376
+          },
+          {
+            "x": 13.984787518092386,
+            "y": 12.203096286634624
+          },
+          {
+            "x": 13.761468834398595,
+            "y": 11.96888441833841
+          },
+          {
+            "x": 13.628483410677052,
+            "y": 11.839047117420074
+          },
+          {
+            "x": 13.491725927433937,
+            "y": 11.713189108500634
+          },
+          {
+            "x": 13.351315406914301,
+            "y": 11.591419927836714
+          },
+          {
+            "x": 13.207374050660508,
+            "y": 11.47384555311171
+          },
+          {
+            "x": 13.060027133158247,
+            "y": 11.3605683112017
+          },
+          {
+            "x": 12.909402892808131,
+            "y": 11.251686789118716
+          },
+          {
+            "x": 12.755632420317749,
+            "y": 11.147295748208869
+          },
+          {
+            "x": 12.598849544611298,
+            "y": 11.047486041680035
+          },
+          {
+            "x": 12.439190716356123,
+            "y": 10.952344535530814
+          },
+          {
+            "x": 12.276794889207494,
+            "y": 10.861954032949683
+          },
+          {
+            "x": 12.11180339887499,
+            "y": 10.776393202250022
+          },
+          {
+            "x": 11.944359840115757,
+            "y": 10.695736508403815
+          },
+          {
+            "x": 11.774609941761675,
+            "y": 10.62005414823359
+          },
+          {
+            "x": 11.602701439889195,
+            "y": 10.549411989318981
+          },
+          {
+            "x": 11.428783949242256,
+            "y": 10.483871512671124
+          },
+          {
+            "x": 11.253008833020148,
+            "y": 10.423489759224724
+          },
+          {
+            "x": 11.07552907114369,
+            "y": 10.36831928019442
+          },
+          {
+            "x": 10.896499127114327,
+            "y": 10.318408091338618
+          },
+          {
+            "x": 10.716074813582047,
+            "y": 10.273799631170588
+          },
+          {
+            "x": 10.53441315673913,
+            "y": 10.234532723153231
+          },
+          {
+            "x": 10.35167225965771,
+            "y": 10.200641541910402
+          },
+          {
+            "x": 10.168011164690114,
+            "y": 10.17215558348417
+          },
+          {
+            "x": 9.98358971505175,
+            "y": 10.149099639663941
+          }
+        ],
+        [
+          {
+            "x": 14.015212481907616,
+            "y": 11.796903713365376
+          },
+          {
+            "x": 15.913148290817865,
+            "y": 8.95
+          },
+          {
+            "x": 16,
+            "y": 9
+          },
+          {
+            "x": 16.086851709182135,
+            "y": 9.05
+          },
+          {
+            "x": 13.984787518092386,
+            "y": 12.203096286634624
+          },
+          {
+            "x": 14,
+            "y": 12
+          }
+        ],
+        [
+          {
+            "x": 15.913148290817865,
+            "y": 8.95
+          },
+          {
+            "x": 20,
+            "y": 8.95
+          },
+          {
+            "x": 20,
+            "y": 9.05
+          },
+          {
+            "x": 16.086851709182135,
+            "y": 9.05
+          },
+          {
+            "x": 16,
+            "y": 9
+          }
+        ],
+        [
+          {
+            "x": 22.044721359549996,
+            "y": -0.022360679774997897
+          },
+          {
+            "x": 23.044721359549996,
+            "y": 1.977639320225002
+          },
+          {
+            "x": 22.955278640450004,
+            "y": 2.022360679774998
+          },
+          {
+            "x": 21.955278640450004,
+            "y": 0.022360679774997897
+          }
+        ]
+      ],
+      "polygons": [],
+      "support": [
+        {
+          "elevation": 0,
+          "electedSlabId": null,
+          "baseElevation": 0,
+          "baseSegments": [
+            {
+              "start": 0,
+              "end": 1,
+              "elevation": 0
+            }
+          ]
+        },
+        {
+          "elevation": 0,
+          "electedSlabId": null,
+          "baseElevation": 0,
+          "baseSegments": [
+            {
+              "start": 0,
+              "end": 1,
+              "elevation": 0
+            }
+          ]
+        },
+        {
+          "elevation": 0,
+          "electedSlabId": null,
+          "baseElevation": 0,
+          "baseSegments": [
+            {
+              "start": 0,
+              "end": 1,
+              "elevation": 0
+            }
+          ]
+        },
+        {
+          "elevation": 0,
+          "electedSlabId": null,
+          "baseElevation": 0,
+          "baseSegments": [
+            {
+              "start": 0,
+              "end": 1,
+              "elevation": 0
+            }
+          ]
+        }
+      ]
+    }
+  }
+]

@@ -12,7 +12,7 @@ import {
   slabPolygonContextFromGeometry,
   WallNode,
 } from '@pascal-app/core'
-import { type Group, Mesh } from 'three'
+import { type Group, Mesh, type MeshStandardMaterial } from 'three'
 import { buildSlabGeometry } from '../geometry'
 
 function meshesOf(group: Group): Mesh[] {
@@ -350,4 +350,29 @@ describe('buildSlabGeometry on empty and collapsed polygons', () => {
     }
     expect(counts).toEqual([0, 2, 0, 0, 2, 0, 0, 2, 0])
   })
+})
+
+test('side paint overrides migrated edge, riser and underside refs', () => {
+  const slab = SlabNode.parse({
+    polygon: [
+      [0, 0],
+      [2, 0],
+      [2, 2],
+      [0, 2],
+    ],
+    slots: {
+      side: 'scene:mat_new',
+      edge: 'scene:mat_old',
+      riser: 'scene:mat_old',
+      underside: 'scene:mat_old',
+    },
+  })
+  const ctx = geometryContext(SiteNode.parse({ id: 'site_paint' }))
+  ctx.materials = {
+    mat_new: { id: 'mat_new', name: 'New paint', material: { properties: { color: '#ff0000' } } },
+    mat_old: { id: 'mat_old', name: 'Old paint', material: { properties: { color: '#0000ff' } } },
+  }
+  const group = buildSlabGeometry(slab, ctx, 'rendered', true)
+  const sides = group.children.find((child) => child.userData.slotId === 'side') as Mesh
+  expect((sides.material as MeshStandardMaterial).color.getHexString()).toBe('ff0000')
 })

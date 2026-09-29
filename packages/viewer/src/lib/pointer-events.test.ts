@@ -22,7 +22,12 @@ import { acceleratedRaycast, computeBoundsTree } from 'three-mesh-bvh'
 import { createWithEqualityFn } from 'zustand/traditional'
 import useViewer from '../store/use-viewer'
 import { BATCHED_LAYER } from './layers'
-import { choosePointerEvents, createPascalPointerEvents, markPureRaycast } from './pointer-events'
+import {
+  choosePointerEvents,
+  createPascalPointerEvents,
+  hasMaterialsForGroups,
+  markPureRaycast,
+} from './pointer-events'
 
 extend({ Group: THREE.Group })
 
@@ -638,6 +643,24 @@ describe('R3F 9.6.1 pointer-event differential', () => {
       f.send('onPointerDown')
     })
     expect(cached.calls.get('b')).toBe(1)
+  })
+
+  test('a mesh missing a material for one of its groups is skipped, not thrown on', async () => {
+    const f = await fixture(createPascalPointerEvents)
+    const broken = f.mesh('broken')
+    f.mesh('good')
+    const material = new THREE.MeshBasicMaterial()
+    // A paint preview restored a three-entry palette over a rebuilt geometry
+    // that draws a fourth: three's raycast would read `undefined.side`.
+    broken.material = [material, material, material]
+    broken.geometry = new THREE.BufferGeometry()
+    for (const index of [0, 2, 3]) broken.geometry.addGroup(0, 3, index)
+    expect(hasMaterialsForGroups(broken)).toBe(false)
+    expect(() => f.send('onPointerMove')).not.toThrow()
+    expect(f.calls.has('broken')).toBe(false)
+    expect(f.calls.get('good')).toBe(1)
+    broken.material = [material, material, material, material]
+    expect(hasMaterialsForGroups(broken)).toBe(true)
   })
 
   test('collection skips interaction slots deleted during raycasting', async () => {

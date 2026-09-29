@@ -84,6 +84,7 @@ export function planWallDivision(
   nodes: Record<AnyNodeId, AnyNode>,
   wallId: WallNode['id'],
   distance: number,
+  mintId?: () => string,
 ) {
   const wall = nodes[wallId]
   if (wall?.type !== 'wall' || !wall.parentId) throw Error('Select a wall.')
@@ -95,6 +96,7 @@ export function planWallDivision(
     levelId: wall.parentId as AnyNodeId,
     point: [point.x, point.y],
     radius: 0.001,
+    mintId,
     ignoreWallIds: Object.values(nodes)
       .filter((n) => n.type === 'wall' && n.id !== wallId)
       .map((n) => n.id),

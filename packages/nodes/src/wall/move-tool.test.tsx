@@ -4,7 +4,6 @@ import {
   type AnyNode,
   type AnyNodeId,
   clearSceneHistory,
-  detectSpacesForLevel,
   emitter,
   GROUND_SUPPORT_ID,
   getSceneHistoryPauseDepth,
@@ -18,7 +17,6 @@ import {
   useLiveNodeOverrides,
   useScene,
   WallNode,
-  ZoneNode,
 } from '@pascal-app/core'
 import { useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
@@ -214,14 +212,17 @@ function polygonArea(polygon: Array<[number, number]>) {
   return Math.abs(sum) / 2
 }
 
-/** Floor area the viewer shows: each slab's live preview polygon, else its stored one. */
-function effectiveSlabArea() {
-  return nodesOfType('slab').reduce((total, slab) => {
-    const preview = useLiveNodeOverrides.getState().get(slab.id)?.polygon
+// Room-first model: each room is a zone (with its ceiling); the level's floor is one
+// derived plate, so room counts and room previews read zones, not slabs.
+
+/** Room area the viewer shows: each zone's live preview polygon, else its stored one. */
+function effectiveRoomArea() {
+  return nodesOfType('zone').reduce((total, zone) => {
+    const preview = useLiveNodeOverrides.getState().get(zone.id)?.polygon
     return (
       total +
       polygonArea(
-        (preview ?? (slab as { polygon: [number, number][] }).polygon) as Array<[number, number]>,
+        (preview ?? (zone as { polygon: [number, number][] }).polygon) as Array<[number, number]>,
       )
     )
   }, 0)
@@ -299,7 +300,7 @@ describe('3D wall move', () => {
   })
 
   test('commits one undo step that restores the walls and every derived surface', async () => {
-    expect(nodesOfType('slab')).toHaveLength(2)
+    expect(nodesOfType('zone')).toHaveLength(2)
     expect(nodesOfType('ceiling')).toHaveLength(2)
     const before = sceneNodes()
     const detect = spyOn(core, 'detectSpacesForLevel')
@@ -310,11 +311,11 @@ describe('3D wall move', () => {
     detect.mockRestore()
 
     // The preview moves the room surfaces with their walls without writing the store.
-    const slabPreviews = nodesOfType('slab').map(
-      (slab) => useLiveNodeOverrides.getState().get(slab.id)?.polygon as [number, number][],
+    const roomPreviews = nodesOfType('zone').map(
+      (zone) => useLiveNodeOverrides.getState().get(zone.id)?.polygon as [number, number][],
     )
-    expect(slabPreviews.every(Array.isArray)).toBe(true)
-    expect(slabPreviews.flat().some(([x]) => Math.abs(x - 2.5) < 1e-9)).toBe(true)
+    expect(roomPreviews.every(Array.isArray)).toBe(true)
+    expect(roomPreviews.flat().some(([x]) => Math.abs(x - 2.5) < 1e-9)).toBe(true)
     expect(useScene.getState().nodes).toEqual(before)
     expect(useScene.temporal.getState().pastStates).toHaveLength(0)
 
@@ -332,8 +333,8 @@ describe('3D wall move', () => {
     const moved = useScene.getState().nodes[DIVIDER_ID] as WallNode
     expect(moved.start).toEqual([2.5, 0])
     expect(moved.end).toEqual([2.5, 4])
-    const committedSlabs = nodesOfType('slab') as Array<{ polygon: [number, number][] }>
-    expect(committedSlabs.flatMap((slab) => slab.polygon).some(([x]) => x === 2.5)).toBe(true)
+    const committedRooms = nodesOfType('zone') as Array<{ polygon: [number, number][] }>
+    expect(committedRooms.flatMap((zone) => zone.polygon).some(([x]) => x === 2.5)).toBe(true)
     expect(useLiveNodeOverrides.getState().overrides.size).toBe(0)
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
     expect(getSceneHistoryPauseDepth()).toBe(0)
@@ -349,13 +350,13 @@ describe('3D wall move', () => {
   test('corner rooms follow a wall whose neighbours stretch with it', async () => {
     const east = 'wall_wall-move-east' as AnyNodeId
     const before = sceneNodes()
-    const eastRoomSlab = nodesOfType('slab').find((slab) =>
-      (slab as { polygon: [number, number][] }).polygon.some(([x]) => x === 4),
+    const eastRoom = nodesOfType('zone').find((zone) =>
+      (zone as { polygon: [number, number][] }).polygon.some(([x]) => x === 4),
     )!
 
     const renderer = await armWall(east)
     await dragFrom(4, 4.5)
-    const preview = useLiveNodeOverrides.getState().get(eastRoomSlab.id)?.polygon
+    const preview = useLiveNodeOverrides.getState().get(eastRoom.id)?.polygon
     expect(preview).toEqual(
       expect.arrayContaining([
         [4.5, 0],
@@ -370,7 +371,7 @@ describe('3D wall move', () => {
 
     const nodes = useScene.getState().nodes
     expect((nodes['wall_wall-move-south' as AnyNodeId] as WallNode).end).toEqual([4.5, 0])
-    expect((nodes[eastRoomSlab.id] as { polygon: [number, number][] }).polygon).toEqual(
+    expect((nodes[eastRoom.id] as { polygon: [number, number][] }).polygon).toEqual(
       expect.arrayContaining([
         [4.5, 0],
         [4.5, 4],
@@ -416,11 +417,11 @@ describe('3D wall move', () => {
         LEVEL_ID,
       )
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
-    expect(nodesOfType('slab')).toHaveLength(3)
+    expect(nodesOfType('zone')).toHaveLength(3)
 
     await moveCursor(2.5)
     // The preview follows the new rooms: the floors still tile the 4 × 4 box, no overlap.
-    expect(effectiveSlabArea()).toBeCloseTo(16, 6)
+    expect(effectiveRoomArea()).toBeCloseTo(16, 6)
     await act(async () => {
       window.dispatchEvent(new Event('pointerup'))
     })
@@ -430,10 +431,10 @@ describe('3D wall move', () => {
     useScene.temporal.getState().undo()
     expect((useScene.getState().nodes[DIVIDER_ID] as WallNode).start).toEqual([2, 0])
     expect(useScene.getState().nodes[foreignId]).toBeDefined()
-    expect(nodesOfType('slab')).toHaveLength(3)
+    expect(nodesOfType('zone')).toHaveLength(3)
   })
 
-  test('a bridged junction previews the floor the drop commits', async () => {
+  test('a bridged junction previews the rooms the drop commits', async () => {
     // A diagonal boundary meets the east wall at (4, 0): moving the east wall bridges that
     // junction along the south wall instead of stretching the diagonal.
     const east = 'wall_wall-move-east' as AnyNodeId
@@ -450,25 +451,14 @@ describe('3D wall move', () => {
         },
       ],
     })
-    const eastRoom = detectSpacesForLevel(LEVEL_ID, nodesOfType('wall') as WallNode[]).spaces.find(
-      (space) => space.polygon.some(([x]) => x === 4),
-    )!
-    const zone = ZoneNode.parse({
-      name: 'East room',
-      parentId: LEVEL_ID,
-      polygon: eastRoom.polygon,
-      autoFromWalls: true,
-      boundaryWallIds: eastRoom.wallIds,
-    })
-    useScene.getState().createNode(zone, LEVEL_ID)
     clearSceneHistory()
     const renderer = await armWall(east)
     await dragFrom(4, 4.5)
     const previews = new Map(
-      nodesOfType('slab').map((slab) => [
-        slab.id,
-        (useLiveNodeOverrides.getState().get(slab.id)?.polygon ??
-          (slab as { polygon: [number, number][] }).polygon) as Array<[number, number]>,
+      nodesOfType('zone').map((zone) => [
+        zone.id,
+        (useLiveNodeOverrides.getState().get(zone.id)?.polygon ??
+          (zone as { polygon: [number, number][] }).polygon) as Array<[number, number]>,
       ]),
     )
     await act(async () => {
@@ -477,21 +467,11 @@ describe('3D wall move', () => {
     await act(async () => renderer.unmount())
 
     expect(useScene.getState().nodes[east] as WallNode).toMatchObject({ start: [4.5, 0] })
-    const eastSlab = (nodesOfType('slab') as Array<{ polygon: [number, number][] }>).find((slab) =>
-      slab.polygon.some(([x]) => x === 4.5),
-    )!
-    expect(
-      normalizedPolygon(
-        (useScene.getState().nodes[zone.id as AnyNodeId] as { polygon: [number, number][] })
-          .polygon,
-      ),
-    ).toEqual(normalizedPolygon(eastSlab.polygon))
-    for (const slab of nodesOfType('slab') as Array<{
-      id: AnyNodeId
-      polygon: [number, number][]
-    }>) {
-      expect(previews.has(slab.id)).toBe(true)
-      expect(normalizedPolygon(previews.get(slab.id)!)).toEqual(normalizedPolygon(slab.polygon))
+    const zones = nodesOfType('zone') as Array<{ id: AnyNodeId; polygon: [number, number][] }>
+    expect(zones.some((zone) => zone.polygon.some(([x]) => x === 4.5))).toBe(true)
+    for (const zone of zones) {
+      expect(previews.has(zone.id)).toBe(true)
+      expect(normalizedPolygon(previews.get(zone.id)!)).toEqual(normalizedPolygon(zone.polygon))
     }
   })
 
@@ -537,7 +517,7 @@ describe('3D wall move', () => {
   })
 
   test('after a drop that merges rooms, nothing deleted stays marked dirty', async () => {
-    expect(nodesOfType('slab')).toHaveLength(2)
+    expect(nodesOfType('zone')).toHaveLength(2)
     const renderer = await armWall(DIVIDER_ID)
     await dragFrom(2, 0)
     await act(async () => {
@@ -546,7 +526,7 @@ describe('3D wall move', () => {
     await act(async () => renderer.unmount())
 
     const nodes = useScene.getState().nodes
-    expect(nodesOfType('slab').length).toBeLessThan(2)
+    expect(nodesOfType('zone').length).toBeLessThan(2)
     expect([...useScene.getState().dirtyNodes].filter((id) => !nodes[id as AnyNodeId])).toEqual([])
   })
 
@@ -665,7 +645,7 @@ describe('3D wall move', () => {
         LEVEL_ID,
       )
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
-    expect(nodesOfType('slab')).toHaveLength(3)
+    expect(nodesOfType('zone')).toHaveLength(3)
     await act(async () => {
       window.dispatchEvent(new Event('pointerup'))
     })
@@ -689,7 +669,7 @@ describe('3D wall move', () => {
         LEVEL_ID,
       )
     expect(useScene.temporal.getState().pastStates).toHaveLength(1)
-    expect(nodesOfType('slab')).toHaveLength(3)
+    expect(nodesOfType('zone')).toHaveLength(3)
     await floorplanPointer('pointerup', 2.5, 2)
     await act(async () => renderer.unmount())
     expect(useScene.temporal.getState().pastStates).toHaveLength(2)

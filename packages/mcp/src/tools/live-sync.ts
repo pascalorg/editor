@@ -1,22 +1,8 @@
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
-import { syncAutoStairOpenings } from '@pascal-app/core/stair-openings'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { SceneVersionConflictError } from '../storage/types'
 import { ErrorCode, throwMcpError } from './errors'
-
-export function syncDerivedStairOpenings(operations: SceneOperations): number {
-  const updates = syncAutoStairOpenings(operations.getNodes())
-  if (updates.length === 0) return 0
-  operations.applyPatch(
-    updates.map((update) => ({
-      op: 'update' as const,
-      id: update.id,
-      data: update.data,
-    })),
-  )
-  return updates.length
-}
 
 export type LiveSyncStatus = 'published' | 'unbound' | 'events_unsupported'
 
@@ -65,8 +51,6 @@ export async function publishLiveSceneSnapshot(
   operations: SceneOperations,
   kind: string,
 ): Promise<LiveSyncStatus> {
-  syncDerivedStairOpenings(operations)
-
   const active = operations.getActiveScene()
   if (!active) return 'unbound'
   if (!operations.canAppendSceneEvents) return 'events_unsupported'

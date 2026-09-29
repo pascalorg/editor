@@ -124,6 +124,19 @@
       }
     },
     {
+      "name": "create_mezzanine",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Creates mezzanine zone intent and reconciles its plate, railings and ceiling cutout.",
+        "destructiveHint": "Adds a stacked room while preserving the host room floor, identity and walls.",
+        "openWorldHint": "Only changes the active Pascal scene through the scene bridge."
+      }
+    },
+    {
       "name": "create_project",
       "annotations": {
         "readOnlyHint": false,
@@ -170,8 +183,8 @@
         "openWorldHint": false
       },
       "justifications": {
-        "readOnlyHint": "It is not read-only because creates a stair and changes related level geometry, including openings in existing slabs.",
-        "destructiveHint": "The operation updates existing slabs or ceilings with openings, so existing modeled geometry is changed.",
+        "readOnlyHint": "It creates a stair and an opening intent node that changes derived floor and ceiling geometry.",
+        "destructiveHint": "The new opening changes existing modeled floor and ceiling geometry.",
         "openWorldHint": "It operates on the connected Pascal scene or project service without accessing the public internet."
       }
     },
@@ -215,6 +228,19 @@
       }
     },
     {
+      "name": "cut_floor_opening",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It creates a floor-opening intent node and reconciles adjacent construction.",
+        "destructiveHint": "It adds an opening node without deleting existing authored intent.",
+        "openWorldHint": "It operates only on the connected Pascal scene."
+      }
+    },
+    {
       "name": "cut_opening",
       "annotations": {
         "readOnlyHint": false,
@@ -254,6 +280,19 @@
       }
     },
     {
+      "name": "delete_zone",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Updates room intent and reconciles construction in the connected scene.",
+        "destructiveHint": "Can replace room intent or boundaries and retire derived construction.",
+        "openWorldHint": "Uses only the connected scene; no public internet access."
+      }
+    },
+    {
       "name": "describe_node",
       "annotations": {
         "readOnlyHint": true,
@@ -267,6 +306,19 @@
       }
     },
     {
+      "name": "divide_zone",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Updates room intent and reconciles construction in the connected scene.",
+        "destructiveHint": "Can replace room intent or boundaries and retire derived construction.",
+        "openWorldHint": "Uses only the connected scene; no public internet access."
+      }
+    },
+    {
       "name": "duplicate_level",
       "annotations": {
         "readOnlyHint": false,
@@ -277,6 +329,19 @@
         "readOnlyHint": "It is not read-only because creates a new level by copying an existing level and its contents.",
         "destructiveHint": "Its intended operation adds new modeled state without deleting or replacing existing Pascal scene or project state.",
         "openWorldHint": "It operates on the connected Pascal scene, project, and configured catalog data without accessing the public internet."
+      }
+    },
+    {
+      "name": "duplicate_zone",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Copies room boundaries, intent and contents into the connected scene.",
+        "destructiveHint": "A drop can merge with and split existing destination walls, re-hosting their children.",
+        "openWorldHint": "Uses only the connected scene; no public internet access."
       }
     },
     {
@@ -488,6 +553,19 @@
       }
     },
     {
+      "name": "lock_outside_faces",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Updates exterior wall justification and connected reference lines in the scene.",
+        "destructiveHint": "Replaces existing wall geometry intent so later thickness edits keep the outside face fixed.",
+        "openWorldHint": "Uses only the connected scene; no public internet access."
+      }
+    },
+    {
       "name": "measure",
       "annotations": {
         "readOnlyHint": true,
@@ -498,6 +576,32 @@
         "readOnlyHint": "It computes measurements from nodes in the connected Pascal scene without changing scene or project state.",
         "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
         "openWorldHint": "It operates only on data supplied by or already available inside the connected Pascal service and does not access the public internet."
+      }
+    },
+    {
+      "name": "merge_zones",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Updates room intent and reconciles construction in the connected scene.",
+        "destructiveHint": "Can replace room intent or boundaries and retire derived construction.",
+        "openWorldHint": "Uses only the connected scene; no public internet access."
+      }
+    },
+    {
+      "name": "move_zone",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Moves room boundaries, intent and contents in the connected scene.",
+        "destructiveHint": "Moves existing construction and can merge walls or replace topology when forced.",
+        "openWorldHint": "Uses only the connected scene; no public internet access."
       }
     },
     {
@@ -540,6 +644,19 @@
       }
     },
     {
+      "name": "rebase_floor_reference",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Rebases a room floor reference datum and compensates dependent placement in the connected scene.",
+        "destructiveHint": "Rebasing rewrites stored floor reference intent and dependent level placement, even when it preserves current world geometry.",
+        "openWorldHint": "Operates only on the connected Pascal scene."
+      }
+    },
+    {
       "name": "redo",
       "annotations": {
         "readOnlyHint": false,
@@ -553,6 +670,19 @@
       }
     },
     {
+      "name": "remove_floor_opening",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It deletes an opening intent node and reconciles the affected construction.",
+        "destructiveHint": "It removes an authored opening and restores the derived floor or ceiling surface.",
+        "openWorldHint": "It operates only on the connected Pascal scene."
+      }
+    },
+    {
       "name": "rename_scene",
       "annotations": {
         "readOnlyHint": false,
@@ -563,6 +693,19 @@
         "readOnlyHint": "It is not read-only because changes persisted scene metadata by replacing the existing scene name.",
         "destructiveHint": "Renaming replaces persisted scene metadata and can overwrite the prior name.",
         "openWorldHint": "It operates on the connected Pascal scene or project service without accessing the public internet."
+      }
+    },
+    {
+      "name": "rotate_zone",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Rotates room intent, boundaries and contents and reconciles the resulting rooms.",
+        "destructiveHint": "May split or merge existing walls and rooms and rehost openings at the destination.",
+        "openWorldHint": "Operates only on nodes in the active Pascal scene without external services."
       }
     },
     {
@@ -592,6 +735,32 @@
       }
     },
     {
+      "name": "set_floor_foundation",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Updates base plate construction intent and translates its room floor elevations.",
+        "destructiveHint": "Preserves authored rooms, boundaries and contents while changing floor and foundation settings.",
+        "openWorldHint": "Operates only on the connected scene."
+      }
+    },
+    {
+      "name": "set_room_floor_construction",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Updates the construction intent owned by a room footprint in the connected scene.",
+        "destructiveHint": "The command preserves the authored room and changes its derived floor construction.",
+        "openWorldHint": "Operates only on the connected Pascal scene."
+      }
+    },
+    {
       "name": "set_unit_members",
       "annotations": {
         "readOnlyHint": false,
@@ -615,6 +784,19 @@
         "readOnlyHint": "It is not read-only because it creates a new zone in the connected Pascal scene.",
         "destructiveHint": "Its intended operation adds new modeled state without deleting or replacing existing Pascal scene or project state.",
         "openWorldHint": "It operates on the connected Pascal scene, project, and configured catalog data without accessing the public internet."
+      }
+    },
+    {
+      "name": "set_zone_intent",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Updates room intent and reconciles construction in the connected scene.",
+        "destructiveHint": "Updates room intent without deleting authored rooms, boundaries or contents.",
+        "openWorldHint": "Uses only the connected scene; no public internet access."
       }
     },
     {

@@ -1,8 +1,13 @@
 import {
   type AnyNodeId,
   CEILING_DRAW_OFFSET,
+  CEILING_SURFACE_ROLE,
   type CeilingNode,
+  type CeilingSurfaceCell,
+  ceilingPaintRegions,
+  computeCeilingSurfaceCells,
   getEffectiveNode,
+  type MultiPolygon,
   nodeRegistry,
   resolveCeilingHeight,
   sceneRegistry,
@@ -11,7 +16,18 @@ import {
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { mergeSurfaceHolePolygons } from '../surface-hole-geometry'
+
+/** Name of the meshes a ceiling draws its paint regions with, one per region. */
+export const CEILING_REGION_MESH = 'ceiling-region'
+
+/**
+ * The material a ceiling draws a region finish with. The ceiling's renderer
+ * owns materials (theme, textures, scene materials) and leaves this on the
+ * registered mesh; the system builds geometry and asks it.
+ */
+export type CeilingRegionMaterial = (finish: CeilingSurfaceCell['finish']) => THREE.Material
 
 type SceneNodes = ReturnType<typeof useScene.getState>['nodes']
 
@@ -88,21 +104,40 @@ function collectCeilingHoles(
 /**
  * Updates the geometry for a single ceiling
  */
-function updateCeilingGeometry(
+export function updateCeilingGeometry(
   node: CeilingNode,
   mesh: THREE.Mesh,
   extraHoles: Array<Array<[number, number]>> = [],
   nodes: SceneNodes = useScene.getState().nodes,
 ) {
   const newGeo = generateCeilingGeometry(node, extraHoles)
+  // Painted regions partition the underside: the ceiling's own mesh keeps what
+  // no region covers, and each region draws as its own single-material mesh,
+  // so batching buckets them by material like any other surface.
+  const regions = node.polygon.length >= 3 ? ceilingPaintRegions(node, nodes) : []
+  const cells = regions.length
+    ? computeCeilingSurfaceCells(
+        node.polygon,
+        [...mergeSurfaceHolePolygons(node.holes || []), ...extraHoles],
+        regions,
+      )
+    : null
+  const surface = cells?.find((cell) => cell.role === CEILING_SURFACE_ROLE)
 
   mesh.geometry.dispose()
-  mesh.geometry = newGeo
+  mesh.geometry = cells ? flatCeilingGeometry(surface?.polygons ?? []) : newGeo
+  mesh.userData.paintRole = CEILING_SURFACE_ROLE
+  syncCeilingRegionMeshes(
+    mesh,
+    (cells ?? []).filter((cell) => cell.role !== CEILING_SURFACE_ROLE),
+  )
 
   const gridMesh = mesh.getObjectByName('ceiling-grid') as THREE.Mesh
   if (gridMesh) {
     gridMesh.geometry.dispose()
-    gridMesh.geometry = newGeo.clone()
+    gridMesh.geometry = cells ? newGeo : newGeo.clone()
+  } else if (cells) {
+    newGeo.dispose()
   }
 
   // Position at the ceiling height and reset X/Z so live-drag mesh
@@ -119,6 +154,57 @@ function updateCeilingGeometry(
   // Slight offset to avoid z-fighting with upper-level slabs.
   mesh.position.y =
     resolveCeilingHeight(node, nodes) - CEILING_DRAW_OFFSET + (liveTransform?.position[1] ?? 0)
+}
+
+/**
+ * One child mesh per region cell, reused by position so a repaint keeps its
+ * mesh; surplus meshes go. The material comes from the renderer's resolver.
+ */
+function syncCeilingRegionMeshes(mesh: THREE.Mesh, cells: readonly CeilingSurfaceCell[]) {
+  const existing = mesh.children.filter(
+    (child): child is THREE.Mesh =>
+      (child as THREE.Mesh).isMesh && child.name === CEILING_REGION_MESH,
+  )
+  const resolve = mesh.userData.ceilingRegionMaterial as CeilingRegionMaterial | undefined
+  cells.forEach((cell, index) => {
+    let region = existing[index]
+    if (!region) {
+      region = new THREE.Mesh()
+      region.name = CEILING_REGION_MESH
+      mesh.add(region)
+    } else region.geometry.dispose()
+    region.geometry = flatCeilingGeometry(cell.polygons)
+    region.userData.paintRole = cell.role
+    region.userData.finish = cell.finish
+    region.userData.__fromGeometry = true
+    region.material = resolve?.(cell.finish) ?? (mesh.material as THREE.Material)
+  })
+  for (const surplus of existing.slice(cells.length)) {
+    surplus.geometry.dispose()
+    surplus.removeFromParent()
+  }
+}
+
+/** Flat geometry for level-XZ pieces, laid out the way `generateCeilingGeometry` lays a ceiling. */
+function flatCeilingGeometry(pieces: MultiPolygon): THREE.BufferGeometry {
+  const parts = pieces
+    .filter((piece) => piece.outer.length >= 3)
+    .map((piece) => {
+      const shape = new THREE.Shape(piece.outer.map(([x, z]) => new THREE.Vector2(x, -z)))
+      for (const hole of piece.holes)
+        if (hole.length >= 3)
+          shape.holes.push(new THREE.Path(hole.map(([x, z]) => new THREE.Vector2(x, -z))))
+      const geometry = new THREE.ShapeGeometry(shape)
+      geometry.rotateX(-Math.PI / 2)
+      geometry.computeVertexNormals()
+      ensureUv2Attribute(geometry)
+      return geometry
+    })
+  if (parts.length === 0) return generateCeilingGeometry({ polygon: [] } as unknown as CeilingNode)
+  if (parts.length === 1) return parts[0]!
+  const merged = mergeGeometries(parts) ?? parts[0]!
+  for (const part of parts) if (part !== merged) part.dispose()
+  return merged
 }
 
 /**

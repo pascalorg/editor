@@ -3,10 +3,21 @@ import {
   type FloorplanPoint,
   type GeometryContext,
   getRenderableSlabPolygon,
+  isDerivedNode,
   type SlabNode,
   slabPolygonContextFromGeometry,
 } from '@pascal-app/core'
 import { readFloorplanContext } from '@pascal-app/editor'
+
+/**
+ * Whether the plan offers the slab's outline and hole handles: only a slab the
+ * user drew. A floor plate's outline (and its room-cut holes) follow the rooms
+ * and walls, so its handles would edit data the reconciler owns — the 3D view
+ * hides them for the same reason.
+ */
+export function slabOutlineEditable(node: SlabNode): boolean {
+  return !node.plateRole && !isDerivedNode(node)
+}
 
 /**
  * Stage C floor-plan builder for slab. Renders the slab polygon as a
@@ -90,8 +101,9 @@ export function buildSlabFloorplan(node: SlabNode, ctx: GeometryContext): Floorp
     })
   }
 
-  // Boundary editor — visible only when the slab is the active selection.
-  if (isSelected) {
+  // Boundary editor — visible only when the slab is the active selection, and
+  // only on a slab the user drew.
+  if (isSelected && slabOutlineEditable(node)) {
     // Handles operate on the STORED polygon while the fill shows the
     // band-healed render polygon; when the two diverge (edges projected
     // onto wall faces / interior centerline seams), a dashed skeleton of the

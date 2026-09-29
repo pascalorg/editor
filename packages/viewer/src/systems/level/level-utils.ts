@@ -1,4 +1,6 @@
 import { getLevelElevations, type LevelNode, sceneRegistry, useScene } from '@pascal-app/core'
+import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
+import { shadowOnlyLevels } from './shadow-only-levels'
 
 export const EXPLODED_GAP = 5
 
@@ -25,14 +27,17 @@ export function getLevelPresentationY(
  * shadow-caster only.
  *
  * Two unrelated things hide a level and they do not compose: the author's own
- * `visible` flag (the sidebar eye), which hides the floor outright, and solo
- * mode, which hides every level but the soloed one — keeping the levels ABOVE
- * it in the shadow map so the sun still shadows the soloed floor through them.
+ * `visible` flag (the sidebar eye), which hides the floor outright, and
+ * presentation hiding — solo mode hides every level but the soloed one, and
+ * the editor's level display (`hideAbove`) hides the levels above the
+ * selected one. Presentation-hidden levels ABOVE the selected one stay in the
+ * shadow map so the sun still shadows the selected floor through them.
  * A level the author hid never enters that shadow-caster branch: its shadows
  * on the floor below would be exactly what hiding it was meant to remove.
  */
 export function resolveLevelVisibility({
   levelMode,
+  hideAbove,
   hasSelectedLevel,
   isSelected,
   index,
@@ -40,6 +45,7 @@ export function resolveLevelVisibility({
   nodeVisible,
 }: {
   levelMode: 'stacked' | 'exploded' | 'solo' | 'manual'
+  hideAbove: boolean
   hasSelectedLevel: boolean
   isSelected: boolean
   index: number
@@ -48,7 +54,9 @@ export function resolveLevelVisibility({
 }): { visible: boolean; shadowOnly: boolean } {
   if (!nodeVisible) return { visible: false, shadowOnly: false }
 
-  const hidden = levelMode === 'solo' && hasSelectedLevel && !isSelected
+  const hidden =
+    (levelMode === 'solo' && hasSelectedLevel && !isSelected) ||
+    (hideAbove && selectedIndex !== undefined && index > selectedIndex)
   const shadowOnly = hidden && selectedIndex !== undefined && index > selectedIndex
   return { visible: shadowOnly || !hidden, shadowOnly }
 }
@@ -95,11 +103,14 @@ export function snapLevelsToTruePositions(): () => void {
     entries.map(({ levelId, obj }) => [levelId, { y: obj.position.y, visible: obj.visible }]),
   )
 
-  // Snap to true stacked positions and undo presentation hiding
+  // Snap to true stacked positions and undo presentation hiding — including
+  // the levels kept shadow-caster-only above the selected level.
+  const shadowOnly = entries.filter(({ obj }) => shadowOnlyLevels.has(obj))
   for (const { levelId, obj, nodeVisible } of entries) {
     obj.position.y = levelElevations.get(levelId)?.baseY ?? 0
     obj.visible = nodeVisible
   }
+  for (const { obj } of shadowOnly) clearShadowOnly(obj)
 
   return () => {
     for (const { levelId, obj } of entries) {
@@ -109,5 +120,6 @@ export function snapLevelsToTruePositions(): () => void {
         obj.visible = saved.visible
       }
     }
+    for (const { obj } of shadowOnly) applyShadowOnly(obj)
   }
 }

@@ -37,7 +37,7 @@ export type WallLayerBands = ResolvedAssembly & { bands: WallLayerBand[] }
  * wall whose stored thickness disagrees gets the `assembly.thickness-mismatch`
  * diagnostic and no bands: it keeps its plain body until a writer re-derives
  * the thickness. Layers stack from the front face (+n), or from the exterior
- * face with `face: 'exterior'` (`resolveWallExteriorSide`, front as fallback).
+ * face with `face: 'exterior'` (`resolveWallExteriorSide`, back as fallback).
  *
  * Straight walls intersect the footprint with half-plane strips through the
  * core polygon booleans, which handles the junction vertex a mitred end cap
@@ -58,7 +58,7 @@ export function getWallLayerBands(
   }
   const half = thickness / 2
   // +1 when the first listed layer is on the front face, −1 when it is on the back.
-  const sign = assembly.face === 'exterior' ? (resolveWallExteriorSide(wall) ?? 1) : 1
+  const sign = assembly.face === 'exterior' ? (resolveWallExteriorSide(wall) ?? -1) : 1
   const footprint = getWallPlanFootprint(wall, miterData)
   const curved = isCurvedWall(wall)
 

@@ -10,6 +10,7 @@ import {
   type WallCutoutViewerStore,
   wallHiddenFromFacing,
 } from './wall-cutout-cache'
+import { getWallFinishRefs } from './wall-finish-data'
 import {
   getMaterialsForWall,
   getSelectionHighlightMaterials,
@@ -60,7 +61,7 @@ export const WallCutout = ({
     [viewerStore, materialResolver],
   )
 
-  useEffect(() => subscribeWallRebuilds((id) => cache.rebuilt.add(id)), [cache])
+  useEffect(() => subscribeWallRebuilds((id) => cache.handleRebuilt(id)), [cache])
 
   useEffect(() => cache.subscribeLiveTransforms(), [cache])
 
@@ -84,6 +85,7 @@ export const WallCutout = ({
           viewerStore.getState().colorPreset,
           viewerStore.getState().sceneTheme,
           useScene.getState().materials,
+          getWallFinishRefs(wallMesh.geometry),
         )
         const current = wallMesh.material as Material | Material[]
         snapshot.set(wallMesh, current)

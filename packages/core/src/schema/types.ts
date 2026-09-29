@@ -18,6 +18,7 @@ import { DuctTerminalNode } from './nodes/duct-terminal'
 import { ElevatorNode } from './nodes/elevator'
 import { EyebrowVentNode } from './nodes/eyebrow-vent'
 import { FenceNode } from './nodes/fence'
+import { FloorOpeningNode } from './nodes/floor-opening'
 import { GuideNode } from './nodes/guide'
 import { GutterNode } from './nodes/gutter'
 import { HvacEquipmentNode } from './nodes/hvac-equipment'
@@ -35,6 +36,7 @@ import { RidgeVentNode } from './nodes/ridge-vent'
 import { RoofNode } from './nodes/roof'
 import { RoofSegmentNode } from './nodes/roof-segment'
 import { ScanNode } from './nodes/scan'
+import { SeparatorNode } from './nodes/separator'
 import { ShelfNode } from './nodes/shelf'
 import { SiteNode } from './nodes/site'
 import { SkylightNode } from './nodes/skylight'
@@ -96,6 +98,8 @@ export const AnyNode = nodeUnion([
   BlockNode,
   StructuralGridNode,
   WallNode,
+  SeparatorNode,
+  FloorOpeningNode,
   FenceNode,
   CabinetNode,
   CabinetModuleNode,

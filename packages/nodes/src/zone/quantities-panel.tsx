@@ -3,7 +3,6 @@
 import {
   type AnyNodeId,
   deriveZoneQuantityReport,
-  resolveAutoZonePolygon,
   type UnitNode,
   useLiveNodeOverrides,
   useScene,
@@ -202,25 +201,14 @@ export default function ZoneQuantitiesPanel() {
   const metricNotation = useViewer((state) => state.metricNotation)
   const nodes = useScene((state) => state.nodes)
   const zone = selectedZoneId ? (nodes[selectedZoneId] as ZoneNode | undefined) : undefined
-  const livePolygon = useLiveNodeOverrides((state) =>
-    selectedZoneId ? state.overrides.get(selectedZoneId)?.polygon : undefined,
-  ) as ZoneNode['polygon'] | undefined
+  const liveZone = useLiveNodeOverrides((state) =>
+    selectedZoneId ? state.overrides.get(selectedZoneId) : undefined,
+  ) as Partial<ZoneNode> | undefined
   const boundaryWallIds = zone?.autoFromWalls ? zone.boundaryWallIds : []
   const boundaryOverrides = useLiveNodeOverrides(
     useShallow((state) => boundaryWallIds.map((id) => state.overrides.get(id))),
   )
-  const proceduralPolygon = zone
-    ? resolveAutoZonePolygon(zone, (id) => {
-        const dependency = nodes[id]
-        if (!dependency) return undefined
-        const override =
-          boundaryOverrides[boundaryWallIds.indexOf(id as (typeof boundaryWallIds)[number])]
-        return override ? { ...dependency, ...override } : dependency
-      })
-    : undefined
-  const effectiveZone = zone
-    ? { ...zone, polygon: livePolygon ?? proceduralPolygon ?? zone.polygon }
-    : undefined
+  const effectiveZone = zone ? { ...zone, ...liveZone } : undefined
   const effectiveNodes = useMemo(() => {
     if (boundaryOverrides.every((override) => !override)) return nodes
     const merged = { ...nodes }

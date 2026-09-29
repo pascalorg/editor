@@ -1,12 +1,16 @@
 'use client'
 
 import { useEffect } from 'react'
+import { structureChangeBatch } from '../../commands/structure/shared'
 import type { AnyNode, AnyNodeId } from '../../schema'
 import { pauseSceneHistory, resumeSceneHistory } from '../../store/history-control'
-import { queueSceneNormalization } from '../../store/scene-hydration'
+import { isHydrationNormalization, queueSceneNormalization } from '../../store/scene-hydration'
 import useLiveNodeOverrides from '../../store/use-live-node-overrides'
 import useLiveTransforms from '../../store/use-live-transforms'
 import useScene from '../../store/use-scene'
+import { ensureSceneOpenings } from '../../utils/ensure-scene-openings'
+import { planOwnedFloorOpenings } from '../owned-floor-openings'
+import { reconcileOwnedFloorOpeningChanges } from '../reconcile-owned-floor-openings'
 import {
   createSurfaceOpeningPreviewController,
   getNodesWithLiveStairOpeningInputs,
@@ -67,6 +71,21 @@ export function initializeStairOpeningSync() {
     })
   }
 
+  const applyOpeningChanges = (skipExistingSurfaces = false) => {
+    const changes = planOwnedFloorOpenings(useScene.getState().nodes, { skipExistingSurfaces })
+    if (!changes.length) return
+    syncingAutoOpenings = true
+    pauseSceneHistory(useScene)
+    try {
+      const before = useScene.getState().nodes
+      useScene.getState().applyNodeChanges(structureChangeBatch(changes))
+      reconcileOwnedFloorOpeningChanges(before, changes)
+    } finally {
+      resumeSceneHistory(useScene)
+      syncingAutoOpenings = false
+    }
+  }
+
   const clearPreviewUpdates = () => {
     if (previewController.previewSurfaceIds.size === 0) return
     syncingPreviewOpenings = true
@@ -96,18 +115,23 @@ export function initializeStairOpeningSync() {
     )
   }
 
-  const runAutoSync = () => {
+  const runAutoSync = (preserveSlabs: boolean) => {
+    if (preserveSlabs) {
+      applyUpdates(ensureSceneOpenings(useScene.getState().nodes).updates)
+      applyOpeningChanges(true)
+      return
+    }
     // Rise first: straight stairs converge their flight heights to the
     // resolved rise (level height or deck elevation), and the opening pass
     // reads those segment heights — so it must run against the post-rise
     // nodes.
     applyUpdates(syncStairRises(useScene.getState().nodes))
-    applyUpdates(syncAutoStairOpenings(useScene.getState().nodes))
+    applyOpeningChanges()
   }
 
   let disposed = false
   let syncGeneration = 0
-  const scheduleAutoSync = () => {
+  const scheduleAutoSync = (preserveSlabs = false) => {
     const generation = ++syncGeneration
     // One microtask later so every other scene-store listener for the
     // triggering transition (and, at mount, the editor's spatial-grid
@@ -117,17 +141,17 @@ export function initializeStairOpeningSync() {
     // rescale flights against the pre-transition slab state.
     queueSceneNormalization(() => {
       if (disposed || generation !== syncGeneration) return
-      runAutoSync()
+      runAutoSync(preserveSlabs)
       refreshLivePreview()
     })
   }
 
-  scheduleAutoSync()
+  scheduleAutoSync(true)
 
   const unsubscribeScene = useScene.subscribe((state, prevState) => {
     if (syncingAutoOpenings) return
     if (!hasOpeningRelevantNodeChange(state.nodes, prevState.nodes)) return
-    scheduleAutoSync()
+    scheduleAutoSync(isHydrationNormalization() || state.hydrationId !== prevState.hydrationId)
   })
 
   const unsubscribeLiveTransforms = useLiveTransforms.subscribe(() => {

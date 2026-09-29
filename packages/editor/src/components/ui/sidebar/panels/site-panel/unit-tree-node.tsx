@@ -94,7 +94,7 @@ export const UnitZoneRow = memo(function UnitZoneRow({
       keepIconColor
       label={
         <span className="flex min-w-0 items-baseline gap-1.5">
-          <span className="truncate">{zone.name || 'Zone'}</span>
+          <span className="truncate">{zone.name || (zone.spaceRole === 'room' ? 'Room' : 'Zone')}</span>
           {levelLabel && (
             <span className="shrink-0 text-muted-foreground text-xs">{levelLabel}</span>
           )}

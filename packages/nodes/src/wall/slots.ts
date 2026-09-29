@@ -6,11 +6,12 @@ import {
 } from '@pascal-app/core'
 
 /**
- * A wall exposes two paintable faces — interior + exterior. Painting writes
- * `node.slots[interior|exterior]` via `wallPaint` like every other kind; this
- * declaration surfaces the slot list + declared defaults for the picker and
- * keeps walls on the same `{ slotId, label, default }` contract. The defaults
- * come from core so the viewer's material resolver renders the identical value.
+ * A wall exposes two paintable faces — `a` (left of start → end) and `b` —
+ * plus a skirting, crown and chair rail per face. Painting writes
+ * `node.slots[slotId]` via `wallPaint` like every other kind; this declaration
+ * surfaces the slot list + declared defaults for the picker and keeps walls on
+ * the same `{ slotId, label, default }` contract. Paint regions and room
+ * finishes are not slots: they live on `faceRegions` and on the zone.
  */
 export function wallSlots(node?: WallNode): SlotDeclaration[] {
   if (node?.wallType === 'curtain') {
@@ -22,77 +23,29 @@ export function wallSlots(node?: WallNode): SlotDeclaration[] {
     ]
   }
   return [
-    { slotId: 'interior', label: 'Interior', default: WALL_SURFACE_SLOT_DEFAULTS.interior },
-    { slotId: 'exterior', label: 'Exterior', default: WALL_SURFACE_SLOT_DEFAULTS.exterior },
+    { slotId: 'a', label: 'Side A', default: WALL_SURFACE_SLOT_DEFAULTS.a },
+    { slotId: 'b', label: 'Side B', default: WALL_SURFACE_SLOT_DEFAULTS.b },
     {
-      slotId: 'lowerInterior',
-      label: 'Lower band (interior)',
-      default: WALL_SURFACE_SLOT_DEFAULTS.lowerInterior,
+      slotId: 'aSkirting',
+      label: 'Skirting (side A)',
+      default: WALL_SURFACE_SLOT_DEFAULTS.aSkirting,
     },
     {
-      slotId: 'middleInterior',
-      label: 'Middle band (interior)',
-      default: WALL_SURFACE_SLOT_DEFAULTS.middleInterior,
+      slotId: 'bSkirting',
+      label: 'Skirting (side B)',
+      default: WALL_SURFACE_SLOT_DEFAULTS.bSkirting,
+    },
+    { slotId: 'aCrown', label: 'Crown (side A)', default: WALL_SURFACE_SLOT_DEFAULTS.aCrown },
+    { slotId: 'bCrown', label: 'Crown (side B)', default: WALL_SURFACE_SLOT_DEFAULTS.bCrown },
+    {
+      slotId: 'aChairRail',
+      label: 'Chair rail (side A)',
+      default: WALL_SURFACE_SLOT_DEFAULTS.aChairRail,
     },
     {
-      slotId: 'upperInterior',
-      label: 'Upper band (interior)',
-      default: WALL_SURFACE_SLOT_DEFAULTS.upperInterior,
-    },
-    {
-      slotId: 'topInterior',
-      label: 'Top band (interior)',
-      default: WALL_SURFACE_SLOT_DEFAULTS.topInterior,
-    },
-    {
-      slotId: 'lowerExterior',
-      label: 'Lower band (exterior)',
-      default: WALL_SURFACE_SLOT_DEFAULTS.lowerExterior,
-    },
-    {
-      slotId: 'middleExterior',
-      label: 'Middle band (exterior)',
-      default: WALL_SURFACE_SLOT_DEFAULTS.middleExterior,
-    },
-    {
-      slotId: 'upperExterior',
-      label: 'Upper band (exterior)',
-      default: WALL_SURFACE_SLOT_DEFAULTS.upperExterior,
-    },
-    {
-      slotId: 'topExterior',
-      label: 'Top band (exterior)',
-      default: WALL_SURFACE_SLOT_DEFAULTS.topExterior,
-    },
-    {
-      slotId: 'skirtingInterior',
-      label: 'Skirting (interior)',
-      default: WALL_SURFACE_SLOT_DEFAULTS.skirtingInterior,
-    },
-    {
-      slotId: 'skirtingExterior',
-      label: 'Skirting (exterior)',
-      default: WALL_SURFACE_SLOT_DEFAULTS.skirtingExterior,
-    },
-    {
-      slotId: 'crownInterior',
-      label: 'Crown (interior)',
-      default: WALL_SURFACE_SLOT_DEFAULTS.crownInterior,
-    },
-    {
-      slotId: 'crownExterior',
-      label: 'Crown (exterior)',
-      default: WALL_SURFACE_SLOT_DEFAULTS.crownExterior,
-    },
-    {
-      slotId: 'chairRailInterior',
-      label: 'Chair rail (interior)',
-      default: WALL_SURFACE_SLOT_DEFAULTS.chairRailInterior,
-    },
-    {
-      slotId: 'chairRailExterior',
-      label: 'Chair rail (exterior)',
-      default: WALL_SURFACE_SLOT_DEFAULTS.chairRailExterior,
+      slotId: 'bChairRail',
+      label: 'Chair rail (side B)',
+      default: WALL_SURFACE_SLOT_DEFAULTS.bChairRail,
     },
   ]
 }

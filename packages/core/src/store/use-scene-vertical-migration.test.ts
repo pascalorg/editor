@@ -357,7 +357,7 @@ describe('scene vertical model migration', () => {
     const deck = nodes.slab_a as SlabResult
     expect(deck.elevation).toBe(-0.15)
     expect(deck.thickness).toBe(0.3)
-    expect('recessed' in deck).toBe(false)
+    expect(deck.recessed).toBe(false)
   })
 
   test('migration is idempotent', () => {

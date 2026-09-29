@@ -58,6 +58,13 @@ const REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
     ],
   },
   fence: { start: [0, 0], end: [4, 0] },
+  'floor-opening': {
+    polygon: [
+      [20, 20],
+      [21, 20],
+      [21, 21],
+    ],
+  },
   guide: { url: 'asset://guide.png' },
   item: {
     asset: {
@@ -95,6 +102,7 @@ const REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
       [1, 0, 0],
     ],
   },
+  separator: { start: [20, 0], end: [22, 0] },
   slab: {
     polygon: [
       [0, 0],
