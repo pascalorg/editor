@@ -1,0 +1,583 @@
+import { beforeEach, describe, expect, test } from 'bun:test'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { nodeRegistry, registerNode } from '@pascal-app/core'
+import { shelfRecipe } from '@pascal-app/core/procedural-items'
+import * as schema from '@pascal-app/core/schema'
+import {
+  AnyNode,
+  type AnyNodeId,
+  BlockNode,
+  BuildingNode,
+  CabinetModuleNode,
+  CabinetNode,
+  FenceNode,
+  LevelNode,
+  MeasurementNode,
+  nodeKindOf,
+  RoofNode,
+  RoofSegmentNode,
+  SlabNode,
+  SolarPanelNode,
+  StairNode,
+  StairSegmentNode,
+  WallNode,
+  WindowNode,
+  ZoneNode,
+} from '@pascal-app/core/schema'
+import { SceneBridge } from '../bridge/scene-bridge'
+import { registerMeasure } from './measure'
+import { HEADLESS_UNRESOLVED_FLOOR_LIFT_KINDS, resolveNodeWorldPoint } from './node-world-point'
+
+type Vec3 = [number, number, number]
+
+type MeasurePayload = {
+  distanceMeters: number
+  approximate?: Array<{ id: string; reason: string }>
+  fromPoint?: [number, number, number]
+  toPoint?: [number, number, number]
+}
+
+/** Fields a kind needs beyond its schema defaults (mirrors core's node fixtures). */
+const REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
+  'procedural-item': { recipe: shelfRecipe },
+  ceiling: {
+    polygon: [
+      [0, 0],
+      [4, 0],
+      [4, 4],
+    ],
+  },
+  'duct-segment': {
+    path: [
+      [0, 0, 0],
+      [1, 0, 0],
+    ],
+  },
+  fence: { start: [0, 0], end: [4, 0] },
+  guide: { url: 'asset://guide.png' },
+  item: {
+    asset: {
+      id: 'asset-1',
+      category: 'furniture',
+      name: 'Chair',
+      thumbnail: 'asset://chair.png',
+      src: 'asset://chair.glb',
+    },
+  },
+  lineset: {
+    path: [
+      [0, 0, 0],
+      [1, 0, 0],
+    ],
+  },
+  'liquid-line': {
+    path: [
+      [0, 0, 0],
+      [1, 0, 0],
+    ],
+  },
+  measurement: {
+    measurement: {
+      kind: 'distance',
+      points: [
+        [0, 0, 0],
+        [1, 0, 0],
+      ],
+    },
+  },
+  'pipe-segment': {
+    path: [
+      [0, 0, 0],
+      [1, 0, 0],
+    ],
+  },
+  slab: {
+    polygon: [
+      [0, 0],
+      [4, 0],
+      [4, 4],
+    ],
+  },
+  wall: { start: [0, 0], end: [4, 0] },
+  zone: {
+    name: 'Kitchen',
+    polygon: [
+      [0, 0],
+      [4, 0],
+      [4, 4],
+    ],
+  },
+}
+
+const ROOF_ACCESSORIES = [
+  'box-vent',
+  'chimney',
+  'cupola',
+  'dormer',
+  'downspout',
+  'eyebrow-vent',
+  'gutter',
+  'ridge-vent',
+  'skylight',
+  'solar-panel',
+  'turbine-vent',
+]
+
+/** Floor-placed kinds whose lift core resolves from the node itself, registry or not. */
+const CORE_LIFTED = new Set(['item', 'procedural-item', 'shelf'])
+
+/** One minimal node per kind the per-kind schemas can build from defaults. */
+function minimalNodes(): AnyNode[] {
+  const out: AnyNode[] = []
+  for (const exported of Object.values(schema)) {
+    const shape = (exported as { shape?: Record<string, unknown> })?.shape
+    const discriminator = shape?.type as { unwrap?: () => { value?: unknown } } | undefined
+    const kind = discriminator?.unwrap?.().value
+    if (typeof kind !== 'string') continue
+    const parsed = (
+      exported as { safeParse: (v: unknown) => { success: boolean; data?: unknown } }
+    ).safeParse({ ...REQUIRED_FIELDS[kind] })
+    if (parsed.success) out.push(parsed.data as AnyNode)
+  }
+  return out
+}
+
+describe('measure in world space', () => {
+  let client: Client
+  let bridge: SceneBridge
+  let level: AnyNode
+
+  async function measure(fromId: string, toId: string) {
+    const result = await client.callTool({ name: 'measure', arguments: { fromId, toId } })
+    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text
+    return {
+      isError: result.isError === true,
+      text,
+      payload: result.isError ? null : (JSON.parse(text) as MeasurePayload),
+    }
+  }
+
+  beforeEach(async () => {
+    bridge = new SceneBridge()
+    bridge.setScene({}, [])
+    bridge.loadDefault()
+    level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const server = new McpServer({ name: 'test', version: '0.0.0' })
+    registerMeasure(server, bridge)
+    const [srvT, cliT] = InMemoryTransport.createLinkedPair()
+    client = new Client({ name: 'test-client', version: '0.0.0' })
+    await Promise.all([server.connect(srvT), client.connect(cliT)])
+  })
+
+  function expectPoint(actual: number[] | undefined, expected: Vec3) {
+    expect(actual).toHaveLength(3)
+    for (let i = 0; i < 3; i++) expect(actual![i]!).toBeCloseTo(expected[i]!, 6)
+  }
+
+  async function approximateOf(id: string): Promise<string | undefined> {
+    const zone = Object.values(bridge.getNodes()).find((n) => n.type === 'zone' && n.name === 'Ref')
+    const { payload } = await measure(id, zone!.id)
+    return payload?.approximate?.find((entry) => entry.id === id)?.reason
+  }
+
+  async function pointOf(id: string): Promise<number[] | undefined> {
+    const zone = Object.values(bridge.getNodes()).find((n) => n.type === 'zone' && n.name === 'Ref')
+    const { payload } = await measure(id, zone!.id)
+    return payload?.fromPoint
+  }
+
+  function seedRef() {
+    const zone = ZoneNode.parse({
+      name: 'Ref',
+      polygon: [
+        [12, 3],
+        [14, 3],
+        [14, 5],
+        [12, 5],
+      ],
+    })
+    bridge.applyPatch([{ op: 'create', node: zone, parentId: level.id as AnyNodeId }])
+    return zone
+  }
+
+  test('a window is measured where its wall hosts it', async () => {
+    const zone = seedRef()
+    const wall = WallNode.parse({ start: [10, 0], end: [16, 0] })
+    const window = WindowNode.parse({ wallId: wall.id, position: [3, 1.2, 0] })
+    bridge.applyPatch([
+      { op: 'create', node: wall, parentId: level.id as AnyNodeId },
+      { op: 'create', node: window, parentId: wall.id as AnyNodeId },
+    ])
+
+    const own = await measure(wall.id, window.id)
+    expect(own.isError).toBe(false)
+    // Before: the window's wall-local [3, 1.2, 0] was read as a level point (10.07 m).
+    expect(own.payload!.distanceMeters).toBeCloseTo(1.2, 6)
+    expectPoint(own.payload!.fromPoint, [13, 0, 0])
+    expectPoint(own.payload!.toPoint, [13, 1.2, 0])
+
+    const toZone = await measure(window.id, zone.id)
+    expect(toZone.payload!.distanceMeters).toBeCloseTo(Math.hypot(1.2, 4), 6)
+  })
+
+  test('a window follows its wall direction', async () => {
+    seedRef()
+    const wall = WallNode.parse({ start: [0, 0], end: [0, 6] })
+    const window = WindowNode.parse({ wallId: wall.id, position: [2, 1.2, 0] })
+    bridge.applyPatch([
+      { op: 'create', node: wall, parentId: level.id as AnyNodeId },
+      { op: 'create', node: window, parentId: wall.id as AnyNodeId },
+    ])
+    expectPoint(await pointOf(window.id), [0, 1.2, 2])
+  })
+
+  test('upper levels add their stacked base and the building transform', async () => {
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
+    bridge.applyPatch([
+      { op: 'update', id: building.id as AnyNodeId, data: { position: [100, 0, 0] } },
+      { op: 'update', id: level.id as AnyNodeId, data: { height: 3 } },
+    ])
+    seedRef()
+    const upper = LevelNode.parse({ level: 1, height: 3 })
+    const wall = WallNode.parse({ start: [10, 0], end: [16, 0], height: 2.5 })
+    const window = WindowNode.parse({ wallId: wall.id, position: [3, 1.2, 0] })
+    bridge.applyPatch([
+      { op: 'create', node: upper, parentId: building.id as AnyNodeId },
+      { op: 'create', node: wall, parentId: upper.id as AnyNodeId },
+      { op: 'create', node: window, parentId: wall.id as AnyNodeId },
+    ])
+    expectPoint(await pointOf(window.id), [113, 4.2, 0])
+    // A level: the plan centre of its content (one wall) on its base plane.
+    expectPoint(await pointOf(upper.id), [113, 3, 0])
+  })
+
+  test('roof segments, cabinet modules and stair segments compose their host frames', async () => {
+    seedRef()
+    const segment = RoofSegmentNode.parse({ position: [2, 0, 0] })
+    const roof = RoofNode.parse({
+      position: [5, 0, 5],
+      rotation: Math.PI / 2,
+      children: [segment.id],
+    })
+    const cabinet = CabinetNode.parse({ position: [1, 0, 1], rotation: Math.PI })
+    const module = CabinetModuleNode.parse({ position: [0.5, 0.1, 0] })
+    const first = StairSegmentNode.parse({ length: 3, height: 1.5 })
+    const second = StairSegmentNode.parse({ length: 2, height: 1, attachmentSide: 'front' })
+    const stair = StairNode.parse({ position: [20, 0, 0], children: [first.id, second.id] })
+    bridge.applyPatch([
+      { op: 'create', node: roof, parentId: level.id as AnyNodeId },
+      { op: 'create', node: segment, parentId: roof.id as AnyNodeId },
+      { op: 'create', node: cabinet, parentId: level.id as AnyNodeId },
+      { op: 'create', node: module, parentId: cabinet.id as AnyNodeId },
+      { op: 'create', node: stair, parentId: level.id as AnyNodeId },
+      { op: 'create', node: first, parentId: stair.id as AnyNodeId },
+      { op: 'create', node: second, parentId: stair.id as AnyNodeId },
+    ])
+    expectPoint(await pointOf(segment.id), [5, 0, 3])
+    expectPoint(await pointOf(module.id), [0.5, 0.1, 1])
+    expectPoint(await pointOf(second.id), [20, 1.5, 3])
+  })
+
+  test('a block is measured at the centre of its vertices', async () => {
+    seedRef()
+    // Default topology: x and z in [-1, 1], y in [0, 2.4].
+    const block = BlockNode.parse({ position: [4, 0, 4], rotation: Math.PI / 2 })
+    bridge.applyPatch([{ op: 'create', node: block, parentId: level.id as AnyNodeId }])
+    expectPoint(await pointOf(block.id), [4, 1.2, 4])
+  })
+
+  test('a floor-placed block is flagged when its floor lift cannot be resolved headless', async () => {
+    seedRef()
+    const deck = SlabNode.parse({
+      elevation: 1,
+      polygon: [
+        [-5, -5],
+        [5, -5],
+        [5, 5],
+        [-5, 5],
+      ],
+    })
+    const block = BlockNode.parse({ position: [0, 0, 0] })
+    const cabinet = CabinetNode.parse({ position: [2, 0, 2] })
+    const module = CabinetModuleNode.parse({ position: [0.5, 0, 0] })
+    bridge.applyPatch([
+      { op: 'create', node: deck, parentId: level.id as AnyNodeId },
+      { op: 'create', node: block, parentId: level.id as AnyNodeId },
+      { op: 'create', node: cabinet, parentId: level.id as AnyNodeId },
+      { op: 'create', node: module, parentId: cabinet.id as AnyNodeId },
+    ])
+    // The viewer lifts it onto the 1 m deck through its registered definition,
+    // which headless MCP does not load: the point stays on the level plane.
+    expectPoint(await pointOf(block.id), [0, 1.2, 0])
+    expect(await approximateOf(block.id)).toContain('floor-lift-unresolved-headless')
+    expect(await approximateOf(cabinet.id)).toContain('floor-lift-unresolved-headless')
+    expect(await approximateOf(module.id)).toContain('floor-lift-unresolved-headless')
+  })
+
+  test('solar panels are flagged: the viewer seats them on the finished roof surface', async () => {
+    seedRef()
+    const segment = RoofSegmentNode.parse({ position: [0, 0, 0], wallHeight: 3 })
+    const roof = RoofNode.parse({ children: [segment.id] })
+    const panel = SolarPanelNode.parse({ roofSegmentId: segment.id, position: [0.5, 0, 0.5] })
+    bridge.applyPatch([
+      { op: 'create', node: roof, parentId: level.id as AnyNodeId },
+      { op: 'create', node: segment, parentId: roof.id as AnyNodeId },
+      { op: 'create', node: panel, parentId: segment.id as AnyNodeId },
+    ])
+    expect(await approximateOf(panel.id)).toContain('roof-surface')
+  })
+
+  test('scenes linked only through children arrays still resolve upper levels', () => {
+    // The store heals parentId on load, but a bridge may hand over a record
+    // whose hierarchy lives only in `children` (SceneBridge's ancestry allows it).
+    const wall = WallNode.parse({ start: [10, 0], end: [16, 0], parentId: null })
+    const ground = LevelNode.parse({ level: 0, height: 3, parentId: null })
+    const upper = LevelNode.parse({ level: 1, height: 3, parentId: null, children: [wall.id] })
+    const building = BuildingNode.parse({
+      position: [100, 0, 0],
+      parentId: null,
+      children: [ground.id, upper.id],
+    })
+    const nodes = Object.fromEntries(
+      [building, ground, upper, wall].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+    expectPoint(resolveNodeWorldPoint(wall.id, nodes)?.point, [113, 3, 0])
+  })
+
+  test('a curved railing is measured on its arc, its deck height flagged', async () => {
+    seedRef()
+    const deck = SlabNode.parse({
+      elevation: 1,
+      polygon: [
+        [-5, -5],
+        [5, -5],
+        [5, 5],
+        [-5, 5],
+      ],
+    })
+    const railing = FenceNode.parse({
+      start: [0, 0],
+      end: [4, 0],
+      curveOffset: 1,
+      supportSlabId: deck.id,
+    })
+    bridge.applyPatch([
+      { op: 'create', node: deck, parentId: level.id as AnyNodeId },
+      { op: 'create', node: railing, parentId: level.id as AnyNodeId },
+    ])
+    const point = await pointOf(railing.id)
+    expect(point![0]).toBeCloseTo(2, 6)
+    expect(point![1]).toBeCloseTo(0, 6)
+    expect(Math.abs(point![2]!)).toBeCloseTo(1, 6)
+    expect(await approximateOf(railing.id)).toContain('floor-lift-unresolved-headless')
+  })
+
+  test('area, perimeter and volume measurements are measured from their base', async () => {
+    seedRef()
+    const base = [
+      [10, 0, 10],
+      [12, 0, 10],
+      [12, 0, 12],
+      [10, 0, 12],
+    ]
+    const area = MeasurementNode.parse({ measurement: { kind: 'area', base } })
+    const perimeter = MeasurementNode.parse({ measurement: { kind: 'perimeter', base } })
+    const volume = MeasurementNode.parse({
+      measurement: { kind: 'volume', base, extrusion: [0, 3, 0] },
+    })
+    bridge.applyPatch(
+      [area, perimeter, volume].map((node) => ({
+        op: 'create' as const,
+        node,
+        parentId: level.id as AnyNodeId,
+      })),
+    )
+    expectPoint(await pointOf(area.id), [11, 0, 11])
+    expectPoint(await pointOf(perimeter.id), [11, 0, 11])
+    // A prism's centre: the base centroid plus half the extrusion.
+    expectPoint(await pointOf(volume.id), [11, 1.5, 11])
+  })
+
+  test('semantic anchors resolve from the referenced node, or are flagged', async () => {
+    seedRef()
+    const wall = WallNode.parse({ start: [10, 0], end: [14, 0] })
+    const anchorAt = (t: number, fallback: [number, number, number]) => ({
+      kind: 'feature',
+      reference: { nodeId: wall.id, featureId: 'centerline', parameters: { t } },
+      fallback,
+    })
+    // Fallbacks recorded before the wall moved from x 0–4 to x 10–14.
+    const distance = MeasurementNode.parse({
+      measurement: { kind: 'distance', points: [anchorAt(0.25, [1, 0, 0]), [14, 0, 0]] },
+    })
+    bridge.applyPatch([
+      { op: 'create', node: wall, parentId: level.id as AnyNodeId },
+      { op: 'create', node: distance, parentId: level.id as AnyNodeId },
+    ])
+
+    // Headless: no registered measurement contribution for walls, so the
+    // fallback is used and flagged.
+    expectPoint(await pointOf(distance.id), [7.5, 0, 0])
+    expect(await approximateOf(distance.id)).toContain('anchor-fallback')
+
+    // With a contribution registered (as a host that loads the definitions
+    // does), the anchor follows the wall: t 0.25 of x 10–14 is x 11.
+    const restore = nodeRegistry._snapshot()
+    try {
+      registerNode({
+        kind: 'wall',
+        schemaVersion: 1,
+        schema: WallNode,
+        capabilities: {},
+        measurement: {
+          features: (node: AnyNode) => {
+            const w = node as WallNode
+            return [
+              {
+                id: 'centerline',
+                label: 'Centerline',
+                snapKind: 'edge',
+                geometry: {
+                  kind: 'segment',
+                  start: [w.start[0], 0, w.start[1]],
+                  end: [w.end[0], 0, w.end[1]],
+                },
+              },
+            ]
+          },
+        },
+      } as never)
+      expectPoint(await pointOf(distance.id), [12.5, 0, 0])
+      expect(await approximateOf(distance.id)).toBeUndefined()
+    } finally {
+      restore()
+    }
+  })
+
+  test('polygons are measured at their area centroid', async () => {
+    seedRef()
+    // An L whose vertex average (1.667, 1.667) falls outside the shape.
+    const zone = ZoneNode.parse({
+      name: 'L',
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 1],
+        [1, 1],
+        [1, 4],
+        [0, 4],
+      ],
+    })
+    bridge.applyPatch([{ op: 'create', node: zone, parentId: level.id as AnyNodeId }])
+    expectPoint(await pointOf(zone.id), [1.357142857, 0, 1.357142857])
+  })
+
+  test('the floor-lift flag list matches the built-in definitions that declare floorPlaced', () => {
+    // Source scan, like core's metadata-reference inventory: MCP cannot load
+    // @pascal-app/nodes (React, three), so keep this list in step with it.
+    const nodesSrc = join(import.meta.dir, '../../../nodes/src')
+    const declared: string[] = []
+    for (const dir of readdirSync(nodesSrc)) {
+      const file = join(nodesSrc, dir, 'definition.ts')
+      if (!existsSync(file)) continue
+      const source = readFileSync(file, 'utf8')
+      const sections = source.split(/\n\s+kind: '/).slice(1)
+      for (const section of sections) {
+        if (/\bfloorPlaced\s*:/.test(section)) declared.push(section.slice(0, section.indexOf("'")))
+      }
+    }
+    expect(declared.sort()).toEqual(
+      [...HEADLESS_UNRESOLVED_FLOOR_LIFT_KINDS, ...CORE_LIFTED].sort(),
+    )
+  })
+
+  test('every kind resolves on its real host, with renderer-derived poses flagged', async () => {
+    const ref = seedRef()
+    const deck = SlabNode.parse({
+      elevation: 1,
+      polygon: [
+        [-50, -50],
+        [50, -50],
+        [50, 50],
+        [-50, 50],
+      ],
+    })
+    const wall = WallNode.parse({ start: [0, 0], end: [8, 0] })
+    const segment = RoofSegmentNode.parse({ position: [2, 0, 0], wallHeight: 3 })
+    const roof = RoofNode.parse({ position: [0, 3, 10], children: [segment.id] })
+    const cabinet = CabinetNode.parse({ position: [5, 0, 5] })
+    const stair = StairNode.parse({ position: [-5, 0, -5] })
+    const hosts: Record<string, AnyNode> = { wall, 'roof-segment': segment, cabinet, stair }
+    const hostOf: Record<string, string> = {
+      door: 'wall',
+      window: 'wall',
+      'cabinet-module': 'cabinet',
+      'stair-segment': 'stair',
+    }
+    for (const kind of ROOF_ACCESSORIES) hostOf[kind] = 'roof-segment'
+
+    const patches: Parameters<SceneBridge['applyPatch']>[0] = [
+      { op: 'create', node: deck, parentId: level.id as AnyNodeId },
+      { op: 'create', node: wall, parentId: level.id as AnyNodeId },
+      { op: 'create', node: roof, parentId: level.id as AnyNodeId },
+      { op: 'create', node: segment, parentId: roof.id as AnyNodeId },
+      { op: 'create', node: cabinet, parentId: level.id as AnyNodeId },
+      { op: 'create', node: stair, parentId: level.id as AnyNodeId },
+    ]
+    const covered = new Set(['site', 'building', 'level', 'zone', 'slab', 'wall', 'roof'])
+    for (const node of minimalNodes()) {
+      if (covered.has(node.type) || hosts[node.type]) continue
+      covered.add(node.type)
+      const host = hosts[hostOf[node.type] ?? ''] ?? level
+      const data = node as Record<string, unknown>
+      if (host.type === 'wall') data.wallId = host.id
+      if (host.type === 'roof-segment') data.roofSegmentId = host.id
+      patches.push({ op: 'create', node, parentId: host.id as AnyNodeId })
+    }
+    for (const kind of Object.keys(hosts)) covered.add(kind)
+    bridge.applyPatch(patches)
+    // Every kind of the node union is in the scene, none skipped.
+    expect([...covered].sort()).toEqual(AnyNode.options.map(nodeKindOf).sort())
+
+    const failures: string[] = []
+    const approximate: string[] = []
+    const coreLiftedBelowDeck: string[] = []
+    for (const node of Object.values(bridge.getNodes())) {
+      if (node.id === ref.id) continue
+      const { isError, text, payload } = await measure(node.id, ref.id)
+      if (isError || !Number.isFinite(payload?.distanceMeters)) {
+        failures.push(`${node.type}: ${text}`)
+        continue
+      }
+      if (payload?.approximate?.some((entry) => entry.id === node.id)) approximate.push(node.type)
+      if (CORE_LIFTED.has(node.type) && node.parentId === level.id) {
+        if ((payload?.fromPoint?.[1] ?? 0) < 1 - 1e-6) coreLiftedBelowDeck.push(node.type)
+      }
+    }
+    expect(failures).toEqual([])
+    expect(coreLiftedBelowDeck).toEqual([])
+    expect(approximate.sort()).toEqual([
+      // Floor lift resolved by definitions headless MCP does not load, and
+      // nodes hosted on them.
+      'block',
+      'cabinet',
+      'cabinet-module',
+      'column',
+      'downspout',
+      'duct-terminal',
+      'fence',
+      'gutter',
+      'hvac-equipment',
+      'ridge-vent',
+      'skylight',
+      'solar-panel',
+      'spawn',
+      'stair',
+      'stair-segment',
+    ])
+  })
+})

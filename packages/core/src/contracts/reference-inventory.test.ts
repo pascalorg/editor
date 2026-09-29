@@ -23,7 +23,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { cloneNodesInto } from '../registry/subtree'
+import { cloneNodesInto, withoutSourceIdentity } from '../registry/subtree'
 import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema, nodeKindOf } from '../schema/types'
 import { cloneLevelSubtree, cloneSceneGraph } from '../utils/clone-scene-graph'
 import { discoverMetadataKeys, type ScanFs, scanMetadataSources } from './metadata-scan'
@@ -308,6 +308,14 @@ describe('label namespaces are never validated as node references', () => {
       'boundaryWallIds[]=wall_gone',
     ])
   })
+
+  test('provenance lineage names deleted nodes without dangling (D5)', () => {
+    const merged = { provenance: { refs: [], lineage: { op: 'merge', fromIds: ['wall_gone'] } } }
+    expect(dangling('wall', merged, {})).toEqual([])
+    expect(
+      EXISTING_REFERENCES.find((r) => r.path === 'provenance.lineage.fromIds[]'),
+    ).toMatchObject({ kind: '*', namespace: 'label', onDelete: 'freeze', onPreset: 'strip' })
+  })
 })
 
 describe('source-namespace provenance (R9)', () => {
@@ -316,9 +324,50 @@ describe('source-namespace provenance (R9)', () => {
       (r) => r.namespace === 'source',
     )
     expect(sources.map((r) => r.path)).toEqual(
-      expect.arrayContaining(['captureSession.sessionId', 'metadata.globalId']),
+      expect.arrayContaining([
+        'captureSession.sessionId',
+        'metadata.globalId',
+        'provenance.refs[].id',
+      ]),
     )
     for (const row of sources) expect(row.remaps).toEqual([])
+  })
+
+  test('every source reference a preset strips is gone from the preset copy (D5)', () => {
+    const rows = [...EXISTING_REFERENCES, ...METADATA_REFERENCES].filter(
+      (r) => r.namespace === 'source' && r.kind !== '#scene',
+    )
+    expect(rows.some((r) => r.onPreset === 'strip')).toBe(true)
+    for (const row of rows) {
+      const kind =
+        row.kind === '*'
+          ? (KINDS.find((k) => CANDIDATES.get(k)?.includes(row.path)) ?? 'wall')
+          : row.kind
+      const node: Loose = { id: `${kind}_a`, type: kind, metadata: {} }
+      setAt(node, row.path, 'source-1')
+      const copy = withoutSourceIdentity(node as unknown as AnyNode)
+      expect({ path: row.path, kept: getAt(copy, row.path) }).toEqual({
+        path: row.path,
+        kept: row.onPreset === 'strip' ? [] : getAt(node, row.path),
+      })
+    }
+    const lineage = { provenance: { refs: [], lineage: { op: 'split', fromIds: ['wall_b'] } } }
+    expect(
+      getAt(
+        withoutSourceIdentity({ ...lineage, id: 'wall_a', type: 'wall' } as never),
+        'provenance.lineage.fromIds[]',
+      ),
+    ).toEqual([])
+  })
+
+  test('typed provenance refs are stripped from presets so copies never claim them (D5)', () => {
+    expect(EXISTING_REFERENCES.find((r) => r.path === 'provenance.refs[].id')).toMatchObject({
+      kind: '*',
+      namespace: 'source',
+      role: 'content',
+      onDelete: 'freeze',
+      onPreset: 'strip',
+    })
   })
 })
 
@@ -527,6 +576,25 @@ describe('clone columns match today (R3 extractor evidence)', () => {
       }
     })
   }
+
+  test('typed provenance is kept verbatim by all three clones today (D5)', () => {
+    const provenance = {
+      refs: [{ ns: 'al', id: 'ground-exterior-01' }],
+      lineage: { op: 'split', fromIds: ['wall_b'] },
+    }
+    const nodes = {
+      level_l: { id: 'level_l', type: 'level', parentId: null, children: ['wall_a', 'wall_b'] },
+      wall_a: { id: 'wall_a', type: 'wall', name: 'owner', parentId: 'level_l', provenance },
+      wall_b: { id: 'wall_b', type: 'wall', name: 'target', parentId: 'level_l' },
+    } as unknown as Record<AnyNodeId, AnyNode>
+    const graph = cloneSceneGraph({ nodes, rootNodeIds: ['level_l' as AnyNodeId] })
+    const level = cloneLevelSubtree(nodes, 'level_l' as AnyNodeId)
+    const into = cloneNodesInto(Object.values(nodes), { rootId: 'level_l' as AnyNodeId })
+    for (const all of [Object.values(graph.nodes), level.clonedNodes, into.nodes]) {
+      expect(byName(all, 'target').id).not.toBe('wall_b')
+      expect(byName(all, 'owner').provenance).toEqual(provenance)
+    }
+  })
 
   test("supportSlabId keeps the 'ground' sentinel", () => {
     const nodes = {

@@ -4,8 +4,11 @@ import {
   type HandleDescriptor,
   type ItemNode as ItemNodeType,
   type NodeDefinition,
+  toggleMechanism,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import { itemHasLights, itemMechanism, toggleItemLights } from '../shared/item-interactions'
+import { itemBatchable } from '../shared/node-batch/batchable'
 import { restingFloorplanAffectedIds } from '../shared/resting-surface-plan'
 import { buildItemContextualDimensions, buildItemFloorplan } from './floorplan'
 import { itemFloorplanMoveTarget } from './floorplan-move'
@@ -177,6 +180,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   extensions: {
     'pascal:editor/floorplan': {
       contextualDimensions: buildItemContextualDimensions,
+      actionMenu: { actions: () => import('../shared/item-interaction-actions') },
     } satisfies FloorplanNodeExtension<ItemNodeType>,
   },
 
@@ -206,6 +210,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
     }) as unknown as Omit<ItemNodeType, 'id' | 'type'>,
 
   capabilities: {
+    batchable: itemBatchable,
     selectable: { hitVolume: 'bbox' },
     surfaces: {
       top: {
@@ -218,6 +223,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
     duplicable: { subtree: 'with-children' },
     deletable: true,
     paint: itemPaint,
+    mechanism: itemMechanism,
     // Items participate in compositions — e.g. "table-with-plants",
     // "shelf-with-books-on-top" — so they're presettable in their own
     // right (and as descendants of presettable parents). The GLB-kind
@@ -330,6 +336,14 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   // *transitions* (drop a wall item on a ceiling) remain canonical
   // in the 3D path; 2D only re-anchors within the same family.
   floorplanMoveTarget: itemFloorplanMoveTarget,
+  keyboardActions: {
+    e: {
+      appliesTo: (node) => itemMechanism.has(node) || itemHasLights(node),
+      // Same as the action bar: mechanisms when the item has them, otherwise its light.
+      run: (node) =>
+        itemMechanism.has(node) ? toggleMechanism(itemMechanism, node) : toggleItemLights(node),
+    },
+  },
 
   toolHints: [
     { key: 'Left click', label: 'Place item' },

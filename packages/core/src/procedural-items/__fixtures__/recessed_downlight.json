@@ -1,0 +1,392 @@
+{
+  "version": 2,
+  "name": "Recessed square downlight",
+  "description": "Square trim flush with the ceiling, an open can recessed into the ceiling and a glowing lens set back inside it.",
+  "classification": {
+    "category": "lighting",
+    "functionTags": ["downlight", "ceiling-light"],
+    "tags": ["recessed"]
+  },
+  "mounting": {
+    "attachTo": "ceiling",
+    "reference": "plane"
+  },
+  "cuts": [
+    {
+      "shape": "rect",
+      "size": ["size", "size"]
+    }
+  ],
+  "surfaces": [
+    {
+      "id": "plane",
+      "label": "Ceiling plane",
+      "position": [0, 0.01, 0],
+      "size": [
+        {
+          "op": "add",
+          "args": ["size", 0.04]
+        },
+        {
+          "op": "add",
+          "args": ["size", 0.04]
+        }
+      ]
+    }
+  ],
+  "parameters": [
+    {
+      "id": "size",
+      "label": "Aperture",
+      "default": 0.12,
+      "min": 0.08,
+      "max": 0.2,
+      "step": 0.01,
+      "unit": "m",
+      "axis": "x"
+    },
+    {
+      "id": "depth",
+      "label": "Recess depth",
+      "default": 0.12,
+      "min": 0.08,
+      "max": 0.2,
+      "step": 0.01,
+      "unit": "m"
+    }
+  ],
+  "slots": [
+    {
+      "id": "trim",
+      "label": "Trim",
+      "color": "#f4f4f2",
+      "finish": "metal"
+    },
+    {
+      "id": "can",
+      "label": "Can",
+      "color": "#2b2b2b"
+    },
+    {
+      "id": "lens",
+      "label": "Lens",
+      "color": "#fff4e0"
+    }
+  ],
+  "parts": [
+    {
+      "id": "trim",
+      "label": "Trim",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "north",
+          "primitive": "box",
+          "slot": "trim",
+          "size": [
+            {
+              "op": "add",
+              "args": ["size", 0.04]
+            },
+            0.01,
+            0.02
+          ],
+          "position": [
+            0,
+            0.005,
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "op": "add",
+                  "args": [
+                    {
+                      "op": "div",
+                      "args": ["size", 2]
+                    },
+                    0.01
+                  ]
+                },
+                -1
+              ]
+            }
+          ]
+        },
+        {
+          "id": "south",
+          "primitive": "box",
+          "slot": "trim",
+          "size": [
+            {
+              "op": "add",
+              "args": ["size", 0.04]
+            },
+            0.01,
+            0.02
+          ],
+          "position": [
+            0,
+            0.005,
+            {
+              "op": "add",
+              "args": [
+                {
+                  "op": "div",
+                  "args": ["size", 2]
+                },
+                0.01
+              ]
+            }
+          ]
+        },
+        {
+          "id": "east",
+          "primitive": "box",
+          "slot": "trim",
+          "size": [0.02, 0.01, "size"],
+          "position": [
+            {
+              "op": "add",
+              "args": [
+                {
+                  "op": "div",
+                  "args": ["size", 2]
+                },
+                0.01
+              ]
+            },
+            0.005,
+            0
+          ]
+        },
+        {
+          "id": "west",
+          "primitive": "box",
+          "slot": "trim",
+          "size": [0.02, 0.01, "size"],
+          "position": [
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "op": "add",
+                  "args": [
+                    {
+                      "op": "div",
+                      "args": ["size", 2]
+                    },
+                    0.01
+                  ]
+                },
+                -1
+              ]
+            },
+            0.005,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "can",
+      "label": "Can",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "north",
+          "primitive": "box",
+          "slot": "can",
+          "size": ["size", "depth", 0.004],
+          "position": [
+            0,
+            {
+              "op": "add",
+              "args": [
+                0.01,
+                {
+                  "op": "div",
+                  "args": ["depth", 2]
+                }
+              ]
+            },
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "op": "sub",
+                  "args": [
+                    {
+                      "op": "div",
+                      "args": ["size", 2]
+                    },
+                    0.002
+                  ]
+                },
+                -1
+              ]
+            }
+          ]
+        },
+        {
+          "id": "south",
+          "primitive": "box",
+          "slot": "can",
+          "size": ["size", "depth", 0.004],
+          "position": [
+            0,
+            {
+              "op": "add",
+              "args": [
+                0.01,
+                {
+                  "op": "div",
+                  "args": ["depth", 2]
+                }
+              ]
+            },
+            {
+              "op": "sub",
+              "args": [
+                {
+                  "op": "div",
+                  "args": ["size", 2]
+                },
+                0.002
+              ]
+            }
+          ]
+        },
+        {
+          "id": "east",
+          "primitive": "box",
+          "slot": "can",
+          "size": [
+            0.004,
+            "depth",
+            {
+              "op": "sub",
+              "args": ["size", 0.008]
+            }
+          ],
+          "position": [
+            {
+              "op": "sub",
+              "args": [
+                {
+                  "op": "div",
+                  "args": ["size", 2]
+                },
+                0.002
+              ]
+            },
+            {
+              "op": "add",
+              "args": [
+                0.01,
+                {
+                  "op": "div",
+                  "args": ["depth", 2]
+                }
+              ]
+            },
+            0
+          ]
+        },
+        {
+          "id": "west",
+          "primitive": "box",
+          "slot": "can",
+          "size": [
+            0.004,
+            "depth",
+            {
+              "op": "sub",
+              "args": ["size", 0.008]
+            }
+          ],
+          "position": [
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "op": "sub",
+                  "args": [
+                    {
+                      "op": "div",
+                      "args": ["size", 2]
+                    },
+                    0.002
+                  ]
+                },
+                -1
+              ]
+            },
+            {
+              "op": "add",
+              "args": [
+                0.01,
+                {
+                  "op": "div",
+                  "args": ["depth", 2]
+                }
+              ]
+            },
+            0
+          ]
+        },
+        {
+          "id": "top",
+          "primitive": "box",
+          "slot": "can",
+          "size": ["size", 0.004, "size"],
+          "position": [
+            0,
+            {
+              "op": "sub",
+              "args": [
+                {
+                  "op": "add",
+                  "args": [0.01, "depth"]
+                },
+                0.002
+              ]
+            },
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lens",
+      "label": "Lens",
+      "count": 1,
+      "light": {
+        "position": [0, 0.045, 0],
+        "color": "#fff4e0",
+        "intensity": 1.5,
+        "distance": 4,
+        "emissiveSlot": "lens"
+      },
+      "shapes": [
+        {
+          "id": "lens",
+          "primitive": "box",
+          "slot": "lens",
+          "size": [
+            {
+              "op": "sub",
+              "args": ["size", 0.01]
+            },
+            0.006,
+            {
+              "op": "sub",
+              "args": ["size", 0.01]
+            }
+          ],
+          "position": [0, 0.05, 0]
+        }
+      ]
+    }
+  ],
+  "constraints": []
+}

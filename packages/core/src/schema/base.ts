@@ -1,6 +1,7 @@
 import { customAlphabet } from 'nanoid'
 import { z } from 'zod'
 import { CameraSchema } from './camera'
+import { Provenance } from './provenance'
 
 const customId = customAlphabet('0123456789abcdefghijklmnopqrstuvwxyz', 16)
 
@@ -34,6 +35,7 @@ export const BaseNode = z.object({
   // Metadata is a flat bag of per-node extras, so an open object with
   // unchecked values is the whole contract we need.
   metadata: z.record(z.string(), z.unknown()).optional().default({}),
+  provenance: Provenance.optional(),
 })
 
 export type BaseNode = z.infer<typeof BaseNode>

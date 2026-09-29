@@ -76,11 +76,14 @@ function restoreMountedExitPose(saved: MountedExitPose) {
  * Runs at priority 1 — before the priority-2 systems (`GeometrySystem`,
  * `ItemSystem`) so the dirty mark survives long enough for those to do
  * their own work. Kinds with no geometry/system have no downstream dirty
- * consumer, so this system clears their dirty mark after applying the lift.
+ * consumer, so this system clears their dirty mark after applying the lift,
+ * at priority 2 like every other consumer: the node batch snapshots marks at
+ * priority 1, and a mark cleared there could run before that snapshot.
  */
 export const FloorElevationSystem = () => {
   const dirtyNodes = useScene((s) => s.dirtyNodes)
   const clearDirty = useScene((s) => s.clearDirty)
+  const consumed = useMemo(() => new Set<AnyNodeId>(), [])
   const preview = useMemo(
     () => ({
       local: new Matrix4(),
@@ -160,9 +163,7 @@ export const FloorElevationSystem = () => {
       if (!position) return
       if (effectiveNode.parentId !== node.parentId) return
 
-      if (!(def.geometry || def.system) && dirtyNodes.has(id)) {
-        clearDirty(id)
-      }
+      if (!(def.geometry || def.system) && dirtyNodes.has(id)) consumed.add(id)
 
       // `applies === false` means the kind opts OUT of floor stacking for this
       // node: its Y belongs to a host frame (a wall/ceiling-mounted item, a
@@ -207,6 +208,11 @@ export const FloorElevationSystem = () => {
       if (!dirtyNodes.has(id as AnyNodeId) && !overrides.has(id)) applyLift(id as AnyNodeId)
     })
   }, 1)
+
+  useFrame(() => {
+    for (const id of consumed) clearDirty(id)
+    consumed.clear()
+  }, 2)
 
   // PostProcessing draws at priority 1 after this system; later callbacks would show one wrong frame per move.
   useFrame(() => {

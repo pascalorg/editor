@@ -4,7 +4,9 @@ import { useEffect, useRef } from 'react'
 import { Vector3 } from 'three'
 import { initPerfObservers } from '../../lib/perf-observers'
 import { publishPerfStats, readPerfBatchStats } from '../../lib/perf-panel-store'
+import { readPerfHistory, readPerfSelection } from '../../lib/perf-probe-state'
 import { clearPerfMeasures, drainPerfCounters, type PerfCounterBucket } from '../../lib/perf-tracks'
+import useViewer from '../../store/use-viewer'
 
 const SAMPLE_INTERVAL = 0.5 // seconds between display updates
 // Walking the scene graph is the overlay's own biggest cost on large projects,
@@ -75,6 +77,10 @@ export const PerfMonitor = () => {
   useEffect(() => {
     const probe = {
       batchStats: readPerfBatchStats,
+      // Undo/redo entry counts and history pause state, and the selection path: what a
+      // gesture receipt needs on a production build, where the stores have no handle.
+      history: () => readPerfHistory(useScene),
+      selection: () => readPerfSelection(useViewer),
       listNodes(type: string): string[] {
         return Object.values(useScene.getState().nodes)
           .filter((n) => n.type === type)

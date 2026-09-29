@@ -1,0 +1,249 @@
+{
+  "version": 2,
+  "name": "Cabinet with nested mechanisms",
+  "description": "A door with a turning knob and a drawer with a swinging bail pull: two nested joint chains.",
+  "classification": {
+    "category": "casework",
+    "functionTags": ["cabinet"],
+    "tags": ["joints"]
+  },
+  "parameters": [
+    {
+      "id": "swing",
+      "label": "Door swing",
+      "default": -1.7,
+      "min": -2.4,
+      "max": -1,
+      "step": 0.1,
+      "unit": "rad"
+    },
+    {
+      "id": "travel",
+      "label": "Drawer travel",
+      "default": 0.3,
+      "min": 0.15,
+      "max": 0.35,
+      "step": 0.01,
+      "unit": "m"
+    }
+  ],
+  "slots": [
+    {
+      "id": "carcass",
+      "label": "Carcass",
+      "color": "#e6dfd2",
+      "finish": "wood"
+    },
+    {
+      "id": "front",
+      "label": "Fronts",
+      "color": "#5f7d8c"
+    },
+    {
+      "id": "metal",
+      "label": "Hardware",
+      "color": "#c9a96b",
+      "finish": "metal"
+    }
+  ],
+  "parts": [
+    {
+      "id": "body",
+      "label": "Body",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "left",
+          "primitive": "box",
+          "slot": "carcass",
+          "size": [0.02, 0.9, 0.5],
+          "position": [-0.39, 0.45, 0]
+        },
+        {
+          "id": "right",
+          "primitive": "box",
+          "slot": "carcass",
+          "size": [0.02, 0.9, 0.5],
+          "position": [0.39, 0.45, 0]
+        },
+        {
+          "id": "top",
+          "primitive": "box",
+          "slot": "carcass",
+          "size": [0.8, 0.02, 0.5],
+          "position": [0, 0.89, 0]
+        },
+        {
+          "id": "bottom",
+          "primitive": "box",
+          "slot": "carcass",
+          "size": [0.8, 0.02, 0.5],
+          "position": [0, 0.01, 0]
+        },
+        {
+          "id": "back",
+          "primitive": "box",
+          "slot": "carcass",
+          "size": [0.76, 0.86, 0.01],
+          "position": [0, 0.45, -0.245]
+        },
+        {
+          "id": "divider",
+          "primitive": "box",
+          "slot": "carcass",
+          "size": [0.02, 0.86, 0.48],
+          "position": [0, 0.45, 0.01]
+        },
+        {
+          "id": "shelf",
+          "primitive": "box",
+          "slot": "carcass",
+          "size": [0.37, 0.02, 0.48],
+          "position": [0.195, 0.55, 0.01]
+        }
+      ]
+    },
+    {
+      "id": "panel",
+      "label": "Lower panel",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "leaf",
+          "primitive": "box",
+          "slot": "front",
+          "size": [0.39, 0.54, 0.02],
+          "position": [0.2, 0.28, 0.26]
+        }
+      ]
+    },
+    {
+      "id": "door",
+      "label": "Door",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "leaf",
+          "primitive": "box",
+          "slot": "front",
+          "size": [0.39, 0.86, 0.02],
+          "position": [-0.2, 0.45, 0.26]
+        }
+      ]
+    },
+    {
+      "id": "knob",
+      "label": "Knob",
+      "count": 1,
+      "parent": "door",
+      "frame": {
+        "position": [-0.06, 0.45, 0.27]
+      },
+      "shapes": [
+        {
+          "id": "stem",
+          "primitive": "cylinder",
+          "slot": "metal",
+          "size": [0.012, 0.02, 0.012],
+          "position": [0, 0, 0.01],
+          "rotation": [1.5707963267948966, 0, 0]
+        },
+        {
+          "id": "grip",
+          "primitive": "box",
+          "slot": "metal",
+          "size": [0.05, 0.016, 0.014],
+          "position": [0, 0, 0.027]
+        }
+      ]
+    },
+    {
+      "id": "drawer",
+      "label": "Drawer",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "front",
+          "primitive": "box",
+          "slot": "front",
+          "size": [0.39, 0.3, 0.02],
+          "position": [0.2, 0.72, 0.26]
+        },
+        {
+          "id": "tray",
+          "primitive": "box",
+          "slot": "carcass",
+          "size": [0.34, 0.2, 0.42],
+          "position": [0.2, 0.7, 0.04]
+        }
+      ]
+    },
+    {
+      "id": "pull",
+      "label": "Pull",
+      "count": 1,
+      "parent": "drawer",
+      "shapes": [
+        {
+          "id": "bar",
+          "primitive": "box",
+          "slot": "metal",
+          "size": [0.14, 0.012, 0.012],
+          "position": [0.2, 0.69, 0.283]
+        },
+        {
+          "id": "lug_left",
+          "primitive": "box",
+          "slot": "metal",
+          "size": [0.008, 0.025, 0.012],
+          "position": [0.134, 0.7, 0.276]
+        },
+        {
+          "id": "lug_right",
+          "primitive": "box",
+          "slot": "metal",
+          "size": [0.008, 0.025, 0.012],
+          "position": [0.266, 0.7, 0.276]
+        }
+      ]
+    }
+  ],
+  "joints": [
+    {
+      "child": "door",
+      "kind": "revolute",
+      "origin": [-0.395, 0.45, 0.27],
+      "axis": [0, 1, 0],
+      "open": "swing",
+      "duration": 0.6
+    },
+    {
+      "child": "knob",
+      "kind": "revolute",
+      "origin": [0, 0, 0],
+      "axis": [0, 0, 1],
+      "open": 1.2,
+      "duration": 0.35
+    },
+    {
+      "child": "drawer",
+      "kind": "prismatic",
+      "origin": [0, 0, 0],
+      "axis": [0, 0, 1],
+      "open": "travel",
+      "delay": 0.1,
+      "duration": 0.45,
+      "easing": "soft"
+    },
+    {
+      "child": "pull",
+      "kind": "revolute",
+      "origin": [0.2, 0.705, 0.276],
+      "axis": [1, 0, 0],
+      "open": -1.2,
+      "duration": 0.3,
+      "delay": 0.05
+    }
+  ],
+  "constraints": []
+}

@@ -58,6 +58,8 @@ export function resolveFloorplanAnnotationVisibility(
     openingMarks: false,
     structuralGrids: false,
     roomLabels: true,
+    roomDetails: false,
+    roofPlan: false,
     stairAnnotations: false,
   }
   return interactive && context.referencedAnnotationRole

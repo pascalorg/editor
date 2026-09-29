@@ -116,6 +116,30 @@ export function planBlockTopologyEdit(
     })
   }
   for (const child of children) {
+    if (child.type === 'item' && child.blockFaceId && child.asset.attachTo) {
+      const faceId = child.blockFaceId
+      // A face stretched, trimmed or re-shaped in its own plane moves its centroid, the
+      // origin of the item's face frame: keep the item's pose instead of dragging it along.
+      // A face moved as a whole still carries it.
+      const previous = getBlockFaceFrame(host.topology, faceId)
+      const next = getBlockFaceFrame(topology, faceId)
+      if (!(previous && next && previousFaces.has(faceId) && nextFaces.has(faceId))) continue
+      if (translation(faceId)) continue
+      if (previous.normal.some((value, axis) => Math.abs(value - next.normal[axis]!) > 1e-6))
+        continue
+      const shift = previous.origin.map((value, axis) => value - next.origin[axis]!)
+      const along = (direction: readonly number[]) =>
+        shift.reduce((sum, value, axis) => sum + value * direction[axis]!, 0)
+      // In-plane only: the item stays on the face if the face also moved along its normal.
+      const position: [number, number, number] = [
+        child.position[0] + along(next.xAxis),
+        child.position[1] + along(next.yAxis),
+        child.position[2],
+      ]
+      if (position.some((value, axis) => Math.abs(value - child.position[axis]!) > 1e-9))
+        updates.push([child.id, { position }])
+      continue
+    }
     if (child.type === 'item' && child.blockFaceId && !child.asset.attachTo) {
       reconciled.add(child.id)
       const matrix = faceMatrix(host, child.blockFaceId)

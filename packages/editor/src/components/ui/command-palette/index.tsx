@@ -364,7 +364,11 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
                         keywords={action.keywords}
                         label={action.label}
                         navigate={action.navigate}
-                        onSelect={() => action.execute()}
+                        // A registered command that does not navigate within the
+                        // palette closes it, like the built-ins — otherwise the
+                        // dialog overlay keeps swallowing clicks under a full-screen
+                        // surface the command opened (Sheets).
+                        onSelect={() => (action.navigate ? action.execute() : run(() => action.execute()))}
                         shortcut={action.shortcut}
                       />
                     ))}
