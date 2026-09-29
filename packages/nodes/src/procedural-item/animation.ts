@@ -2,35 +2,57 @@ import {
   type EvaluatedMotion,
   evaluateRecipe,
   finitePoseFraction,
+  motionAxis,
+  motionRestOffset,
   motionTimeline,
   type ProceduralItemNode,
 } from '@pascal-app/core/procedural-items'
 import * as THREE from 'three'
 
+const playingMotions = new Set<string>()
+
+/** Procedural items whose motion is playing draw their own meshes (node batch). */
+export const isProceduralMotionPlaying = (nodeId: string) => playingMotions.has(nodeId)
+
+export function setProceduralMotionPlaying(nodeId: string, playing: boolean): boolean {
+  if (playingMotions.has(nodeId) === playing) return false
+  if (playing) playingMotions.add(nodeId)
+  else playingMotions.delete(nodeId)
+  return true
+}
+
 export function poseProceduralMotionsAtRest(
   node: ProceduralItemNode,
   object: THREE.Object3D,
 ): void {
-  for (const motion of evaluateRecipe(node.recipe, node.parameters).motions) {
+  const { motions } = evaluateRecipe(node.recipe, node.parameters)
+  for (const motion of motions) {
     const group = object.getObjectByName(`${node.id}__motion__${motion.id}`)
     if (!group) continue
-    group.position.set(...motion.pivot)
+    group.position.set(...motionRestOffset(motion, motions))
     group.quaternion.identity()
   }
 }
 
 function axisVector(motion: EvaluatedMotion): THREE.Vector3 {
-  return new THREE.Vector3(
-    Number(motion.axis === 'x'),
-    Number(motion.axis === 'y'),
-    Number(motion.axis === 'z'),
-  )
+  return new THREE.Vector3(...motionAxis(motion))
+}
+
+// An export animates the joint groups, so it keeps them and drops the merged rest pose.
+function keepJointGroups(object: THREE.Object3D) {
+  const rest: THREE.Object3D[] = []
+  object.traverse((child) => {
+    if (child.userData.pascalProceduralRest) rest.push(child)
+    if (child.userData.pascalProceduralSplit) child.visible = true
+  })
+  for (const child of rest) child.removeFromParent()
 }
 
 export function bakeProceduralAnimationClips(
   node: ProceduralItemNode,
   object: THREE.Object3D,
 ): THREE.AnimationClip[] {
+  keepJointGroups(object)
   const evaluation = evaluateRecipe(node.recipe, node.parameters)
   const { T, perPart } = motionTimeline(evaluation)
   poseProceduralMotionsAtRest(node, object)
@@ -61,7 +83,7 @@ export function bakeProceduralAnimationClips(
       const values = times.flatMap((time) => {
         const fraction = finitePoseFraction(motion, time)
         if (motion.kind === 'slide')
-          return new THREE.Vector3(...motion.pivot)
+          return new THREE.Vector3(...motionRestOffset(motion, evaluation.motions))
             .addScaledVector(axisVector(motion), motion.amount * fraction)
             .toArray()
         return new THREE.Quaternion()

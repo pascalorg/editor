@@ -356,8 +356,11 @@ function collectColliderGeometriesFromNode(
     visitedMeshes.add(object)
 
     // Prune hidden subtrees — children of an invisible group never render,
-    // so they must not collide either (see isEffectivelyVisible).
-    if (!object.visible) return
+    // so they must not collide either (see isEffectivelyVisible). An idle joint
+    // tree draws a merged rest pose that includes its moving parts; its hidden
+    // split group holds the same static parts apart from them.
+    if (object.userData.pascalProceduralRest) return
+    if (!object.visible && !object.userData.pascalProceduralSplit) return
     if (object.userData.proceduralMotion) return
 
     if (

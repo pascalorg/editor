@@ -53,6 +53,7 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   load_scene: policy(false, true, false),
   measure: policy(true, false, false),
   photo_to_scene: policy(false, true, true),
+  place_design: policy(false, false, false),
   place_item: policy(false, false, false),
   redo: policy(false, true, false),
   rename_scene: policy(false, true, false),
@@ -61,6 +62,7 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   set_unit_members: policy(false, true, false),
   set_zone: policy(false, false, false),
   undo: policy(false, true, false),
+  validate_design: policy(true, false, false),
   validate_scene: policy(true, false, false),
   verify_scene: policy(true, false, false),
 } as const satisfies Record<string, ToolAnnotations>

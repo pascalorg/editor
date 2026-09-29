@@ -1215,6 +1215,54 @@ describe('prepareSceneForExport', () => {
     })
   })
 
+  test("lists any kind's registry loop clip in extras.clips, without claiming it opens", () => {
+    // A plugin mechanism (an articulated asset's joints) bakes one looping clip;
+    // the baked viewer can only play clips its identity node lists.
+    const root = new THREE.Group()
+    const nodeGroup = new THREE.Group()
+    const joint = new THREE.Group()
+    joint.add(meshWithNodeMaterial(nodeMaterial()))
+    nodeGroup.add(joint)
+    root.add(nodeGroup)
+
+    const kind = `test:articulated-${crypto.randomUUID()}`
+    const nodeId = 'plugin_articulated'
+    registerNode({
+      kind,
+      schemaVersion: 1,
+      category: 'furnish',
+      defaults: () => ({}),
+      capabilities: {},
+      exportAnimation: ({ node, object }: { node: AnyNode; object: THREE.Object3D }) => {
+        const target = object.children[0]!
+        const clip = new THREE.AnimationClip(`${node.id}: loop`, 2, [
+          new THREE.QuaternionKeyframeTrack(
+            `${target.uuid}.quaternion`,
+            [0, 2],
+            [0, 0, 0, 1, 0, 0, 0, 1],
+          ),
+        ])
+        clip.userData = { loop: true }
+        return clip
+      },
+    } as never)
+    sceneRegistry.nodes.set(nodeId, nodeGroup)
+
+    const { scene, animations } = prepareSceneForExport(root, {
+      [nodeId]: {
+        object: 'node',
+        id: nodeId,
+        type: kind,
+        name: 'Articulated',
+      } as unknown as AnyNode,
+    })
+
+    expect(animations.map((clip) => clip.name)).toEqual(['plugin_articulated: loop'])
+    const exported = scene.getObjectByProperty('name', nodeId)
+    expect(exported?.userData.clips).toEqual(['plugin_articulated: loop'])
+    expect(exported?.userData.openable).toBeUndefined()
+  })
+
   test('bakes a sliding door into a sampled position clip', () => {
     // Operation doors build their moving parts in a named group posed by
     // `poseDoorMovingParts`; the exporter samples it into keyframes. The active

@@ -79,6 +79,8 @@ function collectCeilingHoles(
     const hole = def?.capabilities?.ceilingCut?.buildCeilingHole(child)
     if (hole) holes.push(hole)
   }
+  for (const [, def] of nodeRegistry.entries())
+    holes.push(...(def.capabilities?.ceilingCut?.holesFor?.(ceiling) ?? []))
 
   return holes
 }

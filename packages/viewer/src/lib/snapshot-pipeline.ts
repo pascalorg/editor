@@ -1,8 +1,9 @@
-import { type Camera, Color, Matrix4, type Scene, UnsignedByteType } from 'three'
+import { type Camera, Color, Matrix4, type Scene, SRGBColorSpace, UnsignedByteType } from 'three'
 import { ssgi } from 'three/addons/tsl/display/SSGINode.js'
 import { denoise } from 'three/examples/jsm/tsl/display/DenoiseNode.js'
 import { fxaa } from 'three/examples/jsm/tsl/display/FXAANode.js'
 import {
+  clamp,
   convertToTexture,
   diffuseColor,
   float,
@@ -10,11 +11,13 @@ import {
   mrt,
   normalView,
   output,
+  renderOutput,
   sample,
   saturation,
   screenUV,
   smoothstep,
   uniform,
+  vec2,
   vec3,
   vec4,
 } from 'three/tsl'
@@ -75,6 +78,28 @@ export type SnapshotCaptureResult = {
   outH: number
 }
 
+/**
+ * An opaque studio backdrop in place of the theme sky: a radial gradient in
+ * exact sRGB (never tone mapped, so the hexes land as authored). Fixed at
+ * pipeline creation — callers without one get the untouched theme-backdrop
+ * pipeline. Ground shadows come from the caller's own shadow catcher, which
+ * composites over it through the scene alpha.
+ */
+export type StudioBackdrop = {
+  /** sRGB hex at `center`. */
+  inner: string
+  /** sRGB hex at the frame corner farthest from `center`. */
+  outer: string
+  /** Gradient centre in screen UV (0,0 = top-left). */
+  center: [number, number]
+}
+
+function srgbHexToVec3(hex: string) {
+  const color = new Color(hex)
+  const { r, g, b } = color.getRGB({ r: 0, g: 0, b: 0 }, SRGBColorSpace)
+  return vec3(r, g, b)
+}
+
 export type SnapshotPipeline = {
   applyEnvironment: ({
     theme,
@@ -123,11 +148,13 @@ export async function createSnapshotPipeline({
   scene,
   camera,
   atmosphere = null,
+  studioBackdrop,
 }: {
   renderer: WebGPURenderer
   scene: Scene
   camera: Camera
   atmosphere?: SceneAtmosphereSource | null
+  studioBackdrop?: StudioBackdrop
 }): Promise<SnapshotPipeline | null> {
   try {
     if ((renderer as any).init) await (renderer as any).init()
@@ -237,12 +264,41 @@ export async function createSnapshotPipeline({
       mix(alpha, float(1), bgMixUniform),
     )
 
-    // FXAA requires a texture node as input; convertToTexture renders finalOutput
-    // into an intermediate RT so FXAA can sample it with neighbour UV offsets.
-    const aaOutput = fxaa(convertToTexture(finalOutput))
-
     const pipeline = new RenderPipeline(renderer)
-    pipeline.outputNode = aaOutput
+    if (studioBackdrop) {
+      // Composite in display space: the scene gets the renderer's own output
+      // transform (tone mapping + sRGB), the backdrop is already sRGB — so
+      // the pipeline's final transform is off.
+      const { width, height } = renderer.domElement
+      const aspect = width / height
+      const [cx, cy] = studioBackdrop.center
+      const radius = Math.max(
+        ...[
+          [0, 0],
+          [1, 0],
+          [0, 1],
+          [1, 1],
+        ].map(([x, y]) => Math.hypot((x! - cx) * aspect, y! - cy)),
+      )
+      const offset = (screenUV as any).sub(vec2(cx, cy)).mul(vec2(aspect, 1))
+      const t = smoothstep(float(0), float(1), clamp(offset.length().div(radius), 0, 1))
+      const backdrop = mix(
+        srgbHexToVec3(studioBackdrop.inner),
+        srgbHexToVec3(studioBackdrop.outer),
+        t,
+      )
+      const sceneDisplay = renderOutput(
+        vec4(sceneRgb, 1),
+        renderer.toneMapping,
+        renderer.outputColorSpace,
+      ).rgb
+      pipeline.outputColorTransform = false
+      pipeline.outputNode = fxaa(convertToTexture(vec4(mix(backdrop, sceneDisplay, alpha), 1)))
+    } else {
+      // FXAA requires a texture node as input; convertToTexture renders finalOutput
+      // into an intermediate RT so FXAA can sample it with neighbour UV offsets.
+      pipeline.outputNode = fxaa(convertToTexture(finalOutput))
+    }
 
     // Dedicated render target — pipeline outputs here instead of the canvas,
     // so R3F's main render loop can never overwrite our capture.

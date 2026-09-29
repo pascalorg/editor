@@ -8,6 +8,7 @@ import type { MeasurementFeatureReference, MeasurementPoint } from '../schema/no
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId, Discipline, DisplayFamily, PartKey } from '../schema/types'
 import type { SurfaceProvider } from '../services/surface-hosting'
+import type { InteractiveState } from '../store/use-interactive'
 import type { HandleList } from './handles'
 import type { CloneNodesIntoOptions, Subtree } from './subtree'
 
@@ -1697,6 +1698,13 @@ export type Capabilities = {
   interactive?: boolean
   floorPlaced?: FloorPlacedConfig
   /**
+   * Opt this kind into node draw batching. Its opaque single-material meshes
+   * join its level's shared `BatchedMesh` containers while the node is
+   * static; the sources stay mounted, pickable and exported. See
+   * `BatchableConfig`.
+   */
+  batchable?: BatchableConfig
+  /**
    * Plan footprint this kind exposes to the alignment-anchor pool when it
    * isn't `floorPlaced` and isn't a structural primitive the bridge handles
    * directly (wall, slab). Lets a kind self-describe where it sits in plan
@@ -1740,6 +1748,12 @@ export type Capabilities = {
    * in the editor.
    */
   sceneAction?: SceneActionCapability
+  /**
+   * Moving parts people run: Play/Stop in the action menu, E, and the
+   * walkthrough read this instead of a kind name, so any kind (plugins
+   * included) gets them by declaring it. See `MechanismCapability`.
+   */
+  mechanism?: MechanismCapability
   /**
    * Declares the kind's paintable slots — the `{ slotId, label, default }`
    * contract shared by items (scanned from the GLB) and procedural kinds
@@ -1948,6 +1962,23 @@ export type SceneActionCapability<T = unknown> = {
   activate: (node: AnyNode, target: T, sceneApi: SceneApi) => boolean
 }
 
+/**
+ * A kind's moving parts (a fan's spin, doors, an articulated asset's joints).
+ * Operating state is transient: `set` writes `useInteractive`, never the node,
+ * so running a mechanism never enters undo, autosave or collaboration. A kind
+ * with a single switch keeps it in `useInteractive.mechanisms`.
+ */
+export type MechanismCapability = {
+  /** Whether this node has anything to run. */
+  has: (node: AnyNode) => boolean
+  /** Whether any of its mechanisms is running. */
+  isOn: (node: AnyNode, state: InteractiveState) => boolean
+  /** Starts or stops all of them. */
+  set: (node: AnyNode, on: boolean) => void
+  /** Walkthrough wording: `open` parts open and close; `run` parts (the default) turn on and off. */
+  verb?: 'open' | 'run'
+}
+
 export type NodeQuickActionIcon = 'add-left' | 'add-right' | 'add' | 'convert'
 
 export type NodeQuickActionResult = {
@@ -2084,6 +2115,11 @@ export type RoofAccessoryConfig = {
  */
 export type CeilingCutCapability = {
   buildCeilingHole: (node: AnyNode) => Array<[number, number]> | null
+  /**
+   * Holes this kind cuts in `ceiling` that no child of it reports, such as a node
+   * whose live move preview sits on this ceiling while it still belongs to another.
+   */
+  holesFor?: (ceiling: AnyNode) => Array<Array<[number, number]>>
 }
 
 /**
@@ -2424,9 +2460,40 @@ export type FloorPlacedConfig = {
    * placement/move refuses to overlap another colliding footprint (red ghost,
    * Alt to force). Solid furniture-like kinds (item / shelf / column) set this;
    * markers and port-mated kinds (spawn / MEP / stair) leave it off so they
-   * neither block nor get blocked. Default off.
+   * neither block nor get blocked. Default off. A predicate decides per node
+   * (a block collides only while it rests on the floor); read it through
+   * `floorPlacedCollides`.
    */
-  collides?: boolean
+  collides?: boolean | ((node: AnyNode) => boolean)
+}
+
+/**
+ * How the node batch treats a kind (`capabilities.batchable`). Selection,
+ * hover, live transforms, live overrides and slot paint previews release any
+ * batched node; these fields declare what is specific to the kind.
+ */
+export type BatchableConfig = {
+  /**
+   * Where the node's batches live. `'level'`: the node is a direct child of a
+   * level; hosted or mounted nodes draw themselves, because their host moves
+   * them without a signal the batch sees. `'wall'`: the node is hosted by a
+   * visible wall that is a level child; the wall's edits, tint and gestures
+   * release it.
+   */
+  scope: 'level' | 'wall'
+  /** Transient states in which the node draws its own meshes, such as a running animation. */
+  excluded?: (node: AnyNode) => boolean
+  /** Whether the node's mounted object is final, read from its registered root's `userData`. */
+  settled?: (userData: Readonly<Record<string, unknown>>) => boolean
+  /**
+   * Allocation key for the node's `meshIndex`-th batchable mesh when the kind
+   * rebuilds its geometry in place (slabs, ceilings): a rebuild then replaces
+   * its packed slot instead of adding one. Without it, meshes that share a
+   * geometry share one allocation.
+   */
+  batchKey?: (node: AnyNode, meshIndex: number) => string
+  /** Joins wait until wall rebuilds and wall drags on the node's level have settled. */
+  waitsForWalls?: boolean
 }
 
 /**

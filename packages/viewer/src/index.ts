@@ -120,6 +120,7 @@ export {
   isIsolationActive,
   refreshIsolation,
 } from './lib/isolation'
+export { setKeyLightDirectionOverride } from './lib/key-light-override'
 export { configureKtx2Support, ensureKtx2Support } from './lib/ktx2-loader'
 export { LayerPassIndex } from './lib/layer-pass'
 export {
@@ -160,6 +161,7 @@ export {
   resolveMaterialRef,
   resolveSlotDefaultMaterial,
   resolveSurfaceColor,
+  setSlotDefaultOverrides,
   WHITE_PALETTE,
 } from './lib/materials'
 export { mergedOutline } from './lib/merged-outline-node'
@@ -205,6 +207,7 @@ export {
   type SnapshotCropRegion,
   type SnapshotPipeline,
   type SnapshotSize,
+  type StudioBackdrop,
   THUMBNAIL_HEIGHT,
   THUMBNAIL_WIDTH,
 } from './lib/snapshot-pipeline'

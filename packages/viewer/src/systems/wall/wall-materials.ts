@@ -28,6 +28,7 @@ import {
   materialPresetRefSignature,
   type RenderShading,
   resolveMaterialRef,
+  resolveSlotDefaultRef,
   resolveSurfaceColor,
 } from '../../lib/materials'
 
@@ -113,7 +114,8 @@ function hasExplicitMaterial(spec: WallSurfaceMaterialSpec): boolean {
 
 // Resolve a wall face's declared default — a catalog `library:` finish or a
 // flat colour — to a renderable material.
-function resolveWallSlotDefault(slotDefault: string, shading: RenderShading): Material {
+function resolveWallSlotDefault(declaredDefault: string, shading: RenderShading): Material {
+  const slotDefault = resolveSlotDefaultRef(declaredDefault)
   if (parseMaterialRef(slotDefault)?.kind === 'library') {
     return createMaterialFromPresetRef(slotDefault, shading) ?? baseMaterial(shading)
   }

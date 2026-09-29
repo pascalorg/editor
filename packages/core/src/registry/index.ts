@@ -18,10 +18,12 @@ export type {
   TapActionHandle,
   TranslateHandle,
 } from './handles'
+export { nodeMechanism, toggleMechanism, toggleNodeMechanism } from './mechanism'
 export {
   bakePolicyOf,
   discoverPlugins,
   extendPluginDiscovery,
+  floorPlacedCollides,
   getHostRefFields,
   getInspectorExtensions,
   getNodePluginId,
@@ -74,6 +76,7 @@ export type {
   BakeGeometryBuilder,
   BakePolicy,
   BakeReplaceRenderer,
+  BatchableConfig,
   Capabilities,
   CapabilityCtx,
   CutsContext,
@@ -128,6 +131,7 @@ export type {
   MeasurementFeatureBinding,
   MeasurementFeatureGeometry,
   MeasurementSnapKind,
+  MechanismCapability,
   Modifiers,
   MovableConfig,
   MovableParentFrame,

@@ -354,6 +354,7 @@ export {
   type DoorInteractiveState,
   type ElevatorInteractiveState,
   type ElevatorPhase,
+  type InteractiveState,
   type ItemInteractiveState,
   type SkylightAnimationState,
   type SkylightInteractiveState,
@@ -384,6 +385,7 @@ export {
   type SceneNodeStructuralPatch,
   type SceneOperationPatch,
   type ScenePatch,
+  type ScenePluginInstallPatch,
 } from './store/use-scene'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'
 export {
@@ -556,6 +558,12 @@ export {
 export type { SceneGraph } from './utils/clone-scene-graph'
 export { cloneLevelSubtree, cloneSceneGraph, forkSceneGraph } from './utils/clone-scene-graph'
 export { isObject } from './utils/types'
+export {
+  checkOpeningWithinWall,
+  formatOpeningBoundsIssue,
+  OPENING_BOUNDS_TOLERANCE,
+  type OpeningBoundsIssue,
+} from './validation/opening-bounds'
 export {
   type BuildStats,
   type ParsedBuildJson,

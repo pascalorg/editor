@@ -8,6 +8,7 @@ import type {
   OrthographicCamera,
 } from 'three/webgpu'
 import * as THREE from 'three/webgpu'
+import { getKeyLightDirectionOverride } from '../../lib/key-light-override'
 import { SHADOW_ONLY_LAYER } from '../../lib/layers'
 import { getSceneTheme } from '../../lib/scene-themes'
 import useViewer from '../../store/use-viewer'
@@ -171,7 +172,10 @@ export function Lights() {
         const distance = size + SHADOW_BACKOFF
         const near = SHADOW_BACKOFF
         const far = distance + size
-        if (atmosphere) {
+        const directionOverride = getKeyLightDirectionOverride()
+        if (directionOverride) {
+          shadowDir.current.set(...directionOverride)
+        } else if (atmosphere) {
           shadowDir.current.copy(atmosphere.sunDirection)
         } else if (themeKey) {
           shadowDir.current.set(...themeKey.position)
