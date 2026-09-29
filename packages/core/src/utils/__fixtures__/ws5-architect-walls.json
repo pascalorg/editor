@@ -1,0 +1,1590 @@
+{
+ "source": "Architect plugin-generate buildHouse(POPPY) and its cmu wall system, plus WS5 inspector writes (brick custom, partition, CMU furred), all produced by editor b53a907b7 (#937)",
+ "nodes": {
+  "level_ground": {
+   "object": "node",
+   "id": "level_ground",
+   "type": "level",
+   "parentId": null,
+   "visible": true,
+   "metadata": {},
+   "level": 0,
+   "children": [
+    "wall_ppm4imc2bjedqtux",
+    "wall_3xv3hyxg95ltskqp",
+    "wall_s4841w5qerwa56ld",
+    "wall_2eoxuz6bf9c7ycgk",
+    "wall_9kjd474uctb73k53",
+    "wall_8oek696jtqeofwat",
+    "wall_krqppvgieyttgxsv",
+    "wall_muf1hmgrqtqtqt4n",
+    "wall_ky88k7buxt07vktc",
+    "wall_92ur46ldm6yjsjmk",
+    "wall_t1zatbouicg1g94t",
+    "wall_fjk67tw30rqyumpf",
+    "wall_ykrpgvdk26bl16y1",
+    "wall_x53ke6u8l4mmuxug_cmu",
+    "wall_fwntw72bmkctvghn_cmu",
+    "wall_4dt4b9o4f2hsp6cf_cmu",
+    "wall_7ic0eil9273fk87u_cmu",
+    "wall_v9n9c2hwvkiq34i4_cmu",
+    "wall_52kzscr7wn9n417f_cmu",
+    "wall_mxchrqtirzj7912d_cmu",
+    "wall_dl6tehrz0epx9y9u_cmu",
+    "wall_c4pmkhxbaqd3ahgo_cmu",
+    "wall_kgjg0752h9m0r0md_cmu",
+    "wall_5c0i43n9og73goyf_cmu",
+    "wall_e39nvj4nat5rcfw1_cmu",
+    "wall_odes3s61q6mw0qzz_cmu",
+    "wall_north",
+    "wall_east",
+    "wall_south",
+    "wall_west",
+    "wall_partition",
+    "wall_cmu",
+    "wall_plain"
+   ]
+  },
+  "wall_ppm4imc2bjedqtux": {
+   "id": "wall_ppm4imc2bjedqtux",
+   "type": "wall",
+   "name": "Exterior wall",
+   "parentId": "level_ground",
+   "start": [
+    -3.6576,
+    -5.0292
+   ],
+   "end": [
+    3.6576,
+    -5.0292
+   ],
+   "thickness": 0.182562,
+   "assembly": {
+    "preset": "exterior-2x6-siding",
+    "exterior": {
+     "finish": "siding",
+     "thickness": 0.019049999999999997
+    },
+    "sheathing": {
+     "material": "osb",
+     "thickness": 0.011112499999999999
+    },
+    "framing": {
+     "kind": "wood",
+     "depth": 0.1397
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    },
+    "cavityInsulation": "batt, R per climate zone (IRC N1102.1.3)"
+   },
+   "frontSide": "interior",
+   "backSide": "exterior",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "ext2x6",
+    "role": "exterior",
+    "rooms": [
+     "LIVING"
+    ],
+    "roof": {
+     "role": "gable-end"
+    }
+   },
+   "fillToTerrain": true,
+   "underpinning": {
+    "rim": 0,
+    "stem": 0.3556
+   },
+   "slots": {
+    "exterior": "library:siding-lap-nearblack",
+    "interior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_3xv3hyxg95ltskqp": {
+   "id": "wall_3xv3hyxg95ltskqp",
+   "type": "wall",
+   "name": "LIVING + BATH",
+   "parentId": "level_ground",
+   "start": [
+    -3.6576,
+    -0.762
+   ],
+   "end": [
+    -1.524,
+    -0.762
+   ],
+   "thickness": 0.1143,
+   "assembly": {
+    "preset": "interior-2x4-drywall",
+    "framing": {
+     "kind": "wood",
+     "depth": 0.08889999999999999
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    }
+   },
+   "frontSide": "unknown",
+   "backSide": "unknown",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "int2x4",
+    "role": "partition",
+    "rooms": [
+     "LIVING",
+     "BATH"
+    ]
+   },
+   "slots": {
+    "interior": "library:preset-lightgrey",
+    "exterior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_s4841w5qerwa56ld": {
+   "id": "wall_s4841w5qerwa56ld",
+   "type": "wall",
+   "name": "BATH + BEDROOM 1",
+   "parentId": "level_ground",
+   "start": [
+    -3.6576,
+    1.6764
+   ],
+   "end": [
+    -1.524,
+    1.6764
+   ],
+   "thickness": 0.1143,
+   "assembly": {
+    "preset": "interior-2x4-drywall",
+    "framing": {
+     "kind": "wood",
+     "depth": 0.08889999999999999
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    }
+   },
+   "frontSide": "unknown",
+   "backSide": "unknown",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "int2x4",
+    "role": "partition",
+    "rooms": [
+     "BATH",
+     "BEDROOM 1"
+    ]
+   },
+   "slots": {
+    "interior": "library:preset-lightgrey",
+    "exterior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_2eoxuz6bf9c7ycgk": {
+   "id": "wall_2eoxuz6bf9c7ycgk",
+   "type": "wall",
+   "name": "DINING + BEDROOM 1",
+   "parentId": "level_ground",
+   "start": [
+    -1.524,
+    1.6764
+   ],
+   "end": [
+    -0.4572,
+    1.6764
+   ],
+   "thickness": 0.1143,
+   "assembly": {
+    "preset": "interior-2x4-drywall",
+    "framing": {
+     "kind": "wood",
+     "depth": 0.08889999999999999
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    }
+   },
+   "frontSide": "unknown",
+   "backSide": "unknown",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "int2x4",
+    "role": "partition",
+    "rooms": [
+     "DINING",
+     "BEDROOM 1"
+    ]
+   },
+   "slots": {
+    "interior": "library:preset-lightgrey",
+    "exterior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_9kjd474uctb73k53": {
+   "id": "wall_9kjd474uctb73k53",
+   "type": "wall",
+   "name": "DINING + LAUNDRY",
+   "parentId": "level_ground",
+   "start": [
+    -0.4572,
+    1.6764
+   ],
+   "end": [
+    0.4572,
+    1.6764
+   ],
+   "thickness": 0.1143,
+   "assembly": {
+    "preset": "interior-2x4-drywall",
+    "framing": {
+     "kind": "wood",
+     "depth": 0.08889999999999999
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    }
+   },
+   "frontSide": "unknown",
+   "backSide": "unknown",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "int2x4",
+    "role": "partition",
+    "rooms": [
+     "DINING",
+     "LAUNDRY"
+    ]
+   },
+   "slots": {
+    "interior": "library:preset-lightgrey",
+    "exterior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_8oek696jtqeofwat": {
+   "id": "wall_8oek696jtqeofwat",
+   "type": "wall",
+   "name": "DINING + BEDROOM 2",
+   "parentId": "level_ground",
+   "start": [
+    0.4572,
+    1.6764
+   ],
+   "end": [
+    0.6096,
+    1.6764
+   ],
+   "thickness": 0.1143,
+   "assembly": {
+    "preset": "interior-2x4-drywall",
+    "framing": {
+     "kind": "wood",
+     "depth": 0.08889999999999999
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    }
+   },
+   "frontSide": "unknown",
+   "backSide": "unknown",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "int2x4",
+    "role": "partition",
+    "rooms": [
+     "DINING",
+     "BEDROOM 2"
+    ]
+   },
+   "slots": {
+    "interior": "library:preset-lightgrey",
+    "exterior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_krqppvgieyttgxsv": {
+   "id": "wall_krqppvgieyttgxsv",
+   "type": "wall",
+   "name": "KITCHEN + BEDROOM 2",
+   "parentId": "level_ground",
+   "start": [
+    0.6096,
+    1.6764
+   ],
+   "end": [
+    3.6576,
+    1.6764
+   ],
+   "thickness": 0.1143,
+   "assembly": {
+    "preset": "interior-2x4-drywall",
+    "framing": {
+     "kind": "wood",
+     "depth": 0.08889999999999999
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    }
+   },
+   "frontSide": "unknown",
+   "backSide": "unknown",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "int2x4",
+    "role": "partition",
+    "rooms": [
+     "KITCHEN",
+     "BEDROOM 2"
+    ]
+   },
+   "slots": {
+    "interior": "library:preset-lightgrey",
+    "exterior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_muf1hmgrqtqtqt4n": {
+   "id": "wall_muf1hmgrqtqtqt4n",
+   "type": "wall",
+   "name": "Exterior wall",
+   "parentId": "level_ground",
+   "start": [
+    -3.6576,
+    5.0292
+   ],
+   "end": [
+    3.6576,
+    5.0292
+   ],
+   "thickness": 0.182562,
+   "assembly": {
+    "preset": "exterior-2x6-siding",
+    "exterior": {
+     "finish": "siding",
+     "thickness": 0.019049999999999997
+    },
+    "sheathing": {
+     "material": "osb",
+     "thickness": 0.011112499999999999
+    },
+    "framing": {
+     "kind": "wood",
+     "depth": 0.1397
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    },
+    "cavityInsulation": "batt, R per climate zone (IRC N1102.1.3)"
+   },
+   "frontSide": "exterior",
+   "backSide": "interior",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "ext2x6",
+    "role": "exterior",
+    "rooms": [
+     "BEDROOM 1",
+     "LAUNDRY",
+     "BEDROOM 2"
+    ],
+    "roof": {
+     "role": "gable-end"
+    }
+   },
+   "fillToTerrain": true,
+   "underpinning": {
+    "rim": 0,
+    "stem": 0.3556
+   },
+   "slots": {
+    "exterior": "library:siding-lap-nearblack",
+    "interior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_ky88k7buxt07vktc": {
+   "id": "wall_ky88k7buxt07vktc",
+   "type": "wall",
+   "name": "Exterior wall",
+   "parentId": "level_ground",
+   "start": [
+    -3.6576,
+    -5.0292
+   ],
+   "end": [
+    -3.6576,
+    5.0292
+   ],
+   "thickness": 0.182562,
+   "assembly": {
+    "preset": "exterior-2x6-siding",
+    "exterior": {
+     "finish": "siding",
+     "thickness": 0.019049999999999997
+    },
+    "sheathing": {
+     "material": "osb",
+     "thickness": 0.011112499999999999
+    },
+    "framing": {
+     "kind": "wood",
+     "depth": 0.1397
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    },
+    "cavityInsulation": "batt, R per climate zone (IRC N1102.1.3)"
+   },
+   "frontSide": "exterior",
+   "backSide": "interior",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "ext2x6",
+    "role": "exterior",
+    "rooms": [
+     "LIVING",
+     "BATH",
+     "BEDROOM 1"
+    ],
+    "roof": {
+     "role": "eave"
+    }
+   },
+   "fillToTerrain": true,
+   "underpinning": {
+    "rim": 0,
+    "stem": 0.3556
+   },
+   "slots": {
+    "exterior": "library:siding-lap-nearblack",
+    "interior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_92ur46ldm6yjsjmk": {
+   "id": "wall_92ur46ldm6yjsjmk",
+   "type": "wall",
+   "name": "BATH + DINING",
+   "parentId": "level_ground",
+   "start": [
+    -1.524,
+    -0.762
+   ],
+   "end": [
+    -1.524,
+    1.6764
+   ],
+   "thickness": 0.1143,
+   "assembly": {
+    "preset": "interior-2x4-drywall",
+    "framing": {
+     "kind": "wood",
+     "depth": 0.08889999999999999
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    }
+   },
+   "frontSide": "unknown",
+   "backSide": "unknown",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "int2x4",
+    "role": "partition",
+    "rooms": [
+     "BATH",
+     "DINING"
+    ]
+   },
+   "slots": {
+    "interior": "library:preset-lightgrey",
+    "exterior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_t1zatbouicg1g94t": {
+   "id": "wall_t1zatbouicg1g94t",
+   "type": "wall",
+   "name": "BEDROOM 1 + LAUNDRY",
+   "parentId": "level_ground",
+   "start": [
+    -0.4572,
+    1.6764
+   ],
+   "end": [
+    -0.4572,
+    5.0292
+   ],
+   "thickness": 0.1143,
+   "assembly": {
+    "preset": "interior-2x4-drywall",
+    "framing": {
+     "kind": "wood",
+     "depth": 0.08889999999999999
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    }
+   },
+   "frontSide": "unknown",
+   "backSide": "unknown",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "int2x4",
+    "role": "partition",
+    "rooms": [
+     "BEDROOM 1",
+     "LAUNDRY"
+    ]
+   },
+   "slots": {
+    "interior": "library:preset-lightgrey",
+    "exterior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_fjk67tw30rqyumpf": {
+   "id": "wall_fjk67tw30rqyumpf",
+   "type": "wall",
+   "name": "LAUNDRY + BEDROOM 2",
+   "parentId": "level_ground",
+   "start": [
+    0.4572,
+    1.6764
+   ],
+   "end": [
+    0.4572,
+    5.0292
+   ],
+   "thickness": 0.1143,
+   "assembly": {
+    "preset": "interior-2x4-drywall",
+    "framing": {
+     "kind": "wood",
+     "depth": 0.08889999999999999
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    }
+   },
+   "frontSide": "unknown",
+   "backSide": "unknown",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "int2x4",
+    "role": "partition",
+    "rooms": [
+     "LAUNDRY",
+     "BEDROOM 2"
+    ]
+   },
+   "slots": {
+    "interior": "library:preset-lightgrey",
+    "exterior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_ykrpgvdk26bl16y1": {
+   "id": "wall_ykrpgvdk26bl16y1",
+   "type": "wall",
+   "name": "Exterior wall",
+   "parentId": "level_ground",
+   "start": [
+    3.6576,
+    -5.0292
+   ],
+   "end": [
+    3.6576,
+    5.0292
+   ],
+   "thickness": 0.182562,
+   "assembly": {
+    "preset": "exterior-2x6-siding",
+    "exterior": {
+     "finish": "siding",
+     "thickness": 0.019049999999999997
+    },
+    "sheathing": {
+     "material": "osb",
+     "thickness": 0.011112499999999999
+    },
+    "framing": {
+     "kind": "wood",
+     "depth": 0.1397
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    },
+    "cavityInsulation": "batt, R per climate zone (IRC N1102.1.3)"
+   },
+   "frontSide": "interior",
+   "backSide": "exterior",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "ext2x6",
+    "role": "exterior",
+    "rooms": [
+     "LIVING",
+     "KITCHEN",
+     "BEDROOM 2"
+    ],
+    "roof": {
+     "role": "eave"
+    }
+   },
+   "fillToTerrain": true,
+   "underpinning": {
+    "rim": 0,
+    "stem": 0.3556
+   },
+   "slots": {
+    "exterior": "library:siding-lap-nearblack",
+    "interior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_x53ke6u8l4mmuxug_cmu": {
+   "id": "wall_x53ke6u8l4mmuxug_cmu",
+   "type": "wall",
+   "name": "Exterior wall",
+   "parentId": "level_ground",
+   "start": [
+    16.3424,
+    -5.0292
+   ],
+   "end": [
+    23.6576,
+    -5.0292
+   ],
+   "thickness": 0.24765,
+   "assembly": {
+    "preset": "exterior-cmu-stucco",
+    "framing": {
+     "kind": "cmu",
+     "depth": 0.19367499999999999
+    },
+    "sheathing": {
+     "material": "none",
+     "thickness": 0
+    },
+    "exterior": {
+     "finish": "stucco",
+     "thickness": 0.022224999999999998
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.03175
+    }
+   },
+   "frontSide": "interior",
+   "backSide": "exterior",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "ext2x6",
+    "role": "exterior",
+    "rooms": [
+     "LIVING"
+    ],
+    "roof": {
+     "role": "gable-end"
+    }
+   },
+   "fillToTerrain": true,
+   "underpinning": {
+    "rim": 0,
+    "stem": 0.3556
+   },
+   "slots": {
+    "exterior": "library:preset-midgrey",
+    "interior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_fwntw72bmkctvghn_cmu": {
+   "id": "wall_fwntw72bmkctvghn_cmu",
+   "type": "wall",
+   "name": "LIVING + BATH",
+   "parentId": "level_ground",
+   "start": [
+    16.3424,
+    -0.762
+   ],
+   "end": [
+    18.476,
+    -0.762
+   ],
+   "thickness": 0.1143,
+   "assembly": {
+    "preset": "interior-2x4-drywall",
+    "framing": {
+     "kind": "wood",
+     "depth": 0.08889999999999999
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    }
+   },
+   "frontSide": "unknown",
+   "backSide": "unknown",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "int2x4",
+    "role": "partition",
+    "rooms": [
+     "LIVING",
+     "BATH"
+    ]
+   },
+   "slots": {
+    "interior": "library:preset-lightgrey",
+    "exterior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_4dt4b9o4f2hsp6cf_cmu": {
+   "id": "wall_4dt4b9o4f2hsp6cf_cmu",
+   "type": "wall",
+   "name": "BATH + BEDROOM 1",
+   "parentId": "level_ground",
+   "start": [
+    16.3424,
+    1.6764
+   ],
+   "end": [
+    18.476,
+    1.6764
+   ],
+   "thickness": 0.1143,
+   "assembly": {
+    "preset": "interior-2x4-drywall",
+    "framing": {
+     "kind": "wood",
+     "depth": 0.08889999999999999
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    }
+   },
+   "frontSide": "unknown",
+   "backSide": "unknown",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "int2x4",
+    "role": "partition",
+    "rooms": [
+     "BATH",
+     "BEDROOM 1"
+    ]
+   },
+   "slots": {
+    "interior": "library:preset-lightgrey",
+    "exterior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_7ic0eil9273fk87u_cmu": {
+   "id": "wall_7ic0eil9273fk87u_cmu",
+   "type": "wall",
+   "name": "DINING + BEDROOM 1",
+   "parentId": "level_ground",
+   "start": [
+    18.476,
+    1.6764
+   ],
+   "end": [
+    19.5428,
+    1.6764
+   ],
+   "thickness": 0.1143,
+   "assembly": {
+    "preset": "interior-2x4-drywall",
+    "framing": {
+     "kind": "wood",
+     "depth": 0.08889999999999999
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    }
+   },
+   "frontSide": "unknown",
+   "backSide": "unknown",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "int2x4",
+    "role": "partition",
+    "rooms": [
+     "DINING",
+     "BEDROOM 1"
+    ]
+   },
+   "slots": {
+    "interior": "library:preset-lightgrey",
+    "exterior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_v9n9c2hwvkiq34i4_cmu": {
+   "id": "wall_v9n9c2hwvkiq34i4_cmu",
+   "type": "wall",
+   "name": "DINING + LAUNDRY",
+   "parentId": "level_ground",
+   "start": [
+    19.5428,
+    1.6764
+   ],
+   "end": [
+    20.4572,
+    1.6764
+   ],
+   "thickness": 0.1143,
+   "assembly": {
+    "preset": "interior-2x4-drywall",
+    "framing": {
+     "kind": "wood",
+     "depth": 0.08889999999999999
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    }
+   },
+   "frontSide": "unknown",
+   "backSide": "unknown",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "int2x4",
+    "role": "partition",
+    "rooms": [
+     "DINING",
+     "LAUNDRY"
+    ]
+   },
+   "slots": {
+    "interior": "library:preset-lightgrey",
+    "exterior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_52kzscr7wn9n417f_cmu": {
+   "id": "wall_52kzscr7wn9n417f_cmu",
+   "type": "wall",
+   "name": "DINING + BEDROOM 2",
+   "parentId": "level_ground",
+   "start": [
+    20.4572,
+    1.6764
+   ],
+   "end": [
+    20.6096,
+    1.6764
+   ],
+   "thickness": 0.1143,
+   "assembly": {
+    "preset": "interior-2x4-drywall",
+    "framing": {
+     "kind": "wood",
+     "depth": 0.08889999999999999
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    }
+   },
+   "frontSide": "unknown",
+   "backSide": "unknown",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "int2x4",
+    "role": "partition",
+    "rooms": [
+     "DINING",
+     "BEDROOM 2"
+    ]
+   },
+   "slots": {
+    "interior": "library:preset-lightgrey",
+    "exterior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_mxchrqtirzj7912d_cmu": {
+   "id": "wall_mxchrqtirzj7912d_cmu",
+   "type": "wall",
+   "name": "KITCHEN + BEDROOM 2",
+   "parentId": "level_ground",
+   "start": [
+    20.6096,
+    1.6764
+   ],
+   "end": [
+    23.6576,
+    1.6764
+   ],
+   "thickness": 0.1143,
+   "assembly": {
+    "preset": "interior-2x4-drywall",
+    "framing": {
+     "kind": "wood",
+     "depth": 0.08889999999999999
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    }
+   },
+   "frontSide": "unknown",
+   "backSide": "unknown",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "int2x4",
+    "role": "partition",
+    "rooms": [
+     "KITCHEN",
+     "BEDROOM 2"
+    ]
+   },
+   "slots": {
+    "interior": "library:preset-lightgrey",
+    "exterior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_dl6tehrz0epx9y9u_cmu": {
+   "id": "wall_dl6tehrz0epx9y9u_cmu",
+   "type": "wall",
+   "name": "Exterior wall",
+   "parentId": "level_ground",
+   "start": [
+    16.3424,
+    5.0292
+   ],
+   "end": [
+    23.6576,
+    5.0292
+   ],
+   "thickness": 0.24765,
+   "assembly": {
+    "preset": "exterior-cmu-stucco",
+    "framing": {
+     "kind": "cmu",
+     "depth": 0.19367499999999999
+    },
+    "sheathing": {
+     "material": "none",
+     "thickness": 0
+    },
+    "exterior": {
+     "finish": "stucco",
+     "thickness": 0.022224999999999998
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.03175
+    }
+   },
+   "frontSide": "exterior",
+   "backSide": "interior",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "ext2x6",
+    "role": "exterior",
+    "rooms": [
+     "BEDROOM 1",
+     "LAUNDRY",
+     "BEDROOM 2"
+    ],
+    "roof": {
+     "role": "gable-end"
+    }
+   },
+   "fillToTerrain": true,
+   "underpinning": {
+    "rim": 0,
+    "stem": 0.3556
+   },
+   "slots": {
+    "exterior": "library:preset-midgrey",
+    "interior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_c4pmkhxbaqd3ahgo_cmu": {
+   "id": "wall_c4pmkhxbaqd3ahgo_cmu",
+   "type": "wall",
+   "name": "Exterior wall",
+   "parentId": "level_ground",
+   "start": [
+    16.3424,
+    -5.0292
+   ],
+   "end": [
+    16.3424,
+    5.0292
+   ],
+   "thickness": 0.24765,
+   "assembly": {
+    "preset": "exterior-cmu-stucco",
+    "framing": {
+     "kind": "cmu",
+     "depth": 0.19367499999999999
+    },
+    "sheathing": {
+     "material": "none",
+     "thickness": 0
+    },
+    "exterior": {
+     "finish": "stucco",
+     "thickness": 0.022224999999999998
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.03175
+    }
+   },
+   "frontSide": "exterior",
+   "backSide": "interior",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "ext2x6",
+    "role": "exterior",
+    "rooms": [
+     "LIVING",
+     "BATH",
+     "BEDROOM 1"
+    ],
+    "roof": {
+     "role": "eave"
+    }
+   },
+   "fillToTerrain": true,
+   "underpinning": {
+    "rim": 0,
+    "stem": 0.3556
+   },
+   "slots": {
+    "exterior": "library:preset-midgrey",
+    "interior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_kgjg0752h9m0r0md_cmu": {
+   "id": "wall_kgjg0752h9m0r0md_cmu",
+   "type": "wall",
+   "name": "BATH + DINING",
+   "parentId": "level_ground",
+   "start": [
+    18.476,
+    -0.762
+   ],
+   "end": [
+    18.476,
+    1.6764
+   ],
+   "thickness": 0.1143,
+   "assembly": {
+    "preset": "interior-2x4-drywall",
+    "framing": {
+     "kind": "wood",
+     "depth": 0.08889999999999999
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    }
+   },
+   "frontSide": "unknown",
+   "backSide": "unknown",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "int2x4",
+    "role": "partition",
+    "rooms": [
+     "BATH",
+     "DINING"
+    ]
+   },
+   "slots": {
+    "interior": "library:preset-lightgrey",
+    "exterior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_5c0i43n9og73goyf_cmu": {
+   "id": "wall_5c0i43n9og73goyf_cmu",
+   "type": "wall",
+   "name": "BEDROOM 1 + LAUNDRY",
+   "parentId": "level_ground",
+   "start": [
+    19.5428,
+    1.6764
+   ],
+   "end": [
+    19.5428,
+    5.0292
+   ],
+   "thickness": 0.1143,
+   "assembly": {
+    "preset": "interior-2x4-drywall",
+    "framing": {
+     "kind": "wood",
+     "depth": 0.08889999999999999
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    }
+   },
+   "frontSide": "unknown",
+   "backSide": "unknown",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "int2x4",
+    "role": "partition",
+    "rooms": [
+     "BEDROOM 1",
+     "LAUNDRY"
+    ]
+   },
+   "slots": {
+    "interior": "library:preset-lightgrey",
+    "exterior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_e39nvj4nat5rcfw1_cmu": {
+   "id": "wall_e39nvj4nat5rcfw1_cmu",
+   "type": "wall",
+   "name": "LAUNDRY + BEDROOM 2",
+   "parentId": "level_ground",
+   "start": [
+    20.4572,
+    1.6764
+   ],
+   "end": [
+    20.4572,
+    5.0292
+   ],
+   "thickness": 0.1143,
+   "assembly": {
+    "preset": "interior-2x4-drywall",
+    "framing": {
+     "kind": "wood",
+     "depth": 0.08889999999999999
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    }
+   },
+   "frontSide": "unknown",
+   "backSide": "unknown",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "int2x4",
+    "role": "partition",
+    "rooms": [
+     "LAUNDRY",
+     "BEDROOM 2"
+    ]
+   },
+   "slots": {
+    "interior": "library:preset-lightgrey",
+    "exterior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_odes3s61q6mw0qzz_cmu": {
+   "id": "wall_odes3s61q6mw0qzz_cmu",
+   "type": "wall",
+   "name": "Exterior wall",
+   "parentId": "level_ground",
+   "start": [
+    23.6576,
+    -5.0292
+   ],
+   "end": [
+    23.6576,
+    5.0292
+   ],
+   "thickness": 0.24765,
+   "assembly": {
+    "preset": "exterior-cmu-stucco",
+    "framing": {
+     "kind": "cmu",
+     "depth": 0.19367499999999999
+    },
+    "sheathing": {
+     "material": "none",
+     "thickness": 0
+    },
+    "exterior": {
+     "finish": "stucco",
+     "thickness": 0.022224999999999998
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.03175
+    }
+   },
+   "frontSide": "interior",
+   "backSide": "exterior",
+   "metadata": {
+    "generatedBy": "pascal:generate",
+    "wallType": "ext2x6",
+    "role": "exterior",
+    "rooms": [
+     "LIVING",
+     "KITCHEN",
+     "BEDROOM 2"
+    ],
+    "roof": {
+     "role": "eave"
+    }
+   },
+   "fillToTerrain": true,
+   "underpinning": {
+    "rim": 0,
+    "stem": 0.3556
+   },
+   "slots": {
+    "exterior": "library:preset-midgrey",
+    "interior": "library:preset-lightgrey"
+   },
+   "object": "node",
+   "visible": true,
+   "children": []
+  },
+  "wall_north": {
+   "object": "node",
+   "id": "wall_north",
+   "type": "wall",
+   "name": "wall_north",
+   "parentId": "level_ground",
+   "visible": true,
+   "metadata": {},
+   "children": [],
+   "start": [
+    40,
+    6
+   ],
+   "end": [
+    40,
+    0
+   ],
+   "frontSide": "interior",
+   "backSide": "exterior",
+   "height": 2.7432,
+   "assembly": {
+    "preset": "exterior-2x6-siding",
+    "exterior": {
+     "finish": "siding",
+     "thickness": 0.019049999999999997
+    },
+    "sheathing": {
+     "material": "osb",
+     "thickness": 0.011112499999999999
+    },
+    "framing": {
+     "kind": "wood",
+     "depth": 0.1397
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    },
+    "cavityInsulation": "batt, R per climate zone (IRC N1102.1.3)"
+   },
+   "thickness": 0.18256249999999996
+  },
+  "wall_east": {
+   "object": "node",
+   "id": "wall_east",
+   "type": "wall",
+   "name": "wall_east",
+   "parentId": "level_ground",
+   "visible": true,
+   "metadata": {},
+   "children": [],
+   "start": [
+    40,
+    0
+   ],
+   "end": [
+    48,
+    0
+   ],
+   "frontSide": "interior",
+   "backSide": "exterior",
+   "height": 2.7432,
+   "assembly": {
+    "preset": "exterior-2x6-stucco",
+    "exterior": {
+     "finish": "stucco",
+     "thickness": 0.022224999999999998
+    },
+    "sheathing": {
+     "material": "osb",
+     "thickness": 0.011112499999999999
+    },
+    "framing": {
+     "kind": "wood",
+     "depth": 0.1397
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    },
+    "cavityInsulation": "batt, R per climate zone (IRC N1102.1.3)"
+   },
+   "thickness": 0.18573749999999997
+  },
+  "wall_south": {
+   "object": "node",
+   "id": "wall_south",
+   "type": "wall",
+   "name": "wall_south",
+   "parentId": "level_ground",
+   "visible": true,
+   "metadata": {},
+   "children": [],
+   "start": [
+    48,
+    0
+   ],
+   "end": [
+    48,
+    6
+   ],
+   "frontSide": "interior",
+   "backSide": "exterior",
+   "height": 2.7432,
+   "assembly": {
+    "exterior": {
+     "finish": "brick",
+     "thickness": 0.117475
+    },
+    "sheathing": {
+     "material": "osb",
+     "thickness": 0.011112499999999999
+    },
+    "framing": {
+     "kind": "wood",
+     "depth": 0.1397
+    },
+    "interior": {
+     "finish": "plaster",
+     "thickness": 0.016
+    },
+    "cavityInsulation": "batt, R per climate zone (IRC N1102.1.3)"
+   },
+   "thickness": 0.2842875
+  },
+  "wall_west": {
+   "object": "node",
+   "id": "wall_west",
+   "type": "wall",
+   "name": "wall_west",
+   "parentId": "level_ground",
+   "visible": true,
+   "metadata": {},
+   "children": [],
+   "start": [
+    48,
+    6
+   ],
+   "end": [
+    40,
+    6
+   ],
+   "frontSide": "interior",
+   "backSide": "exterior",
+   "height": 2.7432,
+   "assembly": {
+    "preset": "exterior-2x4-siding",
+    "exterior": {
+     "finish": "siding",
+     "thickness": 0.019049999999999997
+    },
+    "sheathing": {
+     "material": "osb",
+     "thickness": 0.011112499999999999
+    },
+    "framing": {
+     "kind": "wood",
+     "depth": 0.08889999999999999
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    },
+    "cavityInsulation": "batt, R per climate zone (IRC N1102.1.3)"
+   },
+   "thickness": 0.13176249999999998
+  },
+  "wall_partition": {
+   "object": "node",
+   "id": "wall_partition",
+   "type": "wall",
+   "name": "wall_partition",
+   "parentId": "level_ground",
+   "visible": true,
+   "metadata": {},
+   "children": [],
+   "start": [
+    44,
+    0
+   ],
+   "end": [
+    44,
+    6
+   ],
+   "frontSide": "interior",
+   "backSide": "interior",
+   "height": 2.7432,
+   "assembly": {
+    "preset": "interior-2x4-drywall",
+    "framing": {
+     "kind": "wood",
+     "depth": 0.08889999999999999
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.0127
+    }
+   },
+   "thickness": 0.11429999999999998
+  },
+  "wall_cmu": {
+   "object": "node",
+   "id": "wall_cmu",
+   "type": "wall",
+   "name": "wall_cmu",
+   "parentId": "level_ground",
+   "visible": true,
+   "metadata": {},
+   "children": [],
+   "start": [
+    48,
+    0
+   ],
+   "end": [
+    52,
+    0
+   ],
+   "frontSide": "exterior",
+   "backSide": "unknown",
+   "height": 2.7432,
+   "assembly": {
+    "preset": "exterior-cmu-stucco",
+    "framing": {
+     "kind": "cmu",
+     "depth": 0.19367499999999999
+    },
+    "sheathing": {
+     "material": "none",
+     "thickness": 0
+    },
+    "exterior": {
+     "finish": "stucco",
+     "thickness": 0.022224999999999998
+    },
+    "interior": {
+     "finish": "drywall",
+     "thickness": 0.03175
+    }
+   },
+   "thickness": 0.24764999999999998
+  },
+  "wall_plain": {
+   "object": "node",
+   "id": "wall_plain",
+   "type": "wall",
+   "parentId": "level_ground",
+   "visible": true,
+   "metadata": {},
+   "children": [],
+   "start": [
+    52,
+    0
+   ],
+   "end": [
+    52,
+    4
+   ],
+   "thickness": 0.15,
+   "frontSide": "unknown",
+   "backSide": "unknown"
+  }
+ }
+}

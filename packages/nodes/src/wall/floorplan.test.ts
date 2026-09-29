@@ -5,6 +5,7 @@ import {
   type FloorplanPalette,
   type GeometryContext,
   WallNode,
+  wallAssemblyFromLegacy,
 } from '@pascal-app/core'
 import { createFloorplanContextExtensions, readFloorplanGeometryMetadata } from '@pascal-app/editor'
 import { buildWallFloorplan } from './floorplan'
@@ -247,13 +248,14 @@ describe('buildWallFloorplan render purpose', () => {
 })
 
 describe('buildWallFloorplan assembly layers', () => {
-  const assembly = {
+  // The WS5 stack #937 drew, stored as F2 layers.
+  const assembly = wallAssemblyFromLegacy({
     preset: 'exterior-2x6-siding',
-    exterior: { finish: 'siding' as const, thickness: 0.75 * 0.0254 },
-    sheathing: { material: 'osb' as const, thickness: 0.4375 * 0.0254 },
-    framing: { kind: 'wood' as const, depth: 5.5 * 0.0254 },
-    interior: { finish: 'drywall' as const, thickness: 0.5 * 0.0254 },
-  }
+    exterior: { finish: 'siding', thickness: 0.75 * 0.0254 },
+    sheathing: { material: 'osb', thickness: 0.4375 * 0.0254 },
+    framing: { kind: 'wood', depth: 5.5 * 0.0254 },
+    interior: { finish: 'drywall', thickness: 0.5 * 0.0254 },
+  })
   const layered = WallNode.parse({
     id: 'wall_layered',
     parentId: 'level_main',

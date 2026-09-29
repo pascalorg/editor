@@ -15,6 +15,9 @@ import { SourceRefString } from './source-ref'
  * or the exterior face with `face: 'exterior'`; roofs: the covering-top
  * plane). Thickness is measured along the host's `measure` axis. The
  * generators of §2.4 (F3) join this object when F3 lands.
+ *
+ * Thickness, preset ids and cavity notes keep WS5's unbounded valid values
+ * so migration never rejects or truncates a saved wall (owner ruling 2026-09-29).
  */
 
 export const LayerRole = z.enum([
@@ -47,7 +50,7 @@ export const AssemblyLayer = z.object({
   id: AssemblyLayerId,
   role: LayerRole,
   /** Metres along the host's measure axis. */
-  thickness: z.number().nonnegative().max(5),
+  thickness: z.number().finite().nonnegative(),
   /** Body only, at most one: the structural layer (framing, block), the one generators frame. */
   core: z.literal(true).optional(),
   /**
@@ -91,9 +94,9 @@ export const Assembly = z
      * fallback, so the stack follows the outside when rooms are re-detected.
      */
     face: z.enum(['front', 'exterior']).optional(),
-    presetId: z.string().min(1).max(80).optional(),
+    presetId: z.string().optional(),
     /** A note on cavity insulation (`R-21 batt`); no geometry. */
-    cavityInsulation: z.string().min(1).max(120).optional(),
+    cavityInsulation: z.string().optional(),
   })
   .superRefine((assembly, ctx) => {
     if (assembly.layers.length === 0 && !assembly.backing?.length) {
