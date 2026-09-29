@@ -105,6 +105,7 @@ import { SiteEdgeLabels } from './site-edge-labels'
 import { SlabHoleHighlights } from './slab-hole-highlights'
 import { SnapshotCaptureOverlay } from './snapshot-capture-overlay'
 import { type SnapshotCameraData, ThumbnailGenerator } from './thumbnail-generator'
+import { VectorEdgeExtractor } from './vector-edge-extractor'
 import { WallMeasurementLabel } from './wall-measurement-label'
 import { WallMoveSideHandles } from './wall-move-side-handles'
 import { WallOpeningHighlights } from './wall-opening-highlights'
@@ -839,6 +840,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {isCaptureMode && !isXRMode && <CaptureCameraRig />}
       {!isXRMode && <CustomCameraControls />}
       {!isXRMode && <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />}
+      {!isXRMode && <VectorEdgeExtractor />}
       {!(isFirstPersonMode || isXRMode) && <SiteEdgeLabels />}
       {presentationsReady ? <ViewerPresentations /> : null}
       {!noEditing && viewerSceneSlot}
@@ -1311,7 +1313,7 @@ function EditorContent({
 
   useKeyboard({ isVersionPreviewMode, disabled: isFirstPersonMode || isStudioMode })
 
-  const { isLoadingSceneRef, saveNow } = useAutoSave({
+  const { beginSceneLoad, completeSceneLoad, saveNow } = useAutoSave({
     guardAgainstSceneWipe,
     onSave,
     onDirty,
@@ -1372,7 +1374,7 @@ function EditorContent({
     let cancelled = false
 
     async function load(attempt: number) {
-      isLoadingSceneRef.current = true
+      beginSceneLoad()
       setSceneLoadError(null)
       setHasLoadedInitialScene(false)
       setIsViewerSceneReady(false)
@@ -1387,6 +1389,9 @@ function EditorContent({
         const sceneGraph = onLoad ? await onLoad() : loadSceneFromLocalStorage()
         if (!cancelled && attempt === sceneLoadAttempt) {
           applySceneGraphToEditor(sceneGraph)
+          // The store holds the loaded graph: autosave resumes now, not on a
+          // frame — a tab loaded while hidden never gets one.
+          completeSceneLoad()
           setIsViewerSceneReady(false)
           setSceneReadyKey((key) => key + 1)
         }
@@ -1401,12 +1406,7 @@ function EditorContent({
       } finally {
         if (!cancelled) {
           setIsSceneLoading(false)
-          if (!failed) {
-            setHasLoadedInitialScene(true)
-            requestAnimationFrame(() => {
-              isLoadingSceneRef.current = false
-            })
-          }
+          if (!failed) setHasLoadedInitialScene(true)
         }
       }
     }
@@ -1416,7 +1416,7 @@ function EditorContent({
     return () => {
       cancelled = true
     }
-  }, [onLoad, isLoadingSceneRef, sceneLoadAttempt])
+  }, [onLoad, beginSceneLoad, completeSceneLoad, sceneLoadAttempt])
 
   const retrySceneLoad = useCallback(() => {
     setSceneLoadAttempt((attempt) => attempt + 1)
@@ -1535,6 +1535,7 @@ function EditorContent({
       {isFirstPersonMode && <FirstPersonControls />}
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
+      <VectorEdgeExtractor />
       <InteractiveSystem />
       {presentationsReady ? <ViewerPresentations /> : null}
     </Viewer>

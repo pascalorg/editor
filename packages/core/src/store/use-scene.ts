@@ -1898,9 +1898,15 @@ export type SceneNodeStructuralPatch = {
   position: number
 }
 
+export type ScenePluginInstallPatch = {
+  id: string
+  installed: boolean
+}
+
 export type SceneOperationPatch = ScenePatch & {
   nodeCreates: SceneNodeStructuralPatch[]
   nodeDeletes: SceneNodeStructuralPatch[]
+  pluginChanges?: ScenePluginInstallPatch[]
 }
 
 function sceneOperationPatchLiveConflictIds(
@@ -2013,7 +2019,10 @@ function insertSceneStructuralPlacements(
 function sceneOperationPatchNextState(
   beforeState: SceneState,
   changes: SceneOperationPatch,
-): Pick<SceneState, 'materials' | 'nodes' | 'rootNodeIds'> | null {
+):
+  | (Pick<SceneState, 'materials' | 'nodes' | 'rootNodeIds'> &
+      Partial<Pick<SceneState, 'installedPlugins' | 'hasExplicitPluginInstallState'>>)
+  | null {
   const createIds = new Set<AnyNodeId>()
   const deleteIds = new Set<AnyNodeId>()
   const updateIds = new Set<AnyNodeId>()
@@ -2172,7 +2181,27 @@ function sceneOperationPatchNextState(
     else materials[id] = material
   }
 
-  return { materials, nodes: nextNodes, rootNodeIds: nextRootNodeIds }
+  const pluginChanges = changes.pluginChanges ?? []
+  if (pluginChanges.length === 0) {
+    return { materials, nodes: nextNodes, rootNodeIds: nextRootNodeIds }
+  }
+  const installedPlugins = new Set(beforeState.installedPlugins)
+  const pluginIds = new Set<string>()
+  for (const { id, installed } of pluginChanges) {
+    if (!id || pluginIds.has(id)) return null
+    pluginIds.add(id)
+    if (installed) installedPlugins.add(id)
+    else installedPlugins.delete(id)
+  }
+  return {
+    materials,
+    nodes: nextNodes,
+    rootNodeIds: nextRootNodeIds,
+    installedPlugins: Array.from(installedPlugins),
+    // A shared install list is a decision someone made, so hosts must not
+    // re-add their default plugins on top of it.
+    hasExplicitPluginInstallState: true,
+  }
 }
 
 export function applySceneOperationPatch(changes: SceneOperationPatch): boolean {
@@ -2181,7 +2210,8 @@ export function applySceneOperationPatch(changes: SceneOperationPatch): boolean 
     changes.nodeUpdates.length === 0 &&
     changes.materialChanges.length === 0 &&
     changes.nodeCreates.length === 0 &&
-    changes.nodeDeletes.length === 0
+    changes.nodeDeletes.length === 0 &&
+    !changes.pluginChanges?.length
   ) {
     return false
   }
@@ -2241,6 +2271,16 @@ export function applySceneOperationPatch(changes: SceneOperationPatch): boolean 
       if (node.parentId) currentState.markDirty(node.parentId as AnyNodeId)
     }
   }
+  if (changes.pluginChanges?.length) {
+    for (const node of Object.values(current.nodes)) {
+      if (!getNodePluginId(node.type)) continue
+      if (!isNodeKindEnabled(node.type, currentState.installedPlugins)) {
+        currentState.clearDirty(node.id)
+      } else if (!isNodeKindEnabled(node.type, beforeState.installedPlugins)) {
+        currentState.markDirty(node.id)
+      }
+    }
+  }
   for (const { node } of changes.nodeDeletes) currentState.clearDirty(node.id)
 
   notifySceneCommit({
@@ -2261,6 +2301,8 @@ export function applyScenePatch(changes: ScenePatch): boolean {
 
 export type ApplySceneSnapshotOptions = {
   origin: Extract<SceneCommitOrigin, 'load' | 'host'>
+  /** The snapshot's plugin list was chosen, not defaulted, so hosts keep it as is. */
+  explicitPluginInstallState?: boolean
 }
 
 export function applySceneSnapshot(
@@ -2280,6 +2322,7 @@ export function applySceneSnapshot(
     useScene.getState().setScene(snapshot.nodes, snapshot.rootNodeIds, {
       collections: snapshot.collections,
       installedPlugins: snapshot.installedPlugins,
+      hasExplicitPluginInstallState: options.explicitPluginInstallState,
       materials: snapshot.materials,
     })
     useScene.temporal.getState().clear()

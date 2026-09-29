@@ -7,7 +7,11 @@ import {
   type SurfaceRole,
   useInteractive,
 } from '@pascal-app/core'
-import { type EvaluatedMotion, ProceduralMotionController } from '@pascal-app/core/procedural-items'
+import {
+  type EvaluatedMotion,
+  operableParts,
+  ProceduralMotionController,
+} from '@pascal-app/core/procedural-items'
 import { Html, useAnimations } from '@react-three/drei'
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
@@ -22,6 +26,7 @@ import { createSurfaceRoleMaterial } from '../../lib/materials'
 import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
 import useViewer from '../../store/use-viewer'
 import { GlbInteractive, type GlbInteractiveItem } from './glb-interactive'
+import { bakedLoopMechanisms } from './glb-mechanisms'
 import { GlbReferenceNodes } from './glb-reference-nodes'
 import { GlbReplaceInstances } from './glb-replace-instances'
 
@@ -585,6 +590,19 @@ export function GlbScene({
   const zoneById = useMemo(() => new Map(zoneEntries.map((zone) => [zone.id, zone])), [zoneEntries])
   // Level pascalIds bottom-to-top, for the interactive light pool's level factor.
   const levelOrder = useMemo(() => levels.map((entry) => entry.id), [levels])
+  // Loop clips no other controller plays (a plugin kind's mechanism) run on
+  // click and E. As in the editor they start stopped and never persist.
+  const loopMechanisms = useMemo(
+    () =>
+      bakedLoopMechanisms(
+        identity,
+        new Set([
+          ...proceduralPlayback.entries.keys(),
+          ...(interactiveItems ?? []).map((item) => item.pascalId),
+        ]),
+      ),
+    [identity, proceduralPlayback, interactiveItems],
+  )
 
   // The dollhouse hides ceilings/roof — but only their OWN geometry. Items hosted
   // on a ceiling (lamps, fans, recessed lights) are child identity nodes; hiding
@@ -869,6 +887,54 @@ export function GlbScene({
     }
   }, [actions, proceduralPlayback])
 
+  useEffect(() => {
+    if (loopMechanisms.size === 0) return
+    const apply = (running: Record<string, boolean>) => {
+      for (const [id, clips] of loopMechanisms) {
+        for (const name of clips) {
+          const action = actions[name]
+          if (!action) continue
+          if (running[id]) {
+            action.enabled = true
+            action.paused = false
+            if (!action.isRunning()) action.play()
+          } else {
+            action.stop()
+          }
+        }
+      }
+    }
+    apply(useInteractive.getState().mechanisms)
+    const unsubscribe = useInteractive.subscribe((state, previous) => {
+      if (state.mechanisms !== previous.mechanisms) apply(state.mechanisms)
+    })
+    return () => {
+      unsubscribe()
+      for (const id of loopMechanisms.keys())
+        useInteractive.getState().removeMechanism(id as AnyNodeId)
+    }
+  }, [actions, loopMechanisms])
+  // Items the walkthrough operates through their toggles; others fall through to loop clips.
+  const toggleableItem = useCallback(
+    (pascalId: string | undefined) =>
+      interactiveItems?.find(
+        (item) =>
+          item.pascalId === pascalId &&
+          item.interactive.controls.some((control) => control.kind === 'toggle'),
+      ),
+    [interactiveItems],
+  )
+  const toggleLoopMechanism = useCallback(
+    (identityNode: THREE.Object3D) => {
+      const id = (identityNode.userData as PascalExtras).pascalId as AnyNodeId | undefined
+      if (!(id && loopMechanisms.has(id))) return false
+      const state = useInteractive.getState()
+      state.setMechanism(id, !state.mechanisms[id])
+      return true
+    },
+    [loopMechanisms],
+  )
+
   const openIds = useRef(new Set<string>())
   const toggleProcedural = useCallback(
     (hit: THREE.Object3D, identityNode: THREE.Object3D) => {
@@ -1117,8 +1183,9 @@ export function GlbScene({
           (item) =>
             item.pascalId === extras.pascalId &&
             item.procedural?.lights.length &&
-            !item.procedural.parts.some((part) => part.motion),
+            operableParts(item.procedural.recipe ?? { parts: item.procedural.parts }).length === 0,
         )
+      const item = extras?.kind === 'item' ? toggleableItem(extras.pascalId) : undefined
       if (node && extras?.kind === 'procedural-item' && (extras.clips?.length || lightOnly)) {
         doorNode = { hit: hit.object, node }
         const part = findProceduralMotionAncestor(hit.object)
@@ -1141,25 +1208,27 @@ export function GlbScene({
           verb: lightOnly || isSpin ? (isOpen ? 'turn off' : 'turn on') : isOpen ? 'close' : 'open',
         }
         doorId = `${extras.pascalId}:${part?.partId ?? 'all'}`
-      } else if (node && extras?.kind === 'item') {
-        const item = interactiveItems?.find((entry) => entry.pascalId === extras.pascalId)
-        if (item?.interactive.controls.some((control) => control.kind === 'toggle')) {
-          doorNode = { hit: hit.object, node }
-          doorId = extras.pascalId as string
-          const values = useInteractive.getState().items[item.pascalId]?.controlValues
-          const isOpen = item.interactive.controls.some(
-            (control, index) => control.kind === 'toggle' && Boolean(values?.[index]),
-          )
-          door = {
-            label: item.label,
-            isOpen,
-            verb: isOpen ? 'turn off' : 'turn on',
-          }
+      } else if (node && item) {
+        doorNode = { hit: hit.object, node }
+        doorId = item.pascalId
+        const values = useInteractive.getState().items[item.pascalId]?.controlValues
+        const isOpen = item.interactive.controls.some(
+          (control, index) => control.kind === 'toggle' && Boolean(values?.[index]),
+        )
+        door = {
+          label: item.label,
+          isOpen,
+          verb: isOpen ? 'turn off' : 'turn on',
         }
       } else if (node && extras?.openable && extras.clips?.length) {
         doorNode = { hit: hit.object, node }
         doorId = extras.pascalId as string
         door = { label: extras.label ?? 'Door', isOpen: openIds.current.has(doorId) }
+      } else if (node && extras?.pascalId && loopMechanisms.has(extras.pascalId)) {
+        doorNode = { hit: hit.object, node }
+        doorId = extras.pascalId
+        const isOpen = Boolean(useInteractive.getState().mechanisms[doorId as AnyNodeId])
+        door = { label: extras.label ?? 'Item', isOpen, verb: isOpen ? 'turn off' : 'turn on' }
       }
     }
     walkDoorRef.current = doorNode
@@ -1177,13 +1246,14 @@ export function GlbScene({
     const target = walkDoorRef.current
     if (!target) return
     const extras = target.node.userData as PascalExtras
-    if (extras.kind === 'item' && extras.pascalId) {
-      const item = interactiveItems?.find((entry) => entry.pascalId === extras.pascalId)
-      if (item) useInteractive.getState().toggleItemToggles(item.pascalId, item.interactive)
+    const item = extras.kind === 'item' ? toggleableItem(extras.pascalId) : undefined
+    if (item) {
+      useInteractive.getState().toggleItemToggles(item.pascalId, item.interactive)
       return
     }
-    if (!toggleProcedural(target.hit, target.node)) toggleOpenable(target.node)
-  }, [interactiveItems, toggleOpenable, toggleProcedural])
+    if (!(toggleProcedural(target.hit, target.node) || toggleLoopMechanism(target.node)))
+      toggleOpenable(target.node)
+  }, [toggleableItem, toggleLoopMechanism, toggleOpenable, toggleProcedural])
   useEffect(() => {
     if (!walkthroughMode) return
     const onKey = (event: KeyboardEvent) => {
@@ -1275,13 +1345,18 @@ export function GlbScene({
       // the level.
       if (target) {
         setSelection({ selectedIds: [target.id] })
-        if (!toggleProcedural(target.hitObject ?? target.object, target.object))
+        if (
+          !(
+            toggleProcedural(target.hitObject ?? target.object, target.object) ||
+            toggleLoopMechanism(target.object)
+          )
+        )
           toggleOpenable(target.object)
       } else {
         setSelection({ zoneId: null })
       }
     },
-    [resolveTarget, toggleOpenable, toggleProcedural, walkthroughMode],
+    [resolveTarget, toggleLoopMechanism, toggleOpenable, toggleProcedural, walkthroughMode],
   )
 
   // A click that hits nothing (empty space) steps one level back up the drill

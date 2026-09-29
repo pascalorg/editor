@@ -5,6 +5,7 @@ import {
   nodeRegistry,
   pauseSpaceDetection,
   resumeSpaceDetection,
+  toggleNodeMechanism,
   useScene,
 } from '@pascal-app/core'
 import { cancelPerfAction, markPerfAction, useViewer } from '@pascal-app/viewer'
@@ -236,6 +237,16 @@ export function blocksSnappingShortcut(
   if (!target) return false
   if (target.tagName === 'INPUT' && target.hasAttribute('data-run-length-input')) return false
   return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+}
+
+/** E on one selected node: the kind's own E action, else its mechanism. False when neither applies. */
+export function runNodeInteraction(node: AnyNode): boolean {
+  const action = nodeRegistry.get(node.type)?.keyboardActions?.e
+  if (action?.appliesTo(node)) {
+    action.run(node)
+    return true
+  }
+  return toggleNodeMechanism(node)
 }
 
 export const useKeyboard = ({
@@ -697,11 +708,9 @@ export const useKeyboard = ({
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
         if (selectedNodeIds.length === 1) {
           const node = useScene.getState().nodes[selectedNodeIds[0]!]
-          const registryE = node && nodeRegistry.get(node.type)?.keyboardActions?.e
-          if (node && registryE?.appliesTo(node)) {
+          if (node && runNodeInteraction(node)) {
             // Registry-driven E interaction. Same shape as the R/T arms.
             e.preventDefault()
-            registryE.run(node)
             sfxEmitter.emit('sfx:item-rotate')
           } else if (node?.type === 'door' && node.openingKind !== 'opening') {
             e.preventDefault()

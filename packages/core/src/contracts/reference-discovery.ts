@@ -4,7 +4,7 @@ import type { z } from 'zod'
  * Walks a zod schema's AST and returns every persisted path that could hold a
  * reference (R3 coverage). A candidate is a leaf whose field name ends in
  * `Id`/`Ids`, is `id` below the root, `children` or `members`, or names a URL,
- * `src`, thumbnail or material preset; any typed-id (`template_literal`) or `custom`
+ * `src`, a `slot` key, thumbnail or material preset; any typed-id (`template_literal`) or `custom`
  * leaf; every record key; and every string-like record value. The inventory
  * must classify each candidate as a reference or a declared non-reference, so
  * a new id-like field cannot land without a policy. Beside a field ending in
@@ -58,7 +58,7 @@ const HOST_REFERENCE = /[a-z]Id$/
 const DEPENDENT =
   /^(?:side|wallT|offset)$|[a-z]Face$|UV$|[a-z]Edge$|EdgeRange$|^host(?!.*Ids?$)[A-Z]/
 const NAMED =
-  /(^|[a-z])Ids?$|^children$|^members$|^url$|Url$|^src$|^thumbnail$|^materialPreset$|MaterialPreset$/
+  /(^|[a-z])Ids?$|^children$|^members$|^url$|Url$|^src$|^slot$|^thumbnail$|^materialPreset$|MaterialPreset$/
 
 function walk(
   schema: z.ZodType,

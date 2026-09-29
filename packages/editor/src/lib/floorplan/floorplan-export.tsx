@@ -306,6 +306,7 @@ export function collectFloorplanSchedules(
   levelId: AnyNodeId,
   unit: 'metric' | 'imperial',
   scope: FloorplanExportScope = 'full',
+  { drafting = false }: { drafting?: boolean } = {},
 ): FloorplanSchedule[] {
   const siblingsByType = new Map<string, AnyNode[]>()
   const visit = (id: AnyNodeId) => {
@@ -329,7 +330,7 @@ export function collectFloorplanSchedules(
     // or other site-category contributors whose plan geometry was excluded.
     if (!isFloorplanNodeInExportScope(definition, scope)) continue
     const siblings = siblingsByType.get(kind) ?? []
-    const schedule = scheduleContribution({ siblings, nodes, levelId, unit })
+    const schedule = scheduleContribution({ siblings, nodes, levelId, unit, drafting })
     if (schedule && schedule.rows.length > 0) schedules.push(schedule)
   }
   return schedules

@@ -107,10 +107,8 @@ function previewBlockFace(args: PaintPreviewArgs): (() => void) | null {
     if (!mesh.isMesh || mesh.userData.__fromGeometry !== true) return
     const ranges = blockFaceRanges(mesh).filter((candidate) => faceIds.has(candidate.faceId))
     if (ranges.length === 0) return
-    const materialGroups = ranges.flatMap((range) =>
-      mesh.geometry.groups.filter(
-        (group) => group.start === range.start && group.count === range.count,
-      ),
+    const materialGroups = mesh.geometry.groups.filter((group) =>
+      ranges.some((range) => range.start >= group.start && range.start < group.start + group.count),
     )
     if (materialGroups.length === 0) return
 

@@ -14,6 +14,7 @@ import {
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { curtainOpeningResizeMax } from '../shared/curtain-opening-limits'
+import { windowBatchable } from '../shared/node-batch/batchable'
 import {
   buildWindowFloorplanSchedule,
   computeWindowFloorplanLevelData,
@@ -287,6 +288,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   },
 
   capabilities: {
+    batchable: windowBatchable,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
