@@ -256,6 +256,8 @@ the host must call the plugin's public import/export functions explicitly.
 
 `apiVersion: 1` covers the surface above. The host bumps the major when it removes or changes the shape of an existing field. New optional fields don't bump. The plan is to keep additions backwards-compatible as long as possible — the bump is the escape hatch, not the default.
 
+`packages/core/src/registry/plugin-v1-conformance.test.ts` pins v1 with synthetic plugins at the registry and scene-store level: capabilities, ports and surfaces, relations, editing and reload, clone, and projects that have not installed the plugin. `packages/viewer/src/components/viewer/plugin-dispatch.test.tsx` proves the same kinds render, build, run their systems and restore in the baked viewer only while installed; `packages/editor/src/lib/glb-export.test.ts` covers export. A change that fails them breaks shipped plugins. `test.failing` cases are known v1 gaps.
+
 A plugin's own data versioning is `schemaVersion` on each `NodeDefinition`. The host doesn't migrate; the plugin's `migrate(node, fromVersion)` (future) handles its own legacy persisted nodes.
 
 ## What's *not* a plugin contribution (yet)
@@ -263,6 +265,7 @@ A plugin's own data versioning is `schemaVersion` on each `NodeDefinition`. The 
 - **Materials** — there's no `plugin.materials` slot. Use `createMaterial` from `@pascal-app/viewer` inside your `def.renderer` / `def.system`.
 - **Floor-plan primitives** — the `FloorplanGeometry` union is host-owned. To draw something the union can't express, fall back to `def.renderer` and render through a different 2D mount (or open an issue).
 - **Panels / sidebar UI in the core manifest** — host-specific. Export an `EditorHostPanel` separately for hosts that use `@pascal-app/editor`.
+- **Clone remapping for plugin-owned references** — project clone (`cloneSceneGraph`) and subtree duplicate (`cloneNodesInto`) remap `id`, `parentId` and `children` only. A plugin field that stores other node ids (an ordered camera list, a target list) is copied verbatim and keeps pointing at the source scene. Keep hosted ids in `children` where you can.
 - **Stores** — plugins create their own Zustand stores; they don't extend `useScene`, `useEditor`, or `useViewer`. A renderer may subscribe read-only to exported host presentation state such as `useViewer` appearance axes, but must not treat host stores as plugin-owned state.
 - **Routes / pages** — plugins are visualisation + interaction code, not full app surfaces. Hosting a settings page belongs to the app.
 

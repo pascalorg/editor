@@ -485,7 +485,7 @@ function getMergedRoofSegmentBrushes(
       segment.position,
       segment.rotation ?? 0,
     ),
-    () => getRoofSegmentBrushes(segment),
+    () => getRoofSegmentBrushes(segment, { fascia: wearsFascia(segment, roofNode) }),
   )
   if (!brushes) {
     disposeCachedMergedRoofSegmentGeometrySet(cached)
@@ -908,6 +908,8 @@ function getMergedRoofSegmentCacheKey(
   return JSON.stringify({
     roofPosition: roofNode.position ?? [0, 0, 0],
     roofRotation: roofNode.rotation ?? 0,
+    // a shed's fascia depends on whether its roof is a composite of pieces
+    composite: (roofNode.children?.length ?? 0) > 1,
     segment,
     accessories: getMergedRoofAccessoryCachePayload(segment, nodes),
   })
@@ -1007,6 +1009,25 @@ const TRIM_CUT_EPSILON = 0.002
 const ROOF_EDGE_MATERIAL_INDEX = 0
 const ROOF_INSET_WALL_MATERIAL_INDEX = 2
 const DUTCH_RAKE_SIDE_MATERIAL_INDEX = 1
+
+/**
+ * A lean-to's shed segment (the lean-to assembly writes the side-infill
+ * fields) has no wall band of its own: its high side is the host wall and
+ * its ends are the inset infill panels. Every other shed — a house's
+ * mono-pitch roof, hand-placed or generated — carries the same hollow wall
+ * band a gable does (the high wall and the raked side walls above the
+ * plate), sided in the wall/trim slot like a gable's pediment.
+ */
+function isLeanToShedSegment(node: RoofSegmentNode): boolean {
+  return (
+    node.roofType === 'shed' &&
+    (node.shedSideInfillSpan !== undefined ||
+      node.shedSideInfillMinX !== undefined ||
+      node.shedSideInfillMaxX !== undefined ||
+      node.shedFootprintPieces !== undefined ||
+      node.shedOpenEndSides !== undefined)
+  )
+}
 const DUTCH_RAKE_TOP_MATERIAL_INDEX = 3
 const DUTCH_RAKE_SLOPE_SEAT_OFFSET = 0.0002
 
@@ -1339,7 +1360,124 @@ export function clipGeometryBySegmentTrim(
  * Generate complete hollow-shell geometry for a roof segment.
  * Ports the prototype's CSG approach using three-bvh-csg.
  */
-export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSet | null {
+/** A 1x8 fascia / rake board: actual 3/4 × 7-1/4 in. */
+const FASCIA_BOARD = { thickness: 0.019, height: 0.184 } as const
+/** A board's back sits this far inside the deck edge, so the union is one solid with no coplanar faces. */
+const FASCIA_EMBED = 0.002
+/**
+ * Slot 2 takes the trim finish like the rake faces, and the shell remap
+ * leaves it alone: the remap would send a plumb eave board to the wall band
+ * and its top edge to the shingles.
+ */
+const FASCIA_MATERIAL_INDEX = 2
+
+/**
+ * The fascia and rake boards a segment wears, in its own frame: a plumb 1x8
+ * on every eave with its top on the deck's top edge, and one up every gable
+ * or shed rake, from the eave line the deck itself is built on. Being part
+ * of the segment, they follow its pitch, size, overhang and type, and the
+ * trims, cuts and sibling roofs clip them like the deck. Gable, hip, shed
+ * and flat; null for the other forms.
+ */
+function buildFasciaBoards(
+  node: RoofSegmentNode,
+  deckExt: number,
+  eaveTopY: number,
+  tanTheta: number,
+): THREE.BufferGeometry | null {
+  const { roofType, width, depth } = node
+  const { thickness: bt, height: bh } = FASCIA_BOARD
+  const out = bt / 2 - FASCIA_EMBED
+  const halfD = depth / 2 + deckExt
+  const zE = halfD + out
+  const xE = width / 2 + deckExt + out
+  // the eave boards run through the corners to the rake / side boards'
+  // outer faces (a lapped return, no notch at the corner)
+  const xL = xE + bt / 2
+  const faces: THREE.Vector3[][] = []
+  const board = (
+    a: [number, number, number],
+    b: [number, number, number],
+    across: [number, number],
+  ) => {
+    const ax = (across[0] * bt) / 2
+    const az = (across[1] * bt) / 2
+    const p = [
+      [a[0] - ax, a[1] - bh, a[2] - az],
+      [b[0] - ax, b[1] - bh, b[2] - az],
+      [b[0] + ax, b[1] - bh, b[2] + az],
+      [a[0] + ax, a[1] - bh, a[2] + az],
+      [a[0] - ax, a[1], a[2] - az],
+      [b[0] - ax, b[1], b[2] - az],
+      [b[0] + ax, b[1], b[2] + az],
+      [a[0] + ax, a[1], a[2] + az],
+    ].map(([x, y, z]) => new THREE.Vector3(x, y, z))
+    const centre = p.reduce((sum, v) => sum.add(v), new THREE.Vector3()).multiplyScalar(1 / 8)
+    const quads = [
+      [0, 1, 2, 3],
+      [4, 5, 6, 7],
+      [0, 4, 5, 1],
+      [1, 5, 6, 2],
+      [2, 6, 7, 3],
+      [3, 7, 4, 0],
+    ]
+    for (const quad of quads) {
+      const face = quad.map((k) => p[k]!.clone())
+      const normal = new THREE.Vector3()
+        .subVectors(face[1]!, face[0]!)
+        .cross(new THREE.Vector3().subVectors(face[2]!, face[0]!))
+      const faceCentre = face
+        .reduce((sum, v) => sum.add(v), new THREE.Vector3())
+        .multiplyScalar(1 / 4)
+      if (normal.dot(faceCentre.sub(centre)) < 0) face.reverse()
+      faces.push(face)
+    }
+  }
+
+  if (roofType === 'gable') {
+    const ridgeY = eaveTopY + halfD * tanTheta
+    board([-xL, eaveTopY, zE], [xL, eaveTopY, zE], [0, 1])
+    board([-xL, eaveTopY, -zE], [xL, eaveTopY, -zE], [0, 1])
+    for (const sx of [-1, 1]) {
+      board([sx * xE, eaveTopY, zE], [sx * xE, ridgeY, 0], [1, 0])
+      board([sx * xE, ridgeY, 0], [sx * xE, eaveTopY, -zE], [1, 0])
+    }
+  } else if (roofType === 'hip' || roofType === 'flat') {
+    for (const sz of [-1, 1]) board([-xL, eaveTopY, sz * zE], [xL, eaveTopY, sz * zE], [0, 1])
+    // the side boards butt the eave boards' backs
+    for (const sx of [-1, 1])
+      board([sx * xE, eaveTopY, -zE + bt / 2], [sx * xE, eaveTopY, zE - bt / 2], [1, 0])
+  } else if (roofType === 'shed') {
+    // the low eave at +z, the slope rising to −z
+    const highY = eaveTopY + 2 * halfD * tanTheta
+    board([-xL, eaveTopY, zE], [xL, eaveTopY, zE], [0, 1])
+    if (node.fasciaHighEdge ?? true) board([-xL, highY, -zE], [xL, highY, -zE], [0, 1])
+    for (const sx of [-1, 1]) board([sx * xE, eaveTopY, zE], [sx * xE, highY, -zE], [1, 0])
+  } else return null
+  return createGeometryFromFaces(faces, FASCIA_MATERIAL_INDEX)
+}
+
+/**
+ * Whether a drawn segment wears fascia boards. A lean-to carries its own
+ * trim, and a legacy composite shed roof stacks overlapping shed pieces as
+ * one deck (the same pieces whose wall shells are left out), so boards would
+ * show between them.
+ */
+function wearsFascia(node: RoofSegmentNode, parentRoof?: RoofNode): boolean {
+  if (node.fascia !== true) return false
+  if (node.roofType !== 'shed') return true
+  if (isLeanToShedSegment(node)) return false
+  return !parentRoof || (parentRoof.children?.length ?? 0) <= 1
+}
+
+/**
+ * `fascia`: build the segment's fascia boards into its deck. Only the roof
+ * renderer asks; a dormer, a chimney or a sibling's clip takes the bare shell.
+ */
+export function getRoofSegmentBrushes(
+  node: RoofSegmentNode,
+  options: { fascia?: boolean } = {},
+): RoofSegmentBrushSet | null {
   const {
     roofType,
     width,
@@ -1368,6 +1506,7 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
   // same ratio). A hardcoded 0.25 desyncs the gablet from the parameter.
   const baseI = Math.min(width, depth) * node.dutchHipWidthRatio
 
+  const plateSeated = wallHeight <= 0
   const getVol = (
     wExt: number,
     vOffset: number,
@@ -1375,6 +1514,7 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
     matIndex: number,
     isVoid: boolean,
     materialRule?: (normal: THREE.Vector3) => number,
+    onPlate = false,
   ) => {
     const wV = Math.max(0.01, width + 2 * wExt)
     const dV = Math.max(0.01, depth + 2 * wExt)
@@ -1383,13 +1523,20 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
     // Floor every prism at 5 cm so CSG never sees a degenerate volume — by
     // raising the top, never by sinking the base (the base is the wall top).
     // One floor for all volumes keeps each cutter level with the shell it carves.
-    const whV = Math.max(0.05, wallHeight - autoDrop + vOffset)
+    // A plate-seated roof (wallHeight 0) is the exception for its sloped deck
+    // volumes: their eave hangs below the plate, and raising it lifted the
+    // whole roof off its walls, so their base sinks instead.
+    const eaveY = wallHeight - autoDrop + vOffset
+    const sinkBase = plateSeated && !onPlate && autoDrop !== 0
+    const whV = sinkBase ? eaveY : Math.max(0.05, eaveY)
 
     let rhV = activeRh
     if (activeRh > 0) {
       rhV = activeRh + autoDrop
       if (roofType === 'shed') rhV = activeRh + 2 * autoDrop
     }
+
+    const safeBaseY = sinkBase ? Math.min(baseY, whV - 0.05) : baseY
 
     let structuralI = baseI
     if (isVoid) {
@@ -1402,7 +1549,7 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
       d: dV,
       wh: whV,
       rh: rhV,
-      baseY,
+      baseY: safeBaseY,
       insets: { dutchI: structuralI },
       baseW: width,
       baseD: depth,
@@ -1415,19 +1562,27 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
     return createGeometryFromFaces(faces, materialRule ?? matIndex)
   }
 
-  const wallGeo = getVol(wallThickness / 2, 0, 0, 0, false)
-  const innerGeo = getVol(-wallThickness / 2, 0, -5, 2, false)
+  const wallGeo = getVol(wallThickness / 2, 0, 0, 0, false, undefined, true)
+  const innerGeo = getVol(-wallThickness / 2, 0, -5, 2, false, undefined, true)
 
   const horizontalOverhang = overhang * cosTheta
   const deckExt = wallThickness / 2 + horizontalOverhang
 
-  const shedRoofSideMaterialRule =
-    roofType === 'shed'
-      ? (normal: THREE.Vector3) =>
-          normal.y > SHINGLE_SURFACE_EPSILON ? 3 : ROOF_EDGE_MATERIAL_INDEX
-      : undefined
+  // A shed's deck and shingle edges take the wall/trim slot, unless it wears
+  // fascia boards: then they are fascia like a gable's, in the deck slot.
+  const shedEdgesInTrimSlot = roofType === 'shed' && !options.fascia
+  const shedRoofSideMaterialRule = shedEdgesInTrimSlot
+    ? (normal: THREE.Vector3) => (normal.y > SHINGLE_SURFACE_EPSILON ? 3 : ROOF_EDGE_MATERIAL_INDEX)
+    : undefined
   const deckTopGeo = getVol(deckExt, verticalRt, 0, 1, false, shedRoofSideMaterialRule)
   const deckBotGeo = getVol(deckExt, 0, -5, 0, true)
+  // the deck's top edge at its outer plane, as `getVol` puts it
+  const deckEaveDrop = deckExt * tanTheta
+  const deckEaveTopY =
+    plateSeated && deckEaveDrop > 0
+      ? wallHeight - deckEaveDrop + verticalRt
+      : Math.max(0.05, wallHeight - deckEaveDrop + verticalRt)
+  const fasciaGeo = options.fascia ? buildFasciaBoards(node, deckExt, deckEaveTopY, tanTheta) : null
 
   const stSin = shingleThickness * sinTheta
   const stCos = shingleThickness * cosTheta
@@ -1547,7 +1702,7 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
     )
   }
 
-  const shedRoofSideMaterialIndex = roofType === 'shed' ? ROOF_EDGE_MATERIAL_INDEX : 1
+  const shedRoofSideMaterialIndex = shedEdgesInTrimSlot ? ROOF_EDGE_MATERIAL_INDEX : 1
   const shinBotGeo = createGeometryFromFaces(botFaces, (normal) =>
     normal.y > SHINGLE_SURFACE_EPSILON ? 3 : shedRoofSideMaterialIndex,
   )
@@ -1597,6 +1752,8 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
 
   const shinTopBrush = toBrush(shinTopGeo)
   const shinBotBrush = toBrush(shinBotGeo)
+  const fasciaBrush = fasciaGeo ? toBrush(fasciaGeo) : null
+  if (fasciaGeo && !fasciaBrush) fasciaGeo.dispose()
   if (shinBotBrush) {
     const wV = shinBotW
     const dV = shinBotD
@@ -1613,8 +1770,15 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
 
   if (deckTopBrush && deckBotBrush && wallBrush && innerBrush && shinTopBrush && shinBotBrush) {
     try {
-      const deckSlab = csgEvaluator.evaluate(deckTopBrush, deckBotBrush, SUBTRACTION)
+      let deckSlab = csgEvaluator.evaluate(deckTopBrush, deckBotBrush, SUBTRACTION)
       prepareBrushForCSG(deckSlab)
+      if (fasciaBrush) {
+        const withFascia = csgEvaluator.evaluate(deckSlab, fasciaBrush, ADDITION)
+        prepareBrushForCSG(withFascia)
+        deckSlab.geometry.dispose()
+        fasciaBrush.geometry.dispose()
+        deckSlab = withFascia
+      }
       const shinSlab = csgEvaluator.evaluate(shinTopBrush, shinBotBrush, SUBTRACTION)
       prepareBrushForCSG(shinSlab)
 
@@ -1654,6 +1818,7 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
   if (shinBotBrush) shinBotBrush.geometry.dispose()
   if (wallBrush) wallBrush.geometry.dispose()
   if (innerBrush) innerBrush.geometry.dispose()
+  fasciaBrush?.geometry.dispose()
   rakeBoards?.dispose()
 
   return null
@@ -1686,7 +1851,9 @@ export function generateRoofSegmentGeometry(
     ensureRenderableGeometryAttributes(result)
     return result
   }
-  const brushes = withSegmentUvMatrix(segmentWorldMatrix, () => getRoofSegmentBrushes(node))
+  const brushes = withSegmentUvMatrix(segmentWorldMatrix, () =>
+    getRoofSegmentBrushes(node, { fascia: wearsFascia(node, parentRoof) }),
+  )
   if (!brushes) {
     // Fallback: simple box
     return new THREE.BoxGeometry(node.width, node.wallHeight, node.depth)
@@ -3564,7 +3731,9 @@ function buildDutchRakeBoards(
 }
 
 function createShedInsetEndPanelGeometry(node: RoofSegmentNode): THREE.BufferGeometry | null {
-  if (node.roofType !== 'shed') return null
+  // a house shed has real end walls in its wall band; only a lean-to
+  // needs the inset infill panels
+  if (!isLeanToShedSegment(node)) return null
 
   const trim = normalizeRoofSegmentTrim(node)
   const openEndSides = readShedOpenEndSides(node)

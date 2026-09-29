@@ -1,6 +1,12 @@
 // Side-effect import MUST come first: installs RAF polyfill before core loads.
 import './node-shims'
-import { HIDDEN_SITE_NOTE } from '@pascal-app/core'
+import {
+  HIDDEN_SITE_NOTE,
+  type NodeDeletionPlan,
+  type NodeDeletionScene,
+  planNodeDeletion,
+  runAsSingleSceneHistoryStep,
+} from '@pascal-app/core'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import type { AnyNode } from '@pascal-app/core/schema'
 import {
@@ -427,22 +433,26 @@ export class SceneBridge {
       }
     }
 
-    for (let i = 0; i < patches.length; i++) {
-      const p = patches[i]!
-      if (p.op === 'create') {
-        flush('create')
-        const parsedNode = parsedCreateNodes.get(i)!
-        createOps.push({ node: parsedNode, parentId: p.parentId })
-        createdIds.push(parsedNode.id as AnyNodeId)
-      } else if (p.op === 'update') {
-        flush('update')
-        updateOps.push({ id: p.id, data: p.data })
-      } else {
-        flush('delete')
-        deleteIds.push(p.id)
+    // One history step for the whole patch, as its description promises: a create and
+    // the host update it needs (a design-surface attachment) undo together.
+    runAsSingleSceneHistoryStep(useScene, () => {
+      for (let i = 0; i < patches.length; i++) {
+        const p = patches[i]!
+        if (p.op === 'create') {
+          flush('create')
+          const parsedNode = parsedCreateNodes.get(i)!
+          createOps.push({ node: parsedNode, parentId: p.parentId })
+          createdIds.push(parsedNode.id as AnyNodeId)
+        } else if (p.op === 'update') {
+          flush('update')
+          updateOps.push({ id: p.id, data: p.data })
+        } else {
+          flush('delete')
+          deleteIds.push(p.id)
+        }
       }
-    }
-    flush('none')
+      flush('none')
+    })
 
     // Compute actual deleted ids by diffing pre/post snapshots.
     const postNodes = useScene.getState().nodes
@@ -456,6 +466,15 @@ export class SceneBridge {
       deletedIds,
       createdIds,
     }
+  }
+
+  /**
+   * Preview what deleting `ids` does to `scene` with this bridge's semantics
+   * (core's store planner), without committing or minting default gutters.
+   * The apply_patch guard runs its dry run through this.
+   */
+  planDeletion(scene: NodeDeletionScene, ids: AnyNodeId[]): NodeDeletionPlan {
+    return planNodeDeletion(scene, ids, { mintDefaults: false })
   }
 
   /** Undo. Returns the number of steps actually undone. */

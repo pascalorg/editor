@@ -1,12 +1,20 @@
 import type { AnyNode, FloorplanGeometry, HandleDescriptor, NodeDefinition } from '@pascal-app/core'
-import { type AnyNodeId, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  getEffectiveNode,
+  toggleMechanism,
+  useInteractive,
+  useScene,
+} from '@pascal-app/core'
 import {
   boundsOf,
   boxCorners,
   evaluateRecipe,
   frame,
+  operableParts,
   ProceduralItemNode,
   parameterPatch,
+  proceduralCeilingHole,
   proceduralFootprint,
   proceduralSlotColor,
   queryProceduralItem,
@@ -17,8 +25,12 @@ import {
   transformPoint,
   validateProceduralRelations,
 } from '@pascal-app/core/procedural-items'
+import { usePlacementPreview } from '@pascal-app/editor'
+import { decorateProceduralEmission } from '@pascal-app/viewer'
 import { itemPaint } from '../item/paint'
+import { proceduralMechanism, toggleItemLights } from '../shared/item-interactions'
 import { restingFloorplanAffectedIds } from '../shared/resting-surface-plan'
+import { bakeProceduralAnimationClips, isProceduralMotionPlaying } from './animation'
 import { proceduralFloorplanMoveTarget } from './move-session'
 
 const GIZMO_SIDE_OFFSET = 0.3
@@ -31,10 +43,21 @@ function handleBounds(node: ProceduralItemNode, part?: string) {
   return shapes.length
     ? boundsOf(
         shapes.flatMap((shape) =>
-          boxCorners(
-            shape.size.map((v) => -v / 2) as [number, number, number],
-            shape.size.map((v) => v / 2) as [number, number, number],
-          ).map((point) => transformPoint(frame(shape.position, shape.rotation), point)),
+          shape.primitive === 'ellipsoid'
+            ? (() => {
+                const axes = frame(shape.position, shape.rotation).axes
+                const extent = [0, 1, 2].map((i) =>
+                  Math.hypot(...axes.map((axis, j) => (axis[i]! * shape.size[j]!) / 2)),
+                ) as [number, number, number]
+                return boxCorners(
+                  shape.position.map((v, i) => v - extent[i]!) as [number, number, number],
+                  shape.position.map((v, i) => v + extent[i]!) as [number, number, number],
+                )
+              })()
+            : boxCorners(
+                shape.size.map((v) => -v / 2) as [number, number, number],
+                shape.size.map((v) => v / 2) as [number, number, number],
+              ).map((point) => transformPoint(frame(shape.position, shape.rotation), point)),
         ),
       )
     : e
@@ -98,9 +121,23 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
     position: [0, 0, 0],
     rotation: [0, 0, 0],
   }),
-  extensions: { 'pascal:editor/floorplan': { directDrag: true } },
+  extensions: {
+    'pascal:editor/floorplan': {
+      directDrag: true,
+      actionMenu: { actions: () => import('../shared/item-interaction-actions') },
+    },
+  },
   capabilities: {
+    batchable: {
+      scope: 'level',
+      // Part lights clone their emissive slot per node, and a playing motion
+      // moves meshes under the static copy.
+      excluded: (n) =>
+        (n as unknown as ProceduralItemNode).recipe.parts.some((part) => part.light) ||
+        isProceduralMotionPlaying(n.id),
+    },
     selectable: { hitVolume: 'bbox' },
+    mechanism: proceduralMechanism,
     dragBounds: (n) => {
       const node = n as unknown as ProceduralItemNode
       const e = evaluateRecipe(node.recipe, node.parameters)
@@ -114,6 +151,27 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
       align: 'face',
     },
     hostRefFields: ['wallId', 'side', 'supportSlabId'],
+    // A v2 ceiling design with `cuts` opens its host ceiling (CeilingSystem dispatch).
+    ceilingCut: {
+      // Follows the live gesture (R2): a move preview cuts where it sits; handle and slider
+      // overrides cut at their live values; a hidden design (the move's source) cuts nothing.
+      buildCeilingHole: (n) => {
+        const preview = usePlacementPreview.getState().node
+        if (preview?.id === n.id && preview.type === 'procedural-item')
+          return preview.parentId === n.parentId ? proceduralCeilingHole(preview) : null
+        const node = getEffectiveNode(n as unknown as ProceduralItemNode)
+        return node.visible === false ? null : proceduralCeilingHole(node)
+      },
+      // A design being moved onto another ceiling cuts it before it becomes its child.
+      holesFor: (ceiling) => {
+        const preview = usePlacementPreview.getState().node
+        if (preview?.type !== 'procedural-item' || preview.parentId !== ceiling.id) return []
+        const moving = useScene.getState().nodes[preview.id as AnyNodeId]
+        if (!moving || moving.parentId === ceiling.id) return []
+        const hole = proceduralCeilingHole(preview)
+        return hole ? [hole] : []
+      },
+    },
     floorPlaced: {
       footprint: (n) => proceduralFootprint(n as unknown as ProceduralItemNode),
       applies: (n) => !(n as unknown as ProceduralItemNode).recipe.mounting,
@@ -144,15 +202,41 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
       ...itemPaint,
       commit: ({ node, role, material, materialPreset }) =>
         setProceduralMaterial(node.id, role, materialPreset, material),
+      applyPreview: (args) => {
+        const restore = itemPaint.applyPreview?.(args)
+        if (!restore) return restore
+        const node = args.node
+        if (node?.type !== 'procedural-item') return restore
+        const lights = evaluateRecipe(node.recipe, node.parameters).lights
+        const restoreEmission = decorateProceduralEmission(
+          args.root,
+          lights,
+          useInteractive.getState().procedural[node.id]?.lightsOn ??
+            useInteractive.getState().lampDefault,
+        )
+        return () => {
+          restoreEmission()
+          restore()
+        }
+      },
     },
   },
   relations: { hosts: ['item', 'procedural-item'], cascadeDelete: 'descendants' },
   renderer: { kind: 'parametric', module: () => import('./renderer') },
+  exportAnimation: ({ node, object }) => bakeProceduralAnimationClips(node, object),
   parametrics: { groups: [], customPanel: () => import('@pascal-app/editor/procedural-items') },
   affordanceTools: { move: () => import('./move-tool') },
   floorplanMoveTarget: proceduralFloorplanMoveTarget,
   floorplanAffectedIds: restingFloorplanAffectedIds,
   keyboardActions: {
+    e: {
+      appliesTo: (n) => {
+        const recipe = (n as unknown as ProceduralItemNode).recipe
+        return operableParts(recipe).length > 0 || recipe.parts.some((part) => part.light)
+      },
+      run: (n) =>
+        proceduralMechanism.has(n) ? toggleMechanism(proceduralMechanism, n) : toggleItemLights(n),
+    },
     r: {
       appliesTo: (n) => Boolean((n as unknown as ProceduralItemNode).wallId),
       run: (n) => {

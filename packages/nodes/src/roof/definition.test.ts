@@ -83,3 +83,13 @@ describe('roof tool registration', () => {
     useRoofPlacementMode.setState({ conical: false, mode: 'auto' })
   })
 })
+
+describe('roof assembly host', () => {
+  test('stacks one contiguous layer run inward from the covering, summed', () => {
+    const host = roofDefinition.capabilities?.assembly
+    expect(roofDefinition.schemaVersion).toBe(4)
+    expect(host).toMatchObject({ reference: 'covering', measure: 'normal' })
+    expect(host?.backing).toBeUndefined()
+    expect(host?.body(roof())).toBeNull()
+  })
+})

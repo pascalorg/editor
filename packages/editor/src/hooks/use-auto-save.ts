@@ -1,7 +1,7 @@
 'use client'
 
 import { useScene } from '@pascal-app/core'
-import { type MutableRefObject, useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { type SceneGraph, saveSceneToLocalStorage } from '../lib/scene'
 
 const AUTOSAVE_DEBOUNCE_MS = 1000
@@ -105,7 +105,8 @@ export function useAutoSave({
   onSaveStatusChange,
   isVersionPreviewMode = false,
 }: UseAutoSaveOptions): {
-  isLoadingSceneRef: MutableRefObject<boolean>
+  beginSceneLoad: () => void
+  completeSceneLoad: () => void
   saveNow: () => void
 } {
   const saveTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
@@ -237,18 +238,23 @@ export function useAutoSave({
         return
       }
 
+      // A plugin set the user never chose is the host's defaults, re-derived on
+      // every load: a plugin registering after the load (hosted plugins arrive
+      // late) syncs it without anyone editing the scene.
+      const pluginsEdited =
+        state.installedPlugins !== lastInstalledPluginsRef && state.hasExplicitPluginInstallState
+      lastInstalledPluginsRef = state.installedPlugins
       const currentNodesSnapshot = JSON.stringify(state.nodes)
       const changed =
         currentNodesSnapshot !== lastNodesSnapshot ||
         state.collections !== lastCollectionsRef ||
         state.materials !== lastMaterialsRef ||
-        state.installedPlugins !== lastInstalledPluginsRef
+        pluginsEdited
       if (!changed) return
 
       lastNodesSnapshot = currentNodesSnapshot
       lastCollectionsRef = state.collections
       lastMaterialsRef = state.materials
-      lastInstalledPluginsRef = state.installedPlugins
       hasDirtyChangesRef.current = true
       onDirtyRef.current?.()
       setSaveStatus('pending')
@@ -376,5 +382,23 @@ export function useAutoSave({
     executeSaveRef.current?.()
   }, [])
 
-  return { isLoadingSceneRef, saveNow }
+  const beginSceneLoad = useCallback(() => {
+    isLoadingSceneRef.current = true
+  }, [])
+
+  // Call as soon as the store holds the loaded graph — hydration is data, not
+  // a frame. Gating this on requestAnimationFrame kept a tab loaded while
+  // hidden (no frames ever run) "loading" indefinitely: every later edit was
+  // adopted as the loaded baseline, so nothing autosaved and the exit flush
+  // had nothing dirty to write.
+  const completeSceneLoad = useCallback(() => {
+    isLoadingSceneRef.current = false
+    // A save that came due mid-load was deferred; the store now holds real
+    // data, so write it rather than leave the status parked on 'paused'.
+    if (pendingSaveRef.current && !isSavingRef.current && !saveTimeoutRef.current) {
+      executeSaveRef.current?.()
+    }
+  }, [])
+
+  return { beginSceneLoad, completeSceneLoad, saveNow }
 }
