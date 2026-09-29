@@ -1,0 +1,434 @@
+{
+  "version": 1,
+  "name": "Outdoor condensing unit 36 in",
+  "description": "Split-system condenser on a pad: base, coil body, cap, fan with spinning blades, radial fan guard, coil guard rods and wire rings.",
+  "classification": {
+    "category": "hvac",
+    "functionTags": ["condenser", "outdoor-unit"],
+    "tags": ["exterior-services"]
+  },
+  "parameters": [
+    {
+      "id": "fan_speed",
+      "label": "Fan speed",
+      "default": 8,
+      "min": 1,
+      "max": 20,
+      "step": 0.5,
+      "unit": "rad"
+    },
+    {
+      "id": "guard_radius",
+      "label": "Guard spoke radius",
+      "default": 0.235,
+      "min": 0.2,
+      "max": 0.3,
+      "step": 0.005,
+      "unit": "m"
+    }
+  ],
+  "slots": [
+    {
+      "id": "concrete",
+      "label": "Pad",
+      "color": "#b9b4aa"
+    },
+    {
+      "id": "body",
+      "label": "Cabinet",
+      "color": "#d9dcd6",
+      "finish": "metal"
+    },
+    {
+      "id": "dark",
+      "label": "Fan and guard",
+      "color": "#2e3134",
+      "finish": "metal"
+    },
+    {
+      "id": "wire",
+      "label": "Coil guard",
+      "color": "#6d7175",
+      "finish": "metal"
+    }
+  ],
+  "parts": [
+    {
+      "id": "pad",
+      "label": "Equipment pad",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "slab",
+          "primitive": "box",
+          "slot": "concrete",
+          "size": [1.219, 0.152, 1.524],
+          "position": [0.0015000000000000568, 0.076, 0],
+          "support": true
+        }
+      ]
+    },
+    {
+      "id": "cabinet",
+      "label": "Cabinet",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "base",
+          "primitive": "box",
+          "slot": "body",
+          "size": [1.002, 0.045, 1.09],
+          "position": [0, 0.1745, 0]
+        },
+        {
+          "id": "coil",
+          "primitive": "box",
+          "slot": "body",
+          "size": [1.002, 0.842, 1.043],
+          "position": [0, 0.618, -0.023]
+        },
+        {
+          "id": "cap",
+          "primitive": "box",
+          "slot": "body",
+          "size": [1.006, 0.058, 1.098],
+          "position": [0.002, 1.0379999999999998, 0]
+        }
+      ]
+    },
+    {
+      "id": "fan",
+      "label": "Fan",
+      "count": 1,
+      "motion": {
+        "kind": "spin",
+        "pivot": [0.033, 0, -0.024],
+        "axis": "y",
+        "radiansPerSecond": "fan_speed"
+      },
+      "shapes": [
+        {
+          "id": "hub",
+          "primitive": "cylinder",
+          "slot": "dark",
+          "size": [0.12, 0.081, 0.12],
+          "position": [0.033, 1.0055, -0.024]
+        },
+        {
+          "id": "blade_a",
+          "primitive": "box",
+          "slot": "dark",
+          "size": [0.58, 0.01, 0.12],
+          "position": [0.033, 1.002, -0.024],
+          "rotation": [0.25, 0, 0]
+        },
+        {
+          "id": "blade_b",
+          "primitive": "box",
+          "slot": "dark",
+          "size": [0.58, 0.01, 0.12],
+          "position": [0.033, 1.002, -0.024],
+          "rotation": [0.25, 2.094, 0]
+        },
+        {
+          "id": "blade_c",
+          "primitive": "box",
+          "slot": "dark",
+          "size": [0.58, 0.01, 0.12],
+          "position": [0.033, 1.002, -0.024],
+          "rotation": [0.25, 4.189, 0]
+        }
+      ]
+    },
+    {
+      "id": "guard",
+      "label": "Fan guard spoke",
+      "count": 63,
+      "shapes": [
+        {
+          "id": "spoke",
+          "primitive": "box",
+          "slot": "dark",
+          "size": [0.31, 0.016, 0.006],
+          "position": [
+            {
+              "op": "mul",
+              "args": [
+                "guard_radius",
+                {
+                  "op": "cos",
+                  "args": [
+                    {
+                      "op": "add",
+                      "args": [
+                        -3.1171580440618727,
+                        {
+                          "op": "mul",
+                          "args": ["index", 0.0890117918517108]
+                        },
+                        {
+                          "op": "mul",
+                          "args": [
+                            0.22602013813326566,
+                            {
+                              "op": "floor",
+                              "args": [
+                                {
+                                  "op": "div",
+                                  "args": [
+                                    {
+                                      "op": "add",
+                                      "args": ["index", 6]
+                                    },
+                                    21
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            1.054,
+            {
+              "op": "mul",
+              "args": [
+                "guard_radius",
+                {
+                  "op": "sin",
+                  "args": [
+                    {
+                      "op": "add",
+                      "args": [
+                        -3.1171580440618727,
+                        {
+                          "op": "mul",
+                          "args": ["index", 0.0890117918517108]
+                        },
+                        {
+                          "op": "mul",
+                          "args": [
+                            0.22602013813326566,
+                            {
+                              "op": "floor",
+                              "args": [
+                                {
+                                  "op": "div",
+                                  "args": [
+                                    {
+                                      "op": "add",
+                                      "args": ["index", 6]
+                                    },
+                                    21
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "rotation": [
+            0,
+            {
+              "op": "sub",
+              "args": [
+                0,
+                {
+                  "op": "add",
+                  "args": [
+                    -3.1171580440618727,
+                    {
+                      "op": "mul",
+                      "args": ["index", 0.0890117918517108]
+                    },
+                    {
+                      "op": "mul",
+                      "args": [
+                        0.22602013813326566,
+                        {
+                          "op": "floor",
+                          "args": [
+                            {
+                              "op": "div",
+                              "args": [
+                                {
+                                  "op": "add",
+                                  "args": ["index", 6]
+                                },
+                                21
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rods_left",
+      "label": "Coil guard rods left",
+      "count": 9,
+      "shapes": [
+        {
+          "id": "rod",
+          "primitive": "cylinder",
+          "slot": "wire",
+          "size": [0.004, 0.813, 0.004],
+          "position": [
+            -0.499,
+            0.6035,
+            {
+              "op": "add",
+              "args": [
+                -0.19,
+                {
+                  "op": "mul",
+                  "args": ["index", 0.0805]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rods_back",
+      "label": "Coil guard rods back",
+      "count": 12,
+      "shapes": [
+        {
+          "id": "rod",
+          "primitive": "cylinder",
+          "slot": "wire",
+          "size": [0.004, 0.813, 0.004],
+          "position": [
+            {
+              "op": "add",
+              "args": [
+                -0.423,
+                {
+                  "op": "mul",
+                  "args": ["index", 0.0805]
+                }
+              ]
+            },
+            0.6035,
+            0.543
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rods_right",
+      "label": "Coil guard rods right",
+      "count": 9,
+      "shapes": [
+        {
+          "id": "rod",
+          "primitive": "cylinder",
+          "slot": "wire",
+          "size": [0.004, 0.813, 0.004],
+          "position": [
+            0.499,
+            0.6035,
+            {
+              "op": "add",
+              "args": [
+                -0.19,
+                {
+                  "op": "mul",
+                  "args": ["index", 0.0805]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rings",
+      "label": "Coil guard wire",
+      "count": 6,
+      "shapes": [
+        {
+          "id": "left",
+          "primitive": "box",
+          "slot": "wire",
+          "size": [0.003, 0.003, 0.816],
+          "position": [
+            -0.4995,
+            {
+              "op": "add",
+              "args": [
+                0.3125,
+                {
+                  "op": "mul",
+                  "args": ["index", 0.116]
+                }
+              ]
+            },
+            0.137
+          ]
+        },
+        {
+          "id": "back",
+          "primitive": "box",
+          "slot": "wire",
+          "size": [1.002, 0.003, 0.003],
+          "position": [
+            0,
+            {
+              "op": "add",
+              "args": [
+                0.3125,
+                {
+                  "op": "mul",
+                  "args": ["index", 0.116]
+                }
+              ]
+            },
+            0.5435
+          ]
+        },
+        {
+          "id": "right",
+          "primitive": "box",
+          "slot": "wire",
+          "size": [0.003, 0.003, 0.816],
+          "position": [
+            0.4995,
+            {
+              "op": "add",
+              "args": [
+                0.3125,
+                {
+                  "op": "mul",
+                  "args": ["index", 0.116]
+                }
+              ]
+            },
+            0.137
+          ]
+        }
+      ]
+    }
+  ],
+  "constraints": []
+}

@@ -4,6 +4,7 @@ import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 import { ErrorCode, throwMcpError } from './errors'
+import { resolveNodeWorldPoint } from './node-world-point'
 import { NodeIdSchema } from './schemas'
 
 export const measureInput = {
@@ -13,64 +14,12 @@ export const measureInput = {
 
 export const measureOutput = {
   distanceMeters: z.number(),
+  fromPoint: z.array(z.number()).optional(),
+  toPoint: z.array(z.number()).optional(),
+  approximate: z.array(z.object({ id: z.string(), reason: z.string() })).optional(),
   areaSqMeters: z.number().optional(),
   units: z.literal('meters'),
   areaUnits: z.literal('square_meters').optional(),
-}
-
-/**
- * Compute a 3D centre point in level-coordinate space for distance measurement.
- *
- * For walls / fences: midpoint of the start/end segment at Y=0.
- * For positioned nodes (item, door, window, building, stair, roof): `position`.
- * For polygon nodes (slab, ceiling, zone): 2D centroid lifted to Y=0.
- * For site: centroid of property line at Y=0 if available.
- *
- * Returns null if no representative centre can be derived (e.g. level node
- * has no position of its own).
- */
-function getCentre(node: AnyNode): [number, number, number] | null {
-  switch (node.type) {
-    case 'wall':
-    case 'fence': {
-      const [x1, z1] = node.start
-      const [x2, z2] = node.end
-      return [(x1 + x2) / 2, 0, (z1 + z2) / 2]
-    }
-    case 'item':
-    case 'door':
-    case 'window':
-    case 'building':
-    case 'stair':
-    case 'roof':
-      return node.position
-    case 'slab':
-    case 'ceiling':
-    case 'zone': {
-      const poly = node.polygon as Array<[number, number]> | undefined
-      if (!poly || poly.length === 0) return null
-      let cx = 0
-      let cz = 0
-      for (const [x, z] of poly) {
-        cx += x
-        cz += z
-      }
-      return [cx / poly.length, 0, cz / poly.length]
-    }
-    case 'site': {
-      const pts = node.polygon?.points ?? []
-      if (pts.length === 0) return [0, 0, 0]
-      let cx = 0
-      let cz = 0
-      for (const [x, z] of pts) {
-        cx += x
-        cz += z
-      }
-      return [cx / pts.length, 0, cz / pts.length]
-    }
-    default:
-      return null
-  }
 }
 
 /** Compute polygon area via the shoelace formula. */
@@ -92,7 +41,7 @@ export function registerMeasure(server: McpServer, bridge: SceneOperations): voi
     {
       title: 'Measure',
       description:
-        'Measure distance (in meters) between two nodes, or the net area of a polygon node when fromId === toId.',
+        "Measure the distance (in meters) between two nodes, or the net area of a polygon node when fromId === toId. Distance is between world-space reference points, returned as fromPoint/toPoint: a positioned node's origin in its host's frame (an item's base, a door's or window's centre in its wall), a wall's or fence's midpoint at its base, a slab's, ceiling's or zone's polygon centroid on its plane, a block's or imported mesh's vertex-bounds centre, a level's plan centre on its base plane, and another container's descendants' centre. `approximate` lists nodes whose renderer derives the pose from data not modelled here (a downspout at its gutter outlet, a gutter at the eave), with the reason.",
       inputSchema: measureInput,
       outputSchema: measureOutput,
       annotations: READ_ONLY_TOOL_ANNOTATIONS,
@@ -135,22 +84,42 @@ export function registerMeasure(server: McpServer, bridge: SceneOperations): voi
         }
       }
 
-      const fromCentre = getCentre(from as AnyNode)
-      const toCentre = getCentre(to as AnyNode)
-      if (!(fromCentre && toCentre)) {
+      const nodes = bridge.getNodes()
+      const pointOf = (node: AnyNode) => {
+        try {
+          const point = resolveNodeWorldPoint(node.id, nodes)
+          if (point) return point
+        } catch (err) {
+          const reason = err instanceof Error ? err.message : String(err)
+          throwMcpError(
+            ErrorCode.InvalidRequest,
+            `Cannot derive a world point for ${node.type} ${node.id}: ${reason}`,
+          )
+        }
         throwMcpError(
           ErrorCode.InvalidRequest,
-          `Cannot derive centre for measurement between ${from.type} and ${to.type}`,
+          `Cannot derive a world point for ${node.type} ${node.id}`,
         )
       }
+      const fromResolved = pointOf(from as AnyNode)
+      const toResolved = pointOf(to as AnyNode)
+      const fromPoint = fromResolved.point
+      const toPoint = toResolved.point
+      const approximate: Array<{ id: string; reason: string }> = []
+      if (fromResolved.approximate)
+        approximate.push({ id: from.id, reason: fromResolved.approximate })
+      if (toResolved.approximate) approximate.push({ id: to.id, reason: toResolved.approximate })
 
-      const dx = fromCentre[0] - toCentre[0]
-      const dy = fromCentre[1] - toCentre[1]
-      const dz = fromCentre[2] - toCentre[2]
+      const dx = fromPoint[0] - toPoint[0]
+      const dy = fromPoint[1] - toPoint[1]
+      const dz = fromPoint[2] - toPoint[2]
       const distance = Math.sqrt(dx * dx + dy * dy + dz * dz)
 
       const payload = {
         distanceMeters: distance,
+        fromPoint,
+        toPoint,
+        ...(approximate.length > 0 ? { approximate } : {}),
         units: 'meters' as const,
       }
       return {

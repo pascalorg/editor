@@ -19,7 +19,9 @@ import {
   type WindowNode,
   type ZoneNode,
 } from '@pascal-app/core'
+import { evaluateRecipe } from '@pascal-app/core/procedural-items'
 import {
+  decorateProceduralEmission,
   getPascalTextureRef,
   isViewerPresentationTextureBorrowed,
   poseDoorMovingParts,
@@ -486,6 +488,14 @@ function finishSceneExportPreparation(preparation: SceneExportPreparation): GlbE
   sanitizeMaterialGroups(scene, identityNodes)
   convertMaterials(scene, options.textures ?? 'embed', options.purpose ?? 'viewer')
 
+  for (const [id, original] of registryEntries) {
+    const node = nodes[id]
+    const clone = cloneByOriginal.get(original)
+    if (node?.type !== 'procedural-item' || !clone) continue
+    const lights = evaluateRecipe(node.recipe, node.parameters).lights
+    decorateProceduralEmission(clone, lights, true)
+  }
+
   const retainedCloneByOriginal = retainedClones(scene, cloneByOriginal)
   const keepClips = options.animations
     ? options.animations === 'keep'
@@ -493,6 +503,13 @@ function finishSceneExportPreparation(preparation: SceneExportPreparation): GlbE
   const animation = keepClips
     ? bakeAnimationClips(retainedCloneByOriginal, nodes, registryEntries)
     : { clips: [], clipNamesByNode: new Map<string, string[]>() }
+  if (!keepClips) {
+    for (const [id, original] of registryEntries) {
+      const node = nodes[id]
+      const clone = retainedCloneByOriginal.get(original)
+      if (node?.type === 'procedural-item' && clone) bakeRegistryAnimationClips(node, clone)
+    }
+  }
   stampIdentity(scene, retainedCloneByOriginal, nodes, animation.clipNamesByNode, registryEntries)
 
   let disposed = false
@@ -1695,8 +1712,32 @@ function stampIdentity(
   scene.traverse((object) => {
     const presentationId = object.userData.pascalPresentationId
     const label = object.userData.label
+    const motion = object.userData.proceduralMotion as
+      | {
+          nodeId: string
+          partId: string
+          groupId: string
+          kind: 'hinge' | 'slide' | 'spin'
+          clip?: string
+          activeWindow?: [number, number]
+        }
+      | undefined
+    const slotId = object.userData.slotId
     object.userData =
       typeof presentationId === 'string' ? { pascalPresentationId: presentationId, label } : {}
+    if (typeof slotId === 'string') object.userData.slotId = slotId
+    if (motion) {
+      object.userData.proceduralMotion = {
+        nodeId: motion.nodeId,
+        partId: motion.partId,
+        groupId: motion.groupId,
+        kind: motion.kind,
+        ...(motion.clip && clipNamesByNode.get(motion.nodeId)?.includes(motion.clip)
+          ? { clip: motion.clip }
+          : {}),
+        ...(motion.activeWindow ? { activeWindow: motion.activeWindow } : {}),
+      }
+    }
   })
 
   for (const [id, original] of registryEntries) {
@@ -1721,21 +1762,15 @@ function stampIdentity(
       extras.label = getLevelDisplayName(node as LevelNode)
       target.visible = true
     }
-    // Only nodes that actually baked an open clip are openable. A cased opening
-    // (no leaf), fixed window, or static cabinet produces no clip, so it stays
-    // unflagged — the file never claims a part opens when nothing moves.
-    if (clipNamesByNode.get(id)?.some((name) => name.endsWith(': open'))) {
-      const clipNames = clipNamesByNode.get(id)
-      if (clipNames?.length) {
-        extras.openable = true
-        extras.clips = clipNames
-      }
-    }
-    // Items with a baked ambient clip (a fan's spin) carry the clip name but no
-    // `openable` flag — nothing opens; the clip just loops.
-    if (node.type === 'item') {
-      const clipNames = clipNamesByNode.get(id)
-      if (clipNames?.length) extras.clips = clipNames
+    // Every node that baked clips lists them, whatever its kind, so the viewer
+    // can play them. Only nodes that actually baked an open clip are openable. A
+    // cased opening (no leaf), fixed window, or static cabinet produces no clip,
+    // so it stays unflagged — the file never claims a part opens when nothing
+    // moves; an ambient loop (a fan's spin) is listed without the flag.
+    const clipNames = clipNamesByNode.get(id)
+    if (clipNames?.length) {
+      if (clipNames.some((name) => name.endsWith(': open'))) extras.openable = true
+      extras.clips = clipNames
     }
     if (node.type === 'zone') {
       // Zone fills are stripped from the bake; /viewer rebuilds the room from

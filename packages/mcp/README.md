@@ -320,12 +320,12 @@ captured by Zundo's temporal middleware as a single undoable step.
 | `get_scene` | Return the full scene graph. | — | `{ nodes, rootNodeIds, collections }` |
 | `get_node` | Fetch a node by id. | `{ id }` | the node, or `InvalidParams` if not found |
 | `describe_node` | Node summary with ancestry, children count and properties. | `{ id }` | `{ id, type, parentId, ancestry[], childrenCount, properties, description }` |
-| `find_nodes` | Filter nodes by type / parent / zone / level. | `{ type?, parentId?, zoneId?, levelId? }` | `{ nodes: AnyNode[] }` |
+| `find_nodes` | Filter nodes by type (any node kind) / parent / zone / level, or by import source id (`provenance.refs[].id` or legacy `metadata.sourceIds`, exact or prefix). | `{ type?, parentId?, zoneId?, levelId?, sourceId?, sourceIdPrefix? }` | `{ nodes: AnyNode[] }` |
 | `list_levels` | List levels with ids, floor indices, parent ids and child counts. | — | `{ activeSceneId, levels[] }` |
 | `get_level_summary` | Compact summary of one level with counts, wall/opening lists, zones, slabs, ceilings and items. | `{ levelId? }` | `{ levelId, counts, walls, zones, items, slabs, ceilings }` |
 | `get_walls` | Walls on a level with length and child doors/windows. | `{ levelId? }` | `{ levelId, walls[] }` |
 | `get_zones` | Room/zone polygons with approximate areas and bounds. | `{ levelId? }` | `{ levelId, zones[] }` |
-| `measure` | Distance between two nodes; area when applicable. | `{ fromId, toId }` | `{ distanceMeters, areaSqMeters?, units: 'meters' }` |
+| `measure` | Distance between two nodes' world-space reference points (hosted doors, windows and items resolved through their host; every node kind); area when applicable. | `{ fromId, toId }` | `{ distanceMeters, fromPoint?, toPoint?, areaSqMeters?, units: 'meters' }` |
 | `search_assets` | Search the built-in MCP item catalog. | `{ query, category? }` | `{ results, total }` |
 | `create_story_shell` | Create one level-owned story shell from a footprint: perimeter walls plus optional slab and ceiling. Use once per story. | `{ levelId, footprint, wallHeight?, wallThickness?, createSlab?, createCeiling? }` | `{ wallIds, slabId, ceilingId, createdIds }` |
 | `create_stair_between_levels` | Create a straight stair and one rectangular manual opening in the destination slab/source ceiling, with auto-opening disabled. | `{ fromLevelId, toLevelId, position, width?, runLength?, totalRise? }` | `{ stairId, stairSegmentId, openingPolygon }` |
@@ -334,10 +334,11 @@ captured by Zundo's temporal middleware as a single undoable step.
 | `add_door` | Add a door to a wall using parametric placement. | `{ wallId, t, width?, height?, hingesSide?, swingDirection? }` | `{ doorId, localX }` |
 | `add_window` | Add a window to a wall using parametric placement and sill height. | `{ wallId, t, width?, height?, sillHeight? }` | `{ windowId, localX, sillHeight }` |
 | `furnish_room` | Place realistic furniture for a room type inside a polygon. | `{ levelId, roomType, polygon, doorWallIndex? }` | `{ placed, itemIds, skipped }` |
-| `apply_patch` | Batched create/update/delete/move, validated and dry-run before commit. Batch-first is the default: send all create/update/delete ops for a build step in one atomic call (stable order, later ops may reference earlier created ids); do not loop one-op calls. | `{ patches: Patch[] }` | `{ applied: number }` |
+| `apply_patch` | Batched create/update/delete/move, validated and dry-run before commit. Batch-first is the default: send all create/update/delete ops for a build step in one atomic call (stable order, later ops may reference earlier created ids); do not loop one-op calls. A create with an id already in the scene is refused (`node_exists`); delete it earlier in the same patch to replace it. Updates cannot change `id` or `type` (`identity_change`), `object` or `children` (`immutable_field`), move a node under a missing or childless parent (`invalid_parent`), or add schema issues (`invalid_update`); default gutters and downspouts a delete regenerates are addressable only in a later call (`regenerated_default`). Refusals are tool errors with JSON text `{ code, patchIndex, id, message }`. | `{ patches: Patch[] }` | `{ applied: number }` |
 | `create_level` | Add a new level to a building. | `{ buildingId, elevation, height, label? }` | `{ levelId }` |
 | `create_wall` | Add a wall to a level. | `{ levelId, start, end, thickness?, height? }` | `{ wallId }` |
 | `place_item` | Place a catalog item on a level/slab/zone, ceiling, wall, or site. Slab/zone targets resolve to the parent level so floor items render and validate. | `{ catalogItemId, targetNodeId, position, rotation? }` | `{ itemId, status }` |
+| `place_design` | Create one design (procedural item recipe, object or JSON string) that passes `validate_design`. Its mounting picks the host: level/slab/zone or a design surface (`surfaceId`), a straight wall face, or a ceiling. Create-only, one undo step, inline designs up to 24 KiB, with coded refusals. | `{ design, hostId, position, rotation?, side?, surfaceId?, parameters?, slots?, name?, id? }` | `{ designId, parentId, surfaceId }` |
 | `cut_opening` | Cut a door or window opening into a wall. `position` is 0..1 along the wall and is stored as wall-local meters. | `{ wallId, type: 'door' \| 'window', position, width, height }` | `{ openingId }` |
 | `set_zone` | Create a zone/room polygon on a level. | `{ levelId, polygon, label, properties? }` | `{ zoneId }` |
 | `duplicate_level` | Clone a level and all of its descendants. | `{ levelId }` | `{ newLevelId, newNodeIds[] }` |
@@ -347,6 +348,7 @@ captured by Zundo's temporal middleware as a single undoable step.
 | `export_json` | Serialize the scene graph as JSON. | `{ pretty? }` | `{ json: string }` |
 | `export_glb` | Stubbed: GLB export requires the browser renderer. | — | throws `not_implemented` |
 | `validate_scene` | Zod-validate every node and parent-child integrity. | — | `{ valid, errors: { nodeId, path, message }[] }` |
+| `validate_design` | Read-only: validate a design (procedural item recipe, object or JSON string) and measure it. The authority over `pascal://schema/design`. | `{ design, parameters? }` | `{ valid, diagnostics[], design, sweep, measurements }` |
 | `verify_scene` | High-level layout check with validation status, per-level counts, empty levels and practical issues. | — | `{ valid, levels[], issues, hasIssues }` |
 | `check_collisions` | Find overlapping items and out-of-bounds placements. | `{ levelId? }` | `{ collisions: { aId, bId, kind }[] }` |
 | `analyze_floorplan_image` | Vision tool: extract walls, rooms, and approximate dimensions from a floorplan image. | `{ image, scaleHint? }` | `{ walls, rooms, approximateDimensions, confidence }` |
@@ -365,6 +367,7 @@ The vision tools require the MCP host to support the sampling capability
 | `pascal://agent/guide` | `text/markdown` | MCP-first construction workflow, scene invariants, and tool preferences for agents. |
 | `pascal://catalog/items` | `application/json` | Dependency-free built-in catalog subset for common residential furniture and fixtures. |
 | `pascal://constraints/{levelId}` | `application/json` | Slab footprints and wall polygons for the given level — useful as planner context. |
+| `pascal://schema/design` | `application/json` | Design contract: JSON Schema generated from core's `RecipeSchema`, limits, rules only `validate_design` checks, and an example. |
 
 ## Prompts
 

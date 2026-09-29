@@ -9,7 +9,9 @@ import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useState } from 'react'
 import { useHandleGroup } from '../../store/use-handle-group'
 import { PanelSection } from '../ui/controls/panel-section'
+import { SegmentedControl } from '../ui/controls/segmented-control'
 import { SliderControl } from '../ui/controls/slider-control'
+import { ToggleControl } from '../ui/controls/toggle-control'
 import { PanelWrapper } from '../ui/panels/panel-wrapper'
 export function ProceduralInspector({
   nodeId,
@@ -75,21 +77,44 @@ export function ProceduralInspector({
         )}
       </div>
       <div className="space-y-3">
-        {fields.map((p) => (
-          <SliderControl
-            key={p.id}
-            label={p.label}
-            value={node.parameters[p.id] ?? p.default}
-            min={p.min}
-            max={p.max}
-            step={p.step}
-            precision={3}
-            unit={p.unit === 'm' ? 'm' : ''}
-            onChange={(v) => change(p.id, v, false)}
-            onCommit={(v) => change(p.id, v, true)}
-            restoreOnCommit={false}
-          />
-        ))}
+        {fields.map((p) => {
+          const value = node.parameters[p.id] ?? p.default
+          if (p.unit === 'bool')
+            return (
+              <ToggleControl
+                key={p.id}
+                label={p.label}
+                checked={value === 1}
+                onChange={(checked) => change(p.id, checked ? 1 : 0, true)}
+              />
+            )
+          if (p.unit === 'choice' && p.options && p.options.length <= 4)
+            return (
+              <div key={p.id} className="space-y-1.5">
+                <div className="text-muted-foreground text-xs">{p.label}</div>
+                <SegmentedControl
+                  value={String(value)}
+                  options={p.options.map((label, index) => ({ label, value: String(index) }))}
+                  onChange={(index) => change(p.id, Number(index), true)}
+                />
+              </div>
+            )
+          return (
+            <SliderControl
+              key={p.id}
+              label={p.unit === 'choice' ? `${p.label}: ${p.options?.[value] ?? value}` : p.label}
+              value={value}
+              min={p.min}
+              max={p.max}
+              step={p.step}
+              precision={p.unit === 'choice' ? 0 : 3}
+              unit={p.unit === 'm' ? 'm' : ''}
+              onChange={(v) => change(p.id, v, false)}
+              onCommit={(v) => change(p.id, v, true)}
+              restoreOnCommit={false}
+            />
+          )
+        })}
       </div>
       {partId && (
         <button

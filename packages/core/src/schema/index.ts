@@ -7,6 +7,8 @@ export {
   type SolarPanelPresetDims,
   SolarPanelPresetKey,
 } from '../solar-panel-presets'
+// Assembly layers (F2)
+export { Assembly, AssemblyLayer, AssemblyLayerId, LayerRole } from './assembly'
 // Asset URL allowlist
 export { ALLOWED_ORIGINS_ENV, ALLOWED_SCHEMES, AssetUrl } from './asset-url'
 export { BaseNode, generateId, Material, nodeType, objectId } from './base'
@@ -20,6 +22,8 @@ export {
   enableCompiledNodeParsers,
   parseNode,
 } from './compiled-node-parsers'
+// Cut intents (F5b)
+export { CutIntent, CutShape } from './cut'
 export type {
   MaterialMapProperties,
   MaterialMaps,
@@ -153,7 +157,7 @@ export {
   ElevatorShaftStyle,
 } from './nodes/elevator'
 export { EyebrowVentMaterialRole, EyebrowVentNode } from './nodes/eyebrow-vent'
-export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
+export { FenceBaseStyle, FenceGuardInfill, FenceNode, FenceStyle } from './nodes/fence'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
 export {
   computeGutterEaveY,
@@ -292,7 +296,14 @@ export {
   ScanNode,
 } from './nodes/scan'
 export { ShelfNode } from './nodes/shelf'
-export { SiteNode } from './nodes/site'
+export {
+  migrateSiteMetadata,
+  SiteAddress,
+  SiteDossier,
+  SiteNode,
+  SiteParcel,
+  SiteSetbacks,
+} from './nodes/site'
 export {
   SKYLIGHT_TYPE_ORDER,
   SKYLIGHT_TYPE_PRESETS,
@@ -314,6 +325,7 @@ export {
   getEffectiveStairSurfaceMaterial,
   StairNode,
   StairRailingMode,
+  StairRailingStyle,
   StairSlabOpeningMode,
   StairTopLandingMode,
   StairType,
@@ -351,6 +363,11 @@ export {
   WALL_SLOT_DEFAULT,
   WALL_SURFACE_SLOT_DEFAULTS,
   WALL_TRIM_DEFAULTS,
+  WallAssembly,
+  WallAssemblyExteriorFinish,
+  WallAssemblyFramingKind,
+  WallAssemblyInteriorFinish,
+  WallAssemblySheathingMaterial,
   WallNode,
   WallTreatmentSide,
   WallTrimProfile,
@@ -362,8 +379,52 @@ export {
   WindowType,
 } from './nodes/window'
 export { ZoneNode } from './nodes/zone'
+// Typed source identity (D5)
+export {
+  PROVENANCE_MAX_ID_BYTES,
+  PROVENANCE_MAX_LINEAGE_IDS,
+  PROVENANCE_MAX_NAMESPACE_BYTES,
+  PROVENANCE_MAX_NODE_ID_BYTES,
+  PROVENANCE_MAX_REFS,
+  Provenance,
+  ProvenanceLineage,
+  ProvenanceLineageOp,
+  ProvenanceRef,
+  ProvenanceRole,
+} from './provenance'
 export { generateSceneMaterialId, SceneMaterial, type SceneMaterialId } from './scene-material'
+// Source references in string form (`<ns>:<id>[::<sub>]`, D5)
+export { type ParsedSourceRef, parseSourceRef, SourceRefString } from './source-ref'
 export { MAX_TERRAIN_SIDE, TerrainData } from './terrain'
-export type { AnyNodeId, AnyNodeOption, AnyNodeType } from './types'
+export type {
+  Anchor,
+  AnchorPolicy,
+  AnyNodeId,
+  AnyNodeOption,
+  AnyNodeType,
+  DefinitionPin,
+  Discipline,
+  DisplayFamily,
+  DisplayMode,
+  EndCut,
+  FidelityV2,
+  FidelityV3,
+  FitTarget,
+  MaterialPattern,
+  MaterialPatternType,
+  Mount,
+  MountAlign,
+  MountHost,
+  PartKey,
+  ResolvedSectionProfile,
+  SectionFamily,
+  SectionLibraryEntry,
+  SectionProfile,
+  SitePresentation,
+  SurfaceAnchor,
+  SurfacePatchId,
+  SweepEndSpec,
+  WallMountDatum,
+} from './types'
 // Union types
 export { AnyNode, nodeKindOf } from './types'

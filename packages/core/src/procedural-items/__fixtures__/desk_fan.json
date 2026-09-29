@@ -1,0 +1,163 @@
+{
+  "version": 1,
+  "name": "Desk Fan",
+  "description": "desk fan",
+  "parameters": [
+    {
+      "id": "scale",
+      "label": "Scale",
+      "default": 1,
+      "min": 1,
+      "max": 1,
+      "step": 1,
+      "unit": "count"
+    }
+  ],
+  "slots": [
+    {
+      "id": "metal",
+      "label": "Metal",
+      "color": "#8b9299"
+    },
+    {
+      "id": "blue",
+      "label": "Blue",
+      "color": "#588ead"
+    }
+  ],
+  "parts": [
+    {
+      "id": "base",
+      "label": "Base",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "foot",
+          "primitive": "cylinder",
+          "slot": "metal",
+          "size": [0.55, 0.18, 0.55],
+          "position": [0, 0.09, 0],
+          "topScale": 0.55
+        },
+        {
+          "id": "post",
+          "primitive": "cylinder",
+          "slot": "metal",
+          "size": [0.08, 0.6, 0.08],
+          "position": [0, 0.48, 0]
+        },
+        {
+          "id": "hub",
+          "primitive": "ellipsoid",
+          "slot": "metal",
+          "size": [0.2, 0.2, 0.18],
+          "position": [0, 0.9, 0]
+        }
+      ]
+    },
+    {
+      "id": "blades",
+      "label": "Blades",
+      "count": 5,
+      "shapes": [
+        {
+          "id": "blade",
+          "primitive": "roundedBox",
+          "slot": "blue",
+          "size": [0.42, 0.08, 0.025],
+          "position": [
+            {
+              "op": "mul",
+              "args": [
+                0.28,
+                {
+                  "op": "cos",
+                  "args": [
+                    {
+                      "op": "mul",
+                      "args": [
+                        {
+                          "op": "div",
+                          "args": [
+                            {
+                              "op": "mul",
+                              "args": ["index", 2]
+                            },
+                            5
+                          ]
+                        },
+                        3.141592653589793
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "add",
+              "args": [
+                0.9,
+                {
+                  "op": "mul",
+                  "args": [
+                    0.28,
+                    {
+                      "op": "sin",
+                      "args": [
+                        {
+                          "op": "mul",
+                          "args": [
+                            {
+                              "op": "div",
+                              "args": [
+                                {
+                                  "op": "mul",
+                                  "args": ["index", 2]
+                                },
+                                5
+                              ]
+                            },
+                            3.141592653589793
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            0.12
+          ],
+          "rotation": [
+            0,
+            0,
+            {
+              "op": "mul",
+              "args": [
+                {
+                  "op": "div",
+                  "args": [
+                    {
+                      "op": "mul",
+                      "args": ["index", 2]
+                    },
+                    5
+                  ]
+                },
+                3.141592653589793
+              ]
+            }
+          ],
+          "radius": 0.01
+        }
+      ],
+      "motion": {
+        "kind": "spin",
+        "pivot": [0, 0.9, 0.12],
+        "axis": "z",
+        "radiansPerSecond": 9
+      }
+    }
+  ],
+  "constraints": []
+}

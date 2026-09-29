@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "name": "Chandelier six arms",
+  "description": "Six repeated bulbs with one emitter each.",
+  "parameters": [
+    {
+      "id": "radius",
+      "label": "Arm radius",
+      "default": 0.55,
+      "min": 0.45,
+      "max": 0.65,
+      "step": 0.05,
+      "unit": "m"
+    }
+  ],
+  "slots": [
+    { "id": "metal", "label": "Metal", "color": "#b99965" },
+    { "id": "bulb", "label": "Bulbs", "color": "#fff0d0" }
+  ],
+  "surfaces": [
+    { "id": "top", "label": "Ceiling mount", "position": [0, 1.2, 0], "size": [0.16, 0.16] }
+  ],
+  "mounting": { "attachTo": "ceiling", "reference": "top" },
+  "parts": [
+    {
+      "id": "stem",
+      "label": "Stem",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "rod",
+          "primitive": "cylinder",
+          "slot": "metal",
+          "size": [0.04, 0.8, 0.04],
+          "position": [0, 0.8, 0]
+        }
+      ]
+    },
+    {
+      "id": "bulbs",
+      "label": "Bulbs",
+      "count": 6,
+      "light": {
+        "position": [
+          {
+            "op": "mul",
+            "args": [
+              "radius",
+              { "op": "cos", "args": [{ "op": "mul", "args": ["index", 1.0471975511965976] }] }
+            ]
+          },
+          0.65,
+          {
+            "op": "mul",
+            "args": [
+              "radius",
+              { "op": "sin", "args": [{ "op": "mul", "args": ["index", 1.0471975511965976] }] }
+            ]
+          }
+        ],
+        "color": "#ffe2b4",
+        "emissiveSlot": "bulb"
+      },
+      "shapes": [
+        {
+          "id": "glass",
+          "primitive": "ellipsoid",
+          "slot": "bulb",
+          "size": [0.13, 0.18, 0.13],
+          "position": [
+            {
+              "op": "mul",
+              "args": [
+                "radius",
+                { "op": "cos", "args": [{ "op": "mul", "args": ["index", 1.0471975511965976] }] }
+              ]
+            },
+            0.65,
+            {
+              "op": "mul",
+              "args": [
+                "radius",
+                { "op": "sin", "args": [{ "op": "mul", "args": ["index", 1.0471975511965976] }] }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "constraints": []
+}
