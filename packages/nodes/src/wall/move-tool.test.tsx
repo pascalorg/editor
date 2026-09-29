@@ -6,6 +6,7 @@ import {
   clearSceneHistory,
   detectSpacesForLevel,
   emitter,
+  GROUND_SUPPORT_ID,
   getSceneHistoryPauseDepth,
   initSpaceDetectionSync,
   LevelNode,
@@ -13,6 +14,7 @@ import {
   pauseSceneHistory,
   registerNode,
   resumeSceneHistory,
+  sceneHistoryDraftRevertUpdates,
   useLiveNodeOverrides,
   useScene,
   WallNode,
@@ -89,12 +91,23 @@ beforeEach(() => {
   } as never)
 })
 
-afterEach(() => {
+afterEach(async () => {
+  // A failed split-view case must not leave its tools (and their history state) mounted.
+  const leftover = splitRenderer
+  splitRenderer = null
+  if (leftover) {
+    try {
+      await act(async () => leftover.unmount())
+    } catch {
+      // Already unmounted by the case itself.
+    }
+  }
   restoreDocument()
   restoreDocument = () => {}
   stopDetection()
   useLiveNodeOverrides.getState().clearAll()
   clearSceneHistory()
+  await new Promise((resolve) => setTimeout(resolve, 0))
   if (savedWindow) Object.defineProperty(globalThis, 'window', savedWindow)
   else Reflect.deleteProperty(globalThis, 'window')
   globalThis.requestAnimationFrame = savedRaf
@@ -154,12 +167,13 @@ function stubFloorplanScene() {
 }
 
 let restoreDocument = () => {}
+let splitRenderer: Awaited<ReturnType<typeof create>> | null = null
 
 // Split view: the 3D tool and the real FloorplanRegistryMoveOverlay, both on the moving wall.
-async function armSplitView() {
+async function armSplitView(id: AnyNodeId = DIVIDER_ID) {
   if (!nodeRegistry.get('wall')) registerNode(wallDefinition)
   restoreDocument = stubFloorplanScene()
-  const wall = useScene.getState().nodes[DIVIDER_ID] as WallNode
+  const wall = useScene.getState().nodes[id] as WallNode
   useEditor.getState().setMovingNode(wall)
   let renderer: Awaited<ReturnType<typeof create>> | null = null
   await act(async () => {
@@ -170,6 +184,7 @@ async function armSplitView() {
       </>,
     )
   })
+  splitRenderer = renderer
   return renderer!
 }
 
@@ -245,6 +260,44 @@ function normalizedPolygon(polygon: Array<[number, number]>) {
 }
 
 describe('3D wall move', () => {
+  test('a wall detached mid-drag loses its old preview even at the same snapped cursor', async () => {
+    const east = 'wall_wall-move-east' as AnyNodeId
+    const north = 'wall_wall-move-north' as AnyNodeId
+    const renderer = await armWall(east)
+    try {
+      await dragFrom(4, 4.5)
+      expect(useLiveNodeOverrides.getState().get(north)).toBeDefined()
+      useScene.getState().updateNode(north, { start: [6, 6], end: [0, 6] })
+      await moveCursor(4.5)
+      expect(useLiveNodeOverrides.getState().get(north)).toBeUndefined()
+      expect(useScene.getState().nodes[north]).toMatchObject({ start: [6, 6], end: [0, 6] })
+    } finally {
+      await act(async () => renderer.unmount())
+    }
+  })
+
+  test.each([0, 4])('a room merge leaves no wall supported by a deleted slab (x=%s)', async (x) => {
+    const slabs = nodesOfType('slab')
+    useScene.getState().updateNode(DIVIDER_ID, { supportSlabId: slabs[0]!.id } as Partial<AnyNode>)
+    clearSceneHistory()
+    const renderer = await armWall(DIVIDER_ID)
+    try {
+      await dragFrom(2, x)
+      await act(async () => {
+        window.dispatchEvent(new Event('pointerup'))
+      })
+      const nodes = useScene.getState().nodes
+      for (const wall of nodesOfType('wall') as WallNode[]) {
+        if (wall.supportSlabId && wall.supportSlabId !== GROUND_SUPPORT_ID) {
+          expect(nodes[wall.supportSlabId as AnyNodeId]?.type).toBe('slab')
+        }
+      }
+      expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    } finally {
+      await act(async () => renderer.unmount())
+    }
+  })
+
   test('commits one undo step that restores the walls and every derived surface', async () => {
     expect(nodesOfType('slab')).toHaveLength(2)
     expect(nodesOfType('ceiling')).toHaveLength(2)
@@ -552,6 +605,36 @@ describe('3D wall move', () => {
     expect(joined).toBe(true)
   })
 
+  test('split view: 2D preview then 3D drop retains linked wall history', async () => {
+    const westId = 'wall_wall-move-west' as AnyNodeId
+    const before = sceneNodes()
+    const renderer = await armSplitView(westId)
+    await floorplanPointer('pointermove', 0, 2)
+    await floorplanPointer('pointermove', -1, 2)
+    expect(useLiveNodeOverrides.getState().get('wall_wall-move-north' as AnyNodeId)?.end).toEqual([
+      -1, 4,
+    ])
+    expect(useLiveNodeOverrides.getState().get('wall_wall-move-south' as AnyNodeId)?.start).toEqual(
+      [-1, 0],
+    )
+    expect(sceneHistoryDraftRevertUpdates(Object.keys(before) as AnyNodeId[])).toEqual([])
+    await dragFrom(0, -1)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+    await act(async () => {
+      window.dispatchEvent(new Event('pointerup'))
+    })
+    await act(async () => renderer.unmount())
+    const after = sceneNodes()
+    expect(after[westId]).toMatchObject({ start: [-1, 4], end: [-1, 0] })
+    expect(after['wall_wall-move-north' as AnyNodeId]).toMatchObject({ end: [-1, 4] })
+    expect(after['wall_wall-move-south' as AnyNodeId]).toMatchObject({ start: [-1, 0] })
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    useScene.temporal.getState().undo()
+    expect(useScene.getState().nodes).toEqual(before)
+    useScene.temporal.getState().redo()
+    expect(useScene.getState().nodes).toEqual(after)
+  })
+
   test('split view: a 3D drop with the real 2D overlay mounted records one step', async () => {
     const before = sceneNodes()
     const renderer = await armSplitView()
@@ -568,6 +651,49 @@ describe('3D wall move', () => {
     expect(useScene.temporal.getState().isTracking).toBe(true)
     useScene.temporal.getState().undo()
     expect(useScene.getState().nodes).toEqual(before)
+  })
+
+  test('split view: a wall added mid-drag is its own reconciled step', async () => {
+    const renderer = await armSplitView()
+    await moveCursor(2)
+    await moveCursor(2.5)
+    const foreignId = 'wall_wall-move-foreign' as AnyNodeId
+    useScene
+      .getState()
+      .createNode(
+        WallNode.parse({ id: foreignId, parentId: LEVEL_ID, start: [3, 0], end: [3, 4] }),
+        LEVEL_ID,
+      )
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    expect(nodesOfType('slab')).toHaveLength(3)
+    await act(async () => {
+      window.dispatchEvent(new Event('pointerup'))
+    })
+    await act(async () => renderer.unmount())
+    expect(useScene.temporal.getState().pastStates).toHaveLength(2)
+    expect(getSceneHistoryPauseDepth()).toBe(0)
+    useScene.temporal.getState().undo()
+    expect((useScene.getState().nodes[DIVIDER_ID] as WallNode).start).toEqual([2, 0])
+    expect(useScene.getState().nodes[foreignId]).toBeDefined()
+  })
+
+  test('split view: a 2D-carried wall edit lets a foreign write record at once', async () => {
+    const renderer = await armSplitView()
+    await floorplanPointer('pointermove', 2, 2)
+    await floorplanPointer('pointermove', 2.5, 2)
+    const foreignId = 'wall_wall-move-foreign' as AnyNodeId
+    useScene
+      .getState()
+      .createNode(
+        WallNode.parse({ id: foreignId, parentId: LEVEL_ID, start: [3, 0], end: [3, 4] }),
+        LEVEL_ID,
+      )
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    expect(nodesOfType('slab')).toHaveLength(3)
+    await floorplanPointer('pointerup', 2.5, 2)
+    await act(async () => renderer.unmount())
+    expect(useScene.temporal.getState().pastStates).toHaveLength(2)
+    expect(getSceneHistoryPauseDepth()).toBe(0)
   })
 
   test('split view: a 2D drop through the real overlay records one step', async () => {

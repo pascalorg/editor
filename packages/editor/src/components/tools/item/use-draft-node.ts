@@ -9,6 +9,7 @@ import {
   sceneHistoryDraftRevertUpdates,
   sceneRegistry,
   useScene,
+  withSceneHistoryDraftSuspended,
 } from '@pascal-app/core'
 import { beginPerfAction, commitPerfAction, useViewer } from '@pascal-app/viewer'
 import { useCallback, useMemo, useRef } from 'react'
@@ -127,8 +128,8 @@ export interface DraftNodeHandle {
  * The draft is registered with core's history drafts from create/adopt until
  * commit/destroy, so history records it as absent (created) or as it was
  * (adopted) and no draft write becomes an undo step; the draft's own writes
- * also run under a short balanced pause. `commit` ends the registration right
- * before its one tracked write.
+ * also run under a short balanced pause. An adopted `commit` suspends the registration for
+ * its tracked write and ends it only after success, so a rejected drop can still be retried.
  *
  * Supports two modes:
  * - Create mode (via `create()`): draft is a new transient node. Commit = delete+recreate (undo removes node).
@@ -165,7 +166,18 @@ export function useDraftNode(): DraftNodeHandle {
 
       releaseHistoryDraft(endHistoryDraftRef)
       endHistoryDraftRef.current = beginSceneHistoryDraft(node.id, null)
-      pausedDraftWrite(() => useScene.getState().createNode(node, currentLevelId))
+      try {
+        pausedDraftWrite(() => useScene.getState().createNode(node, currentLevelId))
+      } catch (error) {
+        try {
+          if (useScene.getState().nodes[node.id]) {
+            pausedDraftWrite(() => useScene.getState().deleteNode(node.id))
+          }
+        } finally {
+          releaseHistoryDraft(endHistoryDraftRef)
+        }
+        throw error
+      }
       usePlacementPreview
         .getState()
         .set(node, useScene.getState().nodes[currentLevelId as AnyNodeId] ?? null)
@@ -236,6 +248,10 @@ export function useDraftNode(): DraftNodeHandle {
     ): string | null => {
       const draft = draftRef.current
       if (!draft) return null
+      if (finalUpdate.parentId && !useScene.getState().nodes[finalUpdate.parentId as AnyNodeId]) {
+        options?.onReject?.('no-surface')
+        return null
+      }
 
       const surfaceId = surfaceAttachmentId(useScene.getState().nodes[draft.id] ?? draft)
       const stored = surfaceFramePose(
@@ -245,8 +261,11 @@ export function useDraftNode(): DraftNodeHandle {
         true,
       )
       finalUpdate = { ...finalUpdate, ...stored }
+      // The drop ends the carry on the item's live metadata: placement strategies hand in the
+      // adoption-time snapshot, which would drop anything an agent wrote meanwhile.
+      const liveDraft = useScene.getState().nodes[draft.id]
+      if (liveDraft) finalUpdate.metadata = stripTransient(liveDraft.metadata)
       if (isFreshPlacementMetadata(originalStateRef.current?.metadata)) {
-        releaseHistoryDraft(endHistoryDraftRef)
         const effectiveNode = ItemNode.parse({ ...draft, ...finalUpdate })
         const id = commitFreshPlacementSubtree(
           draft.id,
@@ -261,6 +280,7 @@ export function useDraftNode(): DraftNodeHandle {
           options?.onReject,
         )
         if (!id) return null
+        releaseHistoryDraft(endHistoryDraftRef)
         if (usePlacementPreview.getState().node?.id === draft.id) {
           usePlacementPreview.getState().clear()
         }
@@ -281,8 +301,6 @@ export function useDraftNode(): DraftNodeHandle {
 
         // The original is restored above (a carry write), so the one tracked write below has
         // the true baseline as its undo state.
-        releaseHistoryDraft(endHistoryDraftRef)
-
         const effectiveNode = ItemNode.parse({
           ...draft,
           ...updateProps,
@@ -290,32 +308,35 @@ export function useDraftNode(): DraftNodeHandle {
           metadata: updateProps.metadata ?? stripTransient(draft.metadata),
         })
 
-        updateSurfaceNode(
-          draft.id,
-          {
-            position: updateProps.position ?? draft.position,
-            rotation: updateProps.rotation ?? draft.rotation,
-            side: updateProps.side ?? draft.side,
-            metadata: updateProps.metadata ?? stripTransient(draft.metadata),
-            parentId: parentId as string,
-            // Forward the roof host explicitly: strategies set it on every
-            // commit (segment id on a roof face, undefined elsewhere), and
-            // dropping it here strands the item in the roof frame without
-            // the segment transform.
-            roofSegmentId: updateProps.roofSegmentId,
-            roofFace: updateProps.roofFace,
-            blockFaceId: updateProps.blockFaceId,
-            // Only when the strategy decided about wallId (roof commits clear
-            // it) — floor/ceiling commits never managed the field.
-            ...('wallId' in updateProps ? { wallId: updateProps.wallId } : {}),
-            ...resolveSupportSlabPatch(effectiveNode, useScene.getState().nodes, {
-              maxElevation: options?.supportElevationCap,
-              preferredSlabId: options?.preferredSupportSlabId,
-              pinSupport: options?.pinSupport,
-            }),
-          },
-          surfaceId,
-        )
+        withSceneHistoryDraftSuspended(draft.id, () => {
+          updateSurfaceNode(
+            draft.id,
+            {
+              position: updateProps.position ?? draft.position,
+              rotation: updateProps.rotation ?? draft.rotation,
+              side: updateProps.side ?? draft.side,
+              metadata: updateProps.metadata ?? stripTransient(draft.metadata),
+              parentId: parentId as string,
+              // Forward the roof host explicitly: strategies set it on every
+              // commit (segment id on a roof face, undefined elsewhere), and
+              // dropping it here strands the item in the roof frame without
+              // the segment transform.
+              roofSegmentId: updateProps.roofSegmentId,
+              roofFace: updateProps.roofFace,
+              blockFaceId: updateProps.blockFaceId,
+              // Only when the strategy decided about wallId (roof commits clear
+              // it) — floor/ceiling commits never managed the field.
+              ...('wallId' in updateProps ? { wallId: updateProps.wallId } : {}),
+              ...resolveSupportSlabPatch(effectiveNode, useScene.getState().nodes, {
+                maxElevation: options?.supportElevationCap,
+                preferredSlabId: options?.preferredSupportSlabId,
+                pinSupport: options?.pinSupport,
+              }),
+            },
+            surfaceId,
+          )
+        })
+        releaseHistoryDraft(endHistoryDraftRef)
 
         const id = draft.id
         if (usePlacementPreview.getState().node?.id === id) {
@@ -404,7 +425,8 @@ export function useDraftNode(): DraftNodeHandle {
       // `useScene.updateNodes` before unmounting the legacy mover, and
       // an unconditional restore here would wipe that commit. By
       // comparing the live state to the snapshot we took in `adopt()`,
-      // we let an external committer's write stick.
+      // we let an external committer's write stick. A preview after a rejected drop may
+      // lack the transient marker, but its still-owned position must be restored on cancel.
       const original = originalStateRef.current
       const id = draftRef.current.id
       const live = useScene.getState().nodes[id as AnyNodeId] as ItemNode | undefined
@@ -412,6 +434,9 @@ export function useDraftNode(): DraftNodeHandle {
       const externallyMoved =
         !live?.metadata?.isTransient &&
         !!livePosition &&
+        !sceneHistoryDraftRevertUpdates([id]).some(
+          (update) => update.id === id && 'position' in update.data,
+        ) &&
         (livePosition[0] !== original.position[0] ||
           livePosition[1] !== original.position[1] ||
           livePosition[2] !== original.position[2])

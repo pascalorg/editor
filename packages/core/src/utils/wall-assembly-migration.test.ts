@@ -15,13 +15,12 @@ import {
   wallLayerBoundaryOffsets,
 } from '../systems/wall/wall-assembly'
 import { calculateLevelMiters } from '../systems/wall/wall-mitering'
-import fixture from './__fixtures__/ws5-architect-walls.json'
+import fixture from './__fixtures__/ws5-synthetic-walls.json'
 import { migrateLegacyWallAssemblies } from './wall-assembly-migration'
 
 /**
- * Walls exactly as #937 (editor b53a907b7) stored them: the Architect's
- * `buildHouse(POPPY)` in both wall systems, plus inspector writes (a custom
- * brick stack, a partition, a furred CMU wall) and a wall with no assembly.
+ * Synthetic corners and junctions retain WS5's stored shape across wood,
+ * brick, partition and furred CMU stacks, plus a wall with no assembly.
  */
 type LegacyWall = Omit<WallNode, 'assembly'> & { assembly?: WallAssembly }
 const stored = fixture.nodes as unknown as Record<string, LegacyWall | AnyNode>
@@ -119,7 +118,7 @@ describe('WS5 → F2 wall assembly migration', () => {
     })
   })
 
-  test('the Architect reads the same stack: layers, sides, finish and preset note', () => {
+  test('readers see the same stack: layers, sides, finish and preset note', () => {
     for (const [index, legacy] of legacyWalls.entries()) {
       const next = f2Walls[index]!
       for (const sides of SIDES) {
@@ -278,7 +277,7 @@ describe('the scene loader migrates stored WS5 walls', () => {
       .getState()
       .setScene(
         JSON.parse(JSON.stringify(fixture.nodes)) as Record<AnyNodeId, AnyNode>,
-        ['level_ground'] as AnyNodeId[],
+        ['level_synthetic_walls'] as AnyNodeId[],
       )
     const nodes = useScene.getState().nodes
     for (const legacy of legacyWalls) {

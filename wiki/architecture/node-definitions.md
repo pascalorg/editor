@@ -6,7 +6,7 @@ Applies to: `packages/core/src/registry/`, `packages/nodes/src/<kind>/`, `packag
 
 A *node kind* — shelf, wall, door, item, spawn, zone — is described by a `NodeDefinition` registered with `nodeRegistry`. The definition is plain data + lazy module references. Three optional fields decide how the kind appears in the scene at runtime; pick whichever combination matches the kind's needs.
 
-This page covers those three fields. For the broader registry contract (schemas, capabilities, parametrics, MCP), see [the registry plan](../../../plans/editor-node-registry.md) in the private repo.
+This page covers those three fields. For the broader registry contract (schemas, capabilities, parametrics, MCP), see the public [registry type definitions](../../packages/core/src/registry/types.ts).
 
 ## The three-checkbox model
 
@@ -428,7 +428,7 @@ capabilities: {
 
 ### `capabilities.assembly`
 
-Frozen contract (F2 assembly layers), not read by any renderer yet. A kind that declares it stores an optional `assembly` field (`Assembly` in `core/src/schema/assembly.ts`): body `layers` from the reference face inward, each with a stable `id` (its `#layer:<id>` address), a `role`, a `thickness`, an optional `material` kind (`stucco`, `osb`, `wood`, …), `slot` and provenance `src`, one source reference `<ns>:<id>[::<sub>]` (`SourceRefString`: printable ASCII, ns ≤ 48 bytes, id ≤ 160 bytes, the `ProvenanceRef` caps). At most one body layer is the `core`, and only a structural role (`structure`, `deck`, `shell`) may be; a layer `slot` is a key into the host's own `slots` (roofs carry a `slots` record for it); `inset`, `bottom` and `lift` belong to `backing` layers only. Preset capture removes every `src` with `provenance` through `withoutSourceIdentity`.
+F2 assembly layers are consumed by the wall readers and renderers; roofs declare the same optional contract. A kind that declares it stores an optional `assembly` field (`Assembly` in `core/src/schema/assembly.ts`): body `layers` from the reference face inward, each with a stable `id` (its `#layer:<id>` address), a `role`, a `thickness`, an optional `material` kind (`stucco`, `osb`, `wood`, …), `slot` and provenance `src`, one source reference `<ns>:<id>[::<sub>]` (`SourceRefString`: printable ASCII, ns ≤ 48 bytes, id ≤ 160 bytes, the `ProvenanceRef` caps). At most one body layer is the `core`, and only a structural role (`structure`, `deck`, `shell`) may be; a layer `slot` is a key into the host's own `slots` (roofs carry a `slots` record for it); `inset`, `bottom` and `lift` belong to `backing` layers only. Preset capture removes every `src` with `provenance` through `withoutSourceIdentity`.
 
 **The stack sets the body.** A host's thickness is the sum of its layers; a writer that edits the layers writes the sum to the host's thickness in the same patch (the WS5 rule). `face: 'exterior'` lists the layers from the outside, resolved from `frontSide` / `backSide` with the front face as fallback.
 
@@ -525,4 +525,4 @@ mechanism: {
 - [renderers.md](renderers.md) — the legacy renderer pattern (still authoritative for kinds with custom `def.renderer`).
 - [systems.md](systems.md) — per-kind systems, frame-priority ordering, and core/viewer split.
 - [scene-registry.md](scene-registry.md) — how `sceneRegistry` indexes nodes by ID and type.
-- [Node registry plan](../../../plans/editor-node-registry.md) *(in private-editor)* — the multi-phase migration that produced this model.
+- [Registry type definitions](../../packages/core/src/registry/types.ts) — schemas, capabilities, parametrics and MCP contracts for node kinds.

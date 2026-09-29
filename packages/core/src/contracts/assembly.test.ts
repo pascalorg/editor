@@ -1,12 +1,10 @@
 /**
- * F2 assembly layers, executable examples (plan item WL-01,
- * `editor-fidelity-foundations.md` §2.3).
+ * F2 assembly layers, executable examples.
  *
  * The contract: the schema, the host declarations and the band math. The
  * stack sets the body: a wall's `thickness` is the sum of its layers (WS5's
- * rule, owner ruling 2026-09-27). WL-02 (wall compile) and RL-01 (roof layers)
- * must reproduce these numbers; the benchmark-house fixtures pin the stacking
- * datum against measured source build-ups.
+ * rule). Wall and roof rendering must reproduce these numbers; the fixtures
+ * pin the stacking datum against explicit layer boundaries.
  */
 import { describe, expect, test } from 'bun:test'
 import { z } from 'zod'
@@ -113,7 +111,7 @@ describe('a stucco exterior wall (2×6 frame)', () => {
 })
 
 describe('a shingle roof (covering, underlay, sheathing)', () => {
-  // Thicknesses of the benchmark house source: 9 mm shingles, 1 mm underlay, 5/8 in decking.
+  // The covering, underlay and decking form one contiguous stack.
   const roof = RoofNode.parse({
     id: 'roof_shingle',
     assembly: {
@@ -138,7 +136,7 @@ describe('a shingle roof (covering, underlay, sheathing)', () => {
   })
 
   test('measured along the facet normal: a 40° facet cuts each layer 1/cos(40°) tall', () => {
-    // RL-01 splits the direct path's vertical prism: a layer t thick along the
+    // The direct path splits the vertical prism: a layer t thick along the
     // normal spans t / cos(pitch) of the vertical.
     const stack = resolveAssemblyStack(roof.assembly!, { body: null })
     const vertical = (t: number) => t / Math.cos((40 * Math.PI) / 180)
@@ -297,12 +295,10 @@ describe('layer provenance is content (R3, R9)', () => {
 })
 
 /**
- * Build-ups measured on two exterior walls of the benchmark house source
- * (material assemblies and structural study), as faces in metres from the
- * exterior face. Wall ids and absolute coordinates are withheld (owner decision
- * D5); in both walls the interior side is the Pascal front (+n) face.
+ * Synthetic wall build-ups expressed as layer boundaries in metres from the
+ * exterior face. In both walls the interior side is the Pascal front (+n) face.
  */
-describe('benchmark-house fixtures', () => {
+describe('wall layer boundary fixtures', () => {
   type Measured = { id: string; role: AssemblyLayer['role']; from: number; to: number }
   const fromMeasured = (measured: Measured[], core: string): Assembly => ({
     layers: [...measured].reverse().map(({ id, role, from, to }) => ({
@@ -314,62 +310,62 @@ describe('benchmark-house fixtures', () => {
     })),
   })
 
-  test('timber weather wall: stucco, membrane, sheathing, studs, lining (203.2 mm)', () => {
+  test('timber weather wall: stucco, membrane, sheathing, studs, lining (200 mm)', () => {
     const measured: Measured[] = [
-      { id: 'outside-finish', role: 'finish', from: 0, to: 0.0127 },
-      { id: 'finish-gap', role: 'air', from: 0.0127, to: 0.04345 },
-      { id: 'weather-barrier', role: 'membrane', from: 0.04345, to: 0.04445 },
-      { id: 'sheathing', role: 'sheathing', from: 0.04445, to: 0.05715 },
-      { id: 'studs', role: 'structure', from: 0.05715, to: 0.14605 },
-      { id: 'cavity', role: 'air', from: 0.14605, to: 0.1905 },
-      { id: 'lining', role: 'lining', from: 0.1905, to: 0.2032 },
+      { id: 'outside-finish', role: 'finish', from: 0, to: 0.01 },
+      { id: 'finish-gap', role: 'air', from: 0.01, to: 0.039 },
+      { id: 'weather-barrier', role: 'membrane', from: 0.039, to: 0.04 },
+      { id: 'sheathing', role: 'sheathing', from: 0.04, to: 0.05 },
+      { id: 'studs', role: 'structure', from: 0.05, to: 0.15 },
+      { id: 'cavity', role: 'air', from: 0.15, to: 0.19 },
+      { id: 'lining', role: 'lining', from: 0.19, to: 0.2 },
     ]
     const wall = WallNode.parse({
       id: 'wall_timber',
       start: [0, 0],
-      end: [4.4704, 0],
-      thickness: 0.2032,
+      end: [4, 0],
+      thickness: 0.2,
     })
     const result = bandsOf(wall, fromMeasured(measured, 'studs'))
     expect(result.diagnostics).toEqual([])
-    const half = 0.2032 / 2
+    const half = 0.2 / 2
     for (const { id, from, to } of measured) {
       const band = result.bands.find((b) => b.layerId === id)!
       close(band.back, from - half)
       close(band.front, to - half)
     }
-    // The 88.9 mm studs sit on the wall centreline.
+    // The 100 mm studs sit on the wall centreline.
     const studs = result.bands.find((b) => b.layerId === 'studs')!
     close(studs.back + studs.front, 0)
   })
 
-  test("CMU wall: the 50.8 mm interior build-up makes a 254 mm wall whose block band is today's body", () => {
+  test("CMU wall: the 50 mm interior build-up makes a 250 mm wall whose block band is today's body", () => {
     const measured: Measured[] = [
-      { id: 'cmu', role: 'structure', from: 0, to: 0.2032 },
-      { id: 'insulation', role: 'insulation', from: 0.2032, to: 0.22225 },
-      { id: 'furring', role: 'furring', from: 0.22225, to: 0.2413 },
-      { id: 'lining', role: 'lining', from: 0.2413, to: 0.254 },
+      { id: 'cmu', role: 'structure', from: 0, to: 0.2 },
+      { id: 'insulation', role: 'insulation', from: 0.2, to: 0.22 },
+      { id: 'furring', role: 'furring', from: 0.22, to: 0.24 },
+      { id: 'lining', role: 'lining', from: 0.24, to: 0.25 },
     ]
     const today = WallNode.parse({
       id: 'wall_cmu',
       start: [0, 0],
-      end: [4.572, 0],
-      thickness: 0.2032,
+      end: [4, 0],
+      thickness: 0.2,
     })
-    // Same exterior face, centreline moved 25.4 mm toward the interior (+n).
+    // Same exterior face, centreline moved 25 mm toward the interior (+n).
     const layered = WallNode.parse({
       id: 'wall_cmu',
-      start: [0, 0.0254],
-      end: [4.572, 0.0254],
-      thickness: 0.254,
+      start: [0, 0.025],
+      end: [4, 0.025],
+      thickness: 0.25,
     })
     const result = bandsOf(layered, fromMeasured(measured, 'cmu'))
     expect(result.diagnostics).toEqual([])
-    close(result.layers.find((layer) => layer.id === 'cmu')!.thickness, 0.2032)
+    close(result.layers.find((layer) => layer.id === 'cmu')!.thickness, 0.2)
     for (const { id, from, to } of measured) {
       const band = result.bands.find((b) => b.layerId === id)!
-      close(band.back, from - 0.127)
-      close(band.front, to - 0.127)
+      close(band.back, from - 0.125)
+      close(band.front, to - 0.125)
     }
     // The block band is exactly today's wall body.
     const block = result.bands.find((b) => b.layerId === 'cmu')!.polygons
@@ -383,7 +379,7 @@ describe('benchmark-house fixtures', () => {
   })
 })
 
-describe('review round d (rev-943-d)', () => {
+describe('backing, structural layers and host capabilities', () => {
   test('backing resolves on a zero-body host: ceiling insulation', () => {
     const ceiling = Assembly.parse({
       layers: [],

@@ -65,6 +65,7 @@ import {
   hasSceneHistoryDrafts,
   noteSceneHistoryDraftWrite,
   sceneHistoryDraftRevertUpdates as sceneHistoryDraftRevertUpdatesIn,
+  settleSceneHistoryDrafts,
   withAdoptedDraftsAsOriginal,
   withDraftsRestored,
 } from './history-drafts'
@@ -2385,12 +2386,15 @@ let prevFutureLength = 0
  */
 export function runSceneHistoryDraftWrite<T>(write: () => T): T {
   const before = useScene.getState().nodes
+  const wasRawPaused = !useScene.temporal.getState().isTracking && getSceneHistoryPauseDepth() === 0
   const pause = beginSceneHistoryPauseSession(useScene)
   try {
     return write()
   } finally {
     noteSceneHistoryDraftWrite(before, useScene.getState().nodes)
     pause.end()
+    // Legacy movers can co-mount with the overlay without owning a counted pause.
+    if (wasRawPaused && getSceneHistoryPauseDepth() === 0) useScene.temporal.getState().pause()
   }
 }
 
@@ -2405,6 +2409,8 @@ export function sceneHistoryDraftRevertUpdates(
 export function beginSceneHistoryDraft(id: AnyNodeId, original: AnyNode | null): () => void {
   return beginSceneHistoryDraftIn(id, original, useScene.getState().nodes)
 }
+
+export { settleSceneHistoryDrafts }
 
 export function clearSceneHistory() {
   resetSceneHistoryPauseDepth()

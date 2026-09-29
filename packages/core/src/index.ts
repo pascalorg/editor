@@ -351,6 +351,7 @@ export {
   type SceneSnapshot,
   subscribeSceneCommits,
 } from './store/history-control'
+export { withSceneHistoryDraftSuspended } from './store/history-drafts'
 export { getHistoryDirtyNodeIds } from './store/history-invalidation'
 export {
   type ControlValue,
@@ -393,6 +394,7 @@ export {
   type ScenePatch,
   type ScenePluginInstallPatch,
   sceneHistoryDraftRevertUpdates,
+  settleSceneHistoryDrafts,
 } from './store/use-scene'
 export { resolveElevatorDispatchTarget } from './systems/elevator/elevator-dispatch'
 export {

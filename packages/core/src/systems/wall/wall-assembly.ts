@@ -174,7 +174,7 @@ export function isLegacyWallAssembly(value: unknown): value is WallAssembly {
 }
 
 /**
- * A WS5 `WallAssembly` as F2 layers (owner ruling 2026-09-27): exterior →
+ * A WS5 `WallAssembly` as F2 layers: exterior →
  * `finish`, sheathing → `sheathing`, framing → the `core` structure layer,
  * interior → `lining`, listed from the exterior face (`face: 'exterior'`) so the
  * stack keeps following the outside when rooms are re-detected. A brick

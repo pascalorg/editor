@@ -18,6 +18,8 @@ type SceneHistoryDraft = {
   owned: Map<string, OwnedField>
   /** Hosts' `attachments[id]` entries the carry wrote (a surface move on a shelf): before, and its value. */
   hostEntries: Map<AnyNodeId, { baseline: unknown; carried: unknown }>
+  /** Holders of this draft: the 3D mover and the 2D move overlay can carry one node together. */
+  refs: number
   ended: boolean
   /** A gesture's committing write is running: history sees the draft as it is. */
   suspended: boolean
@@ -36,11 +38,17 @@ function sameValue(a: unknown, b: unknown): boolean {
   )
 }
 
-type OwnedField = { baseline: { present: boolean; value: unknown }; carried: unknown }
+type OwnedField = {
+  baseline: { present: boolean; value: unknown }
+  carried: unknown
+  heldKeys?: string[]
+}
 
 const sceneHistoryDrafts = new Map<AnyNodeId, SceneHistoryDraft>()
 
 type NodeMap = Record<AnyNodeId, AnyNode>
+
+const faceHostFields = ['roofSegmentId', 'roofFace', 'blockFaceId']
 
 const childIdsOf = (node: AnyNode | undefined): AnyNodeId[] =>
   node && 'children' in node && Array.isArray(node.children) ? (node.children as AnyNodeId[]) : []
@@ -49,12 +57,20 @@ const attachmentsOf = (node: AnyNode | undefined): Record<string, unknown> | und
     ? (node.attachments as Record<string, unknown>)
     : undefined
 
-/** Registers `id` as a carried draft; returns the call that ends it. */
+/**
+ * Registers `id` as a carried draft; returns the call that ends it. A second holder of a node
+ * already carried (split view) shares its registration, which ends with its last holder.
+ */
 export function beginSceneHistoryDraft(
   id: AnyNodeId,
   original: AnyNode | null,
   nodes: NodeMap,
 ): () => void {
+  const existing = sceneHistoryDrafts.get(id)
+  if (existing && !existing.ended) {
+    existing.refs += 1
+    return releaseOnce(id, existing)
+  }
   const parent = original?.parentId ? nodes[original.parentId as AnyNodeId] : undefined
   const draft: SceneHistoryDraft = {
     original,
@@ -62,11 +78,21 @@ export function beginSceneHistoryDraft(
     attachment: attachmentsOf(parent)?.[id],
     owned: new Map(),
     hostEntries: new Map(),
+    refs: 1,
     ended: false,
     suspended: false,
   }
   sceneHistoryDrafts.set(id, draft)
+  return releaseOnce(id, draft)
+}
+
+function releaseOnce(id: AnyNodeId, draft: SceneHistoryDraft): () => void {
+  let released = false
   return () => {
+    if (released) return
+    released = true
+    draft.refs -= 1
+    if (draft.refs > 0) return
     draft.ended = true
     if (sceneHistoryDrafts.get(id) === draft) sceneHistoryDrafts.delete(id)
   }
@@ -149,7 +175,10 @@ export function noteSceneHistoryDraftWrite(before: NodeMap, after: NodeMap): voi
     if (previous === next) continue
     for (const key of new Set([...Object.keys(previous), ...Object.keys(next)])) {
       if (sameValue(previous[key], next[key])) continue
-      const held = draft.owned.get(key)
+      const held =
+        key === 'metadata'
+          ? heldFields(draft, before[id]!).find(([name]) => name === key)?.[1]
+          : draft.owned.get(key)
       const baseline =
         held && sameValue(held.carried, previous[key])
           ? held.baseline
@@ -169,7 +198,29 @@ export function noteSceneHistoryDraftWrite(before: NodeMap, after: NodeMap): voi
  */
 function heldFields(draft: SceneHistoryDraft, live: AnyNode): Array<[string, OwnedField]> {
   const values = live as unknown as Record<string, unknown>
-  return [...draft.owned].filter(([key, field]) => sameValue(values[key], field.carried))
+  return [...draft.owned].flatMap(([key, field]): Array<[string, OwnedField]> => {
+    if (sameValue(values[key], field.carried)) return [[key, field]]
+    if (key !== 'metadata') return []
+    const current = values[key] as Record<string, unknown> | undefined
+    const carried = field.carried as Record<string, unknown> | undefined
+    const baseline = (field.baseline.present ? field.baseline.value : {}) as
+      | Record<string, unknown>
+      | undefined
+    if (!(current && carried && baseline)) return []
+    // Metadata writers commonly spread the current record before adding their own key.
+    // Retain ownership of unchanged carry keys without masking that writer's additions.
+    const heldKeys = [...new Set([...Object.keys(baseline), ...Object.keys(carried)])].filter(
+      (name) =>
+        !sameValue(baseline[name], carried[name]) && sameValue(current[name], carried[name]),
+    )
+    if (heldKeys.length === 0) return []
+    const restored = { ...current }
+    for (const name of heldKeys) {
+      if (Object.hasOwn(baseline, name)) restored[name] = baseline[name]
+      else delete restored[name]
+    }
+    return [[key, { baseline: { present: true, value: restored }, carried: current, heldKeys }]]
+  })
 }
 
 /**
@@ -201,6 +252,19 @@ export function sceneHistoryDraftRevertUpdates(
     }
   }
   return updates
+}
+
+/**
+ * A drop committed these drafts' carried state: nothing the carry wrote is left to revert, so a
+ * co-holder's later cancel or cleanup (the 3D mover after a split-view 2D drop) keeps the drop.
+ */
+export function settleSceneHistoryDrafts(ids: Iterable<AnyNodeId>): void {
+  for (const id of ids) {
+    const draft = sceneHistoryDrafts.get(id)
+    if (!draft) continue
+    draft.owned.clear()
+    draft.hostEntries.clear()
+  }
 }
 
 export function clearSceneHistoryDrafts(): void {
@@ -323,7 +387,8 @@ export function withDraftsRestored(before: NodeMap, after: NodeMap): NodeMap | n
         result[hostId] = withHostEntry(host, id, carried)
       }
       const values = live as unknown as Record<string, unknown>
-      const held = heldFields(draft, live)
+      const heldEntries = new Map(heldFields(draft, live))
+      const held = [...heldEntries]
         .map(([key]) => key)
         .filter(
           (key) => !sameValue(values[key], (jumped as unknown as Record<string, unknown>)[key]),
@@ -331,7 +396,21 @@ export function withDraftsRestored(before: NodeMap, after: NodeMap): NodeMap | n
       if (held.length === 0) continue
       result ??= { ...after }
       const restored = { ...jumped } as Record<string, unknown>
+      const lostParent = live.parentId && !result[live.parentId as AnyNodeId]
       for (const key of held) {
+        // A missing host's binding must not replace the jumped-to parent's valid binding.
+        if (lostParent && (key === 'parentId' || faceHostFields.includes(key))) continue
+        const heldKeys = heldEntries.get(key)?.heldKeys
+        if (heldKeys) {
+          const metadata = { ...(restored[key] as Record<string, unknown>) }
+          const carried = values[key] as Record<string, unknown>
+          for (const name of heldKeys) {
+            if (Object.hasOwn(carried, name)) metadata[name] = carried[name]
+            else delete metadata[name]
+          }
+          restored[key] = metadata
+          continue
+        }
         if (Object.hasOwn(values, key)) restored[key] = values[key]
         else delete restored[key]
       }
@@ -357,7 +436,17 @@ export function withDraftsRestored(before: NodeMap, after: NodeMap): NodeMap | n
     if (subtree.every((nodeId) => after[nodeId] === before[nodeId])) continue
     result ??= { ...after }
     for (const nodeId of subtree) result[nodeId] = before[nodeId]!
-    const parentId = live.parentId as AnyNodeId | undefined
+    let parentId = live.parentId as AnyNodeId | undefined
+    const visited = new Set<AnyNodeId>()
+    while (parentId && !result[parentId] && !visited.has(parentId)) {
+      visited.add(parentId)
+      parentId = before[parentId]?.parentId as AnyNodeId | undefined
+    }
+    if (parentId !== live.parentId) {
+      const restored = { ...live, parentId: parentId ?? null } as Record<string, unknown>
+      for (const key of faceHostFields) delete restored[key]
+      result[id] = restored as AnyNode
+    }
     const previousParentId = after[id]?.parentId as AnyNodeId | undefined
     const beforeParent = parentId ? before[parentId] : undefined
     placeChild(

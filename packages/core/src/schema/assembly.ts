@@ -2,22 +2,20 @@ import { z } from 'zod'
 import { SourceRefString } from './source-ref'
 
 /**
- * Assembly layers (F2, `editor-fidelity-foundations.md` §2.3), frozen by plan
- * item WL-01. A host kind that declares `capabilities.assembly` stores one
- * optional `assembly` field. Roofs take it here; walls move onto it from the
- * WS5 `WallAssembly` in the follow-up migration. Nothing renders it yet, and a
- * node without it keeps today's geometry byte for byte.
+ * Assembly layers (F2). Wall and roof kinds that declare `capabilities.assembly`
+ * store one optional `assembly` field. Saved WS5 wall assemblies migrate to this
+ * shape, and wall readers and renderers consume it. Nodes without an assembly
+ * keep their existing geometry.
  *
- * The stack sets the body (owner ruling 2026-09-27, WS5's rule): a host's
- * thickness is the sum of its body layers, and a writer that edits the layers
- * writes that sum to the host's thickness field in the same patch. Body
- * layers run from the host's reference face inward (walls: the front face, +n,
- * or the exterior face with `face: 'exterior'`; roofs: the covering-top
- * plane). Thickness is measured along the host's `measure` axis. The
- * generators of §2.4 (F3) join this object when F3 lands.
+ * The stack sets the body (the WS5 rule): a host's thickness is the sum of its
+ * body layers, and a writer that edits the layers writes that sum to the host's
+ * thickness field in the same patch. Body layers run from the host's reference
+ * face inward (walls: the front face, +n, or the exterior face with
+ * `face: 'exterior'`; roofs: the covering-top plane). Thickness is measured
+ * along the host's `measure` axis.
  *
  * Thickness, preset ids and cavity notes keep WS5's unbounded valid values
- * so migration never rejects or truncates a saved wall (owner ruling 2026-09-29).
+ * so migration never rejects or truncates a saved wall.
  */
 
 export const LayerRole = z.enum([
