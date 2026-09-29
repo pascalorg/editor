@@ -14,7 +14,7 @@ import {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
-import { useEditor } from '@pascal-app/editor'
+import { getPlacementSurface, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
 import { Group } from 'three'
@@ -179,6 +179,7 @@ async function drag3d(kind: 'door' | 'window', wallId: AnyNodeId, toLocalX: numb
       <Tool node={node as never} />
     </RegistryToolProvider>,
   )
+  const initialSurface = getPlacementSurface()?.point.clone()
   await act(async () => {
     // Grab on the own wall at the opening, then slide (or hop) and drop.
     emitter.emit('wall:enter', wallEvent(WALL_A_ID, node.position[0], y))
@@ -186,6 +187,7 @@ async function drag3d(kind: 'door' | 'window', wallId: AnyNodeId, toLocalX: numb
     emitter.emit('wall:click', wallEvent(wallId, toLocalX, y))
   })
   await act(async () => renderer.unmount())
+  expect(initialSurface?.z).toBeCloseTo(OFFSET, 6)
   return current(node.id) as DoorNode | WindowNode
 }
 
