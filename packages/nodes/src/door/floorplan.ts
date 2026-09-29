@@ -15,6 +15,7 @@ import {
   type OpeningFloorplanLevelData,
 } from '../shared/opening-documentation'
 import { buildOpeningPlacementDimensions } from '../shared/opening-placement-dimensions'
+import { resolveOpeningPlanPlane } from '../shared/opening-plane-offset'
 
 /**
  * Stage C floor-plan builder for door. 1:1 visual port of the legacy
@@ -68,9 +69,11 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
 
   const distance = node.position[0]
   const width = node.width
-  const depth = wall.thickness ?? 0.1
-  const cx = x1 + dirX * distance
-  const cz = z1 + dirZ * distance
+  const wallDepth = wall.thickness ?? 0.1
+  const plane = resolveOpeningPlanPlane(node, wallDepth)
+  const depth = plane.depth
+  const cx = x1 + dirX * distance + perpX * plane.offset
+  const cz = z1 + dirZ * distance + perpZ * plane.offset
   const halfWidth = width / 2
   const halfDepth = depth / 2
 
@@ -98,6 +101,14 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
     [cx - dirX * halfWidth - perpX * halfDepth, cz - dirZ * halfWidth - perpZ * halfDepth],
   ]
 
+  const halfWallDepth = wallDepth / 2
+  const openingCutoutPoints = (ox: number, oz: number): FloorplanPoint[] => [
+    [ox - dirX * halfWidth + perpX * halfWallDepth, oz - dirZ * halfWidth + perpZ * halfWallDepth],
+    [ox + dirX * halfWidth + perpX * halfWallDepth, oz + dirZ * halfWidth + perpZ * halfWallDepth],
+    [ox + dirX * halfWidth - perpX * halfWallDepth, oz + dirZ * halfWidth - perpZ * halfWallDepth],
+    [ox - dirX * halfWidth - perpX * halfWallDepth, oz - dirZ * halfWidth - perpZ * halfWallDepth],
+  ]
+
   const view = ctx.viewState
   const palette = view?.palette
   const isSelected = view?.selected ?? false
@@ -113,6 +124,21 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
   const fillColor = showSelectedChrome ? '#fed7aa' : '#ffffff'
 
   const children: FloorplanGeometry[] = [
+    // An offset frame stands clear of the wall centre, but the wall is still
+    // cut through its whole thickness: draw that hole too.
+    ...(plane.offset === 0
+      ? []
+      : [
+          {
+            kind: 'polygon' as const,
+            points: openingCutoutPoints(x1 + dirX * distance, z1 + dirZ * distance),
+            fill: fillColor,
+            stroke: accentMuted,
+            strokeWidth: showSelectedChrome ? 2 : 1.25,
+            vectorEffect: 'non-scaling-stroke' as const,
+            strokeLinejoin: 'round' as const,
+          },
+        ]),
     // Background — the cutout is filled white so the swing arc sits on
     // a clean canvas (the wall hatch shows through otherwise).
     {

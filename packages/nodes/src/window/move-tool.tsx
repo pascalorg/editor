@@ -56,6 +56,7 @@ import {
   isWallMeshHidden,
   shouldIgnoreWallEventForOpeningMove,
 } from '../shared/opening-move-wall-gate'
+import { openingPlaneOffsetOnWall } from '../shared/opening-plane-offset'
 import {
   getRoofWallOpeningCursorPose,
   type RoofWallOpeningTarget,
@@ -187,6 +188,9 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         metadata: { ...meta, isTransient: true },
       })
     }
+
+    // Same-wall moves keep the wall-local plane offset; another host resets it.
+    const planeOffsetOn = (wallId: string) => openingPlaneOffsetOnWall(movingWindowNode, wallId)
 
     let currentHostId: string | null = movingWindowNode.parentId
     let committed = false
@@ -455,7 +459,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       useLiveNodeOverrides.getState().clear(movingWindowNode.id)
       if (currentHostId !== target.wallId) {
         useScene.getState().updateNode(movingWindowNode.id, {
-          position: [target.clampedX, target.clampedY, 0],
+          position: [target.clampedX, target.clampedY, planeOffsetOn(target.wallId)],
           rotation: [0, target.itemRotation, 0],
           side: target.side,
           parentId: target.wallId,
@@ -471,13 +475,13 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       } else {
         const windowMesh = sceneRegistry.nodes.get(movingWindowNode.id as AnyNodeId)
         if (windowMesh) {
-          windowMesh.position.set(target.clampedX, target.clampedY, 0)
+          windowMesh.position.set(target.clampedX, target.clampedY, planeOffsetOn(target.wallId))
           windowMesh.rotation.set(0, target.itemRotation, 0)
           windowMesh.updateMatrixWorld(true)
         }
       }
       useLiveTransforms.getState().set(movingWindowNode.id, {
-        position: [target.clampedX, target.clampedY, 0],
+        position: [target.clampedX, target.clampedY, planeOffsetOn(target.wallId)],
         rotation: target.itemRotation,
       })
       markHostDirtyThrottled(target.wallId)
@@ -497,6 +501,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         target.clampedY,
         getLevelYOffset(),
         getSlabElevation(target.event),
+        planeOffsetOn(target.wallId),
       )
       const ghostYaw = target.itemRotation - wallAngle
       setGhostPose({
@@ -610,7 +615,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
 
         const node = WindowNode.parse({
           ...cloned,
-          position: [target.clampedX, target.clampedY, 0],
+          position: [target.clampedX, target.clampedY, planeOffsetOn(target.wallId)],
           rotation: [0, target.itemRotation, 0],
           side: target.side,
           wallId: target.wallId,
@@ -644,7 +649,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
 
         history.commitStep(() => {
           commitOpeningMove(movingWindowNode.id, {
-            position: [target.clampedX, target.clampedY, 0],
+            position: [target.clampedX, target.clampedY, planeOffsetOn(target.wallId)],
             rotation: [0, target.itemRotation, 0],
             side: target.side,
             parentId: target.wallId,
@@ -1287,6 +1292,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
             hostWall.thickness,
             hostWall.supportSlabId,
           ),
+          planeOffsetOn(hostWall.id),
         )
         publishPlacementSurface(
           new Vector3(...seedPos),
