@@ -18,6 +18,7 @@ import {
   publishStructuralElevationGuide,
   resolveStructuralElevationSnap,
 } from '@pascal-app/editor'
+import { surfaceBatchable } from '../shared/node-batch/batchable'
 import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
 import { sameOutlineSurfaceCounterparts } from '../shared/surface-counterparts'
 import {
@@ -300,6 +301,7 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
   }),
 
   capabilities: {
+    batchable: surfaceBatchable,
     selectable: { hitVolume: 'bbox' },
     surfaces: {
       top: { height: (n) => (n as SlabNode).elevation },

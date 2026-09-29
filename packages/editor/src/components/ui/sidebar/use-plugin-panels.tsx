@@ -18,6 +18,7 @@ import {
   managedPluginIds,
   showsPluginManager,
 } from '../../../lib/plugin-panels'
+import { IconRefImage } from '../icon-ref'
 import { ErrorBoundary } from '../primitives/error-boundary'
 import type { ExtraPanel } from './icon-rail'
 import { PluginsPanel } from './panels/plugins-panel'
@@ -33,7 +34,7 @@ const pluginsManagerPanel: ExtraPanel = {
  * inspector's `renderIcon`, sized for the 24px icon-rail button. */
 function renderIconRef(ref: IconRef): ReactNode {
   if (ref.kind === 'url') {
-    return <img alt="" className="h-5 w-5 object-contain" src={ref.src} />
+    return <IconRefImage className="h-5 w-5" src={ref.src} />
   }
   if (ref.kind === 'iconify') {
     return <Icon height={20} icon={ref.name} width={20} />

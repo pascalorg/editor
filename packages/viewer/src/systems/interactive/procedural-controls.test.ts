@@ -10,7 +10,7 @@ test('motion controls and one Lights switch route to independent commands', () =
   ] as unknown as ProceduralItemNode['recipe']['parts']
   const commands: string[] = []
   const controls = proceduralControlDescriptors(
-    parts,
+    { parts },
     { parts: { door: false }, lightsOn: true },
     (partId) => commands.push(partId),
     () => commands.push('lights'),
@@ -19,4 +19,27 @@ test('motion controls and one Lights switch route to independent commands', () =
   expect(controls.map((control) => control.value)).toEqual([false, true])
   for (const control of controls) control.onChange(false)
   expect(commands).toEqual(['door', 'lights'])
+})
+
+test('non-fixed joints get controls too, continuous ones default to running', () => {
+  const parts = [
+    { id: 'lid', label: 'Lid' },
+    { id: 'fan', label: 'Fan' },
+    { id: 'plate', label: 'Plate' },
+  ] as unknown as ProceduralItemNode['recipe']['parts']
+  const joints = [
+    { child: 'lid', kind: 'revolute' },
+    { child: 'fan', kind: 'continuous' },
+    { child: 'plate', kind: 'fixed' },
+  ] as unknown as ProceduralItemNode['recipe']['joints']
+  const controls = proceduralControlDescriptors(
+    { parts, joints },
+    undefined,
+    () => {},
+    () => {},
+  )
+  expect(controls.map((control) => [control.key, control.value])).toEqual([
+    ['lid', false],
+    ['fan', true],
+  ])
 })

@@ -2408,6 +2408,21 @@ describe('procedural zones', () => {
     expect(plan.update[0]?.data.boundaryWallIds).toContain(bridge.id)
   })
 
+  test('keeps a stored ring that only starts at another vertex', () => {
+    const walls = squareWalls()
+    const { spaces } = detectSpacesForLevel('level-1', walls)
+    const detected = spaces[0]!.polygon
+    const rotated = [...detected.slice(1), detected[0]!]
+    const zone = ZoneNode.parse({
+      name: 'Kitchen',
+      polygon: rotated,
+      autoFromWalls: true,
+      boundaryWallIds: walls.map((wall) => wall.id),
+    })
+
+    expect(planAutoZonesForLevel(spaces, [zone]).update).toHaveLength(0)
+  })
+
   test('leaves an unrelated site zone manual', () => {
     const { spaces } = detectSpacesForLevel('level-1', squareWalls())
     const zone = ZoneNode.parse({

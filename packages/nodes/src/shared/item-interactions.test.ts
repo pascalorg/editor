@@ -1,12 +1,13 @@
 import { afterEach, expect, test } from 'bun:test'
-import { type AnyNode, useInteractive } from '@pascal-app/core'
+import { type AnyNode, toggleMechanism, useInteractive } from '@pascal-app/core'
+import { itemDefinition } from '../item/definition'
+import { proceduralItemDefinition } from '../procedural-item/definition'
 import {
   itemHasLights,
-  itemHasMechanisms,
   itemLightsOn,
-  itemMechanismsOn,
+  itemMechanism,
+  proceduralMechanism,
   toggleItemLights,
-  toggleItemMechanisms,
 } from './item-interactions'
 
 const catalogItem = (id: string, interactive: unknown) =>
@@ -24,6 +25,11 @@ afterEach(() => {
   }
 })
 
+test('item and procedural item declare their mechanisms through the registry capability', () => {
+  expect(itemDefinition.capabilities.mechanism).toBe(itemMechanism)
+  expect(proceduralItemDefinition.capabilities.mechanism).toBe(proceduralMechanism)
+})
+
 test('a catalog lamp with an animated part splits its first toggle off as the light', () => {
   const node = catalogItem('item_lamp_fan', {
     controls: [{ kind: 'toggle' }, { kind: 'toggle' }],
@@ -34,17 +40,17 @@ test('a catalog lamp with an animated part splits its first toggle off as the li
   })
   ids.push(node.id)
   expect(itemHasLights(node)).toBe(true)
-  expect(itemHasMechanisms(node)).toBe(true)
+  expect(itemMechanism.has(node)).toBe(true)
 
-  toggleItemMechanisms(node)
+  toggleMechanism(itemMechanism, node)
   expect(useInteractive.getState().items[node.id as never]?.controlValues).toEqual([false, true])
-  expect(itemMechanismsOn(node, useInteractive.getState())).toBe(true)
+  expect(itemMechanism.isOn(node, useInteractive.getState())).toBe(true)
   expect(itemLightsOn(node, useInteractive.getState())).toBe(false)
 
   toggleItemLights(node)
   expect(useInteractive.getState().items[node.id as never]?.controlValues).toEqual([true, true])
 
-  toggleItemMechanisms(node)
+  toggleMechanism(itemMechanism, node)
   expect(useInteractive.getState().items[node.id as never]?.controlValues).toEqual([true, false])
 })
 
@@ -53,7 +59,7 @@ test('a catalog item without an animation effect has no mechanisms', () => {
     controls: [{ kind: 'toggle' }, { kind: 'slider', label: 'Intensity', min: 0, max: 1 }],
     effects: [{ kind: 'light', color: '#fff', intensityRange: [0, 1], offset: [0, 0, 0] }],
   })
-  expect(itemHasMechanisms(node)).toBe(false)
+  expect(itemMechanism.has(node)).toBe(false)
   expect(itemHasLights(node)).toBe(true)
 })
 
@@ -64,19 +70,25 @@ test('procedural motion parts toggle together: any running stops all, else start
     { id: 'bulb', light: {} },
   ])
   ids.push(node.id)
-  expect(itemHasMechanisms(node)).toBe(true)
+  expect(proceduralMechanism.has(node)).toBe(true)
   expect(itemHasLights(node)).toBe(true)
 
   useInteractive.getState().setProceduralParts(node.id as never, ['door'], true)
-  toggleItemMechanisms(node)
+  toggleMechanism(proceduralMechanism, node)
   expect(useInteractive.getState().procedural[node.id as never]?.parts).toEqual({
     door: false,
     drawer: false,
   })
-  toggleItemMechanisms(node)
-  expect(itemMechanismsOn(node, useInteractive.getState())).toBe(true)
+  toggleMechanism(proceduralMechanism, node)
+  expect(proceduralMechanism.isOn(node, useInteractive.getState())).toBe(true)
 
   const lit = itemLightsOn(node, useInteractive.getState())
   toggleItemLights(node)
   expect(itemLightsOn(node, useInteractive.getState())).toBe(!lit)
+})
+
+test('a light-only procedural item has no mechanism', () => {
+  const node = proceduralItem('procedural_pendant', [{ id: 'bulb', light: {} }])
+  expect(proceduralMechanism.has(node)).toBe(false)
+  expect(itemHasLights(node)).toBe(true)
 })
