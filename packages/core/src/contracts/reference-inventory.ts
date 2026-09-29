@@ -225,6 +225,12 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
     remaps: [...CLONES, 'delete-nodes'],
   }),
   row({
+    kind: 'stair',
+    path: 'landscapeSurfaceId',
+    ...policy('node', 'host', 'drop', 'strip'),
+    note: 'An external landscape plugin surface; the built-in schema cannot enumerate its kinds.',
+  }),
+  row({
     kind: 'roof',
     path: 'support.roofSegmentId',
     ...policy('node', 'host', 'drop', 'strip'),
@@ -723,6 +729,7 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'porch',
     'renderPass',
     'role',
+    'roomBoundary',
     'showTrimPlanes',
     'storyShell',
     'suppressedDimensionSegmentIndexes',

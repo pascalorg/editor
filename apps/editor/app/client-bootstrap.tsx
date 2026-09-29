@@ -19,7 +19,7 @@ export function ClientBootstrap({
   enableDevDiagnostics: boolean
 }) {
   useEffect(() => {
-    if (!enableDevDiagnostics) return
+    if (process.env.NODE_ENV !== 'development' || !enableDevDiagnostics) return
     import('react-scan').then(({ scan }) => scan({ enabled: true }))
   }, [enableDevDiagnostics])
   return children

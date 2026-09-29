@@ -4274,6 +4274,8 @@ function FloorplanStairBuildPreviewLayer({
   const tool = useEditor((s) => s.tool)
   const point = useStairBuildPreview((s) => s.point)
   const rotation = useStairBuildPreview((s) => s.rotation)
+  const length = useStairBuildPreview((s) => s.length)
+  const stepCount = useStairBuildPreview((s) => s.stepCount)
   const isActive = phase === 'structure' && mode === 'build' && tool === 'stair'
 
   const previewEntry = useMemo(() => {
@@ -4288,7 +4290,12 @@ function FloorplanStairBuildPreviewLayer({
       children: [FLOORPLAN_PREVIEW_STAIR_SEGMENT.id],
       metadata: { isTransient: true, isFloorplanPreview: true },
     })
-    const entry = buildSharedFloorplanStairEntry(previewStair, [FLOORPLAN_PREVIEW_STAIR_SEGMENT])
+    const segment = {
+      ...FLOORPLAN_PREVIEW_STAIR_SEGMENT,
+      length: length ?? DEFAULT_STAIR_LENGTH,
+      stepCount: stepCount ?? DEFAULT_STAIR_STEP_COUNT,
+    }
+    const entry = buildSharedFloorplanStairEntry(previewStair, [segment])
     if (!entry) {
       return null
     }
@@ -4310,7 +4317,7 @@ function FloorplanStairBuildPreviewLayer({
         })),
       })),
     }
-  }, [isActive, point, rotation])
+  }, [isActive, point, rotation, length, stepCount])
 
   if (!previewEntry) {
     return null

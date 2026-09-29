@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import type { NextConfig } from 'next'
 
 const appDirectory = path.dirname(fileURLToPath(import.meta.url))
+const editorRoot = path.resolve(appDirectory, '../..')
 const portableBuild = process.env.PASCAL_PORTABLE_BUILD === '1'
 
 const nextConfig: NextConfig = {
@@ -31,8 +32,10 @@ const nextConfig: NextConfig = {
     '@pascal-app/viewer',
     '@pascal-app/core',
     '@pascal-app/editor',
+    '@pascal-app/nodes',
     '@pascal-app/mcp',
     '@pascal-app/plugin-pool',
+    '@pascal-app/plugin-landscape',
     '@pascal-app/plugin-streetscape',
     '@pascal-app/plugin-trees',
     '@mint/pascal-plugin',
@@ -41,12 +44,21 @@ const nextConfig: NextConfig = {
     '@pascal-app/plugin-environment',
     '@dgreenheck/ez-tree',
   ],
+  webpack(config, { dev }) {
+    if (!dev) config.resolve.alias['react-scan'] = false
+    return config
+  },
   turbopack: {
+    root: path.resolve(appDirectory, '../../..'),
     resolveAlias: {
-      react: './node_modules/react',
-      three: './node_modules/three',
-      '@react-three/fiber': './node_modules/@react-three/fiber',
-      '@react-three/drei': './node_modules/@react-three/drei',
+      react: '../../node_modules/react',
+      three: '../../node_modules/three',
+      '@react-three/fiber': '../../node_modules/@react-three/fiber',
+      '@react-three/drei': '../../node_modules/@react-three/drei',
+      '@pascal-app/nodes': path.relative(
+        appDirectory,
+        path.join(editorRoot, 'packages/nodes/src/index.ts'),
+      ),
     },
   },
   experimental: {

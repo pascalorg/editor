@@ -5,6 +5,7 @@ import {
   extendPluginDiscovery,
   loadPlugin,
   nodeRegistry,
+  type Plugin,
   registerNode,
 } from '@pascal-app/core'
 import { registerEditorHostPanel } from '@pascal-app/editor'
@@ -15,6 +16,7 @@ import {
   environmentPlugin,
   environmentPresentation,
 } from '@pascal-app/plugin-environment'
+import { landscapeHostPanel, landscapePlugin } from '@pascal-app/plugin-landscape'
 import { poolHostPanel, poolPlugin } from '@pascal-app/plugin-pool'
 import { streetscapeHostPanel, streetscapePlugin } from '@pascal-app/plugin-streetscape'
 import { treesHostPanel, treesPlugin } from '@pascal-app/plugin-trees'
@@ -94,20 +96,24 @@ export async function loadExternalPlugins(): Promise<void> {
 // Register the first-party example node plugin alongside any host-provided
 // discovery source instead of replacing it. Its Nature rail panel is host UI,
 // so it is registered separately from the core plugin manifest.
-extendPluginDiscovery(async () => [treesPlugin])
+extendPluginDiscovery(async () => [treesPlugin as unknown as Plugin])
 registerEditorHostPanel(treesHostPanel)
 extendPluginDiscovery(async () => [environmentPlugin])
 registerEditorHostPanel(environmentHostPanel)
 registerViewerPresentation(environmentPresentation)
-extendPluginDiscovery(async () => [bonesPlugin])
+extendPluginDiscovery(async () => [bonesPlugin as unknown as Plugin])
 // Opt-in: Bones ships uninstalled — users enable it per scene from the
 // Plugins panel (engineering X-ray is a specialist view, not a default).
 registerEditorHostPanel({ ...bonesHostPanel, defaultInstalled: false })
-extendPluginDiscovery(async () => [mintPlugin])
+extendPluginDiscovery(async () => [
+  { id: mintPlugin.id, apiVersion: mintPlugin.apiVersion, nodes: [] },
+])
 registerEditorHostPanel(mintHostPanel)
 extendPluginDiscovery(async () => [poolPlugin])
 registerEditorHostPanel(poolHostPanel)
-extendPluginDiscovery(async () => [streetscapePlugin])
+extendPluginDiscovery(async () => [landscapePlugin])
+registerEditorHostPanel(landscapeHostPanel)
+extendPluginDiscovery(async () => [streetscapePlugin as unknown as Plugin])
 // The upstream manifest still names 'Pascal' as creator; credit the author.
 registerEditorHostPanel({
   ...streetscapeHostPanel,

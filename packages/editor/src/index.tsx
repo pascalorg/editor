@@ -182,6 +182,8 @@ export {
   getSegmentAngleReferenceAtPoint,
   type SegmentAngleReference,
 } from './components/tools/shared/segment-angle'
+export type { LandscapeStairSnap } from './components/tools/stair/landscape-snap'
+export { resolveLandscapeStairSnap } from './components/tools/stair/landscape-snap'
 // Stair placement defaults — used by the kind-owned stair / stair-segment
 // panels. Re-exported from `components/tools/stair/stair-defaults.ts`.
 export {

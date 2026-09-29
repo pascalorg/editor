@@ -62,6 +62,8 @@ export const StairNode = BaseNode.extend({
   width: z.number().default(1.0),
   totalRise: z.number().optional(),
   stepCount: z.number().default(10),
+  autoLandscapeSnap: z.boolean().optional(),
+  landscapeSurfaceId: z.string().optional(),
   thickness: z.number().default(0.25),
   fillToFloor: z.boolean().default(true),
   innerRadius: z.number().default(0.9),
@@ -97,6 +99,7 @@ export const StairNode = BaseNode.extend({
   - width: stair width
   - totalRise: total stair height
   - stepCount: number of visible steps
+  - autoLandscapeSnap: magnetically connect straight flights to nearby landscape surfaces
   - thickness: stair slab / tread thickness
   - fillToFloor: whether the stair mass fills down to the floor or uses tread thickness only
   - innerRadius: inner curve radius for curved stairs

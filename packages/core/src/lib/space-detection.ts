@@ -579,7 +579,14 @@ function splitStraightWallAtVertices(start: Point2D, end: Point2D, vertices: Poi
   return ordered
 }
 
+function isRoomBoundaryWall(wall: WallNode): boolean {
+  return wall.metadata?.roomBoundary !== false
+}
+
 function extractRooms(walls: WallNode[]): ExtractedRoom[] {
+  // Site walls can use the Wall tool's drafting and measurement workflow
+  // without enclosing a building room.
+  walls = walls.filter(isRoomBoundaryWall)
   if (walls.length < 3) return []
 
   type HalfEdge = {
@@ -821,6 +828,7 @@ function extractRoomPolygons(walls: WallNode[]): Point2D[][] {
  * auto-close and auto-slab detection can never disagree about what is "closed".
  */
 export function wallClosesRoom(walls: WallNode[], wall: WallNode): boolean {
+  if (!isRoomBoundaryWall(wall)) return false
   const roomPolygons = extractRoomPolygons(walls)
   if (roomPolygons.length === 0) return false
   return roomPolygons.some((polygon) => wallBoundsRoom(wall, polygon))
@@ -2095,10 +2103,9 @@ function detectSpacesFromWalls(levelId: string, walls: WallNode[]) {
   const roomPolygons = rooms.map((room) => room.polygon)
   const wallUpdates: WallSideUpdate[] = walls.map((wall) => ({
     wallId: wall.id,
-    ...(resolveWallSurfaceSides(wall, roomPolygons) satisfies Pick<
-      WallSideUpdate,
-      'frontSide' | 'backSide'
-    >),
+    ...(isRoomBoundaryWall(wall)
+      ? resolveWallSurfaceSides(wall, roomPolygons)
+      : { frontSide: 'unknown' as const, backSide: 'unknown' as const }),
   }))
 
   return {

@@ -64,6 +64,7 @@ jobs:
       - name: Smoke-test the packed CLI and editor runtime
         env:
           PASCAL_PORTABLE_BUILD: "1"
+          NODE_OPTIONS: "--max-old-space-size=4096"
         run: |
           bun run build --filter editor
           cd packages/cli

@@ -642,7 +642,7 @@ export default function ElevatorPanel() {
       <PanelSection title="Cab">
         <MetricControl
           label="Width"
-          max={4}
+          max={1000}
           min={0.8}
           onChange={(value) => previewMetric('width', value)}
           onCommit={(value) => commitMetric('width', value)}
@@ -654,7 +654,7 @@ export default function ElevatorPanel() {
         />
         <MetricControl
           label="Depth"
-          max={4}
+          max={1000}
           min={0.8}
           onChange={(value) => previewMetric('depth', value)}
           onCommit={(value) => commitMetric('depth', value)}
@@ -666,7 +666,7 @@ export default function ElevatorPanel() {
         />
         <MetricControl
           label="Cab Height"
-          max={4}
+          max={1000}
           min={1.8}
           onChange={(value) => previewMetric('cabHeight', value)}
           onCommit={(value) => commitMetric('cabHeight', value)}
@@ -699,7 +699,7 @@ export default function ElevatorPanel() {
         </div>
         <MetricControl
           label="Shaft Width"
-          max={5}
+          max={1000}
           min={displayNode.width}
           onChange={(value) => previewMetric('shaftWidth', Math.max(value, displayNode.width))}
           onCommit={(value) => commitMetric('shaftWidth', Math.max(value, displayNode.width))}
@@ -711,7 +711,7 @@ export default function ElevatorPanel() {
         />
         <MetricControl
           label="Shaft Depth"
-          max={5}
+          max={1000}
           min={displayNode.depth}
           onChange={(value) => previewMetric('shaftDepth', Math.max(value, displayNode.depth))}
           onCommit={(value) => commitMetric('shaftDepth', Math.max(value, displayNode.depth))}

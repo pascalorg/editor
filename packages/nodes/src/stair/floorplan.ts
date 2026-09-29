@@ -51,12 +51,39 @@ import {
  * segment-sampler helpers so we can emit a stitched polyline.
  */
 export function buildStairFloorplan(
-  stair: StairNode,
+  rawStair: StairNode,
   ctx: GeometryContext,
 ): FloorplanGeometry | null {
-  const segments = (ctx.children ?? []).filter(
-    (child): child is StairSegmentNode => child.type === 'stair-segment' && child.visible !== false,
-  )
+  const parent = ctx.parent as {
+    id?: string
+    type?: string
+    parentId?: string | null
+    position?: [number, number, number]
+    rotation?: [number, number, number]
+  } | null
+  let stair = rawStair
+  if (parent && parent.id === rawStair.landscapeSurfaceId && parent.position && parent.rotation) {
+    const angle = parent.rotation[1]
+    const c = Math.cos(angle),
+      s = Math.sin(angle)
+    const [x, y, z] = rawStair.position
+    stair = {
+      ...rawStair,
+      parentId: parent.parentId ?? null,
+      position: [
+        parent.position[0] + c * x + s * z,
+        parent.position[1] + y,
+        parent.position[2] - s * x + c * z,
+      ],
+      rotation: rawStair.rotation + angle,
+    }
+  }
+  const segments = (ctx.children ?? [])
+    .map((child) => ctx.resolve<StairSegmentNode>(child.id) ?? child)
+    .filter(
+      (child): child is StairSegmentNode =>
+        child.type === 'stair-segment' && child.visible !== false,
+    )
   const entry = buildFloorplanStairEntry(stair, segments)
   if (!entry) return null
 

@@ -978,6 +978,9 @@ export type FloorplanMoveTarget<N> = (args: {
  *
  * Extensions surface only when the contributing plugin is installed in
  * the project (same `installedPlugins` gate as panels and node kinds).
+ * An extension with `primaryWhen` replaces the regular controls for
+ * matching nodes on desktop and mobile. Its component supplies its own
+ * `PanelSection` groups.
  */
 export type InspectorExtension = {
   /** Globally unique id, e.g. `pascal:bones:wall-engineering`. */
@@ -992,6 +995,8 @@ export type InspectorExtension = {
   title: string
   /** Lazy section body; receives `{ node }` (the selected node). */
   component: LazyComponent
+  /** When true for the selected node, this extension owns the inspector body. */
+  primaryWhen?: (node: AnyNode) => boolean
 }
 
 export type Plugin = {
@@ -2155,6 +2160,8 @@ export type CutsContext = { nodes: Readonly<Record<AnyNodeId, AnyNode>> }
 export type MovableConfig = {
   axes: ReadonlyArray<'x' | 'y' | 'z'>
   gridSnap?: boolean
+  /** Keep an existing floor-placed node on its current level and visual elevation while dragging. */
+  preserveLevelAndElevation?: boolean
   /** Allow an ordinary primary-button body drag to enter the move tool. */
   directDrag?: boolean
   /**
@@ -2224,6 +2231,8 @@ export type MovableConfig = {
 }
 
 export type MovableParentFrame = {
+  /** Keep selection and manipulation on the child instead of promoting its parent. */
+  independent?: boolean
   /** The parent node owning the local frame; `null` → move in plan frame. */
   resolveParent: (node: AnyNode, nodes: Readonly<Record<string, AnyNode>>) => AnyNode | null
   /** Parent's Y rotation, composed onto the child's preview rotation. */
