@@ -51,7 +51,7 @@ import {
 import {
   buildLevelDuplicateCreateOps,
   type LevelDuplicatePreset,
-} from './../../../../../lib/level-duplication'
+} from '@pascal-app/core/building'
 import { getDefaultLevelName, getLevelDisplayName } from '@pascal-app/core'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
 import {

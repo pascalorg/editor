@@ -7,13 +7,10 @@ import { registerCreateLevel } from './create-level'
 import { registerCreateUnit } from './create-unit'
 import { registerCreateWall } from './create-wall'
 import { registerCutOpening } from './cut-opening'
-import { registerDeleteNode } from './delete-node'
 import { registerDescribeNode } from './describe-node'
-import { registerDuplicateLevel } from './duplicate-level'
 import { registerExportGlb } from './export-glb'
 import { registerExportJson } from './export-json'
 import { registerFindNodes } from './find-nodes'
-import { registerGetNode } from './get-node'
 import { registerGetScene } from './get-scene'
 import { registerListUnits } from './list-units'
 import { registerMeasure } from './measure'
@@ -23,9 +20,9 @@ import { registerPlaceItem } from './place-item'
 import { registerRedo } from './redo'
 import { registerRoomTools } from './room-tools'
 import { registerSceneLifecycleTools } from './scene-lifecycle'
-import { registerSceneQueryTools } from './scene-query'
 import { registerSetUnitMembers } from './set-unit-members'
 import { registerSetZone } from './set-zone'
+import { registerSharedTools } from './shared-tools'
 import { registerStructureTools } from './structure-tools'
 import { registerTemplateTools } from './templates'
 import { registerUndo } from './undo'
@@ -43,10 +40,9 @@ import { registerVariantTools } from './variants'
  */
 export function registerTools(server: McpServer, operations: SceneOperations): void {
   registerGetScene(server, operations)
-  registerGetNode(server, operations)
   registerDescribeNode(server, operations)
   registerFindNodes(server, operations)
-  registerSceneQueryTools(server, operations)
+  registerSharedTools(server, operations)
   registerMeasure(server, operations)
   registerConstructionTools(server, operations)
   registerRoomTools(server, operations)
@@ -61,8 +57,6 @@ export function registerTools(server: McpServer, operations: SceneOperations): v
   registerCutOpening(server, operations)
   registerSetZone(server, operations)
   registerStructureTools(server, operations)
-  registerDuplicateLevel(server, operations)
-  registerDeleteNode(server, operations)
   registerUndo(server, operations)
   registerRedo(server, operations)
   registerExportJson(server, operations)

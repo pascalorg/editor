@@ -5,7 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { type AnyNodeId, DoorNode, SlabNode, WallNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { registerApplyPatch } from './apply-patch'
-import { registerDeleteNode } from './delete-node'
+import { registerSharedTools } from './shared-tools'
 
 let bridge: SceneBridge
 let client: Client
@@ -25,7 +25,7 @@ beforeEach(async () => {
   bridge.deriveStructure()
   bridge.clearHistory()
   const server = new McpServer({ name: 'wall-deletion', version: '0.0.0' })
-  registerDeleteNode(server, bridge)
+  registerSharedTools(server, bridge)
   registerApplyPatch(server, bridge)
   const [a, b] = InMemoryTransport.createLinkedPair()
   client = new Client({ name: 'test', version: '0.0.0' })

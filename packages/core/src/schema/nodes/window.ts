@@ -2,20 +2,9 @@ import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
+import { WindowType } from './opening-types'
 
-export const WindowType = z.enum([
-  'fixed',
-  'sliding',
-  'casement',
-  'awning',
-  'hopper',
-  'single-hung',
-  'double-hung',
-  'bay',
-  'bow',
-  'louvered',
-])
-export type WindowType = z.infer<typeof WindowType>
+export { WindowType } from './opening-types'
 
 export const WindowConstructionType = z.enum(['framed', 'masonry'])
 export const WindowDimensionReference = z.enum([

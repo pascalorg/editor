@@ -318,13 +318,13 @@ captured by Zundo's temporal middleware as a single undoable step.
 | Name | Purpose | Key input | Output |
 | --- | --- | --- | --- |
 | `get_scene` | Return the full scene graph. | — | `{ nodes, rootNodeIds, collections }` |
-| `get_node` | Fetch a node by id. | `{ id }` | the node, or `InvalidParams` if not found |
+| `get_node` | Fetch a node by id, whole. | `{ id }` | `{ node }`, or refusal `node_not_found` |
 | `describe_node` | Node summary with ancestry, children count and properties. | `{ id }` | `{ id, type, parentId, ancestry[], childrenCount, properties, description }` |
 | `find_nodes` | Filter nodes by type (any node kind) / parent / zone / level, or by import source id (`provenance.refs[].id` or legacy `metadata.sourceIds`, exact or prefix). | `{ type?, parentId?, zoneId?, levelId?, sourceId?, sourceIdPrefix? }` | `{ nodes: AnyNode[] }` |
-| `list_levels` | List levels with ids, floor indices, parent ids and child counts. | — | `{ activeSceneId, levels[] }` |
-| `get_level_summary` | Compact summary of one level with counts, wall/opening lists, zones, slabs, ceilings and items. | `{ levelId? }` | `{ levelId, counts, walls, zones, items, slabs, ceilings }` |
-| `get_walls` | Walls on a level with length and child doors/windows. | `{ levelId? }` | `{ levelId, walls[] }` |
-| `get_zones` | Room/zone polygons with approximate areas and bounds. | `{ levelId? }` | `{ levelId, zones[] }` |
+| `list_levels` | List every building's levels in floor order with their role (storey, roof-only, support). | — | `{ activeSceneId, activeLevelId, levelCount, occupiedStoryCount, supportLevelCount, roofLevelIds, levels[] }` |
+| `get_level_summary` | Compact summary of one level: role, counts, walls with openings, zones with areas, slabs, ceilings, items, stairs, roofs, and everything else by type. Omit `levelId` for the lowest storey. | `{ levelId?, level? }` | `{ levelId, role, counts, walls, zones, slabs, ceilings, items, stairs, roofs, other }` |
+| `get_walls` | Walls on a level with length, stored and resolved height, and child doors/windows. | `{ levelId?, level? }` | `{ levelId, walls[] }` |
+| `get_zones` | Room/zone polygons with holes, areas (holes taken out), bounds and floor choices. | `{ levelId?, level? }` | `{ levelId, zones[] }` |
 | `measure` | Distance between two nodes' world-space reference points (hosted doors, windows and items resolved through their host; every node kind); area when applicable. | `{ fromId, toId }` | `{ distanceMeters, fromPoint?, toPoint?, areaSqMeters?, units: 'meters' }` |
 | `search_assets` | Search the built-in MCP item catalog. | `{ query, category? }` | `{ results, total }` |
 | `create_story_shell` | Create one level-owned story shell from a footprint: the perimeter walls. The floor plate and ceiling are derived from the enclosed rooms; `createSlab` / `createCeiling` / `slabElevation` are recorded as room intent. Use once per story. | `{ levelId, footprint, wallHeight?, wallThickness?, createSlab?, createCeiling? }` | `{ wallIds, zoneIds, slabId, ceilingId, createdIds }` |
@@ -341,15 +341,15 @@ captured by Zundo's temporal middleware as a single undoable step.
 | `place_design` | Create one design (procedural item recipe, object or JSON string) that passes `validate_design`. Its mounting picks the host: level/slab/zone or a design surface (`surfaceId`), a straight wall face, or a ceiling. Create-only, one undo step, inline designs up to 24 KiB, with coded refusals. | `{ design, hostId, position, rotation?, side?, surfaceId?, parameters?, slots?, name?, id? }` | `{ designId, parentId, surfaceId }` |
 | `cut_opening` | Cut a door or window opening into a wall. `position` is 0..1 along the wall and is stored as wall-local meters. | `{ wallId, type: 'door' \| 'window', position, width, height }` | `{ openingId }` |
 | `set_zone` | Create a zone/room polygon on a level. | `{ levelId, polygon, label, properties? }` | `{ zoneId }` |
-| `duplicate_level` | Clone a level and all of its descendants. | `{ levelId }` | `{ newLevelId, newNodeIds[] }` |
-| `delete_node` | Delete a node; cascades when `cascade: true`. | `{ id, cascade? }` | `{ deletedIds: [] }` |
+| `duplicate_level` | Copy a level as the editor does (units whose rooms are all on it included; plan references, scans and spawns left behind), above or below, shifting the floors past it. | `{ levelId, position?, name?, preset? }` | `{ newLevelId, name, floorIndex, shiftedLevelIds, copied, skipped, newNodeIds[] }` |
+| `delete_node` | Delete a node with everything under it, as the editor's Delete does. | `{ id }` | `{ deletedIds: [] }` |
 | `undo` | Step back through temporal history. | `{ steps? }` | `{ undone: number }` |
 | `redo` | Step forward through temporal history. | `{ steps? }` | `{ redone: number }` |
 | `export_json` | Serialize the scene graph as JSON. | `{ pretty? }` | `{ json: string }` |
 | `export_glb` | Stubbed: GLB export requires the browser renderer. | — | throws `not_implemented` |
 | `validate_scene` | Zod-validate every node and parent-child integrity. | — | `{ valid, errors: { nodeId, path, message }[] }` |
 | `validate_design` | Read-only: validate a design (procedural item recipe, object or JSON string) and measure it. The authority over `pascal://schema/design`. | `{ design, parameters? }` | `{ valid, diagnostics[], design, sweep, measurements }` |
-| `verify_scene` | High-level layout check with validation status, per-level counts, empty levels and practical issues. | — | `{ valid, levels[], issues, hasIssues }` |
+| `verify_scene` | High-level check with validation status, per-level counts and roles, empty levels, and typed practical issues (storeys with no stair, openings off their wall, stairs off their slab, blocked doors…). | — | `{ valid, levels[], issues: { type, message }[], hasIssues }` |
 | `check_collisions` | Find overlapping items and out-of-bounds placements. | `{ levelId? }` | `{ collisions: { aId, bId, kind }[] }` |
 | `analyze_floorplan_image` | Vision tool: extract walls, rooms, and approximate dimensions from a floorplan image. | `{ image, scaleHint? }` | `{ walls, rooms, approximateDimensions, confidence }` |
 | `analyze_room_photo` | Vision tool: extract approximate dimensions and fixtures from a room photo. | `{ image }` | `{ approximateDimensions, identifiedFixtures, identifiedWindows }` |

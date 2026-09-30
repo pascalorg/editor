@@ -364,7 +364,7 @@ describe('room tools', () => {
     const parsed = JSON.parse((furnish.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(parsed.placed + parsed.skipped.length).toBeGreaterThan(0)
 
-    const { findBlockedDoors } = await import('./door-clearance')
+    const { findBlockedDoors } = await import('@pascal-app/core/agent-operations')
     const blocked = findBlockedDoors({ nodes: Object.values(bridge.getNodes()) })
     expect(blocked).toEqual([])
     // If the heuristic wanted a fixture in the clear zone, it must be skipped explicitly.
@@ -399,7 +399,9 @@ describe('room tools', () => {
       arguments: { zoneId: room.zoneId, roomType: 'bedroom', doorWallIndex: 0 },
     })
     expect(furnish.isError).toBeFalsy()
-    const { findItemItemCollisions, findBlockedDoors } = await import('./layout-clearance')
+    const { findItemItemCollisions, findBlockedDoors } = await import(
+      '@pascal-app/core/agent-operations'
+    )
     const nodes = Object.values(bridge.getNodes())
     expect(findItemItemCollisions({ nodes })).toEqual([])
     expect(findBlockedDoors({ nodes })).toEqual([])
@@ -438,7 +440,7 @@ describe('room tools', () => {
     })
     expect(furnish.isError).toBeFalsy()
     const parsed = JSON.parse((furnish.content as Array<{ type: string; text: string }>)[0]!.text)
-    const { findBlockedDoors } = await import('./door-clearance')
+    const { findBlockedDoors } = await import('@pascal-app/core/agent-operations')
     expect(findBlockedDoors({ nodes: Object.values(bridge.getNodes()) })).toEqual([])
     // Bed is placed against the back wall where the door is; expect clearance skip or empty bed.
     const bedPlaced = Object.values(bridge.getNodes()).some(

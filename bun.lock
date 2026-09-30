@@ -123,6 +123,7 @@
       "name": "@pascal-app/core",
       "version": "1.0.3",
       "dependencies": {
+        "@pascal-app/lingo": "^0.2.0",
         "dedent": "^1.7.1",
         "idb-keyval": "^6.2.2",
         "mitt": "^3.0.1",

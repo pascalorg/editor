@@ -1,26 +1,31 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { createZone, generateId, runAsSingleSceneHistoryStep, useScene } from '@pascal-app/core'
+import {
+  collectDoorKeepouts,
+  collectOccupiedFootprints,
+  findValidPlacement,
+  itemPlanAabb,
+  keepoutCoversPlanned,
+  keepoutForPolygonEdge,
+  type PlanAabb,
+  polygonArea,
+  polygonBounds,
+  type Vec2,
+} from '@pascal-app/core/agent-operations'
+import { addDoorTool, addWindowTool } from '@pascal-app/core/agent-tools'
+import { planWallOpening } from '@pascal-app/core/building'
 import type {
   AnyNode,
   AnyNodeId,
   AssetInput,
   WallNode as WallNodeType,
 } from '@pascal-app/core/schema'
-import { DoorNode, ItemNode, WindowNode } from '@pascal-app/core/schema'
+import { ItemNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { ADDITIVE_TOOL_ANNOTATIONS, READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 import { findCatalogItem, searchCatalogItems } from './asset-catalog'
-import { keepoutCoversPlanned, keepoutForPolygonEdge } from './door-clearance'
-import { ErrorCode, throwMcpError } from './errors'
-import { polygonArea, polygonBounds, type Vec2, wallLength, wallLocalXFromT } from './geometry'
-import {
-  collectDoorKeepouts,
-  collectOccupiedFootprints,
-  findValidPlacement,
-  itemPlanAabb,
-  type PlanAabb,
-} from './layout-clearance'
+import { ErrorCode, refusalResult, throwMcpError } from './errors'
 import {
   type LiveSyncStatus,
   liveSyncOutput,
@@ -89,16 +94,6 @@ export const createRoomOutput = {
   ...liveSyncOutput,
 }
 
-export const addDoorInput = {
-  wallId: NodeIdSchema,
-  t: z.number().min(0).max(1).optional(),
-  position: z.number().min(0).max(1).optional(),
-  width: measurement('length', 'm', { positive: true, description: 'Door width.' }).optional(),
-  height: measurement('length', 'm', { positive: true, description: 'Door height.' }).optional(),
-  hingesSide: z.enum(['left', 'right']).optional(),
-  swingDirection: z.enum(['inward', 'outward']).optional(),
-}
-
 export const addDoorOutput = {
   doorId: z.string(),
   localX: z.number(),
@@ -108,18 +103,6 @@ export const addDoorOutput = {
   clamped: z.boolean(),
   coordinateSystem: z.literal('wall-local-meters'),
   ...liveSyncOutput,
-}
-
-export const addWindowInput = {
-  wallId: NodeIdSchema,
-  t: z.number().min(0).max(1).optional(),
-  position: z.number().min(0).max(1).optional(),
-  width: measurement('length', 'm', { positive: true, description: 'Window width.' }).optional(),
-  height: measurement('length', 'm', { positive: true, description: 'Window height.' }).optional(),
-  sillHeight: measurement('length', 'm', {
-    min: 0,
-    description: 'Sill height above floor.',
-  }).optional(),
 }
 
 export const addWindowOutput = {
@@ -221,14 +204,6 @@ function inferRoomGeometry(
     levelId: inferredLevelId,
     polygon: polygon ?? (zone.polygon as Vec2[]),
   }
-}
-
-function resolveWallT(toolName: string, t?: number, position?: number): number {
-  const resolved = t ?? position
-  if (resolved === undefined) {
-    throwMcpError(ErrorCode.InvalidParams, `${toolName} requires t or position in the 0..1 range`)
-  }
-  return resolved
 }
 
 function makeItemAsset(asset: AssetInput) {
@@ -563,44 +538,33 @@ export function registerCreateRoom(server: McpServer, bridge: SceneOperations): 
 
 export function registerAddDoor(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
-    'add_door',
+    addDoorTool.name,
     {
-      title: 'Add door',
-      description:
-        'Add a door to an existing wall. t/position is 0..1 along the wall: 0 = start, 0.5 = center, 1 = end.',
-      inputSchema: addDoorInput,
+      title: addDoorTool.title,
+      description: addDoorTool.description,
+      inputSchema: addDoorTool.input,
       outputSchema: addDoorOutput,
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
-    async ({ wallId, t, position, width = 0.9, height = 2.1, hingesSide, swingDirection }) => {
-      const wall = assertWall(bridge, wallId)
-      const length = wallLength(wall)
-      if (length < width) {
-        throwMcpError(
-          ErrorCode.InvalidParams,
-          `Wall ${wallId} is ${length.toFixed(2)}m long, too short for a ${width.toFixed(2)}m door`,
-        )
+    async (input) => {
+      let planned: ReturnType<typeof planWallOpening>
+      try {
+        planned = planWallOpening(bridge.getNodes() as Record<string, AnyNode>, {
+          kind: 'door',
+          ...input,
+        })
+      } catch (error) {
+        return refusalResult(error)
       }
-      const wallT = resolveWallT('add_door', t, position)
-      const localX = wallLocalXFromT(wall, wallT, width)
-      const door = DoorNode.parse({
-        wallId,
-        parentId: wallId,
-        position: [localX, height / 2, 0],
-        width,
-        height,
-        ...(hingesSide ? { hingesSide } : {}),
-        ...(swingDirection ? { swingDirection } : {}),
-      })
-      const id = bridge.createNode(door, wallId as AnyNodeId)
+      const id = bridge.createNode(planned.node, planned.wallId as AnyNodeId)
       const persistence = await publishLiveSceneSnapshot(bridge, 'add_door')
       return textResult({
         doorId: id,
-        localX,
-        t: wallT,
-        position: wallT,
-        wallLength: length,
-        clamped: Math.abs(localX - wallT * length) > 1e-9,
+        localX: planned.localX,
+        t: planned.t,
+        position: planned.t,
+        wallLength: planned.wallLength,
+        clamped: planned.clamped,
         coordinateSystem: 'wall-local-meters',
         ...persistencePayload(persistence),
       })
@@ -610,44 +574,35 @@ export function registerAddDoor(server: McpServer, bridge: SceneOperations): voi
 
 export function registerAddWindow(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
-    'add_window',
+    addWindowTool.name,
     {
-      title: 'Add window',
-      description:
-        'Add a window to an existing wall. t/position is 0..1 along the wall; sillHeight is the height from floor to window bottom.',
-      inputSchema: addWindowInput,
+      title: addWindowTool.title,
+      description: addWindowTool.description,
+      inputSchema: addWindowTool.input,
       outputSchema: addWindowOutput,
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
-    async ({ wallId, t, position, width = 1.5, height = 1.5, sillHeight = 0.9 }) => {
-      const wall = assertWall(bridge, wallId)
-      const length = wallLength(wall)
-      if (length < width) {
-        throwMcpError(
-          ErrorCode.InvalidParams,
-          `Wall ${wallId} is ${length.toFixed(2)}m long, too short for a ${width.toFixed(2)}m window`,
-        )
+    async (input) => {
+      let planned: ReturnType<typeof planWallOpening>
+      try {
+        planned = planWallOpening(bridge.getNodes() as Record<string, AnyNode>, {
+          kind: 'window',
+          ...input,
+        })
+      } catch (error) {
+        return refusalResult(error)
       }
-      const wallT = resolveWallT('add_window', t, position)
-      const localX = wallLocalXFromT(wall, wallT, width)
-      const windowNode = WindowNode.parse({
-        wallId,
-        parentId: wallId,
-        position: [localX, sillHeight + height / 2, 0],
-        width,
-        height,
-      })
-      const id = bridge.createNode(windowNode, wallId as AnyNodeId)
+      const id = bridge.createNode(planned.node, planned.wallId as AnyNodeId)
       const persistence = await publishLiveSceneSnapshot(bridge, 'add_window')
       return textResult({
         windowId: id,
-        localX,
-        t: wallT,
-        position: wallT,
-        wallLength: length,
-        clamped: Math.abs(localX - wallT * length) > 1e-9,
+        localX: planned.localX,
+        t: planned.t,
+        position: planned.t,
+        wallLength: planned.wallLength,
+        clamped: planned.clamped,
         coordinateSystem: 'wall-local-meters',
-        sillHeight,
+        sillHeight: planned.sillHeight ?? 0,
         ...persistencePayload(persistence),
       })
     },

@@ -2,7 +2,7 @@
 
 import type { LevelNode } from '@pascal-app/core'
 import { useEffect, useState } from 'react'
-import type { LevelDuplicatePreset } from '../../lib/level-duplication'
+import type { LevelDuplicatePreset } from '@pascal-app/core/building'
 import { getLevelDisplayName } from '@pascal-app/core'
 import { cn } from '../../lib/utils'
 import {

@@ -1,11 +1,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { floorFootprintName, getLevelDisplayName, resolveCeilingHeight } from '@pascal-app/core'
+import { wallResolvedHeight } from '@pascal-app/core/agent-operations'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 import { ErrorCode, throwMcpError } from './errors'
-import { resolveReportedWallHeight } from './scene-query'
 import { NodeIdSchema } from './schemas'
 
 export const describeNodeInput = {
@@ -32,7 +32,7 @@ function describe(node: AnyNode, bridge: SceneOperations): string {
       const [x1, z1] = node.start
       const [x2, z2] = node.end
       const t = node.thickness ?? 0.1
-      const h = resolveReportedWallHeight(bridge, node)
+      const h = wallResolvedHeight(bridge.getNodes(), node)
       return `Wall from (${x1},${z1}) to (${x2},${z2}), thickness ${t.toFixed(2)}m, height ${h.toFixed(2)}m`
     }
     case 'level':
@@ -93,7 +93,7 @@ export function registerDescribeNode(server: McpServer, bridge: SceneOperations)
         n.type === 'wall'
           ? {
               ...n,
-              resolvedHeight: resolveReportedWallHeight(bridge, n),
+              resolvedHeight: wallResolvedHeight(bridge.getNodes(), n),
               heightIsExplicit: n.height !== undefined,
             }
           : n

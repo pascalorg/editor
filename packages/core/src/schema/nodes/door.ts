@@ -2,6 +2,9 @@ import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
+import { DoorType } from './opening-types'
+
+export { DoorType } from './opening-types'
 
 export const DoorSegment = z.object({
   type: z.enum(['panel', 'glass', 'empty']),
@@ -26,24 +29,11 @@ export const OpeningDimensionReference = z.enum([
   'masonry-opening',
   'finish-opening',
 ])
-export const DoorType = z.enum([
-  'hinged',
-  'double',
-  'french',
-  'folding',
-  'pocket',
-  'barn',
-  'sliding',
-  'garage-sectional',
-  'garage-rollup',
-  'garage-tiltup',
-])
 export const DoorTrackStyle = z.enum(['none', 'visible', 'pocket', 'overhead'])
 
 export type DoorCategory = z.infer<typeof DoorCategory>
 export type OpeningConstructionType = z.infer<typeof OpeningConstructionType>
 export type OpeningDimensionReference = z.infer<typeof OpeningDimensionReference>
-export type DoorType = z.infer<typeof DoorType>
 export type DoorTrackStyle = z.infer<typeof DoorTrackStyle>
 
 export const DoorNode = BaseNode.extend({

@@ -1,0 +1,440 @@
+import { levelBuildingId } from '../building/level-duplication'
+import { getLevelDisplayName } from '../lib/level-name'
+import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema } from '../schema'
+import { getStoredLevelHeight } from '../services/storey'
+import { resolveStairTotalRise } from '../systems/stair/stair-rise'
+import { checkOpeningWithinWall, formatOpeningBoundsIssue } from '../validation/opening-bounds'
+import { layoutIssuesFromScene } from './layout-clearance'
+import { wallResolvedHeight } from './level-reads'
+import { pointInPolygon, polygonContainsPolygon, type Vec2 } from './plan-geometry'
+import {
+  type ContentCounts,
+  contentCounts,
+  levelIdOf,
+  levelRole,
+  levelsOf,
+  nodesOnLevel,
+} from './scene-queries'
+import type { AgentOperation, SceneNodes } from './types'
+
+/** A problem verify_scene found, typed so it can be counted and acted on. */
+export type SceneIssue = { type: string; message: string }
+
+type StairNode = AnyNode & { type: 'stair' }
+type SegmentTransform = { position: [number, number, number]; rotation: number }
+type StairSegmentLike = {
+  width: number
+  length: number
+  height: number
+  stepCount: number
+  attachmentSide: 'front' | 'left' | 'right'
+}
+
+const occupiedContent = (counts: ContentCounts) =>
+  counts.walls +
+  counts.zones +
+  counts.doors +
+  counts.windows +
+  counts.items +
+  counts.slabs +
+  counts.ceilings +
+  counts.stairs
+
+function rotateXZ(x: number, z: number, angle: number): Vec2 {
+  const cos = Math.cos(angle)
+  const sin = Math.sin(angle)
+  return [x * cos + z * sin, -x * sin + z * cos]
+}
+
+function toWorldPlanPoint(stair: StairNode, localX: number, localZ: number): Vec2 {
+  const [worldX, worldZ] = rotateXZ(localX, localZ, stair.rotation ?? 0)
+  return [stair.position[0] + worldX, stair.position[2] + worldZ]
+}
+
+function computeSegmentTransforms(segments: StairSegmentLike[]): SegmentTransform[] {
+  const transforms: SegmentTransform[] = []
+  let currentX = 0
+  let currentY = 0
+  let currentZ = 0
+  let currentRot = 0
+
+  for (let index = 0; index < segments.length; index++) {
+    const segment = segments[index]
+    if (!segment) continue
+
+    if (index === 0) {
+      transforms.push({ position: [currentX, currentY, currentZ], rotation: currentRot })
+      continue
+    }
+
+    const previous = segments[index - 1]
+    if (!previous) continue
+
+    let attachX = 0
+    let attachZ = 0
+    let rotationDelta = 0
+    switch (segment.attachmentSide) {
+      case 'front':
+        attachZ = previous.length
+        break
+      case 'left':
+        attachX = previous.width / 2
+        attachZ = previous.length / 2
+        rotationDelta = Math.PI / 2
+        break
+      case 'right':
+        attachX = -previous.width / 2
+        attachZ = previous.length / 2
+        rotationDelta = -Math.PI / 2
+        break
+    }
+
+    const [deltaX, deltaZ] = rotateXZ(attachX, attachZ, currentRot)
+    currentX += deltaX
+    currentY += previous.height
+    currentZ += deltaZ
+    currentRot += rotationDelta
+    transforms.push({ position: [currentX, currentY, currentZ], rotation: currentRot })
+  }
+
+  return transforms
+}
+
+function stairFootprintPolygons(nodes: SceneNodes, stair: StairNode): Vec2[][] {
+  if (stair.stairType === 'curved' || stair.stairType === 'spiral') {
+    const radius = Math.max(0.05, stair.innerRadius ?? 0.9) + Math.max(stair.width ?? 1, 0.4)
+    return [
+      Array.from({ length: 24 }).map((_, index) => {
+        const angle = (index / 24) * Math.PI * 2
+        return toWorldPlanPoint(stair, Math.cos(angle) * radius, Math.sin(angle) * radius)
+      }),
+    ]
+  }
+
+  const segments = (stair.children ?? [])
+    .map((childId) => nodes[childId])
+    .filter((node): node is AnyNode & { type: 'stair-segment' } => node?.type === 'stair-segment')
+  const usableSegments: StairSegmentLike[] =
+    segments.length > 0
+      ? segments
+      : [
+          {
+            width: stair.width ?? 1,
+            length: 3,
+            height: resolveStairTotalRise(stair, nodes as Record<string, AnyNode>),
+            stepCount: stair.stepCount ?? 10,
+            attachmentSide: 'front' as const,
+          },
+        ]
+  const transforms = computeSegmentTransforms(usableSegments)
+
+  return usableSegments.map((segment, index) => {
+    const transform = transforms[index] ?? {
+      position: [0, 0, 0] as [number, number, number],
+      rotation: 0,
+    }
+    const halfWidth = segment.width / 2
+    const corners: Vec2[] = [
+      [-halfWidth, 0],
+      [halfWidth, 0],
+      [halfWidth, segment.length],
+      [-halfWidth, segment.length],
+    ]
+    return corners.map(([localX, localZ]) => {
+      const [rx, rz] = rotateXZ(localX, localZ, transform.rotation)
+      return toWorldPlanPoint(stair, transform.position[0] + rx, transform.position[2] + rz)
+    })
+  })
+}
+
+function wallSamplePoints(wall: AnyNode & { type: 'wall' }): Vec2[] {
+  return [0.25, 0.5, 0.75].map((t) => [
+    wall.start[0] + (wall.end[0] - wall.start[0]) * t,
+    wall.start[1] + (wall.end[1] - wall.start[1]) * t,
+  ])
+}
+
+function levelNumber(nodes: SceneNodes, levelId: string | null | undefined) {
+  const node = levelId ? nodes[levelId] : undefined
+  return node?.type === 'level' ? node.level : undefined
+}
+
+function targetLevelIdsForStair(nodes: SceneNodes, stair: StairNode): string[] {
+  const fromLevelId = stair.fromLevelId ?? levelIdOf(nodes, stair.id)
+  const toLevelId = stair.toLevelId ?? fromLevelId
+  const fromLevel = levelNumber(nodes, fromLevelId)
+  const toLevel = levelNumber(nodes, toLevelId)
+  if (fromLevel === undefined || toLevel === undefined) return toLevelId ? [toLevelId] : []
+  const low = Math.min(fromLevel, toLevel)
+  const high = Math.max(fromLevel, toLevel)
+  return levelsOf(nodes)
+    .filter((level) => level.level > low && level.level <= high)
+    .map((level) => level.id)
+}
+
+function holeBelongsToStair(
+  surface: AnyNode & { type: 'slab' | 'ceiling' },
+  holeIndex: number,
+  stairId: string,
+) {
+  const metadata = surface.holeMetadata?.[holeIndex]
+  return metadata?.source === 'stair' && metadata.stairId === stairId
+}
+
+function parentListsChild(parent: AnyNode, childId: string): boolean {
+  if (!('children' in parent && Array.isArray(parent.children))) return false
+  return parent.children.some((child) => {
+    if (typeof child === 'string') return child === childId
+    return (
+      child !== null &&
+      typeof child === 'object' &&
+      'id' in child &&
+      (child as { id?: unknown }).id === childId
+    )
+  })
+}
+
+function schemaErrors(nodes: SceneNodes) {
+  const errors: { nodeId: string; path: string; message: string }[] = []
+  for (const [id, node] of Object.entries(nodes)) {
+    const parsed = AnyNodeSchema.safeParse(node)
+    if (parsed.success) continue
+    for (const issue of parsed.error.issues)
+      errors.push({ nodeId: id, path: issue.path.join('.'), message: issue.message })
+  }
+  return errors
+}
+
+/**
+ * `verify_scene`: a self-check after complex edits. Per-level content and roles, then every
+ * practical problem found, typed: rooms missing floors or ceilings, roof levels misused, storeys
+ * with no stair, openings off their wall, stairs off their slab, blocked doors, overlapping
+ * furniture, nodes their schema rejects.
+ */
+export const verifyScene: AgentOperation = (nodes, _input, context) => {
+  const onLevel = (levelId: string) => nodesOnLevel(nodes, levelId)
+  const ofType = <T extends AnyNode['type']>(content: readonly AnyNode[], type: T) =>
+    content.filter((node): node is Extract<AnyNode, { type: T }> => node.type === type)
+
+  const levels = levelsOf(nodes).map((level) => {
+    const content = contentCounts(onLevel(level.id))
+    const { role, metadataRole, referenceLevelId } = levelRole(nodes, level)
+    return {
+      levelId: level.id,
+      levelName: getLevelDisplayName(level),
+      floorIndex: level.level,
+      role,
+      metadataRole,
+      isOccupiedStory: role === 'occupied',
+      isSupportLevel: role !== 'occupied',
+      referenceLevelId,
+      isActive: level.id === context.activeLevelId,
+      isEmpty: Object.values(content).every((count) => count === 0),
+      content,
+    }
+  })
+
+  const issues: SceneIssue[] = []
+  const report = (type: string, message: string) => issues.push({ type, message })
+
+  const empty = levels.filter((level) => level.isEmpty)
+  if (empty.length > 0)
+    report(
+      'empty_levels',
+      `${empty.length} empty level(s): ${empty.map((level) => `${level.levelName} (${level.levelId})`).join(', ')}`,
+    )
+
+  for (const level of levels) {
+    const { content, levelName } = level
+    if (level.role === 'roof') {
+      if (content.roofs === 0)
+        report(
+          'roof_level_no_roof',
+          `${levelName} is a roof support level but has no roof geometry; add or move roof geometry there rather than deleting the support level to satisfy story count`,
+        )
+      if (occupiedContent(content) > 0)
+        report(
+          'roof_level_occupied',
+          `${levelName} is a roof support level but contains occupied-story content; move rooms, walls, stairs, slabs, ceilings, and items to an occupied story and keep the roof level for roof geometry only`,
+        )
+      const reference = level.referenceLevelId ? nodes[level.referenceLevelId] : undefined
+      if (reference?.type === 'level' && level.floorIndex <= reference.level)
+        report(
+          'roof_level_below_reference',
+          `${levelName} roof support level should be above its reference occupied level ${reference.name ?? reference.id}`,
+        )
+      continue
+    }
+    if (content.walls > 0 && content.zones === 0)
+      report('walls_no_zones', `${levelName} has walls but no zones/rooms`)
+    if (content.zones > 0 && content.slabs === 0)
+      report('zones_no_slabs', `${levelName} has zones but no slabs/floors`)
+    if (content.zones > 0 && content.ceilings === 0)
+      report('zones_no_ceilings', `${levelName} has zones but no ceilings`)
+    if (content.walls > 0 && content.doors === 0)
+      report('walls_no_doors', `${levelName} has walls but no doors`)
+    if (content.roofs > 0 && (content.walls > 0 || content.zones > 0 || content.stairs > 0))
+      report(
+        'roof_mixed_in_storey',
+        `${levelName} mixes roof geometry with occupied-level content; place roofs on a dedicated roof level for solo/exploded level views`,
+      )
+  }
+
+  // Storeys of one building need a stair between them; separate buildings do not.
+  const storeysByBuilding = new Map<string, typeof levels>()
+  for (const level of levels) {
+    if (!level.isOccupiedStory) continue
+    const node = nodes[level.levelId] as AnyNode & { type: 'level' }
+    const buildingId = levelBuildingId(nodes as Record<AnyNodeId, AnyNode>, node) ?? ''
+    storeysByBuilding.set(buildingId, [...(storeysByBuilding.get(buildingId) ?? []), level])
+  }
+  for (const [buildingId, storeys] of storeysByBuilding) {
+    if (storeys.length < 2) continue
+    const stairs = levels
+      .filter((level) => {
+        const node = nodes[level.levelId] as AnyNode & { type: 'level' }
+        return (levelBuildingId(nodes as Record<AnyNodeId, AnyNode>, node) ?? '') === buildingId
+      })
+      .reduce((sum, level) => sum + level.content.stairs, 0)
+    if (stairs === 0)
+      report(
+        'missing_stair',
+        `${nodes[buildingId]?.name ?? 'The building'} has ${storeys.length} storeys and no stair: add one on the ground floor, in the hall or entry, to connect them.`,
+      )
+  }
+
+  if (levels.filter((level) => level.isOccupiedStory).length > 1)
+    for (const level of levels) {
+      if (!level.isOccupiedStory) continue
+      const node = nodes[level.levelId] as AnyNode & { type: 'level' }
+      const expectedHeight = getStoredLevelHeight(node)
+      for (const wall of ofType(onLevel(level.levelId), 'wall')) {
+        const wallHeight = wallResolvedHeight(nodes, wall)
+        if (wallHeight > expectedHeight + 0.25)
+          report(
+            'wall_spans_storeys',
+            `Wall ${wall.name ?? wall.id} on ${node.name ?? node.id} is ${wallHeight}m high; multi-story exterior walls should be split into level-owned story walls`,
+          )
+      }
+    }
+
+  for (const node of Object.values(nodes)) {
+    if (node.type !== 'door' && node.type !== 'window') continue
+    const parent = node.parentId ? nodes[node.parentId] : undefined
+    if (parent?.type !== 'wall') {
+      report('opening_not_on_wall', `${node.type} ${node.id} is not parented to a wall`)
+      continue
+    }
+    if (node.wallId !== parent.id)
+      report(
+        'opening_wall_mismatch',
+        `${node.type} ${node.id} has wallId ${node.wallId ?? 'unset'} but is parented to wall ${parent.id}`,
+      )
+    if (!parentListsChild(parent, node.id))
+      report(
+        'opening_not_listed',
+        `${node.type} ${node.id} is not listed in wall ${parent.id} children`,
+      )
+    for (const issue of checkOpeningWithinWall(node, parent, wallResolvedHeight(nodes, parent)))
+      report(
+        issue.kind === 'along_wall' ? 'opening_outside_wall' : 'opening_outside_height',
+        formatOpeningBoundsIssue(issue),
+      )
+  }
+
+  for (const stair of Object.values(nodes).filter(
+    (node): node is StairNode => node.type === 'stair',
+  )) {
+    const stairName = stair.name ?? stair.id
+    const sourceLevelId = levelIdOf(nodes, stair.id)
+    if (sourceLevelId) {
+      const sourceName = nodes[sourceLevelId]?.name ?? sourceLevelId
+      const footprints = stairFootprintPolygons(nodes, stair)
+      const sourceSlabs = ofType(onLevel(sourceLevelId), 'slab')
+      if (
+        sourceSlabs.length > 0 &&
+        footprints.some(
+          (footprint) =>
+            !sourceSlabs.some((slab) => polygonContainsPolygon(slab.polygon as Vec2[], footprint)),
+        )
+      )
+        report(
+          'stair_outside_slab',
+          `Stair ${stairName} footprint extends outside source floor slab on ${sourceName}`,
+        )
+      for (const wall of ofType(onLevel(sourceLevelId), 'wall'))
+        if (
+          footprints.some((footprint) =>
+            wallSamplePoints(wall).some((point) => pointInPolygon(point, footprint, false)),
+          )
+        )
+          report(
+            'stair_obstructed',
+            `Wall ${wall.name ?? wall.id} obstructs stair ${stairName} on ${sourceName}`,
+          )
+    }
+
+    if ((stair.slabOpeningMode ?? 'none') !== 'destination') continue
+    const targetLevelIds = targetLevelIdsForStair(nodes, stair)
+    if (targetLevelIds.length === 0)
+      report(
+        'stair_opening_no_target',
+        `Stair ${stairName} requests a slab opening but has no target level`,
+      )
+    for (const targetLevelId of targetLevelIds) {
+      const targetName = nodes[targetLevelId]?.name ?? targetLevelId
+      const targetSlabs = ofType(onLevel(targetLevelId), 'slab')
+      if (targetSlabs.length === 0) {
+        report(
+          'stair_target_no_slab',
+          `Stair ${stairName} targets ${targetName} but it has no slab`,
+        )
+        continue
+      }
+      const holes = targetSlabs.flatMap((slab) =>
+        (slab.holes ?? [])
+          .map((hole, index) => ({ slab, hole, index }))
+          .filter((entry) => holeBelongsToStair(entry.slab, entry.index, stair.id)),
+      )
+      if (holes.length === 0) {
+        report(
+          'stair_no_opening',
+          `Stair ${stairName} has no destination slab opening on ${targetName}`,
+        )
+        continue
+      }
+      for (const { slab, hole } of holes)
+        if (!polygonContainsPolygon(slab.polygon as Vec2[], hole as Vec2[]))
+          report(
+            'stair_opening_outside_slab',
+            `Stair ${stairName} opening extends outside slab ${slab.name ?? slab.id}`,
+          )
+    }
+  }
+
+  const errors = schemaErrors(nodes)
+  for (const error of errors.slice(0, 5))
+    report('schema_invalid', `Schema: ${error.nodeId}.${error.path} ${error.message}`)
+  if (errors.length > 5)
+    report('schema_invalid', `Schema: ${errors.length - 5} additional validation errors`)
+
+  // Door keep-outs and item–item footprint overlaps (rotation-aware).
+  issues.push(...layoutIssuesFromScene(Object.values(nodes)))
+
+  const occupiedStoryCount = levels.filter((level) => level.isOccupiedStory).length
+  return {
+    result: {
+      ok: true,
+      valid: errors.length === 0,
+      levelCount: levels.length,
+      occupiedStoryCount,
+      supportLevelCount: levels.length - occupiedStoryCount,
+      roofLevelIds: levels.filter((level) => level.role === 'roof').map((level) => level.levelId),
+      activeLevelId: context.activeLevelId,
+      levels,
+      emptyLevelIds: empty.map((level) => level.levelId),
+      issues,
+      hasIssues: issues.length > 0,
+    },
+  }
+}

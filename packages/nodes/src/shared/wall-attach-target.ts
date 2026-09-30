@@ -329,75 +329,10 @@ export function snapLocalXToNeighbors(args: {
 }
 
 /**
- * Does a wall-hosted opening of `width × height` centred at `(clampedX,
- * clampedY)` (wall-local) overlap any OTHER child of `wallId` (door / window /
- * wall-mounted item)? AABB test in the wall's local face plane. `ignoreId`
- * excludes the moving node itself. Returns `true` (blocked) if the wall is
- * gone.
- *
- * Single source of truth for door + window placement collision — door-math and
- * window-math had byte-identical copies of this. Y conventions differ per kind
- * (items store bottom Y; doors/windows store centre Y), handled inline.
+ * Whether a wall-hosted opening would overlap another child of its wall. The rule lives in
+ * core, shared with every agent surface (`planWallOpening`); re-exported for the tools here.
  */
-export function hasWallChildOverlap(
-  wallId: string,
-  nodes: Readonly<Record<string, AnyNode>>,
-  clampedX: number,
-  clampedY: number,
-  width: number,
-  height: number,
-  ignoreId?: string,
-): boolean {
-  const wallNode = nodes[wallId as AnyNodeId] as WallNode | undefined
-  if (!wallNode) return true
-  const halfW = width / 2
-  const halfH = height / 2
-  const newBottom = clampedY - halfH
-  const newTop = clampedY + halfH
-  const newLeft = clampedX - halfW
-  const newRight = clampedX + halfW
-
-  for (const childId of Array.isArray(wallNode.children) ? wallNode.children : []) {
-    if (childId === ignoreId) continue
-    const child = nodes[childId as AnyNodeId]
-    if (!child || child.metadata.isTransient) continue
-
-    let childLeft: number
-    let childRight: number
-    let childBottom: number
-    let childTop: number
-
-    if (child.type === 'item') {
-      const item = child as ItemNode
-      if (item.asset.attachTo !== 'wall' && item.asset.attachTo !== 'wall-side') continue
-      const [w, h] = getScaledDimensions(item)
-      childLeft = item.position[0] - w / 2
-      childRight = item.position[0] + w / 2
-      childBottom = item.position[1] // items store bottom Y
-      childTop = item.position[1] + h
-    } else if (child.type === 'window') {
-      const win = child as { position: [number, number, number]; width: number; height: number }
-      childLeft = win.position[0] - win.width / 2
-      childRight = win.position[0] + win.width / 2
-      childBottom = win.position[1] - win.height / 2 // windows store centre Y
-      childTop = win.position[1] + win.height / 2
-    } else if (child.type === 'door') {
-      const door = child as { position: [number, number, number]; width: number; height: number }
-      childLeft = door.position[0] - door.width / 2
-      childRight = door.position[0] + door.width / 2
-      childBottom = door.position[1] - door.height / 2 // doors store centre Y
-      childTop = door.position[1] + door.height / 2
-    } else {
-      continue
-    }
-
-    const xOverlap = newLeft < childRight && newRight > childLeft
-    const yOverlap = newBottom < childTop && newTop > childBottom
-    if (xOverlap && yOverlap) return true
-  }
-
-  return false
-}
+export { hasWallChildOverlap } from '@pascal-app/core/building'
 
 /** Placement state for a wall-hosted opening — the SINGLE decision the preview
  *  tint and the commit gate both consume so they can never disagree. */

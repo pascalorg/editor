@@ -433,7 +433,7 @@ async function main() {
     'packages/mcp/src/tools/door-clearance.ts',
     'packages/mcp/src/tools/export-json.ts',
     'packages/mcp/src/tools/find-nodes.ts',
-    'packages/mcp/src/tools/get-node.ts',
+    'packages/mcp/src/tools/shared-tools.ts',
     'packages/mcp/src/tools/get-scene.ts',
     'packages/mcp/src/tools/layout-clearance.ts',
     'packages/mcp/src/tools/measure.ts',

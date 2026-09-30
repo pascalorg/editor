@@ -4,7 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WallNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
-import { registerDuplicateLevel } from './duplicate-level'
+import { registerSharedTools } from './shared-tools'
 
 describe('duplicate_level', () => {
   let client: Client
@@ -15,7 +15,7 @@ describe('duplicate_level', () => {
     bridge.setScene({}, [])
     bridge.loadDefault()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
-    registerDuplicateLevel(server, bridge)
+    registerSharedTools(server, bridge)
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
