@@ -302,6 +302,9 @@ export const SelectionManager = () => {
     // re-subscribe when plugin kinds register after mount (async plugin load)
     void registryVersion
     const onEnter = (event: NodeEvent) => {
+      // Walkthrough is camera-only: first-person controls own hover for the
+      // interactable target, and pointer lock keeps raycasting from a frozen cursor.
+      if (useViewer.getState().walkthroughMode) return
       const strategy = getStrategy()
       if (!strategy) return
       // Ceilings are selected via their floor-plan helper and the
@@ -325,6 +328,7 @@ export const SelectionManager = () => {
     }
 
     const onLeave = (event: NodeEvent) => {
+      if (useViewer.getState().walkthroughMode) return
       const strategy = getStrategy()
       if (!strategy) return
       if (event.node.type === 'ceiling') return
@@ -341,6 +345,7 @@ export const SelectionManager = () => {
     }
 
     const onClick = (event: NodeEvent) => {
+      if (useViewer.getState().walkthroughMode) return
       const strategy = getStrategy()
       if (!strategy) return
       if (event.node.type === 'ceiling') return
@@ -411,6 +416,7 @@ const PointerMissedHandler = ({
       // Only handle left clicks
       const viewerState = useViewer.getState()
       if (viewerState.cameraDragging || viewerState.inputDragging) return
+      if (viewerState.walkthroughMode) return
       if (event.button !== 0) return
 
       // Use requestAnimationFrame to check after R3F event handlers

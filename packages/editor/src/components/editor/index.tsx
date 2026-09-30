@@ -259,6 +259,9 @@ export interface EditorProps {
   sidebarOverlay?: ReactNode
   viewerBanner?: ReactNode
 
+  /** Shown in the preview header. */
+  projectName?: string | null
+
   // Panel config (passed through to sidebar panels — v1 only)
   settingsPanelProps?: SettingsPanelProps
   sitePanelProps?: SitePanelProps
@@ -1254,12 +1257,14 @@ function PreviewStage({
   isFirstPersonMode,
   mode,
   onModeChange,
+  projectName,
   showLoader,
   viewerContent,
 }: {
   isFirstPersonMode: boolean
   mode: ViewerStageMode
   onModeChange: (mode: ViewerStageMode) => void
+  projectName?: string | null
   showLoader: boolean
   viewerContent: ReactNode
 }) {
@@ -1286,6 +1291,7 @@ function PreviewStage({
         <ViewerOverlay
           hideBottomBar={stageMode !== '3d'}
           onBack={() => useEditor.getState().setPreviewMode(false)}
+          projectName={projectName}
         />
       )}
 
@@ -1333,6 +1339,7 @@ function EditorContent({
   immersive,
   sidebarOverlay,
   viewerBanner,
+  projectName,
   settingsPanelProps,
   sitePanelProps,
   extraSidebarPanels,
@@ -1688,6 +1695,7 @@ function EditorContent({
             isFirstPersonMode={isFirstPersonMode}
             mode={previewStageMode}
             onModeChange={setPreviewStageMode}
+            projectName={projectName}
             showLoader={visibleLoader}
             viewerContent={previewViewerContent}
           />
@@ -1767,6 +1775,7 @@ function EditorContent({
           isFirstPersonMode={isFirstPersonMode}
           mode={previewStageMode}
           onModeChange={setPreviewStageMode}
+          projectName={projectName}
           showLoader={visibleLoader}
           viewerContent={previewViewerContent}
         />
