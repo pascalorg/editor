@@ -404,6 +404,7 @@ export {
   levelStackGroundBox,
   terrainBetweenEyeAndBox,
 } from './lib/ground-window'
+export { findHierarchyCycles, wouldCreateHierarchyCycle } from './lib/hierarchy'
 export {
   type ExposedInterval,
   exposedIntervals,
