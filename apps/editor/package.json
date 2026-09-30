@@ -19,6 +19,7 @@
     "@pascal-app/editor": "*",
     "@pascal-app/mcp": "*",
     "@pascal-app/nodes": "*",
+    "@pascal-app/plugin-bath-space": "file:../../../pascal-cluster/packages/bath-space",
     "@pascal-app/plugin-bones": "github:pascalorg/plugin-bones#5679260261ee1c733656ff6dfb99e30bb24b58a7",
     "@pascal-app/plugin-environment": "github:AxiomeCG/environment#1aa0bc3cbed273dbf751e9af79e446f6de105c90",
     "@pascal-app/plugin-landscape": "github:sudhir9297/pascal-cluster#c2c70d145bd05afcbf273fe94677a15ec5cf62b2",

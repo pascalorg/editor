@@ -11,6 +11,7 @@ import {
 import { registerEditorHostPanel } from '@pascal-app/editor'
 import { builtinPlugin } from '@pascal-app/nodes'
 import { bonesHostPanel, bonesPlugin } from '@pascal-app/plugin-bones'
+import { bathSpaceHostPanel, bathSpacePlugin } from '@pascal-app/plugin-bath-space'
 import {
   environmentHostPanel,
   environmentPlugin,
@@ -121,6 +122,8 @@ registerEditorHostPanel({
 })
 extendPluginDiscovery(async () => [webXRPlugin])
 registerEditorHostPanel(webXRHostPanel)
+extendPluginDiscovery(async () => [bathSpacePlugin])
+registerEditorHostPanel(bathSpaceHostPanel)
 
 loadBuiltinsSync()
 void loadExternalPlugins()
