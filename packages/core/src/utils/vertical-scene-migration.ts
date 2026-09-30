@@ -4,6 +4,7 @@ import { deriveLegacyLevelHeight } from '../services/level-height'
 import { getCeilingClampBound } from '../services/storey'
 import { computeWallSlabSupport } from '../systems/slab/slab-support'
 import { DEFAULT_WALL_HEIGHT } from '../systems/wall/wall-footprint'
+import { loadMigration } from './load-migration'
 
 export type VerticalSceneMigration = {
   changed: boolean
@@ -38,7 +39,7 @@ const BURIED_PIN_EPSILON = 1e-3
  * hosted scene authority both call it so they compare and persist the same
  * canonical fields during collaboration.
  */
-export function migrateVerticalSceneNodes(
+function migrateVerticalSceneNodesOnView(
   sourceNodes: Record<string, unknown>,
 ): VerticalSceneMigration {
   const nodes: Record<string, any> = { ...sourceNodes }
@@ -231,3 +232,9 @@ export function migrateVerticalSceneNodes(
 
   return changed ? { changed, nodes } : { changed, nodes: sourceNodes }
 }
+
+export const migrateVerticalSceneNodes = loadMigration(
+  'vertical migration',
+  migrateVerticalSceneNodesOnView,
+  (nodes) => ({ nodes, changed: false }),
+)

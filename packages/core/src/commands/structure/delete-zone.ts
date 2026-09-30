@@ -59,7 +59,7 @@ function levelPose(nodes: StructureNodes, item: PositionedIntent, levelId: strin
         position[1],
         frame.point.y + frame.normal.y * position[2],
       ]
-      yaw -= Math.atan2(parent.end[1] - parent.start[1], parent.end[0] - parent.start[0])
+      yaw -= Math.atan2(frame.tangent.y, frame.tangent.x)
     } else if (parent.type === 'ceiling') position[1] += parent.height ?? 2.7
     else if ('position' in parent && Array.isArray(parent.position)) {
       const rotation =

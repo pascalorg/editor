@@ -11,6 +11,7 @@ import { migrateExteriorThresholds } from './exterior-threshold-migration'
 import { migrateFootprintFollowing } from './floor-follow-migration'
 import { migrateFloorOpeningNodes } from './floor-opening-migration'
 import { preserveLegacyWallDatums } from './legacy-wall-datums'
+import { loadMigration, loadNodeView } from './load-migration'
 import {
   materializeLegacyAutoOpenings,
   migrateOwnedFloorOpenings,
@@ -128,10 +129,10 @@ export function alignLegacyStairCuts(source: Record<string, AnyNode>) {
   return nodes
 }
 
-export function reconcileStructureOnLoad(
+function reconcileStructureOnView(
   sourceNodes: Record<string, unknown>,
-  legacyNodes: Record<string, unknown> = sourceNodes,
-  options: { legacyOpeningsPrepared?: boolean } = {},
+  legacyNodes: Record<string, unknown>,
+  options: { legacyOpeningsPrepared?: boolean },
 ) {
   const legacyOpeningsPrepared =
     options.legacyOpeningsPrepared ||
@@ -329,3 +330,18 @@ export function reconcileStructureOnLoad(
   upperStoreyFootprints(nodes)
   return { nodes, changed: nodes !== sourceNodes }
 }
+
+export const reconcileStructureOnLoad = loadMigration(
+  'structure reconcile',
+  (
+    view: Record<string, unknown>,
+    legacyNodes?: Record<string, unknown>,
+    options: { legacyOpeningsPrepared?: boolean } = {},
+  ) =>
+    reconcileStructureOnView(
+      view,
+      legacyNodes === undefined ? view : loadNodeView(legacyNodes).view,
+      options,
+    ),
+  (nodes) => ({ nodes: nodes as SceneNodes, changed: false }),
+)

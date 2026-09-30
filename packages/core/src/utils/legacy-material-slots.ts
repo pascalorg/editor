@@ -1,6 +1,7 @@
 import { parseMaterialRef, toSceneMaterialRef } from '../material-library'
 import { getEffectiveWallSurfaceMaterial, type WallSurfaceSide } from '../schema/nodes/wall'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
+import { loadMigration } from './load-migration'
 
 // Legacy inline finishes (`material*` / `materialPreset*`) → `node.slots`,
 // shared by the client loader and the hosted authority. Both must run it
@@ -130,7 +131,7 @@ export function migrateSingleMaterialSlots(
  * read (walls, slabs, ceilings), for the hosted authority: the client loader
  * runs the same per-node functions in `migrateNodes`.
  */
-export function migrateStructuralMaterialSlots(sourceNodes: Record<string, unknown>) {
+function migrateStructuralMaterialSlotsOnView(sourceNodes: Record<string, unknown>) {
   const materials: MintedMaterials = {}
   let nodes: Record<string, unknown> | null = null
   for (const [id, value] of Object.entries(sourceNodes)) {
@@ -148,3 +149,9 @@ export function migrateStructuralMaterialSlots(sourceNodes: Record<string, unkno
   }
   return { nodes: nodes ?? sourceNodes, materials, changed: nodes !== null }
 }
+
+export const migrateStructuralMaterialSlots = loadMigration(
+  'legacy material slots',
+  migrateStructuralMaterialSlotsOnView,
+  (nodes) => ({ nodes, materials: {}, changed: false }),
+)
