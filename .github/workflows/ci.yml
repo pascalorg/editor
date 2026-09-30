@@ -18,12 +18,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Pinned to match `packageManager` in package.json. Unpinned, this floats
-      # to whatever bun is latest, so a bun release can break the gate with no
-      # change in the repo — and CI then disagrees with what contributors run.
+      # Read from `packageManager` in package.json, so CI runs the same bun as
+      # contributors and a bun release cannot change the gate on its own.
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.14
+          bun-version-file: package.json
+
+      # Turbo remote cache backed by the Actions cache: packages whose inputs
+      # did not change replay check-types/test/build instead of rerunning.
+      - name: Turbo cache
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -52,7 +56,10 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.14
+          bun-version-file: package.json
+
+      - name: Turbo cache
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
 
       - uses: actions/setup-node@v4
         with:
@@ -64,6 +71,9 @@ jobs:
       - name: Smoke-test the packed CLI and editor runtime
         env:
           PASCAL_PORTABLE_BUILD: "1"
+          # Node's default heap ran out during the editor build on the 7 GB
+          # macOS runner ("Reached heap limit", exit 137).
+          NODE_OPTIONS: --max-old-space-size=5120
         run: |
           bun run build --filter editor
           cd packages/cli
