@@ -1,6 +1,7 @@
 import { planWallDeletion } from '../../commands/structure/plan-wall-deletion'
 import type { StructurePlan } from '../../commands/structure/shared'
 import { withoutFloorStepOverrideKeys } from '../../lib/floor-step-finish'
+import { wouldCreateHierarchyCycle } from '../../lib/hierarchy'
 import { isSpaceDetectionPaused } from '../../lib/space-detection'
 import { nodeRegistry } from '../../registry/registry'
 import { validateNodeRelations } from '../../registry/validate-relations'
@@ -1162,6 +1163,11 @@ const createNodesActionImpl = (
       const effectiveParentId = parentId ?? (node.parentId as AnyNodeId | null) ?? null
 
       const newNode = parseCreatedNode(node, effectiveParentId)
+      if (wouldCreateHierarchyCycle(newNode.id, effectiveParentId, nextNodes)) {
+        throw new Error(
+          `invalid hierarchy: placing "${newNode.id}" under "${effectiveParentId}" would create a cycle`,
+        )
+      }
 
       nextNodes[newNode.id] = newNode
 
@@ -1259,6 +1265,12 @@ const applyNodeChangesActionImpl = (
       addLeanToHostRoofId(updatedNode, nextNodes, roofsToRefresh)
 
       if (data.parentId !== undefined && data.parentId !== currentNode.parentId) {
+        const newParentId = data.parentId as AnyNodeId | null
+        if (wouldCreateHierarchyCycle(id, newParentId, nextNodes)) {
+          throw new Error(
+            `invalid hierarchy: placing "${id}" under "${newParentId}" would create a cycle`,
+          )
+        }
         const oldParentId = currentNode.parentId as AnyNodeId | null
         if (oldParentId && nextNodes[oldParentId]) {
           const oldParent = nextNodes[oldParentId] as AnyContainerNode
@@ -1269,7 +1281,6 @@ const applyNodeChangesActionImpl = (
           parentsToMarkDirty.add(oldParent.id)
         }
 
-        const newParentId = data.parentId as AnyNodeId | null
         if (newParentId && nextNodes[newParentId]) {
           const newParent = nextNodes[newParentId] as AnyContainerNode
           nextNodes[newParent.id] = {
@@ -1296,6 +1307,11 @@ const applyNodeChangesActionImpl = (
     for (const { node, parentId } of createOps) {
       const effectiveParentId = parentId ?? (node.parentId as AnyNodeId | null) ?? null
       const newNode = parseCreatedNode(node, effectiveParentId)
+      if (wouldCreateHierarchyCycle(newNode.id, effectiveParentId, nextNodes)) {
+        throw new Error(
+          `invalid hierarchy: placing "${newNode.id}" under "${effectiveParentId}" would create a cycle`,
+        )
+      }
 
       nextNodes[newNode.id as AnyNodeId] = newNode
       nodesToMarkDirty.add(newNode.id as AnyNodeId)
@@ -1452,6 +1468,12 @@ const updateNodesActionImpl = (
 
       // Handle Reparenting Logic
       if (data.parentId !== undefined && data.parentId !== currentNode.parentId) {
+        const newParentId = data.parentId as AnyNodeId | null
+        if (wouldCreateHierarchyCycle(id, newParentId, nextNodes)) {
+          throw new Error(
+            `invalid hierarchy: placing "${id}" under "${newParentId}" would create a cycle`,
+          )
+        }
         // 1. Remove from old parent
         const oldParentId = currentNode.parentId as AnyNodeId | null
         if (oldParentId && nextNodes[oldParentId]) {
@@ -1472,7 +1494,6 @@ const updateNodesActionImpl = (
         // and a spread of `undefined` here throws and aborts the entire
         // `set` callback. Initialising to `[]` matches what the schema's
         // default would have produced.
-        const newParentId = data.parentId as AnyNodeId | null
         if (newParentId && nextNodes[newParentId]) {
           const newParent = nextNodes[newParentId] as AnyContainerNode
           const newChildren = Array.isArray((newParent as { children?: unknown }).children)

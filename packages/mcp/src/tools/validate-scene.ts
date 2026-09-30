@@ -23,7 +23,7 @@ export function registerValidateScene(server: McpServer, bridge: SceneOperations
     {
       title: 'Validate scene',
       description:
-        'Run Zod validation against every node in the scene. Returns `{ valid, errors, warnings }` where each entry has `{ nodeId, path, message }`. Warnings do not fail validation; for example a hidden Site, whose flag hides only its own ground and boundary while the buildings on it stay visible and exported.',
+        'Run node-schema and global hierarchy validation against the scene. Returns `{ valid, errors, warnings }` where each entry has `{ nodeId, path, message }`. Warnings do not fail validation; for example a hidden Site, whose flag hides only its own ground and boundary while the buildings on it stay visible and exported.',
       inputSchema: validateSceneInput,
       outputSchema: validateSceneOutput,
       annotations: READ_ONLY_TOOL_ANNOTATIONS,

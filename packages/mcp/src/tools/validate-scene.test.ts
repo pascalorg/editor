@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { SiteNode } from '@pascal-app/core/schema'
+import { type AnyNodeId, SiteNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { registerValidateScene } from './validate-scene'
 
@@ -58,6 +58,30 @@ describe('validate_scene', () => {
       expect(typeof err.path).toBe('string')
       expect(typeof err.message).toBe('string')
     }
+  })
+
+  test('reports a hierarchy cycle that node schemas cannot see individually', async () => {
+    const siteA = SiteNode.parse({ id: 'site_a', parentId: 'site_b', children: ['site_b'] })
+    const siteB = SiteNode.parse({ id: 'site_b', parentId: 'site_a', children: ['site_a'] })
+    bridge.setScene({ [siteA.id]: siteA, [siteB.id]: siteB }, [] as AnyNodeId[])
+
+    const result = await client.callTool({ name: 'validate_scene', arguments: {} })
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    expect(parsed.valid).toBe(false)
+    expect(parsed.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: siteA.id,
+          path: 'parentId',
+          message: 'hierarchy cycle detected: site_a -> site_b -> site_a',
+        }),
+        expect.objectContaining({
+          nodeId: siteB.id,
+          path: 'parentId',
+          message: 'hierarchy cycle detected: site_a -> site_b -> site_a',
+        }),
+      ]),
+    )
   })
 
   test('returns structuredContent', async () => {

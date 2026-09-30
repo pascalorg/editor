@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { SiteNode } from '../../schema/nodes/site'
 import type { AnyNode, AnyNodeId } from '../../schema/types'
 import useScene from '../use-scene'
 
@@ -240,5 +241,22 @@ describe('node-actions reparent — repeated segment-hopping', () => {
       childrenOf(SEG_A_ID).filter((id) => id === VENT_ID).length +
       childrenOf(SEG_B_ID).filter((id) => id === VENT_ID).length
     expect(totalListings).toBe(1)
+  })
+})
+
+describe('node-actions reparent — hierarchy cycles', () => {
+  test('refuses moving a node beneath one of its descendants', () => {
+    const siteA = SiteNode.parse({ id: 'site_a', children: ['site_b'] })
+    const siteB = SiteNode.parse({ id: 'site_b', parentId: siteA.id })
+    useScene.setState({
+      nodes: { [siteA.id]: siteA, [siteB.id]: siteB },
+      rootNodeIds: [siteA.id],
+    } as never)
+
+    expect(() => useScene.getState().updateNode(siteA.id, { parentId: siteB.id })).toThrow(
+      'would create a cycle',
+    )
+    expect(useScene.getState().nodes[siteA.id]?.parentId).toBeNull()
+    expect(useScene.getState().nodes[siteB.id]?.parentId).toBe(siteA.id)
   })
 })

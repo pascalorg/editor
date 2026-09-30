@@ -4,6 +4,7 @@ import {
   adjacentLevelId,
   applyStructureReconciliation,
   assertDerivedNodeWrites,
+  findHierarchyCycles,
   floorOpeningTargets,
   HIDDEN_SITE_NOTE,
   type NodeDeletionPlan,
@@ -581,10 +582,7 @@ export class SceneBridge {
     return Math.max(0, before - after)
   }
 
-  /**
-   * Zod-validate every node in the scene. Reports one error per failed node,
-   * concatenating Zod issue paths.
-   */
+  /** Validate node schemas and global parent-chain acyclicity. */
   validateScene(): ValidationResult {
     const errors: ValidationError[] = []
     const warnings: ValidationError[] = []
@@ -602,6 +600,10 @@ export class SceneBridge {
           message: issue.message,
         })
       }
+    }
+    for (const cycle of findHierarchyCycles(nodes)) {
+      const message = `hierarchy cycle detected: ${[...cycle, cycle[0]!].join(' -> ')}`
+      for (const nodeId of cycle) errors.push({ nodeId, path: 'parentId', message })
     }
     return { valid: errors.length === 0, errors, warnings }
   }

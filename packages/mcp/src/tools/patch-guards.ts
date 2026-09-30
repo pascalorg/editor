@@ -5,6 +5,7 @@ import {
   planNodeDeletion,
   previewDefaultGutterRefresh,
   validateNodeRelations,
+  wouldCreateHierarchyCycle,
 } from '@pascal-app/core'
 import { AnyNode, type AnyNodeId, nodeKindOf, parseNode } from '@pascal-app/core/schema'
 import type { Patch } from '../bridge/scene-bridge'
@@ -233,6 +234,15 @@ export function assertPatchKeepsIdentity(
         }
       }
       if ('parentId' in data && data.parentId !== current.parentId) {
+        const newParentId = typeof data.parentId === 'string' ? (data.parentId as AnyNodeId) : null
+        if (wouldCreateHierarchyCycle(patch.id, newParentId, scene.nodes)) {
+          throw new PatchRefusedError(
+            'invalid_parent',
+            index,
+            patch.id,
+            `update cannot move "${patch.id}" under ${JSON.stringify(data.parentId)}: it would create a hierarchy cycle.`,
+          )
+        }
         const newParent = typeof data.parentId === 'string' ? at(data.parentId) : undefined
         if (!(newParent && Array.isArray((newParent as { children?: unknown }).children))) {
           throw new PatchRefusedError(
