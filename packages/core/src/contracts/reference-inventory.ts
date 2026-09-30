@@ -836,7 +836,13 @@ export const METADATA_REFERENCES: readonly ExistingReference[] = [
   ),
   meta('floorPlanUrl', { ...policy('asset', 'content', 'freeze', 'keep') }),
   ...(
-    ['expressID', 'globalId', 'hostWallExpressID', 'ifcSimplification.mergedExpressIDs[]'] as const
+    [
+      'expressID',
+      'globalId',
+      'hostWallExpressID',
+      'ifcHostExpressID',
+      'ifcSimplification.mergedExpressIDs[]',
+    ] as const
   ).map((key) =>
     meta(key, {
       ...policy('source', 'content', 'freeze', 'keep'),
@@ -851,6 +857,10 @@ export const METADATA_REFERENCES: readonly ExistingReference[] = [
     ...policy('node', 'internal', 'drop', 'strip'),
     targetKinds: ['slab'],
     note: 'The plate whose manual hole a floor opening was converted from.',
+  }),
+  meta('pascalNodeId', {
+    ...policy('source', 'content', 'freeze', 'strip'),
+    note: 'Import provenance: the Pascal node id an IFC element carried in its Pascal property set, so a re-import keeps identity.',
   }),
   meta('sourceIds[]', {
     ...policy('source', 'content', 'freeze', 'strip'),
@@ -879,6 +889,8 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'floorReassignmentHeight',
     'footprintApproximated',
     'generatedBy',
+    'ifcDerived',
+    'ifcSplit',
     'isFloorplanPreview',
     'isNew',
     'isTransient',
@@ -927,8 +939,9 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
   ...described('IFC attribute copy: a value or IFC label, not an id.', [
     'elevation',
     'height',
-    'thickness',
     'sillHeight',
+    'sourceColor',
+    'typeName',
     'polygon',
     'material',
     'materialLayers',

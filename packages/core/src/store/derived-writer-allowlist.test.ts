@@ -17,6 +17,9 @@ const ALLOWLIST = new Set([
   // Load migrations mint the same construction for scenes saved before it.
   'packages/core/src/utils/room-zone-migration.ts',
   'packages/core/src/utils/floor-plate-migration.ts',
+  // The IFC importer hands the loader plates and ceilings already linked to
+  // their rooms; the load migrations and the kernel then re-derive them.
+  'packages/ifc-converter/src/room-first.ts',
 ])
 
 const MARKERS = [/\bboundary:\s*'auto'/, /\bautoFromWalls:\s*true/]
