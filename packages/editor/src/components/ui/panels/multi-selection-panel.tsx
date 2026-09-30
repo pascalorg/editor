@@ -1,6 +1,11 @@
 'use client'
 
-import { type AnyNodeId, resolveBuildingForLevel, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  type BuildingNode,
+  resolveBuildingForLevel,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Building2, Copy, Group, Trash2, Ungroup } from 'lucide-react'
 import { useMemo } from 'react'
@@ -34,8 +39,8 @@ function useWholeLevelBuildingId(selectedIds: readonly string[]) {
 }
 
 /** The building's own selection (no level): its floating pill offers the whole-building Move. */
-function selectBuilding(buildingId: string) {
-  useViewer.getState().setSelection({ buildingId })
+function selectBuilding(buildingId: AnyNodeId) {
+  useViewer.getState().setSelection({ buildingId: buildingId as BuildingNode['id'] })
 }
 
 export function MultiSelectionActions() {
