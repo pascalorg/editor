@@ -32,7 +32,10 @@ We use [Biome](https://biomejs.dev/) for linting and formatting. Before submitti
 ```bash
 bun check        # Check for issues
 bun check:fix    # Auto-fix issues
+bun run ci       # Everything the CI quality job runs: lint, skills, types, tests, build
 ```
+
+`bun install` points git at `.githooks/`: the pre-commit hook runs Biome on staged files (and fixes what it can), and the pre-push hook lints and runs `check-types` and tests for the packages your branch changes. Skip once with `--no-verify`.
 
 ### Tests
 
@@ -73,7 +76,7 @@ New node kinds and sidebar panels can ship as a plugin instead of editing the bu
 
 1. **Fork the repo** and create a branch from `main`
 2. **Make your changes** and test locally with `bun dev`
-3. **Run `bun check` and `bun run test`** to make sure linting and tests pass
+3. **Run `bun run ci`** to make sure linting, types, tests and the build pass
 4. **Open a PR** with a clear description of what changed and why
 5. **Link related issues** if applicable (e.g., "Fixes #42")
 

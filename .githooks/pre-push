@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Fast local mirror of the CI quality job for what this branch changes.
+# Full parity: `bun run ci`. Skip once with `git push --no-verify`.
+set -euo pipefail
+
+base=$(git merge-base HEAD origin/main 2>/dev/null || echo origin/main)
+changed=$(git diff --name-only "$base" HEAD)
+
+if echo "$changed" | grep -qE '(^|/)package\.json$|^bun\.lock$'; then
+  echo "pre-push: checking bun.lock is in sync"
+  if ! bun install --frozen-lockfile --dry-run >/dev/null 2>&1; then
+    echo "pre-push: bun.lock is out of date. Run \`bun install\` and commit bun.lock." >&2
+    exit 1
+  fi
+fi
+
+echo "pre-push: lint"
+bun run --silent check
+
+echo "pre-push: typecheck and test changed packages"
+bun run --silent ci:changed --filter="...[$base]"
