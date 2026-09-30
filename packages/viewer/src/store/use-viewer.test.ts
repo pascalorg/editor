@@ -91,3 +91,27 @@ describe('unit focus', () => {
     expect(useViewer.getState().selection).toBe(selection)
   })
 })
+
+describe('scene theme', () => {
+  afterEach(() => useViewer.getState().setSceneTheme('studio'))
+
+  test('a shown theme renders without replacing the saved one', () => {
+    useViewer.getState().setSceneTheme('paper')
+    useViewer.getState().showSceneTheme('night')
+
+    expect(useViewer.getState().sceneTheme).toBe('night')
+    expect(useViewer.getState().savedSceneTheme).toBe('paper')
+
+    useViewer.getState().showSceneTheme(null)
+    expect(useViewer.getState().sceneTheme).toBe('paper')
+  })
+
+  test('picking a theme while another is shown saves the pick', () => {
+    useViewer.getState().showSceneTheme('night')
+    useViewer.getState().setSceneTheme('sunset')
+    useViewer.getState().showSceneTheme(null)
+
+    expect(useViewer.getState().sceneTheme).toBe('sunset')
+    expect(useViewer.getState().savedSceneTheme).toBe('sunset')
+  })
+})
