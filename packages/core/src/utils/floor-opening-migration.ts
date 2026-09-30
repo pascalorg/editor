@@ -2,6 +2,7 @@ import { adjacentLevelId } from '../lib/floor-opening-intent'
 import { area, intersection, type Ring, union } from '../lib/polygon-boolean'
 import type { AnyNode, CeilingNode, SlabNode } from '../schema'
 import { FloorOpeningNode } from '../schema/nodes/floor-opening'
+import { loadMigration } from './load-migration'
 
 function polygonKey(polygon: Ring) {
   return polygon.map(([x, z]) => [Math.round(x * 10_000), Math.round(z * 10_000)])
@@ -35,7 +36,7 @@ function matchingCeilingHole(nodes: Record<string, unknown>, levelId: string, po
   })
 }
 
-export function migrateFloorOpeningNodes(sourceNodes: Record<string, unknown>) {
+function migrateFloorOpeningNodesOnView(sourceNodes: Record<string, unknown>) {
   let nodes: Record<string, unknown> = sourceNodes
   const groups = new Map<
     string,
@@ -157,3 +158,16 @@ export function migrateFloorOpeningNodes(sourceNodes: Record<string, unknown>) {
   }
   return { nodes, changed: nodes !== sourceNodes, adoptedHoles, created, dedupes, unions }
 }
+
+export const migrateFloorOpeningNodes = loadMigration(
+  'floor openings',
+  migrateFloorOpeningNodesOnView,
+  (nodes) => ({
+    nodes,
+    changed: false,
+    adoptedHoles: 0,
+    created: 0,
+    dedupes: 0,
+    unions: 0,
+  }),
+)

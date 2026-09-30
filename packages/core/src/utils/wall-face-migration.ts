@@ -1,4 +1,5 @@
 import type { WallFace, WallFaceRegion } from '../schema/nodes/wall'
+import { loadMigration } from './load-migration'
 
 // Load migrations M1 and M2 of the room-first structure plan. Both are pure,
 // idempotent and server-safe: they read and write plain node records only.
@@ -170,7 +171,7 @@ function migrateWallNode(node: RawNode): RawNode {
  * side finishes move to `legacyFaceMaterials`; single-sided trims name a face.
  * The resolved finish of every face is unchanged.
  */
-export function migrateWallFaceKeys(sourceNodes: Record<string, unknown>) {
+function migrateWallFaceKeysOnView(sourceNodes: Record<string, unknown>) {
   let nodes: Record<string, unknown> | null = null
   for (const [id, node] of Object.entries(sourceNodes)) {
     if (!isRecord(node) || node.type !== 'wall' || !needsFaceKeyMigration(node)) continue
@@ -255,7 +256,7 @@ const BAND_SLOT_KEYS = new Set<string>(
  * the same heights and finishes; `faceBands` and the band slot keys are dropped.
  * Runs after M1 (it reads the geometric band keys M1 writes).
  */
-export function migrateWallFaceBands(sourceNodes: Record<string, unknown>) {
+function migrateWallFaceBandsOnView(sourceNodes: Record<string, unknown>) {
   let nodes: Record<string, unknown> | null = null
   for (const [id, node] of Object.entries(sourceNodes)) {
     if (!isRecord(node) || node.type !== 'wall') continue
@@ -279,3 +280,15 @@ export function migrateWallFaceBands(sourceNodes: Record<string, unknown>) {
   }
   return { nodes: nodes ?? sourceNodes, changed: nodes !== null }
 }
+
+export const migrateWallFaceKeys = loadMigration(
+  'wall face keys',
+  migrateWallFaceKeysOnView,
+  (nodes) => ({ nodes, changed: false }),
+)
+
+export const migrateWallFaceBands = loadMigration(
+  'wall face bands',
+  migrateWallFaceBandsOnView,
+  (nodes) => ({ nodes, changed: false }),
+)

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { reconcileLevelStructure } from '../../lib/structure-kernel'
 import { ItemNode, SeparatorNode, WallNode, type ZoneNode } from '../../schema'
+import { getWallCurveFrameAt, getWallCurveLength } from '../../systems/wall/wall-curve'
 import { SHARED_WALLS_DELETE_MESSAGE } from './delete-zone'
 import { deleteZone, divideZone, setZoneIntent } from './index'
 import { applyToScratch, type StructureNodes, structureChangeBatch } from './shared'
@@ -239,4 +240,50 @@ describe('deleting a room', () => {
     expect(plan.payload).toMatchObject({ mode: 'delete', separatorIds: ['separator_m'] })
     expect(plan.payload.wallIds.sort()).toEqual(['wall_m0', 'wall_m1', 'wall_m2'])
   })
+})
+
+test('an item kept from a curved wall faces along the curve where it hung', () => {
+  const nodes: Record<string, any> = fixture()
+  const corners: [number, number][] = [
+    [0, 0],
+    [4, 0],
+    [4, 4],
+    [0, 4],
+  ]
+  for (let i = 0; i < 4; i++)
+    nodes[`wall_c${i}`] = WallNode.parse({
+      id: `wall_c${i}`,
+      parentId: 'level_test',
+      start: corners[i],
+      end: corners[(i + 1) % 4],
+      ...(i === 0 ? { curveOffset: -1 } : {}),
+    })
+  const curved = nodes.wall_c0
+  const along = getWallCurveLength(curved) * 0.2
+  nodes.item_shelf = ItemNode.parse({
+    ...chair('item_shelf', 0, 0),
+    parentId: curved.id,
+    position: [along, 1, 0.1],
+    rotation: [0, 0.3, 0],
+  })
+  curved.children = ['item_shelf']
+  let n = 0
+  const graph = applyToScratch(
+    nodes,
+    structureChangeBatch(
+      reconcileLevelStructure({
+        levelId: 'level_test',
+        nodes,
+        mintId: (kind) => `${kind}_c${++n}`,
+      }).patches,
+    ),
+  )
+  const [zone] = zones(graph)
+  const plan = deleteZone(graph, { zoneId: zone!.id, contents: 'keep' })
+  const kept = applyToScratch(graph, structureChangeBatch(plan.changes)).item_shelf as ItemNode
+  const frame = getWallCurveFrameAt(curved, 0.2)
+  expect(kept.parentId).toBe('level_test')
+  expect(kept.rotation[1]).toBeCloseTo(0.3 - Math.atan2(frame.tangent.y, frame.tangent.x), 6)
+  expect(kept.position[0]).toBeCloseTo(frame.point.x + frame.normal.x * 0.1, 6)
+  expect(kept.position[2]).toBeCloseTo(frame.point.y + frame.normal.y * 0.1, 6)
 })

@@ -44,6 +44,33 @@ function defaultFields(kind: string): DefaultField[] | undefined {
   return defaultsByKind.get(kind)
 }
 
+let containerDefaultsByKind: Map<string, ContainerDefault[]> | undefined
+
+type ContainerDefault = { key: string; value: unknown; json: string }
+
+/**
+ * The container defaults of a kind: arrays (`children`, `holes`, `position`, …)
+ * and empty objects (`metadata`). Unlike a scalar default (a legacy slab
+ * without `thickness` is solid down to its level), an omitted container means
+ * exactly its default: the reload after {@link materializeNodeDefaults} reads
+ * it filled and must migrate the same.
+ */
+export function containerDefaultFields(kind: string): readonly ContainerDefault[] {
+  containerDefaultsByKind ??= new Map()
+  let fields = containerDefaultsByKind.get(kind)
+  if (!fields) {
+    fields = (defaultFields(kind) ?? []).flatMap(({ key, schema }) => {
+      const value = schema.parse(undefined)
+      const container =
+        Array.isArray(value) ||
+        (value !== null && typeof value === 'object' && Object.keys(value).length === 0)
+      return container ? [{ key, value, json: JSON.stringify(value) }] : []
+    })
+    containerDefaultsByKind.set(kind, fields)
+  }
+  return fields
+}
+
 /**
  * Fills the schema defaults a stored built-in node leaves out, as the last
  * step of every load (client `setScene`, hosted authority). The migrations run

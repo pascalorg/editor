@@ -41,6 +41,7 @@ import {
   planFloorPieceAdoption,
 } from './floor-piece-adoption'
 import { legacyWallElevations } from './legacy-wall-datums'
+import { loadMigration } from './load-migration'
 import { omitUndefined } from './omit-undefined'
 
 export type FloorPlateMigrationReport = {
@@ -465,7 +466,7 @@ function clearDanglingFloorSources(nodes: Record<string, AnyNode>) {
 /** A level whose hand-drawn floor pieces cannot be adopted exactly: migrate it without them. */
 class AdoptionRejected extends Error {}
 
-export function migrateFloorPlates(sourceNodes: Record<string, unknown>) {
+function migrateFloorPlatesOnView(sourceNodes: Record<string, unknown>) {
   // Adoption is all-or-nothing per level: a level whose pieces are not all
   // consumed migrates exactly as it would without adoption.
   const skip = new Set<string>()
@@ -1609,7 +1610,7 @@ function runFloorPlateMigration(
   return { nodes: changed ? nodes : sourceNodes, plateIds, reports }
 }
 
-export function migrateSlabSlots(sourceNodes: Record<string, unknown>) {
+function migrateSlabSlotsOnView(sourceNodes: Record<string, unknown>) {
   const nodes = { ...sourceNodes } as Record<string, AnyNode>
   let changed = false
   for (const node of Object.values(nodes)) {
@@ -1623,3 +1624,14 @@ export function migrateSlabSlots(sourceNodes: Record<string, unknown>) {
   }
   return { nodes: changed ? nodes : sourceNodes, changed }
 }
+
+export const migrateFloorPlates = loadMigration(
+  'floor plates',
+  migrateFloorPlatesOnView,
+  (nodes) => ({ nodes, plateIds: [], reports: [] }),
+)
+
+export const migrateSlabSlots = loadMigration('slab slots', migrateSlabSlotsOnView, (nodes) => ({
+  nodes,
+  changed: false,
+}))

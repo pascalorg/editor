@@ -1,7 +1,8 @@
 import type { AnyNode, AnyNodeId } from '../schema'
 import { syncStairRises } from '../systems/stair/stair-rise-query'
+import { loadMigration } from './load-migration'
 
-export function ensureSceneOpenings(sourceNodes: Record<string, unknown>) {
+function ensureSceneOpeningsOnView(sourceNodes: Record<string, unknown>) {
   let nodes = sourceNodes as Record<string, AnyNode>
   const patches = new Map<AnyNodeId, Partial<AnyNode>>()
   const kinds = new Set(Object.values(nodes).map((node) => node.type))
@@ -27,3 +28,9 @@ export function ensureSceneOpenings(sourceNodes: Record<string, unknown>) {
     updates: [...patches].map(([id, data]) => ({ id, data })),
   }
 }
+
+export const ensureSceneOpenings = loadMigration(
+  'stair and elevator openings',
+  ensureSceneOpeningsOnView,
+  (nodes) => ({ nodes: nodes as Record<string, AnyNode>, changed: false, updates: [] }),
+)
