@@ -25,6 +25,7 @@ import { scaleHandleHeight } from './door-math'
 import { buildDoorFloorplan } from './floorplan'
 import { doorWidthAffordance } from './floorplan-affordances'
 import { doorFloorplanMoveTarget } from './floorplan-move'
+import { doorMechanism } from './mechanism'
 import { doorPaint } from './paint'
 import { doorParametrics } from './parametrics'
 import { DoorNode } from './schema'
@@ -258,6 +259,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
     // each mesh with its `userData.slotId`; paint writes `node.slots`.
     slots: () => doorSlots(),
     paint: doorPaint,
+    mechanism: doorMechanism,
   },
 
   parametrics: doorParametrics,

@@ -11,10 +11,11 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Play, Square } from 'lucide-react'
+import { DoorClosed, DoorOpen, PanelTopClose, PanelTopOpen, Play, Square } from 'lucide-react'
 import { type ComponentType, lazy, Suspense } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { getFloorplanNodeExtension } from '../../lib/floorplan/floorplan-extension'
+import { ActionMenuButton } from './action-menu-button'
 
 type Loader = () => Promise<{ default: ComponentType }>
 const lazyCache = new WeakMap<Loader, ComponentType>()
@@ -38,6 +39,28 @@ export function selectedMechanismNode(
   return nodeMechanism(node) ? node : undefined
 }
 
+function MechanismGlyph({
+  icon,
+  running,
+}: {
+  icon: MechanismCapability['icon']
+  running: boolean
+}) {
+  const Glyph =
+    icon === 'door'
+      ? running
+        ? DoorClosed
+        : DoorOpen
+      : icon === 'window'
+        ? running
+          ? PanelTopClose
+          : PanelTopOpen
+        : running
+          ? Square
+          : Play
+  return <Glyph className="h-4 w-4" />
+}
+
 export function MechanismButton({
   node,
   mechanism,
@@ -47,20 +70,19 @@ export function MechanismButton({
   mechanism: MechanismCapability
   running: boolean
 }) {
+  const label = mechanism.icon ? (running ? 'Close' : 'Open') : running ? 'Stop' : 'Play'
   return (
-    <button
-      type="button"
-      aria-label={running ? 'Stop' : 'Play'}
-      title={running ? 'Stop' : 'Play'}
-      aria-pressed={running}
-      className={`tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground ${running ? 'bg-accent text-foreground' : ''}`}
+    <ActionMenuButton
+      keys={['E']}
+      label={label}
       onClick={(event) => {
         event.stopPropagation()
         toggleMechanism(mechanism, node)
       }}
+      pressed={running}
     >
-      {running ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-    </button>
+      <MechanismGlyph icon={mechanism.icon} running={running} />
+    </ActionMenuButton>
   )
 }
 

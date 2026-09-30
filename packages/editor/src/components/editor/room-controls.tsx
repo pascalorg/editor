@@ -66,8 +66,9 @@ import {
   DRAFT_LABEL_Y_OFFSET,
   DraftMeasurementLabel,
 } from '../tools/shared/draft-measurement-label'
+import { ActionMenuButton } from './action-menu-button'
 import { getMenuYOffset } from './floating-action-menu'
-import { ActionMenuButton, NodeActionMenu } from './node-action-menu'
+import { NodeActionMenu } from './node-action-menu'
 import { RoomFloorHighlight3D } from './room-floor-highlight'
 import { RoomHandleDragPreview3D, RoomHandles3D } from './room-handles'
 import { RoomFloorHeightStepper, useRoomControls } from './room-handles-2d'

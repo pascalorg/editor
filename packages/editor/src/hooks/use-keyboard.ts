@@ -26,7 +26,6 @@ import {
 import { steppedRotation } from '../components/tools/item/placement-math'
 import { keyCyclableContinuationContext } from '../lib/continuation'
 import { resolveDirectManipulationNode } from '../lib/direct-manipulation'
-import { toggleDoorOpenState } from '../lib/door-interaction'
 import { cancelGestures } from '../lib/gesture-lifecycle'
 import { guideEmitter } from '../lib/guide-events'
 import { isHistoryShortcut, runRedo, runUndo, shouldCancelDraftOnHistoryJump } from '../lib/history'
@@ -39,7 +38,6 @@ import { openSidebarPanel } from '../lib/sidebar-panel'
 import { activeSiteNode, clampBrushRadius } from '../lib/terrain-sculpt'
 import { leaveUnitFocus } from '../lib/units'
 import { selectWallDrawVariant } from '../lib/wall-draw-variant'
-import { toggleWindowOpenState } from '../lib/window-interaction'
 import useDeleteConfirmation from '../store/use-delete-confirmation'
 import useEditor, { getActiveContinuationContext, getActiveSnapContext } from '../store/use-editor'
 import useInteractionScope, {
@@ -743,32 +741,14 @@ export const useKeyboard = ({
           }
         }
       } else if ((e.key === 'e' || e.key === 'E') && !isVersionPreviewMode) {
-        // Toggle door / operable-window open/closed state. Moved off R,
-        // which now flips the opening (side + π rotation).
+        // E runs the kind's interaction or mechanism (doors and windows open and
+        // close). Moved off R, which now flips the opening (side + π rotation).
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
         if (selectedNodeIds.length === 1) {
           const node = useScene.getState().nodes[selectedNodeIds[0]!]
           if (node && runNodeInteraction(node)) {
             // Registry-driven E interaction. Same shape as the R/T arms.
             e.preventDefault()
-            sfxEmitter.emit('sfx:item-rotate')
-          } else if (node?.type === 'door' && node.openingKind !== 'opening') {
-            e.preventDefault()
-            toggleDoorOpenState(node.id)
-            sfxEmitter.emit('sfx:item-rotate')
-          } else if (
-            node?.type === 'window' &&
-            node.openingKind !== 'opening' &&
-            (node.windowType === 'sliding' ||
-              node.windowType === 'casement' ||
-              node.windowType === 'awning' ||
-              node.windowType === 'hopper' ||
-              node.windowType === 'single-hung' ||
-              node.windowType === 'double-hung' ||
-              node.windowType === 'louvered')
-          ) {
-            e.preventDefault()
-            toggleWindowOpenState(node.id)
             sfxEmitter.emit('sfx:item-rotate')
           }
         }

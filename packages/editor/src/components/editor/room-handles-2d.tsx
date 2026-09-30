@@ -27,8 +27,8 @@ import useInteractionScope from '../../store/use-interaction-scope'
 import { useFloorplanRender } from '../editor-2d/floorplan-render-context'
 import { FloorplanGeometryRenderer } from '../editor-2d/renderers/floorplan-geometry-renderer'
 import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
+import { ActionMenuButton } from './action-menu-button'
 import { formatMeasurement } from './measurement-pill'
-import { ActionMenuButton } from './node-action-menu'
 
 /**
  * The selected room while its controls may show: structure select, nothing

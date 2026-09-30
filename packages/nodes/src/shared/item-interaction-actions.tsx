@@ -1,12 +1,9 @@
 'use client'
-import { type AnyNodeId, useInteractive, useScene } from '@pascal-app/core'
+import { type AnyNodeId, nodeMechanism, useInteractive, useScene } from '@pascal-app/core'
+import { ActionMenuButton } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Lightbulb, LightbulbOff } from 'lucide-react'
 import { itemHasLights, itemLightsOn, toggleItemLights } from './item-interactions'
-
-const BUTTON =
-  'tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground'
-const ACTIVE = 'bg-accent text-foreground'
 
 /**
  * The light switch for a single selected item or procedural item. Play/Stop
@@ -21,18 +18,17 @@ export default function ItemInteractionActions() {
   const lit = useInteractive((s) => (node && hasLights ? itemLightsOn(node, s) : false))
   if (!(node && hasLights)) return null
   return (
-    <button
-      type="button"
-      aria-label={lit ? 'Turn light off' : 'Turn light on'}
-      title={lit ? 'Turn light off' : 'Turn light on'}
-      aria-pressed={lit}
-      className={`${BUTTON} ${lit ? ACTIVE : ''}`}
+    <ActionMenuButton
+      // E runs the mechanism when there is one, and only otherwise the light.
+      keys={nodeMechanism(node) ? undefined : ['E']}
+      label={lit ? 'Turn light off' : 'Turn light on'}
       onClick={(event) => {
         event.stopPropagation()
         toggleItemLights(node)
       }}
+      pressed={lit}
     >
       {lit ? <Lightbulb className="h-4 w-4" /> : <LightbulbOff className="h-4 w-4" />}
-    </button>
+    </ActionMenuButton>
   )
 }
