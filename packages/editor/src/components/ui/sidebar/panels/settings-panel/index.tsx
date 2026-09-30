@@ -101,6 +101,7 @@ const MODEL_EXPORT_FORMATS = [
   { format: 'usdz', label: 'USDZ' },
   { format: 'stl', label: 'STL' },
   { format: 'obj', label: 'OBJ' },
+  { format: 'ifc', label: 'IFC' },
 ] as const
 
 type ModelExportFormat = (typeof MODEL_EXPORT_FORMATS)[number]['format']
@@ -688,6 +689,7 @@ export function SettingsPanel({
     setModelExportWarning(null)
     try {
       const artifact = await modelExport(format, {
+        projectName,
         onlyVisible: exportOnlyVisible,
         excludedNodeTypes,
         includedPresentationIds:
@@ -903,7 +905,7 @@ export function SettingsPanel({
                   <legend className="px-1 font-medium text-sm">Include in file</legend>
                   <p className="text-muted-foreground text-xs">
                     Choose which procedural content is baked into model files. GLB and USDZ use the
-                    textured portable path; STL and OBJ remain geometry-only.
+                    textured portable path; STL, OBJ and IFC remain geometry-only.
                   </p>
                   {exportableNodeTypes.length > 0 ? (
                     <div className="space-y-2 pt-1">

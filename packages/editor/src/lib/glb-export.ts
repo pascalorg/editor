@@ -143,6 +143,115 @@ export function nextFrames(): Promise<void> {
   })
 }
 
+/**
+ * Export visibility, shared with the clone pruning: a hidden node hides its
+ * subtree, except a Site, which hides only its own ground (`hidesDescendants`).
+ */
+export function createExportVisibility(nodes: Record<string, AnyNode>) {
+  const visibility = new Map<string, boolean>()
+  const isVisible = (id: string, path: Set<string> = new Set()): boolean => {
+    const cached = visibility.get(id)
+    if (cached !== undefined) return cached
+    const node = nodes[id]
+    if (!node) return true
+    if (node.visible === false) {
+      visibility.set(id, false)
+      return false
+    }
+    const parentId = node.parentId
+    const parent = parentId ? nodes[parentId] : undefined
+    if (!parentId || path.has(id) || (parent && !hidesDescendants(parent))) {
+      visibility.set(id, true)
+      return true
+    }
+    path.add(id)
+    const visible = isVisible(parentId, path)
+    path.delete(id)
+    visibility.set(id, visible)
+    return visible
+  }
+  return isVisible
+}
+
+export type ExportGeometryScope = Pick<GlbExportOptions, 'onlyVisible' | 'excludedNodeTypes'>
+
+/**
+ * Included `bake: 'replace'` nodes whose live object holds no mesh yet. These
+ * kinds render collectively in the editor and mount their own geometry only
+ * while `isExporting` is set; kinds with bake hooks are rebuilt after the
+ * clone instead, and excluded or hidden nodes never reach the clone.
+ */
+export function nodesAwaitingExportGeometry(
+  nodes: Record<string, AnyNode>,
+  scope: ExportGeometryScope = {},
+): string[] {
+  const sceneState = useScene.getState()
+  const installedPlugins = sceneState.hasExplicitPluginInstallState
+    ? sceneState.installedPlugins
+    : undefined
+  const excluded = new Set(scope.excludedNodeTypes)
+  const isVisible = createExportVisibility(nodes)
+  const typeExcluded = (node: AnyNode): boolean => {
+    for (let current: AnyNode | undefined = node, guard = 0; current && guard < 64; guard++) {
+      if (excluded.has(current.type)) return true
+      current = current.parentId ? nodes[current.parentId] : undefined
+    }
+    return false
+  }
+  const pending: string[] = []
+  for (const [id, object] of sceneRegistry.nodes) {
+    const node = nodes[id]
+    if (!node) continue
+    const definition = nodeRegistry.get(node.type)
+    if (definition?.bake !== 'replace' || definition.bakeGeometry || definition.bakeGeometryAsync) {
+      continue
+    }
+    if (!isNodeKindEnabled(node.type, installedPlugins) || typeExcluded(node)) continue
+    if ((scope.onlyVisible ?? true) && !isVisible(id)) continue
+    let hasMesh = false
+    object.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) hasMesh = true
+    })
+    if (!hasMesh) pending.push(id)
+  }
+  return pending
+}
+
+/** Two animation frames, or `ms` if frames have stopped (hidden tab, test runner). */
+function nextFramesOrTimeout(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms)
+    if (typeof requestAnimationFrame !== 'function') return
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        clearTimeout(timer)
+        resolve()
+      }),
+    )
+  })
+}
+
+/**
+ * After `setExporting(true)`, let one commit land, then wait until every
+ * included replace-kind node has mounted its export geometry. Two frames are
+ * not enough: on a large scene with a busy main thread the proxies' re-render
+ * lands several frames later, and the clone would silently miss every plant.
+ * The deadline runs on its own timer, so stalled frames cannot hang an export.
+ */
+export async function waitForExportGeometry(
+  nodes: Record<string, AnyNode>,
+  scope: ExportGeometryScope = {},
+  timeoutMs = 10_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  await nextFramesOrTimeout(Math.min(500, timeoutMs))
+  while (nodesAwaitingExportGeometry(nodes, scope).length > 0) {
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) return
+    await nextFramesOrTimeout(Math.min(50, remaining))
+  }
+}
+
 type GltfExtrasDef = {
   extras?: Record<string, unknown>
 }
@@ -732,31 +841,7 @@ function pruneHiddenSceneNodes(
   nodes: Record<string, AnyNode>,
   registryEntries: readonly RegistryEntry[],
 ) {
-  const visibility = new Map<string, boolean>()
-
-  const isVisible = (id: string, path: Set<string>): boolean => {
-    const cached = visibility.get(id)
-    if (cached !== undefined) return cached
-
-    const node = nodes[id]
-    if (!node) return true
-    if (node.visible === false) {
-      visibility.set(id, false)
-      return false
-    }
-    const parentId = node.parentId
-    const parent = parentId ? nodes[parentId] : undefined
-    if (!parentId || path.has(id) || (parent && !hidesDescendants(parent))) {
-      visibility.set(id, true)
-      return true
-    }
-
-    path.add(id)
-    const visible = isVisible(parentId, path)
-    path.delete(id)
-    visibility.set(id, visible)
-    return visible
-  }
+  const isVisible = createExportVisibility(nodes)
 
   const nodeClones = new Set<THREE.Object3D>()
   for (const [, original] of registryEntries) {
@@ -765,7 +850,7 @@ function pruneHiddenSceneNodes(
   }
 
   for (const [id, original] of registryEntries) {
-    if (isVisible(id, new Set())) continue
+    if (isVisible(id)) continue
     const clone = cloneByOriginal.get(original)
     if (!clone) continue
     const node = nodes[id]
