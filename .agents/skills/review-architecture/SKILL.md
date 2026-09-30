@@ -19,6 +19,7 @@ Read these before reviewing any diff. They are the source of truth, not your tra
 - `wiki/architecture/viewer-isolation.md` — viewer must stay editor-agnostic
 - `wiki/architecture/node-definitions.md` — the three-checkbox composition model (`geometry` / `renderer` / `system`)
 - `wiki/architecture/plugin-authoring.md` — public contract for external node packs
+- `wiki/architecture/agent-surfaces.md` — MCP ↔ hosted chat ↔ skill parity. Read whenever the diff touches `packages/mcp/**` or `skills/**`.
 
 Required on every review. Read the remaining pages on demand when the diff touches their subject area:
 
