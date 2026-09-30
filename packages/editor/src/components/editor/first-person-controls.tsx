@@ -1074,6 +1074,9 @@ export const FirstPersonControls = () => {
         closestDistance = hit.distance
       }
     }
+    // Doors and windows have their own walkthrough targets (resolveInteractable*Id).
+    for (const rawId of sceneRegistry.byType.door ?? []) covered.add(rawId)
+    for (const rawId of sceneRegistry.byType.window ?? []) covered.add(rawId)
     for (const id of mechanismTargetIds(covered)) {
       const object = sceneRegistry.nodes.get(id)
       const hit = object && proceduralInteractionRaycaster.intersectObject(object, true)[0]

@@ -1,10 +1,11 @@
 'use client'
 
-import { type AnyNodeId, useScene } from '@pascal-app/core'
+import { type AnyNodeId, resolveBuildingForLevel, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Copy, Group, Trash2, Ungroup } from 'lucide-react'
+import { Building2, Copy, Group, Trash2, Ungroup } from 'lucide-react'
 import { useMemo } from 'react'
 import { deleteSelection, duplicateSelectionAndPickUp } from '../../editor/group-actions'
+import { collectSelectableCandidateIds } from '../../tools/select/select-candidates'
 import {
   canCreateSessionGroup,
   selectionIntersectsSessionGroup,
@@ -17,6 +18,25 @@ import useSessionGroups, {
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelWrapper } from './panel-wrapper'
 import { formatSelectionBreakdown } from './selection-breakdown'
+
+/** The building holding the level, when the selection is everything selectable on it. */
+function useWholeLevelBuildingId(selectedIds: readonly string[]) {
+  const levelId = useViewer((s) => s.selection.levelId)
+  const nodes = useScene((s) => s.nodes)
+  return useMemo(() => {
+    if (!levelId) return null
+    const candidates = collectSelectableCandidateIds()
+    if (candidates.length === 0) return null
+    const selected = new Set(selectedIds)
+    if (!candidates.every((id) => selected.has(id))) return null
+    return resolveBuildingForLevel(levelId as AnyNodeId, nodes) ?? null
+  }, [levelId, nodes, selectedIds])
+}
+
+/** The building's own selection (no level): its floating pill offers the whole-building Move. */
+function selectBuilding(buildingId: string) {
+  useViewer.getState().setSelection({ buildingId })
+}
 
 export function MultiSelectionActions() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
@@ -32,10 +52,22 @@ export function MultiSelectionActions() {
     [sessionGroups, selectedIds, liveIds],
   )
 
+  const buildingId = useWholeLevelBuildingId(selectedIds)
+
   return (
-    <ActionGroup>
+    <ActionGroup className="flex-wrap">
+      {buildingId && (
+        <ActionButton
+          className="basis-full whitespace-nowrap"
+          icon={<Building2 className="h-4 w-4" />}
+          label="Select building"
+          onClick={() => selectBuilding(buildingId)}
+          title="Select the whole building to move all its levels"
+        />
+      )}
       {showGroup && (
         <ActionButton
+          className="min-w-20 px-2"
           icon={<Group className="h-4 w-4" />}
           label="Group"
           onClick={() => groupCurrentSelection()}
@@ -44,6 +76,7 @@ export function MultiSelectionActions() {
       )}
       {showUngroup && (
         <ActionButton
+          className="min-w-20 px-2"
           icon={<Ungroup className="h-4 w-4" />}
           label="Ungroup"
           onClick={() => ungroupCurrentSelection()}
@@ -51,12 +84,13 @@ export function MultiSelectionActions() {
         />
       )}
       <ActionButton
+        className="min-w-20 px-2"
         icon={<Copy className="h-4 w-4" />}
         label="Duplicate"
         onClick={() => duplicateSelectionAndPickUp()}
       />
       <ActionButton
-        className="border-red-500/40 text-red-200 hover:bg-red-500/15"
+        className="min-w-20 px-2 border-red-500/40 text-red-200 hover:bg-red-500/15"
         icon={<Trash2 className="h-4 w-4 text-red-400" />}
         label="Delete"
         onClick={() => deleteSelection()}

@@ -1983,6 +1983,8 @@ export type MechanismCapability = {
   set: (node: AnyNode, on: boolean) => void
   /** Walkthrough wording: `open` parts open and close; `run` parts (the default) turn on and off. */
   verb?: 'open' | 'run'
+  /** Action-menu glyph: openable kinds show their own instead of Play/Stop. */
+  icon?: 'door' | 'window'
 }
 
 export type NodeQuickActionIcon = 'add-left' | 'add-right' | 'add' | 'convert'

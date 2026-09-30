@@ -84,6 +84,9 @@ export const FloorElevationSystem = () => {
   const dirtyNodes = useScene((s) => s.dirtyNodes)
   const clearDirty = useScene((s) => s.clearDirty)
   const consumed = useMemo(() => new Set<AnyNodeId>(), [])
+  // Meshes already lifted once. A mesh mounts at its base Y, and a remount (entering Preview
+  // builds a fresh viewer tree) raises no dirty mark, so the lift would never be applied.
+  const mounted = useMemo(() => ({ revision: -1, meshes: new WeakSet<Object3D>() }), [])
   const preview = useMemo(
     () => ({
       local: new Matrix4(),
@@ -143,7 +146,9 @@ export const FloorElevationSystem = () => {
     // during group drags over elevated slabs).
     const overrides = useLiveNodeOverrides.getState().overrides
     const transforms = useLiveTransforms.getState().transforms
-    if (dirtyNodes.size === 0 && overrides.size === 0 && transforms.size === 0) return
+    const registryChanged = sceneRegistry.revision !== mounted.revision
+    if (dirtyNodes.size === 0 && overrides.size === 0 && transforms.size === 0 && !registryChanged)
+      return
     const nodes = useScene.getState().nodes
 
     const applyLift = (id: AnyNodeId) => {
@@ -196,6 +201,19 @@ export const FloorElevationSystem = () => {
         maxElevation: liveTransform?.supportElevationCap,
       })
       mesh.position.y = visualPosition[1]
+    }
+
+    if (registryChanged) {
+      mounted.revision = sceneRegistry.revision
+      for (const [kind, ids] of Object.entries(sceneRegistry.byType)) {
+        if (!nodeRegistry.get(kind)?.capabilities?.floorPlaced) continue
+        for (const id of ids) {
+          const mesh = sceneRegistry.nodes.get(id)
+          if (!mesh || mounted.meshes.has(mesh)) continue
+          mounted.meshes.add(mesh)
+          applyLift(id as AnyNodeId)
+        }
+      }
     }
 
     dirtyNodes.forEach((id) => {

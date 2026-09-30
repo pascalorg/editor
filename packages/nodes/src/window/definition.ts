@@ -30,6 +30,7 @@ import { buildWindowContextualDimensions } from './contextual-dimensions'
 import { buildWindowFloorplan } from './floorplan'
 import { windowWidthAffordance } from './floorplan-affordances'
 import { windowFloorplanMoveTarget } from './floorplan-move'
+import { windowMechanism } from './mechanism'
 import { windowPaint } from './paint'
 import { windowParametrics } from './parametrics'
 import { WindowNode } from './schema'
@@ -309,6 +310,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
     // each mesh with its `userData.slotId`; paint writes `node.slots`.
     slots: () => windowSlots(),
     paint: windowPaint,
+    mechanism: windowMechanism,
   },
 
   parametrics: windowParametrics,

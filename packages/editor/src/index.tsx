@@ -20,6 +20,7 @@ export {
 export { useViewer } from '@pascal-app/viewer'
 export type { EditorProps } from './components/editor'
 export { default as Editor } from './components/editor'
+export { ActionMenuButton } from './components/editor/action-menu-button'
 // Headless component aliases: the implementation files keep their
 // internal names (`ParametricInspector`, `FloatingActionMenu`) because
 // they're referenced throughout the editor's own internals; the public
@@ -416,6 +417,11 @@ export {
   nextContinuation,
 } from './lib/continuation'
 export { canDirectMoveNode } from './lib/direct-manipulation'
+export {
+  closeDoorOpenState,
+  getDisplayedDoorValue,
+  openDoorOpenState,
+} from './lib/door-interaction'
 export { createEditorApi } from './lib/editor-api'
 export {
   clearStructuralElevationGuide,
@@ -832,6 +838,12 @@ export {
   startWallPolygonDraft,
   wallPolygonDraftWalls,
 } from './lib/wall-polygon-draft'
+export {
+  closeWindowOpenState,
+  getDisplayedWindowValue,
+  isOperableWindowType,
+  openWindowOpenState,
+} from './lib/window-interaction'
 export {
   getActiveBuildingPose,
   projectAlignmentGuidesWorldToActiveBuildingLocal,
