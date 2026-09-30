@@ -6,8 +6,9 @@ import { syncAutoElevatorOpenings } from '../systems/elevator/elevator-opening-s
 import { ensureMissingSlabOpenings } from '../systems/slab/ensure-slab-openings'
 import { syncAutoStairOpenings } from '../systems/stair/stair-opening-sync'
 import { syncStairRises } from '../systems/stair/stair-rise-query'
+import { loadMapMigration, loadMigration } from './load-migration'
 
-export function materializeLegacyAutoOpenings(
+function materializeLegacyAutoOpeningsOnView(
   sourceNodes: Record<string, unknown>,
   refreshExisting = false,
 ) {
@@ -229,7 +230,7 @@ function collapseOwnedOpenings(sourceNodes: Record<string, unknown>) {
   return nodes
 }
 
-export function migrateOwnedFloorOpenings(sourceNodes: Record<string, unknown>) {
+function migrateOwnedFloorOpeningsOnView(sourceNodes: Record<string, unknown>) {
   let nodes = sourceNodes
   for (const value of Object.values(sourceNodes)) {
     const surface = value as SlabNode | CeilingNode
@@ -312,3 +313,14 @@ export function migrateOwnedFloorOpenings(sourceNodes: Record<string, unknown>) 
   }
   return { nodes, changed: nodes !== sourceNodes }
 }
+
+export const materializeLegacyAutoOpenings = loadMapMigration(
+  'legacy auto openings',
+  materializeLegacyAutoOpeningsOnView,
+)
+
+export const migrateOwnedFloorOpenings = loadMigration(
+  'owned floor openings',
+  migrateOwnedFloorOpeningsOnView,
+  (nodes) => ({ nodes, changed: false }),
+)

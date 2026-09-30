@@ -24,6 +24,7 @@ import type { SeparatorNode } from '../schema/nodes/separator'
 import type { WallNode } from '../schema/nodes/wall'
 import { ZoneNode } from '../schema/nodes/zone'
 import { calculateLevelMiters, getWallPlanFootprint } from '../systems/wall/wall-footprint'
+import { loadMigration } from './load-migration'
 import { omitUndefined } from './omit-undefined'
 
 type SceneNodes = Record<string, any>
@@ -111,7 +112,7 @@ function roomZoneId(levelId: string, face: RoomFace, attempt = 0): ZoneNode['id'
   return `zone_${hash.toString(36).padStart(16, '0')}`
 }
 
-export function migrateRoomZones(sourceNodes: Record<string, unknown>): RoomZoneMigration {
+function migrateRoomZonesOnView(sourceNodes: Record<string, unknown>): RoomZoneMigration {
   const nodes: SceneNodes = { ...sourceNodes }
   const createdZoneIds: string[] = []
   const adoptedZoneIds: string[] = []
@@ -228,7 +229,7 @@ export function migrateRoomZones(sourceNodes: Record<string, unknown>): RoomZone
   }
 }
 
-export function migrateCeilingRoomLinks(
+function migrateCeilingRoomLinksOnView(
   sourceNodes: Record<string, unknown>,
 ): CeilingRoomLinkMigration {
   const nodes: SceneNodes = { ...sourceNodes }
@@ -325,3 +326,15 @@ export function migrateCeilingRoomLinks(
     ceilinglessZoneIds,
   }
 }
+
+export const migrateRoomZones = loadMigration('room zones', migrateRoomZonesOnView, (nodes) => ({
+  nodes,
+  createdZoneIds: [],
+  adoptedZoneIds: [],
+}))
+
+export const migrateCeilingRoomLinks = loadMigration(
+  'ceiling room links',
+  migrateCeilingRoomLinksOnView,
+  (nodes) => ({ nodes, linkedCeilingIds: [], ceilinglessZoneIds: [] }),
+)
