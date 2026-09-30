@@ -10,6 +10,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./export": {
+      "types": "./dist/export/index.d.ts",
+      "import": "./dist/export/index.js",
+      "default": "./dist/export/index.js"
     }
   },
   "files": [
@@ -24,7 +29,6 @@
   },
   "dependencies": {
     "@pascal-app/core": "^1.0.3",
-    "nanoid": "^5.1.6",
     "web-ifc": "^0.0.77"
   },
   "devDependencies": {
