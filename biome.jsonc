@@ -145,7 +145,7 @@
               "level": "error",
               "options": {
                 "paths": {
-                  "@pascal-app/nodes": "Framework packages must not import from @pascal-app/nodes — consult nodeRegistry.get(kind) instead. See plans/editor-node-registry.md."
+                  "@pascal-app/nodes": "Framework packages must not import from @pascal-app/nodes — consult nodeRegistry.get(kind) instead. See DECISIONS.md E-002."
                 }
               }
             }

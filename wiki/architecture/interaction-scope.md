@@ -153,7 +153,7 @@ There is no per-kind snapping switch.
   (a build tool, `drafting`, `placing`/`moving`, or `reshaping`).
 
 **Known-legacy (migrate on touch).** Two legacy modifier patterns predate this model and survive in
-spots not yet touched; both are tracked in `plans/editor-placement-interaction-overhaul.md`. A PR that
+spots not yet touched (the `event.altKey` alignment bypass and pre-scope `useEditor` flags). A PR that
 **touches** one must migrate it to the model above, not extend the legacy path:
 
 1. **`event.shiftKey` as a snap bypass with hardcoded steps** — the MEP move/endpoint tools

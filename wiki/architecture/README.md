@@ -28,7 +28,6 @@ Canonical rules for code that touches `packages/core`, `packages/viewer`, `packa
 | [wall-frame](wall-frame.md) | Wall reference line and justification (`a` / `b` / Center), lateral offsets owned by `wall-frame.ts` |
 | [space-detection](space-detection.md) | Commit and replication contract for wall-driven room reconciliation |
 | [events](events.md) | Typed event bus — emitting and listening to node and grid events |
-| [creating-rules](creating-rules.md) | How to add or update a page in this folder |
 
 ## Reading order for an architecture review
 

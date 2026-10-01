@@ -6,9 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+# PR runs supersede each other; main runs finish so their turbo cache
+# entries exist for the next PR.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   changes:
