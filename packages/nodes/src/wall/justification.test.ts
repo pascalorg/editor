@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from 'bun:test'
+import { afterEach, describe, expect, jest, spyOn, test } from 'bun:test'
 import {
   DoorNode,
   emitter,
@@ -333,27 +333,9 @@ test('opening world cursor uses the body centre on rotated justified walls', () 
   }
 })
 
-async function isolate(name: string) {
-  if (process.env.PASCAL_WALL_JUSTIFICATION_ISOLATED === '1') return false
-  const child = Bun.spawn(
-    [process.execPath, 'test', import.meta.path, '--test-name-pattern', name],
-    {
-      env: { ...process.env, PASCAL_WALL_JUSTIFICATION_ISOLATED: '1' },
-      stdout: 'pipe',
-      stderr: 'pipe',
-    },
-  )
-  const [stdout, stderr, code] = await Promise.all([
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-    child.exited,
-  ])
-  expect(code, stdout + stderr).toBe(0)
-  return true
-}
-
 test('3D endpoint rotation across 90 degrees preserves orientation fields', async () => {
-  if (await isolate('3D endpoint rotation')) return
+  // The release arms a click-swallow cleanup timer on `window`; drain it before `window` goes.
+  jest.useFakeTimers()
   const savedWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
   globalThis.window = new EventTarget() as Window & typeof globalThis
   const html = spyOn(Html as unknown as { render: () => ReactNode }, 'render').mockImplementation(
@@ -401,6 +383,8 @@ test('3D endpoint rotation across 90 degrees preserves orientation fields', asyn
       }
     }
   } finally {
+    jest.runOnlyPendingTimers()
+    jest.useRealTimers()
     html.mockRestore()
     if (savedWindow) Object.defineProperty(globalThis, 'window', savedWindow)
     else Reflect.deleteProperty(globalThis, 'window')
@@ -446,7 +430,6 @@ for (const justification of [undefined, 'a', 'b'] as const)
   })
 
 test('opening previews keep host thickness while suppressing only their placement offset', async () => {
-  if (await isolate('opening previews keep host thickness')) return
   const wall = { ...makeWall(), thickness: 0.4 }
   useScene.setState({ nodes: { [wall.id]: wall } })
   const props = { parentId: wall.id, position: [0, 0, 0] }

@@ -20,8 +20,9 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { nodeLevelFrame, ProceduralItemNode, type Recipe } from '@pascal-app/core/procedural-items'
-import { NodeRenderer, useViewer } from '@pascal-app/viewer'
+import { NodeRenderer, resolveCdnUrl, useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
+import { useLoader } from '@react-three/fiber'
 import { act, create } from '@react-three/test-renderer'
 import { Children, cloneElement, isValidElement, type ReactNode, useMemo, useRef } from 'react'
 import { BoxGeometry, Group, Matrix4, Mesh, MeshBasicMaterial, Vector3 } from 'three'
@@ -107,7 +108,7 @@ let savedDocument: typeof document
 let savedRaf: typeof requestAnimationFrame
 let savedCancelRaf: typeof cancelAnimationFrame
 
-beforeEach(() => {
+beforeEach(async () => {
   loadModel = spyOn(ItemGLTFLoader.prototype, 'load').mockImplementation((_url, onLoad) => {
     const scene = new Group()
     scene.add(
@@ -122,6 +123,10 @@ beforeEach(() => {
       parser: {},
     } as never)
   })
+  // Resolve the stub model before the first render: a mount that suspends on it can spin act's
+  // synchronous flush forever once an earlier suite in this process has mounted a catalog mover.
+  useLoader.preload(ItemGLTFLoader, resolveCdnUrl(catalog.asset.src)!)
+  await Promise.resolve()
   savedScene = useScene.getState()
   savedEditor = useEditor.getState()
   savedViewer = useViewer.getState()

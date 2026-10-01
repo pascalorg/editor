@@ -33,7 +33,9 @@ import { createRegistryItemSurfaceMove } from '../../../../editor/src/components
 import { MoveRegistryNodeTool } from '../../../../editor/src/components/tools/registry/move-registry-node-tool'
 import { sfxEmitter } from '../../../../editor/src/lib/sfx-bus'
 import useEditor from '../../../../editor/src/store/use-editor'
-import useInteractionScope from '../../../../editor/src/store/use-interaction-scope'
+import useInteractionScope, {
+  getMovingNode,
+} from '../../../../editor/src/store/use-interaction-scope'
 import { itemDefinition } from '../../item/definition'
 import { MoveItemTool } from '../../item/move-tool'
 import { proceduralItemDefinition } from '../../procedural-item/definition'
@@ -499,13 +501,13 @@ for (const mover of ['catalog', 'registry procedural'] as const) {
           emitter.emit('node:click', event as never)
         })
         expect(useScene.temporal.getState().pastStates).toHaveLength(0)
-        expect(useEditor.getState().movingNode).not.toBeNull()
+        expect(getMovingNode()).not.toBeNull()
         await act(async () =>
           window.dispatchEvent(Object.assign(new Event('keyup'), { key: 'Alt' })),
         )
         accepts = true
         await act(async () => emitter.emit('cabinet:move', hit(run, [2, 0.85, 0.01])))
-        expect(useEditor.getState().movingNode).not.toBeNull()
+        expect(getMovingNode()).not.toBeNull()
         expect(useScene.getState().nodes[child.id]!.parentId).toBe(run.id)
         await act(async () => emitter.emit('cabinet:click', hit(run, [2, 0.85, 0.01])))
         expect(useScene.temporal.getState().pastStates).toHaveLength(1)
