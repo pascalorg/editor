@@ -17,5 +17,8 @@ fi
 echo "pre-push: lint"
 bun run --silent check
 
-echo "pre-push: typecheck and test changed packages"
-bun run --silent ci:changed --filter="...[$base]"
+# Directly changed packages only: `...[$base]` also pulled in every dependent,
+# so a core edit typechecked and tested the whole graph before each push. CI
+# owns that parity; this hook is fast feedback.
+echo "pre-push: typecheck changed packages"
+bunx turbo run check-types --filter="[$base]" --output-logs=errors-only

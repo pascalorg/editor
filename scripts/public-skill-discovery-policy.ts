@@ -11,13 +11,16 @@ type IntendedSkill = {
   internal: boolean
 }
 
+// The product skills are an allow-list: a new discoverable skill is a
+// release decision. Maintainer skills under .agents/skills/ are governed by
+// a rule instead (every one must be internal), so adding one needs no
+// TypeScript change.
 export const intendedSkillDiscovery = new Map<string, IntendedSkill>([
   ['skills/pascal-3d/SKILL.md', { name: 'pascal-3d', internal: false }],
   ['skills/furniture-fit/SKILL.md', { name: 'furniture-fit', internal: false }],
-  ['.agents/skills/open-pr/SKILL.md', { name: 'open-pr', internal: true }],
-  ['.agents/skills/open-pr2/SKILL.md', { name: 'open-pr2', internal: true }],
-  ['.agents/skills/review-architecture/SKILL.md', { name: 'review-architecture', internal: true }],
 ])
+
+export const maintainerSkillsRoot = '.agents/skills/'
 
 export const intendedPublicSkillNames = [...intendedSkillDiscovery.values()]
   .filter((skill) => !skill.internal)
@@ -94,6 +97,14 @@ export function validatePublicSkillDiscoverySurface(entries: SkillDiscoveryEntry
   const entriesByPath = new Map(entries.map((entry) => [entry.path, entry]))
 
   for (const entry of entries) {
+    if (entry.path.startsWith(maintainerSkillsRoot)) {
+      const metadata = parseSkillDiscoveryMetadata(entry.content)
+      if (!metadata.name) failures.push(`${entry.path} must declare a frontmatter name`)
+      if (metadata.internal !== true) {
+        failures.push(`${entry.path} must declare metadata.internal: true`)
+      }
+      continue
+    }
     if (!intendedSkillDiscovery.has(entry.path)) {
       failures.push(`Unexpected skill in the repository discovery roots: ${entry.path}`)
     }
