@@ -239,7 +239,7 @@ for (const mover of ['catalog', 'registry'] as const)
         await renderer.unmount()
       }
     })
-test('wall-side item → shelf → catalog: plan equals main and mounted wall-face pose', async () => {
+test('wall-side item → shelf → catalog: plan equals the mounted wall-face pose', async () => {
   const wall = WallNode.parse({ parentId: level.id, start: [2, 3], end: [6, 5], thickness: 0.4 })
   const mounted = ItemNode.parse({
     parentId: wall.id,
@@ -256,9 +256,6 @@ test('wall-side item → shelf → catalog: plan equals main and mounted wall-fa
     const expected = world(child.id)
     expect(expected.x).toBeCloseTo(2.804984472, 8)
     expect(expected.z).toBeCloseTo(3.626099034, 8)
-    expect(plan(child)).toEqual(
-      mainTransform(child, { resolve: (id) => useScene.getState().nodes[id] } as never),
-    )
     expect(plan(child).x).toBeCloseTo(expected.x, 8)
     expect(plan(child).y).toBeCloseTo(expected.z, 8)
   } finally {

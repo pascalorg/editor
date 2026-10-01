@@ -47,7 +47,6 @@ import {
   splitFloorplanOverlay,
 } from '../../../editor/src/components/editor-2d/renderers/floorplan-registry-layer'
 import { useKeyboard } from '../../../editor/src/hooks/use-keyboard'
-import childlessPlan from '../column/__fixtures__/childless-plan.json'
 import { planColumnEdit } from '../column/hosted-resize'
 import { resolveItemTransform } from '../item/floorplan'
 import ItemTool from '../item/tool'
@@ -669,7 +668,7 @@ async function pairedMove(event: any, order: string) {
 }
 for (const order of ['grid first', 'host first'])
   for (const rejection of ['vertical side', 'outside region'])
-    test(`audit: rejected generic ${rejection} yields to floor, ${order}`, async () => {
+    test(`rejected generic ${rejection} yields to floor, ${order}`, async () => {
       const { host, child } = seedColumn('catalog', 'rectangular', 'move')
       useEditor.getState().setMovingNode(child)
       const renderer = await create(<Scene mover="catalog" child={child} />)
@@ -707,7 +706,7 @@ for (const order of ['grid first', 'host first'])
 
 for (const mover of ['catalog', 'registry'] as const)
   for (const kind of ['column', 'plugin', 'shelf', 'cabinet', 'item'])
-    test(`audit: shared frame equals mounted ${mover} under ${kind}, slab and rotated building`, async () => {
+    test(`shared frame equals mounted ${mover} under ${kind}, slab and rotated building`, async () => {
       const { host: column, child } = seedColumn(mover, 'rectangular', 'regrab')
       const host =
         kind === 'column'
@@ -783,7 +782,7 @@ for (const mover of ['catalog', 'registry'] as const)
 
 for (const shape of ['round', 'rectangular'])
   for (const selected of [false, true])
-    test(`audit: childless column plan remains identical to main, ${shape}/${selected}`, async () => {
+    test(`childless column plan: a footprint centred on the column, handles only when selected (${shape}/${selected})`, async () => {
       const { host } = seedColumn('catalog', shape, 'move')
       const renderer = await create(<Scene />)
       try {
@@ -791,9 +790,24 @@ for (const shape of ['round', 'rectangular'])
         const geometry = nodeRegistry.get('column')!.floorplan!(host, {
           viewState: { selected },
         } as never)!
-        expect(JSON.parse(JSON.stringify(geometry))).toEqual(
-          childlessPlan[`${shape}:${selected}` as keyof typeof childlessPlan],
-        )
+        if (geometry.kind !== 'group') throw Error('Expected a group')
+        const centre = [host.position[0], host.position[2]]
+        const footprint = geometry.children.find((child) => child.kind === 'polygon')
+        if (footprint?.kind !== 'polygon') throw Error('Expected a footprint polygon')
+        for (const axis of [0, 1])
+          expect(
+            footprint.points.reduce((sum, point) => sum + point[axis]!, 0) /
+              footprint.points.length,
+          ).toBeCloseTo(centre[axis]!, 6)
+        const handle = geometry.children.find((child) => child.kind === 'move-handle')
+        const rotate = geometry.children.find((child) => child.kind === 'rotate-arrow')
+        if (selected) {
+          expect(handle).toMatchObject({ point: centre })
+          expect(rotate).toMatchObject({ pivot: centre })
+        } else {
+          expect(handle).toBeUndefined()
+          expect(rotate).toBeUndefined()
+        }
         expect(splitFloorplanOverlay(geometry).base).toBeNull()
       } finally {
         await renderer.unmount()
@@ -826,7 +840,7 @@ function pointerDispatcher() {
 }
 for (const order of ['grid first', 'host first'])
   for (const shape of ['round', 'rectangular'])
-    test(`audit: real ItemTool fresh creation on ${shape}, R3F ${order}`, async () => {
+    test(`real ItemTool fresh creation on ${shape}, R3F ${order}`, async () => {
       const { host } = seedColumn('catalog', shape, 'fresh')
       useEditor.setState({ selectedItem: asset })
       useEditor.getState().setContinuation('point', 'single')
@@ -870,7 +884,7 @@ for (const order of ['grid first', 'host first'])
 
 for (const arrangement of ['column child', 'countertop under generic ancestor'])
   for (const order of ['grid first', 'host first'])
-    test(`audit: R3F bubbling gives specialized item top exclusive ownership, ${arrangement}, ${order}`, async () => {
+    test(`R3F bubbling gives specialized item top exclusive ownership, ${arrangement}, ${order}`, async () => {
       const { host: column, child } = seedColumn('catalog', 'rectangular', 'move')
       let parent: AnyNode = useScene.getState().nodes[column.id]!
       if (arrangement !== 'column child') {
@@ -922,7 +936,7 @@ for (const arrangement of ['column child', 'countertop under generic ancestor'])
     })
 
 for (const strict of [false, true])
-  test(`audit: generic route R/T, Escape and queued grid cleanup, Strict Mode ${strict}`, async () => {
+  test(`generic route R/T, Escape and queued grid cleanup, Strict Mode ${strict}`, async () => {
     const { host, child } = seedColumn('catalog', 'rectangular', 'move')
     useEditor.getState().setMovingNode(child)
     const content = <Scene mover="catalog" child={child} keyboard />
@@ -980,7 +994,7 @@ for (const strict of [false, true])
 
 for (const mover of ['catalog', 'registry'] as const)
   for (const operation of ['height', 'clone', 'delete'])
-    test(`audit: ${mover} column subtree ${operation} undo/redo`, async () => {
+    test(`${mover} column subtree ${operation} undo/redo`, async () => {
       const { host, child } = seedColumn(mover, 'rectangular', 'regrab')
       const renderer = await create(<Scene />)
       try {

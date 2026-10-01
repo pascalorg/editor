@@ -412,7 +412,7 @@ function seedBrowser(mover: Mover) {
 }
 
 for (const degrees of [0, 45, 90])
-  test(`browser exact: generated countertop preview equals commit at ${degrees} degrees`, async () => {
+  test(`generated countertop preview equals commit at ${degrees} degrees`, async () => {
     const child = seedBrowser('registry')
     useScene.getState().updateNode('cabinet_f1', { rotation: (degrees * Math.PI) / 180 } as never)
     useEditor.getState().setMovingNode(child)
@@ -448,7 +448,7 @@ for (const degrees of [0, 45, 90])
     }
   })
 
-test('browser exact: occupied named surface rejects without mutating the preview or committing', async () => {
+test('occupied named surface rejects without mutating the preview or committing', async () => {
   const child = seedBrowser('catalog')
   useEditor.getState().setMovingNode(child)
   const renderer = await create(<Scene mover="catalog" child={child} />)
@@ -513,7 +513,7 @@ test('browser exact: occupied named surface rejects without mutating the preview
   }
 })
 
-test('final blocker: catalog block-face preview follows the live face before commit', async () => {
+test('catalog block-face preview follows the live face before commit', async () => {
   const { host, child } = seed('block', 'catalog')
   const source = ItemNode.parse({
     ...child,
@@ -549,7 +549,7 @@ test('final blocker: catalog block-face preview follows the live face before com
 })
 
 for (const order of ['grid first', 'host first'])
-  test(`final blocker: catalog stays on countertop over sink cutout, ${order}`, async () => {
+  test(`catalog stays on the countertop over a sink cutout, ${order}`, async () => {
     const { host, child } = seed('cabinet', 'catalog')
     const moduleId = (host as CabinetNode).children[0]!
     const module = useScene.getState().nodes[moduleId]!
@@ -713,7 +713,7 @@ test('Table Lamp overhang keeps the catalog preview pose when committed to each 
 })
 
 for (const kind of ['cabinet', 'cabinet-module'])
-  test(`audit: generated preview matches commit on rotated ${kind}`, async () => {
+  test(`generated preview matches commit on rotated ${kind}`, async () => {
     const { host, child } = seed(kind, 'registry')
     const nodes = useScene.getState().nodes
     const run = kind === 'cabinet' ? host : nodes[host.parentId!]
@@ -762,7 +762,7 @@ for (const kind of ['cabinet', 'cabinet-module'])
 for (const kind of ['slab', 'wall'])
   for (const mover of ['registry', 'catalog'] as const)
     for (const order of ['grid first', 'host first'])
-      test(`audit: occluded floor pose ${kind}/${mover}/${order}`, async () => {
+      test(`a hit behind ${kind} commits the occluded floor pose (${mover}, ${order})`, async () => {
         const { host, child } = seed(kind, mover)
         useEditor.getState().setMovingNode(child)
         const renderer = await create(<Scene mover={mover} child={child} />)
@@ -821,7 +821,7 @@ for (const kind of ['slab', 'wall'])
         }
       })
 
-test('audit: undeclared geometry plugin renders and reloads hosted children', async () => {
+test('undeclared geometry plugin renders and reloads hosted children', async () => {
   const kind = 'plugin:geometry'
   const schema = nodeRegistry
     .get('shelf')!
@@ -868,7 +868,7 @@ test('audit: undeclared geometry plugin renders and reloads hosted children', as
 })
 
 // No production definition, schema, renderer or capability is replaced.
-test('mounted built-in host audit: registry and catalog commits, rendering, JSON reload and plan layer', async () => {
+test('every built-in host: registry and catalog commits, rendering, JSON reload and plan layer', async () => {
   const rows: Row[] = []
   const excluded: string[] = []
   const errors: string[] = []
@@ -1324,7 +1324,7 @@ test('cabinet tool corner operation keeps nested runs and modules through mounte
 for (const mover of ['registry', 'catalog'] as const)
   for (const key of ['r', 't'] as const)
     for (const occupied of [true, false])
-      test(`review bot 2: ${mover} ${key} rotation occupied=${occupied}`, async () => {
+      test(`${key} rotation on a named surface refuses when occupied and turns when free (${mover} occupied=${occupied})`, async () => {
         const seeded = seed('procedural-item', mover)
         const host = ProceduralItemNode.parse({
           ...seeded.host,
@@ -1454,7 +1454,7 @@ for (const mover of ['registry', 'catalog'] as const)
 
 for (const mover of ['catalog', 'registry'] as const)
   for (const tilt of ['pitch', 'roll'] as const)
-    test(`review bot 4: differential ${mover} ${tilt} floor exit`, async () => {
+    test(`leaving a ${tilt}-tilted surface for the floor gives the same heading in 3D and 2D (${mover})`, async () => {
       const seeded = seed('procedural-item', mover)
       const child = {
         ...seeded.child,
@@ -1566,7 +1566,7 @@ for (const mover of ['catalog', 'registry'] as const)
           await renderer.unmount()
         }
       }
-      console.log(`review bot 4 ${mover} ${tilt}: ${JSON.stringify(results)}`)
+      console.log(`floor exit ${mover} ${tilt}: ${JSON.stringify(results)}`)
       results[1]!.rotation.forEach((v, i) => {
         expect(v).toBeCloseTo(results[0]!.rotation[i]!, 6)
       })

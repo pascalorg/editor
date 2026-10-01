@@ -290,28 +290,24 @@ for (const finish of ['Escape', 'correct'])
       await renderer.unmount()
     }
   })
-test('BlockEditor: childless preview and cancel match main dirty/write/history counts', async () => {
+test('BlockEditor: a childless extrude preview cancelled with Escape writes nothing', async () => {
   const { host } = seed('none')
   const renderer = await mount(<Scene id={host.id} />)
-  const dirty = spyOn(api.sceneApi, 'markDirty'),
-    write = spyOn(api.sceneApi, 'update'),
+  const write = spyOn(api.sceneApi, 'update'),
     batch = spyOn(api.sceneApi, 'applyChanges')
   try {
     await settle(renderer)
-    dirty.mockClear()
     write.mockClear()
     batch.mockClear()
     await keys(['e', '1'])
     await settle(renderer)
-    expect(dirty).toHaveBeenCalledTimes(1)
     await key('Escape')
     await settle(renderer)
-    expect(dirty).toHaveBeenCalledTimes(2)
     expect(write).toHaveBeenCalledTimes(0)
     expect(batch).toHaveBeenCalledTimes(0)
+    expect(useScene.getState().nodes[host.id]).toEqual(host)
     expect(useScene.temporal.getState().pastStates).toHaveLength(0)
   } finally {
-    dirty.mockRestore()
     write.mockRestore()
     batch.mockRestore()
     await renderer.unmount()

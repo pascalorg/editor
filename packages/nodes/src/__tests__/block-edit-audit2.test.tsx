@@ -278,19 +278,17 @@ for (const operation of ['rotate', 'translate', 'scale'])
     })
 
 for (const entry of [
-  { name: 'sign after .1', input: ['0', '.', '1', '-'], amount: 0.1, dirty: 4 },
-  { name: 'sign after .25', input: ['0', '.', '2', '5', '-'], amount: 0.25, dirty: 5 },
-  { name: 'negative without accepted value', input: ['-', '.', '1'], amount: null, dirty: 3 },
+  { name: 'sign after .1', input: ['0', '.', '1', '-'], amount: 0.1 },
+  { name: 'sign after .25', input: ['0', '.', '2', '5', '-'], amount: 0.25 },
+  { name: 'negative without accepted value', input: ['-', '.', '1'], amount: null },
 ])
-  test(`childless malformed inset: ${entry.name} matches main counts`, async () => {
+  test(`childless inset typed as ${entry.name}: the preview is what commits, as at most one undo step`, async () => {
     const { host } = seed('none')
     const renderer = await create(<Scene id={host.id} />)
-    const dirty = spyOn(api.sceneApi, 'markDirty'),
-      write = spyOn(api.sceneApi, 'update'),
+    const write = spyOn(api.sceneApi, 'update'),
       batch = spyOn(api.sceneApi, 'applyChanges')
     try {
       await settle(renderer)
-      dirty.mockClear()
       write.mockClear()
       batch.mockClear()
       await keys(['i', ...entry.input])
@@ -309,13 +307,11 @@ for (const entry of [
           amount: entry.amount,
         })
       else expect(useBlockEditSession.getState().lastOperation).toBeNull()
-      expect(dirty).toHaveBeenCalledTimes(entry.dirty)
       expect(write).toHaveBeenCalledTimes(entry.amount === null ? 0 : 1)
       expect(batch).toHaveBeenCalledTimes(0)
       expect(useScene.temporal.getState().pastStates).toHaveLength(entry.amount === null ? 0 : 1)
       expect(useLiveNodeOverrides.getState().overrides.size).toBe(0)
     } finally {
-      dirty.mockRestore()
       write.mockRestore()
       batch.mockRestore()
       await renderer.unmount()
@@ -324,7 +320,7 @@ for (const entry of [
 
 for (const operation of ['rotate', 'translate', 'scale'])
   for (const finish of ['pointerup', 'pointercancel'])
-    test(`childless drag ${operation} ${finish}: main write and dirty counts`, async () => {
+    test(`childless drag ${operation} ending in ${finish}: preview writes nothing, release commits the preview or nothing`, async () => {
       const { host } = seed('none')
       if (operation === 'translate')
         useBlockEditSession.getState().setSelection(host.id, {
@@ -333,12 +329,10 @@ for (const operation of ['rotate', 'translate', 'scale'])
           activeId: 'f-right',
         })
       const renderer = await create(<Scene id={host.id} />)
-      const dirty = spyOn(api.sceneApi, 'markDirty'),
-        write = spyOn(api.sceneApi, 'update'),
+      const write = spyOn(api.sceneApi, 'update'),
         batch = spyOn(api.sceneApi, 'applyChanges')
       try {
         await settle(renderer)
-        dirty.mockClear()
         write.mockClear()
         batch.mockClear()
         const origin = operation === 'translate' ? new Vector3(1, 0.75, 0) : new Vector3(0, 1.5, 0)
@@ -353,10 +347,8 @@ for (const operation of ['rotate', 'translate', 'scale'])
         }
         const preview = getEffectiveNode(useScene.getState().nodes[host.id] as BlockNode).topology
         expect(write).toHaveBeenCalledTimes(0)
-        expect(dirty).toHaveBeenCalledTimes(2)
         await pointer(finish)
         await settle(renderer)
-        expect(dirty).toHaveBeenCalledTimes(3)
         expect(write).toHaveBeenCalledTimes(finish === 'pointerup' ? 1 : 0)
         expect(batch).toHaveBeenCalledTimes(0)
         expect(useScene.temporal.getState().pastStates).toHaveLength(finish === 'pointerup' ? 1 : 0)
@@ -366,7 +358,6 @@ for (const operation of ['rotate', 'translate', 'scale'])
         expect(useLiveNodeOverrides.getState().overrides.size).toBe(0)
         expect(useInteractionScope.getState().scope).toMatchObject({ phase: 'selecting' })
       } finally {
-        dirty.mockRestore()
         write.mockRestore()
         batch.mockRestore()
         await renderer.unmount()

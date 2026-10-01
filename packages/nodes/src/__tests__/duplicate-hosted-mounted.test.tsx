@@ -848,7 +848,7 @@ for (const route of ['item', 'item-events', 'registry', '2d'])
 
 for (const strict of [false, true]) {
   for (const scenario of ['cabinet-handoff', 'named-replacement'])
-    test(`interaction lifetime audit ${scenario} strict=${strict}`, async () => {
+    test(`Duplicate ${scenario}: the gesture survives a switch to 2D and commits once (strict=${strict})`, async () => {
       const { root } = interactionFixture(
         scenario === 'cabinet-handoff' ? 'cabinet' : 'procedural-item',
       )
@@ -1026,7 +1026,7 @@ for (const strict of [false, true])
 for (const view of ['3d', '2d'])
   for (const kind of ['item', 'procedural-item'])
     for (const childless of [true, false])
-      test(`review bot occupied commit ${view} ${kind} childless=${childless}`, async () => {
+      test(`a copy released over an occupied spot is refused without a write, then lands on a free one (${view} ${kind} childless=${childless})`, async () => {
         const { root, host } = lifecycleFixture(kind, childless)
         select(root, view)
         const before = snapshot()
@@ -1111,7 +1111,7 @@ for (const view of ['3d', '2d'])
 
 for (const kind of ['item', 'procedural-item'])
   for (const childless of [false, true])
-    test(`review bot surface shrinks before release ${kind} childless=${childless}`, async () => {
+    test(`a surface that shrinks under the copy before release refuses the drop (${kind} childless=${childless})`, async () => {
       const { root, host } = lifecycleFixture(kind, childless)
       select(root, '2d')
       const renderer = await create(<Scene menu />)
@@ -1147,7 +1147,7 @@ for (const strict of [false, true])
   for (const kind of ['item', 'shelf', 'procedural-item', 'cabinet'])
     for (const pending of [false, true])
       for (const outcome of ['commit', 'replace'])
-        test(`review bot repeat begin ${kind} pending=${pending} ${outcome} strict=${strict}`, async () => {
+        test(`re-arming the same move keeps one gesture (${kind} pending=${pending} ${outcome} strict=${strict})`, async () => {
           const { root } = interactionFixture(kind)
           select(root)
           const before = snapshot()
@@ -1222,7 +1222,7 @@ for (const strict of [false, true])
 
 for (const view of ['3d', '2d'])
   for (const kind of ['item', 'procedural-item', ...(view === '2d' ? ['cabinet'] : [])])
-    test(`audit7 subscriber error rolls back ${view} ${kind}`, async () => {
+    test(`a scene subscriber that throws on drop rolls the drop back (${view} ${kind})`, async () => {
       const { root } = interactionFixture(kind)
       select(root, view)
       const listeners = spyOn(window, 'addEventListener')
@@ -1290,7 +1290,7 @@ for (const view of ['2d', '3d'])
   for (const kind of ['item', 'procedural-item'])
     for (const refusal of view === '2d' ? ['occupied', 'shrunk'] : ['occupied'])
       for (const check of view === '2d' ? ['unchanged', 'feedback'] : ['unchanged'])
-        test(`audit7 unregistered preset ${view} ${kind} ${refusal} ${check}`, async () => {
+        test(`a refused drop of a fresh preset keeps it moving with no history (${view} ${kind} ${refusal} ${check})`, async () => {
           const { root, host } = lifecycleFixture(kind, false)
           genericPlanDOM()
           const indicators: any[] = []
@@ -1366,7 +1366,7 @@ for (const view of ['2d', '3d'])
 for (const strict of [false, true])
   for (const kind of ['item', 'shelf', 'procedural-item', 'cabinet'])
     for (const outcome of ['replace', 'end'])
-      test(`audit7 pending abandonment ${kind} ${outcome} strict=${strict}`, async () => {
+      test(`abandoning a Duplicate no view adopted yet restores the scene (${kind} ${outcome} strict=${strict})`, async () => {
         const { root } = interactionFixture(kind)
         select(root)
         const before = snapshot()
@@ -1388,7 +1388,7 @@ for (const strict of [false, true])
       })
 
 for (const continuation of ['single', 'repeat'] as const)
-  test(`audit7 fresh catalog ${continuation}`, async () => {
+  test(`fresh catalog placement in ${continuation} mode adds one item and one undo step per click`, async () => {
     seed([])
     useEditor.getState().setSelectedItem(asset)
     useEditor.getState().setContinuation('point', continuation)
@@ -1428,7 +1428,7 @@ for (const continuation of ['single', 'repeat'] as const)
 for (const view of ['3d', '2d'])
   for (const kind of ['item', 'shelf', 'procedural-item', 'cabinet'])
     for (const adoption of ['unmounted', 'refused'])
-      test(`review2 pending Escape ${view} ${kind} ${adoption}`, async () => {
+      test(`Escape cancels a Duplicate the view never adopted (${view} ${kind} ${adoption})`, async () => {
         const { root } = interactionFixture(kind)
         select(root, view)
         const before = snapshot()
@@ -1461,7 +1461,7 @@ for (const kind of ['item', 'shelf', 'procedural-item', 'cabinet'])
   for (const cancel of kind === 'item'
     ? ['tool', 'selection', 'right-click']
     : ['tool', 'selection'])
-    test(`review2 pending cancel ${kind} ${cancel}`, async () => {
+    test(`switching tool, clearing the selection or right-clicking cancels an unadopted Duplicate (${kind} ${cancel})`, async () => {
       const { root } = interactionFixture(kind)
       select(root)
       const before = snapshot()
@@ -1503,7 +1503,7 @@ for (const view of ['3d', '2d'])
       'generated-recipe-fallback',
       'generated-no-drag-bounds',
     ])
-      test(`review2 real named surface ${view} ${snapping} ${childKind}`, async () => {
+      test(`Duplicate on a tilted named worktop stays attached and commits its subtree (${view} ${snapping} ${childKind})`, async () => {
         const host = ProceduralItemNode.parse({
           parentId: level.id,
           recipe: {
@@ -1610,7 +1610,7 @@ for (const view of ['3d', '2d'])
 
 for (const kind of ['item', 'procedural-item', 'procedural-generic'])
   for (const outcome of ['Escape', 'commit'])
-    test(`review3 refused 2d release then 3d ${kind} ${outcome}`, async () => {
+    test(`a refused 2D release keeps the copy for the 3D view to drop or cancel (${kind} ${outcome})`, async () => {
       Core.resetSceneHistoryPauseDepth()
       const { root, host } = lifecycleFixture(
         kind === 'procedural-generic' ? 'procedural-item' : kind,
@@ -1707,7 +1707,7 @@ for (const kind of ['item', 'procedural-item', 'procedural-generic'])
       }
     })
 
-test('review3 unregistered generic Escape cannot record deletion after flags change', async () => {
+test('Escape on a fresh generic placement whose flags changed mid-gesture records no deletion', async () => {
   Core.resetSceneHistoryPauseDepth()
   genericPlanDOM()
   const root = genericHost()

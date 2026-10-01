@@ -464,7 +464,7 @@ function lBlock() {
 for (const mover of ['catalog', 'registry'] as const)
   for (const order of ['grid first', 'host first'])
     for (const fresh of [false, true])
-      test(`${mover} ${fresh ? 'fresh' : 'move'}: L notch uses main conservative floor collision: red preview blocks click, clear floor commits (${order})`, async () => {
+      test(`${mover} ${fresh ? 'fresh' : 'move'}: L notch uses the conservative floor collision: red preview blocks click, clear floor commits (${order})`, async () => {
         const host = lBlock(),
           child = childFor(mover, fresh)
         seed([host, ...(mover === 'catalog' && fresh ? [] : [child])])
@@ -546,7 +546,7 @@ for (const mover of ['catalog', 'registry'] as const)
         }
       })
 for (const shape of ['rotated item', 'warped face'])
-  test(`main conservative collision catches ${shape} against mounted block geometry`, async () => {
+  test(`conservative collision catches ${shape} against mounted block geometry`, async () => {
     const topology = createBoxBlockTopology(0.4, 1, 0.4)
     if (shape === 'warped face') {
       const corners = [
@@ -676,7 +676,7 @@ function genericHost(declared = false) {
   return schema.parse({ parentId: level.id }) as AnyNode
 }
 for (const kind of ['column', 'block', 'plugin', 'shelf', 'item', 'procedural-item', 'cabinet'])
-  test(`Duplicate ${kind}: main legacy policy or occupied host subtree, remapped attachments, drop/delete/undo`, async () => {
+  test(`Duplicate ${kind}: legacy policy or occupied host subtree, remapped attachments, drop/delete/undo`, async () => {
     const host =
       kind === 'plugin'
         ? genericHost()

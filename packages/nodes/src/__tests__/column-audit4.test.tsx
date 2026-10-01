@@ -188,7 +188,7 @@ async function paired(
 
 for (const mover of ['catalog', 'registry'] as const)
   for (const order of ['grid first', 'host first'])
-    test(`PRODUCT RULE: ${mover} centre leaves current column top -> detach and commit at floor datum (${order})`, async () => {
+    test(`${mover} centre leaving the column top detaches and commits at the floor datum (${order})`, async () => {
       const host = ColumnNode.parse({
         parentId: level.id,
         height: 0.8,
@@ -328,7 +328,7 @@ for (const hostKind of ['plugin', 'column'])
             }
           })
 
-test('regression: pitched plugin -> shelf -> catalog matches rendered XZ', async () => {
+test('pitched plugin -> shelf -> catalog plan matches rendered XZ', async () => {
   const root = genericHost()
   Object.assign(root, { rotation: [0.4, 0.6, -0.2] })
   const shelf = ShelfNode.parse({

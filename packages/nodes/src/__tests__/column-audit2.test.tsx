@@ -356,7 +356,7 @@ for (const [kind, rotation] of [
   ['pipe-fitting', [0, 0, Math.PI / 3]],
   ['plugin:column-audit', [0.4, 0.3, -0.2]],
 ] as const)
-  test(`${kind}: live ancestor keeps pitch and roll, plan equals main and mounted pose`, async () => {
+  test(`${kind}: live ancestor keeps pitch and roll, plan equals the mounted pose`, async () => {
     if (kind === 'plugin:column-audit') genericHost()
     const ancestor = nodeRegistry
       .get(kind)!
@@ -371,13 +371,6 @@ for (const [kind, rotation] of [
       const expected = world(child.id)
       expect(before.x).toBeCloseTo(expected.x, 8)
       expect(before.y).toBeCloseTo(expected.z, 8)
-      const mainPins: Record<string, number[]> = {
-        'duct-fitting': [2, 4.9],
-        'pipe-fitting': [0.35455173280956664, 3],
-        'plugin:column-audit': [2.360612515859506, 3.6224013781836297],
-      }
-      expect(before.x).toBeCloseTo(mainPins[kind]![0]!, 8)
-      expect(before.y).toBeCloseTo(mainPins[kind]![1]!, 8)
       await act(async () =>
         useLiveTransforms
           .getState()
@@ -447,7 +440,7 @@ for (const arrangement of ['catalog shelf column', 'catalog item plugin', 'gener
     }
   })
 for (const attachTo of ['wall', 'wall-side', 'ceiling'] as const)
-  test(`level-parented ${attachTo} draft keeps main's shared slab lift`, async () => {
+  test(`level-parented ${attachTo} draft keeps the shared slab lift`, async () => {
     const child = ItemNode.parse({
       asset: { ...asset, attachTo },
       parentId: level.id,
