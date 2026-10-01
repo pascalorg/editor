@@ -237,7 +237,10 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
   if (!input.force) {
     const blocking = findWallChildOverlap(wallId, nodes, clampedX, clampedY, width, height)
     if (blocking) {
-      const span = 'width' in blocking ? (blocking as { width: number }).width : 0
+      const span =
+        blocking.type === 'item'
+          ? getScaledDimensions(blocking as ItemNode)[0]
+          : (blocking as { width: number }).width
       const center = (blocking as { position: [number, number, number] }).position[0]
       refuse(
         'opening_overlap',

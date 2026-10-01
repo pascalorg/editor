@@ -384,6 +384,43 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
     { surfaces: ['core'] },
   ),
   verify(
+    "a stair's floor opening is checked in its own building, not in the house next door",
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        level('level_1', 1),
+        ...room('level_0', 'ground'),
+        ...room('level_1', 'upper').filter((node) => node.type !== 'slab'),
+        SlabNode.parse({
+          id: 'slab_upper',
+          parentId: 'level_1',
+          polygon: ROOM,
+          holes: [
+            [
+              [1.5, 0.2],
+              [2.5, 0.2],
+              [2.5, 2.2],
+              [1.5, 2.2],
+            ],
+          ],
+          holeMetadata: [{ source: 'stair', stairId: 'stair_level_0' }],
+        }),
+        ...stairOn('level_0', {
+          fromLevelId: 'level_0',
+          toLevelId: 'level_1',
+          slabOpeningMode: 'destination',
+        }),
+        building('building_annex'),
+        level('level_annex_0', 0, { parentId: 'building_annex' }),
+        level('level_annex_1', 1, { parentId: 'building_annex' }),
+        ...room('level_annex_0', 'annex_ground'),
+        ...room('level_annex_1', 'annex_upper'),
+      ),
+    { lacks: ['stair_no_opening'] },
+    { surfaces: ['core'] },
+  ),
+  verify(
     'furniture in front of a door is reported',
     () =>
       scene(

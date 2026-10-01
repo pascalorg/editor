@@ -167,8 +167,17 @@ function targetLevelIdsForStair(nodes: SceneNodes, stair: StairNode): string[] {
   if (fromLevel === undefined || toLevel === undefined) return toLevelId ? [toLevelId] : []
   const low = Math.min(fromLevel, toLevel)
   const high = Math.max(fromLevel, toLevel)
+  const fromLevelNode = fromLevelId ? nodes[fromLevelId] : undefined
+  const buildingId =
+    fromLevelNode?.type === 'level'
+      ? levelBuildingId(nodes as Record<AnyNodeId, AnyNode>, fromLevelNode)
+      : null
   return levelsOf(nodes)
     .filter((level) => level.level > low && level.level <= high)
+    .filter(
+      (level) =>
+        !buildingId || levelBuildingId(nodes as Record<AnyNodeId, AnyNode>, level) === buildingId,
+    )
     .map((level) => level.id)
 }
 

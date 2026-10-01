@@ -1,4 +1,4 @@
-import { BuildingNode, DoorNode, LevelNode, WallNode } from '../../schema'
+import { BuildingNode, DoorNode, ItemNode, LevelNode, WallNode } from '../../schema'
 
 /**
  * The edge cases of `add_door` / `add_window`, written before the operation: one table that the
@@ -24,6 +24,9 @@ export const OPENING_SCENE = {
   curved: 'wall_curved',
   /** 4 m wall with no height of its own: the 2.8 m storey decides. */
   storey: 'wall_storey',
+  /** 4 m wall carrying a 1.2 m wall-mounted shelf centred at 2.0 m (1.4–2.6 m, 1.0–1.6 m high). */
+  shelved: 'wall_shelved',
+  wallShelf: 'item_wall_shelf',
 } as const
 
 const wall = (id: string, z: number, length: number, extra: Record<string, unknown> = {}) =>
@@ -37,7 +40,7 @@ const wall = (id: string, z: number, length: number, extra: Record<string, unkno
     ...extra,
   })
 
-/** A fresh scene graph for every case: one building, one 2.8 m storey, six walls. */
+/** A fresh scene graph for every case: one building, one 2.8 m storey, seven walls. */
 export function openingScene() {
   // No height of its own: the storey decides.
   const { height: _height, ...storeyWall } = wall(OPENING_SCENE.storey, 10, 4)
@@ -48,6 +51,7 @@ export function openingScene() {
     { ...wall(OPENING_SCENE.busy, 6, 4), children: [OPENING_SCENE.existingDoor] },
     wall(OPENING_SCENE.curved, 8, 4, { curveOffset: 0.5 }),
     storeyWall as WallNode,
+    { ...wall(OPENING_SCENE.shelved, 12, 4), children: [OPENING_SCENE.wallShelf] },
   ]
   const door = DoorNode.parse({
     id: OPENING_SCENE.existingDoor,
@@ -57,6 +61,21 @@ export function openingScene() {
     width: 0.9,
     height: 2.1,
   })
+  const shelf = ItemNode.parse({
+    id: OPENING_SCENE.wallShelf,
+    parentId: OPENING_SCENE.shelved,
+    wallId: OPENING_SCENE.shelved,
+    position: [2, 1, 0],
+    asset: {
+      id: 'wall-shelf',
+      name: 'Wall shelf',
+      category: 'storage',
+      thumbnail: '/items/wall-shelf/thumbnail.webp',
+      src: '/items/wall-shelf/model.glb',
+      dimensions: [1.2, 0.6, 0.3],
+      attachTo: 'wall',
+    },
+  })
   const level = LevelNode.parse({
     id: OPENING_SCENE.levelId,
     parentId: OPENING_SCENE.buildingId,
@@ -65,7 +84,7 @@ export function openingScene() {
     children: walls.map((w) => w.id),
   })
   const building = BuildingNode.parse({ id: OPENING_SCENE.buildingId, children: [level.id] })
-  const nodes = Object.fromEntries([building, level, ...walls, door].map((node) => [node.id, node]))
+  const nodes = Object.fromEntries([building, level, ...walls, door, shelf].map((node) => [node.id, node]))
   return { nodes, rootNodeIds: [building.id] }
 }
 
@@ -89,7 +108,8 @@ export type WallOpeningCase = {
     | { localX: number; centerY: number; clamped: boolean; glassPanels?: boolean }
 }
 
-const { main, short, exact, busy, curved, storey, levelId, existingDoor } = OPENING_SCENE
+const { main, short, exact, busy, curved, storey, shelved, wallShelf, levelId, existingDoor } =
+  OPENING_SCENE
 
 export const WALL_OPENING_CASES: readonly WallOpeningCase[] = [
   // Where it goes
@@ -177,6 +197,12 @@ export const WALL_OPENING_CASES: readonly WallOpeningCase[] = [
     tool: 'add_window',
     input: { wallId: busy, t: 0.5 },
     expect: { refusal: 'opening_overlap', mentions: [existingDoor] },
+  },
+  {
+    name: 'a door over a wall-mounted item is refused with the item\'s span',
+    tool: 'add_door',
+    input: { wallId: shelved, t: 0.5 },
+    expect: { refusal: 'opening_overlap', mentions: [wallShelf, '1.40 m–2.60 m'] },
   },
   {
     name: 'openings whose edges touch both fit',
