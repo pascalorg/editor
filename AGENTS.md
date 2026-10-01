@@ -1,52 +1,39 @@
-# Agent Instructions — `pascalorg/editor`
+# Agents — `pascalorg/editor`
 
-Public, open-source home of `@pascal-app/{core,viewer,editor,mcp}` and the standalone editor app. Consumed both as npm packages and (in `pascalorg/private-editor`) as a git submodule.
+Public, open-source home of `@pascal-app/{core,viewer,editor,nodes,mcp,cli,ifc-converter}` and the standalone editor app. Consumed as npm packages and, in `pascalorg/private-editor`, as a git submodule.
 
-## Repo Shape
+**Read `DECISIONS.md` first**: what Pascal is, the architecture invariants (E-IDs), the testing rule (T-001), and what is explicitly delegated to you. Everything else here is a map.
 
-| Path | Purpose |
+## Packages
+
+| Path | Owns |
 |---|---|
-| `packages/core` | Scene graph, node schemas, stores, event bus, core systems — pure logic, no Three.js. `src/capture/` holds the capture-session contracts published as `@pascal-app/core/capture` |
-| `packages/viewer` | Standalone 3D canvas: renderers, viewer systems, presentation state. `src/capture/` holds the capture runtime and reference layers published as `@pascal-app/viewer/capture` |
-| `packages/editor` | Editor UI components reused by the standalone app and embedders |
-| `packages/mcp` | MCP server and scene storage adapters |
-| `apps/editor` | Standalone editor app — composes `viewer` + `editor` + tools |
+| `packages/core` | Scene graph, schemas, stores, commands, registry, services — pure logic, no runtime Three.js (E-001). `src/capture/` = capture-session contracts |
+| `packages/viewer` | The 3D canvas: renderers, viewer systems, presentation state. Editor-agnostic (E-001) |
+| `packages/editor` | The editing experience: tools, `useEditor`, panels, floor plan, paint, shortcuts, overlays |
+| `packages/nodes` | The built-in plugin `pascal:core`: one folder per node kind with its definition (E-002) |
+| `packages/mcp` | MCP server, scene storage adapters, agent tools |
+| `packages/cli` | Packed CLI + portable runtime |
+| `packages/ifc-converter` | IFC import/export |
+| `apps/editor` | Standalone app composing viewer + editor |
+| `skills/` | Public agent skills shipped with the plugin (product payload, validated in CI) |
 
 ## Where to look
 
-- **Architecture rules** — `wiki/architecture/` (read on demand; index in `wiki/architecture/README.md`).
-- **Skills (ready workflows)** — `.agents/skills/<name>/SKILL.md`. Same content is reachable as `.claude/skills/`, `.cursor/skills/`, `.codex/skills/` (symlinks to `.agents/skills/`).
-- **Repo orientation for humans** — `README.md`, `SETUP.md`, `CONTRIBUTING.md`.
+- Architecture detail, on demand: `wiki/architecture/` (index in its `README.md`). Read the page for the boundary you touch: a new kind → `node-definitions.md`, `node-schemas.md`; a tool or interaction → `tools.md`, `interaction-scope.md`; anything in `viewer` → `viewer-isolation.md`, `layers.md`; selection → `selection-managers.md`.
+- Reviewing a PR: `.agents/skills/review-architecture/SKILL.md`.
+- Opening a PR: `.agents/skills/open-pr/SKILL.md`.
+- Humans: `README.md`, `SETUP.md`, `CONTRIBUTING.md`.
 
-`CLAUDE.md`, `GEMINI.md`, and `.github/copilot-instructions.md` are symlinks to this file. Codex reads this file directly.
+`CLAUDE.md`, `GEMINI.md` and `.github/copilot-instructions.md` symlink here.
 
-## Layer Boundaries (read once, internalise)
+## Commands
 
-- **`packages/core`** owns domain data and pure logic. It must not import Three.js, `packages/viewer`, `apps/editor`, rendering/UI concepts, tools, modes, phases, or view-specific concepts such as floorplan or paint preview.
-- **`packages/viewer`** owns the standalone 3D canvas, renderers, viewer systems, and genuine presentation state. It must not know about `useEditor`, editor tools, phases, modes, paint mode, floorplan state, or editor-only presentation vocabulary.
-- **`apps/editor`** owns the editing experience: tools, `useEditor`, panels, floorplan helpers, paint mode, keyboard shortcuts, command palette, action menus, cursor badges, and editor-only overlays. Editor features are injected into `<Viewer>` via props and children.
+`bun run ci` is exactly what CI runs (check, skills:validate, check-types, test, build). The git hooks (installed by `bun install`) are fast feedback: Biome on staged files, typecheck of the packages you changed.
 
-Details, examples, and rationale live in `wiki/architecture/layers.md`, `wiki/architecture/viewer-isolation.md`, `wiki/architecture/systems.md`, `wiki/architecture/renderers.md`, `wiki/architecture/tools.md`.
+## Working agreements
 
-## When making architecture-sensitive changes
-
-Read the relevant page in `wiki/architecture/` **before** writing code. The page list lives in `wiki/architecture/README.md`. As a minimum:
-
-- Adding a node type → `node-schemas.md`, `renderers.md`, `systems.md`
-- Adding a tool → `tools.md`, `spatial-queries.md`, `events.md`
-- Adding / changing a placement or move interaction → `tools.md` ("2D ↔ 3D behavioral parity": applicable behaviors must exist in both views; port the change to the sibling 2D/3D file in the same PR)
-- Adding a system → `systems.md`, `scene-registry.md`
-- Anything in `packages/viewer` → `viewer-isolation.md`, `layers.md`
-- Anything touching selection → `selection-managers.md`, `scene-registry.md`, `events.md`
-
-## When reviewing a PR
-
-Invoke the `review-architecture` skill (`.agents/skills/review-architecture/SKILL.md`). It loads the required architecture pages, fetches the diff, classifies each new file by layer, and reports findings grouped by severity.
-
-## Operating rules
-
-- Read the full file before editing. Plan all changes, then make one complete edit.
-- When the user corrects you, stop and re-read their message.
-- After two consecutive tool failures, stop and change approach.
-- Don't introduce backwards-compatibility shims, dead code, or speculative abstractions.
-- Don't write new comments unless they explain a non-obvious *why*.
+- Rewrite when the shape is wrong; say what you are replacing and why; keep the PR to its stated goal.
+- No compatibility shims, dead code or speculative abstractions; comments only for a non-obvious *why*.
+- Old scenes must still load after your change (E-003).
+- Never cite private-repo plan paths from this repo (E-015).
