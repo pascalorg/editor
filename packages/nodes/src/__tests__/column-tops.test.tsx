@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
+import { expect, spyOn, test } from 'bun:test'
 import {
   type AnyNode,
   BuildingNode,
@@ -21,22 +21,14 @@ import {
   spatialGridManager,
   useLiveNodeOverrides,
   useLiveTransforms,
-  useRegistry,
   useScene,
 } from '@pascal-app/core'
-import { nodeLevelFrame, ProceduralItemNode, type Recipe } from '@pascal-app/core/procedural-items'
-import { NodeRenderer, useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
+import { nodeLevelFrame, ProceduralItemNode } from '@pascal-app/core/procedural-items'
+import { MoveRegistryNodeTool, useEditor, useInteractionScope } from '@pascal-app/editor'
+import { useViewer } from '@pascal-app/viewer'
 import { events, type RootStore } from '@react-three/fiber'
 import { act, create } from '@react-three/test-renderer'
-import React, {
-  Children,
-  cloneElement,
-  isValidElement,
-  type ReactNode,
-  useMemo,
-  useRef,
-} from 'react'
+import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import {
   BoxGeometry,
@@ -54,57 +46,21 @@ import {
   FloorplanRegistryLayer,
   splitFloorplanOverlay,
 } from '../../../editor/src/components/editor-2d/renderers/floorplan-registry-layer'
-import { MoveRegistryNodeTool } from '../../../editor/src/components/tools/registry/move-registry-node-tool'
 import { useKeyboard } from '../../../editor/src/hooks/use-keyboard'
-import useEditor from '../../../editor/src/store/use-editor'
-import useInteractionScope from '../../../editor/src/store/use-interaction-scope'
-import { FloorElevationSystem } from '../../../viewer/src/systems/floor-elevation/floor-elevation-system'
-import { GeometrySystem } from '../../../viewer/src/systems/geometry/geometry-system'
-import { ItemSystem } from '../../../viewer/src/systems/item/item-system'
 import childlessPlan from '../column/__fixtures__/childless-plan.json'
 import { planColumnEdit } from '../column/hosted-resize'
-import { builtinPlugin } from '../index'
 import { resolveItemTransform } from '../item/floorplan'
-import { ItemGLTFLoader } from '../item/model-loader'
-import { MoveItemTool } from '../item/move-tool'
 import ItemTool from '../item/tool'
-import { getDefaultPanelMaterial } from '../solar-panel/geometry'
+import {
+  boxAsset as asset,
+  CatalogMover,
+  installMountedScene,
+  LevelScene,
+  boxRecipe as recipe,
+  SceneSystems,
+  settle,
+} from './harness'
 
-const recipe: Recipe = {
-  version: 1,
-  name: 'Audit box',
-  description: '',
-  constraints: [],
-  parameters: [
-    { id: 'width', label: 'Width', default: 0.1, min: 0.05, max: 1, step: 0.05, unit: 'm' },
-  ],
-  slots: [{ id: 'body', label: 'Body', color: '#ffffff' }],
-  parts: [
-    {
-      id: 'body',
-      label: 'Body',
-      count: 1,
-      shapes: [
-        {
-          id: 'box',
-          primitive: 'box',
-          size: [0.1, 0.2, 0.1],
-          position: [0, 0.1, 0],
-          slot: 'body',
-        },
-      ],
-    },
-  ],
-  surfaces: [],
-}
-const asset = {
-  id: 'audit-box',
-  name: 'Audit box',
-  category: 'decor',
-  thumbnail: '',
-  src: '/unrenderable-host-audit.glb',
-  dimensions: [0.1, 0.2, 0.1] as [number, number, number],
-}
 const site = SiteNode.parse({})
 const building = BuildingNode.parse({ parentId: site.id })
 const level = LevelNode.parse({ parentId: building.id })
@@ -129,107 +85,8 @@ type Row = {
   moveError: string
   parseError: string
 }
-let savedScene: ReturnType<typeof useScene.getState>
-let savedEditor: ReturnType<typeof useEditor.getState>
-let savedViewer: ReturnType<typeof useViewer.getState>
-let savedScope: ReturnType<typeof useInteractionScope.getState>
-let restoreRegistry: () => void
-let restoreGlobals: () => void
-let loadModel: ReturnType<typeof spyOn>
-let htmlLabels: ReturnType<typeof spyOn>
+installMountedScene()
 
-beforeEach(() => {
-  htmlLabels = spyOn(Html as unknown as { render: () => ReactNode }, 'render').mockImplementation(
-    () => null,
-  )
-  savedScene = useScene.getState()
-  savedEditor = useEditor.getState()
-  savedViewer = useViewer.getState()
-  savedScope = useInteractionScope.getState()
-  const names = [
-    'window',
-    'document',
-    'requestAnimationFrame',
-    'cancelAnimationFrame',
-    'HTMLElement',
-    'HTMLInputElement',
-    'HTMLTextAreaElement',
-  ] as const
-  const descriptors = names.map((name) => Object.getOwnPropertyDescriptor(globalThis, name))
-  restoreGlobals = () =>
-    names.forEach((name, i) => {
-      const descriptor = descriptors[i]
-      if (descriptor) Object.defineProperty(globalThis, name, descriptor)
-      else Reflect.deleteProperty(globalThis, name)
-    })
-  for (const name of ['HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement'])
-    Object.defineProperty(globalThis, name, { configurable: true, value: class {} })
-  globalThis.window = new EventTarget() as Window & typeof globalThis
-  globalThis.document = {
-    body: { style: { cursor: '' } },
-    createElement: (tag: string) => {
-      if (tag !== 'canvas') throw new Error(`Unexpected DOM element: ${tag}`)
-      const context = new Proxy(
-        {},
-        {
-          get: (_target, key) =>
-            key === 'createLinearGradient' ? () => ({ addColorStop() {} }) : () => {},
-        },
-      )
-      return { width: 0, height: 0, getContext: () => context }
-    },
-  } as unknown as Document
-  getDefaultPanelMaterial()
-  Reflect.deleteProperty(globalThis.document, 'createElement')
-  globalThis.requestAnimationFrame = () => 0
-  globalThis.cancelAnimationFrame = () => {}
-  loadModel = spyOn(ItemGLTFLoader.prototype, 'load').mockImplementation((_url, onLoad) => {
-    const scene = new Group()
-    scene.add(
-      new Mesh(new BoxGeometry(0.1, 0.2, 0.1).translate(0, 0.1, 0), new MeshBasicMaterial()),
-    )
-    onLoad({
-      scene,
-      scenes: [scene],
-      animations: [],
-      cameras: [],
-      asset: { version: '2.0' },
-      parser: {},
-    } as never)
-  })
-  restoreRegistry = nodeRegistry._snapshot()
-  nodeRegistry._reset()
-  for (const def of builtinPlugin.nodes!) registerNode(def)
-})
-afterEach(() => {
-  htmlLabels.mockRestore()
-  loadModel.mockRestore()
-  sceneRegistry.nodes.clear()
-  spatialGridManager.clear()
-  useLiveNodeOverrides.getState().clearAll()
-  useLiveTransforms.getState().clearAll()
-  useScene.temporal.getState().resume()
-  useScene.temporal.getState().clear()
-  useScene.setState(savedScene)
-  useEditor.setState(savedEditor)
-  useViewer.setState(savedViewer)
-  useInteractionScope.setState(savedScope)
-  restoreRegistry()
-  restoreGlobals()
-})
-
-function withoutLabels(element: ReactNode): ReactNode {
-  if (!isValidElement<{ children?: ReactNode }>(element)) return element
-  if (element.type === Html) return null
-  return cloneElement(element, {}, Children.map(element.props.children, withoutLabels))
-}
-function RegistryMover({ node }: { node: AnyNode }) {
-  return withoutLabels(MoveRegistryNodeTool({ node }))
-}
-function CatalogMover({ source }: { source: ItemNode }) {
-  const node = useMemo(() => structuredClone(source), [source])
-  return withoutLabels(MoveItemTool({ node }))
-}
 function Keyboard() {
   useKeyboard()
   return null
@@ -246,28 +103,10 @@ function Scene({
   keyboard?: boolean
 }) {
   const armed = useEditor((s) => s.mode === 'build' && s.tool === 'item')
-  const buildingNode = useScene((s) => s.nodes[building.id] as BuildingNode)
-  const children = useScene((s) => (s.nodes[level.id] as LevelNode).children)
-  const buildingChildren = useScene((s) => (s.nodes[building.id] as BuildingNode).children)
   const moving = useInteractionScope((s) => s.scope.kind === 'moving' || s.scope.kind === 'placing')
-  const ref = useRef<Group>(null!)
-  const buildingRef = useRef<Group>(null!)
-  useRegistry(level.id, 'level', ref)
-  useRegistry(building.id, 'building', buildingRef)
   return (
     <>
-      <group ref={buildingRef} position={buildingNode.position} rotation={buildingNode.rotation}>
-        <group ref={ref}>
-          {children.map((id) => (
-            <NodeRenderer key={id} nodeId={id} />
-          ))}
-        </group>
-        {buildingChildren
-          .filter((id) => id !== level.id)
-          .map((id) => (
-            <NodeRenderer key={id} nodeId={id} />
-          ))}
-      </group>
+      <LevelScene building={building} level={level} posed />
       {keyboard && <Keyboard />}
       {fresh && armed && <ItemTool />}
       {mover &&
@@ -276,21 +115,11 @@ function Scene({
         (mover === 'catalog' ? (
           <CatalogMover source={child as ItemNode} />
         ) : (
-          <RegistryMover node={child} />
+          <MoveRegistryNodeTool node={child} />
         ))}
-      <FloorElevationSystem />
-      <ItemSystem />
-      <GeometrySystem />
+      <SceneSystems />
     </>
   )
-}
-async function settle(renderer: Awaited<ReturnType<typeof create>>) {
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 10))
-  })
-  await act(async () => {
-    await renderer.advanceFrames(3, 1 / 60)
-  })
 }
 function visible(object?: Object3D): boolean {
   if (!object) return false

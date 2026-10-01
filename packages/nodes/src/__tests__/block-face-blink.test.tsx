@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import {
   type AssetInput,
   BlockNode,
@@ -7,160 +7,47 @@ import {
   emitter,
   ItemNode,
   LevelNode,
-  nodeRegistry,
-  registerNode,
   SiteNode,
   sceneRegistry,
-  spatialGridManager,
   useLiveNodeOverrides,
-  useLiveTransforms,
-  useRegistry,
   useScene,
 } from '@pascal-app/core'
-import { useDraftNode, usePlacementCoordinator } from '@pascal-app/editor'
-import { NodeRenderer, useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
+import { useDraftNode, useEditor, usePlacementCoordinator } from '@pascal-app/editor'
+import { useViewer } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
-import { Children, cloneElement, isValidElement, type ReactNode, useRef } from 'react'
-import { BoxGeometry, Group, Mesh, MeshBasicMaterial, Vector3 } from 'three'
-import useEditor from '../../../editor/src/store/use-editor'
-import useInteractionScope from '../../../editor/src/store/use-interaction-scope'
-import { FloorElevationSystem } from '../../../viewer/src/systems/floor-elevation/floor-elevation-system'
-import { GeometrySystem } from '../../../viewer/src/systems/geometry/geometry-system'
-import { ItemSystem } from '../../../viewer/src/systems/item/item-system'
-import { builtinPlugin } from '../index'
-import { ItemGLTFLoader } from '../item/model-loader'
+import { type Mesh, Vector3 } from 'three'
 import { getInitialState } from '../item/move-tool'
-import { getDefaultPanelMaterial } from '../solar-panel/geometry'
+import { installMountedScene, LevelScene, SceneSystems, settle } from './harness'
+
+installMountedScene()
 
 const site = SiteNode.parse({})
 const building = BuildingNode.parse({ parentId: site.id })
 const level = LevelNode.parse({ parentId: building.id })
-let savedScene: ReturnType<typeof useScene.getState>
-let savedEditor: ReturnType<typeof useEditor.getState>
-let savedViewer: ReturnType<typeof useViewer.getState>
-let savedScope: ReturnType<typeof useInteractionScope.getState>
-let restoreRegistry: () => void
-let restoreGlobals: () => void
-let loadModel: ReturnType<typeof spyOn>
 
-beforeEach(() => {
-  savedScene = useScene.getState()
-  savedEditor = useEditor.getState()
-  savedViewer = useViewer.getState()
-  savedScope = useInteractionScope.getState()
-  const names = ['window', 'document', 'requestAnimationFrame', 'cancelAnimationFrame'] as const
-  const descriptors = names.map((name) => Object.getOwnPropertyDescriptor(globalThis, name))
-  restoreGlobals = () =>
-    names.forEach((name, i) => {
-      const descriptor = descriptors[i]
-      if (descriptor) Object.defineProperty(globalThis, name, descriptor)
-      else Reflect.deleteProperty(globalThis, name)
-    })
-  globalThis.window = new EventTarget() as Window & typeof globalThis
-  globalThis.document = {
-    body: { style: { cursor: '' } },
-    createElement: (tag: string) => {
-      if (tag !== 'canvas') throw new Error(`Unexpected DOM element: ${tag}`)
-      const context = new Proxy(
-        {},
-        {
-          get: (_target, key) =>
-            key === 'createLinearGradient' ? () => ({ addColorStop() {} }) : () => {},
-        },
-      )
-      return { width: 0, height: 0, getContext: () => context }
-    },
-  } as unknown as Document
-  getDefaultPanelMaterial()
-  Reflect.deleteProperty(globalThis.document, 'createElement')
-  globalThis.requestAnimationFrame = () => 0
-  globalThis.cancelAnimationFrame = () => {}
-  loadModel = spyOn(ItemGLTFLoader.prototype, 'load').mockImplementation((_url, onLoad) => {
-    const scene = new Group()
-    scene.add(
-      new Mesh(new BoxGeometry(0.1, 0.2, 0.1).translate(0, 0.1, 0), new MeshBasicMaterial()),
-    )
-    onLoad({
-      scene,
-      scenes: [scene],
-      animations: [],
-      cameras: [],
-      asset: { version: '2.0' },
-      parser: {},
-    } as never)
-  })
-  restoreRegistry = nodeRegistry._snapshot()
-  nodeRegistry._reset()
-  for (const def of builtinPlugin.nodes!) registerNode(def)
-})
-afterEach(() => {
-  loadModel.mockRestore()
-  sceneRegistry.nodes.clear()
-  spatialGridManager.clear()
-  useLiveNodeOverrides.getState().clearAll()
-  useLiveTransforms.getState().clearAll()
-  useScene.temporal.getState().resume()
-  useScene.temporal.getState().clear()
-  useScene.setState(savedScene)
-  useEditor.setState(savedEditor)
-  useViewer.setState(savedViewer)
-  useInteractionScope.setState(savedScope)
-  restoreRegistry()
-  restoreGlobals()
-})
-
-function withoutLabels(element: ReactNode): ReactNode {
-  if (!isValidElement<{ children?: ReactNode }>(element)) return element
-  if (element.type === Html) return null
-  return cloneElement(element, {}, Children.map(element.props.children, withoutLabels))
-}
 function Placement({ asset, source }: { asset: AssetInput; source?: ItemNode }) {
   const draftNode = useDraftNode()
-  return withoutLabels(
-    usePlacementCoordinator({
-      asset,
-      draftNode,
-      initialState: source ? getInitialState(source) : undefined,
-      initDraft: (position) => {
-        if (source) {
-          draftNode.adopt(source)
-          position.set(...source.position)
-        } else if (!asset.attachTo) draftNode.create(position, asset)
-      },
-      onCommitted: () => false,
-    }),
-  )
+  return usePlacementCoordinator({
+    asset,
+    draftNode,
+    initialState: source ? getInitialState(source) : undefined,
+    initDraft: (position) => {
+      if (source) {
+        draftNode.adopt(source)
+        position.set(...source.position)
+      } else if (!asset.attachTo) draftNode.create(position, asset)
+    },
+    onCommitted: () => false,
+  })
 }
 function Scene({ asset, source }: { asset: AssetInput; source?: ItemNode }) {
-  const children = useScene((s) => (s.nodes[level.id] as LevelNode).children)
-  const ref = useRef<Group>(null!)
-  const buildingRef = useRef<Group>(null!)
-  useRegistry(level.id, 'level', ref)
-  useRegistry(building.id, 'building', buildingRef)
   return (
     <>
-      <group ref={buildingRef}>
-        <group ref={ref}>
-          {children.map((id) => (
-            <NodeRenderer key={id} nodeId={id} />
-          ))}
-        </group>
-      </group>
+      <LevelScene building={building} level={level} />
       <Placement asset={asset} source={source} />
-      <FloorElevationSystem />
-      <ItemSystem />
-      <GeometrySystem />
+      <SceneSystems />
     </>
   )
-}
-async function settle(renderer: Awaited<ReturnType<typeof create>>) {
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 1))
-  })
-  await act(async () => {
-    await renderer.advanceFrames(3, 1 / 60)
-  })
 }
 for (const order of ['grid first', 'host first'])
   for (const moving of [false, true])

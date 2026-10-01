@@ -11,36 +11,34 @@ import {
   ItemNode,
   LevelNode,
   nodeRegistry,
-  registerNode,
   resolveSurfacePlacement,
   runAsSingleSceneHistoryStep,
   SiteNode,
   sceneRegistry,
-  spatialGridManager,
   useLiveNodeOverrides,
-  useLiveTransforms,
-  useRegistry,
   useScene,
 } from '@pascal-app/core'
-import { nodeLevelFrame, ProceduralItemNode, type Recipe } from '@pascal-app/core/procedural-items'
-import { meshEditScope } from '@pascal-app/editor'
-import { NodeRenderer, useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
+import { nodeLevelFrame, ProceduralItemNode } from '@pascal-app/core/procedural-items'
+import { meshEditScope, useEditor, useInteractionScope } from '@pascal-app/editor'
+import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
-import { act, create } from '@react-three/test-renderer'
-import React, { type ReactNode, useMemo, useRef } from 'react'
-import { BoxGeometry, Group, Mesh, MeshBasicMaterial, Ray, Vector3 } from 'three'
-import useEditor from '../../../editor/src/store/use-editor'
-import useInteractionScope from '../../../editor/src/store/use-interaction-scope'
-import { GeometrySystem } from '../../../viewer/src/systems/geometry/geometry-system'
-import { ItemSystem } from '../../../viewer/src/systems/item/item-system'
+import { act, type create } from '@react-three/test-renderer'
+import React, { type ReactNode, useMemo } from 'react'
+import { Ray, Vector3 } from 'three'
 import { applyBlockCommand } from '../block/commands'
 import useBlockEditSession from '../block/edit-session'
 import { BLOCK_SUPPORT_REFUSAL, planBlockTopologyEdit } from '../block/hosted-edit'
 import BlockSelectionAffordance from '../block/selection'
-import { builtinPlugin } from '../index'
-import { ItemGLTFLoader } from '../item/model-loader'
-import { getDefaultPanelMaterial } from '../solar-panel/geometry'
+import {
+  boxAsset as asset,
+  GeometrySystem,
+  ItemSystem,
+  installMountedScene,
+  LevelScene,
+  mount,
+  boxRecipe as recipe,
+  settle,
+} from './harness'
 
 function htmlText(node: ReactNode): string {
   if (typeof node === 'string' || typeof node === 'number') return String(node)
@@ -48,154 +46,26 @@ function htmlText(node: ReactNode): string {
   if (React.isValidElement<{ children?: ReactNode }>(node)) return htmlText(node.props.children)
   return ''
 }
-const recipe: Recipe = {
-  version: 1,
-  name: 'Audit box',
-  description: '',
-  constraints: [],
-  parameters: [
-    { id: 'width', label: 'Width', default: 0.1, min: 0.05, max: 1, step: 0.05, unit: 'm' },
-  ],
-  slots: [{ id: 'body', label: 'Body', color: '#ffffff' }],
-  parts: [
-    {
-      id: 'body',
-      label: 'Body',
-      count: 1,
-      shapes: [
-        {
-          id: 'box',
-          primitive: 'box',
-          size: [0.1, 0.2, 0.1],
-          position: [0, 0.1, 0],
-          slot: 'body',
-        },
-      ],
-    },
-  ],
-  surfaces: [],
-}
-const asset = {
-  id: 'audit-box',
-  name: 'Audit box',
-  category: 'decor',
-  thumbnail: '',
-  src: '/unrenderable-host-audit.glb',
-  dimensions: [0.1, 0.2, 0.1] as [number, number, number],
-}
 const site = SiteNode.parse({})
 const building = BuildingNode.parse({ parentId: site.id })
 const level = LevelNode.parse({ parentId: building.id })
-let savedScene: ReturnType<typeof useScene.getState>
-let savedEditor: ReturnType<typeof useEditor.getState>
-let savedViewer: ReturnType<typeof useViewer.getState>
-let savedScope: ReturnType<typeof useInteractionScope.getState>
-let restoreRegistry: () => void
-let restoreGlobals: () => void
-let loadModel: ReturnType<typeof spyOn>
-let htmlLabels: ReturnType<typeof spyOn>
-
+installMountedScene({
+  html: (props) => <group userData={{ ui: htmlText(props.children) }} />,
+})
 beforeEach(() => {
-  htmlLabels = spyOn(Html as unknown as { render: () => ReactNode }, 'render').mockImplementation(
-    (props: { children: ReactNode }) => <group userData={{ ui: htmlText(props.children) }} />,
-  )
-  savedScene = useScene.getState()
-  savedEditor = useEditor.getState()
-  savedViewer = useViewer.getState()
-  savedScope = useInteractionScope.getState()
   useBlockEditSession.setState({
     nodeId: null,
     lastOperation: null,
     selection: { mode: 'face', ids: [], activeId: null },
   })
-  const names = [
-    'window',
-    'document',
-    'requestAnimationFrame',
-    'cancelAnimationFrame',
-    'HTMLElement',
-    'HTMLInputElement',
-    'HTMLTextAreaElement',
-  ] as const
-  const descriptors = names.map((name) => Object.getOwnPropertyDescriptor(globalThis, name))
-  restoreGlobals = () =>
-    names.forEach((name, i) => {
-      const descriptor = descriptors[i]
-      if (descriptor) Object.defineProperty(globalThis, name, descriptor)
-      else Reflect.deleteProperty(globalThis, name)
-    })
-  for (const name of ['HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement'])
-    Object.defineProperty(globalThis, name, { configurable: true, value: class {} })
-  globalThis.window = new EventTarget() as Window & typeof globalThis
-  globalThis.document = {
-    body: { style: { cursor: '' } },
-    createElement: (tag: string) => {
-      if (tag !== 'canvas') throw new Error(`Unexpected DOM element: ${tag}`)
-      const context = new Proxy(
-        {},
-        {
-          get: (_target, key) =>
-            key === 'createLinearGradient' ? () => ({ addColorStop() {} }) : () => {},
-        },
-      )
-      return { width: 0, height: 0, getContext: () => context }
-    },
-  } as unknown as Document
-  getDefaultPanelMaterial()
-  Reflect.deleteProperty(globalThis.document, 'createElement')
-  globalThis.requestAnimationFrame = () => 0
-  globalThis.cancelAnimationFrame = () => {}
-  loadModel = spyOn(ItemGLTFLoader.prototype, 'load').mockImplementation((_url, onLoad) => {
-    const scene = new Group()
-    scene.add(
-      new Mesh(new BoxGeometry(0.1, 0.2, 0.1).translate(0, 0.1, 0), new MeshBasicMaterial()),
-    )
-    onLoad({
-      scene,
-      scenes: [scene],
-      animations: [],
-      cameras: [],
-      asset: { version: '2.0' },
-      parser: {},
-    } as never)
-  })
-  restoreRegistry = nodeRegistry._snapshot()
-  nodeRegistry._reset()
-  for (const def of builtinPlugin.nodes!) registerNode(def)
 })
-const mounts = new Set<Promise<Awaited<ReturnType<typeof create>>>>()
 const workSpies: Array<{ mockRestore(): void }> = []
 function ownSpy<T extends { mockRestore(): void }>(spy: T): T {
   workSpies.push(spy)
   return spy
 }
-async function mount(element: React.ReactElement) {
-  const pending = create(element)
-  mounts.add(pending)
-  const renderer = await pending
-  const unmount = renderer.unmount.bind(renderer)
-  renderer.unmount = async () => {
-    if (mounts.delete(pending)) await unmount()
-  }
-  return renderer
-}
-afterEach(async () => {
-  for (const pending of mounts) await (await pending).unmount()
+afterEach(() => {
   for (const spy of workSpies.splice(0).reverse()) spy.mockRestore()
-  htmlLabels.mockRestore()
-  loadModel.mockRestore()
-  sceneRegistry.nodes.clear()
-  spatialGridManager.clear()
-  useLiveNodeOverrides.getState().clearAll()
-  useLiveTransforms.getState().clearAll()
-  useScene.temporal.getState().resume()
-  useScene.temporal.getState().clear()
-  useScene.setState(savedScene)
-  useEditor.setState(savedEditor)
-  useViewer.setState(savedViewer)
-  useInteractionScope.setState(savedScope)
-  restoreRegistry()
-  restoreGlobals()
 })
 
 const services = () => ({
@@ -218,10 +88,7 @@ const services = () => ({
 let api: ReturnType<typeof services>
 const interactionApi = { beginInputDrag: () => () => {}, clearSelection() {} }
 function Scene({ id, editing = true }: { id: AnyNodeId; editing?: boolean }) {
-  const children = useScene((s) => (s.nodes[level.id] as LevelNode).children)
   const host = useScene((s) => s.nodes[id])!
-  const ref = useRef<Group>(null!)
-  useRegistry(level.id, 'level', ref)
   const { camera, gl } = useThree()
   useMemo(() => {
     camera.position.set(4, 5, 6)
@@ -232,11 +99,7 @@ function Scene({ id, editing = true }: { id: AnyNodeId; editing?: boolean }) {
   }, [camera, gl])
   return (
     <>
-      <group ref={ref}>
-        {children.map((id) => (
-          <NodeRenderer key={id} nodeId={id} />
-        ))}
-      </group>
+      <LevelScene level={level} />
       {editing && <BlockSelectionAffordance {...api} node={host} interactionApi={interactionApi} />}
       <GeometrySystem />
       <ItemSystem />
@@ -293,12 +156,6 @@ function seed(
   useInteractionScope.getState().begin(meshEditScope(host.id))
   api = services()
   return { host: useScene.getState().nodes[host.id] as BlockNode, child }
-}
-async function settle(renderer: Awaited<ReturnType<typeof create>>) {
-  await act(async () => {
-    await new Promise((r) => setTimeout(r, 5))
-  })
-  await act(async () => renderer.advanceFrames(3, 1 / 60))
 }
 async function key(key: string, extra = {}) {
   await act(async () =>

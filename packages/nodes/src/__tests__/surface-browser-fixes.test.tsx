@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -23,17 +23,14 @@ import {
   SlabNode,
   sceneRegistry,
   spatialGridManager,
-  useLiveNodeOverrides,
-  useLiveTransforms,
-  useRegistry,
   useScene,
 } from '@pascal-app/core'
-import { ProceduralItemNode, type Recipe } from '@pascal-app/core/procedural-items'
-import { NodeRenderer, useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
+import { ProceduralItemNode } from '@pascal-app/core/procedural-items'
+import { MoveRegistryNodeTool, useEditor } from '@pascal-app/editor'
+import { useViewer } from '@pascal-app/viewer'
 import { events, type RootStore, useThree } from '@react-three/fiber'
 import { act, create } from '@react-three/test-renderer'
-import { Children, isValidElement, type ReactNode, useMemo, useRef } from 'react'
+import { Children, isValidElement, type ReactNode } from 'react'
 import {
   BoxGeometry,
   Euler,
@@ -48,167 +45,43 @@ import {
 } from 'three'
 import { FloatingActionMenu } from '../../../editor/src/components/editor/floating-action-menu'
 import { NodeActionMenu } from '../../../editor/src/components/editor/node-action-menu'
-import { MoveRegistryNodeTool } from '../../../editor/src/components/tools/registry/move-registry-node-tool'
 import { useGridEvents } from '../../../editor/src/hooks/use-grid-events'
 import {
   createFreshPlacementSubtree,
   duplicatesAsFreshSubtree,
 } from '../../../editor/src/lib/fresh-planar-placement'
-import useEditor from '../../../editor/src/store/use-editor'
 import useInteractionScope, {
   getMovingNode,
   useMovingNode,
 } from '../../../editor/src/store/use-interaction-scope'
-import { FloorElevationSystem } from '../../../viewer/src/systems/floor-elevation/floor-elevation-system'
-import { GeometrySystem } from '../../../viewer/src/systems/geometry/geometry-system'
-import { ItemSystem } from '../../../viewer/src/systems/item/item-system'
-import { builtinPlugin } from '../index'
-import { ItemGLTFLoader } from '../item/model-loader'
-import { MoveItemTool } from '../item/move-tool'
 import ItemTool from '../item/tool'
-import { getDefaultPanelMaterial } from '../solar-panel/geometry'
 import ancestryPins from './fixtures/counter-ancestry-main-pointer-pins.json'
 import counterPins from './fixtures/counter-main-pointer-pins.json'
+import {
+  boxAsset as asset,
+  CatalogMover,
+  installMountedScene,
+  LevelScene,
+  boxRecipe as recipe,
+  SceneSystems,
+  settle,
+} from './harness'
 
-const recipe: Recipe = {
-  version: 1,
-  name: 'Audit box',
-  description: '',
-  constraints: [],
-  parameters: [
-    { id: 'width', label: 'Width', default: 0.1, min: 0.05, max: 1, step: 0.05, unit: 'm' },
-  ],
-  slots: [{ id: 'body', label: 'Body', color: '#ffffff' }],
-  parts: [
-    {
-      id: 'body',
-      label: 'Body',
-      count: 1,
-      shapes: [
-        {
-          id: 'box',
-          primitive: 'box',
-          size: [0.1, 0.2, 0.1],
-          position: [0, 0.1, 0],
-          slot: 'body',
-        },
-      ],
-    },
-  ],
-  surfaces: [],
-}
-const asset = {
-  id: 'audit-box',
-  name: 'Audit box',
-  category: 'decor',
-  thumbnail: '',
-  src: '/unrenderable-host-audit.glb',
-  dimensions: [0.1, 0.2, 0.1] as [number, number, number],
-}
 const site = SiteNode.parse({})
 const building = BuildingNode.parse({ parentId: site.id })
 const level = LevelNode.parse({ parentId: building.id })
 type Mover = 'registry' | 'catalog'
-let savedScene: ReturnType<typeof useScene.getState>
-let savedEditor: ReturnType<typeof useEditor.getState>
-let savedViewer: ReturnType<typeof useViewer.getState>
-let savedScope: ReturnType<typeof useInteractionScope.getState>
-let restoreRegistry: () => void
-let restoreGlobals: () => void
-let loadModel: ReturnType<typeof spyOn>
 let htmlChildren: ReactNode[] = []
-let htmlLabels: ReturnType<typeof spyOn>
-
+installMountedScene({
+  html: (props) => {
+    htmlChildren.push(props.children)
+    return null
+  },
+})
 beforeEach(() => {
-  htmlLabels = spyOn(Html as unknown as { render: () => ReactNode }, 'render').mockImplementation(
-    (props: { children?: ReactNode }) => {
-      htmlChildren.push(props.children)
-      return null
-    },
-  )
   htmlChildren = []
-  savedScene = useScene.getState()
-  savedEditor = useEditor.getState()
-  savedViewer = useViewer.getState()
-  savedScope = useInteractionScope.getState()
-  const names = [
-    'window',
-    'document',
-    'requestAnimationFrame',
-    'cancelAnimationFrame',
-    'HTMLElement',
-    'HTMLInputElement',
-    'HTMLTextAreaElement',
-  ] as const
-  const descriptors = names.map((name) => Object.getOwnPropertyDescriptor(globalThis, name))
-  restoreGlobals = () =>
-    names.forEach((name, i) => {
-      const descriptor = descriptors[i]
-      if (descriptor) Object.defineProperty(globalThis, name, descriptor)
-      else Reflect.deleteProperty(globalThis, name)
-    })
-  for (const name of ['HTMLElement', 'HTMLInputElement', 'HTMLTextAreaElement'])
-    Object.defineProperty(globalThis, name, { configurable: true, value: class {} })
-  globalThis.window = Object.assign(new EventTarget(), {
-    matchMedia: () => Object.assign(new EventTarget(), { matches: false }),
-  }) as Window & typeof globalThis
-  globalThis.document = {
-    body: { style: { cursor: '' } },
-    createElement: (tag: string) => {
-      if (tag !== 'canvas') throw new Error(`Unexpected DOM element: ${tag}`)
-      const context = new Proxy(
-        {},
-        {
-          get: (_target, key) =>
-            key === 'createLinearGradient' ? () => ({ addColorStop() {} }) : () => {},
-        },
-      )
-      return { width: 0, height: 0, getContext: () => context }
-    },
-  } as unknown as Document
-  getDefaultPanelMaterial()
-  Reflect.deleteProperty(globalThis.document, 'createElement')
-  globalThis.requestAnimationFrame = () => 0
-  globalThis.cancelAnimationFrame = () => {}
-  loadModel = spyOn(ItemGLTFLoader.prototype, 'load').mockImplementation((_url, onLoad) => {
-    const scene = new Group()
-    scene.add(
-      new Mesh(new BoxGeometry(0.1, 0.2, 0.1).translate(0, 0.1, 0), new MeshBasicMaterial()),
-    )
-    onLoad({
-      scene,
-      scenes: [scene],
-      animations: [],
-      cameras: [],
-      asset: { version: '2.0' },
-      parser: {},
-    } as never)
-  })
-  restoreRegistry = nodeRegistry._snapshot()
-  nodeRegistry._reset()
-  for (const def of builtinPlugin.nodes!) registerNode(def)
-})
-afterEach(() => {
-  htmlLabels.mockRestore()
-  loadModel.mockRestore()
-  sceneRegistry.nodes.clear()
-  spatialGridManager.clear()
-  useLiveNodeOverrides.getState().clearAll()
-  useLiveTransforms.getState().clearAll()
-  useScene.temporal.getState().resume()
-  useScene.temporal.getState().clear()
-  useScene.setState(savedScene)
-  useEditor.setState(savedEditor)
-  useViewer.setState(savedViewer)
-  useInteractionScope.setState(savedScope)
-  restoreRegistry()
-  restoreGlobals()
 })
 
-function CatalogMover({ source }: { source: ItemNode }) {
-  const node = useMemo(() => structuredClone(source), [source])
-  return <MoveItemTool node={node} />
-}
 function Grid() {
   const canvas = useThree((s) => s.gl.domElement)
   if (!(canvas as any).__native) {
@@ -238,20 +111,13 @@ function Scene({
   fresh?: boolean
   menu?: boolean
 }) {
-  const children = useScene((s) => (s.nodes[level.id] as LevelNode).children)
   const activeNode = useMovingNode()
   const source = child ?? activeNode
   const moving = useInteractionScope((s) => s.scope.kind === 'moving' || s.scope.kind === 'placing')
   const armed = useEditor((s) => s.mode === 'build' && s.tool === 'item')
-  const ref = useRef<Group>(null!)
-  useRegistry(level.id, 'level', ref)
   return (
     <>
-      <group ref={ref}>
-        {children.map((id) => (
-          <NodeRenderer key={id} nodeId={id} />
-        ))}
-      </group>
+      <LevelScene level={level} />
       <Grid />
       {menu && <FloatingActionMenu />}
       {fresh && armed && <ItemTool />}
@@ -262,17 +128,9 @@ function Scene({
         ) : (
           <MoveRegistryNodeTool node={source} />
         ))}
-      <FloorElevationSystem />
-      <ItemSystem />
-      <GeometrySystem />
+      <SceneSystems />
     </>
   )
-}
-async function settle(renderer: Awaited<ReturnType<typeof create>>) {
-  await act(async () => {
-    await new Promise((r) => setTimeout(r, 15))
-  })
-  await act(async () => renderer.advanceFrames(3, 1 / 60))
 }
 function seed(entries: AnyNode[], slab = false) {
   const support = SlabNode.parse({
