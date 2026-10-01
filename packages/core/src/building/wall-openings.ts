@@ -241,7 +241,7 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
       const center = (blocking as { position: [number, number, number] }).position[0]
       refuse(
         'opening_overlap',
-        `A ${metres(width)} ${kind} at ${metres(clampedX)} on wall ${wallId} would overlap ${blocking.type} ${blocking.id} (${metres(center - span / 2)}–${metres(center + span / 2)}). Move it along the wall, or pass force to place it anyway, like holding Alt in the editor.`,
+        `A ${metres(width)} ${kind} at ${metres(clampedX)} on wall ${wallId} would overlap ${blocking.type} ${blocking.id} (${metres(center - span / 2)}–${metres(center + span / 2)}). Move it along the wall, or, if the person asked for the overlap, pass force, like holding Alt in the editor.`,
         { wallId, blockingId: blocking.id },
       )
     }

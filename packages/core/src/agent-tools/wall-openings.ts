@@ -15,7 +15,7 @@ const placement = {
     .boolean()
     .optional()
     .describe(
-      'Place it even where it overlaps another door, window or wall item, like holding Alt in the editor.',
+      'Place it even where it overlaps another door, window or wall item, like holding Alt in the editor. Only when the person asks for the overlap.',
     ),
 }
 
