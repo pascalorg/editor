@@ -293,6 +293,29 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
     },
   ),
   verify(
+    'a tall wall on a one-storey annex beside a two-storey house spans no storeys',
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        level('level_1', 1),
+        ...room('level_0', 'ground'),
+        ...room('level_1', 'upper'),
+        ...stairOn('level_0'),
+        building('building_annex'),
+        level('level_annex', 0, { parentId: 'building_annex' }),
+        ...room('level_annex', 'annex'),
+        WallNode.parse({
+          id: 'wall_annex_tall',
+          parentId: 'level_annex',
+          start: [0, 3],
+          end: [4, 3],
+          height: 5.6,
+        }),
+      ),
+    { lacks: ['wall_spans_storeys'] },
+  ),
+  verify(
     'an opening on the wrong wall, past its end and above its top is reported',
     () =>
       scene(

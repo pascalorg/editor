@@ -280,7 +280,8 @@ export const verifyScene: AgentOperation = (nodes, _input, context) => {
       )
   }
 
-  // Storeys of one building need a stair between them; separate buildings do not.
+  // Storeys are counted per building: separate buildings need no stair between them, and a wall
+  // can only span the storeys of its own building.
   const storeysByBuilding = new Map<string, typeof levels>()
   for (const level of levels) {
     if (!level.isOccupiedStory) continue
@@ -303,9 +304,9 @@ export const verifyScene: AgentOperation = (nodes, _input, context) => {
       )
   }
 
-  if (levels.filter((level) => level.isOccupiedStory).length > 1)
-    for (const level of levels) {
-      if (!level.isOccupiedStory) continue
+  for (const storeys of storeysByBuilding.values()) {
+    if (storeys.length < 2) continue
+    for (const level of storeys) {
       const node = nodes[level.levelId] as AnyNode & { type: 'level' }
       const expectedHeight = getStoredLevelHeight(node)
       for (const wall of ofType(onLevel(level.levelId), 'wall')) {
@@ -317,6 +318,7 @@ export const verifyScene: AgentOperation = (nodes, _input, context) => {
           )
       }
     }
+  }
 
   for (const node of Object.values(nodes)) {
     if (node.type !== 'door' && node.type !== 'window') continue
