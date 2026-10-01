@@ -11,6 +11,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      runtime: ${{ steps.filter.outputs.runtime }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          predicate-quantifier: every
+          filters: |
+            # The packed CLI/runtime smoke (macOS, ~5 min) only has to run
+            # when something that ships in the runtime changed; docs, agent
+            # skills, evals and tests do not.
+            runtime:
+              - '**'
+              - '!**/*.md'
+              - '!wiki/**'
+              - '!.agents/**'
+              - '!plugin-evals/**'
+              - '!**/*.test.ts'
+              - '!**/*.test.tsx'
+              - '!**/__tests__/**'
+              - '!**/__fixtures__/**'
+              - '!**/__snapshots__/**'
+
   quality:
     runs-on: ubuntu-latest
     permissions:
@@ -48,6 +78,8 @@ jobs:
         run: bun run build
 
   cli-smoke:
+    needs: changes
+    if: needs.changes.outputs.runtime == 'true'
     runs-on: macos-latest
     permissions:
       contents: read
