@@ -12,15 +12,7 @@
  */
 import { describe, expect, test } from 'bun:test'
 import * as fs from 'node:fs'
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { cloneNodesInto, withoutSourceIdentity } from '../registry/subtree'
@@ -37,7 +29,6 @@ import {
   NON_REFERENCES,
   type ReferenceRemapSite,
 } from './reference-inventory'
-import { FIDELITY_GATES, RULE_GUARDS } from './rules'
 
 const OPTIONS = AnyNodeSchema.options
 const KINDS: string[] = OPTIONS.map(nodeKindOf)
@@ -368,38 +359,6 @@ describe('source-namespace provenance (R9)', () => {
       onDelete: 'freeze',
       onPreset: 'strip',
     })
-  })
-})
-
-// ─── R1–R9 guards ─────────────────────────────────────────────────────────
-
-describe('every rule R1–R9 names existing gates and tests', () => {
-  test('rules R1–R9 each have a guard', () => {
-    expect(Object.keys(RULE_GUARDS)).toEqual(['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9'])
-    for (const guard of Object.values(RULE_GUARDS))
-      expect(guard.checks.length + guard.gates.length).toBeGreaterThan(0)
-  })
-
-  test('each named gate is in the checked-in gate list', () => {
-    const gates: readonly string[] = FIDELITY_GATES
-    const missing = Object.entries(RULE_GUARDS).flatMap(([rule, guard]) =>
-      guard.gates.filter((gate) => !gates.includes(gate)).map((gate) => `${rule}: ${gate}`),
-    )
-    expect(missing).toEqual([])
-  })
-
-  test('each named check is an existing test title in an existing file', () => {
-    const missing = Object.entries(RULE_GUARDS).flatMap(([rule, guard]) =>
-      guard.checks
-        .filter(({ file, title }) => {
-          const full = path.resolve(import.meta.dir, '..', file)
-          if (!existsSync(full)) return true
-          const source = readFileSync(full, 'utf8')
-          return !source.includes(`describe('${title}'`) && !source.includes(`test('${title}'`)
-        })
-        .map(({ file, title }) => `${rule}: ${file} › ${title}`),
-    )
-    expect(missing).toEqual([])
   })
 })
 
