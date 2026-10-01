@@ -17,6 +17,7 @@ export const intendedSkillDiscovery = new Map<string, IntendedSkill>([
   ['.agents/skills/open-pr/SKILL.md', { name: 'open-pr', internal: true }],
   ['.agents/skills/open-pr2/SKILL.md', { name: 'open-pr2', internal: true }],
   ['.agents/skills/review-architecture/SKILL.md', { name: 'review-architecture', internal: true }],
+  ['.agents/skills/repo-check/SKILL.md', { name: 'repo-check', internal: true }],
 ])
 
 export const intendedPublicSkillNames = [...intendedSkillDiscovery.values()]
