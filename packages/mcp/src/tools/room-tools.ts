@@ -1,5 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { createZone, generateId, runAsSingleSceneHistoryStep, useScene } from '@pascal-app/core'
+import { createZone, generateId } from '@pascal-app/core'
 import {
   collectDoorKeepouts,
   collectOccupiedFootprints,
@@ -490,7 +490,7 @@ export function registerCreateRoom(server: McpServer, bridge: SceneOperations): 
           areaSqMeters: 0,
           conflicts: plan.conflicts,
         })
-      runAsSingleSceneHistoryStep(useScene, () => {
+      bridge.runAsSingleHistoryStep(() => {
         bridge.applyPatch(
           plan.changes.map((change) =>
             change.op === 'create'

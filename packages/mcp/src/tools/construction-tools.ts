@@ -5,8 +5,6 @@ import {
   cutFloorOpening,
   generateId,
   resolveStairTotalRise,
-  runAsSingleSceneHistoryStep,
-  useScene,
 } from '@pascal-app/core'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import {
@@ -351,7 +349,7 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
       const wallIds = plan.changes.flatMap((change) =>
         change.op === 'create' && change.node.type === 'wall' ? [change.node.id] : [],
       )
-      runAsSingleSceneHistoryStep(useScene, () => {
+      bridge.runAsSingleHistoryStep(() => {
         bridge.applyPatch(
           plan.changes.map((change) =>
             change.op === 'create'
