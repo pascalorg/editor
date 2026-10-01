@@ -7,8 +7,8 @@
  * See docs/layout-clearance-error-log.md for pitfalls (levels, gap sign, scale).
  */
 
-import { type AnyNode, getScaledDimensions } from '@pascal-app/core/schema'
-import { type Vec2, wallLength } from './geometry'
+import { type AnyNode, getScaledDimensions } from '../schema'
+import { type Vec2, wallLength } from './plan-geometry'
 
 export type PlanAabb = {
   minX: number

@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { pointInPolygon, type Vec2 } from '@pascal-app/core/agent-operations'
 import { type AnyNodeId, LevelNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { registerConstructionTools } from './construction-tools'
-import { pointInPolygon, type Vec2 } from './geometry'
-import { registerSceneQueryTools } from './scene-query'
+import { registerSharedTools } from './shared-tools'
 
 const concaveFootprint: Vec2[] = [
   [0, 0],
@@ -57,7 +57,7 @@ describe('construction tools', () => {
     bridge.loadDefault()
     server = new McpServer({ name: 'test', version: '0.0.0' })
     registerConstructionTools(server, bridge)
-    registerSceneQueryTools(server, bridge)
+    registerSharedTools(server, bridge)
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
@@ -363,7 +363,9 @@ describe('construction tools', () => {
     const result = await client.callTool({ name: 'verify_scene', arguments: {} })
     const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(parsed.hasIssues).toBe(true)
-    expect(parsed.issues.join('\n')).toContain('multi-story exterior walls should be split')
+    expect(parsed.issues.map((issue: { message: string }) => issue.message).join('\n')).toContain(
+      'multi-story exterior walls should be split',
+    )
   })
 
   test('create_roof creates a dedicated roof level by default', async () => {
@@ -481,6 +483,8 @@ describe('construction tools', () => {
     const result = await client.callTool({ name: 'verify_scene', arguments: {} })
     const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(parsed.hasIssues).toBe(true)
-    expect(parsed.issues.join('\n')).toContain('dedicated roof level')
+    expect(parsed.issues.map((issue: { message: string }) => issue.message).join('\n')).toContain(
+      'dedicated roof level',
+    )
   })
 })

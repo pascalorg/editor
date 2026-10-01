@@ -1,14 +1,14 @@
 /**
- * Shared plan-layout clearance for MCP tools.
+ * Shared plan-layout clearance for agent tools.
  *
  * - Door keep-outs (level-scoped)
  * - Item–item AABB overlap (rotation + scale aware)
  * - Placement candidate search when primary pose is blocked
  *
- * See docs/layout-clearance-error-log.md for regression checklist.
+ * See packages/mcp/docs/layout-clearance-error-log.md for regression checklist.
  */
 
-import type { AnyNode } from '@pascal-app/core/schema'
+import type { AnyNode } from '../schema'
 import {
   aabbsOverlap,
   findBlockedDoors,
@@ -246,7 +246,9 @@ export function findValidPlacement(args: {
 /**
  * Collect layout issues, scoped per level so stacked floors do not false-positive.
  */
-export function layoutIssuesFromScene(nodes: Iterable<AnyNode>): string[] {
+export function layoutIssuesFromScene(
+  nodes: Iterable<AnyNode>,
+): { type: 'door_blocked' | 'item_overlap' | 'item_too_close'; message: string }[] {
   const list = [...nodes]
   const byId = new Map(list.map((n) => [n.id, n] as const))
   const levelIds = new Set<string>()
@@ -259,18 +261,18 @@ export function layoutIssuesFromScene(nodes: Iterable<AnyNode>): string[] {
     if (lid) levelIds.add(lid)
   }
 
-  const issues: string[] = []
+  const issues = new Map<string, 'door_blocked' | 'item_overlap' | 'item_too_close'>()
   const levels = levelIds.size > 0 ? [...levelIds] : [undefined]
 
   for (const levelId of levels) {
     for (const b of findBlockedDoors({ nodes: list, levelId })) {
-      issues.push(b.message)
+      issues.set(b.message, 'door_blocked')
     }
     for (const c of findItemItemCollisions({ nodes: list, levelId })) {
-      issues.push(c.message)
+      issues.set(c.message, c.violation === 'overlap' ? 'item_overlap' : 'item_too_close')
     }
   }
 
   // Deduplicate (node may appear under multiple walks)
-  return [...new Set(issues)]
+  return [...issues].map(([message, type]) => ({ type, message }))
 }

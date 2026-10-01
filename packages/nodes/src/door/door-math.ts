@@ -1,5 +1,4 @@
 import {
-  getCurtainWallConfig,
   getWallBodyCenterOffset,
   getWallCurveFrameAt,
   getWallCurveLength,
@@ -46,23 +45,8 @@ export function wallLocalToWorld(
   ]
 }
 
-/**
- * Clamps door center X so it stays fully within wall bounds.
- * Y is always height/2 — doors sit at floor level.
- */
-export function clampToWall(
-  wallNode: WallNode,
-  localX: number,
-  width: number,
-  height: number,
-): { clampedX: number; clampedY: number } {
-  const wallLength = getWallCurveLength(wallNode)
-  const margin = wallNode.wallType === 'curtain' ? getCurtainWallConfig(wallNode).perimeterWidth : 0
-
-  const clampedX = Math.max(margin + width / 2, Math.min(wallLength - margin - width / 2, localX))
-  const clampedY = height / 2 // Doors always sit at floor level
-  return { clampedX, clampedY }
-}
+/** Door centre on its wall: the shared rule in core (`clampDoorToWall`). */
+export { clampDoorToWall as clampToWall } from '@pascal-app/core/building'
 
 // Wall-child overlap is shared by door + window placement (one source of
 // truth in `shared/wall-attach-target.ts`). Re-exported here so existing

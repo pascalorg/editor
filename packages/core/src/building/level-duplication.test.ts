@@ -8,7 +8,7 @@ import {
   UnitNode,
   WallNode,
   ZoneNode,
-} from '@pascal-app/core/schema'
+} from '../schema'
 import { buildLevelDuplicateCreateOps } from './level-duplication'
 
 describe('buildLevelDuplicateCreateOps', () => {

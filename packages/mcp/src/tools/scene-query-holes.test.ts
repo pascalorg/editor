@@ -4,7 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { ZoneNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
-import { registerSceneQueryTools } from './scene-query'
+import { registerSharedTools } from './shared-tools'
 
 test('get_zones returns holes and the area of the outer minus holes', async () => {
   const bridge = new SceneBridge()
@@ -30,7 +30,7 @@ test('get_zones returns holes and the area of the outer minus holes', async () =
   })
   bridge.createNode(zone, level.id)
   const server = new McpServer({ name: 'test', version: '0.0.0' })
-  registerSceneQueryTools(server, bridge)
+  registerSharedTools(server, bridge)
   const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
   const client = new Client({ name: 'test', version: '0.0.0' })
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
@@ -39,10 +39,11 @@ test('get_zones returns holes and the area of the outer minus holes', async () =
       const result = await client.callTool({ name, arguments: { levelId: level.id } })
       expect(result.isError).toBeFalsy()
       const parsed = JSON.parse((result.content as Array<{ text: string }>)[0]!.text)
+      // The level summary stays compact: polygons are get_zones' (the chat reads the summary often).
       expect(parsed.zones).toEqual([
         expect.objectContaining({
           id: zone.id,
-          polygon: zone.polygon,
+          ...(name === 'get_zones' ? { polygon: zone.polygon } : {}),
           holes: zone.holes,
           areaSqMeters: 84,
         }),

@@ -1,4 +1,4 @@
-import type { WallNode } from '@pascal-app/core/schema'
+import type { WallNode } from '../schema'
 
 export type Vec2 = [number, number]
 export type Vec3 = [number, number, number]

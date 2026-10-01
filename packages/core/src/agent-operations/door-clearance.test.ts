@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { AnyNode } from '@pascal-app/core/schema'
+import type { AnyNode } from '../schema'
 import {
   aabbsOverlap,
   collectDoorKeepouts,

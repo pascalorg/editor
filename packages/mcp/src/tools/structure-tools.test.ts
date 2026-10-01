@@ -8,6 +8,7 @@ import { createPascalMcpServer } from '../server'
 describe('MCP structure adapters', () => {
   test('cut_floor_opening and remove_floor_opening round-trip room construction', async () => {
     const bridge = new SceneBridge()
+    bridge.setScene({}, [])
     bridge.loadDefault()
     const server = createPascalMcpServer({ bridge })
     const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()

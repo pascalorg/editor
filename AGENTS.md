@@ -20,7 +20,7 @@ Public, open-source home of `@pascal-app/{core,viewer,editor,nodes,mcp,cli,ifc-c
 
 ## Where to look
 
-- Architecture detail, on demand: `wiki/architecture/` (index in its `README.md`). Read the page for the boundary you touch: a new kind → `node-definitions.md`, `node-schemas.md`; a tool or interaction → `tools.md`, `interaction-scope.md`; anything in `viewer` → `viewer-isolation.md`, `layers.md`; selection → `selection-managers.md`.
+- Architecture detail, on demand: `wiki/architecture/` (index in its `README.md`). Read the page for the boundary you touch: a new kind → `node-definitions.md`, `node-schemas.md`; a tool or interaction → `tools.md`, `interaction-scope.md`; anything in `viewer` → `viewer-isolation.md`, `layers.md`; selection → `selection-managers.md`; an MCP tool or resource, or the `pascal-3d` skill → `agent-surfaces.md` (same contract and knowledge as the hosted AI chat).
 - Reviewing a PR: `.agents/skills/review-architecture/SKILL.md`.
 - Opening a PR: `.agents/skills/open-pr/SKILL.md`.
 - Humans: `README.md`, `SETUP.md`, `CONTRIBUTING.md`.

@@ -1,5 +1,5 @@
-import { cloneLevelSubtree } from '@pascal-app/core/clone-scene-graph'
-import { type AnyNode, type AnyNodeId, type LevelNode, UnitNode } from '@pascal-app/core/schema'
+import { type AnyNode, type AnyNodeId, type LevelNode, UnitNode } from '../schema'
+import { cloneLevelSubtree } from '../utils/clone-scene-graph'
 
 export type LevelDuplicatePreset =
   | 'everything'
@@ -106,23 +106,32 @@ function findLevelBuildingId(nodes: Record<AnyNodeId, AnyNode>, levelId: AnyNode
   return undefined
 }
 
+/** The building a level belongs to; a bootstrap level may only be listed in its children. */
+export function levelBuildingId(nodes: Record<AnyNodeId, AnyNode>, level: LevelNode) {
+  return (level.parentId as AnyNodeId | null) ?? findLevelBuildingId(nodes, level.id)
+}
+
 export function buildLevelDuplicateCreateOps({
   nodes,
   level,
   levels,
   preset,
+  position = 'above',
 }: {
   nodes: Record<AnyNodeId, AnyNode>
   level: LevelNode
   levels: LevelNode[]
   preset: LevelDuplicatePreset
+  /** Below, the copy takes the original's floor and the original moves up with the rest. */
+  position?: 'above' | 'below'
 }) {
   const { clonedNodes, newLevelId, idMap } = cloneLevelSubtree(nodes, level.id)
-  const parentBuildingId =
-    (level.parentId as AnyNodeId | null) ?? findLevelBuildingId(nodes, level.id)
-  const nextLevelNumber = level.level + 1
+  const parentBuildingId = levelBuildingId(nodes, level)
+  const nextLevelNumber = position === 'above' ? level.level + 1 : level.level
   const shiftedLevels = levels
-    .filter((entry) => entry.id !== level.id && entry.level >= nextLevelNumber)
+    .filter(
+      (entry) => (position === 'below' || entry.id !== level.id) && entry.level >= nextLevelNumber,
+    )
     .map((entry) => ({
       id: entry.id,
       level: entry.level + 1,
@@ -191,5 +200,6 @@ export function buildLevelDuplicateCreateOps({
     })),
     newLevelId,
     shiftedLevels,
+    skippedNodes: clonedNodes.filter((node) => !keptIds.has(node.id as AnyNodeId)),
   }
 }

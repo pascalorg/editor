@@ -611,6 +611,7 @@ export {
   getStairSegmentFloorPlacedFootprints,
 } from './systems/stair/stair-floor-footprints'
 export {
+  computeSegmentTransforms,
   type StairFootprintAABB,
   stairDeckLevelId,
   stairFootprintAABB,

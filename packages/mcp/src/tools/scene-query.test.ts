@@ -17,7 +17,7 @@ import {
   ZoneNode,
 } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
-import { registerSceneQueryTools } from './scene-query'
+import { registerSharedTools } from './shared-tools'
 
 describe('scene query tools', () => {
   let client: Client
@@ -28,7 +28,7 @@ describe('scene query tools', () => {
     bridge.setScene({}, [])
     bridge.loadDefault()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
-    registerSceneQueryTools(server, bridge)
+    registerSharedTools(server, bridge)
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
@@ -82,7 +82,9 @@ describe('scene query tools', () => {
     expect(parsed.ok).toBe(true)
     expect(parsed.valid).toBe(true)
     expect(parsed.hasIssues).toBe(true)
-    expect(parsed.issues.join('\n')).toContain('walls but no zones')
+    expect(parsed.issues.map((issue: { message: string }) => issue.message).join('\n')).toContain(
+      'walls but no zones',
+    )
   })
 
   test('verify_scene reports item–item footprint overlaps', async () => {
@@ -124,7 +126,9 @@ describe('scene query tools', () => {
     expect(result.isError).toBeFalsy()
     const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(parsed.hasIssues).toBe(true)
-    expect(parsed.issues.join('\n')).toMatch(/overlap/i)
+    expect(parsed.issues.map((issue: { message: string }) => issue.message).join('\n')).toMatch(
+      /overlap/i,
+    )
   })
 
   test('verify_scene reports furniture blocking door clearance', async () => {
@@ -195,8 +199,12 @@ describe('scene query tools', () => {
     expect(result.isError).toBeFalsy()
     const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(parsed.hasIssues).toBe(true)
-    expect(parsed.issues.join('\n')).toMatch(/blocked by item/i)
-    expect(parsed.issues.join('\n')).toContain(door.id)
+    expect(parsed.issues.map((issue: { message: string }) => issue.message).join('\n')).toMatch(
+      /blocked by item/i,
+    )
+    expect(parsed.issues.map((issue: { message: string }) => issue.message).join('\n')).toContain(
+      door.id,
+    )
   })
 
   test('verify_scene separates occupied stories from dedicated roof levels', async () => {
@@ -258,6 +266,11 @@ describe('scene query tools', () => {
       metadata: { referenceLevelId: upper.id, roofLevelId: roofLevel.id },
     })
     bridge.createNode(roof, roofLevel.id)
+    // Two storeys need a stair between them; it stays inside the ground floor slab.
+    const flight = StairSegmentNode.parse({ width: 1, length: 2, height: 2.5, stepCount: 10 })
+    const stair = StairNode.parse({ position: [2, 0, 0.5], children: [flight.id] })
+    bridge.createNode(stair, ground.id)
+    bridge.createNode(flight, stair.id)
 
     const result = await client.callTool({ name: 'verify_scene', arguments: {} })
     expect(result.isError).toBeFalsy()
@@ -303,7 +316,7 @@ describe('scene query tools', () => {
     const result = await client.callTool({ name: 'verify_scene', arguments: {} })
     expect(result.isError).toBeFalsy()
     const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
-    const issues = parsed.issues.join('\n')
+    const issues = parsed.issues.map((issue: { message: string }) => issue.message).join('\n')
     expect(issues).toContain(`window ${window.id} has wallId ${otherWall.id}`)
     expect(issues).toContain(`window ${window.id} extends outside wall ${hostWall.id}`)
     expect(issues).toContain(`window ${window.id} vertical bounds`)
@@ -340,7 +353,7 @@ describe('scene query tools', () => {
     const result = await client.callTool({ name: 'verify_scene', arguments: {} })
     expect(result.isError).toBeFalsy()
     const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
-    expect(parsed.issues.join('\n')).toContain(
+    expect(parsed.issues.map((issue: { message: string }) => issue.message).join('\n')).toContain(
       'Stair Escaping Stair footprint extends outside source floor slab',
     )
   })
@@ -387,7 +400,11 @@ describe('scene query tools', () => {
     expect(result.isError).toBeFalsy()
     const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(parsed.hasIssues).toBe(true)
-    expect(parsed.issues.join('\n')).toContain('obstructs stair Main Stair')
-    expect(parsed.issues.join('\n')).toContain('no destination slab opening')
+    expect(parsed.issues.map((issue: { message: string }) => issue.message).join('\n')).toContain(
+      'obstructs stair Main Stair',
+    )
+    expect(parsed.issues.map((issue: { message: string }) => issue.message).join('\n')).toContain(
+      'no destination slab opening',
+    )
   })
 })

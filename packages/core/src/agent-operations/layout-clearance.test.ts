@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { AnyNode } from '@pascal-app/core/schema'
+import type { AnyNode } from '../schema'
 import { inspectItemPlanFootprint, itemNodePlanAabb, resolveNodeLevelId } from './door-clearance'
 import {
   classifyPlacement,
@@ -148,8 +148,8 @@ describe('layout-clearance', () => {
     const a = item('a', [3, 0, 4], [1.5, 1, 1.5], 'A')
     const b = item('b', [3.2, 0, 4.1], [1.5, 1, 1.5], 'B')
     const issues = layoutIssuesFromScene([level, wall, door, toilet, a, b] as unknown as AnyNode[])
-    expect(issues.some((m) => m.includes('blocked'))).toBe(true)
-    expect(issues.some((m) => m.includes('overlap'))).toBe(true)
+    expect(issues.some((m) => m.message.includes('blocked'))).toBe(true)
+    expect(issues.some((m) => m.message.includes('overlap'))).toBe(true)
   })
 
   test('item gap of 0.08 m flags near-touching items (L3)', () => {
