@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, spyOn, test } from 'bun:test'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, jest, spyOn, test } from 'bun:test'
 import {
   type AnyNodeId,
   clearSceneHistory,
@@ -60,15 +60,17 @@ function grid(x: number, z: number) {
 const pointerUp = () => window.dispatchEvent(new Event('pointerup'))
 
 beforeAll(() => {
+  // The tools arm click-swallow cleanup timers on `window`; virtual time drains them at the end.
+  jest.useFakeTimers()
   globalThis.window = new EventTarget() as Window & typeof globalThis
   // Measurement pills and hints are DOM labels; there is no DOM here.
   html = spyOn(Html as unknown as { render: () => ReactNode }, 'render').mockImplementation(
     () => null,
   )
 })
-afterAll(async () => {
-  // Let the tools' click-swallow timers fire before the stub goes.
-  await new Promise((resolve) => setTimeout(resolve, 350))
+afterAll(() => {
+  jest.runOnlyPendingTimers()
+  jest.useRealTimers()
   html?.mockRestore()
   if (savedWindow) Object.defineProperty(globalThis, 'window', savedWindow)
   else Reflect.deleteProperty(globalThis, 'window')

@@ -440,12 +440,36 @@ for (const view of ['3d', '2d'] as const)
 
 for (const view of ['3d', '2d'] as const)
   for (const kind of ['table', 'shelf', 'design']) {
-    test(`${view} childless ${kind}: main draft byte pin`, async () => {
+    test(`${view} childless ${kind}: Duplicate leaves the original untouched and adds only the moving copy`, async () => {
       const root = fixture(kind, true)
+      const nodes = structuredClone(useScene.getState().nodes)
       const copy = await duplicate(root, view)
-      const nodes = useScene.getState().nodes
-      const normalized = JSON.stringify({ moving: copy, nodes }).replaceAll(copy.id, 'FRESH_ID')
-      expect(normalized).toMatchSnapshot()
+      const after = useScene.getState().nodes
+      const added = Object.keys(after).filter((id) => !(id in nodes))
+      expect(added.filter((id) => id !== copy.id)).toEqual([])
+      for (const [id, node] of Object.entries(nodes)) {
+        const current = after[id as AnyNodeId] as AnyNode & { children?: string[] }
+        const children = current.children?.filter((child) => !added.includes(child))
+        expect(children ? { ...current, children } : current).toEqual(node)
+      }
+      if (added.length) expect(after[copy.id]).toEqual(copy)
+      expect(copy.metadata).toEqual({ isNew: true })
+      const {
+        id: _copyId,
+        metadata: _copyMeta,
+        position: _copyPos,
+        ...copied
+      } = copy as AnyNode & {
+        position?: unknown
+      }
+      const {
+        id: _id,
+        metadata: _meta,
+        position: _pos,
+        ...source
+      } = nodes[root.id] as AnyNode & { position?: unknown }
+      expect(copied).toEqual(source)
+      expect(useScene.temporal.getState().pastStates).toHaveLength(0)
     })
   }
 

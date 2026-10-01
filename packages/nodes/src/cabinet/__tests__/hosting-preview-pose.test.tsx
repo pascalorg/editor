@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type CabinetNode as Cabinet,
@@ -8,38 +8,30 @@ import {
   getSurfaceProvider,
   ItemNode,
   LevelNode,
-  nodeRegistry,
-  registerNode,
   ShelfNode,
   SlabNode,
   sceneRegistry,
   spatialGridManager,
-  useLiveNodeOverrides,
-  useLiveTransforms,
-  useRegistry,
   useScene,
 } from '@pascal-app/core'
 import { nodeLevelFrame, ProceduralItemNode, type Recipe } from '@pascal-app/core/procedural-items'
-import { NodeRenderer, useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
+import { MoveRegistryNodeTool, useEditor, useInteractionScope } from '@pascal-app/editor'
+import { useViewer } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
-import { Children, cloneElement, isValidElement, type ReactNode, useMemo, useRef } from 'react'
-import { BoxGeometry, Group, Matrix4, Mesh, MeshBasicMaterial, Vector3 } from 'three'
-import { MoveRegistryNodeTool } from '../../../../editor/src/components/tools/registry/move-registry-node-tool'
-import useEditor from '../../../../editor/src/store/use-editor'
-import useInteractionScope from '../../../../editor/src/store/use-interaction-scope'
-import { FloorElevationSystem } from '../../../../viewer/src/systems/floor-elevation/floor-elevation-system'
-import { GeometrySystem } from '../../../../viewer/src/systems/geometry/geometry-system'
-import { ItemSystem } from '../../../../viewer/src/systems/item/item-system'
+import { Matrix4, Vector3 } from 'three'
+import {
+  CatalogMover,
+  installMountedScene,
+  LevelScene,
+  preloadItemModels,
+  SceneSystems,
+} from '../../__tests__/harness'
 import { itemDefinition } from '../../item/definition'
-import { ItemGLTFLoader } from '../../item/model-loader'
-import { MoveItemTool } from '../../item/move-tool'
 import { proceduralItemDefinition } from '../../procedural-item/definition'
 import { shelfDefinition } from '../../shelf/definition'
 import { cabinetDefinition, cabinetModuleDefinition } from '../definition'
 import { CabinetModuleNode, CabinetNode } from '../schema'
 
-let loadModel: ReturnType<typeof spyOn>
 const recipe: Recipe = {
   version: 1,
   name: 'Rectangular hosting fixture',
@@ -97,53 +89,17 @@ const design = ProceduralItemNode.parse({
   rotation: [0, Math.PI / 2, 0],
   supportSlabId: slab.id,
 })
-let restoreRegistry: () => void
-let savedScene: ReturnType<typeof useScene.getState>
-let savedEditor: ReturnType<typeof useEditor.getState>
-let savedViewer: ReturnType<typeof useViewer.getState>
-let savedScope: ReturnType<typeof useInteractionScope.getState>
-let savedWindow: PropertyDescriptor | undefined
-let savedDocument: typeof document
-let savedRaf: typeof requestAnimationFrame
-let savedCancelRaf: typeof cancelAnimationFrame
-
-beforeEach(() => {
-  loadModel = spyOn(ItemGLTFLoader.prototype, 'load').mockImplementation((_url, onLoad) => {
-    const scene = new Group()
-    scene.add(
-      new Mesh(new BoxGeometry(0.4, 0.6, 0.655).translate(0, 0.3, 0), new MeshBasicMaterial()),
-    )
-    onLoad({
-      scene,
-      scenes: [scene],
-      animations: [],
-      cameras: [],
-      asset: { version: '2.0' },
-      parser: {},
-    } as never)
-  })
-  savedScene = useScene.getState()
-  savedEditor = useEditor.getState()
-  savedViewer = useViewer.getState()
-  savedScope = useInteractionScope.getState()
-  savedWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
-  savedDocument = globalThis.document
-  savedRaf = globalThis.requestAnimationFrame
-  savedCancelRaf = globalThis.cancelAnimationFrame
-  globalThis.window = new EventTarget() as Window & typeof globalThis
-  globalThis.document = { body: { style: { cursor: '' } } } as Document
-  globalThis.requestAnimationFrame = () => 0
-  globalThis.cancelAnimationFrame = () => {}
-  restoreRegistry = nodeRegistry._snapshot()
-  nodeRegistry._reset()
-  for (const def of [
+installMountedScene({
+  nodes: [
     cabinetDefinition,
     cabinetModuleDefinition,
     shelfDefinition,
     proceduralItemDefinition,
     itemDefinition,
-  ])
-    registerNode({ ...def, capabilities: { ...def.capabilities } } as never)
+  ],
+  modelSize: () => [0.4, 0.6, 0.655],
+})
+beforeEach(async () => {
   useScene.setState({
     nodes: {
       [level.id]: { ...level, children: [slab.id, catalog.id, design.id] },
@@ -155,10 +111,7 @@ beforeEach(() => {
     dirtyNodes: new Set(),
     readOnly: false,
   })
-  spatialGridManager.clear()
   spatialGridManager.handleNodeCreated(slab, level.id)
-  useLiveNodeOverrides.getState().clearAll()
-  useLiveTransforms.getState().clearAll()
   useScene.temporal.getState().clear()
   useScene.temporal.getState().pause()
   useInteractionScope.getState().end()
@@ -173,26 +126,11 @@ beforeEach(() => {
   useViewer.setState({
     selection: { buildingId: null, levelId: level.id, zoneId: null, selectedIds: [] },
   })
+  // A first mount that suspends on the stub model can spin act's synchronous flush forever once
+  // an earlier suite in this process has mounted a catalog mover; load the model up front.
+  await preloadItemModels()
 })
-afterEach(() => {
-  loadModel.mockRestore()
-  sceneRegistry.nodes.clear()
-  spatialGridManager.clear()
-  useLiveNodeOverrides.getState().clearAll()
-  useLiveTransforms.getState().clearAll()
-  useScene.temporal.getState().resume()
-  useScene.temporal.getState().clear()
-  useScene.setState(savedScene)
-  useEditor.setState(savedEditor)
-  useViewer.setState(savedViewer)
-  useInteractionScope.setState(savedScope)
-  restoreRegistry()
-  if (savedWindow) Object.defineProperty(globalThis, 'window', savedWindow)
-  else Reflect.deleteProperty(globalThis, 'window')
-  globalThis.document = savedDocument
-  globalThis.requestAnimationFrame = savedRaf
-  globalThis.cancelAnimationFrame = savedCancelRaf
-})
+
 function fixture(
   patch: Partial<Cabinet> = {},
   modules = [-0.6, 0, 0.6].map((x) =>
@@ -225,19 +163,6 @@ function hit(run: Cabinet, local: [number, number, number] = [0, 0.85, 0]): Cabi
     nativeEvent: {},
     stopPropagation() {},
   } as CabinetEvent
-}
-// The mounted coordinator keeps its real cursor refs; DOM-only measurement labels need no canvas test coverage.
-function withoutLabels(element: ReactNode): ReactNode {
-  if (!isValidElement<{ children?: ReactNode }>(element)) return element
-  if (element.type === Html) return null
-  return cloneElement(element, {}, Children.map(element.props.children, withoutLabels))
-}
-function RegistryMover({ node }: { node: AnyNode }) {
-  return withoutLabels(MoveRegistryNodeTool({ node }))
-}
-function CatalogMover({ source = catalog }: { source?: ItemNode } = {}) {
-  const node = useMemo(() => structuredClone(source), [source])
-  return withoutLabels(MoveItemTool({ node }))
 }
 
 function generatedHost(named: boolean) {
@@ -290,28 +215,19 @@ function generatedHost(named: boolean) {
 type Mover = 'catalog' | 'registry catalog' | 'registry procedural'
 
 function SceneAndMover({ mover, child }: { mover: Mover; child: AnyNode }) {
-  const children = useScene((s) => (s.nodes[level.id] as typeof level).children)
   const moving = useInteractionScope((s) => s.scope.kind === 'moving' || s.scope.kind === 'placing')
-  const ref = useRef<Group>(null!)
-  useRegistry(level.id, 'level', ref)
   return (
     <>
-      <group ref={ref}>
-        {children.map((id) => (
-          <NodeRenderer key={id} nodeId={id} />
-        ))}
-      </group>
+      <LevelScene level={level} />
       <group name="mover">
         {moving &&
           (mover === 'catalog' ? (
             <CatalogMover source={child as ItemNode} />
           ) : (
-            <RegistryMover node={child} />
+            <MoveRegistryNodeTool node={child} />
           ))}
       </group>
-      <FloorElevationSystem />
-      <ItemSystem />
-      <GeometrySystem />
+      <SceneSystems />
     </>
   )
 }
@@ -399,10 +315,6 @@ for (const kind of hosts) {
             }
             useEditor.getState().setMovingNode(child)
             const renderer = await create(<SceneAndMover mover={mover} child={child} />)
-            const inputElement = globalThis.HTMLInputElement
-            const textElement = globalThis.HTMLTextAreaElement
-            globalThis.HTMLInputElement = class {} as typeof HTMLInputElement
-            globalThis.HTMLTextAreaElement = class {} as typeof HTMLTextAreaElement
             try {
               await act(async () => {
                 await renderer.advanceFrames(2, 1 / 60)
@@ -466,8 +378,6 @@ for (const kind of hosts) {
               )
             } finally {
               await renderer.unmount()
-              globalThis.HTMLInputElement = inputElement
-              globalThis.HTMLTextAreaElement = textElement
             }
           })
         }

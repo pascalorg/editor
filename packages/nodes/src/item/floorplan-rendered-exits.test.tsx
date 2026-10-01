@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -7,7 +7,6 @@ import {
   getSurfaceProvider,
   ItemNode,
   LevelNode,
-  nodeRegistry,
   registerNode,
   resolveSurfacePlacement,
   ShelfNode,
@@ -15,7 +14,6 @@ import {
   sceneRegistry,
   spatialGridManager,
   useLiveNodeOverrides,
-  useLiveTransforms,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -26,37 +24,22 @@ import {
   type Recipe,
   transformPoint,
 } from '@pascal-app/core/procedural-items'
+import { useEditor, useInteractionScope } from '@pascal-app/editor'
 import { NodeRenderer, useViewer, WallSystem } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { extend, useFrame } from '@react-three/fiber'
 import { act, create } from '@react-three/test-renderer'
-import { Children, cloneElement, isValidElement, type ReactNode, useMemo, useRef } from 'react'
-import {
-  BoxGeometry,
-  Group,
-  Line,
-  type Matrix4,
-  Mesh,
-  MeshBasicMaterial,
-  Path,
-  Vector3,
-} from 'three'
+import { useRef } from 'react'
+import { Group, Line, type Matrix4, Path, Vector3 } from 'three'
 import { FloorplanRegistryMoveOverlay } from '../../../editor/src/components/editor-2d/floorplan-registry-move-overlay'
 import { FloorplanRegistryLayer } from '../../../editor/src/components/editor-2d/renderers/floorplan-registry-layer'
 import { sfxEmitter } from '../../../editor/src/lib/sfx-bus'
-import useEditor from '../../../editor/src/store/use-editor'
-import useInteractionScope from '../../../editor/src/store/use-interaction-scope'
-import { FloorElevationSystem } from '../../../viewer/src/systems/floor-elevation/floor-elevation-system'
-import { GeometrySystem } from '../../../viewer/src/systems/geometry/geometry-system'
-import { ItemSystem } from '../../../viewer/src/systems/item/item-system'
+import { CatalogMover, installMountedScene, SceneSystems, settle } from '../__tests__/harness'
 import { cabinetDefinition, cabinetModuleDefinition } from '../cabinet/definition'
 import { CabinetModuleNode, CabinetNode } from '../cabinet/schema'
 import { proceduralItemDefinition } from '../procedural-item/definition'
 import { shelfDefinition } from '../shelf/definition'
 import { itemDefinition } from './definition'
 import { buildItemFloorplan } from './floorplan'
-import { ItemGLTFLoader } from './model-loader'
-import { MoveItemTool } from './move-tool'
 
 class SvgNode extends Group {
   // Keep R3F from interpreting this SVG attribute as a pierced Three.js property.
@@ -79,7 +62,6 @@ extend({
   Pattern: SvgNode,
   Polyline: SvgNode,
 })
-let loader: ReturnType<typeof spyOn>
 const recipe: Recipe = {
   version: 1,
   name: 'Box',
@@ -110,43 +92,25 @@ const asset = {
   dimensions: [0.2, 0.2, 0.2],
 }
 const hostKinds = ['shelf', 'counter', 'bar', 'item', 'named', 'generated'] as const
-let restore: () => void
-let savedScene: ReturnType<typeof useScene.getState>
-let savedEditor: ReturnType<typeof useEditor.getState>
-let savedViewer: ReturnType<typeof useViewer.getState>
-let savedScope: ReturnType<typeof useInteractionScope.getState>
+installMountedScene({
+  nodes: [
+    itemDefinition,
+    proceduralItemDefinition,
+    shelfDefinition,
+    cabinetDefinition,
+    cabinetModuleDefinition,
+  ],
+  modelSize: () => [0.2, 0.2, 0.2],
+})
 let globals: Record<string, PropertyDescriptor | undefined>
 beforeEach(() => {
   extend({ Line: SvgNode, Path: SvgNode })
-  loader = spyOn(ItemGLTFLoader.prototype, 'load').mockImplementation((_url, onLoad) => {
-    const scene = new Group()
-    scene.add(
-      new Mesh(new BoxGeometry(0.2, 0.2, 0.2).translate(0, 0.1, 0), new MeshBasicMaterial()),
-    )
-    onLoad({
-      scene,
-      scenes: [scene],
-      animations: [],
-      cameras: [],
-      asset: { version: '2.0' },
-      parser: {},
-    } as never)
-  })
-  savedScene = useScene.getState()
-  savedEditor = useEditor.getState()
-  savedViewer = useViewer.getState()
-  savedScope = useInteractionScope.getState()
   useViewer.setState({ previewSelectedIds: [] })
   globals = Object.fromEntries(
-    [
-      'window',
-      'document',
-      'requestAnimationFrame',
-      'cancelAnimationFrame',
-      'PointerEvent',
-      'HTMLInputElement',
-      'HTMLTextAreaElement',
-    ].map((k) => [k, Object.getOwnPropertyDescriptor(globalThis, k)]),
+    ['window', 'document', 'PointerEvent'].map((k) => [
+      k,
+      Object.getOwnPropertyDescriptor(globalThis, k),
+    ]),
   )
   const svg = {
     getBoundingClientRect: () => ({ left: -100, right: 100, top: -100, bottom: 100 }),
@@ -158,16 +122,15 @@ beforeEach(() => {
       },
     }),
   }
+  // The floor-plan layer and its move overlay listen on `window` and measure an SVG scene.
   Object.assign(globalThis, {
     window: Object.assign(new EventTarget(), {
       requestAnimationFrame: () => 0,
       cancelAnimationFrame: () => {},
     }),
-    HTMLInputElement: class {},
-    HTMLTextAreaElement: class {},
     PointerEvent: class extends Event {
-      constructor(type: string, props: object) {
-        super(type)
+      constructor(type: string, { bubbles, ...props }: EventInit & object) {
+        super(type, { bubbles })
         Object.assign(this, props)
       }
     },
@@ -179,20 +142,7 @@ beforeEach(() => {
         getScreenCTM: () => ({ inverse: () => ({}) }),
       }),
     }),
-    requestAnimationFrame: () => 0,
-    cancelAnimationFrame: () => {},
   })
-  restore = nodeRegistry._snapshot()
-  nodeRegistry._reset()
-  // Isolate React.lazy caches between files without changing the production capabilities.
-  for (const def of [
-    itemDefinition,
-    proceduralItemDefinition,
-    shelfDefinition,
-    cabinetDefinition,
-    cabinetModuleDefinition,
-  ])
-    registerNode({ ...def, renderer: def.renderer && { ...def.renderer } } as never)
   useInteractionScope.getState().end()
   useEditor.setState({
     viewMode: '2d',
@@ -202,30 +152,17 @@ beforeEach(() => {
     placementDragMode: false,
   })
   useEditor.getState().setSnappingMode('item', 'off')
-  useLiveNodeOverrides.getState().clearAll()
-  spatialGridManager.clear()
   useScene.temporal.getState().pause()
   useScene.temporal.getState().clear()
 })
 afterEach(() => {
   extend({ Line, Path })
-  loader.mockRestore()
-  sceneRegistry.nodes.clear()
-  useLiveTransforms.getState().clearAll()
-  useLiveNodeOverrides.getState().clearAll()
-  spatialGridManager.clear()
-  useScene.setState(savedScene, true)
-  useEditor.setState(savedEditor, true)
-  useViewer.setState(savedViewer, true)
-  useInteractionScope.setState(savedScope, true)
-  useScene.temporal.getState().clear()
-  useScene.temporal.getState().resume()
-  restore()
   for (const k of Object.keys(globals)) {
     if (globals[k]) Object.defineProperty(globalThis, k, globals[k]!)
     else Reflect.deleteProperty(globalThis, k)
   }
 })
+
 function fixture(
   kind: (typeof hostKinds)[number],
   childKind: 'item' | 'procedural-item',
@@ -406,20 +343,12 @@ function RenderedScene({
           ))}
         </group>
       </group>
-      <FloorElevationSystem />
-      <ItemSystem />
-      <GeometrySystem />
+      <SceneSystems />
       {structural && <WallSystem />}
       <FloorplanRegistryMoveOverlay />
       <FloorplanRegistryLayer />
     </>
   )
-}
-async function settle(renderer: Awaited<ReturnType<typeof create>>) {
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 10))
-  })
-  await renderer.advanceFrames(3, 1 / 60)
 }
 function worldMatrix(id: AnyNodeId) {
   const mesh = sceneRegistry.nodes.get(id)!
@@ -855,15 +784,6 @@ for (const mounting of ['wall', 'roof', 'ceiling'] as const)
     }
   })
 
-function withoutLabels(element: ReactNode): ReactNode {
-  if (!isValidElement<{ children?: ReactNode }>(element)) return element
-  if (element.type === Html) return null
-  return cloneElement(element, {}, Children.map(element.props.children, withoutLabels))
-}
-function CatalogMover({ source }: { source: ItemNode }) {
-  const node = useMemo(() => structuredClone(source), [source])
-  return withoutLabels(MoveItemTool({ node }))
-}
 for (const phase of ['retained', 'exited', 'floor'])
   for (const key of ['r', 't'])
     test(`2D drag does not commit ${key} rotation ${phase}`, async () => {

@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, expect, mock, test } from 'bun:test'
+import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
 import {
   BuildingNode,
   createSceneApi,
@@ -8,21 +8,14 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import * as drei from '@react-three/drei'
+import { Html } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { act, create } from '@react-three/test-renderer'
+import type { ReactNode } from 'react'
 import { RegistryToolProvider } from '../../../editor/src/components/tools/registry-tool-context'
 import { sfxEmitter } from '../../../editor/src/lib/sfx-bus'
 import { useFloorplanDraftPreview } from '../../../editor/src/store/use-floorplan-draft-preview'
-
-// The cursor bubble and the side lengths are DOM labels; there is no DOM here.
-// Module mocks outlive the file, so the real module goes back afterwards.
-const realDrei = { ...drei }
-mock.module('@react-three/drei', () => ({ ...realDrei, Html: () => null }))
-afterAll(() => {
-  mock.module('@react-three/drei', () => realDrei)
-})
-const { default: RectangleWallTool } = await import('./rectangle-tool')
+import RectangleWallTool from './rectangle-tool'
 
 const building = BuildingNode.parse({ id: 'building_rectangle_sfx' })
 const level = LevelNode.parse({ id: 'level_rectangle_sfx', parentId: building.id })
@@ -50,7 +43,12 @@ function grid(x: number, z: number): GridEvent {
 }
 
 let savedScene: ReturnType<typeof useScene.getState>
+let htmlLabels: ReturnType<typeof spyOn>
 beforeEach(() => {
+  // The cursor bubble and the side lengths are DOM labels; there is no DOM here.
+  htmlLabels = spyOn(Html as unknown as { render: () => ReactNode }, 'render').mockImplementation(
+    () => null,
+  )
   sounds.length = 0
   for (const [event, listener] of Object.entries(listeners))
     sfxEmitter.on(event as keyof typeof listeners, listener)
@@ -67,6 +65,7 @@ beforeEach(() => {
   useViewer.getState().setSelection({ buildingId: building.id, levelId: level.id })
 })
 afterEach(() => {
+  htmlLabels.mockRestore()
   for (const [event, listener] of Object.entries(listeners))
     sfxEmitter.off(event as keyof typeof listeners, listener)
   useScene.setState(savedScene)
