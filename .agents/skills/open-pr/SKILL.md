@@ -24,7 +24,7 @@ Stop if:
 Run a build sanity check if the change is non-trivial:
 
 ```bash
-bun typecheck
+bun run check-types
 bun build
 ```
 
