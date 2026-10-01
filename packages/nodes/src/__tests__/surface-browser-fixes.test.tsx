@@ -36,9 +36,11 @@ import {
   Euler,
   Group,
   Matrix3,
+  type Matrix4,
   Mesh,
   MeshBasicMaterial,
   type Object3D,
+  Plane,
   Raycaster,
   Vector2,
   Vector3,
@@ -55,8 +57,6 @@ import useInteractionScope, {
   useMovingNode,
 } from '../../../editor/src/store/use-interaction-scope'
 import ItemTool from '../item/tool'
-import ancestryPins from './fixtures/counter-ancestry-main-pointer-pins.json'
-import counterPins from './fixtures/counter-main-pointer-pins.json'
 import {
   boxAsset as asset,
   CatalogMover,
@@ -782,99 +782,139 @@ for (const kind of ['column', 'block', 'plugin', 'shelf', 'item', 'procedural-it
       await renderer.unmount()
     }
   })
+/** Drops `child` at `point` with the given event order; returns the commit and the preview at release. */
+async function dropOnCounter(
+  mover: Mover,
+  order: string,
+  layout: 'run' | 'nested corner' | 'standalone module',
+  point: (nodes: ReturnType<typeof kitchen>) => Vector3,
+) {
+  const counters = kitchen(true)
+  const { run, sink, plain } = counters
+  const child = childFor(mover)
+  if (layout === 'run') seed([run, sink, plain, child])
+  else {
+    const outer = CabinetNode.parse({
+      id: 'cabinet_outer',
+      parentId: level.id,
+      position: [-2, 0, -1],
+      rotation: 0.3,
+    })
+    run.parentId = outer.id
+    run.position = [3, 0, 2]
+    run.rotation = Math.PI / 2
+    if (layout === 'standalone module') {
+      plain.parentId = level.id
+      plain.position = [0, 0, 0]
+      plain.withCountertop = true
+      plain.countertopThickness = 0.02
+      plain.showPlinth = true
+      plain.plinthHeight = 0.1
+    }
+    seed([...(layout === 'nested corner' ? [outer, run, sink] : []), plain, child])
+  }
+  arm(mover, child, false)
+  const renderer = await create(<Scene mover={mover} child={child} />)
+  try {
+    await settle(renderer)
+    const pointer = pointerDispatcher(layout === 'standalone module')
+    await pointer.send(new Vector3(-4, 0, -4), order)
+    await settle(renderer)
+    const target = point(counters)
+    await pointer.send(target, order)
+    await settle(renderer)
+    const previewMesh = sceneRegistry.nodes.get(child.id)!
+    previewMesh.updateWorldMatrix(true, false)
+    const preview = previewMesh.matrixWorld.clone()
+    await pointer.send(target, order, true)
+    await settle(renderer)
+    expect(useInteractionScope.getState().scope.kind).toBe('idle')
+    const committed = useScene.getState().nodes[child.id] as ItemNode | ProceduralItemNode
+    const mesh = sceneRegistry.nodes.get(child.id)!
+    mesh.updateWorldMatrix(true, false)
+    return {
+      committed,
+      preview,
+      world: mesh.matrixWorld.clone(),
+      ray: pointer.ray(target).cast.ray,
+    }
+  } finally {
+    await renderer.unmount()
+  }
+}
+function expectSameMatrix(actual: Matrix4, expected: Matrix4) {
+  for (const [i, value] of actual.elements.entries())
+    expect(value).toBeCloseTo(expected.elements[i]!, 6)
+}
+
+// A countertop or bar-ledge hit hosts the child on that surface, under the pointer, exactly where
+// the preview showed it, whatever the mover and whichever of grid or host event arrives first.
+for (const [x, y, z] of [
+  [1, 1.02, 0.1],
+  [0.4, 1.02, 0.2],
+  [1.4, 1.02, -0.2],
+  [0.5, 1.2, -0.5],
+  [1.1, 1.2, -0.5],
+])
+  test(`counter drop at ${x},${y},${z} lands on the surface under the pointer for both movers and event orders`, async () => {
+    const surfaceY = y > 1.1 ? 1.2 : 0.92
+    const drops = []
+    for (const mover of ['catalog', 'registry'] as const)
+      for (const order of ['grid first', 'host first'])
+        drops.push(await dropOnCounter(mover, order, 'run', () => new Vector3(x, y, z)))
+    for (const { committed, preview, world, ray } of drops) {
+      expect(committed.parentId).toBe('cabinet_browser')
+      expect(committed.rotation).toEqual([0, 0, 0])
+      expect(committed.position[1]).toBeCloseTo(surfaceY, 6)
+      const hit = ray.intersectPlane(new Plane(new Vector3(0, 1, 0), -surfaceY), new Vector3())!
+      expect(committed.position[0]).toBeCloseTo(hit.x, 6)
+      expect(committed.position[2]).toBeCloseTo(hit.z, 6)
+      expectSameMatrix(world, preview)
+    }
+    for (const { committed } of drops.slice(1))
+      expect(committed.position).toEqual(drops[0]!.committed.position)
+  })
+
 for (const mover of ['catalog', 'registry'] as const)
-  for (const point of [
-    [1, 1.02, 0.1],
-    [0.4, 1.02, 0.2],
-    [1.4, 1.02, -0.2],
-    [0.5, 1.2, -0.5],
-    [1.1, 1.2, -0.5],
-  ])
+  test(`${mover} drop on a counter inside a rotated corner run keeps its world heading and lands on the countertop`, async () => {
+    const drops = []
     for (const order of ['grid first', 'host first'])
-      test(`counter differential ${mover} ${point.join(',')} ${order}`, async () => {
-        const { run, sink, plain } = kitchen(true),
-          child = childFor(mover)
-        seed([run, sink, plain, child])
-        arm(mover, child, false)
-        const renderer = await create(<Scene mover={mover} child={child} />)
-        try {
-          await settle(renderer)
-          const pointer = pointerDispatcher()
-          await pointer.send(new Vector3(-4, 0, -4), order)
-          await settle(renderer)
-          await pointer.send(new Vector3(...(point as [number, number, number])), order)
-          await settle(renderer)
-          await pointer.send(new Vector3(...(point as [number, number, number])), order, true)
-          await settle(renderer)
-          const committed = useScene.getState().nodes[child.id]!
-          const baseline = counterPins[`${mover}:${point}:${order}` as keyof typeof counterPins]
-          expect(JSON.stringify({ ...committed, id: 'child' })).toBe(JSON.stringify(baseline))
-          expect(useInteractionScope.getState().scope.kind).toBe('idle')
-          expect(committed.parentId).toBe(run.id)
-        } finally {
-          await renderer.unmount()
-        }
-      })
-for (const layout of ['nested corner', 'standalone module'])
-  for (const mover of ['catalog', 'registry'] as const)
-    for (const order of ['grid first', 'host first'])
-      test(`counter ancestry differential ${layout} ${mover} ${order}`, async () => {
-        const { run, sink, plain } = kitchen(true)
-        const outer = CabinetNode.parse({
-          id: 'cabinet_outer',
-          parentId: level.id,
-          position: [-2, 0, -1],
-          rotation: 0.3,
-        })
-        run.parentId = outer.id
-        run.position = [3, 0, 2]
-        run.rotation = Math.PI / 2
-        if (layout === 'standalone module') {
-          plain.parentId = level.id
-          plain.position = [0, 0, 0]
-          plain.withCountertop = true
-          plain.countertopThickness = 0.02
-          plain.showPlinth = true
-          plain.plinthHeight = 0.1
-        }
-        const child = childFor(mover)
-        seed([...(layout === 'nested corner' ? [outer, run, sink] : []), plain, child])
-        arm(mover, child, false)
-        const renderer = await create(<Scene mover={mover} child={child} />)
-        try {
-          await settle(renderer)
-          const pointer = pointerDispatcher(layout === 'standalone module')
-          await pointer.send(new Vector3(-4, 0, -4), order)
-          await settle(renderer)
-          await pointer.send(new Vector3(-4, 0, -4), order)
-          await settle(renderer)
-          const point =
-            layout === 'nested corner'
-              ? sceneRegistry.nodes.get(run.id)!.localToWorld(new Vector3(1, 0.92, 0.1))
-              : new Vector3(0.15, 0.92, 0.1)
-          expect(
-            pointer.ray(point).cast.intersectObject(sceneRegistry.nodes.get(plain.id)!, true)
-              .length,
-          ).toBeGreaterThan(0)
-          await pointer.send(point, order)
-          await settle(renderer)
-          await pointer.send(point, order, true)
-          await settle(renderer)
-          const committed = useScene.getState().nodes[child.id]!
-          const normalized = {
-            ...committed,
-            id: 'child',
-            parentId: committed.parentId === level.id ? 'level' : committed.parentId,
-          }
-          const key = `${layout}:${mover}:${order}`
-          expect(JSON.stringify(normalized)).toBe(
-            JSON.stringify(ancestryPins[key as keyof typeof ancestryPins]),
-          )
-          expect(useInteractionScope.getState().scope.kind).toBe('idle')
-        } finally {
-          await renderer.unmount()
-        }
-      })
+      drops.push(
+        await dropOnCounter(mover, order, 'nested corner', ({ run }) =>
+          sceneRegistry.nodes.get(run.id)!.localToWorld(new Vector3(1, 0.92, 0.1)),
+        ),
+      )
+    for (const { committed, preview, world } of drops) {
+      expect(committed.parentId).toBe('cabinet_browser')
+      expect(committed.position[0]).toBeCloseTo(1, 6)
+      expect(committed.position[1]).toBeCloseTo(0.92, 6)
+      expect(committed.position[2]).toBeCloseTo(0.1, 6)
+      expect(new Euler().setFromRotationMatrix(world).y).toBeCloseTo(0, 6)
+      expectSameMatrix(world, preview)
+    }
+    expect({ ...drops[1]!.committed, id: null }).toEqual({ ...drops[0]!.committed, id: null })
+  })
+
+test('a standalone module with a countertop hosts a registry drop on its top for either event order', async () => {
+  const drops = []
+  for (const order of ['grid first', 'host first'])
+    drops.push(
+      await dropOnCounter(
+        'registry',
+        order,
+        'standalone module',
+        () => new Vector3(0.15, 0.92, 0.1),
+      ),
+    )
+  for (const { committed, preview, world } of drops) {
+    expect(committed.parentId).toBe('cabinet-module_plain')
+    expect(committed.position[0]).toBeCloseTo(0.15, 6)
+    expect(committed.position[1]).toBeCloseTo(0.92, 6)
+    expect(committed.position[2]).toBeCloseTo(0.1, 6)
+    expectSameMatrix(world, preview)
+  }
+})
+
 for (const kind of ['column', 'box', 'L notch'] as const)
   for (const mode of ['offset', 'grab-offset', 'centred grab', 'centred with neighbour'] as const)
     for (const key of ['r', 't'] as const)

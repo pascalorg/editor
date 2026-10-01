@@ -1,10 +1,9 @@
-import { beforeEach, expect, spyOn, test } from 'bun:test'
+import { expect, spyOn, test } from 'bun:test'
 import * as Core from '@pascal-app/core'
 import {
   type AnyNode,
   type AnyNodeId,
   BlockNode,
-  BuildingNode,
   CabinetModuleNode,
   CabinetNode,
   ColumnNode,
@@ -12,15 +11,10 @@ import {
   emitter,
   getEffectiveNode,
   ItemNode,
-  LevelNode,
   MeasurementNode,
   nodeRegistry,
-  nodeType,
-  objectId,
   registerNode,
   ShelfNode,
-  SiteNode,
-  SlabNode,
   sceneRegistry,
   spatialGridManager,
   subscribeSceneCommits,
@@ -32,391 +26,47 @@ import {
 } from '@pascal-app/core'
 import { nodeLevelFrame, ProceduralItemNode } from '@pascal-app/core/procedural-items'
 import { MoveRegistryNodeTool, useEditor } from '@pascal-app/editor'
-import { useViewer, WallSystem } from '@pascal-app/viewer'
-import { events, type RootStore, useThree } from '@react-three/fiber'
+import { useViewer } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
-import { Children, Component, isValidElement, type ReactNode, StrictMode } from 'react'
-import {
-  BoxGeometry,
-  Euler,
-  Group,
-  Mesh,
-  MeshBasicMaterial,
-  type Object3D,
-  Raycaster,
-  Vector2,
-  Vector3,
-} from 'three'
+import { Component, type ReactNode, StrictMode } from 'react'
+import { Euler, Mesh, Vector3 } from 'three'
 import gridTableRecipe from '../../../core/src/procedural-items/__fixtures__/grid-table.json'
 import { counterRecipe } from '../../../core/src/procedural-items/fixtures'
-import { FloatingActionMenu } from '../../../editor/src/components/editor/floating-action-menu'
-import { NodeActionMenu } from '../../../editor/src/components/editor/node-action-menu'
-import { FloorplanRegistryActionMenu } from '../../../editor/src/components/editor-2d/floorplan-registry-action-menu'
-import { FloorplanRegistryMoveOverlay } from '../../../editor/src/components/editor-2d/floorplan-registry-move-overlay'
 import { CATALOG_ITEMS } from '../../../editor/src/components/ui/item-catalog/catalog-items'
-import { useGridEvents } from '../../../editor/src/hooks/use-grid-events'
-import { useKeyboard } from '../../../editor/src/hooks/use-keyboard'
 import {
   createFreshPlacementSubtree,
   duplicatesAsFreshSubtree,
 } from '../../../editor/src/lib/fresh-planar-placement'
 import { applySceneGraphToEditor } from '../../../editor/src/lib/scene'
 import { surfaceAttachmentId } from '../../../editor/src/lib/surface-attachment'
-import useInteractionScope, {
-  getMovingNode,
-  useMovingNode,
-} from '../../../editor/src/store/use-interaction-scope'
+import useInteractionScope, { getMovingNode } from '../../../editor/src/store/use-interaction-scope'
 import usePlacementPreview from '../../../editor/src/store/use-placement-preview'
-import ItemTool from '../item/tool'
 import MoveProceduralItem from '../procedural-item/move-tool'
 import {
-  advance,
-  boxAsset as asset,
-  CatalogMover,
-  installMountedScene,
-  LevelScene,
-  boxRecipe as recipe,
-  SceneSystems,
-  settle,
-} from './harness'
+  duplicate,
+  genericHost,
+  genericPlanDOM,
+  installEditorScene,
+  interactionFixture,
+  key,
+  level,
+  lifecycleFixture,
+  menuAction,
+  namedFixture,
+  panesFor,
+  planPointer,
+  pointerDispatcher,
+  Scene,
+  seed,
+  select,
+  site,
+  snapshot,
+  world,
+} from './editor-scene'
+import { advance, boxAsset as asset, boxRecipe as recipe, settle } from './harness'
 
-const site = SiteNode.parse({})
-const building = BuildingNode.parse({ parentId: site.id })
-const level = LevelNode.parse({ parentId: building.id })
-type Mover = 'registry' | 'catalog'
-let htmlChildren: ReactNode[] = []
-installMountedScene({
-  html: (props) => {
-    htmlChildren.push(props.children)
-    return null
-  },
-  portal: (children) => htmlChildren.push(children),
-})
-beforeEach(() => {
-  htmlChildren = []
-  // The floor-plan move overlay measures its SVG scene.
-  const svg = {
-    getBoundingClientRect: () => ({ left: -100, top: -100, right: 100, bottom: 100 }),
-    createSVGPoint: () => ({
-      x: 0,
-      y: 0,
-      matrixTransform() {
-        return { x: this.x, y: this.y }
-      },
-    }),
-  }
-  Object.assign(document, {
-    createElementNS: () => ({ setAttribute() {}, remove() {} }),
-    querySelector: () => ({
-      appendChild() {},
-      ownerSVGElement: svg,
-      getScreenCTM: () => ({ inverse: () => ({}) }),
-      querySelector: () => ({ getBoundingClientRect: () => ({ left: 0, top: 0, width: 10 }) }),
-    }),
-  })
-})
+installEditorScene()
 
-function Grid() {
-  const canvas = useThree((s) => s.gl.domElement)
-  if (!(canvas as any).__native) {
-    const target = Object.assign(new EventTarget(), {
-      setPointerCapture() {},
-      releasePointerCapture() {},
-    })
-    Object.assign(canvas, {
-      __native: target,
-      addEventListener: target.addEventListener.bind(target),
-      removeEventListener: target.removeEventListener.bind(target),
-      dispatchEvent: target.dispatchEvent.bind(target),
-      getBoundingClientRect: () => ({ left: 0, top: 0, width: 1000, height: 1000 }),
-    })
-  }
-  useGridEvents(0)
-  return null
-}
-function Scene({
-  mover,
-  child,
-  fresh = false,
-  menu = false,
-  panes,
-}: {
-  mover?: Mover
-  child?: AnyNode
-  fresh?: boolean
-  menu?: boolean
-  panes?: { plan: boolean; spatial: boolean }
-}) {
-  useKeyboard({})
-  const plan = useEditor((s) => s.viewMode === '2d')
-  const activeNode = useMovingNode()
-  const source = child ?? activeNode
-  const moving = useInteractionScope((s) => s.scope.kind === 'moving' || s.scope.kind === 'placing')
-  const armed = useEditor((s) => s.mode === 'build' && s.tool === 'item')
-  return (
-    <>
-      <LevelScene level={level} />
-      <Grid />
-      {menu && (plan ? <FloorplanRegistryActionMenu /> : <FloatingActionMenu />)}
-      {(panes?.plan ?? plan) && moving && <FloorplanRegistryMoveOverlay />}
-      {fresh && armed && <ItemTool />}
-      {moving &&
-        (panes?.spatial ?? !plan) &&
-        source &&
-        (source.type === 'item' ? (
-          <CatalogMover source={source as ItemNode} />
-        ) : (
-          <MoveRegistryNodeTool node={source} />
-        ))}
-      <SceneSystems />
-      <WallSystem />
-    </>
-  )
-}
-function seed(entries: AnyNode[], slab = false) {
-  const support = SlabNode.parse({
-    parentId: level.id,
-    elevation: 0.4,
-    polygon: [
-      [-10, -10],
-      [10, -10],
-      [10, 10],
-      [-10, 10],
-    ],
-  })
-  const nodes = Object.fromEntries(
-    [site, building, level, ...entries, ...(slab ? [support] : [])].map((n) => [
-      n.id,
-      { ...n, children: [] },
-    ]),
-  ) as Record<AnyNodeId, AnyNode>
-  for (const n of Object.values(nodes))
-    if (n.parentId) (nodes[n.parentId] as AnyNode & { children: string[] })?.children?.push(n.id)
-  useScene.setState({
-    nodes,
-    rootNodeIds: [site.id],
-    dirtyNodes: new Set(entries.map((n) => n.id)),
-    readOnly: false,
-    materials: {},
-    collections: {},
-    installedPlugins: [],
-  })
-  if (slab) spatialGridManager.handleNodeCreated(support, level.id)
-  useScene.temporal.getState().clear()
-  useScene.temporal.getState().pause()
-  useInteractionScope.getState().end()
-  useEditor.setState({
-    mode: 'build',
-    tool: 'item',
-    movingNodeOrigin: '3d',
-    placementDragMode: false,
-    isFloorplanHovered: false,
-    viewMode: '3d',
-  })
-  useEditor.getState().setSnappingMode('item', 'off')
-  useEditor.getState().setContinuation('point', 'single')
-  useViewer.setState({
-    textures: false,
-    cameraDragging: false,
-    inputDragging: false,
-    showZones: false,
-    showMeasurements: false,
-    selection: { buildingId: building.id, levelId: level.id, zoneId: null, selectedIds: [] },
-  })
-}
-function world(id: AnyNodeId) {
-  const o = sceneRegistry.nodes.get(id)!
-  o.updateWorldMatrix(true, true)
-  return o.getWorldPosition(new Vector3())
-}
-function pointerDispatcher(side = false) {
-  const object = sceneRegistry.nodes.get(level.id)! as Object3D & { __r3f: { root: RootStore } }
-  const store = object.__r3f.root
-  const manager = events(store)
-  store.setState({ events: manager })
-  const state = store.getState()
-  state.setSize(1000, 1000)
-  state.camera.position.set(...((side ? [0, 1.2, 5] : [0, 10, 0]) as [number, number, number]))
-  state.camera.up.set(0, 0, -1)
-  state.camera.lookAt(0, side ? 0.4 : 0, 0)
-  state.camera.updateMatrixWorld()
-  state.raycaster.layers.enableAll()
-  const ray = (point: Vector3) => {
-    state.scene.updateMatrixWorld(true)
-    const ndc = point.clone().project(state.camera)
-    const cast = new Raycaster()
-    cast.layers.enableAll()
-    cast.setFromCamera(new Vector2(ndc.x, ndc.y), state.camera)
-    return { ndc, cast }
-  }
-  const dispatch = (point: Vector3, order: string, click = false) => {
-    const { ndc } = ray(point)
-    const type = click ? 'pointerup' : 'pointermove'
-    const native = Object.assign(new Event(type), {
-      offsetX: (ndc.x + 1) * 500,
-      offsetY: (1 - ndc.y) * 500,
-      clientX: (ndc.x + 1) * 500,
-      clientY: (1 - ndc.y) * 500,
-      pointerId: 1,
-      button: 0,
-    })
-    const grid = () => state.gl.domElement.dispatchEvent(native)
-    const host = () => manager.handlers![click ? 'onPointerUp' : 'onPointerMove'](native as never)
-    if (order === 'grid first') {
-      grid()
-      host()
-    } else {
-      host()
-      grid()
-    }
-    if (click)
-      state.gl.domElement.dispatchEvent(
-        Object.assign(new Event('click'), {
-          clientX: native.clientX,
-          clientY: native.clientY,
-          button: 0,
-        }),
-      )
-  }
-  return {
-    ray,
-    send: (point: Vector3, order: string, click = false) =>
-      act(async () => dispatch(point, order, click)),
-    // One input frame coalesces grid dispatch before its zero-delay task runs.
-    sendFrame: (points: Vector3[], order: string) =>
-      act(async () => {
-        for (const point of points) dispatch(point, order)
-      }),
-  }
-}
-function menuAction(
-  action: 'onDuplicate' | 'onMove' = 'onDuplicate',
-): ((event: { stopPropagation(): void }) => void) | undefined {
-  const search = (value: ReactNode): any => {
-    for (const element of Children.toArray(value)) {
-      if (!isValidElement(element)) continue
-      if (element.type === NodeActionMenu) return (element.props as any)[action]
-      const child = search((element.props as any).children)
-      if (child) return child
-    }
-  }
-  return htmlChildren.map(search).filter(Boolean).at(-1)
-}
-function genericHost(declared = false) {
-  const kind = 'plugin:browser-host'
-  const schema = nodeRegistry
-    .get('shelf')!
-    .schema.extend({ id: objectId(kind), type: nodeType(kind) })
-  registerNode({
-    kind,
-    schema,
-    schemaVersion: 1,
-    category: 'furnish',
-    defaults: () => ({}),
-    capabilities: {
-      ...(declared
-        ? {
-            surfaces: {
-              hosting: {
-                childFrame: 'host-local',
-                resolveHit: (_host: AnyNode, hit: { normalWorldY: number }) =>
-                  hit.normalWorldY >= 0.75
-                    ? {
-                        id: 'declared-top',
-                        position: [0, 1, 0],
-                        normal: [0, 1, 0],
-                        region: { kind: 'rect', size: [0.5, 0.5] },
-                      }
-                    : null,
-              },
-            },
-          }
-        : {}),
-      selectable: { hitVolume: 'bbox' },
-      movable: { axes: ['x', 'z'] },
-      duplicable: true,
-      deletable: true,
-      floorPlaced: { footprint: () => ({ dimensions: [1, 1, 1], rotation: [0, 0, 0] }) },
-    },
-    geometry: () => {
-      const group = new Group()
-      group.add(new Mesh(new BoxGeometry(1, 1, 1).translate(0, 0.5, 0), new MeshBasicMaterial()))
-      return group
-    },
-  } as never)
-  return schema.parse({ parentId: level.id }) as AnyNode
-}
-
-function snapshot() {
-  const { nodes, rootNodeIds, collections, materials, installedPlugins } = useScene.getState()
-  return JSON.stringify({ nodes, rootNodeIds, collections, materials, installedPlugins })
-}
-async function duplicate(renderer: Awaited<ReturnType<typeof create>>, firstFrame?: () => void) {
-  await settle(renderer)
-  const callback = menuAction()
-  expect(callback).toBeDefined()
-  await act(async () => callback!({ stopPropagation() {} }))
-  if (firstFrame) {
-    await act(async () => renderer.advanceFrames(1, 1 / 60))
-    firstFrame()
-  }
-  await settle(renderer)
-  return getMovingNode()!
-}
-async function key(key: string) {
-  await act(async () =>
-    window.dispatchEvent(
-      Object.assign(new Event('keydown', { cancelable: true }), { key, code: key }),
-    ),
-  )
-}
-async function planPointer(x: number, z: number, click = false) {
-  await act(async () =>
-    window.dispatchEvent(
-      Object.assign(new Event(click ? 'pointerup' : 'pointermove'), {
-        clientX: x,
-        clientY: z,
-        button: 0,
-      }),
-    ),
-  )
-}
-function select(root: AnyNode, view = '3d') {
-  useEditor.setState({
-    mode: 'select',
-    tool: null,
-    viewMode: view as never,
-    isFloorplanHovered: view === '2d',
-  })
-  useViewer.getState().setSelection({ selectedIds: [root.id] })
-  useScene.temporal.getState().resume()
-}
-function namedFixture(childless: boolean) {
-  const host = ProceduralItemNode.parse({
-    parentId: level.id,
-    recipe: {
-      ...recipe,
-      parts: [
-        {
-          ...recipe.parts[0]!,
-          shapes: [{ ...recipe.parts[0]!.shapes[0]!, size: [4, 0.2, 4], position: [0, 1.9, 0] }],
-        },
-      ],
-      surfaces: [{ id: 'top', label: 'Top', position: [0, 2, 0], size: [4, 4] }],
-    },
-  })
-  const root = ItemNode.parse({ parentId: host.id, asset, position: [-1, 0, 0] })
-  host.attachments[root.id] = 'top'
-  const leaf = ItemNode.parse({ parentId: root.id, asset, position: [0, 0.2, 0] })
-  const other = ProceduralItemNode.parse({
-    ...host,
-    id: 'procedural-item_other',
-    position: [6, 0, 0],
-    attachments: {},
-  })
-  seed([host, root, ...(childless ? [] : [leaf]), other])
-  return { host, root, leaf, other }
-}
 for (const view of ['3d', '2d'])
   for (const childless of [false, true])
     for (const outcome of [
@@ -748,133 +398,6 @@ for (const view of ['3d', '2d'])
     expect(useScene.temporal.getState().pastStates).toHaveLength(0)
   })
 for (const view of ['3d', '2d'])
-  for (const kind of ['item', 'shelf', 'procedural-item'])
-    for (const outcome of ['commit', 'Escape'])
-      test(`childless lifecycle ${view} ${kind} ${outcome}`, async () => {
-        const root =
-          kind === 'item'
-            ? ItemNode.parse({ parentId: level.id, asset, position: [-2, 0, 0] })
-            : kind === 'shelf'
-              ? ShelfNode.parse({ parentId: level.id, position: [-2, 0, 0] })
-              : ProceduralItemNode.parse({ parentId: level.id, recipe, position: [-2, 0, 0] })
-        seed([root])
-        select(root, view)
-        const before = snapshot()
-        const minted = new Set<string>()
-        const idDef = nodeRegistry.get(kind)!.schema.shape.id._zod.def
-        const descriptor = Object.getOwnPropertyDescriptor(idDef, 'defaultValue')!
-        const getter = descriptor.get!
-        Object.defineProperty(idDef, 'defaultValue', {
-          ...descriptor,
-          get() {
-            const id = getter.call(idDef)
-            minted.add(id)
-            return id
-          },
-        })
-        const generate = Core.generateId
-        const mintSpy = spyOn(Core, 'generateId').mockImplementation((prefix) => {
-          const id = generate(prefix)
-          minted.add(id)
-          return id
-        })
-        let writes = 0
-        const unsubscribe = useScene.subscribe((s, p) => {
-          if (s.nodes !== p.nodes) {
-            writes++
-            for (const id of Object.keys(s.nodes)) if (!savedIds.has(id)) minted.add(id)
-          }
-        })
-        const savedIds = new Set(Object.keys(useScene.getState().nodes))
-        const commits: unknown[] = []
-        const uncommits = subscribeSceneCommits((c) => commits.push(c))
-        const renderer = await create(<Scene menu />)
-        const trace: unknown[] = []
-        const labels = new Map([...savedIds].map((id, i) => [id, `original-${i}`]))
-        const normalise = (value: unknown) =>
-          JSON.parse(
-            JSON.stringify(value, (_key, v) => {
-              if (typeof v !== 'string') return v
-              if (labels.has(v)) return labels.get(v)
-              if (minted.has(v)) {
-                const label = `fresh-${[...minted].indexOf(v)}`
-                labels.set(v, label)
-                return label
-              }
-              return v
-            }),
-          )
-        const record = (stage: string) => {
-          const moving = getMovingNode()
-          if (moving) minted.add(moving.id)
-          const nodes = Object.values(useScene.getState().nodes).filter((n) => !savedIds.has(n.id))
-          trace.push(
-            normalise({
-              stage,
-              minted: minted.size,
-              writes,
-              history: useScene.temporal.getState().pastStates.length,
-              commits: commits.length,
-              moving: moving?.id ?? null,
-              nodes,
-              preview: nodes.map((n) => ({ id: n.id, position: world(n.id).toArray() })),
-            }),
-          )
-        }
-        try {
-          await duplicate(renderer)
-          record('preview')
-          const pointer = view === '3d' ? pointerDispatcher() : null
-          const point = new Vector3(6, 0, 5)
-          if (pointer) await pointer.send(new Vector3(3, 0, 3), 'grid first')
-          else await planPointer(3, 3)
-          await settle(renderer)
-          if (pointer) await pointer.send(point, 'grid first')
-          else await planPointer(6, 5)
-          await settle(renderer)
-          record('pointer')
-          if (outcome === 'Escape') {
-            await key('Escape')
-            await settle(renderer)
-            record('Escape')
-            expect(snapshot()).toBe(before)
-          } else {
-            if (pointer) await pointer.send(point, 'grid first', true)
-            else await planPointer(6, 5, true)
-            await settle(renderer)
-            record('commit')
-            expect(getMovingNode()).toBeNull()
-            const after = snapshot()
-            await act(async () => useScene.temporal.getState().undo())
-            await settle(renderer)
-            record('undo')
-            expect(snapshot()).toBe(before)
-            await act(async () => useScene.temporal.getState().redo())
-            await settle(renderer)
-            record('redo')
-            expect(snapshot()).toBe(after)
-          }
-          const name = `${view}-${kind}-${outcome}`
-          if (process.env.DUPLICATE_CAPTURE_LIFECYCLE)
-            await Bun.write(
-              `${process.env.DUPLICATE_CAPTURE_LIFECYCLE}/${name}.json`,
-              `${JSON.stringify(trace, null, 2)}\n`,
-            )
-          else
-            expect(trace).toEqual(
-              await Bun.file(
-                new URL(`./fixtures/duplicate-lifecycle/${name}.json`, import.meta.url),
-              ).json(),
-            )
-        } finally {
-          await renderer.unmount()
-          unsubscribe()
-          uncommits()
-          Object.defineProperty(idDef, 'defaultValue', descriptor)
-          mintSpy.mockRestore()
-        }
-      })
-for (const view of ['3d', '2d'])
   for (const hostKind of ['wall', 'block', ...(view === '3d' ? ['block-side'] : [])])
     test(`external ${hostKind} bookkeeping and original references ${view} through Duplicate and pointer commit`, async () => {
       const host =
@@ -1029,21 +552,6 @@ for (const kind of ['item', 'cabinet'])
     await renderer.unmount()
   })
 
-function lifecycleFixture(kind: string, childless: boolean, named = true) {
-  const fixture = namedFixture(true)
-  const root =
-    kind === 'item'
-      ? fixture.root
-      : kind === 'shelf'
-        ? ShelfNode.parse({ parentId: level.id, position: [-1, 0, 0], width: 0.5, depth: 0.3 })
-        : ProceduralItemNode.parse({ parentId: fixture.host.id, position: [-1, 0, 0], recipe })
-  if (!named) root.parentId = level.id
-  fixture.host.attachments = kind === 'shelf' || !named ? {} : { [root.id]: 'top' }
-  if (kind === 'shelf' || !named) fixture.host.position = [20, 0, 0]
-  const leaf = ItemNode.parse({ parentId: root.id, asset, position: [0, 0.2, 0] })
-  seed([fixture.host, root, ...(childless ? [] : [leaf])])
-  return { root, host: fixture.host }
-}
 for (const kind of ['item', 'shelf', 'procedural-item'])
   for (const childless of [false, true]) {
     for (const named of kind === 'shelf' ? [false] : [false, true])
@@ -1179,83 +687,6 @@ for (const kind of ['item', 'shelf', 'procedural-item'])
         }
       })
   }
-
-for (const kind of ['item', 'shelf', 'procedural-item'])
-  for (const producer of ['3d', '2d'])
-    for (const outcome of ['Escape', 'commit', 'unmount'])
-      test(`ordinary differential ${kind} ${producer} ${outcome}`, async () => {
-        const { root } = lifecycleFixture(kind, true, false)
-        usePlacementPreview.getState().clear()
-        select(root, producer)
-        const originalIds = Object.keys(useScene.getState().nodes)
-        const normalize = (data: unknown) =>
-          JSON.parse(
-            originalIds.reduce(
-              (text, id, i) => text.replaceAll(id, `original-${i}`),
-              JSON.stringify(data),
-            ),
-          )
-        const trace: unknown[] = []
-        const record = (stage: string) =>
-          trace.push(
-            normalize({
-              stage,
-              scene: JSON.parse(snapshot()),
-              mesh: world(root.id).toArray(),
-              placement: usePlacementPreview.getState().node,
-              transforms: [...useLiveTransforms.getState().transforms],
-              overrides: [...useLiveNodeOverrides.getState().overrides],
-              history: useScene.temporal.getState().pastStates.length,
-            }),
-          )
-        const renderer = await create(<Scene menu panes={{ plan: true, spatial: true }} />)
-        try {
-          await settle(renderer)
-          await act(async () => menuAction('onMove')!({ stopPropagation() {} }))
-          await settle(renderer)
-          record('start')
-          const pointer = pointerDispatcher()
-          if (producer === '3d') {
-            await pointer.sendFrame([new Vector3(1, 0, 0), new Vector3(4, 0, 4)], 'grid first')
-          } else {
-            await planPointer(1, 0)
-            await planPointer(4, 4)
-          }
-          await settle(renderer)
-          record('pointer')
-          await renderer.update(
-            <Scene menu panes={{ plan: producer === '3d', spatial: producer === '2d' }} />,
-          )
-          await settle(renderer)
-          record('teardown')
-          if (outcome === 'Escape') await key('Escape')
-          else if (outcome === 'commit') {
-            if (producer === '3d') {
-              await planPointer(6, 5)
-              await planPointer(6, 5, true)
-            } else {
-              await pointer.send(new Vector3(6, 0, 5), 'grid first')
-              await pointer.send(new Vector3(6, 0, 5), 'grid first', true)
-            }
-          } else await renderer.update(<Scene menu panes={{ plan: false, spatial: false }} />)
-          await settle(renderer)
-          record(outcome)
-          const name = `${kind}-${producer}-${outcome}`
-          if (process.env.DUPLICATE_CAPTURE_ORDINARY)
-            await Bun.write(
-              `${process.env.DUPLICATE_CAPTURE_ORDINARY}/${name}.json`,
-              `${JSON.stringify(trace, null, 2)}\n`,
-            )
-          else
-            expect(trace).toEqual(
-              await Bun.file(
-                new URL(`./fixtures/ordinary-move-lifecycle/${name}.json`, import.meta.url),
-              ).json(),
-            )
-        } finally {
-          await renderer.unmount()
-        }
-      })
 
 // Split view mounts both movers for a 3D-started move, and the 2D overlay pauses history for
 // the whole gesture too. The two co-own that pause, so the 3D drop still records one step.
@@ -1415,49 +846,6 @@ for (const route of ['item', 'item-events', 'registry', '2d'])
     }
   })
 
-function genericPlanDOM() {
-  const scene = document.querySelector('[data-floorplan-scene]')!
-  const element = () => ({
-    style: {},
-    setAttribute() {},
-    removeAttribute() {},
-    remove() {},
-    getBBox: () => ({ x: -0.5, y: -0.3, width: 1, height: 0.6 }),
-    getBoundingClientRect: () => ({ left: 0, top: 0, width: 10 }),
-  })
-  Object.assign(scene, {
-    querySelector: () => element(),
-    querySelectorAll: () => [],
-    appendChild() {},
-  })
-  Object.assign(document, { querySelector: () => scene, createElementNS: element })
-  Object.defineProperty(globalThis, 'DOMRect', {
-    configurable: true,
-    value: class {
-      constructor(
-        public x: number,
-        public y: number,
-        public width: number,
-        public height: number,
-      ) {}
-    },
-  })
-}
-function interactionFixture(kind: string) {
-  if (kind !== 'cabinet') return lifecycleFixture(kind, false)
-  genericPlanDOM()
-  const root = CabinetNode.parse({
-    ...nodeRegistry.get('cabinet')!.defaults(),
-    parentId: level.id,
-  })
-  const child = CabinetModuleNode.parse({
-    ...nodeRegistry.get('cabinet-module')!.defaults(),
-    parentId: root.id,
-  })
-  seed([root, child])
-  return { root }
-}
-const panesFor = (view: string) => ({ plan: view !== '3d', spatial: view !== '2d' })
 for (const strict of [false, true]) {
   for (const scenario of ['cabinet-handoff', 'named-replacement'])
     test(`interaction lifetime audit ${scenario} strict=${strict}`, async () => {
@@ -2219,87 +1607,6 @@ for (const view of ['3d', '2d'])
           await renderer.unmount()
         }
       })
-
-for (const kind of ['item', 'fence', 'lean-to-extension', 'spawn', 'plugin'])
-  for (const outcome of ['Escape', 'commit', 'unmount'])
-    test(`review3 unregistered fresh overlay ${kind} ${outcome}`, async () => {
-      Core.resetSceneHistoryPauseDepth()
-      genericPlanDOM()
-      const pluginRoot = kind === 'plugin' ? genericHost() : null
-      if (pluginRoot) {
-        const definition = nodeRegistry.get(pluginRoot.type)!
-        registerNode({ ...definition, floorplan: nodeRegistry.get('shelf')!.floorplan } as never)
-      }
-      const definition = nodeRegistry.get(kind === 'plugin' ? pluginRoot!.type : kind)!
-      const root = definition.schema.parse({
-        ...definition.defaults(),
-        ...(kind === 'item' ? { asset } : {}),
-        ...(kind === 'lean-to-extension'
-          ? { hostKind: 'freestanding', hostRoofId: 'roof_fixture', hostSlabId: 'slab_fixture' }
-          : {}),
-        ...(pluginRoot ?? {}),
-        parentId: level.id,
-        position: [-1, 0, 0],
-        metadata: { isNew: true },
-      }) as AnyNode
-      seed([root])
-      usePlacementPreview.getState().clear()
-      useScene.temporal.getState().resume()
-      select(root, '2d')
-      const ids = new Map(Object.keys(useScene.getState().nodes).map((id, i) => [id, `node-${i}`]))
-      const trace: unknown[] = []
-      const record = (stage: string) => {
-        const temporal = useScene.temporal.getState()
-        for (const id of Object.keys(useScene.getState().nodes))
-          if (!ids.has(id)) ids.set(id, `node-${ids.size}`)
-        let value = JSON.stringify({
-          stage,
-          scene: JSON.parse(snapshot()),
-          moving: getMovingNode(),
-          origin: useEditor.getState().movingNodeOrigin,
-          past: temporal.pastStates,
-          future: temporal.futureStates,
-          tracking: temporal.isTracking,
-        })
-        for (const [id, replacement] of ids) value = value.replaceAll(id, replacement)
-        trace.push(JSON.parse(value))
-      }
-      await act(async () => useEditor.getState().setMovingNode(root))
-      const renderer = await create(<Scene panes={panesFor('2d')} />)
-      try {
-        await settle(renderer)
-        expect(useInteractionScope.getState().ownedSubtree ?? null).toBeNull()
-        expect(useInteractionScope.getState().pendingSubtree ?? null).toBeNull()
-        record('start')
-        await planPointer(1, 0)
-        await planPointer(3, 4)
-        await settle(renderer)
-        record('pointer')
-        if (outcome === 'Escape') await key('Escape')
-        else if (outcome === 'commit') await planPointer(3, 4, true)
-        else await renderer.update(<Scene panes={{ plan: false, spatial: false }} />)
-        await settle(renderer)
-        record(outcome)
-        await act(async () => useScene.temporal.getState().undo())
-        record('undo')
-        await act(async () => useScene.temporal.getState().redo())
-        record('redo')
-        const name = `${kind}-${outcome}`
-        if (process.env.DUPLICATE_CAPTURE_FRESH_OVERLAY)
-          await Bun.write(
-            `${process.env.DUPLICATE_CAPTURE_FRESH_OVERLAY}/${name}.json`,
-            `${JSON.stringify(trace, null, 2)}\n`,
-          )
-        else
-          expect(trace).toEqual(
-            await Bun.file(
-              new URL(`./fixtures/fresh-overlay-lifecycle/${name}.json`, import.meta.url),
-            ).json(),
-          )
-      } finally {
-        await renderer.unmount()
-      }
-    })
 
 for (const kind of ['item', 'procedural-item', 'procedural-generic'])
   for (const outcome of ['Escape', 'commit'])
