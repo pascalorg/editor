@@ -644,12 +644,12 @@ const LoadedModelRenderer = ({
       if (!(child as Mesh).isMesh) return
 
       const mesh = child as Mesh
-      if (mesh.name === 'cutout') {
-        child.visible = false
-      }
+      // `cutout` drives wall openings, `collider` the walkthrough; neither renders.
+      const helper = mesh.name === 'cutout' || mesh.name === 'collider'
+      if (helper) child.visible = false
 
       const captured = captureItemMeshMaterials(mesh)
-      if (mesh.name !== 'cutout') meshEntries.push({ mesh, captured })
+      if (!helper) meshEntries.push({ mesh, captured })
     })
 
     const materialOptions = {

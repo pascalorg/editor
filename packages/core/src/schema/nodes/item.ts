@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { AssetUrl } from '../asset-url'
 import { BaseNode, nodeType, objectId } from '../base'
 import type { CollectionId } from '../collections'
+import { GeometryScriptSource } from '../geometry-source'
 
 // --- Control descriptors ---
 
@@ -170,6 +171,10 @@ export const ItemNode = BaseNode.extend({
   // registry default. A dangling ref renders the default (never blocks).
   slots: z.record(z.string(), z.string()).optional(),
 
+  // Geometry authored as a script. When present, `asset.src` is its compiled
+  // artifact and `asset.dimensions` its bounds; absent = a catalog GLB.
+  source: GeometryScriptSource.optional(),
+
   asset: assetSchema,
 }).describe(dedent`Item node - used to represent a item in the building
   - position: position in level coordinate system (or parent coordinate system if attached)
@@ -183,6 +188,7 @@ export const ItemNode = BaseNode.extend({
     - rotation: corrective rotation for the model
     - scale: corrective scale for the model
     - tags: tags associated with the item
+  - source: optional three.js script the asset was compiled from (code, params, artifact hash, manifest)
 `)
 
 export type ItemNode = z.infer<typeof ItemNode>

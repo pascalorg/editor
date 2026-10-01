@@ -24,6 +24,13 @@ export {
 } from './compiled-node-parsers'
 // Cut intents (F5b)
 export { CutIntent, CutShape } from './cut'
+export {
+  GEOMETRY_SCRIPT_MAX_BYTES,
+  GeometryArtifactManifest,
+  GeometryScriptParamSpec,
+  GeometryScriptParamValue,
+  GeometryScriptSource,
+} from './geometry-source'
 export type {
   MaterialMapProperties,
   MaterialMaps,
