@@ -67,9 +67,8 @@ export function SlabPanel() {
     useEditor.getState().selectRoom({ levelId: node.parentId, zoneId: node.zoneIds[0] })
   }, [node])
 
-  // See "Panel slider-drag fix recipe" in plans/editor-node-registry.md.
-  // Stable handler refs across re-renders so slider drags don't trigger
-  // a Maximum update depth cascade on the panel's SliderControls.
+  // Stable handler refs so slider drags don't trigger a Maximum update depth
+  // cascade; see "Custom panels" in wiki/architecture/node-definitions.md.
   const nodeRef = useRef(node)
   nodeRef.current = node
 

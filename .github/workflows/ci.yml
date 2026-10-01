@@ -21,6 +21,7 @@ jobs:
       pull-requests: read
     outputs:
       runtime: ${{ steps.filter.outputs.runtime }}
+      skills: ${{ steps.filter.outputs.skills }}
     steps:
       - uses: actions/checkout@v4
       - id: filter
@@ -42,8 +43,16 @@ jobs:
               - '!**/__tests__/**'
               - '!**/__fixtures__/**'
               - '!**/__snapshots__/**'
+            # What `bun run skills:validate` reads: the skill bundles, the
+            # maintainer skills, plugin evals, every plugin/marketplace manifest
+            # and the logos they reference, the root README install lines, and
+            # the validator itself. `every` ANDs the lines, so the positive
+            # patterns are one brace glob.
+            skills:
+              - '{skills/**,.agents/**,plugin-evals/**,.claude-plugin/**,.codex-plugin/**,.cursor-plugin/**,plugin.json,mcp.json,gemini-extension.json,assets/pascal-mark*.svg,README.md,package.json,scripts/validate-skills.ts,scripts/path-containment*.ts,scripts/*-policy*.ts,.github/workflows/ci.yml}'
 
   quality:
+    needs: changes
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -68,6 +77,7 @@ jobs:
         run: bun run check
 
       - name: Validate agent skills and plugin packages
+        if: needs.changes.outputs.skills == 'true' || github.event_name == 'push'
         run: bun run skills:validate
 
       - name: Type check

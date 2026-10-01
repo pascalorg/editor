@@ -1028,8 +1028,8 @@ export type DistributionRole = 'run' | 'fitting' | 'terminal' | 'equipment'
 export type SnapProfile = 'item' | 'structural'
 
 /**
- * How a kind is treated by the GLB bake and the baked `/viewer`. See
- * plans/editor-plugin-trees-example.md → Part D.
+ * How a kind is treated by the GLB bake and the baked `/viewer`. See "Bake policy" in
+ * wiki/architecture/node-definitions.md.
  * - `'static'` (default) — baked as geometry; the viewer shows the baked mesh.
  * - `'strip'` — excluded from the bake; the viewer rebuilds it live from
  *   `scene_graph` via the registry renderer (heavy reference assets: scans, guides).
@@ -1158,7 +1158,7 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * free) instead of the frozen baked meshes (which the viewer hides). Needed when
    * the normal per-node `renderer` can't stand alone in a baked scene (e.g. an
    * instanced kind whose `renderer` is an invisible selection proxy and whose real
-   * geometry comes from a `system`). See plans/editor-plugin-trees-example.md → Part D.
+   * geometry comes from a `system`). See "Bake policy" in wiki/architecture/node-definitions.md.
    */
   bakeReplaceRenderer?: BakeReplaceRenderer<z.infer<S>>
   /**

@@ -144,8 +144,8 @@ function itemWallMoveHandle(): HandleDescriptor<ItemNodeType> {
 /**
  * Item — Phase 5 batch kind. Catalog-backed, GLB-rendered, multi-host.
  *
- * Demonstrates the **custom `def.renderer` escape hatch** (see
- * plans/editor-node-registry.md): items use `useGLTF` from drei to
+ * Demonstrates the **custom `def.renderer` escape hatch** ("Opting out of a
+ * generic path" in wiki/architecture/node-definitions.md): items use `useGLTF` from drei to
  * load CDN assets, plus a non-trivial interactive-widget layer inside
  * the rendered scene. Not expressible as a pure `def.geometry`. The
  * registry mounts the custom React renderer as-is.

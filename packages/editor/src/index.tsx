@@ -223,11 +223,8 @@ export {
   type WallPlanPoint,
   type WallSnapRadii,
 } from './components/tools/wall/wall-drafting'
-// `ToolbarLeft` / `ToolbarRight` are the headless-spec aliases for the
-// existing `ViewerToolbarLeft` / `ViewerToolbarRight` exports — the
-// underlying components are the same; the alias just matches the names
-// used in `pascalorg/private-editor:plans/community-preset-system.md`
-// so consumer code stays close to the spec vocabulary.
+// `ToolbarLeft` / `ToolbarRight` alias `ViewerToolbarLeft` / `ViewerToolbarRight`
+// (same components) under the names headless hosts compose their toolbars with.
 export {
   CameraActions as ToolbarRight,
   CameraActions as ViewerToolbarRight,

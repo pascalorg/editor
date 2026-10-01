@@ -8,7 +8,7 @@ Canonical rules for code that touches `packages/core`, `packages/viewer`, `packa
 |---|---|
 | [layers](layers.md) | Three.js layer constants, ownership, and rendering separation |
 | [systems](systems.md) | Core and viewer systems architecture |
-| [renderers](renderers.md) | Node renderer pattern in `packages/viewer` |
+| [renderers](renderers.md) | Registry renderer dispatch and the custom `def.renderer` contract |
 | [node-definitions](node-definitions.md) | Three-checkbox composition model for registry-driven kinds (`geometry` / `renderer` / `system`) |
 | [materials-and-themes](materials-and-themes.md) | Surface colour: surface roles, colour presets, the textures axis, and scene themes (appearance / ground / clay tints) |
 | [item-authoring](item-authoring.md) | Content-author contract for catalog item GLBs: `slot_` material naming, authored defaults + `pascal_material` extras, the `cutout` reserved mesh, UV world scale, and the validated Blender/export recipe |

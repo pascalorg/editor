@@ -1,78 +1,40 @@
 # Renderers
 
-*Node renderer pattern in `packages/viewer`.*
+*How the viewer decides what React mounts for a node.*
 
-Applies to: `packages/viewer/**`.
+Applies to: `packages/viewer/src/components/renderers/`, every `def.renderer` in `packages/nodes/src/<kind>/` and in plugins.
 
-Renderers live in `packages/viewer/src/components/renderers/`. Each renderer is responsible for one node type's Three.js geometry and materials — nothing else.
-
-> **For registry-driven kinds, the default is no custom renderer.** Set `def.geometry` instead and the framework mounts a generic renderer + geometry system for you. See [node-definitions.md](node-definitions.md). The pattern below applies to kinds that *do* need a custom renderer (GLB, `<Html>`, drei, instancing, shader materials).
-
-## Dispatch Chain
+## Dispatch
 
 ```
-<SceneRenderer>          — iterates rootNodeIds from useScene
-  └─ <NodeRenderer>      — switches on node.type, renders the matching component
-       └─ <WallRenderer> — (or SlabRenderer, DoorRenderer, …)
+<SceneRenderer>                — maps useScene rootNodeIds to <NodeRenderer>
+  └─ <NodeRenderer nodeId>     — def = nodeRegistry.get(node.type)
+       ├─ def.renderer set     → the kind's lazy component, under <Suspense>
+       ├─ else def.geometry    → <ParametricNodeRenderer>, filled by <GeometrySystem>
+       └─ else                 → nothing
 ```
 
-See `packages/viewer/src/components/renderers/scene-renderer.tsx` and `packages/viewer/src/components/renderers/node-renderer.tsx`.
+`NodeRenderer` (`node-renderer.tsx`) renders nothing when the kind is not registered or its plugin is not installed in the project (`isNodeKindEnabled`). It subscribes to registry changes for its own kind only, so a plugin that registers after the first mount re-renders that kind's nodes and no others.
 
-## Renderer Responsibilities
+`def.renderer` is a `RendererSource`: today `{ kind: 'parametric', module: () => import('./renderer') }`, made lazy once per source and cached. The `glb` / `instanced-glb` variants are declared but not dispatched yet.
 
-A renderer **should**:
-- Read its node from `useScene` via the node's ID
-- Register its mesh(es) with `useRegistry()` so other systems can look them up
-- Subscribe to pointer events via `useNodeEvents()`
-- Render geometry and apply materials based on node properties
+`ParametricNodeRenderer` is the generic renderer for `def.geometry` kinds: an empty `<group>` registered in `sceneRegistry`, with `useNodeEvents`, live drag transforms and overrides, `visible`, a dirty mark on mount, and its hosted children rendered through `<NodeRenderer>`. `<GeometrySystem>` swaps the builder's output into it. See [node-definitions.md](node-definitions.md) for choosing between `geometry`, `renderer` and `system`.
 
-A renderer **must not**:
-- Run geometry generation logic (that belongs in a System)
-- Import anything from `apps/editor`
-- Manage selection state directly (use `useViewer` for read, emit events for write)
-- Perform expensive per-frame calculations in the component body
+## Adding a renderer
 
-## `node.visible` Is the Renderer's Job
+Set `def.renderer` on the kind's definition. That is the only way: never a `case` in `NodeRenderer` and never a per-kind folder under `viewer/src/components/renderers/` (DECISIONS.md E-002). Prefer `def.geometry` unless the kind needs JSX-only features (GLB via `useGLTF`, `<Html>`, drei, instancing, TSL materials).
 
-A custom renderer **must** apply `visible={node.visible !== false}` to its root group (or outer renderable). Registry-driven kinds get this for free — `ParametricNodeRenderer` already sets it — but a kind that ships its own `renderer.tsx` and forgets it stays drawn in the 3D viewport while it is already gone everywhere else: selection candidates, first-person collision, the 2D plan and every export honour the flag. The result is a node that is on screen but unclickable.
+A custom renderer:
+
+- registers its root with `useRegistry(node.id, kind, ref)` and spreads `useNodeEvents(node, kind)` on it (both public exports of `@pascal-app/core` / `@pascal-app/viewer`);
+- renders hosted children with `<NodeRenderer nodeId={childId} />`, or declares `rendersChildren: false`;
+- memoises geometry that depends on node fields and leaves dirty-driven rebuilds and cross-node work to a `def.system`;
+- imports nothing from `@pascal-app/editor` (DECISIONS.md E-001).
+
+## `node.visible` is the renderer's job
+
+A custom renderer **must** apply `visible={node.visible !== false}` to its root group (or outer renderable). `ParametricNodeRenderer` already does; a kind that ships its own `renderer.tsx` and forgets it stays drawn in the 3D viewport while it is already gone everywhere else: selection candidates, first-person collision, the 2D plan and every export honour the flag. The result is a node that is on screen but unclickable.
 
 If a system writes `.visible` on the kind's registry object every frame (solo mode does this for levels, the zone systems do it to keep `<Html>` labels alive), that write has to fold the node flag in as well, or it silently undoes the prop on the next frame.
 
 The **Site is the one exception**: its flag governs only its own presentation — ground fill, sculpted terrain, boundary line — and stops there. Buildings and items standing on a hidden Site keep their own flag and still render, and the horizon disc is a world backdrop rather than part of the parcel, so it renders regardless.
-
-## Example — Minimal Renderer
-
-```tsx
-// packages/viewer/src/components/renderers/my-node/index.tsx
-import { useRegistry } from '@pascal-app/core'
-import { useNodeEvents } from '../../hooks/use-node-events'
-import { useScene } from '@pascal-app/core'
-
-export function MyNodeRenderer({ node }: { node: MyNode }) {
-  const ref = useRef<Mesh>(null!)
-  useRegistry(node.id, 'my-node', ref)   // 3 args: id, type, ref — no return value
-  const events = useNodeEvents(node, 'my-node')
-
-  return (
-    <mesh ref={ref} {...events}>
-      <boxGeometry args={[node.width, node.height, node.depth]} />
-      <meshStandardMaterial color={node.color} />
-    </mesh>
-  )
-}
-```
-
-## Adding a New Node Type
-
-For new kinds, prefer the registry-driven model in [node-definitions.md](node-definitions.md). The legacy steps below apply only when a kind needs a custom React renderer (GLB loaders, `<Html>` portals, etc.) **and** lives in `packages/viewer` rather than `packages/nodes/<kind>`:
-
-1. Create `packages/viewer/src/components/renderers/<type>/index.tsx`
-2. Add a case to `NodeRenderer` in `node-renderer.tsx`
-3. Add the corresponding system in `packages/core/src/systems/` if the node needs derived geometry
-4. Export from `packages/viewer/src/index.ts` if needed externally
-
-## Performance Notes
-
-- Use `useMemo` for geometry that depends on node properties — avoid recreating on every render.
-- For complex cutout or boolean geometry, delegate to a System (e.g. `WallCutout`).
-- Register one mesh per node ID; if a renderer spawns multiple meshes, use a group ref or pick the primary one for registry.

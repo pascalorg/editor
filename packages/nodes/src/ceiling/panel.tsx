@@ -78,8 +78,8 @@ export function CeilingPanel() {
     return ceiling?.type === 'ceiling' ? resolveCeilingHeight(ceiling, s.nodes) : 2.5
   })
 
-  // Panel slider-drag fix recipe (plans/editor-node-registry.md): stable
-  // handler refs so slider drags don't trigger Maximum update depth.
+  // Stable handler refs so slider drags don't trigger Maximum update depth;
+  // see "Custom panels" in wiki/architecture/node-definitions.md.
   const nodeRef = useRef(node)
   nodeRef.current = node
 

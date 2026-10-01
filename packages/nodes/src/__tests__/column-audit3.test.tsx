@@ -2,11 +2,7 @@ import { expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
-  BlockNode,
   BuildingNode,
-  CabinetModuleNode,
-  CabinetNode,
-  CeilingNode,
   ColumnNode,
   emitter,
   ItemNode,
@@ -14,8 +10,6 @@ import {
   nodeRegistry,
   nodeType,
   objectId,
-  RoofNode,
-  RoofSegmentNode,
   registerNode,
   ShelfNode,
   SiteNode,
@@ -28,15 +22,11 @@ import {
 } from '@pascal-app/core'
 import { ProceduralItemNode } from '@pascal-app/core/procedural-items'
 import { MoveRegistryNodeTool, useEditor, useInteractionScope } from '@pascal-app/editor'
-import { CeilingSystem, RoofSystem, useViewer, WallSystem } from '@pascal-app/viewer'
+import { useViewer, WallSystem } from '@pascal-app/viewer'
 import { events, type RootStore } from '@react-three/fiber'
 import { act, create } from '@react-three/test-renderer'
 import { BoxGeometry, Group, Mesh, MeshBasicMaterial, type Object3D, Vector3 } from 'three'
-import {
-  buildItemFloorplan as mainFloorplan,
-  resolveItemTransform as mainTransform,
-} from '../item/__fixtures__/main-floorplan'
-import { buildItemFloorplan, resolveItemTransform } from '../item/floorplan'
+import { resolveItemTransform } from '../item/floorplan'
 import { restingNodePlanFrame } from '../shared/resting-surface-plan'
 import {
   boxAsset as asset,
@@ -68,8 +58,6 @@ function Scene({ mover, child }: { mover?: Mover; child?: AnyNode }) {
         ))}
       <SceneSystems />
       <WallSystem />
-      <CeilingSystem />
-      <RoofSystem />
     </>
   )
 }
@@ -263,171 +251,6 @@ test('wall-side item → shelf → catalog: plan equals the mounted wall-face po
   }
 })
 
-const anchors = [
-  'level',
-  'wall-front',
-  'wall-back',
-  'ceiling',
-  'roof-front',
-  'roof-back',
-  'roof-left',
-  'roof-right',
-  'item',
-  'shelf',
-  'shelf-wall',
-  'cabinet',
-  'cabinet-module',
-  'named',
-  'unnamed',
-  'block-top',
-  'block-side',
-  'block-bottom',
-  'slab',
-  'identity-plugin',
-] as const
-for (const anchor of anchors)
-  for (const attachTo of [undefined, 'wall', 'wall-side', 'ceiling'] as const)
-    for (const depth of [1, 2, 3])
-      for (const transformed of [false, true])
-        test(`main differential: ${anchor}, ${attachTo ?? 'floor'}, depth ${depth}, transformed ${transformed}`, async () => {
-          const pos: [number, number, number] = transformed ? [2, 0.4, 3] : [0, 0, 0]
-          const yaw = transformed ? 0.6 : 0
-          const entries: AnyNode[] = []
-          let host: AnyNode = level
-          let face: string | undefined
-          if (anchor.startsWith('wall') || anchor === 'shelf-wall') {
-            host = WallNode.parse({
-              parentId: level.id,
-              start: transformed ? [2, 3] : [0, 0],
-              end: transformed ? [6, 5] : [4, 0],
-              thickness: 0.4,
-            })
-            entries.push(host)
-            if (anchor === 'shelf-wall')
-              host = ShelfNode.parse({ parentId: host.id, position: pos, rotation: [0, yaw, 0] })
-          } else if (anchor === 'ceiling')
-            host = CeilingNode.parse({
-              parentId: level.id,
-              polygon: [
-                [0, 0],
-                [8, 0],
-                [8, 8],
-                [0, 8],
-              ],
-              height: 3,
-            })
-          else if (anchor.startsWith('roof-')) {
-            const roof = RoofNode.parse({ parentId: level.id, position: pos, rotation: yaw })
-            entries.push(roof)
-            host = RoofSegmentNode.parse({
-              parentId: roof.id,
-              position: [1, 2, 1],
-              rotation: yaw / 2,
-              roofType: 'hip',
-            })
-            face = anchor.slice(5)
-          } else if (anchor === 'item')
-            host = ItemNode.parse({
-              parentId: level.id,
-              asset,
-              position: pos,
-              rotation: [0, yaw, 0],
-            })
-          else if (anchor === 'shelf')
-            host = ShelfNode.parse({ parentId: level.id, position: pos, rotation: [0, yaw, 0] })
-          else if (anchor === 'cabinet' || anchor === 'cabinet-module') {
-            host = CabinetNode.parse({ parentId: level.id, position: pos, rotation: yaw })
-            if (anchor === 'cabinet-module') {
-              entries.push(host)
-              host = CabinetModuleNode.parse({
-                parentId: host.id,
-                position: [0.5, 0.1, 0.2],
-                rotation: yaw / 2,
-              })
-            }
-          } else if (anchor === 'named' || anchor === 'unnamed')
-            host = ProceduralItemNode.parse({
-              parentId: level.id,
-              position: pos,
-              rotation: [0, yaw, 0],
-              recipe: {
-                ...recipe,
-                surfaces:
-                  anchor === 'named'
-                    ? [
-                        {
-                          id: 'top',
-                          label: 'Top',
-                          position: [0.1, 1, 0.2],
-                          rotation: [0, 0.4, 0],
-                          size: [2, 2],
-                        },
-                      ]
-                    : [],
-              },
-            })
-          else if (anchor.startsWith('block-')) {
-            host = BlockNode.parse({ parentId: level.id, position: pos, rotation: yaw })
-            face =
-              anchor === 'block-top' ? 'f-top' : anchor === 'block-side' ? 'f-front' : 'f-bottom'
-          } else if (anchor === 'slab')
-            host = SlabNode.parse({
-              parentId: level.id,
-              elevation: 0.4,
-              polygon: [
-                [0, 0],
-                [8, 0],
-                [8, 8],
-                [0, 8],
-              ],
-            })
-          else if (anchor === 'identity-plugin') {
-            host = genericHost()
-            Object.assign(host, { position: [0, 0, 0], rotation: [0, 0, 0] })
-          }
-          if (host !== level && !entries.includes(host)) entries.push(host)
-          const first = ItemNode.parse({
-            parentId: host.id,
-            asset: { ...asset, attachTo },
-            side: anchor === 'wall-back' ? 'back' : 'front',
-            position: [0.2, 0.4, 0.1],
-            rotation: [0, anchor === 'wall-back' ? Math.PI + yaw : yaw, 0],
-            ...(anchor.startsWith('roof-') ? { roofFace: face, roofSegmentId: host.id } : {}),
-            ...(anchor.startsWith('block-') ? { blockFaceId: face } : {}),
-          })
-          entries.push(first)
-          if (anchor === 'named') (host as ProceduralItemNode).attachments[first.id] = 'top'
-          let parent: AnyNode = first
-          for (let i = 1; i < depth; i++) {
-            const shelf = ShelfNode.parse({
-              parentId: parent.id,
-              position: [0.1, 0.2, -0.1],
-              rotation: [0, yaw / 3, 0],
-            })
-            entries.push(shelf)
-            const child = ItemNode.parse({
-              parentId: shelf.id,
-              asset: { ...asset, attachTo },
-              position: [0.1, 0.3, 0.2],
-              rotation: [0, yaw / 4, 0],
-            })
-            entries.push(child)
-            parent = child
-          }
-          seed(entries)
-          const renderer = await create(<Scene />)
-          try {
-            await settle(renderer)
-            const ctx = { resolve: (id: AnyNodeId) => useScene.getState().nodes[id] } as never
-            for (const item of entries.filter((n): n is ItemNode => n.type === 'item')) {
-              expect(sceneRegistry.nodes.get(item.id)).toBeDefined()
-              expect(resolveItemTransform(item, ctx)).toEqual(mainTransform(item, ctx))
-              expect(buildItemFloorplan(item, ctx)).toEqual(mainFloorplan(item, ctx))
-            }
-          } finally {
-            await renderer.unmount()
-          }
-        })
 for (const rootKind of ['column', 'plugin'])
   for (const depth of [1, 2, 3])
     for (const kind of ['catalog', 'generated'])

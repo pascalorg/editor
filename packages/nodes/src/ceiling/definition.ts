@@ -115,10 +115,10 @@ function ceilingHandles(_node: CeilingNodeType): HandleDescriptor<CeilingNodeTyp
  *
  * **Stage B intentionally skipped**: pure `def.geometry` extraction
  * would lose the React children rendering (hosted items) and the
- * named-mesh structure. Ceiling keeps `def.renderer` as the custom
- * escape hatch (per plans/editor-node-registry.md "custom-behavior
- * escape hatch"). Renderer wraps the legacy CeilingRenderer; system
- * wraps the legacy CeilingSystem.
+ * named-mesh structure. Ceiling keeps `def.renderer` as its escape hatch
+ * ("Opting out of a generic path" in wiki/architecture/node-definitions.md).
+ * Renderer wraps the legacy CeilingRenderer; system wraps the legacy
+ * CeilingSystem.
  *
  * **Stage C completed**: `def.floorplan` builder draws the ceiling
  * polygon as a dashed outline in floor plan; legacy `ceilingPolygons`
