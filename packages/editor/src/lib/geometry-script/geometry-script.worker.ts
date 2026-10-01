@@ -1,5 +1,7 @@
 /// <reference lib="webworker" />
-import { compileGeometryScript } from '@pascal-app/geometry-script'
+import './worker-window-shim'
+// The compile subpath only: the package index pulls in core, which needs `window`.
+import { compileGeometryScript } from '@pascal-app/geometry-script/compile'
 import type { GeometryScriptWorkerRequest, GeometryScriptWorkerResponse } from './protocol'
 
 // Model-written code runs in this worker. Before any of it runs, remove the
