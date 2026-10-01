@@ -1,6 +1,6 @@
 # Architecture
 
-Canonical rules for code that touches `packages/core`, `packages/viewer`, `packages/editor`, `packages/mcp`, or `apps/editor`. Read on demand from `AGENTS.md` and from `.agents/skills/review-architecture/SKILL.md`.
+Canonical rules for code that touches `packages/core`, `packages/viewer`, `packages/editor`, `packages/nodes`, `packages/mcp`, or `apps/editor`. Read on demand from `AGENTS.md` and from `.agents/skills/review-architecture/SKILL.md`.
 
 ## Pages
 
@@ -13,7 +13,7 @@ Canonical rules for code that touches `packages/core`, `packages/viewer`, `packa
 | [materials-and-themes](materials-and-themes.md) | Surface colour: surface roles, colour presets, the textures axis, and scene themes (appearance / ground / clay tints) |
 | [item-authoring](item-authoring.md) | Content-author contract for catalog item GLBs: `slot_` material naming, authored defaults + `pascal_material` extras, the `cutout` reserved mesh, UV world scale, and the validated Blender/export recipe |
 | [plugin-authoring](plugin-authoring.md) | Public contract for external plugins — `Plugin` shape, `setPluginDiscovery`, lifecycle, what's in and out of v1 |
-| [tools](tools.md) | Editor tools structure, 2D↔3D behavioral parity, manipulation constraints, and Shift bypass defaults |
+| [tools](tools.md) | Editor tools structure, 2D↔3D behavioral parity, manipulation constraints, and the snapping rule (Shift taps cycle the mode, Alt hold forces) |
 | [measurements](measurements.md) | Persistent measurement data, 2D/3D draft ownership, snapping, units, and visibility |
 | [interaction-scope](interaction-scope.md) | The authoritative interaction state machine ("the spine"): `InteractionScope` union, the begin/update/end/endIf contract, the raycast hot-set, and the overlay scope matrix |
 | [viewer-isolation](viewer-isolation.md) | Keeping `@pascal-app/viewer` editor-agnostic |
@@ -25,6 +25,7 @@ Canonical rules for code that touches `packages/core`, `packages/viewer`, `packa
 | [node-schemas](node-schemas.md) | Zod schema pattern for node types, `createNode`, `updateNode` |
 | [inspector-field-limits](inspector-field-limits.md) | When a numeric inspector field may and may not have `min`/`max` — no arbitrary caps on dimensions |
 | [vertical-model](vertical-model.md) | Stored level heights, plane-bound wall/ceiling tops, slab placement + thickness, support hosts, clamp rules, and the load migration |
+| [wall-frame](wall-frame.md) | Wall reference line and justification (`a` / `b` / Center), lateral offsets owned by `wall-frame.ts` |
 | [space-detection](space-detection.md) | Commit and replication contract for wall-driven room reconciliation |
 | [events](events.md) | Typed event bus — emitting and listening to node and grid events |
 | [creating-rules](creating-rules.md) | How to add or update a page in this folder |

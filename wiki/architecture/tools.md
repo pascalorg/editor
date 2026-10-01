@@ -134,7 +134,7 @@ Concretely, door/window placement/move keeps these in lockstep across `{door,win
 
 - **Snap target**: nearest wall to the true cursor (shared `findClosestWallInPlan` / wall raycast), free-follow off-wall, commit only on a host.
 - **Move SFX**: a soft `sfx:grid-snap` click per grid step while sliding (free-follow plan XZ or on-wall along-X, quantized + deduped so it isn't a machine-gun) and a soft `sfx:item-pick` cue on the floor→wall snap. Both tools carry an identical `tickGridStep` / `tickWallSnap` pair — keep them in sync.
-- **R-flip** facing mid-placement, **Shift** to free snap/alignment (guides stay visible) and force-place over collisions, faithful ghost/symbol, deterministic single-undo commit.
+- **R-flip** facing mid-placement, **Alt (hold)** to force-place past snapping and collisions (guides stay visible) and **Shift (tap)** to cycle the snapping mode — the rule above, never a held-Shift bypass — faithful ghost/symbol, deterministic single-undo commit.
 
 Tells that you've broken parity: a sound/guide/snap that fires in 3D but is silent in 2D (or vice-versa), or a fix landed in one move file but not its sibling. The two move files are deliberately near-mirrors; diff them when in doubt.
 
