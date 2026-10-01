@@ -107,8 +107,8 @@ export default function WindowPanel() {
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as WindowNode | undefined) : undefined,
   )
 
-  // Panel slider-drag fix recipe (plans/editor-node-registry.md). Without
-  // it, the 15+ SliderControls in this panel would loop on drag.
+  // Stable handler refs ("Custom panels" in wiki/architecture/node-definitions.md).
+  // Without them, the 15+ SliderControls in this panel would loop on drag.
   const handleUpdate = useCallback(
     (updates: Partial<WindowNode>) => {
       if (!selectedId) return

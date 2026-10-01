@@ -285,8 +285,8 @@ export function kindsWithFloorplanScope(scope: FloorplanScope): string[] {
 /**
  * A kind's {@link BakePolicy} from the registry, defaulting to `'static'` for
  * kinds that don't declare one (or aren't registered). The bake and the baked
- * `/viewer` consult this instead of hardcoding kind names — see
- * plans/editor-plugin-trees-example.md → Part D.
+ * `/viewer` consult this instead of hardcoding kind names — see "Bake policy" in
+ * wiki/architecture/node-definitions.md.
  */
 export function bakePolicyOf(kind: string): BakePolicy {
   return nodeRegistry.get(kind)?.bake ?? 'static'

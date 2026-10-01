@@ -120,6 +120,29 @@ renderer and PDFKit export preserve it. `FloorplanImage.url` may also be an
 inline `data:` URL, which PDF export passes directly to PDFKit rather than
 through the asset resolver.
 
+## Bake policy
+
+`def.bake` says how a kind is treated by the GLB bake and the baked `/viewer`.
+The bake and the viewer read it through `bakePolicyOf(kind)` /
+`kindsWithBakePolicy(policy)`; neither names kinds.
+
+| `def.bake` | In the GLB | Pascal's baked viewer | For |
+|---|---|---|---|
+| `'static'` (default) | yes | shows the baked mesh | walls, doors, items |
+| `'strip'` | no | rebuilds the node live from `scene_graph` with its registry renderer | heavy reference assets (scans, guides) |
+| `'replace'` | yes, static | hides the baked meshes and re-renders the kind live | dynamic content (wind-animated plants, interactivity) |
+
+Do not re-apply a runtime effect to baked meshes. The bake optimises geometry
+(quantised positions with a per-node scale, instancing dropped, vertices
+welded), so a shader written for the live coordinate space distorts on the
+baked one. `'replace'` keeps a static snapshot for any glTF viewer and gives
+Pascal's viewer the kind's own render path. Its `bakeReplaceRenderer` is
+collective: it receives every node of the kind under one baked level and is
+portaled into that level's `Object3D`, so it rides level stacking and can draw
+instanced meshes in level-local space — per-instance phase for animated
+content, and a few non-raycast meshes instead of one per node under the baked
+scene's pointer handlers.
+
 ## Export-only geometry
 
 `def.bakeGeometry(node, ctx)` replaces the registered node's cloned subtree
@@ -172,6 +195,28 @@ The selection manager and outliner query this capability through the registry,
 including after late plugin registration. The capability does not change
 selectability, inspector ownership, tool activation, keyboard behavior or
 deletion policy. Host code must not special-case the opting-out kind.
+
+## Opting out of a generic path
+
+The registry lets a kind opt in to generic behaviour; it never forces it. Where
+a generic path would over-generalise, the kind **omits** the capability or
+**supplies its own** module, and its `definition.ts` says why:
+
+- `capabilities.movable` — omit it when the move is bespoke (an endpoint drag
+  with a linked-corner cascade, a polygon vertex edit) and supply
+  `def.affordanceTools.move`. `MoveTool` routes to the generic
+  `MoveRegistryNodeTool` only when `movable` is set, never merely because the
+  kind is registered.
+- `def.renderer` — set it for JSX-only features (GLB via `useGLTF`, `<Html>`,
+  TSL materials, React-mounted hosted children) and skip `def.geometry`.
+- `def.system` — set it for per-frame imperative work beyond a geometry
+  rebuild (door and window animation, zone uniforms).
+- `parametrics.customPanel` — replace the generic inspector for a kind with
+  non-numeric editors (see [the slider-drag pitfall](#custom-panels-keep-handlers-stable-during-slider-drags)).
+
+A need that fits none of these becomes a new optional definition field
+(additive, so existing kinds are untouched), never a `case '<kind>'` in the
+framework (DECISIONS.md E-002).
 
 ## Choosing the right combination
 
@@ -328,6 +373,42 @@ The fix is to clone in the preview, mutate the clone, and reassign `mesh.materia
 If your kind declares `relations.hosts: [...]`, add `children: z.array(...).default([])` to the schema. `useScene.createNode(child, parentId)` writes `child.parentId = parentId` **and** appends `child.id` to `parent.children`. Without the field, the parent-side write is a no-op — `<ParametricNodeRenderer>`'s `n.children.map(...)` then has nothing to mount and the host renderer never sees the new child. Symptom: hosted node lives in `useScene.nodes` but no React mount fires, so the host's tree-node sidebar entry is empty and the 3D scene shows nothing where the host should pick it up.
 
 Migrations matter: if your kind shipped before hosting was added, patch existing nodes in `migrateNodes` so `Array.isArray(node.children)` holds for every loaded scene before the renderer reads it.
+
+### Custom panels: keep handlers stable during slider drags
+
+A `parametrics.customPanel` that selects the whole node
+(`useScene((s) => s.nodes[id])`) and lists it as a `useCallback` dependency gets
+new handlers on every store tick of a slider drag. `SliderControl` then rebuilds
+its pointer handlers while pointer capture is active, and the cascade ends in
+React's "Maximum update depth exceeded". Make handlers depend on the selection
+only and read the latest node from a ref:
+
+```tsx
+const nodeRef = useRef(node)
+nodeRef.current = node
+
+const handleUpdate = useCallback(
+  (updates: Partial<DoorNode>) => {
+    if (!selectedId) return
+    useScene.getState().updateNode(selectedId, updates)
+  },
+  [selectedId],
+)
+
+// Keep the aspect ratio: derived from the latest node, not one captured at render.
+const handleWidthChange = useCallback(
+  (width: number) => {
+    const current = nodeRef.current
+    if (!current || width <= 0) return
+    handleUpdate({ width, height: current.height * (width / current.width) })
+  },
+  [handleUpdate],
+)
+```
+
+Handlers now change only when the selection does, never mid-drag.
+`<ParametricInspector>` already works this way (per-field subscriptions,
+`useScene.getState()` in handlers), so kinds without a custom panel need nothing.
 
 ## Capability reference
 

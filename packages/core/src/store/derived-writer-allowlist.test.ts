@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 
-// Review guardrail for the writers contract (plans/editor-room-first-structure.md):
+// Review guardrail for the writers contract (DECISIONS.md E-012, wiki/architecture/space-detection.md):
 // derived construction — a slab or ceiling marked `boundary: 'auto'` or the
 // legacy `autoFromWalls: true` — is written by the structure kernel and the
 // load migrations, and by nobody else. A new writer anywhere under a package's
