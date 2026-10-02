@@ -19,11 +19,16 @@ export const surfaceBatchable: BatchableConfig = {
 
 export const itemBatchable: BatchableConfig = {
   scope: 'level',
-  // A registered clip means the item animates its own subtree (a fan's
-  // spin) — per-mesh transforms move under a static batch instance.
+  // An animation effect or a registered clip means the item animates its own
+  // subtree (a fan's spin) — per-mesh transforms move under a static batch
+  // instance. Light effects drive separate light objects, so a lit porch or
+  // lamp still batches.
   excluded: (node) =>
-    Boolean((node as { asset?: { interactive?: unknown } }).asset?.interactive) ||
-    itemClipRegistry.has(node.id as string),
+    Boolean(
+      (
+        node as { asset?: { interactive?: { effects?: { kind: string }[] } } }
+      ).asset?.interactive?.effects?.some((effect) => effect.kind === 'animation'),
+    ) || itemClipRegistry.has(node.id as string),
   // Items hold their dirty mark until the GLB settles. A GLB that ships clips
   // autoplays its first one even without an interactive effect
   // (ItemAnimation's no-effect fallback) — static batching would freeze it.

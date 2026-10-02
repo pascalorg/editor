@@ -383,6 +383,51 @@ function analyseGeometry(root: THREE.Object3D, parts: GeometryArtifactManifest['
     }))
 }
 
+/**
+ * Merges each part's meshes by material, so a porch draws as a few dozen
+ * meshes instead of hundreds (draw calls, not triangles, are the cost). Part
+ * groups keep their names and extras; helpers (cutout, collider) and
+ * multi-material meshes stay as authored.
+ */
+function mergeByPartAndMaterial(root: THREE.Object3D) {
+  const owner = (mesh: THREE.Object3D): THREE.Object3D => {
+    for (let p = mesh.parent; p; p = p.parent) {
+      if ((p.userData.pascal as { part?: string } | undefined)?.part || p === root) return p
+    }
+    return root
+  }
+  root.updateWorldMatrix(true, true)
+  const buckets = new Map<
+    string,
+    { owner: THREE.Object3D; material: THREE.Material; meshes: THREE.Mesh[] }
+  >()
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (!mesh.isMesh || isHelper(mesh) || Array.isArray(mesh.material)) return
+    const group = owner(mesh)
+    const attributes = Object.keys(mesh.geometry.attributes).sort().join(',')
+    const key = `${group.uuid}|${mesh.material.uuid}|${attributes}`
+    const bucket = buckets.get(key) ?? { owner: group, material: mesh.material, meshes: [] }
+    bucket.meshes.push(mesh)
+    buckets.set(key, bucket)
+  })
+  const inverse = new THREE.Matrix4()
+  for (const { owner: group, material, meshes } of buckets.values()) {
+    if (meshes.length < 2) continue
+    inverse.copy(group.matrixWorld).invert()
+    const geometries = meshes.map((mesh) => {
+      const geometry = mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry.clone()
+      return geometry.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inverse, mesh.matrixWorld))
+    })
+    const merged = BufferGeometryUtils.mergeGeometries(geometries)
+    if (!merged) continue
+    for (const mesh of meshes) mesh.parent?.remove(mesh)
+    const combined = new THREE.Mesh(merged, material)
+    combined.name = `${group.name || 'object'}_${material.name}`
+    group.add(combined)
+  }
+}
+
 // GLTFExporter writes binaries through FileReader, which Bun and Node lack.
 function ensureFileReader() {
   const g = globalThis as { FileReader?: unknown }
@@ -484,6 +529,7 @@ export async function compileGeometryScript(
   }
 
   const surfaces = analyseGeometry(root, conventions.parts)
+  mergeByPartAndMaterial(root)
   const bounds = visibleBounds(root)
   const glb = await exportGlb(root)
   return {
