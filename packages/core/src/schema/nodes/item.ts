@@ -47,6 +47,10 @@ const animationEffectSchema = z.object({
   // open-close: \`on\` plays once and holds, closing plays \`off\` or \`on\`
   // reversed, and \`loop\` runs throughout (authored objects: a door, a hatch).
   mode: z.enum(['ambient', 'open-close']).optional(),
+  // The toggle (index into controls) driving this effect; absent = the first
+  // toggle, as catalog items have always worked. Authored objects set it so
+  // each of their clips has its own control.
+  control: z.number().int().nonnegative().optional(),
   clips: z.object({
     on: z.string().optional(),
     off: z.string().optional(),

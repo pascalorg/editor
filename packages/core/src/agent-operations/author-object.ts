@@ -49,8 +49,8 @@ const HOSTS: Record<GeometryScriptMount, readonly AnyNode['type'][]> = {
 /**
  * The item's controls from what the module emitted: a light switch for its
  * lights, an open/close toggle for an `open` clip (closing plays `close`, or
- * `open` reversed), and a `loop` clip that runs throughout. Other clips stay
- * in the artifact for later controls.
+ * `open` reversed), a `loop` clip that runs throughout, and a play toggle per
+ * other clip, labelled with its name.
  */
 function scriptInteractive(
   manifest: CompiledGeometryScript['manifest'],
@@ -70,17 +70,26 @@ function scriptInteractive(
     }
   }
   const clip = (name: string) => manifest.animations.some((animation) => animation.name === name)
-  if (clip('open') || clip('loop')) {
-    if (clip('open')) controls.push({ kind: 'toggle', label: 'Open', default: false })
+  if (clip('open')) {
     effects.push({
       kind: 'animation',
       mode: 'open-close',
-      clips: {
-        on: clip('open') ? 'open' : undefined,
-        off: clip('close') ? 'close' : undefined,
-        loop: clip('loop') ? 'loop' : undefined,
-      },
+      control: controls.length,
+      clips: { on: 'open', off: clip('close') ? 'close' : undefined },
     })
+    controls.push({ kind: 'toggle', label: 'Open', default: false })
+  }
+  if (clip('loop')) effects.push({ kind: 'animation', mode: 'ambient', clips: { loop: 'loop' } })
+  // Every other clip gets its own play toggle, labelled with its name.
+  for (const { name } of manifest.animations) {
+    if (name === 'open' || name === 'close' || name === 'loop') continue
+    effects.push({
+      kind: 'animation',
+      mode: 'ambient',
+      control: controls.length,
+      clips: { on: name },
+    })
+    controls.push({ kind: 'toggle', label: name, default: false })
   }
   return effects.length > 0 ? { controls, effects } : undefined
 }

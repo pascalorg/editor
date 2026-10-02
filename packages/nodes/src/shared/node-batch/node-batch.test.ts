@@ -354,7 +354,7 @@ test('items retain loading, animation, transparency, hidden-hitbox and dirty-rej
   expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
   useViewer.setState({ hoveredId: 'item_0' } as never)
   frame()
-  itemClipRegistry.set('item_0', {} as never)
+  itemClipRegistry.set('item_0', [] as never)
   expect(collectBatchCandidate('item_0')).toBeNull()
   itemClipRegistry.delete('item_0')
 })

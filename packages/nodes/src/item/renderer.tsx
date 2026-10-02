@@ -697,21 +697,25 @@ const LoadedModelRenderer = ({
   const lightEffects =
     interactive?.effects.filter((e): e is LightEffect => e.kind === 'light') ?? []
 
-  // Expose this item's ambient clip (e.g. a fan's spin) to the GLB bake. The
-  // catalog GLB owns the clip; it isn't in the scene graph, so the export can't
-  // find it without this registry. The bake retargets it onto the baked subtree.
+  // Expose this item's clips to the GLB bake: the GLB owns them and they are
+  // not in the scene graph, so the export can't find them without this
+  // registry. A catalog item bakes its ambient clip (a fan's spin); an
+  // authored object bakes every clip, its opening played once.
+  const scripted = Boolean(node.source)
   useEffect(() => {
-    if (!animEffect) return
-    // An open-close object bakes its opening, played once; its loop otherwise.
-    const openClose = animEffect.mode === 'open-close'
-    const clipName = animEffect.clips.on ?? animEffect.clips.loop
-    const clip = clipName ? animations.find((c) => c.name === clipName) : undefined
-    if (!clip) return
-    itemClipRegistry.set(node.id, { clip, loop: !(openClose && clipName === animEffect.clips.on) })
+    const entries = scripted
+      ? animations.map((clip) => ({ clip, loop: clip.name !== 'open', name: clip.name }))
+      : (() => {
+          const clipName = animEffect ? (animEffect.clips.on ?? animEffect.clips.loop) : undefined
+          const clip = clipName ? animations.find((c) => c.name === clipName) : undefined
+          return clip ? [{ clip, loop: true, name: 'loop' }] : []
+        })()
+    if (entries.length === 0) return
+    itemClipRegistry.set(node.id, entries)
     return () => {
       itemClipRegistry.delete(node.id)
     }
-  }, [node.id, animEffect, animations])
+  }, [node.id, animEffect, animations, scripted])
 
   // useGLTF caches scenes, and Clone shares child geometry/material references.
   // Undo can unmount one item while another clone of the same asset still needs them.
@@ -728,16 +732,15 @@ const LoadedModelRenderer = ({
           {...handlers}
         />
       </group>
-      {animations.length > 0 && animEffect?.mode === 'open-close' && (
-        <OpenCloseAnimation
+      {animations.length > 0 && scripted && interactive && (
+        <ScriptedAnimations
           animations={animations}
-          animEffect={animEffect}
-          interactive={interactive!}
+          interactive={interactive}
           nodeId={node.id}
           rootRef={ref}
         />
       )}
-      {animations.length > 0 && animEffect?.mode !== 'open-close' && (
+      {animations.length > 0 && !scripted && (
         <ItemAnimation
           animations={animations}
           animEffect={animEffect}
@@ -833,47 +836,91 @@ const ItemAnimation = ({
   return null
 }
 
+/** Whether an effect's toggle is on; an effect without one always runs. */
+const useEffectControl = (nodeId: AnyNodeId, control: number | undefined) =>
+  useInteractive((s) =>
+    control === undefined ? true : Boolean(s.items[nodeId]?.controlValues[control]),
+  )
+
 /**
- * An authored object's motion: `on` (its `open` clip) plays once and holds;
- * closing plays `off` or `on` reversed; `loop` runs throughout. Driven by the
- * mechanism toggle, the one that is not the light switch.
+ * An authored object's clips, each driven by its own toggle: an open-close
+ * effect plays `open` once and holds, closing plays `close` or `open` reversed;
+ * an ambient effect plays its clip while its toggle is on (always, for `loop`).
  */
-const OpenCloseAnimation = ({
+const ScriptedAnimations = ({
   nodeId,
-  animEffect,
   interactive,
   animations,
   rootRef,
 }: {
   nodeId: AnyNodeId
-  animEffect: AnimationEffect
   interactive: Interactive
   animations: AnimationClip[]
   rootRef: RefObject<Group>
 }) => {
   const { actions } = useAnimations(animations, rootRef)
-  const toggles = interactive.controls.flatMap((control, index) =>
-    control.kind === 'toggle' ? [index] : [],
+  const effects = interactive.effects.filter(
+    (effect): effect is AnimationEffect => effect.kind === 'animation',
   )
-  const openToggle = interactive.effects.some((effect) => effect.kind === 'light')
-    ? toggles[1]
-    : toggles[0]
-  const isOpen = useInteractive((s) =>
-    openToggle === undefined ? false : Boolean(s.items[nodeId]?.controlValues[openToggle]),
+  return (
+    <>
+      {effects.map((effect) =>
+        effect.mode === 'open-close' ? (
+          <OpenCloseClip actions={actions} effect={effect} key={effect.clips.on} nodeId={nodeId} />
+        ) : (
+          <PlayClip
+            actions={actions}
+            effect={effect}
+            key={effect.clips.on ?? effect.clips.loop}
+            nodeId={nodeId}
+          />
+        ),
+      )}
+    </>
   )
+}
 
+type ClipActions = Record<string, AnimationAction | null>
+
+const PlayClip = ({
+  nodeId,
+  effect,
+  actions,
+}: {
+  nodeId: AnyNodeId
+  effect: AnimationEffect
+  actions: ClipActions
+}) => {
+  const on = useEffectControl(nodeId, effect.control)
+  const name = effect.clips.on ?? effect.clips.loop
   useEffect(() => {
-    const loop = animEffect.clips.loop ? actions[animEffect.clips.loop] : undefined
-    loop?.play()
-    return () => {
-      loop?.stop()
+    const action = name ? actions[name] : undefined
+    if (!action) return
+    if (on) {
+      action.paused = false
+      action.play()
+    } else {
+      // Hold the pose where it was, like pausing a music box.
+      action.paused = true
     }
-  }, [actions, animEffect.clips.loop])
+  }, [actions, name, on])
+  return null
+}
 
+const OpenCloseClip = ({
+  nodeId,
+  effect,
+  actions,
+}: {
+  nodeId: AnyNodeId
+  effect: AnimationEffect
+  actions: ClipActions
+}) => {
+  const isOpen = useEffectControl(nodeId, effect.control)
   const mounted = useRef(false)
   useEffect(() => {
-    const open = animEffect.clips.on ? actions[animEffect.clips.on] : undefined
-    const close = animEffect.clips.off ? actions[animEffect.clips.off] : undefined
+    const open = effect.clips.on ? actions[effect.clips.on] : undefined
+    const close = effect.clips.off ? actions[effect.clips.off] : undefined
     if (!open) return
     const first = !mounted.current
     mounted.current = true
@@ -901,8 +948,7 @@ const OpenCloseAnimation = ({
     open.paused = false
     open.timeScale = -1
     open.play()
-  }, [actions, animEffect.clips.on, animEffect.clips.off, isOpen])
-
+  }, [actions, effect.clips.on, effect.clips.off, isOpen])
   return null
 }
 
