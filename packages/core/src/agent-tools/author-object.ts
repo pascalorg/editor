@@ -10,7 +10,7 @@ Module shape (import THREE from the three package as usual; the addons below too
   export const mount = 'floor'   // 'floor' | 'wall-side' (on a wall face) | 'wall' (through a wall, like a window) | 'ceiling'
   export default function build({ params, THREE }) { const group = new THREE.Group(); /* … */ return group }
 
-One object is one feature that changes together: a porch, a railing run, a fireplace surround, a ceiling with its beams. Never a whole house, and never walls, rooms, floors, roofs, stairs, doors or windows: those have their own tools (add_window and add_door also make arched and rounded openings).
+One object is one feature that changes together: a porch, a railing run, a fireplace surround, a ceiling with its beams. Never a whole house, and never walls, rooms, floors, roofs, stairs, doors or windows: those have their own tools.
 
 Conventions (they make the object work in Pascal; follow them):
 - Metres, Y up, modelled as it stands. Pascal puts the bottom-centre of the bounds at the placement point; for wall-side the back face sits on the wall and the object faces +Z.

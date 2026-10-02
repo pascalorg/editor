@@ -157,12 +157,6 @@ function summary(node: ItemNode, compiled: CompiledGeometryScript, orphanedSlots
  */
 export const authorObject: AgentOperation<AuthorObjectInput> = (nodes, input, context) => {
   const { compiled } = input
-  if (/^(door|window)s?$/i.test(input.category?.trim() ?? ''))
-    refuse(
-      'use_opening_tool',
-      'Doors and windows are made with add_door and add_window (rectangle, rounded or arched outlines, panes, types), so they keep their marks, schedules and plan symbols.',
-      { category: input.category },
-    )
   const rotation: Vec3 | undefined =
     input.rotation === undefined ? undefined : [0, (input.rotation * Math.PI) / 180, 0]
 
