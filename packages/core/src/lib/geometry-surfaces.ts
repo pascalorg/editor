@@ -137,3 +137,62 @@ export function mountsFlush(asset: {
 }): boolean {
   return Boolean(asset.recessed) || (asset.dimensions?.[1] ?? 1) <= FLUSH_MOUNT_MAX_HEIGHT
 }
+
+/** The closest point to (x, z) inside a convex outline (itself when inside). */
+export function nearestPointIn(
+  polygon: readonly [number, number][],
+  x: number,
+  z: number,
+): [number, number] {
+  if (contains(polygon as [number, number][], x, z)) return [x, z]
+  let best: [number, number] = [x, z]
+  let bestDistance = Number.POSITIVE_INFINITY
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [ax, az] = polygon[j]!
+    const [bx, bz] = polygon[i]!
+    const dx = bx - ax
+    const dz = bz - az
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)))
+    const px = ax + t * dx
+    const pz = az + t * dz
+    const distance = Math.hypot(px - x, pz - z)
+    if (distance < bestDistance) {
+      bestDistance = distance
+      best = [px, pz]
+    }
+  }
+  return best
+}
+
+/**
+ * Where a child item of an authored object sits after the object is rebuilt:
+ * a resting item back on the surface under it (moved onto the main surface
+ * when that shrank away from it), a hanging one from the underside above it.
+ * Positions are in the object's frame; `scale` is the object's. Null when
+ * nothing applies (wall-mounted children, objects without surfaces).
+ */
+export function resettledPosition(
+  manifest: Pick<GeometryArtifactManifest, 'surfaces' | 'undersides' | 'parts' | 'bounds'>,
+  child: {
+    position: readonly [number, number, number]
+    asset: { attachTo?: string; recessed?: boolean; dimensions?: readonly number[] }
+  },
+  scale: readonly [number, number, number],
+): [number, number, number] | null {
+  const [sx, sy, sz] = scale
+  const x = child.position[0] / sx
+  const z = child.position[2] / sz
+  if (child.asset.attachTo === 'ceiling') {
+    const underside = geometryUndersideAt(manifest, x, z)
+    if (!underside) return null
+    const drop = mountsFlush(child.asset) ? 0.02 : (child.asset.dimensions?.[1] ?? 0)
+    return [child.position[0], underside.y * sy - drop, child.position[2]]
+  }
+  if (child.asset.attachTo) return null
+  const surface = geometrySurfaceAt(manifest, x, z)
+  if (surface) return [child.position[0], surface.y * sy, child.position[2]]
+  const main = mainSurfaces(manifest).sort((a, b) => b.y - a.y)[0]
+  if (!main) return null
+  const [nx, nz] = nearestPointIn(main.polygon, x, z)
+  return [nx * sx, main.y * sy, nz * sz]
+}

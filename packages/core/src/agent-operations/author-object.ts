@@ -1,6 +1,6 @@
 import { refuse } from '../agent-tools/refusal'
 import { artifactUrl } from '../lib/artifact-store'
-import { geometryRestingHeight } from '../lib/geometry-surfaces'
+import { geometryRestingHeight, resettledPosition } from '../lib/geometry-surfaces'
 import {
   type AnyNode,
   type CompiledGeometryScript,
@@ -182,9 +182,26 @@ export const authorObject: AgentOperation<AuthorObjectInput> = (nodes, input, co
       source: scriptSource(compiled, input.code),
       asset: scriptAsset(compiled, input, previous.asset),
     })
+    // Children resting on or hanging from the object follow its new geometry.
+    const resettled: { id: string; position: Vec3 }[] = []
+    for (const childId of previous.children) {
+      const child = nodes[childId]
+      if (child?.type !== 'item' || child.wallId) continue
+      const position = resettledPosition(compiled.manifest, child, next.scale)
+      if (!position || position.every((v, i) => Math.abs(v - child.position[i]!) < 1e-4)) continue
+      resettled.push({ id: child.id, position })
+    }
     return {
-      result: summary(next, compiled, orphanedSlots),
-      changes: { update: [{ id: next.id, data: next }] },
+      result: {
+        ...summary(next, compiled, orphanedSlots),
+        ...(resettled.length > 0 ? { resettled: resettled.map((entry) => entry.id) } : {}),
+      },
+      changes: {
+        update: [
+          { id: next.id, data: next },
+          ...resettled.map(({ id, position }) => ({ id, data: { position } })),
+        ],
+      },
     }
   }
 

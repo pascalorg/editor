@@ -176,6 +176,8 @@ export {
   geometrySurfaceAt,
   geometryUndersideAt,
   mountsFlush,
+  nearestPointIn,
+  resettledPosition,
 } from './lib/geometry-surfaces'
 export {
   type ExposedInterval,
