@@ -32,7 +32,27 @@ export type GeometryScriptParamSpec = z.infer<typeof GeometryScriptParamSpec>
 export const GeometryArtifactManifest = z.object({
   bounds: z.object({ min: vec3, max: vec3 }),
   params: z.array(GeometryScriptParamSpec).default([]),
-  parts: z.array(z.object({ id: z.string(), label: z.string().optional() })).default([]),
+  parts: z
+    .array(
+      z.object({
+        id: z.string(),
+        label: z.string().optional(),
+        /** What the part is, for queries ("column", "beam", "slab"); from `userData.type`. */
+        type: z.string().optional(),
+        bounds: z.object({ min: vec3, max: vec3 }).optional(),
+      }),
+    )
+    .default([]),
+  /** Upward-facing flat areas things can rest on, e.g. a porch landing: height and XZ outline. */
+  surfaces: z
+    .array(
+      z.object({
+        part: z.string().optional(),
+        y: finite,
+        polygon: z.array(z.tuple([finite, finite])),
+      }),
+    )
+    .default([]),
   slots: z.array(z.object({ id: z.string(), label: z.string().optional() })).default([]),
   anchors: z
     .array(z.object({ id: z.string(), position: vec3, normal: vec3.optional() }))
@@ -53,6 +73,17 @@ export const GeometryArtifactManifest = z.object({
   triangles: z.number().int().nonnegative(),
 })
 export type GeometryArtifactManifest = z.infer<typeof GeometryArtifactManifest>
+
+export const GeometryScriptMount = z.enum(['floor', 'wall', 'wall-side', 'ceiling'])
+export type GeometryScriptMount = z.infer<typeof GeometryScriptMount>
+
+/** What a compile hands the scene: the artifact's hash, how it mounts, the resolved params and the manifest. */
+export type CompiledGeometryScript = {
+  sha256: string
+  mount: GeometryScriptMount
+  params: Record<string, GeometryScriptParamValue>
+  manifest: GeometryArtifactManifest
+}
 
 /**
  * Geometry authored as a plain three.js module (`export const params`,

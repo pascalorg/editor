@@ -1,3 +1,4 @@
+import { authorObjectTool } from './author-object'
 import {
   duplicateLevelTool,
   getLevelSummaryTool,
@@ -9,6 +10,7 @@ import {
 import { deleteNodeTool, getNodeTool } from './nodes'
 import { addDoorTool, addWindowTool } from './wall-openings'
 
+export * from './author-object'
 export * from './levels'
 export * from './measurement'
 export { NodeId } from './node-id'
@@ -32,4 +34,5 @@ export const AGENT_TOOL_CONTRACTS = [
   duplicateLevelTool,
   verifySceneTool,
   deleteNodeTool,
+  authorObjectTool,
 ] as const

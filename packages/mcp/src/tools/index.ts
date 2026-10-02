@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneOperations } from '../operations'
 import { registerApplyPatch } from './apply-patch'
+import { type GeometryScriptHost, registerAuthorObject } from './author-object'
 import { registerCheckCollisions } from './check-collisions'
 import { registerConstructionTools } from './construction-tools'
 import { registerCreateLevel } from './create-level'
@@ -38,11 +39,16 @@ import { registerVariantTools } from './variants'
  * Scene-lifecycle tools (save/load/list/delete/rename scene) are registered
  * when persistence operations are available.
  */
-export function registerTools(server: McpServer, operations: SceneOperations): void {
+export function registerTools(
+  server: McpServer,
+  operations: SceneOperations,
+  geometryScripts?: GeometryScriptHost,
+): void {
   registerGetScene(server, operations)
   registerDescribeNode(server, operations)
   registerFindNodes(server, operations)
   registerSharedTools(server, operations)
+  registerAuthorObject(server, operations, geometryScripts)
   registerMeasure(server, operations)
   registerConstructionTools(server, operations)
   registerRoomTools(server, operations)

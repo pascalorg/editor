@@ -85,6 +85,7 @@ const TOOL_POLICIES = [
     },
     tools: [
       'apply_patch',
+      'author_object',
       'create_from_template',
       'create_house_from_brief',
       'create_stair_between_levels',
@@ -156,7 +157,7 @@ describe('MCP tool annotations', () => {
     try {
       const listed = await client.listTools()
       const byName = new Map(listed.tools.map((tool) => [tool.name, tool]))
-      expect(byName.size).toBe(65)
+      expect(byName.size).toBe(66)
       expect([...byName.keys()].toSorted()).toEqual(EXPECTED_TOOL_NAMES)
 
       for (const policy of TOOL_POLICIES) {

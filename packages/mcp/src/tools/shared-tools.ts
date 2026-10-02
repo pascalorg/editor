@@ -148,7 +148,7 @@ const SHARED_TOOLS: SharedTool[] = [
   },
 ]
 
-function toPatches(changes: SceneChanges): Patch[] {
+export function toPatches(changes: SceneChanges): Patch[] {
   return [
     ...(changes.create ?? []).map(({ node, parentId }) => ({
       op: 'create' as const,

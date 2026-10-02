@@ -19,6 +19,7 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   analyze_floorplan_image: policy(true, false, true),
   analyze_room_photo: policy(true, false, true),
   apply_patch: policy(false, true, false),
+  author_object: policy(false, true, false),
   check_collisions: policy(true, false, false),
   create_from_template: policy(false, true, false),
   create_house_from_brief: policy(false, true, false),

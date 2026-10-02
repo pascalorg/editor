@@ -43,16 +43,9 @@ try {
   Object.defineProperty(scope.navigator as object, 'sendBeacon', { value: undefined })
 } catch {}
 
-const SOURCE_GUARD = /\bimport\s*\(|\beval\s*\(|\bFunction\s*\(|\.constructor\s*\(/
-
 self.addEventListener('message', async (event: MessageEvent<GeometryScriptWorkerRequest>) => {
   const { id, code, params } = event.data
   try {
-    if (SOURCE_GUARD.test(code)) {
-      throw new Error(
-        'Dynamic import, eval and Function constructors are not available in geometry scripts',
-      )
-    }
     const output = await compileGeometryScript({ code, params })
     const response: GeometryScriptWorkerResponse = { id, ok: true, output }
     post(response, [output.glb])

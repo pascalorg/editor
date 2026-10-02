@@ -25,8 +25,10 @@ export {
 // Cut intents (F5b)
 export { CutIntent, CutShape } from './cut'
 export {
+  type CompiledGeometryScript,
   GEOMETRY_SCRIPT_MAX_BYTES,
   GeometryArtifactManifest,
+  GeometryScriptMount,
   GeometryScriptParamSpec,
   GeometryScriptParamValue,
   GeometryScriptSource,

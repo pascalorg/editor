@@ -1,5 +1,7 @@
 import type {
+  CompiledGeometryScript,
   GeometryArtifactManifest,
+  GeometryScriptMount,
   GeometryScriptParamSpec,
   GeometryScriptParamValue,
 } from '@pascal-app/core'
@@ -14,20 +16,14 @@ import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUti
 import { ADDITION, Brush, DIFFERENCE, Evaluator, INTERSECTION, SUBTRACTION } from 'three-bvh-csg'
 import { type ModuleTable, transformModule } from './transform'
 
-export type GeometryScriptMount = 'floor' | 'wall' | 'wall-side' | 'ceiling'
+export type { GeometryScriptMount }
 
 export type GeometryScriptCompileInput = {
   code: string
   params?: Record<string, GeometryScriptParamValue>
 }
 
-export type GeometryScriptCompileOutput = {
-  glb: ArrayBuffer
-  sha256: string
-  mount: GeometryScriptMount
-  params: Record<string, GeometryScriptParamValue>
-  manifest: GeometryArtifactManifest
-}
+export type GeometryScriptCompileOutput = CompiledGeometryScript & { glb: ArrayBuffer }
 
 export const GEOMETRY_SCRIPT_LIMITS = {
   triangles: 300_000,
@@ -203,6 +199,7 @@ function readConventions(root: THREE.Object3D) {
       parts.push({
         id: partId,
         label: typeof userData.label === 'string' ? userData.label : undefined,
+        type: typeof userData.type === 'string' ? slugify(userData.type) || undefined : undefined,
       })
       userData.pascal = { ...(userData.pascal as object), part: partId }
       object.name = `part_${partId}`
@@ -288,6 +285,102 @@ function readConventions(root: THREE.Object3D) {
   }
 }
 
+const SURFACE_MIN_NORMAL_Y = 0.95
+const SURFACE_MIN_AREA = 0.04
+const SURFACE_MAX_COUNT = 32
+
+function partOf(object: THREE.Object3D): string | undefined {
+  for (let p: THREE.Object3D | null = object; p; p = p.parent) {
+    const part = (p.userData.pascal as { part?: string } | undefined)?.part
+    if (part) return part
+  }
+  return undefined
+}
+
+function convexHull(points: [number, number][]): [number, number][] {
+  const sorted = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1])
+  if (sorted.length < 3) return sorted
+  const cross = (o: [number, number], a: [number, number], b: [number, number]) =>
+    (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+  const lower: [number, number][] = []
+  for (const point of sorted) {
+    while (lower.length >= 2 && cross(lower.at(-2)!, lower.at(-1)!, point) <= 0) lower.pop()
+    lower.push(point)
+  }
+  const upper: [number, number][] = []
+  for (const point of sorted.reverse()) {
+    while (upper.length >= 2 && cross(upper.at(-2)!, upper.at(-1)!, point) <= 0) upper.pop()
+    upper.push(point)
+  }
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)]
+}
+
+/**
+ * Per-part bounds and the upward-facing flat areas things can rest on (a
+ * landing, a seat, a step), so a placement tool can drop an object onto real
+ * geometry without a raycast. Outlines are convex hulls per part and height.
+ */
+function analyseGeometry(root: THREE.Object3D, parts: GeometryArtifactManifest['parts']) {
+  const partBounds = new Map<string, THREE.Box3>()
+  const surfaces = new Map<
+    string,
+    { part?: string; y: number; area: number; points: [number, number][] }
+  >()
+  const a = new THREE.Vector3()
+  const b = new THREE.Vector3()
+  const c = new THREE.Vector3()
+  const ab = new THREE.Vector3()
+  const ac = new THREE.Vector3()
+  const box = new THREE.Box3()
+
+  root.updateWorldMatrix(true, true)
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (!mesh.isMesh || isHelper(mesh)) return
+    const part = partOf(mesh)
+    mesh.geometry.computeBoundingBox()
+    box.copy(mesh.geometry.boundingBox!).applyMatrix4(mesh.matrixWorld)
+    if (part) partBounds.set(part, (partBounds.get(part) ?? new THREE.Box3()).union(box))
+
+    const position = mesh.geometry.getAttribute('position')
+    const index = mesh.geometry.getIndex()
+    const count = index ? index.count : position.count
+    for (let i = 0; i + 2 < count; i += 3) {
+      const ia = index ? index.getX(i) : i
+      const ib = index ? index.getX(i + 1) : i + 1
+      const ic = index ? index.getX(i + 2) : i + 2
+      a.fromBufferAttribute(position, ia).applyMatrix4(mesh.matrixWorld)
+      b.fromBufferAttribute(position, ib).applyMatrix4(mesh.matrixWorld)
+      c.fromBufferAttribute(position, ic).applyMatrix4(mesh.matrixWorld)
+      const normal = ab.subVectors(b, a).cross(ac.subVectors(c, a))
+      const area = normal.length() / 2
+      if (area === 0 || normal.y / (2 * area) < SURFACE_MIN_NORMAL_Y) continue
+      const y = Math.round(((a.y + b.y + c.y) / 3) * 100) / 100
+      const key = `${part ?? ''}|${y}`
+      const entry = surfaces.get(key) ?? { part, y, area: 0, points: [] }
+      entry.area += area
+      entry.points.push([a.x, a.z], [b.x, b.z], [c.x, c.z])
+      surfaces.set(key, entry)
+    }
+  })
+
+  for (const part of parts) {
+    const bounds = partBounds.get(part.id)
+    if (bounds && !bounds.isEmpty()) part.bounds = { min: vec(bounds.min), max: vec(bounds.max) }
+  }
+  return [...surfaces.values()]
+    .filter((surface) => surface.area >= SURFACE_MIN_AREA)
+    .sort((x, y) => y.area - x.area)
+    .slice(0, SURFACE_MAX_COUNT)
+    .map((surface) => ({
+      part: surface.part,
+      y: surface.y,
+      polygon: convexHull(surface.points).map(
+        ([x, z]) => [Math.round(x * 1000) / 1000, Math.round(z * 1000) / 1000] as [number, number],
+      ),
+    }))
+}
+
 // GLTFExporter writes binaries through FileReader, which Bun and Node lack.
 function ensureFileReader() {
   const g = globalThis as { FileReader?: unknown }
@@ -324,9 +417,18 @@ async function digest(bytes: ArrayBuffer): Promise<string> {
   return Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
+// A deterrent, not the isolation boundary: hosts run this in a locked-down worker or process.
+const SOURCE_GUARD =
+  /\bimport\s*\(|\beval\s*\(|\bFunction\s*\(|\.constructor\s*\(|\bprocess\b|\brequire\s*\(/
+
 export async function compileGeometryScript(
   input: GeometryScriptCompileInput,
 ): Promise<GeometryScriptCompileOutput> {
+  if (SOURCE_GUARD.test(input.code)) {
+    throw new Error(
+      'Geometry scripts cannot use dynamic import, eval, Function constructors, process or require',
+    )
+  }
   const body = transformModule(input.code, MODULES)
   // Evaluating the model's module is the compiler's job; callers run it in a locked-down worker.
   const factory = new Function('__modules', 'THREE', 'lib', body) as (
@@ -379,6 +481,7 @@ export async function compileGeometryScript(
     )
   }
 
+  const surfaces = analyseGeometry(root, conventions.parts)
   const bounds = visibleBounds(root)
   const glb = await exportGlb(root)
   return {
@@ -390,6 +493,7 @@ export async function compileGeometryScript(
       bounds: { min: vec(bounds.min), max: vec(bounds.max) },
       params: specs,
       parts: conventions.parts,
+      surfaces,
       slots: conventions.slots,
       anchors: conventions.anchors,
       lights: conventions.lights,

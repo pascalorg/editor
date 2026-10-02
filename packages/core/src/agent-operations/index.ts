@@ -6,6 +6,7 @@ import { listLevels } from './list-levels'
 import { verifyScene } from './verify-scene'
 
 export * from './apply-changes'
+export * from './author-object'
 export * from './delete-node'
 export * from './door-clearance'
 export * from './duplicate-level'
