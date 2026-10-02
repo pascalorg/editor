@@ -8,6 +8,7 @@ import {
   DoorNode,
   RoofNode,
   RoofSegmentNode,
+  SiteNode,
   WallNode,
   WindowNode,
   ZoneNode,
@@ -352,6 +353,26 @@ describe('apply_patch identity and validation guards', () => {
     expect(kept?.parentId).toBe(wall.id)
     const host = bridge.getNode(wall.id as AnyNodeId)
     expect(host?.type === 'wall' && host.children).toEqual([window.id])
+  })
+
+  test('refuses a reparent beneath a descendant without changing the scene', async () => {
+    const siteA = SiteNode.parse({ id: 'site_a' })
+    const siteB = SiteNode.parse({ id: 'site_b' })
+    bridge.setScene({ [siteA.id]: siteA }, [siteA.id])
+
+    expect(await apply([{ op: 'create', node: siteB }])).toMatchObject({ isError: false })
+    expect(
+      await apply([{ op: 'update', id: siteA.id, data: { parentId: siteB.id } }]),
+    ).toMatchObject({ isError: false })
+
+    const cycle = await refusal([{ op: 'update', id: siteB.id, data: { parentId: siteA.id } }])
+    expect(cycle).toMatchObject({ code: 'invalid_parent', patchIndex: 0, id: siteB.id })
+    expect(cycle.message).toContain('hierarchy cycle')
+
+    expect(bridge.getNode(siteA.id as AnyNodeId)?.parentId).toBe(siteB.id)
+    const keptParent = bridge.getNode(siteB.id as AnyNodeId)
+    expect(keptParent?.type === 'site' && keptParent.children).toEqual([siteA.id])
+    expect(bridge.getNode(siteB.id as AnyNodeId)?.parentId).toBeNull()
   })
 
   test('default gutters a delete regenerates cannot be addressed later in the same patch', async () => {

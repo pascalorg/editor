@@ -170,6 +170,7 @@ export {
   withFloorStepOverride,
   withoutFloorStepOverrideKeys,
 } from './lib/floor-step-finish'
+export { findHierarchyCycles, wouldCreateHierarchyCycle } from './lib/hierarchy'
 export {
   isScriptedNode,
   type ScriptedNode,
