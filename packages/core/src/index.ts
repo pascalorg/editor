@@ -170,7 +170,11 @@ export {
   withFloorStepOverride,
   withoutFloorStepOverrideKeys,
 } from './lib/floor-step-finish'
-export { geometryRestingHeight, geometrySurfaceAt } from './lib/geometry-surfaces'
+export {
+  geometryRestingHeight,
+  geometrySurfaceAt,
+  geometryUndersideAt,
+} from './lib/geometry-surfaces'
 export {
   type ExposedInterval,
   exposedIntervals,

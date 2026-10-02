@@ -68,6 +68,20 @@ export const GeometryArtifactManifest = z.object({
       }),
     )
     .default([]),
+  /**
+   * Downward-facing areas ceiling items hang from (a vault plane, a soffit, a
+   * beam): XZ outline and the plane a·x + b·y + c·z + d = 0, so a sloped
+   * underside gives its height anywhere inside the outline.
+   */
+  undersides: z
+    .array(
+      z.object({
+        part: z.string().optional(),
+        polygon: z.array(z.tuple([finite, finite])),
+        plane: z.tuple([finite, finite, finite, finite]),
+      }),
+    )
+    .default([]),
   /** The module's AnimationClips; `open`, `close` and `loop` drive the object's controls. */
   animations: z.array(z.object({ name: z.string(), duration: finite })).default([]),
   cutout: z.boolean().default(false),

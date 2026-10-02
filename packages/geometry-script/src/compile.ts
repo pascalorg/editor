@@ -286,6 +286,8 @@ function readConventions(root: THREE.Object3D) {
 }
 
 const SURFACE_MIN_NORMAL_Y = 0.95
+/** Faces pointing at least this far down hang ceiling items (a vault plane up to ~70°). */
+const UNDERSIDE_MAX_NORMAL_Y = -0.35
 const SURFACE_MIN_AREA = 0.04
 const SURFACE_MAX_COUNT = 32
 
@@ -326,6 +328,10 @@ function analyseGeometry(root: THREE.Object3D, parts: GeometryArtifactManifest['
     string,
     { part?: string; y: number; area: number; points: [number, number][] }
   >()
+  const undersides = new Map<
+    string,
+    { part?: string; normal: THREE.Vector3; d: number; area: number; points: [number, number][] }
+  >()
   const a = new THREE.Vector3()
   const b = new THREE.Vector3()
   const c = new THREE.Vector3()
@@ -354,7 +360,27 @@ function analyseGeometry(root: THREE.Object3D, parts: GeometryArtifactManifest['
       c.fromBufferAttribute(position, ic).applyMatrix4(mesh.matrixWorld)
       const normal = ab.subVectors(b, a).cross(ac.subVectors(c, a))
       const area = normal.length() / 2
-      if (area === 0 || normal.y / (2 * area) < SURFACE_MIN_NORMAL_Y) continue
+      if (area === 0) continue
+      const ny = normal.y / (2 * area)
+      if (ny <= UNDERSIDE_MAX_NORMAL_Y) {
+        const unit = normal.clone().normalize()
+        const key = `${mesh.uuid}|${unit
+          .toArray()
+          .map((v) => v.toFixed(2))
+          .join(',')}`
+        const entry = undersides.get(key) ?? {
+          part,
+          normal: unit,
+          d: -unit.dot(a),
+          area: 0,
+          points: [],
+        }
+        entry.area += area
+        entry.points.push([a.x, a.z], [b.x, b.z], [c.x, c.z])
+        undersides.set(key, entry)
+        continue
+      }
+      if (ny < SURFACE_MIN_NORMAL_Y) continue
       const y = Math.round(((a.y + b.y + c.y) / 3) * 100) / 100
       // One outline per mesh and height: a hull across meshes would merge a beam
       // and its returns into one surface covering the whole object.
@@ -370,17 +396,29 @@ function analyseGeometry(root: THREE.Object3D, parts: GeometryArtifactManifest['
     const bounds = partBounds.get(part.id)
     if (bounds && !bounds.isEmpty()) part.bounds = { min: vec(bounds.min), max: vec(bounds.max) }
   }
-  return [...surfaces.values()]
-    .filter((surface) => surface.area >= SURFACE_MIN_AREA)
-    .sort((x, y) => y.area - x.area)
-    .slice(0, SURFACE_MAX_COUNT)
-    .map((surface) => ({
-      part: surface.part,
-      y: surface.y,
-      polygon: convexHull(surface.points).map(
-        ([x, z]) => [Math.round(x * 1000) / 1000, Math.round(z * 1000) / 1000] as [number, number],
-      ),
-    }))
+  const hull = (points: [number, number][]) =>
+    convexHull(points).map(
+      ([x, z]) => [Math.round(x * 1000) / 1000, Math.round(z * 1000) / 1000] as [number, number],
+    )
+  return {
+    surfaces: [...surfaces.values()]
+      .filter((surface) => surface.area >= SURFACE_MIN_AREA)
+      .sort((x, y) => y.area - x.area)
+      .slice(0, SURFACE_MAX_COUNT)
+      .map((surface) => ({ part: surface.part, y: surface.y, polygon: hull(surface.points) })),
+    undersides: [...undersides.values()]
+      .filter((underside) => underside.area >= SURFACE_MIN_AREA)
+      .sort((x, y) => y.area - x.area)
+      .slice(0, SURFACE_MAX_COUNT)
+      .map((underside) => ({
+        part: underside.part,
+        polygon: hull(underside.points),
+        plane: [
+          ...underside.normal.toArray().map((v: number) => Math.round(v * 1e5) / 1e5),
+          Math.round(underside.d * 1e5) / 1e5,
+        ] as [number, number, number, number],
+      })),
+  }
 }
 
 /**
@@ -672,7 +710,7 @@ export async function compileGeometryScript(
     )
   }
 
-  const surfaces = analyseGeometry(root, conventions.parts)
+  const { surfaces, undersides } = analyseGeometry(root, conventions.parts)
   mergeByPartAndMaterial(root, animated)
   const bounds = visibleBounds(root)
   const glb = await exportGlb(root, clips)
@@ -686,6 +724,7 @@ export async function compileGeometryScript(
       params: specs,
       parts: conventions.parts,
       surfaces,
+      undersides,
       slots: conventions.slots,
       anchors: conventions.anchors,
       lights: conventions.lights,

@@ -1,5 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { geometrySurfaceAt } from '@pascal-app/core'
+import { geometrySurfaceAt, geometryUndersideAt } from '@pascal-app/core'
 import { projectWorldPointToWallLocalX, wallLength } from '@pascal-app/core/agent-operations'
 import type { AnyNodeId } from '@pascal-app/core/schema'
 import { ItemNode } from '@pascal-app/core/schema'
@@ -32,7 +32,7 @@ export function registerPlaceItem(server: McpServer, bridge: SceneOperations): v
     {
       title: 'Place item',
       description:
-        'Place a catalog item into the scene. Target a level/slab/zone for floor items, a wall for wall-attached items, a ceiling for ceiling-attached items, or an item to rest on it (position in level coordinates; on an object built with author_object it lands on the real surface below the point, such as a porch landing, unless position[1] is set above 0). Do not target the site node directly.',
+        'Place a catalog item into the scene. Target a level/slab/zone for floor items, a wall for wall-attached items, a ceiling for ceiling-attached items, or an item to rest on it (position in level coordinates; on an object built with author_object it lands on the real surface below the point, such as a porch landing, and a ceiling item hangs from the underside above it, such as a vaulted ceiling, unless position[1] is set above 0). Do not target the site node directly.',
       inputSchema: placeItemInput,
       outputSchema: placeItemOutput,
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
@@ -112,14 +112,25 @@ export function registerPlaceItem(server: McpServer, bridge: SceneOperations): v
         const dz = requestedPosition[2] - hz
         const lx = (Math.cos(yaw) * dx - Math.sin(yaw) * dz) / target.scale[0]
         const lz = (Math.sin(yaw) * dx + Math.cos(yaw) * dz) / target.scale[2]
-        const surface = target.source ? geometrySurfaceAt(target.source.manifest, lx, lz) : null
-        restingOn = requestedPosition[1] > 0 ? undefined : surface?.part
-        const ly =
-          requestedPosition[1] > 0
-            ? requestedPosition[1] - hy
-            : surface
-              ? surface.y * target.scale[1]
-              : (target.asset.surface?.height ?? target.asset.dimensions[1]) * target.scale[1]
+        const hanging = baseAsset.attachTo === 'ceiling' && target.source
+        const surface = target.source
+          ? hanging
+            ? geometryUndersideAt(target.source.manifest, lx, lz)
+            : geometrySurfaceAt(target.source.manifest, lx, lz)
+          : null
+        const explicitY = !hanging && requestedPosition[1] > 0
+        restingOn = explicitY ? undefined : surface?.part
+        // A ceiling item hangs below the underside (its top flush); others rest on top.
+        const drop = hanging
+          ? 'recessed' in baseAsset && baseAsset.recessed
+            ? 0.02
+            : (baseAsset.dimensions?.[1] ?? 0)
+          : 0
+        const ly = explicitY
+          ? requestedPosition[1] - hy
+          : surface
+            ? surface.y * target.scale[1] - drop
+            : (target.asset.surface?.height ?? target.asset.dimensions[1]) * target.scale[1]
         itemPosition = [lx * target.scale[0], ly, lz * target.scale[2]]
       }
 

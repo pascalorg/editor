@@ -72,3 +72,23 @@ export function geometryRestingHeight(
 ): number | null {
   return highest(mainSurfaces(manifest))?.y ?? null
 }
+
+/**
+ * Where a ceiling item hangs from an authored object above local (x, z): the
+ * lowest underside over the point (a beam before the vault plane above it),
+ * with its height there — sloped undersides included. Null when none is over it.
+ */
+export function geometryUndersideAt(
+  manifest: Pick<GeometryArtifactManifest, 'undersides'>,
+  x: number,
+  z: number,
+): { part?: string; y: number } | null {
+  let best: { part?: string; y: number } | null = null
+  for (const underside of manifest.undersides) {
+    const [a, b, c, d] = underside.plane
+    if (b === 0 || !contains(underside.polygon, x, z)) continue
+    const y = -(a * x + c * z + d) / b
+    if (!best || y < best.y) best = { part: underside.part, y }
+  }
+  return best
+}

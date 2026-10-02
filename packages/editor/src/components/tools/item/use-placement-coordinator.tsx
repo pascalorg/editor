@@ -1883,6 +1883,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
       if (event.node.id === draftNode.current?.id) return
       has3DPointerDrivenMoveRef.current = true
+      // An authored object's underside takes ceiling items (a pendant under a vault).
+      if (enterFaceHost(event)) return
       const result = itemSurfaceStrategy.enter(surfaceContext(event, generic), event)
       if (!result) return
       feedback.clear()
@@ -1900,6 +1902,17 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const onItemMove = (event: NodeEvent<AnyNode>, generic = false) => {
       if (event.node.id === draftNode.current?.id) return
+      if (
+        placementState.current.surface === 'block-face' &&
+        placementState.current.blockId === event.node.id
+      ) {
+        onFaceHostMove(event)
+        return
+      }
+      if (placementState.current.surface !== 'block-face' && enterFaceHost(event)) {
+        releaseCommit = () => onFaceHostClick(event)
+        return
+      }
       releaseCommit = () => onItemClick(event)
       has3DPointerDrivenMoveRef.current = true
       if (!cursorGroupRef.current) return
@@ -2000,6 +2013,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     const onItemLeave = (event: NodeEvent<AnyNode>) => {
       if (event.node.type === 'cabinet') return
       if (event.node.id === draftNode.current?.id) return
+      if (
+        placementState.current.surface === 'block-face' &&
+        placementState.current.blockId === event.node.id
+      ) {
+        onFaceHostLeave(event)
+        return
+      }
       if (placementState.current.surface !== 'item-surface') return
 
       event.stopPropagation()
@@ -2015,6 +2035,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     const onItemClick = (event: NodeEvent<AnyNode>) => {
       gridDispatch.flush()
       if (feedback.reason) return
+      if (
+        placementState.current.surface === 'block-face' &&
+        placementState.current.blockId === event.node.id
+      ) {
+        onFaceHostClick(event)
+        return
+      }
       // Click on the draft item itself. R3F dispatches click events to
       // the closest intersected mesh only — when the draft is hovering
       // on a host (shelf / table / etc.) the draft's mesh is *above*
