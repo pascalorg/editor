@@ -4,8 +4,7 @@ import { NodeId } from './node-id'
 
 const DESCRIPTION = `Build an object by writing a plain three.js module, the way you would in any three.js project. Use it for what the catalog and the structure tools cannot reproduce faithfully: custom columns and capitals, mouldings and trim, panels, lanterns and fixtures, exposed beams, vaulted or tray ceiling bodies, canopies, a porch, railings, built-ins. Pascal runs the module in a sandbox, stores the result and places it as one object the user can move, paint, and ask you to edit again.
 
-Module shape:
-  import * as THREE from 'three'
+Module shape (import THREE from the three package as usual; the addons below too):
   // also available: three/addons/utils/BufferGeometryUtils.js, three/addons/geometries/{RoundedBoxGeometry,ConvexGeometry,LoftGeometry,ParametricGeometry}.js, three-bvh-csg (Brush, Evaluator, SUBTRACTION, ADDITION, INTERSECTION)
   export const params = { width: { default: 4.8, min: 3, max: 8, step: 0.1, unit: 'm', label: 'Width' } }
   export const mount = 'floor'   // 'floor' | 'wall-side' (on a wall face) | 'wall' (through a wall, like a window) | 'ceiling'
