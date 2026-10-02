@@ -15,6 +15,12 @@ export const saveSceneInput = {
   name: z.string().min(1).max(200),
   projectId: z.string().optional(),
   expectedVersion: z.number().int().positive().optional(),
+  replace: z
+    .boolean()
+    .optional()
+    .describe(
+      "Write this session's scene over a project or scene it was not loaded from, replacing what that one holds.",
+    ),
   saveMode: z
     .enum(['draft', 'checkpoint'])
     .default('draft')
@@ -61,6 +67,36 @@ export const saveSceneOutput = {
   defaultLevelId: z.string().nullable(),
 }
 
+/** A saved scene that is more than the default site, building and level. */
+const HOLDS_CONTENT = 3
+
+/**
+ * The session's scene goes over a project or scene only when it was loaded from it (or created
+ * for it). After a server reload a session starts over on a blank scene, and saving it by id wrote
+ * it over the project's draft (2026-10-03: 8 levels and 10 imported plans lost).
+ */
+async function requireSceneLoadedFrom(
+  bridge: SceneOperations,
+  target: { id?: string; projectId?: string },
+) {
+  if (target.id === undefined && target.projectId === undefined) return
+  const active = bridge.getActiveScene()
+  if (target.id !== undefined ? active?.id === target.id : active?.projectId === target.projectId)
+    return
+  const nodeCount =
+    target.projectId !== undefined && bridge.canGetProjectStatus
+      ? ((await bridge.getProjectStatus(target.projectId))?.nodeCount ?? 0)
+      : target.id !== undefined
+        ? Object.keys((await bridge.loadStoredScene(target.id))?.graph.nodes ?? {}).length
+        : 0
+  if (nodeCount <= HOLDS_CONTENT) return
+  throwMcpError(
+    ErrorCode.InvalidRequest,
+    `scene_not_loaded: this session's scene was not loaded from ${target.projectId ?? target.id}, which holds ${nodeCount} nodes — the server may have reloaded and this session started over. Call load_scene with it first, or pass replace: true to write this scene over it.`,
+    { ...target, nodeCount },
+  )
+}
+
 export function registerSaveScene(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'save_scene',
@@ -82,8 +118,10 @@ export function registerSaveScene(server: McpServer, bridge: SceneOperations): v
       thumbnail,
       includeCurrentScene,
       graph,
+      replace,
     }) => {
       let sceneGraph: SceneGraph
+      if (includeCurrentScene && !replace) await requireSceneLoadedFrom(bridge, { id, projectId })
       if (includeCurrentScene) {
         const validation = bridge.validateScene()
         if (!validation.valid) {

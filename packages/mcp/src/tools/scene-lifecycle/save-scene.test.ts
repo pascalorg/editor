@@ -227,4 +227,45 @@ describe('save_scene', () => {
     })
     expect(result.isError).toBe(true)
   })
+
+  // 2026-10-03, a Claude Code run on the hosted MCP: the server reloaded, the session started over
+  // on a blank scene, and save_scene(projectId) wrote it over the project's draft — 8 levels and
+  // 10 imported plans lost.
+  test('refuses to write a scene this session did not load over a project that holds one', async () => {
+    const project = await store.createProject({ name: 'The Victor' })
+    const walls = Array.from({ length: 4 }, (_, index) =>
+      WallNode.parse({ start: [index, 0], end: [index + 1, 0] }),
+    )
+    await store.save({
+      id: project.projectId,
+      name: 'The Victor',
+      projectId: project.projectId,
+      graph: {
+        nodes: Object.fromEntries(walls.map((wall) => [wall.id, wall])),
+        rootNodeIds: [],
+      } as never,
+    })
+    const blank = await client.callTool({
+      name: 'save_scene',
+      arguments: { name: 'The Victor', projectId: project.projectId },
+    })
+    expect(blank.isError).toBe(true)
+    expect(JSON.stringify(blank.content)).toContain('scene_not_loaded')
+    expect((await store.getProjectStatus(project.projectId))?.nodeCount).toBe(4)
+    // Said on purpose, it replaces.
+    const replaced = await client.callTool({
+      name: 'save_scene',
+      arguments: { name: 'The Victor', projectId: project.projectId, replace: true },
+    })
+    expect(replaced.isError).toBeFalsy()
+  })
+
+  test('saves into a project that holds nothing yet', async () => {
+    const project = await store.createProject({ name: 'Empty' })
+    const result = await client.callTool({
+      name: 'save_scene',
+      arguments: { name: 'Empty', projectId: project.projectId },
+    })
+    expect(result.isError).toBeFalsy()
+  })
 })
