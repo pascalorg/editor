@@ -577,7 +577,10 @@ export {
   commitFreshPlacementSubtree,
   createFreshPlacementSubtree,
 } from './lib/fresh-planar-placement'
-export { compileAndStoreGeometryScript } from './lib/geometry-script/author'
+export {
+  compileAndStoreGeometryScript,
+  rebuildAuthoredObject,
+} from './lib/geometry-script/author'
 export { compileGeometryScriptInWorker } from './lib/geometry-script/client'
 export { exportSceneToGlb, type GlbExportOptions } from './lib/glb-export'
 export {

@@ -14,6 +14,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Link, Link2Off, Move, Trash2 } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
+import { AuthoredParams } from './authored-params'
 
 /**
  * Stage E inspector for item. 1:1 port of the legacy
@@ -81,6 +82,8 @@ export default function ItemPanel() {
       rotation: [...node.rotation] as [number, number, number],
       name: node.name,
       asset: node.asset,
+      source: node.source,
+      slots: node.slots,
       parentId: node.parentId,
       side: node.side,
       metadata: { isNew: true },
@@ -105,6 +108,8 @@ export default function ItemPanel() {
       title={node.name || node.asset.name}
       width={300}
     >
+      <AuthoredParams node={node} />
+
       <PanelSection title="Position">
         <SliderControl
           label={
