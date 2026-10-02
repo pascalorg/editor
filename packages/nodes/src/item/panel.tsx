@@ -162,6 +162,7 @@ export default function ItemPanel() {
       </PanelSection>
 
       <PanelSection title="Rotation">
+        <TiltSlider axis={0} label="X" node={node} onUpdate={handleUpdate} />
         <SliderControl
           label={
             <>
@@ -179,6 +180,7 @@ export default function ItemPanel() {
           unit="°"
           value={Math.round((node.rotation[1] * 180) / Math.PI)}
         />
+        <TiltSlider axis={2} label="Z" node={node} onUpdate={handleUpdate} />
         <div className="flex gap-1.5 px-1 pt-2 pb-1">
           <ActionButton
             label="-45°"
@@ -329,5 +331,40 @@ export default function ItemPanel() {
         </ActionGroup>
       </PanelSection>
     </PanelWrapper>
+  )
+}
+
+/** Tilt about X or Z: aiming a spotlight, leaning a frame. Y stays the main turn above. */
+function TiltSlider({
+  axis,
+  label,
+  node,
+  onUpdate,
+}: {
+  axis: 0 | 2
+  label: string
+  node: ItemNode
+  onUpdate: (updates: Partial<ItemNode>) => void
+}) {
+  return (
+    <SliderControl
+      label={
+        <>
+          {label}
+          <sub className="ml-[1px] text-[11px] opacity-70">rot</sub>
+        </>
+      }
+      max={180}
+      min={-180}
+      onChange={(degrees) => {
+        const rotation = [...node.rotation] as [number, number, number]
+        rotation[axis] = (degrees * Math.PI) / 180
+        onUpdate({ rotation })
+      }}
+      precision={0}
+      step={1}
+      unit="°"
+      value={Math.round((node.rotation[axis] * 180) / Math.PI)}
+    />
   )
 }

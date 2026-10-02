@@ -1,7 +1,9 @@
 import {
   type FaceHostCapability,
   type FaceHostPlacementArgs,
+  flushMountRotation,
   type ItemNode,
+  mountsFlush,
   sceneRegistry,
 } from '@pascal-app/core'
 import { type BufferGeometry, type Mesh, Quaternion, Triangle, Vector3 } from 'three'
@@ -44,14 +46,15 @@ function resolveUnderside(args: FaceHostPlacementArgs<ItemNode>) {
     .applyQuaternion(toHost)
     .normalize()
   if (normal.y > UNDERSIDE_MAX_NORMAL_Y) return null
-  return { world, point }
+  return { world, point, normal }
 }
 
 /**
  * Authored objects host ceiling items (pendants, fans, recessed cans) on
  * their real undersides — a vault plane, a soffit, a beam — found from the
- * pointer's hit, so placement follows the geometry the script built. The
- * item hangs upright from the point and becomes the object's child.
+ * pointer's hit, so placement follows the geometry the script built. A
+ * pendant hangs plumb, a recessed fixture tilts with the slope; either
+ * becomes the object's child.
  */
 export const authoredItemFaceHost: FaceHostCapability<ItemNode> = {
   currentFaceId: (item) => (item?.asset.attachTo === 'ceiling' ? UNDERSIDE_FACE : null),
@@ -59,12 +62,19 @@ export const authoredItemFaceHost: FaceHostCapability<ItemNode> = {
   resolvePlacement: (args) => {
     const hit = resolveUnderside(args)
     if (!hit) return null
-    const drop = args.asset.recessed ? 0.02 : args.rawDimensions[1]
-    const position: [number, number, number] = [hit.point.x, hit.point.y - drop, hit.point.z]
     const yaw = args.draftItem?.rotation[1] ?? 0
-    const rotation: [number, number, number] = [0, yaw, 0]
-    const cursor = hit.world.clone()
-    cursor.y -= drop
+    // A recessed fixture seats flush along the face, tilted with a slope; a
+    // pendant or fan hangs plumb from the point.
+    const flush = mountsFlush({ ...args.asset, dimensions: args.rawDimensions })
+    const offset = flush
+      ? hit.normal.clone().multiplyScalar(0.02)
+      : new Vector3(0, -args.rawDimensions[1], 0)
+    const at = hit.point.clone().add(offset)
+    const position: [number, number, number] = [at.x, at.y, at.z]
+    const rotation: [number, number, number] = flush
+      ? flushMountRotation([hit.normal.x, hit.normal.y, hit.normal.z], yaw)
+      : [0, yaw, 0]
+    const cursor = hit.world.clone().add(offset)
     return {
       faceId: UNDERSIDE_FACE,
       nodeUpdate: {

@@ -82,13 +82,58 @@ export function geometryUndersideAt(
   manifest: Pick<GeometryArtifactManifest, 'undersides'>,
   x: number,
   z: number,
-): { part?: string; y: number } | null {
-  let best: { part?: string; y: number } | null = null
+): { part?: string; y: number; normal: [number, number, number] } | null {
+  let best: { part?: string; y: number; normal: [number, number, number] } | null = null
   for (const underside of manifest.undersides) {
     const [a, b, c, d] = underside.plane
     if (b === 0 || !contains(underside.polygon, x, z)) continue
     const y = -(a * x + c * z + d) / b
-    if (!best || y < best.y) best = { part: underside.part, y }
+    if (!best || y < best.y) best = { part: underside.part, y, normal: [a, b, c] }
   }
   return best
+}
+
+/**
+ * The rotation that seats a flush fixture (a recessed can) on a sloped
+ * underside: its +Y goes into the surface, against the downward `normal`,
+ * then it keeps its own turn `yaw`. Euler XYZ, as items store rotation.
+ */
+export function flushMountRotation(
+  normal: readonly [number, number, number],
+  yaw: number,
+): [number, number, number] {
+  // Quaternion turning +Y onto -normal (the direction into the surface).
+  const [vx, vy, vz] = [-normal[0], -normal[1], -normal[2]]
+  let [qx, qy, qz, qw] = [vz, 0, -vx, 1 + vy]
+  const length = Math.hypot(qx, qy, qz, qw) || 1
+  ;[qx, qy, qz, qw] = [qx / length, qy / length, qz / length, qw / length]
+  // Then the fixture's own yaw about its local +Y.
+  const [sy, cy] = [Math.sin(yaw / 2), Math.cos(yaw / 2)]
+  const [x, y, z, w] = [qx * cy - qz * sy, qw * sy + qy * cy, qz * cy + qx * sy, qw * cy - qy * sy]
+  const m11 = 1 - 2 * (y * y + z * z)
+  const m12 = 2 * (x * y - w * z)
+  const m13 = 2 * (x * z + w * y)
+  const m22 = 1 - 2 * (x * x + z * z)
+  const m23 = 2 * (y * z - w * x)
+  const m32 = 2 * (y * z + w * x)
+  const m33 = 1 - 2 * (x * x + y * y)
+  const ry = Math.asin(Math.max(-1, Math.min(1, m13)))
+  return Math.abs(m13) < 0.9999999
+    ? [Math.atan2(-m23, m33), ry, Math.atan2(-m12, m11)]
+    : [Math.atan2(m32, m22), ry, 0]
+}
+
+/** At or under this height a ceiling fixture mounts flush (a can, a surface light) rather than hangs. */
+const FLUSH_MOUNT_MAX_HEIGHT = 0.15
+
+/**
+ * Whether a ceiling fixture sits flush on a surface (tilting with a slope)
+ * rather than hanging plumb: flagged `recessed`, or shallow enough that it
+ * can only be a can or a surface light (catalog data often lacks the flag).
+ */
+export function mountsFlush(asset: {
+  recessed?: boolean
+  dimensions?: readonly number[]
+}): boolean {
+  return Boolean(asset.recessed) || (asset.dimensions?.[1] ?? 1) <= FLUSH_MOUNT_MAX_HEIGHT
 }

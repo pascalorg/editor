@@ -1,5 +1,10 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { geometrySurfaceAt, geometryUndersideAt } from '@pascal-app/core'
+import {
+  flushMountRotation,
+  geometrySurfaceAt,
+  geometryUndersideAt,
+  mountsFlush,
+} from '@pascal-app/core'
 import { projectWorldPointToWallLocalX, wallLength } from '@pascal-app/core/agent-operations'
 import type { AnyNodeId } from '@pascal-app/core/schema'
 import { ItemNode } from '@pascal-app/core/schema'
@@ -97,6 +102,7 @@ export function registerPlaceItem(server: McpServer, bridge: SceneOperations): v
       }
 
       let restingOn: string | undefined
+      let tilt: [number, number, number] | undefined
       if (target.type === 'item') {
         const host = bridge.getNode(target.parentId as AnyNodeId)
         if (host?.type !== 'level') {
@@ -121,22 +127,25 @@ export function registerPlaceItem(server: McpServer, bridge: SceneOperations): v
         const explicitY = !hanging && requestedPosition[1] > 0
         restingOn = explicitY ? undefined : surface?.part
         // A ceiling item hangs below the underside (its top flush); others rest on top.
-        const drop = hanging
-          ? 'recessed' in baseAsset && baseAsset.recessed
-            ? 0.02
-            : (baseAsset.dimensions?.[1] ?? 0)
-          : 0
+        const flush = Boolean(hanging) && mountsFlush(baseAsset)
+        const drop = hanging ? (flush ? 0.02 : (baseAsset.dimensions?.[1] ?? 0)) : 0
         const ly = explicitY
           ? requestedPosition[1] - hy
           : surface
             ? surface.y * target.scale[1] - drop
             : (target.asset.surface?.height ?? target.asset.dimensions[1]) * target.scale[1]
         itemPosition = [lx * target.scale[0], ly, lz * target.scale[2]]
+        // A recessed fixture tilts with a sloped underside (a can in a vault plane).
+        // Its turn is relative to the host's.
+        tilt =
+          flush && surface && 'normal' in surface
+            ? flushMountRotation(surface.normal, (rotation ?? 0) - yaw)
+            : [0, (rotation ?? 0) - yaw, 0]
       }
 
       const item = ItemNode.parse({
         position: itemPosition,
-        rotation: [0, rotation ?? 0, 0],
+        rotation: tilt ?? [0, rotation ?? 0, 0],
         asset: baseAsset,
         ...wallExtras,
       })

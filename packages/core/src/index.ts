@@ -171,9 +171,11 @@ export {
   withoutFloorStepOverrideKeys,
 } from './lib/floor-step-finish'
 export {
+  flushMountRotation,
   geometryRestingHeight,
   geometrySurfaceAt,
   geometryUndersideAt,
+  mountsFlush,
 } from './lib/geometry-surfaces'
 export {
   type ExposedInterval,
