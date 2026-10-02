@@ -26,9 +26,10 @@ export function AuthoredParams({ node }: { node: ItemNode }) {
     setBusy(true)
     setError(null)
     rebuildAuthoredObject(node.id, { ...source.params, [id]: value })
-      .catch((reason: unknown) =>
-        setError(reason instanceof Error ? reason.message : String(reason)),
-      )
+      .catch((reason: unknown) => {
+        console.error('[authored object] rebuild failed', reason)
+        setError("Couldn't rebuild with these values.")
+      })
       .finally(() => {
         setBusy(false)
         setDrafts((current) => {

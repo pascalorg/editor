@@ -14,9 +14,6 @@ import type { AgentOperation } from './types'
 
 type Vec3 = [number, number, number]
 
-/** How many named parts one object may carry; past this it is several objects. */
-export const AUTHORED_OBJECT_MAX_PARTS = 64
-
 export type AuthorObjectInput = {
   code: string
   params?: Record<string, GeometryScriptParamValue>
@@ -160,13 +157,6 @@ function summary(node: ItemNode, compiled: CompiledGeometryScript, orphanedSlots
  */
 export const authorObject: AgentOperation<AuthorObjectInput> = (nodes, input, context) => {
   const { compiled } = input
-  if (compiled.manifest.parts.length > AUTHORED_OBJECT_MAX_PARTS) {
-    refuse(
-      'too_many_parts',
-      `The object has ${compiled.manifest.parts.length} parts; at most ${AUTHORED_OBJECT_MAX_PARTS}. Group detail into fewer parts, or build separate objects for things that are separate.`,
-      { parts: compiled.manifest.parts.length },
-    )
-  }
   const rotation: Vec3 | undefined =
     input.rotation === undefined ? undefined : [0, (input.rotation * Math.PI) / 180, 0]
 
