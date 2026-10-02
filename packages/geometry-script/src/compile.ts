@@ -492,6 +492,80 @@ function readAnimations(built: THREE.Object3D, root: THREE.Object3D) {
   return { clips, animated }
 }
 
+const SAMPLE_FPS = 30
+const MAX_SAMPLES = 900
+
+/**
+ * glTF stores only position, quaternion and scale tracks, and the exporter
+ * silently drops the rest (an Euler `rotation[y]` track, a `position[x]`
+ * one). So each clip is played once in a mixer and the transforms it
+ * produces are sampled back as position / quaternion / scale tracks: any
+ * track that moves objects survives, however the module wrote it.
+ */
+function sampleTransformClips(root: THREE.Object3D, clips: THREE.AnimationClip[]) {
+  const mixer = new THREE.AnimationMixer(root)
+  const sampled: THREE.AnimationClip[] = []
+  for (const clip of clips) {
+    const targets = [
+      ...new Set(
+        clip.tracks
+          .map((track) => root.getObjectByProperty('uuid', track.name.split('.')[0]!))
+          .filter((object): object is THREE.Object3D => Boolean(object)),
+      ),
+    ]
+    const rest = targets.map((object) => ({
+      position: object.position.clone(),
+      quaternion: object.quaternion.clone(),
+      scale: object.scale.clone(),
+    }))
+    const count = Math.min(MAX_SAMPLES, Math.ceil(clip.duration * SAMPLE_FPS) + 1)
+    const times = Array.from({ length: count }, (_, i) => (clip.duration * i) / (count - 1))
+    const values = targets.map(() => ({
+      position: [] as number[],
+      quaternion: [] as number[],
+      scale: [] as number[],
+    }))
+    const action = mixer.clipAction(clip)
+    action.play()
+    for (const time of times) {
+      mixer.setTime(time)
+      targets.forEach((object, k) => {
+        values[k]!.position.push(...object.position.toArray())
+        values[k]!.quaternion.push(...object.quaternion.toArray())
+        values[k]!.scale.push(...object.scale.toArray())
+      })
+    }
+    action.stop()
+    mixer.uncacheClip(clip)
+    const tracks: THREE.KeyframeTrack[] = []
+    targets.forEach((object, k) => {
+      const { position, quaternion, scale } = rest[k]!
+      object.position.copy(position)
+      object.quaternion.copy(quaternion)
+      object.scale.copy(scale)
+      const moves = (series: number[], base: number[]) =>
+        series.some((value, i) => Math.abs(value - base[i % base.length]!) > 1e-6)
+      const v = values[k]!
+      if (moves(v.position, position.toArray()))
+        tracks.push(new THREE.VectorKeyframeTrack(`${object.uuid}.position`, times, v.position))
+      if (moves(v.quaternion, quaternion.toArray()))
+        tracks.push(
+          new THREE.QuaternionKeyframeTrack(`${object.uuid}.quaternion`, times, v.quaternion),
+        )
+      if (moves(v.scale, scale.toArray()))
+        tracks.push(new THREE.VectorKeyframeTrack(`${object.uuid}.scale`, times, v.scale))
+    })
+    if (tracks.length === 0) {
+      throw new Error(
+        `Clip "${clip.name}" moves nothing: only position, rotation and scale animate (material or visibility tracks do not)`,
+      )
+    }
+    sampled.push(new THREE.AnimationClip(clip.name, clip.duration, tracks))
+  }
+  root.updateWorldMatrix(true, true)
+  return sampled
+}
+
 // GLTFExporter writes binaries through FileReader, which Bun and Node lack.
 function ensureFileReader() {
   const g = globalThis as { FileReader?: unknown }
@@ -583,7 +657,9 @@ export async function compileGeometryScript(
   built.position.sub(originFor(box, mount))
   root.updateWorldMatrix(true, true)
 
-  const { clips, animated } = readAnimations(built, root)
+  const read = readAnimations(built, root)
+  const clips = sampleTransformClips(root, read.clips)
+  const animated = read.animated
   const conventions = readConventions(root)
   if (conventions.triangles > GEOMETRY_SCRIPT_LIMITS.triangles) {
     throw new Error(
