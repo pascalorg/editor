@@ -17,12 +17,12 @@ Conventions (they make the object work in Pascal; follow them):
 - Paint: name every material slot_<finish> (slot_trim, slot_frame, slot_metal) and reuse one material per finish; a material named "glass" renders as glass.
 - Parts: name the few groups a person would point at part:<id> (part:column_left, part:canopy, part:landing), usually 2–24, a group per part, not every mesh. Set userData.type on parts someone would look for: column, beam, slab, roof, railing, panel, trim, step, light.
 - Lights: add a THREE.PointLight or SpotLight named light:<id> where the bulb is; it becomes a switchable light.
-- Motion: put THREE.AnimationClips on the returned group's .animations, as in any three.js project; tracks target <objectName>.<property> or <object.uuid>.<property> and may use any transform property (position, rotation, rotation[y], quaternion, scale); material and visibility tracks do not animate. A clip named open becomes the object's open/close control (close plays a clip named close, or open reversed); a clip named loop runs continuously; every other clip gets its own play toggle labelled with its name (name it for the person: "Twirl", "Music"). Write as many clips as the object needs. A window or door opens with its open clip (the sash, the leaves): write one unless it is fixed.
+- Motion: put THREE.AnimationClips on the returned group's .animations, as in any three.js project; tracks target <objectName>.<property> or <object.uuid>.<property> and may use any transform property (position, rotation, rotation[y], quaternion, scale); material and visibility tracks do not animate. A clip named open becomes the object's open/close control (close plays a clip named close, or open reversed); a clip named loop runs continuously; every other clip gets its own play toggle labelled with its name (name it for the person: "Twirl", "Music"). Write as many clips as the object needs.
 - Wall opening: a mesh named cutout (wall mount), shaped like the hole and as deep as the wall or deeper, is cut out of the host wall in that shape and never renders (a niche, a vent, a pass-through).
 - Sockets: an empty Object3D named anchor:<id> marks where other things attach.
 - No textures, network or DOM. At most 300k triangles, 32 materials, 60 m per side.
 
-Edit: pass nodeId (an object, or any window or door: code gives it a script, keeping its place and mark) with new code and/or params (params alone rebuild the stored script; read it first with read_source to change the code); identity, placement and paint are kept. The result lists the size, parts, slots, lights, animations and params.`
+Edit: pass nodeId with new code and/or params (params alone rebuild the stored script; read it first with read_source to change the code); identity, placement and paint are kept. The result lists the size, parts, slots, lights, animations and params.`
 
 export const authorObjectTool = {
   name: 'author_object',
@@ -74,7 +74,7 @@ export const readSourceTool = {
   name: 'read_source',
   title: 'Read object script',
   description:
-    "The three.js module an object (or a window or door built from code) runs, with its params and their current values. Read it before changing an object's code, then pass the edited module to author_object with the same nodeId.",
+    'The three.js module an object (or a window or door built from code) runs, with its params and their current values. Read it before changing its code, then pass the edited module back with the same nodeId: to author_object for an object, to add_window / add_door for a window or door.',
   input: {
     nodeId: NodeId.describe('An object, window or door built from code.'),
   },

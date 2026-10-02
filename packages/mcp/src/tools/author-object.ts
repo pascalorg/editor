@@ -68,7 +68,7 @@ export async function compileAndStore(
   return compiled
 }
 
-async function readScript(
+export async function readScript(
   host: GeometryScriptHost,
   sceneId: string,
   bridge: SceneOperations,

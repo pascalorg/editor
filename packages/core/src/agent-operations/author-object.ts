@@ -11,12 +11,10 @@ import { geometryRestingHeight, resettledPosition } from '../lib/geometry-surfac
 import {
   type AnyNode,
   type CompiledGeometryScript,
-  type DoorNode,
   type GeometryScriptMount,
   type GeometryScriptParamValue,
   generateId,
   ItemNode,
-  type WindowNode,
 } from '../schema'
 import { targetLevel } from './level-target'
 import type { AgentOperation } from './types'
@@ -114,44 +112,15 @@ export const authorObject: AgentOperation<AuthorObjectInput> = (nodes, input, co
     input.rotation === undefined ? undefined : [0, (input.rotation * Math.PI) / 180, 0]
 
   if (input.nodeId) {
-    // New code may also give a native window or door its script; params alone need one already.
-    const previous = input.code
-      ? scriptTarget(nodes, input.nodeId)
-      : authoredObject(nodes, input.nodeId)
+    const previous = authoredObject(nodes, input.nodeId)
+    if (previous.type !== 'item')
+      refuse(
+        'use_opening_tool',
+        `${previous.id} is a ${previous.type}: rebuild it with add_${previous.type} and nodeId.`,
+        { id: previous.id, type: previous.type },
+      )
     const slotIds = new Set(compiled.manifest.slots.map((slot) => slot.id))
     const orphanedSlots = Object.keys(previous.slots ?? {}).filter((id) => !slotIds.has(id))
-    if (previous.type !== 'item') {
-      // A window or door keeps its place on the wall and its bottom edge; its size is what the script built.
-      if (compiled.mount !== 'wall')
-        refuse('wrong_mount', `A ${previous.type}'s script uses mount 'wall'.`, {
-          mount: compiled.mount,
-        })
-      const [width, height] = scriptedSize(compiled.manifest)
-      // Given a position, that is where it goes; otherwise its bottom edge stays put.
-      const [x, y, z] = previous.position
-      const position: Vec3 = (input.position as Vec3 | undefined) ?? [
-        x,
-        y - previous.height / 2 + height / 2,
-        z,
-      ]
-      return {
-        result: summary(previous, compiled, orphanedSlots),
-        changes: {
-          update: [
-            {
-              id: previous.id,
-              data: {
-                name: input.name ?? previous.name,
-                source: scriptSource(compiled),
-                width,
-                height,
-                position,
-              },
-            },
-          ],
-        },
-      }
-    }
     const next = ItemNode.parse({
       ...previous,
       name: input.name ?? previous.name,
@@ -214,6 +183,71 @@ export const authorObject: AgentOperation<AuthorObjectInput> = (nodes, input, co
   }
 }
 
+export type RescriptOpeningInput = {
+  nodeId: string
+  /** Where it goes; without one its bottom edge stays put. */
+  position?: number[]
+  name?: string
+  /** What the host compiled: new code, or the stored script with new params. */
+  compiled: CompiledGeometryScript
+}
+
+/**
+ * `add_window` / `add_door` with a nodeId: a window or door built from (or
+ * given) a script, rebuilt from what the host compiled. Its size is what the
+ * script built; marks, hosting and the opening's own fields are kept.
+ */
+export const rescriptOpening: AgentOperation<RescriptOpeningInput> = (nodes, input) => {
+  const { compiled } = input
+  const previous = nodes[input.nodeId]
+  if (!previous) refuse('node_not_found', `Node not found: ${input.nodeId}.`, { id: input.nodeId })
+  if (previous.type !== 'window' && previous.type !== 'door')
+    refuse('not_an_opening', `${input.nodeId} is a ${previous.type}, not a window or door.`, {
+      id: input.nodeId,
+      type: previous.type,
+    })
+  const slotIds = new Set(compiled.manifest.slots.map((slot) => slot.id))
+  const orphanedSlots = Object.keys(previous.slots ?? {}).filter((id) => !slotIds.has(id))
+  // A window or door keeps its place on the wall and its bottom edge; its size is what the script built.
+  if (compiled.mount !== 'wall')
+    refuse('wrong_mount', `A ${previous.type}'s script uses mount 'wall'.`, {
+      mount: compiled.mount,
+    })
+  const [width, height] = scriptedSize(compiled.manifest)
+  // Given a position, that is where it goes; otherwise its bottom edge stays put.
+  const [x, y, z] = previous.position
+  const placed: Vec3 = (input.position as Vec3 | undefined) ?? [
+    x,
+    y - previous.height / 2 + height / 2,
+    z,
+  ]
+  // A wider rebuild stays on its wall, as a new opening does.
+  const wall = previous.wallId ? nodes[previous.wallId] : undefined
+  const wallLength =
+    wall?.type === 'wall' ? Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]) : 0
+  const position: Vec3 =
+    wallLength >= width
+      ? [Math.min(wallLength - width / 2, Math.max(width / 2, placed[0])), placed[1], placed[2]]
+      : placed
+  return {
+    result: summary(previous, compiled, orphanedSlots),
+    changes: {
+      update: [
+        {
+          id: previous.id,
+          data: {
+            name: input.name ?? previous.name,
+            source: scriptSource(compiled),
+            width,
+            height,
+            position,
+          },
+        },
+      ],
+    },
+  }
+}
+
 /** The scripted node `read_source` and a params-only rebuild act on, or a refusal. */
 export function authoredObject(nodes: Record<string, AnyNode>, nodeId: string): ScriptedNode {
   const node = nodes[nodeId]
@@ -225,16 +259,6 @@ export function authoredObject(nodes: Record<string, AnyNode>, nodeId: string): 
       { id: nodeId, type: node.type },
     )
   return node
-}
-
-/** What `author_object` with new code may edit: a scripted node, or a window or door taking its first script. */
-function scriptTarget(
-  nodes: Record<string, AnyNode>,
-  nodeId: string,
-): ScriptedNode | WindowNode | DoorNode {
-  const node = nodes[nodeId]
-  if (node?.type === 'window' || node?.type === 'door') return node
-  return authoredObject(nodes, nodeId)
 }
 
 /** What `read_source` answers once the host has the module's text. */

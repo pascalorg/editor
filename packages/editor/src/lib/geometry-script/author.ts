@@ -6,7 +6,7 @@ import {
   getArtifactStore,
   useScene,
 } from '@pascal-app/core'
-import { authoredObject, authorObject } from '@pascal-app/core/agent-operations'
+import { authoredObject, authorObject, rescriptOpening } from '@pascal-app/core/agent-operations'
 import { compileGeometryScriptInWorker } from './client'
 
 /**
@@ -56,11 +56,11 @@ export async function rebuildAuthoredObject(
   rebuildGeneration.set(nodeId, generation)
   const compiled = await compileAndStoreGeometryScript({ nodeId, params })
   if (rebuildGeneration.get(nodeId) !== generation) return
-  const { changes } = authorObject(
-    useScene.getState().nodes,
-    { params, nodeId, compiled, position },
-    { activeLevelId: null },
-  )
+  const nodes = useScene.getState().nodes
+  const opening = nodes[nodeId as AnyNodeId]?.type !== 'item'
+  const { changes } = opening
+    ? rescriptOpening(nodes, { nodeId, compiled, position }, { activeLevelId: null })
+    : authorObject(nodes, { params, nodeId, compiled, position }, { activeLevelId: null })
   for (const { id, data } of changes?.update ?? []) {
     useScene.getState().updateNode(id as AnyNodeId, data)
   }

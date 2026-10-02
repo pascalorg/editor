@@ -58,7 +58,10 @@ export const addDoorTool = {
   description:
     'Add a door to an existing straight wall at t (0..1 along it). The door slides to stay on the wall and reports clamped. Refused with a code, as in the editor: curved walls, walls shorter than the door, and overlapping another door, window or wall item unless force is set. Match the reference with the outline (rectangle, rounded, arch), doorType and style.',
   input: {
-    wallId: NodeId.describe('The wall to add the door to.'),
+    wallId: NodeId.optional().describe('The wall to add the door to.'),
+    nodeId: NodeId.optional().describe(
+      'Rebuild this door instead of adding one: new code and/or params (read_source first to change its code). Its native fields change with update_node.',
+    ),
     ...placement,
     width: measurement('length', 'm', {
       positive: true,
@@ -93,7 +96,10 @@ export const addWindowTool = {
   description:
     "Add a window to an existing straight wall at t (0..1 along it), on sillHeight above the floor. It slides to stay on the wall and under the wall's ceiling, and reports clamped. Refused with a code, as in the editor: curved walls, walls shorter than the window, and overlapping another door, window or wall item unless force is set. Match the reference with the outline (rectangle, rounded, arch), windowType and panes (columns × rows, or a style).",
   input: {
-    wallId: NodeId.describe('The wall to add the window to.'),
+    wallId: NodeId.optional().describe('The wall to add the window to.'),
+    nodeId: NodeId.optional().describe(
+      'Rebuild this window instead of adding one: new code and/or params (read_source first to change its code). Its native fields change with update_node.',
+    ),
     ...placement,
     width: measurement('length', 'm', {
       positive: true,

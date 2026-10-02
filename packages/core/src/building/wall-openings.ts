@@ -164,7 +164,7 @@ export function hasWallChildOverlap(
 
 export type WallOpeningInput = {
   kind: 'door' | 'window'
-  wallId: string
+  wallId?: string
   t?: number
   position?: number
   width?: number
@@ -201,6 +201,11 @@ const metres = (value: number) => `${value.toFixed(2)} m`
  */
 export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
   const { kind, wallId } = input
+  if (!wallId)
+    refuse(
+      'wall_required',
+      `Say which wall the ${kind} goes on (wallId), or pass nodeId to rebuild one.`,
+    )
   const host = nodes[wallId]
   if (!host) refuse('wall_not_found', `Wall not found: ${wallId}.`, { wallId })
   if (host.type !== 'wall')
