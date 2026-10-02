@@ -1,5 +1,6 @@
 import { refuse } from '../agent-tools/refusal'
 import { artifactUrl } from '../lib/artifact-store'
+import { geometryRestingHeight } from '../lib/geometry-surfaces'
 import {
   type AnyNode,
   type CompiledGeometryScript,
@@ -52,6 +53,7 @@ function scriptAsset(
 ): ItemNode['asset'] {
   const { min, max } = compiled.manifest.bounds
   const lights = compiled.manifest.lights
+  const restingHeight = geometryRestingHeight(compiled.manifest)
   return {
     id: `script_${compiled.sha256.slice(0, 16)}`,
     category: input.category ?? previous?.category ?? 'object',
@@ -61,6 +63,7 @@ function scriptAsset(
     src: artifactUrl(compiled.sha256),
     dimensions: [max[0] - min[0], max[1] - min[1], max[2] - min[2]],
     attachTo: ATTACH[compiled.mount],
+    surface: restingHeight === null ? undefined : { height: restingHeight },
     offset: [0, 0, 0],
     rotation: [0, 0, 0],
     scale: [1, 1, 1],

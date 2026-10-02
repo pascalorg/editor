@@ -318,7 +318,7 @@ function convexHull(points: [number, number][]): [number, number][] {
 /**
  * Per-part bounds and the upward-facing flat areas things can rest on (a
  * landing, a seat, a step), so a placement tool can drop an object onto real
- * geometry without a raycast. Outlines are convex hulls per part and height.
+ * geometry without a raycast. Outlines are convex hulls per mesh and height.
  */
 function analyseGeometry(root: THREE.Object3D, parts: GeometryArtifactManifest['parts']) {
   const partBounds = new Map<string, THREE.Box3>()
@@ -356,7 +356,9 @@ function analyseGeometry(root: THREE.Object3D, parts: GeometryArtifactManifest['
       const area = normal.length() / 2
       if (area === 0 || normal.y / (2 * area) < SURFACE_MIN_NORMAL_Y) continue
       const y = Math.round(((a.y + b.y + c.y) / 3) * 100) / 100
-      const key = `${part ?? ''}|${y}`
+      // One outline per mesh and height: a hull across meshes would merge a beam
+      // and its returns into one surface covering the whole object.
+      const key = `${mesh.uuid}|${y}`
       const entry = surfaces.get(key) ?? { part, y, area: 0, points: [] }
       entry.area += area
       entry.points.push([a.x, a.z], [b.x, b.z], [c.x, c.z])
