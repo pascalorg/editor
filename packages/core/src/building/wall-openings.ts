@@ -10,6 +10,7 @@ import {
   WindowNode,
 } from '../schema'
 import { getCurtainWallConfig } from '../schema/nodes/curtain-wall'
+import type { DoorType, WindowType } from '../schema/nodes/opening-types'
 import { getWallPlaneTop } from '../services/storey'
 import { getWallCurveLength, isCurvedWall } from '../systems/wall/wall-curve'
 import { resolveWallTop } from '../systems/wall/wall-top'
@@ -171,7 +172,16 @@ export type WallOpeningInput = {
   swingDirection?: 'inward' | 'outward'
   style?: string
   force?: boolean
+  openingShape?: 'rectangle' | 'rounded' | 'arch'
+  archHeight?: number
+  cornerRadius?: number
+  doorType?: DoorType
+  windowType?: WindowType
+  columns?: number
+  rows?: number
 }
+
+const equalRatios = (count: number) => Array.from({ length: count }, () => 1 / count)
 
 const DEFAULTS = {
   door: { width: 0.9, height: 2.1 },
@@ -264,6 +274,9 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
     parentId: wallId,
     width,
     height,
+    ...(input.openingShape ? { openingShape: input.openingShape } : {}),
+    ...(input.archHeight === undefined ? {} : { archHeight: Math.min(input.archHeight, height) }),
+    ...(input.cornerRadius === undefined ? {} : { cornerRadius: input.cornerRadius }),
   }
   const node =
     kind === 'door'
@@ -272,10 +285,14 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
           hingesSide: input.hingesSide ?? 'left',
           swingDirection: input.swingDirection ?? 'inward',
           ...getDoorStyleOverrides(input.style as DoorStyle | undefined),
+          ...(input.doorType ? { doorType: input.doorType } : {}),
         })
       : WindowNode.parse({
           ...base,
           ...getWindowStyleOverrides(input.style as WindowStyle | undefined),
+          ...(input.windowType ? { windowType: input.windowType } : {}),
+          ...(input.columns ? { columnRatios: equalRatios(input.columns) } : {}),
+          ...(input.rows ? { rowRatios: equalRatios(input.rows) } : {}),
         })
 
   return {

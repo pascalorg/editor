@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { DOOR_STYLES, WINDOW_STYLES } from '../building/opening-style-presets'
+import { DoorType, WindowType } from '../schema/nodes/opening-types'
 import { measurement } from './measurement'
 import { NodeId } from './node-id'
 
@@ -19,11 +20,28 @@ const placement = {
     ),
 }
 
+const outline = (archDefault: string) => ({
+  openingShape: z
+    .enum(['rectangle', 'rounded', 'arch'])
+    .optional()
+    .describe(
+      'Outline of the opening: rectangle (default), rounded top corners, or arch (round top).',
+    ),
+  archHeight: measurement('length', 'm', {
+    positive: true,
+    description: `Rise of the arch above its straight sides, within height (arch only; default ${archDefault}).`,
+  }).optional(),
+  cornerRadius: measurement('length', 'm', {
+    positive: true,
+    description: 'Radius of the rounded top corners (rounded only; default 0.15 m).',
+  }).optional(),
+})
+
 export const addDoorTool = {
   name: 'add_door',
   title: 'Add door',
   description:
-    'Add a door to an existing straight wall at t (0..1 along it). The door slides to stay on the wall and reports clamped. Refused with a code, as in the editor: curved walls, walls shorter than the door, and overlapping another door, window or wall item unless force is set. Rectangular doors only: build an arched or otherwise shaped door with author_object.',
+    'Add a door to an existing straight wall at t (0..1 along it). The door slides to stay on the wall and reports clamped. Refused with a code, as in the editor: curved walls, walls shorter than the door, and overlapping another door, window or wall item unless force is set. Match the reference with the outline (rectangle, rounded, arch), doorType and style.',
   input: {
     wallId: NodeId.describe('The wall to add the door to.'),
     ...placement,
@@ -40,6 +58,10 @@ export const addDoorTool = {
       .enum(['inward', 'outward'])
       .optional()
       .describe('Which way the door opens (default inward).'),
+    ...outline('0.45 m'),
+    doorType: DoorType.optional().describe(
+      'How it opens (default hinged); garage types for garage doors.',
+    ),
     style: z
       .enum(DOOR_STYLES)
       .optional()
@@ -53,7 +75,7 @@ export const addWindowTool = {
   name: 'add_window',
   title: 'Add window',
   description:
-    "Add a window to an existing straight wall at t (0..1 along it), on sillHeight above the floor. It slides to stay on the wall and under the wall's ceiling, and reports clamped. Refused with a code, as in the editor: curved walls, walls shorter than the window, and overlapping another door, window or wall item unless force is set. Rectangular windows only: build an arched, round or otherwise shaped window (fanlight, grilles) with author_object.",
+    "Add a window to an existing straight wall at t (0..1 along it), on sillHeight above the floor. It slides to stay on the wall and under the wall's ceiling, and reports clamped. Refused with a code, as in the editor: curved walls, walls shorter than the window, and overlapping another door, window or wall item unless force is set. Match the reference with the outline (rectangle, rounded, arch), windowType and panes (columns × rows, or a style).",
   input: {
     wallId: NodeId.describe('The wall to add the window to.'),
     ...placement,
@@ -69,6 +91,22 @@ export const addWindowTool = {
       min: 0,
       description: 'Height from the floor to the bottom of the window (default 0.9 m).',
     }).optional(),
+    ...outline('0.35 m'),
+    windowType: WindowType.optional().describe('How it opens (default fixed).'),
+    columns: z
+      .number()
+      .int()
+      .min(1)
+      .max(12)
+      .optional()
+      .describe("Panes across, equal widths; overrides the style's panes."),
+    rows: z
+      .number()
+      .int()
+      .min(1)
+      .max(12)
+      .optional()
+      .describe("Panes up, equal heights; overrides the style's panes."),
     style: z
       .enum(WINDOW_STYLES)
       .optional()
