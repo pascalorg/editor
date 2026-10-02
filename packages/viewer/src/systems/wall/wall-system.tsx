@@ -1880,6 +1880,46 @@ function withWallFinishData(
  * cuts come directly from node geometry; item proxy meshes are transformed
  * into wall-local boxes that pass through the wall.
  */
+/**
+ * A CSG brush from an authored object's `cutout` mesh: the mesh in wall-local
+ * space, its depth stretched to twice the wall's thickness about the wall's
+ * body centre so it overshoots both faces. Null when the mesh has no depth to
+ * stretch (a flat cutter), so the caller falls back to its bounding box.
+ */
+function authoredCutoutBrush(
+  cutoutMesh: THREE.Mesh,
+  wallMatrixInverse: THREE.Matrix4,
+  wallThickness: number,
+  wallNode: WallNode,
+): Brush | null {
+  const geometry = cutoutMesh.geometry.clone()
+  geometry.applyMatrix4(
+    new THREE.Matrix4().multiplyMatrices(wallMatrixInverse, cutoutMesh.matrixWorld),
+  )
+  geometry.computeBoundingBox()
+  const box = geometry.boundingBox!
+  const depth = box.max.z - box.min.z
+  if (!(depth > 1e-4)) {
+    geometry.dispose()
+    return null
+  }
+  const centre = getWallBodyCenterOffset(wallNode)
+  const meshCentre = (box.min.z + box.max.z) / 2
+  const scale = (wallThickness * 2) / depth
+  const positions = geometry.getAttribute('position')
+  for (let i = 0; i < positions.count; i++) {
+    positions.setZ(i, centre + (positions.getZ(i) - meshCentre) * scale)
+  }
+  positions.needsUpdate = true
+  // The evaluator needs the attributes every brush carries.
+  if (!geometry.getAttribute('uv')) {
+    geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(positions.count * 2), 2))
+  }
+  geometry.computeVertexNormals()
+  computeGeometryBoundsTree(geometry)
+  return new Brush(geometry)
+}
+
 function collectCutoutBrushes(
   wallNode: WallNode,
   childrenNodes: AnyNode[],
@@ -2033,6 +2073,16 @@ function collectCutoutBrushes(
     }
 
     if (!Number.isFinite(minX)) continue
+
+    // An authored object's cutout keeps its shape (an arch, a circle): its own
+    // geometry in wall space, stretched across the wall so it cuts both faces.
+    if (child.type === 'item' && child.source) {
+      const shaped = authoredCutoutBrush(cutoutMesh, wallMatrixInverse, wallThickness, wallNode)
+      if (shaped) {
+        brushes.push(shaped)
+        continue
+      }
+    }
 
     // Create a box geometry that extends through the wall thickness
     const width = maxX - minX
