@@ -22,6 +22,7 @@ const TOOL_POLICIES = [
       'export_glb',
       'export_json',
       'find_nodes',
+      'find_by_type',
       'get_level_summary',
       'get_node',
       'get_scene',
@@ -32,6 +33,7 @@ const TOOL_POLICIES = [
       'list_templates',
       'list_units',
       'measure',
+      'get_source',
       'search_assets',
       'validate_design',
       'validate_scene',
@@ -85,6 +87,7 @@ const TOOL_POLICIES = [
     },
     tools: [
       'apply_patch',
+      'add_object',
       'create_from_template',
       'create_house_from_brief',
       'create_stair_between_levels',
@@ -156,7 +159,7 @@ describe('MCP tool annotations', () => {
     try {
       const listed = await client.listTools()
       const byName = new Map(listed.tools.map((tool) => [tool.name, tool]))
-      expect(byName.size).toBe(65)
+      expect(byName.size).toBe(68)
       expect([...byName.keys()].toSorted()).toEqual(EXPECTED_TOOL_NAMES)
 
       for (const policy of TOOL_POLICIES) {

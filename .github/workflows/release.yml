@@ -101,7 +101,7 @@ jobs:
       - name: Bump versions and sync inter-package references
         run: |
           BUMP=${{ inputs.bump }}
-          PACKAGES="core viewer editor nodes mcp ifc-converter cli"
+          PACKAGES="core geometry-script viewer editor nodes mcp ifc-converter cli"
 
           bump_version() {
             local v=$1
@@ -189,7 +189,7 @@ jobs:
           done
 
           echo "=== @pascal-app/* refs after sync ==="
-          for pkg in core viewer editor nodes mcp ifc-converter cli; do
+          for pkg in core geometry-script viewer editor nodes mcp ifc-converter cli; do
             echo "--- packages/$pkg/package.json ---"
             jq '{ dependencies: (.dependencies // {} | with_entries(select(.key | startswith("@pascal-app/")))), peerDependencies: (.peerDependencies // {} | with_entries(select(.key | startswith("@pascal-app/")))), devDependencies: (.devDependencies // {} | with_entries(select(.key | startswith("@pascal-app/")))) }' packages/$pkg/package.json
           done
@@ -220,6 +220,21 @@ jobs:
           else
             npm publish --access public --tag "$NPM_TAG"
             echo "📦 Published @pascal-app/core@$CORE_VERSION"
+          fi
+
+      - name: Build & publish geometry-script
+        working-directory: packages/geometry-script
+        run: |
+          # The editor depends on it: publish before the editor.
+          bun run build
+          if [ "${{ inputs.dry-run }}" = "true" ]; then
+            echo "🏜️ Dry run — would publish @pascal-app/geometry-script@$GEOMETRY_SCRIPT_VERSION"
+            npm publish --dry-run --access public --tag "$NPM_TAG"
+          elif npm view "@pascal-app/geometry-script@$GEOMETRY_SCRIPT_VERSION" version >/dev/null 2>&1; then
+            echo "📦 @pascal-app/geometry-script@$GEOMETRY_SCRIPT_VERSION is already published; continuing release recovery"
+          else
+            npm publish --access public --tag "$NPM_TAG"
+            echo "📦 Published @pascal-app/geometry-script@$GEOMETRY_SCRIPT_VERSION"
           fi
 
       - name: Build & publish viewer
@@ -320,7 +335,7 @@ jobs:
           git add -A
           PKGS=""
           TAGS=""
-          for pkg in core viewer editor nodes mcp ifc-converter cli; do
+          for pkg in core geometry-script viewer editor nodes mcp ifc-converter cli; do
             PKGS="$PKGS @pascal-app/$pkg@$RELEASE_VERSION"
             TAGS="$TAGS @pascal-app/$pkg@$RELEASE_VERSION"
           done

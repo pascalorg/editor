@@ -50,7 +50,7 @@ import {
   useState,
 } from 'react'
 import type { AnimationAction, AnimationClip, Group, Material, Mesh, Object3D } from 'three'
-import { MathUtils, Texture } from 'three'
+import { LoopOnce, MathUtils, Texture } from 'three'
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
@@ -196,7 +196,7 @@ const resolveItemMaterial = (
   return authoredMaterial
 }
 
-const BrokenItemFallback = ({ node }: { node: ItemNode }) => {
+const BrokenItemFallback = ({ node, events = true }: { node: ItemNode; events?: boolean }) => {
   const handlers = useNodeEvents(node, 'item')
   const shading = useViewer((s) => s.shading)
   const isExporting = useViewer((s) => s.isExporting)
@@ -215,7 +215,7 @@ const BrokenItemFallback = ({ node }: { node: ItemNode }) => {
   if (isExporting) return null
 
   return (
-    <mesh position-y={h / 2} {...handlers}>
+    <mesh position-y={h / 2} {...(events ? handlers : {})}>
       <boxGeometry args={[w, h, d]} />
       <primitive attach="material" object={material} />
     </mesh>
@@ -364,10 +364,12 @@ const UnavailableItemModel = ({
   markSettled,
   node,
   url,
+  events,
 }: {
   markSettled: () => void
   node: ItemNode
   url: string
+  events: boolean
 }) => {
   useEffect(() => {
     retainUnavailableConsumer(unavailableFailureConsumers, node.id)
@@ -387,7 +389,7 @@ const UnavailableItemModel = ({
     }
   }, [markSettled, node.id, url])
 
-  return <BrokenItemFallback node={node} />
+  return <BrokenItemFallback events={events} node={node} />
 }
 
 /**
@@ -398,9 +400,12 @@ const UnavailableItemModel = ({
 const ModelWithRetry = ({
   node,
   setSettled,
+  events = true,
 }: {
   node: ItemNode
   setSettled: (value: boolean) => void
+  /** False when a host node (a scripted window or door) owns the pointer events. */
+  events?: boolean
 }) => {
   const [renderFailed, setRenderFailed] = useState(false)
   const url = resolveCdnUrl(node.asset.src) || ''
@@ -418,16 +423,17 @@ const ModelWithRetry = ({
     return () => useViewer.getState().clearItemLoadFailure(node.id)
   }, [markSettled, node.id, renderFailed, url])
 
-  if (!url) return <UnavailableItemModel markSettled={markSettled} node={node} url={url} />
+  if (!url)
+    return <UnavailableItemModel events={events} markSettled={markSettled} node={node} url={url} />
 
   return (
     <ErrorBoundary
-      fallback={<BrokenItemFallback node={node} />}
+      fallback={<BrokenItemFallback events={events} node={node} />}
       onError={() => setRenderFailed(true)}
       scope="item-model"
     >
       <Suspense fallback={<PreviewModel node={node} />}>
-        <ModelRenderer markSettled={markSettled} node={node} />
+        <ModelRenderer events={events} markSettled={markSettled} node={node} />
       </Suspense>
     </ErrorBoundary>
   )
@@ -579,23 +585,40 @@ const ClearPreviewModel = ({ node }: { node: ItemNode }) => {
   )
 }
 
-const ModelRenderer = ({ node, markSettled }: { node: ItemNode; markSettled: () => void }) => {
+const ModelRenderer = ({
+  node,
+  markSettled,
+  events,
+}: {
+  node: ItemNode
+  markSettled: () => void
+  events: boolean
+}) => {
   const gltf = useItemGltf(resolveCdnUrl(node.asset.src) || '')
   const unavailable = getUnavailableItemAsset(gltf)
   if (unavailable) {
-    return <UnavailableItemModel markSettled={markSettled} node={node} url={unavailable.url} />
+    return (
+      <UnavailableItemModel
+        events={events}
+        markSettled={markSettled}
+        node={node}
+        url={unavailable.url}
+      />
+    )
   }
-  return <LoadedModelRenderer gltf={gltf} markSettled={markSettled} node={node} />
+  return <LoadedModelRenderer events={events} gltf={gltf} markSettled={markSettled} node={node} />
 }
 
 const LoadedModelRenderer = ({
   gltf: { scene, nodes, animations },
   node,
   markSettled,
+  events,
 }: {
   gltf: LoadedItemGltf
   node: ItemNode
   markSettled: () => void
+  events: boolean
 }) => {
   const ref = useRef<Group>(null!)
 
@@ -644,12 +667,12 @@ const LoadedModelRenderer = ({
       if (!(child as Mesh).isMesh) return
 
       const mesh = child as Mesh
-      if (mesh.name === 'cutout') {
-        child.visible = false
-      }
+      // `cutout` drives wall openings, `collider` the walkthrough; neither renders.
+      const helper = mesh.name === 'cutout' || mesh.name === 'collider'
+      if (helper) child.visible = false
 
       const captured = captureItemMeshMaterials(mesh)
-      if (mesh.name !== 'cutout') meshEntries.push({ mesh, captured })
+      if (!helper) meshEntries.push({ mesh, captured })
     })
 
     const materialOptions = {
@@ -697,19 +720,25 @@ const LoadedModelRenderer = ({
   const lightEffects =
     interactive?.effects.filter((e): e is LightEffect => e.kind === 'light') ?? []
 
-  // Expose this item's ambient clip (e.g. a fan's spin) to the GLB bake. The
-  // catalog GLB owns the clip; it isn't in the scene graph, so the export can't
-  // find it without this registry. The bake retargets it onto the baked subtree.
+  // Expose this item's clips to the GLB bake: the GLB owns them and they are
+  // not in the scene graph, so the export can't find them without this
+  // registry. A catalog item bakes its ambient clip (a fan's spin); an
+  // authored object bakes every clip, its opening played once.
+  const scripted = Boolean(node.source)
   useEffect(() => {
-    if (!animEffect) return
-    const clipName = animEffect.clips.on ?? animEffect.clips.loop
-    const clip = clipName ? animations.find((c) => c.name === clipName) : undefined
-    if (!clip) return
-    itemClipRegistry.set(node.id, { clip, loop: true })
+    const entries = scripted
+      ? animations.map((clip) => ({ clip, loop: clip.name !== 'open', name: clip.name }))
+      : (() => {
+          const clipName = animEffect ? (animEffect.clips.on ?? animEffect.clips.loop) : undefined
+          const clip = clipName ? animations.find((c) => c.name === clipName) : undefined
+          return clip ? [{ clip, loop: true, name: 'loop' }] : []
+        })()
+    if (entries.length === 0) return
+    itemClipRegistry.set(node.id, entries)
     return () => {
       itemClipRegistry.delete(node.id)
     }
-  }, [node.id, animEffect, animations])
+  }, [node.id, animEffect, animations, scripted])
 
   // useGLTF caches scenes, and Clone shares child geometry/material references.
   // Undo can unmount one item while another clone of the same asset still needs them.
@@ -723,10 +752,18 @@ const LoadedModelRenderer = ({
           ref={ref}
           rotation={node.asset.rotation}
           scale={node.asset.scale || [1, 1, 1]}
-          {...handlers}
+          {...(events ? handlers : {})}
         />
       </group>
-      {animations.length > 0 && (
+      {animations.length > 0 && scripted && interactive && (
+        <ScriptedAnimations
+          animations={animations}
+          interactive={interactive}
+          nodeId={node.id}
+          rootRef={ref}
+        />
+      )}
+      {animations.length > 0 && !scripted && (
         <ItemAnimation
           animations={animations}
           animEffect={animEffect}
@@ -822,6 +859,122 @@ const ItemAnimation = ({
   return null
 }
 
+/** Whether an effect's toggle is on; an effect without one always runs. */
+const useEffectControl = (nodeId: AnyNodeId, control: number | undefined) =>
+  useInteractive((s) =>
+    control === undefined ? true : Boolean(s.items[nodeId]?.controlValues[control]),
+  )
+
+/**
+ * An authored object's clips, each driven by its own toggle: an open-close
+ * effect plays `open` once and holds, closing plays `close` or `open` reversed;
+ * an ambient effect plays its clip while its toggle is on (always, for `loop`).
+ */
+const ScriptedAnimations = ({
+  nodeId,
+  interactive,
+  animations,
+  rootRef,
+}: {
+  nodeId: AnyNodeId
+  interactive: Interactive
+  animations: AnimationClip[]
+  rootRef: RefObject<Group>
+}) => {
+  const { actions } = useAnimations(animations, rootRef)
+  const effects = interactive.effects.filter(
+    (effect): effect is AnimationEffect => effect.kind === 'animation',
+  )
+  return (
+    <>
+      {effects.map((effect) =>
+        effect.mode === 'open-close' ? (
+          <OpenCloseClip actions={actions} effect={effect} key={effect.clips.on} nodeId={nodeId} />
+        ) : (
+          <PlayClip
+            actions={actions}
+            effect={effect}
+            key={effect.clips.on ?? effect.clips.loop}
+            nodeId={nodeId}
+          />
+        ),
+      )}
+    </>
+  )
+}
+
+type ClipActions = Record<string, AnimationAction | null>
+
+const PlayClip = ({
+  nodeId,
+  effect,
+  actions,
+}: {
+  nodeId: AnyNodeId
+  effect: AnimationEffect
+  actions: ClipActions
+}) => {
+  const on = useEffectControl(nodeId, effect.control)
+  const name = effect.clips.on ?? effect.clips.loop
+  useEffect(() => {
+    const action = name ? actions[name] : undefined
+    if (!action) return
+    if (on) {
+      action.paused = false
+      action.play()
+    } else {
+      // Hold the pose where it was, like pausing a music box.
+      action.paused = true
+    }
+  }, [actions, name, on])
+  return null
+}
+
+const OpenCloseClip = ({
+  nodeId,
+  effect,
+  actions,
+}: {
+  nodeId: AnyNodeId
+  effect: AnimationEffect
+  actions: ClipActions
+}) => {
+  const isOpen = useEffectControl(nodeId, effect.control)
+  const mounted = useRef(false)
+  useEffect(() => {
+    const open = effect.clips.on ? actions[effect.clips.on] : undefined
+    const close = effect.clips.off ? actions[effect.clips.off] : undefined
+    if (!open) return
+    const first = !mounted.current
+    mounted.current = true
+    for (const action of [open, close]) {
+      if (!action) continue
+      action.setLoop(LoopOnce, 1)
+      action.clampWhenFinished = true
+    }
+    if (isOpen) {
+      close?.stop()
+      open.paused = false
+      open.timeScale = 1
+      if (!open.isRunning()) open.reset()
+      open.play()
+      // Already open when the scene loads: hold the open pose, no swing.
+      if (first) open.time = open.getClip().duration
+      return
+    }
+    if (first) return
+    if (close) {
+      open.stop()
+      close.reset().play()
+      return
+    }
+    open.paused = false
+    open.timeScale = -1
+    open.play()
+  }, [actions, effect.clips.on, effect.clips.off, isOpen])
+  return null
+}
+
 const ItemLightRegistrar = ({
   nodeId,
   effect,
@@ -844,5 +997,19 @@ const ItemLightRegistrar = ({
 
   return null
 }
+
+/**
+ * An artifact rendered through the item's model path (GLB, paint slots,
+ * clips, lights, load settling) for a node that is not an item: a window or
+ * door built from a script. `view` is that node seen as an item; the host
+ * node keeps its own registry entry and pointer events.
+ */
+export const ScriptedModel = ({
+  view,
+  setSettled,
+}: {
+  view: ItemNode
+  setSettled: (value: boolean) => void
+}) => <ModelWithRetry events={false} key={view.asset.src} node={view} setSettled={setSettled} />
 
 export default ItemRenderer

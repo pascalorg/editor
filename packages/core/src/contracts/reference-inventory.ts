@@ -721,6 +721,24 @@ export const NON_REFERENCES: readonly { kind: string; path: string; reason: stri
     reason: 'Inline versioned recipe (R7 stores recipes above 24 KiB by hash).',
   },
   { kind: 'procedural-item', path: 'parameters.@key', reason: 'Recipe parameter name.' },
+  // Scripted nodes (an authored item, or a window or door built from code) share one `source`.
+  ...(['item', 'window', 'door'] as const).flatMap((kind) => [
+    ...(
+      [
+        'source.manifest.anchors[].id',
+        'source.manifest.lights[].id',
+        'source.manifest.params[].id',
+        'source.manifest.parts[].id',
+        'source.manifest.slots[].id',
+      ] as const
+    ).map((path) => ({
+      kind,
+      path,
+      reason: "Defines a key in a scripted node's compiled manifest, read from its script.",
+    })),
+    { kind, path: 'source.params.@key', reason: 'Script parameter name.' },
+    { kind, path: 'source.params.*', reason: 'Script parameter value.' },
+  ]),
   { kind: 'scan', path: 'layers.@key', reason: 'Layer visibility flag name.' },
   { kind: 'site', path: 'frontEdge', reason: "Index of the lot polygon's street-facing edge." },
   ...[

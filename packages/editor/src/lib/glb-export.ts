@@ -1444,15 +1444,19 @@ function bakeAnimationClips(
     const target = cloneByOriginal.get(original)
     if (!node || !target) continue
 
+    // A window or door built from a script carries its clips like an authored item.
+    const scripted = (node.type === 'door' || node.type === 'window') && node.source
     const clip =
       bakeRegistryAnimationClips(node, target) ??
-      (node.type === 'door'
-        ? bakeDoorClip(id, node, target)
-        : node.type === 'window'
-          ? bakeWindowClip(id, node as WindowNode, target)
-          : node.type === 'item'
-            ? bakeItemClip(id, target)
-            : null)
+      (scripted
+        ? bakeItemClip(id, target)
+        : node.type === 'door'
+          ? bakeDoorClip(id, node, target)
+          : node.type === 'window'
+            ? bakeWindowClip(id, node as WindowNode, target)
+            : node.type === 'item'
+              ? bakeItemClip(id, target)
+              : null)
 
     if (clip) {
       const nodeClips = Array.isArray(clip) ? clip : [clip]
@@ -1475,44 +1479,47 @@ function bakeRegistryAnimationClips(
 }
 
 /**
- * Re-emit a catalog item's ambient clip (e.g. a fan's spin) onto the baked
- * subtree. The source clip targets the item GLB's nodes by name (`lamp_018`);
- * since every fan shares those names, we rebind each track to the specific
- * cloned node's uuid so multiple fans animate independently. The clip is named
- * per node (`<id>: loop`) so the baked viewer can drive each one on its own.
+ * Re-emit an item's clips (a fan's spin, an authored object's motions) onto the
+ * baked subtree. Source clips target the item GLB's nodes by name (`lamp_018`);
+ * since every instance shares those names, we rebind each track to the
+ * specific cloned node's uuid so instances animate independently. Clips are
+ * named per node (`<id>: <name>`; the viewer drives `<id>: loop`).
  */
-function bakeItemClip(id: string, itemObject: THREE.Object3D): THREE.AnimationClip | null {
-  const entry = itemClipRegistry.get(id)
-  if (!entry) return null
+function bakeItemClip(id: string, itemObject: THREE.Object3D): THREE.AnimationClip[] | null {
+  const entries = itemClipRegistry.get(id)
+  if (!entries?.length) return null
 
-  const tracks: THREE.KeyframeTrack[] = []
   // The catalog node names (e.g. "lamp_018") repeat across every instance of the
   // item, and the glTF export→import roundtrip rebinds clip tracks by node name —
-  // so a shared name would make all fans share one clip. Uniquify the targeted
-  // node's name per item once, then bind tracks by its (stable) uuid.
+  // so a shared name would make all fans share one clip. Uniquify each targeted
+  // node's name per item once (clips may share targets), then bind by uuid.
   const renamed = new Map<string, THREE.Object3D>()
-  for (const track of entry.clip.tracks) {
-    const dot = track.name.lastIndexOf('.')
-    if (dot < 0) continue
-    const targetName = track.name.slice(0, dot)
-    const property = track.name.slice(dot + 1)
-    let targetNode = renamed.get(targetName)
-    if (!targetNode) {
-      const found = itemObject.getObjectByName(targetName)
-      if (!found) continue
-      found.name = `${id}__${targetName}`
-      renamed.set(targetName, found)
-      targetNode = found
+  const clips: THREE.AnimationClip[] = []
+  for (const entry of entries) {
+    const tracks: THREE.KeyframeTrack[] = []
+    for (const track of entry.clip.tracks) {
+      const dot = track.name.lastIndexOf('.')
+      if (dot < 0) continue
+      const targetName = track.name.slice(0, dot)
+      const property = track.name.slice(dot + 1)
+      let targetNode = renamed.get(targetName)
+      if (!targetNode) {
+        const found = itemObject.getObjectByName(targetName)
+        if (!found) continue
+        found.name = `${id}__${targetName}`
+        renamed.set(targetName, found)
+        targetNode = found
+      }
+      const retargeted = track.clone()
+      retargeted.name = `${targetNode.uuid}.${property}`
+      tracks.push(retargeted)
     }
-    const retargeted = track.clone()
-    retargeted.name = `${targetNode.uuid}.${property}`
-    tracks.push(retargeted)
+    if (tracks.length === 0) continue
+    const clip = new THREE.AnimationClip(`${id}: ${entry.name}`, entry.clip.duration, tracks)
+    clip.userData = { loop: entry.loop }
+    clips.push(clip)
   }
-
-  if (tracks.length === 0) return null
-  const clip = new THREE.AnimationClip(`${id}: loop`, entry.clip.duration, tracks)
-  clip.userData = { loop: entry.loop }
-  return clip
+  return clips.length > 0 ? clips : null
 }
 
 /**

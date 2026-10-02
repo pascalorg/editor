@@ -7,6 +7,7 @@ import {
 import {
   deleteNodeTool,
   duplicateLevelTool,
+  findByTypeTool,
   getLevelSummaryTool,
   getNodeTool,
   getWallsTool,
@@ -54,6 +55,11 @@ const levelRoleOutput = {
 }
 
 const SHARED_TOOLS: SharedTool[] = [
+  {
+    contract: findByTypeTool,
+    operation: AGENT_OPERATIONS.find_by_type,
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
+  },
   {
     contract: listLevelsTool,
     operation: AGENT_OPERATIONS.list_levels,
@@ -148,7 +154,7 @@ const SHARED_TOOLS: SharedTool[] = [
   },
 ]
 
-function toPatches(changes: SceneChanges): Patch[] {
+export function toPatches(changes: SceneChanges): Patch[] {
   return [
     ...(changes.create ?? []).map(({ node, parentId }) => ({
       op: 'create' as const,

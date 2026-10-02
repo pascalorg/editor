@@ -10,7 +10,7 @@ import { z } from 'zod'
  *
  * This validator rejects URLs that don't match the scheme allowlist below.
  */
-const ALLOWED_SCHEMES = ['asset:', 'blob:', 'https:', 'data:image/'] as const
+const ALLOWED_SCHEMES = ['artifact:', 'asset:', 'blob:', 'https:', 'data:image/'] as const
 
 /**
  * Optional environment variable that narrows which `https:` origins are
@@ -35,6 +35,7 @@ function readAllowedOrigins(): readonly string[] | undefined {
 function isAllowedAssetUrl(url: string): boolean {
   if (typeof url !== 'string' || url.length === 0) return false
   if (url.startsWith('asset://')) return true // internal handle
+  if (/^artifact:\/\/[0-9a-f]{64}$/.test(url)) return true // content-addressed artifact
   if (url.startsWith('blob:')) return true // in-memory reference
   if (url.startsWith('data:image/')) return true // inline image only (never data:text/html)
   if (url.startsWith('/')) return true // app-relative path
@@ -59,6 +60,7 @@ function isAllowedAssetUrl(url: string): boolean {
 /**
  * Zod validator for asset-style URL fields. Accepts:
  * - `asset://…` internal handles
+ * - `artifact://<sha256>` content-addressed artifacts (see lib/artifact-store)
  * - `blob:…` in-memory references
  * - `data:image/…` inline images (not `data:text/html` or other types)
  * - `/…` app-relative paths
@@ -70,7 +72,7 @@ function isAllowedAssetUrl(url: string): boolean {
  */
 export const AssetUrl = z.string().refine(isAllowedAssetUrl, {
   message:
-    'URL must be asset://, blob:, data:image/, /path, or https://. http://localhost allowed for dev.',
+    'URL must be artifact://, asset://, blob:, data:image/, /path, or https://. http://localhost allowed for dev.',
 })
 
 export type AssetUrl = z.infer<typeof AssetUrl>

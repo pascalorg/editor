@@ -10,22 +10,26 @@ import {
   type PlanAabb,
   polygonArea,
   polygonBounds,
+  rescriptOpening,
   type Vec2,
 } from '@pascal-app/core/agent-operations'
-import { addDoorTool, addWindowTool } from '@pascal-app/core/agent-tools'
+import { addDoorTool, addWindowTool, isAgentRefusal } from '@pascal-app/core/agent-tools'
 import { planWallOpening } from '@pascal-app/core/building'
 import type {
   AnyNode,
   AnyNodeId,
   AssetInput,
+  CompiledGeometryScript,
+  GeometryScriptParamValue,
   WallNode as WallNodeType,
 } from '@pascal-app/core/schema'
 import { ItemNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
+import { compileAndStore, type GeometryScriptHost, readScript } from './add-object'
 import { ADDITIVE_TOOL_ANNOTATIONS, READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 import { findCatalogItem, searchCatalogItems } from './asset-catalog'
-import { ErrorCode, refusalResult, throwMcpError } from './errors'
+import { ErrorCode, refusalResult, throwMcpError, toolError } from './errors'
 import {
   type LiveSyncStatus,
   liveSyncOutput,
@@ -34,6 +38,7 @@ import {
 } from './live-sync'
 import { measurement } from './measurement'
 import { NodeIdSchema, Vec2Schema } from './schemas'
+import { toPatches } from './shared-tools'
 
 const ROOM_TYPES = [
   'bedroom',
@@ -536,7 +541,95 @@ export function registerCreateRoom(server: McpServer, bridge: SceneOperations): 
   )
 }
 
-export function registerAddDoor(server: McpServer, bridge: SceneOperations): void {
+/**
+ * `add_door` / `add_window` with a nodeId: rebuild that opening from new code,
+ * or its stored script with new params, through the shared operation.
+ */
+async function rebuildOpening(
+  kind: 'door' | 'window',
+  bridge: SceneOperations,
+  host: GeometryScriptHost | undefined,
+  input: {
+    nodeId: string
+    code?: string
+    params?: Record<string, GeometryScriptParamValue>
+  },
+) {
+  if (!host)
+    return toolError('This Pascal server cannot run geometry scripts.', {
+      code: 'scripts_unavailable',
+    })
+  const scene = bridge.getActiveScene()
+  if (!scene) return toolError('Open or save a scene first.', { code: 'no_active_scene' })
+  const nodes = bridge.getNodes() as Record<string, AnyNode>
+  let outcome: ReturnType<typeof rescriptOpening>
+  try {
+    const code = input.code ?? (await readScript(host, scene.id, bridge, input.nodeId))
+    const compiled = await compileAndStore(host, scene.id, code, input.params)
+    outcome = rescriptOpening(nodes, { nodeId: input.nodeId, compiled }, { activeLevelId: null })
+  } catch (error) {
+    if (isAgentRefusal(error)) return refusalResult(error)
+    return toolError(error instanceof Error ? error.message : String(error), {
+      code: 'script_failed',
+    })
+  }
+  if (outcome.changes) bridge.applyPatch(toPatches(outcome.changes))
+  const node = bridge.getNodes()[input.nodeId as AnyNodeId] as AnyNode & {
+    position: [number, number, number]
+    height: number
+    wallId?: string
+  }
+  const wall = node.wallId
+    ? (bridge.getNodes()[node.wallId as AnyNodeId] as WallNodeType)
+    : undefined
+  const wallLength = wall ? Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]) : 0
+  const persistence = await publishLiveSceneSnapshot(bridge, `add_${kind}`)
+  return textResult({
+    [kind === 'door' ? 'doorId' : 'windowId']: input.nodeId,
+    localX: node.position[0],
+    t: wallLength ? node.position[0] / wallLength : 0,
+    position: wallLength ? node.position[0] / wallLength : 0,
+    wallLength,
+    clamped: false,
+    coordinateSystem: 'wall-local-meters' as const,
+    ...(kind === 'window' ? { sillHeight: node.position[1] - node.height / 2 } : {}),
+    ...outcome.result,
+    ...persistencePayload(persistence),
+  })
+}
+
+/** A door or window passed `code`: compiled and stored the way add_object does, or the tool's error. */
+async function compileOpeningScript(
+  bridge: SceneOperations,
+  host: GeometryScriptHost | undefined,
+  input: { code?: string; params?: Record<string, GeometryScriptParamValue> },
+): Promise<{ script?: CompiledGeometryScript } | { error: ReturnType<typeof toolError> }> {
+  if (!input.code) return {}
+  if (!host)
+    return {
+      error: toolError('This Pascal server cannot run geometry scripts; use the fields.', {
+        code: 'scripts_unavailable',
+      }),
+    }
+  const scene = bridge.getActiveScene()
+  if (!scene)
+    return { error: toolError('Open or save a scene first.', { code: 'no_active_scene' }) }
+  try {
+    return { script: await compileAndStore(host, scene.id, input.code, input.params) }
+  } catch (error) {
+    return {
+      error: toolError(error instanceof Error ? error.message : String(error), {
+        code: 'script_failed',
+      }),
+    }
+  }
+}
+
+export function registerAddDoor(
+  server: McpServer,
+  bridge: SceneOperations,
+  geometryScripts?: GeometryScriptHost,
+): void {
   server.registerTool(
     addDoorTool.name,
     {
@@ -547,11 +640,16 @@ export function registerAddDoor(server: McpServer, bridge: SceneOperations): voi
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
     async (input) => {
+      if (input.nodeId)
+        return rebuildOpening('door', bridge, geometryScripts, { ...input, nodeId: input.nodeId })
+      const compiled = await compileOpeningScript(bridge, geometryScripts, input)
+      if ('error' in compiled) return compiled.error
       let planned: ReturnType<typeof planWallOpening>
       try {
         planned = planWallOpening(bridge.getNodes() as Record<string, AnyNode>, {
           kind: 'door',
           ...input,
+          compiled: compiled.script,
         })
       } catch (error) {
         return refusalResult(error)
@@ -572,7 +670,11 @@ export function registerAddDoor(server: McpServer, bridge: SceneOperations): voi
   )
 }
 
-export function registerAddWindow(server: McpServer, bridge: SceneOperations): void {
+export function registerAddWindow(
+  server: McpServer,
+  bridge: SceneOperations,
+  geometryScripts?: GeometryScriptHost,
+): void {
   server.registerTool(
     addWindowTool.name,
     {
@@ -583,11 +685,16 @@ export function registerAddWindow(server: McpServer, bridge: SceneOperations): v
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
     async (input) => {
+      if (input.nodeId)
+        return rebuildOpening('window', bridge, geometryScripts, { ...input, nodeId: input.nodeId })
+      const compiled = await compileOpeningScript(bridge, geometryScripts, input)
+      if ('error' in compiled) return compiled.error
       let planned: ReturnType<typeof planWallOpening>
       try {
         planned = planWallOpening(bridge.getNodes() as Record<string, AnyNode>, {
           kind: 'window',
           ...input,
+          compiled: compiled.script,
         })
       } catch (error) {
         return refusalResult(error)
@@ -733,10 +840,14 @@ export function registerFurnishRoom(server: McpServer, bridge: SceneOperations):
   )
 }
 
-export function registerRoomTools(server: McpServer, bridge: SceneOperations): void {
+export function registerRoomTools(
+  server: McpServer,
+  bridge: SceneOperations,
+  geometryScripts?: GeometryScriptHost,
+): void {
   registerSearchAssets(server)
   registerCreateRoom(server, bridge)
-  registerAddDoor(server, bridge)
-  registerAddWindow(server, bridge)
+  registerAddDoor(server, bridge, geometryScripts)
+  registerAddWindow(server, bridge, geometryScripts)
   registerFurnishRoom(server, bridge)
 }

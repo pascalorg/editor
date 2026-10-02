@@ -196,6 +196,7 @@ export {
   showInScene,
   temporarilyShowShadowOnly,
 } from './lib/scene-visibility'
+export { SCRIPTED_MODEL_FLAG } from './lib/scripted-opening'
 export {
   createPlainSnapshotPipeline,
   createSnapshotPipeline,

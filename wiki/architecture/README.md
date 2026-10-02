@@ -15,6 +15,7 @@ Canonical rules for code that touches `packages/core`, `packages/viewer`, `packa
 | [plugin-authoring](plugin-authoring.md) | Public contract for external plugins — `Plugin` shape, `setPluginDiscovery`, lifecycle, what's in and out of v1 |
 | [tools](tools.md) | Editor tools structure, 2D↔3D behavioral parity, manipulation constraints, and the snapping rule (Shift taps cycle the mode, Alt hold forces) |
 | [agent-surfaces](agent-surfaces.md) | MCP ↔ hosted AI chat ↔ published skill parity: shared contracts and operations, knowledge parity, tells of drift |
+| [authored-objects](authored-objects.md) | Items an agent writes as three.js: script source, artifacts, naming conventions, surfaces, clips, compile hosts |
 | [measurements](measurements.md) | Persistent measurement data, 2D/3D draft ownership, snapping, units, and visibility |
 | [interaction-scope](interaction-scope.md) | The authoritative interaction state machine ("the spine"): `InteractionScope` union, the begin/update/end/endIf contract, the raycast hot-set, and the overlay scope matrix |
 | [viewer-isolation](viewer-isolation.md) | Keeping `@pascal-app/viewer` editor-agnostic |

@@ -20,6 +20,19 @@
       }
     },
     {
+      "name": "add_object",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it creates an object from a three.js module in the connected Pascal scene, or rebuilds an existing one.",
+        "destructiveHint": "Given an existing object's nodeId it replaces that object's geometry and script, so earlier authored state is overwritten (undo restores it).",
+        "openWorldHint": "It runs the supplied module in the Pascal server's script host and stores the result with the scene, without accessing the public internet."
+      }
+    },
+    {
       "name": "add_window",
       "annotations": {
         "readOnlyHint": false,
@@ -371,6 +384,19 @@
       }
     },
     {
+      "name": "find_by_type",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It only reads the connected Pascal scene: nodes of a type and the typed parts recorded in authored objects.",
+        "destructiveHint": "It changes nothing; it returns ids, names, part ids and bounds.",
+        "openWorldHint": "It reads the connected Pascal scene without accessing the public internet."
+      }
+    },
+    {
       "name": "find_nodes",
       "annotations": {
         "readOnlyHint": true,
@@ -459,6 +485,19 @@
         "readOnlyHint": "It reads the active Pascal scene without changing scene or project state.",
         "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
         "openWorldHint": "It operates only on data supplied by or already available inside the connected Pascal service and does not access the public internet."
+      }
+    },
+    {
+      "name": "get_source",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It only reads the script stored for an object built with add_object, with its params.",
+        "destructiveHint": "It changes nothing; it returns the module text and param values.",
+        "openWorldHint": "It reads from the connected Pascal service's artifact store without accessing the public internet."
       }
     },
     {

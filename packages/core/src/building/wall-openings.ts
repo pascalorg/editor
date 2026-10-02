@@ -1,8 +1,10 @@
 import { refuse } from '../agent-tools/refusal'
+import { scriptedSize, scriptSource } from '../lib/geometry-script-node'
 import { wallSupportForNodes } from '../lib/opening-floor-datum'
 import {
   type AnyNode,
   type AnyNodeId,
+  type CompiledGeometryScript,
   DoorNode,
   getScaledDimensions,
   type ItemNode,
@@ -10,6 +12,7 @@ import {
   WindowNode,
 } from '../schema'
 import { getCurtainWallConfig } from '../schema/nodes/curtain-wall'
+import type { DoorType, WindowType } from '../schema/nodes/opening-types'
 import { getWallPlaneTop } from '../services/storey'
 import { getWallCurveLength, isCurvedWall } from '../systems/wall/wall-curve'
 import { resolveWallTop } from '../systems/wall/wall-top'
@@ -161,7 +164,7 @@ export function hasWallChildOverlap(
 
 export type WallOpeningInput = {
   kind: 'door' | 'window'
-  wallId: string
+  wallId?: string
   t?: number
   position?: number
   width?: number
@@ -171,7 +174,18 @@ export type WallOpeningInput = {
   swingDirection?: 'inward' | 'outward'
   style?: string
   force?: boolean
+  openingShape?: 'rectangle' | 'rounded' | 'arch'
+  archHeight?: number
+  cornerRadius?: number
+  doorType?: DoorType
+  windowType?: WindowType
+  columns?: number
+  rows?: number
+  /** A compiled script the opening is built from; its bounds set width and height. */
+  compiled?: CompiledGeometryScript
 }
+
+const equalRatios = (count: number) => Array.from({ length: count }, () => 1 / count)
 
 const DEFAULTS = {
   door: { width: 0.9, height: 2.1 },
@@ -187,6 +201,11 @@ const metres = (value: number) => `${value.toFixed(2)} m`
  */
 export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
   const { kind, wallId } = input
+  if (!wallId)
+    refuse(
+      'wall_required',
+      `Say which wall the ${kind} goes on (wallId), or pass nodeId to rebuild one.`,
+    )
   const host = nodes[wallId]
   if (!host) refuse('wall_not_found', `Wall not found: ${wallId}.`, { wallId })
   if (host.type !== 'wall')
@@ -216,8 +235,12 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
       'Say where on the wall: t (or position) from 0 at its start to 1 at its end.',
     )
 
-  const width = input.width ?? DEFAULTS[kind].width
-  const height = input.height ?? DEFAULTS[kind].height
+  const { compiled } = input
+  if (compiled && compiled.mount !== 'wall')
+    refuse('wrong_mount', `A ${kind}'s script uses mount 'wall'.`, { mount: compiled.mount })
+  const [scriptedWidth, scriptedHeight] = compiled ? scriptedSize(compiled.manifest) : []
+  const width = scriptedWidth ?? input.width ?? DEFAULTS[kind].width
+  const height = scriptedHeight ?? input.height ?? DEFAULTS[kind].height
   const wallLength = lengthOf(wall)
   if (wallLength < width)
     refuse(
@@ -264,6 +287,10 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
     parentId: wallId,
     width,
     height,
+    ...(input.openingShape ? { openingShape: input.openingShape } : {}),
+    ...(input.archHeight === undefined ? {} : { archHeight: Math.min(input.archHeight, height) }),
+    ...(input.cornerRadius === undefined ? {} : { cornerRadius: input.cornerRadius }),
+    ...(compiled ? { source: scriptSource(compiled) } : {}),
   }
   const node =
     kind === 'door'
@@ -272,10 +299,14 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
           hingesSide: input.hingesSide ?? 'left',
           swingDirection: input.swingDirection ?? 'inward',
           ...getDoorStyleOverrides(input.style as DoorStyle | undefined),
+          ...(input.doorType ? { doorType: input.doorType } : {}),
         })
       : WindowNode.parse({
           ...base,
           ...getWindowStyleOverrides(input.style as WindowStyle | undefined),
+          ...(input.windowType ? { windowType: input.windowType } : {}),
+          ...(input.columns ? { columnRatios: equalRatios(input.columns) } : {}),
+          ...(input.rows ? { rowRatios: equalRatios(input.rows) } : {}),
         })
 
   return {

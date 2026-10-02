@@ -10,6 +10,7 @@ import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { itemHasLights, itemMechanism, toggleItemLights } from '../shared/item-interactions'
 import { itemBatchable } from '../shared/node-batch/batchable'
 import { restingFloorplanAffectedIds } from '../shared/resting-surface-plan'
+import { authoredItemFaceHost } from './authored-face-host'
 import { buildItemContextualDimensions, buildItemFloorplan } from './floorplan'
 import { itemFloorplanMoveTarget } from './floorplan-move'
 import { itemPaint } from './paint'
@@ -212,6 +213,8 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   capabilities: {
     batchable: itemBatchable,
     selectable: { hitVolume: 'bbox' },
+    // Authored objects host ceiling items on their undersides; catalog items do not.
+    faceHost: authoredItemFaceHost,
     surfaces: {
       top: {
         height: (node) => {

@@ -11,6 +11,7 @@ import {
   type SceneMaterial,
   type SceneMaterialId,
   sceneRegistry,
+  scriptedSize,
   useInteractive,
   useLiveNodeOverrides,
   useScene,
@@ -30,6 +31,7 @@ import {
   resolveMaterialRef,
 } from '../../lib/materials'
 import { timeSpan } from '../../lib/perf-tracks'
+import { settleScriptedOpening } from '../../lib/scripted-opening'
 import useViewer from '../../store/use-viewer'
 import { getOpeningCutoutProxyDepth } from '../wall/opening-cutout-geometry'
 
@@ -178,9 +180,11 @@ export const DoorSystem = () => {
       // rebuild reflects the in-flight drag without zustand churn. When
       // no override is set this returns the scene node unchanged.
       const effectiveNode = getEffectiveNode(node as DoorNode)
-      timeSpan('door', () => updateDoorMesh(effectiveNode, mesh), {
+      const built = timeSpan('door', () => updateDoorMesh(effectiveNode, mesh), {
         properties: [['node', id]],
       })
+      // A scripted opening stays dirty until its artifact has loaded.
+      if (!built) continue
       clearDirty(id as AnyNodeId)
       rebuiltDoorsThisFrame += 1
 
@@ -2301,7 +2305,7 @@ function getEffectiveOpeningShape(node: DoorNode): DoorNode['openingShape'] {
     : (node.openingShape ?? 'rectangle')
 }
 
-function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
+function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh): boolean {
   const node = normalizeDoorNodeForRender(rawNode)
   currentDoorSlot = undefined
 
@@ -2318,6 +2322,14 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
       : node
   mesh.position.set(...placement.position)
   mesh.rotation.set(...placement.rotation)
+
+  // Built from a script: the renderer shows its artifact, not the parametric
+  // frame, and the hit box is what the script built.
+  if (node.source) {
+    mesh.geometry.dispose()
+    mesh.geometry = new THREE.BoxGeometry(...scriptedSize(node.source.manifest))
+    return settleScriptedOpening(mesh)
+  }
 
   // Dispose and remove all old visual children; preserve 'cutout'
   for (const child of [...mesh.children]) {
@@ -2368,7 +2380,7 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
 
   if (openingKind === 'opening') {
     syncDoorCutout(node, mesh)
-    return
+    return true
   }
 
   const insideWidth = width - 2 * frameThickness
@@ -2687,6 +2699,7 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh) {
   // … was not set" on a Draw(0, …)). Hide any empty mesh so it is never
   // drawn (it would render nothing anyway).
   hideEmptyGeometryMeshes(mesh)
+  return true
 }
 
 function hideEmptyGeometryMeshes(root: THREE.Object3D) {

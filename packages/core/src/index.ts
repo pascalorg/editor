@@ -101,6 +101,15 @@ export {
 } from './hooks/spatial-grid/support-host-patch'
 export { useSpatialQuery } from './hooks/spatial-grid/use-spatial-query'
 export {
+  ARTIFACT_URL_PREFIX,
+  type ArtifactStore,
+  artifactHash,
+  artifactUrl,
+  configureArtifactStore,
+  getArtifactStore,
+  resolveArtifactUrl,
+} from './lib/artifact-store'
+export {
   type AssemblyDiagnostic,
   type AssemblyDiagnosticCode,
   type ResolvedAssembly,
@@ -161,6 +170,22 @@ export {
   withFloorStepOverride,
   withoutFloorStepOverrideKeys,
 } from './lib/floor-step-finish'
+export {
+  isScriptedNode,
+  type ScriptedNode,
+  scriptedSize,
+  scriptInteractive,
+  scriptSource,
+} from './lib/geometry-script-node'
+export {
+  flushMountRotation,
+  geometryRestingHeight,
+  geometrySurfaceAt,
+  geometryUndersideAt,
+  mountsFlush,
+  nearestPointIn,
+  resettledPosition,
+} from './lib/geometry-surfaces'
 export {
   type ExposedInterval,
   exposedIntervals,
