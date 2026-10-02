@@ -22,6 +22,7 @@ const TOOL_POLICIES = [
       'export_glb',
       'export_json',
       'find_nodes',
+      'find_by_type',
       'get_level_summary',
       'get_node',
       'get_scene',
@@ -157,7 +158,7 @@ describe('MCP tool annotations', () => {
     try {
       const listed = await client.listTools()
       const byName = new Map(listed.tools.map((tool) => [tool.name, tool]))
-      expect(byName.size).toBe(66)
+      expect(byName.size).toBe(67)
       expect([...byName.keys()].toSorted()).toEqual(EXPECTED_TOOL_NAMES)
 
       for (const policy of TOOL_POLICIES) {

@@ -384,6 +384,19 @@
       }
     },
     {
+      "name": "find_by_type",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It only reads the connected Pascal scene: nodes of a type and the typed parts recorded in authored objects.",
+        "destructiveHint": "It changes nothing; it returns ids, names, part ids and bounds.",
+        "openWorldHint": "It reads the connected Pascal scene without accessing the public internet."
+      }
+    },
+    {
       "name": "find_nodes",
       "annotations": {
         "readOnlyHint": true,

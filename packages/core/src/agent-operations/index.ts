@@ -1,5 +1,6 @@
 import { deleteNode } from './delete-node'
 import { duplicateLevel } from './duplicate-level'
+import { findByType } from './find-by-type'
 import { getNode } from './get-node'
 import { getLevelSummary, getWalls, getZones } from './level-reads'
 import { listLevels } from './list-levels'
@@ -10,6 +11,7 @@ export * from './author-object'
 export * from './delete-node'
 export * from './door-clearance'
 export * from './duplicate-level'
+export * from './find-by-type'
 export * from './get-node'
 export * from './layout-clearance'
 export * from './level-reads'
@@ -30,4 +32,5 @@ export const AGENT_OPERATIONS = {
   duplicate_level: duplicateLevel,
   verify_scene: verifyScene,
   delete_node: deleteNode,
+  find_by_type: findByType,
 } as const

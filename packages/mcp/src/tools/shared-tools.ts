@@ -7,6 +7,7 @@ import {
 import {
   deleteNodeTool,
   duplicateLevelTool,
+  findByTypeTool,
   getLevelSummaryTool,
   getNodeTool,
   getWallsTool,
@@ -54,6 +55,11 @@ const levelRoleOutput = {
 }
 
 const SHARED_TOOLS: SharedTool[] = [
+  {
+    contract: findByTypeTool,
+    operation: AGENT_OPERATIONS.find_by_type,
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
+  },
   {
     contract: listLevelsTool,
     operation: AGENT_OPERATIONS.list_levels,

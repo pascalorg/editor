@@ -1,4 +1,5 @@
 import { authorObjectTool } from './author-object'
+import { findByTypeTool } from './find-by-type'
 import {
   duplicateLevelTool,
   getLevelSummaryTool,
@@ -11,6 +12,7 @@ import { deleteNodeTool, getNodeTool } from './nodes'
 import { addDoorTool, addWindowTool } from './wall-openings'
 
 export * from './author-object'
+export * from './find-by-type'
 export * from './levels'
 export * from './measurement'
 export { NodeId } from './node-id'
@@ -35,4 +37,5 @@ export const AGENT_TOOL_CONTRACTS = [
   verifySceneTool,
   deleteNodeTool,
   authorObjectTool,
+  findByTypeTool,
 ] as const
