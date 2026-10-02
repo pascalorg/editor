@@ -68,6 +68,8 @@ export const GeometryArtifactManifest = z.object({
       }),
     )
     .default([]),
+  /** The module's AnimationClips; `open`, `close` and `loop` drive the object's controls. */
+  animations: z.array(z.object({ name: z.string(), duration: finite })).default([]),
   cutout: z.boolean().default(false),
   collider: z.boolean().default(false),
   triangles: z.number().int().nonnegative(),

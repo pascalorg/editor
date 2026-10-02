@@ -46,13 +46,51 @@ const HOSTS: Record<GeometryScriptMount, readonly AnyNode['type'][]> = {
   ceiling: ['ceiling'],
 }
 
+/**
+ * The item's controls from what the module emitted: a light switch for its
+ * lights, an open/close toggle for an `open` clip (closing plays `close`, or
+ * `open` reversed), and a `loop` clip that runs throughout. Other clips stay
+ * in the artifact for later controls.
+ */
+function scriptInteractive(
+  manifest: CompiledGeometryScript['manifest'],
+): ItemNode['asset']['interactive'] {
+  const controls: NonNullable<ItemNode['asset']['interactive']>['controls'] = []
+  const effects: NonNullable<ItemNode['asset']['interactive']>['effects'] = []
+  if (manifest.lights.length > 0) {
+    controls.push({ kind: 'toggle', label: 'Lights', default: true })
+    for (const light of manifest.lights) {
+      effects.push({
+        kind: 'light',
+        color: light.color,
+        intensityRange: [0, light.intensity],
+        distance: light.distance,
+        offset: light.position,
+      })
+    }
+  }
+  const clip = (name: string) => manifest.animations.some((animation) => animation.name === name)
+  if (clip('open') || clip('loop')) {
+    if (clip('open')) controls.push({ kind: 'toggle', label: 'Open', default: false })
+    effects.push({
+      kind: 'animation',
+      mode: 'open-close',
+      clips: {
+        on: clip('open') ? 'open' : undefined,
+        off: clip('close') ? 'close' : undefined,
+        loop: clip('loop') ? 'loop' : undefined,
+      },
+    })
+  }
+  return effects.length > 0 ? { controls, effects } : undefined
+}
+
 function scriptAsset(
   compiled: CompiledGeometryScript,
   input: AuthorObjectInput,
   previous: ItemNode['asset'] | undefined,
 ): ItemNode['asset'] {
   const { min, max } = compiled.manifest.bounds
-  const lights = compiled.manifest.lights
   const restingHeight = geometryRestingHeight(compiled.manifest)
   return {
     id: `script_${compiled.sha256.slice(0, 16)}`,
@@ -67,19 +105,7 @@ function scriptAsset(
     offset: [0, 0, 0],
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
-    interactive:
-      lights.length > 0
-        ? {
-            controls: [{ kind: 'toggle', label: 'Lights', default: true }],
-            effects: lights.map((light) => ({
-              kind: 'light' as const,
-              color: light.color,
-              intensityRange: [0, light.intensity] as [number, number],
-              distance: light.distance,
-              offset: light.position,
-            })),
-          }
-        : undefined,
+    interactive: scriptInteractive(compiled.manifest),
   }
 }
 
@@ -95,7 +121,7 @@ const scriptSource = (compiled: CompiledGeometryScript, code: string) => ({
 const round = (value: number) => Math.round(value * 1000) / 1000
 
 function summary(node: ItemNode, compiled: CompiledGeometryScript, orphanedSlots: string[]) {
-  const { bounds, parts, slots, lights, params, triangles, cutout } = compiled.manifest
+  const { bounds, parts, slots, lights, params, triangles, cutout, animations } = compiled.manifest
   return {
     nodeId: node.id,
     mount: compiled.mount,
@@ -103,6 +129,7 @@ function summary(node: ItemNode, compiled: CompiledGeometryScript, orphanedSlots
     parts: parts.map((part) => (part.type ? `${part.id} (${part.type})` : part.id)),
     slots: slots.map((slot) => slot.id),
     lights: lights.map((light) => light.id),
+    animations: animations.map((clip) => clip.name),
     params: params.map((spec) => ({ ...spec, value: compiled.params[spec.id] })),
     cutout,
     triangles,

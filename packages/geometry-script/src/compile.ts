@@ -389,7 +389,7 @@ function analyseGeometry(root: THREE.Object3D, parts: GeometryArtifactManifest['
  * groups keep their names and extras; helpers (cutout, collider) and
  * multi-material meshes stay as authored.
  */
-function mergeByPartAndMaterial(root: THREE.Object3D) {
+function mergeByPartAndMaterial(root: THREE.Object3D, animated: Set<THREE.Object3D>) {
   const owner = (mesh: THREE.Object3D): THREE.Object3D => {
     for (let p = mesh.parent; p; p = p.parent) {
       if ((p.userData.pascal as { part?: string } | undefined)?.part || p === root) return p
@@ -405,6 +405,10 @@ function mergeByPartAndMaterial(root: THREE.Object3D) {
     const mesh = object as THREE.Mesh
     if (!mesh.isMesh || isHelper(mesh) || Array.isArray(mesh.material)) return
     const group = owner(mesh)
+    // A mesh that moves on its own (or under a moving group) keeps its node.
+    for (let p: THREE.Object3D | null = mesh; p && p !== group; p = p.parent) {
+      if (animated.has(p)) return
+    }
     const attributes = Object.keys(mesh.geometry.attributes).sort().join(',')
     const key = `${group.uuid}|${mesh.material.uuid}|${attributes}`
     const bucket = buckets.get(key) ?? { owner: group, material: mesh.material, meshes: [] }
@@ -426,6 +430,66 @@ function mergeByPartAndMaterial(root: THREE.Object3D) {
     combined.name = `${group.name || 'object'}_${material.name}`
     group.add(combined)
   }
+}
+
+const ANIMATION_LIMITS = { clips: 32, duration: 120, values: 200_000 }
+
+/**
+ * The module's clips (`group.animations`, as in any three.js project), with
+ * every track rebound to its target's uuid: names like `part:door.quaternion`
+ * do not survive three's track-name parser, and part objects are renamed for
+ * glTF. Returns the clips and the objects they animate.
+ */
+function readAnimations(built: THREE.Object3D, root: THREE.Object3D) {
+  const clips = (built.animations ?? []).filter(Boolean)
+  if (clips.length > ANIMATION_LIMITS.clips) {
+    throw new Error(`${clips.length} animation clips exceeds the ${ANIMATION_LIMITS.clips} limit`)
+  }
+  const objects: THREE.Object3D[] = []
+  root.traverse((object) => objects.push(object))
+  const byLongestName = objects
+    .filter((object) => object.name)
+    .sort((a, b) => b.name.length - a.name.length)
+  const animated = new Set<THREE.Object3D>()
+  const names = new Set<string>()
+  let values = 0
+  for (const clip of clips) {
+    if (!(clip instanceof THREE.AnimationClip)) {
+      throw new Error('group.animations must hold THREE.AnimationClip instances')
+    }
+    if (names.has(clip.name)) throw new Error(`Two animation clips are named "${clip.name}"`)
+    names.add(clip.name)
+    if (!(clip.duration > 0 && clip.duration <= ANIMATION_LIMITS.duration)) {
+      throw new Error(
+        `Clip "${clip.name}" lasts ${clip.duration} s; clips run 0–${ANIMATION_LIMITS.duration} s`,
+      )
+    }
+    for (const track of clip.tracks) {
+      const target =
+        objects.find((object) => track.name.startsWith(`${object.uuid}.`)) ??
+        byLongestName.find((object) => track.name.startsWith(`${object.name}.`))
+      if (!target) {
+        throw new Error(
+          `Track "${track.name}" in clip "${clip.name}" targets no object: name the target <objectName>.<property> or <object.uuid>.<property>`,
+        )
+      }
+      const property = track.name.slice(
+        (track.name.startsWith(`${target.uuid}.`) ? target.uuid : target.name).length + 1,
+      )
+      track.name = `${target.uuid}.${property}`
+      animated.add(target)
+      values += track.values.length
+      for (const value of track.values) {
+        if (!Number.isFinite(value)) throw new Error(`Clip "${clip.name}" has non-finite keyframes`)
+      }
+    }
+  }
+  if (values > ANIMATION_LIMITS.values) {
+    throw new Error(
+      `Animations hold ${values} keyframe values; the limit is ${ANIMATION_LIMITS.values}`,
+    )
+  }
+  return { clips, animated }
 }
 
 // GLTFExporter writes binaries through FileReader, which Bun and Node lack.
@@ -450,10 +514,13 @@ function ensureFileReader() {
   }
 }
 
-async function exportGlb(root: THREE.Object3D): Promise<ArrayBuffer> {
+async function exportGlb(
+  root: THREE.Object3D,
+  animations: THREE.AnimationClip[],
+): Promise<ArrayBuffer> {
   ensureFileReader()
   const exporter = new GLTFExporter()
-  const result = await exporter.parseAsync(root, { binary: true, onlyVisible: false })
+  const result = await exporter.parseAsync(root, { binary: true, onlyVisible: false, animations })
   if (!(result instanceof ArrayBuffer))
     throw new Error('GLB export returned JSON instead of binary')
   return result
@@ -516,6 +583,7 @@ export async function compileGeometryScript(
   built.position.sub(originFor(box, mount))
   root.updateWorldMatrix(true, true)
 
+  const { clips, animated } = readAnimations(built, root)
   const conventions = readConventions(root)
   if (conventions.triangles > GEOMETRY_SCRIPT_LIMITS.triangles) {
     throw new Error(
@@ -529,9 +597,9 @@ export async function compileGeometryScript(
   }
 
   const surfaces = analyseGeometry(root, conventions.parts)
-  mergeByPartAndMaterial(root)
+  mergeByPartAndMaterial(root, animated)
   const bounds = visibleBounds(root)
-  const glb = await exportGlb(root)
+  const glb = await exportGlb(root, clips)
   return {
     glb,
     sha256: await digest(glb),
@@ -545,6 +613,10 @@ export async function compileGeometryScript(
       slots: conventions.slots,
       anchors: conventions.anchors,
       lights: conventions.lights,
+      animations: clips.map((clip) => ({
+        name: clip.name,
+        duration: Math.round(clip.duration * 1000) / 1000,
+      })),
       cutout: conventions.cutout,
       collider: conventions.collider,
       triangles: conventions.triangles,

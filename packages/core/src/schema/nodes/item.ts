@@ -43,6 +43,10 @@ const controlSchema = z.discriminatedUnion('kind', [
 
 const animationEffectSchema = z.object({
   kind: z.literal('animation'),
+  // ambient (default): the toggle starts/stops looping clips (a fan).
+  // open-close: \`on\` plays once and holds, closing plays \`off\` or \`on\`
+  // reversed, and \`loop\` runs throughout (authored objects: a door, a hatch).
+  mode: z.enum(['ambient', 'open-close']).optional(),
   clips: z.object({
     on: z.string().optional(),
     off: z.string().optional(),

@@ -50,7 +50,7 @@ import {
   useState,
 } from 'react'
 import type { AnimationAction, AnimationClip, Group, Material, Mesh, Object3D } from 'three'
-import { MathUtils, Texture } from 'three'
+import { LoopOnce, MathUtils, Texture } from 'three'
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
@@ -702,10 +702,12 @@ const LoadedModelRenderer = ({
   // find it without this registry. The bake retargets it onto the baked subtree.
   useEffect(() => {
     if (!animEffect) return
+    // An open-close object bakes its opening, played once; its loop otherwise.
+    const openClose = animEffect.mode === 'open-close'
     const clipName = animEffect.clips.on ?? animEffect.clips.loop
     const clip = clipName ? animations.find((c) => c.name === clipName) : undefined
     if (!clip) return
-    itemClipRegistry.set(node.id, { clip, loop: true })
+    itemClipRegistry.set(node.id, { clip, loop: !(openClose && clipName === animEffect.clips.on) })
     return () => {
       itemClipRegistry.delete(node.id)
     }
@@ -726,7 +728,16 @@ const LoadedModelRenderer = ({
           {...handlers}
         />
       </group>
-      {animations.length > 0 && (
+      {animations.length > 0 && animEffect?.mode === 'open-close' && (
+        <OpenCloseAnimation
+          animations={animations}
+          animEffect={animEffect}
+          interactive={interactive!}
+          nodeId={node.id}
+          rootRef={ref}
+        />
+      )}
+      {animations.length > 0 && animEffect?.mode !== 'open-close' && (
         <ItemAnimation
           animations={animations}
           animEffect={animEffect}
@@ -818,6 +829,79 @@ const ItemAnimation = ({
       }
     }
   })
+
+  return null
+}
+
+/**
+ * An authored object's motion: `on` (its `open` clip) plays once and holds;
+ * closing plays `off` or `on` reversed; `loop` runs throughout. Driven by the
+ * mechanism toggle, the one that is not the light switch.
+ */
+const OpenCloseAnimation = ({
+  nodeId,
+  animEffect,
+  interactive,
+  animations,
+  rootRef,
+}: {
+  nodeId: AnyNodeId
+  animEffect: AnimationEffect
+  interactive: Interactive
+  animations: AnimationClip[]
+  rootRef: RefObject<Group>
+}) => {
+  const { actions } = useAnimations(animations, rootRef)
+  const toggles = interactive.controls.flatMap((control, index) =>
+    control.kind === 'toggle' ? [index] : [],
+  )
+  const openToggle = interactive.effects.some((effect) => effect.kind === 'light')
+    ? toggles[1]
+    : toggles[0]
+  const isOpen = useInteractive((s) =>
+    openToggle === undefined ? false : Boolean(s.items[nodeId]?.controlValues[openToggle]),
+  )
+
+  useEffect(() => {
+    const loop = animEffect.clips.loop ? actions[animEffect.clips.loop] : undefined
+    loop?.play()
+    return () => {
+      loop?.stop()
+    }
+  }, [actions, animEffect.clips.loop])
+
+  const mounted = useRef(false)
+  useEffect(() => {
+    const open = animEffect.clips.on ? actions[animEffect.clips.on] : undefined
+    const close = animEffect.clips.off ? actions[animEffect.clips.off] : undefined
+    if (!open) return
+    const first = !mounted.current
+    mounted.current = true
+    for (const action of [open, close]) {
+      if (!action) continue
+      action.setLoop(LoopOnce, 1)
+      action.clampWhenFinished = true
+    }
+    if (isOpen) {
+      close?.stop()
+      open.paused = false
+      open.timeScale = 1
+      if (!open.isRunning()) open.reset()
+      open.play()
+      // Already open when the scene loads: hold the open pose, no swing.
+      if (first) open.time = open.getClip().duration
+      return
+    }
+    if (first) return
+    if (close) {
+      open.stop()
+      close.reset().play()
+      return
+    }
+    open.paused = false
+    open.timeScale = -1
+    open.play()
+  }, [actions, animEffect.clips.on, animEffect.clips.off, isOpen])
 
   return null
 }
