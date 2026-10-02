@@ -695,6 +695,8 @@ function compactManifest(manifest: GeometryArtifactManifest): GeometryArtifactMa
 }
 
 async function digest(bytes: BufferSource): Promise<string> {
+  // An opaque-origin sandbox has no WebCrypto; its host hashes what it receives.
+  if (!globalThis.crypto?.subtle) return ''
   const hash = await crypto.subtle.digest('SHA-256', bytes)
   return Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, '0')).join('')
 }

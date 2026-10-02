@@ -1,7 +1,7 @@
 {
   "name": "@pascal-app/geometry-script",
   "version": "1.0.3",
-  "description": "Compiles AI-authored three.js geometry scripts into GLB artifacts with a Pascal manifest. Runs in a browser worker, Bun or Node \u2014 no DOM, no React.",
+  "description": "Compiles AI-authored three.js geometry scripts into GLB artifacts with a Pascal manifest. Runs in a browser worker, Bun or Node — no DOM, no React.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -15,6 +15,11 @@
       "types": "./dist/compile.d.ts",
       "import": "./dist/compile.js",
       "default": "./dist/compile.js"
+    },
+    "./sandbox": {
+      "types": "./dist/sandbox.d.ts",
+      "import": "./dist/sandbox.js",
+      "default": "./dist/sandbox.js"
     }
   },
   "files": [
@@ -22,7 +27,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc --build",
+    "build": "tsc --build && bun scripts/build-sandbox.ts",
     "dev": "tsgo --build --watch",
     "check-types": "tsgo --noEmit",
     "prepublishOnly": "npm run build",
