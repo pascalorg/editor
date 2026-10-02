@@ -11,6 +11,7 @@ import {
   type SceneMaterial,
   type SceneMaterialId,
   sceneRegistry,
+  scriptedSize,
   useInteractive,
   useLiveNodeOverrides,
   useScene,
@@ -2322,8 +2323,13 @@ function updateDoorMesh(rawNode: DoorNode, mesh: THREE.Mesh): boolean {
   mesh.position.set(...placement.position)
   mesh.rotation.set(...placement.rotation)
 
-  // Built from a script: the renderer shows its artifact, not the parametric frame.
-  if (node.source) return settleScriptedOpening(mesh)
+  // Built from a script: the renderer shows its artifact, not the parametric
+  // frame, and the hit box is what the script built.
+  if (node.source) {
+    mesh.geometry.dispose()
+    mesh.geometry = new THREE.BoxGeometry(...scriptedSize(node.source.manifest))
+    return settleScriptedOpening(mesh)
+  }
 
   // Dispose and remove all old visual children; preserve 'cutout'
   for (const child of [...mesh.children]) {

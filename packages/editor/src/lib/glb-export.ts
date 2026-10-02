@@ -1444,15 +1444,19 @@ function bakeAnimationClips(
     const target = cloneByOriginal.get(original)
     if (!node || !target) continue
 
+    // A window or door built from a script carries its clips like an authored item.
+    const scripted = (node.type === 'door' || node.type === 'window') && node.source
     const clip =
       bakeRegistryAnimationClips(node, target) ??
-      (node.type === 'door'
-        ? bakeDoorClip(id, node, target)
-        : node.type === 'window'
-          ? bakeWindowClip(id, node as WindowNode, target)
-          : node.type === 'item'
-            ? bakeItemClip(id, target)
-            : null)
+      (scripted
+        ? bakeItemClip(id, target)
+        : node.type === 'door'
+          ? bakeDoorClip(id, node, target)
+          : node.type === 'window'
+            ? bakeWindowClip(id, node as WindowNode, target)
+            : node.type === 'item'
+              ? bakeItemClip(id, target)
+              : null)
 
     if (clip) {
       const nodeClips = Array.isArray(clip) ? clip : [clip]

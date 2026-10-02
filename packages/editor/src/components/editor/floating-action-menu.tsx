@@ -144,6 +144,14 @@ const MENU_Y_OFFSETS: Record<string, number> = {
 
 export function getMenuYOffset(node: AnyNode | null): number {
   if (!node) return MENU_Y_OFFSET_DEFAULT + EXTRA_MENU_LIFT
+  // A window or door built from a script has a height arrow only when its script declares height.
+  if (
+    (node.type === 'door' || node.type === 'window') &&
+    node.source &&
+    !node.source.manifest.params.some((spec) => spec.id === 'height')
+  ) {
+    return MENU_Y_OFFSET_DEFAULT + EXTRA_MENU_LIFT
+  }
   if (node.type === 'stair-segment') {
     return (MENU_Y_OFFSETS[`stair-${node.segmentType}`] ?? MENU_Y_OFFSET_DEFAULT) + EXTRA_MENU_LIFT
   }
@@ -234,6 +242,28 @@ function getObjectGeometryKey(object: THREE.Object3D): string {
     )
   })
   return parts.join('|')
+}
+
+const _meshBox = new THREE.Box3()
+
+/** The bounds of what renders: hidden objects and invisible-material hit boxes are skipped. */
+function setFromVisibleMeshes(box: THREE.Box3, root: THREE.Object3D): void {
+  box.makeEmpty()
+  root.updateWorldMatrix(true, true)
+  const visit = (object: THREE.Object3D) => {
+    if (!object.visible) return
+    const mesh = object as THREE.Mesh
+    const material = mesh.material as THREE.Material | THREE.Material[] | undefined
+    const shown = Array.isArray(material) ? material.some((m) => m.visible) : material?.visible
+    if (mesh.isMesh && shown && mesh.geometry) {
+      mesh.geometry.computeBoundingBox()
+      if (mesh.geometry.boundingBox) {
+        box.union(_meshBox.copy(mesh.geometry.boundingBox).applyMatrix4(mesh.matrixWorld))
+      }
+    }
+    for (const child of object.children) visit(child)
+  }
+  visit(root)
 }
 
 function setNodeDerivedMenuAnchor(
@@ -450,7 +480,12 @@ export function FloatingActionMenu() {
       if (needsRecompute) {
         const effectiveNode = getEffectiveNode(node)
         if (!setNodeDerivedMenuAnchor(effectiveNode, obj, anchorRef.current)) {
-          _anchorBox.setFromObject(obj)
+          // Built from a script: its hidden hit box, cutout and collider are not what the person sees.
+          if ('source' in effectiveNode && effectiveNode.source)
+            setFromVisibleMeshes(_anchorBox, obj)
+          if (_anchorBox.isEmpty() || !('source' in effectiveNode && effectiveNode.source)) {
+            _anchorBox.setFromObject(obj)
+          }
           if (!_anchorBox.isEmpty()) {
             _anchorBox.getCenter(_anchorCenter)
             // Position above the object. Per-type offsets clear each kind's

@@ -127,8 +127,13 @@ export const authorObject: AgentOperation<AuthorObjectInput> = (nodes, input, co
           mount: compiled.mount,
         })
       const [width, height] = scriptedSize(compiled.manifest)
-      const [x, y, z] = (input.position as Vec3 | undefined) ?? previous.position
-      const bottom = y - previous.height / 2
+      // Given a position, that is where it goes; otherwise its bottom edge stays put.
+      const [x, y, z] = previous.position
+      const position: Vec3 = (input.position as Vec3 | undefined) ?? [
+        x,
+        y - previous.height / 2 + height / 2,
+        z,
+      ]
       return {
         result: summary(previous, compiled, orphanedSlots),
         changes: {
@@ -140,7 +145,7 @@ export const authorObject: AgentOperation<AuthorObjectInput> = (nodes, input, co
                 source: scriptSource(compiled),
                 width,
                 height,
-                position: [x, bottom + height / 2, z],
+                position,
               },
             },
           ],
