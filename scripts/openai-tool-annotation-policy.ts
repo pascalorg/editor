@@ -20,6 +20,7 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   analyze_room_photo: policy(true, false, true),
   apply_patch: policy(false, true, false),
   find_by_type: policy(true, false, false),
+  read_source: policy(true, false, false),
   author_object: policy(false, true, false),
   check_collisions: policy(true, false, false),
   create_from_template: policy(false, true, false),

@@ -15,7 +15,8 @@ import type { AgentOperation } from './types'
 type Vec3 = [number, number, number]
 
 export type AuthorObjectInput = {
-  code: string
+  /** Absent for a params-only edit: the host compiled the object's stored script. */
+  code?: string
   params?: Record<string, GeometryScriptParamValue>
   nodeId?: string
   parentId?: string
@@ -115,10 +116,10 @@ function scriptAsset(
   }
 }
 
-const scriptSource = (compiled: CompiledGeometryScript, code: string) => ({
+const scriptSource = (compiled: CompiledGeometryScript) => ({
   kind: 'script' as const,
   language: 'three' as const,
-  code,
+  script: compiled.script,
   params: compiled.params,
   artifact: compiled.sha256,
   manifest: compiled.manifest,
@@ -161,16 +162,7 @@ export const authorObject: AgentOperation<AuthorObjectInput> = (nodes, input, co
     input.rotation === undefined ? undefined : [0, (input.rotation * Math.PI) / 180, 0]
 
   if (input.nodeId) {
-    const previous = nodes[input.nodeId]
-    if (!previous)
-      refuse('node_not_found', `Node not found: ${input.nodeId}.`, { id: input.nodeId })
-    if (previous.type !== 'item' || !previous.source) {
-      refuse(
-        'not_authored',
-        `${input.nodeId} is a ${previous.type} without a script; only objects built with author_object can be edited this way.`,
-        { id: input.nodeId, type: previous.type },
-      )
-    }
+    const previous = authoredObject(nodes, input.nodeId)
     const slotIds = new Set(compiled.manifest.slots.map((slot) => slot.id))
     const orphanedSlots = Object.keys(previous.slots ?? {}).filter((id) => !slotIds.has(id))
     const next = ItemNode.parse({
@@ -179,7 +171,7 @@ export const authorObject: AgentOperation<AuthorObjectInput> = (nodes, input, co
       position: (input.position as Vec3 | undefined) ?? previous.position,
       rotation: rotation ?? previous.rotation,
       side: input.side ?? previous.side,
-      source: scriptSource(compiled, input.code),
+      source: scriptSource(compiled),
       asset: scriptAsset(compiled, input, previous.asset),
     })
     // Children resting on or hanging from the object follow its new geometry.
@@ -226,11 +218,45 @@ export const authorObject: AgentOperation<AuthorObjectInput> = (nodes, input, co
     ...(parent.type === 'wall' ? { wallId: parent.id, side: input.side ?? 'front' } : {}),
     position: (input.position as Vec3 | undefined) ?? [0, 0, 0],
     rotation: rotation ?? [0, 0, 0],
-    source: scriptSource(compiled, input.code),
+    source: scriptSource(compiled),
     asset,
   })
   return {
     result: summary(node, compiled, []),
     changes: { create: [{ node, parentId: parent.id }] },
+  }
+}
+
+/** The authored object `read_source` and a params-only rebuild act on, or a refusal. */
+export function authoredObject(
+  nodes: Record<string, AnyNode>,
+  nodeId: string,
+): ItemNode & {
+  source: NonNullable<ItemNode['source']>
+} {
+  const node = nodes[nodeId]
+  if (!node) refuse('node_not_found', `Node not found: ${nodeId}.`, { id: nodeId })
+  if (node.type !== 'item' || !node.source)
+    refuse(
+      'not_authored',
+      `${nodeId} is a ${node.type} without a script; only objects built with author_object have one.`,
+      { id: nodeId, type: node.type },
+    )
+  return node as ItemNode & { source: NonNullable<ItemNode['source']> }
+}
+
+/** What `read_source` answers once the host has the module's text. */
+export function readSourceResult(
+  node: ItemNode & { source: NonNullable<ItemNode['source']> },
+  code: string,
+) {
+  return {
+    nodeId: node.id,
+    name: node.name,
+    code,
+    params: node.source.manifest.params.map((spec) => ({
+      ...spec,
+      value: node.source.params[spec.id] ?? spec.default,
+    })),
   }
 }

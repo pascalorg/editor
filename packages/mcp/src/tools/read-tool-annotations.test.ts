@@ -33,6 +33,7 @@ const TOOL_POLICIES = [
       'list_templates',
       'list_units',
       'measure',
+      'read_source',
       'search_assets',
       'validate_design',
       'validate_scene',
@@ -158,7 +159,7 @@ describe('MCP tool annotations', () => {
     try {
       const listed = await client.listTools()
       const byName = new Map(listed.tools.map((tool) => [tool.name, tool]))
-      expect(byName.size).toBe(67)
+      expect(byName.size).toBe(68)
       expect([...byName.keys()].toSorted()).toEqual(EXPECTED_TOOL_NAMES)
 
       for (const policy of TOOL_POLICIES) {

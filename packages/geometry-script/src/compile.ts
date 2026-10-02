@@ -5,6 +5,7 @@ import type {
   GeometryScriptParamSpec,
   GeometryScriptParamValue,
 } from '@pascal-app/core'
+import { GEOMETRY_MANIFEST_MAX_BYTES, GEOMETRY_SCRIPT_MAX_BYTES } from '@pascal-app/core/schema'
 import * as THREE from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js'
@@ -638,7 +639,58 @@ async function exportGlb(
   return result
 }
 
-async function digest(bytes: ArrayBuffer): Promise<string> {
+/** Outlines keep at most this many corners; a 64-sided circle reads the same with 16. */
+const MAX_OUTLINE_POINTS = 16
+
+function thin<T>(points: T[]): T[] {
+  if (points.length <= MAX_OUTLINE_POINTS) return points
+  const step = points.length / MAX_OUTLINE_POINTS
+  return Array.from({ length: MAX_OUTLINE_POINTS }, (_, i) => points[Math.floor(i * step)]!)
+}
+
+function outlineArea(polygon: [number, number][]): number {
+  let area = 0
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    area += polygon[j]![0] * polygon[i]![1] - polygon[i]![0] * polygon[j]![1]
+  }
+  return Math.abs(area) / 2
+}
+
+const manifestBytes = (manifest: GeometryArtifactManifest) =>
+  new TextEncoder().encode(JSON.stringify(manifest)).byteLength
+
+/**
+ * The manifest rides inline in the node, so it stays under
+ * GEOMETRY_MANIFEST_MAX_BYTES: outlines are thinned, then the smallest
+ * surfaces and undersides go first (placement falls back to the bounds there),
+ * then trailing part entries. The build itself never fails over its size.
+ */
+function compactManifest(manifest: GeometryArtifactManifest): GeometryArtifactManifest {
+  const next = {
+    ...manifest,
+    surfaces: manifest.surfaces.map((surface) => ({ ...surface, polygon: thin(surface.polygon) })),
+    undersides: manifest.undersides.map((underside) => ({
+      ...underside,
+      polygon: thin(underside.polygon),
+    })),
+  }
+  const bySize = (a: { polygon: [number, number][] }, b: { polygon: [number, number][] }) =>
+    outlineArea(b.polygon) - outlineArea(a.polygon)
+  next.surfaces.sort(bySize)
+  next.undersides.sort(bySize)
+  while (manifestBytes(next) > GEOMETRY_MANIFEST_MAX_BYTES) {
+    const last = (list: { polygon: [number, number][] }[]) =>
+      list.length ? outlineArea(list[list.length - 1]!.polygon) : Number.POSITIVE_INFINITY
+    if (next.surfaces.length || next.undersides.length) {
+      if (last(next.surfaces) <= last(next.undersides)) next.surfaces.pop()
+      else next.undersides.pop()
+    } else if (next.parts.length) next.parts.pop()
+    else break
+  }
+  return next
+}
+
+async function digest(bytes: BufferSource): Promise<string> {
   const hash = await crypto.subtle.digest('SHA-256', bytes)
   return Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, '0')).join('')
 }
@@ -650,6 +702,9 @@ const SOURCE_GUARD =
 export async function compileGeometryScript(
   input: GeometryScriptCompileInput,
 ): Promise<GeometryScriptCompileOutput> {
+  if (new TextEncoder().encode(input.code).byteLength > GEOMETRY_SCRIPT_MAX_BYTES) {
+    throw new Error(`The script is longer than ${GEOMETRY_SCRIPT_MAX_BYTES / 1024} KiB`)
+  }
   if (SOURCE_GUARD.test(input.code)) {
     throw new Error(
       'Geometry scripts cannot use dynamic import, eval, Function constructors, process or require',
@@ -717,9 +772,10 @@ export async function compileGeometryScript(
   return {
     glb,
     sha256: await digest(glb),
+    script: await digest(new TextEncoder().encode(input.code)),
     mount,
     params,
-    manifest: {
+    manifest: compactManifest({
       bounds: { min: vec(bounds.min), max: vec(bounds.max) },
       params: specs,
       parts: conventions.parts,
@@ -735,6 +791,6 @@ export async function compileGeometryScript(
       cutout: conventions.cutout,
       collider: conventions.collider,
       triangles: conventions.triangles,
-    },
+    }),
   }
 }

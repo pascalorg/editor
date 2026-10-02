@@ -670,6 +670,19 @@
       }
     },
     {
+      "name": "read_source",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It only reads the script stored for an object built with author_object, with its params.",
+        "destructiveHint": "It changes nothing; it returns the module text and param values.",
+        "openWorldHint": "It reads from the connected Pascal service's artifact store without accessing the public internet."
+      }
+    },
+    {
       "name": "rebase_floor_reference",
       "annotations": {
         "readOnlyHint": false,

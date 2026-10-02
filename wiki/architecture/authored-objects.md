@@ -6,7 +6,7 @@ Applies to: `packages/geometry-script/**`, `item.source` in `packages/core/src/s
 
 ## The model
 
-An authored object is an `item` whose `source` holds the module (`code`), its `params`, the hash of the GLB it compiled to (`artifact`) and the `manifest` read from it. `asset.src` is `artifact://<sha256>` and `asset.dimensions` are the compiled bounds, so everything items already do (paint, hosting, lights, the move tool, plan footprint, collections, bake, export) applies unchanged. A catalog item is the same node without `source`.
+An authored object is an `item` whose `source` holds the hash of its module (`script`), its `params`, the hash of the GLB it compiled to (`artifact`) and the `manifest` read from it. The code never rides in the scene: it is a `text/javascript` artifact that only people who may edit the project can read, so publishing geometry never publishes the code. The manifest stays inline because placement, cuts and queries read it synchronously; the compiler keeps it under 24 KiB (outlines thinned, then the smallest surfaces dropped). `asset.src` is `artifact://<sha256>` and `asset.dimensions` are the compiled bounds, so everything items already do (paint, hosting, lights, the move tool, plan footprint, collections, bake, export) applies unchanged. A catalog item is the same node without `source`.
 
 The artifact is the truth: the module runs again only when its code, params or host inputs change, never on view, publish or bake. Where artifacts live is the host's choice through `configureArtifactStore` (in-memory by default).
 
@@ -37,8 +37,8 @@ The compiler also derives upward surfaces (where things rest) and undersides (wh
 
 ## Compiling
 
-`@pascal-app/geometry-script` compiles a module to a GLB and manifest in a browser worker, Bun or Node. The host decides the isolation: the editor runs it in a worker with network and storage removed; an MCP server receives a `GeometryScriptHost` (compile + store) or answers `scripts_unavailable`.
+`@pascal-app/geometry-script` compiles a module to a GLB and manifest in a browser worker, Bun or Node, and returns both hashes. The host decides the isolation: the editor runs it in a worker with network and storage removed; an MCP server receives a `GeometryScriptHost` (compile, store, read) or answers `scripts_unavailable`. The default in-memory artifact store lasts one session; a host that persists scenes configures its own.
 
 ## Agent tools
 
-`author_object` (create or edit) and `find_by_type` (nodes and typed parts of one type) are shared contracts in `@pascal-app/core/agent-tools`, one operation each; only the compile step differs per surface. See [agent-surfaces.md](agent-surfaces.md).
+`author_object` (create, or edit by `nodeId`: new code, or params alone to rebuild the stored script), `read_source` (the module and its params, for an edit) and `find_by_type` (nodes and typed parts of one type) are shared contracts in `@pascal-app/core/agent-tools`, one operation each; only the compile step differs per surface. See [agent-surfaces.md](agent-surfaces.md).

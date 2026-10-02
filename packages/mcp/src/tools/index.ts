@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneOperations } from '../operations'
 import { registerApplyPatch } from './apply-patch'
-import { type GeometryScriptHost, registerAuthorObject } from './author-object'
+import { type GeometryScriptHost, registerAuthorObject, registerReadSource } from './author-object'
 import { registerCheckCollisions } from './check-collisions'
 import { registerConstructionTools } from './construction-tools'
 import { registerCreateLevel } from './create-level'
@@ -49,6 +49,7 @@ export function registerTools(
   registerFindNodes(server, operations)
   registerSharedTools(server, operations)
   registerAuthorObject(server, operations, geometryScripts)
+  registerReadSource(server, operations, geometryScripts)
   registerMeasure(server, operations)
   registerConstructionTools(server, operations)
   registerRoomTools(server, operations)

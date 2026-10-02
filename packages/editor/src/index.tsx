@@ -580,6 +580,7 @@ export {
 export {
   compileAndStoreGeometryScript,
   rebuildAuthoredObject,
+  storedScript,
 } from './lib/geometry-script/author'
 export { compileGeometryScriptInWorker } from './lib/geometry-script/client'
 export { exportSceneToGlb, type GlbExportOptions } from './lib/glb-export'

@@ -2,6 +2,9 @@ import { z } from 'zod'
 
 /** A script source is persisted inline; this caps one node's share of a scene operation. */
 export const GEOMETRY_SCRIPT_MAX_BYTES = 48 * 1024
+/** The manifest rides inline in the node; the compiler keeps it under this. */
+export const GEOMETRY_MANIFEST_MAX_BYTES = 24 * 1024
+export const GEOMETRY_SCRIPT_MIME_TYPE = 'text/javascript'
 
 const finite = z.number().finite()
 const vec3 = z.tuple([finite, finite, finite])
@@ -95,7 +98,10 @@ export type GeometryScriptMount = z.infer<typeof GeometryScriptMount>
 
 /** What a compile hands the scene: the artifact's hash, how it mounts, the resolved params and the manifest. */
 export type CompiledGeometryScript = {
+  /** sha256 of the GLB. */
   sha256: string
+  /** sha256 of the module text that produced it. */
+  script: string
   mount: GeometryScriptMount
   params: Record<string, GeometryScriptParamValue>
   manifest: GeometryArtifactManifest
@@ -109,13 +115,8 @@ export type CompiledGeometryScript = {
 export const GeometryScriptSource = z.object({
   kind: z.literal('script'),
   language: z.literal('three').default('three'),
-  code: z
-    .string()
-    .min(1)
-    .refine(
-      (code) => new TextEncoder().encode(code).byteLength <= GEOMETRY_SCRIPT_MAX_BYTES,
-      `Script source exceeds ${GEOMETRY_SCRIPT_MAX_BYTES / 1024} KiB`,
-    ),
+  /** sha256 of the module's UTF-8 text, a `text/javascript` artifact: the code never rides in the scene. */
+  script: z.string().regex(/^[0-9a-f]{64}$/),
   params: z.record(z.string(), GeometryScriptParamValue).default({}),
   /** sha256 of the GLB the current code + params compiled to. */
   artifact: z.string().regex(/^[0-9a-f]{64}$/),

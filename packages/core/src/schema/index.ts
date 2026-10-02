@@ -26,7 +26,9 @@ export {
 export { CutIntent, CutShape } from './cut'
 export {
   type CompiledGeometryScript,
+  GEOMETRY_MANIFEST_MAX_BYTES,
   GEOMETRY_SCRIPT_MAX_BYTES,
+  GEOMETRY_SCRIPT_MIME_TYPE,
   GeometryArtifactManifest,
   GeometryScriptMount,
   GeometryScriptParamSpec,

@@ -1,4 +1,4 @@
-import { authorObjectTool } from './author-object'
+import { authorObjectTool, readSourceTool } from './author-object'
 import { findByTypeTool } from './find-by-type'
 import {
   duplicateLevelTool,
@@ -37,5 +37,6 @@ export const AGENT_TOOL_CONTRACTS = [
   verifySceneTool,
   deleteNodeTool,
   authorObjectTool,
+  readSourceTool,
   findByTypeTool,
 ] as const
