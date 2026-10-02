@@ -25,7 +25,8 @@
     "build": "tsc --build",
     "dev": "tsgo --build --watch",
     "check-types": "tsgo --noEmit",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "test": "bun test"
   },
   "dependencies": {
     "@pascal-app/core": "^1.0.3",

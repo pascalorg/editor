@@ -11,10 +11,12 @@ import { geometryRestingHeight, resettledPosition } from '../lib/geometry-surfac
 import {
   type AnyNode,
   type CompiledGeometryScript,
+  type DoorNode,
   type GeometryScriptMount,
   type GeometryScriptParamValue,
   generateId,
   ItemNode,
+  type WindowNode,
 } from '../schema'
 import { targetLevel } from './level-target'
 import type { AgentOperation } from './types'
@@ -112,7 +114,10 @@ export const authorObject: AgentOperation<AuthorObjectInput> = (nodes, input, co
     input.rotation === undefined ? undefined : [0, (input.rotation * Math.PI) / 180, 0]
 
   if (input.nodeId) {
-    const previous = authoredObject(nodes, input.nodeId)
+    // New code may also give a native window or door its script; params alone need one already.
+    const previous = input.code
+      ? scriptTarget(nodes, input.nodeId)
+      : authoredObject(nodes, input.nodeId)
     const slotIds = new Set(compiled.manifest.slots.map((slot) => slot.id))
     const orphanedSlots = Object.keys(previous.slots ?? {}).filter((id) => !slotIds.has(id))
     if (previous.type !== 'item') {
@@ -215,6 +220,16 @@ export function authoredObject(nodes: Record<string, AnyNode>, nodeId: string): 
       { id: nodeId, type: node.type },
     )
   return node
+}
+
+/** What `author_object` with new code may edit: a scripted node, or a window or door taking its first script. */
+function scriptTarget(
+  nodes: Record<string, AnyNode>,
+  nodeId: string,
+): ScriptedNode | WindowNode | DoorNode {
+  const node = nodes[nodeId]
+  if (node?.type === 'window' || node?.type === 'door') return node
+  return authoredObject(nodes, nodeId)
 }
 
 /** What `read_source` answers once the host has the module's text. */

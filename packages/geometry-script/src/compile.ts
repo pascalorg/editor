@@ -565,6 +565,10 @@ function sampleTransformClips(root: THREE.Object3D, clips: THREE.AnimationClip[]
       scale: [] as number[],
     }))
     const action = mixer.clipAction(clip)
+    // Played once and held: a looping action wraps to its first frame at the
+    // clip's end, so `open` would be stored ending closed.
+    action.setLoop(THREE.LoopOnce, 1)
+    action.clampWhenFinished = true
     action.play()
     for (const time of times) {
       mixer.setTime(time)
