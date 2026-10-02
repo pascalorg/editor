@@ -43,6 +43,31 @@ export type GeometryScriptHost = {
   readArtifact(input: { sceneId: string; sha256: string }): Promise<Uint8Array | null>
 }
 
+/** Compiles a module on the host and stores its GLB and text for the scene: the step every scripted tool shares. */
+export async function compileAndStore(
+  host: GeometryScriptHost,
+  sceneId: string,
+  code: string,
+  params: Record<string, GeometryScriptParamValue> | undefined,
+): Promise<CompiledGeometryScript> {
+  const { glb, ...compiled } = await host.compile({ code, params })
+  await Promise.all([
+    host.storeArtifact({
+      sceneId,
+      sha256: compiled.sha256,
+      bytes: glb,
+      mimeType: 'model/gltf-binary',
+    }),
+    host.storeArtifact({
+      sceneId,
+      sha256: compiled.script,
+      bytes: new TextEncoder().encode(code),
+      mimeType: GEOMETRY_SCRIPT_MIME_TYPE,
+    }),
+  ])
+  return compiled
+}
+
 async function readScript(
   host: GeometryScriptHost,
   sceneId: string,
@@ -89,22 +114,7 @@ export function registerAuthorObject(
           (args.nodeId
             ? await readScript(host, scene.id, bridge, args.nodeId)
             : refuseMissingCode())
-        const { glb, ...rest } = await host.compile({ code, params: args.params })
-        await Promise.all([
-          host.storeArtifact({
-            sceneId: scene.id,
-            sha256: rest.sha256,
-            bytes: glb,
-            mimeType: 'model/gltf-binary',
-          }),
-          host.storeArtifact({
-            sceneId: scene.id,
-            sha256: rest.script,
-            bytes: new TextEncoder().encode(code),
-            mimeType: GEOMETRY_SCRIPT_MIME_TYPE,
-          }),
-        ])
-        compiled = rest
+        compiled = await compileAndStore(host, scene.id, code, args.params)
       } catch (error) {
         if (isAgentRefusal(error)) return refusalResult(error)
         return toolError(error instanceof Error ? error.message : String(error), {

@@ -196,7 +196,7 @@ const resolveItemMaterial = (
   return authoredMaterial
 }
 
-const BrokenItemFallback = ({ node }: { node: ItemNode }) => {
+const BrokenItemFallback = ({ node, events = true }: { node: ItemNode; events?: boolean }) => {
   const handlers = useNodeEvents(node, 'item')
   const shading = useViewer((s) => s.shading)
   const isExporting = useViewer((s) => s.isExporting)
@@ -215,7 +215,7 @@ const BrokenItemFallback = ({ node }: { node: ItemNode }) => {
   if (isExporting) return null
 
   return (
-    <mesh position-y={h / 2} {...handlers}>
+    <mesh position-y={h / 2} {...(events ? handlers : {})}>
       <boxGeometry args={[w, h, d]} />
       <primitive attach="material" object={material} />
     </mesh>
@@ -364,10 +364,12 @@ const UnavailableItemModel = ({
   markSettled,
   node,
   url,
+  events,
 }: {
   markSettled: () => void
   node: ItemNode
   url: string
+  events: boolean
 }) => {
   useEffect(() => {
     retainUnavailableConsumer(unavailableFailureConsumers, node.id)
@@ -387,7 +389,7 @@ const UnavailableItemModel = ({
     }
   }, [markSettled, node.id, url])
 
-  return <BrokenItemFallback node={node} />
+  return <BrokenItemFallback events={events} node={node} />
 }
 
 /**
@@ -398,9 +400,12 @@ const UnavailableItemModel = ({
 const ModelWithRetry = ({
   node,
   setSettled,
+  events = true,
 }: {
   node: ItemNode
   setSettled: (value: boolean) => void
+  /** False when a host node (a scripted window or door) owns the pointer events. */
+  events?: boolean
 }) => {
   const [renderFailed, setRenderFailed] = useState(false)
   const url = resolveCdnUrl(node.asset.src) || ''
@@ -418,16 +423,17 @@ const ModelWithRetry = ({
     return () => useViewer.getState().clearItemLoadFailure(node.id)
   }, [markSettled, node.id, renderFailed, url])
 
-  if (!url) return <UnavailableItemModel markSettled={markSettled} node={node} url={url} />
+  if (!url)
+    return <UnavailableItemModel events={events} markSettled={markSettled} node={node} url={url} />
 
   return (
     <ErrorBoundary
-      fallback={<BrokenItemFallback node={node} />}
+      fallback={<BrokenItemFallback events={events} node={node} />}
       onError={() => setRenderFailed(true)}
       scope="item-model"
     >
       <Suspense fallback={<PreviewModel node={node} />}>
-        <ModelRenderer markSettled={markSettled} node={node} />
+        <ModelRenderer events={events} markSettled={markSettled} node={node} />
       </Suspense>
     </ErrorBoundary>
   )
@@ -579,23 +585,40 @@ const ClearPreviewModel = ({ node }: { node: ItemNode }) => {
   )
 }
 
-const ModelRenderer = ({ node, markSettled }: { node: ItemNode; markSettled: () => void }) => {
+const ModelRenderer = ({
+  node,
+  markSettled,
+  events,
+}: {
+  node: ItemNode
+  markSettled: () => void
+  events: boolean
+}) => {
   const gltf = useItemGltf(resolveCdnUrl(node.asset.src) || '')
   const unavailable = getUnavailableItemAsset(gltf)
   if (unavailable) {
-    return <UnavailableItemModel markSettled={markSettled} node={node} url={unavailable.url} />
+    return (
+      <UnavailableItemModel
+        events={events}
+        markSettled={markSettled}
+        node={node}
+        url={unavailable.url}
+      />
+    )
   }
-  return <LoadedModelRenderer gltf={gltf} markSettled={markSettled} node={node} />
+  return <LoadedModelRenderer events={events} gltf={gltf} markSettled={markSettled} node={node} />
 }
 
 const LoadedModelRenderer = ({
   gltf: { scene, nodes, animations },
   node,
   markSettled,
+  events,
 }: {
   gltf: LoadedItemGltf
   node: ItemNode
   markSettled: () => void
+  events: boolean
 }) => {
   const ref = useRef<Group>(null!)
 
@@ -729,7 +752,7 @@ const LoadedModelRenderer = ({
           ref={ref}
           rotation={node.asset.rotation}
           scale={node.asset.scale || [1, 1, 1]}
-          {...handlers}
+          {...(events ? handlers : {})}
         />
       </group>
       {animations.length > 0 && scripted && interactive && (
@@ -974,5 +997,19 @@ const ItemLightRegistrar = ({
 
   return null
 }
+
+/**
+ * An artifact rendered through the item's model path (GLB, paint slots,
+ * clips, lights, load settling) for a node that is not an item: a window or
+ * door built from a script. `view` is that node seen as an item; the host
+ * node keeps its own registry entry and pointer events.
+ */
+export const ScriptedModel = ({
+  view,
+  setSettled,
+}: {
+  view: ItemNode
+  setSettled: (value: boolean) => void
+}) => <ModelWithRetry events={false} key={view.asset.src} node={view} setSettled={setSettled} />
 
 export default ItemRenderer

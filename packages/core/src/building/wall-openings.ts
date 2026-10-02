@@ -1,8 +1,10 @@
 import { refuse } from '../agent-tools/refusal'
+import { scriptedSize, scriptSource } from '../lib/geometry-script-node'
 import { wallSupportForNodes } from '../lib/opening-floor-datum'
 import {
   type AnyNode,
   type AnyNodeId,
+  type CompiledGeometryScript,
   DoorNode,
   getScaledDimensions,
   type ItemNode,
@@ -179,6 +181,8 @@ export type WallOpeningInput = {
   windowType?: WindowType
   columns?: number
   rows?: number
+  /** A compiled script the opening is built from; its bounds set width and height. */
+  compiled?: CompiledGeometryScript
 }
 
 const equalRatios = (count: number) => Array.from({ length: count }, () => 1 / count)
@@ -226,8 +230,12 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
       'Say where on the wall: t (or position) from 0 at its start to 1 at its end.',
     )
 
-  const width = input.width ?? DEFAULTS[kind].width
-  const height = input.height ?? DEFAULTS[kind].height
+  const { compiled } = input
+  if (compiled && compiled.mount !== 'wall')
+    refuse('wrong_mount', `A ${kind}'s script uses mount 'wall'.`, { mount: compiled.mount })
+  const [scriptedWidth, scriptedHeight] = compiled ? scriptedSize(compiled.manifest) : []
+  const width = scriptedWidth ?? input.width ?? DEFAULTS[kind].width
+  const height = scriptedHeight ?? input.height ?? DEFAULTS[kind].height
   const wallLength = lengthOf(wall)
   if (wallLength < width)
     refuse(
@@ -277,6 +285,7 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
     ...(input.openingShape ? { openingShape: input.openingShape } : {}),
     ...(input.archHeight === undefined ? {} : { archHeight: Math.min(input.archHeight, height) }),
     ...(input.cornerRadius === undefined ? {} : { cornerRadius: input.cornerRadius }),
+    ...(compiled ? { source: scriptSource(compiled) } : {}),
   }
   const node =
     kind === 'door'

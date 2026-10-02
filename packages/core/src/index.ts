@@ -171,6 +171,13 @@ export {
   withoutFloorStepOverrideKeys,
 } from './lib/floor-step-finish'
 export {
+  isScriptedNode,
+  type ScriptedNode,
+  scriptedSize,
+  scriptInteractive,
+  scriptSource,
+} from './lib/geometry-script-node'
+export {
   flushMountRotation,
   geometryRestingHeight,
   geometrySurfaceAt,

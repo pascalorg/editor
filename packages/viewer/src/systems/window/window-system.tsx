@@ -26,6 +26,7 @@ import {
   resolveMaterialRef,
 } from '../../lib/materials'
 import { timeSpan } from '../../lib/perf-tracks'
+import { settleScriptedOpening } from '../../lib/scripted-opening'
 import useViewer from '../../store/use-viewer'
 import { getOpeningCutoutProxyDepth } from '../wall/opening-cutout-geometry'
 
@@ -159,9 +160,11 @@ export const WindowSystem = () => {
       // Merge any live override (width / height / position) so the mesh
       // rebuild reflects the in-flight drag without zustand churn.
       const effectiveNode = getEffectiveNode(node as WindowNode)
-      timeSpan('window', () => updateWindowMesh(effectiveNode, mesh), {
+      const built = timeSpan('window', () => updateWindowMesh(effectiveNode, mesh), {
         properties: [['node', id]],
       })
+      // A scripted opening stays dirty until its artifact has loaded.
+      if (!built) continue
       clearDirty(id as AnyNodeId)
       rebuiltWindowsThisFrame += 1
 
@@ -3371,7 +3374,7 @@ function addShapedLouveredWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
   }
 }
 
-function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
+function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh): boolean {
   currentWindowSlot = undefined
 
   // Root mesh is an invisible hitbox; all visuals live in child meshes
@@ -3387,6 +3390,9 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
       : node
   mesh.position.set(...placement.position)
   mesh.rotation.set(...placement.rotation)
+
+  // Built from a script: the renderer shows its artifact, not the parametric frame.
+  if (node.source) return settleScriptedOpening(mesh)
 
   // Dispose and remove all old visual children; preserve 'cutout'
   for (const child of [...mesh.children]) {
@@ -3420,73 +3426,73 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
 
   if (openingKind === 'opening') {
     syncWindowCutout(node, mesh)
-    return
+    return true
   }
 
   if (windowType === 'sliding') {
     addSlidingWindowVisuals(node, mesh)
     syncWindowCutout(node, mesh)
-    return
+    return true
   }
 
   if (windowType === 'casement') {
     addCasementWindowVisuals(node, mesh)
     syncWindowCutout(node, mesh)
-    return
+    return true
   }
 
   if (windowType === 'awning') {
     addAwningWindowVisuals(node, mesh)
     syncWindowCutout(node, mesh)
-    return
+    return true
   }
 
   if (windowType === 'hopper') {
     addAwningWindowVisuals(node, mesh)
     syncWindowCutout(node, mesh)
-    return
+    return true
   }
 
   if (windowType === 'single-hung') {
     addSingleHungWindowVisuals(node, mesh)
     syncWindowCutout(node, mesh)
-    return
+    return true
   }
 
   if (windowType === 'double-hung') {
     addDoubleHungWindowVisuals(node, mesh)
     syncWindowCutout(node, mesh)
-    return
+    return true
   }
 
   if (windowType === 'bay') {
     addBayWindowVisuals(node, mesh)
     syncWindowCutout(node, mesh)
-    return
+    return true
   }
 
   if (windowType === 'bow') {
     addBowWindowVisuals(node, mesh)
     syncWindowCutout(node, mesh)
-    return
+    return true
   }
 
   if (windowType === 'louvered') {
     addLouveredWindowVisuals(node, mesh)
     syncWindowCutout(node, mesh)
-    return
+    return true
   }
 
   if (openingShape === 'arch') {
     addArchedWindowVisuals(node, mesh)
     syncWindowCutout(node, mesh)
-    return
+    return true
   }
 
   if (openingShape === 'rounded') {
     addRoundedWindowVisuals(node, mesh)
     syncWindowCutout(node, mesh)
-    return
+    return true
   }
 
   const innerW = width - 2 * frameThickness
@@ -3643,6 +3649,7 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
   }
 
   syncWindowCutout(node, mesh)
+  return true
 }
 
 function syncWindowCutout(node: WindowNode, mesh: THREE.Mesh) {

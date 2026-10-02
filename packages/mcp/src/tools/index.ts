@@ -52,7 +52,7 @@ export function registerTools(
   registerReadSource(server, operations, geometryScripts)
   registerMeasure(server, operations)
   registerConstructionTools(server, operations)
-  registerRoomTools(server, operations)
+  registerRoomTools(server, operations, geometryScripts)
   registerApplyPatch(server, operations)
   registerCreateLevel(server, operations)
   registerCreateUnit(server, operations)

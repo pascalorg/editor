@@ -1940,7 +1940,13 @@ function collectCutoutBrushes(
   for (const child of childrenNodes) {
     if (child.type !== 'item' && child.type !== 'window' && child.type !== 'door') continue
 
-    if (child.type === 'door' || child.type === 'window') {
+    // A window or door built from a script cuts its `cutout` mesh like an
+    // authored item (below); without one, or until it loads, its outline.
+    const scriptedCutout =
+      child.type !== 'item' &&
+      child.source &&
+      sceneRegistry.nodes.get(child.id)?.getObjectByName('cutout')
+    if ((child.type === 'door' || child.type === 'window') && !scriptedCutout) {
       const nodes = {
         ...sceneNodes,
         [wallNode.id]: wallNode,
@@ -2076,7 +2082,7 @@ function collectCutoutBrushes(
 
     // An authored object's cutout keeps its shape (an arch, a circle): its own
     // geometry in wall space, stretched across the wall so it cuts both faces.
-    if (child.type === 'item' && child.source) {
+    if (child.source) {
       const shaped = authoredCutoutBrush(cutoutMesh, wallMatrixInverse, wallThickness, wallNode)
       if (shaped) {
         brushes.push(shaped)

@@ -20,6 +20,21 @@ const placement = {
     ),
 }
 
+const script = (kind: string) => ({
+  code: z
+    .string()
+    .min(1)
+    .max(48_000)
+    .optional()
+    .describe(
+      `A three.js module for a ${kind} the fields cannot express (a fan grille, tracery, carved trim): the same module and conventions as author_object, with mount 'wall'. Its size is what it builds (name params width and height so the ${kind}'s size controls edit them), and its cutout mesh cuts the wall. Fields first; code only beyond them.`,
+    ),
+  params: z
+    .record(z.string(), z.union([z.number(), z.boolean(), z.string()]))
+    .optional()
+    .describe('Values for the params the module declares.'),
+})
+
 const outline = (archDefault: string) => ({
   openingShape: z
     .enum(['rectangle', 'rounded', 'arch'])
@@ -59,6 +74,7 @@ export const addDoorTool = {
       .optional()
       .describe('Which way the door opens (default inward).'),
     ...outline('0.45 m'),
+    ...script('door'),
     doorType: DoorType.optional().describe(
       'How it opens (default hinged); garage types for garage doors.',
     ),
@@ -92,6 +108,7 @@ export const addWindowTool = {
       description: 'Height from the floor to the bottom of the window (default 0.9 m).',
     }).optional(),
     ...outline('0.35 m'),
+    ...script('window'),
     windowType: WindowType.optional().describe('How it opens (default fixed).'),
     columns: z
       .number()

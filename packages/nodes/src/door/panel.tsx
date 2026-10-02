@@ -16,6 +16,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, DoorOpen, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo } from 'react'
+import { AuthoredParams } from '../item/authored-params'
 import { constrainCurtainOpening, curtainOpeningLimits } from '../shared/curtain-opening-limits'
 import { createOpeningPropertyPreview } from '../shared/opening-property-preview'
 import { openingPropertyPreviewHost } from '../shared/opening-property-preview-host'
@@ -279,6 +280,8 @@ export default function DoorPanel() {
   const hSum = node.segments.reduce((s, seg) => s + seg.heightRatio, 0)
   const normHeights = node.segments.map((seg) => seg.heightRatio / hSum)
   const isOpening = node.openingKind === 'opening'
+  // Built from a script: its params replace the parametric leaf's fields, as on an authored item.
+  const scripted = Boolean(node.source)
   const openingShape = node.openingShape ?? 'rectangle'
   const doorShape =
     openingShape === 'arch' || openingShape === 'rounded' ? openingShape : 'rectangle'
@@ -304,19 +307,21 @@ export default function DoorPanel() {
   const supportsHandleSide = doorType === 'hinged'
   const supportsTopShape = isSwingDoor
   const showFlipSide = !isCutoutOnly
-  const showFoldSection = isFoldingDoor && !isCutoutOnly
-  const showSlideSection = isSlidingDoor && !isCutoutOnly
+  const showFoldSection = !scripted && isFoldingDoor && !isCutoutOnly
+  const showSlideSection = !scripted && isSlidingDoor && !isCutoutOnly
   const showGarageSection =
-    (isSectionalGarageDoor || isRollupGarageDoor || isTiltupGarageDoor) && !isCutoutOnly
-  const showOpeningShapeSection = isCutoutOnly
-  const showDoorShapeSection = !isCutoutOnly && supportsTopShape
-  const showFrameSection = !isCutoutOnly
-  const showContentPaddingSection = !isCutoutOnly && !isGarageDoor
-  const showSwingSection = isSwingDoor
-  const showThresholdSection = isSwingDoor
-  const showHandleSection = isSwingDoor
-  const showHardwareSection = isSwingDoor
-  const showSegmentsSection = !isCutoutOnly && !isGarageDoor
+    !scripted &&
+    (isSectionalGarageDoor || isRollupGarageDoor || isTiltupGarageDoor) &&
+    !isCutoutOnly
+  const showOpeningShapeSection = !scripted && isCutoutOnly
+  const showDoorShapeSection = !scripted && !isCutoutOnly && supportsTopShape
+  const showFrameSection = !scripted && !isCutoutOnly
+  const showContentPaddingSection = !scripted && !isCutoutOnly && !isGarageDoor
+  const showSwingSection = !scripted && isSwingDoor
+  const showThresholdSection = !scripted && isSwingDoor
+  const showHandleSection = !scripted && isSwingDoor
+  const showHardwareSection = !scripted && isSwingDoor
+  const showSegmentsSection = !scripted && !isCutoutOnly && !isGarageDoor
   const maxDoorWidth = isGarageDoor ? 6 : 3
 
   const setOpeningTopRadius = (index: number, value: number, commit = false) => {
@@ -493,67 +498,69 @@ export default function DoorPanel() {
       title={node.name || 'Door'}
       width={320}
     >
-      <PanelSection title="Type">
-        <div className="flex flex-col gap-2 px-1 pb-1">
-          <SegmentedControl
-            onChange={(v) =>
-              handleUpdate(
-                v === 'opening'
-                  ? {
-                      openingKind: v,
-                      openingShape,
-                      openingRadiusMode,
-                      openingTopRadii,
-                      cornerRadius,
-                      archHeight,
-                      openingRevealRadius,
-                    }
-                  : v === 'garage'
+      {!scripted && (
+        <PanelSection title="Type">
+          <div className="flex flex-col gap-2 px-1 pb-1">
+            <SegmentedControl
+              onChange={(v) =>
+                handleUpdate(
+                  v === 'opening'
                     ? {
-                        openingKind: 'door',
-                        ...getDoorTypeUpdates(isGarageDoor ? doorType : 'garage-sectional'),
+                        openingKind: v,
+                        openingShape,
+                        openingRadiusMode,
+                        openingTopRadii,
+                        cornerRadius,
+                        archHeight,
+                        openingRevealRadius,
                       }
-                    : {
-                        openingKind: 'door',
-                        ...(isGarageDoor ? getDoorTypeUpdates('hinged') : {}),
-                      },
-              )
-            }
-            options={[
-              { label: 'Door', value: 'door' },
-              { label: 'Opening', value: 'opening' },
-              { label: 'Garage', value: 'garage' },
-            ]}
-            value={typeMode}
-          />
-        </div>
-        {!isOpening && (
-          <div className="grid grid-cols-2 gap-2 px-1 pt-1">
-            {(isGarageDoor ? garageDoorTypeOptions : doorTypeOptions).map((option) => {
-              const isSelected = doorType === option.value
-              return (
-                <button
-                  className={cn(
-                    'flex min-h-12 items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left text-xs transition-colors',
-                    isSelected
-                      ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
-                      : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
-                    !option.available &&
-                      'cursor-not-allowed opacity-45 hover:bg-[#2C2C2E] hover:text-muted-foreground',
-                  )}
-                  disabled={!option.available}
-                  key={option.value}
-                  onClick={() => handleUpdate(getDoorTypeUpdates(option.value))}
-                  type="button"
-                >
-                  <DoorOpen className="h-4 w-4 shrink-0" />
-                  <span className="truncate font-medium">{option.label}</span>
-                </button>
-              )
-            })}
+                    : v === 'garage'
+                      ? {
+                          openingKind: 'door',
+                          ...getDoorTypeUpdates(isGarageDoor ? doorType : 'garage-sectional'),
+                        }
+                      : {
+                          openingKind: 'door',
+                          ...(isGarageDoor ? getDoorTypeUpdates('hinged') : {}),
+                        },
+                )
+              }
+              options={[
+                { label: 'Door', value: 'door' },
+                { label: 'Opening', value: 'opening' },
+                { label: 'Garage', value: 'garage' },
+              ]}
+              value={typeMode}
+            />
           </div>
-        )}
-      </PanelSection>
+          {!isOpening && (
+            <div className="grid grid-cols-2 gap-2 px-1 pt-1">
+              {(isGarageDoor ? garageDoorTypeOptions : doorTypeOptions).map((option) => {
+                const isSelected = doorType === option.value
+                return (
+                  <button
+                    className={cn(
+                      'flex min-h-12 items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left text-xs transition-colors',
+                      isSelected
+                        ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
+                        : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
+                      !option.available &&
+                        'cursor-not-allowed opacity-45 hover:bg-[#2C2C2E] hover:text-muted-foreground',
+                    )}
+                    disabled={!option.available}
+                    key={option.value}
+                    onClick={() => handleUpdate(getDoorTypeUpdates(option.value))}
+                    type="button"
+                  >
+                    <DoorOpen className="h-4 w-4 shrink-0" />
+                    <span className="truncate font-medium">{option.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </PanelSection>
+      )}
 
       <PanelSection title="Position">
         <SliderControl
@@ -672,41 +679,45 @@ export default function DoorPanel() {
         </PanelSection>
       )}
 
-      <PanelSection title="Dimensions">
-        {limits && (
-          <p className="text-[11px] text-muted-foreground">
-            Size is limited to the wall, including clearance for the opening frame.
-          </p>
-        )}
-        <SliderControl
-          label="Width"
-          max={Math.min(maxDoorWidth, limits?.width ?? Infinity)}
-          min={Math.min(0.5, limits?.width ?? 0.5)}
-          onChange={(v) => previewDoorUpdate('width', v)}
-          onCommit={(v) => commitDoorPreview('width', v)}
-          onCancel={() => preview?.cancel()}
-          previewWhileTyping
-          precision={2}
-          restoreOnCommit={false}
-          step={0.01}
-          unit="m"
-          value={node.width}
-        />
-        <SliderControl
-          label="Height"
-          max={limits?.height ?? 1000}
-          min={Math.min(1, limits?.height ?? 1)}
-          onChange={(v) => preview?.preview(heightUpdates(v))}
-          onCommit={(v) => preview?.commit(heightUpdates(v))}
-          onCancel={() => preview?.cancel()}
-          previewWhileTyping
-          precision={2}
-          restoreOnCommit={false}
-          step={0.01}
-          unit="m"
-          value={node.height}
-        />
-      </PanelSection>
+      {scripted && <AuthoredParams node={node} />}
+
+      {!scripted && (
+        <PanelSection title="Dimensions">
+          {limits && (
+            <p className="text-[11px] text-muted-foreground">
+              Size is limited to the wall, including clearance for the opening frame.
+            </p>
+          )}
+          <SliderControl
+            label="Width"
+            max={Math.min(maxDoorWidth, limits?.width ?? Infinity)}
+            min={Math.min(0.5, limits?.width ?? 0.5)}
+            onChange={(v) => previewDoorUpdate('width', v)}
+            onCommit={(v) => commitDoorPreview('width', v)}
+            onCancel={() => preview?.cancel()}
+            previewWhileTyping
+            precision={2}
+            restoreOnCommit={false}
+            step={0.01}
+            unit="m"
+            value={node.width}
+          />
+          <SliderControl
+            label="Height"
+            max={limits?.height ?? 1000}
+            min={Math.min(1, limits?.height ?? 1)}
+            onChange={(v) => preview?.preview(heightUpdates(v))}
+            onCommit={(v) => preview?.commit(heightUpdates(v))}
+            onCancel={() => preview?.cancel()}
+            previewWhileTyping
+            precision={2}
+            restoreOnCommit={false}
+            step={0.01}
+            unit="m"
+            value={node.height}
+          />
+        </PanelSection>
+      )}
 
       {showDoorShapeSection && (
         <PanelSection title="Top Shape">
@@ -931,7 +942,7 @@ export default function DoorPanel() {
         </PanelSection>
       )}
 
-      {!isCutoutOnly && (
+      {!isCutoutOnly && !scripted && (
         <>
           {showFrameSection && (
             <PanelSection title="Frame">

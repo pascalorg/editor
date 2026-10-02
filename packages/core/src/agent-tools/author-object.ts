@@ -22,7 +22,7 @@ Conventions (they make the object work in Pascal; follow them):
 - Sockets: an empty Object3D named anchor:<id> marks where other things attach.
 - No textures, network or DOM. At most 300k triangles, 32 materials, 60 m per side.
 
-Edit: pass nodeId with new code and/or params (params alone rebuild the stored script; read it first with read_source to change the code); identity, placement and paint are kept. The result lists the size, parts, slots, lights, animations and params.`
+Edit: pass nodeId (an object, or a window or door built from code) with new code and/or params (params alone rebuild the stored script; read it first with read_source to change the code); identity, placement and paint are kept. The result lists the size, parts, slots, lights, animations and params.`
 
 export const authorObjectTool = {
   name: 'author_object',
@@ -74,8 +74,8 @@ export const readSourceTool = {
   name: 'read_source',
   title: 'Read object script',
   description:
-    "The three.js module an object built with author_object runs, with its params and their current values. Read it before changing an object's code, then pass the edited module to author_object with the same nodeId.",
+    "The three.js module an object (or a window or door built from code) runs, with its params and their current values. Read it before changing an object's code, then pass the edited module to author_object with the same nodeId.",
   input: {
-    nodeId: NodeId.describe('An object built with author_object.'),
+    nodeId: NodeId.describe('An object, window or door built from code.'),
   },
 }

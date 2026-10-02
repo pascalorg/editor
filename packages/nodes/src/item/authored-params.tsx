@@ -1,6 +1,10 @@
 'use client'
 
-import type { GeometryScriptParamSpec, GeometryScriptParamValue, ItemNode } from '@pascal-app/core'
+import type {
+  GeometryScriptParamSpec,
+  GeometryScriptParamValue,
+  ScriptedNode,
+} from '@pascal-app/core'
 import {
   PanelSection,
   rebuildAuthoredObject,
@@ -15,7 +19,11 @@ import { useState } from 'react'
  * preview their value while dragging and rebuild on release (a rebuild runs
  * the script again: tens to hundreds of milliseconds).
  */
-export function AuthoredParams({ node }: { node: ItemNode }) {
+export function AuthoredParams({
+  node,
+}: {
+  node: { id: string; source?: ScriptedNode['source'] }
+}) {
   const source = node.source
   const [drafts, setDrafts] = useState<Record<string, number>>({})
   const [busy, setBusy] = useState(false)

@@ -196,7 +196,7 @@ export const ItemNode = BaseNode.extend({
     - rotation: corrective rotation for the model
     - scale: corrective scale for the model
     - tags: tags associated with the item
-  - source: optional three.js script the asset was compiled from (code, params, artifact hash, manifest)
+  - source: optional three.js script the asset was compiled from (script hash, params, artifact hash, manifest)
 `)
 
 export type ItemNode = z.infer<typeof ItemNode>

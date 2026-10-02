@@ -1,5 +1,12 @@
 import { refuse } from '../agent-tools/refusal'
 import { artifactUrl } from '../lib/artifact-store'
+import {
+  isScriptedNode,
+  type ScriptedNode,
+  scriptedSize,
+  scriptInteractive,
+  scriptSource,
+} from '../lib/geometry-script-node'
 import { geometryRestingHeight, resettledPosition } from '../lib/geometry-surfaces'
 import {
   type AnyNode,
@@ -44,54 +51,6 @@ const HOSTS: Record<GeometryScriptMount, readonly AnyNode['type'][]> = {
   ceiling: ['ceiling'],
 }
 
-/**
- * The item's controls from what the module emitted: a light switch for its
- * lights, an open/close toggle for an `open` clip (closing plays `close`, or
- * `open` reversed), a `loop` clip that runs throughout, and a play toggle per
- * other clip, labelled with its name.
- */
-function scriptInteractive(
-  manifest: CompiledGeometryScript['manifest'],
-): ItemNode['asset']['interactive'] {
-  const controls: NonNullable<ItemNode['asset']['interactive']>['controls'] = []
-  const effects: NonNullable<ItemNode['asset']['interactive']>['effects'] = []
-  if (manifest.lights.length > 0) {
-    controls.push({ kind: 'toggle', label: 'Lights', default: true })
-    for (const light of manifest.lights) {
-      effects.push({
-        kind: 'light',
-        color: light.color,
-        intensityRange: [0, light.intensity],
-        distance: light.distance,
-        offset: light.position,
-      })
-    }
-  }
-  const clip = (name: string) => manifest.animations.some((animation) => animation.name === name)
-  if (clip('open')) {
-    effects.push({
-      kind: 'animation',
-      mode: 'open-close',
-      control: controls.length,
-      clips: { on: 'open', off: clip('close') ? 'close' : undefined },
-    })
-    controls.push({ kind: 'toggle', label: 'Open', default: false })
-  }
-  if (clip('loop')) effects.push({ kind: 'animation', mode: 'ambient', clips: { loop: 'loop' } })
-  // Every other clip gets its own play toggle, labelled with its name.
-  for (const { name } of manifest.animations) {
-    if (name === 'open' || name === 'close' || name === 'loop') continue
-    effects.push({
-      kind: 'animation',
-      mode: 'ambient',
-      control: controls.length,
-      clips: { on: name },
-    })
-    controls.push({ kind: 'toggle', label: name, default: false })
-  }
-  return effects.length > 0 ? { controls, effects } : undefined
-}
-
 function scriptAsset(
   compiled: CompiledGeometryScript,
   input: AuthorObjectInput,
@@ -116,18 +75,9 @@ function scriptAsset(
   }
 }
 
-const scriptSource = (compiled: CompiledGeometryScript) => ({
-  kind: 'script' as const,
-  language: 'three' as const,
-  script: compiled.script,
-  params: compiled.params,
-  artifact: compiled.sha256,
-  manifest: compiled.manifest,
-})
-
 const round = (value: number) => Math.round(value * 1000) / 1000
 
-function summary(node: ItemNode, compiled: CompiledGeometryScript, orphanedSlots: string[]) {
+function summary(node: { id: string }, compiled: CompiledGeometryScript, orphanedSlots: string[]) {
   const { bounds, parts, slots, lights, params, triangles, cutout, animations } = compiled.manifest
   return {
     nodeId: node.id,
@@ -165,6 +115,33 @@ export const authorObject: AgentOperation<AuthorObjectInput> = (nodes, input, co
     const previous = authoredObject(nodes, input.nodeId)
     const slotIds = new Set(compiled.manifest.slots.map((slot) => slot.id))
     const orphanedSlots = Object.keys(previous.slots ?? {}).filter((id) => !slotIds.has(id))
+    if (previous.type !== 'item') {
+      // A window or door keeps its place on the wall and its bottom edge; its size is what the script built.
+      if (compiled.mount !== 'wall')
+        refuse('wrong_mount', `A ${previous.type}'s script uses mount 'wall'.`, {
+          mount: compiled.mount,
+        })
+      const [width, height] = scriptedSize(compiled.manifest)
+      const [x, y, z] = (input.position as Vec3 | undefined) ?? previous.position
+      const bottom = y - previous.height / 2
+      return {
+        result: summary(previous, compiled, orphanedSlots),
+        changes: {
+          update: [
+            {
+              id: previous.id,
+              data: {
+                name: input.name ?? previous.name,
+                source: scriptSource(compiled),
+                width,
+                height,
+                position: [x, bottom + height / 2, z],
+              },
+            },
+          ],
+        },
+      }
+    }
     const next = ItemNode.parse({
       ...previous,
       name: input.name ?? previous.name,
@@ -227,31 +204,24 @@ export const authorObject: AgentOperation<AuthorObjectInput> = (nodes, input, co
   }
 }
 
-/** The authored object `read_source` and a params-only rebuild act on, or a refusal. */
-export function authoredObject(
-  nodes: Record<string, AnyNode>,
-  nodeId: string,
-): ItemNode & {
-  source: NonNullable<ItemNode['source']>
-} {
+/** The scripted node `read_source` and a params-only rebuild act on, or a refusal. */
+export function authoredObject(nodes: Record<string, AnyNode>, nodeId: string): ScriptedNode {
   const node = nodes[nodeId]
   if (!node) refuse('node_not_found', `Node not found: ${nodeId}.`, { id: nodeId })
-  if (node.type !== 'item' || !node.source)
+  if (!isScriptedNode(node))
     refuse(
       'not_authored',
-      `${nodeId} is a ${node.type} without a script; only objects built with author_object have one.`,
+      `${nodeId} is a ${node.type} without a script; only objects, windows and doors built from code have one.`,
       { id: nodeId, type: node.type },
     )
-  return node as ItemNode & { source: NonNullable<ItemNode['source']> }
+  return node
 }
 
 /** What `read_source` answers once the host has the module's text. */
-export function readSourceResult(
-  node: ItemNode & { source: NonNullable<ItemNode['source']> },
-  code: string,
-) {
+export function readSourceResult(node: ScriptedNode, code: string) {
   return {
     nodeId: node.id,
+    type: node.type,
     name: node.name,
     code,
     params: node.source.manifest.params.map((spec) => ({
