@@ -18,6 +18,7 @@ import { createOpeningPropertyPreview } from '../shared/opening-property-preview
 import { openingPropertyPreviewHost } from '../shared/opening-property-preview-host'
 import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-opening-host'
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
+import { scriptedOpeningHandles } from '../shared/scripted-opening-handles'
 import { readHostWallCeiling } from '../shared/wall-opening-ceiling'
 import { wallFloorplanSiblingOverrides } from '../wall/floorplan-overrides'
 import { buildDoorContextualDimensions } from './contextual-dimensions'
@@ -263,7 +264,10 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   },
 
   parametrics: doorParametrics,
-  handles: doorHandles,
+  handles: (node) =>
+    node.source
+      ? [doorMoveHandle(), ...scriptedOpeningHandles(node, doorWidthHandle, doorHeightHandle)]
+      : doorHandles,
 
   rendersChildren: false,
   renderer: {

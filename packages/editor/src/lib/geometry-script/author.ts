@@ -42,13 +42,15 @@ export async function storedScript(nodeId: string | undefined): Promise<string> 
 const rebuildGeneration = new Map<string, number>()
 
 /**
- * Re-runs an authored object's script with new param values, the inspector's
- * path: same code, new artifact, one undo step. A slower earlier rebuild of
+ * Re-runs a scripted node's script with new param values, the inspector's
+ * and resize handles' path: same code, new artifact, one undo step. A slower earlier rebuild of
  * the same node never overwrites a newer one.
  */
 export async function rebuildAuthoredObject(
   nodeId: string,
   params: Record<string, GeometryScriptParamValue>,
+  /** Where it ends up, when a resize also moves it (a side arrow keeps the opposite edge). */
+  position?: [number, number, number],
 ): Promise<void> {
   const generation = (rebuildGeneration.get(nodeId) ?? 0) + 1
   rebuildGeneration.set(nodeId, generation)
@@ -56,7 +58,7 @@ export async function rebuildAuthoredObject(
   if (rebuildGeneration.get(nodeId) !== generation) return
   const { changes } = authorObject(
     useScene.getState().nodes,
-    { params, nodeId, compiled },
+    { params, nodeId, compiled, position },
     { activeLevelId: null },
   )
   for (const { id, data } of changes?.update ?? []) {

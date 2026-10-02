@@ -20,10 +20,14 @@ function radiusHandles<N>(
   )
 }
 
+function handlesOf<N>(handles: unknown, node: N): HandleDescriptor<N>[] {
+  return typeof handles === 'function' ? handles(node, scene) : (handles as HandleDescriptor<N>[])
+}
+
 describe('opening corner-radius handles', () => {
   test('window exposes four dots and supports shared or Shift-isolated rounding', () => {
     const window = WindowNode.parse({ id: 'window_radius', cornerRadius: 0.15 })
-    const handles = radiusHandles<WindowNode>(windowDefinition.handles)
+    const handles = radiusHandles<WindowNode>(handlesOf(windowDefinition.handles, window))
 
     expect(handles).toHaveLength(4)
     expect(handles[0]?.apply(window, 0.3, scene, { altKey: false })).toMatchObject({
@@ -42,7 +46,7 @@ describe('opening corner-radius handles', () => {
 
   test('door exposes only its top two dots and hides them for an arch', () => {
     const door = DoorNode.parse({ id: 'door_radius', cornerRadius: 0.15 })
-    const handles = radiusHandles<DoorNode>(doorDefinition.handles)
+    const handles = radiusHandles<DoorNode>(handlesOf(doorDefinition.handles, door))
 
     expect(handles.map((handle) => handle.corner)).toEqual([
       [-1, 1],

@@ -13,7 +13,9 @@ import {
 } from '@pascal-app/core'
 import { resolveWindowHandlePortalTarget, windowDefinition } from './definition'
 
-const windowHandles = windowDefinition.handles as HandleDescriptor<WindowNode>[]
+const windowHandles = (
+  windowDefinition.handles as (node: WindowNode) => HandleDescriptor<WindowNode>[]
+)(WindowNode.parse({ id: 'window_handles' }))
 
 function sceneWith(...nodes: AnyNode[]): SceneApi {
   const byId = Object.fromEntries(nodes.map((node) => [node.id, node])) as Record<
@@ -40,7 +42,7 @@ function resizeToMax(index: number, window: WindowNode, scene: SceneApi): Partia
 
 describe('window handle presentation', () => {
   test('does not register the legacy move arrow', () => {
-    const handles = windowDefinition.handles as HandleDescriptor[]
+    const handles = windowHandles as HandleDescriptor[]
 
     expect(handles.some((handle) => 'shape' in handle && handle.shape === 'move-cross')).toBe(false)
   })
