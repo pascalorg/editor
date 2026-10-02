@@ -1,16 +1,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
-  type AuthorObjectInput,
+  type AddObjectInput,
+  addObject,
   authoredObject,
-  authorObject,
   readSourceResult,
 } from '@pascal-app/core/agent-operations'
-import {
-  authorObjectTool,
-  isAgentRefusal,
-  readSourceTool,
-  refuse,
-} from '@pascal-app/core/agent-tools'
+import { addObjectTool, getSourceTool, isAgentRefusal, refuse } from '@pascal-app/core/agent-tools'
 import {
   type AnyNode,
   type CompiledGeometryScript,
@@ -24,7 +19,7 @@ import { persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { toPatches } from './shared-tools'
 
 /**
- * How a host runs `author_object`'s module and keeps the result. Running
+ * How a host runs `add_object`'s module and keeps the result. Running
  * model-written code is the host's call: it decides the isolation, and where
  * artifacts live for the active scene.
  */
@@ -80,18 +75,18 @@ export async function readScript(
   return new TextDecoder().decode(bytes)
 }
 
-/** `author_object` on the MCP: the shared contract and operation, with the host's compile in front. */
-export function registerAuthorObject(
+/** `add_object` on the MCP: the shared contract and operation, with the host's compile in front. */
+export function registerAddObject(
   server: McpServer,
   bridge: SceneOperations,
   host: GeometryScriptHost | undefined,
 ): void {
   server.registerTool(
-    authorObjectTool.name,
+    addObjectTool.name,
     {
-      title: authorObjectTool.title,
-      description: authorObjectTool.description,
-      inputSchema: authorObjectTool.input,
+      title: addObjectTool.title,
+      description: addObjectTool.description,
+      inputSchema: addObjectTool.input,
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async (input: Record<string, unknown>) => {
@@ -106,7 +101,7 @@ export function registerAuthorObject(
           code: 'no_active_scene',
         })
       }
-      const args = input as Omit<AuthorObjectInput, 'compiled'>
+      const args = input as Omit<AddObjectInput, 'compiled'>
       let compiled: CompiledGeometryScript
       try {
         const code =
@@ -121,9 +116,9 @@ export function registerAuthorObject(
           code: 'script_failed',
         })
       }
-      let outcome: ReturnType<typeof authorObject>
+      let outcome: ReturnType<typeof addObject>
       try {
-        outcome = authorObject(
+        outcome = addObject(
           bridge.getNodes() as Record<string, AnyNode>,
           { ...args, compiled },
           { activeLevelId: null },
@@ -135,7 +130,7 @@ export function registerAuthorObject(
       if (patches.length) bridge.applyPatch(patches)
       const payload = {
         ...outcome.result,
-        ...persistencePayload(await publishLiveSceneSnapshot(bridge, authorObjectTool.name)),
+        ...persistencePayload(await publishLiveSceneSnapshot(bridge, addObjectTool.name)),
       }
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
@@ -152,18 +147,18 @@ function refuseMissingCode(): never {
   )
 }
 
-/** `read_source` on the MCP: the object's module text, read back through the host's store. */
-export function registerReadSource(
+/** `get_source` on the MCP: the object's module text, read back through the host's store. */
+export function registerGetSource(
   server: McpServer,
   bridge: SceneOperations,
   host: GeometryScriptHost | undefined,
 ): void {
   server.registerTool(
-    readSourceTool.name,
+    getSourceTool.name,
     {
-      title: readSourceTool.title,
-      description: readSourceTool.description,
-      inputSchema: readSourceTool.input,
+      title: getSourceTool.title,
+      description: getSourceTool.description,
+      inputSchema: getSourceTool.input,
       annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async ({ nodeId }: { nodeId: string }) => {

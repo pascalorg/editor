@@ -21,7 +21,7 @@ import type { AgentOperation } from './types'
 
 type Vec3 = [number, number, number]
 
-export type AuthorObjectInput = {
+export type AddObjectInput = {
   /** Absent for a params-only edit: the host compiled the object's stored script. */
   code?: string
   params?: Record<string, GeometryScriptParamValue>
@@ -53,7 +53,7 @@ const HOSTS: Record<GeometryScriptMount, readonly AnyNode['type'][]> = {
 
 function scriptAsset(
   compiled: CompiledGeometryScript,
-  input: AuthorObjectInput,
+  input: AddObjectInput,
   previous: ItemNode['asset'] | undefined,
 ): ItemNode['asset'] {
   const { min, max } = compiled.manifest.bounds
@@ -100,13 +100,13 @@ function summary(node: { id: string }, compiled: CompiledGeometryScript, orphane
 }
 
 /**
- * `author_object`: the item a compiled three.js module becomes. Not in
+ * `add_object`: the item a compiled three.js module becomes. Not in
  * AGENT_OPERATIONS: each surface compiles `code` first (the chat in its
  * worker, the MCP on the server) and passes the result as `compiled`.
  * The artifact is referenced by hash and its bounds become the item's dimensions; editing
  * keeps the item's identity, placement, children and paint.
  */
-export const authorObject: AgentOperation<AuthorObjectInput> = (nodes, input, context) => {
+export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context) => {
   const { compiled } = input
   const rotation: Vec3 | undefined =
     input.rotation === undefined ? undefined : [0, (input.rotation * Math.PI) / 180, 0]
@@ -248,7 +248,7 @@ export const rescriptOpening: AgentOperation<RescriptOpeningInput> = (nodes, inp
   }
 }
 
-/** The scripted node `read_source` and a params-only rebuild act on, or a refusal. */
+/** The scripted node `get_source` and a params-only rebuild act on, or a refusal. */
 export function authoredObject(nodes: Record<string, AnyNode>, nodeId: string): ScriptedNode {
   const node = nodes[nodeId]
   if (!node) refuse('node_not_found', `Node not found: ${nodeId}.`, { id: nodeId })
@@ -261,7 +261,7 @@ export function authoredObject(nodes: Record<string, AnyNode>, nodeId: string): 
   return node
 }
 
-/** What `read_source` answers once the host has the module's text. */
+/** What `get_source` answers once the host has the module's text. */
 export function readSourceResult(node: ScriptedNode, code: string) {
   return {
     nodeId: node.id,

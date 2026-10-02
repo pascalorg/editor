@@ -33,7 +33,7 @@ const TOOL_POLICIES = [
       'list_templates',
       'list_units',
       'measure',
-      'read_source',
+      'get_source',
       'search_assets',
       'validate_design',
       'validate_scene',
@@ -87,7 +87,7 @@ const TOOL_POLICIES = [
     },
     tools: [
       'apply_patch',
-      'author_object',
+      'add_object',
       'create_from_template',
       'create_house_from_brief',
       'create_stair_between_levels',

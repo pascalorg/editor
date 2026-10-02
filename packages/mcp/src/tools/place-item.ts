@@ -37,7 +37,7 @@ export function registerPlaceItem(server: McpServer, bridge: SceneOperations): v
     {
       title: 'Place item',
       description:
-        'Place a catalog item into the scene. Target a level/slab/zone for floor items, a wall for wall-attached items, a ceiling for ceiling-attached items, or an item to rest on it (position in level coordinates; on an object built with author_object it lands on the real surface below the point, such as a porch landing, and a ceiling item hangs from the underside above it, such as a vaulted ceiling, unless position[1] is set above 0). Do not target the site node directly.',
+        'Place a catalog item into the scene. Target a level/slab/zone for floor items, a wall for wall-attached items, a ceiling for ceiling-attached items, or an item to rest on it (position in level coordinates; on an object built with add_object it lands on the real surface below the point, such as a porch landing, and a ceiling item hangs from the underside above it, such as a vaulted ceiling, unless position[1] is set above 0). Do not target the site node directly.',
       inputSchema: placeItemInput,
       outputSchema: placeItemOutput,
       annotations: ADDITIVE_TOOL_ANNOTATIONS,

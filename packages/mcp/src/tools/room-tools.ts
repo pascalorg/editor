@@ -26,9 +26,9 @@ import type {
 import { ItemNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
+import { compileAndStore, type GeometryScriptHost, readScript } from './add-object'
 import { ADDITIVE_TOOL_ANNOTATIONS, READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 import { findCatalogItem, searchCatalogItems } from './asset-catalog'
-import { compileAndStore, type GeometryScriptHost, readScript } from './author-object'
 import { ErrorCode, refusalResult, throwMcpError, toolError } from './errors'
 import {
   type LiveSyncStatus,
@@ -598,7 +598,7 @@ async function rebuildOpening(
   })
 }
 
-/** A door or window passed `code`: compiled and stored the way author_object does, or the tool's error. */
+/** A door or window passed `code`: compiled and stored the way add_object does, or the tool's error. */
 async function compileOpeningScript(
   bridge: SceneOperations,
   host: GeometryScriptHost | undefined,

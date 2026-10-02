@@ -5,7 +5,7 @@ import { registerPrompts } from './prompts'
 import { registerResources } from './resources'
 import type { SceneStore } from './storage/types'
 import { registerTools } from './tools'
-import type { GeometryScriptHost } from './tools/author-object'
+import type { GeometryScriptHost } from './tools/add-object'
 import { normalizeToolSchemaDialect } from './tools/normalize-schema-dialect'
 import { registerVisionTools } from './tools/vision'
 import { version } from './version'
@@ -29,7 +29,7 @@ export type CreatePascalMcpServerOptions = {
    * Experimental task-based tool registrations are outside this hook.
    */
   executeTool?: PascalMcpToolExecutor
-  /** Runs and stores `author_object` modules; without it the tool answers `scripts_unavailable`. */
+  /** Runs and stores `add_object` modules; without it the tool answers `scripts_unavailable`. */
   geometryScripts?: GeometryScriptHost
 }
 

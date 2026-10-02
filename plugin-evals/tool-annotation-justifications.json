@@ -20,6 +20,19 @@
       }
     },
     {
+      "name": "add_object",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it creates an object from a three.js module in the connected Pascal scene, or rebuilds an existing one.",
+        "destructiveHint": "Given an existing object's nodeId it replaces that object's geometry and script, so earlier authored state is overwritten (undo restores it).",
+        "openWorldHint": "It runs the supplied module in the Pascal server's script host and stores the result with the scene, without accessing the public internet."
+      }
+    },
+    {
       "name": "add_window",
       "annotations": {
         "readOnlyHint": false,
@@ -69,19 +82,6 @@
         "readOnlyHint": "It is not read-only because applies arbitrary scene patch operations that can update or remove existing Pascal nodes.",
         "destructiveHint": "A patch can update or delete existing nodes, so user-authored scene state can be overwritten or removed.",
         "openWorldHint": "It operates on the connected Pascal scene or project service without accessing the public internet."
-      }
-    },
-    {
-      "name": "author_object",
-      "annotations": {
-        "readOnlyHint": false,
-        "destructiveHint": true,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It is not read-only because it creates an object from a three.js module in the connected Pascal scene, or rebuilds an existing one.",
-        "destructiveHint": "Given an existing object's nodeId it replaces that object's geometry and script, so earlier authored state is overwritten (undo restores it).",
-        "openWorldHint": "It runs the supplied module in the Pascal server's script host and stores the result with the scene, without accessing the public internet."
       }
     },
     {
@@ -488,6 +488,19 @@
       }
     },
     {
+      "name": "get_source",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It only reads the script stored for an object built with add_object, with its params.",
+        "destructiveHint": "It changes nothing; it returns the module text and param values.",
+        "openWorldHint": "It reads from the connected Pascal service's artifact store without accessing the public internet."
+      }
+    },
+    {
       "name": "get_walls",
       "annotations": {
         "readOnlyHint": true,
@@ -667,19 +680,6 @@
         "readOnlyHint": "It is not read-only because adds an item at the requested pose in the connected Pascal scene.",
         "destructiveHint": "Its intended operation adds new modeled state without deleting or replacing existing Pascal scene or project state.",
         "openWorldHint": "It operates on the connected Pascal scene, project, and configured catalog data without accessing the public internet."
-      }
-    },
-    {
-      "name": "read_source",
-      "annotations": {
-        "readOnlyHint": true,
-        "destructiveHint": false,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It only reads the script stored for an object built with author_object, with its params.",
-        "destructiveHint": "It changes nothing; it returns the module text and param values.",
-        "openWorldHint": "It reads from the connected Pascal service's artifact store without accessing the public internet."
       }
     },
     {

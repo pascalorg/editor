@@ -6,11 +6,11 @@ import {
   getArtifactStore,
   useScene,
 } from '@pascal-app/core'
-import { authoredObject, authorObject, rescriptOpening } from '@pascal-app/core/agent-operations'
+import { addObject, authoredObject, rescriptOpening } from '@pascal-app/core/agent-operations'
 import { compileGeometryScriptInWorker } from './client'
 
 /**
- * The editor's compile step for `author_object`: runs the module in the
+ * The editor's compile step for `add_object`: runs the module in the
  * worker and stores the GLB and the module text, so the core operation can
  * reference both by hash. Without `code`, the node's stored script is rebuilt
  * with the new params.
@@ -60,7 +60,7 @@ export async function rebuildAuthoredObject(
   const opening = nodes[nodeId as AnyNodeId]?.type !== 'item'
   const { changes } = opening
     ? rescriptOpening(nodes, { nodeId, compiled, position }, { activeLevelId: null })
-    : authorObject(nodes, { params, nodeId, compiled, position }, { activeLevelId: null })
+    : addObject(nodes, { params, nodeId, compiled, position }, { activeLevelId: null })
   for (const { id, data } of changes?.update ?? []) {
     useScene.getState().updateNode(id as AnyNodeId, data)
   }
