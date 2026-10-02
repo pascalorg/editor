@@ -10,7 +10,7 @@ Module shape (import THREE from the three package as usual; the addons below too
   export const mount = 'floor'   // 'floor' | 'wall-side' (on a wall face) | 'wall' (through a wall, like a window) | 'ceiling'
   export default function build({ params, THREE }) { const group = new THREE.Group(); /* … */ return group }
 
-One object is one feature that changes together: a porch, a railing run, a fireplace surround, a ceiling with its beams. Never a whole house, and never walls, rooms, floors, roofs, stairs, doors or windows: those have their own tools.
+One object is one feature that changes together: a porch, a railing run, a fireplace surround, a ceiling with its beams. Never a whole house, and never walls, rooms, floors, roofs or stairs: those have their own tools. Doors and windows: add_door and add_window make rectangular ones; build any other shape here (an arched or round window, a fanlight, grilles, a carved or arched door) with mount 'wall' and a cutout shaped like the opening.
 
 Conventions (they make the object work in Pascal; follow them):
 - Metres, Y up, modelled as it stands. Pascal puts the bottom-centre of the bounds at the placement point; for wall-side the back face sits on the wall and the object faces +Z.
@@ -18,7 +18,7 @@ Conventions (they make the object work in Pascal; follow them):
 - Parts: name the few groups a person would point at part:<id> (part:column_left, part:canopy, part:landing), usually 2–24, a group per part, not every mesh. Set userData.type on parts someone would look for: column, beam, slab, roof, railing, panel, trim, step, light.
 - Lights: add a THREE.PointLight or SpotLight named light:<id> where the bulb is; it becomes a switchable light.
 - Motion: put THREE.AnimationClips on the returned group's .animations, as in any three.js project; tracks target <objectName>.<property> or <object.uuid>.<property> and may use any transform property (position, rotation, rotation[y], quaternion, scale); material and visibility tracks do not animate. A clip named open becomes the object's open/close control (close plays a clip named close, or open reversed); a clip named loop runs continuously; every other clip gets its own play toggle labelled with its name (name it for the person: "Twirl", "Music"). Write as many clips as the object needs.
-- Wall opening: a box mesh named cutout (wall mount) is cut out of the host wall and never renders.
+- Wall opening: a mesh named cutout (wall mount), shaped like the opening (a box, an arch, a circle) and as deep as the wall or deeper, is cut out of the host wall in that shape and never renders.
 - Sockets: an empty Object3D named anchor:<id> marks where other things attach.
 - No textures, network or DOM. At most 300k triangles, 32 materials, 60 m per side.
 

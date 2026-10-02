@@ -23,7 +23,7 @@ export const addDoorTool = {
   name: 'add_door',
   title: 'Add door',
   description:
-    'Add a door to an existing straight wall at t (0..1 along it). The door slides to stay on the wall and reports clamped. Refused with a code, as in the editor: curved walls, walls shorter than the door, and overlapping another door, window or wall item unless force is set.',
+    'Add a door to an existing straight wall at t (0..1 along it). The door slides to stay on the wall and reports clamped. Refused with a code, as in the editor: curved walls, walls shorter than the door, and overlapping another door, window or wall item unless force is set. Rectangular doors only: build an arched or otherwise shaped door with author_object.',
   input: {
     wallId: NodeId.describe('The wall to add the door to.'),
     ...placement,
@@ -53,7 +53,7 @@ export const addWindowTool = {
   name: 'add_window',
   title: 'Add window',
   description:
-    "Add a window to an existing straight wall at t (0..1 along it), on sillHeight above the floor. It slides to stay on the wall and under the wall's ceiling, and reports clamped. Refused with a code, as in the editor: curved walls, walls shorter than the window, and overlapping another door, window or wall item unless force is set.",
+    "Add a window to an existing straight wall at t (0..1 along it), on sillHeight above the floor. It slides to stay on the wall and under the wall's ceiling, and reports clamped. Refused with a code, as in the editor: curved walls, walls shorter than the window, and overlapping another door, window or wall item unless force is set. Rectangular windows only: build an arched, round or otherwise shaped window (fanlight, grilles) with author_object.",
   input: {
     wallId: NodeId.describe('The wall to add the window to.'),
     ...placement,
