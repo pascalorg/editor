@@ -54,6 +54,7 @@ export function registerCreateProject(server: McpServer, operations: SceneOperat
         )
       }
       try {
+        const bound = operations.getActiveScene()
         const status = await operations.createProject({
           name,
           ...(id !== undefined ? { id } : {}),
@@ -67,6 +68,15 @@ export function registerCreateProject(server: McpServer, operations: SceneOperat
           thumbnailUrl: status.thumbnailUrl,
           version: status.version,
         })
+        // A session bound to another project starts the new one empty: carried over, that
+        // project's scene was saved into the new one (2026-10-03). Unbound work is kept: it is
+        // what the new project is for. Emptied once bound to the new project, so nothing that
+        // follows the scene can write the empty scene to the old one.
+        if (bound && bound.projectId !== status.projectId) {
+          operations.loadJSON({ nodes: {}, rootNodeIds: [] })
+          operations.loadDefault()
+          operations.clearHistory()
+        }
         // A scene from the first call: its first draft is what this session holds (the empty
         // scene, or the unbound work it was made for), so any session can load it at once. Unsaved,
         // another session's load_scene answered scene_not_found until a first save (L56).
