@@ -11,6 +11,7 @@ import { cn } from './../../../lib/utils'
 import useEditor from './../../../store/use-editor'
 import { CameraActions } from './camera-actions'
 import { ControlModes } from './control-modes'
+import { type ActionMenuPlacement, ActionMenuPlacementProvider } from './placement'
 import { SecondaryToggles } from './view-toggles'
 
 // Mobile bottom offset matches the viewer's overlap behind the sheet's
@@ -18,7 +19,13 @@ import { SecondaryToggles } from './view-toggles'
 // just above that strip instead of inside it.
 const MOBILE_BOTTOM_OFFSET = 24
 
-export function ActionMenu({ className }: { className?: string }) {
+export function ActionMenu({
+  className,
+  placement = 'bottom',
+}: {
+  className?: string
+  placement?: ActionMenuPlacement
+}) {
   const isMobile = useIsMobile()
   const readOnly = useScene((s) => s.readOnly)
   const hasSelectionOnMobile = useViewer((s) => isMobile && s.selection.selectedIds.length > 0)
@@ -47,41 +54,50 @@ export function ActionMenu({ className }: { className?: string }) {
     ? { duration: 0 }
     : { type: 'spring' as const, bounce: 0.2, duration: 0.4 }
 
+  // Mobile keeps the bottom rail: the sheet owns the rest of the screen.
+  const effectivePlacement = isMobile ? 'bottom' : placement
+
   return (
-    <TooltipProvider>
-      <motion.div
-        className={cn(
-          'left-1/2 z-50 -translate-x-1/2',
-          isMobile ? 'absolute origin-bottom scale-90' : 'fixed bottom-6',
-          'rounded-2xl border border-border bg-background/90 shadow-2xl backdrop-blur-md',
-          'transition-colors duration-200 ease-out',
-          className,
-        )}
-        layout
-        style={isMobile ? { bottom: MOBILE_BOTTOM_OFFSET } : undefined}
-        transition={transition}
-      >
-        {isMobile ? (
-          <div className="flex flex-col items-stretch gap-0.5 px-2 py-1.5">
-            {/* Row 1: control modes only */}
-            <div className="flex items-center justify-center gap-1">
+    <ActionMenuPlacementProvider value={effectivePlacement}>
+      <TooltipProvider>
+        <motion.div
+          className={cn(
+            'left-1/2 z-50 -translate-x-1/2',
+            isMobile
+              ? 'absolute origin-bottom scale-90'
+              : effectivePlacement === 'top'
+                ? 'fixed top-16'
+                : 'fixed bottom-6',
+            'rounded-2xl border border-border bg-background/90 shadow-2xl backdrop-blur-md',
+            'transition-colors duration-200 ease-out',
+            className,
+          )}
+          layout
+          style={isMobile ? { bottom: MOBILE_BOTTOM_OFFSET } : undefined}
+          transition={transition}
+        >
+          {isMobile ? (
+            <div className="flex flex-col items-stretch gap-0.5 px-2 py-1.5">
+              {/* Row 1: control modes only */}
+              <div className="flex items-center justify-center gap-1">
+                <ControlModes />
+              </div>
+              {/* Row 2: secondary toggles (orbit + top view hidden) */}
+              <div className="flex items-center justify-center gap-1 border-border/50 border-t pt-1">
+                <SecondaryToggles />
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center gap-1 px-2 py-1.5">
               <ControlModes />
-            </div>
-            {/* Row 2: secondary toggles (orbit + top view hidden) */}
-            <div className="flex items-center justify-center gap-1 border-border/50 border-t pt-1">
+              <div className="mx-1 h-5 w-px bg-border" />
               <SecondaryToggles />
+              <div className="mx-1 h-5 w-px bg-border" />
+              <CameraActions />
             </div>
-          </div>
-        ) : (
-          <div className="flex items-center justify-center gap-1 px-2 py-1.5">
-            <ControlModes />
-            <div className="mx-1 h-5 w-px bg-border" />
-            <SecondaryToggles />
-            <div className="mx-1 h-5 w-px bg-border" />
-            <CameraActions />
-          </div>
-        )}
-      </motion.div>
-    </TooltipProvider>
+          )}
+        </motion.div>
+      </TooltipProvider>
+    </ActionMenuPlacementProvider>
   )
 }

@@ -70,6 +70,7 @@ import { ZoneSystem } from '../systems/zone/zone-system'
 import { BoxSelectTool } from '../tools/select/box-select-tool'
 import { ToolManager } from '../tools/tool-manager'
 import { ActionMenu } from '../ui/action-menu'
+import type { ActionMenuPlacement } from '../ui/action-menu/placement'
 import { CommandPalette, type CommandPaletteEmptyAction } from '../ui/command-palette'
 import { EditorCommands } from '../ui/command-palette/editor-commands'
 import { FloatingLevelSelector } from '../ui/floating-level-selector'
@@ -182,6 +183,8 @@ function initializeEditorRuntime(): () => void {
 export interface EditorProps {
   // Layout version — 'v1' (default) or 'v2' (navbar + two-column)
   layoutVersion?: 'v1' | 'v2'
+  // Viewport edge the tool menu docks to (desktop only; mobile stays at the bottom)
+  actionMenuPlacement?: ActionMenuPlacement
 
   // UI slots (v1)
   appMenuButton?: ReactNode
@@ -1313,6 +1316,7 @@ function PreviewStage({
 function EditorContent({
   guardAgainstSceneWipe,
   layoutVersion = 'v1',
+  actionMenuPlacement,
   appMenuButton,
   sidebarTop,
   navbarSlot,
@@ -1708,7 +1712,7 @@ function EditorContent({
                   {!(isCaptureMode || stageOverlay) && <FloatingLevelSelector />}
                   {!(isVersionPreviewMode || isCaptureMode || isStudioMode) && (
                     <div className="pointer-events-auto">
-                      <ActionMenu />
+                      <ActionMenu placement={actionMenuPlacement} />
                     </div>
                   )}
                   {/* The inspector and the shortcuts card share one right column. */}
@@ -1799,7 +1803,7 @@ function EditorContent({
           {/* Fixed UI overlays scoped to the viewer area */}
           <ViewerOverlays left={overlayLeft}>
             <div className="pointer-events-auto">
-              <ActionMenu />
+              <ActionMenu placement={actionMenuPlacement} />
             </div>
             <RightStack helper={<HelperManager />} inspector={<PanelManager />} />
             <RiserDiagramPanel />

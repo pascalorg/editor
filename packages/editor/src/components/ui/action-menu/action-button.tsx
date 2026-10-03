@@ -7,6 +7,7 @@ import {
 } from './../../../components/ui/primitives/tooltip'
 import { triggerSFX } from './../../../lib/sfx-bus'
 import { cn } from './../../../lib/utils'
+import { useActionMenuPopupSide } from './placement'
 
 interface ActionButtonProps extends React.ComponentProps<typeof Button> {
   label: string
@@ -32,6 +33,7 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
     },
     ref,
   ) => {
+    const popupSide = useActionMenuPopupSide()
     return (
       <Tooltip>
         <TooltipTrigger asChild>
@@ -68,7 +70,7 @@ export const ActionButton = React.forwardRef<HTMLButtonElement, ActionButtonProp
             )}
           </Button>
         </TooltipTrigger>
-        <TooltipContent side={tooltipSide}>
+        <TooltipContent side={tooltipSide ?? popupSide}>
           {tooltipContent || (
             <p>
               {label} {shortcut && `(${shortcut})`}

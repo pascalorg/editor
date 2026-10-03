@@ -25,6 +25,7 @@ import useEditor from '../../../store/use-editor'
 import useFloorplanMode from '../../../store/use-floorplan-mode'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
 import { ActionButton } from './action-button'
+import { useActionMenuPopupSide } from './placement'
 
 const measurementOptions = [
   { kind: 'distance', label: 'Distance', icon: Ruler },
@@ -61,6 +62,7 @@ const constructionDimensionOptions = [
 }[]
 
 export function MeasurementControl() {
+  const popupSide = useActionMenuPopupSide()
   const [isOpen, setIsOpen] = useState(false)
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
@@ -189,7 +191,7 @@ export function MeasurementControl() {
       <PopoverContent
         align="center"
         className="max-h-[70vh] w-64 overflow-y-auto rounded-lg border-border/45 bg-background/96 p-2 shadow-elevation-3 backdrop-blur-xl"
-        side="top"
+        side={popupSide}
         sideOffset={14}
       >
         <div aria-label="Measurement type" className="space-y-1" role="menu">
