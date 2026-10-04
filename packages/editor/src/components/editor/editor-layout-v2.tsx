@@ -231,6 +231,10 @@ function RightColumn({
         '--viewer-toolbar-right-bottom',
         `${Math.max(bottomOf(right), centerUnderRight ? bottomOf(centerBox) : 0)}px`,
       )
+      column.style.setProperty(
+        '--viewer-toolbar-full-bottom',
+        `${toolbar.offsetTop + toolbar.offsetHeight}px`,
+      )
     }
     update()
     const observer = new ResizeObserver(update)
@@ -246,6 +250,7 @@ function RightColumn({
       observer.disconnect()
       column.style.removeProperty('--viewer-toolbar-bottom')
       column.style.removeProperty('--viewer-toolbar-right-bottom')
+      column.style.removeProperty('--viewer-toolbar-full-bottom')
     }
   }, [hasToolbar, toolbarCenter])
 
