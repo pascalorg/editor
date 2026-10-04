@@ -167,12 +167,14 @@ function LeftColumn({
 
 function RightColumn({
   toolbarLeft,
+  toolbarCenter,
   toolbarRight,
   children,
   overlays,
   stageOverlay,
 }: {
   toolbarLeft?: ReactNode
+  toolbarCenter?: ReactNode
   toolbarRight?: ReactNode
   children: ReactNode
   overlays?: ReactNode
@@ -188,9 +190,13 @@ function RightColumn({
       }}
     >
       {/* Viewer toolbar */}
-      {(toolbarLeft || toolbarRight) && (
-        <div className="pointer-events-none absolute top-3 right-3 left-3 z-20 flex items-center justify-between gap-2">
+      {(toolbarLeft || toolbarCenter || toolbarRight) && (
+        <div
+          className={`pointer-events-none absolute top-3 right-3 left-3 z-20 flex justify-between gap-2 ${toolbarCenter ? 'items-start' : 'items-center'}`}
+        >
           <div className="pointer-events-auto flex items-center gap-2">{toolbarLeft}</div>
+          {/* Centered in the gap between the side groups, so it never overlaps them. */}
+          {toolbarCenter && <div className="pointer-events-auto">{toolbarCenter}</div>}
           <div className="pointer-events-auto flex items-center gap-2">{toolbarRight}</div>
         </div>
       )}
@@ -230,6 +236,7 @@ export interface EditorLayoutV2Props {
   renderTabContent: (tabId: string) => ReactNode
   sidebarOverlay?: ReactNode
   viewerToolbarLeft?: ReactNode
+  viewerToolbarCenter?: ReactNode
   viewerToolbarRight?: ReactNode
   viewerContent: ReactNode
   overlays?: ReactNode
@@ -242,6 +249,7 @@ export function EditorLayoutV2({
   renderTabContent,
   sidebarOverlay,
   viewerToolbarLeft,
+  viewerToolbarCenter,
   viewerToolbarRight,
   viewerContent,
   overlays,
@@ -282,6 +290,7 @@ export function EditorLayoutV2({
         <RightColumn
           overlays={overlays}
           stageOverlay={stageOverlay}
+          toolbarCenter={isCaptureMode ? undefined : viewerToolbarCenter}
           toolbarLeft={isCaptureMode ? undefined : viewerToolbarLeft}
           toolbarRight={isCaptureMode ? undefined : viewerToolbarRight}
         >

@@ -37,6 +37,7 @@ import { ViewerOverlay } from '../../components/viewer-overlay'
 import { ViewerZoneSystem } from '../../components/viewer-zone-system'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
+import { useIsMobile } from '../../hooks/use-mobile'
 import { useSaveShortcut } from '../../hooks/use-save-shortcut'
 import { useCeilingEditSessionOwner } from '../../lib/ceiling-edit-session'
 import { showsWholeBuilding, useEditorLevelDisplay } from '../../lib/editor-level-display'
@@ -567,9 +568,11 @@ function CameraControlHintItem({ hint }: { hint: CameraControlHint }) {
 }
 
 function ViewerCanvasControlsHint({
+  belowTopMenu = false,
   isPreviewMode,
   onDismiss,
 }: {
+  belowTopMenu?: boolean
   isPreviewMode: boolean
   onDismiss: () => void
 }) {
@@ -584,7 +587,10 @@ function ViewerCanvasControlsHint({
   }
 
   return (
-    <div className="pointer-events-none absolute top-14 left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2">
+    // Sits below the action menu when that menu is docked to the top edge.
+    <div
+      className={`pointer-events-none absolute ${belowTopMenu ? 'top-20' : 'top-14'} left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2`}
+    >
       <section
         aria-label="Camera controls hint"
         className="pointer-events-auto flex items-start gap-3 rounded-2xl border border-border/35 bg-background/90 px-3.5 py-2.5 shadow-elevation-4 backdrop-blur-xl"
@@ -1080,6 +1086,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   floorplanSceneSlot,
   disablePostFx = false,
   immersive,
+  hintBelowTopMenu = false,
 }: {
   isVersionPreviewMode: boolean
   isLoading: boolean
@@ -1095,6 +1102,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   floorplanSceneSlot?: ReactNode
   disablePostFx?: boolean
   immersive?: ViewerImmersiveSession
+  hintBelowTopMenu?: boolean
 }) {
   const viewMode = useEditor((s) => s.viewMode)
   const floorplanPaneRatio = useEditor((s) => s.floorplanPaneRatio)
@@ -1215,6 +1223,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
           />
           {!showLoader && isCameraControlsHintVisible && !isFirstPersonMode ? (
             <ViewerCanvasControlsHint
+              belowTopMenu={hintBelowTopMenu}
               isPreviewMode={isPreviewMode}
               onDismiss={dismissCameraControlsHint}
             />
@@ -1349,6 +1358,9 @@ function EditorContent({
   extraSidebarPanels,
   commandPaletteEmptyAction,
 }: EditorProps) {
+  const isMobile = useIsMobile()
+  // A top-docked menu joins the viewer toolbar row on desktop (layout v2).
+  const dockMenuInToolbar = actionMenuPlacement === 'top' && !isMobile
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const isStudioMode = useEditor((s) => s.workspaceMode === 'studio')
   const presentationProjectId = projectId ?? null
@@ -1617,6 +1629,7 @@ function EditorContent({
   const viewerCanvas = (
     <ViewerCanvas
       disablePostFx={disablePostFx}
+      hintBelowTopMenu={actionMenuPlacement === 'top'}
       hasLoadedInitialScene={hasLoadedInitialScene}
       isFirstPersonMode={isFirstPersonMode}
       isLoading={isLoading}
@@ -1710,7 +1723,12 @@ function EditorContent({
               overlays={
                 <>
                   {!(isCaptureMode || stageOverlay) && <FloatingLevelSelector />}
-                  {!(isVersionPreviewMode || isCaptureMode || isStudioMode) && (
+                  {!(
+                    isVersionPreviewMode ||
+                    isCaptureMode ||
+                    isStudioMode ||
+                    dockMenuInToolbar
+                  ) && (
                     <div className="pointer-events-auto">
                       <ActionMenu placement={actionMenuPlacement} />
                     </div>
@@ -1744,6 +1762,11 @@ function EditorContent({
               sidebarTabs={tabBarTabs}
               stageOverlay={stageOverlay}
               viewerContent={viewerCanvas}
+              viewerToolbarCenter={
+                dockMenuInToolbar && !(isVersionPreviewMode || isCaptureMode || isStudioMode) ? (
+                  <ActionMenu inline placement="top" />
+                ) : undefined
+              }
               viewerToolbarLeft={viewerToolbarLeft}
               viewerToolbarRight={viewerToolbarRight}
             />

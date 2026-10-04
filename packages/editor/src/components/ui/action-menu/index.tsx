@@ -21,9 +21,12 @@ const MOBILE_BOTTOM_OFFSET = 24
 
 export function ActionMenu({
   className,
+  inline = false,
   placement = 'bottom',
 }: {
   className?: string
+  // Rendered in the flow of a layout slot instead of floating over the viewer.
+  inline?: boolean
   placement?: ActionMenuPlacement
 }) {
   const isMobile = useIsMobile()
@@ -62,12 +65,14 @@ export function ActionMenu({
       <TooltipProvider>
         <motion.div
           className={cn(
-            'left-1/2 z-50 -translate-x-1/2',
+            'z-50',
             isMobile
-              ? 'absolute origin-bottom scale-90'
-              : effectivePlacement === 'top'
-                ? 'fixed top-16'
-                : 'fixed bottom-6',
+              ? 'absolute left-1/2 origin-bottom -translate-x-1/2 scale-90'
+              : inline
+                ? 'relative'
+                : effectivePlacement === 'top'
+                  ? 'fixed top-3 left-1/2 -translate-x-1/2'
+                  : 'fixed bottom-6 left-1/2 -translate-x-1/2',
             'rounded-2xl border border-border bg-background/90 shadow-2xl backdrop-blur-md',
             'transition-colors duration-200 ease-out',
             className,
