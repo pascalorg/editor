@@ -205,7 +205,9 @@ function RightColumn({
       const center = centerRef.current?.firstElementChild as HTMLElement | null | undefined
       const left = leftRef.current
       const right = rightRef.current
-      if (center) {
+      if (!center) {
+        setCenterPlacement('inline')
+      } else {
         const gap = Number.parseFloat(getComputedStyle(toolbar).columnGap) || 0
         const leftWidth = left?.scrollWidth ?? 0
         const rightWidth = right?.scrollWidth ?? 0
