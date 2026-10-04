@@ -185,13 +185,17 @@ function RightColumn({
   const leftRef = useRef<HTMLDivElement>(null)
   const centerRef = useRef<HTMLDivElement>(null)
   const rightRef = useRef<HTMLDivElement>(null)
-  const [centerOnOwnRow, setCenterOnOwnRow] = useState(false)
+  // `inline`: between the side groups. `left`: under the left group, beside a
+  // taller right group. `full`: its own row across the whole toolbar.
+  const [centerPlacement, setCenterPlacement] = useState<'inline' | 'left' | 'full'>('inline')
+  const centerOnOwnRow = centerPlacement !== 'inline'
   const hasToolbar = Boolean(toolbarLeft || toolbarCenter || toolbarRight)
 
-  // When the three groups don't fit in one row, keep the side groups on the
-  // first row and move the center group to its own row below. Also publish
-  // where the toolbar ends, so viewer overlays (level selector, camera hint)
-  // sit below it however tall it gets.
+  // When the three groups don't fit in one row, the center group moves under
+  // the left group if the right group is tall enough to leave that space and
+  // the left column is wide enough, else to its own full-width row. Also publish
+  // where each side of the toolbar ends, so viewer overlays sit below their
+  // side however tall it gets.
   // biome-ignore lint/correctness/useExhaustiveDependencies: both are re-run triggers; the observed nodes mount and unmount with them.
   useEffect(() => {
     const column = columnRef.current
@@ -199,18 +203,31 @@ function RightColumn({
     if (!(column && toolbar)) return
     const update = () => {
       const center = centerRef.current?.firstElementChild as HTMLElement | null | undefined
+      const left = leftRef.current
+      const right = rightRef.current
       if (center) {
         const gap = Number.parseFloat(getComputedStyle(toolbar).columnGap) || 0
-        const needed =
-          (leftRef.current?.scrollWidth ?? 0) +
-          center.offsetWidth +
-          (rightRef.current?.scrollWidth ?? 0) +
-          gap * 2
-        setCenterOnOwnRow(needed > toolbar.clientWidth)
+        const leftWidth = left?.scrollWidth ?? 0
+        const rightWidth = right?.scrollWidth ?? 0
+        const fitsInline =
+          leftWidth + center.offsetWidth + rightWidth + gap * 2 <= toolbar.clientWidth
+        const rightIsTall = (right?.offsetHeight ?? 0) > (left?.offsetHeight ?? 0) + gap
+        const fitsUnderLeft = center.offsetWidth <= toolbar.clientWidth - rightWidth - gap
+        setCenterPlacement(fitsInline ? 'inline' : rightIsTall && fitsUnderLeft ? 'left' : 'full')
       }
+      const bottomOf = (el: HTMLElement | null | undefined) =>
+        el ? toolbar.offsetTop + el.offsetTop + el.offsetHeight : toolbar.offsetTop
+      const centerBox = centerRef.current
       column.style.setProperty(
         '--viewer-toolbar-bottom',
-        `${toolbar.offsetTop + toolbar.offsetHeight}px`,
+        `${Math.max(bottomOf(leftRef.current), bottomOf(centerBox))}px`,
+      )
+      // The right side also ends below the center group when that group reaches under it.
+      const centerUnderRight =
+        centerBox && right && centerBox.offsetLeft + centerBox.offsetWidth > right.offsetLeft
+      column.style.setProperty(
+        '--viewer-toolbar-right-bottom',
+        `${Math.max(bottomOf(right), centerUnderRight ? bottomOf(centerBox) : 0)}px`,
       )
     }
     update()
@@ -226,6 +243,7 @@ function RightColumn({
     return () => {
       observer.disconnect()
       column.style.removeProperty('--viewer-toolbar-bottom')
+      column.style.removeProperty('--viewer-toolbar-right-bottom')
     }
   }, [hasToolbar, toolbarCenter])
 
@@ -242,29 +260,47 @@ function RightColumn({
       {/* Viewer toolbar */}
       {hasToolbar && (
         <div
-          className="pointer-events-none absolute top-3 right-3 left-3 z-20 flex flex-wrap items-start justify-between gap-2"
+          className={
+            centerOnOwnRow
+              ? 'pointer-events-none absolute top-3 right-3 left-3 z-20 grid grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_1fr] items-start gap-2'
+              : 'pointer-events-none absolute top-3 right-3 left-3 z-20 flex flex-wrap items-start justify-between gap-2'
+          }
           ref={toolbarRef}
         >
-          <div className="pointer-events-auto flex items-center gap-2" ref={leftRef}>
+          <div
+            className={`pointer-events-auto flex items-center gap-2 ${centerOnOwnRow ? 'col-start-1 row-start-1 justify-self-start' : ''}`}
+            ref={leftRef}
+          >
             {toolbarLeft}
           </div>
-          {/* Centered in the gap between the side groups, or on its own row when it doesn't fit. */}
+          {/* Centered in the gap between the side groups, or under the left group when it doesn't fit. */}
           {toolbarCenter && (
             <div
               className={
-                centerOnOwnRow
-                  ? 'pointer-events-auto order-last flex basis-full justify-center'
-                  : 'pointer-events-auto'
+                centerPlacement === 'left'
+                  ? 'col-start-1 row-start-2 justify-self-center'
+                  : centerPlacement === 'full'
+                    ? 'col-span-2 col-start-1 row-start-2 justify-self-center'
+                    : undefined
               }
               ref={centerRef}
             >
-              {toolbarCenter}
+              {/* Only the group takes clicks; the rest of its row stays on the canvas. */}
+              <div className="pointer-events-auto">{toolbarCenter}</div>
             </div>
           )}
-          {/* `ml-auto` keeps it right-aligned if it wraps to its own line; skipped while the
-              center group shares the row, so the free space stays split around it. */}
+          {/* `ml-auto` keeps it right-aligned if it wraps; skipped while the center group
+              shares the row, so the free space stays split around it. */}
           <div
-            className={`pointer-events-auto flex items-center gap-2 ${toolbarCenter && !centerOnOwnRow ? '' : 'ml-auto'}`}
+            className={`pointer-events-auto flex items-center gap-2 ${
+              centerPlacement === 'left'
+                ? 'col-start-2 row-span-2 row-start-1'
+                : centerPlacement === 'full'
+                  ? 'col-start-2 row-start-1'
+                  : toolbarCenter
+                    ? ''
+                    : 'ml-auto'
+            }`}
             ref={rightRef}
           >
             {toolbarRight}

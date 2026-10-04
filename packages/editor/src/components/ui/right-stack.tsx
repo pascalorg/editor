@@ -125,7 +125,11 @@ export function RightStack({ inspector, helper }: { inspector: ReactNode; helper
   return (
     <RightStackContext.Provider value={true}>
       <div
-        className="pointer-events-none fixed top-20 right-4 bottom-[74px] z-40 flex flex-col items-end gap-2"
+        className="pointer-events-none fixed right-4 bottom-[74px] z-40 flex flex-col items-end gap-2"
+        // Below the right side of the viewer toolbar, which can grow; 80px by default.
+        style={{
+          top: 'calc(var(--viewer-toolbar-right-bottom, var(--viewer-toolbar-bottom, 2.75rem)) + 2.25rem)',
+        }}
         data-right-stack
         ref={stackRef}
       >
