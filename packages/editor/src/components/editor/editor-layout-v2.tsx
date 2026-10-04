@@ -192,7 +192,7 @@ function RightColumn({
       {/* Viewer toolbar */}
       {(toolbarLeft || toolbarCenter || toolbarRight) && (
         <div
-          className={`pointer-events-none absolute top-3 right-3 left-3 z-20 flex justify-between gap-2 ${toolbarCenter ? 'items-start' : 'items-center'}`}
+          className={`pointer-events-none absolute top-3 right-3 left-3 z-20 flex justify-between gap-2 items-start`}
         >
           <div className="pointer-events-auto flex items-center gap-2">{toolbarLeft}</div>
           {/* Centered in the gap between the side groups, so it never overlaps them. */}
