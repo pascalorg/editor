@@ -641,7 +641,11 @@ export function FloatingLevelSelector() {
 
   return (
     <>
-      <div className="pointer-events-auto absolute top-14 left-3 z-20">
+      <div
+        className="pointer-events-auto absolute left-3 z-20"
+        // Under the viewer toolbar row, which can wrap on narrow viewers.
+        style={{ top: 'calc(var(--viewer-toolbar-bottom, 2.75rem) + 0.75rem)' }}
+      >
         <div className="relative">
           {/* Floating + at top edge */}
           {!draggingLevelId && (

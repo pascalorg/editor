@@ -587,9 +587,13 @@ function ViewerCanvasControlsHint({
   }
 
   return (
-    // Sits below the action menu when that menu is docked to the top edge.
+    // Sits under the viewer toolbar row as the layout reports it; without one,
+    // under a top-docked action menu or the default toolbar height.
     <div
-      className={`pointer-events-none absolute ${belowTopMenu ? 'top-20' : 'top-14'} left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2`}
+      className="pointer-events-none absolute left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2"
+      style={{
+        top: `calc(var(--viewer-toolbar-bottom, ${belowTopMenu ? '4.375rem' : '2.75rem'}) + 0.75rem)`,
+      }}
     >
       <section
         aria-label="Camera controls hint"
@@ -1629,7 +1633,7 @@ function EditorContent({
   const viewerCanvas = (
     <ViewerCanvas
       disablePostFx={disablePostFx}
-      hintBelowTopMenu={actionMenuPlacement === 'top'}
+      hintBelowTopMenu={actionMenuPlacement === 'top' && !isMobile}
       hasLoadedInitialScene={hasLoadedInitialScene}
       isFirstPersonMode={isFirstPersonMode}
       isLoading={isLoading}
