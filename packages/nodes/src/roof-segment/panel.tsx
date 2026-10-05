@@ -11,7 +11,6 @@ import {
   normalizeRoofSegmentTrim,
   ROOF_SHAPE_DEFAULTS,
   type RoofSegmentNode,
-  RoofSegmentNode as RoofSegmentNodeSchema,
   type RoofSegmentTrim,
   type RoofType,
   useScene,
@@ -19,6 +18,7 @@ import {
 import {
   ActionButton,
   ActionGroup,
+  duplicateNodeAndPickUp,
   PanelSection,
   PanelWrapper,
   SegmentedControl,
@@ -194,28 +194,8 @@ export default function RoofSegmentPanel() {
   }, [node, setRoofHostDragArmedId, setSelection, updateNode])
 
   const handleDuplicate = useCallback(() => {
-    if (!node?.parentId) return
-    triggerSFX('sfx:item-pick')
-
-    let duplicateInfo = structuredClone(node) as any
-    delete duplicateInfo.id
-    duplicateInfo.metadata = { ...duplicateInfo.metadata, isNew: true }
-    // Offset slightly so it's visible
-    duplicateInfo.position = [
-      duplicateInfo.position[0] + 1,
-      duplicateInfo.position[1],
-      duplicateInfo.position[2] + 1,
-    ]
-
-    try {
-      const duplicate = RoofSegmentNodeSchema.parse(duplicateInfo)
-      useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
-      setSelection({ selectedIds: [] })
-      setMovingNode(duplicate)
-    } catch (e) {
-      console.error('Failed to duplicate roof segment', e)
-    }
-  }, [node, setSelection, setMovingNode])
+    if (node) duplicateNodeAndPickUp(node)
+  }, [node])
 
   const handleMove = useCallback(() => {
     if (node) {

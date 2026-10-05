@@ -2,7 +2,7 @@ import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { SceneVersionConflictError } from '../storage/types'
-import { ErrorCode, throwMcpError } from './errors'
+import { ErrorCode, McpError, throwMcpError } from './errors'
 
 export type LiveSyncStatus = 'published' | 'unbound' | 'events_unsupported'
 
@@ -40,6 +40,16 @@ export function persistencePayload(status: LiveSyncStatus): {
   return { persistence: { status, warning: LIVE_SYNC_WARNINGS[status] } }
 }
 
+const LIVE_SYNC_VERSION_CONFLICT = 'live_sync_version_conflict'
+
+/**
+ * Whether a tool call failed because the stored scene changed after the session
+ * loaded it. The store refuses before writing, so nothing from the call persisted.
+ */
+export function isLiveSyncVersionConflict(error: unknown): boolean {
+  return error instanceof McpError && error.message.endsWith(LIVE_SYNC_VERSION_CONFLICT)
+}
+
 /**
  * Persist the bridge's current graph to the active scene and append a live
  * event for browser subscribers. Skips persistence — reporting why — when the
@@ -66,6 +76,7 @@ export async function publishLiveSceneSnapshot(
       thumbnailUrl: active.thumbnailUrl,
       graph,
       expectedVersion: active.version,
+      ...(active.graphHash !== undefined ? { expectedGraphHash: active.graphHash } : {}),
       saveMode: 'draft',
       publish: false,
       operation: kind,
@@ -79,7 +90,7 @@ export async function publishLiveSceneSnapshot(
     })
   } catch (error) {
     if (error instanceof SceneVersionConflictError) {
-      throwMcpError(ErrorCode.InvalidRequest, 'live_sync_version_conflict', {
+      throwMcpError(ErrorCode.InvalidRequest, LIVE_SYNC_VERSION_CONFLICT, {
         sceneId: active.id,
         expectedVersion: active.version,
       })

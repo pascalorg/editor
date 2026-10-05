@@ -12,6 +12,7 @@ import {
 } from '@pascal-app/core'
 import {
   consumePlacementDragRelease,
+  copyCollectionIds,
   DragBoundingBox,
   EDITOR_LAYER,
   isAlignmentGuideActive,
@@ -262,7 +263,13 @@ export const MoveDuctFittingTool: React.FC<{ node: AnyNode }> = ({ node }) => {
           metadata: stripPlacementMetadataFlags(node.metadata),
           visible: true,
         })
-        useScene.getState().createNode(created as AnyNode, node.parentId as AnyNodeId)
+        useScene.getState().createNodes([
+          {
+            node: created as AnyNode,
+            parentId: node.parentId as AnyNodeId,
+            collectionIds: copyCollectionIds(node),
+          },
+        ])
         selectId = created.id as AnyNodeId
       } else {
         // Fold connected-duct / sibling-run follow-updates into the SAME batch

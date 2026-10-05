@@ -4,9 +4,15 @@ import {
   GEOMETRY_SCRIPT_MIME_TYPE,
   type GeometryScriptParamValue,
   getArtifactStore,
+  runAsSingleSceneHistoryStep,
   useScene,
 } from '@pascal-app/core'
-import { addObject, authoredObject, rescriptOpening } from '@pascal-app/core/agent-operations'
+import {
+  addColumn,
+  addObject,
+  authoredObject,
+  rescriptOpening,
+} from '@pascal-app/core/agent-operations'
 import { compileGeometryScriptInWorker } from './client'
 
 /**
@@ -56,12 +62,32 @@ export async function rebuildAuthoredObject(
   rebuildGeneration.set(nodeId, generation)
   const compiled = await compileAndStoreGeometryScript({ nodeId, params })
   if (rebuildGeneration.get(nodeId) !== generation) return
+  const changes = rebuildChanges(nodeId, compiled, params, position)
+  runAsSingleSceneHistoryStep(useScene, () => {
+    for (const { id, data } of changes?.update ?? []) {
+      useScene.getState().updateNode(id as AnyNodeId, data)
+    }
+  })
+}
+
+/** What a rebuild changes, through the operation of the node's kind. */
+function rebuildChanges(
+  nodeId: string,
+  compiled: CompiledGeometryScript,
+  params: Record<string, GeometryScriptParamValue>,
+  position: [number, number, number] | undefined,
+) {
   const nodes = useScene.getState().nodes
-  const opening = nodes[nodeId as AnyNodeId]?.type !== 'item'
-  const { changes } = opening
-    ? rescriptOpening(nodes, { nodeId, compiled, position }, { activeLevelId: null })
-    : addObject(nodes, { params, nodeId, compiled, position }, { activeLevelId: null })
-  for (const { id, data } of changes?.update ?? []) {
-    useScene.getState().updateNode(id as AnyNodeId, data)
+  const context = { activeLevelId: null }
+  switch (nodes[nodeId as AnyNodeId]?.type) {
+    case 'column': {
+      const at = position && { x: position[0], y: position[1], z: position[2] }
+      return addColumn(nodes, { nodeId, compiled, ...at }, context).changes
+    }
+    case 'window':
+    case 'door':
+      return rescriptOpening(nodes, { nodeId, compiled, position }, context).changes
+    default:
+      return addObject(nodes, { params, nodeId, compiled, position }, context).changes
   }
 }

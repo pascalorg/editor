@@ -3,6 +3,7 @@ import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   type AnyNode,
+  ColumnNode,
   type ImportedMeshNode,
   LevelNode,
   type WallNode,
@@ -180,5 +181,50 @@ describe('Tessellated and grouped elements', () => {
     expect(bounds.min[2]!).toBeCloseTo(6, MM)
     expect(bounds.max[2]!).toBeCloseTo(7, MM)
     expect(scene.nodes[sofa!.parentId!]?.type).toBe('level')
+  })
+})
+
+test('a scripted column persists its source and exports artifact triangles as IfcColumn', () => {
+  const level = LevelNode.parse({ id: 'level_script_column' })
+  const column = ColumnNode.parse({
+    id: 'column_script',
+    parentId: level.id,
+    baseStyle: 'none',
+    capitalStyle: 'none',
+    source: {
+      kind: 'script',
+      language: 'three',
+      script: 'a'.repeat(64),
+      artifact: 'b'.repeat(64),
+      params: { height: 3 },
+      manifest: { bounds: { min: [-0.3, 0, -0.3], max: [0.3, 3, 0.3] }, triangles: 1 },
+    },
+  })
+  const persisted = ColumnNode.parse(JSON.parse(JSON.stringify(column)))
+  expect(persisted.source).toEqual(column.source)
+  const nodes = { [level.id]: level, [column.id]: persisted }
+  const { ifc } = buildIfcExport({
+    nodes,
+    meshes: new Map([
+      [
+        column.id,
+        [
+          {
+            positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 3, 0]),
+            indices: new Uint32Array([0, 1, 2]),
+          },
+        ],
+      ],
+    ]),
+    timestamp: EPOCH,
+  })
+  const types = [...expectWellFormedStep(ifc).values()].map((entity) => entity.type)
+  expect(types).toContain('IFCCOLUMN')
+  expect(types).toContain('IFCTRIANGULATEDFACESET')
+  expect(types).not.toContain('IFCCIRCLEPROFILEDEF')
+  expect(buildIfcExport({ nodes, timestamp: EPOCH }).summary.skipped).toContainEqual({
+    nodeId: column.id,
+    type: 'column',
+    reason: 'no-geometry',
   })
 })

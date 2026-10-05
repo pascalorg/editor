@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   type BuildingNode,
   type CeilingNode,
+  type Collection,
   type ColumnNode,
   calculateLevelMiters,
   DEFAULT_WALL_THICKNESS,
@@ -69,6 +70,7 @@ export interface IfcMeshPart {
 
 export interface IfcExportInput {
   nodes: Record<string, AnyNode>
+  collections?: Readonly<Record<string, Collection>>
   /** Rendered geometry keyed by node id; required for everything that is not a native IFC element. */
   meshes?: ReadonlyMap<string, IfcMeshPart[]>
   projectName?: string
@@ -448,7 +450,11 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
     units,
   )
 
-  const pascalIdentity = (node: AnyNode, refs: StepRef[]) =>
+  const productsByNodeId = new Map<string, StepRef[]>()
+  const pascalIdentity = (node: AnyNode, refs: StepRef[]) => {
+    if (node.type !== 'unit') {
+      for (const ref of refs) pushTo(productsByNodeId, node.id, ref)
+    }
     model.propertySet(
       node.id,
       'Pascal',
@@ -458,6 +464,7 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
       ],
       refs,
     )
+  }
 
   const nodeName = (node: AnyNode, fallback: string) => {
     const name = (node as { name?: unknown }).name
@@ -1247,7 +1254,11 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
     const context = contextFor(column)
     const sets = partsFor(column, context)
     const cls = meshClassFor(column)
-    if (!isPlainColumn(column) && sets.length > 0) {
+    if (column.source && sets.length === 0) {
+      skipped.push({ nodeId: column.id, type: column.type, reason: 'no-geometry' })
+      continue
+    }
+    if ((column.source || !isPlainColumn(column)) && sets.length > 0) {
       const ref = emitMeshElement(cls, column, sets, context.placement)
       if (ref) context.contained.push(ref)
       continue
@@ -1413,6 +1424,33 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
       null,
       zone,
     )
+  }
+
+  for (const collection of Object.values(input.collections ?? {}).sort((a, b) =>
+    a.id.localeCompare(b.id),
+  )) {
+    const group = step.add(
+      'IFCGROUP',
+      model.guid(collection.id),
+      ownerHistory,
+      collection.name,
+      null,
+      null,
+    )
+    model.propertySet(
+      collection.id,
+      'PascalCollection',
+      [
+        ['CollectionId', identifier(collection.id)],
+        ['Template', collection.template ? identifier(collection.template) : null],
+        ['Color', collection.color ? label(collection.color) : null],
+      ],
+      [group],
+    )
+    const members = [...new Set(collection.nodeIds)].flatMap((id) => productsByNodeId.get(id) ?? [])
+    if (members.length > 0) {
+      model.rel('IFCRELASSIGNSTOGROUP', `${collection.id}:members`, members, null, group)
+    }
   }
 
   // ── Spatial containment ──────────────────────────────────────────────

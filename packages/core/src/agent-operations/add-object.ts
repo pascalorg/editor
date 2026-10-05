@@ -112,6 +112,11 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
     input.rotation === undefined ? undefined : [0, (input.rotation * Math.PI) / 180, 0]
 
   if (input.nodeId) {
+    if (nodes[input.nodeId]?.type === 'column')
+      refuse('use_column_tool', `Rebuild ${input.nodeId} with add_column and nodeId.`, {
+        id: input.nodeId,
+        type: 'column',
+      })
     const previous = authoredObject(nodes, input.nodeId)
     if (previous.type !== 'item')
       refuse(
@@ -255,10 +260,48 @@ export function authoredObject(nodes: Record<string, AnyNode>, nodeId: string): 
   if (!isScriptedNode(node))
     refuse(
       'not_authored',
-      `${nodeId} is a ${node.type} without a script; only objects, windows and doors built from code have one.`,
+      `${nodeId} is a ${node.type} without a script; only objects, windows, doors and columns built from code have one.`,
       { id: nodeId, type: node.type },
     )
   return node
+}
+
+/**
+ * Params are a script's values: without code, only a node already built from a
+ * script has one to rerun, so a new node, or one without a script, is refused.
+ */
+export function refuseParamsWithoutScript(
+  nodes: Record<string, AnyNode>,
+  input: { code?: string; params?: unknown; nodeId?: string },
+): void {
+  if (!input.params || input.code) return
+  if (!input.nodeId)
+    refuse('not_authored', 'Pass code with params: they are values for its script.')
+  authoredObject(nodes, input.nodeId)
+}
+
+/** The native size a scripted window, door or column takes from what its script built. */
+const SCRIPTED_SIZE: Partial<Record<ScriptedNode['type'], readonly string[]>> = {
+  window: ['width', 'height'],
+  door: ['width', 'height'],
+  column: ['width', 'height', 'depth'],
+}
+
+/**
+ * Why a raw update (chat `update_node`, MCP `apply_patch`) may not write what a
+ * node's script owns, its `source` or the size it built, or null: the stored
+ * fields would no longer match the geometry. Restating the current value passes.
+ */
+export function scriptedFieldRefusal(node: AnyNode, data: Record<string, unknown>): string | null {
+  if (!isScriptedNode(node)) return null
+  const owned = ['source', ...(SCRIPTED_SIZE[node.type] ?? [])]
+  const current = node as unknown as Record<string, unknown>
+  const fields = owned.filter(
+    (key) => key in data && JSON.stringify(data[key]) !== JSON.stringify(current[key]),
+  )
+  if (fields.length === 0) return null
+  const tool = node.type === 'item' ? 'add_object' : `add_${node.type}`
+  return `${node.id} is built from a script, so ${fields.join(', ')} ${fields.length === 1 ? 'comes' : 'come'} from it: rebuild it with ${tool} with nodeId and params (get_source shows them); nothing was changed.`
 }
 
 /** What `get_source` answers once the host has the module's text. */

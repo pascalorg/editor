@@ -211,6 +211,7 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
     priority: 4,
   },
   floorplan: buildCeilingFloorplan,
+  floorplanDependsOnSiblings: true,
   // 2D move handler — translates polygon by cursor delta from first
   // pointer position. Mirror of slab; 3D `MoveCeilingTool` skips
   // 2D-sourced grid events so they don't double-write on commit.

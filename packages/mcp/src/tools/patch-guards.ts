@@ -6,6 +6,7 @@ import {
   previewDefaultGutterRefresh,
   validateNodeRelations,
 } from '@pascal-app/core'
+import { scriptedFieldRefusal } from '@pascal-app/core/agent-operations'
 import { AnyNode, type AnyNodeId, nodeKindOf, parseNode } from '@pascal-app/core/schema'
 import type { Patch } from '../bridge/scene-bridge'
 
@@ -16,6 +17,7 @@ export type PatchRefusalCode =
   | 'invalid_parent'
   | 'invalid_update'
   | 'regenerated_default'
+  | 'scripted_field'
 
 /**
  * A patch op refused because it would break node identity, the hierarchy or
@@ -90,6 +92,8 @@ function withoutChild(parent: AnyNode, childId: string): AnyNode {
  *   (`immutable_field`); restating the current value passes;
  * - an update whose merged node has schema issues the node did not have
  *   before (`invalid_update`); kinds without a schema in this runtime pass;
+ * - an update of what a node's script owns, its `source` or the size it
+ *   built (`scripted_field`): only a rebuild keeps them and the geometry in step;
  * - any op on a node an earlier delete in the patch removed, or on a default
  *   gutter or downspout that delete regenerates, and any update of the roof
  *   segment holding them (`regenerated_default`).
@@ -218,6 +222,8 @@ export function assertPatchKeepsIdentity(
           )
         }
       }
+      const scripted = scriptedFieldRefusal(current, data)
+      if (scripted) throw new PatchRefusedError('scripted_field', index, patch.id, scripted)
       const merged = { ...current, ...data } as AnyNode
       const issuesAfter = schemaIssues(merged as Record<string, unknown>)
       if (issuesAfter && issuesAfter.size > 0) {

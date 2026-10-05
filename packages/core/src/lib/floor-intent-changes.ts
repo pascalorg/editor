@@ -1,5 +1,14 @@
 import { boundaries, roomFace } from '../commands/structure/shared'
-import type { AnyNode, AnyNodeId, CeilingNode, RoofNode, SlabNode, ZoneNode } from '../schema'
+import type {
+  AnyNode,
+  AnyNodeId,
+  CeilingNode,
+  DoorNode,
+  RoofNode,
+  SlabNode,
+  WindowNode,
+  ZoneNode,
+} from '../schema'
 import { DEFAULT_SLAB_ELEVATION } from '../schema/nodes/slab'
 import {
   findLevelBelowId,
@@ -30,6 +39,38 @@ import {
 } from './room-floor-feasibility'
 
 type Update = { id: AnyNodeId; data: Partial<AnyNode> }
+
+/**
+ * The opening a created one repeats: same kind, size and place on a wall
+ * running the same line, as in a duplicated level. The copy is judged like
+ * its source, refused only when it fits worse, so copying a level never fails
+ * on an opening the original already has.
+ */
+function copiedOpening(
+  nodes: Readonly<Record<string, AnyNode>>,
+  draft: Readonly<Record<string, AnyNode>>,
+  opening: DoorNode | WindowNode,
+) {
+  const wall = draft[opening.parentId!]
+  if (wall?.type !== 'wall') return undefined
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+  return Object.values(nodes).find((node) => {
+    if (
+      node.type !== opening.type ||
+      node.width !== opening.width ||
+      node.height !== opening.height ||
+      !same(node.position, opening.position)
+    )
+      return false
+    const host = nodes[node.parentId!]
+    return (
+      host?.type === 'wall' &&
+      same(host.start, wall.start) &&
+      same(host.end, wall.end) &&
+      same(host.curveOffset, wall.curveOffset)
+    )
+  })
+}
 
 export function expandFloorIntentChanges(
   nodes: Readonly<Record<string, AnyNode>>,
@@ -485,7 +526,7 @@ export function floorIntentConflicts(
       )
     }
     const after = excess(draft, node)
-    const previous = nodes[node.id]
+    const previous = nodes[node.id] ?? copiedOpening(nodes, draft, node)
     const before =
       previous?.type === 'door' || previous?.type === 'window' ? excess(nodes, previous) : -Infinity
     if (

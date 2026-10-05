@@ -18,7 +18,7 @@ Conventions (they make the object work in Pascal; follow them):
 - Parts: name the few groups a person would point at part:<id> (part:column_left, part:canopy, part:landing), usually 2–24, a group per part, not every mesh. Set userData.type on parts someone would look for: column, beam, slab, roof, railing, panel, trim, step, light.
 - Lights: add a THREE.PointLight or SpotLight named light:<id> where the bulb is; it becomes a switchable light.
 - Motion: put THREE.AnimationClips on the returned group's .animations, as in any three.js project; tracks target <objectName>.<property> or <object.uuid>.<property> and may use any transform property (position, rotation, rotation[y], quaternion, scale); material and visibility tracks do not animate. A clip named open becomes the object's open/close control (close plays a clip named close, or open reversed); a clip named loop runs continuously; every other clip gets its own play toggle labelled with its name (name it for the person: "Twirl", "Music"). Write as many clips as the object needs.
-- Wall opening: a mesh named cutout (wall mount), shaped like the hole and as deep as the wall or deeper, is cut out of the host wall in that shape and never renders (a niche, a vent, a pass-through).
+- Cuts: a mesh named cutout cuts only the mounted host; cut:wall, cut:ceiling and cut:slab require that host kind (floor items cut their support slab). The hidden cutter must reach the host; walls use its real shape, ceilings and slabs its through-hole footprint.
 - Sockets: an empty Object3D named anchor:<id> marks where other things attach.
 - No textures, network or DOM. At most 300k triangles, 32 materials, 60 m per side.
 
@@ -74,8 +74,8 @@ export const getSourceTool = {
   name: 'get_source',
   title: 'Read object script',
   description:
-    'The three.js module an object (or a window or door built from code) runs, with its params and their current values. Read it before changing its code, then pass the edited module back with the same nodeId: to add_object for an object, to add_window / add_door for a window or door.',
+    'The three.js module an object (or a window, door or column built from code) runs, with its params and their current values. Read it before changing its code, then pass the edited module back with the same nodeId: to add_object for an object, to add_window / add_door / add_column for their respective kinds.',
   input: {
-    nodeId: NodeId.describe('An object, window or door built from code.'),
+    nodeId: NodeId.describe('An object, window, door or column built from code.'),
   },
 }

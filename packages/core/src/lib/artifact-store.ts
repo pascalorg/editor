@@ -14,6 +14,12 @@ export type ArtifactStore = {
   put: (sha256: string, bytes: ArrayBuffer | Uint8Array, mimeType: string) => Promise<void>
   /** A stored text artifact (an authored object's script), or null when it is missing or unreadable here. */
   text: (sha256: string) => Promise<string | null>
+  /**
+   * Brings artifacts another project holds into this store's project (a paste
+   * from that project), under the reader's access there. Resolves to the
+   * hashes it could not bring. Absent where artifacts are not kept per project.
+   */
+  copyFrom?: (projectId: string, sha256s: string[]) => Promise<string[]>
 }
 
 const memory = new Map<string, { url: string; bytes: ArrayBuffer | Uint8Array }>()

@@ -4,7 +4,6 @@ import {
   type AnyNode,
   type AnyNodeId,
   type ElevatorNode,
-  ElevatorNode as ElevatorNodeSchema,
   getLevelDisplayName,
   type LevelNode,
   requestElevatorLevel,
@@ -16,6 +15,7 @@ import {
 import {
   ActionButton,
   ActionGroup,
+  duplicateNodeAndPickUp,
   MetricControl,
   PanelSection,
   PanelWrapper,
@@ -85,17 +85,6 @@ function getServiceLevels(levels: LevelNode[], fromLevelId: string, toLevelId: s
   return levels.slice(minIndex, maxIndex + 1)
 }
 
-function stripDuplicateFlags(metadata: ElevatorNode['metadata']) {
-  if (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)) {
-    return metadata
-  }
-
-  const nextMeta = { ...(metadata as Record<string, unknown>) }
-  delete nextMeta.isNew
-  delete nextMeta.isTransient
-  return nextMeta as ElevatorNode['metadata']
-}
-
 type ElevatorMetricKey =
   | 'width'
   | 'depth'
@@ -163,7 +152,6 @@ export default function ElevatorPanel() {
   const selectedCount = useViewer((s) => s.selection.selectedIds.length)
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
-  const createNode = useScene((s) => s.createNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const runtime = useInteractive(
     useShallow((s) => {
@@ -316,22 +304,8 @@ export default function ElevatorPanel() {
   }, [clearLivePreview, node, setMovingNode, setSelection])
 
   const handleDuplicate = useCallback(() => {
-    if (!node?.parentId) return
-    triggerSFX('sfx:item-pick')
-
-    const duplicate = ElevatorNodeSchema.parse({
-      ...structuredClone(node),
-      id: undefined,
-      name: node.name ? `${node.name} Copy` : 'Elevator Copy',
-      position: [node.position[0] + 1, node.position[1], node.position[2] + 1],
-      metadata: { ...(stripDuplicateFlags(node.metadata) as Record<string, unknown>), isNew: true },
-    })
-
-    createNode(duplicate, node.parentId as AnyNodeId)
-    clearLivePreview()
-    setMovingNode(duplicate)
-    setSelection({ selectedIds: [] })
-  }, [clearLivePreview, node, createNode, setMovingNode, setSelection])
+    if (node) duplicateNodeAndPickUp(node)
+  }, [node])
 
   const handleDelete = useCallback(() => {
     if (!(selectedId && node)) return

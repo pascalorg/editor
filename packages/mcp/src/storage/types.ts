@@ -55,6 +55,12 @@ export interface SceneSaveOptions {
   thumbnailUrl?: string | null
   /** When set, save fails with `SceneVersionConflictError` on mismatch. */
   expectedVersion?: number
+  /**
+   * When set, save fails with `SceneVersionConflictError` unless the stored graph still hashes to
+   * this. A draft saved in place keeps its version number, so only the content tells that an
+   * open editor wrote in between.
+   */
+  expectedGraphHash?: string | null
   /** `draft` updates the browser-visible working model; `checkpoint` records version history. */
   saveMode?: SceneSaveMode
   /** Whether a checkpoint should become the published/browser-visible head. */

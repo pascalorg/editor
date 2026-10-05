@@ -299,7 +299,6 @@ export function planZoneTransform(
       next.ownerId = copiedOwner
       if (!copiedOwner && next.source === 'plugin:pool') next.source = 'manual'
     }
-    if (duplicate && 'collectionIds' in next) next.collectionIds = []
     const parent = next.parentId ? scratch[next.parentId] : undefined
     const inheritedPose =
       parent && moving.has(parent.id) && ('position' in parent || parent.type === 'wall')

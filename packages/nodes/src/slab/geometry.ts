@@ -4,6 +4,7 @@ import {
   area,
   type BuildingNode,
   computePlateSurfacePartition,
+  cutterContextNodes,
   FenceNode,
   type GeometryContext,
   getLevelElevations,
@@ -27,6 +28,7 @@ import {
   surfaceHeightAt,
   terrainFieldOf,
   useScene,
+  withHostedCutterHoles,
 } from '@pascal-app/core'
 import {
   applyMaterialPresetToMaterials,
@@ -312,6 +314,7 @@ export function buildSlabGeometry(
   colorPreset: ColorPreset = 'clay',
   sceneTheme?: string,
 ): Group {
+  if (ctx) node = withHostedCutterHoles(node, cutterContextNodes(node, ctx))
   if (ctx && !node.plateRole && !node.autoFromWalls)
     node = liftedManualSlab(plateLevelContext(ctx.parent, ctx.resolve).nodes ?? {}, node)
   const group = new Group()

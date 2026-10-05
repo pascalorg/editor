@@ -8,6 +8,7 @@ import {
 } from '@pascal-app/core'
 import { withHostedChildren } from '../shared/hosted-resize'
 import { columnBatchable } from '../shared/node-batch/batchable'
+import { rebuildScriptedSize } from '../shared/scripted-opening-handles'
 import {
   collectStructuralGridAxes,
   resolveStructuralGridSnap,
@@ -213,6 +214,7 @@ function isLeanToManagedColumn(node: ColumnNodeType): boolean {
 // non-vertical supports fall back to the widest sensible brace bound so
 // the rotation handle clears the splay.
 function columnFootprintHalf(n: ColumnNodeType): { halfX: number; halfZ: number } {
+  if (n.source) return { halfX: n.width / 2, halfZ: n.depth / 2 }
   if (n.supportStyle === 'vertical') {
     if (ROUND_CROSS_SECTIONS.has(n.crossSection)) {
       return { halfX: n.radius, halfZ: n.radius }
@@ -289,6 +291,22 @@ function columnMoveHandle(): HandleDescriptor<ColumnNodeType> {
 }
 
 function columnHandles(node: ColumnNodeType): HandleDescriptor<ColumnNodeType>[] {
+  if (node.source) {
+    const declared = new Set(node.source.manifest.params.map((param) => param.id))
+    const sizes: HandleDescriptor<ColumnNodeType>[] = []
+    if (declared.has('height')) sizes.push(columnHeightHandle())
+    if (declared.has('width')) sizes.push(columnAxisHandle('x'))
+    if (declared.has('depth')) sizes.push(columnAxisHandle('z'))
+    return [
+      ...sizes.map((handle) => ({
+        ...handle,
+        commit: (initial: ColumnNodeType, patch: Partial<ColumnNodeType>) =>
+          rebuildScriptedSize(initial, patch),
+      })),
+      columnRotateHandle(),
+      columnMoveHandle(),
+    ]
+  }
   // 1. Height (universal).
   // 2. Footprint arrows depending on supportStyle + crossSection:
   //    - non-vertical supports → braceWidth + braceDepth (skips crossSection)

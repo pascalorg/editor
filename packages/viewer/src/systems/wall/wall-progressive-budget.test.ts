@@ -66,6 +66,11 @@ describe('progressive wall budget', () => {
       expect(shouldDeferWallRebuild(wall.id, sceneNodes, 1, 0)).toBe(false)
       mesh.add(proxy)
       expect(shouldDeferWallRebuild(wall.id, sceneNodes, 1, 0)).toBe(true)
+      proxy.name = 'cut:wall'
+      expect(shouldDeferWallRebuild(wall.id, sceneNodes, 1, 0)).toBe(true)
+      proxy.userData.name = proxy.name
+      proxy.name = 'cutwall'
+      expect(shouldDeferWallRebuild(wall.id, sceneNodes, 1, 0)).toBe(true)
     } finally {
       sceneRegistry.nodes.delete(item.id)
       proxy.geometry.dispose()

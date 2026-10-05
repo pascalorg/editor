@@ -1,4 +1,6 @@
 import { addObjectTool, getSourceTool } from './add-object'
+import { editCollectionTool, listCollectionsTool } from './collections'
+import { addColumnTool } from './columns'
 import { findByTypeTool } from './find-by-type'
 import {
   duplicateLevelTool,
@@ -12,6 +14,8 @@ import { deleteNodeTool, getNodeTool } from './nodes'
 import { addDoorTool, addWindowTool } from './wall-openings'
 
 export * from './add-object'
+export * from './collections'
+export * from './columns'
 export * from './find-by-type'
 export * from './levels'
 export * from './measurement'
@@ -26,6 +30,7 @@ export * from './wall-openings'
  * surface drifts. See wiki/architecture/agent-surfaces.md.
  */
 export const AGENT_TOOL_CONTRACTS = [
+  addColumnTool,
   addDoorTool,
   addWindowTool,
   listLevelsTool,
@@ -39,4 +44,6 @@ export const AGENT_TOOL_CONTRACTS = [
   addObjectTool,
   getSourceTool,
   findByTypeTool,
+  editCollectionTool,
+  listCollectionsTool,
 ] as const

@@ -1,5 +1,5 @@
 import { liftedManualSlab } from '../../lib/floor-construction-lift'
-import { itemOverlapsPolygon } from '../../lib/item-polygon-overlap'
+import { selectSlabSupportForItem, slabSupportsItemFootprint } from '../../lib/item-slab-support'
 import { type PlanAabb, planFootprintAABB, planFootprintCorners } from '../../lib/plan-footprint'
 import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
 import { levelBaseElevationAt } from '../../lib/terrain-support'
@@ -14,7 +14,6 @@ import useScene from '../../store/use-scene'
 import {
   computeWallSlabSupport,
   pointInPolygon,
-  SUPPORT_ELEVATION_EPSILON,
   type WallSlabSupport,
   wallOverlapsPolygon,
 } from '../../systems/slab/slab-support'
@@ -382,15 +381,11 @@ export class SpatialGridManager {
     dimensions: [number, number, number],
     rotation: [number, number, number],
   ): boolean {
-    if (slab.polygon.length < 3) return false
-    const rendered = this.getRenderedSlabPolygon(levelId, slab)
-    if (!itemOverlapsPolygon(position, dimensions, rotation, rendered, 0.01)) return false
-
-    const [cx, , cz] = position
-    for (const hole of slab.holes || []) {
-      if (hole.length >= 3 && pointInPolygon(cx, cz, hole)) return false
-    }
-    return true
+    return slabSupportsItemFootprint(
+      slab,
+      { position, dimensions, rotation },
+      this.getRenderedSlabPolygon(levelId, slab),
+    )
   }
 
   // Called when nodes change
@@ -780,21 +775,15 @@ export class SpatialGridManager {
     const slabMap = this.slabsByLevel.get(levelId)
     if (!slabMap) return { elevation: 0, slabId: null }
 
-    let winningElevation = Number.NEGATIVE_INFINITY
-    let winnerId: string | null = null
-    for (const stored of slabMap.values()) {
-      const slab = this.effectiveSlabRecord(stored)
-      const elevation = slab.elevation ?? 0.05
-      if (maxElevation != null && elevation > maxElevation + SUPPORT_ELEVATION_EPSILON) continue
-      if (!this.slabSupportsFootprint(levelId, slab, position, dimensions, rotation)) continue
-      if (elevation > winningElevation) {
-        winningElevation = elevation
-        winnerId = slab.id
-      }
-    }
-    return winnerId === null
-      ? { elevation: 0, slabId: null }
-      : { elevation: winningElevation, slabId: winnerId }
+    const winner = selectSlabSupportForItem(
+      Array.from(slabMap.values(), (slab) => this.effectiveSlabRecord(slab)),
+      { position, dimensions, rotation },
+      (slab) => this.getRenderedSlabPolygon(levelId, slab),
+      { maxElevation },
+    )
+    return winner
+      ? { elevation: winner.elevation ?? 0.05, slabId: winner.id }
+      : { elevation: 0, slabId: null }
   }
 
   /**
