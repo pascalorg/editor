@@ -36,9 +36,29 @@ export const useWallDraftTyping = create<WallDraftTypingState>((set) => ({
   setProjectedEnd: (end) => set({ projectedEnd: end }),
 }))
 
-/** Keys the wall typing buffer accepts (digits, unit letters, separators). */
+/**
+ * Keys accepted while a buffer is already active (digits, unit letters,
+ * separators). Letters and separators only ever CONTINUE a buffer — a buffer
+ * must start with a digit (or a leading `.`), so single-letter drafting
+ * shortcuts (`c` continuation, `t`, `m`, …) are never swallowed while the
+ * second click is pending (Bugbot 7dcff331).
+ */
 export function isWallTypingKey(key: string): boolean {
   return key.length === 1 && /^[0-9a-zA-Z.'"+\- ]$/.test(key)
+}
+
+/** Keys that may START a buffer: digits and a leading decimal point. */
+export function isWallTypingStartKey(key: string): boolean {
+  return key.length === 1 && /^[0-9.]$/.test(key)
+}
+
+/**
+ * Whether `key` extends the typing flow for the current buffer state: a
+ * digit (or `.`) starts a buffer, anything `isWallTypingKey` accepts may
+ * continue one.
+ */
+export function acceptsWallTypingKey(key: string, buffer: string): boolean {
+  return buffer.length > 0 ? isWallTypingKey(key) : isWallTypingStartKey(key)
 }
 
 /**

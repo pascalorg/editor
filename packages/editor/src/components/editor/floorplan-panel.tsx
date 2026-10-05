@@ -77,6 +77,7 @@ import {
 import { createPortal } from 'react-dom'
 import { Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
+import { markToolCancelConsumed } from '../../hooks/use-keyboard'
 import { resolveCeilingPlanPointSnap } from '../../lib/ceiling-plan-snap'
 import {
   alignFloorplanDraftPoint,
@@ -123,7 +124,7 @@ import usePlacementPreview from '../../store/use-placement-preview'
 import { expandSessionSelectionForNode } from '../../store/use-session-groups'
 import { useStairBuildPreview } from '../../store/use-stair-build-preview'
 import {
-  isWallTypingKey,
+  acceptsWallTypingKey,
   resolveTypedCommitEnd,
   useWallDraftTyping,
 } from '../../store/use-wall-draft-typing'
@@ -5154,6 +5155,10 @@ export function FloorplanPanel({
   // Shims keep the `setXDraftEnd(value | prev => …)` call sites unchanged.
   const [draftStart, setDraftStart] = useState<WallPlanPoint | null>(null)
   const [wallChainFirstVertex, setWallChainFirstVertex] = useState<WallPlanPoint | null>(null)
+  // Set when a typed 2D draft's stage-1 Escape just cleared the buffer; the
+  // next `tool:cancel` is that escape arriving and must not clear the draft
+  // (Bugbot e9c12894). Reset on every other keydown and after commits.
+  const wallTypingEscapeClearedRef = useRef(false)
   const wallConstructionOptionsRef =
     useRef<ReturnType<typeof resolveTerrainWallConstructionOptions>>(undefined)
   // Walls committed by the current 2D-only chain — exclusion set for the
@@ -7982,6 +7987,15 @@ export function FloorplanPanel({
 
   useEffect(() => {
     const handleCancel = () => {
+      // Stage-1 `tool:cancel` from a cleared typing buffer: the buffer clear
+      // WAS the cancel — keep the draft alive and consume the escape so the
+      // global handler does not exit the tool (Bugbot e9c12894). Mirrors the
+      // 3D tool's `onCancel` stage check.
+      if (wallTypingEscapeClearedRef.current) {
+        wallTypingEscapeClearedRef.current = false
+        markToolCancelConsumed()
+        return
+      }
       clearDraft()
     }
 
@@ -7990,6 +8004,20 @@ export function FloorplanPanel({
       emitter.off('tool:cancel', handleCancel)
     }
   }, [clearDraft])
+
+  // Split view: when the 3D wall tool stops drafting (auto-close,
+  // T-junction, single-segment, cancel) it clears the published chain start.
+  // That null clear must tear this panel's draft down too, or the 2D side
+  // keeps a live draft that swallows typing keys against a chain the 3D
+  // view already ended (Bugbot a172c934). Lives here (below `clearDraft`)
+  // rather than beside the re-base subscription so the teardown stays
+  // reachable.
+  useEffect(() => {
+    if (!(mode === 'build' && tool === 'wall')) return
+    return useSegmentDraftChain.subscribe((state, previousState) => {
+      if (state.wall === null && previousState.wall !== null) clearDraft()
+    })
+  }, [mode, tool, clearDraft])
 
   const createZoneOnCurrentLevel = useCallback(
     (points: WallPlanPoint[]) => {
@@ -8260,6 +8288,9 @@ export function FloorplanPanel({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // A fresh keydown invalidates any stale stage-1 escape marker — only
+      // the cancel synchronously following the escape itself is stage-1.
+      wallTypingEscapeClearedRef.current = false
       const target = event.target as HTMLElement | null
       const isEditableTarget =
         target instanceof HTMLInputElement ||
@@ -8288,7 +8319,10 @@ export function FloorplanPanel({
         const typing = useWallDraftTyping.getState()
         const hasInput = typing.input.length > 0
         if (!event.metaKey && !event.ctrlKey && !event.altKey) {
-          if (isWallTypingKey(event.key)) {
+          // A digit (or `.`) starts a buffer; letters only continue one, so
+          // single-letter drafting shortcuts keep working pre-buffer (Bugbot
+          // 7dcff331).
+          if (acceptsWallTypingKey(event.key, typing.input)) {
             typing.append(event.key)
             event.preventDefault()
             event.stopPropagation()
@@ -8309,6 +8343,12 @@ export function FloorplanPanel({
             }
             if (event.key === 'Escape') {
               typing.clearInput()
+              // Stage-1 Escape only clears the buffer. `tool:cancel` still
+              // fires (stopPropagation cannot stop the global handler on the
+              // same window target) — the ref tells `handleCancel` this
+              // cancel is stage-1 so it neither clears the draft nor lets
+              // the global handler exit the tool (Bugbot e9c12894).
+              wallTypingEscapeClearedRef.current = true
               event.preventDefault()
               event.stopPropagation()
               return
@@ -8323,8 +8363,14 @@ export function FloorplanPanel({
                   system: unit === 'imperial' ? 'imperial' : 'metric',
                 },
               )
-              typing.clearInput()
-              if (value === null || value <= 0 || !draftStart) return
+              // Guards first, clear last: an early `clearInput` would wipe a
+              // valid buffer on a degenerate preview (no pointer move yet)
+              // and commit nothing (Bugbot 622bea04) — the 3D path keeps the
+              // buffer in exactly that case.
+              if (value === null || value <= 0 || !draftStart) {
+                typing.clearInput()
+                return
+              }
               const store = useFloorplanDraftPreview.getState()
               const previousEnd = store.wallDraftEnd
               if (!previousEnd) return
@@ -8340,6 +8386,7 @@ export function FloorplanPanel({
               // commits it verbatim (no snap) since the buffer is cleared.
               setDraftEnd(typedEnd)
               wallPlacementPointRef.current?.(typedEnd)
+              typing.clearInput()
               event.preventDefault()
               event.stopPropagation()
               return

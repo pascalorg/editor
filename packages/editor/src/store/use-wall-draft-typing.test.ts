@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { isWallTypingKey, resolveTypedCommitEnd, useWallDraftTyping } from './use-wall-draft-typing'
+import {
+  acceptsWallTypingKey,
+  isWallTypingKey,
+  resolveTypedCommitEnd,
+  useWallDraftTyping,
+} from './use-wall-draft-typing'
 
 describe('useWallDraftTyping', () => {
   beforeEach(() => {
@@ -85,5 +90,26 @@ describe('isWallTypingKey', () => {
     for (const key of ['Enter', 'Escape', 'Tab', 'Shift', '', 'F1']) {
       expect(isWallTypingKey(key)).toBe(false)
     }
+  })
+})
+
+describe('acceptsWallTypingKey (start gating, Bugbot 7dcff331)', () => {
+  test('a digit or leading dot may start a buffer', () => {
+    expect(acceptsWallTypingKey('5', '')).toBe(true)
+    expect(acceptsWallTypingKey('.', '')).toBe(true)
+  })
+
+  test('letters and separators cannot start a buffer — drafting shortcuts stay live', () => {
+    // `c` (continuation), `m`, `t`, `f`… must reach the shortcut layer while
+    // the second click is pending and no buffer exists.
+    for (const key of ['c', 'm', 't', 'f', '-', ' ']) {
+      expect(acceptsWallTypingKey(key, '')).toBe(false)
+    }
+  })
+
+  test('anything isWallTypingKey accepts may continue an active buffer', () => {
+    expect(acceptsWallTypingKey('c', '180')).toBe(true)
+    expect(acceptsWallTypingKey('m', '180c')).toBe(true)
+    expect(acceptsWallTypingKey('.', '2')).toBe(true)
   })
 })

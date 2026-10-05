@@ -19,6 +19,7 @@ import {
   wallClosesRoom,
 } from '@pascal-app/core'
 import {
+  acceptsWallTypingKey,
   CursorSphere,
   chainEndJoinsExistingWall,
   clearPlacementSurface,
@@ -28,12 +29,12 @@ import {
   formatLinearMeasurement,
   getAngleArcToSegmentReference,
   getAngleToSegmentReference,
+  getGridEventScreenProjection,
   getSegmentAngleReferenceAtPoint,
   type HorizontalConstructionPlane,
   isAlignmentGuideActive,
   isAngleSnapActive,
   isMagneticSnapActive,
-  isWallTypingKey,
   markToolCancelConsumed,
   parseMeasurement,
   publishHorizontalConstructionPlane,
@@ -658,20 +659,36 @@ export const WallTool: React.FC = () => {
       // Snapping is governed entirely by the snapping mode (grid / lines /
       // angles / off). `'off'` is the bypass — there is no Shift hold-to-bypass.
       const angleLocked = buildingState.current === 1 && isAngleSnapActive()
-      const snapResult = snapWallDraftPointDetailed({
-        point: localPoint,
-        walls: snapWalls,
-        start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
-        angleSnap: angleLocked,
-        magnetic: isMagneticSnapActive(),
-      })
-      gridPosition = alignPoint(snapResult.point, { applySnap: !angleLocked })
+      // Split view (#308): a `grid:move` from the floor-plan panel carries
+      // `screenProjection` (the 3D raycaster never sets it). While a typing
+      // buffer is active that point is already fully resolved — the 2D side
+      // snapped it and projected it onto the typed length. Running it
+      // through magnetic/grid snap again can rotate the draft ray (a nearby
+      // corner pulls the endpoint) so the committed wall no longer matches
+      // the 2D preview (Bugbot 3cd53dd1). Trust it verbatim; native 3D
+      // moves keep the full snap pipeline.
+      const typedFromFloorplan =
+        buildingState.current === 1 &&
+        useWallDraftTyping.getState().input.length > 0 &&
+        getGridEventScreenProjection(event) !== undefined
+      const snapResult = typedFromFloorplan
+        ? null
+        : snapWallDraftPointDetailed({
+            point: localPoint,
+            walls: snapWalls,
+            start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
+            angleSnap: angleLocked,
+            magnetic: isMagneticSnapActive(),
+          })
+      gridPosition = snapResult
+        ? alignPoint(snapResult.point, { applySnap: !angleLocked })
+        : localPoint
       // Stand the magnetic beacon at the endpoint when it locked onto an
       // existing wall corner / wall point; clear it for plain grid/angle moves.
       useWallSnapIndicator
         .getState()
         .set(
-          snapResult.snap
+          snapResult?.snap
             ? { x: gridPosition[0], z: gridPosition[1], kind: snapResult.snap }
             : null,
         )
@@ -972,7 +989,10 @@ export const WallTool: React.FC = () => {
       const typing = useWallDraftTyping.getState()
       const hasInput = typing.input.length > 0
       if (event.metaKey || event.ctrlKey || event.altKey) return
-      if (isWallTypingKey(event.key)) {
+      // A digit (or `.`) starts a buffer; letters only continue one, so
+      // single-letter drafting shortcuts keep working pre-buffer (Bugbot
+      // 7dcff331).
+      if (acceptsWallTypingKey(event.key, typing.input)) {
         typing.append(event.key)
         event.preventDefault()
         event.stopPropagation()
