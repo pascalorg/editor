@@ -54,7 +54,7 @@ export const addDoorTool = {
   name: 'add_door',
   title: 'Add door',
   description:
-    'Add a door to an existing straight wall at t (0..1 along it), or a passage with no leaf (openingKind opening: a cased opening, an arch). The door slides to stay on the wall and reports clamped. Refused with a code, as in the editor: curved walls, walls shorter than the door, and overlapping another door, window or wall item unless force is set. Match the reference with the outline (rectangle, rounded, arch), doorType and style.',
+    'Add a door to an existing straight wall at t (0..1 along it), or a passage with no leaf (openingKind opening: a cased opening, an arch). The door slides to stay on the wall and reports clamped. Refused with a code, as in the editor: curved walls, walls shorter than the door, and overlapping another door, window or wall item unless force is set. Match the reference with the outline (rectangle, rounded, arch), doorType and style; what they cannot express (glass strips, a pattern of lites, carved panels) is written as a script in code, never left as not possible.',
   input: {
     wallId: NodeId.optional().describe('The wall to add the door to.'),
     nodeId: NodeId.optional().describe(
@@ -98,7 +98,7 @@ export const addWindowTool = {
   name: 'add_window',
   title: 'Add window',
   description:
-    "Add a window to an existing straight wall at t (0..1 along it), on sillHeight above the floor. It slides to stay on the wall and under the wall's ceiling, and reports clamped. Refused with a code, as in the editor: curved walls, walls shorter than the window, and overlapping another door, window or wall item unless force is set. Match the reference with the outline (rectangle, rounded, arch), windowType and panes (columns × rows, or a style).",
+    "Add a window to an existing straight wall at t (0..1 along it), on sillHeight above the floor. It slides to stay on the wall and under the wall's ceiling, and reports clamped. Refused with a code, as in the editor: curved walls, walls shorter than the window, and overlapping another door, window or wall item unless force is set. Match the reference with the outline (rectangle, rounded, arch), windowType and panes (columns × rows, or a style); what they cannot express (glass strips, leaded lites, a feature frame) is written as a script in code, never left as not possible.",
   input: {
     wallId: NodeId.optional().describe('The wall to add the window to.'),
     nodeId: NodeId.optional().describe(

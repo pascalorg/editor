@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { type AgentRefusal, isAgentRefusal } from '../agent-tools/refusal'
+import { addDoorTool, addWindowTool } from '../agent-tools/wall-openings'
 import { openingScene, WALL_OPENING_CASES } from './__fixtures__/wall-opening-cases'
 import { planWallOpening } from './wall-openings'
 
@@ -30,4 +31,15 @@ describe('planWallOpening', () => {
       if (c.expect.node) expect(planned.node).toMatchObject(c.expect.node)
     })
   }
+})
+
+// Run 3 (2026-10-05) wrote the front door's three glass strips off as "not possible": both tools
+// take code, and their descriptions stopped at outline, type and style (L52).
+describe('where an opening beyond the fields is made', () => {
+  test('add_door and add_window say what outline, type and style cannot express goes in code', () => {
+    for (const tool of [addDoorTool, addWindowTool]) {
+      expect(tool.description).toContain('code')
+      expect(tool.description).toContain('glass strips')
+    }
+  })
 })
