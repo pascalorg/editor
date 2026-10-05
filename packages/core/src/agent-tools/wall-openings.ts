@@ -54,7 +54,7 @@ export const addDoorTool = {
   name: 'add_door',
   title: 'Add door',
   description:
-    'Add a door to an existing straight wall at t (0..1 along it). The door slides to stay on the wall and reports clamped. Refused with a code, as in the editor: curved walls, walls shorter than the door, and overlapping another door, window or wall item unless force is set. Match the reference with the outline (rectangle, rounded, arch), doorType and style.',
+    'Add a door to an existing straight wall at t (0..1 along it), or a passage with no leaf (openingKind opening: a cased opening, an arch). The door slides to stay on the wall and reports clamped. Refused with a code, as in the editor: curved walls, walls shorter than the door, and overlapping another door, window or wall item unless force is set. Match the reference with the outline (rectangle, rounded, arch), doorType and style.',
   input: {
     wallId: NodeId.optional().describe('The wall to add the door to.'),
     nodeId: NodeId.optional().describe(
@@ -69,6 +69,12 @@ export const addDoorTool = {
       positive: true,
       description: 'Door height (default 2.1 m).',
     }).optional(),
+    openingKind: z
+      .enum(['door', 'opening'])
+      .optional()
+      .describe(
+        "door (default), or opening: a passage with no leaf, framed or arched by the outline, as the editor's door panel offers.",
+      ),
     hingesSide: z.enum(['left', 'right']).optional().describe('Hinge side (default left).'),
     swingDirection: z
       .enum(['inward', 'outward'])

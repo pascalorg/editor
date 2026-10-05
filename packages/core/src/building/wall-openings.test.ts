@@ -27,6 +27,7 @@ describe('planWallOpening', () => {
       expect(planned.node.position[1]).toBeCloseTo(c.expect.centerY, 6)
       expect(planned.clamped).toBe(c.expect.clamped)
       if (c.expect.glassPanels) expect(JSON.stringify(planned.node)).toContain('"glass"')
+      if (c.expect.node) expect(planned.node).toMatchObject(c.expect.node)
     })
   }
 })

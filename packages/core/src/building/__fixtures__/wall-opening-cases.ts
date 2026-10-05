@@ -105,7 +105,14 @@ export type WallOpeningCase = {
   input: Record<string, unknown>
   expect:
     | { refusal: WallOpeningRefusal; mentions?: string[] }
-    | { localX: number; centerY: number; clamped: boolean; glassPanels?: boolean }
+    | {
+        localX: number
+        centerY: number
+        clamped: boolean
+        glassPanels?: boolean
+        /** Fields the opening built has. */
+        node?: Record<string, unknown>
+      }
 }
 
 const { main, short, exact, busy, curved, storey, shelved, wallShelf, levelId, existingDoor } =
@@ -154,6 +161,19 @@ export const WALL_OPENING_CASES: readonly WallOpeningCase[] = [
     tool: 'add_door',
     input: { wallId: storey, t: 0.5 },
     expect: { localX: 2, centerY: 1.05, clamped: false },
+  },
+  // L45 (2026-10-05): L5's openGaps says to reopen a passage, and no tool made an opening with
+  // no leaf; the editor's door panel has Door / Opening.
+  {
+    name: 'a passage with no leaf is an opening, in the outline asked',
+    tool: 'add_door',
+    input: { wallId: main, t: 0.5, openingKind: 'opening', openingShape: 'arch' },
+    expect: {
+      localX: 2,
+      centerY: 1.05,
+      clamped: false,
+      node: { openingKind: 'opening', openingShape: 'arch' },
+    },
   },
   {
     name: 'a door style changes the panels, not the size',

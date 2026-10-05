@@ -174,6 +174,8 @@ export type WallOpeningInput = {
   sillHeight?: number
   hingesSide?: 'left' | 'right'
   swingDirection?: 'inward' | 'outward'
+  /** A door, or a passage with no leaf (a cased opening, an arch), as the editor's door panel. */
+  openingKind?: 'door' | 'opening'
   style?: string
   force?: boolean
   openingShape?: 'rectangle' | 'rounded' | 'arch'
@@ -305,6 +307,7 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
           swingDirection: input.swingDirection ?? 'inward',
           ...getDoorStyleOverrides(input.style as DoorStyle | undefined),
           ...(input.doorType ? { doorType: input.doorType } : {}),
+          ...(input.openingKind ? { openingKind: input.openingKind } : {}),
         })
       : WindowNode.parse({
           ...base,
