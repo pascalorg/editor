@@ -1,12 +1,12 @@
 import {
   type AnyNodeId,
+  type FenceWithFeatures,
+  fenceWithFeatures,
   floorConstructionLift,
   type GeometryContext,
   getMaterialPresetByRef,
   liftedManualSlab,
   plateLevelContext,
-  type FenceWithFeatures,
-  fenceWithFeatures,
 } from '@pascal-app/core'
 import {
   applyMaterialPresetToMaterials,
@@ -145,7 +145,9 @@ export function buildFenceGeometry(
   const previewFeatures = node.features ?? []
   if (mode === 'body') node = fenceWithFeatures(node, ctx?.children ?? [])
   const group = new Group()
-  const startGround = ctx?.levelBaseAt?.(node.start[0], node.start[1]) ?? 0
+  const nodes = ctx ? (plateLevelContext(ctx.parent, ctx.resolve).nodes ?? {}) : {}
+  const constructionLift = floorConstructionLift(nodes, node)
+  const startGround = (ctx?.levelBaseAt?.(node.start[0], node.start[1]) ?? 0) + constructionLift
   const surfaceId = node.supportSurfaceNodeId as AnyNodeId | undefined
   const surfaceAt = surfaceId
     ? (x: number, z: number) => ctx?.surfaceHeightAt?.(surfaceId, x, z) ?? null
@@ -154,12 +156,17 @@ export function buildFenceGeometry(
   const startBase = startSurface ?? startGround
   const followsTerrain = (node.path?.length ?? 0) >= 2 || Math.abs(node.curveOffset ?? 0) > 1e-4
   const chosenHost =
-    node.supportSlabId ?? (node.surfaceMode === 'selected'
-      ? ((node.supportSurfaceNodeId ?? node.supportSlabId) as AnyNodeId | undefined)
-      : undefined)
-  const sampledSupport = followsTerrain
-    ? (x: number, z: number) => ctx?.supportHeightAt?.(x, z, chosenHost) ?? startBase
-    : undefined
+    node.surfaceMode === 'selected'
+      ? (node.supportSurfaceNodeId as AnyNodeId | undefined)
+      : undefined
+  const sampledSupport =
+    followsTerrain && !node.supportSlabId && ctx?.supportHeightAt
+      ? (x: number, z: number) =>
+          Math.max(
+            ctx.supportHeightAt!(x, z, chosenHost),
+            (ctx.levelBaseAt?.(x, z) ?? 0) + constructionLift,
+          )
+      : undefined
   const levelHeight =
     node.surfaceMode === 'level' ? sampledSupport?.(node.start[0], node.start[1]) : undefined
   const supportAt = levelHeight !== undefined ? () => levelHeight : sampledSupport
@@ -192,7 +199,6 @@ export function buildFenceGeometry(
   // is under this fence. The builder emits local-space children, so the lift
   // lives on an inner group rather than the registered (React-transformed)
   // root.
-  const nodes = ctx ? (plateLevelContext(ctx.parent, ctx.resolve).nodes ?? {}) : {}
   const baseLift = ctx
     ? resolveFenceLiftElevation(
         node,
@@ -200,7 +206,7 @@ export function buildFenceGeometry(
           const host = ctx.resolve(id as AnyNodeId)
           return host?.type === 'slab' ? liftedManualSlab(nodes, host) : host
         },
-        (ctx.levelBaseAt?.(node.start[0], node.start[1]) ?? 0) + floorConstructionLift(nodes, node),
+        startGround,
       )
     : 0
   const lift = supportAt

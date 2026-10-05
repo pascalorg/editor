@@ -2,6 +2,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type HandleDescriptor,
+  liftedManualSlab,
   MIN_SLAB_THICKNESS,
   markSlabChangeDependents,
   type NodeDefinition,
@@ -310,7 +311,7 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
     surfaces: {
       top: {
         height: (n) => (n as SlabNode).elevation,
-        supportHeight: (node, x, z) => {
+        supportHeight: (node, x, z, context) => {
           const slab = node as SlabNodeType
           if (
             slab.polygon.length < 3 ||
@@ -321,7 +322,7 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
             )
           )
             return null
-          return slab.elevation
+          return liftedManualSlab(context.nodes, slab).elevation
         },
       },
     },

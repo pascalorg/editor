@@ -36,7 +36,13 @@ function load(nodes: Record<string, unknown>, rootId: string) {
 
 test('frozen pre-slice corpus covers every kind predating separators', () => {
   expect(baseline.map((n) => n.type).sort()).toEqual(
-    NODE_KINDS.filter((kind) => kind !== 'separator' && kind !== 'floor-opening' && kind !== 'fence-gate' && kind !== 'fence-opening').sort(),
+    NODE_KINDS.filter(
+      (kind) =>
+        kind !== 'separator' &&
+        kind !== 'floor-opening' &&
+        kind !== 'fence-gate' &&
+        kind !== 'fence-opening',
+    ).sort(),
   )
 })
 test.each(

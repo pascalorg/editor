@@ -2,6 +2,7 @@ import {
   type AnyNodeId,
   type FenceNode as FenceNodeType,
   findLevelAncestorId,
+  floorConstructionLift,
   getFenceControlHandle,
   getFenceSpanMode,
   type HandleDescriptor,
@@ -53,6 +54,7 @@ export function fenceBaseElevation(
 ): number {
   const nodes = sceneApi?.nodes()
   if (!nodes) return resolveFenceLiftElevation(n, () => undefined)
+  if (n.supportSlabId) return resolveFenceLiftElevationForNodes(n, nodes)
   const levelId = findLevelAncestorId(n.id as AnyNodeId, nodes)
   if (levelId && ((n.path?.length ?? 0) >= 2 || Math.abs(n.curveOffset ?? 0) > 1e-4)) {
     const selectedHost =
@@ -61,11 +63,15 @@ export function fenceBaseElevation(
         : undefined
     const samplePoint = n.surfaceMode === 'level' ? n.start : point
     return (
-      createSceneSupportHeightSampler(
-        nodes,
-        levelId as AnyNodeId,
-        selectedHost,
-      )(samplePoint[0], samplePoint[1]) + (n.supportOffset ?? 0)
+      Math.max(
+        createSceneSupportHeightSampler(
+          nodes,
+          levelId as AnyNodeId,
+          selectedHost,
+        )(samplePoint[0], samplePoint[1]),
+        levelBaseElevationAt(nodes, levelId, samplePoint[0], samplePoint[1]) +
+          floorConstructionLift(nodes, n),
+      ) + (n.supportOffset ?? 0)
     )
   }
   if (n.supportSurfaceNodeId && levelId) {
@@ -75,12 +81,7 @@ export function fenceBaseElevation(
     )?.(point[0], point[1])
     if (height !== null && height !== undefined) return height + (n.supportOffset ?? 0)
   }
-  if (!levelId) return resolveFenceLiftElevationForNodes(n, nodes)
-  return resolveFenceLiftElevation(
-    n,
-    (id) => nodes[id as AnyNodeId],
-    levelBaseElevationAt(nodes, levelId, point[0], point[1]),
-  )
+  return resolveFenceLiftElevationForNodes(n, nodes)
 }
 
 function fenceMidpointFrame(n: FenceNodeType): {

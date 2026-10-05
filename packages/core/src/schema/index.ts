@@ -176,8 +176,8 @@ export {
   FenceStyle,
   maxFencePicketRailProjection,
 } from './nodes/fence'
-export { FloorOpeningNode } from './nodes/floor-opening'
 export { type FenceFeatureNode, FenceGateNode, FenceOpeningNode } from './nodes/fence-feature'
+export { FloorOpeningNode } from './nodes/floor-opening'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
 export {
   computeGutterEaveY,

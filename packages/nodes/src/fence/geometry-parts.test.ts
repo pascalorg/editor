@@ -4,7 +4,7 @@ import { generateFenceGeometry, generateFenceSlotGeometries } from './geometry-p
 
 const IN = 0.0254
 
-function fence(over: Partial<FenceNode> = {}): FenceNode {
+function guardFence(over: Partial<FenceNode> = {}): FenceNode {
   return {
     id: 'fence_1',
     type: 'fence',
@@ -39,7 +39,7 @@ function yRange(geometry: {
 
 describe('a raised fence base (a deck guard)', () => {
   test('the base is a bottom rail held the clearance above the ground, the pickets end on it, the end posts reach the ground', () => {
-    const parts = generateFenceSlotGeometries(fence())
+    const parts = generateFenceSlotGeometries(guardFence())
     const [baseMin, baseMax] = yRange(parts.base as never)
     expect(baseMin).toBeCloseTo(3.5 * IN, 6)
     expect(baseMax).toBeCloseTo(7 * IN, 6)
@@ -51,7 +51,7 @@ describe('a raised fence base (a deck guard)', () => {
   })
 
   test('a grounded fence keeps its kickboard on the ground', () => {
-    const parts = generateFenceSlotGeometries(fence({ baseStyle: 'grounded' }))
+    const parts = generateFenceSlotGeometries(guardFence({ baseStyle: 'grounded' }))
     const [baseMin] = yRange(parts.base as never)
     expect(baseMin).toBeCloseTo(0, 6)
   })
@@ -59,7 +59,7 @@ describe('a raised fence base (a deck guard)', () => {
 
 describe('the guard fence (AWC DCA 6)', () => {
   const guard = (over: Partial<FenceNode> = {}) =>
-    fence({
+    guardFence({
       style: 'guard',
       guardInfill: 'balusters',
       postSpacing: 6 * 0.3048,
@@ -106,15 +106,24 @@ describe('the guard fence (AWC DCA 6)', () => {
   })
 })
 
-function picketFence(overrides: Partial<FenceNode> = {}) {
-  return FenceNode.parse({ start: [0, 0], end: [4, 0], style: 'picket', ...overrides })
+function fence(overrides: Partial<FenceNode> = {}) {
+  return FenceNode.parse({
+    start: [0, 0],
+    end: [4, 0],
+    style: 'picket',
+    baseStyle: 'floating',
+    groundClearance: 0.14,
+    postSize: 0.109,
+    postSpacing: 1.98,
+    ...overrides,
+  })
 }
 
 describe('picket fence geometry', () => {
   for (const picketTop of ['flat', 'pointed', 'rounded', 'dog-ear'] as const) {
     for (const baseStyle of ['grounded', 'floating'] as const) {
       test(`${picketTop} / ${baseStyle} respects its base and ground clearance`, () => {
-        const node = picketFence({ picketTop, baseStyle, groundClearance: 0.1 })
+        const node = fence({ picketTop, baseStyle, groundClearance: 0.1 })
         const slots = generateFenceSlotGeometries(node)
         expect(Boolean(slots.base.getAttribute('position'))).toBe(baseStyle === 'grounded')
         slots.posts.computeBoundingBox()
@@ -128,8 +137,8 @@ describe('picket fence geometry', () => {
   }
 
   test('rail count and post caps change the generated structure', () => {
-    const plain = generateFenceSlotGeometries(picketFence({ postCap: 'none', picketRailCount: 2 }))
-    const capped = generateFenceSlotGeometries(picketFence({ postCap: 'flat', picketRailCount: 3 }))
+    const plain = generateFenceSlotGeometries(fence({ postCap: 'none', picketRailCount: 2 }))
+    const capped = generateFenceSlotGeometries(fence({ postCap: 'flat', picketRailCount: 3 }))
     plain.posts.computeBoundingBox()
     capped.posts.computeBoundingBox()
     expect(capped.posts.boundingBox!.max.y).toBeGreaterThan(plain.posts.boundingBox!.max.y)
@@ -168,7 +177,7 @@ describe('picket fence geometry', () => {
         ] as [number, number][],
       },
     ]) {
-      const node = picketFence(overrides)
+      const node = fence(overrides)
       const slots = generateFenceSlotGeometries(node)
       const combined = generateFenceGeometry(node)
       const expectedCount = Object.values(slots).reduce(
@@ -183,7 +192,7 @@ describe('picket fence geometry', () => {
   })
 
   test('hidden infill and very short spans omit boards', () => {
-    for (const node of [picketFence({ showInfill: false }), picketFence({ end: [0.05, 0] })]) {
+    for (const node of [fence({ showInfill: false }), fence({ end: [0.05, 0] })]) {
       const slots = generateFenceSlotGeometries(node)
       expect(slots.infill.getAttribute('position')).toBeUndefined()
       expect(slots.posts.getAttribute('position').count).toBeGreaterThan(0)
