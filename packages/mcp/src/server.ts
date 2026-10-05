@@ -1,4 +1,5 @@
 import { McpServer, type RegisteredTool } from '@modelcontextprotocol/sdk/server/mcp.js'
+import type { HostedServiceExecutor } from '@pascal-app/core/agent-operations'
 import type { SceneBridge } from './bridge/scene-bridge'
 import { createSceneOperations, type SceneOperations } from './operations'
 import { registerPrompts } from './prompts'
@@ -6,6 +7,7 @@ import { registerResources } from './resources'
 import type { SceneStore } from './storage/types'
 import { registerTools } from './tools'
 import type { GeometryScriptHost } from './tools/add-object'
+import { registerHostedServiceTools } from './tools/hosted-services'
 import { normalizeToolSchemaDialect } from './tools/normalize-schema-dialect'
 import { registerVisionTools } from './tools/vision'
 import { version } from './version'
@@ -31,6 +33,8 @@ export type CreatePascalMcpServerOptions = {
   executeTool?: PascalMcpToolExecutor
   /** Runs and stores `add_object` modules; without it the tool answers `scripts_unavailable`. */
   geometryScripts?: GeometryScriptHost
+  /** Optional authenticated hosted services; local scene tools remain usable without them. */
+  services?: HostedServiceExecutor
 }
 
 export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpServer {
@@ -43,6 +47,7 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
     opts.operations ?? createSceneOperations({ bridge: opts.bridge, store: opts.store })
   registerTools(server, operations, opts.geometryScripts)
   registerVisionTools(server, operations)
+  if (opts.services) registerHostedServiceTools(server, opts.services)
   registerResources(server, operations)
   registerPrompts(server, operations)
   normalizeToolSchemaDialect(server)

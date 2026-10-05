@@ -30,6 +30,8 @@ A tool has three layers, and only the last one may differ between surfaces:
 
 ## What stays surface-specific
 
+Hosted service tools have public contracts in `core/agent-tools` and a shared request operation in `core/agent-operations`. A host opts into them with `createPascalMcpServer({ services })` or `registerHostedServiceTools`. Without that executor, the open-source server exposes its local scene tools only. Tool arguments carry project/plugin references and an approved credit ceiling; the host supplies verified identity and enforces access, billing and retained-result ownership. Provider selection, workflow prompts and orchestration belong to the host. Public discovery includes only the released contract inventory.
+
 - **Loop control** — step caps, progress ledgers, prompt injection. The chat owns its loop; MCP clients own theirs.
 - **Session and file operations** of the MCP (scenes, units, templates, export) have no chat counterpart unless the chat needs them.
 - **UI-bound chat tools** (current selection, clarification questions) get an MCP counterpart only when external agents need the same information.

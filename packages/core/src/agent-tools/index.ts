@@ -13,6 +13,7 @@ import { addDoorTool, addWindowTool } from './wall-openings'
 
 export * from './add-object'
 export * from './find-by-type'
+export * from './hosted-services'
 export * from './levels'
 export * from './measurement'
 export { NodeId } from './node-id'
