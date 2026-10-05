@@ -38,7 +38,7 @@ export function registerAddColumn(
           const scene = bridge.getActiveScene()
           if (!scene) refuse('no_active_scene', 'Open or save a scene first.')
           const code = input.code ?? (await readScript(host, scene.id, bridge, input.nodeId!))
-          compiled = await compileAndStore(host, scene.id, code, params)
+          compiled = await compileAndStore(host, scene.id, code, params, 'column')
         }
         const outcome = addColumn(nodes, { ...input, compiled }, { activeLevelId: null })
         if (outcome.changes) bridge.applyPatch(toPatches(outcome.changes))
