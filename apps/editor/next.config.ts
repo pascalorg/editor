@@ -35,6 +35,7 @@ const nextConfig: NextConfig = {
     '@pascal-app/nodes',
     '@pascal-app/mcp',
     '@pascal-app/plugin-pool',
+    '@pascal-app/plugin-bath-space',
     '@pascal-app/plugin-landscape',
     '@pascal-app/plugin-streetscape',
     '@pascal-app/plugin-trees',
@@ -46,15 +47,21 @@ const nextConfig: NextConfig = {
   ],
   webpack(config, { dev }) {
     if (!dev) config.resolve.alias['react-scan'] = false
+    for (const name of ['core', 'viewer', 'editor']) {
+      config.resolve.alias[`@pascal-app/${name}`] = path.join(editorRoot, 'packages', name)
+    }
     return config
   },
   turbopack: {
     root: path.resolve(appDirectory, '../../..'),
     resolveAlias: {
-      react: '../../node_modules/react',
+      // App Router requires Next's bundled React, including Fragment refs.
       three: '../../node_modules/three',
       '@react-three/fiber': '../../node_modules/@react-three/fiber',
       '@react-three/drei': '../../node_modules/@react-three/drei',
+      '@pascal-app/core': '../../packages/core',
+      '@pascal-app/viewer': '../../packages/viewer',
+      '@pascal-app/editor': '../../packages/editor',
       '@pascal-app/nodes': path.relative(
         appDirectory,
         path.join(editorRoot, 'packages/nodes/src/index.ts'),

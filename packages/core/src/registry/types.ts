@@ -579,6 +579,8 @@ export type FloorplanGeometry =
        * affordances (rotation, scale) without expanding the union.
        */
       variant?: 'endpoint' | 'curve'
+      /** Keep the drag target the same size in pixels when zooming out. */
+      screenSized?: boolean
       affordance: string
       payload: unknown
     }
@@ -1098,6 +1100,7 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * Has no effect when `distributionRole` is not `'fitting'`.
    */
   portConnectivityFollow?: boolean
+  connectedMove?: (node: z.infer<S>, preview: z.infer<S>, nodes: Readonly<Record<string, AnyNode>>) => { id: AnyNodeId; data: Partial<AnyNode> }[]
 
   defaults: () => Omit<z.infer<S>, 'id' | 'type'>
 

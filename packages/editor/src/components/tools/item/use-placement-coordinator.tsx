@@ -1,3 +1,4 @@
+import { createWallPointerTracker } from '../../../lib/wall-placement-pointer'
 import type { AssetInput, ItemNode } from '@pascal-app/core'
 import {
   type AlignmentAnchor,
@@ -97,6 +98,7 @@ import {
   shouldDetachFaceHostOnLeave,
 } from './face-host-preview'
 import {
+  getSideFromNormal,
   getDetachedAttachmentPreviewLift,
   getGridAlignedDimensions,
   snapToGrid,
@@ -908,15 +910,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     // for a given host, then offsets every later move by
     // `start + (raw - anchor)` — mirroring the floor path and the door/window
     // move tools so the item tracks the grabbed point instead of teleporting
-    // its origin under the cursor. Reset on host change (re-seeded from the
-    // item's then-current position) by the surface leave handlers.
-    let wallDragAnchor: {
-      wallId: string
-      rawX: number
-      rawY: number
-      startX: number
-      startY: number
-    } | null = null
+    // its origin under the cursor. Changing hosts or faces clears the offset.
+    const wallPointer = createWallPointerTracker(
+      preserveDragOffset && grabStartPosition
+        ? { wallId: grabWallId, side: draftNode.current?.side, position: grabStartPosition }
+        : undefined,
+    )
     let ceilingDragAnchor: {
       ceilingId: string
       rawX: number
@@ -1363,28 +1362,12 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
       let wallMoveEvent = event
       if (preserveDragOffset && draftNode.current) {
-        const rawX = event.localPosition[0]
-        const rawY = event.localPosition[1]
-        if (!wallDragAnchor || wallDragAnchor.wallId !== event.node.id) {
-          // Preserve the grab offset only on the wall the item was grabbed
-          // from (no teleport under the pointer at grab time). Any OTHER host
-          // centers the item under the cursor — a host change is already a
-          // jump, so tracking the pointer exactly is the expected feel, while
-          // re-seeding from the carried-over position (the old behavior)
-          // baked an arbitrary along-wall offset into the whole stay on that
-          // wall. Once anchored elsewhere the grab is forgotten for good, so
-          // re-entering the original wall centers under the cursor too.
-          const preserveGrab = preserveGrabOn(event.node.id, grabWallId)
-          wallDragAnchor = {
-            wallId: event.node.id,
-            rawX,
-            rawY,
-            startX: preserveGrab && grabStartPosition ? grabStartPosition[0] : rawX,
-            startY: preserveGrab && grabStartPosition ? grabStartPosition[1] : rawY,
-          }
-        }
-        const correctedX = wallDragAnchor.startX + (rawX - wallDragAnchor.rawX)
-        const correctedY = wallDragAnchor.startY + (rawY - wallDragAnchor.rawY)
+        preserveGrabOn(event.node.id, grabWallId)
+        const [correctedX, correctedY] = wallPointer.resolve(
+          event.node.id,
+          getSideFromNormal(event.normal),
+          [event.localPosition[0], event.localPosition[1]],
+        )
         wallMoveEvent = {
           ...event,
           localPosition: [correctedX, correctedY, event.localPosition[2]],
@@ -1486,7 +1469,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     }
 
     const onWallLeave = (event: WallEvent) => {
-      wallDragAnchor = null
+      wallPointer.leave()
       const result = wallStrategy.leave(getContext())
       if (!result) return
 

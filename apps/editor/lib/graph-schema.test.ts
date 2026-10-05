@@ -237,3 +237,13 @@ test('does not rewrite materials it accepts', () => {
   expect(res.success).toBe(true)
   expect(res.data?.materials?.[MATERIAL_ID]).toEqual(sparse)
 })
+
+ test('accepts plugin material slot references without exempting arbitrary URLs', () => {
+  for (const ref of ['scene:Warm limestone', 'library:wood-finewood27']) {
+    expect(apiGraphSchema.safeParse(buildGraph({ [TREE_ID]: pluginTree({ slots: { body: ref } }) })).success).toBe(true)
+    expect(apiGraphSchema.safeParse(buildGraph({ [TREE_ID]: pluginTree({ src: ref }) })).success).toBe(false)
+  }
+  for (const ref of ['javascript:alert(1)', 'file:///etc/passwd', 'scene:https://evil.example/a']) {
+    expect(apiGraphSchema.safeParse(buildGraph({ [TREE_ID]: pluginTree({ slots: { body: ref } }) })).success).toBe(false)
+  }
+})

@@ -347,3 +347,20 @@ describe('port connectivity — joint follow (stretch vs translate)', () => {
     expect(connectivity.connections.find((c) => c.nodeId === distant.id)).toBeUndefined()
   })
 })
+
+test('kind-owned connectivity keeps fixed neighbors and snapshots custom move followers', () => {
+  registerNode({ kind: 'test:connected-equipment', schemaVersion: 1, schema: {}, category: 'utility', defaults: () => ({}),
+    connectedMove: (_node: AnyNode, preview: AnyNode, nodes: Record<string, AnyNode>) => {
+      const position = (preview as unknown as { position: Point }).position
+      const path = (nodes['custom_run'] as unknown as { path: Point[] }).path
+      return [{ id: 'custom_run' as AnyNodeId, data: { path: [position, path[1]] } }]
+    },
+  } as unknown as AnyNodeDefinition)
+  const equipment = { id: 'equipment', type: 'test:connected-equipment', position: [0, 0, 0] } as unknown as AnyNode
+  const run = { id: 'custom_run', type: 'duct-segment', path: [[0, 0, 0], [5, 0, 0]] } as unknown as AnyNode
+  const snapshot = analyzePortConnectivity(equipment, { [equipment.id]: equipment, [run.id]: run })
+  expect(snapshot.connections).toEqual([{ kind: 'run', nodeId: 'custom_run', startPath: [[0, 0, 0], [5, 0, 0]] }])
+  const updated = resolveConnectivityUpdates(snapshot, { ...equipment, position: [2, 0, 3] } as unknown as AnyNode)
+  expect(updated).toEqual([{ id: 'custom_run', data: { path: [[2, 0, 3], [5, 0, 0]] } }])
+  expect((run as unknown as { path: Point[] }).path).toEqual([[0, 0, 0], [5, 0, 0]])
+})

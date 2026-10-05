@@ -22,9 +22,8 @@ function getCategoryLabel(category: string) {
 
 /**
  * Catalog material picker: a fixed row of category tabs and a source filter row
- * over a scrollable grid of swatches. Scene-material creation lives in the
- * scene-material section (the host's `+` action); `onCreateMaterialRequest` is
- * the host's entry point for authoring a new *library* material.
+ * over a scrollable grid of swatches. `onCreateMaterialRequest` is the host's
+ * entry point for authoring a new library material.
  */
 export function MaterialPicker({
   selectedMaterialPreset,

@@ -1,7 +1,7 @@
 {
   "name": "@pascal-app/nodes",
   "version": "1.0.3",
-  "description": "Built-in node bundles for the Pascal 3D editor — one folder per kind, exported as `builtinPlugin`",
+  "description": "Built-in node bundles for the Pascal 3D editor \u2014 one folder per kind, exported as `builtinPlugin`",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -15,6 +15,11 @@
       "types": "./dist/procedural-item/index.d.ts",
       "import": "./dist/procedural-item/index.js",
       "default": "./dist/procedural-item/index.js"
+    },
+    "./distribution": {
+      "types": "./dist/shared/distribution-public.d.ts",
+      "import": "./dist/shared/distribution-public.js",
+      "default": "./dist/shared/distribution-public.js"
     }
   },
   "files": [

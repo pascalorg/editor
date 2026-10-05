@@ -897,3 +897,9 @@ export {
   type WallSnapKind,
   type WallSnapPoint,
 } from './store/use-wall-snap-indicator'
+
+export {
+  createWallPointerTracker,
+  wallPointerInParent,
+  wallSideAtPointer,
+} from './lib/wall-placement-pointer'

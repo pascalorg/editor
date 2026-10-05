@@ -1,11 +1,6 @@
 'use client'
 
-import {
-  type AnyNodeId,
-  generateSceneMaterialId,
-  toSceneMaterialRef,
-  useScene,
-} from '@pascal-app/core'
+import { type AnyNodeId, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import useEditor from '../store/use-editor'
@@ -24,7 +19,6 @@ export function useMaterialPaintPanelModel(enabled = true) {
   const paintTarget = useScene((state) =>
     resolvePaintTargetFromSelection({ nodes: state.nodes, selectedId }),
   )
-  const materials = useScene((state) => state.materials)
   const canResetSelection = paintTarget !== null
   useEffect(() => {
     if (enabled && paintTarget) setActivePaintTarget(paintTarget)
@@ -34,30 +28,6 @@ export function useMaterialPaintPanelModel(enabled = true) {
     const node = selectedId ? scene.nodes[selectedId as AnyNodeId] : undefined
     if (node) scene.updateNodes(buildResetSurfaceMaterialUpdates(scene.nodes, node))
   }
-  const createCustomMaterial = () => {
-    const scene = useScene.getState()
-    const id = generateSceneMaterialId()
-    scene.addSceneMaterial({
-      id,
-      name: `Material ${Object.keys(scene.materials).length + 1}`,
-      material: {
-        preset: 'custom',
-        properties: {
-          color: '#ffffff',
-          roughness: 0.5,
-          metalness: 0,
-          opacity: 1,
-          transparent: false,
-          side: 'front',
-        },
-      },
-    })
-    setActivePaintMaterial({
-      materialPreset: toSceneMaterialRef(id),
-      sourceTarget: useEditor.getState().activePaintTarget,
-    })
-    return id
-  }
   const selectMaterial = (materialPreset: string) =>
     setActivePaintMaterial({ materialPreset, sourceTarget: useEditor.getState().activePaintTarget })
   return {
@@ -66,11 +36,8 @@ export function useMaterialPaintPanelModel(enabled = true) {
     setActivePaintMaterial,
     paintEraser,
     setPaintEraser,
-    materials,
-    materialCount: Object.keys(materials).length,
     canResetSelection,
     resetSelection,
-    createCustomMaterial,
     selectMaterial,
   }
 }

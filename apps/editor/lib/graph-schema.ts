@@ -71,6 +71,7 @@ function findRejectedUrl(root: unknown): ScanResult | null {
   const walk = (value: unknown, path: (string | number)[], depth: number): ScanResult | null => {
     if (depth > MAX_SCAN_DEPTH || budget-- <= 0) return { path, reason: 'too-complex' }
     if (typeof value === 'string') {
+      if (path.length === 2 && path[0] === 'slots' && /^(scene|library):[^:/\\\x00-\x1f\x7f]+$/.test(value)) return null
       if (isUrlShaped(value) && !AssetUrl.safeParse(value).success) return { path, reason: 'url' }
       return null
     }
