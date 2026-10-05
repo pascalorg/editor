@@ -617,7 +617,24 @@ export const DUPLICATE_LEVEL_CASES: AgentToolCase[] = [
   },
   // Victor run 10: the build guide deletes a family's plan-only floors, then copies its first floor
   // up. Each copy pushed every floor above, gap included, and floor 8 went from index 7 to 10.
-
+  {
+    name: 'a copy fills a free floor above and moves nothing past the gap',
+    tool: 'duplicate_level',
+    scene: () => {
+      const graph = houseScene()
+      const roof = graph.nodes.level_roof as { level: number }
+      graph.nodes.level_roof = { ...roof, level: 4 }
+      return graph
+    },
+    input: { levelId: 'level_upper' },
+    expect: {
+      result: { floorIndex: 2, shiftedLevelIds: [] },
+      after: { level_upper: { level: 1 }, level_roof: { level: 4 } },
+    },
+    // The live stores (chat and MCP) close level gaps when a scene loads; the gap lives inside a
+    // batch, as in run 10 (duplicate-level.test.ts runs that sequence).
+    surfaces: ['core'],
+  },
   {
     name: 'a name names the copy',
     tool: 'duplicate_level',
