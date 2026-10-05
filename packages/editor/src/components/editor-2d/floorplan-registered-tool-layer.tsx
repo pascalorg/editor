@@ -14,8 +14,19 @@ import {
 } from '../../lib/floorplan/floorplan-mode'
 import useEditor from '../../store/use-editor'
 import useFloorplanMode from '../../store/use-floorplan-mode'
+import useInteractionScope, { useReshapingNode } from '../../store/use-interaction-scope'
 
-const lazyToolCache = new WeakMap<() => Promise<unknown>, ComponentType<FloorplanToolContext>>()
+type Loader = () => Promise<{ default: ComponentType<FloorplanToolContext> }>
+const lazyToolCache = new WeakMap<Loader, ComponentType<FloorplanToolContext>>()
+
+function lazyTool(loader: Loader | undefined): ComponentType<FloorplanToolContext> | null {
+  if (!loader) return null
+  const cached = lazyToolCache.get(loader)
+  if (cached) return cached
+  const component = lazy(loader)
+  lazyToolCache.set(loader, component)
+  return component
+}
 
 function registeredFloorplanTool(
   tool: string | null,
@@ -24,13 +35,16 @@ function registeredFloorplanTool(
   if (!tool) return null
   const extension = getFloorplanNodeExtension(nodeRegistry.get(tool))
   if (!isFloorplanToolAvailableInMode(extension?.availableModes, mode)) return null
-  const loader = extension?.tool
-  if (!loader) return null
-  const cached = lazyToolCache.get(loader)
-  if (cached) return cached
-  const component = lazy(loader)
-  lazyToolCache.set(loader, component)
-  return component
+  return lazyTool(extension?.tool)
+}
+
+/** The plan sibling of `def.affordanceTools[reshape]`: a kind's layer for its own reshape. */
+function registeredReshapeLayer(
+  kind: string | null,
+  reshape: string | null,
+): ComponentType<FloorplanToolContext> | null {
+  if (!(kind && reshape)) return null
+  return lazyTool(getFloorplanNodeExtension(nodeRegistry.get(kind))?.reshapeLayers?.[reshape])
 }
 
 export function FloorplanRegisteredToolLayer() {
@@ -42,6 +56,10 @@ export function FloorplanRegisteredToolLayer() {
   const toolDefaults = useEditor((state) =>
     state.tool ? (state.toolDefaults[state.tool] ?? null) : null,
   )
+  const reshape = useInteractionScope((state) =>
+    state.scope.kind === 'reshaping' ? state.scope.reshape : null,
+  )
+  const reshapingNode = useReshapingNode()
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const unit = useViewer((state) => state.unit)
   const metricNotation = useViewer((state) => state.metricNotation)
@@ -55,11 +73,14 @@ export function FloorplanRegisteredToolLayer() {
     useEditor.getState().setTool(null)
     useEditor.getState().setMode('select')
   }, [])
-  if (mode !== 'build') return null
-  const Tool = registeredToolEnabled ? registeredFloorplanTool(tool, floorplanMode) : null
-  return Tool ? (
+  const Active =
+    registeredReshapeLayer(reshapingNode?.type ?? null, reshape) ??
+    (mode === 'build' && registeredToolEnabled
+      ? registeredFloorplanTool(tool, floorplanMode)
+      : null)
+  return Active ? (
     <Suspense fallback={null}>
-      <Tool
+      <Active
         activeLevelId={activeLevelId}
         finishTool={finishTool}
         gridSnapStep={gridSnapStep}

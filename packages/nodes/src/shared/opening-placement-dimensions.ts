@@ -6,6 +6,7 @@ import {
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
+  getWallFaceOffsets,
   isCurvedWall,
   type OpeningSpan,
   useScene,
@@ -56,8 +57,9 @@ export function buildOpeningPlacementDimensions(
   // walls) via ctx.resolve to compute the centroid.
   const outwardNormal = computeOutwardNormal(wall, ctx, dirX, dirZ)
 
-  const wallThickness = wall.thickness ?? 0.1
-  const halfThickness = wallThickness / 2
+  const offsets = getWallFaceOffsets(wall)
+  const halfThickness =
+    outwardNormal[0] * -dirZ + outwardNormal[1] * dirX >= 0 ? offsets.a : -offsets.b
   const FLOORPLAN_WALL_OUTER_MEASUREMENT_OFFSET = 0.32
 
   // Outer-face projection for the placement dimensions (so extension lines stay

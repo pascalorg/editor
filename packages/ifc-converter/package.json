@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/ifc-converter",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "IFC → Pascal scene-graph conversion. Pure logic — no DOM, no React.",
   "type": "module",
   "main": "./dist/index.js",
@@ -10,6 +10,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./export": {
+      "types": "./dist/export/index.d.ts",
+      "import": "./dist/export/index.js",
+      "default": "./dist/export/index.js"
     }
   },
   "files": [
@@ -23,8 +28,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@pascal-app/core": "^1.0.1",
-    "nanoid": "^5.1.6",
+    "@pascal-app/core": "^1.0.3",
     "web-ifc": "^0.0.77"
   },
   "devDependencies": {
@@ -34,7 +38,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/pascalorg/editor.git",
+    "url": "git+https://github.com/pascalorg/editor.git",
     "directory": "packages/ifc-converter"
   },
   "license": "MIT",

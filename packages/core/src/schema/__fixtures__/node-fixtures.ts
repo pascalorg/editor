@@ -26,6 +26,7 @@ export const NODE_REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
     ],
   },
   fence: { start: [0, 0], end: [4, 0] },
+  'floor-opening': { polygon: [[0, 0], [1, 0], [1, 1], [0, 1]] },
   guide: { url: 'asset://guide.png' },
   item: {
     asset: {
@@ -71,6 +72,7 @@ export const NODE_REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
       [4, 4],
     ],
   },
+  separator: { start: [0, 0], end: [4, 0] },
   wall: { start: [0, 0], end: [4, 0] },
   zone: {
     name: 'Kitchen',

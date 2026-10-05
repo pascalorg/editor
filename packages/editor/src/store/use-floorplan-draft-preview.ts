@@ -40,6 +40,12 @@ type FloorplanDraftPreviewState = {
   wallDraftStart: WallPlanPoint | null
   fenceDraftStart: WallPlanPoint | null
   roofDraftStart: WallPlanPoint | null
+  /** First corner of an open rectangle-wall draft; the live cursor is the
+   *  opposite corner, so the rectangle tool publishes only per click. */
+  wallRectangleDraftStart: WallPlanPoint | null
+  /** Corners placed so far by an open Polygon room. Draft only — no wall is
+   *  written until the polygon completes (`lib/wall-polygon-draft.ts`). */
+  wallPolygonDraftPoints: WallPlanPoint[]
   roofDraftQuarterTurn: boolean
   polygonDraftType: FloorplanPolygonDraftType | null
   polygonDraftPoints: WallPlanPoint[]
@@ -55,6 +61,8 @@ type FloorplanDraftPreviewState = {
   setWallDraftStart(point: WallPlanPoint | null): void
   setFenceDraftStart(point: WallPlanPoint | null): void
   setRoofDraftStart(point: WallPlanPoint | null): void
+  setWallRectangleDraftStart(point: WallPlanPoint | null): void
+  setWallPolygonDraftPoints(points: readonly WallPlanPoint[]): void
   setRoofDraftQuarterTurn(quarterTurn: boolean): void
   setPolygonDraft(type: FloorplanPolygonDraftType | null, points: readonly WallPlanPoint[]): void
   reset(): void
@@ -74,7 +82,8 @@ function setPlanPointField(
     | 'roofDraftEnd'
     | 'roofDraftStart'
     | 'wallDraftEnd'
-    | 'wallDraftStart',
+    | 'wallDraftStart'
+    | 'wallRectangleDraftStart',
   point: WallPlanPoint | null,
 ) {
   return (
@@ -96,6 +105,8 @@ export const useFloorplanDraftPreview = create<FloorplanDraftPreviewState>((set)
   wallDraftStart: null,
   fenceDraftStart: null,
   roofDraftStart: null,
+  wallRectangleDraftStart: null,
+  wallPolygonDraftPoints: [],
   roofDraftQuarterTurn: false,
   polygonDraftType: null,
   polygonDraftPoints: [],
@@ -119,6 +130,13 @@ export const useFloorplanDraftPreview = create<FloorplanDraftPreviewState>((set)
   setWallDraftStart: (point) => set(setPlanPointField('wallDraftStart', point)),
   setFenceDraftStart: (point) => set(setPlanPointField('fenceDraftStart', point)),
   setRoofDraftStart: (point) => set(setPlanPointField('roofDraftStart', point)),
+  setWallRectangleDraftStart: (point) => set(setPlanPointField('wallRectangleDraftStart', point)),
+  setWallPolygonDraftPoints: (points) =>
+    set((state) =>
+      planPointsEqual(state.wallPolygonDraftPoints, points)
+        ? state
+        : { wallPolygonDraftPoints: points.map(([x, z]) => [x, z]) },
+    ),
   setRoofDraftQuarterTurn: (quarterTurn) =>
     set((state) =>
       state.roofDraftQuarterTurn === quarterTurn ? state : { roofDraftQuarterTurn: quarterTurn },
@@ -139,6 +157,8 @@ export const useFloorplanDraftPreview = create<FloorplanDraftPreviewState>((set)
       state.wallDraftStart === null &&
       state.fenceDraftStart === null &&
       state.roofDraftStart === null &&
+      state.wallRectangleDraftStart === null &&
+      state.wallPolygonDraftPoints.length === 0 &&
       state.roofDraftQuarterTurn === false &&
       state.polygonDraftType === null &&
       state.polygonDraftPoints.length === 0
@@ -152,6 +172,8 @@ export const useFloorplanDraftPreview = create<FloorplanDraftPreviewState>((set)
             wallDraftStart: null,
             fenceDraftStart: null,
             roofDraftStart: null,
+            wallRectangleDraftStart: null,
+            wallPolygonDraftPoints: [],
             roofDraftQuarterTurn: false,
             polygonDraftType: null,
             polygonDraftPoints: [],

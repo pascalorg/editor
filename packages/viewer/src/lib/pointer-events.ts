@@ -164,6 +164,25 @@ type CachedQuery = {
   hits: THREE.Intersection[]
 }
 
+/**
+ * Whether a mesh has a material for everything a raycast reads: three indexes
+ * a material array by each geometry group, and one with no entry throws on
+ * `material.side`. A mesh caught mid-swap (a preview restored an older array
+ * over a rebuilt geometry) is skipped for this move instead of taking the whole
+ * pointer event down; its children are still tested.
+ */
+export function hasMaterialsForGroups(object: THREE.Object3D): boolean {
+  const mesh = object as THREE.Mesh
+  if (!mesh.isMesh) return true
+  const material = mesh.material
+  if (!material) return false
+  if (!Array.isArray(material)) return true
+  for (const group of mesh.geometry?.groups ?? []) {
+    if (!material[group.materialIndex ?? 0]) return false
+  }
+  return true
+}
+
 function distanceOrder(a: THREE.Intersection, b: THREE.Intersection) {
   return a.distance - b.distance
 }
@@ -197,7 +216,7 @@ function createCachedRaycast() {
         unsupportedObject = object
         return false
       }
-      result = object.raycast(raycaster, hits)
+      if (hasMaterialsForGroups(object)) result = object.raycast(raycaster, hits)
     }
     if (result !== false) {
       const children = object.children

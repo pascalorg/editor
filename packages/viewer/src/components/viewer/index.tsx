@@ -6,10 +6,12 @@ import {
   RoofElevationSystem,
   StairOpeningSystem,
   sceneRegistry,
+  useInteractive,
   useScene,
 } from '@pascal-app/core'
 import { Canvas, extend, type ThreeElement, useFrame, useThree } from '@react-three/fiber'
 import {
+  type ComponentType,
   forwardRef,
   useEffect,
   useImperativeHandle,
@@ -32,7 +34,7 @@ import { FloorElevationSystem } from '../../systems/floor-elevation/floor-elevat
 import { GeometrySystem } from '../../systems/geometry/geometry-system'
 import { PerfActionSettleSystem } from '../../systems/perf-action-settle/perf-action-settle-system'
 import { subscribeWallBuildInteractions } from '../../systems/wall/wall-build-lifecycle'
-import { ErrorBoundary } from '../error-boundary'
+import { ImmersiveXRPresentationProvider } from '../../xr/presentation-context'
 import { SceneRenderer } from '../renderers/scene-renderer'
 import { BATCH_SPIKE_ENABLED, BatchedMeshSpike } from './batched-mesh-spike'
 import FrameLimiter from './frame-limiter'
@@ -42,6 +44,7 @@ import { PerfPanel } from './perf-panel'
 import { PointerRaycastLayers } from './pointer-raycast-layers'
 import PostProcessing, { DEFAULT_HOVER_STYLES, type HoverStyles } from './post-processing'
 import { RegisteredSystems } from './registered-systems'
+import { composeRenderErrorHandlers, SceneErrorBoundary } from './render-error'
 import { useSceneAtmosphere } from './scene-atmosphere'
 import { SceneBvh } from './scene-bvh'
 import { SelectionManager } from './selection-manager'
@@ -114,6 +117,39 @@ const warnedEmptyDraw = process.env.NODE_ENV === 'production' ? null : new WeakS
  * carry the same check inline).
  */
 function installEmptyDrawGuard(renderer: THREE.WebGPURenderer) {
+  // The render-object hook is one funnel; the post-processing passes and the
+  // outline node reach the backend by other paths, and a geometry whose
+  // draw range is empty still slips past a position count. The backend's
+  // own `draw` is the last gate before the command encoder — a zero-vertex
+  // draw leaves a vertex-buffer slot unbound ("Vertex buffer slot 1 required
+  // by [RenderPipeline "…MeshLambertNodeMaterial…"] was not set … Draw(0, …)",
+  // 2026-09-10) and poisons the whole encoder, so it is dropped here.
+  const backend = (
+    renderer as unknown as {
+      backend?: { draw?: (...args: unknown[]) => unknown; __pascalDrawGuard?: boolean }
+    }
+  ).backend
+  if (backend && typeof backend.draw === 'function' && !backend.__pascalDrawGuard) {
+    const draw = backend.draw.bind(backend)
+    backend.draw = (renderObject: unknown, ...rest: unknown[]) => {
+      const geometry = (renderObject as { geometry?: THREE.BufferGeometry } | null)?.geometry
+      const range = geometry?.drawRange
+      if (!hasDrawableGeometry(geometry) || (range && range.count === 0)) {
+        if (warnedEmptyDraw && geometry && !warnedEmptyDraw.has(geometry)) {
+          warnedEmptyDraw.add(geometry)
+          console.warn('[viewer] dropped a zero-vertex draw at the backend', {
+            name: (renderObject as { object?: { name?: string; type?: string } } | null)?.object
+              ?.name,
+            type: (renderObject as { object?: { name?: string; type?: string } } | null)?.object
+              ?.type,
+          })
+        }
+        return
+      }
+      return draw(renderObject, ...rest)
+    }
+    backend.__pascalDrawGuard = true
+  }
   renderer.setRenderObjectFunction(
     (
       object: any,
@@ -171,7 +207,7 @@ type WebGPUDeviceLike = {
   removeEventListener?: (type: string, listener: EventListener) => void
 }
 
-function GPUDeviceWatcher() {
+function GPUDeviceWatcher({ intentionalWebGL = false }: { intentionalWebGL?: boolean }) {
   const gl = useThree((s) => s.gl)
 
   useEffect(() => {
@@ -183,13 +219,14 @@ function GPUDeviceWatcher() {
     const backend = (gl as any).backend
     const device = backend?.device as WebGPUDeviceLike | undefined
 
-    if (!device) {
+    if (!device && !intentionalWebGL) {
       console.warn('[viewer] No WebGPU device on backend — running on a fallback renderer.', {
         backend: backend?.constructor?.name ?? 'unknown',
         rendererType: (gl as any).constructor?.name ?? 'unknown',
       })
       return
     }
+    if (!device) return
 
     console.log('[viewer] WebGPU device ready', {
       label: device.label,
@@ -213,7 +250,7 @@ function GPUDeviceWatcher() {
     return () => {
       device.removeEventListener?.('uncapturederror', onUncapturedError)
     }
-  }, [gl])
+  }, [gl, intentionalWebGL])
 
   return null
 }
@@ -238,30 +275,56 @@ function ToneMappingExposure() {
   return null
 }
 
+function ImmersiveXRBackground() {
+  const background = useViewer((state) => getSceneTheme(state.sceneTheme).background)
+  return <color args={[background]} attach="background" />
+}
+
+function isPendingSceneBuild(
+  id: AnyNodeId,
+  { nodes, rootNodeIds }: Pick<ReturnType<typeof useScene.getState>, 'nodes' | 'rootNodeIds'>,
+): boolean {
+  const node = nodes[id]
+  if (!node) return false
+  // Unreachable nodes (orphaned by a broken detach: the parent doesn't list
+  // them in `children`, or no parent and not a root) never render — every
+  // renderer enumerates the parent's `children` array — so no system will
+  // ever build them or clear their mark. They must not hold scene-ready
+  // hostage (observed in prod scene data: two dangling windows kept every
+  // bake of that scene waiting out the full readiness cap).
+  const parent = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
+  const reachable = parent
+    ? (parent as { children?: string[] }).children?.includes(id) === true
+    : rootNodeIds.includes(id)
+  if (!reachable) return false
+  const def = nodeRegistry.get(node.type)
+  return Boolean(
+    def?.geometry || def?.capabilities?.floorPlaced || DIRTY_BUILD_KINDS.has(node.type),
+  )
+}
+
 function hasPendingSceneBuildWork() {
-  const { dirtyNodes, nodes, rootNodeIds } = useScene.getState()
-
-  for (const id of dirtyNodes) {
-    const node = nodes[id]
-    if (!node) continue
-    // Unreachable nodes (orphaned by a broken detach: the parent doesn't list
-    // them in `children`, or no parent and not a root) never render — every
-    // renderer enumerates the parent's `children` array — so no system will
-    // ever build them or clear their mark. They must not hold scene-ready
-    // hostage (observed in prod scene data: two dangling windows kept every
-    // bake of that scene waiting out the full readiness cap).
-    const parent = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
-    const reachable = parent
-      ? (parent as { children?: string[] }).children?.includes(id) === true
-      : rootNodeIds.includes(id)
-    if (!reachable) continue
-    const def = nodeRegistry.get(node.type)
-    if (def?.geometry || def?.capabilities?.floorPlaced || DIRTY_BUILD_KINDS.has(node.type)) {
-      return true
-    }
+  const state = useScene.getState()
+  for (const id of state.dirtyNodes) {
+    if (isPendingSceneBuild(id, state)) return true
   }
-
   return false
+}
+
+/**
+ * The scene-ready gate's own test as a count — nodes still to build or load
+ * (an item holds its mark until its model settles), 1 while the graph has
+ * not mounted. A capture waits on it, and reads a count that stops moving
+ * as a node no system will ever settle.
+ */
+export function pendingSceneBuildCount(): number {
+  if (!hasCommittedSceneRoot()) return 1
+  const state = useScene.getState()
+  let count = 0
+  for (const id of state.dirtyNodes) {
+    if (isPendingSceneBuild(id, state)) count++
+  }
+  return count
 }
 
 function hasCommittedSceneRoot() {
@@ -332,6 +395,12 @@ function SceneReadyTracker({
   return null
 }
 
+export interface ViewerImmersiveSession {
+  Session: ComponentType<{ children: React.ReactNode }>
+  Scene: ComponentType<{ children: React.ReactNode }>
+  onError?: (cause: unknown) => void
+}
+
 interface ViewerProps {
   children?: React.ReactNode
   hoverStyles?: HoverStyles
@@ -363,6 +432,13 @@ interface ViewerProps {
   sceneReadyKey?: string | number | null
   onSceneReadyChange?: (ready: boolean) => void
   /**
+   * Called when something in the scene throws while rendering (a node
+   * renderer or system, such as a plugin's lazy chunk that failed to load).
+   * The scene boundary still renders nothing in its place; this lets a host
+   * that must not carry on silently (a bake) fail with its own error.
+   */
+  onRenderError?: (cause: unknown) => void
+  /**
    * Wall-clock give-up cap for scene readiness, replacing the default
    * frame-count cap. Set it on hosts whose frame cadence is decoupled from
    * real time (the headless bake page's timer-driven loop runs the default
@@ -392,6 +468,8 @@ interface ViewerProps {
   disablePostFx?: boolean
   /** Keep the mounted renderer/context warm without advancing scene frames. */
   renderPaused?: boolean
+  /** Host-provided immersive XR session wrappers for the main scene. */
+  immersive?: ViewerImmersiveSession
 }
 
 /** Imperative handle exposed via `ref` on `<Viewer>`. */
@@ -418,10 +496,12 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     isolate,
     sceneReadyKey,
     onSceneReadyChange,
+    onRenderError,
     sceneReadyMaxWaitMs,
     maxFps = 50,
     disablePostFx = false,
     renderPaused = false,
+    immersive,
   },
   ref,
 ) {
@@ -460,6 +540,17 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
   const [rendererInitFailed, setRendererInitFailed] = useState(false)
 
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
+  const sceneTheme = useViewer((state) => state.sceneTheme)
+  const previousLampTheme = useRef(sceneTheme)
+  useEffect(() => {
+    useInteractive
+      .getState()
+      .setLampDefault(
+        getSceneTheme(sceneTheme).appearance === 'dark',
+        previousLampTheme.current !== sceneTheme,
+      )
+    previousLampTheme.current = sceneTheme
+  }, [sceneTheme])
   const transparentBackground = useViewer((state) => state.transparentBackground)
   // The shadows toggle drives `renderer.shadowMap.enabled` (via the Canvas
   // `shadows` prop) rather than the lights' `castShadow`: toggling castShadow
@@ -527,6 +618,15 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     if (showGpuFallback) onSceneReadyChange?.(true)
   }, [showGpuFallback, onSceneReadyChange])
 
+  useEffect(() => {
+    if (!immersive) return
+    const timeout = window.setTimeout(() => window.dispatchEvent(new Event('resize')), 0)
+    return () => window.clearTimeout(timeout)
+  }, [immersive])
+
+  const ImmersiveSession = immersive?.Session
+  const immersiveActive = immersive != null
+
   if (showGpuFallback) {
     return <UnsupportedGpuViewerFallback />
   }
@@ -537,6 +637,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
       {(perf || PERF_OVERLAY_ENABLED) && <PerfPanel />}
       <Canvas
         ref={subscribeWallBuildInteractions}
+        key={immersiveActive ? 'webgl-xr' : 'webgpu'}
         camera={{ position: [50, 50, 50], fov: 50 }}
         className={`transition-colors duration-700 ${
           transparentBackground ? 'bg-transparent' : isDark ? 'bg-[#1f2433]' : 'bg-[#fafafa]'
@@ -551,6 +652,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
             if (cached) return cached
             const promise = (async () => {
               const result = await initializeGpuRenderer({
+                forceWebGL: immersiveActive,
                 // Supplying `device` makes three skip its own `requestAdapter`,
                 // so R3F's `powerPreference` only reaches the GPU if we forward it.
                 powerPreference: props.powerPreference,
@@ -600,61 +702,122 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
           enabled: shadowsEnabled,
         }}
       >
-        <FrameLimiter fps={maxFps} paused={renderPaused} />
-        <ViewerCamera />
-        <PointerRaycastLayers />
-        <GPUDeviceWatcher />
-        <ToneMappingExposure />
-        <SceneReadyTracker
-          onSceneReadyChange={onSceneReadyChange}
-          sceneReadyKey={sceneReadyKey}
-          sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
-        />
-
-        <ErrorBoundary fallback={null} scope="viewer-scene">
-          {/* <directionalLight position={[10, 10, 5]} intensity={0.5} castShadow
-          /> */}
-          <Lights />
-          {useBvh ? (
-            <SceneBvh>
-              <SceneRenderer />
-            </SceneBvh>
+        <ImmersiveXRPresentationProvider enabled={immersiveActive}>
+          {ImmersiveSession ? (
+            <ImmersiveSession>
+              <ViewerScene
+                disablePostFx
+                hoverStyles={hoverStyles}
+                immersiveXR
+                renderErrorHandlers={[immersive.onError, onRenderError]}
+                onSceneReadyChange={onSceneReadyChange}
+                perf={perf}
+                sceneReadyKey={sceneReadyKey}
+                sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
+                selectionManager={selectionManager}
+                useBvh={useBvh}
+                SceneWrapper={immersive.Scene}
+              >
+                {children}
+              </ViewerScene>
+            </ImmersiveSession>
           ) : (
-            <SceneRenderer />
+            <>
+              <FrameLimiter
+                fps={maxFps}
+                onFrameError={composeRenderErrorHandlers(onRenderError)}
+                paused={renderPaused}
+              />
+              <ViewerScene
+                disablePostFx={disablePostFx}
+                hoverStyles={hoverStyles}
+                renderErrorHandlers={[onRenderError]}
+                onSceneReadyChange={onSceneReadyChange}
+                perf={perf}
+                sceneReadyKey={sceneReadyKey}
+                sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
+                selectionManager={selectionManager}
+                useBvh={useBvh}
+              >
+                {children}
+              </ViewerScene>
+            </>
           )}
-
-          {/* Generic slab-elevation lift for any kind that declares
-            `capabilities.floorPlaced`. Runs at frame priority 1 so it
-            lands its mesh.position.y override before the priority-2
-            systems below clear the dirty mark. */}
-          <FloorElevationSystem />
-          {/* Generic geometry rebuild loop for any registered kind that
-            ships `def.geometry`. Reads dirtyNodes, calls the kind's pure
-            builder, swaps the registered group's children. See
-            wiki/architecture/node-definitions.md. */}
-          <GeometrySystem />
-          {/* Automated stair opening sync — updates slab/ceiling cutouts
-            whenever stairs, slabs, or levels change. */}
-          <StairOpeningSystem />
-          <RoofElevationSystem />
-          {/* Mounts systems contributed by registry-backed kinds. Each
-            kind's `def.system` is loaded via lazy() and rendered here,
-            ordered by `system.priority`. */}
-          <RegisteredSystems />
-          <PostProcessing disablePostFx={disablePostFx} hoverStyles={hoverStyles} />
-          {selectionManager === 'default' && <SelectionManager />}
-          {(perf || PERF_OVERLAY_ENABLED) && <PerfMonitor />}
-          {/* Feeds the action-cost ledger the frame's settle state (dirty
-            queue + deferred wall rebuilds) at a priority after every other
-            system, so a receipt closes when the user can actually see the
-            edit. */}
-          {(perf || PERF_OVERLAY_ENABLED) && <PerfActionSettleSystem />}
-          {BATCH_SPIKE_ENABLED && <BatchedMeshSpike />}
-          {children}
-        </ErrorBoundary>
+        </ImmersiveXRPresentationProvider>
       </Canvas>
     </>
   )
 })
+
+function ViewerScene({
+  children,
+  disablePostFx,
+  hoverStyles,
+  immersiveXR = false,
+  renderErrorHandlers,
+  onSceneReadyChange,
+  perf,
+  sceneReadyKey,
+  sceneReadyMaxWaitMs,
+  selectionManager,
+  useBvh,
+  SceneWrapper,
+}: {
+  children?: React.ReactNode
+  disablePostFx: boolean
+  hoverStyles: HoverStyles
+  immersiveXR?: boolean
+  renderErrorHandlers: (((cause: unknown) => void) | undefined)[]
+  onSceneReadyChange?: (ready: boolean) => void
+  perf: boolean
+  sceneReadyKey?: string | number | null
+  sceneReadyMaxWaitMs?: number
+  selectionManager: 'default' | 'custom'
+  useBvh: boolean
+  SceneWrapper?: ViewerImmersiveSession['Scene']
+}) {
+  const renderedScene = useBvh ? (
+    <SceneBvh>
+      <SceneRenderer />
+    </SceneBvh>
+  ) : (
+    <SceneRenderer />
+  )
+  const spatialScene = (
+    <>
+      {renderedScene}
+      <FloorElevationSystem />
+      <GeometrySystem />
+      <StairOpeningSystem />
+      <RoofElevationSystem />
+      <RegisteredSystems />
+      {BATCH_SPIKE_ENABLED && <BatchedMeshSpike />}
+      {children}
+    </>
+  )
+
+  return (
+    <>
+      <ViewerCamera immersiveXR={immersiveXR} />
+      {immersiveXR && <ImmersiveXRBackground />}
+      <PointerRaycastLayers />
+      <GPUDeviceWatcher intentionalWebGL={immersiveXR} />
+      <ToneMappingExposure />
+      <SceneReadyTracker
+        onSceneReadyChange={onSceneReadyChange}
+        sceneReadyKey={sceneReadyKey}
+        sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
+      />
+      <SceneErrorBoundary handlers={renderErrorHandlers}>
+        <Lights />
+        {SceneWrapper ? <SceneWrapper>{spatialScene}</SceneWrapper> : spatialScene}
+        {!immersiveXR && <PostProcessing disablePostFx={disablePostFx} hoverStyles={hoverStyles} />}
+        {selectionManager === 'default' && <SelectionManager />}
+        {(perf || PERF_OVERLAY_ENABLED) && <PerfMonitor />}
+        {(perf || PERF_OVERLAY_ENABLED) && <PerfActionSettleSystem />}
+      </SceneErrorBoundary>
+    </>
+  )
+}
 
 export default Viewer

@@ -108,10 +108,13 @@
       "apps/**/*.jsx",
       "!**/node_modules",
       "!**/.next",
+      "!**/.next-*",
       "!**/dist",
       "!**/build",
       "!**/public",
       "!**/components/ui",
+      // Recorded API responses; kept byte-exact.
+      "!**/__fixtures__",
       "!**/next-env.d.ts"
     ]
   },
@@ -142,13 +145,149 @@
               "level": "error",
               "options": {
                 "paths": {
-                  "@pascal-app/nodes": "Framework packages must not import from @pascal-app/nodes — consult nodeRegistry.get(kind) instead. See plans/editor-node-registry.md."
-                }
+                  "@pascal-app/nodes": "Framework packages must not import from @pascal-app/nodes — consult nodeRegistry.get(kind) instead. See DECISIONS.md E-002."
+                },
+                "patterns": [
+                  {
+                    "group": ["@pascal-app/nodes/**", "**/nodes/src", "**/nodes/src/**"],
+                    "message": "Framework packages must not import from @pascal-app/nodes — consult nodeRegistry.get(kind) instead. See DECISIONS.md E-002."
+                  }
+                ]
               }
             }
           }
         }
       }
+    },
+    // E-001 dependency arrow, core → viewer → editor. Biome replaces (does not merge) a rule's
+    // options when several overrides match a file, so each one below repeats the nodes ban.
+    {
+      "includes": ["packages/core/**/*.ts", "packages/core/**/*.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@pascal-app/nodes": "core must not import @pascal-app/nodes — consult nodeRegistry.get(kind) instead. See DECISIONS.md E-002.",
+                  "@pascal-app/viewer": "core sits below viewer and editor and runs headless. See DECISIONS.md E-001.",
+                  "@pascal-app/editor": "core sits below viewer and editor and runs headless. See DECISIONS.md E-001."
+                },
+                "patterns": [
+                  {
+                    "group": [
+                      "@pascal-app/{nodes,viewer,editor}/**",
+                      "**/nodes/src",
+                      "**/nodes/src/**",
+                      "**/viewer/src",
+                      "**/viewer/src/**",
+                      "**/editor/src",
+                      "**/editor/src/**"
+                    ],
+                    "message": "core sits below viewer, editor and nodes and runs headless. See DECISIONS.md E-001."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    // No runtime three / R3F in shipped core code. Biome cannot exempt `import type`, so the four
+    // files holding three/R3F types are excluded here; `packages/core/src/architecture.test.ts`
+    // keeps them type-only. Tests may build real three objects.
+    {
+      "includes": [
+        "packages/core/src/**/*.ts",
+        "packages/core/src/**/*.tsx",
+        "!**/*.test.ts",
+        "!**/*.test.tsx",
+        "!packages/core/src/events/bus.ts",
+        "!packages/core/src/hooks/scene-registry/item-clip-registry.ts",
+        "!packages/core/src/hooks/scene-registry/scene-registry.ts",
+        "!packages/core/src/registry/types.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@pascal-app/nodes": "core must not import @pascal-app/nodes — consult nodeRegistry.get(kind) instead. See DECISIONS.md E-002.",
+                  "@pascal-app/viewer": "core sits below viewer and editor and runs headless. See DECISIONS.md E-001.",
+                  "@pascal-app/editor": "core sits below viewer and editor and runs headless. See DECISIONS.md E-001.",
+                  "three": "core runs headless (MCP, CLI, workers): no three import; three types stay in the four files biome.jsonc exempts. See DECISIONS.md E-001."
+                },
+                "patterns": [
+                  {
+                    "group": [
+                      "@pascal-app/{nodes,viewer,editor}/**",
+                      "**/nodes/src",
+                      "**/nodes/src/**",
+                      "**/viewer/src",
+                      "**/viewer/src/**",
+                      "**/editor/src",
+                      "**/editor/src/**"
+                    ],
+                    "message": "core sits below viewer, editor and nodes and runs headless. See DECISIONS.md E-001."
+                  },
+                  {
+                    "group": ["three/**", "@react-three/**"],
+                    "message": "core runs headless (MCP, CLI, workers): no three / @react-three import. See DECISIONS.md E-001."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/viewer/**/*.ts", "packages/viewer/**/*.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@pascal-app/nodes": "The viewer must not import @pascal-app/nodes — consult nodeRegistry.get(kind) instead. See DECISIONS.md E-002.",
+                  "@pascal-app/editor": "The viewer ships standalone and knows no editor state; pass what it needs through viewer props or the registry. See DECISIONS.md E-001."
+                },
+                "patterns": [
+                  {
+                    "group": [
+                      "@pascal-app/{nodes,editor}/**",
+                      "**/nodes/src",
+                      "**/nodes/src/**",
+                      "**/editor/src",
+                      "**/editor/src/**"
+                    ],
+                    "message": "The viewer ships standalone and knows no editor or nodes internals. See DECISIONS.md E-001."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    // T-001: tests go through package exports. `warn` while ~50 existing tests still reach into
+    // another package's src/ (mostly nodes tests driving editor internals, and shared core
+    // fixtures); becomes an error once that count reaches zero. The two mounted-scene fixtures are
+    // allowed: they compose the viewer frame systems and editor overlays/hooks that no package
+    // exports, so every suite mounting a real scene gets them from one place.
+    {
+      "includes": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/__tests__/**",
+        "!packages/nodes/src/__tests__/harness.tsx",
+        "!packages/nodes/src/__tests__/editor-scene.tsx"
+      ],
+      "plugins": ["./scripts/biome/cross-package-src-in-tests.grit"]
     }
   ]
 }

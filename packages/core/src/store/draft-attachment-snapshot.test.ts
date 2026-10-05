@@ -5,6 +5,12 @@ import type { AnyNode, AnyNodeId } from '../schema/types'
 import { subscribeSceneCommits } from './history-control'
 import useScene from './use-scene'
 
+globalThis.requestAnimationFrame ??= (callback) => {
+  callback(0)
+  return 0
+}
+globalThis.cancelAnimationFrame ??= () => {}
+
 test('draft snapshots do not enumerate unaffected procedural attachment maps', () => {
   const saved = useScene.getState()
   const level = LevelNode.parse({})
@@ -39,6 +45,15 @@ test('draft snapshots do not enumerate unaffected procedural attachment maps', (
       ]
     }),
   ]) as Record<AnyNodeId, AnyNode>
+  // `updateNode` batches its dirty-node flush through rAF, which bun's test
+  // runtime has no DOM to supply. Every other core test that reaches this path
+  // stubs it; this one used to pass only when one of them happened to run first
+  // and leak the global, so on a runner that ordered the files differently it
+  // failed with a bare ReferenceError.
+  const savedRaf = globalThis.requestAnimationFrame
+  const savedCancelRaf = globalThis.cancelAnimationFrame
+  globalThis.requestAnimationFrame = (() => 0) as typeof requestAnimationFrame
+  globalThis.cancelAnimationFrame = (() => {}) as typeof cancelAnimationFrame
   const stop = subscribeSceneCommits((commit) => {
     expect(commit.current.nodes[draft.id]).toBeUndefined()
     expect((commit.current.nodes['procedural-item_0'] as ProceduralItemNode).attachments).toBe(
@@ -68,5 +83,7 @@ test('draft snapshots do not enumerate unaffected procedural attachment maps', (
     useScene.setState(saved)
     useScene.temporal.getState().clear()
     useScene.temporal.getState().resume()
+    globalThis.requestAnimationFrame = savedRaf
+    globalThis.cancelAnimationFrame = savedCancelRaf
   }
 })

@@ -76,11 +76,17 @@ function restoreMountedExitPose(saved: MountedExitPose) {
  * Runs at priority 1 — before the priority-2 systems (`GeometrySystem`,
  * `ItemSystem`) so the dirty mark survives long enough for those to do
  * their own work. Kinds with no geometry/system have no downstream dirty
- * consumer, so this system clears their dirty mark after applying the lift.
+ * consumer, so this system clears their dirty mark after applying the lift,
+ * at priority 2 like every other consumer: the node batch snapshots marks at
+ * priority 1, and a mark cleared there could run before that snapshot.
  */
 export const FloorElevationSystem = () => {
   const dirtyNodes = useScene((s) => s.dirtyNodes)
   const clearDirty = useScene((s) => s.clearDirty)
+  const consumed = useMemo(() => new Set<AnyNodeId>(), [])
+  // Meshes already lifted once. A mesh mounts at its base Y, and a remount (entering Preview
+  // builds a fresh viewer tree) raises no dirty mark, so the lift would never be applied.
+  const mounted = useMemo(() => ({ revision: -1, meshes: new WeakSet<Object3D>() }), [])
   const preview = useMemo(
     () => ({
       local: new Matrix4(),
@@ -140,7 +146,9 @@ export const FloorElevationSystem = () => {
     // during group drags over elevated slabs).
     const overrides = useLiveNodeOverrides.getState().overrides
     const transforms = useLiveTransforms.getState().transforms
-    if (dirtyNodes.size === 0 && overrides.size === 0 && transforms.size === 0) return
+    const registryChanged = sceneRegistry.revision !== mounted.revision
+    if (dirtyNodes.size === 0 && overrides.size === 0 && transforms.size === 0 && !registryChanged)
+      return
     const nodes = useScene.getState().nodes
 
     const applyLift = (id: AnyNodeId) => {
@@ -160,9 +168,7 @@ export const FloorElevationSystem = () => {
       if (!position) return
       if (effectiveNode.parentId !== node.parentId) return
 
-      if (!(def.geometry || def.system) && dirtyNodes.has(id)) {
-        clearDirty(id)
-      }
+      if (!(def.geometry || def.system) && dirtyNodes.has(id)) consumed.add(id)
 
       // `applies === false` means the kind opts OUT of floor stacking for this
       // node: its Y belongs to a host frame (a wall/ceiling-mounted item, a
@@ -197,6 +203,19 @@ export const FloorElevationSystem = () => {
       mesh.position.y = visualPosition[1]
     }
 
+    if (registryChanged) {
+      mounted.revision = sceneRegistry.revision
+      for (const [kind, ids] of Object.entries(sceneRegistry.byType)) {
+        if (!nodeRegistry.get(kind)?.capabilities?.floorPlaced) continue
+        for (const id of ids) {
+          const mesh = sceneRegistry.nodes.get(id)
+          if (!mesh || mounted.meshes.has(mesh)) continue
+          mounted.meshes.add(mesh)
+          applyLift(id as AnyNodeId)
+        }
+      }
+    }
+
     dirtyNodes.forEach((id) => {
       applyLift(id)
     })
@@ -207,6 +226,11 @@ export const FloorElevationSystem = () => {
       if (!dirtyNodes.has(id as AnyNodeId) && !overrides.has(id)) applyLift(id as AnyNodeId)
     })
   }, 1)
+
+  useFrame(() => {
+    for (const id of consumed) clearDirty(id)
+    consumed.clear()
+  }, 2)
 
   // PostProcessing draws at priority 1 after this system; later callbacks would show one wrong frame per move.
   useFrame(() => {

@@ -101,6 +101,7 @@ test.each([
         render() {},
         setSize() {},
         setPixelRatio() {},
+        xr: { isPresenting: false },
       } as unknown as WebGLRenderer,
       camera,
       frameloop: 'never',

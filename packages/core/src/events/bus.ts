@@ -1,7 +1,6 @@
 import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
 import type { Object3D } from 'three'
-import type { ProceduralItemNode } from '../procedural-items/node'
 import type {
   BlockNode,
   BoxVentNode,
@@ -39,6 +38,7 @@ import type {
   RoofNode,
   RoofSegmentNode,
   ScanNode,
+  SeparatorNode,
   ShelfNode,
   SiteNode,
   SkylightNode,
@@ -165,6 +165,7 @@ export type PipeTrapEvent = NodeEvent<PipeTrapNode>
 export type LinesetEvent = NodeEvent<LinesetNode>
 export type LiquidLineEvent = NodeEvent<LiquidLineNode>
 export type MeasurementEvent = NodeEvent<MeasurementNode>
+export type SeparatorEvent = NodeEvent<SeparatorNode>
 
 // Event suffixes - exported for use in hooks
 export const eventSuffixes = [
@@ -180,8 +181,8 @@ export const eventSuffixes = [
 
 export type EventSuffix = (typeof eventSuffixes)[number]
 
-type NodeEvents<T extends string, E> = {
-  [K in `${T}:${EventSuffix}`]: E
+type NodeEvents = {
+  [N in AnyNode as `${N['type']}:${EventSuffix}`]: NodeEvent<N>
 }
 
 type GridEvents = {
@@ -243,6 +244,29 @@ export interface ThumbnailGenerateEvent {
    * any palette background.
    */
   transparent?: boolean
+  // ── a sheet's picture ──
+  /** The ink edges wanted for this frame, else the canvas' setting (off with alpha). */
+  edges?: 'off' | 'soft' | 'strong'
+  /** An orthographic view of the caller's own: the capture camera at `position` looking at `target`, `viewWidth` metres across. */
+  ortho?: {
+    position: [number, number, number]
+    target: [number, number, number]
+    viewWidth: number
+  }
+  /** Node types hidden for this capture besides the helpers (a sheet's elevation hides the terrain). */
+  hideTypes?: readonly string[]
+  /** A perspective view of the caller's own (a sheet's cover view); the user's camera never moves. */
+  perspective?: {
+    position: [number, number, number]
+    target: [number, number, number]
+    fov?: number
+  }
+  /** Re-aim the sun at the face the pose looks at, for this frame. */
+  lightFace?: boolean
+  /** World clipping planes for this frame (a section's cut). */
+  clip?: readonly { normal: [number, number, number]; constant: number }[]
+  /** Render the canvas at this multiple of its size for the frame (print-scale pictures). */
+  supersample?: number
 }
 
 export interface CameraControlFitSceneEvent {
@@ -349,57 +373,7 @@ type SelectionEvents = {
 
 type EditorEvents = GridEvents &
   GenericNodeEvents &
-  NodeEvents<'procedural-item', NodeEvent<ProceduralItemNode>> &
-  NodeEvents<'wall', WallEvent> &
-  NodeEvents<'fence', FenceEvent> &
-  NodeEvents<'cabinet', CabinetEvent> &
-  NodeEvents<'cabinet-module', CabinetModuleEvent> &
-  NodeEvents<'item', ItemEvent> &
-  NodeEvents<'imported-mesh', ImportedMeshEvent> &
-  NodeEvents<'site', SiteEvent> &
-  NodeEvents<'building', BuildingEvent> &
-  NodeEvents<'elevator', ElevatorEvent> &
-  NodeEvents<'unit', UnitEvent> &
-  NodeEvents<'level', LevelEvent> &
-  NodeEvents<'lean-to-extension', LeanToExtensionEvent> &
-  NodeEvents<'zone', ZoneEvent> &
-  NodeEvents<'slab', SlabEvent> &
-  NodeEvents<'shelf', ShelfEvent> &
-  NodeEvents<'spawn', SpawnEvent> &
-  NodeEvents<'ceiling', CeilingEvent> &
-  NodeEvents<'column', ColumnEvent> &
-  NodeEvents<'construction-dimension', ConstructionDimensionEvent> &
-  NodeEvents<'block', BlockEvent> &
-  NodeEvents<'roof', RoofEvent> &
-  NodeEvents<'roof-segment', RoofSegmentEvent> &
-  NodeEvents<'stair', StairEvent> &
-  NodeEvents<'stair-segment', StairSegmentEvent> &
-  NodeEvents<'structural-grid', StructuralGridEvent> &
-  NodeEvents<'window', WindowEvent> &
-  NodeEvents<'door', DoorEvent> &
-  NodeEvents<'scan', ScanEvent> &
-  NodeEvents<'guide', GuideEvent> &
-  NodeEvents<'box-vent', BoxVentEvent> &
-  NodeEvents<'ridge-vent', RidgeVentEvent> &
-  NodeEvents<'turbine-vent', TurbineVentEvent> &
-  NodeEvents<'cupola', CupolaEvent> &
-  NodeEvents<'eyebrow-vent', EyebrowVentEvent> &
-  NodeEvents<'gutter', GutterEvent> &
-  NodeEvents<'chimney', ChimneyEvent> &
-  NodeEvents<'solar-panel', SolarPanelEvent> &
-  NodeEvents<'skylight', SkylightEvent> &
-  NodeEvents<'dormer', DormerEvent> &
-  NodeEvents<'downspout', DownspoutEvent> &
-  NodeEvents<'duct-segment', DuctSegmentEvent> &
-  NodeEvents<'duct-fitting', DuctFittingEvent> &
-  NodeEvents<'duct-terminal', DuctTerminalEvent> &
-  NodeEvents<'hvac-equipment', HvacEquipmentEvent> &
-  NodeEvents<'pipe-segment', PipeSegmentEvent> &
-  NodeEvents<'pipe-fitting', PipeFittingEvent> &
-  NodeEvents<'pipe-trap', PipeTrapEvent> &
-  NodeEvents<'lineset', LinesetEvent> &
-  NodeEvents<'liquid-line', LiquidLineEvent> &
-  NodeEvents<'measurement', MeasurementEvent> &
+  NodeEvents &
   CameraControlEvents &
   ToolEvents &
   GuideEvents &

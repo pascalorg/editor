@@ -31,7 +31,6 @@ import {
   classifyParticipant,
   collectParticipants,
   computeGroupBox,
-  expandToComponent,
   type GroupPlanBounds,
   groupPlanBounds,
   levelFrame,
@@ -107,16 +106,15 @@ export function armGroupMove3d(args: {
     const participantIds = selectedIds.filter(
       (id) => classifyParticipant(nodes[id as AnyNodeId], levelId, nodes) !== null,
     )
-    // Move the full connected wall/fence component, mirroring the 2D session.
-    const fullIds = expandToComponent(participantIds, nodes, levelId)
-    const { starts, links } = collectParticipants(fullIds, nodes, levelId)
+    // Only the selection moves; connected walls stretch through `links`, as in 2D.
+    const { starts, links } = collectParticipants(participantIds, nodes, levelId)
     if (starts.length === 0) return null
     const affectedIds: AnyNodeId[] = [...starts.map((s) => s.id), ...links.map((l) => l.id)]
 
     // Horizontal drag plane at the group's base; placements live in the level
     // frame, so world-space plane hits convert through it (a rotated building
     // would otherwise drift off-axis from the cursor).
-    const restBox = computeGroupBox(fullIds)
+    const restBox = computeGroupBox(participantIds)
     if (!restBox) return null
     const plane = new Plane(new Vector3(0, 1, 0), -restBox.min.y)
     const { inverse: frameInv } = levelFrame(levelId)
@@ -136,7 +134,7 @@ export function armGroupMove3d(args: {
       if (n && !movingIdSet.has(nid)) staticNodes[nid] = n
     }
     const candidates = collectAlignmentAnchors(staticNodes, '', levelId)
-    const restBounds = groupPlanBounds(restBox, starts, frameInv)
+    const restBounds = groupPlanBounds(starts, frameInv)
     if (!restBounds) return null
     const restAnchors = bboxCornerAnchors(
       'group-move',

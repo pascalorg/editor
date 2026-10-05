@@ -57,6 +57,8 @@ Record the active project ID, scene ID or version, and graph hash when returned.
 
 For construction, prefer tools such as `create_story_shell`, `create_room`, `add_door`, `add_window`, `create_roof`, `furnish_room`, and `place_item`. Use `apply_patch` only when no semantic tool expresses the requested edit and you have inspected the relevant node schema or an existing node of the same type.
 
+When those tools and the catalog cannot reproduce something faithfully (custom columns, a porch, lanterns, a garage door, a vaulted or tray ceiling), build it with `add_object`: a plain three.js module, with the naming conventions its description lists for paint slots, parts, lights, cutouts and clips. Edit it by passing its `nodeId`. Servers without a script host answer `scripts_unavailable`. To count or locate things by what they are, including typed parts inside authored objects, use `find_by_type`.
+
 Pascal uses meters. X and Z are floor-plan axes; Y is vertical. Tool fields that accept measurements may also accept strings such as `"6 ft"` or `"180cm"`, but report final spatial values in meters and retain the user's original units when useful.
 
 Preserve unrelated nodes. Before a bounded edit, identify the target IDs with `find_nodes`, `get_node`, `get_level_summary`, `get_walls`, or `get_zones`. After the edit, identify the actual changed IDs from tool output or a before/after read.

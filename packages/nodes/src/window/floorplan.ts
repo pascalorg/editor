@@ -5,12 +5,14 @@ import type {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
+import { getWallBodyCenterOffset } from '@pascal-app/core'
 import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
 import {
   buildOpeningMarkAnnotation,
   type OpeningFloorplanLevelData,
 } from '../shared/opening-documentation'
 import { buildOpeningPlacementDimensions } from '../shared/opening-placement-dimensions'
+import { resolveOpeningPlanPlane } from '../shared/opening-plane-offset'
 
 /**
  * Stage C floor-plan builder for window. Mirrors the legacy
@@ -46,11 +48,43 @@ export function buildWindowFloorplan(
 
   const distance = node.position[0]
   const width = node.width
-  const depth = wall.thickness ?? 0.1
-  const cx = x1 + dirX * distance
-  const cz = z1 + dirZ * distance
+  const wallDepth = wall.thickness ?? 0.1
+  const plane = resolveOpeningPlanPlane(node, wallDepth)
+  const depth = plane.depth
+  // The plane offset is measured from the body centre, which a justified wall
+  // sets off its reference line.
+  const bodyOffset = getWallBodyCenterOffset(wall)
+  const across = bodyOffset + plane.offset
+  const cx = x1 + dirX * distance + perpX * across
+  const cz = z1 + dirZ * distance + perpZ * across
   const halfWidth = width / 2
   const halfDepth = depth / 2
+  // An offset frame stands clear of the wall centre, but the wall is still
+  // cut through its whole thickness: that hole is drawn too.
+  const wallX = x1 + dirX * distance + perpX * bodyOffset
+  const wallZ = z1 + dirZ * distance + perpZ * bodyOffset
+  const halfWallDepth = wallDepth / 2
+  const cutoutPoints: readonly FloorplanPoint[] | null =
+    plane.offset === 0
+      ? null
+      : [
+          [
+            wallX - dirX * halfWidth + perpX * halfWallDepth,
+            wallZ - dirZ * halfWidth + perpZ * halfWallDepth,
+          ],
+          [
+            wallX + dirX * halfWidth + perpX * halfWallDepth,
+            wallZ + dirZ * halfWidth + perpZ * halfWallDepth,
+          ],
+          [
+            wallX + dirX * halfWidth - perpX * halfWallDepth,
+            wallZ + dirZ * halfWidth - perpZ * halfWallDepth,
+          ],
+          [
+            wallX - dirX * halfWidth - perpX * halfWallDepth,
+            wallZ - dirZ * halfWidth - perpZ * halfWallDepth,
+          ],
+        ]
 
   const points: readonly FloorplanPoint[] = [
     [cx - dirX * halfWidth + perpX * halfDepth, cz - dirZ * halfWidth + perpZ * halfDepth],
@@ -96,44 +130,93 @@ export function buildWindowFloorplan(
   const mullionStart: FloorplanPoint = [cx - dirX * halfWidth, cz - dirZ * halfWidth]
   const mullionEnd: FloorplanPoint = [cx + dirX * halfWidth, cz + dirZ * halfWidth]
 
-  const children: FloorplanGeometry[] = [
-    // Outer footprint — white fill so the wall hatch underneath
-    // doesn't bleed through.
-    {
-      kind: 'polygon',
-      points,
-      fill: fillColor,
-      stroke: accentColor,
-      strokeWidth: showSelectedChrome ? 1.9 : 1.25,
-      vectorEffect: 'non-scaling-stroke',
-      strokeLinejoin: 'round',
-      metadata: floorplanGeometryMetadata({ annotationObstacle: 'bounds' }),
-    },
-    // Inset glass-pane outline.
-    {
-      kind: 'polygon',
-      points: [innerStartA, innerEndA, innerEndB, innerStartB],
-      fill: 'none',
-      stroke: accentColor,
-      strokeOpacity: 0.6,
-      strokeWidth: showSelectedChrome ? 1.3 : 0.9,
-      vectorEffect: 'non-scaling-stroke',
-      strokeLinejoin: 'round',
-    },
-    // Center mullion.
-    {
-      kind: 'line',
-      x1: mullionStart[0],
-      y1: mullionStart[1],
-      x2: mullionEnd[0],
-      y2: mullionEnd[1],
-      stroke: accentColor,
-      strokeWidth: showSelectedChrome ? 1.6 : 1.1,
-      strokeOpacity: 0.85,
-      strokeLinecap: 'round',
-      vectorEffect: 'non-scaling-stroke',
-    },
-  ]
+  // A sheet draws the standard window symbol in plan-metre ink, so it prints
+  // the same in every back end: the two wall faces carried across the opening
+  // (the outline, which closes on the jambs) and the glass line between them.
+  const drafting = readFloorplanContext(ctx).drafting
+  const cutout: FloorplanGeometry[] = cutoutPoints
+    ? [
+        drafting
+          ? {
+              kind: 'polygon',
+              points: cutoutPoints,
+              fill: '#ffffff',
+              stroke: '#1f2937',
+              strokeWidth: 0.01,
+              strokeLinejoin: 'miter',
+            }
+          : {
+              kind: 'polygon',
+              points: cutoutPoints,
+              fill: fillColor,
+              stroke: accentColor,
+              strokeWidth: showSelectedChrome ? 1.9 : 1.25,
+              vectorEffect: 'non-scaling-stroke',
+              strokeLinejoin: 'round',
+              metadata: floorplanGeometryMetadata({ annotationObstacle: 'bounds' }),
+            },
+      ]
+    : []
+  const children: FloorplanGeometry[] = drafting
+    ? [
+        ...cutout,
+        {
+          kind: 'polygon',
+          points,
+          fill: '#ffffff',
+          stroke: '#1f2937',
+          strokeWidth: 0.01,
+          strokeLinejoin: 'miter',
+        },
+        {
+          kind: 'line',
+          x1: mullionStart[0],
+          y1: mullionStart[1],
+          x2: mullionEnd[0],
+          y2: mullionEnd[1],
+          stroke: '#1f2937',
+          strokeWidth: 0.008,
+        },
+      ]
+    : [
+        ...cutout,
+        // Outer footprint — white fill so the wall hatch underneath
+        // doesn't bleed through.
+        {
+          kind: 'polygon',
+          points,
+          fill: fillColor,
+          stroke: accentColor,
+          strokeWidth: showSelectedChrome ? 1.9 : 1.25,
+          vectorEffect: 'non-scaling-stroke',
+          strokeLinejoin: 'round',
+          metadata: floorplanGeometryMetadata({ annotationObstacle: 'bounds' }),
+        },
+        // Inset glass-pane outline.
+        {
+          kind: 'polygon',
+          points: [innerStartA, innerEndA, innerEndB, innerStartB],
+          fill: 'none',
+          stroke: accentColor,
+          strokeOpacity: 0.6,
+          strokeWidth: showSelectedChrome ? 1.3 : 0.9,
+          vectorEffect: 'non-scaling-stroke',
+          strokeLinejoin: 'round',
+        },
+        // Center mullion.
+        {
+          kind: 'line',
+          x1: mullionStart[0],
+          y1: mullionStart[1],
+          x2: mullionEnd[0],
+          y2: mullionEnd[1],
+          stroke: accentColor,
+          strokeWidth: showSelectedChrome ? 1.6 : 1.1,
+          strokeOpacity: 0.85,
+          strokeLinecap: 'round',
+          vectorEffect: 'non-scaling-stroke',
+        },
+      ]
 
   // Move handle — orange dot at the window center. Only when selected.
   if (isSelected) {
@@ -147,24 +230,27 @@ export function buildWindowFloorplan(
     // `resize-width` affordance — anchored at the opposite edge, clamped
     // to wall bounds. Mirrors the 3D `WindowSideArrow` width drag and the
     // door's 2D pattern.
-    const startEdgeX = cx - dirX * halfWidth
-    const startEdgeZ = cz - dirZ * halfWidth
-    const endEdgeX = cx + dirX * halfWidth
-    const endEdgeZ = cz + dirZ * halfWidth
-    children.push({
-      kind: 'move-arrow',
-      point: [startEdgeX, startEdgeZ],
-      angle: Math.atan2(-dirZ, -dirX),
-      affordance: 'resize-width',
-      payload: { side: 'start' },
-    })
-    children.push({
-      kind: 'move-arrow',
-      point: [endEdgeX, endEdgeZ],
-      angle: Math.atan2(dirZ, dirX),
-      affordance: 'resize-width',
-      payload: { side: 'end' },
-    })
+    // A scripted opening's width is its script's: its size arrows live in 3D, on its params.
+    if (!node.source) {
+      const startEdgeX = cx - dirX * halfWidth
+      const startEdgeZ = cz - dirZ * halfWidth
+      const endEdgeX = cx + dirX * halfWidth
+      const endEdgeZ = cz + dirZ * halfWidth
+      children.push({
+        kind: 'move-arrow',
+        point: [startEdgeX, startEdgeZ],
+        angle: Math.atan2(-dirZ, -dirX),
+        affordance: 'resize-width',
+        payload: { side: 'start' },
+      })
+      children.push({
+        kind: 'move-arrow',
+        point: [endEdgeX, endEdgeZ],
+        angle: Math.atan2(dirZ, dirX),
+        affordance: 'resize-width',
+        payload: { side: 'end' },
+      })
+    }
   }
 
   // Placement-measurement dimensions when actively moving — same
@@ -179,7 +265,7 @@ export function buildWindowFloorplan(
     node,
     wall,
     ctx.levelData as OpeningFloorplanLevelData | undefined,
-    { stroke: showSelectedChrome ? '#f97316' : '#334155' },
+    { stroke: showSelectedChrome ? '#f97316' : '#334155', drafting },
   )
   if (markAnnotation) children.push(markAnnotation)
 

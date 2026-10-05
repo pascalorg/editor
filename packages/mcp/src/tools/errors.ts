@@ -1,4 +1,5 @@
 import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js'
+import { isAgentRefusal } from '@pascal-app/core/agent-tools'
 
 /**
  * Throw a structured MCP error. The SDK translates `McpError` into a
@@ -29,6 +30,15 @@ export function toolError(
     ],
     isError: true,
   }
+}
+
+/**
+ * A core operation's refusal (`AgentRefusal`) as the same `{ error, code, ...details }` answer the
+ * hosted chat returns; anything else is a real failure and is rethrown.
+ */
+export function refusalResult(error: unknown) {
+  if (isAgentRefusal(error)) return toolError(error.message, { code: error.code, ...error.details })
+  throw error
 }
 
 export { ErrorCode, McpError }

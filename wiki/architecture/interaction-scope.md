@@ -135,6 +135,11 @@ There is no per-kind snapping switch.
   declaring `NodeDefinition.snapProfile` (`'item' | 'structural'`); `snapContextOf(scope × profile)` maps
   it — `structural` while **setting direction** (drafting / endpoint drag) → `wall` (angle-bearing),
   `structural` otherwise (translate / curve) → `polygon` (no angle), `item` → `item`. No profile → no chip.
+  Tools that are not registered kinds map through `TOOL_SNAP_CONTEXTS` in the same file (the host
+  room-preset stamp `room`); without an entry a tool has no snap context, so Shift cycling and the HUD
+  chip stay dead while it runs. A kind's own reshape (the wall split, `reshape: 'split'`) runs as a
+  `reshaping` scope and inherits that scope's mapping (`polygon` unless it sets direction), so it
+  never needs a tool entry.
 - **Single read path.** Tools read `isGridSnapActive()` / `isMagneticSnapActive()` / `isAngleSnapActive()`
   (`store/use-editor`); the grid step is `useEditor.getState().gridSnapStep` gated on `isGridSnapActive()`.
   These resolve the mode from the scope via `getActiveSnapContext()` → `snappingModeByContext[context]`.
@@ -148,7 +153,7 @@ There is no per-kind snapping switch.
   (a build tool, `drafting`, `placing`/`moving`, or `reshaping`).
 
 **Known-legacy (migrate on touch).** Two legacy modifier patterns predate this model and survive in
-spots not yet touched; both are tracked in `plans/editor-placement-interaction-overhaul.md`. A PR that
+spots not yet touched (the `event.altKey` alignment bypass and pre-scope `useEditor` flags). A PR that
 **touches** one must migrate it to the model above, not extend the legacy path:
 
 1. **`event.shiftKey` as a snap bypass with hardcoded steps** — the MEP move/endpoint tools

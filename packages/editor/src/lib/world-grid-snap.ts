@@ -15,6 +15,7 @@ import {
   type BuildingPose,
   type ResolveAlignmentInBuildingResult,
   resolveAlignmentInBuildingWorld,
+  resolveBuildingForLevel,
   snapWorldXZToBuildingLocal,
   useLiveTransforms,
   useScene,
@@ -39,7 +40,7 @@ import { useViewer } from '@pascal-app/viewer'
  * guides drift off the visible grid mid-drag (and through any post-drag
  * frame where the live override is still set).
  */
-export function getActiveBuildingPose(): BuildingPose | null {
+export function getActiveBuildingId(): AnyNodeId | null {
   const sel = useViewer.getState().selection
   const nodes = useScene.getState().nodes
   // Match `use-floorplan-scene-data.ts`: prefer the active level's
@@ -48,12 +49,15 @@ export function getActiveBuildingPose(): BuildingPose | null {
   // different level, the level path is the authoritative one.
   let buildingId: AnyNodeId | null = null
   if (sel.levelId) {
-    const level = nodes[sel.levelId]
-    if (level && level.type === 'level' && level.parentId) {
-      buildingId = level.parentId as AnyNodeId
-    }
+    buildingId = resolveBuildingForLevel(sel.levelId as AnyNodeId, nodes)
   }
   if (!buildingId) buildingId = sel.buildingId ?? null
+  return buildingId
+}
+
+export function getActiveBuildingPose(): BuildingPose | null {
+  const buildingId = getActiveBuildingId()
+  const nodes = useScene.getState().nodes
   const building = buildingId ? nodes[buildingId] : null
   if (building?.type !== 'building') return null
   const live = useLiveTransforms.getState().transforms.get(buildingId as string)

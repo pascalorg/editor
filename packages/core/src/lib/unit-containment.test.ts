@@ -142,7 +142,7 @@ describe('deriveUnit', () => {
     expect(result.boundaryWallIds).not.toContain(farWall.id)
   })
 
-  test('resolves auto zones from current walls instead of the stored polygon', () => {
+  test('uses the authoritative zone footprint for containment', () => {
     const s = scene()
     const polygon = rectangle()
     const walls = polygon.map((start, index) =>
@@ -160,7 +160,7 @@ describe('deriveUnit', () => {
       }),
     )
     const column = s.add(ColumnNode.parse({ parentId: s.lower.id, position: [2, 0, 2] }))
-    expect(deriveUnit(s.unit([zone]), s.nodes).containedNodeIds).toEqual([column.id])
+    expect(deriveUnit(s.unit([zone]), s.nodes).containedNodeIds).not.toContain(column.id)
   })
 
   test('finds crossing supports and excludes holes and supports on other levels', () => {

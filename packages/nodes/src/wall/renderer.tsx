@@ -10,8 +10,9 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import {
-  getVisibleWallMaterials,
+  getWallFinishRefs,
   NodeRenderer,
+  SHADOW_ONLY_LAYER,
   useLibraryMaterialsVersion,
   useNodeEvents,
   useViewer,
@@ -20,6 +21,7 @@ import { type ComponentProps, useEffect, useLayoutEffect, useMemo, useRef } from
 import type { Mesh } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
+import { getCurtainAwareWallMaterials } from './curtain-wall-materials'
 import {
   extractWallSelectionRay,
   WALL_COLLISION_MESH_NAME,
@@ -69,6 +71,7 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
   const ref = useRef<Mesh>(null!)
   const placeholderGeometry = useMemo(() => createPlaceholderGeometry(3), [])
   const collisionPlaceholderGeometry = useMemo(() => createPlaceholderGeometry(), [])
+  const shadowPlaceholderGeometry = useMemo(() => createPlaceholderGeometry(), [])
 
   useRegistry(node.id, 'wall', ref)
 
@@ -80,8 +83,9 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
     return () => {
       placeholderGeometry.dispose()
       collisionPlaceholderGeometry.dispose()
+      shadowPlaceholderGeometry.dispose()
     }
-  }, [collisionPlaceholderGeometry, placeholderGeometry])
+  }, [collisionPlaceholderGeometry, placeholderGeometry, shadowPlaceholderGeometry])
 
   const rawHandlers = useNodeEvents(node, 'wall')
   // Hidden walls participate in hover/selection NEAREST-FIRST: when the
@@ -154,14 +158,17 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
   // register after mount, and a dangling ref cached as the slot default must
   // re-resolve when they land.
   const libraryMaterialsVersion = useLibraryMaterialsVersion()
-  const baseMaterials = getVisibleWallMaterials(
-    node,
+  // Built geometry's groups index its finish palette; WallCutout swaps the
+  // array whenever a rebuild changes that palette.
+  const baseMaterials = getCurtainAwareWallMaterials(
+    treatmentNode,
     shading,
     textures,
     colorPreset,
     sceneTheme,
     sceneMaterials,
-  )
+    getWallFinishRefs(ref.current?.geometry),
+  ).visible
   // biome-ignore lint/correctness/useExhaustiveDependencies: libraryMaterialsVersion invalidates the ref resolution inside createWallExtraSlotMaterials
   const extraMaterials = useMemo(
     () => createWallExtraSlotMaterials(node, shading, sceneMaterials),
@@ -178,7 +185,7 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
 
   return (
     <mesh
-      castShadow
+      castShadow={node.wallType !== 'curtain'}
       geometry={placeholderGeometry}
       material={baseMaterials}
       receiveShadow
@@ -186,13 +193,24 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
       visible={node.visible}
     >
       <mesh
+        name="curtain-wall-shadow"
+        userData={{ pascalExport: 'strip' }}
+        geometry={shadowPlaceholderGeometry}
+        layers={SHADOW_ONLY_LAYER}
+        castShadow
+        visible={node.wallType === 'curtain'}
+        raycast={() => {}}
+      >
+        <meshBasicMaterial />
+      </mesh>
+      <mesh
         geometry={collisionPlaceholderGeometry}
         name={WALL_COLLISION_MESH_NAME}
         visible={false}
         {...handlers}
       />
 
-      {hasWallTreatments(treatmentNode) && (
+      {node.wallType !== 'curtain' && hasWallTreatments(treatmentNode) && (
         <WallTreatmentSubscription
           childrenNodes={childNodes}
           materials={extraMaterials}

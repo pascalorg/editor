@@ -15,7 +15,12 @@ import useSessionGroups, {
   ungroupCurrentSelection,
 } from '../../store/use-session-groups'
 import { deleteSelection, duplicateSelectionAndPickUp, startGroupPickUp } from './group-actions'
-import { classifyParticipant, computeGroupBox, expandToComponent } from './group-transform-shared'
+import {
+  classifyParticipant,
+  computeGroupBox,
+  computeGroupPlanBox,
+  levelFrame,
+} from './group-transform-shared'
 import { NodeActionMenu } from './node-action-menu'
 import { useMeshSettleEpoch } from './use-mesh-settle-epoch'
 
@@ -69,15 +74,20 @@ export function GroupFloatingActionMenu() {
   const anchor = useMemo(() => {
     void meshEpoch
     if (participantIds.length === 0) return null
-    const fullIds = expandToComponent(participantIds, nodes, levelId)
-    const box = computeGroupBox(fullIds)
+    const box = computeGroupBox(participantIds)
     if (!box) return null
-    return new THREE.Vector3(
-      (box.min.x + box.max.x) / 2,
-      box.max.y + MENU_Y_OFFSET,
-      (box.min.z + box.max.z) / 2,
-    )
-  }, [participantIds, nodes, levelId, meshEpoch])
+    // Over the level-frame box's centre (the dashed boxes' and gizmo's), so the
+    // pill stays on the box under a rotated building; the mesh box gives the top.
+    const levelId = useViewer.getState().selection.levelId
+    const plan = computeGroupPlanBox(participantIds, levelId)
+    const anchor = plan
+      ? new THREE.Vector3((plan.minX + plan.maxX) / 2, 0, (plan.minZ + plan.maxZ) / 2).applyMatrix4(
+          levelFrame(levelId).matrix,
+        )
+      : new THREE.Vector3((box.min.x + box.max.x) / 2, 0, (box.min.z + box.max.z) / 2)
+    anchor.y = box.max.y + MENU_Y_OFFSET
+    return anchor
+  }, [participantIds, meshEpoch])
 
   useFrame((state) => {
     if (!(menuScaleRef.current && groupRef.current)) return

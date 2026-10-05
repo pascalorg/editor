@@ -7,7 +7,12 @@ import { useEffect } from 'react'
 import * as THREE from 'three'
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
-import { exportSceneToGlb, nextFrames, prepareSceneForExport } from '../../lib/glb-export'
+import {
+  exportSceneToGlb,
+  prepareSceneForExport,
+  waitForExportGeometry,
+} from '../../lib/glb-export'
+import { exportPreparedSceneToIfc, ifcFileName } from '../../lib/ifc-export'
 import { exportSceneLevelsForPrint } from '../../lib/level-print-export'
 import type { ModelExport, ModelExportArtifact } from '../../lib/model-export'
 import {
@@ -51,7 +56,10 @@ export function ExportManager() {
   const setModelExport = useEditor((state) => state.setModelExport)
 
   useEffect(() => {
-    const exportFn: ModelExport = async (format = 'glb', options = {}) => {
+    const exportFn: ModelExport = async (format = 'glb', requested = {}) => {
+      // Resolve once: scene preparation prunes hidden nodes by default, and the
+      // IFC writer must drop the same nodes it rebuilds parametrically.
+      const options = { ...requested, onlyVisible: requested.onlyVisible ?? true }
       // Find the scene renderer group by name
       const sceneGroup = scene.getObjectByName('scene-renderer')
       if (!sceneGroup) {
@@ -67,7 +75,7 @@ export function ExportManager() {
       // without it every plant exports as its raycast collider, a white box).
       useViewer.getState().setExporting(true)
       try {
-        await nextFrames()
+        await waitForExportGeometry(useScene.getState().nodes, options)
 
         if (format === 'glb') {
           const warnings: string[] = []
@@ -100,7 +108,7 @@ export function ExportManager() {
         try {
           prepared = prepareSceneForExport(sceneGroup, nodes, {
             ...options,
-            requireSynchronousBake: format === 'stl' || format === 'obj',
+            requireSynchronousBake: format === 'stl' || format === 'obj' || format === 'ifc',
           })
         } finally {
           restoreLevels()
@@ -204,6 +212,22 @@ export function ExportManager() {
             const result = exporter.parse(exportScene, { binary: true })
             const blob = new Blob([result], { type: 'model/stl' })
             return finishArtifact(blob, `model_${date}.stl`, options.download)
+          }
+
+          if (format === 'ifc') {
+            const { data, warnings } = exportPreparedSceneToIfc(exportScene, nodes, {
+              projectName: options.projectName,
+              onlyVisible: options.onlyVisible,
+              excludedNodeTypes: options.excludedNodeTypes,
+            })
+            const blob = new Blob([data], { type: 'application/x-step' })
+            return finishArtifact(
+              blob,
+              ifcFileName(options.projectName, `model_${date}`),
+              options.download,
+              undefined,
+              warnings,
+            )
           }
 
           if (format === 'obj') {

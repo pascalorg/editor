@@ -6,24 +6,69 @@ on:
   pull_request:
     branches: [main]
 
+# PR runs supersede each other; main runs finish so their turbo cache
+# entries exist for the next PR.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      runtime: ${{ steps.filter.outputs.runtime }}
+      skills: ${{ steps.filter.outputs.skills }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          predicate-quantifier: every
+          filters: |
+            # The packed CLI/runtime smoke (macOS, ~5 min) only has to run
+            # when something that ships in the runtime changed; docs, agent
+            # skills, evals and tests do not.
+            runtime:
+              - '**'
+              - '!**/*.md'
+              - '!wiki/**'
+              - '!.agents/**'
+              - '!plugin-evals/**'
+              - '!**/*.test.ts'
+              - '!**/*.test.tsx'
+              - '!**/__tests__/**'
+              - '!**/__fixtures__/**'
+              - '!**/__snapshots__/**'
+            # What `bun run skills:validate` reads: the skill bundles, the
+            # maintainer skills, plugin evals, every plugin/marketplace manifest
+            # and the logos they reference, the root README install lines, and
+            # the validator itself. `every` ANDs the lines, so the positive
+            # patterns are one brace glob.
+            skills:
+              - '{skills/**,.agents/**,plugin-evals/**,.claude-plugin/**,.codex-plugin/**,.cursor-plugin/**,plugin.json,mcp.json,gemini-extension.json,assets/pascal-mark*.svg,README.md,package.json,scripts/validate-skills.ts,scripts/path-containment*.ts,scripts/*-policy*.ts,.github/workflows/ci.yml}'
+
   quality:
+    needs: changes
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
 
-      # Pinned to match `packageManager` in package.json. Unpinned, this floats
-      # to whatever bun is latest, so a bun release can break the gate with no
-      # change in the repo — and CI then disagrees with what contributors run.
+      # Read from `packageManager` in package.json, so CI runs the same bun as
+      # contributors and a bun release cannot change the gate on its own.
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.14
+          bun-version-file: package.json
+
+      # Turbo remote cache backed by the Actions cache: packages whose inputs
+      # did not change replay check-types/test/build instead of rerunning.
+      - name: Turbo cache
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -32,6 +77,7 @@ jobs:
         run: bun run check
 
       - name: Validate agent skills and plugin packages
+        if: needs.changes.outputs.skills == 'true' || github.event_name == 'push'
         run: bun run skills:validate
 
       - name: Type check
@@ -44,6 +90,8 @@ jobs:
         run: bun run build
 
   cli-smoke:
+    needs: changes
+    if: needs.changes.outputs.runtime == 'true'
     runs-on: macos-latest
     permissions:
       contents: read
@@ -52,7 +100,10 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.14
+          bun-version-file: package.json
+
+      - name: Turbo cache
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
 
       - uses: actions/setup-node@v4
         with:
@@ -64,6 +115,9 @@ jobs:
       - name: Smoke-test the packed CLI and editor runtime
         env:
           PASCAL_PORTABLE_BUILD: "1"
+          # Node's default heap ran out during the editor build on the 7 GB
+          # macOS runner ("Reached heap limit", exit 137).
+          NODE_OPTIONS: --max-old-space-size=5120
         run: |
           bun run build --filter editor
           cd packages/cli

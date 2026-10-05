@@ -18,6 +18,7 @@ import {
   getWallThickness,
   ItemNode,
   isCurvedWall,
+  isDerivedNode,
   isRegistryMovable,
   isRegistrySelectable,
   isSplineFence,
@@ -25,6 +26,7 @@ import {
   nodeRegistry,
   RoofSegmentNode,
   runAsSingleSceneHistoryStep,
+  runSceneHistoryDraftWrite,
   type SlabNode,
   SpawnNode,
   StairSegmentNode,
@@ -55,6 +57,8 @@ import { duplicateWithoutMove, registryMoveDisabled } from '../../lib/node-actio
 import { playBlockedQuickActionFeedback } from '../../lib/quick-action-feedback'
 import { collectQuickActionNodeScope } from '../../lib/quick-action-nodes'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
+import { deleteSelectedSeparator } from '../../lib/room-structure-commands'
+import { captureElementActionOrigin, completeElementAction } from '../../lib/room-zone-routing'
 import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
 import { cn } from '../../lib/utils'
 import useEditor from '../../store/use-editor'
@@ -66,6 +70,7 @@ import useInteractionScope, {
 import { IconRefGlyph } from '../ui/icon-ref'
 import { formatMeasurement, MeasurementPill } from './measurement-pill'
 import { NodeActionMenu } from './node-action-menu'
+import { startZoneRoomTransform } from './room-controls'
 
 /**
  * A kind shows the system pill when it exposes typed ports — `def.ports`
@@ -126,6 +131,8 @@ const MENU_Y_OFFSETS: Record<string, number> = {
   // Slab: clears the height arrow that sits at elevation + 0.22 plus the
   // chevron's own visual reach, so the menu floats just above it.
   slab: 0.7,
+  // Room: measured from the top of its walls, with a wall's clearance.
+  zone: 0.5,
   // Ceiling: clears the upward height arrow that sits ~0.22 above the
   // ceiling plane, plus extra headroom so the menu doesn't crowd the
   // chevron at any zoom level.
@@ -135,8 +142,16 @@ const MENU_Y_OFFSETS: Record<string, number> = {
   shelf: 0.6,
 }
 
-function getMenuYOffset(node: AnyNode | null): number {
+export function getMenuYOffset(node: AnyNode | null): number {
   if (!node) return MENU_Y_OFFSET_DEFAULT + EXTRA_MENU_LIFT
+  // A window or door built from a script has a height arrow only when its script declares height.
+  if (
+    (node.type === 'door' || node.type === 'window') &&
+    node.source &&
+    !node.source.manifest.params.some((spec) => spec.id === 'height')
+  ) {
+    return MENU_Y_OFFSET_DEFAULT + EXTRA_MENU_LIFT
+  }
   if (node.type === 'stair-segment') {
     return (MENU_Y_OFFSETS[`stair-${node.segmentType}`] ?? MENU_Y_OFFSET_DEFAULT) + EXTRA_MENU_LIFT
   }
@@ -227,6 +242,28 @@ function getObjectGeometryKey(object: THREE.Object3D): string {
     )
   })
   return parts.join('|')
+}
+
+const _meshBox = new THREE.Box3()
+
+/** The bounds of what renders: hidden objects and invisible-material hit boxes are skipped. */
+function setFromVisibleMeshes(box: THREE.Box3, root: THREE.Object3D): void {
+  box.makeEmpty()
+  root.updateWorldMatrix(true, true)
+  const visit = (object: THREE.Object3D) => {
+    if (!object.visible) return
+    const mesh = object as THREE.Mesh
+    const material = mesh.material as THREE.Material | THREE.Material[] | undefined
+    const shown = Array.isArray(material) ? material.some((m) => m.visible) : material?.visible
+    if (mesh.isMesh && shown && mesh.geometry) {
+      mesh.geometry.computeBoundingBox()
+      if (mesh.geometry.boundingBox) {
+        box.union(_meshBox.copy(mesh.geometry.boundingBox).applyMatrix4(mesh.matrixWorld))
+      }
+    }
+    for (const child of object.children) visit(child)
+  }
+  visit(root)
 }
 
 function setNodeDerivedMenuAnchor(
@@ -443,7 +480,12 @@ export function FloatingActionMenu() {
       if (needsRecompute) {
         const effectiveNode = getEffectiveNode(node)
         if (!setNodeDerivedMenuAnchor(effectiveNode, obj, anchorRef.current)) {
-          _anchorBox.setFromObject(obj)
+          // Built from a script: its hidden hit box, cutout and collider are not what the person sees.
+          if ('source' in effectiveNode && effectiveNode.source)
+            setFromVisibleMeshes(_anchorBox, obj)
+          if (_anchorBox.isEmpty() || !('source' in effectiveNode && effectiveNode.source)) {
+            _anchorBox.setFromObject(obj)
+          }
           if (!_anchorBox.isEmpty()) {
             _anchorBox.getCenter(_anchorCenter)
             // Position above the object. Per-type offsets clear each kind's
@@ -489,6 +531,7 @@ export function FloatingActionMenu() {
     (e: React.MouseEvent) => {
       e.stopPropagation()
       if (!node) return
+      if (startZoneRoomTransform(node, 'move')) return
       sfxEmitter.emit('sfx:item-pick')
       const sceneNodes = useScene.getState().nodes
       setMovingNode(resolveMoveActionNode(node, sceneNodes) as any)
@@ -500,6 +543,7 @@ export function FloatingActionMenu() {
     (e: React.MouseEvent) => {
       e.stopPropagation()
       if (!node?.parentId) return
+      if (startZoneRoomTransform(node, 'duplicate')) return
       sfxEmitter.emit('sfx:item-pick')
 
       if (registryMoveDisabled(node)) {
@@ -521,169 +565,166 @@ export function FloatingActionMenu() {
         return
       }
 
-      useScene.temporal.getState().pause()
+      runSceneHistoryDraftWrite(() => {
+        if (duplicatesAsFreshSubtree(node as AnyNode)) {
+          let draftId: AnyNodeId | null = null
+          try {
+            draftId = createFreshPlacementSubtree(node.id as AnyNodeId)
+            const draft = draftId ? useScene.getState().nodes[draftId] : null
+            if (draft) {
+              setMovingNode(draft as any)
+              setSelection({ selectedIds: [] })
+              return
+            }
+          } catch (error) {
+            if (draftId && useScene.getState().nodes[draftId]) {
+              useScene.getState().deleteNode(draftId)
+            }
+            console.error('Failed to duplicate node subtree', error)
+          }
+          return
+        }
 
-      if (duplicatesAsFreshSubtree(node as AnyNode)) {
-        let draftId: AnyNodeId | null = null
+        const duplicateInfo = prepareFreshPlacementRootDuplicate(node as AnyNode) as any
+
+        let duplicate: AnyNode | null = null
         try {
-          draftId = createFreshPlacementSubtree(node.id as AnyNodeId)
-          const draft = draftId ? useScene.getState().nodes[draftId] : null
-          if (draft) {
-            setMovingNode(draft as any)
-            setSelection({ selectedIds: [] })
-            return
+          if (node.type === 'door') {
+            duplicate = DoorNode.parse(duplicateInfo)
+          } else if (node.type === 'window') {
+            duplicate = WindowNode.parse(duplicateInfo)
+          } else if (node.type === 'item') {
+            duplicate = ItemNode.parse(duplicateInfo)
+          } else if (node.type === 'elevator') {
+            duplicate = ElevatorNode.parse(duplicateInfo)
+          } else if (node.type === 'column') {
+            duplicate = ColumnNode.parse(duplicateInfo)
+          } else if (node.type === 'wall') {
+            duplicate = WallNode.parse(duplicateInfo)
+          } else if (node.type === 'fence') {
+            duplicate = FenceNode.parse(duplicateInfo)
+            duplicate.start = [duplicate.start[0] + 1, duplicate.start[1] + 1]
+            duplicate.end = [duplicate.end[0] + 1, duplicate.end[1] + 1]
+          } else if (node.type === 'roof-segment') {
+            duplicateInfo.id = generateId('rseg')
+            duplicate = RoofSegmentNode.parse(duplicateInfo)
+          } else if (node.type === 'stair-segment') {
+            duplicate = StairSegmentNode.parse(duplicateInfo)
+          } else if (node.type === 'spawn') {
+            duplicate = SpawnNode.parse(duplicateInfo)
+          }
+
+          // Registry-driven fallback: any kind with a NodeDefinition can be
+          // duplicated through its schema's parse(). Future built-in kinds
+          // get duplicate for free.
+          if (!duplicate) {
+            const def = nodeRegistry.get(node.type)
+            if (def) {
+              duplicate = def.schema.parse(duplicateInfo) as AnyNode
+            }
           }
         } catch (error) {
-          if (draftId && useScene.getState().nodes[draftId]) {
-            useScene.getState().deleteNode(draftId)
-          }
-          console.error('Failed to duplicate node subtree', error)
-        }
-        useScene.temporal.getState().resume()
-        return
-      }
-
-      const duplicateInfo = prepareFreshPlacementRootDuplicate(node as AnyNode) as any
-
-      let duplicate: AnyNode | null = null
-      try {
-        if (node.type === 'door') {
-          duplicate = DoorNode.parse(duplicateInfo)
-        } else if (node.type === 'window') {
-          duplicate = WindowNode.parse(duplicateInfo)
-        } else if (node.type === 'item') {
-          duplicate = ItemNode.parse(duplicateInfo)
-        } else if (node.type === 'elevator') {
-          duplicate = ElevatorNode.parse(duplicateInfo)
-        } else if (node.type === 'column') {
-          duplicate = ColumnNode.parse(duplicateInfo)
-        } else if (node.type === 'wall') {
-          duplicate = WallNode.parse(duplicateInfo)
-        } else if (node.type === 'fence') {
-          duplicate = FenceNode.parse(duplicateInfo)
-          duplicate.start = [duplicate.start[0] + 1, duplicate.start[1] + 1]
-          duplicate.end = [duplicate.end[0] + 1, duplicate.end[1] + 1]
-        } else if (node.type === 'roof-segment') {
-          duplicateInfo.id = generateId('rseg')
-          duplicate = RoofSegmentNode.parse(duplicateInfo)
-        } else if (node.type === 'stair-segment') {
-          duplicate = StairSegmentNode.parse(duplicateInfo)
-        } else if (node.type === 'spawn') {
-          duplicate = SpawnNode.parse(duplicateInfo)
+          console.error('Failed to parse duplicate', error)
+          return
         }
 
-        // Registry-driven fallback: any kind with a NodeDefinition can be
-        // duplicated through its schema's parse(). Future built-in kinds
-        // get duplicate for free.
         if (!duplicate) {
-          const def = nodeRegistry.get(node.type)
-          if (def) {
-            duplicate = def.schema.parse(duplicateInfo) as AnyNode
-          }
+          return
         }
-      } catch (error) {
-        console.error('Failed to parse duplicate', error)
-        useScene.temporal.getState().resume()
-        return
-      }
 
-      if (!duplicate) {
-        useScene.temporal.getState().resume()
-        return
-      }
-
-      if (duplicate) {
-        if (
-          duplicate.type === 'door' ||
-          duplicate.type === 'window' ||
-          duplicate.type === 'elevator'
-        ) {
-          useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
-        } else if (duplicate.type === 'wall') {
-          useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
-        } else if (duplicate.type === 'fence') {
-          useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
-        } else if (duplicate.type === 'roof-segment' || duplicate.type === 'stair-segment') {
-          // Add small offset to make it visible
-          if ('position' in duplicate) {
-            duplicate.position = [
-              duplicate.position[0] + 1,
-              duplicate.position[1],
-              duplicate.position[2] + 1,
-            ]
+        if (duplicate) {
+          if (
+            duplicate.type === 'door' ||
+            duplicate.type === 'window' ||
+            duplicate.type === 'elevator'
+          ) {
+            useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
+          } else if (duplicate.type === 'wall') {
+            useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
+          } else if (duplicate.type === 'fence') {
+            useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
+          } else if (duplicate.type === 'roof-segment' || duplicate.type === 'stair-segment') {
+            // Add small offset to make it visible
+            if ('position' in duplicate) {
+              duplicate.position = [
+                duplicate.position[0] + 1,
+                duplicate.position[1],
+                duplicate.position[2] + 1,
+              ]
+            }
+            useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
+          } else if (
+            duplicate.type === 'item' ||
+            duplicate.type === 'chimney' ||
+            duplicate.type === 'dormer'
+          ) {
+            // Items, chimneys & dormers use pure drag-to-place: NO node is
+            // inserted into the scene until the user clicks to commit. The
+            // `setMovingNode` call below hands the clone (with
+            // `metadata.isNew = true` + no id) to its move tool —
+            // `MoveItemTool` / `MoveChimneyTool` / `MoveDormerTool` — which
+            // create a draft and call `createNode` on the commit click.
+            // Pre-creating here would drop a second copy into the scene
+            // before any click — the furnish-tab "duplicate auto-places an
+            // item without clicking" bug. (Item has its own
+            // draft-committing move tool, so it must skip the generic
+            // registry auto-create branch below.)
+          } else if (
+            duplicate.type === 'duct-segment' ||
+            duplicate.type === 'duct-fitting' ||
+            duplicate.type === 'pipe-segment' ||
+            duplicate.type === 'lineset' ||
+            duplicate.type === 'liquid-line'
+          ) {
+            // Duct runs & fittings, DWV pipe runs, and refrigerant linesets use
+            // pure drag-to-place: NO node is inserted into the scene until the
+            // commit click. `setMovingNode` below hands the clone (with
+            // `metadata.isNew`) to its ghost tool (`MoveDuctSegmentTool` /
+            // `MoveDuctFittingTool` / `MovePipeSegmentTool` / `MoveLinesetTool`),
+            // which previews a translucent copy inside a footprint bounding box
+            // on the cursor and calls `createNode` on the drop click.
+            // Pre-creating here would drop a copy before any click — the
+            // "auto-places it" bug.
+          } else if (nodeRegistry.has(duplicate.type)) {
+            // Registry-driven kinds: offset slightly so the duplicate doesn't
+            // overlap exactly, then create + hand to the move tool. Mirrors the
+            // roof-segment / stair-segment behavior.
+            if ('position' in duplicate && Array.isArray((duplicate as any).position)) {
+              const pos = (duplicate as { position: [number, number, number] }).position
+              ;(duplicate as { position: [number, number, number] }).position = [
+                pos[0] + 1,
+                pos[1],
+                pos[2] + 1,
+              ]
+            } else if ('path' in duplicate && Array.isArray((duplicate as any).path)) {
+              // Other polyline kinds (pipe / lineset) carry a `path`, not a
+              // `position`. Create the copy HIDDEN so nothing is auto-placed:
+              // their shared path mover reveals it as a cursor-following
+              // preview on the first mouse move and commits on the next click.
+              ;(duplicate as { visible?: boolean }).visible = false
+            }
+            useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
           }
-          useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
-        } else if (
-          duplicate.type === 'item' ||
-          duplicate.type === 'chimney' ||
-          duplicate.type === 'dormer'
-        ) {
-          // Items, chimneys & dormers use pure drag-to-place: NO node is
-          // inserted into the scene until the user clicks to commit. The
-          // `setMovingNode` call below hands the clone (with
-          // `metadata.isNew = true` + no id) to its move tool —
-          // `MoveItemTool` / `MoveChimneyTool` / `MoveDormerTool` — which
-          // create a draft and call `createNode` on the commit click.
-          // Pre-creating here would drop a second copy into the scene
-          // before any click — the furnish-tab "duplicate auto-places an
-          // item without clicking" bug. (Item has its own
-          // draft-committing move tool, so it must skip the generic
-          // registry auto-create branch below.)
-        } else if (
-          duplicate.type === 'duct-segment' ||
-          duplicate.type === 'duct-fitting' ||
-          duplicate.type === 'pipe-segment' ||
-          duplicate.type === 'lineset' ||
-          duplicate.type === 'liquid-line'
-        ) {
-          // Duct runs & fittings, DWV pipe runs, and refrigerant linesets use
-          // pure drag-to-place: NO node is inserted into the scene until the
-          // commit click. `setMovingNode` below hands the clone (with
-          // `metadata.isNew`) to its ghost tool (`MoveDuctSegmentTool` /
-          // `MoveDuctFittingTool` / `MovePipeSegmentTool` / `MoveLinesetTool`),
-          // which previews a translucent copy inside a footprint bounding box
-          // on the cursor and calls `createNode` on the drop click.
-          // Pre-creating here would drop a copy before any click — the
-          // "auto-places it" bug.
-        } else if (nodeRegistry.has(duplicate.type)) {
-          // Registry-driven kinds: offset slightly so the duplicate doesn't
-          // overlap exactly, then create + hand to the move tool. Mirrors the
-          // roof-segment / stair-segment behavior.
-          if ('position' in duplicate && Array.isArray((duplicate as any).position)) {
-            const pos = (duplicate as { position: [number, number, number] }).position
-            ;(duplicate as { position: [number, number, number] }).position = [
-              pos[0] + 1,
-              pos[1],
-              pos[2] + 1,
-            ]
-          } else if ('path' in duplicate && Array.isArray((duplicate as any).path)) {
-            // Other polyline kinds (pipe / lineset) carry a `path`, not a
-            // `position`. Create the copy HIDDEN so nothing is auto-placed:
-            // their shared path mover reveals it as a cursor-following
-            // preview on the first mouse move and commits on the next click.
-            ;(duplicate as { visible?: boolean }).visible = false
+          if (
+            duplicate.type === 'item' ||
+            duplicate.type === 'elevator' ||
+            duplicate.type === 'column' ||
+            duplicate.type === 'wall' ||
+            duplicate.type === 'fence' ||
+            duplicate.type === 'window' ||
+            duplicate.type === 'door' ||
+            duplicate.type === 'roof-segment' ||
+            duplicate.type === 'spawn' ||
+            duplicate.type === 'stair-segment' ||
+            // Registry-driven kinds get picked up by MoveTool's generic
+            // fallback (MoveRegistryNodeTool) so the user can reposition.
+            nodeRegistry.has(duplicate.type)
+          ) {
+            setMovingNode(duplicate as any)
           }
-          useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
+          setSelection({ selectedIds: [] })
         }
-        if (
-          duplicate.type === 'item' ||
-          duplicate.type === 'elevator' ||
-          duplicate.type === 'column' ||
-          duplicate.type === 'wall' ||
-          duplicate.type === 'fence' ||
-          duplicate.type === 'window' ||
-          duplicate.type === 'door' ||
-          duplicate.type === 'roof-segment' ||
-          duplicate.type === 'spawn' ||
-          duplicate.type === 'stair-segment' ||
-          // Registry-driven kinds get picked up by MoveTool's generic
-          // fallback (MoveRegistryNodeTool) so the user can reposition.
-          nodeRegistry.has(duplicate.type)
-        ) {
-          setMovingNode(duplicate as any)
-        }
-        setSelection({ selectedIds: [] })
-      }
+      })
     },
     [node, setMovingNode, setSelection],
   )
@@ -732,9 +773,15 @@ export function FloatingActionMenu() {
     (e: React.MouseEvent) => {
       e.stopPropagation()
       if (!selectedId) return
+      const origin = captureElementActionOrigin([selectedId])
+      if (node?.type === 'separator') {
+        deleteSelectedSeparator(selectedId as AnyNodeId, origin)
+        return
+      }
       emitDeleteSFX(node?.type)
       setSelection({ selectedIds: [] })
       useScene.getState().deleteNode(selectedId as AnyNodeId)
+      completeElementAction(origin)
     },
     [node?.type, selectedId, setSelection],
   )
@@ -773,6 +820,8 @@ export function FloatingActionMenu() {
 
   if (
     !(selectedId && node && isValidType && !isFloorplanHovered && mode !== 'delete') ||
+    // A footprint's floor has one control, its height handle; no pill.
+    (node.type === 'slab' && node.plateRole === 'base') ||
     endpointReshape ||
     isCurveReshape ||
     !menuVisibility.root
@@ -804,7 +853,11 @@ export function FloatingActionMenu() {
                     ? handleFind
                     : undefined
                 }
-                onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
+                onAddHole={
+                  node && HOLE_TYPES.includes(node.type) && !isDerivedNode(node)
+                    ? handleAddHole
+                    : undefined
+                }
                 onCurve={
                   (node?.type === 'fence' && !isSplineFence(node) && !isCurvedWall(node)) ||
                   (node?.type === 'wall' && canCurveSelectedWall)

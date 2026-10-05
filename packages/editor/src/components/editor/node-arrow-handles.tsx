@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type ArcResizeHandle,
+  type CornerRadiusHandle,
   type Cursor,
   createSceneApi,
   DEFAULT_ANGLE_STEP,
@@ -41,12 +42,17 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { useCeilingEditCeilingId } from '../../lib/ceiling-edit-session'
 import { EDITOR_LAYER } from '../../lib/constants'
 import { RESIZE_HANDLE_DRAG_LABEL, ROTATE_HANDLE_DRAG_LABEL } from '../../lib/contextual-help'
 import { createEditorApi } from '../../lib/editor-api'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useDirectManipulationFeedback from '../../store/use-direct-manipulation-feedback'
-import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../store/use-editor'
+import useEditor, {
+  isAngleSnapActive,
+  isGridSnapActive,
+  isMagneticSnapActive,
+} from '../../store/use-editor'
 import { useHandleGroup } from '../../store/use-handle-group'
 import useInteractionScope, {
   useEndpointReshape,
@@ -236,7 +242,12 @@ export function NodeArrowHandles() {
   const activeGroup = useHandleGroup((s) =>
     s.active && s.active.nodeId === node?.id ? s.active.group : null,
   )
-  const def = node ? nodeRegistry.get(node.type) : null
+  // A ceiling's handles belong to its Edit ceiling session; a plain selection shows none.
+  const editCeilingId = useCeilingEditCeilingId()
+  const def =
+    node && (node.type !== 'ceiling' || node.id === editCeilingId)
+      ? nodeRegistry.get(node.type)
+      : null
   const descriptorSceneApi = useMemo(() => createSceneApi(useScene), [])
   const descriptors = useMemo(() => {
     if (!(node && def?.handles)) return null
@@ -574,6 +585,17 @@ function ArrowHandle({
       />
     )
   }
+  if (descriptor.kind === 'corner-radius') {
+    return (
+      <CornerRadiusKnob
+        descriptor={descriptor}
+        dragControls={dragControls}
+        handleIndex={handleIndex}
+        node={placementNode}
+        rideObject={rideObject}
+      />
+    )
+  }
   if (descriptor.kind === 'tap-action') {
     // Tap-action handles (fence side-move arrows, corner pickers) aren't
     // resize handles, so the freeze-at-pre-drag mechanism — which only
@@ -585,6 +607,119 @@ function ArrowHandle({
   }
   // endpoint-move not yet implemented.
   return null
+}
+
+const CORNER_RADIUS_DOT_INSET = 0.2
+const CORNER_RADIUS_POSITION_FACTOR = Math.SQRT2 - 1
+
+function CornerRadiusKnob({
+  descriptor,
+  node,
+  handleIndex,
+  dragControls,
+  rideObject,
+}: {
+  descriptor: CornerRadiusHandle<AnyNode>
+  node: AnyNode
+  handleIndex: number
+  dragControls: HandleDragControls
+  rideObject: Object3D
+}) {
+  const [isHovered, setIsHovered] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const { camera } = useThree()
+  const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
+  const [sx, sy] = descriptor.corner
+  const radius = descriptor.currentValue(node)
+  const inset = CORNER_RADIUS_DOT_INSET + CORNER_RADIUS_POSITION_FACTOR * radius
+  const position: [number, number, number] = [
+    sx * (descriptor.width(node) / 2 - inset / Math.SQRT2),
+    sy * (descriptor.height(node) / 2 - inset / Math.SQRT2),
+    0,
+  ]
+
+  const activate = useHandleDrag({
+    kind: 'drag',
+    cursor: 'grabbing',
+    dragControls,
+    handleIndex,
+    node,
+    rideObject,
+    setIsDragging,
+    onStart: ({ initialNode, nodeId, rideObject: dragRideObject, sceneApi: dragSceneApi }) => {
+      dragRideObject.updateMatrixWorld(true)
+      const worldMatrix = dragRideObject.matrixWorld.clone()
+      const inverseWorldMatrix = worldMatrix.clone().invert()
+      const center = new Vector3().setFromMatrixPosition(worldMatrix)
+      const normal = new Vector3().setFromMatrixColumn(worldMatrix, 2).normalize()
+      const plane = new Plane().setFromNormalAndCoplanarPoint(normal, center)
+      const maxRadius = resolveBound(
+        descriptor.max,
+        Number.POSITIVE_INFINITY,
+        initialNode,
+        dragSceneApi,
+      )
+      const preview = descriptor.createPreview?.(initialNode as never)
+
+      return {
+        markDirty: !preview,
+        commit: preview ? (patch) => preview.commit(patch as never) : undefined,
+        onBegin: () => {
+          useInteractionScope.getState().begin({
+            kind: 'handle-drag',
+            nodeId,
+            handle: 'Corner radius',
+          })
+        },
+        onCancel: () => preview?.cancel(),
+        onEnd: () => {
+          useInteractionScope.getState().endIf((scope) => scope.kind === 'handle-drag')
+        },
+        move: ({ event, modifiers, intersectPlane }) => {
+          const hit = new Vector3()
+          if (!intersectPlane(event.clientX, event.clientY, plane, hit)) return null
+          hit.applyMatrix4(inverseWorldMatrix)
+          const diagonalDistance =
+            (descriptor.width(initialNode) / 2 +
+              descriptor.height(initialNode) / 2 -
+              sx * hit.x -
+              sy * hit.y) /
+            Math.SQRT2
+          const next = Math.min(
+            maxRadius,
+            Math.max(
+              0,
+              (diagonalDistance - CORNER_RADIUS_DOT_INSET) / CORNER_RADIUS_POSITION_FACTOR,
+            ),
+          )
+          const patch = descriptor.apply(initialNode as never, next, dragSceneApi, modifiers)
+          preview?.preview(patch as never)
+          return patch as Partial<AnyNode>
+        },
+      }
+    },
+  })
+
+  return (
+    <HandleArrow
+      activeCursor="grabbing"
+      cursor="grab"
+      hover={isHovered || isDragging}
+      hoverScale={1.3}
+      onHoverChange={setIsHovered}
+      onPointerDown={activate}
+      placement={{ position, rotation: [0, 0, 0], baseScale: zoom * 0.42 }}
+      round
+      shape="corner-picker"
+    >
+      {isHovered || isDragging ? (
+        <DimensionLabel
+          position={[0, 0.22, 0]}
+          text={formatDimension(radius, useViewer.getState().unit)}
+        />
+      ) : null}
+    </HandleArrow>
+  )
 }
 
 function pickCursor(descriptor: LinearResizeHandle<AnyNode> | RadialResizeHandle<AnyNode>): Cursor {
@@ -705,7 +840,10 @@ function LinearArrow({
               initialNode,
               nodeId,
               sceneApi,
-              initialModifiers: { altKey: event.nativeEvent.altKey },
+              initialModifiers: {
+                altKey: event.nativeEvent.altKey,
+                shiftKey: event.nativeEvent.shiftKey,
+              },
             })
           : null
       const overrideId = linearBinding?.overrideId ?? nodeId
@@ -1219,10 +1357,7 @@ function ArcArrow({
       }
       const initialAngle = angleOf(hitWorld)
 
-      // Advertise the rotate interaction so the contextual HUD can surface the
-      // Shift = free-rotation toggle (the angle-step bypass below). Resize
-      // handles route a measurement label here; rotate gets a sentinel label so
-      // the HUD shows the rotate hint, not a dimension pill.
+      // A distinct label selects rotation snapping instead of resize measurements.
       if (isRotateShape) {
         useInteractionScope
           .getState()
@@ -1244,7 +1379,12 @@ function ArcArrow({
           while (delta > Math.PI) delta -= 2 * Math.PI
           while (delta < -Math.PI) delta += 2 * Math.PI
 
-          if (!moveEvent.shiftKey && descriptor.shape === 'rotate') {
+          if (
+            !descriptor.continuous &&
+            !moveEvent.altKey &&
+            isAngleSnapActive() &&
+            descriptor.shape === 'rotate'
+          ) {
             delta = Math.round(delta / DEFAULT_ANGLE_STEP) * DEFAULT_ANGLE_STEP
           }
 

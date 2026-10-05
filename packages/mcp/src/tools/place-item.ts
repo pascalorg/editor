@@ -1,4 +1,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import {
+  flushMountRotation,
+  geometrySurfaceAt,
+  geometryUndersideAt,
+  mountsFlush,
+} from '@pascal-app/core'
+import { projectWorldPointToWallLocalX, wallLength } from '@pascal-app/core/agent-operations'
 import type { AnyNodeId } from '@pascal-app/core/schema'
 import { ItemNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
@@ -6,7 +13,6 @@ import type { SceneOperations } from '../operations'
 import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
 import { findCatalogItem } from './asset-catalog'
 import { ErrorCode, throwMcpError } from './errors'
-import { projectWorldPointToWallLocalX, wallLength } from './geometry'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { measurement } from './measurement'
 import { NodeIdSchema, Vec3Schema } from './schemas'
@@ -21,6 +27,7 @@ export const placeItemInput = {
 export const placeItemOutput = {
   itemId: z.string(),
   status: z.string().optional(),
+  restingOn: z.string().optional(),
   ...liveSyncOutput,
 }
 
@@ -30,7 +37,7 @@ export function registerPlaceItem(server: McpServer, bridge: SceneOperations): v
     {
       title: 'Place item',
       description:
-        'Place a catalog item into the scene. Target a level/slab/zone for floor items, a wall for wall-attached items, or a ceiling for ceiling-attached items. Do not target the site node directly.',
+        'Place a catalog item into the scene. Target a level/slab/zone for floor items, a wall for wall-attached items, a ceiling for ceiling-attached items, or an item to rest on it (position in level coordinates; on an object built with add_object it lands on the real surface below the point, such as a porch landing, and a ceiling item hangs from the underside above it, such as a vaulted ceiling, unless position[1] is set above 0). Do not target the site node directly.',
       inputSchema: placeItemInput,
       outputSchema: placeItemOutput,
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
@@ -46,11 +53,12 @@ export function registerPlaceItem(server: McpServer, bridge: SceneOperations): v
         targetType !== 'slab' &&
         targetType !== 'zone' &&
         targetType !== 'wall' &&
-        targetType !== 'ceiling'
+        targetType !== 'ceiling' &&
+        targetType !== 'item'
       ) {
         throwMcpError(
           ErrorCode.InvalidRequest,
-          `Cannot place item on ${targetType}; target must be a level, slab, zone, wall, or ceiling. Site-level placement is not supported yet because site.children is reserved for buildings.`,
+          `Cannot place item on ${targetType}; target must be a level, slab, zone, wall, ceiling or item. Site-level placement is not supported yet because site.children is reserved for buildings.`,
         )
       }
 
@@ -93,9 +101,51 @@ export function registerPlaceItem(server: McpServer, bridge: SceneOperations): v
         })
       }
 
+      let restingOn: string | undefined
+      let tilt: [number, number, number] | undefined
+      if (target.type === 'item') {
+        const host = bridge.getNode(target.parentId as AnyNodeId)
+        if (host?.type !== 'level') {
+          throwMcpError(
+            ErrorCode.InvalidRequest,
+            `Item ${targetNodeId} rests on a ${host?.type ?? 'missing parent'}; only items standing on a level can host another item here.`,
+          )
+        }
+        // Level coordinates → the host item's frame (translation + yaw).
+        const [hx, hy, hz] = target.position
+        const yaw = target.rotation[1] ?? 0
+        const dx = requestedPosition[0] - hx
+        const dz = requestedPosition[2] - hz
+        const lx = (Math.cos(yaw) * dx - Math.sin(yaw) * dz) / target.scale[0]
+        const lz = (Math.sin(yaw) * dx + Math.cos(yaw) * dz) / target.scale[2]
+        const hanging = baseAsset.attachTo === 'ceiling' && target.source
+        const surface = target.source
+          ? hanging
+            ? geometryUndersideAt(target.source.manifest, lx, lz)
+            : geometrySurfaceAt(target.source.manifest, lx, lz)
+          : null
+        const explicitY = !hanging && requestedPosition[1] > 0
+        restingOn = explicitY ? undefined : surface?.part
+        // A ceiling item hangs below the underside (its top flush); others rest on top.
+        const flush = Boolean(hanging) && mountsFlush(baseAsset)
+        const drop = hanging ? (flush ? 0.02 : (baseAsset.dimensions?.[1] ?? 0)) : 0
+        const ly = explicitY
+          ? requestedPosition[1] - hy
+          : surface
+            ? surface.y * target.scale[1] - drop
+            : (target.asset.surface?.height ?? target.asset.dimensions[1]) * target.scale[1]
+        itemPosition = [lx * target.scale[0], ly, lz * target.scale[2]]
+        // A recessed fixture tilts with a sloped underside (a can in a vault plane).
+        // Its turn is relative to the host's.
+        tilt =
+          flush && surface && 'normal' in surface
+            ? flushMountRotation(surface.normal, (rotation ?? 0) - yaw)
+            : [0, (rotation ?? 0) - yaw, 0]
+      }
+
       const item = ItemNode.parse({
         position: itemPosition,
-        rotation: [0, rotation ?? 0, 0],
+        rotation: tilt ?? [0, rotation ?? 0, 0],
         asset: baseAsset,
         ...wallExtras,
       })
@@ -104,6 +154,7 @@ export function registerPlaceItem(server: McpServer, bridge: SceneOperations): v
       const payload = {
         itemId: id as string,
         status: catalogAsset ? 'ok' : 'catalog_unavailable',
+        ...(restingOn ? { restingOn } : {}),
         ...persistencePayload(persistence),
       }
       return {

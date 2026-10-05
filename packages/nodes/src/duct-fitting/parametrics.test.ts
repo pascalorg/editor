@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { beforeEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -7,9 +7,8 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { readAutoOffsetTag, withAutoOffsetTag } from '../shared/auto-offset-tag'
+import { ductFittingParametrics } from './parametrics'
 import { getDuctFittingPorts } from './ports'
-
-let ductFittingParametrics: typeof import('./parametrics')['ductFittingParametrics']
 
 type Point = [number, number, number]
 
@@ -60,13 +59,6 @@ function verticalRectRunFrom(point: Point, roll: number) {
 }
 
 describe('ductFittingParametrics', () => {
-  beforeAll(async () => {
-    mock.module('@pascal-app/editor', () => ({
-      ActionButton: () => null,
-    }))
-    ;({ ductFittingParametrics } = await import('./parametrics'))
-  })
-
   beforeEach(() => {
     useScene.setState({
       nodes: {},

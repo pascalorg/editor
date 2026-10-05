@@ -4,6 +4,7 @@ import {
   generateSceneMaterialId,
   type MaterialSchema,
   type MaterialTarget,
+  nodeRegistry,
   type PaintCapability,
   type PaintPreviewArgs,
   type PaintResolveArgs,
@@ -11,6 +12,7 @@ import {
   type SceneMaterial,
   type SceneMaterialId,
   sceneRegistry,
+  slotDefaultPaintMaterial,
   toSceneMaterialRef,
   useScene,
 } from '@pascal-app/core'
@@ -22,6 +24,7 @@ import {
   useViewer,
 } from '@pascal-app/viewer'
 import { type Material, type Mesh, type Object3D, Raycaster } from 'three'
+import { swapPreviewMaterial } from './swap-preview-material'
 
 /**
  * Shared paint capability for procedural kinds on the unified slot model
@@ -207,8 +210,11 @@ export function buildSlotPreviewMaterial(
  * slot matches `role`, leaving hosted-child meshes (which can carry a colliding
  * `userData.slotId` from their own GLB) untouched.
  */
-export function previewGeometrySlot(args: PaintPreviewArgs): (() => void) | null {
-  const { role, root, material, materialPreset } = args
+export function previewGeometrySlot(
+  args: PaintPreviewArgs,
+  matches: (meshRole: string) => boolean = (meshRole) => meshRole === args.role,
+): (() => void) | null {
+  const { root, material, materialPreset } = args
   const preview = buildSlotPreviewMaterial(material, materialPreset)
   if (!preview) return () => {}
 
@@ -217,14 +223,15 @@ export function previewGeometrySlot(args: PaintPreviewArgs): (() => void) | null
   ;(root as Object3D).traverse((object) => {
     const mesh = object as Mesh
     if (!mesh.isMesh) return
-    const userData = mesh.userData as { slotId?: string | null; __fromGeometry?: boolean }
+    const userData = mesh.userData as {
+      slotId?: string | null
+      paintRole?: string
+      __fromGeometry?: boolean
+    }
     if (userData.__fromGeometry !== true) return
-    if (userData.slotId !== role) return
-    const previous = mesh.material
-    mesh.material = preview
-    restores.push(() => {
-      mesh.material = previous
-    })
+    const meshRole = userData.paintRole ?? userData.slotId
+    if (!(meshRole && matches(meshRole))) return
+    restores.push(swapPreviewMaterial(mesh, preview))
   })
 
   if (restores.length === 0) return null
@@ -253,11 +260,7 @@ export function previewSlotByUserData(args: PaintPreviewArgs): (() => void) | nu
     const mesh = object as Mesh
     if (!mesh.isMesh) return
     if ((mesh.userData as { slotId?: string | null }).slotId !== role) return
-    const previous = mesh.material
-    mesh.material = preview
-    restores.push(() => {
-      mesh.material = previous
-    })
+    restores.push(swapPreviewMaterial(mesh, preview))
   })
 
   if (restores.length === 0) return null
@@ -312,6 +315,23 @@ export type SlotPaintConfig = {
   ) => { material: MaterialSchema | undefined; materialPreset: string | undefined } | null
   /** Opt into the painter's `room` application scope (walls, slabs). */
   roomScope?: boolean
+  /**
+   * What `role` shows once erased, for the eraser's hover preview (the eraser
+   * itself writes no finish). Defaults to the slot's declared `default`; null
+   * leaves the preview to `applyPreview`.
+   */
+  erasedLook?: (args: PaintPreviewArgs) => PaintLook | null
+}
+
+export type PaintLook = { material?: MaterialSchema; materialPreset?: string }
+
+/** A slot's declared default, as a look: what an unpainted slot draws. */
+export function declaredSlotLook(node: AnyNode, role: string): PaintLook | null {
+  const declared = nodeRegistry
+    .get(node.type)
+    ?.capabilities?.slots?.(node)
+    .find((slot) => slot.slotId === role)
+  return slotDefaultPaintMaterial(declared?.default)
 }
 
 export function createSlotPaintCapability(config: SlotPaintConfig): PaintCapability {
@@ -331,8 +351,15 @@ export function createSlotPaintCapability(config: SlotPaintConfig): PaintCapabil
       // Release before swapping materials, including each room/all-matching target.
       const end = beginSlotPaintPreview(args.node.id)
       let restore: (() => void) | null
+      // The eraser previews what the surface looks like once erased.
+      const erasing = args.material === undefined && args.materialPreset === undefined
+      const look = erasing
+        ? config.erasedLook
+          ? config.erasedLook(args)
+          : declaredSlotLook(args.node, args.role)
+        : null
       try {
-        restore = config.applyPreview(args)
+        restore = config.applyPreview(look ? { ...args, ...look } : args)
       } catch (error) {
         end()
         throw error

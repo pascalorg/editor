@@ -12,7 +12,7 @@ import { armGroupMove3d } from './group-move-3d'
 import {
   classifyParticipant,
   computeGroupBox,
-  expandToComponent,
+  computeGroupPlanBox,
   levelFrame,
 } from './group-transform-shared'
 import { useMeshSettleEpoch } from './use-mesh-settle-epoch'
@@ -24,8 +24,8 @@ const BOX_PAD = 0.06
 
 /**
  * 3D sibling of the 2D dashed group selection box: a dashed wireframe around
- * the multi-selection's transformable participants (expanded to the welded
- * wall/fence component) that doubles as the group's whole-volume drag
+ * the multi-selection's transformable participants that doubles as the
+ * group's whole-volume drag
  * handle — move cursor across it, press-drag anywhere on it slides the group,
  * a plain click picks it up. Holding a selection modifier passes the press
  * through so members inside can still be toggled. Rides the live drag delta
@@ -55,22 +55,30 @@ export function GroupSelectionBox3D() {
   const box = useMemo(() => {
     void meshEpoch
     if (participantIds.length === 0) return null
-    const fullIds = expandToComponent(participantIds, nodes, levelId)
-    const world = computeGroupBox(fullIds)
-    if (!world) return null
-    const size = new THREE.Vector3()
-    world.getSize(size)
-    const center = new THREE.Vector3()
-    world.getCenter(center)
+    // Aligned with the building like the 2D box: level-frame footprint, world
+    // height span, turned by the level's rotation.
+    const world = computeGroupBox(participantIds)
+    const { matrix } = levelFrame(levelId)
+    const plan = computeGroupPlanBox(participantIds, levelId)
+    if (!(world && plan)) return null
+    const center = new THREE.Vector3(
+      (plan.minX + plan.maxX) / 2,
+      0,
+      (plan.minZ + plan.maxZ) / 2,
+    ).applyMatrix4(matrix)
+    center.y = (world.min.y + world.max.y) / 2
+    const quaternion = new THREE.Quaternion()
+    matrix.decompose(new THREE.Vector3(), quaternion, new THREE.Vector3())
     return {
-      size: [size.x + 2 * BOX_PAD, size.y + 2 * BOX_PAD, size.z + 2 * BOX_PAD] as [
-        number,
-        number,
-        number,
-      ],
+      size: [
+        plan.maxX - plan.minX + 2 * BOX_PAD,
+        world.max.y - world.min.y + 2 * BOX_PAD,
+        plan.maxZ - plan.minZ + 2 * BOX_PAD,
+      ] as [number, number, number],
       center,
+      quaternion,
     }
-  }, [participantIds, nodes, levelId, meshEpoch])
+  }, [participantIds, levelId, meshEpoch])
 
   // Dashed wireframe. Built per box size (rare — selection / commit changes)
   // because LineDashedMaterial measures dashes along the line, so scaling a
@@ -156,7 +164,7 @@ export function GroupSelectionBox3D() {
   ]
 
   return (
-    <group position={position}>
+    <group position={position} quaternion={box.quaternion}>
       <primitive object={edges} />
       {/* Invisible whole-volume hit target — the box IS the drag handle. */}
       <mesh

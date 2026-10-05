@@ -1,22 +1,22 @@
 'use client'
 
-import {
-  type AnyNode,
-  type CeilingNode,
-  getCeilingClampBound,
-  resolveCeilingHeight,
-  useScene,
-} from '@pascal-app/core'
+import { type AnyNode, type CeilingNode, resolveCeilingHeight, useScene } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
+  exitCeilingEditToRoom,
   formatLinearMeasurement,
   holeEditScope,
   PanelSection,
   PanelWrapper,
   SegmentedControl,
+  ShapeChoice,
   SliderControl,
+  setCeilingHoles,
+  startOpeningDraft,
   triggerSFX,
+  useCeilingEditCeilingId,
+  useCeilingEditSession,
   useEditingHole,
   useEditor,
   useInteractionScope,
@@ -24,6 +24,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Edit, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef } from 'react'
+import { CEILING_PANEL_MIN_HEIGHT, ceilingHeightRange, clampCeilingHeight } from './height-bounds'
 
 /**
  * Phase 5 Stage E — ceiling inspector (kind-owned).
@@ -39,6 +40,12 @@ export function CeilingPanel() {
   const metricNotation = useViewer((s) => s.metricNotation)
   const setSelection = useViewer((s) => s.setSelection)
   const editingHole = useEditingHole()
+  // Holes are edited only inside this ceiling's Edit ceiling session.
+  const canEditHoles = useCeilingEditCeilingId() === selectedId
+  // The room an edited ceiling belongs to; its openings are cut from the room.
+  const roomZoneId = useCeilingEditSession((s) =>
+    s.session && s.session.ceilingId === selectedId ? s.session.zoneId : null,
+  )
   const setMovingNode = useEditor((s) => s.setMovingNode)
 
   const node = useScene((s) =>
@@ -48,15 +55,18 @@ export function CeilingPanel() {
   // Ceilings no longer drive the storey height — the stored level height
   // does — so height writes clamp under min(storey plane, lowest covering
   // slab underside from the level above) − margin instead of poking into
-  // the level above or a deck hanging from it (clamp, never ask).
-  // Selector returns a primitive, so recomputing per store update is
-  // re-render-safe.
-  const maxHeight = useScene((s) => {
-    const parent = node?.parentId ? s.nodes[node.parentId as AnyNode['id']] : undefined
-    return parent?.type === 'level'
-      ? getCeilingClampBound(parent.id, s.nodes, node?.polygon ?? [])
-      : Number.POSITIVE_INFINITY
-  })
+  // the level above or a deck hanging from it (clamp, never ask). On a
+  // level above grade the floor is grade, not the level floor, so roof-level
+  // soffits keep their negative heights. Selectors return primitives, so
+  // recomputing per store update is re-render-safe.
+  const maxHeight = useScene((s) =>
+    node ? ceilingHeightRange(node, s.nodes, CEILING_PANEL_MIN_HEIGHT).max : Infinity,
+  )
+  const minHeight = useScene((s) =>
+    node
+      ? ceilingHeightRange(node, s.nodes, CEILING_PANEL_MIN_HEIGHT).min
+      : CEILING_PANEL_MIN_HEIGHT,
+  )
 
   // Effective height: the stored custom height, or — for follows-mode
   // ceilings (absent `height`) — the live level-top bound. Primitive
@@ -68,13 +78,16 @@ export function CeilingPanel() {
     return ceiling?.type === 'ceiling' ? resolveCeilingHeight(ceiling, s.nodes) : 2.5
   })
 
-  // Panel slider-drag fix recipe (plans/editor-node-registry.md): stable
-  // handler refs so slider drags don't trigger Maximum update depth.
+  // Stable handler refs so slider drags don't trigger Maximum update depth;
+  // see "Custom panels" in wiki/architecture/node-definitions.md.
   const nodeRef = useRef(node)
   nodeRef.current = node
 
   const maxHeightRef = useRef(maxHeight)
   maxHeightRef.current = maxHeight
+
+  const minHeightRef = useRef(minHeight)
+  minHeightRef.current = minHeight
 
   const resolvedHeightRef = useRef(resolvedHeight)
   resolvedHeightRef.current = resolvedHeight
@@ -89,7 +102,12 @@ export function CeilingPanel() {
 
   const handleHeightChange = useCallback(
     (proposed: number) => {
-      handleUpdate({ height: Math.min(proposed, maxHeightRef.current) })
+      handleUpdate({
+        height: clampCeilingHeight(proposed, {
+          min: minHeightRef.current,
+          max: maxHeightRef.current,
+        }),
+      })
     },
     [handleUpdate],
   )
@@ -159,14 +177,15 @@ export function CeilingPanel() {
     const currentMetadata = currentHoles.map(
       (_, index) => node?.holeMetadata?.[index] ?? { source: 'manual' as const },
     )
-    handleUpdate({
+    const added = setCeilingHoles(selectedId, {
       holes: [...currentHoles, newHole],
       holeMetadata: [...currentMetadata, { source: 'manual' }],
     })
+    if (!added) return
     useInteractionScope
       .getState()
       .begin(holeEditScope({ nodeId: selectedId, holeIndex: currentHoles.length }))
-  }, [node, selectedId, handleUpdate])
+  }, [node, selectedId])
 
   const handleEditHole = useCallback(
     (index: number) => {
@@ -186,14 +205,14 @@ export function CeilingPanel() {
         (_, metadataIndex) => node?.holeMetadata?.[metadataIndex] ?? { source: 'manual' as const },
       )
       const newMetadata = currentMetadata.filter((_, i) => i !== index)
-      handleUpdate({ holes: newHoles, holeMetadata: newMetadata })
+      setCeilingHoles(selectedId, { holes: newHoles, holeMetadata: newMetadata })
       if (editingHole?.nodeId === selectedId && editingHole?.holeIndex === index) {
         useInteractionScope
           .getState()
           .endIf((scope) => scope.kind === 'reshaping' && scope.reshape === 'hole')
       }
     },
-    [selectedId, node?.holes, node?.holeMetadata, handleUpdate, editingHole],
+    [selectedId, node?.holes, node?.holeMetadata, editingHole],
   )
 
   const handleMove = useCallback(() => {
@@ -261,7 +280,7 @@ export function CeilingPanel() {
           <SliderControl
             label="Height"
             max={Math.min(1000, maxHeight)}
-            min={0}
+            min={minHeight}
             onChange={handleHeightChange}
             precision={3}
             step={0.01}
@@ -343,19 +362,21 @@ export function CeilingPanel() {
                       <ActionButton
                         className="h-7 bg-primary text-primary-foreground hover:bg-primary/90"
                         label="Done"
-                        onClick={() =>
+                        onClick={() => {
                           useInteractionScope
                             .getState()
                             .endIf(
                               (scope) => scope.kind === 'reshaping' && scope.reshape === 'hole',
                             )
-                        }
+                          // A finished opening is a completed action: back to the room.
+                          exitCeilingEditToRoom()
+                        }}
                       />
                     ) : isAutoHole ? (
                       <div className="rounded-md bg-[#2C2C2E] px-2 py-1 text-[10px] text-muted-foreground">
                         Auto
                       </div>
-                    ) : (
+                    ) : canEditHoles ? (
                       <>
                         <button
                           className="flex h-7 w-7 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground"
@@ -372,7 +393,7 @@ export function CeilingPanel() {
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               )
@@ -383,13 +404,23 @@ export function CeilingPanel() {
         )}
 
         <div className="px-1 pt-1 pb-1">
-          <ActionButton
-            className="w-full"
-            disabled={editingHole?.nodeId === selectedId}
-            icon={<Plus className="h-3.5 w-3.5" />}
-            label="Add Hole"
-            onClick={handleAddHole}
-          />
+          {roomZoneId ? (
+            // A room's ceiling is cut by an opening (it can also cut the floor above).
+            <ShapeChoice
+              className="px-1 text-muted-foreground text-xs"
+              disabled={!canEditHoles}
+              label="Cut opening"
+              onPick={(shape) => startOpeningDraft(roomZoneId, 'ceiling', shape)}
+            />
+          ) : (
+            <ActionButton
+              className="w-full"
+              disabled={!canEditHoles || editingHole?.nodeId === selectedId}
+              icon={<Plus className="h-3.5 w-3.5" />}
+              label="Add Hole"
+              onClick={handleAddHole}
+            />
+          )}
         </div>
       </PanelSection>
 

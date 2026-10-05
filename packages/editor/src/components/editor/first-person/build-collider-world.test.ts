@@ -93,6 +93,57 @@ describe('buildFirstPersonColliderWorldFromRegistry', () => {
     world?.dispose()
   })
 
+  test('keeps a procedural static body but excludes moving groups', () => {
+    registerColliderDefinition('shelf', ShelfNode, 'furnish')
+    const shelf = ShelfNode.parse({ id: 'shelf_motion_test' })
+    setSceneNodes([shelf])
+    mountNode(shelf, [1, 1, 1], [0, 0.5, 0])
+    const root = sceneRegistry.nodes.get(shelf.id)!
+    const motion = new Group()
+    motion.userData.proceduralMotion = { nodeId: shelf.id, partId: 'drawer' }
+    const movingMesh = new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial())
+    movingMesh.position.set(5, 0.5, 0)
+    motion.add(movingMesh)
+    root.add(motion)
+    root.updateMatrixWorld(true)
+
+    const world = buildFirstPersonColliderWorldFromRegistry()!
+    expect(world.bounds?.min.x).toBeCloseTo(-0.5)
+    expect(world.bounds?.max.x).toBeCloseTo(0.5)
+    world.dispose()
+  })
+
+  test('an idle joint tree collides with its static split parts, not its merged rest pose', () => {
+    registerColliderDefinition('shelf', ShelfNode, 'furnish')
+    const shelf = ShelfNode.parse({ id: 'shelf_rest_test' })
+    setSceneNodes([shelf])
+    mountRegistryGroup(shelf)
+    const root = sceneRegistry.nodes.get(shelf.id)!
+    const box = (x: number) => {
+      const mesh = new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial())
+      mesh.position.set(x, 0.5, 0)
+      return mesh
+    }
+    // The rest pose merges the body with the gate leaf at x = 5; the hidden split draws them apart.
+    const rest = new Group()
+    rest.userData.pascalProceduralRest = true
+    rest.add(box(0), box(5))
+    const split = new Group()
+    split.userData.pascalProceduralSplit = true
+    split.visible = false
+    const motion = new Group()
+    motion.userData.proceduralMotion = { nodeId: shelf.id, partId: 'gate' }
+    motion.add(box(5))
+    split.add(box(0), motion)
+    root.add(rest, split)
+    root.updateMatrixWorld(true)
+
+    const world = buildFirstPersonColliderWorldFromRegistry()!
+    expect(world.bounds?.min.x).toBeCloseTo(-0.5)
+    expect(world.bounds?.max.x).toBeCloseTo(0.5)
+    world.dispose()
+  })
+
   test('standing clearance and floor hits survive a slab source joining and leaving a batch', () => {
     registerColliderDefinition('slab', SlabNode, 'structure', 'floor')
     const slab = SlabNode.parse({ id: 'slab_clearance_batch', polygon: [] })

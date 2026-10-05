@@ -31,6 +31,17 @@ import {
   withCameraPoseDistance,
 } from '../../lib/camera-pose'
 import { EDITOR_LAYER } from '../../lib/constants'
+import {
+  acceptsKeyboardPan,
+  clearKeyboardPanKeys,
+  hasKeyboardPanInput,
+  isEditableKeyboardTarget,
+  isKeyboardPanKey,
+  type KeyboardPanState,
+  keyboardPanDirection,
+  keyboardPanSpeed,
+  setKeyboardPanKey,
+} from '../../lib/keyboard-pan'
 import { editorOwnsOneFingerDrag } from '../../lib/touch-gesture-priority'
 import { publishCameraPose } from '../../store/camera-pose-store'
 import useEditor from '../../store/use-editor'
@@ -51,11 +62,11 @@ const tempTarget = new Vector3()
 const transitionFreezePosition = new Vector3()
 const transitionFreezeTarget = new Vector3()
 const keyboardPanSpherical = new Spherical()
+// In 2D-only view the canvas is paused, so the floor plan drives WASD, orbit and
+// top view itself (`floorplan-panel.tsx`) and the camera stands down.
+const planOwnsNavigation = () => useEditor.getState().viewMode === '2d'
 const DEFAULT_MAX_POLAR_ANGLE = Math.PI / 2 - 0.1
 const DEBUG_MAX_POLAR_ANGLE = Math.PI - 0.05
-const KEYBOARD_PAN_VIEW_WIDTH_PER_SECOND = 0.65
-const KEYBOARD_PAN_MIN_SPEED = 2
-const KEYBOARD_PAN_MAX_SPEED = 55
 type CameraMode = ReturnType<typeof useViewer.getState>['cameraMode']
 type CameraPoseSnapshot = {
   mode: CameraMode
@@ -112,54 +123,6 @@ function freezeCameraControlTransition(control: CameraControlsImpl) {
     transitionFreezeTarget.z,
     false,
   )
-}
-
-function isEditableKeyboardTarget(target: EventTarget | null) {
-  return (
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLTextAreaElement ||
-    target instanceof HTMLSelectElement ||
-    (target instanceof HTMLElement && target.isContentEditable)
-  )
-}
-
-type KeyboardPanState = {
-  forward: boolean
-  backward: boolean
-  left: boolean
-  right: boolean
-}
-
-function setKeyboardPanKey(state: KeyboardPanState, code: string, pressed: boolean): boolean {
-  if (code === 'KeyW') {
-    const changed = state.forward !== pressed
-    state.forward = pressed
-    return changed
-  }
-  if (code === 'KeyS') {
-    const changed = state.backward !== pressed
-    state.backward = pressed
-    return changed
-  }
-  if (code === 'KeyA') {
-    const changed = state.left !== pressed
-    state.left = pressed
-    return changed
-  }
-  if (code === 'KeyD') {
-    const changed = state.right !== pressed
-    state.right = pressed
-    return changed
-  }
-  return false
-}
-
-function isKeyboardPanKey(code: string): boolean {
-  return code === 'KeyW' || code === 'KeyA' || code === 'KeyS' || code === 'KeyD'
-}
-
-function hasKeyboardPanInput(state: KeyboardPanState): boolean {
-  return state.forward || state.backward || state.left || state.right
 }
 
 type CameraViewportSize = {
@@ -380,6 +343,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     !isPreviewMode && allowUndergroundCamera ? DEBUG_MAX_POLAR_ANGLE : DEFAULT_MAX_POLAR_ANGLE
 
   const camera = useThree((state) => state.camera)
+  const scene = useThree((state) => state.scene)
   const gl = useThree((state) => state.gl)
   const raycaster = useThree((state) => state.raycaster)
   const viewportSize = useThree((state) => state.size)
@@ -521,12 +485,31 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     if (process.env.NODE_ENV !== 'development') return
     const w = window as typeof window & {
       __pascalCameraControls?: (() => CameraControlsImpl | null) | null
+      __pascalScene?: (() => unknown) | null
+      __pascalCapture?: (() => Promise<string>) | null
     }
     w.__pascalCameraControls = () => controls.current
+    // the live three.js scene, for the same tooling (a probe can walk the
+    // meshes for an empty geometry the WebGPU validator complains about)
+    w.__pascalScene = () => scene
+    // a fresh frame read back as a PNG data URL: the canvas is cleared after
+    // each presented frame, so a capture has to render and read in one task
+    w.__pascalCapture = async () => {
+      const r = gl as unknown as {
+        renderAsync?: (s: unknown, c: unknown) => Promise<void>
+        render: (s: unknown, c: unknown) => void
+        domElement: HTMLCanvasElement
+      }
+      if (r.renderAsync) await r.renderAsync(scene, camera)
+      else r.render(scene, camera)
+      return r.domElement.toDataURL('image/png')
+    }
     return () => {
       w.__pascalCameraControls = null
+      w.__pascalScene = null
+      w.__pascalCapture = null
     }
-  }, [])
+  }, [scene, gl, camera])
 
   useEffect(() => {
     if (isPreviewMode || isFirstPersonMode || isRestoringFirstPersonPose()) return
@@ -667,19 +650,14 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       }
     }
 
-    const panKeys = keyboardPanKeys.current
-    const horizontal = (panKeys.right ? 1 : 0) - (panKeys.left ? 1 : 0)
-    const vertical = (panKeys.forward ? 1 : 0) - (panKeys.backward ? 1 : 0)
+    const { horizontal, vertical } = keyboardPanDirection(keyboardPanKeys.current)
     if (horizontal === 0 && vertical === 0) return
 
     const control = controls.current
 
     control.getSpherical(keyboardPanSpherical, false)
     const viewWidth = getCameraViewWidth(camera, keyboardPanSpherical.radius, viewportSize)
-    const speed = Math.min(
-      Math.max(viewWidth * KEYBOARD_PAN_VIEW_WIDTH_PER_SECOND, KEYBOARD_PAN_MIN_SPEED),
-      KEYBOARD_PAN_MAX_SPEED,
-    )
+    const speed = keyboardPanSpeed(viewWidth)
     const step = (speed * Math.min(delta, 0.05)) / Math.hypot(horizontal, vertical)
 
     if (horizontal !== 0) control.truck(horizontal * step, 0, true)
@@ -766,13 +744,6 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     let panPointerId: number | null = null
     let panPointerButton: number | null = null
 
-    const clearKeyboardPanKeys = () => {
-      keyboardPanKeys.current.forward = false
-      keyboardPanKeys.current.backward = false
-      keyboardPanKeys.current.left = false
-      keyboardPanKeys.current.right = false
-    }
-
     const setNavigationCursor = (cursor: 'grab' | 'grabbing') => {
       document.body.style.cursor = cursor
       gl.domElement.style.cursor = cursor
@@ -835,10 +806,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (isKeyboardPanKey(event.code)) {
-        if (
-          !(event.metaKey || event.ctrlKey || event.altKey) &&
-          !isEditableKeyboardTarget(event.target)
-        ) {
+        if (acceptsKeyboardPan(event) && !planOwnsNavigation()) {
           const changed = setKeyboardPanKey(keyboardPanKeys.current, event.code, true)
           if (changed) beginLocalCameraInteraction()
           event.preventDefault()
@@ -930,7 +898,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
 
     const onBlur = () => {
       keyState.space = false
-      clearKeyboardPanKeys()
+      clearKeyboardPanKeys(keyboardPanKeys.current)
       panPointerId = null
       panPointerButton = null
       clearNavigationCursor()
@@ -955,7 +923,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       window.removeEventListener('pointercancel', onPointerUp, true)
       window.removeEventListener('blur', onBlur)
       gl.domElement.removeEventListener('wheel', onWheel, true)
-      clearKeyboardPanKeys()
+      clearKeyboardPanKeys(keyboardPanKeys.current)
       clearNavigationCursor()
       cameraDraggingLifecycle.end()
     }
@@ -1196,7 +1164,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     }
 
     const handleTopView = () => {
-      if (isFirstPersonMode || !controls.current) return
+      if (isFirstPersonMode || !controls.current || planOwnsNavigation()) return
 
       const currentPolarAngle = controls.current.polarAngle
 
@@ -1208,7 +1176,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     }
 
     const handleOrbitCW = () => {
-      if (isFirstPersonMode || !controls.current) return
+      if (isFirstPersonMode || !controls.current || planOwnsNavigation()) return
 
       const currentAzimuth = controls.current.azimuthAngle
       const currentPolar = controls.current.polarAngle
@@ -1220,7 +1188,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     }
 
     const handleOrbitCCW = () => {
-      if (isFirstPersonMode || !controls.current) return
+      if (isFirstPersonMode || !controls.current || planOwnsNavigation()) return
 
       const currentAzimuth = controls.current.azimuthAngle
       const currentPolar = controls.current.polarAngle

@@ -11,7 +11,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { setSurfaceRaycastLayers, useViewer } from '@pascal-app/viewer'
-import { type Camera, type Object3D, Raycaster, Vector3 } from 'three'
+import { type Camera, type Object3D, type Ray, Raycaster, Vector3 } from 'three'
 import { resolveTerrainGroundHit } from '../../../lib/ground-surface'
 import { scopeNodeId } from '../../../lib/interaction/scope'
 import useInteractionScope from '../../../store/use-interaction-scope'
@@ -79,16 +79,22 @@ export type PointerSupportSurface = {
 export function resolvePointerSupportSurface(
   camera: Camera,
   worldHit: readonly [number, number, number],
-  options?: { includeNodeTopSurfaces?: boolean },
+  options?: { includeNodeTopSurfaces?: boolean; pointerRay?: Ray },
 ): PointerSupportSurface | null {
   const levelId = useViewer.getState().selection.levelId
   if (!levelId) return null
 
   // The world ray, kept before the level conversion below: the terrain field is
   // world-space (site geometry, not level-local), so the march needs this frame.
-  camera.getWorldPosition(worldRayOrigin)
+  if (options?.pointerRay) worldRayOrigin.copy(options.pointerRay.origin)
+  else camera.getWorldPosition(worldRayOrigin)
+  const isOrthographic =
+    !options?.pointerRay &&
+    (camera as Camera & { isOrthographicCamera?: boolean }).isOrthographicCamera === true
   const cameraToHit = hitScratch.set(worldHit[0], worldHit[1], worldHit[2]).sub(worldRayOrigin)
-  if ((camera as Camera & { isOrthographicCamera?: boolean }).isOrthographicCamera) {
+  if (options?.pointerRay) {
+    worldRayDirection.copy(options.pointerRay.direction).normalize()
+  } else if (isOrthographic) {
     // For an orthographic camera every screen pixel has the same direction. The
     // hit point is offset from the camera along the view plane, so using
     // `camera.position -> hit` tilts the ray toward the screen centre and makes
@@ -102,7 +108,13 @@ export function resolvePointerSupportSurface(
   }
 
   originScratch.copy(worldRayOrigin)
-  hitScratch.set(worldHit[0], worldHit[1], worldHit[2])
+  // Second world point defining the ray fed to the surface solve. In the plain
+  // perspective case `worldHit` already lies on the true pointer ray, so using
+  // it keeps `t === 1` (and the returned plan point exact) whenever the pointed
+  // surface IS the event plane — the pointer-ray and orthographic branches have
+  // no such hit, so they step one unit along the resolved direction.
+  if (options?.pointerRay || isOrthographic) hitScratch.copy(worldRayOrigin).add(worldRayDirection)
+  else hitScratch.set(worldHit[0], worldHit[1], worldHit[2])
   // Slab polygons/elevations live in the level frame; the level mesh
   // carries the storey Y offset and any building rotation.
   const levelMesh = sceneRegistry.nodes.get(levelId as AnyNodeId)

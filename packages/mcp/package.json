@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/mcp",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "Model Context Protocol server for Pascal 3D editor",
   "type": "module",
   "main": "./dist/index.js",
@@ -35,10 +35,15 @@
       "types": "./dist/bridge/index.d.ts",
       "import": "./dist/bridge/index.js",
       "default": "./dist/bridge/index.js"
+    },
+    "./tools/*": {
+      "types": "./dist/tools/*.d.ts",
+      "import": "./dist/tools/*.js",
+      "default": "./dist/tools/*.js"
     }
   },
   "bin": {
-    "pascal-mcp": "./dist/bin/pascal-mcp.js"
+    "pascal-mcp": "dist/bin/pascal-mcp.js"
   },
   "files": [
     "dist",
@@ -56,7 +61,7 @@
     "prepublishOnly": "bun run build && bun test && bun run smoke:node"
   },
   "peerDependencies": {
-    "@pascal-app/core": "^1.0.1"
+    "@pascal-app/core": "^1.0.3"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
@@ -64,7 +69,7 @@
     "zod": ">=4.5.4 <4.6"
   },
   "devDependencies": {
-    "@pascal-app/core": "^1.0.1",
+    "@pascal-app/core": "^1.0.3",
     "@pascal/typescript-config": "*",
     "@types/node": "^22.19.20",
     "typescript": "6.0.3"
@@ -80,7 +85,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/pascalorg/editor.git",
+    "url": "git+https://github.com/pascalorg/editor.git",
     "directory": "packages/mcp"
   },
   "license": "MIT",

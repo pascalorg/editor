@@ -21,8 +21,13 @@ Every node shares these fields:
   parentId: string | null   // parent node ID; null = root
   visible: boolean          // defaults to true
   metadata: Record<string, unknown>  // arbitrary JSON, defaults to {}
+  provenance?: Provenance   // typed source ids and lineage; absent unless a writer sets it
 }
 ```
+
+`provenance` (`packages/core/src/schema/provenance.ts`) records which source elements a node reproduces: `refs` of `{ ns?, id, role? }` (role `primary` when absent, or `piece`, `absorbed`, `alias`, `derived`) and an optional `lineage` (`op` plus the `fromIds` it was split, merged or copied from). An importer writes it; the editor only carries it. Its strings are printable ASCII, so the caps are UTF-8 bytes (32 refs, 32 lineage ids, 160-byte ids; an importer percent-encodes other characters). A write over a cap is refused, by the store and every validated writer, and nothing is truncated: load keeps an over-cap node as stored. Clones copy it verbatim today. A preset never keeps it: hosts serialise preset nodes through `withoutSourceIdentity` (`registry/subtree.ts`), which also drops every other `source` reference the reference inventory strips on preset.
+
+`visible: false` takes the node and everything beneath it out of the 2D plan and every export. `site` is the one exception: it is the parcel reference, so hiding it hides only its own ground fill and boundary, and the buildings on it keep their own flag. The rule lives in `hidesDescendants` (`packages/core/src/lib/node-visibility.ts`); `validate_scene` and Load Build warn when a Site is hidden.
 
 ## Defining a New Node Type
 

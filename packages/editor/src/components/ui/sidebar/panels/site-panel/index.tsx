@@ -29,7 +29,18 @@ import {
   X,
 } from 'lucide-react'
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react'
-import { memo, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { type ComponentType, lazy, memo, Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { nodeRegistry } from '@pascal-app/core'
+
+/** The site kind's inspector (`parametrics.customPanel`), mounted under the Site header. */
+const SiteKindPanel = lazy(async () => {
+  const def = nodeRegistry.get('site') as
+    | { parametrics?: { customPanel?: () => Promise<{ default: ComponentType }> } }
+    | undefined
+  const loader = def?.parametrics?.customPanel
+  if (!loader) return { default: () => null }
+  return loader()
+})
 import { useShallow } from 'zustand/react/shallow'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
 import {
@@ -40,8 +51,8 @@ import {
 import {
   buildLevelDuplicateCreateOps,
   type LevelDuplicatePreset,
-} from './../../../../../lib/level-duplication'
-import { getDefaultLevelName } from '@pascal-app/core'
+} from '@pascal-app/core/building'
+import { getDefaultLevelName, getLevelDisplayName } from '@pascal-app/core'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
 import {
   formatAreaLabel,
@@ -53,6 +64,12 @@ import {
 } from './../../../../../lib/measurements'
 import { createLocalGuideImage, createLocalScan } from './../../../../../lib/local-guide-image'
 import { editorHostTreeChildrenRegistry } from './../../../../../lib/host-tree-children'
+import { requestRoomDeletion } from './../../../../../lib/room-structure-commands'
+import {
+  selectZoneOrRoom,
+  useZoneSelected,
+  zoneKindLabel,
+} from './../../../../../lib/room-zone-routing'
 import { createUnitInBuilding, toggleZoneMembership } from './../../../../../lib/units'
 import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
@@ -838,6 +855,7 @@ const LevelItem = memo(function LevelItem({
           />
           <InlineRenameInput
             defaultName={getDefaultLevelName(level.level)}
+            displayName={getLevelDisplayName(level)}
             isEditing={isEditing}
             nodeId={level.id}
             onStartEditing={() => setIsEditing(true)}
@@ -1260,14 +1278,14 @@ const LayerToggle = memo(function LayerToggle() {
         )}
         <div className="relative z-10 flex flex-col items-center">
           <img
-            alt="Zones"
+            alt="Rooms"
             className={cn(
               'mb-1 h-6 w-6 transition-all',
               activeTab !== 'zones' && 'opacity-50 grayscale',
             )}
             src="/icons/kitchen.webp"
           />
-          Zones
+          Rooms
         </div>
         <div className="absolute right-1.5 bottom-1 z-10 rounded border border-border/40 bg-background/40 px-1 py-[2px] backdrop-blur-md">
           <span className="block font-medium font-mono text-[9px] text-muted-foreground/70 leading-none">
@@ -1289,7 +1307,6 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
     const unit = focusedUnitId ? s.nodes[focusedUnitId] : undefined
     return unit?.type === 'unit' ? unit : null
   })
-  const selectedZoneId = useViewer((state) => state.selection.zoneId)
   const hoveredId = useViewer((state) => state.hoveredId)
   const setSelection = useViewer((state) => state.setSelection)
   const setHoveredId = useViewer((state) => state.setHoveredId)
@@ -1297,7 +1314,8 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
   const setMode = useEditor((state) => state.setMode)
   const unit = useViewer((state) => state.unit)
 
-  const isSelected = selectedZoneId === zone.id
+  const isSelected = useZoneSelected(zone.id)
+  const isRoom = zone.spaceRole === 'room'
   const isHovered = hoveredId === zone.id
 
   const itemRef = useRef<HTMLDivElement>(null)
@@ -1308,12 +1326,12 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
     }
   }, [isSelected])
 
-  const defaultName = `Zone (${formatAreaLabel(calculatePolygonArea(zone.polygon), unit)})`
+  const defaultName = `${zoneKindLabel(zone)} (${formatAreaLabel(calculatePolygonArea(zone.polygon), unit)})`
 
   const handleClick = () => {
-    setSelection({ zoneId: zone.id })
     setPhase('structure')
     setMode('select')
+    selectZoneOrRoom(zone.id)
   }
 
   const handleDoubleClick = () => {
@@ -1322,6 +1340,8 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation()
+    // A room goes the way the room panel deletes it (its walls, or merged back).
+    if (isRoom) return requestRoomDeletion(zone.id)
     deleteNode(zone.id)
     if (isSelected) {
       setSelection({ zoneId: null })
@@ -1523,19 +1543,35 @@ const ContentSection = memo(function ContentSection() {
     if (levelZones.length === 0) {
       return (
         <div className="px-3 py-4 text-muted-foreground text-sm">
-          No zones on this level.{' '}
+          No rooms on this level. Close walls around a space to make one, or{' '}
           <button className="cursor-pointer text-primary hover:underline" onClick={handleAddZone}>
-            Add one
+            draw a zone
           </button>
+          .
         </div>
       )
     }
 
+    const rooms = levelZones.filter((zone) => zone.spaceRole === 'room')
+    const others = levelZones.filter((zone) => zone.spaceRole !== 'room')
     return (
       <div className="flex flex-col">
-        {levelZones.map((zone, index) => (
-          <ZoneItem isLast={index === levelZones.length - 1} key={zone.id} zone={zone} />
+        {rooms.map((zone, index) => (
+          <ZoneItem isLast={index === rooms.length - 1} key={zone.id} zone={zone} />
         ))}
+        {others.length > 0 && (
+          <>
+            <div
+              className="px-3 pt-3 pb-1 font-medium text-[11px] text-muted-foreground"
+              data-other-zones
+            >
+              Other zones
+            </div>
+            {others.map((zone, index) => (
+              <ZoneItem isLast={index === others.length - 1} key={zone.id} zone={zone} />
+            ))}
+          </>
+        )}
       </div>
     )
   }
@@ -1769,7 +1805,14 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
                 : 'text-muted-foreground hover:bg-accent/30 hover:text-foreground',
             )}
             layout="position"
-            onClick={() => setPhase('site')}
+            onClick={() => {
+              setPhase('site')
+              // Also SELECT the site node so the registry inspector mounts the
+              // site kind's panel (address / parcel / setbacks / front edge).
+              // The site kind opts out of 3D click selection, so this header is
+              // its only selection entry point. (WS1)
+              setSelection({ selectedIds: [siteNode.id as AnyNodeId], zoneId: null })
+            }}
           >
             <div className="flex items-center gap-2">
               <img
@@ -1811,6 +1854,12 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
                 transition={{ type: 'spring', bounce: 0, duration: 0.4 }}
               >
                 <PropertyLineSection />
+                {/* Address → parcel, setbacks, front edge: the site kind's own
+                    panel (packages/nodes/src/site/panel.tsx), loaded through
+                    the registry so the editor does not import the nodes package. */}
+                <Suspense fallback={null}>
+                  <SiteKindPanel />
+                </Suspense>
               </motion.div>
             )}
           </AnimatePresence>

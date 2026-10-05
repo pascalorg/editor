@@ -51,7 +51,12 @@ type ViewerState = {
   setCameraMode: (mode: 'perspective' | 'orthographic') => void
 
   sceneTheme: string
+  /** The user's own pick, and the only theme that persists. */
+  savedSceneTheme: string
   setSceneTheme: (id: string) => void
+  /** Show a theme without saving it (e.g. a project's own mood); `null`
+   *  returns to the saved one. */
+  showSceneTheme: (id: string | null) => void
 
   renderContext: RenderContext
   setRenderContext: (context: RenderContext) => void
@@ -103,6 +108,12 @@ type ViewerState = {
 
   levelMode: 'stacked' | 'exploded' | 'solo' | 'manual'
   setLevelMode: (mode: 'stacked' | 'exploded' | 'solo' | 'manual') => void
+  /**
+   * The editor's level display: stacked, with every level above the selected
+   * one hidden (the selected level and those below stay). Set by the host
+   * while editing; never persisted, so the viewer app keeps its own mode.
+   */
+  hideLevelsAboveSelection: boolean
 
   wallMode: WallMode
   setWallMode: (mode: WallMode) => void
@@ -362,7 +373,9 @@ const useViewer = create<ViewerState>()(
       setCameraMode: (mode) => set({ cameraMode: mode }),
 
       sceneTheme: 'studio',
-      setSceneTheme: (id) => set({ sceneTheme: id }),
+      savedSceneTheme: 'studio',
+      setSceneTheme: (id) => set({ sceneTheme: id, savedSceneTheme: id }),
+      showSceneTheme: (id) => set((state) => ({ sceneTheme: id ?? state.savedSceneTheme })),
 
       renderContext: 'editor',
       setRenderContext: (context) => set({ renderContext: context }),
@@ -417,6 +430,7 @@ const useViewer = create<ViewerState>()(
 
       levelMode: 'stacked',
       setLevelMode: (mode) => set({ levelMode: mode }),
+      hideLevelsAboveSelection: false,
 
       wallMode: 'up',
       setWallMode: (mode) => set({ wallMode: mode }),
@@ -553,13 +567,17 @@ const useViewer = create<ViewerState>()(
     }),
     {
       name: 'viewer-preferences',
-      merge: (persistedState, currentState) => ({
-        ...currentState,
-        ...normalizePersistedViewerState(persistedState),
-      }),
+      merge: (persistedState, currentState) => {
+        const persisted = normalizePersistedViewerState(persistedState)
+        return {
+          ...currentState,
+          ...persisted,
+          savedSceneTheme: persisted.sceneTheme ?? currentState.savedSceneTheme,
+        }
+      },
       partialize: (state) => ({
         cameraMode: state.cameraMode,
-        sceneTheme: state.sceneTheme,
+        sceneTheme: state.savedSceneTheme,
         shadingByContext: state.shadingByContext,
         textures: state.textures,
         colorPreset: state.colorPreset,

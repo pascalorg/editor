@@ -9,6 +9,7 @@ import {
   enableCompiledNodeParsers,
   nodeSchemaForKind,
 } from './compiled-node-parsers'
+import { PROVENANCE_MAX_REFS } from './provenance'
 import { AnyNode, type AnyNodeOption, type AnyNodeType, nodeKindOf } from './types'
 
 /**
@@ -34,6 +35,17 @@ function invalidVariants(fixture: Record<string, unknown>): { label: string; val
     { label: 'metadata: string', value: { ...fixture, metadata: 'nope' } },
     { label: 'object: wrong literal', value: { ...fixture, object: 'not-a-node' } },
     { label: 'name: number', value: { ...fixture, name: 5 } },
+    {
+      label: 'provenance: refs over the cap',
+      value: {
+        ...fixture,
+        provenance: { refs: Array.from({ length: PROVENANCE_MAX_REFS + 1 }, () => ({ id: 'a' })) },
+      },
+    },
+    {
+      label: 'provenance: unknown role',
+      value: { ...fixture, provenance: { refs: [{ id: 'a', role: 'owner' }] } },
+    },
     { label: 'root: null', value: null },
     { label: 'root: number', value: 42 },
     { label: 'root: array', value: [] },
@@ -198,6 +210,21 @@ describe('compiled node parsers — flag on', () => {
         viaUnion.error?.message,
       )
     }
+  })
+
+  test.each(NODE_KINDS)('%s: compiled keeps provenance like the interpreter', (kind) => {
+    const interpreted = optionByKind.get(kind) as AnyNodeOption
+    const compiled = nodeSchemaForKind(kind) as AnyNodeOption
+    const value = {
+      ...fixtures.get(kind),
+      provenance: {
+        refs: [{ ns: 'al', id: 'ground-exterior-01', role: 'piece' }],
+        lineage: { op: 'split', fromIds: ['wall_a'] },
+      },
+    }
+    const viaInterpreted = interpreted.safeParse(value).data as { provenance?: unknown }
+    expect(viaInterpreted.provenance).toEqual(value.provenance)
+    expectSameValue(compiled.safeParse(value).data, viaInterpreted)
   })
 
   test.each(NODE_KINDS)('%s: compiled output matches the union', (kind) => {

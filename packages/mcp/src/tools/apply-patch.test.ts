@@ -2,7 +2,14 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { LevelNode, SlabNode, StairNode, StairSegmentNode, WallNode } from '@pascal-app/core/schema'
+import {
+  LevelNode,
+  SlabNode,
+  StairNode,
+  StairSegmentNode,
+  WallNode,
+  WindowNode,
+} from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { registerApplyPatch } from './apply-patch'
 
@@ -61,7 +68,7 @@ describe('apply_patch', () => {
     const segment = StairSegmentNode.parse({
       width: 1,
       length: 2.6,
-      height: 2.5,
+      height: 3.05,
       stepCount: 12,
     })
     const stair = StairNode.parse({
@@ -91,7 +98,13 @@ describe('apply_patch', () => {
     expect(slab?.type).toBe('slab')
     if (slab?.type !== 'slab') return
     expect(slab.holes).toHaveLength(1)
-    expect(slab.holeMetadata[0]).toEqual({ source: 'stair', stairId: stair.id })
+    const metadata = slab.holeMetadata[0]
+    expect(metadata?.source).toBe('floor-opening')
+    if (metadata?.source === 'floor-opening')
+      expect(bridge.getNode(metadata.openingId)).toMatchObject({
+        source: 'stair',
+        ownerId: stair.id,
+      })
   })
 
   test('rejects update to a non-existent node', async () => {
@@ -102,6 +115,125 @@ describe('apply_patch', () => {
       },
     })
     expect(result.isError).toBe(true)
+  })
+
+  test('refuses a create whose id already exists, keeping the hosted windows', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const wall = WallNode.parse({ id: 'wall_ground-exterior-01', start: [0, 0], end: [6, 0] })
+    const windows = [1, 3, 5].map((x) =>
+      WindowNode.parse({ wallId: wall.id, position: [x, 1.2, 0] }),
+    )
+    const seeded = await client.callTool({
+      name: 'apply_patch',
+      arguments: {
+        patches: [
+          { op: 'create', node: wall, parentId: level.id },
+          ...windows.map((w) => ({ op: 'create', node: w, parentId: wall.id })),
+        ],
+      },
+    })
+    expect(seeded.isError).toBeFalsy()
+
+    const result = await client.callTool({
+      name: 'apply_patch',
+      arguments: {
+        patches: [
+          {
+            op: 'create',
+            node: WallNode.parse({ id: wall.id, start: [0, 5], end: [4, 5] }),
+            parentId: level.id,
+          },
+        ],
+      },
+    })
+    expect(result.isError).toBe(true)
+    const text = (result.content as Array<{ type: string; text: string }>)[0]!.text
+    expect(text).toContain('node_exists')
+    expect(text).toContain(wall.id)
+    const kept = bridge.getNode(wall.id)
+    expect(kept?.type === 'wall' && kept.children).toEqual(windows.map((w) => w.id))
+    expect(bridge.validateScene().valid).toBe(true)
+  })
+
+  test('refuses an update that changes id or type', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const wall = WallNode.parse({ start: [0, 0], end: [5, 0] })
+    await client.callTool({
+      name: 'apply_patch',
+      arguments: { patches: [{ op: 'create', node: wall, parentId: level.id }] },
+    })
+
+    for (const data of [{ id: 'wall_other' }, { type: 'fence' }]) {
+      const result = await client.callTool({
+        name: 'apply_patch',
+        arguments: { patches: [{ op: 'update', id: wall.id, data }] },
+      })
+      expect(result.isError).toBe(true)
+      const text = (result.content as Array<{ type: string; text: string }>)[0]!.text
+      expect(text).toContain('identity_change')
+    }
+    const stored = bridge.getNode(wall.id)
+    expect(stored?.id).toBe(wall.id)
+    expect(stored?.type).toBe('wall')
+  })
+
+  test('rejects authoring derived construction, leaving the scene untouched', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const wall = WallNode.parse({ start: [0, 0], end: [5, 0] })
+    const plate = SlabNode.parse({
+      polygon: [
+        [0, 0],
+        [5, 0],
+        [5, 4],
+        [0, 4],
+      ],
+      boundary: 'auto',
+    })
+
+    const result = await client.callTool({
+      name: 'apply_patch',
+      arguments: {
+        patches: [
+          { op: 'create', node: wall, parentId: level.id },
+          { op: 'create', node: plate, parentId: level.id },
+        ],
+      },
+    })
+    expect(result.isError).toBe(true)
+    const message = (result.content as Array<{ type: string; text: string }>)[0]!.text
+    expect(message).toContain('Refusing to create the derived slab')
+    expect(message).toContain('derived from rooms')
+    // Atomic: the wall in the same batch was not applied either.
+    expect(bridge.getNode(wall.id)).toBeNull()
+    expect(bridge.getNode(plate.id)).toBeNull()
+  })
+
+  test('rejects reshaping derived construction', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const polygon: Array<[number, number]> = [
+      [0, 0],
+      [5, 0],
+      [5, 4],
+      [0, 4],
+    ]
+    for (const [index, start] of polygon.entries()) {
+      bridge.createNode(
+        WallNode.parse({ start, end: polygon[(index + 1) % polygon.length] }),
+        level.id,
+      )
+    }
+    bridge.deriveStructure()
+    const plate = Object.values(bridge.getNodes()).find((n) => n.type === 'slab')!
+    const result = await client.callTool({
+      name: 'apply_patch',
+      arguments: {
+        patches: [{ op: 'update', id: plate.id, data: { polygon: [] } }],
+      },
+    })
+    expect(result.isError).toBe(true)
+    expect((result.content as Array<{ type: string; text: string }>)[0]!.text).toContain(
+      'Refusing to change polygon on the derived slab',
+    )
   })
 
   test('rejects malformed patch shape', async () => {

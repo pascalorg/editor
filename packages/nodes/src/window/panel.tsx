@@ -21,8 +21,11 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, FlipHorizontal2, Move, Trash2 } from 'lucide-react'
-import { useCallback, useRef } from 'react'
-import { OpeningDocumentationFields } from '../shared/opening-documentation-fields'
+import { useCallback, useEffect, useMemo } from 'react'
+import { AuthoredParams } from '../item/authored-params'
+import { constrainCurtainOpening, curtainOpeningLimits } from '../shared/curtain-opening-limits'
+import { createOpeningPropertyPreview } from '../shared/opening-property-preview'
+import { openingPropertyPreviewHost } from '../shared/opening-property-preview-host'
 
 function isSameWindowValue(current: unknown, next: unknown): boolean {
   if (typeof current === 'number' && typeof next === 'number') {
@@ -62,13 +65,6 @@ function normalizeWindowCornerRadii(
   return next.map((radius) => radius * scale) as [number, number, number, number]
 }
 
-function isSameRadiusTuple(
-  current: [number, number, number, number],
-  next: [number, number, number, number],
-) {
-  return current.every((value, index) => Math.abs(value - (next[index] ?? 0)) < 1e-6)
-}
-
 const windowTypeOptions: Array<{ label: string; value: WindowNode['windowType'] }> = [
   { label: 'Fixed', value: 'fixed' },
   { label: 'Sliding', value: 'sliding' },
@@ -96,24 +92,31 @@ export default function WindowPanel() {
   const setSelection = useViewer((s) => s.setSelection)
   const deleteNode = useScene((s) => s.deleteNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
-  const previewRef = useRef<{
-    id: AnyNodeId
-    key: keyof WindowNode
-    value: unknown
-  } | null>(null)
+  const preview = useMemo(
+    () =>
+      selectedId
+        ? createOpeningPropertyPreview<WindowNode>(
+            selectedId as AnyNodeId,
+            openingPropertyPreviewHost,
+          )
+        : null,
+    [selectedId],
+  )
+  useEffect(() => () => preview?.cancel(), [preview])
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as WindowNode | undefined) : undefined,
   )
 
-  // Panel slider-drag fix recipe (plans/editor-node-registry.md). Without
-  // it, the 15+ SliderControls in this panel would loop on drag.
+  // Stable handler refs ("Custom panels" in wiki/architecture/node-definitions.md).
+  // Without them, the 15+ SliderControls in this panel would loop on drag.
   const handleUpdate = useCallback(
     (updates: Partial<WindowNode>) => {
       if (!selectedId) return
       const liveNode = useScene.getState().nodes[selectedId as AnyNodeId]
       if (liveNode?.type !== 'window') return
 
+      updates = constrainCurtainOpening(liveNode, updates, useScene.getState().nodes)
       const hasChange = Object.entries(updates).some(([key, value]) => {
         const currentValue = liveNode[key as keyof WindowNode]
         return !isSameWindowValue(currentValue, value)
@@ -128,57 +131,10 @@ export default function WindowPanel() {
     [selectedId],
   )
 
-  const previewWindowUpdate = useCallback(
-    <K extends keyof WindowNode>(key: K, value: WindowNode[K]) => {
-      if (!selectedId) return
-      const liveNode = useScene.getState().nodes[selectedId as AnyNodeId]
-      if (liveNode?.type !== 'window') return
-
-      if (
-        !(
-          previewRef.current &&
-          previewRef.current.id === selectedId &&
-          previewRef.current.key === key
-        )
-      ) {
-        previewRef.current = {
-          id: selectedId as AnyNodeId,
-          key,
-          value: liveNode[key],
-        }
-      }
-
-      if (isSameWindowValue(liveNode[key], value)) return
-
-      ;(liveNode as WindowNode)[key] = value
-      useScene.getState().dirtyNodes.add(selectedId as AnyNodeId)
-    },
-    [selectedId],
-  )
-
-  const commitWindowPreview = useCallback(
-    <K extends keyof WindowNode>(key: K, value: WindowNode[K]) => {
-      if (!selectedId) return
-
-      const scene = useScene.getState()
-      const liveNode = scene.nodes[selectedId as AnyNodeId]
-      const preview = previewRef.current
-      if (liveNode?.type === 'window' && preview?.id === selectedId && preview.key === key) {
-        ;(liveNode as WindowNode)[key] = preview.value as WindowNode[K]
-        scene.dirtyNodes.add(selectedId as AnyNodeId)
-      }
-      previewRef.current = null
-
-      useScene.getState().updateNode(
-        selectedId as AnyNode['id'],
-        {
-          [key]: value,
-        } as Partial<WindowNode>,
-      )
-      scene.dirtyNodes.add(selectedId as AnyNodeId)
-    },
-    [selectedId],
-  )
+  const previewWindowUpdate = <K extends keyof WindowNode>(key: K, value: WindowNode[K]) =>
+    preview?.preview({ [key]: value } as Partial<WindowNode>)
+  const commitWindowPreview = <K extends keyof WindowNode>(key: K, value: WindowNode[K]) =>
+    preview?.commit({ [key]: value } as Partial<WindowNode>)
 
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
@@ -255,6 +211,7 @@ export default function WindowPanel() {
 
   if (!(node && node.type === 'window' && selectedId)) return null
 
+  const limits = curtainOpeningLimits(node, useScene.getState().nodes)
   const numCols = node.columnRatios.length
   const numRows = node.rowRatios.length
 
@@ -263,6 +220,8 @@ export default function WindowPanel() {
   const normCols = node.columnRatios.map((r) => r / colSum)
   const normRows = node.rowRatios.map((r) => r / rowSum)
   const isOpening = node.openingKind === 'opening'
+  // Built from a script: its params replace the parametric frame's fields, as on an authored item.
+  const scripted = Boolean(node.source)
   const openingShape = node.openingShape ?? 'rectangle'
   const windowShape =
     openingShape === 'arch' || openingShape === 'rounded' ? openingShape : 'rectangle'
@@ -287,15 +246,15 @@ export default function WindowPanel() {
   const supportsWindowShape = shapedWindowTypes.has(node.windowType ?? 'fixed')
   const supportsGrid = isFixedWindow
   const supportsSill = !silllessWindowTypes.has(node.windowType)
-  const showWindowTypeSection = !isOpening
-  const showWindowShapeSection = !isOpening && supportsWindowShape
-  const showOpeningShapeSection = isOpening
-  const showFrameSection = !isOpening
-  const showGridSection = !isOpening && supportsGrid
-  const showSillSection = !isOpening && supportsSill
-  const showOperationSection = !isOpening && isOperableWindow
-  const showAwningDirectionSection = !isOpening && displayedWindowType === 'awning'
-  const showCasementSection = !isOpening && windowType === 'casement'
+  const showWindowTypeSection = !scripted && !isOpening
+  const showWindowShapeSection = !scripted && !isOpening && supportsWindowShape
+  const showOpeningShapeSection = !scripted && isOpening
+  const showFrameSection = !scripted && !isOpening
+  const showGridSection = !scripted && !isOpening && supportsGrid
+  const showSillSection = !scripted && !isOpening && supportsSill
+  const showOperationSection = !scripted && !isOpening && isOperableWindow
+  const showAwningDirectionSection = !scripted && !isOpening && displayedWindowType === 'awning'
+  const showCasementSection = !scripted && !isOpening && windowType === 'casement'
   const showFlipSide = !isOpening
   const operationLabel = isTrackSashWindow
     ? windowType === 'sliding'
@@ -320,31 +279,24 @@ export default function WindowPanel() {
 
     if (openingShape === 'rounded') {
       if (openingRadiusMode === 'individual') {
-        const currentRadii = openingCornerRadii as [number, number, number, number]
         const nextRadii = normalizeWindowCornerRadii(
           openingCornerRadii as [number, number, number, number],
           nextWidth,
           nextHeight,
         )
-        if (!isSameRadiusTuple(currentRadii, nextRadii)) {
-          nextUpdates.openingCornerRadii = nextRadii
-        }
+        nextUpdates.openingCornerRadii = nextRadii
       } else {
         const nextRadius = Math.min(
           Math.max(cornerRadius, 0),
           getMaxSharedWindowRadius(nextWidth, nextHeight),
         )
-        if (Math.abs(nextRadius - cornerRadius) > 1e-6) {
-          nextUpdates.cornerRadius = nextRadius
-        }
+        nextUpdates.cornerRadius = nextRadius
       }
     }
 
     if (openingShape === 'arch') {
       const nextArchHeight = Math.min(Math.max(archHeight, 0.05), Math.max(nextHeight, 0.05))
-      if (Math.abs(nextArchHeight - archHeight) > 1e-6) {
-        nextUpdates.archHeight = nextArchHeight
-      }
+      nextUpdates.archHeight = nextArchHeight
     }
 
     return nextUpdates
@@ -393,45 +345,32 @@ export default function WindowPanel() {
       title={node.name || 'Window'}
       width={320}
     >
-      <PanelSection title="Type">
-        <SegmentedControl
-          onChange={(value) =>
-            handleUpdate({
-              openingKind: value as WindowNode['openingKind'],
-              ...(value === 'opening'
-                ? {
-                    openingShape,
-                    openingRadiusMode,
-                    openingCornerRadii,
-                    cornerRadius,
-                    archHeight,
-                    openingRevealRadius,
-                  }
-                : {}),
-            })
-          }
-          options={[
-            { value: 'window', label: 'Window' },
-            { value: 'opening', label: 'Opening' },
-          ]}
-          value={node.openingKind ?? 'window'}
-        />
-      </PanelSection>
-
-      <PanelSection title="Documentation">
-        <OpeningDocumentationFields
-          constructionType={node.constructionType}
-          dimensionReference={node.dimensionReference}
-          finishOpeningHeight={node.finishOpeningHeight}
-          finishOpeningWidth={node.finishOpeningWidth}
-          mark={node.mark}
-          masonryOpeningHeight={node.masonryOpeningHeight}
-          masonryOpeningWidth={node.masonryOpeningWidth}
-          onChange={handleUpdate}
-          roughOpeningHeight={node.roughOpeningHeight}
-          roughOpeningWidth={node.roughOpeningWidth}
-        />
-      </PanelSection>
+      {!scripted && (
+        <PanelSection title="Type">
+          <SegmentedControl
+            onChange={(value) =>
+              handleUpdate({
+                openingKind: value as WindowNode['openingKind'],
+                ...(value === 'opening'
+                  ? {
+                      openingShape,
+                      openingRadiusMode,
+                      openingCornerRadii,
+                      cornerRadius,
+                      archHeight,
+                      openingRevealRadius,
+                    }
+                  : {}),
+              })
+            }
+            options={[
+              { value: 'window', label: 'Window' },
+              { value: 'opening', label: 'Opening' },
+            ]}
+            value={node.openingKind ?? 'window'}
+          />
+        </PanelSection>
+      )}
 
       {showWindowTypeSection && (
         <PanelSection title="Window Type">
@@ -561,28 +500,45 @@ export default function WindowPanel() {
         )}
       </PanelSection>
 
-      <PanelSection title="Dimensions">
-        <SliderControl
-          label="Width"
-          min={0}
-          onChange={(v) => handleUpdate(getDimensionUpdates({ width: v }))}
-          precision={2}
-          restoreOnCommit={false}
-          step={0.1}
-          unit="m"
-          value={node.width}
-        />
-        <SliderControl
-          label="Height"
-          min={0}
-          onChange={(v) => handleUpdate(getDimensionUpdates({ height: v }))}
-          precision={2}
-          restoreOnCommit={false}
-          step={0.1}
-          unit="m"
-          value={node.height}
-        />
-      </PanelSection>
+      {scripted && <AuthoredParams node={node} />}
+
+      {!scripted && (
+        <PanelSection title="Dimensions">
+          {limits && (
+            <p className="text-[11px] text-muted-foreground">
+              Size is limited to the wall, including clearance for the opening frame.
+            </p>
+          )}
+          <SliderControl
+            label="Width"
+            max={limits?.width}
+            min={0.01}
+            onChange={(v) => preview?.preview(getDimensionUpdates({ width: v }))}
+            onCommit={(v) => preview?.commit(getDimensionUpdates({ width: v }))}
+            onCancel={() => preview?.cancel()}
+            previewWhileTyping
+            precision={2}
+            restoreOnCommit={false}
+            step={0.01}
+            unit="m"
+            value={node.width}
+          />
+          <SliderControl
+            label="Height"
+            max={limits?.height}
+            min={0.01}
+            onChange={(v) => preview?.preview(getDimensionUpdates({ height: v }))}
+            onCommit={(v) => preview?.commit(getDimensionUpdates({ height: v }))}
+            onCancel={() => preview?.cancel()}
+            previewWhileTyping
+            precision={2}
+            restoreOnCommit={false}
+            step={0.01}
+            unit="m"
+            value={node.height}
+          />
+        </PanelSection>
+      )}
 
       {showWindowShapeSection && (
         <PanelSection title="Top Shape">
@@ -628,6 +584,9 @@ export default function WindowPanel() {
                   min={0}
                   onChange={(value) => previewWindowUpdate('cornerRadius', value)}
                   onCommit={(value) => commitWindowPreview('cornerRadius', value)}
+                  onCancel={() => preview?.cancel()}
+                  previewWhileTyping
+                  restoreOnCommit={false}
                   precision={2}
                   step={0.05}
                   unit="m"
@@ -648,6 +607,9 @@ export default function WindowPanel() {
                       min={0}
                       onChange={(value) => setOpeningCornerRadius(index as number, value)}
                       onCommit={(value) => setOpeningCornerRadius(index as number, value, true)}
+                      onCancel={() => preview?.cancel()}
+                      previewWhileTyping
+                      restoreOnCommit={false}
                       precision={2}
                       step={0.05}
                       unit="m"
@@ -662,6 +624,9 @@ export default function WindowPanel() {
                 min={0}
                 onChange={(value) => previewWindowUpdate('openingRevealRadius', value)}
                 onCommit={(value) => commitWindowPreview('openingRevealRadius', value)}
+                onCancel={() => preview?.cancel()}
+                previewWhileTyping
+                restoreOnCommit={false}
                 precision={3}
                 step={0.005}
                 unit="m"
@@ -675,7 +640,10 @@ export default function WindowPanel() {
                 label="Arch Height"
                 max={Math.max(0.05, node.height)}
                 min={0.05}
-                onChange={(value) => handleUpdate({ archHeight: value })}
+                onChange={(value) => previewWindowUpdate('archHeight', value)}
+                onCommit={(value) => commitWindowPreview('archHeight', value)}
+                onCancel={() => preview?.cancel()}
+                previewWhileTyping
                 precision={2}
                 restoreOnCommit={false}
                 step={0.05}
@@ -719,6 +687,9 @@ export default function WindowPanel() {
                   min={0}
                   onChange={(value) => previewWindowUpdate('cornerRadius', value)}
                   onCommit={(value) => commitWindowPreview('cornerRadius', value)}
+                  onCancel={() => preview?.cancel()}
+                  previewWhileTyping
+                  restoreOnCommit={false}
                   precision={2}
                   step={0.05}
                   unit="m"
@@ -739,6 +710,9 @@ export default function WindowPanel() {
                       min={0}
                       onChange={(value) => setOpeningCornerRadius(index as number, value)}
                       onCommit={(value) => setOpeningCornerRadius(index as number, value, true)}
+                      onCancel={() => preview?.cancel()}
+                      previewWhileTyping
+                      restoreOnCommit={false}
                       precision={2}
                       step={0.05}
                       unit="m"
@@ -753,6 +727,9 @@ export default function WindowPanel() {
                 min={0}
                 onChange={(value) => previewWindowUpdate('openingRevealRadius', value)}
                 onCommit={(value) => commitWindowPreview('openingRevealRadius', value)}
+                onCancel={() => preview?.cancel()}
+                previewWhileTyping
+                restoreOnCommit={false}
                 precision={3}
                 step={0.005}
                 unit="m"
@@ -766,7 +743,10 @@ export default function WindowPanel() {
                 label="Arch Height"
                 max={Math.max(0.05, node.height)}
                 min={0.05}
-                onChange={(value) => handleUpdate({ archHeight: value })}
+                onChange={(value) => previewWindowUpdate('archHeight', value)}
+                onCommit={(value) => commitWindowPreview('archHeight', value)}
+                onCancel={() => preview?.cancel()}
+                previewWhileTyping
                 precision={2}
                 restoreOnCommit={false}
                 step={0.05}
@@ -778,14 +758,18 @@ export default function WindowPanel() {
         </PanelSection>
       )}
 
-      {!isOpening && (
+      {!isOpening && !scripted && (
         <>
           {showFrameSection && (
             <PanelSection title="Frame">
               <SliderControl
                 label="Thickness"
                 min={0}
-                onChange={(v) => handleUpdate({ frameThickness: v })}
+                onChange={(v) => previewWindowUpdate('frameThickness', v)}
+                onCommit={(v) => commitWindowPreview('frameThickness', v)}
+                onCancel={() => preview?.cancel()}
+                previewWhileTyping
+                restoreOnCommit={false}
                 precision={3}
                 step={0.01}
                 unit="m"
@@ -794,7 +778,11 @@ export default function WindowPanel() {
               <SliderControl
                 label="Depth"
                 min={0}
-                onChange={(v) => handleUpdate({ frameDepth: v })}
+                onChange={(v) => previewWindowUpdate('frameDepth', v)}
+                onCommit={(v) => commitWindowPreview('frameDepth', v)}
+                onCancel={() => preview?.cancel()}
+                previewWhileTyping
+                restoreOnCommit={false}
                 precision={3}
                 step={0.01}
                 unit="m"

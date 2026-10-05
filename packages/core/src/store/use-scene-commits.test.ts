@@ -5,11 +5,13 @@ import { nodeRegistry } from '../registry/registry'
 import type { AnyNodeDefinition } from '../registry/types'
 import { BuildingNode } from '../schema/nodes/building'
 import { CeilingNode } from '../schema/nodes/ceiling'
+import { ItemNode } from '../schema/nodes/item'
 import { LevelNode } from '../schema/nodes/level'
 import { SlabNode } from '../schema/nodes/slab'
 import { WallNode } from '../schema/nodes/wall'
 import { SceneMaterial, type SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
+import { migrateCeilingRoomLinks, migrateRoomZones } from '../utils/room-zone-migration'
 import {
   areSceneSnapshotsEqual,
   pauseSceneHistory,
@@ -391,6 +393,7 @@ describe('scene commit boundary', () => {
         'ceiling',
         'slab',
         'wall',
+        'zone',
       ])
 
       stopDetection()
@@ -420,13 +423,159 @@ describe('scene commit boundary', () => {
       expect(Object.values(spaces)).toHaveLength(2)
       expect(
         receiverNodes.filter((node) => node.type === 'slab' && node.autoFromWalls),
-      ).toHaveLength(2)
+      ).toHaveLength(1)
       expect(
         receiverNodes.filter((node) => node.type === 'ceiling' && node.autoFromWalls),
       ).toHaveLength(2)
     } finally {
       stopDetection()
     }
+  })
+
+  test('host split and merge patches reparent ceiling children without deriving or losing identities', () => {
+    const polygon: [number, number][] = [
+      [0, 0],
+      [8, 0],
+      [8, 4],
+      [0, 4],
+    ]
+    const editor = {
+      spaces: {},
+      setSpaces(spaces: Record<string, Space>) {
+        this.spaces = spaces
+      },
+    }
+    let stop = initSpaceDetectionSync(useScene, { getState: () => editor })
+    try {
+      useScene.getState().createNodes(
+        polygon.map((start, i) => ({
+          node: WallNode.parse({
+            id: `wall_host_${i}`,
+            parentId: LEVEL_ID,
+            start,
+            end: polygon[(i + 1) % 4],
+          }),
+          parentId: LEVEL_ID,
+        })),
+      )
+      const ceiling = Object.values(useScene.getState().nodes).find(
+        (node): node is CeilingNode => node.type === 'ceiling',
+      )!
+      const item = ItemNode.parse({
+        id: 'item_host_light',
+        parentId: ceiling.id,
+        position: [1, 0, 2],
+        asset: {
+          id: 'light',
+          name: 'Light',
+          category: 'lighting',
+          thumbnail: '',
+          src: '/light.glb',
+        },
+      })
+      useScene.getState().createNode(item, ceiling.id)
+      const commits: SceneCommit[] = []
+      unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
+      const divider = WallNode.parse({
+        id: 'wall_host_divider',
+        parentId: LEVEL_ID,
+        start: [2, 0],
+        end: [2, 4],
+      })
+      useScene.getState().createNode(divider, LEVEL_ID)
+      useScene.getState().deleteNode(divider.id)
+      const originals = [...commits]
+      expect(originals).toHaveLength(2)
+      for (const commit of originals) {
+        stop()
+        useScene.setState({ ...commit.before, readOnly: true })
+        clearSceneHistory()
+        stop = initSpaceDetectionSync(useScene, { getState: () => editor })
+        commits.length = 0
+        expect(applySceneOperationPatch(operationPatchFromCommit(commit))).toBe(true)
+        expect(areSceneSnapshotsEqual(currentSnapshot(), commit.current)).toBe(true)
+        expect(commits.map((value) => value.origin)).toEqual(['host'])
+        expect(useScene.temporal.getState().pastStates).toHaveLength(0)
+      }
+    } finally {
+      stop()
+    }
+  })
+
+  describe('wall move commit', () => {
+    const roomWalls = () => [
+      WallNode.parse({ id: 'wall_move_south', parentId: LEVEL_ID, start: [0, 0], end: [4, 0] }),
+      WallNode.parse({ id: 'wall_move_east', parentId: LEVEL_ID, start: [4, 0], end: [4, 4] }),
+      WallNode.parse({ id: 'wall_move_north', parentId: LEVEL_ID, start: [4, 4], end: [0, 4] }),
+      WallNode.parse({ id: 'wall_move_west', parentId: LEVEL_ID, start: [0, 4], end: [0, 0] }),
+      WallNode.parse({ id: 'wall_move_divider', parentId: LEVEL_ID, start: [2, 0], end: [2, 4] }),
+    ]
+    let stopDetection = () => {}
+    let reconcilePasses = 0
+
+    // Two rooms built through the live sync, then a settled history floor.
+    beforeEach(() => {
+      let spaces: Record<string, Space> = {}
+      stopDetection = initSpaceDetectionSync(
+        useScene,
+        {
+          getState: () => ({
+            spaces,
+            setSpaces: (next: Record<string, Space>) => {
+              spaces = next
+            },
+          }),
+        },
+        {
+          onTopologyReconcile: () => {
+            reconcilePasses += 1
+          },
+        },
+      )
+      useScene.getState().applyNodeChanges({
+        create: roomWalls().map((wall) => ({ node: wall, parentId: LEVEL_ID })),
+      })
+      clearSceneHistory()
+      reconcilePasses = 0
+    })
+    afterEach(() => stopDetection())
+
+    const polygonsOf = (type: 'zone' | 'ceiling') =>
+      Object.values(useScene.getState().nodes).flatMap((node) =>
+        node.type === type ? [node.polygon] : [],
+      )
+
+    test('a wall batch derives its rooms in the same step with one detection pass', () => {
+      const before = currentSnapshot()
+      const commits: SceneCommit[] = []
+      unsubscribe = subscribeSceneCommits((commit) => commits.push(commit))
+
+      runAsSingleSceneHistoryStep(useScene, () => {
+        useScene.getState().applyNodeChanges({
+          update: [
+            {
+              id: 'wall_move_divider' as AnyNodeId,
+              data: { start: [2.5, 0], end: [2.5, 4] } as Partial<AnyNode>,
+            },
+          ],
+        })
+      })
+
+      expect(reconcilePasses).toBe(1)
+      expect(commits).toHaveLength(1)
+      expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+      // Rooms sit on wall centrelines, their ceilings on the wall faces.
+      expect(polygonsOf('zone').flat()).toContainEqual([2.5, 0])
+      expect(polygonsOf('zone').flat()).not.toContainEqual([2, 0])
+      const ceilingXs = polygonsOf('ceiling')
+        .flat()
+        .map(([x]) => x)
+      expect(ceilingXs.some((x) => Math.abs(x - 2.5) < 0.2)).toBe(true)
+      expect(ceilingXs.some((x) => Math.abs(x - 2) < 0.2)).toBe(false)
+
+      useScene.temporal.getState().undo()
+      expect(areSceneSnapshotsEqual(currentSnapshot(), before)).toBe(true)
+    })
   })
 
   test('keeps a triangular room valid when an inward wall curve reaches its neighbours', () => {
@@ -445,6 +594,7 @@ describe('scene commit boundary', () => {
       parentId: LEVEL_ID,
       polygon,
       autoFromWalls: true,
+      boundary: 'auto',
     })
     const ceiling = CeilingNode.parse({
       id: 'ceiling_curve_triangle',
@@ -473,6 +623,11 @@ describe('scene commit boundary', () => {
         },
       }),
     }
+    useScene.setState({
+      nodes: migrateCeilingRoomLinks(migrateRoomZones(useScene.getState().nodes).nodes)
+        .nodes as Record<AnyNodeId, AnyNode>,
+    })
+    clearSceneHistory()
     const stopDetection = initSpaceDetectionSync(useScene, editorStore)
 
     try {
@@ -511,6 +666,7 @@ describe('scene commit boundary', () => {
       parentId: LEVEL_ID,
       polygon,
       autoFromWalls: true,
+      boundary: 'auto',
     })
     const ceiling = CeilingNode.parse({
       id: 'ceiling_curve_square',
@@ -531,6 +687,11 @@ describe('scene commit boundary', () => {
     clearSceneHistory()
 
     let spaces: Record<string, Space> = {}
+    useScene.setState({
+      nodes: migrateCeilingRoomLinks(migrateRoomZones(useScene.getState().nodes).nodes)
+        .nodes as Record<AnyNodeId, AnyNode>,
+    })
+    clearSceneHistory()
     const stopDetection = initSpaceDetectionSync(useScene, {
       getState: () => ({
         spaces,
@@ -1156,7 +1317,7 @@ describe('scene commit boundary', () => {
 
   test('semantic equality short-circuits shared nodes in a large scene', () => {
     const nodes: Record<AnyNodeId, AnyNode> = {}
-    for (let index = 0; index < 1_000; index += 1) {
+    for (let index = 0; index < 1000; index += 1) {
       const id = `level_${index}` as AnyNodeId
       nodes[id] = { id, type: 'level', level: index, children: [] } as unknown as AnyNode
     }

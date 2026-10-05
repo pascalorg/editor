@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { SiteNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { registerValidateScene } from './validate-scene'
 
@@ -29,6 +30,21 @@ describe('validate_scene', () => {
     const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(parsed.valid).toBe(true)
     expect(Array.isArray(parsed.errors)).toBe(true)
+    expect(parsed.warnings).toEqual([])
+  })
+
+  test('warns that a hidden site keeps the buildings on it visible', async () => {
+    const site = SiteNode.parse({ visible: false })
+    bridge.setScene({ [site.id]: site }, [site.id])
+    const result = await client.callTool({
+      name: 'validate_scene',
+      arguments: {},
+    })
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    expect(parsed.valid).toBe(true)
+    expect(parsed.warnings).toHaveLength(1)
+    expect(parsed.warnings[0]).toMatchObject({ nodeId: site.id, path: 'visible' })
+    expect(parsed.warnings[0].message).toContain('stay visible')
   })
 
   test('reports structured errors', async () => {

@@ -5,6 +5,7 @@ import type {
   GeometryContext,
   WallNode,
 } from '@pascal-app/core'
+import { getWallBodyCenterOffset } from '@pascal-app/core'
 import {
   readFloorplanContext,
   readFloorplanGeometryMetadata,
@@ -15,6 +16,7 @@ import {
   type OpeningFloorplanLevelData,
 } from '../shared/opening-documentation'
 import { buildOpeningPlacementDimensions } from '../shared/opening-placement-dimensions'
+import { resolveOpeningPlanPlane } from '../shared/opening-plane-offset'
 
 /**
  * Stage C floor-plan builder for door. 1:1 visual port of the legacy
@@ -68,9 +70,15 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
 
   const distance = node.position[0]
   const width = node.width
-  const depth = wall.thickness ?? 0.1
-  const cx = x1 + dirX * distance
-  const cz = z1 + dirZ * distance
+  const wallDepth = wall.thickness ?? 0.1
+  const plane = resolveOpeningPlanPlane(node, wallDepth)
+  const depth = plane.depth
+  // The plane offset is measured from the body centre, which a justified wall
+  // sets off its reference line.
+  const bodyOffset = getWallBodyCenterOffset(wall)
+  const across = bodyOffset + plane.offset
+  const cx = x1 + dirX * distance + perpX * across
+  const cz = z1 + dirZ * distance + perpZ * across
   const halfWidth = width / 2
   const halfDepth = depth / 2
 
@@ -98,6 +106,14 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
     [cx - dirX * halfWidth - perpX * halfDepth, cz - dirZ * halfWidth - perpZ * halfDepth],
   ]
 
+  const halfWallDepth = wallDepth / 2
+  const openingCutoutPoints = (ox: number, oz: number): FloorplanPoint[] => [
+    [ox - dirX * halfWidth + perpX * halfWallDepth, oz - dirZ * halfWidth + perpZ * halfWallDepth],
+    [ox + dirX * halfWidth + perpX * halfWallDepth, oz + dirZ * halfWidth + perpZ * halfWallDepth],
+    [ox + dirX * halfWidth - perpX * halfWallDepth, oz + dirZ * halfWidth - perpZ * halfWallDepth],
+    [ox - dirX * halfWidth - perpX * halfWallDepth, oz - dirZ * halfWidth - perpZ * halfWallDepth],
+  ]
+
   const view = ctx.viewState
   const palette = view?.palette
   const isSelected = view?.selected ?? false
@@ -113,6 +129,24 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
   const fillColor = showSelectedChrome ? '#fed7aa' : '#ffffff'
 
   const children: FloorplanGeometry[] = [
+    // An offset frame stands clear of the wall centre, but the wall is still
+    // cut through its whole thickness: draw that hole too.
+    ...(plane.offset === 0
+      ? []
+      : [
+          {
+            kind: 'polygon' as const,
+            points: openingCutoutPoints(
+              x1 + dirX * distance + perpX * bodyOffset,
+              z1 + dirZ * distance + perpZ * bodyOffset,
+            ),
+            fill: fillColor,
+            stroke: accentMuted,
+            strokeWidth: showSelectedChrome ? 2 : 1.25,
+            vectorEffect: 'non-scaling-stroke' as const,
+            strokeLinejoin: 'round' as const,
+          },
+        ]),
     // Background — the cutout is filled white so the swing arc sits on
     // a clean canvas (the wall hatch shows through otherwise).
     {
@@ -763,24 +797,27 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
     // direction). Pointer-down on either routes through the door's
     // `resize-width` affordance — anchored at the opposite edge, clamped
     // to wall bounds. Mirrors the 3D `DoorSideArrow` width drag.
-    const startEdgeX = cx - dirX * halfWidth
-    const startEdgeZ = cz - dirZ * halfWidth
-    const endEdgeX = cx + dirX * halfWidth
-    const endEdgeZ = cz + dirZ * halfWidth
-    children.push({
-      kind: 'move-arrow',
-      point: [startEdgeX, startEdgeZ],
-      angle: Math.atan2(-dirZ, -dirX),
-      affordance: 'resize-width',
-      payload: { side: 'start' },
-    })
-    children.push({
-      kind: 'move-arrow',
-      point: [endEdgeX, endEdgeZ],
-      angle: Math.atan2(dirZ, dirX),
-      affordance: 'resize-width',
-      payload: { side: 'end' },
-    })
+    // A scripted opening's width is its script's: its size arrows live in 3D, on its params.
+    if (!node.source) {
+      const startEdgeX = cx - dirX * halfWidth
+      const startEdgeZ = cz - dirZ * halfWidth
+      const endEdgeX = cx + dirX * halfWidth
+      const endEdgeZ = cz + dirZ * halfWidth
+      children.push({
+        kind: 'move-arrow',
+        point: [startEdgeX, startEdgeZ],
+        angle: Math.atan2(-dirZ, -dirX),
+        affordance: 'resize-width',
+        payload: { side: 'start' },
+      })
+      children.push({
+        kind: 'move-arrow',
+        point: [endEdgeX, endEdgeZ],
+        angle: Math.atan2(dirZ, dirX),
+        affordance: 'resize-width',
+        payload: { side: 'end' },
+      })
+    }
   }
 
   // Placement-measurement dimensions — distances to adjacent openings
@@ -799,6 +836,7 @@ export function buildDoorFloorplan(node: DoorNode, ctx: GeometryContext): Floorp
     {
       preferredSide: swingSign === 1 ? -1 : 1,
       stroke: showSelectedChrome ? '#f97316' : '#334155',
+      drafting: readFloorplanContext(ctx).drafting,
     },
   )
   if (markAnnotation) children.push(markAnnotation)

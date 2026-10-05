@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   getRenderableSlabPolygon,
+  isFloorPlate,
   type SlabNode,
   type SlabPolygonContext,
   type WallNode,
@@ -36,7 +37,10 @@ export function getRecessedSlabGroundHoles(
   return nodeList
     .filter(
       (node): node is SlabNode =>
-        node.type === 'slab' && node.visible && node.polygon.length >= 3 && node.recessed === true,
+        node.type === 'slab' &&
+        node.visible &&
+        node.polygon.length >= 3 &&
+        (node.recessed === true || (isFloorPlate(node) && node.elevation < -1e-4)),
     )
     .filter((slab) => {
       if (!Number.isFinite(lowestLevelIndex)) return true

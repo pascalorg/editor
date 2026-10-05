@@ -1,6 +1,6 @@
 'use client'
 
-import { type SiteNode, terrainFieldOf, useLiveTerrain } from '@pascal-app/core'
+import { type Ring, type SiteNode, terrainFieldOf, useLiveTerrain } from '@pascal-app/core'
 import { useEffect, useMemo, useRef } from 'react'
 import type { Material } from 'three'
 import {
@@ -33,10 +33,12 @@ import {
 export const TerrainRenderer = ({
   material,
   site,
+  holes,
 }: {
   /** Owned by `SiteRenderer` so the ground material stays defined in one place. */
   material: Material
   site: SiteNode
+  holes: Ring[]
 }) => {
   const targetRef = useRef<TerrainGeometry | null>(null)
 
@@ -50,8 +52,8 @@ export const TerrainRenderer = ({
   const target = useMemo(() => {
     const field = useLiveTerrain.getState().fieldOf(site.id) ?? persistedField
     if (!field) return null
-    return createTerrainGeometry(field)
-  }, [persistedField, site.id])
+    return createTerrainGeometry(field, holes)
+  }, [persistedField, site.id, holes])
 
   targetRef.current = target
   useEffect(
@@ -89,6 +91,14 @@ export const TerrainRenderer = ({
   return (
     <>
       <mesh castShadow geometry={target.geometry} material={material} receiveShadow />
+      {target.holeBoundary && (
+        <mesh
+          castShadow
+          geometry={target.holeBoundary.geometry}
+          material={material}
+          receiveShadow
+        />
+      )}
       {/*
         The edge curtain. Not `castShadow`: it hangs a metre below the ground it
         closes, so it would cast a rim of shade onto the horizon disc all round the

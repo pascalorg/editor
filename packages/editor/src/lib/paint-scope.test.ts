@@ -1,18 +1,30 @@
 import { describe, expect, it } from 'bun:test'
 import {
   type AnyNode,
+  type AnyNodeDefinition,
+  type AnyNodeId,
   detectSpacesForLevel,
   type ItemNode,
+  nodeRegistry,
+  registerNode,
   type SlabNode,
   type Space,
+  useScene,
   type WallNode,
+  type ZoneNode,
 } from '@pascal-app/core'
+import { z } from 'zod'
 import {
   availablePaintScopes,
+  commitPaintScopeFanout,
   cyclePaintScope,
+  effectivePaintScope,
   type PaintHoverInfo,
   type PaintScope,
+  paintHoverInfo,
   paintScopeLabel,
+  paintScopeRole,
+  paintSurfaceLabel,
   resolvePaintScopeTargets,
   type WallPaintHit,
 } from './paint-scope'
@@ -188,51 +200,43 @@ describe('resolvePaintScopeTargets', () => {
 
     const leftRoom = resolve({
       node: shared,
-      role: 'interior',
+      role: 'a',
       scope: 'room',
       nodes: walls,
       spaces,
       wallHit: { face: 'front', point: [3.9, 2] },
     })
-    expect(keys(leftRoom).sort()).toEqual([
-      'bottom-left:interior',
-      'left:interior',
-      'shared:interior',
-      'top-left:interior',
-    ])
+    // Without zones the detected space drives the spread; each wall paints the
+    // physical face it turns to the room.
+    expect(keys(leftRoom).sort()).toEqual(['bottom-left:a', 'left:a', 'shared:a', 'top-left:a'])
 
     const rightRoom = resolve({
       node: shared,
-      role: 'exterior',
+      role: 'b',
       scope: 'room',
       nodes: walls,
       spaces,
       wallHit: { face: 'back', point: [4.1, 2] },
     })
-    expect(keys(rightRoom).sort()).toEqual([
-      'bottom-right:interior',
-      'right:interior',
-      'shared:exterior',
-      'top-right:interior',
-    ])
+    expect(keys(rightRoom).sort()).toEqual(['bottom-right:a', 'right:a', 'shared:b', 'top-right:a'])
   })
 
-  it('wall room preserves the vertical band while mapping each boundary face side', () => {
+  it('wall room keeps the trim while mapping each boundary face side', () => {
     const { walls, spaces } = adjacentRooms()
     const shared = walls.find((candidate) => String(candidate.id) === 'shared')!
     const result = resolve({
       node: shared,
-      role: 'lowerExterior',
+      role: 'bSkirting',
       scope: 'room',
       nodes: walls,
       spaces,
       wallHit: { face: 'back', point: [4.1, 2] },
     })
     expect(keys(result).sort()).toEqual([
-      'bottom-right:lowerInterior',
-      'right:lowerInterior',
-      'shared:lowerExterior',
-      'top-right:lowerInterior',
+      'bottom-right:aSkirting',
+      'right:aSkirting',
+      'shared:bSkirting',
+      'top-right:aSkirting',
     ])
   })
 
@@ -245,15 +249,16 @@ describe('resolvePaintScopeTargets', () => {
     const shared = walls.find((candidate) => String(candidate.id) === 'shared')!
     const result = resolve({
       node: shared,
-      role: 'exterior',
+      role: 'b',
       scope: 'room',
       nodes: walls,
       spaces,
       wallHit: { face: 'back', point: [4.1, 2] },
     })
 
-    expect(keys(result)).toContain('top-right:exterior')
-    expect(keys(result)).not.toContain('top-right:interior')
+    // Reversed, top-right turns its b face to the right room.
+    expect(keys(result)).toContain('top-right:b')
+    expect(keys(result)).not.toContain('top-right:a')
   })
 
   it('wall room excludes duplicate geometry and spaces from another level', () => {
@@ -267,7 +272,7 @@ describe('resolvePaintScopeTargets', () => {
     const shared = levelA.walls.find((candidate) => String(candidate.id) === 'shared')!
     const result = resolve({
       node: shared,
-      role: 'interior',
+      role: 'a',
       scope: 'room',
       nodes: [...levelA.walls, ...levelBWalls],
       spaces: [...levelA.spaces, ...otherSpaces],
@@ -291,7 +296,7 @@ describe('resolvePaintScopeTargets', () => {
 
     const leftBay = resolve({
       node: long,
-      role: 'exterior',
+      role: 'b',
       scope: 'room',
       nodes: walls,
       spaces,
@@ -299,7 +304,7 @@ describe('resolvePaintScopeTargets', () => {
     })
     const rightBay = resolve({
       node: long,
-      role: 'exterior',
+      role: 'b',
       scope: 'room',
       nodes: walls,
       spaces,
@@ -314,9 +319,9 @@ describe('resolvePaintScopeTargets', () => {
 
   it('wall room with no enclosing space falls back to single', () => {
     const w1 = wall('w1', [0, 0], [4, 0])
-    expect(
-      keys(resolve({ node: w1, role: 'interior', scope: 'room', nodes: [w1], spaces: [] })),
-    ).toEqual(['w1:interior'])
+    expect(keys(resolve({ node: w1, role: 'a', scope: 'room', nodes: [w1], spaces: [] }))).toEqual([
+      'w1:a',
+    ])
   })
 
   it('wall room paints the connected exterior envelope from an exterior face', () => {
@@ -331,14 +336,14 @@ describe('resolvePaintScopeTargets', () => {
       keys(
         resolve({
           node: walls[0]!,
-          role: 'exterior',
+          role: 'b',
           scope: 'room',
           nodes: walls,
           spaces,
           wallHit: { face: 'back', point: [2, -0.1] },
         }),
       ).sort(),
-    ).toEqual(['bottom:exterior', 'left:exterior', 'right:exterior', 'top:exterior'])
+    ).toEqual(['bottom:b', 'left:b', 'right:b', 'top:b'])
   })
 
   it('wall room does not cross to a disconnected exterior envelope', () => {
@@ -358,7 +363,7 @@ describe('resolvePaintScopeTargets', () => {
     const spaces = detectSpacesForLevel('l1', walls).spaces
     const result = resolve({
       node: first[0]!,
-      role: 'exterior',
+      role: 'b',
       scope: 'room',
       nodes: walls,
       spaces,
@@ -374,7 +379,7 @@ describe('resolvePaintScopeTargets', () => {
     const bottomLeft = walls.find((candidate) => String(candidate.id) === 'bottom-left')!
     const result = resolve({
       node: bottomLeft,
-      role: 'exterior',
+      role: 'b',
       scope: 'room',
       nodes: walls,
       spaces,
@@ -398,14 +403,14 @@ describe('resolvePaintScopeTargets', () => {
     const spaces = detectSpacesForLevel('l1', walls).spaces
     const result = resolve({
       node: long,
-      role: 'exterior',
+      role: 'b',
       scope: 'room',
       nodes: walls,
       spaces,
       wallHit: { face: 'back', point: [2, -0.1] },
     })
 
-    expect(keys(result).filter((key) => key === 'long:exterior')).toHaveLength(1)
+    expect(keys(result).filter((key) => key === 'long:b')).toHaveLength(1)
     expect(keys(result).some((key) => key.startsWith('divider:'))).toBe(false)
     expect(result).toHaveLength(5)
   })
@@ -506,5 +511,282 @@ describe('resolvePaintScopeTargets', () => {
       ],
     })
     expect(keys(result)).toEqual(['ground:surface'])
+  })
+})
+
+describe('wall room scope inside a zone', () => {
+  function zonedRooms() {
+    const { walls, spaces } = adjacentRooms()
+    const level = { id: 'l1', type: 'level', children: [] as string[] } as unknown as AnyNode
+    // The fixture walls carry plain ids, so the zones skip schema parsing.
+    const zone = (id: string, polygon: Array<[number, number]>, boundary: string[]) =>
+      ({
+        id,
+        type: 'zone',
+        name: id,
+        parentId: 'l1',
+        polygon,
+        holes: [],
+        boundaryWallIds: boundary,
+      }) as unknown as ZoneNode
+    const zones = [
+      zone(
+        'zone_left',
+        [
+          [0, 0],
+          [4, 0],
+          [4, 4],
+          [0, 4],
+        ],
+        ['bottom-left', 'shared', 'top-left', 'left'],
+      ),
+      zone(
+        'zone_right',
+        [
+          [4, 0],
+          [8, 0],
+          [8, 4],
+          [4, 4],
+        ],
+        ['bottom-right', 'right', 'top-right', 'shared'],
+      ),
+    ]
+    ;(level as unknown as { children: string[] }).children = [
+      ...walls.map((w) => String(w.id)),
+      ...zones.map((z) => z.id),
+    ]
+    const shared = walls.find((candidate) => String(candidate.id) === 'shared')!
+    return { nodes: [level, ...walls, ...zones] as AnyNode[], spaces, shared }
+  }
+
+  it('paints the room the hit face borders, as one room commit listed on its walls', () => {
+    const { nodes, spaces, shared } = zonedRooms()
+    const left = resolve({
+      node: shared,
+      role: 'a',
+      scope: 'room',
+      nodes,
+      spaces,
+      wallHit: { face: 'front', point: [3.9, 2] },
+    })
+    expect(keys(left).sort()).toEqual([
+      'bottom-left:room:zone_left',
+      'left:room:zone_left',
+      'shared:room:zone_left',
+      'top-left:room:zone_left',
+    ])
+    // A hit on a face already showing its room finish names the room directly.
+    const right = resolve({
+      node: shared,
+      role: 'room:zone_right/b',
+      scope: 'room',
+      nodes,
+      spaces,
+      wallHit: { face: 'front', point: [4.1, 2] },
+    })
+    expect(new Set(right.map((target) => target.role))).toEqual(new Set(['room:zone_right']))
+    expect(right).toHaveLength(4)
+  })
+
+  it('fans a trim to the face each wall turns to the room, and keeps regions single', () => {
+    const { nodes, spaces, shared } = zonedRooms()
+    const trims = resolve({
+      node: shared,
+      role: 'bSkirting',
+      scope: 'room',
+      nodes,
+      spaces,
+      wallHit: { face: 'back', point: [4.1, 2] },
+    })
+    expect(keys(trims).sort()).toEqual([
+      'bottom-right:aSkirting',
+      'right:aSkirting',
+      'shared:bSkirting',
+      'top-right:aSkirting',
+    ])
+    expect(
+      keys(
+        resolve({
+          node: shared,
+          role: 'region:wainscot',
+          scope: 'room',
+          nodes,
+          spaces,
+          wallHit: { face: 'front', point: [3.9, 2] },
+        }),
+      ),
+    ).toEqual([
+      'shared:room:zone_left',
+      'bottom-left:room:zone_left',
+      'top-left:room:zone_left',
+      'left:room:zone_left',
+    ])
+  })
+})
+
+describe('wall and floor scopes', () => {
+  it('a wall offers its face or its room, never the whole wall', () => {
+    const wall = { id: 'wall_x', type: 'wall', parentId: 'level_x' } as unknown as AnyNode
+    expect(availablePaintScopes({ node: wall, slotRoles: ['a', 'b', 'aSkirting'] })).toEqual([
+      'single',
+      'room',
+    ])
+    expect(paintScopeLabel('single', { scopes: [], slotLabel: 'Face', nodeNoun: 'wall' })).toBe(
+      'Face',
+    )
+    expect(paintSurfaceLabel(wall, 'room:zone_left/a')).toBe('Face')
+    expect(paintSurfaceLabel(wall, 'region:wainscot')).toBe('Face')
+    expect(paintSurfaceLabel(wall, 'a')).toBe('Face')
+  })
+
+  it('the room scope on a room floor is one room-wide role on every plate of the level', () => {
+    const plate = (id: string) =>
+      ({
+        id,
+        type: 'slab',
+        parentId: 'level_f',
+        boundary: 'auto',
+        zoneIds: [],
+      }) as unknown as AnyNode
+    const nodes = { plate_a: plate('plate_a'), plate_b: plate('plate_b') } as Record<
+      string,
+      AnyNode
+    >
+    const targets = resolvePaintScopeTargets({
+      node: nodes.plate_a!,
+      role: 'room:zone_k/rug',
+      scope: 'room',
+      nodes,
+      spaces: {},
+      slotRolesOf: () => [],
+    })
+    expect(targets.map((target) => `${target.nodeId}:${target.role}`)).toEqual([
+      'plate_a:room:zone_k/*',
+      'plate_b:room:zone_k/*',
+    ])
+  })
+})
+
+describe('commitPaintScopeFanout routing', () => {
+  it('commits a routed role once through its kind and writes slot roles as slots', () => {
+    const kind = 'paint-route-test'
+    const commits: string[] = []
+    if (!nodeRegistry.has(kind))
+      registerNode({
+        kind,
+        schemaVersion: 1,
+        schema: z.object({ type: z.literal(kind) }) as never,
+        category: 'structure',
+        defaults: () => ({}),
+        capabilities: {
+          slots: () => [{ slotId: 'a', label: 'A', default: 'library:x' }],
+          paint: {
+            resolveRole: () => null,
+            buildPatch: () => ({}),
+            applyPreview: () => null,
+            commit: ({ role }: { role: string }) => {
+              commits.push(role)
+            },
+          },
+        },
+        floorplanScope: 'level',
+        renderer: { kind: 'parametric', module: async () => ({ default: () => null }) },
+      } as unknown as AnyNodeDefinition)
+    const node = (id: string) => ({ id, type: kind, slots: {} }) as unknown as AnyNode
+    useScene.setState({
+      nodes: {
+        n1: node('n1'),
+        n2: node('n2'),
+        zone_x: { id: 'zone_x', type: 'zone' } as unknown as AnyNode,
+      },
+      materials: {},
+      dirtyNodes: new Set(),
+    } as never)
+    const at = (id: string, role: string) => ({ nodeId: id as AnyNodeId, role })
+    commitPaintScopeFanout(
+      [at('n1', 'room:zone_x'), at('n2', 'room:zone_x'), at('zone_x', 'room:zone_x')],
+      undefined,
+      'library:red',
+    )
+    expect(commits).toEqual(['room:zone_x'])
+    expect(
+      (useScene.getState().nodes.zone_x as unknown as { slots?: unknown }).slots,
+    ).toBeUndefined()
+    commitPaintScopeFanout([at('n1', 'a'), at('n2', 'a')], undefined, 'library:red')
+    const slots = (id: string) =>
+      (useScene.getState().nodes[id as AnyNodeId] as never as { slots: object }).slots
+    expect(slots('n1')).toEqual({ a: 'library:red' })
+    expect(slots('n2')).toEqual({ a: 'library:red' })
+    expect(commits).toEqual(['room:zone_x'])
+  })
+})
+
+describe('generated floor plates: scopes per surface', () => {
+  const plate = (plateRole: 'base' | 'platform' = 'base') =>
+    ({
+      id: `plate_${plateRole}`,
+      type: 'slab',
+      parentId: 'level_p',
+      boundary: 'auto',
+      plateRole,
+      zoneIds: [],
+    }) as unknown as AnyNode
+  const manual = { id: 'slab_hand', type: 'slab', parentId: 'level_p' } as unknown as AnyNode
+  const chip = (node: AnyNode, role: string) => {
+    const info = paintHoverInfo(node, role, ['foundation', 'surface', 'side', 'edge'])
+    return info.scopes.map((scope) => paintScopeLabel(scope, info))
+  }
+
+  it('a floor is this surface or the whole room', () => {
+    expect(chip(plate(), 'room:zone_k')).toEqual(['This surface', 'Whole room'])
+    expect(chip(plate(), 'room:zone_k/rug')).toEqual(['This surface', 'Whole room'])
+    expect(chip(plate('platform'), 'room:zone_k')).toEqual(['This surface', 'Whole room'])
+  })
+
+  it('a step is this step or every step of its room', () => {
+    expect(chip(plate(), 'step:zone_k/door_1')).toEqual(['This step', 'All steps in this room'])
+  })
+
+  it("a footprint's faces have one fixed label and nothing to cycle", () => {
+    expect(chip(plate(), 'edge')).toEqual(['Floor edge · all around this floor'])
+    expect(chip(plate(), 'foundation')).toEqual(['Foundation · all around this floor'])
+    expect(chip(plate(), 'riser')).toEqual(['Riser · all around this floor'])
+    expect(chip(plate(), 'underside')).toEqual(['Underside · all of this floor'])
+  })
+
+  it('no plate offers the whole slab; a hand-drawn slab still does', () => {
+    for (const role of ['room:zone_k', 'step:zone_k/door_1', 'edge', 'foundation', 'riser'])
+      expect(paintHoverInfo(plate(), role, ['foundation', 'surface', 'side']).scopes).not.toContain(
+        'object',
+      )
+    // (The room scope comes from the registry, not wired in this unit context.)
+    expect(chip(manual, 'surface')).toContain('Whole slab')
+  })
+
+  it('a scope the surface does not offer paints just that surface', () => {
+    const node = plate()
+    const nodes = { [node.id]: node } as Record<string, AnyNode>
+    const targets = (role: string, scope: PaintScope) =>
+      resolvePaintScopeTargets({
+        node,
+        role,
+        scope,
+        nodes,
+        spaces: {},
+        slotRolesOf: () => ['foundation', 'surface', 'side', 'edge', 'riser', 'underside'],
+      }).map((target) => `${target.nodeId}:${target.role}`)
+    expect(targets('room:zone_k', 'object')).toEqual(['plate_base:room:zone_k'])
+    expect(targets('edge', 'object')).toEqual(['plate_base:edge'])
+    expect(targets('edge', 'room')).toEqual(['plate_base:edge'])
+    expect(targets('foundation', 'room')).toEqual(['plate_base:foundation'])
+    expect(effectivePaintScope('object', ['single', 'room'])).toBe('single')
+    expect(effectivePaintScope('room', ['single', 'room'])).toBe('room')
+  })
+
+  it('the whole room is one room-wide role; its steps are one room step role', () => {
+    expect(paintScopeRole(plate(), 'room:zone_k/rug', 'room')).toBe('room:zone_k/*')
+    expect(paintScopeRole(plate(), 'room:zone_k', 'single')).toBe('room:zone_k')
+    expect(paintScopeRole(plate(), 'step:zone_k/door_1', 'room')).toBe('step:zone_k')
+    expect(paintScopeRole(manual, 'surface', 'room')).toBe('surface')
   })
 })

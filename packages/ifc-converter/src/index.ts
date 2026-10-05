@@ -3,7 +3,9 @@ import {
   type AnyNodeId,
   BlockNode,
   BuildingNode,
+  CeilingNode,
   ColumnNode,
+  containsPoint,
   DEFAULT_LEVEL_HEIGHT,
   DEFAULT_WALL_HEIGHT,
   DEFAULT_WALL_THICKNESS,
@@ -12,6 +14,7 @@ import {
   ImportedMeshNode,
   type ImportedMeshPrimitiveValue,
   LevelNode,
+  polygonInteriorPoint,
   RoofNode,
   SiteNode,
   SlabNode,
@@ -19,12 +22,14 @@ import {
   WindowNode,
   ZoneNode,
 } from '@pascal-app/core'
-import { customAlphabet } from 'nanoid'
 import * as WebIFC from 'web-ifc'
 import { extractBeamGeometry } from './beam-geometry'
 import { type IfcConversionSimplificationOptions, simplifyConvertedSceneGraph } from './cleanup'
 import { doorGlazingStyle, doorStyleFromIfcOperation } from './door-semantics'
+import { nextId, seedIds } from './ids'
+import { applyRoomFirstStructure } from './room-first'
 import { selectStoreyForElevation } from './storey-semantics'
+import { redundantWallIds } from './wall-joins'
 
 export type {
   IfcConversionSimplificationOptions,
@@ -95,12 +100,6 @@ function tryParse<T>(schema: { parse: (input: unknown) => T }, kind: string, inp
     }
     throw err
   }
-}
-
-const nanoid = customAlphabet('0123456789abcdefghijklmnopqrstuvwxyz', 16)
-
-function generateId<T extends string>(prefix: T): `${T}_${string}` {
-  return `${prefix}_${nanoid()}` as `${T}_${string}`
 }
 
 // --- Unit detection ---
@@ -370,6 +369,49 @@ type ExtrusionData = {
   // 'round' carries `radius`; 'rectangular' carries xDim/yDim.
   profileShape: 'round' | 'rectangular' | null
   radius: number | null
+  // IfcArbitraryProfileDefWithVoids inner rings, same frame as profilePoints.
+  innerCurves: number[][][]
+  // ExtrudedDirection in the extrusion Position frame (model axes, unnormalised).
+  direction: number[] | null
+}
+
+type ExtrudedPlan = {
+  polygon: [number, number][] | null
+  holes: [number, number][][]
+  top: number | null
+  bottom: number | null
+  flat: boolean | null
+}
+
+const DEFAULT_SLAB_THICKNESS = 0.05
+/** Deepest covering mesh read as flat when it has no extrusion to check. */
+const MAX_FLAT_COVERING_DEPTH = 0.3
+
+function readCurvePoints(ifcApi: WebIFC.IfcAPI, modelID: number, curveRef: number): number[][] {
+  const curve = ifcApi.GetLine(modelID, curveRef)
+  const pts: number[][] = []
+  if (!curve.Points) return pts
+  // IFCPOLYLINE — Points is array of CartesianPoint refs
+  if (Array.isArray(curve.Points) && curve.Points.length > 0 && curve.Points[0]?.value != null) {
+    for (const ptRef of curve.Points) {
+      const pt = ifcApi.GetLine(modelID, ptRef.value)
+      const coords = pt.Coordinates.map((c: any) => (typeof c === 'number' ? c : (c?.value ?? 0)))
+      pts.push([coords[0] ?? 0, coords[1] ?? 0])
+    }
+  }
+  // IFCINDEXEDPOLYCURVE — Points is a reference to a point list
+  else if (curve.Points?.value) {
+    const ptList = ifcApi.GetLine(modelID, curve.Points.value)
+    if (ptList.CoordList) {
+      for (const coords of ptList.CoordList) {
+        const c = Array.isArray(coords)
+          ? coords.map((v: any) => (typeof v === 'number' ? v : (v?.value ?? 0)))
+          : []
+        pts.push([c[0] ?? 0, c[1] ?? 0])
+      }
+    }
+  }
+  return pts
 }
 
 function extractFromExtrusionItem(
@@ -393,6 +435,14 @@ function extractFromExtrusionItem(
     result.depth = current.Depth.value
   }
 
+  if (current.ExtrudedDirection?.value) {
+    const direction = ifcApi.GetLine(modelID, current.ExtrudedDirection.value)
+    const ratios = (direction.DirectionRatios ?? []).map((c: any) =>
+      typeof c === 'number' ? c : (c?.value ?? 0),
+    )
+    if (ratios.length >= 2) result.direction = [ratios[0] ?? 0, ratios[1] ?? 0, ratios[2] ?? 0]
+  }
+
   if (current.SweptArea?.value) {
     const profile = ifcApi.GetLine(modelID, current.SweptArea.value)
 
@@ -413,37 +463,13 @@ function extractFromExtrusionItem(
     // Extract profile points — OuterCurve for ArbitraryClosedProfileDef
     const curveRef = profile.OuterCurve?.value
     if (curveRef) {
-      const curve = ifcApi.GetLine(modelID, curveRef)
-      if (curve.Points) {
-        const pts: number[][] = []
-        // IFCPOLYLINE — Points is array of CartesianPoint refs
-        if (
-          Array.isArray(curve.Points) &&
-          curve.Points.length > 0 &&
-          curve.Points[0]?.value != null
-        ) {
-          for (const ptRef of curve.Points) {
-            const pt = ifcApi.GetLine(modelID, ptRef.value)
-            const coords = pt.Coordinates.map((c: any) =>
-              typeof c === 'number' ? c : (c?.value ?? 0),
-            )
-            pts.push([coords[0] ?? 0, coords[1] ?? 0])
-          }
-        }
-        // IFCINDEXEDPOLYCURVE — Points is a reference to a point list
-        else if (curve.Points?.value) {
-          const ptList = ifcApi.GetLine(modelID, curve.Points.value)
-          if (ptList.CoordList) {
-            for (const coords of ptList.CoordList) {
-              const c = Array.isArray(coords)
-                ? coords.map((v: any) => (typeof v === 'number' ? v : (v?.value ?? 0)))
-                : []
-              pts.push([c[0] ?? 0, c[1] ?? 0])
-            }
-          }
-        }
-        if (pts.length >= 3) result.profilePoints = pts
-      }
+      const pts = readCurvePoints(ifcApi, modelID, curveRef)
+      if (pts.length >= 3) result.profilePoints = pts
+    }
+    for (const innerRef of Array.isArray(profile.InnerCurves) ? profile.InnerCurves : []) {
+      if (!innerRef?.value) continue
+      const pts = readCurvePoints(ifcApi, modelID, innerRef.value)
+      if (pts.length >= 3) result.innerCurves.push(pts)
     }
   }
 
@@ -458,6 +484,8 @@ function getBodyExtrusionData(ifcApi: WebIFC.IfcAPI, modelID: number, element: a
     profilePoints: null,
     profileShape: null,
     radius: null,
+    innerCurves: [],
+    direction: null,
   }
   try {
     if (!element.Representation?.value) return result
@@ -518,9 +546,9 @@ function findExtrusionPosition(ifcApi: WebIFC.IfcAPI, modelID: number, item: any
 // world AABB. A world AABB conflates length and thickness for any wall
 // the placement rotates (a 37°-rotated 0.2m wall would read ~1.9m
 // thick); projecting onto the actual axis is rotation-invariant.
-// (axisX, axisY) is the unit wall direction in the converter's
-// horizontal frame, which is parallel to web-ifc world XY — both are IFC
-// world coords, differing only by origin/scale, which cancel in extents.
+// (axisX, axisY) is the unit wall direction in IFC world XY. web-ifc
+// meshes come in (X, Z, -Y), so a vertex's IFC plan point is (wx, -wz)
+// and its height is wy; origin and scale cancel in extents.
 // Returns extents in the geometry's native units (caller resolves
 // scale), or null on any failure.
 function measureWallLocalExtents(
@@ -562,14 +590,14 @@ function measureWallLocalExtents(
           const wx = m[0] * x + m[4] * y + m[8] * z + m[12]
           const wy = m[1] * x + m[5] * y + m[9] * z + m[13]
           const wz = m[2] * x + m[6] * y + m[10] * z + m[14]
-          const a = wx * axisX + wy * axisY
-          const p = wx * perpX + wy * perpY
+          const a = wx * axisX - wz * axisY
+          const p = wx * perpX - wz * perpY
           if (a < minA) minA = a
           if (a > maxA) maxA = a
           if (p < minP) minP = p
           if (p > maxP) maxP = p
-          if (wz < minV) minV = wz
-          if (wz > maxV) maxV = wz
+          if (wy < minV) minV = wy
+          if (wy > maxV) maxV = wy
           any = true
         }
       } finally {
@@ -686,15 +714,15 @@ function extractImportedMeshPrimitives(
           ]
           // `GetFlatMesh` does not use the same axes as the STEP placement
           // data read by `resolveWorldTransform`: web-ifc has already mapped
-          // IFC Z-up coordinates to an X/Y-up/-Z frame. Applying the regular
-          // STEP `swapYZ` transform here a second time makes plan depth look
-          // like height (and height look like plan depth), exploding fallback
-          // walls and railings across the scene.
+          // IFC Z-up coordinates to (X, Z, -Y), which is Pascal's Y-up
+          // right-handed frame. The default preset only removes the origin
+          // offset and level elevation; negating the third axis again would
+          // mirror the mesh.
           const mappedPosition: [number, number, number] = swapYZ
             ? [
                 world[0]! - originOffset[0]! * unitFactor,
                 world[1]! - originOffset[2]! * unitFactor - levelElevation,
-                -(world[2]! + originOffset[1]! * unitFactor),
+                world[2]! + originOffset[1]! * unitFactor,
               ]
             : [
                 world[0]! - originOffset[0]! * unitFactor,
@@ -712,7 +740,7 @@ function extractImportedMeshPrimitives(
             matrix[2]! * nx + matrix[6]! * ny + matrix[10]! * nz,
           ]
           const mappedNormal = swapYZ
-            ? [worldNormal[0]!, worldNormal[1]!, -worldNormal[2]!]
+            ? worldNormal
             : [worldNormal[0]!, -worldNormal[2]!, worldNormal[1]!]
           const normalLength = Math.hypot(...mappedNormal) || 1
           normals.push(
@@ -723,13 +751,6 @@ function extractImportedMeshPrimitives(
         }
 
         const indices = Array.from(sourceIndices)
-        if (swapYZ) {
-          for (let index = 0; index + 2 < indices.length; index += 3) {
-            const second = indices[index + 1]!
-            indices[index + 1] = indices[index + 2]!
-            indices[index + 2] = second
-          }
-        }
         if (positions.length >= 9 && indices.length >= 3) {
           primitives.push({
             positions,
@@ -876,6 +897,7 @@ export async function convertIfcToPascal(
   await ifcApi.Init()
   progress('Opening IFC model...', 10)
   const modelID = ifcApi.OpenModel(ifcData)
+  seedIds(ifcData)
 
   console.log(
     `[IFC→Pascal] Model opened, ID: ${modelID}, File size: ${(ifcData.length / 1024).toFixed(1)} KB`,
@@ -919,10 +941,16 @@ export async function convertIfcToPascal(
     /* keep zero offset */
   }
 
+  // Scene points keep IFC's axis order (plan [0] and [1], vertical [2]), but
+  // the plan's second axis is Pascal z. Pascal is Y-up right-handed, so seen
+  // from above IFC north (+Y) is Pascal -Z: the default preset negates IFC Y
+  // here, once, for every placement-derived wall, opening, slab, roof, space
+  // and column. Mapping +Y to +Z mirrors the whole model.
+  const planDepthSign = opts.swapYZ ? -1 : 1
   function worldToScene(worldPt: number[]): number[] {
     return [
       (worldPt[0] - originOffset[0]) * unitFactor,
-      (worldPt[1] - originOffset[1]) * unitFactor,
+      planDepthSign * (worldPt[1] - originOffset[1]) * unitFactor,
       (worldPt[2] - originOffset[2]) * unitFactor,
     ]
   }
@@ -983,6 +1011,60 @@ export async function convertIfcToPascal(
       }
       for (const childID of children) childrenMap.get(parentExpressID)!.add(childID)
     }
+  }
+
+  // Elements a Pascal export wrote carry their node identity in a `Pascal`
+  // property set; storeys carry their height as the GrossHeight quantity.
+  const pascalIdentity = new Map<number, { id: string; type: string }>()
+  const grossHeightByExpressId = new Map<number, number>()
+  try {
+    const relDefines = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCRELDEFINESBYPROPERTIES)
+    for (let i = 0; i < relDefines.size(); i++) {
+      try {
+        const rel = ifcApi.GetLine(modelID, relDefines.get(i))
+        if (!rel.RelatedObjects || !rel.RelatingPropertyDefinition?.value) continue
+        const definition = ifcApi.GetLine(modelID, rel.RelatingPropertyDefinition.value)
+        if (definition.Name?.value === 'Pascal' && definition.HasProperties) {
+          const values: Record<string, unknown> = {}
+          for (const ref of definition.HasProperties) {
+            const property = ifcApi.GetLine(modelID, ref.value)
+            if (property.Name?.value) values[property.Name.value] = property.NominalValue?.value
+          }
+          if (typeof values.NodeId !== 'string' || typeof values.NodeType !== 'string') continue
+          for (const object of rel.RelatedObjects)
+            pascalIdentity.set(object.value, { id: values.NodeId, type: values.NodeType })
+        }
+        for (const ref of definition.Quantities ?? []) {
+          const quantity = ifcApi.GetLine(modelID, ref.value)
+          if (quantity.Name?.value !== 'GrossHeight' || !(quantity.LengthValue?.value > 0)) continue
+          for (const object of rel.RelatedObjects)
+            grossHeightByExpressId.set(object.value, quantity.LengthValue.value * unitFactor)
+        }
+      } catch {
+        /* skip rel */
+      }
+    }
+  } catch {
+    /* no property rels */
+  }
+  // Re-importing a Pascal export keeps each node's id, so the scene keeps its
+  // identity (links, selections, history) across the round trip.
+  const usedPascalIds = new Set<string>()
+  function nodeIdFor<T extends string>(
+    expressId: number,
+    kind: T,
+    type: string = kind,
+  ): `${T}_${string}` {
+    const identity = pascalIdentity.get(expressId)
+    if (
+      identity?.type === type &&
+      identity.id.startsWith(`${kind}_`) &&
+      !usedPascalIds.has(identity.id)
+    ) {
+      usedPascalIds.add(identity.id)
+      return identity.id as `${T}_${string}`
+    }
+    return nextId(kind)
   }
 
   // Resolve containing storey for an element by walking the parent chain
@@ -1079,6 +1161,85 @@ export async function convertIfcToPascal(
     return primitives
   }
 
+  // Level-local vertical extent of the element's triangles.
+  function meshHeightRange(expressId: number): { min: number; max: number } | null {
+    const heightAxis = opts.swapYZ ? 1 : 2
+    let min = Number.POSITIVE_INFINITY
+    let max = Number.NEGATIVE_INFINITY
+    for (const primitive of importedMeshPrimitivesFor(expressId)) {
+      for (let index = heightAxis; index < primitive.positions.length; index += 3) {
+        const value = primitive.positions[index]!
+        if (value < min) min = value
+        if (value > max) max = value
+      }
+    }
+    return min <= max ? { min, max } : null
+  }
+
+  // Plan outline, holes and level-local vertical extent of an extruded
+  // element (slab, covering, opening, site). `flat` is false when the
+  // profile or extrusion is not horizontal/vertical.
+  function extrudedPlan(element: any, levelElevation: number): ExtrudedPlan | null {
+    const worldMat = element.ObjectPlacement?.value
+      ? resolveWorldTransform(ifcApi, modelID, element.ObjectPlacement.value)
+      : identity()
+    const body = getBodyExtrusionData(ifcApi, modelID, element)
+    const extrusionMat = getExtrusionPosition(ifcApi, modelID, element)
+    const combinedMat = extrusionMat ? multiply(worldMat, extrusionMat) : worldMat
+    const toPlan = (points: number[][]) => {
+      const ring = points.map((point) => {
+        const scene = worldToScene(transformPoint3(combinedMat, [point[0]!, point[1]!, 0]))
+        return [scene[0]!, scene[1]!] as [number, number]
+      })
+      const first = ring[0]
+      const last = ring.at(-1)
+      if (
+        ring.length > 3 &&
+        first &&
+        last &&
+        Math.abs(first[0] - last[0]) < 1e-6 &&
+        Math.abs(first[1] - last[1]) < 1e-6
+      )
+        ring.pop()
+      return ring
+    }
+    let polygon: [number, number][] | null = null
+    if (body.profilePoints && body.profilePoints.length >= 3) {
+      polygon = toPlan(body.profilePoints)
+    } else if (body.xDim && body.yDim) {
+      const hw = body.xDim / 2
+      const hh = body.yDim / 2
+      polygon = toPlan([
+        [-hw, -hh],
+        [hw, -hh],
+        [hw, hh],
+        [-hw, hh],
+      ])
+    }
+    if (polygon && polygon.length < 3) polygon = null
+    let top: number | null = null
+    let bottom: number | null = null
+    let flat: boolean | null = null
+    if (body.depth) {
+      const direction = body.direction ?? [0, 0, 1]
+      const length = Math.hypot(direction[0]!, direction[1]!, direction[2]!) || 1
+      const tip = direction.map((value) => (value / length) * body.depth!)
+      const z0 = worldToScene(transformPoint3(combinedMat, [0, 0, 0]))[2]!
+      const z1 = worldToScene(transformPoint3(combinedMat, tip))[2]!
+      top = Math.max(z0, z1) - levelElevation
+      bottom = Math.min(z0, z1) - levelElevation
+      flat =
+        Math.abs(combinedMat[10]!) > 0.999 && Math.abs(z1 - z0) >= body.depth * unitFactor * 0.999
+    }
+    return {
+      polygon,
+      holes: polygon ? body.innerCurves.map(toPlan).filter((ring) => ring.length >= 3) : [],
+      top,
+      bottom,
+      flat,
+    }
+  }
+
   progress('Processing sites...', 30)
   // Process sites
   const sites = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCSITE)
@@ -1087,7 +1248,7 @@ export async function convertIfcToPascal(
     const siteExpressID = sites.get(i)
     const site = ifcApi.GetLine(modelID, siteExpressID)
 
-    const nodeId = generateId('site')
+    const nodeId = nodeIdFor(siteExpressID, 'site')
     expressIdToNodeId.set(siteExpressID, nodeId)
     rootNodeIds.push(nodeId)
 
@@ -1099,10 +1260,8 @@ export async function convertIfcToPascal(
       parentId: null,
       visible: true,
       polygon: {
-        // Pascal SiteNode requires a property-line polygon. The
-        // converter doesn't read IFC site geometry yet, so seed the
-        // editor's default 30x30 square here.
-        // TODO(ifc-fix): derive from IfcSite.SiteAddress or building footprints.
+        // Placeholder until the whole model is read: fitSitePolygons below
+        // replaces it with the site footprint or the imported extent.
         type: 'polygon',
         points: [
           [-15, -15],
@@ -1130,7 +1289,7 @@ export async function convertIfcToPascal(
     const buildingExpressID = buildings.get(i)
     const building = ifcApi.GetLine(modelID, buildingExpressID)
 
-    const nodeId = generateId('building')
+    const nodeId = nodeIdFor(buildingExpressID, 'building')
     expressIdToNodeId.set(buildingExpressID, nodeId)
 
     const parentExpressID = parentMap.get(buildingExpressID)
@@ -1166,7 +1325,7 @@ export async function convertIfcToPascal(
     const storeyExpressID = storeys.get(i)
     const storey = ifcApi.GetLine(modelID, storeyExpressID)
 
-    const nodeId = generateId('level')
+    const nodeId = nodeIdFor(storeyExpressID, 'level')
     expressIdToNodeId.set(storeyExpressID, nodeId)
 
     const parentExpressID = parentMap.get(storeyExpressID)
@@ -1232,7 +1391,7 @@ export async function convertIfcToPascal(
       const height = nextExpressId
         ? (storeyElevationByExpressId.get(nextExpressId) ?? 0) -
           (storeyElevationByExpressId.get(expressId) ?? 0)
-        : DEFAULT_LEVEL_HEIGHT
+        : (grossHeightByExpressId.get(expressId) ?? DEFAULT_LEVEL_HEIGHT)
       level.level = index
       level.height = height > 0.1 ? height : DEFAULT_LEVEL_HEIGHT
     }
@@ -1240,17 +1399,17 @@ export async function convertIfcToPascal(
 
   progress('Processing walls...', 60)
 
-  // Build void/fill relationship maps for doors and windows
-  // IFCRELVOIDSELEMENT: wall (RelatingBuildingElement) → opening (RelatedOpeningElement)
-  const wallToOpenings = new Map<number, number[]>()
+  // Build void/fill relationship maps for doors, windows and slab holes
+  // IFCRELVOIDSELEMENT: wall/slab (RelatingBuildingElement) → opening (RelatedOpeningElement)
+  const hostToOpenings = new Map<number, number[]>()
   const relVoids = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCRELVOIDSELEMENT)
   for (let i = 0; i < relVoids.size(); i++) {
     const rel = ifcApi.GetLine(modelID, relVoids.get(i))
-    const wallId = rel.RelatingBuildingElement?.value
+    const hostId = rel.RelatingBuildingElement?.value
     const openingId = rel.RelatedOpeningElement?.value
-    if (wallId && openingId) {
-      if (!wallToOpenings.has(wallId)) wallToOpenings.set(wallId, [])
-      wallToOpenings.get(wallId)!.push(openingId)
+    if (hostId && openingId) {
+      if (!hostToOpenings.has(hostId)) hostToOpenings.set(hostId, [])
+      hostToOpenings.get(hostId)!.push(openingId)
     }
   }
 
@@ -1278,6 +1437,62 @@ export async function convertIfcToPascal(
     for (let i = 0; i < ids.size(); i++) windowExpressIds.add(ids.get(i))
   }
 
+  // IfcMaterialLayerSetUsage places the wall body relative to its reference
+  // line: across [low, high] on the wall's local Y (model units).
+  const layerUsageByElement = new Map<number, { low: number; high: number }>()
+  try {
+    const relMaterials = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCRELASSOCIATESMATERIAL)
+    for (let i = 0; i < relMaterials.size(); i++) {
+      try {
+        const rel = ifcApi.GetLine(modelID, relMaterials.get(i))
+        if (!rel.RelatingMaterial?.value || !rel.RelatedObjects) continue
+        const usage = ifcApi.GetLine(modelID, rel.RelatingMaterial.value)
+        if (usage.type !== WebIFC.IFCMATERIALLAYERSETUSAGE || !usage.ForLayerSet?.value) continue
+        if (String(usage.LayerSetDirection?.value ?? 'AXIS2').toUpperCase() !== 'AXIS2') continue
+        const layerSet = ifcApi.GetLine(modelID, usage.ForLayerSet.value)
+        let total = 0
+        for (const layerRef of layerSet.MaterialLayers ?? []) {
+          total += Number(ifcApi.GetLine(modelID, layerRef.value).LayerThickness?.value ?? 0)
+        }
+        const offset = Number(usage.OffsetFromReferenceLine?.value ?? 0)
+        if (!(total > 0) || !Number.isFinite(offset)) continue
+        const negative = String(usage.DirectionSense?.value ?? '').toUpperCase() === 'NEGATIVE'
+        const extent = negative
+          ? { low: offset - total, high: offset }
+          : { low: offset, high: offset + total }
+        for (const object of rel.RelatedObjects) layerUsageByElement.set(object.value, extent)
+      } catch {
+        /* skip rel */
+      }
+    }
+  } catch {
+    /* no material rels */
+  }
+  // Wall node id → plan unit vector from the IFC reference line into the body.
+  const wallBodySides = new Map<string, [number, number]>()
+
+  // IfcRelConnectsPathElements: walls joined at an end (ATSTART/ATEND).
+  const wallConnections: [number, number][] = []
+  try {
+    const relPaths = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCRELCONNECTSPATHELEMENTS)
+    for (let i = 0; i < relPaths.size(); i++) {
+      try {
+        const rel = ifcApi.GetLine(modelID, relPaths.get(i))
+        const ends = [rel.RelatingConnectionType?.value, rel.RelatedConnectionType?.value].map(
+          (value) => String(value ?? '').toUpperCase(),
+        )
+        if (!ends.some((value) => value === 'ATSTART' || value === 'ATEND')) continue
+        const a = rel.RelatingElement?.value
+        const b = rel.RelatedElement?.value
+        if (a && b) wallConnections.push([a, b])
+      } catch {
+        /* skip rel */
+      }
+    }
+  } catch {
+    /* no connection rels */
+  }
+
   // Process walls (both IFCWALL and IFCWALLSTANDARDCASE)
   const wallTypes = [WebIFC.IFCWALL, WebIFC.IFCWALLSTANDARDCASE]
   for (const wallType of wallTypes) {
@@ -1288,7 +1503,7 @@ export async function convertIfcToPascal(
 
       const wall = ifcApi.GetLine(modelID, wallExpressID)
 
-      const nodeId = generateId('wall')
+      const nodeId = nodeIdFor(wallExpressID, 'wall')
       expressIdToNodeId.set(wallExpressID, nodeId)
 
       const parentNodeId = resolveElementParent(wallExpressID)
@@ -1297,6 +1512,7 @@ export async function convertIfcToPascal(
       let end: [number, number] | null = null
       let thickness: number | undefined
       let height: number | undefined
+      let onReferenceLine = false
 
       try {
         // Resolve world placement
@@ -1308,6 +1524,7 @@ export async function convertIfcToPascal(
         const axisPts = getAxisPolyline(ifcApi, modelID, wall)
 
         if (axisPts && axisPts.length >= 2) {
+          onReferenceLine = true
           const s0 = worldToScene(transformPoint3(worldMat, axisPts[0]))
           const s1 = worldToScene(transformPoint3(worldMat, axisPts[axisPts.length - 1]))
           start = [s0[0], s0[1]]
@@ -1396,7 +1613,8 @@ export async function convertIfcToPascal(
           // IFC ground plane, which is also the mapping used for the
           // wall's start/end above.
           const axisX = (end[0] - start[0]) / wallLenM
-          const axisY = (end[1] - start[1]) / wallLenM
+          // Back to IFC world XY, the frame measureWallLocalExtents projects in.
+          const axisY = (planDepthSign * (end[1] - start[1])) / wallLenM
           const extents = measureWallLocalExtents(ifcApi, modelID, wallExpressID, axisX, axisY)
           const geom = extents
             ? wallHeightThicknessFromExtents(extents, wallLenM, unitFactor)
@@ -1409,6 +1627,28 @@ export async function convertIfcToPascal(
       }
       if (height === undefined) height = DEFAULT_WALL_HEIGHT
       if (thickness === undefined) thickness = DEFAULT_WALL_THICKNESS
+
+      // Every later pass (merging, corner joins, room faces) works on body
+      // centrelines; a face reference line is restored at the end as
+      // `justification` (see applyWallReferenceLines).
+      const layers = layerUsageByElement.get(wallExpressID)
+      if (layers && onReferenceLine && wall.ObjectPlacement?.value) {
+        const worldMat = resolveWorldTransform(ifcApi, modelID, wall.ObjectPlacement.value)
+        const sideX = worldMat[1]!
+        const sideY = planDepthSign * worldMat[5]!
+        const sideLength = Math.hypot(sideX, sideY)
+        const low = layers.low * unitFactor
+        const high = layers.high * unitFactor
+        const centre = (low + high) / 2
+        if (sideLength > 1e-6 && Math.abs(centre) > Math.max(0.001, thickness * 0.02)) {
+          const side: [number, number] = [sideX / sideLength, sideY / sideLength]
+          start = [start[0] + side[0] * centre, start[1] + side[1] * centre]
+          end = [end[0] + side[0] * centre, end[1] + side[1] * centre]
+          const faceTolerance = Math.max(0.002, thickness * 0.02)
+          if (Math.abs(low) <= faceTolerance) wallBodySides.set(nodeId, side)
+          else if (Math.abs(high) <= faceTolerance) wallBodySides.set(nodeId, [-side[0], -side[1]])
+        }
+      }
 
       const wallNode = tryParse(WallNode, 'wall', {
         object: 'node',
@@ -1437,8 +1677,30 @@ export async function convertIfcToPascal(
     }
   }
 
+  // Cladding, linings and embedded walls fall through to the imported-mesh
+  // pass. Ends that met a removed lining still reach its host wall's body.
+  const wallLinings = new Map<number, number>()
+  for (const [wallNodeId, host] of redundantWallIds(
+    Object.values(nodes).filter((node): node is WallNode => node.type === 'wall'),
+  )) {
+    const expressId = meta(nodes[wallNodeId]).expressID
+    if (expressId === undefined || hostToOpenings.has(expressId) || pascalIdentity.has(expressId))
+      continue
+    const hostExpressId = meta(host).expressID
+    const thickness = (nodes[wallNodeId] as WallNode).thickness ?? 0
+    if (hostExpressId !== undefined)
+      wallLinings.set(hostExpressId, Math.max(wallLinings.get(hostExpressId) ?? 0, thickness))
+    for (const node of Object.values(nodes) as { children?: string[] }[]) {
+      if (node.children?.includes(wallNodeId))
+        node.children = node.children.filter((id) => id !== wallNodeId)
+    }
+    if (rootNodeIds.includes(wallNodeId)) rootNodeIds.splice(rootNodeIds.indexOf(wallNodeId), 1)
+    delete nodes[wallNodeId]
+    expressIdToNodeId.delete(expressId)
+  }
+
   // Process doors and windows via void/fill relationships
-  for (const [wallExpressID, openingIds] of wallToOpenings) {
+  for (const [wallExpressID, openingIds] of hostToOpenings) {
     const wallNodeId = expressIdToNodeId.get(wallExpressID)
     if (!wallNodeId) continue
     const wallNode = nodes[wallNodeId] as WallNode
@@ -1533,7 +1795,7 @@ export async function convertIfcToPascal(
         }
 
         if (isDoor) {
-          const nodeId = generateId('door')
+          const nodeId = nodeIdFor(fillId, 'door')
 
           // Vertical centering is now handled: door center Y = height/2 so the
           // opening sits at the correct position. Remaining caveat: door bottom
@@ -1550,6 +1812,8 @@ export async function convertIfcToPascal(
             width: width ?? 0.9,
             height: height ?? 2.1,
             position: doorPosition,
+            wallId: wallNodeId,
+            floorThresholdVersion: 1,
             ...doorStyleFromIfcOperation(element.OperationType?.value),
             metadata: buildMetadata({
               ifcType: 'IFCDOOR',
@@ -1564,12 +1828,10 @@ export async function convertIfcToPascal(
           expressIdToNodeId.set(fillId, nodeId)
           wallNode.children.push(nodeId)
         } else {
-          const nodeId = generateId('window')
+          const nodeId = nodeIdFor(fillId, 'window')
 
-          // TODO(ifc-fix): same scalar-vs-tuple position issue as door above.
-          // sillHeight stays read-only metadata until we resolve the window
-          // schema (Pascal's WindowNode doesn't have sillHeight today —
-          // moved to metadata for now so we don't lose the value).
+          // WindowNode has no sill field: the sill sets the centre height in
+          // position[1]; the IFC value is kept in metadata as well.
           const windowPosition: [number, number, number] = [
             position ?? 0,
             (sillHeight ?? 0) + (height ?? 1.2) / 2,
@@ -1585,6 +1847,8 @@ export async function convertIfcToPascal(
             width: width ?? 1.0,
             height: height ?? 1.2,
             position: windowPosition,
+            wallId: wallNodeId,
+            floorThresholdVersion: 1,
             metadata: buildMetadata({
               ifcType: 'IFCWINDOW',
               expressID: fillId,
@@ -1727,7 +1991,7 @@ export async function convertIfcToPascal(
 
       if (isDoor) {
         const h = height ?? 2.1
-        const nodeId = generateId('door')
+        const nodeId = nodeIdFor(fillId, 'door')
         const doorNode = tryParse(DoorNode, 'door', {
           object: 'node',
           id: nodeId,
@@ -1739,6 +2003,7 @@ export async function convertIfcToPascal(
           height: h,
           position: [hosted.along, h / 2, 0],
           wallId: hosted.info.nodeId,
+          floorThresholdVersion: 1,
           ...doorStyleFromIfcOperation(element.OperationType?.value),
           metadata: buildMetadata({
             ifcType: 'IFCDOOR',
@@ -1755,7 +2020,7 @@ export async function convertIfcToPascal(
       } else {
         const h = height ?? 1.2
         const sill = scene ? Math.max(0, scene[2] - hosted.info.baseY) : 0
-        const nodeId = generateId('window')
+        const nodeId = nodeIdFor(fillId, 'window')
         const windowNode = tryParse(WindowNode, 'window', {
           object: 'node',
           id: nodeId,
@@ -1767,6 +2032,7 @@ export async function convertIfcToPascal(
           height: h,
           position: [hosted.along, sill + h / 2, 0],
           wallId: hosted.info.nodeId,
+          floorThresholdVersion: 1,
           metadata: buildMetadata({
             ifcType: 'IFCWINDOW',
             expressID: fillId,
@@ -1804,76 +2070,46 @@ export async function convertIfcToPascal(
       continue
     }
 
-    const nodeId = generateId('slab')
-    expressIdToNodeId.set(slabExpressID, nodeId)
+    const levelElevation = elementLevelElevation(slabExpressID)
+    let plan: ExtrudedPlan | null = null
+    try {
+      plan = extrudedPlan(slab, levelElevation)
+    } catch {
+      // mesh fallback below
+    }
+    // A sloped or tilted slab is not a Pascal floor; keep its exact mesh.
+    if (plan?.flat === false && importedMeshPrimitivesFor(slabExpressID).length > 0) continue
+    if (!plan?.polygon) continue
+
+    // Revit extrudes floors down from their top, other tools up from their
+    // bottom: the top is wherever the extrusion ends highest. The mesh wins
+    // when the body is more than that one extrusion (extra items, clipping).
+    const meshRange = meshHeightRange(slabExpressID)
+    const meshAgrees =
+      !meshRange ||
+      (plan.top !== null &&
+        Math.abs(meshRange.max - plan.top) <= 0.01 &&
+        Math.abs(meshRange.min - (plan.bottom ?? plan.top)) <= 0.01)
+    const top = (meshAgrees ? plan.top : meshRange?.max) ?? 0
+    const bottom = meshAgrees ? (plan.bottom ?? undefined) : meshRange?.min
+    const thickness =
+      bottom !== undefined && top - bottom >= 0.005 ? top - bottom : DEFAULT_SLAB_THICKNESS
+
+    const holes = [
+      ...plan.holes,
+      ...(hostToOpenings.get(slabExpressID) ?? []).flatMap((openingId) => {
+        try {
+          const opening = extrudedPlan(ifcApi.GetLine(modelID, openingId), levelElevation)
+          return opening?.polygon ? [opening.polygon] : []
+        } catch {
+          return []
+        }
+      }),
+    ]
 
     const parentNodeId = resolveElementParent(slabExpressID)
-
-    let polygon: [number, number][] | null = null
-    let elevation = 0
-    let thickness: number | undefined
-
-    try {
-      // Resolve world placement for the slab element
-      const worldMat = slab.ObjectPlacement?.value
-        ? resolveWorldTransform(ifcApi, modelID, slab.ObjectPlacement.value)
-        : identity()
-
-      // Get elevation from placement Z
-      const s = worldToScene(transformPoint3(worldMat, [0, 0, 0]))
-      elevation = s[2] - elementLevelElevation(slabExpressID)
-
-      // Get body extrusion data
-      const body = getBodyExtrusionData(ifcApi, modelID, slab)
-
-      // Extrusion depth is slab thickness
-      if (body.depth) {
-        thickness = body.depth * unitFactor
-      }
-
-      // Extrusion Position provides an additional local offset for the profile
-      const extrusionMat = getExtrusionPosition(ifcApi, modelID, slab)
-
-      if (body.profilePoints && body.profilePoints.length >= 3) {
-        const combinedMat = extrusionMat ? multiply(worldMat, extrusionMat) : worldMat
-        polygon = body.profilePoints.map((pt) => {
-          const sc = worldToScene(transformPoint3(combinedMat, [pt[0], pt[1], 0]))
-          return [sc[0], sc[1]] as [number, number]
-        })
-        const first = polygon[0]
-        const last = polygon[polygon.length - 1]
-        if (
-          polygon.length > 3 &&
-          Math.abs(first[0] - last[0]) < 1e-6 &&
-          Math.abs(first[1] - last[1]) < 1e-6
-        ) {
-          polygon.pop()
-        }
-      } else if (body.xDim && body.yDim) {
-        const hw = body.xDim / 2
-        const hh = body.yDim / 2
-        const corners: number[][] = [
-          [-hw, -hh, 0],
-          [hw, -hh, 0],
-          [hw, hh, 0],
-          [-hw, hh, 0],
-        ]
-        const combinedMat = extrusionMat ? multiply(worldMat, extrusionMat) : worldMat
-        polygon = corners.map((c) => {
-          const sc = worldToScene(transformPoint3(combinedMat, c))
-          return [sc[0], sc[1]] as [number, number]
-        })
-      }
-    } catch {
-      // keep defaults
-    }
-
-    // Skip slabs where we couldn't extract a polygon
-    if (!polygon || polygon.length < 3) {
-      expressIdToNodeId.delete(slabExpressID)
-      continue
-    }
-
+    const nodeId = nodeIdFor(slabExpressID, 'slab')
+    expressIdToNodeId.set(slabExpressID, nodeId)
     const slabNode = tryParse(SlabNode, 'slab', {
       object: 'node',
       id: nodeId,
@@ -1881,23 +2117,111 @@ export async function convertIfcToPascal(
       name: slab.Name?.value || `Slab ${i + 1}`,
       parentId: parentNodeId || null,
       visible: true,
-      polygon,
-      holes: [],
-      elevation,
-      // TODO(ifc-fix): Pascal SlabNode has no `thickness` field — moved
-      // to metadata so the IFC value isn't lost.
+      polygon: plan.polygon,
+      holes,
+      holeMetadata: holes.map(() => ({ source: 'manual' })),
+      elevation: top,
+      thickness,
       metadata: buildMetadata({
         ifcType: 'IFCSLAB',
         expressID: slabExpressID,
         globalId: slab.GlobalId?.value,
         predefinedType: slab.PredefinedType?.value,
-        thickness,
+        sourceColor: importedMeshPrimitivesFor(slabExpressID)[0]?.color,
       }),
     })
 
     nodes[nodeId] = slabNode
 
     attachNodeToGraph(nodeId, parentNodeId)
+  }
+
+  // Ceiling and flooring coverings become Pascal ceilings and floor finishes
+  // (see room-first.ts). Everything else stays an exact imported mesh.
+  const coveringIds = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCCOVERING)
+  for (let i = 0; i < coveringIds.size(); i++) {
+    const coveringExpressID = coveringIds.get(i)
+    try {
+      const covering = ifcApi.GetLine(modelID, coveringExpressID)
+      const role = String(covering.PredefinedType?.value ?? '').toUpperCase()
+      if (role !== 'CEILING' && role !== 'FLOORING') continue
+      const levelElevation = elementLevelElevation(coveringExpressID)
+      const range = meshHeightRange(coveringExpressID)
+      if (!range) continue
+      let plan: ExtrudedPlan | null = null
+      try {
+        plan = extrudedPlan(covering, levelElevation)
+      } catch {
+        // hull fallback below
+      }
+      // A sloped covering is no Pascal ceiling or floor: it keeps its exact mesh.
+      if (plan?.flat === false) continue
+      let polygon = plan?.polygon ?? null
+      if (!polygon) {
+        // Without an extrusion to read, only a thin mesh is known to be flat.
+        if (range.max - range.min > MAX_FLAT_COVERING_DEPTH) continue
+        polygon = meshFootprint(importedMeshPrimitivesFor(coveringExpressID), opts.swapYZ)
+      }
+      if (!polygon || polygon.length < 3) continue
+      const holes = [
+        ...(plan?.polygon ? plan.holes : []),
+        ...(hostToOpenings.get(coveringExpressID) ?? []).flatMap((openingId) => {
+          try {
+            const opening = extrudedPlan(ifcApi.GetLine(modelID, openingId), levelElevation)
+            return opening?.polygon ? [opening.polygon] : []
+          } catch {
+            return []
+          }
+        }),
+      ]
+      const holeMetadata = holes.map(() => ({ source: 'manual' as const }))
+      const parentNodeId = resolveElementParent(coveringExpressID)
+      if (!parentNodeId) continue
+      const color = importedMeshPrimitivesFor(coveringExpressID)[0]?.color
+      const metadata = buildMetadata({
+        ifcType: 'IFCCOVERING',
+        expressID: coveringExpressID,
+        globalId: covering.GlobalId?.value,
+        predefinedType: role,
+        objectType: covering.ObjectType?.value,
+        sourceColor: color,
+      })
+      const name = covering.Name?.value || (role === 'CEILING' ? 'Ceiling' : 'Flooring')
+      const node =
+        role === 'CEILING'
+          ? tryParse(CeilingNode, 'ceiling', {
+              object: 'node',
+              id: nodeIdFor(coveringExpressID, 'ceiling'),
+              type: 'ceiling',
+              name,
+              parentId: parentNodeId,
+              visible: true,
+              polygon,
+              holes,
+              holeMetadata,
+              height: range.min,
+              metadata,
+            })
+          : tryParse(SlabNode, 'slab', {
+              object: 'node',
+              id: nodeIdFor(coveringExpressID, 'slab'),
+              type: 'slab',
+              name,
+              parentId: parentNodeId,
+              visible: true,
+              polygon,
+              holes,
+              holeMetadata,
+              elevation: range.max,
+              thickness: Math.max(0.005, range.max - range.min),
+              metadata,
+            })
+      expressIdToNodeId.set(coveringExpressID, node.id)
+      nodes[node.id] = node
+      attachNodeToGraph(node.id, parentNodeId)
+    } catch {
+      // keep it for the imported-mesh fallback
+    }
   }
 
   // Process roofs
@@ -1907,7 +2231,7 @@ export async function convertIfcToPascal(
     if (expressIdToNodeId.has(roofExpressID)) continue
 
     const roof = ifcApi.GetLine(modelID, roofExpressID)
-    const nodeId = generateId('roof')
+    const nodeId = nodeIdFor(roofExpressID, 'roof')
     expressIdToNodeId.set(roofExpressID, nodeId)
 
     const parentNodeId = resolveElementParent(roofExpressID)
@@ -2006,7 +2330,7 @@ export async function convertIfcToPascal(
       if (expressIdToNodeId.has(colExpressID)) continue
 
       const col = ifcApi.GetLine(modelID, colExpressID)
-      const nodeId = generateId('column')
+      const nodeId = nodeIdFor(colExpressID, 'column')
       expressIdToNodeId.set(colExpressID, nodeId)
 
       const parentNodeId = resolveElementParent(colExpressID)
@@ -2149,7 +2473,7 @@ export async function convertIfcToPascal(
         const roomNumberCandidate =
           longName && spaceName !== longName ? (spaceName ?? '').trim() : ''
         const roomNumber = roomNumberCandidate.length <= 32 ? roomNumberCandidate : ''
-        const nodeId = generateId('zone')
+        const nodeId = nodeIdFor(spaceExpressId, 'zone')
         const zone = tryParse(ZoneNode, 'zone', {
           object: 'node',
           id: nodeId,
@@ -2158,6 +2482,8 @@ export async function convertIfcToPascal(
           parentId: parentNodeId,
           visible: true,
           polygon,
+          // The room keeps this identity point through adoption and edits.
+          seed: polygonInteriorPoint({ polygon }),
           spaceRole: 'room',
           roomNumber,
           ceilingHeight: Math.max(0.1, ceilingHeight),
@@ -2206,6 +2532,7 @@ export async function convertIfcToPascal(
         if (!geometry) throw new Error('No renderable beam geometry')
 
         const beamNode = tryParse(BlockNode, 'beam', {
+          id: nodeIdFor(beamExpressID, 'block'),
           name: beam.Name?.value || `Beam ${i + 1}`,
           parentId: parentNodeId ?? null,
           ...geometry,
@@ -2250,6 +2577,7 @@ export async function convertIfcToPascal(
   addFallbackType(WebIFC.IFCPLATE, 'IFCPLATE')
   addFallbackType(WebIFC.IFCMEMBER, 'IFCMEMBER')
   addFallbackType(WebIFC.IFCFOOTING, 'IFCFOOTING')
+  addFallbackType(WebIFC.IFCGEOGRAPHICELEMENT, 'IFCGEOGRAPHICELEMENT')
   addFallbackType(WebIFC.IFCSTAIRFLIGHT, 'IFCSTAIRFLIGHT')
   addFallbackType(WebIFC.IFCSPACE, 'IFCSPACE')
   addFallbackType(WebIFC.IFCWALL, 'IFCWALL')
@@ -2276,7 +2604,7 @@ export async function convertIfcToPascal(
       const primitives = importedMeshPrimitivesFor(expressId)
       if (primitives.length === 0) continue
 
-      const nodeId = generateId('imesh')
+      const nodeId = nodeIdFor(expressId, 'imesh', 'imported-mesh')
       const importedMesh = tryParse(ImportedMeshNode, 'imported mesh', {
         object: 'node',
         id: nodeId,
@@ -2310,6 +2638,13 @@ export async function convertIfcToPascal(
     if (storeyExpId != null) {
       m.levelId = expressIdToNodeId.get(storeyExpId) ?? undefined
     }
+  }
+
+  // Pascal-authored nodes are already Pascal geometry: cleanup leaves them be.
+  for (const node of Object.values(nodes)) {
+    const m = meta(node)
+    const identity = m.expressID === undefined ? undefined : pascalIdentity.get(m.expressID)
+    if (identity) m.pascalNodeId = identity.id
   }
 
   // Post-process: extract property sets and materials
@@ -2473,15 +2808,82 @@ export async function convertIfcToPascal(
     /* no type rels */
   }
 
+  // The site's property line: the IfcSite footprint when it holds the whole
+  // model, else the imported extent plus a margin.
+  function fitSitePolygons() {
+    let minX = Number.POSITIVE_INFINITY
+    let minZ = Number.POSITIVE_INFINITY
+    let maxX = Number.NEGATIVE_INFINITY
+    let maxZ = Number.NEGATIVE_INFINITY
+    const include = (x: number, z: number, pad = 0) => {
+      minX = Math.min(minX, x - pad)
+      minZ = Math.min(minZ, z - pad)
+      maxX = Math.max(maxX, x + pad)
+      maxZ = Math.max(maxZ, z + pad)
+    }
+    const secondPlanAxis = opts.swapYZ ? 2 : 1
+    for (const node of Object.values(nodes)) {
+      if (node.type === 'wall') {
+        for (const point of [node.start, node.end]) include(point[0], point[1], node.thickness ?? 0)
+      } else if (node.type === 'slab' || node.type === 'zone' || node.type === 'ceiling') {
+        for (const point of node.polygon) include(point[0], point[1])
+      } else if (node.type === 'column') {
+        include(node.position[0], node.position[2], Math.max(node.width ?? 0, node.depth ?? 0))
+      } else if (node.type === 'imported-mesh') {
+        for (const primitive of node.primitives)
+          for (let index = 0; index + 2 < primitive.positions.length; index += 3)
+            include(primitive.positions[index]!, primitive.positions[index + secondPlanAxis]!)
+      }
+    }
+    if (!(minX <= maxX)) return
+    const SITE_MARGIN = 5
+    const extent: [number, number][] = [
+      [minX - SITE_MARGIN, minZ - SITE_MARGIN],
+      [maxX + SITE_MARGIN, minZ - SITE_MARGIN],
+      [maxX + SITE_MARGIN, maxZ + SITE_MARGIN],
+      [minX - SITE_MARGIN, maxZ + SITE_MARGIN],
+    ]
+    for (const node of Object.values(nodes)) {
+      if (node.type !== 'site') continue
+      let footprint: [number, number][] | null = null
+      try {
+        const site = ifcApi.GetLine(modelID, Number(meta(node).expressID))
+        footprint = extrudedPlan(site, 0)?.polygon ?? null
+      } catch {
+        footprint = null
+      }
+      const holds =
+        footprint !== null &&
+        [
+          [minX, minZ],
+          [maxX, minZ],
+          [maxX, maxZ],
+          [minX, maxZ],
+        ].every((point) =>
+          containsPoint([{ outer: footprint!, holes: [] }], point as [number, number]),
+        )
+      node.polygon = { type: 'polygon', points: holds ? footprint! : extent }
+    }
+  }
+
   progress('Simplifying converted scene...', 94)
-  const simplificationStats = simplifyConvertedSceneGraph(nodes, simplificationOptions)
+  const simplificationStats = simplifyConvertedSceneGraph(nodes, simplificationOptions, {
+    wallConnections,
+    wallLinings,
+  })
   if (
     simplificationStats.removedTinyWalls > 0 ||
     simplificationStats.removedMergedWalls > 0 ||
-    simplificationStats.removedDuplicateOpenings > 0
+    simplificationStats.removedDuplicateOpenings > 0 ||
+    simplificationStats.joinedWallEnds > 0
   ) {
     console.log('[IFC→Pascal] Simplification:', simplificationStats)
   }
+
+  const roomFirstStats = applyRoomFirstStructure(nodes, wallBodySides)
+  console.log('[IFC→Pascal] Room-first structure:', roomFirstStats)
+
+  fitSitePolygons()
 
   ifcApi.CloseModel(modelID)
 

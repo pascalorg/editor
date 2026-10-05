@@ -22,12 +22,25 @@
 // All are also prevented at the source now; this is the load-time safety net
 // for already-saved scenes.
 
+import { AnyNode, nodeKindOf } from '../schema/types'
+import { healScenePlanCoordinates } from './heal-plan-coordinates'
+
 const ZERO_LENGTH_EPS = 1e-6
+const hostKinds = new Set<string>(
+  AnyNode.options.filter((schema) => 'children' in schema.shape).map(nodeKindOf),
+)
 
 export interface HealSceneResult {
-  nodes: Record<string, unknown>
   /** Ids of zero-length walls that were dropped. */
   droppedWallIds: string[]
+  nodes: Record<string, unknown>
+  repairedCoordinates: number
+  /**
+   * Ids of nodes whose null `parentId` was repaired to the one parent that
+   * still claims them via `children`.
+   */
+  repairedParentLinkNodeIds: string[]
+  repairedChildLinkNodeIds: string[]
   /** Count of invalid non-string (e.g. null) entries removed from `children` arrays. */
   strippedChildRefs: number
   /**
@@ -35,11 +48,6 @@ export interface HealSceneResult {
    * a different node (stale reparent leftovers), plus same-array duplicates.
    */
   strippedStaleChildRefs: number
-  /**
-   * Ids of nodes whose null `parentId` was repaired to the one parent that
-   * still claims them via `children`.
-   */
-  repairedParentLinkNodeIds: string[]
 }
 
 function isWallLike(node: unknown): node is { start: [number, number]; end: [number, number] } {
@@ -62,11 +70,14 @@ function isWallLike(node: unknown): node is { start: [number, number]; end: [num
  */
 export function healSceneNodes(input: Record<string, unknown>): HealSceneResult {
   const droppedWallIds: string[] = []
+  const repairedChildLinkNodeIds: string[] = []
+  let repairedCoordinates = 0
 
   // Pass 1: drop childless zero-length walls. (Only childless ones — a wall
   // carrying a door/window must keep its hosts, degenerate or not.)
   const kept: Record<string, unknown> = {}
-  for (const [id, node] of Object.entries(input)) {
+  for (const [id, node] of Object.entries(healScenePlanCoordinates(input))) {
+    if (node !== input[id]) repairedCoordinates += 1
     if (isWallLike(node)) {
       const children = (node as { children?: unknown }).children
       const childless = !Array.isArray(children) || children.length === 0
@@ -92,6 +103,16 @@ export function healSceneNodes(input: Record<string, unknown>): HealSceneResult 
   const nodes: Record<string, unknown> = {}
   for (const [id, node] of Object.entries(kept)) {
     const children = (node as { children?: unknown })?.children
+    if ((node as { type?: unknown })?.type === 'level' && !Array.isArray(children)) {
+      nodes[id] = {
+        ...(node as Record<string, unknown>),
+        children: Object.entries(kept)
+          .filter(([, child]) => (child as { parentId?: unknown })?.parentId === id)
+          .map(([childId]) => childId),
+      }
+      repairedChildLinkNodeIds.push(id)
+      continue
+    }
     if (Array.isArray(children)) {
       const seen = new Set<string>()
       const cleaned = children.filter((child) => {
@@ -149,7 +170,7 @@ export function healSceneNodes(input: Record<string, unknown>): HealSceneResult 
           : child && typeof child === 'object' && typeof (child as { id?: unknown }).id === 'string'
             ? (child as { id: string }).id
             : null
-      if (!childId || !(childId in nodes)) continue
+      if (!(childId && childId in nodes)) continue
       const claimants = claimantsByChildId.get(childId) ?? []
       claimants.push(id)
       claimantsByChildId.set(childId, claimants)
@@ -166,11 +187,31 @@ export function healSceneNodes(input: Record<string, unknown>): HealSceneResult 
     repairedParentLinkNodeIds.push(id)
   }
 
+  // Reachability follows children, so retaining a node via parentId also
+  // requires repairing its host's reverse link before authority validation.
+  for (const [id, node] of Object.entries(nodes).sort(([a], [b]) => a.localeCompare(b))) {
+    const parentId = (node as { parentId?: unknown })?.parentId
+    if (typeof parentId !== 'string' || parentId === id) continue
+    const parent = nodes[parentId] as { type?: string; children?: unknown } | undefined
+    if (!parent || !(hostKinds.has(parent.type ?? '') || Array.isArray(parent.children))) continue
+    const children = Array.isArray(parent.children) ? parent.children : []
+    if (
+      children.some(
+        (child) => child === id || (child && typeof child === 'object' && child.id === id),
+      )
+    )
+      continue
+    nodes[parentId] = { ...parent, children: [...children, id] }
+    if (!repairedChildLinkNodeIds.includes(parentId)) repairedChildLinkNodeIds.push(parentId)
+  }
+
   return {
     nodes,
+    repairedCoordinates,
     droppedWallIds,
     strippedChildRefs,
     strippedStaleChildRefs,
     repairedParentLinkNodeIds,
+    repairedChildLinkNodeIds,
   }
 }

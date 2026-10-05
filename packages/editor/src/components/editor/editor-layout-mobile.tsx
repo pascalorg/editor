@@ -236,6 +236,7 @@ export function EditorLayoutMobile({
             <div className="relative h-full w-full overflow-hidden">{viewerContent}</div>
             {overlays && (
               <div
+                data-viewer-bounds
                 className="pointer-events-none absolute inset-0 z-30"
                 style={{ transform: 'translateZ(0)' }}
               >

@@ -1,4 +1,11 @@
-import { type AnyNodeId, type GeometryContext, getMaterialPresetByRef } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  floorConstructionLift,
+  type GeometryContext,
+  getMaterialPresetByRef,
+  liftedManualSlab,
+  plateLevelContext,
+} from '@pascal-app/core'
 import {
   applyMaterialPresetToMaterials,
   type ColorPreset,
@@ -118,11 +125,15 @@ export function buildFenceGeometry(
   // is under this fence. The builder emits local-space children, so the lift
   // lives on an inner group rather than the registered (React-transformed)
   // root.
+  const nodes = ctx ? (plateLevelContext(ctx.parent, ctx.resolve).nodes ?? {}) : {}
   const lift = ctx
     ? resolveFenceLiftElevation(
         node,
-        (id) => ctx.resolve(id as AnyNodeId),
-        ctx.levelBaseAt?.(node.start[0], node.start[1]) ?? 0,
+        (id) => {
+          const host = ctx.resolve(id as AnyNodeId)
+          return host?.type === 'slab' ? liftedManualSlab(nodes, host) : host
+        },
+        (ctx.levelBaseAt?.(node.start[0], node.start[1]) ?? 0) + floorConstructionLift(nodes, node),
       )
     : 0
   const meshParent = new Group()

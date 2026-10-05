@@ -4,9 +4,13 @@ import {
   type HandleDescriptor,
   type ItemNode as ItemNodeType,
   type NodeDefinition,
+  toggleMechanism,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import { itemHasLights, itemMechanism, toggleItemLights } from '../shared/item-interactions'
+import { itemBatchable } from '../shared/node-batch/batchable'
 import { restingFloorplanAffectedIds } from '../shared/resting-surface-plan'
+import { authoredItemFaceHost } from './authored-face-host'
 import { buildItemContextualDimensions, buildItemFloorplan } from './floorplan'
 import { itemFloorplanMoveTarget } from './floorplan-move'
 import { itemPaint } from './paint'
@@ -141,8 +145,8 @@ function itemWallMoveHandle(): HandleDescriptor<ItemNodeType> {
 /**
  * Item — Phase 5 batch kind. Catalog-backed, GLB-rendered, multi-host.
  *
- * Demonstrates the **custom `def.renderer` escape hatch** (see
- * plans/editor-node-registry.md): items use `useGLTF` from drei to
+ * Demonstrates the **custom `def.renderer` escape hatch** ("Opting out of a
+ * generic path" in wiki/architecture/node-definitions.md): items use `useGLTF` from drei to
  * load CDN assets, plus a non-trivial interactive-widget layer inside
  * the rendered scene. Not expressible as a pure `def.geometry`. The
  * registry mounts the custom React renderer as-is.
@@ -177,6 +181,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   extensions: {
     'pascal:editor/floorplan': {
       contextualDimensions: buildItemContextualDimensions,
+      actionMenu: { actions: () => import('../shared/item-interaction-actions') },
     } satisfies FloorplanNodeExtension<ItemNodeType>,
   },
 
@@ -206,7 +211,10 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
     }) as unknown as Omit<ItemNodeType, 'id' | 'type'>,
 
   capabilities: {
+    batchable: itemBatchable,
     selectable: { hitVolume: 'bbox' },
+    // Authored objects host ceiling items on their undersides; catalog items do not.
+    faceHost: authoredItemFaceHost,
     surfaces: {
       top: {
         height: (node) => {
@@ -218,6 +226,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
     duplicable: { subtree: 'with-children' },
     deletable: true,
     paint: itemPaint,
+    mechanism: itemMechanism,
     // Items participate in compositions — e.g. "table-with-plants",
     // "shelf-with-books-on-top" — so they're presettable in their own
     // right (and as descendants of presettable parents). The GLB-kind
@@ -330,6 +339,14 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   // *transitions* (drop a wall item on a ceiling) remain canonical
   // in the 3D path; 2D only re-anchors within the same family.
   floorplanMoveTarget: itemFloorplanMoveTarget,
+  keyboardActions: {
+    e: {
+      appliesTo: (node) => itemMechanism.has(node) || itemHasLights(node),
+      // Same as the action bar: mechanisms when the item has them, otherwise its light.
+      run: (node) =>
+        itemMechanism.has(node) ? toggleMechanism(itemMechanism, node) : toggleItemLights(node),
+    },
+  },
 
   toolHints: [
     { key: 'Left click', label: 'Place item' },

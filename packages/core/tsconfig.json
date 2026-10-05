@@ -9,5 +9,12 @@
     "types": ["bun"]
   },
   "include": ["src"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.test.tsx"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "src/contracts/metadata-scan.ts",
+    "src/systems/wall/__fixtures__/wall-assembly-ws5.ts"
+  ]
 }

@@ -6,6 +6,8 @@ import {
   type AnyNodeId,
   bboxAnchors,
   bboxCornerAnchors,
+  beginSceneHistoryDraft,
+  beginSceneHistoryPauseSession,
   cascadeDirty,
   collectDescendants,
   createSceneApi,
@@ -15,8 +17,10 @@ import {
   getEffectiveNode,
   type MovableConfig,
   nodeRegistry,
-  pauseSceneHistory,
-  resumeSceneHistory,
+  runAsSingleSceneHistoryStep,
+  runSceneHistoryDraftWrite,
+  sceneHistoryDraftRevertUpdates,
+  settleSceneHistoryDrafts,
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
@@ -146,15 +150,55 @@ export function FloorplanRegistryMoveOverlay() {
         }) => FloorplanMoveTargetSession
       )({ node: movingNode, nodes: sceneNodes, sceneApi })
 
-      // Capture snapshots of every affected node BEFORE the first apply
-      // so the single-undo dance has a clean baseline to revert to.
-      const snapshots = session.affectedIds
-        .map((id) => sceneNodes[id])
-        .filter((n): n is AnyNode => !!n)
-        .map((n) => snapshotNode(n))
+      const initialAffectedIds = session.affectedIds.filter((id) => sceneNodes[id])
 
-      pauseSceneHistory(useScene)
+      // History is paused only around this overlay's own writes (`ownWrite`): every affected
+      // node is a carried draft (core's history-drafts), so writes others make mid-move record
+      // as their own steps and space detection reconciles them. The drop writes through a
+      // session keyed by the moving node, which the 3D mover shares in split view.
+      const draftEnds = initialAffectedIds.map((id) =>
+        beginSceneHistoryDraft(
+          id,
+          isFreshPlacementMetadata(sceneNodes[id]!.metadata) ? null : sceneNodes[id]!,
+        ),
+      )
       let historyPaused = true
+      const endDrafts = () => {
+        for (const end of draftEnds) end()
+        historyPaused = false
+      }
+      const ownWrite = runSceneHistoryDraftWrite
+      // Puts back only the fields this move wrote and still holds; a rename or any other write
+      // someone made mid-move stays.
+      // The drop ends the carry: a transient marker (the 3D mover's, in split view) goes even
+      // when someone else edited the metadata meanwhile and the move no longer holds it.
+      const endTransientMarkers = () => {
+        const nodes = useScene.getState().nodes
+        const updates = session.affectedIds.flatMap((id) => {
+          const metadata = nodes[id]?.metadata as Record<string, unknown> | undefined
+          if (!metadata?.isTransient) return []
+          const { isTransient: _transient, ...rest } = metadata
+          return [{ id, data: { metadata: rest } }]
+        })
+        if (updates.length > 0) useScene.getState().updateNodes(updates)
+      }
+      const revertOwnWrites = () =>
+        ownWrite(() => {
+          const updates = sceneHistoryDraftRevertUpdates(session.affectedIds)
+          if (updates.length > 0) useScene.getState().updateNodes(updates)
+        })
+      const recordDrop = (write: () => void) => {
+        const drop = beginSceneHistoryPauseSession(useScene, { gesture: movingNode.id })
+        try {
+          // The move's write and its transient cleanup are one undo entry and one commit.
+          drop.commitStep(() => runAsSingleSceneHistoryStep(useScene, write))
+          // Only a successful drop ends ownership; a rejected write can still be retried.
+          settleSceneHistoryDrafts(session.affectedIds)
+          endDrafts()
+        } finally {
+          drop.end()
+        }
+      }
 
       const clearLivePreviews = () => {
         const liveTransforms = useLiveTransforms.getState()
@@ -229,15 +273,17 @@ export function FloorplanRegistryMoveOverlay() {
         hasMovedSinceStart = true
         lastPlanPoint = planPoint
         clearRejection()
-        session.apply({
-          planPoint,
-          modifiers: {
-            shiftKey: event.shiftKey,
-            altKey: event.altKey,
-            ctrlKey: event.ctrlKey,
-            metaKey: event.metaKey,
-          },
-        })
+        ownWrite(() =>
+          session.apply({
+            planPoint,
+            modifiers: {
+              shiftKey: event.shiftKey,
+              altKey: event.altKey,
+              ctrlKey: event.ctrlKey,
+              metaKey: event.metaKey,
+            },
+          }),
+        )
         // Move "tick" — same feedback the 3D move gives, which fires whenever the
         // resolved position changes (any snapping mode, not just grid), so it
         // ticks as the item lands on each new snapped/free position.
@@ -265,7 +311,14 @@ export function FloorplanRegistryMoveOverlay() {
       }
 
       const commitFinalStateOrRevert = () => {
-        const commitValid = session.canCommit()
+        if (!useScene.getState().nodes[movingNode.id]) {
+          revertOwnWrites()
+          endDrafts()
+          clearLivePreviews()
+          return
+        }
+        // Some registered sessions stage their final polygon from canCommit.
+        const commitValid = ownWrite(() => session.canCommit())
         const freshPlacement = isFreshPlacementMetadata(
           (useScene.getState().nodes[movingNode.id] as { metadata?: unknown } | undefined)
             ?.metadata,
@@ -283,7 +336,7 @@ export function FloorplanRegistryMoveOverlay() {
 
         // Keep ordinary teardown order. Validated replacements can refuse, so they
         // claim teardown only after success, before clearing the moving node.
-        if (!atomicPreview) setMovingNodeOrigin('2d')
+        if (!freshPlacement) setMovingNodeOrigin('2d')
 
         // Sessions with a `commit` hook own their atomic write (e.g.
         // wall move emits creates + deletes + updates via the junction
@@ -293,7 +346,7 @@ export function FloorplanRegistryMoveOverlay() {
         if (commitValid && freshPlacement) {
           // Subtrees finalize from the preview. Staging a session commit would publish
           // an unvalidated graph, including for presets created outside our factory.
-          if (!atomicPreview) session.commit?.()
+          if (!atomicPreview) ownWrite(() => session.commit?.())
           const stagedNode = useScene.getState().nodes[movingNode.id]
           const preview = usePlacementPreview.getState().node
           const effective = stagedNode ? getEffectiveNode(stagedNode) : null
@@ -310,67 +363,66 @@ export function FloorplanRegistryMoveOverlay() {
                 showRejection,
               )
             : null
-          if (!committedId && atomicPreview) return false
+          if (!committedId) return false
+          setMovingNodeOrigin('2d')
           if (atomicPreview) {
-            setMovingNodeOrigin('2d')
             for (const id of session.affectedIds) {
               useLiveTransforms.getState().clear(id)
               useLiveNodeOverrides.getState().clear(id)
             }
           }
-          if (historyPaused) {
-            resumeSceneHistory(useScene)
-            historyPaused = false
-          }
           if (committedId) {
+            settleSceneHistoryDrafts(session.affectedIds)
             sfxEmitter.emit('sfx:item-place')
             useViewer.getState().setSelection({ selectedIds: [committedId] })
           }
+          endDrafts()
           return
         }
 
         if (commitValid && session.commit) {
-          restoreSnapshots(snapshots)
-          if (historyPaused) {
-            resumeSceneHistory(useScene)
-            historyPaused = false
-          }
-          session.commit()
+          revertOwnWrites()
+          recordDrop(() => {
+            session.commit?.()
+            endTransientMarkers()
+          })
           sfxEmitter.emit('sfx:item-place')
-          useViewer.getState().setSelection({ selectedIds: snapshots.map((s) => s.id) })
+          useViewer.getState().setSelection({ selectedIds: initialAffectedIds })
           return
         }
 
         const sceneState = useScene.getState().nodes
         const finalUpdates: Array<{ id: AnyNodeId; data: Record<string, unknown> }> = []
-        for (const snap of snapshots) {
-          const current = sceneState[snap.id]
+        // Reapply everything the revert removes, including newly introduced fields and
+        // attachment entries held on hosts outside affectedIds. Foreign writes stay recorded.
+        for (const update of sceneHistoryDraftRevertUpdates(session.affectedIds)) {
+          const current = sceneState[update.id]
           if (!current) continue
           const data: Record<string, unknown> = {}
           let changed = false
-          for (const [key, before] of Object.entries(snap.data)) {
+          for (const [key, before] of Object.entries(update.data)) {
             const after = (current as unknown as Record<string, unknown>)[key]
             if (!deepEqual(before, after)) {
               data[key] = Array.isArray(after) ? [...(after as unknown[])] : after
               changed = true
             }
           }
-          if (changed) finalUpdates.push({ id: snap.id, data })
+          if (changed) finalUpdates.push({ id: update.id, data })
         }
 
-        for (const snap of snapshots) {
-          const current = sceneState[snap.id]
+        for (const id of initialAffectedIds) {
+          const current = sceneState[id]
           if (!current || !isFreshPlacementMetadata((current as { metadata?: unknown }).metadata)) {
             continue
           }
-          const existing = finalUpdates.find((update) => update.id === snap.id)
+          const existing = finalUpdates.find((update) => update.id === id)
           const metadata = stripPlacementMetadataFlags((current as { metadata?: unknown }).metadata)
           if (existing) {
             existing.data.metadata = metadata
             existing.data.visible = true
           } else {
             finalUpdates.push({
-              id: snap.id,
+              id,
               data: { metadata, visible: true },
             })
           }
@@ -381,25 +433,21 @@ export function FloorplanRegistryMoveOverlay() {
           //   1. Revert to baseline while history is still paused.
           //   2. Resume history.
           //   3. Re-apply the final state — recorded as one tracked change.
-          restoreSnapshots(snapshots)
-          if (historyPaused) {
-            resumeSceneHistory(useScene)
-            historyPaused = false
-          }
-          useScene.getState().updateNodes(finalUpdates)
+          revertOwnWrites()
+          recordDrop(() => {
+            useScene.getState().updateNodes(finalUpdates)
+            endTransientMarkers()
+          })
           sfxEmitter.emit('sfx:item-place')
           // Re-select the moved node(s) — mirrors the legacy 3D move
           // tool. The action menu cleared selection on Move click so
           // selection-gated affordances (slab/ceiling boundary editor,
           // etc.) would unmount during the drag; restoring it here
           // brings them back at the new position.
-          useViewer.getState().setSelection({ selectedIds: snapshots.map((s) => s.id) })
+          useViewer.getState().setSelection({ selectedIds: initialAffectedIds })
         } else {
-          restoreSnapshots(snapshots)
-          if (historyPaused) {
-            resumeSceneHistory(useScene)
-            historyPaused = false
-          }
+          revertOwnWrites()
+          endDrafts()
         }
       }
 
@@ -474,7 +522,7 @@ export function FloorplanRegistryMoveOverlay() {
           }
           event.preventDefault()
           event.stopImmediatePropagation()
-          session.flipSide()
+          ownWrite(() => session.flipSide?.())
           sfxEmitter.emit('sfx:item-rotate')
           return
         }
@@ -492,22 +540,16 @@ export function FloorplanRegistryMoveOverlay() {
         if (isFreshPlacementMetadata((movingNode as { metadata?: unknown }).metadata)) {
           emitter.emit('tool:cancel')
           if (!ownsSubtree && !isInteractionSubtreeDraft(movingNode.id))
-            useScene.getState().deleteNode(movingNode.id)
-          if (historyPaused) {
-            resumeSceneHistory(useScene)
-            historyPaused = false
-          }
+            ownWrite(() => useScene.getState().deleteNode(movingNode.id))
+          endDrafts()
           clearLivePreviews()
           useAlignmentGuides.getState().clear()
           setMovingNode(null)
           return
         }
-        // Revert untracked, then resume — no history entry.
-        restoreSnapshots(snapshots)
-        if (historyPaused) {
-          resumeSceneHistory(useScene)
-          historyPaused = false
-        }
+        // Revert as the overlay's own write: no history entry.
+        revertOwnWrites()
+        endDrafts()
         // Clear any live previews the session wrote. Slab / ceiling
         // 2D move stages a translation delta in `useLiveTransforms`;
         // wall move publishes `{ start, end, ... }` to
@@ -516,7 +558,7 @@ export function FloorplanRegistryMoveOverlay() {
         // position.
         clearLivePreviews()
         // Restore selection cleared by the action menu's Move click.
-        useViewer.getState().setSelection({ selectedIds: snapshots.map((s) => s.id) })
+        useViewer.getState().setSelection({ selectedIds: initialAffectedIds })
         setMovingNode(null)
       }
 
@@ -535,7 +577,7 @@ export function FloorplanRegistryMoveOverlay() {
         window.removeEventListener('keydown', onKey, true)
         // Unmount cleanup. `historyPaused === true` here means none of
         // our terminal paths (commit, Esc) ran in this overlay — they
-        // each call `resumeSceneHistory` and flip the flag.
+        // each end the drafts and flip the flag.
         //
         // If `movingNodeOrigin === '3d'`, a 3D move tool finalised
         // while our overlay was still mounted (split view); the live
@@ -554,10 +596,10 @@ export function FloorplanRegistryMoveOverlay() {
           const finalisedBy3D = useEditor.getState().movingNodeOrigin === '3d'
           if (!finalisedBy3D && !freshPlacement) {
             if (hasMovedSinceStart) {
-              restoreSnapshots(snapshots)
+              revertOwnWrites()
             }
           }
-          resumeSceneHistory(useScene)
+          endDrafts()
         }
         // Belt-and-suspenders: clear any live previews on abnormal
         // unmount paths too. Slab / ceiling sessions write to
@@ -933,11 +975,7 @@ export function FloorplanRegistryMoveOverlay() {
       if (isFreshPlacement) {
         emitter.emit('tool:cancel')
         if (!ownsSubtree && !isInteractionSubtreeDraft(movingNode.id)) {
-          const temporal = useScene.temporal.getState()
-          const wasTracking = (temporal as { isTracking?: boolean }).isTracking !== false
-          if (wasTracking) temporal.pause()
-          useScene.getState().deleteNode(movingNode.id)
-          if (wasTracking) temporal.resume()
+          runSceneHistoryDraftWrite(() => useScene.getState().deleteNode(movingNode.id))
         }
       }
       for (const relatedEntry of relatedEntries) {
@@ -968,33 +1006,6 @@ export function FloorplanRegistryMoveOverlay() {
   }, [isActive, movingNode, setMovingNode, setMovingNodeOrigin, hasMoveTarget, def])
 
   return null
-}
-
-// ── Snapshot helpers (shared shape with floorplan-registry-layer) ───
-//
-// Kept inline here to avoid a circular dependency through a shared
-// utility module. If a third call site shows up, extract.
-
-type NodeSnapshot = { id: AnyNodeId; data: Record<string, unknown> }
-
-function snapshotNode(node: AnyNode): NodeSnapshot {
-  const data: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(node)) {
-    if (key === 'id' || key === 'type' || key === 'object') continue
-    data[key] = Array.isArray(value) ? [...(value as unknown[])] : value
-  }
-  return { id: node.id, data }
-}
-
-function restoreSnapshots(snapshots: NodeSnapshot[]) {
-  const updates = snapshots
-    .filter(
-      (s) =>
-        !useScene.getState().nodes[s.id] ||
-        !deepEqual(s.data, snapshotNode(useScene.getState().nodes[s.id]!).data),
-    )
-    .map((s) => ({ id: s.id, data: s.data }))
-  if (updates.length) useScene.getState().updateNodes(updates)
 }
 
 function deepEqual(a: unknown, b: unknown): boolean {

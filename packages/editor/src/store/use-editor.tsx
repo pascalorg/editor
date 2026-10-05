@@ -42,10 +42,18 @@ import {
 } from '../lib/measurement-kind'
 import type { ModelExport } from '../lib/model-export'
 import {
+  endPaintSession,
+  isPaintErasing,
+  type PaintMode,
+  paintRegionModeActive,
+  usePaintRegionMode,
+} from '../lib/paint-region-mode'
+import {
   cyclePaintScope as cyclePaintScopeValue,
   type PaintHoverInfo,
   type PaintScope,
 } from '../lib/paint-scope'
+import { type RoomKey, sameRoom } from '../lib/room-selection'
 import {
   cycleSnappingModeIn,
   defaultSnappingModeFor,
@@ -65,7 +73,7 @@ const MAX_FLOORPLAN_PANE_RATIO = 0.85
 
 export type ViewMode = '3d' | '2d' | 'split'
 export type SplitOrientation = 'horizontal' | 'vertical'
-export type WorkspaceMode = 'edit' | 'studio'
+export type WorkspaceMode = 'edit' | 'studio' | 'sheets'
 
 // Snapshot capture is invoked from two surfaces with different policies.
 // `standard` mirrors the existing user-driven UX — pick region / viewport /
@@ -267,11 +275,20 @@ export type GuideUiState = {
 }
 
 type EditorState = {
+  room: RoomKey | null
+  hoveredRoom: RoomKey | null
+  selectRoom: (room: RoomKey) => void
+  clearRoom: () => void
+  setHoveredRoom: (room: RoomKey | null) => void
   phase: Phase
   setPhase: (phase: Phase) => void
   toolMode: ToolMode
   armToolMode: (next: ToolMode) => void
-  armMaterialPaint: (material?: ActivePaintMaterial) => void
+  /**
+   * The paint tool: enter paint mode in `subMode`, else the last painting
+   * sub-mode (never erase), picking `material` when given.
+   */
+  armMaterialPaint: (material?: ActivePaintMaterial, subMode?: PaintMode) => void
   mode: Mode
   setMode: (mode: Mode) => void
   tool: Tool | null
@@ -336,6 +353,8 @@ type EditorState = {
   setActivePaintMaterial: (material: ActivePaintMaterial | null) => void
   activePaintTarget: PaintableMaterialTarget
   setActivePaintTarget: (target: PaintableMaterialTarget) => void
+  /** Mirror of the paint sub-mode being `erase`, for plugins that read the editor store. */
+  paintEraser: boolean
   // Live vertex count of an in-progress polygon draft (slab / ceiling), so the
   // contextual HUD can gate hints on it (e.g. "Finish" only once ≥ 3 points).
   // 0 when not drafting. Not persisted.
@@ -350,10 +369,6 @@ type EditorState = {
   // Cycle the scope within the hovered node's available set and return the new
   // value. Bound to Shift while in paint mode.
   cyclePaintScope: () => PaintScope
-  // When true, clicking a surface in paint mode clears it back to its
-  // default material instead of applying `activePaintMaterial`.
-  paintEraser: boolean
-  setPaintEraser: (eraser: boolean) => void
   primeMaterialPaintFromSelection: () => MaterialPaintSelectionSnapshot
   /**
    * Terrain sculpt state. Lives here rather than in the tool component so the
@@ -418,6 +433,12 @@ type EditorState = {
   captureMode: CaptureMode
   isCaptureMode: boolean
   setCaptureMode: (next: boolean | CaptureMode) => void
+  // What a scene capture shows: null is the whole building (every level, the
+  // default on entering capture); a level id shows that level and the ones
+  // below it, like editing. Picking a level moves the viewer's active level;
+  // leaving capture puts back the level the editor was on.
+  captureLevelId: LevelNode['id'] | null
+  setCaptureLevel: (levelId: LevelNode['id'] | null) => void
   // View mode (3D only, 2D only, or split 2D+3D)
   viewMode: ViewMode
   setViewMode: (mode: ViewMode) => void
@@ -570,6 +591,7 @@ export const DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE: PersistedEditorLayoutState =
     wall: defaultSnappingModeFor('wall'),
     item: defaultSnappingModeFor('item'),
     polygon: defaultSnappingModeFor('polygon'),
+    rotation: defaultSnappingModeFor('rotation'),
   },
   continuationByContext: {
     wall: CONTINUATION_PROFILES.wall.default,
@@ -754,6 +776,28 @@ export function normalizePersistedEditorUiState(
   })
 }
 
+/**
+ * The UI state a project opens with.
+ *
+ * Every persisted preference comes back except the armed tool: a project always
+ * opens in select mode. The tool is session state, not a preference — re-arming
+ * the one the last session happened to leave behind turns the first canvas click
+ * of the new one into a wall (or a dropped item) instead of a selection, with
+ * nothing on screen to explain why. `partialize` no longer writes it; a blob
+ * written before that still carries it, so the rule is enforced on read.
+ */
+export function editorUiStateOnOpen(
+  state: Partial<PersistedEditorUiState> | null | undefined,
+): PersistedEditorUiState {
+  return {
+    ...normalizePersistedEditorUiState(state),
+    toolMode: DEFAULT_PERSISTED_EDITOR_UI_STATE.toolMode,
+    mode: DEFAULT_PERSISTED_EDITOR_UI_STATE.mode,
+    tool: DEFAULT_PERSISTED_EDITOR_UI_STATE.tool,
+    catalogCategory: DEFAULT_PERSISTED_EDITOR_UI_STATE.catalogCategory,
+  }
+}
+
 // Validate a persisted per-context mode against that context's allowed set
 // (so e.g. a stale `angles` for items resets), falling back to its default.
 function migrateSnappingMode(value: unknown, context: SnapContext): SnappingMode {
@@ -800,8 +844,14 @@ function normalizeContinuationByContext(
   }
 }
 
-function normalizePersistedEditorLayoutState(
-  state: (Partial<PersistedEditorLayoutState> & LegacyContinuationState) | null | undefined,
+export function normalizePersistedEditorLayoutState(
+  state:
+    | (Omit<Partial<PersistedEditorLayoutState>, 'snappingModeByContext'> &
+        LegacyContinuationState & {
+          snappingModeByContext?: Partial<Record<SnapContext, unknown>>
+        })
+    | null
+    | undefined,
 ): PersistedEditorLayoutState {
   return {
     activeSidebarPanel:
@@ -821,6 +871,7 @@ function normalizePersistedEditorLayoutState(
       wall: migrateSnappingMode(state?.snappingModeByContext?.wall, 'wall'),
       item: migrateSnappingMode(state?.snappingModeByContext?.item, 'item'),
       polygon: migrateSnappingMode(state?.snappingModeByContext?.polygon, 'polygon'),
+      rotation: migrateSnappingMode(state?.snappingModeByContext?.rotation, 'rotation'),
     },
     continuationByContext: normalizeContinuationByContext(state),
     showReferenceFloor: state?.showReferenceFloor === true,
@@ -946,6 +997,8 @@ export function selectSiteFloorplanContext() {
 // restore it on exit. Snapshot capture always frames in 3D — the 2D/split
 // floorplan panes render nothing meaningful for a thumbnail.
 let viewModeBeforeCapture: ViewMode | null = null
+// The editor's active level when capture began (undefined: not in capture).
+let levelBeforeCapture: LevelNode['id'] | null | undefined
 
 /**
  * Hold the interaction scope that belongs to a sustained brush mode.
@@ -973,6 +1026,19 @@ function syncBrushModeScope(mode: Mode): void {
     scope.endIf((s) => s.kind === 'painting' || s.kind === 'sculpting')
     if (useEditor.getState().terrainSampling) useEditor.getState().setTerrainSampling(false)
   }
+  // Erasing and a refused-gesture notice end with the paint session, whatever left it.
+  if (mode !== 'material-paint') endPaintSession()
+}
+
+/**
+ * The modes whose click acts on what is selected. In every other mode a click
+ * draws, places, paints, sculpts or deletes, so the ToolMode transition into
+ * one ends the selection — room, nodes and reference — and its panel and
+ * overlay go with it. A flow that needs a target inside such a mode hands it to
+ * the tool itself (paint primes its target from the selection before it goes).
+ */
+function keepsSelection(mode: Mode): boolean {
+  return mode === 'select' || mode === 'edit'
 }
 
 /**
@@ -993,6 +1059,14 @@ export function isBrushMode(mode: Mode): boolean {
 const useEditor = create<EditorState>()(
   persist(
     (set, get) => ({
+      room: null,
+      hoveredRoom: null,
+      selectRoom: (room) =>
+        set({ room, hoveredRoom: null, selectedReferenceId: null, selectedMaterialTarget: null }),
+      clearRoom: () => set({ room: null, hoveredRoom: null }),
+      setHoveredRoom: (room) => {
+        if (!sameRoom(get().hoveredRoom, room)) set({ hoveredRoom: room })
+      },
       phase: DEFAULT_PERSISTED_EDITOR_UI_STATE.phase,
       setPhase: (phase) => {
         const currentPhase = get().phase
@@ -1001,6 +1075,8 @@ const useEditor = create<EditorState>()(
         const structureLayer = phase === 'furnish' ? 'elements' : get().structureLayer
         set({
           phase,
+          room: null,
+          hoveredRoom: null,
           structureLayer,
           catalogCategory: wasBuilding && phase === 'furnish' ? 'furniture' : null,
         })
@@ -1062,10 +1138,15 @@ const useEditor = create<EditorState>()(
         }
 
         const phaseChanged = phase !== current.phase
+        const nextTool = next.mode === 'build' ? next.tool : null
+        const endsSelection =
+          !keepsSelection(next.mode) && (next.mode !== current.mode || nextTool !== current.tool)
+        if (next.mode === 'material-paint') get().primeMaterialPaintFromSelection()
         set({
           toolMode: next,
           mode: next.mode,
-          tool: next.mode === 'build' ? next.tool : null,
+          tool: nextTool,
+          ...(endsSelection ? { room: null, hoveredRoom: null, selectedReferenceId: null } : {}),
           ...(phaseChanged ? { phase } : {}),
           ...(structureLayer !== current.structureLayer ? { structureLayer } : {}),
           ...(viewMode !== current.viewMode ? { viewMode } : {}),
@@ -1079,14 +1160,13 @@ const useEditor = create<EditorState>()(
           if (phase === 'site') selectSiteFloorplanContext()
           else selectDefaultBuildingAndLevel()
         }
-        if (next.mode === 'material-paint') get().primeMaterialPaintFromSelection()
-        if (next.mode === 'terrain-sculpt') {
-          useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
-        }
+        if (endsSelection) useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
         syncBrushModeScope(next.mode)
       },
-      armMaterialPaint: (material) => {
+      armMaterialPaint: (material, subMode) => {
         get().armToolMode({ mode: 'material-paint' })
+        const paintMode = usePaintRegionMode.getState()
+        paintMode.setMode(subMode ?? paintMode.drawMode)
         if (material) get().setActivePaintMaterial(material)
       },
       mode: DEFAULT_PERSISTED_EDITOR_UI_STATE.mode,
@@ -1201,11 +1281,16 @@ const useEditor = create<EditorState>()(
       },
       selectedMaterialTarget: null,
       setSelectedMaterialTarget: (target) => set({ selectedMaterialTarget: target }),
+      paintEraser: usePaintRegionMode.getState().mode === 'erase',
       activePaintMaterial: null,
-      // Picking a material implies paint, not erase — clear the eraser so the
+      // Picking a material implies paint, not erase — leave the eraser so the
       // next click applies the chosen material.
-      setActivePaintMaterial: (material) =>
-        set({ activePaintMaterial: material, paintEraser: false }),
+      setActivePaintMaterial: (material) => {
+        set({ activePaintMaterial: material })
+        if (material && isPaintErasing()) {
+          usePaintRegionMode.getState().setMode(usePaintRegionMode.getState().drawMode)
+        }
+      },
       activePaintTarget: 'wall',
       setActivePaintTarget: (target) =>
         set((state) =>
@@ -1224,8 +1309,6 @@ const useEditor = create<EditorState>()(
         set({ paintScope: next })
         return next
       },
-      paintEraser: false,
-      setPaintEraser: (eraser) => set({ paintEraser: eraser }),
       primeMaterialPaintFromSelection: () => {
         const selectedId =
           useViewer.getState().selection.selectedIds.length === 1
@@ -1273,7 +1356,8 @@ const useEditor = create<EditorState>()(
       canFindNode: false,
       setCanFindNode: (canFind) => set({ canFindNode: canFind }),
       selectedReferenceId: null,
-      setSelectedReferenceId: (id) => set({ selectedReferenceId: id }),
+      setSelectedReferenceId: (id) =>
+        set({ selectedReferenceId: id, ...(id ? { room: null, hoveredRoom: null } : {}) }),
       referenceScaleActiveGuideId: null,
       setReferenceScaleActiveGuideId: (id) => set({ referenceScaleActiveGuideId: id }),
       guideUi: {},
@@ -1333,6 +1417,11 @@ const useEditor = create<EditorState>()(
         const resolved: CaptureMode =
           typeof next === 'boolean' ? { mode: next ? 'standard' : 'idle' } : next
         const entering = resolved.mode !== 'idle'
+        const wasCapturing = get().isCaptureMode
+        if (entering && !wasCapturing) {
+          levelBeforeCapture = useViewer.getState().selection.levelId
+          set({ captureLevelId: null })
+        }
         // Walk / drone framing is a capture-only camera, so leaving capture always
         // lands back on orbit. Run it first: it restores its own view mode, and
         // the capture restore below has the final say.
@@ -1361,12 +1450,28 @@ const useEditor = create<EditorState>()(
             return {
               captureMode: resolved,
               isCaptureMode: false,
+              captureLevelId: null,
               viewMode: restore,
               isFloorplanOpen: true,
             }
           }
-          return { captureMode: resolved, isCaptureMode: false }
+          return { captureMode: resolved, isCaptureMode: false, captureLevelId: null }
         })
+        if (!entering && wasCapturing) {
+          const level = levelBeforeCapture
+          levelBeforeCapture = undefined
+          const viewer = useViewer.getState()
+          const exists = level === null || useScene.getState().nodes[level as AnyNodeId]
+          if (level !== undefined && exists && viewer.selection.levelId !== level)
+            viewer.setSelection({ levelId: level })
+        }
+      },
+      captureLevelId: null,
+      setCaptureLevel: (levelId) => {
+        if (!get().isCaptureMode) return
+        set({ captureLevelId: levelId })
+        const viewer = useViewer.getState()
+        if (levelId && viewer.selection.levelId !== levelId) viewer.setSelection({ levelId })
       },
       viewMode: DEFAULT_PERSISTED_EDITOR_UI_STATE.viewMode,
       setViewMode: (mode) => {
@@ -1501,10 +1606,13 @@ const useEditor = create<EditorState>()(
       _viewModeBeforeStudio: null as ViewMode | null,
       setWorkspaceMode: (mode) => {
         if (get().workspaceMode === mode) return
-        if (mode === 'studio') {
+        // Every non-'edit' workspace (studio's clean canvas, sheets' paper
+        // space) enters the same way: stash the view, go 3D-only, drop the
+        // editing chrome. Leaving any of them restores the stashed view.
+        if (mode !== 'edit') {
           const currentViewMode = get().viewMode
           set({
-            workspaceMode: 'studio',
+            workspaceMode: mode,
             _viewModeBeforeStudio: currentViewMode,
             viewMode: '3d',
             isFloorplanOpen: false,
@@ -1535,9 +1643,7 @@ const useEditor = create<EditorState>()(
     {
       name: 'pascal-editor-ui-preferences',
       merge: (persistedState, currentState) => {
-        const uiState = normalizePersistedEditorUiState(
-          persistedState as Partial<PersistedEditorState>,
-        )
+        const uiState = editorUiStateOnOpen(persistedState as Partial<PersistedEditorState>)
         const layoutState = normalizePersistedEditorLayoutState(
           persistedState as Partial<PersistedEditorState>,
         )
@@ -1546,30 +1652,23 @@ const useEditor = create<EditorState>()(
           ...currentState,
           ...uiState,
           ...layoutState,
-          ...(uiState.mode === 'build' && uiState.tool === 'measurement'
-            ? {
-                toolDefaults: {
-                  ...currentState.toolDefaults,
-                  measurement: { kind: layoutState.lastMeasurementKind },
-                },
-              }
-            : {}),
         }
       },
-      // `toolMode` is persisted, but the interaction scope a brush mode holds is not
-      // — it lives in a separate, non-persisted store. Rehydrating into
-      // `terrain-sculpt` (or paint) without re-claiming the scope would restore
-      // the brush with selection still enabled, so every dab could grab a wall.
+      // `merge` rewrites `mode` wholesale, while the interaction scope a brush
+      // mode holds is not persisted — it lives in a separate store. A paint or
+      // sculpt brush armed before rehydrate would otherwise keep its scope after
+      // the merge resets the mode, leaving selection suppressed for the rest of
+      // the session with no mode on screen to explain it.
       onRehydrateStorage: () => (state) => {
         if (state) syncBrushModeScope(state.mode)
       },
+      // The armed tool (`toolMode` / `mode` / `tool`, and the catalog category
+      // that only exists while a build tool is armed) is deliberately absent:
+      // a project always opens in select mode, so persisting it could only ever
+      // arm a tool nobody asked for on the next load.
       partialize: (state) => ({
         phase: state.phase,
-        toolMode: state.toolMode,
-        mode: state.mode,
-        tool: state.tool,
         structureLayer: state.structureLayer,
-        catalogCategory: state.catalogCategory,
         isFloorplanOpen: state.isFloorplanOpen,
         viewMode: state.viewMode,
         activeSidebarPanel: state.activeSidebarPanel,
@@ -1594,8 +1693,8 @@ export function armToolMode(next: ToolMode): void {
   useEditor.getState().armToolMode(next)
 }
 
-export function armMaterialPaint(material?: ActivePaintMaterial): void {
-  useEditor.getState().armMaterialPaint(material)
+export function armMaterialPaint(material?: ActivePaintMaterial, subMode?: PaintMode): void {
+  useEditor.getState().armMaterialPaint(material, subMode)
 }
 
 /**
@@ -1659,6 +1758,7 @@ export function getActiveSnapContext(): SnapContext | null {
       return node ? nodeRegistry.get(node.type)?.snapProfile : undefined
     },
     draftDirectionalOf: (typeOrTool) => nodeRegistry.get(typeOrTool)?.snapDraftDirectional ?? true,
+    paintRegion: paintRegionModeActive(editor.mode),
   })
 }
 
@@ -1690,5 +1790,10 @@ export function getActiveSnappingMode(): SnappingMode {
   if (!context) return 'off'
   return useEditor.getState().snappingModeByContext[context]
 }
+
+usePaintRegionMode.subscribe((state) => {
+  const paintEraser = state.mode === 'erase'
+  if (useEditor.getState().paintEraser !== paintEraser) useEditor.setState({ paintEraser })
+})
 
 export default useEditor

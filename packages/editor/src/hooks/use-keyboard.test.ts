@@ -10,13 +10,19 @@ import {
   nodeRegistry,
   PipeFittingNode,
   PipeSegmentNode,
+  registerNode,
+  useInteractive,
   useScene,
 } from '@pascal-app/core'
+import { useSidebarStore } from '../components/ui/primitives/sidebar'
 import { runRedo, runUndo } from '../lib/history'
 import { meshEditScope } from '../lib/interaction/scope'
+import { setSidebarTabIds } from '../lib/sidebar-panel'
 import useEditor from '../store/use-editor'
 import useInteractionScope from '../store/use-interaction-scope'
 import {
+  armPaintFromShortcut,
+  armWallToolFromShortcut,
   blocksSnappingShortcut,
   canCycleSnappingModeShortcut,
   canRunGlobalRotationShortcut,
@@ -24,6 +30,7 @@ import {
   isToolOwnedRotation,
   markToolCancelConsumed,
   runHistoryShortcut,
+  runNodeInteraction,
 } from './use-keyboard'
 
 type RafFn = (callback: (time: number) => void) => number
@@ -104,6 +111,12 @@ describe('rotation shortcut ownership', () => {
     useEditor.getState().armToolMode({ mode: 'build', tool: 'lean-to-extension' })
 
     expect(isToolOwnedRotation()).toBe(true)
+  })
+
+  test('does not reserve R for the wall tool: its shape is picked in the Build panel', () => {
+    useEditor.getState().armToolMode({ mode: 'build', tool: 'wall' })
+
+    expect(isToolOwnedRotation()).toBe(false)
   })
 
   test('leaves R and T to a moving lean-to extension', () => {
@@ -241,4 +254,95 @@ describe('history while drawing distribution runs', () => {
       }
     })
   }
+})
+
+describe('E on a single selected node', () => {
+  function registerKind(overrides: Record<string, unknown>) {
+    const kind = `test:e-${crypto.randomUUID()}`
+    registerNode({
+      kind,
+      schemaVersion: 1,
+      category: 'furnish',
+      defaults: () => ({}),
+      capabilities: {},
+      ...overrides,
+    } as never)
+    return { object: 'node', id: `${kind}_1`, type: kind } as unknown as AnyNode
+  }
+
+  const switchMechanism = {
+    has: () => true,
+    isOn: (node: AnyNode, state: ReturnType<typeof useInteractive.getState>) =>
+      Boolean(state.mechanisms[node.id]),
+    set: (node: AnyNode, on: boolean) => useInteractive.getState().setMechanism(node.id, on),
+  }
+
+  test('runs the mechanism of a kind that declares only the capability', () => {
+    const node = registerKind({ capabilities: { mechanism: switchMechanism } })
+    try {
+      expect(runNodeInteraction(node)).toBe(true)
+      expect(useInteractive.getState().mechanisms[node.id]).toBe(true)
+      expect(runNodeInteraction(node)).toBe(true)
+      expect(useInteractive.getState().mechanisms[node.id]).toBe(false)
+    } finally {
+      useInteractive.getState().removeMechanism(node.id)
+    }
+  })
+
+  test("prefers the kind's own E action over its mechanism", () => {
+    let ran = 0
+    const node = registerKind({
+      capabilities: { mechanism: switchMechanism },
+      keyboardActions: { e: { appliesTo: () => true, run: () => (ran += 1) } },
+    })
+    expect(runNodeInteraction(node)).toBe(true)
+    expect(ran).toBe(1)
+    expect(useInteractive.getState().mechanisms[node.id]).toBeUndefined()
+  })
+
+  test('leaves E to the door and window fallbacks when nothing applies', () => {
+    const node = registerKind({
+      capabilities: { mechanism: { ...switchMechanism, has: () => false } },
+    })
+    expect(runNodeInteraction(node)).toBe(false)
+    expect(runNodeInteraction(registerKind({}))).toBe(false)
+  })
+})
+
+describe('B and P open their panel', () => {
+  afterEach(() => {
+    setSidebarTabIds([])
+    useSidebarStore.getState().setIsCollapsed(false)
+    useEditor.getState().setContinuation('wall', 'room')
+    useEditor.getState().armToolMode({ mode: 'select' })
+  })
+
+  test('B arms the wall tool on Rectangle and shows the Build panel', () => {
+    setSidebarTabIds(['site', 'build', 'paint', 'items'])
+    useEditor.getState().setActiveSidebarPanel('items')
+    useSidebarStore.getState().setIsCollapsed(true)
+    useEditor.getState().setContinuation('wall', 'single')
+
+    armWallToolFromShortcut()
+
+    const editor = useEditor.getState()
+    expect(editor.mode).toBe('build')
+    expect(editor.tool).toBe('wall')
+    expect(editor.getContinuation('wall')).toBe('rectangle')
+    expect(editor.activeSidebarPanel).toBe('build')
+    expect(useSidebarStore.getState().isCollapsed).toBe(false)
+  })
+
+  test('P arms paint and shows the Paint panel, or Build where the host has none', () => {
+    setSidebarTabIds(['build', 'paint', 'items'])
+    useEditor.getState().setActiveSidebarPanel('items')
+    armPaintFromShortcut()
+    expect(useEditor.getState().mode).toBe('material-paint')
+    expect(useEditor.getState().activeSidebarPanel).toBe('paint')
+
+    setSidebarTabIds(['site', 'build', 'items'])
+    useEditor.getState().setActiveSidebarPanel('items')
+    armPaintFromShortcut()
+    expect(useEditor.getState().activeSidebarPanel).toBe('build')
+  })
 })

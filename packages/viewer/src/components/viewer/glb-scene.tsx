@@ -1,6 +1,20 @@
 'use client'
 
-import { type AnyNode, bakePolicyOf, type SurfaceRole } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  bakePolicyOf,
+  containsPoint,
+  distanceToBoundary,
+  polygonInteriorPoint,
+  type SurfaceRole,
+  useInteractive,
+} from '@pascal-app/core'
+import {
+  type EvaluatedMotion,
+  operableParts,
+  ProceduralMotionController,
+} from '@pascal-app/core/procedural-items'
 import { Html, useAnimations } from '@react-three/drei'
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
@@ -13,8 +27,10 @@ import { useGLTFKTX2 } from '../../hooks/use-gltf-ktx2'
 import { ZONE_LAYER } from '../../lib/layers'
 import { createSurfaceRoleMaterial } from '../../lib/materials'
 import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
+import { createZoneShape, createZoneWallGeometry } from '../../lib/zone-geometry'
 import useViewer from '../../store/use-viewer'
 import { GlbInteractive, type GlbInteractiveItem } from './glb-interactive'
+import { bakedLoopMechanisms } from './glb-mechanisms'
 import { GlbReferenceNodes } from './glb-reference-nodes'
 import { GlbReplaceInstances } from './glb-replace-instances'
 
@@ -45,11 +61,11 @@ export type GlbIdentity = Record<string, { kind: string; label: string }>
 export type GlbHover = { kind: string; label: string } | null
 
 /** Walkthrough HUD state, reported each frame: the floor/room the camera is in
- *  and the openable door/window directly in view (for the reticle prompt). */
+ *  and the interactive part directly in view (for the reticle prompt). */
 export type GlbWalkthrough = {
   zoneLabel: string | null
   floorLabel: string | null
-  door: { label: string; isOpen: boolean } | null
+  door: { label: string; isOpen: boolean; verb?: string } | null
 } | null
 
 type GlbLevelEntry = { id: GlbLevel['id']; node: THREE.Object3D; baseY: number }
@@ -58,9 +74,10 @@ type GlbZoneEntry = {
   node: THREE.Object3D
   levelId: string | null
   polygon: [number, number][]
+  holes: [number, number][][]
   label: string
   color: string
-  /** Polygon centroid (zone-local x, z) for placing the room label. */
+  /** Interior pole (zone-local x, z), outside any room holes. */
   centroid: [number, number]
 }
 
@@ -70,7 +87,16 @@ type PascalExtras = {
   label?: string
   openable?: boolean
   clips?: string[]
+  proceduralMotion?: {
+    nodeId: string
+    partId: string
+    groupId: string
+    kind: 'hinge' | 'slide' | 'spin'
+    clip?: string
+    activeWindow?: [number, number]
+  }
   polygon?: [number, number][]
+  holes?: [number, number][][]
   color?: string
   camera?: { position: [number, number, number]; target: [number, number, number] }
 }
@@ -93,7 +119,13 @@ type LookAtControls = {
 }
 
 /** The resolved drill target for a raycast hit, given the current selection. */
-type Target = { object: THREE.Object3D; id: string; kind: string; label: string }
+type Target = {
+  object: THREE.Object3D
+  hitObject?: THREE.Object3D
+  id: string
+  kind: string
+  label: string
+}
 type HitCandidate = { object: THREE.Object3D; point?: THREE.Vector3 }
 
 function findIdentityAncestor(object: THREE.Object3D): THREE.Object3D | null {
@@ -103,6 +135,16 @@ function findIdentityAncestor(object: THREE.Object3D): THREE.Object3D | null {
     current = current.parent
   }
   return null
+}
+
+function findProceduralMotionAncestor(object: THREE.Object3D): PascalExtras['proceduralMotion'] {
+  let current: THREE.Object3D | null = object
+  while (current) {
+    const motion = (current.userData as PascalExtras).proceduralMotion
+    if (motion) return motion
+    current = current.parent
+  }
+  return undefined
 }
 
 function findAncestorLevelId(object: THREE.Object3D): string | null {
@@ -130,55 +172,23 @@ const _camPoint = new THREE.Vector3()
 const _walkPos = new THREE.Vector3()
 const _reticleNdc = new THREE.Vector2(0, 0)
 const _reticleRaycaster = new THREE.Raycaster()
-/** How far ahead (metres) a door/window counts as "in view" for activation. */
+/** How far ahead (metres) an interactive part counts as "in view" for activation. */
 const WALK_REACH = 3
 const ZONE_FOOTPRINT_EPSILON = 0.05
 
 const NO_RAYCAST: THREE.Mesh['raycast'] = () => {}
 
-/** Ray-cast point-in-polygon (polygon is a list of [x, z] in the test frame). */
-function pointInPolygon(x: number, z: number, polygon: [number, number][]): boolean {
-  let inside = false
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const [xi, zi] = polygon[i]!
-    const [xj, zj] = polygon[j]!
-    if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside
-  }
-  return inside
-}
-
-function pointOnSegment(
-  x: number,
-  z: number,
-  ax: number,
-  az: number,
-  bx: number,
-  bz: number,
-): boolean {
-  const dx = bx - ax
-  const dz = bz - az
-  const lengthSq = dx * dx + dz * dz
-  if (lengthSq === 0) return Math.hypot(x - ax, z - az) <= ZONE_FOOTPRINT_EPSILON
-  const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / lengthSq))
-  const px = ax + t * dx
-  const pz = az + t * dz
-  return Math.hypot(x - px, z - pz) <= ZONE_FOOTPRINT_EPSILON
-}
-
-function pointInPolygonInclusive(x: number, z: number, polygon: [number, number][]): boolean {
-  if (pointInPolygon(x, z, polygon)) return true
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const [xi, zi] = polygon[i]!
-    const [xj, zj] = polygon[j]!
-    if (pointOnSegment(x, z, xi, zi, xj, zj)) return true
-  }
-  return false
+function pointInZone(x: number, z: number, zone: GlbZoneEntry): boolean {
+  const polygon = [{ outer: zone.polygon, holes: zone.holes }]
+  return (
+    containsPoint(polygon, [x, z]) || distanceToBoundary(polygon, [x, z]) <= ZONE_FOOTPRINT_EPSILON
+  )
 }
 
 function worldPointInZoneFootprint(worldPoint: THREE.Vector3, zone: GlbZoneEntry): boolean {
   _local.copy(worldPoint)
   zone.node.worldToLocal(_local)
-  return pointInPolygonInclusive(_local.x, _local.z, zone.polygon)
+  return pointInZone(_local.x, _local.z, zone)
 }
 
 function objectFootprintTouchesZone(object: THREE.Object3D, zone: GlbZoneEntry): boolean {
@@ -238,40 +248,6 @@ function createZoneWallMaterial(zoneColor: string) {
   return material
 }
 
-/** Vertical quads along each polygon edge (UV.y 0 at the floor, 1 at the top). */
-function createZoneWallGeometry(polygon: [number, number][]): THREE.BufferGeometry {
-  const positions: number[] = []
-  const uvs: number[] = []
-  const indices: number[] = []
-  for (let i = 0; i < polygon.length; i++) {
-    const [cx, cz] = polygon[i]!
-    const [nx, nz] = polygon[(i + 1) % polygon.length]!
-    const base = i * 4
-    positions.push(
-      cx,
-      Y_OFFSET,
-      cz,
-      nx,
-      Y_OFFSET,
-      nz,
-      nx,
-      Y_OFFSET + ZONE_WALL_HEIGHT,
-      nz,
-      cx,
-      Y_OFFSET + ZONE_WALL_HEIGHT,
-      cz,
-    )
-    uvs.push(0, 0, 1, 0, 1, 1, 0, 1)
-    indices.push(base, base + 1, base + 2, base, base + 2, base + 3)
-  }
-  const geometry = new THREE.BufferGeometry()
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
-  geometry.setIndex(indices)
-  geometry.computeVertexNormals()
-  return geometry
-}
-
 /**
  * GLB-consuming viewer scene (plan phase 2). Loads a baked artifact and drives
  * the editor's presentation/interaction with no parametric scene graph. Hover
@@ -313,6 +289,111 @@ export function GlbScene({
   }
   const rootRef = useRef<THREE.Group>(null!)
   const { actions } = useAnimations(gltf.animations, rootRef)
+  const proceduralPlayback = useMemo(() => {
+    const byNode = new Map<
+      string,
+      {
+        motions: EvaluatedMotion[]
+        clips: Map<string, { partId: string; kind: 'finite' | 'spin'; groupId: string }>
+      }
+    >()
+    gltf.scene.traverse((object) => {
+      const extras = object.userData as PascalExtras
+      if (extras.kind === 'procedural-item' && extras.pascalId && !byNode.has(extras.pascalId))
+        byNode.set(extras.pascalId, { motions: [], clips: new Map() })
+      const motion = extras.proceduralMotion
+      if (!motion?.clip) return
+      const clip = gltf.animations.find((entry) => entry.name === motion.clip)
+      if (!clip) return
+      const entry: {
+        motions: EvaluatedMotion[]
+        clips: Map<string, { partId: string; kind: 'finite' | 'spin'; groupId: string }>
+      } = byNode.get(motion.nodeId) ?? { motions: [], clips: new Map() }
+      if (motion.kind === 'spin') {
+        entry.motions.push({
+          id: motion.groupId,
+          partId: motion.partId,
+          kind: 'spin',
+          axis: 'y',
+          pivot: [0, 0, 0],
+          amount: (2 * Math.PI) / clip.duration,
+          delay: 0,
+          duration: 0,
+          easing: 'linear',
+        })
+        entry.clips.set(motion.clip, {
+          partId: motion.partId,
+          kind: 'spin',
+          groupId: entry.clips.get(motion.clip)?.groupId ?? motion.groupId,
+        })
+      } else if (
+        motion.activeWindow &&
+        !entry.motions.some((item) => item.partId === motion.partId)
+      ) {
+        entry.motions.push({
+          id: motion.groupId,
+          partId: motion.partId,
+          kind: 'hinge',
+          axis: 'y',
+          pivot: [0, 0, 0],
+          amount: 1,
+          delay: motion.activeWindow[0],
+          duration: motion.activeWindow[1] - motion.activeWindow[0],
+          easing: 'linear',
+        })
+        entry.clips.set(motion.clip, {
+          partId: motion.partId,
+          kind: 'finite',
+          groupId: motion.groupId,
+        })
+      }
+      byNode.set(motion.nodeId, entry)
+    })
+    // Procedural actions need a separate mixer so drei cannot advance their assigned times.
+    const mixer = new THREE.AnimationMixer(gltf.scene)
+    const entries = new Map<
+      string,
+      {
+        controller: ProceduralMotionController
+        clips: Map<string, { partId: string; kind: 'finite' | 'spin'; groupId: string }>
+        spinParts: string[]
+        sequence: number
+      }
+    >(
+      [...byNode].map(([nodeId, entry]) => {
+        const spinParts = [
+          ...new Set(
+            entry.motions.filter((motion) => motion.kind === 'spin').map((motion) => motion.partId),
+          ),
+        ]
+        const initial = Object.fromEntries(spinParts.map((partId) => [partId, true]))
+        return [
+          nodeId,
+          {
+            controller: new ProceduralMotionController(entry.motions, initial),
+            clips: entry.clips,
+            spinParts,
+            sequence: 0,
+          },
+        ]
+      }),
+    )
+    const proceduralActions = new Map(
+      gltf.animations
+        .filter((clip) => [...entries.values()].some((entry) => entry.clips.has(clip.name)))
+        .map((clip) => {
+          const action = mixer.clipAction(clip)
+          action.enabled = true
+          action.paused = true
+          action.loop = clip.name.endsWith(': loop') ? THREE.LoopRepeat : THREE.LoopOnce
+          action.clampWhenFinished = true
+          action.setEffectiveWeight(1)
+          action.play()
+          return [clip.name, action] as const
+        }),
+    )
+    return { entries, mixer, actions: proceduralActions }
+  }, [gltf.scene, gltf.animations])
   const camera = useThree((state) => state.camera)
   const raycaster = useThree((state) => state.raycaster)
   const controls = useThree((state) => state.controls) as LookAtControls | null
@@ -420,15 +501,14 @@ export function GlbScene({
       }
       if (extras.kind === 'zone' && extras.polygon && extras.polygon.length >= 3) {
         const polygon = extras.polygon
-        const centroid: [number, number] = [
-          polygon.reduce((sum, [x]) => sum + x, 0) / polygon.length,
-          polygon.reduce((sum, [, z]) => sum + z, 0) / polygon.length,
-        ]
+        const holes = extras.holes ?? []
+        const centroid = polygonInteriorPoint({ polygon, holes })
         zoneList.push({
           id: extras.pascalId,
           node: object,
           levelId: findAncestorLevelId(object),
           polygon,
+          holes,
           label: extras.label ?? extras.pascalId,
           color: extras.color ?? '#3b82f6',
           centroid,
@@ -449,6 +529,19 @@ export function GlbScene({
   const zoneById = useMemo(() => new Map(zoneEntries.map((zone) => [zone.id, zone])), [zoneEntries])
   // Level pascalIds bottom-to-top, for the interactive light pool's level factor.
   const levelOrder = useMemo(() => levels.map((entry) => entry.id), [levels])
+  // Loop clips no other controller plays (a plugin kind's mechanism) run on
+  // click and E. As in the editor they start stopped and never persist.
+  const loopMechanisms = useMemo(
+    () =>
+      bakedLoopMechanisms(
+        identity,
+        new Set([
+          ...proceduralPlayback.entries.keys(),
+          ...(interactiveItems ?? []).map((item) => item.pascalId),
+        ]),
+      ),
+    [identity, proceduralPlayback, interactiveItems],
+  )
 
   // The dollhouse hides ceilings/roof — but only their OWN geometry. Items hosted
   // on a ceiling (lamps, fans, recessed lights) are child identity nodes; hiding
@@ -632,12 +725,7 @@ export function GlbScene({
   useEffect(() => {
     const built: ZoneFill[] = []
     for (const entry of zoneEntries) {
-      const shape = new THREE.Shape()
-      entry.polygon.forEach(([x, z], i) => {
-        if (i === 0) shape.moveTo(x, -z)
-        else shape.lineTo(x, -z)
-      })
-      shape.closePath()
+      const shape = createZoneShape(entry)
 
       const floorMaterial = createZoneFloorMaterial(entry.color)
       const floor = new THREE.Mesh(new THREE.ShapeGeometry(shape), floorMaterial)
@@ -645,7 +733,7 @@ export function GlbScene({
       floor.position.y = 0.02
 
       const wallMaterial = createZoneWallMaterial(entry.color)
-      const walls = new THREE.Mesh(createZoneWallGeometry(entry.polygon), wallMaterial)
+      const walls = new THREE.Mesh(createZoneWallGeometry(entry), wallMaterial)
 
       const meshes = [floor, walls]
       for (const mesh of meshes) {
@@ -681,11 +769,48 @@ export function GlbScene({
   }, [zoneEntries])
 
   useEffect(() => {
+    for (const [nodeId, entry] of proceduralPlayback.entries)
+      useInteractive
+        .getState()
+        .initProcedural(
+          nodeId as AnyNodeId,
+          [...new Set(entry.controller.motions.map((motion) => motion.partId))],
+          entry.spinParts,
+        )
+    return () => {
+      for (const nodeId of proceduralPlayback.entries.keys())
+        useInteractive.getState().removeProcedural(nodeId as AnyNodeId)
+      proceduralPlayback.mixer.stopAllAction()
+    }
+  }, [proceduralPlayback])
+
+  useFrame((_, delta) => {
+    for (const [nodeId, entry] of proceduralPlayback.entries) {
+      const command = useInteractive.getState().procedural[nodeId as AnyNodeId]?.motionCommand
+      if (command && command.sequence > entry.sequence) {
+        entry.controller.command(command)
+        entry.sequence = command.sequence
+      }
+      const frame = entry.controller.tick(delta)
+      for (const [clipName, binding] of entry.clips) {
+        const action = proceduralPlayback.actions.get(clipName)
+        if (!action) continue
+        if (binding.kind === 'finite') action.time = frame.times[binding.partId] ?? 0
+        else {
+          const motion = entry.controller.motions.find((item) => item.id === binding.groupId)
+          if (motion)
+            action.time =
+              ((frame.spins[motion.id]?.phase ?? 0) / (2 * Math.PI)) * action.getClip().duration
+        }
+      }
+    }
+    proceduralPlayback.mixer.update(0)
+  }, -1)
+
+  useEffect(() => {
     for (const [name, action] of Object.entries(actions)) {
       if (!action) continue
-      // Ambient item loops (a fan's spin, `<id>: loop`) repeat; door/window
-      // open clips play once and hold their end pose. GlbInteractive plays the
-      // loops, gated on the item's toggle.
+      if (proceduralPlayback.actions.has(name)) continue
       if (name.endsWith(': loop')) {
         action.loop = THREE.LoopRepeat
         action.clampWhenFinished = false
@@ -694,9 +819,82 @@ export function GlbScene({
         action.clampWhenFinished = true
       }
     }
-  }, [actions])
+  }, [actions, proceduralPlayback])
+
+  useEffect(() => {
+    if (loopMechanisms.size === 0) return
+    const apply = (running: Record<string, boolean>) => {
+      for (const [id, clips] of loopMechanisms) {
+        for (const name of clips) {
+          const action = actions[name]
+          if (!action) continue
+          if (running[id]) {
+            action.enabled = true
+            action.paused = false
+            if (!action.isRunning()) action.play()
+          } else {
+            action.stop()
+          }
+        }
+      }
+    }
+    apply(useInteractive.getState().mechanisms)
+    const unsubscribe = useInteractive.subscribe((state, previous) => {
+      if (state.mechanisms !== previous.mechanisms) apply(state.mechanisms)
+    })
+    return () => {
+      unsubscribe()
+      for (const id of loopMechanisms.keys())
+        useInteractive.getState().removeMechanism(id as AnyNodeId)
+    }
+  }, [actions, loopMechanisms])
+  // Items the walkthrough operates through their toggles; others fall through to loop clips.
+  const toggleableItem = useCallback(
+    (pascalId: string | undefined) =>
+      interactiveItems?.find(
+        (item) =>
+          item.pascalId === pascalId &&
+          item.interactive.controls.some((control) => control.kind === 'toggle'),
+      ),
+    [interactiveItems],
+  )
+  const toggleLoopMechanism = useCallback(
+    (identityNode: THREE.Object3D) => {
+      const id = (identityNode.userData as PascalExtras).pascalId as AnyNodeId | undefined
+      if (!(id && loopMechanisms.has(id))) return false
+      const state = useInteractive.getState()
+      state.setMechanism(id, !state.mechanisms[id])
+      return true
+    },
+    [loopMechanisms],
+  )
 
   const openIds = useRef(new Set<string>())
+  const toggleProcedural = useCallback(
+    (hit: THREE.Object3D, identityNode: THREE.Object3D) => {
+      const extras = identityNode.userData as PascalExtras
+      if (extras.kind !== 'procedural-item') return false
+      const part = findProceduralMotionAncestor(hit)
+      if (part?.clip) {
+        useInteractive.getState().toggleProceduralPart(part.nodeId as AnyNodeId, part.partId)
+        return true
+      }
+      const nodeId = extras.pascalId as string
+      const entry = proceduralPlayback.entries.get(nodeId)
+      if (!entry) return false
+      const parts = [...new Set(entry.controller.motions.map((motion) => motion.partId))]
+      if (parts.length === 0) {
+        useInteractive.getState().toggleProceduralLights(nodeId as AnyNodeId)
+        return true
+      }
+      const active = useInteractive.getState().procedural[nodeId as AnyNodeId]?.parts
+      useInteractive
+        .getState()
+        .setProceduralParts(nodeId as AnyNodeId, parts, !parts.some((partId) => active?.[partId]))
+      return true
+    },
+    [proceduralPlayback],
+  )
   const toggleOpenable = useCallback(
     (node: THREE.Object3D) => {
       const extras = node.userData as PascalExtras
@@ -727,7 +925,7 @@ export function GlbScene({
         if (entry.levelId !== levelId) continue
         _local.copy(worldPoint)
         entry.node.worldToLocal(_local)
-        if (pointInPolygonInclusive(_local.x, _local.z, entry.polygon)) return entry
+        if (pointInZone(_local.x, _local.z, entry)) return entry
       }
       return null
     },
@@ -756,9 +954,13 @@ export function GlbScene({
   const resolveTarget = useCallback(
     (hits: HitCandidate[], ray: THREE.Ray): Target | null => {
       const firstNode = hits.length > 0 ? findIdentityAncestor(hits[0]!.object) : null
-      const toTarget = (object: THREE.Object3D, tid: string): Target => {
+      const toTarget = (
+        object: THREE.Object3D,
+        tid: string,
+        hitObject?: THREE.Object3D,
+      ): Target => {
         const e = object.userData as PascalExtras
-        return { object, id: tid, kind: e.kind ?? 'node', label: e.label ?? tid }
+        return { object, hitObject, id: tid, kind: e.kind ?? 'node', label: e.label ?? tid }
       }
       const { selection } = useViewer.getState()
 
@@ -797,10 +999,10 @@ export function GlbScene({
         const hitLevel = findAncestorLevelId(node)
         if (hitLevel !== selection.levelId) continue
         if (hit.point && worldPointInZoneFootprint(hit.point, activeZone)) {
-          return toTarget(node, id)
+          return toTarget(node, id, hit.object)
         }
         if (objectFootprintTouchesZone(node, activeZone)) {
-          return toTarget(node, id)
+          return toTarget(node, id, hit.object)
         }
       }
       return null
@@ -881,8 +1083,8 @@ export function GlbScene({
     }
   })
 
-  // ── Walkthrough: first-person HUD + door/window interaction ────────────────
-  const walkDoorRef = useRef<THREE.Object3D | null>(null)
+  // ── Walkthrough: first-person HUD + interaction ────────────────────────────
+  const walkDoorRef = useRef<{ hit: THREE.Object3D; node: THREE.Object3D } | null>(null)
   const lastWalkKey = useRef<string | null>(null)
 
   // Each frame in walkthrough, report the floor + room the camera stands in and
@@ -903,16 +1105,64 @@ export function GlbScene({
     _reticleRaycaster.far = WALK_REACH
     _reticleRaycaster.setFromCamera(_reticleNdc, camera)
     const hit = _reticleRaycaster.intersectObject(gltf.scene, true)[0]
-    let doorNode: THREE.Object3D | null = null
+    let doorNode: { hit: THREE.Object3D; node: THREE.Object3D } | null = null
     let doorId = ''
-    let door: { label: string; isOpen: boolean } | null = null
+    let door: { label: string; isOpen: boolean; verb?: string } | null = null
     if (hit) {
       const node = findIdentityAncestor(hit.object)
       const extras = node?.userData as PascalExtras | undefined
-      if (node && extras?.openable && extras.clips?.length) {
-        doorNode = node
+      const lightOnly =
+        extras?.pascalId &&
+        interactiveItems?.some(
+          (item) =>
+            item.pascalId === extras.pascalId &&
+            item.procedural?.lights.length &&
+            operableParts(item.procedural.recipe ?? { parts: item.procedural.parts }).length === 0,
+        )
+      const item = extras?.kind === 'item' ? toggleableItem(extras.pascalId) : undefined
+      if (node && extras?.kind === 'procedural-item' && (extras.clips?.length || lightOnly)) {
+        doorNode = { hit: hit.object, node }
+        const part = findProceduralMotionAncestor(hit.object)
+        const state = useInteractive.getState().procedural[extras.pascalId as AnyNodeId]
+        const isOpen = lightOnly
+          ? (state?.lightsOn ?? useInteractive.getState().lampDefault)
+          : part
+            ? Boolean(state?.parts[part.partId])
+            : Object.values(state?.parts ?? {}).some(Boolean)
+        const clips = part?.clip ? [part.clip] : extras.clips
+        const isSpin = part
+          ? part.kind === 'spin'
+          : (clips?.every((clip) => clip.endsWith(': loop')) ?? false)
+        const label = lightOnly
+          ? (extras.label ?? 'Lights')
+          : (part?.partId.replaceAll('_', ' ') ?? extras.label ?? 'Item')
+        door = {
+          label,
+          isOpen,
+          verb: lightOnly || isSpin ? (isOpen ? 'turn off' : 'turn on') : isOpen ? 'close' : 'open',
+        }
+        doorId = `${extras.pascalId}:${part?.partId ?? 'all'}`
+      } else if (node && item) {
+        doorNode = { hit: hit.object, node }
+        doorId = item.pascalId
+        const values = useInteractive.getState().items[item.pascalId]?.controlValues
+        const isOpen = item.interactive.controls.some(
+          (control, index) => control.kind === 'toggle' && Boolean(values?.[index]),
+        )
+        door = {
+          label: item.label,
+          isOpen,
+          verb: isOpen ? 'turn off' : 'turn on',
+        }
+      } else if (node && extras?.openable && extras.clips?.length) {
+        doorNode = { hit: hit.object, node }
         doorId = extras.pascalId as string
         door = { label: extras.label ?? 'Door', isOpen: openIds.current.has(doorId) }
+      } else if (node && extras?.pascalId && loopMechanisms.has(extras.pascalId)) {
+        doorNode = { hit: hit.object, node }
+        doorId = extras.pascalId
+        const isOpen = Boolean(useInteractive.getState().mechanisms[doorId as AnyNodeId])
+        door = { label: extras.label ?? 'Item', isOpen, verb: isOpen ? 'turn off' : 'turn on' }
       }
     }
     walkDoorRef.current = doorNode
@@ -927,8 +1177,17 @@ export function GlbScene({
   // E or click activates the openable in view. The click also re-locks the
   // pointer through the walkthrough controller; no selection happens.
   const activateWalkDoor = useCallback(() => {
-    if (walkDoorRef.current) toggleOpenable(walkDoorRef.current)
-  }, [toggleOpenable])
+    const target = walkDoorRef.current
+    if (!target) return
+    const extras = target.node.userData as PascalExtras
+    const item = extras.kind === 'item' ? toggleableItem(extras.pascalId) : undefined
+    if (item) {
+      useInteractive.getState().toggleItemToggles(item.pascalId, item.interactive)
+      return
+    }
+    if (!(toggleProcedural(target.hit, target.node) || toggleLoopMechanism(target.node)))
+      toggleOpenable(target.node)
+  }, [toggleableItem, toggleLoopMechanism, toggleOpenable, toggleProcedural])
   useEffect(() => {
     if (!walkthroughMode) return
     const onKey = (event: KeyboardEvent) => {
@@ -1020,12 +1279,18 @@ export function GlbScene({
       // the level.
       if (target) {
         setSelection({ selectedIds: [target.id] })
-        toggleOpenable(target.object)
+        if (
+          !(
+            toggleProcedural(target.hitObject ?? target.object, target.object) ||
+            toggleLoopMechanism(target.object)
+          )
+        )
+          toggleOpenable(target.object)
       } else {
         setSelection({ zoneId: null })
       }
     },
-    [resolveTarget, toggleOpenable, walkthroughMode],
+    [resolveTarget, toggleLoopMechanism, toggleOpenable, toggleProcedural, walkthroughMode],
   )
 
   // A click that hits nothing (empty space) steps one level back up the drill

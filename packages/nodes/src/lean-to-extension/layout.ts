@@ -5,6 +5,7 @@ import {
   getWallChordFrame,
   getWallCurveFrameAt,
   getWallCurveLength,
+  getWallLocalFaceZ,
   isCurvedWall,
   LeanToExtensionNode,
   type WallNode,
@@ -611,8 +612,7 @@ export function resolveLeanToWallPlacement(
   const requestedSpan = typeof overrides.span === 'number' ? overrides.span : 4
   const span = Math.max(0.5, Math.min(requestedSpan, wallLength - 0.1))
   const localX = Math.max(span / 2, Math.min(wallLength - span / 2, rawLocalX))
-  const thickness = wall.thickness ?? 0.1
-  const positionZ = side === 'front' ? thickness / 2 : -thickness / 2
+  const positionZ = getWallLocalFaceZ(wall, side === 'front' ? 'a' : 'b')
   const rotationY = side === 'front' ? 0 : Math.PI
 
   const parsed = LeanToExtensionNode.parse({

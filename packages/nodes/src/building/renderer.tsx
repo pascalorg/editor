@@ -16,6 +16,7 @@ export const BuildingRenderer = ({ node }: { node: BuildingNode }) => {
       position={node.position}
       ref={ref}
       rotation={[node.rotation[0], node.rotation[1], node.rotation[2]]}
+      visible={node.visible !== false}
       {...handlers}
     >
       {(node.children ?? []).map((childId) => (

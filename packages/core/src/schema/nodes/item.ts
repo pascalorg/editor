@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { AssetUrl } from '../asset-url'
 import { BaseNode, nodeType, objectId } from '../base'
 import type { CollectionId } from '../collections'
+import { GeometryScriptSource } from '../geometry-source'
 
 // --- Control descriptors ---
 
@@ -42,6 +43,14 @@ const controlSchema = z.discriminatedUnion('kind', [
 
 const animationEffectSchema = z.object({
   kind: z.literal('animation'),
+  // ambient (default): the toggle starts/stops looping clips (a fan).
+  // open-close: \`on\` plays once and holds, closing plays \`off\` or \`on\`
+  // reversed, and \`loop\` runs throughout (authored objects: a door, a hatch).
+  mode: z.enum(['ambient', 'open-close']).optional(),
+  // The toggle (index into controls) driving this effect; absent = the first
+  // toggle, as catalog items have always worked. Authored objects set it so
+  // each of their clips has its own control.
+  control: z.number().int().nonnegative().optional(),
   clips: z.object({
     on: z.string().optional(),
     off: z.string().optional(),
@@ -170,6 +179,10 @@ export const ItemNode = BaseNode.extend({
   // registry default. A dangling ref renders the default (never blocks).
   slots: z.record(z.string(), z.string()).optional(),
 
+  // Geometry authored as a script. When present, `asset.src` is its compiled
+  // artifact and `asset.dimensions` its bounds; absent = a catalog GLB.
+  source: GeometryScriptSource.optional(),
+
   asset: assetSchema,
 }).describe(dedent`Item node - used to represent a item in the building
   - position: position in level coordinate system (or parent coordinate system if attached)
@@ -183,6 +196,7 @@ export const ItemNode = BaseNode.extend({
     - rotation: corrective rotation for the model
     - scale: corrective scale for the model
     - tags: tags associated with the item
+  - source: optional three.js script the asset was compiled from (script hash, params, artifact hash, manifest)
 `)
 
 export type ItemNode = z.infer<typeof ItemNode>

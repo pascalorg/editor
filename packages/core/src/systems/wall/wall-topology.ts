@@ -64,11 +64,16 @@ function isSegmentLongEnough(start: WallPlanPoint, end: WallPlanPoint) {
   return distanceSquared(start, end) >= WALL_MIN_LENGTH * WALL_MIN_LENGTH
 }
 
-function wallSegmentsCoverSegment(start: WallPlanPoint, end: WallPlanPoint, walls: WallNode[]) {
+/** Where straight walls run along `start→end`, as sorted parameter intervals of it. */
+function collinearWallIntervals(
+  start: WallPlanPoint,
+  end: WallPlanPoint,
+  walls: WallNode[],
+): { intervals: Array<[number, number]>; length: number } | null {
   const dx = end[0] - start[0]
   const dz = end[1] - start[1]
   const lengthSquared = dx * dx + dz * dz
-  if (lengthSquared <= WALL_INTERSECTION_EPSILON * WALL_INTERSECTION_EPSILON) return false
+  if (lengthSquared <= WALL_INTERSECTION_EPSILON * WALL_INTERSECTION_EPSILON) return null
 
   const length = Math.sqrt(lengthSquared)
   const intervals: Array<[number, number]> = []
@@ -89,16 +94,50 @@ function wallSegmentsCoverSegment(start: WallPlanPoint, end: WallPlanPoint, wall
     const intervalEnd = Math.min(1, Math.max(wallStartT, wallEndT))
     if (intervalEnd >= intervalStart) intervals.push([intervalStart, intervalEnd])
   }
-
   intervals.sort((left, right) => left[0] - right[0])
-  const parameterTolerance = WALL_INTERSECTION_EPSILON / length
+  return { intervals, length }
+}
+
+function wallSegmentsCoverSegment(start: WallPlanPoint, end: WallPlanPoint, walls: WallNode[]) {
+  const collinear = collinearWallIntervals(start, end, walls)
+  if (!collinear) return false
+  const parameterTolerance = WALL_INTERSECTION_EPSILON / collinear.length
   let coveredUntil = 0
-  for (const [intervalStart, intervalEnd] of intervals) {
+  for (const [intervalStart, intervalEnd] of collinear.intervals) {
     if (intervalStart > coveredUntil + parameterTolerance) return false
     coveredUntil = Math.max(coveredUntil, intervalEnd)
     if (coveredUntil >= 1 - parameterTolerance) return true
   }
   return false
+}
+
+/**
+ * The parts of `start→end` that no straight wall already runs along, in order.
+ * A side drawn along an existing wall and past its end yields the overhang
+ * only, so the existing wall is reused instead of doubled. Gaps too short to
+ * be a wall are treated as covered.
+ */
+export function uncoveredWallSegments(
+  start: WallPlanPoint,
+  end: WallPlanPoint,
+  walls: WallNode[],
+): Array<[WallPlanPoint, WallPlanPoint]> {
+  const collinear = collinearWallIntervals(start, end, walls)
+  if (!collinear) return []
+  const minimumGap = WALL_MIN_LENGTH / collinear.length
+  const at = (t: number): WallPlanPoint => [
+    start[0] + (end[0] - start[0]) * t,
+    start[1] + (end[1] - start[1]) * t,
+  ]
+  const segments: Array<[WallPlanPoint, WallPlanPoint]> = []
+  let coveredUntil = 0
+  for (const [intervalStart, intervalEnd] of collinear.intervals) {
+    if (intervalStart > coveredUntil + minimumGap)
+      segments.push([at(coveredUntil), at(intervalStart)])
+    coveredUntil = Math.max(coveredUntil, intervalEnd)
+  }
+  if (coveredUntil < 1 - minimumGap) segments.push([at(coveredUntil), end])
+  return segments
 }
 
 function projectPointOntoWallCenterline(
@@ -162,6 +201,7 @@ export function planWallSplitAtPoint(
     point: WallPlanPoint
     radius: number
     ignoreWallIds?: readonly string[]
+    mintId?: () => string
   },
 ): WallPointSplitResult {
   if (!args.levelId) return { ok: false, reason: 'no-host' }
@@ -182,7 +222,7 @@ export function planWallSplitAtPoint(
     }
   }
 
-  const split = splitWall(projection.wall, [projection.wallT], nodes)
+  const split = splitWall(projection.wall, [projection.wallT], nodes, args.mintId)
   if (!split) {
     return {
       ok: true,
@@ -371,6 +411,7 @@ function splitWall(
   wall: WallNode,
   splitParameters: number[],
   nodes: Record<AnyNodeId, AnyNode>,
+  mintId?: () => string,
 ): { create: WallNode[]; update: WallTopologyChanges['update'] } | null {
   const parameters = [
     0,
@@ -384,6 +425,7 @@ function splitWall(
     const endT = parameters[index + 1]!
     return WallSchema.parse({
       ...properties,
+      id: mintId?.(),
       start: wallPointAt(wall, startT),
       end: wallPointAt(wall, endT),
       curveOffset: segmentCurveOffset(wall, startT, endT),
@@ -444,6 +486,7 @@ export function planWallInsertion(
     end: WallPlanPoint
     joinRadius: number
     wallDefaults?: Partial<WallNode>
+    mintId?: () => string
   },
 ): WallInsertionResult {
   const walls = Object.values(nodes).filter(
@@ -494,6 +537,7 @@ export function planWallInsertion(
   const insertedWalls = vertices.slice(0, -1).map((start, index) =>
     WallSchema.parse({
       ...wallProperties,
+      id: args.mintId?.(),
       name: `Wall ${existingWallCount + index + 1}`,
       start,
       end: vertices[index + 1]!,
@@ -523,17 +567,36 @@ export function planWallInsertion(
   }
   const splitPlans = [...splitWalls].flatMap(([wallId, parameters]) => {
     const wall = walls.find((candidate) => candidate.id === wallId)
-    const split = wall ? splitWall(wall, parameters, nodes) : null
+    const split = wall ? splitWall(wall, parameters, nodes, args.mintId) : null
     return split ? [[wallId, split] as const] : []
   })
   const replacementWalls = splitPlans.flatMap(([, split]) => split.create)
+  // Rooms name the walls that enclose them; a split wall's replacements take
+  // its place, as they do for an explicit division or a merge.
+  const replacements = new Map(
+    splitPlans.map(([wallId, split]) => [wallId, split.create.map((wall) => wall.id)] as const),
+  )
+  const zoneUpdates = Object.values(nodes).flatMap((node) =>
+    node.type === 'zone' &&
+    node.parentId === args.levelId &&
+    node.boundaryWallIds.some((id) => replacements.has(id))
+      ? [
+          {
+            id: node.id,
+            data: {
+              boundaryWallIds: node.boundaryWallIds.flatMap((id) => replacements.get(id) ?? [id]),
+            },
+          },
+        ]
+      : [],
+  )
   const plan: WallInsertionPlan = {
     changes: {
       create: [...replacementWalls, ...insertedWalls].map((node) => ({
         node,
         parentId: args.levelId,
       })),
-      update: splitPlans.flatMap(([, split]) => split.update),
+      update: [...splitPlans.flatMap(([, split]) => split.update), ...zoneUpdates],
       delete: splitPlans.map(([wallId]) => wallId as AnyNodeId),
     },
     insertedWalls,

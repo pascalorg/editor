@@ -18,6 +18,7 @@ import {
   usePlacementPreview,
 } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
+import { openingPlaneOffsetOnWall } from '../shared/opening-plane-offset'
 import { getOpeningHostLevelId, getRoofHostedOpeningPlanPoint } from '../shared/roof-opening-host'
 import {
   findClosestWallInPlan,
@@ -220,7 +221,8 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
       const itemRotation = hit.itemRotation + (flipped ? Math.PI : 0)
 
       lastValid = {
-        position: [clampedX, clampedY, 0],
+        // Same-wall moves keep the wall-local plane offset; another host resets it.
+        position: [clampedX, clampedY, openingPlaneOffsetOnWall(node, hit.wall.id)],
         rotation: [0, itemRotation, 0],
         side,
         parentId: hit.wall.id,

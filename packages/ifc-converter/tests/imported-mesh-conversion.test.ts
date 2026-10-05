@@ -232,7 +232,10 @@ describe('IFC imported mesh conversion', () => {
     const scene = await duplexWithMissingSpaceNameScene()
     const nodes = Object.values(scene.nodes)
 
-    expect(nodes.filter((node) => node.type === 'zone')).toHaveLength(21)
+    // Wall loops no IfcSpace claims become rooms too; only the spaces are counted.
+    expect(
+      nodes.filter((node) => node.type === 'zone' && metadata(node).ifcType === 'IFCSPACE'),
+    ).toHaveLength(21)
     expect(
       nodes.some((node) => node.type === 'zone' && metadata(node).footprintApproximated === true),
     ).toBe(true)
@@ -247,7 +250,7 @@ describe('IFC imported mesh conversion', () => {
   test('keeps a zone when its IFC room number exceeds the Pascal limit', async () => {
     const scene = await duplexWithLongRoomNumberScene()
     const zones = Object.values(scene.nodes).filter(
-      (node): node is ZoneNode => node.type === 'zone',
+      (node): node is ZoneNode => node.type === 'zone' && metadata(node).ifcType === 'IFCSPACE',
     )
     const changedZone = zones.find((zone) => metadata(zone).expressID === 157)
 

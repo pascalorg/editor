@@ -1,28 +1,35 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import type { AnyNode, AnyNodeId, AssetInput } from '@pascal-app/core/schema'
-import {
-  CeilingNode,
-  DoorNode,
-  ItemNode,
-  SlabNode,
-  WallNode,
-  WindowNode,
-  ZoneNode,
-} from '@pascal-app/core/schema'
-import { z } from 'zod'
-import type { SceneOperations } from '../operations'
-import { ADDITIVE_TOOL_ANNOTATIONS, READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
-import { findCatalogItem, searchCatalogItems } from './asset-catalog'
-import { keepoutCoversPlanned, keepoutForPolygonEdge } from './door-clearance'
-import { ErrorCode, throwMcpError } from './errors'
-import { polygonArea, polygonBounds, type Vec2, wallLength, wallLocalXFromT } from './geometry'
+import { createZone, generateId } from '@pascal-app/core'
 import {
   collectDoorKeepouts,
   collectOccupiedFootprints,
   findValidPlacement,
   itemPlanAabb,
+  keepoutCoversPlanned,
+  keepoutForPolygonEdge,
   type PlanAabb,
-} from './layout-clearance'
+  polygonArea,
+  polygonBounds,
+  rescriptOpening,
+  type Vec2,
+} from '@pascal-app/core/agent-operations'
+import { addDoorTool, addWindowTool, isAgentRefusal } from '@pascal-app/core/agent-tools'
+import { planWallOpening } from '@pascal-app/core/building'
+import type {
+  AnyNode,
+  AnyNodeId,
+  AssetInput,
+  CompiledGeometryScript,
+  GeometryScriptParamValue,
+  WallNode as WallNodeType,
+} from '@pascal-app/core/schema'
+import { ItemNode } from '@pascal-app/core/schema'
+import { z } from 'zod'
+import type { SceneOperations } from '../operations'
+import { compileAndStore, type GeometryScriptHost, readScript } from './add-object'
+import { ADDITIVE_TOOL_ANNOTATIONS, READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
+import { findCatalogItem, searchCatalogItems } from './asset-catalog'
+import { ErrorCode, refusalResult, throwMcpError, toolError } from './errors'
 import {
   type LiveSyncStatus,
   liveSyncOutput,
@@ -31,6 +38,7 @@ import {
 } from './live-sync'
 import { measurement } from './measurement'
 import { NodeIdSchema, Vec2Schema } from './schemas'
+import { toPatches } from './shared-tools'
 
 const ROOM_TYPES = [
   'bedroom',
@@ -67,25 +75,28 @@ export const createRoomInput = {
     positive: true,
     description: 'Wall thickness.',
   }).optional(),
+  outdoor: z
+    .boolean()
+    .optional()
+    .describe(
+      'true for an outdoor room (a terrace): closed with separators where no wall runs, no walls of its own and no ceiling.',
+    ),
 }
 
 export const createRoomOutput = {
   zoneId: z.string(),
-  slabId: z.string(),
-  ceilingId: z.string(),
-  wallIds: z.array(z.string()),
+  /** Derived floor plate. `null` when the bridge has not reconciled yet. */
+  slabId: z.string().nullable(),
+  /** Derived ceiling. `null` when the bridge has not reconciled yet. */
+  ceilingId: z.string().nullable(),
+  /** One entry per polygon edge; `null` where no wall covers that edge. */
+  wallIds: z.array(z.string().nullable()),
+  reusedWalls: z.number(),
   areaSqMeters: z.number(),
+  conflicts: z
+    .array(z.object({ code: z.string(), nodeIds: z.array(z.string()), message: z.string() }))
+    .optional(),
   ...liveSyncOutput,
-}
-
-export const addDoorInput = {
-  wallId: NodeIdSchema,
-  t: z.number().min(0).max(1).optional(),
-  position: z.number().min(0).max(1).optional(),
-  width: measurement('length', 'm', { positive: true, description: 'Door width.' }).optional(),
-  height: measurement('length', 'm', { positive: true, description: 'Door height.' }).optional(),
-  hingesSide: z.enum(['left', 'right']).optional(),
-  swingDirection: z.enum(['inward', 'outward']).optional(),
 }
 
 export const addDoorOutput = {
@@ -97,18 +108,6 @@ export const addDoorOutput = {
   clamped: z.boolean(),
   coordinateSystem: z.literal('wall-local-meters'),
   ...liveSyncOutput,
-}
-
-export const addWindowInput = {
-  wallId: NodeIdSchema,
-  t: z.number().min(0).max(1).optional(),
-  position: z.number().min(0).max(1).optional(),
-  width: measurement('length', 'm', { positive: true, description: 'Window width.' }).optional(),
-  height: measurement('length', 'm', { positive: true, description: 'Window height.' }).optional(),
-  sillHeight: measurement('length', 'm', {
-    min: 0,
-    description: 'Sill height above floor.',
-  }).optional(),
 }
 
 export const addWindowOutput = {
@@ -210,14 +209,6 @@ function inferRoomGeometry(
     levelId: inferredLevelId,
     polygon: polygon ?? (zone.polygon as Vec2[]),
   }
-}
-
-function resolveWallT(toolName: string, t?: number, position?: number): number {
-  const resolved = t ?? position
-  if (resolved === undefined) {
-    throwMcpError(ErrorCode.InvalidParams, `${toolName} requires t or position in the 0..1 range`)
-  }
-  return resolved
 }
 
 function makeItemAsset(asset: AssetInput) {
@@ -429,56 +420,120 @@ export function registerSearchAssets(server: McpServer): void {
   )
 }
 
+const WALL_EDGE_TOLERANCE = 0.2
+
+function pointToEdgeDistance(a: Vec2, b: Vec2, point: readonly [number, number]) {
+  const dx = b[0] - a[0]
+  const dz = b[1] - a[1]
+  const length = Math.hypot(dx, dz)
+  if (length < 1e-9) return Math.hypot(point[0] - a[0], point[1] - a[1])
+  return Math.abs((point[0] - a[0]) * dz - (point[1] - a[1]) * dx) / length
+}
+
+function wallCoversEdge(wall: AnyNode & { type: 'wall' }, start: Vec2, end: Vec2) {
+  const dx = end[0] - start[0],
+    dz = end[1] - start[1]
+  const lengthSq = dx * dx + dz * dz
+  const station = (p: Vec2) => ((p[0] - start[0]) * dx + (p[1] - start[1]) * dz) / lengthSq
+  const a = station(wall.start),
+    b = station(wall.end)
+  return (
+    Math.min(1, Math.max(a, b)) - Math.max(0, Math.min(a, b)) > 1e-6 &&
+    pointToEdgeDistance(start, end, wall.start) < WALL_EDGE_TOLERANCE &&
+    pointToEdgeDistance(start, end, wall.end) < WALL_EDGE_TOLERANCE
+  )
+}
+
+/** The construction the reconciler derived for a room, for the tool payload. */
+function derivedRoomSurfaces(bridge: SceneOperations, levelId: string, zoneId: string) {
+  const children = Object.values(bridge.getNodes()).filter((node) => node.parentId === levelId)
+  const plate = children.find(
+    (node) => node.type === 'slab' && node.boundary === 'auto' && node.zoneIds?.includes(zoneId),
+  )
+  const ceiling = children.find(
+    (node) => node.type === 'ceiling' && node.boundary === 'auto' && node.zoneId === zoneId,
+  )
+  return { slabId: plate?.id ?? null, ceilingId: ceiling?.id ?? null }
+}
+
 export function registerCreateRoom(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'create_room',
     {
       title: 'Create room',
       description:
-        'Create a room on a level: zone, slab, ceiling, and one wall per polygon edge. Returns wallIds in polygon edge order.',
+        'Create a room on a level from a polygon: one wall per edge (reusing or splitting the walls already there) plus the room zone that names it. The floor plate and the ceiling are DERIVED from the room — never author a slab or a ceiling for a room, and never pass boundary/autoFromWalls. Returns wallIds in polygon edge order and the derived slabId / ceilingId. outdoor: true draws a terrace instead: separators where no wall runs and no ceiling (wallIds are null for its own sides).',
       inputSchema: createRoomInput,
       outputSchema: createRoomOutput,
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
-    async ({ levelId, name, polygon, color, wallHeight, wallThickness }) => {
+    async ({ levelId, name, polygon, color, wallHeight, wallThickness, outdoor }) => {
       assertLevel(bridge, levelId)
       const points = polygon as Vec2[]
-      const zone = ZoneNode.parse({
-        name,
-        polygon: points,
-        color: color ?? '#60a5fa',
-        metadata: { mcpTool: 'create_room' },
-      })
-      const slab = SlabNode.parse({ polygon: points, metadata: { mcpTool: 'create_room' } })
-      const ceiling = CeilingNode.parse({ polygon: points, metadata: { mcpTool: 'create_room' } })
-      const walls = points.map((start, index) =>
-        WallNode.parse({
-          name: `${name} wall ${index + 1}`,
-          start,
-          end: points[(index + 1) % points.length],
-          ...(wallHeight !== undefined ? { height: wallHeight } : {}),
-          ...(wallThickness !== undefined ? { thickness: wallThickness } : {}),
-          metadata: { mcpTool: 'create_room', roomName: name, edgeIndex: index },
-        }),
-      )
+      const wallDefaults: Partial<WallNodeType> = {
+        ...(wallHeight !== undefined ? { height: wallHeight } : {}),
+        ...(wallThickness !== undefined ? { thickness: wallThickness } : {}),
+        metadata: { mcpTool: 'create_room', roomName: name },
+      }
 
-      bridge.applyPatch([
-        { op: 'create', node: zone, parentId: levelId as AnyNodeId },
-        { op: 'create', node: slab, parentId: levelId as AnyNodeId },
-        { op: 'create', node: ceiling, parentId: levelId as AnyNodeId },
-        ...walls.map((wall) => ({
-          op: 'create' as const,
-          node: wall,
-          parentId: levelId as AnyNodeId,
-        })),
-      ])
+      const before = bridge.getNodes()
+      const plan = createZone(before, {
+        levelId,
+        polygon: points,
+        name,
+        enclose: !outdoor,
+        ...(outdoor ? { intent: { hasCeiling: false } } : { wall: wallDefaults }),
+        mintId: generateId,
+      })
+      if (plan.conflicts?.length)
+        return textResult({
+          zoneId: '',
+          slabId: null,
+          ceilingId: null,
+          wallIds: [],
+          reusedWalls: 0,
+          areaSqMeters: 0,
+          conflicts: plan.conflicts,
+        })
+      bridge.runAsSingleHistoryStep(() => {
+        bridge.applyPatch(
+          plan.changes.map((change) =>
+            change.op === 'create'
+              ? {
+                  ...change,
+                  node:
+                    change.node.type === 'zone'
+                      ? {
+                          ...change.node,
+                          color: color ?? '#60a5fa',
+                          metadata: { mcpTool: 'create_room' },
+                        }
+                      : change.node,
+                  parentId: change.node.parentId as AnyNodeId,
+                }
+              : change,
+          ),
+        )
+        bridge.deriveStructure([levelId as AnyNodeId])
+      })
+      const wallIds = points.map(
+        (start, i) =>
+          Object.values(bridge.getNodes()).find(
+            (node) =>
+              node.type === 'wall' &&
+              node.parentId === levelId &&
+              wallCoversEdge(node, start, points[(i + 1) % points.length]!),
+          )?.id ?? null,
+      )
+      const reusedWalls = wallIds.filter((id) => id && before[id as AnyNodeId]).length
+
       const persistence = await publishLiveSceneSnapshot(bridge, 'create_room')
 
       return textResult({
-        zoneId: zone.id,
-        slabId: slab.id,
-        ceilingId: ceiling.id,
-        wallIds: walls.map((wall) => wall.id),
+        zoneId: plan.zoneId,
+        ...derivedRoomSurfaces(bridge, levelId, plan.zoneId),
+        wallIds,
+        reusedWalls,
         areaSqMeters: Math.round(polygonArea(points) * 100) / 100,
         ...persistencePayload(persistence),
       })
@@ -486,46 +541,128 @@ export function registerCreateRoom(server: McpServer, bridge: SceneOperations): 
   )
 }
 
-export function registerAddDoor(server: McpServer, bridge: SceneOperations): void {
+/**
+ * `add_door` / `add_window` with a nodeId: rebuild that opening from new code,
+ * or its stored script with new params, through the shared operation.
+ */
+async function rebuildOpening(
+  kind: 'door' | 'window',
+  bridge: SceneOperations,
+  host: GeometryScriptHost | undefined,
+  input: {
+    nodeId: string
+    code?: string
+    params?: Record<string, GeometryScriptParamValue>
+  },
+) {
+  if (!host)
+    return toolError('This Pascal server cannot run geometry scripts.', {
+      code: 'scripts_unavailable',
+    })
+  const scene = bridge.getActiveScene()
+  if (!scene) return toolError('Open or save a scene first.', { code: 'no_active_scene' })
+  const nodes = bridge.getNodes() as Record<string, AnyNode>
+  let outcome: ReturnType<typeof rescriptOpening>
+  try {
+    const code = input.code ?? (await readScript(host, scene.id, bridge, input.nodeId))
+    const compiled = await compileAndStore(host, scene.id, code, input.params)
+    outcome = rescriptOpening(nodes, { nodeId: input.nodeId, compiled }, { activeLevelId: null })
+  } catch (error) {
+    if (isAgentRefusal(error)) return refusalResult(error)
+    return toolError(error instanceof Error ? error.message : String(error), {
+      code: 'script_failed',
+    })
+  }
+  if (outcome.changes) bridge.applyPatch(toPatches(outcome.changes))
+  const node = bridge.getNodes()[input.nodeId as AnyNodeId] as AnyNode & {
+    position: [number, number, number]
+    height: number
+    wallId?: string
+  }
+  const wall = node.wallId
+    ? (bridge.getNodes()[node.wallId as AnyNodeId] as WallNodeType)
+    : undefined
+  const wallLength = wall ? Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]) : 0
+  const persistence = await publishLiveSceneSnapshot(bridge, `add_${kind}`)
+  return textResult({
+    [kind === 'door' ? 'doorId' : 'windowId']: input.nodeId,
+    localX: node.position[0],
+    t: wallLength ? node.position[0] / wallLength : 0,
+    position: wallLength ? node.position[0] / wallLength : 0,
+    wallLength,
+    clamped: false,
+    coordinateSystem: 'wall-local-meters' as const,
+    ...(kind === 'window' ? { sillHeight: node.position[1] - node.height / 2 } : {}),
+    ...outcome.result,
+    ...persistencePayload(persistence),
+  })
+}
+
+/** A door or window passed `code`: compiled and stored the way add_object does, or the tool's error. */
+async function compileOpeningScript(
+  bridge: SceneOperations,
+  host: GeometryScriptHost | undefined,
+  input: { code?: string; params?: Record<string, GeometryScriptParamValue> },
+): Promise<{ script?: CompiledGeometryScript } | { error: ReturnType<typeof toolError> }> {
+  if (!input.code) return {}
+  if (!host)
+    return {
+      error: toolError('This Pascal server cannot run geometry scripts; use the fields.', {
+        code: 'scripts_unavailable',
+      }),
+    }
+  const scene = bridge.getActiveScene()
+  if (!scene)
+    return { error: toolError('Open or save a scene first.', { code: 'no_active_scene' }) }
+  try {
+    return { script: await compileAndStore(host, scene.id, input.code, input.params) }
+  } catch (error) {
+    return {
+      error: toolError(error instanceof Error ? error.message : String(error), {
+        code: 'script_failed',
+      }),
+    }
+  }
+}
+
+export function registerAddDoor(
+  server: McpServer,
+  bridge: SceneOperations,
+  geometryScripts?: GeometryScriptHost,
+): void {
   server.registerTool(
-    'add_door',
+    addDoorTool.name,
     {
-      title: 'Add door',
-      description:
-        'Add a door to an existing wall. t/position is 0..1 along the wall: 0 = start, 0.5 = center, 1 = end.',
-      inputSchema: addDoorInput,
+      title: addDoorTool.title,
+      description: addDoorTool.description,
+      inputSchema: addDoorTool.input,
       outputSchema: addDoorOutput,
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
-    async ({ wallId, t, position, width = 0.9, height = 2.1, hingesSide, swingDirection }) => {
-      const wall = assertWall(bridge, wallId)
-      const length = wallLength(wall)
-      if (length < width) {
-        throwMcpError(
-          ErrorCode.InvalidParams,
-          `Wall ${wallId} is ${length.toFixed(2)}m long, too short for a ${width.toFixed(2)}m door`,
-        )
+    async (input) => {
+      if (input.nodeId)
+        return rebuildOpening('door', bridge, geometryScripts, { ...input, nodeId: input.nodeId })
+      const compiled = await compileOpeningScript(bridge, geometryScripts, input)
+      if ('error' in compiled) return compiled.error
+      let planned: ReturnType<typeof planWallOpening>
+      try {
+        planned = planWallOpening(bridge.getNodes() as Record<string, AnyNode>, {
+          kind: 'door',
+          ...input,
+          compiled: compiled.script,
+        })
+      } catch (error) {
+        return refusalResult(error)
       }
-      const wallT = resolveWallT('add_door', t, position)
-      const localX = wallLocalXFromT(wall, wallT, width)
-      const door = DoorNode.parse({
-        wallId,
-        parentId: wallId,
-        position: [localX, height / 2, 0],
-        width,
-        height,
-        ...(hingesSide ? { hingesSide } : {}),
-        ...(swingDirection ? { swingDirection } : {}),
-      })
-      const id = bridge.createNode(door, wallId as AnyNodeId)
+      const id = bridge.createNode(planned.node, planned.wallId as AnyNodeId)
       const persistence = await publishLiveSceneSnapshot(bridge, 'add_door')
       return textResult({
         doorId: id,
-        localX,
-        t: wallT,
-        position: wallT,
-        wallLength: length,
-        clamped: Math.abs(localX - wallT * length) > 1e-9,
+        localX: planned.localX,
+        t: planned.t,
+        position: planned.t,
+        wallLength: planned.wallLength,
+        clamped: planned.clamped,
         coordinateSystem: 'wall-local-meters',
         ...persistencePayload(persistence),
       })
@@ -533,46 +670,46 @@ export function registerAddDoor(server: McpServer, bridge: SceneOperations): voi
   )
 }
 
-export function registerAddWindow(server: McpServer, bridge: SceneOperations): void {
+export function registerAddWindow(
+  server: McpServer,
+  bridge: SceneOperations,
+  geometryScripts?: GeometryScriptHost,
+): void {
   server.registerTool(
-    'add_window',
+    addWindowTool.name,
     {
-      title: 'Add window',
-      description:
-        'Add a window to an existing wall. t/position is 0..1 along the wall; sillHeight is the height from floor to window bottom.',
-      inputSchema: addWindowInput,
+      title: addWindowTool.title,
+      description: addWindowTool.description,
+      inputSchema: addWindowTool.input,
       outputSchema: addWindowOutput,
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
-    async ({ wallId, t, position, width = 1.5, height = 1.5, sillHeight = 0.9 }) => {
-      const wall = assertWall(bridge, wallId)
-      const length = wallLength(wall)
-      if (length < width) {
-        throwMcpError(
-          ErrorCode.InvalidParams,
-          `Wall ${wallId} is ${length.toFixed(2)}m long, too short for a ${width.toFixed(2)}m window`,
-        )
+    async (input) => {
+      if (input.nodeId)
+        return rebuildOpening('window', bridge, geometryScripts, { ...input, nodeId: input.nodeId })
+      const compiled = await compileOpeningScript(bridge, geometryScripts, input)
+      if ('error' in compiled) return compiled.error
+      let planned: ReturnType<typeof planWallOpening>
+      try {
+        planned = planWallOpening(bridge.getNodes() as Record<string, AnyNode>, {
+          kind: 'window',
+          ...input,
+          compiled: compiled.script,
+        })
+      } catch (error) {
+        return refusalResult(error)
       }
-      const wallT = resolveWallT('add_window', t, position)
-      const localX = wallLocalXFromT(wall, wallT, width)
-      const windowNode = WindowNode.parse({
-        wallId,
-        parentId: wallId,
-        position: [localX, sillHeight + height / 2, 0],
-        width,
-        height,
-      })
-      const id = bridge.createNode(windowNode, wallId as AnyNodeId)
+      const id = bridge.createNode(planned.node, planned.wallId as AnyNodeId)
       const persistence = await publishLiveSceneSnapshot(bridge, 'add_window')
       return textResult({
         windowId: id,
-        localX,
-        t: wallT,
-        position: wallT,
-        wallLength: length,
-        clamped: Math.abs(localX - wallT * length) > 1e-9,
+        localX: planned.localX,
+        t: planned.t,
+        position: planned.t,
+        wallLength: planned.wallLength,
+        clamped: planned.clamped,
         coordinateSystem: 'wall-local-meters',
-        sillHeight,
+        sillHeight: planned.sillHeight ?? 0,
         ...persistencePayload(persistence),
       })
     },
@@ -703,10 +840,14 @@ export function registerFurnishRoom(server: McpServer, bridge: SceneOperations):
   )
 }
 
-export function registerRoomTools(server: McpServer, bridge: SceneOperations): void {
+export function registerRoomTools(
+  server: McpServer,
+  bridge: SceneOperations,
+  geometryScripts?: GeometryScriptHost,
+): void {
   registerSearchAssets(server)
   registerCreateRoom(server, bridge)
-  registerAddDoor(server, bridge)
-  registerAddWindow(server, bridge)
+  registerAddDoor(server, bridge, geometryScripts)
+  registerAddWindow(server, bridge, geometryScripts)
   registerFurnishRoom(server, bridge)
 }

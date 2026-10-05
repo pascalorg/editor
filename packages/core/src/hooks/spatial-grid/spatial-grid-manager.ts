@@ -1,12 +1,14 @@
+import { liftedManualSlab } from '../../lib/floor-construction-lift'
 import { itemOverlapsPolygon } from '../../lib/item-polygon-overlap'
 import { type PlanAabb, planFootprintAABB, planFootprintCorners } from '../../lib/plan-footprint'
 import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
 import { levelBaseElevationAt } from '../../lib/terrain-support'
-import { nodeRegistry } from '../../registry'
+import { floorPlacedCollides, nodeRegistry } from '../../registry'
 import type { AnyNode, AnyNodeId, CeilingNode, ItemNode, SlabNode, WallNode } from '../../schema'
 import { getScaledDimensions, isLowProfileItemSurface } from '../../schema'
 import { getWallPlaneTop } from '../../services/storey'
 import useLiveNodeOverrides, { getEffectiveNode } from '../../store/use-live-node-overrides'
+import useLiveTerrain from '../../store/use-live-terrain'
 import useLiveTransforms from '../../store/use-live-transforms'
 import useScene from '../../store/use-scene'
 import {
@@ -14,12 +16,13 @@ import {
   pointInPolygon,
   SUPPORT_ELEVATION_EPSILON,
   type WallSlabSupport,
+  wallOverlapsPolygon,
 } from '../../systems/slab/slab-support'
 import { DEFAULT_WALL_THICKNESS } from '../../systems/wall/wall-footprint'
+import type { WallJustification } from '../../systems/wall/wall-frame'
 import { resolveWallEffectiveHeight } from '../../systems/wall/wall-top'
 import { getFloorPlacedFootprints } from './floor-placed-elevation'
 import { SpatialGrid } from './spatial-grid'
-import { GROUND_SUPPORT_ID } from './support-host-id'
 import { WallSpatialGrid } from './wall-spatial-grid'
 
 export { itemOverlapsPolygon } from '../../lib/item-polygon-overlap'
@@ -238,7 +241,6 @@ export class SpatialGridManager {
   private getWallHeight(wallId: string): number {
     const wall = this.walls.get(wallId)
     if (!wall) return 0
-    if (wall.height != null) return wall.height
 
     const nodes = useScene.getState().nodes
     const levelId = resolveNodeLevelId(wall, nodes)
@@ -251,6 +253,7 @@ export class SpatialGridManager {
       wall.supportSlabId ?? null,
       undefined,
       wall.supportOffset,
+      wall.justification,
     )
     return resolveWallEffectiveHeight(
       wall,
@@ -342,7 +345,7 @@ export class SpatialGridManager {
         }
       }
     }
-    return effective
+    return liftedManualSlab(useScene.getState().nodes, effective)
   }
 
   private getRenderedSlabPolygon(levelId: string, slab: SlabNode): Array<[number, number]> {
@@ -592,7 +595,7 @@ export class SpatialGridManager {
     for (const node of Object.values(nodes)) {
       if (ignoreSet.has(node.id)) continue
       const floorPlaced = nodeRegistry.get(node.type)?.capabilities?.floorPlaced
-      if (!floorPlaced?.collides) continue
+      if (!floorPlaced || !floorPlacedCollides(floorPlaced, node)) continue
       if (floorPlaced.applies && !floorPlaced.applies(node)) continue
       // Low-profile item surfaces (rugs, mats) are stack-on targets, not
       // obstacles — keep the long-standing item-only exemption.
@@ -918,9 +921,19 @@ export class SpatialGridManager {
     curveOffset = 0,
     thickness = DEFAULT_WALL_THICKNESS,
     preferredSlabId?: string | null,
+    justification?: WallJustification,
   ): number {
-    return this.getSlabSupportForWall(levelId, start, end, curveOffset, thickness, preferredSlabId)
-      .elevation
+    return this.getSlabSupportForWall(
+      levelId,
+      start,
+      end,
+      curveOffset,
+      thickness,
+      preferredSlabId,
+      undefined,
+      0,
+      justification,
+    ).elevation
   }
 
   getSlabSupportForWall(
@@ -932,21 +945,12 @@ export class SpatialGridManager {
     preferredSlabId?: string | null,
     maxElevation?: number | null,
     supportOffset = 0,
+    justification?: WallJustification,
   ): WallSlabSupport {
     // Sampled at the wall's own start point — the same anchor the mesh is
     // positioned at, so the resolver and the renderer cannot disagree about
     // where the ground is under this wall.
     const levelBase = levelBaseElevationAt(useScene.getState().nodes, levelId, start[0], start[1])
-
-    if (preferredSlabId === GROUND_SUPPORT_ID) {
-      const elevation = levelBase + supportOffset
-      return {
-        elevation,
-        electedSlabId: null,
-        baseElevation: elevation,
-        baseSegments: [{ start: 0, end: 1, elevation }],
-      }
-    }
 
     const slabMap = this.slabsByLevel.get(levelId)
     if (!slabMap) {
@@ -956,29 +960,29 @@ export class SpatialGridManager {
         electedSlabId: null,
         baseElevation: elevation,
         baseSegments: [{ start: 0, end: 1, elevation }],
+        faceDatum: { a: [{ start: 0, end: 1, elevation }], b: [{ start: 0, end: 1, elevation }] },
+        faceBottom: { a: [{ start: 0, end: 1, elevation }], b: [{ start: 0, end: 1, elevation }] },
       }
     }
 
     const inputs = this.getSupportInputs(levelId, slabMap)
 
     const support = computeWallSlabSupport(
-      { start, end, curveOffset, thickness },
+      { start, end, curveOffset, thickness, justification, supportOffset },
       inputs.slabs,
       inputs.walls,
       preferredSlabId,
       maxElevation,
       levelBase,
+      inputs.supportNodes,
+      inputs.baseAt,
+      inputs.terrainPlates.some((slab) =>
+        wallOverlapsPolygon({ start, end, curveOffset, thickness, justification }, slab.polygon),
+      )
+        ? useLiveTerrain.getState()
+        : undefined,
     )
-    if (supportOffset === 0) return support
-    return {
-      ...support,
-      elevation: support.elevation + supportOffset,
-      baseElevation: support.baseElevation + supportOffset,
-      baseSegments: support.baseSegments.map((segment) => ({
-        ...segment,
-        elevation: segment.elevation + supportOffset,
-      })),
-    }
+    return support
   }
 
   /**
@@ -998,8 +1002,11 @@ export class SpatialGridManager {
       nodes: object
       overrides: object
       transforms: object
+      terrainPlates: SlabNode[]
+      baseAt: (x: number, z: number) => number
       slabs: SlabNode[]
       walls: WallNode[]
+      supportNodes: Record<string, AnyNode>
     }
   >()
 
@@ -1018,12 +1025,43 @@ export class SpatialGridManager {
       return cached
     }
 
+    const slabs = [...slabMap.values()].map((slab) => {
+      const effective = this.effectiveSlabRecord(slab)
+      const lifted = liftedManualSlab(nodes, slab)
+      return lifted === slab
+        ? effective
+        : { ...effective, elevation: effective.elevation - (lifted.elevation - slab.elevation) }
+    })
+    const supportNodes: Record<string, AnyNode> = slabs.some(
+      (slab) => slab.plateRole === 'base' && slab.floorHeight !== undefined,
+    )
+      ? { ...nodes }
+      : {}
+    for (const slab of slabs)
+      for (const id of slab.zoneIds ?? []) {
+        const zone = nodes[id as AnyNodeId]
+        if (zone?.type === 'zone') supportNodes[id] = getEffectiveNode(zone)
+      }
+    for (const node of Object.values(nodes))
+      if (node.parentId === levelId && (node.type === 'separator' || node.type === 'zone'))
+        supportNodes[node.id] = getEffectiveNode(node)
+    for (const node of Object.values(nodes))
+      if (node.type === 'site' || node.type === 'building' || node.type === 'level')
+        supportNodes[node.id] = node
     const next = {
       revision: this.supportInputsRevision,
       nodes,
       overrides,
       transforms,
-      slabs: [...slabMap.values()].map((slab) => this.effectiveSlabRecord(slab)),
+      terrainPlates: slabs.filter(
+        (slab) =>
+          slab.boundary === 'auto' &&
+          !slab.recessed &&
+          (slab.elevation - slab.thickness > 1e-4 || slab.elevation < -1e-4),
+      ),
+      baseAt: (x: number, z: number) => levelBaseElevationAt(nodes, levelId, x, z),
+      slabs,
+      supportNodes,
       walls: this.getLevelWallNodes(levelId).map((wall) => getEffectiveNode(wall)),
     }
     this.supportInputs.set(levelId, next)
@@ -1173,6 +1211,7 @@ export function getWallBaseElevationForNodes(
     wall.supportSlabId ?? null,
     undefined,
     wall.supportOffset,
+    wall.justification,
   ).elevation
 }
 
@@ -1189,6 +1228,16 @@ export function getWallEffectiveHeightForNodes(
   nodes: Record<string, AnyNode>,
 ): number {
   const levelId = resolveNodeLevelId(wall, nodes)
-  const baseElevation = getWallBaseElevationForNodes(wall, nodes)
-  return resolveWallEffectiveHeight(wall, getWallPlaneTop(wall, levelId, nodes), baseElevation)
+  const support = spatialGridManager.getSlabSupportForWall(
+    levelId,
+    wall.start,
+    wall.end,
+    wall.curveOffset ?? 0,
+    wall.thickness,
+    wall.supportSlabId ?? null,
+    undefined,
+    wall.supportOffset,
+    wall.justification,
+  )
+  return resolveWallEffectiveHeight(wall, getWallPlaneTop(wall, levelId, nodes), support.elevation)
 }

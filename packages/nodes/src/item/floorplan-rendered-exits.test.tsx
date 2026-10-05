@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -7,7 +7,6 @@ import {
   getSurfaceProvider,
   ItemNode,
   LevelNode,
-  nodeRegistry,
   registerNode,
   resolveSurfacePlacement,
   ShelfNode,
@@ -15,7 +14,6 @@ import {
   sceneRegistry,
   spatialGridManager,
   useLiveNodeOverrides,
-  useLiveTransforms,
   useRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -26,39 +24,22 @@ import {
   type Recipe,
   transformPoint,
 } from '@pascal-app/core/procedural-items'
+import { useEditor, useInteractionScope } from '@pascal-app/editor'
 import { NodeRenderer, useViewer, WallSystem } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { extend, useFrame } from '@react-three/fiber'
 import { act, create } from '@react-three/test-renderer'
-import { Children, cloneElement, isValidElement, type ReactNode, useMemo, useRef } from 'react'
-import {
-  BoxGeometry,
-  Euler,
-  Group,
-  Line,
-  type Matrix4,
-  Mesh,
-  MeshBasicMaterial,
-  Path,
-  Quaternion,
-  Vector3,
-} from 'three'
+import { useRef } from 'react'
+import { Group, Line, type Matrix4, Path, Vector3 } from 'three'
 import { FloorplanRegistryMoveOverlay } from '../../../editor/src/components/editor-2d/floorplan-registry-move-overlay'
 import { FloorplanRegistryLayer } from '../../../editor/src/components/editor-2d/renderers/floorplan-registry-layer'
 import { sfxEmitter } from '../../../editor/src/lib/sfx-bus'
-import useEditor from '../../../editor/src/store/use-editor'
-import useInteractionScope from '../../../editor/src/store/use-interaction-scope'
-import { FloorElevationSystem } from '../../../viewer/src/systems/floor-elevation/floor-elevation-system'
-import { GeometrySystem } from '../../../viewer/src/systems/geometry/geometry-system'
-import { ItemSystem } from '../../../viewer/src/systems/item/item-system'
+import { CatalogMover, installMountedScene, SceneSystems, settle } from '../__tests__/harness'
 import { cabinetDefinition, cabinetModuleDefinition } from '../cabinet/definition'
 import { CabinetModuleNode, CabinetNode } from '../cabinet/schema'
 import { proceduralItemDefinition } from '../procedural-item/definition'
 import { shelfDefinition } from '../shelf/definition'
 import { itemDefinition } from './definition'
 import { buildItemFloorplan } from './floorplan'
-import { ItemGLTFLoader } from './model-loader'
-import { MoveItemTool } from './move-tool'
 
 class SvgNode extends Group {
   // Keep R3F from interpreting this SVG attribute as a pierced Three.js property.
@@ -81,7 +62,6 @@ extend({
   Pattern: SvgNode,
   Polyline: SvgNode,
 })
-let loader: ReturnType<typeof spyOn>
 const recipe: Recipe = {
   version: 1,
   name: 'Box',
@@ -112,43 +92,25 @@ const asset = {
   dimensions: [0.2, 0.2, 0.2],
 }
 const hostKinds = ['shelf', 'counter', 'bar', 'item', 'named', 'generated'] as const
-let restore: () => void
-let savedScene: ReturnType<typeof useScene.getState>
-let savedEditor: ReturnType<typeof useEditor.getState>
-let savedViewer: ReturnType<typeof useViewer.getState>
-let savedScope: ReturnType<typeof useInteractionScope.getState>
+installMountedScene({
+  nodes: [
+    itemDefinition,
+    proceduralItemDefinition,
+    shelfDefinition,
+    cabinetDefinition,
+    cabinetModuleDefinition,
+  ],
+  modelSize: () => [0.2, 0.2, 0.2],
+})
 let globals: Record<string, PropertyDescriptor | undefined>
 beforeEach(() => {
   extend({ Line: SvgNode, Path: SvgNode })
-  loader = spyOn(ItemGLTFLoader.prototype, 'load').mockImplementation((_url, onLoad) => {
-    const scene = new Group()
-    scene.add(
-      new Mesh(new BoxGeometry(0.2, 0.2, 0.2).translate(0, 0.1, 0), new MeshBasicMaterial()),
-    )
-    onLoad({
-      scene,
-      scenes: [scene],
-      animations: [],
-      cameras: [],
-      asset: { version: '2.0' },
-      parser: {},
-    } as never)
-  })
-  savedScene = useScene.getState()
-  savedEditor = useEditor.getState()
-  savedViewer = useViewer.getState()
-  savedScope = useInteractionScope.getState()
   useViewer.setState({ previewSelectedIds: [] })
   globals = Object.fromEntries(
-    [
-      'window',
-      'document',
-      'requestAnimationFrame',
-      'cancelAnimationFrame',
-      'PointerEvent',
-      'HTMLInputElement',
-      'HTMLTextAreaElement',
-    ].map((k) => [k, Object.getOwnPropertyDescriptor(globalThis, k)]),
+    ['window', 'document', 'PointerEvent'].map((k) => [
+      k,
+      Object.getOwnPropertyDescriptor(globalThis, k),
+    ]),
   )
   const svg = {
     getBoundingClientRect: () => ({ left: -100, right: 100, top: -100, bottom: 100 }),
@@ -160,41 +122,27 @@ beforeEach(() => {
       },
     }),
   }
+  // The floor-plan layer and its move overlay listen on `window` and measure an SVG scene.
   Object.assign(globalThis, {
     window: Object.assign(new EventTarget(), {
       requestAnimationFrame: () => 0,
       cancelAnimationFrame: () => {},
     }),
-    HTMLInputElement: class {},
-    HTMLTextAreaElement: class {},
     PointerEvent: class extends Event {
-      constructor(type: string, props: object) {
-        super(type)
+      constructor(type: string, { bubbles, ...props }: EventInit & object) {
+        super(type, { bubbles })
         Object.assign(this, props)
       }
     },
-    document: {
+    document: Object.assign(new EventTarget(), {
       body: { style: {} },
       activeElement: null,
       querySelector: () => ({
         ownerSVGElement: svg,
         getScreenCTM: () => ({ inverse: () => ({}) }),
       }),
-    },
-    requestAnimationFrame: () => 0,
-    cancelAnimationFrame: () => {},
+    }),
   })
-  restore = nodeRegistry._snapshot()
-  nodeRegistry._reset()
-  // Isolate React.lazy caches between files without changing the production capabilities.
-  for (const def of [
-    itemDefinition,
-    proceduralItemDefinition,
-    shelfDefinition,
-    cabinetDefinition,
-    cabinetModuleDefinition,
-  ])
-    registerNode({ ...def, renderer: def.renderer && { ...def.renderer } } as never)
   useInteractionScope.getState().end()
   useEditor.setState({
     viewMode: '2d',
@@ -204,30 +152,17 @@ beforeEach(() => {
     placementDragMode: false,
   })
   useEditor.getState().setSnappingMode('item', 'off')
-  useLiveNodeOverrides.getState().clearAll()
-  spatialGridManager.clear()
   useScene.temporal.getState().pause()
   useScene.temporal.getState().clear()
 })
 afterEach(() => {
   extend({ Line, Path })
-  loader.mockRestore()
-  sceneRegistry.nodes.clear()
-  useLiveTransforms.getState().clearAll()
-  useLiveNodeOverrides.getState().clearAll()
-  spatialGridManager.clear()
-  useScene.setState(savedScene, true)
-  useEditor.setState(savedEditor, true)
-  useViewer.setState(savedViewer, true)
-  useInteractionScope.setState(savedScope, true)
-  useScene.temporal.getState().clear()
-  useScene.temporal.getState().resume()
-  restore()
   for (const k of Object.keys(globals)) {
     if (globals[k]) Object.defineProperty(globalThis, k, globals[k]!)
     else Reflect.deleteProperty(globalThis, k)
   }
 })
+
 function fixture(
   kind: (typeof hostKinds)[number],
   childKind: 'item' | 'procedural-item',
@@ -408,20 +343,12 @@ function RenderedScene({
           ))}
         </group>
       </group>
-      <FloorElevationSystem />
-      <ItemSystem />
-      <GeometrySystem />
+      <SceneSystems />
       {structural && <WallSystem />}
       <FloorplanRegistryMoveOverlay />
       <FloorplanRegistryLayer />
     </>
   )
-}
-async function settle(renderer: Awaited<ReturnType<typeof create>>) {
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 10))
-  })
-  await renderer.advanceFrames(3, 1 / 60)
 }
 function worldMatrix(id: AnyNodeId) {
   const mesh = sceneRegistry.nodes.get(id)!
@@ -857,15 +784,6 @@ for (const mounting of ['wall', 'roof', 'ceiling'] as const)
     }
   })
 
-function withoutLabels(element: ReactNode): ReactNode {
-  if (!isValidElement<{ children?: ReactNode }>(element)) return element
-  if (element.type === Html) return null
-  return cloneElement(element, {}, Children.map(element.props.children, withoutLabels))
-}
-function CatalogMover({ source }: { source: ItemNode }) {
-  const node = useMemo(() => structuredClone(source), [source])
-  return withoutLabels(MoveItemTool({ node }))
-}
 for (const phase of ['retained', 'exited', 'floor'])
   for (const key of ['r', 't'])
     test(`2D drag does not commit ${key} rotation ${phase}`, async () => {
@@ -1016,601 +934,3 @@ test('concurrent catalog cancel restores serialized scene', async () => {
     await renderer.unmount()
   }
 })
-
-for (const finish of ['Escape', 'return'] as const)
-  test(`audit: scaled host exit restores mounted transform on ${finish}`, async () => {
-    const { child, host, level } = fixture('item', 'item', false)
-    const renderer = await create(<RenderedScene levelId={level.id} />)
-    try {
-      await settle(renderer)
-      sceneRegistry.nodes.get(host.id)!.scale.setScalar(2)
-      const baseline = worldMatrix(child.id)
-      const origin = nodeLevelFrame(child.id, useScene.getState().nodes).position
-      await moving(child)
-      await pointer('pointermove', [origin[0], origin[2]])
-      await pointer('pointermove', [8, 8])
-      await settle(renderer)
-      if (finish === 'Escape')
-        await act(async () =>
-          window.dispatchEvent(Object.assign(new Event('keydown'), { key: 'Escape' })),
-        )
-      else await pointer('pointermove', [origin[0], origin[2]])
-      await settle(renderer)
-      expectMatrix(worldMatrix(child.id), baseline)
-    } finally {
-      await renderer.unmount()
-    }
-  })
-
-for (const changeAt of ['tick', 'commit'] as const)
-  test(`audit: retention reads live shelf width at ${changeAt}`, async () => {
-    const { child, host, level } = fixture('shelf', 'item', false)
-    const source = { ...child, position: [0.8, child.position[1], 0] } as ItemNode
-    useScene.setState({ nodes: { ...useScene.getState().nodes, [child.id]: source } })
-    const renderer = await create(<RenderedScene levelId={level.id} />)
-    try {
-      await settle(renderer)
-      const origin = nodeLevelFrame(child.id, useScene.getState().nodes).position
-      await moving(source)
-      await pointer('pointermove', [origin[0], origin[2]])
-      await act(async () => useScene.getState().updateNode(host.id, { width: 0.5 } as never))
-      if (changeAt === 'tick') {
-        await pointer('pointermove', [origin[0], origin[2]])
-        expect(getEffectiveNode(useScene.getState().nodes[child.id]!).parentId).toBe(level.id)
-      }
-      await pointer('pointerup', [origin[0], origin[2]])
-      expect(useScene.getState().nodes[child.id]!.parentId).toBe(level.id)
-    } finally {
-      await renderer.unmount()
-    }
-  })
-
-for (const kind of ['item', 'procedural-item'] as const)
-  test(`audit: tilted surface exit matches the asset-specific 3D detach policy ${kind}`, async () => {
-    const { child, host, level } = fixture('named', kind, false)
-    const nodes = useScene.getState().nodes
-    const generated = nodes[host.id] as ProceduralItemNode
-    generated.recipe = structuredClone(generated.recipe)
-    generated.recipe.surfaces[0]!.rotation = [0.3, 1.7, 0.1]
-    useScene.setState({ nodes: { ...nodes } })
-    const renderer = await create(<RenderedScene levelId={level.id} />)
-    try {
-      await settle(renderer)
-      const { surfaceFramePose } = await import('../../../editor/src/lib/surface-attachment')
-      const { createRegistryItemSurfaceMove } = await import(
-        '../../../editor/src/components/tools/registry/item-surface-move'
-      )
-      const adopted = surfaceFramePose(host.id, 'top', child, false)
-      const levelYaw = new Euler().setFromQuaternion(
-        sceneRegistry.nodes.get(level.id)!.getWorldQuaternion(new Quaternion()),
-        'YXZ',
-      ).y
-      const meshYaw = new Euler().setFromQuaternion(
-        sceneRegistry.nodes.get(child.id)!.getWorldQuaternion(new Quaternion()),
-        'YXZ',
-      ).y
-      const expected =
-        kind === 'item'
-          ? [adopted.rotation[0], meshYaw - levelYaw, adopted.rotation[2]]
-          : [
-              child.rotation[0],
-              createRegistryItemSurfaceMove(child)!.worldYaw(child.rotation[1]) - levelYaw,
-              child.rotation[2],
-            ]
-      await moving(child)
-      await pointer('pointermove', [0, 0])
-      await pointer('pointermove', [8, 8])
-      await pointer('pointerup', [8, 8])
-      const result = useScene.getState().nodes[child.id] as ItemNode
-      result.rotation.forEach((v, i) => {
-        expect(v).toBeCloseTo(expected[i]!, 6)
-      })
-    } finally {
-      await renderer.unmount()
-    }
-  })
-
-test('audit: procedural pickup does not enable a new plain 3D drag gesture', () => {
-  expect(proceduralItemDefinition.capabilities.movable?.directDrag).toBe(
-    itemDefinition.capabilities.movable?.directDrag,
-  )
-})
-
-test('audit: block top exit clears face storage and lands upright at the floor datum', async () => {
-  const { BlockNode, getBlockFaceFrame } = await import('@pascal-app/core')
-  const { blockDefinition } = await import('../block/definition')
-  registerNode(blockDefinition)
-  const { child, level } = fixture('item', 'item', false)
-  const block = BlockNode.parse({
-    parentId: level.id,
-    position: [2, 0, 3],
-    rotation: 0.6,
-    children: [child.id],
-  })
-  const face = block.topology.faces.find(
-    (f) => getBlockFaceFrame(block.topology, f.id)!.normal[1] > 0.99,
-  )!
-  const source = {
-    ...child,
-    parentId: block.id,
-    position: [0, 0, 0] as [number, number, number],
-    rotation: [Math.PI / 2, 0, 0] as [number, number, number],
-    blockFaceId: face.id,
-  }
-  useScene.setState({
-    nodes: {
-      ...useScene.getState().nodes,
-      [child.id]: source,
-      [block.id]: block,
-      [level.id]: { ...level, children: [block.id] },
-    },
-  })
-  const renderer = await create(<RenderedScene levelId={level.id} />)
-  try {
-    await settle(renderer)
-    await moving(source)
-    await pointer('pointermove', [0, 0])
-    await pointer('pointermove', [8, 8])
-    await settle(renderer)
-    const before = worldMatrix(child.id)
-    await pointer('pointerup', [8, 8])
-    await settle(renderer)
-    const result = useScene.getState().nodes[child.id] as ItemNode
-    expect(result.parentId).toBe(level.id)
-    expect(result.blockFaceId).toBeUndefined()
-    expect(result.position[1]).toBe(0)
-    expect(result.rotation[0]).toBe(0)
-    expect(result.rotation[2]).toBe(0)
-    expectMatrix(worldMatrix(child.id), before)
-  } finally {
-    await renderer.unmount()
-  }
-})
-
-test('audit: unmount releases every imperative exit transform', async () => {
-  const { child, level } = fixture('item', 'item', false)
-  const renderer = await create(<RenderedScene levelId={level.id} />)
-  let unmounted = false
-  try {
-    await settle(renderer)
-    const mesh = sceneRegistry.nodes.get(child.id)!
-    const position = mesh.position.clone(),
-      quaternion = mesh.quaternion.clone(),
-      scale = mesh.scale.clone()
-    await moving(child)
-    await pointer('pointermove', [0, 0])
-    await pointer('pointermove', [8, 8])
-    await settle(renderer)
-    await renderer.unmount()
-    unmounted = true
-    expect(mesh.matrixAutoUpdate).toBe(true)
-    expect(mesh.position.toArray()).toEqual(position.toArray())
-    expect(mesh.quaternion.toArray()).toEqual(quaternion.toArray())
-    expect(mesh.scale.toArray()).toEqual(scale.toArray())
-  } finally {
-    if (!unmounted) await renderer.unmount()
-  }
-})
-
-for (const kind of ['fence', 'imported-mesh', 'plugin', 'ineligible-plugin', 'slab'] as const)
-  for (const childKind of ['item', 'procedural-item'] as const)
-    for (const overSlab of [true, false])
-      test(`review bot: generic parent exit ${kind} ${childKind} slab=${overSlab}`, async () => {
-        const { FenceNode, ImportedMeshNode, nodeType, objectId } = await import('@pascal-app/core')
-        const { fenceDefinition } = await import('../fence/definition')
-        const { importedMeshDefinition } = await import('../imported-mesh/definition')
-        const { slabDefinition } = await import('../slab/definition')
-        registerNode(fenceDefinition)
-        registerNode(importedMeshDefinition)
-        registerNode(slabDefinition)
-        const pluginSchema = ShelfNode.extend({
-          type: nodeType('review:host'),
-          id: objectId('reviewhost'),
-        })
-        const schema =
-          kind === 'ineligible-plugin' ? pluginSchema.omit({ children: true }) : pluginSchema
-        registerNode({
-          kind: 'review:host',
-          schemaVersion: 1,
-          schema,
-          category: 'furnish',
-          defaults: () => ({}),
-          capabilities: { dragBounds: () => ({ size: [2, 1, 2], center: [0, 0.5, 0] }) },
-          geometry: () => {
-            const group = new Group()
-            group.add(
-              new Mesh(new BoxGeometry(2, 1, 2).translate(0, 0.5, 0), new MeshBasicMaterial()),
-            )
-            return group
-          },
-        } as never)
-        const { child, host: ancestor, level, slab } = fixture('item', childKind, false)
-        const parent =
-          kind === 'fence'
-            ? FenceNode.parse({ parentId: ancestor.id, start: [-1, 0], end: [1, 0], height: 1 })
-            : kind === 'imported-mesh'
-              ? ImportedMeshNode.parse({
-                  parentId: level.id,
-                  position: [2, 0.6, 3],
-                  rotation: [0, 0.6, 0],
-                  primitives: [
-                    { positions: [-1, 1, -1, 1, 1, 1, 1, 1, -1, -1, 1, -1, -1, 1, 1, 1, 1, 1] },
-                  ],
-                })
-              : kind === 'slab'
-                ? slab
-                : schema.parse({ parentId: level.id, position: [2, 0.6, 3], rotation: [0, 0.6, 0] })
-        const source = {
-          ...child,
-          parentId: parent.id,
-          position: [0, kind === 'slab' ? slab.elevation : 1, 0],
-          rotation: [0, 0.2, 0],
-          supportSlabId: undefined,
-        } as typeof child
-        const graph = {
-          ...useScene.getState().nodes,
-          [child.id]: source,
-          [ancestor.id]: { ...ancestor, children: kind === 'fence' ? [parent.id] : [] },
-          [parent.id]: { ...parent, children: [child.id] },
-          [level.id]: {
-            ...level,
-            children:
-              kind === 'fence'
-                ? [slab.id, ancestor.id]
-                : kind === 'slab'
-                  ? [slab.id]
-                  : [slab.id, parent.id],
-          },
-        } as Record<AnyNodeId, AnyNode>
-        useScene.setState({ nodes: graph })
-        useScene.temporal.getState().clear()
-        const baseline = structuredClone(graph)
-        const renderer = await create(<RenderedScene levelId={level.id} />)
-        try {
-          await settle(renderer)
-          if (kind === 'fence') {
-            useScene.getState().markDirty(ancestor.id)
-            await renderer.advanceFrames(1, 1 / 60)
-          }
-          const baselineMatrix = worldMatrix(child.id)
-          const initial = sceneRegistry.nodes
-            .get(level.id)!
-            .matrixWorld.clone()
-            .invert()
-            .multiply(baselineMatrix)
-          const heading = Math.atan2(initial.elements[8]!, initial.elements[10]!)
-          const footprint = svgPose(renderer, child.id)[0]!
-          const points =
-            typeof footprint.points === 'string'
-              ? footprint.points.split(' ').map((p) => p.split(',').map(Number))
-              : [
-                  [
-                    Number(footprint.x) + Number(footprint.width) / 2,
-                    Number(footprint.y) + Number(footprint.height) / 2,
-                  ],
-                ]
-          const pickup = [0, 1].map(
-            (axis) => points.reduce((sum, p) => sum + p[axis]!, 0) / points.length,
-          )
-          const target = overSlab ? [8, 8] : [14, 14]
-          await moving(source)
-          await pointer('pointermove', pickup)
-          await pointer('pointermove', target)
-          await settle(renderer)
-          const preview = worldMatrix(child.id)
-          const plan = svgPose(renderer, child.id)
-          await pointer('pointerup', target)
-          await settle(renderer)
-          const committed = useScene.getState().nodes[child.id] as ItemNode
-          expect(committed.parentId).toBe(level.id)
-          expect(committed.position[1]).toBe(0)
-          expect(committed.position[0]).toBeCloseTo(target[0]!)
-          expect(committed.position[2]).toBeCloseTo(target[1]!)
-          expect(committed.rotation[0]).toBe(0)
-          expect(committed.rotation[1]).toBeCloseTo(heading)
-          expect(committed.rotation[2]).toBe(0)
-          expect(committed.supportSlabId).toBe(overSlab ? slab.id : undefined)
-          const rendered = worldMatrix(child.id)
-          const actual = sceneRegistry.nodes
-            .get(level.id)!
-            .matrixWorld.clone()
-            .invert()
-            .multiply(rendered)
-          expect(actual.elements[13]).toBeCloseTo(overSlab ? slab.elevation : 0)
-          expect(Math.atan2(actual.elements[8]!, actual.elements[10]!)).toBeCloseTo(heading)
-          expectMatrix(preview, worldMatrix(child.id))
-          expect(svgPose(renderer, child.id)).toEqual(plan)
-          expect(
-            (useScene.getState().nodes[parent.id] as { children: string[] }).children,
-          ).not.toContain(child.id)
-          expect(
-            (useScene.getState().nodes[level.id] as LevelNode).children.filter(
-              (id) => id === child.id,
-            ),
-          ).toHaveLength(1)
-          expect(useScene.temporal.getState().pastStates).toHaveLength(1)
-          await act(async () => useScene.temporal.getState().undo())
-          await settle(renderer)
-          expect(useScene.getState().nodes).toEqual(baseline)
-          expectMatrix(worldMatrix(child.id), baselineMatrix)
-        } finally {
-          await renderer.unmount()
-        }
-      })
-
-for (const kind of ['item', 'shelf', 'generated'] as const)
-  test(`review bot: block face frame composes ${kind} ancestor and one slab lift`, async () => {
-    const { BlockNode, getBlockFaceFrame } = await import('@pascal-app/core')
-    const { blockDefinition } = await import('../block/definition')
-    registerNode(blockDefinition)
-    const { child, host, level, slab } = fixture(kind, 'item', false)
-    const block = BlockNode.parse({
-      parentId: host.id,
-      position: [0.3, 1, 0.2],
-      rotation: 0.4,
-      children: [child.id],
-    })
-    const face = block.topology.faces.find(
-      (f) => getBlockFaceFrame(block.topology, f.id)!.normal[2] > 0.99,
-    )!
-    const source = {
-      ...child,
-      parentId: block.id,
-      position: [0.1, 0.2, 0.05],
-      rotation: [0, 0.2, 0],
-      blockFaceId: face.id,
-    } as ItemNode
-    const graph = {
-      ...useScene.getState().nodes,
-      [child.id]: source,
-      [host.id]: { ...host, children: [block.id] },
-      [block.id]: block,
-    } as Record<AnyNodeId, AnyNode>
-    useScene.setState({ nodes: graph })
-    const renderer = await create(<RenderedScene levelId={level.id} />)
-    try {
-      await settle(renderer)
-      useScene.getState().markDirty(host.id)
-      await renderer.advanceFrames(1, 1 / 60)
-      const rendered = worldMatrix(child.id)
-      const actual = sceneRegistry.nodes
-        .get(level.id)!
-        .matrixWorld.clone()
-        .invert()
-        .multiply(rendered)
-      const faceFrame = getBlockFaceFrame(block.topology, face.id)!
-      expect(actual.elements[13]).toBeCloseTo(
-        slab.elevation + block.position[1] + faceFrame.origin[1] + source.position[1],
-      )
-      const resolved = nodeLevelFrame(child.id, graph)
-      resolved.position.forEach((v, i) => {
-        expect(v).toBeCloseTo(actual.elements[12 + i]!, 6)
-      })
-      resolved.axes.forEach((axis, i) => {
-        axis.forEach((v, j) => {
-          expect(v).toBeCloseTo(actual.elements[i * 4 + j]!, 6)
-        })
-      })
-    } finally {
-      await renderer.unmount()
-    }
-  })
-
-for (const kind of ['shelf', 'plugin'] as const)
-  for (const check of ['frame', 'plan'] as const)
-    test(`review bot 2: ${kind} named attachment ${check}`, async () => {
-      const { nodeType, objectId } = await import('@pascal-app/core')
-      const schema = ShelfNode.extend({
-        type: nodeType('review:child'),
-        id: objectId('reviewchild'),
-      })
-      registerNode({
-        kind: 'review:child',
-        schemaVersion: 1,
-        schema,
-        category: 'furnish',
-        defaults: () => ({}),
-        capabilities: {},
-        geometry: () => {
-          const group = new Group()
-          group.add(
-            new Mesh(new BoxGeometry(0.6, 0.4, 0.3).translate(0, 0.2, 0), new MeshBasicMaterial()),
-          )
-          return group
-        },
-        floorplan: shelfDefinition.floorplan,
-      } as never)
-      const { host, child, level } = fixture('named', 'item', true)
-      const source = (kind === 'shelf' ? ShelfNode : schema).parse({
-        parentId: host.id,
-        position: [0.2, 0, -0.1],
-        rotation: [0, 0.15, 0],
-        width: 0.6,
-        height: 0.4,
-        depth: 0.3,
-      })
-      const generated = useScene.getState().nodes[host.id] as ProceduralItemNode
-      const recipe = structuredClone(generated.recipe)
-      recipe.surfaces[0]!.position = [0.4, 1, -0.3]
-      recipe.surfaces[0]!.rotation = [0.3, 0.4, 0.1]
-      const graph = {
-        ...useScene.getState().nodes,
-        [host.id]: {
-          ...generated,
-          recipe,
-          children: [source.id],
-          attachments: { [source.id]: 'top' },
-        },
-        [source.id]: source,
-      } as Record<AnyNodeId, AnyNode>
-      delete graph[child.id]
-      useScene.setState({ nodes: graph })
-      const renderer = await create(<RenderedScene levelId={level.id} />)
-      try {
-        await settle(renderer)
-        useScene.getState().markDirty(host.parentId as AnyNodeId)
-        await renderer.advanceFrames(1, 1 / 60)
-        const rendered = worldMatrix(source.id as AnyNodeId)
-        const actual = sceneRegistry.nodes
-          .get(level.id)!
-          .matrixWorld.clone()
-          .invert()
-          .multiply(rendered)
-        if (check === 'frame') {
-          const resolved = nodeLevelFrame(source.id, graph)
-          resolved.position.forEach((v, i) => {
-            expect(v).toBeCloseTo(actual.elements[12 + i]!, 6)
-          })
-          resolved.axes.forEach((axis, i) => {
-            axis.forEach((v, j) => {
-              expect(v).toBeCloseTo(actual.elements[i * 4 + j]!, 6)
-            })
-          })
-        } else {
-          const entry = renderer.scene.findAll((n) => n.props['data-node-id'] === source.id)[0]!
-          const transform = entry.findAll(
-            (n) =>
-              typeof n.props.transform === 'string' && n.props.transform.startsWith('translate('),
-          )[0]!.props.transform as string
-          const values = transform.match(/-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/g)!.map(Number)
-          expect(values[0]).toBeCloseTo(actual.elements[12]!, 6)
-          expect(values[1]).toBeCloseTo(actual.elements[14]!, 6)
-          expect((values[2]! * Math.PI) / 180).toBeCloseTo(
-            -Math.atan2(actual.elements[8]!, actual.elements[10]!),
-            6,
-          )
-        }
-      } finally {
-        await renderer.unmount()
-      }
-    })
-
-for (const hostKind of ['item', 'generated'] as const)
-  for (const childKind of ['item', 'procedural-item'] as const)
-    test(`review bot 3: undeclared ${hostKind} top retains and exits ${childKind}`, async () => {
-      const { child, host, level, slab } = fixture(hostKind, childKind, false)
-      const provider = getSurfaceProvider(host)
-      if (hostKind === 'item') expect(provider.surfaces).toBeUndefined()
-      else expect(provider.surfaces?.(host, { scene: createSceneApi(useScene) })).toEqual([])
-      const renderer = await create(<RenderedScene levelId={level.id} />)
-      try {
-        await settle(renderer)
-        const origin = sceneRegistry.nodes
-          .get(level.id)!
-          .worldToLocal(new Vector3().setFromMatrixPosition(worldMatrix(child.id)))
-        await moving(child)
-        for (const delta of [0, 0.1, 0.2]) {
-          await pointer('pointermove', [origin.x + delta, origin.z])
-          await settle(renderer)
-          const preview = getEffectiveNode(useScene.getState().nodes[child.id]!) as typeof child
-          expect(preview.parentId).toBe(host.id)
-          expect(preview.position[1]).toBeCloseTo(child.position[1])
-        }
-        await pointer('pointermove', [8, 8])
-        await settle(renderer)
-        const preview = worldMatrix(child.id)
-        const plan = svgPose(renderer, child.id)
-        await pointer('pointerup', [8, 8])
-        await settle(renderer)
-        const committed = useScene.getState().nodes[child.id] as typeof child
-        expect(committed.parentId).toBe(level.id)
-        expect(committed.position[0]).toBeCloseTo(8)
-        expect(committed.position[1]).toBe(0)
-        expect(committed.position[2]).toBeCloseTo(8)
-        expect(committed.supportSlabId).toBe(slab.id)
-        expectMatrix(worldMatrix(child.id), preview)
-        expect(svgPose(renderer, child.id)).toEqual(plan)
-      } finally {
-        await renderer.unmount()
-      }
-    })
-
-for (const childKind of ['item', 'procedural-item'] as const)
-  for (const finish of ['occupied', 'exit', 'reentry'] as const)
-    test(`review bot 3: named occupancy ${childKind} ${finish}`, async () => {
-      const { child, host, level, slab } = fixture('named', childKind, false)
-      const source = { ...child, position: [0, 0, 0], rotation: [0, 0.2, 0] } as typeof child
-      const occupant = ItemNode.parse({
-        asset,
-        parentId: host.id,
-        position: [0.92, 0, 0],
-      })
-      const generated = useScene.getState().nodes[host.id] as ProceduralItemNode
-      const attachments = { ...generated.attachments, [occupant.id]: 'top' }
-      useScene.setState({
-        nodes: {
-          ...useScene.getState().nodes,
-          [child.id]: source,
-          [occupant.id]: occupant,
-          [host.id]: { ...generated, children: [child.id, occupant.id], attachments },
-        },
-      })
-      useScene.temporal.getState().clear()
-      const baseline = structuredClone(useScene.getState().nodes)
-      const renderer = await create(<RenderedScene levelId={level.id} />)
-      try {
-        await settle(renderer)
-        const wrapper = sceneRegistry.nodes.get(child.id)!.parent!
-        const levelMesh = sceneRegistry.nodes.get(level.id)!
-        const planPoint = (x: number) => {
-          const point = levelMesh.worldToLocal(wrapper.localToWorld(new Vector3(x, 0, 0)))
-          return [point.x, point.z]
-        }
-        const origin = planPoint(0)
-        const valid = planPoint(0.45)
-        const occupied = planPoint(0.8)
-        const outside = planPoint(1.05)
-        await moving(source)
-        await pointer('pointermove', origin)
-        await pointer('pointermove', valid)
-        await settle(renderer)
-        const lastValid = getEffectiveNode(useScene.getState().nodes[child.id]!) as typeof child
-        expect(lastValid.parentId).toBe(host.id)
-        expect(lastValid.position[0]).toBeCloseTo(0.45)
-        const hostedPreview = worldMatrix(child.id)
-        const hostedPlan = svgPose(renderer, child.id)[0]
-        if (finish === 'reentry') {
-          await pointer('pointermove', outside)
-          await settle(renderer)
-          expect(getEffectiveNode(useScene.getState().nodes[child.id]!).parentId).toBe(level.id)
-        }
-        await pointer('pointermove', occupied)
-        await settle(renderer)
-        if (finish !== 'exit') {
-          const refused = getEffectiveNode(useScene.getState().nodes[child.id]!) as typeof child
-          expect(refused.parentId).toBe(host.id)
-          expect(refused.position).toEqual(lastValid.position)
-          expect(refused.rotation).toEqual(lastValid.rotation)
-          expectMatrix(worldMatrix(child.id), hostedPreview)
-          expect(svgPose(renderer, child.id)[0]).toEqual(hostedPlan)
-        } else {
-          await pointer('pointermove', outside)
-          await settle(renderer)
-        }
-        const preview = worldMatrix(child.id)
-        const plan = svgPose(renderer, child.id)[0]
-        await pointer('pointerup', finish === 'exit' ? outside : occupied)
-        await settle(renderer)
-        const committed = useScene.getState().nodes[child.id] as typeof child
-        const committedHost = useScene.getState().nodes[host.id] as ProceduralItemNode
-        if (finish === 'exit') {
-          expect(committed.parentId).toBe(level.id)
-          expect(committed.position[1]).toBe(0)
-          expect(committed.supportSlabId).toBe(slab.id)
-          expect(committedHost.attachments[child.id]).toBeUndefined()
-          expect(committedHost.children).not.toContain(child.id)
-        } else {
-          expect(committed.parentId).toBe(host.id)
-          expect(committed.position).toEqual(lastValid.position)
-          expect(committed.rotation).toEqual(lastValid.rotation)
-          expect(committedHost.attachments).toEqual(attachments)
-        }
-        expectMatrix(worldMatrix(child.id), preview)
-        expect(svgPose(renderer, child.id)[0]).toEqual(plan)
-        expect(useScene.temporal.getState().pastStates).toHaveLength(1)
-        await act(async () => useScene.temporal.getState().undo())
-        expect(useScene.getState().nodes).toEqual(baseline)
-      } finally {
-        await renderer.unmount()
-      }
-    })

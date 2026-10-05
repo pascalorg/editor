@@ -97,6 +97,7 @@ export {
   DEFAULT_GRID_STEP,
   type SnapServices,
   snapAngleToList,
+  snapLocalXZInWorld,
   snapPointAlongAngleRay,
   snapPointToAngle,
   snapPointToGrid,
@@ -107,9 +108,11 @@ export {
 } from './snap'
 export {
   CEILING_CLAMP_MARGIN,
+  CEILING_DRAW_OFFSET,
   findLevelAboveId,
   findLevelBelowId,
   getCeilingClampBound,
+  getCeilingMinHeight,
   getCoveringSlabUndersideAt,
   getLevelAbove,
   getLevelBelow,

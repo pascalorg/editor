@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { CabinetModuleNode, CabinetNode } from '@pascal-app/core/schema'
+import { CabinetModuleNode, CabinetNode, WallNode } from '@pascal-app/core/schema'
 import { apiGraphSchema } from './graph-schema'
 
 function buildGraph(nodes: Record<string, unknown>, rootNodeIds: string[] = []) {
@@ -168,6 +168,59 @@ test('still rejects invalid builtin nodes', () => {
   })
 
   expect(apiGraphSchema.safeParse(graph).success).toBe(false)
+})
+
+test('migrates legacy wall assemblies before validation and persists canonical layers', () => {
+  const wall = WallNode.parse({ id: 'wall_legacygraph', start: [0, 0], end: [4, 0] })
+  const assembly = { framing: { kind: 'wood', depth: 0.14 } }
+  const graph = buildGraph({ [wall.id]: { ...wall, assembly } }, [wall.id])
+
+  const result = apiGraphSchema.safeParse(graph)
+
+  expect(result.success).toBe(true)
+  expect((result.data?.nodes[wall.id] as WallNode).assembly).toEqual({
+    face: 'exterior',
+    layers: [{ id: 'framing', role: 'structure', thickness: 0.14, core: true, material: 'wood' }],
+  })
+  expect(graph.nodes[wall.id]).toEqual({ ...wall, assembly })
+})
+
+test('reports malformed legacy wall assemblies as validation issues', () => {
+  const wall = WallNode.parse({ id: 'wall_malformedgraph', start: [0, 0], end: [4, 0] })
+  const graph = buildGraph({ [wall.id]: { ...wall, assembly: { framing: null } } })
+
+  expect(apiGraphSchema.safeParse(graph).success).toBe(false)
+})
+
+test.each([
+  ['long', 'a'.repeat(81), 'a'.repeat(121)],
+  ['empty', '', ''],
+])('preserves %s legacy text and every layer above the former F2 caps', (_, preset, cavityInsulation) => {
+  const wall = WallNode.parse({ id: 'wall_unboundedgraph', start: [0, 0], end: [4, 0] })
+  const graph = buildGraph({
+    [wall.id]: {
+      ...wall,
+      assembly: {
+        preset,
+        cavityInsulation,
+        exterior: { finish: 'stone', thickness: 5.001 },
+        sheathing: { material: 'osb', thickness: 5.001 },
+        framing: { kind: 'wood', depth: 5.001 },
+        interior: { finish: 'drywall', thickness: 5.001 },
+      },
+    },
+  })
+
+  const result = apiGraphSchema.parse(graph)
+  const assembly = WallNode.parse(result.nodes[wall.id]).assembly!
+  expect(assembly.presetId).toBe(preset)
+  expect(assembly.cavityInsulation).toBe(cavityInsulation)
+  expect(assembly.layers.map(({ id, thickness }) => [id, thickness])).toEqual([
+    ['exterior', 5.001],
+    ['sheathing', 5.001],
+    ['framing', 5.001],
+    ['interior', 5.001],
+  ])
 })
 
 // Unnamespaced kinds are legitimate: `wiki/architecture/plugin-authoring.md`

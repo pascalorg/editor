@@ -38,7 +38,8 @@ export function extractBeamGeometry(
           const sx = wx - options.origin[0] * options.unitFactor
           const sy = -wz - options.origin[1] * options.unitFactor
           const sz = wy - options.origin[2] * options.unitFactor - options.levelElevation
-          const position: Point = options.swapYZ ? [sx, sz, sy] : [sx, sy, sz]
+          // Pascal is Y-up right-handed: IFC north (+Y) is Pascal -Z.
+          const position: Point = options.swapYZ ? [sx, sz, -sy] : [sx, sy, sz]
           if (!position.every(Number.isFinite)) throw new Error('Non-finite beam vertex')
           const key = position.join(',')
           let id = vertexByPosition.get(key)
@@ -55,7 +56,7 @@ export function extractBeamGeometry(
           m[4] * (m[1] * m[10] - m[9] * m[2]) +
           m[8] * (m[1] * m[6] - m[5] * m[2])
         // Baking a reflection into the vertices also reverses the outward face winding.
-        const reverseWinding = determinant < 0 !== options.swapYZ
+        const reverseWinding = determinant < 0
         for (let i = 0; i + 2 < indices.length; i += 3) {
           const ids = [vertexIds[indices[i]], vertexIds[indices[i + 1]], vertexIds[indices[i + 2]]]
           if (ids.some((id) => id === undefined)) throw new Error('Invalid beam triangle index')

@@ -21,14 +21,16 @@ import { useEffect, useRef } from 'react'
 import type { Object3D } from 'three'
 import { isSlotPaintPreviewActive, subscribeSlotPaintPreviews } from '../slot-paint'
 import {
-  BATCH_KINDS,
+  batchableConfig,
   collectBatchCandidate,
   collectTintedNodes,
   getBatchableNodeIds,
   hideBatchedNode,
+  isWallHosted,
   revealAllBatchedHolds,
   revealBatchedNode,
 } from './candidates'
+import { subscribeBatchReleases } from './release'
 import { NodeBatchStore } from './store'
 import { type BatchCandidate, MIN_BATCH_ENTRIES, NODE_BATCH_SETTLE_MS } from './types'
 
@@ -77,6 +79,7 @@ const waveDebug = { runs: 0, stale: 0, candidates: 0, joined: 0, nullCandidates:
 let lastNodeChangeAtMs = 0
 let batchingSuspended = false
 let lastLevelMode: string | undefined
+let lastHideAbove: boolean | undefined
 let lastSelectedLevel: string | null | undefined
 
 type AppearanceInputs = {
@@ -129,6 +132,7 @@ export function resetNodeBatchState() {
   lastNodeChangeAtMs = 0
   batchingSuspended = false
   lastLevelMode = undefined
+  lastHideAbove = undefined
   lastSelectedLevel = undefined
   lastAppearance.shading = undefined
   lastAppearance.textures = undefined
@@ -171,8 +175,7 @@ function releaseAll() {
 
 export function subscribeBatchInteractions(invalidate: () => void): () => void {
   const changed = (nodeId: string) => {
-    const node = useScene.getState().nodes[nodeId as AnyNodeId]
-    if (!node || !BATCH_KINDS.has(node.type)) return
+    if (!batchableConfig(useScene.getState().nodes[nodeId as AnyNodeId])) return
     releaseNode(nodeId)
     changedNodes.add(nodeId)
     invalidate()
@@ -186,6 +189,7 @@ export function subscribeBatchInteractions(invalidate: () => void): () => void {
     }
   })
   const unsubscribePreviews = subscribeSlotPaintPreviews(changed)
+  const unsubscribeReleases = subscribeBatchReleases(changed)
   const unsubscribeMaterials = registerMaterialCacheCleanup(() => {
     releaseAll()
     for (const nodeId of getBatchableNodeIds()) changedNodes.add(nodeId)
@@ -194,6 +198,7 @@ export function subscribeBatchInteractions(invalidate: () => void): () => void {
   return () => {
     unsubscribeTransforms()
     unsubscribePreviews()
+    unsubscribeReleases()
     unsubscribeMaterials()
   }
 }
@@ -205,15 +210,12 @@ export function captureChangedNodes() {
   for (const id of dirty) {
     const node = nodes[id]
     if (!node) continue
-    if (BATCH_KINDS.has(node.type)) changedNodes.add(id as string)
+    if (batchableConfig(node)) changedNodes.add(id as string)
     else if (node.type === 'wall' && Array.isArray(node.children)) {
       // The wall edit moved its openings in level space; their own marks may
       // never come.
       for (const childId of node.children) {
-        const child = nodes[childId as AnyNodeId]
-        if (child && (child.type === 'door' || child.type === 'window')) {
-          changedNodes.add(childId as string)
-        }
+        if (isWallHosted(nodes[childId as AnyNodeId])) changedNodes.add(childId as string)
       }
     }
   }
@@ -280,8 +282,13 @@ function processBatchFrame(
   changedNodes.clear()
 
   const viewer = useViewer.getState()
-  if (lastLevelMode !== viewer.levelMode || lastSelectedLevel !== viewer.selection.levelId) {
+  if (
+    lastLevelMode !== viewer.levelMode ||
+    lastHideAbove !== viewer.hideLevelsAboveSelection ||
+    lastSelectedLevel !== viewer.selection.levelId
+  ) {
     lastLevelMode = viewer.levelMode
+    lastHideAbove = viewer.hideLevelsAboveSelection
     lastSelectedLevel = viewer.selection.levelId
     // Shadow-only sources were rejected and dropped from the previous join wave.
     for (const nodeId of nodeIds) if (!store.has(nodeId)) staleNodes.add(nodeId)
@@ -404,13 +411,13 @@ function processBatchFrame(
   const overrides = useLiveNodeOverrides.getState()
   for (const nodeId of staleNodes) {
     if (store.has(nodeId)) continue
+    const node = sceneNodes[nodeId as AnyNodeId]
     // Overrides defer like tint/dirt — an in-flight gesture ends with a
     // commit whose mark re-offers the node; dropping it here would strand it.
     if (
-      ((sceneNodes[nodeId as AnyNodeId]?.type === 'slab' ||
-        sceneNodes[nodeId as AnyNodeId]?.type === 'ceiling') &&
-        (wallsPending ||
-          surfaceLevelReadyAt.has(sceneNodes[nodeId as AnyNodeId]!.parentId ?? ''))) ||
+      (node &&
+        batchableConfig(node)?.waitsForWalls &&
+        (wallsPending || surfaceLevelReadyAt.has(node.parentId ?? ''))) ||
       tinted.has(nodeId) ||
       dirty.has(nodeId as AnyNodeId) ||
       overrides.get(nodeId) !== undefined ||

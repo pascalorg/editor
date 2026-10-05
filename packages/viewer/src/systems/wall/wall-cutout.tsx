@@ -10,7 +10,12 @@ import {
   type WallCutoutViewerStore,
   wallHiddenFromFacing,
 } from './wall-cutout-cache'
-import { getMaterialsForWall, getSelectionHighlightMaterials } from './wall-materials'
+import { getWallFinishRefs } from './wall-finish-data'
+import {
+  getMaterialsForWall,
+  getSelectionHighlightMaterials,
+  type WallMaterialsResolver,
+} from './wall-materials'
 import { subscribeWallRebuilds } from './wall-rebuild-notifications'
 
 const v = new Vector3()
@@ -46,12 +51,17 @@ export function getWallHideState(
 
 export const WallCutout = ({
   viewerStore = useViewer,
+  materialResolver = getMaterialsForWall,
 }: {
   viewerStore?: WallCutoutViewerStore
+  materialResolver?: WallMaterialsResolver
 }) => {
-  const cache = useMemo(() => new WallCutoutCache(viewerStore), [viewerStore])
+  const cache = useMemo(
+    () => new WallCutoutCache(viewerStore, materialResolver),
+    [viewerStore, materialResolver],
+  )
 
-  useEffect(() => subscribeWallRebuilds((id) => cache.rebuilt.add(id)), [cache])
+  useEffect(() => subscribeWallRebuilds((id) => cache.handleRebuilt(id)), [cache])
 
   useEffect(() => cache.subscribeLiveTransforms(), [cache])
 
@@ -68,13 +78,14 @@ export const WallCutout = ({
         if (!wallMesh) return
         const wallNode = useScene.getState().nodes[wallId as AnyNodeId] as WallNode | undefined
         if (wallNode?.type !== 'wall') return
-        const mats = getMaterialsForWall(
+        const mats = materialResolver(
           wallNode,
           viewerStore.getState().shading,
           viewerStore.getState().textures,
           viewerStore.getState().colorPreset,
           viewerStore.getState().sceneTheme,
           useScene.getState().materials,
+          getWallFinishRefs(wallMesh.geometry),
         )
         const current = wallMesh.material as Material | Material[]
         snapshot.set(wallMesh, current)
@@ -104,7 +115,7 @@ export const WallCutout = ({
       emitter.off('thumbnail:before-capture', restoreForCapture)
       emitter.off('thumbnail:after-capture', reapplyAfterCapture)
     }
-  }, [viewerStore])
+  }, [viewerStore, materialResolver])
 
   return null
 }

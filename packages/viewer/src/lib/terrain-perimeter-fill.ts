@@ -20,32 +20,38 @@ export function buildTerrainPerimeterFillGeometry(
   }
   const counterClockwise = signedArea > 0
   const positions: number[] = []
-  const push = (point: TerrainPerimeterPoint, y: number) => {
+  const uvs: number[] = []
+  const push = (point: TerrainPerimeterPoint, y: number, u = point.x, v = point.z) => {
     positions.push(point.x, y, point.z)
+    uvs.push(u, v)
   }
 
+  let perimeter = 0
   for (let index = 0; index < points.length; index += 1) {
     const next = (index + 1) % points.length
     const a = points[index]!
     const b = points[next]!
     const ay = bottomY[index]!
     const by = bottomY[next]!
-    if (ay >= topY - epsilon && by >= topY - epsilon) continue
-
+    const length = Math.hypot(b.x - a.x, b.z - a.z)
+    const ua = perimeter
+    perimeter += length
+    const ub = perimeter
+    if (length < epsilon || (ay >= topY - epsilon && by >= topY - epsilon)) continue
     if (counterClockwise) {
-      push(a, topY)
-      push(b, by)
-      push(a, ay)
-      push(a, topY)
-      push(b, topY)
-      push(b, by)
+      push(a, topY, ua, topY)
+      push(b, by, ub, by)
+      push(a, ay, ua, ay)
+      push(a, topY, ua, topY)
+      push(b, topY, ub, topY)
+      push(b, by, ub, by)
     } else {
-      push(a, topY)
-      push(a, ay)
-      push(b, by)
-      push(a, topY)
-      push(b, by)
-      push(b, topY)
+      push(a, topY, ua, topY)
+      push(a, ay, ua, ay)
+      push(b, by, ub, by)
+      push(a, topY, ua, topY)
+      push(b, by, ub, by)
+      push(b, topY, ub, topY)
     }
   }
 
@@ -80,6 +86,7 @@ export function buildTerrainPerimeterFillGeometry(
   if (positions.length === 0) return null
   const geometry = new BufferGeometry()
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3))
+  geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2))
   geometry.computeVertexNormals()
   ensureRenderableGeometryAttributes(geometry)
   return geometry

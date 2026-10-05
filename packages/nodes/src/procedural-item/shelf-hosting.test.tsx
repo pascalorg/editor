@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
+import { afterEach, beforeEach, expect, jest, spyOn, test } from 'bun:test'
 import {
   type AnyNodeId,
   createSceneApi,
@@ -515,6 +515,8 @@ test('shelf move and 2D resize re-mark the hosted child after dirty work drains'
 })
 
 test('3D resize handle cascades each tick and cancel restores dirty descendants', async () => {
+  // The drag arms a click-swallow cleanup timer on `window`; drain it before `window` goes.
+  jest.useFakeTimers()
   createRegistryItemSurfaceMove(original)!.enter(hit(), dimensions, 0.2)
   const host = useScene.getState().nodes[shelf.id]!
   let begin: ReturnType<typeof useHandleDrag>
@@ -552,7 +554,8 @@ test('3D resize handle cascades each tick and cancel restores dirty descendants'
     expect(useScene.getState().nodes[shelf.id]).toEqual(host)
   } finally {
     await renderer.unmount()
-    await new Promise((resolve) => setTimeout(resolve, 310))
+    jest.runOnlyPendingTimers()
+    jest.useRealTimers()
   }
 })
 
