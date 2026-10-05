@@ -110,6 +110,8 @@ function resolveParams(
   for (const spec of specs) {
     const override = overrides[spec.id]
     let value = typeof override === typeof spec.default ? override! : spec.default
+    if (typeof value === 'string' && spec.options && !spec.options.includes(value))
+      value = spec.default
     if (typeof value === 'number') {
       if (spec.min !== undefined) value = Math.max(spec.min, value)
       if (spec.max !== undefined) value = Math.min(spec.max, value)

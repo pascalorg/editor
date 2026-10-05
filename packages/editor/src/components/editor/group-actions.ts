@@ -472,9 +472,16 @@ const REFUSED_PASTE_REASONS: Record<PasteRefusal, [one: string, many: string]> =
   failed: ["it couldn't be copied. Try again.", "they couldn't be copied. Try again."],
 }
 
-function refusedPasteNotice(count: number, refusal: PasteRefusal) {
+/** Why scripted objects were left out of a paste, or of a build loaded from a file. */
+export function refusedObjectsNotice(
+  count: number,
+  refusal: PasteRefusal,
+  action: 'pasted' | 'loaded' = 'pasted',
+) {
   const [one, many] = REFUSED_PASTE_REASONS[refusal]
-  return count === 1 ? `1 object wasn't pasted: ${one}` : `${count} objects weren't pasted: ${many}`
+  return count === 1
+    ? `1 object wasn't ${action}: ${one}`
+    : `${count} objects weren't ${action}: ${many}`
 }
 
 let pastePending = false
@@ -510,7 +517,7 @@ export async function pasteSelectionAndPickUp(targetLevelId?: AnyNodeId): Promis
   if (result?.refusal) {
     useFloorplanMode
       .getState()
-      .showNotice(refusedPasteNotice(result.refusedIds.length, result.refusal))
+      .showNotice(refusedObjectsNotice(result.refusedIds.length, result.refusal))
   }
   if (!result || result.pastedIds.length === 0) return false
 

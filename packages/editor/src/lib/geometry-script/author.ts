@@ -11,6 +11,7 @@ import {
   addColumn,
   addObject,
   authoredObject,
+  editedScriptParams,
   rescriptOpening,
 } from '@pascal-app/core/agent-operations'
 import { compileGeometryScriptInWorker } from './client'
@@ -18,8 +19,8 @@ import { compileGeometryScriptInWorker } from './client'
 /**
  * The editor's compile step for `add_object`: runs the module in the
  * worker and stores the GLB and the module text, so the core operation can
- * reference both by hash. Without `code`, the node's stored script is rebuilt
- * with the new params.
+ * reference both by hash. Without `code`, the node's stored script is rebuilt;
+ * either way an edit keeps the node's param values it does not override.
  */
 export async function compileAndStoreGeometryScript(input: {
   code?: string
@@ -27,7 +28,9 @@ export async function compileAndStoreGeometryScript(input: {
   params?: Record<string, GeometryScriptParamValue>
 }): Promise<CompiledGeometryScript> {
   const code = input.code ?? (await storedScript(input.nodeId))
-  const { glb, ...compiled } = await compileGeometryScriptInWorker({ code, params: input.params })
+  const node = input.nodeId ? useScene.getState().nodes[input.nodeId as AnyNodeId] : undefined
+  const params = editedScriptParams(node, input.params)
+  const { glb, ...compiled } = await compileGeometryScriptInWorker({ code, params })
   const store = getArtifactStore()
   await Promise.all([
     store.put(compiled.sha256, glb, 'model/gltf-binary'),

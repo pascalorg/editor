@@ -21,6 +21,7 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import {
+  bringBuildArtifacts,
   copySelectedNodesToEditorClipboard,
   getEditorClipboardSnapshot,
   pasteEditorClipboardToLevel,
@@ -573,6 +574,39 @@ describe('scene clipboard', () => {
       const sameProject = await pasteSystemEditorClipboardToLevel(targetLevelId)
       expect(sameProject?.pastedIds).toHaveLength(1)
       expect(copyFrom).not.toHaveBeenCalled()
+    } finally {
+      configureArtifactStore(previousStore)
+      useViewer.getState().setProjectId(null)
+    }
+  })
+
+  test('build files verify artifacts even when their origin is absent or names the current project', async () => {
+    const node = copyScriptedWindow()
+    const previousStore = getArtifactStore()
+    const copyFrom = mock(async (_projectId: string, _hashes: string[]) => [node.source!.script])
+    configureArtifactStore({ ...previousStore, copyFrom })
+    try {
+      for (const projectId of [undefined, 'project_clipboard-target', 'project_unreadable']) {
+        const result = await bringBuildArtifacts({
+          projectId,
+          nodes: {
+            [sourceLevelId]: makeLevel(sourceLevelId, [node.id]),
+            [node.id]: node,
+          },
+          rootNodeIds: [sourceLevelId],
+        })
+        expect(copyFrom.mock.calls.at(-1)?.[0]).toBe(projectId ?? 'project_clipboard-target')
+        expect(result.refusedIds).toEqual([node.id])
+        expect(result.build.nodes[node.id]).toBeUndefined()
+        expect((result.build.nodes[sourceLevelId] as LevelNode).children).toEqual([])
+      }
+      configureArtifactStore({ ...previousStore, copyFrom: async () => [] })
+      const available = await bringBuildArtifacts({
+        nodes: { [sourceLevelId]: makeLevel(sourceLevelId, [node.id]), [node.id]: node },
+        rootNodeIds: [sourceLevelId],
+      })
+      expect(available.refusedIds).toEqual([])
+      expect(available.build.nodes[node.id]).toEqual(node)
     } finally {
       configureArtifactStore(previousStore)
       useViewer.getState().setProjectId(null)

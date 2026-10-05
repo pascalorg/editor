@@ -336,6 +336,7 @@ export {
   SLOT_MATERIAL_PREFIX,
   slotDefaultPaintMaterial,
   slotLabelFromId,
+  slotPaintMaterial,
 } from './lib/slots'
 export {
   createRoomTopologyIndex,
@@ -464,7 +465,9 @@ export {
   type MaterialRef,
   type MaterialSource,
   type MaterialSurface,
+  materialColorPaint,
   type ParsedMaterialRef,
+  parseMaterialColor,
   parseMaterialRef,
   registerLibraryMaterials,
   SCENE_MATERIAL_REF_PREFIX,
@@ -473,6 +476,7 @@ export {
   toSceneMaterialRef,
   unregisterLibraryMaterials,
 } from './material-library'
+export * from './node-slots'
 export type {
   FloorPlacedFootprint,
   FloorPlacedFootprintContext,

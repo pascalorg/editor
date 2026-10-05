@@ -7,6 +7,7 @@ import {
   getArtifactStore,
   type LevelNode,
   nodeRegistry,
+  type ParsedBuildJson,
   remapMeasurementReferences,
   SceneMaterial,
   type SceneMaterialId,
@@ -465,7 +466,10 @@ export async function pasteSystemEditorClipboardToLevel(
   const payload = clipboardPayload
   const targetLevel = getPasteTargetLevel(targetLevelId)
   if (!targetLevel) return null
-  const refused = await copyArtifactsHere(payload)
+  const refused =
+    payload.projectId && payload.projectId === projectId
+      ? NONE_REFUSED
+      : await copyArtifactsHere(payload)
   // Navigation can replace the scene while the server copies its artifacts.
   if (projectId !== useViewer.getState().projectId || store !== getArtifactStore()) return null
   return applyClipboardPayloadToLevel(payload, targetLevel.id, refused)
@@ -483,11 +487,10 @@ function artifactHashes(node: AnyNode): string[] {
  * reference into this one. Returns the nodes whose artifacts could not come,
  * which the paste leaves out with everything they host, and why.
  */
-async function copyArtifactsHere(payload: ClipboardPayload): Promise<Refused> {
+async function copyArtifactsHere(
+  payload: Pick<ClipboardPayload, 'nodes' | 'projectId'>,
+): Promise<Refused> {
   const store = getArtifactStore()
-  if (payload.projectId && payload.projectId === useViewer.getState().projectId) {
-    return NONE_REFUSED
-  }
   const hashes = [...new Set(payload.nodes.flatMap(artifactHashes))]
   if (hashes.length === 0) return NONE_REFUSED
 
@@ -512,6 +515,64 @@ async function copyArtifactsHere(payload: ClipboardPayload): Promise<Refused> {
   }
   if (ids.size === 0) return NONE_REFUSED
   return { ids, reason: failed ? 'failed' : geometryMissing ? 'no-access' : 'no-copies' }
+}
+
+/**
+ * A build file loaded into another project first brings the artifacts its
+ * scripted nodes reference from the project it was saved in, as a paste does.
+ * Answers the build without the nodes whose artifacts could not come, nor
+ * anything they host.
+ */
+export async function bringBuildArtifacts(build: ParsedBuildJson): Promise<{
+  build: ParsedBuildJson
+  refusedIds: AnyNodeId[]
+  refusal: PasteRefusal | null
+}> {
+  const nodes = Object.values(build.nodes) as AnyNode[]
+  // A file's origin is untrusted, even when it names this project. Older files can
+  // still use artifacts already registered here, but cannot introduce missing ones.
+  const refused = await copyArtifactsHere({
+    nodes,
+    projectId: build.projectId ?? useViewer.getState().projectId,
+  })
+  if (refused.ids.size === 0) return { build, refusedIds: [], refusal: null }
+
+  const excluded = new Set<string>(refused.ids)
+  for (let grew = true; grew; ) {
+    grew = false
+    for (const node of nodes) {
+      if (node.parentId && excluded.has(node.parentId) && !excluded.has(node.id)) {
+        excluded.add(node.id)
+        grew = true
+      }
+    }
+  }
+  const kept: Record<string, unknown> = {}
+  for (const node of nodes) {
+    if (excluded.has(node.id)) continue
+    const children = (node as { children?: unknown }).children
+    kept[node.id] = Array.isArray(children)
+      ? { ...node, children: children.filter((id) => !excluded.has(id as string)) }
+      : node
+  }
+  const collections =
+    build.collections &&
+    Object.fromEntries(
+      Object.entries(build.collections).map(([id, collection]) => [
+        id,
+        { ...collection, nodeIds: collection.nodeIds.filter((nodeId) => !excluded.has(nodeId)) },
+      ]),
+    )
+  return {
+    build: {
+      ...build,
+      nodes: kept,
+      rootNodeIds: build.rootNodeIds.filter((id) => !excluded.has(id)),
+      ...(collections ? { collections } : {}),
+    },
+    refusedIds: [...refused.ids],
+    refusal: refused.reason,
+  }
 }
 
 function applyClipboardPayloadToLevel(

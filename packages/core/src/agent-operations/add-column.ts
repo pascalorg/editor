@@ -4,7 +4,7 @@ import { refuse } from '../agent-tools/refusal'
 import { scriptedSize, scriptSource } from '../lib/geometry-script-node'
 import { resettledPosition } from '../lib/geometry-surfaces'
 import { ColumnNode, type CompiledGeometryScript, type GeometryScriptParamValue } from '../schema'
-import { refuseParamsWithoutScript } from './add-object'
+import { editedScriptParams, refuseParamsWithoutScript } from './add-object'
 import { targetLevel } from './level-target'
 import type { AgentOperation } from './types'
 
@@ -29,7 +29,7 @@ export function columnScriptParams(
 ) {
   const sizes = (['height', 'width', 'depth'] as const).filter((key) => input[key] !== undefined)
   if (!(input.code || (node?.source && (input.params || sizes.length > 0)))) return undefined
-  const params = { ...node?.source?.params, ...input.params }
+  const params = { ...editedScriptParams(node, input.params) }
   for (const key of sizes) {
     if (node?.source && !input.code && !node.source.manifest.params.some((spec) => spec.id === key))
       refuse(

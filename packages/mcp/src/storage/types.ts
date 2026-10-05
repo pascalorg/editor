@@ -23,7 +23,7 @@ export interface SceneMeta {
   editorUrl?: string
   /** Backward-compatible alias for clients that still read url. */
   url?: string
-  /** True when this save is browser-visible without a separate publish call. */
+  /** True when this version is the published one (hosted: what the project's viewers see). */
   published?: boolean
   /** True when the saved graph is still the mutable browser-visible draft. */
   isDraft?: boolean
@@ -63,7 +63,7 @@ export interface SceneSaveOptions {
   expectedGraphHash?: string | null
   /** `draft` updates the browser-visible working model; `checkpoint` records version history. */
   saveMode?: SceneSaveMode
-  /** Whether a checkpoint should become the published/browser-visible head. */
+  /** Publish this checkpoint. Only an explicit `true` publishes; a checkpoint alone never does. */
   publish?: boolean
   /** Optional hosted MCP session id for project presence/debug metadata. */
   agentSessionId?: string

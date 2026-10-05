@@ -1,4 +1,6 @@
 import { describe, expect, test } from 'bun:test'
+import { type AnyNode, scriptSource } from '@pascal-app/core'
+import { editedScriptParams } from '@pascal-app/core/agent-operations'
 import { GeometryArtifactManifest } from '@pascal-app/core/schema'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { compileGeometryScript } from './index'
@@ -25,6 +27,39 @@ describe('clips', () => {
     const start = track.values[1]!
     const end = track.values[track.values.length - 2]!
     expect(end - start).toBeCloseTo(0.7, 3)
+  })
+})
+
+test('an edit keeps the current param values the new code still accepts', async () => {
+  const module = (params: string) => `export const params = ${params}
+  export default function build({ THREE }) {
+    const g = new THREE.Group(); g.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1))); return g
+  }`
+  const before = await compileGeometryScript({
+    code: module(
+      `{ width: { default: 5.2, min: 3, max: 8 }, depth: 2.4, height: 2.75, finish: 'pine', rail: 1, gone: 9 }`,
+    ),
+    params: { width: 6.3, depth: 1.7, height: 2.52, finish: 'walnut', rail: 0, gone: 4 },
+  })
+  const node = { type: 'item', source: scriptSource(before) } as AnyNode
+  const after = await compileGeometryScript({
+    code: module(`{
+      width: { default: 5.2, min: 3, max: 8 },
+      depth: { default: 2.4, min: 2, max: 4 },
+      height: 2.75,
+      finish: { default: 'oak', options: ['oak', 'ash'] },
+      rail: true,
+      lit: false,
+    }`),
+    params: editedScriptParams(node, { height: 3 }),
+  })
+  expect(after.params).toEqual({
+    width: 6.3,
+    depth: 2,
+    height: 3,
+    finish: 'oak',
+    rail: true,
+    lit: false,
   })
 })
 

@@ -19,6 +19,27 @@ describe('builtinPlugin', () => {
     expect(nodeRegistry.size).toBeGreaterThanOrEqual(1)
   })
 
+  test('opening paint reads the body material beneath slot overrides', async () => {
+    await loadPlugin(builtinPlugin)
+    for (const type of ['door', 'window'] as const) {
+      const node = AnyNode.parse({
+        type,
+        wallId: 'wall_test',
+        material: { properties: { color: '#123456' } },
+      })
+      const paint = nodeRegistry.get(type)?.capabilities?.paint
+      const pick = (role: string, painted = node) =>
+        paint?.getEffectiveMaterial?.({ node: painted, role, nodes: {} })
+      expect(pick('frame')?.material?.properties?.color).toBe('#123456')
+      if (type === 'door') expect(pick('panel')?.material?.properties?.color).toBe('#123456')
+      expect(pick('glass')).toBeNull()
+      expect(
+        pick('frame', AnyNode.parse({ ...node, slots: { frame: '#abcdef' } }))?.material?.properties
+          ?.color,
+      ).toBe('#abcdef')
+    }
+  })
+
   test('every AnyNode discriminator is registered in builtinPlugin', async () => {
     // Phase 6 coverage check. The `AnyNode` discriminated union and the
     // `builtinPlugin.nodes` array are both hand-maintained today (full

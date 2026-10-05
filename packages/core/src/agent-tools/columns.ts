@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { scriptParams } from './add-object'
 import { measurement } from './measurement'
 import { NodeId } from './node-id'
 
@@ -61,9 +62,6 @@ export const addColumnTool = {
       .describe(
         'A three.js module when the native fields cannot express the column. Same module and conventions as add_object; mount floor. Declare height, width and depth params for editable dimensions.',
       ),
-    params: z
-      .record(z.string(), z.union([z.number(), z.boolean(), z.string()]))
-      .optional()
-      .describe('Values for the params the module declares.'),
+    params: scriptParams,
   },
 }

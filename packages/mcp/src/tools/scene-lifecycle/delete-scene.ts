@@ -20,7 +20,7 @@ export function registerDeleteScene(server: McpServer, operations: SceneOperatio
     {
       title: 'Delete scene',
       description:
-        'Delete a scene from the SceneStore by id. Optionally pass `expectedVersion` for optimistic concurrency.',
+        'Permanently delete a stored scene by id; in Pascal that is the whole project with its versions and files. It cannot be undone, and only someone who can manage the project may delete it. Optionally pass `expectedVersion` for optimistic concurrency.',
       inputSchema: deleteSceneInput,
       outputSchema: deleteSceneOutput,
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,

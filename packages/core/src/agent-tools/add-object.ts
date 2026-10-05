@@ -22,7 +22,15 @@ Conventions (they make the object work in Pascal; follow them):
 - Sockets: an empty Object3D named anchor:<id> marks where other things attach.
 - No textures, network or DOM. At most 300k triangles, 32 materials, 60 m per side.
 
-Edit: pass nodeId with new code and/or params (params alone rebuild the stored script; read it first with get_source to change the code); identity, placement and paint are kept. The result lists the size, parts, slots, lights, animations and params.`
+Edit: pass nodeId with new code and/or params (params alone rebuild the stored script; read it first with get_source to change the code); identity, placement, paint and the params you leave out are kept. The result lists the size, parts, slots, lights, animations and params.`
+
+/** The `params` field every scripted tool shares (add_object, add_window, add_door, add_column). */
+export const scriptParams = z
+  .record(z.string(), z.union([z.number(), z.boolean(), z.string()]))
+  .optional()
+  .describe(
+    "Values for the params the module declares; on an edit, each one you leave out keeps its current value (clamped to the param's range) and a param new to the code starts at its default.",
+  )
 
 export const addObjectTool = {
   name: 'add_object',
@@ -37,10 +45,7 @@ export const addObjectTool = {
       .describe(
         'The three.js module (see the tool description). Required to create; omit to rebuild an object with new params.',
       ),
-    params: z
-      .record(z.string(), z.union([z.number(), z.boolean(), z.string()]))
-      .optional()
-      .describe('Values for the params the module declares; omitted ones use their defaults.'),
+    params: scriptParams,
     nodeId: NodeId.optional().describe(
       'Edit this existing authored object instead of creating one.',
     ),

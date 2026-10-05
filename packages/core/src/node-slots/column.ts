@@ -1,5 +1,5 @@
-import type { SlotDeclaration } from '@pascal-app/core'
-import type { ColumnNode } from './schema'
+import type { SlotDeclaration } from '../registry/types'
+import type { ColumnNode } from '../schema/nodes/column'
 
 export type ColumnSlotId = 'shaft' | 'base' | 'capital' | 'frame'
 

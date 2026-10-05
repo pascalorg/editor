@@ -253,6 +253,19 @@ export const rescriptOpening: AgentOperation<RescriptOpeningInput> = (nodes, inp
   }
 }
 
+/**
+ * The param values a rebuild of `node` compiles with: its current ones under the
+ * edit's. The compile then keeps only what the module declares, clamps numbers to
+ * their new range and gives a param new to the code, or one whose type changed,
+ * its default. A node without a script just takes the edit's.
+ */
+export function editedScriptParams(
+  node: AnyNode | undefined,
+  params: Record<string, GeometryScriptParamValue> | undefined,
+): Record<string, GeometryScriptParamValue> | undefined {
+  return isScriptedNode(node) ? { ...node.source.params, ...params } : params
+}
+
 /** The scripted node `get_source` and a params-only rebuild act on, or a refusal. */
 export function authoredObject(nodes: Record<string, AnyNode>, nodeId: string): ScriptedNode {
   const node = nodes[nodeId]

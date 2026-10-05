@@ -2,7 +2,12 @@
 
 import {
   type AnyNodeId,
+  COLUMN_BASE_DEFAULT,
+  COLUMN_CAPITAL_DEFAULT,
+  COLUMN_FRAME_DEFAULT,
+  COLUMN_SHAFT_DEFAULT,
   type ColumnNode,
+  type ColumnSlotId,
   collectDescendants,
   createSceneApi,
   useLiveNodeOverrides,
@@ -38,13 +43,6 @@ import {
   getShaftSegmentCount,
   getShaftTwistRadians,
 } from './shape'
-import {
-  COLUMN_BASE_DEFAULT,
-  COLUMN_CAPITAL_DEFAULT,
-  COLUMN_FRAME_DEFAULT,
-  COLUMN_SHAFT_DEFAULT,
-  type ColumnSlotId,
-} from './slots'
 
 type ColumnSlotMaterials = Record<ColumnSlotId, Material>
 type SceneMaterials = ReturnType<typeof useScene.getState>['materials']

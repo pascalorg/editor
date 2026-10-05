@@ -1,9 +1,6 @@
-import {
-  getCurtainWallConfig,
-  type SlotDeclaration,
-  WALL_SURFACE_SLOT_DEFAULTS,
-  type WallNode,
-} from '@pascal-app/core'
+import type { SlotDeclaration } from '../registry/types'
+import { getCurtainWallConfig } from '../schema/nodes/curtain-wall'
+import { WALL_SURFACE_SLOT_DEFAULTS, type WallNode } from '../schema/nodes/wall'
 
 /**
  * A wall exposes two paintable faces — `a` (left of start → end) and `b` —
@@ -47,5 +44,14 @@ export function wallSlots(node?: WallNode): SlotDeclaration[] {
       label: 'Chair rail (side B)',
       default: WALL_SURFACE_SLOT_DEFAULTS.bChairRail,
     },
+    ...(node?.underpinning
+      ? [
+          {
+            slotId: 'foundation',
+            label: 'Foundation',
+            default: WALL_SURFACE_SLOT_DEFAULTS.foundation,
+          },
+        ]
+      : []),
   ]
 }

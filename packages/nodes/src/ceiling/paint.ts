@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  CEILING_SLOT_DEFAULT_COLOR,
   CEILING_SURFACE_ROLE,
   type CeilingNode,
   ceilingPaintRegions,
@@ -20,7 +21,6 @@ import type { Material, Mesh, Object3D } from 'three'
 import { createSlotPaintCapability, resolveSlotPaintMaterialRef } from '../shared/slot-paint'
 import { swapPreviewMaterial } from '../shared/swap-preview-material'
 import { ceilingColorFromRef, getCeilingMaterials } from './materials'
-import { CEILING_SLOT_DEFAULT_COLOR } from './slots'
 
 /**
  * Ceiling paint on the unified slot model. A ceiling's own finish is its

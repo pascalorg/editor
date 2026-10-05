@@ -3,6 +3,7 @@ import { createZone, generateId } from '@pascal-app/core'
 import {
   collectDoorKeepouts,
   collectOccupiedFootprints,
+  editedScriptParams,
   findValidPlacement,
   itemPlanAabb,
   keepoutCoversPlanned,
@@ -565,7 +566,8 @@ async function rebuildOpening(
   let outcome: ReturnType<typeof rescriptOpening>
   try {
     const code = input.code ?? (await readScript(host, scene.id, bridge, input.nodeId))
-    const compiled = await compileAndStore(host, scene.id, code, input.params, kind)
+    const params = editedScriptParams(nodes[input.nodeId], input.params)
+    const compiled = await compileAndStore(host, scene.id, code, params, kind)
     outcome = rescriptOpening(nodes, { nodeId: input.nodeId, compiled }, { activeLevelId: null })
   } catch (error) {
     if (isAgentRefusal(error)) return refusalResult(error)

@@ -6,6 +6,7 @@ import {
   computePlateSurfacePartition,
   cutterContextNodes,
   FenceNode,
+  FOUNDATION_SLOT_DEFAULT,
   type GeometryContext,
   getLevelElevations,
   getMaterialPresetByRef,
@@ -23,7 +24,10 @@ import {
   plateLevelContext,
   resolveFloorStepFinish,
   type SiteNode,
+  SLAB_SIDE_SLOT_DEFAULT,
+  SLAB_TOP_SLOT_DEFAULT,
   type SlabNode,
+  type SlabSlotId,
   slabPolygonContextFromGeometry,
   surfaceHeightAt,
   terrainFieldOf,
@@ -46,12 +50,6 @@ import {
 } from '@pascal-app/viewer'
 import { type BufferGeometry, FrontSide, Group, type Material, Mesh, type Texture } from 'three'
 import { creaseCrossings } from '../site/terrain-drape'
-import {
-  FOUNDATION_SLOT_DEFAULT,
-  SLAB_SIDE_SLOT_DEFAULT,
-  SLAB_TOP_SLOT_DEFAULT,
-  type SlabSlotId,
-} from './slots'
 import { clipPlateTerrainFill, splitPlateFaces, splitSlabFacesByFacing } from './surface-split'
 
 /**

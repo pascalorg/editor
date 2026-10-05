@@ -1,6 +1,7 @@
 import {
   ColumnNode as ColumnNodeSchema,
   type ColumnNode as ColumnNodeType,
+  columnSlots,
   type GroupMoveSnapArgs,
   type GroupMoveSnapResult,
   type HandleDescriptor,
@@ -20,7 +21,6 @@ import { columnHostedPolicy } from './hosted-resize'
 import { columnPaint } from './paint'
 import { columnParametrics } from './parametrics'
 import { ColumnNode } from './schema'
-import { columnSlots } from './slots'
 import { columnSurfaceProvider } from './surface'
 
 // Limits + offsets shared with the in-world arrows. Mirrors the floors

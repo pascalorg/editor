@@ -42,8 +42,10 @@ export const DoorNode = BaseNode.extend({
   type: nodeType('door'),
   material: MaterialSchema.optional(),
   // Per-slot material overrides on the unified slot model. Keys: `panel` (the
-  // door body), `glass`. Value = a `MaterialRef` (`library:<id>` / `scene:<id>`).
-  // Absent = the body/glass default. Mirrors `ShelfNode.slots`.
+  // door body), `frame`, `glass`, `hardware`. Value = a `MaterialRef`
+  // (`library:<id>` / `scene:<id>`) or a plain `#rrggbb` colour. Absent = the
+  // door-wide `material` on panel and frame, else the slot default. Mirrors
+  // `ShelfNode.slots`.
   slots: z.record(z.string(), z.string()).optional(),
   /**
    * A three.js script the door is built from instead of its parametric frame, as on an item:

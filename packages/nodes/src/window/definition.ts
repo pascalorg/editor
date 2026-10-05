@@ -11,6 +11,7 @@ import type {
 import {
   getDormerWallHorizontalBoundsAtHeight,
   getDormerWallOpeningVerticalBounds,
+  windowSlots,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { curtainOpeningResizeMax } from '../shared/curtain-opening-limits'
@@ -35,7 +36,6 @@ import { windowMechanism } from './mechanism'
 import { windowPaint } from './paint'
 import { windowParametrics } from './parametrics'
 import { WindowNode } from './schema'
-import { windowSlots } from './slots'
 
 const SIDE_HANDLE_OFFSET = 0.24
 const HEIGHT_HANDLE_OFFSET = 0.24

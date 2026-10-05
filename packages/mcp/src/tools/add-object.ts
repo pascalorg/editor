@@ -3,6 +3,7 @@ import {
   type AddObjectInput,
   addObject,
   authoredObject,
+  editedScriptParams,
   readSourceResult,
 } from '@pascal-app/core/agent-operations'
 import { addObjectTool, getSourceTool, isAgentRefusal, refuse } from '@pascal-app/core/agent-tools'
@@ -124,7 +125,9 @@ export function registerAddObject(
           (args.nodeId
             ? await readScript(host, scene.id, bridge, args.nodeId)
             : refuseMissingCode())
-        compiled = await compileAndStore(host, scene.id, code, args.params, 'object')
+        const nodes = bridge.getNodes() as Record<string, AnyNode>
+        const params = editedScriptParams(args.nodeId ? nodes[args.nodeId] : undefined, args.params)
+        compiled = await compileAndStore(host, scene.id, code, params, 'object')
       } catch (error) {
         if (isAgentRefusal(error)) return refusalResult(error)
         return toolError(error instanceof Error ? error.message : String(error), {
