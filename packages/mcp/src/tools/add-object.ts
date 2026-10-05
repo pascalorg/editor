@@ -5,6 +5,7 @@ import {
   authoredObject,
   editedScriptParams,
   readSourceResult,
+  requireAddObjectReason,
 } from '@pascal-app/core/agent-operations'
 import { addObjectTool, getSourceTool, isAgentRefusal, refuse } from '@pascal-app/core/agent-tools'
 import {
@@ -120,6 +121,7 @@ export function registerAddObject(
       const args = input as Omit<AddObjectInput, 'compiled'>
       let compiled: CompiledGeometryScript
       try {
+        requireAddObjectReason(args)
         const code =
           args.code ??
           (args.nodeId

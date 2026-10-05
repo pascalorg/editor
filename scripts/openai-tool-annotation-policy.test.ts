@@ -1,6 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import packet from '../plugin-evals/tool-annotation-justifications.json'
-import { validateOpenAiToolAnnotationPacket } from './openai-tool-annotation-policy'
+import {
+  EXPECTED_OPENAI_TOOL_ANNOTATIONS,
+  validateOpenAiToolAnnotationPacket,
+} from './openai-tool-annotation-policy'
 
 const clonePacket = () => structuredClone(packet)
 
@@ -13,7 +16,7 @@ describe('OpenAI tool annotation justification packet', () => {
     const candidate = clonePacket()
     candidate.tools.pop()
     expect(validateOpenAiToolAnnotationPacket(candidate)).toContain(
-      'OpenAI tool annotation packet must contain the exact 71-tool inventory',
+      `OpenAI tool annotation packet must contain the exact ${Object.keys(EXPECTED_OPENAI_TOOL_ANNOTATIONS).length}-tool inventory`,
     )
   })
 

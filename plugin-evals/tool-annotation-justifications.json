@@ -33,6 +33,19 @@
       }
     },
     {
+      "name": "add_level",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it creates a new empty level in a building of the connected Pascal scene.",
+        "destructiveHint": "It goes above the highest level or below the lowest, so no existing level moves and nothing is deleted or replaced.",
+        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
+      }
+    },
+    {
       "name": "add_object",
       "annotations": {
         "readOnlyHint": false,
@@ -43,6 +56,19 @@
         "readOnlyHint": "It is not read-only because it creates an object from a three.js module in the connected Pascal scene, or rebuilds an existing one.",
         "destructiveHint": "Given an existing object's nodeId it replaces that object's geometry and script, so earlier authored state is overwritten (undo restores it).",
         "openWorldHint": "It runs the supplied module in the Pascal server's script host and stores the result with the scene, without accessing the public internet."
+      }
+    },
+    {
+      "name": "add_wall",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it adds a wall node to a level of the connected Pascal scene.",
+        "destructiveHint": "Its intended operation adds new modeled state without deleting or replacing existing Pascal scene or project state.",
+        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
       }
     },
     {
@@ -137,19 +163,6 @@
       }
     },
     {
-      "name": "create_level",
-      "annotations": {
-        "readOnlyHint": false,
-        "destructiveHint": false,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It is not read-only because creates a new level in the connected Pascal scene.",
-        "destructiveHint": "Its intended operation adds new modeled state without deleting or replacing existing Pascal scene or project state.",
-        "openWorldHint": "It operates on the connected Pascal scene, project, and configured catalog data without accessing the public internet."
-      }
-    },
-    {
       "name": "create_mezzanine",
       "annotations": {
         "readOnlyHint": false,
@@ -202,16 +215,16 @@
       }
     },
     {
-      "name": "create_stair_between_levels",
+      "name": "create_stair",
       "annotations": {
         "readOnlyHint": false,
-        "destructiveHint": true,
+        "destructiveHint": false,
         "openWorldHint": false
       },
       "justifications": {
-        "readOnlyHint": "It creates a stair and an opening intent node that changes derived floor and ceiling geometry.",
-        "destructiveHint": "The new opening changes existing modeled floor and ceiling geometry.",
-        "openWorldHint": "It operates on the connected Pascal scene or project service without accessing the public internet."
+        "readOnlyHint": "It is not read-only because it creates a stair, its flight and the floor openings it owns, and a level above when there is none.",
+        "destructiveHint": "It adds nodes and opens holes in the floors it passes, as the editor's stair tool does; it deletes nothing.",
+        "openWorldHint": "It operates on the connected Pascal scene without accessing the public internet."
       }
     },
     {
@@ -241,19 +254,6 @@
       }
     },
     {
-      "name": "create_wall",
-      "annotations": {
-        "readOnlyHint": false,
-        "destructiveHint": false,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It is not read-only because adds a wall node to the connected Pascal scene.",
-        "destructiveHint": "Its intended operation adds new modeled state without deleting or replacing existing Pascal scene or project state.",
-        "openWorldHint": "It operates on the connected Pascal scene, project, and configured catalog data without accessing the public internet."
-      }
-    },
-    {
       "name": "cut_floor_opening",
       "annotations": {
         "readOnlyHint": false,
@@ -264,19 +264,6 @@
         "readOnlyHint": "It creates a floor-opening intent node and reconciles adjacent construction.",
         "destructiveHint": "It adds an opening node without deleting existing authored intent.",
         "openWorldHint": "It operates only on the connected Pascal scene."
-      }
-    },
-    {
-      "name": "cut_opening",
-      "annotations": {
-        "readOnlyHint": false,
-        "destructiveHint": false,
-        "openWorldHint": false
-      },
-      "justifications": {
-        "readOnlyHint": "It is not read-only because adds an opening definition to existing Pascal scene geometry.",
-        "destructiveHint": "Its intended operation adds new modeled state without deleting or replacing existing Pascal scene or project state.",
-        "openWorldHint": "It operates on the connected Pascal scene, project, and configured catalog data without accessing the public internet."
       }
     },
     {
@@ -709,16 +696,16 @@
       }
     },
     {
-      "name": "place_item",
+      "name": "place_items",
       "annotations": {
         "readOnlyHint": false,
         "destructiveHint": false,
         "openWorldHint": false
       },
       "justifications": {
-        "readOnlyHint": "It is not read-only because adds an item at the requested pose in the connected Pascal scene.",
+        "readOnlyHint": "It is not read-only because it adds catalog items to the floor of a level in the connected Pascal scene.",
         "destructiveHint": "Its intended operation adds new modeled state without deleting or replacing existing Pascal scene or project state.",
-        "openWorldHint": "It operates on the connected Pascal scene, project, and configured catalog data without accessing the public internet."
+        "openWorldHint": "It operates on the connected Pascal scene and the host's configured item catalog without accessing the public internet."
       }
     },
     {

@@ -10,7 +10,7 @@ export const AGENT_GUIDE = [
   '',
   '1. Read this guide or call `get_capabilities` if available.',
   '2. If the user asks for a new project, call `create_project` first.',
-  '3. For quick starts, call `create_house_from_brief`. For precise edits, build with semantic tools: `create_story_shell`, `create_room`, `add_door`, `add_window`, `furnish_room`, `create_roof`, `place_item`.',
+  '3. For quick starts, call `create_house_from_brief`. For precise edits, build with semantic tools: `create_story_shell`, `create_room`, `add_door`, `add_window`, `furnish_room`, `create_roof`, `place_items`.',
   '4. Let semantic tools update the browser-visible draft. Call `save_scene` with `saveMode: "draft"` for autosave-style progress, or `saveMode: "checkpoint"` only for meaningful milestones.',
   '5. Call `validate_scene`, `verify_scene`, then `get_project_status`.',
   '6. Return the final `editorUrl` from tool output. Do not infer routes.',

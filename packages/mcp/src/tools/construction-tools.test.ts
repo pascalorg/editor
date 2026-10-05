@@ -211,7 +211,7 @@ describe('construction tools', () => {
     expect(bridge.validateScene().valid).toBe(true)
   })
 
-  test('create_stair_between_levels creates one persistent floor opening', async () => {
+  test('create_stair owns the openings it cuts: they follow the stair, undo with it and go with it', async () => {
     const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
     const ground = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
     const upper = LevelNode.parse({ name: 'Second Floor', level: 1, metadata: { height: 2.8 } })
@@ -235,108 +235,50 @@ describe('construction tools', () => {
     }
 
     const result = await client.callTool({
-      name: 'create_stair_between_levels',
-      arguments: {
-        fromLevelId: ground.id,
-        toLevelId: upper.id,
-        position: [0, 0, -1],
-        width: 1,
-        runLength: 3,
-        totalRise: 2.8,
-        openingOffset: 0.2,
-      },
+      name: 'create_stair',
+      arguments: { levelId: ground.id, x: 0, z: -1, width: 1, length: 3 },
     })
     expect(result.isError).toBeFalsy()
     const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
-    expect(parsed.openingPolygon).toHaveLength(4)
-    expect(parsed.openingIds).toHaveLength(1)
-    expect(bridge.getNode(parsed.openingIds[0])).toMatchObject({
-      type: 'floor-opening',
-      source: 'stair',
-      polygon: parsed.openingPolygon,
-      cutsPrimary: true,
-      cutsAdjacent: true,
-    })
+    expect(parsed).toMatchObject({ upperLevelId: upper.id, slabHoleCut: true })
+    // The floor above is opened, and the ceiling below it.
+    const openings = (parsed.openingIds as AnyNodeId[]).map((id) => bridge.getNode(id))
+    for (const [parentId, drawnOn] of [
+      [upper.id, 'floor'],
+      [ground.id, 'ceiling'],
+    ])
+      expect(openings).toContainEqual(
+        expect.objectContaining({
+          type: 'floor-opening',
+          source: 'stair',
+          ownerId: parsed.stairId,
+          parentId,
+          drawnOn,
+        }),
+      )
+    const opening = openings.find((node) => node?.parentId === upper.id)
+    if (opening?.type !== 'floor-opening') throw new Error('no floor opening above')
+    const openingId = opening.id as AnyNodeId
+    const cutBy = (id: string) =>
+      Object.values(bridge.getNodes()).filter(
+        (node) =>
+          (node.type === 'slab' || node.type === 'ceiling') &&
+          node.holeMetadata?.some((hole) => hole.openingId === id),
+      )
+    expect(cutBy(openingId).map((node) => node.type)).toContain('slab')
 
-    const stair = bridge.getNode(parsed.stairId)
-    expect(stair?.type).toBe('stair')
-    if (stair?.type === 'stair') expect(stair.slabOpeningMode).toBe('none')
-
-    const destinationSlab = bridge.getNode(parsed.destinationSlabId)
-    expect(destinationSlab?.type).toBe('slab')
-    if (destinationSlab?.type === 'slab') {
-      expect(destinationSlab.holes).toHaveLength(1)
-      expect(destinationSlab.holes[0]).toHaveLength(4)
-      expect(destinationSlab.holeMetadata).toEqual([
-        { source: 'floor-opening', openingId: parsed.openingIds[0] },
-      ])
-    }
-
-    const sourceCeiling = bridge.getNode(parsed.sourceCeilingId)
-    expect(sourceCeiling?.type).toBe('ceiling')
-    if (sourceCeiling?.type === 'ceiling') {
-      expect(sourceCeiling.holes).toHaveLength(1)
-      expect(sourceCeiling.holes[0]).toHaveLength(4)
-      expect(sourceCeiling.holeMetadata).toEqual([
-        { source: 'floor-opening', openingId: parsed.openingIds[0] },
-      ])
-    }
     bridge.clearHistory()
     bridge.updateNode(parsed.stairId, { position: [1, 0, -1] })
-    const movedOpening = bridge.getNode(parsed.openingIds[0])
-    expect(movedOpening?.type).toBe('floor-opening')
-    if (movedOpening?.type === 'floor-opening')
-      expect(movedOpening.polygon[0]?.[0]).toBeCloseTo(parsed.openingPolygon[0][0] + 1)
+    const moved = bridge.getNode(openingId)
+    if (moved?.type !== 'floor-opening') throw new Error('the opening went with the move')
+    expect(moved.polygon[0]![0]).toBeCloseTo(opening.polygon[0]![0] + 1)
     expect(bridge.getHistory().pastCount).toBe(1)
     expect(bridge.undo()).toBe(1)
-    const restored = bridge.getNode(parsed.openingIds[0])
-    if (restored?.type === 'floor-opening') expect(restored.polygon).toEqual(parsed.openingPolygon)
+    expect(bridge.getNode(openingId)).toMatchObject({ polygon: opening.polygon })
     expect(bridge.redo()).toBe(1)
     bridge.deleteNode(parsed.stairId, true)
-    expect(bridge.getNode(parsed.openingIds[0])).toBeNull()
+    expect(bridge.getNode(openingId)).toBeNull()
     expect(bridge.validateScene().valid).toBe(true)
-  })
-
-  test('create_stair_between_levels defaults opening offset to zero', async () => {
-    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
-    const ground = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
-    const upper = LevelNode.parse({ name: 'Second Floor', level: 1, metadata: { height: 2.8 } })
-    bridge.createNode(upper, building.id)
-
-    for (const level of [ground, upper]) {
-      const result = await client.callTool({
-        name: 'create_story_shell',
-        arguments: {
-          levelId: level.id,
-          footprint: [
-            [-4, -3],
-            [4, -3],
-            [4, 3],
-            [-4, 3],
-          ],
-          wallHeight: 2.8,
-        },
-      })
-      expect(result.isError).toBeFalsy()
-    }
-
-    const result = await client.callTool({
-      name: 'create_stair_between_levels',
-      arguments: {
-        fromLevelId: ground.id,
-        toLevelId: upper.id,
-        position: [0, 0, -1],
-        width: 1,
-        runLength: 3,
-        totalRise: 2.8,
-      },
-    })
-    expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
-    const stair = bridge.getNode(parsed.stairId)
-
-    expect(stair?.type).toBe('stair')
-    if (stair?.type === 'stair') expect(stair.openingOffset).toBe(0)
   })
 
   test('verify_scene flags suspicious multi-story wall heights', async () => {
@@ -420,14 +362,8 @@ describe('construction tools', () => {
     expect(shell.isError).toBe(true)
 
     const stair = await client.callTool({
-      name: 'create_stair_between_levels',
-      arguments: {
-        fromLevelId: level.id,
-        toLevelId: roofLevel.id,
-        position: [0, 0, 0],
-        runLength: 3,
-        totalRise: 2.8,
-      },
+      name: 'create_stair',
+      arguments: { levelId: level.id, toLevelId: roofLevel.id, x: 0, z: 0 },
     })
     expect(stair.isError).toBe(true)
   })

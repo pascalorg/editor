@@ -84,7 +84,7 @@ Compare every candidate call against the recorded user constraints before execut
 
 `verify_scene` checks saved or active scene items, not this prospective candidate. Its clean result cannot pass the candidate's default spacing or door access. Mark those candidate rows `not checked` unless a separate check includes the candidate and the required geometry; identify that evidence explicitly. A candidate collision check at the requested gap supports that gap only.
 
-`place_item` uses catalog dimensions and an unknown catalog ID falls back to a 0.5 m placeholder. That fallback cannot verify a real product. If the connected release lacks the read-only candidate input:
+`place_items` uses catalog dimensions and refuses an ID the library lacks (`asset_not_found`), so it cannot place a product of other dimensions. If the connected release lacks the read-only candidate input:
 
 - provide a preliminary dimension-and-bounds calculation only when a rectangular measured room and exact intended pose are supplied;
 - label it `preliminary`, not Pascal-verified;

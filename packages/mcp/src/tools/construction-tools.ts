@@ -1,24 +1,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import {
-  adjacentLevelId,
-  createZone,
-  cutFloorOpening,
-  generateId,
-  resolveStairTotalRise,
-} from '@pascal-app/core'
+import { createZone, generateId } from '@pascal-app/core'
 import { unknownMaterialPresetRefusal } from '@pascal-app/core/agent-operations'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
-import {
-  getActiveRoofHeight,
-  LevelNode,
-  RoofNode,
-  RoofSegmentNode,
-  StairNode,
-  StairSegmentNode,
-} from '@pascal-app/core/schema'
+import { getActiveRoofHeight, LevelNode, RoofNode, RoofSegmentNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
-import { ADDITIVE_TOOL_ANNOTATIONS, DESTRUCTIVE_TOOL_ANNOTATIONS } from './annotations'
+import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { measurement } from './measurement'
 import { NodeIdSchema, Vec2Schema, Vec3Schema } from './schemas'
@@ -33,8 +20,6 @@ const ROOF_TYPES = [
   'flat',
   'conical',
 ] as const
-const RAILING_MODES = ['none', 'left', 'right', 'both'] as const
-
 export const createStoryShellInput = {
   levelId: NodeIdSchema,
   footprint: z.array(Vec2Schema).min(3),
@@ -117,59 +102,6 @@ export const createRoofOutput = {
   ...liveSyncOutput,
 }
 
-export const createStairBetweenLevelsInput = {
-  fromLevelId: NodeIdSchema,
-  toLevelId: NodeIdSchema,
-  position: Vec3Schema,
-  rotation: measurement('angle', 'rad', { description: 'Y-axis rotation.' }).default(0),
-  width: measurement('length', 'm', { positive: true, description: 'Stair width.' }).default(1),
-  runLength: measurement('length', 'm', {
-    positive: true,
-    description: 'Horizontal run length.',
-  }).default(3),
-  totalRise: measurement('length', 'm', {
-    positive: true,
-    description: 'Total vertical rise.',
-  }).optional(),
-  stepCount: z.number().int().positive().default(14),
-  railingMode: z.enum(RAILING_MODES).default('both'),
-  destinationSlabId: NodeIdSchema.optional(),
-  sourceCeilingId: NodeIdSchema.optional(),
-  createDestinationSlabOpening: z.boolean().default(true),
-  createSourceCeilingOpening: z.boolean().default(true),
-  openingWidth: measurement('length', 'm', {
-    positive: true,
-    description: 'Floor opening width.',
-  }).optional(),
-  openingLength: measurement('length', 'm', {
-    positive: true,
-    description: 'Floor opening length.',
-  }).optional(),
-  openingOffset: measurement('length', 'm', { min: 0, description: 'Opening offset.' }).default(0),
-  openingCenter: Vec2Schema.optional(),
-  openingRotation: measurement('angle', 'rad', { description: 'Opening rotation.' }).optional(),
-  materialPreset: z.string().optional(),
-  name: z.string().optional(),
-}
-
-export const createStairBetweenLevelsOutput = {
-  stairId: z.string(),
-  stairSegmentId: z.string(),
-  destinationSlabId: z.string().nullable(),
-  sourceCeilingId: z.string().nullable(),
-  openingPolygon: z.array(Vec2Schema),
-  openingIds: z.array(z.string()),
-  openingHints: z.array(
-    z.object({
-      code: z.literal('manual-ceiling'),
-      openingId: z.string(),
-      surfaceIds: z.array(z.string()),
-      message: z.string(),
-    }),
-  ),
-  ...liveSyncOutput,
-}
-
 function textResult<T extends Record<string, unknown>>(payload: T) {
   return {
     content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
@@ -214,56 +146,6 @@ function nextLevelIndex(
   const referenceIndex = referenceLevel.type === 'level' ? referenceLevel.level : 0
   const candidate = referenceIndex + 1
   return existing.includes(candidate) ? Math.max(candidate, ...existing) + 1 : candidate
-}
-
-function nodesOnLevel(bridge: SceneOperations, levelId: string): AnyNode[] {
-  return Object.values(bridge.getNodes()).filter(
-    (node) => node.id !== levelId && bridge.resolveLevelId(node.id as AnyNodeId) === levelId,
-  )
-}
-
-function firstNodeOnLevel(
-  bridge: SceneOperations,
-  levelId: string,
-  type: 'slab' | 'ceiling',
-): AnyNode | null {
-  return nodesOnLevel(bridge, levelId).find((node) => node.type === type) ?? null
-}
-
-function rotatePoint(x: number, z: number, rotation: number): [number, number] {
-  const cos = Math.cos(rotation)
-  const sin = Math.sin(rotation)
-  return [x * cos + z * sin, -x * sin + z * cos]
-}
-
-function rectangularOpening(args: {
-  position: [number, number, number]
-  rotation: number
-  width: number
-  length: number
-  offset: number
-  center?: [number, number] | undefined
-  openingRotation?: number | undefined
-}): [number, number][] {
-  const width = args.width + args.offset * 2
-  const length = args.length + args.offset * 2
-  const center: [number, number] = args.center ?? [
-    args.position[0],
-    args.position[2] + args.length / 2,
-  ]
-  const rotation = args.openingRotation ?? args.rotation
-  const halfW = width / 2
-  const halfL = length / 2
-  const local: [number, number][] = [
-    [-halfW, -halfL],
-    [halfW, -halfL],
-    [halfW, halfL],
-    [-halfW, halfL],
-  ]
-  return local.map(([x, z]) => {
-    const [rx, rz] = rotatePoint(x, z, rotation)
-    return [center[0] + rx, center[1] + rz]
-  })
 }
 
 /** Room zones that appeared on the level while this tool call ran. */
@@ -529,184 +411,6 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         createdRoofLevelId,
         roofId: roof.id,
         roofSegmentId: segment.id,
-        ...persistencePayload(persistence),
-      })
-    },
-  )
-
-  server.registerTool(
-    'create_stair_between_levels',
-    {
-      title: 'Create stair between levels',
-      description:
-        'Create a straight stair and a persistent floor-opening node for its destination floor and the ceiling directly below. This disables stair auto-opening mode to avoid duplicate cuts.',
-      inputSchema: createStairBetweenLevelsInput,
-      outputSchema: createStairBetweenLevelsOutput,
-      annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
-    },
-    async ({
-      fromLevelId,
-      toLevelId,
-      position,
-      rotation,
-      width,
-      runLength,
-      totalRise,
-      stepCount,
-      railingMode,
-      destinationSlabId,
-      sourceCeilingId,
-      createDestinationSlabOpening,
-      createSourceCeilingOpening,
-      openingWidth,
-      openingLength,
-      openingOffset,
-      openingCenter,
-      openingRotation,
-      materialPreset,
-      name,
-    }) => {
-      const preset = unknownMaterialPresetRefusal({ materialPreset })
-      if (preset) throw new Error(preset)
-      const fromLevel = assertNode(bridge, fromLevelId, 'level')
-      const toLevel = assertNode(bridge, toLevelId, 'level')
-      if (isRoofLevel(fromLevel) || isRoofLevel(toLevel)) {
-        throw new Error(
-          'Roof support levels are not occupied stories; create a separate occupied attic/story level if a stair-accessible attic is required',
-        )
-      }
-
-      const stairDraft = StairNode.parse({
-        name: name ?? 'Stair',
-        position: position as [number, number, number],
-        rotation,
-        stairType: 'straight',
-        fromLevelId,
-        toLevelId,
-        slabOpeningMode: 'none',
-        openingOffset,
-        width,
-        ...(totalRise !== undefined ? { totalRise } : {}),
-        stepCount,
-        railingMode,
-        children: [],
-        ...(materialPreset ? { materialPreset } : {}),
-        metadata: {
-          openingManaged: 'floor-opening',
-        },
-      })
-      const riseNodes = {
-        ...bridge.getNodes(),
-        [fromLevel.id]: {
-          ...fromLevel,
-          children: [...(fromLevel as Extract<AnyNode, { type: 'level' }>).children, stairDraft.id],
-        },
-        [stairDraft.id]: stairDraft,
-      } as Record<string, AnyNode>
-      const resolvedTotalRise = resolveStairTotalRise(stairDraft, riseNodes)
-      const segment = StairSegmentNode.parse({
-        segmentType: 'stair',
-        width,
-        length: runLength,
-        height: resolvedTotalRise,
-        stepCount,
-        ...(materialPreset ? { materialPreset } : {}),
-      })
-      const stair = { ...stairDraft, children: [segment.id] }
-
-      const openingPolygon = rectangularOpening({
-        position: position as [number, number, number],
-        rotation,
-        width: openingWidth ?? width,
-        length: openingLength ?? runLength,
-        offset: openingOffset,
-        center: openingCenter as [number, number] | undefined,
-        openingRotation,
-      })
-
-      const patches: Array<
-        | { op: 'create'; node: AnyNode; parentId: AnyNodeId }
-        | { op: 'update'; id: AnyNodeId; data: Partial<AnyNode> }
-      > = [
-        { op: 'create', node: stair, parentId: fromLevelId as AnyNodeId },
-        { op: 'create', node: segment, parentId: stair.id as AnyNodeId },
-      ]
-
-      const destinationSlab =
-        destinationSlabId !== undefined
-          ? assertNode(bridge, destinationSlabId, 'slab')
-          : firstNodeOnLevel(bridge, toLevelId, 'slab')
-      const sourceCeiling =
-        sourceCeilingId !== undefined
-          ? assertNode(bridge, sourceCeilingId, 'ceiling')
-          : firstNodeOnLevel(bridge, fromLevelId, 'ceiling')
-      const floorCut = createDestinationSlabOpening && destinationSlab?.type === 'slab'
-      const ceilingCut = createSourceCeilingOpening && sourceCeiling?.type === 'ceiling'
-      const adjacentSource = adjacentLevelId(bridge.getNodes(), toLevelId, -1) === fromLevelId
-      const openingPlans = [
-        ...(floorCut
-          ? [
-              cutFloorOpening(bridge.getNodes(), {
-                levelId: toLevelId,
-                polygon: openingPolygon,
-                source: 'stair',
-                ownerId: stair.id,
-                cutsAdjacent: ceilingCut && adjacentSource,
-                mintId: generateId,
-              }),
-            ]
-          : []),
-        ...((!floorCut || !adjacentSource) && ceilingCut
-          ? [
-              cutFloorOpening(bridge.getNodes(), {
-                levelId: fromLevelId,
-                polygon: openingPolygon,
-                drawnOn: 'ceiling',
-                source: 'stair',
-                ownerId: stair.id,
-                cutsAdjacent: false,
-                mintId: generateId,
-              }),
-            ]
-          : []),
-      ]
-      for (const plan of openingPlans)
-        for (const change of plan.changes)
-          patches.push(
-            change.op === 'create'
-              ? {
-                  ...change,
-                  parentId: change.node.parentId as AnyNodeId,
-                  node: {
-                    ...change.node,
-                    metadata: {
-                      ...change.node.metadata,
-                      ownerPose: {
-                        position: stair.position,
-                        rotation: stair.rotation,
-                        width: stair.width,
-                        runLength,
-                      },
-                      ownerOpeningTarget:
-                        change.node.type === 'floor-opening' && change.node.drawnOn === 'ceiling'
-                          ? 'source'
-                          : 'destination',
-                    },
-                  },
-                }
-              : (change as Extract<(typeof patches)[number], { op: 'update' }>),
-          )
-
-      bridge.applyPatch(patches)
-      const persistence = await publishLiveSceneSnapshot(bridge, 'create_stair_between_levels')
-      return textResult({
-        stairId: stair.id,
-        stairSegmentId: segment.id,
-        destinationSlabId: destinationSlab?.id ?? null,
-        sourceCeilingId: sourceCeiling?.id ?? null,
-        openingPolygon,
-        openingIds: openingPlans.flatMap((plan) => plan.openingIds),
-        openingHints: openingPlans.flatMap((plan) => plan.hints),
         ...persistencePayload(persistence),
       })
     },

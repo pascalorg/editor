@@ -6,6 +6,7 @@ import type { AnyNodeId } from '@pascal-app/core/schema'
 import { CeilingNode, LevelNode, SlabNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { registerRoomTools } from './room-tools'
+import { registerSharedTools } from './shared-tools'
 
 describe('room tools', () => {
   let client: Client
@@ -16,21 +17,11 @@ describe('room tools', () => {
     bridge.setScene({}, [])
     bridge.loadDefault()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
+    registerSharedTools(server, bridge)
     registerRoomTools(server, bridge)
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
-  })
-
-  test('search_assets returns built-in catalog matches', async () => {
-    const result = await client.callTool({
-      name: 'search_assets',
-      arguments: { query: 'sofa' },
-    })
-    expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
-    expect(parsed.total).toBeGreaterThan(0)
-    expect(parsed.results.map((item: { id: string }) => item.id)).toContain('sofa')
   })
 
   test('create_room writes walls and a room zone only; floor and ceiling are derived', async () => {

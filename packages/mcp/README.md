@@ -115,7 +115,7 @@ The flow is intentionally local and lightweight:
 1. Open or create a scene in the editor so it is saved in the local database.
 2. Load that scene through MCP with `load_scene`.
 3. Run MCP mutation tools such as `create_room`, `add_door`, `furnish_room`,
-   `create_wall`, `place_item`, or `set_zone`.
+   `add_wall`, `place_items`, or `set_zone`.
 
 Each mutation version-checks the saved scene before writing. If the browser or
 another MCP process saved a newer version first, the MCP tool returns
@@ -318,9 +318,8 @@ This lands flat on the ground (Y = 0), about 6 m along a heading 30° off the +X
 axis and 4 m along its perpendicular — i.e. occupying world (x, z) directly.
 
 One separate gotcha: wall-attached coordinates are wall-local, not plan
-coordinates. Stored door/window `position[0]`, and `place_item` `position[0]`
-when the target is a wall, are metres along the wall; wall-attached rotations
-are wall-local too.
+coordinates. Stored door/window `position[0]` is metres along the wall, and
+wall-attached rotations are wall-local too.
 
 ## Tools
 
@@ -338,20 +337,19 @@ captured by Zundo's temporal middleware as a single undoable step.
 | `get_walls` | Walls on a level with length, stored and resolved height, and child doors/windows. | `{ levelId?, level? }` | `{ levelId, walls[] }` |
 | `get_zones` | Room/zone polygons with holes, areas (holes taken out), bounds and floor choices. | `{ levelId?, level? }` | `{ levelId, zones[] }` |
 | `measure` | Distance between two nodes' world-space reference points (hosted doors, windows and items resolved through their host; every node kind); area when applicable. | `{ fromId, toId }` | `{ distanceMeters, fromPoint?, toPoint?, areaSqMeters?, units: 'meters' }` |
-| `search_assets` | Search the built-in MCP item catalog. | `{ query, category? }` | `{ results, total }` |
+| `search_assets` | Search the host's item library (the built-in list on a standalone server), several queries in one call; a query matches name, id, category or tags. A query that finds nothing gets a hint to build the item with `add_object`. | `{ queries: [{ query, category? }] }` | `{ groups: [{ query, total, results[] }], total, hint? }`; refusal `no_catalog` |
 | `create_story_shell` | Create one level-owned story shell from a footprint: the perimeter walls. The floor plate and ceiling are derived from the enclosed rooms; `createSlab` / `createCeiling` / `slabElevation` are recorded as room intent. Use once per story. | `{ levelId, footprint, wallHeight?, wallThickness?, createSlab?, createCeiling? }` | `{ wallIds, zoneIds, slabId, ceilingId, createdIds }` |
-| `create_stair_between_levels` | Create a straight stair and one rectangular manual opening in the destination slab/source ceiling, with auto-opening disabled. | `{ fromLevelId, toLevelId, position, width?, runLength?, totalRise? }` | `{ stairId, stairSegmentId, openingPolygon }` |
+| `create_stair` | Create a straight stair as the editor's stair tool does: from a level to the next one above (made when there is none), owning the floor openings it cuts. `(x, z)` is the back-centre of the bottom step, `rotation` in degrees (0 climbs toward +Z). | `{ x, z, levelId?, toLevelId?, rotation?, width?, length?, height?, steps? }` | `{ stairId, segmentId, upperLevelId, createdUpperLevel, stepCount, slabHoleCut, openingIds? }`; refusals `roof_level`, `not_above`, `level_not_found` |
 | `create_roof` | Create a roof container and one roof segment. By default creates a dedicated roof level above the reference occupied level for solo/exploded views. | `{ levelId, width, depth, roofType?, roofHeight?, roofLevelId?, useDedicatedRoofLevel? }` | `{ roofLevelId, createdRoofLevelId, roofId, roofSegmentId }` |
 | `create_room` | Create a room from a polygon: one wall per edge (reusing or splitting existing walls) plus the room zone. The floor plate and ceiling are derived, never authored. | `{ levelId, name, polygon, color?, wallHeight?, wallThickness? }` | `{ zoneId, slabId, ceilingId, wallIds, reusedWalls, areaSqMeters }` |
 | `add_door` | Add a door to a wall using parametric placement. | `{ wallId, t, width?, height?, hingesSide?, swingDirection? }` | `{ doorId, localX }` |
 | `add_window` | Add a window to a wall using parametric placement and sill height. | `{ wallId, t, width?, height?, sillHeight? }` | `{ windowId, localX, sillHeight }` |
 | `furnish_room` | Place realistic furniture for a room type inside a polygon. | `{ levelId, roomType, polygon, doorWallIndex? }` | `{ placed, itemIds, skipped }` |
 | `apply_patch` | Batched create/update/delete/move, validated and dry-run before commit. Batch-first is the default: send all create/update/delete ops for a build step in one atomic call (stable order, later ops may reference earlier created ids); do not loop one-op calls. A create with an id already in the scene is refused (`node_exists`); delete it earlier in the same patch to replace it. Updates cannot change `id` or `type` (`identity_change`), `object` or `children` (`immutable_field`), move a node under a missing or childless parent (`invalid_parent`), or add schema issues (`invalid_update`); default gutters and downspouts a delete regenerates are addressable only in a later call (`regenerated_default`). Refusals are tool errors with JSON text `{ code, patchIndex, id, message }`. | `{ patches: Patch[] }` | `{ applied: number }` |
-| `create_level` | Add a new level to a building. | `{ buildingId, elevation, height, label? }` | `{ levelId }` |
-| `create_wall` | Add a wall to a level. | `{ levelId, start, end, thickness?, height? }` | `{ wallId }` |
-| `place_item` | Place a catalog item on a level/slab/zone, ceiling, wall, or site. Slab/zone targets resolve to the parent level so floor items render and validate. | `{ catalogItemId, targetNodeId, position, rotation? }` | `{ itemId, status }` |
+| `add_level` | Add an empty level to a building, as the editor does: above the highest, or below the lowest for a basement. Omit `buildingId` for the scene's only building. | `{ buildingId?, position?, name?, height? }` | `{ levelId, buildingId, floorIndex, height }`; refusals `building_required`, `building_not_found`, `no_building` |
+| `add_wall` | Add a wall to a level, straight or, with `curveOffset`, an arc. Omit `levelId` for the lowest storey. | `{ start, end, levelId?, thickness?, height?, curveOffset? }` | `{ wallId, levelId, length }`; refusals `roof_level`, `wall_too_short`, `level_not_found` |
+| `place_items` | Place catalog items on a level's floor in one call, each placed or refused on its own: `asset_not_found` for an id the library lacks, `outside_rooms` for an indoor item outside every room. | `{ items: [{ assetId, x, z, rotation? }], levelId? }` | `{ levelId, items: [{ ok, itemId?, code? }] }` |
 | `place_design` | Create one design (procedural item recipe, object or JSON string) that passes `validate_design`. Its mounting picks the host: level/slab/zone or a design surface (`surfaceId`), a straight wall face, or a ceiling. Create-only, one undo step, inline designs up to 24 KiB, with coded refusals. | `{ design, hostId, position, rotation?, side?, surfaceId?, parameters?, slots?, name?, id? }` | `{ designId, parentId, surfaceId }` |
-| `cut_opening` | Cut a door or window opening into a wall. `position` is 0..1 along the wall and is stored as wall-local meters. | `{ wallId, type: 'door' \| 'window', position, width, height }` | `{ openingId }` |
 | `set_zone` | Create a zone/room polygon on a level. | `{ levelId, polygon, label, properties? }` | `{ zoneId }` |
 | `duplicate_level` | Copy a level as the editor does (units whose rooms are all on it included; plan references, scans and spawns left behind), above or below, shifting the floors past it. | `{ levelId, position?, name?, preset? }` | `{ newLevelId, name, floorIndex, shiftedLevelIds, copied, skipped, newNodeIds[] }` |
 | `delete_node` | Delete a node with everything under it, as the editor's Delete does. | `{ id }` | `{ deletedIds: [] }` |

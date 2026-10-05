@@ -5,7 +5,6 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { createSceneOperations, type SceneOperations } from '../operations'
 import type { SceneStore } from '../storage/types'
-import { registerCreateWall } from './create-wall'
 import { publishLiveSceneSnapshot } from './live-sync'
 import {
   createTestSceneOperations,
@@ -13,6 +12,7 @@ import {
   parseToolText,
   type StoredTextContent,
 } from './scene-lifecycle/test-utils'
+import { registerSharedTools } from './shared-tools'
 
 function createBridge(): SceneBridge {
   const bridge = new SceneBridge()
@@ -33,22 +33,19 @@ function withoutSceneEvents(base: InMemorySceneStore): SceneStore {
   }
 }
 
-async function connectCreateWall(operations: SceneOperations): Promise<Client> {
+async function connectAddWall(operations: SceneOperations): Promise<Client> {
   const server = new McpServer({ name: 'test', version: '0.0.0' })
-  registerCreateWall(server, operations)
+  registerSharedTools(server, operations)
   const [srvT, cliT] = InMemoryTransport.createLinkedPair()
   const client = new Client({ name: 'test-client', version: '0.0.0' })
   await Promise.all([server.connect(srvT), client.connect(cliT)])
   return client
 }
 
-async function callCreateWall(
-  client: Client,
-  bridge: SceneBridge,
-): Promise<Record<string, unknown>> {
+async function callAddWall(client: Client, bridge: SceneBridge): Promise<Record<string, unknown>> {
   const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
   const result = await client.callTool({
-    name: 'create_wall',
+    name: 'add_wall',
     arguments: { levelId: level.id, start: [0, 0], end: [4, 0] },
   })
   expect(result.isError).toBeFalsy()
@@ -59,9 +56,9 @@ describe('live sync persistence reporting', () => {
   test('warns unbound when no active scene is bound', async () => {
     const bridge = createBridge()
     const { store, operations } = createTestSceneOperations({ bridge })
-    const client = await connectCreateWall(operations)
+    const client = await connectAddWall(operations)
 
-    const parsed = await callCreateWall(client, bridge)
+    const parsed = await callAddWall(client, bridge)
     const persistence = parsed.persistence as { status: string; warning: string }
     expect(persistence.status).toBe('unbound')
     expect(typeof persistence.warning).toBe('string')
@@ -74,13 +71,13 @@ describe('live sync persistence reporting', () => {
     const { store, operations } = createTestSceneOperations({ bridge })
     const meta = await store.save({ name: 'Live Scene', graph: operations.exportSceneGraph() })
     operations.setActiveScene(meta)
-    const client = await connectCreateWall(operations)
+    const client = await connectAddWall(operations)
 
-    const parsed = await callCreateWall(client, bridge)
+    const parsed = await callAddWall(client, bridge)
     expect(parsed.persistence).toBeUndefined()
     const events = await store.listSceneEvents(meta.id)
     expect(events).toHaveLength(1)
-    expect(events[0]!.kind).toBe('create_wall')
+    expect(events[0]!.kind).toBe('add_wall')
     const saved = await store.load(meta.id)
     expect(saved!.version).toBe(meta.version + 1)
     expect(saved!.graph.nodes[parsed.wallId as string]).toBeDefined()
@@ -92,9 +89,9 @@ describe('live sync persistence reporting', () => {
     const operations = createSceneOperations({ bridge, store: withoutSceneEvents(base) })
     const meta = await base.save({ name: 'Live Scene', graph: operations.exportSceneGraph() })
     operations.setActiveScene(meta)
-    const client = await connectCreateWall(operations)
+    const client = await connectAddWall(operations)
 
-    const parsed = await callCreateWall(client, bridge)
+    const parsed = await callAddWall(client, bridge)
     const persistence = parsed.persistence as { status: string; warning: string }
     expect(persistence.status).toBe('events_unsupported')
     expect(typeof persistence.warning).toBe('string')

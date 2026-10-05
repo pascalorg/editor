@@ -13,7 +13,7 @@ import {
 import { getWallArcData, getWallCurveFrameAt, getWallCurveLength, isCurvedWall } from './wall-curve'
 import type { WallPlanPoint } from './wall-move'
 
-const WALL_MIN_LENGTH = 0.01
+export const WALL_MIN_LENGTH = 0.01
 const WALL_SPLIT_ENDPOINT_EPSILON = 0.02
 const WALL_INTERSECTION_EPSILON = 1e-6
 
