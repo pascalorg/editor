@@ -92,9 +92,17 @@ describe('hosted service MCP contracts', () => {
           'service_consent_required',
           'Reconnect and approve Pascal service access.',
         ),
-        'service_consent_required',
+        { code: 'service_consent_required' },
       ],
-      [new Error('private-provider-configuration'), 'service_error'],
+      [
+        Object.assign(new Error('Review the current price before trying again.'), {
+          name: 'AgentRefusal',
+          code: 'credit_limit_exceeded',
+          details: { status: 409 },
+        }),
+        { code: 'credit_limit_exceeded', status: 409 },
+      ],
+      [new Error('private-provider-configuration'), { code: 'service_error' }],
     ] as const) {
       await withClient(
         async () => {
@@ -106,7 +114,8 @@ describe('hosted service MCP contracts', () => {
             arguments: { pluginId: 'pascal:architect' },
           })
           expect(result.isError).toBe(true)
-          expect(JSON.stringify(result.content)).toContain(expected)
+          const content = result.content as Array<{ type: 'text'; text: string }>
+          expect(JSON.parse(content[0]!.text)).toMatchObject(expected)
           expect(JSON.stringify(result.content)).not.toContain('private-provider-configuration')
         },
       )

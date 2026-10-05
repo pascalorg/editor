@@ -3,7 +3,11 @@ import {
   executeHostedServiceTool,
   type HostedServiceExecutor,
 } from '@pascal-app/core/agent-operations'
-import { AgentRefusal, HOSTED_SERVICE_TOOL_CONTRACTS } from '@pascal-app/core/agent-tools'
+import {
+  HOSTED_SERVICE_TOOL_CONTRACTS,
+  isAgentRefusal,
+  refusalPayload,
+} from '@pascal-app/core/agent-tools'
 import { z } from 'zod'
 
 export function registerHostedServiceTools(
@@ -24,14 +28,13 @@ export function registerHostedServiceTools(
           const result = await executeHostedServiceTool(contract.name, input, execute, extra.signal)
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
         } catch (error) {
-          const result =
-            error instanceof AgentRefusal
-              ? { error: error.message, code: error.code, ...error.details }
-              : {
-                  error:
-                    'Pascal could not complete this service request. Check its retained result before repeating paid work.',
-                  code: 'service_error',
-                }
+          const result = isAgentRefusal(error)
+            ? refusalPayload(error)
+            : {
+                error:
+                  'Pascal could not complete this service request. Check its retained result before repeating paid work.',
+                code: 'service_error',
+              }
           return {
             isError: true,
             content: [{ type: 'text' as const, text: JSON.stringify(result) }],
