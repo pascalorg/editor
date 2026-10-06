@@ -36,6 +36,7 @@ export type {
   SiteEvent,
   SkylightEvent,
   SlabEvent,
+  SnapshotCapturedEvent,
   SnapshotCaptureFailedEvent,
   SnapshotCapturePose,
   SnapshotSavedEvent,
