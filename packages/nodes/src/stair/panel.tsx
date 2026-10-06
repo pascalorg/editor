@@ -3,6 +3,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  getBoundarySurfaces,
   getLevelDisplayName,
   type LevelNode,
   measureStair,
@@ -23,6 +24,7 @@ import {
   type StairSlabOpeningMode,
   type StairTopLandingMode,
   type StairType,
+  useRegistryVersion,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -104,6 +106,8 @@ export default function StairPanel() {
   const [walkingLineOffset, setWalkingLineOffset] = useState(0.5)
   const [division, setDivision] = useState<'equal-going' | 'equal-angle'>('equal-going')
   const [riseError, setRiseError] = useState<{ id: string; message: string } | null>(null)
+  const installedPlugins = useScene((s) => s.installedPlugins)
+  useRegistryVersion()
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as StairNode | undefined) : undefined,
@@ -373,6 +377,14 @@ export default function StairPanel() {
           .reduce((sum, segment) => sum + segment.height, 0)
       : 0) + 0.001,
   )
+  const landscapeLevelId =
+    node.landscapeSurfaceId && node.parentId === node.landscapeSurfaceId
+      ? nodes[node.parentId as AnyNodeId]?.parentId
+      : node.parentId
+  const landscapeSurfaces = getBoundarySurfaces(nodes, landscapeLevelId, installedPlugins)
+  const connectedSurface = node.landscapeSurfaceId
+    ? nodes[node.landscapeSurfaceId as AnyNodeId]
+    : undefined
 
   return (
     <PanelWrapper

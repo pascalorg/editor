@@ -1,16 +1,20 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import {
   type AnyNode,
+  type AnyNodeDefinition,
   clearSceneHistory,
   createSceneApi,
   getEffectiveNode,
   LevelNode,
+  nodeRegistry,
+  registerNode,
   StairNode,
   StairSegmentNode,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import { commitFreshPlacementSubtree, useEditor } from '@pascal-app/editor'
+import { z } from 'zod'
 import { stairDefinition } from './definition'
 
 const originalRaf = globalThis.requestAnimationFrame
@@ -34,6 +38,34 @@ afterEach(() => {
 })
 
 function setup() {
+  if (!nodeRegistry.has('landscape:deck'))
+    registerNode({
+      kind: 'landscape:deck',
+      schemaVersion: 1,
+      schema: z.object({ type: z.literal('landscape:deck') }),
+      category: 'site',
+      defaults: () => ({}),
+      capabilities: {
+        surfaces: {
+          top: {
+            height: (raw: AnyNode) => (raw as unknown as { thickness: number }).thickness,
+            boundary: () => [
+              [-2, -1.5],
+              [2, -1.5],
+              [2, 1.5],
+              [-2, 1.5],
+            ],
+          },
+        },
+      },
+    } as AnyNodeDefinition)
+  useEditor.setState({
+    tool: 'stair',
+    snappingModeByContext: {
+      ...useEditor.getState().snappingModeByContext,
+      item: 'lines',
+    },
+  })
   const level = LevelNode.parse({ id: 'level_landscape_move' })
   const flight = StairSegmentNode.parse({
     id: 'sseg_landscape_move',

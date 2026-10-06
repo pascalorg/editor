@@ -439,6 +439,7 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
 
   capabilities: {
     reveal: { phase: 'circulation', style: 'drop', height: 2.5 },
+    hostRefFields: ['landscapeSurfaceId'],
     surfacePlacement: 'floor-only',
     selectable: { hitVolume: 'bbox' },
     // A stair has no centred box footprint: straight = a cumulative

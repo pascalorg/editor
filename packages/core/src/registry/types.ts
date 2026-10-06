@@ -2420,7 +2420,13 @@ export type SnapPointKind = 'start' | 'end' | 'midpoint' | 'center' | 'corners'
 export type SurfacesConfig = {
   hosting?: SurfaceProvider | false
   top?: {
-    height: number | ((n: AnyNode, context: { nodes: Record<string, AnyNode> }) => number)
+    /** Height above the node origin; point, when supplied, is in the parent XZ frame. */
+    height:
+      | number
+      | ((
+          n: AnyNode,
+          context: { nodes: Readonly<Record<string, AnyNode>>; point?: readonly [number, number] },
+        ) => number)
     /** Resolve support from node data; null means this point is outside the support footprint. */
     supportHeight?: (
       node: AnyNode,
@@ -3007,6 +3013,7 @@ export type SceneApi = {
    * do not mutate.
    */
   nodes: () => Readonly<Record<AnyNodeId, AnyNode>>
+  installedPlugins?: () => readonly string[] | undefined
   update: (id: AnyNodeId, patch: Partial<AnyNode>) => void
   upsert: (node: AnyNode, parentId?: AnyNodeId) => AnyNodeId
   createMany?: (ops: { node: AnyNode; parentId?: AnyNodeId }[]) => void

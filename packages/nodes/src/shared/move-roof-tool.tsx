@@ -10,9 +10,11 @@ import {
   type RoofNode,
   type RoofSegmentNode,
   resolveAlignment,
+  resolveStairSurfaceSnap,
   resolveSupportSlabPatch,
   type StairNode,
   type StairSegmentNode,
+  type StairSurfaceSnap,
   sceneRegistry,
   seatRoofs,
   useLiveNodeOverrides,
@@ -29,8 +31,6 @@ import {
   getMovingNode,
   isMagneticSnapActive,
   isTypingTarget,
-  type LandscapeStairSnap,
-  resolveLandscapeStairSnap,
   resolvePlanarCursorPosition,
   selectPlacedNode,
   stripPlacementMetadataFlags,
@@ -164,7 +164,7 @@ export const MoveRoofTool: React.FC<{
     let wasCommitted = false
     let wasCancelled = false
     let hasMoved = false
-    let landscapeSnap: LandscapeStairSnap | null = null
+    let landscapeSnap: StairSurfaceSnap | null = null
     const flightId =
       movingNode.type === 'stair'
         ? movingNode.children
@@ -392,7 +392,11 @@ export const MoveRoofTool: React.FC<{
 
       lastLocalPosition = [localX, movingNode.position[1], localZ]
       const wasLandscapeSnapped = landscapeSnap !== null
-      if (movingNode.type === 'stair' && event.nativeEvent?.altKey !== true) {
+      if (
+        movingNode.type === 'stair' &&
+        event.nativeEvent?.altKey !== true &&
+        isMagneticSnapActive()
+      ) {
         const sceneNodes = useScene.getState().nodes
         const segment = movingNode.children
           .map((id) => sceneNodes[id])
@@ -401,12 +405,13 @@ export const MoveRoofTool: React.FC<{
               child?.type === 'stair-segment' && child.segmentType === 'stair',
           )
         const baseElevation = getPreviewPosition(lastLocalPosition)[1]
-        landscapeSnap = resolveLandscapeStairSnap(
+        landscapeSnap = resolveStairSurfaceSnap(
           { ...movingNode, rotation: freeRotation },
           sceneNodes,
           lastLocalPosition,
           segment?.length ?? 3,
           baseElevation,
+          useScene.getState().installedPlugins,
         )
         if (landscapeSnap) {
           if (!wasLandscapeSnapped) freeRotation = pendingRotation

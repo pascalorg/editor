@@ -1,5 +1,6 @@
 import { getLevelPresentationY, useViewer } from '@pascal-app/viewer'
 import {
+  type AnyNode,
   type AnyNodeId,
   DEFAULT_ANGLE_STEP,
   type FenceConstructionOptions as FenceCommitOptions,
@@ -97,17 +98,15 @@ const FENCE_SPAN_SNAP_RADIUS = 0.16
 const FENCE_CORNER_SNAP_RADIUS = 0.28
 const FENCE_SPAN_SNAP_RADIUS = 0.16
 
-export function getFenceDrawingSurface() {
-  const id = useEditor.getState().toolDefaults.fence?.supportSurfaceId
+export function getFenceDrawingSurface(
+  nodes: Record<string, AnyNode> = useScene.getState().nodes,
+  id = useEditor.getState().toolDefaults.fence?.supportSurfaceId,
+  levelId = useViewer.getState().selection.levelId,
+  levelMode = useViewer.getState().levelMode,
+) {
   if (typeof id !== 'string') return null
-  const nodes = useScene.getState().nodes
   const node = nodes[id as AnyNodeId]
-  if (
-    !node?.parentId ||
-    node.parentId !== useViewer.getState().selection.levelId ||
-    node.visible === false
-  )
-    return null
+  if (!node?.parentId || node.parentId !== levelId || node.visible === false) return null
   const top = nodeRegistry.get(node.type)?.capabilities?.surfaces?.top
   if (!top?.boundary) return null
   const position = (node as unknown as { position: number[] }).position
@@ -115,7 +114,7 @@ export function getFenceDrawingSurface() {
   return {
     id,
     boundary: top.boundary(node, 0.08),
-    levelElevation: getLevelPresentationY(node.parentId, nodes, useViewer.getState().levelMode),
+    levelElevation: getLevelPresentationY(node.parentId, nodes, levelMode),
     elevation: (position?.[1] ?? 0) + height + floorConstructionLift(nodes, node),
   }
 }

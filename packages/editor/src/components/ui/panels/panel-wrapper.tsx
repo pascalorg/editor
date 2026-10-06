@@ -169,13 +169,9 @@ export function PanelWrapper({
     useInspectorExpanded.getState().setExpanded(!next)
   }, [])
 
-  const landscapeSelection = Boolean(selectedNode && (
-    (selectedNode.type as string).startsWith('landscape:') ||
-    (selectedNode.type === 'wall' && selectedNode.metadata?.landscapeRetainingWall === true)
-  ))
   useEffect(() => {
-    if (landscapeSelection) setCollapsed(false)
-  }, [landscapeSelection, selectedId, setCollapsed])
+    if (primaryExtension) setCollapsed(false)
+  }, [primaryExtension, selectedId, setCollapsed])
 
   const applyMode = useCallback(
     (next: { collapsed: boolean; activeExtensionId: string | null }) => {
