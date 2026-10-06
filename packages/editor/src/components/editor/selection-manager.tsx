@@ -388,6 +388,16 @@ function roomForEvent(event: NodeEvent) {
   return resolveEditorRoomHit(event.node, levelId, roomHitXZ, '3d')
 }
 
+// The 3D click routes a node on the current level to its own phase before it
+// picks a room, and walls, slabs and ceilings route to structure. Hover and
+// press resolve rooms in that phase too: from the furnish or site phase a
+// click on a room's wall still selects the room, so its hover must show it.
+function canvasRoomPickingEnabled(node: AnyNode) {
+  return roomPickingEnabled(
+    isNodeInCurrentLevel(node) ? resolveNodeSelectionTarget(node)?.phase : undefined,
+  )
+}
+
 function resolveWallPaintHit(event: NodeEvent): WallPaintHit | undefined {
   const wall = event.node
   if (wall.type !== 'wall') return undefined
@@ -1488,7 +1498,7 @@ export const SelectionManager = () => {
       const pointer = pointerEventFromNodeEvent(event)
       if (pointer.button !== 0 || pointer.altKey) return
       if (
-        roomPickingEnabled() &&
+        canvasRoomPickingEnabled(event.node) &&
         shouldInterceptRoom(
           roomForEvent(event),
           selectionModifiersFromEvent(pointer),
@@ -2165,7 +2175,7 @@ export const SelectionManager = () => {
 
       event.stopPropagation()
       if (
-        roomPickingEnabled() &&
+        canvasRoomPickingEnabled(node) &&
         hoverRoomFromHit(
           roomForEvent(event),
           selectionModifiersFromEvent(event.nativeEvent, modifierKeysRef.current),
