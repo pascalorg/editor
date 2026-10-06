@@ -917,6 +917,7 @@ const described = (reason: string, paths: readonly string[]) =>
 
 /** Metadata keys found in editor sources that are not references. */
 export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[] = [
+  { path: 'metadata.roomBoundary', reason: 'Boolean opt-out from room boundary detection.' },
   ...described('Flag, enum, number or tag; names nothing.', [
     'annotationObstacle',
     'annotationRole',
