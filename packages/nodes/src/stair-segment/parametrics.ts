@@ -1,7 +1,17 @@
-import type { ParametricDescriptor, StairSegmentNode } from '@pascal-app/core'
+import {
+  type ParametricDescriptor,
+  planStairFlightHeightEdit,
+  type StairSegmentNode,
+} from '@pascal-app/core'
+
+import { StairSegmentConstructionField } from '../stair/construction-controls'
 
 export const stairSegmentParametrics: ParametricDescriptor<StairSegmentNode> = {
   groups: [
+    {
+      label: 'Construction',
+      fields: [{ key: 'construction', kind: 'custom', component: StairSegmentConstructionField }],
+    },
     {
       label: 'Type',
       fields: [
@@ -23,14 +33,20 @@ export const stairSegmentParametrics: ParametricDescriptor<StairSegmentNode> = {
     {
       label: 'Dimensions',
       fields: [
-        { key: 'width', kind: 'number', unit: 'm', min: 0.5, max: 1000, step: 0.1 },
-        { key: 'length', kind: 'number', unit: 'm', min: 0.5, max: 1000, step: 0.1 },
+        { key: 'width', kind: 'number', unit: 'm', min: 0.001, step: 0.1 },
+        {
+          key: 'length',
+          kind: 'number',
+          unit: 'm',
+          min: 0.001,
+          step: 0.1,
+          visibleIf: (node) => !node.winder,
+        },
         {
           key: 'height',
           kind: 'number',
           unit: 'm',
-          min: 0.5,
-          max: 1000,
+          min: 0.001,
           step: 0.1,
           visibleIf: (node) => node.segmentType === 'stair',
         },
@@ -39,7 +55,6 @@ export const stairSegmentParametrics: ParametricDescriptor<StairSegmentNode> = {
           kind: 'number',
           label: 'Steps',
           min: 2,
-          max: 30,
           step: 1,
           visibleIf: (node) => node.segmentType === 'stair',
         },
@@ -53,8 +68,7 @@ export const stairSegmentParametrics: ParametricDescriptor<StairSegmentNode> = {
           key: 'thickness',
           kind: 'number',
           unit: 'm',
-          min: 0.05,
-          max: 1000,
+          min: 0.001,
           step: 0.05,
           visibleIf: (node) => !node.fillToFloor,
         },
@@ -78,8 +92,12 @@ export const stairSegmentParametrics: ParametricDescriptor<StairSegmentNode> = {
   derive: (_next, patch, previous) => {
     if (!(patch.segmentType && patch.segmentType !== previous?.segmentType)) return {}
     return patch.segmentType === 'landing'
-      ? { height: 0, length: 1, stepCount: 0 }
+      ? { height: 0, length: 1, stepCount: 0, winder: undefined }
       : { height: 2.5, length: 3, stepCount: 10 }
   },
+  reconcile: (previous, next, nodes) =>
+    next.segmentType === 'stair' && next.height !== previous.height
+      ? planStairFlightHeightEdit(next, next.height, nodes).slice(1)
+      : [],
   customPanel: () => import('./panel'),
 }

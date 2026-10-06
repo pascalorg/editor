@@ -13,7 +13,6 @@ import {
   BuildPanelSection,
   BuildToolGrid,
   BuildToolTile,
-  MaterialPaintPanel,
   selectWallDrawVariant,
   startTerraceDraft,
   TerrainSculptPanel,
@@ -38,7 +37,6 @@ import {
   activateBuildTool,
   activateFenceFeaturePlacement,
   activateModularCabinetTool,
-  activatePaintMode,
   activateRoofFeatureTool,
   activateRoofType,
   activateTerrainSculptMode,
@@ -59,8 +57,7 @@ const subscribeToClientMount = () => () => {}
 /**
  * Build tab for the open-source standalone editor — a preset-less replica of
  * the community Build sidebar. Clicking a type activates its raw tool, drawn
- * with the kind's own `def.defaults()`. The "Painting" type swaps in the
- * material-paint panel.
+ * with the kind's own `def.defaults()`. Painting has its own rail panel.
  */
 export function BuildTab() {
   const [mepOpen, setMepOpen] = useState(false)
@@ -140,9 +137,7 @@ export function BuildTab() {
     (type: BuildType) => {
       setMepOpen(type.id === 'mep')
       if (type.id === 'fence' && selectedFence) return
-      if (type.mode === 'material-paint') {
-        activatePaintMode()
-      } else if (type.mode === 'terrain-sculpt') {
+      if (type.mode === 'terrain-sculpt') {
         activateTerrainSculptMode()
       } else if (type.id === 'mep') {
         const ed = useEditor.getState()
@@ -172,7 +167,7 @@ export function BuildTab() {
     didInitRef.current = true
     if (selectedFence) return
     const ed = useEditor.getState()
-    if (ed.mode === 'material-paint' || ed.mode === 'terrain-sculpt') return
+    if (ed.mode === 'terrain-sculpt') return
     if (ed.mode === 'build' && ed.tool) return
     const firstType = buildTypes.find((t) => t.kind)
     if (firstType) handleTypeClick(firstType)
@@ -225,11 +220,7 @@ export function BuildTab() {
         </BuildPanelAdvancedSection>
       </div>
 
-      {mode === 'material-paint' ? (
-        <div className="border-border/60 border-t pt-3">
-          <MaterialPaintPanel />
-        </div>
-      ) : mode === 'terrain-sculpt' ? (
+      {mode === 'terrain-sculpt' ? (
         <div className="border-border/60 border-t pt-3">
           <TerrainSculptPanel />
         </div>

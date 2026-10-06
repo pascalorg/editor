@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { measureStair } from '@pascal-app/core'
 import { pointInPolygon, type Vec2 } from '@pascal-app/core/agent-operations'
-import { type AnyNodeId, LevelNode } from '@pascal-app/core/schema'
+import { type AnyNodeId, LevelNode, SlabNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { registerConstructionTools } from './construction-tools'
 import { registerSharedTools } from './shared-tools'
@@ -327,7 +328,6 @@ describe('construction tools', () => {
         toLevelId: upper.id,
         position: [0, 0, -1],
         width: 1,
-        runLength: 3,
         totalRise: 2.8,
       },
     })
@@ -336,7 +336,59 @@ describe('construction tools', () => {
     const stair = bridge.getNode(parsed.stairId)
 
     expect(stair?.type).toBe('stair')
-    if (stair?.type === 'stair') expect(stair.openingOffset).toBe(0)
+    if (stair?.type === 'stair') {
+      expect(stair.openingOffset).toBe(0)
+      const flight = Object.values(bridge.getNodes()).find(
+        (node) => node.type === 'stair-segment' && node.parentId === stair.id,
+      )
+      expect(flight?.type).toBe('stair-segment')
+      if (flight?.type === 'stair-segment') {
+        expect(flight.height / flight.stepCount).toBeLessThanOrEqual(0.18)
+        expect(flight.length / flight.stepCount).toBeGreaterThanOrEqual(0.25)
+        expect(stair.stepCount).toBe(flight.stepCount)
+        expect(
+          measureStair(stair, bridge.getNodes()).diagnostics.some(
+            (issue) => issue.severity === 'error',
+          ),
+        ).toBe(false)
+      }
+    }
+  })
+
+  test('stair creation sizes the resolved rise above a raised support without viewer state', async () => {
+    const building = Object.values(bridge.getNodes()).find((node) => node.type === 'building')!
+    const ground = Object.values(bridge.getNodes()).find((node) => node.type === 'level')!
+    bridge.updateNode(ground.id, { height: 3 })
+    const upper = LevelNode.parse({ level: 1, height: 3 })
+    bridge.createNode(upper, building.id)
+    const polygon: [number, number][] = [
+      [-8, -8],
+      [8, -8],
+      [8, 8],
+      [-8, 8],
+    ]
+    bridge.createNode(SlabNode.parse({ elevation: 0.6, polygon, autoFromWalls: false }), ground.id)
+    bridge.createNode(SlabNode.parse({ elevation: 0, polygon, autoFromWalls: false }), upper.id)
+    const result = await client.callTool({
+      name: 'create_stair_between_levels',
+      arguments: {
+        fromLevelId: ground.id,
+        toLevelId: upper.id,
+        position: [0, 0, 0],
+      },
+    })
+    expect(result.isError).toBeFalsy()
+    const payload = JSON.parse((result.content as Array<{ text: string }>)[0]!.text)
+    const stair = bridge.getNode(payload.stairId)
+    if (stair?.type !== 'stair') throw new Error('Missing stair')
+    const flight = bridge.getNode(stair.children[0]!)
+    expect(flight?.type).toBe('stair-segment')
+    if (flight?.type === 'stair-segment') {
+      expect(flight.height).toBeCloseTo(2.4)
+      expect(flight.height / flight.stepCount).toBeLessThanOrEqual(0.18)
+      expect(flight.length / flight.stepCount).toBeGreaterThanOrEqual(0.25)
+      expect(measureStair(stair, bridge.getNodes()).totalRise).toBeCloseTo(2.4)
+    }
   })
 
   test('verify_scene flags suspicious multi-story wall heights', async () => {
@@ -486,5 +538,118 @@ describe('construction tools', () => {
     expect(parsed.issues.map((issue: { message: string }) => issue.message).join('\n')).toContain(
       'dedicated roof level',
     )
+  })
+  test('stair measurement is read-only and explicit sizing is one reversible operation', async () => {
+    const { StairNode, StairSegmentNode } = await import('@pascal-app/core')
+    const level = Object.values(bridge.getNodes()).find((node) => node.type === 'level')!
+    const stair = StairNode.parse({
+      totalRise: 3,
+      construction: { mode: 'center-stringer', finishThickness: 0.03 },
+    })
+    const flight = StairSegmentNode.parse({ height: 3, length: 3, stepCount: 10 })
+    bridge.createNode(stair, level.id)
+    bridge.createNode(flight, stair.id)
+    const before = JSON.stringify(bridge.getNodes())
+    const measured = await client.callTool({
+      name: 'measure_stair',
+      arguments: { stairId: stair.id },
+    })
+    expect(measured.isError).toBeFalsy()
+    expect(JSON.stringify(bridge.getNodes())).toBe(before)
+    const measurement = JSON.parse((measured.content as Array<{ text: string }>)[0]!.text)
+    expect(measurement.measurements.flights[0].construction.mode).toBe('center-stringer')
+    expect(measurement.measurements.flights[0].construction.finishThickness).toBe(0.03)
+    const result = await client.callTool({
+      name: 'fit_stair',
+      arguments: { stairId: stair.id, fitRun: true },
+    })
+    expect(result.isError).toBeFalsy()
+    const parsed = JSON.parse((result.content as Array<{ text: string }>)[0]!.text)
+    expect(parsed.measurements.riserCount).toBeGreaterThan(0)
+    const fitted = bridge.getNodes()[flight.id] as typeof flight
+    expect(fitted.height).toBe(3)
+    expect(fitted.length / fitted.stepCount).toBeGreaterThanOrEqual(
+      parsed.measurements.targets.minimumGoing,
+    )
+    expect(fitted.height / fitted.stepCount).toBeLessThanOrEqual(
+      parsed.measurements.targets.maxRiserHeight,
+    )
+    bridge.undo()
+    const restored = bridge.getNodes()[flight.id] as typeof flight
+    expect(restored.stepCount).toBe(10)
+    expect(restored.length).toBe(3)
+    expect((bridge.getNodes()[stair.id] as typeof stair).uniformRisers).toBeUndefined()
+  })
+  test('stair layout alternatives are read-only and U presets replace the chain atomically', async () => {
+    const { StairNode, StairSegmentNode } = await import('@pascal-app/core')
+    const level = Object.values(bridge.getNodes()).find((node) => node.type === 'level')!
+    const stair = StairNode.parse({ totalRise: 3 })
+    const flight = StairSegmentNode.parse({ height: 3, length: 3 })
+    bridge.createNode(stair, level.id)
+    bridge.createNode(flight, stair.id)
+    const before = JSON.stringify(bridge.getNodes())
+    const measurement = await client.callTool({
+      name: 'measure_stair',
+      arguments: { stairId: stair.id, available: { width: 2, length: 4 } },
+    })
+    expect(measurement.isError).toBeFalsy()
+    const alternatives = JSON.parse(
+      (measurement.content as Array<{ text: string }>)[0]!.text,
+    ).layouts
+    expect(alternatives).toHaveLength(5)
+    expect(JSON.stringify(bridge.getNodes())).toBe(before)
+    const result = await client.callTool({
+      name: 'fit_stair',
+      arguments: { stairId: stair.id, layout: 'u', turn: 'right' },
+    })
+    expect(result.isError).toBeFalsy()
+    const changed = bridge.getNodes()[stair.id] as typeof stair
+    expect(changed.children).toHaveLength(4)
+    expect(changed.children[0]).toBe(flight.id)
+    expect((bridge.getNodes()[changed.children[3]!] as typeof flight).attachmentSide).toBe('right')
+    expect(bridge.undo()).toBe(1)
+    expect(JSON.stringify(bridge.getNodes())).toBe(before)
+  })
+  test('winder presets preserve walking-line settings and undo the whole chain', async () => {
+    const { StairNode, StairSegmentNode } = await import('@pascal-app/core')
+    const level = Object.values(bridge.getNodes()).find((node) => node.type === 'level')!
+    const stair = StairNode.parse({ totalRise: 3 })
+    const flight = StairSegmentNode.parse({ height: 3, length: 3 })
+    bridge.createNode(stair, level.id)
+    bridge.createNode(flight, stair.id)
+    const before = JSON.stringify(bridge.getNodes())
+    const result = await client.callTool({
+      name: 'fit_stair',
+      arguments: {
+        stairId: stair.id,
+        layout: 'u',
+        turn: 'right',
+        turningStrategy: 'winder',
+        innerGap: 0.2,
+        walkingLineOffset: 0.45,
+        division: 'equal-angle',
+      },
+    })
+    expect(result.isError).toBeFalsy()
+    const changed = bridge.getNodes()[stair.id] as typeof stair
+    const winders = changed.children
+      .map((id) => bridge.getNodes()[id] as typeof flight)
+      .filter((node) => node.winder)
+    expect(winders).toHaveLength(2)
+    for (const winder of winders)
+      expect(winder.winder).toEqual({
+        turn: 'right',
+        innerGap: 0.2,
+        walkingLineOffset: 0.45,
+        division: 'equal-angle',
+      })
+    const parsed = JSON.parse((result.content as Array<{ text: string }>)[0]!.text)
+    for (const winder of winders)
+      expect(
+        parsed.measurements.flights.find((entry: { nodeId: string }) => entry.nodeId === winder.id)
+          .going,
+      ).toBeGreaterThan(0)
+    expect(bridge.undo()).toBe(1)
+    expect(JSON.stringify(bridge.getNodes())).toBe(before)
   })
 })

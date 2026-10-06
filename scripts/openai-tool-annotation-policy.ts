@@ -34,6 +34,8 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   create_roof: policy(false, false, false),
   create_room: policy(false, false, false),
   create_stair_between_levels: policy(false, true, false),
+  fit_stair: policy(false, true, false),
+  measure_stair: policy(true, false, false),
   create_story_shell: policy(false, false, false),
   create_unit: policy(false, false, false),
   create_wall: policy(false, false, false),

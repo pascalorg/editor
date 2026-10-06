@@ -112,6 +112,7 @@ export type {
   SelectionAffordanceInteractionApi,
   SelectionAffordanceProps,
 } from './components/systems/selection-affordance-services'
+export { StairEditSystem } from './components/systems/stair/stair-edit-system'
 export { MoveTool } from './components/tools/item/move-tool'
 // Placement-math helpers — shared by kind-owned placement tools in
 // `@pascal-app/nodes` (wall curve sagitta snap, door / window placement,
@@ -186,11 +187,8 @@ export {
   DEFAULT_SPIRAL_TOP_LANDING_MODE,
   DEFAULT_STAIR_ATTACHMENT_SIDE,
   DEFAULT_STAIR_FILL_TO_FLOOR,
-  DEFAULT_STAIR_HEIGHT,
-  DEFAULT_STAIR_LENGTH,
   DEFAULT_STAIR_RAILING_HEIGHT,
   DEFAULT_STAIR_RAILING_MODE,
-  DEFAULT_STAIR_STEP_COUNT,
   DEFAULT_STAIR_THICKNESS,
   DEFAULT_STAIR_TYPE,
   DEFAULT_STAIR_WIDTH,
@@ -248,6 +246,7 @@ export {
 export { MetricControl } from './components/ui/controls/metric-control'
 export { PanelSection } from './components/ui/controls/panel-section'
 export { SegmentedControl } from './components/ui/controls/segmented-control'
+export { SelectControl } from './components/ui/controls/select-control'
 export { SliderControl } from './components/ui/controls/slider-control'
 export { TerrainSculptPanel } from './components/ui/controls/terrain-sculpt-panel'
 export { ToggleControl } from './components/ui/controls/toggle-control'
@@ -431,25 +430,19 @@ export {
 export type { ExportTextureUtils } from './lib/export-texture-utils'
 export { getFloatingMenuScale } from './lib/floating-menu-scale'
 export { startOpeningDraft } from './lib/floor-opening-draft'
-// Floor-plan stair helpers — the cumulative-transform walk
-// (`computeFloorplanStairSegmentTransforms`) and the rich segment-entry
-// builder (`buildFloorplanStairEntry`) used by the kind-owned stair
-// floor-plan emitter in `@pascal-app/nodes/src/stair/floorplan.ts`.
-// Each flight's transform depends on every prior sibling's length /
-// height / `attachmentSide`, so individual stair-segments can't compute
-// their own polygon in isolation — the stair (parent) owns the
-// computation and emits the whole stack as one registry entry.
 export {
   alignFloorplanDraftPoint,
   applyFloorplanAlignment,
-  buildFloorplanStairEntry,
+  clampPlanValue,
   FLOORPLAN_ALIGNMENT_THRESHOLD_M,
   FLOORPLAN_DRAFT_ALIGN_ID,
   type FloorplanAlignmentResult,
-  type FloorplanStairArrowEntry,
-  type FloorplanStairEntry,
-  type FloorplanStairSegmentEntry,
   getFloorplanWallThickness,
+  getPlanPointDistance,
+  getThickPlanLinePolygon,
+  interpolatePlanPoint,
+  movePlanPointTowards,
+  rotatePlanVector,
 } from './lib/floorplan'
 export type {
   FloorplanAnnotationCategory,

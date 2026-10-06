@@ -6,6 +6,7 @@ import {
   type ArcResizeHandle,
   type CornerRadiusHandle,
   type Cursor,
+  createAngleAccumulator,
   createSceneApi,
   DEFAULT_ANGLE_STEP,
   type HandleDescriptor,
@@ -1364,6 +1365,7 @@ function ArcArrow({
         return null
       }
       const initialAngle = angleOf(hitWorld)
+      const accumulateAngle = createAngleAccumulator(initialAngle)
 
       // A distinct label selects rotation snapping instead of resize measurements.
       if (isRotateShape) {
@@ -1383,9 +1385,12 @@ function ArcArrow({
           const hit = new Vector3()
           if (!intersectMovePlane(moveEvent.clientX, moveEvent.clientY, plane, hit)) return null
           const currentAngle = angleOf(hit)
-          let delta = currentAngle - initialAngle
-          while (delta > Math.PI) delta -= 2 * Math.PI
-          while (delta < -Math.PI) delta += 2 * Math.PI
+          let delta = isRotateShape
+            ? Math.atan2(
+                Math.sin(currentAngle - initialAngle),
+                Math.cos(currentAngle - initialAngle),
+              )
+            : accumulateAngle(currentAngle)
 
           if (
             !descriptor.continuous &&
