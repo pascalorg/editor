@@ -449,6 +449,19 @@
       }
     },
     {
+      "name": "fit_stair",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It updates stair sizing and uniform-riser intent in the connected scene.",
+        "destructiveHint": "It replaces authored flight heights and counts, and optionally runs or sweep, in one undoable edit.",
+        "openWorldHint": "It operates on the connected scene and its configured live persistence transport without accessing the public internet."
+      }
+    },
+    {
       "name": "furnish_room",
       "annotations": {
         "readOnlyHint": false,
@@ -667,6 +680,19 @@
         "readOnlyHint": "It computes measurements from nodes in the connected Pascal scene without changing scene or project state.",
         "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
         "openWorldHint": "It operates only on data supplied by or already available inside the connected Pascal service and does not access the public internet."
+      }
+    },
+    {
+      "name": "measure_stair",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It reads resolved stair quantities and design diagnostics without writing scene state.",
+        "destructiveHint": "It does not change, replace or delete authored geometry.",
+        "openWorldHint": "It evaluates the connected scene with the shared core stair planner; it does not access the public internet."
       }
     },
     {

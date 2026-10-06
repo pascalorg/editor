@@ -33,6 +33,7 @@ const TOOL_POLICIES = [
       'list_templates',
       'list_units',
       'measure',
+      'measure_stair',
       'get_source',
       'list_collections',
       'search_assets',
@@ -96,6 +97,7 @@ const TOOL_POLICIES = [
       'create_house_from_brief',
       'create_stair_between_levels',
       'delete_node',
+      'fit_stair',
       'remove_floor_opening',
       'rebase_floor_reference',
       'delete_zone',
@@ -163,7 +165,6 @@ describe('MCP tool annotations', () => {
     try {
       const listed = await client.listTools()
       const byName = new Map(listed.tools.map((tool) => [tool.name, tool]))
-      expect(byName.size).toBe(72)
       expect([...byName.keys()].toSorted()).toEqual(EXPECTED_TOOL_NAMES)
 
       for (const policy of TOOL_POLICIES) {
