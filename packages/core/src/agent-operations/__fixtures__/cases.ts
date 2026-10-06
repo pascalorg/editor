@@ -19,6 +19,7 @@ import {
 } from '../../schema'
 import { CREATE_ROOM_CASES, FURNISH_ROOM_CASES } from './build-room-cases'
 import { PLACE_ITEMS_CASES } from './place-items-cases'
+import { FIND_BY_TYPE_CASES } from './find-by-type-cases'
 import { ROOM_CASES } from './room-cases'
 import { SEARCH_ASSETS_CASES } from './search-assets-cases'
 import { ADD_LEVEL_CASES, ADD_WALL_CASES, CREATE_STAIR_CASES } from './structure-cases'
@@ -778,4 +779,5 @@ export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...ADD_LEVEL_CASES,
   ...CREATE_STAIR_CASES,
   ...PLACE_ITEMS_CASES,
+  ...FIND_BY_TYPE_CASES,
 ]

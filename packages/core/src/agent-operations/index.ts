@@ -43,6 +43,7 @@ export * from './scene-queries'
 export * from './search-assets'
 export * from './types'
 export * from './verify-scene'
+export * from './wall-opening'
 
 /** Each shared agent tool's operation, by tool name: what every surface executes. */
 export const AGENT_OPERATIONS = {

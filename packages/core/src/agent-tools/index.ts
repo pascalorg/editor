@@ -21,6 +21,7 @@ import { verifySceneTool } from './verify-scene'
 import { addDoorTool, addWindowTool } from './wall-openings'
 import { addWallTool } from './walls'
 
+export * from './achieved'
 export * from './add-object'
 export * from './assets'
 export * from './collections'
@@ -39,6 +40,7 @@ export * from './stairs'
 export * from './verify-scene'
 export * from './wall-openings'
 export * from './walls'
+export * from './write-target'
 
 /**
  * Tools defined once for every agent surface — the MCP server and the hosted AI chat register

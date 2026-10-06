@@ -1,4 +1,4 @@
-import { BuildingNode, LevelNode, SlabNode, WallNode, ZoneNode } from '../../schema'
+import { BuildingNode, LevelNode, SiteNode, SlabNode, WallNode, ZoneNode } from '../../schema'
 import type { AgentToolCase, SceneGraph } from './cases'
 
 /**
@@ -215,12 +215,46 @@ export const ADD_LEVEL_CASES: AgentToolCase[] = [
     input: { buildingId: 'level_ground' },
     expect: { refusal: 'not_a_building' },
   },
+  // L56, the fresh start: an agent that cleared the scene to restart could not begin again with
+  // the tools (add_level answered no_building, add_wall no_levels). An empty scene gets the
+  // editor's own empty scene: a site, its building, the ground level.
   {
-    name: 'a scene with no building has nowhere to add a level',
+    name: 'a scene with no building starts as the editor starts: site, building, ground level',
     tool: 'add_level',
     scene: emptyScene,
     input: {},
-    expect: { refusal: 'no_building' },
+    expect: {
+      result: { ok: true, floorIndex: 0 },
+      check: (result, nodes) => {
+        const level = nodes[result.levelId as string]
+        const building = nodes[result.buildingId as string]
+        const site = nodes[result.siteId as string]
+        return [
+          ...(level?.type === 'level' && level.parentId === building?.id ? [] : ['no ground level']),
+          ...(building?.type === 'building' && building.parentId === site?.id ? [] : ['no building']),
+          ...(site?.type === 'site' && site.parentId == null ? [] : ['no site at the root']),
+        ]
+      },
+    },
+  },
+  {
+    name: 'a site with no building gets its building and ground level',
+    tool: 'add_level',
+    scene: () => ({
+      nodes: { site_lot: SiteNode.parse({ id: 'site_lot', children: [] }) },
+      rootNodeIds: ['site_lot'],
+    }),
+    input: {},
+    expect: {
+      result: { ok: true, floorIndex: 0 },
+      check: (result, nodes) => {
+        const building = nodes[result.buildingId as string]
+        return [
+          ...('siteId' in result ? ['made a second site'] : []),
+          ...(building?.parentId === 'site_lot' ? [] : ['the building is not on the site']),
+        ]
+      },
+    },
   },
 ]
 

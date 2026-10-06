@@ -67,9 +67,26 @@ export function registerCreateProject(server: McpServer, operations: SceneOperat
           thumbnailUrl: status.thumbnailUrl,
           version: status.version,
         })
+        // A scene from the first call: its first draft is what this session holds (the empty
+        // scene, or the unbound work it was made for), so any session can load it at once. Unsaved,
+        // another session's load_scene answered scene_not_found until a first save (L56).
+        operations.setActiveScene(
+          await operations.saveScene({
+            id: status.id,
+            name: status.name,
+            projectId: status.projectId,
+            ownerId: status.ownerId,
+            thumbnailUrl: status.thumbnailUrl,
+            graph: operations.exportSceneGraph(),
+            saveMode: 'draft',
+            publish: false,
+            operation: 'create_project',
+          }),
+        )
+        const saved = (await operations.getProjectStatus(status.id)) ?? status
         const payload = {
           ...projectStatusPayload(
-            status,
+            saved,
             'The project is now bound to this MCP session. Open editorUrl now; semantic tools will update the browser-visible draft. Call save_scene with saveMode: "checkpoint" only when you want a meaningful version.',
           ),
           ...currentLevelContext(operations),

@@ -2,10 +2,11 @@ import { describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { NOT_SAVED_NOTE } from '@pascal-app/core/agent-tools'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { createSceneOperations, type SceneOperations } from '../operations'
 import type { SceneStore } from '../storage/types'
-import { publishLiveSceneSnapshot } from './live-sync'
+import { persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import {
   createTestSceneOperations,
   InMemorySceneStore,
@@ -99,9 +100,21 @@ describe('live sync persistence reporting', () => {
 })
 
 describe('publishLiveSceneSnapshot', () => {
+  // L56 (2026-10-05): on a session with no project, add_wall answered ok and the work reached
+  // nothing. Every write says where it went, top-level.
+  test('a write with no project says so: project null, and how to keep it', () => {
+    expect(persistencePayload({ status: 'unbound', project: null })).toMatchObject({
+      project: null,
+      unsaved: NOT_SAVED_NOTE,
+    })
+    expect(persistencePayload({ status: 'published', project: 'project_a' })).toEqual({
+      project: 'project_a',
+    })
+  })
+
   test('returns unbound without an active scene', async () => {
     const { operations } = createTestSceneOperations({ bridge: createBridge() })
-    expect(await publishLiveSceneSnapshot(operations, 'test')).toBe('unbound')
+    expect((await publishLiveSceneSnapshot(operations, 'test')).status).toBe('unbound')
   })
 
   test('returns events_unsupported when the store lacks scene events', async () => {
@@ -112,14 +125,14 @@ describe('publishLiveSceneSnapshot', () => {
     })
     const meta = await base.save({ name: 'Live Scene', graph: operations.exportSceneGraph() })
     operations.setActiveScene(meta)
-    expect(await publishLiveSceneSnapshot(operations, 'test')).toBe('events_unsupported')
+    expect((await publishLiveSceneSnapshot(operations, 'test')).status).toBe('events_unsupported')
   })
 
   test('returns published when bound to an event-capable store', async () => {
     const { store, operations } = createTestSceneOperations({ bridge: createBridge() })
     const meta = await store.save({ name: 'Live Scene', graph: operations.exportSceneGraph() })
     operations.setActiveScene(meta)
-    expect(await publishLiveSceneSnapshot(operations, 'test')).toBe('published')
+    expect((await publishLiveSceneSnapshot(operations, 'test')).status).toBe('published')
     expect(await store.listSceneEvents(meta.id)).toHaveLength(1)
   })
 })

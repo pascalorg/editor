@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { DOOR_STYLES, WINDOW_STYLES } from '../building/opening-style-presets'
 import { DoorType, WindowType } from '../schema/nodes/opening-types'
+import { achievedOutput } from './achieved'
 import { scriptParams } from './add-object'
 import { measurement } from './measurement'
 import { NodeId } from './node-id'
@@ -141,4 +142,28 @@ export const addWindowTool = {
         'Visual preset (panes only, never the size); same presets as create_room windows[].',
       ),
   },
+}
+
+/**
+ * What add_door and add_window answer, on every surface: one result from the core operation, which
+ * the MCP and the chat pass through as it is. `localX` is metres along the wall from its start.
+ */
+const openingOutput = {
+  ok: z.literal(true),
+  wallId: z.string(),
+  localX: z.number(),
+  t: z.number(),
+  wallLength: z.number(),
+  clamped: z.boolean(),
+  coordinateSystem: z.literal('wall-local-meters'),
+  message: z.string(),
+  achieved: achievedOutput,
+}
+
+export const addDoorOutput = { doorId: z.string(), ...openingOutput }
+
+export const addWindowOutput = {
+  windowId: z.string(),
+  ...openingOutput,
+  sillHeight: z.number().optional(),
 }

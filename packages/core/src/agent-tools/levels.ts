@@ -46,7 +46,7 @@ export const addLevelTool = {
   name: 'add_level',
   title: 'Add level',
   description:
-    'Add an empty level to a building, as the editor does: above its highest level, or below its lowest for a basement. To copy a floor with its content, use duplicate_level.',
+    'Add an empty level to a building, as the editor does: above its highest level, or below its lowest for a basement. On a scene with no building (a new or cleared scene), it starts the scene as the editor does: a site, a building and its ground level. To copy a floor with its content, use duplicate_level.',
   input: {
     buildingId: NodeId.optional().describe(
       "The building. Default: the building of the floor the person is viewing, else the scene's only building.",

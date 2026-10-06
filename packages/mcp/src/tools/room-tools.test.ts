@@ -205,7 +205,7 @@ describe('room tools', () => {
     const door = JSON.parse((doorResult.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(door.localX).toBeCloseTo(2.5, 3)
     expect(door.t).toBe(0.5)
-    expect(door.position).toBe(0.5)
+    expect(door.achieved).toMatchObject({ created: { door: 1 } })
     expect(door.wallLength).toBeCloseTo(5, 3)
     expect(door.coordinateSystem).toBe('wall-local-meters')
     expect(
@@ -219,7 +219,7 @@ describe('room tools', () => {
     const win = JSON.parse((windowResult.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(win.localX).toBeCloseTo(1.25, 3)
     expect(win.t).toBe(0.25)
-    expect(win.position).toBe(0.25)
+    expect(win.achieved).toMatchObject({ created: { window: 1 } })
     expect(win.wallLength).toBeCloseTo(5, 3)
     expect(win.coordinateSystem).toBe('wall-local-meters')
     expect(

@@ -1,15 +1,24 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { editedScriptParams, rescriptOpening } from '@pascal-app/core/agent-operations'
-import { addDoorTool, addWindowTool, isAgentRefusal } from '@pascal-app/core/agent-tools'
-import { planWallOpening } from '@pascal-app/core/building'
+import {
+  achievedChanges,
+  addWallOpening,
+  editedScriptParams,
+  rebuiltOpeningResult,
+  rescriptOpening,
+  type SceneNodes,
+} from '@pascal-app/core/agent-operations'
+import {
+  addDoorOutput as addDoorResult,
+  addDoorTool,
+  addWindowOutput as addWindowResult,
+  addWindowTool,
+  isAgentRefusal,
+} from '@pascal-app/core/agent-tools'
 import type {
   AnyNode,
-  AnyNodeId,
   CompiledGeometryScript,
   GeometryScriptParamValue,
-  WallNode as WallNodeType,
 } from '@pascal-app/core/schema'
-import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { compileAndStore, type GeometryScriptHost, readScript } from './add-object'
 import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
@@ -17,28 +26,9 @@ import { refusalResult, toolError } from './errors'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { toPatches } from './shared-tools'
 
-export const addDoorOutput = {
-  doorId: z.string(),
-  localX: z.number(),
-  t: z.number(),
-  position: z.number(),
-  wallLength: z.number(),
-  clamped: z.boolean(),
-  coordinateSystem: z.literal('wall-local-meters'),
-  ...liveSyncOutput,
-}
-
-export const addWindowOutput = {
-  windowId: z.string(),
-  localX: z.number(),
-  t: z.number(),
-  position: z.number(),
-  wallLength: z.number(),
-  clamped: z.boolean(),
-  coordinateSystem: z.literal('wall-local-meters'),
-  sillHeight: z.number(),
-  ...liveSyncOutput,
-}
+/** The contract's one result (core `addWallOpening`), and the live sync's note. */
+export const addDoorOutput = { ...addDoorResult, ...liveSyncOutput }
+export const addWindowOutput = { ...addWindowResult, ...liveSyncOutput }
 
 function textResult<T extends Record<string, unknown>>(payload: T) {
   return {
@@ -80,27 +70,18 @@ async function rebuildOpening(
       code: 'script_failed',
     })
   }
+  const achieved = outcome.changes
+    ? achievedChanges(nodes as SceneNodes, outcome.changes)
+    : achievedChanges(nodes as SceneNodes, {})
   if (outcome.changes) bridge.applyPatch(toPatches(outcome.changes))
-  const node = bridge.getNodes()[input.nodeId as AnyNodeId] as AnyNode & {
-    position: [number, number, number]
-    height: number
-    wallId?: string
-  }
-  const wall = node.wallId
-    ? (bridge.getNodes()[node.wallId as AnyNodeId] as WallNodeType)
-    : undefined
-  const wallLength = wall ? Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]) : 0
   const persistence = await publishLiveSceneSnapshot(bridge, `add_${kind}`)
   return textResult({
-    [kind === 'door' ? 'doorId' : 'windowId']: input.nodeId,
-    localX: node.position[0],
-    t: wallLength ? node.position[0] / wallLength : 0,
-    position: wallLength ? node.position[0] / wallLength : 0,
-    wallLength,
-    clamped: false,
-    coordinateSystem: 'wall-local-meters' as const,
-    ...(kind === 'window' ? { sillHeight: node.position[1] - node.height / 2 } : {}),
-    ...outcome.result,
+    ...rebuiltOpeningResult(
+      bridge.getNodes() as SceneNodes,
+      input.nodeId,
+      outcome.result as Record<string, unknown>,
+      achieved,
+    ),
     ...persistencePayload(persistence),
   })
 }
@@ -153,9 +134,9 @@ export function registerAddDoor(
         return rebuildOpening('door', bridge, geometryScripts, { ...input, nodeId: input.nodeId })
       const compiled = await compileOpeningScript('door', bridge, geometryScripts, input)
       if ('error' in compiled) return compiled.error
-      let planned: ReturnType<typeof planWallOpening>
+      let opening: ReturnType<typeof addWallOpening>
       try {
-        planned = planWallOpening(bridge.getNodes() as Record<string, AnyNode>, {
+        opening = addWallOpening(bridge.getNodes() as SceneNodes, {
           kind: 'door',
           ...input,
           compiled: compiled.script,
@@ -163,18 +144,9 @@ export function registerAddDoor(
       } catch (error) {
         return refusalResult(error)
       }
-      const id = bridge.createNode(planned.node, planned.wallId as AnyNodeId)
+      bridge.applyPatch(toPatches(opening.changes))
       const persistence = await publishLiveSceneSnapshot(bridge, 'add_door')
-      return textResult({
-        doorId: id,
-        localX: planned.localX,
-        t: planned.t,
-        position: planned.t,
-        wallLength: planned.wallLength,
-        clamped: planned.clamped,
-        coordinateSystem: 'wall-local-meters',
-        ...persistencePayload(persistence),
-      })
+      return textResult({ ...opening.result, ...persistencePayload(persistence) })
     },
   )
 }
@@ -198,9 +170,9 @@ export function registerAddWindow(
         return rebuildOpening('window', bridge, geometryScripts, { ...input, nodeId: input.nodeId })
       const compiled = await compileOpeningScript('window', bridge, geometryScripts, input)
       if ('error' in compiled) return compiled.error
-      let planned: ReturnType<typeof planWallOpening>
+      let opening: ReturnType<typeof addWallOpening>
       try {
-        planned = planWallOpening(bridge.getNodes() as Record<string, AnyNode>, {
+        opening = addWallOpening(bridge.getNodes() as SceneNodes, {
           kind: 'window',
           ...input,
           compiled: compiled.script,
@@ -208,19 +180,9 @@ export function registerAddWindow(
       } catch (error) {
         return refusalResult(error)
       }
-      const id = bridge.createNode(planned.node, planned.wallId as AnyNodeId)
+      bridge.applyPatch(toPatches(opening.changes))
       const persistence = await publishLiveSceneSnapshot(bridge, 'add_window')
-      return textResult({
-        windowId: id,
-        localX: planned.localX,
-        t: planned.t,
-        position: planned.t,
-        wallLength: planned.wallLength,
-        clamped: planned.clamped,
-        coordinateSystem: 'wall-local-meters',
-        sillHeight: planned.sillHeight ?? 0,
-        ...persistencePayload(persistence),
-      })
+      return textResult({ ...opening.result, ...persistencePayload(persistence) })
     },
   )
 }

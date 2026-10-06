@@ -1,5 +1,5 @@
 import { refuse } from '../agent-tools/refusal'
-import { type BuildingNode, LevelNode } from '../schema'
+import { BuildingNode, LevelNode, SiteNode } from '../schema'
 import { DEFAULT_LEVEL_HEIGHT } from '../services/level-height'
 import { levelsOf } from './scene-queries'
 import type { AgentContext, AgentOperation, SceneNodes } from './types'
@@ -42,8 +42,47 @@ export function targetBuilding(
   )
 }
 
+/**
+ * On a scene with no building, the editor's own empty scene: a site (unless one stands), its
+ * building, the ground level. An agent that cleared the scene to restart begins again here.
+ */
+function freshStart(nodes: SceneNodes, input: AddLevelInput) {
+  const standing = Object.values(nodes).find((node) => node.type === 'site')
+  const site = standing ? null : SiteNode.parse({ children: [] })
+  const siteId = standing?.id ?? site!.id
+  const building = BuildingNode.parse({ parentId: siteId, children: [] })
+  const level = LevelNode.parse({
+    parentId: building.id,
+    level: 0,
+    height: input.height ?? DEFAULT_LEVEL_HEIGHT,
+    children: [],
+    ...(input.name ? { name: input.name } : {}),
+  })
+  return {
+    result: {
+      ok: true,
+      levelId: level.id,
+      buildingId: building.id,
+      ...(site ? { siteId: site.id } : {}),
+      floorIndex: 0,
+      ...(level.name ? { name: level.name } : {}),
+      height: level.height,
+      message: `The scene had no building: made ${site ? 'a site, ' : ''}a building and its ground level.`,
+    },
+    changes: {
+      create: [
+        ...(site ? [{ node: site }] : []),
+        { node: building, parentId: siteId },
+        { node: level, parentId: building.id },
+      ],
+    },
+  }
+}
+
 /** `add_level`: an empty level over the building's highest, or under its lowest — the editor's +. */
 export const addLevel: AgentOperation<AddLevelInput> = (nodes, input, context) => {
+  if (!(input.buildingId || Object.values(nodes).some((node) => node.type === 'building')))
+    return freshStart(nodes, input)
   const building = targetBuilding(nodes, input.buildingId, context)
   const floors = levelsOf(nodes)
     .filter((level) => level.parentId === building.id || building.children.includes(level.id))
