@@ -1,19 +1,49 @@
 import type { Point2D, StairNode, StairSegmentNode } from '@pascal-app/core'
 import {
+  computeSegmentTransforms,
+  measureStairDetail,
+  resolveStairArcDimensions,
+  resolveStairConstruction,
+  resolveStairWalkingPaths,
+  resolveStairWinder,
+  resolveStairWinderFootprint,
+  stairSegmentDetailError,
+} from '@pascal-app/core'
+import {
   clampPlanValue,
   getPlanPointDistance,
   getThickPlanLinePolygon,
   interpolatePlanPoint,
   movePlanPointTowards,
   rotatePlanVector,
-} from './geometry'
-import type {
-  FloorplanLineSegment,
-  FloorplanStairArrowEntry,
-  FloorplanStairEntry,
-  FloorplanStairSegmentEntry,
-  StairSegmentTransform,
-} from './types'
+} from '@pascal-app/editor'
+
+type FloorplanLineSegment = { start: Point2D; end: Point2D }
+export type FloorplanStairSegmentEntry = {
+  centerLine: FloorplanLineSegment | null
+  innerPolygon: Point2D[]
+  segment: StairSegmentNode
+  polygon: Point2D[]
+  treadBars: Point2D[][]
+  treadThickness: number
+}
+
+export type FloorplanStairArrowEntry = {
+  head: Point2D[]
+  polyline: Point2D[]
+}
+
+export type FloorplanStairEntry = {
+  arrow: FloorplanStairArrowEntry | null
+  hitPolygons: Point2D[][]
+  stair: StairNode
+  segments: FloorplanStairSegmentEntry[]
+}
+
+export type StairSegmentTransform = {
+  position: [number, number, number]
+  rotation: number
+}
 
 const FLOORPLAN_STAIR_OUTLINE_BAND_THICKNESS = 0.05
 const FLOORPLAN_STAIR_OUTLINE_MAX_FRACTION = 0.18
@@ -76,6 +106,7 @@ function getFloorplanStairTreadLines(
   segment: StairSegmentNode,
   innerPolygon: Point2D[],
 ): FloorplanLineSegment[] {
+  if (stairSegmentDetailError(segment)) return []
   if (segment.segmentType !== 'stair' || segment.stepCount <= 1 || innerPolygon.length < 4) {
     return []
   }
@@ -198,65 +229,23 @@ function getFloorplanArcPoint(center: Point2D, radius: number, angle: number): P
   }
 }
 
-function getNormalizedFloorplanStairSweepAngle(stair: StairNode) {
-  const stairType = stair.stairType ?? 'straight'
-  const baseSweepAngle = stair.sweepAngle ?? (stairType === 'spiral' ? Math.PI * 2 : Math.PI / 2)
-
-  if (Math.abs(baseSweepAngle) >= Math.PI * 2) {
-    return Math.sign(baseSweepAngle || 1) * (Math.PI * 2 - 0.001)
-  }
-
-  return baseSweepAngle
-}
-
-function clampFloorplanCircularSweepAngle(sweepAngle: number) {
-  if (Math.abs(sweepAngle) >= Math.PI * 2) {
-    return Math.sign(sweepAngle || 1) * (Math.PI * 2 - 0.001)
-  }
-
-  return sweepAngle
-}
-
-function getFloorplanSpiralLandingSweep(stair: StairNode, sweepAngle: number) {
-  if (
-    (stair.stairType ?? 'straight') !== 'spiral' ||
-    (stair.topLandingMode ?? 'none') !== 'integrated'
-  ) {
-    return 0
-  }
-
-  const innerRadius = Math.max(0.05, stair.innerRadius ?? 0.9)
-  const width = Math.max(stair.width ?? 1, 0.4)
-  const landingDepth = Math.max(0.3, stair.topLandingDepth ?? Math.max(width * 0.9, 0.8))
-
-  return (
-    Math.min(Math.PI * 0.75, landingDepth / Math.max(innerRadius + width / 2, 0.1)) *
-    Math.sign(sweepAngle || 1)
-  )
-}
-
 function getFloorplanCurvedStairHitPolygon(stair: StairNode): Point2D[] {
-  const stairType = stair.stairType ?? 'straight'
-  const sweepAngle = getNormalizedFloorplanStairSweepAngle(stair)
-  const visualSweepAngle = clampFloorplanCircularSweepAngle(
-    sweepAngle + getFloorplanSpiralLandingSweep(stair, sweepAngle),
-  )
-  const startAngle = -stair.rotation - sweepAngle / 2
+  const layout = resolveStairArcDimensions(stair, 0)
+  const { innerRadius, outerRadius, sweepAngle } = layout
+  const visualSweepAngle =
+    Math.sign(sweepAngle || 1) *
+    Math.min(Math.abs(sweepAngle + layout.landingSweep + layout.nosingSweep), Math.PI * 2)
+  const startAngle = -stair.rotation - sweepAngle / 2 - layout.nosingSweep
   const endAngle = startAngle + visualSweepAngle
-  const center = {
-    x: stair.position[0],
-    y: stair.position[2],
-  }
-  const innerRadius = Math.max(
-    stairType === 'spiral' ? 0.05 : 0.2,
-    stair.innerRadius ?? (stairType === 'spiral' ? 0.2 : 0.9),
-  )
-  const outerRadius = innerRadius + stair.width
-  const outerArcLength = Math.abs(sweepAngle) * outerRadius
-  const segmentCount = Math.max(
-    24,
-    Math.ceil(Math.abs(sweepAngle) / (Math.PI / 24)),
-    Math.ceil(outerArcLength / 0.14),
+  const center = { x: stair.position[0], y: stair.position[2] }
+  const outerArcLength = Math.abs(visualSweepAngle) * outerRadius
+  const segmentCount = Math.min(
+    256,
+    Math.max(
+      24,
+      Math.ceil(Math.abs(visualSweepAngle) / (Math.PI / 24)),
+      Math.ceil(outerArcLength / 0.14),
+    ),
   )
   const outerPoints: Point2D[] = []
   const innerPoints: Point2D[] = []
@@ -372,66 +361,22 @@ function buildFloorplanStairArrow(
   }
 }
 
-export function computeFloorplanStairSegmentTransforms(
-  segments: StairSegmentNode[],
-): StairSegmentTransform[] {
-  const transforms: StairSegmentTransform[] = []
-  let currentX = 0
-  let currentY = 0
-  let currentZ = 0
-  let currentRotation = 0
-
-  for (let index = 0; index < segments.length; index += 1) {
-    const segment = segments[index]!
-
-    if (index === 0) {
-      transforms.push({
-        position: [currentX, currentY, currentZ],
-        rotation: currentRotation,
-      })
-      continue
-    }
-
-    const previousSegment = segments[index - 1]!
-    let attachX = 0
-    let attachY = previousSegment.height
-    let attachZ = previousSegment.length
-    let rotationDelta = 0
-
-    if (segment.attachmentSide === 'left') {
-      attachX = previousSegment.width / 2
-      attachZ = previousSegment.length / 2
-      rotationDelta = Math.PI / 2
-    } else if (segment.attachmentSide === 'right') {
-      attachX = -previousSegment.width / 2
-      attachZ = previousSegment.length / 2
-      rotationDelta = -Math.PI / 2
-    }
-
-    const [rotatedAttachX, rotatedAttachZ] = rotatePlanVector(attachX, attachZ, currentRotation)
-    currentX += rotatedAttachX
-    currentY += attachY
-    currentZ += rotatedAttachZ
-    currentRotation += rotationDelta
-
-    transforms.push({
-      position: [currentX, currentY, currentZ],
-      rotation: currentRotation,
-    })
-  }
-
-  return transforms
-}
-
 export function getFloorplanStairSegmentPolygon(
   stair: StairNode,
   segment: StairSegmentNode,
   transform: StairSegmentTransform,
+  includeNosing = true,
 ): Point2D[] {
   const halfWidth = segment.width / 2
-  const localCorners: Array<[number, number]> = [
-    [-halfWidth, 0],
-    [halfWidth, 0],
+  const nose =
+    includeNosing && segment.segmentType !== 'landing'
+      ? (resolveStairConstruction(segment, stair)?.nosing ?? 0)
+      : 0
+  const localCorners: Array<[number, number]> = (includeNosing
+    ? resolveStairWinderFootprint(segment, stair)
+    : resolveStairWinder(segment)?.footprint) ?? [
+    [-halfWidth, -nose],
+    [halfWidth, -nose],
     [halfWidth, segment.length],
     [-halfWidth, segment.length],
   ]
@@ -452,38 +397,102 @@ export function getFloorplanStairSegmentPolygon(
 export function buildFloorplanStairEntry(
   stair: StairNode,
   segments: StairSegmentNode[],
+  footprintsOnly = false,
 ): FloorplanStairEntry | null {
   const stairType = stair.stairType ?? 'straight'
+  const detailAllowed = !footprintsOnly && !measureStairDetail(stair, segments).error
 
   if (segments.length === 0 && stairType === 'straight') {
     return null
   }
 
-  const transforms = computeFloorplanStairSegmentTransforms(segments)
+  const transforms = computeSegmentTransforms(segments)
   const segmentEntries = segments.map((segment, index) => {
     const polygon = getFloorplanStairSegmentPolygon(stair, segment, transforms[index]!)
-    const centerLine = getFloorplanStairSegmentCenterLine(polygon)
-    const innerPolygon = getFloorplanStairInnerPolygon(polygon)
-    const treadThickness = getFloorplanStairTreadThickness(segment, innerPolygon)
+    const walkingPolygon = getFloorplanStairSegmentPolygon(
+      stair,
+      segment,
+      transforms[index]!,
+      false,
+    )
+    const winder = resolveStairWinder(segment)
+    const transform = transforms[index]!
+    const point = ([x, z]: [number, number]): Point2D => {
+      const [sx, sz] = rotatePlanVector(x, z, transform.rotation)
+      const [wx, wz] = rotatePlanVector(
+        transform.position[0] + sx,
+        transform.position[2] + sz,
+        stair.rotation,
+      )
+      return { x: stair.position[0] + wx, y: stair.position[2] + wz }
+    }
+    const centerLine = winder
+      ? {
+          start: point([winder.walkingLine[0]![0], winder.walkingLine[0]![2]]),
+          end: point([winder.walkingLine.at(-1)![0], winder.walkingLine.at(-1)![2]]),
+        }
+      : getFloorplanStairSegmentCenterLine(walkingPolygon)
+    const innerPolygon = winder ? polygon : getFloorplanStairInnerPolygon(polygon)
+    const walkingInner = getFloorplanStairInnerPolygon(walkingPolygon)
+    const treadThickness = getFloorplanStairTreadThickness(segment, walkingInner)
 
     return {
       centerLine,
       innerPolygon,
       segment,
       polygon,
-      treadBars: getFloorplanStairTreadBars(segment, innerPolygon, treadThickness),
+      treadBars: detailAllowed
+        ? winder
+          ? winder.treads.slice(0, -1).map((tread) => {
+              const n = tread.polygon.length / 2
+              return getThickPlanLinePolygon(
+                { start: point(tread.polygon[n - 1]!), end: point(tread.polygon[n]!) },
+                0.025,
+              )
+            })
+          : getFloorplanStairTreadBars(segment, walkingInner, treadThickness)
+        : [],
       treadThickness,
     }
   })
+  const visibleEntries = segmentEntries.filter((entry) => entry.segment.visible !== false)
   const hitPolygons =
     stairType === 'straight'
-      ? segmentEntries.map(({ polygon }) => polygon)
+      ? visibleEntries.map(({ polygon }) => polygon)
       : [getFloorplanCurvedStairHitPolygon(stair)]
 
   return {
-    arrow: buildFloorplanStairArrow(segmentEntries),
+    arrow: segments.some((segment) => segment.winder)
+      ? (() => {
+          const path = resolveStairWalkingPaths(
+            stair,
+            segments,
+            segments.reduce((sum, segment) => sum + segment.height, 0),
+          ).at(-1)
+          if (!path || path.length < 2) return null
+          const polyline = path.map(([x, , z]) => {
+            const [wx, wz] = rotatePlanVector(x, z, stair.rotation)
+            return { x: stair.position[0] + wx, y: stair.position[2] + wz }
+          })
+          const tip = polyline.at(-1)!,
+            prev = polyline.at(-2)!,
+            length = Math.hypot(tip.x - prev.x, tip.y - prev.y)
+          if (length < 1e-8) return null
+          const dx = (tip.x - prev.x) / length,
+            dy = (tip.y - prev.y) / length,
+            size = Math.min(0.2, length * 0.8)
+          return {
+            polyline,
+            head: [
+              tip,
+              { x: tip.x - dx * size - dy * size * 0.34, y: tip.y - dy * size + dx * size * 0.34 },
+              { x: tip.x - dx * size + dy * size * 0.34, y: tip.y - dy * size - dx * size * 0.34 },
+            ],
+          }
+        })()
+      : buildFloorplanStairArrow(visibleEntries),
     hitPolygons,
     stair,
-    segments: segmentEntries,
+    segments: visibleEntries,
   }
 }

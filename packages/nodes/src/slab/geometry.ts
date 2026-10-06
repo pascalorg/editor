@@ -41,7 +41,6 @@ import {
   createDefaultMaterial,
   createMaterial,
   createSurfaceRoleMaterial,
-  generateFenceSlotGeometries,
   generateSlabGeometry,
   type RenderShading,
   registerMaterialCacheCleanup,
@@ -49,6 +48,7 @@ import {
   resolveSlotDefaultMaterial,
 } from '@pascal-app/viewer'
 import { type BufferGeometry, FrontSide, Group, type Material, Mesh, type Texture } from 'three'
+import { generateFenceSlotGeometries } from '../fence/geometry-parts'
 import { creaseCrossings } from '../site/terrain-drape'
 import { clipPlateTerrainFill, splitPlateFaces, splitSlabFacesByFacing } from './surface-split'
 

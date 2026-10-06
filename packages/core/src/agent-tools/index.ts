@@ -11,17 +11,20 @@ import {
   verifySceneTool,
 } from './levels'
 import { deleteNodeTool, getNodeTool } from './nodes'
+import { fitStairTool, measureStairTool } from './stairs'
 import { addDoorTool, addWindowTool } from './wall-openings'
 
 export * from './add-object'
 export * from './collections'
 export * from './columns'
 export * from './find-by-type'
+export * from './hosted-services'
 export * from './levels'
 export * from './measurement'
 export { NodeId } from './node-id'
 export * from './nodes'
 export * from './refusal'
+export * from './stairs'
 export * from './wall-openings'
 
 /**
@@ -31,6 +34,8 @@ export * from './wall-openings'
  */
 export const AGENT_TOOL_CONTRACTS = [
   addColumnTool,
+  measureStairTool,
+  fitStairTool,
   addDoorTool,
   addWindowTool,
   listLevelsTool,

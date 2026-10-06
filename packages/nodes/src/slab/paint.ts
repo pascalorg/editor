@@ -377,8 +377,12 @@ function finishLook(finish: ZoneFinish | undefined): PaintLook | null {
 /** A plate slot as drawn: its value, else its legacy finish, else its declared default. */
 function plateSlotLook(node: AnyNode, slot: string): PaintLook | null {
   return (
-    base.getEffectiveMaterial?.({ node, role: slot, nodes: useScene.getState().nodes }) ??
-    slotDefaultPaintMaterial(slabSlots().find((entry) => entry.slotId === slot)?.default)
+    base.getEffectiveMaterial?.({
+      node,
+      role: slot,
+      nodes: useScene.getState().nodes,
+      materials: useScene.getState().materials,
+    }) ?? slotDefaultPaintMaterial(slabSlots().find((entry) => entry.slotId === slot)?.default)
   )
 }
 

@@ -3,6 +3,8 @@ import {
   type AnyNodeId,
   type MaterialSchema,
   nodeRegistry,
+  type SceneMaterial,
+  type SceneMaterialId,
   slotDefaultPaintMaterial,
 } from '@pascal-app/core'
 import type { Material, Object3D } from 'three'
@@ -51,6 +53,7 @@ export function eyedropperMaterial(args: {
   node: AnyNode
   role: string
   nodes: Record<string, AnyNode>
+  materials?: Record<SceneMaterialId, SceneMaterial>
   hitObject?: Object3D
   materialIndex?: number | null
 }): ActivePaintMaterial | null {
@@ -70,11 +73,13 @@ export function eyedropperMaterial(args: {
         role,
         nodes: nodes as Record<AnyNodeId, AnyNode>,
         rendered: true,
+        materials: args.materials,
       }) ?? null,
     ) ??
     resolveActivePaintMaterialFromSelection({
       nodes,
       selectedId: node.id,
+      materials: args.materials,
       selectedMaterialTarget: { nodeId: node.id, role },
     })
   if (effective) return effective

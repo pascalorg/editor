@@ -943,6 +943,7 @@ export const SelectionManager = () => {
       useEditor.getState().activePaintMaterial ??
       resolveActivePaintMaterialFromSelection({
         nodes: useScene.getState().nodes,
+        materials: useScene.getState().materials,
         selectedId:
           useViewer.getState().selection.selectedIds.length === 1
             ? (useViewer.getState().selection.selectedIds[0] ?? null)
@@ -963,6 +964,7 @@ export const SelectionManager = () => {
             node,
             role,
             nodes: useScene.getState().nodes,
+            materials: useScene.getState().materials,
             hitObject: getEventObject(event),
             materialIndex,
           })
@@ -1167,6 +1169,8 @@ export const SelectionManager = () => {
                       if (!(targetNode && targetRoot && targetCap)) continue
                       const restore = targetCap.applyPreview({
                         node: targetNode,
+                        nodes: liveNodes,
+                        materials: useScene.getState().materials,
                         role: target.role,
                         material: paintSpec.material,
                         materialPreset: paintSpec.materialPreset,

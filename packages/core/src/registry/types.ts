@@ -51,6 +51,10 @@ export type GeometryContext = {
    * in 2D.
    */
   levelBaseAt?: (x: number, z: number) => number
+  /** Height of a rendered node's upward-facing top at level-local XZ, or null outside it. */
+  surfaceHeightAt?: (hostId: AnyNodeId, x: number, z: number) => number | null
+  /** Highest terrain, slab, or shaped top at a level-local point. */
+  supportHeightAt?: (x: number, z: number, selectedHostId?: AnyNodeId) => number
   /**
    * Pre-computed level-batch data, populated by the dispatcher when the
    * kind declares `def.computeLevelData` (3D) or
@@ -2057,9 +2061,15 @@ export type PaintPreviewArgs = {
   material: MaterialSchema | undefined
   materialPreset: string | undefined
   root: Object3D
+  /** Host snapshot used for parent finishes and per-flight overrides. */
+  nodes?: Record<AnyNodeId, AnyNode>
+  /** Shared palette from the same host snapshot; absent means no scene palette. */
+  materials?: Record<SceneMaterialId, SceneMaterial>
 }
 
 export type PaintEffectiveMaterialArgs = {
+  /** Host palette for resolving scene material refs without reading a store. */
+  materials?: Record<SceneMaterialId, SceneMaterial>
   node: AnyNode
   role: string
   /** Snapshot of the scene `nodes` map — kinds whose effective material walks the parent chain (roof-segment → roof) read parents through it. */
@@ -2375,6 +2385,13 @@ export type SurfacesConfig = {
   hosting?: SurfaceProvider | false
   top?: {
     height: number | ((n: AnyNode, context: { nodes: Record<string, AnyNode> }) => number)
+    /** Resolve support from node data; null means this point is outside the support footprint. */
+    supportHeight?: (
+      node: AnyNode,
+      x: number,
+      z: number,
+      context: { nodes: Readonly<Record<AnyNodeId, AnyNode>> },
+    ) => number | null
   }
   sides?: { faces: 'all' | ReadonlyArray<readonly [number, number, number]> }
   custom?: SurfaceQuery
@@ -2734,9 +2751,14 @@ export type ParametricDescriptor<N> = {
    * the scene consistent — e.g. duct runs re-trimmed onto a resized
    * fitting's collars. `prev` is the node before the edit, `next` after
    * (with `derive` already folded in). Applied in the same gesture via
-   * `updateNodes`.
+   * `updateNodes`. The third argument contains all pending edits in
+   * the gesture, so reconciliation can read updated siblings during a multi-edit.
    */
-  reconcile?: (prev: N, next: N) => Array<{ id: AnyNodeId; data: Partial<AnyNode> }>
+  reconcile?: (
+    prev: N,
+    next: N,
+    nodes: Readonly<Record<string, AnyNode | undefined>>,
+  ) => Array<{ id: AnyNodeId; data: Partial<AnyNode> }>
   /**
    * Deletion companion to `reconcile`: when a node of this kind is about
    * to be removed, return patches for OTHER nodes that must follow to

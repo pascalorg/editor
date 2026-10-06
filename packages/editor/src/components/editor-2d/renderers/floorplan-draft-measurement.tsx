@@ -1,16 +1,16 @@
 'use client'
 
-import type { WallPlanPoint } from '@pascal-app/core'
+/** Length plate + angle arcs for a drafted segment, in plan space. */
+type PlanPoint = readonly [number, number]
 
-/** Length plate + angle arcs for a drafted wall segment, in plan space. */
-export type DraftWallMeasurement = {
+export type DraftMeasurement = {
   lengthLabel: string
-  midpoint: WallPlanPoint
-  direction: WallPlanPoint
+  midpoint: PlanPoint
+  direction: PlanPoint
   angleLabels: {
     id: string
     label: string
-    center: WallPlanPoint
+    center: PlanPoint
     radius: number
     startAngle: number
     endAngle: number
@@ -18,7 +18,7 @@ export type DraftWallMeasurement = {
   }[]
 }
 
-export function FloorplanDraftWallMeasurement({
+export function FloorplanDraftMeasurement({
   measurement,
   measurementStroke,
   labelBackground,
@@ -26,7 +26,7 @@ export function FloorplanDraftWallMeasurement({
   sceneRotationDeg,
   unitsPerPixel,
 }: {
-  measurement: DraftWallMeasurement
+  measurement: DraftMeasurement
   measurementStroke: string
   labelBackground: string
   labelText: string
