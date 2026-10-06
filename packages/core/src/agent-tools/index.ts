@@ -16,8 +16,8 @@ import {
 import { deleteNodeTool, getNodeTool } from './nodes'
 import { placeItemsTool } from './place-items'
 import { ROOM_TOOL_CONTRACTS } from './room-structure'
-import { verifySceneTool } from './verify-scene'
 import { createStairTool, fitStairTool, measureStairTool } from './stairs'
+import { verifySceneTool } from './verify-scene'
 import { addDoorTool, addWindowTool } from './wall-openings'
 import { addWallTool } from './walls'
 
