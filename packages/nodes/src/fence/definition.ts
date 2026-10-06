@@ -384,6 +384,7 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
   }),
 
   capabilities: {
+    hostRefFields: ['supportSurfaceId'],
     surfacePlacement: 'floor-only',
     selectable: { hitVolume: 'bbox' },
     surfaces: { sides: { faces: 'all' }, hosting: false },

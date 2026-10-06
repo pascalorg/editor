@@ -107,6 +107,11 @@ export {
   snapWorldXZToBuildingLocal,
 } from './snap'
 export {
+  getBoundarySurfaces,
+  resolveStairSurfaceSnap,
+  type StairSurfaceSnap,
+} from './stair-surface-snap'
+export {
   CEILING_CLAMP_MARGIN,
   CEILING_DRAW_OFFSET,
   findLevelAboveId,

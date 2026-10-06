@@ -5,6 +5,7 @@ import {
   remapConstructionDimensionReferences,
   remapMeasurementReferences,
 } from '../lib/measurement-geometry'
+import { remapSurfaceSupportReferences } from '../lib/surface-support-references'
 import type { AnyNode, AnyNodeId } from '../schema'
 import { generateId } from '../schema/base'
 import type { Collection, CollectionId } from '../schema/collections'
@@ -433,6 +434,7 @@ export function cloneLevelSubtree(
       ;(cloned as Record<string, unknown>).deckSlabId =
         idMap.get(cloned.deckSlabId) ?? cloned.deckSlabId
     }
+    remapSurfaceSupportReferences(cloned, idMap)
     remapFloorOpeningReferences(cloned, idMap)
 
     // A copied plate or ceiling stands for the copied rooms, so the guard

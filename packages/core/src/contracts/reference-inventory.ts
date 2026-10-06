@@ -234,14 +234,15 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
     kind: 'fence',
     path: 'supportSurfaceId',
     ...policy('node', 'host', 'drop', 'strip'),
-    remaps: [...CLONES, 'delete-nodes'],
+    remaps: [...CLONES, 'clone-nodes-into', 'delete-nodes'],
     note: 'A registered walking surface supporting a railing.',
   }),
   row({
     kind: 'stair',
     path: 'landscapeSurfaceId',
     ...policy('node', 'host', 'drop', 'strip'),
-    note: 'An external landscape plugin surface; the built-in schema cannot enumerate its kinds.',
+    remaps: [...CLONES, 'clone-nodes-into', 'delete-nodes'],
+    note: 'A registered top surface supporting a stair connection.',
   }),
   row({
     kind: 'roof',

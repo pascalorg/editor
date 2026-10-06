@@ -85,10 +85,14 @@ const FENCE_PREVIEW_HEIGHT = 1.8
 const FENCE_PREVIEW_THICKNESS = 0.08
 
 function FenceSurfaceSnapPoints() {
-  useEditor((state) => state.toolDefaults.fence?.supportSurfaceId)
-  useViewer((state) => state.selection.levelId)
-  useViewer((state) => state.levelMode)
-  useScene((state) => state.nodes)
+  const hostId = useEditor((state) => state.toolDefaults.fence?.supportSurfaceId)
+  const levelId = useViewer((state) => state.selection.levelId)
+  const levelMode = useViewer((state) => state.levelMode)
+  useScene((state) => (typeof hostId === 'string' ? state.nodes[hostId as AnyNodeId] : undefined))
+  useScene((state) => {
+    const surface = getFenceDrawingSurface(state.nodes, hostId, levelId, levelMode)
+    return surface ? surface.levelElevation + surface.elevation : null
+  })
   const surface = getFenceDrawingSurface()
   if (!surface) return null
   return (
@@ -516,15 +520,19 @@ function getCurrentLevelElements(): { walls: WallNode[]; fences: FenceNode[] } {
 export const FenceTool: React.FC = () => {
   const levelId = useViewer((state) => state.selection.levelId)
   const levelMode = useViewer((state) => state.levelMode)
-  const nodes = useScene((state) => state.nodes)
   const hostId = useEditor((state) => state.toolDefaults.fence?.supportSurfaceId)
-  const floorY = levelId ? getLevelPresentationY(levelId, nodes, levelMode) : 0
+  const hostParentId = useScene((state) =>
+    typeof hostId === 'string' ? state.nodes[hostId as AnyNodeId]?.parentId : undefined,
+  )
+  const floorY = useScene((state) =>
+    levelId ? getLevelPresentationY(levelId, state.nodes, levelMode) : 0,
+  )
   const draftKey = `${levelId}:${floorY}`
   useEffect(() => {
-    if (typeof hostId === 'string' && nodes[hostId as AnyNodeId]?.parentId !== levelId) {
+    if (typeof hostId === 'string' && hostParentId !== levelId) {
       useEditor.getState().setTool(null)
     }
-  }, [hostId, levelId, nodes])
+  }, [hostId, levelId, hostParentId])
   const fenceMode = useEditor((s) => s.continuationByContext.fence)
   const feature = useEditor((s) => s.toolDefaults.fence?.featurePlacement)
   if (feature === 'gate' || feature === 'opening') return <FenceFeatureTool kind={feature} />

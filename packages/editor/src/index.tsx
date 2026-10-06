@@ -186,8 +186,6 @@ export {
   getSegmentAngleReferenceAtPoint,
   type SegmentAngleReference,
 } from './components/tools/shared/segment-angle'
-export type { LandscapeStairSnap } from './components/tools/stair/landscape-snap'
-export { resolveLandscapeStairSnap } from './components/tools/stair/landscape-snap'
 // Stair placement defaults — used by the kind-owned stair / stair-segment
 // panels. Re-exported from `components/tools/stair/stair-defaults.ts`.
 export {
@@ -706,6 +704,7 @@ export type {
   ModelExportOptions,
 } from './lib/model-export'
 export { eyedropperMaterial } from './lib/paint-eyedropper'
+export { usePaintRegionMode } from './lib/paint-region-mode'
 export {
   cyclePaintScope,
   type PaintHoverInfo,

@@ -5,19 +5,18 @@ import {
   type FloorplanMoveTargetSession,
   getFloorStackedPosition,
   movingAlignmentAnchors,
+  resolveStairSurfaceSnap,
   type StairNode,
   type StairSegmentNode,
+  type StairSurfaceSnap,
   snapScalar,
   useLiveNodeOverrides,
-  useScene,
 } from '@pascal-app/core'
 import {
   applyFloorplanAlignment,
   getSegmentGridStep,
   isGridSnapActive,
   isMagneticSnapActive,
-  type LandscapeStairSnap,
-  resolveLandscapeStairSnap,
 } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 
@@ -33,7 +32,11 @@ import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
  * The position previews through the live override store and is written to
  * scene once via `commit()`.
  */
-export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({ node, nodes }) => {
+export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({
+  node,
+  nodes,
+  sceneApi,
+}) => {
   const startY = node.position[1]
   const resolveCursor = createFloorplanCursorResolver({
     original: [node.position[0], node.position[2]],
@@ -48,7 +51,7 @@ export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({ node,
       (child): child is StairSegmentNode =>
         child?.type === 'stair-segment' && child.segmentType === 'stair',
     )
-  let landscapeSnap: LandscapeStairSnap | null = null
+  let landscapeSnap: StairSurfaceSnap | null = null
 
   const session: FloorplanMoveTargetSession = {
     affectedIds: flight ? [node.id as AnyNodeId, flight.id as AnyNodeId] : [node.id as AnyNodeId],
@@ -70,7 +73,7 @@ export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({ node,
       const sx = aligned[0]
       const sz = aligned[1]
 
-      const sceneNodes = useScene.getState().nodes
+      const sceneNodes = sceneApi?.nodes() ?? nodes
       const baseElevation = getFloorStackedPosition({
         node,
         nodes: sceneNodes,
@@ -78,15 +81,17 @@ export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({ node,
         rotation: node.rotation,
         levelId: node.parentId,
       })[1]
-      landscapeSnap = modifiers.altKey
-        ? null
-        : resolveLandscapeStairSnap(
-            node,
-            sceneNodes,
-            [sx, startY, sz],
-            flight?.length ?? 3,
-            baseElevation,
-          )
+      landscapeSnap =
+        modifiers.altKey || !isMagneticSnapActive()
+          ? null
+          : resolveStairSurfaceSnap(
+              node,
+              sceneNodes,
+              [sx, startY, sz],
+              flight?.length ?? 3,
+              baseElevation,
+              sceneApi?.installedPlugins?.(),
+            )
       const position = landscapeSnap?.position ?? ([sx, startY, sz] as [number, number, number])
       if (
         lastValid &&
@@ -117,14 +122,14 @@ export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({ node,
           })
         else useLiveNodeOverrides.getState().clear(flight.id as AnyNodeId)
       }
-      useScene.getState().markDirty(node.id as AnyNodeId)
-      if (flight) useScene.getState().markDirty(flight.id as AnyNodeId)
+      sceneApi?.markDirty(node.id as AnyNodeId)
+      if (flight) sceneApi?.markDirty(flight.id as AnyNodeId)
     },
     canCommit() {
       // No overlap / placement rules for stairs in 2D — any pointer-up
       // position commits, as long as we actually moved. Mirrors the 3D
       // move tool which also lets stairs land anywhere on the slab.
-      return lastValid !== null
+      return lastValid !== null && Boolean(sceneApi?.applyChanges)
     },
     commit() {
       // Own the atomic write so the overlay takes the deterministic
@@ -133,37 +138,39 @@ export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({ node,
       if (!lastValid) return
       useLiveNodeOverrides.getState().clear(node.id as AnyNodeId)
       if (flight) useLiveNodeOverrides.getState().clear(flight.id as AnyNodeId)
-      useScene.getState().updateNodes([
-        {
-          id: node.id as AnyNodeId,
-          data: {
-            ...lastValid,
-            ...(landscapeSnap
-              ? {
-                  totalRise: landscapeSnap.totalRise,
-                  stepCount: landscapeSnap.stepCount,
-                  slabOpeningMode: 'none' as const,
-                  landscapeSurfaceId: landscapeSnap.surfaceId,
-                  railingMode: 'none' as const,
-                }
-              : node.landscapeSurfaceId
-                ? { landscapeSurfaceId: undefined }
-                : {}),
+      sceneApi?.applyChanges?.({
+        update: [
+          {
+            id: node.id as AnyNodeId,
+            data: {
+              ...lastValid,
+              ...(landscapeSnap
+                ? {
+                    totalRise: landscapeSnap.totalRise,
+                    stepCount: landscapeSnap.stepCount,
+                    slabOpeningMode: 'none' as const,
+                    landscapeSurfaceId: landscapeSnap.surfaceId,
+                    railingMode: 'none' as const,
+                  }
+                : node.landscapeSurfaceId
+                  ? { landscapeSurfaceId: undefined }
+                  : {}),
+            },
           },
-        },
-        ...(landscapeSnap && flight
-          ? [
-              {
-                id: flight.id as AnyNodeId,
-                data: {
-                  height: landscapeSnap.totalRise,
-                  length: landscapeSnap.length,
-                  stepCount: landscapeSnap.stepCount,
+          ...(landscapeSnap && flight
+            ? [
+                {
+                  id: flight.id as AnyNodeId,
+                  data: {
+                    height: landscapeSnap.totalRise,
+                    length: landscapeSnap.length,
+                    stepCount: landscapeSnap.stepCount,
+                  },
                 },
-              },
-            ]
-          : []),
-      ])
+              ]
+            : []),
+        ],
+      })
     },
   }
 

@@ -1,12 +1,16 @@
-import { type AnyNodeId, useLiveNodeOverrides, useScene } from '@pascal-app/core'
-import type { LandscapeStairSnap } from '@pascal-app/editor'
+import {
+  type AnyNodeId,
+  type StairSurfaceSnap,
+  useLiveNodeOverrides,
+  useScene,
+} from '@pascal-app/core'
 
 export function publishStairMovePreview(
   stairId: AnyNodeId,
   flightId: AnyNodeId | undefined,
   position: [number, number, number],
   rotation: number,
-  snap: LandscapeStairSnap | null,
+  snap: StairSurfaceSnap | null,
 ) {
   const overrides = useLiveNodeOverrides.getState()
   if (snap) {

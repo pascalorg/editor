@@ -15,9 +15,11 @@ import {
   planStairSizing,
   resolveAlignment,
   resolveFrozenFloorPlacementPatch,
+  resolveStairSurfaceSnap,
   resolveSupportSlabPatch,
   StairNode,
   type StairSegmentNode,
+  type StairSurfaceSnap,
   syncAutoStairOpenings,
   useScene,
 } from '@pascal-app/core'
@@ -47,7 +49,6 @@ import {
   type PointerSupportSurface,
   resolvePointerSupportSurface,
 } from '../shared/pointer-support-cap'
-import { type LandscapeStairSnap, resolveLandscapeStairSnap } from './landscape-snap'
 import { createStairCommitGate, swallowFollowUpBrowserClick } from './stair-click-guard'
 import {
   DEFAULT_CURVED_STAIR_INNER_RADIUS,
@@ -195,7 +196,7 @@ function commitStairPlacement(
   position: [number, number, number],
   rotation: number,
   supportSurface: PointerSupportSurface | null,
-  landscapeSnap: LandscapeStairSnap | null,
+  landscapeSnap: StairSurfaceSnap | null,
 ): void {
   const { createNodes, nodes } = useScene.getState()
   const placementLevelId = resolveStairPlacementLevelId(
@@ -311,7 +312,7 @@ export const StairTool: React.FC = () => {
   const previewMeshRef = useRef<THREE.Mesh>(null)
   const rotationRef = useRef(0)
   const supportSurfaceRef = useRef<PointerSupportSurface | null>(null)
-  const landscapeSnapRef = useRef<LandscapeStairSnap | null>(null)
+  const landscapeSnapRef = useRef<StairSurfaceSnap | null>(null)
   const previousGridPosRef = useRef<[number, number] | null>(null)
   const lastCanonicalPositionRef = useRef<[number, number, number] | null>(null)
   const currentLevelId = useViewer((state) => state.selection.levelId)
@@ -349,7 +350,7 @@ export const StairTool: React.FC = () => {
       position: [number, number, number],
       rotation: number,
       supportSurface: PointerSupportSurface | null,
-      landscapeSnap: LandscapeStairSnap | null,
+      landscapeSnap: StairSurfaceSnap | null,
     ) => {
       const nodes = useScene.getState().nodes
       const placementLevelId = resolveStairPlacementLevelId(
@@ -611,9 +612,17 @@ export const StairTool: React.FC = () => {
             levelId,
           })[1]
         : candidate[1]
-      const snap = event.nativeEvent?.altKey
-        ? null
-        : resolveLandscapeStairSnap(draft, nodes, candidate, DEFAULT_STAIR_LENGTH, baseElevation)
+      const snap =
+        event.nativeEvent?.altKey || !isMagneticSnapActive()
+          ? null
+          : resolveStairSurfaceSnap(
+              draft,
+              nodes,
+              candidate,
+              DEFAULT_STAIR_LENGTH,
+              baseElevation,
+              useScene.getState().installedPlugins,
+            )
       landscapeSnapRef.current = snap
       if (snap) {
         rotationRef.current = snap.rotation
