@@ -1,6 +1,15 @@
 import { refuse } from '../agent-tools/refusal'
 import type { VIEW_SIDES } from '../agent-tools/view-scene'
-import type { AnyNode, AnyNodeId, ItemNode, WallNode } from '../schema'
+import type {
+  AnyNode,
+  AnyNodeId,
+  ColumnNode,
+  FenceNode,
+  ItemNode,
+  SlabNode,
+  StairNode,
+  WallNode,
+} from '../schema'
 import { getLevelElevations } from '../services/storey'
 import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
 
@@ -145,6 +154,66 @@ function itemBox(item: ItemNode, baseY: number): SceneViewBox {
   return { min: [x - hx, baseY + y, z - hz], max: [x + hx, baseY + y + h, z + hz] }
 }
 
+/** A box of at least `least` metres tall, so a flat element still frames. */
+const tall = (box: SceneViewBox, least: number): SceneViewBox =>
+  box.max[1] - box.min[1] >= least
+    ? box
+    : { min: box.min, max: [box.max[0], box.min[1] + least, box.max[2]] }
+
+/**
+ * A site element's box, at detail scale (S10 live: view_scene could not look at the steps it
+ * built): a column round its position, a fence along its run, a slab over its outline, a stair
+ * round its foot as far as it could reach.
+ */
+function siteBox(node: AnyNode, baseY: number): SceneViewBox | null {
+  if (node.type === 'column') {
+    const column = node as ColumnNode
+    const half =
+      column.crossSection === 'round' ? column.radius : Math.max(column.width, column.depth) / 2
+    const [x, , z] = column.position
+    return { min: [x - half, baseY, z - half], max: [x + half, baseY + column.height, z + half] }
+  }
+  if (node.type === 'fence') {
+    const fence = node as FenceNode
+    const points = [fence.start, fence.end, ...(fence.path ?? [])]
+    const half = fence.thickness / 2
+    return {
+      min: [
+        Math.min(...points.map((p) => p[0])) - half,
+        baseY,
+        Math.min(...points.map((p) => p[1])) - half,
+      ],
+      max: [
+        Math.max(...points.map((p) => p[0])) + half,
+        baseY + fence.height,
+        Math.max(...points.map((p) => p[1])) + half,
+      ],
+    }
+  }
+  if (node.type === 'slab') {
+    const polygon = (node as SlabNode).polygon as [number, number][]
+    const top = baseY + ((node as SlabNode).elevation ?? 0)
+    return tall(
+      {
+        min: [Math.min(...polygon.map((p) => p[0])), top, Math.min(...polygon.map((p) => p[1]))],
+        max: [Math.max(...polygon.map((p) => p[0])), top, Math.max(...polygon.map((p) => p[1]))],
+      },
+      0.3,
+    )
+  }
+  if (node.type === 'stair') {
+    const stair = node as StairNode
+    const rise = stair.totalRise ?? 1
+    const reach = Math.max(stair.width ?? 1, (rise / 0.17) * 0.28)
+    const [x, , z] = stair.position
+    return {
+      min: [x - reach, baseY, z - reach],
+      max: [x + reach, baseY + Math.max(rise, 0.3), z + reach],
+    }
+  }
+  return null
+}
+
 /**
  * The side an opening is seen from by default: its outside, when its wall knows it; else the
  * side it faces. Its wall's +normal is perp(end - start) = (-dz, dx).
@@ -177,6 +246,11 @@ export function sceneViewBounds(
   if (opening) return openingBox(opening as never, baseOf(opening.wall.parentId))
   if (target?.type === 'item' && nodes[target.parentId ?? '']?.type === 'level')
     return itemBox(target, baseOf(target.parentId))
+  const site =
+    target && nodes[target.parentId ?? '']?.type === 'level'
+      ? siteBox(target, baseOf(target.parentId))
+      : null
+  if (site) return site
   const levelOf = (node: AnyNode) => (node.parentId ? nodes[node.parentId] : undefined)
   const outlines: { points: Pt[]; levelId: string }[] = []
   for (const node of Object.values(nodes)) {

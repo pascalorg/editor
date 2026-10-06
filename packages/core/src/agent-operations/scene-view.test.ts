@@ -4,10 +4,14 @@ import { isAgentRefusal } from '../agent-tools'
 import {
   type AnyNode,
   BuildingNode,
+  ColumnNode,
   DoorNode,
+  FenceNode,
   GuideNode,
   ItemNode,
   LevelNode,
+  SlabNode,
+  StairNode,
   WallNode,
   WindowNode,
 } from '../schema'
@@ -352,5 +356,80 @@ describe("a crop's size", () => {
   // new detail, but the strips stand apart.
   test('a small crop is enlarged to 512 px on its longer side', () => {
     expect(photoCropSize(85, 155)).toEqual({ width: 281, height: 512 })
+  })
+})
+
+// S10 live (20:33): view_scene could not look at the steps it built (nothing_to_view: "no walls
+// to look at"). A stair, a column, a fence or a slab frames by its own bounds, as an opening does.
+describe('a close-up of a site element', () => {
+  function site() {
+    const column = ColumnNode.parse({
+      id: 'column_s',
+      parentId: 'level_s',
+      position: [2, 0, 3],
+      height: 2.5,
+    })
+    const fence = FenceNode.parse({
+      id: 'fence_s',
+      parentId: 'level_s',
+      start: [0, 8],
+      end: [6, 8],
+      height: 1.8,
+    })
+    const lawn = SlabNode.parse({
+      id: 'slab_lawn',
+      parentId: 'level_s',
+      polygon: [
+        [0, 4],
+        [6, 4],
+        [6, 7],
+        [0, 7],
+      ],
+      elevation: 0.01,
+    })
+    const steps = StairNode.parse({
+      id: 'stair_s',
+      parentId: 'level_s',
+      position: [4, 0, 1],
+      width: 1.2,
+      totalRise: 0.45,
+      fromLevelId: 'level_s',
+      toLevelId: null,
+    })
+    const level = LevelNode.parse({
+      id: 'level_s',
+      parentId: 'building_s',
+      level: 0,
+      children: [column.id, fence.id, lawn.id, steps.id],
+    })
+    const building = BuildingNode.parse({ id: 'building_s', children: [level.id] })
+    return Object.fromEntries(
+      [building, level, column, fence, lawn, steps].map((n) => [n.id, n]),
+    ) as Record<string, AnyNode>
+  }
+  const r = (v: number) => Math.round(v * 100) / 100
+
+  test('a column, a fence and a slab frame their own boxes', () => {
+    const column = sceneViewBounds(site(), 'column_s')
+    expect([r(column.min[1]), r(column.max[1])]).toEqual([0, 2.5])
+    expect(column.min[0]).toBeLessThan(2)
+    expect(column.max[0]).toBeGreaterThan(2)
+    const fence = sceneViewBounds(site(), 'fence_s')
+    // Along its run, padded by half its thickness.
+    expect(fence.min[0]).toBeCloseTo(-0.04, 6)
+    expect(fence.max[0]).toBeCloseTo(6.04, 6)
+    expect(r(fence.max[1])).toBe(1.8)
+    const lawn = sceneViewBounds(site(), 'slab_lawn')
+    expect([r(lawn.min[0]), r(lawn.max[0]), r(lawn.min[2]), r(lawn.max[2])]).toEqual([0, 6, 4, 7])
+    expect(lawn.max[1] - lawn.min[1]).toBeGreaterThan(0.2)
+  })
+
+  test('steps frame round their foot, as tall as they rise', () => {
+    const steps = sceneViewBounds(site(), 'stair_s')
+    expect(steps.min[0]).toBeLessThan(4)
+    expect(steps.max[0]).toBeGreaterThan(4)
+    expect(r(steps.max[1])).toBeGreaterThanOrEqual(0.45)
+    const { pose } = sceneViewPlan(site(), { target: 'stair_s' })
+    expect(pose.position.every(Number.isFinite)).toBe(true)
   })
 })
