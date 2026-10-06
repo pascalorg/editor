@@ -1,4 +1,13 @@
-import { BuildingNode, LevelNode, SiteNode, SlabNode, WallNode, ZoneNode } from '../../schema'
+import {
+  type AnyNode,
+  BuildingNode,
+  CeilingNode,
+  LevelNode,
+  SiteNode,
+  SlabNode,
+  WallNode,
+  ZoneNode,
+} from '../../schema'
 import type { AgentToolCase, SceneGraph } from './cases'
 
 /**
@@ -258,6 +267,45 @@ export const ADD_LEVEL_CASES: AgentToolCase[] = [
   },
 ]
 
+/** The house with the hall's ceiling on the ground floor, the surface a flight cuts below. */
+function ceiledScene(): SceneGraph {
+  const scene = storeysScene()
+  const ceiling = CeilingNode.parse({ id: 'ceiling_hall', parentId: 'level_ground', polygon: HALL })
+  const ground = scene.nodes.level_ground as LevelNode
+  scene.nodes.ceiling_hall = ceiling
+  scene.nodes.level_ground = { ...ground, children: [...ground.children, ceiling.id] }
+  return scene
+}
+
+type Stair = AnyNode & {
+  name?: string
+  railingMode?: string
+  materialPreset?: string
+  slabOpeningMode?: string
+  openingOffset?: number
+  children: string[]
+}
+type Opening = AnyNode & {
+  parentId: string
+  polygon: Pt[]
+  drawnOn?: string
+  ownerId?: string
+  source?: string
+}
+const stairOf = (nodes: Readonly<Record<string, AnyNode>>) =>
+  Object.values(nodes).find((node) => node.type === 'stair') as Stair | undefined
+const openingsOf = (nodes: Readonly<Record<string, AnyNode>>) =>
+  Object.values(nodes).filter((node) => node.type === 'floor-opening') as Opening[]
+/** An outline's extent: [minX, minZ, maxX, maxZ]. */
+const extent = (polygon: Pt[]) => [
+  Math.min(...polygon.map((p) => p[0])),
+  Math.min(...polygon.map((p) => p[1])),
+  Math.max(...polygon.map((p) => p[0])),
+  Math.max(...polygon.map((p) => p[1])),
+]
+const spans = (polygon: Pt[] | undefined, expected: number[]) =>
+  !!polygon && extent(polygon).every((value, i) => Math.abs(value - expected[i]!) < 1e-3)
+
 export const CREATE_STAIR_CASES: AgentToolCase[] = [
   {
     name: 'a flight rises to the floor above and owns the opening it cuts there',
@@ -320,6 +368,168 @@ export const CREATE_STAIR_CASES: AgentToolCase[] = [
     scene: storeysScene,
     input: { levelId: 'level_upper', toLevelId: 'level_ground', x: 1, z: 1 },
     expect: { refusal: 'not_above', mentions: ['level_ground'] },
+  },
+  {
+    // create_stair_between_levels' options (S1 parity with main): railings, a finish, a name.
+    name: 'railings on one side, a finish and a name, as asked',
+    tool: 'create_stair',
+    scene: storeysScene,
+    input: {
+      levelId: 'level_ground',
+      x: 3,
+      z: 1,
+      railingMode: 'left',
+      materialPreset: 'library:wood-woodfine1',
+      name: 'Main stair',
+    },
+    expect: {
+      result: { ok: true, railingMode: 'left' },
+      check: (_result, nodes) => {
+        const stair = stairOf(nodes)
+        const segment = stair && (nodes[stair.children[0]!] as Stair | undefined)
+        return stair?.railingMode === 'left' &&
+          stair.name === 'Main stair' &&
+          stair.materialPreset === 'library:wood-woodfine1' &&
+          segment?.materialPreset === 'library:wood-woodfine1'
+          ? []
+          : [`stair ${JSON.stringify({ ...stair, children: undefined })}`]
+      },
+    },
+  },
+  {
+    name: 'a finish the library lacks is refused, naming the nearest, and nothing is built',
+    tool: 'create_stair',
+    scene: storeysScene,
+    input: { levelId: 'level_ground', x: 3, z: 1, materialPreset: 'library:oak-treads' },
+    expect: {
+      refusal: 'unknown_material',
+      mentions: ['library:oak-treads', 'flooring', 'library:preset-'],
+    },
+  },
+  {
+    name: 'the margin round the opening, alone, widens the opening the stair owns',
+    tool: 'create_stair',
+    scene: storeysScene,
+    input: { levelId: 'level_ground', x: 3, z: 1, openingOffset: 0.2 },
+    expect: {
+      result: { ok: true, slabHoleCut: true },
+      check: (_result, nodes) => {
+        const stair = stairOf(nodes)
+        return stair?.slabOpeningMode === 'destination' && stair.openingOffset === 0.2
+          ? []
+          : [`mode ${stair?.slabOpeningMode}, offset ${stair?.openingOffset}`]
+      },
+    },
+  },
+  {
+    name: 'with both cuts off, no opening is cut',
+    tool: 'create_stair',
+    scene: ceiledScene,
+    input: {
+      levelId: 'level_ground',
+      x: 3,
+      z: 1,
+      createDestinationSlabOpening: false,
+      createSourceCeilingOpening: false,
+    },
+    expect: {
+      result: { ok: true, slabHoleCut: false },
+      check: (_result, nodes) => [
+        ...(openingsOf(nodes).length ? [`${openingsOf(nodes).length} openings`] : []),
+        ...(stairOf(nodes)?.slabOpeningMode === 'none' ? [] : ['the stair still cuts']),
+      ],
+    },
+  },
+  {
+    name: 'an opening of the size, margin, centre and turn given, owned by the stair',
+    tool: 'create_stair',
+    scene: ceiledScene,
+    input: {
+      levelId: 'level_ground',
+      x: 3,
+      z: 1,
+      openingWidth: 1.6,
+      openingLength: 3.4,
+      openingOffset: 0.1,
+      openingCenter: [3, 2.5],
+      openingRotation: 0,
+      createSourceCeilingOpening: false,
+    },
+    expect: {
+      result: { ok: true, slabHoleCut: true, destinationSlabId: 'slab_upper' },
+      check: (_result, nodes) => {
+        const openings = openingsOf(nodes)
+        const [opening] = openings
+        return [
+          ...(openings.length === 1 ? [] : [`${openings.length} openings`]),
+          ...(opening?.parentId === 'level_upper' &&
+          opening.source === 'stair' &&
+          opening.ownerId === stairOf(nodes)?.id
+            ? []
+            : [`opening ${JSON.stringify(opening)}`]),
+          // 1.6 + 2 × 0.1 across, 3.4 + 2 × 0.1 along, round (3, 2.5).
+          ...(spans(opening?.polygon, [2.1, 0.7, 3.9, 4.3])
+            ? []
+            : [`spans ${opening && extent(opening.polygon)}`]),
+          ...(stairOf(nodes)?.slabOpeningMode === 'none' ? [] : ['the stair cuts its own too']),
+        ]
+      },
+    },
+  },
+  {
+    name: 'the ceiling below alone, when the floor above is not to be cut',
+    tool: 'create_stair',
+    scene: ceiledScene,
+    input: {
+      levelId: 'level_ground',
+      x: 3,
+      z: 1,
+      sourceCeilingId: 'ceiling_hall',
+      createDestinationSlabOpening: false,
+    },
+    expect: {
+      result: { ok: true, sourceCeilingId: 'ceiling_hall' },
+      check: (_result, nodes) => {
+        const openings = openingsOf(nodes)
+        return openings.length === 1 &&
+          openings[0]!.parentId === 'level_ground' &&
+          openings[0]!.drawnOn === 'ceiling'
+          ? []
+          : [`openings ${JSON.stringify(openings.map((o) => [o.parentId, o.drawnOn]))}`]
+      },
+    },
+  },
+  {
+    // Main centred the opening at z + length / 2 whatever the turn: off the flight once turned.
+    name: 'an opening of a turned flight follows the climb',
+    tool: 'create_stair',
+    scene: ceiledScene,
+    input: {
+      levelId: 'level_ground',
+      x: 2,
+      z: 2,
+      rotation: '90°',
+      length: 3,
+      openingWidth: 1.2,
+      createSourceCeilingOpening: false,
+    },
+    expect: {
+      result: { ok: true },
+      // Climbing toward +X from (2, 2): 3 m along x, 1.2 m across z, and the 0.08 m margin.
+      check: (_result, nodes) => {
+        const [opening] = openingsOf(nodes)
+        return spans(opening?.polygon, [1.92, 1.32, 5.08, 2.68])
+          ? []
+          : [`spans ${opening && extent(opening.polygon)}`]
+      },
+    },
+  },
+  {
+    name: 'a slab id that names no slab, or a ceiling id no ceiling, is refused',
+    tool: 'create_stair',
+    scene: ceiledScene,
+    input: { levelId: 'level_ground', x: 3, z: 1, destinationSlabId: 'zone_hall' },
+    expect: { refusal: 'slab_not_found', mentions: ['zone_hall'] },
   },
   {
     name: 'an unknown level is refused with the id',

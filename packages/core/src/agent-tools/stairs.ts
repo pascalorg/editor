@@ -7,7 +7,7 @@ export const createStairTool = {
   name: 'create_stair',
   title: 'Create stair',
   description:
-    "Create a straight staircase rising from a level to the level above, as the editor's stair tool does: it owns the floor opening it cuts in every floor it passes, and when no level stands above, a blank one is created for it. Refused with a code: a flight to or from a declared roof level, and a toLevelId that is not above the level it rises from.\n\nGEOMETRY (get this wrong and the stair pokes through a wall):\n- (x, z) is the BACK-CENTRE of the first (bottom) step, not the centre of the footprint.\n- The footprint is width × length: width side to side, length along the climb. At rotation 0 it covers x − width/2 .. x + width/2 and z .. z + length.\n- rotation in degrees about Y: 0 climbs toward +Z, 90 → +X, 180 → −Z, 270 → −X. Point the climb into the room, away from the wall the bottom step sits against.\n- Leave at least 0.5 m clear at the foot of the flight, and keep the whole footprint inside one room on both levels (a hall is typical): read the room's outline first (get_zones).",
+    "Create a straight staircase rising from a level to the level above, as the editor's stair tool does: it owns the floor opening it cuts in every floor it passes, and when no level stands above, a blank one is created for it. Refused with a code: a flight to or from a declared roof level, and a toLevelId that is not above the level it rises from.\n\nGEOMETRY (get this wrong and the stair pokes through a wall):\n- (x, z) is the BACK-CENTRE of the first (bottom) step, not the centre of the footprint.\n- The footprint is width × length: width side to side, length along the climb. At rotation 0 it covers x − width/2 .. x + width/2 and z .. z + length.\n- rotation in degrees about Y: 0 climbs toward +Z, 90 → +X, 180 → −Z, 270 → −X. Point the climb into the room, away from the wall the bottom step sits against.\n- Leave at least 0.5 m clear at the foot of the flight, and keep the whole footprint inside one room on both levels (a hall is typical): read the room's outline first (get_zones).\n\nOPENINGS: by default the stair owns the opening over its flight and keeps it as the flight moves (openingOffset widens it). An opening of another size, centre or turn, through a slab or ceiling you name, or through one of the two only, is cut as an opening the stair owns, as given.",
   input: {
     x: z.number().describe('X of the back-centre of the first step.'),
     z: z.number().describe('Z of the back-centre of the first step.'),
@@ -39,5 +39,47 @@ export const createStairTool = {
     toLevelId: NodeId.optional().describe(
       'The level the flight arrives on. Default: the next level above, created when there is none.',
     ),
+    railingMode: z
+      .enum(['none', 'left', 'right', 'both'])
+      .optional()
+      .describe('Which sides have a railing, looking up the flight (default both).'),
+    materialPreset: z
+      .string()
+      .optional()
+      .describe('A library material for the flight (library:<id>); an unknown one is refused.'),
+    name: z.string().optional().describe('Its name (default Staircase N).'),
+    createDestinationSlabOpening: z
+      .boolean()
+      .optional()
+      .describe('Cut the floor it arrives through (default true).'),
+    createSourceCeilingOpening: z
+      .boolean()
+      .optional()
+      .describe('Cut the ceiling of the floor it leaves (default true).'),
+    destinationSlabId: NodeId.optional().describe(
+      'The slab it arrives through. Default: the floor of the level it arrives on.',
+    ),
+    sourceCeilingId: NodeId.optional().describe(
+      'The ceiling it rises through. Default: the ceiling of the level it leaves.',
+    ),
+    openingWidth: measurement('length', 'm', {
+      positive: true,
+      description: 'The opening across the climb (default the flight width).',
+    }).optional(),
+    openingLength: measurement('length', 'm', {
+      positive: true,
+      description: 'The opening along the climb (default the run length).',
+    }).optional(),
+    openingOffset: measurement('length', 'm', {
+      min: 0,
+      description: 'A margin round the opening on every side (default 0.08 m).',
+    }).optional(),
+    openingCenter: z
+      .tuple([z.number(), z.number()])
+      .optional()
+      .describe('The opening centre (x, z). Default: the middle of the flight.'),
+    openingRotation: measurement('angle', 'deg', {
+      description: "The opening's turn (default the flight's).",
+    }).optional(),
   },
 }

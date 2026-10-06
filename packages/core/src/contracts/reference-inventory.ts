@@ -924,6 +924,7 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'legacyAutoOpeningsMigrated',
     'legacyRoomMigrationPending',
     'locked',
+    'openingManaged',
     'ownerOpeningTarget',
     'plateMigration',
     'plateMigration.demoted',

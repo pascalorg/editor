@@ -83,6 +83,8 @@ export function requireMaterialRef(
   asked: string,
   field?: string,
   surface?: MaterialSurface,
+  /** Whether `paint` takes the target: else a colour is a flat library one, named outright. */
+  { paint = true } = {},
 ): string {
   const parsed = parseMaterialRef(asked.includes(':') ? asked : `library:${asked}`)
   if (parsed?.kind === 'scene') return asked
@@ -97,12 +99,15 @@ export function requireMaterialRef(
   // Only names sharing a word: with none, the ranking is alphabetical and names bricks for a roof.
   const byName = nearestLibraryMaterials(asked).filter(shares)
   const head = `${field ? `${field}: ` : ''}${asked} is not in the material library`
+  const colour = paint
+    ? 'a colour with paint'
+    : 'a flat colour, library:preset-<colour> (library:preset-midgrey, library:preset-tan)'
   const message =
     surface && !alike.length
       ? `${head}, which has no ${SURFACE_WORDS[surface]} like it. Its ${SURFACE_WORDS[surface]}: ${
           kind.length ? kind.slice(0, 5).map(named).join(', ') : 'none'
-        }.${byName.length ? ` Nearest by name: ${byName.join(', ')}.` : ''} Or give a colour instead of a library material.`
-      : `${head}. Nearest: ${nearest.join(', ')}; or give a colour instead.`
+        }.${byName.length ? ` Nearest by name: ${byName.join(', ')}.` : ''} Or ${colour} is the nearest.`
+      : `${head}. Nearest: ${nearest.join(', ')}; or give ${colour}.`
   return refuse('unknown_material', message, {
     material: asked,
     ...(field ? { field } : {}),
