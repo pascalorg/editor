@@ -593,7 +593,7 @@ function finishSceneExportPreparation(preparation: SceneExportPreparation): GlbE
     if (clone) identityNodes.add(clone)
   }
 
-  pruneNonRenderableMeshes(scene, identityNodes)
+  const warnings = pruneNonRenderableMeshes(scene, identityNodes)
   sanitizeMaterialGroups(scene, identityNodes)
   convertMaterials(scene, options.textures ?? 'embed', options.purpose ?? 'viewer')
 
@@ -625,7 +625,7 @@ function finishSceneExportPreparation(preparation: SceneExportPreparation): GlbE
   return {
     scene,
     animations: animation.clips,
-    warnings: [],
+    warnings,
     dispose: () => {
       if (disposed) return
       disposed = true
@@ -1004,9 +1004,16 @@ const PLACEHOLDER_MATERIAL = new THREE.MeshBasicMaterial({ visible: false })
  */
 function pruneNonRenderableMeshes(root: THREE.Object3D, identityNodes: Set<THREE.Object3D>) {
   const toRemove: THREE.Object3D[] = []
+  const warnings: string[] = []
   root.traverse((object) => {
-    if (typeof object.userData.pascalExportRefusal === 'string')
-      throw new Error(object.userData.pascalExportRefusal)
+    if (toRemove.some((ancestor) => isDescendantOf(object, ancestor))) return
+    if (typeof object.userData.pascalExportRefusal === 'string') {
+      warnings.push(
+        `Skipped ${object.name || object.userData.pascalId || 'object'}: ${object.userData.pascalExportRefusal}`,
+      )
+      toRemove.push(object)
+      return
+    }
     if (object.userData.pascalExport === 'strip') {
       toRemove.push(object)
       return
@@ -1065,6 +1072,7 @@ function pruneNonRenderableMeshes(root: THREE.Object3D, identityNodes: Set<THREE
   for (const object of toRemove) {
     object.removeFromParent()
   }
+  return warnings
 }
 
 /**

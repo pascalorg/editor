@@ -95,6 +95,27 @@ function sceneWithVisibleAndHiddenBoxes(): {
 }
 
 describe('prepareSceneForExport', () => {
+  test('skips a refused subtree and reports its warning while exporting other objects', () => {
+    const root = new THREE.Group()
+    const refused = new THREE.Group()
+    refused.name = 'Oversized stair'
+    refused.userData.pascalExportRefusal = 'Detailed stair geometry exceeds the computation budget.'
+    refused.add(meshWithNodeMaterial(nodeMaterial()))
+    const accepted = meshWithNodeMaterial(nodeMaterial())
+    accepted.name = 'Retained object'
+    root.add(refused, accepted)
+    const result = prepareSceneForExport(root, {})
+    expect(result.scene.getObjectByName(refused.name)).toBeUndefined()
+    expect(result.scene.getObjectByName(accepted.name)).toBeDefined()
+    expect(
+      result.warnings.some(
+        (warning) => warning.includes(refused.name) && warning.includes('computation budget'),
+      ),
+    ).toBe(true)
+    expect(root.children).toContain(refused)
+    result.dispose()
+  })
+
   test('exports procedural bulb emission on detached materials regardless of live state', async () => {
     const definitionModule = '../../../nodes/src/procedural-item/definition'
     const { proceduralItemDefinition } = await import(definitionModule)
