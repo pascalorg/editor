@@ -26,11 +26,9 @@
 import {
   add,
   barBox,
+  buildGuardChassis,
   type GuardBox,
   type GuardRail,
-  postBox,
-  railBars,
-  resolveGuardPath,
   scale,
   sub,
   type Vec3,
@@ -67,20 +65,6 @@ export function cableGuardRails(railHeight: number): GuardRail[] {
   return [{ y: railHeight - CAP_T / 2, across: CAP_W, vertical: CAP_T }]
 }
 
-/** How far above the nosing line a post rises: under the cap, or through it. */
-function postRise(railHeight: number, postThrough: boolean): number {
-  return postThrough ? railHeight + POST_ABOVE_CAP : railHeight - CAP_T
-}
-
-/** The small cap sitting on a through-post's top. */
-function postCap(x: number, topY: number, z: number): GuardBox {
-  return {
-    center: [x, topY + POST_CAP_T / 2, z],
-    size: [POST + POST_CAP_OVERHANG, POST_CAP_T, POST + POST_CAP_OVERHANG],
-    direction: [0, 1, 0],
-  }
-}
-
 /** Cable centreline heights off the nosing line, bottom-to-top. */
 function cableLevels(railHeight: number): number[] {
   const top = railHeight - CAP_T - CABLE_CLEAR - CABLE_D / 2
@@ -90,42 +74,25 @@ function cableLevels(railHeight: number): number[] {
 }
 
 export function buildCableGuard(points: Vec3[], options: CableGuardOptions): GuardBox[] {
-  const path = resolveGuardPath(points, {
-    postSpacing: options.postSpacing,
-    cornerPosts: true,
-    topPost: options.topPost,
-    reach: options.reach,
-    // Cables are not pickets; this pitch is unused but the chassis requires one.
-    picketPitch: CABLE_PITCH,
-    picketMinPitch: CABLE_PITCH,
-    picketMaxPitch: CABLE_PITCH,
-  })
-  if (!path) return []
   const { railHeight } = options
-  const postThrough = options.postThrough === true
-  const rise = postRise(railHeight, postThrough)
-
-  if (path.kind === 'pivot') {
-    // A zero-radius winder's inner pivot: one plumb post keeps the inner edge's
-    // support; a single pivot has nothing to span a cable between.
-    const { lo, hi } = path
-    const base: Vec3 = [lo[0], lo[1] - POST_EMBED, lo[2]]
-    const height = hi[1] - lo[1] + rise + POST_EMBED
-    const pivot: GuardBox[] = [postBox(base, height, POST)]
-    if (postThrough) pivot.push(postCap(lo[0], base[1] + height, lo[2]))
-    return pivot
-  }
-
+  const chassis = buildGuardChassis(
+    points,
+    options,
+    cableGuardRails(railHeight),
+    {
+      width: POST,
+      embed: POST_EMBED,
+      top: -CAP_T,
+      throughTop: POST_ABOVE_CAP,
+      capThickness: POST_CAP_T,
+      capOverhang: POST_CAP_OVERHANG,
+    },
+    { cornerPosts: true },
+  )
+  if (!chassis) return []
+  const { path, boxes } = chassis
+  if (path.kind === 'pivot') return boxes
   const { railPoints, isCorner, postPositions } = path
-
-  // The flat cap follows the path; a fitting block closes each real corner.
-  const boxes: GuardBox[] = railBars(railPoints, isCorner, cableGuardRails(railHeight))
-
-  // Posts: both ends (the top only when `topPost`), every bay ≤ spacing between.
-  for (const p of postPositions) {
-    boxes.push(postBox(add(p, [0, -POST_EMBED, 0]), rise + POST_EMBED, POST))
-    if (postThrough) boxes.push(postCap(p[0], p[1] + rise, p[2]))
-  }
 
   // Cables: a run of straight chords between consecutive posts at each level,
   // with a swage sleeve where the terminal posts anchor the ends.

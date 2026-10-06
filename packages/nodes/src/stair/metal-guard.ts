@@ -22,13 +22,10 @@
  */
 
 import {
-  add,
-  barBox,
+  buildGuardChassis,
   type GuardBox,
   type GuardRail,
-  postBox,
-  railBars,
-  resolveGuardPath,
+  guardPickets,
   type Vec3,
 } from './guard-path'
 
@@ -69,11 +66,6 @@ export function metalGuardRails(railHeight: number): GuardRail[] {
   ]
 }
 
-/** How far above the nosing line a post rises: under the top rail, or through it. */
-function postRise(railHeight: number, postThrough: boolean): number {
-  return postThrough ? railHeight + POST_ABOVE_RAIL : railHeight - TOP_RAIL_T
-}
-
 /** The flat baseplate welded under a post foot, sitting on the nosing line. */
 function baseplate(x: number, footY: number, z: number): GuardBox {
   return {
@@ -83,69 +75,33 @@ function baseplate(x: number, footY: number, z: number): GuardBox {
   }
 }
 
-/** The small cap sitting on a through-post's top. */
-function postCap(x: number, topY: number, z: number): GuardBox {
-  return {
-    center: [x, topY + POST_CAP_T / 2, z],
-    size: [POST + POST_CAP_OVERHANG, POST_CAP_T, POST + POST_CAP_OVERHANG],
-    direction: [0, 1, 0],
-  }
-}
-
 export function buildMetalGuard(points: Vec3[], options: MetalGuardOptions): GuardBox[] {
-  const path = resolveGuardPath(points, {
-    postSpacing: options.postSpacing,
-    topPost: options.topPost,
-    reach: options.reach,
-    picketPitch: INFILL_PITCH,
-    picketMinPitch: INFILL + 0.02,
-    picketMaxPitch: INFILL_MAX_GAP + INFILL,
-  })
-  if (!path) return []
   const { railHeight } = options
-  const postThrough = options.postThrough === true
-  const rise = postRise(railHeight, postThrough)
-
-  if (path.kind === 'pivot') {
-    // A zero-radius winder's inner pivot: one plumb post on its baseplate keeps
-    // the inner edge's support; a single pivot has no bay to infill.
-    const { lo, hi } = path
-    const height = hi[1] - lo[1] + rise
-    const pivot: GuardBox[] = [postBox(lo, height, POST), baseplate(lo[0], lo[1], lo[2])]
-    if (postThrough) pivot.push(postCap(lo[0], lo[1] + height, lo[2]))
-    return pivot
-  }
-
-  const { railPoints, isCorner, postPositions, picketStations } = path
-
-  // Top and bottom rails follow the path; a fitting block closes each corner.
-  const boxes: GuardBox[] = railBars(railPoints, isCorner, metalGuardRails(railHeight))
-
-  // Posts stand on the nosing line on a baseplate — both ends (the top only when
-  // `topPost`), every bay ≤ spacing between — never sunk below the structure.
-  for (const p of postPositions) {
-    boxes.push(postBox(p, rise, POST))
-    boxes.push(baseplate(p[0], p[1], p[2]))
-    if (postThrough) boxes.push(postCap(p[0], p[1] + rise, p[2]))
-  }
-
-  // Slender plumb balusters span the two rails, dropped where a post stands.
-  const infillBottom = BOTTOM_CLEAR + BOTTOM_RAIL_T
-  const infillTop = railHeight - TOP_RAIL_T
-  const clearPost = (p: Vec3) =>
-    postPositions.every(
-      (post) => Math.hypot(post[0] - p[0], post[2] - p[2]) > POST / 2 + INFILL / 2,
-    )
-  for (const p of picketStations) {
-    if (!clearPost(p)) continue
-    const bar = barBox(
-      [p[0], p[1] + infillBottom, p[2]],
-      [p[0], p[1] + infillTop, p[2]],
-      INFILL,
-      INFILL,
-    )
-    if (bar) boxes.push(bar)
-  }
+  const chassis = buildGuardChassis(
+    points,
+    options,
+    metalGuardRails(railHeight),
+    {
+      width: POST,
+      embed: 0,
+      top: -TOP_RAIL_T,
+      throughTop: POST_ABOVE_RAIL,
+      capThickness: POST_CAP_T,
+      capOverhang: POST_CAP_OVERHANG,
+      foot: baseplate,
+    },
+    {
+      picketPitch: INFILL_PITCH,
+      picketMinPitch: INFILL + 0.02,
+      picketMaxPitch: INFILL_MAX_GAP + INFILL,
+    },
+  )
+  if (!chassis) return []
+  const { path, boxes } = chassis
+  if (path.kind === 'pivot') return boxes
+  boxes.push(
+    ...guardPickets(path, INFILL, POST, BOTTOM_CLEAR + BOTTOM_RAIL_T, railHeight - TOP_RAIL_T),
+  )
 
   return boxes
 }

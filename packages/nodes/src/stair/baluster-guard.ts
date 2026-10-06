@@ -19,13 +19,10 @@
  */
 
 import {
-  add,
-  barBox,
+  buildGuardChassis,
   type GuardBox,
   type GuardRail,
-  postBox,
-  railBars,
-  resolveGuardPath,
+  guardPickets,
   type Vec3,
 } from './guard-path'
 
@@ -73,73 +70,37 @@ export function balusterGuardRails(railHeight: number): GuardRail[] {
 }
 
 export function buildBalusterGuard(points: Vec3[], options: BalusterGuardOptions): GuardBox[] {
-  const path = resolveGuardPath(points, {
-    postSpacing: options.postSpacing,
-    topPost: options.topPost,
-    reach: options.reach,
-    picketPitch: options.pickets,
-    picketMinPitch: PICKET + 0.02,
-    picketMaxPitch: PICKET_MAX_GAP + PICKET,
-  })
-  if (!path) return []
   const { railHeight } = options
-
-  if (path.kind === 'pivot') {
-    // The rails collapse to one plumb newel standing the guard's height past
-    // the top of the vertical rise, so the inner edge keeps its support.
-    const { lo, hi } = path
-    const base: Vec3 = [lo[0], lo[1] - NEWEL_EMBED, lo[2]]
-    const height =
-      hi[1] -
-      lo[1] +
-      railHeight +
-      NEWEL_ABOVE +
-      NEWEL_EMBED +
-      (options.postThrough ? POST_THROUGH_RISE : 0)
-    const pivot: GuardBox[] = [postBox(base, height, NEWEL)]
-    if (options.postThrough)
-      pivot.push({
-        center: [lo[0], base[1] + height + NEWEL_CAP_T / 2, lo[2]],
-        size: [NEWEL + NEWEL_CAP_OVERHANG, NEWEL_CAP_T, NEWEL + NEWEL_CAP_OVERHANG],
-        direction: [0, 1, 0],
-      })
-    return pivot
-  }
-
-  const { railPoints, isCorner, postPositions, picketStations } = path
-
-  // Top and bottom rails follow the path; a fitting block closes each corner.
-  const boxes: GuardBox[] = railBars(railPoints, isCorner, balusterGuardRails(railHeight))
-
-  // Newels: both ends always (the top end only when `topPost`), bays between.
-  const postHeight = railHeight + NEWEL_ABOVE + (options.postThrough ? POST_THROUGH_RISE : 0)
-  for (const p of postPositions) {
-    boxes.push(postBox(add(p, [0, -NEWEL_EMBED, 0]), postHeight + NEWEL_EMBED, NEWEL))
-    if (options.postThrough)
-      boxes.push({
-        center: [p[0], p[1] + postHeight + NEWEL_CAP_T / 2, p[2]],
-        size: [NEWEL + NEWEL_CAP_OVERHANG, NEWEL_CAP_T, NEWEL + NEWEL_CAP_OVERHANG],
-        direction: [0, 1, 0],
-      })
-  }
-
-  // Pickets span the two rails, dropped where a newel already stands.
-  const picketBottom = BOTTOM_RAIL_Y + BOTTOM_RAIL_T / 2
-  const picketTop = railHeight - TOP_RAIL_T / 2
-  const clearNewel = (p: Vec3) =>
-    postPositions.every(
-      (post) => Math.hypot(post[0] - p[0], post[2] - p[2]) > NEWEL / 2 + PICKET / 2,
-    )
-  for (const p of picketStations) {
-    if (!clearNewel(p)) continue
-    const picket = barBox(
-      [p[0], p[1] + picketBottom, p[2]],
-      [p[0], p[1] + picketTop, p[2]],
+  const chassis = buildGuardChassis(
+    points,
+    options,
+    balusterGuardRails(railHeight),
+    {
+      width: NEWEL,
+      embed: NEWEL_EMBED,
+      top: NEWEL_ABOVE,
+      throughTop: NEWEL_ABOVE + POST_THROUGH_RISE,
+      capThickness: NEWEL_CAP_T,
+      capOverhang: NEWEL_CAP_OVERHANG,
+    },
+    {
+      picketPitch: options.pickets,
+      picketMinPitch: PICKET + 0.02,
+      picketMaxPitch: PICKET_MAX_GAP + PICKET,
+    },
+  )
+  if (!chassis) return []
+  const { path, boxes } = chassis
+  if (path.kind === 'pivot') return boxes
+  boxes.push(
+    ...guardPickets(
+      path,
       PICKET,
-      PICKET,
-    )
-    if (picket) boxes.push(picket)
-  }
+      NEWEL,
+      BOTTOM_RAIL_Y + BOTTOM_RAIL_T / 2,
+      railHeight - TOP_RAIL_T / 2,
+    ),
+  )
 
   return boxes
 }

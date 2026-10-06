@@ -40,6 +40,7 @@ import {
 } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { createExportTextureUtils, type ExportTextureUtils } from './export-texture-utils'
 import { cloneExportUserData } from './export-user-data'
+import { isIfcRolePart } from './ifc-parts'
 import {
   type CompressedTextureDecompressor,
   decompressCanonicalNormalMaps,
@@ -1836,19 +1837,7 @@ function stampIdentity(
     )
       object.userData.surfaceNodeIds = surfaceNodeIds
     if (typeof ifcRole === 'string') object.userData.pascalIfcRole = ifcRole
-    if (
-      Array.isArray(ifcParts) &&
-      ifcParts.every(
-        (part) =>
-          Number.isInteger(part.start) &&
-          part.start >= 0 &&
-          part.start % 3 === 0 &&
-          Number.isInteger(part.count) &&
-          part.count > 0 &&
-          part.count % 3 === 0 &&
-          typeof part.role === 'string',
-      )
-    )
+    if (Array.isArray(ifcParts) && ifcParts.every(isIfcRolePart))
       object.userData.pascalIfcParts = ifcParts
     if (typeof slotId === 'string') object.userData.slotId = slotId
     if (motion) {

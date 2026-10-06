@@ -7,6 +7,7 @@ import {
   resolveStairArcLayout,
   resolveStairRailPaths,
   resolveStairWalkingPaths,
+  rotateXZ,
   STAIR_RAILING_SLOT_DEFAULT,
   type StairNode,
   type StairSegmentNode,
@@ -33,7 +34,13 @@ import { balusterGuardRails, buildBalusterGuard } from './baluster-guard'
 import { boardsGuardRails, buildBoardsGuard } from './boards-guard'
 import { buildCableGuard, cableGuardRails } from './cable-guard'
 import { ContinuousStairRailings } from './continuous-railings'
-import { barBox, type GuardBox, type GuardRail } from './guard-path'
+import {
+  barBox,
+  GUARD_PICKET_PITCH,
+  GUARD_POST_SPACING,
+  type GuardBox,
+  type GuardRail,
+} from './guard-path'
 import {
   resolveStairBodySlotMaterials,
   resolveStairSegmentMaterials,
@@ -443,10 +450,6 @@ const STAIR_BODY_SLOT_IDS: StairSlotId[] = ['treads', 'body']
 const STAIR_BODY_SLOT_USER_DATA = { slotIds: STAIR_BODY_SLOT_IDS }
 const STAIR_BODY_SINGLE_SLOT_USER_DATA = { slotId: 'body' satisfies StairSlotId }
 const STAIR_RAILING_SLOT_USER_DATA = { slotId: 'railing' satisfies StairSlotId }
-
-const GUARD_POST_SPACING = 1.2192
-/** Picket pitch for the merged balusters guard; its 95 mm clear gap (0.127 − 0.032 m) matches the detail budget. */
-const GUARD_PICKET_PITCH = 0.127
 
 /**
  * A guard for one rail path — a run of posts, rails and infill spaced by run
@@ -1316,12 +1319,6 @@ function toWorldRailPoint(
   const [localX, localY, localZ] = point
   const [offsetX, offsetZ] = rotateXZ(localZ, localX, layout.rotation)
   return [layout.center[0] + offsetX, layout.elevation + localY, layout.center[1] + offsetZ]
-}
-
-function rotateXZ(x: number, z: number, angle: number): [number, number] {
-  const cos = Math.cos(angle)
-  const sin = Math.sin(angle)
-  return [x * cos + z * sin, -x * sin + z * cos]
 }
 
 function distance3(a: [number, number, number], b: [number, number, number]) {

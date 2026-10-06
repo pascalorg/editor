@@ -12,36 +12,23 @@ import { getStairRailingMaterial, useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { guardBoxGeometry, metricBox } from './baluster-geometry'
+import { guardBoxGeometry, metricBox, metricCylinder } from './baluster-geometry'
 import { buildBalusterGuard } from './baluster-guard'
 import { buildBoardsGuard } from './boards-guard'
 import { buildCableGuard } from './cable-guard'
 import { buildGlassGuard, type GlassPanel } from './glass-guard'
+import { GUARD_PICKET_PITCH, GUARD_POST_SPACING } from './guard-path'
 import { resolveStairSlotMaterial } from './materials'
 import { buildMetalGuard } from './metal-guard'
 import { buildPostAndRailGuard } from './post-and-rail-guard'
 import type { StairRenderData } from './use-stair-render-data'
 
-/** A continuous guard's newels are at most this far apart along the run. */
-const GUARD_POST_SPACING = 1.2192
-/** Picket pitch; its 95 mm clear gap (0.127 − 0.032 m) matches the detail budget. */
-const GUARD_PICKET_PITCH = 0.127
-
 function bar(a: THREE.Vector3, b: THREE.Vector3, width: number, depth: number, round = false) {
   const direction = b.clone().sub(a),
     length = direction.length()
   if (length < 1e-8) return null
-  const geometry = round
-    ? new THREE.CylinderGeometry(width / 2, width / 2, length, 12)
-    : metricBox(length, depth, width)
+  const geometry = round ? metricCylinder(width, length) : metricBox(length, depth, width)
   if (round) {
-    const uv = geometry.getAttribute('uv'),
-      position = geometry.getAttribute('position'),
-      normal = geometry.getAttribute('normal')
-    for (let i = 0; i < uv.count; i++) {
-      if (Math.abs(normal.getY(i)) > 0.5) uv.setXY(i, position.getX(i), position.getZ(i))
-      else uv.setXY(i, uv.getX(i) * 12 * width * Math.sin(Math.PI / 12), uv.getY(i) * length)
-    }
     geometry.applyQuaternion(
       new THREE.Quaternion().setFromUnitVectors(
         new THREE.Vector3(0, 1, 0),
@@ -167,8 +154,10 @@ function buildRails(
   }
   const merge = (geometries: THREE.BufferGeometry[]) => {
     if (!geometries.length) return null
-    // Normalize attributes before merging boxes, cylinders and extruded panels.
-    for (const geometry of geometries) geometry.deleteAttribute('uv2')
+    for (const geometry of geometries) {
+      if (!geometry.hasAttribute('uv2'))
+        geometry.setAttribute('uv2', geometry.getAttribute('uv').clone())
+    }
     const result = mergeGeometries(geometries, false)
     for (const geometry of geometries) geometry.dispose()
     return result

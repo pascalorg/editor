@@ -103,9 +103,9 @@ export type GuardPathOptions = {
   /** Metres the rails run past the top vertex, along the final slope. */
   reach?: number
   /** The requested infill pitch, clamped into [min, max] below. */
-  picketPitch: number
-  picketMinPitch: number
-  picketMaxPitch: number
+  picketPitch?: number
+  picketMinPitch?: number
+  picketMaxPitch?: number
 }
 
 export type GuardPath =
@@ -216,12 +216,14 @@ export function resolveGuardPath(points: Vec3[], options: GuardPathOptions): Gua
   const postPositions = sortedStations.map(pointAt)
 
   const picketStations: Vec3[] = []
-  const pitch = Math.min(
-    Math.max(options.picketPitch, options.picketMinPitch),
-    options.picketMaxPitch,
-  )
-  const bays = Math.max(2, Math.ceil(run / pitch))
-  for (let i = 1; i < bays; i++) picketStations.push(pointAt((run * i) / bays))
+  if (options.picketPitch !== undefined) {
+    const pitch = Math.min(
+      Math.max(options.picketPitch, options.picketMinPitch ?? options.picketPitch),
+      options.picketMaxPitch ?? options.picketPitch,
+    )
+    const bays = Math.max(2, Math.ceil(run / pitch))
+    for (let i = 1; i < bays; i++) picketStations.push(pointAt((run * i) / bays))
+  }
 
   return {
     kind: 'path',
@@ -233,4 +235,81 @@ export function resolveGuardPath(points: Vec3[], options: GuardPathOptions): Gua
     postStations: sortedStations,
     picketStations,
   }
+}
+
+export const GUARD_POST_SPACING = 1.2192
+export const GUARD_PICKET_PITCH = 0.127
+
+export type GuardOptions = {
+  railHeight: number
+  postSpacing?: number
+  topPost?: boolean
+  postThrough?: boolean
+  reach?: number
+}
+
+type PostProfile = {
+  width: number
+  embed: number
+  top: number
+  throughTop: number
+  capThickness: number
+  capOverhang: number
+  foot?: (x: number, y: number, z: number) => GuardBox
+}
+
+/** Posts, caps and the vertical-pivot case have the same assembly in every style. */
+export function buildGuardChassis(
+  points: Vec3[],
+  options: GuardOptions,
+  rails: GuardRail[],
+  profile: PostProfile,
+  sampling: Pick<
+    GuardPathOptions,
+    'cornerPosts' | 'picketPitch' | 'picketMinPitch' | 'picketMaxPitch'
+  > = {},
+) {
+  const path = resolveGuardPath(points, { ...options, ...sampling })
+  if (!path) return null
+  const rise = options.railHeight + (options.postThrough ? profile.throughTop : profile.top)
+  const boxes = path.kind === 'pivot' ? [] : railBars(path.railPoints, path.isCorner, rails)
+  const posts = path.kind === 'pivot' ? [path.lo] : path.postPositions
+  for (const p of posts) {
+    const height = rise + profile.embed + (path.kind === 'pivot' ? path.hi[1] - path.lo[1] : 0)
+    const base = add(p, [0, -profile.embed, 0])
+    boxes.push(postBox(base, height, profile.width))
+    if (profile.foot) boxes.push(profile.foot(p[0], p[1], p[2]))
+    if (options.postThrough)
+      boxes.push({
+        center: [p[0], base[1] + height + profile.capThickness / 2, p[2]],
+        size: [
+          profile.width + profile.capOverhang,
+          profile.capThickness,
+          profile.width + profile.capOverhang,
+        ],
+        direction: UP,
+      })
+  }
+  return { path, boxes }
+}
+
+export function guardPickets(
+  path: Extract<GuardPath, { kind: 'path' }>,
+  width: number,
+  postWidth: number,
+  bottom: number,
+  top: number,
+): GuardBox[] {
+  const boxes: GuardBox[] = []
+  for (const p of path.picketStations) {
+    if (
+      !path.postPositions.every(
+        (post) => Math.hypot(post[0] - p[0], post[2] - p[2]) > postWidth / 2 + width / 2,
+      )
+    )
+      continue
+    const picket = barBox([p[0], p[1] + bottom, p[2]], [p[0], p[1] + top, p[2]], width, width)
+    if (picket) boxes.push(picket)
+  }
+  return boxes
 }

@@ -16,13 +16,10 @@
  */
 
 import {
-  add,
-  barBox,
+  buildGuardChassis,
   type GuardBox,
   type GuardRail,
-  postBox,
-  railBars,
-  resolveGuardPath,
+  guardPickets,
   type Vec3,
 } from './guard-path'
 
@@ -62,76 +59,35 @@ export function postAndRailGuardRails(railHeight: number): GuardRail[] {
   ]
 }
 
-/** How far above the nosing line a post rises: under the cap, or through it. */
-function postRise(railHeight: number, postThrough: boolean): number {
-  return postThrough ? railHeight + POST_ABOVE_CAP : railHeight - CAP_T
-}
-
-/** The small cap sitting on a through-post's top. */
-function postCap(x: number, topY: number, z: number): GuardBox {
-  return {
-    center: [x, topY + POST_CAP_T / 2, z],
-    size: [POST + POST_CAP_OVERHANG, POST_CAP_T, POST + POST_CAP_OVERHANG],
-    direction: [0, 1, 0],
-  }
-}
-
 export function buildPostAndRailGuard(
   points: Vec3[],
   options: PostAndRailGuardOptions,
 ): GuardBox[] {
-  const path = resolveGuardPath(points, {
-    postSpacing: options.postSpacing,
-    topPost: options.topPost,
-    reach: options.reach,
-    picketPitch: PICKET + PICKET_GAP,
-    picketMinPitch: PICKET + 0.02,
-    picketMaxPitch: PICKET_MAX_GAP + PICKET,
-  })
-  if (!path) return []
   const { railHeight } = options
-  const postThrough = options.postThrough === true
-  const rise = postRise(railHeight, postThrough)
-
-  if (path.kind === 'pivot') {
-    // A zero-radius winder's inner pivot: one plumb 4x4 standing the guard's
-    // height past the top of the vertical rise, keeping the inner edge's post.
-    const { lo, hi } = path
-    const base: Vec3 = [lo[0], lo[1] - POST_EMBED, lo[2]]
-    const height = hi[1] - lo[1] + rise + POST_EMBED
-    const pivot: GuardBox[] = [postBox(base, height, POST)]
-    if (postThrough) pivot.push(postCap(lo[0], base[1] + height, lo[2]))
-    return pivot
-  }
-
-  const { railPoints, isCorner, postPositions, picketStations } = path
-
-  // Cap, top rail and bottom rail follow the path; a block closes each corner.
-  const boxes: GuardBox[] = railBars(railPoints, isCorner, postAndRailGuardRails(railHeight))
-
-  // Posts: both ends (the top only when `topPost`), every bay ≤ spacing between.
-  for (const p of postPositions) {
-    boxes.push(postBox(add(p, [0, -POST_EMBED, 0]), rise + POST_EMBED, POST))
-    if (postThrough) boxes.push(postCap(p[0], p[1] + rise, p[2]))
-  }
-
-  // Pickets span the two rails, dropped where a post already stands.
-  const picketBottom = BOTTOM_CLEAR + RAIL_D
-  const picketTop = railHeight - CAP_T - RAIL_D
-  const clearPost = (p: Vec3) =>
-    postPositions.every(
-      (post) => Math.hypot(post[0] - p[0], post[2] - p[2]) > POST / 2 + PICKET / 2,
-    )
-  for (const p of picketStations) {
-    if (!clearPost(p)) continue
-    const picket = barBox(
-      [p[0], p[1] + picketBottom, p[2]],
-      [p[0], p[1] + picketTop, p[2]],
-      PICKET,
-      PICKET,
-    )
-    if (picket) boxes.push(picket)
-  }
+  const chassis = buildGuardChassis(
+    points,
+    options,
+    postAndRailGuardRails(railHeight),
+    {
+      width: POST,
+      embed: POST_EMBED,
+      top: -CAP_T,
+      throughTop: POST_ABOVE_CAP,
+      capThickness: POST_CAP_T,
+      capOverhang: POST_CAP_OVERHANG,
+    },
+    {
+      picketPitch: PICKET + PICKET_GAP,
+      picketMinPitch: PICKET + 0.02,
+      picketMaxPitch: PICKET_MAX_GAP + PICKET,
+    },
+  )
+  if (!chassis) return []
+  const { path, boxes } = chassis
+  if (path.kind === 'pivot') return boxes
+  boxes.push(
+    ...guardPickets(path, PICKET, POST, BOTTOM_CLEAR + RAIL_D, railHeight - CAP_T - RAIL_D),
+  )
 
   return boxes
 }

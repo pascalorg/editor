@@ -24,6 +24,7 @@ export function metricBox(length: number, height: number, depth: number) {
     else if (Math.abs(normal.getY(i)) > 0.5) uv.setXY(i, x, z)
     else uv.setXY(i, x, y)
   }
+  geometry.setAttribute('uv2', geometry.getAttribute('uv').clone())
   return geometry
 }
 
@@ -31,18 +32,22 @@ export function metricBox(length: number, height: number, depth: number) {
  * along its direction: `size[0]` is the diameter, `size[2]` the length. UVs run
  * in metres — the circumference across, the length along — so a finish tiles
  * the same as on a rectangular bar. */
-function roundGuardBoxGeometry(box: GuardBox) {
-  const radius = box.size[0] / 2
-  const length = box.size[2]
+export function metricCylinder(diameter: number, length: number) {
+  const radius = diameter / 2
   const geometry = new THREE.CylinderGeometry(radius, radius, length, 12)
   const position = geometry.getAttribute('position'),
     normal = geometry.getAttribute('normal'),
     uv = geometry.getAttribute('uv')
-  const circumference = 2 * Math.PI * radius
   for (let i = 0; i < uv.count; i++) {
     if (Math.abs(normal.getY(i)) > 0.5) uv.setXY(i, position.getX(i), position.getZ(i))
-    else uv.setXY(i, uv.getX(i) * circumference, uv.getY(i) * length)
+    else uv.setXY(i, uv.getX(i) * 2 * Math.PI * radius, uv.getY(i) * length)
   }
+  geometry.setAttribute('uv2', uv.clone())
+  return geometry
+}
+
+function roundGuardBoxGeometry(box: GuardBox) {
+  const geometry = metricCylinder(box.size[0], box.size[2])
   const direction = new THREE.Vector3(...box.direction).normalize()
   geometry.applyQuaternion(
     new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction),

@@ -19,15 +19,7 @@
  * `postThrough` runs the posts past the cap with a small cap of their own.
  */
 
-import {
-  add,
-  type GuardBox,
-  type GuardRail,
-  postBox,
-  railBars,
-  resolveGuardPath,
-  type Vec3,
-} from './guard-path'
+import { buildGuardChassis, type GuardBox, type GuardRail, type Vec3 } from './guard-path'
 
 export type BoardsGuardOptions = {
   railHeight: number
@@ -68,57 +60,25 @@ export function boardsGuardRails(railHeight: number): GuardRail[] {
   return rails
 }
 
-/** How far above the nosing line a post rises: under the cap, or through it. */
-function postRise(railHeight: number, postThrough: boolean): number {
-  return postThrough ? railHeight + POST_ABOVE_CAP : railHeight - CAP_T
-}
-
-/** The small cap sitting on a through-post's top. */
-function postCap(x: number, topY: number, z: number): GuardBox {
-  return {
-    center: [x, topY + POST_CAP_T / 2, z],
-    size: [POST + POST_CAP_OVERHANG, POST_CAP_T, POST + POST_CAP_OVERHANG],
-    direction: [0, 1, 0],
-  }
-}
-
 export function buildBoardsGuard(points: Vec3[], options: BoardsGuardOptions): GuardBox[] {
-  const path = resolveGuardPath(points, {
-    postSpacing: options.postSpacing,
-    topPost: options.topPost,
-    reach: options.reach,
-    // Boards have no pickets; the infill is the horizontal board stack. The
-    // picket fields are unused, so any valid pitch does.
-    picketPitch: CAP_W,
-    picketMinPitch: CAP_W,
-    picketMaxPitch: CAP_W,
-  })
-  if (!path) return []
   const { railHeight } = options
-  const postThrough = options.postThrough === true
-  const rise = postRise(railHeight, postThrough)
-
-  if (path.kind === 'pivot') {
-    // A zero-radius winder's inner pivot: one plumb 4x4 standing the guard's
-    // height past the top of the vertical rise, keeping the inner edge's post.
-    const { lo, hi } = path
-    const base: Vec3 = [lo[0], lo[1] - POST_EMBED, lo[2]]
-    const height = hi[1] - lo[1] + rise + POST_EMBED
-    const pivot: GuardBox[] = [postBox(base, height, POST)]
-    if (postThrough) pivot.push(postCap(lo[0], base[1] + height, lo[2]))
-    return pivot
-  }
-
-  const { railPoints, isCorner, postPositions } = path
-
-  // Cap and every board course follow the path; a block closes each corner.
-  const boxes: GuardBox[] = railBars(railPoints, isCorner, boardsGuardRails(railHeight))
-
-  // Posts: both ends (the top only when `topPost`), every bay ≤ spacing between.
-  for (const p of postPositions) {
-    boxes.push(postBox(add(p, [0, -POST_EMBED, 0]), rise + POST_EMBED, POST))
-    if (postThrough) boxes.push(postCap(p[0], p[1] + rise, p[2]))
-  }
+  const chassis = buildGuardChassis(
+    points,
+    options,
+    boardsGuardRails(railHeight),
+    {
+      width: POST,
+      embed: POST_EMBED,
+      top: -CAP_T,
+      throughTop: POST_ABOVE_CAP,
+      capThickness: POST_CAP_T,
+      capOverhang: POST_CAP_OVERHANG,
+    },
+    {},
+  )
+  if (!chassis) return []
+  const { path, boxes } = chassis
+  if (path.kind === 'pivot') return boxes
 
   return boxes
 }

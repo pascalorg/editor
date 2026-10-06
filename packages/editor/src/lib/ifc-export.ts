@@ -2,6 +2,7 @@ import { type AnyNode, bakePolicyOf, type Collection, sceneRegistry } from '@pas
 import { buildIfcExport, type IfcMeshPart } from '@pascal-app/ifc-converter/export'
 import { SCENE_LAYER } from '@pascal-app/viewer'
 import * as THREE from 'three'
+import { isIfcRolePart } from './ifc-parts'
 
 // Kinds the IFC writer always rebuilds parametrically from node data; their
 // rendered triangles are never read, so skip copying them. (Slabs are copied:
@@ -67,16 +68,7 @@ export function collectIfcMeshes(
         : [{ start: drawStart, count: drawEnd - drawStart, materialIndex: 0 }]
 
     const roleParts = Array.isArray(mesh.userData.pascalIfcParts)
-      ? mesh.userData.pascalIfcParts.filter(
-          (part: { start: number; count: number; role: string }) =>
-            Number.isInteger(part.start) &&
-            part.start >= 0 &&
-            part.start % 3 === 0 &&
-            Number.isInteger(part.count) &&
-            part.count > 0 &&
-            part.count % 3 === 0 &&
-            typeof part.role === 'string',
-        )
+      ? mesh.userData.pascalIfcParts.filter(isIfcRolePart)
       : []
     const semanticGroups = groups.flatMap((group) => {
       const end = group.start + group.count
