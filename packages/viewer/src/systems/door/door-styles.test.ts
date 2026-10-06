@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { DoorNode, useScene, WallNode } from '@pascal-app/core'
-import { DOOR_STYLES, getDoorStyleOverrides } from '@pascal-app/core/building'
+import { DOOR_STYLES, doorStyleLook } from '@pascal-app/core/building'
 import * as THREE from 'three'
 import { buildDoorPreviewMesh } from './door-system'
 
@@ -24,7 +24,7 @@ function leafBoxes(style: (typeof DOOR_STYLES)[number], slots = ['panel', 'glass
     position: [2, 1.15, 0],
     width: 1,
     height: 2.3,
-    ...getDoorStyleOverrides(style),
+    ...doorStyleLook(style),
   })
   const previous = useScene.getState().nodes
   useScene.setState({ nodes: { ...previous, [wall.id]: wall } })

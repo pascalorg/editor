@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { GeometryScriptSource } from '../geometry-source'
 import { MaterialSchema } from '../material'
-import { DoorType } from './opening-types'
+import { DEFAULT_DOOR_CONTENT_PADDING, DoorType, defaultDoorSegments } from './opening-types'
 
 export { DoorType } from './opening-types'
 
@@ -120,24 +120,7 @@ export const DoorNode = BaseNode.extend({
     .default(0),
 
   // Leaf segments — stacked top to bottom, each with its own column split
-  segments: z.array(DoorSegment).default([
-    {
-      type: 'panel',
-      heightRatio: 0.4,
-      columnRatios: [1],
-      dividerThickness: 0.03,
-      panelDepth: 0.01,
-      panelInset: 0.04,
-    },
-    {
-      type: 'panel',
-      heightRatio: 0.6,
-      columnRatios: [1],
-      dividerThickness: 0.03,
-      panelDepth: 0.01,
-      panelInset: 0.04,
-    },
-  ]),
+  segments: z.array(DoorSegment).default(defaultDoorSegments),
 
   // Handle
   handle: z.boolean().default(true),
@@ -145,7 +128,9 @@ export const DoorNode = BaseNode.extend({
   handleSide: z.enum(['left', 'right']).default('right'),
 
   // Leaf inner margin — space between leaf edge and segment content area [x, y]
-  contentPadding: z.tuple([z.number(), z.number()]).default([0.04, 0.04]),
+  contentPadding: z
+    .tuple([z.number(), z.number()])
+    .default((): [number, number] => [...DEFAULT_DOOR_CONTENT_PADDING]),
 
   // Emergency / commercial hardware
   doorCloser: z.boolean().default(false),

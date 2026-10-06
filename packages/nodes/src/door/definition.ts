@@ -30,6 +30,7 @@ import { doorFloorplanMoveTarget } from './floorplan-move'
 import { doorMechanism } from './mechanism'
 import { doorPaint } from './paint'
 import { doorParametrics } from './parametrics'
+import { DOOR_PLACEMENT_HINTS } from './placement'
 import { DoorNode } from './schema'
 
 const SIDE_HANDLE_OFFSET = 0.24
@@ -317,6 +318,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
 
   toolHints: [
     { key: 'Left click', label: 'Place door on wall' },
+    ...DOOR_PLACEMENT_HINTS,
     { key: 'R', label: 'Flip side' },
     { key: 'Alt', label: 'Force place' },
     { key: 'Esc', label: 'Cancel' },

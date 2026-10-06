@@ -20,7 +20,7 @@ import { getWallCurveLength, isCurvedWall } from '../systems/wall/wall-curve'
 import { resolveWallTop } from '../systems/wall/wall-top'
 import {
   type DoorStyle,
-  getDoorStyleOverrides,
+  doorStyleLook,
   getWindowStyleOverrides,
   type WindowStyle,
 } from './opening-style-presets'
@@ -303,7 +303,7 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
           ...base,
           hingesSide: input.hingesSide ?? 'left',
           swingDirection: input.swingDirection ?? 'inward',
-          ...getDoorStyleOverrides(input.style as DoorStyle | undefined),
+          ...(input.style ? doorStyleLook(input.style as DoorStyle) : {}),
           ...(input.doorType ? { doorType: input.doorType } : {}),
         })
       : WindowNode.parse({

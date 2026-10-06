@@ -8,6 +8,15 @@ import {
   type WindowNode,
 } from '@pascal-app/core'
 import {
+  getWindowStyleOverrides,
+  SHAPED_WINDOW_TYPES,
+  SILLLESS_WINDOW_TYPES,
+  WINDOW_STYLE_LABELS,
+  WINDOW_STYLES,
+  windowStylesOf,
+  windowTypeFields,
+} from '@pascal-app/core/building'
+import {
   ActionButton,
   ActionGroup,
   cn,
@@ -27,6 +36,7 @@ import { AuthoredParams } from '../item/authored-params'
 import { constrainCurtainOpening, curtainOpeningLimits } from '../shared/curtain-opening-limits'
 import { createOpeningPropertyPreview } from '../shared/opening-property-preview'
 import { openingPropertyPreviewHost } from '../shared/opening-property-preview-host'
+import { windowTypeOptions } from './placement'
 
 function isSameWindowValue(current: unknown, next: unknown): boolean {
   if (typeof current === 'number' && typeof next === 'number') {
@@ -65,28 +75,6 @@ function normalizeWindowCornerRadii(
 
   return next.map((radius) => radius * scale) as [number, number, number, number]
 }
-
-const windowTypeOptions: Array<{ label: string; value: WindowNode['windowType'] }> = [
-  { label: 'Fixed', value: 'fixed' },
-  { label: 'Sliding', value: 'sliding' },
-  { label: 'Casement', value: 'casement' },
-  { label: 'Awning', value: 'awning' },
-  { label: 'Single Hung', value: 'single-hung' },
-  { label: 'Double Hung', value: 'double-hung' },
-  { label: 'Bay', value: 'bay' },
-  { label: 'Bow', value: 'bow' },
-  { label: 'Louvered', value: 'louvered' },
-]
-
-const shapedWindowTypes = new Set<WindowNode['windowType']>([
-  'fixed',
-  'casement',
-  'awning',
-  'hopper',
-  'louvered',
-])
-
-const silllessWindowTypes = new Set<WindowNode['windowType']>(['bay', 'bow'])
 
 export default function WindowPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
@@ -202,10 +190,11 @@ export default function WindowPanel() {
     windowType === 'hopper' ||
     windowType === 'louvered'
   const isOperableWindow = isTrackSashWindow || isOperableSashWindow
-  const supportsWindowShape = shapedWindowTypes.has(node.windowType ?? 'fixed')
+  const supportsWindowShape = SHAPED_WINDOW_TYPES.has(node.windowType ?? 'fixed')
   const supportsGrid = isFixedWindow
-  const supportsSill = !silllessWindowTypes.has(node.windowType)
+  const supportsSill = !SILLLESS_WINDOW_TYPES.has(node.windowType)
   const showWindowTypeSection = !scripted && !isOpening
+  const windowStyles = windowStylesOf(node)
   const showWindowShapeSection = !scripted && !isOpening && supportsWindowShape
   const showOpeningShapeSection = !scripted && isOpening
   const showFrameSection = !scripted && !isOpening
@@ -347,12 +336,8 @@ export default function WindowPanel() {
                   key={option.value}
                   onClick={() =>
                     handleUpdate({
-                      windowType: option.value,
+                      ...windowTypeFields(option.value),
                       ...(option.value === 'awning' ? { awningDirection } : {}),
-                      ...(!shapedWindowTypes.has(option.value)
-                        ? { openingShape: 'rectangle' }
-                        : {}),
-                      ...(silllessWindowTypes.has(option.value) ? { sill: false } : {}),
                     })
                   }
                   type="button"
@@ -418,6 +403,34 @@ export default function WindowPanel() {
                 value={Math.round((node.operationState ?? 0) * 100) / 100}
               />
             </div>
+          )}
+        </PanelSection>
+      )}
+
+      {showWindowTypeSection && (
+        <PanelSection title="Style">
+          <div className="grid grid-cols-2 gap-2 px-1 pt-1">
+            {WINDOW_STYLES.map((style) => (
+              <button
+                aria-pressed={windowStyles.includes(style)}
+                className={cn(
+                  'flex min-h-10 items-center rounded-lg border px-3 py-2 text-left text-xs transition-colors',
+                  windowStyles.includes(style)
+                    ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
+                    : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
+                )}
+                key={style}
+                onClick={() => handleUpdate(getWindowStyleOverrides(style))}
+                type="button"
+              >
+                <span className="truncate font-medium">{WINDOW_STYLE_LABELS[style]}</span>
+              </button>
+            ))}
+          </div>
+          {!windowStyles.length && (
+            <p className="px-1 pt-2 text-muted-foreground text-xs">
+              Custom: the panes match no style.
+            </p>
           )}
         </PanelSection>
       )}
