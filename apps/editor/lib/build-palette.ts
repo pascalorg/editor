@@ -7,6 +7,7 @@ import {
   useEditor,
   useFloorplanMode,
 } from '@pascal-app/editor'
+import { beginFenceFeaturePlacement } from '@pascal-app/nodes'
 import { useViewer } from '@pascal-app/viewer'
 import { getRoofFootprintSource, type RoofFootprintSource } from '@/lib/build-tab-state'
 
@@ -16,7 +17,7 @@ export type BuildType = {
   iconSrc: string
   kind?: string
   paletteOrder?: number
-  mode?: 'material-paint' | 'terrain-sculpt'
+  mode?: 'terrain-sculpt'
   /**
    * The Build panel group listing the tile; registry-discovered kinds land in
    * Advanced. The wall has none: the Rooms group's variant tiles arm it.
@@ -77,13 +78,6 @@ export const BASE_BUILD_TYPES: BuildType[] = [
   },
   { id: 'kitchen', label: 'Kitchen', iconSrc: '/icons/kitchen.webp', section: 'add' },
   { id: 'mep', label: 'MEP', iconSrc: '/icons/HVAC.webp', section: 'advanced' },
-  {
-    id: 'painting',
-    label: 'Painting',
-    iconSrc: '/icons/paint.webp',
-    mode: 'material-paint',
-    section: 'advanced',
-  },
   {
     id: 'terrain',
     label: 'Terrain',
@@ -172,6 +166,10 @@ export function activateBuildTool(kind: string): void {
   editor.setTool(kind)
 }
 
+export function activateFenceFeaturePlacement(kind: 'gate' | 'opening'): void {
+  beginFenceFeaturePlacement(kind)
+}
+
 export function activateSelectMode(): void {
   emitter.emit('tool:cancel')
   useEditor.getState().setMode('select')
@@ -190,9 +188,10 @@ export function activateModularCabinetTool(): void {
 
 export function activatePaintMode(): void {
   const editor = useEditor.getState()
+  if (editor.mode === 'material-paint') return
   editor.setPhase('structure')
   editor.setStructureLayer('elements')
-  editor.setMode('material-paint')
+  editor.armMaterialPaint()
 }
 
 export function activateTerrainSculptMode(): void {

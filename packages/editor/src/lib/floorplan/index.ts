@@ -29,20 +29,11 @@ export {
   collectLevelDescendants,
   getItemFloorplanTransform,
 } from './items'
-export {
-  buildFloorplanStairEntry,
-  computeFloorplanStairSegmentTransforms,
-  getFloorplanStairSegmentPolygon,
-} from './stairs'
 export type {
   FloorplanItemEntry,
   FloorplanLineSegment,
   FloorplanNodeTransform,
   FloorplanSelectionBounds,
-  FloorplanStairArrowEntry,
-  FloorplanStairEntry,
-  FloorplanStairSegmentEntry,
   LevelDescendantMap,
-  StairSegmentTransform,
 } from './types'
 export { getFloorplanWall, getFloorplanWallThickness } from './walls'

@@ -173,7 +173,15 @@ export {
   ElevatorShaftStyle,
 } from './nodes/elevator'
 export { EyebrowVentMaterialRole, EyebrowVentNode } from './nodes/eyebrow-vent'
-export { FenceBaseStyle, FenceGuardInfill, FenceNode, FenceStyle } from './nodes/fence'
+export {
+  clampFencePicketRailProjection,
+  FenceBaseStyle,
+  FenceGuardInfill,
+  FenceNode,
+  FenceStyle,
+  maxFencePicketRailProjection,
+} from './nodes/fence'
+export { type FenceFeatureNode, FenceGateNode, FenceOpeningNode } from './nodes/fence-feature'
 export { FloorOpeningNode } from './nodes/floor-opening'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
 export {
@@ -341,6 +349,7 @@ export { SpawnNode } from './nodes/spawn'
 export type { StairSurfaceMaterialRole, StairSurfaceMaterialSpec } from './nodes/stair'
 export {
   getEffectiveStairSurfaceMaterial,
+  StairDesignTargets,
   StairNode,
   StairRailingMode,
   StairRailingStyle,
@@ -348,6 +357,7 @@ export {
   StairTopLandingMode,
   StairType,
 } from './nodes/stair'
+export { StairConstruction } from './nodes/stair-construction'
 export { AttachmentSide, StairSegmentNode, StairSegmentType } from './nodes/stair-segment'
 export { StructuralGridNode } from './nodes/structural-grid'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'

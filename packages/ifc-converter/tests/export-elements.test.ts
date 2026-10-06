@@ -6,6 +6,9 @@ import {
   ColumnNode,
   type ImportedMeshNode,
   LevelNode,
+  resolveStairWinder,
+  StairNode,
+  StairSegmentNode,
   type WallNode,
   WallNode as WallSchema,
 } from '@pascal-app/core'
@@ -226,5 +229,129 @@ test('a scripted column persists its source and exports artifact triangles as If
     nodeId: column.id,
     type: 'column',
     reason: 'no-geometry',
+  })
+})
+
+test('stair assemblies classify flights, landings and guards and publish measured flight properties', () => {
+  const level = LevelNode.parse({ id: 'level_stair', height: 3 })
+  const flight = StairSegmentNode.parse({
+    id: 'sseg_flight',
+    metadata: { globalId: '2O2Fr$t4X7Zf8NOew3FLOH' },
+    parentId: 'stair_semantic',
+    height: 3,
+    length: 4.5,
+    stepCount: 18,
+  })
+  const landing = StairSegmentNode.parse({
+    id: 'sseg_landing',
+    parentId: 'stair_semantic',
+    segmentType: 'landing',
+  })
+  const stair = StairNode.parse({
+    id: 'stair_semantic',
+    parentId: level.id,
+    children: [flight.id, landing.id],
+    totalRise: 3,
+  })
+  const triangle = { positions: [0, 0, 0, 1, 0, 0, 0, 1, 0], indices: [0, 1, 2] }
+  const nodes = { [level.id]: level, [stair.id]: stair, [flight.id]: flight, [landing.id]: landing }
+  const result = buildIfcExport({
+    nodes,
+    meshes: new Map([
+      [flight.id, [triangle]],
+      [landing.id, [triangle]],
+      [
+        stair.id,
+        [
+          { ...triangle, role: 'railing' },
+          { ...triangle, role: 'handrail' },
+        ],
+      ],
+    ]),
+    timestamp: EPOCH,
+  })
+  expect(result.summary.elements.IFCSTAIR).toBe(1)
+  expect(result.summary.elements.IFCSTAIRFLIGHT).toBe(1)
+  expect(result.summary.elements.IFCSLAB).toBe(1)
+  expect(result.summary.elements.IFCRAILING).toBe(2)
+  withModel(result.ifc, (modelID) => {
+    expect(api.GetLine(modelID, idsOf(modelID, WebIFC.IFCSLAB)[0]!).PredefinedType.value).toBe(
+      'LANDING',
+    )
+    const pset = idsOf(modelID, WebIFC.IFCPROPERTYSET)
+      .map((id) => api.GetLine(modelID, id))
+      .find((entry) => entry.Name.value === 'Pset_StairFlightCommon')
+    const props = Object.fromEntries(
+      pset.HasProperties.map((ref: { value: number }) => {
+        const property = api.GetLine(modelID, ref.value)
+        return [property.Name.value, property.NominalValue.value]
+      }),
+    )
+    expect(props.NumberOfRiser).toBe(18)
+    expect(props.NumberOfTreads).toBe(18)
+    expect(props.RiserHeight).toBeCloseTo(1 / 6)
+    expect(props.TreadLength).toBeCloseTo(0.25)
+    expect(props.Headroom).toBeUndefined()
+    const relation = idsOf(modelID, WebIFC.IFCRELAGGREGATES)
+      .map((id) => api.GetLine(modelID, id))
+      .find((entry) => entry.RelatingObject.value === idsOf(modelID, WebIFC.IFCSTAIR)[0])
+    expect(relation.RelatedObjects).toHaveLength(4)
+    const guids = [
+      WebIFC.IFCSTAIR,
+      WebIFC.IFCSTAIRFLIGHT,
+      WebIFC.IFCSLAB,
+      WebIFC.IFCRAILING,
+    ].flatMap((type) => idsOf(modelID, type).map((id) => api.GetLine(modelID, id).GlobalId.value))
+    expect(new Set(guids).size).toBe(5)
+    expect(api.GetLine(modelID, idsOf(modelID, WebIFC.IFCSTAIRFLIGHT)[0]!).GlobalId.value).toBe(
+      '2O2Fr$t4X7Zf8NOew3FLOH',
+    )
+    expect(
+      idsOf(modelID, WebIFC.IFCRAILING)
+        .map((id) => api.GetLine(modelID, id).PredefinedType.value)
+        .sort(),
+    ).toEqual(['GUARDRAIL', 'HANDRAIL'])
+  })
+})
+
+test('winder export carries actual walking-line going and winding classifications', () => {
+  const level = LevelNode.parse({ height: 3 })
+  const stair = StairNode.parse({ parentId: level.id, totalRise: 3 })
+  const flight = StairSegmentNode.parse({
+    parentId: stair.id,
+    height: 3,
+    length: 99,
+    stepCount: 4,
+    width: 1,
+    winder: { turn: 'left', innerGap: 0.2, walkingLineOffset: 0.45, division: 'equal-going' },
+  })
+  stair.children = [flight.id]
+  const layout = resolveStairWinder(flight)!
+  const result = buildIfcExport({
+    nodes: { [level.id]: level, [stair.id]: stair, [flight.id]: flight },
+    meshes: new Map([
+      [flight.id, [{ positions: [0, 0, 0, 1, 0, 0, 0, 1, 0], indices: [0, 1, 2] }]],
+    ]),
+    timestamp: EPOCH,
+  })
+  withModel(result.ifc, (modelID) => {
+    expect(api.GetLine(modelID, idsOf(modelID, WebIFC.IFCSTAIR)[0]!).PredefinedType.value).toBe(
+      'QUARTER_WINDING_STAIR',
+    )
+    expect(
+      api.GetLine(modelID, idsOf(modelID, WebIFC.IFCSTAIRFLIGHT)[0]!).PredefinedType.value,
+    ).toBe('WINDER')
+    const pset = idsOf(modelID, WebIFC.IFCPROPERTYSET)
+      .map((id) => api.GetLine(modelID, id))
+      .find((entry) => entry.Name.value === 'Pset_StairFlightCommon')
+    const props = Object.fromEntries(
+      pset.HasProperties.map((ref: { value: number }) => {
+        const property = api.GetLine(modelID, ref.value)
+        return [property.Name.value, property.NominalValue.value]
+      }),
+    )
+    expect(props.WalkingLineOffset).toBe(0.45)
+    expect(props.TreadLength).toBeCloseTo(layout.going)
+    expect(props.TreadLengthAtInnerSide).toBeCloseTo(layout.narrowEndGoing)
   })
 })

@@ -66,12 +66,7 @@ export function buildSvgArcPath(
   endAngle: number,
 ) {
   const start = getArcPlanPoint(center, radius, startAngle)
-  const end = getArcPlanPoint(center, radius, endAngle)
-  const delta = endAngle - startAngle
-  const largeArcFlag = Math.abs(delta) > Math.PI ? 1 : 0
-  const sweepFlag = delta >= 0 ? 1 : 0
-
-  return `M ${toSvgX(start.x)} ${toSvgY(start.y)} A ${radius} ${radius} 0 ${largeArcFlag} ${sweepFlag} ${toSvgX(end.x)} ${toSvgY(end.y)}`
+  return `M ${toSvgX(start.x)} ${toSvgY(start.y)} ${svgArcCommands(center, radius, startAngle, endAngle)}`
 }
 
 export function buildSvgAnnularSectorPath(
@@ -82,21 +77,23 @@ export function buildSvgAnnularSectorPath(
   endAngle: number,
 ) {
   const outerStart = getArcPlanPoint(center, outerRadius, startAngle)
-  const outerEnd = getArcPlanPoint(center, outerRadius, endAngle)
   const innerEnd = getArcPlanPoint(center, innerRadius, endAngle)
-  const innerStart = getArcPlanPoint(center, innerRadius, startAngle)
-  const delta = endAngle - startAngle
-  const largeArcFlag = Math.abs(delta) > Math.PI ? 1 : 0
-  const sweepFlag = delta >= 0 ? 1 : 0
-  const reverseSweepFlag = sweepFlag ? 0 : 1
-
   return [
     `M ${toSvgX(outerStart.x)} ${toSvgY(outerStart.y)}`,
-    `A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} ${sweepFlag} ${toSvgX(outerEnd.x)} ${toSvgY(outerEnd.y)}`,
+    svgArcCommands(center, outerRadius, startAngle, endAngle),
     `L ${toSvgX(innerEnd.x)} ${toSvgY(innerEnd.y)}`,
-    `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} ${reverseSweepFlag} ${toSvgX(innerStart.x)} ${toSvgY(innerStart.y)}`,
+    svgArcCommands(center, innerRadius, endAngle, startAngle),
     'Z',
   ].join(' ')
+}
+
+function svgArcCommands(center: Point2D, radius: number, startAngle: number, endAngle: number) {
+  const delta = endAngle - startAngle
+  const count = Math.max(1, Math.ceil(Math.abs(delta) / Math.PI))
+  return Array.from({ length: count }, (_, index) => {
+    const end = getArcPlanPoint(center, radius, startAngle + (delta * (index + 1)) / count)
+    return `A ${radius} ${radius} 0 0 ${delta >= 0 ? 1 : 0} ${toSvgX(end.x)} ${toSvgY(end.y)}`
+  }).join(' ')
 }
 
 export function formatSvgPolygonPoints(points: Point2D[]) {
