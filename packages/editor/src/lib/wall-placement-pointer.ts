@@ -33,6 +33,11 @@ export function createWallPointerTracker(source?: {
     leave() {
       anchor = null
     },
+    forget() {
+      anchor = null
+      grabOffset = null
+      forgotten = true
+    },
   }
 }
 

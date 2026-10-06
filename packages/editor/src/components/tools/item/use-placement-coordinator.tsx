@@ -1164,6 +1164,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!cursorGroupRef.current) return
       const result = floorStrategy.move(getContext(), floorEvent)
       if (!result) return
+      grabForgotten = true
 
       // Figma-style alignment snap layered on top of the floor strategy's
       // grid snap: when the draft's edge lines up (on X or Z) with another
@@ -1394,6 +1395,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       let wallMoveEvent = event
       if (preserveDragOffset && draftNode.current) {
         preserveGrabOn(event.node.id, grabWallId)
+        if (grabForgotten) wallPointer.forget()
         const [correctedX, correctedY] = wallPointer.resolve(
           event.node.id,
           getSideFromNormal(event.normal),
