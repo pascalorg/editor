@@ -15,6 +15,11 @@ export { BaseNode, generateId, Material, nodeType, objectId } from './base'
 // Camera
 export { CameraSchema } from './camera'
 // Collections
+export {
+  COLLECTION_TEMPLATE_IDS,
+  COLLECTION_TEMPLATES,
+  type CollectionTemplateId,
+} from './collection-templates'
 export { type Collection, type CollectionId, generateCollectionId } from './collections'
 // Compiled per-kind parsers (opt-in)
 export {

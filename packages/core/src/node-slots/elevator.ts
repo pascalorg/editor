@@ -1,9 +1,9 @@
+import type { SlotDeclaration } from '../registry/types'
+import type { ElevatorNode } from '../schema/nodes/elevator'
 import {
-  type ElevatorNode,
   getResolvedElevatorDoorPanelStyle,
   getResolvedElevatorShaftStyle,
-  type SlotDeclaration,
-} from '@pascal-app/core'
+} from '../systems/elevator/elevator-geometry'
 
 export type ElevatorSlotId = 'cab' | 'doors' | 'shaft' | 'glass'
 

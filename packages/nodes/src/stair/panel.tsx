@@ -21,7 +21,7 @@ import {
 import {
   ActionButton,
   ActionGroup,
-  duplicateStairSubtree,
+  duplicateNodeAndPickUp,
   formatLinearMeasurement,
   getStairLevelOptions,
   MetricControl,
@@ -244,14 +244,7 @@ export default function StairPanel() {
   )
 
   const handleDuplicate = useCallback(() => {
-    if (!node) return
-    triggerSFX('sfx:item-pick')
-
-    try {
-      duplicateStairSubtree(node.id as AnyNodeId, { mode: 'move' })
-    } catch (e) {
-      console.error('Failed to duplicate stair', e)
-    }
+    if (node) duplicateNodeAndPickUp(node)
   }, [node])
 
   const handleMove = useCallback(() => {

@@ -1,5 +1,5 @@
-import type { SlotDeclaration } from '@pascal-app/core'
-import type { ColumnNode } from './schema'
+import type { SlotDeclaration } from '../registry/types'
+import type { ColumnNode } from '../schema/nodes/column'
 
 export type ColumnSlotId = 'shaft' | 'base' | 'capital' | 'frame'
 
@@ -9,6 +9,11 @@ export const COLUMN_CAPITAL_DEFAULT = 'library:concrete-plaster'
 export const COLUMN_FRAME_DEFAULT = 'library:metal-steel'
 
 export function columnSlots(node: ColumnNode): SlotDeclaration[] {
+  if (node.source)
+    return node.source.manifest.slots.map((slot) => ({
+      slotId: slot.id,
+      label: slot.label ?? slot.id,
+    }))
   const slots: SlotDeclaration[] = [
     { slotId: 'shaft', label: 'Shaft', default: COLUMN_SHAFT_DEFAULT },
   ]

@@ -1,6 +1,7 @@
 import {
   type AnyNodeId,
   type FenceNode as FenceNodeType,
+  fenceSlots,
   findLevelAncestorId,
   floorConstructionLift,
   getFenceControlHandle,
@@ -38,7 +39,6 @@ import { fencePaint } from './paint'
 import { fencePanelModel } from './panel-model'
 import { fenceParametrics } from './parametrics'
 import { FenceNode } from './schema'
-import { fenceSlots } from './slots'
 
 const SIDE_HANDLE_OFFSET = 0.27
 const SIDE_HANDLE_MIN_OFFSET = 0.33

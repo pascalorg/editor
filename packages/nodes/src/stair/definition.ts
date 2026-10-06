@@ -8,6 +8,7 @@ import {
   type StairNode as StairNodeType,
   type StairSegmentNode,
   stairFootprintAABB,
+  stairSlots,
   useScene,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
@@ -417,7 +418,6 @@ import { stairFloorplanMoveTarget } from './floorplan-move'
 import { stairPaint } from './paint'
 import { stairParametrics } from './parametrics'
 import { StairNode } from './schema'
-import { stairSlots } from './slots'
 
 /**
  * Stair — Stage A. Composite node like roof: owns overall framing,

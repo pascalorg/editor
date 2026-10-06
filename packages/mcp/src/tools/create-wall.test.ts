@@ -107,7 +107,7 @@ describe('create_wall', () => {
         return []
       },
       async delete() {
-        return false
+        return { deleted: false, hidden: false }
       },
       async rename() {
         return savedMeta

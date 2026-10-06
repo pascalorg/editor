@@ -5,6 +5,7 @@ import type {
   GeometryScriptParamSpec,
   GeometryScriptParamValue,
 } from '@pascal-app/core'
+import { type Ring, union } from '@pascal-app/core/polygon-boolean'
 import { GEOMETRY_MANIFEST_MAX_BYTES, GEOMETRY_SCRIPT_MAX_BYTES } from '@pascal-app/core/schema'
 import * as THREE from 'three'
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
@@ -109,6 +110,8 @@ function resolveParams(
   for (const spec of specs) {
     const override = overrides[spec.id]
     let value = typeof override === typeof spec.default ? override! : spec.default
+    if (typeof value === 'string' && spec.options && !spec.options.includes(value))
+      value = spec.default
     if (typeof value === 'number') {
       if (spec.min !== undefined) value = Math.max(spec.min, value)
       if (spec.max !== undefined) value = Math.min(spec.max, value)
@@ -130,7 +133,8 @@ const slugify = (value: string) =>
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
 
-const isHelper = (object: THREE.Object3D) => object.name === 'cutout' || object.name === 'collider'
+const isCutter = (name: string) => /^(cutout|cut:(wall|ceiling|slab))$/.test(name)
+const isHelper = (object: THREE.Object3D) => isCutter(object.name) || object.name === 'collider'
 
 function triangleCount(geometry: THREE.BufferGeometry): number {
   const index = geometry.getIndex()
@@ -248,7 +252,7 @@ function readConventions(root: THREE.Object3D) {
       toRemove.push(object)
       return
     }
-    if (object.name === 'cutout') cutout = true
+    if (isCutter(object.name)) cutout = true
     if (object.name === 'collider') collider = true
 
     const mesh = object as THREE.Mesh
@@ -316,6 +320,41 @@ function convexHull(points: [number, number][]): [number, number][] {
     upper.push(point)
   }
   return [...lower.slice(0, -1), ...upper.slice(0, -1)]
+}
+
+function readCutters(
+  root: THREE.Object3D,
+  mount: GeometryScriptMount,
+): NonNullable<GeometryArtifactManifest['cutters']> {
+  const cutters: NonNullable<GeometryArtifactManifest['cutters']> = []
+  root.traverse((object) => {
+    const mesh = object as THREE.Mesh
+    if (!mesh.isMesh || !isCutter(mesh.name)) return
+    if (
+      mesh.name === 'cut:wall' ||
+      (mesh.name === 'cutout' && (mount === 'wall' || mount === 'wall-side'))
+    )
+      return
+    const positions = mesh.geometry.getAttribute('position')
+    const index = mesh.geometry.getIndex()
+    const points = Array.from({ length: positions.count }, (_, i) =>
+      new THREE.Vector3().fromBufferAttribute(positions, i).applyMatrix4(mesh.matrixWorld),
+    )
+    const triangles: Ring[] = []
+    for (let i = 0; i < (index?.count ?? positions.count); i += 3) {
+      const triangle = [0, 1, 2].map((j) => points[index ? index.getX(i + j) : i + j]!)
+      const [a, b, c] = triangle
+      if (Math.abs((b!.x - a!.x) * (c!.z - a!.z) - (b!.z - a!.z) * (c!.x - a!.x)) < 1e-10) continue
+      triangles.push(triangle.map((p): [number, number] => [p.x, p.z]))
+    }
+    const host = (mesh.name === 'cutout' ? 'mounted' : mesh.name.slice(4)) as NonNullable<
+      GeometryArtifactManifest['cutters']
+    >[number]['host']
+    const minY = points.reduce((y, p) => Math.min(y, p.y), Infinity)
+    const maxY = points.reduce((y, p) => Math.max(y, p.y), -Infinity)
+    for (const region of union(triangles)) cutters.push({ host, polygon: region.outer, minY, maxY })
+  })
+  return cutters
 }
 
 /**
@@ -665,7 +704,8 @@ const manifestBytes = (manifest: GeometryArtifactManifest) =>
 
 /**
  * The manifest rides inline in the node, so it stays under
- * GEOMETRY_MANIFEST_MAX_BYTES: outlines are thinned, then the smallest
+ * GEOMETRY_MANIFEST_MAX_BYTES: outlines are thinned (cutter footprints only
+ * when still over, since a coarser footprint changes the hole), then the smallest
  * surfaces and undersides go first (placement falls back to the bounds there),
  * then trailing part entries. The build itself never fails over its size.
  */
@@ -682,6 +722,9 @@ function compactManifest(manifest: GeometryArtifactManifest): GeometryArtifactMa
     outlineArea(b.polygon) - outlineArea(a.polygon)
   next.surfaces.sort(bySize)
   next.undersides.sort(bySize)
+  if (manifestBytes(next) > GEOMETRY_MANIFEST_MAX_BYTES) {
+    next.cutters = next.cutters?.map((cutter) => ({ ...cutter, polygon: thin(cutter.polygon) }))
+  }
   while (manifestBytes(next) > GEOMETRY_MANIFEST_MAX_BYTES) {
     const last = (list: { polygon: [number, number][] }[]) =>
       list.length ? outlineArea(list[list.length - 1]!.polygon) : Number.POSITIVE_INFINITY
@@ -794,6 +837,7 @@ export async function compileGeometryScript(
         name: clip.name,
         duration: Math.round(clip.duration * 1000) / 1000,
       })),
+      cutters: readCutters(root, mount),
       cutout: conventions.cutout,
       collider: conventions.collider,
       triangles: conventions.triangles,

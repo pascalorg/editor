@@ -1,5 +1,5 @@
-import type { SlotDeclaration } from '@pascal-app/core'
-import type { ShelfNode } from './schema'
+import type { SlotDeclaration } from '../registry/types'
+import type { ShelfNode } from '../schema/nodes/shelf'
 
 export type ShelfSlotId = 'shelves' | 'frame' | 'back'
 

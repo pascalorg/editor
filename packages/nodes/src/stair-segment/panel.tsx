@@ -8,13 +8,13 @@ import {
   resolveStairTotalRise,
   runAsSingleSceneHistoryStep,
   type StairSegmentNode,
-  StairSegmentNode as StairSegmentNodeSchema,
   type StairSegmentType,
   useScene,
 } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
+  duplicateNodeAndPickUp,
   PanelSection,
   PanelWrapper,
   SegmentedControl,
@@ -119,27 +119,8 @@ export default function StairSegmentPanel() {
   }, [node?.parentId, setSelection])
 
   const handleDuplicate = useCallback(() => {
-    if (!node?.parentId) return
-    triggerSFX('sfx:item-pick')
-
-    let duplicateInfo = structuredClone(node) as any
-    delete duplicateInfo.id
-    duplicateInfo.metadata = { ...duplicateInfo.metadata, isNew: true }
-    duplicateInfo.position = [
-      duplicateInfo.position[0] + 1,
-      duplicateInfo.position[1],
-      duplicateInfo.position[2] + 1,
-    ]
-
-    try {
-      const duplicate = StairSegmentNodeSchema.parse(duplicateInfo)
-      useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
-      setSelection({ selectedIds: [] })
-      setMovingNode(duplicate)
-    } catch (e) {
-      console.error('Failed to duplicate stair segment', e)
-    }
-  }, [node, setSelection, setMovingNode])
+    if (node) duplicateNodeAndPickUp(node)
+  }, [node])
 
   const handleMove = useCallback(() => {
     if (node) {

@@ -1,5 +1,7 @@
 import {
   type AnyNodeId,
+  FENCE_SLOT_DEFAULTS,
+  type FenceSlotId,
   type FenceWithFeatures,
   fenceWithFeatures,
   floorConstructionLift,
@@ -26,7 +28,6 @@ import {
 } from './geometry-parts'
 import { resolveFenceLiftElevation } from './lift'
 import type { FenceNode } from './schema'
-import { FENCE_SLOT_DEFAULTS, type FenceSlotId } from './slots'
 
 /**
  * Stage B builder for fence. Splits the geometry into four paintable slots —

@@ -1,9 +1,15 @@
 // @ts-expect-error — bun:test is provided by the Bun runtime; viewer does not
 // depend on @types/bun so the import type is unresolved at compile time.
 import { describe, expect, test } from 'bun:test'
-import type { MaterialSchema } from '@pascal-app/core'
+import { MaterialProperties, type MaterialSchema } from '@pascal-app/core'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
-import { getTextureKey, resolveSlotDefaultMaterial, resolveTextureRepeat } from './materials'
+import {
+  createMaterial,
+  getTextureKey,
+  resolveMaterialRef,
+  resolveSlotDefaultMaterial,
+  resolveTextureRepeat,
+} from './materials'
 
 function materialWithRepeat(repeat: unknown): MaterialSchema {
   return {
@@ -47,5 +53,20 @@ describe('shared flat slot defaults', () => {
     expect(solid).toBeInstanceOf(MeshLambertNodeMaterial)
     expect(solid).toBe(resolveSlotDefaultMaterial('#abcdef', 'solid', 0.75))
     expect(solid.userData.__pascalCachedMaterial).toBe(true)
+  })
+})
+
+describe('plain colour material refs', () => {
+  test('a #rrggbb slot value paints that colour, as material.properties.color does', () => {
+    const material = resolveMaterialRef(
+      '#2F5585',
+      undefined,
+      'rendered',
+    ) as MeshStandardNodeMaterial
+    expect(material).toBeInstanceOf(MeshStandardNodeMaterial)
+    expect(material.color.getHexString()).toBe('2f5585')
+    expect(material).toBe(
+      createMaterial({ properties: MaterialProperties.parse({ color: '#2f5585' }) }, 'rendered'),
+    )
   })
 })

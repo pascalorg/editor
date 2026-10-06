@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-/** A script source is persisted inline; this caps one node's share of a scene operation. */
+/** Source code is stored separately from the scene; bound its upload size. */
 export const GEOMETRY_SCRIPT_MAX_BYTES = 48 * 1024
 /** The manifest rides inline in the node; the compiler keeps it under this. */
 export const GEOMETRY_MANIFEST_MAX_BYTES = 24 * 1024
@@ -87,6 +87,17 @@ export const GeometryArtifactManifest = z.object({
     .default([]),
   /** The module's AnimationClips; `open`, `close` and `loop` drive the object's controls. */
   animations: z.array(z.object({ name: z.string(), duration: finite })).default([]),
+  /** Vertical cutter footprints in the normalized artifact frame. Absent in older artifacts. */
+  cutters: z
+    .array(
+      z.object({
+        host: z.enum(['mounted', 'wall', 'ceiling', 'slab']),
+        polygon: z.array(z.array(finite).length(2)).min(3),
+        minY: finite,
+        maxY: finite,
+      }),
+    )
+    .optional(),
   cutout: z.boolean().default(false),
   collider: z.boolean().default(false),
   triangles: z.number().int().nonnegative(),

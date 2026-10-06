@@ -24,6 +24,7 @@ import {
   DESTRUCTIVE_TOOL_ANNOTATIONS,
   READ_ONLY_TOOL_ANNOTATIONS,
 } from './annotations'
+import { registerCollectionTools } from './collections'
 import { refusalResult } from './errors'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 
@@ -210,4 +211,5 @@ export function registerSharedTools(server: McpServer, bridge: SceneOperations):
       },
     )
   }
+  registerCollectionTools(server, bridge)
 }

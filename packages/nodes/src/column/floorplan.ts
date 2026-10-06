@@ -200,7 +200,11 @@ export function buildColumnFloorplan(
       })
     }
 
-    if (node.supportStyle !== 'vertical') {
+    if (node.source) {
+      const params = new Set(node.source.manifest.params.map((spec) => spec.id))
+      if (params.has('width')) emitArrowAlong('width', 'x', node.width / 2 + RESIZE_ARROW_OFFSET)
+      if (params.has('depth')) emitArrowAlong('depth', 'z', node.depth / 2 + RESIZE_ARROW_OFFSET)
+    } else if (node.supportStyle !== 'vertical') {
       // Brace columns — width + depth of the bracing structure. Spread
       // arrows (top + bottom) project to the same XZ in top-view, so
       // we only surface bracing dimensions here. The 3D set still has
@@ -250,6 +254,21 @@ export function buildColumnFloorplan(
 }
 
 export function getColumnFloorplanFootprint(node: ColumnNode): FloorplanPoint[] {
+  if (node.source) {
+    const cos = Math.cos(node.rotation),
+      sin = Math.sin(node.rotation)
+    const { min, max } = node.source.manifest.bounds
+    const footprint: [number, number][] = [
+      [min[0], min[2]],
+      [max[0], min[2]],
+      [max[0], max[2]],
+      [min[0], max[2]],
+    ]
+    return footprint.map(([x, z]) => [
+      node.position[0] + x * cos + z * sin,
+      node.position[2] - x * sin + z * cos,
+    ])
+  }
   return getColumnPlanFootprint(node).map((point) => [point.x, point.y])
 }
 
@@ -265,6 +284,7 @@ type PlanPoint = { x: number; y: number }
  * arrows clear the splay.
  */
 function columnPlanHalfExtents(column: ColumnNode): { halfX: number; halfZ: number } {
+  if (column.source) return { halfX: column.width / 2, halfZ: column.depth / 2 }
   if (column.supportStyle !== 'vertical') {
     return {
       halfX:

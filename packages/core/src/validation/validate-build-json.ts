@@ -35,6 +35,8 @@ export type ParsedBuildJson = {
   materials?: Record<string, SceneMaterial>
   /** Item collections; member nodes carry the matching `collectionIds`. */
   collections?: Record<string, Collection>
+  /** The project the file was saved from, where its scripted nodes' artifacts live. */
+  projectId?: string
 }
 
 export type SchemaIssue = {
@@ -134,6 +136,7 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
   const installedPluginsRaw = input.installedPlugins
   const materialsRaw = input.materials
   const collectionsRaw = input.collections
+  const projectId = typeof input.projectId === 'string' ? input.projectId : undefined
 
   if (!isPlainObject(nodesRaw)) {
     errors.push({
@@ -510,6 +513,7 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
           ...(installedPlugins ? { installedPlugins } : {}),
           ...(materials ? { materials } : {}),
           ...(collections ? { collections } : {}),
+          ...(projectId ? { projectId } : {}),
         }
       : null,
     stats,

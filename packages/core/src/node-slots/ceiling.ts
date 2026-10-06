@@ -1,4 +1,4 @@
-import type { SlotDeclaration } from '@pascal-app/core'
+import type { SlotDeclaration } from '../registry/types'
 
 export type CeilingSlotId = 'surface'
 
