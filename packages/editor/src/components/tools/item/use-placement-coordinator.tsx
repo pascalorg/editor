@@ -1152,7 +1152,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!cursorGroupRef.current) return
       const result = floorStrategy.move(getContext(), floorEvent)
       if (!result) return
-      grabForgotten = true
+      // Attached items cannot land on the floor; its hit can be a gap in their host.
+      if (!asset.attachTo) grabForgotten = true
 
       // Figma-style alignment snap layered on top of the floor strategy's
       // grid snap: when the draft's edge lines up (on X or Z) with another

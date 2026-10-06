@@ -68,7 +68,7 @@ export function resolveStairSurfaceSnap(
       const nx = (-dz / size) * direction,
         nz = (dx / size) * direction
       const outside = -((candidate[0] - edge[0]) * nx + (candidate[1] - edge[1]) * nz)
-      if (outside < -SNAP_DISTANCE || outside > 5) continue
+      if (outside < -SNAP_DISTANCE) continue
       const distance = Math.min(lowDistance, highDistance)
       const catchDistance = stair.landscapeSurfaceId === surface.id ? 1.25 : SNAP_DISTANCE
       if (distance > catchDistance || (closest && distance >= closest.distance)) continue
