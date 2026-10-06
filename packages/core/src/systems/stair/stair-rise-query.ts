@@ -100,8 +100,8 @@ const RISE_SYNC_EPSILON = 1e-4
  * Scope: stairs whose total the system owns — follows-mode stairs (absent
  * `totalRise`, tracking their level or their deck) and deck-attached stairs
  * (an explicit rise converges to the typed value). A detached stair with an
- * explicit `totalRise` is the one place hand-edited segment chains are
- * legitimate, so it is never touched. Flight heights scale proportionally
+ * explicit `totalRise` keeps its hand-edited segment chain, unless the user
+ * enabled uniform risers. Flight heights otherwise scale proportionally
  * (landings keep theirs); returns `updateNodes` patches, empty when every
  * stair is already in step.
  */
@@ -115,7 +115,7 @@ export function syncStairRises(
   for (const node of Object.values(nodes)) {
     if (node.type !== 'stair' || (node.stairType ?? 'straight') !== 'straight') continue
     const deck = node.deckSlabId ? nodes[node.deckSlabId] : undefined
-    if (node.totalRise !== undefined && deck?.type !== 'slab') continue
+    if (node.totalRise !== undefined && deck?.type !== 'slab' && !node.uniformRisers) continue
 
     const segments = (node.children ?? [])
       .map((childId) => nodes[childId])
@@ -130,17 +130,22 @@ export function syncStairRises(
     const targetFlightRise =
       resolveStairTotalRise(node, nodes, baseElevationFor, legacyArrival) - landingRise
     if (!Number.isFinite(targetFlightRise) || targetFlightRise <= 0) continue
-    if (Math.abs(flightRise - targetFlightRise) <= RISE_SYNC_EPSILON) continue
+    if (!node.uniformRisers && Math.abs(flightRise - targetFlightRise) <= RISE_SYNC_EPSILON)
+      continue
+    const count = flights.reduce((sum, flight) => sum + Math.max(0, flight.stepCount), 0)
 
     for (const flight of flights) {
       // A sole flight owns the exact target; proportional scaling adds undo/redo rounding drift.
       const height =
         flights.length === 1
           ? targetFlightRise
-          : flightRise > RISE_SYNC_EPSILON
-            ? flight.height * (targetFlightRise / flightRise)
-            : targetFlightRise / flights.length
-      updates.push({ id: flight.id as AnyNodeId, data: { height } })
+          : node.uniformRisers && count > 0
+            ? (targetFlightRise * Math.max(0, flight.stepCount)) / count
+            : flightRise > RISE_SYNC_EPSILON
+              ? flight.height * (targetFlightRise / flightRise)
+              : targetFlightRise / flights.length
+      if (Math.abs(height - flight.height) > RISE_SYNC_EPSILON)
+        updates.push({ id: flight.id as AnyNodeId, data: { height } })
     }
   }
 

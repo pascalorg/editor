@@ -2,7 +2,9 @@ import { levelBuildingId } from '../building/level-duplication'
 import { getLevelDisplayName } from '../lib/level-name'
 import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema } from '../schema'
 import { getStoredLevelHeight } from '../services/storey'
-import { resolveStairTotalRise } from '../systems/stair/stair-rise'
+import { computeSegmentTransforms, rotateXZ } from '../systems/stair/stair-footprint'
+import { resolveStairTotalRise } from '../systems/stair/stair-rise-query'
+import { measureStair } from '../systems/stair/stair-sizing'
 import { checkOpeningWithinWall, formatOpeningBoundsIssue } from '../validation/opening-bounds'
 import { layoutIssuesFromScene } from './layout-clearance'
 import { wallResolvedHeight } from './level-reads'
@@ -21,15 +23,6 @@ import type { AgentOperation, SceneNodes } from './types'
 export type SceneIssue = { type: string; message: string }
 
 type StairNode = AnyNode & { type: 'stair' }
-type SegmentTransform = { position: [number, number, number]; rotation: number }
-type StairSegmentLike = {
-  width: number
-  length: number
-  height: number
-  stepCount: number
-  attachmentSide: 'front' | 'left' | 'right'
-}
-
 const occupiedContent = (counts: ContentCounts) =>
   counts.walls +
   counts.zones +
@@ -40,64 +33,9 @@ const occupiedContent = (counts: ContentCounts) =>
   counts.ceilings +
   counts.stairs
 
-function rotateXZ(x: number, z: number, angle: number): Vec2 {
-  const cos = Math.cos(angle)
-  const sin = Math.sin(angle)
-  return [x * cos + z * sin, -x * sin + z * cos]
-}
-
 function toWorldPlanPoint(stair: StairNode, localX: number, localZ: number): Vec2 {
   const [worldX, worldZ] = rotateXZ(localX, localZ, stair.rotation ?? 0)
   return [stair.position[0] + worldX, stair.position[2] + worldZ]
-}
-
-function computeSegmentTransforms(segments: StairSegmentLike[]): SegmentTransform[] {
-  const transforms: SegmentTransform[] = []
-  let currentX = 0
-  let currentY = 0
-  let currentZ = 0
-  let currentRot = 0
-
-  for (let index = 0; index < segments.length; index++) {
-    const segment = segments[index]
-    if (!segment) continue
-
-    if (index === 0) {
-      transforms.push({ position: [currentX, currentY, currentZ], rotation: currentRot })
-      continue
-    }
-
-    const previous = segments[index - 1]
-    if (!previous) continue
-
-    let attachX = 0
-    let attachZ = 0
-    let rotationDelta = 0
-    switch (segment.attachmentSide) {
-      case 'front':
-        attachZ = previous.length
-        break
-      case 'left':
-        attachX = previous.width / 2
-        attachZ = previous.length / 2
-        rotationDelta = Math.PI / 2
-        break
-      case 'right':
-        attachX = -previous.width / 2
-        attachZ = previous.length / 2
-        rotationDelta = -Math.PI / 2
-        break
-    }
-
-    const [deltaX, deltaZ] = rotateXZ(attachX, attachZ, currentRot)
-    currentX += deltaX
-    currentY += previous.height
-    currentZ += deltaZ
-    currentRot += rotationDelta
-    transforms.push({ position: [currentX, currentY, currentZ], rotation: currentRot })
-  }
-
-  return transforms
 }
 
 function stairFootprintPolygons(nodes: SceneNodes, stair: StairNode): Vec2[][] {
@@ -114,7 +52,7 @@ function stairFootprintPolygons(nodes: SceneNodes, stair: StairNode): Vec2[][] {
   const segments = (stair.children ?? [])
     .map((childId) => nodes[childId])
     .filter((node): node is AnyNode & { type: 'stair-segment' } => node?.type === 'stair-segment')
-  const usableSegments: StairSegmentLike[] =
+  const usableSegments =
     segments.length > 0
       ? segments
       : [
@@ -357,6 +295,11 @@ export const verifyScene: AgentOperation = (nodes, _input, context) => {
     (node): node is StairNode => node.type === 'stair',
   )) {
     const stairName = stair.name ?? stair.id
+    for (const diagnostic of measureStair(stair, nodes as Record<string, AnyNode>).diagnostics)
+      report(
+        `stair_${diagnostic.code.replaceAll('-', '_')}`,
+        `Stair ${stairName}: ${diagnostic.message}`,
+      )
     const sourceLevelId = levelIdOf(nodes, stair.id)
     if (sourceLevelId) {
       const sourceName = nodes[sourceLevelId]?.name ?? sourceLevelId

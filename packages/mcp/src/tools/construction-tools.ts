@@ -4,7 +4,12 @@ import {
   createZone,
   cutFloorOpening,
   generateId,
-  resolveStairTotalRise,
+  measureStair,
+  planStairCreation,
+  planStairPreset,
+  planStairSizingEdit,
+  proposeStairLayouts,
+  StairDesignTargets,
 } from '@pascal-app/core'
 import { unknownMaterialPresetRefusal } from '@pascal-app/core/agent-operations'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
@@ -17,8 +22,13 @@ import {
   StairSegmentNode,
 } from '@pascal-app/core/schema'
 import { z } from 'zod'
+import type { Patch } from '../bridge/scene-bridge'
 import type { SceneOperations } from '../operations'
-import { ADDITIVE_TOOL_ANNOTATIONS, DESTRUCTIVE_TOOL_ANNOTATIONS } from './annotations'
+import {
+  ADDITIVE_TOOL_ANNOTATIONS,
+  DESTRUCTIVE_TOOL_ANNOTATIONS,
+  READ_ONLY_TOOL_ANNOTATIONS,
+} from './annotations'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { measurement } from './measurement'
 import { NodeIdSchema, Vec2Schema, Vec3Schema } from './schemas'
@@ -125,13 +135,13 @@ export const createStairBetweenLevelsInput = {
   width: measurement('length', 'm', { positive: true, description: 'Stair width.' }).default(1),
   runLength: measurement('length', 'm', {
     positive: true,
-    description: 'Horizontal run length.',
-  }).default(3),
+    description: 'Horizontal run length; omitted derives from shared stair design targets.',
+  }).optional(),
   totalRise: measurement('length', 'm', {
     positive: true,
     description: 'Total vertical rise.',
   }).optional(),
-  stepCount: z.number().int().positive().default(14),
+  stepCount: z.number().int().min(2).optional(),
   railingMode: z.enum(RAILING_MODES).default('both'),
   destinationSlabId: NodeIdSchema.optional(),
   sourceCeilingId: NodeIdSchema.optional(),
@@ -299,6 +309,113 @@ function derivedShellSurfaces(bridge: SceneOperations, levelId: string, zoneIds:
 }
 
 export function registerConstructionTools(server: McpServer, bridge: SceneOperations): void {
+  server.registerTool(
+    'measure_stair',
+    {
+      title: 'Measure stair',
+      description:
+        'Inspect actual flight risers, walking-line going, slope, arrival, uniformity, headroom against floors, ceilings and stair bodies, and design-target diagnostics without changing measured geometry.',
+      inputSchema: {
+        stairId: NodeIdSchema,
+        available: z
+          .object({ width: z.number().positive(), length: z.number().positive() })
+          .optional(),
+      },
+      outputSchema: { measurements: z.json(), layouts: z.json() },
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
+    },
+    async ({ stairId, available }) => {
+      const stair = assertNode(bridge, stairId, 'stair') as StairNode
+      return textResult({
+        measurements: measureStair(stair, bridge.getNodes()),
+        layouts: proposeStairLayouts(stair, bridge.getNodes(), available),
+      })
+    },
+  )
+  server.registerTool(
+    'fit_stair',
+    {
+      title: 'Fit stair',
+      description:
+        'Explicitly replace stair riser proportions with uniform risers from design targets. Optionally fit going by changing flight runs or arc sweep; preserves landing elevations. Optional straight, L or U layout replaces the flight chain with width-sized turning landings or quarter-turn winders. Winder going is measured along the selected walking line. One atomic edit.',
+      inputSchema: {
+        stairId: NodeIdSchema,
+        fitRun: z.boolean().default(false),
+        layout: z.enum(['straight', 'l', 'u']).optional(),
+        turn: z.enum(['left', 'right']).optional(),
+        width: z.number().positive().optional(),
+        landingDepth: z.number().positive().optional(),
+        turningStrategy: z.enum(['landing', 'winder']).optional(),
+        innerGap: z.number().nonnegative().optional(),
+        walkingLineOffset: z.number().positive().optional(),
+        division: z.enum(['equal-going', 'equal-angle']).optional(),
+        targets: StairDesignTargets.partial().optional(),
+      },
+      outputSchema: { stairId: NodeIdSchema, measurements: z.json(), ...liveSyncOutput },
+      annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
+    },
+    async ({
+      stairId,
+      fitRun,
+      targets,
+      layout,
+      turn,
+      width,
+      landingDepth,
+      turningStrategy,
+      innerGap,
+      walkingLineOffset,
+      division,
+    }) => {
+      const original = assertNode(bridge, stairId, 'stair') as StairNode
+      const stair = targets
+        ? {
+            ...original,
+            designTargets: StairDesignTargets.parse({ ...original.designTargets, ...targets }),
+          }
+        : original
+      const nodes: Record<string, AnyNode> = { ...bridge.getNodes(), [stair.id]: stair }
+      let patches: Patch[]
+      if (layout) {
+        const plan = planStairPreset(stair, nodes, {
+          layout,
+          turn,
+          width,
+          landingDepth,
+          turningStrategy,
+          innerGap,
+          walkingLineOffset,
+          division,
+        })
+        patches = plan.removeIds.map((id) => ({ op: 'delete', id }))
+        for (const segment of plan.segments) {
+          patches.push(
+            nodes[segment.id]
+              ? { op: 'update', id: segment.id, data: segment }
+              : { op: 'create', node: segment, parentId: stair.id },
+          )
+        }
+        patches.push({ op: 'update', id: stair.id, data: plan.stair })
+      } else {
+        if (turn || width !== undefined || landingDepth !== undefined)
+          throw new RangeError('Choose a layout when specifying turn, width or landing depth')
+        const updates = planStairSizingEdit(stair, nodes, fitRun)
+        if (targets)
+          updates[0]!.data = {
+            ...updates[0]!.data,
+            designTargets: stair.designTargets,
+          } as Partial<AnyNode>
+        patches = updates.map(({ id, data }) => ({ op: 'update', id, data }))
+      }
+      bridge.applyPatch(patches)
+      const persistence = await publishLiveSceneSnapshot(bridge, 'fit_stair')
+      return textResult({
+        stairId,
+        measurements: measureStair(bridge.getNodes()[stair.id] as StairNode, bridge.getNodes()),
+        ...persistencePayload(persistence),
+      })
+    },
+  )
   server.registerTool(
     'create_story_shell',
     {
@@ -550,9 +667,9 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
       position,
       rotation,
       width,
-      runLength,
+      runLength: requestedRunLength,
       totalRise,
-      stepCount,
+      stepCount: requestedStepCount,
       railingMode,
       destinationSlabId,
       sourceCeilingId,
@@ -581,13 +698,15 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         position: position as [number, number, number],
         rotation,
         stairType: 'straight',
+        parentId: fromLevelId,
+        uniformRisers: true,
         fromLevelId,
         toLevelId,
         slabOpeningMode: 'none',
         openingOffset,
         width,
         ...(totalRise !== undefined ? { totalRise } : {}),
-        stepCount,
+        stepCount: requestedStepCount,
         railingMode,
         children: [],
         ...(materialPreset ? { materialPreset } : {}),
@@ -603,16 +722,18 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         },
         [stairDraft.id]: stairDraft,
       } as Record<string, AnyNode>
-      const resolvedTotalRise = resolveStairTotalRise(stairDraft, riseNodes)
-      const segment = StairSegmentNode.parse({
-        segmentType: 'stair',
+      const dimensions = {
         width,
-        length: runLength,
-        height: resolvedTotalRise,
-        stepCount,
+        ...(requestedRunLength !== undefined ? { length: requestedRunLength } : {}),
+        ...(requestedStepCount !== undefined ? { stepCount: requestedStepCount } : {}),
+      }
+      const { flight } = planStairCreation(stairDraft, riseNodes, dimensions)
+      const segment = StairSegmentNode.parse({
+        ...flight,
         ...(materialPreset ? { materialPreset } : {}),
       })
-      const stair = { ...stairDraft, children: [segment.id] }
+      const runLength = segment.length
+      const stair = { ...stairDraft, stepCount: segment.stepCount, children: [segment.id] }
 
       const openingPolygon = rectangularOpening({
         position: position as [number, number, number],

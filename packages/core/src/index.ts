@@ -100,6 +100,7 @@ export {
   type WallConstructionResolution,
 } from './hooks/spatial-grid/support-host-patch'
 export { useSpatialQuery } from './hooks/spatial-grid/use-spatial-query'
+export { createAngleAccumulator } from './lib/angle-accumulator'
 export {
   ARTIFACT_URL_PREFIX,
   type ArtifactStore,
@@ -663,6 +664,28 @@ export {
   type WallSlabSupport,
 } from './systems/slab/slab-support'
 export {
+  measureStairHeadroom,
+  resolveStairWalkingSurfaces,
+  type StairBodySurface,
+  type StairWalkingSurface,
+  stairClearanceOpening,
+} from './systems/stair/stair-clearance'
+export {
+  resolveArcStairConstruction,
+  resolveStairConstruction,
+  resolveStraightStairConstruction,
+  type StairArcConstructionPiece,
+  type StairConstructionPiece,
+  stairArcSliceCount,
+  stairConstructionError,
+  stairSegmentConstructionError,
+} from './systems/stair/stair-construction'
+export {
+  measureStairDetail,
+  STAIR_DETAIL_SURFACE_BUDGET,
+  stairSegmentDetailError,
+} from './systems/stair/stair-detail-budget'
+export {
   createDefaultStairSegment,
   createStairFlightFromStair,
   type StairFlightOverrides,
@@ -674,15 +697,59 @@ export {
 } from './systems/stair/stair-floor-footprints'
 export {
   computeSegmentTransforms,
+  rotateXZ,
   type StairFootprintAABB,
   stairDeckLevelId,
   stairFootprintAABB,
 } from './systems/stair/stair-footprint'
+export {
+  resolveStairArcDimensions,
+  resolveStairArcLayout,
+  type StairArcStep,
+} from './systems/stair/stair-layout'
 export { createSurfaceOpeningPreviewController } from './systems/stair/stair-opening-preview'
 export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
 export { StairOpeningSystem } from './systems/stair/stair-opening-system'
+export {
+  planStairPreset,
+  proposeStairLayouts,
+  type StairLayoutPreset,
+  type StairPresetOptions,
+} from './systems/stair/stair-presets'
+export {
+  resolveStairHandrailPaths,
+  resolveStairRailPaths,
+  resolveStairWalkInside,
+  type StairRailPath,
+} from './systems/stair/stair-rail-path'
 export { resolveStairTotalRise, syncStairRises } from './systems/stair/stair-rise'
-export { stairHasNoRise } from './systems/stair/stair-rise-query'
+export { planStairFlightHeightEdit, planStairRiseEdit } from './systems/stair/stair-rise-edit'
+export {
+  resolveStairTotalRise as resolveStairTotalRiseFromNodes,
+  stairHasNoRise,
+} from './systems/stair/stair-rise-query'
+export {
+  createSizedStairFlight,
+  DEFAULT_STAIR_DESIGN_TARGETS,
+  measureStair,
+  planStairCreation,
+  planStairSizing,
+  planStairSizingEdit,
+  type StairDiagnostic,
+} from './systems/stair/stair-sizing'
+export { planStairSweepEdit } from './systems/stair/stair-sweep-edit'
+export {
+  resolveStairWalkingPaths,
+  type StairWalkingPoint,
+} from './systems/stair/stair-walking-line'
+export {
+  resolveStairWinder,
+  resolveStairWinderFootprint,
+  resolveWinderStairConstruction,
+  type StairWinderConstructionPiece,
+  type StairWinderLayout,
+  type StairWinderPoint,
+} from './systems/stair/stair-winder'
 export {
   assemblyThickness,
   BRICK_AIR_SPACE,

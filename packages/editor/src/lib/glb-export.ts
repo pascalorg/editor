@@ -1005,6 +1005,8 @@ const PLACEHOLDER_MATERIAL = new THREE.MeshBasicMaterial({ visible: false })
 function pruneNonRenderableMeshes(root: THREE.Object3D, identityNodes: Set<THREE.Object3D>) {
   const toRemove: THREE.Object3D[] = []
   root.traverse((object) => {
+    if (typeof object.userData.pascalExportRefusal === 'string')
+      throw new Error(object.userData.pascalExportRefusal)
     if (object.userData.pascalExport === 'strip') {
       toRemove.push(object)
       return
@@ -1814,9 +1816,32 @@ function stampIdentity(
           activeWindow?: [number, number]
         }
       | undefined
+    const surfaceNodeIds = object.userData.surfaceNodeIds
+    const ifcRole = object.userData.pascalIfcRole
+    const ifcParts = object.userData.pascalIfcParts
     const slotId = object.userData.slotId
     object.userData =
       typeof presentationId === 'string' ? { pascalPresentationId: presentationId, label } : {}
+    if (
+      Array.isArray(surfaceNodeIds) &&
+      surfaceNodeIds.every((id) => typeof id === 'string' && nodes[id])
+    )
+      object.userData.surfaceNodeIds = surfaceNodeIds
+    if (typeof ifcRole === 'string') object.userData.pascalIfcRole = ifcRole
+    if (
+      Array.isArray(ifcParts) &&
+      ifcParts.every(
+        (part) =>
+          Number.isInteger(part.start) &&
+          part.start >= 0 &&
+          part.start % 3 === 0 &&
+          Number.isInteger(part.count) &&
+          part.count > 0 &&
+          part.count % 3 === 0 &&
+          typeof part.role === 'string',
+      )
+    )
+      object.userData.pascalIfcParts = ifcParts
     if (typeof slotId === 'string') object.userData.slotId = slotId
     if (motion) {
       object.userData.proceduralMotion = {
@@ -1882,6 +1907,6 @@ function stampIdentity(
       extras.rotation = (node as { rotation?: number }).rotation ?? 0
       target.visible = true
     }
-    target.userData = extras
+    target.userData = { ...target.userData, ...extras }
   }
 }

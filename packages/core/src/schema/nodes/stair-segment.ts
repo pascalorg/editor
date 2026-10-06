@@ -2,6 +2,7 @@ import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
+import { StairConstruction } from './stair-construction'
 
 export const StairSegmentType = z.enum(['stair', 'landing'])
 
@@ -11,11 +12,19 @@ export const AttachmentSide = z.enum(['front', 'left', 'right'])
 
 export type AttachmentSide = z.infer<typeof AttachmentSide>
 
+export const StairWinder = z.object({
+  turn: z.enum(['left', 'right']),
+  innerGap: z.number().finite().nonnegative().default(0),
+  walkingLineOffset: z.number().finite().positive().default(0.5),
+  division: z.enum(['equal-going', 'equal-angle']).default('equal-going'),
+})
+
 export const StairSegmentNode = BaseNode.extend({
   id: objectId('sseg'),
   type: nodeType('stair-segment'),
   material: MaterialSchema.optional(),
   materialPreset: z.string().optional(),
+  slots: z.record(z.string(), z.string()).optional(),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   // Rotation around Y axis in radians
   rotation: z.number().default(0),
@@ -33,6 +42,8 @@ export const StairSegmentNode = BaseNode.extend({
   attachmentSide: AttachmentSide.default('front'),
   // Whether to fill the underside down to floor level
   fillToFloor: z.boolean().default(true),
+  construction: StairConstruction.optional(),
+  winder: StairWinder.optional(),
   // Thickness of the stair slab when not filled to floor
   thickness: z.number().default(0.25),
 }).describe(
@@ -47,6 +58,7 @@ export const StairSegmentNode = BaseNode.extend({
   - stepCount: number of steps (stair type only)
   - attachmentSide: front, left, or right - which side of the previous segment to attach to
   - fillToFloor: whether to fill the underside down to the absolute floor level
+  - construction: optional explicit body, tread, riser, nosing, finish and stringer details; absent inherits the parent setting
   - thickness: slab thickness when not filled to floor
   `,
 )

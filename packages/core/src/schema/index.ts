@@ -349,6 +349,7 @@ export { SpawnNode } from './nodes/spawn'
 export type { StairSurfaceMaterialRole, StairSurfaceMaterialSpec } from './nodes/stair'
 export {
   getEffectiveStairSurfaceMaterial,
+  StairDesignTargets,
   StairNode,
   StairRailingMode,
   StairRailingStyle,
@@ -356,6 +357,7 @@ export {
   StairTopLandingMode,
   StairType,
 } from './nodes/stair'
+export { StairConstruction } from './nodes/stair-construction'
 export { AttachmentSide, StairSegmentNode, StairSegmentType } from './nodes/stair-segment'
 export { StructuralGridNode } from './nodes/structural-grid'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'

@@ -2375,3 +2375,27 @@ describe('plugin bake policies through export', () => {
     })
   })
 })
+
+test('prepared exports preserve surface identities and IFC subpart roles on registered meshes', () => {
+  const root = new THREE.Group()
+  root.name = 'scene-renderer'
+  const owner = { ...BaseNode.parse({ id: 'item_surface_owner' }), type: 'item' } as AnyNode
+  const child = {
+    ...BaseNode.parse({ id: 'item_surface_child', parentId: owner.id }),
+    type: 'item',
+  } as AnyNode
+  const mesh = meshWithNodeMaterial(nodeMaterial())
+  mesh.userData = {
+    surfaceNodeIds: [child.id],
+    pascalIfcRole: 'railing',
+    pascalIfcParts: [{ start: 0, count: 3, role: 'handrail' }],
+  }
+  root.add(mesh)
+  sceneRegistry.nodes.set(owner.id, mesh)
+  const { scene } = prepareSceneForExport(root, { [owner.id]: owner, [child.id]: child })
+  const exported = scene.getObjectByName(owner.id)!
+  expect(exported.userData.pascalId).toBe(owner.id)
+  expect(exported.userData.surfaceNodeIds).toEqual([child.id])
+  expect(exported.userData.pascalIfcRole).toBe('railing')
+  expect(exported.userData.pascalIfcParts).toEqual([{ start: 0, count: 3, role: 'handrail' }])
+})

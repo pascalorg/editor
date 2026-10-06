@@ -1,6 +1,11 @@
 'use client'
 
-import type { Point2D, StairNode, StairSegmentNode } from '@pascal-app/core'
+import {
+  type Point2D,
+  resolveStairArcLayout,
+  type StairNode,
+  type StairSegmentNode,
+} from '@pascal-app/core'
 import {
   memo,
   type MouseEvent as ReactMouseEvent,
@@ -72,46 +77,8 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
 }
 
-function getNormalizedFloorplanStairSweepAngle(stair: StairNode) {
-  const stairType = stair.stairType ?? 'straight'
-  const baseSweepAngle = stair.sweepAngle ?? (stairType === 'spiral' ? Math.PI * 2 : Math.PI / 2)
-
-  if (Math.abs(baseSweepAngle) >= Math.PI * 2) {
-    return Math.sign(baseSweepAngle || 1) * (Math.PI * 2 - 0.001)
-  }
-
-  return baseSweepAngle
-}
-
-function clampFloorplanCircularSweepAngle(sweepAngle: number) {
-  if (Math.abs(sweepAngle) >= Math.PI * 2) {
-    return Math.sign(sweepAngle || 1) * (Math.PI * 2 - 0.001)
-  }
-
-  return sweepAngle
-}
-
-function getFloorplanStairStepCount(stair: StairNode, minimum: number) {
-  return Math.max(minimum, Math.round(stair.stepCount ?? 10))
-}
-
 function getFloorplanStairBreakStep(stepCount: number) {
   return Math.max(1, Math.ceil(Math.max(1, Math.round(stepCount)) * 0.68))
-}
-
-function getFloorplanSpiralLandingSweep(stair: StairNode, sweepAngle: number) {
-  if (stair.stairType !== 'spiral' || (stair.topLandingMode ?? 'none') !== 'integrated') {
-    return 0
-  }
-
-  const innerRadius = Math.max(0.05, stair.innerRadius ?? 0.9)
-  const width = Math.max(stair.width ?? 1, 0.4)
-  const landingDepth = Math.max(0.3, stair.topLandingDepth ?? Math.max(width * 0.9, 0.8))
-
-  return (
-    Math.min(Math.PI * 0.75, landingDepth / Math.max(innerRadius + width / 2, 0.1)) *
-    Math.sign(sweepAngle || 1)
-  )
 }
 
 export const FloorplanStairLayer = memo(function FloorplanStairLayer({
@@ -147,24 +114,30 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
         const isSelectionActive =
           stairSelected || stairHighlighted || segmentSelected || segmentHighlighted
         const stairType = stair.stairType ?? 'straight'
-        const normalizedSweepAngle = getNormalizedFloorplanStairSweepAngle(stair)
+        const layout = resolveStairArcLayout(stair, 0)
+        const {
+          stepCount,
+          stepSweep,
+          innerRadius,
+          outerRadius,
+          walkingRadius: centerlineRadius,
+        } = layout
+        const normalizedSweepAngle = layout.sweepAngle
         const sectorStartAngle = -stair.rotation - normalizedSweepAngle / 2
         const sectorEndAngle = sectorStartAngle + normalizedSweepAngle
-        const spiralLandingSweep = getFloorplanSpiralLandingSweep(stair, normalizedSweepAngle)
-        const visualSweepAngle = clampFloorplanCircularSweepAngle(
-          normalizedSweepAngle + spiralLandingSweep,
-        )
-        const visualSectorEndAngle = sectorStartAngle + visualSweepAngle
+        const spiralLandingSweep = layout.landingSweep
+        const visualSweepAngle =
+          Math.sign(normalizedSweepAngle || 1) *
+          Math.min(
+            Math.abs(normalizedSweepAngle + spiralLandingSweep + layout.nosingSweep),
+            Math.PI * 2,
+          )
+        const visualSectorStartAngle = sectorStartAngle - layout.nosingSweep
+        const visualSectorEndAngle = visualSectorStartAngle + visualSweepAngle
         const stairCenter = {
           x: stair.position[0],
           y: stair.position[2],
         }
-        const innerRadius = Math.max(
-          stairType === 'spiral' ? 0.05 : 0.2,
-          stair.innerRadius ?? (stairType === 'spiral' ? 0.2 : 0.9),
-        )
-        const outerRadius = innerRadius + stair.width
-        const centerlineRadius = innerRadius + stair.width / 2
         const curvedStroke = isDeleteHovered
           ? palette.deleteStroke
           : isSelectionActive
@@ -210,7 +183,7 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
                   stairCenter,
                   innerRadius,
                   outerRadius,
-                  sectorStartAngle,
+                  visualSectorStartAngle,
                   visualSectorEndAngle,
                 )}
                 fill={curvedFill}
@@ -220,7 +193,7 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
                 d={buildSvgArcPath(
                   stairCenter,
                   outerRadius,
-                  sectorStartAngle,
+                  visualSectorStartAngle,
                   visualSectorEndAngle,
                 )}
                 fill="none"
@@ -233,7 +206,7 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
                 d={buildSvgArcPath(
                   stairCenter,
                   innerRadius,
-                  sectorStartAngle,
+                  visualSectorStartAngle,
                   visualSectorEndAngle,
                 )}
                 fill="none"
@@ -242,9 +215,7 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
                 strokeWidth={curvedInnerLineWidth}
                 vectorEffect="non-scaling-stroke"
               />
-              {Array.from({ length: getFloorplanStairStepCount(stair, 6) + 1 }, (_, index) => {
-                const stepCount = getFloorplanStairStepCount(stair, 6)
-                const stepSweep = normalizedSweepAngle / stepCount
+              {Array.from({ length: stepCount + 1 }, (_, index) => {
                 const angle = sectorStartAngle + stepSweep * index
                 const innerPoint = getArcPlanPoint(stairCenter, innerRadius, angle)
                 const outerPoint = getArcPlanPoint(stairCenter, outerRadius, angle)
@@ -278,8 +249,7 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
               />
               {(() => {
                 const directionAngle =
-                  visualSectorEndAngle -
-                  (normalizedSweepAngle / getFloorplanStairStepCount(stair, 6)) * 0.8
+                  sectorEndAngle + spiralLandingSweep - (normalizedSweepAngle / stepCount) * 0.8
                 const arrowPoint = getArcPlanPoint(stairCenter, centerlineRadius, directionAngle)
                 const tangentAngle =
                   directionAngle + (normalizedSweepAngle >= 0 ? Math.PI / 2 : -Math.PI / 2)
@@ -293,7 +263,7 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
                       buildSvgArrowHeadPoints(
                         arrowPoint,
                         tangentAngle,
-                        clamp(stair.width * 0.18, 0.12, 0.18),
+                        clamp(layout.width * 0.18, 0.12, 0.18),
                       ),
                     )}
                   />
@@ -307,14 +277,19 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
                   stairCenter,
                   innerRadius,
                   outerRadius,
-                  sectorStartAngle,
-                  sectorEndAngle,
+                  visualSectorStartAngle,
+                  visualSectorEndAngle,
                 )}
                 fill={curvedFill}
                 pointerEvents="none"
               />
               <path
-                d={buildSvgArcPath(stairCenter, outerRadius, sectorStartAngle, sectorEndAngle)}
+                d={buildSvgArcPath(
+                  stairCenter,
+                  outerRadius,
+                  visualSectorStartAngle,
+                  visualSectorEndAngle,
+                )}
                 fill="none"
                 pointerEvents="none"
                 stroke={curvedStroke}
@@ -322,16 +297,19 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
                 vectorEffect="non-scaling-stroke"
               />
               <path
-                d={buildSvgArcPath(stairCenter, innerRadius, sectorStartAngle, sectorEndAngle)}
+                d={buildSvgArcPath(
+                  stairCenter,
+                  innerRadius,
+                  visualSectorStartAngle,
+                  visualSectorEndAngle,
+                )}
                 fill="none"
                 pointerEvents="none"
                 stroke={curvedStroke}
                 strokeWidth={curvedInnerLineWidth}
                 vectorEffect="non-scaling-stroke"
               />
-              {Array.from({ length: getFloorplanStairStepCount(stair, 4) + 1 }, (_, index) => {
-                const stepCount = getFloorplanStairStepCount(stair, 4)
-                const stepSweep = normalizedSweepAngle / stepCount
+              {Array.from({ length: stepCount + 1 }, (_, index) => {
                 const angle = sectorStartAngle + stepSweep * index
                 const innerPoint = getArcPlanPoint(stairCenter, innerRadius, angle)
                 const outerPoint = getArcPlanPoint(stairCenter, outerRadius, angle)
@@ -357,10 +335,8 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
                 d={buildSvgArcPath(
                   stairCenter,
                   centerlineRadius,
-                  sectorStartAngle +
-                    (normalizedSweepAngle / getFloorplanStairStepCount(stair, 4)) * 0.55,
-                  sectorEndAngle -
-                    (normalizedSweepAngle / getFloorplanStairStepCount(stair, 4)) * 0.55,
+                  sectorStartAngle + (normalizedSweepAngle / stepCount) * 0.55,
+                  sectorEndAngle - (normalizedSweepAngle / stepCount) * 0.55,
                 )}
                 fill="none"
                 pointerEvents="none"
@@ -370,8 +346,6 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
                 vectorEffect="non-scaling-stroke"
               />
               {(() => {
-                const stepCount = getFloorplanStairStepCount(stair, 4)
-                const stepSweep = normalizedSweepAngle / stepCount
                 const arrowAngle = sectorEndAngle - stepSweep * 0.8
                 const arrowPoint = getArcPlanPoint(stairCenter, centerlineRadius, arrowAngle)
                 const tangentAngle =
@@ -386,7 +360,7 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
                       buildSvgArrowHeadPoints(
                         arrowPoint,
                         tangentAngle,
-                        clamp(stair.width * 0.16, 0.1, 0.16),
+                        clamp(layout.width * 0.16, 0.1, 0.16),
                       ),
                     )}
                   />

@@ -1,7 +1,7 @@
 import {
   type AnyNode,
   collectAlignmentAnchors,
-  createDefaultStairSegment,
+  createSizedStairFlight,
   createSurfaceOpeningPreviewController,
   DEFAULT_LEVEL_HEIGHT,
   emitter,
@@ -11,6 +11,8 @@ import {
   type LevelNode,
   movingAlignmentAnchors,
   type NodeEvent,
+  planStairCreation,
+  planStairSizing,
   resolveAlignment,
   resolveFrozenFloorPlacementPatch,
   resolveSupportSlabPatch,
@@ -54,11 +56,9 @@ import {
   DEFAULT_SPIRAL_TOP_LANDING_MODE,
   DEFAULT_STAIR_ATTACHMENT_SIDE,
   DEFAULT_STAIR_FILL_TO_FLOOR,
-  DEFAULT_STAIR_LENGTH,
   DEFAULT_STAIR_OPENING_OFFSET,
   DEFAULT_STAIR_RAILING_HEIGHT,
   DEFAULT_STAIR_RAILING_MODE,
-  DEFAULT_STAIR_STEP_COUNT,
   DEFAULT_STAIR_THICKNESS,
   DEFAULT_STAIR_TYPE,
   DEFAULT_STAIR_WIDTH,
@@ -75,19 +75,18 @@ type MoveTriggerEvent = GridEvent | NodeEvent<AnyNode>
  * Same algorithm as StairSystem's generateStairSegmentGeometry.
  */
 function createStairPreviewGeometry(rise: number): THREE.BufferGeometry {
-  const riserHeight = rise / DEFAULT_STAIR_STEP_COUNT
-  const treadDepth = DEFAULT_STAIR_LENGTH / DEFAULT_STAIR_STEP_COUNT
+  const { stepCount, length, riserHeight, going: treadDepth } = planStairSizing(rise)
 
   const shape = new THREE.Shape()
   shape.moveTo(0, 0)
 
-  for (let i = 0; i < DEFAULT_STAIR_STEP_COUNT; i++) {
+  for (let i = 0; i < stepCount; i++) {
     shape.lineTo(i * treadDepth, (i + 1) * riserHeight)
     shape.lineTo((i + 1) * treadDepth, (i + 1) * riserHeight)
   }
 
   // Fill to floor (absoluteHeight = 0)
-  shape.lineTo(DEFAULT_STAIR_LENGTH, 0)
+  shape.lineTo(length, 0)
   shape.lineTo(0, 0)
 
   const geometry = new THREE.ExtrudeGeometry(shape, {
@@ -110,33 +109,28 @@ function createStairPreviewGeometry(rise: number): THREE.BufferGeometry {
  * dropped on, not a constant: the placed stair has no explicit `totalRise`, so
  * this is the height `syncStairRises` immediately converges it to anyway.
  */
-function resolvePlacedStairRise(
+function resolvePlacedStairBase(
   nodes: Record<string, AnyNode>,
   levelId: LevelNode['id'],
   stair: StairNode,
   supportSurface: PointerSupportSurface | null,
+  seed: StairSegmentNode,
 ): number {
-  // Same contract as `resolveStairTotalRise` for a stair that is not in the
-  // scene yet: the storey height minus whatever slab lifts the drop point,
-  // capped by the surface the pointer actually aims at (a floor under an
-  // overlapping deck must not elect the deck).
+  // Keep the pointer-selected base when an overlapping deck is above the cursor.
   const base = getFloorStackedPosition({
     node: stair,
-    nodes,
+    nodes: { ...nodes, [seed.id]: { ...seed, parentId: stair.id } },
     position: stair.position,
     rotation: stair.rotation,
     levelId,
     maxElevation: supportSurface?.elevation ?? null,
   })[1]
-  return getLevelFloorToFloorHeight(levelId, nodes) - base
+  return base
 }
 
 function createSeedStairSegment(rise: number) {
-  return createDefaultStairSegment({
+  return createSizedStairFlight(rise, {
     width: DEFAULT_STAIR_WIDTH,
-    length: DEFAULT_STAIR_LENGTH,
-    height: rise,
-    stepCount: DEFAULT_STAIR_STEP_COUNT,
     attachmentSide: DEFAULT_STAIR_ATTACHMENT_SIDE,
     fillToFloor: DEFAULT_STAIR_FILL_TO_FLOOR,
     thickness: DEFAULT_STAIR_THICKNESS,
@@ -160,15 +154,16 @@ function createDefaultStairNode({
 }) {
   return StairNode.parse({
     name,
+    parentId: levelId,
     position,
     rotation,
     stairType: DEFAULT_STAIR_TYPE,
+    uniformRisers: true,
     fromLevelId: levelId,
     toLevelId: nextLevelId,
     slabOpeningMode: 'destination',
     openingOffset: DEFAULT_STAIR_OPENING_OFFSET,
     width: DEFAULT_STAIR_WIDTH,
-    stepCount: DEFAULT_STAIR_STEP_COUNT,
     thickness: DEFAULT_STAIR_THICKNESS,
     fillToFloor: DEFAULT_STAIR_FILL_TO_FLOOR,
     innerRadius: DEFAULT_CURVED_STAIR_INNER_RADIUS,
@@ -202,7 +197,9 @@ function commitStairPlacement(
 
   const stairCount = Object.values(nodes).filter((n) => n.type === 'stair').length
   const name = `Staircase ${stairCount + 1}`
-  const seed = createSeedStairSegment(getLevelFloorToFloorHeight(placementLevelId, nodes))
+  const storeyRise = getLevelFloorToFloorHeight(placementLevelId, nodes)
+  if (!(storeyRise > 0)) return
+  const seed = createSeedStairSegment(storeyRise)
 
   const destinationPlan = resolveStairDestinationLevel({
     createMissing: true,
@@ -222,10 +219,28 @@ function commitStairPlacement(
     }),
     parentId: placementLevelId,
   })
-  const segment = {
-    ...seed,
-    height: resolvePlacedStairRise(nodes, placementLevelId, stair, supportSurface),
+  const base = resolvePlacedStairBase(nodes, placementLevelId, stair, supportSurface, seed)
+  let segment: StairSegmentNode
+  try {
+    segment = {
+      ...planStairCreation(
+        stair,
+        nodes,
+        {
+          width: seed.width,
+          attachmentSide: seed.attachmentSide,
+          fillToFloor: seed.fillToFloor,
+          thickness: seed.thickness,
+        },
+        base,
+      ).flight,
+      id: seed.id,
+    }
+  } catch (error) {
+    if (error instanceof RangeError) return
+    throw error
   }
+  stair.stepCount = segment.stepCount
   const prospectiveNodes = {
     ...nodes,
     [stair.id]: stair,
@@ -270,6 +285,7 @@ export const StairTool: React.FC = () => {
   cameraRef.current = camera
   const cursorRef = useRef<THREE.Group>(null)
   const previewRef = useRef<THREE.Group>(null)
+  const previewMeshRef = useRef<THREE.Mesh>(null)
   const rotationRef = useRef(0)
   const supportSurfaceRef = useRef<PointerSupportSurface | null>(null)
   const previousGridPosRef = useRef<[number, number] | null>(null)
@@ -281,8 +297,10 @@ export const StairTool: React.FC = () => {
   )
   const previewRiseRef = useRef(previewRise)
   previewRiseRef.current = previewRise
-  const previewGeometry = useMemo(() => createStairPreviewGeometry(previewRise), [previewRise])
-  useEffect(() => () => previewGeometry.dispose(), [previewGeometry])
+  const previewGeometry = useMemo(() => createStairPreviewGeometry(DEFAULT_LEVEL_HEIGHT), [])
+  const ownedGeometryRef = useRef(previewGeometry)
+  const geometryRiseRef = useRef(DEFAULT_LEVEL_HEIGHT)
+  useEffect(() => () => ownedGeometryRef.current.dispose(), [])
 
   useEffect(() => {
     if (!currentLevelId) return
@@ -321,7 +339,9 @@ export const StairTool: React.FC = () => {
         nodes,
       })
       const nextLevelId = destinationPlan?.toLevel.id ?? placementLevelId
-      const seed = createSeedStairSegment(getLevelFloorToFloorHeight(placementLevelId, nodes))
+      const storeyRise = getLevelFloorToFloorHeight(placementLevelId, nodes)
+      if (!(storeyRise > 0)) return null
+      const seed = createSeedStairSegment(storeyRise)
       const stair = createDefaultStairNode({
         name: 'Staircase Preview',
         levelId: placementLevelId,
@@ -330,10 +350,28 @@ export const StairTool: React.FC = () => {
         rotation,
         segmentId: seed.id,
       })
-      const segment = {
-        ...seed,
-        height: resolvePlacedStairRise(nodes, placementLevelId, stair, supportSurface),
+      const base = resolvePlacedStairBase(nodes, placementLevelId, stair, supportSurface, seed)
+      let segment: StairSegmentNode
+      try {
+        segment = {
+          ...planStairCreation(
+            stair,
+            nodes,
+            {
+              width: seed.width,
+              attachmentSide: seed.attachmentSide,
+              fillToFloor: seed.fillToFloor,
+              thickness: seed.thickness,
+            },
+            base,
+          ).flight,
+          id: seed.id,
+        }
+      } catch (error) {
+        if (error instanceof RangeError) return null
+        throw error
       }
+      stair.stepCount = segment.stepCount
       const previewNodes = {
         ...nodes,
         ...(destinationPlan?.createdLevel
@@ -360,11 +398,13 @@ export const StairTool: React.FC = () => {
       rotation: number,
       supportSurface: PointerSupportSurface | null,
     ) => {
-      const key = `${position[0].toFixed(3)},${position[2].toFixed(3)},${rotation.toFixed(4)},${supportSurface?.elevation.toFixed(3) ?? 'none'},${supportSurface?.sourceNodeId ?? 'floor'}`
+      const key = `${position[0].toFixed(3)},${position[2].toFixed(3)},${rotation.toFixed(4)},${supportSurface?.elevation.toFixed(3) ?? 'none'},${supportSurface?.sourceNodeId ?? 'floor'},${previewRiseRef.current}`
       if (key === lastPreviewKey) return
       lastPreviewKey = key
-      useStairBuildPreview.getState().setPreview([position[0], position[2]], rotation)
       const preview = buildPreviewScene(position, rotation, supportSurface)
+      useStairBuildPreview
+        .getState()
+        .setPreview(preview ? [position[0], position[2]] : null, rotation, preview?.rise ?? null)
       const frozenPatch =
         preview && supportSurface?.sourceNodeId
           ? resolveFrozenFloorPlacementPatch(preview.stair, preview.previewNodes, {
@@ -398,11 +438,17 @@ export const StairTool: React.FC = () => {
       }
 
       if (previewRef.current) {
+        previewRef.current.visible = Boolean(preview)
         previewRef.current.position.set(...visualPosition)
         previewRef.current.rotation.y = rotation
-        // The ghost geometry is built for the storey height; squash it to the
-        // rise the placed flight will get on this surface.
-        previewRef.current.scale.y = preview ? preview.rise / previewRiseRef.current : 1
+        if (preview && previewMeshRef.current && preview.rise !== geometryRiseRef.current) {
+          const previous = previewMeshRef.current.geometry
+          previewMeshRef.current.geometry = createStairPreviewGeometry(preview.rise)
+          previous.dispose()
+          ownedGeometryRef.current = previewMeshRef.current.geometry
+          geometryRiseRef.current = preview.rise
+        }
+        previewRef.current.scale.y = 1
       }
 
       // Forward-facing triangle (editor-side overlay). The run ascends along
@@ -410,18 +456,19 @@ export const StairTool: React.FC = () => {
       // so `reversed` points the triangle out of the entry (where you approach
       // from), sitting just before it — not inside the footprint or at the
       // elevated far end. Centre is the footprint mid-run (origin is the entry).
-      useFacingPose.getState().set({
-        position: visualPosition,
-        rotationY: rotation,
-        depth: DEFAULT_STAIR_LENGTH,
-        center: [0, DEFAULT_STAIR_LENGTH / 2],
-        reversed: true,
-      })
-
       if (!preview) {
+        useFacingPose.getState().clear()
         openingPreview.clear()
         return
       }
+      const sizing = planStairSizing(preview.rise)
+      useFacingPose.getState().set({
+        position: visualPosition,
+        rotationY: rotation,
+        depth: sizing.length,
+        center: [0, sizing.length / 2],
+        reversed: true,
+      })
 
       openingPreview.apply(syncAutoStairOpenings(preview.previewNodes))
     }
@@ -625,7 +672,7 @@ export const StairTool: React.FC = () => {
           forward-facing triangle is drawn by the editor-side overlay from the
           pose published in `applyDraftPreview`. */}
       <group ref={previewRef}>
-        <mesh castShadow geometry={previewGeometry}>
+        <mesh castShadow dispose={null} geometry={previewGeometry} ref={previewMeshRef}>
           <meshStandardMaterial color="#818cf8" depthWrite={false} opacity={0.35} transparent />
         </mesh>
       </group>

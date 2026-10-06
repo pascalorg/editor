@@ -2745,9 +2745,14 @@ export type ParametricDescriptor<N> = {
    * the scene consistent — e.g. duct runs re-trimmed onto a resized
    * fitting's collars. `prev` is the node before the edit, `next` after
    * (with `derive` already folded in). Applied in the same gesture via
-   * `updateNodes`.
+   * `updateNodes`. The optional third argument contains all pending edits in
+   * the gesture, so reconciliation can read updated siblings during a multi-edit.
    */
-  reconcile?: (prev: N, next: N) => Array<{ id: AnyNodeId; data: Partial<AnyNode> }>
+  reconcile?: (
+    prev: N,
+    next: N,
+    nodes?: Readonly<Record<string, AnyNode | undefined>>,
+  ) => Array<{ id: AnyNodeId; data: Partial<AnyNode> }>
   /**
    * Deletion companion to `reconcile`: when a node of this kind is about
    * to be removed, return patches for OTHER nodes that must follow to
