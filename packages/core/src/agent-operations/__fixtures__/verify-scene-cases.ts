@@ -392,6 +392,51 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
     // Only core: a live store cuts the opening itself when the scene loads, as the editor does.
     { surfaces: ['core'] },
   ),
+  // Since owned floor openings (#976) a stair's opening is a floor-opening node on the floor
+  // above, owned by the stair; the slab hole it cuts carries the opening, not the stair.
+  verify(
+    "a stair whose owned floor opening sits on the floor above has its opening",
+    () =>
+      twoStoreys(
+        ...stairOn('level_0', {
+          fromLevelId: 'level_0',
+          toLevelId: 'level_1',
+          slabOpeningMode: 'destination',
+        }),
+        FloorOpeningNode.parse({
+          id: 'floor-opening_stair',
+          parentId: 'level_1',
+          polygon: STAIR_HOLE,
+          source: 'stair',
+          ownerId: 'stair_level_0',
+          surfaceId: 'slab_upper',
+          drawnOn: 'floor',
+        }),
+      ),
+    { lacks: ['stair_no_opening'] },
+    { surfaces: ['core'] },
+  ),
+  verify(
+    'a stair whose only owned opening is drawn on its own ceiling still misses the floor above',
+    () =>
+      twoStoreys(
+        ...stairOn('level_0', {
+          fromLevelId: 'level_0',
+          toLevelId: 'level_1',
+          slabOpeningMode: 'destination',
+        }),
+        FloorOpeningNode.parse({
+          id: 'floor-opening_ceiling',
+          parentId: 'level_0',
+          polygon: STAIR_HOLE,
+          source: 'stair',
+          ownerId: 'stair_level_0',
+          drawnOn: 'ceiling',
+        }),
+      ),
+    { contains: ['stair_no_opening'] },
+    { surfaces: ['core'] },
+  ),
   verify(
     'a stair whose only owned opening is drawn on its own ceiling still misses the floor above',
     () =>
