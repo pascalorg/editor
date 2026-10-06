@@ -93,12 +93,19 @@ export async function publishLiveSceneSnapshot(
       graph,
     })
   } catch (error) {
-    if (error instanceof SceneWipeBlockedError)
+    if (error instanceof SceneWipeBlockedError) {
+      // The store kept what it held; the session goes back to it, so the agent's next write builds
+      // on the project as stored rather than on the refused one (L76: deleting the only room).
+      const stored = await operations.loadStoredScene(active.id).catch(() => null)
+      if (stored) operations.loadJSON(stored.graph)
       refuse(
         'scene_wipe_blocked',
-        'This write would empty the project, so it was blocked. To empty it on purpose, call clear_scene.',
-        { sceneId: active.id },
+        stored
+          ? 'This write would leave the project empty, so it was blocked and nothing changed. To empty the project on purpose, call clear_scene. To remove only part of it, such as its only room, build what replaces it first, then remove it.'
+          : 'This write would leave the project empty, so it was blocked and not saved. Call load_scene before writing again. To empty the project on purpose, call clear_scene.',
+        { sceneId: active.id, mutationApplied: false, sessionRestored: !!stored },
       )
+    }
     if (error instanceof SceneVersionConflictError) {
       throwMcpError(ErrorCode.InvalidRequest, LIVE_SYNC_VERSION_CONFLICT, {
         sceneId: active.id,

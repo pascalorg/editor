@@ -11,6 +11,8 @@ import { type SceneMeta, type SceneStore, SceneWipeBlockedError } from '../stora
 import { registerApplyPatch } from './apply-patch'
 import { registerClearScene } from './clear-scene'
 import { registerCreateWall } from './create-wall'
+import { registerCreateRoom } from './room-tools'
+import { registerStructureTools } from './structure-tools'
 
 // An agent that starts over clears the project on purpose; a write that would empty it by
 // accident is refused, as the hosted store refuses it (the scaffold: a site, a building, a level).
@@ -141,13 +143,89 @@ describe('clear_scene', () => {
     expect(types.sort()).toEqual(['building', 'level', 'site', 'wall'])
   })
 
-  test('a write that would empty the project by accident is refused, naming clear_scene', async () => {
+  test('a write that would empty the project by accident is refused, and nothing changed', async () => {
     const { bridge, call, guarded } = await houseSession()
+    const before = Object.keys(bridge.getNodes()).sort()
     const site = bridge.getRootNodeIds()[0]!
     const refused = await call('apply_patch', { patches: [{ op: 'delete', id: site }] })
     expect(refused.isError).toBe(true)
     expect(refused.body.code).toBe('scene_wipe_blocked')
+    expect(String(refused.body.error)).toContain('nothing changed')
     expect(String(refused.body.error)).toContain('clear_scene')
     expect(guarded.saves).toEqual([])
+    // The session holds the project as stored, not the refused write.
+    expect(Object.keys(bridge.getNodes()).sort()).toEqual(before)
+  })
+})
+
+// L76 (the parity runner, 2026-10-06): an agent deleted the only room it built; the store refused
+// the write as a wipe, but the session kept the deletion, so its next writes built on a scene the
+// project did not hold.
+describe('deleting the only room', () => {
+  async function oneRoomSession() {
+    const bridge = new SceneBridge()
+    bridge.setScene({}, [])
+    bridge.loadDefault()
+    const meta: SceneMeta = {
+      id: 'scene_room',
+      name: 'Room',
+      projectId: 'project_room',
+      thumbnailUrl: null,
+      version: 1,
+      createdAt: '2026-10-06T00:00:00Z',
+      updatedAt: '2026-10-06T00:00:00Z',
+      ownerId: null,
+      sizeBytes: 0,
+      nodeCount: Object.keys(bridge.getNodes()).length,
+    }
+    const guarded = guardedStore(meta)
+    guarded.seed(bridge.exportJSON())
+    const operations = createSceneOperations({ bridge, store: guarded.store })
+    operations.setActiveScene(meta)
+    const server = new McpServer({ name: 'room', version: '0.0.0' })
+    registerCreateRoom(server, operations)
+    registerStructureTools(server, operations)
+    registerCreateWall(server, operations)
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: 'room-client', version: '0.0.0' })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+    const call = async (name: string, args: Record<string, unknown>) => {
+      const result = await client.callTool({ name, arguments: args })
+      return {
+        isError: !!result.isError,
+        text: (result.content as { type: string; text: string }[])[0]!.text,
+      }
+    }
+    const level = Object.values(bridge.getNodes()).find((node) => node.type === 'level')!
+    const room = await call('create_room', {
+      levelId: level.id,
+      name: 'Studio',
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 3],
+        [0, 3],
+      ],
+    })
+    expect(room.isError).toBe(false)
+    return { bridge, call, guarded, meta, levelId: level.id, zoneId: JSON.parse(room.text).zoneId }
+  }
+
+  test('is refused as a wipe, the session keeps the room, and the next write matches the store', async () => {
+    const { bridge, call, guarded, meta, levelId, zoneId } = await oneRoomSession()
+    const before = Object.keys(bridge.getNodes()).sort()
+    const saves = guarded.saves.length
+    const refused = await call('delete_zone', { zoneId, contents: 'delete' })
+    expect(refused.isError).toBe(true)
+    expect(refused.text).toContain('nothing changed')
+    expect(refused.text).toContain('only room')
+    expect(guarded.saves.length).toBe(saves)
+    expect(Object.keys(bridge.getNodes()).sort()).toEqual(before)
+
+    const wall = await call('create_wall', { levelId, start: [6, 0], end: [8, 0] })
+    expect(wall.isError).toBe(false)
+    const stored = await guarded.store.load(meta.id)
+    expect(Object.keys(stored!.graph.nodes).sort()).toEqual(Object.keys(bridge.getNodes()).sort())
+    expect(Object.keys(stored!.graph.nodes)).toContain(zoneId)
   })
 })
