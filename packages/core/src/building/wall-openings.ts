@@ -16,6 +16,7 @@ import {
 import { getCurtainWallConfig } from '../schema/nodes/curtain-wall'
 import type { DoorType, WindowType } from '../schema/nodes/opening-types'
 import { getWallPlaneTop } from '../services/storey'
+import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
 import { getWallCurveLength, isCurvedWall } from '../systems/wall/wall-curve'
 import { resolveWallTop } from '../systems/wall/wall-top'
 import {
@@ -205,6 +206,28 @@ const metres = (value: number) => `${value.toFixed(2)} m`
  * operation behind `add_door` / `add_window` on every agent surface. The caller creates
  * `node` under `wallId`.
  */
+/**
+ * Which way a door on `wall` faces: out, when the wall knows its outside. A door's swing and a
+ * garage door's track run behind its facing (run 3, 2026-10-05: the garage door's track ran on the
+ * street), so a door facing out opens and rolls inside, whichever way the wall was drawn. A wall
+ * that does not know its outside, or an inside wall, keeps its front.
+ */
+export function doorFacing(wall: Pick<WallNode, 'frontSide' | 'backSide'>): {
+  side?: 'front' | 'back'
+  rotation: [number, number, number]
+} {
+  const outside = resolveWallExteriorSide(wall)
+  if (outside === -1) return { side: 'back', rotation: [0, Math.PI, 0] }
+  if (outside === 1) return { side: 'front', rotation: [0, 0, 0] }
+  return { rotation: [0, 0, 0] }
+}
+
+/** The face a door placed by hand takes: out on an outside wall, else the face hovered. */
+export const placedDoorFace = (
+  wall: Pick<WallNode, 'frontSide' | 'backSide'>,
+  hovered: 'front' | 'back',
+): 'front' | 'back' => doorFacing(wall).side ?? hovered
+
 export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
   refuseParamsWithoutScript(nodes, input)
   const { kind, wallId } = input
@@ -303,6 +326,7 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
     kind === 'door'
       ? DoorNode.parse({
           ...base,
+          ...doorFacing(wall),
           hingesSide: input.hingesSide ?? 'left',
           swingDirection: input.swingDirection ?? 'inward',
           ...getDoorStyleOverrides(input.style as DoorStyle | undefined),
