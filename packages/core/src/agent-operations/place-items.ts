@@ -1,4 +1,5 @@
 import { refuse } from '../agent-tools/refusal'
+import { floorItemFit } from '../building/floor-item-fit'
 import {
   flushMountRotation,
   geometrySurfaceAt,
@@ -7,17 +8,10 @@ import {
 } from '../lib/geometry-surfaces'
 import { type AnyNode, type AssetInput, ItemNode, type WallNode } from '../schema'
 import { getWallLocalFaceZ } from '../systems/wall/wall-frame'
-import {
-  collectDoorKeepouts,
-  type DoorKeepout,
-  itemBlocksDoorKeepout,
-  itemPlanAabb,
-} from './door-clearance'
-import { findValidPlacement } from './layout-clearance'
+import { collectDoorKeepouts, type DoorKeepout } from './door-clearance'
 import { type LevelTargetInput, targetLevel } from './level-target'
 import {
   pointInPolygon,
-  polygonBounds,
   projectWorldPointToWallLocalX,
   type Vec2,
   wallLength,
@@ -78,46 +72,38 @@ const refused = (assetId: string, code: string, error: string): Placed => ({
 const round = (value: number) => Math.round(value * 100) / 100
 
 /**
- * Whether a floor item fits where it is put: an agent set the catalog's 2.34 m bathtub in front
- * of a bath's door, after furnish_room had skipped it there, and place_items checked only
- * that its centre was in a room. An item the room cannot hold in any turn, or one standing in the
- * space a door needs (as verify_scene's blocked-door check sees it), is refused; the second with a
- * spot in the room that clears every door, when there is one. Items overlapping is not refused: a
- * chair under its table and a bed on its rug overlap by design.
+ * A floor item that does not fit where it is put (`floorItemFit`), refused with what to do:
+ * one its room cannot hold in any turn points to a smaller one; one in a door's way names the door
+ * and a spot in the room that clears every door, when there is one.
  */
 function floorFit(
+  nodes: SceneNodes,
+  levelId: string,
   entry: Entry,
   asset: AssetInput,
-  room: Vec2[] | undefined,
   doors: DoorKeepout[],
 ): Placed | null {
-  const [width = 1, , depth = 1] = asset.dimensions ?? [1, 1, 1]
-  const bounds = room ? polygonBounds(room) : undefined
-  if (bounds) {
-    const [roomWidth, roomDepth] = [bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ]
-    const fits = (a: number, b: number) => a <= roomWidth && b <= roomDepth
-    if (!fits(width, depth) && !fits(depth, width))
-      return refused(
-        entry.assetId,
-        'too_large_for_room',
-        `"${asset.name}" is ${round(width)} × ${round(depth)} m; the room it stands in is ${round(roomWidth)} × ${round(roomDepth)} m, so it fits in no turn. Pick a smaller one (search_assets), or build one at the room's size with add_object.`,
-      )
-  }
-  const turn = entry.rotation ?? 0
-  const footprint = itemPlanAabb([entry.x, 0, entry.z], asset.dimensions, (turn * Math.PI) / 180)
-  const door = doors.find((keepout) => itemBlocksDoorKeepout(footprint, keepout))
-  if (!door) return null
-  const { candidate } = findValidPlacement({
-    primary: { x: entry.x, z: entry.z, rotationDeg: turn },
+  const misfit = floorItemFit(nodes, {
+    levelId,
+    x: entry.x,
+    z: entry.z,
+    rotationDeg: entry.rotation ?? 0,
     dimensions: asset.dimensions,
-    doorKeepouts: doors.map((keepout) => keepout.aabb),
-    occupied: [],
-    roomBounds: bounds,
+    doors,
   })
+  if (!misfit) return null
+  const [width = 1, , depth = 1] = asset.dimensions ?? [1, 1, 1]
+  if (misfit.code === 'too_large_for_room')
+    return refused(
+      entry.assetId,
+      'too_large_for_room',
+      `"${asset.name}" is ${round(width)} × ${round(depth)} m; the room it stands in is ${round(misfit.room.width)} × ${round(misfit.room.depth)} m, so it fits in no turn. Pick a smaller one (search_assets), or build one at the room's size with add_object.`,
+    )
+  const { candidate } = misfit
   return refused(
     entry.assetId,
     'blocks_door',
-    `"${asset.name}" at (${entry.x}, ${entry.z}) stands in the space door ${door.doorId} needs to open and be walked through.${
+    `"${asset.name}" at (${entry.x}, ${entry.z}) stands in the space door ${misfit.doorId} needs to open and be walked through.${
       candidate
         ? ` A spot that fits: (${round(candidate.x)}, ${round(candidate.z)}), turned ${candidate.rotationDeg}°.`
         : ' No spot in this room clears its doors: pick a smaller one, or none.'
@@ -307,7 +293,7 @@ export const placeItems: AgentOperation<PlaceItemsInput> = (nodes, input, contex
         `"${asset.name}" at (${x}, ${z}) is outside every room on this level: indoor items go inside a room (read the rooms with get_zones); trees and garden items may stand outside.`,
       )
     doorsOn[floorId] ??= collectDoorKeepouts(Object.values(nodes), { levelId: floorId })
-    const misfit = floorFit(entry, asset, room, doorsOn[floorId])
+    const misfit = floorFit(nodes, floorId, entry, asset, doorsOn[floorId])
     if (misfit) return misfit
     const node = make(asset, {
       parentId: floorId,

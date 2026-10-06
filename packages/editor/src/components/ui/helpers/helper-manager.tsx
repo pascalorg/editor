@@ -74,6 +74,7 @@ import useInteractionScope, {
 } from '../../../store/use-interaction-scope'
 import { BuildingHelper } from './building-helper'
 import { ContextualHelperPanel } from './contextual-helper-panel'
+import { placingItemId, useFloorItemWarning } from '../../../hooks/use-floor-item-warning'
 import { ItemHelper } from './item-helper'
 import { RegisteredToolHelper } from './registered-tool-helper'
 
@@ -308,6 +309,8 @@ export function HelperManager() {
   const openingShape = useOpeningDraft((s) => (s.host ? s.shape : null))
   const terraceShape = useTerraceDraft((s) => (s.host ? s.shape : null))
   const movingNode = useMovingNode()
+  const placingItem = useScene((s) => (tool === 'item' ? placingItemId(s.nodes) : null))
+  const fitWarning = useFloorItemWarning(movingNode?.type === 'item' ? movingNode.id : placingItem)
   const reshapingNode = useReshapingNode()
   const activeHandleDrag = useActiveHandleDrag()
   const mezzanineHandle = useScene((s) => mezzanineGesture(activeHandleDrag, s.nodes))
@@ -553,6 +556,7 @@ export function HelperManager() {
     return (
       <ItemHelper
         continuationContext={movingContinuationContext}
+        notice={fitWarning?.line}
         showEsc
         showForce={collisionValidatesDrop}
         snapContext={snapContext}
@@ -649,6 +653,7 @@ export function HelperManager() {
         <RegisteredToolHelper
           continuationContext={continuationContext}
           hints={hints}
+          notice={tool === 'item' ? fitWarning?.line : null}
           shiftPressed={modifiers.shift}
           snapContext={snapContext}
           title={toolHudTitle(tool, wallMode)}
