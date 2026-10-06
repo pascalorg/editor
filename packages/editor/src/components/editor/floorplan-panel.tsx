@@ -117,6 +117,7 @@ import {
 } from '../../lib/keyboard-pan'
 import { measurementHint, parseMeasurement } from '../../lib/measurement-parser'
 import { formatLinearMeasurement, linearUnitToMeters } from '../../lib/measurements'
+import { snapRegisteredDraftPoint } from '../../lib/registered-draft-snap'
 import { selectRoomFromHit } from '../../lib/room-selection-commands'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { SITE_BOUNDARY_DRAG_LABEL, siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
@@ -174,7 +175,7 @@ import {
 import { FloorplanSnapBeaconLayer } from '../editor-2d/floorplan-snap-beacon-layer'
 import { FloorplanWallMoveGhostLayer } from '../editor-2d/floorplan-wall-move-ghost-layer'
 import { FloorplanDraftLayer } from '../editor-2d/renderers/floorplan-draft-layer'
-import { FloorplanDraftWallMeasurement } from '../editor-2d/renderers/floorplan-draft-wall-measurement'
+import { FloorplanDraftMeasurement } from '../editor-2d/renderers/floorplan-draft-measurement'
 import { FloorplanGeometryRenderer } from '../editor-2d/renderers/floorplan-geometry-renderer'
 import { FloorplanMarqueeLayer } from '../editor-2d/renderers/floorplan-marquee-layer'
 import { FloorplanPlacementPreviewLayer } from '../editor-2d/renderers/floorplan-placement-preview-layer'
@@ -185,7 +186,6 @@ import {
 import { FloorplanStairLayer } from '../editor-2d/renderers/floorplan-stair-layer'
 import { FloorplanVoronoiLayer } from '../editor-2d/renderers/floorplan-voronoi-layer'
 import { buildSvgPolylinePath, formatPolygonPath, getArcPlanPoint } from '../editor-2d/svg-paths'
-import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
 import { snapToHalf } from '../tools/item/placement-math'
 import {
   isBoxSelectPointerSuppressed,
@@ -4873,7 +4873,7 @@ function FloorplanLinearDraftLayer({
       )}
 
       {draftWallMeasurement && (
-        <FloorplanDraftWallMeasurement
+        <FloorplanDraftMeasurement
           labelBackground={isDark ? '#0f172a' : '#ffffff'}
           labelText={isDark ? '#e2e8f0' : '#171717'}
           measurement={draftWallMeasurement}
@@ -4916,7 +4916,7 @@ function FloorplanLinearDraftLayer({
       ))}
 
       {rectangleDraft?.measurements.map((measurement, index) => (
-        <FloorplanDraftWallMeasurement
+        <FloorplanDraftMeasurement
           key={index}
           labelBackground={isDark ? '#0f172a' : '#ffffff'}
           labelText={isDark ? '#e2e8f0' : '#171717'}
@@ -9063,7 +9063,7 @@ export function FloorplanPanel({
   // tools that subscribe to these grid events.
   const emitFloorplanGridEvent = useCallback(
     (
-      eventType: 'move' | 'click' | 'double-click',
+      eventType: 'move' | 'click' | 'double-click' | 'pointerdown' | 'pointerup',
       planPoint: WallPlanPoint,
       nativeEvent: ReactMouseEvent<SVGSVGElement> | ReactPointerEvent<SVGSVGElement>,
     ) => {
@@ -9398,6 +9398,14 @@ export function FloorplanPanel({
       }
 
       if (isFenceBuildActive) {
+        if (useEditor.getState().getContinuation('fence') === 'freehand') {
+          useAlignmentGuides.getState().clear()
+          emitFloorplanGridEvent('move', planPoint, event)
+          setCursorPoint((previousPoint) =>
+            previousPoint && pointsEqual(previousPoint, planPoint) ? previousPoint : planPoint,
+          )
+          return
+        }
         // Fence draft: grid snap (+ existing-wall/fence endpoint snap), then
         // Figma alignment — same endpoint-wins precedence as the wall branch.
         // While a draft is open the segment locks to 15° rays from its start.
@@ -9405,14 +9413,18 @@ export function FloorplanPanel({
         // there is no Shift hold-to-bypass. Alignment follows the magnetic snap
         // mode, not Alt (continuation is cycled through the HUD / C).
         const fenceAngleSnap = fenceDraftStart !== null && isAngleSnapActive()
-        const fenceSnapped = snapFenceDraftPoint({
-          point: planPoint,
-          walls,
-          fences,
-          start: fenceDraftStart ?? undefined,
-          angleSnap: fenceAngleSnap,
-          magnetic: isMagneticSnapActive(),
-        })
+        const fenceSnapped = snapRegisteredDraftPoint(
+          'fence',
+          {
+            point: planPoint,
+            walls,
+            fences,
+            start: fenceDraftStart ?? undefined,
+            angleSnap: fenceAngleSnap,
+            magnetic: isMagneticSnapActive(),
+          },
+          planPoint,
+        )
         const fenceGridBase = snapWallPointToGrid(planPoint)
         const fenceLocked =
           fenceSnapped[0] !== fenceGridBase[0] || fenceSnapped[1] !== fenceGridBase[1]
@@ -10236,6 +10248,49 @@ export function FloorplanPanel({
       handleBackgroundClick(event)
     },
     [handleBackgroundClick],
+  )
+  const handleSvgPointerDown = useCallback(
+    (event: ReactPointerEvent<SVGSVGElement>) => {
+      if (
+        isFenceBuildActive &&
+        useEditor.getState().getContinuation('fence') === 'freehand' &&
+        event.button === 0
+      ) {
+        const point = getPlanPointFromClientPoint(event.clientX, event.clientY)
+        if (point) {
+          clearFencePlacementDraft()
+          event.currentTarget.setPointerCapture(event.pointerId)
+          emitFloorplanGridEvent('pointerdown', point, event)
+        }
+      }
+      handlePointerDown(event)
+    },
+    [
+      clearFencePlacementDraft,
+      emitFloorplanGridEvent,
+      getPlanPointFromClientPoint,
+      handlePointerDown,
+      isFenceBuildActive,
+    ],
+  )
+  const handleSvgPointerUp = useCallback(
+    (event: ReactPointerEvent<SVGSVGElement>) => {
+      if (
+        isFenceBuildActive &&
+        useEditor.getState().getContinuation('fence') === 'freehand' &&
+        event.button === 0
+      ) {
+        const point = getPlanPointFromClientPoint(event.clientX, event.clientY)
+        if (point) emitFloorplanGridEvent('pointerup', point, event)
+      }
+      endFloorplanNavigation(event)
+    },
+    [
+      emitFloorplanGridEvent,
+      endFloorplanNavigation,
+      getPlanPointFromClientPoint,
+      isFenceBuildActive,
+    ],
   )
   const handleBackgroundDoubleClick = useCallback(
     (event: ReactMouseEvent<SVGSVGElement>) => {
@@ -11481,11 +11536,11 @@ export function FloorplanPanel({
             onContextMenu={(event) => event.preventDefault()}
             onDoubleClick={isMarqueeSelectionToolActive ? undefined : handleBackgroundDoubleClick}
             onPointerCancel={endFloorplanNavigation}
-            onPointerDown={handlePointerDown}
+            onPointerDown={handleSvgPointerDown}
             onPointerDownCapture={handleNavigationPointerDown}
             onPointerLeave={handleSvgPointerLeave}
             onPointerMove={handleSvgPointerMove}
-            onPointerUp={endFloorplanNavigation}
+            onPointerUp={handleSvgPointerUp}
             ref={svgRef}
             style={{
               cursor:

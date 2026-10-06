@@ -173,7 +173,15 @@ export {
   ElevatorShaftStyle,
 } from './nodes/elevator'
 export { EyebrowVentMaterialRole, EyebrowVentNode } from './nodes/eyebrow-vent'
-export { FenceBaseStyle, FenceGuardInfill, FenceNode, FenceStyle } from './nodes/fence'
+export {
+  clampFencePicketRailProjection,
+  FenceBaseStyle,
+  FenceGuardInfill,
+  FenceNode,
+  FenceStyle,
+  maxFencePicketRailProjection,
+} from './nodes/fence'
+export { type FenceFeatureNode, FenceGateNode, FenceOpeningNode } from './nodes/fence-feature'
 export { FloorOpeningNode } from './nodes/floor-opening'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
 export {
