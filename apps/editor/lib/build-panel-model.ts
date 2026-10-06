@@ -99,7 +99,7 @@ export function useBuildPanelModel(): XRWandBuildModel {
     mode === 'build' && (tool === 'pipe-segment' || tool === 'pipe-fitting' || tool === 'pipe-trap')
   const parsed = RoofTypeSchema.safeParse(defaults?.roofType)
   const roofType = parsed.success ? parsed.data : 'gable'
-  const items = collectBuildTypes(floorplanMode).map(
+  const buildItems = collectBuildTypes(floorplanMode).map(
     (type): XRWandBuildItem => ({
       id: type.id,
       label: type.label,
@@ -117,14 +117,24 @@ export function useBuildPanelModel(): XRWandBuildModel {
                 : mode === 'build' && tool === type.kind,
       onSelect: () => {
         if (type.id === 'fence' && selectedFence) return
-        if (type.mode === 'material-paint') activatePaintMode()
-        else if (type.mode === 'terrain-sculpt') activateTerrainSculptMode()
+        if (type.mode === 'terrain-sculpt') activateTerrainSculptMode()
         else if (type.id === 'mep') activateBuildTool('duct-segment')
         else if (type.id === 'kitchen') activateModularCabinetTool()
         else if (type.kind) activateBuildTool(type.kind)
       },
     }),
   )
+  // Painting has its own rail panel on desktop; the wand has no rail, so it stays a Build item here.
+  const items: XRWandBuildItem[] = [
+    ...buildItems,
+    {
+      id: 'painting',
+      label: 'Painting',
+      icon: { src: '/icons/paint.webp' },
+      active: mode === 'material-paint',
+      onSelect: activatePaintMode,
+    },
+  ]
   const secondaryItems: XRWandBuildItem[] = roofActive
     ? [
         ...ROOF_TYPE_OPTIONS.map((type) => ({
