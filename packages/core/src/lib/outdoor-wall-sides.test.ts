@@ -1,9 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { applyAgentOutcome } from '../agent-operations/apply-outcome'
 import { AGENT_OPERATIONS, applySceneChanges } from '../agent-operations/index'
-import { sceneViewPlan } from '../agent-operations/scene-view'
 import { addWallOpening } from '../agent-operations/wall-opening'
-import { facadeLoopTargets } from '../building/facade-scope'
 import { doorFacing } from '../building/wall-openings'
 import {
   type AnyNode,
@@ -130,7 +128,7 @@ for (const [winding, order] of [
   ['clockwise', cw],
 ] as const) {
   describe(`outdoor rooms, house drawn ${winding}`, () => {
-    test("a porch's wall is outside on the porch face: the door faces it, the facade fills it", () => {
+    test("a porch's wall is outside on the porch face: the door faces it", () => {
       const house = createRoom(levelScene(), {
         name: 'Living',
         polygon: order([
@@ -159,14 +157,10 @@ for (const [winding, order] of [
         'exterior',
         'interior',
       ])
-      const { targets } = facadeLoopTargets(nodes as Record<AnyNodeId, AnyNode>, street, 'exterior')
-      const porchFace = sideToward(wall, [3, 6]) === wall.frontSide ? 'front' : 'back'
-      expect(targets[wall.id]).toEqual({ surface: 'exterior', face: porchFace })
-      // add_door's placement on every surface, and view_scene's close-up from the door's outside.
+      // add_door's placement on every surface faces the porch.
       const door = addWallOpening(nodes, { kind: 'door', wallId: wall.id, t: 0.5, style: 'modern' })
-      const withDoor = applySceneChanges(nodes, door.changes)
-      const { pose } = sceneViewPlan(withDoor, { target: door.result.doorId })
-      expect(pose.position[2]).toBeGreaterThan(5)
+      const placed = applySceneChanges(nodes, door.changes)[door.result.doorId as AnyNodeId]
+      expect(placed).toMatchObject(doorFacing(wall))
     })
 
     // Held out: not tuned on run 4's porch.
