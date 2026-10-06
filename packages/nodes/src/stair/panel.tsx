@@ -38,6 +38,7 @@ import {
   resolveStairFromLevelId,
   resolveStairToLevelId,
   SegmentedControl,
+  SelectControl,
   SliderControl,
   ToggleControl,
   triggerSFX,
@@ -916,7 +917,8 @@ export default function StairPanel() {
         />
         {(node.railingMode ?? 'none') !== 'none' && (
           <>
-            <SegmentedControl
+            <SelectControl
+              label="Style"
               onChange={(value) =>
                 handleUpdate({
                   railingStyle: value,

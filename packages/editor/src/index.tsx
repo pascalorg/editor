@@ -246,6 +246,7 @@ export {
 export { MetricControl } from './components/ui/controls/metric-control'
 export { PanelSection } from './components/ui/controls/panel-section'
 export { SegmentedControl } from './components/ui/controls/segmented-control'
+export { SelectControl } from './components/ui/controls/select-control'
 export { SliderControl } from './components/ui/controls/slider-control'
 export { TerrainSculptPanel } from './components/ui/controls/terrain-sculpt-panel'
 export { ToggleControl } from './components/ui/controls/toggle-control'

@@ -7,7 +7,7 @@ import {
   type StairSegmentNode,
   useScene,
 } from '@pascal-app/core'
-import { MetricControl, SegmentedControl, ToggleControl } from '@pascal-app/editor'
+import { MetricControl, SelectControl, ToggleControl } from '@pascal-app/editor'
 
 const OPTIONS = [
   { label: 'Original', value: 'original' },
@@ -32,7 +32,8 @@ export function StairConstructionControls({
     onChange(StairConstruction.parse({ ...effective, ...patch }))
   return (
     <div className="space-y-3">
-      <SegmentedControl
+      <SelectControl
+        label="Body"
         value={node.construction?.mode ?? 'original'}
         options={OPTIONS.map((option) =>
           option.value === 'original' && inherited ? { ...option, label: 'Inherit' } : option,
