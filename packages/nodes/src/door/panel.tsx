@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type DoorNode,
+  scriptImages,
   useInteractive,
   useScene,
 } from '@pascal-app/core'
@@ -256,7 +257,7 @@ export default function DoorPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/door.webp"
+      icon={scriptImages(node)?.thumbnail ?? '/icons/door.webp'}
       onClose={handleClose}
       title={node.name || 'Door'}
       width={320}

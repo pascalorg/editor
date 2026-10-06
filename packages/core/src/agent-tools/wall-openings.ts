@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { DOOR_STYLES, WINDOW_STYLES } from '../building/opening-style-presets'
+import { geometryMetaFields } from '../schema/geometry-metadata'
 import { DoorType, WindowType } from '../schema/nodes/opening-types'
 import { achievedOutput } from './achieved'
 import { scriptParams } from './add-object'
@@ -32,6 +33,7 @@ const script = (kind: string) => ({
       `A three.js module for a ${kind} the fields cannot express (a fan grille, tracery, carved trim): the same module and conventions as add_object, with mount 'wall'. Its size is what it builds (name params width and height so the ${kind}'s size controls edit them), and its cutout mesh cuts the wall. Make it open like a real ${kind}: add an \`open\` clip (${kind === 'door' ? 'the leaves swinging or sliding' : 'the sash sliding or swinging'}; \`close\` is optional, \`open\` reversed by default) unless it is fixed. Fields first; code only beyond them.`,
     ),
   params: scriptParams,
+  ...geometryMetaFields,
 })
 
 const outline = (archDefault: string) => ({

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { GeometrySourceMeta } from './geometry-metadata'
 
 /** Source code is stored separately from the scene; bound its upload size. */
 export const GEOMETRY_SCRIPT_MAX_BYTES = 48 * 1024
@@ -121,6 +122,8 @@ export type GeometryScriptMount = z.infer<typeof GeometryScriptMount>
 
 /** What a compile hands the scene: the artifact's hash, how it mounts, the resolved params and the manifest. */
 export type CompiledGeometryScript = {
+  /** The destination identity reserved before artifact uploads. */
+  nodeId?: string
   /** sha256 of the GLB. */
   sha256: string
   /** sha256 of the module text that produced it. */
@@ -130,6 +133,8 @@ export type CompiledGeometryScript = {
   manifest: GeometryArtifactManifest
 }
 
+const sha256 = z.string().regex(/^[0-9a-f]{64}$/)
+
 /**
  * Geometry authored as a plain three.js module (`export const params`,
  * `export default function build({ params, inputs, THREE, lib })`). The
@@ -137,12 +142,19 @@ export type CompiledGeometryScript = {
  */
 export const GeometryScriptSource = z.object({
   kind: z.literal('script'),
+  meta: GeometrySourceMeta.optional(),
   language: z.literal('three').default('three'),
   /** sha256 of the module's UTF-8 text, a `text/javascript` artifact: the code never rides in the scene. */
-  script: z.string().regex(/^[0-9a-f]{64}$/),
+  script: sha256,
   params: z.record(z.string(), GeometryScriptParamValue).default({}),
   /** sha256 of the GLB the current code + params compiled to. */
-  artifact: z.string().regex(/^[0-9a-f]{64}$/),
+  artifact: sha256,
   manifest: GeometryArtifactManifest,
+  /**
+   * The thumbnail and the top-down floor-plan image an editor took of a GLB,
+   * as image artifacts. They describe the node only while `artifact` is still
+   * the GLB they were taken of.
+   */
+  images: z.object({ artifact: sha256, thumbnail: sha256, floorPlan: sha256 }).optional(),
 })
 export type GeometryScriptSource = z.infer<typeof GeometryScriptSource>

@@ -1,9 +1,11 @@
 import { matchPascalMaterial } from '../procedural-items/library-colors'
 import type { CompiledGeometryScript } from '../schema'
+import { GeometrySourceMeta } from '../schema/geometry-metadata'
 import type { ColumnNode } from '../schema/nodes/column'
 import type { DoorNode } from '../schema/nodes/door'
 import type { ItemNode } from '../schema/nodes/item'
 import type { WindowNode } from '../schema/nodes/window'
+import { artifactUrl } from './artifact-store'
 
 /** A node built from a three.js script: an authored item, or a window or door with a script source. */
 export type ScriptedNode = (ItemNode | WindowNode | DoorNode | ColumnNode) & {
@@ -19,15 +21,74 @@ export const isScriptedNode = (
     node!.type === 'door' ||
     node!.type === 'column')
 
+/**
+ * Merges reuse metadata into a source's, dropping `meta` when nothing is left:
+ * the scene carries no empty object.
+ */
+export function withSourceMeta<S extends { meta?: GeometrySourceMeta }>(
+  source: S,
+  next: object,
+  parent?: string,
+): S {
+  const { meta: previous, ...rest } = source
+  const meta = GeometrySourceMeta.parse({
+    ...previous,
+    ...Object.fromEntries(
+      Object.entries(GeometrySourceMeta.parse(next)).filter(([, value]) => value !== undefined),
+    ),
+    ...(parent ? { parent } : {}),
+  })
+  return (Object.keys(meta).length > 0 ? { ...rest, meta } : rest) as S
+}
+
 /** The `source` a compile produces, the same on every kind. */
-export const scriptSource = (compiled: CompiledGeometryScript) => ({
-  kind: 'script' as const,
-  language: 'three' as const,
-  script: compiled.script,
-  params: compiled.params,
-  artifact: compiled.sha256,
-  manifest: compiled.manifest,
-})
+export const scriptSource = (
+  compiled: CompiledGeometryScript,
+  meta: object = {},
+  previous?: ScriptedNode['source'],
+) =>
+  withSourceMeta(
+    {
+      kind: 'script' as const,
+      meta: previous?.meta,
+      language: 'three' as const,
+      script: compiled.script,
+      params: compiled.params,
+      artifact: compiled.sha256,
+      manifest: compiled.manifest,
+    },
+    meta,
+    // A params-only rebuild runs the same script: its lineage stays where it was.
+    previous && previous.script !== compiled.script ? previous.script : undefined,
+  )
+
+/**
+ * What a scripted object is, for reuse, whatever its kind: the name from the
+ * node, an item's category from its asset, the rest from `source.meta`.
+ */
+export function scriptedObjectMeta(node: ScriptedNode) {
+  const { description, category, tags, parent } = node.source.meta ?? {}
+  return {
+    name: node.name,
+    description,
+    category: node.type === 'item' ? node.asset.category : category,
+    tags,
+    parent,
+  }
+}
+
+/**
+ * A scripted node's thumbnail and floor-plan image as `artifact://` URLs, or
+ * null until an editor has taken them of the GLB the node shows now.
+ */
+export function scriptImages(
+  node: { type: string; source?: unknown } | undefined,
+): { thumbnail: string; floorPlan: string } | null {
+  if (!isScriptedNode(node)) return null
+  const { images, artifact } = node.source
+  if (images?.artifact !== artifact) return null
+  return { thumbnail: artifactUrl(images.thumbnail), floorPlan: artifactUrl(images.floorPlan) }
+}
 
 type Manifest = CompiledGeometryScript['manifest']
 

@@ -2,9 +2,14 @@ import {
   type AnyNodeId,
   type CompiledGeometryScript,
   GEOMETRY_SCRIPT_MIME_TYPE,
+  GeometryArtifactMetadata,
+  GeometryReuseFields,
   type GeometryScriptParamValue,
+  generateId,
   getArtifactStore,
+  isScriptedNode,
   runAsSingleSceneHistoryStep,
+  scriptedObjectMeta,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -26,17 +31,37 @@ export async function compileAndStoreGeometryScript(input: {
   code?: string
   nodeId?: string
   params?: Record<string, GeometryScriptParamValue>
+  kind?: 'item' | 'door' | 'window' | 'column'
+  name?: string
+  description?: string
+  category?: string
+  tags?: string[]
+  provenance?: GeometryArtifactMetadata
 }): Promise<CompiledGeometryScript> {
   const code = input.code ?? (await storedScript(input.nodeId))
   const node = input.nodeId ? useScene.getState().nodes[input.nodeId as AnyNodeId] : undefined
   const params = editedScriptParams(node, input.params)
   const { glb, ...compiled } = await compileGeometryScriptInWorker({ code, params })
+  const kind =
+    input.kind ??
+    (node?.type === 'door' || node?.type === 'window' || node?.type === 'column'
+      ? node.type
+      : 'item')
+  const nodeId = input.nodeId ?? generateId(kind)
+  const metadata = GeometryArtifactMetadata.parse({
+    ...(isScriptedNode(node) ? scriptedObjectMeta(node) : {}),
+    ...input.provenance,
+    ...GeometryReuseFields.parse(input),
+    kind,
+    mount: compiled.mount,
+  })
+  const context = { nodeId, metadata }
   const store = getArtifactStore()
   await Promise.all([
-    store.put(compiled.sha256, glb, 'model/gltf-binary'),
-    store.put(compiled.script, new TextEncoder().encode(code), GEOMETRY_SCRIPT_MIME_TYPE),
+    store.put(compiled.sha256, glb, 'model/gltf-binary', context),
+    store.put(compiled.script, new TextEncoder().encode(code), GEOMETRY_SCRIPT_MIME_TYPE, context),
   ])
-  return compiled
+  return { ...compiled, nodeId }
 }
 
 /** The module text of an authored object, read back from the artifact store. */

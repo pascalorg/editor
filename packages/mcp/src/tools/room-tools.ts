@@ -1,4 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { isScriptedNode, scriptedObjectMeta } from '@pascal-app/core'
 import {
   achievedChanges,
   addWallOpening,
@@ -19,6 +20,7 @@ import type {
   CompiledGeometryScript,
   GeometryScriptParamValue,
 } from '@pascal-app/core/schema'
+import { GeometryReuseFields } from '@pascal-app/core/schema'
 import type { SceneOperations } from '../operations'
 import { compileAndStore, type GeometryScriptHost, readScript } from './add-object'
 import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
@@ -47,6 +49,10 @@ async function rebuildOpening(
   host: GeometryScriptHost | undefined,
   input: {
     nodeId: string
+    name?: string
+    description?: string
+    category?: string
+    tags?: string[]
     code?: string
     params?: Record<string, GeometryScriptParamValue>
   },
@@ -61,9 +67,16 @@ async function rebuildOpening(
   let outcome: ReturnType<typeof rescriptOpening>
   try {
     const code = input.code ?? (await readScript(host, scene.id, bridge, input.nodeId))
-    const params = editedScriptParams(nodes[input.nodeId], input.params)
-    const compiled = await compileAndStore(host, scene.id, code, params, kind)
-    outcome = rescriptOpening(nodes, { nodeId: input.nodeId, compiled }, { activeLevelId: null })
+    const previous = nodes[input.nodeId]
+    const params = editedScriptParams(previous, input.params)
+    const compiled = await compileAndStore(host, scene.id, code, params, kind, {
+      nodeId: input.nodeId,
+      metadata: {
+        ...(isScriptedNode(previous) ? scriptedObjectMeta(previous) : {}),
+        ...GeometryReuseFields.parse(input),
+      },
+    })
+    outcome = rescriptOpening(nodes, { ...input, compiled }, { activeLevelId: null })
   } catch (error) {
     if (isAgentRefusal(error)) return refusalResult(error)
     return toolError(error instanceof Error ? error.message : String(error), {
@@ -91,7 +104,14 @@ async function compileOpeningScript(
   kind: 'door' | 'window',
   bridge: SceneOperations,
   host: GeometryScriptHost | undefined,
-  input: { code?: string; params?: Record<string, GeometryScriptParamValue> },
+  input: {
+    code?: string
+    params?: Record<string, GeometryScriptParamValue>
+    name?: string
+    description?: string
+    category?: string
+    tags?: string[]
+  },
 ): Promise<{ script?: CompiledGeometryScript } | { error: ReturnType<typeof toolError> }> {
   if (!input.code) return {}
   if (!host)
@@ -104,7 +124,11 @@ async function compileOpeningScript(
   if (!scene)
     return { error: toolError('Open or save a scene first.', { code: 'no_active_scene' }) }
   try {
-    return { script: await compileAndStore(host, scene.id, input.code, input.params, kind) }
+    return {
+      script: await compileAndStore(host, scene.id, input.code, input.params, kind, {
+        metadata: input,
+      }),
+    }
   } catch (error) {
     if (isAgentRefusal(error)) return { error: refusalResult(error) }
     return {

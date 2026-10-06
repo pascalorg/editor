@@ -177,8 +177,10 @@ export {
   isScriptedNode,
   matchScriptSlotsToLibrary,
   type ScriptedNode,
+  scriptedObjectMeta,
   scriptedOrigin,
   scriptedSize,
+  scriptImages,
   scriptInteractive,
   scriptSource,
 } from './lib/geometry-script-node'

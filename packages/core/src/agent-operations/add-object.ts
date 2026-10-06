@@ -33,6 +33,8 @@ export type AddObjectInput = {
   rotation?: number
   side?: 'front' | 'back'
   name?: string
+  description?: string
+  tags?: string[]
   category?: string
   /** What the object stands in for; kept in `metadata.reason`, listed by verify_scene. */
   reason?: string
@@ -158,6 +160,9 @@ function refuseWallOrSlabShape(compiled: CompiledGeometryScript, input: AddObjec
   }
 }
 
+/** An item's category lives on its asset, so its source meta leaves it out. */
+const itemSourceMeta = ({ category: _, ...input }: AddObjectInput) => input
+
 const round = (value: number) => Math.round(value * 1000) / 1000
 
 function summary(node: { id: string }, compiled: CompiledGeometryScript, orphanedSlots: string[]) {
@@ -228,7 +233,7 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
       position: (input.position as Vec3 | undefined) ?? previous.position,
       rotation: rotation ?? previous.rotation,
       side: input.side ?? previous.side,
-      source: scriptSource(compiled),
+      source: scriptSource(compiled, itemSourceMeta(input), previous.source),
       slots: matchScriptSlotsToLibrary(
         compiled.manifest,
         previous.slots,
@@ -276,14 +281,14 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
   const asset = scriptAsset(compiled, input, undefined)
   const node = ItemNode.parse({
     object: 'node',
-    id: generateId('item'),
+    id: compiled.nodeId ?? generateId('item'),
     type: 'item',
     name: input.name ?? asset.name,
     parentId: parent.id,
     ...(parent.type === 'wall' ? { wallId: parent.id, side: input.side ?? 'front' } : {}),
     position: (input.position as Vec3 | undefined) ?? [0, 0, 0],
     rotation: rotation ?? [0, 0, 0],
-    source: scriptSource(compiled),
+    source: scriptSource(compiled, itemSourceMeta(input)),
     slots: matchScriptSlotsToLibrary(compiled.manifest),
     asset,
     metadata: { reason: input.reason },
@@ -303,6 +308,9 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
 }
 
 export type RescriptOpeningInput = {
+  description?: string
+  category?: string
+  tags?: string[]
   nodeId: string
   /** Where it goes; without one its bottom edge stays put. */
   position?: number[]
@@ -356,7 +364,7 @@ export const rescriptOpening: AgentOperation<RescriptOpeningInput> = (nodes, inp
           id: previous.id,
           data: {
             name: input.name ?? previous.name,
-            source: scriptSource(compiled),
+            source: scriptSource(compiled, input, previous.source),
             slots: matchScriptSlotsToLibrary(
               compiled.manifest,
               previous.slots,

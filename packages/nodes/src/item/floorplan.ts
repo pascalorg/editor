@@ -13,6 +13,7 @@ import {
   type ItemNode,
   type RoofSegmentNode,
   roofFacePointToSegment,
+  scriptImages,
   useLiveTransforms,
 } from '@pascal-app/core'
 import {
@@ -389,7 +390,7 @@ export function buildItemFloorplan(node: ItemNode, ctx: GeometryContext): Floorp
   const showSelection = isSelected || isHighlighted
   const isMoving = ctx.viewState?.moving ?? false
   const selectedStroke = ctx.viewState?.palette?.selectedStroke ?? '#3b82f6'
-  const floorPlanUrl = node.asset.floorPlanUrl
+  const floorPlanUrl = scriptImages(node)?.floorPlan ?? node.asset.floorPlanUrl
   const children: FloorplanGeometry[] = [
     {
       kind: 'polygon',

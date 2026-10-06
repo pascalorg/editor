@@ -1,10 +1,11 @@
-import type {
-  AnyNode,
-  ColumnNode,
-  FloorplanGeometry,
-  FloorplanPoint,
-  GeometryContext,
-  StructuralGridNode,
+import {
+  type AnyNode,
+  type ColumnNode,
+  type FloorplanGeometry,
+  type FloorplanPoint,
+  type GeometryContext,
+  type StructuralGridNode,
+  scriptImages,
 } from '@pascal-app/core'
 import { floorplanGeometryMetadata } from '@pascal-app/editor'
 import {
@@ -70,11 +71,14 @@ export function buildColumnFloorplan(
 
   const stroke = showSelectedChrome && palette ? palette.selectedStroke : '#374151'
   const fill = showSelectedChrome ? '#fed7aa' : '#9ca3af'
+  // A scripted column draws its floor-plan image the way a catalog item does.
+  const floorPlanUrl = scriptImages(node)?.floorPlan
 
   const body: FloorplanGeometry = {
     kind: 'polygon',
     points,
-    fill,
+    // Transparent, not none: the body stays the hit target under the image.
+    fill: floorPlanUrl ? 'transparent' : fill,
     stroke,
     strokeWidth: showSelectedChrome ? 0.03 : 0.02,
     opacity: 0.92,
@@ -94,6 +98,24 @@ export function buildColumnFloorplan(
         { ...body, metadata: undefined },
       ]
     : [body]
+  if (floorPlanUrl && node.source) {
+    const { min, max } = node.source.manifest.bounds
+    const [cx, cz] = points
+      .reduce((sum, [x, z]) => [sum[0] + x, sum[1] + z], [0, 0])
+      .map((total) => total / points.length) as [number, number]
+    children.push({
+      kind: 'image',
+      url: floorPlanUrl,
+      center: [cx, cz],
+      width: max[0] - min[0],
+      height: max[2] - min[2],
+      // The footprint turns by R(-rotation); the renderer's SVG rotate is R(+angle).
+      rotation: -node.rotation,
+    })
+    // The selection ring goes back on top of the image.
+    if (showSelectedChrome)
+      children.push({ ...body, fill: 'none', pointerEvents: 'none', metadata: undefined })
+  }
   const { halfX, halfZ } = columnPlanHalfExtents(node)
   const centerMarkHalf = Math.min(0.09, Math.max(0.035, Math.min(halfX, halfZ) * 0.45))
   const centerX = node.position[0]

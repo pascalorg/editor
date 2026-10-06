@@ -1,3 +1,5 @@
+import type { GeometryArtifactMetadata } from '../schema/geometry-metadata'
+
 /**
  * Content-addressed geometry artifacts. Nodes reference an artifact as
  * `artifact://<sha256>` and never by URL, so where the bytes live is the
@@ -11,7 +13,12 @@ export type ArtifactStore = {
   /** A loadable URL for a stored artifact, or null when this store does not have it. */
   url: (sha256: string) => string | null
   /** Stores the bytes under their hash; resolves once `url` returns a URL for it. */
-  put: (sha256: string, bytes: ArrayBuffer | Uint8Array, mimeType: string) => Promise<void>
+  put: (
+    sha256: string,
+    bytes: ArrayBuffer | Uint8Array,
+    mimeType: string,
+    context?: { nodeId: string; metadata: GeometryArtifactMetadata },
+  ) => Promise<void>
   /** A stored text artifact (an authored object's script), or null when it is missing or unreadable here. */
   text: (sha256: string) => Promise<string | null>
   /**
