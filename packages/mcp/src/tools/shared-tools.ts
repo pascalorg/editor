@@ -150,6 +150,8 @@ const SHARED_TOOLS: SharedTool[] = [
       copied: z.record(z.string(), z.number()),
       skipped: z.record(z.string(), z.number()),
       newNodeIds: z.array(z.string()),
+      // A floor copy is hundreds of ids: the result lists 40 and counts the rest.
+      newNodeIdsOmitted: z.number().optional(),
       ...achievedOutput,
       ...liveSyncOutput,
     },

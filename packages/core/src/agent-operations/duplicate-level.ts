@@ -59,7 +59,9 @@ export const duplicateLevel: AgentOperation<DuplicateLevelInput> = (nodes, input
       shiftedLevelIds: shiftedLevels.map((entry) => entry.id),
       copied: countByType(create.map(({ node }) => node)),
       skipped: countByType(skippedNodes),
-      newNodeIds: create.map(({ node }) => node.id),
+      // Counts are in `copied`; a floor copy is hundreds of ids the model reads back every call.
+      newNodeIds: create.slice(0, 40).map(({ node }) => node.id),
+      ...(create.length > 40 ? { newNodeIdsOmitted: create.length - 40 } : {}),
     },
     changes: {
       create,
