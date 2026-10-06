@@ -329,40 +329,24 @@ export function BuildTab() {
           ) : null}
         </div>
       ) : fenceContext ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto border-border/50 border-t pt-3">
+        <div className="flex flex-col gap-3 border-border/50 border-t pt-3">
           <div className="px-0.5 font-medium text-muted-foreground text-xs">Fence features</div>
-          <div
-            className="grid gap-1.5"
-            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
-          >
+          <BuildToolGrid columns={4}>
             {(['gate', 'opening'] as const).map((kind) => (
-              <button
-                aria-pressed={placingFenceFeature === kind}
-                className={cn(
-                  'group flex aspect-square items-center justify-center rounded-xl p-1 transition-all duration-200',
-                  placingFenceFeature === kind
-                    ? 'bg-primary/10 text-primary ring-1 ring-primary/50'
-                    : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
-                )}
+              <BuildToolTile
+                active={placingFenceFeature === kind}
+                iconSrc={kind === 'gate' ? '/icons/gate.webp' : '/icons/open-passage.webp'}
                 key={kind}
-                aria-label={kind === 'gate' ? 'Add Gate' : 'Add Open Passage'}
-                title={kind === 'gate' ? 'Add Gate' : 'Add Open Passage'}
+                label={kind === 'gate' ? 'Gate' : 'Opening'}
                 onClick={() => {
                   triggerSFX('sfx:menu-click')
                   activateFenceFeaturePlacement(kind)
                 }}
-                type="button"
-              >
-                <Image
-                  alt=""
-                  className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
-                  height={48}
-                  src={kind === 'gate' ? '/icons/gate.webp' : '/icons/open-passage.webp'}
-                  width={48}
-                />
-              </button>
+                onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+                title={kind === 'gate' ? 'Add Gate' : 'Add Open Passage'}
+              />
             ))}
-          </div>
+          </BuildToolGrid>
           {selectedFenceFeature && (
             <label className="flex items-center justify-between text-xs">
               Match fence style

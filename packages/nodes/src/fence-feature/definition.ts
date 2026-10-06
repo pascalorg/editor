@@ -8,6 +8,7 @@ import {
   type NodeDefinition,
   type ParametricDescriptor,
 } from '@pascal-app/core'
+import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { AnimationClip, type Object3D, QuaternionKeyframeTrack } from 'three'
 import { buildFenceFeatureFloorplan } from './floorplan'
@@ -71,6 +72,11 @@ export const fenceGateDefinition: NodeDefinition<typeof FenceGateNode | typeof F
     },
   },
   schema: FenceGateNode,
+  extensions: {
+    'pascal:editor/floorplan': {
+      actionMenu: { actions: () => import('./actions') },
+    } satisfies FloorplanNodeExtension<FenceFeatureNode>,
+  },
   exportAnimation: ({ node, object }) =>
     node.type === 'fence-gate' ? bakeFenceGateClip(node.id, object) : null,
   defaults: () => {
