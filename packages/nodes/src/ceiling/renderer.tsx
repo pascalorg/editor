@@ -3,6 +3,7 @@
 import {
   type AnyNodeId,
   CEILING_DRAW_OFFSET,
+  CEILING_SLOT_DEFAULT_COLOR,
   type CeilingNode,
   ceilingPaintRegions,
   getMaterialPresetByRef,
@@ -26,7 +27,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { BackSide, type Mesh } from 'three/webgpu'
 import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
 import { ceilingColorFromRef, getCeilingMaterials } from './materials'
-import { CEILING_SLOT_DEFAULT_COLOR } from './slots'
 
 function createEmptyGeometry() {
   return createPlaceholderGeometry()

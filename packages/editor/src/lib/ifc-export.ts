@@ -1,4 +1,4 @@
-import { type AnyNode, bakePolicyOf, sceneRegistry } from '@pascal-app/core'
+import { type AnyNode, bakePolicyOf, type Collection, sceneRegistry } from '@pascal-app/core'
 import { buildIfcExport, type IfcMeshPart } from '@pascal-app/ifc-converter/export'
 import { SCENE_LAYER } from '@pascal-app/viewer'
 import * as THREE from 'three'
@@ -131,6 +131,7 @@ export function exportPreparedSceneToIfc(
   root: THREE.Object3D,
   nodes: Record<string, AnyNode>,
   options: {
+    collections?: Readonly<Record<string, Collection>>
     projectName?: string
     onlyVisible?: boolean
     excludedNodeTypes?: readonly string[]
@@ -139,6 +140,7 @@ export function exportPreparedSceneToIfc(
   const { meshes, renderedNodeIds } = collectIfcMeshes(root, nodes)
   const { ifc, summary } = buildIfcExport({
     nodes,
+    collections: options.collections,
     meshes,
     projectName: options.projectName,
     // Same default as scene preparation, which already pruned hidden meshes.

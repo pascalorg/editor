@@ -127,6 +127,7 @@ export {
   computeCeilingSurfaceCells,
   parseCeilingRegionRole,
 } from './lib/ceiling-surface'
+export { isCutterName, resolveCutterHost } from './lib/cutter-host'
 export {
   clampDoorOperationState,
   getDoorRenderOpenAmount,
@@ -173,6 +174,7 @@ export {
 export {
   isScriptedNode,
   type ScriptedNode,
+  scriptedOrigin,
   scriptedSize,
   scriptInteractive,
   scriptSource,
@@ -213,6 +215,12 @@ export {
   remapMeasurementReferences,
 } from './lib/measurement-geometry'
 export { HIDDEN_SITE_NOTE, hidesDescendants } from './lib/node-visibility'
+export {
+  cutterContextNodes,
+  getEffectiveCutterNode,
+  hostedCutterHoles,
+  withHostedCutterHoles,
+} from './lib/object-cuts'
 export {
   getOpeningFloorDatum,
   getOpeningWallCut,
@@ -328,6 +336,7 @@ export {
   SLOT_MATERIAL_PREFIX,
   slotDefaultPaintMaterial,
   slotLabelFromId,
+  slotPaintMaterial,
 } from './lib/slots'
 export {
   createRoomTopologyIndex,
@@ -456,7 +465,9 @@ export {
   type MaterialRef,
   type MaterialSource,
   type MaterialSurface,
+  materialColorPaint,
   type ParsedMaterialRef,
+  parseMaterialColor,
   parseMaterialRef,
   registerLibraryMaterials,
   SCENE_MATERIAL_REF_PREFIX,
@@ -465,6 +476,7 @@ export {
   toSceneMaterialRef,
   unregisterLibraryMaterials,
 } from './material-library'
+export * from './node-slots'
 export type {
   FloorPlacedFootprint,
   FloorPlacedFootprintContext,
@@ -480,6 +492,8 @@ export * from './schema'
 export * from './services'
 export { isMovable, movePlanToward, moveToward, resolveMovable } from './services/movement'
 export {
+  collectionIdsOf,
+  joinCollections,
   type NodeDeletionPlan,
   type NodeDeletionScene,
   planNodeDeletion,
@@ -516,6 +530,12 @@ export {
 } from './store/history-control'
 export { withSceneHistoryDraftSuspended } from './store/history-drafts'
 export { getHistoryDirtyNodeIds } from './store/history-invalidation'
+export {
+  type ItemInteraction,
+  itemInteraction,
+  itemPrompt,
+  operateItem,
+} from './store/item-interaction'
 export { materializeRegisteredNodeDefaults } from './store/registered-node-defaults'
 export {
   type ControlValue,

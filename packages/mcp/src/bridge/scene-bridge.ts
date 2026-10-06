@@ -20,7 +20,7 @@ import {
   structureChangeBatch,
 } from '@pascal-app/core'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
-import type { AnyNode } from '@pascal-app/core/schema'
+import type { AnyNode, Collection, CollectionId } from '@pascal-app/core/schema'
 import {
   type AnyNodeId,
   AnyNode as AnyNodeSchema,
@@ -46,7 +46,7 @@ export type DeletePatch = { op: 'delete'; id: AnyNodeId; cascade?: boolean }
 export type Patch = CreatePatch | UpdatePatch | DeletePatch
 export type ActiveSceneMeta = Pick<
   SceneMeta,
-  'id' | 'name' | 'projectId' | 'ownerId' | 'thumbnailUrl' | 'version'
+  'id' | 'name' | 'projectId' | 'ownerId' | 'thumbnailUrl' | 'version' | 'graphHash'
 >
 
 /** The `extra` bag `setScene` accepts — collections, materials, plugin state. */
@@ -74,6 +74,7 @@ export class SceneBridge {
       ownerId: meta.ownerId,
       thumbnailUrl: meta.thumbnailUrl,
       version: meta.version,
+      ...(meta.graphHash === undefined ? {} : { graphHash: meta.graphHash }),
     }
   }
 
@@ -186,6 +187,15 @@ export class SceneBridge {
   /** All nodes (live reference into the store — do NOT mutate). */
   getNodes(): Record<AnyNodeId, AnyNode> {
     return useScene.getState().nodes
+  }
+
+  getCollections(): Record<CollectionId, Collection> {
+    return useScene.getState().collections
+  }
+
+  setCollections(collections: Record<CollectionId, Collection>): void {
+    if (useScene.getState().readOnly) return
+    useScene.setState({ collections })
   }
 
   /** Root node IDs. */

@@ -7,6 +7,19 @@
   ],
   "tools": [
     {
+      "name": "add_column",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Creates or rebuilds a column in the active scene.",
+        "destructiveHint": "Rebuilding can replace the geometry of an existing column.",
+        "openWorldHint": "Uses the active scene and configured artifact store."
+      }
+    },
+    {
       "name": "add_door",
       "annotations": {
         "readOnlyHint": false,
@@ -287,8 +300,8 @@
         "openWorldHint": false
       },
       "justifications": {
-        "readOnlyHint": "It is not read-only because permanently deletes a persisted Pascal scene.",
-        "destructiveHint": "The operation permanently removes a persisted scene and its stored revisions.",
+        "readOnlyHint": "It is not read-only because it hides a Pascal project from public listings, or deletes a scene from a local store.",
+        "destructiveHint": "A local store permanently removes the scene and its stored revisions; in Pascal the project is not deleted but leaves the public listings.",
         "openWorldHint": "It operates on the connected Pascal scene or project service without accessing the public internet."
       }
     },
@@ -355,6 +368,19 @@
         "readOnlyHint": "Copies room boundaries, intent and contents into the connected scene.",
         "destructiveHint": "A drop can merge with and split existing destination walls, re-hosting their children.",
         "openWorldHint": "Uses only the connected scene; no public internet access."
+      }
+    },
+    {
+      "name": "edit_collection",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "Creates, renames, deletes or changes the members of a collection in the active scene.",
+        "destructiveHint": "Can delete a collection or take elements out of it; the elements themselves stay.",
+        "openWorldHint": "Uses only the active scene."
       }
     },
     {
@@ -524,6 +550,19 @@
         "readOnlyHint": "It reads zone data from the connected Pascal scene without changing scene or project state.",
         "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
         "openWorldHint": "It operates only on data supplied by or already available inside the connected Pascal service and does not access the public internet."
+      }
+    },
+    {
+      "name": "list_collections",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It only reads the scene's collections and their members.",
+        "destructiveHint": "It changes nothing.",
+        "openWorldHint": "It reads only the active scene."
       }
     },
     {

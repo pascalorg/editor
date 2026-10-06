@@ -1,10 +1,17 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, DoorNode, useInteractive, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  type DoorNode,
+  useInteractive,
+  useScene,
+} from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
   cn,
+  duplicateNodeAndPickUp,
   PanelSection,
   PanelWrapper,
   SegmentedControl,
@@ -215,18 +222,8 @@ export default function DoorPanel() {
   }, [selectedId, node, deleteNode, setSelection])
 
   const handleDuplicate = useCallback(() => {
-    if (!node?.parentId) return
-    triggerSFX('sfx:item-pick')
-    useScene.temporal.getState().pause()
-    const cloned = structuredClone(node) as any
-    delete cloned.id
-    delete cloned.mark
-    cloned.metadata = { ...cloned.metadata, isNew: true }
-    const duplicate = DoorNode.parse(cloned)
-    useScene.getState().createNode(duplicate, node.parentId as AnyNodeId)
-    setMovingNode(duplicate)
-    setSelection({ selectedIds: [] })
-  }, [node, setMovingNode, setSelection])
+    if (node) duplicateNodeAndPickUp(node)
+  }, [node])
 
   const setSegmentHeightRatio = (segIdx: number, newVal: number) => {
     if (!node) return

@@ -6,6 +6,7 @@ import {
   generateId,
   resolveStairTotalRise,
 } from '@pascal-app/core'
+import { unknownMaterialPresetRefusal } from '@pascal-app/core/agent-operations'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import {
   getActiveRoofHeight,
@@ -322,6 +323,12 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
       slabMaterialPreset,
       ceilingMaterialPreset,
     }) => {
+      const preset = unknownMaterialPresetRefusal({
+        wallMaterialPreset,
+        slabMaterialPreset,
+        ceilingMaterialPreset,
+      })
+      if (preset) throw new Error(preset)
       const level = assertNode(bridge, levelId, 'level')
       if (isRoofLevel(level)) {
         throw new Error(
@@ -447,6 +454,8 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
       materialPreset,
       name,
     }) => {
+      const preset = unknownMaterialPresetRefusal({ materialPreset })
+      if (preset) throw new Error(preset)
       const effectiveWidth = roofType === 'conical' ? Math.max(width, depth) : width
       const effectiveDepth = roofType === 'conical' ? effectiveWidth : depth
       // Peak height is derived from pitch + footprint + type; we still
@@ -557,6 +566,8 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
       materialPreset,
       name,
     }) => {
+      const preset = unknownMaterialPresetRefusal({ materialPreset })
+      if (preset) throw new Error(preset)
       const fromLevel = assertNode(bridge, fromLevelId, 'level')
       const toLevel = assertNode(bridge, toLevelId, 'level')
       if (isRoofLevel(fromLevel) || isRoofLevel(toLevel)) {

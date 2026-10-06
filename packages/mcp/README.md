@@ -90,6 +90,18 @@ PASCAL_DATA_DIR="$HOME/.pascal/data" bun run dev
 PASCAL_DATA_DIR="$HOME/.pascal/data" bun packages/mcp/dist/bin/pascal-mcp.js
 ```
 
+### Local geometry artifacts
+
+Scripted objects keep their GLB and source in `<database-path>.artifacts/<sha256>` beside the
+local SQLite scene database, where saved scenes live (also with `--scene`, which only seeds the
+first scene); keep that directory with the database. Files are verified against their hash and
+written once, so saved scenes and undo history keep their original geometry. The standalone
+editor reads and writes the same database-side store.
+
+Local MCP compilation is opt-in with `PASCAL_SERVER_SCRIPT_COMPILE=1`. It runs in a separate
+process without inherited environment variables, with a deadline; this is not a sandbox for
+untrusted code. `get_source` can read saved scripts without enabling compilation.
+
 ## Live editor updates
 
 When the editor and MCP server share the same `PASCAL_DATA_DIR`, MCP mutations

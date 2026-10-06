@@ -1,5 +1,5 @@
-import type { SlotDeclaration } from '@pascal-app/core'
-import type { FenceNode } from './schema'
+import type { SlotDeclaration } from '../registry/types'
+import type { FenceNode } from '../schema/nodes/fence'
 
 // Slots map 1:1 to the fence panel's build options: the end posts, the infill
 // slats (the showInfill toggle), the base kickboard, and the top rail.

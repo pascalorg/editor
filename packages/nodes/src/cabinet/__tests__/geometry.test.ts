@@ -6,6 +6,7 @@ import type {
   HandleDescriptor,
   LinearResizeHandle,
 } from '@pascal-app/core'
+import { cabinetSlots } from '@pascal-app/core'
 import type { BufferAttribute, Mesh, Object3D } from 'three'
 import { Box3 } from 'three'
 import { bakeCabinetAnimationClip } from '../animation'
@@ -14,7 +15,6 @@ import { buildCabinetGeometry } from '../geometry'
 import { runLocalToPlan } from '../run-layout'
 import { addCornerRun, wallBottomHeightForTallAlignment } from '../run-ops'
 import { CabinetModuleNode, CabinetNode } from '../schema'
-import { cabinetSlots } from '../slots'
 import {
   backAnchoredModuleZ,
   COOKTOP_DEFAULT_HEIGHT,

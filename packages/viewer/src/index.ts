@@ -263,6 +263,11 @@ export {
 export { FloorElevationSystem } from './systems/floor-elevation/floor-elevation-system'
 export { GuideSystem } from './systems/guide/guide-system'
 export { InteractiveSystem } from './systems/interactive/interactive-system'
+export {
+  type ScriptedClipActions,
+  ScriptedClips,
+  useClipActions,
+} from './systems/interactive/scripted-clips'
 // Item systems for the registry-driven item definition. ItemSystem
 // applies attachTo-driven transforms each frame; ItemLightSystem
 // manages item-mounted light sources.

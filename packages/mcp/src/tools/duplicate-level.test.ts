@@ -4,6 +4,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WallNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
+import { registerRoomTools } from './room-tools'
 import { registerSharedTools } from './shared-tools'
 
 describe('duplicate_level', () => {
@@ -16,6 +17,7 @@ describe('duplicate_level', () => {
     bridge.loadDefault()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
     registerSharedTools(server, bridge)
+    registerRoomTools(server, bridge)
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
@@ -39,6 +41,37 @@ describe('duplicate_level', () => {
     const newLevel = bridge.getNode(parsed.newLevelId)
     expect(newLevel).not.toBeNull()
     expect(newLevel!.type).toBe('level')
+  })
+
+  test('copies a level with automatic room surfaces and can undo the copy', async () => {
+    const level = bridge.findNodes({ type: 'level' })[0]!
+    const room = await client.callTool({
+      name: 'create_room',
+      arguments: {
+        levelId: level.id,
+        name: 'Room',
+        polygon: [
+          [0, 0],
+          [4, 0],
+          [4, 3],
+          [0, 3],
+        ],
+      },
+    })
+    expect(room.isError).toBeFalsy()
+    expect(bridge.findNodes({ type: 'ceiling' })[0]).toMatchObject({ boundary: 'auto' })
+    bridge.clearHistory()
+    const before = bridge.exportJSON()
+    const result = await client.callTool({
+      name: 'duplicate_level',
+      arguments: { levelId: level.id },
+    })
+    expect(result.isError).toBeFalsy()
+    const { newLevelId } = result.structuredContent as { newLevelId: string }
+    expect(bridge.findNodes({ type: 'ceiling', levelId: newLevelId as never })).toHaveLength(1)
+    expect(bridge.validateScene().valid).toBe(true)
+    expect(bridge.undo(1)).toBe(1)
+    expect(bridge.exportJSON()).toEqual(before)
   })
 
   test('rejects unknown id', async () => {

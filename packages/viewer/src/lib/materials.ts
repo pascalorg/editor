@@ -4,6 +4,8 @@ import {
   type MaterialPresetPayload,
   type MaterialProperties,
   type MaterialSchema,
+  materialColorPaint,
+  parseMaterialColor,
   parseMaterialRef,
   resolveMaterial,
   type SceneMaterial,
@@ -607,19 +609,23 @@ export function createMaterial(
  * the dangling-ref fallback for the whole session.
  */
 export function materialPresetRefSignature(ref: string): string {
-  return getMaterialPresetByRef(ref) ? ref : `${ref}#unresolved`
+  return getMaterialPresetByRef(ref) || parseMaterialColor(ref) ? ref : `${ref}#unresolved`
 }
 
 /**
- * Resolve a MaterialRef ('library:<id>' | 'scene:<id>') to a three.js material.
- * Returns null for an unknown / dangling ref so callers fall back to the
- * slot's default (authored material, then themed default). Never throws.
+ * Resolve a MaterialRef ('library:<id>' | 'scene:<id>') or a plain '#rrggbb'
+ * colour to a three.js material; the colour paints like
+ * `material: { properties: { color } }`. Returns null for an unknown / dangling
+ * ref so callers fall back to the slot's default (authored material, then
+ * themed default). Never throws.
  */
 export function resolveMaterialRef(
   ref: string | undefined,
   sceneMaterials: Record<SceneMaterialId, SceneMaterial> | undefined,
   shading: RenderShading = 'rendered',
 ): THREE.Material | null {
+  const color = parseMaterialColor(ref)
+  if (color) return createMaterial(materialColorPaint(color), shading)
   const parsed = parseMaterialRef(ref)
   if (!parsed) return null
   if (parsed.kind === 'library') return createMaterialFromPresetRef(ref, shading)

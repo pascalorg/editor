@@ -100,11 +100,11 @@ export function healSceneNodes(input: Record<string, unknown>): HealSceneResult 
   // and stale references whose child's `parentId` names a different parent.
   // Legacy sites embedded full child objects; keep those for migrateNodes to
   // flatten after healing instead of disconnecting the entire building.
-  const nodes: Record<string, unknown> = {}
+  const cleanedNodes: Record<string, unknown> = {}
   for (const [id, node] of Object.entries(kept)) {
     const children = (node as { children?: unknown })?.children
     if ((node as { type?: unknown })?.type === 'level' && !Array.isArray(children)) {
-      nodes[id] = {
+      cleanedNodes[id] = {
         ...(node as Record<string, unknown>),
         children: Object.entries(kept)
           .filter(([, child]) => (child as { parentId?: unknown })?.parentId === id)
@@ -148,44 +148,15 @@ export function healSceneNodes(input: Record<string, unknown>): HealSceneResult 
         return true
       })
       if (cleaned.length !== children.length) {
-        nodes[id] = { ...(node as Record<string, unknown>), children: cleaned }
+        cleanedNodes[id] = { ...(node as Record<string, unknown>), children: cleaned }
         continue
       }
     }
-    nodes[id] = node
+    cleanedNodes[id] = node
   }
 
-  // Pass 3: repair null parent links. A node claimed as a child by exactly one
-  // parent must point back at it; legacy writers linked `children` without
-  // writing `parentId`. Embedded legacy site children claim by their `id` so
-  // the flattened flat-map node is repaired too.
-  const claimantsByChildId = new Map<string, string[]>()
-  for (const [id, node] of Object.entries(nodes)) {
-    const children = (node as { children?: unknown })?.children
-    if (!Array.isArray(children)) continue
-    for (const child of children) {
-      const childId =
-        typeof child === 'string'
-          ? child
-          : child && typeof child === 'object' && typeof (child as { id?: unknown }).id === 'string'
-            ? (child as { id: string }).id
-            : null
-      if (!(childId && childId in nodes)) continue
-      const claimants = claimantsByChildId.get(childId) ?? []
-      claimants.push(id)
-      claimantsByChildId.set(childId, claimants)
-    }
-  }
-
-  const repairedParentLinkNodeIds: string[] = []
-  for (const [id, node] of Object.entries(nodes)) {
-    if (!node || typeof node !== 'object') continue
-    if ((node as { parentId?: unknown }).parentId != null) continue
-    const claimants = claimantsByChildId.get(id)
-    if (claimants?.length !== 1 || claimants[0] === id) continue
-    nodes[id] = { ...(node as Record<string, unknown>), parentId: claimants[0] }
-    repairedParentLinkNodeIds.push(id)
-  }
+  // Pass 3: repair null parent links (`repairClaimedParentLinks`).
+  const { nodes, repairedParentLinkNodeIds } = repairClaimedParentLinks(cleanedNodes)
 
   // Reachability follows children, so retaining a node via parentId also
   // requires repairing its host's reverse link before authority validation.
@@ -214,4 +185,47 @@ export function healSceneNodes(input: Record<string, unknown>): HealSceneResult 
     repairedParentLinkNodeIds,
     repairedChildLinkNodeIds,
   }
+}
+
+/**
+ * Pass 3 of `healSceneNodes`, on its own for loaders that must not run the
+ * other repairs: a node with a null `parentId` that exactly one parent claims
+ * via `children` gets that `parentId`. Legacy writers (the hosted MCP's
+ * default scene until 2026-10) linked `children` without writing `parentId`.
+ * Embedded legacy site children claim by their `id`, so the flattened node is
+ * repaired too. Pure: nodes that need no repair are passed through by reference.
+ */
+export function repairClaimedParentLinks(input: Record<string, unknown>): {
+  nodes: Record<string, unknown>
+  repairedParentLinkNodeIds: string[]
+} {
+  const nodes = { ...input }
+  const claimantsByChildId = new Map<string, string[]>()
+  for (const [id, node] of Object.entries(nodes)) {
+    const children = (node as { children?: unknown })?.children
+    if (!Array.isArray(children)) continue
+    for (const child of children) {
+      const childId =
+        typeof child === 'string'
+          ? child
+          : child && typeof child === 'object' && typeof (child as { id?: unknown }).id === 'string'
+            ? (child as { id: string }).id
+            : null
+      if (!(childId && childId in nodes)) continue
+      const claimants = claimantsByChildId.get(childId) ?? []
+      claimants.push(id)
+      claimantsByChildId.set(childId, claimants)
+    }
+  }
+
+  const repairedParentLinkNodeIds: string[] = []
+  for (const [id, node] of Object.entries(nodes)) {
+    if (!node || typeof node !== 'object') continue
+    if ((node as { parentId?: unknown }).parentId != null) continue
+    const claimants = claimantsByChildId.get(id)
+    if (claimants?.length !== 1 || claimants[0] === id) continue
+    nodes[id] = { ...(node as Record<string, unknown>), parentId: claimants[0] }
+    repairedParentLinkNodeIds.push(id)
+  }
+  return { nodes, repairedParentLinkNodeIds }
 }

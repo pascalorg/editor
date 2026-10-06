@@ -1931,11 +1931,20 @@ describe('near-miss joints follow the drawn wall bodies', () => {
         end: [(i % 50) * 3 + 2, Math.floor(i / 50) * 3 + 1],
       }),
     )
-    const started = performance.now()
-    expect(extractRooms(walls)).toHaveLength(0)
-    // HEAD took ~75 ms; the unbounded scan took 7.8 s.
-    expect(performance.now() - started).toBeLessThan(1500)
-  })
+    const smaller = walls.slice(0, 250)
+    const fastest = (input: WallNode[]) => {
+      let best = Number.POSITIVE_INFINITY
+      for (let i = 0; i < 6; i++) {
+        const started = performance.now()
+        expect(extractRooms(input)).toHaveLength(0)
+        best = Math.min(best, performance.now() - started)
+      }
+      return best
+    }
+    // Eight times the walls: splitting every wall at every vertex already grows ~25×;
+    // the unbounded neighbour scan (7.8 s at 2,000 walls) grows ~70×.
+    expect(fastest(walls) / fastest(smaller)).toBeLessThan(40)
+  }, 30_000)
 })
 
 describe('wall ends that stand inside another wall body', () => {

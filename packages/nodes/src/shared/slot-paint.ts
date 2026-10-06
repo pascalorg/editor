@@ -13,6 +13,7 @@ import {
   type SceneMaterialId,
   sceneRegistry,
   slotDefaultPaintMaterial,
+  slotPaintMaterial,
   toSceneMaterialRef,
   useScene,
 } from '@pascal-app/core'
@@ -381,15 +382,9 @@ export function createSlotPaintCapability(config: SlotPaintConfig): PaintCapabil
       }
       return Object.assign(() => finish(false), { commit: () => finish(true) })
     },
-    getEffectiveMaterial: ({ node, role }) => {
-      const ref = (node as SlotsNode).slots?.[role]
-      const parsed = parseMaterialRef(ref)
-      if (parsed) {
-        if (parsed.kind === 'library') return { material: undefined, materialPreset: ref }
-        const sceneMaterial = useScene.getState().materials[parsed.id as SceneMaterialId]
-        if (sceneMaterial) return { material: sceneMaterial.material, materialPreset: undefined }
-      }
-      return config.legacyEffective?.(node, role) ?? null
-    },
+    getEffectiveMaterial: ({ node, role }) =>
+      slotPaintMaterial((node as SlotsNode).slots?.[role], useScene.getState().materials) ??
+      config.legacyEffective?.(node, role) ??
+      null,
   }
 }

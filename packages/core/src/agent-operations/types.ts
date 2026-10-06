@@ -1,4 +1,4 @@
-import type { AnyNode } from '../schema'
+import type { AnyNode, Collection } from '../schema'
 
 export type SceneNodes = Readonly<Record<string, AnyNode>>
 
@@ -11,6 +11,8 @@ export type SceneChanges = {
   update?: { id: string; data: Partial<AnyNode> }[]
   /** Ids to remove; as with the editor's Delete, each goes with everything under it. */
   delete?: string[]
+  /** Collection records to write by id; `null` removes one. */
+  collections?: Record<string, Collection | null>
 }
 
 export type AgentOperationOutcome = { result: Record<string, unknown>; changes?: SceneChanges }

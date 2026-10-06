@@ -3,6 +3,7 @@ import {
   type AddObjectInput,
   addObject,
   authoredObject,
+  editedScriptParams,
   readSourceResult,
 } from '@pascal-app/core/agent-operations'
 import { addObjectTool, getSourceTool, isAgentRefusal, refuse } from '@pascal-app/core/agent-tools'
@@ -36,7 +37,20 @@ export type GeometryScriptHost = {
   }): Promise<void>
   /** A stored artifact's bytes (an object's script), or null when missing; only for principals who may edit the scene. */
   readArtifact(input: { sceneId: string; sha256: string }): Promise<Uint8Array | null>
+  /**
+   * Compiles and stores in one step, for a host whose compiler keeps the artifacts itself (the
+   * hosted MCP's user editor tab); preferred over `compile` + `storeArtifact` when present.
+   */
+  build?(input: {
+    sceneId: string
+    code: string
+    params?: Record<string, GeometryScriptParamValue>
+    /** What the script builds, for the host to name it to the user. */
+    kind: ScriptedKind
+  }): Promise<CompiledGeometryScript>
 }
+
+export type ScriptedKind = 'object' | 'window' | 'door' | 'column'
 
 /** Compiles a module on the host and stores its GLB and text for the scene: the step every scripted tool shares. */
 export async function compileAndStore(
@@ -44,7 +58,9 @@ export async function compileAndStore(
   sceneId: string,
   code: string,
   params: Record<string, GeometryScriptParamValue> | undefined,
+  kind: ScriptedKind,
 ): Promise<CompiledGeometryScript> {
+  if (host.build) return host.build({ sceneId, code, params, kind })
   const { glb, ...compiled } = await host.compile({ code, params })
   await Promise.all([
     host.storeArtifact({
@@ -109,7 +125,9 @@ export function registerAddObject(
           (args.nodeId
             ? await readScript(host, scene.id, bridge, args.nodeId)
             : refuseMissingCode())
-        compiled = await compileAndStore(host, scene.id, code, args.params)
+        const nodes = bridge.getNodes() as Record<string, AnyNode>
+        const params = editedScriptParams(args.nodeId ? nodes[args.nodeId] : undefined, args.params)
+        compiled = await compileAndStore(host, scene.id, code, params, 'object')
       } catch (error) {
         if (isAgentRefusal(error)) return refusalResult(error)
         return toolError(error instanceof Error ? error.message : String(error), {

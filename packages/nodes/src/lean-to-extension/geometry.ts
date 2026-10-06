@@ -1,4 +1,5 @@
 import type { GeometryContext, LeanToExtensionNode, SurfaceRole } from '@pascal-app/core'
+import { LEAN_TO_SLOT_DEFAULTS, type LeanToSlotId } from '@pascal-app/core'
 import {
   applyWorldScaleBoxUVs,
   type ColorPreset,
@@ -16,7 +17,6 @@ import {
   LEAN_TO_EXTENSION_GEOMETRY_REVISION,
   resolveLeanToLayout,
 } from './layout'
-import { LEAN_TO_SLOT_DEFAULTS, type LeanToSlotId } from './slots'
 
 // Number of straight facets used to approximate a curved member spanning the arc.
 export function leanToFacetCount(node: LeanToExtensionNode): number {

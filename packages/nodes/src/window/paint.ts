@@ -13,4 +13,8 @@ import {
 export const windowPaint = createSlotPaintCapability({
   resolveRole: resolveSlotByReRaycast,
   applyPreview: previewSlotByUserData,
+  legacyEffective: (node, role) =>
+    node.type === 'window' && !node.source && node.material && role === 'frame'
+      ? { material: node.material, materialPreset: undefined }
+      : null,
 })

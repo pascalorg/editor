@@ -5,6 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
   type AnyNode,
   type AnyNodeId,
+  ColumnNode,
   DoorNode,
   RoofNode,
   RoofSegmentNode,
@@ -288,6 +289,40 @@ describe('apply_patch identity and validation guards', () => {
     bridge.loadJSON({ nodes, rootNodeIds: bridge.getRootNodeIds() } as never)
     const unrelated = await apply([{ op: 'update', id: wall.id, data: { thickness: 0.3 } }])
     expect(unrelated.isError).toBe(false)
+  })
+
+  test("a scripted window's or column's size comes from its script, not a patch", async () => {
+    const sha = 'a'.repeat(64)
+    const source = {
+      kind: 'script',
+      language: 'three',
+      script: sha,
+      artifact: sha,
+      params: {},
+      manifest: { bounds: { min: [-0.5, 0, -0.1], max: [0.5, 1.2, 0.1] }, triangles: 12 },
+    }
+    const wall = WallNode.parse({ start: [0, 0], end: [6, 0] })
+    const window = WindowNode.parse({ wallId: wall.id, position: [2, 1.2, 0], source })
+    const column = ColumnNode.parse({ position: [1, 0, 2], source })
+    const seeded = await apply([
+      { op: 'create', node: wall, parentId: level.id },
+      { op: 'create', node: window, parentId: wall.id },
+      { op: 'create', node: column, parentId: level.id },
+    ])
+    expect(seeded.isError).toBe(false)
+
+    expect((await refusal([{ op: 'update', id: window.id, data: { width: 2 } }])).code).toBe(
+      'scripted_field',
+    )
+    const tall = await refusal([{ op: 'update', id: column.id, data: { height: 4 } }])
+    expect([tall.code, tall.message.includes('add_column with nodeId')]).toEqual([
+      'scripted_field',
+      true,
+    ])
+    const renamed = await apply([
+      { op: 'update', id: column.id, data: { name: 'Doric', height: column.height } },
+    ])
+    expect(renamed.isError).toBe(false)
   })
 
   test('refusals reach the client as structured data', async () => {

@@ -272,6 +272,7 @@
       },
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.30.0",
+        "@pascal-app/geometry-script": "^1.0.3",
         "@pascal-app/lingo": "^0.2.0",
         "zod": ">=4.5.4 <4.6",
       },
