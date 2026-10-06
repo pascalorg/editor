@@ -13,7 +13,7 @@ import {
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { commitFreshPlacementSubtree, useEditor } from '@pascal-app/editor'
+import { commitFreshPlacementSubtree, useEditor, useInteractionScope } from '@pascal-app/editor'
 import { z } from 'zod'
 import { stairDefinition } from './definition'
 
@@ -31,6 +31,7 @@ const modifiers = { altKey: false, shiftKey: false, ctrlKey: false, metaKey: fal
 afterEach(() => {
   globalThis.requestAnimationFrame = originalRaf
   globalThis.cancelAnimationFrame = originalCancelRaf
+  useInteractionScope.getState().end()
   useLiveNodeOverrides.getState().clearAll()
   useScene.setState(initialScene, true)
   useEditor.setState(initialEditor, true)
@@ -38,6 +39,7 @@ afterEach(() => {
 })
 
 function setup() {
+  if (!nodeRegistry.has(stairDefinition.kind)) registerNode(stairDefinition)
   if (!nodeRegistry.has('landscape:deck'))
     registerNode({
       kind: 'landscape:deck',
@@ -60,10 +62,12 @@ function setup() {
       },
     } as AnyNodeDefinition)
   useEditor.setState({
-    tool: 'stair',
+    mode: 'select',
+    tool: null,
+    magneticSnap: true,
     snappingModeByContext: {
       ...useEditor.getState().snappingModeByContext,
-      item: 'lines',
+      polygon: 'lines',
     },
   })
   const level = LevelNode.parse({ id: 'level_landscape_move' })
@@ -92,6 +96,13 @@ function setup() {
   useScene.setState({ nodes, rootNodeIds: [level.id], dirtyNodes: new Set() })
   useScene.temporal.getState().resume()
   clearSceneHistory()
+  useInteractionScope.getState().begin({
+    kind: 'moving',
+    node: stair,
+    nodeId: stair.id,
+    nodeType: stair.type,
+    view: '2d',
+  })
   const session = stairDefinition.floorplanMoveTarget!({
     node: stair,
     nodes,
