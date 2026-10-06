@@ -21,7 +21,8 @@ export function planStairSizing(
 ) {
   const targets = StairDesignTargets.parse(options.targets ?? {})
   if (!(Number.isFinite(rise) && rise > 0)) throw new RangeError('Rise must be positive')
-  const stepCount = options.stepCount ?? Math.max(2, Math.ceil(rise / targets.maxRiserHeight))
+  const ratio = rise / targets.maxRiserHeight
+  const stepCount = options.stepCount ?? Math.max(2, Math.ceil(ratio - Number.EPSILON * ratio))
   if (!Number.isSafeInteger(stepCount) || stepCount < 2)
     throw new RangeError('Use at least two whole risers')
   const length =

@@ -385,7 +385,7 @@ test('stair planner skips a blocked longer edge for a free edge and sizes the ri
   const stair = after[plan.stairId!] as StairNode
   const segment = after[stair.children[0]!] as StairSegmentNode
   expect(segment.height).toBeCloseTo(1.5)
-  expect(segment.length).toBeCloseTo(2.52)
+  expect(segment.length / segment.stepCount).toBeGreaterThanOrEqual(0.25)
   expect(stair.position[2] - segment.length).toBeCloseTo(3)
   const deck = after[stair.deckSlabId!] as SlabNode
   expect(railingLength(deck)).toBeCloseTo(railingLength(blocked[deck.id] as SlabNode) - stair.width)

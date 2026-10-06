@@ -1,4 +1,3 @@
-import { StairNode, StairSegmentNode, planStairFlightHeightEdit } from '@pascal-app/core'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
@@ -6,6 +5,9 @@ import {
   BuildingNode,
   clearSceneHistory,
   LevelNode,
+  planStairFlightHeightEdit,
+  StairNode,
+  StairSegmentNode,
   useLiveNodeOverrides,
   useScene,
   WallNode,
@@ -125,9 +127,7 @@ describe('buildMultiNodePatches', () => {
       nodes,
       {
         derive: (next) => ({ thickness: (next as { height: number }).height / 10 }),
-        reconcile: (prev) => [
-          { id: `${prev.id}_follow` as AnyNodeId, data: { height: 4 } },
-        ],
+        reconcile: (prev) => [{ id: `${prev.id}_follow` as AnyNodeId, data: { height: 4 } }],
       },
     )
     expect(patches).toEqual([
@@ -209,16 +209,20 @@ describe('commitMultiNodeFields', () => {
   })
 })
 
- test('multi-flight edits reconcile their parent from the complete proposed scene', () => {
+test('multi-flight edits reconcile their parent from the complete proposed scene', () => {
   const first = StairSegmentNode.parse({ height: 1 })
   const second = StairSegmentNode.parse({ height: 3 })
   const stair = StairNode.parse({ totalRise: 4, children: [first.id, second.id] })
   first.parentId = stair.id
   second.parentId = stair.id
-  const nodes: Record<string, AnyNode> = Object.fromEntries([stair, first, second].map(node => [node.id, node]))
+  const nodes: Record<string, AnyNode> = Object.fromEntries(
+    [stair, first, second].map((node) => [node.id, node]),
+  )
   const patches = buildMultiNodePatches([first.id, second.id], () => ({ height: 2 }), nodes, {
-    reconcile: (_prev, next, proposed) => next.type === 'stair-segment'
-      ? planStairFlightHeightEdit(next, next.height, proposed!).slice(1) : [],
+    reconcile: (_prev, next, proposed) =>
+      next.type === 'stair-segment'
+        ? planStairFlightHeightEdit(next, next.height, proposed!).slice(1)
+        : [],
   })
   const result = { ...nodes }
   for (const patch of patches) result[patch.id] = { ...result[patch.id], ...patch.data } as AnyNode
