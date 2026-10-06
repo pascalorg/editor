@@ -1,22 +1,11 @@
-import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { NextConfig } from 'next'
+import { getLocalPluginPackages } from './local-plugins'
 
 const appDirectory = path.dirname(fileURLToPath(import.meta.url))
 const portableBuild = process.env.PASCAL_PORTABLE_BUILD === '1'
-const appPackageJson = JSON.parse(
-  readFileSync(path.join(appDirectory, 'package.json'), 'utf8'),
-) as {
-  dependencies?: Record<string, string>
-  devDependencies?: Record<string, string>
-}
-const localPluginPaths = Object.values({
-  ...appPackageJson.dependencies,
-  ...appPackageJson.devDependencies,
-})
-  .filter((dependency) => dependency.startsWith('file:'))
-  .map((dependency) => path.resolve(appDirectory, dependency.slice('file:'.length)))
+const localPluginPaths = getLocalPluginPackages().map((plugin) => plugin.directory)
 const turbopackRoot = [path.resolve(appDirectory, '../..'), ...localPluginPaths].reduce(
   (commonRoot, candidate) => {
     const commonParts = commonRoot.split(path.sep)
