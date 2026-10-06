@@ -2,6 +2,7 @@ import type { SceneGraph } from '@pascal-app/editor'
 import { headers } from 'next/headers'
 import Link from 'next/link'
 import { SceneLoader, type SceneMeta } from '@/components/scene-loader'
+import { getSceneOperations } from '@/lib/scene-store-server'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,21 +20,32 @@ async function resolveBaseUrl(): Promise<string> {
   if (!host) {
     return 'http://localhost:3000'
   }
+  const [hostname, port] = host.split(':')
+  if (hostname && (hostname === 'localhost' || hostname.endsWith('.localhost'))) {
+    return `${proto}://127.0.0.1${port ? `:${port}` : ''}`
+  }
   return `${proto}://${host}`
 }
 
 async function fetchScene(id: string): Promise<SceneWithGraph | null> {
-  const base = await resolveBaseUrl()
-  const response = await fetch(`${base}/api/scenes/${encodeURIComponent(id)}`, {
-    cache: 'no-store',
-  })
-  if (response.status === 404) {
-    return null
+  try {
+    const operations = await getSceneOperations()
+    const scene = await operations.loadStoredScene(id)
+    if (!scene) return null
+    return scene as SceneWithGraph
+  } catch {
+    const base = await resolveBaseUrl()
+    const response = await fetch(`${base}/api/scenes/${encodeURIComponent(id)}`, {
+      cache: 'no-store',
+    })
+    if (response.status === 404) {
+      return null
+    }
+    if (!response.ok) {
+      throw new Error(`Failed to load scene: ${response.status}`)
+    }
+    return (await response.json()) as SceneWithGraph
   }
-  if (!response.ok) {
-    throw new Error(`Failed to load scene: ${response.status}`)
-  }
-  return (await response.json()) as SceneWithGraph
 }
 
 export default async function ScenePage({ params }: { params: Promise<{ id: string }> }) {

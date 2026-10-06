@@ -2,6 +2,7 @@ import { headers } from 'next/headers'
 import Link from 'next/link'
 import { CreateSceneButton } from '@/components/save-button'
 import type { SceneMeta } from '@/components/scene-loader'
+import { getSceneOperations } from '@/lib/scene-store-server'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,22 +16,31 @@ async function resolveBaseUrl(): Promise<string> {
   if (!host) {
     return 'http://localhost:3000'
   }
+  const [hostname, port] = host.split(':')
+  if (hostname && (hostname === 'localhost' || hostname.endsWith('.localhost'))) {
+    return `${proto}://127.0.0.1${port ? `:${port}` : ''}`
+  }
   return `${proto}://${host}`
 }
 
 async function fetchScenes(): Promise<SceneMeta[]> {
-  const base = await resolveBaseUrl()
-  const response = await fetch(`${base}/api/scenes?limit=50`, {
-    cache: 'no-store',
-  })
-  if (!response.ok) {
-    return []
+  try {
+    const operations = await getSceneOperations()
+    return await operations.listScenes({ limit: 50 })
+  } catch {
+    const base = await resolveBaseUrl()
+    const response = await fetch(`${base}/api/scenes?limit=50`, {
+      cache: 'no-store',
+    })
+    if (!response.ok) {
+      return []
+    }
+    const payload = (await response.json()) as { scenes?: SceneMeta[] } | SceneMeta[]
+    if (Array.isArray(payload)) {
+      return payload
+    }
+    return payload.scenes ?? []
   }
-  const payload = (await response.json()) as { scenes?: SceneMeta[] } | SceneMeta[]
-  if (Array.isArray(payload)) {
-    return payload
-  }
-  return payload.scenes ?? []
 }
 
 function formatDate(iso: string): string {
