@@ -409,6 +409,41 @@ describe('a close-up of a site element', () => {
   }
   const r = (v: number) => Math.round(v * 100) / 100
 
+  // furnish_from_plan live (22:30): a level with furniture and no walls yet answered
+  // nothing_to_view. A level, a building or the scene frames all it holds when it has no walls.
+  test('a level, its building or the scene with no walls frames everything on it', () => {
+    for (const target of ['level_s', 'building_s', undefined]) {
+      const box = sceneViewBounds(site(), target)
+      expect(box.min[0]).toBeLessThanOrEqual(0)
+      expect(box.max[0]).toBeGreaterThanOrEqual(6)
+      expect(box.max[2]).toBeGreaterThanOrEqual(8)
+      expect(box.max[1]).toBeGreaterThan(box.min[1])
+    }
+    const bed = ItemNode.parse({
+      id: 'item_bed',
+      parentId: 'level_i',
+      position: [3, 0, 2],
+      asset: {
+        id: 'double-bed',
+        category: 'furniture',
+        name: 'Double bed',
+        thumbnail: '',
+        src: '/items/double-bed/model.glb',
+        dimensions: [1.6, 0.5, 2.1],
+      },
+    })
+    const level = LevelNode.parse({ id: 'level_i', parentId: 'building_i', children: [bed.id] })
+    const building = BuildingNode.parse({ id: 'building_i', children: [level.id] })
+    const nodes = Object.fromEntries([building, level, bed].map((n) => [n.id, n])) as Record<
+      string,
+      AnyNode
+    >
+    const box = sceneViewBounds(nodes, 'level_i')
+    expect([r(box.min[0]), r(box.max[0]), r(box.min[2]), r(box.max[2])]).toEqual([
+      2.2, 3.8, 0.95, 3.05,
+    ])
+  })
+
   test('a column, a fence and a slab frame their own boxes', () => {
     const column = sceneViewBounds(site(), 'column_s')
     expect([r(column.min[1]), r(column.max[1])]).toEqual([0, 2.5])

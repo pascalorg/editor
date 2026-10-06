@@ -253,6 +253,9 @@ export function sceneViewBounds(
   if (site) return site
   const levelOf = (node: AnyNode) => (node.parentId ? nodes[node.parentId] : undefined)
   const outlines: { points: Pt[]; levelId: string }[] = []
+  // With no walls yet, what the level holds frames it: furniture placed from a plan before the
+  // walls are built, a site with its paving and fences.
+  const held: SceneViewBox[] = []
   for (const node of Object.values(nodes)) {
     const level = levelOf(node)
     if (level?.type !== 'level') continue
@@ -265,13 +268,23 @@ export function sceneViewBounds(
     if (node.type === 'wall') outlines.push({ points: [node.start, node.end], levelId: level.id })
     else if (node.type === 'zone' && target?.id === node.id)
       outlines.push({ points: node.polygon as Pt[], levelId: level.id })
+    else if (node.type === 'item') held.push(itemBox(node, baseOf(level.id)))
+    else {
+      const box = siteBox(node, baseOf(level.id))
+      if (box) held.push(box)
+    }
   }
+  if (!outlines.length && held.length)
+    return {
+      min: [0, 1, 2].map((axis) => Math.min(...held.map((box) => box.min[axis]!))) as V3,
+      max: [0, 1, 2].map((axis) => Math.max(...held.map((box) => box.max[axis]!))) as V3,
+    }
   if (!outlines.length)
     refuse(
       'nothing_to_view',
       target
-        ? `${target.type} ${target.id} has no walls to look at: give a building, a level, a wall or a zone.`
-        : 'The scene has no walls yet.',
+        ? `${target.type} ${target.id} holds nothing built to look at: give a building, a level, a wall, a zone or what was placed.`
+        : 'The scene has nothing built yet.',
       targetId ? { target: targetId } : {},
     )
   const min: V3 = [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY]
