@@ -112,15 +112,72 @@ function equal(a: unknown, b: unknown) {
   return JSON.stringify(a) === JSON.stringify(b)
 }
 
+/** Span overlap below this (a fraction of the boundary) is a shared endpoint, not a shared edge. */
+const SPAN_OVERLAP = 1e-6
+
+/**
+ * The rooms that are outside (L66): without a ceiling, and left without crossing a wall, through a
+ * separator no room stands behind or into another such room. Run 4's porch was a room for its
+ * floor, and its wall knew no outside: the front door faced the hall. A room that only lost its
+ * ceiling is walled in and a kitchen open to a terrace keeps its ceiling, so both stay inside; so
+ * does a courtyard walled on every side, a limit of this rule.
+ */
+export function outdoorRoomIds(
+  rooms: readonly { spans: readonly BoundarySpan[]; hasCeiling: boolean }[],
+): Set<string> {
+  const separatorSpans = rooms.flatMap((room) =>
+    room.spans.filter((span) => span.kind === 'separator'),
+  )
+  const across = (span: BoundarySpan) =>
+    separatorSpans
+      .filter(
+        (other) =>
+          other.boundaryId === span.boundaryId &&
+          other.face !== span.face &&
+          Math.min(span.t1, other.t1) - Math.max(span.t0, other.t0) > SPAN_OVERLAP,
+      )
+      .sort((a, b) => a.t0 - b.t0)
+  const exposed = (span: BoundarySpan) => {
+    let reach = span.t0
+    for (const other of across(span)) {
+      if (other.t0 > reach + SPAN_OVERLAP) return true
+      reach = Math.max(reach, other.t1)
+    }
+    return reach < span.t1 - SPAN_OVERLAP
+  }
+  const open = new Map(
+    rooms.flatMap((room) =>
+      !room.hasCeiling && room.spans[0] ? [[room.spans[0].roomId, room.spans] as const] : [],
+    ),
+  )
+  const queue = [...open].flatMap(([id, spans]) =>
+    spans.some((span) => span.kind === 'separator' && exposed(span)) ? [id] : [],
+  )
+  const outdoor = new Set(queue)
+  for (let id = queue.pop(); id !== undefined; id = queue.pop())
+    for (const span of open.get(id)!)
+      if (span.kind === 'separator')
+        for (const other of across(span))
+          if (open.has(other.roomId) && !outdoor.has(other.roomId)) {
+            outdoor.add(other.roomId)
+            queue.push(other.roomId)
+          }
+  return outdoor
+}
+
+/** A wall face is inside when an indoor room stands on it; an outdoor room's face is outside. */
 export function classifyWallSides(
   wall: WallNode,
   spans: readonly BoundarySpan[],
+  outdoor: ReadonlySet<string> = new Set(),
 ): Pick<WallNode, 'frontSide' | 'backSide'> {
   const boundary = spans.filter((span) => span.boundaryId === wall.id)
   if (!boundary.length) return { frontSide: wall.frontSide, backSide: wall.backSide }
+  const indoor = (face: BoundarySpan['face']) =>
+    boundary.some((span) => span.face === face && !outdoor.has(span.roomId))
   return {
-    frontSide: boundary.some((span) => span.face === 'a') ? 'interior' : 'exterior',
-    backSide: boundary.some((span) => span.face === 'b') ? 'interior' : 'exterior',
+    frontSide: indoor('a') ? 'interior' : 'exterior',
+    backSide: indoor('b') ? 'interior' : 'exterior',
   }
 }
 
@@ -709,8 +766,14 @@ function planLevelStructure({
   for (const components of ceilingComponentsByFace.values())
     for (const ceiling of components) ceiling.children = [...new Set(ceiling.children)].sort()
   const spans = snapshot.rooms.flatMap((room) => room.spans)
+  const outdoor = outdoorRoomIds(
+    [...zoneByFace].map(([index, zone]) => ({
+      spans: faces[index]!.spans,
+      hasCeiling: ((next.get(zone.id) ?? zone) as ZoneNode).hasCeiling !== false,
+    })),
+  )
   for (const wall of walls)
-    put({ ...wall, ...next.get(wall.id), ...classifyWallSides(wall, spans) } as WallNode)
+    put({ ...wall, ...next.get(wall.id), ...classifyWallSides(wall, spans, outdoor) } as WallNode)
   for (const ceiling of allCeilings) {
     if (deleted.has(ceiling.id)) continue
     const updated = (next.get(ceiling.id) ?? ceiling) as CeilingNode

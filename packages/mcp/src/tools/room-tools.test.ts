@@ -398,6 +398,51 @@ describe('room tools', () => {
     expect(findBlockedDoors({ nodes })).toEqual([])
   })
 
+  // L66, run 4: the front door behind an outdoor porch faced the hall, whichever way drawn.
+  for (const polygon of [
+    [
+      [0, 0],
+      [0, 5],
+      [6, 5],
+      [6, 0],
+    ],
+    [
+      [0, 0],
+      [6, 0],
+      [6, 5],
+      [0, 5],
+    ],
+  ])
+    test(`a door on the wall behind an outdoor porch faces the porch (${polygon[1]})`, async () => {
+      const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+      const call = async (name: string, args: Record<string, unknown>) => {
+        const result = await client.callTool({ name, arguments: args })
+        expect(result.isError).toBeFalsy()
+        return JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+      }
+      const house = await call('create_room', { levelId: level.id, name: 'Hall', polygon })
+      await call('create_room', {
+        levelId: level.id,
+        name: 'Porch',
+        outdoor: true,
+        polygon: [
+          [1, 5],
+          [4, 5],
+          [4, 7],
+          [1, 7],
+        ],
+      })
+      const wallId = (house.wallIds as string[]).find((id) => {
+        const wall = bridge.getNodes()[id as AnyNodeId] as { start: number[]; end: number[] }
+        return wall.start[1] === 5 && wall.end[1] === 5
+      })!
+      const wall = bridge.getNodes()[wallId as AnyNodeId] as { start: number[]; end: number[] }
+      const { doorId } = await call('add_door', { wallId, t: 0.5, style: 'modern' })
+      const door = bridge.getNodes()[doorId as AnyNodeId] as { rotation: number[] }
+      const sign = Math.abs(door.rotation[1]!) > Math.PI / 2 ? -1 : 1
+      expect((wall.end[0]! - wall.start[0]!) * sign).toBeGreaterThan(0)
+    })
+
   test('furnish_room records door-clearance skips when a door sits on the furniture wall', async () => {
     const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
     // Large bedroom so bed placement is near the "back" wall (edge opposite doorWallIndex).
