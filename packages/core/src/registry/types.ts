@@ -1618,9 +1618,16 @@ export type RendererSource<N> =
  * A collective renderer for the baked `/viewer` (see `NodeDefinition.bakeReplaceRenderer`):
  * a lazy module whose default export takes all of one level's `replace` nodes and
  * is portaled into that baked level. Three-free indirection, same as `system`.
+ *
+ * `resolve` looks up any node of the scene graph the artifact was baked from.
+ * The baked viewer never loads that graph into `useScene`, so a renderer that
+ * builds from other nodes (its parent site, its siblings) reads them here.
+ * Hosts without the graph omit it.
  */
 export type BakeReplaceRenderer<N> = {
-  module: () => Promise<{ default: ComponentType<{ nodes: N[] }> }>
+  module: () => Promise<{
+    default: ComponentType<{ nodes: N[]; resolve?: GeometryContext['resolve'] }>
+  }>
 }
 
 export type BakeGeometryBuilder<N> = (node: N, ctx: GeometryContext) => Object3D
