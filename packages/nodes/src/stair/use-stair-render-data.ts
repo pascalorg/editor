@@ -12,39 +12,62 @@ import {
 import { useMemo, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 
-function subscribeRise(onChange: () => void) {
-  const scene = useScene.subscribe(onChange)
-  const live = useLiveNodeOverrides.subscribe(onChange)
-  return () => {
-    scene()
-    live()
+type Nodes = ReturnType<typeof useScene.getState>['nodes']
+type Overrides = ReturnType<typeof useLiveNodeOverrides.getState>['overrides']
+const effectiveNodesMemo = new WeakMap<Nodes, WeakMap<Overrides, Nodes>>()
+
+function effectiveRiseNodes(nodes: Nodes, overrides: Overrides): Nodes {
+  if (!overrides.size) return nodes
+  let cache = effectiveNodesMemo.get(nodes)
+  if (!cache) {
+    cache = new WeakMap()
+    effectiveNodesMemo.set(nodes, cache)
   }
+  const cached = cache.get(overrides)
+  if (cached) return cached
+  const effective = { ...nodes }
+  for (const [id, override] of overrides) {
+    const node = nodes[id as AnyNodeId]
+    if (node) effective[id as AnyNodeId] = { ...node, ...override } as AnyNode
+  }
+  cache.set(overrides, effective)
+  return effective
 }
 
-/** Structural context can change a following stair's rise, but only the
- * resulting scalar belongs in rendering dependencies. */
 export function useStairTotalRise(stair: StairNode) {
-  const snapshot = useMemo(() => {
-    let lastNodes: ReturnType<typeof useScene.getState>['nodes'] | undefined
-    let lastOverrides: ReturnType<typeof useLiveNodeOverrides.getState>['overrides'] | undefined
+  const selector = useMemo(() => {
+    let lastNodes: Nodes | undefined
     let rise = 0
-    return () => {
+    const snapshot = () => {
       if (stair.totalRise !== undefined) return stair.totalRise
-      const nodes = useScene.getState().nodes
-      const overrides = useLiveNodeOverrides.getState().overrides
-      if (nodes === lastNodes && overrides === lastOverrides) return rise
-      const effective: Record<string, AnyNode> = { ...nodes }
-      for (const [id, override] of overrides) {
-        const node = nodes[id as AnyNodeId]
-        if (node) effective[id] = { ...node, ...override } as AnyNode
+      const nodes = effectiveRiseNodes(
+        useScene.getState().nodes,
+        useLiveNodeOverrides.getState().overrides,
+      )
+      if (nodes !== lastNodes) {
+        rise = resolveStairTotalRise(stair, nodes)
+        lastNodes = nodes
       }
-      rise = resolveStairTotalRise(stair, effective)
-      lastNodes = nodes
-      lastOverrides = overrides
       return rise
     }
+    const subscribe = (onChange: () => void) => {
+      let previous = snapshot()
+      const check = () => {
+        const current = snapshot()
+        if (Object.is(previous, current)) return
+        previous = current
+        onChange()
+      }
+      const scene = useScene.subscribe(check)
+      const live = useLiveNodeOverrides.subscribe(check)
+      return () => {
+        scene()
+        live()
+      }
+    }
+    return { snapshot, subscribe }
   }, [stair])
-  return useSyncExternalStore(subscribeRise, snapshot, snapshot)
+  return useSyncExternalStore(selector.subscribe, selector.snapshot, selector.snapshot)
 }
 
 export function useStairRenderData(stair: StairNode) {
@@ -73,3 +96,5 @@ export function useStairRenderData(stair: StairNode) {
   )
   return { stair: resolvedStair, segments, nodes, totalRise }
 }
+
+export type StairRenderData = ReturnType<typeof useStairRenderData>

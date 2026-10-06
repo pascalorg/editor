@@ -17,9 +17,13 @@ export function resolveStairTotalRise(
 ): number {
   if (stair.totalRise !== undefined) return stair.totalRise
 
-  const parentLevel = Object.values(nodes).find(
-    (node) => node.type === 'level' && (node.children ?? []).includes(stair.id),
-  )
+  const parent = stair.parentId ? nodes[stair.parentId] : undefined
+  const parentLevel =
+    parent?.type === 'level'
+      ? parent
+      : Object.values(nodes).find(
+          (node) => node.type === 'level' && (node.children ?? []).includes(stair.id),
+        )
   const requestedSource = stair.fromLevelId ? nodes[stair.fromLevelId] : undefined
   const level = requestedSource?.type === 'level' ? requestedSource : parentLevel
 

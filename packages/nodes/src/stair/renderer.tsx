@@ -6,11 +6,11 @@ import {
   resolveArcStairConstruction,
   resolveStairArcLayout,
   resolveStairRailPaths,
-  STAIR_RAILING_SLOT_DEFAULT,
-  type StairSlotId,
   resolveStairWalkingPaths,
+  STAIR_RAILING_SLOT_DEFAULT,
   type StairNode,
   type StairSegmentNode,
+  type StairSlotId,
   stairArcSliceCount,
   useLiveNodeOverrides,
   useRegistry,
@@ -40,7 +40,7 @@ import {
   resolveStairSlotMaterial,
 } from './materials'
 import { buildPostAndRailGuard, postAndRailGuardRails } from './post-and-rail-guard'
-import { useStairRenderData, useStairTotalRise } from './use-stair-render-data'
+import { type StairRenderData, useStairRenderData } from './use-stair-render-data'
 
 type StairRailPathSide = 'left' | 'right' | 'front'
 
@@ -102,11 +102,12 @@ export const StairRenderer = ({ node: rawNode }: { node: StairNode }) => {
     () => resolveStairBodySlotMaterials(node, baseBodyMaterials, sceneMaterials, shading, textures),
     [baseBodyMaterials, node, sceneMaterials, shading, textures],
   )
-  const { segments } = useStairRenderData(node)
+  const renderData = useStairRenderData(node)
+  const { segments, totalRise } = renderData
   useLayoutEffect(() => {
     for (const id of node.children) useScene.getState().markDirty(id)
   }, [node.children, node.construction])
-  const detail = measureStairDetail(node, segments)
+  const detail = useMemo(() => measureStairDetail(node, segments), [node, segments])
   const mergedMaterials = useMemo(
     () =>
       segments.length
@@ -185,22 +186,27 @@ export const StairRenderer = ({ node: rawNode }: { node: StairNode }) => {
         />
       ) : null}
       {isSegmentBasedStair || detail.error ? null : (
-        <CurvedStairBody bodyMaterials={bodyMaterials} stair={node} />
+        <CurvedStairBody bodyMaterials={bodyMaterials} stair={node} rise={totalRise} />
       )}
       {detail.error ? null : segments.some((segment) => segment.winder) ||
         node.railingPath === 'continuous' ||
         node.railingStyle === 'glass' ||
         node.railingStyle === 'metal' ? (
-        <ContinuousStairRailings material={railingMaterial} stair={node} />
+        <ContinuousStairRailings material={railingMaterial} stair={node} renderData={renderData} />
       ) : (
         <>
-          <StairRailings material={railingMaterial} stair={node} />
+          <StairRailings material={railingMaterial} stair={node} renderData={renderData} />
           {node.handrail ? (
-            <ContinuousStairRailings material={railingMaterial} stair={node} guard={false} />
+            <ContinuousStairRailings
+              material={railingMaterial}
+              stair={node}
+              renderData={renderData}
+              guard={false}
+            />
           ) : null}
         </>
       )}
-      <StairWalkingLine stair={node} segments={segments} />
+      <StairWalkingLine stair={node} segments={segments} totalRise={totalRise} />
       {isSegmentBasedStair && !detail.error ? (
         <group name="segments-wrapper" visible={false}>
           {(node.children ?? []).map((childId) => (
@@ -212,9 +218,16 @@ export const StairRenderer = ({ node: rawNode }: { node: StairNode }) => {
   )
 }
 
-function StairWalkingLine({ stair, segments }: { stair: StairNode; segments: StairSegmentNode[] }) {
+function StairWalkingLine({
+  stair,
+  segments,
+  totalRise,
+}: {
+  stair: StairNode
+  segments: StairSegmentNode[]
+  totalRise: number
+}) {
   const selected = useViewer((state) => state.selection.selectedIds.includes(stair.id))
-  const totalRise = useStairTotalRise(stair)
   const lines = useMemo(() => {
     if (!selected) return []
     return resolveStairWalkingPaths(stair, segments, totalRise).map((points) => {
@@ -250,8 +263,16 @@ function StairWalkingLine({ stair, segments }: { stair: StairNode; segments: Sta
   )
 }
 
-function StairRailings({ stair, material }: { stair: StairNode; material: THREE.Material }) {
-  const { stair: resolvedStair, segments, nodes } = useStairRenderData(stair)
+function StairRailings({
+  stair,
+  material,
+  renderData,
+}: {
+  stair: StairNode
+  material: THREE.Material
+  renderData: StairRenderData
+}) {
+  const { stair: resolvedStair, segments, nodes } = renderData
 
   const railPaths = useMemo(
     () =>
@@ -539,12 +560,14 @@ function ConnectorRails({ boxes, material }: { boxes: GuardBox[]; material: THRE
 function CurvedStairBody({
   stair,
   bodyMaterials,
+  rise,
 }: {
   stair: StairNode
   bodyMaterials: StairBodyMaterials
+  rise: number
 }) {
   const sideMaterial = bodyMaterials[1]
-  const totalRise = Math.max(useStairTotalRise(stair), 0.001)
+  const totalRise = Math.max(rise, 0.001)
   const isSpiral = stair.stairType === 'spiral'
   const layout = resolveStairArcLayout(stair, totalRise)
   const { innerRadius, outerRadius, thickness } = layout

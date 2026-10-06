@@ -20,7 +20,7 @@ import { buildGlassGuard, type GlassPanel } from './glass-guard'
 import { resolveStairSlotMaterial } from './materials'
 import { buildMetalGuard } from './metal-guard'
 import { buildPostAndRailGuard } from './post-and-rail-guard'
-import { useStairRenderData } from './use-stair-render-data'
+import type { StairRenderData } from './use-stair-render-data'
 
 /** A continuous guard's newels are at most this far apart along the run. */
 const GUARD_POST_SPACING = 1.2192
@@ -191,12 +191,14 @@ export function ContinuousStairRailings({
   stair,
   material,
   guard = true,
+  renderData,
 }: {
   stair: StairNode
   material: THREE.Material
   guard?: boolean
+  renderData: StairRenderData
 }) {
-  const { stair: resolvedStair, nodes: effective } = useStairRenderData(stair)
+  const { stair: resolvedStair, nodes: effective } = renderData
   const sceneMaterials = useScene((state) => state.materials)
   const shading = useViewer((state) => state.shading),
     textures = useViewer((state) => state.textures),
