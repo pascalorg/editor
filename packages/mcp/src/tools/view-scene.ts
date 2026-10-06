@@ -24,7 +24,7 @@ export type SceneViewCapture = {
 
 /**
  * Asks an editor open on the project for a picture, the MCP having no renderer of its own. Refuses
- * `no_editor_open` when none answers.
+ * `editor_tab_required` when none answers.
  */
 export type SceneViewHost = {
   capture(request: {

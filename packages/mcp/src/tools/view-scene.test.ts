@@ -174,12 +174,12 @@ describe('view_scene over the MCP', () => {
   test('with no editor open on the project, it says so', async () => {
     const view = await viewWith({
       capture: async () =>
-        refuse('no_editor_open', 'No editor tab answered: open the project in the editor.'),
+        refuse('editor_tab_required', 'No editor tab answered: open the project in the editor.'),
     })
     try {
       const { isError, content } = await view.call({})
       expect(isError).toBe(true)
-      expect(json(content)).toMatchObject({ code: 'no_editor_open' })
+      expect(json(content)).toMatchObject({ code: 'editor_tab_required' })
     } finally {
       await view.close()
     }
