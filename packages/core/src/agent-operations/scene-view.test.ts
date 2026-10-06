@@ -342,8 +342,15 @@ describe("the photo's crop beside the view", () => {
 // Both hosts return a crop at most 1280 px long, as a view is (the hosted one capped, the chat's
 // did not: a whole 4000-px photo as the region went to the model at full size).
 describe("a crop's size", () => {
-  test('kept below 1280 px on its longer side, never enlarged', () => {
+  test('kept below 1280 px on its longer side', () => {
     expect(photoCropSize(4000, 3000)).toEqual({ width: 1280, height: 960 })
     expect(photoCropSize(560, 270)).toEqual({ width: 560, height: 270 })
+  })
+
+  // L51 live (2026-10-05): the front door's crop came back 85 × 155 px, its four glass strips
+  // about 8 px each, under what a vision model resolves. A small crop is enlarged to 512 px: no
+  // new detail, but the strips stand apart.
+  test('a small crop is enlarged to 512 px on its longer side', () => {
+    expect(photoCropSize(85, 155)).toEqual({ width: 281, height: 512 })
   })
 })

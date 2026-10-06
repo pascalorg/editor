@@ -65,9 +65,16 @@ const ASPECT = VIEW_SIZE.w / VIEW_SIZE.h
 /** A crop comes back at most this long on either host: the region as the photo has it, never larger than a view. */
 export const PHOTO_CROP_LONGEST = VIEW_SIZE.w
 
+/** A crop comes back at least this long, enlarged if smaller, so a small element's detail reads. */
+export const PHOTO_CROP_SHORTEST_LONG_SIDE = 512
+
 /** The size a crop of `width` × `height` pixels comes back at. */
 export function photoCropSize(width: number, height: number) {
-  const scale = Math.min(1, PHOTO_CROP_LONGEST / Math.max(width, height))
+  const longest = Math.max(width, height)
+  const scale =
+    longest < PHOTO_CROP_SHORTEST_LONG_SIDE
+      ? PHOTO_CROP_SHORTEST_LONG_SIDE / longest
+      : Math.min(1, PHOTO_CROP_LONGEST / longest)
   return { width: Math.round(width * scale), height: Math.round(height * scale) }
 }
 const DEFAULT_FOV = 45
