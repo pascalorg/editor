@@ -150,6 +150,50 @@ export function hostScene(): SceneGraph {
   return { nodes: Object.fromEntries(nodes.map((node) => [node.id, node])), rootNodeIds: [building.id] }
 }
 
+/**
+ * A bathroom, 2.2 × 1.9 m unless sized: its door, 0.8 m wide, in the middle of its south wall; the
+ * catalog's 2.34 m bathtub (run 4's only one), a 1.6 m bath and a vanity.
+ */
+export function bathScene([width, depth]: [number, number] = [2.2, 1.9]): SceneGraph {
+  const room: [number, number][] = [
+    [0, 0],
+    [width, 0],
+    [width, depth],
+    [0, depth],
+  ]
+  const wall = WallNode.parse({
+    id: 'wall_bath',
+    parentId: 'level_b',
+    start: [0, 0],
+    end: [width, 0],
+    thickness: 0.1,
+    children: ['door_bath'],
+  })
+  const door = DoorNode.parse({
+    id: 'door_bath',
+    parentId: wall.id,
+    wallId: wall.id,
+    position: [width / 2, 1.05, 0],
+    width: 0.8,
+  })
+  const zone = ZoneNode.parse({ id: 'zone_bath', parentId: 'level_b', name: 'Bath', polygon: room })
+  const level = LevelNode.parse({
+    id: 'level_b',
+    parentId: 'building_b',
+    level: 0,
+    children: [wall.id, zone.id],
+  })
+  const building = BuildingNode.parse({ id: 'building_b', children: [level.id] })
+  const nodes: AnyNode[] = [building, level, wall, door, zone]
+  return { nodes: Object.fromEntries(nodes.map((node) => [node.id, node])), rootNodeIds: [building.id] }
+}
+export const BATH_CATALOG = [
+  { ...item('bathtub', 'Bathtub', 'bathtubs'), dimensions: [2.34, 0.79, 1.11] },
+  { ...item('bath-1600', 'Bath 1600', 'bathtubs'), dimensions: [1.6, 0.6, 0.75] },
+  { ...item('vanity', 'Vanity', 'sinks'), dimensions: [0.6, 0.85, 0.45] },
+] as AssetInput[]
+const bath = { activeLevelId: null, catalog: BATH_CATALOG }
+
 type Placed = AnyNode & {
   parentId: string
   position: number[]
@@ -434,6 +478,57 @@ export const PLACE_ITEMS_CASES: AgentToolCase[] = [
           { ok: false, code: 'host_not_on_level' },
         ],
       },
+    },
+  },
+  {
+    // Run 4 (L59): furnish_room skipped the tub as blocking the bath's door; the agent then put it
+    // there itself with place_items, which checked only that its centre was in a room.
+    name: 'an item in front of a door is refused, naming the door, with a spot that fits',
+    tool: 'place_items',
+    scene: bathScene,
+    input: { items: [{ assetId: 'bath-1600', x: 1.1, z: 0.45 }] },
+    context: bath,
+    expect: {
+      result: { ok: false },
+      contains: { items: [{ ok: false, assetId: 'bath-1600', code: 'blocks_door' }] },
+      mentions: ['door_bath', 'A spot that fits'],
+    },
+  },
+  {
+    name: 'an item larger than its room is refused with both sizes, pointing to a smaller one',
+    tool: 'place_items',
+    scene: bathScene,
+    input: { items: [{ assetId: 'bathtub', x: 1.1, z: 1.3 }] },
+    context: bath,
+    expect: {
+      result: { ok: false },
+      contains: { items: [{ ok: false, assetId: 'bathtub', code: 'too_large_for_room' }] },
+      mentions: ['2.34', '2.2 × 1.9', 'add_object'],
+    },
+  },
+  {
+    name: 'furnish_room names what it skips with its size',
+    tool: 'furnish_room',
+    // Run 4's bath: 3.1 × 2.2 m, large enough to be given a tub.
+    scene: () => bathScene([3.1, 2.2]),
+    input: { zoneId: 'zone_bath', roomType: 'bathroom' },
+    context: bath,
+    expect: { result: { ok: true }, mentions: ['bathtub (2.34 × 1.11 m)'] },
+  },
+  {
+    name: 'an item clear of the door, inside its room, is placed',
+    tool: 'place_items',
+    scene: bathScene,
+    input: {
+      items: [
+        { assetId: 'vanity', x: 1.8, z: 1.6 },
+        { assetId: 'bath-1600', x: 1.1, z: 1.45 },
+      ],
+    },
+    context: bath,
+    expect: {
+      result: { ok: true },
+      contains: { items: [{ ok: true, assetId: 'vanity' }, { ok: true, assetId: 'bath-1600' }] },
     },
   },
   {

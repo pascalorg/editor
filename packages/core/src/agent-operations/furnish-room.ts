@@ -4,6 +4,7 @@ import { type AnyNode, type AssetInput, ItemNode } from '../schema'
 import { edgeProjection } from './create-room'
 import {
   collectDoorKeepouts,
+  itemBlocksDoorKeepout,
   itemPlanAabb,
   keepoutCoversPlanned,
   keepoutForPolygonEdge,
@@ -200,6 +201,38 @@ const SKIP_REASONS = {
   overlaps_item: 'overlaps another item',
 } as const
 
+const round = (value: number) => Math.round(value * 100) / 100
+
+/**
+ * Why a piece was skipped, with its size (L59): run 4 read "bathtub: blocks door clearance", then
+ * set the same tub there with place_items. An item the room cannot hold in any turn says so and
+ * what instead; one in a door's way names the door.
+ */
+function skipReason(
+  asset: AssetInput,
+  pose: { x: number; z: number; rotationDeg: number },
+  reason: string,
+  room: { minX: number; maxX: number; minZ: number; maxZ: number },
+  doors: ReturnType<typeof collectDoorKeepouts>,
+) {
+  const [width = 1, , depth = 1] = asset.dimensions ?? [1, 1, 1]
+  const named = `${asset.id} (${round(width)} × ${round(depth)} m)`
+  const [roomWidth, roomDepth] = [room.maxX - room.minX, room.maxZ - room.minZ]
+  const fits = (a: number, b: number) => a <= roomWidth && b <= roomDepth
+  if (!fits(width, depth) && !fits(depth, width))
+    return `${named}: too large for the room (${round(roomWidth)} × ${round(roomDepth)} m); a smaller one, or add_object at the room's size`
+  if (reason === 'blocks_door_clearance') {
+    const footprint = itemPlanAabb(
+      [pose.x, 0, pose.z],
+      asset.dimensions,
+      (pose.rotationDeg * Math.PI) / 180,
+    )
+    const door = doors.find((keepout) => itemBlocksDoorKeepout(footprint, keepout))
+    return `${named}: in the way of ${door ? `door ${door.doorId}` : 'the door wall kept clear for a door'}`
+  }
+  return `${named}: ${SKIP_REASONS[reason as keyof typeof SKIP_REASONS]}`
+}
+
 /**
  * `furnish_room`: a room type's pieces from the host's catalog, against the walls the door decides,
  * each moved off door clear zones and other items or skipped with the reason. The door wall is the
@@ -221,7 +254,8 @@ export const furnishRoom: AgentOperation<FurnishRoomInput> = (nodes, input, cont
   const doors = doorsOfRoom(nodes, levelId, polygon)
   const doorWall = input.doorWallIndex ?? doors[0]?.edge ?? 0
   const all = Object.values(nodes)
-  const keepouts: PlanAabb[] = collectDoorKeepouts(all, { levelId }).map((door) => door.aabb)
+  const doorKeepouts = collectDoorKeepouts(all, { levelId })
+  const keepouts: PlanAabb[] = doorKeepouts.map((door) => door.aabb)
   // A door wall without a door yet keeps the middle of it clear for the one to come.
   if (!doors.some((door) => door.edge === doorWall)) {
     const planned = keepoutForPolygonEdge(polygon, doorWall, { t: 0.5, width: 0.9 })
@@ -251,7 +285,7 @@ export const furnishRoom: AgentOperation<FurnishRoomInput> = (nodes, input, cont
       inward: pose.inward,
     })
     if (!candidate) {
-      skipped.push(`${asset.id}: ${SKIP_REASONS[reason as keyof typeof SKIP_REASONS]}`)
+      skipped.push(skipReason(asset, pose, reason, { minX, maxX, minZ, maxZ }, doorKeepouts))
       continue
     }
     const rotation = (candidate.rotationDeg * Math.PI) / 180
