@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { isAgentRefusal } from '../agent-tools/refusal'
+import { getCatalogMaterialById } from '../material-library'
 import { finishSurface, nearestLibraryMaterials, requireMaterialRef } from './material-refs'
 
 /**
@@ -9,9 +10,13 @@ import { finishSurface, nearestLibraryMaterials, requireMaterialRef } from './ma
  * nothing of the kind.
  */
 describe('the nearest library materials', () => {
+  // Roofing as the library tags it, not one material by name: which roofing a library holds is
+  // its data.
   test('a roof is offered roofing first, never a wall or a floor material', () => {
     const roof = nearestLibraryMaterials('metal-corrugated', 'roof')
-    expect(roof[0]).toContain('library:roof-')
+    const surfaces = (ref: string) =>
+      getCatalogMaterialById(ref.replace(/^library:/, '').split(' ')[0]!)?.surfaces ?? []
+    expect(surfaces(roof[0]!)).toContain('roof')
     for (const ref of roof) expect(ref).not.toMatch(/brick|drywall/i)
   })
 
