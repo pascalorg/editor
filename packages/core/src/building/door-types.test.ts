@@ -4,7 +4,7 @@ import { doorTypeChange, doorTypeFields } from './door-types'
 import { doorStyleLook, doorStylesOf } from './opening-style-presets'
 
 /**
- * L67: the door panel's Type row, moved into core so the Style row and the placement chips share
+ * The door panel's Type row, moved into core so the Style row and the placement chips share
  * it. What goes wrong, written first: a person's chosen style lost when they change the type, or
  * a plain door keeping its panels when made French; the door left off the floor at its new height.
  */

@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import { buildDoorPreviewMesh } from './door-system'
 
 /**
- * Run 4 (L66): the front door, style "modern" ("flat slab"), rendered its frame and no leaf, so
+ * A front door, style "modern" ("flat slab"), rendered its frame and no leaf, so
  * the porch read as an open passage. A door style is a leaf look: whatever the style, the closed
  * leaf covers its opening.
  */

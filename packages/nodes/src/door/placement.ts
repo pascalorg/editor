@@ -1,4 +1,4 @@
-// The door tool's placement choices: the chips [O] Type and [L] Style (L67).
+// The door tool's placement choices: the chips [O] Type and [L] Style.
 
 import type { DoorNode, ToolHint } from '@pascal-app/core'
 import {

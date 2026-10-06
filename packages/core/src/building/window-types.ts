@@ -13,7 +13,7 @@ export const SHAPED_WINDOW_TYPES: ReadonlySet<WindowType> = new Set([
 /** The window types that project from the wall and have no sill. */
 export const SILLLESS_WINDOW_TYPES: ReadonlySet<WindowType> = new Set(['bay', 'bow'])
 
-/** What a window type writes, for the window panel's Type row and add_window alike (L67). */
+/** What a window type writes, for the window panel's Type row and add_window alike. */
 export function windowTypeFields(type: WindowType): Partial<WindowNode> {
   return {
     windowType: type,

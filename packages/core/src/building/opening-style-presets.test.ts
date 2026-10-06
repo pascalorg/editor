@@ -12,7 +12,7 @@ import {
 } from './opening-style-presets'
 
 /**
- * L67: the door and window panels show the agents' styles. What goes wrong, written first: a
+ * The door and window panels show the agents' styles. What goes wrong, written first: a
  * style the panel cannot read back (it shows Custom for a door just given it); a second style
  * keeping the first one's fields (modern's flush padding left on a panel door); an old or
  * hand-made leaf shown as a style it isn't.

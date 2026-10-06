@@ -1,4 +1,4 @@
-// The window tool's placement choices: the chips [O] Type and [L] Style (L67).
+// The window tool's placement choices: the chips [O] Type and [L] Style.
 
 import type { ToolHint, WindowNode } from '@pascal-app/core'
 import {

@@ -57,8 +57,8 @@ type TypeSource = Partial<Pick<DoorNode, 'operationState' | 'slideDirection' | '
 
 /**
  * What a door type writes besides its size, for the door panel's Type row and add_door alike: its
- * leaves, its track and the leaf it comes with (L67: an agent's sliding door had no track, as the
- * agent set doorType alone).
+ * leaves, its track and the leaf it comes with (an agent's sliding door had no track, as the agent
+ * set doorType alone).
  */
 export function doorTypeFields(type: DoorType, door: TypeSource = {}): Partial<DoorNode> {
   const segments = segmentsOf(type)

@@ -91,8 +91,8 @@ export function doorStyleLook(style: DoorStyle): DoorStyleLook {
     case 'glass':
       return look([panelSegment('glass', 1)])
     case 'modern':
-      // A flush slab: one panel over the whole leaf. An 'empty' segment is no leaf at all (run 4's
-      // front door rendered as an open frame).
+      // A flush slab: one panel over the whole leaf. An 'empty' segment is no leaf at all (a front
+      // door once rendered as an open frame).
       return look([panelSegment('panel', 1, [1], { panelDepth: 0, panelInset: 0 })], [0, 0])
     case 'paneled-glass':
       return look([panelSegment('glass', 0.55), panelSegment('panel', 0.45)])
