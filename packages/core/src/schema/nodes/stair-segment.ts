@@ -59,7 +59,9 @@ export const StairSegmentNode = BaseNode.extend({
   - attachmentSide: front, left, or right - which side of the previous segment to attach to
   - fillToFloor: whether to fill the underside down to the absolute floor level
   - construction: optional explicit body, tread, riser, nosing, finish and stringer details; absent inherits the parent setting
+  - winder: optional quarter-turn flight with left/right turn, inner gap, walking-line offset and equal-going/equal-angle division
   - thickness: slab thickness when not filled to floor
+  Parent designTargets, uniformRisers and railingPath apply to the chain. Guards support balusters, post-and-rail, cable, boards, glass and metal.
   `,
 )
 

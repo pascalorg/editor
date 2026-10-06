@@ -11,8 +11,8 @@ export type StairArcStep = {
 export function resolveStairArcDimensions(stair: StairNode, totalRise: number) {
   const spiral = stair.stairType === 'spiral'
   const stepCount = Math.max(2, Math.round(stair.stepCount ?? 10))
-  const innerRadius = Math.max(0.001, stair.innerRadius ?? 0.9)
-  const width = Math.max(stair.width ?? 1, 0.001)
+  const innerRadius = Math.max(0.2, stair.innerRadius ?? 0.9)
+  const width = Math.max(stair.width ?? 1, 0.4)
   const outerRadius = innerRadius + width
   const walkingRadius = innerRadius + width / 2
   const sweepAngle = stair.sweepAngle ?? (spiral ? Math.PI * 2 : Math.PI / 2)

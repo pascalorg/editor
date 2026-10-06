@@ -20,7 +20,7 @@ import {
 import type { AgentOperation, SceneNodes } from './types'
 
 /** A problem verify_scene found, typed so it can be counted and acted on. */
-export type SceneIssue = { type: string; message: string }
+export type SceneIssue = { type: string; message: string; severity?: 'info' }
 
 type StairNode = AnyNode & { type: 'stair' }
 const occupiedContent = (counts: ContentCounts) =>
@@ -182,7 +182,8 @@ export const verifyScene: AgentOperation = (nodes, _input, context) => {
   })
 
   const issues: SceneIssue[] = []
-  const report = (type: string, message: string) => issues.push({ type, message })
+  const report = (type: string, message: string, informational = false) =>
+    issues.push({ type, message, ...(informational ? { severity: 'info' as const } : {}) })
 
   const empty = levels.filter((level) => level.isEmpty)
   if (empty.length > 0)
@@ -299,6 +300,7 @@ export const verifyScene: AgentOperation = (nodes, _input, context) => {
       report(
         `stair_${diagnostic.code.replaceAll('-', '_')}`,
         `Stair ${stairName}: ${diagnostic.message}`,
+        diagnostic.code.endsWith('-target'),
       )
     const sourceLevelId = levelIdOf(nodes, stair.id)
     if (sourceLevelId) {
@@ -388,7 +390,7 @@ export const verifyScene: AgentOperation = (nodes, _input, context) => {
       levels,
       emptyLevelIds: empty.map((level) => level.levelId),
       issues,
-      hasIssues: issues.length > 0,
+      hasIssues: issues.some((issue) => issue.severity !== 'info'),
     },
   }
 }

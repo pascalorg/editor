@@ -361,8 +361,6 @@ function buildFloorplanStairArrow(
   }
 }
 
-export const computeFloorplanStairSegmentTransforms = computeSegmentTransforms
-
 export function getFloorplanStairSegmentPolygon(
   stair: StairNode,
   segment: StairSegmentNode,
@@ -408,7 +406,7 @@ export function buildFloorplanStairEntry(
     return null
   }
 
-  const transforms = computeFloorplanStairSegmentTransforms(segments)
+  const transforms = computeSegmentTransforms(segments)
   const segmentEntries = segments.map((segment, index) => {
     const polygon = getFloorplanStairSegmentPolygon(stair, segment, transforms[index]!)
     const walkingPolygon = getFloorplanStairSegmentPolygon(

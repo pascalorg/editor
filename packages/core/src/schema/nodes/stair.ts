@@ -142,7 +142,10 @@ export const StairNode = BaseNode.extend({
   - showStepSupports: whether spiral stairs render step support brackets
   - railingMode: whether to render railings and on which side(s)
   - railingHeight: top height of the railing above the stair surface
-  - railingStyle: 'balusters' (round balusters at every nosing, two round rails) | the DCA 6 deck-stair guard — 4x4 posts ≤ 4 ft apart, a 2x6 cap rail with a 2x4 top rail under it, and the infill: 'post-and-rail' (2x2 balusters on a 2x4 bottom rail, 4 in gap), 'cable' (slim posts under a flat cap, round cables 3 in apart spanning straight post-to-post with terminal sleeves), 'boards' (1x6 boards with the flight); 'balusters' when absent
+  - railingStyle: balusters, post-and-rail, cable, boards, glass (flat panels) or metal (steel posts and balusters); balusters when absent
+  - railingPath: original per-flight paths or continuous guards through turns and exposed landing edges
+  - designTargets: optional riser, going and headroom preferences in metres, not code certification
+  - uniformRisers: distribute the total flight rise by riser count when enabled
   - railingTopPost: guard styles only — false leaves the top post out so the rails die into a post already standing there (a porch post); railingTopReach runs the rails that far past the top nosing along the slope to reach it (top post on, reach 0 when absent)
   - railingPostThrough: guard styles — the posts run past the cap rail and get a cap of their own (off when absent)
   - handrail: independent rail; optional bottom/top end extension (bottom sloped, top horizontal), return none/wall/post/floor, and returnLength in metres for outward wall-facing or downward post-facing geometry. Returns do not attach to hosts. Floor returns meet the source/arrival elevation. Closed paths have no end details.

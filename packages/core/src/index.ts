@@ -727,10 +727,7 @@ export {
 } from './systems/stair/stair-rail-path'
 export { resolveStairTotalRise, syncStairRises } from './systems/stair/stair-rise'
 export { planStairFlightHeightEdit, planStairRiseEdit } from './systems/stair/stair-rise-edit'
-export {
-  resolveStairTotalRise as resolveStairTotalRiseFromNodes,
-  stairHasNoRise,
-} from './systems/stair/stair-rise-query'
+export { stairHasNoRise } from './systems/stair/stair-rise-query'
 export {
   createSizedStairFlight,
   DEFAULT_STAIR_DESIGN_TARGETS,

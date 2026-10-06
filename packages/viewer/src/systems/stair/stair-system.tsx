@@ -136,6 +136,20 @@ export const StairSystem = () => {
   return null
 }
 
+function mergeConstructionGeometries(geometries: THREE.BufferGeometry[]) {
+  const result = mergeGeometries(geometries, true) ?? createEmptyGeometry()
+  result.clearGroups()
+  let offset = 0
+  for (const geometry of geometries) {
+    for (const group of geometry.groups)
+      result.addGroup(offset + group.start, group.count, group.materialIndex)
+    offset += geometry.getAttribute('position').count
+    geometry.dispose()
+  }
+  result.userData.stairConstructionGroups = true
+  return result
+}
+
 // ============================================================================
 // SEGMENT GEOMETRY
 // ============================================================================
@@ -211,13 +225,19 @@ function generateStairSegmentGeometry(
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
       geometry.computeVertexNormals()
       const uvs: number[] = []
+      const a = new THREE.Vector3(),
+        b = new THREE.Vector3(),
+        c = new THREE.Vector3()
+      const u = new THREE.Vector3(),
+        normal = new THREE.Vector3(),
+        v = new THREE.Vector3()
       for (let i = 0; i < positions.length; i += 9) {
-        const a = new THREE.Vector3(...(positions.slice(i, i + 3) as [number, number, number])),
-          b = new THREE.Vector3(...(positions.slice(i + 3, i + 6) as [number, number, number])),
-          c = new THREE.Vector3(...(positions.slice(i + 6, i + 9) as [number, number, number]))
-        const u = b.clone().sub(a).normalize(),
-          normal = b.clone().sub(a).cross(c.clone().sub(a)).normalize(),
-          v = normal.clone().cross(u)
+        a.fromArray(positions, i)
+        b.fromArray(positions, i + 3)
+        c.fromArray(positions, i + 6)
+        u.subVectors(b, a).normalize()
+        normal.subVectors(b, a).cross(v.subVectors(c, a)).normalize()
+        v.crossVectors(normal, u)
         uvs.push(a.dot(u), a.dot(v), b.dot(u), b.dot(v), c.dot(u), c.dot(v))
       }
       geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
@@ -227,17 +247,7 @@ function generateStairSegmentGeometry(
       })
       return geometry
     })
-    const result = mergeGeometries(geometries, true) ?? createEmptyGeometry()
-    result.clearGroups()
-    let offset = 0
-    for (const geometry of geometries) {
-      for (const group of geometry.groups)
-        result.addGroup(offset + group.start, group.count, group.materialIndex)
-      offset += geometry.getAttribute('position').count
-      geometry.dispose()
-    }
-    result.userData.stairConstructionGroups = true
-    return result
+    return mergeConstructionGeometries(geometries)
   }
   const pieces = resolveStraightStairConstruction(segment, absoluteHeight, parent)
   if (pieces) {
@@ -264,17 +274,7 @@ function generateStairSegmentGeometry(
       } else applyStraightStairMaterialGroups(geometry)
       return geometry
     })
-    const result = mergeGeometries(geometries, true) ?? createEmptyGeometry()
-    result.clearGroups()
-    let offset = 0
-    for (const geometry of geometries) {
-      for (const group of geometry.groups)
-        result.addGroup(offset + group.start, group.count, group.materialIndex)
-      offset += geometry.getAttribute('position').count
-      geometry.dispose()
-    }
-    result.userData.stairConstructionGroups = true
-    return result
+    return mergeConstructionGeometries(geometries)
   }
   const { width, length, height, stepCount, segmentType, fillToFloor, thickness } = segment
 

@@ -156,7 +156,9 @@ const SHARED_TOOLS: SharedTool[] = [
       activeLevelId: z.string().nullable(),
       levels: z.array(jsonObject),
       emptyLevelIds: z.array(z.string()),
-      issues: z.array(z.object({ type: z.string(), message: z.string() })),
+      issues: z.array(
+        z.object({ type: z.string(), message: z.string(), severity: z.literal('info').optional() }),
+      ),
       hasIssues: z.boolean(),
     },
     envelope: (bridge) => ({ activeSceneId: bridge.getActiveScene()?.id ?? null }),

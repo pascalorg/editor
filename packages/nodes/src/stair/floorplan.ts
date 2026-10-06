@@ -234,9 +234,6 @@ export function buildStairFloorplan(
       }
     }
   } else {
-    // Curved / spiral — full arc-band chrome. Mirrors the legacy
-    // `<FloorplanStairLayer>` curved/spiral branches in
-    // floorplan-panel.tsx (~line 285+).
     const layout = resolveStairArcDimensions(stair, 0)
     const normalizedSweepAngle = layout.sweepAngle
     const sectorStartAngle = -stair.rotation - layout.sweepAngle / 2
@@ -251,8 +248,7 @@ export function buildStairFloorplan(
 
     // Stroke widths are screen pixels (paired with `vectorEffect:
     // 'non-scaling-stroke'` below). World-metre values like 0.02 would
-    // render as sub-pixel — invisible at every zoom. Matches the legacy
-    // `<FloorplanStairLayer>` curved/spiral branches.
+    // render as sub-pixel — invisible at every zoom.
     const outerArcWidth = showSelectedChrome ? 2 : 1.4
     const innerArcWidth = showSelectedChrome ? 1.7 : 1.2
 
@@ -300,9 +296,7 @@ export function buildStairFloorplan(
       const outer = getArcPlanPoint(stairCenter, outerRadius, angle)
       const isLast = index === stepCount
       const isFirst = index === 0
-      // Curved: regular stroke everywhere, but both the starting and the
-      // ending step lines are bolded (matches the legacy
-      // `<FloorplanStairLayer>` curved branch).
+      // Curved stairs accent both ascent portals.
       // Spiral: only the last step is accented + bolded.
       const isEmphasised = stairType === 'spiral' ? isLast : isFirst || isLast
       const stepWidth =
