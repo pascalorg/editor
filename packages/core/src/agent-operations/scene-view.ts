@@ -33,7 +33,7 @@ export type SceneViewInput = {
   photo?: { source: string; region: number[] }
 }
 
-/** A region of the reference photo the host crops and returns beside the view (L51). */
+/** A region of the reference photo the host crops and returns beside the view. */
 export type SceneViewCrop = { source: string; region: [number, number, number, number] }
 
 function cropOf(photo: SceneViewInput['photo']): SceneViewCrop | undefined {
@@ -118,7 +118,7 @@ function openingOf(nodes: Readonly<Record<string, AnyNode>>, target: AnyNode | u
 }
 
 /**
- * An opening's box, at detail scale (L51): along its wall, centred at its height on the storey,
+ * An opening's box, at detail scale: along its wall, centred at its height on the storey,
  * as deep as the wall.
  */
 function openingBox(

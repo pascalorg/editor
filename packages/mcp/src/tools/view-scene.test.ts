@@ -8,7 +8,7 @@ import { SceneBridge } from '../bridge/scene-bridge'
 import { createTestSceneOperations } from './scene-lifecycle/test-utils'
 import { registerViewScene, type SceneViewHost } from './view-scene'
 
-// Hawkesbury run 2's builder had no view over the MCP (no editor, export_glb unavailable headless)
+// An agent with no view over the MCP (no editor, export_glb unavailable headless)
 // and drew its own elevation from coordinates, without materials. Over the MCP the picture comes
 // from an editor tab open on the project, which the host asks.
 
@@ -124,7 +124,7 @@ describe('view_scene over the MCP', () => {
     }
   })
 
-  // L51: run 3 cropped the photo 9 times in the shell and compared whole facades only. The photo's
+  // An agent cropped the photo 9 times in the shell and compared whole facades only. The photo's
   // crop of the element comes back beside the close-up, each image after its label.
   test("the photo's crop comes back beside the view, each image labelled", async () => {
     const crops: unknown[] = []

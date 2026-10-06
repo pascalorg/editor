@@ -32,7 +32,7 @@ export type SceneViewHost = {
     pose: SceneViewPose
     size: { w: number; h: number }
   }): Promise<SceneViewCapture>
-  /** Crops the reference photo to a region (L51); without it a view with a photo is refused. */
+  /** Crops the reference photo to a region; without it a view with a photo is refused. */
   crop?(
     request: SceneViewCrop,
   ): Promise<{ image: Uint8Array; mimeType: string; width: number; height: number }>

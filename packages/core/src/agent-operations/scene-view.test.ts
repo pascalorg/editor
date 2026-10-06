@@ -172,7 +172,7 @@ describe('where the eye stands', () => {
   })
 })
 
-// Hawkesbury run 2's builder had no view over the MCP and drew its own elevation from coordinates;
+// An agent with no view over the MCP drew its own elevation from coordinates;
 // straighten_facade_photo gives the photo's camera (camera.pose) to render the build from.
 describe("the photo's camera", () => {
   const pose = {
@@ -222,7 +222,7 @@ describe('the note a view comes with', () => {
   })
 })
 
-// L51: run 3 compared whole facades only and settled for a plain door against the photo's door
+// An agent that compared whole facades only settled for a plain door against the photo's door
 // with three glass strips. A view frames one opening or item at detail scale, an opening from its
 // outside face, so it can be laid beside the photo's crop of the same element.
 describe('a close-up of one element', () => {
@@ -307,7 +307,7 @@ describe('a close-up of one element', () => {
   })
 })
 
-// L51, the other half: the photo's crop of the same element comes back beside the close-up, in one
+// The other half: the photo's crop of the same element comes back beside the close-up, in one
 // call. The region is in the photo's pixels, as an agent measures it; the host crops.
 describe("the photo's crop beside the view", () => {
   const scene = () => {
@@ -351,7 +351,7 @@ describe("a crop's size", () => {
     expect(photoCropSize(560, 270)).toEqual({ width: 560, height: 270 })
   })
 
-  // L51 live (2026-10-05): the front door's crop came back 85 × 155 px, its four glass strips
+  // A front door's crop came back 85 × 155 px, its four glass strips
   // about 8 px each, under what a vision model resolves. A small crop is enlarged to 512 px: no
   // new detail, but the strips stand apart.
   test('a small crop is enlarged to 512 px on its longer side', () => {

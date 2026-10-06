@@ -209,7 +209,7 @@ async function toolText(client: Client, name: string): Promise<string | undefine
   return content?.type === 'text' ? content.text : undefined
 }
 
-// L64: what the agent does when a tool needs the editor tab is the host's to say, at connect.
+// What the agent does when a tool needs the editor tab is the host's to say, at connect.
 describe('what a client reads at connect', () => {
   test('a host adds its own lines', async () => {
     const bridge = new SceneBridge()
