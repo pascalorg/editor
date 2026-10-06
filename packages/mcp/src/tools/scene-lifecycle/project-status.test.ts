@@ -70,8 +70,8 @@ describe('project lifecycle tools', () => {
     expect(parsed.nodeCount).toBe(0)
   })
 
-  // 2026-10-03, a Claude Code run on :3101: create_project in a session bound to another project
-  // returned that project's levels, and the next save would have written it into the new one.
+  // create_project in a session bound to another project returned that project's levels, and the
+  // next save would have written it into the new one.
   const withAWall = () => {
     operations.loadDefault()
     const level = Object.values(operations.getNodes()).find((node) => node.type === 'level')!
@@ -102,6 +102,34 @@ describe('project lifecycle tools', () => {
     expect(parsed.levelIds).not.toContain(otherLevel)
     expect(walls()).toHaveLength(0)
     expect(operations.getHistory().pastCount).toBe(0)
+  })
+
+  // A saved scene that belongs to no project is not another project: its work is what the new
+  // project is for, and emptying the session dropped what was not saved yet.
+  test('work on a scene of no project becomes the new project', async () => {
+    withAWall()
+    operations.setActiveScene({
+      id: 'scene_loose',
+      name: 'Loose scene',
+      projectId: null,
+      ownerId: null,
+      thumbnailUrl: null,
+      version: 1,
+    })
+    const before = walls().length
+    const result = await client.callTool({
+      name: 'create_project',
+      arguments: { name: 'From the loose scene' },
+    })
+    const parsed = parseToolText(result.content as StoredTextContent[])
+    expect(before).toBeGreaterThan(0)
+    expect(walls().length).toBe(before)
+    const saved = await createTestSceneOperations({ store }).operations.loadStoredScene(
+      parsed.projectId as string,
+    )
+    expect(Object.values(saved!.graph.nodes).filter((node) => node.type === 'wall')).toHaveLength(
+      before,
+    )
   })
 
   test('work not bound to any project becomes the new project', async () => {

@@ -69,10 +69,10 @@ export function registerCreateProject(server: McpServer, operations: SceneOperat
           version: status.version,
         })
         // A session bound to another project starts the new one empty: carried over, that
-        // project's scene was saved into the new one (2026-10-03). Unbound work is kept: it is
-        // what the new project is for. Emptied once bound to the new project, so nothing that
-        // follows the scene can write the empty scene to the old one.
-        if (bound && bound.projectId !== status.projectId) {
+        // project's scene was saved into the new one. Work bound to no project, a saved scene of
+        // none included, is kept: it is what the new project is for. Emptied once bound to the new
+        // project, so nothing that follows the scene can write the empty scene to the old one.
+        if (bound?.projectId && bound.projectId !== status.projectId) {
           operations.loadJSON({ nodes: {}, rootNodeIds: [] })
           operations.loadDefault()
           operations.clearHistory()
