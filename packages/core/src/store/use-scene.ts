@@ -33,6 +33,7 @@ import { StairSegmentNode as StairSegmentNodeSchema } from '../schema/nodes/stai
 import { WindowNode as WindowNodeSchema } from '../schema/nodes/window'
 import { SceneMaterial, type SceneMaterialId } from '../schema/scene-material'
 import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema } from '../schema/types'
+import { DEFAULT_LEVEL_HEIGHT } from '../services/level-height'
 import { ensureSceneOpenings } from '../utils/ensure-scene-openings'
 import { migrateFloorPlates, migrateSlabSlots } from '../utils/floor-plate-migration'
 import { healSceneNodes } from '../utils/heal-scene-graph'
@@ -1602,7 +1603,7 @@ const useScene: UseSceneStore = createSceneStore(
           parentId: building.id,
           level: 0,
           children: [],
-          height: 2.5,
+          height: DEFAULT_LEVEL_HEIGHT,
         })
 
         // Define all nodes flat
