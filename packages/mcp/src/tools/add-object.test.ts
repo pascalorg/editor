@@ -53,6 +53,9 @@ describe('add_object over MCP', () => {
       }
       expect(result.isError).toBeFalsy()
       expect(payload).toMatchObject(c.expect.result)
+      // Every write answers what the scene now holds (L56): the object built, or rebuilt.
+      expect(payload.achieved).toMatchObject({ created: expect.any(Object), deleted: {} })
+      expect(payload.achieved).not.toHaveProperty('unchanged')
       if (c.expect.node)
         expect(bridge.getNode(payload.nodeId as AnyNodeId)).toMatchObject(c.expect.node)
       for (const text of c.expect.mentions ?? []) expect(JSON.stringify(payload)).toContain(text)
