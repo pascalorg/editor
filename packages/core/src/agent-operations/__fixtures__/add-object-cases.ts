@@ -216,9 +216,9 @@ export const ADD_OBJECT_CASES: AddObjectCase[] = [
   ),
   create(
     'a name naming a Pascal type is built, with a hint naming the tool for it',
-    { name: 'Juliet balcony', category: 'railing' },
-    [3, 1.1, 0.05],
-    { result: { mount: 'floor' }, mentions: ['is something Pascal builds: balconies'] },
+    { name: 'Spiral staircase', category: 'stair' },
+    [1.6, 2.8, 1.6],
+    { result: { mount: 'floor' }, mentions: ['is something Pascal builds: create_stair'] },
   ),
   create(
     'a type word that only qualifies the name is built',

@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { PASCAL_TYPES } from '@pascal-app/core/agent-operations'
 import type { AnyNodeId, CompiledGeometryScript } from '@pascal-app/core/schema'
 import { ADD_OBJECT_CASES } from '../../../core/src/agent-operations/__fixtures__/add-object-cases'
 import { SceneBridge } from '../bridge/scene-bridge'
+import { createPascalMcpServer } from '../server'
+import { SqliteSceneStore } from '../storage/sqlite-scene-store'
 import { type GeometryScriptHost, registerAddObject } from './add-object'
 
 // Layer 2 of 3: add_object through a real client, the host's compile answering with the case's.
@@ -60,5 +66,26 @@ describe('add_object over MCP', () => {
         expect(bridge.getNode(payload.nodeId as AnyNodeId)).toMatchObject(c.expect.node)
       for (const text of c.expect.mentions ?? []) expect(JSON.stringify(payload)).toContain(text)
     })
+  }
+})
+
+// A hint that names a tool the server does not offer sends the agent to a call that fails.
+test('every tool an add_object hint names is one the server offers', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'pascal-mcp-hints-'))
+  const server = createPascalMcpServer({
+    bridge: new SceneBridge(),
+    store: new SqliteSceneStore({ databasePath: join(directory, 'pascal.db') }),
+  })
+  const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
+  const client = new Client({ name: 'hint-test-client', version: '0.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  try {
+    const offered = new Set((await client.listTools()).tools.map((tool) => tool.name))
+    const named = PASCAL_TYPES.flatMap(([, hint]) => hint.match(/\b[a-z]+(?:_[a-z]+)+\b/g) ?? [])
+    expect(named.length).toBeGreaterThan(0)
+    expect(named.filter((name) => !offered.has(name))).toEqual([])
+  } finally {
+    await client.close()
+    rmSync(directory, { recursive: true, force: true })
   }
 })

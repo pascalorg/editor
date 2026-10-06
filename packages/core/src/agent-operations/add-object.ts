@@ -81,23 +81,19 @@ function scriptAsset(
  * Words that name what Pascal already builds, with the tool that builds it. An object named so is
  * built with a hint naming that tool: authored objects are for what has no type.
  */
-const PASCAL_TYPES: [RegExp, string][] = [
-  [/\bwalls?\b/i, 'walls: create_reference_elements (walls) or add_wall'],
-  [/\b(slabs?|floor plates?|floors?)\b/i, 'a slab: create_reference_elements (slab)'],
+export const PASCAL_TYPES: [RegExp, string][] = [
+  [/\bwalls?\b/i, 'walls: add_wall'],
+  [
+    /\b(slabs?|floor plates?|floors?)\b/i,
+    'a floor: rooms make their floor plates (create_room), shaped by set_room_floor_construction or set_floor_foundation',
+  ],
   [
     /\b(doors?|windows?|sills?|glazing)\b/i,
-    'add_door / add_window (with code for a design their fields cannot express), or openings in a facade unit (apply_facade)',
+    'add_door / add_window (with code for a design their fields cannot express)',
   ],
-  [/\b(stairs?|staircases?|lifts?|elevators?)\b/i, 'create_stairs_and_lifts'],
+  [/\b(stairs?|staircases?)\b/i, 'create_stair'],
   [/\broofs?\b/i, 'create_roof'],
-  [
-    /\b(balcon(y|ies)|loggias?)\b/i,
-    'balconies: create_reference_elements (outlineSteps balconies, or correct_plan_reading) or a balcony bay in a facade unit',
-  ],
-  [
-    /\b(rooms?|zones?|apartments?)\b/i,
-    'rooms and units: create_room / create_reference_elements (unit, zone)',
-  ],
+  [/\b(rooms?|zones?|apartments?)\b/i, 'rooms: create_room'],
 ]
 
 /**
