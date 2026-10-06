@@ -12,8 +12,8 @@ import {
   LevelNode,
   SlabNode,
 } from '@pascal-app/core'
-import { fenceDefinition } from '@pascal-app/nodes'
 import { Box3, Mesh } from 'three'
+import { fenceDefinition } from '../definition'
 import { resolveFenceLiftElevation, resolveFenceLiftElevationForNodes } from '../lift'
 
 const LEVEL_ID = 'level-1'

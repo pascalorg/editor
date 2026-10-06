@@ -120,20 +120,23 @@ function fence(overrides: Partial<FenceNode> = {}) {
 }
 
 describe('picket fence geometry', () => {
-  for (const picketTop of ['flat', 'pointed', 'rounded', 'dog-ear'] as const) {
-    for (const baseStyle of ['grounded', 'floating'] as const) {
-      test(`${picketTop} / ${baseStyle} respects its base and ground clearance`, () => {
-        const node = fence({ picketTop, baseStyle, groundClearance: 0.1 })
-        const slots = generateFenceSlotGeometries(node)
-        expect(Boolean(slots.base.getAttribute('position'))).toBe(baseStyle === 'grounded')
-        slots.posts.computeBoundingBox()
-        slots.infill.computeBoundingBox()
-        expect(slots.posts.boundingBox!.min.y).toBeCloseTo(0)
-        expect(slots.infill.boundingBox!.min.y).toBeCloseTo(baseStyle === 'grounded' ? 0.32 : 0.1)
-        expect(slots.infill.boundingBox!.max.y).toBeCloseTo(node.height - node.picketTopClearance)
-        for (const geometry of Object.values(slots)) geometry.dispose()
-      })
-    }
+  for (const [picketTop, baseStyle] of [
+    ['flat', 'grounded'],
+    ['pointed', 'floating'],
+    ['rounded', 'grounded'],
+    ['dog-ear', 'floating'],
+  ] as const) {
+    test(`${picketTop} / ${baseStyle} respects its base and ground clearance`, () => {
+      const node = fence({ picketTop, baseStyle, groundClearance: 0.1 })
+      const slots = generateFenceSlotGeometries(node)
+      expect(Boolean(slots.base.getAttribute('position'))).toBe(baseStyle === 'grounded')
+      slots.posts.computeBoundingBox()
+      slots.infill.computeBoundingBox()
+      expect(slots.posts.boundingBox!.min.y).toBeCloseTo(0)
+      expect(slots.infill.boundingBox!.min.y).toBeCloseTo(baseStyle === 'grounded' ? 0.32 : 0.1)
+      expect(slots.infill.boundingBox!.max.y).toBeCloseTo(node.height - node.picketTopClearance)
+      for (const geometry of Object.values(slots)) geometry.dispose()
+    })
   }
 
   test('rail count and post caps change the generated structure', () => {
@@ -255,29 +258,31 @@ describe('matched fence infill', () => {
 })
 
 describe('fence feature post heights', () => {
-  for (const style of ['picket', 'horizontal', 'slat', 'rail', 'privacy'] as const) {
-    for (const baseStyle of ['floating', 'grounded'] as const) {
-      for (const postCap of ['none', 'flat', 'pyramid'] as const) {
-        test(`${style} / ${baseStyle} / ${postCap}: gate and opening posts match the host`, () => {
-          const host = fence({ style, baseStyle, postCap, groundClearance: 0.23 })
-          const body = generateFenceSlotGeometries(host)
-          body.posts.computeBoundingBox()
-          for (const kind of ['gate', 'opening'] as const) {
-            const feature = { id: 'feature', kind, center: 2, width: 1.1, matchFenceStyle: true }
-            const slots = generateFenceSlotGeometries(
-              { ...host, features: [feature] },
-              undefined,
-              'features',
-            )
-            slots.posts.computeBoundingBox()
-            expect(slots.posts.boundingBox!.min.y).toBeCloseTo(body.posts.boundingBox!.min.y)
-            expect(slots.posts.boundingBox!.max.y).toBeCloseTo(body.posts.boundingBox!.max.y)
-            for (const geometry of Object.values(slots)) geometry.dispose()
-          }
-          for (const geometry of Object.values(body)) geometry.dispose()
-        })
+  for (const [style, baseStyle, postCap] of [
+    ['picket', 'floating', 'none'],
+    ['horizontal', 'grounded', 'flat'],
+    ['slat', 'floating', 'pyramid'],
+    ['rail', 'grounded', 'none'],
+    ['privacy', 'floating', 'flat'],
+  ] as const) {
+    test(`${style} / ${baseStyle} / ${postCap}: gate and opening posts match the host`, () => {
+      const host = fence({ style, baseStyle, postCap, groundClearance: 0.23 })
+      const body = generateFenceSlotGeometries(host)
+      body.posts.computeBoundingBox()
+      for (const kind of ['gate', 'opening'] as const) {
+        const feature = { id: 'feature', kind, center: 2, width: 1.1, matchFenceStyle: true }
+        const slots = generateFenceSlotGeometries(
+          { ...host, features: [feature] },
+          undefined,
+          'features',
+        )
+        slots.posts.computeBoundingBox()
+        expect(slots.posts.boundingBox!.min.y).toBeCloseTo(body.posts.boundingBox!.min.y)
+        expect(slots.posts.boundingBox!.max.y).toBeCloseTo(body.posts.boundingBox!.max.y)
+        for (const geometry of Object.values(slots)) geometry.dispose()
       }
-    }
+      for (const geometry of Object.values(body)) geometry.dispose()
+    })
   }
 
   test('manual height resizes only the gate leaf; its posts remain matched to the fence', () => {

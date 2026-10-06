@@ -54,14 +54,28 @@ test.each(
       ? { ...expected, boundarySeparatorIds: [], holes: [] }
       : saved.type === 'door' || saved.type === 'window'
         ? { ...expected, floorThresholdVersion: 1 }
-        : expected
-  if (saved.type === 'fence') {
-    const parsed = JSON.parse(JSON.stringify(AnyNode.parse(saved)))
-    expect(parsed).toMatchObject(parsedExpected)
-    expect(load({ [saved.id]: saved }, saved.id)).toEqual({ [saved.id]: parsed })
-    expect(load({ [saved.id]: parsed }, saved.id)).toEqual({ [saved.id]: parsed })
-    return
-  }
+        : saved.type === 'fence'
+          ? {
+              ...expected,
+              children: [],
+              surfaceMode: 'auto',
+              transitionMode: 'slope',
+              transitionWidth: 0.8,
+              picketSpacing: 0.27,
+              patternDistribution: 'automatic',
+              patternAlignment: 'center',
+              patternCount: 4,
+              patternRemainder: 'leave',
+              picketWidth: 0.07,
+              picketTop: 'flat',
+              picketProfile: 'level',
+              picketTopClearance: 0.2,
+              picketVariation: 0.23,
+              picketRailProjection: 0.001,
+              picketRailCount: 2,
+              infillPlacement: 'center',
+            }
+          : expected
   expect(JSON.parse(JSON.stringify(AnyNode.parse(saved)))).toEqual(parsedExpected)
   // Loading fills the schema defaults a stored node leaves out, nothing else.
   const graph = { [saved.id]: parsedExpected }
