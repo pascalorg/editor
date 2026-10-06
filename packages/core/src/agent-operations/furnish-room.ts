@@ -196,7 +196,6 @@ function layout(
 }
 
 const SKIP_REASONS = {
-  blocks_door_clearance: 'blocks door clearance',
   outside_bounds: 'outside the room',
   overlaps_item: 'overlaps another item',
 } as const
