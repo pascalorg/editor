@@ -708,7 +708,10 @@ export {
   type StairArcStep,
 } from './systems/stair/stair-layout'
 export { createSurfaceOpeningPreviewController } from './systems/stair/stair-opening-preview'
-export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
+export {
+  changedStairOpeningOwners,
+  syncAutoStairOpenings,
+} from './systems/stair/stair-opening-sync'
 export { StairOpeningSystem } from './systems/stair/stair-opening-system'
 export {
   planStairPreset,

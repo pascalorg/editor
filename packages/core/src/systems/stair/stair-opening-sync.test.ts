@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import type { AnyNode } from '../../schema'
+import {
+  type AnyNode,
+  changedStairOpeningOwners,
+  FloorOpeningNode,
+  planOwnedFloorOpenings,
+} from '../../index'
 import {
   BuildingNode,
   CeilingNode,
@@ -740,4 +745,61 @@ test('intermediate slab cuts stop above the floating body and hidden flights ret
   expect(surfaces[0]?.nodeId).toBe(second.id)
   expect(surfaces[0]?.walkingLine[0][2]).toBeCloseTo(5)
   expect(surfaces[0]?.top).toBeCloseTo(3.2)
+})
+
+test('an unrelated slab edit preserves a loaded stair opening with historical geometry', () => {
+  const building = BuildingNode.parse({})
+  const lower = LevelNode.parse({ parentId: building.id, level: 0, height: 3 })
+  const upper = LevelNode.parse({ parentId: building.id, level: 1 })
+  const segment = StairSegmentNode.parse({ height: 3, length: 4.5 })
+  const stair = StairNode.parse({
+    parentId: lower.id,
+    fromLevelId: lower.id,
+    toLevelId: upper.id,
+    slabOpeningMode: 'destination',
+    totalRise: 3,
+    children: [segment.id],
+  })
+  const slab = SlabNode.parse({
+    parentId: upper.id,
+    polygon: [
+      [-5, -5],
+      [5, -5],
+      [5, 10],
+      [-5, 10],
+    ],
+  })
+  const opening = FloorOpeningNode.parse({
+    parentId: upper.id,
+    source: 'stair',
+    ownerId: stair.id,
+    surfaceId: slab.id,
+    cutsPrimary: true,
+    polygon: [
+      [-0.5, 3.5],
+      [0.5, 3.5],
+      [0.5, 4.5],
+      [-0.5, 4.5],
+    ],
+  })
+  building.children = [lower.id, upper.id]
+  lower.children = [stair.id]
+  upper.children = [slab.id, opening.id]
+  segment.parentId = stair.id
+  const before: Record<string, AnyNode> = Object.fromEntries(
+    [building, lower, upper, segment, stair, slab, opening].map((node) => [node.id, node]),
+  )
+  const after = { ...before, [slab.id]: { ...slab, thickness: slab.thickness + 0.1 } }
+  expect(
+    planOwnedFloorOpenings(after).some((patch) => patch.op === 'update' && patch.id === opening.id),
+  ).toBe(true)
+  expect(
+    planOwnedFloorOpenings(after, { ownerIds: changedStairOpeningOwners(before, after) }),
+  ).toEqual([])
+  const changed = { ...after, [segment.id]: { ...segment, length: segment.length + 1 } }
+  expect(
+    planOwnedFloorOpenings(changed, { ownerIds: changedStairOpeningOwners(after, changed) }).some(
+      (patch) => patch.op === 'update' && patch.id === opening.id,
+    ),
+  ).toBe(true)
 })

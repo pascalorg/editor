@@ -9,9 +9,11 @@ import type {
   StairNode,
   SurfaceHoleMetadata,
 } from '../../schema'
+import { StairDesignTargets } from '../../schema/nodes/stair-design-targets'
 import { resolveCeilingHeight } from '../../services/level-height'
 import { getLevelElevations } from '../../services/storey'
 import { stairClearanceOpening } from './stair-clearance'
+import { resolveStairTotalRise } from './stair-rise-query'
 
 const buildingLevelsMemo = new WeakMap<object, Map<string, Extract<AnyNode, { type: 'level' }>[]>>()
 const stairLevelsMemo = new WeakMap<
@@ -182,6 +184,115 @@ function getResolvedStairLevelIds(stair: StairNode, nodes: Record<string, AnyNod
   const resolved = { fromLevelId, toLevelId }
   cache.set(stair, resolved)
   return resolved
+}
+
+const defaultMinimumHeadroom = StairDesignTargets.parse({}).minimumHeadroom
+
+function openingGeometry(node: AnyNode | undefined) {
+  if (!node) return null
+  const fields =
+    node.type === 'stair'
+      ? [
+          'parentId',
+          'visible',
+          'position',
+          'rotation',
+          'supportSlabId',
+          'stairType',
+          'fromLevelId',
+          'toLevelId',
+          'deckSlabId',
+          'slabOpeningMode',
+          'openingOffset',
+          'width',
+          'totalRise',
+          'designTargets',
+          'stepCount',
+          'thickness',
+          'fillToFloor',
+          'construction',
+          'innerRadius',
+          'sweepAngle',
+          'topLandingMode',
+          'topLandingDepth',
+          'children',
+        ]
+      : [
+          'parentId',
+          'visible',
+          'position',
+          'rotation',
+          'segmentType',
+          'width',
+          'length',
+          'height',
+          'stepCount',
+          'attachmentSide',
+          'fillToFloor',
+          'construction',
+          'winder',
+          'thickness',
+        ]
+  return JSON.stringify(
+    fields.map((field) =>
+      field === 'designTargets' && node.type === 'stair'
+        ? (node.designTargets?.minimumHeadroom ?? defaultMinimumHeadroom)
+        : (node as unknown as Record<string, unknown>)[field],
+    ),
+  )
+}
+
+/** Existing cuts are user data: a surface edit alone must not upgrade their geometry. */
+export function changedStairOpeningOwners(
+  before: Record<string, AnyNode>,
+  after: Record<string, AnyNode>,
+): Set<string> {
+  const owners = new Set<string>()
+  const beforeElevations = getLevelElevations(before)
+  const afterElevations = getLevelElevations(after)
+  const span = (
+    stair: StairNode,
+    nodes: Record<string, AnyNode>,
+    elevations: typeof beforeElevations,
+  ) => {
+    const { fromLevelId, toLevelId } = getResolvedStairLevelIds(stair, nodes)
+    const from = elevations.get(fromLevelId ?? '')
+    const to = elevations.get(toLevelId ?? '')
+    return JSON.stringify([
+      fromLevelId,
+      toLevelId,
+      from?.height,
+      to?.height,
+      from && to
+        ? [...elevations]
+            .filter(
+              ([, level]) =>
+                level.buildingId === from.buildingId &&
+                level.ordinal >= Math.min(from.ordinal, to.ordinal) &&
+                level.ordinal <= Math.max(from.ordinal, to.ordinal),
+            )
+            .map(([id, level]) => [id, level.height, level.baseY - from.baseY])
+        : null,
+    ])
+  }
+  for (const id of new Set([...Object.keys(before), ...Object.keys(after)])) {
+    const previous = before[id]
+    const current = after[id]
+    if (previous?.type !== 'stair' && current?.type !== 'stair') continue
+    if (
+      previous?.type !== 'stair' ||
+      current?.type !== 'stair' ||
+      openingGeometry(previous) !== openingGeometry(current) ||
+      current.children.some(
+        (childId) => openingGeometry(before[childId]) !== openingGeometry(after[childId]),
+      ) ||
+      span(previous, before, beforeElevations) !== span(current, after, afterElevations) ||
+      resolveStairTotalRise(previous, before) !== resolveStairTotalRise(current, after)
+    ) {
+      owners.add(id)
+    }
+  }
+  return owners
 }
 
 function isCoveredByExistingHole(existingHoles: Point2D[][], autoHole: Point2D[]) {
