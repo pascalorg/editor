@@ -41,6 +41,7 @@ export const DOOR_STYLE_DESCRIPTIONS: Record<DoorStyle, string> = {
 
 interface DoorStyleOverrides {
   segments?: DoorSegment[]
+  contentPadding?: [number, number]
 }
 
 const PANEL_DIVIDER = 0.03
@@ -73,7 +74,12 @@ export function getDoorStyleOverrides(style: DoorStyle | undefined): DoorStyleOv
     return { segments: [panelSegment('glass', 1)] }
   }
   if (style === 'modern') {
-    return { segments: [panelSegment('empty', 1)] }
+    // A flush slab: one panel over the whole leaf. An 'empty' segment is no leaf at all (run 4's
+    // front door rendered as an open frame).
+    return {
+      segments: [panelSegment('panel', 1, [1], { panelDepth: 0, panelInset: 0 })],
+      contentPadding: [0, 0],
+    }
   }
   if (style === 'paneled-glass') {
     return {
@@ -108,19 +114,9 @@ export function getDoorStyleOverrides(style: DoorStyle | undefined): DoorStyleOv
     }
   }
   if (style === 'half-louvered') {
-    // Approximate slats by stacking thin "empty" rows on the top half.
-    const slatRatio = 0.5 / 6
-    return {
-      segments: [
-        panelSegment('empty', slatRatio),
-        panelSegment('empty', slatRatio),
-        panelSegment('empty', slatRatio),
-        panelSegment('empty', slatRatio),
-        panelSegment('empty', slatRatio),
-        panelSegment('empty', slatRatio),
-        panelSegment('panel', 0.5),
-      ],
-    }
+    // Slats as thin panel rows on the top half: an 'empty' row would be a hole in the leaf.
+    const slat = panelSegment('panel', 0.5 / 6, [1], { panelDepth: -0.01, panelInset: 0.015 })
+    return { segments: [slat, slat, slat, slat, slat, slat, panelSegment('panel', 0.5)] }
   }
   if (style === 'barn') {
     return {
