@@ -103,7 +103,7 @@ export function registerSaveScene(server: McpServer, bridge: SceneOperations): v
     {
       title: 'Save scene',
       description:
-        'Save the current scene (or a provided graph) to the SceneStore. Defaults to a browser-visible draft save so agents can iterate without creating many project versions. Use saveMode: "checkpoint" for meaningful version history.',
+        'Save the current scene (or a provided graph) to the SceneStore. Without id or projectId it saves to the project this session is bound to (create_project or load_scene). Defaults to a browser-visible draft save so agents can iterate without creating many project versions. Use saveMode: "checkpoint" for meaningful version history.',
       inputSchema: saveSceneInput,
       outputSchema: saveSceneOutput,
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
@@ -120,6 +120,17 @@ export function registerSaveScene(server: McpServer, bridge: SceneOperations): v
       graph,
       replace,
     }) => {
+      // Without a target, the session's scene goes where it came from (create_project, load_scene,
+      // an earlier save). Run 4 (2026-10-06) was refused "Call create_project first" on its first
+      // save, right after create_project bound the session to its project.
+      const bound =
+        includeCurrentScene && id === undefined && projectId === undefined
+          ? bridge.getActiveScene()
+          : null
+      if (bound) {
+        id = bound.id
+        projectId = bound.projectId ?? undefined
+      }
       let sceneGraph: SceneGraph
       if (includeCurrentScene && !replace) await requireSceneLoadedFrom(bridge, { id, projectId })
       if (includeCurrentScene) {

@@ -268,4 +268,24 @@ describe('save_scene', () => {
     })
     expect(result.isError).toBeFalsy()
   })
+
+  // L61, run 4 (2026-10-06): the first save after create_project was refused "projectId is
+  // required for Supabase store. Call create_project first.", though the session held its project.
+  test("without a target, saves to the session's project", async () => {
+    const project = await store.createProject({ name: 'Hawkesbury' })
+    const meta = await store.save({
+      id: project.projectId,
+      name: 'Hawkesbury',
+      projectId: project.projectId,
+      graph: { nodes: bridge.getNodes(), rootNodeIds: bridge.getRootNodeIds() } as never,
+    })
+    bridge.setActiveScene(meta)
+    const result = await client.callTool({
+      name: 'save_scene',
+      arguments: { name: 'Hawkesbury', saveMode: 'checkpoint' },
+    })
+    expect(result.isError).toBeFalsy()
+    const saved = parseToolText(result.content as StoredTextContent[])
+    expect(saved).toMatchObject({ id: project.projectId, projectId: project.projectId, version: 2 })
+  })
 })
