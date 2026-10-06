@@ -87,10 +87,7 @@ export const createStair: AgentOperation<CreateStairInput> = (nodes, input, cont
   const preset =
     input.materialPreset === undefined
       ? undefined
-      : // paint takes no stair: a colour is a flat library one.
-        requireMaterialRef(input.materialPreset, 'materialPreset', finishSurface('stair'), {
-          paint: false,
-        })
+      : requireMaterialRef(input.materialPreset, 'materialPreset', finishSurface('stair'))
   if (input.destinationSlabId && nodes[input.destinationSlabId]?.type !== 'slab')
     refuse(
       'slab_not_found',

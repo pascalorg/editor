@@ -25,7 +25,7 @@ describe('the nearest library materials', () => {
     }
     expect(message).toContain('no roofing like it')
     expect(message).toContain('library:roof-')
-    expect(message).toContain('give a colour')
+    expect(message).toContain('a flat colour, library:preset-')
     // Nothing shares a word with it: no alphabetical "nearest" (bricks, drywall) pads the answer.
     expect(message).not.toMatch(/brick|drywall/i)
   })

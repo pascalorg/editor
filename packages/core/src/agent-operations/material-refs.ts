@@ -83,8 +83,8 @@ export function requireMaterialRef(
   asked: string,
   field?: string,
   surface?: MaterialSurface,
-  /** Whether `paint` takes the target: else a colour is a flat library one, named outright. */
-  { paint = true } = {},
+  /** Whether to point to `paint` for a colour (paint passes it); else a flat library colour. */
+  { paint = false } = {},
 ): string {
   const parsed = parseMaterialRef(asked.includes(':') ? asked : `library:${asked}`)
   if (parsed?.kind === 'scene') return asked
