@@ -208,3 +208,22 @@ async function toolText(client: Client, name: string): Promise<string | undefine
   const content = result.content[0]
   return content?.type === 'text' ? content.text : undefined
 }
+
+// L64: what the agent does when a tool needs the editor tab is the host's to say, at connect.
+describe('what a client reads at connect', () => {
+  test('a host adds its own lines', async () => {
+    const bridge = new SceneBridge()
+    bridge.loadDefault()
+    const line = 'When a tool needs the editor tab in front: ask the user to bring it forward.'
+    const server = createPascalMcpServer({ bridge, instructions: line })
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: 'instructions-test', version: '0.0.0' })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+    try {
+      expect(client.getInstructions()).toBe(line)
+    } finally {
+      await client.close()
+      await server.close()
+    }
+  })
+})

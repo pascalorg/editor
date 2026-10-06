@@ -46,13 +46,16 @@ export type CreatePascalMcpServerOptions = {
   services?: HostedServiceExecutor
   /** Asks an editor open on the project for a picture (`view_scene`); without it, refused. */
   sceneViews?: SceneViewHost
+  /** Lines the host adds to what a client reads at connect (the person's own settings). */
+  instructions?: string
 }
 
 export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpServer {
-  const server = new McpServer({
-    name: opts.name ?? 'pascal-mcp-server',
-    version: opts.version ?? version,
-  })
+  // A client shows these before the agent's first call.
+  const server = new McpServer(
+    { name: opts.name ?? 'pascal-mcp-server', version: opts.version ?? version },
+    opts.instructions ? { instructions: opts.instructions } : undefined,
+  )
   if (opts.executeTool) installToolExecutor(server, opts.executeTool)
   const operations =
     opts.operations ?? createSceneOperations({ bridge: opts.bridge, store: opts.store })
