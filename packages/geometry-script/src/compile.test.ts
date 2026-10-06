@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import { type AnyNode, scriptSource } from '@pascal-app/core'
-import { editedScriptParams } from '@pascal-app/core/agent-operations'
-import { GeometryArtifactManifest } from '@pascal-app/core/schema'
+import { type AnyNode, matchScriptSlotsToLibrary, scriptSource } from '@pascal-app/core'
+import { addObject, applySceneChanges, editedScriptParams } from '@pascal-app/core/agent-operations'
+import { GeometryArtifactManifest, ItemNode, LevelNode } from '@pascal-app/core/schema'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { compileGeometryScript } from './index'
 
@@ -61,6 +61,111 @@ test('an edit keeps the current param values the new code still accepts', async 
     rail: true,
     lit: false,
   })
+})
+
+test('building and adding a scripted item assigns Pascal finishes and rebuilding keeps paint', async () => {
+  const compiled = await compileGeometryScript({
+    code: `export default function build({ THREE }) {
+      const group = new THREE.Group();
+      const samples = [
+        ['slot_oak', '#a77440', 0, 1, false],
+        ['slot_hardware', '#b08d57', 0.9, 1, false],
+        ['glass', '#87ceeb', 0, 0.3, true],
+        ['slot_paint', '#eae6de', 0, 1, false],
+        ['slot_unknown', '#ff00ff', 0, 1, false],
+        ['slot_oakTop', '#f3dcb5', 0, 1, false],
+      ];
+      samples.forEach(([name, color, metalness, opacity, transparent], i) => {
+        const material = new THREE.MeshStandardMaterial({ color, metalness, opacity, transparent, roughness: 0.7 });
+        material.name = name;
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.2, 0.1), material);
+        mesh.position.x = i * 0.2; group.add(mesh);
+      });
+      const bulb = new THREE.MeshStandardMaterial({color: '#ffffff', emissive: '#ffffff'});
+      bulb.name = 'slot_bulb'; group.add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), bulb));
+      return group;
+    }`,
+  })
+  const level = LevelNode.parse({ id: 'level_material_test' })
+  const initial = { [level.id]: level }
+  const context = { activeLevelId: level.id }
+  const added = addObject(initial, { compiled }, context)
+  const nodes = applySceneChanges(initial, added.changes)
+  const node = ItemNode.parse(nodes[added.result.nodeId as string])
+  expect(node.slots).toEqual({
+    oak: 'library:wood-finewood27',
+    hardware: 'library:metal-brass',
+    glass: 'library:preset-glass',
+    paint: 'library:preset-softwhite',
+    oaktop: 'library:wood-finewood27',
+  })
+  expect(node.source!.manifest.slots.find((slot) => slot.id === 'hardware')).toMatchObject({
+    color: '#b08d57',
+    metalness: 0.9,
+    roughness: 0.7,
+  })
+  expect(node.source!.manifest.slots.find((slot) => slot.id === 'unknown')?.color).toBe('#ff00ff')
+  expect(node.source!.manifest.slots.find((slot) => slot.id === 'bulb')?.emissive).toBe(true)
+  const artifact = await new GLTFLoader().parseAsync(compiled.glb, '')
+  expect(
+    artifact.parser.json.materials.some(
+      (material: { name?: string }) => material.name === 'slot_glass',
+    ),
+  ).toBe(true)
+
+  for (const paint of ['scene:mtl_user', 'library:preset-white', '#123456']) {
+    const painted = ItemNode.parse({ ...node, slots: { ...node.slots, oak: paint } })
+    const rebuilt = addObject(
+      { ...nodes, [node.id]: painted },
+      { compiled, nodeId: node.id },
+      context,
+    )
+    const after = applySceneChanges({ ...nodes, [node.id]: painted }, rebuilt.changes)
+    expect(ItemNode.parse(JSON.parse(JSON.stringify(after[node.id]))).slots).toEqual({
+      ...node.slots,
+      oak: paint,
+    })
+  }
+})
+
+test('conflicting materials in one slot do not invent a matching tone', async () => {
+  const { manifest } = await compileGeometryScript({
+    code: `export default function build({ THREE }) {
+      const group = new THREE.Group();
+      for (const color of ['#a77440', '#3e220d']) {
+        const material = new THREE.MeshStandardMaterial({ color }); material.name = 'slot_body';
+        group.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material));
+      }
+      return group;
+    }`,
+  })
+  expect(manifest.slots).toHaveLength(1)
+  expect(manifest.slots[0]!.color).toBeUndefined()
+})
+
+test('only see-through materials hint glass', async () => {
+  const { manifest } = await compileGeometryScript({
+    code: `export default function build({ THREE }) {
+      const group = new THREE.Group();
+      const materials = [
+        new THREE.MeshStandardMaterial({ color: '#fff8e7', transparent: true, opacity: 0.85 }),
+        new THREE.MeshStandardMaterial({ color: '#2e7d32', transparent: true }),
+        new THREE.MeshStandardMaterial({ color: '#ffffff', transparent: true, opacity: 0.3 }),
+        new THREE.MeshPhysicalMaterial({ color: '#ffffff', transmission: 1 }),
+      ];
+      ['slot_shade', 'slot_leaves', 'slot_pane', 'slot_lens'].forEach((name, i) => {
+        materials[i].name = name;
+        group.add(new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), materials[i]));
+      });
+      return group;
+    }`,
+  })
+  expect(matchScriptSlotsToLibrary(manifest)).toMatchObject({
+    pane: 'library:preset-glass',
+    lens: 'library:preset-glass',
+  })
+  expect(matchScriptSlotsToLibrary(manifest).shade).not.toBe('library:preset-glass')
+  expect(matchScriptSlotsToLibrary(manifest).leaves).not.toBe('library:preset-glass')
 })
 
 test('cutter footprints retain concavity and host kind while old manifests still load', async () => {

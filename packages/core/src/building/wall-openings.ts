@@ -1,6 +1,6 @@
 import { refuseParamsWithoutScript } from '../agent-operations/add-object'
 import { refuse } from '../agent-tools/refusal'
-import { scriptedSize, scriptSource } from '../lib/geometry-script-node'
+import { matchScriptSlotsToLibrary, scriptedSize, scriptSource } from '../lib/geometry-script-node'
 import { wallSupportForNodes } from '../lib/opening-floor-datum'
 import {
   type AnyNode,
@@ -330,7 +330,9 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
     ...(input.openingShape ? { openingShape: input.openingShape } : {}),
     ...(input.archHeight === undefined ? {} : { archHeight: Math.min(input.archHeight, height) }),
     ...(input.cornerRadius === undefined ? {} : { cornerRadius: input.cornerRadius }),
-    ...(compiled ? { source: scriptSource(compiled) } : {}),
+    ...(compiled
+      ? { source: scriptSource(compiled), slots: matchScriptSlotsToLibrary(compiled.manifest) }
+      : {}),
   }
   const node =
     kind === 'door'

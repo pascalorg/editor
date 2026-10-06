@@ -56,7 +56,19 @@ export const GeometryArtifactManifest = z.object({
       }),
     )
     .default([]),
-  slots: z.array(z.object({ id: z.string(), label: z.string().optional() })).default([]),
+  slots: z
+    .array(
+      z.object({
+        id: z.string(),
+        label: z.string().optional(),
+        color: z.string().optional(),
+        roughness: finite.optional(),
+        metalness: finite.optional(),
+        transparent: z.boolean().optional(),
+        emissive: z.boolean().optional(),
+      }),
+    )
+    .default([]),
   anchors: z
     .array(z.object({ id: z.string(), position: vec3, normal: vec3.optional() }))
     .default([]),

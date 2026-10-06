@@ -1,7 +1,7 @@
 import type { z } from 'zod'
 import type { addColumnTool } from '../agent-tools/columns'
 import { refuse } from '../agent-tools/refusal'
-import { scriptedSize, scriptSource } from '../lib/geometry-script-node'
+import { matchScriptSlotsToLibrary, scriptedSize, scriptSource } from '../lib/geometry-script-node'
 import { resettledPosition } from '../lib/geometry-surfaces'
 import { ColumnNode, type CompiledGeometryScript, type GeometryScriptParamValue } from '../schema'
 import { editedScriptParams, refuseParamsWithoutScript } from './add-object'
@@ -87,6 +87,11 @@ export const addColumn: AgentOperation<AddColumnInput> = (nodes, input, context)
     ...(compiled && dimensions
       ? {
           source: scriptSource(compiled),
+          slots: matchScriptSlotsToLibrary(
+            compiled.manifest,
+            previous?.slots,
+            previous?.source?.manifest,
+          ),
           width: dimensions[0],
           height: dimensions[1],
           depth: dimensions[2],

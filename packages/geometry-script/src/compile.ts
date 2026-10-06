@@ -187,7 +187,7 @@ function readConventions(root: THREE.Object3D) {
   const parts: GeometryArtifactManifest['parts'] = []
   const anchors: GeometryArtifactManifest['anchors'] = []
   const lights: GeometryArtifactManifest['lights'] = []
-  const slots = new Map<string, string | undefined>()
+  const slots = new Map<string, GeometryArtifactManifest['slots'][number]>()
   const materialSlot = new Map<THREE.Material, string>()
   const toRemove: THREE.Object3D[] = []
   let cutout = false
@@ -264,16 +264,36 @@ function readConventions(root: THREE.Object3D) {
     for (const material of materials) {
       if (materialSlot.has(material)) continue
       const authored = material.name ?? ''
-      if (authored.toLowerCase() === 'glass') {
-        materialSlot.set(material, 'glass')
-        continue
-      }
       const slotId =
         slugify(conventionId(authored, 'slot_') ?? authored) || `material_${slots.size + 1}`
       material.name = `slot_${slotId}`
       materialSlot.set(material, slotId)
-      if (!slots.has(slotId))
-        slots.set(slotId, authored.startsWith('slot_') ? undefined : authored || undefined)
+      const surface = material as THREE.MeshStandardMaterial & { transmission?: number }
+      const hints = {
+        color: surface.color?.isColor ? `#${surface.color.getHexString()}` : undefined,
+        roughness: surface.roughness,
+        metalness: surface.metalness,
+        // Faintly translucent shades and alpha-cut leaves are not glass; the viewer's glass cut-off.
+        transparent:
+          (surface.transmission ?? 0) > 0 || (material.transparent && material.opacity < 0.6),
+        emissive:
+          (surface.emissiveIntensity ?? 0) > 0 &&
+          (surface.emissive?.r > 0 || surface.emissive?.g > 0 || surface.emissive?.b > 0),
+      }
+      const previous = slots.get(slotId)
+      if (previous) {
+        // A shared slot with conflicting materials has no single authored tone to match.
+        for (const key of ['color', 'roughness', 'metalness', 'transparent'] as const) {
+          if (previous[key] !== hints[key]) delete previous[key]
+        }
+        previous.emissive ||= hints.emissive
+      } else {
+        slots.set(slotId, {
+          id: slotId,
+          label: (conventionId(authored, 'slot_') ?? authored) || undefined,
+          ...hints,
+        })
+      }
     }
   })
   for (const object of toRemove) object.parent?.remove(object)
@@ -282,7 +302,7 @@ function readConventions(root: THREE.Object3D) {
     parts,
     anchors,
     lights,
-    slots: [...slots].map(([id, label]) => ({ id, label })),
+    slots: [...slots.values()],
     cutout,
     collider,
     triangles,

@@ -175,6 +175,7 @@ export {
 } from './lib/floor-step-finish'
 export {
   isScriptedNode,
+  matchScriptSlotsToLibrary,
   type ScriptedNode,
   scriptedOrigin,
   scriptedSize,
@@ -479,6 +480,7 @@ export {
   unregisterLibraryMaterials,
 } from './material-library'
 export * from './node-slots'
+export { matchPascalMaterial, type PascalMaterialHints } from './procedural-items/library-colors'
 export type {
   FloorPlacedFootprint,
   FloorPlacedFootprintContext,

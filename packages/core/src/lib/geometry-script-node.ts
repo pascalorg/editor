@@ -1,3 +1,4 @@
+import { matchPascalMaterial } from '../procedural-items/library-colors'
 import type { CompiledGeometryScript } from '../schema'
 import type { ColumnNode } from '../schema/nodes/column'
 import type { DoorNode } from '../schema/nodes/door'
@@ -27,6 +28,34 @@ export const scriptSource = (compiled: CompiledGeometryScript) => ({
   artifact: compiled.sha256,
   manifest: compiled.manifest,
 })
+
+type Manifest = CompiledGeometryScript['manifest']
+
+const matchSlot = (slot: Manifest['slots'][number]) =>
+  matchPascalMaterial({ ...slot, name: `${slot.id} ${slot.label ?? ''}` })
+
+/**
+ * Paint and automatic matching write the same overrides. A rebuild keeps every
+ * pick, but a slot still holding what the previous build matched is matched
+ * again, so a script edit to that finish shows.
+ */
+export function matchScriptSlotsToLibrary(
+  manifest: Manifest,
+  overrides: Record<string, string> = {},
+  previous?: Manifest,
+): Record<string, string> {
+  const slots = { ...overrides }
+  for (const slot of manifest.slots) {
+    if (Object.hasOwn(overrides, slot.id)) {
+      const before = previous?.slots.find((candidate) => candidate.id === slot.id)
+      if (!before || overrides[slot.id] !== matchSlot(before)) continue
+      delete slots[slot.id]
+    }
+    const ref = matchSlot(slot)
+    if (ref) slots[slot.id] = ref
+  }
+  return slots
+}
 
 /** Width, height and depth of what the script built. */
 export function scriptedSize(

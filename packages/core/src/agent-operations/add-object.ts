@@ -2,6 +2,7 @@ import { refuse } from '../agent-tools/refusal'
 import { artifactUrl } from '../lib/artifact-store'
 import {
   isScriptedNode,
+  matchScriptSlotsToLibrary,
   type ScriptedNode,
   scriptedSize,
   scriptInteractive,
@@ -228,6 +229,11 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
       rotation: rotation ?? previous.rotation,
       side: input.side ?? previous.side,
       source: scriptSource(compiled),
+      slots: matchScriptSlotsToLibrary(
+        compiled.manifest,
+        previous.slots,
+        previous.source?.manifest,
+      ),
       asset: scriptAsset(compiled, input, previous.asset),
       ...(input.reason ? { metadata: { ...previous.metadata, reason: input.reason } } : {}),
     })
@@ -278,6 +284,7 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
     position: (input.position as Vec3 | undefined) ?? [0, 0, 0],
     rotation: rotation ?? [0, 0, 0],
     source: scriptSource(compiled),
+    slots: matchScriptSlotsToLibrary(compiled.manifest),
     asset,
     metadata: { reason: input.reason },
   })
@@ -350,6 +357,11 @@ export const rescriptOpening: AgentOperation<RescriptOpeningInput> = (nodes, inp
           data: {
             name: input.name ?? previous.name,
             source: scriptSource(compiled),
+            slots: matchScriptSlotsToLibrary(
+              compiled.manifest,
+              previous.slots,
+              previous.source?.manifest,
+            ),
             width,
             height,
             position,
