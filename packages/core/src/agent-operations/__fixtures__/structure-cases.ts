@@ -601,6 +601,27 @@ export const CREATE_STAIR_CASES: AgentToolCase[] = [
     },
   },
   {
+    // The flight cuts the slab on the floor it arrives at and the ceiling on the one it leaves.
+    name: 'a slab id on another storey is refused, naming the floor the flight arrives at',
+    tool: 'create_stair',
+    scene: ceiledScene,
+    input: { levelId: 'level_ground', x: 3, z: 1, destinationSlabId: 'slab_ground' },
+    expect: { refusal: 'slab_not_on_level', mentions: ['slab_ground', 'level_upper'] },
+  },
+  {
+    name: 'a ceiling id on another storey is refused, naming the floor the flight leaves',
+    tool: 'create_stair',
+    scene: ceiledScene,
+    input: {
+      levelId: 'level_upper',
+      x: 3,
+      z: 1,
+      sourceCeilingId: 'ceiling_hall',
+      createDestinationSlabOpening: false,
+    },
+    expect: { refusal: 'ceiling_not_on_level', mentions: ['ceiling_hall', 'level_upper'] },
+  },
+  {
     name: 'a slab id that names no slab, or a ceiling id no ceiling, is refused',
     tool: 'create_stair',
     scene: ceiledScene,

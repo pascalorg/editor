@@ -132,6 +132,19 @@ export const createStair: AgentOperation<CreateStairInput> = (nodes, input, cont
       { levelId: from.id, toLevelId: upper.id },
     )
   if (upper) refuseRoofLevel(nodes, upper.id, 'a stair')
+  // The flight cuts the slab of the floor it arrives at and the ceiling of the one it leaves.
+  if (input.destinationSlabId && nodes[input.destinationSlabId]!.parentId !== upper?.id)
+    refuse(
+      'slab_not_on_level',
+      `Slab ${input.destinationSlabId} is not on ${upper?.id ?? 'the floor above'}, the floor the flight arrives at: name a slab there, or leave it out.`,
+      { slabId: input.destinationSlabId, levelId: upper?.id ?? null },
+    )
+  if (input.sourceCeilingId && nodes[input.sourceCeilingId]!.parentId !== from.id)
+    refuse(
+      'ceiling_not_on_level',
+      `Ceiling ${input.sourceCeilingId} is not on ${from.id}, the floor the flight leaves: name a ceiling there, or leave it out.`,
+      { ceilingId: input.sourceCeilingId, levelId: from.id },
+    )
   if (!upper) {
     upper = LevelNode.parse({
       parentId: building.id,
