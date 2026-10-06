@@ -4,7 +4,7 @@ import { getCatalogMaterialById } from '../material-library'
 import { finishSurface, nearestLibraryMaterials, requireMaterialRef } from './material-refs'
 
 /**
- * L46 live (23:40): a roof's missing corrugated material got Brown brick, Buff brick and Prepared
+ * A roof's missing corrugated material got Brown brick, Buff brick and Prepared
  * Drywall as its nearest, ranked by name, blind to the roof. What goes wrong, written first: a
  * wall's or a floor's material offered for a roof; a nearest list that hides that the library has
  * nothing of the kind.

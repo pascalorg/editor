@@ -121,8 +121,8 @@ export function registerSaveScene(server: McpServer, bridge: SceneOperations): v
       replace,
     }) => {
       // Without a target, the session's scene goes where it came from (create_project, load_scene,
-      // an earlier save). Run 4 (2026-10-06) was refused "Call create_project first" on its first
-      // save, right after create_project bound the session to its project.
+      // an earlier save). An agent was refused "Call create_project first" on its first save, right
+      // after create_project bound the session to its project.
       const bound =
         includeCurrentScene && id === undefined && projectId === undefined
           ? bridge.getActiveScene()

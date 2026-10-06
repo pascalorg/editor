@@ -269,7 +269,7 @@ describe('save_scene', () => {
     expect(result.isError).toBeFalsy()
   })
 
-  // L61, run 4 (2026-10-06): the first save after create_project was refused "projectId is
+  // The first save after create_project was refused "projectId is
   // required for Supabase store. Call create_project first.", though the session held its project.
   test("without a target, saves to the session's project", async () => {
     const project = await store.createProject({ name: 'Hawkesbury' })

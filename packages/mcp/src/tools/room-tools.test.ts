@@ -398,7 +398,7 @@ describe('room tools', () => {
     expect(findBlockedDoors({ nodes })).toEqual([])
   })
 
-  // L66, run 4: the front door behind an outdoor porch faced the hall, whichever way drawn.
+  // The front door behind an outdoor porch faced the hall, whichever way it was drawn.
   for (const polygon of [
     [
       [0, 0],

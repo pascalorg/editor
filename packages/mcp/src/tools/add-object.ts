@@ -151,7 +151,7 @@ export function registerAddObject(
       if (patches.length) bridge.applyPatch(patches)
       const payload = {
         ...outcome.result,
-        // What the scene holds now, as every write answers (L56).
+        // What the scene holds now, as every write answers.
         achieved: achievedChanges(before as SceneNodes, outcome.changes ?? {}),
         ...persistencePayload(await publishLiveSceneSnapshot(bridge, addObjectTool.name)),
       }

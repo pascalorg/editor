@@ -116,9 +116,9 @@ function equal(a: unknown, b: unknown) {
 const SPAN_OVERLAP = 1e-6
 
 /**
- * The rooms that are outside (L66): without a ceiling, and left without crossing a wall, through a
- * separator no room stands behind or into another such room. Run 4's porch was a room for its
- * floor, and its wall knew no outside: the front door faced the hall. A room that only lost its
+ * The rooms that are outside: without a ceiling, and left without crossing a wall, through a
+ * separator no room stands behind or into another such room. A porch made a room for its floor
+ * left its wall with no outside: the front door faced the hall. A room that only lost its
  * ceiling is walled in and a kitchen open to a terrace keeps its ceiling, so both stay inside; so
  * does a courtyard walled on every side, a limit of this rule.
  */

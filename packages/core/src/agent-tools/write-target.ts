@@ -1,7 +1,7 @@
 /**
  * Where a write went, on every surface: the project it reached, or `null` and `unsaved` on a
  * scratch scene no project holds, so an agent that missed a load error does not build on into
- * nothing (L56, 2026-10-05: add_wall answered ok with no project bound). Its own key: a result's
+ * nothing (add_wall answered ok with no project bound). Its own key: a result's
  * `note` is the operation's.
  */
 export const NOT_SAVED_NOTE =

@@ -130,7 +130,7 @@ export function buildLevelDuplicateCreateOps({
   const nextLevelNumber = position === 'above' ? level.level + 1 : level.level
   // Only the floors in the way move up: a free floor index above the copy (floors deleted before
   // copying, as the agents' build guide does) is filled, not carried up. Pushing every floor above
-  // sent Victor run 10's floor 8 from index 7 to 10.
+  // sent a tall build's floor 8 from index 7 to 10.
   const shiftedLevels: { id: string; level: number }[] = []
   let free = nextLevelNumber
   for (const entry of levels

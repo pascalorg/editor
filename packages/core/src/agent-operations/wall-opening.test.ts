@@ -6,7 +6,7 @@ import { applySceneChanges } from './apply-changes'
 import type { SceneNodes } from './types'
 import { addWallOpening } from './wall-opening'
 
-// L56: the MCP and the chat answered add_door and add_window with two envelopes around one
+// The MCP and the chat answered add_door and add_window with two envelopes around one
 // operation (coordinateSystem and position on one side, ok, message and wallId on the other) and
 // neither said what the scene held after. One result now, from core, that both pass through.
 

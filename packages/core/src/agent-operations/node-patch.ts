@@ -5,8 +5,8 @@ import { parseNode } from '../schema/compiled-node-parsers'
 import { finishSurface, requireMaterialRef } from './material-refs'
 
 /**
- * An agent's edit of a node checked so it does what it says (L46), the same on the MCP's
- * apply_patch and the chat's update_node. Run 3's pier took five attempts: `material: {color}`
+ * An agent's edit of a node checked so it does what it says, the same on the MCP's apply_patch
+ * and the chat's update_node. A pier once took five attempts: `material: {color}`
  * reported "applied" and stored `{}` (the schema drops unknown keys), `materialPreset: null` was
  * refused (no way to clear), an unknown preset rendered grey, and a `material` under a set preset
  * never showed. Returns the data to write: `null` (or an empty material ref) as `undefined`, which

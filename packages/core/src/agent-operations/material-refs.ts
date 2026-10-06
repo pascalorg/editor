@@ -75,9 +75,9 @@ export function nearestLibraryMaterials(
 /**
  * A material ref that renders: a library id the catalog holds (`library:<id>`, or the bare id), or
  * a scene material (`scene:<id>`, which only the host's store can check). Anything else would fall
- * back to a default with no word (run 3: an unknown preset came out grey), so it is refused, naming
+ * back to a default with no word (an unknown preset came out grey), so it is refused, naming
  * the nearest library ids for the surface; when the library has nothing of the kind like it, the
- * refusal says so, and that a colour is the nearest (L46 live: a corrugated roof was offered bricks).
+ * refusal says so, and that a colour is the nearest (a corrugated roof was once offered bricks).
  */
 export function requireMaterialRef(
   asked: string,

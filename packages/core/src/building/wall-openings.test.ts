@@ -33,8 +33,8 @@ describe('planWallOpening', () => {
   }
 })
 
-// Run 3 (2026-10-05) wrote the front door's three glass strips off as "not possible": both tools
-// take code, and their descriptions stopped at outline, type and style (L52).
+// An agent wrote a front door's three glass strips off as "not possible": both tools take code,
+// and their descriptions stopped at outline, type and style.
 describe('where an opening beyond the fields is made', () => {
   test('add_door and add_window say what outline, type and style cannot express goes in code', () => {
     for (const tool of [addDoorTool, addWindowTool]) {

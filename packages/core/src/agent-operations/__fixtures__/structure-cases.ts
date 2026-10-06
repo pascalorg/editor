@@ -224,7 +224,7 @@ export const ADD_LEVEL_CASES: AgentToolCase[] = [
     input: { buildingId: 'level_ground' },
     expect: { refusal: 'not_a_building' },
   },
-  // L56, the fresh start: an agent that cleared the scene to restart could not begin again with
+  // The fresh start: an agent that cleared the scene to restart could not begin again with
   // the tools (add_level answered no_building, add_wall no_levels). An empty scene gets the
   // editor's own empty scene: a site, its building, the ground level.
   {

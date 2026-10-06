@@ -21,7 +21,7 @@ export type PatchRefusalCode =
   | 'invalid_update'
   | 'regenerated_default'
   | 'scripted_field'
-  // An update that would not do what it says (honestNodePatch, L46).
+  // An update that would not do what it says (honestNodePatch).
   | 'unknown_field'
   | 'unknown_material'
   | 'field_required'

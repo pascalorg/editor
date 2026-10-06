@@ -3,7 +3,7 @@ import { type AnyNode, BuildingNode, DoorNode, LevelNode, WallNode } from '../sc
 import { achievedChanges } from './achieved'
 
 // classcad-ai's delta check, on a scene graph: a tool says what it asked for; the scene says what
-// happened. Victor run 8 reported a facade "applied" on 432 walls that placed no window.
+// happened. A facade was once reported "applied" on 432 walls that placed no window.
 function scene(): Record<string, AnyNode> {
   const building = BuildingNode.parse({ id: 'building_main' })
   const level = LevelNode.parse({ id: 'level_0', parentId: building.id, level: 0 })

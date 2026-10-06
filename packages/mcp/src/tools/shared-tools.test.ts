@@ -68,7 +68,7 @@ describe('shared tools over MCP', () => {
   }
 })
 
-// Hawkesbury run 1 (2026-10-03): the hosted MCP searched 23 built-in items, no light or plant,
+// The hosted MCP searched 23 built-in items, no light or plant,
 // while the chat searched the app's library; the agent found no wall light and left them out.
 describe("search_assets over MCP reads the host's catalog", () => {
   async function search(query: string, catalog?: AssetCatalog) {

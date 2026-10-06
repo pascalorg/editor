@@ -3,8 +3,8 @@ import { levelTarget } from './levels'
 import { measurement } from './measurement'
 
 /**
- * A wall's bend: Hawkesbury run 2's rounded corner could only be made with apply_patch, its sign
- * documented nowhere (2026-10-03).
+ * A wall's bend: a rounded corner could only be made with apply_patch, its sign documented
+ * nowhere.
  */
 export const WALL_CURVE_OFFSET_INPUT = measurement('length', 'm', {
   description:

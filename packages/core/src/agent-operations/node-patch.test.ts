@@ -5,8 +5,8 @@ import { ColumnNode, SlabNode, WallNode } from '../schema'
 import { honestNodePatch } from './node-patch'
 
 /**
- * L46: an agent's edit of a node does what it says, or says why not. Run 3's pier: `material:
- * {color}` reported "applied" and stored `{}`; `materialPreset: null` was refused; a `material`
+ * An agent's edit of a node does what it says, or says why not. A pier's `material: {color}`
+ * reported "applied" and stored `{}`; `materialPreset: null` was refused; a `material`
  * set under a preset never showed. What goes wrong, written first: a field the schema drops
  * reported applied; a value the schema changes (an unknown preset turned "custom") kept quiet; a
  * material the library lacks stored and rendered grey; no way to clear a field; an edit a set

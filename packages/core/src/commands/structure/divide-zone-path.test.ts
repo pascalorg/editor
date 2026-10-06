@@ -434,7 +434,7 @@ test.each([
   }
 })
 
-// Hawkesbury run 2 (2026-10-05, 10:44 UTC): divide_zone over the hosted MCP crashed with "Cannot
+// divide_zone over the hosted MCP crashed with "Cannot
 // read properties of undefined (reading 'getState')". A host that brings its own runtime keeps its
 // own history; the editor's scene store may not be there at all.
 test('a headless host divides a room without the scene store', () => {

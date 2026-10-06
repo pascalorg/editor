@@ -20,9 +20,9 @@ const countByType = (ids: Iterable<string>, nodes: SceneNodes) => {
 
 /**
  * What a mutating call really changed, read from the scene before and after its changes, so a
- * result never claims what the scene does not hold (Victor run 8: a facade "applied" on 432 walls
- * that placed no window). Cheap: one pass over the ids; a scene check per call is not (2.7 s on
- * the 4,362 nodes of Victor run 10).
+ * result never claims what the scene does not hold (a facade was once reported "applied" on 432
+ * walls that placed no window). Cheap: one pass over the ids; a scene check per call is not (2.7 s
+ * on a scene of 4,362 nodes).
  */
 export function achievedChanges(before: SceneNodes, changes: SceneChanges): Achieved {
   const after = applySceneChanges(before as never, changes) as SceneNodes

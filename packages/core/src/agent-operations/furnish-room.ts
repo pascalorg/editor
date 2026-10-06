@@ -204,7 +204,7 @@ const SKIP_REASONS = {
 const round = (value: number) => Math.round(value * 100) / 100
 
 /**
- * Why a piece was skipped, with its size (L59): run 4 read "bathtub: blocks door clearance", then
+ * Why a piece was skipped, with its size: told only "bathtub: blocks door clearance", an agent
  * set the same tub there with place_items. An item the room cannot hold in any turn says so and
  * what instead; one in a door's way names the door.
  */

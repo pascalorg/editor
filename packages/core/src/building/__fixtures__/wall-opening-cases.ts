@@ -29,7 +29,7 @@ export const OPENING_SCENE = {
   wallShelf: 'item_wall_shelf',
   /** 4 m outside wall, its outside at the front (+normal). */
   outFront: 'wall_out_front',
-  /** 4 m outside wall drawn the other way: its outside at the back, as run 3's garage wall. */
+  /** 4 m outside wall drawn the other way: its outside at the back, as a garage wall can be. */
   outBack: 'wall_out_back',
 } as const
 
@@ -138,8 +138,8 @@ const {
 
 export const WALL_OPENING_CASES: readonly WallOpeningCase[] = [
   // Which way it faces. A door's swing and a garage door's track run behind its facing, so a door
-  // on an outside wall faces out whichever way the wall was drawn (run 3, 2026-10-05: the garage
-  // door's track ran on the street). An inside wall keeps the wall's front.
+  // on an outside wall faces out whichever way the wall was drawn (a garage door's track once ran
+  // on the street). An inside wall keeps the wall's front.
   {
     name: 'a door on an outside wall faces out',
     tool: 'add_door',
@@ -206,8 +206,7 @@ export const WALL_OPENING_CASES: readonly WallOpeningCase[] = [
     input: { wallId: storey, t: 0.5 },
     expect: { localX: 2, centerY: 1.05, clamped: false },
   },
-  // L45 (2026-10-05): L5's openGaps says to reopen a passage, and no tool made an opening with
-  // no leaf; the editor's door panel has Door / Opening.
+  // A gap's advice says to reopen a passage, and no tool made an opening with no leaf; the editor's door panel has Door / Opening.
   {
     name: 'a passage with no leaf is an opening, in the outline asked',
     tool: 'add_door',

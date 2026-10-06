@@ -79,7 +79,7 @@ export function registerCreateProject(server: McpServer, operations: SceneOperat
         }
         // A scene from the first call: its first draft is what this session holds (the empty
         // scene, or the unbound work it was made for), so any session can load it at once. Unsaved,
-        // another session's load_scene answered scene_not_found until a first save (L56).
+        // another session's load_scene answered scene_not_found until a first save.
         operations.setActiveScene(
           await operations.saveScene({
             id: status.id,

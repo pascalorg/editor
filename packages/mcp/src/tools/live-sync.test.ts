@@ -100,7 +100,7 @@ describe('live sync persistence reporting', () => {
 })
 
 describe('publishLiveSceneSnapshot', () => {
-  // L56 (2026-10-05): on a session with no project, add_wall answered ok and the work reached
+  // On a session with no project, add_wall answered ok and the work reached
   // nothing. Every write says where it went, top-level.
   test('a write with no project says so: project null, and how to keep it', () => {
     expect(persistencePayload({ status: 'unbound', project: null })).toMatchObject({

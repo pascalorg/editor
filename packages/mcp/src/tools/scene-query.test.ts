@@ -365,8 +365,8 @@ describe('scene query tools', () => {
   })
 
   // The live store cuts the stair's destination opening itself (an owned floor-opening on the upper
-  // floor), so only the obstruction is real; reporting the opening missing was Victor run 10's
-  // false stair_no_opening.
+  // floor), so only the obstruction is real; reporting the opening missing was a false
+  // stair_no_opening.
   test('verify_scene reports a stair wall obstruction, not the opening the store cut', async () => {
     const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
     const ground = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!

@@ -15,7 +15,7 @@ import {
 import { reconcileSceneStructure } from './structure-reconcile'
 
 /**
- * Run 4 (L66): the agent made the porch an outdoor room, so the house wall behind it had a room
+ * An agent made the porch an outdoor room, so the house wall behind it had a room
  * on both faces and knew no outside. Its front door faced the house, view_scene showed its
  * "outside" from the hall, and the porch face took the inside finish. What goes wrong, written
  * first: a wall between a room and an outdoor room is interior on both faces; an indoor room
@@ -163,7 +163,7 @@ for (const [winding, order] of [
       expect(placed).toMatchObject(doorFacing(wall))
     })
 
-    // Held out: not tuned on run 4's porch.
+    // Held out: not tuned on the porch case.
     test("an alfresco in an L's inside corner is outside on both house walls", () => {
       const house = createRoom(levelScene(), {
         name: 'House',

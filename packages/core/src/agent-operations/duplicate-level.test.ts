@@ -5,7 +5,7 @@ import { deleteNode } from './delete-node'
 import { duplicateLevel } from './duplicate-level'
 import type { SceneNodes } from './types'
 
-// Victor run 10, call 22: delete floors 5–7 (they held only their plans), then copy floor 4 three
+// An agent's build: delete floors 5–7 (they held only their plans), then copy floor 4 three
 // times. Floor 8 must stay at index 7 and the copies must take 4, 5 and 6.
 function eightFloors(): Record<string, AnyNode> {
   const building = BuildingNode.parse({ id: 'building_main' })

@@ -399,7 +399,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
           .filter((entry) => holeBelongsToStair(entry.slab, entry.index, stair.id)),
       )
       // Since owned floor openings, the stair owns a floor-opening on the floor above, and the
-      // slab hole it cuts names the opening, not the stair (Victor run 10: 14 false reports).
+      // slab hole it cuts names the opening, not the stair (else 14 false reports on one build).
       const owned = onLevel(targetLevelId).filter(
         (node): node is AnyNode & { type: 'floor-opening' } =>
           node.type === 'floor-opening' &&

@@ -42,7 +42,7 @@ describe('project lifecycle tools', () => {
     expect(parsed.nextStep).toContain('save_scene')
   })
 
-  // L56 (2026-10-05): a project made in one session answered scene_not_found to load_scene from any
+  // A project made in one session answered scene_not_found to load_scene from any
   // other until its first save; an agent whose session reset could not open it again.
   test('a new project is a saved scene at once, loadable from any session', async () => {
     const result = await client.callTool({

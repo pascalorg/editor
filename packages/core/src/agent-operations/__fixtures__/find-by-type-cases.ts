@@ -2,7 +2,7 @@ import type { AgentToolCase } from './cases'
 import { storeysScene } from './structure-cases'
 
 /**
- * find_by_type (L56): an unknown level answered "nothing found" on both surfaces, where get_zones
+ * find_by_type: an unknown level answered "nothing found" on both surfaces, where get_zones
  * refuses it; the agent could not tell a typo from an empty floor.
  */
 export const FIND_BY_TYPE_CASES: AgentToolCase[] = [

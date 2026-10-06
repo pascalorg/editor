@@ -52,7 +52,7 @@ describe('apply_patch', () => {
     expect((stored as { thickness?: number }).thickness).toBe(0.2)
   })
 
-  // L46 (run 3): a pier's `material: {color}` reported applied and stored {}, and
+  // A pier's `material: {color}` reported applied and stored {}, and
   // `materialPreset: null` was refused, so the agent could not clear the preset hiding it.
   test('an update the node would drop is refused, naming the path; null clears a field', async () => {
     const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!

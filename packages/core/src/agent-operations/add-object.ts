@@ -102,7 +102,7 @@ const PASCAL_TYPES: [RegExp, string][] = [
 
 /**
  * What a label names: the last word of its main phrase. "entry door pull handle (brass)" is a
- * handle; "door" only says which one (Hawkesbury run 2 had it refused as a door).
+ * handle; "door" only says which one (it was once refused as a door).
  */
 function headWord(label: string) {
   const phrase = label.split(/\(|,|\s[-–—]\s|\sof\s/i)[0]!.trim()
@@ -112,7 +112,7 @@ function headWord(label: string) {
 /**
  * The tool for an object named after something Pascal builds: an invitation, not a gate. A word
  * gate taught evasion: refused "entry door pull handle (brass)", the agent relabelled it "brass
- * pull bars", and the label stopped naming the gap (Hawkesbury run 2).
+ * pull bars", and the label stopped naming the gap.
  */
 function typeHint(input: AddObjectInput): string | undefined {
   for (const label of [input.name, input.category]) {

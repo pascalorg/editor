@@ -78,8 +78,8 @@ const refused = (assetId: string, code: string, error: string): Placed => ({
 const round = (value: number) => Math.round(value * 100) / 100
 
 /**
- * Whether a floor item fits where it is put (L59): run 4's agent set the catalog's 2.34 m bathtub
- * in front of a bath's door, after furnish_room had skipped it there, and place_items checked only
+ * Whether a floor item fits where it is put: an agent set the catalog's 2.34 m bathtub in front
+ * of a bath's door, after furnish_room had skipped it there, and place_items checked only
  * that its centre was in a room. An item the room cannot hold in any turn, or one standing in the
  * space a door needs (as verify_scene's blocked-door check sees it), is refused; the second with a
  * spot in the room that clears every door, when there is one. Items overlapping is not refused: a

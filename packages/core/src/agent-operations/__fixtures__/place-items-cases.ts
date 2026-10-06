@@ -152,7 +152,7 @@ export function hostScene(): SceneGraph {
 
 /**
  * A bathroom, 2.2 × 1.9 m unless sized: its door, 0.8 m wide, in the middle of its south wall; the
- * catalog's 2.34 m bathtub (run 4's only one), a 1.6 m bath and a vanity.
+ * catalog's 2.34 m bathtub (its only one), a 1.6 m bath and a vanity.
  */
 export function bathScene([width, depth]: [number, number] = [2.2, 1.9]): SceneGraph {
   const room: [number, number][] = [
@@ -481,8 +481,8 @@ export const PLACE_ITEMS_CASES: AgentToolCase[] = [
     },
   },
   {
-    // Run 4 (L59): furnish_room skipped the tub as blocking the bath's door; the agent then put it
-    // there itself with place_items, which checked only that its centre was in a room.
+    // furnish_room skipped the tub as blocking the bath's door; an agent then put it there itself
+    // with place_items, which checked only that its centre was in a room.
     name: 'an item in front of a door is refused, naming the door, with a spot that fits',
     tool: 'place_items',
     scene: bathScene,
@@ -509,7 +509,7 @@ export const PLACE_ITEMS_CASES: AgentToolCase[] = [
   {
     name: 'furnish_room names what it skips with its size',
     tool: 'furnish_room',
-    // Run 4's bath: 3.1 × 2.2 m, large enough to be given a tub.
+    // A bath of 3.1 × 2.2 m, large enough to be given a tub.
     scene: () => bathScene([3.1, 2.2]),
     input: { zoneId: 'zone_bath', roomType: 'bathroom' },
     context: bath,

@@ -208,8 +208,7 @@ const metres = (value: number) => `${value.toFixed(2)} m`
  */
 /**
  * Which way a door on `wall` faces: out, when the wall knows its outside. A door's swing and a
- * garage door's track run behind its facing (run 3, 2026-10-05: the garage door's track ran on the
- * street), so a door facing out opens and rolls inside, whichever way the wall was drawn. A wall
+ * garage door's track run behind its facing (a garage door's track once ran on the street), so a door facing out opens and rolls inside, whichever way the wall was drawn. A wall
  * that does not know its outside, or an inside wall, keeps its front.
  */
 export function doorFacing(wall: Pick<WallNode, 'frontSide' | 'backSide'>): {

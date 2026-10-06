@@ -616,8 +616,7 @@ export const DUPLICATE_LEVEL_CASES: AgentToolCase[] = [
       after: { level_ground: { level: 0 }, level_upper: { level: 2 }, level_roof: { level: 3 } },
     },
   },
-  // Victor run 10: the build guide deletes a family's plan-only floors, then copies its first floor
-  // up. Each copy pushed every floor above, gap included, and floor 8 went from index 7 to 10.
+  // The build guide deletes a family's plan-only floors, then copies its first floor up. Each copy pushed every floor above, gap included, and floor 8 went from index 7 to 10.
   {
     name: 'a copy fills a free floor above and moves nothing past the gap',
     tool: 'duplicate_level',

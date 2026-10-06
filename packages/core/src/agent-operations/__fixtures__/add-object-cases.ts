@@ -15,8 +15,8 @@ import type { AgentSurface, SceneGraph } from './cases'
  * `add_object`, the one way to author an object Pascal has no type for. Each new object says what
  * it stands in for (its reason, listed by verify_scene), so every one names a gap in Pascal; one
  * on a floor shaped like a wall or a floor plate is refused with the tool to use; one named
- * after something Pascal builds gets a hint, not a refusal (Hawkesbury run 2: a word gate refused
- * "entry door pull handle (brass)" and the agent relabelled it until the label named nothing).
+ * after something Pascal builds gets a hint, not a refusal (a word gate once refused "entry door
+ * pull handle (brass)", and the agent relabelled it until the label named nothing).
  *
  * The surfaces compile `code` before the operation runs; a case carries what that compile
  * produced, and each runner hands it over in place of its own compile.
@@ -171,7 +171,7 @@ export const ADD_OBJECT_CASES: AddObjectCase[] = [
     [4, 2.7, 0.2],
     { refusal: 'use_walls', mentions: ['add_wall'] },
   ),
-  // A bookcase and Hawkesbury's breeze-block screen (about 1.4 m wide and the tall box's height)
+  // A bookcase and a breeze-block screen (about 1.4 m wide and the tall box's height)
   // have a wall's box too, with shelves or holes in it: built, the wall tool named in case.
   create(
     'a detailed object with a wall’s size is built, with a hint naming the wall tool',
