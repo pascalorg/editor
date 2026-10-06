@@ -42,6 +42,7 @@ import {
   keyboardPanSpeed,
   setKeyboardPanKey,
 } from '../../lib/keyboard-pan'
+import { ORBIT_FLOOR_CLEARANCE } from '../../lib/orbit-floor-clearance'
 import { editorOwnsOneFingerDrag } from '../../lib/touch-gesture-priority'
 import { publishCameraPose } from '../../store/camera-pose-store'
 import useEditor from '../../store/use-editor'
@@ -51,6 +52,7 @@ import {
   useMovingNode,
 } from '../../store/use-interaction-scope'
 import { createCameraDraggingLifecycle } from './camera-dragging-lifecycle'
+import { FloorAwareCameraControls } from './floor-aware-camera-controls'
 
 const currentTarget = new Vector3()
 const tempBox = new Box3()
@@ -66,7 +68,9 @@ const keyboardPanSpherical = new Spherical()
 // top view itself (`floorplan-panel.tsx`) and the camera stands down.
 const planOwnsNavigation = () => useEditor.getState().viewMode === '2d'
 const DEFAULT_MAX_POLAR_ANGLE = Math.PI / 2 - 0.1
-const DEBUG_MAX_POLAR_ANGLE = Math.PI - 0.05
+// Perspective tilts past the horizon to look up at a ceiling; the floor
+// clearance keeps the camera itself above the active level.
+const LOOK_UP_MAX_POLAR_ANGLE = Math.PI - 0.05
 type CameraMode = ReturnType<typeof useViewer.getState>['cameraMode']
 type CameraPoseSnapshot = {
   mode: CameraMode
@@ -311,7 +315,7 @@ function useFirstPersonCameraPoseRestore(
 }
 
 export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) => {
-  const controls = useRef<CameraControlsImpl | null>(null)
+  const controls = useRef<FloorAwareCameraControls | null>(null)
   const pendingAppliedPose = useRef<CameraPoseApplicationPlan | null>(null)
   const activePoseInterpolation = useRef<{
     camera: Camera
@@ -339,8 +343,15 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
   )
   const currentLevelId = selection.levelId
   const firstLoad = useRef(true)
+  const floorY = useScene((state) =>
+    currentLevelId ? getLevelPresentationY(currentLevelId, state.nodes, levelMode) : 0,
+  )
+  const allowUnderground = !isPreviewMode && allowUndergroundCamera
+  const floorMinY = allowUnderground ? null : floorY + ORBIT_FLOOR_CLEARANCE
   const maxPolarAngle =
-    !isPreviewMode && allowUndergroundCamera ? DEBUG_MAX_POLAR_ANGLE : DEFAULT_MAX_POLAR_ANGLE
+    allowUnderground || cameraMode === 'perspective'
+      ? LOOK_UP_MAX_POLAR_ANGLE
+      : DEFAULT_MAX_POLAR_ANGLE
 
   const camera = useThree((state) => state.camera)
   const scene = useThree((state) => state.scene)
@@ -525,7 +536,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       firstLoad.current = false
       controls.current.setLookAt(20, 20, 20, 0, 0, 0, true)
     }
-    controls.current.getTarget(currentTarget)
+    controls.current.getOrbitTarget(currentTarget)
     // Idempotence guard: skip when already there — also swallows the thumbnail
     // generator's synchronous stacked→restore levelMode round-trip.
     if (Math.abs(currentTarget.y - targetY) < 1e-3) return
@@ -543,6 +554,11 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     }
   }, [isFirstPersonMode, maxPolarAngle])
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: drei builds a new controls instance per camera
+  useLayoutEffect(() => {
+    if (controls.current) controls.current.floorMinY = floorMinY
+  }, [camera, floorMinY, isFirstPersonMode])
+
   const focusNode = useCallback(
     (nodeId: string) => {
       if (isPreviewMode || isFirstPersonMode || !controls.current) return
@@ -558,9 +574,11 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       controls.current.getTarget(tempTarget)
       tempDelta.copy(tempCenter).sub(tempTarget)
 
+      const focusedY = tempPosition.y + tempDelta.y
+      const floorMinY = isPerspectiveCamera(camera) ? controls.current.floorMinY : null
       controls.current.setLookAt(
         tempPosition.x + tempDelta.x,
-        tempPosition.y + tempDelta.y,
+        floorMinY === null ? focusedY : Math.max(focusedY, floorMinY),
         tempPosition.z + tempDelta.z,
         tempCenter.x,
         tempCenter.y,
@@ -568,7 +586,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
         true,
       )
     },
-    [isPreviewMode, isFirstPersonMode],
+    [camera, isPreviewMode, isFirstPersonMode],
   )
 
   const publishCurrentPose = useCallback(() => {
@@ -1277,6 +1295,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     <CameraControls
       makeDefault
       maxDistance={100}
+      impl={FloorAwareCameraControls}
       maxPolarAngle={maxPolarAngle}
       minDistance={minDistance}
       minPolarAngle={0}
