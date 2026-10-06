@@ -1,4 +1,13 @@
-import { type AnyNode, createSceneApi, isMovable, nodeRegistry, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  cloneNodesInto,
+  collectSubtree,
+  isMovable,
+  nodeRegistry,
+  useScene,
+} from '@pascal-app/core'
+import { copyCreateOps } from './fresh-planar-placement'
 
 export function registryMoveDisabled(node: AnyNode): boolean {
   const def = nodeRegistry.get(node.type)
@@ -11,11 +20,13 @@ export function registryMoveDisabled(node: AnyNode): boolean {
 }
 
 export function duplicateWithoutMove(node: AnyNode) {
-  const api = createSceneApi(useScene)
-  const subtree = api.getSubtree(node.id)
-  if (!subtree || !node.parentId) return null
-  return api.cloneNodesInto([subtree.root, ...subtree.descendants], {
+  const subtree = collectSubtree(useScene.getState().nodes, node.id)
+  const parentId = node.parentId as AnyNodeId | null
+  if (!subtree || !parentId) return null
+  const cloned = cloneNodesInto([subtree.root, ...subtree.descendants], {
     rootId: node.id,
-    parentId: node.parentId as AnyNode['id'],
+    parentId,
   })
+  useScene.getState().createNodes(copyCreateOps(cloned, parentId))
+  return cloned.rootId
 }

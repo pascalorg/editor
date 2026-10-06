@@ -20,6 +20,7 @@ import * as THREE from 'three'
 import { applyWorldScaleBoxUVs } from '../../lib/box-uv'
 import {
   type ColorPreset,
+  createMaterial,
   createSurfaceRoleMaterial,
   glassMaterial as defaultGlassMaterial,
   baseMaterial as getBaseMaterial,
@@ -234,14 +235,16 @@ function windowSlotDefault(slotId: 'frame' | 'glass'): THREE.Material {
 }
 
 // Resolve a window's slot to a material: the `node.slots` override (colored mode
-// only) → the role/base default. Textures-off ignores overrides — the monochrome
-// escape hatch.
+// only) → the window-wide `material` for the frame (glass keeps its own) → the
+// role/base default. Textures-off ignores overrides — the monochrome escape hatch.
 function resolveWindowSlotMaterial(node: WindowNode, slotId: 'frame' | 'glass'): THREE.Material {
   const fallback = windowSlotDefault(slotId)
   if (!currentTextures) return fallback
   const ref = node.slots?.[slotId]
-  if (!ref) return fallback
-  return resolveMaterialRef(ref, currentSceneMaterials, currentShading) ?? fallback
+  const painted = ref ? resolveMaterialRef(ref, currentSceneMaterials, currentShading) : null
+  if (painted) return painted
+  if (node.material && slotId === 'frame') return createMaterial(node.material, currentShading)
+  return fallback
 }
 
 function addBox(

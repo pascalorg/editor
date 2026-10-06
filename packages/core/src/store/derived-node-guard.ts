@@ -500,6 +500,22 @@ function mergeRoomHoles(current: DerivedSurfaceNode, patch: Partial<DerivedSurfa
   return { ...patch, holes, holeMetadata }
 }
 
+const createdNodes = (create: DerivedNodeChanges['create']) =>
+  new Map((create ?? []).map(({ node }) => [node.id as string, node]))
+
+/**
+ * Construction copied together with the level and rooms it stands for (a
+ * duplicated level) stays derived: the reconciler adopts it for the copied
+ * rooms, as it does a loaded scene's, instead of building a second plate
+ * beside a manual copy.
+ */
+function arrivesWithItsLevel(node: DerivedSurfaceNode, created: ReadonlyMap<string, AnyNode>) {
+  return (
+    created.get(node.parentId ?? '')?.type === 'level' &&
+    linkedZoneIds(node).every((id) => created.get(id)?.type === 'zone')
+  )
+}
+
 /** In-app writers retain authored edits without taking ownership from the reconciler. */
 export function filterDerivedNodeWrites<T extends DerivedNodeChanges>(
   nodes: Readonly<Record<string, AnyNode>>,
@@ -512,11 +528,12 @@ export function filterDerivedNodeWrites<T extends DerivedNodeChanges>(
     const update = own.conflicts.length ? [] : expandFloorIntentChanges(nodes, own.updates)
     changes = { ...changes, update }
   }
+  const created = createdNodes(changes.create)
   return {
     ...changes,
     ...(changes.create && {
       create: changes.create.map((op) => {
-        if (!isDerivedNode(op.node)) return op
+        if (!isDerivedNode(op.node) || arrivesWithItsLevel(op.node, created)) return op
         const node = { ...op.node } as Record<string, unknown>
         const fields = ['plateRole', 'boundary', 'zoneIds', 'zoneId', 'autoFromWalls']
         warnFilteredFields(
@@ -580,8 +597,9 @@ export function assertDerivedNodeWrites(
       code: 'room_floor_conflict',
       conflicts,
     })
+  const created = createdNodes(changes.create)
   for (const { node } of changes.create ?? []) {
-    if (!isDerivedNode(node)) continue
+    if (!isDerivedNode(node) || arrivesWithItsLevel(node, created)) continue
     throw new DerivedNodeWriteError(
       'create',
       node.id,

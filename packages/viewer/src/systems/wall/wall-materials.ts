@@ -2,6 +2,7 @@ import {
   getEffectiveWallFaceMaterial,
   getMaterialPresetByRef,
   getWallSurfaceMaterialSignature,
+  parseMaterialColor,
   parseMaterialRef,
   resolveMaterial,
   resolveWallExteriorSide,
@@ -194,6 +195,8 @@ function wallFaceMaterialSignature(
 }
 
 function resolveRefColor(ref: string, sceneMaterials: SceneMaterials, fallback: string): string {
+  const color = parseMaterialColor(ref)
+  if (color) return color
   const parsed = parseMaterialRef(ref)
   if (parsed?.kind === 'library') {
     return getMaterialPresetByRef(ref)?.mapProperties?.color ?? fallback

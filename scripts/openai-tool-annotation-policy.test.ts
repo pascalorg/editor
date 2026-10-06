@@ -13,7 +13,7 @@ describe('OpenAI tool annotation justification packet', () => {
     const candidate = clonePacket()
     candidate.tools.pop()
     expect(validateOpenAiToolAnnotationPacket(candidate)).toContain(
-      'OpenAI tool annotation packet must contain the exact 68-tool inventory',
+      'OpenAI tool annotation packet must contain the exact 73-tool inventory',
     )
   })
 
@@ -35,7 +35,7 @@ describe('OpenAI tool annotation justification packet', () => {
     const candidate = clonePacket()
     candidate.tools[0]!.annotations.readOnlyHint = true
     expect(validateOpenAiToolAnnotationPacket(candidate)).toContain(
-      'OpenAI tool annotation packet add_door has readOnlyHint=true, expected false',
+      'OpenAI tool annotation packet add_column has readOnlyHint=true, expected false',
     )
   })
 
@@ -45,13 +45,13 @@ describe('OpenAI tool annotation justification packet', () => {
     }
     delete missing.tools[0].justifications.openWorldHint
     expect(validateOpenAiToolAnnotationPacket(missing)).toContain(
-      'OpenAI tool annotation packet add_door justifications must contain exactly the required hints',
+      'OpenAI tool annotation packet add_column justifications must contain exactly the required hints',
     )
 
     const blank = clonePacket()
     blank.tools[0]!.justifications.destructiveHint = '   '
     expect(validateOpenAiToolAnnotationPacket(blank)).toContain(
-      'OpenAI tool annotation packet add_door needs a non-empty destructiveHint justification',
+      'OpenAI tool annotation packet add_column needs a non-empty destructiveHint justification',
     )
 
     const extra = clonePacket() as unknown as {
@@ -59,7 +59,7 @@ describe('OpenAI tool annotation justification packet', () => {
     }
     extra.tools[0].justifications.idempotentHint = 'Not part of this submission packet.'
     expect(validateOpenAiToolAnnotationPacket(extra)).toContain(
-      'OpenAI tool annotation packet add_door justifications must contain exactly the required hints',
+      'OpenAI tool annotation packet add_column justifications must contain exactly the required hints',
     )
   })
 })

@@ -47,3 +47,12 @@ Hosted service tools have public contracts in `core/agent-tools` and a shared re
 
 - `@pascal-app/core/agent-tools` holds the shared contracts; the hosted repo's `agent-surface-parity.test.ts` fails when a shared tool's name, description or input schema differs between the MCP and the chat. Tools still defined twice are tracked in its tool-surface alignment plan.
 - `review-architecture` loads this page for changes under `packages/mcp/**` and `skills/**`.
+
+## Stair capability parity
+
+| Capability | Shared contract | Shared operation | MCP | Hosted AI chat |
+|---|---|---|---|---|
+| `measure_stair` | `measureStairTool` in `core/agent-tools` | `AGENT_OPERATIONS.measure_stair` | Shared-tool adapter; read-only measurements and layout alternatives | Needs hosted-chat registration and executor port (companion change in private-editor) |
+| `fit_stair` | `fitStairTool` in `core/agent-tools` | `AGENT_OPERATIONS.fit_stair` | Shared-tool adapter; applies the planned changes atomically | Needs hosted-chat registration and executor port (companion change in private-editor) |
+
+Both surfaces use the zod-only `@pascal-app/core/agent-tools` contracts and the plans in `@pascal-app/core/agent-operations`. The hosted-chat port needs registration, executor integration and parity tests. The published `pascal-3d` skill and MCP agent guide describe the same sizing, winder and measurement semantics. Design targets are preferences, not code certification; measurement reports only the modeled obstacles it supports.

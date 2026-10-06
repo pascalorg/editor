@@ -3,6 +3,7 @@ import {
   type NodeDefinition,
   TurbineVentNode as TurbineVentNodeSchema,
   type TurbineVentNode as TurbineVentNodeType,
+  turbineVentSlots,
 } from '@pascal-app/core'
 import { buildTurbineVentFloorplan } from './floorplan'
 import { turbineVentPaint } from './paint'
@@ -93,10 +94,7 @@ export const turbineVentDefinition: NodeDefinition<typeof TurbineVentNode> = {
   },
 
   capabilities: {
-    slots: () => [
-      { slotId: 'base', label: 'Base', default: 'library:preset-softwhite' },
-      { slotId: 'head', label: 'Head', default: 'library:preset-softwhite' },
-    ],
+    slots: turbineVentSlots,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,

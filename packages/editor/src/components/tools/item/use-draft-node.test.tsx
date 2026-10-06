@@ -376,6 +376,27 @@ describe('useDraftNode block face commit', () => {
     )
   })
 
+  test('a duplicate drops into the collections of the item it copies, in its one undo step', () => {
+    const asset = { id: 'lamp', name: 'Lamp', category: 'decor', thumbnail: '', src: '/lamp.glb' }
+    useScene.temporal.getState().pause()
+    const lamp = ItemNode.parse({ parentId: LEVEL_ID, position: [1, 0, 1], asset })
+    useScene.getState().createNode(lamp, LEVEL_ID as AnyNodeId)
+    const lightingId = useScene.getState().createCollection('Lighting', [lamp.id])
+    const lighting = useScene.getState().collections[lightingId]
+    const source = useScene.getState().nodes[lamp.id] as ItemNode
+    const draft = draftNode!
+    draft.create(new Vector3(3, 0, 3), asset, undefined, undefined, source)
+    useScene.temporal.getState().resume()
+
+    const copyId = draft.commit({ parentId: LEVEL_ID, position: [3, 0, 3] }) as AnyNodeId
+
+    expect(useScene.getState().nodes[copyId]).toMatchObject({ collectionIds: [lightingId] })
+    expect(useScene.getState().collections[lightingId]?.nodeIds).toEqual([lamp.id, copyId])
+    useScene.temporal.getState().undo()
+    expect(useScene.getState().nodes[copyId]).toBeUndefined()
+    expect(useScene.getState().collections[lightingId]).toEqual(lighting)
+  })
+
   test('moves a block-face item to the floor as one undoable reparent', () => {
     const hosted = ItemNode.parse({
       id: 'item_hosted-potted-plant',

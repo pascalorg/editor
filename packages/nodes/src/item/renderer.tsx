@@ -7,6 +7,7 @@ import {
   getScaledDimensions,
   type Interactive,
   type ItemNode,
+  isCutterName,
   isSlotMaterialName,
   itemClipRegistry,
   LIBRARY_MATERIAL_REF_PREFIX,
@@ -31,7 +32,9 @@ import {
   type RenderShading,
   resolveCdnUrl,
   resolveMaterialRef,
+  ScriptedClips,
   stampPascalTextureRef,
+  useClipActions,
   useItemLightPool,
   useNodeEvents,
   useViewer,
@@ -50,7 +53,7 @@ import {
   useState,
 } from 'react'
 import type { AnimationAction, AnimationClip, Group, Material, Mesh, Object3D } from 'three'
-import { LoopOnce, MathUtils, Texture } from 'three'
+import { MathUtils, Texture } from 'three'
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
@@ -668,7 +671,8 @@ const LoadedModelRenderer = ({
 
       const mesh = child as Mesh
       // `cutout` drives wall openings, `collider` the walkthrough; neither renders.
-      const helper = mesh.name === 'cutout' || mesh.name === 'collider'
+      const name = typeof mesh.userData.name === 'string' ? mesh.userData.name : mesh.name
+      const helper = isCutterName(name) || name === 'collider'
       if (helper) child.visible = false
 
       const captured = captureItemMeshMaterials(mesh)
@@ -727,7 +731,11 @@ const LoadedModelRenderer = ({
   const scripted = Boolean(node.source)
   useEffect(() => {
     const entries = scripted
-      ? animations.map((clip) => ({ clip, loop: clip.name !== 'open', name: clip.name }))
+      ? animations.map((clip) => ({
+          clip,
+          loop: clip.name !== 'open' && clip.name !== 'close',
+          name: clip.name,
+        }))
       : (() => {
           const clipName = animEffect ? (animEffect.clips.on ?? animEffect.clips.loop) : undefined
           const clip = clipName ? animations.find((c) => c.name === clipName) : undefined
@@ -780,6 +788,7 @@ const LoadedModelRenderer = ({
           key={i}
           nodeId={node.id}
           canRegister={canRegisterItemLight(node.metadata)}
+          localScale={scripted ? node.scale : undefined}
         />
       ))}
     </>
@@ -859,17 +868,7 @@ const ItemAnimation = ({
   return null
 }
 
-/** Whether an effect's toggle is on; an effect without one always runs. */
-const useEffectControl = (nodeId: AnyNodeId, control: number | undefined) =>
-  useInteractive((s) =>
-    control === undefined ? true : Boolean(s.items[nodeId]?.controlValues[control]),
-  )
-
-/**
- * An authored object's clips, each driven by its own toggle: an open-close
- * effect plays `open` once and holds, closing plays `close` or `open` reversed;
- * an ambient effect plays its clip while its toggle is on (always, for `loop`).
- */
+/** An authored object's clips, played through the shared `ScriptedClips`. */
 const ScriptedAnimations = ({
   nodeId,
   interactive,
@@ -881,98 +880,8 @@ const ScriptedAnimations = ({
   animations: AnimationClip[]
   rootRef: RefObject<Group>
 }) => {
-  const { actions } = useAnimations(animations, rootRef)
-  const effects = interactive.effects.filter(
-    (effect): effect is AnimationEffect => effect.kind === 'animation',
-  )
-  return (
-    <>
-      {effects.map((effect) =>
-        effect.mode === 'open-close' ? (
-          <OpenCloseClip actions={actions} effect={effect} key={effect.clips.on} nodeId={nodeId} />
-        ) : (
-          <PlayClip
-            actions={actions}
-            effect={effect}
-            key={effect.clips.on ?? effect.clips.loop}
-            nodeId={nodeId}
-          />
-        ),
-      )}
-    </>
-  )
-}
-
-type ClipActions = Record<string, AnimationAction | null>
-
-const PlayClip = ({
-  nodeId,
-  effect,
-  actions,
-}: {
-  nodeId: AnyNodeId
-  effect: AnimationEffect
-  actions: ClipActions
-}) => {
-  const on = useEffectControl(nodeId, effect.control)
-  const name = effect.clips.on ?? effect.clips.loop
-  useEffect(() => {
-    const action = name ? actions[name] : undefined
-    if (!action) return
-    if (on) {
-      action.paused = false
-      action.play()
-    } else {
-      // Hold the pose where it was, like pausing a music box.
-      action.paused = true
-    }
-  }, [actions, name, on])
-  return null
-}
-
-const OpenCloseClip = ({
-  nodeId,
-  effect,
-  actions,
-}: {
-  nodeId: AnyNodeId
-  effect: AnimationEffect
-  actions: ClipActions
-}) => {
-  const isOpen = useEffectControl(nodeId, effect.control)
-  const mounted = useRef(false)
-  useEffect(() => {
-    const open = effect.clips.on ? actions[effect.clips.on] : undefined
-    const close = effect.clips.off ? actions[effect.clips.off] : undefined
-    if (!open) return
-    const first = !mounted.current
-    mounted.current = true
-    for (const action of [open, close]) {
-      if (!action) continue
-      action.setLoop(LoopOnce, 1)
-      action.clampWhenFinished = true
-    }
-    if (isOpen) {
-      close?.stop()
-      open.paused = false
-      open.timeScale = 1
-      if (!open.isRunning()) open.reset()
-      open.play()
-      // Already open when the scene loads: hold the open pose, no swing.
-      if (first) open.time = open.getClip().duration
-      return
-    }
-    if (first) return
-    if (close) {
-      open.stop()
-      close.reset().play()
-      return
-    }
-    open.paused = false
-    open.timeScale = -1
-    open.play()
-  }, [actions, effect.clips.on, effect.clips.off, isOpen])
-  return null
+  const actions = useClipActions(animations, rootRef)
+  return <ScriptedClips actions={actions} interactive={interactive} nodeId={nodeId} />
 }
 
 const ItemLightRegistrar = ({
@@ -981,19 +890,23 @@ const ItemLightRegistrar = ({
   interactive,
   index,
   canRegister,
+  localScale,
 }: {
   nodeId: AnyNodeId
   effect: LightEffect
   interactive: Interactive
   index: number
   canRegister: boolean
+  localScale?: [number, number, number]
 }) => {
   useEffect(() => {
     if (!canRegister) return
     const key = `${nodeId}:${index}`
-    useItemLightPool.getState().register(catalogLightSource(key, nodeId, effect, interactive))
+    useItemLightPool
+      .getState()
+      .register(catalogLightSource(key, nodeId, effect, interactive, localScale))
     return () => useItemLightPool.getState().unregister(key)
-  }, [nodeId, index, effect, interactive, canRegister])
+  }, [nodeId, index, effect, interactive, canRegister, localScale])
 
   return null
 }

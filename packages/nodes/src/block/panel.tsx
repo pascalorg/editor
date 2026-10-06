@@ -3,9 +3,12 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  BLOCK_BODY_SLOT_ID,
   type BlockNode,
+  blockSlots,
   getCatalogMaterialById,
   type MaterialSchema,
+  parseMaterialColor,
   parseMaterialRef,
   type SceneMaterialId,
   useScene,
@@ -27,13 +30,11 @@ import { resolveSlotPaintMaterialRef } from '../shared/slot-paint'
 import useBlockEditSession from './edit-session'
 import {
   assignBlockMaterial,
-  BLOCK_BODY_SLOT_ID,
   blockMaterialSelection,
   createAssignedBlockMaterialSlot,
   removeBlockMaterialSlot,
   renameBlockMaterialSlot,
 } from './material-slots'
-import { blockSlots } from './slots'
 
 const SLOT_TRAILING_ACTION_CLASS =
   'm-2 ml-0 flex w-8 shrink-0 items-center justify-center rounded-md'
@@ -55,6 +56,8 @@ function materialRefLabel(
   ref: string | undefined,
   sceneMaterials: ReturnType<typeof useScene.getState>['materials'],
 ): string {
+  const color = parseMaterialColor(ref)
+  if (color) return color.toUpperCase()
   const parsed = parseMaterialRef(ref)
   if (!parsed) return 'Default material'
   if (parsed.kind === 'scene')
@@ -66,6 +69,8 @@ function materialRefPreview(
   ref: string | undefined,
   sceneMaterials: ReturnType<typeof useScene.getState>['materials'],
 ): { color: string; imageUrl?: string } {
+  const color = parseMaterialColor(ref)
+  if (color) return { color }
   const parsed = parseMaterialRef(ref)
   if (!parsed) return { color: '#71717a' }
   if (parsed.kind === 'scene') {

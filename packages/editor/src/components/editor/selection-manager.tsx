@@ -31,9 +31,9 @@ import {
 } from '@pascal-app/core'
 import {
   createMaterial,
-  createMaterialFromPresetRef,
   getRoofMaterialArray,
   registerMaterialCacheCleanup,
+  resolveMaterialRef,
   useViewer,
 } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
@@ -499,6 +499,8 @@ function applyRoofPaintPreview(
     useViewer.getState().textures,
     useViewer.getState().colorPreset,
     useViewer.getState().sceneTheme,
+    null,
+    useScene.getState().materials,
   )
   if (!previewMaterial) return null
 
@@ -522,13 +524,12 @@ function applyRoofSegmentPaintPreview(
     ...node,
     ...buildRoofSegmentSurfaceMaterialPatch(node, role, material.material, material.materialPreset),
   }
+  const sceneMaterials = useScene.getState().materials
   const resolveSlot = (r: 'top' | 'edge' | 'wall'): Material | null => {
     const parentSpec = parent ? getEffectiveRoofSurfaceMaterial(parent, r) : undefined
     const spec = getEffectiveSegmentSurfaceMaterial(previewNode, r, parentSpec)
-    if (typeof spec.materialPreset === 'string') {
-      const resolved = createMaterialFromPresetRef(spec.materialPreset)
-      if (resolved) return resolved
-    }
+    const resolved = resolveMaterialRef(spec.materialPreset, sceneMaterials)
+    if (resolved) return resolved
     if (spec.material !== undefined) return createMaterial(spec.material)
     return null
   }
@@ -536,7 +537,9 @@ function applyRoofSegmentPaintPreview(
   const wall = resolveSlot('wall')
   const top = resolveSlot('top')
   if (!(edge || wall || top)) return null
-  const fallback = parent ? getRoofMaterialArray(parent) : null
+  const fallback = parent
+    ? getRoofMaterialArray(parent, undefined, undefined, undefined, undefined, null, sceneMaterials)
+    : null
   const fb = (n: number) => fallback?.[n] ?? null
   // Per-role only, then the parent's themed slot — matches the renderer so the
   // preview never bleeds a painted surface onto the segment's other surfaces.
@@ -940,6 +943,7 @@ export const SelectionManager = () => {
       useEditor.getState().activePaintMaterial ??
       resolveActivePaintMaterialFromSelection({
         nodes: useScene.getState().nodes,
+        materials: useScene.getState().materials,
         selectedId:
           useViewer.getState().selection.selectedIds.length === 1
             ? (useViewer.getState().selection.selectedIds[0] ?? null)
@@ -960,6 +964,7 @@ export const SelectionManager = () => {
             node,
             role,
             nodes: useScene.getState().nodes,
+            materials: useScene.getState().materials,
             hitObject: getEventObject(event),
             materialIndex,
           })
@@ -1164,6 +1169,8 @@ export const SelectionManager = () => {
                       if (!(targetNode && targetRoot && targetCap)) continue
                       const restore = targetCap.applyPreview({
                         node: targetNode,
+                        nodes: liveNodes,
+                        materials: useScene.getState().materials,
                         role: target.role,
                         material: paintSpec.material,
                         materialPreset: paintSpec.materialPreset,

@@ -1,4 +1,6 @@
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
+import { spatialGridManager } from '../hooks/spatial-grid/spatial-grid-manager'
+import { reconcileSceneStructure } from '../lib/structure-reconcile'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -7,8 +9,10 @@ import {
   SpawnNode,
   UnitNode,
   WallNode,
+  WindowNode,
   ZoneNode,
 } from '../schema'
+import { assertDerivedNodeWrites, filterDerivedNodeWrites } from '../store/derived-node-guard'
 import { buildLevelDuplicateCreateOps } from './level-duplication'
 
 describe('buildLevelDuplicateCreateOps', () => {
@@ -141,4 +145,89 @@ describe('unit duplication', () => {
       expect(nodes).toEqual(before)
     })
   }
+})
+
+describe('duplicated construction', () => {
+  afterEach(() => spatialGridManager.clear())
+
+  let serial = 0
+  const mintId = (kind: string) => `${kind}_dup${++serial}`
+  const reconcile = (nodes: Record<string, AnyNode>) =>
+    reconcileSceneStructure({ nodes, mintId }).nodes as Record<AnyNodeId, AnyNode>
+
+  /** A walled room with its derived floor plate and ceiling, and a window already past its wall top. */
+  function roomLevel() {
+    const ring: [number, number][] = [
+      [0, 0],
+      [6, 0],
+      [6, 4],
+      [0, 4],
+    ]
+    const walls = ring.map((start, i) =>
+      WallNode.parse({ parentId: 'level_dup', start, end: ring[(i + 1) % 4], thickness: 0.2 }),
+    )
+    const window = WindowNode.parse({
+      parentId: walls[0]!.id,
+      wallId: walls[0]!.id,
+      position: [3, 1.6, 0],
+      width: 1.2,
+      height: 2.4,
+    })
+    walls[0] = { ...walls[0]!, children: [window.id] }
+    const building = BuildingNode.parse({ children: ['level_dup'] })
+    const level = LevelNode.parse({
+      id: 'level_dup',
+      parentId: building.id,
+      height: 2.5,
+      children: walls.map((wall) => wall.id),
+    })
+    const nodes = reconcile(
+      Object.fromEntries([building, level, ...walls, window].map((node) => [node.id, node])),
+    )
+    return { nodes, level: nodes[level.id] as LevelNode, window }
+  }
+
+  test('keeps one derived plate and ceiling per copied room, linked to the copy', () => {
+    const { nodes, level } = roomLevel()
+    const { createOps, newLevelId } = buildLevelDuplicateCreateOps({
+      nodes,
+      level,
+      levels: [level],
+      preset: 'everything',
+    })
+    // The editor's createNodes keeps the copy derived; the hosted bridges accept it as is.
+    expect(filterDerivedNodeWrites(nodes, { create: createOps }).create).toEqual(createOps)
+    expect(() => assertDerivedNodeWrites(nodes, { create: createOps })).not.toThrow()
+
+    const copied = reconcile({
+      ...nodes,
+      ...Object.fromEntries(createOps.map(({ node }) => [node.id, node])),
+    })
+    const onCopy = Object.values(copied).filter((node) => node.parentId === newLevelId)
+    const room = onCopy.find((node) => node.type === 'zone')!
+    const surfaces = onCopy.filter((node) => node.type === 'slab' || node.type === 'ceiling')
+    expect(surfaces.map((node) => node.type).sort()).toEqual(['ceiling', 'slab'])
+    for (const surface of surfaces) {
+      expect(surface).toMatchObject({ boundary: 'auto' })
+      expect(createOps.some(({ node }) => node.id === surface.id)).toBe(true)
+    }
+    expect(surfaces.find((node) => node.type === 'slab')).toMatchObject({ zoneIds: [room.id] })
+    expect(surfaces.find((node) => node.type === 'ceiling')).toMatchObject({ zoneId: room.id })
+  })
+
+  test('judges a copied window like its source, and still refuses a new one that does not fit', () => {
+    const { nodes, level, window } = roomLevel()
+    const { createOps } = buildLevelDuplicateCreateOps({
+      nodes,
+      level,
+      levels: [level],
+      preset: 'everything',
+    })
+    expect(createOps.some(({ node }) => node.type === 'window')).toBe(true)
+    expect(() => assertDerivedNodeWrites(nodes, { create: createOps })).not.toThrow()
+    const taller = WindowNode.parse({ ...window, id: undefined, height: 2.6 })
+    expect(() => assertDerivedNodeWrites(nodes, { create: [{ node: taller }] })).toThrow(
+      'does not fit',
+    )
+  })
 })

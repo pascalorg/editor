@@ -23,7 +23,7 @@ export interface SceneMeta {
   editorUrl?: string
   /** Backward-compatible alias for clients that still read url. */
   url?: string
-  /** True when this save is browser-visible without a separate publish call. */
+  /** True when this version is the published one (hosted: what the project's viewers see). */
   published?: boolean
   /** True when the saved graph is still the mutable browser-visible draft. */
   isDraft?: boolean
@@ -55,9 +55,15 @@ export interface SceneSaveOptions {
   thumbnailUrl?: string | null
   /** When set, save fails with `SceneVersionConflictError` on mismatch. */
   expectedVersion?: number
+  /**
+   * When set, save fails with `SceneVersionConflictError` unless the stored graph still hashes to
+   * this. A draft saved in place keeps its version number, so only the content tells that an
+   * open editor wrote in between.
+   */
+  expectedGraphHash?: string | null
   /** `draft` updates the browser-visible working model; `checkpoint` records version history. */
   saveMode?: SceneSaveMode
-  /** Whether a checkpoint should become the published/browser-visible head. */
+  /** Publish this checkpoint. Only an explicit `true` publishes; a checkpoint alone never does. */
   publish?: boolean
   /** Optional hosted MCP session id for project presence/debug metadata. */
   agentSessionId?: string
@@ -75,6 +81,16 @@ export interface SceneListOptions {
 
 export interface SceneMutateOptions {
   expectedVersion?: number
+}
+
+/**
+ * What `delete` did. A local store removes the scene; hosted Pascal never deletes a project this
+ * way and only hides it, with a `message` saying so.
+ */
+export type SceneDeleteResult = {
+  deleted: boolean
+  hidden: boolean
+  message?: string
 }
 
 export interface SceneEventAppendOptions {
@@ -125,7 +141,7 @@ export interface SceneStore {
   save(opts: SceneSaveOptions): Promise<SceneMeta>
   load(id: SceneId): Promise<SceneWithGraph | null>
   list(opts?: SceneListOptions): Promise<SceneMeta[]>
-  delete(id: SceneId, opts?: SceneMutateOptions): Promise<boolean>
+  delete(id: SceneId, opts?: SceneMutateOptions): Promise<SceneDeleteResult>
   rename(id: SceneId, newName: string, opts?: SceneMutateOptions): Promise<SceneMeta>
   appendSceneEvent?(opts: SceneEventAppendOptions): Promise<SceneEvent>
   listSceneEvents?(sceneId: SceneId, opts?: SceneEventListOptions): Promise<SceneEvent[]>

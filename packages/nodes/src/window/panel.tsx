@@ -5,12 +5,13 @@ import {
   type AnyNodeId,
   useInteractive,
   useScene,
-  WindowNode,
+  type WindowNode,
 } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
   cn,
+  duplicateNodeAndPickUp,
   PanelSection,
   PanelWrapper,
   SegmentedControl,
@@ -164,50 +165,8 @@ export default function WindowPanel() {
   }, [selectedId, node, deleteNode, setSelection])
 
   const handleDuplicate = useCallback(() => {
-    if (!node?.parentId) return
-    triggerSFX('sfx:item-pick')
-    useScene.temporal.getState().pause()
-    const duplicate = WindowNode.parse({
-      position: [...node.position] as [number, number, number],
-      rotation: [...node.rotation] as [number, number, number],
-      side: node.side,
-      wallId: node.wallId,
-      dormerId: node.dormerId,
-      dormerFace: node.dormerFace,
-      roofSegmentId: node.roofSegmentId,
-      roofFace: node.roofFace,
-      parentId: node.parentId,
-      width: node.width,
-      height: node.height,
-      roughOpeningWidth: node.roughOpeningWidth,
-      roughOpeningHeight: node.roughOpeningHeight,
-      windowType: node.windowType,
-      operationState: node.operationState,
-      awningDirection: node.awningDirection,
-      casementStyle: node.casementStyle,
-      hingesSide: node.hingesSide,
-      frameThickness: node.frameThickness,
-      frameDepth: node.frameDepth,
-      openingKind: node.openingKind,
-      openingShape: node.openingShape,
-      openingRadiusMode: node.openingRadiusMode ?? 'all',
-      openingCornerRadii: [...(node.openingCornerRadii ?? [0.15, 0.15, 0.15, 0.15])],
-      cornerRadius: node.cornerRadius,
-      archHeight: node.archHeight,
-      openingRevealRadius: node.openingRevealRadius,
-      columnRatios: [...node.columnRatios],
-      rowRatios: [...node.rowRatios],
-      columnDividerThickness: node.columnDividerThickness,
-      rowDividerThickness: node.rowDividerThickness,
-      sill: node.sill,
-      sillDepth: node.sillDepth,
-      sillThickness: node.sillThickness,
-      metadata: { isNew: true },
-    })
-    useScene.getState().createNode(duplicate, node.parentId as AnyNodeId)
-    setMovingNode(duplicate)
-    setSelection({ selectedIds: [] })
-  }, [node, setMovingNode, setSelection])
+    if (node) duplicateNodeAndPickUp(node)
+  }, [node])
 
   if (!(node && node.type === 'window' && selectedId)) return null
 

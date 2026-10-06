@@ -14,6 +14,8 @@ import { version } from './version'
 
 export type PascalMcpToolExecutor = <Result>(input: {
   name: string
+  /** The call's parsed arguments; undefined for a tool without inputs. */
+  arguments: unknown
   signal: AbortSignal
   execute: () => Promise<Result>
 }) => Promise<Result>
@@ -90,6 +92,7 @@ function wrapToolCallback(
   return (...args) =>
     executeTool({
       name,
+      arguments: args.length > 1 ? args[0] : undefined,
       signal: toolRequestSignal(args),
       execute: () => Promise.resolve(Reflect.apply(callback, undefined, args)),
     })
