@@ -166,10 +166,15 @@ const MAX_SEGMENTS_PER_FRAME = 3
 
 /**
  * Roofs whose merged shell is still to build: until it is, the roof shows its segments apart (or
- * an old shell), and a capture would show that.
+ * an old shell), and a capture would show that. Only roofs on screen count: one never mounted
+ * stays queued and would hold every capture.
  */
 export function getPendingRoofMergeCount(): number {
-  return pendingRoofUpdates.size
+  let count = 0
+  for (const id of pendingRoofUpdates)
+    if ((sceneRegistry.nodes.get(id) as THREE.Group | undefined)?.getObjectByName('merged-roof'))
+      count++
+  return count
 }
 
 function queueSiblingRoofUpdates(roofId: AnyNodeId, nodes: Record<string, AnyNode>) {
