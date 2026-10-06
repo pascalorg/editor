@@ -164,6 +164,14 @@ const warnedMergedRoofNaNIds = new Set<AnyNodeId>()
 const MAX_ROOFS_PER_FRAME = 1
 const MAX_SEGMENTS_PER_FRAME = 3
 
+/**
+ * Roofs whose merged shell is still to build: until it is, the roof shows its segments apart (or
+ * an old shell), and a capture would show that.
+ */
+export function getPendingRoofMergeCount(): number {
+  return pendingRoofUpdates.size
+}
+
 function queueSiblingRoofUpdates(roofId: AnyNodeId, nodes: Record<string, AnyNode>) {
   pendingRoofUpdates.add(roofId)
   const roof = nodes[roofId]?.type === 'roof' ? getEffectiveNode(nodes[roofId]) : undefined
