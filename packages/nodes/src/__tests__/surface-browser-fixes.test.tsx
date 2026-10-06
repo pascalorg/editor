@@ -1,4 +1,4 @@
-import { beforeEach, expect, test } from 'bun:test'
+import { beforeEach, expect, spyOn, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -56,6 +56,7 @@ import useInteractionScope, {
   getMovingNode,
   useMovingNode,
 } from '../../../editor/src/store/use-interaction-scope'
+import { ItemGLTFLoader } from '../item/model-loader'
 import ItemTool from '../item/tool'
 import {
   boxAsset as asset,
@@ -1063,5 +1064,117 @@ for (const kind of ['column', 'box', 'L notch'] as const)
             }
           } finally {
             await renderer.unmount()
+          }
+        })
+
+for (const height of [0.8688, 2])
+  for (const order of ['grid first', 'host first'])
+    for (const mode of ['grid', 'off'] as const)
+      for (const fresh of [true, false])
+        test(`scripted bookcase ${fresh ? 'fresh' : 'move'} hit at ${height} keeps preview and drop on that board (${order}, ${mode})`, async () => {
+          const host = ItemNode.parse({
+            parentId: level.id,
+            asset: {
+              ...asset,
+              src: `/scripted-bookcase-${height}-${order}-${mode}-${fresh}.glb`,
+              dimensions: [1.2, 2, 0.36],
+              surface: { height: 2 },
+            },
+            source: {
+              kind: 'script',
+              script: 'a'.repeat(64),
+              artifact: 'b'.repeat(64),
+              manifest: {
+                bounds: { min: [-0.6, 0, -0.18], max: [0.6, 2, 0.18] },
+                surfaces: [0.5, 0.87, 1.24, 1.61, 2].map((y) => ({
+                  y,
+                  polygon: [
+                    [-0.6, -0.18],
+                    [0.6, -0.18],
+                    [0.6, 0.18],
+                    [-0.6, 0.18],
+                  ],
+                })),
+                triangles: 60,
+              },
+            },
+          })
+          const child = childFor('catalog') as ItemNode
+          seed([host, ...(fresh ? [] : [child])])
+          useEditor.getState().setSnappingMode('item', mode)
+          useEditor.setState({ gridSnapStep: 0.1 })
+          arm('catalog', child, fresh)
+          const loader = spyOn(ItemGLTFLoader.prototype, 'load').mockImplementation(
+            (url, onLoad) => {
+              const scene = new Group()
+              const boards = new Group()
+              scene.add(boards)
+              const bookcase = url.includes('scripted-bookcase-')
+              for (const y of bookcase ? [0.4964, 0.8688, 1.2412, 1.6136, 2] : [0.2]) {
+                const mesh = new Mesh(
+                  new BoxGeometry(
+                    ...((bookcase ? [1.2, 0.028, 0.36] : [0.1, 0.2, 0.1]) as [
+                      number,
+                      number,
+                      number,
+                    ]),
+                  ),
+                  new MeshBasicMaterial(),
+                )
+                mesh.position.y = y - (bookcase ? 0.014 : 0.1)
+                boards.add(mesh)
+              }
+              onLoad({
+                scene,
+                scenes: [scene],
+                animations: [],
+                cameras: [],
+                asset: { version: '2.0' },
+                parser: {},
+              } as never)
+            },
+          )
+          const renderer = await create(<Scene mover="catalog" child={child} fresh={fresh} />)
+          try {
+            await settle(renderer)
+            const pointer = pointerDispatcher(height < 2)
+            const target = new Vector3(0.13, height, 0.04)
+            const hit = pointer
+              .ray(target)
+              .cast.intersectObject(sceneRegistry.nodes.get(host.id)!, true)[0]!
+            expect(hit.point.y).toBeCloseTo(height, 6)
+            expect(hit.face!.normal.y).toBeGreaterThan(0.75)
+            await pointer.send(target, order)
+            await settle(renderer)
+            await pointer.send(new Vector3(0.23, height, 0.04), order)
+            await settle(renderer)
+            const draft = Object.values(useScene.getState().nodes).find(
+              (node) => node.type === 'item' && node.id !== host.id,
+            )! as ItemNode
+            expect(draft.parentId).toBe(host.id)
+            expect(draft.position[1]).toBeCloseTo(height, 6)
+            const mesh = sceneRegistry.nodes.get(draft.id)!
+            mesh.updateWorldMatrix(true, false)
+            expect(mesh.getWorldPosition(new Vector3()).y).toBeCloseTo(height, 6)
+            expect(mesh.getWorldPosition(new Vector3()).x).toBeCloseTo(
+              mode === 'grid' ? 0.25 : 0.23,
+              6,
+            )
+            const preview = mesh.matrixWorld.clone()
+            await pointer.send(new Vector3(0.23, height, 0.04), order, true)
+            await settle(renderer)
+            expect(useInteractionScope.getState().scope.kind).toBe('idle')
+            const committed = Object.values(useScene.getState().nodes).find(
+              (node) => node.type === 'item' && node.id !== host.id,
+            )! as ItemNode
+            expect(committed.parentId).toBe(host.id)
+            expect(committed.position[1]).toBeCloseTo(height, 6)
+            expect(committed.position[0]).toBeCloseTo(mode === 'grid' ? 0.25 : 0.23, 6)
+            const committedMesh = sceneRegistry.nodes.get(committed.id)!
+            committedMesh.updateWorldMatrix(true, false)
+            expectSameMatrix(committedMesh.matrixWorld, preview)
+          } finally {
+            await renderer.unmount()
+            loader.mockRestore()
           }
         })
