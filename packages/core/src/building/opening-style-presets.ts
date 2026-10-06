@@ -114,9 +114,11 @@ export function getDoorStyleOverrides(style: DoorStyle | undefined): DoorStyleOv
     }
   }
   if (style === 'half-louvered') {
-    // Slats as thin panel rows on the top half: an 'empty' row would be a hole in the leaf.
-    const slat = panelSegment('panel', 0.5 / 6, [1], { panelDepth: -0.01, panelInset: 0.015 })
-    return { segments: [slat, slat, slat, slat, slat, slat, panelSegment('panel', 0.5)] }
+    // Slats as narrow raised bars on the top half: an 'empty' row would be a hole in the leaf.
+    // The door system always raises a panel by |panelDepth|, so a slat reads only when it is
+    // deep and narrow against its gap: ten bars about 7 cm tall, 2.2 cm proud, 2.8 cm apart.
+    const slat = panelSegment('panel', 0.5 / 10, [1], { panelDepth: 0.022, panelInset: 0.014 })
+    return { segments: [...Array.from({ length: 10 }, () => slat), panelSegment('panel', 0.5)] }
   }
   if (style === 'barn') {
     return {

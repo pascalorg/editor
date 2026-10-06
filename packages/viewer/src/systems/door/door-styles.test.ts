@@ -9,7 +9,8 @@ import { buildDoorPreviewMesh } from './door-system'
  * the porch read as an open passage. A door style is a leaf look: whatever the style, the closed
  * leaf covers its opening.
  */
-function leafCoverage(style: (typeof DOOR_STYLES)[number]) {
+/** The boxes of a door's leaf meshes (its panels and glass), as the preview builds them. */
+function leafBoxes(style: (typeof DOOR_STYLES)[number], slots = ['panel', 'glass']) {
   const wall = WallNode.parse({
     id: 'wall_style_test',
     start: [0, 0],
@@ -33,9 +34,14 @@ function leafCoverage(style: (typeof DOOR_STYLES)[number]) {
   const leaves: THREE.Box3[] = []
   mesh.traverse((child) => {
     if (!(child instanceof THREE.Mesh) || child === mesh || !child.visible) return
-    if (child.userData.slotId !== 'panel' && child.userData.slotId !== 'glass') return
+    if (!slots.includes(child.userData.slotId)) return
     leaves.push(new THREE.Box3().setFromObject(child))
   })
+  return { door, leaves }
+}
+
+function leafCoverage(style: (typeof DOOR_STYLES)[number]) {
+  const { door, leaves } = leafBoxes(style)
   const [cx, cy] = [door.position[0], door.position[1]]
   const misses: string[] = []
   for (let i = 1; i < 10; i++)
@@ -57,5 +63,21 @@ describe('door styles', () => {
   for (const style of DOOR_STYLES)
     test(`a ${style} door's leaf covers its opening`, () => {
       expect(leafCoverage(style)).toEqual([])
+    })
+})
+
+/**
+ * The raised inner panels of a panelled leaf are on both of its faces: seen from the street or
+ * from the hall, a six-panel door shows its six panels (the user, 2026-10-06, on :3102).
+ */
+function panelFaces(style: (typeof DOOR_STYLES)[number]) {
+  const centres = leafBoxes(style, ['panel']).leaves.map((box) => (box.min.z + box.max.z) / 2)
+  return { front: centres.some((z) => z > 0.001), back: centres.some((z) => z < -0.001) }
+}
+
+describe('panelled door styles', () => {
+  for (const style of ['six-panel', 'shaker', 'half-louvered'] as const)
+    test(`a ${style} door shows its panels on both faces`, () => {
+      expect(panelFaces(style)).toEqual({ front: true, back: true })
     })
 })
