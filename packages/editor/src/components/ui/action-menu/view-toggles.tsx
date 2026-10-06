@@ -119,8 +119,15 @@ function UploadButton({ onError }: { onError: (message: string | null) => void }
           setShowGuides(true)
           setSelectedReferenceId(guide.id)
           setSelection({ selectedIds: [], zoneId: null })
-        } catch {
-          onError('Could not add that guide image.')
+        } catch (error) {
+          // The reason must survive: this path swallowed a secure-context
+          // TypeError for a whole debugging session.
+          console.error('[guide-image]', error)
+          onError(
+            error instanceof Error && error.message
+              ? `Could not add that guide image: ${error.message}`
+              : 'Could not add that guide image.',
+          )
         } finally {
           setIsAddingGuide(false)
         }
