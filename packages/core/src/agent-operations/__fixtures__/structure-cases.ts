@@ -528,7 +528,8 @@ export const CREATE_STAIR_CASES: AgentToolCase[] = [
       createDestinationSlabOpening: false,
     },
     expect: {
-      result: { ok: true, sourceCeilingId: 'ceiling_hall' },
+      // A hole in the ceiling below is not one in the slab above: the floor upstairs stays closed.
+      result: { ok: true, slabHoleCut: false, sourceCeilingId: 'ceiling_hall' },
       check: (_result, nodes) => {
         const openings = openingsOf(nodes)
         return openings.length === 1 &&

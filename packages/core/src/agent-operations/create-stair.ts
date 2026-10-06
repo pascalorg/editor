@@ -198,6 +198,8 @@ export const createStair: AgentOperation<CreateStairInput> = (nodes, input, cont
   // opening systems then find it in place. Openings as given are cut as main cuts them: owned by
   // the stair, with the pose the live systems move them by.
   const openingIds: string[] = []
+  // A hole in the slab above, not one in the ceiling below: the floor upstairs is open.
+  let slabHoleCut = false
   const built = applySceneChanges(nodes, changes)
   const polygon = asGiven
     ? openingRing({ x: input.x, z: input.z, turn: stair.rotation, width, length }, input)
@@ -259,7 +261,10 @@ export const createStair: AgentOperation<CreateStairInput> = (nodes, input, cont
             }
           : patch.node
       changes.create.push({ node, parentId: node.parentId ?? undefined })
-      if (node.type === 'floor-opening') openingIds.push(node.id)
+      if (node.type === 'floor-opening') {
+        openingIds.push(node.id)
+        if (node.drawnOn !== 'ceiling') slabHoleCut = true
+      }
     } else if (patch.op === 'update') changes.update.push({ id: patch.id, data: patch.data })
     else changes.delete.push(patch.id)
   }
@@ -280,7 +285,7 @@ export const createStair: AgentOperation<CreateStairInput> = (nodes, input, cont
       width,
       length,
       railingMode,
-      slabHoleCut: openingIds.length > 0,
+      slabHoleCut,
       ...(openingIds.length ? { openingIds } : {}),
       ...(floorCut ? { destinationSlabId: destinationSlab!.id } : {}),
       ...(ceilingCut ? { sourceCeilingId: sourceCeiling!.id } : {}),
