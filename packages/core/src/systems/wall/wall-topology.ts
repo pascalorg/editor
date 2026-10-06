@@ -1,4 +1,5 @@
 import { GROUND_SUPPORT_ID } from '../../hooks/spatial-grid/support-host-id'
+import { type OpenWallEnd, wallEndJoinCandidates } from '../../lib/room-graph'
 import { terrainSupportLift } from '../../lib/terrain-support'
 import {
   type AnyNode,
@@ -46,6 +47,18 @@ export type WallPointSplitPlan = {
 export type WallPointSplitResult =
   | { ok: true; plan: WallPointSplitPlan }
   | { ok: false; reason: 'no-host' }
+
+export type WallJoinResult =
+  | { ok: true; plan: WallInsertionPlan }
+  | {
+      ok: false
+      reason:
+        | WallTopologyRejection['reason']
+        | 'stale-end'
+        | 'no-target'
+        | 'attachment-outside-wall'
+        | 'attachment-straddles-junction'
+    }
 
 type WallSegmentIntersection = {
   wallId: WallNode['id']
@@ -605,4 +618,306 @@ export function planWallInsertion(
     resolvedEnd,
   }
   return { ok: true, plan }
+}
+
+function distanceToLine(point: WallPlanPoint, a: WallPlanPoint, b: WallPlanPoint) {
+  const length = Math.hypot(b[0] - a[0], b[1] - a[1])
+  return Math.abs((point[0] - a[0]) * (b[1] - a[1]) - (point[1] - a[1]) * (b[0] - a[0])) / length
+}
+
+/** Where two straight walls' lines meet, if they meet at a real angle, and where along `target`. */
+function lineMeeting(wall: WallNode, target: WallNode) {
+  const r = [wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]]
+  const u = [target.end[0] - target.start[0], target.end[1] - target.start[1]]
+  const denominator = r[0]! * u[1]! - r[1]! * u[0]!
+  if (Math.abs(denominator) < 0.5 * Math.hypot(r[0]!, r[1]!) * Math.hypot(u[0]!, u[1]!)) return null
+  const qp = [target.start[0] - wall.start[0], target.start[1] - wall.start[1]]
+  const t = (qp[0]! * u[1]! - qp[1]! * u[0]!) / denominator
+  return {
+    point: [wall.start[0] + t * r[0]!, wall.start[1] + t * r[1]!] as WallPlanPoint,
+    targetT: (qp[0]! * r[1]! - qp[1]! * r[0]!) / denominator,
+  }
+}
+
+/** Repair one reference endpoint, including host splits and opening rehosting, in one scene batch. */
+export function planJoinOpenWallEnd(
+  nodes: Readonly<Record<string, AnyNode>>,
+  openEnd: OpenWallEnd,
+): WallJoinResult {
+  const wall = nodes[openEnd.wallId]
+  if (
+    wall?.type !== 'wall' ||
+    !wall.parentId ||
+    distanceSquared(wall[openEnd.end], openEnd.point) > 1e-12
+  )
+    return { ok: false, reason: 'stale-end' }
+  const candidate = openEnd.candidate
+  const target = candidate ? nodes[candidate.wallId] : undefined
+  if (
+    !candidate ||
+    target?.type !== 'wall' ||
+    target.id === wall.id ||
+    target.parentId !== wall.parentId
+  )
+    return { ok: false, reason: 'no-target' }
+  const straight = !isCurvedWall(wall) && !isCurvedWall(target)
+  // Where the wall, run on or cut back along its own axis, meets the target's line: joining
+  // there never tilts it.
+  const meet = straight ? lineMeeting(wall, target) : null
+  const near = (a: WallPlanPoint, b: WallPlanPoint) => distanceSquared(a, b) <= 0.35 ** 2
+  let point = candidate.point
+  // The target's open end slides along its own axis to the meeting point too.
+  let targetEnd: 'start' | 'end' | null = null
+  if (candidate.kind === 'endpoint') {
+    const key = (['start', 'end'] as const).find(
+      (end) => distanceSquared(target[end], point) <= 1e-12,
+    )
+    if (!key) return { ok: false, reason: 'no-target' }
+    point = target[key]
+    const onOwnAxis = straight && distanceToLine(point, wall.start, wall.end) <= 1e-4
+    if (!onOwnAxis && meet && near(meet.point, openEnd.point) && near(meet.point, point)) {
+      const shared = Object.values(nodes).some(
+        (node) =>
+          node.type === 'wall' &&
+          node.id !== target.id &&
+          node.id !== wall.id &&
+          node.parentId === wall.parentId &&
+          (distanceSquared(node.start, point) <= 1e-12 ||
+            distanceSquared(node.end, point) <= 1e-12),
+      )
+      if (!shared) targetEnd = key
+      if (!shared || (meet.targetT > 0 && meet.targetT < 1)) point = meet.point
+    }
+  } else if (meet && meet.targetT > 0 && meet.targetT < 1 && near(meet.point, openEnd.point)) {
+    point = meet.point
+  } else {
+    const projection = nearestWallProjection(
+      point,
+      [target],
+      isCurvedWall(target) ? 0.04 : WALL_INTERSECTION_EPSILON,
+    )
+    if (!projection) return { ok: false, reason: 'no-target' }
+    point = projection.point
+  }
+  if (!near(point, openEnd.point)) return { ok: false, reason: 'no-target' }
+  const nextWall = { ...wall, [openEnd.end]: point }
+  const nextTarget = targetEnd ? { ...target, [targetEnd]: point } : null
+  if (
+    !isSegmentLongEnough(nextWall.start, nextWall.end) ||
+    (nextTarget && !isSegmentLongEnough(nextTarget.start, nextTarget.end))
+  )
+    return { ok: false, reason: 'segment-too-short' }
+  const nextLength = wallLength(nextWall)
+  const adjusted = { ...nodes } as Record<AnyNodeId, AnyNode>
+  const attachmentUpdates: WallTopologyChanges['update'] = []
+  const remapAttachments = (before: WallNode, after: WallNode) => {
+    const length = wallLength(after)
+    const dx = (after.end[0] - after.start[0]) / length
+    const dz = (after.end[1] - after.start[1]) / length
+    const oldLength = wallLength(before)
+    for (const attachment of wallAttachments(before, adjusted)) {
+      const span = attachmentSpan(attachment)
+      if (!span) return false
+      const oldPoint = getWallCurveFrameAt(before, span.center / oldLength).point
+      const projection = isCurvedWall(after)
+        ? projectPointOntoWallCenterline([oldPoint.x, oldPoint.y], after)
+        : null
+      if (isCurvedWall(after) && !projection) return false
+      const center = projection
+        ? projection.wallT * length
+        : (oldPoint.x - after.start[0]) * dx + (oldPoint.y - after.start[1]) * dz
+      if (
+        center - (span.center - span.min) < -1e-4 ||
+        center + (span.max - span.center) > length + 1e-4
+      )
+        return false
+      const data = remapAttachment(attachment, after, center)!
+      adjusted[attachment.id] = { ...attachment, ...data } as AnyNode
+      attachmentUpdates.push({ id: attachment.id, data })
+    }
+    return true
+  }
+  if (!remapAttachments(wall, nextWall) || (nextTarget && !remapAttachments(target, nextTarget)))
+    return { ok: false, reason: 'attachment-outside-wall' }
+  if (nextTarget) adjusted[target.id] = nextTarget
+  delete adjusted[wall.id]
+  let insertion: WallInsertionResult
+  if (isCurvedWall(wall)) {
+    const split =
+      candidate.kind === 'body'
+        ? planWallSplitAtPoint(adjusted, {
+            levelId: wall.parentId as AnyNodeId,
+            point,
+            radius: WALL_INTERSECTION_EPSILON,
+          })
+        : {
+            ok: true as const,
+            plan: { point, changes: { create: [], update: [], delete: [] } as WallTopologyChanges },
+          }
+    if (!split.ok) return { ok: false, reason: 'no-target' }
+    const replacementIds = split.plan.changes.create.map(({ node }) => node.id as WallNode['id'])
+    if (split.plan.changes.delete.includes(target.id))
+      for (const node of Object.values(nodes)) {
+        if (node.type === 'zone' && node.boundaryWallIds.includes(target.id))
+          split.plan.changes.update.push({
+            id: node.id,
+            data: {
+              boundaryWallIds: node.boundaryWallIds.flatMap((id) =>
+                id === target.id ? replacementIds : [id],
+              ),
+            },
+          })
+      }
+    insertion = {
+      ok: true,
+      plan: {
+        changes: split.plan.changes,
+        insertedWalls: [nextWall],
+        terminalWallId: wall.id,
+        resolvedStart: nextWall.start,
+        resolvedEnd: nextWall.end,
+      },
+    }
+  } else
+    insertion = planWallInsertion(adjusted, {
+      levelId: wall.parentId as AnyNodeId,
+      start: nextWall.start,
+      end: nextWall.end,
+      joinRadius: WALL_INTERSECTION_EPSILON,
+      wallDefaults: nextWall,
+    })
+  if (!insertion.ok) return insertion
+  const insertedIds = new Set(insertion.plan.insertedWalls.map((segment) => segment.id))
+  let replacements: WallNode[]
+  let updates = attachmentUpdates
+  if (insertion.plan.insertedWalls.length === 1) {
+    replacements = [nextWall]
+  } else {
+    const parameters = insertion.plan.insertedWalls
+      .slice(0, -1)
+      .map(
+        (segment) =>
+          Math.hypot(segment.end[0] - nextWall.start[0], segment.end[1] - nextWall.start[1]) /
+          nextLength,
+      )
+    let index = 0
+    const split = splitWall(nextWall, parameters, adjusted, () =>
+      index++ === 0 ? wall.id : insertion.plan.insertedWalls[index - 1]!.id,
+    )
+    if (!split) return { ok: false, reason: 'attachment-straddles-junction' }
+    replacements = split.create.map((segment) => ({ ...segment, parentId: wall.parentId }))
+    updates = split.update
+  }
+  const zoneUpdates: WallTopologyChanges['update'] =
+    replacements.length > 1
+      ? Object.values(nodes).flatMap((node) =>
+          node.type === 'zone' && node.boundaryWallIds.includes(wall.id)
+            ? [
+                {
+                  id: node.id,
+                  data: {
+                    boundaryWallIds: (
+                      (
+                        insertion.plan.changes.update.find((update) => update.id === node.id)
+                          ?.data as Partial<typeof node>
+                      )?.boundaryWallIds ?? node.boundaryWallIds
+                    ).flatMap((id) =>
+                      id === wall.id ? replacements.map((segment) => segment.id) : [id],
+                    ),
+                  },
+                },
+              ]
+            : [],
+        )
+      : []
+  const mergedUpdates = new Map<AnyNodeId, Partial<AnyNode>>()
+  for (const update of [
+    ...(nextTarget && targetEnd && !insertion.plan.changes.delete.includes(target.id)
+      ? [{ id: target.id, data: { [targetEnd]: point } }]
+      : []),
+    ...insertion.plan.changes.update,
+    ...zoneUpdates,
+    ...updates,
+    { id: wall.id, data: replacements[0]! },
+  ])
+    mergedUpdates.set(update.id, {
+      ...mergedUpdates.get(update.id),
+      ...update.data,
+    } as Partial<AnyNode>)
+  return {
+    ok: true,
+    plan: {
+      changes: {
+        create: [
+          ...insertion.plan.changes.create.filter(
+            ({ node }) => !insertedIds.has(node.id as WallNode['id']),
+          ),
+          ...replacements.slice(1).map((node) => ({ node, parentId: wall.parentId as AnyNodeId })),
+        ],
+        update: [...mergedUpdates].map(([id, data]) => ({ id, data })),
+        delete: insertion.plan.changes.delete,
+      },
+      insertedWalls: replacements,
+      terminalWallId: replacements.at(-1)!.id,
+      resolvedStart: nextWall.start,
+      resolvedEnd: nextWall.end,
+    },
+  }
+}
+
+/** Fold drop-time connections into the move's atomic batch, including linked moved walls. */
+export function planWallEndRejoins(
+  nodes: Readonly<Record<string, AnyNode>>,
+  wallIds: readonly string[],
+  radius: number,
+  changes: WallTopologyChanges,
+): WallTopologyChanges {
+  const draft = { ...nodes } as Record<AnyNodeId, AnyNode>
+  const creates = new Map<AnyNodeId, WallTopologyChanges['create'][number]>()
+  const updates = new Map<AnyNodeId, Partial<AnyNode>>()
+  const deletes = new Set<AnyNodeId>()
+  const fold = (patch: WallTopologyChanges) => {
+    for (const id of patch.delete) {
+      delete draft[id]
+      updates.delete(id)
+      if (!creates.delete(id)) deletes.add(id)
+    }
+    for (const entry of patch.create) {
+      creates.set(entry.node.id, entry)
+      draft[entry.node.id] = {
+        ...entry.node,
+        parentId: entry.parentId ?? entry.node.parentId,
+      } as AnyNode
+    }
+    for (const { id, data } of patch.update) {
+      if (!draft[id]) continue
+      draft[id] = { ...draft[id], ...data } as AnyNode
+      const created = creates.get(id)
+      if (created) creates.set(id, { ...created, node: draft[id] })
+      else updates.set(id, { ...updates.get(id), ...data } as Partial<AnyNode>)
+    }
+  }
+  fold(changes)
+  for (const wallId of wallIds)
+    for (const end of ['start', 'end'] as const) {
+      const wall = draft[wallId as AnyNodeId]
+      const original = nodes[wallId]
+      if (wall?.type !== 'wall' || !wall.parentId) continue
+      // A linked wall's far end stays put; the drop only connects ends it moved.
+      if (original?.type === 'wall' && distanceSquared(original[end], wall[end]) <= 1e-12) continue
+      const openEnd = wallEndJoinCandidates(draft, wall.parentId).find(
+        (entry) => entry.wallId === wallId && entry.end === end,
+      )
+      if (!openEnd?.candidate || openEnd.reason === 'parallel') continue
+      const distance = distanceSquared(openEnd.point, openEnd.candidate.point)
+      if (distance > radius ** 2 || (distance < 1e-12 && openEnd.candidate.kind === 'endpoint'))
+        continue
+      const result = planJoinOpenWallEnd(draft, openEnd)
+      if (result.ok) fold(result.plan.changes)
+    }
+  return {
+    create: [...creates.values()],
+    update: [...updates].map(([id, data]) => ({ id, data })),
+    delete: [...deletes],
+  }
 }

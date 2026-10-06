@@ -1,4 +1,4 @@
-import type { SeparatorNode, WallNode } from '../schema'
+import type { AnyNode, SeparatorNode, WallNode } from '../schema'
 import { getWallArcData, getWallCurveFrameAt, isCurvedWall } from '../systems/wall/wall-curve'
 import { getWallBodyCenterOffset, getWallFaceOffsets } from '../systems/wall/wall-frame'
 import { area, difference, intersection, type Ring, union } from './polygon-boolean'
@@ -6,6 +6,15 @@ import type { BoundaryNode, BoundarySpan } from './room-topology-index'
 
 export type Point2D = { x: number; y: number }
 type JunctionVertex = Point2D & { wallEndpoint: boolean }
+
+export type OpenWallEnd = {
+  wallId: string
+  end: 'start' | 'end'
+  point: [number, number]
+  reason: 'gap' | 'crosses' | 'parallel' | 'rejected' | 'isolated'
+  gap?: number
+  candidate?: { wallId: string; point: [number, number]; kind: 'endpoint' | 'body' }
+}
 
 export type SpaceBoundaryFace = {
   wallId: WallNode['id']
@@ -431,8 +440,9 @@ function joinsBoundaryInterior(point: Point2D, sampled: SampledBoundary) {
   return false
 }
 
-function sampledCross(left: SampledBoundary, right: SampledBoundary) {
+function sampledCrossings(left: SampledBoundary, right: SampledBoundary) {
   const margin = WALL_JUNCTION_TOLERANCE
+  const crossings: Array<{ point: Point2D; along: number; otherAlong: number; sine: number }> = []
   for (let i = 0; i < left.points.length - 1; i++) {
     const p = left.points[i]!
     const r = { x: left.points[i + 1]!.x - p.x, y: left.points[i + 1]!.y - p.y }
@@ -452,10 +462,45 @@ function sampledCross(left: SampledBoundary, right: SampledBoundary) {
         otherAlong > margin &&
         otherAlong < right.length - margin
       )
-        return true
+        crossings.push({
+          point: { x: p.x + t * r.x, y: p.y + t * r.y },
+          along,
+          otherAlong,
+          sine: Math.abs(denominator) / (Math.hypot(r.x, r.y) * Math.hypot(u.x, u.y)),
+        })
     }
   }
-  return false
+  return crossings
+}
+
+function sampledCross(left: SampledBoundary, right: SampledBoundary) {
+  return sampledCrossings(left, right).length > 0
+}
+
+/**
+ * Crossings where a wall end runs a short way past another wall: the stub past the crossing
+ * must end free, so a wall passing through another near its corner stays a plain crossing.
+ */
+function overshootCrossings(
+  left: SampledBoundary,
+  right: SampledBoundary,
+  free: (end: Point2D) => boolean,
+) {
+  if (
+    left.boundary.type !== 'wall' ||
+    right.boundary.type !== 'wall' ||
+    isCurvedWall(left.boundary) ||
+    isCurvedWall(right.boundary) ||
+    Math.max(left.boundary.thickness ?? 0.1, right.boundary.thickness ?? 0.1) > 0.8
+  )
+    return []
+  const overshoots = (sampled: SampledBoundary, along: number) =>
+    (along <= TEE_REACH && free(sampled.points[0]!)) ||
+    (sampled.length - along <= TEE_REACH && free(sampled.points.at(-1)!))
+  return sampledCrossings(left, right).filter(
+    ({ along, otherAlong, sine }) =>
+      sine >= Math.SQRT1_2 && (overshoots(left, along) || overshoots(right, otherAlong)),
+  )
 }
 
 /**
@@ -519,11 +564,13 @@ function quadGap(left: Point2D[], right: Point2D[]) {
 }
 
 /** What the user sees: the two drawn wall bodies touch, or nearly, at the joint. */
-function bodiesTouch(left: SampledBoundary, right: SampledBoundary, near: Point2D) {
-  if (left.boundary.type !== 'wall' || right.boundary.type !== 'wall') return false
-  const reach =
+function bodyGap(left: SampledBoundary, right: SampledBoundary, near: Point2D, minimumReach = 0) {
+  if (left.boundary.type !== 'wall' || right.boundary.type !== 'wall') return Infinity
+  const reach = Math.max(
+    minimumReach,
     WALL_JUNCTION_TOLERANCE +
-    Math.max(left.boundary.thickness ?? 0.1, right.boundary.thickness ?? 0.1)
+      Math.max(left.boundary.thickness ?? 0.1, right.boundary.thickness ?? 0.1),
+  )
   // Only the stretch of each body around the joint counts, never a touch elsewhere.
   const local = (sampled: SampledBoundary) =>
     bodyOf(sampled).filter((quad) => {
@@ -536,7 +583,11 @@ function bodiesTouch(left: SampledBoundary, right: SampledBoundary, near: Point2
       )
     })
   const rightQuads = local(right)
-  return local(left).some((quad) => rightQuads.some((other) => quadGap(quad, other) <= JOINT_GAP))
+  return Math.min(...local(left).flatMap((quad) => rightQuads.map((other) => quadGap(quad, other))))
+}
+
+function bodiesTouch(left: SampledBoundary, right: SampledBoundary, near: Point2D) {
+  return bodyGap(left, right, near) <= JOINT_GAP
 }
 
 function halfBody(sampled: SampledBoundary) {
@@ -573,6 +624,21 @@ function interiorFoot(point: Point2D, sampled: SampledBoundary) {
     }
   }
   return best
+}
+
+/** Where a straight wall's line meets another straight wall's reference line between its ends. */
+function ownAxisMeet(sampled: SampledBoundary, other: SampledBoundary): Point2D | undefined {
+  if (isCurvedWall(sampled.boundary) || isCurvedWall(other.boundary)) return
+  const [p, p2] = sampled.points as [Point2D, Point2D]
+  const [q, q2] = other.points as [Point2D, Point2D]
+  const r = { x: p2.x - p.x, y: p2.y - p.y }
+  const u = { x: q2.x - q.x, y: q2.y - q.y }
+  const denominator = r.x * u.y - r.y * u.x
+  if (Math.abs(denominator) < 1e-12) return
+  const along = ((q.x - p.x) * r.y - (q.y - p.y) * r.x) / denominator
+  if (!(along > 0 && along < 1)) return
+  const t = ((q.x - p.x) * u.y - (q.y - p.y) * u.x) / denominator
+  return { x: p.x + t * r.x, y: p.y + t * r.y }
 }
 
 /** Where two loose straight wall ends would meet if both ran on to their corner. */
@@ -625,7 +691,11 @@ function bodyReach(
  * involves walls that touch within the tolerance, so incremental topology rebuilds of
  * one component elect the same point as full ones.
  */
-function nearMissJunctions(boundaries: readonly BoundaryNode[], bodyJoints: boolean) {
+function nearMissJunctions(
+  boundaries: readonly BoundaryNode[],
+  bodyJoints: boolean,
+  diagnostics?: OpenWallEnd[],
+) {
   const reachOf = (a: BoundaryNode, b: BoundaryNode) =>
     bodyJoints ? junctionReach(a, b) : WALL_JUNCTION_TOLERANCE
   // loose: a wall end meeting nothing. A loose end whose wall crosses another is
@@ -651,6 +721,7 @@ function nearMissJunctions(boundaries: readonly BoundaryNode[], bodyJoints: bool
   const ordered = [...groups.values()].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
   const nearGroups = spatialIndex(ordered, (group) => pointBox(group.point))
   const crossing = new Map<string, boolean>()
+  const looseEnd = (end: Point2D) => groups.get(pointKey(end))?.state === 'loose'
   // The graph is planar only at junctions; connecting a wall that crosses another
   // would close faces through the crossing.
   const crosses = (wall: SampledBoundary) => {
@@ -658,7 +729,11 @@ function nearMissJunctions(boundaries: readonly BoundaryNode[], bodyJoints: bool
     if (value === undefined) {
       value = false
       for (const other of near(wall.box, 0))
-        if (other !== wall && sampledCross(wall, other)) {
+        if (
+          other !== wall &&
+          sampledCrossings(wall, other).length >
+            (bodyJoints ? overshootCrossings(wall, other, looseEnd).length : 0)
+        ) {
           value = true
           break
         }
@@ -780,7 +855,127 @@ function nearMissJunctions(boundaries: readonly BoundaryNode[], bodyJoints: bool
     for (const group of cluster)
       if (pointKey(group.point) !== pointKey(junction)) junctions.set(group.key, junction)
   }
-  return junctions
+  if (diagnostics)
+    for (const group of ordered) {
+      for (const id of group.boundaryIds) {
+        const wall = byId.get(id)!
+        if (wall.boundary.type !== 'wall') continue
+        const approach = endDirection(wall, group.point)
+        let best:
+          | {
+              candidate: NonNullable<OpenWallEnd['candidate']>
+              distance: number
+              parallel: boolean
+              gap: number
+            }
+          | undefined
+        let crossingTarget: typeof best
+        for (const other of near(pointBox(group.point), 0.35)) {
+          if (other === wall || other.boundary.type !== 'wall') continue
+          const consider = (point: Point2D, kind: 'endpoint' | 'body', parallel: boolean) => {
+            const distance = Math.hypot(point.x - group.point.x, point.y - group.point.y)
+            if (distance > 0.35 || (best && distance >= best.distance)) return
+            best = {
+              candidate: { wallId: other.boundary.id, point: pointToTuple(point), kind },
+              distance,
+              parallel,
+              gap: bodyGap(wall, other, group.point, 0.35),
+            }
+          }
+          for (const point of [other.points[0]!, other.points.at(-1)!])
+            consider(point, 'endpoint', false)
+          const foot = interiorFoot(group.point, other)
+          if (foot) {
+            const parallel =
+              Math.abs(approach.x * foot.direction.y - approach.y * foot.direction.x) < 0.5
+            // A straight wall joins a straight body where its own line meets it, never tilting.
+            const meet = parallel ? undefined : ownAxisMeet(wall, other)
+            consider(meet ?? foot.point, 'body', parallel)
+          }
+          for (const crossing of sampledCrossings(wall, other)) {
+            const distance = Math.hypot(
+              crossing.point.x - group.point.x,
+              crossing.point.y - group.point.y,
+            )
+            if (distance <= 0.35 && (!crossingTarget || distance < crossingTarget.distance))
+              crossingTarget = {
+                candidate: {
+                  wallId: other.boundary.id,
+                  point: pointToTuple(crossing.point),
+                  kind: 'body',
+                },
+                distance,
+                parallel: false,
+                gap: 0,
+              }
+          }
+        }
+        const target = crossingTarget ?? best
+        const reason: OpenWallEnd['reason'] =
+          crossingTarget || crosses(wall)
+            ? 'crosses'
+            : best?.parallel
+              ? 'parallel'
+              : best && best.gap > JOINT_GAP
+                ? 'gap'
+                : best
+                  ? 'rejected'
+                  : 'isolated'
+        diagnostics.push({
+          wallId: id,
+          end: pointKey(pointFromTuple(wall.boundary.start)) === group.key ? 'start' : 'end',
+          point: pointToTuple(group.point),
+          reason,
+          ...(reason === 'gap' && best && Number.isFinite(best.gap) ? { gap: best.gap } : {}),
+          ...(target ? { candidate: target.candidate } : {}),
+        })
+      }
+    }
+  // Free once joints are elected: a loose end no joint connected.
+  const freeEnd = (end: Point2D) => {
+    const key = pointKey(end)
+    return looseEnd(end) && !tees.has(key) && membersOf(find(key)).size === 1
+  }
+  return { junctions, freeEnd }
+}
+
+export function wallEndJoinCandidates(nodes: Readonly<Record<string, AnyNode>>, levelId: string) {
+  const ends: OpenWallEnd[] = []
+  nearMissJunctions(
+    Object.values(nodes).filter(
+      (node): node is BoundaryNode =>
+        (node.type === 'wall' || node.type === 'separator') && node.parentId === levelId,
+    ),
+    true,
+    ends,
+  )
+  return ends
+}
+
+/** Separator edges preserve intentional openings after wall deletion; only wall ends are reported. */
+export function findOpenWallEnds(
+  nodes: Readonly<Record<string, AnyNode>>,
+  levelId: string,
+): OpenWallEnd[] {
+  const boundaries = Object.values(nodes).filter(
+    (node): node is BoundaryNode =>
+      (node.type === 'wall' || node.type === 'separator') && node.parentId === levelId,
+  )
+  const joined = extractRoomGraph(boundaries, {}, true, true)
+  if (!joined.bodyJoints) return joined.openEnds
+  const plain = extractRoomGraph(boundaries, {}, false, true)
+  const selected = new Set(keepPlainRoomsWhereLost(plain.rooms, joined.rooms))
+  const rejected = new Set(
+    plain.rooms
+      .filter((room) => selected.has(room) && !joined.rooms.includes(room))
+      .flatMap((room) => room.spans.map((span) => span.boundaryId)),
+  )
+  return [
+    ...joined.openEnds.filter((end) => !rejected.has(end.wallId)),
+    ...plain.openEnds
+      .filter((end) => rejected.has(end.wallId))
+      .map((end) => ({ ...end, reason: 'rejected' as const })),
+  ].sort((a, b) => a.wallId.localeCompare(b.wallId) || a.end.localeCompare(b.end))
 }
 
 /**
@@ -854,8 +1049,9 @@ function extractRoomGraph(
   boundaries: BoundaryNode[],
   { includeHoles = true }: { includeHoles?: boolean },
   bodyJoints: boolean,
-): { rooms: ExtractedRoom[]; bodyJoints: boolean } {
-  if (boundaries.length < 3) return { rooms: [], bodyJoints: false }
+  diagnostics = false,
+): { rooms: ExtractedRoom[]; bodyJoints: boolean; openEnds: OpenWallEnd[] } {
+  if (boundaries.length < 3 && !diagnostics) return { rooms: [], bodyJoints: false, openEnds: [] }
   // Snapped junctions must elect the same representative in migrations,
   // full index rebuilds and incremental edits, independent of map insertion order.
   const walls = [...boundaries].sort((a, b) => a.id.localeCompare(b.id))
@@ -889,12 +1085,17 @@ function extractRoomGraph(
   // Without this the touching wall's endpoint is a dangling degree-1 node and the
   // enclosed area (e.g. a room added against the middle of an existing wall)
   // never forms a cycle.
-  const junctions = nearMissJunctions(walls, bodyJoints)
+  const openEnds: OpenWallEnd[] = []
+  const { junctions, freeEnd } = nearMissJunctions(
+    walls,
+    bodyJoints,
+    diagnostics ? openEnds : undefined,
+  )
   // Whether the body joints change the graph at all: new junctions, or doubled spans
   // dropped where joints connect walls.
   let changed = false
   if (bodyJoints) {
-    const plain = nearMissJunctions(walls, false)
+    const plain = nearMissJunctions(walls, false).junctions
     changed =
       plain.size !== junctions.size ||
       [...junctions].some(([key, point]) => {
@@ -917,20 +1118,37 @@ function extractRoomGraph(
     }
   }
   const vertices = [...vertexByKey.values()]
+  if (bodyJoints) {
+    const sampled = walls.map(sampleBoundary)
+    const near = spatialIndex(sampled, (item) => item.box)
+    for (const wall of sampled)
+      for (const other of near(wall.box, 0)) {
+        if (wall.boundary.id >= other.boundary.id) continue
+        // An end already joined (e.g. onto the crossed wall's body) gets no second vertex at
+        // the crossing, which would only double that joint with a sliver.
+        for (const { point } of overshootCrossings(wall, other, freeEnd)) {
+          vertices.push({ ...point, wallEndpoint: false })
+          changed = true
+        }
+      }
+  }
 
+  const nearVertices = spatialIndex(vertices, (vertex) => pointBox(vertex))
   const parts: { wall: BoundaryNode; points: Point2D[]; subIndex: number; snapped: boolean }[] = []
   for (const wall of walls) {
     const start = pointFromTuple(wall.start)
     const end = pointFromTuple(wall.end)
     if (samePointWithinTolerance(start, end)) continue
+    const points = sampleWallPointsForRoomDetection(wall)
+    const localVertices = [...nearVertices(bboxOf(points), WALL_JUNCTION_TOLERANCE)]
 
     const subPolylines: Point2D[][] = isCurvedWall(wall)
-      ? splitCurvedWallAtVertices(sampleWallPointsForRoomDetection(wall), vertices, wall)
+      ? splitCurvedWallAtVertices(points, localVertices, wall)
       : (() => {
           const ordered = splitStraightWallAtVertices(
             start,
             end,
-            vertices,
+            localVertices,
             wall.type === 'separator',
           )
           const parts: Point2D[][] = []
@@ -1254,7 +1472,15 @@ function extractRoomGraph(
   }
 
   rooms.sort((a, b) => Math.abs(polygonArea(b.polygon)) - Math.abs(polygonArea(a.polygon)))
-  return { rooms, bodyJoints: changed }
+  return {
+    rooms,
+    bodyJoints: changed,
+    openEnds: openEnds.filter((end) => {
+      const point = junctions.get(pointKey(pointFromTuple(end.point))) ?? pointFromTuple(end.point)
+      const node = graph.get(pointKey(point))
+      return !node || new Set(node.outgoing.map((id) => halfEdges.get(id)!.wallId)).size < 2
+    }),
+  }
 }
 
 export type RoomFace = {

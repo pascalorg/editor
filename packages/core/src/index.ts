@@ -303,6 +303,7 @@ export {
   roomFloorElevationFromRelative,
   roundFloorElevation,
 } from './lib/room-floor-feasibility'
+export { findOpenWallEnds, type OpenWallEnd } from './lib/room-graph'
 export {
   type BoundaryNode,
   type BoundarySpan,
@@ -889,8 +890,13 @@ export {
   resolveWallTop,
 } from './systems/wall/wall-top'
 export {
+  planJoinOpenWallEnd,
+  planWallEndRejoins,
   planWallInsertion,
   planWallSplitAtPoint,
+  type WallInsertionPlan,
+  type WallJoinResult,
+  type WallTopologyChanges,
 } from './systems/wall/wall-topology'
 export type { SceneGraph } from './utils/clone-scene-graph'
 export { cloneLevelSubtree, cloneSceneGraph, forkSceneGraph } from './utils/clone-scene-graph'

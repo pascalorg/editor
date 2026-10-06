@@ -299,6 +299,35 @@ describe('3D wall move', () => {
     }
   })
 
+  test('drop rejoins a moved endpoint within the connect radius in one reversible step', async () => {
+    const target = WallNode.parse({
+      id: 'wall_drop_target',
+      parentId: LEVEL_ID,
+      start: [2.53, -2],
+      end: [2.53, 0.04],
+    })
+    useScene.getState().applyNodeChanges({
+      create: [{ node: target, parentId: LEVEL_ID }],
+      update: [{ id: DIVIDER_ID, data: { start: [2, 0.04] } }],
+    })
+    clearSceneHistory()
+    const before = sceneNodes()
+    const renderer = await armWall(DIVIDER_ID)
+    await dragFrom(2, 2.5)
+    await act(async () => {
+      window.dispatchEvent(new Event('pointerup'))
+    })
+    await act(async () => renderer.unmount())
+    expect(useScene.getState().nodes[DIVIDER_ID]).toMatchObject({
+      start: [2.53, 0.04],
+      end: [2.5, 4],
+    })
+    expect(nodesOfType('zone')).toHaveLength(2)
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+    useScene.temporal.getState().undo()
+    expect(useScene.getState().nodes).toEqual(before)
+  })
+
   test('commits one undo step that restores the walls and every derived surface', async () => {
     expect(nodesOfType('zone')).toHaveLength(2)
     expect(nodesOfType('ceiling')).toHaveLength(2)

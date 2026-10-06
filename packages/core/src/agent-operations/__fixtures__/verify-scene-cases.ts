@@ -58,23 +58,26 @@ const level = (id: string, index: number, extra: Record<string, unknown> = {}) =
     ...extra,
   })
 
-/** A finished room on a level: a 4 m wall with a centred door, its zone, slab and ceiling. */
+/** A finished room on a level: four closed walls, a centred door, its zone, slab and ceiling. */
 function room(levelId: string, tag: string): AnyNode[] {
-  const wall = WallNode.parse({
-    id: `wall_${tag}`,
-    parentId: levelId,
-    start: [0, 0],
-    end: [4, 0],
-    height: 2.5,
-  })
+  const [wall, ...walls] = ROOM.map((start, i) =>
+    WallNode.parse({
+      id: i === 0 ? `wall_${tag}` : `wall_${tag}_${i}`,
+      parentId: levelId,
+      start,
+      end: ROOM[(i + 1) % ROOM.length],
+      height: 2.5,
+    }),
+  )
   const door = DoorNode.parse({
     id: `door_${tag}`,
-    parentId: wall.id,
-    wallId: wall.id,
+    parentId: wall!.id,
+    wallId: wall!.id,
     position: [2, 1.05, 0],
   })
   return [
-    wall,
+    wall!,
+    ...walls,
     door,
     ZoneNode.parse({ id: `zone_${tag}`, parentId: levelId, name: 'Room', polygon: ROOM }),
     SlabNode.parse({ id: `slab_${tag}`, parentId: levelId, polygon: ROOM }),
@@ -182,6 +185,7 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
       ),
     {
       contains: ['walls_no_zones', 'walls_no_doors'],
+      lacks: ['wall_open_end'],
       mentions: ['walls but no zones'],
     },
   ),
