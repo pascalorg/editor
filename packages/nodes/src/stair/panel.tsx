@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   getLevelDisplayName,
+  getStairMirrorUpdates,
   type LevelNode,
   resolveStairTotalRise,
   runAsSingleSceneHistoryStep,
@@ -37,7 +38,7 @@ import {
   useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Copy, Move, Plus, Trash2 } from 'lucide-react'
+import { Copy, FlipHorizontal2, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { getStairDestinationUpdates } from './destination'
@@ -272,6 +273,21 @@ export default function StairPanel() {
     }
     setSelection({ selectedIds: [] })
   }, [selectedId, node, setSelection])
+
+  const handleMirror = useCallback(() => {
+    if (!node) return
+    triggerSFX('sfx:item-rotate')
+    const { stairUpdates, segmentUpdates } = getStairMirrorUpdates(node, useScene.getState().nodes)
+    if (Object.keys(stairUpdates).length === 0 && segmentUpdates.length === 0) return
+    runAsSingleSceneHistoryStep(useScene, () => {
+      if (Object.keys(stairUpdates).length > 0) {
+        updateNode(node.id as AnyNode['id'], stairUpdates)
+      }
+      for (const seg of segmentUpdates) {
+        updateNode(seg.id, seg.updates)
+      }
+    })
+  }, [node, updateNode])
 
   if (!(node && node.type === 'stair' && selectedId && selectedCount === 1)) return null
 
@@ -603,6 +619,11 @@ export default function StairPanel() {
               handleUpdate({ rotation: node.rotation + Math.PI / 4 })
             }}
           />
+          <ActionButton
+            icon={<FlipHorizontal2 className="h-3.5 w-3.5" />}
+            label="Mirror"
+            onClick={handleMirror}
+          />
         </div>
       </PanelSection>
 
@@ -640,6 +661,11 @@ export default function StairPanel() {
             icon={<Copy className="h-3.5 w-3.5" />}
             label="Duplicate"
             onClick={handleDuplicate}
+          />
+          <ActionButton
+            icon={<FlipHorizontal2 className="h-3.5 w-3.5" />}
+            label="Mirror"
+            onClick={handleMirror}
           />
           <ActionButton
             className="hover:bg-red-500/20"

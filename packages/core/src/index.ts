@@ -641,6 +641,10 @@ export {
   stairDeckLevelId,
   stairFootprintAABB,
 } from './systems/stair/stair-footprint'
+export {
+  getStairMirrorUpdates,
+  type StairMirrorResult,
+} from './systems/stair/stair-mirror'
 export { createSurfaceOpeningPreviewController } from './systems/stair/stair-opening-preview'
 export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
 export { StairOpeningSystem } from './systems/stair/stair-opening-system'
