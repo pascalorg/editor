@@ -8,11 +8,13 @@ import {
   deleteNodeTool,
   duplicateLevelTool,
   findByTypeTool,
+  fitStairTool,
   getLevelSummaryTool,
   getNodeTool,
   getWallsTool,
   getZonesTool,
   listLevelsTool,
+  measureStairTool,
   verifySceneTool,
 } from '@pascal-app/core/agent-tools'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
@@ -56,6 +58,18 @@ const levelRoleOutput = {
 }
 
 const SHARED_TOOLS: SharedTool[] = [
+  {
+    contract: measureStairTool,
+    operation: AGENT_OPERATIONS.measure_stair,
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
+    outputSchema: { measurements: z.json(), layouts: z.json() },
+  },
+  {
+    contract: fitStairTool,
+    operation: AGENT_OPERATIONS.fit_stair,
+    annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
+    outputSchema: { stairId: z.string().min(1), measurements: z.json(), ...liveSyncOutput },
+  },
   {
     contract: findByTypeTool,
     operation: AGENT_OPERATIONS.find_by_type,

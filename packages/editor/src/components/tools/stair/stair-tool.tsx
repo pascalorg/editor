@@ -25,6 +25,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import {
   resolveStairDestinationLevel,
@@ -672,7 +673,7 @@ export const StairTool: React.FC = () => {
           forward-facing triangle is drawn by the editor-side overlay from the
           pose published in `applyDraftPreview`. */}
       <group ref={previewRef}>
-        <mesh castShadow dispose={null} geometry={previewGeometry} ref={previewMeshRef}>
+        <mesh dispose={null} geometry={previewGeometry} layers={EDITOR_LAYER} ref={previewMeshRef}>
           <meshStandardMaterial color="#818cf8" depthWrite={false} opacity={0.35} transparent />
         </mesh>
       </group>

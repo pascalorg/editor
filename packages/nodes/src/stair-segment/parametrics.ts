@@ -2,7 +2,6 @@ import {
   type ParametricDescriptor,
   planStairFlightHeightEdit,
   type StairSegmentNode,
-  useScene,
 } from '@pascal-app/core'
 
 import { StairSegmentConstructionField } from '../stair/construction-controls'
@@ -98,7 +97,7 @@ export const stairSegmentParametrics: ParametricDescriptor<StairSegmentNode> = {
   },
   reconcile: (previous, next, nodes) =>
     next.segmentType === 'stair' && next.height !== previous.height
-      ? planStairFlightHeightEdit(next, next.height, nodes ?? useScene.getState().nodes).slice(1)
+      ? planStairFlightHeightEdit(next, next.height, nodes).slice(1)
       : [],
   customPanel: () => import('./panel'),
 }

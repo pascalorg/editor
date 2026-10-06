@@ -251,7 +251,7 @@ test('oversized stair counts produce a bounded plan and visible detail refusal',
 })
 
 test('whole-chain plan budgets retain footprints without allocating any flight treads', async () => {
-  const { buildFloorplanStairEntry } = await import('@pascal-app/editor')
+  const { buildFloorplanStairEntry } = await import('@pascal-app/nodes')
   const segments = Array.from({ length: 20 }, () => StairSegmentNode.parse({ stepCount: 10000 }))
   const stair = StairNode.parse({ children: segments.map((segment) => segment.id) })
   const entry = buildFloorplanStairEntry(stair, segments)!

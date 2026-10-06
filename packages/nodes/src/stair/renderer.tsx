@@ -1,16 +1,12 @@
 'use client'
 
 import {
-  type AnyNodeId,
   computeSegmentTransforms,
   measureStairDetail,
   resolveArcStairConstruction,
   resolveStairArcLayout,
   resolveStairRailPaths,
-  resolveStairTotalRise,
-  STAIR_BODY_SLOT_DEFAULT,
   STAIR_RAILING_SLOT_DEFAULT,
-  STAIR_TREADS_SLOT_DEFAULT,
   type StairSlotId,
   resolveStairWalkingPaths,
   type StairNode,
@@ -44,6 +40,7 @@ import {
   resolveStairSlotMaterial,
 } from './materials'
 import { buildPostAndRailGuard, postAndRailGuardRails } from './post-and-rail-guard'
+import { useStairRenderData, useStairTotalRise } from './use-stair-render-data'
 
 type StairRailPathSide = 'left' | 'right' | 'front'
 
@@ -105,19 +102,7 @@ export const StairRenderer = ({ node: rawNode }: { node: StairNode }) => {
     () => resolveStairBodySlotMaterials(node, baseBodyMaterials, sceneMaterials, shading, textures),
     [baseBodyMaterials, node, sceneMaterials, shading, textures],
   )
-  const sceneNodes = useScene((state) => state.nodes)
-  const childOverrides = useLiveNodeOverrides((state) => state.overrides)
-  const segments = useMemo(
-    () =>
-      node.children
-        .map((id) => {
-          const child = sceneNodes[id]
-          const override = childOverrides.get(id)
-          return child && override ? { ...child, ...override } : child
-        })
-        .filter((child): child is StairSegmentNode => child?.type === 'stair-segment'),
-    [node.children, sceneNodes, childOverrides],
-  )
+  const { segments } = useStairRenderData(node)
   useLayoutEffect(() => {
     for (const id of node.children) useScene.getState().markDirty(id)
   }, [node.children, node.construction])
@@ -229,19 +214,10 @@ export const StairRenderer = ({ node: rawNode }: { node: StairNode }) => {
 
 function StairWalkingLine({ stair, segments }: { stair: StairNode; segments: StairSegmentNode[] }) {
   const selected = useViewer((state) => state.selection.selectedIds.includes(stair.id))
-  const nodes = useScene((state) => state.nodes)
-  const overrides = useLiveNodeOverrides((state) => state.overrides)
+  const totalRise = useStairTotalRise(stair)
   const lines = useMemo(() => {
     if (!selected) return []
-    const effectiveSegments = segments.map((segment) => ({
-      ...segment,
-      ...overrides.get(segment.id),
-    }))
-    return resolveStairWalkingPaths(
-      stair,
-      effectiveSegments,
-      resolveStairTotalRise(stair, nodes),
-    ).map((points) => {
+    return resolveStairWalkingPaths(stair, segments, totalRise).map((points) => {
       const geometry = new THREE.BufferGeometry().setFromPoints(
         points.map(([x, y, z]) => new THREE.Vector3(x, y + 0.02, z)),
       )
@@ -255,7 +231,7 @@ function StairWalkingLine({ stair, segments }: { stair: StairNode; segments: Sta
       line.raycast = () => {}
       return line
     })
-  }, [selected, stair, segments, nodes, overrides])
+  }, [selected, stair, segments, totalRise])
   useEffect(
     () => () => {
       for (const line of lines) {
@@ -275,25 +251,7 @@ function StairWalkingLine({ stair, segments }: { stair: StairNode; segments: Sta
 }
 
 function StairRailings({ stair, material }: { stair: StairNode; material: THREE.Material }) {
-  const nodes = useScene((state) => state.nodes)
-  // Stair segments' width/length/height arrow handles publish drag values to
-  // `useLiveNodeOverrides` and only commit to zustand on release. Subscribing
-  // here and merging each child segment's override means the railing tracks
-  // the drag in real time instead of freezing at the pre-drag values.
-  const overrides = useLiveNodeOverrides((s) => s.overrides)
-
-  const segments = useMemo(
-    () =>
-      (stair.children ?? [])
-        .map((childId) => {
-          const base = nodes[childId as AnyNodeId] as StairSegmentNode | undefined
-          if (!base) return undefined
-          const override = overrides.get(childId as AnyNodeId)
-          return (override ? { ...base, ...override } : base) as StairSegmentNode
-        })
-        .filter((node): node is StairSegmentNode => node?.type === 'stair-segment'),
-    [nodes, overrides, stair.children],
-  )
+  const { stair: resolvedStair, segments, nodes } = useStairRenderData(stair)
 
   const railPaths = useMemo(
     () =>
@@ -325,7 +283,7 @@ function StairRailings({ stair, material }: { stair: StairNode; material: THREE.
     // and drops the landing. `GuardMesh` then spaces pickets by run, so the
     // density tracks the arc length instead of the step count — for the deck
     // post-and-rail guard as well as the balusters.
-    const arcPaths = resolveStairRailPaths(stair, nodes, stair.railingMode ?? 'none')
+    const arcPaths = resolveStairRailPaths(resolvedStair, nodes, stair.railingMode ?? 'none')
     if (arcPaths.length === 0) return null
     return (
       <group name="stair-railing" userData={{ pascalIfcRole: 'railing' }}>
@@ -585,9 +543,8 @@ function CurvedStairBody({
   stair: StairNode
   bodyMaterials: StairBodyMaterials
 }) {
-  const nodes = useScene((state) => state.nodes)
   const sideMaterial = bodyMaterials[1]
-  const totalRise = Math.max(resolveStairTotalRise(stair, nodes), 0.001)
+  const totalRise = Math.max(useStairTotalRise(stair), 0.001)
   const isSpiral = stair.stairType === 'spiral'
   const layout = resolveStairArcLayout(stair, totalRise)
   const { innerRadius, outerRadius, thickness } = layout

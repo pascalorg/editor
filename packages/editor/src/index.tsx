@@ -431,25 +431,19 @@ export {
 export type { ExportTextureUtils } from './lib/export-texture-utils'
 export { getFloatingMenuScale } from './lib/floating-menu-scale'
 export { startOpeningDraft } from './lib/floor-opening-draft'
-// Floor-plan stair helpers — the cumulative-transform walk
-// (`computeFloorplanStairSegmentTransforms`) and the rich segment-entry
-// builder (`buildFloorplanStairEntry`) used by the kind-owned stair
-// floor-plan emitter in `@pascal-app/nodes/src/stair/floorplan.ts`.
-// Each flight's transform depends on every prior sibling's length /
-// height / `attachmentSide`, so individual stair-segments can't compute
-// their own polygon in isolation — the stair (parent) owns the
-// computation and emits the whole stack as one registry entry.
 export {
   alignFloorplanDraftPoint,
   applyFloorplanAlignment,
-  buildFloorplanStairEntry,
+  clampPlanValue,
   FLOORPLAN_ALIGNMENT_THRESHOLD_M,
   FLOORPLAN_DRAFT_ALIGN_ID,
   type FloorplanAlignmentResult,
-  type FloorplanStairArrowEntry,
-  type FloorplanStairEntry,
-  type FloorplanStairSegmentEntry,
   getFloorplanWallThickness,
+  getPlanPointDistance,
+  getThickPlanLinePolygon,
+  interpolatePlanPoint,
+  movePlanPointTowards,
+  rotatePlanVector,
 } from './lib/floorplan'
 export type {
   FloorplanAnnotationCategory,

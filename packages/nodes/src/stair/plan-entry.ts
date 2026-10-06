@@ -16,14 +16,34 @@ import {
   interpolatePlanPoint,
   movePlanPointTowards,
   rotatePlanVector,
-} from './geometry'
-import type {
-  FloorplanLineSegment,
-  FloorplanStairArrowEntry,
-  FloorplanStairEntry,
-  FloorplanStairSegmentEntry,
-  StairSegmentTransform,
-} from './types'
+} from '@pascal-app/editor'
+
+type FloorplanLineSegment = { start: Point2D; end: Point2D }
+export type FloorplanStairSegmentEntry = {
+  centerLine: FloorplanLineSegment | null
+  innerPolygon: Point2D[]
+  segment: StairSegmentNode
+  polygon: Point2D[]
+  treadBars: Point2D[][]
+  treadThickness: number
+}
+
+export type FloorplanStairArrowEntry = {
+  head: Point2D[]
+  polyline: Point2D[]
+}
+
+export type FloorplanStairEntry = {
+  arrow: FloorplanStairArrowEntry | null
+  hitPolygons: Point2D[][]
+  stair: StairNode
+  segments: FloorplanStairSegmentEntry[]
+}
+
+export type StairSegmentTransform = {
+  position: [number, number, number]
+  rotation: number
+}
 
 const FLOORPLAN_STAIR_OUTLINE_BAND_THICKNESS = 0.05
 const FLOORPLAN_STAIR_OUTLINE_MAX_FRACTION = 0.18

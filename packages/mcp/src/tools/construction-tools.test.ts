@@ -4,7 +4,9 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { measureStair } from '@pascal-app/core'
 import { pointInPolygon, type Vec2 } from '@pascal-app/core/agent-operations'
+import { fitStairTool, measureStairTool } from '@pascal-app/core/agent-tools'
 import { type AnyNodeId, LevelNode, SlabNode } from '@pascal-app/core/schema'
+import { z } from 'zod'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { registerConstructionTools } from './construction-tools'
 import { registerSharedTools } from './shared-tools'
@@ -538,6 +540,21 @@ describe('construction tools', () => {
     expect(parsed.issues.map((issue: { message: string }) => issue.message).join('\n')).toContain(
       'dedicated roof level',
     )
+  })
+  test('stair MCP tools expose the shared contracts', async () => {
+    const listed = await client.listTools()
+    for (const contract of [measureStairTool, fitStairTool]) {
+      const tool = listed.tools.find((tool) => tool.name === contract.name)!
+      expect(tool.title).toBe(contract.title)
+      expect(tool.description).toBe(contract.description)
+      const expected = JSON.parse(
+        JSON.stringify(
+          z.toJSONSchema(z.object(contract.input), { io: 'input', target: 'draft-7' }),
+        ),
+      )
+      delete expected['~standard']
+      expect(tool.inputSchema).toEqual(expected)
+    }
   })
   test('stair measurement is read-only and explicit sizing is one reversible operation', async () => {
     const { StairNode, StairSegmentNode } = await import('@pascal-app/core')

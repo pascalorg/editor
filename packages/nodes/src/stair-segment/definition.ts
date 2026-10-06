@@ -3,11 +3,12 @@ import {
   type NodeDefinition,
   planStairFlightHeightEdit,
   resolveStairWinder,
+  STAIR_BODY_SLOT_DEFAULT,
+  STAIR_TREADS_SLOT_DEFAULT,
   StairSegmentNode as StairSegmentNodeSchema,
   type StairSegmentNode as StairSegmentNodeType,
 } from '@pascal-app/core'
 import { stairSegmentPaint } from '../stair/paint'
-import { STAIR_BODY_SLOT_DEFAULT, STAIR_TREADS_SLOT_DEFAULT } from '../stair/slots'
 import { stairSegmentParametrics } from './parametrics'
 import { StairSegmentNode } from './schema'
 

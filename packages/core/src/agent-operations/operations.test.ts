@@ -52,3 +52,42 @@ describe('agent operations', () => {
     })
   }
 })
+
+test('stair operations share sizing defaults and keep measurement read-only', async () => {
+  const { StairNode, StairSegmentNode } = await import('@pascal-app/core/schema')
+  const { fitStairTool, measureStairTool } = await import('@pascal-app/core/agent-tools')
+  const { AGENT_OPERATIONS, applySceneChanges } = await import('@pascal-app/core/agent-operations')
+  const flight = StairSegmentNode.parse({ height: 3, length: 3, stepCount: 10 })
+  const stair = StairNode.parse({ totalRise: 3, children: [flight.id] })
+  const nodes = { [stair.id]: stair, [flight.id]: { ...flight, parentId: stair.id } }
+  const before = JSON.stringify(nodes)
+  const context = { activeLevelId: null }
+  const measured = AGENT_OPERATIONS.measure_stair(
+    nodes,
+    z.object(measureStairTool.input).parse({ stairId: stair.id }),
+    context,
+  )
+  expect(measured.changes).toBeUndefined()
+  expect(JSON.stringify(nodes)).toBe(before)
+  const fitted = AGENT_OPERATIONS.fit_stair(
+    nodes,
+    z
+      .object(fitStairTool.input)
+      .parse({ stairId: stair.id, fitRun: true, targets: { maxRiserHeight: 0.15 } }),
+    context,
+  )
+  const next = applySceneChanges(nodes, fitted.changes)
+  expect(next[flight.id]).toMatchObject({ stepCount: 20, height: 3 })
+  expect((next[flight.id] as typeof flight).length).toBeCloseTo(5.6)
+  expect(next[stair.id]).toMatchObject({
+    designTargets: { maxRiserHeight: 0.15, targetGoing: 0.28 },
+  })
+  expect(JSON.stringify(nodes)).toBe(before)
+  expect(() =>
+    AGENT_OPERATIONS.fit_stair(
+      nodes,
+      z.object(fitStairTool.input).parse({ stairId: stair.id, turningStrategy: 'winder' }),
+      context,
+    ),
+  ).toThrow('Choose a straight, L or U layout')
+})

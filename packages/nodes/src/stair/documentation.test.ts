@@ -6,11 +6,8 @@ import {
   StairNode,
   StairSegmentNode,
 } from '@pascal-app/core'
-import {
-  buildFloorplanStairEntry,
-  createFloorplanContextExtensions,
-  readFloorplanGeometryMetadata,
-} from '@pascal-app/editor'
+import { createFloorplanContextExtensions, readFloorplanGeometryMetadata } from '@pascal-app/editor'
+import { buildFloorplanStairEntry } from '@pascal-app/nodes'
 import {
   buildStairDocumentation,
   resolveStairPlanDirection,

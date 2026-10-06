@@ -1,9 +1,4 @@
-import {
-  type ParametricDescriptor,
-  planStairRiseEdit,
-  type StairNode,
-  useScene,
-} from '@pascal-app/core'
+import { type ParametricDescriptor, planStairRiseEdit, type StairNode } from '@pascal-app/core'
 import { StairConstructionField } from './construction-controls'
 import { StairRailingField } from './railing-controls'
 
@@ -186,7 +181,7 @@ export const stairParametrics: ParametricDescriptor<StairNode> = {
       : {},
   reconcile: (previous, next, nodes) =>
     next.totalRise !== previous.totalRise && next.totalRise !== undefined
-      ? planStairRiseEdit(next, next.totalRise, nodes ?? useScene.getState().nodes).slice(1)
+      ? planStairRiseEdit(next, next.totalRise, nodes).slice(1)
       : [],
   customPanel: () => import('./panel'),
 }

@@ -2061,9 +2061,15 @@ export type PaintPreviewArgs = {
   material: MaterialSchema | undefined
   materialPreset: string | undefined
   root: Object3D
+  /** Host snapshot used for parent finishes and per-flight overrides. */
+  nodes?: Record<AnyNodeId, AnyNode>
+  /** Shared palette from the same host snapshot; absent means no scene palette. */
+  materials?: Record<SceneMaterialId, SceneMaterial>
 }
 
 export type PaintEffectiveMaterialArgs = {
+  /** Host palette for resolving scene material refs without reading a store. */
+  materials?: Record<SceneMaterialId, SceneMaterial>
   node: AnyNode
   role: string
   /** Snapshot of the scene `nodes` map — kinds whose effective material walks the parent chain (roof-segment → roof) read parents through it. */
@@ -2745,13 +2751,13 @@ export type ParametricDescriptor<N> = {
    * the scene consistent — e.g. duct runs re-trimmed onto a resized
    * fitting's collars. `prev` is the node before the edit, `next` after
    * (with `derive` already folded in). Applied in the same gesture via
-   * `updateNodes`. The optional third argument contains all pending edits in
+   * `updateNodes`. The third argument contains all pending edits in
    * the gesture, so reconciliation can read updated siblings during a multi-edit.
    */
   reconcile?: (
     prev: N,
     next: N,
-    nodes?: Readonly<Record<string, AnyNode | undefined>>,
+    nodes: Readonly<Record<string, AnyNode | undefined>>,
   ) => Array<{ id: AnyNodeId; data: Partial<AnyNode> }>
   /**
    * Deletion companion to `reconcile`: when a node of this kind is about

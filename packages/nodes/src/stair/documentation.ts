@@ -9,17 +9,17 @@ import {
   type StairNode,
   useScene,
 } from '@pascal-app/core'
-import type {
-  FloorplanStairArrowEntry,
-  FloorplanStairEntry,
-  FloorplanStairSegmentEntry,
-} from '@pascal-app/editor'
 import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
 import {
   type ConstructionLengthProfile,
   type ConstructionMetricNotation,
   formatConstructionLength,
 } from '../shared/construction-length'
+import type {
+  FloorplanStairArrowEntry,
+  FloorplanStairEntry,
+  FloorplanStairSegmentEntry,
+} from './plan-entry'
 
 const ANNOTATION_OFFSET = 0.28
 const ANNOTATION_FONT_SIZE = 0.125

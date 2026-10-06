@@ -6,14 +6,21 @@ import {
   getFloorStackedPosition,
   getStairFloorPlacedFootprints,
   getStairSegmentFloorPlacedFootprints,
+  LevelNode,
   nodeRegistry,
   registerNode,
   resolveSupportSlabPatch,
   type SlabNode,
   StairNode,
   StairSegmentNode,
+  sceneRegistry,
   spatialGridManager,
+  useLiveNodeOverrides,
+  useScene,
 } from '@pascal-app/core'
+import { act, create } from '@react-three/test-renderer'
+import { createElement } from 'react'
+import type { Mesh } from 'three'
 import { stairDefinition } from './definition'
 
 const LEVEL_ID = 'level_test'
@@ -459,6 +466,8 @@ test('painted flights retain parent slots and per-flight finishes in selected an
     }
     expect(firstMesh.userData.slotIds).toEqual(['treads', 'body'])
     const parentPreview = definition.capabilities!.paint!.applyPreview({
+      nodes: useScene.getState().nodes,
+      materials: useScene.getState().materials,
       node: stair,
       root: sceneRegistry.nodes.get(stair.id)!,
       role: 'treads',
@@ -474,14 +483,20 @@ test('painted flights retain parent slots and per-flight finishes in selected an
     parentPreview()
     const paint = segmentDefinition.capabilities!.paint!
     expect(
-      paint.getEffectiveMaterial!({ node: first, role: 'treads', nodes: useScene.getState().nodes })
-        ?.material?.properties?.color,
+      paint.getEffectiveMaterial!({
+        materials: useScene.getState().materials,
+        node: first,
+        role: 'treads',
+        nodes: useScene.getState().nodes,
+      })?.material?.properties?.color,
     ).toBe('#ff0000')
     await act(async () =>
       useScene.getState().updateNode(first.id, { slots: { treads: `scene:${blue.id}` } }),
     )
     const paintedFirst = useScene.getState().nodes[first.id]!
     const erase = paint.applyPreview({
+      nodes: useScene.getState().nodes,
+      materials: useScene.getState().materials,
       node: paintedFirst,
       root: firstMesh,
       role: 'treads',
@@ -517,6 +532,8 @@ test('painted flights retain parent slots and per-flight finishes in selected an
     const originalColor = fallback[1]!.color.getHexString()
     const originalRoughness = fallback[1]!.roughness
     const eraseOrphan = paint.applyPreview({
+      nodes: useScene.getState().nodes,
+      materials: useScene.getState().materials,
       node: orphan,
       root: orphanMesh,
       role: 'body',
@@ -1230,6 +1247,124 @@ test('merged stairs omit hidden bodies without shifting downstream flights or ma
     }
   } finally {
     await renderer?.unmount()
+    useScene.setState(previous)
+  }
+})
+
+test('stair railing geometry invalidates for its own live dependencies and resolved rise only', async () => {
+  const previousScene = useScene.getState()
+  const previousLive = useLiveNodeOverrides.getState()
+  const level = LevelNode.parse({ height: 3 })
+  const segment = StairSegmentNode.parse({ width: 1, length: 3, height: 3 })
+  const stair = StairNode.parse({
+    parentId: level.id,
+    children: [segment.id],
+    stairType: 'straight',
+    railingMode: 'both',
+    railingPath: 'continuous',
+  })
+  level.children = [stair.id]
+  const unrelated = StairNode.parse({ totalRise: 2 })
+  const nodes = Object.fromEntries(
+    [level, stair, segment, unrelated].map((node) => [node.id, node]),
+  )
+  useScene.setState({ nodes })
+  useLiveNodeOverrides.setState({ overrides: new Map() })
+  if (stairDefinition.renderer?.kind !== 'parametric') throw new Error('Missing renderer')
+  const Renderer = (await stairDefinition.renderer.module()).default
+  const renderer = await create(createElement(Renderer, { node: stair }))
+  const geometry = () =>
+    (sceneRegistry.nodes.get(stair.id)!.getObjectByName('stair-railing') as Mesh).geometry
+  try {
+    const original = geometry()
+    await act(async () => {
+      useScene.setState({ nodes: { ...nodes, [unrelated.id]: { ...unrelated, totalRise: 4 } } })
+    })
+    expect(geometry()).toBe(original)
+    await act(async () => {
+      useLiveNodeOverrides.getState().set(unrelated.id, { totalRise: 5 })
+    })
+    expect(geometry()).toBe(original)
+    await act(async () => {
+      useLiveNodeOverrides.getState().set(segment.id, { width: 2 })
+    })
+    expect(geometry()).not.toBe(original)
+    const childPreview = geometry()
+    await act(async () => {
+      useScene.setState({
+        nodes: { ...useScene.getState().nodes, [segment.id]: { ...segment, length: 4 } },
+      })
+    })
+    expect(geometry()).not.toBe(childPreview)
+    const arcStair = { ...stair, stairType: 'curved' as const }
+    await renderer.update(createElement(Renderer, { node: arcStair }))
+    const childEdited = geometry()
+    await act(async () => {
+      useScene.setState({
+        nodes: { ...useScene.getState().nodes, [level.id]: { ...level, height: 4 } },
+      })
+    })
+    expect(geometry()).not.toBe(childEdited)
+    const levelEdited = geometry()
+    await act(async () => {
+      useLiveNodeOverrides.getState().set(level.id, { height: 5 })
+    })
+    expect(geometry()).not.toBe(levelEdited)
+    const beforeParentDrag = geometry()
+    await act(async () => {
+      useLiveNodeOverrides.getState().set(stair.id, { width: 2 })
+    })
+    expect(geometry()).not.toBe(beforeParentDrag)
+  } finally {
+    await renderer.unmount()
+    useScene.setState(previousScene, true)
+    useLiveNodeOverrides.setState(previousLive, true)
+  }
+})
+
+test('stair paint resolves inherited finishes from the supplied scene snapshot', async () => {
+  const { builtinPlugin } = await import('../index')
+  const { loadPlugin, SceneMaterial } = await import('@pascal-app/core')
+  const { Mesh, BoxGeometry, MeshStandardMaterial } = await import('three')
+  await loadPlugin(builtinPlugin)
+  const previous = useScene.getState()
+  const red = SceneMaterial.parse({
+    id: 'mat_stair_context',
+    name: 'Snapshot finish',
+    material: { properties: { color: '#ff0000' } },
+  })
+  const blue = { ...red, material: { properties: { color: '#0000ff' } } }
+  const stair = StairNode.parse({ slots: { treads: `scene:${red.id}` } })
+  const flight = StairSegmentNode.parse({ parentId: stair.id })
+  const nodes = { [stair.id]: stair, [flight.id]: flight }
+  const materials = { [red.id]: red }
+  const original = new MeshStandardMaterial({ color: '#ffffff' })
+  const mesh = new Mesh(new BoxGeometry(), original)
+  mesh.userData.slotId = 'treads'
+  try {
+    useScene.setState({ nodes: {}, materials: { [blue.id]: blue } })
+    const paint = nodeRegistry.get('stair-segment')!.capabilities!.paint!
+    expect(
+      paint.getEffectiveMaterial!({ node: flight, role: 'treads', nodes, materials })?.material
+        ?.properties?.color,
+    ).toBe('#ff0000')
+    const restore = paint.applyPreview({
+      node: flight,
+      role: 'treads',
+      nodes,
+      materials,
+      root: mesh,
+      material: undefined,
+      materialPreset: undefined,
+    })!
+    expect((mesh.material as import('three').MeshStandardMaterial).color.getHexString()).toBe(
+      'ff0000',
+    )
+    restore()
+    expect(mesh.material).toBe(original)
+  } finally {
+    mesh.geometry.dispose()
+    original.dispose()
     useScene.setState(previous)
   }
 })

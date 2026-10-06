@@ -6,7 +6,6 @@ import {
   resolveStairWalkInside,
   type StairNode,
   type StairRailPath,
-  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import { getStairRailingMaterial, useViewer } from '@pascal-app/viewer'
@@ -21,6 +20,7 @@ import { buildGlassGuard, type GlassPanel } from './glass-guard'
 import { resolveStairSlotMaterial } from './materials'
 import { buildMetalGuard } from './metal-guard'
 import { buildPostAndRailGuard } from './post-and-rail-guard'
+import { useStairRenderData } from './use-stair-render-data'
 
 /** A continuous guard's newels are at most this far apart along the run. */
 const GUARD_POST_SPACING = 1.2192
@@ -196,33 +196,25 @@ export function ContinuousStairRailings({
   material: THREE.Material
   guard?: boolean
 }) {
-  const nodes = useScene((state) => state.nodes),
-    overrides = useLiveNodeOverrides((state) => state.overrides),
-    sceneMaterials = useScene((state) => state.materials)
+  const { stair: resolvedStair, nodes: effective } = useStairRenderData(stair)
+  const sceneMaterials = useScene((state) => state.materials)
   const shading = useViewer((state) => state.shading),
     textures = useViewer((state) => state.textures),
     colorPreset = useViewer((state) => state.colorPreset)
-  const effective = useMemo(
-    () =>
-      Object.fromEntries(
-        Object.entries(nodes).map(([id, node]) => [id, { ...node, ...overrides.get(node.id) }]),
-      ),
-    [nodes, overrides],
-  )
   const paths = useMemo(
-    () => (guard ? resolveStairRailPaths(stair, effective) : []),
-    [stair, effective, guard],
+    () => (guard ? resolveStairRailPaths(resolvedStair, effective) : []),
+    [resolvedStair, effective, guard],
   )
   const handrails = useMemo(
-    () => (stair.handrail ? resolveStairHandrailPaths(stair, effective) : []),
-    [stair, effective],
+    () => (resolvedStair.handrail ? resolveStairHandrailPaths(resolvedStair, effective) : []),
+    [resolvedStair, effective],
   )
   const insideWalk = useMemo(
     () =>
-      guard && stair.railingStyle === 'glass'
-        ? resolveStairWalkInside(stair, effective)
+      guard && resolvedStair.railingStyle === 'glass'
+        ? resolveStairWalkInside(resolvedStair, effective)
         : undefined,
-    [stair, effective, guard],
+    [resolvedStair, effective, guard],
   )
   const geometry = useMemo(
     () => buildRails(stair, paths, handrails, guard, insideWalk),

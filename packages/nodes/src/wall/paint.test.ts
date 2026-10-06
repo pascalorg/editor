@@ -181,6 +181,7 @@ describe('resolveWallRole', () => {
 
     expect(
       wallPaint.getEffectiveMaterial?.({
+        materials: useScene.getState().materials,
         node: baseWall,
         role: 'aCrown',
         nodes: { [baseWall.id]: baseWall },
@@ -260,6 +261,7 @@ describe('wall paint roles', () => {
     ])
     expect(
       wallPaint.getEffectiveMaterial?.({
+        materials: useScene.getState().materials,
         node: nodes()[wall.id],
         role: wallRoomFaceRole('zone_room', 'a'),
         nodes: nodes(),
@@ -298,7 +300,12 @@ describe('wall paint roles', () => {
       materialPreset: 'library:legacy-wall',
     }
     const effective = (role: string) =>
-      wallPaint.getEffectiveMaterial?.({ node: wall, role, nodes: { [wall.id]: wall } })
+      wallPaint.getEffectiveMaterial?.({
+        materials: useScene.getState().materials,
+        node: wall,
+        role,
+        nodes: { [wall.id]: wall },
+      })
     expect(effective('b')).toEqual({ material: undefined, materialPreset: 'library:legacy-b' })
     expect(effective('a')).toEqual({ material: undefined, materialPreset: 'library:legacy-wall' })
     expect(wallPaint.roleLabel?.(wall, wallRoomFinishRole('zone_room'))).toBe('Room')
