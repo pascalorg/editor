@@ -386,6 +386,13 @@ export function resolveFenceConstructionSupport(
       supportSurfaceNodeId: options.supportSurfaceNodeId,
     }
   }
+  const surface = fence.supportSurfaceId ? nodes[fence.supportSurfaceId] : null
+  if (
+    surface?.parentId === levelId &&
+    nodeRegistry.get(surface.type)?.capabilities?.surfaces?.top
+  ) {
+    return { ...fence, supportSlabId: undefined }
+  }
   const supportPatch = resolveFenceSupportSlabPatch({ ...fence, parentId: levelId }, nodes, {
     maxElevation: options?.supportCap ?? null,
     preferredSlabId: options?.preferredSupportSlabId ?? null,

@@ -583,6 +583,8 @@ export type FloorplanGeometry =
        * affordances (rotation, scale) without expanding the union.
        */
       variant?: 'endpoint' | 'curve'
+      /** Keep the drag target the same size in pixels when zooming out. */
+      screenSized?: boolean
       affordance: string
       payload: unknown
     }
@@ -982,6 +984,9 @@ export type FloorplanMoveTarget<N> = (args: {
  *
  * Extensions surface only when the contributing plugin is installed in
  * the project (same `installedPlugins` gate as panels and node kinds).
+ * An extension with `primaryWhen` replaces the regular controls for
+ * matching nodes on desktop and mobile. Its component supplies its own
+ * `PanelSection` groups.
  */
 export type InspectorExtension = {
   /** Globally unique id, e.g. `pascal:bones:wall-engineering`. */
@@ -996,6 +1001,8 @@ export type InspectorExtension = {
   title: string
   /** Lazy section body; receives `{ node }` (the selected node). */
   component: LazyComponent
+  /** When true for the selected node, this extension owns the inspector body. */
+  primaryWhen?: (node: AnyNode) => boolean
 }
 
 export type Plugin = {
@@ -1097,6 +1104,11 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * Has no effect when `distributionRole` is not `'fitting'`.
    */
   portConnectivityFollow?: boolean
+  connectedMove?: (
+    node: z.infer<S>,
+    preview: z.infer<S>,
+    nodes: Readonly<Record<string, AnyNode>>,
+  ) => { id: AnyNodeId; data: Partial<AnyNode> }[]
 
   defaults: () => Omit<z.infer<S>, 'id' | 'type'>
 
@@ -2190,6 +2202,8 @@ export type CutsContext = { nodes: Readonly<Record<AnyNodeId, AnyNode>> }
 export type MovableConfig = {
   axes: ReadonlyArray<'x' | 'y' | 'z'>
   gridSnap?: boolean
+  /** Keep an existing floor-placed node on its current level and visual elevation while dragging. */
+  preserveLevelAndElevation?: boolean
   /** Allow an ordinary primary-button body drag to enter the move tool. */
   directDrag?: boolean
   /**
@@ -2259,6 +2273,8 @@ export type MovableConfig = {
 }
 
 export type MovableParentFrame = {
+  /** Keep selection and manipulation on the child instead of promoting its parent. */
+  independent?: boolean
   /** The parent node owning the local frame; `null` → move in plan frame. */
   resolveParent: (node: AnyNode, nodes: Readonly<Record<string, AnyNode>>) => AnyNode | null
   /** Parent's Y rotation, composed onto the child's preview rotation. */
@@ -2406,6 +2422,8 @@ export type SurfacesConfig = {
       z: number,
       context: { nodes: Readonly<Record<AnyNodeId, AnyNode>> },
     ) => number | null
+    /** Closed walking-surface perimeter in the host's parent XZ frame; optional inward offset in metres. */
+    boundary?: (n: AnyNode, inset?: number) => ReadonlyArray<readonly [number, number]>
   }
   sides?: { faces: 'all' | ReadonlyArray<readonly [number, number, number]> }
   custom?: SurfaceQuery

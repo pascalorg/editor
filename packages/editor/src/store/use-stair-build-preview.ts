@@ -51,7 +51,6 @@ export const useStairBuildPreview = create<StairBuildPreviewState>((set) => ({
             rise: rise === undefined ? state.rise : rise,
           }
     }),
-  rotateBy: (deltaRadians) => set((state) => ({ rotation: state.rotation + deltaRadians })),
   reset: () =>
     set((state) =>
       state.point === null && state.rotation === 0 && state.rise === null

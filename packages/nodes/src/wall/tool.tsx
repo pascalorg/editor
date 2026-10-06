@@ -1046,7 +1046,14 @@ function PolygonDraftGhosts({
 export const WallTool: React.FC = () => {
   // Clear preset-seeded defaults on deactivation so a later manual wall draw
   // isn't built with a stale preset's parameters. Unmount-only.
-  useEffect(() => () => useEditor.getState().setToolDefaults('wall', null), [])
+  useEffect(
+    () => () => {
+      const editor = useEditor.getState()
+      // Remounts keep the active preset; leaving the wall tool releases it.
+      if (editor.tool !== 'wall') editor.setToolDefaults('wall', null)
+    },
+    [],
+  )
 
   // The drawing variant is picked in the Build panel's Rooms group.
   const variant = useWallDrawVariant()

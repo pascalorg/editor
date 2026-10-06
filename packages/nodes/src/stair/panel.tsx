@@ -576,6 +576,25 @@ export default function StairPanel() {
           onClick={() => applySizing(true)}
         />
       </PanelSection>
+      {node.stairType === 'straight' &&
+        (landscapeSurfaces.length > 0 || node.landscapeSurfaceId) && (
+          <PanelSection title="Landscape connection">
+            <div className="space-y-2">
+              <ToggleControl
+                checked={node.autoLandscapeSnap !== false}
+                label="Snap to nearby surfaces"
+                onChange={(checked) => handleUpdate({ autoLandscapeSnap: checked })}
+              />
+              <p className="px-1 text-[11px] text-muted-foreground">
+                {node.autoLandscapeSnap !== false
+                  ? connectedSurface
+                    ? `Connected to ${connectedSurface.name || 'landscape surface'}. Move the stair to connect to another edge.`
+                    : 'Drag near a deck, patio, concrete slab, or landing edge to fit the stair.'
+                  : 'Moving this stair keeps its current rise, steps, and run.'}
+              </p>
+            </div>
+          </PanelSection>
+        )}
 
       <PanelSection title="Opening">
         <div className="space-y-3">

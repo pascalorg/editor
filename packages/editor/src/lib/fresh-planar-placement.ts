@@ -8,6 +8,7 @@ import {
   collectSubtree,
   createSceneApi,
   type DuplicableConfig,
+  getEffectiveNode,
   getSceneHistoryPauseDepth,
   getSurfaceProvider,
   nodeRegistry,
@@ -255,7 +256,9 @@ export function commitFreshPlacementSubtree(
     onReject?.(rejection)
     return null
   }
-  const descendants = subtree.descendants.map((node) => cleanPlacementMetadata(node))
+  const descendants = subtree.descendants.map((node) =>
+    cleanPlacementMetadata(getEffectiveNode(node)),
+  )
   const parentId = parentIdOf(root)
   const cloned = cloneNodesInto([root, ...descendants], { rootId, parentId })
   // The drafts' memberships, read before they are deleted.

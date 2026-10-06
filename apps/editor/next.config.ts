@@ -1,9 +1,37 @@
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { NextConfig } from 'next'
 
 const appDirectory = path.dirname(fileURLToPath(import.meta.url))
 const portableBuild = process.env.PASCAL_PORTABLE_BUILD === '1'
+const appPackageJson = JSON.parse(
+  readFileSync(path.join(appDirectory, 'package.json'), 'utf8'),
+) as {
+  dependencies?: Record<string, string>
+  devDependencies?: Record<string, string>
+}
+const localPluginPaths = Object.values({
+  ...appPackageJson.dependencies,
+  ...appPackageJson.devDependencies,
+})
+  .filter((dependency) => dependency.startsWith('file:'))
+  .map((dependency) => path.resolve(appDirectory, dependency.slice('file:'.length)))
+const turbopackRoot = [path.resolve(appDirectory, '../..'), ...localPluginPaths].reduce(
+  (commonRoot, candidate) => {
+    const commonParts = commonRoot.split(path.sep)
+    const candidateParts = candidate.split(path.sep)
+    let sharedParts = 0
+    while (
+      sharedParts < commonParts.length &&
+      sharedParts < candidateParts.length &&
+      commonParts[sharedParts] === candidateParts[sharedParts]
+    ) {
+      sharedParts += 1
+    }
+    return commonParts.slice(0, sharedParts).join(path.sep) || path.parse(commonRoot).root
+  },
+)
 
 const nextConfig: NextConfig = {
   ...(portableBuild
@@ -33,7 +61,9 @@ const nextConfig: NextConfig = {
     '@pascal-app/editor',
     '@pascal-app/mcp',
     '@pascal-app/plugin-pool',
-    '@pascal-app/plugin-streetscape',
+    '@pascal-app/plugin-bath-space',
+    '@pascal-app/plugin-landscape',
+    '@pascal-app/plugin-streetscape-lab',
     '@pascal-app/plugin-trees',
     '@mint/pascal-plugin',
     '@pascal-app/plugin-bones',
@@ -42,6 +72,7 @@ const nextConfig: NextConfig = {
     '@dgreenheck/ez-tree',
   ],
   turbopack: {
+    root: turbopackRoot,
     resolveAlias: {
       react: './node_modules/react',
       three: './node_modules/three',

@@ -180,6 +180,10 @@ export class MergedOutlineNode extends TempNode {
   private readonly _proxiesA = new Map<Object3D, Mesh | Sprite>()
   private readonly _proxiesB = new Map<Object3D, Mesh | Sprite>()
   private readonly _proxyMaskMaterials = new WeakMap<Mesh | Sprite, NodeMaterial>()
+  private readonly _cutoutMasksA = new Map<any, NodeMaterial>()
+  private readonly _cutoutMasksB = new Map<any, NodeMaterial>()
+  private readonly _usedCutoutMasksA = new Set<any>()
+  private readonly _usedCutoutMasksB = new Set<any>()
   private readonly _maskSceneA = new Scene()
   private readonly _maskSceneB = new Scene()
 
@@ -370,8 +374,21 @@ export class MergedOutlineNode extends TempNode {
     this._buildCache(this.secondaryObjects, this._cacheB)
     const useProxiesA = this._syncProxies(this._cacheA, this._proxiesA, this._maskSceneA)
     const useProxiesB = this._syncProxies(this._cacheB, this._proxiesB, this._maskSceneB)
+    this._usedCutoutMasksA.clear()
+    this._usedCutoutMasksB.clear()
+    for (const [cache, used] of [
+      [this._cacheA, this._usedCutoutMasksA],
+      [this._cacheB, this._usedCutoutMasksB],
+    ] as const) {
+      for (const object of cache) {
+        if (!(object instanceof Mesh)) continue
+        const materials = Array.isArray(object.material) ? object.material : [object.material]
+        for (const source of materials) if (source?.alphaTest > 0) used.add(source)
+      }
+    }
 
     if (!hasAny) {
+      this._pruneCutoutMasks()
       RendererUtils.restoreRendererAndSceneState(renderer, scene, _rendererState)
       return
     }
@@ -408,6 +425,7 @@ export class MergedOutlineNode extends TempNode {
     if (hasPrimary) this._runEdgePipeline(renderer, 'A')
     if (hasSecondary) this._runEdgePipeline(renderer, 'B')
 
+    this._pruneCutoutMasks()
     RendererUtils.restoreRendererAndSceneState(renderer, scene, _rendererState)
   }
 
@@ -418,6 +436,8 @@ export class MergedOutlineNode extends TempNode {
     const maskScene = isA ? this._maskSceneA : this._maskSceneB
     const material = isA ? this._prepareMaskMatA : this._prepareMaskMatB
     const spriteMaterial = isA ? this._prepareMaskSpriteMatA : this._prepareMaskSpriteMatB
+    const cutoutMasks = isA ? this._cutoutMasksA : this._cutoutMasksB
+    const usedCutoutMasks = isA ? this._usedCutoutMasksA : this._usedCutoutMasksB
     if (useProxies) {
       for (const [source, proxy] of proxies) proxy.matrixWorld.copy(source.matrixWorld)
     }
@@ -425,10 +445,48 @@ export class MergedOutlineNode extends TempNode {
     // Keep source materials on proxies for material visibility and geometry
     // groups; substitute only at submission, just like the full-scene path.
     renderer.setRenderObjectFunction(
-      (obj: any, sc: any, cam: any, geo: any, _mat: any, grp: any, lights: any, clip: any) => {
+      (
+        obj: any,
+        sc: any,
+        cam: any,
+        geo: any,
+        sourceMaterial: any,
+        grp: any,
+        lights: any,
+        clip: any,
+      ) => {
         if (!hasDrawableGeometry(geo)) return
         if (useProxies || cache.has(obj)) {
           let maskMaterial = obj.isSprite ? spriteMaterial : material
+          if (!obj.isSprite && sourceMaterial?.alphaTest > 0) {
+            let cutoutMask = cutoutMasks.get(sourceMaterial)
+            const opacityNode =
+              sourceMaterial.opacityNode ??
+              (sourceMaterial.map
+                ? cutoutMask?.userData.sourceMap === sourceMaterial.map
+                  ? cutoutMask.opacityNode
+                  : texture(sourceMaterial.map).a
+                : null)
+            if (opacityNode) {
+              if (!cutoutMask) {
+                cutoutMask = material.clone()
+                cutoutMasks.set(sourceMaterial, cutoutMask)
+              }
+              const positionNode = sourceMaterial.positionNode ?? null
+              const changed =
+                cutoutMask.opacityNode !== opacityNode ||
+                cutoutMask.positionNode !== positionNode ||
+                cutoutMask.side !== sourceMaterial.side
+              cutoutMask.opacityNode = opacityNode
+              cutoutMask.positionNode = positionNode
+              cutoutMask.alphaTest = sourceMaterial.alphaTest
+              cutoutMask.side = sourceMaterial.side
+              cutoutMask.userData.sourceMap = sourceMaterial.map
+              if (changed) cutoutMask.needsUpdate = true
+              maskMaterial = cutoutMask
+              usedCutoutMasks.add(sourceMaterial)
+            }
+          }
           if (useProxies) {
             let ownedMaterial = this._proxyMaskMaterials.get(obj)
             if (!ownedMaterial) {
@@ -437,8 +495,18 @@ export class MergedOutlineNode extends TempNode {
               ownedMaterial = maskMaterial.clone()
               this._proxyMaskMaterials.set(obj, ownedMaterial)
             }
-            if (ownedMaterial.colorNode !== maskMaterial.colorNode) {
+            if (
+              ownedMaterial.colorNode !== maskMaterial.colorNode ||
+              ownedMaterial.opacityNode !== maskMaterial.opacityNode ||
+              ownedMaterial.positionNode !== maskMaterial.positionNode ||
+              ownedMaterial.alphaTest !== maskMaterial.alphaTest ||
+              ownedMaterial.side !== maskMaterial.side
+            ) {
               ownedMaterial.colorNode = maskMaterial.colorNode
+              ownedMaterial.opacityNode = maskMaterial.opacityNode
+              ownedMaterial.positionNode = maskMaterial.positionNode
+              ownedMaterial.alphaTest = maskMaterial.alphaTest
+              ownedMaterial.side = maskMaterial.side
               ownedMaterial.needsUpdate = true
             }
             maskMaterial = ownedMaterial
@@ -523,6 +591,19 @@ export class MergedOutlineNode extends TempNode {
   private _disposeProxyMaterial(proxy: Mesh | Sprite) {
     this._proxyMaskMaterials.get(proxy)?.dispose()
     this._proxyMaskMaterials.delete(proxy)
+  }
+
+  private _pruneCutoutMasks() {
+    for (const [materials, used] of [
+      [this._cutoutMasksA, this._usedCutoutMasksA],
+      [this._cutoutMasksB, this._usedCutoutMasksB],
+    ] as const) {
+      for (const [source, mask] of materials) {
+        if (used.has(source)) continue
+        mask.dispose()
+        materials.delete(source)
+      }
+    }
   }
 
   private _runEdgePipeline(renderer: any, group: 'A' | 'B') {
@@ -759,6 +840,10 @@ export class MergedOutlineNode extends TempNode {
     this._proxiesB.clear()
     this._cacheA.clear()
     this._cacheB.clear()
+    for (const mask of this._cutoutMasksA.values()) mask.dispose()
+    for (const mask of this._cutoutMasksB.values()) mask.dispose()
+    this._cutoutMasksA.clear()
+    this._cutoutMasksB.clear()
     this._depthRT.dispose()
     this._groupA.dispose()
     this._groupB.dispose()

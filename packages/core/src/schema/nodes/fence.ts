@@ -99,6 +99,10 @@ export const FenceNode = BaseNode.extend({
   // is resolved again for both preview and committed geometry.
   supportSurfaceNodeId: z.string().optional(),
   // Manual vertical offset from the elected slab, shaped surface, or level base.
+  // Registered top surface supporting a drawn railing on the same level.
+  supportSurfaceId: z.string().optional(),
+  // Manual vertical offset from the elected slab or level support. This moves
+  // the complete fence body without changing its height.
   supportOffset: z.number().finite().optional(),
   surfaceMode: FenceSurfaceMode.default('auto'),
   transitionMode: FenceTransitionMode.default('slope'),

@@ -208,6 +208,7 @@ export function buildFenceGeometry(
           return host?.type === 'slab' ? liftedManualSlab(nodes, host) : host
         },
         startGround,
+          nodes,
       )
     : 0
   const lift = supportAt

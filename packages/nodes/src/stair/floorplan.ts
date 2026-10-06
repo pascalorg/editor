@@ -39,9 +39,10 @@ import { buildFloorplanStairEntry } from './plan-entry'
 
 /** The stair parent emits its complete cumulative segment chain. */
 export function buildStairFloorplan(
-  stair: StairNode,
+  rawStair: StairNode,
   ctx: GeometryContext,
 ): FloorplanGeometry | null {
+  const stair = rawStair
   const segments = (ctx.children ?? []).filter(
     (child): child is StairSegmentNode => child.type === 'stair-segment',
   )

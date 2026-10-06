@@ -218,10 +218,10 @@ export function projectRunToSurfaceAngleLock(
   ]
 }
 
-type DistributionRunToolConfig = {
+export type DistributionRunToolConfig = {
   active: boolean
   levelId: AnyNodeId | null
-  toolName: 'duct-segment' | 'pipe-segment'
+  toolName: string
   initialStart?: RunPoint | null
   initialConnection?: RunConnection | null
   getPorts: () => ScenePort[]

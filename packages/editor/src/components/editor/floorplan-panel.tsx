@@ -18,7 +18,6 @@ import {
   type FenceNode,
   type FloorplanGeometry,
   type GeometryContext,
-  type GridEvent,
   type GuideNode,
   getRenderableSlabPolygon,
   getWallChordFrame,
@@ -7990,22 +7989,6 @@ export function FloorplanPanel({
       useStairBuildPreview.getState().reset()
       return
     }
-
-    const handleGridMove = (event: GridEvent) => {
-      // Publish to the dedicated store (deduped on the snapped point), NOT panel
-      // state: the stair preview lives in `FloorplanStairBuildPreviewLayer`, so a
-      // per-move update re-renders only that tiny leaf instead of this entire
-      // (~200ms) panel — the same pattern that keeps column/elevator smooth.
-      useStairBuildPreview
-        .getState()
-        .setPoint(getSnappedFloorplanPoint([event.localPosition[0], event.localPosition[2]]))
-    }
-
-    emitter.on('grid:move', handleGridMove)
-
-    return () => {
-      emitter.off('grid:move', handleGridMove)
-    }
   }, [isStairBuildActive])
 
   useEffect(() => {
@@ -9278,7 +9261,10 @@ export function FloorplanPanel({
         )
         const fenceGridBase = snapWallPointToGrid(planPoint)
         const fenceLocked =
-          fenceSnapped[0] !== fenceGridBase[0] || fenceSnapped[1] !== fenceGridBase[1]
+          getFenceDrawingSurface() !== null ||
+          event.altKey ||
+          fenceSnapped[0] !== fenceGridBase[0] ||
+          fenceSnapped[1] !== fenceGridBase[1]
         let snappedPoint = fenceSnapped
         if (fenceLocked) useAlignmentGuides.getState().clear()
         // Alignment lines show in every mode; the pull applies only when
