@@ -295,6 +295,13 @@ export function snapFenceDraftPoint(args: {
   return fenceSnapTarget ?? findWallSnapTarget(basePoint, walls) ?? basePoint
 }
 
+function getFenceDefaultsForCurrentLevel() {
+  const defaults = useEditor.getState().toolDefaults.fence ?? {}
+  if (typeof defaults.supportSurfaceId !== 'string' || getFenceDrawingSurface()) return defaults
+  const { supportSurfaceId: _supportSurfaceId, ...unhostedDefaults } = defaults
+  return unhostedDefaults
+}
+
 export function createFenceOnCurrentLevel(
   start: FencePlanPoint,
   end: FencePlanPoint,
@@ -313,7 +320,7 @@ export function createFenceOnCurrentLevel(
   // spacing, …) merge in first; `name`/`start`/`end` always win. The
   // schema parse validates and drops anything unexpected.
   const defaults = {
-    ...useEditor.getState().toolDefaults.fence,
+    ...getFenceDefaultsForCurrentLevel(),
     ...getFenceInheritedDefaults(start, context),
   }
   const authoredFence = FenceNode.parse({
@@ -359,7 +366,7 @@ export function createSplineFenceOnCurrentLevel(
 
   const fenceCount = Object.values(nodes).filter((node) => node.type === 'fence').length
   const defaults = {
-    ...useEditor.getState().toolDefaults.fence,
+    ...getFenceDefaultsForCurrentLevel(),
     ...getFenceInheritedDefaults(start, context),
   }
   const authoredFence = FenceNode.parse({

@@ -326,6 +326,7 @@ export const StairTool: React.FC = () => {
   const ownedGeometryRef = useRef(previewGeometry)
   const geometryRiseRef = useRef(DEFAULT_LEVEL_HEIGHT)
   useEffect(() => () => ownedGeometryRef.current.dispose(), [])
+  useEffect(() => () => useEditor.getState().setToolDefaults('stair', null), [])
 
   useEffect(() => {
     if (!currentLevelId) return
@@ -742,7 +743,6 @@ export const StairTool: React.FC = () => {
       openingPreview.clear()
       useFacingPose.getState().clear()
       useStairBuildPreview.getState().reset()
-      useEditor.getState().setToolDefaults('stair', null)
     }
   }, [currentLevelId])
 

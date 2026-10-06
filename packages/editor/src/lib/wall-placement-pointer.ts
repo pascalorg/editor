@@ -10,6 +10,7 @@ export function createWallPointerTracker(source?: {
   position: readonly number[]
 }) {
   let forgotten = !source
+  let grabOffset: { x: number; y: number } | null = null
   let anchor: { wallId: string; side: WallSide; x: number; y: number } | null = null
   return {
     resolve(wallId: string, side: WallSide, point: Point): [number, number] {
@@ -17,18 +18,20 @@ export function createWallPointerTracker(source?: {
         const preserve =
           !forgotten && source?.wallId === wallId && (!source.side || source.side === side)
         if (!preserve) forgotten = true
+        if (preserve && !grabOffset) {
+          grabOffset = { x: source!.position[0]! - point[0], y: source!.position[1]! - point[1] }
+        }
         anchor = {
           wallId,
           side,
-          x: preserve ? source!.position[0]! - point[0] : 0,
-          y: preserve ? source!.position[1]! - point[1] : 0,
+          x: preserve ? grabOffset!.x : 0,
+          y: preserve ? grabOffset!.y : 0,
         }
       }
       return [point[0] + anchor.x, point[1] + anchor.y]
     },
     leave() {
       anchor = null
-      forgotten = true
     },
   }
 }
