@@ -73,7 +73,7 @@ export const viewSceneTool = {
           .min(1)
           .max(8_000_000)
           .describe(
-            'The photo: the URL of a file the user attached, or a data:image/...;base64 URL (read the file and encode it).',
+            'The photo as a data:image/...;base64 URL (read the file and encode it); in the chat, the URL of a file the user attached works too.',
           ),
         region: z
           .array(z.number().min(0))

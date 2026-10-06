@@ -12,6 +12,7 @@ import {
   WindowNode,
 } from '../schema'
 import {
+  photoCropSize,
   type SceneViewBox,
   sceneViewBounds,
   sceneViewNote,
@@ -335,5 +336,14 @@ describe("the photo's crop beside the view", () => {
       }
       expect(code).toBe('photo_region_invalid')
     }
+  })
+})
+
+// Both hosts return a crop at most 1280 px long, as a view is (the hosted one capped, the chat's
+// did not: a whole 4000-px photo as the region went to the model at full size).
+describe("a crop's size", () => {
+  test('kept below 1280 px on its longer side, never enlarged', () => {
+    expect(photoCropSize(4000, 3000)).toEqual({ width: 1280, height: 960 })
+    expect(photoCropSize(560, 270)).toEqual({ width: 560, height: 270 })
   })
 })

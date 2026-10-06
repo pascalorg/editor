@@ -61,6 +61,15 @@ export type SceneViewPose =
 /** The picture's size: enough to read a facade's bays, few tokens. */
 export const VIEW_SIZE = { w: 1280, h: 800 } as const
 const ASPECT = VIEW_SIZE.w / VIEW_SIZE.h
+
+/** A crop comes back at most this long on either host: the region as the photo has it, never larger than a view. */
+export const PHOTO_CROP_LONGEST = VIEW_SIZE.w
+
+/** The size a crop of `width` × `height` pixels comes back at. */
+export function photoCropSize(width: number, height: number) {
+  const scale = Math.min(1, PHOTO_CROP_LONGEST / Math.max(width, height))
+  return { width: Math.round(width * scale), height: Math.round(height * scale) }
+}
 const DEFAULT_FOV = 45
 const DEFAULT_ELEVATION = 12
 const MARGIN = 1.08
