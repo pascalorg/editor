@@ -13,6 +13,7 @@ import { registerClearScene } from './clear-scene'
 import { registerCreateWall } from './create-wall'
 import { registerCreateRoom } from './room-tools'
 import { registerStructureTools } from './structure-tools'
+import { registerUndo } from './undo'
 
 // An agent that starts over clears the project on purpose; a write that would empty it by
 // accident is refused, as the hosted store refuses it (the scaffold: a site, a building, a level).
@@ -105,6 +106,7 @@ async function houseSession() {
   registerClearScene(server, operations)
   registerApplyPatch(server, operations)
   registerCreateWall(server, operations)
+  registerUndo(server, operations)
   const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
   const client = new Client({ name: 'clear-client', version: '0.0.0' })
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
@@ -141,6 +143,17 @@ describe('clear_scene', () => {
     const stored = await guarded.store.load(meta.id)
     const types = Object.values(stored!.graph.nodes).map((node) => (node as { type: string }).type)
     expect(types.sort()).toEqual(['building', 'level', 'site', 'wall'])
+  })
+
+  test('leaves nothing to undo: an undo after a clear does not bring back an empty or old scene', async () => {
+    const { bridge, call, guarded } = await houseSession()
+    const cleared = await call('clear_scene', { reason: 'The person asked to start over.' })
+    expect(cleared.isError).toBe(false)
+    const saves = guarded.saves.length
+    await call('undo', { steps: 1 })
+    const types = Object.values(bridge.getNodes()).map((node) => node.type)
+    expect(types.sort()).toEqual(['building', 'level', 'site'])
+    expect(guarded.saves.length).toBe(saves)
   })
 
   test("keeps the project's installed plugins, in the session and in the saved scene", async () => {

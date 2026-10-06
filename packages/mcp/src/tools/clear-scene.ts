@@ -9,7 +9,7 @@ import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './
 /**
  * `clear_scene`: the scene goes back to the host's default scaffold (a site, a building, a level),
  * then is saved with `allowSceneWipe`, so a store that refuses an accidental wipe takes this one.
- * The project's installed plugins stay, as the editor's own clear keeps them.
+ * The project's installed plugins stay, and its undo history goes, as the editor's own clear does.
  */
 export function registerClearScene(server: McpServer, operations: SceneOperations): void {
   server.registerTool(
@@ -40,6 +40,8 @@ export function registerClearScene(server: McpServer, operations: SceneOperation
             materials: {},
             installedPlugins,
           })
+        // Nothing to undo back into: the empty intermediate or the old scene, saved over the clear.
+        operations.clearHistory()
         const removed = Math.max(0, before - Object.keys(operations.getNodes()).length)
         const persistence = await publishLiveSceneSnapshot(operations, clearSceneTool.name, {
           allowSceneWipe: true,
