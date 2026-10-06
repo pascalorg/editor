@@ -941,6 +941,19 @@
         "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
         "openWorldHint": "It operates only on data supplied by or already available inside the connected Pascal service and does not access the public internet."
       }
+    },
+    {
+      "name": "view_scene",
+      "annotations": {
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It renders a picture of the connected Pascal scene in an editor tab open on the project, without changing the scene.",
+        "destructiveHint": "It does not create, update, replace, delete, load, or save Pascal scene or project state.",
+        "openWorldHint": "It operates only on the connected Pascal service and the user's own editor tab and does not access the public internet."
+      }
     }
   ]
 }

@@ -27,6 +27,7 @@ import { registerUndo } from './undo'
 import { registerValidateDesign } from './validate-design'
 import { registerValidateScene } from './validate-scene'
 import { registerVariantTools } from './variants'
+import { registerViewScene, type SceneViewHost } from './view-scene'
 
 /**
  * Register every non-vision MCP tool against the given server.
@@ -36,16 +37,17 @@ import { registerVariantTools } from './variants'
  * Scene-lifecycle tools (save/load/list/delete/rename scene) are registered
  * when persistence operations are available.
  */
-/** What the host lends the tools: its item library and script compiles. */
+/** What the host lends the tools: its item library, script compiles, a view. */
 export type ToolHosts = {
   catalog?: AssetCatalog
   geometryScripts?: GeometryScriptHost
+  sceneViews?: SceneViewHost
 }
 
 export function registerTools(
   server: McpServer,
   operations: SceneOperations,
-  { catalog, geometryScripts }: ToolHosts = {},
+  { catalog, geometryScripts, sceneViews }: ToolHosts = {},
 ): void {
   registerGetScene(server, operations)
   registerDescribeNode(server, operations)
@@ -55,6 +57,7 @@ export function registerTools(
   registerAddObject(server, operations, geometryScripts)
   registerGetSource(server, operations, geometryScripts)
   registerMeasure(server, operations)
+  registerViewScene(server, operations, sceneViews)
   registerConstructionTools(server, operations)
   registerRoomTools(server, operations, geometryScripts)
   registerApplyPatch(server, operations)
