@@ -199,6 +199,11 @@ export function sceneViewPose(box: SceneViewBox, input: SceneViewInput): SceneVi
  * The view to render and its size: from a photo's camera at the photo's aspect, so the two lay
  * one beside the other; else framing the target at the standard size.
  */
+/** What a view comes with, on both surfaces: a picture to compare, not a measure. */
+export function sceneViewNote() {
+  return 'A picture to compare with the reference, not a measure: take sizes and counts from the tools.'
+}
+
 export function sceneViewPlan(
   nodes: Readonly<Record<string, AnyNode>>,
   input: SceneViewInput,

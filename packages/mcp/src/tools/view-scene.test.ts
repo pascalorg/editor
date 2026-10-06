@@ -94,6 +94,7 @@ describe('view_scene over the MCP', () => {
         tab: 'tab_1',
         capturedAt: '2026-10-05T15:30:00.000Z',
       })
+      expect(String(json(content).note)).toContain('not a measure')
     } finally {
       await view.close()
     }

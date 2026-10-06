@@ -5,6 +5,7 @@ import { type AnyNode, BuildingNode, GuideNode, LevelNode, WallNode } from '../s
 import {
   type SceneViewBox,
   sceneViewBounds,
+  sceneViewNote,
   sceneViewPlan,
   sceneViewPose,
   VIEW_SIZE,
@@ -198,5 +199,11 @@ describe("the photo's camera", () => {
     const plan = sceneViewPlan(building(), { from: 'south', eyeHeight: 1.7 })
     expect(plan.size).toEqual({ ...VIEW_SIZE })
     expect(plan.pose.position[1]).toBe(1.7)
+  })
+})
+
+describe('the note a view comes with', () => {
+  test('says a view is a picture to compare, not a measure', () => {
+    expect(sceneViewNote()).toContain('not a measure')
   })
 })

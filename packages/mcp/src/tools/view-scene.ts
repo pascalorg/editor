@@ -1,5 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { type SceneViewPose, sceneViewPlan } from '@pascal-app/core/agent-operations'
+import { type SceneViewPose, sceneViewNote, sceneViewPlan } from '@pascal-app/core/agent-operations'
 import { refuse, viewSceneTool } from '@pascal-app/core/agent-tools'
 import type { AnyNode } from '@pascal-app/core/schema'
 import type { SceneOperations } from '../operations'
@@ -63,7 +63,7 @@ export function registerViewScene(
           size: { width: shot.width, height: shot.height },
           tab: shot.tab,
           capturedAt: shot.capturedAt,
-          note: 'A picture to compare with the reference, not a measure: take sizes and counts from the tools.',
+          note: sceneViewNote(),
         }
         return {
           content: [
