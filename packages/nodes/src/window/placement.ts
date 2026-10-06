@@ -3,6 +3,7 @@
 import type { ToolHint, WindowNode } from '@pascal-app/core'
 import {
   getWindowStyleOverrides,
+  SILLLESS_WINDOW_TYPES,
   WINDOW_STYLE_LABELS,
   WINDOW_STYLES,
   type WindowStyle,
@@ -45,10 +46,18 @@ export const useWindowPlacement = create<WindowPlacementState>((set, get) => ({
   cycleStyle: () => set({ style: next(WINDOW_STYLES, get().style) }),
 }))
 
-/** The window the tool places: the chips' type and style, as the panel writes them. */
+/**
+ * The window the tool places: the chips' type and style, as the panel writes them. The draft takes
+ * these by merge and the tool has no sill control, so the type always says whether there is a sill:
+ * cycled past Bay or Bow, a Fixed window would otherwise keep their "no sill".
+ */
 export function placedWindowFields(): Partial<WindowNode> {
   const { type, style } = useWindowPlacement.getState()
-  return { ...windowTypeFields(type), ...getWindowStyleOverrides(style) }
+  return {
+    ...windowTypeFields(type),
+    sill: !SILLLESS_WINDOW_TYPES.has(type),
+    ...getWindowStyleOverrides(style),
+  }
 }
 
 export const WINDOW_PLACEMENT_HINTS: ToolHint[] = [
