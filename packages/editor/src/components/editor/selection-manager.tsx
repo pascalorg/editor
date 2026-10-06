@@ -921,7 +921,7 @@ export const SelectionManager = () => {
     // The last hover event, replayed when the application scope cycles so the
     // preview + chip update under a stationary cursor (Shift fires no pointer move).
     let lastEnterEvent: NodeEvent | null = null
-    // Paint never stops a pointer event. R3F keeps a hover that stopped
+    // Paint hover never stops a pointer event. R3F keeps a hover that stopped
     // propagation stopping every later move over that object, which would pin
     // the pointer to a door or a wall it should pass through where it opens
     // (see `paint-pass-through`). So the nearest surface that takes a pointer
@@ -1361,6 +1361,9 @@ export const SelectionManager = () => {
         return
       }
 
+      // Picking switches sub-mode synchronously and replays the hover, replacing
+      // the event claim. Consume this click before a farther hit can paint.
+      if (isPaintPicking()) event.stopPropagation()
       interaction.apply()
       sfxEmitter.emit('sfx:paint-apply')
       if (activePreview?.key === interaction.key) {
