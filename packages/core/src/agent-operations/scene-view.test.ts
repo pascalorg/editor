@@ -301,3 +301,39 @@ describe('a close-up of one element', () => {
     expect(lamp.max.map((v) => Math.round(v * 100) / 100)).toEqual([5.2, 1.6, 4.2])
   })
 })
+
+// L51, the other half: the photo's crop of the same element comes back beside the close-up, in one
+// call. The region is in the photo's pixels, as an agent measures it; the host crops.
+describe("the photo's crop beside the view", () => {
+  const scene = () => {
+    const wall = WallNode.parse({ id: 'wall_p', parentId: 'level_p', start: [0, 0], end: [8, 0] })
+    const level = LevelNode.parse({ id: 'level_p', parentId: 'building_p', children: [wall.id] })
+    const building = BuildingNode.parse({ id: 'building_p', children: [level.id] })
+    return Object.fromEntries([building, level, wall].map((n) => [n.id, n])) as Record<
+      string,
+      AnyNode
+    >
+  }
+
+  test('a region of the photo is passed on to crop, whole numbers of pixels', () => {
+    const { crop } = sceneViewPlan(scene(), {
+      photo: { source: 'data:image/png;base64,AAAA', region: [60.4, 200, 620, 470.6] },
+    })
+    expect(crop).toEqual({ source: 'data:image/png;base64,AAAA', region: [60, 200, 620, 471] })
+  })
+
+  test('an empty or inverted region is refused', () => {
+    for (const region of [
+      [100, 100, 100, 200],
+      [300, 100, 200, 200],
+    ]) {
+      let code = ''
+      try {
+        sceneViewPlan(scene(), { photo: { source: 'x', region } })
+      } catch (error) {
+        if (isAgentRefusal(error)) code = error.code
+      }
+      expect(code).toBe('photo_region_invalid')
+    }
+  })
+})

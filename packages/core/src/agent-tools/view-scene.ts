@@ -66,5 +66,23 @@ export const viewSceneTool = {
       .describe(
         "A photo's camera, as straighten_facade_photo returned it (camera.pose, passed whole): the render takes its eye, aim and field of view at the photo's aspect. Not with from, position, elevation, eyeHeight, fov or projection.",
       ),
+    photo: z
+      .looseObject({
+        source: z
+          .string()
+          .min(1)
+          .max(8_000_000)
+          .describe(
+            'The photo: the URL of a file the user attached, or a data:image/...;base64 URL (read the file and encode it).',
+          ),
+        region: z
+          .array(z.number().min(0))
+          .length(4)
+          .describe("[left, top, right, bottom] in the photo's pixels: the element to compare."),
+      })
+      .optional()
+      .describe(
+        "The photo's crop of the element the view frames, returned beside it in the same call: a door's glass, a lamp's shape, a window's panes, at detail scale, to say what differs.",
+      ),
   },
 }

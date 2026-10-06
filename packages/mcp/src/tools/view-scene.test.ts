@@ -124,6 +124,53 @@ describe('view_scene over the MCP', () => {
     }
   })
 
+  // L51: run 3 cropped the photo 9 times in the shell and compared whole facades only. The photo's
+  // crop of the element comes back beside the close-up, each image after its label.
+  test("the photo's crop comes back beside the view, each image labelled", async () => {
+    const crops: unknown[] = []
+    const view = await viewWith({
+      capture: async (request) => ({
+        image: new Uint8Array([1]),
+        mimeType: 'image/webp',
+        width: request.size.w,
+        height: request.size.h,
+        tab: 'tab_1',
+        capturedAt: '2026-10-05T19:55:00.000Z',
+      }),
+      crop: async (request) => {
+        crops.push(request)
+        return { image: new Uint8Array([9]), mimeType: 'image/png', width: 560, height: 270 }
+      },
+    })
+    try {
+      const photo = { source: 'data:image/png;base64,AAAA', region: [60, 200, 620, 470] }
+      const { isError, content } = await view.call({ photo })
+      expect(isError).toBe(false)
+      expect(crops).toEqual([photo])
+      expect(content.filter((part) => part.type === 'image').map((part) => part.data)).toEqual([
+        Buffer.from([1]).toString('base64'),
+        Buffer.from([9]).toString('base64'),
+      ])
+      const texts = content.filter((part) => part.type === 'text').map((part) => part.text ?? '')
+      expect(texts.some((text) => text.includes('photo'))).toBe(true)
+      expect(json(content)).toMatchObject({ photoRegion: [60, 200, 620, 470] })
+    } finally {
+      await view.close()
+    }
+  })
+
+  test('a host that cannot crop a photo says so', async () => {
+    const view = await viewWith({
+      capture: async () => refuse('unexpected', 'not called'),
+    })
+    try {
+      const { content } = await view.call({ photo: { source: 'x', region: [0, 0, 10, 10] } })
+      expect(json(content)).toMatchObject({ code: 'photo_crop_unavailable' })
+    } finally {
+      await view.close()
+    }
+  })
+
   test('with no editor open on the project, it says so', async () => {
     const view = await viewWith({
       capture: async () =>

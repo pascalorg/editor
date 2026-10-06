@@ -21,6 +21,27 @@ export type SceneViewInput = {
   fov?: number
   projection?: 'perspective' | 'orthographic'
   camera?: { position: number[]; target: number[]; fov: number; aspect: number }
+  photo?: { source: string; region: number[] }
+}
+
+/** A region of the reference photo the host crops and returns beside the view (L51). */
+export type SceneViewCrop = { source: string; region: [number, number, number, number] }
+
+function cropOf(photo: SceneViewInput['photo']): SceneViewCrop | undefined {
+  if (!photo) return undefined
+  const [left, top, right, bottom] = photo.region.map(Math.round) as [
+    number,
+    number,
+    number,
+    number,
+  ]
+  if (!(right > left && bottom > top))
+    refuse(
+      'photo_region_invalid',
+      `The region [${photo.region.join(', ')}] holds nothing: give [left, top, right, bottom] in the photo's pixels, right of left and below top.`,
+      { region: photo.region },
+    )
+  return { source: photo.source, region: [left, top, right, bottom] }
 }
 
 export type SceneViewPose =
@@ -274,8 +295,9 @@ export function sceneViewNote() {
 export function sceneViewPlan(
   nodes: Readonly<Record<string, AnyNode>>,
   input: SceneViewInput,
-): { pose: SceneViewPose; size: { w: number; h: number } } {
+): { pose: SceneViewPose; size: { w: number; h: number }; crop?: SceneViewCrop } {
   const { camera } = input
+  const crop = cropOf(input.photo)
   if (camera) {
     const own = (
       ['from', 'position', 'elevation', 'eyeHeight', 'fov', 'projection'] as const
@@ -294,6 +316,7 @@ export function sceneViewPlan(
         fov: camera.fov,
       },
       size: { w: VIEW_SIZE.w, h: Math.round(VIEW_SIZE.w / camera.aspect) },
+      ...(crop ? { crop } : {}),
     }
   }
   const opening = openingOf(nodes, input.target ? nodes[input.target] : undefined)
@@ -306,5 +329,6 @@ export function sceneViewPlan(
       ...(from ? { from } : {}),
     }),
     size: { ...VIEW_SIZE },
+    ...(crop ? { crop } : {}),
   }
 }
