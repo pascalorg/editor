@@ -165,6 +165,7 @@ import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOver
 import { FloorplanGroupActionMenu } from '../editor-2d/floorplan-group-action-menu'
 import { FloorplanSiteKeyHandler } from '../editor-2d/floorplan-hotkey-handlers'
 import { FloorplanMeasurementToolLayer } from '../editor-2d/floorplan-measurement-tool-layer'
+import { FloorplanOpenWallEndsLayer } from '../editor-2d/floorplan-open-wall-ends-layer'
 import { FloorplanRegisteredToolLayer } from '../editor-2d/floorplan-registered-tool-layer'
 import { FloorplanRegistryActionMenu } from '../editor-2d/floorplan-registry-action-menu'
 import { FloorplanRegistryMoveOverlay } from '../editor-2d/floorplan-registry-move-overlay'
@@ -11582,6 +11583,7 @@ export function FloorplanPanel({
                       `floorplan-wall-move-ghost-layer.tsx`. */}
                   <FloorplanWallMoveGhostLayer />
                 </g>
+                {activeDrawingType !== 'site-plan' && <FloorplanOpenWallEndsLayer />}
                 <FloorplanMeasurementToolLayer />
                 <FloorplanRegisteredToolLayer />
                 {floorplanSceneSlot}
