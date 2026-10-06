@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { measureStair } from '@pascal-app/core'
 import { pointInPolygon, type Vec2 } from '@pascal-app/core/agent-operations'
-import { type AnyNodeId, LevelNode } from '@pascal-app/core/schema'
+import { type AnyNodeId, LevelNode, SlabNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { registerConstructionTools } from './construction-tools'
 import { registerSharedTools } from './shared-tools'
@@ -271,7 +272,11 @@ describe('construction tools', () => {
     bridge.updateNode(parsed.stairId, { position: [1, 0, -1] })
     const moved = bridge.getNode(openingId)
     if (moved?.type !== 'floor-opening') throw new Error('the opening went with the move')
-    expect(moved.polygon[0]![0]).toBeCloseTo(opening.polygon[0]![0] + 1)
+    // The ring may start at another corner once re-planned: its extent is what moves.
+    const minX = (ring: [number, number][]) => Math.min(...ring.map(([x]) => x))
+    expect(minX(moved.polygon as [number, number][])).toBeCloseTo(
+      minX(opening.polygon as [number, number][]) + 1,
+    )
     expect(bridge.getHistory().pastCount).toBe(1)
     expect(bridge.undo()).toBe(1)
     expect(bridge.getNode(openingId)).toMatchObject({ polygon: opening.polygon })
@@ -422,5 +427,78 @@ describe('construction tools', () => {
     expect(parsed.issues.map((issue: { message: string }) => issue.message).join('\n')).toContain(
       'dedicated roof level',
     )
+  })
+
+  // Main's sizing of a new flight (#1000), on create_stair: the run and the risers come from the
+  // stair design targets, and the flight's rise is resolved against what it stands on.
+  test('create_stair sizes its flight from the design targets', async () => {
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
+    const ground = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const upper = LevelNode.parse({ name: 'Second Floor', level: 1, metadata: { height: 2.8 } })
+    bridge.createNode(upper, building.id)
+    for (const level of [ground, upper]) {
+      const result = await client.callTool({
+        name: 'create_story_shell',
+        arguments: {
+          levelId: level.id,
+          footprint: [
+            [-4, -3],
+            [4, -3],
+            [4, 3],
+            [-4, 3],
+          ],
+          wallHeight: 2.8,
+        },
+      })
+      expect(result.isError).toBeFalsy()
+    }
+    const result = await client.callTool({
+      name: 'create_stair',
+      arguments: { levelId: ground.id, toLevelId: upper.id, x: 0, z: -1, width: 1, height: 2.8 },
+    })
+    expect(result.isError).toBeFalsy()
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const stair = bridge.getNode(parsed.stairId)
+    if (stair?.type !== 'stair') throw new Error('Missing stair')
+    const flight = bridge.getNode(stair.children[0]!)
+    if (flight?.type !== 'stair-segment') throw new Error('Missing flight')
+    expect(flight.height / flight.stepCount).toBeLessThanOrEqual(0.18)
+    expect(flight.length / flight.stepCount).toBeGreaterThanOrEqual(0.25)
+    expect(stair.stepCount).toBe(flight.stepCount)
+    expect(
+      measureStair(stair, bridge.getNodes()).diagnostics.some(
+        (issue) => issue.severity === 'error',
+      ),
+    ).toBe(false)
+  })
+
+  test('create_stair resolves the rise above a raised support', async () => {
+    const building = Object.values(bridge.getNodes()).find((node) => node.type === 'building')!
+    const ground = Object.values(bridge.getNodes()).find((node) => node.type === 'level')!
+    bridge.updateNode(ground.id, { height: 3 })
+    const upper = LevelNode.parse({ level: 1, height: 3 })
+    bridge.createNode(upper, building.id)
+    const polygon: [number, number][] = [
+      [-8, -8],
+      [8, -8],
+      [8, 8],
+      [-8, 8],
+    ]
+    bridge.createNode(SlabNode.parse({ elevation: 0.6, polygon, autoFromWalls: false }), ground.id)
+    bridge.createNode(SlabNode.parse({ elevation: 0, polygon, autoFromWalls: false }), upper.id)
+    const result = await client.callTool({
+      name: 'create_stair',
+      arguments: { levelId: ground.id, toLevelId: upper.id, x: 0, z: 0 },
+    })
+    expect(result.isError).toBeFalsy()
+    const payload = JSON.parse((result.content as Array<{ text: string }>)[0]!.text)
+    const stair = bridge.getNode(payload.stairId)
+    if (stair?.type !== 'stair') throw new Error('Missing stair')
+    const flight = bridge.getNode(stair.children[0]!)
+    if (flight?.type !== 'stair-segment') throw new Error('Missing flight')
+    expect(flight.height).toBeCloseTo(2.4)
+    expect(flight.height / flight.stepCount).toBeLessThanOrEqual(0.18)
+    expect(flight.length / flight.stepCount).toBeGreaterThanOrEqual(0.25)
+    expect(measureStair(stair, bridge.getNodes()).totalRise).toBeCloseTo(2.4)
   })
 })

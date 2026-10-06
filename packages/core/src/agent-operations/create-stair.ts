@@ -4,9 +4,8 @@ import { cutFloorOpening } from '../commands/structure/floor-opening'
 import { adjacentLevelId } from '../lib/floor-opening-intent'
 import { type AnyNode, type AnyNodeId, generateId, LevelNode, StairNode } from '../schema'
 import { DEFAULT_LEVEL_HEIGHT } from '../services/level-height'
-import { getLevelFloorToFloorHeight } from '../services/storey'
 import { planOwnedFloorOpenings } from '../systems/owned-floor-openings'
-import { createDefaultStairSegment } from '../systems/stair/stair-flight'
+import { planStairCreation } from '../systems/stair/stair-sizing'
 import { refuseRoofLevel } from './add-wall'
 import { applySceneChanges } from './apply-changes'
 import { type LevelTargetInput, requireLevel, targetLevel } from './level-target'
@@ -37,7 +36,6 @@ type CreateStairInput = LevelTargetInput & {
   openingRotation?: number
 }
 
-const RISER = 0.18
 /** The margin round a stair's opening when none is given, as the editor's stair tool cuts it. */
 const OPENING_MARGIN = 0.08
 
@@ -147,41 +145,50 @@ export const createStair: AgentOperation<CreateStairInput> = (nodes, input, cont
   const withUpper = applySceneChanges(nodes, changes)
   const rotation = input.rotation ?? 0
   const width = input.width ?? 1
-  const length = input.length ?? 3
-  // No height: the flight follows its storey (no totalRise) and keeps tracking it.
-  const rise = input.height ?? getLevelFloorToFloorHeight(from.id, withUpper)
-  const stepCount = input.steps ?? Math.max(3, Math.round(rise / RISER))
-  const segment = {
-    ...createDefaultStairSegment({
-      width,
-      length,
-      height: rise,
-      stepCount,
-      attachmentSide: 'front',
-      fillToFloor: true,
-    }),
-    ...(preset ? { materialPreset: preset } : {}),
-  }
   const stairs = Object.values(nodes).filter((node) => node.type === 'stair').length
   const railingMode = input.railingMode ?? 'both'
-  const stair = StairNode.parse({
+  const draft = StairNode.parse({
     parentId: from.id,
     name: input.name ?? `Staircase ${stairs + 1}`,
     position: [input.x, 0, input.z],
     rotation: (rotation * Math.PI) / 180,
     stairType: 'straight',
+    uniformRisers: true,
     fromLevelId: from.id,
     toLevelId: upper.id,
     slabOpeningMode: owned ? 'destination' : 'none',
     openingOffset: input.openingOffset ?? OPENING_MARGIN,
     width,
-    stepCount,
     railingMode,
     ...(preset ? { materialPreset: preset } : {}),
+    // No height: the flight follows its storey (no totalRise) and keeps tracking it.
     ...(input.height === undefined ? {} : { totalRise: input.height }),
     ...(asGiven ? { metadata: { openingManaged: 'floor-opening' } } : {}),
-    children: [segment.id],
+    children: [],
   })
+  // As main sizes a new flight: the run and the risers from the stair's design targets unless
+  // given, the rise resolved against what the flight stands on and arrives at.
+  const { flight } = planStairCreation(
+    draft,
+    {
+      ...withUpper,
+      [from.id]: {
+        ...withUpper[from.id],
+        children: [...(withUpper[from.id] as LevelNode).children, draft.id],
+      } as AnyNode,
+      [draft.id]: draft,
+    },
+    {
+      width,
+      attachmentSide: 'front',
+      fillToFloor: true,
+      ...(input.length === undefined ? {} : { length: input.length }),
+      ...(input.steps === undefined ? {} : { stepCount: input.steps }),
+    },
+  )
+  const segment = { ...flight, ...(preset ? { materialPreset: preset } : {}) }
+  const { length, stepCount } = segment
+  const stair = StairNode.parse({ ...draft, stepCount, children: [segment.id] })
   changes.create.push(
     { node: stair, parentId: from.id },
     { node: { ...segment, parentId: stair.id }, parentId: stair.id },
@@ -257,7 +264,7 @@ export const createStair: AgentOperation<CreateStairInput> = (nodes, input, cont
       upperLevelId: upper.id,
       createdUpperLevel,
       stepCount,
-      rise: Math.round(rise * 1000) / 1000,
+      rise: Math.round(segment.height * 1000) / 1000,
       rotation,
       width,
       length,
