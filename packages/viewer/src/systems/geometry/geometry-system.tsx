@@ -23,7 +23,9 @@ import {
   createSurfaceRoleMaterial,
   type RenderShading,
 } from '../../lib/materials'
+import { createNodeTopSurfaceHeightSampler } from '../../lib/node-top-surface-height'
 import { timeSpan } from '../../lib/perf-tracks'
+import { createSceneSupportHeightSampler } from '../../lib/scene-support-height'
 import useViewer from '../../store/use-viewer'
 
 /**
@@ -74,6 +76,21 @@ export const GeometrySystem = () => {
   // but its geometry inputs are unchanged — e.g. an item reparenting onto a
   // shelf dirties the shelf without altering its boards.
   const builtGeometryKeyRef = useRef<Map<string, GeometryBuildCacheEntry>>(new Map())
+  const liveBuildIds = useRef<Set<AnyNodeId>>(new Set())
+
+  useEffect(() => {
+    const unsubscribe = useLiveNodeOverrides.subscribe((state, previous) => {
+      for (const id of new Set([...state.overrides.keys(), ...previous.overrides.keys()])) {
+        if (state.overrides.get(id) === previous.overrides.get(id)) continue
+        const node = useScene.getState().nodes[id as AnyNodeId]
+        if (node && nodeRegistry.get(node.type)?.geometry) liveBuildIds.current.add(id as AnyNodeId)
+      }
+    })
+    return () => {
+      unsubscribe()
+      liveBuildIds.current.clear()
+    }
+  }, [])
 
   // Re-mark every geometry-backed node dirty whenever a viewer appearance
   // value changes, so `def.geometry` builders re-run and pick up the new
@@ -112,7 +129,7 @@ export const GeometrySystem = () => {
   }, [sceneMaterials])
 
   useFrame(() => {
-    if (dirtyNodes.size === 0) return
+    if (dirtyNodes.size === 0 && liveBuildIds.current.size === 0) return
     const nodes = useScene.getState().nodes
     let rebuiltGeometry = false
 
@@ -128,18 +145,24 @@ export const GeometrySystem = () => {
       { kind: string; parentId: AnyNodeId | null; ids: AnyNodeId[] }
     >()
     const dirtyIds: AnyNodeId[] = []
-    dirtyNodes.forEach((id) => {
+    for (const id of new Set([...dirtyNodes, ...liveBuildIds.current])) {
       const node = nodes[id]
-      if (!node) return
+      if (!node) {
+        liveBuildIds.current.delete(id as AnyNodeId)
+        continue
+      }
       const def = nodeRegistry.get(node.type)
-      if (!def?.geometry) return
+      if (!def?.geometry) {
+        liveBuildIds.current.delete(id as AnyNodeId)
+        continue
+      }
       dirtyIds.push(id as AnyNodeId)
       const parentId = (node.parentId ?? null) as AnyNodeId | null
       const key: BatchKey = `${node.type}::${parentId ?? ''}`
       const existing = batches.get(key)
       if (existing) existing.ids.push(id as AnyNodeId)
       else batches.set(key, { kind: node.type, parentId, ids: [id as AnyNodeId] })
-    })
+    }
 
     // Phase 2 — for each batch whose kind declares `computeLevelData`,
     // collect every sibling in the level + run the precompute once.
@@ -202,7 +225,8 @@ export const GeometrySystem = () => {
         const childLiveOverrideKey = liveChildOverrideKey(node)
         const builtKey = `${shading}|${textures}|${colorPreset}|${sceneTheme}|${def.geometryKey(effectiveNode)}|${childLiveOverrideKey}`
         if (shouldReuseGeometryBuild(builtGeometryKeyRef.current, id, group, builtKey)) {
-          clearDirty(id as AnyNodeId)
+          liveBuildIds.current.delete(id as AnyNodeId)
+          if (dirtyNodes.has(id)) clearDirty(id as AnyNodeId)
           continue
         }
       }
@@ -250,7 +274,8 @@ export const GeometrySystem = () => {
       // tick, R3F wouldn't re-apply the props, leaving the group stuck at
       // origin. Geometry builders are expected to emit local-space children.
 
-      clearDirty(id as AnyNodeId)
+      liveBuildIds.current.delete(id as AnyNodeId)
+      if (dirtyNodes.has(id)) clearDirty(id as AnyNodeId)
     }
     if (rebuiltGeometry) bumpGeometryRevision()
   }, 2)
@@ -338,7 +363,37 @@ function buildGeometryContext(
     return levelId ? levelBaseElevationAt(nodes, levelId, x, z) : 0
   }
 
-  return { resolve, children, siblings, parent, levelBaseAt, levelData, materials }
+  const surfaceSamplers = new Map<AnyNodeId, ReturnType<typeof createNodeTopSurfaceHeightSampler>>()
+  const surfaceHeightAt = (hostId: AnyNodeId, x: number, z: number) => {
+    if (!levelId) return null
+    if (!surfaceSamplers.has(hostId)) {
+      surfaceSamplers.set(hostId, createNodeTopSurfaceHeightSampler(hostId, levelId as AnyNodeId))
+    }
+    return surfaceSamplers.get(hostId)?.(x, z) ?? null
+  }
+
+  const supportSamplers = new Map<string, ReturnType<typeof createSceneSupportHeightSampler>>()
+  const supportHeightAt = (x: number, z: number, selectedHostId?: AnyNodeId) => {
+    if (!levelId) return levelBaseAt(x, z)
+    const key = selectedHostId ?? 'auto'
+    let sampler = supportSamplers.get(key)
+    if (!sampler) {
+      sampler = createSceneSupportHeightSampler(nodes, levelId as AnyNodeId, selectedHostId)
+      supportSamplers.set(key, sampler)
+    }
+    return sampler(x, z)
+  }
+  return {
+    resolve,
+    children,
+    siblings,
+    parent,
+    levelBaseAt,
+    surfaceHeightAt,
+    supportHeightAt,
+    levelData,
+    materials,
+  }
 }
 
 function disposeChildren(group: Group) {

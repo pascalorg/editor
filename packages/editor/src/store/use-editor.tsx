@@ -1320,6 +1320,7 @@ const useEditor = create<EditorState>()(
             selectedId,
           }) ?? get().activePaintTarget
         const activePaintMaterial = resolveActivePaintMaterialFromSelection({
+          materials: useScene.getState().materials,
           nodes: useScene.getState().nodes,
           selectedId,
           selectedMaterialTarget: get().selectedMaterialTarget,

@@ -9,7 +9,7 @@ import {
 } from '@pascal-app/core'
 import {
   clientToPlan,
-  FloorplanDraftWallMeasurement,
+  FloorplanDraftMeasurement,
   type FloorplanToolContext,
   formatLinearMeasurement,
   useFloorplanRender,
@@ -99,7 +99,7 @@ export default function WallSplitFloorplanLayer(_props: FloorplanToolContext) {
         </text>
       ) : (
         wallSplitSegmentLabels(wall, preview).map((segment, index) => (
-          <FloorplanDraftWallMeasurement
+          <FloorplanDraftMeasurement
             key={index}
             labelBackground={isDark ? '#0f172a' : '#ffffff'}
             labelText={isDark ? '#e2e8f0' : '#171717'}

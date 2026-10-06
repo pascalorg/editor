@@ -15,6 +15,7 @@ import {
   duplicateLevelTool,
   findByTypeTool,
   furnishRoomTool,
+  fitStairTool,
   getLevelSummaryTool,
   getNodeTool,
   getWallsTool,
@@ -23,6 +24,7 @@ import {
   placeItemsTool,
   ROOM_TOOL_CONTRACTS,
   searchAssetsTool,
+  measureStairTool,
   verifySceneTool,
 } from '@pascal-app/core/agent-tools'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
@@ -82,6 +84,18 @@ const levelRoleOutput = {
 }
 
 const SHARED_TOOLS: SharedTool[] = [
+  {
+    contract: measureStairTool,
+    operation: AGENT_OPERATIONS.measure_stair,
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
+    outputSchema: { measurements: z.json(), layouts: z.json() },
+  },
+  {
+    contract: fitStairTool,
+    operation: AGENT_OPERATIONS.fit_stair,
+    annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
+    outputSchema: { stairId: z.string().min(1), measurements: z.json(), ...liveSyncOutput },
+  },
   {
     contract: findByTypeTool,
     operation: AGENT_OPERATIONS.find_by_type,
@@ -171,7 +185,9 @@ const SHARED_TOOLS: SharedTool[] = [
       activeLevelId: z.string().nullable(),
       levels: z.array(jsonObject),
       emptyLevelIds: z.array(z.string()),
-      issues: z.array(z.object({ type: z.string(), message: z.string() })),
+      issues: z.array(
+        z.object({ type: z.string(), message: z.string(), severity: z.literal('info').optional() }),
+      ),
       hasIssues: z.boolean(),
       authoredObjects: z
         .array(

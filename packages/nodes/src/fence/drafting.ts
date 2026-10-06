@@ -1,28 +1,92 @@
 import {
+  type AnyNodeId,
   DEFAULT_ANGLE_STEP,
   type FenceConstructionOptions as FenceCommitOptions,
   FenceNode,
-  getTwoPointFenceCurveTangents,
-  getWallCurveFrameAt,
-  getWallCurveLength,
-  isCurvedWall,
+  getFenceCenterlineLength,
+  getFenceSplineLength,
   resolveFenceConstructionSupport,
+  type SceneApi,
+  sampleFenceCenterline,
   snapPointAlongAngleRay,
-  useScene,
   type WallNode,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
-import { sfxEmitter } from '../../../lib/sfx-bus'
-import useEditor from '../../../store/use-editor'
 import {
   findWallSnapTarget,
   getSegmentGridStep,
   isSegmentLongEnough,
   snapPointToGrid,
+  triggerSFX,
+  useEditor,
   type WallPlanPoint,
-} from '../wall/wall-drafting'
+} from '@pascal-app/editor'
 
 export type FencePlanPoint = WallPlanPoint
+
+export type FenceDraftContext = {
+  sceneApi: SceneApi
+  levelId: AnyNodeId | null
+}
+
+const INHERITED_FENCE_FIELDS = [
+  'height',
+  'thickness',
+  'material',
+  'materialPreset',
+  'slots',
+  'baseHeight',
+  'postSpacing',
+  'picketSpacing',
+  'patternDistribution',
+  'patternAlignment',
+  'patternCount',
+  'patternRemainder',
+  'picketWidth',
+  'picketTop',
+  'picketRailCount',
+  'picketProfile',
+  'picketTopClearance',
+  'picketVariation',
+  'picketRailProjection',
+  'postSize',
+  'topRailHeight',
+  'groundClearance',
+  'edgeInset',
+  'slatGap',
+  'postCap',
+  'baseStyle',
+  'surfaceMode',
+  'supportOffset',
+  'transitionMode',
+  'transitionWidth',
+  'showInfill',
+  'infillPlacement',
+  'color',
+  'style',
+] as const satisfies readonly (keyof FenceNode)[]
+
+export function getFenceInheritedDefaults(
+  start: FencePlanPoint,
+  context: FenceDraftContext,
+  currentNodes: ReturnType<SceneApi['nodes']> = context.sceneApi.nodes(),
+): Partial<FenceNode> | null {
+  const { levelId } = context
+  if (!levelId) return null
+  const nodes = currentNodes
+  const source = Object.values(nodes).find(
+    (node): node is FenceNode =>
+      node.type === 'fence' &&
+      node.parentId === levelId &&
+      node.visible !== false &&
+      [node.start, node.end].some((point) => distanceSquared(start, point) < 0.001 ** 2),
+  )
+  if (!source) return null
+  const defaults: Record<string, unknown> = {}
+  for (const field of INHERITED_FENCE_FIELDS) {
+    if (source[field] !== undefined) defaults[field] = source[field]
+  }
+  return defaults as Partial<FenceNode>
+}
 
 const FENCE_CORNER_SNAP_RADIUS = 0.28
 const FENCE_SPAN_SNAP_RADIUS = 0.16
@@ -51,10 +115,7 @@ function projectPointOntoSegment(
     return null
   }
 
-  const t = ((point[0] - x1) * dx + (point[1] - z1) * dz) / lengthSquared
-  if (t <= 0 || t >= 1) {
-    return null
-  }
+  const t = Math.max(0, Math.min(1, ((point[0] - x1) * dx + (point[1] - z1) * dz) / lengthSquared))
 
   return [x1 + dx * t, z1 + dz * t]
 }
@@ -90,36 +151,24 @@ function findFenceSnapTarget(
       bestCornerDistanceSquared = candidateDistanceSquared
     }
 
-    if (isCurvedWall(fence)) {
-      const sampleCount = Math.max(8, Math.ceil(getWallCurveLength(fence) / 0.3))
-      for (let index = 1; index < sampleCount; index += 1) {
-        const frame = getWallCurveFrameAt(fence, index / sampleCount)
-        const candidate: FencePlanPoint = [frame.point.x, frame.point.y]
-        const candidateDistanceSquared = distanceSquared(point, candidate)
-        if (
-          candidateDistanceSquared > spanRadiusSquared ||
-          candidateDistanceSquared >= bestSpanDistanceSquared
-        ) {
-          continue
-        }
-
-        bestSpanTarget = candidate
-        bestSpanDistanceSquared = candidateDistanceSquared
-      }
-    } else {
-      const candidate = projectPointOntoSegment(point, fence)
-      if (!candidate) {
-        continue
-      }
-
+    const samples = sampleFenceCenterline(
+      fence,
+      Math.max(32, Math.ceil(getFenceCenterlineLength(fence) / 0.1)),
+    )
+    for (let index = 1; index < samples.length; index += 1) {
+      const a = samples[index - 1]!
+      const b = samples[index]!
+      const candidate = projectPointOntoSegment(point, {
+        start: [a.x, a.y],
+        end: [b.x, b.y],
+      })
+      if (!candidate) continue
       const candidateDistanceSquared = distanceSquared(point, candidate)
       if (
         candidateDistanceSquared > spanRadiusSquared ||
         candidateDistanceSquared >= bestSpanDistanceSquared
-      ) {
+      )
         continue
-      }
-
       bestSpanTarget = candidate
       bestSpanDistanceSquared = candidateDistanceSquared
     }
@@ -147,6 +196,7 @@ export function snapFenceDraftPoint(args: {
    */
   gridSnap?: (point: FencePlanPoint) => FencePlanPoint
 }): FencePlanPoint {
+  if (useEditor.getState().toolDefaults.fence?.featurePlacement) return args.point
   const {
     point,
     walls,
@@ -192,10 +242,11 @@ export function snapFenceDraftPoint(args: {
 export function createFenceOnCurrentLevel(
   start: FencePlanPoint,
   end: FencePlanPoint,
-  options?: FenceCommitOptions,
+  options: FenceCommitOptions | undefined,
+  context: FenceDraftContext,
 ): FenceNode | null {
-  const currentLevelId = useViewer.getState().selection.levelId
-  const { createNode, nodes } = useScene.getState()
+  const { sceneApi, levelId: currentLevelId } = context
+  const nodes = sceneApi.nodes()
 
   if (!(currentLevelId && isSegmentLongEnough(start, end))) {
     return null
@@ -205,7 +256,10 @@ export function createFenceOnCurrentLevel(
   // Build parameters seeded by a placed preset (height, style, post
   // spacing, …) merge in first; `name`/`start`/`end` always win. The
   // schema parse validates and drops anything unexpected.
-  const defaults = useEditor.getState().toolDefaults.fence ?? {}
+  const defaults = {
+    ...useEditor.getState().toolDefaults.fence,
+    ...getFenceInheritedDefaults(start, context),
+  }
   const authoredFence = FenceNode.parse({
     ...defaults,
     name: `Fence ${fenceCount + 1}`,
@@ -216,8 +270,8 @@ export function createFenceOnCurrentLevel(
   // lift (absent = level floor), so elect it at commit, pointer-capped.
   const fence = resolveFenceConstructionSupport(authoredFence, currentLevelId, nodes, options)
 
-  createNode(fence, currentLevelId)
-  sfxEmitter.emit('sfx:structure-build')
+  sceneApi.upsert(fence, currentLevelId)
+  triggerSFX('sfx:structure-build')
 
   return fence
 }
@@ -230,11 +284,11 @@ export function createFenceOnCurrentLevel(
  */
 export function createSplineFenceOnCurrentLevel(
   path: FencePlanPoint[],
-  tangents = getTwoPointFenceCurveTangents(path),
-  options?: FenceCommitOptions,
+  tangents: FenceNode['tangents'] | undefined,
+  context: FenceDraftContext,
 ): FenceNode | null {
-  const currentLevelId = useViewer.getState().selection.levelId
-  const { createNode, nodes } = useScene.getState()
+  const { sceneApi, levelId: currentLevelId } = context
+  const nodes = sceneApi.nodes()
 
   if (!currentLevelId || path.length < 2) {
     return null
@@ -243,12 +297,15 @@ export function createSplineFenceOnCurrentLevel(
   const end = path[path.length - 1]!
   // A degenerate single-point-ish path (all clicks on one spot) is rejected
   // the same way a too-short straight segment is.
-  if (!isSegmentLongEnough(start, end) && path.length < 3) {
+  if (getFenceSplineLength(path, tangents) < 0.01) {
     return null
   }
 
   const fenceCount = Object.values(nodes).filter((node) => node.type === 'fence').length
-  const defaults = useEditor.getState().toolDefaults.fence ?? {}
+  const defaults = {
+    ...useEditor.getState().toolDefaults.fence,
+    ...getFenceInheritedDefaults(start, context),
+  }
   const authoredFence = FenceNode.parse({
     ...defaults,
     name: `Fence ${fenceCount + 1}`,
@@ -257,10 +314,10 @@ export function createSplineFenceOnCurrentLevel(
     path,
     tangents,
   })
-  const fence = resolveFenceConstructionSupport(authoredFence, currentLevelId, nodes, options)
+  const fence = authoredFence
 
-  createNode(fence, currentLevelId)
-  sfxEmitter.emit('sfx:structure-build')
+  sceneApi.upsert(fence, currentLevelId)
+  triggerSFX('sfx:structure-build')
 
   return fence
 }

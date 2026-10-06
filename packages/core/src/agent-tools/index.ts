@@ -16,8 +16,8 @@ import {
 import { deleteNodeTool, getNodeTool } from './nodes'
 import { placeItemsTool } from './place-items'
 import { ROOM_TOOL_CONTRACTS } from './room-structure'
-import { createStairTool } from './stairs'
 import { verifySceneTool } from './verify-scene'
+import { createStairTool, fitStairTool, measureStairTool } from './stairs'
 import { addDoorTool, addWindowTool } from './wall-openings'
 import { addWallTool } from './walls'
 
@@ -49,6 +49,8 @@ export * from './write-target'
  */
 export const AGENT_TOOL_CONTRACTS = [
   addColumnTool,
+  measureStairTool,
+  fitStairTool,
   addDoorTool,
   addWindowTool,
   listLevelsTool,

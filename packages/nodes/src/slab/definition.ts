@@ -2,6 +2,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type HandleDescriptor,
+  liftedManualSlab,
   MIN_SLAB_THICKNESS,
   markSlabChangeDependents,
   type NodeDefinition,
@@ -308,7 +309,22 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
     batchable: surfaceBatchable,
     selectable: { hitVolume: 'bbox' },
     surfaces: {
-      top: { height: (n) => (n as SlabNode).elevation },
+      top: {
+        height: (n) => (n as SlabNode).elevation,
+        supportHeight: (node, x, z, context) => {
+          const slab = node as SlabNodeType
+          if (
+            slab.polygon.length < 3 ||
+            !pointInPolygon2D([x, z], slab.polygon, { includeBoundary: true }) ||
+            slab.holes.some(
+              (hole) =>
+                hole.length >= 3 && pointInPolygon2D([x, z], hole, { includeBoundary: false }),
+            )
+          )
+            return null
+          return liftedManualSlab(context.nodes, slab).elevation
+        },
+      },
     },
     duplicable: true,
     deletable: true,

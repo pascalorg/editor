@@ -2,6 +2,7 @@ import { type AnyNode, bakePolicyOf, type Collection, sceneRegistry } from '@pas
 import { buildIfcExport, type IfcMeshPart } from '@pascal-app/ifc-converter/export'
 import { SCENE_LAYER } from '@pascal-app/viewer'
 import * as THREE from 'three'
+import { isIfcRolePart } from './ifc-parts'
 
 // Kinds the IFC writer always rebuilds parametrically from node data; their
 // rendered triangles are never read, so skip copying them. (Slabs are copied:
@@ -66,7 +67,43 @@ export function collectIfcMeshes(
         ? geometry.groups
         : [{ start: drawStart, count: drawEnd - drawStart, materialIndex: 0 }]
 
-    for (const group of groups) {
+    const roleParts = Array.isArray(mesh.userData.pascalIfcParts)
+      ? mesh.userData.pascalIfcParts.filter(isIfcRolePart)
+      : []
+    const semanticGroups = groups.flatMap((group) => {
+      const end = group.start + group.count
+      const boundaries = [
+        ...new Set([
+          group.start,
+          end,
+          ...roleParts
+            .flatMap((part: { start: number; count: number }) => [
+              part.start,
+              part.start + part.count,
+            ])
+            .filter((offset: number) => offset > group.start && offset < end),
+        ]),
+      ].sort((a, b) => a - b)
+      return boundaries.slice(0, -1).map((start, index) => ({
+        ...group,
+        start,
+        count: boundaries[index + 1]! - start,
+        role: roleParts.find(
+          (part: { start: number; count: number }) =>
+            start >= part.start && start < part.start + part.count,
+        )?.role as string | undefined,
+      }))
+    })
+    for (const group of semanticGroups) {
+      const surfaceId = mesh.userData.surfaceNodeIds?.[group.materialIndex ?? 0]
+      const owner = typeof surfaceId === 'string' && nodes[surfaceId] ? nodes[surfaceId]! : node
+      let role: string | undefined = group.role
+      for (let current: THREE.Object3D | null = mesh; current; current = current.parent) {
+        if (role === undefined && typeof current.userData.pascalIfcRole === 'string') {
+          role = current.userData.pascalIfcRole
+          break
+        }
+      }
       const material = materials[group.materialIndex ?? 0]
       if (!material || material.visible === false) continue
       const start = Math.max(group.start, drawStart)
@@ -88,13 +125,15 @@ export function collectIfcMeshes(
         }
       }
       if (indices.length === 0) continue
-      const list = parts.get(node.id) ?? []
+      const list = parts.get(owner.id) ?? []
       list.push({
+        role,
         positions: new Float32Array(positions),
         indices: new Uint32Array(indices),
         ...materialColor(material),
       })
-      parts.set(node.id, list)
+      parts.set(owner.id, list)
+      renderedNodeIds.add(owner.id)
     }
   })
   return { meshes: parts, renderedNodeIds }

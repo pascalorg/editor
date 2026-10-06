@@ -4,6 +4,7 @@ import {
   adjacentLevelId,
   applyStructureReconciliation,
   assertDerivedNodeWrites,
+  changedStairOpeningOwners,
   floorOpeningTargets,
   HIDDEN_SITE_NOTE,
   type NodeDeletionPlan,
@@ -654,10 +655,29 @@ export class SceneBridge {
     ].some((id) => {
       if (before[id] === currentNodes[id]) return false
       const type = (currentNodes[id] ?? before[id])?.type
-      return type === 'stair' || type === 'stair-segment' || type === 'elevator' || type === 'level'
+      return (
+        type === 'stair' ||
+        type === 'stair-segment' ||
+        type === 'elevator' ||
+        type === 'level' ||
+        type === 'building' ||
+        type === 'slab' ||
+        type === 'ceiling'
+      )
     })
     if (authoredInputChanged) {
-      const owned = planOwnedFloorOpenings(this.getNodes())
+      const ownerIds = changedStairOpeningOwners(before, currentNodes)
+      for (const node of [...Object.values(before), ...Object.values(currentNodes)]) {
+        if (
+          node.type === 'elevator' &&
+          (before[node.id] !== currentNodes[node.id] ||
+            Object.values(currentNodes).some(
+              (level) => level.type === 'level' && before[level.id] !== level,
+            ))
+        )
+          ownerIds.add(node.id)
+      }
+      const owned = planOwnedFloorOpenings(currentNodes, { ownerIds })
       if (owned.length) {
         pauseSpaceDetection()
         try {

@@ -92,7 +92,12 @@ test('an automatic ceiling repaints and erases its room region, one undo step ea
   expect((current(zone.id) as ZoneNode).ceiling?.regions?.[0]?.finish).toBe('library:red')
   expect(useScene.temporal.getState().pastStates).toHaveLength(1)
   expect(
-    ceilingPaint.getEffectiveMaterial!({ node: auto, role: 'region:patch', nodes: {} }),
+    ceilingPaint.getEffectiveMaterial!({
+      materials: useScene.getState().materials,
+      node: auto,
+      role: 'region:patch',
+      nodes: {},
+    }),
   ).toEqual({
     material: undefined,
     materialPreset: 'library:red',

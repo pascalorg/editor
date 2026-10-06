@@ -12,6 +12,7 @@ import { listLevels } from './list-levels'
 import { placeItems } from './place-items'
 import { ROOM_OPERATIONS } from './room-structure'
 import { searchAssets } from './search-assets'
+import { fitStair, measureStairOperation } from './stairs'
 import { verifyScene } from './verify-scene'
 
 export * from './achieved'
@@ -43,12 +44,15 @@ export * from './room-structure'
 export * from './scene-measure'
 export * from './scene-queries'
 export * from './search-assets'
+export * from './stairs'
 export * from './types'
 export * from './verify-scene'
 export * from './wall-opening'
 
 /** Each shared agent tool's operation, by tool name: what every surface executes. */
 export const AGENT_OPERATIONS = {
+  measure_stair: measureStairOperation,
+  fit_stair: fitStair,
   list_levels: listLevels,
   get_node: getNode,
   get_level_summary: getLevelSummary,
