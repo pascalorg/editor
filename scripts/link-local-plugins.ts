@@ -8,12 +8,10 @@ import {
   symlinkSync,
 } from 'node:fs'
 import path from 'node:path'
+import { getLocalPluginPackages } from '../apps/editor/local-plugins'
 
 const appDirectory = path.resolve(import.meta.dir, '../apps/editor')
-const manifest = JSON.parse(readFileSync(path.join(appDirectory, 'package.json'), 'utf8'))
-for (const [name, source] of Object.entries(manifest.dependencies ?? {})) {
-  if (typeof source !== 'string' || !source.startsWith('file:')) continue
-  const target = path.resolve(appDirectory, source.slice(5))
+for (const { name, directory: target } of getLocalPluginPackages()) {
   const packageManifest = JSON.parse(readFileSync(path.join(target, 'package.json'), 'utf8'))
   if (packageManifest.name !== name)
     throw new Error(`Local dependency ${name} has a mismatched package name`)
