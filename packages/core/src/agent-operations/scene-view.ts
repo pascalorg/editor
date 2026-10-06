@@ -1,7 +1,8 @@
-import { refuse } from '../agent-tools'
+import { refuse } from '../agent-tools/refusal'
 import type { VIEW_SIDES } from '../agent-tools/view-scene'
-import type { AnyNode, AnyNodeId } from '../schema'
+import type { AnyNode, AnyNodeId, ItemNode, WallNode } from '../schema'
 import { getLevelElevations } from '../services/storey'
+import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
 
 /**
  * Where `view_scene` looks from, the same on every surface; the picture is the host's: the chat's
@@ -63,6 +64,66 @@ const COMPASS: Record<Exclude<SceneViewSide, 'above'>, Pt> = {
  * each at its storey's height; every wall by default. Plan guides never count: an imported plan
  * is drawn much larger than its building.
  */
+/** A door or a window and the wall it is in, when the target is one. */
+function openingOf(nodes: Readonly<Record<string, AnyNode>>, target: AnyNode | undefined) {
+  if (target?.type !== 'door' && target?.type !== 'window') return null
+  const wall = nodes[target.wallId ?? target.parentId ?? '']
+  return wall?.type === 'wall' && !target.roofSegmentId ? { opening: target, wall } : null
+}
+
+/**
+ * An opening's box, at detail scale (L51): along its wall, centred at its height on the storey,
+ * as deep as the wall.
+ */
+function openingBox(
+  {
+    opening,
+    wall,
+  }: { opening: AnyNode & { position: number[]; width: number; height: number }; wall: WallNode },
+  baseY: number,
+): SceneViewBox {
+  const [dx, dz] = [wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]]
+  const length = Math.hypot(dx, dz) || 1
+  const [ux, uz] = [dx / length, dz / length]
+  const [nx, nz] = [-uz, ux]
+  const along = opening.position[0]!
+  const [cx, cz] = [wall.start[0] + ux * along, wall.start[1] + uz * along]
+  const [half, depth] = [opening.width / 2, (wall.thickness ?? 0.2) / 2]
+  const xs = [-1, 1].flatMap((a) => [-1, 1].map((n) => cx + ux * half * a + nx * depth * n))
+  const zs = [-1, 1].flatMap((a) => [-1, 1].map((n) => cz + uz * half * a + nz * depth * n))
+  const y = baseY + opening.position[1]!
+  return {
+    min: [Math.min(...xs), y - opening.height / 2, Math.min(...zs)],
+    max: [Math.max(...xs), y + opening.height / 2, Math.max(...zs)],
+  }
+}
+
+/** An item standing on a floor, by its asset's dimensions and its turn. */
+function itemBox(item: ItemNode, baseY: number): SceneViewBox {
+  const [w, h, d] = item.asset.dimensions
+  const turn = item.rotation?.[1] ?? 0
+  const [c, s] = [Math.abs(Math.cos(turn)), Math.abs(Math.sin(turn))]
+  const [hx, hz] = [(w * c + d * s) / 2, (w * s + d * c) / 2]
+  const [x, y, z] = item.position
+  return { min: [x - hx, baseY + y, z - hz], max: [x + hx, baseY + y + h, z + hz] }
+}
+
+/**
+ * The side an opening is seen from by default: its outside, when its wall knows it; else the
+ * side it faces. Its wall's +normal is perp(end - start) = (-dz, dx).
+ */
+function outsideSide(opening: AnyNode & { rotation?: number[] }, wall: WallNode): SceneViewSide {
+  const [dx, dz] = [wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]]
+  const facing = Math.abs(opening.rotation?.[1] ?? 0) > Math.PI / 2 ? -1 : 1
+  const sign = resolveWallExteriorSide(wall) ?? facing
+  const [nx, nz] = [-dz * sign, dx * sign]
+  return (Object.keys(COMPASS) as (keyof typeof COMPASS)[]).reduce((best, side) =>
+    COMPASS[side][0] * nx + COMPASS[side][1] * nz > COMPASS[best][0] * nx + COMPASS[best][1] * nz
+      ? side
+      : best,
+  )
+}
+
 export function sceneViewBounds(
   nodes: Readonly<Record<string, AnyNode>>,
   targetId?: string,
@@ -73,6 +134,12 @@ export function sceneViewBounds(
       target: targetId,
     })
   const elevations = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>)
+  const baseOf = (levelId: string | null | undefined) =>
+    (levelId ? elevations.get(levelId)?.baseY : undefined) ?? 0
+  const opening = openingOf(nodes, target)
+  if (opening) return openingBox(opening as never, baseOf(opening.wall.parentId))
+  if (target?.type === 'item' && nodes[target.parentId ?? '']?.type === 'level')
+    return itemBox(target, baseOf(target.parentId))
   const levelOf = (node: AnyNode) => (node.parentId ? nodes[node.parentId] : undefined)
   const outlines: { points: Pt[]; levelId: string }[] = []
   for (const node of Object.values(nodes)) {
@@ -229,8 +296,15 @@ export function sceneViewPlan(
       size: { w: VIEW_SIZE.w, h: Math.round(VIEW_SIZE.w / camera.aspect) },
     }
   }
+  const opening = openingOf(nodes, input.target ? nodes[input.target] : undefined)
+  const from =
+    input.from ??
+    (opening && !input.position ? outsideSide(opening.opening, opening.wall) : undefined)
   return {
-    pose: sceneViewPose(sceneViewBounds(nodes, input.target), input),
+    pose: sceneViewPose(sceneViewBounds(nodes, input.target), {
+      ...input,
+      ...(from ? { from } : {}),
+    }),
     size: { ...VIEW_SIZE },
   }
 }

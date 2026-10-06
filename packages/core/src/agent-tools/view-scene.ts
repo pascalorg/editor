@@ -18,12 +18,14 @@ export const viewSceneTool = {
   name: 'view_scene',
   title: 'Look at the scene',
   description:
-    "Look at the building in 3D from a viewpoint you pick and get the picture back. Use it to compare what you built with a reference and say what differs before you fix it: the facade from the photo's own camera (camera: the camera.pose straighten_facade_photo returned), rendered at the photo's aspect to lay beside it; or from the photo's side at street height (from, eyeHeight 1.7); one face square on (projection orthographic) beside its straightened elevation; the massing from above. North is the plan's top edge (z grows south, x east). The view frames the target (a building, a level, a wall or a zone; the whole building by default) from outside, unless you place the eye yourself with position or camera. Over the MCP an editor tab open on the project renders the picture: with none open it is refused (no_editor_open). A picture is not a measure: take sizes and counts from the tools.",
+    "Look at the building in 3D from a viewpoint you pick and get the picture back. Use it to compare what you built with a reference and say what differs before you fix it: the facade from the photo's own camera (camera: the camera.pose straighten_facade_photo returned), rendered at the photo's aspect to lay beside it; or from the photo's side at street height (from, eyeHeight 1.7); one face square on (projection orthographic) beside its straightened elevation; the massing from above. North is the plan's top edge (z grows south, x east). The view frames the target (a building, a level, a wall or a zone; the whole building by default) from outside, unless you place the eye yourself with position or camera. A door, a window or an item on a floor frames at detail scale, an opening seen from its outside face: a close-up to lay beside the photo's crop of the same element, to see what differs. Over the MCP an editor tab open on the project renders the picture: with none open it is refused (no_editor_open). A picture is not a measure: take sizes and counts from the tools.",
   input: {
     target: z
       .string()
       .optional()
-      .describe('A building, level, wall or zone id to frame. Default: every wall in the scene.'),
+      .describe(
+        'A building, level, wall, zone, door, window or floor item id to frame. Default: every wall in the scene.',
+      ),
     from: z
       .enum(VIEW_SIDES)
       .optional()

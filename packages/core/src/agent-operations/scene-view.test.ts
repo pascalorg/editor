@@ -1,7 +1,16 @@
 import { describe, expect, test } from 'bun:test'
 import { PerspectiveCamera, Vector3 } from 'three'
 import { isAgentRefusal } from '../agent-tools'
-import { type AnyNode, BuildingNode, GuideNode, LevelNode, WallNode } from '../schema'
+import {
+  type AnyNode,
+  BuildingNode,
+  DoorNode,
+  GuideNode,
+  ItemNode,
+  LevelNode,
+  WallNode,
+  WindowNode,
+} from '../schema'
 import {
   type SceneViewBox,
   sceneViewBounds,
@@ -205,5 +214,90 @@ describe("the photo's camera", () => {
 describe('the note a view comes with', () => {
   test('says a view is a picture to compare, not a measure', () => {
     expect(sceneViewNote()).toContain('not a measure')
+  })
+})
+
+// L51: run 3 compared whole facades only and settled for a plain door against the photo's door
+// with three glass strips. A view frames one opening or item at detail scale, an opening from its
+// outside face, so it can be laid beside the photo's crop of the same element.
+describe('a close-up of one element', () => {
+  /** A 10 m wall along x drawn so its outside is the north (-z) side, a door and a window in it. */
+  function facade(outside: 'front' | 'back') {
+    const wall = WallNode.parse({
+      id: 'wall_face',
+      parentId: 'level_face',
+      start: outside === 'back' ? [0, 0] : [10, 0],
+      end: outside === 'back' ? [10, 0] : [0, 0],
+      thickness: 0.2,
+      height: 2.8,
+      frontSide: outside === 'front' ? 'exterior' : 'interior',
+      backSide: outside === 'front' ? 'interior' : 'exterior',
+      children: ['door_face', 'window_face'],
+    })
+    const along = (x: number) => (outside === 'back' ? x : 10 - x)
+    const door = DoorNode.parse({
+      id: 'door_face',
+      parentId: wall.id,
+      wallId: wall.id,
+      position: [along(3), 1.05, 0],
+      width: 0.9,
+      height: 2.1,
+    })
+    const window = WindowNode.parse({
+      id: 'window_face',
+      parentId: wall.id,
+      wallId: wall.id,
+      position: [along(7), 1.5, 0],
+      width: 1.2,
+      height: 1.2,
+    })
+    const lamp = ItemNode.parse({
+      id: 'item_lamp',
+      parentId: 'level_face',
+      position: [5, 0, 4],
+      asset: {
+        id: 'floor-lamp',
+        name: 'Floor lamp',
+        category: 'lighting',
+        thumbnail: '/items/floor-lamp/thumbnail.webp',
+        src: '/items/floor-lamp/model.glb',
+        dimensions: [0.4, 1.6, 0.4],
+      },
+    })
+    const level = LevelNode.parse({
+      id: 'level_face',
+      parentId: 'building_face',
+      level: 0,
+      height: 2.8,
+      children: [wall.id, lamp.id],
+    })
+    const building = BuildingNode.parse({ id: 'building_face', children: [level.id] })
+    return Object.fromEntries(
+      [building, level, wall, door, window, lamp].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+  }
+
+  test('a door frames its own box, at detail scale', () => {
+    const box = sceneViewBounds(facade('back'), 'door_face')
+    expect(box.min.map((v) => Math.round(v * 100) / 100)).toEqual([2.55, 0, -0.1])
+    expect(box.max.map((v) => Math.round(v * 100) / 100)).toEqual([3.45, 2.1, 0.1])
+  })
+
+  test('an opening is seen from its outside face, whichever way its wall was drawn', () => {
+    for (const outside of ['back', 'front'] as const) {
+      const { pose } = sceneViewPlan(facade(outside), { target: 'door_face' })
+      expect(pose.position[2]).toBeLessThan(0)
+      const [cx, , cz] = pose.target as number[]
+      expect(Math.hypot(pose.position[0] - cx!, pose.position[2] - cz!)).toBeLessThan(6)
+    }
+  })
+
+  test('a window frames its own box too, and a floor item by its dimensions', () => {
+    const window = sceneViewBounds(facade('back'), 'window_face')
+    expect(window.max[1] - window.min[1]).toBeCloseTo(1.2, 6)
+    expect(window.max[0] - window.min[0]).toBeCloseTo(1.2, 6)
+    const lamp = sceneViewBounds(facade('back'), 'item_lamp')
+    expect(lamp.min.map((v) => Math.round(v * 100) / 100)).toEqual([4.8, 0, 3.8])
+    expect(lamp.max.map((v) => Math.round(v * 100) / 100)).toEqual([5.2, 1.6, 4.2])
   })
 })
