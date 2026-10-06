@@ -1,4 +1,5 @@
 import { addObjectTool, getSourceTool } from './add-object'
+import { clearSceneTool } from './clear-scene'
 import { editCollectionTool, listCollectionsTool } from './collections'
 import { addColumnTool } from './columns'
 import { findByTypeTool } from './find-by-type'
@@ -14,6 +15,7 @@ import { deleteNodeTool, getNodeTool } from './nodes'
 import { addDoorTool, addWindowTool } from './wall-openings'
 
 export * from './add-object'
+export * from './clear-scene'
 export * from './collections'
 export * from './columns'
 export * from './find-by-type'
@@ -46,4 +48,5 @@ export const AGENT_TOOL_CONTRACTS = [
   findByTypeTool,
   editCollectionTool,
   listCollectionsTool,
+  clearSceneTool,
 ] as const

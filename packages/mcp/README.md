@@ -355,6 +355,7 @@ captured by Zundo's temporal middleware as a single undoable step.
 | `set_zone` | Create a zone/room polygon on a level. | `{ levelId, polygon, label, properties? }` | `{ zoneId }` |
 | `duplicate_level` | Copy a level as the editor does (units whose rooms are all on it included; plan references, scans and spawns left behind), above or below, shifting the floors past it. | `{ levelId, position?, name?, preset? }` | `{ newLevelId, name, floorIndex, shiftedLevelIds, copied, skipped, newNodeIds[] }` |
 | `delete_node` | Delete a node with everything under it, as the editor's Delete does. | `{ id }` | `{ deletedIds: [] }` |
+| `clear_scene` | Empty the project on purpose, back to the default site, building and level. The only way to empty a project: a write that would empty it is refused (`scene_wipe_blocked`) by a store that guards against accidental wipes. | `{ reason }` | `{ cleared: { removed }, version, graphHash }` |
 | `undo` | Step back through temporal history. | `{ steps? }` | `{ undone: number }` |
 | `redo` | Step forward through temporal history. | `{ steps? }` | `{ redone: number }` |
 | `export_json` | Serialize the scene graph as JSON. | `{ pretty? }` | `{ json: string }` |

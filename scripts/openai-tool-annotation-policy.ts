@@ -26,6 +26,7 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   edit_collection: policy(false, true, false),
   list_collections: policy(true, false, false),
   check_collisions: policy(true, false, false),
+  clear_scene: policy(false, true, false),
   create_from_template: policy(false, true, false),
   create_house_from_brief: policy(false, true, false),
   create_mezzanine: policy(false, false, false),

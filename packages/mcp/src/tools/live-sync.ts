@@ -1,7 +1,8 @@
+import { refuse } from '@pascal-app/core/agent-tools'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
-import { SceneVersionConflictError } from '../storage/types'
+import { SceneVersionConflictError, SceneWipeBlockedError } from '../storage/types'
 import { ErrorCode, McpError, throwMcpError } from './errors'
 
 export type LiveSyncStatus = 'published' | 'unbound' | 'events_unsupported'
@@ -60,6 +61,8 @@ export function isLiveSyncVersionConflict(error: unknown): boolean {
 export async function publishLiveSceneSnapshot(
   operations: SceneOperations,
   kind: string,
+  /** `allowSceneWipe`: the write empties the project on purpose (clear_scene). */
+  options: { allowSceneWipe?: boolean } = {},
 ): Promise<LiveSyncStatus> {
   const active = operations.getActiveScene()
   if (!active) return 'unbound'
@@ -80,6 +83,7 @@ export async function publishLiveSceneSnapshot(
       saveMode: 'draft',
       publish: false,
       operation: kind,
+      ...(options.allowSceneWipe ? { allowSceneWipe: true } : {}),
     })
     operations.setActiveScene(meta)
     await operations.appendSceneEvent({
@@ -89,6 +93,12 @@ export async function publishLiveSceneSnapshot(
       graph,
     })
   } catch (error) {
+    if (error instanceof SceneWipeBlockedError)
+      refuse(
+        'scene_wipe_blocked',
+        'This write would empty the project, so it was blocked. To empty it on purpose, call clear_scene.',
+        { sceneId: active.id },
+      )
     if (error instanceof SceneVersionConflictError) {
       throwMcpError(ErrorCode.InvalidRequest, LIVE_SYNC_VERSION_CONFLICT, {
         sceneId: active.id,

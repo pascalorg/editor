@@ -4,6 +4,7 @@ import { registerAddColumn } from './add-column'
 import { type GeometryScriptHost, registerAddObject, registerGetSource } from './add-object'
 import { registerApplyPatch } from './apply-patch'
 import { registerCheckCollisions } from './check-collisions'
+import { registerClearScene } from './clear-scene'
 import { registerConstructionTools } from './construction-tools'
 import { registerCreateLevel } from './create-level'
 import { registerCreateUnit } from './create-unit'
@@ -56,6 +57,7 @@ export function registerTools(
   registerConstructionTools(server, operations)
   registerRoomTools(server, operations, geometryScripts)
   registerApplyPatch(server, operations)
+  registerClearScene(server, operations)
   registerCreateLevel(server, operations)
   registerCreateUnit(server, operations)
   registerSetUnitMembers(server, operations)

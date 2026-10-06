@@ -69,6 +69,11 @@ export interface SceneSaveOptions {
   agentSessionId?: string
   /** Optional high-level operation name for presence/debug metadata. */
   operation?: string
+  /**
+   * The write empties a populated project on purpose (clear_scene). A store may refuse a write that
+   * empties the project unless this is set, with `SceneWipeBlockedError`.
+   */
+  allowSceneWipe?: boolean
 }
 
 export type SceneSaveMode = 'draft' | 'checkpoint'
@@ -168,6 +173,19 @@ export class SceneInvalidError extends Error {
   constructor(message = 'Scene invalid') {
     super(message)
     this.name = 'SceneInvalidError'
+  }
+}
+
+/**
+ * A store refused a write that would empty a populated project without `allowSceneWipe`: far more
+ * often an accident (a client that never finished loading, a deletion of everything) than an intent.
+ * Still an invalid write to a caller that only knows `SceneInvalidError`; the MCP answers it
+ * `scene_wipe_blocked`, naming clear_scene.
+ */
+export class SceneWipeBlockedError extends SceneInvalidError {
+  constructor(message = 'Scene wipe blocked') {
+    super(message)
+    this.name = 'SceneWipeBlockedError'
   }
 }
 
