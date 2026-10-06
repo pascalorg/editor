@@ -203,7 +203,7 @@ export const divideZoneTool = {
   name: 'divide_zone',
   title: 'Divide room',
   description:
-    'Divide a room with an open path (endpoints snap to its boundary; the seed side keeps its id) or a closed island (outer room keeps its id). Supply path or the legacy two-point cut. Islands need 0.25 m² and 5 cm wall clearance.',
+    "Divide a room with an open path (endpoints snap to its boundary; the seed side keeps its id) or a closed island (outer room keeps its id). The two rooms are parted by a separator (the editor's Separator: a room boundary with no wall), not a wall. Supply path or the legacy two-point cut. Islands need 0.25 m² and 5 cm wall clearance.",
   input: {
     zoneId: NodeId,
     cut: z.array(point).length(2).optional(),
@@ -218,7 +218,7 @@ export const mergeZonesTool = {
   name: 'merge_zones',
   title: 'Merge rooms',
   description:
-    'Remove shared separators between two rooms. Walls are preserved; wall-only boundaries return a conflict.',
+    "Merge two rooms by removing the separators they share (the editor's Separator: a room boundary with no wall). Walls are preserved; wall-only boundaries return a conflict.",
   input: { zoneIds: z.array(NodeId).length(2) },
 }
 
@@ -226,7 +226,7 @@ export const deleteZoneTool = {
   name: 'delete_zone',
   title: 'Delete room',
   description:
-    'Delete a room. A room Divide made (a separator shared with a room on its outline) merges back into that room: the separators go, walls and items stay (mode "merge"). A room whose every boundary is a wall shared with other rooms is refused with a "shared-walls" conflict and nothing changes (mode "blocked"); delete one of its walls instead. Otherwise the room goes with its unshared walls, separators and their openings (mode "delete"), and contents chooses whether its items are kept or deleted. Returns the disposition payload.',
+    'Delete a room. A room Divide made, which shares a separator (the editor\'s Separator: a room boundary with no wall) with a room on its outline, merges back into that room: the separators go, walls and items stay (mode "merge"). A room whose every boundary is a wall shared with other rooms is refused with a "shared-walls" conflict and nothing changes (mode "blocked"); delete one of its walls instead. Otherwise the room goes with its unshared walls, separators and their openings (mode "delete"), and contents chooses whether its items are kept or deleted. Returns the disposition payload.',
   input: { zoneId: NodeId, contents: z.enum(['delete', 'keep']) },
 }
 

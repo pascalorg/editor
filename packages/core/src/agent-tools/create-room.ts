@@ -42,7 +42,7 @@ export const createRoomTool = {
       .boolean()
       .optional()
       .describe(
-        'true for an outdoor room (a terrace): closed with separators where no wall runs, no walls of its own and no ceiling.',
+        "true for an outdoor room (a terrace): closed with separators (the editor's Separator: a room boundary with no wall) where no wall runs, no walls of its own and no ceiling.",
       ),
     doors: z
       .array(
