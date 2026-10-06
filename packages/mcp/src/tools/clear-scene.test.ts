@@ -158,9 +158,8 @@ describe('clear_scene', () => {
   })
 })
 
-// L76 (the parity runner, 2026-10-06): an agent deleted the only room it built; the store refused
-// the write as a wipe, but the session kept the deletion, so its next writes built on a scene the
-// project did not hold.
+// An agent deletes the only room it built: the store refuses the write as a wipe, and the session
+// must not keep the deletion, or its next writes build on a scene the project does not hold.
 describe('deleting the only room', () => {
   async function oneRoomSession() {
     const bridge = new SceneBridge()

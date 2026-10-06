@@ -95,7 +95,7 @@ export async function publishLiveSceneSnapshot(
   } catch (error) {
     if (error instanceof SceneWipeBlockedError) {
       // The store kept what it held; the session goes back to it, so the agent's next write builds
-      // on the project as stored rather than on the refused one (L76: deleting the only room).
+      // on the project as stored rather than on the refused one (deleting the only room, say).
       const stored = await operations.loadStoredScene(active.id).catch(() => null)
       if (stored) operations.loadJSON(stored.graph)
       refuse(
