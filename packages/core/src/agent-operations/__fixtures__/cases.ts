@@ -592,7 +592,7 @@ export const DUPLICATE_LEVEL_CASES: AgentToolCase[] = [
     expect: {
       result: {
         floorIndex: 1,
-        name: 'Ground',
+        name: 'Floor 1',
         shiftedLevelIds: ['level_upper', 'level_roof'],
         copied: HOUSE_COPY,
         skipped: { guide: 1 },

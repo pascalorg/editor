@@ -5,6 +5,7 @@ import {
   generateId,
   generateSceneMaterialId,
   getArtifactStore,
+  isDerivedNode,
   type LevelNode,
   nodeRegistry,
   type ParsedBuildJson,
@@ -106,7 +107,7 @@ function collectSubtreeIds(
 ) {
   if (ids.has(rootId)) return
   const node = nodes[rootId]
-  if (!node) return
+  if (!node || isDerivedNode(node)) return
   ids.add(rootId)
 
   if ('children' in node && Array.isArray(node.children)) {
@@ -151,6 +152,7 @@ function isClipboardRoot(
 }
 
 function isCopyableRootType(node: AnyNode) {
+  if (isDerivedNode(node)) return false
   if (COPYABLE_ROOT_TYPES.has(node.type)) return true
   const definition = nodeRegistry.get(node.type)
   return !!definition && definition.capabilities?.duplicable !== false
@@ -590,6 +592,7 @@ function applyClipboardPayloadToLevel(
   const materialsToCreate: SceneMaterial[] = []
 
   for (const node of payload.nodes) {
+    if (isDerivedNode(node)) continue
     idMap.set(node.id as AnyNodeId, generateId(extractIdPrefix(node.id)) as AnyNodeId)
   }
   for (const material of payload.materials) {
@@ -609,6 +612,10 @@ function applyClipboardPayloadToLevel(
   const skippedIds: AnyNodeId[] = []
 
   for (const node of payload.nodes) {
+    if (isDerivedNode(node)) {
+      skippedIds.push(node.id as AnyNodeId)
+      continue
+    }
     try {
       pastedNodes.push(
         remapNodeReferences(

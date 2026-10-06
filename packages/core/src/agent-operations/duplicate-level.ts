@@ -4,7 +4,8 @@ import {
   type LevelDuplicatePreset,
   levelBuildingId,
 } from '../building/level-duplication'
-import type { AnyNode, AnyNodeId } from '../schema'
+import { getLevelDisplayName } from '../lib/level-name'
+import type { AnyNode, AnyNodeId, LevelNode } from '../schema'
 import { requireLevel } from './level-target'
 import { levelsOf } from './scene-queries'
 import type { AgentOperation } from './types'
@@ -35,26 +36,26 @@ export const duplicateLevel: AgentOperation<DuplicateLevelInput> = (nodes, input
       levelId,
     })
 
-  const { createOps, newLevelId, shiftedLevels, skippedNodes } = buildLevelDuplicateCreateOps({
-    nodes: all,
-    level,
-    levels: levelsOf(nodes).filter(
-      (entry) => entry.parentId === building.id || building.children.includes(entry.id),
-    ),
-    preset: input.preset ?? 'everything',
-    position: input.position ?? 'above',
-  })
-  const name = input.name ?? level.name
+  const { createOps, newLevelId, shiftedLevels, updateOps, skippedNodes } =
+    buildLevelDuplicateCreateOps({
+      nodes: all,
+      level,
+      levels: levelsOf(nodes).filter(
+        (entry) => entry.parentId === building.id || building.children.includes(entry.id),
+      ),
+      preset: input.preset ?? 'everything',
+      position: input.position ?? 'above',
+    })
   const create = createOps.map(({ node, parentId }) => ({
-    node: node.id === newLevelId ? ({ ...node, name } as AnyNode) : node,
+    node: node.id === newLevelId && input.name ? ({ ...node, name: input.name } as AnyNode) : node,
     parentId,
   }))
-  const copy = create.find(({ node }) => node.id === newLevelId)!.node as { level: number }
+  const copy = create.find(({ node }) => node.id === newLevelId)!.node as LevelNode
 
   return {
     result: {
       newLevelId,
-      name,
+      name: getLevelDisplayName(copy),
       floorIndex: copy.level,
       shiftedLevelIds: shiftedLevels.map((entry) => entry.id),
       copied: countByType(create.map(({ node }) => node)),
@@ -65,7 +66,7 @@ export const duplicateLevel: AgentOperation<DuplicateLevelInput> = (nodes, input
     },
     changes: {
       create,
-      update: shiftedLevels.map((entry) => ({ id: entry.id, data: { level: entry.level } })),
+      update: updateOps,
     },
   }
 }

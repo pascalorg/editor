@@ -1,9 +1,14 @@
-import { floorPlateHoldsUnderside } from '../lib/floor-foundation-datum'
+import {
+  floorPlateAtGroundContact,
+  floorPlateHoldsUnderside,
+  supportDerivedFloorHeight,
+} from '../lib/floor-foundation-datum'
 import { expandFloorIntentChanges, floorIntentConflicts } from '../lib/floor-intent-changes'
 import { ownFloorIntentChanges } from '../lib/own-floor-intent'
 import { type Ring, union } from '../lib/polygon-boolean'
 import type { AnyNode, AnyNodeId, CeilingNode, SlabNode, ZoneNode } from '../schema'
 import { FloorOpeningNode, generateId } from '../schema'
+import { DEFAULT_SLAB_ELEVATION } from '../schema/nodes/slab'
 import type { SurfaceHoleMetadata } from '../schema/nodes/surface-hole-metadata'
 
 /**
@@ -516,6 +521,47 @@ function arrivesWithItsLevel(node: DerivedSurfaceNode, created: ReadonlyMap<stri
   )
 }
 
+function groundPlateRebases(nodes: Readonly<Record<string, AnyNode>>, changes: DerivedNodeChanges) {
+  // Inserting a storey below a ground plate changes its construction model:
+  // retain thickness, remove the foundation, and rest its underside upstairs.
+  const movedLevels = new Set<string>(
+    changes.update?.flatMap(({ id, data }) =>
+      nodes[id]?.type === 'level' && 'level' in data && data.level !== nodes[id].level ? [id] : [],
+    ),
+  )
+  if (!movedLevels.size) return new Set<string>()
+  const draft = {
+    ...nodes,
+    ...Object.fromEntries(changes.create?.map(({ node }) => [node.id, node]) ?? []),
+  }
+  for (const { id, data } of changes.update ?? [])
+    if (movedLevels.has(id)) draft[id] = { ...draft[id], ...data } as AnyNode
+  return new Set(
+    changes.update?.flatMap(({ id, data }) => {
+      const plate = nodes[id]
+      if (
+        plate?.type !== 'slab' ||
+        plate.plateRole !== 'base' ||
+        !movedLevels.has(plate.parentId!) ||
+        !floorPlateAtGroundContact(nodes, plate) ||
+        floorPlateAtGroundContact(draft, plate)
+      )
+        return []
+      const patch = data as Partial<SlabNode>
+      const reference = supportDerivedFloorHeight(draft, plate)
+      return Object.hasOwn(patch, 'floorHeight') &&
+        patch.floorHeight === undefined &&
+        patch.foundation?.type === 'none' &&
+        (patch.thickness === undefined || patch.thickness === plate.thickness) &&
+        patch.referenceFloorElevation === reference &&
+        typeof patch.elevation === 'number' &&
+        Math.abs(patch.elevation - (reference - DEFAULT_SLAB_ELEVATION + plate.thickness)) <= 1e-6
+        ? [id]
+        : []
+    }),
+  )
+}
+
 /** In-app writers retain authored edits without taking ownership from the reconciler. */
 export function filterDerivedNodeWrites<T extends DerivedNodeChanges>(
   nodes: Readonly<Record<string, AnyNode>>,
@@ -529,6 +575,7 @@ export function filterDerivedNodeWrites<T extends DerivedNodeChanges>(
     changes = { ...changes, update }
   }
   const created = createdNodes(changes.create)
+  const rebases = groundPlateRebases(nodes, changes)
   return {
     ...changes,
     ...(changes.create && {
@@ -549,7 +596,7 @@ export function filterDerivedNodeWrites<T extends DerivedNodeChanges>(
         const current = nodes[op.id]
         if (!isDerivedNode(current)) return [op]
         const fields = derivedFieldViolations(current, op.data, nodes).filter(
-          (field) => field !== 'holes',
+          (field) => field !== 'holes' && !(field === 'elevation' && rebases.has(op.id)),
         )
         let data = { ...op.data } as Record<string, unknown>
         for (const field of fields) delete data[field]
@@ -598,6 +645,7 @@ export function assertDerivedNodeWrites(
       conflicts,
     })
   const created = createdNodes(changes.create)
+  const rebases = groundPlateRebases(nodes, changes)
   for (const { node } of changes.create ?? []) {
     if (!isDerivedNode(node) || arrivesWithItsLevel(node, created)) continue
     throw new DerivedNodeWriteError(
@@ -610,7 +658,9 @@ export function assertDerivedNodeWrites(
   for (const { id, data } of changes.update ?? []) {
     const current = nodes[id]
     if (!isDerivedNode(current)) continue
-    const fields = derivedFieldViolations(current, data, nodes)
+    const fields = derivedFieldViolations(current, data, nodes).filter(
+      (field) => !(field === 'elevation' && rebases.has(id)),
+    )
     if (fields.length === 0) continue
     throw new DerivedNodeWriteError(
       'update',
