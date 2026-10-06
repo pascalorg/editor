@@ -428,7 +428,8 @@ export const StairTool: React.FC = () => {
       rotation: number,
       supportSurface: PointerSupportSurface | null,
     ) => {
-      const key = `${position[0].toFixed(3)},${position[2].toFixed(3)},${rotation.toFixed(4)},${supportSurface?.elevation.toFixed(3) ?? 'none'},${supportSurface?.sourceNodeId ?? 'floor'},${previewRiseRef.current}`
+      rotation = landscapeSnapRef.current?.rotation ?? rotation
+      const key = `${position[0].toFixed(3)},${position[2].toFixed(3)},${rotation.toFixed(4)},${supportSurface?.elevation.toFixed(3) ?? 'none'},${supportSurface?.sourceNodeId ?? 'floor'},${landscapeSnapRef.current?.length.toFixed(3) ?? 'free'},${landscapeSnapRef.current?.stepCount ?? 0},${landscapeSnapRef.current?.totalRise.toFixed(3) ?? 'free'}`
       if (key === lastPreviewKey) return
       lastPreviewKey = key
       const preview = buildPreviewScene(position, rotation, supportSurface)
@@ -625,10 +626,7 @@ export const StairTool: React.FC = () => {
               useScene.getState().installedPlugins,
             )
       landscapeSnapRef.current = snap
-      if (snap) {
-        rotationRef.current = snap.rotation
-        return snap.position
-      }
+      if (snap) return snap.position
       return candidate
     }
 
@@ -674,7 +672,7 @@ export const StairTool: React.FC = () => {
       commitStairPlacement(
         currentLevelId,
         position,
-        rotationRef.current,
+        landscapeSnapRef.current?.rotation ?? rotationRef.current,
         supportSurfaceRef.current,
         landscapeSnapRef.current,
       )
