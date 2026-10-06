@@ -21,6 +21,11 @@ export type PatchRefusalCode =
   | 'invalid_update'
   | 'regenerated_default'
   | 'scripted_field'
+  // An update that would not do what it says (honestNodePatch, L46).
+  | 'unknown_field'
+  | 'unknown_material'
+  | 'field_required'
+  | 'shadowed_field'
 
 /**
  * A patch op refused because it would break node identity, the hierarchy or

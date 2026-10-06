@@ -52,6 +52,37 @@ describe('apply_patch', () => {
     expect((stored as { thickness?: number }).thickness).toBe(0.2)
   })
 
+  // L46 (run 3): a pier's `material: {color}` reported applied and stored {}, and
+  // `materialPreset: null` was refused, so the agent could not clear the preset hiding it.
+  test('an update the node would drop is refused, naming the path; null clears a field', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const wall = WallNode.parse({
+      start: [0, 0],
+      end: [5, 0],
+      materialPreset: 'library:concrete-raw',
+    })
+    await client.callTool({
+      name: 'apply_patch',
+      arguments: { patches: [{ op: 'create', node: wall, parentId: level.id }] },
+    })
+    const dropped = await client.callTool({
+      name: 'apply_patch',
+      arguments: {
+        patches: [{ op: 'update', id: wall.id, data: { material: { color: '#8a8a8a' } } }],
+      },
+    })
+    expect(dropped.isError).toBe(true)
+    const refusal = JSON.parse((dropped.content as Array<{ text: string }>)[0]!.text)
+    expect(refusal.code).toBe('unknown_field')
+    expect(refusal.message).toContain('material.color')
+    const cleared = await client.callTool({
+      name: 'apply_patch',
+      arguments: { patches: [{ op: 'update', id: wall.id, data: { materialPreset: null } }] },
+    })
+    expect(cleared.isError).toBeFalsy()
+    expect(bridge.getNode(wall.id)).not.toHaveProperty('materialPreset')
+  })
+
   test('syncs derived stair openings after stair patches', async () => {
     const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
     const ground = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
