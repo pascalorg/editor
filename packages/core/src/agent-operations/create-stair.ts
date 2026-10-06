@@ -10,6 +10,7 @@ import { refuseRoofLevel } from './add-wall'
 import { applySceneChanges } from './apply-changes'
 import { type LevelTargetInput, requireLevel, targetLevel } from './level-target'
 import { finishSurface, requireMaterialRef } from './material-refs'
+import { pointInPolygon, type Vec2 } from './plan-geometry'
 import { levelsOf } from './scene-queries'
 import type { AgentOperation, SceneChanges } from './types'
 
@@ -74,10 +75,9 @@ function openingRing(
 
 /**
  * `create_stair`: a straight flight placed as the editor's stair tool places one — rising to the
- * next level (made when there is none), its floor openings owned and cut by the stair. With
- * create_stair_between_levels' opening controls (S1 parity with main), the opening is cut as
- * given instead, owned by the stair as main's are, and the stair's own opening is off so nothing
- * is cut twice.
+ * next level (made when there is none), its floor openings owned and cut by the stair. With the
+ * opening controls create_stair_between_levels had, the opening is cut as given instead, owned by
+ * the stair as main's are, and the stair's own opening is off so nothing is cut twice.
  */
 export const createStair: AgentOperation<CreateStairInput> = (nodes, input, context) => {
   const from = targetLevel(nodes, input, context)
@@ -199,20 +199,31 @@ export const createStair: AgentOperation<CreateStairInput> = (nodes, input, cont
   // the stair, with the pose the live systems move them by.
   const openingIds: string[] = []
   const built = applySceneChanges(nodes, changes)
-  const onLevel = (type: 'slab' | 'ceiling', levelId: string) =>
-    Object.values(built).find((node) => node.type === type && node.parentId === levelId)
-  const destinationSlab = input.destinationSlabId
-    ? built[input.destinationSlabId]
-    : onLevel('slab', upper.id)
-  const sourceCeiling = input.sourceCeilingId
-    ? built[input.sourceCeilingId]
-    : onLevel('ceiling', from.id)
-  const floorCut = asGiven && cutFloor && !!destinationSlab
-  const ceilingCut = asGiven && cutCeiling && !!sourceCeiling
-  const adjacent = adjacentLevelId(built, upper.id, -1) === from.id
   const polygon = asGiven
     ? openingRing({ x: input.x, z: input.z, turn: stair.rotation, width, length }, input)
     : []
+  // The surface the opening falls in, not the storey's first: a floor of several rooms has a
+  // slab (and a ceiling below) per room.
+  const centre: Vec2 = [
+    polygon.reduce((sum, [x]) => sum + x, 0) / (polygon.length || 1),
+    polygon.reduce((sum, [, z]) => sum + z, 0) / (polygon.length || 1),
+  ]
+  const over = (type: 'slab' | 'ceiling', levelId: string) =>
+    Object.values(built).find(
+      (node) =>
+        node.type === type &&
+        node.parentId === levelId &&
+        pointInPolygon(centre, node.polygon as Vec2[]),
+    )
+  const destinationSlab = input.destinationSlabId
+    ? built[input.destinationSlabId]
+    : over('slab', upper.id)
+  const sourceCeiling = input.sourceCeilingId
+    ? built[input.sourceCeilingId]
+    : over('ceiling', from.id)
+  const floorCut = asGiven && cutFloor && !!destinationSlab
+  const ceilingCut = asGiven && cutCeiling && !!sourceCeiling
+  const adjacent = adjacentLevelId(built, upper.id, -1) === from.id
   const opened = (levelId: string, drawnOn: 'floor' | 'ceiling', cutsAdjacent: boolean) =>
     cutFloorOpening(built, {
       levelId,

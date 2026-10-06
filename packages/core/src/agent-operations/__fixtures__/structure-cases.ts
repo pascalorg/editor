@@ -277,6 +277,46 @@ function ceiledScene(): SceneGraph {
   return scene
 }
 
+/**
+ * The house with its hall split in two rooms, west and east, on both floors: a slab per room
+ * upstairs (or only the west one) and a ceiling per room below, the west first on each level.
+ */
+function splitScene(eastSlab = true): SceneGraph {
+  const scene = storeysScene()
+  const west: Pt[] = [
+    [0, 0],
+    [3, 0],
+    [3, 5],
+    [0, 5],
+  ]
+  const east: Pt[] = [
+    [3, 0],
+    [6, 0],
+    [6, 5],
+    [3, 5],
+  ]
+  const slabs = [
+    SlabNode.parse({ id: 'slab_upper_west', parentId: 'level_upper', polygon: west }),
+    ...(eastSlab
+      ? [SlabNode.parse({ id: 'slab_upper_east', parentId: 'level_upper', polygon: east })]
+      : []),
+  ]
+  const ceilings = [
+    CeilingNode.parse({ id: 'ceiling_west', parentId: 'level_ground', polygon: west }),
+    CeilingNode.parse({ id: 'ceiling_east', parentId: 'level_ground', polygon: east }),
+  ]
+  delete scene.nodes.slab_upper
+  for (const node of [...slabs, ...ceilings]) scene.nodes[node.id] = node
+  const upper = scene.nodes.level_upper as LevelNode
+  const ground = scene.nodes.level_ground as LevelNode
+  scene.nodes.level_upper = { ...upper, children: slabs.map((slab) => slab.id) }
+  scene.nodes.level_ground = {
+    ...ground,
+    children: [...ground.children, ...ceilings.map((ceiling) => ceiling.id)],
+  }
+  return scene
+}
+
 type Stair = AnyNode & {
   name?: string
   railingMode?: string
@@ -522,6 +562,41 @@ export const CREATE_STAIR_CASES: AgentToolCase[] = [
           ? []
           : [`spans ${opening && extent(opening.polygon)}`]
       },
+    },
+  },
+  {
+    // On a floor of several rooms, the surfaces a flight cuts are the ones over and under it, not
+    // the first on each storey.
+    name: 'the slab above and the ceiling below are the ones the opening falls in',
+    tool: 'create_stair',
+    scene: () => splitScene(),
+    input: { levelId: 'level_ground', x: 4.5, z: 1, openingWidth: 1 },
+    expect: {
+      result: {
+        ok: true,
+        slabHoleCut: true,
+        destinationSlabId: 'slab_upper_east',
+        sourceCeilingId: 'ceiling_east',
+      },
+    },
+  },
+  {
+    name: 'an opening under no slab is not reported as cut through one',
+    tool: 'create_stair',
+    scene: () => splitScene(false),
+    input: {
+      levelId: 'level_ground',
+      x: 4.5,
+      z: 1,
+      openingWidth: 1,
+      createSourceCeilingOpening: false,
+    },
+    expect: {
+      result: { ok: true, slabHoleCut: false },
+      check: (result, nodes) => [
+        ...('destinationSlabId' in result ? [`reported ${result.destinationSlabId}`] : []),
+        ...(openingsOf(nodes).length ? [`${openingsOf(nodes).length} openings`] : []),
+      ],
     },
   },
   {
