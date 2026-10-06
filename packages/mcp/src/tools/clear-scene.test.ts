@@ -143,6 +143,18 @@ describe('clear_scene', () => {
     expect(types.sort()).toEqual(['building', 'level', 'site', 'wall'])
   })
 
+  test("keeps the project's installed plugins, in the session and in the saved scene", async () => {
+    const { bridge, call, guarded, meta } = await houseSession()
+    bridge.loadJSON({ ...bridge.exportJSON(), installedPlugins: ['pascal:sheets'] })
+    const cleared = await call('clear_scene', { reason: 'The person asked to start over.' })
+    expect(cleared.isError).toBe(false)
+    expect(bridge.exportJSON().installedPlugins).toEqual(['pascal:sheets'])
+    const stored = await guarded.store.load(meta.id)
+    expect(stored!.graph.installedPlugins).toEqual(['pascal:sheets'])
+    const types = Object.values(stored!.graph.nodes).map((node) => (node as { type: string }).type)
+    expect(types.sort()).toEqual(['building', 'level', 'site'])
+  })
+
   test('a write that would empty the project by accident is refused, and nothing changed', async () => {
     const { bridge, call, guarded } = await houseSession()
     const before = Object.keys(bridge.getNodes()).sort()
