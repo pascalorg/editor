@@ -18,7 +18,7 @@ export const viewSceneTool = {
   name: 'view_scene',
   title: 'Look at the scene',
   description:
-    "Look at the building in 3D from a viewpoint you pick and get the picture back. Use it to compare what you built with a reference and say what differs before you fix it: the facade from the photo's own camera (camera: the camera.pose straighten_facade_photo returned), rendered at the photo's aspect to lay beside it; or from the photo's side at street height (from, eyeHeight 1.7); one face square on (projection orthographic) beside its straightened elevation; the massing from above. North is the plan's top edge (z grows south, x east). The view frames the target (a building, a level, a wall or a zone; the whole building by default) from outside, unless you place the eye yourself with position or camera. A door, a window or an item on a floor frames at detail scale, an opening seen from its outside face: a close-up to lay beside the photo's crop of the same element, to see what differs. Over the MCP an editor tab open on the project renders the picture: with none open it is refused (no_editor_open). A picture is not a measure: take sizes and counts from the tools.",
+    "Look at the building in 3D from a viewpoint you pick and get the picture back. Use it to compare what you built with a reference and say what differs before you fix it: the facade from the photo's own camera (camera: its position, aim, field of view and aspect), rendered at the photo's aspect to lay beside it; or from the photo's side at street height (from, eyeHeight 1.7); one face square on (projection orthographic); the massing from above. North is the plan's top edge (z grows south, x east). The view frames the target (a building, a level, a wall or a zone; the whole building by default) from outside, unless you place the eye yourself with position or camera. A door, a window or an item on a floor frames at detail scale, an opening seen from its outside face: a close-up to lay beside the photo's crop of the same element, to see what differs. Over the MCP an editor tab open on the project renders the picture: with none open it is refused (no_editor_open). A picture is not a measure: take sizes and counts from the tools.",
   input: {
     target: z
       .string()
@@ -64,7 +64,7 @@ export const viewSceneTool = {
       })
       .optional()
       .describe(
-        "A photo's camera, as straighten_facade_photo returned it (camera.pose, passed whole): the render takes its eye, aim and field of view at the photo's aspect. Not with from, position, elevation, eyeHeight, fov or projection.",
+        "A photo's camera (position, target, fov, aspect): the render takes its eye, aim and field of view at the photo's aspect. Not with from, position, elevation, eyeHeight, fov or projection.",
       ),
     photo: z
       .looseObject({
