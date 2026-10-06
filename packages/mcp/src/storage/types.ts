@@ -83,6 +83,16 @@ export interface SceneMutateOptions {
   expectedVersion?: number
 }
 
+/**
+ * What `delete` did. A local store removes the scene; hosted Pascal never deletes a project this
+ * way and only hides it, with a `message` saying so.
+ */
+export type SceneDeleteResult = {
+  deleted: boolean
+  hidden: boolean
+  message?: string
+}
+
 export interface SceneEventAppendOptions {
   sceneId: SceneId
   version: number
@@ -131,7 +141,7 @@ export interface SceneStore {
   save(opts: SceneSaveOptions): Promise<SceneMeta>
   load(id: SceneId): Promise<SceneWithGraph | null>
   list(opts?: SceneListOptions): Promise<SceneMeta[]>
-  delete(id: SceneId, opts?: SceneMutateOptions): Promise<boolean>
+  delete(id: SceneId, opts?: SceneMutateOptions): Promise<SceneDeleteResult>
   rename(id: SceneId, newName: string, opts?: SceneMutateOptions): Promise<SceneMeta>
   appendSceneEvent?(opts: SceneEventAppendOptions): Promise<SceneEvent>
   listSceneEvents?(sceneId: SceneId, opts?: SceneEventListOptions): Promise<SceneEvent[]>

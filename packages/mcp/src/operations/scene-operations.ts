@@ -11,6 +11,7 @@ import type { ActiveSceneMeta, Patch, SceneBridge, ValidationResult } from '../b
 import type {
   ProjectCreateOptions,
   ProjectStatus,
+  SceneDeleteResult,
   SceneEvent,
   SceneEventAppendOptions,
   SceneEventListOptions,
@@ -86,7 +87,7 @@ export interface SceneOperations {
   saveScene(options: SceneSaveOptions): Promise<SceneMeta>
   loadStoredScene(id: string): Promise<SceneWithGraph | null>
   listScenes(options?: SceneListOptions): Promise<SceneMeta[]>
-  deleteStoredScene(id: string, options?: SceneMutateOptions): Promise<boolean>
+  deleteStoredScene(id: string, options?: SceneMutateOptions): Promise<SceneDeleteResult>
   renameStoredScene(id: string, newName: string, options?: SceneMutateOptions): Promise<SceneMeta>
   appendSceneEvent(options: SceneEventAppendOptions): Promise<SceneEvent | null>
   listSceneEvents(id: string, options?: SceneEventListOptions): Promise<SceneEvent[]>
@@ -333,7 +334,7 @@ class SceneOperationsFacade implements SceneOperations {
     return this.requireStore().list(options)
   }
 
-  async deleteStoredScene(id: string, options?: SceneMutateOptions): Promise<boolean> {
+  async deleteStoredScene(id: string, options?: SceneMutateOptions): Promise<SceneDeleteResult> {
     return this.requireStore().delete(id, options)
   }
 

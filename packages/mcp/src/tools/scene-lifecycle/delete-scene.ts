@@ -12,6 +12,8 @@ export const deleteSceneInput = {
 
 export const deleteSceneOutput = {
   deleted: z.boolean(),
+  hidden: z.boolean(),
+  message: z.string().optional(),
 }
 
 export function registerDeleteScene(server: McpServer, operations: SceneOperations): void {
@@ -20,17 +22,16 @@ export function registerDeleteScene(server: McpServer, operations: SceneOperatio
     {
       title: 'Delete scene',
       description:
-        'Permanently delete a stored scene by id; in Pascal that is the whole project with its versions and files. It cannot be undone, and only someone who can manage the project may delete it. Optionally pass `expectedVersion` for optimistic concurrency.',
+        "Remove a stored scene by id. In Pascal this never deletes the project: it hides it from Pascal's public listings until it is next saved with content, and answers `deleted: false, hidden: true` with a message; its owner can delete it from the projects page. Only someone who can manage the project may hide it. A local scene store deletes the scene. Optionally pass `expectedVersion` for optimistic concurrency.",
       inputSchema: deleteSceneInput,
       outputSchema: deleteSceneOutput,
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async ({ id, expectedVersion }) => {
       try {
-        const deleted = await operations.deleteStoredScene(id, {
+        const payload = await operations.deleteStoredScene(id, {
           ...(expectedVersion !== undefined ? { expectedVersion } : {}),
         })
-        const payload = { deleted }
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
           structuredContent: payload,

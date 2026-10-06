@@ -300,8 +300,8 @@
         "openWorldHint": false
       },
       "justifications": {
-        "readOnlyHint": "It is not read-only because permanently deletes a persisted Pascal scene.",
-        "destructiveHint": "The operation permanently removes a persisted scene and its stored revisions.",
+        "readOnlyHint": "It is not read-only because it hides a Pascal project from public listings, or deletes a scene from a local store.",
+        "destructiveHint": "A local store permanently removes the scene and its stored revisions; in Pascal the project is not deleted but leaves the public listings.",
         "openWorldHint": "It operates on the connected Pascal scene or project service without accessing the public internet."
       }
     },
