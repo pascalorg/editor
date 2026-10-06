@@ -1,8 +1,11 @@
+import { getLevelPresentationY, useViewer } from '@pascal-app/viewer'
 import {
   type AnyNodeId,
   DEFAULT_ANGLE_STEP,
   type FenceConstructionOptions as FenceCommitOptions,
   FenceNode,
+  floorConstructionLift,
+  nodeRegistry,
   getFenceCenterlineLength,
   getFenceSplineLength,
   resolveFenceConstructionSupport,
@@ -90,6 +93,60 @@ export function getFenceInheritedDefaults(
 
 const FENCE_CORNER_SNAP_RADIUS = 0.28
 const FENCE_SPAN_SNAP_RADIUS = 0.16
+
+const FENCE_CORNER_SNAP_RADIUS = 0.28
+const FENCE_SPAN_SNAP_RADIUS = 0.16
+
+export function getFenceDrawingSurface() {
+  const id = useEditor.getState().toolDefaults.fence?.supportSurfaceId
+  if (typeof id !== 'string') return null
+  const nodes = useScene.getState().nodes
+  const node = nodes[id as AnyNodeId]
+  if (
+    !node?.parentId ||
+    node.parentId !== useViewer.getState().selection.levelId ||
+    node.visible === false
+  )
+    return null
+  const top = nodeRegistry.get(node.type)?.capabilities?.surfaces?.top
+  if (!top?.boundary) return null
+  const position = (node as unknown as { position: number[] }).position
+  const height = typeof top.height === 'function' ? top.height(node, { nodes }) : top.height
+  return {
+    id,
+    boundary: top.boundary(node, 0.08),
+    levelElevation: getLevelPresentationY(node.parentId, nodes, useViewer.getState().levelMode),
+    elevation: (position?.[1] ?? 0) + height + floorConstructionLift(nodes, node),
+  }
+}
+
+function findSurfaceSnapTarget(point: FencePlanPoint): FencePlanPoint | null {
+  const surface = getFenceDrawingSurface()
+  if (!surface) return null
+  let corner: FencePlanPoint | null = null
+  let edge: FencePlanPoint | null = null
+  let cornerDistance = FENCE_CORNER_SNAP_RADIUS ** 2
+  let edgeDistance = FENCE_SPAN_SNAP_RADIUS ** 2
+  for (let index = 0; index < surface.boundary.length; index++) {
+    const a = surface.boundary[index]!
+    const b = surface.boundary[(index + 1) % surface.boundary.length]!
+    const candidate: FencePlanPoint = [a[0], a[1]]
+    const distance = distanceSquared(point, candidate)
+    if (distance <= cornerDistance) {
+      corner = candidate
+      cornerDistance = distance
+    }
+    const projection = projectPointOntoSegment(point, { start: candidate, end: [b[0], b[1]] })
+    if (projection) {
+      const distance = distanceSquared(point, projection)
+      if (distance <= edgeDistance) {
+        edge = projection
+        edgeDistance = distance
+      }
+    }
+  }
+  return corner ?? edge
+}
 
 type SegmentNode = {
   start: FencePlanPoint

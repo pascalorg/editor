@@ -15,6 +15,7 @@ import { Hammer, Layers, Package, Palette, Settings } from 'lucide-react'
 import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { PoolSectionBanner } from '@/components/pool-section-banner'
 import { countGraphNodes, isEmptyGraphOverwrite } from '@/lib/empty-graph-guard'
 import { useLocalArtifactStore } from '@/lib/local-artifact-store'
 import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signature'
@@ -379,6 +380,7 @@ function SceneEditor({ initialScene, meta: initialMeta }: SceneLoaderProps) {
         projectId={meta.projectId ?? 'default'}
         projectName={meta.name}
         sidebarTabs={SIDEBAR_TABS}
+        viewerBanner={<PoolSectionBanner />}
         viewerToolbarLeft={<EditorViewerToolbarLeft />}
         viewerToolbarRight={
           <EditorViewerToolbarRight

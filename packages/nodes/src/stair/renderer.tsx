@@ -34,6 +34,7 @@ import { balusterGuardRails, buildBalusterGuard } from './baluster-guard'
 import { boardsGuardRails, buildBoardsGuard } from './boards-guard'
 import { buildCableGuard, cableGuardRails } from './cable-guard'
 import { ContinuousStairRailings } from './continuous-railings'
+import { landscapeTransitionProfile } from './landscape-transition'
 import {
   barBox,
   GUARD_PICKET_PITCH,
@@ -174,8 +175,7 @@ export const StairRenderer = ({ node: rawNode }: { node: StairNode }) => {
 
   return (
     <group
-      position-x={node.position[0]}
-      position-z={node.position[2]}
+      position={node.position}
       ref={ref}
       rotation-y={node.rotation}
       visible={node.visible}
@@ -299,7 +299,7 @@ function StairRailings({
   // reads as one coherent guard across straight, chained, winder, curved and
   // spiral layouts.
 
-  if ((stair.railingMode ?? 'none') === 'none') {
+  if (stair.landscapeSurfaceId || (stair.railingMode ?? 'none') === 'none') {
     return null
   }
 

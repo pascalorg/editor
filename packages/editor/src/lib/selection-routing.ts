@@ -98,7 +98,7 @@ export function resolveCanvasSelectionNode({
   const proxiedTarget = nodes[resolveSelectionProxyId(node, nodes)] ?? node
   let target = shouldBypassSelectionProxy(node, proxiedTarget) ? node : proxiedTarget
   const parentFrame = nodeRegistry.get(target.type)?.capabilities?.movable?.parentFrame
-  if (parentFrame) {
+  if (parentFrame && !parentFrame.independent) {
     const parent = parentFrame.resolveParent(target, nodes as Readonly<Record<string, AnyNode>>)
     if (parent && selectedIds.length === 1 && selectedIds[0] === parent.id) {
       target = parent

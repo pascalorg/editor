@@ -903,7 +903,10 @@ function cloneSceneForExport(
 ): THREE.Object3D {
   if (excludedObjects.has(source)) return new THREE.Group()
 
-  const clone = source.clone(false)
+  // LOD.copy clones every level even when called through clone(false). Export
+  // walks the children itself, and plugin LOD constructors may require inputs.
+  const clone =
+    source instanceof THREE.LOD ? new THREE.Group().copy(source, false) : source.clone(false)
   clone.userData = cloneExportUserData(source.userData)
   const renderable = source as THREE.Mesh
   const renderableClone = clone as THREE.Mesh

@@ -2690,6 +2690,7 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
       }
       case 'endpoint-handle': {
         if (!palette) return <></>
+        const endpointUnitsPerPixel = g.screenSized ? unitsPerPixel : handleUnitsPerPixel
         const handleId = makeHandleId(nodeId, g.payload)
         const doubleClickAffordance = floorplanHandleDoubleClickAffordance(g)
         const isHovered = hoveredHandleId === handleId
@@ -2715,10 +2716,10 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
             : palette.endpointHandleFill
         const outerRadius =
           (isActive ? ENDPOINT_HANDLE_ACTIVE_RADIUS_PX : ENDPOINT_HANDLE_SELECTED_RADIUS_PX) *
-          handleUnitsPerPixel
+          endpointUnitsPerPixel
         const dotRadius =
           (isActive ? ENDPOINT_HANDLE_ACTIVE_DOT_RADIUS_PX : ENDPOINT_HANDLE_DOT_RADIUS_PX) *
-          handleUnitsPerPixel
+          endpointUnitsPerPixel
         return (
           <g
             key={keyHint}
@@ -2734,7 +2735,7 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
               r={outerRadius}
               stroke={hoverStroke}
               strokeOpacity={isActive ? 0.24 : 0.16}
-              strokeWidth={ENDPOINT_HOVER_GLOW_STROKE_WIDTH_PX * handleUnitsPerPixel}
+              strokeWidth={ENDPOINT_HOVER_GLOW_STROKE_WIDTH_PX * endpointUnitsPerPixel}
               style={{ opacity: isHovered || isActive ? 1 : 0, transition: HOVER_TRANSITION }}
               vectorEffect="non-scaling-stroke"
             />
@@ -2746,7 +2747,7 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
               r={outerRadius}
               stroke={hoverStroke}
               strokeOpacity={isActive ? 0.72 : 0.52}
-              strokeWidth={ENDPOINT_HOVER_RING_STROKE_WIDTH_PX * handleUnitsPerPixel}
+              strokeWidth={ENDPOINT_HOVER_RING_STROKE_WIDTH_PX * endpointUnitsPerPixel}
               style={{ opacity: isHovered || isActive ? 1 : 0, transition: HOVER_TRANSITION }}
               vectorEffect="non-scaling-stroke"
             />
