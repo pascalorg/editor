@@ -8,7 +8,6 @@ import {
   LevelNode,
   planOwnedFloorOpenings,
   SlabNode,
-  StairDesignTargets,
   StairNode,
   StairSegmentNode,
   syncAutoStairOpenings,
@@ -630,18 +629,6 @@ test('an unrelated slab edit preserves a loaded stair opening with historical ge
     [middle.id]: { ...middle, height: middle.height! - 0.5 },
   }
   expect(changedStairOpeningOwners(spanning, redistributed).has(stair.id)).toBe(true)
-  expect(
-    changedStairOpeningOwners(before, {
-      ...before,
-      [stair.id]: { ...stair, railingStyle: 'glass' },
-    }).has(stair.id),
-  ).toBe(false)
-  expect(
-    changedStairOpeningOwners(before, {
-      ...before,
-      [stair.id]: { ...stair, designTargets: StairDesignTargets.parse({ maxRiserHeight: 0.2 }) },
-    }).has(stair.id),
-  ).toBe(false)
   expect(
     changedStairOpeningOwners(before, {
       ...before,

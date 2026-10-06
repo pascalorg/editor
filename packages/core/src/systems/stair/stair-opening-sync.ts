@@ -9,7 +9,6 @@ import type {
   StairNode,
   SurfaceHoleMetadata,
 } from '../../schema'
-import { StairDesignTargets } from '../../schema/nodes/stair-design-targets'
 import { resolveCeilingHeight } from '../../services/level-height'
 import { getLevelElevations } from '../../services/storey'
 import { stairClearanceOpening } from './stair-clearance'
@@ -186,63 +185,7 @@ function getResolvedStairLevelIds(stair: StairNode, nodes: Record<string, AnyNod
   return resolved
 }
 
-const defaultMinimumHeadroom = StairDesignTargets.parse({}).minimumHeadroom
-
-function openingGeometry(node: AnyNode | undefined) {
-  if (!node) return null
-  const fields =
-    node.type === 'stair'
-      ? [
-          'parentId',
-          'visible',
-          'position',
-          'rotation',
-          'supportSlabId',
-          'stairType',
-          'fromLevelId',
-          'toLevelId',
-          'deckSlabId',
-          'slabOpeningMode',
-          'openingOffset',
-          'width',
-          'totalRise',
-          'designTargets',
-          'stepCount',
-          'thickness',
-          'fillToFloor',
-          'construction',
-          'innerRadius',
-          'sweepAngle',
-          'topLandingMode',
-          'topLandingDepth',
-          'children',
-        ]
-      : [
-          'parentId',
-          'visible',
-          'position',
-          'rotation',
-          'segmentType',
-          'width',
-          'length',
-          'height',
-          'stepCount',
-          'attachmentSide',
-          'fillToFloor',
-          'construction',
-          'winder',
-          'thickness',
-        ]
-  return JSON.stringify(
-    fields.map((field) =>
-      field === 'designTargets' && node.type === 'stair'
-        ? (node.designTargets?.minimumHeadroom ?? defaultMinimumHeadroom)
-        : (node as unknown as Record<string, unknown>)[field],
-    ),
-  )
-}
-
-/** Existing cuts are user data: a surface edit alone must not upgrade their geometry. */
+/** Existing cuts are user data: only an edit to the stair itself or the levels it spans re-cuts them. */
 export function changedStairOpeningOwners(
   before: Record<string, AnyNode>,
   after: Record<string, AnyNode>,
@@ -282,10 +225,8 @@ export function changedStairOpeningOwners(
     if (
       previous?.type !== 'stair' ||
       current?.type !== 'stair' ||
-      openingGeometry(previous) !== openingGeometry(current) ||
-      current.children.some(
-        (childId) => openingGeometry(before[childId]) !== openingGeometry(after[childId]),
-      ) ||
+      previous !== current ||
+      current.children.some((childId) => before[childId] !== after[childId]) ||
       span(previous, before, beforeElevations) !== span(current, after, afterElevations) ||
       resolveStairTotalRise(previous, before) !== resolveStairTotalRise(current, after)
     ) {
