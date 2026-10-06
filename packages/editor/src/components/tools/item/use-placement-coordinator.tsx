@@ -799,10 +799,13 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       // Alignment guides are floor-only; clear them when the cursor moves
       // onto a wall / ceiling / item surface (only those paths call this).
       useAlignmentGuides.getState().clear()
-      // Roof faces carry no grab anchor, but landing on one still counts as
-      // anchoring elsewhere — a later return to the grabbed wall must center
-      // under the cursor, not restore the stale grab offset.
-      if (result.stateUpdate.surface === 'roof-wall') grabForgotten = true
+      // A floor transition can be a hit gap; other hosted surfaces are a new anchor.
+      if (
+        result.stateUpdate.surface &&
+        result.stateUpdate.surface !== 'floor' &&
+        result.stateUpdate.surface !== 'wall'
+      )
+        grabForgotten = true
       Object.assign(placementState.current, result.stateUpdate)
       gridPosition.current.set(...result.gridPosition)
 
