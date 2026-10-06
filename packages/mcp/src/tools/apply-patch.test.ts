@@ -73,8 +73,15 @@ describe('apply_patch', () => {
     })
     expect(dropped.isError).toBe(true)
     const refusal = JSON.parse((dropped.content as Array<{ text: string }>)[0]!.text)
-    expect(refusal.code).toBe('unknown_field')
-    expect(refusal.message).toContain('material.color')
+    // Registered as a patch guard, it answers as it did when apply_patch held it.
+    expect(refusal).toEqual({
+      code: 'unknown_field',
+      patchIndex: 0,
+      id: wall.id,
+      message: expect.stringContaining(
+        `unknown_field: patches[0] wall ${wall.id} would not keep material.color: the patch would report it applied and drop it.`,
+      ),
+    })
     const cleared = await client.callTool({
       name: 'apply_patch',
       arguments: { patches: [{ op: 'update', id: wall.id, data: { materialPreset: null } }] },
