@@ -745,6 +745,11 @@ export const NON_REFERENCES: readonly { kind: string; path: string; reason: stri
     })),
     { kind, path: 'source.params.@key', reason: 'Script parameter name.' },
     { kind, path: 'source.params.*', reason: 'Script parameter value.' },
+    {
+      kind,
+      path: 'source.images.thumbnail',
+      reason: 'Content hash of a project artifact, like source.artifact; forks carry it.',
+    },
   ]),
   { kind: 'scan', path: 'layers.@key', reason: 'Layer visibility flag name.' },
   { kind: 'site', path: 'frontEdge', reason: "Index of the lot polygon's street-facing edge." },
@@ -979,6 +984,7 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'flatMap',
   ]),
   ...described('Print-export artifact metadata, not scene-node metadata.', ['status']),
+  ...described('Script build provenance metadata, not scene-node metadata.', ['mount']),
   ...described('Derived floorplan drawing metadata, not scene-node metadata.', [
     'at',
     'buildingId',
