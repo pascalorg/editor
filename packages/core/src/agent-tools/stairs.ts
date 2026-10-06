@@ -75,7 +75,8 @@ export const createStairTool = {
       description: 'A margin round the opening on every side (default 0.08 m).',
     }).optional(),
     openingCenter: z
-      .tuple([z.number(), z.number()])
+      .array(z.number())
+      .length(2)
       .optional()
       .describe('The opening centre (x, z). Default: the middle of the flight.'),
     openingRotation: measurement('angle', 'deg', {
