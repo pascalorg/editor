@@ -108,12 +108,15 @@ import { groundHeightAt } from '../../lib/ground-surface'
 import { guideEmitter } from '../../lib/guide-events'
 import {
   acceptsKeyboardPan,
+  advanceKeyboardPanMotion,
   clearKeyboardPanKeys,
+  createKeyboardPanMotion,
   isKeyboardPanKey,
   type KeyboardPanState,
-  keyboardPanDirection,
   keyboardPanSpeed,
+  resetKeyboardPanMotion,
   setKeyboardPanKey,
+  syncKeyboardPanMotion,
 } from '../../lib/keyboard-pan'
 import { measurementHint, parseMeasurement } from '../../lib/measurement-parser'
 import { formatLinearMeasurement, linearUnitToMeters } from '../../lib/measurements'
@@ -7664,26 +7667,22 @@ export function FloorplanPanel({
   useEffect(() => {
     if (viewMode !== '2d') return
     const keys = keyboardPanKeysRef.current
+    const motion = createKeyboardPanMotion()
     let frame: number | null = null
-    let lastTime: number | null = null
     const sceneRotationDeg = (userRotationDeg: number) =>
       FLOORPLAN_VIEW_ROTATION_DEG + userRotationDeg - buildingRotationDeg
-    const step = (time: number) => {
-      const { horizontal, vertical } = keyboardPanDirection(keys)
+    const step = () => {
       const viewport = latestViewportRef.current ?? latestFittedViewportRef.current
-      if ((horizontal === 0 && vertical === 0) || !viewport) {
+      if (!(viewport && advanceKeyboardPanMotion(motion, keys, performance.now()))) {
         frame = null
-        lastTime = null
+        resetKeyboardPanMotion(motion)
         commitFloorplanPan()
         return
       }
-      const elapsed = lastTime === null ? 0 : Math.min((time - lastTime) / 1000, 0.05)
-      lastTime = time
-      const distance =
-        (keyboardPanSpeed(viewport.width) * elapsed) / Math.hypot(horizontal, vertical)
+      const speed = keyboardPanSpeed(viewport.width)
       const next = {
-        centerX: viewport.centerX + horizontal * distance,
-        centerY: viewport.centerY - vertical * distance,
+        centerX: viewport.centerX + motion.stepX * speed,
+        centerY: viewport.centerY - motion.stepY * speed,
         width: viewport.width,
       }
       const userRotationDeg = latestFloorplanUserRotationDegRef.current
@@ -7704,12 +7703,15 @@ export function FloorplanPanel({
     }
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(isKeyboardPanKey(event.code) && acceptsKeyboardPan(event))) return
+      syncKeyboardPanMotion(motion, keys, performance.now())
       if (setKeyboardPanKey(keys, event.code, true)) start()
       event.preventDefault()
       event.stopPropagation()
     }
     const onKeyUp = (event: KeyboardEvent) => {
-      if (isKeyboardPanKey(event.code) && setKeyboardPanKey(keys, event.code, false)) {
+      if (!isKeyboardPanKey(event.code)) return
+      syncKeyboardPanMotion(motion, keys, performance.now())
+      if (setKeyboardPanKey(keys, event.code, false)) {
         event.preventDefault()
         event.stopPropagation()
       }
