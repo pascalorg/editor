@@ -32,7 +32,7 @@
     "@react-three/fiber": "^9.5.0",
     "@react-three/xr": "^6.6.30",
     "@tailwindcss/postcss": "^4.2.1",
-    "@webxr/plugin": "github:sudhir9297/pascal-cluster#3dfbdf1e859368746e848489dab83f770b148255",
+    "@webxr/plugin": "github:sudhir9297/pascal-cluster#9cd90457fc823d5d633d38e9575856c854aeb4d4",
     "clsx": "^2.1.1",
     "geist": "^1.7.0",
     "lucide-react": "^1.7.0",
