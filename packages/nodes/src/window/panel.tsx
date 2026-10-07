@@ -14,7 +14,7 @@ import {
   WINDOW_STYLE_CHOICES,
   WINDOW_STYLE_LABELS,
   windowStylesOf,
-  windowTypeFields,
+  windowTypeChange,
 } from '@pascal-app/core/building'
 import {
   ActionButton,
@@ -338,7 +338,7 @@ export default function WindowPanel() {
                   key={option.value}
                   onClick={() =>
                     handleUpdate({
-                      ...windowTypeFields(option.value),
+                      ...windowTypeChange(node, option.value),
                       ...(option.value === 'awning' ? { awningDirection } : {}),
                     })
                   }

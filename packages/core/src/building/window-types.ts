@@ -21,3 +21,17 @@ export function windowTypeFields(type: WindowType): Partial<WindowNode> {
     ...(SILLLESS_WINDOW_TYPES.has(type) ? { sill: false } : {}),
   }
 }
+
+/**
+ * What changing `window`'s type writes, for the window panel's Type row: the type's own fields, and
+ * the sill back when the window leaves Bay or Bow, which have none. A sill the person turned off on
+ * any other type stays off.
+ */
+export function windowTypeChange(
+  window: Pick<WindowNode, 'windowType'>,
+  type: WindowType,
+): Partial<WindowNode> {
+  const leavesSillless =
+    SILLLESS_WINDOW_TYPES.has(window.windowType) && !SILLLESS_WINDOW_TYPES.has(type)
+  return { ...windowTypeFields(type), ...(leavesSillless ? { sill: true } : {}) }
+}
