@@ -74,7 +74,7 @@ import useInteractionScope, {
 } from '../../../store/use-interaction-scope'
 import { BuildingHelper } from './building-helper'
 import { ContextualHelperPanel } from './contextual-helper-panel'
-import { placingItemId, useFloorItemWarning } from '../../../hooks/use-floor-item-warning'
+import { transientDraftId, usePlacementNotice } from '../../../hooks/use-placement-notice'
 import { ItemHelper } from './item-helper'
 import { RegisteredToolHelper } from './registered-tool-helper'
 
@@ -309,8 +309,10 @@ export function HelperManager() {
   const openingShape = useOpeningDraft((s) => (s.host ? s.shape : null))
   const terraceShape = useTerraceDraft((s) => (s.host ? s.shape : null))
   const movingNode = useMovingNode()
-  const placingItem = useScene((s) => (tool === 'item' ? placingItemId(s.nodes) : null))
-  const fitWarning = useFloorItemWarning(movingNode?.type === 'item' ? movingNode.id : placingItem)
+  // A tool whose kind gives placement notices: its transient draft is the node in hand.
+  const toolNotices = !!(tool && nodeRegistry.get(tool)?.placementNotice)
+  const toolDraftId = useScene((s) => (toolNotices ? transientDraftId(s.nodes) : null))
+  const placementNotice = usePlacementNotice(movingNode?.id ?? toolDraftId)
   const reshapingNode = useReshapingNode()
   const activeHandleDrag = useActiveHandleDrag()
   const mezzanineHandle = useScene((s) => mezzanineGesture(activeHandleDrag, s.nodes))
@@ -556,7 +558,7 @@ export function HelperManager() {
     return (
       <ItemHelper
         continuationContext={movingContinuationContext}
-        notice={fitWarning?.line}
+        notice={placementNotice?.line}
         showEsc
         showForce={collisionValidatesDrop}
         snapContext={snapContext}
@@ -653,7 +655,7 @@ export function HelperManager() {
         <RegisteredToolHelper
           continuationContext={continuationContext}
           hints={hints}
-          notice={tool === 'item' ? fitWarning?.line : null}
+          notice={placementNotice?.line ?? null}
           shiftPressed={modifiers.shift}
           snapContext={snapContext}
           title={toolHudTitle(tool, wallMode)}

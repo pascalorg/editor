@@ -333,9 +333,16 @@ When emitting a `FloorplanGeometry` polygon that should remain interactive but v
 Procedural recipes declare `mounting: { attachTo: 'ceiling', reference }` with a named, non-repeated +Y top surface. The shared procedural mounted move session handles wall and ceiling previews, snapping, collision checks, Alt force-place for collisions, fresh subtree commits and single-step undo. Ceiling enter/move/click events use ceiling-local XZ; grid fallback shows an unhosted red ghost and cannot commit. The parent is the ceiling, stored Y is zero at the reference, and only yaw rotates (R/T); the rendered pose subtracts the rotated reference so the design hangs flush below the ceiling underside. Core validation enforces polygon containment, holes and level height even with Alt. The 2D move target finds ceiling polygons and uses the same session; glyphs resolve the ceiling frame, while parameter arrows portal through the ceiling frame and floor elevation never applies.
 
 
-## Floor item fit
+## Placement notices
 
-While a floor item is placed from the catalog or moved, the item tool's HUD shows a `!` row when it stands in a door's clearance ("Blocks the door to Bath") or when its room cannot hold it in any turn ("Too large for Bath"); the selected item's panel shows the same line at its top, with the item's and the room's sizes for a room too small. It is a warning, not a block: the item still places. The check is core's `floorItemFit` (`@pascal-app/core/building`), the one `place_items` refuses with (`blocks_door`, naming the door and a spot that clears every door; `too_large_for_room`), read through `useFloorItemWarning` at the item's live pose. Only items standing on a level are checked: an item on a table, a shelf or a wall is not, and items overlapping each other (a chair under its table) are not a misfit.
+A kind can tell the person why the node in hand doesn't fit where it stands. It declares `placementNotice(node, { nodes, live })` on its `NodeDefinition`: a pure function that returns `{ line, detail? }` or null, with `live` the in-flight drag pose, which the kind merges in its own frame.
+- The editor reads it through one generic hook, `usePlacementNotice(nodeId)`. HelperManager shows `line` in the HUD's `!` row for the moving node or the active tool's transient draft. A panel shows `line` and `detail` for the selected node.
+- The framework names no kind. HelperManager scans for a transient draft only while the active tool's kind declares a notice, and the hook subscribes to the scene only while it has a node.
+- It is a warning, never a block: the node still places.
+
+The item kind uses it for floor fit (`nodes/src/item/placement-notice.ts`): a floor item standing in a door's clearance ("Blocks the door to Bath"), or one its room cannot hold in any turn ("Too large for Bath", with both sizes in the panel).
+- The check is core's `floorItemFit` (`@pascal-app/core/building`), the same one `place_items` refuses with (`blocks_door`, naming the door and a spot that clears every door; `too_large_for_room`). The person-facing wording lives in the kind.
+- Only items standing on a level are checked: not an item on a table, a shelf or a wall. Items overlapping each other (a chair under its table) are not a misfit.
 
 ## Surface fit policy
 

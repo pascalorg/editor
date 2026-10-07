@@ -17,6 +17,7 @@ import { buildItemContextualDimensions, buildItemFloorplan } from './floorplan'
 import { itemFloorplanMoveTarget } from './floorplan-move'
 import { itemPaint } from './paint'
 import { itemParametrics } from './parametrics'
+import { itemPlacementNotice } from './placement-notice'
 import { ItemNode } from './schema'
 
 // The two floor gizmos flank the item at mid-height so they never overlap,
@@ -355,6 +356,7 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   // *transitions* (drop a wall item on a ceiling) remain canonical
   // in the 3D path; 2D only re-anchors within the same family.
   floorplanMoveTarget: itemFloorplanMoveTarget,
+  placementNotice: itemPlacementNotice,
   keyboardActions: {
     e: {
       appliesTo: (node) => itemMechanism.has(node) || itemHasLights(node),

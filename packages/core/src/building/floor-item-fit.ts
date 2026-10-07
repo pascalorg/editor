@@ -7,7 +7,7 @@ import {
 import { findValidPlacement } from '../agent-operations/layout-clearance'
 import { pointInPolygon, polygonBounds, type Vec2 } from '../agent-operations/plan-geometry'
 import type { SceneNodes } from '../agent-operations/types'
-import { type AnyNode, getScaledDimensions, type ItemNode, type ZoneNode } from '../schema'
+import type { ZoneNode } from '../schema'
 
 export type FloorItemRoom = { id: string; name: string; width: number; depth: number }
 
@@ -20,8 +20,6 @@ export type FloorItemMisfit =
       /** A spot in the room that clears every door, when there is one. */
       candidate?: { x: number; z: number; rotationDeg: number }
     }
-
-const round = (value: number) => Math.round(value * 100) / 100
 
 /**
  * Whether a floor item fits where it stands. An item its room cannot hold in any turn, or one
@@ -81,32 +79,5 @@ export function floorItemFit(
     ...(room ? { room } : {}),
     doorId: door.doorId,
     ...(candidate ? { candidate } : {}),
-  }
-}
-
-/**
- * The warning a person reads for a floor item that does not fit, in the HUD while placing it and
- * in its panel once placed; null for one that fits, or one not standing on the floor.
- */
-export function floorItemWarning(
-  nodes: Readonly<Record<string, AnyNode>>,
-  item: ItemNode,
-): { line: string; detail?: string } | null {
-  if (nodes[item.parentId ?? '']?.type !== 'level') return null
-  const dimensions = getScaledDimensions(item)
-  const misfit = floorItemFit(nodes as SceneNodes, {
-    levelId: item.parentId!,
-    x: item.position[0],
-    z: item.position[2],
-    rotationDeg: ((item.rotation?.[1] ?? 0) * 180) / Math.PI,
-    dimensions,
-  })
-  if (!misfit) return null
-  const name = misfit.room?.name.trim()
-  if (misfit.code === 'blocks_door')
-    return { line: name ? `Blocks the door to ${name}` : 'Blocks a door' }
-  return {
-    line: name ? `Too large for ${name}` : 'Too large for its room',
-    detail: `${round(dimensions[0])} × ${round(dimensions[2])} m in a ${round(misfit.room.width)} × ${round(misfit.room.depth)} m room`,
   }
 }

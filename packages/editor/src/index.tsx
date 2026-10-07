@@ -354,9 +354,9 @@ export type { SaveStatus } from './hooks/use-auto-save'
 // primitive. Public so registry-driven kinds (Phase 5+ Stage D ports)
 // can express their affordances declaratively in their own folder.
 export { type UseDragActionArgs, useDragAction } from './hooks/use-drag-action'
-export { useFloorItemWarning } from './hooks/use-floor-item-warning'
 // Phase 5 Stage D — extras for kind-owned placement tools (FenceTool etc.).
 export { cancelActiveTool, markToolCancelConsumed } from './hooks/use-keyboard'
+export { usePlacementNotice } from './hooks/use-placement-notice'
 export { useReducedMotion } from './hooks/use-reduced-motion'
 export { useSelectedRoom } from './hooks/use-selected-room'
 export { type Selection, useSelection } from './hooks/use-selection'

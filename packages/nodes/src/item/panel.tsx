@@ -10,7 +10,7 @@ import {
   SliderControl,
   triggerSFX,
   useEditor,
-  useFloorItemWarning,
+  usePlacementNotice,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Link, Link2Off, Move, Trash2 } from 'lucide-react'
@@ -39,7 +39,7 @@ export default function ItemPanel() {
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as ItemNode | undefined) : undefined,
   )
 
-  const fitWarning = useFloorItemWarning(selectedId)
+  const fitWarning = usePlacementNotice(selectedId)
   const [uniformScale, setUniformScale] = useState(true)
   const nodeRef = useRef(node)
   nodeRef.current = node
