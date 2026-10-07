@@ -14,6 +14,7 @@ import {
   WINDOW_STYLE_CHOICES,
   WINDOW_STYLE_LABELS,
   windowStylesOf,
+  windowTakesStyle,
   windowTypeChange,
 } from '@pascal-app/core/building'
 import {
@@ -199,8 +200,7 @@ export default function WindowPanel() {
   const showOpeningShapeSection = !scripted && isOpening
   const showFrameSection = !scripted && !isOpening
   const showGridSection = !scripted && !isOpening && supportsGrid
-  // A style shapes the pane grid, which only a Fixed window draws, like the Grid section.
-  const showStyleSection = showGridSection
+  const showStyleSection = !scripted && !isOpening && windowTakesStyle(node.windowType)
   const showSillSection = !scripted && !isOpening && supportsSill
   const showOperationSection = !scripted && !isOpening && isOperableWindow
   const showAwningDirectionSection = !scripted && !isOpening && displayedWindowType === 'awning'

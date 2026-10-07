@@ -21,6 +21,7 @@ import {
   type WindowEvent,
   WindowNode,
 } from '@pascal-app/core'
+import { windowTakesStyle } from '@pascal-app/core/building'
 import {
   calculateItemRotation,
   clearPlacementSurface,
@@ -68,7 +69,7 @@ import {
   resolveWallSlideAlignment,
 } from '../shared/wall-opening-alignment'
 import { WindowFloorProjection } from './floor-projection'
-import { placedWindowFields, useWindowPlacement, windowTakesStyle } from './placement'
+import { placedWindowFields, useWindowPlacement } from './placement'
 import WindowPreview from './preview'
 import {
   clampToWall,

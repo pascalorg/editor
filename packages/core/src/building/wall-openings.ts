@@ -25,6 +25,7 @@ import {
   getWindowStyleOverrides,
   type WindowStyle,
 } from './opening-style-presets'
+import { windowTakesStyle } from './window-types'
 
 // The placement rules of wall openings, shared by the editor's door and window tools and by
 // every agent surface: what the editor lets a person do by hand is what an agent may do.
@@ -267,7 +268,7 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
   // The renderer draws a style's panes on a Fixed window only; an operable window draws its own
   // sashes, so a style there would be written and never seen.
   const windowType = input.windowType ?? 'fixed'
-  if (kind === 'window' && input.style && windowType !== 'fixed')
+  if (kind === 'window' && input.style && !windowTakesStyle(windowType))
     refuse(
       'style_needs_fixed_window',
       `A window style shapes a Fixed window's panes; a ${windowType} window draws its own sashes, so the style would not show. Pass windowType 'fixed' with the style, or drop the style.`,

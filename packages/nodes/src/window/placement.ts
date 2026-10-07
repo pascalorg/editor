@@ -7,6 +7,7 @@ import {
   WINDOW_STYLE_CHOICES,
   WINDOW_STYLE_LABELS,
   type WindowStyle,
+  windowTakesStyle,
   windowTypeFields,
 } from '@pascal-app/core/building'
 import { create } from 'zustand'
@@ -30,9 +31,6 @@ type WindowPlacementState = {
   cycleType(): void
   cycleStyle(): void
 }
-
-/** A style shapes a Fixed window's panes; every other type draws its own sashes and ignores them. */
-export const windowTakesStyle = (type: WindowNode['windowType']) => type === 'fixed'
 
 const next = <T>(list: readonly T[], value: T) => list[(list.indexOf(value) + 1) % list.length]!
 

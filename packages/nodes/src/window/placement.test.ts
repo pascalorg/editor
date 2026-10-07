@@ -1,11 +1,7 @@
 import { afterEach, expect, test } from 'bun:test'
 import { WindowNode } from '@pascal-app/core'
-import {
-  placedWindowFields,
-  useWindowPlacement,
-  WINDOW_PLACEMENT_HINTS,
-  windowTakesStyle,
-} from './placement'
+import { windowTakesStyle } from '@pascal-app/core/building'
+import { placedWindowFields, useWindowPlacement, WINDOW_PLACEMENT_HINTS } from './placement'
 
 const initial = useWindowPlacement.getState()
 afterEach(() => useWindowPlacement.setState(initial))
