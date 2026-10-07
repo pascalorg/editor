@@ -1,50 +1,21 @@
 'use client'
 
-import {
-  type AnyNode,
-  type AnyNodeId,
-  emitter,
-  findOpenWallEnds,
-  type LevelNode,
-  type OpenWallEnd,
-  useScene,
-} from '@pascal-app/core'
+import type { OpenWallEnd } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Link2 } from 'lucide-react'
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useShallow } from 'zustand/react/shallow'
 import {
-  collapseMutualOpenWallEnds,
-  joinOpenWallEnd,
-  openWallEndKey,
-  openWallEndLabel,
-  openWallEndsSummary,
-  visibleOpenWallEnds,
-} from '../../lib/floorplan/open-wall-ends'
+  useOpenWallEndFocus,
+  useOpenWallEnds,
+  useOpenWallEndsSuppressed,
+} from '../../hooks/use-open-wall-ends'
+import { openWallEndKey, openWallEndLabel } from '../../lib/floorplan/open-wall-ends'
 import { MEASUREMENT_DANGLING_COLOR } from '../../lib/measurements'
-import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
-import { useFloorplanDraftPreview } from '../../store/use-floorplan-draft-preview'
-import useInteractionScope from '../../store/use-interaction-scope'
+import { JoinWallsPill } from '../editor/join-walls-pill'
+import { OpenWallEndsHint } from '../editor/open-wall-ends-hint'
 import { useFloorplanRender } from './floorplan-render-context'
 import { resolveFloorplanLabelAngle } from './renderers/floorplan-label-angle'
-
-type Boundary = Extract<AnyNode, { type: 'wall' | 'separator' }>
-
-const HOVER_RELEASE_MS = 250
-
-function useLevelBoundaries(levelId: LevelNode['id'] | null): Boundary[] {
-  return useScene(
-    useShallow((state) => {
-      const level = levelId ? state.nodes[levelId] : undefined
-      if (level?.type !== 'level') return [] as Boundary[]
-      return level.children
-        .map((id) => state.nodes[id])
-        .filter((node): node is Boundary => node?.type === 'wall' || node?.type === 'separator')
-    }),
-  )
-}
 
 function sceneScreenPoint(point: [number, number]): { left: number; top: number } | null {
   const scene = document.querySelector<SVGGElement>('[data-floorplan-scene]')
@@ -58,7 +29,7 @@ function sceneScreenPoint(point: [number, number]): { left: number; top: number 
 /**
  * Shows where walls look joined but are not, so a room can't close: a red dot
  * on each open end, a dashed line to the wall it nearly meets with what is
- * wrong ("4 cm gap"), and the walls that bound no room dimmed. Hover or click a
+ * wrong ("4 cm gap"), and — while drawing — the walls that bound no room dimmed. Hover or click a
  * dot for "Join walls", which applies core's join planner as one undo step.
  *
  * On while walls or rooms are being drawn (the wall tool's variants, Divide);
@@ -66,150 +37,24 @@ function sceneScreenPoint(point: [number, number]): { left: number; top: number 
  */
 export const FloorplanOpenWallEndsLayer = memo(function FloorplanOpenWallEndsLayer() {
   const visible = useEditor((state) => state.viewMode !== '3d')
-  const suppressed = useInteractionScope(
-    (state) =>
-      state.scope.kind === 'moving' ||
-      state.scope.kind === 'placing' ||
-      state.scope.kind === 'reshaping' ||
-      state.scope.kind === 'handle-drag',
-  )
+  const suppressed = useOpenWallEndsSuppressed()
   return visible && !suppressed ? <ActiveOpenWallEndsLayer /> : null
 })
 
 const ActiveOpenWallEndsLayer = memo(function ActiveOpenWallEndsLayer() {
-  const levelId = useViewer((state) => state.selection.levelId) as LevelNode['id'] | null
   const unit = useViewer((state) => state.unit)
-  const mode = useEditor((state) => state.mode)
-  const tool = useEditor((state) => state.tool)
-  const spaces = useEditor(
-    useShallow((state) => Object.values(state.spaces).filter((space) => space.levelId === levelId)),
-  )
-  const isDividing = useInteractionScope((state) => state.scope.kind === 'room-divide')
-  const dividingDraft = useInteractionScope(
-    (state) => state.scope.kind === 'room-divide' && state.scope.points.length > 0,
-  )
-  const wallDrafting = useFloorplanDraftPreview(
-    (state) =>
-      state.wallDraftStart !== null ||
-      state.wallRectangleDraftStart !== null ||
-      state.wallPolygonDraftPoints.length > 0,
-  )
   const renderContext = useFloorplanRender()
-  const boundaries = useLevelBoundaries(levelId)
-
-  const drafting = wallDrafting || dividingDraft
-  const drawing = (mode === 'build' && tool === 'wall') || isDividing
-  const roomWallIds = useMemo(() => {
-    const ids = new Set<string>()
-    for (const space of spaces) {
-      for (const wallId of space.wallIds) ids.add(wallId)
-    }
-    return ids
-  }, [spaces])
-  const roomlessWallIds = useMemo(
-    () =>
-      boundaries
-        .filter((node) => node.type === 'wall' && !roomWallIds.has(node.id))
-        .map((node) => node.id),
-    [boundaries, roomWallIds],
-  )
-  const hasWalls = boundaries.some((node) => node.type === 'wall')
-  const shouldAnalyse = !!levelId && hasWalls && (drawing || roomlessWallIds.length > 0)
-  // `boundaries` changes identity only when a wall or separator on this level
-  // changes, so the room-graph pass runs once per wall edit, never per frame.
-  const openEnds = useMemo(
-    () =>
-      shouldAnalyse && levelId
-        ? findOpenWallEnds(Object.fromEntries(boundaries.map((node) => [node.id, node])), levelId)
-        : [],
-    [shouldAnalyse, levelId, boundaries],
-  )
-  const visibleEnds = useMemo(() => {
-    const walls = new Map(boundaries.map((node) => [node.id as string, node]))
-    return collapseMutualOpenWallEnds(
-      visibleOpenWallEnds(openEnds, roomWallIds, drawing),
-      (wallId) => {
-        const wall = walls.get(wallId)
-        return wall?.type === 'wall'
-          ? [wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]]
-          : null
-      },
-    )
-  }, [openEnds, roomWallIds, drawing, boundaries])
-
-  const [hoveredKey, setHoveredKey] = useState<string | null>(null)
-  const [pinnedKey, setPinnedKey] = useState<string | null>(null)
-  const [refusal, setRefusal] = useState<{ key: string; message: string } | null>(null)
-  const [showCursor, setShowCursor] = useState(0)
-  const releaseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const keepHover = (key: string) => {
-    if (releaseTimer.current) clearTimeout(releaseTimer.current)
-    releaseTimer.current = null
-    setHoveredKey(key)
-  }
-  const releaseHover = () => {
-    if (releaseTimer.current) clearTimeout(releaseTimer.current)
-    releaseTimer.current = setTimeout(() => setHoveredKey(null), HOVER_RELEASE_MS)
-  }
-  useEffect(
-    () => () => {
-      if (releaseTimer.current) clearTimeout(releaseTimer.current)
-    },
-    [],
-  )
-
-  const shown = drawing || visibleEnds.length > 0
-  const activeKey = pinnedKey ?? hoveredKey
-  const activeEnd =
-    shown && !drafting
-      ? (visibleEnds.find((end) => openWallEndKey(end) === activeKey) ?? null)
-      : null
-
-  // A pinned pill closes on any press outside it or its dot.
-  useEffect(() => {
-    if (!pinnedKey) return
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target instanceof Element ? event.target : null
-      if (target?.closest('[data-open-wall-end]')) return
-      setPinnedKey(null)
-    }
-    window.addEventListener('pointerdown', onPointerDown, true)
-    return () => window.removeEventListener('pointerdown', onPointerDown, true)
-  }, [pinnedKey])
-
-  useEffect(() => {
-    if (!activeEnd) return
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      event.stopPropagation()
-      if (releaseTimer.current) clearTimeout(releaseTimer.current)
-      releaseTimer.current = null
-      setPinnedKey(null)
-      setHoveredKey(null)
-      setRefusal(null)
-    }
-    window.addEventListener('keydown', onKeyDown, true)
-    return () => window.removeEventListener('keydown', onKeyDown, true)
-  }, [activeEnd])
+  const { drawing, drafting, ends: visibleEnds, roomlessWallIds, shown } = useOpenWallEnds()
+  const focus = useOpenWallEndFocus(visibleEnds, drafting)
+  const { activeEnd, activeKey } = focus
 
   if (!shown) return null
 
   const unitsPerPixel = Math.max(renderContext?.unitsPerPixel ?? 0.01, 1e-6)
   const sceneRotationDeg = renderContext?.sceneRotationDeg ?? 0
-  const joinable = visibleEnds.filter((end) => end.candidate)
-  const summary = openWallEndsSummary(joinable.length)
-  const showNext = () => {
-    const target = joinable[showCursor % joinable.length]
-    if (!target) return
-    setShowCursor((cursor) => cursor + 1)
-    setPinnedKey(openWallEndKey(target))
-    emitter.emit('camera-controls:focus', { nodeId: target.wallId as AnyNodeId })
-  }
-
   return (
     <g data-open-wall-ends-layer="">
-      {roomlessWallIds.length > 0 ? (
+      {drawing && roomlessWallIds.length > 0 ? (
         <style>
           {`${roomlessWallIds
             .map(
@@ -228,33 +73,24 @@ const ActiveOpenWallEndsLayer = memo(function ActiveOpenWallEndsLayer() {
             interactive={!!end.candidate && !drafting}
             key={key}
             label={openWallEndLabel(end, unit)}
-            onHoverEnd={releaseHover}
-            onHoverStart={() => keepHover(key)}
-            onPin={() => setPinnedKey((current) => (current === key ? null : key))}
+            onHoverEnd={focus.releaseHover}
+            onHoverStart={() => focus.keepHover(key)}
+            onPin={() => focus.togglePin(key)}
             sceneRotationDeg={sceneRotationDeg}
             unitsPerPixel={unitsPerPixel}
           />
         )
       })}
-      {activeEnd?.candidate ? (
-        <JoinWallsPill
+      {activeEnd ? (
+        <FloorplanJoinWallsPill
           end={activeEnd}
-          onHoverEnd={releaseHover}
-          onHoverStart={() => keepHover(openWallEndKey(activeEnd))}
-          onJoin={() => {
-            const key = openWallEndKey(activeEnd)
-            const message = joinOpenWallEnd(activeEnd)
-            setRefusal(message ? { key, message } : null)
-            if (!message) {
-              sfxEmitter.emit('sfx:structure-build')
-              setPinnedKey(null)
-              setHoveredKey(null)
-            }
-          }}
-          refusal={refusal?.key === openWallEndKey(activeEnd) ? refusal.message : null}
+          onHoverEnd={focus.releaseHover}
+          onHoverStart={() => focus.keepHover(openWallEndKey(activeEnd))}
+          onJoin={() => focus.join(activeEnd)}
+          refusal={focus.refusal}
         />
       ) : null}
-      {summary ? <OpenWallEndsHint onShow={showNext} summary={summary} /> : null}
+      <OpenWallEndsHint ends={visibleEnds} onShow={(end) => focus.pin(openWallEndKey(end))} />
     </g>
   )
 })
@@ -400,7 +236,7 @@ function OpenWallEndLabel({
   )
 }
 
-function JoinWallsPill({
+function FloorplanJoinWallsPill({
   end,
   onHoverEnd,
   onHoverStart,
@@ -441,82 +277,12 @@ function JoinWallsPill({
         transform: 'translate(-50%, calc(-100% - 40px))',
       }}
     >
-      <div
-        className="pointer-events-auto flex items-center gap-1 whitespace-nowrap rounded-full border border-border bg-background/95 p-1 text-xs shadow-xl backdrop-blur-md"
-        data-open-wall-end=""
-        onPointerDown={(event) => event.stopPropagation()}
-        onPointerEnter={onHoverStart}
-        onPointerLeave={onHoverEnd}
-        onPointerUp={(event) => event.stopPropagation()}
-      >
-        {refusal ? <span className="px-2 text-muted-foreground">{refusal}</span> : null}
-        <button
-          className="flex items-center gap-1.5 rounded-full px-3 py-1.5 font-medium text-foreground transition-colors hover:bg-accent"
-          onClick={(event) => {
-            event.stopPropagation()
-            onJoin()
-          }}
-          type="button"
-        >
-          <Link2 className="h-3.5 w-3.5" />
-          Join walls
-        </button>
-      </div>
-    </div>,
-    document.body,
-  )
-}
-
-// The floor plan slides in and out without resizing, so its box is read per
-// frame while the hint is up, like the pill's anchor.
-function useFloorplanTopCenter(): { left: number; top: number } | null {
-  const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null)
-  useEffect(() => {
-    let raf = 0
-    const tick = () => {
-      raf = requestAnimationFrame(tick)
-      const svg = document.querySelector<SVGGElement>('[data-floorplan-scene]')?.ownerSVGElement
-      const rect = svg?.getBoundingClientRect()
-      const next =
-        rect && rect.width > 0 ? { left: rect.left + rect.width / 2, top: rect.top } : null
-      setAnchor((current) =>
-        current && next && current.left === next.left && current.top === next.top ? current : next,
-      )
-    }
-    tick()
-    return () => cancelAnimationFrame(raf)
-  }, [])
-  return anchor
-}
-
-/** "2 wall ends aren't joined — rooms can't close", with a Show that walks the ends one by one. */
-function OpenWallEndsHint({ onShow, summary }: { onShow: () => void; summary: string }) {
-  const anchor = useFloorplanTopCenter()
-  if (!anchor) return null
-  return createPortal(
-    <div
-      className="pointer-events-auto fixed z-30 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full border border-border bg-background/95 py-1 pr-1 pl-3 text-xs shadow-lg backdrop-blur-md"
-      data-open-wall-end=""
-      onPointerDown={(event) => event.stopPropagation()}
-      onPointerUp={(event) => event.stopPropagation()}
-      style={{ left: anchor.left, top: anchor.top + 16 }}
-    >
-      <span
-        aria-hidden
-        className="h-2 w-2 shrink-0 rounded-full"
-        style={{ backgroundColor: MEASUREMENT_DANGLING_COLOR }}
+      <JoinWallsPill
+        onHoverEnd={onHoverEnd}
+        onHoverStart={onHoverStart}
+        onJoin={onJoin}
+        refusal={refusal}
       />
-      <span className="text-foreground">{summary}</span>
-      <button
-        className="rounded-full px-3 py-1 font-medium text-foreground transition-colors hover:bg-accent"
-        onClick={(event) => {
-          event.stopPropagation()
-          onShow()
-        }}
-        type="button"
-      >
-        Show
-      </button>
     </div>,
     document.body,
   )

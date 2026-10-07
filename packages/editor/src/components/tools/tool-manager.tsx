@@ -33,6 +33,7 @@ import { Alignment3DGuideLayer } from '../editor/alignment-3d-guide-layer'
 import { Elevation3DGuideLayer } from '../editor/elevation-3d-guide-layer'
 import { FloorOpeningsOverlay3D } from '../editor/floor-openings-overlay'
 import { FloorRegionControls3D } from '../editor/floor-region-controls'
+import { OpenWallEnds3DLayer } from '../editor/open-wall-ends-3d-layer'
 import { OpeningGuides3DLayer } from '../editor/opening-guides-3d-layer'
 import { WallSnapBeaconLayer } from '../editor/wall-snap-beacon-layer'
 import { ElevatorTool } from './elevator/elevator-tool'
@@ -474,6 +475,8 @@ export const ToolManager: React.FC = () => {
         <Elevation3DGuideLayer />
         {/* "Magnetic" beacon at the active wall-draft snap point. */}
         <WallSnapBeaconLayer />
+        {/* Wall ends that aren't joined, with a one-click join — twin of the floor plan's. */}
+        <OpenWallEnds3DLayer />
       </group>
     </RegistryToolProvider>
   )

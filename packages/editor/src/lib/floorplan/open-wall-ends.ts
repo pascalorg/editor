@@ -92,10 +92,14 @@ export function visibleOpenWallEnds(
   })
 }
 
-const samePoint = (a: readonly [number, number], b: readonly [number, number]) =>
-  Math.abs(a[0] - b[0]) < 1e-6 && Math.abs(a[1] - b[1]) < 1e-6
+// Core looks for join targets within 0.35 m; two ends naming each other sit closer than that.
+const MUTUAL_GAP_REACH = 0.5
 
-/** How squarely joining this end slides its wall along its own line (1) rather than tilting it (0). */
+/**
+ * How well this end shows its gap when it is the one marked: an end that
+ * slides along its own wall onto the join (1) beats one that stays put while
+ * the other wall comes to it (0.5), which beats one that would tilt its wall.
+ */
 function joinAlignment(
   end: OpenWallEnd,
   wallDirection: (wallId: string) => readonly [number, number] | null,
@@ -106,14 +110,16 @@ function joinAlignment(
   const dz = end.candidate.point[1] - end.point[1]
   const move = Math.hypot(dx, dz)
   const length = Math.hypot(direction[0], direction[1])
-  if (move < 1e-9 || length < 1e-9) return 1
+  if (move < 1e-9) return 0.5
+  if (length < 1e-9) return 0
   return Math.abs(dx * direction[0] + dz * direction[1]) / (move * length)
 }
 
 /**
- * Two ends that are each other's join candidate are one gap: keep the end
- * whose join slides its wall along its own line, so "Join walls" closes the
- * gap without tilting the other wall.
+ * Two ends of different walls that name each other as the join target, a
+ * join's reach apart, are one gap — whether core plans the join as one end
+ * onto the other or both onto a squared corner. Keep the end that shows the
+ * gap best (`joinAlignment`), so the floor plan and the 3D view mark it once.
  */
 export function collapseMutualOpenWallEnds(
   ends: readonly OpenWallEnd[],
@@ -135,10 +141,9 @@ export function collapseMutualOpenWallEnds(
         (other) =>
           other !== end &&
           !dropped.has(other) &&
-          other.wallId === candidate.wallId &&
-          samePoint(other.point, candidate.point) &&
           other.candidate?.wallId === end.wallId &&
-          samePoint(other.candidate.point, end.point),
+          Math.hypot(other.point[0] - end.point[0], other.point[1] - end.point[1]) <=
+            MUTUAL_GAP_REACH,
       )
     if (!partner) continue
     dropped.add(

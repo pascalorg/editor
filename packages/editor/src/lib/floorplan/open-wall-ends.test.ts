@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  findOpenWallEnds,
   LevelNode,
   type OpenWallEnd,
+  planJoinOpenWallEnd,
   type SceneCommit,
   subscribeSceneCommits,
   useScene,
@@ -175,4 +177,92 @@ test('Join emits one scene commit and one undo step, restoring both wall endpoin
     useScene.setState(before)
     useScene.temporal.setState(history)
   }
+})
+
+test('a gap core plans as a squared corner shows once, on the end that moves', () => {
+  // Both ends name the corner (0, 1): wall_a stays put, wall_b slides 9 cm down onto it.
+  const a = end({
+    wallId: 'wall_a',
+    end: 'end',
+    point: [0, 1],
+    candidate: { wallId: 'wall_b', point: [0, 1], kind: 'endpoint' },
+  })
+  const b = end({
+    wallId: 'wall_b',
+    end: 'start',
+    point: [0, 1.09],
+    candidate: { wallId: 'wall_a', point: [0, 1], kind: 'endpoint' },
+  })
+  const directions: Record<string, [number, number]> = { wall_a: [4.5, 0], wall_b: [0, 4.41] }
+  expect(collapseMutualOpenWallEnds([a, b], (id) => directions[id] ?? null)).toEqual([b])
+})
+
+test.each([
+  {
+    name: 'target endpoint',
+    a: [
+      [0, 0],
+      [2, 0],
+    ],
+    b: [
+      [2.09, 0],
+      [4, 0],
+    ],
+    marker: 'wall_a',
+  },
+  {
+    name: 'squared corner',
+    a: [
+      [-4.5, 1],
+      [0, 1],
+    ],
+    b: [
+      [0, 1.09],
+      [0, 5.5],
+    ],
+    marker: 'wall_b',
+  },
+])('a real $name gap can be joined from either end and shows one marker', ({ a, b, marker }) => {
+  const walls = [
+    WallNode.parse({
+      id: 'wall_a',
+      parentId: 'level_pair',
+      start: a[0],
+      end: a[1],
+      thickness: 0.1,
+    }),
+    WallNode.parse({
+      id: 'wall_b',
+      parentId: 'level_pair',
+      start: b[0],
+      end: b[1],
+      thickness: 0.1,
+    }),
+  ]
+  const nodes = Object.fromEntries(walls.map((wall) => [wall.id, wall]))
+  const ends = findOpenWallEnds(nodes, 'level_pair').filter((end) => end.candidate)
+  expect(ends).toHaveLength(2)
+  for (const diagnostic of ends) {
+    const result = planJoinOpenWallEnd(nodes, diagnostic)
+    expect(result.ok).toBe(true)
+    if (!result.ok) continue
+    const resolved =
+      diagnostic.end === 'start' ? result.plan.resolvedStart : result.plan.resolvedEnd
+    expect(resolved).toEqual(diagnostic.candidate!.point)
+    const joined = { ...nodes }
+    for (const { id, data } of result.plan.changes.update) {
+      if (joined[id]) joined[id] = { ...joined[id]!, ...data } as (typeof walls)[number]
+    }
+    for (const id of result.plan.changes.delete) delete joined[id]
+    for (const { node: wall } of result.plan.changes.create) {
+      if (wall.type === 'wall') joined[wall.id] = wall
+    }
+    expect(findOpenWallEnds(joined, 'level_pair').filter((end) => end.candidate)).toEqual([])
+  }
+  const collapsed = collapseMutualOpenWallEnds(ends, (id) => {
+    const wall = nodes[id]
+    return wall ? [wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]] : null
+  })
+  expect(collapsed).toHaveLength(1)
+  expect(collapsed[0]?.wallId).toBe(marker)
 })
