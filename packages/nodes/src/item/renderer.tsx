@@ -55,7 +55,6 @@ import {
 } from 'react'
 import type { AnimationAction, AnimationClip, Group, Material, Mesh, Object3D } from 'three'
 import { MathUtils, Texture } from 'three'
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { positionLocal, smoothstep, time } from 'three/tsl'
@@ -235,7 +234,6 @@ const configureItemModelLoader = (loader: ItemGLTFLoader, renderer: unknown) => 
     itemDracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.5/')
   }
   loader.setDRACOLoader(itemDracoLoader)
-  loader.setMeshoptDecoder(MeshoptDecoder)
 }
 
 type LoadedItemGltf = GLTF & {

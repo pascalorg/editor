@@ -43,7 +43,7 @@ export type GeometryScriptHost = {
     mimeType: string
     nodeId?: string
     metadata?: GeometryArtifactMetadata
-  }): Promise<void>
+  }): Promise<string>
   /** A stored artifact's bytes (an object's script), or null when missing; only for principals who may edit the scene. */
   readArtifact(input: { sceneId: string; sha256: string }): Promise<Uint8Array | null>
   /**
@@ -81,7 +81,7 @@ export async function compileAndStore(
     return { ...(await host.build({ sceneId, code, params, kind, nodeId, metadata })), nodeId }
   const { glb, ...compiled } = await host.compile({ code, params })
   metadata.mount = compiled.mount
-  await Promise.all([
+  const [sha256] = await Promise.all([
     host.storeArtifact({
       sceneId,
       nodeId,
@@ -99,7 +99,7 @@ export async function compileAndStore(
       mimeType: GEOMETRY_SCRIPT_MIME_TYPE,
     }),
   ])
-  return { ...compiled, nodeId }
+  return { ...compiled, sha256, nodeId }
 }
 
 export async function readScript(

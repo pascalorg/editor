@@ -47,6 +47,7 @@ for (const kind of ['object', 'door', 'window', 'column'] as const) {
       }),
       storeArtifact: async (input) => {
         uploads.push(input)
+        return input.mimeType === 'model/gltf-binary' ? 'd'.repeat(64) : input.sha256
       },
       readArtifact: async () => new TextEncoder().encode('original'),
     }
@@ -72,8 +73,12 @@ for (const kind of ['object', 'door', 'window', 'column'] as const) {
       const payload = JSON.parse((result.content as { text: string }[])[0]!.text)
       const nodeId = (payload.nodeId ?? payload.doorId ?? payload.windowId) as AnyNodeId
       const node = bridge.getNode(nodeId) as {
-        source?: { meta?: { description?: string; tags?: string[]; parent?: string } }
+        source?: {
+          artifact: string
+          meta?: { description?: string; tags?: string[]; parent?: string }
+        }
       }
+      expect(node.source?.artifact).toBe('d'.repeat(64))
       expect(node.source?.meta?.description).toHaveLength(200)
       expect(node.source?.meta?.tags).toEqual(Array(5).fill('oak'))
       expect(uploads).toHaveLength(2)

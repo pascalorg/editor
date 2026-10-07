@@ -57,11 +57,11 @@ export async function compileAndStoreGeometryScript(input: {
   })
   const context = { nodeId, metadata }
   const store = getArtifactStore()
-  await Promise.all([
+  const [sha256] = await Promise.all([
     store.put(compiled.sha256, glb, 'model/gltf-binary', context),
     store.put(compiled.script, new TextEncoder().encode(code), GEOMETRY_SCRIPT_MIME_TYPE, context),
   ])
-  return { ...compiled, nodeId }
+  return { ...compiled, sha256, nodeId }
 }
 
 /** The module text of an authored object, read back from the artifact store. */

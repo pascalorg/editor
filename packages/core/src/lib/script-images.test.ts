@@ -85,7 +85,7 @@ test('malformed image hashes are refused', () => {
 test('an artifact URL loads through the configured artifact store', async () => {
   configureArtifactStore({
     url: (sha256) => `/api/projects/p/artifacts/${sha256}`,
-    put: async () => {},
+    put: async (sha256) => sha256,
     text: async () => null,
   })
   expect(await loadAssetUrl(`artifact://${images.thumbnail}`)).toBe(
