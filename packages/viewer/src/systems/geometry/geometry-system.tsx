@@ -21,6 +21,7 @@ import { disposeObject3DResources } from '../../lib/dispose-object3d'
 import {
   type ColorPreset,
   createSurfaceRoleMaterial,
+  materialCastsShadow,
   type RenderShading,
 } from '../../lib/materials'
 import { createNodeTopSurfaceHeightSampler } from '../../lib/node-top-surface-height'
@@ -468,6 +469,8 @@ export function markGeometryBuildOutput(child: Object3D): void {
   // example a cabinet sink faucet handle), while disposal still removes only
   // top-level builder children from the registered group.
   child.traverse((object) => {
+    const mesh = object as Mesh
+    if (mesh.isMesh) mesh.castShadow = mesh.castShadow && materialCastsShadow(mesh.material)
     object.userData = {
       ...object.userData,
       __fromGeometry: true,

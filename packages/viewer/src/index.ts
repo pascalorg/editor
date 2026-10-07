@@ -155,6 +155,7 @@ export {
   disposeMaterial,
   glassMaterial,
   MONO_PALETTE,
+  materialCastsShadow,
   PRESET_PALETTES,
   type RenderShading,
   registerMaterialCacheCleanup,

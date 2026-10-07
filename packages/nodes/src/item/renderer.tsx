@@ -28,6 +28,7 @@ import {
   createSurfaceRoleMaterial,
   ErrorBoundary,
   glassMaterial,
+  materialCastsShadow,
   NodeRenderer,
   type RenderShading,
   resolveCdnUrl,
@@ -146,7 +147,7 @@ const isCapturedMaterialArray = (
   captured: CapturedItemMaterialData,
 ): captured is CapturedMultiItemMaterialData => Array.isArray(captured.authoredMaterials)
 
-const isGlassMaterial = (material: Material): boolean =>
+const isLegacyGlassMaterial = (material: Material): boolean =>
   material === glassMaterial || material.name.toLowerCase() === 'glass'
 
 const clampGeometryGroups = (mesh: Mesh, matCount: number): void => {
@@ -688,7 +689,7 @@ const LoadedModelRenderer = ({
     }
 
     for (const { mesh, captured } of meshEntries) {
-      let hasGlass = false
+      let hasLegacyGlass = false
 
       if (isCapturedMaterialArray(captured)) {
         const nextMaterials = captured.authoredMaterials.map((authoredMaterial, index) =>
@@ -700,7 +701,7 @@ const LoadedModelRenderer = ({
           ),
         )
         mesh.material = nextMaterials
-        hasGlass = nextMaterials.some(isGlassMaterial)
+        hasLegacyGlass = nextMaterials.some(isLegacyGlassMaterial)
         clampGeometryGroups(mesh, nextMaterials.length)
       } else {
         const nextMaterial = resolveItemMaterial(
@@ -710,11 +711,11 @@ const LoadedModelRenderer = ({
           materialOptions,
         )
         mesh.material = nextMaterial
-        hasGlass = isGlassMaterial(nextMaterial)
+        hasLegacyGlass = isLegacyGlassMaterial(nextMaterial)
       }
 
-      mesh.castShadow = !hasGlass
-      mesh.receiveShadow = !hasGlass
+      mesh.castShadow = materialCastsShadow(mesh.material)
+      mesh.receiveShadow = !hasLegacyGlass
     }
   }, [shading, textures, colorPreset, node.slots, sceneMaterials])
 
