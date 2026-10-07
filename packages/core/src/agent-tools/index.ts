@@ -19,6 +19,7 @@ import { placeItemsTool } from './place-items'
 import { ROOM_TOOL_CONTRACTS } from './room-structure'
 import { createStairTool, fitStairTool, measureStairTool } from './stairs'
 import { verifySceneTool } from './verify-scene'
+import { viewSceneTool } from './view-scene'
 import { addDoorTool, addWindowTool } from './wall-openings'
 import { addWallTool } from './walls'
 
@@ -41,6 +42,7 @@ export * from './refusal'
 export * from './room-structure'
 export * from './stairs'
 export * from './verify-scene'
+export * from './view-scene'
 export * from './wall-openings'
 export * from './walls'
 export * from './write-target'
@@ -54,6 +56,7 @@ export const AGENT_TOOL_CONTRACTS = [
   addColumnTool,
   measureStairTool,
   fitStairTool,
+  viewSceneTool,
   addDoorTool,
   addWindowTool,
   listLevelsTool,

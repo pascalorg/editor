@@ -40,6 +40,7 @@ const TOOL_POLICIES = [
       'validate_design',
       'validate_scene',
       'verify_scene',
+      'view_scene',
     ],
   },
   {

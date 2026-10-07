@@ -87,6 +87,7 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   validate_design: policy(true, false, false),
   validate_scene: policy(true, false, false),
   verify_scene: policy(true, false, false),
+  view_scene: policy(true, false, false),
 } as const satisfies Record<string, ToolAnnotations>
 
 const exactKeys = (value: Record<string, unknown>, expected: readonly string[]): boolean => {

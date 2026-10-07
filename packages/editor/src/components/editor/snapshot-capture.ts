@@ -1,8 +1,9 @@
-import type {
-  SnapshotCaptureFailedEvent,
-  SnapshotCapturePose,
-  SnapshotSavedEvent,
-  ThumbnailGenerateEvent,
+import {
+  emitter,
+  type SnapshotCaptureFailedEvent,
+  type SnapshotCapturePose,
+  type SnapshotSavedEvent,
+  type ThumbnailGenerateEvent,
 } from '@pascal-app/core'
 import { MathUtils, type PerspectiveCamera } from 'three'
 
@@ -142,4 +143,26 @@ export async function runSnapshotCapture(
   } finally {
     busy.current = false
   }
+}
+
+/**
+ * Where a captured frame goes: to the host, which stores it (a snapshot, the project's
+ * thumbnail), or for an ephemeral capture straight back to its caller, stored nowhere.
+ */
+export function deliverSnapshot<T extends object & { resolution?: { w: number; h: number } }>(
+  event: Pick<ThumbnailGenerateEvent, 'requestId' | 'ephemeral'>,
+  blob: Blob,
+  cameraData: T,
+  onCapture: (blob: Blob, cameraData: T) => void | Promise<void>,
+): void | Promise<void> {
+  if (event.ephemeral && event.requestId) {
+    emitter.emit('snapshot:captured', {
+      requestId: event.requestId,
+      blob,
+      width: cameraData.resolution?.w ?? 0,
+      height: cameraData.resolution?.h ?? 0,
+    })
+    return
+  }
+  return onCapture(blob, cameraData)
 }
