@@ -19,6 +19,7 @@ import {
   wallClosesRoom,
 } from '@pascal-app/core'
 import {
+  acceptsWallTypingKey,
   addWallPolygonDraftCorner,
   CursorSphere,
   chainEndJoinsExistingWall,
@@ -32,6 +33,7 @@ import {
   formatLinearMeasurement,
   getAngleArcToSegmentReference,
   getAngleToSegmentReference,
+  getGridEventScreenProjection,
   getSegmentAngleReferenceAtPoint,
   getWallDrawVariant,
   type HorizontalConstructionPlane,
@@ -39,11 +41,13 @@ import {
   isAngleSnapActive,
   isMagneticSnapActive,
   markToolCancelConsumed,
+  parseMeasurement,
   publishHorizontalConstructionPlane,
   publishPlacementSurface,
   resampleTerrainConstructionPlane,
   resolveEventConstructionPlane,
   resolvePointerSupportSurface,
+  resolveTypedCommitEnd,
   type SegmentAngleReference,
   snapWallDraftPointDetailed,
   startWallPolygonDraft,
@@ -52,6 +56,7 @@ import {
   useEditor,
   useFloorplanDraftPreview,
   useSegmentDraftChain,
+  useWallDraftTyping,
   useWallDrawVariant,
   useWallSnapIndicator,
   WALL_CONNECT_SNAP_RADIUS,
@@ -493,6 +498,7 @@ const LineWallTool: React.FC = () => {
   const flatConstructionBase = useRef(false)
   const buildingState = useRef(0)
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
+  const wallTypingInput = useWallDraftTyping((s) => s.input)
   // Base Y of an open Polygon room's ghost sides (its construction plane).
   const [polygonGhostY, setPolygonGhostY] = useState(0)
   const [axisGuide, setAxisGuide] = useState<DraftAxisGuideState>(null)
@@ -620,6 +626,7 @@ const LineWallTool: React.FC = () => {
       flatConstructionBase.current = false
       chainFirstVertex.current = null
       chainWallIds.current = []
+      useWallDraftTyping.getState().clearInput()
       const draftPreview = useFloorplanDraftPreview.getState()
       draftPreview.setWallDraftStart(null)
       draftPreview.setWallDraftEnd(null)
@@ -668,26 +675,66 @@ const LineWallTool: React.FC = () => {
       // Snapping is governed entirely by the snapping mode (grid / lines /
       // angles / off). `'off'` is the bypass — there is no Shift hold-to-bypass.
       const angleLocked = buildingState.current === 1 && isAngleSnapActive()
-      const snapResult = snapWallDraftPointDetailed({
-        point: localPoint,
-        walls: snapWalls,
-        start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
-        angleSnap: angleLocked,
-        magnetic: isMagneticSnapActive(),
-      })
-      gridPosition = alignPoint(snapResult.point, { applySnap: !angleLocked })
+      // Split view (#308): a `grid:move` from the floor-plan panel carries
+      // `screenProjection` (the 3D raycaster never sets it). While a typing
+      // buffer is active that point is already fully resolved — the 2D side
+      // snapped it and projected it onto the typed length. Running it
+      // through magnetic/grid snap again can rotate the draft ray (a nearby
+      // corner pulls the endpoint) so the committed wall no longer matches
+      // the 2D preview (Bugbot 3cd53dd1). Trust it verbatim; native 3D
+      // moves keep the full snap pipeline.
+      const typedFromFloorplan =
+        buildingState.current === 1 &&
+        useWallDraftTyping.getState().input.length > 0 &&
+        getGridEventScreenProjection(event) !== undefined
+      const snapResult = typedFromFloorplan
+        ? null
+        : snapWallDraftPointDetailed({
+            point: localPoint,
+            walls: snapWalls,
+            start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
+            angleSnap: angleLocked,
+            magnetic: isMagneticSnapActive(),
+          })
+      gridPosition = snapResult
+        ? alignPoint(snapResult.point, { applySnap: !angleLocked })
+        : localPoint
       // Stand the magnetic beacon at the endpoint when it locked onto an
       // existing wall corner / wall point; clear it for plain grid/angle moves.
       useWallSnapIndicator
         .getState()
         .set(
-          snapResult.snap
+          snapResult?.snap
             ? { x: gridPosition[0], z: gridPosition[1], kind: snapResult.snap }
             : null,
         )
 
       if (buildingState.current === 1) {
-        const snappedLocal = gridPosition
+        // Typed-length editing (#308): while a buffer is active the draft end
+        // is the start projected along the current draft direction onto the
+        // typed length; the pointer keeps steering direction only.
+        let snappedLocal = gridPosition
+        const typedInput = useWallDraftTyping.getState().input
+        const typedLength = parseMeasurement(
+          typedInput,
+          { kind: 'length', unitId: 'm' },
+          {
+            bareUnit: unit === 'imperial' ? 'in' : metricNotation === 'millimeters' ? 'mm' : 'm',
+            system: unit === 'imperial' ? 'imperial' : 'metric',
+          },
+        )
+        if (typedInput && typedLength !== null && typedLength > 0) {
+          const dx = gridPosition[0] - startingPoint.current.x
+          const dz = gridPosition[1] - startingPoint.current.z
+          const pointerLength = Math.hypot(dx, dz)
+          if (pointerLength > 1e-6) {
+            snappedLocal = [
+              startingPoint.current.x + (dx / pointerLength) * typedLength,
+              startingPoint.current.z + (dz / pointerLength) * typedLength,
+            ]
+          }
+        }
+        useWallDraftTyping.getState().setProjectedEnd?.(snappedLocal)
         const draftY = constructionPlane.current?.localY ?? event.localPosition[1]
         endingPoint.current.set(snappedLocal[0], draftY, snappedLocal[1])
         const draftPreview = useFloorplanDraftPreview.getState()
@@ -809,17 +856,41 @@ const LineWallTool: React.FC = () => {
         // positions it for the active segment.
         setDraftMeasurement(null)
       } else if (buildingState.current === 1) {
+        // Typed-length editing (#308): when a buffer is active, commit the
+        // projected endpoint the previews already show — re-snapping the raw
+        // pointer (or the projected point) would change the typed length.
+        // The projection is re-derived from the live draft direction at
+        // commit time (Bugbot 8497d792): append/backspace only change the
+        // buffer, so the pointer-move-published `projectedEnd` can be stale
+        // (e.g. typed "1" then "2" without moving — the click must commit
+        // 12, not 1).
+        const typing = useWallDraftTyping.getState()
+        const typedCommit =
+          (typing.input &&
+            resolveTypedCommitEnd(
+              [startingPoint.current.x, startingPoint.current.z],
+              [endingPoint.current.x, endingPoint.current.z],
+              typing.input,
+              {
+                bareUnit:
+                  unit === 'imperial' ? 'in' : metricNotation === 'millimeters' ? 'mm' : 'm',
+                system: unit === 'imperial' ? 'imperial' : 'metric',
+              },
+            )) ||
+          (typing.input ? typing.projectedEnd : null)
         const angleLocked = isAngleSnapActive()
-        const snappedEnd = alignPoint(
-          snapWallDraftPointDetailed({
-            point: localClick,
-            walls: snapWalls,
-            start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
-            angleSnap: angleLocked,
-            magnetic: isMagneticSnapActive(),
-          }).point,
-          { applySnap: !angleLocked },
-        )
+        const snappedEnd =
+          typedCommit ??
+          alignPoint(
+            snapWallDraftPointDetailed({
+              point: localClick,
+              walls: snapWalls,
+              start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
+              angleSnap: angleLocked,
+              magnetic: isMagneticSnapActive(),
+            }).point,
+            { applySnap: !angleLocked },
+          )
         const dx = snappedEnd[0] - startingPoint.current.x
         const dz = snappedEnd[1] - startingPoint.current.z
         if (dx * dx + dz * dz < 0.01 * 0.01) return
@@ -859,6 +930,9 @@ const LineWallTool: React.FC = () => {
           )
           if (!createdWall) return
           chainWallIds.current.push(createdWall.id)
+          // The committed length was typed for this segment only; a stale
+          // buffer would silently re-apply it to the next segment.
+          useWallDraftTyping.getState().clearInput()
 
           // The new segment is now a real node — make it an alignment target
           // for the next segment, and drop the just-shown guide.
@@ -925,14 +999,112 @@ const LineWallTool: React.FC = () => {
 
     const onCancel = () => {
       if (buildingState.current === 1) {
+        // Stage-1 Escape clears the typing buffer; stage-2 cancels the draft.
+        if (useWallDraftTyping.getState().input) {
+          useWallDraftTyping.getState().clearInput()
+          return
+        }
         markToolCancelConsumed()
         stopDrafting()
+      }
+    }
+
+    // Typed-length editing (#308): number keys start a buffer while drafting;
+    // Enter commits at the typed length along the current draft direction.
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (buildingState.current !== 1) return
+      // 2D-only view: the floor-plan panel owns the wall commit there — this
+      // tool's `grid:click` pipeline never commits while the canvas is
+      // `display:none`, so capture-consuming the typing keys here would leave
+      // a typed Enter with no owner and commit nothing (Bugbot cb434c3d:
+      // "Enter skips 2D wall commit"). Let the panel's bubble-phase handler
+      // see them instead. The panel re-bases its draft onto the chain start
+      // this tool publishes, so split view keeps a single owner (this tool)
+      // while 2D-only hands the keyboard to the view that commits.
+      if (useEditor.getState().viewMode === '2d') return
+      const target = event.target as HTMLElement | null
+      if (
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target?.isContentEditable
+      ) {
+        return
+      }
+      const typing = useWallDraftTyping.getState()
+      const hasInput = typing.input.length > 0
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      // A digit (or `.`) starts a buffer; letters only continue one, so
+      // single-letter drafting shortcuts keep working pre-buffer (Bugbot
+      // 7dcff331).
+      if (acceptsWallTypingKey(event.key, typing.input)) {
+        typing.append(event.key)
+        event.preventDefault()
+        event.stopPropagation()
+        return
+      }
+      if (!hasInput) return
+      if (event.key === 'Enter') {
+        const value = parseMeasurement(
+          typing.input,
+          { kind: 'length', unitId: 'm' },
+          {
+            bareUnit: unit === 'imperial' ? 'in' : metricNotation === 'millimeters' ? 'mm' : 'm',
+            system: unit === 'imperial' ? 'imperial' : 'metric',
+          },
+        )
+        if (value === null || value <= 0) {
+          typing.clearInput()
+          return
+        }
+        // Project the current draft end onto the typed length, then run the
+        // normal commit path with that endpoint.
+        const dx = endingPoint.current.x - startingPoint.current.x
+        const dz = endingPoint.current.z - startingPoint.current.z
+        const length = Math.hypot(dx, dz)
+        if (length <= 1e-6) return
+        const typedEnd: WallPlanPoint = [
+          startingPoint.current.x + (dx / length) * value,
+          startingPoint.current.z + (dz / length) * value,
+        ]
+        // Keep the buffer across the synthetic click below: onGridClick only
+        // honors a typed commit while `input` is non-empty, and the commit
+        // path clears the buffer itself once the wall is created.
+        typing.setProjectedEnd(typedEnd)
+        endingPoint.current.set(typedEnd[0], endingPoint.current.y, typedEnd[1])
+        const draftPreview = useFloorplanDraftPreview.getState()
+        draftPreview.setWallDraftEnd(typedEnd)
+        // Commit through the shared click pipeline by synthesizing a grid
+        // click at the typed endpoint; snap is bypassed so the typed length
+        // survives.
+        emitter.emit('grid:click', {
+          nativeEvent: { detail: 1 } as unknown as GridEvent['nativeEvent'],
+          position: [typedEnd[0], endingPoint.current.y, typedEnd[1]],
+          localPosition: [typedEnd[0], endingPoint.current.y, typedEnd[1]],
+        } as GridEvent)
+        // Clear defensively in case the commit path bailed before its own
+        // clear (e.g. zero-length guard).
+        typing.clearInput()
+        event.preventDefault()
+        event.stopPropagation()
+      } else if (event.key === 'Backspace') {
+        typing.backspace()
+        event.preventDefault()
+        event.stopPropagation()
+      } else if (event.key === 'Delete') {
+        typing.clearInput()
+        event.preventDefault()
+        event.stopPropagation()
+      } else if (event.key === 'Escape') {
+        typing.clearInput()
+        event.preventDefault()
+        event.stopPropagation()
       }
     }
 
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('keydown', onKeyDown, true)
 
     return () => {
       // Leaving the tool mid-polygon abandons it (nothing was written).
@@ -940,6 +1112,8 @@ const LineWallTool: React.FC = () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('keydown', onKeyDown, true)
+      useWallDraftTyping.getState().clearInput()
       clearPlacementSurface()
       useAlignmentGuides.getState().clear()
       useWallSnapIndicator.getState().clear()
@@ -974,7 +1148,7 @@ const LineWallTool: React.FC = () => {
         <>
           <DraftMeasurementLabel
             color={measurementColor}
-            label={draftMeasurement.lengthLabel}
+            label={wallTypingInput || draftMeasurement.lengthLabel}
             position={draftMeasurement.lengthPosition}
             shadowColor={measurementShadowColor}
           />

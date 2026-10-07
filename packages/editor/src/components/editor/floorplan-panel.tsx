@@ -77,6 +77,7 @@ import {
 import { createPortal } from 'react-dom'
 import { Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
+import { markToolCancelConsumed } from '../../hooks/use-keyboard'
 import {
   hoverRoomFromHit,
   resolvePlanRoomHit,
@@ -160,6 +161,11 @@ import useInteractionScope, {
 import usePlacementPreview from '../../store/use-placement-preview'
 import { expandSessionSelectionForNode } from '../../store/use-session-groups'
 import { useStairBuildPreview } from '../../store/use-stair-build-preview'
+import {
+  acceptsWallTypingKey,
+  resolveTypedCommitEnd,
+  useWallDraftTyping,
+} from '../../store/use-wall-draft-typing'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
 import { FloorplanGroupActionMenu } from '../editor-2d/floorplan-group-action-menu'
@@ -4427,6 +4433,7 @@ function FloorplanLinearDraftLayer({
 }) {
   const metricNotation = useViewer((state) => state.metricNotation)
   const wallDraftEnd = useFloorplanDraftPreview((s) => s.wallDraftEnd)
+  const wallTypingInput = useWallDraftTyping((s) => s.input)
   const fenceDraftEnd = useFloorplanDraftPreview((s) => s.fenceDraftEnd)
   const roofDraftEnd = useFloorplanDraftPreview((s) => s.roofDraftEnd)
   const roofDraftQuarterTurn = useFloorplanDraftPreview((s) => s.roofDraftQuarterTurn)
@@ -4567,6 +4574,8 @@ function FloorplanLinearDraftLayer({
   // Live length + angle feedback for the wall draft — parity with the 3D
   // `WallTool`, ported to 2D plan space.
   const draftWallMeasurement = useMemo(() => {
+    // Typed-length editing (#308): while a buffer is active the HUD shows the
+    // buffer instead of the live pointer length — parity with the 3D tool.
     if (
       !(
         isWallBuildActive &&
@@ -4628,7 +4637,7 @@ function FloorplanLinearDraftLayer({
     }
 
     return {
-      lengthLabel: formatMeasurement(length, unit, null, metricNotation),
+      lengthLabel: wallTypingInput || formatMeasurement(length, unit, null, metricNotation),
       midpoint: [
         (wallDraftStart[0] + wallDraftEnd[0]) / 2,
         (wallDraftStart[1] + wallDraftEnd[1]) / 2,
@@ -4636,7 +4645,15 @@ function FloorplanLinearDraftLayer({
       direction: [dx / length, dy / length] as WallPlanPoint,
       angleLabels,
     }
-  }, [isWallBuildActive, metricNotation, unit, wallDraftEnd, wallDraftStart, walls])
+  }, [
+    isWallBuildActive,
+    metricNotation,
+    unit,
+    wallDraftEnd,
+    wallDraftStart,
+    wallTypingInput,
+    walls,
+  ])
 
   // Axis guides for wall and fence drafts — parity with the 3D tools'
   // `DraftAxisGuides`: an X/Z cross through the draft start, and a single
@@ -4833,6 +4850,9 @@ export function FloorplanPanel({
   const floorplanSpacePanPressedRef = useRef(false)
   const floorplanNavigationClickSuppressedRef = useRef(false)
   const guideInteractionRef = useRef<GuideInteractionState | null>(null)
+  // Late-bound so the window keydown effect can commit the wall draft at the
+  // typed length without an ordering dependency on `handleWallPlacementPoint`.
+  const wallPlacementPointRef = useRef<((point: WallPlanPoint) => void) | null>(null)
   const guideTransformDraftRef = useRef<GuideTransformDraft | null>(null)
   const pendingFenceDragRef = useRef<PendingFenceDragState | null>(null)
   const wallEndpointDragRef = useRef<WallEndpointDragState | null>(null)
@@ -5010,15 +5030,42 @@ export function FloorplanPanel({
   // Shims keep the `setXDraftEnd(value | prev => …)` call sites unchanged.
   const [draftStart, setDraftStart] = useState<WallPlanPoint | null>(null)
   const [wallChainFirstVertex, setWallChainFirstVertex] = useState<WallPlanPoint | null>(null)
+  // Set when a typed 2D draft's stage-1 Escape just cleared the buffer; the
+  // next `tool:cancel` is that escape arriving and must not clear the draft
+  // (Bugbot e9c12894). Reset on every other keydown and after commits.
+  const wallTypingEscapeClearedRef = useRef(false)
   const wallConstructionOptionsRef =
     useRef<ReturnType<typeof resolveTerrainWallConstructionOptions>>(undefined)
   // Walls committed by the current 2D-only chain — exclusion set for the
   // T-junction chain-termination test (mirrors the 3D tool's `chainWallIds`).
   const wallChainWallIdsRef = useRef<string[]>([])
+  // Split view: the 3D wall tool owns the commit and publishes each segment's
+  // resolved end as the chain start. Re-base this panel's draft onto it so a
+  // typed Enter in the plan projects from the segment the 3D chain is
+  // actually drafting — without this, `draftStart` stays on the last point
+  // the panel itself placed and the typed commit uses a stale origin
+  // (Bugbot cb434c3d). In 2D-only the panel is the committer and never
+  // publishes, so this subscription stays dormant there.
+  useEffect(() => {
+    if (!(mode === 'build' && tool === 'wall')) return
+    return useSegmentDraftChain.subscribe((state, previousState) => {
+      const next = state.wall
+      if (next === previousState.wall) return
+      if (!next) return
+      setDraftStart((current) =>
+        current && current[0] === next[0] && current[1] === next[1] ? current : next,
+      )
+      setWallChainFirstVertex((current) => current ?? next)
+    })
+  }, [mode, tool])
   const setDraftEnd = useCallback(
     (next: WallPlanPoint | null | ((prev: WallPlanPoint | null) => WallPlanPoint | null)) => {
       const store = useFloorplanDraftPreview.getState()
-      store.setWallDraftEnd(typeof next === 'function' ? next(store.wallDraftEnd) : next)
+      const value = typeof next === 'function' ? next(store.wallDraftEnd) : next
+      store.setWallDraftEnd(value)
+      // Keep the typing store's projected endpoint in sync with the live
+      // preview so a click mid-type commits the projected point (#308).
+      if (value) useWallDraftTyping.getState().setProjectedEnd(value)
     },
     [],
   )
@@ -7819,6 +7866,7 @@ export function FloorplanPanel({
     wallConstructionOptionsRef.current = undefined
     wallChainWallIdsRef.current = []
     setDraftEnd(null)
+    useWallDraftTyping.getState().clearInput()
     useSegmentDraftChain.getState().clear('wall')
   }, [setDraftEnd])
   const clearFencePlacementDraft = useCallback(() => {
@@ -7919,6 +7967,15 @@ export function FloorplanPanel({
 
   useEffect(() => {
     const handleCancel = () => {
+      // Stage-1 `tool:cancel` from a cleared typing buffer: the buffer clear
+      // WAS the cancel — keep the draft alive and consume the escape so the
+      // global handler does not exit the tool (Bugbot e9c12894). Mirrors the
+      // 3D tool's `onCancel` stage check.
+      if (wallTypingEscapeClearedRef.current) {
+        wallTypingEscapeClearedRef.current = false
+        markToolCancelConsumed()
+        return
+      }
       clearDraft()
     }
 
@@ -7927,6 +7984,20 @@ export function FloorplanPanel({
       emitter.off('tool:cancel', handleCancel)
     }
   }, [clearDraft])
+
+  // Split view: when the 3D wall tool stops drafting (auto-close,
+  // T-junction, single-segment, cancel) it clears the published chain start.
+  // That null clear must tear this panel's draft down too, or the 2D side
+  // keeps a live draft that swallows typing keys against a chain the 3D
+  // view already ended (Bugbot a172c934). Lives here (below `clearDraft`)
+  // rather than beside the re-base subscription so the teardown stays
+  // reachable.
+  useEffect(() => {
+    if (!(mode === 'build' && tool === 'wall')) return
+    return useSegmentDraftChain.subscribe((state, previousState) => {
+      if (state.wall === null && previousState.wall !== null) clearDraft()
+    })
+  }, [mode, tool, clearDraft])
 
   const createZoneOnCurrentLevel = useCallback(
     (points: WallPlanPoint[]) => {
@@ -8197,6 +8268,9 @@ export function FloorplanPanel({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // A fresh keydown invalidates any stale stage-1 escape marker — only
+      // the cancel synchronously following the escape itself is stage-1.
+      wallTypingEscapeClearedRef.current = false
       const target = event.target as HTMLElement | null
       const isEditableTarget =
         target instanceof HTMLInputElement ||
@@ -8216,6 +8290,89 @@ export function FloorplanPanel({
 
       if (event.key === 'Shift') {
         setShiftPressed(true)
+      }
+
+      // Typed-length editing for the 2D wall draft (#308) — parity with the
+      // 3D wall tool's `onKeyDown`: printable keys extend the buffer, Enter
+      // commits at the typed length, Escape (stage 1) clears it.
+      if (isWallBuildActive && draftStart) {
+        const typing = useWallDraftTyping.getState()
+        const hasInput = typing.input.length > 0
+        if (!event.metaKey && !event.ctrlKey && !event.altKey) {
+          // A digit (or `.`) starts a buffer; letters only continue one, so
+          // single-letter drafting shortcuts keep working pre-buffer (Bugbot
+          // 7dcff331).
+          if (acceptsWallTypingKey(event.key, typing.input)) {
+            typing.append(event.key)
+            event.preventDefault()
+            event.stopPropagation()
+            return
+          }
+          if (hasInput) {
+            if (event.key === 'Backspace') {
+              typing.backspace()
+              event.preventDefault()
+              event.stopPropagation()
+              return
+            }
+            if (event.key === 'Delete') {
+              typing.clearInput()
+              event.preventDefault()
+              event.stopPropagation()
+              return
+            }
+            if (event.key === 'Escape') {
+              typing.clearInput()
+              // Stage-1 Escape only clears the buffer. `tool:cancel` still
+              // fires (stopPropagation cannot stop the global handler on the
+              // same window target) — the ref tells `handleCancel` this
+              // cancel is stage-1 so it neither clears the draft nor lets
+              // the global handler exit the tool (Bugbot e9c12894).
+              wallTypingEscapeClearedRef.current = true
+              event.preventDefault()
+              event.stopPropagation()
+              return
+            }
+            if (event.key === 'Enter') {
+              const value = parseMeasurement(
+                typing.input,
+                { kind: 'length', unitId: 'm' },
+                {
+                  bareUnit:
+                    unit === 'imperial' ? 'in' : metricNotation === 'millimeters' ? 'mm' : 'm',
+                  system: unit === 'imperial' ? 'imperial' : 'metric',
+                },
+              )
+              // Guards first, clear last: an early `clearInput` would wipe a
+              // valid buffer on a degenerate preview (no pointer move yet)
+              // and commit nothing (Bugbot 622bea04) — the 3D path keeps the
+              // buffer in exactly that case.
+              if (value === null || value <= 0 || !draftStart) {
+                typing.clearInput()
+                return
+              }
+              const store = useFloorplanDraftPreview.getState()
+              const previousEnd = store.wallDraftEnd
+              if (!previousEnd) return
+              const dx = previousEnd[0] - draftStart[0]
+              const dz = previousEnd[1] - draftStart[1]
+              const length = Math.hypot(dx, dz)
+              if (length <= 1e-6) return
+              const typedEnd: WallPlanPoint = [
+                draftStart[0] + (dx / length) * value,
+                draftStart[1] + (dz / length) * value,
+              ]
+              // typedEnd is passed as the raw point; handleWallPlacementPoint
+              // commits it verbatim (no snap) since the buffer is cleared.
+              setDraftEnd(typedEnd)
+              wallPlacementPointRef.current?.(typedEnd)
+              typing.clearInput()
+              event.preventDefault()
+              event.stopPropagation()
+              return
+            }
+          }
+        }
       }
 
       if (
@@ -8273,7 +8430,16 @@ export function FloorplanPanel({
       window.removeEventListener('keyup', handleKeyUp)
       window.removeEventListener('blur', handleBlur)
     }
-  }, [isFloorplanOpen, isStairBuildActive, movingNode])
+  }, [
+    isFloorplanOpen,
+    isStairBuildActive,
+    movingNode,
+    isWallBuildActive,
+    draftStart,
+    unit,
+    metricNotation,
+    setDraftEnd,
+  ])
 
   useEffect(() => {
     const handleWindowPointerMove = (event: PointerEvent) => {
@@ -9513,8 +9679,34 @@ export function FloorplanPanel({
       // Emit `grid:move` so the registry-driven wall tool's 3D preview
       // tracks the cursor. The local draftEnd update below is what
       // drives the 2D draft polygon — both views update in parallel.
-      emitFloorplanGridEvent('move', snappedPoint, event)
-      setCursorPoint(snappedPoint)
+      // Typed-length editing (#308): while a buffer is active the draft end
+      // is the start projected along the draft direction onto the typed
+      // length; the pointer keeps steering direction only.
+      let draftEndPoint = snappedPoint
+      const wallTyping = useWallDraftTyping.getState()
+      if (draftStart && wallTyping.input) {
+        const typedLength = parseMeasurement(
+          wallTyping.input,
+          { kind: 'length', unitId: 'm' },
+          {
+            bareUnit: unit === 'imperial' ? 'in' : metricNotation === 'millimeters' ? 'mm' : 'm',
+            system: unit === 'imperial' ? 'imperial' : 'metric',
+          },
+        )
+        if (typedLength !== null && typedLength > 0) {
+          const dx = snappedPoint[0] - draftStart[0]
+          const dz = snappedPoint[1] - draftStart[1]
+          const pointerLength = Math.hypot(dx, dz)
+          if (pointerLength > 1e-6) {
+            draftEndPoint = [
+              draftStart[0] + (dx / pointerLength) * typedLength,
+              draftStart[1] + (dz / pointerLength) * typedLength,
+            ]
+          }
+        }
+      }
+      emitFloorplanGridEvent('move', draftEndPoint, event)
+      setCursorPoint(draftEndPoint)
 
       if (!draftStart) {
         return
@@ -9523,13 +9715,13 @@ export function FloorplanPanel({
       setDraftEnd((previousEnd) => {
         if (
           !previousEnd ||
-          previousEnd[0] !== snappedPoint[0] ||
-          previousEnd[1] !== snappedPoint[1]
+          previousEnd[0] !== draftEndPoint[0] ||
+          previousEnd[1] !== draftEndPoint[1]
         ) {
           sfxEmitter.emit('sfx:grid-snap')
         }
 
-        return snappedPoint
+        return draftEndPoint
       })
     },
     [
@@ -9564,6 +9756,11 @@ export function FloorplanPanel({
       isRoofBuildActive,
       isWallBuildActive,
       levelId,
+      // `unit` / `metricNotation` feed the typed-length projection helpers
+      // shared with the commit path; listed so a unit change re-binds the
+      // move preview to the new bare-unit parse.
+      metricNotation,
+      unit,
       publishFloorplanNavigationPose,
       referenceScaleDraft,
       roofDraftStart,
@@ -9750,7 +9947,29 @@ export function FloorplanPanel({
   )
 
   const handleWallPlacementPoint = useCallback(
-    (point: WallPlanPoint) => {
+    (rawPoint: WallPlanPoint) => {
+      // Typed-length editing (#308): while a buffer is active, commit the
+      // projected endpoint the preview shows instead of the raw pointer —
+      // keeps the 2D-only commit, the chain continuation, and the length
+      // label in agreement with what the user typed. Re-derived at commit
+      // time (Bugbot 8497d792): digits arriving after the last pointer move
+      // leave `projectedEnd` stale; the commit must reflect the full buffer.
+      const typing = useWallDraftTyping.getState()
+      const draftPreviewStore = useFloorplanDraftPreview.getState()
+      const typedEnd =
+        (draftStart &&
+          typing.input &&
+          resolveTypedCommitEnd(
+            draftStart,
+            draftPreviewStore.wallDraftEnd ?? rawPoint,
+            typing.input,
+            {
+              bareUnit: unit === 'imperial' ? 'in' : metricNotation === 'millimeters' ? 'mm' : 'm',
+              system: unit === 'imperial' ? 'imperial' : 'metric',
+            },
+          )) ||
+        (typing.input ? typing.projectedEnd : null)
+      const point: WallPlanPoint = typedEnd ?? rawPoint
       if (!draftStart) {
         wallConstructionOptionsRef.current = levelId
           ? resolveTerrainWallConstructionOptions(
@@ -9871,16 +10090,27 @@ export function FloorplanPanel({
       setDraftStart(nextStart)
       setDraftEnd(nextStart)
       setCursorPoint(nextStart)
+      // Typed length applied to the committed segment only — never carry it
+      // into the next chain segment.
+      useWallDraftTyping.getState().clearInput()
     },
     [
       clearWallPlacementDraft,
       draftStart,
       levelId,
+      metricNotation,
+      unit,
       wallChainFirstVertex,
       setDraftEnd,
       setCursorPoint,
     ],
   )
+  // Latest-ref for the Enter-commit path: assigning the ref inside the
+  // callback itself froze the first-render closure (draftStart === null), so
+  // a typed Enter re-started the draft instead of committing the wall.
+  useEffect(() => {
+    wallPlacementPointRef.current = handleWallPlacementPoint
+  }, [handleWallPlacementPoint])
   const { getFloorplanHitIdAtPoint, getFloorplanSelectionIdsInBounds } = useFloorplanHitTesting({
     sceneRef: floorplanSceneRef,
   })
