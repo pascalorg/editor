@@ -76,6 +76,7 @@ import useEditor from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'
 import { MetricControl } from '../../../controls/metric-control'
 import { LevelDuplicateDialog } from '../../../level-duplicate-dialog'
+import { CollectionsSection } from './collection-tree-node'
 import { InlineRenameInput } from './inline-rename-input'
 import { ZoneMembershipCheckbox } from './zone-membership-checkbox'
 import { focusTreeNode, TreeNode, TreeNodeWrapper } from './tree-node'
@@ -1757,6 +1758,7 @@ const BuildingItem = memo(function BuildingItem({
                   projectId={projectId}
                 />
                 <UnitsSection buildingId={building.id} />
+                <CollectionsSection />
                 <LayerToggle />
               </div>
               <div className="subtle-scrollbar relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">

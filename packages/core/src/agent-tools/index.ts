@@ -1,4 +1,7 @@
 import { addObjectTool, getSourceTool } from './add-object'
+import { clearSceneTool } from './clear-scene'
+import { editCollectionTool, listCollectionsTool } from './collections'
+import { addColumnTool } from './columns'
 import { findByTypeTool } from './find-by-type'
 import {
   duplicateLevelTool,
@@ -9,15 +12,21 @@ import {
   verifySceneTool,
 } from './levels'
 import { deleteNodeTool, getNodeTool } from './nodes'
+import { fitStairTool, measureStairTool } from './stairs'
 import { addDoorTool, addWindowTool } from './wall-openings'
 
 export * from './add-object'
+export * from './clear-scene'
+export * from './collections'
+export * from './columns'
 export * from './find-by-type'
+export * from './hosted-services'
 export * from './levels'
 export * from './measurement'
 export { NodeId } from './node-id'
 export * from './nodes'
 export * from './refusal'
+export * from './stairs'
 export * from './wall-openings'
 
 /**
@@ -26,6 +35,9 @@ export * from './wall-openings'
  * surface drifts. See wiki/architecture/agent-surfaces.md.
  */
 export const AGENT_TOOL_CONTRACTS = [
+  addColumnTool,
+  measureStairTool,
+  fitStairTool,
   addDoorTool,
   addWindowTool,
   listLevelsTool,
@@ -39,4 +51,7 @@ export const AGENT_TOOL_CONTRACTS = [
   addObjectTool,
   getSourceTool,
   findByTypeTool,
+  editCollectionTool,
+  listCollectionsTool,
+  clearSceneTool,
 ] as const

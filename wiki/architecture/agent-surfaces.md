@@ -30,6 +30,8 @@ A tool has three layers, and only the last one may differ between surfaces:
 
 ## What stays surface-specific
 
+Hosted service tools have public contracts in `core/agent-tools` and a shared request operation in `core/agent-operations`. A host opts into them with `createPascalMcpServer({ services })` or `registerHostedServiceTools`. Without that executor, the open-source server exposes its local scene tools only. Tool arguments carry project/plugin references and an approved credit ceiling; the host supplies verified identity and enforces access, billing and retained-result ownership. Provider selection, workflow prompts and orchestration belong to the host. Public discovery includes only the released contract inventory.
+
 - **Loop control** — step caps, progress ledgers, prompt injection. The chat owns its loop; MCP clients own theirs.
 - **Session and file operations** of the MCP (scenes, units, templates, export) have no chat counterpart unless the chat needs them.
 - **UI-bound chat tools** (current selection, clarification questions) get an MCP counterpart only when external agents need the same information.
@@ -45,3 +47,12 @@ A tool has three layers, and only the last one may differ between surfaces:
 
 - `@pascal-app/core/agent-tools` holds the shared contracts; the hosted repo's `agent-surface-parity.test.ts` fails when a shared tool's name, description or input schema differs between the MCP and the chat. Tools still defined twice are tracked in its tool-surface alignment plan.
 - `review-architecture` loads this page for changes under `packages/mcp/**` and `skills/**`.
+
+## Stair capability parity
+
+| Capability | Shared contract | Shared operation | MCP | Hosted AI chat |
+|---|---|---|---|---|
+| `measure_stair` | `measureStairTool` in `core/agent-tools` | `AGENT_OPERATIONS.measure_stair` | Shared-tool adapter; read-only measurements and layout alternatives | Needs hosted-chat registration and executor port (companion change in private-editor) |
+| `fit_stair` | `fitStairTool` in `core/agent-tools` | `AGENT_OPERATIONS.fit_stair` | Shared-tool adapter; applies the planned changes atomically | Needs hosted-chat registration and executor port (companion change in private-editor) |
+
+Both surfaces use the zod-only `@pascal-app/core/agent-tools` contracts and the plans in `@pascal-app/core/agent-operations`. The hosted-chat port needs registration, executor integration and parity tests. The published `pascal-3d` skill and MCP agent guide describe the same sizing, winder and measurement semantics. Design targets are preferences, not code certification; measurement reports only the modeled obstacles it supports.

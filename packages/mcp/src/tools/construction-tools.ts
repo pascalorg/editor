@@ -4,8 +4,9 @@ import {
   createZone,
   cutFloorOpening,
   generateId,
-  resolveStairTotalRise,
+  planStairCreation,
 } from '@pascal-app/core'
+import { unknownMaterialPresetRefusal } from '@pascal-app/core/agent-operations'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import {
   getActiveRoofHeight,
@@ -124,13 +125,13 @@ export const createStairBetweenLevelsInput = {
   width: measurement('length', 'm', { positive: true, description: 'Stair width.' }).default(1),
   runLength: measurement('length', 'm', {
     positive: true,
-    description: 'Horizontal run length.',
-  }).default(3),
+    description: 'Horizontal run length; omitted derives from shared stair design targets.',
+  }).optional(),
   totalRise: measurement('length', 'm', {
     positive: true,
     description: 'Total vertical rise.',
   }).optional(),
-  stepCount: z.number().int().positive().default(14),
+  stepCount: z.number().int().min(2).optional(),
   railingMode: z.enum(RAILING_MODES).default('both'),
   destinationSlabId: NodeIdSchema.optional(),
   sourceCeilingId: NodeIdSchema.optional(),
@@ -322,6 +323,12 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
       slabMaterialPreset,
       ceilingMaterialPreset,
     }) => {
+      const preset = unknownMaterialPresetRefusal({
+        wallMaterialPreset,
+        slabMaterialPreset,
+        ceilingMaterialPreset,
+      })
+      if (preset) throw new Error(preset)
       const level = assertNode(bridge, levelId, 'level')
       if (isRoofLevel(level)) {
         throw new Error(
@@ -447,6 +454,8 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
       materialPreset,
       name,
     }) => {
+      const preset = unknownMaterialPresetRefusal({ materialPreset })
+      if (preset) throw new Error(preset)
       const effectiveWidth = roofType === 'conical' ? Math.max(width, depth) : width
       const effectiveDepth = roofType === 'conical' ? effectiveWidth : depth
       // Peak height is derived from pitch + footprint + type; we still
@@ -541,9 +550,9 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
       position,
       rotation,
       width,
-      runLength,
+      runLength: requestedRunLength,
       totalRise,
-      stepCount,
+      stepCount: requestedStepCount,
       railingMode,
       destinationSlabId,
       sourceCeilingId,
@@ -557,6 +566,8 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
       materialPreset,
       name,
     }) => {
+      const preset = unknownMaterialPresetRefusal({ materialPreset })
+      if (preset) throw new Error(preset)
       const fromLevel = assertNode(bridge, fromLevelId, 'level')
       const toLevel = assertNode(bridge, toLevelId, 'level')
       if (isRoofLevel(fromLevel) || isRoofLevel(toLevel)) {
@@ -570,13 +581,15 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         position: position as [number, number, number],
         rotation,
         stairType: 'straight',
+        parentId: fromLevelId,
+        uniformRisers: true,
         fromLevelId,
         toLevelId,
         slabOpeningMode: 'none',
         openingOffset,
         width,
         ...(totalRise !== undefined ? { totalRise } : {}),
-        stepCount,
+        stepCount: requestedStepCount,
         railingMode,
         children: [],
         ...(materialPreset ? { materialPreset } : {}),
@@ -592,16 +605,18 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         },
         [stairDraft.id]: stairDraft,
       } as Record<string, AnyNode>
-      const resolvedTotalRise = resolveStairTotalRise(stairDraft, riseNodes)
-      const segment = StairSegmentNode.parse({
-        segmentType: 'stair',
+      const dimensions = {
         width,
-        length: runLength,
-        height: resolvedTotalRise,
-        stepCount,
+        ...(requestedRunLength !== undefined ? { length: requestedRunLength } : {}),
+        ...(requestedStepCount !== undefined ? { stepCount: requestedStepCount } : {}),
+      }
+      const { flight } = planStairCreation(stairDraft, riseNodes, dimensions)
+      const segment = StairSegmentNode.parse({
+        ...flight,
         ...(materialPreset ? { materialPreset } : {}),
       })
-      const stair = { ...stairDraft, children: [segment.id] }
+      const runLength = segment.length
+      const stair = { ...stairDraft, stepCount: segment.stepCount, children: [segment.id] }
 
       const openingPolygon = rectangularOpening({
         position: position as [number, number, number],

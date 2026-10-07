@@ -2,8 +2,11 @@ import { planFootprintCorners } from '../../lib/plan-footprint'
 import { area, difference, intersection, union } from '../../lib/polygon-boolean'
 import { roomFloorPlate } from '../../lib/room-floor-plate'
 import { getScaledDimensions, StairNode, StairSegmentNode } from '../../schema'
-import { createDefaultStairSegment } from '../../systems/stair/stair-flight'
 import { stairFootprintAABB } from '../../systems/stair/stair-footprint'
+import {
+  createSizedStairFlight,
+  DEFAULT_STAIR_DESIGN_TARGETS,
+} from '../../systems/stair/stair-sizing'
 import {
   conflict,
   type Point,
@@ -33,11 +36,12 @@ export function planMezzanineStair(
   const deck = slabs.find((node) => node.zoneIds?.includes(zone.id))
   const floor = roomFloorPlate(slabs, host.id)
   if (!deck || !floor) return refuse()
-  const defaults = createDefaultStairSegment()
   const rise = deck.elevation - floor.elevation
   if (!(rise > 0)) return refuse()
-  const stepCount = Math.max(2, Math.ceil(rise / (defaults.height / defaults.stepCount)))
-  const run = (stepCount * defaults.length) / defaults.stepCount
+  const defaults = createSizedStairFlight(rise)
+  const stepCount = defaults.stepCount
+  const preferredRun = defaults.length
+  const minimumRun = stepCount * DEFAULT_STAIR_DESIGN_TARGETS.minimumGoing
   const width = defaults.width
   const obstacles: Point[][] = []
   for (const node of Object.values(nodes)) {
@@ -88,26 +92,32 @@ export function planMezzanineStair(
           arrival[0] + tangent[0] * x! + normal[0] * z!,
           arrival[1] + tangent[1] * x! + normal[1] * z!,
         ])
-      if (area(difference(footprint(run), free)) > 1e-6) continue
-      let lo = run,
+      const fits = (depth: number) => {
+        const polygon = footprint(depth)
+        return (
+          area(difference(polygon, free)) <= 1e-6 &&
+          area(difference(polygon, { outer: floor.polygon, holes: floor.holes })) <= 1e-6 &&
+          area(intersection(polygon, zone.polygon)) <= 1e-6
+        )
+      }
+      if (!fits(minimumRun)) continue
+      let lo = minimumRun,
         hi = extent
       for (let i = 0; i < 16; i++) {
         const mid = (lo + hi) / 2
-        if (area(difference(footprint(mid), free)) <= 1e-6) lo = mid
+        if (fits(mid)) lo = mid
         else hi = mid
       }
-      // Both ends of the flight must land on the selected host floor.
-      if (area(difference(footprint(run), { outer: floor.polygon, holes: floor.holes })) > 1e-6)
-        continue
-      if (area(intersection(footprint(run), zone.polygon)) > 1e-6) continue
       candidates.push({ edgeIndex, arrival, normal, freeRun: lo })
     }
   }
   const best = candidates.sort((a, b) => b.freeRun - a.freeRun)[0]
   if (!best) return refuse()
+  const run = Math.min(preferredRun, best.freeRun)
   const stair = StairNode.parse({
     parentId: zone.parentId,
     name: 'Mezzanine stair',
+    uniformRisers: true,
     fromLevelId: zone.parentId,
     supportSlabId: floor.id,
     deckSlabId: deck.id,

@@ -8,6 +8,7 @@ import {
   parseMaterialRef,
   type SceneMaterial,
   type SceneMaterialId,
+  slotPaintMaterial,
   toSceneMaterialRef,
   useScene,
 } from '@pascal-app/core'
@@ -235,15 +236,6 @@ export const itemPaint: PaintCapability = {
     commitItemPaint(node as ItemNode, role, material, materialPreset),
   applyPreview: ({ role, root, material, materialPreset }) =>
     applyItemPreview(role, root, material, materialPreset),
-  getEffectiveMaterial: ({ node, role }) => {
-    const ref = (node as ItemNode).slots?.[role]
-    const parsed = parseMaterialRef(ref)
-    if (!parsed) return null
-    if (parsed.kind === 'library') {
-      return { material: undefined, materialPreset: ref }
-    }
-    const sceneMaterial = useScene.getState().materials[parsed.id as SceneMaterialId]
-    if (!sceneMaterial) return null
-    return { material: sceneMaterial.material, materialPreset: undefined }
-  },
+  getEffectiveMaterial: ({ node, role }) =>
+    slotPaintMaterial((node as ItemNode).slots?.[role], useScene.getState().materials),
 }

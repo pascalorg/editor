@@ -3,6 +3,7 @@ import { createZone, generateId } from '@pascal-app/core'
 import {
   collectDoorKeepouts,
   collectOccupiedFootprints,
+  editedScriptParams,
   findValidPlacement,
   itemPlanAabb,
   keepoutCoversPlanned,
@@ -565,7 +566,8 @@ async function rebuildOpening(
   let outcome: ReturnType<typeof rescriptOpening>
   try {
     const code = input.code ?? (await readScript(host, scene.id, bridge, input.nodeId))
-    const compiled = await compileAndStore(host, scene.id, code, input.params)
+    const params = editedScriptParams(nodes[input.nodeId], input.params)
+    const compiled = await compileAndStore(host, scene.id, code, params, kind)
     outcome = rescriptOpening(nodes, { nodeId: input.nodeId, compiled }, { activeLevelId: null })
   } catch (error) {
     if (isAgentRefusal(error)) return refusalResult(error)
@@ -600,6 +602,7 @@ async function rebuildOpening(
 
 /** A door or window passed `code`: compiled and stored the way add_object does, or the tool's error. */
 async function compileOpeningScript(
+  kind: 'door' | 'window',
   bridge: SceneOperations,
   host: GeometryScriptHost | undefined,
   input: { code?: string; params?: Record<string, GeometryScriptParamValue> },
@@ -615,8 +618,9 @@ async function compileOpeningScript(
   if (!scene)
     return { error: toolError('Open or save a scene first.', { code: 'no_active_scene' }) }
   try {
-    return { script: await compileAndStore(host, scene.id, input.code, input.params) }
+    return { script: await compileAndStore(host, scene.id, input.code, input.params, kind) }
   } catch (error) {
+    if (isAgentRefusal(error)) return { error: refusalResult(error) }
     return {
       error: toolError(error instanceof Error ? error.message : String(error), {
         code: 'script_failed',
@@ -642,7 +646,7 @@ export function registerAddDoor(
     async (input) => {
       if (input.nodeId)
         return rebuildOpening('door', bridge, geometryScripts, { ...input, nodeId: input.nodeId })
-      const compiled = await compileOpeningScript(bridge, geometryScripts, input)
+      const compiled = await compileOpeningScript('door', bridge, geometryScripts, input)
       if ('error' in compiled) return compiled.error
       let planned: ReturnType<typeof planWallOpening>
       try {
@@ -687,7 +691,7 @@ export function registerAddWindow(
     async (input) => {
       if (input.nodeId)
         return rebuildOpening('window', bridge, geometryScripts, { ...input, nodeId: input.nodeId })
-      const compiled = await compileOpeningScript(bridge, geometryScripts, input)
+      const compiled = await compileOpeningScript('window', bridge, geometryScripts, input)
       if ('error' in compiled) return compiled.error
       let planned: ReturnType<typeof planWallOpening>
       try {

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { z } from 'zod'
 import { AGENT_TOOL_CONTRACTS } from '../agent-tools'
 import { type AgentRefusal, isAgentRefusal } from '../agent-tools/refusal'
-import type { AnyNode } from '../schema'
+import { type AnyNode, LevelNode, StairNode, StairSegmentNode } from '../schema'
 import { AGENT_TOOL_CASES } from './__fixtures__/cases'
 import { AGENT_OPERATIONS, applySceneChanges } from './index'
 
@@ -51,4 +51,18 @@ describe('agent operations', () => {
         expect(JSON.stringify(outcome.result)).toContain(text)
     })
   }
+})
+
+test('stair design targets stay informational in scene verification', () => {
+  const level = LevelNode.parse({})
+  const flight = StairSegmentNode.parse({ height: 3, length: 3, stepCount: 10 })
+  const stair = StairNode.parse({ parentId: level.id, totalRise: 3, children: [flight.id] })
+  flight.parentId = stair.id
+  level.children = [stair.id]
+  const nodes = Object.fromEntries([level, stair, flight].map((node) => [node.id, node]))
+  const verified = AGENT_OPERATIONS.verify_scene(nodes, {}, { activeLevelId: level.id }).result
+  expect(verified.issues).toContainEqual(
+    expect.objectContaining({ type: 'stair_riser_target', severity: 'info' }),
+  )
+  expect(verified.hasIssues).toBe(false)
 })

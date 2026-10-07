@@ -47,6 +47,7 @@ export type SceneSnapshot = {
   collections: Record<CollectionId, Collection>
   materials: Record<SceneMaterialId, SceneMaterial>
   installedPlugins: string[]
+  hasExplicitPluginInstallState?: boolean
 }
 
 export type SceneCommitOrigin = 'local' | 'load' | 'host'
@@ -154,7 +155,8 @@ export function areSceneSnapshotsEqual(left: SceneSnapshot, right: SceneSnapshot
     areSemanticValuesEqual(left.rootNodeIds, right.rootNodeIds) &&
     areSemanticValuesEqual(left.collections, right.collections) &&
     areSemanticValuesEqual(left.materials, right.materials) &&
-    areSemanticValuesEqual(left.installedPlugins, right.installedPlugins)
+    areSemanticValuesEqual(left.installedPlugins, right.installedPlugins) &&
+    (left.hasExplicitPluginInstallState ?? false) === (right.hasExplicitPluginInstallState ?? false)
   )
 }
 

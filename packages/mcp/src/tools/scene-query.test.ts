@@ -279,7 +279,13 @@ describe('scene query tools', () => {
     expect(parsed.occupiedStoryCount).toBe(2)
     expect(parsed.supportLevelCount).toBe(1)
     expect(parsed.roofLevelIds).toEqual([roofLevel.id])
-    expect(parsed.hasIssues).toBe(false)
+    expect(parsed.hasIssues).toBe(true)
+    expect(
+      parsed.issues.some((issue: { type: string }) => issue.type === 'stair_riser_target'),
+    ).toBe(true)
+    expect(
+      parsed.issues.filter((issue: { type: string }) => !issue.type.startsWith('stair_')),
+    ).toEqual([])
 
     const listed = await client.callTool({ name: 'list_levels', arguments: {} })
     expect(listed.isError).toBeFalsy()

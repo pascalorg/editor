@@ -90,6 +90,18 @@ PASCAL_DATA_DIR="$HOME/.pascal/data" bun run dev
 PASCAL_DATA_DIR="$HOME/.pascal/data" bun packages/mcp/dist/bin/pascal-mcp.js
 ```
 
+### Local geometry artifacts
+
+Scripted objects keep their GLB and source in `<database-path>.artifacts/<sha256>` beside the
+local SQLite scene database, where saved scenes live (also with `--scene`, which only seeds the
+first scene); keep that directory with the database. Files are verified against their hash and
+written once, so saved scenes and undo history keep their original geometry. The standalone
+editor reads and writes the same database-side store.
+
+Local MCP compilation is opt-in with `PASCAL_SERVER_SCRIPT_COMPILE=1`. It runs in a separate
+process without inherited environment variables, with a deadline; this is not a sandbox for
+untrusted code. `get_source` can read saved scripts without enabling compilation.
+
 ## Live editor updates
 
 When the editor and MCP server share the same `PASCAL_DATA_DIR`, MCP mutations
@@ -329,6 +341,8 @@ captured by Zundo's temporal middleware as a single undoable step.
 | `search_assets` | Search the built-in MCP item catalog. | `{ query, category? }` | `{ results, total }` |
 | `create_story_shell` | Create one level-owned story shell from a footprint: the perimeter walls. The floor plate and ceiling are derived from the enclosed rooms; `createSlab` / `createCeiling` / `slabElevation` are recorded as room intent. Use once per story. | `{ levelId, footprint, wallHeight?, wallThickness?, createSlab?, createCeiling? }` | `{ wallIds, zoneIds, slabId, ceilingId, createdIds }` |
 | `create_stair_between_levels` | Create a straight stair and one rectangular manual opening in the destination slab/source ceiling, with auto-opening disabled. | `{ fromLevelId, toLevelId, position, width?, runLength?, totalRise? }` | `{ stairId, stairSegmentId, openingPolygon }` |
+| `measure_stair` | Read actual risers, going at the walking line, slope, uniformity, arrival, headroom against floors/ceilings/stair bodies, and design-target diagnostics. | `{ stairId, available?: { width, length } }` | `{ measurements, layouts }` |
+| `fit_stair` | Fit uniform risers or replace the chain with a straight/L/U preset with width-sized landings or quarter-turn winders in one undoable edit. | `{ stairId, fitRun?, targets?, layout?, turn?, width?, landingDepth?, turningStrategy?, innerGap?, walkingLineOffset?, division? }` | `{ stairId, measurements }` |
 | `create_roof` | Create a roof container and one roof segment. By default creates a dedicated roof level above the reference occupied level for solo/exploded views. | `{ levelId, width, depth, roofType?, roofHeight?, roofLevelId?, useDedicatedRoofLevel? }` | `{ roofLevelId, createdRoofLevelId, roofId, roofSegmentId }` |
 | `create_room` | Create a room from a polygon: one wall per edge (reusing or splitting existing walls) plus the room zone. The floor plate and ceiling are derived, never authored. | `{ levelId, name, polygon, color?, wallHeight?, wallThickness? }` | `{ zoneId, slabId, ceilingId, wallIds, reusedWalls, areaSqMeters }` |
 | `add_door` | Add a door to a wall using parametric placement. | `{ wallId, t, width?, height?, hingesSide?, swingDirection? }` | `{ doorId, localX }` |
@@ -343,6 +357,7 @@ captured by Zundo's temporal middleware as a single undoable step.
 | `set_zone` | Create a zone/room polygon on a level. | `{ levelId, polygon, label, properties? }` | `{ zoneId }` |
 | `duplicate_level` | Copy a level as the editor does (units whose rooms are all on it included; plan references, scans and spawns left behind), above or below, shifting the floors past it. | `{ levelId, position?, name?, preset? }` | `{ newLevelId, name, floorIndex, shiftedLevelIds, copied, skipped, newNodeIds[] }` |
 | `delete_node` | Delete a node with everything under it, as the editor's Delete does. | `{ id }` | `{ deletedIds: [] }` |
+| `clear_scene` | Empty the project on purpose, back to the default site, building and level. The only way to empty a project: a write that would leave it empty is refused (`scene_wipe_blocked`) by a store that guards against accidental wipes, and the session keeps the project as stored. | `{ reason }` | `{ cleared: { removed }, version, graphHash }` |
 | `undo` | Step back through temporal history. | `{ steps? }` | `{ undone: number }` |
 | `redo` | Step forward through temporal history. | `{ steps? }` | `{ redone: number }` |
 | `export_json` | Serialize the scene graph as JSON. | `{ pretty? }` | `{ json: string }` |

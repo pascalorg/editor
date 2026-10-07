@@ -3,8 +3,13 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  ELEVATOR_CAB_SLOT_DEFAULT,
+  ELEVATOR_DOORS_SLOT_DEFAULT,
+  ELEVATOR_GLASS_SLOT_DEFAULT,
+  ELEVATOR_SHAFT_SLOT_DEFAULT,
   type ElevatorDoorSide,
   type ElevatorNode,
+  type ElevatorSlotId,
   getElevatorCabDepth,
   getElevatorCabWidth,
   getElevatorDoorLeafSides,
@@ -45,13 +50,6 @@ import {
   TorusGeometry,
 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
-import {
-  ELEVATOR_CAB_SLOT_DEFAULT,
-  ELEVATOR_DOORS_SLOT_DEFAULT,
-  ELEVATOR_GLASS_SLOT_DEFAULT,
-  ELEVATOR_SHAFT_SLOT_DEFAULT,
-  type ElevatorSlotId,
-} from './slots'
 
 const DEFAULT_STRUCTURE_WHITE = '#f2f0ed'
 const SHAFT_WALL_COLOR = DEFAULT_STRUCTURE_WHITE

@@ -1,3 +1,4 @@
+import { refuseParamsWithoutScript } from '../agent-operations/add-object'
 import { refuse } from '../agent-tools/refusal'
 import { scriptedSize, scriptSource } from '../lib/geometry-script-node'
 import { wallSupportForNodes } from '../lib/opening-floor-datum'
@@ -6,6 +7,7 @@ import {
   type AnyNodeId,
   type CompiledGeometryScript,
   DoorNode,
+  type GeometryScriptParamValue,
   getScaledDimensions,
   type ItemNode,
   type WallNode,
@@ -183,6 +185,8 @@ export type WallOpeningInput = {
   rows?: number
   /** A compiled script the opening is built from; its bounds set width and height. */
   compiled?: CompiledGeometryScript
+  code?: string
+  params?: Record<string, GeometryScriptParamValue>
 }
 
 const equalRatios = (count: number) => Array.from({ length: count }, () => 1 / count)
@@ -200,6 +204,7 @@ const metres = (value: number) => `${value.toFixed(2)} m`
  * `node` under `wallId`.
  */
 export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
+  refuseParamsWithoutScript(nodes, input)
   const { kind, wallId } = input
   if (!wallId)
     refuse(

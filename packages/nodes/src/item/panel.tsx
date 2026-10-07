@@ -1,10 +1,10 @@
 'use client'
 
-import { type AnyNode, getScaledDimensions, ItemNode, useScene } from '@pascal-app/core'
+import { type AnyNode, getScaledDimensions, type ItemNode, useScene } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
-  CollectionsPopover,
+  duplicateNodeAndPickUp,
   PanelSection,
   PanelWrapper,
   SliderControl,
@@ -20,9 +20,7 @@ import { AuthoredParams } from './authored-params'
  * Stage E inspector for item. 1:1 port of the legacy
  * `editor/components/ui/panels/item-panel.tsx`, relocated into the
  * kind's folder so `parametrics.customPanel` mounts it through the
- * registry inspector. The catalog popover (`<CollectionsPopover>`) is
- * the only kind-specific UI that can't be expressed via the generic
- * auto-inspector today — kept inline.
+ * registry inspector.
  *
  * Slider-drag fix recipe applied: scale / position / rotation slider
  * `onChange` callbacks read from a `useRef(node)` instead of the
@@ -75,22 +73,8 @@ export default function ItemPanel() {
   }, [node, setMovingNode, setSelection])
 
   const handleDuplicate = useCallback(() => {
-    if (!node) return
-    triggerSFX('sfx:item-pick')
-    const proto = ItemNode.parse({
-      position: [...node.position] as [number, number, number],
-      rotation: [...node.rotation] as [number, number, number],
-      name: node.name,
-      asset: node.asset,
-      source: node.source,
-      slots: node.slots,
-      parentId: node.parentId,
-      side: node.side,
-      metadata: { isNew: true },
-    })
-    setMovingNode(proto)
-    setSelection({ selectedIds: [] })
-  }, [node, setMovingNode, setSelection])
+    if (node) duplicateNodeAndPickUp(node)
+  }, [node])
 
   const handleDelete = useCallback(() => {
     if (!selectedId) return
@@ -301,17 +285,6 @@ export default function ItemPanel() {
             )
           })()}
         </div>
-      </PanelSection>
-
-      <PanelSection title="Collections">
-        <ActionGroup>
-          <CollectionsPopover
-            collectionIds={node.collectionIds}
-            nodeId={selectedId as AnyNode['id']}
-          >
-            <ActionButton label="Manage collections…" />
-          </CollectionsPopover>
-        </ActionGroup>
       </PanelSection>
 
       <PanelSection title="Actions">

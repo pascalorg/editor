@@ -1095,6 +1095,30 @@ function collectReachableNodeIds(
   return reachable
 }
 
+/** Collection membership lives in `collection.nodeIds`; items alone mirror it in `collectionIds`. */
+function mirrorItemMembership(
+  nodes: Record<AnyNodeId, AnyNode>,
+  collectionId: CollectionId,
+  nodeIds: readonly AnyNodeId[],
+  member: boolean,
+): Record<AnyNodeId, AnyNode> {
+  let next = nodes
+  for (const nodeId of nodeIds) {
+    const node = next[nodeId]
+    if (node?.type !== 'item') continue
+    const current = node.collectionIds ?? []
+    if (current.includes(collectionId) === member) continue
+    if (next === nodes) next = { ...nodes }
+    next[nodeId] = {
+      ...node,
+      collectionIds: member
+        ? [...current, collectionId]
+        : current.filter((id) => id !== collectionId),
+    }
+  }
+  return next
+}
+
 export type SceneState = {
   // 1. The Data: A flat dictionary of all nodes
   nodes: Record<AnyNodeId, AnyNode>
@@ -1141,12 +1165,12 @@ export type SceneState = {
 
   createNode: (node: AnyNode, parentId?: AnyNodeId, options?: DerivedWriteOptions) => void
   createNodes: (
-    ops: { node: AnyNode; parentId?: AnyNodeId }[],
+    ops: { node: AnyNode; parentId?: AnyNodeId; collectionIds?: CollectionId[] }[],
     options?: DerivedWriteOptions,
   ) => void
   applyNodeChanges: (
     changes: {
-      create?: { node: AnyNode; parentId?: AnyNodeId }[]
+      create?: { node: AnyNode; parentId?: AnyNodeId; collectionIds?: CollectionId[] }[]
       update?: { id: AnyNodeId; data: Partial<AnyNode> }[]
       delete?: AnyNodeId[]
     },
@@ -1169,8 +1193,8 @@ export type SceneState = {
   createCollection: (name: string, nodeIds?: AnyNodeId[]) => CollectionId
   deleteCollection: (id: CollectionId) => void
   updateCollection: (id: CollectionId, data: Partial<Omit<Collection, 'id'>>) => void
-  addToCollection: (id: CollectionId, nodeId: AnyNodeId) => void
-  removeFromCollection: (id: CollectionId, nodeId: AnyNodeId) => void
+  addToCollection: (id: CollectionId, nodeIds: AnyNodeId[]) => void
+  removeFromCollection: (id: CollectionId, nodeIds: AnyNodeId[]) => void
 
   // Scene material actions
   addSceneMaterial: (material: SceneMaterial) => void
@@ -1181,20 +1205,28 @@ export type SceneState = {
 // type PartializedStoreState = Pick<SceneState, 'rootNodeIds' | 'nodes'>;
 
 type UseSceneStore = UseBoundStore<StoreApi<SceneState>> & {
-  temporal: StoreApi<
-    TemporalState<
-      Pick<SceneState, 'nodes' | 'rootNodeIds' | 'collections' | 'materials' | 'installedPlugins'>
-    >
-  >
+  temporal: StoreApi<TemporalState<SceneSnapshot>>
 }
 
 function sceneHistorySnapshotFromState(
   state: Pick<
     SceneState,
-    'nodes' | 'rootNodeIds' | 'collections' | 'materials' | 'installedPlugins'
+    | 'nodes'
+    | 'rootNodeIds'
+    | 'collections'
+    | 'materials'
+    | 'installedPlugins'
+    | 'hasExplicitPluginInstallState'
   >,
 ): SceneSnapshot {
-  const { nodes, rootNodeIds, collections, materials, installedPlugins } = state
+  const {
+    nodes,
+    rootNodeIds,
+    collections,
+    materials,
+    installedPlugins,
+    hasExplicitPluginInstallState,
+  } = state
   // Fresh placement nodes are renderable drafts, not document history. Excluding their
   // entire subtree here protects both local undo and external commit subscribers. Carried
   // drafts (history-drafts.ts) are kept out the same way.
@@ -1220,6 +1252,7 @@ function sceneHistorySnapshotFromState(
       collections,
       materials,
       installedPlugins,
+      hasExplicitPluginInstallState,
     }
   }
 
@@ -1287,6 +1320,7 @@ function sceneHistorySnapshotFromState(
     collections: historyCollections,
     materials,
     installedPlugins,
+    hasExplicitPluginInstallState,
   }
 }
 
@@ -1618,20 +1652,10 @@ const useScene: UseSceneStore = createSceneStore(
       createCollection: (name, nodeIds = []) => {
         if (get().readOnly) return '' as CollectionId
         const id = generateCollectionId()
-        const collection: Collection = { id, name, nodeIds }
-        set((state) => {
-          const nextCollections = { ...state.collections, [id]: collection }
-          // Denormalize: stamp collectionId onto each node
-          const nextNodes = { ...state.nodes }
-          for (const nodeId of nodeIds) {
-            const node = nextNodes[nodeId]
-            if (!node) continue
-            const existing =
-              ('collectionIds' in node ? (node.collectionIds as CollectionId[]) : undefined) ?? []
-            nextNodes[nodeId] = { ...node, collectionIds: [...existing, id] } as AnyNode
-          }
-          return { collections: nextCollections, nodes: nextNodes }
-        })
+        set((state) => ({
+          collections: { ...state.collections, [id]: { id, name, nodeIds: [...nodeIds] } },
+          nodes: mirrorItemMembership(state.nodes, id, nodeIds, true),
+        }))
         return id
       },
 
@@ -1641,17 +1665,10 @@ const useScene: UseSceneStore = createSceneStore(
           const col = state.collections[id]
           const nextCollections = { ...state.collections }
           delete nextCollections[id]
-          // Remove collectionId from all member nodes
-          const nextNodes = { ...state.nodes }
-          for (const nodeId of col?.nodeIds ?? []) {
-            const node = nextNodes[nodeId]
-            if (!(node && 'collectionIds' in node)) continue
-            nextNodes[nodeId] = {
-              ...node,
-              collectionIds: (node.collectionIds as CollectionId[]).filter((cid) => cid !== id),
-            } as AnyNode
+          return {
+            collections: nextCollections,
+            nodes: mirrorItemMembership(state.nodes, id, col?.nodeIds ?? [], false),
           }
-          return { collections: nextCollections, nodes: nextNodes }
         })
       },
 
@@ -1664,46 +1681,35 @@ const useScene: UseSceneStore = createSceneStore(
         })
       },
 
-      addToCollection: (id, nodeId) => {
+      addToCollection: (id, nodeIds) => {
         if (get().readOnly) return
         set((state) => {
           const col = state.collections[id]
-          if (!col || col.nodeIds.includes(nodeId)) return state
-          const nextCollections = {
-            ...state.collections,
-            [id]: { ...col, nodeIds: [...col.nodeIds, nodeId] },
+          const added = nodeIds.filter((nodeId) => !col?.nodeIds.includes(nodeId))
+          if (!col || added.length === 0) return state
+          return {
+            collections: {
+              ...state.collections,
+              [id]: { ...col, nodeIds: [...col.nodeIds, ...added] },
+            },
+            nodes: mirrorItemMembership(state.nodes, id, added, true),
           }
-          const node = state.nodes[nodeId]
-          if (!node) return { collections: nextCollections }
-          const existing =
-            ('collectionIds' in node ? (node.collectionIds as CollectionId[]) : undefined) ?? []
-          const nextNodes = {
-            ...state.nodes,
-            [nodeId]: { ...node, collectionIds: [...existing, id] } as AnyNode,
-          }
-          return { collections: nextCollections, nodes: nextNodes }
         })
       },
 
-      removeFromCollection: (id, nodeId) => {
+      removeFromCollection: (id, nodeIds) => {
         if (get().readOnly) return
         set((state) => {
           const col = state.collections[id]
-          if (!col) return state
-          const nextCollections = {
-            ...state.collections,
-            [id]: { ...col, nodeIds: col.nodeIds.filter((n) => n !== nodeId) },
+          const removed = nodeIds.filter((nodeId) => col?.nodeIds.includes(nodeId))
+          if (!col || removed.length === 0) return state
+          return {
+            collections: {
+              ...state.collections,
+              [id]: { ...col, nodeIds: col.nodeIds.filter((nodeId) => !removed.includes(nodeId)) },
+            },
+            nodes: mirrorItemMembership(state.nodes, id, removed, false),
           }
-          const node = state.nodes[nodeId]
-          if (!(node && 'collectionIds' in node)) return { collections: nextCollections }
-          const nextNodes = {
-            ...state.nodes,
-            [nodeId]: {
-              ...node,
-              collectionIds: (node.collectionIds as CollectionId[]).filter((cid) => cid !== id),
-            } as AnyNode,
-          }
-          return { collections: nextCollections, nodes: nextNodes }
         })
       },
 
@@ -1841,7 +1847,14 @@ export type ScenePluginInstallPatch = {
   installed: boolean
 }
 
+export type SceneCollectionPatch = {
+  id: CollectionId
+  collection: Collection | null
+}
+
 export type SceneOperationPatch = ScenePatch & {
+  pluginInstallState?: { installedPlugins: string[]; explicit: boolean }
+  collectionChanges?: SceneCollectionPatch[]
   nodeCreates: SceneNodeStructuralPatch[]
   nodeDeletes: SceneNodeStructuralPatch[]
   pluginChanges?: ScenePluginInstallPatch[]
@@ -1961,7 +1974,7 @@ function sceneOperationPatchNextState(
   beforeState: SceneState,
   changes: SceneOperationPatch,
 ):
-  | (Pick<SceneState, 'materials' | 'nodes' | 'rootNodeIds'> &
+  | (Pick<SceneState, 'collections' | 'materials' | 'nodes' | 'rootNodeIds'> &
       Partial<Pick<SceneState, 'installedPlugins' | 'hasExplicitPluginInstallState'>>)
   | null {
   const createIds = new Set<AnyNodeId>()
@@ -2051,16 +2064,6 @@ function sceneOperationPatchNextState(
     placements.push(change)
     existingParentCreates.set(parentId, placements)
   }
-  const insertedRoots = insertSceneStructuralPlacements(nextRootNodeIds, rootCreates)
-  if (!insertedRoots) return null
-  nextRootNodeIds = insertedRoots
-  for (const [parentId, placements] of existingParentCreates) {
-    const parent = nextNodes[parentId]
-    if (!(parent && 'children' in parent && Array.isArray(parent.children))) return null
-    const children = insertSceneStructuralPlacements(parent.children as AnyNodeId[], placements)
-    if (!children) return null
-    nextNodes[parentId] = { ...parent, children } as AnyNode
-  }
 
   for (const { id, data, removeFields } of changes.nodeUpdates) {
     const node = nextNodes[id]
@@ -2113,6 +2116,17 @@ function sceneOperationPatchNextState(
         nextNodes[parentId] = { ...parent, children: [...parent.children, id] } as AnyNode
     } else if (!nextRootNodeIds.includes(id)) nextRootNodeIds = [...nextRootNodeIds, id]
   }
+  const insertedRoots = insertSceneStructuralPlacements(nextRootNodeIds, rootCreates)
+  if (!insertedRoots) return null
+  nextRootNodeIds = insertedRoots
+  for (const [parentId, placements] of existingParentCreates) {
+    const parent = nextNodes[parentId]
+    if (!(parent && 'children' in parent && Array.isArray(parent.children))) return null
+    const children = insertSceneStructuralPlacements(parent.children as AnyNodeId[], placements)
+    if (!children) return null
+    nextNodes[parentId] = { ...parent, children } as AnyNode
+  }
+
   for (const node of Object.values(nextNodes)) {
     if (node.parentId && deleteIds.has(node.parentId as AnyNodeId)) return null
   }
@@ -2140,9 +2154,30 @@ function sceneOperationPatchNextState(
     else materials[id] = material
   }
 
+  const collectionChanges = changes.collectionChanges ?? []
+  const collections =
+    collectionChanges.length > 0 ? { ...beforeState.collections } : beforeState.collections
+  const collectionIds = new Set<CollectionId>()
+  for (const { id, collection } of collectionChanges) {
+    if (collectionIds.has(id) || (collection !== null && collection.id !== id)) return null
+    collectionIds.add(id)
+    if (collection === null) delete collections[id]
+    else collections[id] = collection
+  }
+
   const pluginChanges = changes.pluginChanges ?? []
+  if (changes.pluginInstallState) {
+    return {
+      collections,
+      materials,
+      nodes: nextNodes,
+      rootNodeIds: nextRootNodeIds,
+      installedPlugins: [...changes.pluginInstallState.installedPlugins],
+      hasExplicitPluginInstallState: changes.pluginInstallState.explicit,
+    }
+  }
   if (pluginChanges.length === 0) {
-    return { materials, nodes: nextNodes, rootNodeIds: nextRootNodeIds }
+    return { collections, materials, nodes: nextNodes, rootNodeIds: nextRootNodeIds }
   }
   const installedPlugins = new Set(beforeState.installedPlugins)
   const pluginIds = new Set<string>()
@@ -2153,6 +2188,7 @@ function sceneOperationPatchNextState(
     else installedPlugins.delete(id)
   }
   return {
+    collections,
     materials,
     nodes: nextNodes,
     rootNodeIds: nextRootNodeIds,
@@ -2163,14 +2199,39 @@ function sceneOperationPatchNextState(
   }
 }
 
-export function applySceneOperationPatch(changes: SceneOperationPatch): boolean {
+export type ApplySceneOperationPatchOptions = {
+  /**
+   * Record the change as one step this client can undo. History holds whole snapshots, so a
+   * change kept out of it is reverted by the next undo of an earlier local step — fine for a
+   * live collaborator whose own history replaces local undo, not for a writer that only
+   * reaches this tab as a saved scene. Refused (false) mid-interaction; retry once it ends.
+   */
+  undoable?: boolean
+}
+
+export function applySceneOperationPatch(
+  changes: SceneOperationPatch,
+  options: ApplySceneOperationPatchOptions = {},
+): boolean {
   const beforeState = useScene.getState()
   if (
     changes.nodeUpdates.length === 0 &&
     changes.materialChanges.length === 0 &&
     changes.nodeCreates.length === 0 &&
     changes.nodeDeletes.length === 0 &&
-    !changes.pluginChanges?.length
+    !changes.pluginChanges?.length &&
+    !changes.collectionChanges?.length &&
+    !changes.pluginInstallState
+  ) {
+    return false
+  }
+  if (
+    options.undoable &&
+    !(
+      useScene.temporal.getState().isTracking &&
+      getSceneHistoryPauseDepth() === 0 &&
+      !hasSceneHistoryDrafts()
+    )
   ) {
     return false
   }
@@ -2200,6 +2261,12 @@ export function applySceneOperationPatch(changes: SceneOperationPatch): boolean 
     useLiveTransforms.getState().clear(id)
   }
   if (areSceneSnapshotsEqual(before, current)) return false
+  if (options.undoable) {
+    useScene.temporal.setState(({ pastStates }) => ({
+      pastStates: [...pastStates, before],
+      futureStates: [],
+    }))
+  }
 
   for (const id of touchedNodeIds) {
     if (current.nodes[id]) currentState.markDirty(id)
@@ -2230,7 +2297,7 @@ export function applySceneOperationPatch(changes: SceneOperationPatch): boolean 
       if (node.parentId) currentState.markDirty(node.parentId as AnyNodeId)
     }
   }
-  if (changes.pluginChanges?.length) {
+  if (changes.pluginChanges?.length || changes.pluginInstallState) {
     for (const node of Object.values(current.nodes)) {
       if (!getNodePluginId(node.type)) continue
       if (!isNodeKindEnabled(node.type, currentState.installedPlugins)) {

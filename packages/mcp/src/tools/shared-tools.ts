@@ -8,11 +8,13 @@ import {
   deleteNodeTool,
   duplicateLevelTool,
   findByTypeTool,
+  fitStairTool,
   getLevelSummaryTool,
   getNodeTool,
   getWallsTool,
   getZonesTool,
   listLevelsTool,
+  measureStairTool,
   verifySceneTool,
 } from '@pascal-app/core/agent-tools'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
@@ -24,6 +26,7 @@ import {
   DESTRUCTIVE_TOOL_ANNOTATIONS,
   READ_ONLY_TOOL_ANNOTATIONS,
 } from './annotations'
+import { registerCollectionTools } from './collections'
 import { refusalResult } from './errors'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 
@@ -55,6 +58,18 @@ const levelRoleOutput = {
 }
 
 const SHARED_TOOLS: SharedTool[] = [
+  {
+    contract: measureStairTool,
+    operation: AGENT_OPERATIONS.measure_stair,
+    annotations: READ_ONLY_TOOL_ANNOTATIONS,
+    outputSchema: { measurements: z.json(), layouts: z.json() },
+  },
+  {
+    contract: fitStairTool,
+    operation: AGENT_OPERATIONS.fit_stair,
+    annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
+    outputSchema: { stairId: z.string().min(1), measurements: z.json(), ...liveSyncOutput },
+  },
   {
     contract: findByTypeTool,
     operation: AGENT_OPERATIONS.find_by_type,
@@ -141,7 +156,9 @@ const SHARED_TOOLS: SharedTool[] = [
       activeLevelId: z.string().nullable(),
       levels: z.array(jsonObject),
       emptyLevelIds: z.array(z.string()),
-      issues: z.array(z.object({ type: z.string(), message: z.string() })),
+      issues: z.array(
+        z.object({ type: z.string(), message: z.string(), severity: z.literal('info').optional() }),
+      ),
       hasIssues: z.boolean(),
     },
     envelope: (bridge) => ({ activeSceneId: bridge.getActiveScene()?.id ?? null }),
@@ -210,4 +227,5 @@ export function registerSharedTools(server: McpServer, bridge: SceneOperations):
       },
     )
   }
+  registerCollectionTools(server, bridge)
 }

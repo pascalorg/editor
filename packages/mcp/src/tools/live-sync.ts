@@ -1,8 +1,9 @@
+import { refuse } from '@pascal-app/core/agent-tools'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
-import { SceneVersionConflictError } from '../storage/types'
-import { ErrorCode, throwMcpError } from './errors'
+import { SceneVersionConflictError, SceneWipeBlockedError } from '../storage/types'
+import { ErrorCode, McpError, throwMcpError } from './errors'
 
 export type LiveSyncStatus = 'published' | 'unbound' | 'events_unsupported'
 
@@ -40,6 +41,16 @@ export function persistencePayload(status: LiveSyncStatus): {
   return { persistence: { status, warning: LIVE_SYNC_WARNINGS[status] } }
 }
 
+const LIVE_SYNC_VERSION_CONFLICT = 'live_sync_version_conflict'
+
+/**
+ * Whether a tool call failed because the stored scene changed after the session
+ * loaded it. The store refuses before writing, so nothing from the call persisted.
+ */
+export function isLiveSyncVersionConflict(error: unknown): boolean {
+  return error instanceof McpError && error.message.endsWith(LIVE_SYNC_VERSION_CONFLICT)
+}
+
 /**
  * Persist the bridge's current graph to the active scene and append a live
  * event for browser subscribers. Skips persistence — reporting why — when the
@@ -50,6 +61,8 @@ export function persistencePayload(status: LiveSyncStatus): {
 export async function publishLiveSceneSnapshot(
   operations: SceneOperations,
   kind: string,
+  /** `allowSceneWipe`: the write empties the project on purpose (clear_scene). */
+  options: { allowSceneWipe?: boolean } = {},
 ): Promise<LiveSyncStatus> {
   const active = operations.getActiveScene()
   if (!active) return 'unbound'
@@ -66,9 +79,11 @@ export async function publishLiveSceneSnapshot(
       thumbnailUrl: active.thumbnailUrl,
       graph,
       expectedVersion: active.version,
+      ...(active.graphHash !== undefined ? { expectedGraphHash: active.graphHash } : {}),
       saveMode: 'draft',
       publish: false,
       operation: kind,
+      ...(options.allowSceneWipe ? { allowSceneWipe: true } : {}),
     })
     operations.setActiveScene(meta)
     await operations.appendSceneEvent({
@@ -78,8 +93,21 @@ export async function publishLiveSceneSnapshot(
       graph,
     })
   } catch (error) {
+    if (error instanceof SceneWipeBlockedError) {
+      // The store kept what it held; the session goes back to it, so the agent's next write builds
+      // on the project as stored rather than on the refused one (deleting the only room, say).
+      const stored = await operations.loadStoredScene(active.id).catch(() => null)
+      if (stored) operations.loadJSON(stored.graph)
+      refuse(
+        'scene_wipe_blocked',
+        stored
+          ? 'This write would leave the project empty, so it was blocked and nothing changed. To empty the project on purpose, call clear_scene. To remove only part of it, such as its only room, build what replaces it first, then remove it.'
+          : 'This write would leave the project empty, so it was blocked and not saved. Call load_scene before writing again. To empty the project on purpose, call clear_scene.',
+        { sceneId: active.id, mutationApplied: false, sessionRestored: !!stored },
+      )
+    }
     if (error instanceof SceneVersionConflictError) {
-      throwMcpError(ErrorCode.InvalidRequest, 'live_sync_version_conflict', {
+      throwMcpError(ErrorCode.InvalidRequest, LIVE_SYNC_VERSION_CONFLICT, {
         sceneId: active.id,
         expectedVersion: active.version,
       })

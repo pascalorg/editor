@@ -29,7 +29,7 @@ import {
   resolveAutomaticDownspoutLength,
   type WallNode,
 } from '../../schema'
-import type { CollectionId } from '../../schema/collections'
+import type { Collection, CollectionId } from '../../schema/collections'
 import { Provenance } from '../../schema/provenance'
 import { constrainWallCurveOffsetToAvoidIntersections } from '../../systems/wall/wall-curve'
 import {
@@ -59,7 +59,12 @@ import {
 import type { SceneState } from '../use-scene'
 
 type AnyContainerNode = AnyNode & { children: string[] }
-type NodeCreateOp = { node: AnyNode; parentId?: AnyNodeId }
+type NodeCreateOp = {
+  node: AnyNode
+  parentId?: AnyNodeId
+  /** Collections the node joins, for any kind; an item's own `collectionIds` otherwise. */
+  collectionIds?: CollectionId[]
+}
 type NodeUpdateOp = { id: AnyNodeId; data: Partial<AnyNode> }
 type NodeDeleteOp = AnyNodeId
 type WallMergePlan = {
@@ -1157,11 +1162,16 @@ const createNodesActionImpl = (
   set((state) => {
     const nextNodes = { ...state.nodes }
     const nextRootIds = [...state.rootNodeIds]
+    const nextCollections = { ...state.collections }
 
-    for (const { node, parentId } of ops) {
+    for (const { node, parentId, collectionIds } of ops) {
       const effectiveParentId = parentId ?? (node.parentId as AnyNodeId | null) ?? null
 
-      const newNode = parseCreatedNode(node, effectiveParentId)
+      const newNode = joinCollections(
+        nextCollections,
+        parseCreatedNode(node, effectiveParentId),
+        collectionIds,
+      )
 
       nextNodes[newNode.id] = newNode
 
@@ -1209,7 +1219,14 @@ const createNodesActionImpl = (
 
     addActiveSceneCommitNodeIds([...extraNodesToMarkDirty, ...extraNodesToClearDirty])
 
-    return { nodes: nextNodes, rootNodeIds: nextRootIds }
+    const joined = Object.entries(nextCollections).some(
+      ([id, collection]) => state.collections[id as CollectionId] !== collection,
+    )
+    return {
+      nodes: nextNodes,
+      rootNodeIds: nextRootIds,
+      ...(joined && { collections: nextCollections }),
+    }
   })
 
   // 4. System Sync
@@ -1220,6 +1237,56 @@ const createNodesActionImpl = (
   })
   for (const id of extraNodesToMarkDirty) get().markDirty(id)
   for (const id of extraNodesToClearDirty) get().clearDirty(id)
+}
+
+/**
+ * A created node joins the collections it is given, or an item those its mirror
+ * names, so a duplicate or a same-project paste stays a member; ids of
+ * collections this scene lacks (a paste from another project) are dropped.
+ * Writes the joined collections into `collections` and returns the node, an
+ * item with its mirror set to what it joined.
+ */
+export function joinCollections(
+  collections: Record<CollectionId, Collection>,
+  node: AnyNode,
+  requested = node.type === 'item' ? node.collectionIds : undefined,
+): AnyNode {
+  const collectionIds = (requested ?? []).filter((id) => collections[id])
+  for (const id of collectionIds) {
+    const collection = collections[id]!
+    if (!collection.nodeIds.includes(node.id))
+      collections[id] = { ...collection, nodeIds: [...collection.nodeIds, node.id] }
+  }
+  if (node.type !== 'item' || sameIds(node.collectionIds ?? [], collectionIds)) return node
+  return { ...node, collectionIds }
+}
+
+function sameIds(left: readonly CollectionId[], right: readonly CollectionId[]) {
+  return left.length === right.length && left.every((id, index) => right[index] === id)
+}
+
+/** The collections `id` belongs to: membership lives on the collection for every kind. */
+export function collectionIdsOf(
+  collections: Readonly<Record<CollectionId, Collection>>,
+  id: AnyNodeId,
+): CollectionId[] {
+  return (Object.values(collections) as Collection[])
+    .filter((collection) => collection.nodeIds.includes(id))
+    .map((collection) => collection.id)
+}
+
+/** Membership lives on the collection; only items mirror it, so every collection is checked. */
+function removeFromCollections(collections: Record<CollectionId, Collection>, id: AnyNodeId) {
+  for (const [collectionId, collection] of Object.entries(collections) as [
+    CollectionId,
+    Collection,
+  ][]) {
+    if (collection.nodeIds.includes(id))
+      collections[collectionId] = {
+        ...collection,
+        nodeIds: collection.nodeIds.filter((nodeId) => nodeId !== id),
+      }
+  }
 }
 
 const applyNodeChangesActionImpl = (
@@ -1293,9 +1360,13 @@ const applyNodeChangesActionImpl = (
       nodesToMarkDirty.add(id)
     }
 
-    for (const { node, parentId } of createOps) {
+    for (const { node, parentId, collectionIds } of createOps) {
       const effectiveParentId = parentId ?? (node.parentId as AnyNodeId | null) ?? null
-      const newNode = parseCreatedNode(node, effectiveParentId)
+      const newNode = joinCollections(
+        nextCollections,
+        parseCreatedNode(node, effectiveParentId),
+        collectionIds,
+      )
 
       nextNodes[newNode.id as AnyNodeId] = newNode
       nodesToMarkDirty.add(newNode.id as AnyNodeId)
@@ -1360,17 +1431,7 @@ const applyNodeChangesActionImpl = (
 
       resolvedRootIds = resolvedRootIds.filter((rootId) => rootId !== id)
 
-      if ('collectionIds' in node && node.collectionIds) {
-        for (const collectionId of node.collectionIds as CollectionId[]) {
-          const collection = nextCollections[collectionId]
-          if (collection) {
-            nextCollections[collectionId] = {
-              ...collection,
-              nodeIds: collection.nodeIds.filter((nodeId) => nodeId !== id),
-            }
-          }
-        }
-      }
+      removeFromCollections(nextCollections, id)
 
       delete nextNodes[id]
     }
@@ -1803,14 +1864,7 @@ export function planNodeDeletion(
     nextRootIds = nextRootIds.filter((rid) => rid !== id)
 
     // 3. Remove from any collections it belongs to
-    if ('collectionIds' in node && node.collectionIds) {
-      for (const cid of node.collectionIds as CollectionId[]) {
-        const col = nextCollections[cid]
-        if (col) {
-          nextCollections[cid] = { ...col, nodeIds: col.nodeIds.filter((nid) => nid !== id) }
-        }
-      }
-    }
+    removeFromCollections(nextCollections, id)
 
     // 4. Delete the node itself
     delete nextNodes[id]

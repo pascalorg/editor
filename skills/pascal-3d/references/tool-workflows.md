@@ -49,6 +49,10 @@ Use `checkpoint` only at a meaningful milestone. A browser-visible draft and a d
 
 If a live-sync version conflict occurs, call `load_scene`, inspect the newer graph, and rebase the requested edit. Do not retry an old whole-scene write blindly.
 
+## Build a scripted object (hosted)
+
+`add_object`, and `add_window`, `add_door` or `add_column` with `code` or new params on a scripted node, compile in the user's open Pascal editor tab of the project. When none is open the call answers `editor_tab_required` with `editorUrl` and `mutationApplied: false`; nothing changed. Show the user the link, wait until they confirm the tab is open, and repeat the same call. `editor_tab_timeout` means the tab stopped answering; ask whether it is still open, then retry. `script_failed` is the module's own error: fix the code.
+
 ## Read-only spatial answer
 
 Do not mutate just to make a report unless the user authorizes a temporary or saved layout change. Use scene queries, `measure`, `check_collisions`, and `verify_scene`. Name the exact check and units. A plan-footprint check is not a detailed 3D, structural, regulatory, or delivery-path analysis.

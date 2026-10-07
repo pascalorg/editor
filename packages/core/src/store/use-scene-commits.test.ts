@@ -75,8 +75,22 @@ function levelNumber(): number {
 }
 
 function currentSnapshot(): SceneSnapshot {
-  const { nodes, rootNodeIds, collections, materials, installedPlugins } = useScene.getState()
-  return { nodes, rootNodeIds, collections, materials, installedPlugins }
+  const {
+    nodes,
+    rootNodeIds,
+    collections,
+    materials,
+    installedPlugins,
+    hasExplicitPluginInstallState,
+  } = useScene.getState()
+  return {
+    nodes,
+    rootNodeIds,
+    collections,
+    materials,
+    installedPlugins,
+    hasExplicitPluginInstallState,
+  }
 }
 
 function applyHostNodePatches(

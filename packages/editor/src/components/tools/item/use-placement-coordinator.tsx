@@ -119,7 +119,7 @@ import {
 } from './placement-strategies'
 import { resolveItemPlacementSurfaceNormal } from './placement-surface'
 import type { PlacementState, TransitionResult } from './placement-types'
-import { type DraftNodeHandle, pausedDraftWrite } from './use-draft-node'
+import { type DraftNodeHandle, type ItemCopy, pausedDraftWrite } from './use-draft-node'
 
 const DEFAULT_DIMENSIONS: [number, number, number] = [1, 1, 1]
 
@@ -276,9 +276,9 @@ export interface PlacementCoordinatorConfig {
    *  (floor / wall / ceiling / item-surface / shelf) instead of snapping the
    *  item's origin under the cursor. */
   preserveDragOffset?: boolean
-  /** Painted slot overrides to seed onto a lazily-created draft (wall/ceiling
-   *  duplicates) so the duplicate keeps its materials. */
-  slots?: ItemNode['slots']
+  /** The item a duplicate copies, for a lazily-created draft (wall/ceiling
+   *  duplicates) to keep its materials and collections. */
+  copied?: ItemCopy
 }
 
 export function usePlacementCoordinator(config: PlacementCoordinatorConfig): React.ReactNode {
@@ -849,7 +849,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         asset,
         initRotation,
         configRef.current.defaultScale,
-        configRef.current.slots,
+        configRef.current.copied,
       )
 
       const draft = draftNode.current
@@ -1292,7 +1292,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           asset,
           currentRotation,
           configRef.current.defaultScale,
-          configRef.current.slots,
+          configRef.current.copied,
         )
         const previewBounds = expandBoundsToGrid(
           getFallbackPreviewBounds(draftNode.current, asset, asset.attachTo),

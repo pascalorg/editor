@@ -36,6 +36,11 @@
       "import": "./dist/registry/index.js",
       "default": "./dist/registry/index.js"
     },
+    "./polygon-boolean": {
+      "types": "./dist/lib/polygon-boolean.d.ts",
+      "import": "./dist/lib/polygon-boolean.js",
+      "default": "./dist/lib/polygon-boolean.js"
+    },
     "./schema": {
       "types": "./dist/schema/index.d.ts",
       "import": "./dist/schema/index.js",

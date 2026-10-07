@@ -28,6 +28,7 @@ export { ActionMenuButton } from './components/editor/action-menu-button'
 // preset-system spec.
 export { BakeExporter } from './components/editor/bake-exporter'
 export { BakeThumbnail, prepareBakeThumbnailLook } from './components/editor/bake-thumbnail'
+export { copyCollectionIds, duplicateNodeAndPickUp } from './components/editor/duplicate-node'
 export { FirstPersonControls } from './components/editor/first-person-controls'
 export { FloatingActionMenu as FloatingMenu } from './components/editor/floating-action-menu'
 // Embed surface — the editor's real in-canvas affordances, so a host can mount
@@ -89,9 +90,9 @@ export { WallMoveSideHandles } from './components/editor/wall-move-side-handles'
 export { useFloorplanRender } from './components/editor-2d/floorplan-render-context'
 export { FloorplanDimensionRenderer } from './components/editor-2d/renderers/floorplan-dimension-renderer'
 export {
-  type DraftWallMeasurement,
-  FloorplanDraftWallMeasurement,
-} from './components/editor-2d/renderers/floorplan-draft-wall-measurement'
+  type DraftMeasurement,
+  FloorplanDraftMeasurement,
+} from './components/editor-2d/renderers/floorplan-draft-measurement'
 export { FloorplanGeometryRenderer } from './components/editor-2d/renderers/floorplan-geometry-renderer'
 export {
   FloorplanNodePreview,
@@ -111,16 +112,7 @@ export type {
   SelectionAffordanceInteractionApi,
   SelectionAffordanceProps,
 } from './components/systems/selection-affordance-services'
-// Phase 5 Stage D transitional exports — pure drafting / angle helpers
-// consumed by kind-owned drag actions in @pascal-app/nodes. Stage F
-// cleanup moves these into @pascal-app/nodes (fence/drafting.ts +
-// shared/segment-angle.ts) once every Stage D port is in.
-export {
-  createFenceOnCurrentLevel,
-  createSplineFenceOnCurrentLevel,
-  type FencePlanPoint,
-  snapFenceDraftPoint,
-} from './components/tools/fence/fence-drafting'
+export { StairEditSystem } from './components/systems/stair/stair-edit-system'
 export { MoveTool } from './components/tools/item/move-tool'
 // Placement-math helpers — shared by kind-owned placement tools in
 // `@pascal-app/nodes` (wall curve sagitta snap, door / window placement,
@@ -195,11 +187,8 @@ export {
   DEFAULT_SPIRAL_TOP_LANDING_MODE,
   DEFAULT_STAIR_ATTACHMENT_SIDE,
   DEFAULT_STAIR_FILL_TO_FLOOR,
-  DEFAULT_STAIR_HEIGHT,
-  DEFAULT_STAIR_LENGTH,
   DEFAULT_STAIR_RAILING_HEIGHT,
   DEFAULT_STAIR_RAILING_MODE,
-  DEFAULT_STAIR_STEP_COUNT,
   DEFAULT_STAIR_THICKNESS,
   DEFAULT_STAIR_TYPE,
   DEFAULT_STAIR_WIDTH,
@@ -208,6 +197,7 @@ export { preloadRegistryToolModules, ToolManager } from './components/tools/tool
 export {
   chainEndJoinsExistingWall,
   createWallOnCurrentLevel,
+  findWallSnapTarget,
   getSegmentGridStep,
   isSegmentLongEnough,
   resolveEndpointWallSplit,
@@ -256,14 +246,13 @@ export {
 export { MetricControl } from './components/ui/controls/metric-control'
 export { PanelSection } from './components/ui/controls/panel-section'
 export { SegmentedControl } from './components/ui/controls/segmented-control'
+export { SelectControl } from './components/ui/controls/select-control'
 export { SliderControl } from './components/ui/controls/slider-control'
 export { TerrainSculptPanel } from './components/ui/controls/terrain-sculpt-panel'
 export { ToggleControl } from './components/ui/controls/toggle-control'
 export { ToolOptionsPanel } from './components/ui/controls/tool-options-panel'
 export { FloatingLevelSelector } from './components/ui/floating-level-selector'
 export { CATALOG_ITEMS } from './components/ui/item-catalog/catalog-items'
-// Item collections UI — used by the kind-owned ItemPanel in nodes/.
-export { CollectionsPopover } from './components/ui/panels/collections/collections-popover'
 // A base plate's panel (one connected footprint's floor and foundation); the
 // slab kind's panel hands base plates to it.
 export { FloorFoundationPanel } from './components/ui/panels/floor-foundation-panel'
@@ -441,25 +430,19 @@ export {
 export type { ExportTextureUtils } from './lib/export-texture-utils'
 export { getFloatingMenuScale } from './lib/floating-menu-scale'
 export { startOpeningDraft } from './lib/floor-opening-draft'
-// Floor-plan stair helpers — the cumulative-transform walk
-// (`computeFloorplanStairSegmentTransforms`) and the rich segment-entry
-// builder (`buildFloorplanStairEntry`) used by the kind-owned stair
-// floor-plan emitter in `@pascal-app/nodes/src/stair/floorplan.ts`.
-// Each flight's transform depends on every prior sibling's length /
-// height / `attachmentSide`, so individual stair-segments can't compute
-// their own polygon in isolation — the stair (parent) owns the
-// computation and emits the whole stack as one registry entry.
 export {
   alignFloorplanDraftPoint,
   applyFloorplanAlignment,
-  buildFloorplanStairEntry,
+  clampPlanValue,
   FLOORPLAN_ALIGNMENT_THRESHOLD_M,
   FLOORPLAN_DRAFT_ALIGN_ID,
   type FloorplanAlignmentResult,
-  type FloorplanStairArrowEntry,
-  type FloorplanStairEntry,
-  type FloorplanStairSegmentEntry,
   getFloorplanWallThickness,
+  getPlanPointDistance,
+  getThickPlanLinePolygon,
+  interpolatePlanPoint,
+  movePlanPointTowards,
+  rotatePlanVector,
 } from './lib/floorplan'
 export type {
   FloorplanAnnotationCategory,
@@ -744,6 +727,10 @@ export {
   quickMeasurementContext,
   resolveQuickMeasurementReport,
 } from './lib/quick-measurement'
+export {
+  REGISTERED_DRAFT_SNAP_EXTENSION,
+  snapRegisteredDraftPoint,
+} from './lib/registered-draft-snap'
 export { clearRoofDuplicateMetadata, duplicateRoofSubtree } from './lib/roof-duplication'
 // Roof wall-face hit resolution + overlap guard — shared by the
 // kind-owned door / window tools in `@pascal-app/nodes` and the item

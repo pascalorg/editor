@@ -19,12 +19,14 @@ export const saveSceneInput = {
     .enum(['draft', 'checkpoint'])
     .default('draft')
     .describe(
-      '`draft` updates the browser-visible working model without polluting version history. `checkpoint` creates a meaningful saved version.',
+      '`draft` updates the browser-visible working model without polluting version history. `checkpoint` creates a meaningful saved version; it does not publish.',
     ),
   publish: z
     .boolean()
     .optional()
-    .describe('For checkpoint saves, publish the checkpoint as the browser-visible version.'),
+    .describe(
+      "Hosted Pascal: also publish this checkpoint, making it the version the project's viewers see. Only when the user asks to publish.",
+    ),
   thumbnail: z.string().url().optional(),
   includeCurrentScene: z
     .boolean()

@@ -53,6 +53,7 @@ test('frame paint resolves through the wall proxy, previews only the frame, and 
   expect(updated.slots).toEqual({ 'curtain-frame': materialPreset })
   expect(
     wallPaint.getEffectiveMaterial?.({
+      materials: useScene.getState().materials,
       node: updated,
       role: role!,
       nodes: useScene.getState().nodes,
@@ -62,8 +63,12 @@ test('frame paint resolves through the wall proxy, previews only the frame, and 
   const reset = useScene.getState().nodes[wall.id] as WallNode
   expect(reset.slots?.['curtain-frame']).toBeUndefined()
   expect(
-    wallPaint.getEffectiveMaterial?.({ node: reset, role: role!, nodes: useScene.getState().nodes })
-      ?.material?.properties?.color,
+    wallPaint.getEffectiveMaterial?.({
+      materials: useScene.getState().materials,
+      node: reset,
+      role: role!,
+      nodes: useScene.getState().nodes,
+    })?.material?.properties?.color,
   ).toBe('#303942')
   geometry.dispose()
 })

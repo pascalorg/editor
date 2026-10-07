@@ -34,8 +34,9 @@ export type ViewerSceneHeaderProps = {
   owner?: { username?: string | null } | null
   onBack?: () => void
   /** Fallback destination when no `onBack` handler is supplied. Must already be
-   *  sanitized by the caller. */
-  backHref?: string
+   *  sanitized by the caller. `null` shows no back arrow (an embedded viewer with
+   *  nowhere to go back to). */
+  backHref?: string | null
   /** Extra row under the project info (e.g. likes/fork actions). */
   stats?: ReactNode
 }
@@ -110,7 +111,7 @@ export const ViewerSceneHeader = ({
             >
               <ArrowLeft className="h-4 w-4 text-muted-foreground" />
             </button>
-          ) : (
+          ) : backHref === null ? null : (
             <Link
               aria-label="Back"
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-white/10"

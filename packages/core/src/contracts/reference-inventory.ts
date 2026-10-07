@@ -218,6 +218,12 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
     note: "'ground' pins the node to the level base; deleting the slab strips the field.",
   }),
   row({
+    kind: 'fence',
+    path: 'supportSurfaceNodeId',
+    ...policy('node', 'host', 'drop', 'strip'),
+    remaps: ['clone-scene-graph'],
+  }),
+  row({
     kind: 'stair',
     path: 'deckSlabId',
     ...policy('node', 'host', 'drop', 'strip'),
@@ -383,7 +389,7 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
     path: 'zoneIds[]',
     ...policy('node', 'membership', 'drop', 'strip'),
     targetKinds: ['zone'],
-    remaps: ['clone-scene-graph'],
+    remaps: ['clone-scene-graph', 'clone-level-subtree'],
     note: 'Rooms a derived plate carries; rewritten by the structure reconciler.',
   }),
   row({
@@ -399,7 +405,7 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
     path: 'zoneId',
     ...policy('node', 'membership', 'drop', 'strip'),
     targetKinds: ['zone'],
-    remaps: ['clone-scene-graph'],
+    remaps: ['clone-scene-graph', 'clone-level-subtree'],
     note: 'The room a derived ceiling covers; rewritten by the structure reconciler.',
   }),
   row({
@@ -414,6 +420,7 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
     path: 'collectionIds[]',
     ...policy('collection', 'membership', 'drop', 'strip'),
     remaps: ['clone-scene-graph'],
+    note: 'Node creation (`joinCollections`) adds a copy to the collections it names that exist and drops the rest.',
   }),
   row({
     kind: '#scene',
@@ -722,7 +729,7 @@ export const NON_REFERENCES: readonly { kind: string; path: string; reason: stri
   },
   { kind: 'procedural-item', path: 'parameters.@key', reason: 'Recipe parameter name.' },
   // Scripted nodes (an authored item, or a window or door built from code) share one `source`.
-  ...(['item', 'window', 'door'] as const).flatMap((kind) => [
+  ...(['item', 'window', 'door', 'column'] as const).flatMap((kind) => [
     ...(
       [
         'source.manifest.anchors[].id',

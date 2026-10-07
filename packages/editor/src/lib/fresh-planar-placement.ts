@@ -2,7 +2,9 @@ import {
   type AnyNode,
   type AnyNodeId,
   beginSceneHistoryPauseSession,
+  type CloneNodesIntoResult,
   cloneNodesInto,
+  collectionIdsOf,
   collectSubtree,
   createSceneApi,
   type DuplicableConfig,
@@ -35,6 +37,20 @@ function cleanPlacementMetadata<N extends AnyNode>(node: N): N {
 function parentIdOf(node: AnyNode): AnyNodeId | undefined {
   const parentId = (node as { parentId?: AnyNodeId | null }).parentId
   return parentId ?? undefined
+}
+
+/**
+ * Create ops for a clone of scene nodes: each copy joins the collections its
+ * source is in, whatever its kind.
+ */
+export function copyCreateOps(cloned: CloneNodesIntoResult, parentId: AnyNodeId | undefined) {
+  const collections = useScene.getState().collections
+  const sourceIds = new Map([...cloned.idMap].map(([source, copy]) => [copy, source]))
+  return cloned.nodes.map((node, index) => ({
+    node,
+    ...(index === 0 && parentId ? { parentId } : {}),
+    collectionIds: collectionIdsOf(collections, sourceIds.get(node.id as AnyNodeId)!),
+  }))
 }
 
 function duplicableConfigFor(node: AnyNode): DuplicableConfig | null {
@@ -117,9 +133,7 @@ export function createFreshPlacementSubtree(
   })
 
   scene.applyNodeChanges({
-    create: cloned.nodes.map((node, index) =>
-      index === 0 && parentId ? { node, parentId } : { node },
-    ),
+    create: copyCreateOps(cloned, parentId),
     update: surfaceAttachmentUpdates(cloned.rootId, parentId, surfaceAttachmentId(subtree.root)),
   })
 
@@ -244,6 +258,8 @@ export function commitFreshPlacementSubtree(
   const descendants = subtree.descendants.map((node) => cleanPlacementMetadata(node))
   const parentId = parentIdOf(root)
   const cloned = cloneNodesInto([root, ...descendants], { rootId, parentId })
+  // The drafts' memberships, read before they are deleted.
+  const create = copyCreateOps(cloned, parentId)
   const updates = surfaceAttachmentUpdates(rootId, null, null)
   for (const update of surfaceAttachmentUpdates(cloned.rootId, parentId, surfaceId)) {
     const attachments = { ...(update.data as { attachments: Record<string, string> }).attachments }
@@ -266,24 +282,13 @@ export function commitFreshPlacementSubtree(
       useScene.getState().deleteNode(rootId)
     })
     recordPlacementStep(rootId, wasTracking, () =>
-      useScene.getState().applyNodeChanges({
-        create: cloned.nodes.map((node, index) =>
-          index === 0 && parentId ? { node, parentId } : { node },
-        ),
-        update: updates,
-      }),
+      useScene.getState().applyNodeChanges({ create, update: updates }),
     )
   } else {
     recordPlacementStep(rootId, wasTracking, () => {
       try {
         // applyNodeChanges validates the complete proposed graph before publishing any part of it.
-        scene.applyNodeChanges({
-          delete: [rootId],
-          create: cloned.nodes.map((node, index) =>
-            index === 0 && parentId ? { node, parentId } : { node },
-          ),
-          update: updates,
-        })
+        scene.applyNodeChanges({ delete: [rootId], create, update: updates })
         for (const node of [subtree.root, ...subtree.descendants]) scene.clearDirty(node.id)
       } catch (error) {
         // Zustand publishes before notifying subscribers. A subscriber error must restore
