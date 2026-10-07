@@ -13,7 +13,7 @@ Pascal has two agent surfaces: the MCP server in this repo, used by external age
 - **Operations live once.** A new capability is a core operation over `SceneApi` (`createSceneApi(store)`); each surface only adapts inputs and outputs. Never implement the same scene edit twice.
 - **Rules live in the operation, not the loop.** A refusal or diagnostic that exists only in one surface's prompt or step logic is not enforced for the other surface's agents. Put realism refusals and `check`-style diagnostics where both surfaces execute them.
 - **Knowledge parity.** A lesson that changes how an agent should build — a realism rule, a tool-choice rule, a known pitfall — is added to the published guide (skill references, agent guide) in the same change that teaches it to the chat, worded for any agent.
-- **By-hand counterpart.** No agent capability ships without its manual counterpart in the editor, in the same change: what an agent can do, a person can do by hand, and the two read the same core rule. Example: `place_items` refuses a floor item in a door's clearance or too large for its room (`blocks_door`, `too_large_for_room`), and the editor's item tool warns about the same placement while the item is placed or moved, from the same check (`floorItemFit` in `core/building`). When an agent tool has no counterpart yet, the PR names it and the follow-up that adds it.
+- **Agent first, by hand second.** Pascal is built agent-first. When a person could do by hand what an agent tool does, offer that alternative, in the same change or as a follow-up, reading the same core rule; it never blocks an agent tool from shipping. Example: `place_items` refuses a floor item in a door's clearance or too large for its room (`blocks_door`, `too_large_for_room`), and the editor's item tool warns about the same placement while the item is placed or moved, from the same check (`floorItemFit` in `core/building`).
 
 ### Parity by layer
 
@@ -38,7 +38,7 @@ A tool is written once and registered twice; never build the same tool separatel
 3. **Cases** in the shared fixture table, written failing first; the core and MCP runners pick them up.
 4. **MCP**: an entry in `SHARED_TOOLS` (`packages/mcp/src/tools/shared-tools.ts`) with its annotations and output schema; the annotation policy (`scripts/openai-tool-annotation-policy.ts`) and `plugin-evals/tool-annotation-justifications.json` list it.
 5. **Hosted chat**: the hosted repo defines its chat tool from the same contract and runs the same operation through its shared-tool executor; its `agent-surface-parity.test.ts` checks that the two surfaces' name, description and input schema match.
-6. **By hand**: the editor's counterpart, in the same change.
+6. **By hand**, where possible: offer the editor's alternative, in the same change or as a follow-up. It never holds the tool back (agent first).
 7. **Knowledge**: the `pascal-3d` skill, the agent guide (`pascal://agent-guide`) and the MCP README's tool table.
 
 A tool that needs something only a host has keeps the same contract and operation; the host passes the missing piece to `createPascalMcpServer`. Without a renderer (`sceneViews`) or a script runtime (`geometryScripts`) the tool still exists and answers with a code (`view_unavailable`, `scripts_unavailable`); without a `catalog` the item tools draw from a small built-in list; hosted service tools are registered only with a `services` executor.
