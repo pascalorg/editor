@@ -38,7 +38,7 @@
         "@pascal-app/plugin-bath-space": "github:sudhir9297/pascal-cluster#8f3c0db2be7a33b19f406ecb35e23417ff850dcc",
         "@pascal-app/plugin-bones": "github:pascalorg/plugin-bones#5679260261ee1c733656ff6dfb99e30bb24b58a7",
         "@pascal-app/plugin-environment": "github:AxiomeCG/environment#1aa0bc3cbed273dbf751e9af79e446f6de105c90",
-        "@pascal-app/plugin-landscape": "github:sudhir9297/pascal-cluster#98cb3d13b0e49133774aad1783c7f3e032cb2daf",
+        "@pascal-app/plugin-landscape": "github:sudhir9297/pascal-cluster#aaa2a4801209c3bcb614dd7e0b6d5aca6dfbbdcf",
         "@pascal-app/plugin-pool": "github:sudhir9297/pascal-cluster#92cb88c3c049e4c299062c962d9f6a0e579cc69b",
         "@pascal-app/plugin-streetscape-lab": "github:sudhir9297/pascal-cluster#b31fe375fa47c53b7f792fb5cac7671c09667bd3",
         "@pascal-app/plugin-trees": "github:pascalorg/plugin-trees#56d978cd9b409b716207b3f3d269455d3cd6f067",
@@ -823,7 +823,7 @@
 
     "@pascal-app/plugin-environment": ["@pascal-app/plugin-environment@github:AxiomeCG/environment#1aa0bc3", { "peerDependencies": { "@dgreenheck/ez-tree": "^1.1.0", "@pascal-app/core": ">=1.0.0-beta.6 <2", "@pascal-app/editor": ">=1.0.0-beta.6 <2", "@pascal-app/viewer": ">=1.0.0-beta.6 <2", "@radix-ui/react-tooltip": "^1.2.8", "@react-three/fiber": "^9", "lucide-react": "^1.7.0", "react": "^18 || ^19", "react-colorful": "^5.8.1", "three": "^0.186", "zod": "^4", "zustand": "^5" } }, "AxiomeCG-environment-1aa0bc3", "sha512-wvCYDEr62ItSwgWf8zOJL0z97zTyZ7TszrFwLOcIhX7LRYrmHhP/6LE7lB6lBBeXNPExg7jRk8eQZm+ri6GfaQ=="],
 
-    "@pascal-app/plugin-landscape": ["@pascal-app/plugin-landscape@github:sudhir9297/pascal-cluster#98cb3d1", { "dependencies": { "@types/clipper-lib": "^6.4.0", "clipper-lib": "^6.4.2", "polygon-clipping": "^0.15.7" }, "peerDependencies": { "@pascal-app/core": "^1.0.3", "@pascal-app/editor": "^1.0.3", "@pascal-app/nodes": "^1.0.1", "@pascal-app/viewer": "^1.0.3", "@react-three/drei": "^10", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.186.0", "zod": ">=4.5.4 <4.6" } }, "sudhir9297-pascal-cluster-98cb3d1", "sha512-XyoTDKs+8D3dYVlzeSOy6nP2D158WX4U8WrqN122y3T+Sr7AXaWhHvNKUNMfrusvFPT/LwCPqTWHGM4zbCPo4Q=="],
+    "@pascal-app/plugin-landscape": ["@pascal-app/plugin-landscape@github:sudhir9297/pascal-cluster#aaa2a48", { "dependencies": { "@types/clipper-lib": "^6.4.0", "clipper-lib": "^6.4.2", "polygon-clipping": "^0.15.7" }, "peerDependencies": { "@pascal-app/core": "^1.0.3", "@pascal-app/editor": "^1.0.3", "@pascal-app/nodes": "^1.0.1", "@pascal-app/viewer": "^1.0.3", "@react-three/drei": "^10", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.186.0", "zod": ">=4.5.4 <4.6" } }, "sudhir9297-pascal-cluster-aaa2a48", "sha512-jsgEITBltWoP9vDFbvTypHJj2C0/klcZSox8C43Y8O3Ae0T89PYjZJqWAnYYXJRoBuxSjqxRL+oZhEyhxr5n2g=="],
 
     "@pascal-app/plugin-pool": ["@pascal-app/plugin-pool@github:sudhir9297/pascal-cluster#92cb88c", { "dependencies": { "three-bvh-csg": "^0.0.18", "three-mesh-bvh": "^0.9.8" }, "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1 || >=1.0.0-beta.0 <2", "@pascal-app/editor": ">=0.9.1 <1 || >=1.0.0-beta.0 <2", "@pascal-app/viewer": ">=0.9.1 <1 || >=1.0.0-beta.0 <2", "@react-three/fiber": "^9", "react": "^18 || ^19", "react-dom": "^18 || ^19", "three": "^0.186.0", "zod": "^4", "zustand": "^5" } }, "sudhir9297-pascal-cluster-92cb88c", "sha512-OdmWc1q8ybrIDtrPL5fn4x+7NzQM5wDOLlNrGFRQhH/hQNm1sUwpCEJqKt2nmH5/6/sDIsK3QFkLRteT2k+bOQ=="],
 

@@ -386,7 +386,7 @@ export function resolveFenceConstructionSupport(
       supportSurfaceNodeId: options.supportSurfaceNodeId,
     }
   }
-  const surface = fence.supportSurfaceId ? nodes[fence.supportSurfaceId] : null
+  const surface = fence.supportSurfaceNodeId ? nodes[fence.supportSurfaceNodeId] : null
   if (
     surface?.parentId === levelId &&
     nodeRegistry.get(surface.type)?.capabilities?.surfaces?.top

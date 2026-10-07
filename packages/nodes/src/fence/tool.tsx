@@ -89,7 +89,7 @@ const FENCE_PREVIEW_HEIGHT = 1.8
 const FENCE_PREVIEW_THICKNESS = 0.08
 
 function FenceSurfaceSnapPoints() {
-  const hostId = useEditor((state) => state.toolDefaults.fence?.supportSurfaceId)
+  const hostId = useEditor((state) => state.toolDefaults.fence?.supportSurfaceNodeId)
   const levelId = useViewer((state) => state.selection.levelId)
   const levelMode = useViewer((state) => state.levelMode)
   useScene((state) => (typeof hostId === 'string' ? state.nodes[hostId as AnyNodeId] : undefined))
@@ -558,7 +558,7 @@ function getCurrentLevelElements(): { walls: WallNode[]; fences: FenceNode[] } {
 export const FenceTool: React.FC = () => {
   const levelId = useViewer((state) => state.selection.levelId)
   const levelMode = useViewer((state) => state.levelMode)
-  const hostId = useEditor((state) => state.toolDefaults.fence?.supportSurfaceId)
+  const hostId = useEditor((state) => state.toolDefaults.fence?.supportSurfaceNodeId)
   const hostParentId = useScene((state) =>
     typeof hostId === 'string' ? state.nodes[hostId as AnyNodeId]?.parentId : undefined,
   )
@@ -735,7 +735,6 @@ const StraightFenceTool: React.FC = () => {
             start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
             angleSnap: angleLocked,
             magnetic: isMagneticSnapActive(),
-            bypassSnap: event.nativeEvent.altKey,
           }),
           { applySnap: !angleLocked },
         )
@@ -788,7 +787,6 @@ const StraightFenceTool: React.FC = () => {
             walls,
             fences,
             magnetic: isMagneticSnapActive(),
-            bypassSnap: event.nativeEvent.altKey,
           }),
         )
         cursorRef.current.position.set(snappedPoint[0], activeY, snappedPoint[1])
@@ -818,7 +816,6 @@ const StraightFenceTool: React.FC = () => {
             walls,
             fences,
             magnetic: isMagneticSnapActive(),
-            bypassSnap: event.nativeEvent.altKey,
           }),
         )
         startingPoint.current.set(
@@ -851,7 +848,6 @@ const StraightFenceTool: React.FC = () => {
             start: angleLocked ? [startingPoint.current.x, startingPoint.current.z] : undefined,
             angleSnap: angleLocked,
             magnetic: isMagneticSnapActive(),
-            bypassSnap: event.nativeEvent.altKey,
           }),
           { applySnap: !angleLocked },
         )
@@ -1089,7 +1085,7 @@ const SplineFenceDraft: React.FC<{ freehand?: boolean }> = ({ freehand = false }
   )
 
   useEffect(() => {
-    const snapPoint = (local: FencePlanPoint, bypassSnap = false): FencePlanPoint => {
+    const snapPoint = (local: FencePlanPoint): FencePlanPoint => {
       if (freehand) return local
       const { walls, fences } = getCurrentLevelElements()
       return snapFenceDraftPoint({
@@ -1097,7 +1093,6 @@ const SplineFenceDraft: React.FC<{ freehand?: boolean }> = ({ freehand = false }
         walls,
         fences,
         magnetic: isMagneticSnapActive(),
-        bypassSnap,
       })
     }
 
@@ -1196,13 +1191,10 @@ const SplineFenceDraft: React.FC<{ freehand?: boolean }> = ({ freehand = false }
         commit()
         return
       }
-      const point = snapPoint(
-        [
-          pointed?.localPoint?.[0] ?? event.localPosition[0],
-          pointed?.localPoint?.[2] ?? event.localPosition[2],
-        ],
-        event.nativeEvent.altKey,
-      )
+      const point = snapPoint([
+        pointed?.localPoint?.[0] ?? event.localPosition[0],
+        pointed?.localPoint?.[2] ?? event.localPosition[2],
+      ])
       triggerSFX('sfx:grid-snap')
       setDraftPoints((prev) => [...prev, point])
     }

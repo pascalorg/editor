@@ -9,16 +9,12 @@ import {
 } from '@pascal-app/core'
 import { registerEditorHostPanel } from '@pascal-app/editor'
 import { builtinPlugin } from '@pascal-app/nodes'
-import { bathSpaceHostPanel, bathSpacePlugin } from '@pascal-app/plugin-bath-space'
 import { bonesHostPanel, bonesPlugin } from '@pascal-app/plugin-bones'
 import {
   environmentHostPanel,
   environmentPlugin,
   environmentPresentation,
 } from '@pascal-app/plugin-environment'
-import { landscapeHostPanel, landscapePlugin } from '@pascal-app/plugin-landscape'
-import { poolHostPanel, poolPlugin } from '@pascal-app/plugin-pool'
-import { streetscapeHostPanel, streetscapePlugin } from '@pascal-app/plugin-streetscape-lab'
 import { treesHostPanel, treesPlugin } from '@pascal-app/plugin-trees'
 import { registerViewerPresentation } from '@pascal-app/viewer'
 import { webXRHostPanel, webXRPlugin } from '@webxr/plugin'
@@ -107,17 +103,30 @@ extendPluginDiscovery(async () => [bonesPlugin])
 registerEditorHostPanel({ ...bonesHostPanel, defaultInstalled: false })
 extendPluginDiscovery(async () => [mintPlugin])
 registerEditorHostPanel(mintHostPanel)
-extendPluginDiscovery(async () => [poolPlugin])
-registerEditorHostPanel(poolHostPanel)
-extendPluginDiscovery(async () => [landscapePlugin])
-registerEditorHostPanel(landscapeHostPanel)
-extendPluginDiscovery(async () => [bathSpacePlugin])
-registerEditorHostPanel(bathSpaceHostPanel)
-extendPluginDiscovery(async () => [streetscapePlugin])
-// The upstream manifest still names 'Pascal' as creator; credit the author.
-registerEditorHostPanel({
-  ...streetscapeHostPanel,
-  creator: { name: 'Sudhir Yadav', url: 'https://github.com/sudhir9297' },
+extendPluginDiscovery(async () => {
+  const { poolHostPanel, poolPlugin } = await import('@pascal-app/plugin-pool')
+  registerEditorHostPanel(poolHostPanel)
+  return [poolPlugin]
+})
+extendPluginDiscovery(async () => {
+  const { landscapeHostPanel, landscapePlugin } = await import('@pascal-app/plugin-landscape')
+  registerEditorHostPanel(landscapeHostPanel)
+  return [landscapePlugin]
+})
+extendPluginDiscovery(async () => {
+  const { bathSpaceHostPanel, bathSpacePlugin } = await import('@pascal-app/plugin-bath-space')
+  registerEditorHostPanel(bathSpaceHostPanel)
+  return [bathSpacePlugin]
+})
+extendPluginDiscovery(async () => {
+  const { streetscapeHostPanel, streetscapePlugin } = await import(
+    '@pascal-app/plugin-streetscape-lab'
+  )
+  registerEditorHostPanel({
+    ...streetscapeHostPanel,
+    creator: { name: 'Sudhir Yadav', url: 'https://github.com/sudhir9297' },
+  })
+  return [streetscapePlugin]
 })
 extendPluginDiscovery(async () => [webXRPlugin])
 registerEditorHostPanel(webXRHostPanel)

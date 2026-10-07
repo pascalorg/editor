@@ -175,24 +175,6 @@ export {
   getSegmentAngleReferenceAtPoint,
   type SegmentAngleReference,
 } from './components/tools/shared/segment-angle'
-// Stair placement defaults — used by the kind-owned stair / stair-segment
-// panels. Re-exported from `components/tools/stair/stair-defaults.ts`.
-export {
-  DEFAULT_CURVED_STAIR_INNER_RADIUS,
-  DEFAULT_CURVED_STAIR_SWEEP_ANGLE,
-  DEFAULT_SPIRAL_SHOW_CENTER_COLUMN,
-  DEFAULT_SPIRAL_SHOW_STEP_SUPPORTS,
-  DEFAULT_SPIRAL_STAIR_SWEEP_ANGLE,
-  DEFAULT_SPIRAL_TOP_LANDING_DEPTH,
-  DEFAULT_SPIRAL_TOP_LANDING_MODE,
-  DEFAULT_STAIR_ATTACHMENT_SIDE,
-  DEFAULT_STAIR_FILL_TO_FLOOR,
-  DEFAULT_STAIR_RAILING_HEIGHT,
-  DEFAULT_STAIR_RAILING_MODE,
-  DEFAULT_STAIR_THICKNESS,
-  DEFAULT_STAIR_TYPE,
-  DEFAULT_STAIR_WIDTH,
-} from './components/tools/stair/stair-defaults'
 export { preloadRegistryToolModules, ToolManager } from './components/tools/tool-manager'
 export {
   chainEndJoinsExistingWall,

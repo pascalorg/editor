@@ -218,12 +218,6 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
     note: "'ground' pins the node to the level base; deleting the slab strips the field.",
   }),
   row({
-    kind: 'fence',
-    path: 'supportSurfaceNodeId',
-    ...policy('node', 'host', 'drop', 'strip'),
-    remaps: ['clone-scene-graph'],
-  }),
-  row({
     kind: 'stair',
     path: 'deckSlabId',
     ...policy('node', 'host', 'drop', 'strip'),
@@ -232,7 +226,7 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
   }),
   row({
     kind: 'fence',
-    path: 'supportSurfaceId',
+    path: 'supportSurfaceNodeId',
     ...policy('node', 'host', 'drop', 'strip'),
     remaps: [...CLONES, 'clone-nodes-into', 'delete-nodes'],
     note: 'A registered walking surface supporting a railing.',

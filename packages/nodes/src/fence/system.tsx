@@ -103,13 +103,9 @@ const FenceSystems = () => {
         if (followsSurfaces(fence)) {
           const level = findLevelAncestorId(fence.id as AnyNodeId, currentNodes)
           if (level && changedLevels.has(level as AnyNodeId)) markFenceAndChildren(fence.id)
-        } else if (fence.supportSlabId || fence.supportSurfaceNodeId || fence.supportSurfaceId) {
+        } else if (fence.supportSlabId || fence.supportSurfaceNodeId) {
           const previous = previousNodes[fence.id as AnyNodeId] as FenceNode | undefined
           if (
-            previous?.supportSurfaceId !== fence.supportSurfaceId ||
-            (fence.supportSurfaceId &&
-              previousNodes[fence.supportSurfaceId as AnyNodeId] !==
-                currentNodes[fence.supportSurfaceId as AnyNodeId]) ||
             previous?.supportSurfaceNodeId !== fence.supportSurfaceNodeId ||
             (fence.supportSurfaceNodeId &&
               previousNodes[fence.supportSurfaceNodeId as AnyNodeId] !==

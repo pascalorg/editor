@@ -1,3 +1,5 @@
+'use client'
+
 import {
   type AnyNode,
   collectAlignmentAnchors,
@@ -23,32 +25,27 @@ import {
   syncAutoStairOpenings,
   useScene,
 } from '@pascal-app/core'
+import {
+  CursorSphere,
+  EDITOR_LAYER,
+  getFloorStackPreviewPosition,
+  isAlignmentGuideActive,
+  isGridSnapActive,
+  isMagneticSnapActive,
+  type PointerSupportSurface,
+  resolvePointerSupportSurface,
+  resolveStairDestinationLevel,
+  resolveStairPlacementLevelId,
+  triggerSFX,
+  useAlignmentGuides,
+  useEditor,
+  useFacingPose,
+  useStairBuildPreview,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { EDITOR_LAYER } from '../../../lib/constants'
-import { sfxEmitter } from '../../../lib/sfx-bus'
-import {
-  resolveStairDestinationLevel,
-  resolveStairPlacementLevelId,
-} from '../../../lib/stair-levels'
-
-import useAlignmentGuides from '../../../store/use-alignment-guides'
-import useEditor, {
-  isAlignmentGuideActive,
-  isGridSnapActive,
-  isMagneticSnapActive,
-} from '../../../store/use-editor'
-
-import useFacingPose from '../../../store/use-facing-pose'
-import { useStairBuildPreview } from '../../../store/use-stair-build-preview'
-import { CursorSphere } from '../shared/cursor-sphere'
-import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
-import {
-  type PointerSupportSurface,
-  resolvePointerSupportSurface,
-} from '../shared/pointer-support-cap'
 import { createStairCommitGate, swallowFollowUpBrowserClick } from './stair-click-guard'
 import {
   DEFAULT_CURVED_STAIR_INNER_RADIUS,
@@ -315,10 +312,10 @@ function commitStairPlacement(
     { node: segment, parentId: committedStair.id },
   ])
 
-  sfxEmitter.emit('sfx:structure-build')
+  triggerSFX('sfx:structure-build')
 }
 
-export const StairTool: React.FC = () => {
+export default function StairTool() {
   const camera = useThree((state) => state.camera)
   const cameraRef = useRef(camera)
   cameraRef.current = camera
@@ -624,15 +621,14 @@ export const StairTool: React.FC = () => {
       const rawZ = pointed?.localPoint?.[2] ?? fallbackPosition![2]
       // Grid snap follows the global mode (live step so the HUD chip is
       // honest); Off keeps the raw cursor. Shift cycles the mode centrally.
-      const bypassSnap = event.nativeEvent?.altKey === true
       const step = useEditor.getState().gridSnapStep
       const [gridX, gridZ] = alignPoint(
-        !bypassSnap && isGridSnapActive() ? Math.round(rawX / step) * step : rawX,
-        !bypassSnap && isGridSnapActive() ? Math.round(rawZ / step) * step : rawZ,
+        isGridSnapActive() ? Math.round(rawX / step) * step : rawX,
+        isGridSnapActive() ? Math.round(rawZ / step) * step : rawZ,
         rawX,
         rawZ,
         !isAlignmentGuideActive(),
-        !bypassSnap && isMagneticSnapActive(),
+        isMagneticSnapActive(),
       )
       const nodes = useScene.getState().nodes
       const levelId = resolveStairPlacementLevelId(
@@ -657,17 +653,16 @@ export const StairTool: React.FC = () => {
             levelId,
           })[1]
         : candidate[1]
-      const snap =
-        event.nativeEvent?.altKey || !isMagneticSnapActive()
-          ? null
-          : resolveStairSurfaceSnap(
-              draft,
-              nodes,
-              candidate,
-              planStairSizing(previewRiseRef.current).length,
-              baseElevation,
-              useScene.getState().installedPlugins,
-            )
+      const snap = !isMagneticSnapActive()
+        ? null
+        : resolveStairSurfaceSnap(
+            draft,
+            nodes,
+            candidate,
+            planStairSizing(previewRiseRef.current).length,
+            baseElevation,
+            useScene.getState().installedPlugins,
+          )
       landscapeSnapRef.current = snap
       if (snap) return snap.position
       return candidate
@@ -685,7 +680,7 @@ export const StairTool: React.FC = () => {
         previousGridPosRef.current &&
         (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
       ) {
-        sfxEmitter.emit('sfx:grid-snap')
+        triggerSFX('sfx:grid-snap')
       }
 
       previousGridPosRef.current = [gridX, gridZ]
@@ -754,7 +749,7 @@ export const StairTool: React.FC = () => {
 
       if (rotationDelta !== 0) {
         event.preventDefault()
-        sfxEmitter.emit('sfx:item-rotate')
+        triggerSFX('sfx:item-rotate')
         rotationRef.current += rotationDelta
         if (lastCanonicalPositionRef.current) {
           applyDraftPreview(
