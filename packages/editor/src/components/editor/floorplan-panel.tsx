@@ -184,7 +184,7 @@ import {
   RotationAngleOverlay,
 } from '../editor-2d/renderers/floorplan-registry-layer'
 import { FloorplanVoronoiLayer } from '../editor-2d/renderers/floorplan-voronoi-layer'
-import { buildSvgPolylinePath, formatPolygonPath, getArcPlanPoint } from '../editor-2d/svg-paths'
+import { buildSvgPolylinePath, formatPolygonPath } from '../editor-2d/svg-paths'
 import { snapToHalf } from '../tools/item/placement-math'
 import {
   isBoxSelectPointerSuppressed,
