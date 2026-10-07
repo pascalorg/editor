@@ -1091,7 +1091,9 @@ function addLeafSegmentContent({
           if (innerPanelShape && addLeafShape) {
             addLeafShape(baseMaterial, innerPanelShape, effectiveDepth)
           } else {
+            // A leaf is paneled on both faces, so the person sees the style from either side.
             addLeafBox(baseMaterial, panelW, panelH, effectiveDepth, colX, segCenterY, panelZ)
+            addLeafBox(baseMaterial, panelW, panelH, effectiveDepth, colX, segCenterY, -panelZ)
           }
         }
       }
