@@ -9,6 +9,7 @@ import {
   WindowNode,
   ZoneNode,
 } from '../../schema'
+import { doorFacing } from '../../building/wall-openings'
 import { findBlockedDoors } from '../door-clearance'
 import { findItemItemCollisions } from '../layout-clearance'
 import type { AgentToolCase, SceneGraph } from './cases'
@@ -192,6 +193,30 @@ const roomOn = (levelId: string) => (result: Record<string, unknown>, nodes: Nod
 const room = (input: Record<string, unknown>) => ({ name: 'Bedroom', polygon: CLEAR, ...input })
 
 export const CREATE_ROOM_CASES: AgentToolCase[] = [
+  // A door declared with a new room is planned before the host knows the new walls' outside;
+  // once the room is derived, a door on an outside wall faces out, as add_door's does.
+  {
+    name: "a door declared on a new room's outside wall faces out",
+    tool: 'create_room',
+    scene: roomsScene,
+    input: { levelId: 'level_g', name: 'Studio', polygon: CLEAR, doors: [{ wallIndex: 0 }] },
+    expect: {
+      result: { ok: true },
+      check: (result, nodes) => {
+        const [doorId] = result.doorIds as string[]
+        const door = nodes[doorId!]
+        const wall = nodes[door?.parentId ?? '']
+        const facing = wall?.type === 'wall' ? doorFacing(wall) : undefined
+        return problems(
+          [facing?.side !== undefined, `the wall does not know its outside: ${JSON.stringify(wall)}`],
+          [
+            door?.type === 'door' && door.side === facing?.side,
+            `the door faces ${door?.type === 'door' ? door.side : '?'}, its wall's outside is ${facing?.side}`,
+          ],
+        )
+      },
+    },
+  },
   {
     name: 'a room is a wall per edge and a zone; its floor plate and ceiling are derived',
     tool: 'create_room',

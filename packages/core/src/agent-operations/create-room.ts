@@ -1,5 +1,5 @@
 import { isAgentRefusal, refuse } from '../agent-tools/refusal'
-import { planWallOpening } from '../building/wall-openings'
+import { doorFacing, planWallOpening } from '../building/wall-openings'
 import { createZone } from '../commands/structure/create-zone'
 import { structureChangeBatch } from '../commands/structure/shared'
 import { type AnyNode, generateId, type WallNode } from '../schema'
@@ -216,8 +216,20 @@ export const createRoom: AgentOperation<CreateRoomInput> = (nodes, input, contex
   return {
     result,
     changes: { ...roomChanges, create: [...roomChanges.create, ...openings] },
-    afterReconcile: (derived) => ({
-      result: { ...result, ...derivedSurfaces(derived, level.id, plan.zoneId) },
-    }),
+    // The doors were planned before the host derived the room, so a new wall did not know its
+    // outside yet; once it does, a door on an outside wall faces out, as add_door's does.
+    afterReconcile: (derived) => {
+      const update = doorIds.flatMap((id) => {
+        const door = derived[id]
+        const wall = derived[door?.parentId ?? '']
+        if (door?.type !== 'door' || wall?.type !== 'wall') return []
+        const facing = doorFacing(wall)
+        return facing.side && facing.side !== door.side ? [{ id, data: facing }] : []
+      })
+      return {
+        result: { ...result, ...derivedSurfaces(derived, level.id, plan.zoneId) },
+        ...(update.length ? { changes: { update } } : {}),
+      }
+    },
   }
 }
