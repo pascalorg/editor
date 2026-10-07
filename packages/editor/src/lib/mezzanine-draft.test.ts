@@ -98,7 +98,7 @@ function setup(height?: number) {
   applyRoomPlan(plan)
   hostId = plan.zoneId
   useViewer.getState().setSelection({ buildingId: building.id, levelId: LEVEL, selectedIds: [] })
-  useEditor.setState({ phase: 'structure', mode: 'select', room: null })
+  useEditor.setState({ phase: 'building', mode: 'select', room: null })
   clearSceneHistory()
 }
 

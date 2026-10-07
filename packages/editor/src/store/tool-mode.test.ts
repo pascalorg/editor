@@ -8,7 +8,7 @@ import useInteractionScope from './use-interaction-scope'
 function resetToolMode() {
   useEditor.getState().clearRoom()
   useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
-  useEditor.getState().setPhase('structure')
+  useEditor.getState().setPhase('building')
   useEditor.getState().setStructureLayer('elements')
   useEditor.getState().armToolMode({ mode: 'select' })
   useEditor.getState().setActivePaintMaterial(null)
@@ -18,6 +18,19 @@ beforeEach(resetToolMode)
 afterEach(resetToolMode)
 
 describe('ToolMode transition', () => {
+  test('arming building tools preserves the current phase and Scene tab', () => {
+    for (const phase of ['site', 'building'] as const) {
+      useEditor.getState().setPhase(phase)
+      useEditor.getState().armToolMode({ mode: 'select' })
+      for (const tool of ['item', 'wall', 'measurement', 'zone'] as const) {
+        useEditor.getState().armToolMode({ mode: 'build', tool })
+        expect(useEditor.getState().phase).toBe(phase)
+        expect(useEditor.getState().structureLayer).toBe('elements')
+        expect(useEditor.getState().tool).toBe(tool)
+      }
+    }
+  })
+
   test('choosing a paint swatch while selected arms material paint', () => {
     useEditor.getState().armToolMode({ mode: 'select' })
     useEditor.getState().armMaterialPaint({
@@ -181,7 +194,7 @@ describe('leaving Select ends the selection', () => {
 describe('persisted ToolMode normalization', () => {
   test('elects a default for build with a null tool', () => {
     const state = normalizePersistedEditorUiState({
-      phase: 'structure',
+      phase: 'building',
       toolMode: { mode: 'build', tool: null as never },
       mode: 'select',
       tool: 'slab',
@@ -195,7 +208,7 @@ describe('persisted ToolMode normalization', () => {
 
   test('clears a persisted tool from a non-build mode', () => {
     const state = normalizePersistedEditorUiState({
-      phase: 'structure',
+      phase: 'building',
       toolMode: { mode: 'select' },
       mode: 'build',
       tool: 'wall',

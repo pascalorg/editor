@@ -4189,13 +4189,12 @@ function FloorplanStairBuildPreviewLayer({
 }: {
   palette: FloorplanRenderContextValue['palette']
 }) {
-  const phase = useEditor((s) => s.phase)
   const mode = useEditor((s) => s.mode)
   const tool = useEditor((s) => s.tool)
   const point = useStairBuildPreview((s) => s.point)
   const rotation = useStairBuildPreview((s) => s.rotation)
   const rise = useStairBuildPreview((s) => s.rise)
-  const isActive = phase === 'structure' && mode === 'build' && tool === 'stair'
+  const isActive = mode === 'build' && tool === 'stair'
 
   const previewGeometry = useMemo(() => {
     if (!(isActive && point && rise && rise > 0)) {
@@ -5728,21 +5727,21 @@ export function FloorplanPanel({
   )
 
   const isSiteEditActive = phase === 'site'
-  const isWallBuildActive = phase === 'structure' && mode === 'build' && tool === 'wall'
-  const isSlabBuildActive = phase === 'structure' && mode === 'build' && tool === 'slab'
-  const isCeilingBuildActive = phase === 'structure' && mode === 'build' && tool === 'ceiling'
-  const isZoneBuildActive = phase === 'structure' && mode === 'build' && tool === 'zone'
-  const isDoorBuildActive = phase === 'structure' && mode === 'build' && tool === 'door'
-  const isWindowBuildActive = phase === 'structure' && mode === 'build' && tool === 'window'
+  const isWallBuildActive = mode === 'build' && tool === 'wall'
+  const isSlabBuildActive = mode === 'build' && tool === 'slab'
+  const isCeilingBuildActive = mode === 'build' && tool === 'ceiling'
+  const isZoneBuildActive = mode === 'build' && tool === 'zone'
+  const isDoorBuildActive = mode === 'build' && tool === 'door'
+  const isWindowBuildActive = mode === 'build' && tool === 'window'
   const isPolygonBuildActive = isSlabBuildActive || isZoneBuildActive
   const isPolygonDraftBuildActive = isPolygonBuildActive || isCeilingBuildActive
   const isOpeningBuildActive = isDoorBuildActive || isWindowBuildActive
   const isOpeningMoveActive = movingOpeningType !== null
   const isOpeningPlacementActive = isOpeningBuildActive || isOpeningMoveActive
-  const isFenceBuildActive = phase === 'structure' && mode === 'build' && tool === 'fence'
+  const isFenceBuildActive = mode === 'build' && tool === 'fence'
   const fenceContinuation = useEditor((state) => state.continuationByContext.fence)
-  const isRoofBuildActive = phase === 'structure' && mode === 'build' && tool === 'roof'
-  const isStairBuildActive = phase === 'structure' && mode === 'build' && tool === 'stair'
+  const isRoofBuildActive = mode === 'build' && tool === 'roof'
+  const isStairBuildActive = mode === 'build' && tool === 'stair'
   const isStairMoveActive = movingNode?.type === 'stair'
   const isRoofMoveActive = movingNode?.type === 'roof' || movingNode?.type === 'roof-segment'
   const isSlabMoveActive = movingNode?.type === 'slab'
@@ -5872,7 +5871,7 @@ export function FloorplanPanel({
   const isScreenSelectionToolActive =
     mode === 'select' &&
     floorplanSelectionTool === 'click' &&
-    (phase === 'structure' || phase === 'furnish') &&
+    phase === 'building' &&
     !movingNode &&
     !isFenceEndpointMoveActive &&
     !referenceScaleDraft &&
@@ -5897,39 +5896,6 @@ export function FloorplanPanel({
     !isFenceEndpointMoveActive &&
     structureLayer === 'zones'
   const canInteractFloorplanZones = isDeleteMode || canSelectFloorplanZones
-  const isFloorplanStructureContextActive = phase === 'structure'
-  const isFloorplanFurnishContextActive = phase === 'furnish'
-  const isFloorplanItemContextActive =
-    isFloorplanFurnishContextActive || isFloorplanStructureContextActive
-  const canSelectFloorplanStairs =
-    (mode === 'select' &&
-      floorplanSelectionTool === 'click' &&
-      !movingNode &&
-      !isFenceEndpointMoveActive &&
-      isFloorplanStructureContextActive) ||
-    isDeleteMode
-  const canSelectFloorplanElevators = canSelectFloorplanStairs
-  const canSelectFloorplanSpawns = canSelectFloorplanStairs
-  const canSelectFloorplanItems =
-    (mode === 'select' &&
-      floorplanSelectionTool === 'click' &&
-      !movingNode &&
-      !isFenceEndpointMoveActive &&
-      isFloorplanItemContextActive) ||
-    isDeleteMode
-  const canFocusFloorplanStairs =
-    mode === 'select' &&
-    floorplanSelectionTool === 'click' &&
-    !movingNode &&
-    !isFenceEndpointMoveActive &&
-    isFloorplanStructureContextActive
-  const canFocusFloorplanSpawns = canFocusFloorplanStairs
-  const canFocusFloorplanItems =
-    mode === 'select' &&
-    floorplanSelectionTool === 'click' &&
-    !movingNode &&
-    !isFenceEndpointMoveActive &&
-    isFloorplanItemContextActive
   const visibleSitePolygon = displaySitePolygon
   const canUseSiteBoundaryVertexHandles =
     visibleSitePolygon !== null && siteBoundaryHandlesEnabled({ mode, phase })
@@ -7873,7 +7839,7 @@ export function FloorplanPanel({
     setHoveredSiteHandleId(null)
   }, [clearSiteBoundaryLivePreview])
   const exitSiteEditingToSelect = useCallback(() => {
-    setPhase('structure')
+    setPhase('building')
     setStructureLayer('elements')
     setMode('select')
   }, [setMode, setPhase, setStructureLayer])
@@ -11146,7 +11112,7 @@ export function FloorplanPanel({
             )
           })()
 
-    setPhase('structure')
+    setPhase('building')
     setStructureLayer('elements')
     setMode('select')
 

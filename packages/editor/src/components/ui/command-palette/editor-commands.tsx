@@ -49,10 +49,8 @@ export function EditorCommands() {
   const register = useCommandRegistry((s) => s.register)
   const { navigateTo, setInputValue, setOpen } = useCommandPalette()
 
-  const setPhase = useEditor((s) => s.setPhase)
   const armToolMode = useEditor((s) => s.armToolMode)
   const armMaterialPaint = useEditor((s) => s.armMaterialPaint)
-  const setStructureLayer = useEditor((s) => s.setStructureLayer)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const setPreviewMode = useEditor((s) => s.setPreviewMode)
 
@@ -78,12 +76,7 @@ export function EditorCommands() {
     )
 
     const activateTool = (tool: StructureTool) => {
-      run(() => {
-        setPhase('structure')
-        if (tool === 'zone') setStructureLayer('zones')
-        else setStructureLayer('elements')
-        armToolMode({ mode: 'build', tool })
-      })
+      run(() => armToolMode({ mode: 'build', tool }))
     }
 
     return register([
@@ -174,11 +167,7 @@ export function EditorCommands() {
         keywords: ['paint', 'material', 'texture', 'bucket', 'surface'],
         shortcut: ['P'],
         execute: () =>
-          run(() => {
-            setPhase('structure')
-            setStructureLayer('elements')
-            armMaterialPaint()
-          }),
+          run(() => armMaterialPaint()),
       },
       {
         id: 'editor.mode.terrain-sculpt',
@@ -462,10 +451,8 @@ export function EditorCommands() {
     navigateTo,
     setInputValue,
     setOpen,
-    setPhase,
     armToolMode,
     armMaterialPaint,
-    setStructureLayer,
     isPreviewMode,
     setPreviewMode,
     exportScene,

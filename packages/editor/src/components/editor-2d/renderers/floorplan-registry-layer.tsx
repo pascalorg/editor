@@ -100,7 +100,11 @@ import { runFloorplanWallPush, WALL_PUSH_AFFORDANCE } from '../../../lib/room-ha
 import { sameRoom } from '../../../lib/room-selection'
 import { selectRoom, selectRoomFromHit } from '../../../lib/room-selection-commands'
 import { roomKeyForZone } from '../../../lib/room-zone-routing'
-import { emitCanvasNodeSelection } from '../../../lib/selection-routing'
+import {
+  deleteNodeFromCanvas,
+  enterBuildingFromCanvas,
+  resolveCanvasBuildingId,
+} from '../../../lib/selection-routing'
 import { createSessionWrites, type SessionWrites } from '../../../lib/session-writes'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { clearSurfacePlanSnapFeedback } from '../../../lib/surface-plan-snap'
@@ -457,18 +461,16 @@ const MOVE_CURSOR_STYLE = { cursor: 'move' } as const
 const NO_POINTER_EVENTS_STYLE = { pointerEvents: 'none' } as const
 
 export function isFloorplanOpeningPlacementState({
-  phase,
   mode,
   tool,
   movingNodeHasWallOpeningPlacement,
 }: {
-  phase: string
   mode: string
   tool: string | null
   movingNodeHasWallOpeningPlacement: boolean
 }): boolean {
   return (
-    (phase === 'structure' && mode === 'build' && (tool === 'door' || tool === 'window')) ||
+    (mode === 'build' && (tool === 'door' || tool === 'window')) ||
     movingNodeHasWallOpeningPlacement
   )
 }
@@ -487,12 +489,11 @@ export function floorplanEntryYieldsToTool(state: {
 }
 
 function floorplanEntryYieldsToToolNow(): boolean {
-  const { phase, mode, tool } = useEditor.getState()
+  const { mode, tool } = useEditor.getState()
   const movingNode = getMovingNode()
   return floorplanEntryYieldsToTool({
     mode,
     openingPlacement: isFloorplanOpeningPlacementState({
-      phase,
       mode,
       tool,
       movingNodeHasWallOpeningPlacement:
@@ -736,9 +737,13 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         nextSelectedIds = expanded && expanded.length > 1 ? expanded : [id]
       }
       setSelection({ selectedIds: nextSelectedIds })
-      if (nextSelectedIds.length === 1 && nextSelectedIds[0] === id) {
+      if (
+        useEditor.getState().mode === 'delete' &&
+        nextSelectedIds.length === 1 &&
+        nextSelectedIds[0] === id
+      ) {
         const node = useScene.getState().nodes[id]
-        if (node) emitCanvasNodeSelection(node)
+        if (node) deleteNodeFromCanvas(node)
       }
       // Setting selection re-renders the entry — the overlay pass mounts
       // (endpoint handles, etc.), reshuffling DOM under the cursor between
@@ -1028,6 +1033,12 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       // React paints the next frame; a render-time `undefined` handler leaves
       // a short dead zone where the first post-placement selection is lost.
       if (floorplanEntryYieldsToToolNow() || !isIdle(useInteractionScope.getState().scope)) return
+      const node = useScene.getState().nodes[id]
+      if (event.button === 0 && node && enterBuildingFromCanvas(node)) {
+        event.stopPropagation()
+        swallowNextClick(200)
+        return
+      }
       const point = clientToPlan(event.clientX, event.clientY)
       if (
         event.button === 0 &&
@@ -2036,7 +2047,10 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
     node,
     nodes as Record<string, AnyNode | undefined>,
   )
-  const hovered = useViewer((state) => state.hoveredId === selectionProxyId)
+  const phase = useEditor((state) => state.phase)
+  const hoverTargetId =
+    phase === 'site' ? (resolveCanvasBuildingId(node, nodes) ?? selectionProxyId) : selectionProxyId
+  const hovered = useViewer((state) => state.hoveredId === hoverTargetId)
   const setHoveredId = useViewer((state) => state.setHoveredId)
   const referencedAnnotationRole = useViewer((state) =>
     floorplanEntryReferencedAnnotationRole(node, nodes, new Set(state.selection.selectedIds)),
@@ -2073,6 +2087,14 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
   const handlePointerEnter = useCallback(
     (event: ReactPointerEvent<SVGGElement>) => {
       if (floorplanEntryYieldsToToolNow() || !isIdle(useInteractionScope.getState().scope)) return
+      const currentNode = useScene.getState().nodes[nodeId]
+      if (currentNode && useEditor.getState().phase === 'site') {
+        const buildingId = resolveCanvasBuildingId(currentNode, useScene.getState().nodes)
+        if (buildingId) {
+          setHoveredId(buildingId)
+          return
+        }
+      }
       const point = clientToPlan(event.clientX, event.clientY)
       if (
         point &&
@@ -2084,7 +2106,6 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
         )
       )
         return
-      const currentNode = useScene.getState().nodes[nodeId]
       setHoveredId(
         currentNode
           ? resolveSelectionProxyId(
@@ -2101,10 +2122,13 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
     useEditor.getState().setHoveredRoom(null)
     const node = useScene.getState().nodes[nodeId]
     const targetId = node
-      ? resolveSelectionProxyId(
-          node,
-          useScene.getState().nodes as Record<string, AnyNode | undefined>,
-        )
+      ? useEditor.getState().phase === 'site'
+        ? (resolveCanvasBuildingId(node, useScene.getState().nodes) ??
+          resolveSelectionProxyId(node, useScene.getState().nodes))
+        : resolveSelectionProxyId(
+            node,
+            useScene.getState().nodes as Record<string, AnyNode | undefined>,
+          )
       : nodeId
     if (useViewer.getState().hoveredId === targetId) setHoveredId(null)
   }, [nodeId, setHoveredId])

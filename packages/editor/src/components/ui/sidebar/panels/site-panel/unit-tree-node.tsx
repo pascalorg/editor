@@ -14,7 +14,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
 import { assignZoneToUnit, enterUnitFocus } from './../../../../../lib/units'
 import { InlineRenameInput } from './inline-rename-input'
-import { routeTreeSelectionToNode, TreeNodeWrapper } from './tree-node'
+import { TreeNodeWrapper } from './tree-node'
 
 type UnitWarningCode = ReturnType<typeof unitWarnings>[number]['code']
 
@@ -55,7 +55,6 @@ export const UnitZoneRow = memo(function UnitZoneRow({
       event.stopPropagation()
       if (!zone) return
       setSelection({ levelId: zone.parentId as LevelNode['id'], zoneId })
-      routeTreeSelectionToNode(zone)
     },
     [zone, zoneId, setSelection],
   )

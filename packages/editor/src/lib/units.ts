@@ -51,7 +51,7 @@ export function enterUnitFocus(unitId: UnitNode['id']): void {
     if (unit?.type !== 'unit') return
     const editor = useEditor.getState()
     if (restoreLayer === null) restoreLayer = editor.structureLayer
-    if (editor.phase !== 'structure') editor.setPhase('structure')
+    if (editor.phase === 'site') editor.setPhase('building')
     if (useEditor.getState().structureLayer !== 'zones') {
       useEditor.getState().setStructureLayer('zones')
     }
@@ -81,7 +81,7 @@ function finishLeave(unitId: UnitNode['id'], keepLayer: boolean) {
     !keepLayer &&
     layer &&
     layer !== 'zones' &&
-    editor.phase === 'structure' &&
+    editor.phase === 'building' &&
     editor.structureLayer === 'zones'
   ) {
     editor.setStructureLayer(layer)
@@ -292,7 +292,7 @@ export function useUnitFocusRules(): void {
     const unsubscribeEditor = useEditor.subscribe((state, prev) => {
       if (state.structureLayer === prev.structureLayer && state.phase === prev.phase) return
       if (!useViewer.getState().focusedUnitId) return
-      if (state.phase !== 'structure' || state.structureLayer !== 'zones') {
+      if (state.phase !== 'building' || state.structureLayer !== 'zones') {
         leaveUnitFocus({ keepLayer: true })
       }
     })

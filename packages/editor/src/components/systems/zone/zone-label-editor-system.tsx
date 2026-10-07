@@ -110,7 +110,7 @@ function ZoneLabelEditor({ zoneId }: { zoneId: ZoneNode['id'] }) {
 
   // Select zone + switch to zone mode from any mode
   const selectZone = useCallback(() => {
-    useEditor.getState().setPhase('structure')
+    useEditor.getState().setPhase('building')
     useEditor.getState().setStructureLayer('zones')
     useEditor.getState().setMode('select')
     selectZoneOrRoom(zoneId)

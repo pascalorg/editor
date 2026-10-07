@@ -158,7 +158,7 @@ export function activateBuildTool(kind: string): void {
   }
   if (extension?.preferredView) editor.setViewMode(extension.preferredView)
   useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
-  editor.setPhase('structure')
+  editor.setPhase('building')
   editor.setStructureLayer('elements')
   editor.setCatalogCategory(null)
   editor.setToolDefaults(kind, null)
@@ -179,7 +179,7 @@ export function activateModularCabinetTool(): void {
   const editor = useEditor.getState()
   useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
   if (MODULAR_CABINET_CATALOG_ITEM) editor.setSelectedItem(MODULAR_CABINET_CATALOG_ITEM)
-  editor.setPhase('structure')
+  editor.setPhase('building')
   editor.setStructureLayer('elements')
   editor.setCatalogCategory(null)
   editor.setMode('build')
@@ -189,7 +189,7 @@ export function activateModularCabinetTool(): void {
 export function activatePaintMode(): void {
   const editor = useEditor.getState()
   if (editor.mode === 'material-paint') return
-  editor.setPhase('structure')
+  editor.setPhase('building')
   editor.setStructureLayer('elements')
   editor.armMaterialPaint()
 }
@@ -221,7 +221,7 @@ export function collectRoofFeatures(): RoofFeature[] {
 export function activateRoofFeatureTool(feature: RoofFeature): void {
   const editor = useEditor.getState()
   useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
-  editor.setPhase('structure')
+  editor.setPhase('building')
   editor.setStructureLayer('elements')
   editor.setCatalogCategory(null)
   editor.setMode('build')

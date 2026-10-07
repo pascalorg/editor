@@ -128,7 +128,11 @@ function clampCaptureFov(fov: number): number {
   return Math.min(Math.max(Math.round(fov), CAPTURE_FOV_MIN), CAPTURE_FOV_MAX)
 }
 
-export type Phase = 'site' | 'structure' | 'furnish'
+/**
+ * `site` is the outside (property line, terrain, the site panel); `building` is
+ * everything on the active level — walls, openings, stairs, items, rooms.
+ */
+export type Phase = 'site' | 'building'
 
 /**
  * `terrain-sculpt` is a mode, not a build tool, and that is the whole answer to
@@ -146,7 +150,7 @@ export type Phase = 'site' | 'structure' | 'furnish'
  */
 export type Mode = 'select' | 'edit' | 'delete' | 'build' | 'material-paint' | 'terrain-sculpt'
 
-// Structure mode tools (building elements)
+// Building tools
 type BuiltInStructureTool =
   | 'wall'
   | 'fence'
@@ -189,13 +193,13 @@ type BuiltInStructureTool =
 /** Registry node kinds are valid build tools without central union edits. */
 export type StructureTool = BuiltInStructureTool | (string & {})
 
-// Furnish mode tools (items and decoration)
+// Item tools (items and decoration)
 export type FurnishTool = 'item' | 'cabinet'
 
 // Site mode tools
 export type SiteTool = 'property-line'
 
-// Catalog categories for furnish mode items
+// Catalog categories for the item tool
 export type CatalogCategory =
   | 'furniture'
   | 'appliance'
@@ -613,7 +617,6 @@ type SelectDefaultBuildingAndLevelOptions = {
 
 function defaultBuildTool(phase: Phase, structureLayer: StructureLayer): StructureTool {
   if (phase === 'site') return 'property-line'
-  if (phase === 'furnish') return 'item'
   return structureLayer === 'zones' ? 'zone' : 'wall'
 }
 
@@ -688,7 +691,12 @@ function normalizeFloorplanPaneRatio(value: unknown): number {
 export function normalizePersistedEditorUiState(
   state: Partial<PersistedEditorUiState> | null | undefined,
 ): PersistedEditorUiState {
-  const phase = state?.phase === 'structure' || state?.phase === 'furnish' ? state.phase : 'site'
+  // Before Structure and Furnish merged, `phase` stored either of them.
+  const storedPhase: unknown = state?.phase
+  const phase: Phase =
+    storedPhase === 'building' || storedPhase === 'structure' || storedPhase === 'furnish'
+      ? 'building'
+      : 'site'
   const persistedToolMode = readPersistedToolMode(state)
   let mode = normalizeModeForPhase(phase, persistedToolMode.mode)
 
@@ -715,18 +723,6 @@ export function normalizePersistedEditorUiState(
       tool: mode === 'build' ? 'property-line' : null,
       structureLayer: 'elements',
       catalogCategory: null,
-      viewMode,
-      isFloorplanOpen,
-    })
-  }
-
-  if (phase === 'furnish') {
-    return withMaterializedToolMode({
-      phase,
-      mode,
-      tool: mode === 'build' ? 'item' : null,
-      structureLayer: 'elements',
-      catalogCategory: mode === 'build' ? (state?.catalogCategory ?? 'furniture') : null,
       viewMode,
       isFloorplanOpen,
     })
@@ -1072,14 +1068,14 @@ const useEditor = create<EditorState>()(
         const currentPhase = get().phase
         if (currentPhase === phase) return
         const wasBuilding = get().toolMode.mode === 'build'
-        const structureLayer = phase === 'furnish' ? 'elements' : get().structureLayer
+        const structureLayer = phase === 'site' ? 'elements' : get().structureLayer
         set({
           phase,
-          // A room is picked from structure and furnish alike; only site drops it.
+          // Site has no rooms.
           ...(phase === 'site' ? { room: null } : {}),
           hoveredRoom: null,
           structureLayer,
-          catalogCategory: wasBuilding && phase === 'furnish' ? 'furniture' : null,
+          catalogCategory: null,
         })
         get().armToolMode(
           wasBuilding
@@ -1087,19 +1083,8 @@ const useEditor = create<EditorState>()(
             : { mode: 'select' },
         )
 
-        switch (phase) {
-          case 'site':
-            selectSiteFloorplanContext()
-            break
-
-          case 'structure':
-            selectDefaultBuildingAndLevel()
-            break
-
-          case 'furnish':
-            selectDefaultBuildingAndLevel()
-            break
-        }
+        if (phase === 'site') selectSiteFloorplanContext()
+        else selectDefaultBuildingAndLevel()
       },
       toolMode: DEFAULT_PERSISTED_EDITOR_UI_STATE.toolMode,
       armToolMode: (requested) => {
@@ -1125,16 +1110,7 @@ const useEditor = create<EditorState>()(
         } else if (next.mode === 'build' && next.tool === 'property-line') {
           phase = 'site'
           structureLayer = 'elements'
-        } else if (next.mode === 'build' && next.tool === 'zone') {
-          phase = 'structure'
-          structureLayer = 'zones'
-        } else if (next.mode === 'build' && phase === 'site') {
-          phase = 'structure'
-          structureLayer = 'elements'
-        } else if (next.mode === 'material-paint' && phase === 'site') {
-          phase = 'structure'
-          structureLayer = 'elements'
-        } else if (phase !== 'structure') {
+        } else if (phase === 'site') {
           structureLayer = 'elements'
         }
 
@@ -1152,9 +1128,6 @@ const useEditor = create<EditorState>()(
           ...(structureLayer !== current.structureLayer ? { structureLayer } : {}),
           ...(viewMode !== current.viewMode ? { viewMode } : {}),
           ...(isFloorplanOpen !== current.isFloorplanOpen ? { isFloorplanOpen } : {}),
-          ...(next.mode === 'build' && phase === 'furnish' && !current.catalogCategory
-            ? { catalogCategory: 'furniture' }
-            : {}),
         })
 
         if (phaseChanged) {

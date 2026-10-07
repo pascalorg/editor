@@ -48,7 +48,7 @@ describe('selectable candidates', () => {
       previewSelectedIds: [],
     })
     useEditor.setState({
-      phase: 'structure',
+      phase: 'building',
       structureLayer: 'elements',
     })
   })
@@ -105,5 +105,44 @@ describe('selectable candidates', () => {
     } as never)
 
     expect(collectSelectableCandidateIds()).toContain('elevator_test')
+  })
+
+  test('Building box selection includes structural and furnishing kinds on the active level', () => {
+    for (const category of ['structure', 'furnish'] as const) {
+      const kind = `box-select-test-${category}`
+      if (!nodeRegistry.has(kind)) {
+        registerNode({
+          kind,
+          schemaVersion: 1,
+          schema: z.object({ type: z.literal(kind) }) as never,
+          category,
+          defaults: () => ({}),
+          capabilities: { selectable: {} },
+        } as AnyNodeDefinition)
+      }
+    }
+    useScene.setState({
+      nodes: {
+        level_test: {
+          id: 'level_test',
+          type: 'level',
+          parentId: 'building_test',
+          children: ['wall_pick', 'item_pick', 'item_hidden'],
+        },
+        wall_pick: { id: 'wall_pick', type: 'box-select-test-structure', parentId: 'level_test' },
+        item_pick: { id: 'item_pick', type: 'box-select-test-furnish', parentId: 'level_test' },
+        item_hidden: {
+          id: 'item_hidden',
+          type: 'box-select-test-furnish',
+          parentId: 'level_test',
+          visible: false,
+        },
+        item_other: { id: 'item_other', type: 'box-select-test-furnish', parentId: 'level_other' },
+      } as unknown as Record<string, AnyNode>,
+    })
+    for (const structureLayer of ['elements', 'zones'] as const) {
+      useEditor.setState({ structureLayer })
+      expect(collectSelectableCandidateIds().sort()).toEqual(['item_pick', 'wall_pick'])
+    }
   })
 })

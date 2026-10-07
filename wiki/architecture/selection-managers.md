@@ -1,6 +1,6 @@
 # Selection Managers
 
-*Two-layer selection architecture: viewer manager (hierarchy) + editor manager (phase-aware).*
+*Two-layer selection architecture: viewer manager (hierarchy) + editor manager (site or building).*
 
 Applies to: `packages/viewer/src/components/viewer/selection-manager.tsx`, `apps/editor/components/editor/selection-manager.tsx`.
 
@@ -67,19 +67,23 @@ Multi-select: `Ctrl/Meta + click` toggles an ID in `selectedIds`; `Shift + click
 
 ## Editor Selection Manager
 
-Extends selection with phase awareness from `useEditor`. The viewer's `SelectionManager` is **not** mounted in the editor; this one takes its place (injected as a child of `<Viewer>`).
+Extends selection with the editor's `phase` from `useEditor`. The viewer's `SelectionManager` is **not** mounted in the editor; this one takes its place (injected as a child of `<Viewer>`).
 
 ```
-phase: 'site'      → selectable: buildings
-phase: 'structure' → selectable: walls, zones, slabs, ceilings, roofs, doors, windows
+phase: 'site'      → any hit on a house hovers its building; the click selects it and goes inside
+phase: 'building'  → everything on the active level: walls, slabs, ceilings, roofs,
+                     openings, stairs, elevators, spawn, items, plugin kinds
   either structureLayer     → room-first walls, slabs and ceilings
-  structureLayer: 'zones'    → also zone labels and zone editing
-phase: 'furnish'   → selectable: furniture items only
+  structureLayer: 'zones'    → also zone labels and zone editing (the Scene panel's Rooms tab)
 ```
 
-Clicking a node of a different phase auto-switches the phase. Double-click drills into a context level.
+Inside the building no click changes the phase. Site is entered from the Scene panel's site header
+or `1`, and left by a click on the house or on empty ground, the building row, the Elements/Rooms
+tabs or `2`. Arming a building tool keeps the phase. Double-click on a roof or stair selects the segment
+under the cursor.
+Persisted `structure` / `furnish` values from before the merge read back as `building`.
 
-Structure selection first resolves a wall face or floor/ceiling hit to a detected room.
+Building selection first resolves a wall face or floor/ceiling hit to a detected room.
 The editor keeps its transient `{ levelId, roomId }` in `useEditor.room`; `roomKey`
 in `lib/room-selection.ts` derives identity from the sorted unique boundary ID/face pairs in `spans`, excluding
 coordinates and interval extents so moving a boundary preserves selection. This adapter
@@ -92,7 +96,8 @@ Room commands orchestrate viewer selection; editor room actions are plain setter
 Clicking the room clears `selectedIds`. Its own elements then select individually;
 a hit in another room changes the room context. Escape clears the element first,
 then the room. Empty clicks clear both. Alt bypasses room and session-group picking;
-Shift/Ctrl/Meta and marquee select elements in either structure layer. Free elements
+Shift/Ctrl/Meta and marquee select elements in either layer. Selecting a furnishing (a
+non-opening catalog item or a `furnish`-category kind) ends the room context. Free elements
 retain direct selection. Room highlights and the read-only inspector follow
 `resolveOverlayPolicy` and hide during active interaction scopes. Zone-label selection
 still uses `useViewer.selection.zoneId`.
@@ -137,5 +142,5 @@ opts out. See [selection-groups](selection-groups.md).
 
 1. Add the type to `SelectableNodeType` in the viewer store / selection manager.
 2. Make sure its renderer calls `useNodeEvents(node, type)` and spreads the handlers.
-3. Add a case to whichever selection strategy needs it (viewer hierarchy level or editor phase).
+3. Registry kinds with `capabilities.selectable` are picked inside the building automatically; only a viewer hierarchy level needs a case.
 4. Ensure `useRegistry` is called in the renderer so the outliner can highlight it.

@@ -49,15 +49,12 @@ export const RoofTreeNode = memo(function RoofTreeNode({
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      const handled = handleTreeSelection(
+      handleTreeSelection(
         e,
         nodeId,
         useViewer.getState().selection.selectedIds,
         setSelection,
       )
-      if (!handled && useEditor.getState().phase === 'furnish') {
-        useEditor.getState().setPhase('structure')
-      }
       if (!e.metaKey && !e.ctrlKey && !e.shiftKey) {
         setRoofHostDragArmedId(nodeId)
       }

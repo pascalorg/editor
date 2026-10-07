@@ -136,7 +136,7 @@ beforeEach(() => {
   useScene.getState().updateNode(zoneId as AnyNodeId, { name: 'Studio' } as never)
   useViewer.getState().setSelection({ buildingId: building.id, levelId: LEVEL, selectedIds: [] })
   useEditor.setState({
-    phase: 'structure',
+    phase: 'building',
     mode: 'select',
     tool: null,
     room: { zoneId, levelId: LEVEL },
@@ -387,7 +387,7 @@ const triggers: Trigger[] = [
         .getState()
         .setMode(usePaintRegionMode.getState().mode === 'rectangle' ? 'polygon' : 'rectangle'),
   },
-  { name: 'phase switch', fire: () => useEditor.setState({ phase: 'furnish' }) },
+  { name: 'phase switch', fire: () => useEditor.setState({ phase: 'site' }) },
   {
     name: 'level change',
     fire: () => useViewer.getState().setSelection({ levelId: 'level_other' }),

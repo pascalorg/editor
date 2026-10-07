@@ -14,7 +14,7 @@ import { memo, useCallback, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
 import { InlineRenameField } from './inline-rename-input'
-import { routeTreeSelectionToNode, TreeNode, TreeNodeWrapper } from './tree-node'
+import { TreeNode, TreeNodeWrapper } from './tree-node'
 
 const ACTION_BUTTON_CLASS =
   'flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10'
@@ -113,7 +113,6 @@ const CollectionTreeNode = memo(function CollectionTreeNode({
       if (members.length === 0) return
       const nodes = useScene.getState().nodes
       setSelection({ ...levelSwitchFor(members, nodes), selectedIds: members })
-      routeTreeSelectionToNode(nodes[members[0] as AnyNodeId])
     },
     [members, setSelection],
   )

@@ -73,7 +73,7 @@ beforeEach(() => {
   useViewer
     .getState()
     .setSelection({ buildingId: building.id, levelId: level.id, selectedIds: [], zoneId: null })
-  useEditor.setState({ phase: 'structure', mode: 'select', room: null, hoveredRoom: null })
+  useEditor.setState({ phase: 'building', mode: 'select', room: null, hoveredRoom: null })
   clearSceneHistory()
 })
 afterEach(() => {

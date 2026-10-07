@@ -1,23 +1,66 @@
 import { describe, expect, test } from 'bun:test'
-import {
-  type AnyNode,
-  BlockNode,
-  emitter,
-  nodeRegistry,
-  registerNode,
-  useScene,
-} from '@pascal-app/core'
+import { type AnyNode, BlockNode, nodeRegistry, registerNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { z } from 'zod'
 import useEditor from '../store/use-editor'
 import {
-  emitCanvasNodeSelection,
+  deleteNodeFromCanvas,
+  enterBuildingFromCanvas,
+  resolveCanvasBuildingId,
   resolveCanvasSelectionNode,
-  resolveNodeSelectionTarget,
   resolveSelectedIdsForNodeClick,
   selectionModifiersFromEvent,
   shouldPreserveSelectedRoofHostTarget,
 } from './selection-routing'
+
+describe('building entry from either canvas', () => {
+  test('a Site hit enters the owning building before selecting an element', () => {
+    const previousScene = useScene.getState()
+    const previousSelection = useViewer.getState().selection
+    const previousEditor = useEditor.getState()
+    const building = { id: 'building_pick', type: 'building', children: ['level_pick'] }
+    const level = {
+      id: 'level_pick',
+      type: 'level',
+      level: 0,
+      parentId: building.id,
+      children: ['wall_pick'],
+    }
+    const wall = { id: 'wall_pick', type: 'wall', parentId: level.id }
+    const shelf = { id: 'shelf_pick', type: 'shelf', parentId: wall.id }
+    const elevator = { id: 'elevator_pick', type: 'elevator', parentId: building.id }
+    const nodes = Object.fromEntries(
+      [building, level, wall, shelf, elevator].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+    try {
+      useScene.setState({ nodes: nodes as never, rootNodeIds: [building.id as never] })
+      for (const hit of [wall, shelf, elevator]) {
+        useEditor.getState().setPhase('site')
+        useEditor.getState().armToolMode({ mode: 'select' })
+        const node = nodes[hit.id]!
+        expect(resolveCanvasBuildingId(node, nodes)).toBe(building.id)
+        expect(enterBuildingFromCanvas(node)).toBe(true)
+        expect(useEditor.getState().phase).toBe('building')
+        expect(useViewer.getState().selection).toMatchObject({
+          buildingId: building.id,
+          levelId: level.id,
+          selectedIds: [],
+        })
+        useViewer.getState().setSelection({ selectedIds: [wall.id as never] })
+        expect(enterBuildingFromCanvas(node)).toBe(false)
+        expect(useViewer.getState().selection.selectedIds).toEqual([wall.id])
+      }
+      useEditor.getState().setPhase('site')
+      useEditor.getState().armToolMode({ mode: 'build', tool: 'item' })
+      expect(enterBuildingFromCanvas(nodes[wall.id]!)).toBe(false)
+      expect(useEditor.getState().phase).toBe('site')
+    } finally {
+      useScene.setState(previousScene)
+      useViewer.setState({ selection: previousSelection })
+      useEditor.setState(previousEditor)
+    }
+  })
+})
 
 function registerTestDefinition(kind: string, overrides: Record<string, unknown> = {}) {
   if (nodeRegistry.has(kind)) return
@@ -68,31 +111,13 @@ describe('resolveSelectedIdsForNodeClick', () => {
   })
 })
 
-describe('emitCanvasNodeSelection', () => {
-  test('publishes the accepted canvas node once', () => {
-    const node = { id: 'wall_1', type: 'wall' } as unknown as AnyNode
-    const received: AnyNode[] = []
-    const onSelection = (selectedNode: AnyNode) => received.push(selectedNode)
-    emitter.on('selection:canvas-node-click', onSelection)
-
-    emitCanvasNodeSelection(node)
-
-    emitter.off('selection:canvas-node-click', onSelection)
-    expect(received).toEqual([node])
-  })
-
-  test('deletes an accepted floorplan node when Delete mode is active', () => {
+describe('deleteNodeFromCanvas', () => {
+  test('deletes the clicked plan node and clears the selection', () => {
     const node = BlockNode.parse({ id: 'block_floorplan-delete-target' })
-    const previousToolMode = useEditor.getState().toolMode
     const previousScene = useScene.getState()
     const previousSelection = useViewer.getState().selection
-    const received: AnyNode[] = []
-    const listener = (selectedNode: AnyNode) => received.push(selectedNode)
-
-    emitter.on('selection:canvas-node-click', listener)
 
     try {
-      useEditor.getState().armToolMode({ mode: 'delete' })
       useScene.setState({
         nodes: { [node.id]: node },
         rootNodeIds: [node.id],
@@ -100,27 +125,22 @@ describe('emitCanvasNodeSelection', () => {
       })
       useViewer.getState().setSelection({ selectedIds: [node.id] })
 
-      emitCanvasNodeSelection(node)
+      deleteNodeFromCanvas(node)
 
       expect(useScene.getState().nodes[node.id]).toBeUndefined()
       expect(useViewer.getState().selection.selectedIds).toEqual([])
-      expect(received).toEqual([])
     } finally {
-      emitter.off('selection:canvas-node-click', listener)
-      useEditor.getState().armToolMode(previousToolMode)
       useScene.setState(previousScene)
       useViewer.setState({ selection: previousSelection })
     }
   })
 
-  test('preserves a floorplan node and its selection when the scene is read-only', () => {
+  test('preserves a plan node and its selection when the scene is read-only', () => {
     const node = BlockNode.parse({ id: 'block_floorplan-read-only-target' })
-    const previousToolMode = useEditor.getState().toolMode
     const previousScene = useScene.getState()
     const previousSelection = useViewer.getState().selection
 
     try {
-      useEditor.getState().armToolMode({ mode: 'delete' })
       useScene.setState({
         nodes: { [node.id]: node },
         rootNodeIds: [node.id],
@@ -128,12 +148,11 @@ describe('emitCanvasNodeSelection', () => {
       })
       useViewer.getState().setSelection({ selectedIds: [node.id] })
 
-      emitCanvasNodeSelection(node)
+      deleteNodeFromCanvas(node)
 
       expect(useScene.getState().nodes[node.id]).toEqual(node)
       expect(useViewer.getState().selection.selectedIds).toEqual([node.id])
     } finally {
-      useEditor.getState().armToolMode(previousToolMode)
       useScene.setState(previousScene)
       useViewer.setState({ selection: previousSelection })
     }
@@ -163,31 +182,6 @@ describe('selectionModifiersFromEvent', () => {
       ctrl: false,
       shift: false,
       alt: false,
-    })
-  })
-})
-
-describe('resolveNodeSelectionTarget', () => {
-  test('routes furniture items to furnish', () => {
-    const node = {
-      id: 'item_1',
-      type: 'item',
-      asset: { category: 'furniture' },
-    } as unknown as AnyNode
-
-    expect(resolveNodeSelectionTarget(node)).toEqual({ phase: 'furnish' })
-  })
-
-  test('routes door and window catalog items to structure', () => {
-    const node = {
-      id: 'item_1',
-      type: 'item',
-      asset: { category: 'door' },
-    } as unknown as AnyNode
-
-    expect(resolveNodeSelectionTarget(node)).toEqual({
-      phase: 'structure',
-      structureLayer: 'elements',
     })
   })
 })

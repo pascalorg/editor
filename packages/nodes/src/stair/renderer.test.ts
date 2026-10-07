@@ -275,7 +275,7 @@ test('stair placement preview follows raised support, survives level switches, a
       selection: { buildingId: building.id, levelId: ground.id, zoneId: null, selectedIds: [] },
     })
     useEditor.setState({
-      phase: 'structure',
+      phase: 'building',
       mode: 'build',
       tool: 'stair',
       isFloorplanHovered: true,

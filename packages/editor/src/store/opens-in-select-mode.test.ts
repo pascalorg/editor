@@ -14,7 +14,7 @@ import { DEFAULT_PERSISTED_EDITOR_UI_STATE, editorUiStateOnOpen } from './use-ed
 describe('opening a project', () => {
   test('a persisted wall tool is not armed, and the preferences beside it survive', () => {
     const state = editorUiStateOnOpen({
-      phase: 'structure',
+      phase: 'building',
       structureLayer: 'elements',
       toolMode: { mode: 'build', tool: 'wall' },
       mode: 'build',
@@ -25,14 +25,14 @@ describe('opening a project', () => {
     expect(state.toolMode).toEqual({ mode: 'select' })
     expect(state.mode).toBe('select')
     expect(state.tool).toBeNull()
-    expect(state.phase).toBe('structure')
+    expect(state.phase).toBe('building')
     expect(state.structureLayer).toBe('elements')
     expect(state.viewMode).toBe('3d')
   })
 
   test('the 2D plan opens in select mode as well', () => {
     const state = editorUiStateOnOpen({
-      phase: 'structure',
+      phase: 'building',
       toolMode: { mode: 'build', tool: 'slab' },
       mode: 'build',
       tool: 'slab',
@@ -47,29 +47,40 @@ describe('opening a project', () => {
 
   test('a persisted item tool leaves no catalog category armed either', () => {
     const state = editorUiStateOnOpen({
-      phase: 'furnish',
+      phase: 'building',
       toolMode: { mode: 'build', tool: 'item' },
       mode: 'build',
       tool: 'item',
       catalogCategory: 'kitchen',
     })
 
-    expect(state.phase).toBe('furnish')
+    expect(state.phase).toBe('building')
     expect(state.mode).toBe('select')
     expect(state.tool).toBeNull()
     expect(state.catalogCategory).toBeNull()
+  })
+
+  test('a phase stored before Structure and Furnish merged opens inside the building', () => {
+    // Browsers still hold `structure` / `furnish` from before the merge.
+    for (const stored of ['structure', 'furnish']) {
+      const state = editorUiStateOnOpen({ phase: stored as never, structureLayer: 'zones' })
+      expect(state.phase).toBe('building')
+      expect(state.structureLayer).toBe('zones')
+    }
+    expect(editorUiStateOnOpen({ phase: 'site' }).phase).toBe('site')
+    expect(editorUiStateOnOpen({ phase: 'garden' as never }).phase).toBe('site')
   })
 
   test('the brush modes do not come back armed', () => {
     // Paint and sculpt hold an interaction scope for the whole mode, so opening
     // into one is the same class of surprise as opening into a build tool.
     expect(editorUiStateOnOpen({ phase: 'site', mode: 'terrain-sculpt' }).mode).toBe('select')
-    expect(editorUiStateOnOpen({ phase: 'structure', mode: 'material-paint' }).mode).toBe('select')
+    expect(editorUiStateOnOpen({ phase: 'building', mode: 'material-paint' }).mode).toBe('select')
   })
 
   test('the zones layer is a preference — it comes back without arming the zone tool', () => {
     const state = editorUiStateOnOpen({
-      phase: 'structure',
+      phase: 'building',
       structureLayer: 'zones',
       toolMode: { mode: 'build', tool: 'zone' },
       mode: 'build',

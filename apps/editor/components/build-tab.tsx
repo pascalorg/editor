@@ -141,7 +141,7 @@ export function BuildTab() {
         activateTerrainSculptMode()
       } else if (type.id === 'mep') {
         const ed = useEditor.getState()
-        ed.setPhase('structure')
+        ed.setPhase('building')
         ed.setStructureLayer('elements')
         ed.setCatalogCategory(null)
         ed.setMode('build')

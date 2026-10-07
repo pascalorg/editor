@@ -72,7 +72,7 @@ import {
 } from './../../../../../lib/room-zone-routing'
 import { createUnitInBuilding, toggleZoneMembership } from './../../../../../lib/units'
 import { cn } from './../../../../../lib/utils'
-import useEditor from './../../../../../store/use-editor'
+import useEditor, { type StructureLayer } from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'
 import { MetricControl } from '../../../controls/metric-control'
 import { LevelDuplicateDialog } from '../../../level-duplicate-dialog'
@@ -1165,30 +1165,24 @@ const LayerToggle = memo(function LayerToggle() {
   const phase = useEditor((state) => state.phase)
   const setPhase = useEditor((state) => state.setPhase)
 
-  const activeTab =
-    phase === 'structure' && structureLayer === 'elements'
-      ? 'structure'
-      : phase === 'furnish'
-        ? 'furnish'
-        : phase === 'structure' && structureLayer === 'zones'
-          ? 'zones'
-          : 'none'
+  const activeTab = phase === 'building' ? structureLayer : 'none'
+  const selectLayer = (layer: StructureLayer) => {
+    setPhase('building')
+    setStructureLayer(layer)
+  }
 
   return (
     <div className="relative flex items-center gap-1 border-border/50 border-b bg-[#2C2C2E] p-1">
       <button
         className={cn(
           'relative flex flex-1 cursor-pointer flex-col items-center justify-center rounded-md py-2 font-medium text-[10px] transition-all duration-200',
-          activeTab === 'structure'
+          activeTab === 'elements'
             ? 'text-foreground'
             : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
         )}
-        onClick={() => {
-          setPhase('structure')
-          setStructureLayer('elements')
-        }}
+        onClick={() => selectLayer('elements')}
       >
-        {activeTab === 'structure' && (
+        {activeTab === 'elements' && (
           <motion.div
             className="absolute inset-0 rounded-md bg-[#3e3e3e] shadow-sm ring-1 ring-border/50"
             layoutId="layerToggleActiveBg"
@@ -1197,55 +1191,14 @@ const LayerToggle = memo(function LayerToggle() {
         )}
         <div className="relative z-10 flex flex-col items-center">
           <img
-            alt="Structure"
+            alt="Elements"
             className={cn(
               'mb-1 h-6 w-6 transition-all',
-              activeTab !== 'structure' && 'opacity-50 grayscale',
+              activeTab !== 'elements' && 'opacity-50 grayscale',
             )}
             src="/icons/room.webp"
           />
-          Structure
-        </div>
-        <div className="absolute right-1.5 bottom-1 z-10 rounded border border-border/40 bg-background/40 px-1 py-[2px] backdrop-blur-md">
-          <span className="block font-medium font-mono text-[9px] text-muted-foreground/70 leading-none">
-            B
-          </span>
-        </div>
-      </button>
-
-      <button
-        className={cn(
-          'relative flex flex-1 cursor-pointer flex-col items-center justify-center rounded-md py-2 font-medium text-[10px] transition-all duration-200',
-          activeTab === 'furnish'
-            ? 'text-foreground'
-            : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
-        )}
-        onClick={() => {
-          setPhase('furnish')
-        }}
-      >
-        {activeTab === 'furnish' && (
-          <motion.div
-            className="absolute inset-0 rounded-md bg-[#3e3e3e] shadow-sm ring-1 ring-border/50"
-            layoutId="layerToggleActiveBg"
-            transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
-          />
-        )}
-        <div className="relative z-10 flex flex-col items-center">
-          <img
-            alt="Furnish"
-            className={cn(
-              'mb-1 h-6 w-6 transition-all',
-              activeTab !== 'furnish' && 'opacity-50 grayscale',
-            )}
-            src="/icons/couch.webp"
-          />
-          Furnish
-        </div>
-        <div className="absolute right-1.5 bottom-1 z-10 rounded border border-border/40 bg-background/40 px-1 py-[2px] backdrop-blur-md">
-          <span className="block font-medium font-mono text-[9px] text-muted-foreground/70 leading-none">
-            F
-          </span>
+          Elements
         </div>
       </button>
 
@@ -1256,10 +1209,7 @@ const LayerToggle = memo(function LayerToggle() {
             ? 'text-foreground'
             : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
         )}
-        onClick={() => {
-          setPhase('structure')
-          setStructureLayer('zones')
-        }}
+        onClick={() => selectLayer('zones')}
       >
         {activeTab === 'zones' && (
           <motion.div
@@ -1302,7 +1252,6 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
   const hoveredId = useViewer((state) => state.hoveredId)
   const setSelection = useViewer((state) => state.setSelection)
   const setHoveredId = useViewer((state) => state.setHoveredId)
-  const setPhase = useEditor((state) => state.setPhase)
   const setMode = useEditor((state) => state.setMode)
   const unit = useViewer((state) => state.unit)
 
@@ -1321,7 +1270,6 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
   const defaultName = `${zoneKindLabel(zone)} (${formatAreaLabel(calculatePolygonArea(zone.polygon), unit)})`
 
   const handleClick = () => {
-    setPhase('structure')
     setMode('select')
     selectZoneOrRoom(zone.id)
   }
@@ -1491,8 +1439,6 @@ const MultiSelectionBadge = memo(function MultiSelectionBadge() {
 const ContentSection = memo(function ContentSection() {
   const selectedLevelId = useViewer((state) => state.selection.levelId)
   const structureLayer = useEditor((state) => state.structureLayer)
-  const phase = useEditor((state) => state.phase)
-  const setPhase = useEditor((state) => state.setPhase)
   const setMode = useEditor((state) => state.setMode)
   const setTool = useEditor((state) => state.setTool)
 
@@ -1527,7 +1473,6 @@ const ContentSection = memo(function ContentSection() {
 
   if (structureLayer === 'zones') {
     const handleAddZone = () => {
-      setPhase('structure')
       setMode('build')
       setTool('zone')
     }
@@ -1619,7 +1564,7 @@ const BuildingItem = memo(function BuildingItem({
   const handleSelect = () => {
     setSelection({ buildingId: building.id })
     if (phase === 'site') {
-      setPhase('structure')
+      setPhase('building')
     }
   }
 
@@ -1866,7 +1811,7 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
             <div className="flex min-h-0 flex-1 flex-col">
               {buildings.map((building) => {
                 const isBuildingActive =
-                  (phase === 'structure' || phase === 'furnish') &&
+                  phase === 'building' &&
                   selectedBuildingId === building.id
 
                 return (

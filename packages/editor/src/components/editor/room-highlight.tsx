@@ -20,8 +20,7 @@ function useRoomHighlight() {
   const visible = useInteractionScope(
     (state) => resolveOverlayPolicy(state.scope).conflictingControls === 'shown',
   )
-  // No phase gate: a 3D hover from the furnish or site phase shows the room its
-  // click will switch to structure and select.
+  // No phase gate: site never hovers or keeps a room (`roomPickingEnabled`).
   const enabled = useEditor((state) => state.mode === 'select')
   return enabled && visible ? room : null
 }

@@ -41,8 +41,8 @@ describe('terrain-sculpt mode lifecycle', () => {
     expect(useInteractionScope.getState().scope.kind).toBe('idle')
   })
 
-  test('arming sculpt from another phase moves to the site phase', () => {
-    useEditor.getState().setPhase('structure')
+  test('arming sculpt from the building moves to site', () => {
+    useEditor.getState().setPhase('building')
     useEditor.getState().setMode('terrain-sculpt')
     // Otherwise `normalizeModeForPhase` rejects the mode on the next rehydrate
     // and the UI shows a mode the store does not hold.
@@ -53,7 +53,7 @@ describe('terrain-sculpt mode lifecycle', () => {
   test('a phase switch out of site drops the scope', () => {
     useEditor.getState().setMode('terrain-sculpt')
     // The phase setter delegates its mode rewrite to the ToolMode transition.
-    useEditor.getState().setPhase('structure')
+    useEditor.getState().setPhase('building')
     expect(useInteractionScope.getState().scope.kind).toBe('idle')
   })
 })
@@ -71,7 +71,7 @@ describe('the eyedropper arm is not allowed to outlive sculpt mode', () => {
   test('leaving via a phase switch disarms it too', () => {
     useEditor.getState().setMode('terrain-sculpt')
     useEditor.getState().setTerrainSampling(true)
-    useEditor.getState().setPhase('furnish')
+    useEditor.getState().setPhase('building')
     expect(useEditor.getState().terrainSampling).toBe(false)
   })
 
@@ -185,7 +185,7 @@ describe('the modes that hide the editing canvas release the brush', () => {
 
 describe('entering sculpt mode stands other affordances down', () => {
   test('the armed build tool is cleared', () => {
-    useEditor.getState().setPhase('structure')
+    useEditor.getState().setPhase('building')
     useEditor.getState().setMode('build')
     useEditor.getState().setTool('wall')
     useEditor.getState().setMode('terrain-sculpt')

@@ -74,9 +74,7 @@ export function MeasurementControl() {
     (state) => state.toolDefaults['construction-dimension']?.mode,
   )
   const setMode = useEditor((state) => state.setMode)
-  const setPhase = useEditor((state) => state.setPhase)
   const setLastMeasurementKind = useEditor((state) => state.setLastMeasurementKind)
-  const setStructureLayer = useEditor((state) => state.setStructureLayer)
   const setTool = useEditor((state) => state.setTool)
   const setToolDefaults = useEditor((state) => state.setToolDefaults)
   const setViewMode = useEditor((state) => state.setViewMode)
@@ -104,8 +102,6 @@ export function MeasurementControl() {
       : selectedOption.label
 
   const activateMeasurement = (kind: CreatableMeasurementKind) => {
-    setPhase('structure')
-    setStructureLayer('elements')
     setLastMeasurementKind(kind)
     setToolDefaults('measurement', { kind })
     setMode('build')
@@ -121,8 +117,6 @@ export function MeasurementControl() {
   }
 
   const activateSmartMeasurement = () => {
-    setPhase('structure')
-    setStructureLayer('elements')
     setToolDefaults('measurement', { kind: 'smart' })
     setMode('build')
     setTool('measurement')
@@ -136,8 +130,6 @@ export function MeasurementControl() {
       useFloorplanMode.getState().showExpertModeNotice('Construction Dimension')
       return
     }
-    setPhase('structure')
-    setStructureLayer('elements')
     setViewMode('2d')
     setToolDefaults('construction-dimension', { chainMode, mode: dimensionMode })
     setMode('build')

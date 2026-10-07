@@ -87,7 +87,7 @@ beforeEach(() => {
     levelId: LEVEL,
     selectedIds: [],
   })
-  useEditor.setState({ phase: 'structure', mode: 'select', gridSnapStep: 0.5 })
+  useEditor.setState({ phase: 'building', mode: 'select', gridSnapStep: 0.5 })
   clearSceneHistory()
 })
 

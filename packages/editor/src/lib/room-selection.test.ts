@@ -12,6 +12,8 @@ import {
   type NodeEvent,
   reconcileLevelStructure,
   SlabNode,
+  SpawnNode,
+  StairNode,
   sceneRegistry,
   useScene,
   WallNode,
@@ -391,7 +393,7 @@ async function withRooms(
       focusedUnitId: null,
     })
     useEditor.setState({
-      phase: 'structure',
+      phase: 'building',
       mode: 'select',
       toolMode: { mode: 'select' },
       room: null,
@@ -511,44 +513,65 @@ describe('room drill-down state through the mounted selection manager', () => {
       expect(useEditor.getState().room).toEqual(left)
     })
   })
-  test('outside the structure phase a wall still hovers the room its click selects', async () => {
-    for (const phase of ['furnish', 'site'] as const) {
-      for (const [id, point] of [
-        ['wall_west', [-0.1, 2]],
-        ['slab_test', [2, 2]],
-        ['ceiling_test', [2, 2]],
-      ] as const) {
-        await withRooms(async ({ click, highlighted, left }) => {
-          // Selecting a furniture item (or the building) leaves the editor in that
-          // phase; the 3D click routes a wall back to structure and picks its room.
-          await act(async () => useEditor.setState({ phase }))
-          expect(highlighted()).toBe(false)
-          expect(await click(id, [...point], {}, { event: 'enter' })).toBe(true)
-          expect(useEditor.getState().hoveredRoom).toEqual(left)
-          expect(useViewer.getState().hoveredId).toBeNull()
-          expect(highlighted()).toBe(true)
-          await click(id, [...point])
-          // Furnish keeps its phase; site enters structure, where the building's rooms are.
-          expect(useEditor.getState().phase).toBe(phase === 'site' ? 'structure' : phase)
-          expect(useEditor.getState().room).toEqual(left)
+  test('a stair flight hovers the same whole stair its click selects', async () => {
+    await withRooms(async ({ click }) => {
+      const stair = StairNode.parse({ id: 'stair_hover', parentId: levelId, position: [6, 0, 2] })
+      const segment = {
+        id: 'stair-segment_hover',
+        type: 'stair-segment',
+        parentId: stair.id,
+      } as AnyNode
+      await act(async () =>
+        useScene.setState({
+          nodes: { ...useScene.getState().nodes, [stair.id]: stair, [segment.id]: segment },
+        }),
+      )
+      await click(segment.id, [6, 2], {}, { event: 'enter' })
+      expect(useViewer.getState().hoveredId).toBe(stair.id)
+      await click(segment.id, [6, 2])
+      expect(useViewer.getState().selection.selectedIds).toEqual([stair.id])
+    })
+  })
+
+  test('from site any hit on the house hovers and picks the building, then goes inside', async () => {
+    for (const [id, point] of [
+      ['wall_west', [-0.1, 2]],
+      ['slab_test', [2, 2]],
+      ['ceiling_test', [2, 2]],
+    ] as const) {
+      await withRooms(async ({ click, highlighted, left }) => {
+        await act(async () => {
+          useEditor.getState().setPhase('site')
+          useViewer.getState().setSelection({ buildingId: null })
         })
-      }
+        expect(await click(id, [...point], {}, { event: 'enter' })).toBe(true)
+        expect(useViewer.getState().hoveredId).toBe(buildingId)
+        expect(useEditor.getState().hoveredRoom).toBeNull()
+        expect(highlighted()).toBe(false)
+        expect(await click(id, [...point])).toBe(true)
+        expect(useEditor.getState().phase).toBe('building')
+        expect(useViewer.getState().selection.buildingId).toBe(buildingId)
+        expect(useViewer.getState().selection.selectedIds).toEqual([])
+        expect(useEditor.getState().room).toBeNull()
+        // Inside, the same spot is room-first again.
+        await click(id, [...point])
+        expect(useEditor.getState().phase).toBe('building')
+        expect(useEditor.getState().room).toEqual(left)
+      })
     }
   })
-  test('from furnish a room click stays in furnish; the drill click enters structure with the room kept', async () => {
+  test('room clicks and the drill click into a wall never change the mode', async () => {
     await withRooms(async ({ click, left, right }) => {
-      await act(async () => useEditor.getState().setPhase('furnish'))
       expect(await click('wall_south', [2, 0.1])).toBe(true)
-      expect(useEditor.getState().phase).toBe('furnish')
+      expect(useEditor.getState().phase).toBe('building')
       expect(useEditor.getState().room).toEqual(left)
       expect(useViewer.getState().selection.selectedIds).toEqual([])
       expect(await click('wall_shared', [4.1, 2])).toBe(true)
-      expect(useEditor.getState().phase).toBe('furnish')
       expect(useEditor.getState().room).toEqual(right)
-      // The wall is structure: drilling past the room selects it there, the room
-      // stays its context, and Escape climbs back to the room.
+      // Drilling past the room selects the wall, the room stays its context, and
+      // Escape climbs back to the room.
       await click('wall_shared', [4.1, 2])
-      expect(useEditor.getState().phase).toBe('structure')
+      expect(useEditor.getState().phase).toBe('building')
       expect(useViewer.getState().selection.selectedIds).toEqual(['wall_shared'])
       expect(useEditor.getState().room).toEqual(right)
       await act(async () => cancelActiveTool())
@@ -556,18 +579,18 @@ describe('room drill-down state through the mounted selection manager', () => {
       expect(useEditor.getState().room).toEqual(right)
     })
   })
-  test('the phase tabs keep the room between structure and furnish; site drops it', async () => {
+  test('the Elements and Rooms tabs keep the room; site drops it', async () => {
     await withRooms(async ({ click, left }) => {
       await click('wall_south', [2, 0.1])
-      await act(async () => useEditor.getState().setPhase('furnish'))
+      await act(async () => useEditor.getState().setStructureLayer('zones'))
       expect(useEditor.getState().room).toEqual(left)
-      await act(async () => useEditor.getState().setPhase('structure'))
+      await act(async () => useEditor.getState().setStructureLayer('elements'))
       expect(useEditor.getState().room).toEqual(left)
       await act(async () => useEditor.getState().setPhase('site'))
       expect(useEditor.getState().room).toBeNull()
     })
   })
-  test('in furnish, furniture and empty ground end the room, as from structure', async () => {
+  test('furniture, stairs, spawn and walls all select in place; furniture and ground end the room', async () => {
     jest.useFakeTimers()
     const chair = ItemNode.parse({
       id: 'item_chair',
@@ -581,36 +604,52 @@ describe('room drill-down state through the mounted selection manager', () => {
         src: '/chair.glb',
       },
     })
-    for (const phase of ['structure', 'furnish'] as const) {
-      await withRooms(async ({ click, left }) => {
-        await act(async () => {
-          useScene.setState({ nodes: { ...useScene.getState().nodes, [chair.id]: chair } })
-          useEditor.getState().setPhase(phase)
+    const stair = StairNode.parse({ id: 'stair_test', parentId: levelId, position: [6, 0, 2] })
+    const spawn = SpawnNode.parse({ id: 'spawn_test', parentId: levelId, position: [1, 0, 1] })
+    await withRooms(async ({ click, left }) => {
+      await act(async () => {
+        useScene.setState({
+          nodes: {
+            ...useScene.getState().nodes,
+            [chair.id]: chair,
+            [stair.id]: stair,
+            [spawn.id]: spawn,
+          },
         })
-        await click('wall_south', [2, 0.1])
-        expect(useEditor.getState().room).toEqual(left)
-        await click(chair.id, [2, 2])
-        expect(useEditor.getState().phase).toBe('furnish')
-        expect(useViewer.getState().selection.selectedIds).toEqual([chair.id])
-        expect(useEditor.getState().room).toBeNull()
-
-        await click('wall_south', [2, 0.1])
-        expect(useEditor.getState().phase).toBe('furnish')
-        expect(useEditor.getState().room).toEqual(left)
-        // The room click guards the same pointer's ground click for 50 ms.
-        jest.advanceTimersByTime(50)
-        await act(async () =>
-          emitter.emit('grid:click', {
-            position: [20, 0, 20],
-            localPosition: [20, 0, 20],
-            nativeEvent: {},
-          } as never),
-        )
-        expect(useEditor.getState().room).toBeNull()
       })
-    }
+      await click('wall_south', [2, 0.1])
+      expect(useEditor.getState().room).toEqual(left)
+      await click(chair.id, [2, 2])
+      expect(useEditor.getState().phase).toBe('building')
+      expect(useViewer.getState().selection.selectedIds).toEqual([chair.id])
+      expect(useEditor.getState().room).toBeNull()
+
+      jest.advanceTimersByTime(50)
+      await click(stair.id, [6, 2])
+      expect(useEditor.getState().phase).toBe('building')
+      expect(useViewer.getState().selection.selectedIds).toEqual([stair.id])
+      jest.advanceTimersByTime(50)
+      await click(spawn.id, [1, 1])
+      expect(useEditor.getState().phase).toBe('building')
+      expect(useViewer.getState().selection.selectedIds).toEqual([spawn.id])
+
+      jest.advanceTimersByTime(50)
+      await click('wall_south', [2, 0.1])
+      expect(useEditor.getState().phase).toBe('building')
+      expect(useEditor.getState().room).toEqual(left)
+      // The room click guards the same pointer's ground click for 50 ms.
+      jest.advanceTimersByTime(50)
+      await act(async () =>
+        emitter.emit('grid:click', {
+          position: [20, 0, 20],
+          localPosition: [20, 0, 20],
+          nativeEvent: {},
+        } as never),
+      )
+      expect(useEditor.getState().room).toBeNull()
+    })
   })
-  test('plan and box furniture selections end the selected room in furnish', async () => {
+  test('plan and box furniture selections end the selected room', async () => {
     await withRooms(async ({ click, left }) => {
       const chair = ItemNode.parse({
         id: 'item_plan_chair',
@@ -625,7 +664,6 @@ describe('room drill-down state through the mounted selection manager', () => {
       })
       await act(async () => {
         useScene.setState({ nodes: { ...useScene.getState().nodes, [chair.id]: chair } })
-        useEditor.getState().setPhase('furnish')
       })
       await click('wall_south', [2, 0.1])
       expect(useEditor.getState().room).toEqual(left)
@@ -639,19 +677,18 @@ describe('room drill-down state through the mounted selection manager', () => {
   })
   test('arming furniture placement from a selected room leaves floor and wall clicks to the tool', async () => {
     await withRooms(async ({ click, left }) => {
-      await act(async () => useEditor.getState().setPhase('furnish'))
       await click('wall_south', [2, 0.1])
       expect(useEditor.getState().room).toEqual(left)
       await act(async () => useEditor.getState().armToolMode({ mode: 'build', tool: 'item' }))
       expect(useEditor.getState().room).toBeNull()
       expect(await click('slab_test', [2, 2])).toBe(false)
       expect(await click('wall_south', [2, 0.1])).toBe(false)
-      expect(useEditor.getState().phase).toBe('furnish')
+      expect(useEditor.getState().phase).toBe('building')
       expect(useEditor.getState().tool).toBe('item')
       expect(useViewer.getState().selection.selectedIds).toEqual([])
     })
   })
-  test('furnish placement owns floor and wall hits until the placement ends', async () => {
+  test('item placement owns floor and wall hits until the placement ends', async () => {
     for (const attachTo of ['floor', 'wall'] as const) {
       await withRooms(async ({ click, highlighted, left }) => {
         const item = ItemNode.parse({
@@ -665,7 +702,6 @@ describe('room drill-down state through the mounted selection manager', () => {
           },
         })
         await act(async () => {
-          useEditor.setState({ phase: 'furnish' })
           useInteractionScope.getState().begin({
             kind: 'placing',
             node: item,
@@ -683,7 +719,7 @@ describe('room drill-down state through the mounted selection manager', () => {
         expect(await click(id, point)).toBe(false)
         expect(useEditor.getState().hoveredRoom).toBeNull()
         expect(useEditor.getState().room).toBeNull()
-        expect(useEditor.getState().phase).toBe('furnish')
+        expect(useEditor.getState().phase).toBe('building')
         expect(highlighted()).toBe(false)
         await act(async () => useInteractionScope.getState().end())
         await click(id, point, {}, { event: 'move' })
@@ -811,11 +847,10 @@ describe('room drill-down state through the mounted selection manager', () => {
       expect(await select({ ...plain, alt: true })).toBe(false)
     })
   })
-  test('the 2D plan picks rooms in structure and furnish, not in site', async () => {
+  test('the 2D plan picks rooms inside the building, not in site', async () => {
     await withRooms(async () => {
       for (const [phase, enabled] of [
-        ['structure', true],
-        ['furnish', true],
+        ['building', true],
         ['site', false],
       ] as const) {
         await act(async () => useEditor.setState({ phase }))
