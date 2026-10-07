@@ -1939,9 +1939,10 @@ describe('near-miss joints follow the drawn wall bodies', () => {
     expect(run.exitCode).toBe(0)
     const { ratio, rooms } = JSON.parse(run.stdout.toString()) as { ratio: number; rooms: number }
     expect(rooms).toBe(0)
-    // Eight times the walls: splitting every wall at every vertex already grows ~25×;
-    // the unbounded neighbour scan (7.8 s at 2,000 walls) grows ~70×.
-    expect(ratio).toBeLessThan(40)
+    // Eight times the walls: splitting every wall at every vertex already grows ~25× on a laptop
+    // and 42–57× on a shared CI runner, where 2,000 walls fall out of cache; the unbounded
+    // neighbour scan (7.8 s at 2,000 walls) grows ~70× even on a laptop.
+    expect(ratio).toBeLessThan(60)
   }, 30_000)
 })
 
