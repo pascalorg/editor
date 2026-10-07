@@ -70,6 +70,13 @@ const VALID_VISION_JSON = {
       approximateAreaSqM: 20,
     },
   ],
+  doors: [{ position: [2.5, 0], widthM: 0.9, swingDirection: 'inward' }],
+  windows: [{ position: [5, 2], widthM: 1.2, heightM: 1.2, sillHeightM: 0.9 }],
+  stairs: [{ position: [1, 1], widthM: 1, runLengthM: 2.5, rotationDeg: 90 }],
+  furniture: [
+    { type: 'sofa', position: [2.5, 2.8], rotationDeg: 0, widthM: 2.2, depthM: 0.9, confidence: 0.9 },
+    { type: 'coffee-table', position: [2.5, 1], rotationDeg: 0, confidence: 0.86 },
+  ],
   approximateDimensions: { widthM: 5, depthM: 4 },
   confidence: 0.82,
 }
@@ -103,6 +110,10 @@ describe('photo_to_scene', () => {
       url?: string
       walls: number
       rooms: number
+      doors: number
+      windows: number
+      stairs: number
+      furniture: number
       confidence: number
     }
     expect(structured.walls).toBe(4)
@@ -124,6 +135,15 @@ describe('photo_to_scene', () => {
     const zones = allNodes.filter((n) => n.type === 'zone')
     expect(walls.length).toBe(4)
     expect(zones.length).toBe(1)
+    expect(allNodes.filter((n) => n.type === 'door').length).toBe(1)
+    expect(allNodes.filter((n) => n.type === 'window').length).toBe(1)
+    expect(allNodes.filter((n) => n.type === 'stair').length).toBe(1)
+    expect(allNodes.filter((n) => n.type === 'stair-segment').length).toBe(1)
+    expect(allNodes.filter((n) => n.type === 'item').length).toBe(2)
+    expect(structured.doors).toBe(1)
+    expect(structured.windows).toBe(1)
+    expect(structured.stairs).toBe(1)
+    expect(structured.furniture).toBe(2)
 
     // Scene was persisted in the store.
     const saved = await store.load(structured.sceneId!)

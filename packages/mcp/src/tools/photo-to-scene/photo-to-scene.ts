@@ -5,13 +5,26 @@ import type { AnyNodeId, AnyNode as AnyNodeT } from '@pascal-app/core/schema'
 import {
   AnyNode,
   BuildingNode,
+  DoorNode,
+  ItemNode,
   LevelNode,
   SiteNode,
+  StairNode,
+  StairSegmentNode,
   WallNode,
+  WindowNode,
   ZoneNode,
 } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../../operations'
+import { findCatalogItem } from '../asset-catalog'
+import {
+  collectDoorKeepouts,
+  collectOccupiedFootprints,
+  findValidPlacement,
+  itemPlanAabb,
+  type PlanAabb,
+} from '../layout-clearance'
 import { DESTRUCTIVE_OPEN_WORLD_TOOL_ANNOTATIONS } from '../annotations'
 import { appendLiveSceneEvent } from '../live-sync'
 import { measurement } from '../measurement'
@@ -40,6 +53,10 @@ export const photoToSceneOutput = {
   url: z.string().optional(),
   walls: z.number(),
   rooms: z.number(),
+  doors: z.number(),
+  windows: z.number(),
+  stairs: z.number(),
+  furniture: z.number(),
   confidence: z.number(),
   notes: z.string().optional(),
   graph: z.any().optional(),
@@ -66,6 +83,41 @@ const VisionResponseSchema = z.object({
       approximateAreaSqM: z.number().optional(),
     }),
   ),
+  doors: z.array(
+    z.object({
+      position: z.tuple([z.number(), z.number()]),
+      widthM: z.number().positive().optional(),
+      heightM: z.number().positive().optional(),
+      swingDirection: z.enum(['inward', 'outward']).optional(),
+    }),
+  ).default([]),
+  windows: z.array(
+    z.object({
+      position: z.tuple([z.number(), z.number()]),
+      widthM: z.number().positive().optional(),
+      heightM: z.number().positive().optional(),
+      sillHeightM: z.number().nonnegative().optional(),
+    }),
+  ).default([]),
+  stairs: z.array(
+    z.object({
+      position: z.tuple([z.number(), z.number()]),
+      widthM: z.number().positive().optional(),
+      runLengthM: z.number().positive().optional(),
+      rotationDeg: z.number().optional(),
+      stepCount: z.number().int().positive().optional(),
+    }),
+  ).default([]),
+  furniture: z.array(
+    z.object({
+      type: z.string().min(1),
+      position: z.tuple([z.number(), z.number()]),
+      rotationDeg: z.number().optional(),
+      widthM: z.number().positive().optional(),
+      depthM: z.number().positive().optional(),
+      confidence: z.number().min(0).max(1).optional(),
+    }),
+  ).default([]),
   approximateDimensions: z.object({
     widthM: z.number(),
     depthM: z.number(),
@@ -86,12 +138,17 @@ Your ONLY job: return a JSON object that exactly matches this schema — no pros
 {
   "walls": [{ "start": [x, z], "end": [x, z], "thickness": number?, "height": number? }, ...],
   "rooms": [{ "name": string, "polygon": [[x,z], ...], "approximateAreaSqM": number? }, ...],
+  "doors": [{ "position": [x,z], "widthM": number?, "heightM": number?, "swingDirection": "inward"|"outward"? }, ...],
+  "windows": [{ "position": [x,z], "widthM": number?, "heightM": number?, "sillHeightM": number? }, ...],
+  "stairs": [{ "position": [x,z], "widthM": number?, "runLengthM": number?, "rotationDeg": number?, "stepCount": number? }, ...],
+  "furniture": [{ "type": string, "position": [x,z], "rotationDeg": number?, "widthM": number?, "depthM": number?, "confidence": number? }, ...],
   "approximateDimensions": { "widthM": number, "depthM": number },
   "confidence": number 0..1
 }
 
 Coordinates are in metres. Origin can be the floor plan's centre or bottom-left — be consistent.
 Only include a wall height when it is visibly measured or annotated in the image.
+Identify furniture symbols and fixtures separately from walls. Use common catalog terms such as double-bed, single-bed, sofa, coffee-table, dining-table, dining-chair, closet, dresser, kitchen, kitchen-counter, stove, fridge, toilet, bathroom-sink, bathtub, shower-square, tv-stand, shelf, desk, bookshelf, washing-machine, or coat-rack where applicable. Preserve each item's centre, orientation, and approximate footprint.
 If the image is unclear, lower the confidence score but still produce your best attempt.
 DO NOT wrap the JSON in markdown. DO NOT explain. Just output the raw JSON.`
 
@@ -219,8 +276,65 @@ type BuildResult = {
   rootNodeIds: AnyNodeId[]
   walls: number
   rooms: number
+  doors: number
+  windows: number
+  stairs: number
+  furniture: number
   warnings: string[]
   levelId: AnyNodeId
+}
+
+type Point2 = readonly [number, number]
+
+function nearestWall(walls: AnyNodeT[], point: Point2) {
+  let best: { wall: AnyNodeT & { type: 'wall' }; t: number; distance: number } | undefined
+  for (const candidate of walls) {
+    if (candidate.type !== 'wall') continue
+    const wall = candidate as AnyNodeT & { type: 'wall'; start: Point2; end: Point2 }
+    const dx = wall.end[0] - wall.start[0]
+    const dz = wall.end[1] - wall.start[1]
+    const length2 = dx * dx + dz * dz
+    if (length2 <= 1e-9) continue
+    const rawT = ((point[0] - wall.start[0]) * dx + (point[1] - wall.start[1]) * dz) / length2
+    const t = Math.max(0, Math.min(1, rawT))
+    const x = wall.start[0] + t * dx
+    const z = wall.start[1] + t * dz
+    const distance = Math.hypot(point[0] - x, point[1] - z)
+    if (!best || distance < best.distance) best = { wall, t, distance }
+  }
+  return best
+}
+
+function assetForDetectedFurniture(type: string) {
+  const key = type.trim().toLowerCase().replace(/\s+/g, '-')
+  const aliases: Record<string, string> = {
+    bed: 'double-bed',
+    doublebed: 'double-bed',
+    bunk: 'bunkbed',
+    sofa: 'sofa',
+    couch: 'sofa',
+    table: 'dining-table',
+    chair: 'dining-chair',
+    wardrobe: 'closet',
+    cabinet: 'closet',
+    'kitchen-cabinet': 'kitchen-cabinet',
+    sink: 'bathroom-sink',
+    toilet: 'toilet',
+    wc: 'toilet',
+    shower: 'shower-square',
+    tv: 'tv-stand',
+    television: 'tv-stand',
+    washingmachine: 'washing-machine',
+  }
+  const id = aliases[key] ?? key
+  return { asset: findCatalogItem(id), requested: type, id }
+}
+
+function makeDetectedAsset(asset: NonNullable<ReturnType<typeof findCatalogItem>>, widthM?: number, depthM?: number) {
+  const dimensions = [...(asset.dimensions ?? [1, 1, 1])] as [number, number, number]
+  if (widthM) dimensions[0] = widthM
+  if (depthM) dimensions[2] = depthM
+  return { ...asset, dimensions }
 }
 
 /**
@@ -332,6 +446,165 @@ function buildSceneGraphFromVision(
       warnings.push(`room[${i}] dropped: ${msg}`)
     }
   }
+
+  const createdWalls = Object.values(nodes).filter((node) => node.type === 'wall')
+  const warningsFor = (kind: string, index: number, reason: string) =>
+    warnings.push(`${kind}[${index}] skipped: ${reason}`)
+
+  // Openings are anchored to the nearest detected wall. The vision model only
+  // returns plan coordinates, while Pascal stores door/window positions in the
+  // wall-local coordinate system.
+  let doorsAdded = 0
+  for (let i = 0; i < vision.doors.length; i++) {
+    const detected = vision.doors[i]!
+    const nearest = nearestWall(createdWalls, detected.position)
+    if (!nearest || nearest.distance > 0.75) {
+      warningsFor('door', i, 'no nearby wall')
+      continue
+    }
+    const wall = nearest.wall
+    const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+    const width = detected.widthM ?? 0.9
+    const height = detected.heightM ?? 2.1
+    const localX = Math.max(width / 2, Math.min(length - width / 2, nearest.t * length))
+    const door = DoorNode.parse({
+      wallId: wall.id,
+      parentId: wall.id,
+      position: [localX, height / 2, 0],
+      width,
+      height,
+      swingDirection: detected.swingDirection ?? 'inward',
+      metadata: { mcpTool: 'photo_to_scene', detectedIndex: i },
+    })
+    nodes[door.id as AnyNodeId] = door as AnyNodeT
+    ;(nodes[wall.id] as AnyNodeT & { children?: string[] }).children = [
+      ...((nodes[wall.id] as AnyNodeT & { children?: string[] }).children ?? []),
+      door.id,
+    ]
+    doorsAdded++
+  }
+
+  let windowsAdded = 0
+  for (let i = 0; i < vision.windows.length; i++) {
+    const detected = vision.windows[i]!
+    const nearest = nearestWall(createdWalls, detected.position)
+    if (!nearest || nearest.distance > 0.75) {
+      warningsFor('window', i, 'no nearby wall')
+      continue
+    }
+    const wall = nearest.wall
+    const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+    const width = detected.widthM ?? 1.5
+    const height = detected.heightM ?? 1.5
+    const sillHeight = detected.sillHeightM ?? 0.9
+    const localX = Math.max(width / 2, Math.min(length - width / 2, nearest.t * length))
+    const windowNode = WindowNode.parse({
+      wallId: wall.id,
+      parentId: wall.id,
+      position: [localX, sillHeight + height / 2, 0],
+      width,
+      height,
+      metadata: { mcpTool: 'photo_to_scene', detectedIndex: i },
+    })
+    nodes[windowNode.id as AnyNodeId] = windowNode as AnyNodeT
+    ;(nodes[wall.id] as AnyNodeT & { children?: string[] }).children = [
+      ...((nodes[wall.id] as AnyNodeT & { children?: string[] }).children ?? []),
+      windowNode.id,
+    ]
+    windowsAdded++
+  }
+
+  let stairsAdded = 0
+  for (let i = 0; i < vision.stairs.length; i++) {
+    const detected = vision.stairs[i]!
+    const stair = StairNode.parse({
+      position: [detected.position[0], 0, detected.position[1]],
+      rotation: ((detected.rotationDeg ?? 0) * Math.PI) / 180,
+      width: detected.widthM ?? 1,
+      totalRise: defaultWallHeight,
+      stepCount: detected.stepCount ?? 10,
+      children: [],
+      metadata: { mcpTool: 'photo_to_scene', detectedIndex: i },
+    })
+    const segment = StairSegmentNode.parse({
+      width: detected.widthM ?? 1,
+      length: detected.runLengthM ?? 3,
+      height: defaultWallHeight,
+      stepCount: detected.stepCount ?? 10,
+      parentId: stair.id,
+    })
+    const linkedStair = { ...stair, children: [segment.id] }
+    nodes[stair.id as AnyNodeId] = linkedStair as AnyNodeT
+    nodes[segment.id as AnyNodeId] = segment as AnyNodeT
+    levelChildren.push(stair.id)
+    stairsAdded++
+  }
+
+  let furnitureAdded = 0
+  const occupied: PlanAabb[] = collectOccupiedFootprints(Object.values(nodes), {
+    levelId,
+    floorOnly: true,
+  }).map((entry) => entry.aabb)
+  const doorKeepouts = collectDoorKeepouts(Object.values(nodes), { levelId }).map(
+    (entry) => entry.aabb,
+  )
+  const bounds = vision.rooms.length > 0
+    ? vision.rooms.reduce(
+        (acc, room) => {
+          for (const [x, z] of room.polygon) {
+            acc.minX = Math.min(acc.minX, x)
+            acc.maxX = Math.max(acc.maxX, x)
+            acc.minZ = Math.min(acc.minZ, z)
+            acc.maxZ = Math.max(acc.maxZ, z)
+          }
+          return acc
+        },
+        { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity },
+      )
+    : undefined
+
+  for (let i = 0; i < vision.furniture.length; i++) {
+    const detected = vision.furniture[i]!
+    const resolved = assetForDetectedFurniture(detected.type)
+    if (!resolved.asset) {
+      warningsFor('furniture', i, `no catalog match for ${resolved.requested}`)
+      continue
+    }
+    const asset = makeDetectedAsset(resolved.asset, detected.widthM, detected.depthM)
+    const primary = {
+      x: detected.position[0],
+      z: detected.position[1],
+      rotationDeg: detected.rotationDeg ?? 0,
+    }
+    const placement = findValidPlacement({
+      primary,
+      dimensions: asset.dimensions,
+      doorKeepouts,
+      occupied,
+      roomBounds: bounds,
+    })
+    if (!placement.candidate) {
+      warningsFor('furniture', i, `${detected.type}: ${placement.reason}`)
+      continue
+    }
+    const { x, z, rotationDeg } = placement.candidate
+    const item = ItemNode.parse({
+      name: asset.name,
+      position: [x, 0, z],
+      rotation: [0, (rotationDeg * Math.PI) / 180, 0],
+      asset,
+      metadata: {
+        mcpTool: 'photo_to_scene',
+        detectedType: detected.type,
+        detectedConfidence: detected.confidence,
+        ...(x !== primary.x || z !== primary.z ? { placementAdjusted: true } : {}),
+      },
+    })
+    nodes[item.id as AnyNodeId] = item as AnyNodeT
+    levelChildren.push(item.id)
+    occupied.push(itemPlanAabb([x, 0, z], asset.dimensions, (rotationDeg * Math.PI) / 180))
+    furnitureAdded++
+  }
   // Finalise the level's children array now that walls/zones are in the dict.
   ;(linkedLevel as LevelNode).children = levelChildren as LevelNode['children']
   const levelValidated = AnyNode.safeParse(linkedLevel)
@@ -345,6 +618,10 @@ function buildSceneGraphFromVision(
     rootNodeIds: [siteId],
     walls: wallsAdded,
     rooms: roomsAdded,
+    doors: doorsAdded,
+    windows: windowsAdded,
+    stairs: stairsAdded,
+    furniture: furnitureAdded,
     warnings,
     levelId,
   }
@@ -392,6 +669,10 @@ export function registerPhotoToScene(server: McpServer, bridge: SceneOperations)
           url: string
           walls: number
           rooms: number
+          doors: number
+          windows: number
+          stairs: number
+          furniture: number
           confidence: number
           notes?: string
         } = {
@@ -399,6 +680,10 @@ export function registerPhotoToScene(server: McpServer, bridge: SceneOperations)
           url: `/scene/${meta.id}`,
           walls: built.walls,
           rooms: built.rooms,
+          doors: built.doors,
+          windows: built.windows,
+          stairs: built.stairs,
+          furniture: built.furniture,
           confidence: vision.confidence,
         }
         if (notes) payload.notes = notes
@@ -411,12 +696,20 @@ export function registerPhotoToScene(server: McpServer, bridge: SceneOperations)
       const payload: {
         walls: number
         rooms: number
+        doors: number
+        windows: number
+        stairs: number
+        furniture: number
         confidence: number
         notes?: string
         graph: SceneGraph
       } = {
         walls: built.walls,
         rooms: built.rooms,
+        doors: built.doors,
+        windows: built.windows,
+        stairs: built.stairs,
+        furniture: built.furniture,
         confidence: vision.confidence,
         graph,
       }
