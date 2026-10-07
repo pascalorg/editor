@@ -545,6 +545,13 @@ export {
 } from './store/item-interaction'
 export { materializeRegisteredNodeDefaults } from './store/registered-node-defaults'
 export {
+  readSceneNodeField,
+  SCENE_IMAGE_FIELD,
+  withoutSceneNodeAnnotations,
+  withSceneNodeBuildImages,
+  writeSceneNodeField,
+} from './store/scene-annotations'
+export {
   type ControlValue,
   type DoorAnimationState,
   type DoorInteractiveState,

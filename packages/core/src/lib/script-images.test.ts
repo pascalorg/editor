@@ -1,6 +1,12 @@
 import { afterEach, expect, test } from 'bun:test'
 import { addObject, applySceneChanges } from '../agent-operations'
 import {
+  applySceneOperationPatch,
+  subscribeSceneCommits,
+  useScene,
+  withoutSceneNodeAnnotations,
+} from '../index'
+import {
   type CompiledGeometryScript,
   DoorNode,
   GeometryArtifactManifest,
@@ -86,4 +92,78 @@ test('an artifact URL loads through the configured artifact store', async () => 
     `/api/projects/p/artifacts/${images.thumbnail}`,
   )
   expect(await loadAssetUrl('artifact://not-a-hash')).toBeNull()
+})
+
+test('annotation writes use the durable commit boundary without owning solo undo or redo', () => {
+  const initial = useScene.getState()
+  const previousRaf = globalThis.requestAnimationFrame
+  const previousCancel = globalThis.cancelAnimationFrame
+  globalThis.requestAnimationFrame = () => 0
+  globalThis.cancelAnimationFrame = () => {}
+  const node = created()
+  const commits: Array<{ origin: string; images: unknown }> = []
+  const unsubscribe = subscribeSceneCommits((commit) =>
+    commits.push({
+      origin: commit.origin,
+      images: (commit.current.nodes[node.id] as ItemNode)?.source?.images,
+    }),
+  )
+  try {
+    useScene.setState({ nodes: { [node.id]: node }, rootNodeIds: [node.id], readOnly: false })
+    useScene.temporal.getState().clear()
+    useScene
+      .getState()
+      .updateNode(node.id, { source: { ...node.source!, meta: { description: 'Edited' } } })
+    useScene.temporal.getState().undo()
+    const history = useScene.temporal.getState()
+    commits.length = 0
+    const patch = {
+      nodeUpdates: [{ id: node.id, data: { 'source.images': images }, removeFields: [] }],
+      nodeCreates: [],
+      nodeDeletes: [],
+      materialChanges: [],
+    }
+    expect(applySceneOperationPatch(patch, { annotation: true })).toBe(true)
+    expect(commits).toEqual([{ origin: 'local', images }])
+    expect(useScene.temporal.getState().pastStates).toHaveLength(history.pastStates.length)
+    expect(useScene.temporal.getState().futureStates).toHaveLength(history.futureStates.length)
+    useScene.temporal.getState().redo()
+    expect(useScene.getState().nodes[node.id]).toMatchObject({
+      source: { images, meta: { description: 'Edited' } },
+    })
+    useScene.temporal.getState().undo()
+    expect(useScene.getState().nodes[node.id]).toMatchObject({ source: { images } })
+    useScene
+      .getState()
+      .updateNode(node.id, { source: { ...node.source!, artifact: 'e'.repeat(64) } })
+    expect(applySceneOperationPatch(patch, { annotation: true })).toBe(false)
+    expect((useScene.getState().nodes[node.id] as ItemNode).source?.images).toBeUndefined()
+  } finally {
+    unsubscribe()
+    useScene.setState(initial)
+    useScene.temporal.getState().clear()
+    globalThis.requestAnimationFrame = previousRaf
+    globalThis.cancelAnimationFrame = previousCancel
+  }
+})
+
+test('scripted item creation and rebuild remain JSON scene records for the collaboration journal', () => {
+  const original = created()
+  const workerCompiled = {
+    ...compiled,
+    manifest: { ...compiled.manifest, slots: [{ id: 'body', label: undefined, color: '#a67441' }] },
+  }
+  const rebuilt = addObject(
+    { [original.id]: original },
+    { nodeId: original.id, compiled: workerCompiled },
+    { activeLevelId: level.id },
+  )
+  const next = applySceneChanges({ [original.id]: original }, rebuilt.changes)[original.id]
+  expect(original).toStrictEqual(JSON.parse(JSON.stringify(original)))
+  expect(next).toStrictEqual(JSON.parse(JSON.stringify(next)))
+})
+
+test('annotation exclusion preserves another source kind’s authored images', () => {
+  const node = { source: { kind: 'custom-plugin', images: { front: 'user-photo' } } }
+  expect(withoutSceneNodeAnnotations(node)).toEqual(node)
 })

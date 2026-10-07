@@ -63,6 +63,8 @@ function scriptAsset(
 ): ItemNode['asset'] {
   const { min, max } = compiled.manifest.bounds
   const restingHeight = geometryRestingHeight(compiled.manifest)
+  const attachTo = ATTACH[compiled.mount]
+  const interactive = scriptInteractive(compiled.manifest)
   return {
     id: `script_${compiled.sha256.slice(0, 16)}`,
     category: input.category ?? previous?.category ?? 'object',
@@ -71,12 +73,12 @@ function scriptAsset(
     source: 'mine',
     src: artifactUrl(compiled.sha256),
     dimensions: [max[0] - min[0], max[1] - min[1], max[2] - min[2]],
-    attachTo: ATTACH[compiled.mount],
-    surface: restingHeight === null ? undefined : { height: restingHeight },
+    ...(attachTo ? { attachTo } : {}),
+    ...(restingHeight === null ? {} : { surface: { height: restingHeight } }),
     offset: [0, 0, 0],
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
-    interactive: scriptInteractive(compiled.manifest),
+    ...(interactive ? { interactive } : {}),
   }
 }
 
@@ -232,7 +234,7 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
       name: input.name ?? previous.name,
       position: (input.position as Vec3 | undefined) ?? previous.position,
       rotation: rotation ?? previous.rotation,
-      side: input.side ?? previous.side,
+      ...(input.side === undefined ? {} : { side: input.side }),
       source: scriptSource(compiled, itemSourceMeta(input), previous.source),
       slots: matchScriptSlotsToLibrary(
         compiled.manifest,

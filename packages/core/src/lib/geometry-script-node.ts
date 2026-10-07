@@ -55,7 +55,8 @@ export const scriptSource = (
       script: compiled.script,
       params: compiled.params,
       artifact: compiled.sha256,
-      manifest: compiled.manifest,
+      // Worker structured clones retain optional undefined fields; durable scene writes are JSON.
+      manifest: JSON.parse(JSON.stringify(compiled.manifest)),
     },
     meta,
     // A params-only rebuild runs the same script: its lineage stays where it was.
