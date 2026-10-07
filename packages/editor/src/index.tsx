@@ -220,6 +220,7 @@ export {
   CameraActions as ViewerToolbarRight,
 } from './components/ui/action-menu/camera-actions'
 export { furnishTools } from './components/ui/action-menu/furnish-tools'
+export type { ActionMenuPlacement } from './components/ui/action-menu/placement'
 export {
   ViewToggles as ToolbarLeft,
   ViewToggles as ViewerToolbarLeft,

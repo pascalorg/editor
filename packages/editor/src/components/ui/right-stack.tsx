@@ -56,7 +56,16 @@ function inspectorHeights(slot: HTMLElement): { natural: number; header: number 
  * and the card scrolls instead. Neither hides the other. On a phone the two
  * keep their own layouts (sheet / no card).
  */
-export function RightStack({ inspector, helper }: { inspector: ReactNode; helper: ReactNode }) {
+export function RightStack({
+  inspector,
+  helper,
+  reserveBottomMenu = true,
+}: {
+  inspector: ReactNode
+  helper: ReactNode
+  // Keep clear of an action menu docked at the bottom; off when it sits at the top.
+  reserveBottomMenu?: boolean
+}) {
   const isMobile = useIsMobile()
   const stackRef = useRef<HTMLDivElement>(null)
   const inspectorRef = useRef<HTMLDivElement>(null)
@@ -125,7 +134,11 @@ export function RightStack({ inspector, helper }: { inspector: ReactNode; helper
   return (
     <RightStackContext.Provider value={true}>
       <div
-        className="pointer-events-none fixed top-20 right-4 bottom-[74px] z-40 flex flex-col items-end gap-2"
+        className={`pointer-events-none fixed right-4 z-40 flex flex-col items-end gap-2 ${reserveBottomMenu ? 'bottom-[74px]' : 'bottom-4'}`}
+        // Below the right side of the viewer toolbar, which can grow; 80px by default.
+        style={{
+          top: 'calc(var(--viewer-toolbar-right-bottom, var(--viewer-toolbar-bottom, 2.75rem)) + 2.25rem)',
+        }}
         data-right-stack
         ref={stackRef}
       >

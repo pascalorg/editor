@@ -37,6 +37,7 @@ import { ViewerOverlay } from '../../components/viewer-overlay'
 import { ViewerZoneSystem } from '../../components/viewer-zone-system'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
+import { useIsMobile } from '../../hooks/use-mobile'
 import { useSaveShortcut } from '../../hooks/use-save-shortcut'
 import { useCeilingEditSessionOwner } from '../../lib/ceiling-edit-session'
 import { showsWholeBuilding, useEditorLevelDisplay } from '../../lib/editor-level-display'
@@ -70,6 +71,7 @@ import { ZoneSystem } from '../systems/zone/zone-system'
 import { BoxSelectTool } from '../tools/select/box-select-tool'
 import { ToolManager } from '../tools/tool-manager'
 import { ActionMenu } from '../ui/action-menu'
+import type { ActionMenuPlacement } from '../ui/action-menu/placement'
 import { CommandPalette, type CommandPaletteEmptyAction } from '../ui/command-palette'
 import { EditorCommands } from '../ui/command-palette/editor-commands'
 import { FloatingLevelSelector } from '../ui/floating-level-selector'
@@ -182,6 +184,8 @@ function initializeEditorRuntime(): () => void {
 export interface EditorProps {
   // Layout version — 'v1' (default) or 'v2' (navbar + two-column)
   layoutVersion?: 'v1' | 'v2'
+  // Viewport edge the tool menu docks to (desktop only; mobile stays at the bottom)
+  actionMenuPlacement?: ActionMenuPlacement
 
   // UI slots (v1)
   appMenuButton?: ReactNode
@@ -564,9 +568,11 @@ function CameraControlHintItem({ hint }: { hint: CameraControlHint }) {
 }
 
 function ViewerCanvasControlsHint({
+  belowTopMenu = false,
   isPreviewMode,
   onDismiss,
 }: {
+  belowTopMenu?: boolean
   isPreviewMode: boolean
   onDismiss: () => void
 }) {
@@ -581,7 +587,14 @@ function ViewerCanvasControlsHint({
   }
 
   return (
-    <div className="pointer-events-none absolute top-14 left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2">
+    // Sits under the whole viewer toolbar as the layout reports it; without one,
+    // under a top-docked action menu or the default toolbar height.
+    <div
+      className="pointer-events-none absolute left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2"
+      style={{
+        top: `calc(var(--viewer-toolbar-full-bottom, ${belowTopMenu ? '4.375rem' : '2.75rem'}) + 0.75rem)`,
+      }}
+    >
       <section
         aria-label="Camera controls hint"
         className="pointer-events-auto flex items-start gap-3 rounded-2xl border border-border/35 bg-background/90 px-3.5 py-2.5 shadow-elevation-4 backdrop-blur-xl"
@@ -1077,6 +1090,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   floorplanSceneSlot,
   disablePostFx = false,
   immersive,
+  hintBelowTopMenu = false,
 }: {
   isVersionPreviewMode: boolean
   isLoading: boolean
@@ -1092,6 +1106,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   floorplanSceneSlot?: ReactNode
   disablePostFx?: boolean
   immersive?: ViewerImmersiveSession
+  hintBelowTopMenu?: boolean
 }) {
   const viewMode = useEditor((s) => s.viewMode)
   const floorplanPaneRatio = useEditor((s) => s.floorplanPaneRatio)
@@ -1212,6 +1227,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
           />
           {!showLoader && isCameraControlsHintVisible && !isFirstPersonMode ? (
             <ViewerCanvasControlsHint
+              belowTopMenu={hintBelowTopMenu}
               isPreviewMode={isPreviewMode}
               onDismiss={dismissCameraControlsHint}
             />
@@ -1313,6 +1329,7 @@ function PreviewStage({
 function EditorContent({
   guardAgainstSceneWipe,
   layoutVersion = 'v1',
+  actionMenuPlacement,
   appMenuButton,
   sidebarTop,
   navbarSlot,
@@ -1345,6 +1362,9 @@ function EditorContent({
   extraSidebarPanels,
   commandPaletteEmptyAction,
 }: EditorProps) {
+  const isMobile = useIsMobile()
+  // A top-docked menu joins the viewer toolbar row on desktop (layout v2).
+  const dockMenuInToolbar = actionMenuPlacement === 'top' && !isMobile
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const isStudioMode = useEditor((s) => s.workspaceMode === 'studio')
   const presentationProjectId = projectId ?? null
@@ -1613,6 +1633,7 @@ function EditorContent({
   const viewerCanvas = (
     <ViewerCanvas
       disablePostFx={disablePostFx}
+      hintBelowTopMenu={actionMenuPlacement === 'top' && !isMobile}
       hasLoadedInitialScene={hasLoadedInitialScene}
       isFirstPersonMode={isFirstPersonMode}
       isLoading={isLoading}
@@ -1706,13 +1727,19 @@ function EditorContent({
               overlays={
                 <>
                   {!(isCaptureMode || stageOverlay) && <FloatingLevelSelector />}
-                  {!(isVersionPreviewMode || isCaptureMode || isStudioMode) && (
+                  {!(
+                    isVersionPreviewMode ||
+                    isCaptureMode ||
+                    isStudioMode ||
+                    dockMenuInToolbar
+                  ) && (
                     <div className="pointer-events-auto">
-                      <ActionMenu />
+                      <ActionMenu placement={actionMenuPlacement} />
                     </div>
                   )}
                   {/* The inspector and the shortcuts card share one right column. */}
                   <RightStack
+                    reserveBottomMenu={!dockMenuInToolbar}
                     helper={isCaptureMode ? null : <HelperManager />}
                     inspector={
                       isVersionPreviewMode || isCaptureMode || isStudioMode ? null : (
@@ -1740,6 +1767,11 @@ function EditorContent({
               sidebarTabs={tabBarTabs}
               stageOverlay={stageOverlay}
               viewerContent={viewerCanvas}
+              viewerToolbarCenter={
+                dockMenuInToolbar && !(isVersionPreviewMode || isCaptureMode || isStudioMode) ? (
+                  <ActionMenu inline placement="top" />
+                ) : undefined
+              }
               viewerToolbarLeft={viewerToolbarLeft}
               viewerToolbarRight={viewerToolbarRight}
             />
@@ -1799,9 +1831,13 @@ function EditorContent({
           {/* Fixed UI overlays scoped to the viewer area */}
           <ViewerOverlays left={overlayLeft}>
             <div className="pointer-events-auto">
-              <ActionMenu />
+              <ActionMenu placement={actionMenuPlacement} />
             </div>
-            <RightStack helper={<HelperManager />} inspector={<PanelManager />} />
+            <RightStack
+              helper={<HelperManager />}
+              inspector={<PanelManager />}
+              reserveBottomMenu={actionMenuPlacement !== 'top' || isMobile}
+            />
             <RiserDiagramPanel />
             {isFirstPersonMode && (
               <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />

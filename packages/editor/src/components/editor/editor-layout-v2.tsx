@@ -1,6 +1,6 @@
 'use client'
 
-import { type ReactNode, useCallback, useEffect, useRef } from 'react'
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { useIsMobile } from '../../hooks/use-mobile'
 import { openSidebarPanel, SIDEBAR_MIN_WIDTH, setSidebarTabIds } from '../../lib/sidebar-panel'
 import useEditor from '../../store/use-editor'
@@ -179,20 +179,97 @@ function LeftColumn({
 
 function RightColumn({
   toolbarLeft,
+  toolbarCenter,
   toolbarRight,
   children,
   overlays,
   stageOverlay,
 }: {
   toolbarLeft?: ReactNode
+  toolbarCenter?: ReactNode
   toolbarRight?: ReactNode
   children: ReactNode
   overlays?: ReactNode
   stageOverlay?: ReactNode
 }) {
+  const columnRef = useRef<HTMLDivElement>(null)
+  const toolbarRef = useRef<HTMLDivElement>(null)
+  const leftRef = useRef<HTMLDivElement>(null)
+  const centerRef = useRef<HTMLDivElement>(null)
+  const rightRef = useRef<HTMLDivElement>(null)
+  // `inline`: between the side groups. `left`: under the left group, beside a
+  // taller right group. `full`: its own row across the whole toolbar.
+  const [centerPlacement, setCenterPlacement] = useState<'inline' | 'left' | 'full'>('inline')
+  const centerOnOwnRow = centerPlacement !== 'inline'
+  const hasToolbar = Boolean(toolbarLeft || toolbarCenter || toolbarRight)
+
+  // When the three groups don't fit in one row, the center group moves under
+  // the left group if the right group is tall enough to leave that space and
+  // the left column is wide enough, else to its own full-width row. Also publish
+  // where each side of the toolbar ends, so viewer overlays sit below their
+  // side however tall it gets.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: both are re-run triggers; the observed nodes mount and unmount with them.
+  useEffect(() => {
+    const column = columnRef.current
+    const toolbar = toolbarRef.current
+    if (!(column && toolbar)) return
+    const update = () => {
+      const center = centerRef.current?.firstElementChild as HTMLElement | null | undefined
+      const left = leftRef.current
+      const right = rightRef.current
+      if (!center) {
+        setCenterPlacement('inline')
+      } else {
+        const gap = Number.parseFloat(getComputedStyle(toolbar).columnGap) || 0
+        const leftWidth = left?.scrollWidth ?? 0
+        const rightWidth = right?.scrollWidth ?? 0
+        const fitsInline =
+          leftWidth + center.offsetWidth + rightWidth + gap * 2 <= toolbar.clientWidth
+        const rightIsTall = (right?.offsetHeight ?? 0) > (left?.offsetHeight ?? 0) + gap
+        const fitsUnderLeft = center.offsetWidth <= toolbar.clientWidth - rightWidth - gap
+        setCenterPlacement(fitsInline ? 'inline' : rightIsTall && fitsUnderLeft ? 'left' : 'full')
+      }
+      const bottomOf = (el: HTMLElement | null | undefined) =>
+        el ? toolbar.offsetTop + el.offsetTop + el.offsetHeight : toolbar.offsetTop
+      const centerBox = centerRef.current
+      column.style.setProperty(
+        '--viewer-toolbar-bottom',
+        `${Math.max(bottomOf(leftRef.current), bottomOf(centerBox))}px`,
+      )
+      // The right side also ends below the center group when that group reaches under it.
+      const centerUnderRight =
+        centerBox && right && centerBox.offsetLeft + centerBox.offsetWidth > right.offsetLeft
+      column.style.setProperty(
+        '--viewer-toolbar-right-bottom',
+        `${Math.max(bottomOf(right), centerUnderRight ? bottomOf(centerBox) : 0)}px`,
+      )
+      column.style.setProperty(
+        '--viewer-toolbar-full-bottom',
+        `${toolbar.offsetTop + toolbar.offsetHeight}px`,
+      )
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    for (const el of [
+      toolbar,
+      leftRef.current,
+      rightRef.current,
+      centerRef.current?.firstElementChild,
+    ]) {
+      if (el) observer.observe(el)
+    }
+    return () => {
+      observer.disconnect()
+      column.style.removeProperty('--viewer-toolbar-bottom')
+      column.style.removeProperty('--viewer-toolbar-right-bottom')
+      column.style.removeProperty('--viewer-toolbar-full-bottom')
+    }
+  }, [hasToolbar, toolbarCenter])
+
   return (
     <div
       className="relative flex min-w-0 flex-1 flex-col overflow-hidden"
+      ref={columnRef}
       style={{
         borderTopLeftRadius: 16,
         clipPath: 'inset(0 0 0 0 round 16px 0 0 0)',
@@ -200,10 +277,53 @@ function RightColumn({
       }}
     >
       {/* Viewer toolbar */}
-      {(toolbarLeft || toolbarRight) && (
-        <div className="pointer-events-none absolute top-3 right-3 left-3 z-20 flex items-center justify-between gap-2">
-          <div className="pointer-events-auto flex items-center gap-2">{toolbarLeft}</div>
-          <div className="pointer-events-auto flex items-center gap-2">{toolbarRight}</div>
+      {hasToolbar && (
+        <div
+          className={
+            centerOnOwnRow
+              ? 'pointer-events-none absolute top-3 right-3 left-3 z-20 grid grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_1fr] items-start gap-2'
+              : 'pointer-events-none absolute top-3 right-3 left-3 z-20 flex flex-wrap items-start justify-between gap-2'
+          }
+          ref={toolbarRef}
+        >
+          <div
+            className={`pointer-events-auto flex items-center gap-2 ${centerOnOwnRow ? 'col-start-1 row-start-1 justify-self-start' : ''}`}
+            ref={leftRef}
+          >
+            {toolbarLeft}
+          </div>
+          {/* Centered in the gap between the side groups, or under the left group when it doesn't fit. */}
+          {toolbarCenter && (
+            <div
+              className={
+                centerPlacement === 'left'
+                  ? 'col-start-1 row-start-2 justify-self-center'
+                  : centerPlacement === 'full'
+                    ? 'col-span-2 col-start-1 row-start-2 justify-self-center'
+                    : undefined
+              }
+              ref={centerRef}
+            >
+              {/* Only the group takes clicks; the rest of its row stays on the canvas. */}
+              <div className="pointer-events-auto">{toolbarCenter}</div>
+            </div>
+          )}
+          {/* `ml-auto` keeps it right-aligned if it wraps; skipped while the center group
+              shares the row, so the free space stays split around it. */}
+          <div
+            className={`pointer-events-auto flex items-center gap-2 ${
+              centerPlacement === 'left'
+                ? 'col-start-2 row-span-2 row-start-1'
+                : centerPlacement === 'full'
+                  ? 'col-start-2 row-start-1'
+                  : toolbarCenter
+                    ? ''
+                    : 'ml-auto'
+            }`}
+            ref={rightRef}
+          >
+            {toolbarRight}
+          </div>
         </div>
       )}
       {/* Canvas area. `isolate` matters: drei's `<Html>` computes a z-index
@@ -242,6 +362,7 @@ export interface EditorLayoutV2Props {
   renderTabContent: (tabId: string) => ReactNode
   sidebarOverlay?: ReactNode
   viewerToolbarLeft?: ReactNode
+  viewerToolbarCenter?: ReactNode
   viewerToolbarRight?: ReactNode
   viewerContent: ReactNode
   overlays?: ReactNode
@@ -254,6 +375,7 @@ export function EditorLayoutV2({
   renderTabContent,
   sidebarOverlay,
   viewerToolbarLeft,
+  viewerToolbarCenter,
   viewerToolbarRight,
   viewerContent,
   overlays,
@@ -294,6 +416,7 @@ export function EditorLayoutV2({
         <RightColumn
           overlays={overlays}
           stageOverlay={stageOverlay}
+          toolbarCenter={isCaptureMode ? undefined : viewerToolbarCenter}
           toolbarLeft={isCaptureMode ? undefined : viewerToolbarLeft}
           toolbarRight={isCaptureMode ? undefined : viewerToolbarRight}
         >
