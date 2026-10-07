@@ -305,7 +305,7 @@ export {
   roomFloorElevationFromRelative,
   roundFloorElevation,
 } from './lib/room-floor-feasibility'
-export { findOpenWallEnds, type OpenWallEnd } from './lib/room-graph'
+export type { OpenWallEnd } from './lib/room-graph'
 export {
   type BoundaryNode,
   type BoundarySpan,
@@ -892,6 +892,7 @@ export {
   resolveWallTop,
 } from './systems/wall/wall-top'
 export {
+  findOpenWallEnds,
   planJoinOpenWallEnd,
   planWallEndRejoins,
   planWallInsertion,

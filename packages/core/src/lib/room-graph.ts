@@ -953,7 +953,7 @@ export function wallEndJoinCandidates(nodes: Readonly<Record<string, AnyNode>>, 
 }
 
 /** Separator edges preserve intentional openings after wall deletion; only wall ends are reported. */
-export function findOpenWallEnds(
+export function detectOpenWallEnds(
   nodes: Readonly<Record<string, AnyNode>>,
   levelId: string,
 ): OpenWallEnd[] {

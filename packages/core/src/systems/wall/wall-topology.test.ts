@@ -12,7 +12,7 @@ import {
   useScene,
   type WallTopologyChanges,
 } from '../../index'
-import { extractRooms } from '../../lib/room-graph'
+import { detectOpenWallEnds, extractRooms } from '../../lib/room-graph'
 import { encodeTerrainField } from '../../lib/terrain-codec'
 import { applyHeightPatch, createTerrainField, flattenPatch } from '../../lib/terrain-field'
 import { type AnyNode, type AnyNodeId, DoorNode, WallNode, ZoneNode } from '../../schema'
@@ -514,6 +514,227 @@ describe('planJoinOpenWallEnd', () => {
     extractRooms(Object.values(nodes).filter((node): node is WallNode => node.type === 'wall'))
   const endOf = (nodes: Record<string, AnyNode>, wallId: string, end: 'start' | 'end') =>
     findOpenWallEnds(nodes, LEVEL_ID).find((entry) => entry.wallId === wallId && entry.end === end)!
+
+  const cornerScene = (angle: number, height = 3, gap = 0.09, reversed = false) => {
+    const pivot: [number, number] = [2, height]
+    const tip: [number, number] = [2 + (height - gap) / Math.tan((angle * Math.PI) / 180), gap]
+    const source = {
+      ...wall('wall_source', reversed ? tip : pivot, reversed ? pivot : tip),
+      thickness: 0.01,
+    }
+    const target = { ...wall('wall_target', [-20, 0], [30, 0]), thickness: 0.01 }
+    return nodeMap([
+      source,
+      target,
+      wall('wall_anchor', pivot, [-20, height]),
+      wall('wall_left', [-20, height], [-20, 0]),
+    ])
+  }
+
+  test.each([
+    [88, 90, 3, false],
+    [47, 45, 0.4, false],
+    [133, 135, 0.4, false],
+    [88, 90, 3, true],
+    [89.5, 90, 20, false],
+  ] as const)('joins %s° at exactly %s° while retaining the anchored junction', (angle, exact, height, reversed) => {
+    const nodes = cornerScene(angle, height, 0.09, reversed)
+    const source = nodes.wall_source as WallNode
+    const target = nodes.wall_target as WallNode
+    const end = reversed ? 'start' : 'end'
+    const fixedEnd = reversed ? 'end' : 'start'
+    expect(rooms(nodes)).toHaveLength(0)
+    const open = endOf(nodes, source.id, end)
+    const result = planJoinOpenWallEnd(nodes, open)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const after = apply(nodes, result.plan.changes)
+    const joined = after[source.id] as WallNode
+    expect(joined[fixedEnd]).toEqual(source[fixedEnd])
+    expect(joined[end][1]).toBeCloseTo(0, 10)
+    expect(joined[end][0]).toBeCloseTo(2 + height / Math.tan((exact * Math.PI) / 180), 10)
+    expect(open.candidate!.point).toEqual(joined[end])
+    expect(after.wall_anchor).toEqual(nodes.wall_anchor)
+    expect(after.wall_left).toEqual(nodes.wall_left)
+    const targetSegments = Object.values(after).filter(
+      (node): node is WallNode =>
+        node.type === 'wall' && node.id !== source.id && node.start[1] === 0 && node.end[1] === 0,
+    )
+    expect(targetSegments).toHaveLength(2)
+    expect(targetSegments[0]!.start).toEqual(target.start)
+    expect(targetSegments[1]!.end).toEqual(target.end)
+    expect(rooms(after)).toHaveLength(1)
+    expect(endOf(after, source.id, end)).toBeUndefined()
+  })
+
+  test.each([
+    [80, 3],
+    [84, 1],
+    [88, 6],
+    [88, 10],
+  ] as const)('keeps the straight join for %s° at height %s when angle or movement exceeds the limit', (angle, height) => {
+    const nodes = cornerScene(angle, height)
+    const source = nodes.wall_source as WallNode
+    const open = endOf(nodes, source.id, 'end')
+    const result = planJoinOpenWallEnd(nodes, open)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const joined = apply(nodes, result.plan.changes)[source.id] as WallNode
+    expect(joined.start).toEqual(source.start)
+    expect(joined.end[0]).toBeCloseTo(2 + height / Math.tan((angle * Math.PI) / 180), 10)
+    expect(joined.end[1]).toBeCloseTo(0, 10)
+    expect(open.candidate!.point).toEqual(joined.end)
+  })
+
+  test('measures the squaring limit from where the straight join lands', () => {
+    // 3 m wall, 2° off square, 20 cm short: the corner is ~22 cm from the open end but
+    // only ~10 cm from the straight join.
+    const nodes = cornerScene(88, 3, 0.2)
+    const source = nodes.wall_source as WallNode
+    const open = endOf(nodes, source.id, 'end')
+    const result = planJoinOpenWallEnd(nodes, open)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const joined = apply(nodes, result.plan.changes)[source.id] as WallNode
+    expect(joined.start).toEqual(source.start)
+    expect(joined.end[0]).toBeCloseTo(2, 10)
+    expect(joined.end[1]).toBeCloseTo(0, 10)
+    expect(open.candidate!.point).toEqual(joined.end)
+  })
+
+  test('squares an L near miss the same way from either open end', () => {
+    // Two walls stopping 9 cm short of each other at 88°.
+    const meetX = 3 / Math.tan((88 * Math.PI) / 180)
+    const nodes = nodeMap([
+      wall('wall_a', [0, 3], [(2.91 / 3) * meetX, 0.09]),
+      wall('wall_b', [meetX + 0.09, 0], [4, 0]),
+    ])
+    const outcomes = (['wall_a', 'wall_b'] as const).map((wallId) => {
+      const open = findOpenWallEnds(nodes, LEVEL_ID).find(
+        (entry) => entry.wallId === wallId && entry.candidate,
+      )!
+      const result = planJoinOpenWallEnd(nodes, open)
+      expect(result.ok).toBe(true)
+      if (!result.ok) return null
+      const after = apply(nodes, result.plan.changes)
+      const a = after.wall_a as WallNode
+      const b = after.wall_b as WallNode
+      expect(open.candidate!.point).toEqual(open.end === 'start' ? b.start : a.end)
+      return { a, b }
+    })
+    for (const outcome of outcomes) {
+      const { a, b } = outcome!
+      expect(a.start).toEqual([0, 3])
+      expect(b.end).toEqual([4, 0])
+      expect(a.end[0]).toBeCloseTo(0, 10)
+      expect(a.end[1]).toBeCloseTo(0, 10)
+      expect(b.start).toEqual(a.end)
+      const dot =
+        (a.end[0] - a.start[0]) * (b.end[0] - b.start[0]) +
+        (a.end[1] - a.start[1]) * (b.end[1] - b.start[1])
+      expect(dot).toBeCloseTo(0, 10)
+    }
+    expect(outcomes[0]!.a.end).toEqual(outcomes[1]!.a.end)
+  })
+
+  test('a previewed endpoint join plans the same join as the raw open end', () => {
+    const nodes = nodeMap([wall('wall_a', [0, 3], [0.05, 0.08]), wall('wall_b', [0.08, 0], [4, 0])])
+    const raw = detectOpenWallEnds(nodes, LEVEL_ID).find(
+      (entry) => entry.wallId === 'wall_a' && entry.end === 'end',
+    )!
+    const previewed = endOf(nodes, 'wall_a', 'end')
+    expect(raw.candidate).toMatchObject({ kind: 'endpoint', point: [0.08, 0] })
+    expect(previewed.candidate!.point).not.toEqual(raw.candidate!.point)
+    const fromRaw = planJoinOpenWallEnd(nodes, raw)
+    const fromPreview = planJoinOpenWallEnd(nodes, previewed)
+    expect(fromRaw.ok && fromPreview.ok).toBe(true)
+    if (!(fromRaw.ok && fromPreview.ok)) return
+    expect(fromPreview.plan.resolvedEnd).toEqual(previewed.candidate!.point)
+    expect(fromPreview.plan.changes).toEqual(fromRaw.plan.changes)
+  })
+
+  test('squares relative to a rotated target with reversed endpoints', () => {
+    const nodes = cornerScene(88)
+    const rotation = (23 * Math.PI) / 180
+    const rotate = ([x, z]: [number, number]): [number, number] => [
+      x * Math.cos(rotation) - z * Math.sin(rotation),
+      x * Math.sin(rotation) + z * Math.cos(rotation),
+    ]
+    for (const node of Object.values(nodes)) {
+      if (node.type === 'wall')
+        nodes[node.id] = { ...node, start: rotate(node.start), end: rotate(node.end) }
+    }
+    const target = nodes.wall_target as WallNode
+    nodes[target.id] = { ...target, start: target.end, end: target.start }
+    const source = nodes.wall_source as WallNode
+    const open = endOf(nodes, source.id, 'end')
+    const result = planJoinOpenWallEnd(nodes, open)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const after = apply(nodes, result.plan.changes)
+    const joined = after[source.id] as WallNode
+    const delta = [joined.end[0] - joined.start[0], joined.end[1] - joined.start[1]]
+    const direction = [target.end[0] - target.start[0], target.end[1] - target.start[1]]
+    expect(delta[0]! * direction[0]! + delta[1]! * direction[1]!).toBeCloseTo(0, 10)
+    expect(joined.start).toEqual(source.start)
+    expect(open.candidate!.point).toEqual(joined.end)
+    expect(rooms(after)).toHaveLength(1)
+  })
+
+  test.each([
+    'start',
+    'end',
+  ] as const)('squaring the open %s preserves hosted openings and closes the room', (end) => {
+    const nodes = cornerScene(88, 3, 0.09, end === 'start')
+    const source = nodes.wall_source as WallNode
+    const door = DoorNode.parse({
+      id: 'door_source',
+      parentId: source.id,
+      wallId: source.id,
+      position: [1, 1.05, 0],
+      width: 0.8,
+    })
+    nodes[source.id] = { ...source, children: [door.id] }
+    nodes[door.id] = door
+    const open = endOf(nodes, source.id, end)
+    const result = planJoinOpenWallEnd(nodes, open)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const after = apply(nodes, result.plan.changes)
+    const joined = after[source.id] as WallNode
+    expect(joined[end][0]).toBeCloseTo(2, 10)
+    expect(joined.children).toContain(door.id)
+    expect(
+      checkOpeningWithinWall(after[door.id] as ReturnType<typeof DoorNode.parse>, joined, 3),
+    ).toEqual([])
+    expect(rooms(after)).toHaveLength(1)
+  })
+
+  test('falls back to a straight join when squaring would push an opening past the anchored end', () => {
+    const nodes = cornerScene(88)
+    const source = nodes.wall_source as WallNode
+    const door = DoorNode.parse({
+      id: 'door_source',
+      parentId: source.id,
+      wallId: source.id,
+      position: [0.4, 1.05, 0],
+      width: 0.8,
+    })
+    nodes[source.id] = { ...source, children: [door.id] }
+    nodes[door.id] = door
+    const open = endOf(nodes, source.id, 'end')
+    const result = planJoinOpenWallEnd(nodes, open)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const after = apply(nodes, result.plan.changes)
+    const joined = after[source.id] as WallNode
+    expect(joined.end[0]).toBeCloseTo(2 + 3 / Math.tan((88 * Math.PI) / 180), 10)
+    expect(open.candidate!.point).toEqual(joined.end)
+    expect(
+      checkOpeningWithinWall(after[door.id] as ReturnType<typeof DoorNode.parse>, joined, 3),
+    ).toEqual([])
+    expect(rooms(after)).toHaveLength(1)
+  })
 
   test('snapping an endpoint seam detects a room and retains the repaired wall id', () => {
     const walls = [

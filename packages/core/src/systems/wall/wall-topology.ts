@@ -1,5 +1,5 @@
 import { GROUND_SUPPORT_ID } from '../../hooks/spatial-grid/support-host-id'
-import { type OpenWallEnd, wallEndJoinCandidates } from '../../lib/room-graph'
+import { detectOpenWallEnds, type OpenWallEnd, wallEndJoinCandidates } from '../../lib/room-graph'
 import { terrainSupportLift } from '../../lib/terrain-support'
 import {
   type AnyNode,
@@ -17,6 +17,10 @@ import type { WallPlanPoint } from './wall-move'
 export const WALL_MIN_LENGTH = 0.01
 const WALL_SPLIT_ENDPOINT_EPSILON = 0.02
 const WALL_INTERSECTION_EPSILON = 1e-6
+const WALL_JOIN_ANGLE_TOLERANCE = (5 * Math.PI) / 180
+const WALL_JOIN_CORNER_STEP = Math.PI / 4
+const WALL_JOIN_CORNER_MOVE_FLOOR = 0.15
+const WALL_JOIN_CORNER_LENGTH_RATIO = 0.03
 
 export type WallTopologyChanges = {
   create: Array<{ node: AnyNode; parentId?: AnyNodeId }>
@@ -639,10 +643,10 @@ function lineMeeting(wall: WallNode, target: WallNode) {
   }
 }
 
-/** Repair one reference endpoint, including host splits and opening rehosting, in one scene batch. */
-export function planJoinOpenWallEnd(
+function planWallEndJoin(
   nodes: Readonly<Record<string, AnyNode>>,
   openEnd: OpenWallEnd,
+  cornerPoint?: WallPlanPoint,
 ): WallJoinResult {
   const wall = nodes[openEnd.wallId]
   if (
@@ -669,8 +673,16 @@ export function planJoinOpenWallEnd(
   // The target's open end slides along its own axis to the meeting point too.
   let targetEnd: 'start' | 'end' | null = null
   if (candidate.kind === 'endpoint') {
+    const endpoint = [target.start, target.end].some((end) => distanceSquared(end, point) <= 1e-12)
+      ? point
+      : wallEndJoinCandidates(nodes, wall.parentId).find(
+          (end) =>
+            end.wallId === wall.id &&
+            end.end === openEnd.end &&
+            end.candidate?.wallId === target.id,
+        )?.candidate?.point
     const key = (['start', 'end'] as const).find(
-      (end) => distanceSquared(target[end], point) <= 1e-12,
+      (end) => endpoint && distanceSquared(target[end], endpoint) <= 1e-12,
     )
     if (!key) return { ok: false, reason: 'no-target' }
     point = target[key]
@@ -699,6 +711,9 @@ export function planJoinOpenWallEnd(
     if (!projection) return { ok: false, reason: 'no-target' }
     point = projection.point
   }
+  // A squared corner keeps the straight join's shape: the target's open end, if it slides, slides
+  // to the corner too.
+  if (cornerPoint) point = cornerPoint
   if (!near(point, openEnd.point)) return { ok: false, reason: 'no-target' }
   const nextWall = { ...wall, [openEnd.end]: point }
   const nextTarget = targetEnd ? { ...target, [targetEnd]: point } : null
@@ -863,6 +878,136 @@ export function planJoinOpenWallEnd(
       resolvedEnd: nextWall.end,
     },
   }
+}
+
+/**
+ * Where `line` meets a wall turning about `pivot` once their corner, now at `through`, snaps to the
+ * nearest 45° step. Null when it is already exact, more than the tolerance off, or the meeting
+ * leaves `line`'s segment on a side that `lineEnd` (the end of `line` that may slide) cannot reach.
+ */
+function squaredCorner(
+  pivot: WallPlanPoint,
+  through: WallPlanPoint,
+  line: WallNode,
+  lineEnd: 'start' | 'end' | null,
+): WallPlanPoint | null {
+  const ux = line.end[0] - line.start[0]
+  const uz = line.end[1] - line.start[1]
+  const rx = through[0] - pivot[0]
+  const rz = through[1] - pivot[1]
+  const angle = Math.atan2(ux * rz - uz * rx, ux * rx + uz * rz)
+  const exactAngle = Math.round(angle / WALL_JOIN_CORNER_STEP) * WALL_JOIN_CORNER_STEP
+  if (
+    Math.abs(Math.sin(exactAngle)) < WALL_INTERSECTION_EPSILON ||
+    Math.abs(angle - exactAngle) < WALL_INTERSECTION_EPSILON ||
+    Math.abs(angle - exactAngle) > WALL_JOIN_ANGLE_TOLERANCE + 1e-12
+  )
+    return null
+  const lineLength = Math.hypot(ux, uz)
+  const dx = (ux * Math.cos(exactAngle) - uz * Math.sin(exactAngle)) / lineLength
+  const dz = (ux * Math.sin(exactAngle) + uz * Math.cos(exactAngle)) / lineLength
+  const denominator = dx * uz - dz * ux
+  const qx = line.start[0] - pivot[0]
+  const qz = line.start[1] - pivot[1]
+  const reach = (qx * uz - qz * ux) / denominator
+  const lineT = (qx * dz - qz * dx) / denominator
+  if (reach <= WALL_MIN_LENGTH) return null
+  if (lineEnd === null ? lineT < 0 || lineT > 1 : lineEnd === 'end' ? lineT <= 0 : lineT >= 1)
+    return null
+  return [pivot[0] + reach * dx, pivot[1] + reach * dz]
+}
+
+const otherEnd = (end: 'start' | 'end') => (end === 'start' ? 'end' : 'start')
+
+/** Repair one reference endpoint, including host splits and opening rehosting, in one scene batch. */
+export function planJoinOpenWallEnd(
+  nodes: Readonly<Record<string, AnyNode>>,
+  openEnd: OpenWallEnd,
+): WallJoinResult {
+  const straight = planWallEndJoin(nodes, openEnd)
+  if (!straight.ok) return straight
+  const wall = nodes[openEnd.wallId] as WallNode
+  const target = nodes[openEnd.candidate!.wallId] as WallNode
+  if (isCurvedWall(wall) || isCurvedWall(target)) return straight
+  const fixedEnd = otherEnd(openEnd.end)
+  const point = openEnd.end === 'start' ? straight.plan.resolvedStart : straight.plan.resolvedEnd
+  // An L near miss: the straight join slid the target's open end onto the corner as well.
+  const slid = straight.plan.changes.update.find(({ id }) => id === target.id)?.data as
+    | Partial<WallNode>
+    | undefined
+  const targetEnd =
+    (['start', 'end'] as const).find((end) => {
+      const moved = slid?.[end]
+      return moved !== undefined && distanceSquared(moved, point) <= 1e-12
+    }) ?? null
+  // Square by turning one wall about its anchored end. In an L either wall may turn; the one that
+  // moves the corner least wins (then the lower id), so both ends of the gap plan the same join.
+  const options = [
+    { turned: wall, corner: squaredCorner(wall[fixedEnd], point, target, targetEnd) },
+    ...(targetEnd
+      ? [
+          {
+            turned: target,
+            corner: squaredCorner(target[otherEnd(targetEnd)], point, wall, openEnd.end),
+          },
+        ]
+      : []),
+  ]
+    .flatMap(({ turned, corner }) => {
+      if (!corner) return []
+      const move = distanceSquared(corner, point)
+      const maxMove = Math.max(
+        WALL_JOIN_CORNER_MOVE_FLOOR,
+        WALL_JOIN_CORNER_LENGTH_RATIO * wallLength(turned),
+      )
+      return move <= maxMove ** 2 ? [{ turned, corner, move }] : []
+    })
+    .sort((a, b) =>
+      Math.abs(a.move - b.move) > 1e-9 ? a.move - b.move : a.turned.id.localeCompare(b.turned.id),
+    )
+  for (const { corner } of options) {
+    const squared = planWallEndJoin(nodes, openEnd, corner)
+    if (!squared.ok || squared.plan.insertedWalls.length !== 1) continue
+    const joined = squared.plan.insertedWalls[0]!
+    // Only the open ends move: anchored junctions and every other wall keep their geometry.
+    if (
+      distanceSquared(joined[fixedEnd], wall[fixedEnd]) > 1e-12 ||
+      distanceSquared(joined[openEnd.end], corner) > 1e-12 ||
+      squared.plan.changes.delete.some((id) => id !== target.id) ||
+      squared.plan.changes.update.some(({ id, data }) => {
+        if (id === wall.id || nodes[id]?.type !== 'wall') return false
+        const moved = data as Partial<WallNode>
+        if (!(moved.start || moved.end)) return false
+        return !(
+          id === target.id &&
+          targetEnd &&
+          !moved[otherEnd(targetEnd)] &&
+          distanceSquared(moved[targetEnd]!, corner) <= 1e-12
+        )
+      })
+    )
+      continue
+    return squared
+  }
+  return straight
+}
+
+/**
+ * The level's open wall ends, each candidate moved to where Join walls will put the end, so a
+ * preview draws the join it makes. `nodes` must hold what the walls host: an opening can turn
+ * a squared corner back into a straight join. Room detection (room-graph) stays planner-free.
+ */
+export function findOpenWallEnds(
+  nodes: Readonly<Record<string, AnyNode>>,
+  levelId: string,
+): OpenWallEnd[] {
+  return detectOpenWallEnds(nodes, levelId).map((end) => {
+    if (!end.candidate) return end
+    const result = planJoinOpenWallEnd(nodes, end)
+    if (!result.ok) return end
+    const point = end.end === 'start' ? result.plan.resolvedStart : result.plan.resolvedEnd
+    return { ...end, candidate: { ...end.candidate, point } }
+  })
 }
 
 /** Fold drop-time connections into the move's atomic batch, including linked moved walls. */

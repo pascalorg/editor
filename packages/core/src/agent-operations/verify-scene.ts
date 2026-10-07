@@ -1,6 +1,6 @@
 import { levelBuildingId } from '../building/level-duplication'
 import { getLevelDisplayName } from '../lib/level-name'
-import { findOpenWallEnds, type OpenWallEnd } from '../lib/room-graph'
+import { detectOpenWallEnds, type OpenWallEnd } from '../lib/room-graph'
 import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema } from '../schema'
 import { getStoredLevelHeight } from '../services/storey'
 import { computeSegmentTransforms, rotateXZ } from '../systems/stair/stair-footprint'
@@ -253,7 +253,7 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
   for (const level of levels) {
     const { content, levelName } = level
     // A free-standing wall (garden wall, half wall) is legitimate, not something to repair.
-    for (const end of findOpenWallEnds(nodes, level.levelId)) {
+    for (const end of detectOpenWallEnds(nodes, level.levelId)) {
       if (end.reason === 'isolated') continue
       issues.push({
         type: 'wall_open_end',
