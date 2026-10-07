@@ -166,14 +166,22 @@ const MAX_SEGMENTS_PER_FRAME = 3
 
 /**
  * Roofs whose merged shell is still to build: until it is, the roof shows its segments apart (or
- * an old shell), and a capture would show that. Only roofs on screen count: one never mounted
- * stays queued and would hold every capture.
+ * an old shell), and a capture would show that. Only roofs on screen count, a first merge (a
+ * mounted group with no shell yet) included: one never mounted stays queued and would hold every
+ * capture.
  */
 export function getPendingRoofMergeCount(): number {
+  return countPendingRoofShells(pendingRoofUpdates, (id) =>
+    sceneRegistry.nodes.get(id as AnyNodeId),
+  )
+}
+
+export function countPendingRoofShells(
+  pending: Iterable<string>,
+  mounted: (id: string) => THREE.Object3D | undefined,
+): number {
   let count = 0
-  for (const id of pendingRoofUpdates)
-    if ((sceneRegistry.nodes.get(id) as THREE.Group | undefined)?.getObjectByName('merged-roof'))
-      count++
+  for (const id of pending) if (mounted(id)) count++
   return count
 }
 
