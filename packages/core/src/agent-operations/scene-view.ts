@@ -154,6 +154,65 @@ function itemBox(item: ItemNode, baseY: number): SceneViewBox {
   return { min: [x - hx, baseY + y, z - hz], max: [x + hx, baseY + y + h, z + hz] }
 }
 
+/**
+ * Where an item stands in its level's frame, through the host place_items gave it: on a level as
+ * placed; on a wall along it and off its face (the wall's local +z is its left); under a ceiling at
+ * the ceiling's height (its x and z are the level's); on another item in that item's turned frame.
+ */
+function itemLevelPose(
+  nodes: Readonly<Record<string, AnyNode>>,
+  item: ItemNode,
+  storeyHeight: (levelId: string) => number,
+): { x: number; y: number; z: number; yaw: number; levelId: string } | null {
+  const parent = nodes[item.parentId ?? '']
+  const [px, py, pz] = item.position
+  const yaw = item.rotation?.[1] ?? 0
+  if (parent?.type === 'level') return { x: px, y: py, z: pz, yaw, levelId: parent.id }
+  if (parent?.type === 'wall') {
+    const [dx, dz] = [parent.end[0] - parent.start[0], parent.end[1] - parent.start[1]]
+    const length = Math.hypot(dx, dz) || 1
+    const [ux, uz] = [dx / length, dz / length]
+    return {
+      x: parent.start[0] + ux * px - uz * pz,
+      y: py,
+      z: parent.start[1] + uz * px + ux * pz,
+      yaw,
+      levelId: parent.parentId ?? '',
+    }
+  }
+  if (parent?.type === 'ceiling') {
+    const levelId = parent.parentId ?? ''
+    return { x: px, y: (parent.height ?? storeyHeight(levelId)) + py, z: pz, yaw, levelId }
+  }
+  if (parent?.type === 'item') {
+    const host = itemLevelPose(nodes, parent, storeyHeight)
+    if (!host) return null
+    const [c, s] = [Math.cos(host.yaw), Math.sin(host.yaw)]
+    return {
+      x: host.x + c * px + s * pz,
+      y: host.y + py,
+      z: host.z - s * px + c * pz,
+      yaw: host.yaw + yaw,
+      levelId: host.levelId,
+    }
+  }
+  return null
+}
+
+/** A hosted item's box: its footprint squared (any turn), its height from where it rests. */
+function hostedItemBox(
+  item: ItemNode,
+  pose: { x: number; y: number; z: number },
+  baseY: number,
+): SceneViewBox {
+  const [w, h, d] = item.asset.dimensions
+  const half = Math.max(w, d) / 2
+  return {
+    min: [pose.x - half, baseY + pose.y, pose.z - half],
+    max: [pose.x + half, baseY + pose.y + h, pose.z + half],
+  }
+}
+
 /** A box of at least `least` metres tall, so a flat element still frames. */
 const tall = (box: SceneViewBox, least: number): SceneViewBox =>
   box.max[1] - box.min[1] >= least
@@ -246,6 +305,10 @@ export function sceneViewBounds(
   if (opening) return openingBox(opening as never, baseOf(opening.wall.parentId))
   if (target?.type === 'item' && nodes[target.parentId ?? '']?.type === 'level')
     return itemBox(target, baseOf(target.parentId))
+  if (target?.type === 'item') {
+    const pose = itemLevelPose(nodes, target, (id) => elevations.get(id)?.height ?? 2.5)
+    if (pose) return hostedItemBox(target, pose, baseOf(pose.levelId))
+  }
   const site =
     target && nodes[target.parentId ?? '']?.type === 'level'
       ? siteBox(target, baseOf(target.parentId))

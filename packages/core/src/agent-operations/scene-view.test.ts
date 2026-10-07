@@ -4,6 +4,7 @@ import { isAgentRefusal } from '../agent-tools'
 import {
   type AnyNode,
   BuildingNode,
+  CeilingNode,
   ColumnNode,
   DoorNode,
   FenceNode,
@@ -466,5 +467,86 @@ describe('a close-up of a site element', () => {
     expect(r(steps.max[1])).toBeGreaterThanOrEqual(0.45)
     const { pose } = sceneViewPlan(site(), { target: 'stair_s' })
     expect(pose.position.every(Number.isFinite)).toBe(true)
+  })
+})
+
+// A piece place_items hosts (art on a wall, a lamp on a table, a pendant under a ceiling) has its
+// parent's frame, not the level's: it frames where it hangs, rests or stands, never nothing_to_view.
+describe('a close-up of a hosted item', () => {
+  const asset = (id: string, dimensions: [number, number, number]) => ({
+    id,
+    category: 'decor',
+    name: id,
+    thumbnail: '',
+    src: `/items/${id}/model.glb`,
+    dimensions,
+  })
+  function room() {
+    const wall = WallNode.parse({ id: 'wall_h', parentId: 'level_h', start: [0, 0], end: [4, 0] })
+    const art = ItemNode.parse({
+      id: 'item_art',
+      parentId: wall.id,
+      position: [1, 1.2, 0.05],
+      asset: asset('art', [0.8, 0.6, 0.04]),
+    })
+    const table = ItemNode.parse({
+      id: 'item_table',
+      parentId: 'level_h',
+      position: [2, 0, 2],
+      rotation: [0, Math.PI / 2, 0],
+      asset: asset('table', [1.2, 0.75, 0.8]),
+    })
+    const lamp = ItemNode.parse({
+      id: 'item_lamp',
+      parentId: table.id,
+      position: [0.3, 0.75, 0],
+      asset: asset('lamp', [0.3, 0.5, 0.3]),
+    })
+    const ceiling = CeilingNode.parse({
+      id: 'ceiling_h',
+      parentId: 'level_h',
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 4],
+        [0, 4],
+      ],
+      height: 2.5,
+    })
+    const pendant = ItemNode.parse({
+      id: 'item_pendant',
+      parentId: ceiling.id,
+      position: [3, -0.4, 3],
+      asset: asset('pendant', [0.4, 0.4, 0.4]),
+    })
+    const level = LevelNode.parse({
+      id: 'level_h',
+      parentId: 'building_h',
+      level: 0,
+      children: [wall.id, table.id, ceiling.id],
+    })
+    const building = BuildingNode.parse({ id: 'building_h', children: [level.id] })
+    return Object.fromEntries(
+      [building, level, wall, art, table, lamp, ceiling, pendant].map((n) => [n.id, n]),
+    ) as Record<string, AnyNode>
+  }
+  const centre = (box: SceneViewBox) => box.min.map((v, axis) => (v + box.max[axis]!) / 2)
+
+  test('art on a wall, a lamp on a table and a pendant under a ceiling frame where they are', () => {
+    const nodes = room()
+    // Art 1 m along a wall drawn +x, its bottom 1.2 m up: centred at x 1, y 1.5, just off the wall.
+    const [ax, ay, az] = centre(sceneViewBounds(nodes, 'item_art'))
+    expect([Math.round(ax! * 10) / 10, Math.round(ay! * 10) / 10]).toEqual([1, 1.5])
+    expect(Math.abs(az!)).toBeLessThan(0.3)
+    // The lamp 0.3 m along a table turned a quarter: beside the table's centre, on its top.
+    const lamp = sceneViewBounds(nodes, 'item_lamp')
+    const [lx, , lz] = centre(lamp)
+    expect(Math.hypot(lx! - 2, lz! - 2)).toBeCloseTo(0.3, 1)
+    expect(lamp.min[1]).toBeCloseTo(0.75, 2)
+    // The pendant hangs 0.4 m under a 2.5 m ceiling at (3, 3).
+    const pendant = sceneViewBounds(nodes, 'item_pendant')
+    const [px, , pz] = centre(pendant)
+    expect([Math.round(px! * 10) / 10, Math.round(pz! * 10) / 10]).toEqual([3, 3])
+    expect(pendant.min[1]).toBeCloseTo(2.1, 2)
   })
 })
