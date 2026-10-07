@@ -216,7 +216,11 @@ describe('unit tools', () => {
     bridge.setActiveScene(meta)
     const result = await call('set_unit_members', { unitId, memberZoneIds: [zoneId, upperZoneId] })
     expect(result.isError).toBeFalsy()
-    expect(result.structuredContent).toEqual({ unitId, memberCount: 2 })
+    expect(result.structuredContent).toEqual({
+      unitId,
+      memberCount: 2,
+      project: expect.any(String),
+    })
     expect((await store.load(meta.id))?.graph.nodes[unitId]).toMatchObject({
       members: [zoneId, upperZoneId],
     })

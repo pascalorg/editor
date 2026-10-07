@@ -15,8 +15,8 @@ import {
   type WallNode,
   WallNode as WallNodeSchema,
 } from '@pascal-app/core'
+import { placedDoorFace } from '@pascal-app/core/building'
 import {
-  calculateItemRotation,
   EDITOR_LAYER,
   getSideFromNormal,
   isMagneticSnapActive,
@@ -481,10 +481,11 @@ const DoorTool: React.FC = () => {
       }
       lastWallEvent = event
 
-      const faceSide = getSideFromNormal(event.normal)
+      // An outside wall's door faces out whichever face is hovered, as add_door places it.
+      const faceSide = placedDoorFace(event.node, getSideFromNormal(event.normal))
       const side = sideFlip ? (faceSide === 'front' ? 'back' : 'front') : faceSide
       const flipOffset = sideFlip ? Math.PI : 0
-      const itemRotation = calculateItemRotation(event.normal) + flipOffset
+      const itemRotation = (faceSide === 'back' ? Math.PI : 0) + flipOffset
       const cursorRotation =
         // World yaw of a wall CHILD (-wallAngle + itemRotation, which already
         // carries the flip) — `calculateCursorRotation` was π off, pointing
@@ -513,9 +514,9 @@ const DoorTool: React.FC = () => {
         return
       }
 
-      const faceSide = getSideFromNormal(event.normal)
+      const faceSide = placedDoorFace(event.node, getSideFromNormal(event.normal))
       const side = sideFlip ? (faceSide === 'front' ? 'back' : 'front') : faceSide
-      const itemRotation = calculateItemRotation(event.normal) + (sideFlip ? Math.PI : 0)
+      const itemRotation = (faceSide === 'back' ? Math.PI : 0) + (sideFlip ? Math.PI : 0)
       const { clampedX, clampedY, valid } = resolveWallPlacement(
         event.node,
         event.localPosition[0],

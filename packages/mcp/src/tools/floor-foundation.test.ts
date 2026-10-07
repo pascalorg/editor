@@ -133,18 +133,27 @@ test('set_floor_foundation sets one footprint in one call and one undo; raw upda
     expect(bridge.getHistory().pastCount).toBe(1)
     bridge.undo()
     expect(bridge.getNodes()).toEqual(unchanged)
-    const refused = await call('create_room', {
-      levelId,
-      name: 'Overlapping terrace',
-      polygon: [
-        [1, 1],
-        [3, 1],
-        [3, 3],
-        [1, 3],
-      ],
-      outdoor: true,
+    const refused = await client.callTool({
+      name: 'create_room',
+      arguments: {
+        levelId,
+        name: 'Overlapping terrace',
+        polygon: [
+          [1, 1],
+          [3, 1],
+          [3, 3],
+          [1, 3],
+        ],
+        outdoor: true,
+      },
     })
-    expect(refused.conflicts?.[0]).toMatchObject({ code: 'outdoor-room-overlap' })
+    expect(refused.isError).toBe(true)
+    expect(
+      JSON.parse((refused.content as Array<{ type: string; text: string }>)[0]!.text),
+    ).toMatchObject({
+      code: 'outdoor_room_overlap',
+      conflicts: [{ code: 'outdoor-room-overlap' }],
+    })
     expect(bridge.getNodes()).toEqual(unchanged)
   } finally {
     await client.close()

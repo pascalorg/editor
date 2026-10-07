@@ -6,6 +6,7 @@ import type { AnyNodeId } from '@pascal-app/core/schema'
 import { CeilingNode, LevelNode, SlabNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { registerRoomTools } from './room-tools'
+import { registerSharedTools } from './shared-tools'
 
 describe('room tools', () => {
   let client: Client
@@ -16,21 +17,11 @@ describe('room tools', () => {
     bridge.setScene({}, [])
     bridge.loadDefault()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
+    registerSharedTools(server, bridge)
     registerRoomTools(server, bridge)
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
-  })
-
-  test('search_assets returns built-in catalog matches', async () => {
-    const result = await client.callTool({
-      name: 'search_assets',
-      arguments: { query: 'sofa' },
-    })
-    expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
-    expect(parsed.total).toBeGreaterThan(0)
-    expect(parsed.results.map((item: { id: string }) => item.id)).toContain('sofa')
   })
 
   test('create_room writes walls and a room zone only; floor and ceiling are derived', async () => {
@@ -214,7 +205,7 @@ describe('room tools', () => {
     const door = JSON.parse((doorResult.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(door.localX).toBeCloseTo(2.5, 3)
     expect(door.t).toBe(0.5)
-    expect(door.position).toBe(0.5)
+    expect(door.achieved).toMatchObject({ created: { door: 1 } })
     expect(door.wallLength).toBeCloseTo(5, 3)
     expect(door.coordinateSystem).toBe('wall-local-meters')
     expect(
@@ -228,7 +219,7 @@ describe('room tools', () => {
     const win = JSON.parse((windowResult.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(win.localX).toBeCloseTo(1.25, 3)
     expect(win.t).toBe(0.25)
-    expect(win.position).toBe(0.25)
+    expect(win.achieved).toMatchObject({ created: { window: 1 } })
     expect(win.wallLength).toBeCloseTo(5, 3)
     expect(win.coordinateSystem).toBe('wall-local-meters')
     expect(
@@ -407,6 +398,51 @@ describe('room tools', () => {
     expect(findBlockedDoors({ nodes })).toEqual([])
   })
 
+  // The front door behind an outdoor porch faced the hall, whichever way it was drawn.
+  for (const polygon of [
+    [
+      [0, 0],
+      [0, 5],
+      [6, 5],
+      [6, 0],
+    ],
+    [
+      [0, 0],
+      [6, 0],
+      [6, 5],
+      [0, 5],
+    ],
+  ])
+    test(`a door on the wall behind an outdoor porch faces the porch (${polygon[1]})`, async () => {
+      const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+      const call = async (name: string, args: Record<string, unknown>) => {
+        const result = await client.callTool({ name, arguments: args })
+        expect(result.isError).toBeFalsy()
+        return JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+      }
+      const house = await call('create_room', { levelId: level.id, name: 'Hall', polygon })
+      await call('create_room', {
+        levelId: level.id,
+        name: 'Porch',
+        outdoor: true,
+        polygon: [
+          [1, 5],
+          [4, 5],
+          [4, 7],
+          [1, 7],
+        ],
+      })
+      const wallId = (house.wallIds as string[]).find((id) => {
+        const wall = bridge.getNodes()[id as AnyNodeId] as { start: number[]; end: number[] }
+        return wall.start[1] === 5 && wall.end[1] === 5
+      })!
+      const wall = bridge.getNodes()[wallId as AnyNodeId] as { start: number[]; end: number[] }
+      const { doorId } = await call('add_door', { wallId, t: 0.5, style: 'modern' })
+      const door = bridge.getNodes()[doorId as AnyNodeId] as { rotation: number[] }
+      const sign = Math.abs(door.rotation[1]!) > Math.PI / 2 ? -1 : 1
+      expect((wall.end[0]! - wall.start[0]!) * sign).toBeGreaterThan(0)
+    })
+
   test('furnish_room records door-clearance skips when a door sits on the furniture wall', async () => {
     const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
     // Large bedroom so bed placement is near the "back" wall (edge opposite doorWallIndex).
@@ -446,9 +482,7 @@ describe('room tools', () => {
     const bedPlaced = Object.values(bridge.getNodes()).some(
       (n) => n.type === 'item' && (n.name === 'Double Bed' || n.name === 'Single Bed'),
     )
-    const doorSkips = (parsed.skipped as string[]).filter((s) =>
-      s.includes('blocks door clearance'),
-    )
+    const doorSkips = (parsed.skipped as string[]).filter((s) => s.includes('in the way of'))
     expect(bedPlaced || doorSkips.length > 0).toBe(true)
     if (bedPlaced) {
       expect(doorSkips.length).toBe(0)

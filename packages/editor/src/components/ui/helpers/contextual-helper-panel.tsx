@@ -453,6 +453,7 @@ export function ContextualHelperPanel({
   showPaintScope = false,
   continuationContext = null,
   title = null,
+  notice = null,
 }: {
   hints: ContextualShortcutHint[]
   // Kind-owned live mode chips (`ToolHint.chip`), rendered alongside the
@@ -465,6 +466,8 @@ export function ContextualHelperPanel({
   continuationContext?: ContinuationContext | null
   // The tool or gesture in hand, shown as the panel's header.
   title?: HudTitle | null
+  // A warning about what is in hand (a floor item in a door's way), in the "!" row.
+  notice?: string | null
 }) {
   const inStack = useInRightStack()
   const modeChips = chipHints.filter((hint) => hint.chip)
@@ -479,7 +482,7 @@ export function ContextualHelperPanel({
       <ChipRow shortcut="Esc" label="Cancel placement" />
     </div>
   )
-  if (hints.length === 0 && !hasChips) return null
+  if (hints.length === 0 && !hasChips && !notice) return null
 
   const actionHints = hints.filter((hint) => !isEscHint(hint))
   const escHints = hints.filter(isEscHint)
@@ -493,6 +496,7 @@ export function ContextualHelperPanel({
       {actionHints.map((hint) => (
         <HintRow hint={hint} key={hintKey(hint)} />
       ))}
+      {notice ? <HintRow hint={{ keys: ['!'], label: notice, active: true }} /> : null}
       {actionHints.length > 0 && (hasChips || escHints.length > 0) ? (
         <div className="col-span-2 my-0.5 h-px bg-border" />
       ) : null}

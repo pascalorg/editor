@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { type AgentRefusal, isAgentRefusal } from '../agent-tools/refusal'
+import { addDoorTool, addWindowTool } from '../agent-tools/wall-openings'
 import { openingScene, WALL_OPENING_CASES } from './__fixtures__/wall-opening-cases'
-import { planWallOpening } from './wall-openings'
+import { placedDoorFace, planWallOpening } from './wall-openings'
 
 // Layer 1 of 3: the operation both agent surfaces call. The cases are the spec.
 describe('planWallOpening', () => {
@@ -27,6 +28,37 @@ describe('planWallOpening', () => {
       expect(planned.node.position[1]).toBeCloseTo(c.expect.centerY, 6)
       expect(planned.clamped).toBe(c.expect.clamped)
       if (c.expect.glassPanels) expect(JSON.stringify(planned.node)).toContain('"glass"')
+      if (c.expect.node) expect(planned.node).toMatchObject(c.expect.node)
     })
   }
+})
+
+// An agent wrote a front door's three glass strips off as "not possible": both tools take code,
+// and their descriptions stopped at outline, type and style.
+describe('where an opening beyond the fields is made', () => {
+  test('add_door and add_window say what outline, type and style cannot express goes in code', () => {
+    for (const tool of [addDoorTool, addWindowTool]) {
+      expect(tool.description).toContain('code')
+      expect(tool.description).toContain('glass strips')
+    }
+  })
+})
+
+// The user (2026-10-05 19:25): one rule for agents and people. A door placed by hand on an outside
+// wall faces out whichever face is hovered (R still flips it); any other wall, the face hovered.
+describe('the face a door placed by hand takes', () => {
+  const { nodes } = openingScene()
+  const wallOf = (id: string) => nodes[id] as never
+
+  test('out on an outside wall, from either face', () => {
+    for (const hovered of ['front', 'back'] as const) {
+      expect(placedDoorFace(wallOf('wall_out_back'), hovered)).toBe('back')
+      expect(placedDoorFace(wallOf('wall_out_front'), hovered)).toBe('front')
+    }
+  })
+
+  test('the face hovered on a wall that does not know its outside', () => {
+    expect(placedDoorFace(wallOf('wall_main'), 'back')).toBe('back')
+    expect(placedDoorFace(wallOf('wall_main'), 'front')).toBe('front')
+  })
 })

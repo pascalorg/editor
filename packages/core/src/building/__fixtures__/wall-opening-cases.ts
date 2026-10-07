@@ -27,6 +27,10 @@ export const OPENING_SCENE = {
   /** 4 m wall carrying a 1.2 m wall-mounted shelf centred at 2.0 m (1.4–2.6 m, 1.0–1.6 m high). */
   shelved: 'wall_shelved',
   wallShelf: 'item_wall_shelf',
+  /** 4 m outside wall, its outside at the front (+normal). */
+  outFront: 'wall_out_front',
+  /** 4 m outside wall drawn the other way: its outside at the back, as a garage wall can be. */
+  outBack: 'wall_out_back',
 } as const
 
 const wall = (id: string, z: number, length: number, extra: Record<string, unknown> = {}) =>
@@ -40,7 +44,7 @@ const wall = (id: string, z: number, length: number, extra: Record<string, unkno
     ...extra,
   })
 
-/** A fresh scene graph for every case: one building, one 2.8 m storey, seven walls. */
+/** A fresh scene graph for every case: one building, one 2.8 m storey, nine walls. */
 export function openingScene() {
   // No height of its own: the storey decides.
   const { height: _height, ...storeyWall } = wall(OPENING_SCENE.storey, 10, 4)
@@ -52,6 +56,8 @@ export function openingScene() {
     wall(OPENING_SCENE.curved, 8, 4, { curveOffset: 0.5 }),
     storeyWall as WallNode,
     { ...wall(OPENING_SCENE.shelved, 12, 4), children: [OPENING_SCENE.wallShelf] },
+    wall(OPENING_SCENE.outFront, 14, 4, { frontSide: 'exterior', backSide: 'interior' }),
+    wall(OPENING_SCENE.outBack, 16, 4, { frontSide: 'interior', backSide: 'exterior' }),
   ]
   const door = DoorNode.parse({
     id: OPENING_SCENE.existingDoor,
@@ -105,13 +111,58 @@ export type WallOpeningCase = {
   input: Record<string, unknown>
   expect:
     | { refusal: WallOpeningRefusal; mentions?: string[] }
-    | { localX: number; centerY: number; clamped: boolean; glassPanels?: boolean }
+    | {
+        localX: number
+        centerY: number
+        clamped: boolean
+        glassPanels?: boolean
+        /** Fields the opening built has. */
+        node?: Record<string, unknown>
+      }
 }
 
-const { main, short, exact, busy, curved, storey, shelved, wallShelf, levelId, existingDoor } =
-  OPENING_SCENE
+const {
+  main,
+  short,
+  exact,
+  busy,
+  curved,
+  storey,
+  shelved,
+  wallShelf,
+  levelId,
+  existingDoor,
+  outFront,
+  outBack,
+} = OPENING_SCENE
 
 export const WALL_OPENING_CASES: readonly WallOpeningCase[] = [
+  // Which way it faces. A door's swing and a garage door's track run behind its facing, so a door
+  // on an outside wall faces out whichever way the wall was drawn (a garage door's track once ran
+  // on the street). An inside wall keeps the wall's front.
+  {
+    name: 'a door on an outside wall faces out',
+    tool: 'add_door',
+    input: { wallId: outFront, t: 0.5 },
+    expect: { localX: 2, centerY: 1.05, clamped: false, node: { side: 'front', rotation: [0, 0, 0] } },
+  },
+  {
+    name: 'a garage door on an outside wall drawn the other way faces out, its track inside',
+    tool: 'add_door',
+    input: { wallId: outBack, t: 0.5, width: 2.4, doorType: 'garage-sectional' },
+    expect: {
+      localX: 2,
+      centerY: 1.05,
+      clamped: false,
+      node: { side: 'back', rotation: [0, Math.PI, 0] },
+    },
+  },
+  {
+    name: "a door on an inside wall keeps the wall's front",
+    tool: 'add_door',
+    input: { wallId: main, t: 0.5 },
+    expect: { localX: 2, centerY: 1.05, clamped: false, node: { rotation: [0, 0, 0] } },
+  },
   // Where it goes
   {
     name: 'a door at t 0.5 is centred',
@@ -154,6 +205,18 @@ export const WALL_OPENING_CASES: readonly WallOpeningCase[] = [
     tool: 'add_door',
     input: { wallId: storey, t: 0.5 },
     expect: { localX: 2, centerY: 1.05, clamped: false },
+  },
+  // A gap's advice says to reopen a passage, and no tool made an opening with no leaf; the editor's door panel has Door / Opening.
+  {
+    name: 'a passage with no leaf is an opening, in the outline asked',
+    tool: 'add_door',
+    input: { wallId: main, t: 0.5, openingKind: 'opening', openingShape: 'arch' },
+    expect: {
+      localX: 2,
+      centerY: 1.05,
+      clamped: false,
+      node: { openingKind: 'opening', openingShape: 'arch' },
+    },
   },
   {
     name: 'a door style changes the panels, not the size',

@@ -20,7 +20,7 @@ A tool has three layers, and only the last one may differ between surfaces:
 
 1. **Contract** — name, description, input schema — one definition in `@pascal-app/core/agent-tools`, registered by the MCP and defined by the chat from the same object. Kept zod-only: the chat declares tools inside a sandbox that rejects Node-dependent packages (`contracts-purity.test.ts`).
 2. **Operation** — validation, defaults, clamping, refusals, the nodes to create — one pure function in core (`planWallOpening`, `verifyScene`, `duplicateLevel`…).
-3. **Executor** — applying to a store (the chat's live store, the MCP's bridge) and the result envelope (live sync, persistence). Surface context resolves here too: "the active floor" is what the person is viewing in the chat.
+3. **Executor** — applying to a store (the chat's live store, the MCP's bridge) and the result envelope (live sync, persistence). Surface context resolves here too: "the active floor" is what the person is viewing in the chat. An edit that reads construction the host derives (re-derived rooms, auto ceilings, floor plates — the room and floor tools) returns `afterReconcile`; both hosts run it through `applyAgentOutcome` with their own reconciler, in one undo step.
 
 **The editor is the reference.** What a person can do by hand is what an agent may do: the operation reuses the editor tool's own rules (for openings: `clampDoorToWall`, `clampWindowToWall`, `findWallChildOverlap`, no openings on curved walls, overlap allowed only with force — the editor's Alt). An agent-only guard is the exception, kept only when it is sane and worth giving the editor too.
 

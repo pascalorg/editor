@@ -9,6 +9,7 @@ import { checkOpeningWithinWall, formatOpeningBoundsIssue } from '../validation/
 import { layoutIssuesFromScene } from './layout-clearance'
 import { wallResolvedHeight } from './level-reads'
 import { pointInPolygon, polygonContainsPolygon, type Vec2 } from './plan-geometry'
+import { changesSince, type SceneCheckpoint } from './scene-measure'
 import {
   type ContentCounts,
   contentCounts,
@@ -21,6 +22,47 @@ import type { AgentOperation, SceneNodes } from './types'
 
 /** A problem verify_scene found, typed so it can be counted and acted on. */
 export type SceneIssue = { type: string; message: string; severity?: 'info' }
+
+/** What verify_scene was asked: its contract's input, which other modules may extend. */
+export type VerifySceneInput = Readonly<Record<string, unknown>>
+
+/**
+ * A check verify_scene runs beyond its own, registered by the module that knows it (the facade
+ * checks, the photo's), so verify_scene imports none of them. Checks before CHECKPOINT_ORDER run
+ * ahead of the checkpoint's comparison, the rest after it.
+ */
+export type SceneCheck = {
+  name: string
+  order: number
+  run: (nodes: SceneNodes, input: VerifySceneInput) => SceneIssue[]
+}
+
+export const CHECKPOINT_ORDER = 100
+
+const checks: SceneCheck[] = []
+
+/**
+ * Fields verify_scene's result carries beyond its own, from the module that knows them (the
+ * reference inventory's counts and what is unbuilt).
+ */
+export type SceneReport = { name: string; run: (nodes: SceneNodes) => Record<string, unknown> }
+
+const reports: SceneReport[] = []
+
+/** Adds a report's fields to every verify_scene from now on; registering again replaces it. */
+export function registerSceneReport(report: SceneReport) {
+  const at = reports.findIndex((known) => known.name === report.name)
+  if (at >= 0) reports[at] = report
+  else reports.push(report)
+}
+
+/** Runs a check in every verify_scene from now on; registering a check again replaces it. */
+export function registerSceneCheck(check: SceneCheck) {
+  const at = checks.findIndex((known) => known.name === check.name)
+  if (at >= 0) checks[at] = check
+  else checks.push(check)
+  checks.sort((a, b) => a.order - b.order)
+}
 
 type StairNode = AnyNode & { type: 'stair' }
 const occupiedContent = (counts: ContentCounts) =>
@@ -158,7 +200,11 @@ function schemaErrors(nodes: SceneNodes) {
  * with no stair, openings off their wall, stairs off their slab, blocked doors, overlapping
  * furniture, nodes their schema rejects.
  */
-export const verifyScene: AgentOperation = (nodes, _input, context) => {
+export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
+  nodes,
+  input,
+  context,
+) => {
   const onLevel = (levelId: string) => nodesOnLevel(nodes, levelId)
   const ofType = <T extends AnyNode['type']>(content: readonly AnyNode[], type: T) =>
     content.filter((node): node is Extract<AnyNode, { type: T }> => node.type === type)
@@ -352,6 +398,20 @@ export const verifyScene: AgentOperation = (nodes, _input, context) => {
           .map((hole, index) => ({ slab, hole, index }))
           .filter((entry) => holeBelongsToStair(entry.slab, entry.index, stair.id)),
       )
+      // Since owned floor openings, the stair owns a floor-opening on the floor above, and the
+      // slab hole it cuts names the opening, not the stair (else 14 false reports on one build).
+      const owned = onLevel(targetLevelId).filter(
+        (node): node is AnyNode & { type: 'floor-opening' } =>
+          node.type === 'floor-opening' &&
+          node.source === 'stair' &&
+          node.ownerId === stair.id &&
+          node.drawnOn === 'floor',
+      )
+      for (const opening of owned) {
+        const slab =
+          targetSlabs.find((candidate) => candidate.id === opening.surfaceId) ?? targetSlabs[0]!
+        holes.push({ slab, hole: opening.polygon, index: -1 })
+      }
       if (holes.length === 0) {
         report(
           'stair_no_opening',
@@ -376,6 +436,15 @@ export const verifyScene: AgentOperation = (nodes, _input, context) => {
 
   // Door keep-outs and item–item footprint overlaps (rotation-aware).
   issues.push(...layoutIssuesFromScene(Object.values(nodes)))
+  for (const check of checks)
+    if (check.order < CHECKPOINT_ORDER) issues.push(...check.run(nodes, input ?? {}))
+  // What the edits since the host's checkpoint lost, by place.
+  const since = context.checkpoint
+    ? changesSince(context.checkpoint as SceneCheckpoint, nodes)
+    : null
+  if (since) issues.push(...since.issues)
+  for (const check of checks)
+    if (check.order >= CHECKPOINT_ORDER) issues.push(...check.run(nodes, input ?? {}))
 
   const occupiedStoryCount = levels.filter((level) => level.isOccupiedStory).length
   return {
@@ -391,6 +460,30 @@ export const verifyScene: AgentOperation = (nodes, _input, context) => {
       emptyLevelIds: empty.map((level) => level.levelId),
       issues,
       hasIssues: issues.some((issue) => issue.severity !== 'info'),
+      ...authoredObjects(nodes),
+      ...Object.assign({}, ...reports.map((report) => report.run(nodes))),
+      ...(since && {
+        sinceCheckpoint: { name: context.checkpoint!.name, changes: since.changes },
+      }),
     },
   }
+}
+
+/** Objects built by add_object, with what each stands in for: each is a gap in what Pascal builds. */
+function authoredObjects(nodes: SceneNodes) {
+  const objects = Object.values(nodes)
+    .flatMap((node) =>
+      node.type === 'item' && node.source
+        ? [
+            {
+              id: node.id,
+              name: node.name ?? node.asset.name,
+              category: node.asset.category,
+              reason: typeof node.metadata?.reason === 'string' ? node.metadata.reason : null,
+            },
+          ]
+        : [],
+    )
+    .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+  return objects.length ? { authoredObjects: objects } : {}
 }

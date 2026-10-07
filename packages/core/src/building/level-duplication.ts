@@ -128,14 +128,21 @@ export function buildLevelDuplicateCreateOps({
   const { clonedNodes, newLevelId, idMap } = cloneLevelSubtree(nodes, level.id)
   const parentBuildingId = levelBuildingId(nodes, level)
   const nextLevelNumber = position === 'above' ? level.level + 1 : level.level
-  const shiftedLevels = levels
+  // Only the floors in the way move up: a free floor index above the copy (floors deleted before
+  // copying, as the agents' build guide does) is filled, not carried up. Pushing every floor above
+  // sent a tall build's floor 8 from index 7 to 10.
+  const shiftedLevels: { id: string; level: number }[] = []
+  let free = nextLevelNumber
+  for (const entry of levels
     .filter(
-      (entry) => (position === 'below' || entry.id !== level.id) && entry.level >= nextLevelNumber,
+      (candidate) =>
+        (position === 'below' || candidate.id !== level.id) && candidate.level >= nextLevelNumber,
     )
-    .map((entry) => ({
-      id: entry.id,
-      level: entry.level + 1,
-    }))
+    .sort((a, b) => a.level - b.level)) {
+    if (entry.level > free) break
+    shiftedLevels.push({ id: entry.id, level: entry.level + 1 })
+    free = entry.level + 1
+  }
 
   const filteredNodes = clonedNodes
     .filter((node) => shouldKeepNode(node, preset))

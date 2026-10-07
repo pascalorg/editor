@@ -1,10 +1,13 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import {
   type AddObjectInput,
+  achievedChanges,
   addObject,
   authoredObject,
   editedScriptParams,
   readSourceResult,
+  requireAddObjectReason,
+  type SceneNodes,
 } from '@pascal-app/core/agent-operations'
 import { addObjectTool, getSourceTool, isAgentRefusal, refuse } from '@pascal-app/core/agent-tools'
 import {
@@ -120,6 +123,7 @@ export function registerAddObject(
       const args = input as Omit<AddObjectInput, 'compiled'>
       let compiled: CompiledGeometryScript
       try {
+        requireAddObjectReason(args)
         const code =
           args.code ??
           (args.nodeId
@@ -134,13 +138,12 @@ export function registerAddObject(
           code: 'script_failed',
         })
       }
+      // A copy: the hosted bridge writes its map in place, and a "before" that grows with the call
+      // reads every creation as unchanged.
+      const before = { ...(bridge.getNodes() as Record<string, AnyNode>) }
       let outcome: ReturnType<typeof addObject>
       try {
-        outcome = addObject(
-          bridge.getNodes() as Record<string, AnyNode>,
-          { ...args, compiled },
-          { activeLevelId: null },
-        )
+        outcome = addObject(before, { ...args, compiled }, { activeLevelId: null })
       } catch (error) {
         return refusalResult(error)
       }
@@ -148,6 +151,8 @@ export function registerAddObject(
       if (patches.length) bridge.applyPatch(patches)
       const payload = {
         ...outcome.result,
+        // What the scene holds now, as every write answers.
+        achieved: achievedChanges(before as SceneNodes, outcome.changes ?? {}),
         ...persistencePayload(await publishLiveSceneSnapshot(bridge, addObjectTool.name)),
       }
       return {

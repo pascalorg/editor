@@ -129,16 +129,15 @@ Bedroom polygons from the floorplan rooms.
 
 ### 4. Cut the identified openings
 
-For each window the vision tool reported, the agent calls `cut_opening`
+For each window the vision tool reported, the agent calls `add_window`
 against the corresponding perimeter wall:
 
 ```jsonc
 {
-  "name": "cut_opening",
+  "name": "add_window",
   "arguments": {
     "wallId": "wall-south",
-    "type": "window",
-    "position": 0.5,
+    "t": 0.5,
     "width": 1.4,
     "height": 1.5
   }

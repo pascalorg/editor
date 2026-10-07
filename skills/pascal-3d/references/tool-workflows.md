@@ -62,7 +62,7 @@ Do not mutate just to make a report unless the user authorizes a temporary or sa
 - `export_json` returns the editable scene graph.
 - `export_glb` in the open-source headless server currently reports `status: "not_implemented"`; protocol success is not artifact success.
 - `photo_to_scene` needs host sampling. Without it, expect `sampling_unavailable`.
-- `place_item` uses catalog dimensions. If a catalog item is unavailable, its placeholder dimensions are not evidence for a real product.
+- `place_items` uses catalog dimensions and refuses an ID the library lacks (`asset_not_found`) rather than placing a placeholder. It places items on a level's floor, or on the host each names (`targetNodeId`): a wall (`y` is the height of the item's bottom; it hangs on the side of the wall the point is on), a ceiling, or an item standing on the floor (on an object built with `add_object`, the real surface under the point; the result names it in `restingOn`). Positions are level coordinates.
 - `check_collisions` checks rotation-aware scaled item footprints using plan AABBs. Pass `minimumClearance` explicitly: zero reports overlap; a positive measurement also reports pairs closer than that gap. Inspect `status`, `checkedItems`, `skippedItems`, and `unsupportedChecks` before drawing a conclusion.
 - `verify_scene` adds practical issues, including item separation and rectangular door-access keep-outs. It does not model a door-leaf swing arc or a delivery route.
 - No tool starts a room scan or clones a scan into a new project. Scans are created only by the Pascal iOS app, and `open_capture_as_project` opens the scan's existing owning project.

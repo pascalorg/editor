@@ -49,6 +49,8 @@ The compiler also derives upward surfaces (where things rest) and undersides (wh
 
 `add_object` (create, or edit by `nodeId`: new code, or params alone to rebuild the stored script), `get_source` (the module and its params, for an edit) and `find_by_type` (nodes and typed parts of one type) are shared contracts in `@pascal-app/core/agent-tools`, one operation each; only the compile step differs per surface. See [agent-surfaces.md](agent-surfaces.md).
 
+A new object carries a `reason`, what it stands in for, kept in `metadata.reason`; `verify_scene` lists every authored object with it (`authoredObjects`), so each names something Pascal has no type for. On a level, a floor object that is a plain box (12 triangles) with a wall's size (≤ 0.45 m thin, ≥ 1 m long, ≥ 2 m high), or a floor plate (≤ 0.35 m thick, ≥ 2 m both ways, on the floor), is refused (`use_walls`, `use_slab`). A detailed object with a wall's size (a bookcase's shelves, a screen's holes) is built with a `hint` naming `add_wall`, as is a name whose head word is something Pascal builds, with that tool. These apply to creation only: an edit, which is also the inspector's rebuild path, is never refused for its shape.
+
 ## Cutter binding
 
 A bare `cutout` cuts the surface the object is mounted on. A wall or ceiling parent is the host; a floor item uses its preferred support slab while it overlaps, otherwise the same highest overlapping slab as floor placement. Items resting on other items do not cut a slab beneath them. `cut:wall`, `cut:ceiling` and `cut:slab` require that kind of host; they never select a neighbouring surface.
