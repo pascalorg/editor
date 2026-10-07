@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/mcp",
-  "version": "1.0.0-beta.6",
+  "version": "1.0.3",
   "description": "Model Context Protocol server for Pascal 3D editor",
   "type": "module",
   "main": "./dist/index.js",
@@ -35,10 +35,15 @@
       "types": "./dist/bridge/index.d.ts",
       "import": "./dist/bridge/index.js",
       "default": "./dist/bridge/index.js"
+    },
+    "./tools/*": {
+      "types": "./dist/tools/*.d.ts",
+      "import": "./dist/tools/*.js",
+      "default": "./dist/tools/*.js"
     }
   },
   "bin": {
-    "pascal-mcp": "./dist/bin/pascal-mcp.js"
+    "pascal-mcp": "dist/bin/pascal-mcp.js"
   },
   "files": [
     "dist",
@@ -47,23 +52,25 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "build": "tsc --build",
+    "build": "tsc --build && bun ../../scripts/fix-node-esm-imports.ts ../core/dist && bun ../../scripts/fix-node-esm-imports.ts dist",
     "dev": "tsgo --build --watch",
     "start": "bun dist/bin/pascal-mcp.js",
     "test": "bun test",
     "smoke": "bun run scripts/smoke.ts",
-    "prepublishOnly": "bun run build && bun test"
+    "smoke:node": "node dist/bin/pascal-mcp.js --help",
+    "prepublishOnly": "bun run build && bun test && bun run smoke:node"
   },
   "peerDependencies": {
-    "@pascal-app/core": "^1.0.0-beta.5"
+    "@pascal-app/core": "^1.0.3"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "@pascal-app/geometry-script": "^1.0.3",
     "@pascal-app/lingo": "^0.2.0",
     "zod": ">=4.5.4 <4.6"
   },
   "devDependencies": {
-    "@pascal-app/core": "^1.0.0-beta.5",
+    "@pascal-app/core": "^1.0.3",
     "@pascal/typescript-config": "*",
     "@types/node": "^22.19.20",
     "typescript": "6.0.3"
@@ -79,7 +86,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/pascalorg/editor.git",
+    "url": "git+https://github.com/pascalorg/editor.git",
     "directory": "packages/mcp"
   },
   "license": "MIT",

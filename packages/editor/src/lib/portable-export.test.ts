@@ -5,6 +5,8 @@ import {
   BoxGeometry,
   BufferGeometry,
   Color,
+  CompressedTexture,
+  DataTexture,
   DoubleSide,
   Float32BufferAttribute,
   FrontSide,
@@ -15,11 +17,13 @@ import {
   Mesh,
   MeshStandardMaterial,
   Quaternion,
+  Texture,
   Vector3,
 } from 'three'
 import { USDZExporter } from 'three/examples/jsm/exporters/USDZExporter.js'
 import {
   createUsdzScene,
+  decompressCanonicalNormalMaps,
   expandInstancedMeshes,
   freezeDeformedMeshes,
   normalizePortableScene,
@@ -345,6 +349,17 @@ function withCanvasCapture(run: (capture: () => ImageData) => void): void {
       putImageData: (image: ImageData) => {
         captured = image
       },
+      drawImage: () => {
+        if (!captured) throw new Error('Source canvas has no captured pixels')
+      },
+      getImageData: (_x: number, _y: number, width: number, height: number) =>
+        captured ??
+        ({
+          colorSpace: 'srgb',
+          data: new Uint8ClampedArray(width * height * 4),
+          height,
+          width,
+        } as ImageData),
     }),
   } as unknown as HTMLCanvasElement
   globals.document = {
@@ -364,3 +379,77 @@ function withCanvasCapture(run: (capture: () => ImageData) => void): void {
     else delete globals.document
   }
 }
+
+describe('portable normal maps', () => {
+  function flatNormalPixels(size: number): Uint8Array {
+    const pixels = new Uint8Array(size * size * 4)
+    for (let index = 0; index < pixels.length; index += 4) pixels.set([128, 128, 255, 255], index)
+    return pixels
+  }
+
+  test('decompresses a shared compressed normal map once before canonicalising it', async () => {
+    const compressed = new CompressedTexture([], 2, 2)
+    compressed.name = 'NormalGL_test'
+    compressed.repeat.set(2, 2)
+    const first = new MeshStandardMaterial({ normalMap: compressed })
+    first.normalScale.set(0.5, 0.5)
+    const second = new MeshStandardMaterial({ normalMap: compressed })
+    second.normalScale.set(0.5, -0.5)
+    const root = new Group()
+    root.add(new Mesh(new BoxGeometry(), first), new Mesh(new BoxGeometry(), second))
+
+    let calls = 0
+    await decompressCanonicalNormalMaps(root, async () => {
+      calls += 1
+      return new DataTexture(flatNormalPixels(2), 2, 2)
+    })
+
+    expect(calls).toBe(1)
+    expect(first.normalMap).toBe(second.normalMap)
+    expect(first.normalMap?.repeat.toArray()).toEqual([2, 2])
+    expect(first.normalMap?.name).toBe('NormalGL_test')
+
+    withCanvasCapture(() => {
+      normalizePortableScene(root)
+    })
+
+    expect((first.normalMap as { isCanvasTexture?: boolean }).isCanvasTexture).toBe(true)
+    expect(first.normalMap).not.toBe(second.normalMap)
+    expect(first.normalScale.toArray()).toEqual([1, 1])
+    expect(second.normalScale.toArray()).toEqual([1, 1])
+  })
+
+  test('a compressed normal map that was not decompressed still fails loudly', () => {
+    const material = new MeshStandardMaterial({ normalMap: new CompressedTexture([], 2, 2) })
+    material.normalScale.set(0.5, 0.5)
+    const root = new Group()
+    root.add(new Mesh(new BoxGeometry(), material))
+    withCanvasCapture(() => {
+      expect(() => normalizePortableScene(root)).toThrow('must be baked before portable export')
+    })
+  })
+
+  test('preserved normal maps keep their texture and normal scale', async () => {
+    const placeholder = new Texture()
+    placeholder.image = { width: 1, height: 1 }
+    const material = new MeshStandardMaterial({ normalMap: placeholder })
+    material.normalScale.set(1, -1)
+    const root = new Group()
+    root.add(new Mesh(new BoxGeometry(), material))
+    const options = { preserveNormalMap: (texture: Texture) => texture === placeholder }
+
+    await decompressCanonicalNormalMaps(
+      root,
+      async () => {
+        throw new Error('preserved maps must not be decompressed')
+      },
+      options,
+    )
+    withCanvasCapture(() => {
+      normalizePortableScene(root, options)
+    })
+
+    expect(material.normalMap).toBe(placeholder)
+    expect(material.normalScale.toArray()).toEqual([1, -1])
+  })
+})

@@ -57,13 +57,7 @@ export function CaptureDeviceMotionLayer({
   return (
     <group>
       {trajectorySegments.map(({ points, segment }) => (
-        <CaptureLine
-          color="#222326"
-          key={segment}
-          lineWidth={lineWidth}
-          opacity={0.78}
-          points={points}
-        />
+        <CaptureLine color="#39ff14" key={segment} lineWidth={lineWidth} points={points} />
       ))}
       <group ref={deviceRef}>
         <CameraFrustum lineWidth={lineWidth} />
@@ -88,11 +82,11 @@ function CameraFrustum({ lineWidth }: { lineWidth: number }) {
   ].flat()
 
   return (
-    <group>
-      <CaptureLine color="#f5b900" lineWidth={lineWidth} points={points} segments />
+    <group scale={1.35}>
+      <CaptureLine color="#ffee00" lineWidth={lineWidth} points={points} segments />
       <mesh>
-        <sphereGeometry args={[0.025, 12, 12]} />
-        <meshBasicMaterial color="#ffd84d" />
+        <sphereGeometry args={[0.035, 12, 12]} />
+        <meshBasicMaterial color="#ffee00" toneMapped={false} />
       </mesh>
     </group>
   )
@@ -101,13 +95,11 @@ function CameraFrustum({ lineWidth }: { lineWidth: number }) {
 function CaptureLine({
   color,
   lineWidth,
-  opacity = 1,
   points,
   segments = false,
 }: {
   color: string
   lineWidth: number
-  opacity?: number
   points: readonly [number, number, number][]
   segments?: boolean
 }) {
@@ -117,17 +109,15 @@ function CaptureLine({
     )
     const material = new LineBasicMaterial({
       color,
-      depthWrite: opacity >= 1,
       linewidth: lineWidth,
-      opacity,
-      transparent: opacity < 1,
+      toneMapped: false,
     })
     const object = segments
       ? new LineSegments(geometry, material)
       : new ThreeLine(geometry, material)
     object.frustumCulled = false
     return object
-  }, [color, lineWidth, opacity, points, segments])
+  }, [color, lineWidth, points, segments])
 
   useEffect(
     () => () => {

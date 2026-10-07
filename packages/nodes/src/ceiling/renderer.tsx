@@ -1,8 +1,13 @@
 'use client'
 
 import {
+  type AnyNodeId,
+  CEILING_DRAW_OFFSET,
+  CEILING_SLOT_DEFAULT_COLOR,
   type CeilingNode,
+  ceilingPaintRegions,
   getMaterialPresetByRef,
+  type MaterialSchema,
   resolveCeilingHeight,
   resolveMaterial,
   useLiveTransforms,
@@ -10,16 +15,18 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  CEILING_REGION_MESH,
+  type CeilingRegionMaterial,
   createSurfaceRoleMaterial,
   NodeRenderer,
   resolveSurfaceColor,
+  useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { BackSide, type Mesh } from 'three/webgpu'
 import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
 import { ceilingColorFromRef, getCeilingMaterials } from './materials'
-import { CEILING_SLOT_DEFAULT_COLOR } from './slots'
 
 function createEmptyGeometry() {
   return createPlaceholderGeometry()
@@ -27,6 +34,7 @@ function createEmptyGeometry() {
 
 export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   const ref = useRef<Mesh>(null!)
+  const handlers = useNodeEvents(node, 'ceiling')
   const placeholderGeometry = useMemo(createEmptyGeometry, [])
   const gridPlaceholderGeometry = useMemo(createEmptyGeometry, [])
 
@@ -51,7 +59,7 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   // (primitive selector, so follows-mode ceilings track level-height edits
   // and covering-slab changes without a node write).
   const resolvedHeight = useScene((s) => resolveCeilingHeight(node, s.nodes))
-  const ceilingY = resolvedHeight - 0.01 + (liveTransform?.position[1] ?? 0)
+  const ceilingY = resolvedHeight - CEILING_DRAW_OFFSET + (liveTransform?.position[1] ?? 0)
   const position: [number, number, number] = [
     liveTransform?.position[0] ?? 0,
     ceilingY,
@@ -110,12 +118,51 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
     node.material?.texture,
   ])
 
+  // Painted parts draw with the same flat tint as the ceiling; the system builds
+  // their meshes and asks this for the material.
+  const regionMaterial = useCallback<CeilingRegionMaterial>(
+    (finish) => {
+      if (!textures) return materials.bottomMaterial
+      const color =
+        typeof finish === 'string'
+          ? ceilingColorFromRef(finish, sceneMaterials)
+          : finish
+            ? resolveMaterial(finish as MaterialSchema).color
+            : null
+      return getCeilingMaterials(color || CEILING_SLOT_DEFAULT_COLOR).bottomMaterial
+    },
+    [textures, sceneMaterials, materials],
+  )
+  useLayoutEffect(() => {
+    const mesh = ref.current
+    if (!mesh) return
+    mesh.userData.ceilingRegionMaterial = regionMaterial
+    let repainted = false
+    for (const child of mesh.children)
+      if (child.name === CEILING_REGION_MESH) {
+        ;(child as Mesh).material = regionMaterial(child.userData.finish)
+        repainted = true
+      }
+    // A batched copy keeps the old material until the ceiling is rebuilt.
+    if (repainted) useScene.getState().markDirty(node.id as AnyNodeId)
+  }, [node.id, regionMaterial])
+  // An automatic ceiling's regions live on its room: a repaint there rebuilds it.
+  const regionsKey = useScene((s) => JSON.stringify(ceilingPaintRegions(node, s.nodes)))
+  const builtRegionsKey = useRef(regionsKey)
+  useEffect(() => {
+    if (builtRegionsKey.current === regionsKey) return
+    builtRegionsKey.current = regionsKey
+    useScene.getState().markDirty(node.id as AnyNodeId)
+  }, [node.id, regionsKey])
+
   return (
     <mesh
       geometry={placeholderGeometry}
       material={materials.bottomMaterial}
       position={position}
       ref={ref}
+      visible={node.visible !== false}
+      {...handlers}
     >
       <mesh
         geometry={gridPlaceholderGeometry}

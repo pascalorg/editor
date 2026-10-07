@@ -82,6 +82,7 @@ export const spawnDefinition: NodeDefinition<typeof SpawnNode> = {
   parametrics: spawnParametrics,
   handles: [spawnRotateHandle(), spawnMoveHandle()],
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

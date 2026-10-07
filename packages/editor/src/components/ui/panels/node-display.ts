@@ -1,4 +1,4 @@
-import type { AnyNode } from '@pascal-app/core'
+import { type AnyNode, scriptImages } from '@pascal-app/core'
 
 export type NodeDisplay = {
   icon: string
@@ -21,6 +21,7 @@ const TYPE_DEFAULTS: Record<string, NodeDisplay> = {
   'stair-segment': { icon: '/icons/stairs.webp', label: 'Stair segment' },
   scan: { icon: '/icons/mesh.webp', label: '3D Scan' },
   guide: { icon: '/icons/floorplan.webp', label: 'Guide image' },
+  zone: { icon: '/icons/zone.webp', label: 'Zone' },
 }
 
 export function getTypeDisplay(type: string): NodeDisplay {
@@ -30,15 +31,19 @@ export function getTypeDisplay(type: string): NodeDisplay {
 export function getNodeDisplay(node: AnyNode | null | undefined): NodeDisplay {
   if (!node) return { icon: '/icons/select.webp', label: 'Selection' }
   const fallback = TYPE_DEFAULTS[node.type] ?? { icon: '/icons/select.webp', label: node.type }
+  const scripted = scriptImages(node)?.thumbnail
   // Item nodes carry an asset with its own thumbnail/name
   if (node.type === 'item') {
     return {
-      icon: node.asset?.thumbnail || fallback.icon,
+      icon: scripted ?? (node.asset?.thumbnail || fallback.icon),
       label: node.name || node.asset?.name || fallback.label,
     }
   }
+  if (node.type === 'zone' && node.spaceRole === 'room') {
+    return { icon: '/icons/kitchen.webp', label: node.name || 'Room' }
+  }
   return {
-    icon: fallback.icon,
+    icon: scripted ?? fallback.icon,
     label: node.name || fallback.label,
   }
 }

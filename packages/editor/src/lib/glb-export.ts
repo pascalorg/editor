@@ -7,6 +7,7 @@ import {
   findLevelAncestorId,
   type GeometryContext,
   getLevelDisplayName,
+  hidesDescendants,
   isNodeKindEnabled,
   isOperationDoorType,
   itemClipRegistry,
@@ -18,7 +19,9 @@ import {
   type WindowNode,
   type ZoneNode,
 } from '@pascal-app/core'
+import { evaluateRecipe } from '@pascal-app/core/procedural-items'
 import {
+  decorateProceduralEmission,
   getPascalTextureRef,
   isViewerPresentationTextureBorrowed,
   poseDoorMovingParts,
@@ -35,9 +38,14 @@ import {
   type GLTFExporterPlugin,
   type GLTFWriter,
 } from 'three/examples/jsm/exporters/GLTFExporter.js'
-import * as WebGPUTextureUtils from 'three/examples/jsm/utils/WebGPUTextureUtils.js'
+import { createExportTextureUtils, type ExportTextureUtils } from './export-texture-utils'
+import { cloneExportUserData } from './export-user-data'
+import { isIfcRolePart } from './ifc-parts'
 import {
+  type CompressedTextureDecompressor,
+  decompressCanonicalNormalMaps,
   disposeExportResources,
+  GLASS_OPACITY_USERDATA,
   normalizePortableScene,
   normalizeViewerArtifactMaterials,
 } from './portable-export'
@@ -69,12 +77,61 @@ export type GlbExportOptions = {
   excludedNodeTypes?: readonly string[]
   /** Selected static viewer-presentation contributions; omitted means none. */
   includedPresentationIds?: readonly string[]
-  /** Portable downloads are static; the baked viewer retains internal clips. */
+  /** Portable materials/geometry normalisation vs the baked viewer artifact. */
   purpose?: 'portable' | 'viewer'
+  /**
+   * Door/window open clips. Defaults to `keep` for the viewer bake and for GLB
+   * downloads (Blender turns them into actions); USDZ and print pass `none`
+   * because those formats freeze geometry and cannot play them.
+   */
+  animations?: 'keep' | 'none'
   /** Called for actual lossy portable conversions discovered during preparation. */
   onWarning?: (warning: string) => void
   /** Reject retained node kinds whose export geometry can only be baked asynchronously. */
   requireSynchronousBake?: boolean
+  /** GPU decompressor for compressed normal maps that must be baked; defaults to `textureUtils`. */
+  decompressTexture?: CompressedTextureDecompressor
+  /**
+   * Shared GPU decompressor for every compressed texture in the export. The
+   * export entry points create one per export and dispose it; supplying your
+   * own keeps ownership with you.
+   */
+  textureUtils?: ExportTextureUtils
+  /**
+   * Wall-clock deadline for the whole export (preparation and serialisation),
+   * after which it rejects instead of leaving the caller waiting. Defaults to
+   * `DEFAULT_MODEL_EXPORT_TIMEOUT_MS`; `Infinity` disables it.
+   */
+  timeoutMs?: number
+}
+
+export const DEFAULT_MODEL_EXPORT_TIMEOUT_MS = 180_000
+
+/**
+ * three's exporters finish inside `FileReader.onloadend` and `canvas.toBlob`
+ * callbacks that carry no error path: a failed read or a callback the browser
+ * never invokes calls neither `onDone` nor `onError`, so without a deadline the
+ * returned promise stays pending forever and the export UI is stuck.
+ */
+export function withExportDeadline<Result>(
+  promise: Promise<Result>,
+  timeoutMs: number,
+  format: string,
+  onTimeout?: () => void,
+): Promise<Result> {
+  if (!Number.isFinite(timeoutMs)) return promise
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      onTimeout?.()
+      reject(
+        new Error(
+          `${format} export timed out after ${Math.max(1, Math.round(timeoutMs / 1000))} s. Try again with “Visible nodes only” to shrink the scene, or reload the page if it keeps failing.`,
+        ),
+      )
+    }, timeoutMs)
+  })
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer))
 }
 
 /** Resolve after the next couple of animation frames, giving React/R3F time to
@@ -85,6 +142,115 @@ export function nextFrames(): Promise<void> {
   return new Promise((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
   })
+}
+
+/**
+ * Export visibility, shared with the clone pruning: a hidden node hides its
+ * subtree, except a Site, which hides only its own ground (`hidesDescendants`).
+ */
+export function createExportVisibility(nodes: Record<string, AnyNode>) {
+  const visibility = new Map<string, boolean>()
+  const isVisible = (id: string, path: Set<string> = new Set()): boolean => {
+    const cached = visibility.get(id)
+    if (cached !== undefined) return cached
+    const node = nodes[id]
+    if (!node) return true
+    if (node.visible === false) {
+      visibility.set(id, false)
+      return false
+    }
+    const parentId = node.parentId
+    const parent = parentId ? nodes[parentId] : undefined
+    if (!parentId || path.has(id) || (parent && !hidesDescendants(parent))) {
+      visibility.set(id, true)
+      return true
+    }
+    path.add(id)
+    const visible = isVisible(parentId, path)
+    path.delete(id)
+    visibility.set(id, visible)
+    return visible
+  }
+  return isVisible
+}
+
+export type ExportGeometryScope = Pick<GlbExportOptions, 'onlyVisible' | 'excludedNodeTypes'>
+
+/**
+ * Included `bake: 'replace'` nodes whose live object holds no mesh yet. These
+ * kinds render collectively in the editor and mount their own geometry only
+ * while `isExporting` is set; kinds with bake hooks are rebuilt after the
+ * clone instead, and excluded or hidden nodes never reach the clone.
+ */
+export function nodesAwaitingExportGeometry(
+  nodes: Record<string, AnyNode>,
+  scope: ExportGeometryScope = {},
+): string[] {
+  const sceneState = useScene.getState()
+  const installedPlugins = sceneState.hasExplicitPluginInstallState
+    ? sceneState.installedPlugins
+    : undefined
+  const excluded = new Set(scope.excludedNodeTypes)
+  const isVisible = createExportVisibility(nodes)
+  const typeExcluded = (node: AnyNode): boolean => {
+    for (let current: AnyNode | undefined = node, guard = 0; current && guard < 64; guard++) {
+      if (excluded.has(current.type)) return true
+      current = current.parentId ? nodes[current.parentId] : undefined
+    }
+    return false
+  }
+  const pending: string[] = []
+  for (const [id, object] of sceneRegistry.nodes) {
+    const node = nodes[id]
+    if (!node) continue
+    const definition = nodeRegistry.get(node.type)
+    if (definition?.bake !== 'replace' || definition.bakeGeometry || definition.bakeGeometryAsync) {
+      continue
+    }
+    if (!isNodeKindEnabled(node.type, installedPlugins) || typeExcluded(node)) continue
+    if ((scope.onlyVisible ?? true) && !isVisible(id)) continue
+    let hasMesh = false
+    object.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) hasMesh = true
+    })
+    if (!hasMesh) pending.push(id)
+  }
+  return pending
+}
+
+/** Two animation frames, or `ms` if frames have stopped (hidden tab, test runner). */
+function nextFramesOrTimeout(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms)
+    if (typeof requestAnimationFrame !== 'function') return
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        clearTimeout(timer)
+        resolve()
+      }),
+    )
+  })
+}
+
+/**
+ * After `setExporting(true)`, let one commit land, then wait until every
+ * included replace-kind node has mounted its export geometry. Two frames are
+ * not enough: on a large scene with a busy main thread the proxies' re-render
+ * lands several frames later, and the clone would silently miss every plant.
+ * The deadline runs on its own timer, so stalled frames cannot hang an export.
+ */
+export async function waitForExportGeometry(
+  nodes: Record<string, AnyNode>,
+  scope: ExportGeometryScope = {},
+  timeoutMs = 10_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  await nextFramesOrTimeout(Math.min(500, timeoutMs))
+  while (nodesAwaitingExportGeometry(nodes, scope).length > 0) {
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) return
+    await nextFramesOrTimeout(Math.min(50, remaining))
+  }
 }
 
 type GltfExtrasDef = {
@@ -144,15 +310,43 @@ export async function exportSceneToGlb(
   options: GlbExportOptions = {},
 ): Promise<ArrayBuffer> {
   const textureMode = options.textures ?? 'embed'
-  const prepared = await preparePortableSceneFromViewer(sceneGroup, nodes, options)
-  for (const warning of prepared.warnings) options.onWarning?.(warning)
+  const textureUtils = options.textureUtils ?? createExportTextureUtils()
+  // Preparation awaits plugin bake hooks and presentation builders, so the
+  // deadline has to cover it as well as the serialisation.
+  const preparation = preparePortableSceneFromViewer(sceneGroup, nodes, {
+    ...options,
+    textureUtils,
+    animations: options.animations ?? 'keep',
+  })
+  // Assigned inside the raced closure, so a plain `let` narrows to `never` in
+  // the `finally`.
+  const run: { prepared: GlbExport | null; abandoned: boolean } = {
+    prepared: null,
+    abandoned: false,
+  }
   try {
-    return await serializePreparedSceneToGlb(prepared, {
-      textures: textureMode,
-      onlyVisible: options.onlyVisible,
-    })
+    return await withExportDeadline(
+      (async () => {
+        run.prepared = await preparation
+        // The race has already rejected; don't serialise a file nobody will get.
+        if (run.abandoned) throw new Error('GLB export abandoned')
+        for (const warning of run.prepared.warnings) options.onWarning?.(warning)
+        return serializePreparedSceneToGlb(run.prepared, {
+          textures: textureMode,
+          onlyVisible: options.onlyVisible,
+          textureUtils,
+        })
+      })(),
+      options.timeoutMs ?? DEFAULT_MODEL_EXPORT_TIMEOUT_MS,
+      'GLB',
+      () => {
+        run.abandoned = true
+      },
+    )
   } finally {
-    prepared.dispose()
+    if (run.prepared) run.prepared.dispose()
+    else preparation.then((late) => late.dispose()).catch(() => {})
+    if (!options.textureUtils) await textureUtils.dispose()
   }
 }
 /**
@@ -179,24 +373,30 @@ export async function preparePortableSceneFromViewer(
   return completeSceneExportPreparation(preparation)
 }
 
+/** Serialise a prepared scene; callers own the deadline (see `exportSceneToGlb`). */
 export function serializePreparedSceneToGlb(
   prepared: GlbExport,
-  options: Pick<GlbExportOptions, 'textures' | 'onlyVisible'> = {},
+  options: Pick<GlbExportOptions, 'textures' | 'onlyVisible'> & {
+    textureUtils: ExportTextureUtils
+  },
 ): Promise<ArrayBuffer> {
   const exporter = new GLTFExporter()
   if ((options.textures ?? 'embed') === 'reference') {
     exporter.register(textureReferencePlugin)
   }
-  exporter.setTextureUtils(WebGPUTextureUtils)
+  exporter.setTextureUtils(options.textureUtils)
 
   return new Promise<ArrayBuffer>((resolve, reject) => {
     exporter.parse(
       prepared.scene,
       (gltf) => {
-        resolve(gltf as ArrayBuffer)
+        // A failed final FileReader hands GLTFExporter's onDone `null`, which
+        // `new Blob([null])` would happily turn into a four-byte download.
+        if (gltf instanceof ArrayBuffer) resolve(gltf)
+        else reject(new Error('GLB export produced no data'))
       },
       (error) => {
-        reject(error)
+        reject(error instanceof Error ? error : new Error(String(error)))
       },
       {
         binary: true,
@@ -342,22 +542,47 @@ function startSceneExportPreparation(
   }
 }
 
+/** Own a throwaway decompressor only when the caller supplied neither form. */
+function resolveNormalMapDecompressor(options: GlbExportOptions): {
+  decompress: CompressedTextureDecompressor
+  dispose: () => Promise<void>
+} {
+  if (options.decompressTexture) {
+    return { decompress: options.decompressTexture, dispose: async () => {} }
+  }
+  const utils = options.textureUtils ?? createExportTextureUtils()
+  return {
+    decompress: (texture) => utils.decompress(texture),
+    dispose: options.textureUtils ? async () => {} : () => utils.dispose(),
+  }
+}
+
 async function completeSceneExportPreparation(
   preparation: SceneExportPreparation,
 ): Promise<GlbExport> {
+  const decompressor = resolveNormalMapDecompressor(preparation.options)
   try {
     await replaceBakeGeometryAsync(preparation)
     await appendSelectedPresentations(preparation)
     const prepared = finishSceneExportPreparation(preparation)
+    const { options } = preparation
+    const byReference = (options.textures ?? 'embed') === 'reference'
+    const normalizeOptions = {
+      preserveNormalMap: (texture: THREE.Texture) =>
+        byReference && getPascalTextureRef(texture) !== null,
+    }
+    await decompressCanonicalNormalMaps(prepared.scene, decompressor.decompress, normalizeOptions)
     prepared.warnings.push(
-      ...(preparation.options.purpose === 'viewer'
-        ? normalizeViewerArtifactMaterials(prepared.scene)
-        : normalizePortableScene(prepared.scene)),
+      ...(options.purpose === 'viewer'
+        ? normalizeViewerArtifactMaterials(prepared.scene, normalizeOptions)
+        : normalizePortableScene(prepared.scene, normalizeOptions)),
     )
     return prepared
   } catch (error) {
     disposeExportResources(preparation.scene)
     throw error
+  } finally {
+    await decompressor.dispose()
   }
 }
 
@@ -369,22 +594,39 @@ function finishSceneExportPreparation(preparation: SceneExportPreparation): GlbE
     if (clone) identityNodes.add(clone)
   }
 
-  pruneNonRenderableMeshes(scene, identityNodes)
+  const warnings = pruneNonRenderableMeshes(scene, identityNodes)
   sanitizeMaterialGroups(scene, identityNodes)
   convertMaterials(scene, options.textures ?? 'embed', options.purpose ?? 'viewer')
 
+  for (const [id, original] of registryEntries) {
+    const node = nodes[id]
+    const clone = cloneByOriginal.get(original)
+    if (node?.type !== 'procedural-item' || !clone) continue
+    const lights = evaluateRecipe(node.recipe, node.parameters).lights
+    decorateProceduralEmission(clone, lights, true)
+  }
+
   const retainedCloneByOriginal = retainedClones(scene, cloneByOriginal)
-  const animation =
-    options.purpose === 'viewer'
-      ? bakeAnimationClips(retainedCloneByOriginal, nodes, registryEntries)
-      : { clips: [], clipNamesByNode: new Map<string, string[]>() }
+  const keepClips = options.animations
+    ? options.animations === 'keep'
+    : options.purpose === 'viewer'
+  const animation = keepClips
+    ? bakeAnimationClips(retainedCloneByOriginal, nodes, registryEntries)
+    : { clips: [], clipNamesByNode: new Map<string, string[]>() }
+  if (!keepClips) {
+    for (const [id, original] of registryEntries) {
+      const node = nodes[id]
+      const clone = retainedCloneByOriginal.get(original)
+      if (node?.type === 'procedural-item' && clone) bakeRegistryAnimationClips(node, clone)
+    }
+  }
   stampIdentity(scene, retainedCloneByOriginal, nodes, animation.clipNamesByNode, registryEntries)
 
   let disposed = false
   return {
     scene,
     animations: animation.clips,
-    warnings: [],
+    warnings,
     dispose: () => {
       if (disposed) return
       disposed = true
@@ -495,7 +737,7 @@ function ownBorrowedPresentationTextures(root: THREE.Object3D): void {
         let ownedTexture = ownedTextures.get(sourceTexture)
         if (!ownedTexture) {
           ownedTexture = sourceTexture.clone()
-          ownedTexture.userData = structuredClone(sourceTexture.userData)
+          ownedTexture.userData = cloneExportUserData(sourceTexture.userData)
           ownedTexture.needsUpdate = true
           ownedTextures.set(sourceTexture, ownedTexture)
         }
@@ -600,45 +842,33 @@ function pruneHiddenSceneNodes(
   nodes: Record<string, AnyNode>,
   registryEntries: readonly RegistryEntry[],
 ) {
-  const visibility = new Map<string, boolean>()
-  const declaredSiteParents = new Map<string, string>()
-  for (const node of Object.values(nodes)) {
-    if (node.type !== 'site' || !('children' in node) || !Array.isArray(node.children)) continue
-    for (const childId of node.children) {
-      const child = nodes[childId]
-      if (child && !child.parentId && !declaredSiteParents.has(childId)) {
-        declaredSiteParents.set(childId, node.id)
-      }
-    }
-  }
+  const isVisible = createExportVisibility(nodes)
 
-  const isVisible = (id: string, path: Set<string>): boolean => {
-    const cached = visibility.get(id)
-    if (cached !== undefined) return cached
-
-    const node = nodes[id]
-    if (!node) return true
-    if (node.visible === false) {
-      visibility.set(id, false)
-      return false
-    }
-    const parentId = node.parentId || declaredSiteParents.get(id)
-    if (!parentId || path.has(id)) {
-      visibility.set(id, true)
-      return true
-    }
-
-    path.add(id)
-    const visible = isVisible(parentId, path)
-    path.delete(id)
-    visibility.set(id, visible)
-    return visible
+  const nodeClones = new Set<THREE.Object3D>()
+  for (const [, original] of registryEntries) {
+    const clone = cloneByOriginal.get(original)
+    if (clone) nodeClones.add(clone)
   }
 
   for (const [id, original] of registryEntries) {
-    if (isVisible(id, new Set())) continue
-    cloneByOriginal.get(original)?.removeFromParent()
+    if (isVisible(id)) continue
+    const clone = cloneByOriginal.get(original)
+    if (!clone) continue
+    const node = nodes[id]
+    if (!node || hidesDescendants(node)) {
+      clone.removeFromParent()
+      continue
+    }
+    // Drop the hidden Site's own ground fill and boundary; keep what it hosts.
+    for (const child of [...clone.children]) {
+      if (!hostsSceneNode(child, nodeClones)) child.removeFromParent()
+    }
   }
+}
+
+function hostsSceneNode(object: THREE.Object3D, nodeClones: Set<THREE.Object3D>): boolean {
+  if (nodeClones.has(object)) return true
+  return object.children.some((child) => hostsSceneNode(child, nodeClones))
 }
 
 function retainedClones(
@@ -670,7 +900,7 @@ function cloneSceneForExport(
   if (excludedObjects.has(source)) return new THREE.Group()
 
   const clone = source.clone(false)
-  clone.userData = structuredClone(source.userData)
+  clone.userData = cloneExportUserData(source.userData)
   const renderable = source as THREE.Mesh
   const renderableClone = clone as THREE.Mesh
   if (renderable.geometry) {
@@ -693,7 +923,7 @@ function cloneSceneForExport(
         let textureClone = cache.textures.get(texture)
         if (!textureClone) {
           textureClone = texture.clone()
-          textureClone.userData = structuredClone(texture.userData)
+          textureClone.userData = cloneExportUserData(texture.userData)
           textureClone.needsUpdate = true
           cache.textures.set(texture, textureClone)
         }
@@ -775,7 +1005,16 @@ const PLACEHOLDER_MATERIAL = new THREE.MeshBasicMaterial({ visible: false })
  */
 function pruneNonRenderableMeshes(root: THREE.Object3D, identityNodes: Set<THREE.Object3D>) {
   const toRemove: THREE.Object3D[] = []
+  const warnings: string[] = []
   root.traverse((object) => {
+    if (toRemove.some((ancestor) => isDescendantOf(object, ancestor))) return
+    if (typeof object.userData.pascalExportRefusal === 'string') {
+      warnings.push(
+        `Skipped ${object.name || object.userData.pascalId || 'object'}: ${object.userData.pascalExportRefusal}`,
+      )
+      toRemove.push(object)
+      return
+    }
     if (object.userData.pascalExport === 'strip') {
       toRemove.push(object)
       return
@@ -834,6 +1073,7 @@ function pruneNonRenderableMeshes(root: THREE.Object3D, identityNodes: Set<THREE
   for (const object of toRemove) {
     object.removeFromParent()
   }
+  return warnings
 }
 
 /**
@@ -1047,7 +1287,8 @@ function convertMaterial(
   if (cached) return cached
 
   const src = material as THREE.Material & Record<string, unknown>
-  const target = new THREE.MeshStandardMaterial()
+  const glass = purpose === 'portable' && isPortableGlass(material)
+  const target = glass ? new THREE.MeshPhysicalMaterial() : new THREE.MeshStandardMaterial()
 
   target.name = material.name
   if (src.color instanceof THREE.Color) target.color.copy(src.color)
@@ -1083,10 +1324,42 @@ function convertMaterial(
     }
   }
 
+  if (glass) applyPortableGlass(target as THREE.MeshPhysicalMaterial, material)
   if (textureMode === 'reference') replaceReferencedTextures(target, placeholderCache)
 
   cache.set(material, target)
   return target
+}
+
+/** Mirrors the viewer's own rule (`maybeApplyGlassFresnel`): an untextured
+ * see-through surface below this opacity is glass, not tinted plastic. */
+const GLASS_OPACITY_THRESHOLD = 0.6
+
+function isPortableGlass(material: THREE.Material): boolean {
+  const src = material as THREE.Material & Record<string, unknown>
+  return (
+    material.transparent &&
+    material.opacity < GLASS_OPACITY_THRESHOLD &&
+    !(src.map instanceof THREE.Texture)
+  )
+}
+
+/**
+ * The viewer sells glass with a fresnel-driven opacity node, which glTF cannot
+ * carry; a plain alpha blend lands in every other tool as a blue film. Real
+ * transmission (KHR_materials_transmission + ior) is what Blender, Unity and
+ * Unreal all render as glass. The authored opacity becomes the tint strength.
+ */
+function applyPortableGlass(target: THREE.MeshPhysicalMaterial, source: THREE.Material) {
+  target.color.lerp(new THREE.Color(0xffffff), 1 - source.opacity)
+  target.transmission = 1
+  target.ior = 1.5
+  target.roughness = Math.min(target.roughness, 0.15)
+  target.metalness = 0
+  target.transparent = false
+  target.opacity = 1
+  target.depthWrite = true
+  target.userData[GLASS_OPACITY_USERDATA] = source.opacity
 }
 
 function replaceReferencedTextures(
@@ -1182,15 +1455,19 @@ function bakeAnimationClips(
     const target = cloneByOriginal.get(original)
     if (!node || !target) continue
 
+    // A window or door built from a script carries its clips like an authored item.
+    const scripted = (node.type === 'door' || node.type === 'window') && node.source
     const clip =
       bakeRegistryAnimationClips(node, target) ??
-      (node.type === 'door'
-        ? bakeDoorClip(id, node, target)
-        : node.type === 'window'
-          ? bakeWindowClip(id, node as WindowNode, target)
-          : node.type === 'item'
-            ? bakeItemClip(id, target)
-            : null)
+      (scripted
+        ? bakeItemClip(id, target)
+        : node.type === 'door'
+          ? bakeDoorClip(id, node, target)
+          : node.type === 'window'
+            ? bakeWindowClip(id, node as WindowNode, target)
+            : node.type === 'item'
+              ? bakeItemClip(id, target)
+              : null)
 
     if (clip) {
       const nodeClips = Array.isArray(clip) ? clip : [clip]
@@ -1213,44 +1490,47 @@ function bakeRegistryAnimationClips(
 }
 
 /**
- * Re-emit a catalog item's ambient clip (e.g. a fan's spin) onto the baked
- * subtree. The source clip targets the item GLB's nodes by name (`lamp_018`);
- * since every fan shares those names, we rebind each track to the specific
- * cloned node's uuid so multiple fans animate independently. The clip is named
- * per node (`<id>: loop`) so the baked viewer can drive each one on its own.
+ * Re-emit an item's clips (a fan's spin, an authored object's motions) onto the
+ * baked subtree. Source clips target the item GLB's nodes by name (`lamp_018`);
+ * since every instance shares those names, we rebind each track to the
+ * specific cloned node's uuid so instances animate independently. Clips are
+ * named per node (`<id>: <name>`; the viewer drives `<id>: loop`).
  */
-function bakeItemClip(id: string, itemObject: THREE.Object3D): THREE.AnimationClip | null {
-  const entry = itemClipRegistry.get(id)
-  if (!entry) return null
+function bakeItemClip(id: string, itemObject: THREE.Object3D): THREE.AnimationClip[] | null {
+  const entries = itemClipRegistry.get(id)
+  if (!entries?.length) return null
 
-  const tracks: THREE.KeyframeTrack[] = []
   // The catalog node names (e.g. "lamp_018") repeat across every instance of the
   // item, and the glTF export→import roundtrip rebinds clip tracks by node name —
-  // so a shared name would make all fans share one clip. Uniquify the targeted
-  // node's name per item once, then bind tracks by its (stable) uuid.
+  // so a shared name would make all fans share one clip. Uniquify each targeted
+  // node's name per item once (clips may share targets), then bind by uuid.
   const renamed = new Map<string, THREE.Object3D>()
-  for (const track of entry.clip.tracks) {
-    const dot = track.name.lastIndexOf('.')
-    if (dot < 0) continue
-    const targetName = track.name.slice(0, dot)
-    const property = track.name.slice(dot + 1)
-    let targetNode = renamed.get(targetName)
-    if (!targetNode) {
-      const found = itemObject.getObjectByName(targetName)
-      if (!found) continue
-      found.name = `${id}__${targetName}`
-      renamed.set(targetName, found)
-      targetNode = found
+  const clips: THREE.AnimationClip[] = []
+  for (const entry of entries) {
+    const tracks: THREE.KeyframeTrack[] = []
+    for (const track of entry.clip.tracks) {
+      const dot = track.name.lastIndexOf('.')
+      if (dot < 0) continue
+      const targetName = track.name.slice(0, dot)
+      const property = track.name.slice(dot + 1)
+      let targetNode = renamed.get(targetName)
+      if (!targetNode) {
+        const found = itemObject.getObjectByName(targetName)
+        if (!found) continue
+        found.name = `${id}__${targetName}`
+        renamed.set(targetName, found)
+        targetNode = found
+      }
+      const retargeted = track.clone()
+      retargeted.name = `${targetNode.uuid}.${property}`
+      tracks.push(retargeted)
     }
-    const retargeted = track.clone()
-    retargeted.name = `${targetNode.uuid}.${property}`
-    tracks.push(retargeted)
+    if (tracks.length === 0) continue
+    const clip = new THREE.AnimationClip(`${id}: ${entry.name}`, entry.clip.duration, tracks)
+    clip.userData = { loop: entry.loop }
+    clips.push(clip)
   }
-
-  if (tracks.length === 0) return null
-  const clip = new THREE.AnimationClip(`${id}: loop`, entry.clip.duration, tracks)
-  clip.userData = { loop: entry.loop }
-  return clip
+  return clips.length > 0 ? clips : null
 }
 
 /**
@@ -1535,8 +1815,43 @@ function stampIdentity(
   scene.traverse((object) => {
     const presentationId = object.userData.pascalPresentationId
     const label = object.userData.label
+    const motion = object.userData.proceduralMotion as
+      | {
+          nodeId: string
+          partId: string
+          groupId: string
+          kind: 'hinge' | 'slide' | 'spin'
+          clip?: string
+          activeWindow?: [number, number]
+        }
+      | undefined
+    const surfaceNodeIds = object.userData.surfaceNodeIds
+    const ifcRole = object.userData.pascalIfcRole
+    const ifcParts = object.userData.pascalIfcParts
+    const slotId = object.userData.slotId
     object.userData =
       typeof presentationId === 'string' ? { pascalPresentationId: presentationId, label } : {}
+    if (
+      Array.isArray(surfaceNodeIds) &&
+      surfaceNodeIds.every((id) => typeof id === 'string' && nodes[id])
+    )
+      object.userData.surfaceNodeIds = surfaceNodeIds
+    if (typeof ifcRole === 'string') object.userData.pascalIfcRole = ifcRole
+    if (Array.isArray(ifcParts) && ifcParts.every(isIfcRolePart))
+      object.userData.pascalIfcParts = ifcParts
+    if (typeof slotId === 'string') object.userData.slotId = slotId
+    if (motion) {
+      object.userData.proceduralMotion = {
+        nodeId: motion.nodeId,
+        partId: motion.partId,
+        groupId: motion.groupId,
+        kind: motion.kind,
+        ...(motion.clip && clipNamesByNode.get(motion.nodeId)?.includes(motion.clip)
+          ? { clip: motion.clip }
+          : {}),
+        ...(motion.activeWindow ? { activeWindow: motion.activeWindow } : {}),
+      }
+    }
   })
 
   for (const [id, original] of registryEntries) {
@@ -1561,21 +1876,15 @@ function stampIdentity(
       extras.label = getLevelDisplayName(node as LevelNode)
       target.visible = true
     }
-    // Only nodes that actually baked an open clip are openable. A cased opening
-    // (no leaf), fixed window, or static cabinet produces no clip, so it stays
-    // unflagged — the file never claims a part opens when nothing moves.
-    if (clipNamesByNode.get(id)?.some((name) => name.endsWith(': open'))) {
-      const clipNames = clipNamesByNode.get(id)
-      if (clipNames?.length) {
-        extras.openable = true
-        extras.clips = clipNames
-      }
-    }
-    // Items with a baked ambient clip (a fan's spin) carry the clip name but no
-    // `openable` flag — nothing opens; the clip just loops.
-    if (node.type === 'item') {
-      const clipNames = clipNamesByNode.get(id)
-      if (clipNames?.length) extras.clips = clipNames
+    // Every node that baked clips lists them, whatever its kind, so the viewer
+    // can play them. Only nodes that actually baked an open clip are openable. A
+    // cased opening (no leaf), fixed window, or static cabinet produces no clip,
+    // so it stays unflagged — the file never claims a part opens when nothing
+    // moves; an ambient loop (a fan's spin) is listed without the flag.
+    const clipNames = clipNamesByNode.get(id)
+    if (clipNames?.length) {
+      if (clipNames.some((name) => name.endsWith(': open'))) extras.openable = true
+      extras.clips = clipNames
     }
     if (node.type === 'zone') {
       // Zone fills are stripped from the bake; /viewer rebuilds the room from
@@ -1583,6 +1892,7 @@ function stampIdentity(
       // `onlyVisible` keeps it even when the editor had zones hidden at export.
       const zone = node as ZoneNode
       extras.polygon = zone.polygon
+      if (zone.holes?.length) extras.holes = zone.holes
       extras.color = zone.color
       target.visible = true
     }
@@ -1594,6 +1904,6 @@ function stampIdentity(
       extras.rotation = (node as { rotation?: number }).rotation ?? 0
       target.visible = true
     }
-    target.userData = extras
+    target.userData = { ...target.userData, ...extras }
   }
 }

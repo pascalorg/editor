@@ -27,6 +27,11 @@ export type FloorplanAnnotationRole =
   | 'structural-grid'
   | 'column-center'
   | 'room-label'
+  /** A room's finish / ceiling-height lines — detail under the name, off in the clean plan. */
+  | 'room-detail'
+  /** The roof plan proper: outline, ridges, hips, slope arrows. Off over a floor plan unless asked. */
+  | 'roof-plan'
+  | 'roof-pitch'
   | 'stair-annotation'
 
 export type FloorplanSchedule = {
@@ -57,18 +62,36 @@ export type FloorplanToolContext = {
 
 export type FloorplanNodeExtension<N extends AnyNode = AnyNode> = {
   tool?: () => Promise<{ default: ComponentType<FloorplanToolContext> }>
+  directDrag?: boolean
   availableModes?: readonly FloorplanToolMode[]
   preferredView?: '2d' | '3d'
   referencedSelectionAnnotationRole?: FloorplanAnnotationRole
   contextualDimensions?: (node: N, ctx: GeometryContext) => FloorplanGeometry | null
   actionMenu?: {
     canCurve?: (args: { node: N; nodes: Readonly<Record<AnyNodeId, AnyNode>> }) => boolean
+    /** Buttons the kind adds to the selection's action menu (2D and 3D); each decides its own visibility. */
+    actions?: () => Promise<{ default: ComponentType }>
   }
+  /**
+   * Plan layers mounted while a node of this kind is in a `reshaping` scope of
+   * that name (the 2D sibling of `def.affordanceTools[reshape]`).
+   */
+  reshapeLayers?: Record<string, () => Promise<{ default: ComponentType<FloorplanToolContext> }>>
+  /**
+   * Nodes the plan treats as one with this node when toggling it out of a
+   * selection (a slab and its ceiling share an outline and a click).
+   */
+  selectionCounterparts?: (args: {
+    node: N
+    nodes: Readonly<Record<AnyNodeId, AnyNode>>
+  }) => AnyNodeId[]
   schedule?: (args: {
     siblings: ReadonlyArray<N>
     nodes: Readonly<Record<string, AnyNode>>
     levelId: AnyNodeId
     unit: 'metric' | 'imperial'
+    /** A drafted sheet's schedule: marks match the sheet's tags. */
+    drafting?: boolean
   }) => FloorplanSchedule | null
   linkedLevelIds?: (node: N) => readonly AnyNodeId[]
   resolveForDrawing?: (args: {
@@ -82,11 +105,24 @@ type FloorplanGeometryMetadata = {
   annotationRole?: FloorplanAnnotationRole
   annotationObstacle?: 'bounds' | 'outline'
   renderPass?: 'overlay'
+  /**
+   * Annotation text only: the size to print at, in paper points, instead of
+   * the size its role implies. Lets a sheet set a room tag's name larger than
+   * its number without inventing a role per size.
+   */
+  textSizePt?: number
 }
 
 type FloorplanContextExtension = {
   automaticDimensions: boolean
   purpose: FloorplanRenderPurpose
+  /**
+   * Sheet drafting (the Sheets plan viewports): kinds draw the permit-set
+   * convention — fixtures as labelled linework, furniture as light outlines,
+   * no raster sprites. Only `collectSheetGeometry` sets it; the editor and the
+   * read-only viewer never do, so their plans keep today's look.
+   */
+  drafting: boolean
   metricNotation: FloorplanMetricNotation
   wallDimensionReference: FloorplanWallDimensionReference
 }
@@ -140,6 +176,7 @@ export function createFloorplanContextExtensions(
     [FLOORPLAN_CONTEXT_EXTENSION_KEY]: {
       automaticDimensions: values.automaticDimensions !== false,
       purpose: values.purpose === 'document' ? 'document' : 'edit',
+      drafting: values.drafting === true,
       metricNotation: values.metricNotation === 'millimeters' ? 'millimeters' : 'meters',
       wallDimensionReference: normalizeFloorplanWallDimensionReference(
         values.wallDimensionReference,
@@ -155,6 +192,7 @@ export function readFloorplanContext(ctx: GeometryContext): FloorplanContextExte
     return {
       automaticDimensions: extension.automaticDimensions !== false,
       purpose: extension.purpose === 'document' ? 'document' : 'edit',
+      drafting: extension.drafting === true,
       metricNotation: extension.metricNotation === 'millimeters' ? 'millimeters' : 'meters',
       wallDimensionReference: normalizeFloorplanWallDimensionReference(
         extension.wallDimensionReference,
@@ -164,6 +202,7 @@ export function readFloorplanContext(ctx: GeometryContext): FloorplanContextExte
   return {
     automaticDimensions: true,
     purpose: 'edit',
+    drafting: false,
     metricNotation: 'meters',
     wallDimensionReference: DEFAULT_FLOORPLAN_WALL_DIMENSION_REFERENCE,
   }

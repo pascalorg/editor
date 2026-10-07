@@ -70,12 +70,7 @@ export const ItemTreeNode = memo(function ItemTreeNode({
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      handleTreeSelection(
-        e,
-        nodeId,
-        useViewer.getState().selection.selectedIds,
-        setSelection,
-      )
+      handleTreeSelection(e, nodeId, useViewer.getState().selection.selectedIds, setSelection)
       routeTreeSelectionToNode(node)
     },
     [node, nodeId, setSelection],
@@ -134,7 +129,7 @@ export const ItemTreeNode = memo(function ItemTreeNode({
             depth={depth + 1}
             isLast={index === children.length - 1}
             key={childId}
-            nodeId={childId}
+            nodeId={childId as AnyNodeId}
           />
         ))}
     </TreeNodeWrapper>

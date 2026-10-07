@@ -93,30 +93,15 @@ interface SelectionStrategy {
   isValid: (node: AnyNode) => boolean
 }
 
-// Check if a node belongs to the selected level (directly or via wall parent)
 const isNodeOnLevel = (node: AnyNode, levelId: string): boolean => {
   const nodes = useScene.getState().nodes
-
-  // Direct child of level
-  if (node.parentId === levelId) return true
-
-  // Wall-attached nodes (window/door/item): check if parent wall is on the level
-  if ((node.type === 'item' || node.type === 'window' || node.type === 'door') && node.parentId) {
-    const parentNode = nodes[node.parentId as keyof typeof nodes]
-    if (parentNode?.type === 'wall' && parentNode.parentId === levelId) {
-      return true
-    }
-    // Ceiling/slab/roof-attached items: check if parent structure is on the level
-    if (
-      (parentNode?.type === 'ceiling' ||
-        parentNode?.type === 'slab' ||
-        parentNode?.type === 'roof') &&
-      parentNode.parentId === levelId
-    ) {
-      return true
-    }
+  const seen = new Set<string>()
+  let parentId = node.parentId
+  while (parentId && !seen.has(parentId)) {
+    if (parentId === levelId) return true
+    seen.add(parentId)
+    parentId = nodes[parentId as AnyNodeId]?.parentId ?? null
   }
-
   return false
 }
 
@@ -257,6 +242,7 @@ const getStrategy = (): SelectionStrategy | null => {
       'roof-segment',
       'window',
       'door',
+      ...getSelectableKinds(),
     ],
     handleClick: (node, nativeEvent) => {
       let nodeToSelect = node
@@ -297,6 +283,7 @@ const getStrategy = (): SelectionStrategy | null => {
         'roof-segment',
         'window',
         'door',
+        ...getSelectableKinds(),
       ]
       if (!validTypes.includes(node.type)) return false
       return isNodeInZone(node, levelId, zoneId)
@@ -315,6 +302,9 @@ export const SelectionManager = () => {
     // re-subscribe when plugin kinds register after mount (async plugin load)
     void registryVersion
     const onEnter = (event: NodeEvent) => {
+      // Walkthrough is camera-only: first-person controls own hover for the
+      // interactable target, and pointer lock keeps raycasting from a frozen cursor.
+      if (useViewer.getState().walkthroughMode) return
       const strategy = getStrategy()
       if (!strategy) return
       // Ceilings are selected via their floor-plan helper and the
@@ -338,6 +328,7 @@ export const SelectionManager = () => {
     }
 
     const onLeave = (event: NodeEvent) => {
+      if (useViewer.getState().walkthroughMode) return
       const strategy = getStrategy()
       if (!strategy) return
       if (event.node.type === 'ceiling') return
@@ -354,6 +345,7 @@ export const SelectionManager = () => {
     }
 
     const onClick = (event: NodeEvent) => {
+      if (useViewer.getState().walkthroughMode) return
       const strategy = getStrategy()
       if (!strategy) return
       if (event.node.type === 'ceiling') return
@@ -424,6 +416,7 @@ const PointerMissedHandler = ({
       // Only handle left clicks
       const viewerState = useViewer.getState()
       if (viewerState.cameraDragging || viewerState.inputDragging) return
+      if (viewerState.walkthroughMode) return
       if (event.button !== 0) return
 
       // Use requestAnimationFrame to check after R3F event handlers

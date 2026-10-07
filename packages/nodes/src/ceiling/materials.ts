@@ -1,5 +1,7 @@
 import {
+  getCatalogMaterialById,
   getMaterialPresetByRef,
+  parseMaterialColor,
   parseMaterialRef,
   resolveMaterial,
   type SceneMaterial,
@@ -61,17 +63,25 @@ export function getCeilingMaterials(color = '#999999'): CeilingMaterials {
 /**
  * Resolve a slot `MaterialRef` to a flat colour for the ceiling surface.
  * `library:` refs use the catalog preset's base colour; `scene:` refs use the
- * stored material's colour. Returns null for a dangling / unparseable ref so
+ * stored material's colour; a plain colour is itself. Returns null for a dangling / unparseable ref so
  * the caller falls back to its default.
  */
 export function ceilingColorFromRef(
   ref: string | undefined,
   sceneMaterials: Record<SceneMaterialId, SceneMaterial> | undefined,
 ): string | null {
+  const color = parseMaterialColor(ref)
+  if (color) return color
   const parsed = parseMaterialRef(ref)
   if (!parsed) return null
   if (parsed.kind === 'library') {
-    return getMaterialPresetByRef(ref)?.mapProperties.color ?? null
+    // A flat tint: the catalog's preview colour reads as the finish (a textured
+    // preset's map colour is often plain white).
+    return (
+      getCatalogMaterialById(parsed.id)?.previewColor ??
+      getMaterialPresetByRef(ref)?.mapProperties.color ??
+      null
+    )
   }
   const sceneMaterial = sceneMaterials?.[parsed.id as SceneMaterialId]
   if (!sceneMaterial) return null

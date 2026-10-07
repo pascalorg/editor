@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import type { SlabNode, WallNode, ZoneNode } from '@pascal-app/core'
+import { type SlabNode, type WallNode, ZoneNode } from '@pascal-app/core'
 import { slabQuickMeasurement } from '../slab/quick-measurement'
 import { wallQuickMeasurement } from '../wall/quick-measurement'
+import { buildZoneContextualDimensions } from '../zone/contextual-dimensions'
 import { zoneQuickMeasurement } from '../zone/quick-measurement'
 
 describe('quick measurement reports', () => {
@@ -72,5 +73,47 @@ describe('quick measurement reports', () => {
     expect(report?.title).toBe('Kitchen')
     expect(report?.metrics.find((metric) => metric.key === 'area')?.value).toBeCloseTo(20)
     expect(report?.note).toContain('room envelope not proven')
+  })
+  test('room quantities subtract holes and disappear while the enclosure is open', () => {
+    const room = ZoneNode.parse({
+      name: 'Hall',
+      autoFromWalls: true,
+      spaceRole: 'room',
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 4],
+        [0, 4],
+      ],
+      holes: [
+        [
+          [1, 1],
+          [2, 1],
+          [2, 2],
+          [1, 2],
+        ],
+      ],
+    })
+    expect(zoneQuickMeasurement(room)?.metrics.find((metric) => metric.key === 'area')?.value).toBe(
+      15,
+    )
+    expect(
+      buildZoneContextualDimensions(room, {
+        resolve: () => undefined,
+        siblings: [],
+        children: [],
+        parent: null,
+      }),
+    ).toMatchObject({ text: '15.0m²' })
+    const open = { ...room, enclosureStatus: 'open' as const }
+    expect(zoneQuickMeasurement(open)).toBeNull()
+    expect(
+      buildZoneContextualDimensions(open, {
+        resolve: () => undefined,
+        siblings: [],
+        children: [],
+        parent: null,
+      }),
+    ).toBeNull()
   })
 })

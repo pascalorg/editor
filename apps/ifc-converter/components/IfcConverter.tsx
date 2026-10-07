@@ -66,7 +66,7 @@ export default function IfcConverter() {
   }, [pascalData])
 
   const elementTypes = useMemo(() => {
-    const order = ['wall', 'slab', 'door', 'window', 'stair', 'roof', 'column', 'item']
+    const order = ['wall', 'slab', 'door', 'window', 'stair', 'roof', 'column', 'block', 'item']
     return order.filter((t) => typeCounts[t])
   }, [typeCounts])
 

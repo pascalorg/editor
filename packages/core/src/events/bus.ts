@@ -24,6 +24,7 @@ import type {
   GuideNode,
   GutterNode,
   HvacEquipmentNode,
+  ImportedMeshNode,
   ItemNode,
   LeanToExtensionNode,
   LevelNode,
@@ -37,6 +38,7 @@ import type {
   RoofNode,
   RoofSegmentNode,
   ScanNode,
+  SeparatorNode,
   ShelfNode,
   SiteNode,
   SkylightNode,
@@ -47,6 +49,7 @@ import type {
   StairSegmentNode,
   StructuralGridNode,
   TurbineVentNode,
+  UnitNode,
   WallNode,
   WindowNode,
   ZoneNode,
@@ -115,6 +118,7 @@ export interface NodeEvent<T extends AnyNode = AnyNode> {
 export type WallEvent = NodeEvent<WallNode>
 export type FenceEvent = NodeEvent<FenceNode>
 export type ItemEvent = NodeEvent<ItemNode>
+export type ImportedMeshEvent = NodeEvent<ImportedMeshNode>
 export type SiteEvent = NodeEvent<SiteNode>
 export type BuildingEvent = NodeEvent<BuildingNode>
 export type CabinetEvent = NodeEvent<CabinetNode>
@@ -137,6 +141,7 @@ export type StructuralGridEvent = NodeEvent<StructuralGridNode>
 export type WindowEvent = NodeEvent<WindowNode>
 export type DoorEvent = NodeEvent<DoorNode>
 export type ElevatorEvent = NodeEvent<ElevatorNode>
+export type UnitEvent = NodeEvent<UnitNode>
 export type ScanEvent = NodeEvent<ScanNode>
 export type GuideEvent = NodeEvent<GuideNode>
 export type BoxVentEvent = NodeEvent<BoxVentNode>
@@ -160,6 +165,7 @@ export type PipeTrapEvent = NodeEvent<PipeTrapNode>
 export type LinesetEvent = NodeEvent<LinesetNode>
 export type LiquidLineEvent = NodeEvent<LiquidLineNode>
 export type MeasurementEvent = NodeEvent<MeasurementNode>
+export type SeparatorEvent = NodeEvent<SeparatorNode>
 
 // Event suffixes - exported for use in hooks
 export const eventSuffixes = [
@@ -175,8 +181,8 @@ export const eventSuffixes = [
 
 export type EventSuffix = (typeof eventSuffixes)[number]
 
-type NodeEvents<T extends string, E> = {
-  [K in `${T}:${EventSuffix}`]: E
+type NodeEvents = {
+  [N in AnyNode as `${N['type']}:${EventSuffix}`]: NodeEvent<N>
 }
 
 type GridEvents = {
@@ -212,6 +218,14 @@ export interface SnapshotCaptureFailedEvent {
   error: string
 }
 
+/** An ephemeral capture's frame, handed back to the caller that asked for it. */
+export interface SnapshotCapturedEvent {
+  requestId: string
+  blob: Blob
+  width: number
+  height: number
+}
+
 export interface ThumbnailGenerateEvent {
   projectId: string
   requestId?: string
@@ -238,6 +252,34 @@ export interface ThumbnailGenerateEvent {
    * any palette background.
    */
   transparent?: boolean
+  // ── a sheet's picture ──
+  /** The ink edges wanted for this frame, else the canvas' setting (off with alpha). */
+  edges?: 'off' | 'soft' | 'strong'
+  /** An orthographic view of the caller's own: the capture camera at `position` looking at `target`, `viewWidth` metres across. */
+  ortho?: {
+    position: [number, number, number]
+    target: [number, number, number]
+    viewWidth: number
+  }
+  /** Node types hidden for this capture besides the helpers (a sheet's elevation hides the terrain). */
+  hideTypes?: readonly string[]
+  /** A perspective view of the caller's own (a sheet's cover view); the user's camera never moves. */
+  perspective?: {
+    position: [number, number, number]
+    target: [number, number, number]
+    fov?: number
+  }
+  /** Re-aim the sun at the face the pose looks at, for this frame. */
+  lightFace?: boolean
+  /**
+   * The frame is the caller's alone: it comes back on `snapshot:captured` (matched by `requestId`)
+   * and the host stores nothing — no snapshot, no thumbnail. An agent looking at the scene.
+   */
+  ephemeral?: boolean
+  /** World clipping planes for this frame (a section's cut). */
+  clip?: readonly { normal: [number, number, number]; constant: number }[]
+  /** Render the canvas at this multiple of its size for the frame (print-scale pictures). */
+  supersample?: number
 }
 
 export interface CameraControlFitSceneEvent {
@@ -310,6 +352,7 @@ type ThumbnailEvents = {
 type SnapshotEvents = {
   'snapshot:saved': undefined | SnapshotSavedEvent
   'snapshot:capture-failed': SnapshotCaptureFailedEvent
+  'snapshot:captured': SnapshotCapturedEvent
   'camera:go-to-position': { position: [number, number, number]; target: [number, number, number] }
 }
 
@@ -344,54 +387,7 @@ type SelectionEvents = {
 
 type EditorEvents = GridEvents &
   GenericNodeEvents &
-  NodeEvents<'wall', WallEvent> &
-  NodeEvents<'fence', FenceEvent> &
-  NodeEvents<'cabinet', CabinetEvent> &
-  NodeEvents<'cabinet-module', CabinetModuleEvent> &
-  NodeEvents<'item', ItemEvent> &
-  NodeEvents<'site', SiteEvent> &
-  NodeEvents<'building', BuildingEvent> &
-  NodeEvents<'elevator', ElevatorEvent> &
-  NodeEvents<'level', LevelEvent> &
-  NodeEvents<'lean-to-extension', LeanToExtensionEvent> &
-  NodeEvents<'zone', ZoneEvent> &
-  NodeEvents<'slab', SlabEvent> &
-  NodeEvents<'shelf', ShelfEvent> &
-  NodeEvents<'spawn', SpawnEvent> &
-  NodeEvents<'ceiling', CeilingEvent> &
-  NodeEvents<'column', ColumnEvent> &
-  NodeEvents<'construction-dimension', ConstructionDimensionEvent> &
-  NodeEvents<'block', BlockEvent> &
-  NodeEvents<'roof', RoofEvent> &
-  NodeEvents<'roof-segment', RoofSegmentEvent> &
-  NodeEvents<'stair', StairEvent> &
-  NodeEvents<'stair-segment', StairSegmentEvent> &
-  NodeEvents<'structural-grid', StructuralGridEvent> &
-  NodeEvents<'window', WindowEvent> &
-  NodeEvents<'door', DoorEvent> &
-  NodeEvents<'scan', ScanEvent> &
-  NodeEvents<'guide', GuideEvent> &
-  NodeEvents<'box-vent', BoxVentEvent> &
-  NodeEvents<'ridge-vent', RidgeVentEvent> &
-  NodeEvents<'turbine-vent', TurbineVentEvent> &
-  NodeEvents<'cupola', CupolaEvent> &
-  NodeEvents<'eyebrow-vent', EyebrowVentEvent> &
-  NodeEvents<'gutter', GutterEvent> &
-  NodeEvents<'chimney', ChimneyEvent> &
-  NodeEvents<'solar-panel', SolarPanelEvent> &
-  NodeEvents<'skylight', SkylightEvent> &
-  NodeEvents<'dormer', DormerEvent> &
-  NodeEvents<'downspout', DownspoutEvent> &
-  NodeEvents<'duct-segment', DuctSegmentEvent> &
-  NodeEvents<'duct-fitting', DuctFittingEvent> &
-  NodeEvents<'duct-terminal', DuctTerminalEvent> &
-  NodeEvents<'hvac-equipment', HvacEquipmentEvent> &
-  NodeEvents<'pipe-segment', PipeSegmentEvent> &
-  NodeEvents<'pipe-fitting', PipeFittingEvent> &
-  NodeEvents<'pipe-trap', PipeTrapEvent> &
-  NodeEvents<'lineset', LinesetEvent> &
-  NodeEvents<'liquid-line', LiquidLineEvent> &
-  NodeEvents<'measurement', MeasurementEvent> &
+  NodeEvents &
   CameraControlEvents &
   ToolEvents &
   GuideEvents &

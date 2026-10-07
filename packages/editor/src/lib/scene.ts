@@ -2,6 +2,7 @@
 
 import {
   clearSceneHistory,
+  materializeRegisteredNodeDefaults,
   nodeRegistry,
   resolveLevelId,
   sceneRegistry,
@@ -9,8 +10,8 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import useEditor, {
+  editorUiStateOnOpen,
   hasCustomPersistedEditorUiState,
-  normalizePersistedEditorUiState,
   type PersistedEditorUiState,
 } from '../store/use-editor'
 import { editorHostPanelRegistry } from './plugin-panels'
@@ -276,11 +277,18 @@ function getRestoredSelectionForScene(
 export function syncEditorSelectionFromCurrentScene() {
   const sceneNodes = useScene.getState().nodes as Record<string, any>
   const sceneRootIds = useScene.getState().rootNodeIds
-  const siteNode = sceneRootIds[0] ? sceneNodes[sceneRootIds[0]] : null
   const resolve = (child: any) => (typeof child === 'string' ? sceneNodes[child] : child)
-  const firstBuilding = siteNode?.children?.map(resolve).find((n: any) => n?.type === 'building')
+  const rootNodes = sceneRootIds.map((id) => sceneNodes[id]).filter(Boolean)
+  const firstBuilding =
+    rootNodes.find((node) => node.type === 'building') ??
+    rootNodes
+      .flatMap((node) => (Array.isArray(node.children) ? node.children.map(resolve) : []))
+      .find((node) => node?.type === 'building')
   const firstLevel = firstBuilding?.children?.map(resolve).find((n: any) => n?.type === 'level')
-  const restoredEditorUiState = normalizePersistedEditorUiState(useEditor.getState())
+  // Every project open lands in select mode, a mid-session switch included: this
+  // runs on each scene load, so it reads the live state the last project left
+  // behind and would otherwise re-arm that project's tool over the new scene.
+  const restoredEditorUiState = editorUiStateOnOpen(useEditor.getState())
   const shouldRestoreEditorUiState = hasCustomPersistedEditorUiState(restoredEditorUiState)
   const restoredSelection = getRestoredSelectionForScene(sceneNodes)
   const selectionDrivenEditorUiState = restoredSelection
@@ -400,12 +408,14 @@ export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
   const defaultInstalledPlugins = editorHostPanelRegistry.getDefaultInstalledPluginIds()
   if (hasUsableSceneGraph(sceneGraph)) {
     const { nodes, rootNodeIds, collections, materials, installedPlugins } = sceneGraph
-    useScene.getState().setScene(nodes as any, rootNodeIds as any, {
-      collections: collections as any,
-      materials: materials as any,
-      installedPlugins: installedPlugins ?? defaultInstalledPlugins,
-      hasExplicitPluginInstallState: installedPlugins !== undefined,
-    })
+    useScene
+      .getState()
+      .setScene(materializeRegisteredNodeDefaults(nodes) as any, rootNodeIds as any, {
+        collections: collections as any,
+        materials: materials as any,
+        installedPlugins: installedPlugins ?? defaultInstalledPlugins,
+        hasExplicitPluginInstallState: installedPlugins !== undefined,
+      })
   } else {
     useScene.getState().clearScene()
     useScene.getState().setInstalledPlugins(defaultInstalledPlugins, { explicit: false })

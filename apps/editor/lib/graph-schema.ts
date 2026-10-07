@@ -1,3 +1,4 @@
+import { migrateLegacyWallAssemblies } from '@pascal-app/core/scene-migrations'
 import { AnyNode, AssetUrl, BaseNode, nodeKindOf, SceneMaterial } from '@pascal-app/core/schema'
 import { z } from 'zod'
 
@@ -108,6 +109,10 @@ export const apiGraphSchema = z
     // where that allowlist is enforced.
     materials: z.record(z.string(), z.unknown()).optional(),
     installedPlugins: z.array(z.string().min(1)).optional(),
+  })
+  .transform((graph) => {
+    const migration = migrateLegacyWallAssemblies(graph.nodes)
+    return migration.changed ? { ...graph, nodes: migration.nodes } : graph
   })
   .superRefine((value, ctx) => {
     const addIssues = (nodeId: string, error: z.ZodError) => {

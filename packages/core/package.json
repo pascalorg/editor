@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/core",
-  "version": "1.0.0-beta.5",
+  "version": "1.0.3",
   "description": "Core library for Pascal 3D building editor",
   "type": "module",
   "main": "./dist/index.js",
@@ -16,6 +16,11 @@
       "import": "./dist/utils/clone-scene-graph.js",
       "default": "./dist/utils/clone-scene-graph.js"
     },
+    "./structure-kernel": {
+      "types": "./dist/lib/structure-kernel.d.ts",
+      "import": "./dist/lib/structure-kernel.js",
+      "default": "./dist/lib/structure-kernel.js"
+    },
     "./scene-migrations": {
       "types": "./dist/utils/scene-migrations.d.ts",
       "import": "./dist/utils/scene-migrations.js",
@@ -30,6 +35,11 @@
       "types": "./dist/registry/index.d.ts",
       "import": "./dist/registry/index.js",
       "default": "./dist/registry/index.js"
+    },
+    "./polygon-boolean": {
+      "types": "./dist/lib/polygon-boolean.d.ts",
+      "import": "./dist/lib/polygon-boolean.js",
+      "default": "./dist/lib/polygon-boolean.js"
     },
     "./schema": {
       "types": "./dist/schema/index.d.ts",
@@ -51,6 +61,11 @@
       "import": "./dist/hooks/spatial-grid/spatial-grid-manager.js",
       "default": "./dist/hooks/spatial-grid/spatial-grid-manager.js"
     },
+    "./plan-footprint": {
+      "types": "./dist/lib/plan-footprint.d.ts",
+      "import": "./dist/lib/plan-footprint.js",
+      "default": "./dist/lib/plan-footprint.js"
+    },
     "./wall": {
       "types": "./dist/systems/wall/wall-footprint.d.ts",
       "import": "./dist/systems/wall/wall-footprint.js",
@@ -60,6 +75,26 @@
       "types": "./dist/systems/stair/stair-opening-sync.d.ts",
       "import": "./dist/systems/stair/stair-opening-sync.js",
       "default": "./dist/systems/stair/stair-opening-sync.js"
+    },
+    "./procedural-items": {
+      "types": "./dist/procedural-items/index.d.ts",
+      "import": "./dist/procedural-items/index.js",
+      "default": "./dist/procedural-items/index.js"
+    },
+    "./building": {
+      "types": "./dist/building/index.d.ts",
+      "import": "./dist/building/index.js",
+      "default": "./dist/building/index.js"
+    },
+    "./agent-tools": {
+      "types": "./dist/agent-tools/index.d.ts",
+      "import": "./dist/agent-tools/index.js",
+      "default": "./dist/agent-tools/index.js"
+    },
+    "./agent-operations": {
+      "types": "./dist/agent-operations/index.d.ts",
+      "import": "./dist/agent-operations/index.js",
+      "default": "./dist/agent-operations/index.js"
     }
   },
   "files": [
@@ -67,12 +102,14 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc --build",
+    "build": "tsc --build && bun ../../scripts/fix-node-esm-imports.ts dist",
     "dev": "tsgo --build --watch",
     "test": "bun test src",
+    "check-types": "tsc -p tsconfig.contracts.json --pretty false",
     "bench:registry": "bun run src/registry/__bench__/relations-resolver.bench.ts",
     "bench:schema": "bun run src/schema/__bench__/node-parsers.bench.ts",
-    "prepublishOnly": "npm run build"
+    "smoke:node": "node --input-type=module -e \"await import('./dist/index.js')\"",
+    "prepublishOnly": "npm run build && npm run smoke:node"
   },
   "peerDependencies": {
     "@react-three/drei": "^10",
@@ -81,10 +118,12 @@
     "three": "^0.186"
   },
   "dependencies": {
+    "@pascal-app/lingo": "^0.2.0",
     "dedent": "^1.7.1",
     "idb-keyval": "^6.2.2",
     "mitt": "^3.0.1",
     "nanoid": "^5.1.6",
+    "polygon-clipping": "0.15.7",
     "zod": ">=4.5.4 <4.6",
     "zundo": "^2.3.0",
     "zustand": "^5"
@@ -107,7 +146,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/pascalorg/editor.git",
+    "url": "git+https://github.com/pascalorg/editor.git",
     "directory": "packages/core"
   },
   "license": "MIT",

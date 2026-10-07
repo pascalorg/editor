@@ -111,7 +111,7 @@ export default function SpawnPanel() {
           precision={2}
           step={0.01}
           unit="m"
-          value={Math.round(node.position[0] * 100) / 100}
+          value={node.position[0]}
         />
         <SliderControl
           label="Y"
@@ -123,7 +123,7 @@ export default function SpawnPanel() {
           precision={2}
           step={0.01}
           unit="m"
-          value={Math.round(node.position[1] * 100) / 100}
+          value={node.position[1]}
         />
         <SliderControl
           label="Z"
@@ -135,7 +135,7 @@ export default function SpawnPanel() {
           precision={2}
           step={0.01}
           unit="m"
-          value={Math.round(node.position[2] * 100) / 100}
+          value={node.position[2]}
         />
       </PanelSection>
 

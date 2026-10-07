@@ -2,13 +2,13 @@
 
 import { type ReactNode, useCallback, useEffect, useRef } from 'react'
 import { useIsMobile } from '../../hooks/use-mobile'
+import { openSidebarPanel, SIDEBAR_MIN_WIDTH, setSidebarTabIds } from '../../lib/sidebar-panel'
 import useEditor from '../../store/use-editor'
 
 import { useSidebarStore } from '../ui/primitives/sidebar'
 import { IconRail, type SidebarTab } from '../ui/sidebar/tab-bar'
 import { EditorLayoutMobile } from './editor-layout-mobile'
 
-const SIDEBAR_MIN_WIDTH = 300
 const SIDEBAR_MAX_WIDTH = 800
 const SIDEBAR_COLLAPSE_THRESHOLD = 220
 // Matches the `w-14` rail in <IconRail>; the resize math is relative to it.
@@ -36,6 +36,12 @@ function LeftColumn({
 
   const isResizing = useRef(false)
 
+  // Publish the rail's tabs so keyboard shortcuts (B, P) can open a panel.
+  useEffect(() => {
+    setSidebarTabIds(tabs.map((tab) => tab.id))
+    return () => setSidebarTabIds([])
+  }, [tabs])
+
   // Ensure active panel is a valid tab
   useEffect(() => {
     if (tabs.length > 0 && !tabs.some((t) => t.id === activePanel)) {
@@ -51,6 +57,18 @@ function LeftColumn({
       setMode('select')
     }
   }, [activePanel])
+
+  // Paint mode entered without the panel (command palette, a material's "paint
+  // with") brings the host's Paint panel along, so the rail reflects the mode.
+  useEffect(
+    () =>
+      useEditor.subscribe((state, prev) => {
+        if (state.mode !== prev.mode && state.mode === 'material-paint') {
+          openSidebarPanel(['paint'])
+        }
+      }),
+    [],
+  )
 
   // Closing (collapsing) the sidebar disarms any build tool back to select
   useEffect(() => {

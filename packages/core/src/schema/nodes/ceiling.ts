@@ -4,11 +4,12 @@ import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 import { ItemNode } from './item'
 import { SurfaceHoleMetadata } from './surface-hole-metadata'
+import { SurfacePaintRegion } from './surface-paint-region'
 
 export const CeilingNode = BaseNode.extend({
   id: objectId('ceiling'),
   type: nodeType('ceiling'),
-  children: z.array(ItemNode.shape.id).default([]),
+  children: z.array(z.union([ItemNode.shape.id, objectId('procedural-item')])).default([]),
   material: MaterialSchema.optional(),
   materialPreset: z.string().optional(),
   // Per-slot material overrides on the unified slot model, mirroring
@@ -18,12 +19,18 @@ export const CeilingNode = BaseNode.extend({
   polygon: z.array(z.tuple([z.number(), z.number()])),
   holes: z.array(z.array(z.tuple([z.number(), z.number()]))).default([]),
   holeMetadata: z.array(SurfaceHoleMetadata).default([]),
+  openingIds: z.array(z.string()).optional(),
   // Height in meters. Absent = the ceiling follows the level top: its
   // effective height is the same bound its write-clamp uses —
   // min(storey plane, lowest covering-slab underside over the polygon)
   // − CEILING_CLAMP_MARGIN (see `resolveCeilingHeight`). Present = an
   // explicit custom height, still write-clamped under that bound.
   height: z.number().optional(),
+  // Painted parts of a manual ceiling (later wins). An automatic ceiling draws
+  // its room's `zone.ceiling.regions` instead: it is rebuilt from the room.
+  regions: z.array(SurfacePaintRegion).optional(),
+  boundary: z.literal('auto').optional(),
+  zoneId: z.string().optional(),
   autoFromWalls: z.boolean().default(false),
 }).describe(
   dedent`
@@ -32,6 +39,7 @@ export const CeilingNode = BaseNode.extend({
   - holes: array of polygons representing holes in the ceiling
   - holeMetadata: metadata parallel to holes, used to preserve manual and auto-managed cutouts
   - height: explicit height in meters; absent = follows the level top automatically
+  - regions: painted parts of a manual ceiling ([x, z] polygons, later wins)
   - autoFromWalls: whether the ceiling is automatically generated from a closed wall loop
   `,
 )

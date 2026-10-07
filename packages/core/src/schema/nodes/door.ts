@@ -1,7 +1,11 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import { GeometryScriptSource } from '../geometry-source'
 import { MaterialSchema } from '../material'
+import { DEFAULT_DOOR_CONTENT_PADDING, DoorType, defaultDoorSegments } from './opening-types'
+
+export { DoorType } from './opening-types'
 
 export const DoorSegment = z.object({
   type: z.enum(['panel', 'glass', 'empty']),
@@ -26,24 +30,11 @@ export const OpeningDimensionReference = z.enum([
   'masonry-opening',
   'finish-opening',
 ])
-export const DoorType = z.enum([
-  'hinged',
-  'double',
-  'french',
-  'folding',
-  'pocket',
-  'barn',
-  'sliding',
-  'garage-sectional',
-  'garage-rollup',
-  'garage-tiltup',
-])
 export const DoorTrackStyle = z.enum(['none', 'visible', 'pocket', 'overhead'])
 
 export type DoorCategory = z.infer<typeof DoorCategory>
 export type OpeningConstructionType = z.infer<typeof OpeningConstructionType>
 export type OpeningDimensionReference = z.infer<typeof OpeningDimensionReference>
-export type DoorType = z.infer<typeof DoorType>
 export type DoorTrackStyle = z.infer<typeof DoorTrackStyle>
 
 export const DoorNode = BaseNode.extend({
@@ -51,13 +42,22 @@ export const DoorNode = BaseNode.extend({
   type: nodeType('door'),
   material: MaterialSchema.optional(),
   // Per-slot material overrides on the unified slot model. Keys: `panel` (the
-  // door body), `glass`. Value = a `MaterialRef` (`library:<id>` / `scene:<id>`).
-  // Absent = the body/glass default. Mirrors `ShelfNode.slots`.
+  // door body), `frame`, `glass`, `hardware`. Value = a `MaterialRef`
+  // (`library:<id>` / `scene:<id>`) or a plain `#rrggbb` colour. Absent = the
+  // door-wide `material` on panel and frame, else the slot default. Mirrors
+  // `ShelfNode.slots`.
   slots: z.record(z.string(), z.string()).optional(),
+  /**
+   * A three.js script the door is built from instead of its parametric frame, as on an item:
+   * width and height are the compiled bounds and the wall cuts the script's `cutout` mesh.
+   */
+  source: GeometryScriptSource.optional(),
 
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   side: z.enum(['front', 'back']).optional(),
+  verticalAnchor: z.enum(['wall', 'floor']).optional(),
+  floorThresholdVersion: z.union([z.literal(0), z.literal(1)]).default(1),
   wallId: z.string().optional(),
   // Alternative host: a roof-segment's generated wall face (base wall
   // under the roof or a coplanar gable end). When set, `position` is
@@ -120,24 +120,7 @@ export const DoorNode = BaseNode.extend({
     .default(0),
 
   // Leaf segments — stacked top to bottom, each with its own column split
-  segments: z.array(DoorSegment).default([
-    {
-      type: 'panel',
-      heightRatio: 0.4,
-      columnRatios: [1],
-      dividerThickness: 0.03,
-      panelDepth: 0.01,
-      panelInset: 0.04,
-    },
-    {
-      type: 'panel',
-      heightRatio: 0.6,
-      columnRatios: [1],
-      dividerThickness: 0.03,
-      panelDepth: 0.01,
-      panelInset: 0.04,
-    },
-  ]),
+  segments: z.array(DoorSegment).default(defaultDoorSegments),
 
   // Handle
   handle: z.boolean().default(true),
@@ -145,7 +128,9 @@ export const DoorNode = BaseNode.extend({
   handleSide: z.enum(['left', 'right']).default('right'),
 
   // Leaf inner margin — space between leaf edge and segment content area [x, y]
-  contentPadding: z.tuple([z.number(), z.number()]).default([0.04, 0.04]),
+  contentPadding: z
+    .tuple([z.number(), z.number()])
+    .default((): [number, number] => [...DEFAULT_DOOR_CONTENT_PADDING]),
 
   // Emergency / commercial hardware
   doorCloser: z.boolean().default(false),

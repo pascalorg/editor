@@ -58,9 +58,13 @@ export const ZoneSystem = () => {
       const isDeleteHovered = editorMode === 'delete' && hoveredId === zoneId
 
       // Keep group visible (so <Html> labels stay active), hide/show meshes only.
-      // Show meshes when: in zone mode, selected, or delete-hovered.
-      if (!obj.visible) obj.visible = true
-      const meshVisible = !isCaptureMode && (zoneGeometryVisible || isSelected || isDeleteHovered)
+      // Show meshes when: in zone mode, selected, or delete-hovered. A zone the
+      // author hid (sidebar eye) is the one case where the group itself goes:
+      // otherwise this per-frame write would undo the renderer's `visible` prop.
+      const nodeVisible = zone?.visible !== false
+      if (obj.visible !== nodeVisible) obj.visible = nodeVisible
+      const meshVisible =
+        nodeVisible && !isCaptureMode && (zoneGeometryVisible || isSelected || isDeleteHovered)
       const targetOpacity = isCaptureMode
         ? 0
         : isSelected || isDeleteHovered
@@ -103,7 +107,7 @@ export const ZoneSystem = () => {
       // Labels: visible on the current level (regardless of mode), but never
       // during snapshot capture.
       const showLabel =
-        !isCaptureMode && !zoneLabelsHidden && !!selectedLevelId && isOnSelectedLevel
+        nodeVisible && !isCaptureMode && !zoneLabelsHidden && !!selectedLevelId && isOnSelectedLevel
       const labelOpacity = showLabel ? '1' : '0'
       const labelEl = document.getElementById(`${zoneId}-label`)
       if (labelEl && labelEl.style.opacity !== labelOpacity) {

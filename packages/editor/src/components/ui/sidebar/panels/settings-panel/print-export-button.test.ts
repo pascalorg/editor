@@ -40,7 +40,7 @@ describe('simple 3D print export', () => {
       return artifact
     }
 
-    const prepared = await preparePrintExport(modelExport, true)
+    const prepared = await preparePrintExport(modelExport, true, 'print-3mf')
 
     expect(calls).toEqual([
       {
@@ -56,6 +56,33 @@ describe('simple 3D print export', () => {
       },
     ])
     expect(prepared).toEqual({ artifact, report })
+  })
+
+  test('uses the same safe profile for printable STL files', async () => {
+    const calls: { format?: string; options?: ModelExportOptions }[] = []
+    const stlReport: PrintExportReport = { ...report, format: 'stl' }
+    const artifact = { blob: new Blob(['stl']), filename: 'house.zip', metadata: stlReport }
+    const modelExport: ModelExport = async (format, options) => {
+      calls.push({ format, options })
+      return artifact
+    }
+
+    const prepared = await preparePrintExport(modelExport, false, 'print-stl')
+
+    expect(calls).toEqual([
+      {
+        format: 'print-stl',
+        options: {
+          onlyVisible: false,
+          download: false,
+          printScale: 100,
+          printScope: 'levels',
+          printContent: 'structure',
+          printBase: 'none',
+        },
+      },
+    ])
+    expect(prepared).toEqual({ artifact, report: stlReport })
   })
 
   test('blocks the download when preflight finds invalid geometry', async () => {
@@ -76,7 +103,7 @@ describe('simple 3D print export', () => {
       metadata: blockedReport,
     })
 
-    await expect(preparePrintExport(modelExport, true)).rejects.toThrow(
+    await expect(preparePrintExport(modelExport, true, 'print-3mf')).rejects.toThrow(
       'One wall has an open edge.',
     )
   })
@@ -122,7 +149,7 @@ describe('simple 3D print export', () => {
       metadata: blockedBundleReport,
     })
 
-    await expect(preparePrintExport(modelExport, true)).rejects.toThrow(
+    await expect(preparePrintExport(modelExport, true, 'print-3mf')).rejects.toThrow(
       'The upper level has an open edge.',
     )
   })
@@ -133,7 +160,7 @@ describe('simple 3D print export', () => {
       filename: 'house.3mf',
     })
 
-    await expect(preparePrintExport(modelExport, false)).rejects.toThrow(
+    await expect(preparePrintExport(modelExport, false, 'print-3mf')).rejects.toThrow(
       'did not return a valid file',
     )
   })

@@ -11,9 +11,11 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { getNodePanelModel } from '../../../lib/panel-rows'
 import { selectionMatchesSessionGroup } from '../../../lib/session-groups'
 import useSessionGroups from '../../../store/use-session-groups'
 import { PanelSection } from '../controls/panel-section'
+import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'
 import { resolveUniqueSelectionIds } from './homogeneous-selection'
 import {
@@ -52,6 +54,7 @@ export function MultiParametricInspector({ footer }: { footer?: React.ReactNode 
 
   const def = nodeType ? nodeRegistry.get(nodeType) : undefined
   const parametrics = def?.parametrics as ParametricDescriptor<AnyNode> | undefined
+  const hasKindControls = !!getNodePanelModel(def)?.multiControls
 
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
@@ -72,13 +75,18 @@ export function MultiParametricInspector({ footer }: { footer?: React.ReactNode 
       )}
       {parametrics.groups.map((group, gi) => (
         <MultiGroupFields
+          defaultExpanded={group.defaultExpanded}
           fields={group.fields as ParamField<AnyNode>[]}
-          key={`group-${gi}`}
+          key={`${nodeType}-${group.label}-${gi}`}
           nodeIds={nodeIds}
           nodeType={nodeType}
           parametrics={parametrics}
           title={group.label}
-        />
+        >
+          {hasKindControls ? (
+            <MultiKindControls nodeIds={nodeIds} nodeType={nodeType} section={group.label} />
+          ) : null}
+        </MultiGroupFields>
       ))}
       <div className="border-border/50 border-t p-3">
         <MultiSelectionActions />
@@ -87,13 +95,57 @@ export function MultiParametricInspector({ footer }: { footer?: React.ReactNode 
   )
 }
 
+/**
+ * The kind's own multi-selection controls for one section (the wall's
+ * Reference), from its panel model — the same segmented control the single
+ * panel shows, mixed when the selection disagrees.
+ */
+function MultiKindControls({
+  nodeIds,
+  nodeType,
+  section,
+}: {
+  nodeIds: AnyNodeId[]
+  nodeType: AnyNode['type']
+  section: string
+}) {
+  const nodes = useScene((s) => s.nodes)
+  const controls = useMemo(() => {
+    const model = getNodePanelModel(nodeRegistry.get(nodeType))
+    if (!model?.multiControls) return []
+    const selection = nodeIds.flatMap((id) => (nodes[id] ? [nodes[id]!] : []))
+    return model.multiControls({ selection, nodes }).filter((control) => control.section === section)
+  }, [nodeIds, nodeType, nodes, section])
+  return (
+    <>
+      {controls.map((control) => (
+        <div className="flex flex-col gap-1" key={control.id}>
+          <div className="px-1 font-medium text-[10px] text-muted-foreground/80">
+            {control.label}
+          </div>
+          <SegmentedControl
+            mixed={control.value === null}
+            onChange={control.onChange}
+            options={control.options.map((option) => ({ ...option }))}
+            value={control.value ?? ''}
+          />
+        </div>
+      ))}
+    </>
+  )
+}
+
 function MultiGroupFields({
+  defaultExpanded,
   title,
   fields,
   nodeIds,
   nodeType,
   parametrics,
+  children,
 }: {
+  children?: React.ReactNode
+  defaultExpanded?: boolean
   title: string
   fields: ParamField<AnyNode>[]
   nodeIds: AnyNodeId[]
@@ -106,9 +158,9 @@ function MultiGroupFields({
       fieldVisibleForAll(nodeIds, (field as { visibleIf?: (n: AnyNode) => boolean }).visibleIf, s.nodes),
     ),
   )
-  if (genericFields.length === 0 || !anyVisible) return null
+  if ((genericFields.length === 0 || !anyVisible) && !children) return null
   return (
-    <PanelSection title={title}>
+    <PanelSection defaultExpanded={defaultExpanded} title={title}>
       {genericFields.map((field, fi) => {
         if (
           String(field.key) === 'height' &&
@@ -136,6 +188,7 @@ function MultiGroupFields({
           />
         )
       })}
+      {children}
     </PanelSection>
   )
 }
@@ -254,7 +307,7 @@ function MultiVec3Field({
             restoreOnCommit={false}
             step={0.05}
             unit="m"
-            value={Math.round(axisValue * 100) / 100}
+            value={axisValue}
           />
         )
       })}

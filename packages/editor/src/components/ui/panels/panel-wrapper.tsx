@@ -12,7 +12,6 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { ChevronDown, ChevronLeft, GripHorizontal, RotateCcw, X } from 'lucide-react'
-import Image from 'next/image'
 import {
   type ComponentType,
   createContext,
@@ -27,27 +26,25 @@ import {
   useState,
 } from 'react'
 import { useIsMobile } from '../../../hooks/use-mobile'
+import { IconRefImage } from '../icon-ref'
+import { NodeIconImage } from '../node-icon-image'
 import {
   resolveActiveExtension,
   toggleCard,
   toggleExtension,
 } from '../../../lib/inspector-card-mode'
 import { cn } from '../../../lib/utils'
+import { useInspectorExpanded } from '../../../lib/inspector-expanded'
+import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
 import { ErrorBoundary } from '../primitives/error-boundary'
+import { useInRightStack } from '../right-stack'
+import { CollectionsPopover } from './collections/collections-popover'
 
 const DRAG_MARGIN = 8
 // Pointer travel (px) below which a header press is treated as a click
 // (toggles collapse) rather than a drag.
 const CLICK_SLOP = 4
-let desktopInspectorCollapsed = true
-
-/** Forget the shared expanded state. Called when the last selection clears so
- * a fresh selection opens the inspector collapsed — the sharing is only meant
- * to survive swaps between panels (roof ↔ segment), not a close/reopen. */
-export function resetDesktopInspectorCollapsed() {
-  desktopInspectorCollapsed = true
-}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), Math.max(min, max))
@@ -81,8 +78,19 @@ function getDragBounds(el: HTMLElement | null): {
  */
 export const InspectorFooterContext = createContext<React.ReactNode>(null)
 
+/**
+ * The scene elements the inspector card shows (the selection, or the zone behind a room).
+ * `PanelManager` provides it so every card gets the Collections section; a card mounted
+ * elsewhere (the site panel in the sidebar) is not about the selection and gets none.
+ */
+export const InspectedNodesContext = createContext<AnyNodeId[]>([])
+
 interface PanelWrapperProps {
   title: string
+  /** A short line above the title ("Room · Ground floor"). */
+  kicker?: string
+  /** Replaces the plain title, e.g. with the name edited in place. */
+  titleContent?: React.ReactNode
   /** Either a URL path (legacy panels pass `/icons/floor.webp` etc.,
    *  rendered via next/image) OR a React node (registry-driven
    *  inspector renders `<Icon icon="lucide:fence" />` from
@@ -100,6 +108,8 @@ interface PanelWrapperProps {
 
 export function PanelWrapper({
   title,
+  kicker,
+  titleContent,
   icon,
   onClose,
   onReset,
@@ -110,7 +120,9 @@ export function PanelWrapper({
   width = 320, // default width
 }: PanelWrapperProps) {
   const isMobile = useIsMobile()
+  const inStack = useInRightStack()
   const contextFooter = useContext(InspectorFooterContext)
+  const inspectedIds = useContext(InspectedNodesContext)
   const resolvedFooter = footer ?? contextFooter
 
   const panelRef = useRef<HTMLDivElement>(null)
@@ -145,22 +157,13 @@ export function PanelWrapper({
   // Stale ids (kind changed, plugin gated off) fall back to regular mode.
   const activeExtension = resolveActiveExtension(activeExtensionId, extensions)
 
-  // The whole panel is collapsed to just its header by default; the chevron
-  // expands it to reveal the inspector body. Keep the desktop value shared
-  // across inspector swaps (roof ↔ segment, etc.) so navigating between
-  // related panels preserves whether the user left the inspector open.
-  const [collapsed, setCollapsedState] = useState(desktopInspectorCollapsed)
-
-  const setCollapsed = useCallback(
-    (next: boolean | ((previous: boolean) => boolean)) => {
-      setCollapsedState((previous) => {
-        const resolved = typeof next === 'function' ? next(previous) : next
-        desktopInspectorCollapsed = resolved
-        return resolved
-      })
-    },
-    [],
-  )
+  // The panel is collapsed to just its header until the user expands it. The
+  // choice is one editor preference for every inspector (room, wall, item…),
+  // persisted, so every panel opens the way the user last left one.
+  const collapsed = !useInspectorExpanded((state) => state.expanded)
+  const setCollapsed = useCallback((next: boolean) => {
+    useInspectorExpanded.getState().setExpanded(!next)
+  }, [])
 
   const applyMode = useCallback(
     (next: { collapsed: boolean; activeExtensionId: string | null }) => {
@@ -205,8 +208,8 @@ export function PanelWrapper({
 
   const handleHeaderPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
-      // Buttons (close / reset / collapse) handle their own clicks.
-      if ((e.target as HTMLElement).closest('button')) return
+      // Buttons (close / reset / collapse) and a title edited in place handle their own clicks.
+      if ((e.target as HTMLElement).closest('button, input, label')) return
       const rect = panelRef.current?.getBoundingClientRect()
       if (!rect) return
       const bounds = getDragBounds(panelRef.current)
@@ -282,6 +285,10 @@ export function PanelWrapper({
       className={cn(
         isMobile
           ? 'flex h-full w-full flex-col overflow-hidden bg-transparent dark:text-foreground'
+          : inStack
+            ? // In the shared right column: it grows down and scrolls on itself,
+              // leaving the shortcuts card below it its room (`right-stack.tsx`).
+              'pointer-events-auto flex max-h-full min-h-0 flex-[0_1_auto] flex-col overflow-hidden rounded-xl border border-border/50 bg-sidebar/95 shadow-2xl backdrop-blur-xl dark:text-foreground'
           // Cap height at `100dvh - 154px` so a tall panel's bottom edge
           // aligns flush with the top of the floating bottom action bar.
           // Combined with `top-20` (80px), the panel's bottom sits at
@@ -292,6 +299,7 @@ export function PanelWrapper({
           : 'pointer-events-auto fixed top-20 right-4 z-50 flex max-h-[calc(100dvh-154px)] flex-col overflow-hidden rounded-xl border border-border/50 bg-sidebar/95 shadow-2xl backdrop-blur-xl dark:text-foreground',
         className,
       )}
+      data-panel-wrapper
       ref={panelRef}
       style={
         isMobile
@@ -311,11 +319,12 @@ export function PanelWrapper({
             !collapsed && 'border-border/50 border-b',
             isDragging ? 'cursor-grabbing' : 'cursor-grab',
           )}
+          data-panel-header
           onPointerDown={handleHeaderPointerDown}
           onPointerMove={handleHeaderPointerMove}
           onPointerUp={handleHeaderPointerUp}
         >
-          <div className="flex min-w-0 items-center gap-2">
+          <div className={cn('flex min-w-0 items-center gap-2', titleContent && 'flex-1 pr-2')}>
             {onBack && (
               <button
                 className="mr-1 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-[#3e3e3e] hover:text-foreground"
@@ -327,7 +336,7 @@ export function PanelWrapper({
             )}
             {icon &&
               (typeof icon === 'string' ? (
-                <Image
+                <NodeIconImage
                   alt=""
                   className="shrink-0 object-contain"
                   height={16}
@@ -337,13 +346,30 @@ export function PanelWrapper({
               ) : (
                 <span className="flex shrink-0 items-center justify-center">{icon}</span>
               ))}
-            <h2 className="truncate font-semibold text-foreground text-sm tracking-tight">
-              {title}
-            </h2>
+            {kicker || titleContent ? (
+              <div className="flex min-w-0 flex-1 flex-col">
+                {kicker && (
+                  <span className="truncate text-[11px] text-muted-foreground leading-tight" data-panel-kicker>
+                    {kicker}
+                  </span>
+                )}
+                {titleContent ?? (
+                  <h2 className="truncate font-semibold text-foreground text-sm tracking-tight">
+                    {title}
+                  </h2>
+                )}
+              </div>
+            ) : (
+              <h2 className="truncate font-semibold text-foreground text-sm tracking-tight">
+                {title}
+              </h2>
+            )}
           </div>
 
-          {/* Centered grip — purely a visual drag affordance. */}
-          <GripHorizontal className="-translate-x-1/2 pointer-events-none absolute left-1/2 h-4 w-4 text-muted-foreground/40" />
+          {/* Centered grip — purely a visual drag affordance (a title edited in place takes its room). */}
+          {!titleContent && (
+            <GripHorizontal className="-translate-x-1/2 pointer-events-none absolute left-1/2 h-4 w-4 text-muted-foreground/40" />
+          )}
 
           <div className="flex items-center gap-1">
             {onReset && (
@@ -413,7 +439,7 @@ export function PanelWrapper({
           controls (`children`). A stale extension id falls back to regular
           via `resolveActiveExtension`. */}
       {!(collapsed && !isMobile) && (
-        <div className="no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div className="no-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto" data-panel-scroll>
           {!isMobile && selectedId && activeExtension ? (
             <InspectorExtensionSection
               extension={activeExtension}
@@ -422,7 +448,23 @@ export function PanelWrapper({
             />
           ) : (
             <>
+              {/* The mobile sheet has its own header: a title edited in place moves into the body. */}
+              {isMobile && titleContent && (
+                <div className="flex flex-col px-4 pt-3">
+                  {kicker && <span className="text-[11px] text-muted-foreground">{kicker}</span>}
+                  {titleContent}
+                </div>
+              )}
               {children}
+              {inspectedIds.length > 0 && (
+                <PanelSection title="Collections">
+                  <ActionGroup>
+                    <CollectionsPopover nodeIds={inspectedIds}>
+                      <ActionButton label="Manage collections…" />
+                    </CollectionsPopover>
+                  </ActionGroup>
+                </PanelSection>
+              )}
               {/* Mobile sheet has no header icons to swap modes — keep the
                   plugin sections appended after the kind's controls there. */}
               {isMobile &&
@@ -453,7 +495,7 @@ export function PanelWrapper({
  *  inspector's `renderIcon` (plain <img> so no next/image server deps). */
 function renderExtensionIcon(ref: IconRef): React.ReactNode {
   if (ref.kind === 'url') {
-    return <img alt="" className="h-4 w-4 shrink-0 object-contain" src={ref.src} />
+    return <IconRefImage className="h-4 w-4 shrink-0" src={ref.src} />
   }
   if (ref.kind === 'iconify') {
     return <Icon height={16} icon={ref.name} width={16} />

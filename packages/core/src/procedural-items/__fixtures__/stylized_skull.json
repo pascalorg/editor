@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "name": "Stylized Skull",
+  "description": "stylized skull",
+  "parameters": [
+    {
+      "id": "scale",
+      "label": "Scale",
+      "default": 1,
+      "min": 1,
+      "max": 1,
+      "step": 1,
+      "unit": "count"
+    }
+  ],
+  "slots": [
+    {
+      "id": "bone",
+      "label": "Bone",
+      "color": "#e8dfc7"
+    },
+    {
+      "id": "dark",
+      "label": "Dark",
+      "color": "#29232b"
+    }
+  ],
+  "parts": [
+    {
+      "id": "skull",
+      "label": "Skull",
+      "count": 1,
+      "shapes": [
+        {
+          "id": "cranium",
+          "primitive": "ellipsoid",
+          "slot": "bone",
+          "size": [0.3, 0.34, 0.28],
+          "position": [0, 0.27, 0]
+        },
+        {
+          "id": "jaw",
+          "primitive": "ellipsoid",
+          "slot": "bone",
+          "size": [0.21, 0.16, 0.19],
+          "position": [0, 0.1, 0.035]
+        },
+        {
+          "id": "left_eye",
+          "primitive": "ellipsoid",
+          "slot": "dark",
+          "size": [0.085, 0.09, 0.02],
+          "position": [-0.075, 0.27, 0.135]
+        },
+        {
+          "id": "right_eye",
+          "primitive": "ellipsoid",
+          "slot": "dark",
+          "size": [0.085, 0.09, 0.02],
+          "position": [0.075, 0.27, 0.135]
+        },
+        {
+          "id": "nose",
+          "primitive": "ellipsoid",
+          "slot": "dark",
+          "size": [0.045, 0.07, 0.015],
+          "position": [0, 0.19, 0.14]
+        }
+      ]
+    }
+  ],
+  "constraints": []
+}

@@ -4,6 +4,8 @@ import {
   type MaterialPresetPayload,
   type MaterialProperties,
   type MaterialSchema,
+  materialColorPaint,
+  parseMaterialColor,
   parseMaterialRef,
   resolveMaterial,
   type SceneMaterial,
@@ -468,6 +470,16 @@ function applyMaterialMapProperties(
 // `transparent` with opacity below this gets the fresnel treatment.
 const GLASS_OPACITY_THRESHOLD = 0.6
 
+/** Glass lets light through; shadow maps would otherwise treat it as a solid panel. */
+export function materialCastsShadow(material: THREE.Material | THREE.Material[]): boolean {
+  const materials = Array.isArray(material) ? material : [material]
+  return !materials.some(
+    (entry) =>
+      (entry as THREE.MeshPhysicalMaterial).transmission > 0 ||
+      (entry.transparent && entry.opacity < GLASS_OPACITY_THRESHOLD),
+  )
+}
+
 /**
  * Fresnel-driven opacity for glass: nearly the authored opacity head-on,
  * increasingly opaque (showing the environment reflection) at grazing angles.
@@ -607,19 +619,23 @@ export function createMaterial(
  * the dangling-ref fallback for the whole session.
  */
 export function materialPresetRefSignature(ref: string): string {
-  return getMaterialPresetByRef(ref) ? ref : `${ref}#unresolved`
+  return getMaterialPresetByRef(ref) || parseMaterialColor(ref) ? ref : `${ref}#unresolved`
 }
 
 /**
- * Resolve a MaterialRef ('library:<id>' | 'scene:<id>') to a three.js material.
- * Returns null for an unknown / dangling ref so callers fall back to the
- * slot's default (authored material, then themed default). Never throws.
+ * Resolve a MaterialRef ('library:<id>' | 'scene:<id>') or a plain '#rrggbb'
+ * colour to a three.js material; the colour paints like
+ * `material: { properties: { color } }`. Returns null for an unknown / dangling
+ * ref so callers fall back to the slot's default (authored material, then
+ * themed default). Never throws.
  */
 export function resolveMaterialRef(
   ref: string | undefined,
   sceneMaterials: Record<SceneMaterialId, SceneMaterial> | undefined,
   shading: RenderShading = 'rendered',
 ): THREE.Material | null {
+  const color = parseMaterialColor(ref)
+  if (color) return createMaterial(materialColorPaint(color), shading)
   const parsed = parseMaterialRef(ref)
   if (!parsed) return null
   if (parsed.kind === 'library') return createMaterialFromPresetRef(ref, shading)
@@ -634,18 +650,37 @@ export function resolveMaterialRef(
  * procedural kinds whose colored-mode unpainted appearance comes from a
  * declarative default (slab, wall).
  */
+let slotDefaultOverrides: Readonly<Record<string, string>> | null = null
+
+/**
+ * Swaps declared slot DEFAULTS (never painted refs) for another finish, e.g.
+ * the worker thumbnail renders unpainted walls as plaster instead of the
+ * prepared-drywall default. Must be set before the scene builds its
+ * materials; `null` restores the declared defaults.
+ */
+export function setSlotDefaultOverrides(overrides: Readonly<Record<string, string>> | null) {
+  slotDefaultOverrides = overrides
+}
+
+/** A declared slot default after `setSlotDefaultOverrides`. */
+export function resolveSlotDefaultRef(slotDefault: string): string {
+  return slotDefaultOverrides?.[slotDefault] ?? slotDefault
+}
+
 export function resolveSlotDefaultMaterial(
   slotDefault: string,
   shading: RenderShading = 'rendered',
   roughness = 0.9,
 ): THREE.Material {
+  slotDefault = resolveSlotDefaultRef(slotDefault)
   if (parseMaterialRef(slotDefault)?.kind === 'library') {
     return (
       createMaterialFromPresetRef(slotDefault, shading) ??
       cachedDefaultMaterial(`slot-#ffffff-${roughness}`, '#ffffff', roughness, shading)
     )
   }
-  return cachedDefaultMaterial(`slot-${slotDefault}-${roughness}`, slotDefault, roughness, shading)
+  const color = slotDefault.startsWith('#') ? slotDefault.toLowerCase() : slotDefault
+  return cachedDefaultMaterial(`slot-${color}-${roughness}`, color, roughness, shading)
 }
 
 export function createDefaultMaterial(

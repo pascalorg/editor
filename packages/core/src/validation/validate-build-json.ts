@@ -1,7 +1,13 @@
+import { HIDDEN_SITE_NOTE } from '../lib/node-visibility'
 import { nodeRegistry } from '../registry'
+import type { Collection } from '../schema/collections'
 import { SceneMaterial } from '../schema/scene-material'
 import { AnyNode, type AnyNodeType, nodeKindOf } from '../schema/types'
+import { DEFAULT_LEVEL_HEIGHT } from '../services/level-height'
+import { getStoredLevelHeight } from '../services/storey'
+import { resolveWallEffectiveHeight } from '../systems/wall/wall-top'
 import { healSceneNodes } from '../utils/heal-scene-graph'
+import { checkOpeningWithinWall, formatOpeningBoundsIssue } from './opening-bounds'
 
 export type ValidationSeverity = 'error' | 'warning'
 
@@ -27,6 +33,10 @@ export type ParsedBuildJson = {
   installedPlugins?: string[]
   /** Scene materials referenced by node `slots` (`scene:<id>`). */
   materials?: Record<string, SceneMaterial>
+  /** Item collections; member nodes carry the matching `collectionIds`. */
+  collections?: Record<string, Collection>
+  /** The project the file was saved from, where its scripted nodes' artifacts live. */
+  projectId?: string
 }
 
 export type SchemaIssue = {
@@ -50,6 +60,18 @@ const KNOWN_TYPES = new Set<string>(AnyNode.options.map(nodeKindOf))
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isCollection(value: unknown): value is Collection {
+  if (!isPlainObject(value)) return false
+  return (
+    typeof value.id === 'string' &&
+    typeof value.name === 'string' &&
+    Array.isArray(value.nodeIds) &&
+    value.nodeIds.every((nodeId) => typeof nodeId === 'string') &&
+    (value.color === undefined || typeof value.color === 'string') &&
+    (value.controlNodeId === undefined || typeof value.controlNodeId === 'string')
+  )
 }
 
 function polygonAreaM2(points: ReadonlyArray<readonly [number, number]>): number {
@@ -113,6 +135,8 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
   const rootNodeIdsRaw = input.rootNodeIds
   const installedPluginsRaw = input.installedPlugins
   const materialsRaw = input.materials
+  const collectionsRaw = input.collections
+  const projectId = typeof input.projectId === 'string' ? input.projectId : undefined
 
   if (!isPlainObject(nodesRaw)) {
     errors.push({
@@ -206,6 +230,35 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
     })
   }
 
+  let collections: Record<string, Collection> | undefined
+  if (isPlainObject(collectionsRaw)) {
+    const skippedIds: string[] = []
+    const kept: Record<string, Collection> = {}
+    for (const [id, value] of Object.entries(collectionsRaw)) {
+      if (isCollection(value)) {
+        kept[id] = value
+      } else {
+        skippedIds.push(id)
+      }
+    }
+    if (Object.keys(kept).length > 0) collections = kept
+    if (skippedIds.length > 0) {
+      warnings.push({
+        severity: 'warning',
+        code: 'invalid_collections',
+        message: `Ignored ${skippedIds.length} invalid collection${
+          skippedIds.length === 1 ? '' : 's'
+        }: ${skippedIds.join(', ')}.`,
+      })
+    }
+  } else if (collectionsRaw !== undefined) {
+    warnings.push({
+      severity: 'warning',
+      code: 'invalid_collections',
+      message: 'Ignored invalid "collections" — expected an object of id → collection.',
+    })
+  }
+
   if (strippedChildRefs > 0 || droppedWallIds.length > 0) {
     warnings.push({
       severity: 'warning',
@@ -219,6 +272,17 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
       severity: 'error',
       code: 'empty_root_node_ids',
       message: '"rootNodeIds" is empty — no entry point into the scene.',
+    })
+  }
+
+  // Hand-authored files hide the Site expecting the parcel to disappear; the
+  // flag is accepted but reaches nothing beneath it, so say so at import.
+  for (const [key, value] of Object.entries(nodes)) {
+    if (!isPlainObject(value) || value.type !== 'site' || value.visible !== false) continue
+    warnings.push({
+      severity: 'warning',
+      code: 'site_hidden',
+      message: `Site "${typeof value.id === 'string' ? value.id : key}" is hidden. ${HIDDEN_SITE_NOTE}`,
     })
   }
 
@@ -252,6 +316,9 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
   let validRootCount = 0
   let mismatchedKeyCount = 0
   let schemaFailureCount = 0
+  // Schema-shaped copies of the nodes that passed, for the cross-node
+  // geometry pass below (defaults applied, so width/height are numbers).
+  const parsedNodes = new Map<string, AnyNode>()
 
   for (const [key, value] of Object.entries(nodes)) {
     if (!isPlainObject(value)) {
@@ -289,7 +356,9 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
       stats.byType[t] = (stats.byType[t] ?? 0) + 1
 
       const parseResult = AnyNode.safeParse(withoutNonSchemaChildren(value))
-      if (!parseResult.success) {
+      if (parseResult.success) {
+        parsedNodes.set(key, parseResult.data)
+      } else {
         schemaFailureCount += 1
         const issue = parseResult.error.issues[0]
         schemaIssues.push({
@@ -343,6 +412,29 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
         severity: 'warning',
         code: 'orphan_parent',
         message: `Node "${key}" has parentId "${parentId}" which is not in the file (will be dropped on import).`,
+        nodeId: key,
+      })
+    }
+  }
+
+  // Wall-hosted openings must sit inside their wall. Schema validation
+  // cannot see this (each node parses alone), and an agent authoring the
+  // file by hand is the likeliest source of a door past the end of its
+  // wall. Warning, not error: the scene still loads, it just looks wrong.
+  for (const [key, opening] of parsedNodes) {
+    if (opening.type !== 'door' && opening.type !== 'window') continue
+    const hostId = opening.parentId ?? opening.wallId
+    const wall = hostId ? parsedNodes.get(hostId) : undefined
+    if (wall?.type !== 'wall') continue
+    const level = wall.parentId ? parsedNodes.get(wall.parentId) : undefined
+    const storeyHeight =
+      level?.type === 'level' ? getStoredLevelHeight(level) : DEFAULT_LEVEL_HEIGHT
+    const wallHeight = resolveWallEffectiveHeight(wall, storeyHeight, 0)
+    for (const issue of checkOpeningWithinWall(opening, wall, wallHeight)) {
+      warnings.push({
+        severity: 'warning',
+        code: 'opening_outside_wall',
+        message: `${formatOpeningBoundsIssue(issue)}.`,
         nodeId: key,
       })
     }
@@ -420,6 +512,8 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
           rootNodeIds,
           ...(installedPlugins ? { installedPlugins } : {}),
           ...(materials ? { materials } : {}),
+          ...(collections ? { collections } : {}),
+          ...(projectId ? { projectId } : {}),
         }
       : null,
     stats,

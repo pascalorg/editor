@@ -98,9 +98,10 @@ describe('wall surface-material → slots migration', () => {
     )
 
     const wall = useScene.getState().nodes.wall_test as WallNode
+    // Then M1 re-keys the unclassified wall's sides onto faces a (front) and b (back).
     expect(wall.slots).toEqual({
-      interior: 'library:concrete-plate',
-      exterior: 'library:wood-woodplank48',
+      a: 'library:concrete-plate',
+      b: 'library:wood-woodplank48',
     })
     expect(wall.interiorMaterialPreset).toBeUndefined()
     expect(wall.exteriorMaterialPreset).toBeUndefined()
@@ -115,7 +116,7 @@ describe('wall surface-material → slots migration', () => {
     )
 
     const wall = useScene.getState().nodes.wall_test as WallNode
-    const interiorRef = wall.slots?.interior
+    const interiorRef = wall.slots?.a
     expect(interiorRef?.startsWith('scene:')).toBe(true)
     expect(wall.interiorMaterial).toBeUndefined()
 
@@ -135,8 +136,8 @@ describe('wall surface-material → slots migration', () => {
     )
 
     const wall = useScene.getState().nodes.wall_test as WallNode
-    expect(wall.slots?.interior).toBeDefined()
-    expect(wall.slots?.interior).toBe(wall.slots?.exterior as string)
+    expect(wall.slots?.a).toBeDefined()
+    expect(wall.slots?.a).toBe(wall.slots?.b as string)
     expect(wall.material).toBeUndefined()
     // One minted datablock shared across both faces.
     expect(Object.keys(useScene.getState().materials)).toHaveLength(1)
@@ -150,7 +151,7 @@ describe('wall surface-material → slots migration', () => {
       ] as never)
 
     const migratedWall = useScene.getState().nodes.wall_test as WallNode
-    expect(migratedWall.slots).toEqual({ interior: 'library:concrete-drywall' })
+    expect(migratedWall.slots).toEqual({ a: 'library:concrete-drywall' })
     expect(Object.keys(useScene.getState().materials)).toHaveLength(0)
 
     useScene.getState().setScene(sceneWithWall({}), ['site_test'] as never)

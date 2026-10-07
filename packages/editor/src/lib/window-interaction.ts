@@ -84,3 +84,17 @@ export function closeWindowOpenState(windowId: AnyNodeId, options?: WindowOpenAn
   const currentOpenAmount = getDisplayedWindowValue(windowId, node.operationState)
   startWindowOpenAnimation(windowId, 'operationState', currentOpenAmount, 0, options)
 }
+
+export function openWindowOpenState(windowId: AnyNodeId, options?: WindowOpenAnimationOptions) {
+  const node = useScene.getState().nodes[windowId]
+  if (
+    node?.type !== 'window' ||
+    node.openingKind === 'opening' ||
+    !isOperableWindowType(node.windowType)
+  ) {
+    return
+  }
+
+  const currentOpenAmount = getDisplayedWindowValue(windowId, node.operationState)
+  startWindowOpenAnimation(windowId, 'operationState', currentOpenAmount, 1, options)
+}

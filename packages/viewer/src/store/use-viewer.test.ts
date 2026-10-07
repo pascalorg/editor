@@ -73,3 +73,45 @@ describe('external selection highlights', () => {
     expect(useViewer.getState().selection).toBe(localSelection)
   })
 })
+
+describe('unit focus', () => {
+  afterEach(() => useViewer.getState().setFocusedUnit(null))
+
+  test('focuses one unit at a time and clears without touching the selection', () => {
+    const selection = useViewer.getState().selection
+
+    useViewer.getState().setFocusedUnit('unit_a' as never)
+    expect(useViewer.getState().focusedUnitId).toBe('unit_a')
+
+    useViewer.getState().setFocusedUnit('unit_b' as never)
+    expect(useViewer.getState().focusedUnitId).toBe('unit_b')
+
+    useViewer.getState().setFocusedUnit(null)
+    expect(useViewer.getState().focusedUnitId).toBeNull()
+    expect(useViewer.getState().selection).toBe(selection)
+  })
+})
+
+describe('scene theme', () => {
+  afterEach(() => useViewer.getState().setSceneTheme('studio'))
+
+  test('a shown theme renders without replacing the saved one', () => {
+    useViewer.getState().setSceneTheme('paper')
+    useViewer.getState().showSceneTheme('night')
+
+    expect(useViewer.getState().sceneTheme).toBe('night')
+    expect(useViewer.getState().savedSceneTheme).toBe('paper')
+
+    useViewer.getState().showSceneTheme(null)
+    expect(useViewer.getState().sceneTheme).toBe('paper')
+  })
+
+  test('picking a theme while another is shown saves the pick', () => {
+    useViewer.getState().showSceneTheme('night')
+    useViewer.getState().setSceneTheme('sunset')
+    useViewer.getState().showSceneTheme(null)
+
+    expect(useViewer.getState().sceneTheme).toBe('sunset')
+    expect(useViewer.getState().savedSceneTheme).toBe('sunset')
+  })
+})

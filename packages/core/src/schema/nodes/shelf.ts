@@ -1,7 +1,6 @@
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
-import { ItemNode } from './item'
 
 /**
  * Parametric shelf — a configurable furniture unit with one or more
@@ -40,7 +39,7 @@ export const ShelfNode = BaseNode.extend({
   // not be rendered, making the commit look like "the item went
   // somewhere else"). The action's parent-update branch needs the field
   // present at parse-time so the children array is always defined.
-  children: z.array(ItemNode.shape.id).default([]),
+  children: z.array(z.string()).default([]),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   // Persisted slab-support host — see ItemNode.supportSlabId for the rules.

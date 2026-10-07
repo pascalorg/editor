@@ -33,10 +33,14 @@ export const ViewerZoneSystem = () => {
       // Zone geometry: visible in zone mode on the right level, OR when this zone is selected.
       // The editor ZoneSystem handles the selected zone's opacity animation.
       const isSelected = id === zoneId
+      // A zone the author hid (sidebar eye) takes the group with it — this
+      // per-frame write would otherwise undo the renderer's `visible` prop.
+      const nodeVisible = zone.visible !== false
       const shouldShowGeometry =
+        nodeVisible &&
         !isCaptureMode &&
         ((structureLayer === 'zones' && !!levelId && isOnSelectedLevel) || isSelected)
-      if (!obj.visible) obj.visible = true
+      if (obj.visible !== nodeVisible) obj.visible = nodeVisible
       obj.traverse((child) => {
         if ((child as Mesh).isMesh) {
           child.visible = shouldShowGeometry
@@ -44,7 +48,8 @@ export const ViewerZoneSystem = () => {
       })
 
       // Labels: always visible on the current level (regardless of mode or zone selection)
-      const showLabel = !isCaptureMode && !zoneLabelsHidden && !!levelId && isOnSelectedLevel
+      const showLabel =
+        nodeVisible && !isCaptureMode && !zoneLabelsHidden && !!levelId && isOnSelectedLevel
       const targetOpacity = showLabel ? '1' : '0'
       const labelEl = document.getElementById(`${id}-label`)
       if (labelEl && labelEl.style.opacity !== targetOpacity) {

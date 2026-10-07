@@ -1,6 +1,7 @@
 import { type DuctFittingNode, type ParametricDescriptor, useScene } from '@pascal-app/core'
 import { Vector3 } from 'three'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
+import { findAutomaticRunEndCapIds } from '../shared/automatic-run-end-cap'
 import { fittingDeletionPlansForRun } from '../shared/fitting-deletion-cleanup'
 import { rollToContinueAcrossElbow } from './geometry'
 import type { DuctSegmentNode } from './schema'
@@ -105,10 +106,12 @@ export const ductSegmentParametrics: ParametricDescriptor<DuctSegmentNode> = {
     fittingDeletionPlansForRun(duct, nodes, requestedDeleteIds, true).flatMap(
       (plan) => plan.updates,
     ),
-  onDeleteCascade: (duct, nodes, _pendingDeleteIds, requestedDeleteIds) =>
-    fittingDeletionPlansForRun(duct, nodes, requestedDeleteIds, false).flatMap((plan) =>
+  onDeleteCascade: (duct, nodes, _pendingDeleteIds, requestedDeleteIds) => [
+    ...findAutomaticRunEndCapIds(duct.id, nodes, 'duct-fitting'),
+    ...fittingDeletionPlansForRun(duct, nodes, requestedDeleteIds, false).flatMap((plan) =>
       plan.deleteFitting ? [plan.fittingId, ...plan.cascadeDeleteIds] : [],
     ),
+  ],
   trailingSection: () => import('../shared/run-hanger-inspector'),
   groups: [
     {

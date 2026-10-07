@@ -1,6 +1,6 @@
 import { constants } from 'node:fs'
 import { access, readdir, stat } from 'node:fs/promises'
-import { ensurePascalDirectories, getEditorStatus } from './editor-process.js'
+import { ensurePascalDirectories, getEditorStatus, pinnedRuntimeVersion } from './editor-process.js'
 import { readJsonFile } from './json-files.js'
 import { getMcpServiceStatus } from './mcp-service.js'
 import type { PascalPaths } from './paths.js'
@@ -11,7 +11,10 @@ export interface DiagnosticCheck {
   message: string
 }
 
-export async function runDoctor(paths: PascalPaths): Promise<DiagnosticCheck[]> {
+export async function runDoctor(
+  paths: PascalPaths,
+  options: { runtimeSourceFile?: string } = {},
+): Promise<DiagnosticCheck[]> {
   const checks: DiagnosticCheck[] = []
   const [major = 0, minor = 0] = process.versions.node
     .split('.')
@@ -47,12 +50,19 @@ export async function runDoctor(paths: PascalPaths): Promise<DiagnosticCheck[]> 
     })
   }
   try {
-    const [status, mcp] = await Promise.all([getEditorStatus(paths), getMcpServiceStatus(paths)])
+    const [status, mcp, pinned] = await Promise.all([
+      getEditorStatus(paths),
+      getMcpServiceStatus(paths),
+      pinnedRuntimeVersion(options),
+    ])
+    const outdated = Boolean(status.runtime && pinned && status.runtime.version !== pinned)
     checks.push({
       id: 'runtime',
-      status: status.installed ? 'pass' : 'warn',
+      status: status.installed && !outdated ? 'pass' : 'warn',
       message: status.runtime
-        ? `Installed web runtime ${status.runtime.version}`
+        ? outdated
+          ? `Installed web runtime ${status.runtime.version}; this CLI ships ${pinned}. It switches the next time the editor starts ("pascal restart" if it is running, or "pascal update").`
+          : `Installed web runtime ${status.runtime.version}`
         : 'No web runtime installed yet. It downloads when the editor first starts.',
     })
     checks.push({

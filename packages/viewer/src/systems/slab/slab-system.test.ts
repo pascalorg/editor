@@ -119,4 +119,50 @@ describe('generateSlabGeometry', () => {
     expect(poolGeometry.getAttribute('position').count).toBe(20)
     expect((poolGeometry.index?.count ?? 0) / 3).toBe(10)
   })
+
+  test('a zero-area polygon builds no side-wall fins', () => {
+    const collinear: Array<[number, number]> = [
+      [0, 0],
+      [1, 0],
+      [2, 0],
+      [1, 0],
+    ]
+    for (const recessed of [false, true]) {
+      const slab = SlabNode.parse({ polygon: collinear, recessed, recessedRimElevation: 0.3 })
+      const geometry = generateSlabGeometry(slab, EMPTY_CONTEXT)
+      expect(geometry.getAttribute('position')?.count ?? 0).toBe(0)
+    }
+  })
+
+  test('a zero-area interior hole cuts nothing and grows no hole-wall fins', () => {
+    const plain = generateSlabGeometry(SlabNode.parse({ polygon: SQUARE }), EMPTY_CONTEXT)
+    const sliverHole = SlabNode.parse({
+      polygon: SQUARE,
+      holes: [
+        [
+          [1, 1],
+          [2, 1],
+          [2, 1.0000005],
+          [1, 1.0000005],
+        ],
+      ],
+    })
+    const geometry = generateSlabGeometry(sliverHole, EMPTY_CONTEXT)
+    expect((geometry.index?.count ?? 0) / 3).toBe((plain.index?.count ?? 0) / 3)
+  })
+
+  test('a hole covering the whole slab leaves no triangles', () => {
+    const slab = SlabNode.parse({
+      polygon: SQUARE,
+      holes: [
+        [
+          [-1, -1],
+          [5, -1],
+          [5, 4],
+          [-1, 4],
+        ],
+      ],
+    })
+    expect((generateSlabGeometry(slab, EMPTY_CONTEXT).index?.count ?? 0) / 3).toBe(0)
+  })
 })

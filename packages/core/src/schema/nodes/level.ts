@@ -1,5 +1,6 @@
 import dedent from 'dedent'
 import { z } from 'zod'
+import type { ProceduralItemNode } from '../../procedural-items/node'
 import { BaseNode, nodeType, objectId } from '../base'
 import type { BlockNode } from './block'
 import type { CeilingNode } from './ceiling'
@@ -9,8 +10,10 @@ import type { DuctFittingNode } from './duct-fitting'
 import type { DuctSegmentNode } from './duct-segment'
 import type { DuctTerminalNode } from './duct-terminal'
 import type { FenceNode } from './fence'
+import type { FloorOpeningNode } from './floor-opening'
 import type { GuideNode } from './guide'
 import type { HvacEquipmentNode } from './hvac-equipment'
+import type { ImportedMeshNode } from './imported-mesh'
 import type { ItemNode } from './item'
 import type { LinesetNode } from './lineset'
 import type { LiquidLineNode } from './liquid-line'
@@ -20,6 +23,7 @@ import type { PipeSegmentNode } from './pipe-segment'
 import type { PipeTrapNode } from './pipe-trap'
 import type { RoofNode } from './roof'
 import type { ScanNode } from './scan'
+import type { SeparatorNode } from './separator'
 import type { ShelfNode } from './shelf'
 import type { SlabNode } from './slab'
 import type { SpawnNode } from './spawn'
@@ -30,12 +34,16 @@ import type { ZoneNode } from './zone'
 
 type CoreLevelChildId =
   | WallNode['id']
+  | SeparatorNode['id']
+  | FloorOpeningNode['id']
   | FenceNode['id']
   | ColumnNode['id']
   | ConstructionDimensionNode['id']
   | BlockNode['id']
   | StructuralGridNode['id']
   | ItemNode['id']
+  | ProceduralItemNode['id']
+  | ImportedMeshNode['id']
   | ZoneNode['id']
   | SlabNode['id']
   | CeilingNode['id']

@@ -19,17 +19,29 @@ function isVisibleSelectableNode(node: AnyNode): boolean {
 export function collectSelectableCandidateIds(): string[] {
   const { levelId } = useViewer.getState().selection
   const { nodes } = useScene.getState()
-  const { phase, structureLayer } = useEditor.getState()
+  const { phase } = useEditor.getState()
   const result: string[] = []
   const seen = new Set<string>()
   const addNode = (node: AnyNode | undefined) => {
-    if (!node || seen.has(node.id) || (node as { visible?: boolean }).visible === false) return
+    if (
+      !node ||
+      node.type === 'zone' ||
+      seen.has(node.id) ||
+      (node as { visible?: boolean }).visible === false
+    )
+      return
     seen.add(node.id)
     result.push(node.id)
   }
   const visitLevelDescendant = (id: AnyNodeId) => {
     const node = nodes[id]
-    if (!node || seen.has(node.id) || (node as { visible?: boolean }).visible === false) return
+    if (
+      !node ||
+      node.type === 'zone' ||
+      seen.has(node.id) ||
+      (node as { visible?: boolean }).visible === false
+    )
+      return
 
     if (isRegistrySelectable(node.type)) {
       addNode(node)
@@ -51,14 +63,6 @@ export function collectSelectableCandidateIds(): string[] {
   if (!levelId) return []
   const levelNode = nodes[levelId as AnyNodeId] as LevelNode | undefined
   if (levelNode?.type !== 'level') return []
-
-  if (phase === 'structure' && structureLayer === 'zones') {
-    for (const childId of levelNode.children) {
-      const node = nodes[childId as AnyNodeId]
-      if (node?.type === 'zone') addNode(node)
-    }
-    return result
-  }
 
   for (const childId of levelNode.children) {
     visitLevelDescendant(childId as AnyNodeId)

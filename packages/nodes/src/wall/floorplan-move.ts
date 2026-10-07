@@ -1,21 +1,13 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  type AutoCeilingSyncPlan,
-  type AutoSlabSyncPlan,
-  type CeilingNode,
-  detectSpacesForLevel,
+  createLevelStructurePreview,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
-  getCeilingClampBound,
   getPerpendicularWallMoveAxis,
   getPlannedLinkedWallUpdates,
-  getStoredLevelHeight,
-  type LevelNode,
-  planAutoCeilingsForLevel,
-  planAutoSlabsForLevel,
+  planWallEndRejoins,
   planWallMoveJunctions,
-  type SlabNode,
   useLiveNodeOverrides,
   useScene,
   type WallNode,
@@ -27,6 +19,7 @@ import {
   isSegmentLongEnough,
   snapScalarToGrid,
   useWallMoveGhosts,
+  WALL_CONNECT_SNAP_RADIUS,
   type WallMoveGhostBridge,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
@@ -38,24 +31,6 @@ import {
   type LinkedWallSnapshot,
   stripWallIsNewMetadata,
 } from './move-shared'
-
-function getLevelSlabs(levelId: string, nodes: ReturnType<typeof useScene.getState>['nodes']) {
-  return Object.values(nodes).filter(
-    (entry): entry is SlabNode => entry?.type === 'slab' && (entry.parentId ?? null) === levelId,
-  )
-}
-
-function getLevelCeilings(levelId: string, nodes: ReturnType<typeof useScene.getState>['nodes']) {
-  return Object.values(nodes).filter(
-    (entry): entry is CeilingNode =>
-      entry?.type === 'ceiling' && (entry.parentId ?? null) === levelId,
-  )
-}
-
-type WallMoveSurfacePlans = {
-  slabs: AutoSlabSyncPlan
-  ceilings: AutoCeilingSyncPlan
-}
 
 /**
  * 2D floor-plan move handler for wall.
@@ -81,7 +56,7 @@ type WallMoveSurfacePlans = {
  * overrides after the write lands so the system reads from the new
  * committed scene state.
  *
- * Existing automatic slabs and ceilings receive live polygon overrides during
+ * Existing slabs, ceilings and zones receive live polygon overrides during
  * the drag. New surfaces and removals stay deferred until commit because live
  * overrides cannot represent nodes that do not exist in the scene.
  */
@@ -129,46 +104,26 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
   let lastNextStart: WallPlanPoint = originalStart
   let lastNextEnd: WallPlanPoint = originalEnd
   const levelId = node.parentId ?? null
+  const previewStructure = levelId
+    ? createLevelStructurePreview(levelId, useScene.getState().nodes)
+    : null
+  const dragNodes = Object.fromEntries(
+    Object.values(useScene.getState().nodes)
+      .filter((node) => node.parentId === levelId)
+      .map((node) => [node.id, node]),
+  )
   const affectedIds: AnyNodeId[] = [wallId, ...linkedOriginals.map((wall) => wall.id as AnyNodeId)]
   const affectedIdSet = new Set(affectedIds)
   const touchedSurfaceIds = new Set<AnyNodeId>()
-  let latestSurfacePlans: WallMoveSurfacePlans | null = null
-
-  const planSurfaces = (walls: WallNode[]): WallMoveSurfacePlans | null => {
-    if (!levelId) return null
-    const sceneState = useScene.getState()
-    const levelWalls = walls.filter((wall) => (wall.parentId ?? null) === levelId)
-    const { roomPolygons } = detectSpacesForLevel(levelId, levelWalls)
-    const slabs = planAutoSlabsForLevel(roomPolygons, getLevelSlabs(levelId, sceneState.nodes))
-    const levelNode = sceneState.nodes[levelId as AnyNodeId]
-    const ceilings = planAutoCeilingsForLevel(
-      roomPolygons,
-      getLevelCeilings(levelId, sceneState.nodes),
-      {
-        storeyHeight:
-          levelNode?.type === 'level' ? getStoredLevelHeight(levelNode as LevelNode) : undefined,
-        ceilingClampBound: (polygon) => getCeilingClampBound(levelId, sceneState.nodes, polygon),
-      },
-    )
-    return { slabs, ceilings }
-  }
 
   const publishSurfacePreviews = (walls: WallNode[]) => {
-    const plans = planSurfaces(walls)
-    latestSurfacePlans = plans
-    if (!plans) return
-
-    const entries: Array<[AnyNodeId, Record<string, unknown>]> = []
-    for (const update of plans.slabs.update) {
-      if (update.data.polygon !== undefined) {
-        entries.push([update.id as AnyNodeId, { polygon: update.data.polygon }])
-      }
-    }
-    for (const update of plans.ceilings.update) {
-      if (update.data.polygon !== undefined || update.data.height !== undefined) {
-        entries.push([update.id as AnyNodeId, update.data as Record<string, unknown>])
-      }
-    }
+    if (!previewStructure) return
+    const updates = previewStructure(walls)
+    const entries: Array<[AnyNodeId, Record<string, unknown>]> = updates.flatMap((update) =>
+      'polygon' in update.data || 'holes' in update.data
+        ? [[update.id, update.data as Record<string, unknown>]]
+        : [],
+    )
 
     const nextIds = new Set(entries.map(([id]) => id))
     const overrides = useLiveNodeOverrides.getState()
@@ -200,7 +155,6 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
       sceneState.markDirty(id)
     }
     touchedSurfaceIds.clear()
-    latestSurfacePlans = null
   }
 
   const session: FloorplanMoveTargetSession = {
@@ -304,7 +258,7 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
       // `existingWalls` snapshot needs the post-drag layout so duplicate
       // detection works; we synthesise it from scene state + the
       // overrides we just published (zustand is still on baseline).
-      const previewSceneWalls = getWallsAfterUpdates(useScene.getState().nodes, [
+      const previewSceneWalls = getWallsAfterUpdates(dragNodes, [
         { id: wallId, data: { start: nextStart, end: nextEnd } },
         ...linkedUpdates.map((u) => ({ id: u.id, data: { start: u.start, end: u.end } })),
       ]).filter((wall) => !collapsedIds.has(wall.id))
@@ -408,52 +362,18 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
         wallCount: Object.values(sceneState.nodes).filter((entry) => entry?.type === 'wall').length,
       })
 
-      const finalWalls = [
-        ...existingWalls,
-        ...bridgeCreates.map(
-          (entry) => ({ ...entry.node, parentId: entry.parentId ?? null }) as WallNode,
+      sceneState.applyNodeChanges(
+        planWallEndRejoins(
+          sceneState.nodes,
+          commitUpdates.map(({ id }) => id),
+          WALL_CONNECT_SNAP_RADIUS,
+          {
+            update: commitUpdates as Array<{ id: AnyNodeId; data: Partial<AnyNode> }>,
+            create: bridgeCreates,
+            delete: Array.from(collapsedLinkedWallIds),
+          },
         ),
-      ]
-      const surfacePlans = planSurfaces(finalWalls) ?? latestSurfacePlans
-      const surfaceUpdates = surfacePlans
-        ? [
-            ...surfacePlans.slabs.update.map((entry) => ({
-              id: entry.id as AnyNodeId,
-              data: entry.data as Partial<AnyNode>,
-            })),
-            ...surfacePlans.ceilings.update.map((entry) => ({
-              id: entry.id as AnyNodeId,
-              data: entry.data as Partial<AnyNode>,
-            })),
-          ]
-        : []
-      const surfaceCreates = surfacePlans
-        ? [
-            ...surfacePlans.slabs.create.map((slab) => ({
-              node: slab,
-              parentId: levelId as AnyNodeId,
-            })),
-            ...surfacePlans.ceilings.create.map((ceiling) => ({
-              node: ceiling,
-              parentId: levelId as AnyNodeId,
-            })),
-          ]
-        : []
-      const surfaceDeletes = surfacePlans
-        ? [
-            ...surfacePlans.slabs.delete.map((id) => id as AnyNodeId),
-            ...surfacePlans.ceilings.delete.map((id) => id as AnyNodeId),
-          ]
-        : []
-
-      sceneState.applyNodeChanges({
-        update: [
-          ...(commitUpdates as Array<{ id: AnyNodeId; data: Partial<AnyNode> }>),
-          ...surfaceUpdates,
-        ],
-        create: [...bridgeCreates, ...surfaceCreates],
-        delete: Array.from(new Set([...collapsedLinkedWallIds, ...surfaceDeletes])),
-      })
+      )
 
       // Drop the live overrides now that the committed scene state
       // matches them — leaving them around would keep the system

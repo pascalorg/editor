@@ -9,6 +9,8 @@ import useLiveTerrain from '../../store/use-live-terrain'
 import useScene, { clearSceneHistory } from '../../store/use-scene'
 import { spatialGridManager } from './spatial-grid-manager'
 import {
+  BULK_SLAB_CHANGE_THRESHOLD,
+  countBulkSlabChanges,
   initSpatialGridSync,
   markCoveringDependentsBelow,
   markLevelHeightDependents,
@@ -781,5 +783,107 @@ describe('temporal writes update slab support dependencies', () => {
         .elevation,
     ).toBe(1)
     await Promise.resolve()
+  })
+})
+
+describe('bulk slab-change guard', () => {
+  let stopSync = () => {}
+
+  // One level: a perimeter wall along y = 1 and a floor slab that contains it.
+  // Plates are small interior squares kept away from the wall, so the per-slab
+  // overlap scan would never dirty the wall — only the bulk superset does.
+  const wall = makeChild('wall_bulk', 'wall', 'level_bulk')
+  const floor = makeSlab('slab_floor', 'level_bulk', { polygon: SQUARE })
+  function plates(count: number): AnyNode[] {
+    return Array.from({ length: count }, (_, index) => {
+      const x = 0.2 + (index % 16) * 0.22
+      const y = 2.5 + Math.floor(index / 16) * 0.0002
+      return makeSlab(`slab_plate_${index}`, 'level_bulk', {
+        polygon: [
+          [x, y],
+          [x + 0.2, y],
+          [x + 0.2, y + 0.2],
+          [x, y + 0.2],
+        ],
+        elevation: 0.5,
+      })
+    })
+  }
+  function sceneWith(extra: AnyNode[]): Record<AnyNodeId, AnyNode> {
+    const level = makeLevel('level_bulk', 0, 2.5, [
+      wall.id,
+      floor.id,
+      ...extra.map((node) => node.id),
+    ])
+    return nodesFor(level, wall, floor, ...extra)
+  }
+  function write(nodes: Record<AnyNodeId, AnyNode>) {
+    useScene.setState({ dirtyNodes: new Set<AnyNodeId>() })
+    const started = performance.now()
+    useScene.setState({ nodes })
+    return performance.now() - started
+  }
+
+  beforeEach(() => {
+    spatialGridManager.clear()
+    useScene.setState({
+      collections: {},
+      dirtyNodes: new Set<AnyNodeId>(),
+      nodes: sceneWith([]),
+      readOnly: false,
+      rootNodeIds: ['level_bulk'] as AnyNodeId[],
+    } as never)
+    clearSceneHistory()
+    stopSync = initSpatialGridSync()
+    useScene.setState({ dirtyNodes: new Set<AnyNodeId>() })
+  })
+
+  afterEach(() => {
+    stopSync()
+    spatialGridManager.clear()
+  })
+
+  test('counts added, removed and reshaped slabs only', () => {
+    const before = sceneWith([])
+    const added = sceneWith(plates(3))
+    expect(countBulkSlabChanges(added, before)).toBe(3)
+    expect(countBulkSlabChanges(before, added)).toBe(3)
+    const moved = { ...added, slab_plate_0: { ...added.slab_plate_0, elevation: 0.9 } }
+    expect(countBulkSlabChanges(moved as never, added)).toBe(1)
+    const renamedWall = { ...added, wall_bulk: { ...added.wall_bulk, thickness: 0.2 } }
+    expect(countBulkSlabChanges(renamedWall as never, added)).toBe(0)
+  })
+
+  test('below the threshold the per-slab scan runs and leaves a non-overlapping wall clean', () => {
+    write(sceneWith(plates(BULK_SLAB_CHANGE_THRESHOLD - 1)))
+    expect(useScene.getState().dirtyNodes.has(wall.id as AnyNodeId)).toBe(false)
+  })
+
+  test('at the threshold the superset sweep marks the wall once and skips the scans', () => {
+    write(sceneWith(plates(BULK_SLAB_CHANGE_THRESHOLD)))
+    expect(useScene.getState().dirtyNodes.has(wall.id as AnyNodeId)).toBe(true)
+  })
+
+  test('a 3,000-slab write stays linear and later single-slab edits stay targeted', () => {
+    const many = plates(3000)
+    // Unguarded: 3,000 slabs × 2 scans × ~3,000 nodes with a parent walk each.
+    const elapsed = write(sceneWith(many))
+    expect(elapsed).toBeLessThan(1500)
+    expect(useScene.getState().dirtyNodes.has(wall.id as AnyNodeId)).toBe(true)
+
+    // One interior plate moves: nothing it overlaps, so the wall stays clean.
+    const nodes = useScene.getState().nodes
+    write({
+      ...nodes,
+      slab_plate_7: { ...nodes.slab_plate_7, elevation: 0.9 },
+    } as Record<AnyNodeId, AnyNode>)
+    expect(useScene.getState().dirtyNodes.has(wall.id as AnyNodeId)).toBe(false)
+
+    // The floor slab under the wall moves: the targeted overlap rule still fires.
+    write({
+      ...useScene.getState().nodes,
+      slab_floor: { ...floor, elevation: 0.3 },
+    } as Record<AnyNodeId, AnyNode>)
+    expect(useScene.getState().dirtyNodes.has(wall.id as AnyNodeId)).toBe(true)
   })
 })

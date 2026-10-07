@@ -2,6 +2,25 @@ import { describe, expect, test } from 'bun:test'
 import { isCaptureStreamRenderable } from './stream-rendering'
 
 describe('isCaptureStreamRenderable', () => {
+  test('renders completed generated models while withholding failed and pending results', () => {
+    const stream = {
+      id: 'generated',
+      kind: 'spaceform-scene',
+      artifact: { id: 'generated', mediaType: 'model/gltf-binary', uri: '/scene.glb' },
+    }
+    expect(isCaptureStreamRenderable({ ...stream, availability: 'ready' })).toBe(true)
+    for (const availability of ['pending', 'failed'] as const) {
+      expect(isCaptureStreamRenderable({ ...stream, availability })).toBe(false)
+    }
+    expect(isCaptureStreamRenderable({ id: stream.id, kind: stream.kind })).toBe(false)
+    expect(
+      isCaptureStreamRenderable({
+        ...stream,
+        artifact: { id: 'unsupported', mediaType: 'application/json', uri: '/scene.json' },
+      }),
+    ).toBe(false)
+  })
+
   test('only advertises point-cloud formats handled by the reference renderer', () => {
     expect(
       isCaptureStreamRenderable({

@@ -3,9 +3,16 @@ import { useViewer } from '@pascal-app/viewer'
 import { memo, useCallback, useState } from 'react'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
 import { formatAreaLabel } from './../../../../../lib/measurements'
+import {
+  selectZoneOrRoom,
+  useZoneSelected,
+  zoneKindLabel,
+} from './../../../../../lib/room-zone-routing'
+import { toggleZoneMembership } from './../../../../../lib/units'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
+import { ZoneMembershipCheckbox } from './zone-membership-checkbox'
 
 interface ZoneTreeNodeProps {
   nodeId: ZoneNode['id']
@@ -23,20 +30,25 @@ export const ZoneTreeNode = memo(function ZoneTreeNode({
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
   const color = useScene((s) => (s.nodes[nodeId] as ZoneNode | undefined)?.color)
   const polygon = useScene((s) => (s.nodes[nodeId] as ZoneNode | undefined)?.polygon ?? [])
-  const isSelected = useViewer((state) => state.selection.zoneId === nodeId)
+  const isSelected = useZoneSelected(nodeId)
+  const kind = useScene((s) => zoneKindLabel(s.nodes[nodeId] as ZoneNode | undefined))
   const isHovered = useViewer((state) => state.hoveredId === nodeId)
-  const setSelection = useViewer((state) => state.setSelection)
   const setHoveredId = useViewer((state) => state.setHoveredId)
   const unit = useViewer((state) => state.unit)
+  const focusedUnitId = useViewer((state) => state.focusedUnitId)
+  const focusedUnit = useScene((s) => {
+    const focused = focusedUnitId ? s.nodes[focusedUnitId] : undefined
+    return focused?.type === 'unit' ? focused : null
+  })
 
-  const handleClick = useCallback(() => setSelection({ zoneId: nodeId }), [nodeId, setSelection])
+  const handleClick = useCallback(() => selectZoneOrRoom(nodeId), [nodeId])
   const handleDoubleClick = useCallback(() => focusTreeNode(nodeId), [nodeId])
   const handleMouseEnter = useCallback(() => setHoveredId(nodeId), [nodeId, setHoveredId])
   const handleMouseLeave = useCallback(() => setHoveredId(null), [setHoveredId])
   const handleStartEditing = useCallback(() => setIsEditing(true), [])
   const handleStopEditing = useCallback(() => setIsEditing(false), [])
 
-  const defaultName = `Zone (${formatAreaLabel(calculatePolygonArea(polygon), unit)})`
+  const defaultName = `${kind} (${formatAreaLabel(calculatePolygonArea(polygon), unit)})`
 
   return (
     <TreeNodeWrapper
@@ -50,15 +62,25 @@ export const ZoneTreeNode = memo(function ZoneTreeNode({
       isHovered={isHovered}
       isLast={isLast}
       isSelected={isSelected}
+      keepIconColor
       isVisible={isVisible}
       label={
-        <InlineRenameInput
-          defaultName={defaultName}
-          isEditing={isEditing}
-          nodeId={nodeId}
-          onStartEditing={handleStartEditing}
-          onStopEditing={handleStopEditing}
-        />
+        <span className="flex min-w-0 items-center">
+          {focusedUnit && (
+            <ZoneMembershipCheckbox
+              checked={focusedUnit.members.includes(nodeId)}
+              onToggle={() => toggleZoneMembership(focusedUnit.id, nodeId)}
+              unitName={focusedUnit.name || 'Unit'}
+            />
+          )}
+          <InlineRenameInput
+            defaultName={defaultName}
+            isEditing={isEditing}
+            nodeId={nodeId}
+            onStartEditing={handleStartEditing}
+            onStopEditing={handleStopEditing}
+          />
+        </span>
       }
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}

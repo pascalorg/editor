@@ -2,22 +2,23 @@ import {
   type AnyNodeId,
   type HandleDescriptor,
   type NodeDefinition,
+  planStairSweepEdit,
   resolveStairTotalRise,
+  resolveStairWinder,
   type SceneApi,
   StairNode as StairNodeSchema,
   type StairNode as StairNodeType,
   type StairSegmentNode,
   stairFootprintAABB,
+  stairSlots,
   useScene,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 
-const MIN_CURVED_RISE = 0.3
-const MIN_CURVED_WIDTH = 0.4
-const MIN_CURVED_INNER_RADIUS_SPIRAL = 0.05
-const MIN_CURVED_INNER_RADIUS_CURVED = 0.2
-const MIN_CURVED_SWEEP = Math.PI / 12
-const MAX_CURVED_SWEEP = Math.PI * 2 - 0.05
+const MIN_CURVED_RISE = 0.001
+const MIN_CURVED_WIDTH = 0.001
+const MIN_CURVED_INNER_RADIUS_SPIRAL = 0.001
+const MIN_CURVED_INNER_RADIUS_CURVED = 0.001
 const CURVED_RISE_OFFSET = 0.35
 const CURVED_WIDTH_HANDLE_OFFSET = 0.5
 const CURVED_RADIAL_OFFSET = 0.16
@@ -58,7 +59,7 @@ type StairMoveBounds = {
 }
 
 function readTotalRise(node: StairNodeType): number {
-  return Math.max(resolveStairTotalRise(node, useScene.getState().nodes), 0.1)
+  return Math.max(resolveStairTotalRise(node, useScene.getState().nodes), 0.001)
 }
 
 function readCurvedStairGeometry(node: StairNodeType): CurvedStairGeom {
@@ -126,12 +127,14 @@ function readStraightStairMoveBounds(node: StairNodeType, sceneApi: SceneApi): S
     const transform = transforms[index]
     if (!transform) return
     const halfWidth = segment.width / 2
-    const corners = [
-      [-halfWidth, 0],
-      [halfWidth, 0],
-      [-halfWidth, segment.length],
-      [halfWidth, segment.length],
-    ] as const
+    const corners =
+      resolveStairWinder(segment)?.footprint ??
+      ([
+        [-halfWidth, 0],
+        [halfWidth, 0],
+        [-halfWidth, segment.length],
+        [halfWidth, segment.length],
+      ] as const)
     for (const [x, z] of corners) {
       const [rx, rz] = rotateLocalXZ(x, z, transform.rotation)
       minX = Math.min(minX, transform.position[0] + rx)
@@ -256,29 +259,7 @@ function curvedSweepHandle(end: 'start' | 'end'): HandleDescriptor<StairNodeType
     kind: 'arc-resize',
     axis: 'angular',
     end,
-    apply: (initial, delta) => {
-      const initialSweep = initial.sweepAngle ?? Math.PI / 2
-      const initialRotation = (initial.rotation as number) ?? 0
-      const sweepSign = Math.sign(initialSweep) || 1
-      // END handle: cursor angle delta IS the sweep delta.
-      // START handle: cursor angle delta is the negation of the sweep delta.
-      const sweepDelta = end === 'end' ? delta : -delta
-      const targetSweep = initialSweep + sweepDelta
-      const clampedAbs = Math.min(
-        MAX_CURVED_SWEEP,
-        Math.max(MIN_CURVED_SWEEP, Math.abs(targetSweep)),
-      )
-      const newSweep = sweepSign * clampedAbs
-      const appliedDelta = newSweep - initialSweep
-      // Re-orient the stair so the OPPOSITE edge stays world-fixed:
-      //   END  fixed-start: ΔR = −ΔS / 2
-      //   START fixed-end : ΔR = +ΔS / 2
-      const rotationShift = end === 'end' ? -appliedDelta / 2 : appliedDelta / 2
-      return {
-        sweepAngle: newSweep,
-        rotation: initialRotation + rotationShift,
-      }
-    },
+    apply: (initial, delta) => planStairSweepEdit(initial, delta, end),
     placement: {
       position: (n) => {
         const g = readCurvedStairGeometry(n)
@@ -403,7 +384,7 @@ function stairHandles(node: StairNodeType): HandleDescriptor<StairNodeType>[] {
 import {
   computeStairSegmentFloorStackTransforms,
   getStairFloorPlacedFootprints,
-} from './floor-stack'
+} from '@pascal-app/core'
 import { buildStairFloorplan } from './floorplan'
 import {
   curvedStairInnerRadiusAffordance,
@@ -417,7 +398,6 @@ import { stairFloorplanMoveTarget } from './floorplan-move'
 import { stairPaint } from './paint'
 import { stairParametrics } from './parametrics'
 import { StairNode } from './schema'
-import { stairSlots } from './slots'
 
 /**
  * Stair — Stage A. Composite node like roof: owns overall framing,
@@ -426,7 +406,7 @@ import { stairSlots } from './slots'
  */
 export const stairDefinition: NodeDefinition<typeof StairNode> = {
   kind: 'stair',
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: StairNode,
   category: 'structure',
   extensions: {
@@ -458,6 +438,7 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
   },
 
   capabilities: {
+    surfacePlacement: 'floor-only',
     selectable: { hitVolume: 'bbox' },
     // A stair has no centred box footprint: straight = a cumulative
     // `stair-segment` chain, curved / spiral = an annular sector. Hand the
@@ -488,6 +469,7 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
   parametrics: stairParametrics,
   handles: stairHandles,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

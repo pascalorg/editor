@@ -15,9 +15,11 @@ import { Icon } from '@iconify/react'
 import { Move, Trash2 } from 'lucide-react'
 import { type ComponentType, lazy, Suspense, useCallback } from 'react'
 import { resolveMoveActionNode } from '../../../lib/direct-manipulation'
+import { commitParametricNodeFields } from '../../../lib/parametric-node-update'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { collectZoneContentIds } from '../../../lib/zone-content'
 import useEditor from '../../../store/use-editor'
+import { IconRefImage } from '../icon-ref'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
 import { ParametricFieldControl } from './parametric-field-control'
@@ -61,22 +63,9 @@ export function ParametricInspector({
   const handleUpdate = useCallback(
     (patch: Partial<AnyNode>) => {
       if (!selectedId) return
-      const scene = useScene.getState()
-      const node = scene.nodes[selectedId]
-      if (parametrics?.derive && node) {
-        const next = { ...node, ...patch } as AnyNode
-        patch = { ...patch, ...parametrics.derive(next, patch, node as AnyNode) }
-      }
-      // Bundle the edited node + any reconcile follow-ups into ONE
-      // updateNodes call so a single inspector edit is a single undo step.
-      const updates: { id: AnyNodeId; data: Partial<AnyNode> }[] = [{ id: selectedId, data: patch }]
-      if (parametrics?.reconcile && node) {
-        const next = { ...node, ...patch } as AnyNode
-        updates.push(...parametrics.reconcile(node as AnyNode, next))
-      }
-      scene.updateNodes(updates)
+      commitParametricNodeFields(selectedId, patch)
     },
-    [selectedId, parametrics],
+    [selectedId],
   )
 
   const clearSelection = useCallback(() => {
@@ -157,7 +146,11 @@ export function ParametricInspector({
       width={320}
     >
       {parametrics.groups.map((group, gi) => (
-        <PanelSection key={`group-${gi}`} title={group.label}>
+        <PanelSection
+          defaultExpanded={group.defaultExpanded}
+          key={`${nodeType}-${group.label}-${gi}`}
+          title={group.label}
+        >
           {group.fields.map((field, fi) => (
             <FieldRenderer
               key={`field-${gi}-${fi}-${String(field.key)}`}
@@ -175,7 +168,7 @@ export function ParametricInspector({
       )}
       {(canMove || canDelete || (parametrics.actions && parametrics.actions.length > 0)) && (
         <PanelSection title="Actions">
-          <ActionGroup className={isZone ? 'flex-col' : undefined}>
+          <ActionGroup className={isZone ? 'flex-col' : parametrics.actions?.length ? 'grid grid-cols-2 gap-2' : undefined}>
             {canMove && (
               <ActionButton icon={<Move className="h-4 w-4" />} label="Move" onClick={handleMove} />
             )}
@@ -244,10 +237,9 @@ function ParamActionButton({ action, nodeId }: { action: ParamAction<AnyNode>; n
 function renderIcon(ref: IconRef | undefined): React.ReactNode | undefined {
   if (!ref) return undefined
   if (ref.kind === 'url') {
-    // Plain <img> here so the inspector doesn't pull in next/image's
-    // server-only requirements (the file is `'use client'`). Same
-    // 16x16 box the legacy panels use.
-    return <img alt="" className="h-4 w-4 shrink-0 object-contain" src={ref.src} />
+    // No next/image here: the inspector is `'use client'` and next/image
+    // drags in server-only requirements. Same 16x16 box the legacy panels use.
+    return <IconRefImage className="h-4 w-4 shrink-0" src={ref.src} />
   }
   if (ref.kind === 'iconify') {
     return <Icon height={16} icon={ref.name} width={16} />

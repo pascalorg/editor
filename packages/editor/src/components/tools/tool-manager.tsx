@@ -13,6 +13,9 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, lazy, Suspense, useMemo } from 'react'
 import { useRegisteredToolEnabled } from '../../hooks/use-registered-tool-enabled'
+import { useCeilingEditCeilingId } from '../../lib/ceiling-edit-session'
+import type { ReshapeKind } from '../../lib/interaction/scope'
+import { paintRegionTargets, usePaintRegionMode } from '../../lib/paint-region-mode'
 import { siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
 import useInteractionScope, {
@@ -28,12 +31,19 @@ import useInteractionScope, {
 } from '../../store/use-interaction-scope'
 import { Alignment3DGuideLayer } from '../editor/alignment-3d-guide-layer'
 import { Elevation3DGuideLayer } from '../editor/elevation-3d-guide-layer'
+import { FloorOpeningsOverlay3D } from '../editor/floor-openings-overlay'
+import { FloorRegionControls3D } from '../editor/floor-region-controls'
+import { OpenWallEnds3DLayer } from '../editor/open-wall-ends-3d-layer'
 import { OpeningGuides3DLayer } from '../editor/opening-guides-3d-layer'
 import { WallSnapBeaconLayer } from '../editor/wall-snap-beacon-layer'
 import { ElevatorTool } from './elevator/elevator-tool'
 import { MoveTool } from './item/move-tool'
+import { WallPaintRegionTool } from './paint-region/wall-paint-region-tool'
 import { RegistryToolProvider } from './registry-tool-context'
-import { getRegistryAffordanceTool } from './shared/affordance-dispatch'
+import {
+  getRegistryAffordanceTool,
+  preloadRegistryAffordanceTools,
+} from './shared/affordance-dispatch'
 import { FacingPoseIndicator } from './shared/facing-pose-indicator'
 import { SiteBoundaryEditor } from './site/site-boundary-editor'
 import { TerrainSculptTool } from './site/terrain-sculpt-tool'
@@ -44,6 +54,15 @@ import { ZoneTool } from './zone/zone-tool'
 // Cache lazy tool components keyed by their loader so React.lazy isn't
 // re-invoked across renders.
 const lazyToolCache = new WeakMap<() => Promise<unknown>, ComponentType>()
+// Reshapes with their own arm below; anything else resolves by name.
+const DEDICATED_RESHAPES = new Set<ReshapeKind>([
+  'curve',
+  'hole',
+  'endpoint',
+  'boundary',
+  'control-point',
+  'tangent',
+])
 const registryToolPreloadCache = new WeakMap<AnyNodeDefinition, Promise<void>>()
 
 export function preloadRegistryToolModules(tool: string | null): Promise<void> {
@@ -60,8 +79,7 @@ export function preloadRegistryToolModules(tool: string | null): Promise<void> {
   if (def.system) loaders.push(def.system.module)
   if (def.parametrics?.customPanel) loaders.push(def.parametrics.customPanel)
   if (def.parametrics?.trailingSection) loaders.push(def.parametrics.trailingSection)
-  const moveTool = def.affordanceTools?.move
-  if (moveTool) loaders.push(moveTool)
+  loaders.push(() => preloadRegistryAffordanceTools(tool))
 
   const preload = Promise.allSettled(loaders.map((loader) => loader())).then(() => undefined)
   registryToolPreloadCache.set(def, preload)
@@ -103,6 +121,7 @@ export const ToolManager: React.FC = () => {
   const phase = useEditor((state) => state.phase)
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
+  const paintsWallRegions = usePaintRegionMode((state) => paintRegionTargets(state.mode).wall)
   const registeredToolEnabled = useRegisteredToolEnabled(tool)
   const movingNode = useMovingNode()
   const registryToolOwnsPlacement = useInteractionScope(
@@ -114,6 +133,11 @@ export const ToolManager: React.FC = () => {
   const tangentReshape = useTangentReshape()
   const isCurveReshape = useIsCurveReshape()
   const isToolDrivenReshape = useIsToolDrivenReshape()
+  const registryReshape = useInteractionScope((state) =>
+    state.scope.kind === 'reshaping' && !DEDICATED_RESHAPES.has(state.scope.reshape)
+      ? state.scope.reshape
+      : null,
+  )
   const isFloorplanDrivenReshape = useIsFloorplanDrivenReshape()
   const reshapingNode = useReshapingNode()
   // The endpoint affordance tool's `target` is kind-specific
@@ -140,6 +164,7 @@ export const ToolManager: React.FC = () => {
     }
   }, [reshapingNode, tangentReshape])
   const editingHole = useEditingHole()
+  const editCeilingId = useCeilingEditCeilingId()
   const selectedZoneId = useViewer((state) => state.selection.zoneId)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const buildingId = useViewer((state) => state.selection.buildingId)
@@ -202,6 +227,9 @@ export const ToolManager: React.FC = () => {
     mode === 'select' &&
     isSoleSelection &&
     selectedSlabId !== undefined &&
+    // Derived plates (a footprint's floor, a room's raised plate) follow their
+    // rooms; only user-drawn slabs get the outline editor.
+    !selectedSlab?.plateRole &&
     !isFloorplanDrivenReshape &&
     !editingSlabHoleIsManual
 
@@ -213,20 +241,24 @@ export const ToolManager: React.FC = () => {
     !isFloorplanDrivenReshape &&
     editingSlabHoleIsManual
 
-  // Show ceiling boundary editor when in structure/select mode with a ceiling selected (but not editing a hole)
+  // Show ceiling boundary editor only inside the ceiling's Edit ceiling session (not while editing a hole)
   const showCeilingBoundaryEditor =
     phase === 'structure' &&
     mode === 'select' &&
     isSoleSelection &&
     selectedCeilingId !== undefined &&
+    selectedCeilingId === editCeilingId &&
     !isFloorplanDrivenReshape &&
     (!editingHole || editingHole.nodeId !== selectedCeilingId)
 
-  // Show ceiling hole editor when editing a hole on the selected ceiling
+  // Show ceiling hole editor when editing a manual hole inside the ceiling's Edit ceiling session
   const showCeilingHoleEditor =
     selectedCeilingId !== undefined &&
+    selectedCeilingId === editCeilingId &&
     editingHole !== null &&
     editingHole.nodeId === selectedCeilingId &&
+    ((nodes[selectedCeilingId as AnyNodeId] as CeilingNode).holeMetadata?.[editingHole.holeIndex]
+      ?.source ?? 'manual') === 'manual' &&
     !isFloorplanDrivenReshape
 
   // Show zone boundary editor when in structure/select mode with a zone selected
@@ -285,6 +317,12 @@ export const ToolManager: React.FC = () => {
           it places no node — so it gets its own gate here. World-space, because
           the ground is not building-local. */}
       {sculpting && <TerrainSculptTool />}
+      {/* "Paint part of the floor": level-space, follows the level matrix itself. */}
+      <FloorRegionControls3D />
+      {/* Floor and ceiling openings: level-space, follows the level matrix itself. */}
+      <FloorOpeningsOverlay3D />
+      {/* "Paint part of the wall": follows the wall mesh's own matrix. */}
+      {mode === 'material-paint' && paintsWallRegions && <WallPaintRegionTool />}
       {showMover && movingNode?.type === 'building' && (
         <MoveTool onNodeMoved={handlePlacedNodeSelected} onSpawnMoved={handlePlacedNodeSelected} />
       )}
@@ -384,6 +422,22 @@ export const ToolManager: React.FC = () => {
               </Suspense>
             ) : null
           })()}
+        {/* Reshape kinds without an arm above mount the kind's own affordance tool
+            under the reshape's name (`def.affordanceTools[reshape]`, e.g. wall 'split'). */}
+        {isToolDrivenReshape &&
+          reshapingNode &&
+          registryReshape &&
+          (() => {
+            const RegistryAffordance = getRegistryAffordanceTool(
+              reshapingNode.type,
+              registryReshape,
+            )
+            return RegistryAffordance ? (
+              <Suspense fallback={null}>
+                <RegistryAffordance node={reshapingNode} />
+              </Suspense>
+            ) : null
+          })()}
         {showMover && movingNode.type !== 'building' && (
           <MoveTool
             onNodeMoved={handlePlacedNodeSelected}
@@ -421,6 +475,8 @@ export const ToolManager: React.FC = () => {
         <Elevation3DGuideLayer />
         {/* "Magnetic" beacon at the active wall-draft snap point. */}
         <WallSnapBeaconLayer />
+        {/* Wall ends that aren't joined, with a one-click join — twin of the floor plan's. */}
+        <OpenWallEnds3DLayer />
       </group>
     </RegistryToolProvider>
   )

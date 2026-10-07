@@ -24,7 +24,6 @@ import {
   projectAlignmentGuidesWorldToActiveBuildingLocal,
   resolveAlignmentForActiveBuilding,
   snapBuildingLocalToWorldGrid,
-  snapFenceDraftPoint,
   triggerSFX,
   useAlignmentGuides,
   useEditor,
@@ -32,6 +31,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type * as THREE from 'three'
+import { snapFenceDraftPoint } from '../fence/drafting'
 
 /**
  * Phase 5 Stage D — slab whole-move tool.
@@ -176,7 +176,7 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
         walls: levelWalls,
         fences: levelFences,
         magnetic: isMagneticSnapActive(),
-        gridSnap: (p) => snapBuildingLocalToWorldGrid(p, gridStep),
+        gridSnap: (p: [number, number]) => snapBuildingLocalToWorldGrid(p, gridStep),
       })
 
       if (
@@ -232,10 +232,10 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
         // Single scene.update — recorded as one undo step (history was
         // never paused). GeometrySystem rebuilds polygon-driven geometry
         // and resets the group's transform on the next frame.
-        useScene.getState().updateNode(slabId, {
+        // Dragging a plate by hand converts it to an authored slab.
+        useScene.getState().detachDerivedNode(slabId, {
           polygon: translatePolygon(originalPolygon, deltaX, deltaZ),
           holes: originalHoles.map((h) => translatePolygon(h, deltaX, deltaZ)),
-          autoFromWalls: false,
         })
         useScene.getState().markDirty(slabId as AnyNodeId)
       }
@@ -274,10 +274,10 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
 
     return () => {
       useAlignmentGuides.getState().clear()
-      if (!wasCommitted) {
-        clearPreview()
-      } else {
+      if (wasCommitted) {
         useLiveTransforms.getState().clear(slabId)
+      } else {
+        clearPreview()
       }
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)

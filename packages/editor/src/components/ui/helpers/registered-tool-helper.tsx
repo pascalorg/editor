@@ -1,8 +1,8 @@
 import type { ToolHint } from '@pascal-app/core'
-import { useMemo, useSyncExternalStore } from 'react'
 import type { ContinuationContext } from '../../../lib/continuation'
+import type { HudTitle } from '../../../lib/hud-title'
 import type { SnapContext } from '../../../lib/snapping-mode'
-import useEditor from '../../../store/use-editor'
+import { useVisibleToolHints } from '../../../lib/panel-tool-options'
 import { ContextualHelperPanel } from './contextual-helper-panel'
 
 /**
@@ -19,43 +19,18 @@ export function RegisteredToolHelper({
   shiftPressed = false,
   snapContext = null,
   continuationContext = null,
+  title = null,
+  notice = null,
 }: {
   hints: ToolHint[]
   shiftPressed?: boolean
   snapContext?: SnapContext | null
   continuationContext?: ContinuationContext | null
+  title?: HudTitle | null
+  notice?: string | null
 }) {
-  // Live vertex count of an in-progress polygon draft, so hints gated on a
-  // minimum (e.g. "Finish" at ≥ 3) only appear once they're actually possible.
-  const draftVertexCount = useEditor((s) => s.draftVertexCount)
-  const visibilityStore = useMemo(
-    () => ({
-      subscribe: (onChange: () => void) => {
-        const unsubscribers = hints.flatMap((hint) =>
-          hint.visible ? [hint.visible.subscribe(onChange)] : [],
-        )
-        return () => {
-          for (const unsubscribe of unsubscribers) unsubscribe()
-        }
-      },
-      getSnapshot: () => hints.map((hint) => (hint.visible?.value() === false ? '0' : '1')).join(''),
-    }),
-    [hints],
-  )
-  useSyncExternalStore(
-    visibilityStore.subscribe,
-    visibilityStore.getSnapshot,
-    visibilityStore.getSnapshot,
-  )
-  // Some hints are replaced by live contextual chips, so keep the generic
-  // registry renderer from duplicating stale/static versions.
-  const visible = hints.filter(
-    (hint) =>
-      !(hint.key === 'Shift' && hint.label === 'Cycle snapping mode') &&
-      hint.visible?.value() !== false &&
-      (hint.minDraftVertices == null || draftVertexCount >= hint.minDraftVertices),
-  )
-  if (visible.length === 0 && !snapContext && !continuationContext) return null
+  const visible = useVisibleToolHints(hints)
+  if (visible.length === 0 && !snapContext && !continuationContext && !notice) return null
   // Hints carrying a live-state `chip` render as mode chips next to the
   // snapping / continuation rows; the rest stay static key rows.
   const chipHints = visible.filter((hint) => hint.chip)
@@ -74,7 +49,9 @@ export function RegisteredToolHelper({
         }
       })}
       continuationContext={continuationContext}
+      notice={notice}
       snapContext={snapContext}
+      title={title}
     />
   )
 }

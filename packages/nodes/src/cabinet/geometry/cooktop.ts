@@ -11,6 +11,7 @@ import {
   SphereGeometry,
   TorusGeometry,
 } from 'three'
+import { cooktopFootprint } from '../appliance-layout'
 import {
   COOKTOP_FLAME_COUNT,
   cooktopFlameSeed,
@@ -425,8 +426,7 @@ export function addCooktopCompartment(
   const burnersOn = activeBurners.size > 0 || compartmentCooktopBurnersOn(compartment)
   const name =
     type === 'cooktop-gas' ? `cabinet-cooktop-gas-${index}` : `cabinet-cooktop-induction-${index}`
-  const frameWidth = Math.max(0.32, Math.min(node.width - 0.01, 0.76))
-  const frameDepth = Math.max(0.28, Math.min(node.depth - 0.04, 0.53))
+  const { width: frameWidth, depth: frameDepth } = cooktopFootprint(node)
   const surfaceWidth = Math.max(0.28, frameWidth - 0.026)
   const surfaceDepth = Math.max(0.24, frameDepth - 0.026)
   const surfaceThickness = 0.012

@@ -1,6 +1,7 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import { GeometryScriptSource } from '../geometry-source'
 import { MaterialSchema } from '../material'
 
 export const ColumnStyle = z.enum([
@@ -84,10 +85,14 @@ export type ColumnSupportStyle = z.infer<typeof ColumnSupportStyle>
 export const ColumnNode = BaseNode.extend({
   id: objectId('column'),
   type: nodeType('column'),
+  children: z.array(z.string()).default([]),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.number().default(0),
   // Persisted slab-support host — see ItemNode.supportSlabId for the rules.
   supportSlabId: z.string().optional(),
+  source: GeometryScriptSource.optional().describe(
+    'Stored scripted geometry; its bounds determine height, width and depth.',
+  ),
   style: ColumnStyle.default('plain'),
   crossSection: ColumnCrossSection.default('round'),
   height: z.number().positive().default(2.5),

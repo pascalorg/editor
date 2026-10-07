@@ -1,21 +1,16 @@
 import { getLevelElevations, type LevelNode, sceneRegistry, useScene } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
-import type { Object3D } from 'three'
 import { lerp } from 'three/src/math/MathUtils.js'
 import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
 import useViewer from '../../store/use-viewer'
-import { EXPLODED_GAP } from './level-utils'
-
-// Levels currently in shadow-caster-only mode (solo hides them from the color
-// passes but keeps their sun shadows). Tracked so we can restore layer masks
-// exactly once on transition; apply re-runs every frame so meshes rebuilt
-// while hidden (theme/texture changes) get re-hidden.
-const shadowOnlyLevels = new WeakSet<Object3D>()
+import { EXPLODED_GAP, resolveLevelVisibility } from './level-utils'
+import { shadowOnlyLevels } from './shadow-only-levels'
 
 export const LevelSystem = () => {
   useFrame((_, delta) => {
     const nodes = useScene.getState().nodes
     const levelMode = useViewer.getState().levelMode
+    const hideAbove = useViewer.getState().hideLevelsAboveSelection
     const selectedLevel = useViewer.getState().selection.levelId
 
     const levelElevations = getLevelElevations(nodes)
@@ -54,22 +49,23 @@ export const LevelSystem = () => {
       // feel at 60 fps, exact snap instead of overshoot on slow frames.
       obj.position.y = lerp(obj.position.y, targetY, Math.min(1, delta * 12))
 
-      // Solo: hidden levels ABOVE the soloed one stay in the shadow map
-      // (shadow-caster-only) so the sun still shadows the soloed floor through
-      // them; levels below can't block the sun, so they plain-hide.
-      const hidden = levelMode === 'solo' && Boolean(selectedLevel) && level?.id !== selectedLevel
-      const castsWhileHidden = hidden && selectedIndex !== undefined && index > selectedIndex
-      if (castsWhileHidden) {
+      const { visible, shadowOnly } = resolveLevelVisibility({
+        levelMode,
+        hideAbove,
+        hasSelectedLevel: Boolean(selectedLevel),
+        isSelected: level?.id === selectedLevel,
+        index,
+        selectedIndex,
+        nodeVisible: level?.visible !== false,
+      })
+      if (shadowOnly) {
         applyShadowOnly(obj)
         shadowOnlyLevels.add(obj)
-        obj.visible = true
-      } else {
-        if (shadowOnlyLevels.has(obj)) {
-          clearShadowOnly(obj)
-          shadowOnlyLevels.delete(obj)
-        }
-        obj.visible = !hidden
+      } else if (shadowOnlyLevels.has(obj)) {
+        clearShadowOnly(obj)
+        shadowOnlyLevels.delete(obj)
       }
+      obj.visible = visible
     }
   }, 5) // Using a lower priority so it runs after transforms from other systems have settled
   return null

@@ -10,12 +10,22 @@ import {
   DRAFTING_SURFACE_EXTENSION_KEY,
   type DraftingSurfaceExtension,
   getFloorplanNodeExtension,
+  selectWallDrawVariant,
 } from '@pascal-app/editor'
 import { createConicalRoofSectorAboveWall } from '../roof/conical-roof'
 import { wallDefinition } from './definition'
 
-test('wallDefinition records the lean-to child schema migration', () => {
-  expect(wallDefinition.schemaVersion).toBe(8)
+test('wallDefinition records the F2 assembly schema version', () => {
+  expect(wallDefinition.schemaVersion).toBe(10)
+})
+
+test('walls host F2 assembly layers whose sum is the stored thickness', () => {
+  const host = wallDefinition.capabilities?.assembly
+  const wall = wallDefinition.schema.parse({ id: 'wall_layers', start: [0, 0], end: [4, 0] })
+  expect(host).toMatchObject({ reference: 'front', measure: 'normal' })
+  expect(host?.backing).toBeUndefined()
+  expect(host?.body(wall)).toBe(0.1)
+  expect(host?.body({ ...wall, thickness: 0.2032 })).toBe(0.2032)
 })
 
 test('wall drafting surface classifies its top, ends, and two sides', () => {
@@ -318,4 +328,30 @@ test('curved wall roof builder rejects walls more than one level below', () => {
     createConicalRoofSectorAboveWall(wall, nodes, sceneApi, activeLevel.id as AnyNodeId),
   ).toBeNull()
   expect(created).toEqual([])
+})
+
+describe('wall tool hints', () => {
+  const visibleClickHints = () =>
+    (wallDefinition.toolHints ?? [])
+      .filter((hint) => hint.key === 'Left click' && (hint.visible?.value() ?? true))
+      .map((hint) => hint.label)
+
+  test('carry no Shape chip and no R key: the variant is picked in the Build panel', () => {
+    const hints = wallDefinition.toolHints ?? []
+    expect(hints.some((hint) => hint.chip)).toBe(false)
+    expect(hints.some((hint) => hint.key === 'R')).toBe(false)
+  })
+
+  test('describe the gesture of the variant in hand', () => {
+    try {
+      selectWallDrawVariant('rectangle')
+      expect(visibleClickHints()).toEqual(['Set one corner, then the opposite'])
+      selectWallDrawVariant('polygon')
+      expect(visibleClickHints()).toEqual(['Add a corner · click the first to close'])
+      selectWallDrawVariant('walls')
+      expect(visibleClickHints()).toEqual(['Set wall start / end'])
+    } finally {
+      selectWallDrawVariant('polygon')
+    }
+  })
 })

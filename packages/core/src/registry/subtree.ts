@@ -1,3 +1,4 @@
+import { EXISTING_REFERENCES, METADATA_REFERENCES } from '../contracts/reference-inventory'
 import {
   remapConstructionDimensionReferences,
   remapMeasurementReferences,
@@ -169,6 +170,14 @@ export function cloneNodesInto(
         .filter((cid): cid is AnyNodeId => cid !== undefined)
     }
 
+    if (cloned.type === 'procedural-item') {
+      cloned.attachments = Object.fromEntries(
+        Object.entries(cloned.attachments).flatMap(([id, surface]) => {
+          const fresh = idMap.get(id as AnyNodeId)
+          return fresh ? [[fresh, surface]] : []
+        }),
+      )
+    }
     if (cloned.type === 'measurement') {
       cloned.measurement = remapMeasurementReferences(cloned.measurement, idMap)
     }
@@ -194,4 +203,56 @@ export function cloneNodesInto(
   }
 
   return { rootId: rootFreshId, nodes: [root, ...out], idMap }
+}
+
+/**
+ * Source references a preset strips besides `provenance`: the reference
+ * inventory's `source` rows with `onPreset: 'strip'` (layer `src`, …).
+ */
+const PRESET_STRIPPED_SOURCES = [...EXISTING_REFERENCES, ...METADATA_REFERENCES].filter(
+  (row) =>
+    row.namespace === 'source' &&
+    row.onPreset === 'strip' &&
+    row.kind !== '#scene' &&
+    !row.path.startsWith('provenance.'),
+)
+
+/**
+ * A deep copy of `node` as a preset stores it, without its source identity
+ * (D5): the whole `provenance` (refs and lineage) and every other source
+ * reference the inventory strips on preset. A placed preset is a new element,
+ * so it must never claim the source elements of the node it was saved from.
+ * Host references stay the host's call (`getHostRefFields`).
+ */
+export function withoutSourceIdentity<T extends AnyNode>(node: T): T {
+  const copy = JSON.parse(JSON.stringify(node)) as T & { provenance?: unknown }
+  delete copy.provenance
+  for (const row of PRESET_STRIPPED_SOURCES) {
+    if (row.kind === '*' || row.kind === node.type) deleteReferenceField(copy, row.path)
+  }
+  return copy
+}
+
+/**
+ * Deletes the field a `ReferencePath` names in every container it resolves
+ * to. A trailing `[]`, `*` or `@key` deletes the whole array or record.
+ */
+function deleteReferenceField(target: unknown, path: string): void {
+  const segments = path.replace(/\[\]/g, '.[]').split('.')
+  while (['[]', '*', '@key'].includes(segments.at(-1) ?? '')) segments.pop()
+  const field = segments.pop()
+  if (!field) return
+  let containers: unknown[] = [target]
+  for (const segment of segments) {
+    containers = containers.flatMap((value) => {
+      if (value === null || typeof value !== 'object') return []
+      if (segment === '[]') return Array.isArray(value) ? value : []
+      if (segment === '*' || segment === '@key') return Object.values(value)
+      return [(value as Record<string, unknown>)[segment]]
+    })
+  }
+  for (const container of containers) {
+    if (container !== null && typeof container === 'object' && !Array.isArray(container))
+      delete (container as Record<string, unknown>)[field]
+  }
 }

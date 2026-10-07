@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { LevelNode } from '@pascal-app/core/schema'
+import type { AnyNodeId } from '@pascal-app/core/schema'
+import { CeilingNode, LevelNode, SlabNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { registerRoomTools } from './room-tools'
+import { registerSharedTools } from './shared-tools'
 
 describe('room tools', () => {
   let client: Client
@@ -15,24 +17,14 @@ describe('room tools', () => {
     bridge.setScene({}, [])
     bridge.loadDefault()
     const server = new McpServer({ name: 'test', version: '0.0.0' })
+    registerSharedTools(server, bridge)
     registerRoomTools(server, bridge)
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
   })
 
-  test('search_assets returns built-in catalog matches', async () => {
-    const result = await client.callTool({
-      name: 'search_assets',
-      arguments: { query: 'sofa' },
-    })
-    expect(result.isError).toBeFalsy()
-    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
-    expect(parsed.total).toBeGreaterThan(0)
-    expect(parsed.results.map((item: { id: string }) => item.id)).toContain('sofa')
-  })
-
-  test('create_room creates a valid zone/slab/ceiling/wall bundle', async () => {
+  test('create_room writes walls and a room zone only; floor and ceiling are derived', async () => {
     const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
     const result = await client.callTool({
       name: 'create_room',
@@ -50,11 +42,116 @@ describe('room tools', () => {
     expect(result.isError).toBeFalsy()
     const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(parsed.zoneId).toMatch(/^zone_/)
-    expect(parsed.slabId).toMatch(/^slab_/)
-    expect(parsed.ceilingId).toMatch(/^ceiling_/)
     expect(parsed.wallIds).toHaveLength(4)
+    expect(parsed.reusedWalls).toBe(0)
     expect(parsed.areaSqMeters).toBe(12)
+
+    const children = Object.values(bridge.getNodes()).filter((n) => n.parentId === level.id)
+    const zones = children.filter((n) => n.type === 'zone')
+    const slabs = children.filter((n) => n.type === 'slab')
+    const ceilings = children.filter((n) => n.type === 'ceiling')
+    expect(children.filter((n) => n.type === 'wall')).toHaveLength(4)
+    expect(zones).toHaveLength(1)
+    expect(zones[0]).toMatchObject({ id: parsed.zoneId, name: 'Bedroom', spaceRole: 'room' })
+
+    // Both surfaces exist only because the reconciler derived them.
+    expect(slabs).toHaveLength(1)
+    expect(slabs[0]).toMatchObject({ id: parsed.slabId, boundary: 'auto' })
+    expect((slabs[0] as { zoneIds?: string[] }).zoneIds).toContain(parsed.zoneId)
+    expect(ceilings).toHaveLength(1)
+    expect(ceilings[0]).toMatchObject({
+      id: parsed.ceilingId,
+      boundary: 'auto',
+      zoneId: parsed.zoneId,
+    })
     expect(bridge.validateScene().valid).toBe(true)
+  })
+
+  test('create_room outdoor: a terrace with separators and no walls or ceiling', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const result = await client.callTool({
+      name: 'create_room',
+      arguments: {
+        levelId: level.id,
+        name: 'Terrace',
+        outdoor: true,
+        polygon: [
+          [0, 0],
+          [4, 0],
+          [4, 3],
+          [0, 3],
+        ],
+      },
+    })
+    expect(result.isError).toBeFalsy()
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    expect(parsed.wallIds).toEqual([null, null, null, null])
+    expect(parsed.ceilingId).toBeNull()
+    const children = Object.values(bridge.getNodes()).filter((n) => n.parentId === level.id)
+    expect(children.filter((n) => n.type === 'wall')).toHaveLength(0)
+    expect(children.filter((n) => n.type === 'separator')).toHaveLength(4)
+    expect(children.filter((n) => n.type === 'ceiling')).toHaveLength(0)
+    expect(children.find((n) => n.id === parsed.zoneId)).toMatchObject({
+      name: 'Terrace',
+      spaceRole: 'room',
+      hasCeiling: false,
+    })
+    // It still stands on a derived floor, like any room.
+    expect(parsed.slabId).toMatch(/^slab_/)
+    expect(bridge.validateScene().valid).toBe(true)
+  })
+
+  test('create_room reuses the shared wall of an adjacent room', async () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const call = (name: string, polygon: number[][]) =>
+      client.callTool({ name: 'create_room', arguments: { levelId: level.id, name, polygon } })
+    const first = await call('Kitchen', [
+      [0, 0],
+      [4, 0],
+      [4, 3],
+      [0, 3],
+    ])
+    expect(first.isError).toBeFalsy()
+    const second = await call('Dining', [
+      [0, 3],
+      [4, 3],
+      [4, 6],
+      [0, 6],
+    ])
+    expect(second.isError).toBeFalsy()
+    const parsed = JSON.parse((second.content as Array<{ type: string; text: string }>)[0]!.text)
+    expect(parsed.reusedWalls).toBe(1)
+
+    const children = Object.values(bridge.getNodes()).filter((n) => n.parentId === level.id)
+    expect(children.filter((n) => n.type === 'wall')).toHaveLength(7)
+    expect(children.filter((n) => n.type === 'zone')).toHaveLength(2)
+    expect(children.filter((n) => n.type === 'ceiling')).toHaveLength(2)
+    // Two rooms with the same construction share one floor plate.
+    expect(children.filter((n) => n.type === 'slab')).toHaveLength(1)
+  })
+
+  test('the bridge refuses derived construction with a clear message', () => {
+    const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const polygon: Array<[number, number]> = [
+      [0, 0],
+      [4, 0],
+      [4, 3],
+      [0, 3],
+    ]
+    expect(() =>
+      bridge.createNode(SlabNode.parse({ polygon, boundary: 'auto' }), level.id as AnyNodeId),
+    ).toThrow(/Refusing to create the derived slab/)
+    expect(() =>
+      bridge.applyPatch([
+        {
+          op: 'create',
+          node: CeilingNode.parse({ polygon, autoFromWalls: true }),
+          parentId: level.id as AnyNodeId,
+        },
+      ]),
+    ).toThrow(/Refusing to create the derived ceiling/)
+    expect(Object.values(bridge.getNodes()).filter((n) => n.type === 'slab')).toHaveLength(0)
+    expect(Object.values(bridge.getNodes()).filter((n) => n.type === 'ceiling')).toHaveLength(0)
   })
 
   test('create_room rejects dedicated roof support levels', async () => {
@@ -108,7 +205,7 @@ describe('room tools', () => {
     const door = JSON.parse((doorResult.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(door.localX).toBeCloseTo(2.5, 3)
     expect(door.t).toBe(0.5)
-    expect(door.position).toBe(0.5)
+    expect(door.achieved).toMatchObject({ created: { door: 1 } })
     expect(door.wallLength).toBeCloseTo(5, 3)
     expect(door.coordinateSystem).toBe('wall-local-meters')
     expect(
@@ -122,7 +219,7 @@ describe('room tools', () => {
     const win = JSON.parse((windowResult.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(win.localX).toBeCloseTo(1.25, 3)
     expect(win.t).toBe(0.25)
-    expect(win.position).toBe(0.25)
+    expect(win.achieved).toMatchObject({ created: { window: 1 } })
     expect(win.wallLength).toBeCloseTo(5, 3)
     expect(win.coordinateSystem).toBe('wall-local-meters')
     expect(
@@ -258,7 +355,7 @@ describe('room tools', () => {
     const parsed = JSON.parse((furnish.content as Array<{ type: string; text: string }>)[0]!.text)
     expect(parsed.placed + parsed.skipped.length).toBeGreaterThan(0)
 
-    const { findBlockedDoors } = await import('./door-clearance')
+    const { findBlockedDoors } = await import('@pascal-app/core/agent-operations')
     const blocked = findBlockedDoors({ nodes: Object.values(bridge.getNodes()) })
     expect(blocked).toEqual([])
     // If the heuristic wanted a fixture in the clear zone, it must be skipped explicitly.
@@ -293,11 +390,58 @@ describe('room tools', () => {
       arguments: { zoneId: room.zoneId, roomType: 'bedroom', doorWallIndex: 0 },
     })
     expect(furnish.isError).toBeFalsy()
-    const { findItemItemCollisions, findBlockedDoors } = await import('./layout-clearance')
+    const { findItemItemCollisions, findBlockedDoors } = await import(
+      '@pascal-app/core/agent-operations'
+    )
     const nodes = Object.values(bridge.getNodes())
     expect(findItemItemCollisions({ nodes })).toEqual([])
     expect(findBlockedDoors({ nodes })).toEqual([])
   })
+
+  // The front door behind an outdoor porch faced the hall, whichever way it was drawn.
+  for (const polygon of [
+    [
+      [0, 0],
+      [0, 5],
+      [6, 5],
+      [6, 0],
+    ],
+    [
+      [0, 0],
+      [6, 0],
+      [6, 5],
+      [0, 5],
+    ],
+  ])
+    test(`a door on the wall behind an outdoor porch faces the porch (${polygon[1]})`, async () => {
+      const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+      const call = async (name: string, args: Record<string, unknown>) => {
+        const result = await client.callTool({ name, arguments: args })
+        expect(result.isError).toBeFalsy()
+        return JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+      }
+      const house = await call('create_room', { levelId: level.id, name: 'Hall', polygon })
+      await call('create_room', {
+        levelId: level.id,
+        name: 'Porch',
+        outdoor: true,
+        polygon: [
+          [1, 5],
+          [4, 5],
+          [4, 7],
+          [1, 7],
+        ],
+      })
+      const wallId = (house.wallIds as string[]).find((id) => {
+        const wall = bridge.getNodes()[id as AnyNodeId] as { start: number[]; end: number[] }
+        return wall.start[1] === 5 && wall.end[1] === 5
+      })!
+      const wall = bridge.getNodes()[wallId as AnyNodeId] as { start: number[]; end: number[] }
+      const { doorId } = await call('add_door', { wallId, t: 0.5, style: 'modern' })
+      const door = bridge.getNodes()[doorId as AnyNodeId] as { rotation: number[] }
+      const sign = Math.abs(door.rotation[1]!) > Math.PI / 2 ? -1 : 1
+      expect((wall.end[0]! - wall.start[0]!) * sign).toBeGreaterThan(0)
+    })
 
   test('furnish_room records door-clearance skips when a door sits on the furniture wall', async () => {
     const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
@@ -332,15 +476,13 @@ describe('room tools', () => {
     })
     expect(furnish.isError).toBeFalsy()
     const parsed = JSON.parse((furnish.content as Array<{ type: string; text: string }>)[0]!.text)
-    const { findBlockedDoors } = await import('./door-clearance')
+    const { findBlockedDoors } = await import('@pascal-app/core/agent-operations')
     expect(findBlockedDoors({ nodes: Object.values(bridge.getNodes()) })).toEqual([])
     // Bed is placed against the back wall where the door is; expect clearance skip or empty bed.
     const bedPlaced = Object.values(bridge.getNodes()).some(
       (n) => n.type === 'item' && (n.name === 'Double Bed' || n.name === 'Single Bed'),
     )
-    const doorSkips = (parsed.skipped as string[]).filter((s) =>
-      s.includes('blocks door clearance'),
-    )
+    const doorSkips = (parsed.skipped as string[]).filter((s) => s.includes('in the way of'))
     expect(bedPlaced || doorSkips.length > 0).toBe(true)
     if (bedPlaced) {
       expect(doorSkips.length).toBe(0)

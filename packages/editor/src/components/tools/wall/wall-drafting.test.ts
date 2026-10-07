@@ -22,6 +22,11 @@ import {
   type WallNode,
   WallNode as WallSchema,
 } from '@pascal-app/core'
+import {
+  migrateCeilingRoomLinks,
+  migrateFloorPlates,
+  migrateRoomZones,
+} from '@pascal-app/core/scene-migrations'
 import { useViewer } from '@pascal-app/viewer'
 import useEditor from '../../../store/use-editor'
 import useInteractionScope from '../../../store/use-interaction-scope'
@@ -721,7 +726,9 @@ describe('createWallOnCurrentLevel', () => {
     expect(useScene.temporal.getState().pastStates.length - before).toBe(1)
   })
 
-  test('a room divider splits customized auto slabs and ceilings', () => {
+  test.each([
+    0.05, 0.18,
+  ])('a room divider preserves the footprint floor at %s and splits ceilings', (elevation) => {
     const walls = [
       makeWall([0, 0], [8, 0], 'wall_bottom'),
       makeWall([8, 0], [8, 6], 'wall_right'),
@@ -737,7 +744,8 @@ describe('createWallOnCurrentLevel', () => {
         [8, 6],
         [0, 6],
       ],
-      elevation: 0.18,
+      elevation,
+      floorHeight: elevation,
       thickness: 0.32,
       autoFromWalls: true,
     })
@@ -748,6 +756,11 @@ describe('createWallOnCurrentLevel', () => {
       autoFromWalls: true,
     })
     seedLevel(walls, [slab, ceiling])
+    useScene.setState({
+      nodes: migrateFloorPlates(
+        migrateCeilingRoomLinks(migrateRoomZones(useScene.getState().nodes).nodes).nodes,
+      ).nodes as Record<AnyNodeId, AnyNode>,
+    })
     const stopDetection = initSpaceDetectionSync(useScene, useEditor)
 
     try {
@@ -756,11 +769,13 @@ describe('createWallOnCurrentLevel', () => {
       const nodes = Object.values(useScene.getState().nodes)
       const slabs = nodes.filter((node) => node.type === 'slab')
       const ceilings = nodes.filter((node) => node.type === 'ceiling')
-      expect(slabs).toHaveLength(2)
+      expect(slabs).toHaveLength(1)
+      expect(slabs[0]).toMatchObject({ plateRole: 'base', floorHeight: elevation })
+      expect(slabs[0]!.zoneIds).toHaveLength(2)
       expect(ceilings).toHaveLength(2)
       expect(
         slabs.every(
-          (node) => node.autoFromWalls && node.elevation === 0.18 && node.thickness === 0.32,
+          (node) => node.autoFromWalls && node.elevation === elevation && node.thickness === 0.32,
         ),
       ).toBe(true)
       expect(ceilings.every((node) => node.autoFromWalls)).toBe(true)

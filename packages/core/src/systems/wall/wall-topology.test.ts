@@ -1,8 +1,21 @@
 import { describe, expect, test } from 'bun:test'
 import { GROUND_SUPPORT_ID } from '../../hooks/spatial-grid/support-host-id'
+import {
+  checkOpeningWithinWall,
+  clearSceneHistory,
+  findOpenWallEnds,
+  initSpaceDetectionSync,
+  LevelNode,
+  planJoinOpenWallEnd,
+  planWallEndRejoins,
+  runAsSingleSceneHistoryStep,
+  useScene,
+  type WallTopologyChanges,
+} from '../../index'
+import { detectOpenWallEnds, extractRooms } from '../../lib/room-graph'
 import { encodeTerrainField } from '../../lib/terrain-codec'
 import { applyHeightPatch, createTerrainField, flattenPatch } from '../../lib/terrain-field'
-import { type AnyNode, type AnyNodeId, DoorNode, WallNode } from '../../schema'
+import { type AnyNode, type AnyNodeId, DoorNode, WallNode, ZoneNode } from '../../schema'
 import { getWallArcData, getWallCurveFrameAt } from './wall-curve'
 import { planWallInsertion, planWallSplitAtPoint } from './wall-topology'
 
@@ -106,6 +119,36 @@ describe('planWallInsertion', () => {
     ])
   })
 
+  test('a room keeps naming its boundary when a T-join splits one of its walls', () => {
+    const host = WallNode.parse({ parentId: LEVEL_ID, start: [0, 0], end: [8, 0] })
+    const other = WallNode.parse({ parentId: LEVEL_ID, start: [8, 0], end: [8, 6] })
+    const room = ZoneNode.parse({
+      parentId: LEVEL_ID,
+      name: 'Room',
+      polygon: [
+        [0, 0],
+        [8, 0],
+        [8, 6],
+        [0, 6],
+      ],
+      autoFromWalls: true,
+      boundaryWallIds: [host.id, other.id],
+    })
+    const result = planWallInsertion(nodeMap([host, other, room]), {
+      levelId: LEVEL_ID,
+      start: [4, 0],
+      end: [4, -3],
+      joinRadius: 0.1,
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const replacementIds = result.plan.changes.create
+      .map((op) => op.node.id)
+      .filter((id) => !result.plan.insertedWalls.some((wall) => wall.id === id))
+    expect(replacementIds).toHaveLength(2)
+    const zoneUpdate = result.plan.changes.update.find((op) => op.id === room.id)
+    expect(zoneUpdate?.data).toEqual({ boundaryWallIds: [...replacementIds, other.id] })
+  })
   test('moves an attached opening to the replacement wall that contains it', () => {
     const door = DoorNode.parse({
       id: 'door_attached',
@@ -453,5 +496,532 @@ describe('planWallSplitAtPoint', () => {
     expect(result.plan.changes.delete).toEqual([host.id])
     expect(result.plan.changes.create).toHaveLength(2)
     expect(nodes[host.id]).toBe(host)
+  })
+})
+
+describe('planJoinOpenWallEnd', () => {
+  const apply = (nodes: Record<AnyNodeId, AnyNode>, changes: WallTopologyChanges) => {
+    const after = { ...nodes }
+    for (const id of changes.delete) delete after[id]
+    for (const { node, parentId } of changes.create)
+      after[node.id] = { ...node, parentId: parentId ?? node.parentId } as AnyNode
+    for (const { id, data } of changes.update) after[id] = { ...after[id], ...data } as AnyNode
+    return after
+  }
+  const wall = (id: string, start: [number, number], end: [number, number]) =>
+    WallNode.parse({ id, parentId: LEVEL_ID, start, end })
+  const rooms = (nodes: Record<string, AnyNode>) =>
+    extractRooms(Object.values(nodes).filter((node): node is WallNode => node.type === 'wall'))
+  const endOf = (nodes: Record<string, AnyNode>, wallId: string, end: 'start' | 'end') =>
+    findOpenWallEnds(nodes, LEVEL_ID).find((entry) => entry.wallId === wallId && entry.end === end)!
+
+  const cornerScene = (angle: number, height = 3, gap = 0.09, reversed = false) => {
+    const pivot: [number, number] = [2, height]
+    const tip: [number, number] = [2 + (height - gap) / Math.tan((angle * Math.PI) / 180), gap]
+    const source = {
+      ...wall('wall_source', reversed ? tip : pivot, reversed ? pivot : tip),
+      thickness: 0.01,
+    }
+    const target = { ...wall('wall_target', [-20, 0], [30, 0]), thickness: 0.01 }
+    return nodeMap([
+      source,
+      target,
+      wall('wall_anchor', pivot, [-20, height]),
+      wall('wall_left', [-20, height], [-20, 0]),
+    ])
+  }
+
+  test.each([
+    [88, 90, 3, false],
+    [47, 45, 0.4, false],
+    [133, 135, 0.4, false],
+    [88, 90, 3, true],
+    [89.5, 90, 20, false],
+  ] as const)('joins %s° at exactly %s° while retaining the anchored junction', (angle, exact, height, reversed) => {
+    const nodes = cornerScene(angle, height, 0.09, reversed)
+    const source = nodes.wall_source as WallNode
+    const target = nodes.wall_target as WallNode
+    const end = reversed ? 'start' : 'end'
+    const fixedEnd = reversed ? 'end' : 'start'
+    expect(rooms(nodes)).toHaveLength(0)
+    const open = endOf(nodes, source.id, end)
+    const result = planJoinOpenWallEnd(nodes, open)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const after = apply(nodes, result.plan.changes)
+    const joined = after[source.id] as WallNode
+    expect(joined[fixedEnd]).toEqual(source[fixedEnd])
+    expect(joined[end][1]).toBeCloseTo(0, 10)
+    expect(joined[end][0]).toBeCloseTo(2 + height / Math.tan((exact * Math.PI) / 180), 10)
+    expect(open.candidate!.point).toEqual(joined[end])
+    expect(after.wall_anchor).toEqual(nodes.wall_anchor)
+    expect(after.wall_left).toEqual(nodes.wall_left)
+    const targetSegments = Object.values(after).filter(
+      (node): node is WallNode =>
+        node.type === 'wall' && node.id !== source.id && node.start[1] === 0 && node.end[1] === 0,
+    )
+    expect(targetSegments).toHaveLength(2)
+    expect(targetSegments[0]!.start).toEqual(target.start)
+    expect(targetSegments[1]!.end).toEqual(target.end)
+    expect(rooms(after)).toHaveLength(1)
+    expect(endOf(after, source.id, end)).toBeUndefined()
+  })
+
+  test.each([
+    [80, 3],
+    [84, 1],
+    [88, 6],
+    [88, 10],
+  ] as const)('keeps the straight join for %s° at height %s when angle or movement exceeds the limit', (angle, height) => {
+    const nodes = cornerScene(angle, height)
+    const source = nodes.wall_source as WallNode
+    const open = endOf(nodes, source.id, 'end')
+    const result = planJoinOpenWallEnd(nodes, open)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const joined = apply(nodes, result.plan.changes)[source.id] as WallNode
+    expect(joined.start).toEqual(source.start)
+    expect(joined.end[0]).toBeCloseTo(2 + height / Math.tan((angle * Math.PI) / 180), 10)
+    expect(joined.end[1]).toBeCloseTo(0, 10)
+    expect(open.candidate!.point).toEqual(joined.end)
+  })
+
+  test('measures the squaring limit from where the straight join lands', () => {
+    // 3 m wall, 2° off square, 20 cm short: the corner is ~22 cm from the open end but
+    // only ~10 cm from the straight join.
+    const nodes = cornerScene(88, 3, 0.2)
+    const source = nodes.wall_source as WallNode
+    const open = endOf(nodes, source.id, 'end')
+    const result = planJoinOpenWallEnd(nodes, open)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const joined = apply(nodes, result.plan.changes)[source.id] as WallNode
+    expect(joined.start).toEqual(source.start)
+    expect(joined.end[0]).toBeCloseTo(2, 10)
+    expect(joined.end[1]).toBeCloseTo(0, 10)
+    expect(open.candidate!.point).toEqual(joined.end)
+  })
+
+  test('squares an L near miss the same way from either open end', () => {
+    // Two walls stopping 9 cm short of each other at 88°.
+    const meetX = 3 / Math.tan((88 * Math.PI) / 180)
+    const nodes = nodeMap([
+      wall('wall_a', [0, 3], [(2.91 / 3) * meetX, 0.09]),
+      wall('wall_b', [meetX + 0.09, 0], [4, 0]),
+    ])
+    const outcomes = (['wall_a', 'wall_b'] as const).map((wallId) => {
+      const open = findOpenWallEnds(nodes, LEVEL_ID).find(
+        (entry) => entry.wallId === wallId && entry.candidate,
+      )!
+      const result = planJoinOpenWallEnd(nodes, open)
+      expect(result.ok).toBe(true)
+      if (!result.ok) return null
+      const after = apply(nodes, result.plan.changes)
+      const a = after.wall_a as WallNode
+      const b = after.wall_b as WallNode
+      expect(open.candidate!.point).toEqual(open.end === 'start' ? b.start : a.end)
+      return { a, b }
+    })
+    for (const outcome of outcomes) {
+      const { a, b } = outcome!
+      expect(a.start).toEqual([0, 3])
+      expect(b.end).toEqual([4, 0])
+      expect(a.end[0]).toBeCloseTo(0, 10)
+      expect(a.end[1]).toBeCloseTo(0, 10)
+      expect(b.start).toEqual(a.end)
+      const dot =
+        (a.end[0] - a.start[0]) * (b.end[0] - b.start[0]) +
+        (a.end[1] - a.start[1]) * (b.end[1] - b.start[1])
+      expect(dot).toBeCloseTo(0, 10)
+    }
+    expect(outcomes[0]!.a.end).toEqual(outcomes[1]!.a.end)
+  })
+
+  test('a previewed endpoint join plans the same join as the raw open end', () => {
+    const nodes = nodeMap([wall('wall_a', [0, 3], [0.05, 0.08]), wall('wall_b', [0.08, 0], [4, 0])])
+    const raw = detectOpenWallEnds(nodes, LEVEL_ID).find(
+      (entry) => entry.wallId === 'wall_a' && entry.end === 'end',
+    )!
+    const previewed = endOf(nodes, 'wall_a', 'end')
+    expect(raw.candidate).toMatchObject({ kind: 'endpoint', point: [0.08, 0] })
+    expect(previewed.candidate!.point).not.toEqual(raw.candidate!.point)
+    const fromRaw = planJoinOpenWallEnd(nodes, raw)
+    const fromPreview = planJoinOpenWallEnd(nodes, previewed)
+    expect(fromRaw.ok && fromPreview.ok).toBe(true)
+    if (!(fromRaw.ok && fromPreview.ok)) return
+    expect(fromPreview.plan.resolvedEnd).toEqual(previewed.candidate!.point)
+    expect(fromPreview.plan.changes).toEqual(fromRaw.plan.changes)
+  })
+
+  test('squares relative to a rotated target with reversed endpoints', () => {
+    const nodes = cornerScene(88)
+    const rotation = (23 * Math.PI) / 180
+    const rotate = ([x, z]: [number, number]): [number, number] => [
+      x * Math.cos(rotation) - z * Math.sin(rotation),
+      x * Math.sin(rotation) + z * Math.cos(rotation),
+    ]
+    for (const node of Object.values(nodes)) {
+      if (node.type === 'wall')
+        nodes[node.id] = { ...node, start: rotate(node.start), end: rotate(node.end) }
+    }
+    const target = nodes.wall_target as WallNode
+    nodes[target.id] = { ...target, start: target.end, end: target.start }
+    const source = nodes.wall_source as WallNode
+    const open = endOf(nodes, source.id, 'end')
+    const result = planJoinOpenWallEnd(nodes, open)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const after = apply(nodes, result.plan.changes)
+    const joined = after[source.id] as WallNode
+    const delta = [joined.end[0] - joined.start[0], joined.end[1] - joined.start[1]]
+    const direction = [target.end[0] - target.start[0], target.end[1] - target.start[1]]
+    expect(delta[0]! * direction[0]! + delta[1]! * direction[1]!).toBeCloseTo(0, 10)
+    expect(joined.start).toEqual(source.start)
+    expect(open.candidate!.point).toEqual(joined.end)
+    expect(rooms(after)).toHaveLength(1)
+  })
+
+  test.each([
+    'start',
+    'end',
+  ] as const)('squaring the open %s preserves hosted openings and closes the room', (end) => {
+    const nodes = cornerScene(88, 3, 0.09, end === 'start')
+    const source = nodes.wall_source as WallNode
+    const door = DoorNode.parse({
+      id: 'door_source',
+      parentId: source.id,
+      wallId: source.id,
+      position: [1, 1.05, 0],
+      width: 0.8,
+    })
+    nodes[source.id] = { ...source, children: [door.id] }
+    nodes[door.id] = door
+    const open = endOf(nodes, source.id, end)
+    const result = planJoinOpenWallEnd(nodes, open)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const after = apply(nodes, result.plan.changes)
+    const joined = after[source.id] as WallNode
+    expect(joined[end][0]).toBeCloseTo(2, 10)
+    expect(joined.children).toContain(door.id)
+    expect(
+      checkOpeningWithinWall(after[door.id] as ReturnType<typeof DoorNode.parse>, joined, 3),
+    ).toEqual([])
+    expect(rooms(after)).toHaveLength(1)
+  })
+
+  test('falls back to a straight join when squaring would push an opening past the anchored end', () => {
+    const nodes = cornerScene(88)
+    const source = nodes.wall_source as WallNode
+    const door = DoorNode.parse({
+      id: 'door_source',
+      parentId: source.id,
+      wallId: source.id,
+      position: [0.4, 1.05, 0],
+      width: 0.8,
+    })
+    nodes[source.id] = { ...source, children: [door.id] }
+    nodes[door.id] = door
+    const open = endOf(nodes, source.id, 'end')
+    const result = planJoinOpenWallEnd(nodes, open)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const after = apply(nodes, result.plan.changes)
+    const joined = after[source.id] as WallNode
+    expect(joined.end[0]).toBeCloseTo(2 + 3 / Math.tan((88 * Math.PI) / 180), 10)
+    expect(open.candidate!.point).toEqual(joined.end)
+    expect(
+      checkOpeningWithinWall(after[door.id] as ReturnType<typeof DoorNode.parse>, joined, 3),
+    ).toEqual([])
+    expect(rooms(after)).toHaveLength(1)
+  })
+
+  test('snapping an endpoint seam detects a room and retains the repaired wall id', () => {
+    const walls = [
+      wall('wall_a', [0, 0], [2, 0]),
+      wall('wall_b', [2.05, 0], [4, 0]),
+      wall('wall_right', [4, 0], [4, 3]),
+      wall('wall_top', [4, 3], [0, 3]),
+      wall('wall_left', [0, 3], [0, 0]),
+    ]
+    const nodes = nodeMap(walls)
+    expect(rooms(nodes)).toHaveLength(0)
+    const result = planJoinOpenWallEnd(nodes, endOf(nodes, 'wall_a', 'end'))
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const after = apply(nodes, result.plan.changes)
+    expect(after.wall_a).toMatchObject({ end: [2.05, 0] })
+    expect(rooms(after)).toHaveLength(1)
+    expect(findOpenWallEnds(after, LEVEL_ID)).toEqual([])
+    expect(nodes.wall_a).toMatchObject({ end: [2, 0] })
+  })
+
+  test('the scene write commits a T repair, hosted opening and derived room as one undo step', () => {
+    const host = wall('wall_host', [0, 0], [4, 0])
+    const source = wall('wall_source', [2, 0.2], [2, 3])
+    const door = DoorNode.parse({
+      id: 'door_host',
+      parentId: host.id,
+      wallId: host.id,
+      position: [3, 1.05, 0],
+      width: 0.8,
+    })
+    const walls = [
+      { ...host, children: [door.id] },
+      source,
+      wall('wall_right', [4, 0], [4, 3]),
+      wall('wall_top', [4, 3], [2, 3]),
+    ]
+    const level = LevelNode.parse({
+      id: LEVEL_ID,
+      height: 3,
+      children: walls.map((wall) => wall.id),
+    })
+    const previous = useScene.getState()
+    const raf = globalThis.requestAnimationFrame
+    const cancel = globalThis.cancelAnimationFrame
+    globalThis.requestAnimationFrame = () => 0
+    globalThis.cancelAnimationFrame = () => {}
+    useScene.setState({
+      nodes: nodeMap([level, ...walls, door]),
+      rootNodeIds: [LEVEL_ID],
+      collections: {},
+      materials: {},
+      dirtyNodes: new Set(),
+      readOnly: false,
+    })
+    const stop = initSpaceDetectionSync(useScene, {
+      getState: () => ({ spaces: {}, setSpaces() {} }),
+    })
+    try {
+      clearSceneHistory()
+      const before = structuredClone(useScene.getState().nodes)
+      const result = planJoinOpenWallEnd(before, endOf(before, source.id, 'start'))
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      runAsSingleSceneHistoryStep(useScene, () =>
+        useScene.getState().applyNodeChanges(result.plan.changes),
+      )
+      const after = useScene.getState().nodes
+      const opening = after[door.id] as ReturnType<typeof DoorNode.parse>
+      const parent = after[opening.parentId!] as WallNode
+      expect(parent.children).toContain(door.id)
+      expect(checkOpeningWithinWall(opening, parent, 3)).toEqual([])
+      expect(Object.values(after).filter((node) => node.type === 'zone')).toHaveLength(1)
+      expect(useScene.temporal.getState().pastStates).toHaveLength(1)
+      useScene.temporal.getState().undo()
+      expect(useScene.getState().nodes).toEqual(before)
+      useScene.temporal.getState().redo()
+      expect(
+        Object.values(useScene.getState().nodes).filter((node) => node.type === 'zone'),
+      ).toHaveLength(1)
+    } finally {
+      stop()
+      useScene.setState(previous)
+      clearSceneHistory()
+      globalThis.requestAnimationFrame = raf
+      globalThis.cancelAnimationFrame = cancel
+    }
+  })
+
+  test('a T join splits the host and preserves openings on the host and repaired wall', () => {
+    const source = wall('wall_source', [2, 0.2], [2, 3])
+    const host = wall('wall_host', [0, 0], [4, 0])
+    const sourceDoor = DoorNode.parse({
+      id: 'door_source',
+      parentId: source.id,
+      wallId: source.id,
+      position: [1, 1.05, 0],
+      width: 0.8,
+    })
+    const hostDoor = DoorNode.parse({
+      id: 'door_host',
+      parentId: host.id,
+      wallId: host.id,
+      position: [3, 1.05, 0],
+      width: 0.8,
+    })
+    const nodes = nodeMap([
+      { ...source, children: [sourceDoor.id] },
+      { ...host, children: [hostDoor.id] },
+      sourceDoor,
+      hostDoor,
+      wall('wall_right', [4, 0], [4, 3]),
+      wall('wall_top', [4, 3], [2, 3]),
+    ])
+    expect(rooms(nodes)).toHaveLength(0)
+    const result = planJoinOpenWallEnd(nodes, endOf(nodes, source.id, 'start'))
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const after = apply(nodes, result.plan.changes)
+    expect(after[source.id]).toMatchObject({ start: [2, 0] })
+    expect(after[sourceDoor.id]).toMatchObject({ position: [1.2, 1.05, 0], wallId: source.id })
+    expect(after[host.id]).toBeUndefined()
+    for (const id of [sourceDoor.id, hostDoor.id]) {
+      const door = after[id] as ReturnType<typeof DoorNode.parse>
+      const parent = after[door.parentId!] as WallNode
+      expect(parent.children).toContain(id)
+      expect(checkOpeningWithinWall(door, parent, 3)).toEqual([])
+    }
+    expect(rooms(after)).toHaveLength(1)
+    expect(endOf(after, source.id, 'start')).toBeUndefined()
+  })
+
+  test('trims an overshoot and refuses to trim through a hosted opening', () => {
+    const source = wall('wall_source', [2, -0.2], [2, 3])
+    const host = wall('wall_host', [0, 0], [4, 0])
+    const nodes = nodeMap([source, host])
+    const open = endOf(nodes, source.id, 'start')
+    const result = planJoinOpenWallEnd(nodes, open)
+    expect(result.ok).toBe(true)
+    if (result.ok)
+      expect(apply(nodes, result.plan.changes)[source.id]).toMatchObject({
+        start: [2, 0],
+        end: [2, 3],
+      })
+    const door = DoorNode.parse({
+      id: 'door_trim',
+      parentId: source.id,
+      wallId: source.id,
+      position: [0.45, 1.05, 0],
+      width: 0.8,
+    })
+    expect(planJoinOpenWallEnd(nodeMap([source, host, door]), open)).toEqual({
+      ok: false,
+      reason: 'attachment-outside-wall',
+    })
+  })
+
+  test('preserves an opening straddling a T join by retaining its unsplit host', () => {
+    const host = wall('wall_host', [0, 0], [4, 0])
+    const source = wall('wall_source', [2, 0.2], [2, 3])
+    const door = DoorNode.parse({
+      id: 'door_host',
+      parentId: host.id,
+      wallId: host.id,
+      position: [2, 1.05, 0],
+      width: 0.8,
+    })
+    const nodes = nodeMap([host, source, door])
+    const result = planJoinOpenWallEnd(nodes, endOf(nodes, source.id, 'start'))
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.plan.changes.delete).not.toContain(host.id)
+    expect(apply(nodes, result.plan.changes)[door.id]).toEqual(door)
+  })
+
+  test('joining either end of a facing pair slides the walls along their own axes, never tilting one', () => {
+    const nodes = nodeMap([
+      wall('wall_bottom', [-4.5, 1], [0, 1]),
+      wall('wall_right', [0, 1.09], [0, 5.5]),
+      wall('wall_top', [0, 5.5], [-4.5, 5.5]),
+      wall('wall_left', [-4.5, 5.5], [-4.5, 1]),
+    ])
+    for (const [wallId, end] of [
+      ['wall_bottom', 'end'],
+      ['wall_right', 'start'],
+    ] as const) {
+      const result = planJoinOpenWallEnd(nodes, endOf(nodes, wallId, end))
+      expect(result.ok).toBe(true)
+      if (!result.ok) continue
+      const after = apply(nodes, result.plan.changes)
+      expect(after.wall_bottom).toMatchObject({ start: [-4.5, 1], end: [0, 1] })
+      expect(after.wall_right).toMatchObject({ start: [0, 1], end: [0, 5.5] })
+      expect(rooms(after)).toHaveLength(1)
+    }
+  })
+
+  test('an end short of a slanted host runs on along its own direction to meet it', () => {
+    const nodes = nodeMap([
+      wall('wall_host', [0, 0], [4, 4]),
+      wall('wall_source', [3, -2], [3, 2.8]),
+    ])
+    const result = planJoinOpenWallEnd(nodes, endOf(nodes, 'wall_source', 'end'))
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const source = apply(nodes, result.plan.changes).wall_source as WallNode
+    expect(source.start).toEqual([3, -2])
+    expect(source.end[0]).toBeCloseTo(3, 9)
+    expect(source.end[1]).toBeCloseTo(3, 9)
+  })
+
+  test('drop rejoins both moved ends within 5 cm even when the room graph already joins their bodies', () => {
+    const source = wall('wall_source', [1, 0.04], [1, 2.96])
+    const nodes = nodeMap([
+      source,
+      wall('wall_bottom', [0, 0], [4, 0]),
+      wall('wall_top', [4, 3], [0, 3]),
+    ])
+    const changes = planWallEndRejoins(nodes, [source.id], 0.05, {
+      create: [],
+      delete: [],
+      update: [{ id: source.id, data: { start: [2, 0.04], end: [2, 2.96] } }],
+    })
+    const after = apply(nodes, changes)
+    expect(after[source.id]).toMatchObject({ start: [2, 0], end: [2, 3] })
+    expect(changes.delete).toHaveLength(2)
+    expect(changes.create).toHaveLength(4)
+    const moved = { id: source.id, data: { start: [2, 0.04], end: [2, 2.96] } } as const
+    const far = planWallEndRejoins(nodes, [source.id], 0.02, {
+      create: [],
+      delete: [],
+      update: [moved],
+    })
+    expect(far).toEqual({ create: [], delete: [], update: [moved] })
+  })
+
+  test('drop leaves the far end of a linked wall where it was', () => {
+    const moved = wall('wall_moved', [1, 0], [1, 3])
+    const linked = wall('wall_linked', [1, 3], [3, 3.04])
+    const nodes = nodeMap([moved, linked, wall('wall_host', [3, 0], [3, 5])])
+    const update = [
+      { id: moved.id, data: { start: [1.5, 0], end: [1.5, 3] } },
+      { id: linked.id, data: { start: [1.5, 3] } },
+    ] as WallTopologyChanges['update']
+    expect(
+      planWallEndRejoins(nodes, [moved.id, linked.id], 0.05, { create: [], delete: [], update }),
+    ).toEqual({ create: [], delete: [], update })
+  })
+
+  test('refuses stale endpoints and cross-level repair targets', () => {
+    const source = wall('wall_source', [0, 0], [2, 0])
+    const target = wall('wall_target', [2.05, 0], [4, 0])
+    const nodes = nodeMap([source, target])
+    const open = endOf(nodes, source.id, 'end')
+    expect(planJoinOpenWallEnd(nodes, { ...open, point: [1, 0] })).toEqual({
+      ok: false,
+      reason: 'stale-end',
+    })
+    expect(
+      planJoinOpenWallEnd({ ...nodes, [target.id]: { ...target, parentId: 'level_other' } }, open),
+    ).toEqual({ ok: false, reason: 'no-target' })
+  })
+
+  test('joins a curved source without replacing its arc or invalidating its opening', () => {
+    const source = WallNode.parse({
+      id: 'wall_curve_source',
+      parentId: LEVEL_ID,
+      start: [0, 0],
+      end: [4, 0],
+      curveOffset: 1,
+    })
+    const target = wall('wall_target', [4.1, 0], [4.1, 3])
+    const door = DoorNode.parse({
+      id: 'door_curve_source',
+      parentId: source.id,
+      wallId: source.id,
+      position: [2, 1.05, 0],
+      width: 0.8,
+    })
+    const nodes = nodeMap([{ ...source, children: [door.id] }, target, door])
+    const result = planJoinOpenWallEnd(nodes, endOf(nodes, source.id, 'end'))
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const after = apply(nodes, result.plan.changes)
+    const repaired = after[source.id] as WallNode
+    expect(repaired).toMatchObject({ end: [4.1, 0], curveOffset: 1, children: [door.id] })
+    expect(
+      checkOpeningWithinWall(after[door.id] as ReturnType<typeof DoorNode.parse>, repaired, 3),
+    ).toEqual([])
   })
 })

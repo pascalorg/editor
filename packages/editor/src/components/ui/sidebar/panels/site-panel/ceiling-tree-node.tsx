@@ -3,6 +3,7 @@ import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { startCeilingEditFromTreeSelection } from './../../../../../lib/ceiling-edit-session'
 import { formatAreaLabel } from './../../../../../lib/measurements'
 import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
@@ -63,7 +64,9 @@ export const CeilingTreeNode = memo(function CeilingTreeNode({
         useViewer.getState().selection.selectedIds,
         setSelection,
       )
-      if (!handled && useEditor.getState().phase === 'furnish') {
+      if (handled) return
+      // Selecting a ceiling in the scene graph opens its Edit ceiling session.
+      if (!startCeilingEditFromTreeSelection(nodeId) && useEditor.getState().phase === 'furnish') {
         useEditor.getState().setPhase('structure')
       }
     },

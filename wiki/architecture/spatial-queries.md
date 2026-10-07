@@ -102,3 +102,19 @@ const y = spatialGridManager.getSlabElevationForItem(levelId, position, dimensio
 - Validate on every pointer move for live feedback (highlight ghost red/green). Only `createNode` / `updateNode` on pointer up or click.
 
 See `apps/editor/components/tools/item/use-placement-coordinator.tsx` for a full implementation.
+
+## Resting on host surfaces
+
+`resolveSurfacePlacement` checks the footprint centre after the active snapping and rotation,
+expressed in the surface frame. It transforms the midpoint of the scaled local bounds; omitted
+bounds default to a bottom-centred box. Projecting a rotated box onto XZ preserves that centre.
+The outer boundary includes the existing small tolerance; hole boundaries and interiors refuse.
+Overhang and a child larger than its host are valid. The fit check never clamps or moves the pose.
+Hit-derived surfaces use the host's local bounds rectangle when dimensions are available.
+
+The catalog and registry movers use this predicate for placement and movement. Leaving the region
+unlinks through the existing floor/support preview path. Refusals retain machine-readable reasons
+and the normal invalid preview colour, with no text label. The paired grid event cannot turn a
+refused surface preview into a hidden floor commit. Procedural attachment validation uses the same
+centre rule so a permitted overhang survives validation. Floorplan retention shares the resolver;
+its existing detach behaviour is unchanged.

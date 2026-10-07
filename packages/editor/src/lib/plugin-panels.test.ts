@@ -3,7 +3,9 @@ import {
   type EditorHostPanel,
   editorHostPanelRegistry,
   managedPluginIds,
+  pluginInstallLocks,
   registerEditorHostPanel,
+  setPluginInstallLocks,
   showsPluginManager,
 } from './plugin-panels'
 
@@ -106,5 +108,28 @@ describe('showsPluginManager', () => {
         showsPluginManager({ managedPluginCount, readOnly: false, workspaceMode: 'edit' }),
       ).toBe(true)
     }
+  })
+})
+
+describe('pluginInstallLocks', () => {
+  afterEach(() => setPluginInstallLocks({}))
+
+  test('replaces the whole lock set and notifies subscribers with a new snapshot', () => {
+    let notified = 0
+    const unsubscribe = pluginInstallLocks.subscribe(() => {
+      notified += 1
+    })
+    const before = pluginInstallLocks.getSnapshot()
+    setPluginInstallLocks({
+      'pascal:architect': { actionLabel: 'Upgrade', onAction: () => {}, reason: 'Pro plan' },
+    })
+    const after = pluginInstallLocks.getSnapshot()
+
+    expect(after).not.toBe(before)
+    expect(Object.keys(after)).toEqual(['pascal:architect'])
+    setPluginInstallLocks({})
+    expect(pluginInstallLocks.getSnapshot()).toEqual({})
+    expect(notified).toBe(2)
+    unsubscribe()
   })
 })

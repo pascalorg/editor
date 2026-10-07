@@ -1,0 +1,305 @@
+{
+  "source": "generateExtrudedWall at editor a7c0bb4d (pre-phase-7), plain walls, no finish layout",
+  "groups": {
+    "tee": [
+      {
+        "object": "node",
+        "id": "wall_host",
+        "type": "wall",
+        "parentId": "level_golden",
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "start": [0, 0],
+        "end": [8, 0],
+        "height": 2.5,
+        "thickness": 0.12,
+        "frontSide": "interior",
+        "backSide": "exterior",
+        "slots": {
+          "a": "library:preset-navy"
+        }
+      },
+      {
+        "object": "node",
+        "id": "wall_east",
+        "type": "wall",
+        "parentId": "level_golden",
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "start": [8, 0],
+        "end": [8, 4],
+        "height": 2.5,
+        "thickness": 0.12,
+        "frontSide": "unknown",
+        "backSide": "unknown"
+      },
+      {
+        "object": "node",
+        "id": "wall_north",
+        "type": "wall",
+        "parentId": "level_golden",
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "start": [8, 4],
+        "end": [0, 4],
+        "height": 2.5,
+        "thickness": 0.12,
+        "frontSide": "unknown",
+        "backSide": "unknown"
+      },
+      {
+        "object": "node",
+        "id": "wall_west",
+        "type": "wall",
+        "parentId": "level_golden",
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "start": [0, 4],
+        "end": [0, 0],
+        "height": 2.5,
+        "thickness": 0.12,
+        "frontSide": "unknown",
+        "backSide": "unknown"
+      },
+      {
+        "object": "node",
+        "id": "wall_partition",
+        "type": "wall",
+        "parentId": "level_golden",
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "start": [4, 0],
+        "end": [4, 4],
+        "height": 2.5,
+        "thickness": 0.12,
+        "frontSide": "unknown",
+        "backSide": "unknown"
+      }
+    ],
+    "justified": [
+      {
+        "object": "node",
+        "id": "wall_j0",
+        "type": "wall",
+        "parentId": "level_golden",
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "start": [0, 0],
+        "end": [5, 0],
+        "height": 2.5,
+        "thickness": 0.12,
+        "frontSide": "unknown",
+        "backSide": "unknown",
+        "justification": "a"
+      },
+      {
+        "object": "node",
+        "id": "wall_j1",
+        "type": "wall",
+        "parentId": "level_golden",
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "start": [5, 0],
+        "end": [5, 3],
+        "height": 2.5,
+        "thickness": 0.12,
+        "frontSide": "unknown",
+        "backSide": "unknown",
+        "justification": "a"
+      },
+      {
+        "object": "node",
+        "id": "wall_j2",
+        "type": "wall",
+        "parentId": "level_golden",
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "start": [5, 3],
+        "end": [0, 3],
+        "height": 2.5,
+        "thickness": 0.12,
+        "frontSide": "unknown",
+        "backSide": "unknown"
+      },
+      {
+        "object": "node",
+        "id": "wall_j3",
+        "type": "wall",
+        "parentId": "level_golden",
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "start": [0, 3],
+        "end": [0, 0],
+        "height": 2.5,
+        "thickness": 0.12,
+        "frontSide": "unknown",
+        "backSide": "unknown",
+        "justification": "b"
+      }
+    ],
+    "curved": [
+      {
+        "object": "node",
+        "id": "wall_arc",
+        "type": "wall",
+        "parentId": "level_golden",
+        "visible": true,
+        "metadata": {},
+        "children": [],
+        "start": [0, 0],
+        "end": [6, 0],
+        "height": 2.5,
+        "thickness": 0.12,
+        "frontSide": "unknown",
+        "backSide": "unknown",
+        "curveOffset": 1.2
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "tee:wall_host",
+      "group": "tee",
+      "wallId": "wall_host",
+      "children": []
+    },
+    {
+      "name": "tee:wall_east",
+      "group": "tee",
+      "wallId": "wall_east",
+      "children": []
+    },
+    {
+      "name": "tee:wall_north",
+      "group": "tee",
+      "wallId": "wall_north",
+      "children": []
+    },
+    {
+      "name": "tee:wall_west",
+      "group": "tee",
+      "wallId": "wall_west",
+      "children": []
+    },
+    {
+      "name": "tee:wall_partition",
+      "group": "tee",
+      "wallId": "wall_partition",
+      "children": []
+    },
+    {
+      "name": "tee:host+door",
+      "group": "tee",
+      "wallId": "wall_host",
+      "children": [
+        {
+          "object": "node",
+          "id": "door_g",
+          "type": "door",
+          "parentId": "wall_host",
+          "wallId": "wall_host",
+          "visible": true,
+          "metadata": {},
+          "position": [6, 1.05, 0],
+          "rotation": [0, 0, 0],
+          "width": 0.9,
+          "height": 2.1
+        }
+      ]
+    },
+    {
+      "name": "tee:partition+window",
+      "group": "tee",
+      "wallId": "wall_partition",
+      "children": [
+        {
+          "object": "node",
+          "id": "window_g",
+          "type": "window",
+          "parentId": "wall_partition",
+          "wallId": "wall_partition",
+          "visible": true,
+          "metadata": {},
+          "position": [2, 1.5, 0],
+          "rotation": [0, 0, 0],
+          "width": 0.9,
+          "height": 1.2
+        }
+      ]
+    },
+    {
+      "name": "justified:wall_j0",
+      "group": "justified",
+      "wallId": "wall_j0",
+      "children": []
+    },
+    {
+      "name": "justified:wall_j1",
+      "group": "justified",
+      "wallId": "wall_j1",
+      "children": []
+    },
+    {
+      "name": "justified:wall_j2",
+      "group": "justified",
+      "wallId": "wall_j2",
+      "children": []
+    },
+    {
+      "name": "justified:wall_j3",
+      "group": "justified",
+      "wallId": "wall_j3",
+      "children": []
+    },
+    {
+      "name": "justified:j0+door",
+      "group": "justified",
+      "wallId": "wall_j0",
+      "children": [
+        {
+          "object": "node",
+          "id": "door_j",
+          "type": "door",
+          "parentId": "wall_j0",
+          "wallId": "wall_j0",
+          "visible": true,
+          "metadata": {},
+          "position": [2.5, 1.05, 0],
+          "rotation": [0, 0, 0],
+          "width": 0.9,
+          "height": 2.1
+        }
+      ]
+    },
+    {
+      "name": "curved:arc",
+      "group": "curved",
+      "wallId": "wall_arc",
+      "children": []
+    }
+  ],
+  "hashes": {
+    "tee:wall_host": "424bfd7497cf519c7e34171fbf3c4152e1af2328794f39ccab7b1593fcc45770",
+    "tee:wall_east": "3bf9e523d25e34c208c55fa356f1a2e0657a5ecd5bcebb95ac7ab694732fd9f4",
+    "tee:wall_north": "aa63a548bd98132f198a235453adf504754eb5912368f7f3cbbf32ac2cc9761a",
+    "tee:wall_west": "324ab313c346909b3d79849348e3128f9189957fb975aaf1087c5ba39715960c",
+    "tee:wall_partition": "0b394a067431a25d83b8a7ca0a1e952b52605acd7a2dafda39a07b1b769cd048",
+    "tee:host+door": "c382bdf2024919037b30ec235c74dfe4d721a8d4edfde4a4172e70aeb4fa2343",
+    "tee:partition+window": "1fcc46fe475a2278b3d5361837420e1de3cd4c06a722155c81731dbabc9c94a5",
+    "justified:wall_j0": "4f321f9a747b007b190dd64998c098814873b2dd2cdec00cd3d775cf8627c800",
+    "justified:wall_j1": "f26795be1dfb64a591f391cdc47e7199a29efb634e69bd908eaab31b6921e580",
+    "justified:wall_j2": "7bcc9e6a117df9066343c1d47ff91533112617852afb2b4b93f95217fab5491f",
+    "justified:wall_j3": "c362f9124ff8d972058e4ad79bd7a3588650c8bb7064167a454de03fcf45172d",
+    "justified:j0+door": "6e9369f62d5f3608fac2f0fd8bf382509ea1774fbbc8f2d222ec3627b4694db9",
+    "curved:arc": "b7fcaadd054683c3e4f5507fc623036fa3fe8d9f39f8c6e3e721cd02ea8e531c"
+  }
+}

@@ -1,25 +1,30 @@
-import { describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeDefinition,
+  BuildingNode,
   type FloorplanGeometry,
   type GeometryContext,
+  LevelNode,
   loadPlugin,
   type NodeCategory,
   nodeRegistry,
   registerNode,
 } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
 import PDFDocument from 'pdfkit'
 import { z } from 'zod'
 import { splitFloorplanOverlay } from '../../components/editor-2d/renderers/floorplan-registry-layer'
 import { DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY } from './annotation-visibility'
 import {
   collectFloorplanGeometry,
+  collectFloorplanSchedules,
   filterFloorplanExportOverlay,
   fitPlanToBox,
   isFloorplanExportAnnotationGeometry,
   isFloorplanNodeInExportScope,
   partitionFloorplanExportOverlay,
+  resolveExportLevels,
   resolveFloorplanExportAnnotationVisibility,
   resolveFloorplanExportNodeGeometry,
   resolveFloorplanExportPlacement,
@@ -32,7 +37,7 @@ import {
   rotateFloorplanExportBounds,
 } from './floorplan-export'
 import { floorplanGeometryMetadata } from './floorplan-extension'
-import { FloorplanPdfDocument } from './floorplan-pdfkit-document'
+import { FloorplanPdfDocument, loadFloorplanPdfFonts } from './floorplan-pdfkit-document'
 import { renderFloorplanGeometryToPdfKit } from './floorplan-pdfkit-renderer'
 
 type GroupGeometry = Extract<FloorplanGeometry, { kind: 'group' }>
@@ -301,6 +306,8 @@ describe('floor plan export policy', () => {
       openingMarks: true,
       structuralGrids: false,
       roomLabels: false,
+      roomDetails: true,
+      roofPlan: true,
       stairAnnotations: true,
     }
 
@@ -323,6 +330,8 @@ describe('floor plan export policy', () => {
       openingMarks: false,
       structuralGrids: false,
       roomLabels: true,
+      roomDetails: false,
+      roofPlan: false,
       stairAnnotations: false,
     })
   })
@@ -421,6 +430,81 @@ describe('isFloorplanNodeInExportScope', () => {
   test('handles an undefined definition like a no-category node', () => {
     expect(isFloorplanNodeInExportScope(undefined, 'full')).toBe(true)
     expect(isFloorplanNodeInExportScope(undefined, 'structure')).toBe(false)
+  })
+})
+
+describe('collectFloorplanSchedules', () => {
+  test('omits non-structure schedule contributors under structure scope', () => {
+    const restoreRegistry = nodeRegistry._snapshot()
+    const structureKind = 'test:structure-schedule'
+    const siteKind = 'test:site-schedule'
+    const levelId = 'level_schedules' as AnyNode['id']
+    const structureNodeId = 'structure_scheduled' as AnyNode['id']
+    const siteNodeId = 'site_scheduled' as AnyNode['id']
+
+    const scheduleFor = (title: string) => ({
+      id: title.toLowerCase(),
+      title,
+      columns: [{ key: 'id', label: 'ID' }],
+      rows: [{ id: 'row', cells: { id: '1' } }],
+    })
+
+    try {
+      nodeRegistry._reset()
+      registerNode({
+        kind: structureKind,
+        schemaVersion: 1,
+        schema: z.object({ type: z.literal(structureKind) }) as never,
+        category: 'structure',
+        defaults: () => ({}) as never,
+        capabilities: {},
+        extensions: {
+          'pascal:editor/floorplan': {
+            schedule: () => scheduleFor('Doors'),
+          },
+        },
+      } as AnyNodeDefinition)
+      registerNode({
+        kind: siteKind,
+        schemaVersion: 1,
+        schema: z.object({ type: z.literal(siteKind) }) as never,
+        category: 'site',
+        defaults: () => ({}) as never,
+        capabilities: {},
+        extensions: {
+          'pascal:editor/floorplan': {
+            schedule: () => scheduleFor('Rooms'),
+          },
+        },
+      } as AnyNodeDefinition)
+
+      const nodes = {
+        [levelId]: {
+          id: levelId,
+          type: 'level',
+          visible: true,
+          children: [structureNodeId, siteNodeId],
+        },
+        [structureNodeId]: {
+          id: structureNodeId,
+          type: structureKind,
+          visible: true,
+        },
+        [siteNodeId]: {
+          id: siteNodeId,
+          type: siteKind,
+          visible: true,
+        },
+      } as unknown as Record<string, AnyNode>
+
+      const full = collectFloorplanSchedules(nodes, levelId, 'metric', 'full')
+      expect(full.map((schedule) => schedule.title).sort()).toEqual(['Doors', 'Rooms'])
+
+      const structure = collectFloorplanSchedules(nodes, levelId, 'metric', 'structure')
+      expect(structure.map((schedule) => schedule.title)).toEqual(['Doors'])
+    } finally {
+      restoreRegistry()
+    }
   })
 })
 
@@ -650,7 +734,7 @@ describe('collectFloorplanGeometry', () => {
       rawPdf.on('data', (chunk: Buffer) => chunks.push(chunk))
       const completedPdf = Promise.withResolvers<string>()
       rawPdf.on('end', () => completedPdf.resolve(Buffer.concat(chunks).toString('latin1')))
-      const pdf = new FloorplanPdfDocument(rawPdf, [200, 200])
+      const pdf = new FloorplanPdfDocument(rawPdf, [200, 200], await loadFloorplanPdfFonts())
       pdf.addPage()
       for (const { model } of full) {
         if (!model) continue
@@ -694,7 +778,9 @@ describe('collectFloorplanGeometry', () => {
         'finished-faces',
         [enabledPluginId],
       )
-      expect(hiddenSite.map(({ id }) => id)).toEqual(['level_architecture'])
+      // A hidden Site hides only its own ground and boundary; the site-scoped
+      // nodes on it keep their own flag (see `hidesDescendants`).
+      expect(hiddenSite.map(({ id }) => id)).toEqual(['site_overlay', 'level_architecture'])
 
       const structure = collectFloorplanGeometry(
         nodes,
@@ -711,5 +797,63 @@ describe('collectFloorplanGeometry', () => {
     } finally {
       restoreRegistry()
     }
+  })
+})
+
+describe('resolveExportLevels', () => {
+  const ground = LevelNode.parse({ id: 'level_ground', parentId: 'building_a', level: 0 })
+  const upper = LevelNode.parse({ id: 'level_upper', parentId: 'building_a', level: 1 })
+  const roof = LevelNode.parse({
+    id: 'level_roof',
+    parentId: 'building_a',
+    level: 2,
+    metadata: { role: 'roof', referenceLevelId: upper.id },
+  })
+  const attic = LevelNode.parse({
+    id: 'level_attic',
+    parentId: 'building_a',
+    level: 3,
+    metadata: { role: 'attic' },
+  })
+  const building = BuildingNode.parse({
+    id: 'building_a',
+    children: [ground.id, upper.id, roof.id, attic.id],
+  })
+  const nodes: Record<string, AnyNode> = Object.fromEntries(
+    [building, ground, upper, roof, attic].map((node) => [node.id, node]),
+  )
+
+  // The viewer store is a process-wide singleton, so an earlier test file can
+  // leak a selection into these tests; restore it instead of leaving ours.
+  const previousSelection = useViewer.getState().selection
+
+  const selectLevel = (levelId: string | null) => {
+    useViewer.setState({
+      selection: { ...previousSelection, buildingId: building.id, levelId },
+    } as never)
+  }
+
+  afterEach(() => {
+    useViewer.setState({ selection: previousSelection } as never)
+  })
+
+  test('skips a dedicated roof support level', () => {
+    selectLevel(ground.id)
+
+    expect(resolveExportLevels(nodes)).toEqual([
+      { id: ground.id, label: 'Ground floor' },
+      { id: upper.id, label: 'Floor 1' },
+      { id: attic.id, label: 'Floor 3' },
+    ])
+  })
+
+  test('skips the roof level when it is the selected level', () => {
+    selectLevel(roof.id)
+
+    expect(resolveExportLevels(nodes)).toEqual([
+      { id: ground.id, label: 'Ground floor' },
+      { id: upper.id, label: 'Floor 1' },
+      { id: attic.id, label: 'Floor 3' },
+    ])
   })
 })

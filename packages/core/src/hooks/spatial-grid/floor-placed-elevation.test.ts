@@ -143,6 +143,54 @@ describe('floor-placed elevation resolver', () => {
     ).toBe(0)
   })
 
+  test('items pinned to the base follow solid platforms while ignoring an open mezzanine above', () => {
+    registerNode(
+      makeDefinition('item', {
+        floorPlaced: { footprint: () => ({ dimensions: [1, 1, 1], rotation: [0, 0, 0] }) },
+      }),
+    )
+    const polygon: [number, number][] = [
+      [-2, -2],
+      [2, -2],
+      [2, 2],
+      [-2, 2],
+    ]
+    const level = makeLevel()
+    const base = {
+      id: 'slab_base',
+      type: 'slab',
+      parentId: LEVEL_ID,
+      polygon,
+      holes: [],
+      elevation: 0.05,
+      thickness: 0.05,
+      plateRole: 'base',
+    } as SlabNode
+    const platform = {
+      ...base,
+      id: 'slab_platform',
+      elevation: 0.55,
+      thickness: 0.5,
+      plateRole: 'platform',
+    } as SlabNode
+    const mezzanine = {
+      ...base,
+      id: 'slab_mezzanine',
+      elevation: 2,
+      thickness: 0.2,
+      plateRole: undefined,
+      support: 'open',
+    } as SlabNode
+    const item = makeFloorNode({ supportSlabId: base.id } as Partial<AnyNode>)
+    for (const slab of [base, platform, mezzanine])
+      spatialGridManager.handleNodeCreated(slab, LEVEL_ID)
+    const nodes = nodesFor(level, base, platform, mezzanine, item)
+    expect(getFloorPlacedElevation({ node: item, nodes, position: [0, 0, 0] })).toBe(0.55)
+    expect(
+      getFloorPlacedElevation({ node: item, nodes, position: [0, 0, 0], maxElevation: 0.1 }),
+    ).toBe(0.05)
+  })
+
   test('canPlaceOnFloorFootprints accepts an L-shaped draft in the open corner gap', () => {
     const baseAsset = (makeFloorNode() as { asset: Record<string, unknown> }).asset
     registerNode(

@@ -21,7 +21,9 @@ export function isCaptureStreamRenderable(
   if (stream.availability === 'failed' || stream.availability === 'pending') return false
   const layerKey = captureLayerKey(stream)
   if (customRendererKeys.has(layerKey) || customRendererKeys.has(stream.kind)) return true
-  if (layerKey === 'model') return isCaptureModelArtifact(stream.artifact)
+  if (layerKey === 'model' || layerKey === 'spaceformScene') {
+    return isCaptureModelArtifact(stream.artifact)
+  }
   if (layerKey === 'deviceMotion') {
     return (
       stream.availability === 'live' ||

@@ -1,14 +1,23 @@
 'use client'
 
-import { type AnyNode, MIN_SLAB_THICKNESS, type SlabNode, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  isDerivedNode,
+  MIN_SLAB_THICKNESS,
+  type SlabNode,
+  useScene,
+} from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
+  FloorFoundationPanel,
   holeEditScope,
   PanelSection,
   PanelWrapper,
   SegmentedControl,
+  ShapeChoice,
   SliderControl,
+  startOpeningDraft,
   triggerSFX,
   useEditingHole,
   useEditor,
@@ -51,9 +60,15 @@ export function SlabPanel() {
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as SlabNode | undefined) : undefined,
   )
 
-  // See "Panel slider-drag fix recipe" in plans/editor-node-registry.md.
-  // Stable handler refs across re-renders so slider drags don't trigger
-  // a Maximum update depth cascade on the panel's SliderControls.
+  useEffect(() => {
+    if (!node?.plateRole || node.plateRole === 'base' || !node.parentId || !node.zoneIds?.[0])
+      return
+    useViewer.getState().setSelection({ selectedIds: [] })
+    useEditor.getState().selectRoom({ levelId: node.parentId, zoneId: node.zoneIds[0] })
+  }, [node])
+
+  // Stable handler refs so slider drags don't trigger a Maximum update depth
+  // cascade; see "Custom panels" in wiki/architecture/node-definitions.md.
   const nodeRef = useRef(node)
   nodeRef.current = node
 
@@ -237,6 +252,12 @@ export function SlabPanel() {
 
   if (!(node && node.type === 'slab' && selectedId)) return null
 
+  if (node.plateRole === 'base') return <FloorFoundationPanel node={node} onClose={handleClose} />
+  const derived = isDerivedNode(node)
+  const room = useEditor.getState().room
+  const openingZoneId =
+    room && node.zoneIds?.includes(room.zoneId) ? room.zoneId : node.zoneIds?.[0]
+
   const calculateArea = (polygon: Array<[number, number]>): number => {
     if (polygon.length < 3) return 0
     let area = 0
@@ -289,7 +310,7 @@ export function SlabPanel() {
           precision={3}
           step={0.01}
           unit="m"
-          value={Math.round(node.elevation * 1000) / 1000}
+          value={node.elevation}
         />
 
         <SliderControl
@@ -300,7 +321,7 @@ export function SlabPanel() {
           precision={3}
           step={0.01}
           unit="m"
-          value={Math.round(getSlabAnchorElevation(node) * 1000) / 1000}
+          value={getSlabAnchorElevation(node)}
         />
 
         {node.recessed ? (
@@ -312,7 +333,7 @@ export function SlabPanel() {
             precision={2}
             step={0.01}
             unit="m"
-            value={Math.round(getSlabRecessDepth(node) * 100) / 100}
+            value={getSlabRecessDepth(node)}
           />
         ) : (
           <SliderControl
@@ -323,7 +344,7 @@ export function SlabPanel() {
             precision={2}
             step={0.01}
             unit="m"
-            value={Math.round((node.thickness ?? 0.05) * 100) / 100}
+            value={node.thickness ?? 0.05}
           />
         )}
 
@@ -375,8 +396,18 @@ export function SlabPanel() {
               const isEditing =
                 editingHole?.nodeId === selectedId && editingHole?.holeIndex === index
               const source = node.holeMetadata?.[index]?.source ?? 'manual'
-              const isAutoHole = source !== 'manual'
-              const autoLabel = source === 'elevator' ? 'Auto elevator cutout' : 'Auto stair cutout'
+              // A derived plate's holes are owned by its rooms and openings: an
+              // opening's hole opens that opening, the rest are read-only.
+              const openingId = derived ? node.holeMetadata?.[index]?.openingId : undefined
+              const isAutoHole = source !== 'manual' || derived
+              const autoLabel =
+                source === 'elevator'
+                  ? 'Auto elevator cutout'
+                  : source === 'stair'
+                    ? 'Auto stair cutout'
+                    : source === 'floor-opening'
+                      ? 'Opening'
+                      : 'Room cutout'
               return (
                 <div
                   className={`flex items-center justify-between rounded-lg border p-2 transition-colors ${
@@ -410,6 +441,15 @@ export function SlabPanel() {
                             )
                         }
                       />
+                    ) : openingId ? (
+                      <button
+                        className="flex h-7 w-7 items-center justify-center rounded-md bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground"
+                        data-slab-hole-opening={openingId}
+                        onClick={() => setSelection({ selectedIds: [openingId as AnyNode['id']] })}
+                        type="button"
+                      >
+                        <Edit className="h-3.5 w-3.5" />
+                      </button>
                     ) : isAutoHole ? (
                       <div className="rounded-md bg-[#2C2C2E] px-2 py-1 text-[10px] text-muted-foreground">
                         Auto
@@ -442,13 +482,24 @@ export function SlabPanel() {
         )}
 
         <div className="px-1 pt-1 pb-1">
-          <ActionButton
-            className="w-full"
-            disabled={editingHole?.nodeId === selectedId}
-            icon={<Plus className="h-3.5 w-3.5" />}
-            label="Add Hole"
-            onClick={handleAddHole}
-          />
+          {derived ? (
+            // A derived plate's holes follow its rooms and their openings: cut an
+            // opening (a hatch in a mezzanine) instead of editing the plate.
+            <ShapeChoice
+              className="px-1 text-muted-foreground text-xs"
+              disabled={!openingZoneId}
+              label={node.support === 'open' ? 'Cut hatch' : 'Cut opening'}
+              onPick={(shape) => openingZoneId && startOpeningDraft(openingZoneId, 'floor', shape)}
+            />
+          ) : (
+            <ActionButton
+              className="w-full"
+              disabled={editingHole?.nodeId === selectedId}
+              icon={<Plus className="h-3.5 w-3.5" />}
+              label="Add Hole"
+              onClick={handleAddHole}
+            />
+          )}
         </div>
       </PanelSection>
       <ActionGroup>

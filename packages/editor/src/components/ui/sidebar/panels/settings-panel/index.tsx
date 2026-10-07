@@ -1,28 +1,40 @@
 import {
   clearSceneHistory,
+  DEFAULT_LEVEL_HEIGHT,
   emitter,
+  getArtifactStore,
+  getLevelDisplayName,
+  LevelNode,
+  type AnyNodeId,
+  type BuildingNode,
   isNodeKindEnabled,
   nodeRegistry,
+  type ParsedBuildJson,
   useRegistryVersion,
   useScene,
-  type ParsedBuildJson,
   validateBuildJson,
 } from '@pascal-app/core'
 import { useViewer, viewerPresentationRegistry } from '@pascal-app/viewer'
 import { TreeView, VisualJson } from '@visual-json/react'
 import {
+  ArrowDown,
+  ArrowUp,
   Camera,
   Check,
-  ChevronDown,
   Copy,
   Download,
+  Layers,
+  ListTree,
   Map as MapIcon,
   Save,
+  ChevronDown,
+  Send,
   Trash2,
   Upload,
 } from 'lucide-react'
 import {
   type KeyboardEvent,
+  type ReactNode,
   type SyntheticEvent,
   useCallback,
   useEffect,
@@ -32,10 +44,17 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import {
   exportFloorplanPdf,
   type FloorplanExportScope,
 } from '../../../../../lib/floorplan/floorplan-export'
+import {
+  LocalAppError,
+  probeLocalApp,
+  sendGlbToLocalApp,
+  waitForLocalImport,
+} from '../../../../../lib/send-to-app'
 import { Button } from './../../../../../components/ui/primitives/button'
 import {
   Dialog,
@@ -45,8 +64,13 @@ import {
 } from './../../../../../components/ui/primitives/dialog'
 import { Input } from './../../../../../components/ui/primitives/input'
 import { Switch } from './../../../../../components/ui/primitives/switch'
+import { cn } from './../../../../../lib/utils'
+import { refusedObjectsNotice } from './../../../../../components/editor/group-actions'
+import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
+import { bringBuildArtifacts } from './../../../../../lib/scene-clipboard'
 import useEditor, { selectDefaultBuildingAndLevel } from './../../../../../store/use-editor'
 import useFloorplanMode from './../../../../../store/use-floorplan-mode'
+import { type SendToAppStep, useSendToApp } from './../../../../../store/use-send-to-app'
 import { AudioSettingsDialog } from './audio-settings-dialog'
 import { KeyboardShortcutsDialog } from './keyboard-shortcuts-dialog'
 import { LoadBuildDialog, type PendingImport } from './load-build-dialog'
@@ -80,9 +104,19 @@ const MODEL_EXPORT_FORMATS = [
   { format: 'usdz', label: 'USDZ' },
   { format: 'stl', label: 'STL' },
   { format: 'obj', label: 'OBJ' },
+  { format: 'ifc', label: 'IFC' },
 ] as const
 
 type ModelExportFormat = (typeof MODEL_EXPORT_FORMATS)[number]['format']
+
+const SEND_TO_BLENDER_STEP_LABEL: Record<SendToAppStep, string> = {
+  probing: 'Looking for Blender…',
+  exporting: 'Preparing the scene…',
+  sending: 'Sending to Blender…',
+  importing: 'Blender is importing…',
+}
+
+const BLENDER_ADDON_URL = 'https://github.com/pascalorg/blender-addon#install'
 
 type ExportableNodeType = {
   type: string
@@ -206,8 +240,72 @@ export interface ProjectVisibility {
   showGuidesPublic: boolean
 }
 
+function SettingsSection({
+  children,
+  description,
+  title,
+  tone = 'default',
+}: {
+  children: ReactNode
+  description?: string
+  title: string
+  tone?: 'default' | 'destructive'
+}) {
+  const headingId = useId()
+  return (
+    <section aria-labelledby={headingId} className="space-y-3 py-5 first:pt-0 last:pb-0">
+      <div className="space-y-0.5">
+        <h3
+          className={cn(
+            'font-semibold text-sm',
+            tone === 'destructive' ? 'text-destructive' : 'text-foreground',
+          )}
+          id={headingId}
+        >
+          {title}
+        </h3>
+        {description ? <p className="text-muted-foreground text-xs">{description}</p> : null}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function SettingsSubheading({ children }: { children: ReactNode }) {
+  return <h4 className="font-medium text-muted-foreground text-xs">{children}</h4>
+}
+
+function SettingsSwitchRow({
+  checked,
+  description,
+  label,
+  onCheckedChange,
+}: {
+  checked: boolean
+  description: string
+  label: string
+  onCheckedChange: (checked: boolean) => void
+}) {
+  const id = useId()
+  return (
+    <div className="flex items-center justify-between gap-4 py-1">
+      <div className="min-w-0 space-y-0.5">
+        <label className="block font-medium text-sm" htmlFor={id}>
+          {label}
+        </label>
+        <p className="text-muted-foreground text-xs">{description}</p>
+      </div>
+      <Switch checked={checked} id={id} onCheckedChange={onCheckedChange} />
+    </div>
+  )
+}
+
 export interface SettingsPanelProps {
+  /** Merged onto the scrolling root so hosts can restyle padding (e.g. inside a dialog). */
+  className?: string
   projectId?: string
+  /** Shown as the scene name in apps the scene is sent to (Blender collection name). */
+  projectName?: string
   projectVisibility?: ProjectVisibility
   onVisibilityChange?: (
     field: 'isPrivate' | 'showScansPublic' | 'showGuidesPublic',
@@ -215,8 +313,126 @@ export interface SettingsPanelProps {
   ) => Promise<void>
 }
 
+function FloorSettingsSection() {
+  const selectedBuildingId = useViewer((state) => state.selection.buildingId)
+  const selectedLevelId = useViewer((state) => state.selection.levelId)
+  const setSelection = useViewer((state) => state.setSelection)
+  const createNode = useScene((state) => state.createNode)
+  const building = useScene((state) => {
+    const selected = selectedBuildingId ? state.nodes[selectedBuildingId] : undefined
+    if (selected?.type === 'building') return selected as BuildingNode
+
+    const site = state.rootNodeIds
+      .map((nodeId) => state.nodes[nodeId])
+      .find((node) => node?.type === 'site')
+    if (site?.type !== 'site') return null
+
+    return (
+      site.children
+        .map((childId) => state.nodes[childId as AnyNodeId])
+        .find((node): node is BuildingNode => node?.type === 'building') ?? null
+    )
+  })
+  const levels = useScene(
+    useShallow((state) => {
+      if (!building) return []
+
+      return building.children
+        .map((childId) => state.nodes[childId as AnyNodeId])
+        .filter((node): node is LevelNode => node?.type === 'level')
+        .sort((a, b) => b.level - a.level)
+    }),
+  )
+
+  if (!building) return null
+
+  const addLevel = (level: number) => {
+    const newLevel = LevelNode.parse({
+      level,
+      height: DEFAULT_LEVEL_HEIGHT,
+      children: [],
+      parentId: building.id,
+    })
+    createNode(newLevel, building.id)
+    setSelection({ buildingId: building.id, levelId: newLevel.id })
+  }
+
+  const addFloor = () =>
+    addLevel(levels.length === 0 ? 0 : Math.max(0, ...levels.map((level) => level.level)) + 1)
+  const addBasement = () => addLevel(Math.min(0, ...levels.map((level) => level.level)) - 1)
+
+  return (
+    <div className="space-y-3">
+      <label className="font-medium text-muted-foreground text-xs uppercase">Floors</label>
+      <div className="grid grid-cols-2 gap-2">
+        <Button className="justify-start" onClick={addFloor} size="sm" type="button" variant="outline">
+          <ArrowUp className="size-3.5" />
+          Add floor
+        </Button>
+        <Button
+          className="justify-start"
+          onClick={addBasement}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          <ArrowDown className="size-3.5" />
+          Add basement
+        </Button>
+      </div>
+
+      <div className="space-y-1 rounded-md border p-1">
+        {levels.length === 0 ? (
+          <div className="px-2 py-2 text-muted-foreground text-xs">No floors yet</div>
+        ) : (
+          levels.map((level) => {
+            const isSelected = level.id === selectedLevelId
+            const canDelete = level.level !== 0
+
+            return (
+              <div className="flex items-center gap-1" key={level.id}>
+                <button
+                  className={cn(
+                    'flex min-w-0 flex-1 items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors',
+                    isSelected
+                      ? 'bg-accent text-foreground'
+                      : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+                  )}
+                  onClick={() => setSelection({ buildingId: building.id, levelId: level.id })}
+                  type="button"
+                >
+                  <Layers className="size-3.5 shrink-0" />
+                  <span className="truncate">{getLevelDisplayName(level)}</span>
+                  <span className="ml-auto shrink-0 text-muted-foreground text-xs">
+                    {level.level === 0 ? '0' : level.level > 0 ? `+${level.level}` : level.level}
+                  </span>
+                </button>
+                <button
+                  aria-label={`Remove ${getLevelDisplayName(level)}`}
+                  className="flex size-7 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:cursor-not-allowed disabled:opacity-30"
+                  disabled={!canDelete}
+                  onClick={() => deleteLevelWithFallbackSelection(level.id)}
+                  title={canDelete ? 'Remove floor' : 'The ground floor cannot be removed'}
+                  type="button"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              </div>
+            )
+          })
+        )}
+      </div>
+      <p className="text-muted-foreground text-xs">
+        Select a floor to make it active. The ground floor is always kept as the building datum.
+      </p>
+    </div>
+  )
+}
+
 export function SettingsPanel({
+  className,
   projectId,
+  projectName,
   projectVisibility,
   onVisibilityChange,
 }: SettingsPanelProps = {}) {
@@ -226,6 +442,7 @@ export function SettingsPanel({
   const rootNodeIds = useScene((state) => state.rootNodeIds)
   const installedPlugins = useScene((state) => state.installedPlugins)
   const materials = useScene((state) => state.materials)
+  const collections = useScene((state) => state.collections)
   const setScene = useScene((state) => state.setScene)
   const clearScene = useScene((state) => state.clearScene)
   const resetSelection = useViewer((state) => state.resetSelection)
@@ -244,6 +461,10 @@ export function SettingsPanel({
   const [activeModelExport, setActiveModelExport] = useState<ModelExportFormat | null>(null)
   const [modelExportError, setModelExportError] = useState<string | null>(null)
   const [modelExportWarning, setModelExportWarning] = useState<string | null>(null)
+  const sendToBlenderStep = useSendToApp((state) => state.step)
+  const sendToBlenderMessage = useSendToApp((state) => state.message)
+  const setSendToBlenderStep = useSendToApp((state) => state.setStep)
+  const setSendToBlenderMessage = useSendToApp((state) => state.setMessage)
   const [activeFloorplanExport, setActiveFloorplanExport] = useState<FloorplanExportScope | null>(
     null,
   )
@@ -323,7 +544,16 @@ export function SettingsPanel({
     // Materials ride along: nodes reference them by `scene:<id>` slot
     // refs, so a save without the table produces a file whose custom
     // finishes revert to defaults on the very Load Build path below.
-    const sceneData = { nodes, rootNodeIds, installedPlugins, materials }
+    // The project rides along too: a scripted object's artifacts live there, and
+    // loading the file into another project copies them over as a paste does.
+    const sceneData = {
+      nodes,
+      rootNodeIds,
+      installedPlugins,
+      materials,
+      collections,
+      projectId: useViewer.getState().projectId,
+    }
     const json = JSON.stringify(sceneData, null, 2)
     const blob = new Blob([json], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -379,7 +609,20 @@ export function SettingsPanel({
     e.target.value = ''
   }
 
-  const handleConfirmImport = (parsed: ParsedBuildJson) => {
+  const handleConfirmImport = async (file: ParsedBuildJson) => {
+    const targetProjectId = useViewer.getState().projectId
+    const artifactStore = getArtifactStore()
+    const { build: parsed, refusedIds, refusal } = await bringBuildArtifacts(file)
+    if (
+      targetProjectId !== useViewer.getState().projectId ||
+      artifactStore !== getArtifactStore()
+    )
+      return
+    if (refusal) {
+      useFloorplanMode
+        .getState()
+        .showNotice(refusedObjectsNotice(refusedIds.length, refusal, 'loaded'))
+    }
     const currentScene = useScene.getState()
     setScene(
       parsed.nodes as Parameters<typeof setScene>[0],
@@ -389,6 +632,7 @@ export function SettingsPanel({
         // pointed at a material that no longer existed — custom finishes
         // silently reverted to defaults on import.
         materials: parsed.materials,
+        collections: parsed.collections,
         installedPlugins: parsed.installedPlugins ?? currentScene.installedPlugins,
         hasExplicitPluginInstallState:
           parsed.installedPlugins !== undefined || currentScene.hasExplicitPluginInstallState,
@@ -463,13 +707,14 @@ export function SettingsPanel({
   }, [])
 
   const handleModelExport = async (format: ModelExportFormat, label: string) => {
-    if (!modelExport || activeModelExport) return
+    if (!modelExport || activeModelExport || useSendToApp.getState().step) return
 
     setActiveModelExport(format)
     setModelExportError(null)
     setModelExportWarning(null)
     try {
       const artifact = await modelExport(format, {
+        projectName,
         onlyVisible: exportOnlyVisible,
         excludedNodeTypes,
         includedPresentationIds:
@@ -492,6 +737,62 @@ export function SettingsPanel({
     }
   }
 
+  const handleSendToBlender = async () => {
+    if (!modelExport || activeModelExport || useSendToApp.getState().step) return
+
+    setSendToBlenderMessage(null)
+    setSendToBlenderStep('probing')
+    try {
+      const probe = await probeLocalApp()
+      if (probe.status === 'unreachable') {
+        setSendToBlenderMessage({
+          tone: 'error',
+          text: 'Blender isn’t listening. Open Blender with the Pascal add-on installed and enabled, then try again.',
+        })
+        return
+      }
+      if (probe.status === 'refused') {
+        setSendToBlenderMessage({
+          tone: 'error',
+          text: `Blender is open but hasn’t allowed ${window.location.origin} yet. In Blender, open the Pascal tab in the 3D viewport sidebar (N) and click Allow.`,
+        })
+        return
+      }
+
+      setSendToBlenderStep('exporting')
+      const artifact = await modelExport('glb', {
+        onlyVisible: exportOnlyVisible,
+        excludedNodeTypes,
+        includedPresentationIds: includedPresentationIds.filter((id) =>
+          exportablePresentations.some((contribution) => contribution.id === id),
+        ),
+        download: false,
+      })
+      if (!artifact) throw new Error('Model export did not produce a file')
+
+      setSendToBlenderStep('sending')
+      const queued = await sendGlbToLocalApp(probe.base, artifact.blob, {
+        name: projectName,
+        projectId,
+      })
+
+      setSendToBlenderStep('importing')
+      const done = await waitForLocalImport(probe.base, queued.id)
+      setSendToBlenderMessage({
+        tone: 'info',
+        text: done.summary ? `Sent to Blender. ${done.summary}.` : 'Sent to Blender.',
+      })
+    } catch (error) {
+      const text =
+        error instanceof LocalAppError || error instanceof Error
+          ? error.message
+          : 'Couldn’t send the scene to Blender. Try again.'
+      setSendToBlenderMessage({ tone: 'error', text })
+    } finally {
+      setSendToBlenderStep(null)
+    }
+  }
+
   const handleFloorplanExport = async (scope: FloorplanExportScope) => {
     if (activeFloorplanExport) return
 
@@ -509,374 +810,433 @@ export function SettingsPanel({
   }
 
   return (
-    <div className="subtle-scrollbar min-h-0 flex-1 space-y-6 overflow-x-hidden overflow-y-auto overscroll-contain p-3">
-      {projectId && (
-        <div className="space-y-2">
-          <label className="font-medium text-muted-foreground text-xs uppercase">Project</label>
-          <div className="font-medium text-sm">Project ID</div>
-          <div className="flex items-center gap-2">
-            <Input
-              aria-label="Project ID"
-              className="font-mono text-xs"
-              readOnly
-              value={projectId}
-            />
-            <Button
-              aria-label={projectIdCopyState === 'copied' ? 'Project ID copied' : 'Copy project ID'}
-              className="rounded-full"
-              onClick={() => void handleCopyProjectId()}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              {projectIdCopyState === 'copied' ? (
-                <Check className="size-3.5" />
-              ) : (
-                <Copy className="size-3.5" />
-              )}
-              {projectIdCopyState === 'copied'
-                ? 'Copied'
-                : projectIdCopyState === 'error'
-                  ? 'Try again'
-                  : 'Copy'}
-            </Button>
-          </div>
-        </div>
+    <div
+      className={cn(
+        'subtle-scrollbar @container min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-3',
+        className,
       )}
-
-      {/* Visibility Section (only for cloud projects) */}
-      {projectId && !isLocalProject && (
-        <div className="space-y-3">
-          <label className="font-medium text-muted-foreground text-xs uppercase">Visibility</label>
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-medium text-sm">Public</div>
-              <div className="text-muted-foreground text-xs">
-                {projectVisibility?.isPrivate ? 'Only you' : 'Anyone'} can view
-              </div>
-            </div>
-            <Switch
-              aria-label="Make project public"
-              checked={!(projectVisibility?.isPrivate ?? false)}
-              onCheckedChange={(checked) => handleVisibilityChange('isPrivate', !checked)}
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-medium text-sm">Show 3D Scans</div>
-              <div className="text-muted-foreground text-xs">Visible to public viewers</div>
-            </div>
-            <Switch
-              aria-label="Show 3D scans to public viewers"
-              checked={projectVisibility?.showScansPublic ?? true}
-              onCheckedChange={(checked) => handleVisibilityChange('showScansPublic', checked)}
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-medium text-sm">Show Floorplans</div>
-              <div className="text-muted-foreground text-xs">Visible to public viewers</div>
-            </div>
-            <Switch
-              aria-label="Show floorplans to public viewers"
-              checked={projectVisibility?.showGuidesPublic ?? true}
-              onCheckedChange={(checked) => handleVisibilityChange('showGuidesPublic', checked)}
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-medium text-sm">Shadows</div>
-              <div className="text-muted-foreground text-xs">Cast shadows from lights</div>
-            </div>
-            <Switch
-              aria-label="Enable shadows"
-              checked={shadows}
-              onCheckedChange={(checked) => useViewer.getState().setShadows(checked)}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Export Section */}
-      <div className="space-y-4">
-        <label className="font-medium text-muted-foreground text-xs uppercase">Export</label>
-
-        <div className="space-y-2">
-          <div className="font-medium text-muted-foreground text-xs">3D model</div>
-          <details
-            className="group"
-            onKeyDownCapture={(event) => {
-              // Keep Space available to the disclosure and switches, not canvas panning.
-              if (event.code === 'Space') event.stopPropagation()
-            }}
+    >
+      <div className="divide-y divide-border/60">
+        <section className="space-y-3 py-5 first:pt-0 last:pb-0">
+          <FloorSettingsSection />
+        </section>
+        {projectId && (
+          <SettingsSection
+            description="Reference this project from the API, MCP tools, or support."
+            title="Project"
           >
-            <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between rounded-md border px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring">
-              Export options
-              <ChevronDown aria-hidden="true" className="size-4 group-open:rotate-180" />
-            </summary>
-            <div className="space-y-3 pt-3">
-              <div className="flex items-center justify-between gap-4 rounded-md border p-3">
-                <div className="min-w-0">
-                  <label className="font-medium text-sm" htmlFor={visibleOnlySwitchId}>
-                    Visible nodes only
-                  </label>
-                  <div className="text-muted-foreground text-xs">
-                    Exclude hidden furniture and other hidden scene nodes
-                  </div>
-                </div>
-                <Switch
-                  aria-label="Export visible nodes only"
-                  checked={exportOnlyVisible}
-                  id={visibleOnlySwitchId}
-                  onCheckedChange={setExportOnlyVisible}
-                />
-              </div>
-
-              <fieldset className="space-y-2 rounded-md border p-3">
-                <legend className="px-1 font-medium text-sm">Include in file</legend>
-                <p className="text-muted-foreground text-xs">
-                  Choose which procedural content is baked into model files. GLB and USDZ use the
-                  textured portable path; STL and OBJ remain geometry-only.
-                </p>
-                {exportableNodeTypes.length > 0 ? (
-                  <div className="space-y-2 pt-1">
-                    {exportableNodeTypes.map(({ type, label, supportsGeometryOnly }, index) => {
-                      const switchId = `${includeNodeTypeIdPrefix}-${index}`
-                      return (
-                        <div className="flex items-center justify-between gap-4" key={type}>
-                          <label className="min-w-0 font-medium text-sm" htmlFor={switchId}>
-                            {label}
-                            {!supportsGeometryOnly && (
-                              <span className="text-muted-foreground text-xs"> (GLB/USDZ only)</span>
-                            )}
-                          </label>
-                          <Switch
-                            aria-label={`Include ${label} in model files`}
-                            checked={!excludedNodeTypes.includes(type)}
-                            id={switchId}
-                            onCheckedChange={(included) => handleNodeTypeInclusion(type, included)}
-                          />
-                        </div>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground text-xs">
-                    No optional procedural content is present.
-                  </p>
-                )}
-                <p className="text-muted-foreground text-xs">
-                  Viewer surroundings are excluded unless selected separately below.
-                </p>
-              </fieldset>
-              {exportablePresentations.length > 0 ? (
-                <fieldset className="space-y-2 rounded-md border p-3">
-                  <legend className="px-1 font-medium text-sm">Viewer surroundings</legend>
-                  <p className="text-muted-foreground text-xs">
-                    Optional static surroundings are included only in GLB and USDZ.
-                  </p>
-                  <div className="space-y-2 pt-1">
-                    {exportablePresentations.map((contribution, index) => {
-                      const switchId = `${includePresentationIdPrefix}-${index}`
-                      const label = contribution.staticExport!.label
-                      return (
-                        <div
-                          className="flex items-center justify-between gap-4"
-                          key={contribution.id}
-                        >
-                          <label className="min-w-0 font-medium text-sm" htmlFor={switchId}>
-                            {label}
-                          </label>
-                          <Switch
-                            aria-label={`Include ${label} in GLB and USDZ`}
-                            checked={includedPresentationIds.includes(contribution.id)}
-                            id={switchId}
-                            onCheckedChange={(included) =>
-                              handlePresentationInclusion(contribution.id, included)
-                            }
-                          />
-                        </div>
-                      )
-                    })}
-                  </div>
-                </fieldset>
-              ) : null}
-            </div>
-          </details>
-
-          {MODEL_EXPORT_FORMATS.map(({ format, label }) => {
-            const isActive = activeModelExport === format
-            return (
+            <div className="flex items-center gap-2">
+              <Input
+                aria-label="Project ID"
+                className="font-mono text-xs"
+                readOnly
+                value={projectId}
+              />
               <Button
-                aria-busy={isActive}
-                className="w-full justify-start gap-2"
-                disabled={activeModelExport !== null || !modelExport}
-                key={format}
-                onClick={() => void handleModelExport(format, label)}
+                aria-label={
+                  projectIdCopyState === 'copied' ? 'Project ID copied' : 'Copy project ID'
+                }
+                className="rounded-full"
+                onClick={() => void handleCopyProjectId()}
+                size="sm"
+                type="button"
                 variant="outline"
               >
-                <Download aria-hidden="true" className="size-4" />
-                {isActive ? `Exporting ${label}…` : `Export ${label}`}
+                {projectIdCopyState === 'copied' ? (
+                  <Check className="size-3.5" />
+                ) : (
+                  <Copy className="size-3.5" />
+                )}
+                {projectIdCopyState === 'copied'
+                  ? 'Copied'
+                  : projectIdCopyState === 'error'
+                    ? 'Try again'
+                    : 'Copy'}
               </Button>
-            )
-          })}
-
-          {activeModelExport ? (
-            <p className="text-muted-foreground text-xs" role="status">
-              Preparing {activeModelExport.toUpperCase()} file…
-            </p>
-          ) : null}
-          {modelExportError ? (
-            <p className="text-destructive text-xs" role="alert">
-              {modelExportError}
-            </p>
-          ) : null}
-          {modelExportWarning ? (
-            <p className="text-foreground text-xs" role="status">
-              Warning: {modelExportWarning}
-            </p>
-          ) : null}
-
-          <PrintExportButton onlyVisible={exportOnlyVisible} />
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center justify-between font-medium text-muted-foreground text-xs">
-            <span>Floor plan</span>
-            <span>{floorplanMode === 'default' ? 'Default mode' : 'Expert mode'}</span>
-          </div>
-          <Button
-            aria-busy={activeFloorplanExport === 'full'}
-            className="w-full justify-start gap-2"
-            disabled={activeFloorplanExport !== null}
-            onClick={() => void handleFloorplanExport('full')}
-            variant="outline"
-          >
-            <MapIcon className="size-4" />
-            Full floor plan
-          </Button>
-          <Button
-            aria-busy={activeFloorplanExport === 'structure'}
-            className="w-full justify-start gap-2"
-            disabled={activeFloorplanExport !== null}
-            onClick={() => void handleFloorplanExport('structure')}
-            variant="outline"
-          >
-            <MapIcon className="size-4" />
-            Structure only
-          </Button>
-          {activeFloorplanExport ? (
-            <p className="text-muted-foreground text-xs" role="status">
-              Preparing floor-plan PDF…
-            </p>
-          ) : null}
-          {floorplanExportError ? (
-            <p className="break-words text-destructive text-xs" role="alert">
-              {floorplanExportError}
-            </p>
-          ) : null}
-        </div>
-      </div>
-
-      {/* Thumbnail Section (only for cloud projects) */}
-      {projectId && !isLocalProject && (
-        <div className="space-y-2">
-          <label className="font-medium text-muted-foreground text-xs uppercase">Thumbnail</label>
-          <Button
-            className="w-full justify-start gap-2"
-            disabled={isGeneratingThumbnail}
-            onClick={handleGenerateThumbnail}
-            variant="outline"
-          >
-            <Camera className="size-4" />
-            {isGeneratingThumbnail ? 'Generating...' : 'Generate Thumbnail'}
-          </Button>
-        </div>
-      )}
-
-      {/* Save/Load Section */}
-      <div className="space-y-2">
-        <label className="font-medium text-muted-foreground text-xs uppercase">Save & Load</label>
-
-        <Button className="w-full justify-start gap-2" onClick={handleSaveBuild} variant="outline">
-          <Save className="size-4" />
-          Save Build
-        </Button>
-
-        <Button
-          className="w-full justify-start gap-2"
-          onClick={() => fileInputRef.current?.click()}
-          variant="outline"
-        >
-          <Upload className="size-4" />
-          Load Build
-        </Button>
-
-        <input
-          accept="application/json"
-          className="hidden"
-          onChange={handleFileLoad}
-          ref={fileInputRef}
-          type="file"
-        />
-
-        <LoadBuildDialog
-          onCancel={() => setPendingImport(null)}
-          onConfirm={handleConfirmImport}
-          pending={pendingImport}
-        />
-      </div>
-
-      {/* Audio Section */}
-      <div className="space-y-2">
-        <label className="font-medium text-muted-foreground text-xs uppercase">Audio</label>
-        <AudioSettingsDialog />
-      </div>
-
-      {/* Keyboard Section */}
-      <div className="space-y-2">
-        <label className="font-medium text-muted-foreground text-xs uppercase">Keyboard</label>
-        <KeyboardShortcutsDialog />
-      </div>
-
-      {/* Scene Graph */}
-      <div className="space-y-1">
-        <label className="font-medium text-muted-foreground text-xs uppercase">Scene Graph</label>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button className="h-auto justify-start p-0 text-sm" variant="link">
-              Explore scene graph
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="h-[80vh] max-w-[95vw] gap-0 overflow-hidden border-0 bg-[#1e1e1e] p-0 shadow-none sm:max-w-5xl">
-            <DialogTitle className="sr-only">Scene Graph</DialogTitle>
-            <div
-              className="flex h-full min-h-0 w-full min-w-0 *:h-full *:w-full *:overflow-y-auto"
-              onContextMenuCapture={blockSceneGraphMutations}
-              onDragStartCapture={blockSceneGraphMutations}
-              onDropCapture={blockSceneGraphMutations}
-              onKeyDownCapture={blockSceneGraphDeletion}
-            >
-              <VisualJson value={sceneGraphValue}>
-                <TreeView showCounts />
-              </VisualJson>
             </div>
-          </DialogContent>
-        </Dialog>
-      </div>
+          </SettingsSection>
+        )}
 
-      {/* Danger Zone */}
-      <div className="space-y-2">
-        <label className="font-medium text-destructive text-xs uppercase">Danger Zone</label>
+        {/* Sharing (only for cloud projects) */}
+        {projectId && !isLocalProject && (
+          <SettingsSection description="Control who can open this project." title="Sharing">
+            <SettingsSwitchRow
+              checked={!(projectVisibility?.isPrivate ?? false)}
+              description={
+                projectVisibility?.isPrivate
+                  ? 'Only you can view it.'
+                  : 'Anyone with the link can view it.'
+              }
+              label="Public project"
+              onCheckedChange={(checked) => handleVisibilityChange('isPrivate', !checked)}
+            />
+            <SettingsSwitchRow
+              checked={projectVisibility?.showScansPublic ?? true}
+              description="Visible in the public viewer."
+              label="Show 3D scans"
+              onCheckedChange={(checked) => handleVisibilityChange('showScansPublic', checked)}
+            />
+            <SettingsSwitchRow
+              checked={projectVisibility?.showGuidesPublic ?? true}
+              description="Visible in the public viewer."
+              label="Show floor plans"
+              onCheckedChange={(checked) => handleVisibilityChange('showGuidesPublic', checked)}
+            />
+          </SettingsSection>
+        )}
 
-        <Button
-          className="w-full justify-start gap-2"
-          onClick={handleResetToDefault}
-          variant="destructive"
+        <SettingsSection description="Rendering options for this editor session." title="Viewer">
+          <SettingsSwitchRow
+            checked={shadows}
+            description="Cast shadows from lights."
+            label="Shadows"
+            onCheckedChange={(checked) => useViewer.getState().setShadows(checked)}
+          />
+        </SettingsSection>
+
+        <SettingsSection description="Download the scene or hand it to another app." title="Export">
+          <div className="space-y-3">
+            <SettingsSubheading>3D model</SettingsSubheading>
+            <details
+              className="group"
+              onKeyDownCapture={(event) => {
+                // Keep Space available to the disclosure and switches, not canvas panning.
+                if (event.code === 'Space') event.stopPropagation()
+              }}
+            >
+              <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between rounded-md border px-3 font-medium text-sm focus-visible:outline-2 focus-visible:outline-ring">
+                Export options
+                <ChevronDown aria-hidden="true" className="size-4 group-open:rotate-180" />
+              </summary>
+              <div className="space-y-3 pt-3">
+                <div className="flex items-center justify-between gap-4 rounded-md border p-3">
+                  <div className="min-w-0">
+                    <label className="font-medium text-sm" htmlFor={visibleOnlySwitchId}>
+                      Visible nodes only
+                    </label>
+                    <div className="text-muted-foreground text-xs">
+                      Exclude hidden furniture and other hidden scene nodes
+                    </div>
+                  </div>
+                  <Switch
+                    aria-label="Export visible nodes only"
+                    checked={exportOnlyVisible}
+                    id={visibleOnlySwitchId}
+                    onCheckedChange={setExportOnlyVisible}
+                  />
+                </div>
+
+                <fieldset className="space-y-2 rounded-md border p-3">
+                  <legend className="px-1 font-medium text-sm">Include in file</legend>
+                  <p className="text-muted-foreground text-xs">
+                    Choose which procedural content is baked into model files. GLB and USDZ use the
+                    textured portable path; STL, OBJ and IFC remain geometry-only.
+                  </p>
+                  {exportableNodeTypes.length > 0 ? (
+                    <div className="space-y-2 pt-1">
+                      {exportableNodeTypes.map(({ type, label, supportsGeometryOnly }, index) => {
+                        const switchId = `${includeNodeTypeIdPrefix}-${index}`
+                        return (
+                          <div className="flex items-center justify-between gap-4" key={type}>
+                            <label className="min-w-0 font-medium text-sm" htmlFor={switchId}>
+                              {label}
+                              {!supportsGeometryOnly && (
+                                <span className="text-muted-foreground text-xs">
+                                  {' '}
+                                  (GLB/USDZ only)
+                                </span>
+                              )}
+                            </label>
+                            <Switch
+                              aria-label={`Include ${label} in model files`}
+                              checked={!excludedNodeTypes.includes(type)}
+                              id={switchId}
+                              onCheckedChange={(included) =>
+                                handleNodeTypeInclusion(type, included)
+                              }
+                            />
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground text-xs">
+                      No optional procedural content is present.
+                    </p>
+                  )}
+                  <p className="text-muted-foreground text-xs">
+                    Viewer surroundings are excluded unless selected separately below.
+                  </p>
+                </fieldset>
+                {exportablePresentations.length > 0 ? (
+                  <fieldset className="space-y-2 rounded-md border p-3">
+                    <legend className="px-1 font-medium text-sm">Viewer surroundings</legend>
+                    <p className="text-muted-foreground text-xs">
+                      Optional static surroundings are included only in GLB and USDZ.
+                    </p>
+                    <div className="space-y-2 pt-1">
+                      {exportablePresentations.map((contribution, index) => {
+                        const switchId = `${includePresentationIdPrefix}-${index}`
+                        const label = contribution.staticExport!.label
+                        return (
+                          <div
+                            className="flex items-center justify-between gap-4"
+                            key={contribution.id}
+                          >
+                            <label className="min-w-0 font-medium text-sm" htmlFor={switchId}>
+                              {label}
+                            </label>
+                            <Switch
+                              aria-label={`Include ${label} in GLB and USDZ`}
+                              checked={includedPresentationIds.includes(contribution.id)}
+                              id={switchId}
+                              onCheckedChange={(included) =>
+                                handlePresentationInclusion(contribution.id, included)
+                              }
+                            />
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </fieldset>
+                ) : null}
+              </div>
+            </details>
+
+            <div className="grid gap-2 @sm:grid-cols-2">
+              {MODEL_EXPORT_FORMATS.map(({ format, label }) => {
+                const isActive = activeModelExport === format
+                return (
+                  <Button
+                    aria-busy={isActive}
+                    className="w-full justify-start gap-2"
+                    disabled={
+                      activeModelExport !== null || sendToBlenderStep !== null || !modelExport
+                    }
+                    key={format}
+                    onClick={() => void handleModelExport(format, label)}
+                    variant="outline"
+                  >
+                    <Download aria-hidden="true" className="size-4" />
+                    {isActive ? `Exporting ${label}…` : `Export ${label}`}
+                  </Button>
+                )
+              })}
+            </div>
+
+            <div className="space-y-2">
+              <Button
+                aria-busy={sendToBlenderStep !== null}
+                className="w-full justify-start gap-2"
+                disabled={activeModelExport !== null || sendToBlenderStep !== null || !modelExport}
+                onClick={() => void handleSendToBlender()}
+                variant="outline"
+              >
+                <Send aria-hidden="true" className="size-4" />
+                {sendToBlenderStep
+                  ? SEND_TO_BLENDER_STEP_LABEL[sendToBlenderStep]
+                  : 'Send to Blender'}
+              </Button>
+              <p className="text-muted-foreground text-xs">
+                Needs the{' '}
+                <a
+                  className="underline underline-offset-2"
+                  href={BLENDER_ADDON_URL}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  Pascal add-on for Blender
+                </a>{' '}
+                running in an open Blender.
+              </p>
+            </div>
+            {sendToBlenderMessage ? (
+              <p
+                className={
+                  sendToBlenderMessage.tone === 'error'
+                    ? 'text-destructive text-xs'
+                    : 'text-foreground text-xs'
+                }
+                role={sendToBlenderMessage.tone === 'error' ? 'alert' : 'status'}
+              >
+                {sendToBlenderMessage.text}
+              </p>
+            ) : null}
+
+            {activeModelExport ? (
+              <p className="text-muted-foreground text-xs" role="status">
+                Preparing {activeModelExport.toUpperCase()} file…
+              </p>
+            ) : null}
+            {modelExportError ? (
+              <p className="text-destructive text-xs" role="alert">
+                {modelExportError}
+              </p>
+            ) : null}
+            {modelExportWarning ? (
+              <p className="text-foreground text-xs" role="status">
+                Warning: {modelExportWarning}
+              </p>
+            ) : null}
+
+            <div className="grid gap-2 @sm:grid-cols-2">
+              <PrintExportButton onlyVisible={exportOnlyVisible} />
+            </div>
+          </div>
+
+          <div className="space-y-3 pt-2">
+            <div className="flex items-center justify-between">
+              <SettingsSubheading>Floor plan</SettingsSubheading>
+              <span className="text-muted-foreground text-xs">
+                {floorplanMode === 'default' ? 'Default mode' : 'Expert mode'}
+              </span>
+            </div>
+            <div className="grid gap-2 @sm:grid-cols-2">
+              <Button
+                aria-busy={activeFloorplanExport === 'full'}
+                className="w-full justify-start gap-2"
+                disabled={activeFloorplanExport !== null}
+                onClick={() => void handleFloorplanExport('full')}
+                variant="outline"
+              >
+                <MapIcon className="size-4" />
+                Full floor plan
+              </Button>
+              <Button
+                aria-busy={activeFloorplanExport === 'structure'}
+                className="w-full justify-start gap-2"
+                disabled={activeFloorplanExport !== null}
+                onClick={() => void handleFloorplanExport('structure')}
+                variant="outline"
+              >
+                <MapIcon className="size-4" />
+                Structure only
+              </Button>
+            </div>
+            {activeFloorplanExport ? (
+              <p className="text-muted-foreground text-xs" role="status">
+                Preparing floor-plan PDF…
+              </p>
+            ) : null}
+            {floorplanExportError ? (
+              <p className="break-words text-destructive text-xs" role="alert">
+                {floorplanExportError}
+              </p>
+            ) : null}
+          </div>
+        </SettingsSection>
+
+        {/* Thumbnail (only for cloud projects) */}
+        {projectId && !isLocalProject && (
+          <SettingsSection
+            description="Refresh the preview shown in your project list."
+            title="Thumbnail"
+          >
+            <div className="grid gap-2 @sm:grid-cols-2">
+              <Button
+                className="w-full justify-start gap-2"
+                disabled={isGeneratingThumbnail}
+                onClick={handleGenerateThumbnail}
+                variant="outline"
+              >
+                <Camera className="size-4" />
+                {isGeneratingThumbnail ? 'Generating…' : 'Generate thumbnail'}
+              </Button>
+            </div>
+          </SettingsSection>
+        )}
+
+        <SettingsSection
+          description="Keep a JSON copy of the scene, or restore one."
+          title="Save and load"
         >
-          <Trash2 className="size-4" />
-          Clear & Start New
-        </Button>
+          <div className="grid gap-2 @sm:grid-cols-2">
+            <Button
+              className="w-full justify-start gap-2"
+              onClick={handleSaveBuild}
+              variant="outline"
+            >
+              <Save className="size-4" />
+              Save build
+            </Button>
+            <Button
+              className="w-full justify-start gap-2"
+              onClick={() => fileInputRef.current?.click()}
+              variant="outline"
+            >
+              <Upload className="size-4" />
+              Load build
+            </Button>
+          </div>
+
+          <input
+            accept="application/json"
+            className="hidden"
+            onChange={handleFileLoad}
+            ref={fileInputRef}
+            type="file"
+          />
+
+          <LoadBuildDialog
+            onCancel={() => setPendingImport(null)}
+            onConfirm={handleConfirmImport}
+            pending={pendingImport}
+          />
+        </SettingsSection>
+
+        <SettingsSection description="Sound levels and keyboard shortcuts." title="Preferences">
+          <div className="grid gap-2 @sm:grid-cols-2">
+            <AudioSettingsDialog />
+            <KeyboardShortcutsDialog />
+          </div>
+        </SettingsSection>
+
+        <SettingsSection
+          description="Inspect how nodes are nested in this scene."
+          title="Scene graph"
+        >
+          <Dialog>
+            <DialogTrigger asChild>
+              <div className="grid gap-2 @sm:grid-cols-2">
+                <Button className="w-full justify-start gap-2" variant="outline">
+                  <ListTree className="size-4" />
+                  Explore scene graph
+                </Button>
+              </div>
+            </DialogTrigger>
+            <DialogContent className="h-[80vh] max-w-[95vw] gap-0 overflow-hidden border-0 bg-[#1e1e1e] p-0 shadow-none sm:max-w-5xl">
+              <DialogTitle className="sr-only">Scene Graph</DialogTitle>
+              <div
+                className="flex h-full min-h-0 w-full min-w-0 *:h-full *:w-full *:overflow-y-auto"
+                onContextMenuCapture={blockSceneGraphMutations}
+                onDragStartCapture={blockSceneGraphMutations}
+                onDropCapture={blockSceneGraphMutations}
+                onKeyDownCapture={blockSceneGraphDeletion}
+              >
+                <VisualJson value={sceneGraphValue}>
+                  <TreeView showCounts />
+                </VisualJson>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </SettingsSection>
+
+        <SettingsSection
+          description="Removes every node from this scene. This cannot be undone."
+          title="Danger zone"
+          tone="destructive"
+        >
+          <div className="grid gap-2 @sm:grid-cols-2">
+            <Button
+              className="w-full justify-start gap-2"
+              onClick={handleResetToDefault}
+              variant="destructive"
+            >
+              <Trash2 className="size-4" />
+              Clear and start new
+            </Button>
+          </div>
+        </SettingsSection>
       </div>
     </div>
   )

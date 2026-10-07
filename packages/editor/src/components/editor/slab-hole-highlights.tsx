@@ -417,7 +417,10 @@ function SlabHoleHighlight({
     [holeIndex, metadata, slabId],
   )
 
+  // Only a release that ends a press on a hole is the hole's: any other
+  // (a handle drag let go over the hole) must reach its owner.
   const handlePointerUp = useCallback((event: ThreeEvent<PointerEvent>) => {
+    if (!restoreNodeClickSuppression) return
     releaseNodeClickSuppression()
     stopPointerPropagation(event)
   }, [])

@@ -1,0 +1,59 @@
+{
+  "sceneId": "scene-13",
+  "levelId": "level_001",
+  "rootNodeIds": ["level_001"],
+  "nodes": {
+    "wall_001": {
+      "id": "wall_001",
+      "end": [5, 0],
+      "type": "wall",
+      "start": [0, 0],
+      "object": "node",
+      "visible": true,
+      "backSide": "exterior",
+      "parentId": "level_001",
+      "frontSide": "interior"
+    },
+    "wall_002": {
+      "id": "wall_002",
+      "end": [5, 4],
+      "type": "wall",
+      "start": [5, 0],
+      "object": "node",
+      "visible": true,
+      "backSide": "exterior",
+      "parentId": "level_001",
+      "frontSide": "interior"
+    },
+    "wall_003": {
+      "id": "wall_003",
+      "end": [0, 4],
+      "type": "wall",
+      "start": [5, 4],
+      "object": "node",
+      "visible": true,
+      "backSide": "exterior",
+      "parentId": "level_001",
+      "frontSide": "interior"
+    },
+    "wall_004": {
+      "id": "wall_004",
+      "end": [0, 0],
+      "type": "wall",
+      "start": [0, 4],
+      "object": "node",
+      "visible": true,
+      "backSide": "exterior",
+      "parentId": "level_001",
+      "frontSide": "interior"
+    },
+    "level_001": {
+      "id": "level_001",
+      "type": "level",
+      "object": "node",
+      "visible": true,
+      "parentId": null,
+      "level": 0
+    }
+  }
+}

@@ -21,6 +21,7 @@ import {
   type WindowEvent,
   WindowNode,
 } from '@pascal-app/core'
+import { windowTakesStyle } from '@pascal-app/core/building'
 import {
   calculateItemRotation,
   clearPlacementSurface,
@@ -48,6 +49,10 @@ import {
   resolveDormerWindowTarget,
 } from '../shared/dormer-wall-opening-placement'
 import {
+  shouldFollowOpeningGrid,
+  shouldHandleOpeningHostLeave,
+} from '../shared/opening-grid-follow'
+import {
   clearOpeningGuides3D,
   publishOpeningGuidesForWallEvent,
   resolveSillSnap,
@@ -58,11 +63,13 @@ import {
   resolveRoofWallOpeningTarget,
   worldToSelectedBuildingLocal,
 } from '../shared/roof-wall-opening-placement'
+import { wallEventFromGrid } from '../shared/wall-event-from-grid'
 import {
   collectWallOpeningAlignmentCandidates,
   resolveWallSlideAlignment,
 } from '../shared/wall-opening-alignment'
 import { WindowFloorProjection } from './floor-projection'
+import { placedWindowFields, useWindowPlacement } from './placement'
 import WindowPreview from './preview'
 import {
   clampToWall,
@@ -120,15 +127,20 @@ const WindowTool: React.FC = () => {
     side: WindowNode['side']
   } | null>(null)
 
-  // Ghost preview node — zeroed transform + the live facing side (rebuilds on R).
+  const placedType = useWindowPlacement((state) => state.type)
+  const placedStyle = useWindowPlacement((state) => state.style)
+  // Ghost preview node — zeroed transform + the live facing side (rebuilds on R) and the
+  // chips' type and style (rebuilds on O / L).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: placedWindowFields reads the chips' store
   const ghostStub = useMemo(
     () =>
       WindowNode.parse({
+        ...placedWindowFields(),
         position: [0, 0, 0],
         rotation: [0, 0, 0],
         side: fallbackPose?.side ?? 'front',
       }),
-    [fallbackPose?.side],
+    [fallbackPose?.side, placedType, placedStyle],
   )
   // The frame depth is a fixed parse default (the `side` flip doesn't change
   // it); a ref lets the facing-pose publish inside the setup effect read it
@@ -139,11 +151,13 @@ const WindowTool: React.FC = () => {
     useScene.temporal.getState().pause()
 
     const ownedPreviewIds = new Set<string>()
-    const fallbackPreview = WindowNode.parse({
-      position: [0, 0, 0],
-      rotation: [0, 0, 0],
-      side: 'front',
-    })
+    const fallbackPreview = () =>
+      WindowNode.parse({
+        ...placedWindowFields(),
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        side: 'front',
+      })
     const fallbackWallId = WallNodeSchema.parse({
       end: [1, 0],
       start: [0, 0],
@@ -196,6 +210,7 @@ const WindowTool: React.FC = () => {
         wall.curveOffset ?? 0,
         wall.thickness,
         wall.supportSlabId,
+        wall.justification,
       )
 
     const markHostDirty = (hostId: string) => {
@@ -270,7 +285,8 @@ const WindowTool: React.FC = () => {
         floorY,
         side: sideFlip ? 'back' : 'front',
       })
-      const halfWidth = fallbackPreview.width / 2 + 0.5
+      const preview = fallbackPreview()
+      const halfWidth = preview.width / 2 + 0.5
       const wall = WallNodeSchema.parse({
         end: [position[0] + halfWidth, position[2]],
         id: fallbackWallId,
@@ -278,10 +294,10 @@ const WindowTool: React.FC = () => {
         thickness: 0.1,
       })
       const ghost = WindowNode.parse({
-        ...fallbackPreview,
+        ...preview,
         metadata: { isTransient: true },
         parentId: wall.id,
-        position: [halfWidth, FALLBACK_SILL_LIFT + fallbackPreview.height / 2, 0],
+        position: [halfWidth, FALLBACK_SILL_LIFT + preview.height / 2, 0],
         rotation: [0, sideFlip ? Math.PI : 0, 0],
         side: sideFlip ? 'back' : 'front',
         wallId: wall.id,
@@ -322,19 +338,7 @@ const WindowTool: React.FC = () => {
       const itemRotation = sideFlip ? Math.PI : 0
 
       if (draftRef.current && draftRef.current.parentId !== event.node.id) destroyDraft()
-      if (!draftRef.current) {
-        const node = WindowNode.parse({
-          position: target.position,
-          rotation: [0, itemRotation, 0],
-          side,
-          parentId: event.node.id,
-          dormerId: event.node.id,
-          dormerFace: target.face,
-          metadata: { isTransient: true },
-        })
-        useScene.getState().createNode(node, event.node.id as AnyNodeId)
-        draftRef.current = node
-      } else {
+      if (draftRef.current) {
         useLiveNodeOverrides.getState().set(draftRef.current.id, {
           position: target.position,
           rotation: [0, itemRotation, 0],
@@ -346,6 +350,19 @@ const WindowTool: React.FC = () => {
           roofSegmentId: undefined,
           roofFace: undefined,
         })
+      } else {
+        const node = WindowNode.parse({
+          ...placedWindowFields(),
+          position: target.position,
+          rotation: [0, itemRotation, 0],
+          side,
+          parentId: event.node.id,
+          dormerId: event.node.id,
+          dormerFace: target.face,
+          metadata: { isTransient: true },
+        })
+        useScene.getState().createNode(node, event.node.id as AnyNodeId)
+        draftRef.current = node
       }
 
       publishDraftPreview(event.node)
@@ -453,6 +470,7 @@ const WindowTool: React.FC = () => {
 
       if (!draftRef.current) {
         const node = WindowNode.parse({
+          ...placedWindowFields(),
           position: [0, DEFAULT_SILL_CENTER_Y, 0],
           rotation: [0, itemRotation, 0],
           side,
@@ -722,7 +740,15 @@ const WindowTool: React.FC = () => {
       event.stopPropagation()
     }
 
-    const onWallLeave = () => {
+    // XR selectend produces a grid click without replaying the wall mesh's
+    // R3F pointer-up event. Use the latest valid wall hover for that release.
+    const onXRGridClick = (event: GridEvent) => {
+      if (event.nativeEvent?.pointerType !== 'xr' || !lastWallEvent) return
+      onWallClick(lastWallEvent)
+    }
+
+    const onWallLeave = (event: WallEvent) => {
+      if (!shouldHandleOpeningHostLeave(event.nativeEvent)) return
       if (hostKind !== 'wall') return
       lastWallEvent = null
       destroyDraft()
@@ -740,7 +766,25 @@ const WindowTool: React.FC = () => {
       // timeStamp) — it owns the frame and has snapped the draft, so skip the
       // floor follow this tick.
       const ts = event.nativeEvent?.timeStamp ?? -1
-      if (ts === lastMeshEventTime) return
+      if (
+        !shouldFollowOpeningGrid({
+          eventTime: ts,
+          hasActiveHost: hostKind !== null,
+          lastHostEventTime: lastMeshEventTime,
+          pointerType: event.nativeEvent?.pointerType,
+        })
+      )
+        return
+      const wallEvent = wallEventFromGrid(
+        event,
+        activeLevelId,
+        useScene.getState().nodes,
+        sceneRegistry.nodes,
+      )
+      if (wallEvent) {
+        onWallHover(wallEvent)
+        return
+      }
       // Fresh floor-only frame: the cursor is off any wall/roof. Drop any draft
       // and free-follow the cursor with the invalid (unplaceable) ghost.
       hostKind = null
@@ -748,6 +792,17 @@ const WindowTool: React.FC = () => {
       const [x, y, z] = event.localPosition
       destroyDraft()
       showGhostAt([x, y + FALLBACK_HEIGHT / 2 + FALLBACK_SILL_LIFT, z], y)
+    }
+
+    const onGridPointerUp = (event: GridEvent) => {
+      if (isCameraDragging() || !draftRef.current) return
+      const wallEvent = wallEventFromGrid(
+        event,
+        activeLevelId,
+        useScene.getState().nodes,
+        sceneRegistry.nodes,
+      )
+      if (wallEvent) onWallClick(wallEvent)
     }
 
     // ── Dormer wall faces ──────────────────────────────────────────
@@ -878,6 +933,7 @@ const WindowTool: React.FC = () => {
         })
       } else {
         const node = WindowNode.parse({
+          ...placedWindowFields(),
           position,
           rotation: [0, 0, 0],
           side: 'front',
@@ -977,11 +1033,21 @@ const WindowTool: React.FC = () => {
     // guard dropped R off-wall / before the first hover). Then re-renders the
     // current preview so the flip shows live and matches commit.
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'r' && e.key !== 'R') return
+      const key = e.key.toLowerCase()
+      if (key !== 'r' && key !== 'o' && key !== 'l') return
+      if (key === 'l' && !windowTakesStyle(useWindowPlacement.getState().type)) return
       if (e.repeat) return
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      if (key !== 'r' && (e.metaKey || e.ctrlKey || e.altKey)) return
       e.preventDefault()
+      if (key !== 'r') {
+        // O / L cycle the chips; the store subscription re-previews.
+        if (key === 'o') useWindowPlacement.getState().cycleType()
+        else useWindowPlacement.getState().cycleStyle()
+        triggerSFX('sfx:item-rotate')
+        return
+      }
       sideFlip = !sideFlip
       triggerSFX('sfx:item-rotate')
       if (lastWallEvent) {
@@ -997,6 +1063,7 @@ const WindowTool: React.FC = () => {
     emitter.on('wall:enter', onWallHover)
     emitter.on('wall:move', onWallHover)
     emitter.on('wall:click', onWallClick)
+    emitter.on('grid:click', onXRGridClick)
     emitter.on('wall:leave', onWallLeave)
     emitter.on('roof:enter', onRoofHover)
     emitter.on('roof:move', onRoofHover)
@@ -1011,8 +1078,23 @@ const WindowTool: React.FC = () => {
     emitter.on('window:click', onDormerWindowClick)
     emitter.on('window:leave', onDormerWindowLeave)
     emitter.on('grid:move', onGridFreeFollow)
+    emitter.on('grid:pointerup', onGridPointerUp)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('keydown', onKeyDown)
+    // A chip changed (key or click): the draft takes the new type and style, then re-previews.
+    const unsubscribePlacement = useWindowPlacement.subscribe(() => {
+      const draft = draftRef.current
+      if (draft) {
+        useScene.getState().updateNode(draft.id, placedWindowFields())
+        const live = useScene.getState().nodes[draft.id as AnyNodeId]
+        if (live?.type === 'window') draftRef.current = live
+      }
+      const parent = draft?.parentId ? useScene.getState().nodes[draft.parentId as AnyNodeId] : null
+      if (lastWallEvent) onWallHover(lastWallEvent)
+      else if (lastDormerEvent) onDormerHover(lastDormerEvent)
+      else if (parent) publishDraftPreview(parent)
+      else if (lastFloorPoint) showGhostAt(lastFloorPoint.pos, lastFloorPoint.floorY)
+    })
     // Placement tracks the cursor through wall events; keep walls hidden by
     // the wall-mode pass (X-ray 'down' mode) pointer-targetable while the
     // tool is active so a new window still snaps onto them (see the wall
@@ -1030,6 +1112,7 @@ const WindowTool: React.FC = () => {
       emitter.off('wall:enter', onWallHover)
       emitter.off('wall:move', onWallHover)
       emitter.off('wall:click', onWallClick)
+      emitter.off('grid:click', onXRGridClick)
       emitter.off('wall:leave', onWallLeave)
       emitter.off('roof:enter', onRoofHover)
       emitter.off('roof:move', onRoofHover)
@@ -1044,8 +1127,10 @@ const WindowTool: React.FC = () => {
       emitter.off('window:click', onDormerWindowClick)
       emitter.off('window:leave', onDormerWindowLeave)
       emitter.off('grid:move', onGridFreeFollow)
+      emitter.off('grid:pointerup', onGridPointerUp)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
+      unsubscribePlacement()
     }
   }, [activeLevelId, isCameraDragging, selectNode])
 

@@ -35,6 +35,7 @@ export const scanDefinition: NodeDefinition<typeof ScanNode> = {
 
   parametrics: scanParametrics,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

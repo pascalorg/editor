@@ -175,6 +175,18 @@ colors; dollhouse enables front-face rendering for surface previews and room mod
 inward-facing room surfaces from outside. It changes per-instance materials, not geometry or
 loader-cached materials. Omitting these options preserves the existing presentation.
 
+## Scene Snapshots
+
+`createSnapshotPipeline` renders offscreen snapshots with the scene theme's backdrop by default.
+Inside a `Viewer`, pass the source returned by `useSceneAtmosphere()` as `atmosphere` to capture
+the active presentation's sky instead. Recreate the pipeline when that source changes; updates
+to its existing uniforms do not require rebuilding it.
+
+Use `applyEnvironment({ ..., transparent: true })` to retain scene alpha without compositing a
+backdrop. The snapshot scene pass owns its transparent clear so intermediate post-processing
+passes cannot turn empty sky into opaque pixels. Dispose the pipeline when it is replaced or
+no longer needed.
+
 ## Viewer State
 
 ```typescript

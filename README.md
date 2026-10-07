@@ -12,6 +12,35 @@ WebGPU. Run it in the browser or from the CLI, and connect AI agents through MCP
 
 https://github.com/user-attachments/assets/8b50e7cf-cebe-4579-9cf3-8786b35f7b6b
 
+## A first look at Pascal Next
+
+[Explore the live demo](https://editor.pascal.app/next) — a real home reconstructed
+in detail, from its rooms and finishes to the structure and systems behind the walls.
+This hosted preview explores the direction of the next Pascal editor; the experience
+shown here is not yet part of the open-source editor release.
+
+| Exploded view — see how the home fits together | Cut view — slice through the building |
+| --- | --- |
+| [![Roof lifted above the reconstructed home](docs/media/next-demo/exploded.gif)](https://editor.pascal.app/next) | [![A section cut reveals the roof framing and interior](docs/media/next-demo/cutview.gif)](https://editor.pascal.app/next) |
+| **X-ray — reveal the modeled systems** | **Walkthrough — step inside at eye level** |
+| [![Building systems isolated with the walls hidden](docs/media/next-demo/xray.gif)](https://editor.pascal.app/next) | [![Walking through the home toward the pool terrace](docs/media/next-demo/walkthrough.gif)](https://editor.pascal.app/next) |
+| **Interactions — open doors and explore** | **Environment — change the light and atmosphere** |
+| [![Interacting with doors in the reconstructed home](docs/media/next-demo/interactions.gif)](https://editor.pascal.app/next) | [![Changing the lighting around the reconstructed home](docs/media/next-demo/environment.gif)](https://editor.pascal.app/next) |
+
+We are exploring what this could make possible for facility management, home services,
+architecture, home building, and infrastructure.
+[Join the discussion on X](https://x.com/pascal_app/status/2102097655031558496)
+and tell us where you would use it.
+
+### Make something with these videos
+
+Making a video, tutorial, article, or social post about Pascal? You are welcome to
+use and edit this footage, including in monetized content, under
+[CC BY 4.0](docs/media/next-demo/LICENSE.md). Credit Pascal, link the license,
+and note your edits; no separate permission is needed.
+
+[Download the six original videos and see the creator guide](docs/media/next-demo/README.md).
+
 ## Run the Editor Locally
 
 Node.js 22.13 or newer can create a persistent local Pascal installation without
@@ -26,42 +55,10 @@ collision-free loopback ports, and keeps projects in `~/.pascal/data/pascal.db`.
 package holds the CLI and that MCP service; the web editor runtime is downloaded once per
 version on the first command that starts the editor and verified against a digest published
 inside the package. Configure an agent to launch `pascal mcp connect`, which needs neither
-the editor process nor that download. See [Run Pascal locally](https://editor.pascal.app/docs/developers/local-editor)
+the editor process nor that download. Install the `pascal` command with
+`npm install --global @pascal-app/cli`. See [Run Pascal locally](https://editor.pascal.app/docs/developers/local-editor)
 for pnpm/Bun commands, project management, MCP setup, updates, storage paths, and
-troubleshooting. The npm release is the older runtime described below; use the verified
-GitHub preview when a task needs the new read-only furniture candidate check.
-
-## Verified CLI preview
-
-The npm `beta` tag currently resolves to `@pascal-app/cli@1.0.0-beta.1`, which predates the read-only furniture candidate input and hosted agent claim/status commands in this repository. To use those capabilities before the next npm release, install the verified GitHub prerelease built from commit `5dabbc3b56109c9f79dc8a378443a4c520d9ee0a`:
-
-```bash
-PASCAL_PREVIEW_VERSION='1.0.0-beta.2.status.0'
-PASCAL_PREVIEW_PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}/pascal-preview"
-PASCAL_PREVIEW_DOWNLOAD="$(mktemp -d)"
-cd "$PASCAL_PREVIEW_DOWNLOAD"
-
-curl --fail --location --remote-name \
-  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.2-status.0/pascal-app-cli-${PASCAL_PREVIEW_VERSION}.tgz"
-curl --fail --location --remote-name \
-  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.2-status.0/SHA256SUMS.txt"
-
-# macOS
-shasum -a 256 -c SHA256SUMS.txt
-# Linux: use `sha256sum -c SHA256SUMS.txt` instead.
-
-npm install --global --prefix "$PASCAL_PREVIEW_PREFIX" --ignore-scripts \
-  "./pascal-app-cli-${PASCAL_PREVIEW_VERSION}.tgz"
-export PATH="$PASCAL_PREVIEW_PREFIX/bin:$PATH"
-pascal --version
-pascal update --version "$PASCAL_PREVIEW_VERSION"
-pascal editor --no-open
-# For an existing hosted autonomous-agent key:
-PASCAL_API_KEY='sk_live_...' pascal agent claim
-PASCAL_API_KEY='sk_live_...' pascal agent status --json
-```
-
-The expected archive SHA-256 is `15628baeeb174fb7786a1643db08f0554bf6d18afaaa3979f01922c5cd40019a`. The same-version `update` command installs and activates this CLI's bundled runtime, restarting an older running service when necessary. Keep an existing `PASCAL_HOME` unchanged so stored projects remain in the same data directory; `pascal editor` alone reuses any healthy service, including an older one. Keep the preview prefix on the agent host's `PATH` before using the Claude plugin-provided connector, running `pascal mcp setup claude` or `pascal mcp setup codex` for another installation path, or configuring `pascal mcp connect` manually. `pascal agent claim` opens a prefilled 15-minute human handoff; `pascal agent status` verifies the key and reports the bounded claim state. Neither command stores or prints the hosted key. If you assign `PASCAL_API_KEY` in a shell command, avoid or remove that command from shell history. This GitHub prerelease is not an npm version.
+troubleshooting.
 
 Use one active agent client per local CLI service. The standalone local HTTP runtime shares active scene state between clients; use separate `PASCAL_HOME` directories and service processes when independent concurrent work is required.
 
@@ -528,14 +525,14 @@ turbo build --filter=@pascal-app/core
 
 ### Publishing Packages
 
-```bash
-# Build packages
-turbo build --filter=@pascal-app/core --filter=@pascal-app/viewer
-
-# Publish to npm
-npm publish --workspace=@pascal-app/core --access public
-npm publish --workspace=@pascal-app/viewer --access public
-```
+Releases run from `.github/workflows/release.yml` (`workflow_dispatch`, with
+`bump` and `dry-run` inputs). Every package shares one version: the workflow
+bumps all seven, rewrites the internal `@pascal-app/*` ranges, builds, publishes
+in dependency order (`core` → `viewer` → `editor` → `nodes` → `mcp` →
+`ifc-converter` → `cli`), then commits the release and pushes one tag per
+package. A dry run validates the builds without touching the registry.
+[Releasing to npm](wiki/npm-release.md) covers authentication, recovering a
+partial run, publishing by hand and the follow-ups.
 
 ---
 

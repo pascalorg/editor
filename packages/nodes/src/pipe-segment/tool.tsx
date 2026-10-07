@@ -63,6 +63,9 @@ function getConnectionPorts(
 
 const PipeSegmentTool = () => {
   const { activeLevelId, sceneApi, unit } = useRegistryToolContext()
+  const toolDefaults = useEditor((s) => s.toolDefaults['pipe-segment']) as
+    | Partial<PipeSegmentNode>
+    | undefined
   const continuationSeedRef = useRef(currentPipeContinuationSeed())
   const continuationSeed = continuationSeedRef.current
   const hangerDefaults = useEditor((state) => state.toolDefaults['pipe-segment'])
@@ -87,16 +90,18 @@ const PipeSegmentTool = () => {
     system: PipeSegmentNode['system']
   }
   const [system, setSystem] = useState<'waste' | 'vent'>(
-    continuationSeed?.pipe.system ?? defaults.system,
+    continuationSeed?.pipe.system ?? toolDefaults?.system ?? defaults.system,
   )
   const [sloped, setSloped] = useState(false)
   const slopePercent = 100 / 48
   const slopeDirection = 1
   const gradeRef = useRef(slopePercent / 100)
   gradeRef.current = (slopeDirection * slopePercent) / 100
-  const [diameter, setDiameter] = useState(continuationSeed?.pipe.diameter ?? defaults.diameter)
+  const [diameter, setDiameter] = useState(
+    continuationSeed?.pipe.diameter ?? toolDefaults?.diameter ?? defaults.diameter,
+  )
   const [pipeMaterial, setPipeMaterial] = useState<PipeSegmentNode['pipeMaterial']>(
-    continuationSeed?.pipe.pipeMaterial ?? defaults.pipeMaterial,
+    continuationSeed?.pipe.pipeMaterial ?? toolDefaults?.pipeMaterial ?? defaults.pipeMaterial,
   )
   const systemRef = useRef(system)
   systemRef.current = system
@@ -112,6 +117,13 @@ const PipeSegmentTool = () => {
     mode.setEnabled('pipe-segment', initialAutoHangersRef.current)
     return () => mode.setEnabled('pipe-segment', false)
   }, [])
+
+  useEffect(() => {
+    if (!toolDefaults) return
+    if (toolDefaults.system) setSystem(toolDefaults.system)
+    if (typeof toolDefaults.diameter === 'number') setDiameter(toolDefaults.diameter)
+    if (toolDefaults.pipeMaterial) setPipeMaterial(toolDefaults.pipeMaterial)
+  }, [toolDefaults])
 
   const commitSegment = ({
     start: rawStart,

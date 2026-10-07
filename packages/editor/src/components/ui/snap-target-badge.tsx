@@ -1,4 +1,5 @@
 import type { AnyNode, AssetInput } from '@pascal-app/core'
+import { isProceduralItem } from '@pascal-app/core/procedural-items'
 import type { ReactNode } from 'react'
 import { cn } from '../../lib/utils'
 
@@ -35,6 +36,7 @@ export function resolveAssetSnapTarget(attachTo: AssetInput['attachTo']): SnapTa
 
 export function resolveNodeSnapTarget(node: AnyNode | null | undefined): SnapTarget | null {
   if (!node) return null
+  if (isProceduralItem(node)) return resolveAssetSnapTarget(node.recipe.mounting?.attachTo)
   if ('roofSegmentId' in node && typeof node.roofSegmentId === 'string') return 'roof'
   if (node.type === 'downspout') return 'roof'
   if (node.type === 'door' || node.type === 'window') return 'wall'

@@ -15,6 +15,7 @@ import { pipeFittingDefinition } from '../pipe-fitting/definition'
 import { getPipeFittingPorts } from '../pipe-fitting/ports'
 import { pipeSegmentDefinition } from '../pipe-segment/definition'
 import { PipeSegmentNode } from '../pipe-segment/schema'
+import { createDuctRunEndCap, createPipeRunEndCap } from './automatic-run-end-cap'
 
 type RafFn = (callback: (time: number) => void) => number
 ;(globalThis as unknown as { requestAnimationFrame?: RafFn }).requestAnimationFrame ??= (
@@ -109,6 +110,62 @@ function expectRunStartsOnPorts(
 }
 
 describe('fitting cleanup when a connected run is deleted', () => {
+  test('deleting a duct removes its automatic end cap but keeps a manual cap', () => {
+    withDistributionDefinitions(() => {
+      const duct = DuctSegmentNode.parse({
+        ...ductSegmentDefinition.defaults(),
+        id: 'duct-segment_end-cap-delete',
+        path: [
+          [0, 1, 0],
+          [3, 1, 0],
+        ],
+      })
+      const automaticCap = createDuctRunEndCap(duct)!
+      const manualCap = DuctFittingNode.parse({
+        ...ductFittingDefinition.defaults(),
+        id: 'duct-fitting_manual-end-cap',
+        fittingType: 'end-cap',
+      })
+      useScene.setState({
+        nodes: {
+          [duct.id]: duct,
+          [automaticCap.id]: automaticCap,
+          [manualCap.id]: manualCap,
+        },
+        rootNodeIds: [duct.id, automaticCap.id, manualCap.id],
+        readOnly: false,
+      } as never)
+
+      useScene.getState().deleteNode(duct.id)
+
+      expect(useScene.getState().nodes[automaticCap.id]).toBeUndefined()
+      expect(useScene.getState().nodes[manualCap.id]).toBeDefined()
+    })
+  })
+
+  test('deleting a pipe removes its automatic end cap', () => {
+    withDistributionDefinitions(() => {
+      const pipe = PipeSegmentNode.parse({
+        ...pipeSegmentDefinition.defaults(),
+        id: 'pipe-segment_end-cap-delete',
+        path: [
+          [0, 1, 0],
+          [3, 1, 0],
+        ],
+      })
+      const automaticCap = createPipeRunEndCap(pipe)!
+      useScene.setState({
+        nodes: { [pipe.id]: pipe, [automaticCap.id]: automaticCap },
+        rootNodeIds: [pipe.id, automaticCap.id],
+        readOnly: false,
+      } as never)
+
+      useScene.getState().deleteNode(pipe.id)
+
+      expect(useScene.getState().nodes[automaticCap.id]).toBeUndefined()
+    })
+  })
+
   test('downgrades a duct cross to a tee and keeps every surviving collar mated', () => {
     withDistributionDefinitions(() => {
       const fitting = DuctFittingNode.parse({

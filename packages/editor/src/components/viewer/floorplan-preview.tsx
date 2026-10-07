@@ -6,6 +6,7 @@ import {
   type FloorplanGeometry,
   type FloorplanPalette,
   type GeometryContext,
+  getLevelDisplayName,
   isNodeKindEnabled,
   nodeRegistry,
   useScene,
@@ -62,6 +63,7 @@ import {
   rotateFloorplanPoint,
   visibleFloorplanViewWidth,
 } from './floorplan-preview-navigation'
+import { isVisibleInFloorplan } from './floorplan-preview-visibility'
 
 const READ_ONLY_PALETTE: FloorplanPalette = {
   selectedStroke: '#4f46e5',
@@ -142,12 +144,10 @@ function boundsToViewBox(bounds: FloorplanBounds): FloorplanViewBox {
 }
 
 function levelLabel(level: AnyNode): string {
-  const named = (level as { name?: string }).name?.trim()
-  if (named) return named
-  const ordinal = (level as { level?: number }).level ?? 0
-  if (ordinal === 0) return 'Ground floor'
-  if (ordinal < 0) return `Basement ${Math.abs(ordinal)}`
-  return `Level ${ordinal}`
+  return getLevelDisplayName({
+    name: (level as { name?: string }).name,
+    level: (level as { level?: number }).level ?? 0,
+  })
 }
 
 function collectLevelTree(root: AnyNode, nodes: Record<string, AnyNode>): AnyNode[] {
@@ -191,18 +191,6 @@ export function normalizeFloorplanPreviewNodes(
     }
   }
   return normalized
-}
-
-function isVisibleInFloorplan(node: AnyNode, nodes: Record<string, AnyNode>): boolean {
-  const seen = new Set<string>()
-  let current: AnyNode | undefined = node
-  while (current) {
-    if (seen.has(current.id)) return true
-    seen.add(current.id)
-    if (current.visible === false) return false
-    current = current.parentId ? nodes[current.parentId] : undefined
-  }
-  return true
 }
 
 function buildFloorplanGeometries(

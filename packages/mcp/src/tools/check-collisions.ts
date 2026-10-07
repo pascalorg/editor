@@ -1,11 +1,14 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import {
+  findItemItemCollisions,
+  inspectItemPlanFootprint,
+  resolveNodeLevelId,
+} from '@pascal-app/core/agent-operations'
 import { ItemNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
-import { inspectItemPlanFootprint, resolveNodeLevelId } from './door-clearance'
 import { ErrorCode, throwMcpError } from './errors'
-import { findItemItemCollisions } from './layout-clearance'
 import { measurement } from './measurement'
 import { computeGraphHash } from './scene-lifecycle/metadata'
 import { NodeIdSchema } from './schemas'

@@ -1,8 +1,9 @@
 'use client'
 
 import {
+  type AnyNodeId,
   deriveZoneQuantityReport,
-  resolveAutoZonePolygon,
+  type UnitNode,
   useLiveNodeOverrides,
   useScene,
   type ZoneNode,
@@ -12,13 +13,13 @@ import {
   formatAreaLabel,
   formatLinearMeasurement,
   formatVolumeLabel,
-  MetricControl,
   PanelSection,
-  ToggleControl,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { PanelSelect } from '../shared/panel-fields'
+import { buildingUnitsForZone } from './unit-membership'
 
 type Point2D = readonly [number, number]
 
@@ -155,163 +156,41 @@ function QuantityRow({
   )
 }
 
-function RoomTextField({
-  label,
-  onCommit,
-  value,
-}: {
-  label: string
-  onCommit: (value: string) => void
-  value: string
-}) {
-  const [draft, setDraft] = useState(value)
-  const cancelRef = useRef(false)
+function ZoneUnitPanel({ zone }: { zone: ZoneNode }) {
+  const units = useScene(useShallow((state) => buildingUnitsForZone(zone, (id) => state.nodes[id])))
+  if (units.length === 0) return null
 
-  useEffect(() => setDraft(value), [value])
+  const current = units.find((unit) => unit.members.includes(zone.id))
 
-  const commit = () => {
-    if (cancelRef.current) {
-      cancelRef.current = false
-      setDraft(value)
-      return
+  const handleChange = (nextId: string) => {
+    const { nodes, updateNodes } = useScene.getState()
+    const updates: { id: AnyNodeId; data: Partial<UnitNode> }[] = []
+    for (const unit of Object.values(nodes)) {
+      if (unit.type !== 'unit') continue
+      const isMember = unit.members.includes(zone.id)
+      if (unit.id === nextId && !isMember) {
+        updates.push({ id: unit.id, data: { members: [...unit.members, zone.id] } })
+      } else if (unit.id !== nextId && isMember) {
+        updates.push({
+          id: unit.id,
+          data: { members: unit.members.filter((id) => id !== zone.id) },
+        })
+      }
     }
-    const next = draft.trim()
-    if (next !== value) onCommit(next)
-    else setDraft(value)
+    if (updates.length > 0) updateNodes(updates)
   }
 
   return (
-    <label className="flex h-10 items-center gap-3 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm">
-      <span className="shrink-0 text-muted-foreground">{label}</span>
-      <input
-        className="min-w-0 flex-1 bg-transparent text-right text-foreground outline-none selection:bg-primary/30"
-        onBlur={commit}
-        onChange={(event) => setDraft(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') event.currentTarget.blur()
-          if (event.key === 'Escape') {
-            cancelRef.current = true
-            event.currentTarget.blur()
-          }
-        }}
-        type="text"
-        value={draft}
+    <PanelSection title="Unit">
+      <PanelSelect
+        label="Unit"
+        onChange={handleChange}
+        options={[
+          { label: 'None', value: '' },
+          ...units.map((unit) => ({ label: unit.name || 'Unit', value: unit.id })),
+        ]}
+        value={current?.id ?? ''}
       />
-    </label>
-  )
-}
-
-function RoomSelect({
-  label,
-  onChange,
-  options,
-  value,
-}: {
-  label: string
-  onChange: (value: string) => void
-  options: ReadonlyArray<{ label: string; value: string }>
-  value: string
-}) {
-  return (
-    <label className="flex h-10 items-center justify-between gap-3 rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <select
-        className="min-w-0 rounded-md border border-border/50 bg-[#232325] px-2 py-1 text-foreground text-xs outline-none"
-        onChange={(event) => onChange(event.target.value)}
-        value={value}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  )
-}
-
-function RoomDocumentationPanel({ zone }: { zone: ZoneNode }) {
-  const updateNode = useScene((state) => state.updateNode)
-  const update = (patch: Partial<ZoneNode>) => updateNode(zone.id, patch)
-  const isRoom = zone.spaceRole === 'room'
-
-  return (
-    <PanelSection title="Room documentation">
-      <ToggleControl
-        checked={isRoom}
-        label="Architectural room"
-        onChange={(checked) => update({ spaceRole: checked ? 'room' : 'generic' })}
-      />
-      {isRoom ? (
-        <>
-          <RoomTextField
-            label="Room name"
-            onCommit={(name) => update({ name })}
-            value={zone.name}
-          />
-          <RoomTextField
-            label="Room number"
-            onCommit={(roomNumber) => update({ roomNumber })}
-            value={zone.roomNumber}
-          />
-          <RoomSelect
-            label="Enclosure"
-            onChange={(enclosureStatus) =>
-              update({ enclosureStatus: enclosureStatus as ZoneNode['enclosureStatus'] })
-            }
-            options={[
-              { label: 'Auto-detect', value: 'auto' },
-              { label: 'Enclosed', value: 'enclosed' },
-              { label: 'Open', value: 'open' },
-            ]}
-            value={zone.enclosureStatus}
-          />
-          <RoomTextField
-            label="Occupancy / use"
-            onCommit={(occupancy) => update({ occupancy })}
-            value={zone.occupancy}
-          />
-          <RoomTextField
-            label="Floor finish"
-            onCommit={(floorFinish) => update({ floorFinish })}
-            value={zone.floorFinish}
-          />
-          <RoomTextField
-            label="Wall finish"
-            onCommit={(wallFinish) => update({ wallFinish })}
-            value={zone.wallFinish}
-          />
-          <RoomTextField
-            label="Ceiling finish"
-            onCommit={(ceilingFinish) => update({ ceilingFinish })}
-            value={zone.ceilingFinish}
-          />
-          <MetricControl
-            label="Ceiling height"
-            max={20}
-            min={0.1}
-            onChange={(ceilingHeight) => update({ ceilingHeight })}
-            precision={2}
-            step={0.05}
-            unit="m"
-            value={zone.ceilingHeight}
-          />
-          <RoomSelect
-            label="Clear dimensions"
-            onChange={(clearDimensionPolicy) =>
-              update({
-                clearDimensionPolicy: clearDimensionPolicy as ZoneNode['clearDimensionPolicy'],
-              })
-            }
-            options={[
-              { label: 'None', value: 'none' },
-              { label: 'Inside faces', value: 'inside-faces' },
-              { label: 'Finish faces', value: 'finish-faces' },
-            ]}
-            value={zone.clearDimensionPolicy}
-          />
-        </>
-      ) : null}
     </PanelSection>
   )
 }
@@ -322,25 +201,14 @@ export default function ZoneQuantitiesPanel() {
   const metricNotation = useViewer((state) => state.metricNotation)
   const nodes = useScene((state) => state.nodes)
   const zone = selectedZoneId ? (nodes[selectedZoneId] as ZoneNode | undefined) : undefined
-  const livePolygon = useLiveNodeOverrides((state) =>
-    selectedZoneId ? state.overrides.get(selectedZoneId)?.polygon : undefined,
-  ) as ZoneNode['polygon'] | undefined
+  const liveZone = useLiveNodeOverrides((state) =>
+    selectedZoneId ? state.overrides.get(selectedZoneId) : undefined,
+  ) as Partial<ZoneNode> | undefined
   const boundaryWallIds = zone?.autoFromWalls ? zone.boundaryWallIds : []
   const boundaryOverrides = useLiveNodeOverrides(
     useShallow((state) => boundaryWallIds.map((id) => state.overrides.get(id))),
   )
-  const proceduralPolygon = zone
-    ? resolveAutoZonePolygon(zone, (id) => {
-        const dependency = nodes[id]
-        if (!dependency) return undefined
-        const override =
-          boundaryOverrides[boundaryWallIds.indexOf(id as (typeof boundaryWallIds)[number])]
-        return override ? { ...dependency, ...override } : dependency
-      })
-    : undefined
-  const effectiveZone = zone
-    ? { ...zone, polygon: livePolygon ?? proceduralPolygon ?? zone.polygon }
-    : undefined
+  const effectiveZone = zone ? { ...zone, ...liveZone } : undefined
   const effectiveNodes = useMemo(() => {
     if (boundaryOverrides.every((override) => !override)) return nodes
     const merged = { ...nodes }
@@ -360,7 +228,7 @@ export default function ZoneQuantitiesPanel() {
 
   return (
     <>
-      <RoomDocumentationPanel zone={effectiveZone} />
+      <ZoneUnitPanel zone={effectiveZone} />
       <PanelSection
         title={effectiveZone.spaceRole === 'room' ? 'Room quantities' : 'Zone quantities'}
       >

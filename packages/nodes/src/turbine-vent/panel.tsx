@@ -5,13 +5,13 @@ import {
   type AnyNodeId,
   getActiveRoofHeight,
   type RoofSegmentNode,
-  TurbineVentNode as TurbineVentSchema,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
+  duplicateNodeAndPickUp,
   PanelSection,
   PanelWrapper,
   SegmentedControl,
@@ -95,28 +95,8 @@ export default function TurbineVentPanel() {
   }, [node, setMovingNode, setSelection])
 
   const handleDuplicate = useCallback(() => {
-    if (!node) return
-    triggerSFX('sfx:item-pick')
-    const parentId = node.roofSegmentId as AnyNodeId | undefined
-    if (!parentId) return
-
-    const state = useScene.getState()
-    const meta =
-      typeof node.metadata === 'object' && node.metadata !== null
-        ? (node.metadata as Record<string, unknown>)
-        : {}
-    const cloneInput = {
-      ...node,
-      id: undefined,
-      metadata: { ...meta, isNew: true },
-    } as Record<string, unknown>
-    const cloned = TurbineVentSchema.parse(cloneInput) as TurbineVentNode
-
-    state.createNode(cloned, parentId)
-    state.dirtyNodes.add(parentId)
-    setMovingNode(cloned as never)
-    setSelection({ selectedIds: [] })
-  }, [node, setMovingNode, setSelection])
+    if (node) duplicateNodeAndPickUp(node)
+  }, [node])
 
   const handleDelete = useCallback(() => {
     if (!(selectedId && node)) return
@@ -189,7 +169,7 @@ export default function TurbineVentPanel() {
           restoreOnCommit={false}
           step={0.01}
           unit="m"
-          value={Math.round(node.diameter * 100) / 100}
+          value={node.diameter}
         />
         <SliderControl
           label="Height"
@@ -201,7 +181,7 @@ export default function TurbineVentPanel() {
           restoreOnCommit={false}
           step={0.01}
           unit="m"
-          value={Math.round(node.height * 100) / 100}
+          value={node.height}
         />
         <SliderControl
           label="Neck Height"
@@ -213,7 +193,7 @@ export default function TurbineVentPanel() {
           restoreOnCommit={false}
           step={0.01}
           unit="m"
-          value={Math.round((node.neckHeight ?? 0.09) * 100) / 100}
+          value={node.neckHeight ?? 0.09}
         />
         <SliderControl
           label="Vanes"
@@ -266,7 +246,7 @@ export default function TurbineVentPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round((node.position[0] ?? 0) * 100) / 100}
+          value={node.position[0] ?? 0}
         />
         <SliderControl
           label="Y"
@@ -285,7 +265,7 @@ export default function TurbineVentPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round((node.position[1] ?? 0) * 100) / 100}
+          value={node.position[1] ?? 0}
         />
         <SliderControl
           label="Z"
@@ -301,7 +281,7 @@ export default function TurbineVentPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round((node.position[2] ?? 0) * 100) / 100}
+          value={node.position[2] ?? 0}
         />
         <SliderControl
           label="Rotation"

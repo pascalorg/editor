@@ -15,6 +15,7 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { cn } from '../../lib/utils'
+import { ViewerUnitsPanel } from './viewer-units-panel'
 
 const getNodeName = (node: AnyNode): string => {
   if ('name' in node && node.name) return node.name
@@ -33,8 +34,9 @@ export type ViewerSceneHeaderProps = {
   owner?: { username?: string | null } | null
   onBack?: () => void
   /** Fallback destination when no `onBack` handler is supplied. Must already be
-   *  sanitized by the caller. */
-  backHref?: string
+   *  sanitized by the caller. `null` shows no back arrow (an embedded viewer with
+   *  nowhere to go back to). */
+  backHref?: string | null
   /** Extra row under the project info (e.g. likes/fork actions). */
   stats?: ReactNode
 }
@@ -63,6 +65,7 @@ export const ViewerSceneHeader = ({
   const selectedNode = useScene((s) =>
     firstSelectedId ? (s.nodes[firstSelectedId as AnyNodeId] as AnyNode | undefined) : null,
   )
+  const sceneNodes = useScene((s) => s.nodes)
   // Highest first so the list reads top-down like a building section.
   const levels = useScene(
     useShallow((s) => {
@@ -108,7 +111,7 @@ export const ViewerSceneHeader = ({
             >
               <ArrowLeft className="h-4 w-4 text-muted-foreground" />
             </button>
-          ) : (
+          ) : backHref === null ? null : (
             <Link
               aria-label="Back"
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-white/10"
@@ -231,6 +234,7 @@ export const ViewerSceneHeader = ({
           </div>
         </div>
       )}
+      {building && <ViewerUnitsPanel nodes={sceneNodes} />}
     </div>
   )
 }

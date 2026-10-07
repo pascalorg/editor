@@ -46,7 +46,7 @@ export function ParametricFieldControl({
     }
 
     case 'boolean': {
-      const checked = !mixed && value === true
+      const checked = !mixed && (value ?? field.default) === true
       return (
         <ToggleControl
           checked={checked}
@@ -159,7 +159,7 @@ export function ParametricFieldControl({
                 restoreOnCommit={!onCommit}
                 step={0.05}
                 unit="m"
-                value={Math.round(axisValue * 100) / 100}
+                value={axisValue}
               />
             )
           })}

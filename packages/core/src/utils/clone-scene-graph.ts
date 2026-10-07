@@ -1,4 +1,6 @@
 import { GROUND_SUPPORT_ID } from '../hooks/spatial-grid/floor-placed-elevation'
+import { floorFootprintCreatorId, mintFloorFootprintKey } from '../lib/floor-footprint-key'
+import { keyedFloorPlateId } from '../lib/floor-plate-id'
 import {
   remapConstructionDimensionReferences,
   remapMeasurementReferences,
@@ -24,9 +26,120 @@ function extractIdPrefix(id: string): string {
   return underscoreIndex === -1 ? 'node' : id.slice(0, underscoreIndex)
 }
 
+function remapFloorOpeningReferences(node: AnyNode, ids: Map<string, string>) {
+  if ('hostZoneId' in node && typeof node.hostZoneId === 'string')
+    node.hostZoneId = ids.get(node.hostZoneId) ?? node.hostZoneId
+  if (node.type === 'floor-opening') {
+    if (node.ownerId) {
+      node.ownerId = ids.get(node.ownerId)
+      if (!node.ownerId && node.source === 'plugin:pool') node.source = 'manual'
+    }
+    if (node.legacyPlateCuts)
+      node.legacyPlateCuts = Object.fromEntries(
+        Object.entries(node.legacyPlateCuts).flatMap(([id, cuts]) =>
+          ids.has(id) ? [[ids.get(id)!, cuts]] : [],
+        ),
+      )
+  }
+  if ((node.type === 'slab' || node.type === 'ceiling') && node.holeMetadata)
+    node.holeMetadata = node.holeMetadata.map((entry) =>
+      entry.openingId && ids.has(entry.openingId)
+        ? { ...entry, openingId: ids.get(entry.openingId) }
+        : entry,
+    )
+}
+
+/**
+ * Rewrites every other node reference: node ids live in many fields that are
+ * data rather than schema (hole metadata stair ids, stair level ids, room
+ * boundaries and plates, plugin and metadata links, id-keyed maps), so a whole
+ * graph clone swaps any string or key that is exactly a cloned node id.
+ */
+function remapNodeIdStrings(value: unknown, ids: Map<string, string>): unknown {
+  if (typeof value === 'string') return ids.get(value) ?? value
+  if (Array.isArray(value)) return value.map((entry) => remapNodeIdStrings(entry, ids))
+  if (value && typeof value === 'object')
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [
+        ids.get(key) ?? key,
+        remapNodeIdStrings(entry, ids),
+      ]),
+    )
+  return value
+}
+
+// Id lists the structure kernel stores sorted; a remap must keep them sorted
+// or the first load re-sorts them and the clone saves a change.
+const SORTED_ID_LISTS = ['boundaryWallIds', 'boundarySeparatorIds', 'zoneIds', 'openingIds']
+
+export function remapNodeReferences(node: AnyNode, ids: Map<string, string>): AnyNode {
+  // Provenance source ids are history, not links: clones carry them verbatim (D5).
+  const { provenance, ...links } = node as AnyNode & { provenance?: unknown }
+  const remapped = remapNodeIdStrings(links, ids) as Record<string, unknown>
+  if (provenance !== undefined) remapped.provenance = provenance
+  for (const key of SORTED_ID_LISTS) {
+    const before = (node as Record<string, unknown>)[key]
+    const after = remapped[key]
+    if (
+      Array.isArray(before) &&
+      Array.isArray(after) &&
+      before.every((id, i) => i === 0 || String(before[i - 1]) <= String(id))
+    )
+      remapped[key] = [...after].sort()
+  }
+  return remapped as AnyNode
+}
+
+function copiedFloorKeys(nodes: Record<AnyNodeId, AnyNode>, ids: Map<string, string>) {
+  const keys = new Map<string, string>()
+  const identity = (level: string, key: string) => JSON.stringify([level, key])
+  for (const node of Object.values(nodes)) {
+    if (node.type !== 'zone' || !node.floor?.footprint || !node.parentId || !ids.has(node.parentId))
+      continue
+    const old = identity(node.parentId, node.floor.footprint)
+    if (!keys.has(old)) {
+      const creatorId = floorFootprintCreatorId(node.floor.footprint)
+      keys.set(old, mintFloorFootprintKey(creatorId ? ids.get(creatorId) : undefined))
+    }
+  }
+  const plates = Object.values(nodes).filter(
+    (node) => node.type === 'slab' && node.plateRole === 'base',
+  )
+  for (const plate of plates) {
+    if (plate.type !== 'slab' || !plate.parentId || !ids.has(plate.id)) continue
+    const room = (plate.zoneIds ?? [])
+      .map((id) => nodes[id as AnyNodeId])
+      .find((node) => node?.type === 'zone' && node.floor?.footprint)
+    if (room?.type !== 'zone' || !room.floor?.footprint) continue
+    const key = keys.get(identity(plate.parentId, room.floor.footprint))
+    if (!key) continue
+    for (let component = 0; component <= plates.length; component++) {
+      if (plate.id !== keyedFloorPlateId(plate.parentId, room.floor.footprint, component)) continue
+      ids.set(plate.id, keyedFloorPlateId(ids.get(plate.parentId)!, key, component))
+      break
+    }
+  }
+  return (source: AnyNode, copy: AnyNode) => {
+    if (
+      source.type !== 'zone' ||
+      copy.type !== 'zone' ||
+      !source.parentId ||
+      !source.floor?.footprint
+    )
+      return
+    const key = keys.get(identity(source.parentId, source.floor.footprint))
+    if (key) copy.floor = { ...copy.floor, footprint: key }
+  }
+}
+
 /**
  * Deep clones a scene graph with all node IDs regenerated while preserving
  * parent-child relationships and other internal references.
+ *
+ * The hand-written remaps here and in `cloneLevelSubtree` are inventoried in
+ * `contracts/reference-inventory.ts`, which records the references they miss;
+ * `contracts/fidelity.test.ts` fails when either drifts from the inventory.
+ * P-03 replaces both passes with the one extractor over `capabilities.refs`.
  *
  * This is useful for:
  * - Duplicating a project (host app creates a new project record, then loads the cloned scene)
@@ -44,6 +157,8 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
     const prefix = extractIdPrefix(nodeId)
     idMap.set(nodeId, generateId(prefix))
   }
+
+  const copyFloor = copiedFloorKeys(nodes, idMap)
 
   // Pass 2: Deep clone nodes with remapped references
   const clonedNodes = {} as Record<AnyNodeId, AnyNode>
@@ -120,11 +235,19 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
       ) as string | undefined
     }
 
+    if (clonedNode.type === 'unit') {
+      clonedNode.members = clonedNode.members.flatMap((id) => {
+        const remapped = idMap.get(id)
+        return remapped ? [remapped as typeof id] : []
+      })
+    }
+
     if ('deckSlabId' in clonedNode && typeof clonedNode.deckSlabId === 'string') {
       ;(clonedNode as Record<string, unknown>).deckSlabId = idMap.get(clonedNode.deckSlabId) as
         | string
         | undefined
     }
+    remapFloorOpeningReferences(clonedNode, idMap)
 
     if (clonedNode.type === 'measurement') {
       clonedNode.measurement = remapMeasurementReferences(clonedNode.measurement, idMap)
@@ -132,7 +255,8 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
     if (clonedNode.type === 'construction-dimension') {
       clonedNode = remapConstructionDimensionReferences(clonedNode, idMap)
     }
-    clonedNodes[newId] = clonedNode
+    copyFloor(node, clonedNode)
+    clonedNodes[newId] = remapNodeReferences(clonedNode, idMap)
   }
 
   // Remap root node IDs
@@ -141,10 +265,10 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
     .filter((id): id is string => id !== undefined) as AnyNodeId[]
 
   // Clone and remap collections if present
+  const collectionIdMap = new Map<string, CollectionId>()
   let clonedCollections: Record<CollectionId, Collection> | undefined
   if (collections) {
     clonedCollections = {} as Record<CollectionId, Collection>
-    const collectionIdMap = new Map<string, CollectionId>()
 
     for (const collectionId of Object.keys(collections)) {
       collectionIdMap.set(collectionId, generateId('collection'))
@@ -162,21 +286,14 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
           ? (idMap.get(collection.controlNodeId) as AnyNodeId | undefined)
           : undefined,
       }
-
-      // Update collectionIds on nodes that reference this collection
-      for (const oldNodeId of collection.nodeIds) {
-        const newNodeId = idMap.get(oldNodeId)
-        if (newNodeId && clonedNodes[newNodeId as AnyNodeId]) {
-          const node = clonedNodes[newNodeId as AnyNodeId] as Record<string, unknown>
-          if ('collectionIds' in node && Array.isArray(node.collectionIds)) {
-            const oldColIds = node.collectionIds as string[]
-            node.collectionIds = oldColIds
-              .map((cid) => collectionIdMap.get(cid))
-              .filter((id): id is CollectionId => id !== undefined)
-          }
-        }
-      }
     }
+  }
+
+  for (const node of Object.values(clonedNodes)) {
+    if ('collectionIds' in node && node.collectionIds)
+      node.collectionIds = node.collectionIds
+        .map((id) => collectionIdMap.get(id))
+        .filter((id): id is CollectionId => id !== undefined)
   }
 
   return {
@@ -237,6 +354,7 @@ export function cloneLevelSubtree(
     idMap.set(oldId, generateId(prefix))
   }
 
+  const copyFloor = copiedFloorKeys(nodes, idMap)
   const newLevelId = idMap.get(levelId)! as AnyNodeId
 
   // Clone each node with remapped references.
@@ -315,6 +433,14 @@ export function cloneLevelSubtree(
       ;(cloned as Record<string, unknown>).deckSlabId =
         idMap.get(cloned.deckSlabId) ?? cloned.deckSlabId
     }
+    remapFloorOpeningReferences(cloned, idMap)
+
+    // A copied plate or ceiling stands for the copied rooms, so the guard
+    // accepts it as derived and the reconciler adopts it on the new level.
+    if (cloned.type === 'slab' && cloned.zoneIds)
+      cloned.zoneIds = cloned.zoneIds.map((id) => idMap.get(id) ?? id).sort()
+    if (cloned.type === 'ceiling' && cloned.zoneId)
+      cloned.zoneId = idMap.get(cloned.zoneId) ?? cloned.zoneId
 
     if (cloned.type === 'measurement') {
       cloned.measurement = remapMeasurementReferences(cloned.measurement, idMap)
@@ -322,6 +448,7 @@ export function cloneLevelSubtree(
     if (cloned.type === 'construction-dimension') {
       cloned = remapConstructionDimensionReferences(cloned, idMap)
     }
+    copyFloor(node, cloned)
     clonedNodes.push(cloned)
   }
 

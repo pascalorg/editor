@@ -8,10 +8,17 @@ export type ElevatorLevelEntry = {
 }
 
 function getBuildingLevels(elevator: ElevatorNode, nodes: Record<string, AnyNode>): LevelNode[] {
+  const parent = elevator.parentId ? nodes[elevator.parentId as AnyNodeId] : undefined
+  // Older saves attach elevators to a level. Opening queries must agree before
+  // and after client hydration reparents them to the owning building.
   const building =
-    elevator.parentId && nodes[elevator.parentId as AnyNodeId]?.type === 'building'
-      ? nodes[elevator.parentId as AnyNodeId]
-      : null
+    parent?.type === 'level'
+      ? parent.parentId && nodes[parent.parentId]?.type === 'building'
+        ? nodes[parent.parentId]
+        : Object.values(nodes).find(
+            (node) => node.type === 'building' && node.children.includes(parent.id),
+          )
+      : parent
 
   if (building?.type !== 'building') return []
 

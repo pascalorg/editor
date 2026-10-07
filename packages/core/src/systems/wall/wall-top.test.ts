@@ -10,8 +10,8 @@ describe('resolveWallTop', () => {
     expect(resolveWallTop({ height: 2.5 }, 3, 0.6)).toBeCloseTo(3.1)
   })
 
-  test('explicit height on sunken base keeps the absolute top', () => {
-    expect(resolveWallTop({ height: 2.5 }, 3, -0.4)).toBe(2.5)
+  test('explicit height on sunken support follows its actual support', () => {
+    expect(resolveWallTop({ height: 2.5 }, 3, -0.4)).toBe(2.1)
   })
 
   test('ground-hosted explicit height remains body-relative in a terrain depression', () => {

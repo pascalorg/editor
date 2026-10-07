@@ -1,11 +1,14 @@
 import type { ComponentType } from 'react'
 import type { AnimationClip, BufferGeometry, Object3D, Ray } from 'three'
 import type { ZodObject, z } from 'zod'
+import type { CutIntent } from '../schema/cut'
 import type { MaterialSchema, MaterialTarget } from '../schema/material'
 import type { AssetInput, ItemNode } from '../schema/nodes/item'
 import type { MeasurementFeatureReference, MeasurementPoint } from '../schema/nodes/measurement'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
-import type { AnyNode, AnyNodeId } from '../schema/types'
+import type { AnyNode, AnyNodeId, Discipline, DisplayFamily, PartKey } from '../schema/types'
+import type { SurfaceProvider } from '../services/surface-hosting'
+import type { InteractiveState } from '../store/use-interactive'
 import type { HandleList } from './handles'
 import type { CloneNodesIntoOptions, Subtree } from './subtree'
 
@@ -48,6 +51,10 @@ export type GeometryContext = {
    * in 2D.
    */
   levelBaseAt?: (x: number, z: number) => number
+  /** Height of a rendered node's upward-facing top at level-local XZ, or null outside it. */
+  surfaceHeightAt?: (hostId: AnyNodeId, x: number, z: number) => number | null
+  /** Highest terrain, slab, or shaped top at a level-local point. */
+  supportHeightAt?: (x: number, z: number, selectedHostId?: AnyNodeId) => number
   /**
    * Pre-computed level-batch data, populated by the dispatcher when the
    * kind declares `def.computeLevelData` (3D) or
@@ -99,6 +106,10 @@ export type GeometryContext = {
      * wall ends only during the move.
      */
     moving: boolean
+    /** The unit under focus in the editor and its member zone ids, so zone
+     * builders can dim non-members. Absent when no unit is focused. */
+    focusedUnitId?: string
+    focusedUnitMemberIds?: readonly string[]
     /**
      * The kind's theme palette. Theme-aware colors (selection stroke,
      * endpoint handle fill, hatch color) live here so kinds don't need
@@ -319,7 +330,22 @@ export type NodePort = {
    *  face at roll 0, height the vertical one. */
   width?: number
   height?: number
+  /** Ports sharing a group are one flow path of one system (F6). Unread until F6. */
+  group?: string
+  /** Membership label of this port's group; labels, never connects (F6). Unread until F6. */
+  systemId?: string
 }
+
+/**
+ * One end of an explicit, persisted connection edge (F6). Proximity only
+ * proposes a connection; an edge is declared in `capabilities.refs` with role
+ * `connection` and stored by the end that joins. A `port` end names a declared
+ * port; a `tap` end is a station on a run's body, `at` metres of arc length
+ * from the run's start, where a branch joins midway along a duct or pipe.
+ */
+export type PortRef =
+  | { kind: 'port'; nodeId: AnyNodeId; portId: string }
+  | { kind: 'tap'; nodeId: AnyNodeId; at: number }
 
 // ─── ToolHint ────────────────────────────────────────────────────────
 //
@@ -735,6 +761,12 @@ export type FloorplanGeometry =
       text: string
       /** Optional override for the line/text colour. Defaults to the palette accent. */
       stroke?: string
+      /**
+       * WS3: the text is an author override rather than the measured value.
+       * Set when a typed dimension could not drive geometry and fell back to
+       * `textOverride`; the 2D renderer draws a small "override" badge.
+       */
+      overridden?: boolean
     }
   | {
       kind: 'dimension-string'
@@ -1000,8 +1032,8 @@ export type DistributionRole = 'run' | 'fitting' | 'terminal' | 'equipment'
 export type SnapProfile = 'item' | 'structural'
 
 /**
- * How a kind is treated by the GLB bake and the baked `/viewer`. See
- * plans/editor-plugin-trees-example.md → Part D.
+ * How a kind is treated by the GLB bake and the baked `/viewer`. See "Bake policy" in
+ * wiki/architecture/node-definitions.md.
  * - `'static'` (default) — baked as geometry; the viewer shows the baked mesh.
  * - `'strip'` — excluded from the bake; the viewer rebuilds it live from
  *   `scene_graph` via the registry renderer (heavy reference assets: scans, guides).
@@ -1120,6 +1152,8 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * already null-guard on `def.renderer` so omitting it is safe.
    */
   renderer?: RendererSource<z.infer<S>>
+  /** Custom renderers default to mounting arbitrary children; declare false when they do not. */
+  rendersChildren?: boolean
   /**
    * Collective renderer the baked `/viewer` uses to re-render this kind live when
    * `bake === 'replace'`. It receives every node of this kind under one baked
@@ -1128,7 +1162,7 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * free) instead of the frozen baked meshes (which the viewer hides). Needed when
    * the normal per-node `renderer` can't stand alone in a baked scene (e.g. an
    * instanced kind whose `renderer` is an invisible selection proxy and whose real
-   * geometry comes from a `system`). See plans/editor-plugin-trees-example.md → Part D.
+   * geometry comes from a `system`). See "Bake policy" in wiki/architecture/node-definitions.md.
    */
   bakeReplaceRenderer?: BakeReplaceRenderer<z.infer<S>>
   /**
@@ -1168,6 +1202,8 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * inputs aren't captured by the node alone.
    */
   geometryKey?: (node: z.infer<S>) => string
+  /** Child kinds whose live overrides affect this node’s generated geometry. */
+  geometryChildTypes?: readonly string[]
   /**
    * Level-batch precompute hook. Called by `<GeometrySystem>` once per
    * level per frame, **before** the per-node `def.geometry` calls in
@@ -1216,8 +1252,24 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * the legacy `floorplan-panel.tsx` monolith.
    */
   floorplan?: (node: z.infer<S>, ctx: GeometryContext) => FloorplanGeometry | null
-  /** Extra node IDs whose committed changes invalidate this node's floor-plan cache. */
-  floorplanDependencies?: (node: z.infer<S>) => readonly AnyNodeId[]
+  /** Extra node IDs whose committed changes invalidate this node's floor-plan cache.
+   *  `nodes` is the committed scene, for dependencies the node doesn't name itself
+   *  (a zone's owning unit lists the zone, not the other way round). */
+  floorplanDependencies?: (
+    node: z.infer<S>,
+    nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+  ) => readonly AnyNodeId[]
+  /**
+   * Why the node does not fit where it stands, for the person placing, moving or selecting it:
+   * the editor shows `line` in the HUD's "!" row while the node is in hand, and `line` with
+   * `detail` at the top of its panel. A warning, never a block. Pure: `live` is the node's
+   * in-flight drag pose, which the kind merges in its own frame. Null when it fits, or when the
+   * check doesn't apply.
+   */
+  placementNotice?: (
+    node: z.infer<S>,
+    ctx: { nodes: Readonly<Record<string, AnyNode>>; live?: LiveTransformLike },
+  ) => PlacementNotice | null
   /** Stable semantic geometry that associative measurement anchors may reference. */
   measurement?: MeasurementContribution<z.infer<S>>
   /**
@@ -1364,9 +1416,11 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * returns LEVEL-LOCAL positions/directions (the kind applies its own
    * transform). Consumed by placement tools for port-snapping and, in a
    * later slice, by the system graph for connectivity. Kinds with no
-   * connectable geometry omit this.
+   * connectable geometry omit this. `ctx` stays optional for API v1 (R1):
+   * hosts must always pass it, and an implementation falls back to the
+   * stored pose only when it is absent.
    */
-  ports?: (node: z.infer<S>) => NodePort[]
+  ports?: (node: z.infer<S>, ctx?: EvaluationContext) => NodePort[]
   system?: SystemContribution
   tool?: LazyComponent
   /**
@@ -1396,6 +1450,13 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * its bespoke helper component instead.
    */
   toolHints?: ToolHint[]
+
+  /**
+   * HUD hints for the kind's own reshapes, keyed by reshape name (see
+   * `affordanceTools`): shown while a node of this kind is in that `reshaping`
+   * scope, with the same chips and visibility rules as `toolHints`.
+   */
+  affordanceHints?: Record<string, ToolHint[]>
 
   /**
    * Pick-one option rows for this kind's build tool, rendered by the shared
@@ -1610,7 +1671,8 @@ export type DuplicateSubtreeCloneResult = {
 }
 
 export type DuplicableConfig = {
-  subtree?: boolean
+  /** 'with-children' preserves the root-only draft lifecycle for childless nodes. */
+  subtree?: boolean | 'with-children'
   prepareSubtreeClone?: (args: DuplicateSubtreeCloneArgs) => DuplicateSubtreeCloneResult
 }
 
@@ -1621,14 +1683,26 @@ export type Capabilities = {
   rotatable?: RotatableConfig
   scalable?: ScalableConfig
   hostable?: HostableConfig
+  surfacePlacement?: 'floor-only'
+  /**
+   * @deprecated Ignored: nothing has ever read it. Declare {@link Capabilities.cuts}
+   * instead. Kept so plugin API v1 definitions still compile; removed in v2.
+   */
   cuttable?: CuttableConfig
+  /**
+   * What the node cuts out of its host(s), as cut intents (F5b). Frozen
+   * contract, not read yet: DT-03b (walls, ceilings, slabs) and RL-02 (roofs)
+   * consume it beside today's paths (`collectCutoutBrushes`,
+   * `roofAccessory.buildCut`, `ceilingCut`), which it later replaces.
+   */
+  cuts?: (node: AnyNode, ctx: CutsContext) => CutIntent[]
   snappable?: SnappableConfig
   surfaces?: SurfacesConfig
   faceHost?: FaceHostCapability<any>
   duplicable?: boolean | DuplicableConfig
   deletable?: boolean
   groupable?: boolean
-  selectable?: SelectableConfig
+  selectable?: SelectableConfig | false
   /**
    * Whether selecting this kind should replace its rendered mesh materials
    * with the editor's selection tint. Defaults to `true`. Set to `false` for
@@ -1638,6 +1712,13 @@ export type Capabilities = {
   selectionHighlight?: boolean
   interactive?: boolean
   floorPlaced?: FloorPlacedConfig
+  /**
+   * Opt this kind into node draw batching. Its opaque single-material meshes
+   * join its level's shared `BatchedMesh` containers while the node is
+   * static; the sources stay mounted, pickable and exported. See
+   * `BatchableConfig`.
+   */
+  batchable?: BatchableConfig
   /**
    * Plan footprint this kind exposes to the alignment-anchor pool when it
    * isn't `floorPlaced` and isn't a structural primitive the bridge handles
@@ -1682,6 +1763,12 @@ export type Capabilities = {
    * in the editor.
    */
   sceneAction?: SceneActionCapability
+  /**
+   * Moving parts people run: Play/Stop in the action menu, E, and the
+   * walkthrough read this instead of a kind name, so any kind (plugins
+   * included) gets them by declaring it. See `MechanismCapability`.
+   */
+  mechanism?: MechanismCapability
   /**
    * Declares the kind's paintable slots — the `{ slotId, label, default }`
    * contract shared by items (scanned from the GLB) and procedural kinds
@@ -1731,6 +1818,20 @@ export type Capabilities = {
    *     `defaults()` or the dragging logic populates it dynamically.
    */
   hostRefFields?: string[]
+  /**
+   * Every reference this kind persists, declared once (R3, F5a), with its
+   * dependent fields. Frozen contract, not read yet: P-03's one extractor
+   * will serve clone, delete, split/merge, preset save and the reverse
+   * (host → dependents) index from it, replacing the hand-written remaps and
+   * `hostRefFields`. Existing references are declared before any new one.
+   */
+  refs?: readonly ReferenceDeclaration[]
+  /**
+   * The kind stores assembly layers in an optional `assembly` field (F2) and
+   * says how they stack. Frozen contract, not read yet: WL-02 compiles wall
+   * layers and RL-01 roof layers from it.
+   */
+  assembly?: AssemblyHostConfig
   /**
    * Whether instances of this kind can be saved as a reusable preset
    * (unified `items` catalog, `kind='preset'`). The editor itself does
@@ -1816,6 +1917,12 @@ export type PaintCapability = {
    */
   resolveRole: (args: PaintResolveArgs) => string | null
   /**
+   * Optional: label for a role that is NOT one of the kind's declared slots.
+   * A slab plate resolves per-room roles carrying a zone id, which would read
+   * back to the user as the raw id. Return `null` to keep the derived label.
+   */
+  roleLabel?: (node: AnyNode, role: string) => string | null
+  /**
    * Build the node-update patch that applies the new material at
    * `role`. Returned partial is merged into the node by the editor.
    */
@@ -1874,6 +1981,25 @@ export type SceneActionCapability<T = unknown> = {
   resolveTarget: (object: { userData: Record<string, unknown> }) => T | null
   /** Run the action. Return `true` to consume the click (skip selection). */
   activate: (node: AnyNode, target: T, sceneApi: SceneApi) => boolean
+}
+
+/**
+ * A kind's moving parts (a fan's spin, doors, an articulated asset's joints).
+ * Operating state is transient: `set` writes `useInteractive`, never the node,
+ * so running a mechanism never enters undo, autosave or collaboration. A kind
+ * with a single switch keeps it in `useInteractive.mechanisms`.
+ */
+export type MechanismCapability = {
+  /** Whether this node has anything to run. */
+  has: (node: AnyNode) => boolean
+  /** Whether any of its mechanisms is running. */
+  isOn: (node: AnyNode, state: InteractiveState) => boolean
+  /** Starts or stops all of them. */
+  set: (node: AnyNode, on: boolean) => void
+  /** Walkthrough wording: `open` parts open and close; `run` parts (the default) turn on and off. */
+  verb?: 'open' | 'run'
+  /** Action-menu glyph: openable kinds show their own instead of Play/Stop. */
+  icon?: 'door' | 'window'
 }
 
 export type NodeQuickActionIcon = 'add-left' | 'add-right' | 'add' | 'convert'
@@ -1946,13 +2072,25 @@ export type PaintPreviewArgs = {
   material: MaterialSchema | undefined
   materialPreset: string | undefined
   root: Object3D
+  /** Host snapshot used for parent finishes and per-flight overrides. */
+  nodes?: Record<AnyNodeId, AnyNode>
+  /** Shared palette from the same host snapshot; absent means no scene palette. */
+  materials?: Record<SceneMaterialId, SceneMaterial>
 }
 
 export type PaintEffectiveMaterialArgs = {
+  /** Host palette for resolving scene material refs without reading a store. */
+  materials?: Record<SceneMaterialId, SceneMaterial>
   node: AnyNode
   role: string
   /** Snapshot of the scene `nodes` map — kinds whose effective material walks the parent chain (roof-segment → roof) read parents through it. */
   nodes: Record<AnyNodeId, AnyNode>
+  /**
+   * Resolve what the surface shows, falling through to the finish an unpainted
+   * derived role draws with (the eyedropper). A slot role's declared `default`
+   * stays the caller's to apply.
+   */
+  rendered?: boolean
 }
 
 /**
@@ -2012,9 +2150,42 @@ export type RoofAccessoryConfig = {
  */
 export type CeilingCutCapability = {
   buildCeilingHole: (node: AnyNode) => Array<[number, number]> | null
+  /**
+   * Holes this kind cuts in `ceiling` that no child of it reports, such as a node
+   * whose live move preview sits on this ceiling while it still belongs to another.
+   */
+  holesFor?: (ceiling: AnyNode) => Array<Array<[number, number]>>
+}
+
+/**
+ * The face body layers stack inward from: a wall's `front` face (+n), a
+ * slab's `top`, a ceiling's `underside`, or a roof's `covering`-top plane
+ * (every facet's `facet:<id>:covering` patch).
+ */
+export type AssemblyReference = 'front' | 'top' | 'underside' | 'covering'
+
+/**
+ * Host declaration for assembly layers (F2, `editor-fidelity-foundations.md`
+ * §2.3). Each host keeps its own datum rule instead of one offset equation.
+ */
+export type AssemblyHostConfig = {
+  reference: AssemblyReference
+  /** The axis layer thickness runs along: the reference face's normal, or vertical. */
+  measure: 'normal' | 'vertical'
+  /**
+   * The body thickness the host stores (a wall's `thickness`), which must
+   * equal the sum of its layers: the stack sets it and writers re-derive it.
+   * `null` when the host stores none (roofs).
+   */
+  body: (node: AnyNode) => number | null
+  /** Accepts `assembly.backing` (slabs, ceilings). Absent = refused. */
+  backing?: boolean
 }
 
 export type CapabilityCtx = { node: AnyNode }
+
+/** What a cut publisher may read: the scene, to find its host and the host's frame. */
+export type CutsContext = { nodes: Readonly<Record<AnyNodeId, AnyNode>> }
 
 export type MovableConfig = {
   axes: ReadonlyArray<'x' | 'y' | 'z'>
@@ -2187,6 +2358,9 @@ export type LiveTransformLike = {
   rotation: number
 }
 
+/** What `NodeDefinition.placementNotice` says: a one-line warning and an optional detail. */
+export type PlacementNotice = { line: string; detail?: string }
+
 export type RotatableConfig = {
   axes: ReadonlyArray<'x' | 'y' | 'z'>
   snapAngles?: readonly number[]
@@ -2208,6 +2382,7 @@ export type HostableConfig = {
   override?: (ctx: CapabilityCtx) => HostableConfig | null
 }
 
+/** @deprecated See {@link Capabilities.cuttable}. */
 export type CuttableConfig = {
   hostKinds: readonly string[]
   override?: (ctx: CapabilityCtx) => CuttableConfig | null
@@ -2221,8 +2396,16 @@ export type SnappableConfig = {
 export type SnapPointKind = 'start' | 'end' | 'midpoint' | 'center' | 'corners'
 
 export type SurfacesConfig = {
+  hosting?: SurfaceProvider | false
   top?: {
     height: number | ((n: AnyNode, context: { nodes: Record<string, AnyNode> }) => number)
+    /** Resolve support from node data; null means this point is outside the support footprint. */
+    supportHeight?: (
+      node: AnyNode,
+      x: number,
+      z: number,
+      context: { nodes: Readonly<Record<AnyNodeId, AnyNode>> },
+    ) => number | null
   }
   sides?: { faces: 'all' | ReadonlyArray<readonly [number, number, number]> }
   custom?: SurfaceQuery
@@ -2322,9 +2505,40 @@ export type FloorPlacedConfig = {
    * placement/move refuses to overlap another colliding footprint (red ghost,
    * Alt to force). Solid furniture-like kinds (item / shelf / column) set this;
    * markers and port-mated kinds (spawn / MEP / stair) leave it off so they
-   * neither block nor get blocked. Default off.
+   * neither block nor get blocked. Default off. A predicate decides per node
+   * (a block collides only while it rests on the floor); read it through
+   * `floorPlacedCollides`.
    */
-  collides?: boolean
+  collides?: boolean | ((node: AnyNode) => boolean)
+}
+
+/**
+ * How the node batch treats a kind (`capabilities.batchable`). Selection,
+ * hover, live transforms, live overrides and slot paint previews release any
+ * batched node; these fields declare what is specific to the kind.
+ */
+export type BatchableConfig = {
+  /**
+   * Where the node's batches live. `'level'`: the node is a direct child of a
+   * level; hosted or mounted nodes draw themselves, because their host moves
+   * them without a signal the batch sees. `'wall'`: the node is hosted by a
+   * visible wall that is a level child; the wall's edits, tint and gestures
+   * release it.
+   */
+  scope: 'level' | 'wall'
+  /** Transient states in which the node draws its own meshes, such as a running animation. */
+  excluded?: (node: AnyNode) => boolean
+  /** Whether the node's mounted object is final, read from its registered root's `userData`. */
+  settled?: (userData: Readonly<Record<string, unknown>>) => boolean
+  /**
+   * Allocation key for the node's `meshIndex`-th batchable mesh when the kind
+   * rebuilds its geometry in place (slabs, ceilings): a rebuild then replaces
+   * its packed slot instead of adding one. Without it, meshes that share a
+   * geometry share one allocation.
+   */
+  batchKey?: (node: AnyNode, meshIndex: number) => string
+  /** Joins wait until wall rebuilds and wall drags on the node's level have settled. */
+  waitsForWalls?: boolean
 }
 
 /**
@@ -2358,11 +2572,178 @@ export type AlignmentFootprintConfig = (
 // ─── Relations ───────────────────────────────────────────────────────
 
 export type Relations = {
+  /**
+   * Derived, unpersisted junctions. Wall junctions are `endpoint-match` and
+   * enter the reference index as derived `connection` references (R3).
+   */
   linkedBy?: 'endpoint-match' | 'polygon-share' | { custom: (n: AnyNode) => AnyNodeId[] }
   hosts?: readonly string[]
   affectsSpatial?: readonly string[]
   cascadeDelete?: 'descendants' | 'children' | 'none'
 }
+
+// ─── References (R3; F5a, F8 typed reference policy) ─────────────────
+//
+// Frozen by A-02. A reference is a persisted value that names something
+// other than the literal it is: a scene node, a generated part of an owner,
+// a surface patch, an asset, a source-provenance id, a scene collection or a
+// scene material. Namespaces never mix: an `edgeBinding.edgeId` is a surface
+// id, not a node id, so a node remap must never touch it.
+
+/**
+ * - `node`: a scene node id.
+ * - `part`: a key inside one owner node (a generated `PartKey`, a gutter
+ *   outlet, a hanger slot, block topology); the owner is `owner`.
+ * - `surface`: a finite patch or named face of one owner node.
+ * - `asset`: content outside the graph by URL, catalog id or content hash.
+ * - `source`: provenance ids of an importer or capture (stable across re-import).
+ * - `collection`: a scene-root `collections` record.
+ * - `material`: a `MaterialRef` (`scene:<id>` palette entry, `library:<id>`)
+ *   or a library material/preset name.
+ * - `label`: an opaque key compared only for equality among peers (a join or
+ *   scope label). Producers may use a node id as the label, others a source
+ *   face id or any string; it is never dereferenced and never required to
+ *   resolve. A remap rewrites a label only where it equals a node id being
+ *   remapped in the same operation.
+ */
+export type ReferenceNamespace =
+  | 'node'
+  | 'part'
+  | 'surface'
+  | 'asset'
+  | 'source'
+  | 'collection'
+  | 'material'
+  | 'label'
+
+/**
+ * - `host`: the dependent resolves pose or geometry from the target (a mount,
+ *   support, hosting face, measurement anchor); follow or freeze.
+ * - `internal`: a reference inside the owner's own data or its generated
+ *   output (block topology, hanger slots, an owning generator).
+ * - `membership`: the target is a member of a set the owner labels (unit
+ *   zones, collection members, served levels, boundary walls).
+ * - `connection`: an explicit join between peers (ports, shed joints, wall
+ *   junctions).
+ * - `control`: a signal or driving relation, never flow (a collection's
+ *   control node, a controlling dimension, a switch's luminaires).
+ * - `hierarchy`: `parentId` / `children` and records keyed by a child id;
+ *   their consistency is protected separately from the typed policy.
+ * - `content`: the owner uses something outside the scene graph by
+ *   reference: an asset, a material, a pinned definition, provenance. Never
+ *   remapped by a clone.
+ */
+export type ReferenceRole =
+  | 'host'
+  | 'internal'
+  | 'membership'
+  | 'connection'
+  | 'control'
+  | 'hierarchy'
+  | 'content'
+
+/** When the target is deleted: freeze at the last resolved pose, drop the value, or delete the dependent. */
+export type ReferenceDeletePolicy = 'freeze' | 'drop' | 'cascade'
+
+/** When the owner is saved as a preset: strip the value, snapshot its resolved geometry then strip, or keep it. */
+export type ReferencePresetPolicy = 'strip' | 'materialize' | 'keep'
+
+/**
+ * A path into a node's persisted data. Dot-separated field names; `[]` visits
+ * every array or tuple element, `*` every record value and `@key` every record
+ * key. A path that does not resolve on a value (an absent optional, another
+ * union branch) yields no reference. Example: `measurement.points[].reference.nodeId`.
+ */
+export type ReferencePath = string
+
+export type ReferenceDeclaration = {
+  path: ReferencePath
+  namespace: ReferenceNamespace
+  role: ReferenceRole
+  onDelete: ReferenceDeletePolicy
+  onPreset: ReferencePresetPolicy
+  /** Node kinds the target may have (`node` namespace). Absent = any kind. */
+  targetKinds?: readonly string[]
+  /** Literal values that are not references (e.g. `supportSlabId: 'ground'`). */
+  sentinels?: readonly string[]
+  /** The value is `${prefix}${id}`; only values with this prefix are references. */
+  prefix?: string
+  /**
+   * `part` / `surface` namespaces: path to the owner node id, resolved in the
+   * same element as `path` (shared `[]` / `*` prefixes bind to one element).
+   * Absent = this node.
+   */
+  owner?: ReferencePath
+  /**
+   * Fields whose value is derived from, or only meaningful with, this
+   * reference: the side, face, station or UV of the host it names (`wallT`
+   * and `side` with `wallId`, `roofFace` with `roofSegmentId`). They share
+   * its lifecycle: a preset strip, a drop or a freeze applies to the
+   * reference and its dependents together. Paths absent on a kind are skipped.
+   */
+  dependents?: readonly ReferencePath[]
+}
+
+// ─── Evaluation context (F5a/§2.12; R2) ──────────────────────────────
+
+/**
+ * One model revision plus the live overrides of a gesture in flight (R2).
+ * Every reader of resolved geometry — meshes, bounds, ports, cuts, bake, MCP —
+ * resolves from the same context, so a device's ports never come from a
+ * different snapshot than its mesh. Frozen name; the evaluator lands in P-03.
+ */
+export type EvaluationContext = {
+  revision: number
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>
+  /** Preview-only values; never committed, never persisted. */
+  overrides?: ReadonlyMap<AnyNodeId, Readonly<Record<string, unknown>>>
+}
+
+// ─── Export identity (F4) ────────────────────────────────────────────
+
+/**
+ * Per-mesh export identity (F4), `userData.pascalPart` / glTF
+ * `extras.pascalPart`, version 1. Validated live, in the raw bake, the
+ * optimised bake and the saved viewer. A missing tag means `finish`.
+ */
+export type PascalPartTag = {
+  v: 1
+  family: DisplayFamily
+  role: string
+  discipline?: Discipline
+  concealed?: boolean
+  layerId?: string
+  key?: PartKey
+  owner?: string
+  /** Envelope stand-in for a missing model: physical, exported. */
+  proxy?: boolean
+  /** Presentation-only solid: never in the canonical bake. */
+  presentation?: true
+  surfaceRole?: SurfaceRole
+  /** Source category when it differs from the owner's. */
+  source?: string
+}
+
+/**
+ * `canonical` holds every physical part exactly once, compiled from persisted
+ * state whatever was displayed; `finished` is what the visitor view shows;
+ * `lightweight` declares its omissions.
+ */
+export type ExportProfile = 'canonical' | 'finished' | 'lightweight'
+
+/**
+ * Root glTF `extras.pascalBake`, one arm per profile. A canonical artifact
+ * always carries every family and declares no omissions; only `lightweight`
+ * may omit. The benchmark harness refuses non-canonical bakes.
+ */
+export type PascalBakeExtras =
+  | { profile: 'canonical'; families: 'all'; omissions?: never }
+  | { profile: 'finished'; families: readonly DisplayFamily[]; omissions?: never }
+  | {
+      profile: 'lightweight'
+      families: 'all' | readonly DisplayFamily[]
+      omissions: readonly string[]
+    }
 
 // ─── ParametricDescriptor ────────────────────────────────────────────
 
@@ -2384,9 +2765,14 @@ export type ParametricDescriptor<N> = {
    * the scene consistent — e.g. duct runs re-trimmed onto a resized
    * fitting's collars. `prev` is the node before the edit, `next` after
    * (with `derive` already folded in). Applied in the same gesture via
-   * `updateNodes`.
+   * `updateNodes`. The third argument contains all pending edits in
+   * the gesture, so reconciliation can read updated siblings during a multi-edit.
    */
-  reconcile?: (prev: N, next: N) => Array<{ id: AnyNodeId; data: Partial<AnyNode> }>
+  reconcile?: (
+    prev: N,
+    next: N,
+    nodes: Readonly<Record<string, AnyNode | undefined>>,
+  ) => Array<{ id: AnyNodeId; data: Partial<AnyNode> }>
   /**
    * Deletion companion to `reconcile`: when a node of this kind is about
    * to be removed, return patches for OTHER nodes that must follow to
@@ -2455,6 +2841,8 @@ export type ParamAction<N> = {
 export type ParamGroup<N> = {
   label: string
   fields: ParamField<N>[]
+  /** Whether this inspector group is open when it is first rendered. */
+  defaultExpanded?: boolean
 }
 
 export type ParamField<N> =
@@ -2469,7 +2857,14 @@ export type ParamField<N> =
       visibleIf?: (n: N) => boolean
       customEditor?: ComponentType
     }
-  | { key: keyof N; label?: string; kind: 'boolean'; visibleIf?: (n: N) => boolean }
+  | {
+      key: keyof N
+      label?: string
+      kind: 'boolean'
+      /** Shown when the node omits the key (an optional field that reads as on). */
+      default?: boolean
+      visibleIf?: (n: N) => boolean
+    }
   | {
       key: keyof N
       label?: string

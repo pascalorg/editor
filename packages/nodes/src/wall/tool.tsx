@@ -19,16 +19,21 @@ import {
   wallClosesRoom,
 } from '@pascal-app/core'
 import {
+  addWallPolygonDraftCorner,
   CursorSphere,
   chainEndJoinsExistingWall,
   clearPlacementSurface,
+  commitWallPolygonDraft,
   createWallOnCurrentLevel,
+  DraftMeasurementLabel,
+  discardWallPolygonDraft,
   EDITOR_LAYER,
   formatAngleRadians,
   formatLinearMeasurement,
   getAngleArcToSegmentReference,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
+  getWallDrawVariant,
   type HorizontalConstructionPlane,
   isAlignmentGuideActive,
   isAngleSnapActive,
@@ -41,15 +46,18 @@ import {
   resolvePointerSupportSurface,
   type SegmentAngleReference,
   snapWallDraftPointDetailed,
+  startWallPolygonDraft,
   triggerSFX,
   useAlignmentGuides,
   useEditor,
   useFloorplanDraftPreview,
   useSegmentDraftChain,
+  useWallDrawVariant,
   useWallSnapIndicator,
   WALL_CONNECT_SNAP_RADIUS,
   WALL_JOIN_SNAP_RADIUS,
   type WallPlanPoint,
+  wallPolygonDraftWalls,
 } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
@@ -60,9 +68,10 @@ import {
   type DraftAngleLabel,
   type DraftAxisGuideState,
   DraftAxisGuides,
-  DraftMeasurementLabel,
   getNearestAxisAngleLabel,
 } from '../shared/draft-axis-guides'
+
+import RectangleWallTool from './rectangle-tool'
 
 /**
  * Phase 5 Stage D — wall placement tool (kind-owned).
@@ -443,7 +452,7 @@ function getBelowLevelWalls(): WallNode[] {
   return getLevelWalls(belowLevel?.id ?? null, nodes)
 }
 
-export const WallTool: React.FC = () => {
+const LineWallTool: React.FC = () => {
   const unit = useViewer((state) => state.unit)
   const metricNotation = useViewer((state) => state.metricNotation)
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
@@ -484,13 +493,11 @@ export const WallTool: React.FC = () => {
   const flatConstructionBase = useRef(false)
   const buildingState = useRef(0)
   const [draftMeasurement, setDraftMeasurement] = useState<DraftMeasurementState>(null)
+  // Base Y of an open Polygon room's ghost sides (its construction plane).
+  const [polygonGhostY, setPolygonGhostY] = useState(0)
   const [axisGuide, setAxisGuide] = useState<DraftAxisGuideState>(null)
   const measurementColor = isDark ? '#ffffff' : '#111111'
   const measurementShadowColor = isDark ? '#111111' : '#ffffff'
-
-  // Clear preset-seeded defaults on deactivation so a later manual wall draw
-  // isn't built with a stale preset's parameters. Unmount-only.
-  useEffect(() => () => useEditor.getState().setToolDefaults('wall', null), [])
 
   useEffect(() => {
     let gridPosition: WallPlanPoint = [0, 0]
@@ -547,6 +554,7 @@ export const WallTool: React.FC = () => {
       event.nativeEvent?.target instanceof HTMLCanvasElement
         ? resolvePointerSupportSurface(cameraRef.current, event.position, {
             includeNodeTopSurfaces: true,
+            pointerRay: event.nativeEvent.ray,
           })
         : null
 
@@ -603,7 +611,10 @@ export const WallTool: React.FC = () => {
       return resolved
     }
 
+    // Stopping without committing drops an open Polygon room — its corners
+    // were never written. Completing paths commit before they stop.
     const stopDrafting = () => {
+      discardWallPolygonDraft()
       buildingState.current = 0
       constructionPlane.current = null
       flatConstructionBase.current = false
@@ -623,8 +634,13 @@ export const WallTool: React.FC = () => {
       clearPlacementSurface()
     }
 
+    // In 2D-only view the plan owns wall drafting; this tool stays mounted
+    // behind the hidden canvas and still hears the plan's grid events, so it
+    // must not also draft (it would add every corner twice).
+    const planOwnsInput = () => useEditor.getState().viewMode === '2d'
+
     const onGridMove = (event: GridEvent) => {
-      if (!(cursorRef.current && wallPreviewRef.current)) return
+      if (!(cursorRef.current && wallPreviewRef.current) || planOwnsInput()) return
 
       // Ride the grid event plane on the pointed surface: aiming at an
       // elevated deck lifts the plane to the deck top, so the draft's XZ
@@ -645,7 +661,7 @@ export const WallTool: React.FC = () => {
       // Add walls on the floor below as extra snap references so the new wall
       // can align with the level beneath it. Kept separate from `walls` so the
       // measurement HUD only reports against the active level.
-      const snapWalls = [...walls, ...getBelowLevelWalls()]
+      const snapWalls = [...walls, ...getBelowLevelWalls(), ...wallPolygonDraftWalls()]
       const localPoint: WallPlanPoint = pointed?.localPoint
         ? [pointed.localPoint[0], pointed.localPoint[2]]
         : [event.localPosition[0], event.localPosition[2]]
@@ -728,15 +744,17 @@ export const WallTool: React.FC = () => {
     }
 
     const onGridClick = (event: GridEvent) => {
-      if (!wallPreviewRef.current) return
+      if (!wallPreviewRef.current || planOwnsInput()) return
 
       if (buildingState.current === 1 && event.nativeEvent.detail >= 2) {
+        // A double-click finishes the chain and keeps an open Polygon room.
+        commitWallPolygonDraft()
         stopDrafting()
         return
       }
 
       const walls = getCurrentLevelWalls()
-      const snapWalls = [...walls, ...getBelowLevelWalls()]
+      const snapWalls = [...walls, ...getBelowLevelWalls(), ...wallPolygonDraftWalls()]
       const pointed = buildingState.current === 0 ? pointedSurfaceFor(event) : null
       const localClick: WallPlanPoint = pointed?.localPoint
         ? [pointed.localPoint[0], pointed.localPoint[2]]
@@ -774,6 +792,18 @@ export const WallTool: React.FC = () => {
           angleLabel: null,
         })
         triggerSFX('sfx:structure-build-start')
+        const levelId = useViewer.getState().selection.levelId
+        if (getWallDrawVariant() === 'polygon' && levelId) {
+          startWallPolygonDraft(levelId as AnyNodeId, snappedStart, {
+            supportCap: plane.elevation ?? null,
+            preferredSupportSlabId: plane.supportSlabId ?? null,
+            constructionElevation: plane.elevation ?? null,
+            constructionHeight: previewHeightRef.current,
+            constructionSourceNodeId: plane.sourceNodeId ?? null,
+            flatConstructionBase: flatConstructionBase.current,
+          })
+          setPolygonGhostY(plane.localY)
+        }
         // Visibility is owned by `updateWallPreview`. Leave the
         // unit box hidden until the first pointer move scales and
         // positions it for the active segment.
@@ -797,59 +827,73 @@ export const WallTool: React.FC = () => {
         // any other chain re-resolves the aimed surface per commit so a later
         // segment can still elect the slab it visibly crosses instead of
         // being capped at the first click's elevation.
-        const draftPlane = constructionPlane.current
-        const commitPointed =
-          draftPlane?.supportSlabId === GROUND_SUPPORT_ID ? null : pointedSurfaceFor(event)
-        // Both start and end are building-local ✓
-        const createdWall = createWallOnCurrentLevel(
-          [startingPoint.current.x, startingPoint.current.z],
-          snappedEnd,
-          {
-            supportCap: commitPointed ? commitPointed.elevation : (draftPlane?.elevation ?? null),
-            preferredSupportSlabId: draftPlane?.supportSlabId ?? null,
-            constructionElevation: draftPlane?.elevation ?? null,
-            constructionHeight: previewHeightRef.current,
-            constructionSourceNodeId: constructionPlane.current?.sourceNodeId ?? null,
-            flatConstructionBase: flatConstructionBase.current,
-          },
-        )
-        if (!createdWall) return
-        chainWallIds.current.push(createdWall.id)
+        let nextStart: WallPlanPoint
+        if (getWallDrawVariant() === 'polygon') {
+          // A Polygon room writes nothing until it completes: the corner joins
+          // the draft, and closing / sealing / teeing commits every wall at once.
+          const outcome = addWallPolygonDraftCorner(snappedEnd)
+          useAlignmentGuides.getState().clear()
+          useWallSnapIndicator.getState().clear()
+          if (outcome !== 'open') {
+            commitWallPolygonDraft()
+            stopDrafting()
+            return
+          }
+          nextStart = snappedEnd
+        } else {
+          const draftPlane = constructionPlane.current
+          const commitPointed =
+            draftPlane?.supportSlabId === GROUND_SUPPORT_ID ? null : pointedSurfaceFor(event)
+          // Both start and end are building-local ✓
+          const createdWall = createWallOnCurrentLevel(
+            [startingPoint.current.x, startingPoint.current.z],
+            snappedEnd,
+            {
+              supportCap: commitPointed ? commitPointed.elevation : (draftPlane?.elevation ?? null),
+              preferredSupportSlabId: draftPlane?.supportSlabId ?? null,
+              constructionElevation: draftPlane?.elevation ?? null,
+              constructionHeight: previewHeightRef.current,
+              constructionSourceNodeId: constructionPlane.current?.sourceNodeId ?? null,
+              flatConstructionBase: flatConstructionBase.current,
+            },
+          )
+          if (!createdWall) return
+          chainWallIds.current.push(createdWall.id)
 
-        // The new segment is now a real node — make it an alignment target
-        // for the next segment, and drop the just-shown guide.
-        refreshAlignmentCandidates()
-        useAlignmentGuides.getState().clear()
-        useWallSnapIndicator.getState().clear()
+          // The new segment is now a real node — make it an alignment target
+          // for the next segment, and drop the just-shown guide.
+          refreshAlignmentCandidates()
+          useAlignmentGuides.getState().clear()
+          useWallSnapIndicator.getState().clear()
 
-        if (useEditor.getState().getContinuation('wall') === 'single') {
-          stopDrafting()
-          return
+          if (useEditor.getState().getContinuation('wall') === 'single') {
+            stopDrafting()
+            return
+          }
+
+          const closedToChainStart =
+            chainFirstVertex.current &&
+            isWithinWallJoinSnapRadius(createdWall.end, chainFirstVertex.current)
+
+          // Auto-close also fires when the segment seals a room against the
+          // existing wall network (e.g. a bay closed onto the middle of another
+          // wall), not just when the chain loops back to its own start. Shares the
+          // room graph with auto slab/ceiling detection so the two never disagree.
+          // A resolved end that tees into wall geometry outside the chain also
+          // terminates even without an enclosed room — nobody continues drawing
+          // from a T-junction into an existing wall; a dead end in free space
+          // keeps the chain going.
+          const levelWalls = getCurrentLevelWalls()
+          if (
+            closedToChainStart ||
+            chainEndJoinsExistingWall(createdWall.end, levelWalls, chainWallIds.current) ||
+            wallClosesRoom(levelWalls, createdWall)
+          ) {
+            stopDrafting()
+            return
+          }
+          nextStart = createdWall.end
         }
-
-        const closedToChainStart =
-          chainFirstVertex.current &&
-          isWithinWallJoinSnapRadius(createdWall.end, chainFirstVertex.current)
-
-        // Auto-close also fires when the segment seals a room against the
-        // existing wall network (e.g. a bay closed onto the middle of another
-        // wall), not just when the chain loops back to its own start. Shares the
-        // room graph with auto slab/ceiling detection so the two never disagree.
-        // A resolved end that tees into wall geometry outside the chain also
-        // terminates even without an enclosed room — nobody continues drawing
-        // from a T-junction into an existing wall; a dead end in free space
-        // keeps the chain going.
-        const levelWalls = getCurrentLevelWalls()
-        if (
-          closedToChainStart ||
-          chainEndJoinsExistingWall(createdWall.end, levelWalls, chainWallIds.current) ||
-          wallClosesRoom(levelWalls, createdWall)
-        ) {
-          stopDrafting()
-          return
-        }
-
-        const nextStart = createdWall.end
         // Publish the resolved chain start so the 2D floor-plan draft
         // chains its next segment from the same point (its own snap
         // pipeline can resolve a slightly different endpoint).
@@ -891,6 +935,8 @@ export const WallTool: React.FC = () => {
     emitter.on('tool:cancel', onCancel)
 
     return () => {
+      // Leaving the tool mid-polygon abandons it (nothing was written).
+      discardWallPolygonDraft()
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
@@ -912,6 +958,7 @@ export const WallTool: React.FC = () => {
         labelShadowColor={measurementShadowColor}
       />
       <CursorSphere height={previewHeight} ref={cursorRef} />
+      <PolygonDraftGhosts height={previewHeight} thickness={previewThickness} y={polygonGhostY} />
       <mesh layers={EDITOR_LAYER} ref={wallPreviewRef} renderOrder={1} visible={false}>
         <boxGeometry />
         <meshBasicMaterial
@@ -946,6 +993,63 @@ export const WallTool: React.FC = () => {
       )}
     </group>
   )
+}
+
+/**
+ * The placed sides of an open Polygon room, drawn like the live segment's
+ * preview. They are draft state (`wallPolygonDraftPoints`), not scene walls.
+ */
+function PolygonDraftGhosts({
+  height,
+  thickness,
+  y,
+}: {
+  height: number
+  thickness: number
+  y: number
+}) {
+  const corners = useFloorplanDraftPreview((state) => state.wallPolygonDraftPoints)
+  return (
+    <>
+      {corners.slice(1).map((end, index) => {
+        const start = corners[index]!
+        const dx = end[0] - start[0]
+        const dz = end[1] - start[1]
+        const length = Math.hypot(dx, dz)
+        if (length < 0.01) return null
+        return (
+          <mesh
+            key={`${index}:${start[0]},${start[1]}`}
+            layers={EDITOR_LAYER}
+            position={[(start[0] + end[0]) / 2, y + height / 2, (start[1] + end[1]) / 2]}
+            renderOrder={1}
+            rotation={[0, -Math.atan2(dz, dx), 0]}
+            scale={[length, height, thickness]}
+          >
+            <boxGeometry />
+            <meshBasicMaterial
+              color="#818cf8"
+              depthTest={false}
+              depthWrite={false}
+              opacity={0.5}
+              side={DoubleSide}
+              transparent
+            />
+          </mesh>
+        )
+      })}
+    </>
+  )
+}
+
+export const WallTool: React.FC = () => {
+  // Clear preset-seeded defaults on deactivation so a later manual wall draw
+  // isn't built with a stale preset's parameters. Unmount-only.
+  useEffect(() => () => useEditor.getState().setToolDefaults('wall', null), [])
+
+  // The drawing variant is picked in the Build panel's Rooms group.
+  const variant = useWallDrawVariant()
+  return variant === 'rectangle' ? <RectangleWallTool /> : <LineWallTool />
 }
 
 export default WallTool

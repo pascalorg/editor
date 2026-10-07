@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type Cursor,
+  cascadeDirty,
   createSceneApi,
   type HandleDragModifiers,
   runAsSingleSceneHistoryStep,
@@ -13,9 +14,22 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { type ThreeEvent, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
-import { type Camera, type Object3D, type Plane, type Ray, Vector2, type Vector3 } from 'three'
+import {
+  type Camera,
+  type Object3D,
+  type Plane,
+  type Ray,
+  type Raycaster,
+  Vector2,
+  type Vector3,
+} from 'three'
+import { beginGesture, scopeMatcher } from '../../../lib/gesture-lifecycle'
 import { isHistoryShortcut } from '../../../lib/history'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { intersectSpatialDragPlane } from '../../../lib/spatial-drag-plane'
+import { getSpatialPointerId, spatialPointerInput } from '../../../lib/spatial-pointer-input'
+import { isTypingTarget } from '../../../lib/typing-target'
+import useInteractionScope from '../../../store/use-interaction-scope'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
 import { commitHandleDragPatch } from './handle-drag-history'
 
@@ -57,6 +71,7 @@ type HandleDragSession = {
   commit?: (patch: Partial<AnyNode>) => void
   markDirty?: boolean
   onBegin?: () => void
+  onCancel?: () => void
   onEnd?: () => void
   overrideId?: AnyNodeId
 }
@@ -78,13 +93,14 @@ type UseHandleDragArgs =
     }
 
 export function swallowNextClick() {
+  const clickWindow = window
   const swallow = (clickEvent: Event) => {
     clickEvent.stopPropagation()
     clickEvent.preventDefault()
   }
-  window.addEventListener('click', swallow, { capture: true, once: true })
+  clickWindow.addEventListener('click', swallow, { capture: true, once: true })
   setTimeout(() => {
-    window.removeEventListener('click', swallow, { capture: true })
+    clickWindow.removeEventListener('click', swallow, { capture: true })
   }, 300)
 }
 
@@ -106,6 +122,7 @@ function suppressInputDraggingUntilPointerRelease(pointerId: number) {
   window.addEventListener('pointerup', restore)
   window.addEventListener('pointercancel', restore)
   window.addEventListener('blur', onBlur)
+  return () => restore()
 }
 
 export function useHandleDrag(args: UseHandleDragArgs) {
@@ -114,160 +131,287 @@ export function useHandleDrag(args: UseHandleDragArgs) {
 
   useEffect(() => () => dragCleanupRef.current?.(), [])
 
-  return (event: ThreeEvent<PointerEvent>) => {
-    // Only the primary button starts a handle gesture — right/middle-drag
-    // belongs to the camera, so let it propagate untouched.
-    if (event.button !== 0) return
-    event.stopPropagation()
-    suppressBoxSelectForPointer(event)
+  return (event: ThreeEvent<PointerEvent>) =>
+    startHandleDrag(args, event, { camera, raycaster, gl }, dragCleanupRef)
+}
 
-    if (args.kind === 'tap') {
-      suppressInputDraggingUntilPointerRelease(event.nativeEvent.pointerId)
-      swallowNextClick()
-      sfxEmitter.emit('sfx:item-pick')
-      document.body.style.cursor = ''
-      args.onTap(event)
-      return
-    }
+type HandleDragThree = {
+  camera: Camera
+  raycaster: Raycaster
+  gl: { domElement: Pick<HTMLElement, 'getBoundingClientRect'> }
+}
 
-    const { cursor, dragControls, handleIndex, node, rideObject, setIsDragging } = args
-    rideObject.updateMatrixWorld()
+/**
+ * One press on a handle: a tap, or a drag registered with the gesture
+ * lifecycle owner (mode / level / selection change, its scope replaced, its
+ * node deleted, any history command, unmount → cancel). Release commits; the
+ * cleanup runs exactly once and in `finally`, so a throwing commit cannot
+ * leave the drag live. Exported for tests; components use `useHandleDrag`.
+ */
+export function startHandleDrag(
+  args: UseHandleDragArgs,
+  event: ThreeEvent<PointerEvent>,
+  { camera, raycaster, gl }: HandleDragThree,
+  dragCleanupRef: { current: (() => void) | null },
+) {
+  // Only the primary button starts a handle gesture — right/middle-drag
+  // belongs to the camera, so let it propagate untouched.
+  if (event.button !== 0) return
+  event.stopPropagation()
+  suppressBoxSelectForPointer(event)
+  const spatialPointerId = getSpatialPointerId(event.nativeEvent)
 
-    const ndc = new Vector2()
-    const setPointerRay = (clientX: number, clientY: number) => {
-      const rect = gl.domElement.getBoundingClientRect()
-      ndc.set(
-        ((clientX - rect.left) / rect.width) * 2 - 1,
-        -((clientY - rect.top) / rect.height) * 2 + 1,
-      )
-      raycaster.setFromCamera(ndc, camera)
+  if (args.kind === 'tap') {
+    const restoreInputDragging = suppressInputDraggingUntilPointerRelease(event.pointerId)
+    if (spatialPointerId) {
+      spatialPointerInput.capture(spatialPointerId, {
+        onMove: () => undefined,
+        onRelease: restoreInputDragging,
+        onCancel: restoreInputDragging,
+      })
     }
-    const getPointerRay: GetPointerRay = (clientX, clientY, target) => {
-      setPointerRay(clientX, clientY)
-      return target.copy(raycaster.ray)
-    }
-    const intersectPlane: IntersectPlane = (clientX, clientY, plane, target) => {
-      setPointerRay(clientX, clientY)
-      return raycaster.ray.intersectPlane(plane, target)
-    }
+    swallowNextClick()
+    sfxEmitter.emit('sfx:item-pick')
+    document.body.style.cursor = ''
+    args.onTap(event)
+    return
+  }
 
-    const nodeId = node.id as AnyNodeId
-    const sceneApi = createSceneApi(useScene)
-    const initialNode = (sceneApi.get(nodeId) ?? node) as AnyNode
-    const session = args.onStart({
-      event,
-      camera,
+  const { cursor, dragControls, handleIndex, node, rideObject, setIsDragging } = args
+  rideObject.updateMatrixWorld()
+  const spatialRay = spatialPointerId ? event.ray.clone() : null
+
+  const ndc = new Vector2()
+  const setPointerRay = (clientX: number, clientY: number) => {
+    const rect = gl.domElement.getBoundingClientRect()
+    ndc.set(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1,
+    )
+    raycaster.setFromCamera(ndc, camera)
+  }
+  const getPointerRay: GetPointerRay = (clientX, clientY, target) => {
+    if (spatialRay) return target.copy(spatialRay)
+    setPointerRay(clientX, clientY)
+    return target.copy(raycaster.ray)
+  }
+  const intersectPlane: IntersectPlane = (clientX, clientY, plane, target) => {
+    if (spatialRay) return intersectSpatialDragPlane(spatialRay, plane, target)
+    setPointerRay(clientX, clientY)
+    return raycaster.ray.intersectPlane(plane, target)
+  }
+
+  const nodeId = node.id as AnyNodeId
+  const sceneApi = createSceneApi(useScene)
+  const initialNode = (sceneApi.get(nodeId) ?? node) as AnyNode
+  const session = args.onStart({
+    event,
+    camera,
+    getPointerRay,
+    intersectPlane,
+    initialNode,
+    node,
+    nodeId,
+    rideObject,
+    sceneApi,
+  })
+  if (!session) return
+
+  const overrideId = session.overrideId ?? nodeId
+  const markDirty = session.markDirty !== false
+  const scopeBefore = useInteractionScope.getState().scope
+  document.body.style.cursor = cursor
+  sfxEmitter.emit('sfx:item-pick')
+  useViewer.getState().setInputDragging(true)
+  useScene.temporal.getState().pause()
+  setIsDragging(true)
+  dragControls.onStart(handleIndex, initialNode)
+  session.onBegin?.()
+  // The scope the handle's own callbacks began is the one whose loss cancels.
+  const scopeAfter = useInteractionScope.getState().scope
+  const nodeInScene = !!useScene.getState().nodes[nodeId]
+
+  let lastPatch: Partial<AnyNode> | null = null
+  let historyPaused = true
+  let releaseSpatialCapture: (() => void) | null = null
+  let altKey = event.nativeEvent.altKey
+  let shiftKey = event.nativeEvent.shiftKey
+  let pendingMoveEvent: PointerEvent | null = null
+  let moveFrame = 0
+
+  const resumeHistory = () => {
+    if (!historyPaused) return
+    historyPaused = false
+    useScene.temporal.getState().resume()
+  }
+
+  const processMove = (moveEvent: PointerEvent) => {
+    const patch = session.move({
+      event: moveEvent,
+      modifiers: { altKey, shiftKey },
       getPointerRay,
       intersectPlane,
-      initialNode,
-      node,
-      nodeId,
-      rideObject,
-      sceneApi,
     })
-    if (!session) return
-
-    const overrideId = session.overrideId ?? nodeId
-    const markDirty = session.markDirty !== false
-    document.body.style.cursor = cursor
-    sfxEmitter.emit('sfx:item-pick')
-    useViewer.getState().setInputDragging(true)
-    useScene.temporal.getState().pause()
-    setIsDragging(true)
-    dragControls.onStart(handleIndex, initialNode)
-    session.onBegin?.()
-
-    let lastPatch: Partial<AnyNode> | null = null
-    let historyPaused = true
-    let altKey = event.nativeEvent.altKey
-
-    const resumeHistory = () => {
-      if (!historyPaused) return
-      historyPaused = false
-      useScene.temporal.getState().resume()
+    if (!patch) return
+    lastPatch = patch
+    useLiveNodeOverrides.getState().set(overrideId, patch as Record<string, unknown>)
+    if (markDirty) {
+      for (const id of cascadeDirty(overrideId, { scene: createSceneApi(useScene) }))
+        useScene.getState().markDirty(id)
     }
+  }
 
-    const onMove = (moveEvent: PointerEvent) => {
-      const patch = session.move({
-        event: moveEvent,
-        modifiers: { altKey },
-        getPointerRay,
-        intersectPlane,
-      })
-      if (!patch) return
-      lastPatch = patch
-      useLiveNodeOverrides.getState().set(overrideId, patch as Record<string, unknown>)
-      if (markDirty) {
-        useScene.getState().markDirty(overrideId)
-      }
+  // Coalesce high-frequency pointer events so live React/store updates happen
+  // at most once per animation frame while retaining the newest position.
+  const flushMove = () => {
+    moveFrame = 0
+    const moveEvent = pendingMoveEvent
+    pendingMoveEvent = null
+    if (moveEvent) processMove(moveEvent)
+  }
+  const onMove = (moveEvent: PointerEvent) => {
+    pendingMoveEvent = moveEvent
+    if (moveFrame !== 0) return
+    if (typeof window.requestAnimationFrame === 'function') {
+      moveFrame = window.requestAnimationFrame(flushMove)
+    } else {
+      flushMove()
     }
+  }
 
-    const cleanup = () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', onCancel)
-      window.removeEventListener('keydown', onKeyDown, true)
-      window.removeEventListener('keyup', onKeyUp, true)
+  let done = false
+  const cleanup = () => {
+    if (done) return
+    done = true
+    if (moveFrame !== 0) window.cancelAnimationFrame?.(moveFrame)
+    moveFrame = 0
+    pendingMoveEvent = null
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', onUp)
+    window.removeEventListener('pointercancel', onCancel)
+    window.removeEventListener('keydown', onKeyDown, true)
+    window.removeEventListener('keyup', onKeyUp, true)
+    dragCleanupRef.current = null
+    try {
+      releaseSpatialCapture?.()
+      releaseSpatialCapture = null
       if (document.body.style.cursor === cursor) {
         document.body.style.cursor = ''
       }
       resumeHistory()
       useViewer.getState().setInputDragging(false)
       setIsDragging(false)
-      session.onEnd?.()
-      dragControls.onEnd()
-      dragCleanupRef.current = null
-    }
-
-    const clearOverride = () => {
-      useLiveNodeOverrides.getState().clear(overrideId)
-      if (markDirty) {
-        useScene.getState().markDirty(overrideId)
+    } finally {
+      try {
+        session.onEnd?.()
+      } finally {
+        dragControls.onEnd()
       }
     }
+  }
 
-    const onUp = () => {
-      swallowNextClick()
-      sfxEmitter.emit('sfx:item-place')
-      if (lastPatch) {
-        commitHandleDragPatch({
-          patch: lastPatch,
-          resumeHistory,
-          runAsSingleHistoryStep: (run) => runAsSingleSceneHistoryStep(useScene, run),
-          commit: session.commit ?? ((patch) => sceneApi.update(overrideId, patch)),
-        })
+  const clearOverride = () => {
+    useLiveNodeOverrides.getState().clear(overrideId)
+    if (markDirty) {
+      for (const id of cascadeDirty(overrideId, { scene: createSceneApi(useScene) }))
+        useScene.getState().markDirty(id)
+    }
+  }
+
+  const gesture = beginGesture({
+    kind: 'handle-drag',
+    onCancel: () => {
+      try {
+        session.onCancel?.()
+      } finally {
+        try {
+          clearOverride()
+        } finally {
+          cleanup()
+        }
       }
-      clearOverride()
-      cleanup()
-    }
+    },
+    ownsScope:
+      scopeAfter !== scopeBefore && scopeAfter.kind !== 'idle'
+        ? scopeMatcher(scopeAfter)
+        : undefined,
+    // A draft handle's node is not in the scene yet; only a real node can go stale.
+    stale: nodeInScene ? () => !useScene.getState().nodes[nodeId] : undefined,
+  })
 
-    const onCancel = () => {
-      clearOverride()
-      cleanup()
-    }
-
-    // Escape / ⌘Z abort the drag — capture phase so they win over the global
-    // use-keyboard arms (⌘Z must never history-jump under a live pointer).
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Alt') {
-        altKey = true
-        return
+  const onUp = () => {
+    if (moveFrame !== 0) window.cancelAnimationFrame?.(moveFrame)
+    flushMove()
+    swallowNextClick()
+    sfxEmitter.emit('sfx:item-place')
+    gesture.finish(() => {
+      try {
+        if (lastPatch) {
+          commitHandleDragPatch({
+            patch: lastPatch,
+            resumeHistory,
+            runAsSingleHistoryStep: (run) => runAsSingleSceneHistoryStep(useScene, run),
+            commit: session.commit ?? ((patch) => sceneApi.update(overrideId, patch)),
+          })
+        }
+      } finally {
+        try {
+          clearOverride()
+        } finally {
+          cleanup()
+        }
       }
-      if (e.key !== 'Escape' && !isHistoryShortcut(e)) return
-      e.preventDefault()
-      e.stopPropagation()
-      swallowNextClick()
-      onCancel()
-    }
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Alt') altKey = false
-    }
+    })
+  }
 
-    dragCleanupRef.current = onCancel
+  const onCancel = () => gesture.cancel('cancel')
+
+  // Escape / ⌘Z abort the drag — capture phase so they win over the global
+  // use-keyboard arms (⌘Z must never history-jump under a live pointer).
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Alt') {
+      altKey = true
+      return
+    }
+    if (e.key === 'Shift') {
+      shiftKey = true
+      return
+    }
+    if (e.key !== 'Escape' && !isHistoryShortcut(e)) return
+    if (isTypingTarget(e.target)) return
+    e.preventDefault()
+    e.stopPropagation()
+    swallowNextClick()
+    onCancel()
+  }
+  const onKeyUp = (e: KeyboardEvent) => {
+    if (e.key === 'Alt') altKey = false
+    if (e.key === 'Shift') shiftKey = false
+  }
+
+  dragCleanupRef.current = onCancel
+  if (spatialPointerId && spatialRay) {
+    releaseSpatialCapture = spatialPointerInput.capture(spatialPointerId, {
+      onMove: (ray) => {
+        spatialRay.copy(ray)
+        processMove(
+          new PointerEvent('pointermove', {
+            button: 0,
+            buttons: 1,
+            altKey,
+            pointerId: event.pointerId,
+            pointerType: 'xr',
+          }),
+        )
+      },
+      onRelease: onUp,
+      onCancel,
+    })
+  } else {
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onCancel)
-    window.addEventListener('keydown', onKeyDown, true)
-    window.addEventListener('keyup', onKeyUp, true)
   }
+  window.addEventListener('keydown', onKeyDown, true)
+  window.addEventListener('keyup', onKeyUp, true)
 }

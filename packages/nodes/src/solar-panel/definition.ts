@@ -255,6 +255,7 @@ export const solarPanelDefinition: NodeDefinition<typeof SolarPanelNode> = {
   handles: solarPanelHandles,
   floorplan: buildSolarPanelFloorplan,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

@@ -1,4 +1,5 @@
 import type { FenceNode, WallNode } from '../../schema'
+import { getWallFaceOffsets } from './wall-frame'
 import type { Point2D } from './wall-mitering'
 
 const CURVE_EPSILON = 1e-6
@@ -290,11 +291,12 @@ export function getWallCurveLength(wall: WallCurveLike, segments = DEFAULT_SAMPL
 }
 
 export function getWallSurfacePolygon(
-  wall: Pick<WallNode | FenceNode, 'start' | 'end' | 'curveOffset' | 'thickness'>,
+  wall: Pick<WallNode | FenceNode, 'start' | 'end' | 'curveOffset' | 'thickness'> &
+    Pick<WallNode, 'justification'>,
   segments = DEFAULT_SAMPLE_SEGMENTS,
   miterOverrides?: WallSurfaceMiterOverrides,
 ) {
-  const halfThickness = (wall.thickness ?? 0.1) / 2
+  const { a, b } = getWallFaceOffsets(wall)
   const count = Math.max(1, segments)
   const left: Point2D[] = []
   const right: Point2D[] = []
@@ -302,12 +304,12 @@ export function getWallSurfacePolygon(
   for (let index = 0; index <= count; index += 1) {
     const frame = getWallCurveFrameAt(wall, index / count)
     left.push({
-      x: frame.point.x + frame.normal.x * halfThickness,
-      y: frame.point.y + frame.normal.y * halfThickness,
+      x: frame.point.x + frame.normal.x * a,
+      y: frame.point.y + frame.normal.y * a,
     })
     right.push({
-      x: frame.point.x - frame.normal.x * halfThickness,
-      y: frame.point.y - frame.normal.y * halfThickness,
+      x: frame.point.x - frame.normal.x * -b,
+      y: frame.point.y - frame.normal.y * -b,
     })
   }
 
@@ -319,4 +321,23 @@ export function getWallSurfacePolygon(
   }
 
   return [...right, ...left.reverse()]
+}
+
+export function getWallCurveStationAtPoint(
+  wall: WallCurveLike,
+  point: readonly [number, number],
+): number {
+  const arc = getWallArcData(wall)
+  if (!arc) {
+    const chord = getWallChordFrame(wall)
+    return clamp01(
+      ((point[0] - chord.start.x) * chord.tangent.x +
+        (point[1] - chord.start.y) * chord.tangent.y) /
+        chord.length,
+    )
+  }
+  let angle = Math.atan2(point[1] - arc.center.y, point[0] - arc.center.x) - arc.startAngle
+  if (arc.delta > 0 && angle < 0) angle += Math.PI * 2
+  if (arc.delta < 0 && angle > 0) angle -= Math.PI * 2
+  return clamp01(angle / arc.delta)
 }

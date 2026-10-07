@@ -8,11 +8,13 @@ import {
   parseMaterialRef,
   type SceneMaterial,
   type SceneMaterialId,
+  slotPaintMaterial,
   toSceneMaterialRef,
   useScene,
 } from '@pascal-app/core'
 import { createMaterial, createMaterialFromPresetRef, useViewer } from '@pascal-app/viewer'
 import type { Material, Mesh } from 'three'
+import { swapPreviewMaterial } from '../shared/swap-preview-material'
 
 type SlotTag = string | null | (string | null)[]
 
@@ -200,7 +202,6 @@ function applyItemPreview(
     if (Array.isArray(tag)) {
       const current = mesh.material as Material | Material[]
       if (Array.isArray(current)) {
-        const previousArray = [...current]
         const nextArray = [...current]
         let changed = false
         for (let index = 0; index < tag.length; index += 1) {
@@ -209,20 +210,13 @@ function applyItemPreview(
           changed = true
         }
         if (!changed) return
-        mesh.material = nextArray
-        restores.push(() => {
-          mesh.material = previousArray
-        })
+        restores.push(swapPreviewMaterial(mesh, nextArray))
         return
       }
       if (tag[0] !== role) return
     }
 
-    const previous = mesh.material
-    mesh.material = previewMaterial
-    restores.push(() => {
-      mesh.material = previous
-    })
+    restores.push(swapPreviewMaterial(mesh, previewMaterial))
   })
 
   if (restores.length === 0) return null
@@ -242,15 +236,6 @@ export const itemPaint: PaintCapability = {
     commitItemPaint(node as ItemNode, role, material, materialPreset),
   applyPreview: ({ role, root, material, materialPreset }) =>
     applyItemPreview(role, root, material, materialPreset),
-  getEffectiveMaterial: ({ node, role }) => {
-    const ref = (node as ItemNode).slots?.[role]
-    const parsed = parseMaterialRef(ref)
-    if (!parsed) return null
-    if (parsed.kind === 'library') {
-      return { material: undefined, materialPreset: ref }
-    }
-    const sceneMaterial = useScene.getState().materials[parsed.id as SceneMaterialId]
-    if (!sceneMaterial) return null
-    return { material: sceneMaterial.material, materialPreset: undefined }
-  },
+  getEffectiveMaterial: ({ node, role }) =>
+    slotPaintMaterial((node as ItemNode).slots?.[role], useScene.getState().materials),
 }

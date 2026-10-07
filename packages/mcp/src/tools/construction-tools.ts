@@ -1,20 +1,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { resolveStairTotalRise } from '@pascal-app/core'
+import { createZone, generateId } from '@pascal-app/core'
+import { unknownMaterialPresetRefusal } from '@pascal-app/core/agent-operations'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
-import {
-  CeilingNode,
-  getActiveRoofHeight,
-  LevelNode,
-  RoofNode,
-  RoofSegmentNode,
-  SlabNode,
-  StairNode,
-  StairSegmentNode,
-  WallNode,
-} from '@pascal-app/core/schema'
+import { getActiveRoofHeight, LevelNode, RoofNode, RoofSegmentNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
-import { ADDITIVE_TOOL_ANNOTATIONS, DESTRUCTIVE_TOOL_ANNOTATIONS } from './annotations'
+import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { measurement } from './measurement'
 import { NodeIdSchema, Vec2Schema, Vec3Schema } from './schemas'
@@ -29,8 +20,6 @@ const ROOF_TYPES = [
   'flat',
   'conical',
 ] as const
-const RAILING_MODES = ['none', 'left', 'right', 'both'] as const
-
 export const createStoryShellInput = {
   levelId: NodeIdSchema,
   footprint: z.array(Vec2Schema).min(3),
@@ -42,9 +31,17 @@ export const createStoryShellInput = {
     positive: true,
     description: 'Wall thickness.',
   }).default(0.16),
-  createSlab: z.boolean().default(true),
-  createCeiling: z.boolean().default(true),
-  slabElevation: measurement('length', 'm', { description: 'Slab elevation.' }).default(0.1),
+  createSlab: z
+    .boolean()
+    .default(true)
+    .describe('Floor intent for the rooms inside the shell. False records hasFloor: false.'),
+  createCeiling: z
+    .boolean()
+    .default(true)
+    .describe('Ceiling intent for the rooms inside the shell. False records hasCeiling: false.'),
+  slabElevation: measurement('length', 'm', {
+    description: "Walking surface of the derived plate, stored as the room's floor elevation.",
+  }).default(0.1),
   ceilingHeight: measurement('length', 'm', {
     positive: true,
     description: 'Ceiling height.',
@@ -58,7 +55,11 @@ export const createStoryShellInput = {
 export const createStoryShellOutput = {
   levelId: z.string(),
   wallIds: z.array(z.string()),
+  /** Zones the reconciler derived for the enclosed faces. */
+  zoneIds: z.array(z.string()),
+  /** Derived floor plate. `null` when floors were declined or nothing reconciled. */
   slabId: z.string().nullable(),
+  /** Derived ceiling. `null` when ceilings were declined or nothing reconciled. */
   ceilingId: z.string().nullable(),
   createdIds: z.array(z.string()),
   ...liveSyncOutput,
@@ -98,50 +99,6 @@ export const createRoofOutput = {
   createdRoofLevelId: z.string().nullable(),
   roofId: z.string(),
   roofSegmentId: z.string(),
-  ...liveSyncOutput,
-}
-
-export const createStairBetweenLevelsInput = {
-  fromLevelId: NodeIdSchema,
-  toLevelId: NodeIdSchema,
-  position: Vec3Schema,
-  rotation: measurement('angle', 'rad', { description: 'Y-axis rotation.' }).default(0),
-  width: measurement('length', 'm', { positive: true, description: 'Stair width.' }).default(1),
-  runLength: measurement('length', 'm', {
-    positive: true,
-    description: 'Horizontal run length.',
-  }).default(3),
-  totalRise: measurement('length', 'm', {
-    positive: true,
-    description: 'Total vertical rise.',
-  }).optional(),
-  stepCount: z.number().int().positive().default(14),
-  railingMode: z.enum(RAILING_MODES).default('both'),
-  destinationSlabId: NodeIdSchema.optional(),
-  sourceCeilingId: NodeIdSchema.optional(),
-  createDestinationSlabOpening: z.boolean().default(true),
-  createSourceCeilingOpening: z.boolean().default(true),
-  openingWidth: measurement('length', 'm', {
-    positive: true,
-    description: 'Floor opening width.',
-  }).optional(),
-  openingLength: measurement('length', 'm', {
-    positive: true,
-    description: 'Floor opening length.',
-  }).optional(),
-  openingOffset: measurement('length', 'm', { min: 0, description: 'Opening offset.' }).default(0),
-  openingCenter: Vec2Schema.optional(),
-  openingRotation: measurement('angle', 'rad', { description: 'Opening rotation.' }).optional(),
-  materialPreset: z.string().optional(),
-  name: z.string().optional(),
-}
-
-export const createStairBetweenLevelsOutput = {
-  stairId: z.string(),
-  stairSegmentId: z.string(),
-  destinationSlabId: z.string().nullable(),
-  sourceCeilingId: z.string().nullable(),
-  openingPolygon: z.array(Vec2Schema),
   ...liveSyncOutput,
 }
 
@@ -191,64 +148,36 @@ function nextLevelIndex(
   return existing.includes(candidate) ? Math.max(candidate, ...existing) + 1 : candidate
 }
 
-function nodesOnLevel(bridge: SceneOperations, levelId: string): AnyNode[] {
-  return Object.values(bridge.getNodes()).filter(
-    (node) => node.id !== levelId && bridge.resolveLevelId(node.id as AnyNodeId) === levelId,
+/** Room zones that appeared on the level while this tool call ran. */
+function newRoomZoneIds(bridge: SceneOperations, levelId: string, before: ReadonlySet<string>) {
+  return Object.values(bridge.getNodes())
+    .filter(
+      (node) =>
+        node.type === 'zone' &&
+        node.parentId === levelId &&
+        node.spaceRole === 'room' &&
+        !before.has(node.id),
+    )
+    .map((node) => node.id)
+    .sort()
+}
+
+function derivedShellSurfaces(bridge: SceneOperations, levelId: string, zoneIds: string[]) {
+  const children = Object.values(bridge.getNodes()).filter((node) => node.parentId === levelId)
+  const plate = children
+    .filter((node) => node.type === 'slab')
+    .sort((a, b) => Number(a.plateRole === 'base') - Number(b.plateRole === 'base'))
+    .find(
+      (node) =>
+        node.type === 'slab' &&
+        node.boundary === 'auto' &&
+        (node.zoneIds ?? []).some((id) => zoneIds.includes(id)),
+    )
+  const ceiling = children.find(
+    (node) =>
+      node.type === 'ceiling' && node.boundary === 'auto' && zoneIds.includes(node.zoneId ?? ''),
   )
-}
-
-function firstNodeOnLevel(
-  bridge: SceneOperations,
-  levelId: string,
-  type: 'slab' | 'ceiling',
-): AnyNode | null {
-  return nodesOnLevel(bridge, levelId).find((node) => node.type === type) ?? null
-}
-
-function rotatePoint(x: number, z: number, rotation: number): [number, number] {
-  const cos = Math.cos(rotation)
-  const sin = Math.sin(rotation)
-  return [x * cos + z * sin, -x * sin + z * cos]
-}
-
-function rectangularOpening(args: {
-  position: [number, number, number]
-  rotation: number
-  width: number
-  length: number
-  offset: number
-  center?: [number, number] | undefined
-  openingRotation?: number | undefined
-}): [number, number][] {
-  const width = args.width + args.offset * 2
-  const length = args.length + args.offset * 2
-  const center: [number, number] = args.center ?? [
-    args.position[0],
-    args.position[2] + args.length / 2,
-  ]
-  const rotation = args.openingRotation ?? args.rotation
-  const halfW = width / 2
-  const halfL = length / 2
-  const local: [number, number][] = [
-    [-halfW, -halfL],
-    [halfW, -halfL],
-    [halfW, halfL],
-    [-halfW, halfL],
-  ]
-  return local.map(([x, z]) => {
-    const [rx, rz] = rotatePoint(x, z, rotation)
-    return [center[0] + rx, center[1] + rz]
-  })
-}
-
-function withHole(
-  surface: AnyNode & { type: 'slab' | 'ceiling' },
-  hole: [number, number][],
-): Partial<AnyNode> {
-  return {
-    holes: [...(surface.holes ?? []), hole],
-    holeMetadata: [...(surface.holeMetadata ?? []), { source: 'manual' }],
-  } as Partial<AnyNode>
+  return { slabId: plate?.id ?? null, ceilingId: ceiling?.id ?? null }
 }
 
 export function registerConstructionTools(server: McpServer, bridge: SceneOperations): void {
@@ -257,7 +186,7 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
     {
       title: 'Create story shell',
       description:
-        'Create one level-owned building shell from a footprint: perimeter walls plus optional slab and ceiling. Use once per story; do not make first-floor walls span multiple stories.',
+        'Create one level-owned building shell from a footprint: the perimeter walls. The floor plate and the ceiling are DERIVED from the rooms the walls enclose — never author a slab or a ceiling here, and never pass boundary/autoFromWalls; createSlab / createCeiling / slabElevation are recorded as room intent instead. Use once per story; do not make first-floor walls span multiple stories.',
       inputSchema: createStoryShellInput,
       outputSchema: createStoryShellOutput,
       annotations: ADDITIVE_TOOL_ANNOTATIONS,
@@ -276,6 +205,12 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
       slabMaterialPreset,
       ceilingMaterialPreset,
     }) => {
+      const preset = unknownMaterialPresetRefusal({
+        wallMaterialPreset,
+        slabMaterialPreset,
+        ceilingMaterialPreset,
+      })
+      if (preset) throw new Error(preset)
       const level = assertNode(bridge, levelId, 'level')
       if (isRoofLevel(level)) {
         throw new Error(
@@ -283,67 +218,91 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         )
       }
       const points = footprint as [number, number][]
-      const wallIds: string[] = []
-      const patches: Array<{ op: 'create'; node: AnyNode; parentId: AnyNodeId }> = []
-
-      for (let i = 0; i < points.length; i++) {
-        const wall = WallNode.parse({
-          name: namePrefix ? `${namePrefix} Wall ${i + 1}` : undefined,
-          start: points[i],
-          end: points[(i + 1) % points.length],
+      const before = new Set(Object.keys(bridge.getNodes()))
+      const plan = createZone(bridge.getNodes(), {
+        levelId,
+        polygon: points,
+        name: namePrefix ?? 'Room',
+        enclose: true,
+        mintId: generateId,
+        wall: {
           thickness: wallThickness,
           ...(wallHeight !== undefined ? { height: wallHeight } : {}),
-          frontSide: 'exterior',
-          backSide: 'interior',
-          ...(wallMaterialPreset ? { materialPreset: wallMaterialPreset } : {}),
-          metadata: { role: 'exterior', storyShell: true },
-        })
-        wallIds.push(wall.id)
-        patches.push({ op: 'create', node: wall, parentId: levelId as AnyNodeId })
-      }
+        },
+        intent: {
+          floor: { elevation: slabElevation },
+          hasFloor: createSlab,
+          hasCeiling: createCeiling,
+        },
+      })
+      const wallIds = plan.changes.flatMap((change) =>
+        change.op === 'create' && change.node.type === 'wall' ? [change.node.id] : [],
+      )
+      bridge.runAsSingleHistoryStep(() => {
+        bridge.applyPatch(
+          plan.changes.map((change) =>
+            change.op === 'create'
+              ? {
+                  ...change,
+                  parentId: change.node.parentId as AnyNodeId,
+                  node:
+                    change.node.type === 'wall'
+                      ? {
+                          ...change.node,
+                          ...(namePrefix
+                            ? { name: `${namePrefix} Wall ${wallIds.indexOf(change.node.id) + 1}` }
+                            : {}),
+                          ...(wallMaterialPreset ? { materialPreset: wallMaterialPreset } : {}),
+                          metadata: { role: 'exterior', storyShell: true },
+                        }
+                      : change.node,
+                }
+              : change,
+          ),
+        )
+        bridge.deriveStructure([levelId as AnyNodeId])
+      })
+      const zoneIds = newRoomZoneIds(bridge, levelId, before)
 
-      let slabId: string | null = null
-      if (createSlab) {
-        const slab = SlabNode.parse({
-          name: namePrefix ? `${namePrefix} Slab` : undefined,
-          polygon: points,
-          elevation: slabElevation,
-          // Grounded solid: underside on the level plane, so the created
-          // story slab occupies [0, slabElevation] like the legacy
-          // extrude-from-zero model.
-          thickness: Math.max(slabElevation, 0),
-          recessed: slabElevation < 0,
-          ...(slabMaterialPreset ? { materialPreset: slabMaterialPreset } : {}),
-          metadata: { role: 'story-slab' },
-        })
-        slabId = slab.id
-        patches.push({ op: 'create', node: slab, parentId: levelId as AnyNodeId })
-      }
+      // Finishes and an explicit ceiling height stay editable on derived
+      // construction, so they are applied to whatever the reconciler built.
+      const derived = derivedShellSurfaces(bridge, levelId, zoneIds)
+      const explicitCeilingHeight = ceilingHeight ?? wallHeight
+      const finishes = [
+        ...(derived.slabId && slabMaterialPreset
+          ? [
+              {
+                op: 'update' as const,
+                id: derived.slabId as AnyNodeId,
+                data: {
+                  ...(slabMaterialPreset ? { materialPreset: slabMaterialPreset } : {}),
+                } as Partial<AnyNode>,
+              },
+            ]
+          : []),
+        ...(derived.ceilingId && (ceilingMaterialPreset || explicitCeilingHeight !== undefined)
+          ? [
+              {
+                op: 'update' as const,
+                id: derived.ceilingId as AnyNodeId,
+                data: {
+                  ...(ceilingMaterialPreset ? { materialPreset: ceilingMaterialPreset } : {}),
+                  ...(explicitCeilingHeight !== undefined ? { height: explicitCeilingHeight } : {}),
+                } as Partial<AnyNode>,
+              },
+            ]
+          : []),
+      ]
+      if (finishes.length > 0) bridge.applyPatch(finishes)
 
-      let ceilingId: string | null = null
-      if (createCeiling) {
-        // Height-less unless the caller pinned one: a new story ceiling
-        // follows the level top automatically.
-        const explicitCeilingHeight = ceilingHeight ?? wallHeight
-        const ceiling = CeilingNode.parse({
-          name: namePrefix ? `${namePrefix} Ceiling` : undefined,
-          polygon: points,
-          ...(explicitCeilingHeight !== undefined ? { height: explicitCeilingHeight } : {}),
-          ...(ceilingMaterialPreset ? { materialPreset: ceilingMaterialPreset } : {}),
-          metadata: { role: 'story-ceiling' },
-        })
-        ceilingId = ceiling.id
-        patches.push({ op: 'create', node: ceiling, parentId: levelId as AnyNodeId })
-      }
-
-      const result = bridge.applyPatch(patches)
       const persistence = await publishLiveSceneSnapshot(bridge, 'create_story_shell')
       return textResult({
         levelId,
         wallIds,
-        slabId,
-        ceilingId,
-        createdIds: result.createdIds as string[],
+        zoneIds,
+        slabId: derived.slabId,
+        ceilingId: derived.ceilingId,
+        createdIds: Object.keys(bridge.getNodes()).filter((id) => !before.has(id)),
         ...persistencePayload(persistence),
       })
     },
@@ -377,6 +336,8 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
       materialPreset,
       name,
     }) => {
+      const preset = unknownMaterialPresetRefusal({ materialPreset })
+      if (preset) throw new Error(preset)
       const effectiveWidth = roofType === 'conical' ? Math.max(width, depth) : width
       const effectiveDepth = roofType === 'conical' ? effectiveWidth : depth
       // Peak height is derived from pitch + footprint + type; we still
@@ -450,139 +411,6 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         createdRoofLevelId,
         roofId: roof.id,
         roofSegmentId: segment.id,
-        ...persistencePayload(persistence),
-      })
-    },
-  )
-
-  server.registerTool(
-    'create_stair_between_levels',
-    {
-      title: 'Create stair between levels',
-      description:
-        'Create a straight stair and a single rectangular manual opening in the destination slab/source ceiling. This disables stair auto-opening mode to avoid duplicate or irregular holes.',
-      inputSchema: createStairBetweenLevelsInput,
-      outputSchema: createStairBetweenLevelsOutput,
-      annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
-    },
-    async ({
-      fromLevelId,
-      toLevelId,
-      position,
-      rotation,
-      width,
-      runLength,
-      totalRise,
-      stepCount,
-      railingMode,
-      destinationSlabId,
-      sourceCeilingId,
-      createDestinationSlabOpening,
-      createSourceCeilingOpening,
-      openingWidth,
-      openingLength,
-      openingOffset,
-      openingCenter,
-      openingRotation,
-      materialPreset,
-      name,
-    }) => {
-      const fromLevel = assertNode(bridge, fromLevelId, 'level')
-      const toLevel = assertNode(bridge, toLevelId, 'level')
-      if (isRoofLevel(fromLevel) || isRoofLevel(toLevel)) {
-        throw new Error(
-          'Roof support levels are not occupied stories; create a separate occupied attic/story level if a stair-accessible attic is required',
-        )
-      }
-
-      const stairDraft = StairNode.parse({
-        name: name ?? 'Stair',
-        position: position as [number, number, number],
-        rotation,
-        stairType: 'straight',
-        fromLevelId,
-        toLevelId,
-        slabOpeningMode: 'none',
-        openingOffset,
-        width,
-        ...(totalRise !== undefined ? { totalRise } : {}),
-        stepCount,
-        railingMode,
-        children: [],
-        ...(materialPreset ? { materialPreset } : {}),
-        metadata: {
-          openingManaged: 'manual-rectangular',
-        },
-      })
-      const riseNodes = {
-        ...bridge.getNodes(),
-        [fromLevel.id]: {
-          ...fromLevel,
-          children: [...(fromLevel as Extract<AnyNode, { type: 'level' }>).children, stairDraft.id],
-        },
-        [stairDraft.id]: stairDraft,
-      } as Record<string, AnyNode>
-      const resolvedTotalRise = resolveStairTotalRise(stairDraft, riseNodes)
-      const segment = StairSegmentNode.parse({
-        segmentType: 'stair',
-        width,
-        length: runLength,
-        height: resolvedTotalRise,
-        stepCount,
-        ...(materialPreset ? { materialPreset } : {}),
-      })
-      const stair = { ...stairDraft, children: [segment.id] }
-
-      const openingPolygon = rectangularOpening({
-        position: position as [number, number, number],
-        rotation,
-        width: openingWidth ?? width,
-        length: openingLength ?? runLength,
-        offset: openingOffset,
-        center: openingCenter as [number, number] | undefined,
-        openingRotation,
-      })
-
-      const patches: Array<
-        | { op: 'create'; node: AnyNode; parentId: AnyNodeId }
-        | { op: 'update'; id: AnyNodeId; data: Partial<AnyNode> }
-      > = [
-        { op: 'create', node: stair, parentId: fromLevelId as AnyNodeId },
-        { op: 'create', node: segment, parentId: stair.id as AnyNodeId },
-      ]
-
-      const destinationSlab =
-        destinationSlabId !== undefined
-          ? assertNode(bridge, destinationSlabId, 'slab')
-          : firstNodeOnLevel(bridge, toLevelId, 'slab')
-      if (createDestinationSlabOpening && destinationSlab?.type === 'slab') {
-        patches.push({
-          op: 'update',
-          id: destinationSlab.id as AnyNodeId,
-          data: withHole(destinationSlab, openingPolygon),
-        })
-      }
-
-      const sourceCeiling =
-        sourceCeilingId !== undefined
-          ? assertNode(bridge, sourceCeilingId, 'ceiling')
-          : firstNodeOnLevel(bridge, fromLevelId, 'ceiling')
-      if (createSourceCeilingOpening && sourceCeiling?.type === 'ceiling') {
-        patches.push({
-          op: 'update',
-          id: sourceCeiling.id as AnyNodeId,
-          data: withHole(sourceCeiling, openingPolygon),
-        })
-      }
-
-      bridge.applyPatch(patches)
-      const persistence = await publishLiveSceneSnapshot(bridge, 'create_stair_between_levels')
-      return textResult({
-        stairId: stair.id,
-        stairSegmentId: segment.id,
-        destinationSlabId: destinationSlab?.id ?? null,
-        sourceCeilingId: sourceCeiling?.id ?? null,
-        openingPolygon,
         ...persistencePayload(persistence),
       })
     },

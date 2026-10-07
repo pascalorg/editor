@@ -1,7 +1,6 @@
 import {
-  type AnyNodeId,
   type CeilingNode as CeilingNodeType,
-  getCeilingClampBound,
+  ceilingSlots,
   type HandleDescriptor,
   type NodeDefinition,
   resolveCeilingHeight,
@@ -12,10 +11,13 @@ import {
   clearStructuralElevationGuide,
   DRAFTING_SURFACE_EXTENSION_KEY,
   type DraftingSurfaceExtension,
+  type FloorplanNodeExtension,
   publishStructuralElevationGuide,
   resolveStructuralElevationSnap,
 } from '@pascal-app/editor'
+import { surfaceBatchable } from '../shared/node-batch/batchable'
 import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
+import { sameOutlineSurfaceCounterparts } from '../shared/surface-counterparts'
 import { buildCeilingFloorplan } from './floorplan'
 import {
   ceilingAddVertexAffordance,
@@ -24,24 +26,21 @@ import {
   ceilingMoveVertexAffordance,
 } from './floorplan-affordances'
 import { ceilingFloorplanMoveTarget } from './floorplan-move'
+import { CEILING_HANDLE_MIN_HEIGHT, ceilingHeightRange } from './height-bounds'
 import { ceilingPaint } from './paint'
 import { ceilingParametrics } from './parametrics'
 import { CeilingNode } from './schema'
-import { ceilingSlots } from './slots'
 
 const HEIGHT_HANDLE_OFFSET = 0.22
-const MIN_CEILING_HEIGHT = 0.5
 
 // Ceilings no longer drive the storey height; the stored level height
 // does. Height writes clamp under min(storey plane, lowest underside of
 // any covering slab from the level above) − CEILING_CLAMP_MARGIN, so a
 // ceiling can poke into neither the level above nor a deck hanging from
-// it (clamp, never ask).
-function ceilingHeightBound(n: CeilingNodeType, sceneApi: SceneApi): number {
-  const parent = n.parentId ? sceneApi.get(n.parentId as AnyNodeId) : undefined
-  return parent?.type === 'level'
-    ? getCeilingClampBound(parent.id, sceneApi.nodes(), n.polygon ?? [])
-    : Number.POSITIVE_INFINITY
+// it (clamp, never ask). On a level above grade the ceiling may hang below
+// the level floor down to grade (soffits owned by a roof level).
+function ceilingHeightBounds(n: CeilingNodeType, sceneApi: SceneApi) {
+  return ceilingHeightRange(n, sceneApi.nodes(), CEILING_HANDLE_MIN_HEIGHT)
 }
 
 function ceilingPolygonCenter(n: CeilingNodeType): [number, number] {
@@ -83,8 +82,8 @@ function ceilingHeightHandle(): HandleDescriptor<CeilingNodeType> {
     kind: 'linear-resize',
     axis: 'y',
     anchor: 'min',
-    min: MIN_CEILING_HEIGHT,
-    max: ceilingHeightBound,
+    min: (n, sceneApi) => ceilingHeightBounds(n, sceneApi).min,
+    max: (n, sceneApi) => ceilingHeightBounds(n, sceneApi).max,
     currentValue: (n) => resolveCeilingHeight(n, useScene.getState().nodes),
     magneticSnap: (n, newValue, sceneApi) =>
       resolveStructuralElevationSnap(ceilingElevationGuideSource(n), newValue, sceneApi.nodes()),
@@ -116,10 +115,10 @@ function ceilingHandles(_node: CeilingNodeType): HandleDescriptor<CeilingNodeTyp
  *
  * **Stage B intentionally skipped**: pure `def.geometry` extraction
  * would lose the React children rendering (hosted items) and the
- * named-mesh structure. Ceiling keeps `def.renderer` as the custom
- * escape hatch (per plans/editor-node-registry.md "custom-behavior
- * escape hatch"). Renderer wraps the legacy CeilingRenderer; system
- * wraps the legacy CeilingSystem.
+ * named-mesh structure. Ceiling keeps `def.renderer` as its escape hatch
+ * ("Opting out of a generic path" in wiki/architecture/node-definitions.md).
+ * Renderer wraps the legacy CeilingRenderer; system wraps the legacy
+ * CeilingSystem.
  *
  * **Stage C completed**: `def.floorplan` builder draws the ceiling
  * polygon as a dashed outline in floor plan; legacy `ceilingPolygons`
@@ -137,6 +136,9 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
       kind: 'ceiling',
       raycast: 'underside',
     } satisfies DraftingSurfaceExtension,
+    'pascal:editor/floorplan': {
+      selectionCounterparts: sameOutlineSurfaceCounterparts,
+    } satisfies FloorplanNodeExtension,
   },
 
   // Height-less on purpose: a new ceiling follows the level top until the
@@ -154,8 +156,10 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
   }),
 
   capabilities: {
+    batchable: surfaceBatchable,
     selectable: { hitVolume: 'bbox' },
     surfaces: {
+      hosting: false,
       top: {
         height: (n) => resolveCeilingHeight(n as CeilingNodeType, useScene.getState().nodes),
       },
@@ -169,7 +173,7 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
   },
 
   relations: {
-    hosts: ['item'],
+    hosts: ['item', 'procedural-item'],
     cascadeDelete: 'descendants',
   },
 
@@ -207,6 +211,7 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
     priority: 4,
   },
   floorplan: buildCeilingFloorplan,
+  floorplanDependsOnSiblings: true,
   // 2D move handler — translates polygon by cursor delta from first
   // pointer position. Mirror of slab; 3D `MoveCeilingTool` skips
   // 2D-sourced grid events so they don't double-write on commit.

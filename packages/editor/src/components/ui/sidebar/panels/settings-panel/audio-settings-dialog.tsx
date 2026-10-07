@@ -28,12 +28,12 @@ export function AudioSettingsDialog() {
       <DialogTrigger asChild>
         <Button className="w-full justify-start gap-2" variant="outline">
           {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
-          Audio Settings
+          Audio settings
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Audio Settings</DialogTitle>
+          <DialogTitle>Audio settings</DialogTitle>
           <DialogDescription>Adjust volume levels and mute settings</DialogDescription>
         </DialogHeader>
         <div className="space-y-6 py-4">

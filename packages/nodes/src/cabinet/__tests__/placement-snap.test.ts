@@ -1,9 +1,33 @@
 import { describe, expect, test } from 'bun:test'
-import { resolveCabinetGridPosition, resolveCabinetGridPositionInFrame } from '../placement-snap'
+import type { AnyNode } from '@pascal-app/core'
+import {
+  resolveCabinetGridPosition,
+  resolveCabinetGridPositionInFrame,
+  resolveCabinetLevelPlanFrame,
+} from '../placement-snap'
 
 const DIMENSIONS: [number, number, number] = [0.6, 0.84, 0.58]
 
 describe('cabinet placement grid snap', () => {
+  test('uses the origin for legacy buildings without explicit transforms', () => {
+    const nodes = {
+      building_test: {
+        id: 'building_test',
+        type: 'building',
+      },
+      level_test: {
+        id: 'level_test',
+        parentId: 'building_test',
+        type: 'level',
+      },
+    } as unknown as Record<string, AnyNode>
+
+    expect(resolveCabinetLevelPlanFrame('level_test', nodes)).toEqual({
+      position: [0, 0],
+      rotationY: 0,
+    })
+  })
+
   test('aligns the footprint edges to grid lines', () => {
     const position = resolveCabinetGridPosition({
       raw: [0.12, 0, 0.17],

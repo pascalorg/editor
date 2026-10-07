@@ -7,6 +7,7 @@ import {
   type FloorplanGeometry,
   type FloorplanPalette,
   type FloorplanPoint,
+  getLevelDisplayName,
   isNodeKindEnabled,
   type LiveNodeOverrides,
   type NodeCategory,
@@ -169,8 +170,23 @@ export type FloorplanPageLayout = {
   planBox: { x: number; y: number; width: number; height: number }
 }
 
+/**
+ * Install list the PDF export gates plugin kinds with. Mirrors the GLB exporter:
+ * a scene without explicit install state is legacy, so every loaded plugin kind
+ * draws (`undefined`); the store's `installedPlugins` then only holds host
+ * defaults and would hide plugin nodes the project has always had.
+ */
+export function floorplanExportInstalledPlugins(scene: {
+  installedPlugins: readonly string[]
+  hasExplicitPluginInstallState: boolean
+}): readonly string[] | undefined {
+  return scene.hasExplicitPluginInstallState ? scene.installedPlugins : undefined
+}
+
 export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<void> {
-  const { nodes, installedPlugins } = useScene.getState()
+  const sceneState = useScene.getState()
+  const { nodes } = sceneState
+  const installedPlugins = floorplanExportInstalledPlugins(sceneState)
   const viewer = useViewer.getState()
   const unit = viewer.unit
   const metricNotation = viewer.metricNotation
@@ -219,7 +235,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
         wallDimensionReference,
         installedPlugins,
       )
-      const schedules = collectFloorplanSchedules(nodes, level.id, unit)
+      const schedules = collectFloorplanSchedules(nodes, level.id, unit, scope)
       if (geometries.length === 0 && schedules.length === 0) continue
       const layout = resolveFloorplanPageLayout(A4_LANDSCAPE_WIDTH_PT, A4_LANDSCAPE_HEIGHT_PT)
 
@@ -305,6 +321,8 @@ export function collectFloorplanSchedules(
   nodes: Record<string, AnyNode>,
   levelId: AnyNodeId,
   unit: 'metric' | 'imperial',
+  scope: FloorplanExportScope = 'full',
+  { drafting = false }: { drafting?: boolean } = {},
 ): FloorplanSchedule[] {
   const siblingsByType = new Map<string, AnyNode[]>()
   const visit = (id: AnyNodeId) => {
@@ -324,8 +342,11 @@ export function collectFloorplanSchedules(
   for (const [kind, definition] of nodeRegistry.entries()) {
     const scheduleContribution = getFloorplanNodeExtension(definition)?.schedule
     if (!scheduleContribution) continue
+    // Same scope gate as geometry: a structure-only PDF must not list rooms
+    // or other site-category contributors whose plan geometry was excluded.
+    if (!isFloorplanNodeInExportScope(definition, scope)) continue
     const siblings = siblingsByType.get(kind) ?? []
-    const schedule = scheduleContribution({ siblings, nodes, levelId, unit })
+    const schedule = scheduleContribution({ siblings, nodes, levelId, unit, drafting })
     if (schedule && schedule.rows.length > 0) schedules.push(schedule)
   }
   return schedules
@@ -765,7 +786,8 @@ export function collectFloorplanGeometry(
   annotationVisibility: FloorplanAnnotationVisibility,
   drawingType: ConstructionDrawingType,
   wallDimensionReference: FloorplanWallDimensionReference,
-  installedPlugins: readonly string[],
+  /** `undefined` = legacy scene without install state: every loaded kind draws. */
+  installedPlugins: readonly string[] | undefined,
 ): ExportGeometry[] {
   const noLiveOverrides = new Map<string, LiveNodeOverrides>()
   const levelNodeIdsByType = new Map<string, AnyNodeId[]>()
@@ -774,13 +796,17 @@ export function collectFloorplanGeometry(
   const visit = (id: AnyNodeId) => {
     const node = nodes[id]
     if (!node) return
+    // Same install gate as the live layer: an uninstalled plugin's kinds draw
+    // nothing, while their hosted children keep their own gate.
+    const enabled = isNodeKindEnabled(node.type, installedPlugins)
     const def = nodeRegistry.get(node.type)
-    if (def?.computeFloorplanLevelData) {
+    if (enabled && def?.computeFloorplanLevelData) {
       const ids = levelNodeIdsByType.get(node.type)
       if (ids) ids.push(id)
       else levelNodeIdsByType.set(node.type, [id])
     }
     if (
+      enabled &&
       def?.floorplan &&
       isFloorplanNodeVisible(node) &&
       isFloorplanNodeInExportScope(def, scope)
@@ -798,7 +824,11 @@ export function collectFloorplanGeometry(
   if (activeLevelNode) {
     for (const linked of collectFloorplanLinkedLevelNodes(nodes, levelId, collectedIds)) {
       const definition = nodeRegistry.get(linked.node.type)
-      if (isFloorplanNodeVisible(linked.node) && isFloorplanNodeInExportScope(definition, scope)) {
+      if (
+        isNodeKindEnabled(linked.node.type, installedPlugins) &&
+        isFloorplanNodeVisible(linked.node) &&
+        isFloorplanNodeInExportScope(definition, scope)
+      ) {
         const drawingNode = resolveNodeForDrawingType(linked.node, nodes, drawingType)
         if (drawingNode) {
           entries.push({ id: linked.id, node: drawingNode, parentOverride: activeLevelNode })
@@ -1021,9 +1051,10 @@ function combineGeometryList(
  * Levels to export, ordered bottom-to-top. The active building (the building
  * owning the selected level, or the first one found) contributes all of its
  * level children; if there is no building wrapper we fall back to the single
- * resolved level.
+ * resolved level. Roof support levels are excluded: they are not occupied
+ * stories, so they do not get a floor-plan page.
  */
-function resolveExportLevels(nodes: Record<string, AnyNode>): ExportLevel[] {
+export function resolveExportLevels(nodes: Record<string, AnyNode>): ExportLevel[] {
   const selected = useViewer.getState().selection.levelId as AnyNodeId | null | undefined
   const activeLevelId = selected && nodes[selected] ? selected : firstLevelId(nodes)
   if (!activeLevelId) return []
@@ -1038,6 +1069,7 @@ function resolveExportLevels(nodes: Record<string, AnyNode>): ExportLevel[] {
     levelNodes = node ? [node] : []
   }
 
+  levelNodes = levelNodes.filter((n) => n.metadata.role !== 'roof')
   levelNodes.sort((a, b) => levelIndexOf(a) - levelIndexOf(b))
   return levelNodes.map((n) => ({ id: n.id as AnyNodeId, label: levelLabelOf(n) }))
 }
@@ -1054,9 +1086,7 @@ function levelIndexOf(node: AnyNode): number {
 }
 
 function levelLabelOf(node: AnyNode): string {
-  const name = node.name?.trim()
-  if (name) return name
-  return `Level ${levelIndexOf(node)}`
+  return getLevelDisplayName({ name: node.name, level: levelIndexOf(node) })
 }
 
 function nextFrames(count: number): Promise<void> {

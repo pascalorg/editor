@@ -1,4 +1,5 @@
 import { type AnyNodeId, sceneRegistry, useScene } from '@pascal-app/core'
+import { isProceduralItem } from '@pascal-app/core/procedural-items'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import { Color, type Material, type Mesh } from 'three'
@@ -98,7 +99,8 @@ export const CeilingSystem = () => {
     const isCeilingToolActive =
       tool === 'ceiling' ||
       selectedItem?.attachTo === 'ceiling' ||
-      (movingNode?.type === 'item' && movingNode?.asset?.attachTo === 'ceiling')
+      (movingNode?.type === 'item' && movingNode?.asset?.attachTo === 'ceiling') ||
+      (isProceduralItem(movingNode) && movingNode.recipe.mounting?.attachTo === 'ceiling')
 
     if (isCeilingToolActive && activeLevelId) {
       levelsToShowCeilings.add(activeLevelId)

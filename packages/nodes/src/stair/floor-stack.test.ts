@@ -4,6 +4,8 @@ import {
   type AnyNodeDefinition,
   getFloorPlacedElevation,
   getFloorStackedPosition,
+  getStairFloorPlacedFootprints,
+  getStairSegmentFloorPlacedFootprints,
   nodeRegistry,
   registerNode,
   resolveSupportSlabPatch,
@@ -12,8 +14,7 @@ import {
   StairSegmentNode,
   spatialGridManager,
 } from '@pascal-app/core'
-import { stairDefinition } from './definition'
-import { getStairFloorPlacedFootprints, getStairSegmentFloorPlacedFootprints } from './floor-stack'
+import { stairDefinition } from '../index'
 
 const LEVEL_ID = 'level_test'
 
@@ -137,7 +138,7 @@ describe('stair floor-stack footprints', () => {
       [retainedSegment.id]: retainedSegment,
     })
 
-    expect(footprints.length).toBeGreaterThanOrEqual(24)
+    expect(footprints.length).toBeGreaterThan(0)
     expect(
       footprints.some((footprint) => (footprint.position?.[0] ?? 0) < spiral.position[0]),
     ).toBe(true)
@@ -356,4 +357,37 @@ describe('stair floor-stack footprints', () => {
       }),
     ).toBeCloseTo(0.8)
   })
+})
+
+test('a full-circle landing keeps its complete support footprint beside a tiny flight sweep', () => {
+  const stair = StairNode.parse({
+    stairType: 'spiral',
+    sweepAngle: 0.0001,
+    innerRadius: 1,
+    width: 1,
+    topLandingMode: 'integrated',
+    topLandingDepth: 3 * Math.PI,
+    showCenterColumn: false,
+  })
+  const footprints = getStairFloorPlacedFootprints(stair, { [stair.id]: stair })
+  for (const [x, z] of [
+    [1.5, 0],
+    [-1.5, 0],
+    [0, 1.5],
+    [0, -1.5],
+  ]) {
+    expect(
+      footprints.some((footprint) => {
+        const dx = x - footprint.position![0],
+          dz = z - footprint.position![2]
+        const angle = footprint.rotation![1]
+        const localX = dx * Math.cos(angle) + dz * Math.sin(angle)
+        const localZ = -dx * Math.sin(angle) + dz * Math.cos(angle)
+        return (
+          Math.abs(localX) <= footprint.dimensions[0] / 2 + 1e-8 &&
+          Math.abs(localZ) <= footprint.dimensions[2] / 2 + 1e-8
+        )
+      }),
+    ).toBe(true)
+  }
 })

@@ -1,5 +1,9 @@
-import type { AnyNode, AnyNodeId, WallNode } from '@pascal-app/core'
-import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
+import {
+  getWallBodyCenterOffset,
+  getWallCurveFrameAt,
+  getWallCurveLength,
+  type WallNode,
+} from '@pascal-app/core'
 
 /**
  * Default sill height (metres from the floor to the BOTTOM of a window) for a
@@ -11,7 +15,8 @@ import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 export const DEFAULT_WINDOW_SILL_M = 0.5
 
 /**
- * Converts wall-local (X along wall, Y = height above wall base) to world XYZ.
+ * Converts wall-local (X along wall, Y = height above wall base, Z = offset
+ * from the wall centre plane along its normal) to world XYZ.
  * Wall XZ uses level-local coordinates (levels only offset in Y, not XZ).
  * Pass levelYOffset (the level group's current world Y) and slabElevation (the
  * wall mesh's Y within the level group) so the cursor lands at the correct world
@@ -23,42 +28,22 @@ export function wallLocalToWorld(
   localY: number,
   levelYOffset = 0,
   slabElevation = 0,
+  localZ = 0,
 ): [number, number, number] {
-  const wallAngle = Math.atan2(
-    wallNode.end[1] - wallNode.start[1],
-    wallNode.end[0] - wallNode.start[0],
-  )
+  const wallLength = getWallCurveLength(wallNode)
+  const frame = getWallCurveFrameAt(wallNode, wallLength > 1e-6 ? localX / wallLength : 0)
+  // `localZ` is measured from the body's centre plane, which a justified wall
+  // sets off its reference line.
+  const across = getWallBodyCenterOffset(wallNode) + localZ
   return [
-    wallNode.start[0] + localX * Math.cos(wallAngle),
+    frame.point.x + frame.normal.x * across,
     slabElevation + localY + levelYOffset,
-    wallNode.start[1] + localX * Math.sin(wallAngle),
+    frame.point.y + frame.normal.y * across,
   ]
 }
 
-/**
- * Clamps window center position so it stays fully within wall bounds. The Y
- * ceiling is the wall's RESOLVED top (storey plane for plane-bound walls,
- * stored height for explicit ones, minus the elected slab base) — `nodes` is
- * required because a plane-bound wall's top lives on its level, not on the
- * wall record.
- */
-export function clampToWall(
-  wallNode: WallNode,
-  localX: number,
-  localY: number,
-  width: number,
-  height: number,
-  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
-): { clampedX: number; clampedY: number } {
-  const dx = wallNode.end[0] - wallNode.start[0]
-  const dz = wallNode.end[1] - wallNode.start[1]
-  const wallLength = Math.sqrt(dx * dx + dz * dz)
-  const wallHeight = resolveWallOpeningCeiling(wallNode, nodes)
-
-  const clampedX = Math.max(width / 2, Math.min(wallLength - width / 2, localX))
-  const clampedY = Math.max(height / 2, Math.min(wallHeight - height / 2, localY))
-  return { clampedX, clampedY }
-}
+/** Window centre on its wall and under its ceiling: the shared rule in core (`clampWindowToWall`). */
+export { clampWindowToWall as clampToWall } from '@pascal-app/core/building'
 
 /**
  * Wall-child overlap is shared by door + window placement (one source of

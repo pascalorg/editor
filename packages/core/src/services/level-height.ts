@@ -1,7 +1,6 @@
 import type { CeilingNode, LevelNode, SlabNode, WallNode } from '../schema'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { computeWallSlabSupport, pointInPolygon } from '../systems/slab/slab-support'
-import { resolveWallTop } from '../systems/wall/wall-top'
 // Cycle with ./storey (it imports DEFAULT_LEVEL_HEIGHT from here) is safe:
 // both sides only reference the other inside function bodies.
 import { CEILING_CLAMP_MARGIN, getCeilingClampBound } from './storey'
@@ -35,7 +34,7 @@ export function deriveLegacyLevelHeight(
   const level = nodes[levelId as LevelNode['id']] as LevelNode | undefined
   if (!level) return DEFAULT_LEVEL_HEIGHT
 
-  const levelChildren = level.children
+  const levelChildren = (level.children ?? [])
     .map((childId) => nodes[childId as keyof typeof nodes])
     .filter((child): child is AnyNode => child !== undefined)
   const slabs = levelChildren.filter((child): child is SlabNode => child.type === 'slab')
@@ -58,11 +57,19 @@ export function deriveLegacyLevelHeight(
           end: wall.end,
           curveOffset: wall.curveOffset,
           thickness: wall.thickness,
+          justification: wall.justification,
         },
         slabs,
         walls,
+        undefined,
+        undefined,
+        0,
+        nodes,
       ).elevation
-      const top = resolveWallTop(wall, level.height ?? DEFAULT_LEVEL_HEIGHT, electedElevation)
+      const top =
+        wall.height == null
+          ? (level.height ?? DEFAULT_LEVEL_HEIGHT)
+          : Math.max(0, electedElevation) + wall.height
       if (top > maxTop) maxTop = top
     }
   }

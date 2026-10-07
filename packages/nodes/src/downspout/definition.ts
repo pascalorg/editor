@@ -2,6 +2,7 @@ import {
   type AnyNodeId,
   DownspoutNode as DownspoutNodeSchema,
   type DownspoutNode as DownspoutNodeType,
+  downspoutSlots,
   type GutterNode,
   type GutterOutlet,
   type HandleDescriptor,
@@ -177,7 +178,7 @@ export const downspoutDefinition: NodeDefinition<typeof DownspoutNode> = {
   },
 
   capabilities: {
-    slots: () => [{ slotId: 'surface', label: 'Surface', default: 'library:preset-softwhite' }],
+    slots: downspoutSlots,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
@@ -190,6 +191,7 @@ export const downspoutDefinition: NodeDefinition<typeof DownspoutNode> = {
   parametrics: downspoutParametrics,
   handles: downspoutHandles,
 
+  rendersChildren: false,
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),

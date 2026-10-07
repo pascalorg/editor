@@ -1,28 +1,29 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneOperations } from '../operations'
-import { MCP_CATALOG_ITEMS } from '../tools/asset-catalog'
+import { type AssetCatalog, builtInCatalog } from '../tools/asset-catalog'
 
 /**
- * `pascal://catalog/items` — small built-in item catalog for standalone MCP.
- *
- * The editor UI owns the full catalog. MCP intentionally keeps a dependency-free
- * subset so headless agents can still place realistic furniture and fixtures.
+ * `pascal://catalog/items` — the items place_items draws from: the host's library when it passes
+ * one, else a dependency-free built-in subset, so headless agents can still place furniture.
  */
-export function registerCatalogItems(server: McpServer, _bridge: SceneOperations): void {
+export function registerCatalogItems(
+  server: McpServer,
+  _bridge: SceneOperations,
+  catalog: AssetCatalog = builtInCatalog,
+): void {
   server.registerResource(
     'catalog-items',
     'pascal://catalog/items',
     {
       title: 'Item catalog',
-      description:
-        'Dependency-free catalog subset of placeable items available in standalone MCP mode.',
+      description: "Placeable items: the host's library when it has one, else a built-in subset.",
       mimeType: 'application/json',
     },
     async (uri) => {
       const payload = {
         status: 'ok' as const,
-        items: MCP_CATALOG_ITEMS,
-        note: 'Standalone MCP catalog subset; host applications can still expose a larger catalog separately.',
+        items: await catalog(),
+        note: 'A fixture this catalog lacks (a wall light, a house number) is built as a design: place_design.',
       }
       return {
         contents: [

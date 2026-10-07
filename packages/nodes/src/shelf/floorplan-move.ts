@@ -1,7 +1,9 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  cascadeDirty,
   collectAlignmentAnchors,
+  createSceneApi,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
   movingFootprintAnchors,
@@ -84,7 +86,8 @@ export const shelfFloorplanMoveTarget: FloorplanMoveTarget<ShelfNode> = ({ node,
       })
       lastVisualPosition = visualPosition
       useLiveNodeOverrides.getState().set(shelfId, { position: visualPosition })
-      useScene.getState().markDirty(shelfId)
+      for (const id of cascadeDirty(shelfId, { scene: createSceneApi(useScene) }))
+        useScene.getState().markDirty(id)
     },
     canCommit() {
       const live = useScene.getState().nodes[shelfId] as ShelfNode | undefined

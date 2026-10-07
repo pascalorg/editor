@@ -36,11 +36,13 @@ export {
   canAttach,
   canHostOnTop,
   clampYToHostTop,
+  clearFaceHostItemFields,
   getSurface,
   getTopSurfaceHeight,
   MAX_HOST_DEPTH,
   pickHost,
   type Vec3,
+  wouldCreateHostingCycle,
 } from './hosting'
 export {
   DEFAULT_LEVEL_HEIGHT,
@@ -89,11 +91,13 @@ export {
   type RiserLine,
   type RiserMarker,
 } from './riser-diagram'
+export { SHELF_BOARD_INSET, shelfBoardDimensions, shelfRowBoardDimensions } from './shelf-board'
 export {
   DEFAULT_ANGLE_STEP,
   DEFAULT_GRID_STEP,
   type SnapServices,
   snapAngleToList,
+  snapLocalXZInWorld,
   snapPointAlongAngleRay,
   snapPointToAngle,
   snapPointToGrid,
@@ -104,9 +108,11 @@ export {
 } from './snap'
 export {
   CEILING_CLAMP_MARGIN,
+  CEILING_DRAW_OFFSET,
   findLevelAboveId,
   findLevelBelowId,
   getCeilingClampBound,
+  getCeilingMinHeight,
   getCoveringSlabUndersideAt,
   getLevelAbove,
   getLevelBelow,
@@ -116,6 +122,27 @@ export {
   getWallPlaneTop,
   type LevelElevation,
 } from './storey'
+export {
+  canHostSurfaceChild,
+  type DeclaredHostSurface,
+  getSurfaceProvider,
+  type HostSurface,
+  hitDerivedSurfaceProvider,
+  itemSurfaceProvider,
+  NON_PHYSICAL_HOST_KINDS,
+  proceduralItemSurfaceProvider,
+  rendersHostedChildren,
+  resolveSurfacePlacement,
+  type SurfaceContext,
+  type SurfaceHit,
+  type SurfaceId,
+  type SurfacePlacement,
+  type SurfaceProvider,
+  type SurfaceRegion,
+  type SurfaceRejectReason,
+  shelfSurfaceProvider,
+} from './surface-hosting'
+export { surfaceRegionContainsFootprint, surfaceRegionContainsPoint } from './surface-region'
 export {
   buildPortComponents,
   collectSystemPorts,

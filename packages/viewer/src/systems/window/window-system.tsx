@@ -2,10 +2,12 @@ import {
   type AnyNodeId,
   DEFAULT_WALL_THICKNESS,
   getEffectiveNode,
+  getOpeningWallPlacement,
   getWallThickness,
   type SceneMaterial,
   type SceneMaterialId,
   sceneRegistry,
+  scriptedSize,
   useInteractive,
   useLiveNodeOverrides,
   useScene,
@@ -18,6 +20,7 @@ import * as THREE from 'three'
 import { applyWorldScaleBoxUVs } from '../../lib/box-uv'
 import {
   type ColorPreset,
+  createMaterial,
   createSurfaceRoleMaterial,
   glassMaterial as defaultGlassMaterial,
   baseMaterial as getBaseMaterial,
@@ -25,6 +28,7 @@ import {
   resolveMaterialRef,
 } from '../../lib/materials'
 import { timeSpan } from '../../lib/perf-tracks'
+import { settleScriptedOpening } from '../../lib/scripted-opening'
 import useViewer from '../../store/use-viewer'
 import { getOpeningCutoutProxyDepth } from '../wall/opening-cutout-geometry'
 
@@ -158,17 +162,20 @@ export const WindowSystem = () => {
       // Merge any live override (width / height / position) so the mesh
       // rebuild reflects the in-flight drag without zustand churn.
       const effectiveNode = getEffectiveNode(node as WindowNode)
-      timeSpan('window', () => updateWindowMesh(effectiveNode, mesh), {
+      const built = timeSpan('window', () => updateWindowMesh(effectiveNode, mesh), {
         properties: [['node', id]],
       })
+      // A scripted opening stays dirty until its artifact has loaded.
+      if (!built) continue
       clearDirty(id as AnyNodeId)
       rebuiltWindowsThisFrame += 1
 
       // Rebuild the parent wall so its cutout reflects the updated window geometry
       // Avoid triggering expensive wall CSG rebuilds while the window is being interactively moved/duplicated.
       // The editor tools will request a final wall rebuild on commit.
-      const isTransient = !!(node.metadata as Record<string, unknown> | null)?.isTransient
-      if (!isTransient && effectiveNode.parentId) {
+      const metadata = effectiveNode.metadata as Record<string, unknown> | null
+      const deferParentRebuild = !!metadata?.isTransient || !!metadata?.deferParentRebuild
+      if (!deferParentRebuild && effectiveNode.parentId) {
         useScene.getState().dirtyNodes.add(effectiveNode.parentId as AnyNodeId)
       }
     }
@@ -228,14 +235,16 @@ function windowSlotDefault(slotId: 'frame' | 'glass'): THREE.Material {
 }
 
 // Resolve a window's slot to a material: the `node.slots` override (colored mode
-// only) → the role/base default. Textures-off ignores overrides — the monochrome
-// escape hatch.
+// only) → the window-wide `material` for the frame (glass keeps its own) → the
+// role/base default. Textures-off ignores overrides — the monochrome escape hatch.
 function resolveWindowSlotMaterial(node: WindowNode, slotId: 'frame' | 'glass'): THREE.Material {
   const fallback = windowSlotDefault(slotId)
   if (!currentTextures) return fallback
   const ref = node.slots?.[slotId]
-  if (!ref) return fallback
-  return resolveMaterialRef(ref, currentSceneMaterials, currentShading) ?? fallback
+  const painted = ref ? resolveMaterialRef(ref, currentSceneMaterials, currentShading) : null
+  if (painted) return painted
+  if (node.material && slotId === 'frame') return createMaterial(node.material, currentShading)
+  return fallback
 }
 
 function addBox(
@@ -3369,7 +3378,7 @@ function addShapedLouveredWindowVisuals(node: WindowNode, mesh: THREE.Mesh) {
   }
 }
 
-function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
+function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh): boolean {
   currentWindowSlot = undefined
 
   // Root mesh is an invisible hitbox; all visuals live in child meshes
@@ -3378,8 +3387,21 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
   mesh.material = hitboxMaterial
 
   // Sync transform from node (React may lag behind the system by a frame during drag)
-  mesh.position.set(node.position[0], node.position[1], node.position[2])
-  mesh.rotation.set(node.rotation[0], node.rotation[1], node.rotation[2])
+  const parent = node.parentId ? useScene.getState().nodes[node.parentId as AnyNodeId] : undefined
+  const placement =
+    parent?.type === 'wall' && !node.roofSegmentId
+      ? getOpeningWallPlacement(getEffectiveNode(parent), node, useScene.getState().nodes)
+      : node
+  mesh.position.set(...placement.position)
+  mesh.rotation.set(...placement.rotation)
+
+  // Built from a script: the renderer shows its artifact, not the parametric
+  // frame, and the hit box is what the script built.
+  if (node.source) {
+    mesh.geometry.dispose()
+    mesh.geometry = new THREE.BoxGeometry(...scriptedSize(node.source.manifest))
+    return settleScriptedOpening(mesh)
+  }
 
   // Dispose and remove all old visual children; preserve 'cutout'
   for (const child of [...mesh.children]) {
@@ -3413,73 +3435,73 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
 
   if (openingKind === 'opening') {
     syncWindowCutout(node, mesh)
-    return
+    return true
   }
 
   if (windowType === 'sliding') {
     addSlidingWindowVisuals(node, mesh)
     syncWindowCutout(node, mesh)
-    return
+    return true
   }
 
   if (windowType === 'casement') {
     addCasementWindowVisuals(node, mesh)
     syncWindowCutout(node, mesh)
-    return
+    return true
   }
 
   if (windowType === 'awning') {
     addAwningWindowVisuals(node, mesh)
     syncWindowCutout(node, mesh)
-    return
+    return true
   }
 
   if (windowType === 'hopper') {
     addAwningWindowVisuals(node, mesh)
     syncWindowCutout(node, mesh)
-    return
+    return true
   }
 
   if (windowType === 'single-hung') {
     addSingleHungWindowVisuals(node, mesh)
     syncWindowCutout(node, mesh)
-    return
+    return true
   }
 
   if (windowType === 'double-hung') {
     addDoubleHungWindowVisuals(node, mesh)
     syncWindowCutout(node, mesh)
-    return
+    return true
   }
 
   if (windowType === 'bay') {
     addBayWindowVisuals(node, mesh)
     syncWindowCutout(node, mesh)
-    return
+    return true
   }
 
   if (windowType === 'bow') {
     addBowWindowVisuals(node, mesh)
     syncWindowCutout(node, mesh)
-    return
+    return true
   }
 
   if (windowType === 'louvered') {
     addLouveredWindowVisuals(node, mesh)
     syncWindowCutout(node, mesh)
-    return
+    return true
   }
 
   if (openingShape === 'arch') {
     addArchedWindowVisuals(node, mesh)
     syncWindowCutout(node, mesh)
-    return
+    return true
   }
 
   if (openingShape === 'rounded') {
     addRoundedWindowVisuals(node, mesh)
     syncWindowCutout(node, mesh)
-    return
+    return true
   }
 
   const innerW = width - 2 * frameThickness
@@ -3636,6 +3658,7 @@ function updateWindowMesh(node: WindowNode, mesh: THREE.Mesh) {
   }
 
   syncWindowCutout(node, mesh)
+  return true
 }
 
 function syncWindowCutout(node: WindowNode, mesh: THREE.Mesh) {

@@ -6,7 +6,12 @@ import type {
   GeometryContext,
   WallNode,
 } from '@pascal-app/core'
-import { resolveLevelId } from '@pascal-app/core'
+import {
+  getWallBodyCenterOffset,
+  getWallBodyLine,
+  getWallFaceOffsets,
+  resolveLevelId,
+} from '@pascal-app/core'
 
 /**
  * Straight-line run layout math — the single home for the "modules sit on the
@@ -146,11 +151,18 @@ function wallConstraintAtRunEnd({
     const wallAxis: readonly [number, number] = [dx / length, dz / length]
     const axisDot = runAxis[0] * wallAxis[0] + runAxis[1] * wallAxis[1]
     if (Math.abs(axisDot) > 0.2) continue
-    const closest = closestPointOnSegment(point, wall.start, wall.end)
+    const bodyWall = { ...wall, thickness: wall.thickness ?? 0.2 }
+    const body = getWallBodyLine(bodyWall)
+    const closest = closestPointOnSegment(
+      point,
+      [body.start.x, body.start.y],
+      [body.end.x, body.end.y],
+    )
+    const bodyHalfWidth = getWallFaceOffsets(bodyWall).a - getWallBodyCenterOffset(bodyWall)
     const offsetX = (closest[0] - point[0]) * runAxis[0] + (closest[1] - point[1]) * runAxis[1]
-    const halfThickness = ((wall.thickness ?? 0.2) / 2) * Math.sqrt(1 - axisDot * axisDot)
+    const halfThickness = bodyHalfWidth * Math.sqrt(1 - axisDot * axisDot)
     const distance = Math.hypot(point[0] - closest[0], point[1] - closest[1])
-    if (distance > maxDistance + (wall.thickness ?? 0.2) / 2 + RUN_ADJACENCY_EPSILON) continue
+    if (distance > maxDistance + bodyHalfWidth + RUN_ADJACENCY_EPSILON) continue
     if (direction * offsetX < -halfThickness - RUN_ADJACENCY_EPSILON) continue
     const slack = Math.max(0, direction * offsetX - halfThickness)
     closestSlack = Math.min(closestSlack, slack)
@@ -231,6 +243,11 @@ export type RunSpan = {
   hasCountertop: boolean
 }
 
+type SpanModule = Pick<
+  CabinetModuleNode,
+  'position' | 'width' | 'depth' | 'carcassHeight' | 'cabinetType'
+>
+
 /**
  * Contiguous same-height module groups along the run — the units the
  * countertop, plinth, and appliance-gap logic operate on. A gap, a
@@ -238,16 +255,20 @@ export type RunSpan = {
  * starts a new span.
  */
 export function getRunSpans(
-  modules: readonly Pick<
-    CabinetModuleNode,
-    'position' | 'width' | 'depth' | 'carcassHeight' | 'cabinetType'
-  >[],
+  modules: readonly SpanModule[],
+  opts: { runTier?: CabinetNode['runTier'] } = {},
+): RunSpan[] {
+  return getRunSpanGroups(modules, opts).map((group) => group.span)
+}
+
+export function getRunSpanGroups<T extends SpanModule>(
+  modules: readonly T[],
   opts: {
     runTier?: CabinetNode['runTier']
   } = {},
-): RunSpan[] {
+): Array<{ span: RunSpan; modules: T[] }> {
   const sorted = [...modules].sort((a, b) => a.position[0] - b.position[0])
-  const spans: RunSpan[] = []
+  const groups: Array<{ span: RunSpan; modules: T[] }> = []
   const runTier = opts.runTier ?? 'base'
 
   for (const module of sorted) {
@@ -257,7 +278,8 @@ export function getRunSpans(
     const maxZ = module.position[2] + module.depth / 2
     const topY = module.position[1] + module.carcassHeight
     const hasCountertop = runTier === 'base' && (module.cabinetType ?? 'base') !== 'tall'
-    const current = spans.at(-1)
+    const group = groups.at(-1)
+    const current = group?.span
     if (
       !current ||
       minX - current.maxX > RUN_ADJACENCY_EPSILON ||
@@ -266,21 +288,25 @@ export function getRunSpans(
       Math.abs(current.minZ - minZ) > RUN_ADJACENCY_EPSILON ||
       Math.abs(current.maxZ - maxZ) > RUN_ADJACENCY_EPSILON
     ) {
-      spans.push({
-        minX,
-        maxX,
-        centerX: module.position[0],
-        centerZ: module.position[2],
-        width: module.width,
-        depth: module.depth,
-        minZ,
-        maxZ,
-        topY,
-        hasCountertop,
+      groups.push({
+        modules: [module],
+        span: {
+          minX,
+          maxX,
+          centerX: module.position[0],
+          centerZ: module.position[2],
+          width: module.width,
+          depth: module.depth,
+          minZ,
+          maxZ,
+          topY,
+          hasCountertop,
+        },
       })
       continue
     }
 
+    group!.modules.push(module)
     current.maxX = Math.max(current.maxX, maxX)
     current.minZ = Math.min(current.minZ, minZ)
     current.maxZ = Math.max(current.maxZ, maxZ)
@@ -291,7 +317,7 @@ export function getRunSpans(
     current.topY = Math.max(current.topY, topY)
   }
 
-  return spans
+  return groups
 }
 
 function angleDelta(a: number, b: number): number {
@@ -327,7 +353,7 @@ function childDerivedBaseLegSides(ctx?: GeometryContext): Set<'left' | 'right'> 
 
 function modulesForRun(node: CabinetNode, ctx?: GeometryContext): CabinetModuleNode[] {
   return (node.children ?? [])
-    .map((id) => ctx?.resolve<AnyNode>(id))
+    .map((id) => ctx?.resolve<AnyNode>(id as AnyNodeId))
     .filter((child): child is CabinetModuleNode => child?.type === 'cabinet-module')
 }
 
@@ -726,7 +752,7 @@ export function reflowRunModules<T extends ModuleLike>(
     nextLeft = runMaxX(sorted) + consumedRightSlack - totalWidth
   } else if (preserveRightEdge) {
     nextLeft = runMaxX(sorted) - totalWidth
-  } else if (preserveLeftEdge || (!leftConstrained && !rightConstrained && selectedIndex === 0)) {
+  } else if (preserveLeftEdge || (!(leftConstrained || rightConstrained) && selectedIndex === 0)) {
     nextLeft = preserveLeftEdge ? runMinX(sorted) - consumedLeftSlack : runMaxX(sorted) - totalWidth
   }
   return sorted.map((module, index) => {

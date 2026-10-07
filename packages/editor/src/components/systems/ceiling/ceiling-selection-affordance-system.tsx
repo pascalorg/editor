@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  type AnyNodeId,
   type CeilingNode,
   emitter,
   resolveCeilingHeight,
@@ -24,6 +25,7 @@ import {
 } from 'react'
 import { Group, type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
+import { useCeilingEditCeilingId } from '../../../lib/ceiling-edit-session'
 import {
   clearCeilingSnapFeedback,
   resolveCeilingPlanPointSnap,
@@ -96,7 +98,6 @@ function clearCornerDragPreview(drag: CornerDragState) {
 export const CeilingSelectionAffordanceSystem = () => {
   const phase = useEditor((state) => state.phase)
   const mode = useEditor((state) => state.mode)
-  const structureLayer = useEditor((state) => state.structureLayer)
   // ANY active interaction (moving/placing a node, reshaping a boundary or
   // curve, dragging a handle) unmounts the brackets: their ceiling-height hit
   // boxes would otherwise catch drag-time hover, set `hoveredId` to the
@@ -105,26 +106,28 @@ export const CeilingSelectionAffordanceSystem = () => {
   // scope, so it can't unmount itself.
   const scopeIdle = useInteractionScope((state) => state.scope.kind === 'idle')
   const currentLevelId = useViewer((state) => state.selection.levelId)
+  // Brackets and their hit boxes exist only for the ceiling in an explicit
+  // Edit ceiling session (`lib/ceiling-edit-session.ts`).
+  const editCeilingId = useCeilingEditCeilingId()
 
   const ceilings = useScene(
-    useShallow((state) =>
-      Object.values(state.nodes).filter((node): node is CeilingNode => {
-        return (
-          node.type === 'ceiling' &&
-          node.visible !== false &&
-          currentLevelId !== null &&
-          resolveLevelId(node, state.nodes) === currentLevelId
-        )
-      }),
-    ),
+    useShallow((state) => {
+      const node = editCeilingId ? state.nodes[editCeilingId as AnyNodeId] : undefined
+      return node?.type === 'ceiling' &&
+        node.visible !== false &&
+        currentLevelId !== null &&
+        resolveLevelId(node, state.nodes) === currentLevelId
+        ? [node]
+        : []
+    }),
   )
 
   const shouldRender =
     phase === 'structure' &&
     mode === 'select' &&
-    structureLayer === 'elements' &&
     scopeIdle &&
-    currentLevelId !== null
+    currentLevelId !== null &&
+    ceilings.length > 0
 
   if (!shouldRender) return null
 
@@ -528,7 +531,9 @@ const CeilingSelectionAffordance = memo(function CeilingSelectionAffordance({
         suppressNextClick()
 
         if (drag.previewPolygon) {
-          useScene.getState().updateNode(drag.ceilingId, { polygon: drag.previewPolygon })
+          // A polygon edit converts a derived (`boundary: 'auto'`) ceiling into
+          // an authored one, like the boundary editor's commit.
+          useScene.getState().detachDerivedNode(drag.ceilingId, { polygon: drag.previewPolygon })
           useViewer.getState().setSelection({ selectedIds: [drag.ceilingId] })
         }
 

@@ -1,21 +1,11 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import { GeometryScriptSource } from '../geometry-source'
 import { MaterialSchema } from '../material'
+import { WindowType } from './opening-types'
 
-export const WindowType = z.enum([
-  'fixed',
-  'sliding',
-  'casement',
-  'awning',
-  'hopper',
-  'single-hung',
-  'double-hung',
-  'bay',
-  'bow',
-  'louvered',
-])
-export type WindowType = z.infer<typeof WindowType>
+export { WindowType } from './opening-types'
 
 export const WindowConstructionType = z.enum(['framed', 'masonry'])
 export const WindowDimensionReference = z.enum([
@@ -32,13 +22,20 @@ export const WindowNode = BaseNode.extend({
   type: nodeType('window'),
   material: MaterialSchema.optional(),
   // Per-slot material overrides on the unified slot model. Keys: `frame`,
-  // `glass`. Value = a `MaterialRef` (`library:<id>` / `scene:<id>`). Absent =
-  // the frame/glass default. Mirrors `ShelfNode.slots`.
+  // `glass`. Value = a `MaterialRef` (`library:<id>` / `scene:<id>`) or a plain
+  // `#rrggbb` colour. Absent = the frame/glass default. Mirrors `ShelfNode.slots`.
   slots: z.record(z.string(), z.string()).optional(),
+  /**
+   * A three.js script the window is built from instead of its parametric frame, as on an item:
+   * width and height are the compiled bounds and the wall cuts the script's `cutout` mesh.
+   */
+  source: GeometryScriptSource.optional(),
 
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   side: z.enum(['front', 'back']).optional(),
+  verticalAnchor: z.enum(['wall', 'floor']).optional(),
+  floorThresholdVersion: z.union([z.literal(0), z.literal(1)]).default(1),
 
   // Wall reference
   wallId: z.string().optional(),

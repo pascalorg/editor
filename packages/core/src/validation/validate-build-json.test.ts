@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { z } from 'zod'
 import { nodeRegistry, registerNode } from '../registry'
 import type { AnyNodeDefinition } from '../registry/types'
-import { LevelNode, WallNode } from '../schema'
+import { DoorNode, LevelNode, SiteNode, WallNode, WindowNode } from '../schema'
 import { validateBuildJson } from './validate-build-json'
 
 function makeScene() {
@@ -29,6 +29,83 @@ describe('validateBuildJson', () => {
     const result = validateBuildJson(makeScene())
     expect(result.ok).toBe(true)
     expect(result.schemaIssueCount).toBe(0)
+  })
+
+  test('warns that a hidden site keeps the buildings on it visible', () => {
+    const scene = makeScene()
+    const site = SiteNode.parse({ id: 'site_test', visible: false })
+    const result = validateBuildJson({
+      ...scene,
+      nodes: { ...scene.nodes, [site.id]: site },
+      rootNodeIds: [site.id, ...scene.rootNodeIds],
+    })
+    expect(result.ok).toBe(true)
+    const warning = result.warnings.find((w) => w.code === 'site_hidden')
+    expect(warning?.message).toContain('site_test')
+    expect(warning?.message).toContain('stay visible')
+  })
+
+  test('warns when a door reaches past the end of its wall', () => {
+    const scene = makeScene()
+    const wall = scene.nodes.wall_test1 as { id: string; children: string[] }
+    const door = DoorNode.parse({
+      id: 'door_past_end',
+      parentId: wall.id,
+      wallId: wall.id,
+      position: [5, 1.05, 0],
+      width: 0.9,
+      height: 2.1,
+    })
+    wall.children = [door.id]
+    scene.nodes[door.id] = door
+
+    const result = validateBuildJson(scene)
+    expect(result.ok).toBe(true)
+    const warning = result.warnings.find((w) => w.code === 'opening_outside_wall')
+    expect(warning?.nodeId).toBe(door.id)
+    expect(warning?.message).toContain(`door ${door.id} extends outside wall ${wall.id}`)
+    expect(warning?.message).toContain('4.00 m wall')
+  })
+
+  test('warns when a window rises above a half wall', () => {
+    const scene = makeScene()
+    const wall = scene.nodes.wall_test1 as { id: string; height?: number; children: string[] }
+    wall.height = 1.2
+    const window = WindowNode.parse({
+      id: 'window_too_high',
+      parentId: wall.id,
+      wallId: wall.id,
+      position: [2, 1.5, 0],
+      width: 1,
+      height: 1,
+    })
+    wall.children = [window.id]
+    scene.nodes[window.id] = window
+
+    const result = validateBuildJson(scene)
+    const messages = result.warnings
+      .filter((w) => w.code === 'opening_outside_wall')
+      .map((w) => w.message)
+    expect(messages).toHaveLength(1)
+    expect(messages[0]).toContain(`window ${window.id} vertical bounds [1.00, 2.00] exceed wall`)
+    expect(messages[0]).toContain('height 1.20m')
+  })
+
+  test('accepts an opening that fits its wall without warnings', () => {
+    const scene = makeScene()
+    const wall = scene.nodes.wall_test1 as { id: string; children: string[] }
+    const door = DoorNode.parse({
+      id: 'door_fits',
+      parentId: wall.id,
+      wallId: wall.id,
+      position: [2, 1.05, 0],
+    })
+    wall.children = [door.id]
+    scene.nodes[door.id] = door
+
+    const result = validateBuildJson(scene)
+    expect(result.ok).toBe(true)
+    expect(result.warnings.filter((w) => w.code === 'opening_outside_wall')).toHaveLength(0)
   })
 
   test('plugin-typed children do not hard-fail their parent level', () => {
@@ -172,5 +249,62 @@ describe('scene materials', () => {
     expect(result.ok).toBe(true)
     expect(result.parsed?.materials).toBeUndefined()
     expect(result.warnings.some((w) => w.code === 'invalid_materials')).toBe(true)
+  })
+})
+
+describe('collections', () => {
+  const minimalGraph = () => ({
+    nodes: {
+      building_1: { id: 'building_1', type: 'building', children: ['level_1'] },
+      level_1: { id: 'level_1', type: 'level', children: [] },
+    },
+    rootNodeIds: ['building_1'],
+  })
+
+  test('carries valid collections through to parsed', () => {
+    const result = validateBuildJson({
+      ...minimalGraph(),
+      collections: {
+        collection_a: {
+          id: 'collection_a',
+          name: 'Kitchen set',
+          color: '#ff0000',
+          nodeIds: ['item_1', 'item_2'],
+        },
+      },
+    })
+    expect(result.ok).toBe(true)
+    expect(result.parsed?.collections?.collection_a?.name).toBe('Kitchen set')
+    expect(result.parsed?.collections?.collection_a?.nodeIds).toEqual(['item_1', 'item_2'])
+  })
+
+  test('skips invalid collection entries with a warning, keeps the rest', () => {
+    const result = validateBuildJson({
+      ...minimalGraph(),
+      collections: {
+        collection_ok: { id: 'collection_ok', name: 'Fine', nodeIds: [] },
+        collection_bad: { id: 'collection_bad', name: 'Broken', nodeIds: [42] },
+        collection_worse: 'nope',
+      },
+    })
+    expect(result.ok).toBe(true)
+    expect(Object.keys(result.parsed?.collections ?? {})).toEqual(['collection_ok'])
+    const warning = result.warnings.find((w) => w.code === 'invalid_collections')
+    expect(warning).toBeDefined()
+    expect(warning?.message).toContain('collection_bad')
+    expect(warning?.message).toContain('collection_worse')
+  })
+
+  test('warns when collections is not an object', () => {
+    const result = validateBuildJson({ ...minimalGraph(), collections: [] })
+    expect(result.ok).toBe(true)
+    expect(result.parsed?.collections).toBeUndefined()
+    expect(result.warnings.some((w) => w.code === 'invalid_collections')).toBe(true)
+  })
+
+  test('omits collections from parsed when absent', () => {
+    const result = validateBuildJson(minimalGraph())
+    expect(result.ok).toBe(true)
+    expect('collections' in (result.parsed ?? {})).toBe(false)
   })
 })

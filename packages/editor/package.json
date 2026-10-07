@@ -1,20 +1,21 @@
 {
   "name": "@pascal-app/editor",
-  "version": "1.0.0-beta.5",
+  "version": "1.0.3",
   "description": "Pascal building editor component",
   "license": "MIT",
   "type": "module",
   "exports": {
     ".": "./src/index.tsx",
-    "./catalog": "./src/components/ui/item-catalog/catalog-items.tsx"
+    "./catalog": "./src/components/ui/item-catalog/catalog-items.tsx",
+    "./procedural-items": "./src/components/procedural-items/inspector.tsx"
   },
   "scripts": {
     "check-types": "tsgo --noEmit",
     "test": "bun test src"
   },
   "peerDependencies": {
-    "@pascal-app/core": "^1.0.0-beta.5",
-    "@pascal-app/viewer": "^1.0.0-beta.5",
+    "@pascal-app/core": "^1.0.3",
+    "@pascal-app/viewer": "^1.0.3",
     "@react-three/drei": "^10",
     "@react-three/fiber": "^9",
     "next": ">=15",
@@ -28,6 +29,8 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@iconify/react": "^6.0.2",
     "@number-flow/react": "^0.6.0",
+    "@pascal-app/geometry-script": "^1.0.3",
+    "@pascal-app/ifc-converter": "^1.0.3",
     "@pascal-app/lingo": "^0.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-context-menu": "^2.2.16",
@@ -61,8 +64,8 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
-    "@pascal-app/core": "^1.0.0-beta.5",
-    "@pascal-app/viewer": "^1.0.0-beta.5",
+    "@pascal-app/core": "^1.0.3",
+    "@pascal-app/viewer": "^1.0.3",
     "@pascal/typescript-config": "*",
     "@react-three/test-renderer": "^9.1.0",
     "@types/blob-stream": "^0.1.33",
@@ -74,5 +77,10 @@
     "@types/three": "^0.184.0",
     "fast-xml-parser": "^5.4.2",
     "typescript": "6.0.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pascalorg/editor.git",
+    "directory": "packages/editor"
   }
 }

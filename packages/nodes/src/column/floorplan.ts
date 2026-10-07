@@ -1,10 +1,11 @@
-import type {
-  AnyNode,
-  ColumnNode,
-  FloorplanGeometry,
-  FloorplanPoint,
-  GeometryContext,
-  StructuralGridNode,
+import {
+  type AnyNode,
+  type ColumnNode,
+  type FloorplanGeometry,
+  type FloorplanPoint,
+  type GeometryContext,
+  type StructuralGridNode,
+  scriptImages,
 } from '@pascal-app/core'
 import { floorplanGeometryMetadata } from '@pascal-app/editor'
 import {
@@ -70,18 +71,51 @@ export function buildColumnFloorplan(
 
   const stroke = showSelectedChrome && palette ? palette.selectedStroke : '#374151'
   const fill = showSelectedChrome ? '#fed7aa' : '#9ca3af'
+  // A scripted column draws its floor-plan image the way a catalog item does.
+  const floorPlanUrl = scriptImages(node)?.floorPlan
 
-  const children: FloorplanGeometry[] = [
-    {
-      kind: 'polygon',
-      points,
-      fill,
-      stroke,
-      strokeWidth: showSelectedChrome ? 0.03 : 0.02,
-      opacity: 0.92,
-      metadata: floorplanGeometryMetadata({ annotationObstacle: 'bounds' }),
-    },
-  ]
+  const body: FloorplanGeometry = {
+    kind: 'polygon',
+    points,
+    // Transparent, not none: the body stays the hit target under the image.
+    fill: floorPlanUrl ? 'transparent' : fill,
+    stroke,
+    strokeWidth: showSelectedChrome ? 0.03 : 0.02,
+    opacity: 0.92,
+    metadata: floorplanGeometryMetadata({ annotationObstacle: 'bounds' }),
+  }
+  const children: FloorplanGeometry[] = node.children.length
+    ? [
+        // Occupied columns keep label bounds in the overlay without covering their children.
+        {
+          kind: 'polygon',
+          points,
+          fill: 'none',
+          stroke: 'none',
+          pointerEvents: 'none',
+          metadata: body.metadata,
+        },
+        { ...body, metadata: undefined },
+      ]
+    : [body]
+  if (floorPlanUrl && node.source) {
+    const { min, max } = node.source.manifest.bounds
+    const [cx, cz] = points
+      .reduce((sum, [x, z]) => [sum[0] + x, sum[1] + z], [0, 0])
+      .map((total) => total / points.length) as [number, number]
+    children.push({
+      kind: 'image',
+      url: floorPlanUrl,
+      center: [cx, cz],
+      width: max[0] - min[0],
+      height: max[2] - min[2],
+      // The footprint turns by R(-rotation); the renderer's SVG rotate is R(+angle).
+      rotation: -node.rotation,
+    })
+    // The selection ring goes back on top of the image.
+    if (showSelectedChrome)
+      children.push({ ...body, fill: 'none', pointerEvents: 'none', metadata: undefined })
+  }
   const { halfX, halfZ } = columnPlanHalfExtents(node)
   const centerMarkHalf = Math.min(0.09, Math.max(0.035, Math.min(halfX, halfZ) * 0.45))
   const centerX = node.position[0]
@@ -188,7 +222,11 @@ export function buildColumnFloorplan(
       })
     }
 
-    if (node.supportStyle !== 'vertical') {
+    if (node.source) {
+      const params = new Set(node.source.manifest.params.map((spec) => spec.id))
+      if (params.has('width')) emitArrowAlong('width', 'x', node.width / 2 + RESIZE_ARROW_OFFSET)
+      if (params.has('depth')) emitArrowAlong('depth', 'z', node.depth / 2 + RESIZE_ARROW_OFFSET)
+    } else if (node.supportStyle !== 'vertical') {
       // Brace columns — width + depth of the bracing structure. Spread
       // arrows (top + bottom) project to the same XZ in top-view, so
       // we only surface bracing dimensions here. The 3D set still has
@@ -238,6 +276,21 @@ export function buildColumnFloorplan(
 }
 
 export function getColumnFloorplanFootprint(node: ColumnNode): FloorplanPoint[] {
+  if (node.source) {
+    const cos = Math.cos(node.rotation),
+      sin = Math.sin(node.rotation)
+    const { min, max } = node.source.manifest.bounds
+    const footprint: [number, number][] = [
+      [min[0], min[2]],
+      [max[0], min[2]],
+      [max[0], max[2]],
+      [min[0], max[2]],
+    ]
+    return footprint.map(([x, z]) => [
+      node.position[0] + x * cos + z * sin,
+      node.position[2] - x * sin + z * cos,
+    ])
+  }
   return getColumnPlanFootprint(node).map((point) => [point.x, point.y])
 }
 
@@ -253,6 +306,7 @@ type PlanPoint = { x: number; y: number }
  * arrows clear the splay.
  */
 function columnPlanHalfExtents(column: ColumnNode): { halfX: number; halfZ: number } {
+  if (column.source) return { halfX: column.width / 2, halfZ: column.depth / 2 }
   if (column.supportStyle !== 'vertical') {
     return {
       halfX:

@@ -1,5 +1,6 @@
 import { nodeRegistry } from '../registry/registry'
 import type { SceneApi, SurfacesConfig } from '../registry/types'
+import type { ItemNode } from '../schema/nodes/item'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 
 /**
@@ -17,7 +18,6 @@ export type AttachError =
   | { kind: 'cycle'; nodeId: AnyNodeId; hostId: AnyNodeId }
   | { kind: 'depth-exceeded'; depth: number; max: number }
   | { kind: 'host-missing'; hostId: AnyNodeId }
-  | { kind: 'kind-not-allowed'; hostKind: string; allowed: readonly string[] }
 
 export type AttachResult = { ok: true } | { ok: false; error: AttachError }
 
@@ -31,8 +31,6 @@ export type AttachResult = { ok: true } | { ok: false; error: AttachError }
  * - The hosting chain (child → host → host.parent → ...) must not contain
  *   `child` (cycle prevention).
  * - The resulting chain must not exceed {@link MAX_HOST_DEPTH}.
- * - If the child's NodeDefinition declares `capabilities.hostable.parents`,
- *   `host.type` must appear in that list.
  */
 export function canAttach(childId: AnyNodeId, hostId: AnyNodeId, scene: SceneApi): AttachResult {
   if (childId === hostId) {
@@ -51,25 +49,27 @@ export function canAttach(childId: AnyNodeId, hostId: AnyNodeId, scene: SceneApi
     return checkDepth(hostId, scene)
   }
 
-  const childDef = nodeRegistry.get(child.type)
-  const allowed = childDef?.capabilities.hostable?.parents
-  if (allowed && allowed.length > 0 && !(allowed as readonly string[]).includes(host.type)) {
-    return {
-      ok: false,
-      error: { kind: 'kind-not-allowed', hostKind: host.type, allowed },
-    }
-  }
-
-  // Cycle: walk host's ancestors and reject if we hit the child.
-  let cursor: AnyNode | undefined = host
-  while (cursor) {
-    if (cursor.id === childId) {
-      return { ok: false, error: { kind: 'cycle', nodeId: childId, hostId } }
-    }
-    cursor = cursor.parentId ? scene.get(cursor.parentId as AnyNodeId) : undefined
+  if (wouldCreateHostingCycle(childId, host, scene)) {
+    return { ok: false, error: { kind: 'cycle', nodeId: childId, hostId } }
   }
 
   return checkDepth(hostId, scene)
+}
+
+export function wouldCreateHostingCycle(
+  childId: string,
+  host: Pick<AnyNode, 'id' | 'parentId'>,
+  scene: Pick<SceneApi, 'get'>,
+): boolean {
+  const visited = new Set<string>()
+  let cursor: string | null = host.id
+  while (cursor) {
+    if (cursor === childId || visited.has(cursor)) return true
+    visited.add(cursor)
+    cursor =
+      (scene.get(cursor as AnyNodeId) ?? (cursor === host.id ? host : undefined))?.parentId ?? null
+  }
+  return false
 }
 
 function checkDepth(hostId: AnyNodeId, scene: SceneApi): AttachResult {
@@ -124,7 +124,7 @@ export function getTopSurfaceHeight(
  */
 export function canHostOnTop(host: AnyNode): boolean {
   const attachTo = (host as { asset?: { attachTo?: string } }).asset?.attachTo
-  return attachTo !== 'ceiling'
+  return attachTo !== 'ceiling' && !(host as { recipe?: { mounting?: unknown } }).recipe?.mounting
 }
 
 /**
@@ -162,4 +162,14 @@ export function clampYToHostTop(
 ): number {
   const top = getTopSurfaceHeight(host, nodes)
   return top == null ? originalY : top
+}
+
+export function clearFaceHostItemFields(host: AnyNode | undefined): Partial<ItemNode> {
+  const patch: Partial<ItemNode> = {}
+  for (const field of (host &&
+    nodeRegistry.get(host.type)?.capabilities.faceHost?.clearItemFields) ??
+    []) {
+    ;(patch as Record<string, unknown>)[field] = undefined
+  }
+  return patch
 }

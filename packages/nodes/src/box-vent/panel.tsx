@@ -3,7 +3,6 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  BoxVentNode as BoxVentSchema,
   getActiveRoofHeight,
   type RoofSegmentNode,
   useLiveNodeOverrides,
@@ -12,6 +11,7 @@ import {
 import {
   ActionButton,
   ActionGroup,
+  duplicateNodeAndPickUp,
   PanelSection,
   PanelWrapper,
   SegmentedControl,
@@ -110,33 +110,8 @@ export default function BoxVentPanel() {
   }, [node, setMovingNode, setSelection])
 
   const handleDuplicate = useCallback(() => {
-    if (!node) return
-    triggerSFX('sfx:item-pick')
-    const parentId = node.roofSegmentId as AnyNodeId | undefined
-    if (!parentId) return
-
-    // Clone via the schema parser so the new node gets a fresh ID and
-    // valid defaults. Keep position/rotation/dimensions identical to the
-    // source — the user will drag it to its real destination next.
-    const state = useScene.getState()
-    const meta =
-      typeof node.metadata === 'object' && node.metadata !== null
-        ? (node.metadata as Record<string, unknown>)
-        : {}
-    const cloneInput = {
-      ...node,
-      id: undefined,
-      metadata: { ...meta, isNew: true },
-    } as Record<string, unknown>
-    // Use the schema parser so the new node gets a fresh ID and stays
-    // in sync with the placement-tool defaults.
-    const cloned = BoxVentSchema.parse(cloneInput) as BoxVentNode
-
-    state.createNode(cloned, parentId)
-    state.dirtyNodes.add(parentId)
-    setMovingNode(cloned as never)
-    setSelection({ selectedIds: [] })
-  }, [node, setMovingNode, setSelection])
+    if (node) duplicateNodeAndPickUp(node)
+  }, [node])
 
   const handleDelete = useCallback(() => {
     if (!(selectedId && node)) return
@@ -193,7 +168,7 @@ export default function BoxVentPanel() {
           restoreOnCommit={false}
           step={0.01}
           unit="m"
-          value={Math.round(node.width * 100) / 100}
+          value={node.width}
         />
         <SliderControl
           label="Depth"
@@ -205,7 +180,7 @@ export default function BoxVentPanel() {
           restoreOnCommit={false}
           step={0.01}
           unit="m"
-          value={Math.round(node.depth * 100) / 100}
+          value={node.depth}
         />
         <SliderControl
           label="Height"
@@ -217,7 +192,7 @@ export default function BoxVentPanel() {
           restoreOnCommit={false}
           step={0.01}
           unit="m"
-          value={Math.round(node.height * 100) / 100}
+          value={node.height}
         />
         {/* Hood Overhang is `cap`-only — the dome shape rolls down to
             the body footprint without a flange skirt, and `box` doesn't
@@ -234,7 +209,7 @@ export default function BoxVentPanel() {
             restoreOnCommit={false}
             step={0.005}
             unit="m"
-            value={Math.round((node.hoodOverhang ?? 0) * 1000) / 1000}
+            value={node.hoodOverhang ?? 0}
           />
         )}
         {node.style === 'box' && (
@@ -249,7 +224,7 @@ export default function BoxVentPanel() {
               restoreOnCommit={false}
               step={0.005}
               unit="m"
-              value={Math.round((node.baseInset ?? 0.06) * 1000) / 1000}
+              value={node.baseInset ?? 0.06}
             />
             <SliderControl
               label="Base Height"
@@ -261,7 +236,7 @@ export default function BoxVentPanel() {
               restoreOnCommit={false}
               step={0.005}
               unit="m"
-              value={Math.round((node.baseHeight ?? 0.04) * 1000) / 1000}
+              value={node.baseHeight ?? 0.04}
             />
             <SliderControl
               label="Corner Bevel"
@@ -276,7 +251,7 @@ export default function BoxVentPanel() {
               restoreOnCommit={false}
               step={0.002}
               unit="m"
-              value={Math.round((node.cornerBevel ?? 0.012) * 1000) / 1000}
+              value={node.cornerBevel ?? 0.012}
             />
           </>
         )}
@@ -292,7 +267,7 @@ export default function BoxVentPanel() {
               restoreOnCommit={false}
               step={0.005}
               unit="m"
-              value={Math.round((node.capHeight ?? 0.07) * 1000) / 1000}
+              value={node.capHeight ?? 0.07}
             />
             <SliderControl
               label="Gap Height"
@@ -304,7 +279,7 @@ export default function BoxVentPanel() {
               restoreOnCommit={false}
               step={0.005}
               unit="m"
-              value={Math.round((node.capGap ?? 0) * 1000) / 1000}
+              value={node.capGap ?? 0}
             />
             <SliderControl
               label="Top Taper"
@@ -344,7 +319,7 @@ export default function BoxVentPanel() {
               restoreOnCommit={false}
               step={0.005}
               unit="m"
-              value={Math.round((node.hoodOverhang ?? 0.04) * 1000) / 1000}
+              value={node.hoodOverhang ?? 0.04}
             />
           </>
         )}
@@ -369,7 +344,7 @@ export default function BoxVentPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round((node.position[0] ?? 0) * 100) / 100}
+          value={node.position[0] ?? 0}
         />
         <SliderControl
           label="Y"
@@ -392,7 +367,7 @@ export default function BoxVentPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round((node.position[1] ?? 0) * 100) / 100}
+          value={node.position[1] ?? 0}
         />
         <SliderControl
           label="Z"
@@ -412,7 +387,7 @@ export default function BoxVentPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round((node.position[2] ?? 0) * 100) / 100}
+          value={node.position[2] ?? 0}
         />
         <SliderControl
           label="Rotation"

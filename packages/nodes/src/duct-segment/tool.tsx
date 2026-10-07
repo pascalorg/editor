@@ -85,6 +85,7 @@ import { rectSectionAxes, rollToContinueAcrossElbow } from './geometry'
  */
 const DUCT_DIAMETERS_IN = [4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20] as const
 const BODY_SNAP_RADIUS_M = 0.35
+const DUCT_WALL_STANDOFF_M = 0.01
 /** Angle step (radians) for the XZ angle lock — 45°. */
 
 /**
@@ -186,6 +187,18 @@ type DraftProfile = {
   diameter: number
   width: number
   height: number
+}
+
+export function ductSurfaceClearanceM(profile: DraftProfile, wall = false): number {
+  return (
+    runSectionHalfSizeM(
+      profile.shape === 'round'
+        ? profile.diameter
+        : wall
+          ? Math.max(profile.width, profile.height)
+          : profile.height,
+    ) + (wall && profile.shape !== 'round' ? DUCT_WALL_STANDOFF_M : 0)
+  )
 }
 
 /**
@@ -499,6 +512,9 @@ export function planDuctDraw(
 
 const DuctSegmentTool = () => {
   const { activeLevelId, sceneApi, unit } = useRegistryToolContext()
+  const toolDefaults = useEditor((s) => s.toolDefaults['duct-segment']) as
+    | Partial<DraftProfile>
+    | undefined
   const cursorRef = useRef<Group>(null)
   const continuationSeedRef = useRef(currentDuctContinuationSeed())
   const continuationSeed = continuationSeedRef.current
@@ -553,13 +569,7 @@ const DuctSegmentTool = () => {
     findBody: (point) =>
       findNearestRunBody3D(point, BODY_SNAP_RADIUS_M, { levelId: activeLevelId ?? undefined }),
     surfaceClearance: (surface) =>
-      surface
-        ? runSectionHalfSizeM(
-            profileRef.current.shape === 'round'
-              ? profileRef.current.diameter
-              : profileRef.current.height,
-          )
-        : 0,
+      surface ? ductSurfaceClearanceM(profileRef.current, surface.kind === 'wall') : 0,
     minimumSegmentLength: 0.08,
     inheritFromConnection: ({ port }) => {
       if (!port) return
@@ -593,9 +603,7 @@ const DuctSegmentTool = () => {
                 node.path[0]!,
                 node.path.at(-1)!,
                 surfaceTarget,
-                profileRef.current.shape === 'round'
-                  ? runSectionHalfSizeM(profileRef.current.diameter)
-                  : runSectionHalfSizeM(profileRef.current.height),
+                ductSurfaceClearanceM(profileRef.current, true),
               )
             : undefined
         return { ...node, wallAttachment }
@@ -669,6 +677,16 @@ const DuctSegmentTool = () => {
       }
     },
   })
+
+  useEffect(() => {
+    if (!toolDefaults) return
+    setProfile((current) => ({
+      shape: toolDefaults.shape ?? current.shape,
+      diameter: toolDefaults.diameter ?? current.diameter,
+      width: toolDefaults.width ?? current.width,
+      height: toolDefaults.height ?? current.height,
+    }))
+  }, [toolDefaults])
 
   const previewPlan = useMemo(() => {
     if (!(activeLevelId && run.start && run.cursor)) return null

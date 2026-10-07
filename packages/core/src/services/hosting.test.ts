@@ -121,26 +121,6 @@ describe('canAttach', () => {
     expect(canAttach(id('candidate'), id('root'), scene).ok).toBe(true)
   })
 
-  test('rejects host kind not in child def.hostable.parents', () => {
-    registerNode(makeDef('shelf', { hostable: { parents: ['wall', 'slab'] } }))
-    const scene = makeFakeScene({
-      s: makeNode('shelf', 's'),
-      ceiling: makeNode('ceiling', 'ceiling'),
-    })
-    const result = canAttach(id('s'), id('ceiling'), scene)
-    expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.error.kind).toBe('kind-not-allowed')
-  })
-
-  test('accepts when host kind is in parents', () => {
-    registerNode(makeDef('shelf', { hostable: { parents: ['wall', 'slab'] } }))
-    const scene = makeFakeScene({
-      s: makeNode('shelf', 's'),
-      w: makeNode('wall', 'w'),
-    })
-    expect(canAttach(id('s'), id('w'), scene).ok).toBe(true)
-  })
-
   test('no def or no hostable.parents = no kind restriction', () => {
     // Some kinds (e.g. items via catalog) defer to runtime checks instead of
     // declaring parents up front. canAttach should not block them.

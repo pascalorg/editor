@@ -1,5 +1,7 @@
 import { resolveSync } from 'bun'
 
+// Preload React too: when R3F loads its CJS entry first, Bun can give our ESM
+// hooks a second React instance and fail with an invalid hook call.
 // three r186's CommonJS entry is `require('./three.module.js')`. Bun cannot
 // require() an ES module that is still loading, and the R3F ecosystem (fiber,
 // drei, maath, meshline, troika) ships CJS mains that require("three") while
@@ -8,10 +10,12 @@ import { resolveSync } from 'bun'
 // turns the later require() into a cache hit. Resolve from the package under
 // test, not from this file: with the isolated linker each package has its own
 // link and this directory would walk up to a different copy. Packages that do
-// not depend on three have nothing to pre-evaluate.
+// not depend on a package have nothing to pre-evaluate.
 process.noDeprecation = true
-let threePath: string | null = null
-try {
-  threePath = resolveSync('three', process.cwd())
-} catch {}
-if (threePath) await import(threePath)
+for (const packageName of ['react', 'three']) {
+  let packagePath: string | null = null
+  try {
+    packagePath = resolveSync(packageName, process.cwd())
+  } catch {}
+  if (packagePath) await import(packagePath)
+}

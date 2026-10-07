@@ -29,6 +29,7 @@ import useEditor, {
 import { useFirstPersonHud } from '../../store/use-first-person-hud'
 import { Slider } from '../ui/slider'
 import { WalkthroughCrosshair } from '../walkthrough-hud'
+import { CaptureLevelPicker } from './capture-level-picker'
 import { isOverlaySnapshotSave } from './snapshot-capture'
 
 // Local alias — distinct from `useEditor.captureMode` (which describes *why*
@@ -709,6 +710,9 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
           </div>
         </div>
       )}
+
+      {/* Top-left: which levels the shot shows (the whole building by default). */}
+      {!isPreset && <CaptureLevelPicker />}
 
       {/* Top-right dismiss button (icon-only on mobile) */}
       <div className="pointer-events-auto absolute top-4 right-4">
