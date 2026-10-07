@@ -64,6 +64,7 @@ export {
 } from './components/viewer/scene-atmosphere'
 export { SceneEnvironment } from './components/viewer/scene-environment'
 export {
+  claimSceneGround,
   SceneGroundReplacement,
   useSceneGroundReplacement,
 } from './components/viewer/scene-ground-replacement'

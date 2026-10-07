@@ -10,7 +10,13 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { GRID_LAYER, getLevelPresentationY, useViewer, ZONE_LAYER } from '@pascal-app/viewer'
+import {
+  GRID_LAYER,
+  getLevelPresentationY,
+  useSceneGroundReplacement,
+  useViewer,
+  ZONE_LAYER,
+} from '@pascal-app/viewer'
 import { CameraControls, CameraControlsImpl } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
@@ -1368,6 +1374,10 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
   // navigation guardrails.
   const isPresetCapture = captureMode.mode === 'preset'
   const minDistance = isPresetCapture ? 0.5 : 2
+  // Over modeled or mapped surroundings (a neighbourhood instead of the
+  // horizon disc) the camera may pull back far enough to take it all in.
+  const groundReplaced = useSceneGroundReplacement()
+  const maxDistance = groundReplaced ? 1500 : 100
 
   if (isFirstPersonMode) {
     return null
@@ -1377,7 +1387,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     <CameraControls
       azimuthRotateSpeed={ORBIT_ROTATE_SPEED}
       makeDefault
-      maxDistance={100}
+      maxDistance={maxDistance}
       impl={FloorAwareCameraControls}
       maxPolarAngle={maxPolarAngle}
       minDistance={minDistance}
