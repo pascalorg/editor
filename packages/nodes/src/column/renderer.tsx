@@ -28,7 +28,7 @@ import {
   useViewer,
 } from '@pascal-app/viewer'
 import { createContext, type ReactNode, useContext, useEffect, useMemo, useRef } from 'react'
-import { BufferGeometry, Float32BufferAttribute, type Group, type Material } from 'three'
+import { BufferGeometry, Float32BufferAttribute, type Group, type Material, Matrix4 } from 'three'
 import {
   columnCapitalBlocks,
   columnShaftLayout,
@@ -1030,6 +1030,53 @@ function SquareBlock({
   )
 }
 
+function IBeamBlock({
+  y,
+  height,
+  width,
+  depth,
+  softenEdges = true,
+}: {
+  y: number
+  height: number
+  width: number
+  depth: number
+  softenEdges?: boolean
+}) {
+  const flangeThickness = Math.max(0.01, depth * 0.1)
+  const webThickness = Math.max(0.01, width * 0.1)
+  const webDepth = Math.max(0, depth - flangeThickness * 2)
+
+  return (
+    <group position={[0, y + height / 2, 0]}>
+      {/* Front Flange */}
+      <MappedBox
+        depth={flangeThickness}
+        height={height}
+        position={[0, 0, depth / 2 - flangeThickness / 2]}
+        softenEdges={softenEdges}
+        width={width}
+      />
+      {/* Back Flange */}
+      <MappedBox
+        depth={flangeThickness}
+        height={height}
+        position={[0, 0, -depth / 2 + flangeThickness / 2]}
+        softenEdges={softenEdges}
+        width={width}
+      />
+      {/* Web */}
+      <MappedBox
+        depth={webDepth}
+        height={height}
+        position={[0, 0, 0]}
+        softenEdges={softenEdges}
+        width={webThickness}
+      />
+    </group>
+  )
+}
+
 function RoundBlock({
   x = 0,
   y,
@@ -1143,6 +1190,10 @@ function ColumnBlock({
   const width = node.width * scale
   const depth = node.depth * scale
   const radius = node.radius * scale
+
+  if (node.crossSection === 'i-beam') {
+    return <IBeamBlock depth={depth} height={height} width={width} y={y} />
+  }
 
   if (node.crossSection === 'square' || node.crossSection === 'rectangular') {
     return <SquareBlock depth={depth} height={height} width={width} y={y} />
@@ -2232,7 +2283,14 @@ export const ColumnPreview = ({ node }: { node: ColumnNode }) => {
   return (
     <ColumnMaterialContext.Provider value={materials}>
       <ColumnEdgeSoftnessContext.Provider value={node.edgeSoftness ?? 0.025}>
-        <group ref={groupRef}>
+        <group
+          ref={groupRef}
+          matrixAutoUpdate={false}
+          onUpdate={(self) => {
+            self.matrix.makeShear(-Math.tan(node.tiltZ ?? 0), 0, 0, 0, 0, Math.tan(node.tiltX ?? 0))
+            self.matrixWorldNeedsUpdate = true
+          }}
+        >
           <ColumnBody node={node} />
         </group>
       </ColumnEdgeSoftnessContext.Provider>
@@ -2290,9 +2348,25 @@ export const ColumnRenderer = ({ node: rawNode }: { node: ColumnNode }) => {
     <ColumnMaterialContext.Provider value={materials}>
       <ColumnEdgeSoftnessContext.Provider value={node.edgeSoftness ?? 0.025}>
         <group
-          position={liveTransform?.position ?? node.position}
           ref={ref}
-          rotation={[0, liveTransform?.rotation ?? node.rotation, 0]}
+          matrixAutoUpdate={false}
+          onUpdate={(self) => {
+            const pos = liveTransform?.position ?? node.position
+            const rotY = liveTransform?.rotation ?? node.rotation
+            self.matrix.makeTranslation(pos[0], pos[1], pos[2])
+            self.matrix.multiply(new Matrix4().makeRotationY(rotY))
+            self.matrix.multiply(
+              new Matrix4().makeShear(
+                -Math.tan(node.tiltZ ?? 0),
+                0,
+                0,
+                0,
+                0,
+                Math.tan(node.tiltX ?? 0),
+              ),
+            )
+            self.matrixWorldNeedsUpdate = true
+          }}
           visible={node.visible}
           {...handlers}
         >

@@ -437,7 +437,7 @@ export default function ColumnPanel() {
           </>
         ) : (
           <>
-            <div className="grid grid-cols-3 gap-2 px-1 pt-1">
+            <div className="grid grid-cols-4 gap-2 px-1 pt-1">
               {(
                 [
                   {
@@ -480,7 +480,7 @@ export default function ColumnPanel() {
                   },
                   {
                     value: 'rectangular',
-                    label: 'Rectangular',
+                    label: 'Rect.',
                     icon: (
                       <svg
                         aria-hidden="true"
@@ -498,6 +498,21 @@ export default function ColumnPanel() {
                           x="3"
                           y="5.5"
                         />
+                      </svg>
+                    ),
+                  },
+                  {
+                    value: 'i-beam',
+                    label: 'I-Beam',
+                    icon: (
+                      <svg
+                        aria-hidden="true"
+                        fill="none"
+                        height="22"
+                        viewBox="0 0 22 22"
+                        width="22"
+                      >
+                        <path d="M5 4h12v2h-4.5v10h4.5v2H5v-2h4.5V6H5V4z" fill="currentColor" />
                       </svg>
                     ),
                   },
@@ -559,6 +574,29 @@ export default function ColumnPanel() {
             )}
           </>
         )}
+      </PanelSection>
+
+      <PanelSection title="Tilt (Eğim)">
+        <SliderControl
+          label="Tilt X"
+          max={Math.PI / 4}
+          min={-Math.PI / 4}
+          onChange={(value) => handleUpdate({ tiltX: value })}
+          precision={3}
+          step={0.01}
+          unit="rad"
+          value={node.tiltX ?? 0}
+        />
+        <SliderControl
+          label="Tilt Z"
+          max={Math.PI / 4}
+          min={-Math.PI / 4}
+          onChange={(value) => handleUpdate({ tiltZ: value })}
+          precision={3}
+          step={0.01}
+          unit="rad"
+          value={node.tiltZ ?? 0}
+        />
       </PanelSection>
 
       <PanelSection title="Dimensions">

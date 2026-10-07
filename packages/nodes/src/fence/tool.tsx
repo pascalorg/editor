@@ -148,6 +148,7 @@ function toMiterWall(segment: SegmentLike): WallNode {
     visible: true,
     metadata: {},
     children: [],
+    tilt: 0,
     start: segment.start,
     end: segment.end,
     thickness: segment.thickness,

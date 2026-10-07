@@ -339,7 +339,26 @@ export default function WallPanel() {
             value={Math.round(displayHeight * 100) / 100}
           />
         )}
-        <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+
+        <div className="px-1 mt-2 mb-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+          Tilt (Eğim)
+        </div>
+        <SliderControl
+          onCommit={handleCommit}
+          onCancel={handleCancel}
+          restoreOnCommit={false}
+          previewWhileTyping
+          label="Angle"
+          max={45}
+          min={-45}
+          onChange={(v) => handlePreview({ tilt: v * (Math.PI / 180) })}
+          precision={0}
+          step={1}
+          unit="°"
+          value={Math.round((node.tilt ?? 0) * (180 / Math.PI))}
+        />
+
+        <div className="px-1 mt-2 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
           Bottom
         </div>
         <SegmentedControl

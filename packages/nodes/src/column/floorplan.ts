@@ -387,7 +387,11 @@ function getColumnPlanFootprint(column: ColumnNode): PlanPoint[] {
     column.depth * column.capitalDepthScale,
   )
 
-  if (column.crossSection === 'square' || column.crossSection === 'rectangular') {
+  if (
+    column.crossSection === 'square' ||
+    column.crossSection === 'rectangular' ||
+    column.crossSection === 'i-beam'
+  ) {
     return getRotatedRectanglePolygon(center, width, depth, -column.rotation)
   }
 

@@ -77,6 +77,7 @@ describe('resolvePointerSupportSurface node tops', () => {
           visible: true,
           metadata: {},
           children: [],
+          tilt: 0,
           assemblyLayers: [],
           start: [-1, 0],
           end: [1, 0],
@@ -319,6 +320,7 @@ describe('resolvePointerSupportSurface node tops', () => {
       visible: true,
       metadata: {},
       children: [],
+      tilt: 0,
       polygon: [
         [-2, 1],
         [2, 1],
