@@ -52,7 +52,8 @@ export const createStairTool = {
     }).optional(),
     length: measurement('length', 'm', {
       positive: true,
-      description: 'Horizontal run along the climb (default 3.0 m).',
+      description:
+        "Horizontal run along the climb (default: from the stair's design targets, 0.28 m of going per riser, risers of at most 0.18 m).",
     }).optional(),
     height: measurement('length', 'm', {
       positive: true,
