@@ -6,6 +6,7 @@ import {
   bakePolicyOf,
   containsPoint,
   distanceToBoundary,
+  type GeometryContext,
   itemInteraction,
   itemPrompt,
   operateItem,
@@ -267,6 +268,7 @@ export function GlbScene({
   interactiveItems,
   referenceNodes,
   replaceNodes,
+  sceneNodes,
   onLevelsChange,
   onIdentityChange,
   onHoverChange,
@@ -282,6 +284,9 @@ export function GlbScene({
   /** `bake: 'replace'` nodes (e.g. plugin trees): baked static but re-rendered
    *  live here via their `bakeReplaceRenderer`; the baked meshes are hidden. */
   replaceNodes?: AnyNode[]
+  /** Every node of the scene graph the artifact was baked from, so a `replace`
+   *  renderer can resolve its parent and siblings. A stable reference. */
+  sceneNodes?: Readonly<Record<string, AnyNode>>
   onLevelsChange?: (levels: GlbLevel[]) => void
   onIdentityChange?: (identity: GlbIdentity) => void
   onHoverChange?: (hover: GlbHover) => void
@@ -293,6 +298,11 @@ export function GlbScene({
   }
   const rootRef = useRef<THREE.Group>(null!)
   const actions = useClipActions(gltf.animations, rootRef)
+  const resolveNode = useMemo<GeometryContext['resolve'] | undefined>(
+    () =>
+      sceneNodes ? <N = AnyNode>(id: AnyNodeId) => sceneNodes[id] as N | undefined : undefined,
+    [sceneNodes],
+  )
   const proceduralPlayback = useMemo(() => {
     const byNode = new Map<
       string,
@@ -1368,7 +1378,7 @@ export function GlbScene({
       {/* `bake: 'replace'` nodes (plugin trees): baked meshes hidden above, the
           live instanced render portaled per level via each kind's bakeReplaceRenderer. */}
       {replaceNodes?.length ? (
-        <GlbReplaceInstances identity={identity} nodes={replaceNodes} />
+        <GlbReplaceInstances identity={identity} nodes={replaceNodes} resolve={resolveNode} />
       ) : null}
       {/* Floating room labels. Each group's matrix is synced to its zone node
           every frame (above) so the label rides level stacking; the div fades

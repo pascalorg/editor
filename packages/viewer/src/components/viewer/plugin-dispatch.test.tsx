@@ -2,7 +2,9 @@ import { afterEach, beforeEach, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeDefinition,
+  type AnyNodeId,
   BaseNode,
+  type GeometryContext,
   LevelNode,
   loadPlugin,
   type NodeDefinition,
@@ -112,8 +114,21 @@ const meadowDef: NodeDefinition<typeof Meadow> = {
   bake: 'replace',
   bakeReplaceRenderer: {
     module: async () => ({
-      default: ({ nodes }: { nodes: { id: string }[] }) => (
-        <group name={`meadow:${nodes.map((node) => node.id).join(',')}`} />
+      default: ({
+        nodes,
+        resolve,
+      }: {
+        nodes: { id: string; parentId: string | null }[]
+        resolve?: GeometryContext['resolve']
+      }) => (
+        <group name={`meadow:${nodes.map((node) => node.id).join(',')}`}>
+          {nodes.map((node) => (
+            <group
+              key={node.id}
+              name={`meadow-parent:${node.parentId ? (resolve?.(node.parentId as AnyNodeId)?.type ?? 'unresolved') : 'none'}`}
+            />
+          ))}
+        </group>
       ),
     }),
   },
@@ -299,6 +314,33 @@ test('the baked viewer restores strip nodes and mounts the replace renderer only
 
     expect(bakedLevel.getObjectByName(`overlay:${overlay.id}`)).toBeDefined()
     expect(bakedLevel.getObjectByName(`meadow:${meadow.id}`)).toBeDefined()
+  } finally {
+    await renderer.unmount()
+  }
+})
+
+// The baked viewer never loads the scene graph into `useScene`, so a replace
+// renderer that builds from its parent (a site's polygon, its terrain) reads
+// the published graph through `resolve` instead.
+test('replace renderers resolve nodes from the published graph, not the scene store', async () => {
+  const { level, meadow, graph } = scene([PLUGIN_ID])
+  const replaceNodes = buildGlbReplaceNodes(graph)
+  useScene.getState().unloadScene()
+  const bakedLevel = new Group()
+  const identity = new Map([[level.id, bakedLevel]])
+  const resolve: GeometryContext['resolve'] = (id) =>
+    graph.nodes[id] as ReturnType<GeometryContext['resolve']>
+  const renderer = await create(
+    <>
+      <primitive object={bakedLevel} />
+      <GlbReplaceInstances identity={identity} nodes={replaceNodes} resolve={resolve} />
+    </>,
+  )
+  try {
+    await settle(renderer, 0)
+
+    expect(bakedLevel.getObjectByName(`meadow:${meadow.id}`)).toBeDefined()
+    expect(bakedLevel.getObjectByName('meadow-parent:level')).toBeDefined()
   } finally {
     await renderer.unmount()
   }

@@ -149,6 +149,14 @@ instanced meshes in level-local space — per-instance phase for animated
 content, and a few non-raycast meshes instead of one per node under the baked
 scene's pointer handlers.
 
+The baked viewer never loads the scene graph into `useScene`: the store is
+empty there. A `bakeReplaceRenderer` that builds from other nodes — a ground
+surface that needs its parent site's polygon and terrain, a water body that
+needs its siblings — reads them through its `resolve` prop, which looks up
+any node of the graph the artifact was baked from (same signature as
+`GeometryContext.resolve`). A renderer that reads `useScene` for that context
+draws nothing in the baked viewer. Hosts without the graph omit `resolve`.
+
 ## Export-only geometry
 
 `def.bakeGeometry(node, ctx)` replaces the registered node's cloned subtree
