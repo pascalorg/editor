@@ -135,6 +135,7 @@ Concretely, door/window placement/move keeps these in lockstep across `{door,win
 - **Snap target**: nearest wall to the true cursor (shared `findClosestWallInPlan` / wall raycast), free-follow off-wall, commit only on a host.
 - **Move SFX**: a soft `sfx:grid-snap` click per grid step while sliding (free-follow plan XZ or on-wall along-X, quantized + deduped so it isn't a machine-gun) and a soft `sfx:item-pick` cue on the floor→wall snap. Both tools carry an identical `tickGridStep` / `tickWallSnap` pair — keep them in sync.
 - **R-flip** facing mid-placement, **Alt (hold)** to force-place past snapping and collisions (guides stay visible) and **Shift (tap)** to cycle the snapping mode — the rule above, never a held-Shift bypass — faithful ghost/symbol, deterministic single-undo commit.
+- **O / L** cycle the door and window tools' Type and Style chips (`ToolHint.chip`, by key or click): the choices of the panel's Type and Style rows, written from the same core fields (`doorTypeFields`, `DOOR_TYPE_SIZES` and `doorStyleLook` for a door; `windowTypeFields` and the window style presets for a window), so a door placed by hand matches one changed in the panel. A window placed as Bay or Bow has no sill; every other type has one.
 
 Tells that you've broken parity: a sound/guide/snap that fires in 3D but is silent in 2D (or vice-versa), or a fix landed in one move file but not its sibling. The two move files are deliberately near-mirrors; diff them when in doubt.
 
@@ -331,6 +332,10 @@ When emitting a `FloorplanGeometry` polygon that should remain interactive but v
 
 Procedural recipes declare `mounting: { attachTo: 'ceiling', reference }` with a named, non-repeated +Y top surface. The shared procedural mounted move session handles wall and ceiling previews, snapping, collision checks, Alt force-place for collisions, fresh subtree commits and single-step undo. Ceiling enter/move/click events use ceiling-local XZ; grid fallback shows an unhosted red ghost and cannot commit. The parent is the ceiling, stored Y is zero at the reference, and only yaw rotates (R/T); the rendered pose subtracts the rotated reference so the design hangs flush below the ceiling underside. Core validation enforces polygon containment, holes and level height even with Alt. The 2D move target finds ceiling polygons and uses the same session; glyphs resolve the ceiling frame, while parameter arrows portal through the ceiling frame and floor elevation never applies.
 
+
+## Floor item fit
+
+While a floor item is placed from the catalog or moved, the item tool's HUD shows a `!` row when it stands in a door's clearance ("Blocks the door to Bath") or when its room cannot hold it in any turn ("Too large for Bath"); the selected item's panel shows the same line at its top, with the item's and the room's sizes for a room too small. It is a warning, not a block: the item still places. The check is core's `floorItemFit` (`@pascal-app/core/building`), the one `place_items` refuses with (`blocks_door`, naming the door and a spot that clears every door; `too_large_for_room`), read through `useFloorItemWarning` at the item's live pose. Only items standing on a level are checked: an item on a table, a shelf or a wall is not, and items overlapping each other (a chair under its table) are not a misfit.
 
 ## Surface fit policy
 

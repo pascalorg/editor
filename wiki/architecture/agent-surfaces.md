@@ -13,6 +13,7 @@ Pascal has two agent surfaces: the MCP server in this repo, used by external age
 - **Operations live once.** A new capability is a core operation over `SceneApi` (`createSceneApi(store)`); each surface only adapts inputs and outputs. Never implement the same scene edit twice.
 - **Rules live in the operation, not the loop.** A refusal or diagnostic that exists only in one surface's prompt or step logic is not enforced for the other surface's agents. Put realism refusals and `check`-style diagnostics where both surfaces execute them.
 - **Knowledge parity.** A lesson that changes how an agent should build — a realism rule, a tool-choice rule, a known pitfall — is added to the published guide (skill references, agent guide) in the same change that teaches it to the chat, worded for any agent.
+- **By-hand counterpart.** No agent capability ships without its manual counterpart in the editor, in the same change: what an agent can do, a person can do by hand, and the two read the same core rule. Example: `place_items` refuses a floor item in a door's clearance or too large for its room (`blocks_door`, `too_large_for_room`), and the editor's item tool warns about the same placement while the item is placed or moved, from the same check (`floorItemFit` in `core/building`). When an agent tool has no counterpart yet, the PR names it and the follow-up that adds it.
 
 ### Parity by layer
 
@@ -26,7 +27,21 @@ A tool has three layers, and only the last one may differ between surfaces:
 
 **Refusals are answers.** An operation that cannot do what was asked throws `AgentRefusal(code, message, details)` — "Wall wall_a is 0.80 m long, too short for a 0.90 m door." Both surfaces return `{ error, code, ...details }`; the code is stable and counted (per thread, per week), and the message says what would work.
 
-**Tests follow the layers.** A tool's edge cases are written first as one table (e.g. `building/__fixtures__/wall-opening-cases.ts`) and run by three runners: the core operation, the MCP tool through a real client, the chat executor on the real store. A change that makes one layer disagree fails.
+**Tests follow the layers.** A tool's edge cases are written first as one table (e.g. `building/__fixtures__/wall-opening-cases.ts`, or the shared `agent-operations/__fixtures__/cases.ts`) and run by three runners: the core operation (`operations.test.ts`), the MCP tool through a real client (`shared-tools.test.ts`), the chat executor on the real store. A change that makes one layer disagree fails.
+
+## Adding a tool to both surfaces
+
+A tool is written once and registered twice; never build the same tool separately for the chat and the MCP.
+
+1. **Contract** in `packages/core/src/agent-tools/<area>.ts`: `{ name, title, description, input }`, zod only, and added to `AGENT_TOOL_CONTRACTS` (`agent-tools/index.ts`). The description is what both agents read: say what it does, its defaults, and its refusal codes.
+2. **Operation** in `packages/core/src/agent-operations/`: a pure function over the scene's nodes that returns `{ result, changes }` and refuses with `refuse(code, message, details)`; registered by tool name in `AGENT_OPERATIONS`.
+3. **Cases** in the shared fixture table, written failing first; the core and MCP runners pick them up.
+4. **MCP**: an entry in `SHARED_TOOLS` (`packages/mcp/src/tools/shared-tools.ts`) with its annotations and output schema; the annotation policy (`scripts/openai-tool-annotation-policy.ts`) and `plugin-evals/tool-annotation-justifications.json` list it.
+5. **Hosted chat**: the hosted repo defines its chat tool from the same contract and runs the same operation through its shared-tool executor; its `agent-surface-parity.test.ts` checks that the two surfaces' name, description and input schema match.
+6. **By hand**: the editor's counterpart, in the same change.
+7. **Knowledge**: the `pascal-3d` skill, the agent guide (`pascal://agent-guide`) and the MCP README's tool table.
+
+A tool that needs something only a host has keeps the same contract and operation; the host passes the missing piece to `createPascalMcpServer`. Without a renderer (`sceneViews`) or a script runtime (`geometryScripts`) the tool still exists and answers with a code (`view_unavailable`, `scripts_unavailable`); without a `catalog` the item tools draw from a small built-in list; hosted service tools are registered only with a `services` executor.
 
 ## What stays surface-specific
 
@@ -52,7 +67,23 @@ Hosted service tools have public contracts in `core/agent-tools` and a shared re
 
 | Capability | Shared contract | Shared operation | MCP | Hosted AI chat |
 |---|---|---|---|---|
-| `measure_stair` | `measureStairTool` in `core/agent-tools` | `AGENT_OPERATIONS.measure_stair` | Shared-tool adapter; read-only measurements and layout alternatives | Needs hosted-chat registration and executor port (companion change in private-editor) |
-| `fit_stair` | `fitStairTool` in `core/agent-tools` | `AGENT_OPERATIONS.fit_stair` | Shared-tool adapter; applies the planned changes atomically | Needs hosted-chat registration and executor port (companion change in private-editor) |
+| `create_stair` | `createStairTool` in `core/agent-tools` | `AGENT_OPERATIONS.create_stair` | Shared-tool adapter; sizes the flight as the editor's stair tool does (`planStairCreation`) and owns the floor openings it cuts | Same contract and operation, one undo step |
+| `measure_stair` | `measureStairTool` in `core/agent-tools` | `AGENT_OPERATIONS.measure_stair` | Shared-tool adapter; read-only measurements and layout alternatives | Same contract and operation, read-only |
+| `fit_stair` | `fitStairTool` in `core/agent-tools` | `AGENT_OPERATIONS.fit_stair` | Shared-tool adapter; applies the planned changes atomically | Same contract and operation, one undo step |
 
-Both surfaces use the zod-only `@pascal-app/core/agent-tools` contracts and the plans in `@pascal-app/core/agent-operations`. The hosted-chat port needs registration, executor integration and parity tests. The published `pascal-3d` skill and MCP agent guide describe the same sizing, winder and measurement semantics. Design targets are preferences, not code certification; measurement reports only the modeled obstacles it supports.
+Both surfaces use the zod-only `@pascal-app/core/agent-tools` contracts and the plans in `@pascal-app/core/agent-operations`. The published `pascal-3d` skill and MCP agent guide describe the same sizing, winder and measurement semantics. Design targets are preferences, not code certification; measurement reports only the modeled obstacles it supports.
+
+## Looking at the scene: `view_scene`
+
+One contract (`viewSceneTool`) and one plan (`sceneViewPlan` in `core/agent-operations`): the plan turns the request (a target, a side or an exact eye, a projection, a photo's camera) into a camera pose and an image size, and, when a photo region is given, a crop of the photo to return beside the view. Only the rendering differs by surface:
+
+- **Hosted chat**: the editor in the same page renders the pose.
+- **MCP**: the server has no renderer. It asks the host's `sceneViews` (a `SceneViewHost`, passed to `createPascalMcpServer`) for a capture of the active project. The hosted Pascal app answers through the person's editor tab open on that project, as a screenshot job the tab runs; with no tab open the call is refused `editor_tab_required` with the editor link, and with the tab in the background `editor_tab_hidden`, so the agent asks the person to bring it forward. A server without a `sceneViews` host refuses `view_unavailable`; a session with no project, `no_project`; a photo crop the host cannot make, `photo_crop_unavailable`.
+
+The answer is the picture plus the pose it was taken from, and which tab rendered it and when. A picture is not a measure: sizes and counts come from the tools.
+
+## Emptying a project: `clear_scene`
+
+A write that would leave a populated project empty is far more often an accident than an intent, so a store may refuse it: the save options carry `allowSceneWipe`, and without it a guarding store throws `SceneWipeBlockedError` (a `SceneInvalidError`). Live sync answers that refusal as `scene_wipe_blocked` with `mutationApplied: false` and loads the stored scene back into the session, so the agent's next write builds on the project as stored; when the stored scene cannot be read back, it says to call `load_scene` first.
+
+`clear_scene` is the only way to empty a project on purpose: it resets the scene to the host's default scaffold (a site, a building, one level), keeps the project's installed plugins, clears the undo history, and saves with `allowSceneWipe`. Its `reason` says what the person asked. The by-hand counterpart is the hosted editor's **Clear the project**, offered on the notice when a save is refused as a wipe. A store with no wipe guard (the local SQLite store) saves either way.
