@@ -102,6 +102,7 @@ export const WALL_OPENING_REFUSALS = [
   'conflicting_position',
   'wall_too_short',
   'opening_overlap',
+  'style_needs_fixed_window',
 ] as const
 export type WallOpeningRefusal = (typeof WALL_OPENING_REFUSALS)[number]
 
@@ -229,6 +230,19 @@ export const WALL_OPENING_CASES: readonly WallOpeningCase[] = [
     tool: 'add_window',
     input: { wallId: main, t: 0.5 },
     expect: { localX: 2, centerY: 1.65, clamped: false },
+  },
+  // A style shapes a Fixed window's panes; an operable window draws its own sashes and ignores them.
+  {
+    name: 'a Fixed window takes a style',
+    tool: 'add_window',
+    input: { wallId: main, t: 0.5, windowType: 'fixed', style: 'double-hung' },
+    expect: { localX: 2, centerY: 1.65, clamped: false },
+  },
+  {
+    name: 'a style on a window that is not Fixed is refused, naming the Fixed type',
+    tool: 'add_window',
+    input: { wallId: main, t: 0.5, windowType: 'casement', style: 'double-hung' },
+    expect: { refusal: 'style_needs_fixed_window', mentions: ["'fixed'", 'casement'] },
   },
   {
     name: 'a window keeps the sill it is given',

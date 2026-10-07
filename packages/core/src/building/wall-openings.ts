@@ -264,6 +264,16 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
       'Say where on the wall: t (or position) from 0 at its start to 1 at its end.',
     )
 
+  // The renderer draws a style's panes on a Fixed window only; an operable window draws its own
+  // sashes, so a style there would be written and never seen.
+  const windowType = input.windowType ?? 'fixed'
+  if (kind === 'window' && input.style && windowType !== 'fixed')
+    refuse(
+      'style_needs_fixed_window',
+      `A window style shapes a Fixed window's panes; a ${windowType} window draws its own sashes, so the style would not show. Pass windowType 'fixed' with the style, or drop the style.`,
+      { windowType, style: input.style },
+    )
+
   const { compiled } = input
   if (compiled && compiled.mount !== 'wall')
     refuse('wrong_mount', `A ${kind}'s script uses mount 'wall'.`, { mount: compiled.mount })

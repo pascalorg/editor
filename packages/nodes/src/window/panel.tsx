@@ -199,6 +199,8 @@ export default function WindowPanel() {
   const showOpeningShapeSection = !scripted && isOpening
   const showFrameSection = !scripted && !isOpening
   const showGridSection = !scripted && !isOpening && supportsGrid
+  // A style shapes the pane grid, which only a Fixed window draws, like the Grid section.
+  const showStyleSection = showGridSection
   const showSillSection = !scripted && !isOpening && supportsSill
   const showOperationSection = !scripted && !isOpening && isOperableWindow
   const showAwningDirectionSection = !scripted && !isOpening && displayedWindowType === 'awning'
@@ -407,7 +409,7 @@ export default function WindowPanel() {
         </PanelSection>
       )}
 
-      {showWindowTypeSection && (
+      {showStyleSection && (
         <PanelSection title="Style">
           <div className="grid grid-cols-2 gap-2 px-1 pt-1">
             {WINDOW_STYLES.map((style) => (

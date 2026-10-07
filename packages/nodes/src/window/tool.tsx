@@ -68,7 +68,7 @@ import {
   resolveWallSlideAlignment,
 } from '../shared/wall-opening-alignment'
 import { WindowFloorProjection } from './floor-projection'
-import { placedWindowFields, useWindowPlacement } from './placement'
+import { placedWindowFields, useWindowPlacement, windowTakesStyle } from './placement'
 import WindowPreview from './preview'
 import {
   clampToWall,
@@ -1034,6 +1034,7 @@ const WindowTool: React.FC = () => {
     const onKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase()
       if (key !== 'r' && key !== 'o' && key !== 'l') return
+      if (key === 'l' && !windowTakesStyle(useWindowPlacement.getState().type)) return
       if (e.repeat) return
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return

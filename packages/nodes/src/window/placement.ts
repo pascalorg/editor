@@ -31,6 +31,9 @@ type WindowPlacementState = {
   cycleStyle(): void
 }
 
+/** A style shapes a Fixed window's panes; every other type draws its own sashes and ignores them. */
+export const windowTakesStyle = (type: WindowNode['windowType']) => type === 'fixed'
+
 const next = <T>(list: readonly T[], value: T) => list[(list.indexOf(value) + 1) % list.length]!
 
 export const useWindowPlacement = create<WindowPlacementState>((set, get) => ({
@@ -56,7 +59,7 @@ export function placedWindowFields(): Partial<WindowNode> {
   return {
     ...windowTypeFields(type),
     sill: !SILLLESS_WINDOW_TYPES.has(type),
-    ...getWindowStyleOverrides(style),
+    ...(windowTakesStyle(type) ? getWindowStyleOverrides(style) : {}),
   }
 }
 
@@ -77,6 +80,11 @@ export const WINDOW_PLACEMENT_HINTS: ToolHint[] = [
   {
     key: 'L',
     label: 'Style',
+    // Shown only while the tool places a Fixed window, the one type a style shapes.
+    visible: {
+      subscribe: (onChange) => useWindowPlacement.subscribe(onChange),
+      value: () => windowTakesStyle(useWindowPlacement.getState().type),
+    },
     chip: {
       subscribe: (onChange) => useWindowPlacement.subscribe(onChange),
       value: () => useWindowPlacement.getState().style,
