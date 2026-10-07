@@ -451,6 +451,14 @@ describe('an ephemeral capture', () => {
     }
   })
 
+  test('an ephemeral frame with no caller to answer is stored nowhere', async () => {
+    const stored: Blob[] = []
+    await deliverSnapshot({ ephemeral: true }, new Blob(['frame']), cameraData, (frame) => {
+      stored.push(frame)
+    })
+    expect(stored).toEqual([])
+  })
+
   test('any other capture goes to the host as before', async () => {
     const stored: Blob[] = []
     const blob = new Blob(['frame'])

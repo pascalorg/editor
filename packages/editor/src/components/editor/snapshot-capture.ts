@@ -155,13 +155,15 @@ export function deliverSnapshot<T extends object & { resolution?: { w: number; h
   cameraData: T,
   onCapture: (blob: Blob, cameraData: T) => void | Promise<void>,
 ): void | Promise<void> {
-  if (event.ephemeral && event.requestId) {
-    emitter.emit('snapshot:captured', {
-      requestId: event.requestId,
-      blob,
-      width: cameraData.resolution?.w ?? 0,
-      height: cameraData.resolution?.h ?? 0,
-    })
+  // An ephemeral frame is never stored: with no caller to answer, it is dropped.
+  if (event.ephemeral) {
+    if (event.requestId)
+      emitter.emit('snapshot:captured', {
+        requestId: event.requestId,
+        blob,
+        width: cameraData.resolution?.w ?? 0,
+        height: cameraData.resolution?.h ?? 0,
+      })
     return
   }
   return onCapture(blob, cameraData)
