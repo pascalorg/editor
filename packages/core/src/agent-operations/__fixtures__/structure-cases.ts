@@ -410,7 +410,7 @@ export const CREATE_STAIR_CASES: AgentToolCase[] = [
     expect: { refusal: 'not_above', mentions: ['level_ground'] },
   },
   {
-    // create_stair_between_levels' options (S1 parity with main): railings, a finish, a name.
+    // create_stair_between_levels' options, kept by create_stair: railings, a finish, a name.
     name: 'railings on one side, a finish and a name, as asked',
     tool: 'create_stair',
     scene: storeysScene,

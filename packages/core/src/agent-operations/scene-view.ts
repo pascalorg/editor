@@ -161,7 +161,7 @@ const tall = (box: SceneViewBox, least: number): SceneViewBox =>
     : { min: box.min, max: [box.max[0], box.min[1] + least, box.max[2]] }
 
 /**
- * A site element's box, at detail scale (S10 live: view_scene could not look at the steps it
+ * A site element's box, at detail scale (view_scene once could not look at the steps an agent
  * built): a column round its position, a fence along its run, a slab over its outline, a stair
  * round its foot as far as it could reach.
  */

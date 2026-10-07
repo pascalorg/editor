@@ -359,7 +359,7 @@ describe("a crop's size", () => {
   })
 })
 
-// S10 live (20:33): view_scene could not look at the steps it built (nothing_to_view: "no walls
+// view_scene could not look at the steps an agent built (nothing_to_view: "no walls
 // to look at"). A stair, a column, a fence or a slab frames by its own bounds, as an opening does.
 describe('a close-up of a site element', () => {
   function site() {
