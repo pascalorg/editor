@@ -4203,6 +4203,8 @@ function FloorplanStairBuildPreviewLayer({
   const point = useStairBuildPreview((s) => s.point)
   const rotation = useStairBuildPreview((s) => s.rotation)
   const rise = useStairBuildPreview((s) => s.rise)
+  const length = useStairBuildPreview((s) => s.length)
+  const stepCount = useStairBuildPreview((s) => s.stepCount)
   const isActive = mode === 'build' && tool === 'stair'
 
   const previewGeometry = useMemo(() => {
@@ -4211,6 +4213,8 @@ function FloorplanStairBuildPreviewLayer({
     }
     const previewSegment = {
       ...createSizedStairFlight(rise),
+      ...(length !== null ? { length } : {}),
+      ...(stepCount !== null ? { stepCount } : {}),
       id: 'sseg_floorplan_preview' as const,
       parentId: 'stair_floorplan_preview' as const,
     }
@@ -4236,7 +4240,7 @@ function FloorplanStairBuildPreviewLayer({
         }),
       ) ?? null
     )
-  }, [isActive, point, rotation, rise, palette])
+  }, [isActive, point, rotation, rise, length, stepCount, palette])
 
   if (!previewGeometry) return null
   return <FloorplanGeometryRenderer geometry={previewGeometry} pointerEventsOverride="none" />
@@ -9321,7 +9325,6 @@ export function FloorplanPanel({
         )
         const fenceGridBase = snapWallPointToGrid(planPoint)
         const fenceLocked =
-          getFenceDrawingSurface() !== null ||
           event.altKey ||
           fenceSnapped[0] !== fenceGridBase[0] ||
           fenceSnapped[1] !== fenceGridBase[1]

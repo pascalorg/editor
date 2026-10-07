@@ -149,7 +149,7 @@ export function buildFenceGeometry(
   const nodes = ctx ? (plateLevelContext(ctx.parent, ctx.resolve).nodes ?? {}) : {}
   const constructionLift = floorConstructionLift(nodes, node)
   const startGround = (ctx?.levelBaseAt?.(node.start[0], node.start[1]) ?? 0) + constructionLift
-  const surfaceId = node.supportSurfaceNodeId as AnyNodeId | undefined
+  const surfaceId = (node.supportSurfaceNodeId ?? node.supportSurfaceId) as AnyNodeId | undefined
   const surfaceAt = surfaceId
     ? (x: number, z: number) => ctx?.surfaceHeightAt?.(surfaceId, x, z) ?? null
     : undefined
@@ -158,7 +158,7 @@ export function buildFenceGeometry(
   const followsTerrain = (node.path?.length ?? 0) >= 2 || Math.abs(node.curveOffset ?? 0) > 1e-4
   const chosenHost =
     node.surfaceMode === 'selected'
-      ? (node.supportSurfaceNodeId as AnyNodeId | undefined)
+      ? ((node.supportSurfaceNodeId ?? node.supportSurfaceId) as AnyNodeId | undefined)
       : undefined
   const sampledSupport =
     followsTerrain && !node.supportSlabId && ctx?.supportHeightAt
@@ -208,7 +208,7 @@ export function buildFenceGeometry(
           return host?.type === 'slab' ? liftedManualSlab(nodes, host) : host
         },
         startGround,
-          nodes,
+        nodes,
       )
     : 0
   const lift = supportAt

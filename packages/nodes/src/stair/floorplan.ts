@@ -42,7 +42,30 @@ export function buildStairFloorplan(
   rawStair: StairNode,
   ctx: GeometryContext,
 ): FloorplanGeometry | null {
-  const stair = rawStair
+  const parent = ctx.parent as {
+    id?: string
+    type?: string
+    parentId?: string | null
+    position?: [number, number, number]
+    rotation?: [number, number, number]
+  } | null
+  let stair = rawStair
+  if (parent && parent.id === rawStair.landscapeSurfaceId && parent.position && parent.rotation) {
+    const angle = parent.rotation[1]
+    const c = Math.cos(angle),
+      s = Math.sin(angle)
+    const [x, y, z] = rawStair.position
+    stair = {
+      ...rawStair,
+      parentId: parent.parentId ?? null,
+      position: [
+        parent.position[0] + c * x + s * z,
+        parent.position[1] + y,
+        parent.position[2] - s * x + c * z,
+      ],
+      rotation: rawStair.rotation + angle,
+    }
+  }
   const segments = (ctx.children ?? []).filter(
     (child): child is StairSegmentNode => child.type === 'stair-segment',
   )
