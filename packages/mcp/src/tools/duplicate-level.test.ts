@@ -7,7 +7,6 @@ import { WallNode } from '@pascal-app/core/schema'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { registerRoomTools } from './room-tools'
 import { registerSharedTools } from './shared-tools'
-import { registerStructureTools } from './structure-tools'
 
 describe('duplicate_level', () => {
   let client: Client
@@ -20,7 +19,6 @@ describe('duplicate_level', () => {
     const server = new McpServer({ name: 'test', version: '0.0.0' })
     registerSharedTools(server, bridge)
     registerRoomTools(server, bridge)
-    registerStructureTools(server, bridge)
     const [srvT, cliT] = InMemoryTransport.createLinkedPair()
     client = new Client({ name: 'test-client', version: '0.0.0' })
     await Promise.all([server.connect(srvT), client.connect(cliT)])
