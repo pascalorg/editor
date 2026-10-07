@@ -89,7 +89,7 @@ test('building and adding a scripted item assigns Pascal finishes and rebuilding
   const level = LevelNode.parse({ id: 'level_material_test' })
   const initial = { [level.id]: level }
   const context = { activeLevelId: level.id }
-  const added = addObject(initial, { compiled }, context)
+  const added = addObject(initial, { compiled, reason: 'no catalog cabinet' }, context)
   const nodes = applySceneChanges(initial, added.changes)
   const node = ItemNode.parse(nodes[added.result.nodeId as string])
   expect(node.slots).toEqual({

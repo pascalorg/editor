@@ -62,6 +62,7 @@ for (const kind of ['object', 'door', 'window', 'column'] as const) {
         description: 'x'.repeat(220),
         category: 'carved',
         tags: Array(7).fill('OAK'),
+        ...(kind === 'object' ? { reason: 'no carved panel type' } : {}),
         ...(wallMount
           ? { wallId: wall.id, t: 0.5 }
           : kind === 'column'

@@ -82,7 +82,8 @@ for (const kind of ['item', 'door', 'window', 'column'] as const) {
     if (kind === 'item')
       before = applySceneChanges(
         nodes,
-        addObject(nodes, { ...meta, compiled: build }, context).changes,
+        addObject(nodes, { ...meta, reason: 'no catalog cabinet', compiled: build }, context)
+          .changes,
       )
     else if (kind === 'column')
       before = applySceneChanges(
@@ -168,7 +169,11 @@ test('a column metadata edit keeps its current build and lineage', () => {
 })
 
 test('a build without reuse metadata carries no meta object', () => {
-  const created = addObject(nodes, { compiled: { ...compiled, nodeId: 'item_bare' } }, context)
+  const created = addObject(
+    nodes,
+    { reason: 'no catalog cabinet', compiled: { ...compiled, nodeId: 'item_bare' } },
+    context,
+  )
   const source = (applySceneChanges(nodes, created.changes).item_bare as ScriptedNode).source
   expect('meta' in source).toBe(false)
 })
@@ -176,7 +181,7 @@ test('a build without reuse metadata carries no meta object', () => {
 test('a params-only rebuild runs the same script and keeps the lineage it had', () => {
   const created = addObject(
     nodes,
-    { ...meta, compiled: { ...compiled, nodeId: 'item_lineage' } },
+    { ...meta, reason: 'no catalog cabinet', compiled: { ...compiled, nodeId: 'item_lineage' } },
     context,
   )
   const first = applySceneChanges(nodes, created.changes)

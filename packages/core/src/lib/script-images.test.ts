@@ -37,7 +37,11 @@ const nodes = { [level.id]: level }
 afterEach(() => configureArtifactStore(null))
 
 function created(): ItemNode {
-  const { changes, result } = addObject(nodes, { compiled }, { activeLevelId: level.id })
+  const { changes, result } = addObject(
+    nodes,
+    { compiled, reason: 'no catalog cabinet' },
+    { activeLevelId: level.id },
+  )
   return ItemNode.parse(applySceneChanges(nodes, changes)[result.nodeId as string])
 }
 
