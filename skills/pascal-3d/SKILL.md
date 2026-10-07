@@ -57,7 +57,7 @@ Record the active project ID, scene ID or version, and graph hash when returned.
 
 For construction, prefer tools such as `create_story_shell`, `create_room`, `add_door`, `add_window`, `create_roof`, `furnish_room`, and `place_items`. Use `apply_patch` only when no semantic tool expresses the requested edit and you have inspected the relevant node schema or an existing node of the same type.
 
-A window `style` (double-hung, grid, transom…) shapes a Fixed window's panes. For a casement, sliding, hung, awning, louvered, bay or bow window, pass its `windowType` without a style: those types draw their own sashes, and a style there is refused (`style_needs_fixed_window`).
+A window `style` (double-hung, grid, transom…) shapes a Fixed window's panes. For a casement, sliding, hung, awning, louvered, bay or bow window, pass its `windowType` without a style: those types draw their own sashes, and a style there is refused (`style_needs_fixed_window`). `picture` is an alias of `single` (one pane): both are accepted and draw the same.
 
 To add a stair, call `create_stair` on the floor it rises from: `(x, z)` is the back-centre of the bottom step and `rotation` the climb direction. It sizes the flight as the editor's stair tool does (about 18 cm risers, the run from the design targets) unless you give `length` or `steps`, creates the level above when there is none, and cuts the floor it arrives through and the ceiling it leaves. It refuses a flight to or from a roof level (`roof_level`), a `toLevelId` that is not above (`not_above`), and a given slab or ceiling that is not on the floor it arrives on or leaves (`slab_not_on_level`, `ceiling_not_on_level`).
 

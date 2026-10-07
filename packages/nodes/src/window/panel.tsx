@@ -11,8 +11,8 @@ import {
   getWindowStyleOverrides,
   SHAPED_WINDOW_TYPES,
   SILLLESS_WINDOW_TYPES,
+  WINDOW_STYLE_CHOICES,
   WINDOW_STYLE_LABELS,
-  WINDOW_STYLES,
   windowStylesOf,
   windowTypeFields,
 } from '@pascal-app/core/building'
@@ -412,7 +412,7 @@ export default function WindowPanel() {
       {showStyleSection && (
         <PanelSection title="Style">
           <div className="grid grid-cols-2 gap-2 px-1 pt-1">
-            {WINDOW_STYLES.map((style) => (
+            {WINDOW_STYLE_CHOICES.map((style) => (
               <button
                 aria-pressed={windowStyles.includes(style)}
                 className={cn(

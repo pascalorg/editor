@@ -4,8 +4,8 @@ import type { ToolHint, WindowNode } from '@pascal-app/core'
 import {
   getWindowStyleOverrides,
   SILLLESS_WINDOW_TYPES,
+  WINDOW_STYLE_CHOICES,
   WINDOW_STYLE_LABELS,
-  WINDOW_STYLES,
   type WindowStyle,
   windowTypeFields,
 } from '@pascal-app/core/building'
@@ -46,7 +46,7 @@ export const useWindowPlacement = create<WindowPlacementState>((set, get) => ({
         get().type,
       ),
     }),
-  cycleStyle: () => set({ style: next(WINDOW_STYLES, get().style) }),
+  cycleStyle: () => set({ style: next(WINDOW_STYLE_CHOICES, get().style) }),
 }))
 
 /**
@@ -90,7 +90,7 @@ export const WINDOW_PLACEMENT_HINTS: ToolHint[] = [
       value: () => useWindowPlacement.getState().style,
       cycle: () => useWindowPlacement.getState().cycleStyle(),
       labels: Object.fromEntries(
-        WINDOW_STYLES.map((style) => [style, `Style: ${WINDOW_STYLE_LABELS[style]}`]),
+        WINDOW_STYLE_CHOICES.map((style) => [style, `Style: ${WINDOW_STYLE_LABELS[style]}`]),
       ),
       tooltip: 'Window style — click or press L to cycle',
     },

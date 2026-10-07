@@ -6,6 +6,7 @@ import {
   doorStyleLook,
   doorStylesOf,
   getWindowStyleOverrides,
+  WINDOW_STYLE_CHOICES,
   WINDOW_STYLE_LABELS,
   WINDOW_STYLES,
   windowStylesOf,
@@ -71,17 +72,40 @@ describe('window styles in the panel', () => {
   })
 
   // Held out from the door rule: panes, not segments.
-  for (const style of WINDOW_STYLES)
-    test(`a window given ${style} reads back with ${style} among its styles`, () => {
+  for (const style of WINDOW_STYLE_CHOICES)
+    test(`a window given ${style} reads back as ${style} alone`, () => {
       const styled = windowNode(getWindowStyleOverrides(style))
-      expect(windowStylesOf(styled)).toContain(style)
+      expect(windowStylesOf(styled)).toEqual([style])
     })
 
-  test('a single pane is both single and picture, which draw the same', () => {
-    expect(windowStylesOf(windowNode())).toEqual(['single', 'picture'])
+  // 'picture' draws what 'single' draws: an agent may still ask for it, and the panel shows the one
+  // look once, as Single.
+  test('picture is an alias of single: accepted, the same panes, read back as single', () => {
+    expect(WINDOW_STYLES).toContain('picture')
+    expect(WINDOW_STYLE_CHOICES).not.toContain('picture')
+    expect(getWindowStyleOverrides('picture')).toEqual(getWindowStyleOverrides('single'))
+    expect(windowStylesOf(windowNode(getWindowStyleOverrides('picture')))).toEqual(['single'])
+    expect(windowStylesOf(windowNode())).toEqual(['single'])
   })
 
   test('panes set by hand are no style', () => {
     expect(windowStylesOf(windowNode({ columnRatios: [0.3, 0.7], rowRatios: [1] }))).toEqual([])
+  })
+})
+
+// The Style row and the L chip offer one entry per look: two offered styles that draw the same
+// would both light up for one window or door.
+describe('one offered style per look', () => {
+  const pairs = <T extends string>(list: readonly T[]) =>
+    list.flatMap((a, i) => list.slice(i + 1).map((b) => [a, b] as const))
+
+  test('no two offered window styles draw the same panes', () => {
+    for (const [a, b] of pairs(WINDOW_STYLE_CHOICES))
+      expect([a, b, getWindowStyleOverrides(a)]).not.toEqual([a, b, getWindowStyleOverrides(b)])
+  })
+
+  test('no two offered door styles draw the same leaf', () => {
+    for (const [a, b] of pairs(DOOR_STYLES))
+      expect([a, b, doorStyleLook(a)]).not.toEqual([a, b, doorStyleLook(b)])
   })
 })

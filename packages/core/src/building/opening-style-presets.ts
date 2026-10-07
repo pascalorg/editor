@@ -153,6 +153,14 @@ export const WINDOW_STYLES = [
 ] as const
 export type WindowStyle = (typeof WINDOW_STYLES)[number]
 
+/**
+ * The styles the panel's Style row and the window tool's L chip offer: one per look. 'picture'
+ * draws what 'single' draws, so it is not offered; agents may still ask for it (an alias).
+ */
+export const WINDOW_STYLE_CHOICES: readonly WindowStyle[] = WINDOW_STYLES.filter(
+  (style) => style !== 'picture',
+)
+
 export const WINDOW_STYLE_DESCRIPTIONS: Record<WindowStyle, string> = {
   single: 'Single pane with a frame — simplest look (default).',
   'double-hung': 'Two stacked sashes — classic American style.',
@@ -164,7 +172,7 @@ export const WINDOW_STYLE_DESCRIPTIONS: Record<WindowStyle, string> = {
   'wide-grid': '3 columns × 2 rows — wider proportions.',
   'horizontal-bands': '4 stacked horizontal bands — modernist strip window.',
   transom: 'Short row on top + larger pane below — transom over a base.',
-  picture: 'Large fixed pane, no internal divisions.',
+  picture: "Alias of 'single': one pane, no internal divisions.",
 }
 
 /** The Style row's labels; the stored and agent value is the style itself. */
@@ -222,13 +230,13 @@ export function getWindowStyleOverrides(style: WindowStyle | undefined): WindowS
   return {}
 }
 
-/** The styles a window's panes are, in list order: single and picture draw the same; none by hand. */
+/** The style a window's panes are, as the panel offers it: one per look, none for panes set by hand. */
 export function windowStylesOf(window: {
   columnRatios: number[]
   rowRatios: number[]
 }): WindowStyle[] {
   const { columnRatios, rowRatios } = window
-  return WINDOW_STYLES.filter((style) =>
+  return WINDOW_STYLE_CHOICES.filter((style) =>
     same(getWindowStyleOverrides(style), { columnRatios, rowRatios }),
   )
 }

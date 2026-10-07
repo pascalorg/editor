@@ -91,7 +91,7 @@ export const createRoomTool = {
             .enum(WINDOW_STYLES)
             .optional()
             .describe(
-              "Visual preset: 'single' (default single pane), 'double-hung', 'triple-hung' (stacked sashes), 'casement' (two panes side by side), 'sliding' (three side by side — wide), 'grid' (2 × 2), 'tall-grid' (2 × 3), 'wide-grid' (3 × 2), 'horizontal-bands' (4 stacked bands), 'transom' (a small row over a larger pane), 'picture' (one large fixed pane). One style for all the windows of a room, and per room type across the home.",
+              "Visual preset: 'single' (default single pane), 'double-hung', 'triple-hung' (stacked sashes), 'casement' (two panes side by side), 'sliding' (three side by side — wide), 'grid' (2 × 2), 'tall-grid' (2 × 3), 'wide-grid' (3 × 2), 'horizontal-bands' (4 stacked bands), 'transom' (a small row over a larger pane), 'picture' (an alias of 'single'). One style for all the windows of a room, and per room type across the home.",
             ),
         }),
       )
