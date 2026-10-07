@@ -111,11 +111,14 @@ export function resolveEditorRoomHit(
   return room?.key ?? null
 }
 
-/** `phase` is the phase the pick lands in, when the pick itself switches phase. */
+/**
+ * Rooms pick in the structure and furnish phases alike; site has no rooms.
+ * `phase` is the phase the pick lands in, when the pick itself switches phase.
+ */
 export function roomPickingEnabled(phase: Phase = useEditor.getState().phase) {
   const editor = useEditor.getState()
   return (
-    phase === 'structure' &&
+    phase !== 'site' &&
     editor.mode === 'select' &&
     !useViewer.getState().focusedUnitId &&
     selectionEnabled(useInteractionScope.getState().scope)

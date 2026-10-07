@@ -110,11 +110,7 @@ import {
 } from '../../lib/plate-paint-affected'
 import { getHoveredRoofSegmentOutlineProxy } from '../../lib/roof-hover-outline-proxy'
 import { sameRoom } from '../../lib/room-selection'
-import {
-  selectRoom,
-  selectRoomFromHit,
-  shouldInterceptRoom,
-} from '../../lib/room-selection-commands'
+import { selectRoom, shouldInterceptRoom } from '../../lib/room-selection-commands'
 import { roomKeyForZone } from '../../lib/room-zone-routing'
 import {
   emitCanvasNodeSelection,
@@ -388,10 +384,9 @@ function roomForEvent(event: NodeEvent) {
   return resolveEditorRoomHit(event.node, levelId, roomHitXZ, '3d')
 }
 
-// The 3D click routes a node on the current level to its own phase before it
-// picks a room, and walls, slabs and ceilings route to structure. Hover and
-// press resolve rooms in that phase too: from the furnish or site phase a
-// click on a room's wall still selects the room, so its hover must show it.
+// Hover, press and click share this predicate, so the hover shows exactly
+// what the click selects. Rooms pick in structure and furnish without a phase
+// change; from site, a room's wall, floor or ceiling enters structure.
 function canvasRoomPickingEnabled(node: AnyNode) {
   return roomPickingEnabled(
     isNodeInCurrentLevel(node) ? resolveNodeSelectionTarget(node)?.phase : undefined,
@@ -842,6 +837,7 @@ const SELECTION_STRATEGIES: Record<string, SelectionStrategy> = {
       setSelection(updates)
     },
     handleDeselect: () => {
+      useEditor.getState().clearRoom()
       useViewer.getState().setSelection({ selectedIds: [] })
     },
     isValid: (node) => {
@@ -871,7 +867,12 @@ export const SelectionManager = () => {
       useViewer.subscribe((state, previous) => {
         if (
           state.selection.levelId !== previous.selection.levelId ||
-          (state.selection.zoneId !== previous.selection.zoneId && state.selection.zoneId)
+          (state.selection.zoneId !== previous.selection.zoneId && state.selection.zoneId) ||
+          (state.selection.selectedIds !== previous.selection.selectedIds &&
+            state.selection.selectedIds.some((id) => {
+              const node = useScene.getState().nodes[id as AnyNodeId]
+              return node && resolveNodeSelectionTarget(node)?.phase === 'furnish'
+            }))
         ) {
           useEditor.getState().clearRoom()
         }
@@ -1872,6 +1873,30 @@ export const SelectionManager = () => {
         }
       }
 
+      // A room click selects the room in the phase it was made from: rooms pick
+      // in structure and furnish alike, and only site enters structure first.
+      if (isNodeInCurrentLevel(node) && canvasRoomPickingEnabled(node)) {
+        const room = roomForEvent(event)
+        if (
+          room &&
+          shouldInterceptRoom(
+            room,
+            selectionModifiersFromEvent(event.nativeEvent, modifierKeysRef.current),
+            node.id,
+          )
+        ) {
+          event.stopPropagation()
+          clickHandledRef.current = true
+          setTimeout(() => {
+            clickHandledRef.current = false
+          }, 50)
+          if (useEditor.getState().phase === 'site') useEditor.getState().setPhase('structure')
+          selectRoom(room)
+          return
+        }
+        useEditor.getState().setHoveredRoom(null)
+      }
+
       let currentPhase = useEditor.getState().phase
       let currentStructureLayer = useEditor.getState().structureLayer
       const selectedIdsBeforeRouting = useViewer.getState().selection.selectedIds
@@ -1913,15 +1938,6 @@ export const SelectionManager = () => {
           clickHandledRef.current = false
         }, 50)
 
-        if (
-          roomPickingEnabled() &&
-          selectRoomFromHit(
-            roomForEvent(event),
-            selectionModifiersFromEvent(event.nativeEvent, modifierKeysRef.current),
-            node.id,
-          )
-        )
-          return
         // Room first: a raised or sunken room's plate and a mezzanine's plate
         // belong to their room, never selected on their own. Past the room (the
         // drill click, or Alt) a raised or sunken room continues to the
