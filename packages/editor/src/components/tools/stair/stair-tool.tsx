@@ -25,7 +25,7 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { sfxEmitter } from '../../../lib/sfx-bus'
@@ -77,8 +77,16 @@ type MoveTriggerEvent = GridEvent | NodeEvent<AnyNode>
  * Generates the step-profile geometry for the ghost preview.
  * Same algorithm as StairSystem's generateStairSegmentGeometry.
  */
-function createStairPreviewGeometry(rise: number): THREE.BufferGeometry {
-  const { stepCount, length, riserHeight, going: treadDepth } = planStairSizing(rise)
+function createStairPreviewGeometry(
+  rise: number,
+  count?: number,
+  run?: number,
+): THREE.BufferGeometry {
+  const sizing = planStairSizing(rise)
+  const stepCount = count ?? sizing.stepCount
+  const length = run ?? sizing.length
+  const riserHeight = rise / stepCount
+  const treadDepth = length / stepCount
 
   const shape = new THREE.Shape()
   shape.moveTo(0, 0)
@@ -262,6 +270,13 @@ function commitStairPlacement(
     if (error instanceof RangeError) return
     throw error
   }
+  if (landscapeSnap)
+    segment = {
+      ...segment,
+      height: landscapeSnap.totalRise,
+      length: landscapeSnap.length,
+      stepCount: landscapeSnap.stepCount,
+    }
   stair.stepCount = segment.stepCount
   const prospectiveNodes = {
     ...nodes,
@@ -324,7 +339,7 @@ export const StairTool: React.FC = () => {
   previewRiseRef.current = previewRise
   const previewGeometry = useMemo(() => createStairPreviewGeometry(DEFAULT_LEVEL_HEIGHT), [])
   const ownedGeometryRef = useRef(previewGeometry)
-  const geometryRiseRef = useRef(DEFAULT_LEVEL_HEIGHT)
+  const geometryRiseRef = useRef<string | number>(DEFAULT_LEVEL_HEIGHT)
   useEffect(() => () => ownedGeometryRef.current.dispose(), [])
   useEffect(() => () => useEditor.getState().setToolDefaults('stair', null), [])
 
@@ -401,17 +416,29 @@ export const StairTool: React.FC = () => {
         if (error instanceof RangeError) return null
         throw error
       }
+      if (landscapeSnap) {
+        stair.totalRise = landscapeSnap.totalRise
+        stair.landscapeSurfaceId = landscapeSnap.surfaceId
+        stair.slabOpeningMode = 'none'
+        stair.railingMode = 'none'
+        segment = {
+          ...segment,
+          height: landscapeSnap.totalRise,
+          length: landscapeSnap.length,
+          stepCount: landscapeSnap.stepCount,
+        }
+      }
       stair.stepCount = segment.stepCount
       const previewNodes = {
         ...nodes,
         ...(destinationPlan?.createdLevel
           ? { [destinationPlan.createdLevel.id]: destinationPlan.createdLevel }
           : {}),
-        [stair.id]: { ...previewStair, parentId: placementLevelId },
+        [stair.id]: { ...stair, parentId: placementLevelId },
         [segment.id]: { ...segment, parentId: stair.id },
       } as Record<string, AnyNode>
 
-      return { placementLevelId, previewNodes, stair: previewStair, rise: segment.height }
+      return { placementLevelId, previewNodes, stair, rise: segment.height }
     }
 
     // The preview rebuild (full-scene copy + destination-level resolution +
@@ -428,14 +455,21 @@ export const StairTool: React.FC = () => {
       rotation: number,
       supportSurface: PointerSupportSurface | null,
     ) => {
-      rotation = landscapeSnapRef.current?.rotation ?? rotation
+      const landscapeSnap = landscapeSnapRef.current
+      rotation = landscapeSnap?.rotation ?? rotation
       const key = `${position[0].toFixed(3)},${position[2].toFixed(3)},${rotation.toFixed(4)},${supportSurface?.elevation.toFixed(3) ?? 'none'},${supportSurface?.sourceNodeId ?? 'floor'},${landscapeSnapRef.current?.length.toFixed(3) ?? 'free'},${landscapeSnapRef.current?.stepCount ?? 0},${landscapeSnapRef.current?.totalRise.toFixed(3) ?? 'free'}`
       if (key === lastPreviewKey) return
       lastPreviewKey = key
-      const preview = buildPreviewScene(position, rotation, supportSurface)
+      const preview = buildPreviewScene(position, rotation, supportSurface, landscapeSnap)
       useStairBuildPreview
         .getState()
-        .setPreview(preview ? [position[0], position[2]] : null, rotation, preview?.rise ?? null)
+        .setPreview(
+          preview ? [position[0], position[2]] : null,
+          rotation,
+          preview?.rise ?? null,
+          landscapeSnap?.length,
+          landscapeSnap?.stepCount,
+        )
       const frozenPatch =
         preview && supportSurface?.sourceNodeId && !landscapeSnap
           ? resolveFrozenFloorPlacementPatch(preview.stair, preview.previewNodes, {
@@ -473,12 +507,21 @@ export const StairTool: React.FC = () => {
         previewRef.current.visible = Boolean(preview)
         previewRef.current.position.set(...visualPosition)
         previewRef.current.rotation.y = rotation
-        if (preview && previewMeshRef.current && preview.rise !== geometryRiseRef.current) {
+        if (
+          preview &&
+          previewMeshRef.current &&
+          `${preview.rise}:${landscapeSnap?.stepCount}:${landscapeSnap?.length}` !==
+            String(geometryRiseRef.current)
+        ) {
           const previous = previewMeshRef.current.geometry
-          previewMeshRef.current.geometry = createStairPreviewGeometry(preview.rise)
+          previewMeshRef.current.geometry = createStairPreviewGeometry(
+            preview.rise,
+            landscapeSnap?.stepCount,
+            landscapeSnap?.length,
+          )
           previous.dispose()
           ownedGeometryRef.current = previewMeshRef.current.geometry
-          geometryRiseRef.current = preview.rise
+          geometryRiseRef.current = `${preview.rise}:${landscapeSnap?.stepCount}:${landscapeSnap?.length}`
         }
         previewRef.current.scale.y = 1
       }
@@ -621,7 +664,7 @@ export const StairTool: React.FC = () => {
               draft,
               nodes,
               candidate,
-              DEFAULT_STAIR_LENGTH,
+              planStairSizing(previewRiseRef.current).length,
               baseElevation,
               useScene.getState().installedPlugins,
             )

@@ -1,4 +1,3 @@
-import { getLevelPresentationY, useViewer } from '@pascal-app/viewer'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -6,13 +5,14 @@ import {
   type FenceConstructionOptions as FenceCommitOptions,
   FenceNode,
   floorConstructionLift,
-  nodeRegistry,
   getFenceCenterlineLength,
   getFenceSplineLength,
+  nodeRegistry,
   resolveFenceConstructionSupport,
   type SceneApi,
   sampleFenceCenterline,
   snapPointAlongAngleRay,
+  useScene,
   type WallNode,
 } from '@pascal-app/core'
 import {
@@ -24,6 +24,7 @@ import {
   useEditor,
   type WallPlanPoint,
 } from '@pascal-app/editor'
+import { getLevelPresentationY, useViewer } from '@pascal-app/viewer'
 
 export type FencePlanPoint = WallPlanPoint
 
@@ -91,9 +92,6 @@ export function getFenceInheritedDefaults(
   }
   return defaults as Partial<FenceNode>
 }
-
-const FENCE_CORNER_SNAP_RADIUS = 0.28
-const FENCE_SPAN_SNAP_RADIUS = 0.16
 
 const FENCE_CORNER_SNAP_RADIUS = 0.28
 const FENCE_SPAN_SNAP_RADIUS = 0.16
@@ -276,7 +274,9 @@ export function snapFenceDraftPoint(args: {
   if (start && angleSnap) {
     const rawTarget =
       magnetic &&
-      (findFenceSnapTarget(point, fences, ignoreFenceIds) ?? findWallSnapTarget(point, walls))
+      (findSurfaceSnapTarget(point) ??
+        findFenceSnapTarget(point, fences, ignoreFenceIds) ??
+        findWallSnapTarget(point, walls))
     if (rawTarget) return rawTarget
   }
 
@@ -291,6 +291,8 @@ export function snapFenceDraftPoint(args: {
         : snapPointToGrid(point, gridStep)
   if (!magnetic) return basePoint
 
+  const surfaceSnapTarget = findSurfaceSnapTarget(basePoint)
+  if (surfaceSnapTarget) return surfaceSnapTarget
   const fenceSnapTarget = findFenceSnapTarget(basePoint, fences, ignoreFenceIds)
   return fenceSnapTarget ?? findWallSnapTarget(basePoint, walls) ?? basePoint
 }

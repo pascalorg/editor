@@ -274,7 +274,6 @@ export function useFloorplanBackgroundPlacement({
         )
         const fenceGridBase = worldGridSnap(planPoint, fenceStep)
         const fenceLocked =
-          getFenceDrawingSurface() !== null ||
           event.altKey ||
           fenceSnapped[0] !== fenceGridBase[0] ||
           fenceSnapped[1] !== fenceGridBase[1]

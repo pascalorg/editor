@@ -29,7 +29,6 @@ import {
   formatLinearMeasurement,
   getAngleArcToSegmentReference,
   getAngleToSegmentReference,
-  getFenceDrawingSurface,
   getSegmentAngleReferenceAtPoint,
   isAlignmentGuideActive,
   isAngleSnapActive,
@@ -39,7 +38,6 @@ import {
   publishPlacementSurface,
   resolvePointerSupportSurface,
   type SegmentAngleReference,
-  snapScalarToGrid,
   triggerSFX,
   useAlignmentGuides,
   useEditor,
@@ -50,7 +48,12 @@ import {
   useSegmentDraftChain,
 } from '@pascal-app/editor'
 
-import { createSceneSupportHeightSampler, getSceneTheme, useViewer } from '@pascal-app/viewer'
+import {
+  createSceneSupportHeightSampler,
+  getLevelPresentationY,
+  getSceneTheme,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -75,6 +78,7 @@ import {
   createFenceOnCurrentLevel,
   createSplineFenceOnCurrentLevel,
   type FencePlanPoint,
+  getFenceDrawingSurface,
   getFenceInheritedDefaults,
   snapFenceDraftPoint,
 } from './drafting'
@@ -117,6 +121,40 @@ const SURFACE_UP = new Vector3(0, 1, 0)
 const surfacePointScratch = new Vector3()
 
 function pointedSurfaceFor(camera: Camera, event: GridEvent): PointerSupportSurface | null {
+  const surface = getFenceDrawingSurface()
+  if (surface) {
+    const buildingId = useViewer.getState().selection.buildingId
+    const buildingMesh = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : null
+    const point = new Vector3(
+      event.localPosition[0],
+      surface.levelElevation + surface.elevation,
+      event.localPosition[2],
+    )
+    if (buildingMesh) buildingMesh.localToWorld(point)
+    const worldY = point.y
+    if (event.nativeEvent?.target instanceof HTMLCanvasElement) {
+      const bounds = event.nativeEvent.target.getBoundingClientRect()
+      const raycaster = new Raycaster()
+      raycaster.setFromCamera(
+        new Vector2(
+          ((event.nativeEvent.clientX - bounds.left) / bounds.width) * 2 - 1,
+          -((event.nativeEvent.clientY - bounds.top) / bounds.height) * 2 + 1,
+        ),
+        camera,
+      )
+      if (!raycaster.ray.intersectPlane(new Plane(SURFACE_UP, -worldY), point)) return null
+    }
+    const worldPoint: [number, number, number] = [point.x, point.y, point.z]
+    if (buildingMesh) buildingMesh.worldToLocal(point)
+    return {
+      elevation: surface.elevation,
+      sourceNodeId: surface.id as PointerSupportSurface['sourceNodeId'],
+      supportSlabId: null,
+      localPoint: [point.x, point.y, point.z],
+      worldY,
+      worldPoint,
+    }
+  }
   if (event.localRay) {
     return resolvePointerSupportSurface(camera, event.position, { includeNodeTopSurfaces: true })
   }
@@ -544,8 +582,13 @@ export const FenceTool: React.FC = () => {
       </>
     )
   }
-  if (fenceMode === 'freehand') return <SplineFenceDraft freehand />
-  return <StraightFenceTool />
+  if (fenceMode === 'freehand') return <SplineFenceDraft key={draftKey} freehand />
+  return (
+    <>
+      <FenceSurfaceSnapPoints />
+      <StraightFenceTool key={draftKey} />
+    </>
+  )
 }
 
 const StraightFenceTool: React.FC = () => {
@@ -1046,11 +1089,16 @@ const SplineFenceDraft: React.FC<{ freehand?: boolean }> = ({ freehand = false }
   )
 
   useEffect(() => {
-    const snapPoint = (local: FencePlanPoint): FencePlanPoint => {
+    const snapPoint = (local: FencePlanPoint, bypassSnap = false): FencePlanPoint => {
       if (freehand) return local
-      const step = isGridSnapActive() ? getSegmentGridStep() : 0
-      if (step <= 0) return local
-      return [snapScalarToGrid(local[0], step), snapScalarToGrid(local[1], step)]
+      const { walls, fences } = getCurrentLevelElements()
+      return snapFenceDraftPoint({
+        point: local,
+        walls,
+        fences,
+        magnetic: isMagneticSnapActive(),
+        bypassSnap,
+      })
     }
 
     const commit = (points = draftRef.current) => {

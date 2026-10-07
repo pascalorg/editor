@@ -113,17 +113,6 @@ export type {
   SelectionAffordanceProps,
 } from './components/systems/selection-affordance-services'
 export { StairEditSystem } from './components/systems/stair/stair-edit-system'
-// Phase 5 Stage D transitional exports — pure drafting / angle helpers
-// consumed by kind-owned drag actions in @pascal-app/nodes. Stage F
-// cleanup moves these into @pascal-app/nodes (fence/drafting.ts +
-// shared/segment-angle.ts) once every Stage D port is in.
-export {
-  createFenceOnCurrentLevel,
-  createSplineFenceOnCurrentLevel,
-  type FencePlanPoint,
-  getFenceDrawingSurface,
-  snapFenceDraftPoint,
-} from './components/tools/fence/fence-drafting'
 export { MoveTool } from './components/tools/item/move-tool'
 // Placement-math helpers — shared by kind-owned placement tools in
 // `@pascal-app/nodes` (wall curve sagitta snap, door / window placement,
