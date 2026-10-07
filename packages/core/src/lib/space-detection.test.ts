@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { BuildingNode, CeilingNode, LevelNode, SlabNode, WallNode } from '../schema'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import {
@@ -1925,31 +1926,22 @@ describe('near-miss joints follow the drawn wall bodies', () => {
     expect(detectSpacesForLevel('level-1', thin).roomPolygons).toHaveLength(0)
   })
   test('stays near-linear on 2,000 isolated walls', () => {
-    const walls = Array.from({ length: 2000 }, (_, i) =>
-      WallNode.parse({
-        start: [(i % 50) * 3, Math.floor(i / 50) * 3],
-        end: [(i % 50) * 3 + 2, Math.floor(i / 50) * 3 + 1],
-      }),
+    // Timed in a fresh process (`__bench__/near-linear-walls.ts`): inside the suite, the heap the
+    // other test files leave behind made the large run pay for collections the small one didn't
+    // (CI read 41–57 while the code runs at ~26).
+    const run = Bun.spawnSync(
+      [process.execPath, resolve(import.meta.dir, '__bench__/near-linear-walls.ts')],
+      {
+        stdout: 'pipe',
+        stderr: 'pipe',
+      },
     )
-    const smaller = walls.slice(0, 250)
-    const timed = (input: WallNode[]) => {
-      Bun.gc(true)
-      const started = performance.now()
-      expect(extractRooms(input)).toHaveLength(0)
-      return performance.now() - started
-    }
-    // Collected before each run and interleaved, so a collection landing in one sample or a busy
-    // shared CI runner during one phase does not inflate one side of the ratio (seen at 41–55
-    // while the code ran at ~26).
-    let small = Number.POSITIVE_INFINITY
-    let large = Number.POSITIVE_INFINITY
-    for (let i = 0; i < 8; i++) {
-      small = Math.min(small, timed(smaller))
-      large = Math.min(large, timed(walls))
-    }
+    expect(run.exitCode).toBe(0)
+    const { ratio, rooms } = JSON.parse(run.stdout.toString()) as { ratio: number; rooms: number }
+    expect(rooms).toBe(0)
     // Eight times the walls: splitting every wall at every vertex already grows ~25×;
     // the unbounded neighbour scan (7.8 s at 2,000 walls) grows ~70×.
-    expect(large / small).toBeLessThan(40)
+    expect(ratio).toBeLessThan(40)
   }, 30_000)
 })
 
