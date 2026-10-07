@@ -468,6 +468,8 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
     move: () => import('../shared/move-roof-tool'),
   },
 
+  tool: () => import('./tool'),
+
   parametrics: stairParametrics,
   handles: stairHandles,
 

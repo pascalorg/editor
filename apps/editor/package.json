@@ -22,7 +22,7 @@
     "@pascal-app/plugin-bones": "github:pascalorg/plugin-bones#5679260261ee1c733656ff6dfb99e30bb24b58a7",
     "@pascal-app/plugin-environment": "github:AxiomeCG/environment#1aa0bc3cbed273dbf751e9af79e446f6de105c90",
     "@pascal-app/plugin-bath-space": "github:sudhir9297/pascal-cluster#8f3c0db2be7a33b19f406ecb35e23417ff850dcc",
-    "@pascal-app/plugin-landscape": "github:sudhir9297/pascal-cluster#98cb3d13b0e49133774aad1783c7f3e032cb2daf",
+    "@pascal-app/plugin-landscape": "github:sudhir9297/pascal-cluster#aaa2a4801209c3bcb614dd7e0b6d5aca6dfbbdcf",
     "@pascal-app/plugin-pool": "github:sudhir9297/pascal-cluster#92cb88c3c049e4c299062c962d9f6a0e579cc69b",
     "@pascal-app/plugin-streetscape-lab": "github:sudhir9297/pascal-cluster#b31fe375fa47c53b7f792fb5cac7671c09667bd3",
     "@pascal-app/plugin-trees": "github:pascalorg/plugin-trees#56d978cd9b409b716207b3f3d269455d3cd6f067",

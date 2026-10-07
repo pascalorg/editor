@@ -32,14 +32,14 @@ import type { FenceNode } from './schema'
  * instead of following the hillside around it.
  */
 export function resolveFenceLiftElevation(
-  node: Pick<FenceNode, 'supportSlabId' | 'supportSurfaceId' | 'supportOffset' | 'parentId'>,
+  node: Pick<FenceNode, 'supportSlabId' | 'supportSurfaceNodeId' | 'supportOffset' | 'parentId'>,
   resolve: (id: string) => AnyNode | undefined,
   levelBase = 0,
   nodes: Record<string, AnyNode> = {},
 ): number {
   const offset = node.supportOffset ?? 0
-  if (node.supportSurfaceId) {
-    const surface = resolve(node.supportSurfaceId)
+  if (node.supportSurfaceNodeId) {
+    const surface = resolve(node.supportSurfaceNodeId)
     const top = surface && nodeRegistry.get(surface.type)?.capabilities?.surfaces?.top
     if (surface && top && surface.parentId === node.parentId) {
       const height = typeof top.height === 'function' ? top.height(surface, { nodes }) : top.height
@@ -70,7 +70,7 @@ export function resolveFenceLiftElevation(
 export function resolveFenceLiftElevationForNodes(
   node: Pick<
     FenceNode,
-    'id' | 'start' | 'supportSlabId' | 'supportSurfaceId' | 'supportOffset' | 'parentId'
+    'id' | 'start' | 'supportSlabId' | 'supportSurfaceNodeId' | 'supportOffset' | 'parentId'
   >,
   nodes: Record<string, AnyNode>,
 ): number {

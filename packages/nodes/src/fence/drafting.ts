@@ -98,7 +98,7 @@ const FENCE_SPAN_SNAP_RADIUS = 0.16
 
 export function getFenceDrawingSurface(
   nodes: Record<string, AnyNode> = useScene.getState().nodes,
-  id = useEditor.getState().toolDefaults.fence?.supportSurfaceId,
+  id = useEditor.getState().toolDefaults.fence?.supportSurfaceNodeId,
   levelId = useViewer.getState().selection.levelId,
   levelMode = useViewer.getState().levelMode,
 ) {
@@ -299,8 +299,8 @@ export function snapFenceDraftPoint(args: {
 
 function getFenceDefaultsForCurrentLevel() {
   const defaults = useEditor.getState().toolDefaults.fence ?? {}
-  if (typeof defaults.supportSurfaceId !== 'string' || getFenceDrawingSurface()) return defaults
-  const { supportSurfaceId: _supportSurfaceId, ...unhostedDefaults } = defaults
+  if (typeof defaults.supportSurfaceNodeId !== 'string' || getFenceDrawingSurface()) return defaults
+  const { supportSurfaceNodeId: _supportSurfaceNodeId, ...unhostedDefaults } = defaults
   return unhostedDefaults
 }
 

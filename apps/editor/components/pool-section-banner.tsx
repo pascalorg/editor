@@ -1,11 +1,18 @@
 'use client'
 
-import { PoolSectionBar } from '@pascal-app/plugin-pool'
+import { lazy, Suspense } from 'react'
+
+const PoolSectionBar = lazy(async () => {
+  const pool = await import('@pascal-app/plugin-pool')
+  return { default: pool.PoolSectionBar }
+})
 
 export function PoolSectionBanner() {
   return (
     <div data-pool-section-global>
-      <PoolSectionBar />
+      <Suspense fallback={null}>
+        <PoolSectionBar />
+      </Suspense>
     </div>
   )
 }

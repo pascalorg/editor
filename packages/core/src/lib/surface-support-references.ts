@@ -1,6 +1,6 @@
 import type { AnyNode } from '../schema/types'
 
-const fields = ['supportSurfaceId', 'landscapeSurfaceId'] as const
+const fields = ['supportSurfaceNodeId', 'landscapeSurfaceId'] as const
 
 export function remapSurfaceSupportReferences(
   node: AnyNode,

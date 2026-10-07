@@ -55,8 +55,8 @@ export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({
 
   const session: FloorplanMoveTargetSession = {
     affectedIds: flight ? [node.id as AnyNodeId, flight.id as AnyNodeId] : [node.id as AnyNodeId],
-    apply({ planPoint, modifiers }) {
-      const step = !modifiers.altKey && isGridSnapActive() ? getSegmentGridStep() : 0
+    apply({ planPoint }) {
+      const step = isGridSnapActive() ? getSegmentGridStep() : 0
       const snap = (value: number) => (step > 0 ? snapScalar(value, step) : value)
       const [gx, gz] = resolveCursor(planPoint, { snap })
       // Figma alignment on the actual stair footprint, matching the 3D move
@@ -68,7 +68,7 @@ export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({
           ? movingAnchors
           : [{ nodeId: node.id, kind: 'corner', x: gx, z: gz }],
         candidates,
-        { applySnap: !modifiers.altKey && isMagneticSnapActive() },
+        { applySnap: isMagneticSnapActive() },
       )
       const sx = aligned[0]
       const sz = aligned[1]
@@ -81,17 +81,16 @@ export const stairFloorplanMoveTarget: FloorplanMoveTarget<StairNode> = ({
         rotation: node.rotation,
         levelId: node.parentId,
       })[1]
-      landscapeSnap =
-        modifiers.altKey || !isMagneticSnapActive()
-          ? null
-          : resolveStairSurfaceSnap(
-              node,
-              sceneNodes,
-              [sx, startY, sz],
-              flight?.length ?? 3,
-              baseElevation,
-              sceneApi?.installedPlugins?.(),
-            )
+      landscapeSnap = !isMagneticSnapActive()
+        ? null
+        : resolveStairSurfaceSnap(
+            node,
+            sceneNodes,
+            [sx, startY, sz],
+            flight?.length ?? 3,
+            baseElevation,
+            sceneApi?.installedPlugins?.(),
+          )
       const position = landscapeSnap?.position ?? ([sx, startY, sz] as [number, number, number])
       if (
         lastValid &&

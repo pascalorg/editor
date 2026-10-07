@@ -6,7 +6,7 @@ import {
   type StairSegmentNode,
   type StairType,
 } from '@pascal-app/core'
-import { DEFAULT_SPIRAL_STAIR_SWEEP_ANGLE } from '@pascal-app/editor'
+import { DEFAULT_SPIRAL_STAIR_SWEEP_ANGLE } from './stair-defaults'
 
 export type StairTypeChange = {
   updates: Partial<StairNode>
