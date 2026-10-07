@@ -1,7 +1,8 @@
+import { refuse } from '@pascal-app/core/agent-tools'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
-import { SceneVersionConflictError } from '../storage/types'
+import { SceneVersionConflictError, SceneWipeBlockedError } from '../storage/types'
 import { ErrorCode, McpError, throwMcpError } from './errors'
 
 export type LiveSyncStatus = 'published' | 'unbound' | 'events_unsupported'
@@ -60,6 +61,8 @@ export function isLiveSyncVersionConflict(error: unknown): boolean {
 export async function publishLiveSceneSnapshot(
   operations: SceneOperations,
   kind: string,
+  /** `allowSceneWipe`: the write empties the project on purpose (clear_scene). */
+  options: { allowSceneWipe?: boolean } = {},
 ): Promise<LiveSyncStatus> {
   const active = operations.getActiveScene()
   if (!active) return 'unbound'
@@ -80,6 +83,7 @@ export async function publishLiveSceneSnapshot(
       saveMode: 'draft',
       publish: false,
       operation: kind,
+      ...(options.allowSceneWipe ? { allowSceneWipe: true } : {}),
     })
     operations.setActiveScene(meta)
     await operations.appendSceneEvent({
@@ -89,6 +93,19 @@ export async function publishLiveSceneSnapshot(
       graph,
     })
   } catch (error) {
+    if (error instanceof SceneWipeBlockedError) {
+      // The store kept what it held; the session goes back to it, so the agent's next write builds
+      // on the project as stored rather than on the refused one (deleting the only room, say).
+      const stored = await operations.loadStoredScene(active.id).catch(() => null)
+      if (stored) operations.loadJSON(stored.graph)
+      refuse(
+        'scene_wipe_blocked',
+        stored
+          ? 'This write would leave the project empty, so it was blocked and nothing changed. To empty the project on purpose, call clear_scene. To remove only part of it, such as its only room, build what replaces it first, then remove it.'
+          : 'This write would leave the project empty, so it was blocked and not saved. Call load_scene before writing again. To empty the project on purpose, call clear_scene.',
+        { sceneId: active.id, mutationApplied: false, sessionRestored: !!stored },
+      )
+    }
     if (error instanceof SceneVersionConflictError) {
       throwMcpError(ErrorCode.InvalidRequest, LIVE_SYNC_VERSION_CONFLICT, {
         sceneId: active.id,

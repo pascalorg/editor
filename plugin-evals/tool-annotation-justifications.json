@@ -111,6 +111,19 @@
       }
     },
     {
+      "name": "clear_scene",
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": false
+      },
+      "justifications": {
+        "readOnlyHint": "It is not read-only because it empties the project back to its default scaffold and saves it.",
+        "destructiveHint": "The operation removes everything in the project except the site, building and level, on purpose.",
+        "openWorldHint": "It operates on the connected Pascal scene or project service without accessing the public internet."
+      }
+    },
+    {
       "name": "create_from_template",
       "annotations": {
         "readOnlyHint": false,

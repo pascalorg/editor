@@ -89,6 +89,7 @@ const TOOL_POLICIES = [
     },
     tools: [
       'apply_patch',
+      'clear_scene',
       'add_object',
       'add_column',
       'edit_collection',

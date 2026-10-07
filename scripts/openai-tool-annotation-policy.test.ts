@@ -13,7 +13,7 @@ describe('OpenAI tool annotation justification packet', () => {
     const candidate = clonePacket()
     candidate.tools.pop()
     expect(validateOpenAiToolAnnotationPacket(candidate)).toContain(
-      'OpenAI tool annotation packet must contain the exact 73-tool inventory',
+      'OpenAI tool annotation packet must contain the exact 74-tool inventory',
     )
   })
 

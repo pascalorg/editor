@@ -1,10 +1,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { isAgentRefusal } from '@pascal-app/core/agent-tools'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { Patch as BridgePatch } from '../bridge/scene-bridge'
 import type { SceneOperations } from '../operations'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS } from './annotations'
-import { ErrorCode, throwMcpError } from './errors'
+import { ErrorCode, refusalResult, throwMcpError } from './errors'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { assertPatchKeepsIdentity, PatchRefusedError } from './patch-guards'
 import { PatchSchema } from './schemas'
@@ -90,6 +91,8 @@ export function registerApplyPatch(server: McpServer, bridge: SceneOperations): 
             isError: true,
           }
         }
+        // A refusal the store made (an accidental wipe) answers with its code, as the shared tools'.
+        if (isAgentRefusal(err)) return refusalResult(err)
         const msg = err instanceof Error ? err.message : String(err)
         throwMcpError(ErrorCode.InvalidParams, msg)
       }
