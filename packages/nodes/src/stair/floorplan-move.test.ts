@@ -133,11 +133,14 @@ test('2D landscape attachment previews without scene writes and commits the flig
   expect(useScene.getState().nodes[flight.id]).toEqual(flight)
 })
 
-test('Alt releases the landscape preview and commits the free position', () => {
+test('snap mode releases the landscape preview and commits the free position', () => {
   const { stair, flight, session } = setup()
   session.apply({ planPoint: [0, -2], modifiers })
   expect(getEffectiveNode(stair).landscapeSurfaceId).toBeDefined()
   session.apply({ planPoint: [0.13, -2.17], modifiers: { ...modifiers, altKey: true } })
+  expect(getEffectiveNode(stair).landscapeSurfaceId).toBeDefined()
+  useEditor.getState().setSnappingMode('polygon', 'off')
+  session.apply({ planPoint: [0.13, -2.17], modifiers })
   expect(getEffectiveNode(stair).landscapeSurfaceId).toBeUndefined()
   expect(getEffectiveNode(flight)).toEqual(flight)
   session.commit!()
