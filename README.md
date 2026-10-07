@@ -8,7 +8,7 @@ WebGPU. Run it in the browser or from the CLI, and connect AI agents through MCP
 [![npm @pascal-app/viewer](https://img.shields.io/npm/v/@pascal-app/viewer?label=%40pascal-app%2Fviewer)](https://www.npmjs.com/package/@pascal-app/viewer)
 [![npm @pascal-app/cli](https://img.shields.io/npm/v/@pascal-app/cli?label=%40pascal-app%2Fcli)](https://www.npmjs.com/package/@pascal-app/cli)
 [![Discord](https://img.shields.io/badge/Discord-Join%20Server-5865F2?logo=discord&logoColor=white)](https://discord.gg/XRKsDcpqgS)
-[![X (Twitter)](https://img.shields.io/badge/follow-%40pascal__app-black?logo=x&logoColor=white)](https://x.com/pascal_app)
+[![X (Twitter)](https://img.shields.io/badge/follow-%40pascal-black?logo=x&logoColor=white)](https://x.com/pascal)
 
 https://github.com/user-attachments/assets/8b50e7cf-cebe-4579-9cf3-8786b35f7b6b
 
@@ -29,7 +29,7 @@ shown here is not yet part of the open-source editor release.
 
 We are exploring what this could make possible for facility management, home services,
 architecture, home building, and infrastructure.
-[Join the discussion on X](https://x.com/pascal_app/status/2102097655031558496)
+[Join the discussion on X](https://x.com/pascal/status/2102097655031558496)
 and tell us where you would use it.
 
 ### Make something with these videos
