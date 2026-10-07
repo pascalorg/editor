@@ -19,36 +19,35 @@ type Boundary = Extract<AnyNode, { type: 'wall' | 'separator' }>
 
 const NO_ENDS: OpenWallEnd[] = []
 
+const isBoundary = (node: AnyNode): node is Boundary =>
+  node.type === 'wall' || node.type === 'separator'
+
 let lastAnalysis: {
   levelId: string
-  boundaries: readonly Boundary[]
+  nodes: readonly AnyNode[]
   ends: OpenWallEnd[]
 } | null = null
 
 /**
  * The room-graph pass behind the open-end markers, shared by the floor plan
  * and the 3D view: split view mounts both, and they must not pay for it twice.
- * Recomputed only when the level's walls or separators change (compared by
- * node reference), never per frame.
+ * `nodes` is the level's walls and separators plus what the walls host: an
+ * opening can stop core squaring a corner, and the preview must land where
+ * Join walls will. Recomputed only when one of those nodes changes (compared
+ * by reference), never per frame or on unrelated edits.
  */
-export function analyseOpenWallEnds(
-  levelId: string,
-  boundaries: readonly Boundary[],
-): OpenWallEnd[] {
+export function analyseOpenWallEnds(levelId: string, nodes: readonly AnyNode[]): OpenWallEnd[] {
   const last = lastAnalysis
   if (
     last &&
     last.levelId === levelId &&
-    last.boundaries.length === boundaries.length &&
-    last.boundaries.every((node, index) => node === boundaries[index])
+    last.nodes.length === nodes.length &&
+    last.nodes.every((node, index) => node === nodes[index])
   ) {
     return last.ends
   }
-  const ends = findOpenWallEnds(
-    Object.fromEntries(boundaries.map((node) => [node.id, node])),
-    levelId,
-  )
-  lastAnalysis = { levelId, boundaries, ends }
+  const ends = findOpenWallEnds(Object.fromEntries(nodes.map((node) => [node.id, node])), levelId)
+  lastAnalysis = { levelId, nodes, ends }
   return ends
 }
 
@@ -98,15 +97,26 @@ export function useOpenWallEnds(): OpenWallEndsState {
       state.wallRectangleDraftStart !== null ||
       state.wallPolygonDraftPoints.length > 0,
   )
-  const boundaries = useScene(
+  // Walls and separators first, then every node a wall hosts — one flat list,
+  // so a door moving re-runs the analysis but an unrelated item edit does not.
+  const analysisNodes = useScene(
     useShallow((state) => {
       const level = levelId ? state.nodes[levelId as AnyNode['id']] : undefined
-      if (level?.type !== 'level') return [] as Boundary[]
-      return level.children
+      if (level?.type !== 'level') return [] as AnyNode[]
+      const boundaries = level.children
         .map((id) => state.nodes[id])
-        .filter((node): node is Boundary => node?.type === 'wall' || node?.type === 'separator')
+        .filter((node): node is Boundary => !!node && isBoundary(node))
+      const hosted = boundaries.flatMap((node) =>
+        node.type === 'wall'
+          ? node.children
+              .map((id) => state.nodes[id])
+              .filter((child): child is AnyNode => child !== undefined)
+          : [],
+      )
+      return [...boundaries, ...hosted]
     }),
   )
+  const boundaries = useMemo(() => analysisNodes.filter(isBoundary), [analysisNodes])
 
   const drawing = (mode === 'build' && tool === 'wall') || isDividing
   const roomWallIds = useMemo(() => {
@@ -124,8 +134,8 @@ export function useOpenWallEnds(): OpenWallEndsState {
   const hasWalls = boundaries.some((node) => node.type === 'wall')
   const shouldAnalyse = !!levelId && hasWalls && (drawing || roomlessWallIds.length > 0)
   const openEnds = useMemo(
-    () => (shouldAnalyse && levelId ? analyseOpenWallEnds(levelId, boundaries) : NO_ENDS),
-    [shouldAnalyse, levelId, boundaries],
+    () => (shouldAnalyse && levelId ? analyseOpenWallEnds(levelId, analysisNodes) : NO_ENDS),
+    [shouldAnalyse, levelId, analysisNodes],
   )
   const ends = useMemo(() => {
     const walls = new Map(boundaries.map((node) => [node.id as string, node]))

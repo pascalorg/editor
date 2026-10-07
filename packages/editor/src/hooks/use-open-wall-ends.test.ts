@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { WallNode } from '@pascal-app/core'
+import { type AnyNode, DoorNode, type OpenWallEnd, WallNode } from '@pascal-app/core'
 import { analyseOpenWallEnds } from './use-open-wall-ends'
 
 const wall = (id: string, start: [number, number], end: [number, number]) =>
@@ -43,5 +43,57 @@ describe('open wall end analysis shared by the floor plan and 3D view', () => {
     const next = analyseOpenWallEnds('level_a', closed)
     expect(next).not.toBe(first)
     expect(next.some((end) => end.wallId === 'wall_4')).toBe(false)
+  })
+})
+
+describe('the open-end preview reads what the walls host', () => {
+  // An 88° near-miss T: the source wall stops 9 cm short of the long target wall.
+  const level = 'level_t'
+  const tWall = (id: string, start: [number, number], end: [number, number], thickness = 0.1) =>
+    WallNode.parse({ id, parentId: level, start, end, thickness })
+  const scene = () => {
+    const tip: [number, number] = [2 + (3 - 0.09) / Math.tan((88 * Math.PI) / 180), 0.09]
+    const source = tWall('wall_source', [2, 3], tip, 0.01)
+    return {
+      source,
+      walls: [
+        source,
+        tWall('wall_target', [-20, 0], [30, 0], 0.01),
+        tWall('wall_anchor', [2, 3], [-20, 3]),
+        tWall('wall_left', [-20, 3], [-20, 0]),
+      ],
+    }
+  }
+  const sourceEnd = (ends: OpenWallEnd[]) =>
+    ends.find((end) => end.wallId === 'wall_source' && end.end === 'end')
+
+  test('without an opening the preview squares the corner', () => {
+    const point = sourceEnd(analyseOpenWallEnds(level, scene().walls))?.candidate?.point
+    expect(point?.[0]).toBeCloseTo(2, 6)
+    expect(point?.[1]).toBeCloseTo(0, 6)
+  })
+
+  test('a door flush with the anchored end keeps the join straight, and only the door changing re-runs it', () => {
+    const { source, walls } = scene()
+    const door = DoorNode.parse({
+      id: 'door_source',
+      parentId: source.id,
+      wallId: source.id,
+      position: [0.4, 1.05, 0],
+      width: 0.8,
+    })
+    const hosted: AnyNode[] = [
+      { ...source, children: [door.id] } as AnyNode,
+      ...walls.slice(1),
+      door as AnyNode,
+    ]
+    const first = analyseOpenWallEnds(level, hosted)
+    const point = sourceEnd(first)?.candidate?.point
+    expect(point?.[0]).toBeCloseTo(2 + 3 / Math.tan((88 * Math.PI) / 180), 6)
+    expect(point?.[1]).toBeCloseTo(0, 6)
+
+    const narrower = { ...door, width: 0.6 } as AnyNode
+    const next = analyseOpenWallEnds(level, [...hosted.slice(0, -1), narrower])
+    expect(next).not.toBe(first)
   })
 })
