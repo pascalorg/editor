@@ -51,7 +51,10 @@ export function localGeometryScripts(projectPath: string): GeometryScriptHost {
         child.stdin.end(JSON.stringify(input))
       })
     },
-    storeArtifact: ({ sha256, bytes }) => artifacts.put(sha256, bytes),
+    storeArtifact: async ({ sha256, bytes }) => {
+      await artifacts.put(sha256, bytes)
+      return sha256
+    },
     readArtifact: ({ sha256 }) => artifacts.read(sha256),
   }
 }

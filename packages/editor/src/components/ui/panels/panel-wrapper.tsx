@@ -12,7 +12,6 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { ChevronDown, ChevronLeft, GripHorizontal, RotateCcw, X } from 'lucide-react'
-import Image from 'next/image'
 import {
   type ComponentType,
   createContext,
@@ -28,6 +27,7 @@ import {
 } from 'react'
 import { useIsMobile } from '../../../hooks/use-mobile'
 import { IconRefImage } from '../icon-ref'
+import { NodeIconImage } from '../node-icon-image'
 import {
   resolveActiveExtension,
   toggleCard,
@@ -336,7 +336,7 @@ export function PanelWrapper({
             )}
             {icon &&
               (typeof icon === 'string' ? (
-                <Image
+                <NodeIconImage
                   alt=""
                   className="shrink-0 object-contain"
                   height={16}

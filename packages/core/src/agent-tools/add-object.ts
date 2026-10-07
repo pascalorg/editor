@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { geometryMetaFields } from '../schema/geometry-metadata'
 import { measurement } from './measurement'
 import { NodeId } from './node-id'
 
@@ -66,12 +67,11 @@ export const addObjectTool = {
       .enum(['front', 'back'])
       .optional()
       .describe('Which wall face a wall-side object sits on.'),
-    name: z.string().max(120).optional().describe('What the user would call it ("Front porch").'),
-    category: z
-      .string()
-      .max(60)
-      .optional()
-      .describe('What it is, one word or two ("porch", "lantern", "ceiling", "trim").'),
+    ...geometryMetaFields,
+    name: geometryMetaFields.name.describe('What the user would call it ("Front porch").'),
+    category: geometryMetaFields.category.describe(
+      'What it is, one word or two ("porch", "lantern", "ceiling", "trim").',
+    ),
     reason: z
       .string()
       .min(1)

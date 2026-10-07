@@ -5,7 +5,7 @@ import { temporal } from 'zundo'
 import { create, type StateCreator, type StoreApi, type UseBoundStore } from 'zustand'
 import { toSceneMaterialRef } from '../material-library'
 import { getNodePluginId, isNodeKindEnabled, nodeRegistry } from '../registry/registry'
-import { BuildingNode } from '../schema'
+import { BuildingNode, type GeometryScriptSource } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId } from '../schema/collections'
 import { compiledNodeSchema } from '../schema/compiled-node-parsers'
@@ -80,6 +80,12 @@ import {
   withDraftsRestored,
 } from './history-drafts'
 import { getHistoryDirtyNodeIds } from './history-invalidation'
+import {
+  retainSceneAnnotations,
+  withoutSceneAnnotations,
+  withoutSceneNodeAnnotations,
+  writeSceneNodeField,
+} from './scene-annotations'
 import {
   invalidatePendingHydration,
   isHydrationNormalization,
@@ -1392,8 +1398,12 @@ function createSceneStore(config: TemporalSceneCreator): UseSceneStore {
 function runTemporalJump(target: Partial<SceneSnapshot> | undefined, restore: () => void): void {
   const draftsBefore = useScene.getState().nodes
   const restoreDrafts = () => {
-    const nodes = withDraftsRestored(draftsBefore, useScene.getState().nodes)
-    if (!nodes) return
+    const current = useScene.getState().nodes
+    const nodes = retainSceneAnnotations(
+      draftsBefore,
+      withDraftsRestored(draftsBefore, current) ?? current,
+    )
+    if (nodes === current) return
     // The carry's own state, not a new step: a tracked write here would clear redo.
     const pause = beginSceneHistoryPauseSession(useScene)
     try {
@@ -1743,7 +1753,11 @@ const useScene: UseSceneStore = createSceneStore(
     }),
     {
       partialize: (state: SceneState) => sceneHistorySnapshotFromState(state),
-      equality: (pastState, currentState) => areSceneSnapshotsEqual(pastState, currentState),
+      equality: (pastState, currentState) =>
+        areSceneSnapshotsEqual(
+          { ...pastState, nodes: withoutSceneAnnotations(pastState.nodes) },
+          { ...currentState, nodes: withoutSceneAnnotations(currentState.nodes) },
+        ),
       onSave: (pastState, currentState) => {
         notifySceneCommit({
           origin: 'local',
@@ -1824,7 +1838,7 @@ export function acquireSceneReadOnlyLease(): () => void {
 
 export type SceneNodePatch = {
   id: AnyNodeId
-  data: Partial<AnyNode>
+  data: Partial<AnyNode> & { 'source.images'?: NonNullable<GeometryScriptSource['images']> }
   removeFields: string[]
 }
 
@@ -2011,7 +2025,10 @@ function sceneOperationPatchNextState(
       !Number.isSafeInteger(change.position) ||
       change.position < 0 ||
       siblings?.[change.position] !== id ||
-      !areScenePatchValuesEqual(current, change.node)
+      !areScenePatchValuesEqual(
+        withoutSceneNodeAnnotations(current as Record<string, unknown>),
+        withoutSceneNodeAnnotations(change.node as Record<string, unknown>),
+      )
     ) {
       return null
     }
@@ -2084,8 +2101,17 @@ function sceneOperationPatchNextState(
       return null
     }
     updateIds.add(id)
-    const candidate = { ...node, ...data } as Record<string, unknown>
-    for (const field of removeFields) delete candidate[field]
+    let candidate = { ...node } as Record<string, unknown>
+    for (const [field, value] of Object.entries(data)) {
+      const written = writeSceneNodeField(candidate, field, value, true)
+      if (!written) return null
+      candidate = written
+    }
+    for (const field of removeFields) {
+      const written = writeSceneNodeField(candidate, field, undefined, false)
+      if (!written) return null
+      candidate = written
+    }
     const validated = parseSceneOperationPatchNode(candidate)
     if (
       !validated ||
@@ -2208,6 +2234,8 @@ export type ApplySceneOperationPatchOptions = {
    * reaches this tab as a saved scene. Refused (false) mid-interaction; retry once it ends.
    */
   undoable?: boolean
+  /** Local annotation commits use the same durable host journal as authored commits. */
+  annotation?: boolean
 }
 
 export function applySceneOperationPatch(
@@ -2236,6 +2264,29 @@ export function applySceneOperationPatch(
   ) {
     return false
   }
+  if (
+    options.annotation &&
+    (options.undoable ||
+      beforeState.readOnly ||
+      !useScene.temporal.getState().isTracking ||
+      getSceneHistoryPauseDepth() > 0 ||
+      hasSceneHistoryDrafts())
+  )
+    return false
+  if (
+    options.annotation &&
+    (changes.nodeCreates.length ||
+      changes.nodeDeletes.length ||
+      changes.materialChanges.length ||
+      changes.pluginChanges?.length ||
+      changes.collectionChanges?.length ||
+      changes.pluginInstallState ||
+      changes.nodeUpdates.some(
+        ({ data, removeFields }) =>
+          removeFields.length || Object.keys(data).some((field) => field !== 'source.images'),
+      ))
+  )
+    return false
   if (sceneOperationPatchHasLiveConflict(beforeState, changes)) return false
   const next = sceneOperationPatchNextState(beforeState, changes)
   if (!next) return false
@@ -2311,7 +2362,7 @@ export function applySceneOperationPatch(
   for (const { node } of changes.nodeDeletes) currentState.clearDirty(node.id)
 
   notifySceneCommit({
-    origin: 'host',
+    origin: options.annotation ? 'local' : 'host',
     before,
     current,
   })

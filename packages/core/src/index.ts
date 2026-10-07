@@ -175,9 +175,12 @@ export {
 } from './lib/floor-step-finish'
 export {
   isScriptedNode,
+  matchScriptSlotsToLibrary,
   type ScriptedNode,
+  scriptedObjectMeta,
   scriptedOrigin,
   scriptedSize,
+  scriptImages,
   scriptInteractive,
   scriptSource,
 } from './lib/geometry-script-node'
@@ -302,6 +305,7 @@ export {
   roomFloorElevationFromRelative,
   roundFloorElevation,
 } from './lib/room-floor-feasibility'
+export type { OpenWallEnd } from './lib/room-graph'
 export {
   type BoundaryNode,
   type BoundarySpan,
@@ -479,6 +483,7 @@ export {
   unregisterLibraryMaterials,
 } from './material-library'
 export * from './node-slots'
+export { matchPascalMaterial, type PascalMaterialHints } from './procedural-items/library-colors'
 export type {
   FloorPlacedFootprint,
   FloorPlacedFootprintContext,
@@ -539,6 +544,13 @@ export {
   operateItem,
 } from './store/item-interaction'
 export { materializeRegisteredNodeDefaults } from './store/registered-node-defaults'
+export {
+  readSceneNodeField,
+  SCENE_IMAGE_FIELD,
+  withoutSceneNodeAnnotations,
+  withSceneNodeBuildImages,
+  writeSceneNodeField,
+} from './store/scene-annotations'
 export {
   type ControlValue,
   type DoorAnimationState,
@@ -887,8 +899,14 @@ export {
   resolveWallTop,
 } from './systems/wall/wall-top'
 export {
+  findOpenWallEnds,
+  planJoinOpenWallEnd,
+  planWallEndRejoins,
   planWallInsertion,
   planWallSplitAtPoint,
+  type WallInsertionPlan,
+  type WallJoinResult,
+  type WallTopologyChanges,
 } from './systems/wall/wall-topology'
 export type { SceneGraph } from './utils/clone-scene-graph'
 export { cloneLevelSubtree, cloneSceneGraph, forkSceneGraph } from './utils/clone-scene-graph'

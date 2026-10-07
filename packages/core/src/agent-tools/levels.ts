@@ -86,7 +86,9 @@ export const duplicateLevelTool = {
       .min(1)
       .max(120)
       .optional()
-      .describe('Name of the copy. Default: the original name.'),
+      .describe(
+        'Name of the copy. Default: none, so it reads by its floor like a new level (Floor 1, Ground floor…).',
+      ),
     preset: z
       .enum(['everything', 'structure', 'structure-materials', 'structure-furniture'])
       .optional()

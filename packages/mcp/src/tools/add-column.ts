@@ -1,11 +1,12 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { isScriptedNode, scriptedObjectMeta } from '@pascal-app/core'
 import {
   type AddColumnInput,
   addColumn,
   columnScriptParams,
 } from '@pascal-app/core/agent-operations'
 import { addColumnTool, isAgentRefusal, refuse } from '@pascal-app/core/agent-tools'
-import type { AnyNode } from '@pascal-app/core/schema'
+import { type AnyNode, GeometryReuseFields } from '@pascal-app/core/schema'
 import type { SceneOperations } from '../operations'
 import { compileAndStore, type GeometryScriptHost, readScript } from './add-object'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS } from './annotations'
@@ -38,7 +39,13 @@ export function registerAddColumn(
           const scene = bridge.getActiveScene()
           if (!scene) refuse('no_active_scene', 'Open or save a scene first.')
           const code = input.code ?? (await readScript(host, scene.id, bridge, input.nodeId!))
-          compiled = await compileAndStore(host, scene.id, code, params, 'column')
+          compiled = await compileAndStore(host, scene.id, code, params, 'column', {
+            nodeId: input.nodeId,
+            metadata: {
+              ...(isScriptedNode(previous) ? scriptedObjectMeta(previous) : {}),
+              ...GeometryReuseFields.parse(input),
+            },
+          })
         }
         const outcome = addColumn(nodes, { ...input, compiled }, { activeLevelId: null })
         if (outcome.changes) bridge.applyPatch(toPatches(outcome.changes))

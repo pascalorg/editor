@@ -2,7 +2,9 @@
 // depend on @types/bun so the import type is unresolved at compile time.
 import { describe, expect, test } from 'bun:test'
 import { MaterialProperties, type MaterialSchema } from '@pascal-app/core'
+import { MeshPhysicalMaterial, MeshStandardMaterial } from 'three'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
+import { materialCastsShadow } from '../index'
 import {
   createMaterial,
   getTextureKey,
@@ -53,6 +55,31 @@ describe('shared flat slot defaults', () => {
     expect(solid).toBeInstanceOf(MeshLambertNodeMaterial)
     expect(solid).toBe(resolveSlotDefaultMaterial('#abcdef', 'solid', 0.75))
     expect(solid.userData.__pascalCachedMaterial).toBe(true)
+  })
+})
+
+describe('material shadow policy', () => {
+  test('library glass does not cast in either shading mode, independent of its name', () => {
+    for (const shading of ['solid', 'rendered'] as const) {
+      const glass = resolveMaterialRef('library:preset-glass', undefined, shading)!
+      expect(glass.name).not.toBe('glass')
+      expect(materialCastsShadow(glass)).toBe(false)
+      const opaque = resolveSlotDefaultMaterial('#cccccc', shading)
+      expect(materialCastsShadow(opaque)).toBe(true)
+      expect(materialCastsShadow([opaque, glass])).toBe(false)
+    }
+  })
+
+  test('transmission and glass opacity suppress casting, while tinted and opaque materials cast', () => {
+    const transmitting = new MeshPhysicalMaterial({ transmission: 0.9 })
+    const transparent = new MeshStandardMaterial({ transparent: true, opacity: 0.3 })
+    const tinted = new MeshStandardMaterial({ transparent: true, opacity: 0.8 })
+    const opaque = new MeshStandardMaterial()
+    opaque.name = 'glass'
+    expect(materialCastsShadow(transmitting)).toBe(false)
+    expect(materialCastsShadow(transparent)).toBe(false)
+    expect(materialCastsShadow(tinted)).toBe(true)
+    expect(materialCastsShadow(opaque)).toBe(true)
   })
 })
 

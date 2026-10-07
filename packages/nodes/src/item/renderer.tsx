@@ -28,6 +28,7 @@ import {
   createSurfaceRoleMaterial,
   ErrorBoundary,
   glassMaterial,
+  materialCastsShadow,
   NodeRenderer,
   type RenderShading,
   resolveCdnUrl,
@@ -54,7 +55,6 @@ import {
 } from 'react'
 import type { AnimationAction, AnimationClip, Group, Material, Mesh, Object3D } from 'three'
 import { MathUtils, Texture } from 'three'
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { positionLocal, smoothstep, time } from 'three/tsl'
@@ -146,7 +146,7 @@ const isCapturedMaterialArray = (
   captured: CapturedItemMaterialData,
 ): captured is CapturedMultiItemMaterialData => Array.isArray(captured.authoredMaterials)
 
-const isGlassMaterial = (material: Material): boolean =>
+const isLegacyGlassMaterial = (material: Material): boolean =>
   material === glassMaterial || material.name.toLowerCase() === 'glass'
 
 const clampGeometryGroups = (mesh: Mesh, matCount: number): void => {
@@ -234,7 +234,6 @@ const configureItemModelLoader = (loader: ItemGLTFLoader, renderer: unknown) => 
     itemDracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.5/')
   }
   loader.setDRACOLoader(itemDracoLoader)
-  loader.setMeshoptDecoder(MeshoptDecoder)
 }
 
 type LoadedItemGltf = GLTF & {
@@ -688,7 +687,7 @@ const LoadedModelRenderer = ({
     }
 
     for (const { mesh, captured } of meshEntries) {
-      let hasGlass = false
+      let hasLegacyGlass = false
 
       if (isCapturedMaterialArray(captured)) {
         const nextMaterials = captured.authoredMaterials.map((authoredMaterial, index) =>
@@ -700,7 +699,7 @@ const LoadedModelRenderer = ({
           ),
         )
         mesh.material = nextMaterials
-        hasGlass = nextMaterials.some(isGlassMaterial)
+        hasLegacyGlass = nextMaterials.some(isLegacyGlassMaterial)
         clampGeometryGroups(mesh, nextMaterials.length)
       } else {
         const nextMaterial = resolveItemMaterial(
@@ -710,11 +709,11 @@ const LoadedModelRenderer = ({
           materialOptions,
         )
         mesh.material = nextMaterial
-        hasGlass = isGlassMaterial(nextMaterial)
+        hasLegacyGlass = isLegacyGlassMaterial(nextMaterial)
       }
 
-      mesh.castShadow = !hasGlass
-      mesh.receiveShadow = !hasGlass
+      mesh.castShadow = materialCastsShadow(mesh.material)
+      mesh.receiveShadow = !hasLegacyGlass
     }
   }, [shading, textures, colorPreset, node.slots, sceneMaterials])
 

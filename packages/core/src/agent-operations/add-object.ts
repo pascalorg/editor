@@ -2,6 +2,7 @@ import { refuse } from '../agent-tools/refusal'
 import { artifactUrl } from '../lib/artifact-store'
 import {
   isScriptedNode,
+  matchScriptSlotsToLibrary,
   type ScriptedNode,
   scriptedSize,
   scriptInteractive,
@@ -32,6 +33,8 @@ export type AddObjectInput = {
   rotation?: number
   side?: 'front' | 'back'
   name?: string
+  description?: string
+  tags?: string[]
   category?: string
   /** What the object stands in for; kept in `metadata.reason`, listed by verify_scene. */
   reason?: string
@@ -60,6 +63,8 @@ function scriptAsset(
 ): ItemNode['asset'] {
   const { min, max } = compiled.manifest.bounds
   const restingHeight = geometryRestingHeight(compiled.manifest)
+  const attachTo = ATTACH[compiled.mount]
+  const interactive = scriptInteractive(compiled.manifest)
   return {
     id: `script_${compiled.sha256.slice(0, 16)}`,
     category: input.category ?? previous?.category ?? 'object',
@@ -68,12 +73,12 @@ function scriptAsset(
     source: 'mine',
     src: artifactUrl(compiled.sha256),
     dimensions: [max[0] - min[0], max[1] - min[1], max[2] - min[2]],
-    attachTo: ATTACH[compiled.mount],
-    surface: restingHeight === null ? undefined : { height: restingHeight },
+    ...(attachTo ? { attachTo } : {}),
+    ...(restingHeight === null ? {} : { surface: { height: restingHeight } }),
     offset: [0, 0, 0],
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
-    interactive: scriptInteractive(compiled.manifest),
+    ...(interactive ? { interactive } : {}),
   }
 }
 
@@ -157,6 +162,9 @@ function refuseWallOrSlabShape(compiled: CompiledGeometryScript, input: AddObjec
   }
 }
 
+/** An item's category lives on its asset, so its source meta leaves it out. */
+const itemSourceMeta = ({ category: _, ...input }: AddObjectInput) => input
+
 const round = (value: number) => Math.round(value * 1000) / 1000
 
 function summary(node: { id: string }, compiled: CompiledGeometryScript, orphanedSlots: string[]) {
@@ -226,8 +234,13 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
       name: input.name ?? previous.name,
       position: (input.position as Vec3 | undefined) ?? previous.position,
       rotation: rotation ?? previous.rotation,
-      side: input.side ?? previous.side,
-      source: scriptSource(compiled),
+      ...(input.side === undefined ? {} : { side: input.side }),
+      source: scriptSource(compiled, itemSourceMeta(input), previous.source),
+      slots: matchScriptSlotsToLibrary(
+        compiled.manifest,
+        previous.slots,
+        previous.source?.manifest,
+      ),
       asset: scriptAsset(compiled, input, previous.asset),
       ...(input.reason ? { metadata: { ...previous.metadata, reason: input.reason } } : {}),
     })
@@ -270,14 +283,15 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
   const asset = scriptAsset(compiled, input, undefined)
   const node = ItemNode.parse({
     object: 'node',
-    id: generateId('item'),
+    id: compiled.nodeId ?? generateId('item'),
     type: 'item',
     name: input.name ?? asset.name,
     parentId: parent.id,
     ...(parent.type === 'wall' ? { wallId: parent.id, side: input.side ?? 'front' } : {}),
     position: (input.position as Vec3 | undefined) ?? [0, 0, 0],
     rotation: rotation ?? [0, 0, 0],
-    source: scriptSource(compiled),
+    source: scriptSource(compiled, itemSourceMeta(input)),
+    slots: matchScriptSlotsToLibrary(compiled.manifest),
     asset,
     metadata: { reason: input.reason },
   })
@@ -296,6 +310,9 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
 }
 
 export type RescriptOpeningInput = {
+  description?: string
+  category?: string
+  tags?: string[]
   nodeId: string
   /** Where it goes; without one its bottom edge stays put. */
   position?: number[]
@@ -349,7 +366,12 @@ export const rescriptOpening: AgentOperation<RescriptOpeningInput> = (nodes, inp
           id: previous.id,
           data: {
             name: input.name ?? previous.name,
-            source: scriptSource(compiled),
+            source: scriptSource(compiled, input, previous.source),
+            slots: matchScriptSlotsToLibrary(
+              compiled.manifest,
+              previous.slots,
+              previous.source?.manifest,
+            ),
             width,
             height,
             position,

@@ -3,6 +3,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  scriptImages,
   useInteractive,
   useScene,
   type WindowNode,
@@ -290,7 +291,7 @@ export default function WindowPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/window.webp"
+      icon={scriptImages(node)?.thumbnail ?? '/icons/window.webp'}
       onClose={handleClose}
       title={node.name || 'Window'}
       width={320}

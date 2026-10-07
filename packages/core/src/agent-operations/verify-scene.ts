@@ -1,5 +1,6 @@
 import { levelBuildingId } from '../building/level-duplication'
 import { getLevelDisplayName } from '../lib/level-name'
+import { detectOpenWallEnds, type OpenWallEnd } from '../lib/room-graph'
 import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema } from '../schema'
 import { getStoredLevelHeight } from '../services/storey'
 import { computeSegmentTransforms, rotateXZ } from '../systems/stair/stair-footprint'
@@ -21,7 +22,18 @@ import {
 import type { AgentOperation, SceneNodes } from './types'
 
 /** A problem verify_scene found, typed so it can be counted and acted on. */
-export type SceneIssue = { type: string; message: string; severity?: 'info' }
+export type SceneIssue =
+  | { type: string; message: string; severity?: 'info' }
+  | {
+      type: 'wall_open_end'
+      message: string
+      severity?: 'info'
+      wallId: string
+      end: OpenWallEnd['end']
+      reason: Exclude<OpenWallEnd['reason'], 'isolated'>
+      gap?: number
+      nearestWallId?: string
+    }
 
 /** What verify_scene was asked: its contract's input, which other modules may extend. */
 export type VerifySceneInput = Readonly<Record<string, unknown>>
@@ -240,6 +252,19 @@ export const verifyScene: AgentOperation<VerifySceneInput | undefined> = (
 
   for (const level of levels) {
     const { content, levelName } = level
+    // A free-standing wall (garden wall, half wall) is legitimate, not something to repair.
+    for (const end of detectOpenWallEnds(nodes, level.levelId)) {
+      if (end.reason === 'isolated') continue
+      issues.push({
+        type: 'wall_open_end',
+        message: `Wall ${end.wallId} ${end.end} is open on ${levelName}: ${end.reason}${end.candidate ? `; nearest wall ${end.candidate.wallId}` : ''}`,
+        wallId: end.wallId,
+        end: end.end,
+        reason: end.reason,
+        ...(end.gap !== undefined ? { gap: end.gap } : {}),
+        ...(end.candidate ? { nearestWallId: end.candidate.wallId } : {}),
+      })
+    }
     if (level.role === 'roof') {
       if (content.roofs === 0)
         report(

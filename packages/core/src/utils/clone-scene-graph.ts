@@ -72,7 +72,7 @@ function remapNodeIdStrings(value: unknown, ids: Map<string, string>): unknown {
 // or the first load re-sorts them and the clone saves a change.
 const SORTED_ID_LISTS = ['boundaryWallIds', 'boundarySeparatorIds', 'zoneIds', 'openingIds']
 
-function remapNodeReferences(node: AnyNode, ids: Map<string, string>): AnyNode {
+export function remapNodeReferences(node: AnyNode, ids: Map<string, string>): AnyNode {
   // Provenance source ids are history, not links: clones carry them verbatim (D5).
   const { provenance, ...links } = node as AnyNode & { provenance?: unknown }
   const remapped = remapNodeIdStrings(links, ids) as Record<string, unknown>

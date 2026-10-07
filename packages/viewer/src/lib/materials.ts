@@ -470,6 +470,16 @@ function applyMaterialMapProperties(
 // `transparent` with opacity below this gets the fresnel treatment.
 const GLASS_OPACITY_THRESHOLD = 0.6
 
+/** Glass lets light through; shadow maps would otherwise treat it as a solid panel. */
+export function materialCastsShadow(material: THREE.Material | THREE.Material[]): boolean {
+  const materials = Array.isArray(material) ? material : [material]
+  return !materials.some(
+    (entry) =>
+      (entry as THREE.MeshPhysicalMaterial).transmission > 0 ||
+      (entry.transparent && entry.opacity < GLASS_OPACITY_THRESHOLD),
+  )
+}
+
 /**
  * Fresnel-driven opacity for glass: nearly the authored opacity head-on,
  * increasingly opaque (showing the environment reflection) at grazing angles.

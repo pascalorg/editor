@@ -13,6 +13,7 @@ const localArtifactStore: ArtifactStore = {
       body: bytes as BodyInit,
     })
     if (!response.ok) throw new Error(`Artifact save failed (${response.status})`)
+    return sha256
   },
   text: async (sha256) => {
     const response = await fetch(artifactUrl(sha256))

@@ -1,6 +1,12 @@
 'use client'
 
-import { type AnyNode, getScaledDimensions, type ItemNode, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  getScaledDimensions,
+  type ItemNode,
+  scriptImages,
+  useScene,
+} from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
@@ -89,7 +95,7 @@ export default function ItemPanel() {
 
   return (
     <PanelWrapper
-      icon={node.asset.thumbnail || '/icons/item.webp'}
+      icon={scriptImages(node)?.thumbnail ?? (node.asset.thumbnail || '/icons/item.webp')}
       onClose={handleClose}
       title={node.name || node.asset.name}
       width={300}

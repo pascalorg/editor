@@ -186,7 +186,16 @@ const SHARED_TOOLS: SharedTool[] = [
       levels: z.array(jsonObject),
       emptyLevelIds: z.array(z.string()),
       issues: z.array(
-        z.object({ type: z.string(), message: z.string(), severity: z.literal('info').optional() }),
+        z.object({
+          type: z.string(),
+          message: z.string(),
+          severity: z.literal('info').optional(),
+          wallId: z.string().optional(),
+          end: z.enum(['start', 'end']).optional(),
+          reason: z.enum(['gap', 'crosses', 'parallel', 'rejected']).optional(),
+          gap: z.number().optional(),
+          nearestWallId: z.string().optional(),
+        }),
       ),
       hasIssues: z.boolean(),
       authoredObjects: z

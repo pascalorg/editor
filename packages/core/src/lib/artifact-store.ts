@@ -1,3 +1,5 @@
+import type { GeometryArtifactMetadata } from '../schema/geometry-metadata'
+
 /**
  * Content-addressed geometry artifacts. Nodes reference an artifact as
  * `artifact://<sha256>` and never by URL, so where the bytes live is the
@@ -10,8 +12,13 @@ export const ARTIFACT_URL_PREFIX = 'artifact://'
 export type ArtifactStore = {
   /** A loadable URL for a stored artifact, or null when this store does not have it. */
   url: (sha256: string) => string | null
-  /** Stores the bytes under their hash; resolves once `url` returns a URL for it. */
-  put: (sha256: string, bytes: ArrayBuffer | Uint8Array, mimeType: string) => Promise<void>
+  /** Stores bytes and returns their stored hash, which may change if the host compresses them. */
+  put: (
+    sha256: string,
+    bytes: ArrayBuffer | Uint8Array,
+    mimeType: string,
+    context?: { nodeId: string; metadata: GeometryArtifactMetadata },
+  ) => Promise<string>
   /** A stored text artifact (an authored object's script), or null when it is missing or unreadable here. */
   text: (sha256: string) => Promise<string | null>
   /**
@@ -27,11 +34,12 @@ const memory = new Map<string, { url: string; bytes: ArrayBuffer | Uint8Array }>
 const memoryStore: ArtifactStore = {
   url: (sha256) => memory.get(sha256)?.url ?? null,
   put: async (sha256, bytes, mimeType) => {
-    if (memory.has(sha256)) return
+    if (memory.has(sha256)) return sha256
     memory.set(sha256, {
       url: URL.createObjectURL(new Blob([bytes as BlobPart], { type: mimeType })),
       bytes,
     })
+    return sha256
   },
   text: async (sha256) => {
     const stored = memory.get(sha256)

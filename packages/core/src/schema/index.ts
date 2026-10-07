@@ -30,6 +30,11 @@ export {
 // Cut intents (F5b)
 export { CutIntent, CutShape } from './cut'
 export {
+  GeometryArtifactMetadata,
+  GeometryReuseFields,
+  GeometrySourceMeta,
+} from './geometry-metadata'
+export {
   type CompiledGeometryScript,
   GEOMETRY_MANIFEST_MAX_BYTES,
   GEOMETRY_SCRIPT_MAX_BYTES,

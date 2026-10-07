@@ -1,6 +1,6 @@
 import { refuseParamsWithoutScript } from '../agent-operations/add-object'
 import { refuse } from '../agent-tools/refusal'
-import { scriptedSize, scriptSource } from '../lib/geometry-script-node'
+import { matchScriptSlotsToLibrary, scriptedSize, scriptSource } from '../lib/geometry-script-node'
 import { wallSupportForNodes } from '../lib/opening-floor-datum'
 import {
   type AnyNode,
@@ -167,6 +167,10 @@ export function hasWallChildOverlap(
 }
 
 export type WallOpeningInput = {
+  name?: string
+  description?: string
+  category?: string
+  tags?: string[]
   kind: 'door' | 'window'
   wallId?: string
   t?: number
@@ -320,7 +324,8 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
     return parent?.parentId === levelId
   }).length
   const base = {
-    name: `${kind === 'door' ? 'Door' : 'Window'} ${siblings + 1}`,
+    ...(compiled?.nodeId ? { id: compiled.nodeId } : {}),
+    name: input.name ?? `${kind === 'door' ? 'Door' : 'Window'} ${siblings + 1}`,
     position: [clampedX, clampedY, 0] as [number, number, number],
     rotation: [0, 0, 0] as [number, number, number],
     wallId,
@@ -330,7 +335,12 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
     ...(input.openingShape ? { openingShape: input.openingShape } : {}),
     ...(input.archHeight === undefined ? {} : { archHeight: Math.min(input.archHeight, height) }),
     ...(input.cornerRadius === undefined ? {} : { cornerRadius: input.cornerRadius }),
-    ...(compiled ? { source: scriptSource(compiled) } : {}),
+    ...(compiled
+      ? {
+          source: scriptSource(compiled, input),
+          slots: matchScriptSlotsToLibrary(compiled.manifest),
+        }
+      : {}),
   }
   const node =
     kind === 'door'

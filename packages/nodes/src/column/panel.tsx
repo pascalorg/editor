@@ -5,6 +5,7 @@ import {
   COLUMN_PRESETS,
   type ColumnNode,
   type ColumnPresetId,
+  scriptImages,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -349,7 +350,7 @@ export default function ColumnPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/column.webp"
+      icon={scriptImages(node)?.thumbnail ?? '/icons/column.webp'}
       onClose={handleClose}
       title={node.name || 'Column'}
       width={300}

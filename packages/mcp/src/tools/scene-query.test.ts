@@ -87,6 +87,33 @@ describe('scene query tools', () => {
     )
   })
 
+  test('verify_scene identifies each open wall endpoint with its nearest repair target', async () => {
+    const level = Object.values(bridge.getNodes()).find((node) => node.type === 'level')!
+    const first = WallNode.parse({ id: 'wall_open_first', start: [0, 0], end: [2, 0] })
+    const second = WallNode.parse({ id: 'wall_open_second', start: [2.05, 0], end: [4, 0] })
+    bridge.createNode(first, level.id)
+    bridge.createNode(second, level.id)
+    const result = await client.callTool({ name: 'verify_scene', arguments: {} })
+    expect(result.isError).toBeFalsy()
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const issues = parsed.issues.filter((issue: { type: string }) => issue.type === 'wall_open_end')
+    expect(issues).toHaveLength(2)
+    expect(issues).toContainEqual(
+      expect.objectContaining({
+        wallId: first.id,
+        end: 'end',
+        reason: 'gap',
+        nearestWallId: second.id,
+      }),
+    )
+    expect(
+      issues.find(
+        (issue: { wallId: string; end: string }) =>
+          issue.wallId === first.id && issue.end === 'end',
+      ).gap,
+    ).toBeCloseTo(0.05, 6)
+  })
+
   test('verify_scene reports item–item footprint overlaps', async () => {
     const level = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
     bridge.createNode(

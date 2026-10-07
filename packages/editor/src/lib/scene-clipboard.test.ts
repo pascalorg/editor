@@ -15,6 +15,7 @@ import {
   MeasurementNode,
   SceneMaterial,
   type SceneMaterialId,
+  SlabNode,
   useScene,
   WallNode,
   WindowNode,
@@ -142,6 +143,47 @@ describe('scene clipboard', () => {
   beforeEach(() => {
     seedCabinetRun()
     useScene.temporal.getState().clear()
+  })
+
+  test('leaves derived room surfaces out of a group copy while retaining authored slabs', () => {
+    const derived = SlabNode.parse({
+      parentId: sourceLevelId,
+      boundary: 'auto',
+      autoFromWalls: true,
+      plateRole: 'base',
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 3],
+        [0, 3],
+      ],
+    })
+    const manual = SlabNode.parse({
+      parentId: sourceLevelId,
+      polygon: [
+        [5, 0],
+        [7, 0],
+        [7, 2],
+        [5, 2],
+      ],
+    })
+    useScene.setState((state) => ({
+      nodes: {
+        ...state.nodes,
+        [derived.id]: derived,
+        [manual.id]: manual,
+      },
+    }))
+    expect(copySelectedNodesToEditorClipboard([runId, derived.id, manual.id])).toBe(true)
+    expect(getEditorClipboardSnapshot()?.rootIds).toEqual([runId, manual.id])
+    expect(getEditorClipboardSnapshot()?.nodes.some((node) => node.id === derived.id)).toBe(false)
+    const result = pasteEditorClipboardToLevel(targetLevelId)
+    expect(result?.pastedIds).toHaveLength(2)
+    expect(
+      Object.values(useScene.getState().nodes).filter(
+        (node) => node.type === 'slab' && node.parentId === targetLevelId,
+      ),
+    ).toHaveLength(1)
   })
 
   test('copies a selected cabinet run as one subtree instead of independent modules', () => {

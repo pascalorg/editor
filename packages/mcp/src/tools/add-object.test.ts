@@ -27,7 +27,7 @@ describe('add_object over MCP', () => {
       compiles++
       return { ...compiled, glb: new Uint8Array() }
     },
-    storeArtifact: async () => {},
+    storeArtifact: async ({ sha256 }) => sha256,
     readArtifact: async () => null,
   }
 

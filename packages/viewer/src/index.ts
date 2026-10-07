@@ -67,6 +67,7 @@ export {
   SceneGroundReplacement,
   useSceneGroundReplacement,
 } from './components/viewer/scene-ground-replacement'
+export { applyWalkthroughCameraClipping } from './components/viewer/viewer-camera'
 export {
   isViewerPresentationTextureBorrowed,
   markViewerPresentationTextureBorrowed,
@@ -155,6 +156,7 @@ export {
   disposeMaterial,
   glassMaterial,
   MONO_PALETTE,
+  materialCastsShadow,
   PRESET_PALETTES,
   type RenderShading,
   registerMaterialCacheCleanup,
