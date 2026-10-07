@@ -66,15 +66,13 @@ export function buildStairFloorplan(
       rotation: rawStair.rotation + angle,
     }
   }
-  const segments = (ctx.children ?? []).filter(
-    (child): child is StairSegmentNode => child.type === 'stair-segment',
-  )
-  const detail = measureStairDetail(
-    stair,
-    (ctx.children ?? []).filter(
-      (child): child is StairSegmentNode => child.type === 'stair-segment',
-    ),
-  )
+  const segments = (ctx.children ?? [])
+    .map((child) => ctx.resolve<StairSegmentNode>(child.id) ?? child)
+    .filter(
+      (child): child is StairSegmentNode =>
+        child.type === 'stair-segment' && child.visible !== false,
+    )
+  const detail = measureStairDetail(stair, segments)
   const entry = buildFloorplanStairEntry(stair, segments, !!detail.error)
   if (!entry) return null
   if (detail.error)
