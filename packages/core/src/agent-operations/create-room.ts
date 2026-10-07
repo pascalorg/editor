@@ -141,10 +141,14 @@ export const createRoom: AgentOperation<CreateRoomInput> = (nodes, input, contex
       )
     refuse('cannot_enclose', error.message, { levelId: level.id })
   }
+  // The refusal takes the conflict's own code: today createZone reports only a terrace overlapping
+  // a room (outdoor-room-overlap), and an indoor conflict must not borrow that name.
   if (plan.conflicts?.length)
-    refuse('outdoor_room_overlap', plan.conflicts.map((conflict) => conflict.message).join(' '), {
-      conflicts: plan.conflicts,
-    })
+    refuse(
+      plan.conflicts[0]!.code.replaceAll('-', '_'),
+      plan.conflicts.map((conflict) => conflict.message).join(' '),
+      { conflicts: plan.conflicts },
+    )
 
   const roomChanges = structureChangeBatch(plan.changes)
   if (input.color)
