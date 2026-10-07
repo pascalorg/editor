@@ -932,7 +932,6 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'locked',
     'openingManaged',
     'ownerOpeningTarget',
-    'placementAdjusted',
     'plateMigration',
     'plateMigration.demoted',
     'porch',
@@ -954,13 +953,7 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'ownerPose.runLength',
     'ownerPose.width',
   ]),
-  ...described('Display or authoring label written by the MCP tools.', [
-    'label',
-    'name',
-    'roomName',
-    'roomType',
-    'mcpTool',
-  ]),
+  ...described('Display or authoring label written by the MCP tools.', ['label', 'name']),
   ...described('IFC attribute copy: a value or IFC label, not an id.', [
     'elevation',
     'height',
@@ -1002,6 +995,7 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
   ]),
   ...described('Registry extension key, not scene-node metadata.', ['pascal:editor/floorplan']),
   ...described('Next.js page metadata export, not scene-node metadata.', ['title']),
+  ...described('An authored object: what it stands in for, as add_object was told.', ['reason']),
 ]
 
 const bare = (path: string) => path.replace(/^metadata\./, '').replace(/\[\]/g, '')

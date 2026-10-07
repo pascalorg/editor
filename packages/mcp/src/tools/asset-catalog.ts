@@ -295,21 +295,24 @@ export const MCP_CATALOG_ITEMS: AssetInput[] = [
   },
 ]
 
-export function findCatalogItem(id: string): AssetInput | undefined {
-  return MCP_CATALOG_ITEMS.find((item) => item.id === id)
+/**
+ * The items search_assets, place_items and furnish_room draw from. A host passes its own (the hosted
+ * app: its published library, as the chat searches); a standalone server keeps the built-in list.
+ */
+export type AssetCatalog = () => Promise<readonly AssetInput[]>
+
+export const builtInCatalog: AssetCatalog = async () => MCP_CATALOG_ITEMS
+
+/** A host's catalog, read once by the first call that needs it; a failed read is tried again. */
+export function cachedCatalog(load: AssetCatalog): AssetCatalog {
+  let items: Promise<readonly AssetInput[]> | null = null
+  return () =>
+    (items ??= load().catch((error) => {
+      items = null
+      throw error
+    }))
 }
 
-export function searchCatalogItems(args: {
-  query: string
-  category?: string | undefined
-}): AssetInput[] {
-  const terms = args.query.trim().toLowerCase().split(/\s+/).filter(Boolean)
-
-  return MCP_CATALOG_ITEMS.filter((item) => {
-    if (args.category && item.category !== args.category) return false
-    const haystack = [item.id, item.name, item.category, ...(item.tags ?? [])]
-      .join(' ')
-      .toLowerCase()
-    return terms.every((term) => haystack.includes(term))
-  })
+export function findCatalogItem(items: readonly AssetInput[], id: string): AssetInput | undefined {
+  return items.find((item) => item.id === id)
 }

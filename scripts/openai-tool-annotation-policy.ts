@@ -15,6 +15,8 @@ const policy = (
 
 export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   add_door: policy(false, false, false),
+  add_level: policy(false, false, false),
+  add_wall: policy(false, false, false),
   add_window: policy(false, false, false),
   add_column: policy(false, true, false),
   analyze_floorplan_image: policy(true, false, true),
@@ -30,18 +32,15 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   create_from_template: policy(false, true, false),
   create_house_from_brief: policy(false, true, false),
   create_mezzanine: policy(false, false, false),
-  create_level: policy(false, false, false),
   create_project: policy(false, false, false),
   create_roof: policy(false, false, false),
   create_room: policy(false, false, false),
-  create_stair_between_levels: policy(false, true, false),
+  create_stair: policy(false, false, false),
   fit_stair: policy(false, true, false),
   measure_stair: policy(true, false, false),
   create_story_shell: policy(false, false, false),
   create_unit: policy(false, false, false),
-  create_wall: policy(false, false, false),
   cut_floor_opening: policy(false, false, false),
-  cut_opening: policy(false, false, false),
   delete_node: policy(false, true, false),
   delete_scene: policy(false, true, false),
   delete_zone: policy(false, true, false),
@@ -71,7 +70,7 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   move_zone: policy(false, true, false),
   photo_to_scene: policy(false, true, true),
   place_design: policy(false, false, false),
-  place_item: policy(false, false, false),
+  place_items: policy(false, false, false),
   rebase_floor_reference: policy(false, true, false),
   redo: policy(false, true, false),
   remove_floor_opening: policy(false, true, false),
@@ -88,6 +87,7 @@ export const EXPECTED_OPENAI_TOOL_ANNOTATIONS = {
   validate_design: policy(true, false, false),
   validate_scene: policy(true, false, false),
   verify_scene: policy(true, false, false),
+  view_scene: policy(true, false, false),
 } as const satisfies Record<string, ToolAnnotations>
 
 const exactKeys = (value: Record<string, unknown>, expected: readonly string[]): boolean => {

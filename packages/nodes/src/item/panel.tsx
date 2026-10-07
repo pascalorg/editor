@@ -10,6 +10,7 @@ import {
   SliderControl,
   triggerSFX,
   useEditor,
+  usePlacementNotice,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Link, Link2Off, Move, Trash2 } from 'lucide-react'
@@ -38,6 +39,7 @@ export default function ItemPanel() {
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as ItemNode | undefined) : undefined,
   )
 
+  const fitWarning = usePlacementNotice(selectedId)
   const [uniformScale, setUniformScale] = useState(true)
   const nodeRef = useRef(node)
   nodeRef.current = node
@@ -92,6 +94,17 @@ export default function ItemPanel() {
       title={node.name || node.asset.name}
       width={300}
     >
+      {fitWarning && (
+        <div className="mx-1 mb-1 flex gap-2 rounded-lg bg-amber-400/10 px-3 py-2 text-xs">
+          <span className="font-semibold text-amber-400">!</span>
+          <div className="flex flex-col gap-0.5">
+            <span className="font-medium text-foreground">{fitWarning.line}</span>
+            {fitWarning.detail && (
+              <span className="text-muted-foreground">{fitWarning.detail}</span>
+            )}
+          </div>
+        </div>
+      )}
       <AuthoredParams node={node} />
 
       <PanelSection title="Position">

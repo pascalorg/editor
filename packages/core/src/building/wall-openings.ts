@@ -16,14 +16,16 @@ import {
 import { getCurtainWallConfig } from '../schema/nodes/curtain-wall'
 import type { DoorType, WindowType } from '../schema/nodes/opening-types'
 import { getWallPlaneTop } from '../services/storey'
+import { resolveWallExteriorSide } from '../systems/wall/wall-assembly'
 import { getWallCurveLength, isCurvedWall } from '../systems/wall/wall-curve'
 import { resolveWallTop } from '../systems/wall/wall-top'
 import {
   type DoorStyle,
-  getDoorStyleOverrides,
+  doorStyleLook,
   getWindowStyleOverrides,
   type WindowStyle,
 } from './opening-style-presets'
+import { windowTakesStyle } from './window-types'
 
 // The placement rules of wall openings, shared by the editor's door and window tools and by
 // every agent surface: what the editor lets a person do by hand is what an agent may do.
@@ -174,6 +176,8 @@ export type WallOpeningInput = {
   sillHeight?: number
   hingesSide?: 'left' | 'right'
   swingDirection?: 'inward' | 'outward'
+  /** A door, or a passage with no leaf (a cased opening, an arch), as the editor's door panel. */
+  openingKind?: 'door' | 'opening'
   style?: string
   force?: boolean
   openingShape?: 'rectangle' | 'rounded' | 'arch'
@@ -203,6 +207,27 @@ const metres = (value: number) => `${value.toFixed(2)} m`
  * operation behind `add_door` / `add_window` on every agent surface. The caller creates
  * `node` under `wallId`.
  */
+/**
+ * Which way a door on `wall` faces: out, when the wall knows its outside. A door's swing and a
+ * garage door's track run behind its facing (a garage door's track once ran on the street), so a door facing out opens and rolls inside, whichever way the wall was drawn. A wall
+ * that does not know its outside, or an inside wall, keeps its front.
+ */
+export function doorFacing(wall: Pick<WallNode, 'frontSide' | 'backSide'>): {
+  side?: 'front' | 'back'
+  rotation: [number, number, number]
+} {
+  const outside = resolveWallExteriorSide(wall)
+  if (outside === -1) return { side: 'back', rotation: [0, Math.PI, 0] }
+  if (outside === 1) return { side: 'front', rotation: [0, 0, 0] }
+  return { rotation: [0, 0, 0] }
+}
+
+/** The face a door placed by hand takes: out on an outside wall, else the face hovered. */
+export const placedDoorFace = (
+  wall: Pick<WallNode, 'frontSide' | 'backSide'>,
+  hovered: 'front' | 'back',
+): 'front' | 'back' => doorFacing(wall).side ?? hovered
+
 export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
   refuseParamsWithoutScript(nodes, input)
   const { kind, wallId } = input
@@ -238,6 +263,16 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
     refuse(
       'position_required',
       'Say where on the wall: t (or position) from 0 at its start to 1 at its end.',
+    )
+
+  // The renderer draws a style's panes on a Fixed window only; an operable window draws its own
+  // sashes, so a style there would be written and never seen.
+  const windowType = input.windowType ?? 'fixed'
+  if (kind === 'window' && input.style && !windowTakesStyle(windowType))
+    refuse(
+      'style_needs_fixed_window',
+      `A window style shapes a Fixed window's panes; a ${windowType} window draws its own sashes, so the style would not show. Pass windowType 'fixed' with the style, or drop the style.`,
+      { windowType, style: input.style },
     )
 
   const { compiled } = input
@@ -301,10 +336,12 @@ export function planWallOpening(nodes: Nodes, input: WallOpeningInput) {
     kind === 'door'
       ? DoorNode.parse({
           ...base,
+          ...doorFacing(wall),
           hingesSide: input.hingesSide ?? 'left',
           swingDirection: input.swingDirection ?? 'inward',
-          ...getDoorStyleOverrides(input.style as DoorStyle | undefined),
+          ...(input.style ? doorStyleLook(input.style as DoorStyle) : {}),
           ...(input.doorType ? { doorType: input.doorType } : {}),
+          ...(input.openingKind ? { openingKind: input.openingKind } : {}),
         })
       : WindowNode.parse({
           ...base,

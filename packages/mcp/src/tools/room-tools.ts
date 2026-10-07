@@ -1,545 +1,40 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { createZone, generateId } from '@pascal-app/core'
 import {
-  collectDoorKeepouts,
-  collectOccupiedFootprints,
+  achievedChanges,
+  addWallOpening,
   editedScriptParams,
-  findValidPlacement,
-  itemPlanAabb,
-  keepoutCoversPlanned,
-  keepoutForPolygonEdge,
-  type PlanAabb,
-  polygonArea,
-  polygonBounds,
+  rebuiltOpeningResult,
   rescriptOpening,
-  type Vec2,
+  type SceneNodes,
 } from '@pascal-app/core/agent-operations'
-import { addDoorTool, addWindowTool, isAgentRefusal } from '@pascal-app/core/agent-tools'
-import { planWallOpening } from '@pascal-app/core/building'
+import {
+  addDoorOutput as addDoorResult,
+  addDoorTool,
+  addWindowOutput as addWindowResult,
+  addWindowTool,
+  isAgentRefusal,
+} from '@pascal-app/core/agent-tools'
 import type {
   AnyNode,
-  AnyNodeId,
-  AssetInput,
   CompiledGeometryScript,
   GeometryScriptParamValue,
-  WallNode as WallNodeType,
 } from '@pascal-app/core/schema'
-import { ItemNode } from '@pascal-app/core/schema'
-import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { compileAndStore, type GeometryScriptHost, readScript } from './add-object'
-import { ADDITIVE_TOOL_ANNOTATIONS, READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
-import { findCatalogItem, searchCatalogItems } from './asset-catalog'
-import { ErrorCode, refusalResult, throwMcpError, toolError } from './errors'
-import {
-  type LiveSyncStatus,
-  liveSyncOutput,
-  persistencePayload,
-  publishLiveSceneSnapshot,
-} from './live-sync'
-import { measurement } from './measurement'
-import { NodeIdSchema, Vec2Schema } from './schemas'
+import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
+import { refusalResult, toolError } from './errors'
+import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { toPatches } from './shared-tools'
 
-const ROOM_TYPES = [
-  'bedroom',
-  'kitchen',
-  'bathroom',
-  'living',
-  'dining',
-  'hallway',
-  'entry',
-  'laundry',
-  'storage',
-] as const
-
-export const searchAssetsInput = {
-  query: z.string().min(1),
-  category: z.string().optional(),
-}
-
-export const searchAssetsOutput = {
-  results: z.array(z.record(z.string(), z.unknown())),
-  total: z.number(),
-}
-
-export const createRoomInput = {
-  levelId: NodeIdSchema,
-  name: z.string().min(1),
-  polygon: z.array(Vec2Schema).min(3),
-  color: z.string().optional(),
-  wallHeight: measurement('length', 'm', {
-    positive: true,
-    description: 'Wall height.',
-  }).optional(),
-  wallThickness: measurement('length', 'm', {
-    positive: true,
-    description: 'Wall thickness.',
-  }).optional(),
-  outdoor: z
-    .boolean()
-    .optional()
-    .describe(
-      'true for an outdoor room (a terrace): closed with separators where no wall runs, no walls of its own and no ceiling.',
-    ),
-}
-
-export const createRoomOutput = {
-  zoneId: z.string(),
-  /** Derived floor plate. `null` when the bridge has not reconciled yet. */
-  slabId: z.string().nullable(),
-  /** Derived ceiling. `null` when the bridge has not reconciled yet. */
-  ceilingId: z.string().nullable(),
-  /** One entry per polygon edge; `null` where no wall covers that edge. */
-  wallIds: z.array(z.string().nullable()),
-  reusedWalls: z.number(),
-  areaSqMeters: z.number(),
-  conflicts: z
-    .array(z.object({ code: z.string(), nodeIds: z.array(z.string()), message: z.string() }))
-    .optional(),
-  ...liveSyncOutput,
-}
-
-export const addDoorOutput = {
-  doorId: z.string(),
-  localX: z.number(),
-  t: z.number(),
-  position: z.number(),
-  wallLength: z.number(),
-  clamped: z.boolean(),
-  coordinateSystem: z.literal('wall-local-meters'),
-  ...liveSyncOutput,
-}
-
-export const addWindowOutput = {
-  windowId: z.string(),
-  localX: z.number(),
-  t: z.number(),
-  position: z.number(),
-  wallLength: z.number(),
-  clamped: z.boolean(),
-  coordinateSystem: z.literal('wall-local-meters'),
-  sillHeight: z.number(),
-  ...liveSyncOutput,
-}
-
-export const furnishRoomInput = {
-  levelId: NodeIdSchema.optional(),
-  zoneId: NodeIdSchema.optional(),
-  roomType: z.enum(ROOM_TYPES),
-  polygon: z.array(Vec2Schema).min(3).optional(),
-  doorWallIndex: z.number().int().min(0).optional(),
-}
-
-export const furnishRoomOutput = {
-  placed: z.number(),
-  itemIds: z.array(z.string()),
-  skipped: z.array(z.string()),
-  ...liveSyncOutput,
-}
-
-type Placement = {
-  assetId: string
-  x: number
-  z: number
-  rotationDeg?: number
-  /** Optional axes for smart re-place (along wall / into room). */
-  along?: { x: number; z: number }
-  inward?: { x: number; z: number }
-}
+/** The contract's one result (core `addWallOpening`), and the live sync's note. */
+export const addDoorOutput = { ...addDoorResult, ...liveSyncOutput }
+export const addWindowOutput = { ...addWindowResult, ...liveSyncOutput }
 
 function textResult<T extends Record<string, unknown>>(payload: T) {
   return {
     content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
     structuredContent: payload,
   }
-}
-
-function assertLevel(bridge: SceneOperations, levelId: string): AnyNode {
-  const level = bridge.getNode(levelId as AnyNodeId)
-  if (!level) throwMcpError(ErrorCode.InvalidParams, `Level not found: ${levelId}`)
-  if (level.type !== 'level') {
-    throwMcpError(ErrorCode.InvalidParams, `Node ${levelId} is a ${level.type}, expected level`)
-  }
-  if (
-    typeof level.metadata === 'object' &&
-    level.metadata !== null &&
-    'role' in level.metadata &&
-    level.metadata.role === 'roof'
-  ) {
-    throwMcpError(
-      ErrorCode.InvalidParams,
-      `Roof support level ${levelId} is not an occupied story; create rooms or furnishings on an occupied level instead`,
-    )
-  }
-  return level
-}
-
-function assertWall(bridge: SceneOperations, wallId: string): AnyNode & { type: 'wall' } {
-  const wall = bridge.getNode(wallId as AnyNodeId)
-  if (!wall) throwMcpError(ErrorCode.InvalidParams, `Wall not found: ${wallId}`)
-  if (wall.type !== 'wall') {
-    throwMcpError(ErrorCode.InvalidParams, `Node ${wallId} is a ${wall.type}, expected wall`)
-  }
-  return wall
-}
-
-function inferRoomGeometry(
-  bridge: SceneOperations,
-  levelId: string | undefined,
-  polygon: Vec2[] | undefined,
-  zoneId: string | undefined,
-) {
-  if (levelId && polygon) return { levelId, polygon }
-  if (!zoneId) {
-    throwMcpError(
-      ErrorCode.InvalidParams,
-      'Provide either levelId + polygon or zoneId so the room can be furnished',
-    )
-  }
-  const zone = bridge.getNode(zoneId as AnyNodeId)
-  if (!zone) throwMcpError(ErrorCode.InvalidParams, `Zone not found: ${zoneId}`)
-  if (zone.type !== 'zone') {
-    throwMcpError(ErrorCode.InvalidParams, `Node ${zoneId} is a ${zone.type}, expected zone`)
-  }
-  const inferredLevelId = levelId ?? zone.parentId ?? undefined
-  if (!inferredLevelId) {
-    throwMcpError(ErrorCode.InvalidParams, `Zone ${zoneId} is missing a parent level`)
-  }
-  return {
-    levelId: inferredLevelId,
-    polygon: polygon ?? (zone.polygon as Vec2[]),
-  }
-}
-
-function makeItemAsset(asset: AssetInput) {
-  return {
-    id: asset.id,
-    name: asset.name,
-    category: asset.category,
-    thumbnail: asset.thumbnail ?? '',
-    src: asset.src,
-    dimensions: asset.dimensions ?? [1, 1, 1],
-    offset: asset.offset ?? [0, 0, 0],
-    rotation: asset.rotation ?? [0, 0, 0],
-    scale: asset.scale ?? [1, 1, 1],
-    ...(asset.attachTo ? { attachTo: asset.attachTo } : {}),
-    ...(asset.tags ? { tags: asset.tags } : {}),
-    ...(asset.surface ? { surface: asset.surface } : {}),
-    ...(asset.interactive ? { interactive: asset.interactive } : {}),
-  }
-}
-
-function buildRoomPlacements(
-  roomType: (typeof ROOM_TYPES)[number],
-  polygon: Vec2[],
-  doorWallIndex = 0,
-) {
-  const bounds = polygonBounds(polygon)
-  const n = polygon.length
-  const backIdx = (doorWallIndex + Math.floor(n / 2)) % n
-  const backStart = polygon[backIdx]!
-  const backEnd = polygon[(backIdx + 1) % n]!
-  const backMidX = (backStart[0] + backEnd[0]) / 2
-  const backMidZ = (backStart[1] + backEnd[1]) / 2
-  const inwardX = bounds.centerX - backMidX
-  const inwardZ = bounds.centerZ - backMidZ
-  const inwardLen = Math.sqrt(inwardX * inwardX + inwardZ * inwardZ) || 1
-  const inX = inwardX / inwardLen
-  const inZ = inwardZ / inwardLen
-  const facingRot = (Math.atan2(inX, inZ) * 180) / Math.PI
-
-  const alongX = backEnd[0] - backStart[0]
-  const alongZ = backEnd[1] - backStart[1]
-  const alongLen = Math.sqrt(alongX * alongX + alongZ * alongZ) || 1
-  const ax = alongX / alongLen
-  const az = alongZ / alongLen
-
-  const backPos = (inset: number, lateral = 0): [number, number] => [
-    backMidX + inX * inset + ax * lateral,
-    backMidZ + inZ * inset + az * lateral,
-  ]
-
-  const sideIdx = (doorWallIndex + 1) % n
-  const sideStart = polygon[sideIdx]!
-  const sideEnd = polygon[(sideIdx + 1) % n]!
-  const sideMidX = (sideStart[0] + sideEnd[0]) / 2
-  const sideMidZ = (sideStart[1] + sideEnd[1]) / 2
-  const sideInX = bounds.centerX - sideMidX
-  const sideInZ = bounds.centerZ - sideMidZ
-  const sideInLen = Math.sqrt(sideInX * sideInX + sideInZ * sideInZ) || 1
-  const snX = sideInX / sideInLen
-  const snZ = sideInZ / sideInLen
-  const sideRot = (Math.atan2(snX, snZ) * 180) / Math.PI
-  const sideAlongX = sideEnd[0] - sideStart[0]
-  const sideAlongZ = sideEnd[1] - sideStart[1]
-  const sideAlongLen = Math.sqrt(sideAlongX * sideAlongX + sideAlongZ * sideAlongZ) || 1
-  const sax = sideAlongX / sideAlongLen
-  const saz = sideAlongZ / sideAlongLen
-  const sidePos = (inset: number, lateral = 0): [number, number] => [
-    sideMidX + snX * inset + sax * lateral,
-    sideMidZ + snZ * inset + saz * lateral,
-  ]
-
-  const placements: Placement[] = []
-  const area = polygonArea(polygon)
-
-  const addBack = (assetId: string, inset: number, lateral = 0, rotationDeg = facingRot) => {
-    const [x, z] = backPos(inset, lateral)
-    placements.push({
-      assetId,
-      x,
-      z,
-      rotationDeg,
-      along: { x: ax, z: az },
-      inward: { x: inX, z: inZ },
-    })
-  }
-  const addSide = (assetId: string, inset: number, lateral = 0, rotationDeg = sideRot) => {
-    const [x, z] = sidePos(inset, lateral)
-    placements.push({
-      assetId,
-      x,
-      z,
-      rotationDeg,
-      along: { x: sax, z: saz },
-      inward: { x: snX, z: snZ },
-    })
-  }
-
-  switch (roomType) {
-    case 'bedroom': {
-      const bedId = Math.max(bounds.width, bounds.depth) >= 3.2 ? 'double-bed' : 'single-bed'
-      const bed = findCatalogItem(bedId)
-      const [bedW = 2, , bedD = 2.5] = bed?.dimensions ?? []
-      addBack(bedId, bedD / 2 + 0.1)
-      if (alongLen > bedW + 1.1) {
-        addBack('bedside-table', 0.35, -(bedW / 2 + 0.35))
-        addBack('bedside-table', 0.35, bedW / 2 + 0.35)
-      }
-      if (area >= 10) addSide('dresser', 0.55, sideAlongLen * 0.22)
-      if (area >= 13) addSide('closet', 0.6, -sideAlongLen * 0.22)
-      break
-    }
-    case 'kitchen':
-      addBack(alongLen >= 2.6 ? 'kitchen' : 'kitchen-counter', 0.55)
-      if (alongLen >= 3.5) addBack('stove', 0.55, alongLen / 2 - 0.65)
-      addSide('fridge', 0.6, sideAlongLen * 0.25)
-      break
-    case 'bathroom':
-      addBack('toilet', 0.55, alongLen * 0.25)
-      addBack('bathroom-sink', 0.8, -alongLen * 0.2)
-      if (area >= 6.5) addSide('bathtub', 0.85)
-      else placements.push({ assetId: 'shower-square', x: bounds.centerX, z: bounds.centerZ })
-      break
-    case 'living': {
-      addBack('sofa', 0.9)
-      addBack('coffee-table', 2.1)
-      addSide('livingroom-chair', 0.85, -sideAlongLen * 0.18)
-      // TV faces the sofa from the door wall: use door-wall axes so smart
-      // re-place nudges into the room (along wall / inward), not world X/Z.
-      const doorIdx = doorWallIndex % n
-      const doorStart = polygon[doorIdx]!
-      const doorEnd = polygon[(doorIdx + 1) % n]!
-      const doorMidX = (doorStart[0] + doorEnd[0]) / 2
-      const doorMidZ = (doorStart[1] + doorEnd[1]) / 2
-      // Door-wall inward is opposite of "back wall" inward (into room from door).
-      const doorInX = -inX
-      const doorInZ = -inZ
-      placements.push({
-        assetId: 'tv-stand',
-        x: doorMidX + doorInX * 0.35,
-        z: doorMidZ + doorInZ * 0.35,
-        rotationDeg: facingRot + 180,
-        along: { x: ax, z: az },
-        inward: { x: doorInX, z: doorInZ },
-      })
-      break
-    }
-    case 'dining':
-      placements.push({ assetId: 'dining-table', x: bounds.centerX, z: bounds.centerZ })
-      placements.push({ assetId: 'dining-chair', x: bounds.centerX, z: bounds.centerZ - 0.85 })
-      placements.push({
-        assetId: 'dining-chair',
-        x: bounds.centerX,
-        z: bounds.centerZ + 0.85,
-        rotationDeg: 180,
-      })
-      if (Math.min(bounds.width, bounds.depth) >= 3) {
-        placements.push({
-          assetId: 'dining-chair',
-          x: bounds.centerX - 0.85,
-          z: bounds.centerZ,
-          rotationDeg: 270,
-        })
-        placements.push({
-          assetId: 'dining-chair',
-          x: bounds.centerX + 0.85,
-          z: bounds.centerZ,
-          rotationDeg: 90,
-        })
-      }
-      break
-    case 'laundry':
-      addBack('washing-machine', 0.6, -0.55)
-      addBack('drying-rack', 0.65, 0.65)
-      break
-    case 'entry':
-    case 'hallway':
-      if (Math.min(bounds.width, bounds.depth) >= 1.4) addSide('coat-rack', 0.35)
-      break
-    case 'storage':
-      addBack('closet', 0.6)
-      break
-  }
-
-  return { placements, bounds }
-}
-
-export function registerSearchAssets(server: McpServer): void {
-  server.registerTool(
-    'search_assets',
-    {
-      title: 'Search assets',
-      description:
-        'Search the built-in MCP item catalog by keyword. Call before place_item when you need a valid catalogItemId.',
-      inputSchema: searchAssetsInput,
-      outputSchema: searchAssetsOutput,
-      annotations: READ_ONLY_TOOL_ANNOTATIONS,
-    },
-    async ({ query, category }) => {
-      const results = searchCatalogItems({ query, category }).map((item) => ({
-        id: item.id,
-        name: item.name,
-        category: item.category,
-        tags: item.tags ?? [],
-        dimensions: item.dimensions,
-        attachTo: item.attachTo ?? null,
-      }))
-      return textResult({ results, total: results.length })
-    },
-  )
-}
-
-const WALL_EDGE_TOLERANCE = 0.2
-
-function pointToEdgeDistance(a: Vec2, b: Vec2, point: readonly [number, number]) {
-  const dx = b[0] - a[0]
-  const dz = b[1] - a[1]
-  const length = Math.hypot(dx, dz)
-  if (length < 1e-9) return Math.hypot(point[0] - a[0], point[1] - a[1])
-  return Math.abs((point[0] - a[0]) * dz - (point[1] - a[1]) * dx) / length
-}
-
-function wallCoversEdge(wall: AnyNode & { type: 'wall' }, start: Vec2, end: Vec2) {
-  const dx = end[0] - start[0],
-    dz = end[1] - start[1]
-  const lengthSq = dx * dx + dz * dz
-  const station = (p: Vec2) => ((p[0] - start[0]) * dx + (p[1] - start[1]) * dz) / lengthSq
-  const a = station(wall.start),
-    b = station(wall.end)
-  return (
-    Math.min(1, Math.max(a, b)) - Math.max(0, Math.min(a, b)) > 1e-6 &&
-    pointToEdgeDistance(start, end, wall.start) < WALL_EDGE_TOLERANCE &&
-    pointToEdgeDistance(start, end, wall.end) < WALL_EDGE_TOLERANCE
-  )
-}
-
-/** The construction the reconciler derived for a room, for the tool payload. */
-function derivedRoomSurfaces(bridge: SceneOperations, levelId: string, zoneId: string) {
-  const children = Object.values(bridge.getNodes()).filter((node) => node.parentId === levelId)
-  const plate = children.find(
-    (node) => node.type === 'slab' && node.boundary === 'auto' && node.zoneIds?.includes(zoneId),
-  )
-  const ceiling = children.find(
-    (node) => node.type === 'ceiling' && node.boundary === 'auto' && node.zoneId === zoneId,
-  )
-  return { slabId: plate?.id ?? null, ceilingId: ceiling?.id ?? null }
-}
-
-export function registerCreateRoom(server: McpServer, bridge: SceneOperations): void {
-  server.registerTool(
-    'create_room',
-    {
-      title: 'Create room',
-      description:
-        'Create a room on a level from a polygon: one wall per edge (reusing or splitting the walls already there) plus the room zone that names it. The floor plate and the ceiling are DERIVED from the room — never author a slab or a ceiling for a room, and never pass boundary/autoFromWalls. Returns wallIds in polygon edge order and the derived slabId / ceilingId. outdoor: true draws a terrace instead: separators where no wall runs and no ceiling (wallIds are null for its own sides).',
-      inputSchema: createRoomInput,
-      outputSchema: createRoomOutput,
-      annotations: ADDITIVE_TOOL_ANNOTATIONS,
-    },
-    async ({ levelId, name, polygon, color, wallHeight, wallThickness, outdoor }) => {
-      assertLevel(bridge, levelId)
-      const points = polygon as Vec2[]
-      const wallDefaults: Partial<WallNodeType> = {
-        ...(wallHeight !== undefined ? { height: wallHeight } : {}),
-        ...(wallThickness !== undefined ? { thickness: wallThickness } : {}),
-        metadata: { mcpTool: 'create_room', roomName: name },
-      }
-
-      const before = bridge.getNodes()
-      const plan = createZone(before, {
-        levelId,
-        polygon: points,
-        name,
-        enclose: !outdoor,
-        ...(outdoor ? { intent: { hasCeiling: false } } : { wall: wallDefaults }),
-        mintId: generateId,
-      })
-      if (plan.conflicts?.length)
-        return textResult({
-          zoneId: '',
-          slabId: null,
-          ceilingId: null,
-          wallIds: [],
-          reusedWalls: 0,
-          areaSqMeters: 0,
-          conflicts: plan.conflicts,
-        })
-      bridge.runAsSingleHistoryStep(() => {
-        bridge.applyPatch(
-          plan.changes.map((change) =>
-            change.op === 'create'
-              ? {
-                  ...change,
-                  node:
-                    change.node.type === 'zone'
-                      ? {
-                          ...change.node,
-                          color: color ?? '#60a5fa',
-                          metadata: { mcpTool: 'create_room' },
-                        }
-                      : change.node,
-                  parentId: change.node.parentId as AnyNodeId,
-                }
-              : change,
-          ),
-        )
-        bridge.deriveStructure([levelId as AnyNodeId])
-      })
-      const wallIds = points.map(
-        (start, i) =>
-          Object.values(bridge.getNodes()).find(
-            (node) =>
-              node.type === 'wall' &&
-              node.parentId === levelId &&
-              wallCoversEdge(node, start, points[(i + 1) % points.length]!),
-          )?.id ?? null,
-      )
-      const reusedWalls = wallIds.filter((id) => id && before[id as AnyNodeId]).length
-
-      const persistence = await publishLiveSceneSnapshot(bridge, 'create_room')
-
-      return textResult({
-        zoneId: plan.zoneId,
-        ...derivedRoomSurfaces(bridge, levelId, plan.zoneId),
-        wallIds,
-        reusedWalls,
-        areaSqMeters: Math.round(polygonArea(points) * 100) / 100,
-        ...persistencePayload(persistence),
-      })
-    },
-  )
 }
 
 /**
@@ -575,27 +70,18 @@ async function rebuildOpening(
       code: 'script_failed',
     })
   }
+  const achieved = outcome.changes
+    ? achievedChanges(nodes as SceneNodes, outcome.changes)
+    : achievedChanges(nodes as SceneNodes, {})
   if (outcome.changes) bridge.applyPatch(toPatches(outcome.changes))
-  const node = bridge.getNodes()[input.nodeId as AnyNodeId] as AnyNode & {
-    position: [number, number, number]
-    height: number
-    wallId?: string
-  }
-  const wall = node.wallId
-    ? (bridge.getNodes()[node.wallId as AnyNodeId] as WallNodeType)
-    : undefined
-  const wallLength = wall ? Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]) : 0
   const persistence = await publishLiveSceneSnapshot(bridge, `add_${kind}`)
   return textResult({
-    [kind === 'door' ? 'doorId' : 'windowId']: input.nodeId,
-    localX: node.position[0],
-    t: wallLength ? node.position[0] / wallLength : 0,
-    position: wallLength ? node.position[0] / wallLength : 0,
-    wallLength,
-    clamped: false,
-    coordinateSystem: 'wall-local-meters' as const,
-    ...(kind === 'window' ? { sillHeight: node.position[1] - node.height / 2 } : {}),
-    ...outcome.result,
+    ...rebuiltOpeningResult(
+      bridge.getNodes() as SceneNodes,
+      input.nodeId,
+      outcome.result as Record<string, unknown>,
+      achieved,
+    ),
     ...persistencePayload(persistence),
   })
 }
@@ -648,9 +134,9 @@ export function registerAddDoor(
         return rebuildOpening('door', bridge, geometryScripts, { ...input, nodeId: input.nodeId })
       const compiled = await compileOpeningScript('door', bridge, geometryScripts, input)
       if ('error' in compiled) return compiled.error
-      let planned: ReturnType<typeof planWallOpening>
+      let opening: ReturnType<typeof addWallOpening>
       try {
-        planned = planWallOpening(bridge.getNodes() as Record<string, AnyNode>, {
+        opening = addWallOpening(bridge.getNodes() as SceneNodes, {
           kind: 'door',
           ...input,
           compiled: compiled.script,
@@ -658,18 +144,9 @@ export function registerAddDoor(
       } catch (error) {
         return refusalResult(error)
       }
-      const id = bridge.createNode(planned.node, planned.wallId as AnyNodeId)
+      bridge.applyPatch(toPatches(opening.changes))
       const persistence = await publishLiveSceneSnapshot(bridge, 'add_door')
-      return textResult({
-        doorId: id,
-        localX: planned.localX,
-        t: planned.t,
-        position: planned.t,
-        wallLength: planned.wallLength,
-        clamped: planned.clamped,
-        coordinateSystem: 'wall-local-meters',
-        ...persistencePayload(persistence),
-      })
+      return textResult({ ...opening.result, ...persistencePayload(persistence) })
     },
   )
 }
@@ -693,9 +170,9 @@ export function registerAddWindow(
         return rebuildOpening('window', bridge, geometryScripts, { ...input, nodeId: input.nodeId })
       const compiled = await compileOpeningScript('window', bridge, geometryScripts, input)
       if ('error' in compiled) return compiled.error
-      let planned: ReturnType<typeof planWallOpening>
+      let opening: ReturnType<typeof addWallOpening>
       try {
-        planned = planWallOpening(bridge.getNodes() as Record<string, AnyNode>, {
+        opening = addWallOpening(bridge.getNodes() as SceneNodes, {
           kind: 'window',
           ...input,
           compiled: compiled.script,
@@ -703,155 +180,19 @@ export function registerAddWindow(
       } catch (error) {
         return refusalResult(error)
       }
-      const id = bridge.createNode(planned.node, planned.wallId as AnyNodeId)
+      bridge.applyPatch(toPatches(opening.changes))
       const persistence = await publishLiveSceneSnapshot(bridge, 'add_window')
-      return textResult({
-        windowId: id,
-        localX: planned.localX,
-        t: planned.t,
-        position: planned.t,
-        wallLength: planned.wallLength,
-        clamped: planned.clamped,
-        coordinateSystem: 'wall-local-meters',
-        sillHeight: planned.sillHeight ?? 0,
-        ...persistencePayload(persistence),
-      })
+      return textResult({ ...opening.result, ...persistencePayload(persistence) })
     },
   )
 }
 
-export function registerFurnishRoom(server: McpServer, bridge: SceneOperations): void {
-  server.registerTool(
-    'furnish_room',
-    {
-      title: 'Furnish room',
-      description:
-        'Place furniture for a room type (levelId+polygon or zoneId). Skips or nudges poses that block door clear zones or overlap existing items (rotation-aware). Parent floor items to the level.',
-      inputSchema: furnishRoomInput,
-      outputSchema: furnishRoomOutput,
-      annotations: ADDITIVE_TOOL_ANNOTATIONS,
-    },
-    async ({ levelId, zoneId, roomType, polygon, doorWallIndex }) => {
-      const room = inferRoomGeometry(bridge, levelId, polygon as Vec2[] | undefined, zoneId)
-      assertLevel(bridge, room.levelId)
-      const points = room.polygon
-      const resolvedDoorWallIndex = doorWallIndex ?? 0
-      const { placements, bounds } = buildRoomPlacements(roomType, points, resolvedDoorWallIndex)
-      const skipped: string[] = []
-      const items: AnyNode[] = []
-
-      const allNodes = Object.values(bridge.getNodes())
-      // Doors on THIS level only (stacked floors must not interact in plan).
-      const existingKeepouts = collectDoorKeepouts(allNodes, { levelId: room.levelId })
-      const doorKeepoutAabbs: PlanAabb[] = existingKeepouts.map((k) => k.aabb)
-      // Always protect this room's door-wall edge when no keep-out already covers it
-      // (other rooms may already have doors elsewhere on the same level).
-      const planned = keepoutForPolygonEdge(points, resolvedDoorWallIndex, {
-        t: 0.5,
-        width: 0.9,
-      })
-      if (
-        planned &&
-        !doorKeepoutAabbs.some((existing) => keepoutCoversPlanned(existing, planned))
-      ) {
-        doorKeepoutAabbs.push(planned)
-      }
-
-      // Existing floor items on this level + footprints we place in this batch.
-      const occupied: PlanAabb[] = collectOccupiedFootprints(allNodes, {
-        levelId: room.levelId,
-        floorOnly: true,
-      }).map((f) => f.aabb)
-
-      const roomBounds = {
-        minX: bounds.minX,
-        maxX: bounds.maxX,
-        minZ: bounds.minZ,
-        maxZ: bounds.maxZ,
-      }
-
-      for (const placement of placements) {
-        const asset = findCatalogItem(placement.assetId)
-        if (!asset) {
-          skipped.push(`${placement.assetId}: asset not found`)
-          continue
-        }
-
-        const primary = {
-          x: placement.x,
-          z: placement.z,
-          rotationDeg: placement.rotationDeg ?? 0,
-        }
-        const resolved = findValidPlacement({
-          primary,
-          dimensions: asset.dimensions,
-          doorKeepouts: doorKeepoutAabbs,
-          occupied,
-          roomBounds,
-          along: placement.along,
-          inward: placement.inward,
-        })
-
-        if (!resolved.candidate) {
-          const reason =
-            resolved.reason === 'blocks_door_clearance'
-              ? 'blocks door clearance'
-              : resolved.reason === 'outside_bounds'
-                ? 'outside room bounds'
-                : 'overlaps another item'
-          skipped.push(`${asset.id}: ${reason}`)
-          continue
-        }
-
-        const { x, z, rotationDeg } = resolved.candidate
-        const rotRad = (rotationDeg * Math.PI) / 180
-        const planAabb = itemPlanAabb([x, 0, z], asset.dimensions, rotRad)
-        occupied.push(planAabb)
-        items.push(
-          ItemNode.parse({
-            name: asset.name,
-            position: [x, 0, z],
-            rotation: [0, rotRad, 0],
-            asset: makeItemAsset(asset),
-            metadata: {
-              mcpTool: 'furnish_room',
-              roomType,
-              ...(x !== primary.x || z !== primary.z ? { placementAdjusted: true } : {}),
-            },
-          }),
-        )
-      }
-
-      let persistence: LiveSyncStatus = 'published'
-      if (items.length > 0) {
-        bridge.applyPatch(
-          items.map((item) => ({
-            op: 'create' as const,
-            node: item,
-            parentId: room.levelId as AnyNodeId,
-          })),
-        )
-        persistence = await publishLiveSceneSnapshot(bridge, 'furnish_room')
-      }
-
-      return textResult({
-        placed: items.length,
-        itemIds: items.map((item) => item.id),
-        skipped,
-        ...persistencePayload(persistence),
-      })
-    },
-  )
-}
-
+/** add_door and add_window; create_room and furnish_room are shared tools (shared-tools.ts). */
 export function registerRoomTools(
   server: McpServer,
   bridge: SceneOperations,
   geometryScripts?: GeometryScriptHost,
 ): void {
-  registerSearchAssets(server)
-  registerCreateRoom(server, bridge)
   registerAddDoor(server, bridge, geometryScripts)
   registerAddWindow(server, bridge, geometryScripts)
-  registerFurnishRoom(server, bridge)
 }

@@ -8,6 +8,13 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
+  DOOR_STYLE_LABELS,
+  DOOR_STYLES,
+  doorStyleLook,
+  doorStylesOf,
+  doorTypeChange,
+} from '@pascal-app/core/building'
+import {
   ActionButton,
   ActionGroup,
   cn,
@@ -28,20 +35,7 @@ import { constrainCurtainOpening, curtainOpeningLimits } from '../shared/curtain
 import { createOpeningPropertyPreview } from '../shared/opening-property-preview'
 import { openingPropertyPreviewHost } from '../shared/opening-property-preview-host'
 import { scaleHandleHeight } from './door-math'
-
-const doorTypeOptions = [
-  { label: 'Hinged', value: 'hinged', available: true },
-  { label: 'Double', value: 'double', available: true },
-  { label: 'French', value: 'french', available: true },
-  { label: 'Folding', value: 'folding', available: true },
-  { label: 'Pocket', value: 'pocket', available: true },
-  { label: 'Barn', value: 'barn', available: true },
-  { label: 'Sliding', value: 'sliding', available: true },
-] satisfies {
-  label: string
-  value: DoorNode['doorType']
-  available: boolean
-}[]
+import { doorTypeOptions } from './placement'
 
 const garageDoorTypeOptions = [
   { label: 'Sectional', value: 'garage-sectional', available: true },
@@ -52,81 +46,6 @@ const garageDoorTypeOptions = [
   value: DoorNode['doorType']
   available: boolean
 }[]
-
-const frenchDoorSegments: DoorNode['segments'] = [
-  {
-    type: 'glass',
-    heightRatio: 0.76,
-    columnRatios: [1, 1],
-    dividerThickness: 0.025,
-    panelDepth: 0.01,
-    panelInset: 0.04,
-  },
-  {
-    type: 'panel',
-    heightRatio: 0.24,
-    columnRatios: [1],
-    dividerThickness: 0.03,
-    panelDepth: 0.012,
-    panelInset: 0.035,
-  },
-]
-
-const foldingDoorSegments: DoorNode['segments'] = [
-  {
-    type: 'panel',
-    heightRatio: 1,
-    columnRatios: [1],
-    dividerThickness: 0.02,
-    panelDepth: 0.008,
-    panelInset: 0.025,
-  },
-]
-
-const hingedDoorSegments: DoorNode['segments'] = [
-  {
-    type: 'panel',
-    heightRatio: 0.4,
-    columnRatios: [1],
-    dividerThickness: 0.03,
-    panelDepth: 0.01,
-    panelInset: 0.04,
-  },
-  {
-    type: 'panel',
-    heightRatio: 0.6,
-    columnRatios: [1],
-    dividerThickness: 0.03,
-    panelDepth: 0.01,
-    panelInset: 0.04,
-  },
-]
-
-const defaultDoorDimensions: Record<DoorNode['doorType'], { width: number; height: number }> = {
-  hinged: { width: 0.9, height: 2.1 },
-  double: { width: 1.5, height: 2.1 },
-  french: { width: 1.5, height: 2.1 },
-  folding: { width: 1.8, height: 2.1 },
-  pocket: { width: 0.9, height: 2.1 },
-  barn: { width: 1, height: 2.1 },
-  sliding: { width: 1.5, height: 2.1 },
-  'garage-sectional': { width: 2.7, height: 2.4 },
-  'garage-rollup': { width: 2.7, height: 2.4 },
-  'garage-tiltup': { width: 2.7, height: 2.4 },
-}
-
-const defaultDoorSegmentsByType: Record<DoorNode['doorType'], DoorNode['segments']> = {
-  hinged: hingedDoorSegments,
-  double: hingedDoorSegments,
-  french: frenchDoorSegments,
-  folding: foldingDoorSegments,
-  pocket: foldingDoorSegments,
-  barn: foldingDoorSegments,
-  sliding: frenchDoorSegments,
-  'garage-sectional': foldingDoorSegments,
-  'garage-rollup': foldingDoorSegments,
-  'garage-tiltup': foldingDoorSegments,
-}
 
 function isSameDoorValue(current: unknown, next: unknown): boolean {
   if (typeof current === 'number' && typeof next === 'number') {
@@ -290,6 +209,7 @@ export default function DoorPanel() {
   const maxRoundedRadius = Math.max(0.01, Math.min(node.width / 2, node.height))
   const doorType = node.doorType ?? 'hinged'
   const isGarageDoor = node.doorCategory === 'garage' || doorType.startsWith('garage-')
+  const doorStyles = doorStylesOf(node)
   const isSwingDoor = doorType === 'hinged' || doorType === 'double' || doorType === 'french'
   const isSlideFoldDoor =
     doorType === 'folding' || doorType === 'pocket' || doorType === 'barn' || doorType === 'sliding'
@@ -331,162 +251,8 @@ export default function DoorPanel() {
     }
   }
 
-  const getDoorTypeUpdates = (nextDoorType: DoorNode['doorType']): Partial<DoorNode> => {
-    const dimensions = defaultDoorDimensions[nextDoorType]
-    const segments = structuredClone(defaultDoorSegmentsByType[nextDoorType])
-    const dimensionUpdates = {
-      width: dimensions.width,
-      height: dimensions.height,
-      position: [node.position[0], dimensions.height / 2, node.position[2]] as DoorNode['position'],
-    }
-
-    if (nextDoorType === 'double' || nextDoorType === 'french') {
-      return {
-        doorCategory: 'interior',
-        doorType: nextDoorType,
-        leafCount: 2,
-        ...dimensionUpdates,
-        handleSide: 'right',
-        segments,
-        ...(nextDoorType === 'french'
-          ? {
-              contentPadding: [0.045, 0.055],
-            }
-          : {}),
-      }
-    }
-
-    if (nextDoorType === 'folding') {
-      return {
-        doorCategory: 'interior',
-        doorType: nextDoorType,
-        leafCount: 4,
-        ...dimensionUpdates,
-        openingShape: 'rectangle',
-        handle: true,
-        handleSide: 'right',
-        trackStyle: 'visible',
-        operationState: Math.max(node.operationState ?? 0, 0.65),
-        threshold: false,
-        contentPadding: [0.03, 0.04],
-        segments,
-      }
-    }
-
-    if (nextDoorType === 'pocket') {
-      return {
-        doorCategory: 'interior',
-        doorType: nextDoorType,
-        leafCount: 1,
-        ...dimensionUpdates,
-        openingShape: 'rectangle',
-        handle: true,
-        handleSide: 'right',
-        trackStyle: 'pocket',
-        slideDirection: node.slideDirection ?? 'left',
-        operationState: node.operationState ?? 0,
-        threshold: false,
-        contentPadding: [0.035, 0.045],
-        segments,
-      }
-    }
-
-    if (nextDoorType === 'barn') {
-      return {
-        doorCategory: 'interior',
-        doorType: nextDoorType,
-        leafCount: 1,
-        ...dimensionUpdates,
-        openingShape: 'rectangle',
-        handle: true,
-        handleSide: 'right',
-        trackStyle: 'visible',
-        slideDirection: node.slideDirection ?? 'left',
-        operationState: node.operationState ?? 0,
-        threshold: false,
-        contentPadding: [0.035, 0.045],
-        segments,
-      }
-    }
-
-    if (nextDoorType === 'sliding') {
-      return {
-        doorCategory: 'interior',
-        doorType: nextDoorType,
-        leafCount: 2,
-        ...dimensionUpdates,
-        openingShape: 'rectangle',
-        handle: true,
-        handleSide: 'right',
-        trackStyle: 'visible',
-        slideDirection: node.slideDirection ?? 'left',
-        operationState: node.operationState ?? 0,
-        threshold: false,
-        contentPadding: [0.03, 0.04],
-        segments,
-      }
-    }
-
-    if (nextDoorType === 'garage-sectional') {
-      return {
-        doorCategory: 'garage',
-        doorType: nextDoorType,
-        leafCount: 1,
-        ...dimensionUpdates,
-        handle: false,
-        threshold: false,
-        openingShape: 'rectangle',
-        trackStyle: 'overhead',
-        operationState: 0,
-        garagePanelCount: Math.max(3, Math.min(8, node.garagePanelCount ?? 4)),
-        contentPadding: [0.04, 0.04],
-        segments,
-      }
-    }
-
-    if (nextDoorType === 'garage-rollup') {
-      return {
-        doorCategory: 'garage',
-        doorType: nextDoorType,
-        leafCount: 1,
-        ...dimensionUpdates,
-        handle: false,
-        threshold: false,
-        openingShape: 'rectangle',
-        trackStyle: 'overhead',
-        operationState: 0,
-        garagePanelCount: 4,
-        contentPadding: [0.04, 0.04],
-        segments,
-      }
-    }
-
-    if (nextDoorType === 'garage-tiltup') {
-      return {
-        doorCategory: 'garage',
-        doorType: nextDoorType,
-        leafCount: 1,
-        ...dimensionUpdates,
-        handle: false,
-        threshold: false,
-        openingShape: 'rectangle',
-        trackStyle: 'overhead',
-        operationState: 0,
-        garagePanelCount: 4,
-        contentPadding: [0.04, 0.04],
-        segments,
-      }
-    }
-
-    return {
-      doorCategory: 'interior',
-      doorType: nextDoorType,
-      leafCount: 1,
-      ...dimensionUpdates,
-      segments,
-      threshold: true,
-    }
-  }
+  const getDoorTypeUpdates = (nextDoorType: DoorNode['doorType']): Partial<DoorNode> =>
+    doorTypeChange(node, nextDoorType)
 
   return (
     <PanelWrapper
@@ -555,6 +321,34 @@ export default function DoorPanel() {
                 )
               })}
             </div>
+          )}
+        </PanelSection>
+      )}
+
+      {!scripted && !isOpening && !isGarageDoor && (
+        <PanelSection title="Style">
+          <div className="grid grid-cols-2 gap-2 px-1 pt-1">
+            {DOOR_STYLES.map((style) => (
+              <button
+                aria-pressed={doorStyles.includes(style)}
+                className={cn(
+                  'flex min-h-10 items-center rounded-lg border px-3 py-2 text-left text-xs transition-colors',
+                  doorStyles.includes(style)
+                    ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
+                    : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
+                )}
+                key={style}
+                onClick={() => handleUpdate(doorStyleLook(style))}
+                type="button"
+              >
+                <span className="truncate font-medium">{DOOR_STYLE_LABELS[style]}</span>
+              </button>
+            ))}
+          </div>
+          {!doorStyles.length && (
+            <p className="px-1 pt-2 text-muted-foreground text-xs">
+              Custom: the segments match no style.
+            </p>
           )}
         </PanelSection>
       )}

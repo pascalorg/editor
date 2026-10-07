@@ -1,5 +1,6 @@
 import { isScriptedNode } from '../lib/geometry-script-node'
 import type { AnyNode, ItemNode } from '../schema'
+import { requireLevel } from './level-target'
 import { levelIdOf } from './scene-queries'
 import type { AgentOperation } from './types'
 
@@ -51,6 +52,8 @@ export const findByType: AgentOperation<{ type: string; levelId?: string }> = (
   nodes,
   { type, levelId },
 ) => {
+  // A level that is not there is said, as get_zones says it, not answered with nothing found.
+  if (levelId) requireLevel(nodes, levelId)
   const word = type.trim().toLowerCase().replace(/s$/, '')
   const results: Record<string, unknown>[] = []
   for (const node of Object.values(nodes)) {

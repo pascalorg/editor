@@ -1259,6 +1259,17 @@ export type NodeDefinition<S extends ZodObject<any>> = {
     node: z.infer<S>,
     nodes: Readonly<Record<AnyNodeId, AnyNode>>,
   ) => readonly AnyNodeId[]
+  /**
+   * Why the node does not fit where it stands, for the person placing, moving or selecting it:
+   * the editor shows `line` in the HUD's "!" row while the node is in hand, and `line` with
+   * `detail` at the top of its panel. A warning, never a block. Pure: `live` is the node's
+   * in-flight drag pose, which the kind merges in its own frame. Null when it fits, or when the
+   * check doesn't apply.
+   */
+  placementNotice?: (
+    node: z.infer<S>,
+    ctx: { nodes: Readonly<Record<string, AnyNode>>; live?: LiveTransformLike },
+  ) => PlacementNotice | null
   /** Stable semantic geometry that associative measurement anchors may reference. */
   measurement?: MeasurementContribution<z.infer<S>>
   /**
@@ -2346,6 +2357,9 @@ export type LiveTransformLike = {
   position: [number, number, number]
   rotation: number
 }
+
+/** What `NodeDefinition.placementNotice` says: a one-line warning and an optional detail. */
+export type PlacementNotice = { line: string; detail?: string }
 
 export type RotatableConfig = {
   axes: ReadonlyArray<'x' | 'y' | 'z'>

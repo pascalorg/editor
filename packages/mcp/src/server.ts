@@ -7,8 +7,10 @@ import { registerResources } from './resources'
 import type { SceneStore } from './storage/types'
 import { registerTools } from './tools'
 import type { GeometryScriptHost } from './tools/add-object'
+import { type AssetCatalog, cachedCatalog } from './tools/asset-catalog'
 import { registerHostedServiceTools } from './tools/hosted-services'
 import { normalizeToolSchemaDialect } from './tools/normalize-schema-dialect'
+import type { SceneViewHost } from './tools/view-scene'
 import { registerVisionTools } from './tools/vision'
 import { version } from './version'
 
@@ -33,24 +35,39 @@ export type CreatePascalMcpServerOptions = {
    * Experimental task-based tool registrations are outside this hook.
    */
   executeTool?: PascalMcpToolExecutor
+  /**
+   * The items search_assets, place_items and furnish_room draw from, read once per server. The
+   * hosted app passes its published library; without it, a small built-in list.
+   */
+  catalog?: AssetCatalog
   /** Runs and stores `add_object` modules; without it the tool answers `scripts_unavailable`. */
   geometryScripts?: GeometryScriptHost
   /** Optional authenticated hosted services; local scene tools remain usable without them. */
   services?: HostedServiceExecutor
+  /** Asks an editor open on the project for a picture (`view_scene`); without it, refused. */
+  sceneViews?: SceneViewHost
+  /** Lines the host adds to what a client reads at connect (the person's own settings). */
+  instructions?: string
 }
 
 export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpServer {
-  const server = new McpServer({
-    name: opts.name ?? 'pascal-mcp-server',
-    version: opts.version ?? version,
-  })
+  // A client shows these before the agent's first call.
+  const server = new McpServer(
+    { name: opts.name ?? 'pascal-mcp-server', version: opts.version ?? version },
+    opts.instructions ? { instructions: opts.instructions } : undefined,
+  )
   if (opts.executeTool) installToolExecutor(server, opts.executeTool)
   const operations =
     opts.operations ?? createSceneOperations({ bridge: opts.bridge, store: opts.store })
-  registerTools(server, operations, opts.geometryScripts)
+  const catalog = opts.catalog ? cachedCatalog(opts.catalog) : undefined
+  registerTools(server, operations, {
+    catalog,
+    geometryScripts: opts.geometryScripts,
+    sceneViews: opts.sceneViews,
+  })
   registerVisionTools(server, operations)
   if (opts.services) registerHostedServiceTools(server, opts.services)
-  registerResources(server, operations)
+  registerResources(server, operations, catalog)
   registerPrompts(server, operations)
   normalizeToolSchemaDialect(server)
   return server

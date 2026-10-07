@@ -3,6 +3,7 @@ import {
   BuildingNode,
   CeilingNode,
   DoorNode,
+  FloorOpeningNode,
   ItemNode,
   LevelNode,
   RoofNode,
@@ -13,6 +14,7 @@ import {
   WindowNode,
   ZoneNode,
 } from '../../schema'
+import { authoredItem } from './add-object-cases'
 import type { AgentToolCase, SceneGraph } from './cases'
 
 /**
@@ -79,6 +81,13 @@ function room(levelId: string, tag: string): AnyNode[] {
     CeilingNode.parse({ id: `ceiling_${tag}`, parentId: levelId, polygon: ROOM }),
   ]
 }
+
+const STAIR_HOLE: [number, number][] = [
+  [1.5, 0.2],
+  [2.5, 0.2],
+  [2.5, 2.2],
+  [1.5, 2.2],
+]
 
 const stairOn = (levelId: string, extra: Record<string, unknown> = {}) => {
   const flight = StairSegmentNode.parse({
@@ -383,6 +392,72 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
     // Only core: a live store cuts the opening itself when the scene loads, as the editor does.
     { surfaces: ['core'] },
   ),
+  // Since owned floor openings (#976) a stair's opening is a floor-opening node on the floor
+  // above, owned by the stair; the slab hole it cuts carries the opening, not the stair.
+  verify(
+    "a stair whose owned floor opening sits on the floor above has its opening",
+    () =>
+      twoStoreys(
+        ...stairOn('level_0', {
+          fromLevelId: 'level_0',
+          toLevelId: 'level_1',
+          slabOpeningMode: 'destination',
+        }),
+        FloorOpeningNode.parse({
+          id: 'floor-opening_stair',
+          parentId: 'level_1',
+          polygon: STAIR_HOLE,
+          source: 'stair',
+          ownerId: 'stair_level_0',
+          surfaceId: 'slab_upper',
+          drawnOn: 'floor',
+        }),
+      ),
+    { lacks: ['stair_no_opening'] },
+    { surfaces: ['core'] },
+  ),
+  verify(
+    'a stair whose only owned opening is drawn on its own ceiling still misses the floor above',
+    () =>
+      twoStoreys(
+        ...stairOn('level_0', {
+          fromLevelId: 'level_0',
+          toLevelId: 'level_1',
+          slabOpeningMode: 'destination',
+        }),
+        FloorOpeningNode.parse({
+          id: 'floor-opening_ceiling',
+          parentId: 'level_0',
+          polygon: STAIR_HOLE,
+          source: 'stair',
+          ownerId: 'stair_level_0',
+          drawnOn: 'ceiling',
+        }),
+      ),
+    { contains: ['stair_no_opening'] },
+    { surfaces: ['core'] },
+  ),
+  verify(
+    'a stair whose only owned opening is drawn on its own ceiling still misses the floor above',
+    () =>
+      twoStoreys(
+        ...stairOn('level_0', {
+          fromLevelId: 'level_0',
+          toLevelId: 'level_1',
+          slabOpeningMode: 'destination',
+        }),
+        FloorOpeningNode.parse({
+          id: 'floor-opening_ceiling',
+          parentId: 'level_0',
+          polygon: STAIR_HOLE,
+          source: 'stair',
+          ownerId: 'stair_level_0',
+          drawnOn: 'ceiling',
+        }),
+      ),
+    { contains: ['stair_no_opening'] },
+    { surfaces: ['core'] },
+  ),
   verify(
     "a stair's floor opening is checked in its own building, not in the house next door",
     () =>
@@ -468,5 +543,45 @@ export const VERIFY_SCENE_CASES: AgentToolCase[] = [
     { result: { valid: false }, contains: ['schema_invalid'] },
     // Only core: a live store and a bridge would not hold a node that fails its schema.
     { surfaces: ['core'] },
+  ),
+  // Each authored object stands in for something Pascal has no type for: the list names the gaps.
+  verify(
+    'authored objects are listed with what they stand in for',
+    () =>
+      scene(
+        building(),
+        level('level_0', 0),
+        ...room('level_0', 'ground'),
+        authoredItem('item_lantern', 'level_0', {
+          name: 'Porch lantern',
+          category: 'light',
+          size: [0.2, 0.4, 0.2],
+        }),
+        authoredItem('item_cornice', 'level_0', {
+          name: 'Cornice',
+          category: 'trim',
+          reason: 'Pascal has no cornice type.',
+          size: [4, 0.3, 0.4],
+        }),
+        ItemNode.parse({
+          id: 'item_sofa',
+          parentId: 'level_0',
+          position: [2, 0, 2],
+          asset: asset('sofa', [2, 0.8, 0.9]),
+        }),
+      ),
+    {
+      result: {
+        authoredObjects: [
+          {
+            id: 'item_cornice',
+            name: 'Cornice',
+            category: 'trim',
+            reason: 'Pascal has no cornice type.',
+          },
+          { id: 'item_lantern', name: 'Porch lantern', category: 'light', reason: null },
+        ],
+      },
+    },
   ),
 ]

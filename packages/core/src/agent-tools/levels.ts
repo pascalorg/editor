@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { measurement } from './measurement'
 import { NodeId } from './node-id'
 
 export const listLevelsTool = {
@@ -10,7 +11,7 @@ export const listLevelsTool = {
 }
 
 // `level` is the chat's older name for the same parameter; threads and habits still use it.
-const levelTarget = {
+export const levelTarget = {
   levelId: NodeId.optional().describe(
     'The level, by an id list_levels returned; an id made up from a name ("level_1", "level_ground") does not exist. Default: the floor the person is viewing, else the lowest floor.',
   ),
@@ -41,6 +42,32 @@ export const getZonesTool = {
   input: levelTarget,
 }
 
+export const addLevelTool = {
+  name: 'add_level',
+  title: 'Add level',
+  description:
+    'Add an empty level to a building, as the editor does: above its highest level, or below its lowest for a basement. On a scene with no building (a new or cleared scene), it starts the scene as the editor does: a site, a building and its ground level. To copy a floor with its content, use duplicate_level.',
+  input: {
+    buildingId: NodeId.optional().describe(
+      "The building. Default: the building of the floor the person is viewing, else the scene's only building.",
+    ),
+    position: z
+      .enum(['above', 'below'])
+      .optional()
+      .describe('above (default): over the highest level; below: under the lowest, a basement.'),
+    name: z
+      .string()
+      .min(1)
+      .max(120)
+      .optional()
+      .describe('Name of the level, e.g. "Basement", "Attic".'),
+    height: measurement('length', 'm', {
+      positive: true,
+      description: 'Floor-to-floor storey height (default 2.5 m).',
+    }).optional(),
+  },
+}
+
 export const duplicateLevelTool = {
   name: 'duplicate_level',
   title: 'Duplicate level',
@@ -67,12 +94,4 @@ export const duplicateLevelTool = {
         'What to copy, as in the editor: everything (default); structure (walls, zones, slabs, ceilings, roofs, stairs, doors, windows) without materials; structure with its materials; or structure and furniture.',
       ),
   },
-}
-
-export const verifySceneTool = {
-  name: 'verify_scene',
-  title: 'Verify scene',
-  description:
-    'Check the whole scene after complex edits, and before retrying a failed tool: per-level content and roles (storey, roof-only, support), then every problem found, each with a type: empty levels, walls with no room or door, rooms with no floor or ceiling, storeys with no stair, roof levels misused, openings off their wall, stairs off their slab or blocked, furniture blocking a door or overlapping, nodes their schema rejects.',
-  input: {},
 }

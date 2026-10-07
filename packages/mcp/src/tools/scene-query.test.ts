@@ -364,7 +364,10 @@ describe('scene query tools', () => {
     )
   })
 
-  test('verify_scene reports stair wall obstructions and missing destination slab openings', async () => {
+  // The live store cuts the stair's destination opening itself (an owned floor-opening on the upper
+  // floor), so only the obstruction is real; reporting the opening missing was a false
+  // stair_no_opening.
+  test('verify_scene reports a stair wall obstruction, not the opening the store cut', async () => {
     const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
     const ground = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
     const upper = LevelNode.parse({ name: 'Upper Floor', level: 1 })
@@ -409,8 +412,8 @@ describe('scene query tools', () => {
     expect(parsed.issues.map((issue: { message: string }) => issue.message).join('\n')).toContain(
       'obstructs stair Main Stair',
     )
-    expect(parsed.issues.map((issue: { message: string }) => issue.message).join('\n')).toContain(
-      'no destination slab opening',
-    )
+    expect(
+      parsed.issues.map((issue: { message: string }) => issue.message).join('\n'),
+    ).not.toContain('no destination slab opening')
   })
 })
