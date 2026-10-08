@@ -1,7 +1,5 @@
 'use client'
 
-import { DEFAULT_ZONE_COLOR } from '@pascal-app/core'
-import { useZoneDisplayColor } from '../../../hooks/use-zone-display-color'
 import {
   type AnyNode,
   type AnyNodeId,
@@ -396,10 +394,13 @@ function MezzanineRows({ room }: { room: RoomSelectionRecord }) {
  * the label tint, never a finish (finishes are painted).
  */
 function RoomColorDot({ zoneId }: { zoneId: string }) {
-  const color = useZoneDisplayColor(zoneId)
+  const color = useScene((state) => {
+    const zone = state.nodes[zoneId as AnyNodeId]
+    return zone?.type === 'zone' ? zone.color : undefined
+  })
   return (
     <ColorDot
-      color={color ?? DEFAULT_ZONE_COLOR}
+      color={color ?? '#3b82f6'}
       label="Room colour — used in the plan and labels"
       onChange={(next) => useScene.getState().updateNode(zoneId as AnyNodeId, { color: next })}
       side="bottom"

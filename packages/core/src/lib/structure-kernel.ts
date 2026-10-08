@@ -2,7 +2,7 @@ import type { AnyNode, AnyNodeId, SeparatorNode, WallNode } from '../schema'
 import { CeilingNode } from '../schema/nodes/ceiling'
 import { SlabNode } from '../schema/nodes/slab'
 import type { SurfacePaintRegion } from '../schema/nodes/surface-paint-region'
-import { ZoneNode } from '../schema/nodes/zone'
+import type { ZoneNode } from '../schema/nodes/zone'
 import {
   CEILING_CLAMP_MARGIN,
   getCeilingClampBound,
@@ -40,6 +40,7 @@ import {
   type ZoneFaceFit,
   zoneFaceFits,
 } from './room-zone-adoption'
+import { newZone } from './new-zone'
 
 export const ORPHAN_MERGE_COVERAGE_THRESHOLD = 0.6
 
@@ -333,7 +334,7 @@ function planLevelStructure({
     if (source) sourceByFace.set(index, source)
     const zone =
       survivor ??
-      ZoneNode.parse({
+      newZone({
         id: mintId('zone'),
         parentId: levelId,
         name: nextRoomName(),

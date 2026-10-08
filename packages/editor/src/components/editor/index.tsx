@@ -56,6 +56,7 @@ import {
 } from '../../lib/scene'
 import { disposeSFXBus, initSFXBus } from '../../lib/sfx-bus'
 import { useUnitFocusRules } from '../../lib/units'
+import { useViewerFloorDisplay } from '../../lib/viewer-selection'
 import { type CameraHintAction, useCameraHintFocus } from '../../store/use-camera-hint-focus'
 import useEditor from '../../store/use-editor'
 import useFloorplanMode from '../../store/use-floorplan-mode'
@@ -85,6 +86,8 @@ import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/set
 import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
+import { ParametricViewerRooms } from '../viewer/viewer-rooms'
+import { ViewerSelectionManager } from '../viewer/viewer-selection-manager'
 import { ViewerStage } from '../viewer/viewer-stage'
 import type { ViewerStageMode } from '../viewer/viewer-stage-modes'
 import { CaptureCameraRig } from './capture-camera-rig'
@@ -441,18 +444,12 @@ type CameraControlHint = {
   alternativeKeys?: ShortcutKey[]
 }
 
-const EDITOR_CAMERA_CONTROL_HINTS: CameraControlHint[] = [
+const CAMERA_CONTROL_HINTS: CameraControlHint[] = [
   {
     action: 'Pan',
     keys: [{ value: 'Space' }, { value: 'Left click' }],
     alternativeKeys: [{ value: 'Middle click' }],
   },
-  { action: 'Rotate', keys: [{ value: 'Right click' }] },
-  { action: 'Zoom', keys: [{ value: 'Scroll' }] },
-]
-
-const PREVIEW_CAMERA_CONTROL_HINTS: CameraControlHint[] = [
-  { action: 'Pan', keys: [{ value: 'Left click' }] },
   { action: 'Rotate', keys: [{ value: 'Right click' }] },
   { action: 'Zoom', keys: [{ value: 'Scroll' }] },
 ]
@@ -563,14 +560,8 @@ function CameraControlHintItem({ hint }: { hint: CameraControlHint }) {
   )
 }
 
-function ViewerCanvasControlsHint({
-  isPreviewMode,
-  onDismiss,
-}: {
-  isPreviewMode: boolean
-  onDismiss: () => void
-}) {
-  const all = isPreviewMode ? PREVIEW_CAMERA_CONTROL_HINTS : EDITOR_CAMERA_CONTROL_HINTS
+function ViewerCanvasControlsHint({ onDismiss }: { onDismiss: () => void }) {
+  const all = CAMERA_CONTROL_HINTS
   // A host teaching one gesture at a time narrows this to the one it is asking
   // for, and to nothing once it is done. Null — the default — is all of them.
   const focus = useCameraHintFocus((state) => state.actions)
@@ -1212,10 +1203,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
             isVersionPreviewMode={isVersionPreviewMode}
           />
           {!showLoader && isCameraControlsHintVisible && !isFirstPersonMode ? (
-            <ViewerCanvasControlsHint
-              isPreviewMode={isPreviewMode}
-              onDismiss={dismissCameraControlsHint}
-            />
+            <ViewerCanvasControlsHint onDismiss={dismissCameraControlsHint} />
           ) : null}
           <SelectionPersistenceManager enabled={hasLoadedInitialScene && !showLoader} />
           <Viewer
@@ -1280,6 +1268,7 @@ function PreviewStage({
     [onModeChange],
   )
 
+  useViewerFloorDisplay()
   const stageMode = isFirstPersonMode || !hasFloorplan ? '3d' : mode
   const stageModes = hasFloorplan && !isFirstPersonMode ? undefined : (['3d'] as const)
 
@@ -1554,10 +1543,13 @@ function EditorContent({
 
   const firstPersonPreviousLevelRef = useRef(useViewer.getState().selection.levelId)
   const wasFirstPersonModeRef = useRef(isFirstPersonMode)
+  const firstPersonWasPreviewRef = useRef(isPreviewMode)
 
   useEffect(() => {
     const wasFirstPersonMode = wasFirstPersonModeRef.current
+    const wasPreviewMode = firstPersonWasPreviewRef.current
     wasFirstPersonModeRef.current = isFirstPersonMode
+    firstPersonWasPreviewRef.current = isPreviewMode
 
     if (isFirstPersonMode && !wasFirstPersonMode) {
       const viewer = useViewer.getState()
@@ -1576,7 +1568,8 @@ function EditorContent({
     firstPersonPreviousLevelRef.current = null
     viewer.setWalkthroughMode(false)
 
-    if (!previousLevelId) return
+    // Leaving Preview has already restored the editor's complete selection.
+    if ((wasPreviewMode && !isPreviewMode) || !previousLevelId) return
 
     const previousLevelNode = useScene.getState().nodes[previousLevelId]
     if (previousLevelNode?.type === 'level') {
@@ -1586,7 +1579,7 @@ function EditorContent({
         selectedIds: [],
       })
     }
-  }, [isFirstPersonMode])
+  }, [isFirstPersonMode, isPreviewMode])
 
   const previewViewerContent = (
     <Viewer
@@ -1594,10 +1587,11 @@ function EditorContent({
       disablePostFx={disablePostFx}
       hoverStyles={EDITOR_HOVER_STYLES}
       renderContext="editor"
-      selectionManager="default"
+      selectionManager="custom"
     >
       <ExportManager />
-      <ViewerZoneSystem />
+      <ViewerSelectionManager />
+      <ParametricViewerRooms />
       <CeilingSystem />
       <RoofEditSystem />
       <StairEditSystem />

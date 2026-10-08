@@ -5,6 +5,7 @@ import {
   type AnyNodeId,
   type CameraControlEvent,
   type CameraControlFitSceneEvent,
+  type CameraControlFrameEvent,
   type CameraPose,
   emitter,
   sceneRegistry,
@@ -51,8 +52,9 @@ import {
   ORBIT_TARGET_HEIGHT,
 } from '../../lib/orbit-floor-clearance'
 import { editorOwnsOneFingerDrag } from '../../lib/touch-gesture-priority'
+import { frameViewerCamera } from '../../lib/viewer-selection'
 import { publishCameraPose } from '../../store/camera-pose-store'
-import useEditor from '../../store/use-editor'
+import useEditor, { takePreviewCameraRestore } from '../../store/use-editor'
 import {
   useActiveHandleDrag,
   useEndpointReshape,
@@ -521,11 +523,21 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
 
     emitter.on('camera-controls:apply-pose', handleAppliedPose)
     emitter.on('camera-controls:cancel-pose', cancelPoseApplication)
+    if (!isPreviewMode) {
+      const restore = takePreviewCameraRestore()
+      if (restore) handleAppliedPose(restore)
+    }
     return () => {
       emitter.off('camera-controls:apply-pose', handleAppliedPose)
       emitter.off('camera-controls:cancel-pose', cancelPoseApplication)
     }
-  }, [applyPendingPose, cancelPoseApplication, freezeActivePoseInterpolation, isFirstPersonMode])
+  }, [
+    applyPendingPose,
+    cancelPoseApplication,
+    freezeActivePoseInterpolation,
+    isFirstPersonMode,
+    isPreviewMode,
+  ])
 
   useEffect(() => cancelPoseApplication, [cancelPoseApplication])
 
@@ -757,13 +769,14 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
         ? CameraControlsImpl.ACTION.ZOOM
         : CameraControlsImpl.ACTION.DOLLY
 
+    // Left click selects, in Preview as in the published viewer.
     return {
-      left: isPreviewMode ? CameraControlsImpl.ACTION.SCREEN_PAN : CameraControlsImpl.ACTION.NONE,
+      left: CameraControlsImpl.ACTION.NONE,
       middle: CameraControlsImpl.ACTION.SCREEN_PAN,
       right: CameraControlsImpl.ACTION.ROTATE,
       wheel: wheelAction,
     }
-  }, [cameraMode, isPreviewMode])
+  }, [cameraMode])
 
   // Touch gestures (mobile / trackpad).
   // - One finger drag    → rotate by default (much easier on a phone), but
@@ -879,10 +892,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       controls.current.mouseButtons.wheel = wheelAction
       controls.current.mouseButtons.middle = CameraControlsImpl.ACTION.SCREEN_PAN
       controls.current.mouseButtons.right = CameraControlsImpl.ACTION.ROTATE
-      if (isPreviewMode) {
-        // In preview mode, left-click is always pan (viewer-style)
-        controls.current.mouseButtons.left = CameraControlsImpl.ACTION.SCREEN_PAN
-      } else if (space) {
+      if (space) {
         controls.current.mouseButtons.left = CameraControlsImpl.ACTION.SCREEN_PAN
       } else {
         controls.current.mouseButtons.left = CameraControlsImpl.ACTION.NONE
@@ -1018,14 +1028,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       clearNavigationCursor()
       cameraDraggingLifecycle.end()
     }
-  }, [
-    beginLocalCameraInteraction,
-    cameraDraggingLifecycle,
-    cameraMode,
-    gl,
-    isPreviewMode,
-    isFirstPersonMode,
-  ])
+  }, [beginLocalCameraInteraction, cameraDraggingLifecycle, cameraMode, gl, isFirstPersonMode])
 
   // `controlstart` fires only for user pointer interactions. Pointerdowns
   // mapped to ACTION.NONE must not flag the camera as dragging because no
@@ -1038,18 +1041,18 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     })
   }, [beginLocalCameraInteraction])
 
-  // Preview mode: auto-navigate camera to selected node (viewer behavior)
-  const previewTargetNodeId = isPreviewMode
-    ? (selection.zoneId ?? selection.levelId ?? selection.buildingId)
-    : null
-
+  // Preview opens on the editor's floor (or building, or site) framed the
+  // viewer's way; afterwards only the viewer navigation moves the camera
+  // (`camera-controls:frame`), never a canvas selection.
   useEffect(() => {
     if (!(isPreviewMode && controls.current) || isFirstPersonMode) return
 
     const nodes = useScene.getState().nodes
-    let node = previewTargetNodeId ? nodes[previewTargetNodeId] : null
+    const { selection: opening } = useViewer.getState()
+    const openingNodeId = opening.levelId ?? opening.buildingId
+    let node = openingNodeId ? nodes[openingNodeId as AnyNodeId] : null
 
-    if (!previewTargetNodeId) {
+    if (!openingNodeId) {
       const site = Object.values(nodes).find((n) => n.type === 'site')
       node = site || null
     }
@@ -1082,10 +1085,10 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       return
     }
 
-    if (!previewTargetNodeId) return
+    if (!openingNodeId) return
 
     // Calculate camera position from bounding box
-    const object3D = sceneRegistry.nodes.get(previewTargetNodeId)
+    const object3D = sceneRegistry.nodes.get(openingNodeId)
     if (!object3D) return
 
     tempBox.setFromObject(object3D)
@@ -1104,7 +1107,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       tempCenter.z,
       true,
     )
-  }, [isPreviewMode, isFirstPersonMode, previewTargetNodeId])
+  }, [isPreviewMode, isFirstPersonMode])
 
   // Preset capture auto-framing — when `setCaptureMode({ mode: 'preset',
   // isolated })` fires, fly the camera to a pose that fits the union
@@ -1294,6 +1297,12 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       focusNode(nodeId)
     }
 
+    const handleFrame = (event: CameraControlFrameEvent) => {
+      if (isFirstPersonMode || !controls.current) return
+      cancelPoseApplication()
+      frameViewerCamera(controls.current, camera, event)
+    }
+
     const handleFitScene = ({ bounds }: CameraControlFitSceneEvent) => {
       if (isFirstPersonMode || !controls.current || isPreviewMode) return
       const groundY = orbitGroundY(lastLevelId.current)
@@ -1322,6 +1331,7 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
 
     emitter.on('camera-controls:capture', handleNodeCapture)
     emitter.on('camera-controls:focus', handleNodeFocus)
+    emitter.on('camera-controls:frame', handleFrame)
     emitter.on('camera-controls:view', handleNodeView)
     emitter.on('camera-controls:top-view', handleTopView)
     emitter.on('camera-controls:orbit-cw', handleOrbitCW)
@@ -1331,13 +1341,14 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     return () => {
       emitter.off('camera-controls:capture', handleNodeCapture)
       emitter.off('camera-controls:focus', handleNodeFocus)
+      emitter.off('camera-controls:frame', handleFrame)
       emitter.off('camera-controls:view', handleNodeView)
       emitter.off('camera-controls:top-view', handleTopView)
       emitter.off('camera-controls:orbit-cw', handleOrbitCW)
       emitter.off('camera-controls:orbit-ccw', handleOrbitCCW)
       emitter.off('camera-controls:fit-scene', handleFitScene)
     }
-  }, [focusNode, isPreviewMode, isFirstPersonMode])
+  }, [camera, cancelPoseApplication, focusNode, isPreviewMode, isFirstPersonMode])
 
   const onTransitionStart = useCallback(() => {
     cameraDraggingLifecycle.begin()

@@ -36,6 +36,11 @@
       "import": "./dist/registry/index.js",
       "default": "./dist/registry/index.js"
     },
+    "./zone-colors": {
+      "types": "./dist/lib/zone-colors.d.ts",
+      "import": "./dist/lib/zone-colors.js",
+      "default": "./dist/lib/zone-colors.js"
+    },
     "./polygon-boolean": {
       "types": "./dist/lib/polygon-boolean.d.ts",
       "import": "./dist/lib/polygon-boolean.js",

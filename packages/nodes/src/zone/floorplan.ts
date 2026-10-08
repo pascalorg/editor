@@ -6,7 +6,6 @@ import {
   polygonInteriorPoint,
   type SlabNode,
   type ZoneNode,
-  zoneDisplayColor,
 } from '@pascal-app/core'
 import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
 import {
@@ -44,9 +43,8 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
     return { kind: 'group', children: [{ kind: 'polygon', points, fill: 'none', stroke: 'none' }] }
   }
   const unit = owningUnitForZone(node, ctx.resolve)
-  const color = zoneDisplayColor(node, (id) => ctx.resolve(id))
-  const tintColor = unit?.color ?? color
-  const stroke = color
+  const tintColor = unit?.color ?? node.color
+  const stroke = node.color
   const focusOpacity =
     view?.focusedUnitId && !view.focusedUnitMemberIds?.includes(node.id) ? 0.35 : 1
   const isRoom = node.spaceRole === 'room'

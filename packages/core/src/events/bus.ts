@@ -297,6 +297,16 @@ export interface CameraControlFitSceneEvent {
   }
 }
 
+/**
+ * Frames something for the viewer surfaces' navigation (a floor, a room, a
+ * unit): the camera owner sets the distance and keeps its heading. A view
+ * saved on the node wins over the box.
+ */
+export interface CameraControlFrameEvent {
+  bounds: { min: [number, number, number]; max: [number, number, number] } | null
+  pose?: { position: [number, number, number]; target: [number, number, number] }
+}
+
 export interface CameraPose {
   position: [number, number, number]
   target: [number, number, number]
@@ -314,6 +324,7 @@ type CameraControlEvents = {
   'camera-controls:orbit-cw': undefined
   'camera-controls:orbit-ccw': undefined
   'camera-controls:fit-scene': CameraControlFitSceneEvent
+  'camera-controls:frame': CameraControlFrameEvent
   'camera-controls:generate-thumbnail': ThumbnailGenerateEvent
   'camera-controls:apply-pose': CameraPose
   'camera-controls:cancel-pose': undefined

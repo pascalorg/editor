@@ -28,6 +28,7 @@ import {
   isCurvedWall,
   type LevelNode,
   loadAssetUrl,
+  newZone,
   nodeRegistry,
   normalizeWallCurveOffset,
   type Point2D,
@@ -56,7 +57,6 @@ import {
   WindowNode as WindowNodeSchema,
   wallClosesRoom,
   wallRectangleCorners,
-  ZoneNode as ZoneNodeSchema,
 } from '@pascal-app/core'
 import { useSegmentDraftChain, useWallSnapIndicator } from '@pascal-app/editor'
 import { getSceneTheme, useViewer } from '@pascal-app/viewer'
@@ -7899,8 +7899,7 @@ export function FloorplanPanel({
       }
 
       const { createNode, updateNode, nodes } = useScene.getState()
-      // No colour: an unpicked zone shows one derived from its neighbours.
-      const zone = ZoneNodeSchema.parse({
+      const zone = newZone({
         name: nextZoneName(nodes),
         polygon: points.map(([x, z]) => [x, z] as [number, number]),
       })

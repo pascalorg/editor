@@ -1,5 +1,4 @@
-import { DEFAULT_ZONE_COLOR, useScene, type ZoneNode } from '@pascal-app/core'
-import { useZoneDisplayColor } from './../../../../../hooks/use-zone-display-color'
+import { useScene, type ZoneNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { memo, useCallback, useState } from 'react'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
@@ -29,7 +28,7 @@ export const ZoneTreeNode = memo(function ZoneTreeNode({
   const [isEditing, setIsEditing] = useState(false)
   const updateNode = useScene((state) => state.updateNode)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
-  const color = useZoneDisplayColor(nodeId)
+  const color = useScene((s) => (s.nodes[nodeId] as ZoneNode | undefined)?.color)
   const polygon = useScene((s) => (s.nodes[nodeId] as ZoneNode | undefined)?.polygon ?? [])
   const isSelected = useZoneSelected(nodeId)
   const kind = useScene((s) => zoneKindLabel(s.nodes[nodeId] as ZoneNode | undefined))
@@ -58,7 +57,7 @@ export const ZoneTreeNode = memo(function ZoneTreeNode({
       expanded={false}
       hasChildren={false}
       icon={
-        <ColorDot color={color ?? DEFAULT_ZONE_COLOR} onChange={(c) => updateNode(nodeId, { color: c })} />
+        <ColorDot color={color ?? '#3b82f6'} onChange={(c) => updateNode(nodeId, { color: c })} />
       }
       isHovered={isHovered}
       isLast={isLast}

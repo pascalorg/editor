@@ -33,7 +33,7 @@ export const createRoomTool = {
       .string()
       .optional()
       .describe(
-        'Hex colour of the room zone, e.g. "#22c55e"; omit it to get one that differs from the neighbouring rooms.',
+        'Hex colour of the room zone, e.g. "#22c55e"; omit it and the room gets a palette colour picked from its id.',
       ),
     wallHeight: measurement('length', 'm', {
       positive: true,

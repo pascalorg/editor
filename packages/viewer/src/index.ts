@@ -33,11 +33,10 @@ export {
   buildGlbReplaceNodes,
 } from './components/viewer/glb-reference-nodes'
 export {
-  type GlbHover,
-  type GlbIdentity,
-  type GlbLevel,
+  type GlbPickEvent,
   GlbScene,
   type GlbWalkthrough,
+  resolveGlbPick,
 } from './components/viewer/glb-scene'
 export {
   CROUCH_CAPSULE,

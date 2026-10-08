@@ -1,7 +1,8 @@
 import { GROUND_SUPPORT_ID } from '../../hooks/spatial-grid/support-host-id'
 import { containsPoint } from '../../lib/polygon-boolean'
 import { polygonInteriorPoint } from '../../lib/polygon-label'
-import { type SlabNode, ZoneNode } from '../../schema'
+import { newZone } from '../../lib/new-zone'
+import type { SlabNode } from '../../schema'
 import { getStoredLevelHeight } from '../../services/storey'
 import { isFloorPlacedIntent } from './mezzanine-content'
 import {
@@ -32,7 +33,7 @@ export function createMezzanine(
   if (level?.type !== 'level' || host.floor?.support === 'open')
     throw Error('A mezzanine needs a host room on a level.')
   const polygon = input.polygon
-  const zone = ZoneNode.parse({
+  const zone = newZone({
     id: input.mintId('zone'),
     parentId: level.id,
     name: 'Mezzanine',

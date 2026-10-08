@@ -6,6 +6,7 @@ import {
   type AnyNodeId,
   type BrushSettings,
   type BuildingNode,
+  type CameraPose,
   type ChimneyMaterialRole,
   DEFAULT_BRUSH_SETTINGS,
   type DormerSurfaceMaterialRole,
@@ -63,6 +64,7 @@ import {
   snapContextOf,
   snappingModesFor,
 } from '../lib/snapping-mode'
+import { cameraPoseStore } from './camera-pose-store'
 import { publishNavigationSyncPoseToStore } from './navigation-sync-pose-store'
 import useInteractionScope from './use-interaction-scope'
 
@@ -957,6 +959,29 @@ export function selectSiteFloorplanContext() {
 let viewModeBeforeCapture: ViewMode | null = null
 // The editor's active level when capture began (undefined: not in capture).
 let levelBeforeCapture: LevelNode['id'] | null | undefined
+// The editor's viewer selection while Preview borrows the shared viewer store.
+let viewerBeforePreview: {
+  selection: ReturnType<typeof useViewer.getState>['selection']
+  focusedUnitId: ReturnType<typeof useViewer.getState>['focusedUnitId']
+  room: RoomKey | null
+  toolMode: ToolMode
+  viewMode: ViewMode
+  isFloorplanOpen: boolean
+  cameraPose: CameraPose | null
+  cameraMode: ReturnType<typeof useViewer.getState>['cameraMode']
+  levelMode: ReturnType<typeof useViewer.getState>['levelMode']
+  wallMode: ReturnType<typeof useViewer.getState>['wallMode']
+  hideLevelsAboveSelection: boolean
+  showZones: boolean
+} | null = null
+let previewCameraRestore: CameraPose | null = null
+
+// Preview replaces the canvas; the returning controls consume this after mounting.
+export function takePreviewCameraRestore(): CameraPose | null {
+  const pose = previewCameraRestore
+  previewCameraRestore = null
+  return pose
+}
 
 /**
  * Hold the interaction scope that belongs to a sustained brush mode.
@@ -1311,13 +1336,67 @@ const useEditor = create<EditorState>()(
         ),
       isPreviewMode: false,
       setPreviewMode: (preview) => {
+        if (preview === get().isPreviewMode) return
         if (preview) {
+          const viewer = useViewer.getState()
+          viewerBeforePreview = {
+            selection: viewer.selection,
+            focusedUnitId: viewer.focusedUnitId,
+            room: get().room,
+            toolMode: get().toolMode,
+            viewMode: get().viewMode,
+            isFloorplanOpen: get().isFloorplanOpen,
+            cameraPose: cameraPoseStore.getState().pose,
+            cameraMode: viewer.cameraMode,
+            levelMode: viewer.levelMode,
+            wallMode: viewer.wallMode,
+            hideLevelsAboveSelection: viewer.hideLevelsAboveSelection,
+            showZones: viewer.showZones,
+          }
+          previewCameraRestore = null
           set({ isPreviewMode: true, catalogCategory: null })
           get().armToolMode({ mode: 'select' })
-          // Clear zone/item selection for clean viewer drill-down hierarchy
-          useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
+          // Preview starts on the editor's floor with nothing else picked; what
+          // the visitor selects there is its own and is dropped on the way out.
+          viewer.setSelection({ selectedIds: [], zoneId: null })
+          viewer.setFocusedUnit(null)
+          viewer.setHoveredId(null)
         } else {
+          if (get().isFirstPersonMode) get().setFirstPersonMode(false)
+          useViewer.getState().setWalkthroughMode(false)
           set({ isPreviewMode: false })
+          const before = viewerBeforePreview
+          viewerBeforePreview = null
+          if (!before) return
+          const viewer = useViewer.getState()
+          const nodes = useScene.getState().nodes
+          const exists = (id: string | null) => id !== null && !!nodes[id as AnyNodeId]
+          get().armToolMode(before.toolMode)
+          set({
+            room:
+              before.room && exists(before.room.zoneId) && exists(before.room.levelId)
+                ? before.room
+                : null,
+            hoveredRoom: null,
+            viewMode: before.viewMode,
+            isFloorplanOpen: before.isFloorplanOpen,
+          })
+          viewer.setSelection({
+            buildingId: exists(before.selection.buildingId) ? before.selection.buildingId : null,
+            levelId: exists(before.selection.levelId) ? before.selection.levelId : null,
+            zoneId: exists(before.selection.zoneId) ? before.selection.zoneId : null,
+            selectedIds: before.selection.selectedIds.filter(exists),
+          })
+          viewer.setFocusedUnit(exists(before.focusedUnitId) ? before.focusedUnitId : null)
+          viewer.setHoveredId(null)
+          viewer.setCameraMode(before.cameraMode)
+          viewer.setLevelMode(before.levelMode)
+          viewer.setWallMode(before.wallMode)
+          useViewer.setState({
+            hideLevelsAboveSelection: before.hideLevelsAboveSelection,
+            showZones: before.showZones,
+          })
+          previewCameraRestore = before.cameraPose
         }
       },
       captureMode: { mode: 'idle' } as CaptureMode,

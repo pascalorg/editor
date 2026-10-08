@@ -18,21 +18,17 @@ import {
   operableParts,
   ProceduralMotionController,
 } from '@pascal-app/core/procedural-items'
-import { Html } from '@react-three/drei'
 import { type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { lerp } from 'three/src/math/MathUtils.js'
-import { color, float, uniform, uv } from 'three/tsl'
-import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh'
 import { useGLTFKTX2 } from '../../hooks/use-gltf-ktx2'
-import { ZONE_LAYER } from '../../lib/layers'
 import { createSurfaceRoleMaterial } from '../../lib/materials'
 import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
-import { createZoneShape, createZoneWallGeometry } from '../../lib/zone-geometry'
 import useViewer from '../../store/use-viewer'
 import { useClipActions } from '../../systems/interactive/scripted-clips'
+import { resolveLevelVisibility } from '../../systems/level/level-utils'
 import { GlbInteractive, type GlbInteractiveItem } from './glb-interactive'
 import { bakedLoopMechanisms } from './glb-mechanisms'
 import { GlbReferenceNodes } from './glb-reference-nodes'
@@ -55,14 +51,19 @@ const ROLE_BY_KIND: Record<string, SurfaceRole> = {
   item: 'furnishing',
 }
 
-/** A building floor discovered in the baked GLB, ordered bottom-to-top. */
-export type GlbLevel = { id: `level_${string}`; label: string }
+/**
+ * A pointer on the baked building, handed to the host's selection rules: the
+ * baked node under it (its `pascalId`) and the hit in its level's local XZ,
+ * or null for empty space.
+ */
+export type GlbPickEvent = {
+  type: 'click' | 'hover'
+  pick: { nodeId: string; point: [number, number] | null } | null
+  modifiers: { alt: boolean; ctrl: boolean; meta: boolean; shift: boolean }
+}
 
-/** pascalId → display info, reported so a host can label the breadcrumb. */
-export type GlbIdentity = Record<string, { kind: string; label: string }>
-
-/** What the cursor would act on at the current drill depth (for a hover label). */
-export type GlbHover = { kind: string; label: string } | null
+/** Kinds a pointer passes through to what lies behind (they frame, they don't get picked). */
+const PASS_THROUGH_KINDS = new Set(['site', 'building', 'level', 'zone', 'ceiling', 'spawn'])
 
 /** Walkthrough HUD state, reported each frame: the floor/room the camera is in
  *  and the interactive part directly in view (for the reticle prompt). */
@@ -72,7 +73,7 @@ export type GlbWalkthrough = {
   door: { label: string; isOpen: boolean; verb?: string } | null
 } | null
 
-type GlbLevelEntry = { id: GlbLevel['id']; node: THREE.Object3D; baseY: number }
+type GlbLevelEntry = { id: string; node: THREE.Object3D; baseY: number }
 type GlbZoneEntry = {
   id: string
   node: THREE.Object3D
@@ -122,15 +123,7 @@ type LookAtControls = {
   moveTo?: (x: number, y: number, z: number, enableTransition?: boolean) => unknown
 }
 
-/** The resolved drill target for a raycast hit, given the current selection. */
-type Target = {
-  object: THREE.Object3D
-  hitObject?: THREE.Object3D
-  id: string
-  kind: string
-  label: string
-}
-type HitCandidate = { object: THREE.Object3D; point?: THREE.Vector3 }
+type HitCandidate = { object: THREE.Object3D; point: THREE.Vector3 }
 
 function findIdentityAncestor(object: THREE.Object3D): THREE.Object3D | null {
   let current: THREE.Object3D | null = object
@@ -162,17 +155,9 @@ function findAncestorLevelId(object: THREE.Object3D): string | null {
 }
 
 const _local = new THREE.Vector3()
-const _floorHit = new THREE.Vector3()
-const _floorPlanePoint = new THREE.Vector3()
-const _floorPlane = new THREE.Plane()
-const _up = new THREE.Vector3(0, 1, 0)
-const _bounds = new THREE.Box3()
-const _boundsCenter = new THREE.Vector3()
-const _sample = new THREE.Vector3()
 const _camBox = new THREE.Box3()
 const _camCenter = new THREE.Vector3()
 const _camSize = new THREE.Vector3()
-const _camPoint = new THREE.Vector3()
 const _walkPos = new THREE.Vector3()
 const _reticleNdc = new THREE.Vector2(0, 0)
 const _reticleRaycaster = new THREE.Raycaster()
@@ -180,7 +165,33 @@ const _reticleRaycaster = new THREE.Raycaster()
 const WALK_REACH = 3
 const ZONE_FOOTPRINT_EPSILON = 0.05
 
-const NO_RAYCAST: THREE.Mesh['raycast'] = () => {}
+/**
+ * The baked node under a pointer that a click can land on: the nearest hit
+ * whose identity is not a kind that only frames (site, building, level, zone,
+ * ceiling) and is not on a hidden floor, with the hit in its level's local XZ.
+ */
+export function resolveGlbPick(
+  hits: readonly HitCandidate[],
+  identity: ReadonlyMap<string, THREE.Object3D>,
+): (NonNullable<GlbPickEvent['pick']> & { hitObject: THREE.Object3D }) | null {
+  for (const hit of hits) {
+    const node = findIdentityAncestor(hit.object)
+    const extras = node?.userData as PascalExtras | undefined
+    if (!(node && extras?.pascalId) || PASS_THROUGH_KINDS.has(extras.kind ?? '')) continue
+    const levelId = findAncestorLevelId(node)
+    const level = levelId ? identity.get(levelId) : undefined
+    if (level && !level.visible) continue
+    let point: [number, number] | null = null
+    if (level) {
+      level.updateWorldMatrix(true, false)
+      _local.copy(hit.point)
+      level.worldToLocal(_local)
+      point = [_local.x, _local.z]
+    }
+    return { nodeId: extras.pascalId, point, hitObject: hit.object }
+  }
+  return null
+}
 
 function pointInZone(x: number, z: number, zone: GlbZoneEntry): boolean {
   const polygon = [{ outer: zone.polygon, holes: zone.holes }]
@@ -189,87 +200,22 @@ function pointInZone(x: number, z: number, zone: GlbZoneEntry): boolean {
   )
 }
 
-function worldPointInZoneFootprint(worldPoint: THREE.Vector3, zone: GlbZoneEntry): boolean {
-  _local.copy(worldPoint)
-  zone.node.worldToLocal(_local)
-  return pointInZone(_local.x, _local.z, zone)
-}
-
-function objectFootprintTouchesZone(object: THREE.Object3D, zone: GlbZoneEntry): boolean {
-  _bounds.setFromObject(object)
-  if (_bounds.isEmpty()) {
-    object.getWorldPosition(_sample)
-    return worldPointInZoneFootprint(_sample, zone)
-  }
-
-  _bounds.getCenter(_boundsCenter)
-  const y = _bounds.min.y
-  const samples: Array<[number, number]> = [
-    [_boundsCenter.x, _boundsCenter.z],
-    [_bounds.min.x, _bounds.min.z],
-    [_bounds.min.x, _bounds.max.z],
-    [_bounds.max.x, _bounds.min.z],
-    [_bounds.max.x, _bounds.max.z],
-  ]
-
-  for (const [x, z] of samples) {
-    _sample.set(x, y, z)
-    if (worldPointInZoneFootprint(_sample, zone)) return true
-  }
-  return false
-}
-
-const Y_OFFSET = 0.01
-const ZONE_WALL_HEIGHT = 2.3
-
-/** Floor fill — flat 0.25 tint scaled by the fade uniform (matches the editor). */
-function createZoneFloorMaterial(zoneColor: string) {
-  const o = uniform(0)
-  const material = new MeshBasicNodeMaterial({
-    colorNode: color(new THREE.Color(zoneColor)),
-    depthTest: false,
-    depthWrite: false,
-    opacityNode: float(0.25).mul(o),
-    side: THREE.DoubleSide,
-    transparent: true,
-  })
-  material.userData.uOpacity = o
-  return material
-}
-
-/** Vertical border — color at the base fading to transparent at the top. */
-function createZoneWallMaterial(zoneColor: string) {
-  const o = uniform(0)
-  const material = new MeshBasicNodeMaterial({
-    colorNode: color(new THREE.Color(zoneColor)),
-    depthTest: false,
-    depthWrite: false,
-    opacityNode: float(0.6).mul(float(1).sub(uv().y)).mul(o),
-    side: THREE.DoubleSide,
-    transparent: true,
-  })
-  material.userData.uOpacity = o
-  return material
-}
-
 /**
- * GLB-consuming viewer scene (plan phase 2). Loads a baked artifact and drives
- * the editor's presentation/interaction with no parametric scene graph. Hover
- * and click resolve through the drill hierarchy (building → level → zone →
- * object): the cursor targets the floor in the building view, the room or
- * structure in a level, and items/structure inside a room. Selection feeds the
- * existing outline post-FX, openables play their baked clips, and the shared
- * `useViewer.selection` (with its hierarchy guard) holds the drill state. The
- * host disables the parametric `SelectionManager` (`selectionManager="custom"`).
+ * GLB-consuming viewer scene. Loads a baked artifact and drives the viewer's
+ * presentation and interaction with no parametric scene graph. A pointer
+ * becomes a `GlbPickEvent` the host runs through its selection rules (the
+ * same rules as the parametric viewer); the shared `useViewer.selection` and
+ * `hoveredId` then drive the outline, and openables play their baked clips
+ * when clicked. The host disables the parametric `SelectionManager`
+ * (`selectionManager="custom"`).
  */
 export function GlbScene({
   url,
   interactiveItems,
   referenceNodes,
   replaceNodes,
-  onLevelsChange,
-  onIdentityChange,
-  onHoverChange,
+  onObjectsChange,
+  onPick,
   onWalkthroughChange,
 }: {
   url: string
@@ -282,9 +228,10 @@ export function GlbScene({
   /** `bake: 'replace'` nodes (e.g. plugin trees): baked static but re-rendered
    *  live here via their `bakeReplaceRenderer`; the baked meshes are hidden. */
   replaceNodes?: AnyNode[]
-  onLevelsChange?: (levels: GlbLevel[]) => void
-  onIdentityChange?: (identity: GlbIdentity) => void
-  onHoverChange?: (hover: GlbHover) => void
+  /** pascalId → baked object, so the host can place room pills and frame nodes. */
+  onObjectsChange?: (objects: ReadonlyMap<string, THREE.Object3D>) => void
+  /** Clicks and hovers on the building; without it the scene is look-only. */
+  onPick?: (event: GlbPickEvent) => void
   onWalkthroughChange?: (state: GlbWalkthrough) => void
 }) {
   const gltf = useGLTFKTX2(url) as unknown as {
@@ -399,7 +346,6 @@ export function GlbScene({
     return { entries, mixer, actions: proceduralActions }
   }, [gltf.scene, gltf.animations])
   const camera = useThree((state) => state.camera)
-  const raycaster = useThree((state) => state.raycaster)
   const controls = useThree((state) => state.controls) as LookAtControls | null
   const walkthroughMode = useViewer((s) => s.walkthroughMode)
   const textures = useViewer((s) => s.textures)
@@ -415,7 +361,7 @@ export function GlbScene({
       if (!role) return
       object.traverse((child) => {
         const mesh = child as THREE.Mesh
-        if (!mesh.isMesh || mesh.layers.isEnabled(ZONE_LAYER)) return
+        if (!mesh.isMesh) return
         const ud = mesh.userData as { __bakedMaterial?: THREE.Material | THREE.Material[] }
         if (!ud.__bakedMaterial) ud.__bakedMaterial = mesh.material
         mesh.material = textures
@@ -498,7 +444,7 @@ export function GlbScene({
       if (extras.kind === 'ceiling' || extras.kind === 'roof') occluderNodes.push(object)
       if (extras.kind === 'level') {
         floors.push({
-          id: extras.pascalId as GlbLevel['id'],
+          id: extras.pascalId,
           node: object,
           baseY: object.position.y,
         })
@@ -530,7 +476,6 @@ export function GlbScene({
       levelsWithZones: new Set(zoneList.map((zone) => zone.levelId)),
     }
   }, [gltf.scene])
-  const zoneById = useMemo(() => new Map(zoneEntries.map((zone) => [zone.id, zone])), [zoneEntries])
   // Level pascalIds bottom-to-top, for the interactive light pool's level factor.
   const levelOrder = useMemo(() => levels.map((entry) => entry.id), [levels])
   // Loop clips no other controller plays (a plugin kind's mechanism) run on
@@ -567,69 +512,19 @@ export function GlbScene({
     return meshes
   }, [occluders])
 
-  // Move the camera to match the drill depth: a saved bookmark (extras.camera)
-  // wins; otherwise fit to the target's bounds (the object, the room's polygon
-  // footprint for empty zone nodes, the level, or the whole building). Mirrors
-  // the parametric viewer's selection framing so the GLB path feels identical.
-  const focusLevelId = useViewer((s) => s.selection.levelId)
-  const focusZoneId = useViewer((s) => s.selection.zoneId)
-  const focusSelectedId = useViewer((s) => s.selection.selectedIds[0] ?? null)
+  // Open on the building: its saved view, else a fit of its bounds. Later moves
+  // belong to the host's navigation (`camera-controls:frame`), never to a click.
   useEffect(() => {
     if (!controls) return
-    const flyToBookmark = (bookmark: NonNullable<PascalExtras['camera']>) => {
+    const bookmark = (rootNode?.userData as PascalExtras | undefined)?.camera
+    if (bookmark) {
       const { position: p, target: t } = bookmark
       controls.setLookAt(p[0], p[1], p[2], t[0], t[1], t[2], true)
       controls.normalizeRotations?.()
-    }
-
-    // Item selection happens inside a room, where we're already at a good angle:
-    // fly to the item's own bookmark if it has one, otherwise just pan to it
-    // (keep the current orbit angle + distance) rather than reframing the camera.
-    if (focusSelectedId) {
-      const object = identity.get(focusSelectedId)
-      if (!object) return
-      const itemBookmark = (object.userData as PascalExtras).camera
-      if (itemBookmark) {
-        flyToBookmark(itemBookmark)
-        return
-      }
-      _camBox.makeEmpty()
-      _camBox.setFromObject(object)
-      if (_camBox.isEmpty()) return
-      _camBox.getCenter(_camCenter)
-      controls.moveTo?.(_camCenter.x, _camCenter.y, _camCenter.z, true)
       return
     }
-
-    let bookmarkNode: THREE.Object3D | null = null
     _camBox.makeEmpty()
-    if (focusZoneId) {
-      const zone = zoneById.get(focusZoneId)
-      if (!zone) return
-      bookmarkNode = zone.node
-      // Zone identity nodes carry no mesh — bound the room from its polygon.
-      zone.node.updateWorldMatrix(true, false)
-      for (const [x, z] of zone.polygon) {
-        _camBox.expandByPoint(_camPoint.set(x, 0, z).applyMatrix4(zone.node.matrixWorld))
-        _camBox.expandByPoint(
-          _camPoint.set(x, ZONE_WALL_HEIGHT, z).applyMatrix4(zone.node.matrixWorld),
-        )
-      }
-    } else if (focusLevelId) {
-      const object = identity.get(focusLevelId)
-      if (!object) return
-      bookmarkNode = object
-      _camBox.setFromObject(object)
-    } else {
-      bookmarkNode = rootNode
-      _camBox.setFromObject(rootNode ?? gltf.scene)
-    }
-
-    const bookmark = (bookmarkNode?.userData as PascalExtras | undefined)?.camera
-    if (bookmark) {
-      flyToBookmark(bookmark)
-      return
-    }
+    _camBox.setFromObject(rootNode ?? gltf.scene)
     if (_camBox.isEmpty()) return
     _camBox.getCenter(_camCenter)
     _camBox.getSize(_camSize)
@@ -644,51 +539,22 @@ export function GlbScene({
       true,
     )
     controls.normalizeRotations?.()
-  }, [
-    controls,
-    focusSelectedId,
-    focusZoneId,
-    focusLevelId,
-    identity,
-    zoneById,
-    rootNode,
-    gltf.scene,
-  ])
+  }, [controls, rootNode, gltf.scene])
 
   useEffect(() => {
-    const cameraMask = camera.layers.mask
-    const raycasterMask = raycaster.layers.mask
-    camera.layers.enable(ZONE_LAYER)
-    raycaster.layers.disable(ZONE_LAYER)
-    return () => {
-      camera.layers.mask = cameraMask
-      raycaster.layers.mask = raycasterMask
-    }
-  }, [camera, raycaster])
+    onObjectsChange?.(identity)
+    return () => onObjectsChange?.(new Map())
+  }, [identity, onObjectsChange])
 
-  useEffect(() => {
-    onLevelsChange?.(
-      levels.map(({ id, node }) => ({ id, label: (node.userData as PascalExtras).label ?? id })),
-    )
-    const labels: GlbIdentity = {}
-    identity.forEach((object, id) => {
-      const extras = object.userData as PascalExtras
-      labels[id] = { kind: extras.kind ?? 'node', label: extras.label ?? id }
-    })
-    onIdentityChange?.(labels)
-    return () => {
-      onLevelsChange?.([])
-      onIdentityChange?.({})
-    }
-  }, [levels, identity, onLevelsChange, onIdentityChange])
-
-  // Apply the editor's level modes to the baked floors each frame. Walkthrough
-  // always shows the full stacked building (you're standing inside it) — and the
-  // first-person collider is built from the visible meshes, so a hidden solo
-  // floor would otherwise drop the player through the world.
+  // Apply the viewer's level display to the baked floors each frame, by the
+  // parametric LevelSystem's rule (solo, and the levels above the current one
+  // hidden when the host asks). Walkthrough always shows the full stacked
+  // building (you're standing inside it) — and the first-person collider is
+  // built from the visible meshes, so a hidden floor would otherwise drop the
+  // player through the world.
   useFrame((_, delta) => {
     if (levels.length === 0) return
-    const { levelMode, selection, walkthroughMode } = useViewer.getState()
+    const { levelMode, hideLevelsAboveSelection, selection, walkthroughMode } = useViewer.getState()
     const selectedLevel = selection.levelId
     const selectedIdx = selectedLevel ? levels.findIndex((l) => l.id === selectedLevel) : -1
     levels.forEach(({ id, node, baseY }, index) => {
@@ -699,78 +565,22 @@ export function GlbScene({
       node.position.y = walkthroughMode
         ? targetY
         : lerp(node.position.y, targetY, Math.min(1, delta * 12))
-      // Solo: hidden levels above the soloed one keep casting shadows
-      // (shadow-caster-only); below-levels can't block the sun, so plain-hide.
-      const hidden =
-        !walkthroughMode && levelMode === 'solo' && Boolean(selectedLevel) && id !== selectedLevel
-      const castsWhileHidden = hidden && selectedIdx >= 0 && index > selectedIdx
-      if (castsWhileHidden) {
-        applyShadowOnly(node)
-        node.visible = true
-      } else {
-        clearShadowOnly(node)
-        node.visible = !hidden
-      }
+      const { visible, shadowOnly } = walkthroughMode
+        ? { visible: true, shadowOnly: false }
+        : resolveLevelVisibility({
+            levelMode,
+            hideAbove: hideLevelsAboveSelection,
+            hasSelectedLevel: selectedIdx >= 0,
+            isSelected: id === selectedLevel,
+            index,
+            selectedIndex: selectedIdx >= 0 ? selectedIdx : undefined,
+            nodeVisible: true,
+          })
+      if (shadowOnly) applyShadowOnly(node)
+      else clearShadowOnly(node)
+      node.visible = visible
     })
   }, 5)
-
-  // Reconstruct each room from `extras.polygon` as the editor renders it: a flat
-  // floor fill plus vertical gradient borders (color at the base fading up). The
-  // geometry isn't baked (engine-agnostic GLB); /viewer rebuilds it, parented to
-  // the zone node so it rides level stacking. Both meshes live on ZONE_LAYER so
-  // the post-FX zone pass composites them (the default scene pass skips them).
-  type ZoneFill = {
-    id: string
-    levelId: string | null
-    meshes: THREE.Mesh[]
-    uniforms: { value: number }[]
-  }
-  const zoneFills = useRef<ZoneFill[]>([])
-  useEffect(() => {
-    const built: ZoneFill[] = []
-    for (const entry of zoneEntries) {
-      const shape = createZoneShape(entry)
-
-      const floorMaterial = createZoneFloorMaterial(entry.color)
-      const floor = new THREE.Mesh(new THREE.ShapeGeometry(shape), floorMaterial)
-      floor.rotation.x = -Math.PI / 2
-      floor.position.y = 0.02
-
-      const wallMaterial = createZoneWallMaterial(entry.color)
-      const walls = new THREE.Mesh(createZoneWallGeometry(entry), wallMaterial)
-
-      const meshes = [floor, walls]
-      for (const mesh of meshes) {
-        mesh.visible = false
-        mesh.layers.set(ZONE_LAYER)
-        // Visual helpers only — never participate in picking. Hover/selection
-        // resolves against the real building geometry + point-in-polygon, so the
-        // tall wall helpers can't occlude items or fight at shared boundaries.
-        mesh.raycast = NO_RAYCAST
-        entry.node.add(mesh)
-      }
-      built.push({
-        id: entry.id,
-        levelId: entry.levelId,
-        meshes,
-        uniforms: [
-          floorMaterial.userData.uOpacity as { value: number },
-          wallMaterial.userData.uOpacity as { value: number },
-        ],
-      })
-    }
-    zoneFills.current = built
-    return () => {
-      for (const { meshes } of built) {
-        for (const mesh of meshes) {
-          mesh.removeFromParent()
-          mesh.geometry.dispose()
-          ;(mesh.material as THREE.Material).dispose()
-        }
-      }
-      zoneFills.current = []
-    }
-  }, [zoneEntries])
 
   useEffect(() => {
     for (const [nodeId, entry] of proceduralPlayback.entries)
@@ -952,108 +762,21 @@ export function GlbScene({
     [zoneEntries],
   )
 
-  // The room the cursor points at, found by intersecting the pointer ray with the
-  // level's floor plane — independent of what 3D object the ray actually hits.
-  // This is the editor's model: zone helpers and walls are ignored, so adjacent
-  // rooms never fight and an item against a wall still maps to its own room.
-  const zoneAtRay = useCallback(
-    (ray: THREE.Ray, levelId: string): GlbZoneEntry | null => {
-      const levelNode = identity.get(levelId)
-      const floorY = levelNode ? levelNode.getWorldPosition(_floorPlanePoint).y : 0
-      _floorPlane.setFromNormalAndCoplanarPoint(_up, _floorPlanePoint.set(0, floorY, 0))
-      if (!ray.intersectPlane(_floorPlane, _floorHit)) return null
-      return zoneAtPoint(_floorHit, levelId)
-    },
-    [identity, zoneAtPoint],
-  )
-
-  // Resolve a pointer ray to the unit the current drill depth acts on:
-  //  - building view → the floor the hit object belongs to
-  //  - level view    → the room the cursor points at on the floor
-  //  - zone view     → the first hit node whose hit/footprint is inside the room
-  const resolveTarget = useCallback(
-    (hits: HitCandidate[], ray: THREE.Ray): Target | null => {
-      const firstNode = hits.length > 0 ? findIdentityAncestor(hits[0]!.object) : null
-      const toTarget = (
-        object: THREE.Object3D,
-        tid: string,
-        hitObject?: THREE.Object3D,
-      ): Target => {
-        const e = object.userData as PascalExtras
-        return { object, hitObject, id: tid, kind: e.kind ?? 'node', label: e.label ?? tid }
-      }
-      const { selection } = useViewer.getState()
-
-      // Building view → drill to the floor the hit object belongs to.
-      if (!selection.levelId) {
-        if (!firstNode) return null
-        const extras = firstNode.userData as PascalExtras
-        const levelId = extras.kind === 'level' ? extras.pascalId : findAncestorLevelId(firstNode)
-        const levelObject = levelId ? identity.get(levelId) : undefined
-        return levelObject && levelId ? toTarget(levelObject, levelId) : null
-      }
-
-      // Level view → the room the cursor is over (floor-plane intersection).
-      if (!selection.zoneId) {
-        const zone = zoneAtRay(ray, selection.levelId)
-        return zone ? toTarget(zone.node, zone.id) : null
-      }
-
-      // Zone view → scan through all R3F intersections so room helpers or slabs
-      // can't hide a selectable item/structure behind the first hit.
-      const activeZone = zoneById.get(selection.zoneId)
-      if (!activeZone) return null
-      const seen = new Set<string>()
-      for (const hit of hits) {
-        const node = findIdentityAncestor(hit.object)
-        if (!node) continue
-        const extras = node.userData as PascalExtras
-        const id = extras.pascalId
-        if (!id || seen.has(id)) continue
-        seen.add(id)
-
-        const kind = extras.kind ?? 'node'
-        if (kind === 'site' || kind === 'building' || kind === 'level' || kind === 'zone') {
-          continue
-        }
-        const hitLevel = findAncestorLevelId(node)
-        if (hitLevel !== selection.levelId) continue
-        if (hit.point && worldPointInZoneFootprint(hit.point, activeZone)) {
-          return toTarget(node, id, hit.object)
-        }
-        if (objectFootprintTouchesZone(node, activeZone)) {
-          return toTarget(node, id, hit.object)
-        }
-      }
-      return null
-    },
-    [identity, zoneAtRay, zoneById],
-  )
-
-  // DOM nodes for each zone's floating room label, plus a group whose transform
-  // tracks the zone node so the label rides level stacking.
-  const labelGroups = useRef(new Map<string, THREE.Group>())
-  const labelDivs = useRef(new Map<string, HTMLDivElement>())
-
-  // Per-frame: fade a level's rooms in/out (hidden once a zone is entered, like
-  // the editor) with a brightness bump on the hovered room, keep room labels
-  // positioned + faded with them, and sync the outline post-FX from the shared
-  // selection + local hover.
-  const hoveredTarget = useRef<Target | null>(null)
-  useFrame((_, delta) => {
+  // Per-frame: hide the focused floor's ceilings and roof when it has rooms
+  // (dollhouse), and sync the outline post-FX from the shared selection and
+  // hover. Rooms highlight through the host's room layer, not the outline.
+  useFrame(() => {
     const state = useViewer.getState()
     const { selection, outliner } = state
-    const t = Math.min(1, delta * 8)
-    const hoveredZoneId = hoveredTarget.current?.kind === 'zone' ? hoveredTarget.current.id : null
 
-    // Walkthrough is a first-person tour: no zone tints, no dollhouse cutaway,
-    // no selection outline — you're standing inside the real building.
+    // Walkthrough is a first-person tour: no dollhouse cutaway, no selection
+    // outline — you're standing inside the real building.
     const walk = state.walkthroughMode
 
-    // Dollhouse: hide ceilings + roof so the rooms (and their zone tint) are
-    // visible from above and the ray reaches their contents — but only when the
-    // focused level actually has rooms. Focusing a zone-less floor keeps the
-    // building intact (otherwise its roof would just vanish with nothing to show).
+    // Dollhouse: hide ceilings + roof so the rooms are visible from above and
+    // the ray reaches their contents — but only when the focused level actually
+    // has rooms. Focusing a zone-less floor keeps the building intact
+    // (otherwise its roof would just vanish with nothing to show).
     const revealing = !walk && selection.levelId != null && levelsWithZones.has(selection.levelId)
     // Shadow-caster-only: hidden roof/ceiling meshes keep casting sun shadows
     // so interiors show window light patches instead of uniform sun flood.
@@ -1062,44 +785,21 @@ export function GlbScene({
       else clearShadowOnly(mesh)
     }
 
-    for (const { id, levelId, meshes, uniforms } of zoneFills.current) {
-      const show =
-        !walk && selection.levelId != null && levelId === selection.levelId && !selection.zoneId
-      const target = !show ? 0 : id === hoveredZoneId ? 1 : 0.65
-      let visible = false
-      for (const u of uniforms) {
-        u.value = lerp(u.value, target, t)
-        if (u.value > 0.01) visible = true
-      }
-      for (const mesh of meshes) mesh.visible = visible
-
-      const group = labelGroups.current.get(id)
-      const zoneNode = identity.get(id)
-      if (group && zoneNode) {
-        group.matrixAutoUpdate = false
-        group.matrix.copy(zoneNode.matrixWorld)
-        group.visible = visible
-      }
-      const div = labelDivs.current.get(id)
-      if (div) {
-        div.style.opacity = show ? '1' : '0'
-        // Small by default, smoothly zooming up when its room is hovered.
-        div.style.transform = `scale(${id === hoveredZoneId ? 1 : 0.82})`
-      }
-    }
-
     outliner.selectedObjects.length = 0
     outliner.hoveredObjects.length = 0
     if (walk) return
 
-    const selectedObject = selection.selectedIds[0]
-      ? (identity.get(selection.selectedIds[0]) ?? null)
-      : null
-    if (selectedObject) outliner.selectedObjects.push(selectedObject)
-    // Rooms show hover via the fill brightness; everything else uses the outline.
-    const hover = hoveredTarget.current
-    if (hover && hover.kind !== 'zone' && hover.object !== selectedObject) {
-      outliner.hoveredObjects.push(hover.object)
+    for (const id of selection.selectedIds) {
+      const object = identity.get(id)
+      if (object) outliner.selectedObjects.push(object)
+    }
+    const hovered = state.hoveredId ? identity.get(state.hoveredId) : undefined
+    if (
+      hovered &&
+      (hovered.userData as PascalExtras).kind !== 'zone' &&
+      !outliner.selectedObjects.includes(hovered)
+    ) {
+      outliner.hoveredObjects.push(hovered)
     }
   })
 
@@ -1226,85 +926,49 @@ export function GlbScene({
   const handlePointerMove = useCallback(
     (event: ThreeEvent<PointerEvent>) => {
       event.stopPropagation()
-      if (walkthroughMode) return
-      const target = resolveTarget(
-        event.intersections.map((hit) => ({ object: hit.object, point: hit.point })),
-        event.ray,
-      )
-      hoveredTarget.current = target
-      document.body.style.cursor = target ? 'pointer' : 'auto'
-      const key = target ? `${target.kind}:${target.id}` : null
-      if (key !== lastHover.current) {
-        lastHover.current = key
-        onHoverChange?.(target ? { kind: target.kind, label: target.label } : null)
-      }
+      if (walkthroughMode || !onPick) return
+      const pick = resolveGlbPick(event.intersections, identity)
+      document.body.style.cursor = pick ? 'pointer' : 'auto'
+      const key = pick ? `${pick.nodeId}:${pick.point?.join(',') ?? ''}` : null
+      if (key === lastHover.current) return
+      lastHover.current = key
+      onPick({ type: 'hover', pick, modifiers: modifiersOf(event.nativeEvent) })
     },
-    [resolveTarget, onHoverChange, walkthroughMode],
+    [identity, onPick, walkthroughMode],
   )
 
   const handlePointerOut = useCallback(() => {
-    hoveredTarget.current = null
     document.body.style.cursor = 'auto'
-    if (lastHover.current !== null) {
-      lastHover.current = null
-      onHoverChange?.(null)
-    }
-  }, [onHoverChange])
+    if (lastHover.current === null) return
+    lastHover.current = null
+    onPick?.({ type: 'hover', pick: null, modifiers: NO_MODIFIERS })
+  }, [onPick])
 
-  // Drill the building → level → zone → object hierarchy, deselecting back up
-  // when the click lands outside the current scope. setSelection's hierarchy
-  // guard clears deeper selections automatically when a parent changes.
+  // The host's rules decide the selection; an openable the click selects (a
+  // door, a window, an item with an `open` clip, a mechanism) also plays.
   const handleClick = useCallback(
     (event: ThreeEvent<MouseEvent>) => {
       event.stopPropagation()
       // Walkthrough handles its own door activation (E / canvas click) and never
-      // selects — leave the drill hierarchy untouched.
-      if (walkthroughMode) return
-      const target = resolveTarget(
-        event.intersections.map((hit) => ({ object: hit.object, point: hit.point })),
-        event.ray,
-      )
-      const { selection, setSelection, setLevelMode } = useViewer.getState()
-
-      // Building view → drill into the clicked floor.
-      if (!selection.levelId) {
-        if (target) {
-          setLevelMode('solo')
-          setSelection({ levelId: target.id as `level_${string}` })
-        }
-        return
-      }
-
-      // Level view → enter the clicked room; clicking outside any room exits to
-      // the building.
-      if (!selection.zoneId) {
-        if (target) {
-          setSelection({ zoneId: target.id as `zone_${string}` })
-        } else {
-          setLevelMode('stacked')
-          setSelection({ levelId: null })
-        }
-        return
-      }
-
-      // Zone view → select the clicked node; clicking outside the room exits to
-      // the level.
-      if (target) {
-        setSelection({ selectedIds: [target.id] })
-        if (
-          !(
-            toggleOpenControl(target.object) ||
-            toggleProcedural(target.hitObject ?? target.object, target.object) ||
-            toggleLoopMechanism(target.object)
-          )
+      // selects.
+      if (walkthroughMode || !onPick) return
+      const pick = resolveGlbPick(event.intersections, identity)
+      onPick({ type: 'click', pick, modifiers: modifiersOf(event.nativeEvent) })
+      if (!pick || !useViewer.getState().selection.selectedIds.includes(pick.nodeId)) return
+      const object = identity.get(pick.nodeId)
+      if (!object) return
+      if (
+        !(
+          toggleOpenControl(object) ||
+          toggleProcedural(pick.hitObject, object) ||
+          toggleLoopMechanism(object)
         )
-          toggleOpenable(target.object)
-      } else {
-        setSelection({ zoneId: null })
-      }
+      )
+        toggleOpenable(object)
     },
     [
-      resolveTarget,
+      identity,
+      onPick,
       toggleLoopMechanism,
       toggleOpenControl,
       toggleOpenable,
@@ -1313,20 +977,14 @@ export function GlbScene({
     ],
   )
 
-  // A click that hits nothing (empty space) steps one level back up the drill
-  // hierarchy, like the legacy viewer.
-  const handlePointerMissed = useCallback(() => {
-    if (useViewer.getState().walkthroughMode) return
-    const { selection, setSelection, setLevelMode } = useViewer.getState()
-    if (selection.selectedIds.length > 0) {
-      setSelection({ selectedIds: [] })
-    } else if (selection.zoneId) {
-      setSelection({ zoneId: null })
-    } else if (selection.levelId) {
-      setLevelMode('stacked')
-      setSelection({ levelId: null })
-    }
-  }, [])
+  // A click on empty space clears the room and the element (the floor stays).
+  const handlePointerMissed = useCallback(
+    (event: MouseEvent) => {
+      if (useViewer.getState().walkthroughMode || !onPick) return
+      onPick({ type: 'click', pick: null, modifiers: modifiersOf(event) })
+    },
+    [onPick],
+  )
 
   useEffect(
     () => () => {
@@ -1370,43 +1028,17 @@ export function GlbScene({
       {replaceNodes?.length ? (
         <GlbReplaceInstances identity={identity} nodes={replaceNodes} />
       ) : null}
-      {/* Floating room labels. Each group's matrix is synced to its zone node
-          every frame (above) so the label rides level stacking; the div fades
-          with the room fill via a CSS transition. */}
-      {zoneEntries.map((zone) => (
-        <group
-          key={zone.id}
-          ref={(group) => {
-            if (group) labelGroups.current.set(zone.id, group)
-            else labelGroups.current.delete(zone.id)
-          }}
-        >
-          <Html
-            center
-            position={[zone.centroid[0], 1, zone.centroid[1]]}
-            style={{ pointerEvents: 'none', userSelect: 'none' }}
-            zIndexRange={[10, 0]}
-          >
-            <div
-              ref={(div) => {
-                if (div) labelDivs.current.set(zone.id, div)
-                else labelDivs.current.delete(zone.id)
-              }}
-              style={{
-                color: 'white',
-                opacity: 0,
-                textShadow: `-1px -1px 0 ${zone.color}, 1px -1px 0 ${zone.color}, -1px 1px 0 ${zone.color}, 1px 1px 0 ${zone.color}`,
-                transform: 'scale(0.82)',
-                transformOrigin: 'center',
-                transition: 'opacity 0.3s ease-in-out, transform 0.2s ease-out',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {zone.label}
-            </div>
-          </Html>
-        </group>
-      ))}
     </group>
   )
+}
+
+const NO_MODIFIERS: GlbPickEvent['modifiers'] = {
+  alt: false,
+  ctrl: false,
+  meta: false,
+  shift: false,
+}
+
+function modifiersOf(event: MouseEvent): GlbPickEvent['modifiers'] {
+  return { alt: event.altKey, ctrl: event.ctrlKey, meta: event.metaKey, shift: event.shiftKey }
 }

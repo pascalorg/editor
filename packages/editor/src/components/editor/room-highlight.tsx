@@ -4,13 +4,23 @@ import { type AnyNodeId, sceneRegistry, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
-import { BufferGeometry, DoubleSide, Float32BufferAttribute, type Group } from 'three'
+import {
+  BufferGeometry,
+  DoubleSide,
+  Float32BufferAttribute,
+  type Group,
+  type Object3D,
+} from 'three'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { useShallow } from 'zustand/react/shallow'
 import { useHighlightedRoom } from '../../hooks/use-selected-room'
 import { EDITOR_LAYER } from '../../lib/constants'
 import { resolveOverlayPolicy } from '../../lib/interaction/overlay-policy'
-import { getRoomAssembly, resolveRoomAssemblyHeights } from '../../lib/room-assembly-overlay'
+import {
+  getRoomAssembly,
+  type RoomAssemblyHeights,
+  resolveRoomAssemblyHeights,
+} from '../../lib/room-assembly-overlay'
 import { describeZoneOutline, type RoomSelectionRecord } from '../../lib/room-selection'
 import useEditor from '../../store/use-editor'
 import useInteractionScope from '../../store/use-interaction-scope'
@@ -78,7 +88,6 @@ function positions(array: Float32Array) {
 }
 
 function RoomMesh({ room }: { room: RoomSelectionRecord }) {
-  const ref = useRef<Group>(null)
   const { levelId } = room.key
   // Zone, plate and ceiling edits already produce a new record; wall and
   // storey heights live on these nodes.
@@ -89,11 +98,31 @@ function RoomMesh({ room }: { room: RoomSelectionRecord }) {
     ]),
   )
   // biome-ignore lint/correctness/useExhaustiveDependencies: `heightSources` re-resolves heights from the current node map.
-  const assembly = useMemo(
-    () =>
-      getRoomAssembly(room.geometry, resolveRoomAssemblyHeights(room, useScene.getState().nodes)),
+  const heights = useMemo(
+    () => resolveRoomAssemblyHeights(room, useScene.getState().nodes),
     [room, heightSources],
   )
+  return (
+    <RoomAssemblyMesh
+      heights={heights}
+      levelObject={() => sceneRegistry.nodes.get(levelId)}
+      room={room}
+    />
+  )
+}
+
+/** A room's floor, wall faces and outline in the highlight colour, riding its level's object. */
+export function RoomAssemblyMesh({
+  room,
+  heights,
+  levelObject,
+}: {
+  room: RoomSelectionRecord
+  heights: RoomAssemblyHeights
+  levelObject: () => Object3D | undefined
+}) {
+  const ref = useRef<Group>(null)
+  const assembly = useMemo(() => getRoomAssembly(room.geometry, heights), [room, heights])
   const geometry = useMemo(
     () => ({
       floor: positions(assembly.floor),
@@ -111,7 +140,7 @@ function RoomMesh({ room }: { room: RoomSelectionRecord }) {
     [geometry],
   )
   useFrame(() => {
-    const level = sceneRegistry.nodes.get(levelId)
+    const level = levelObject()
     if (!ref.current) return
     ref.current.visible = !!level
     if (level) {

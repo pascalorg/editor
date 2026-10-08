@@ -2,7 +2,8 @@ import { area, intersection } from '../../lib/polygon-boolean'
 import { polygonInteriorPoint } from '../../lib/polygon-label'
 import { segmentsIntersect } from '../../lib/polygon-relations'
 import { extractRooms } from '../../lib/room-graph'
-import { type AnyNodeId, SeparatorNode, type WallNode, ZoneNode } from '../../schema'
+import { newZone } from '../../lib/new-zone'
+import { type AnyNodeId, SeparatorNode, type WallNode } from '../../schema'
 import { getWallCurveFrameAt } from '../../systems/wall/wall-curve'
 import { planWallInsertion, uncoveredWallSegments } from '../../systems/wall/wall-topology'
 import { setZoneIntent, type ZoneIntentPatch } from './set-zone-intent'
@@ -149,7 +150,7 @@ export function createZone(
       }
     }
   }
-  const zone = ZoneNode.parse({
+  const zone = newZone({
     id: input.mintId('zone'),
     parentId: input.levelId,
     name: input.name ?? 'Room',
