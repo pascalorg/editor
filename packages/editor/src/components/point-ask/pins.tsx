@@ -6,6 +6,7 @@ import { type PointerEvent, useEffect, useRef, useState } from 'react'
 import { Vector3 } from 'three'
 import {
   CARD_AUTO_MS,
+  CARD_CARRIED_MS,
   CARD_CLOSE_DELAY_MS,
   CARD_MS,
   CARD_W,
@@ -251,7 +252,7 @@ function PinView({ askId }: { askId: string }) {
         if (s.cardFor === null && s.bubble === null && s.pins[askId]) {
           s.openCard(askId)
           setTimeout(() => {
-            if (usePointAsk.getState().cardFor === askId && !hovering.current && !cardHover.current)
+            if (usePointAsk.getState().cardFor === askId && !cardHeld(askId))
               usePointAsk.getState().openCard(null)
           }, CARD_AUTO_MS)
         }
@@ -361,17 +362,19 @@ function PinView({ askId }: { askId: string }) {
         }}
         onPointerEnter={() => {
           hovering.current = true
+          pinHover.askId = askId
           emitter.emit('point-ask:pin', { askId, action: 'hover' })
           usePointAsk.getState().openCard(askId)
         }}
         onPointerLeave={() => {
           hovering.current = false
+          if (pinHover.askId === askId) pinHover.askId = null
           if (holdTimer.current) clearTimeout(holdTimer.current)
           holdTimer.current = null
           emitter.emit('point-ask:pin', { askId, action: 'leave' })
           window.setTimeout(() => {
             const s = usePointAsk.getState()
-            if (s.cardFor === askId && !cardHover.current) s.openCard(null)
+            if (s.cardFor === askId && !cardHeld(askId)) s.openCard(null)
           }, CARD_CLOSE_DELAY_MS)
         }}
         ref={(node) => {
@@ -388,6 +391,19 @@ function PinView({ askId }: { askId: string }) {
 
 const cardHover = { current: false }
 
+/**
+ * Whether the pointer is on the card. The flag follows the card's enter and leave events, but a card
+ * that closes under the pointer (a click on Redo, Keep) never gets its leave, and one that opens
+ * under a still pointer never gets its enter, so the browser's own :hover is asked as well.
+ */
+const cardHeld = (askId: string) =>
+  cardHover.current ||
+  pinHover.askId === askId ||
+  document.querySelector('.pa-card:hover, .pa-pin:hover') !== null
+
+/** The pin the pointer is on, so a card's close timer does not shut what the pin just opened. */
+const pinHover: { askId: string | null } = { askId: null }
+
 /** The pin's card: what Pascal did, and Keep or Undo; it rises from the pin. */
 function PinCard() {
   const askId = usePointAsk((s) => s.cardFor)
@@ -397,14 +413,22 @@ function PinCard() {
   const [warn, setWarn] = useState(false)
   const [note, setNote] = useState<string | null>(null)
   const comparing = usePointAsk((s) => s.comparing === askId)
-  const lastMove = useRef(0)
+  const lastMove = useRef<{ x: number; y: number } | null>(null)
+  const carriedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
     const note = (event: globalThis.PointerEvent) => {
-      lastMove.current = event.timeStamp
+      lastMove.current = { x: event.clientX, y: event.clientY }
     }
     window.addEventListener('pointermove', note, { passive: true, capture: true })
     return () => window.removeEventListener('pointermove', note, { capture: true })
   }, [])
+  // A card that goes under the pointer never hears its leave: the next one starts unheld.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: tied to which card is open
+  useEffect(() => {
+    cardHover.current = false
+    if (carriedTimer.current) clearTimeout(carriedTimer.current)
+    carriedTimer.current = null
+  }, [askId])
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new card starts without the warning
   useEffect(() => {
     setWarn(false)
@@ -466,20 +490,30 @@ function PinCard() {
   const edits = handEditsSince(askId)
   const keepOpen = () => {
     cardHover.current = true
+    if (carriedTimer.current) clearTimeout(carriedTimer.current)
+    carriedTimer.current = null
   }
   const leave = (event: PointerEvent<HTMLDivElement>) => {
     cardHover.current = false
     if (
       cardCarriedFromPointer({
         pointerType: event.pointerType,
-        leftAt: event.timeStamp,
-        lastMoveAt: lastMove.current,
+        at: { x: event.clientX, y: event.clientY },
+        last: lastMove.current,
       })
-    )
+    ) {
+      // The pointer did not leave, the card was taken from it: it waits a while for the pointer.
+      if (carriedTimer.current) clearTimeout(carriedTimer.current)
+      carriedTimer.current = setTimeout(() => {
+        carriedTimer.current = null
+        const s = usePointAsk.getState()
+        if (s.cardFor === askId && !cardHeld(askId)) s.openCard(null)
+      }, CARD_CARRIED_MS)
       return
+    }
     window.setTimeout(() => {
       const s = usePointAsk.getState()
-      if (s.cardFor === askId && !cardHover.current) s.openCard(null)
+      if (s.cardFor === askId && !cardHeld(askId)) s.openCard(null)
     }, CARD_CLOSE_DELAY_MS)
   }
   return (

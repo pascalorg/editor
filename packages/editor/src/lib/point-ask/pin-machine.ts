@@ -173,18 +173,23 @@ export function alsoChangedLine(pin: PinModel): string | null {
   return `Also changed ${count} other element${count === 1 ? '' : 's'}`
 }
 
-/** A pointer that left with no move just before it did not walk out. */
-const POINTER_STILL_MS = 150
-
 /**
  * The card rides its pin, so a camera flight (an Undo playing the build backwards, say) can carry it
- * out from under a pointer that has not moved. That is not the person leaving, and the card holds the
- * Redo, so it stays. A finger leaves without a move whenever it lifts, so only a mouse can be carried.
+ * out from under a pointer that has not moved. That is not the person leaving, and the card holds
+ * the Redo, so it stays for a while. The leave event of a pointer that walked out is dispatched
+ * before the move that caused it, so it is told by position: `at` is where the leave says the
+ * pointer is, `last` where the last move left it; a pointer that did not move is where it was.
+ * A finger leaves without a move whenever it lifts, so only a mouse can be carried.
  */
 export function cardCarriedFromPointer(leave: {
   pointerType: string
-  leftAt: number
-  lastMoveAt: number
+  at: { x: number; y: number }
+  last: { x: number; y: number } | null
 }): boolean {
-  return leave.pointerType === 'mouse' && leave.leftAt - leave.lastMoveAt > POINTER_STILL_MS
+  return (
+    leave.pointerType === 'mouse' &&
+    leave.last !== null &&
+    Math.abs(leave.at.x - leave.last.x) < 0.5 &&
+    Math.abs(leave.at.y - leave.last.y) < 0.5
+  )
 }

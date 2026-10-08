@@ -430,20 +430,31 @@ describe('redo', () => {
 })
 
 describe('a card carried out from under the pointer', () => {
+  // Boundary events come before the move that caused them, so the leave of a person who moves
+  // after a long pause arrives with the old last position: only where the pointer is, against where
+  // it was last seen, tells a pointer that walked out from a card that was taken from it.
+  const last = { x: 640, y: 380 }
+
   test('is a mouse that did not move: the camera flew, the person did not leave', () => {
-    expect(cardCarriedFromPointer({ pointerType: 'mouse', leftAt: 5000, lastMoveAt: 1200 })).toBe(
+    expect(cardCarriedFromPointer({ pointerType: 'mouse', at: { x: 640, y: 380 }, last })).toBe(
       true,
     )
   })
 
-  test('is not a mouse that moved out just now', () => {
-    expect(cardCarriedFromPointer({ pointerType: 'mouse', leftAt: 5000, lastMoveAt: 4990 })).toBe(
+  test('is not a mouse that moved out, however long it had been still', () => {
+    expect(cardCarriedFromPointer({ pointerType: 'mouse', at: { x: 700, y: 560 }, last })).toBe(
       false,
     )
   })
 
+  test('is not a mouse we never saw move', () => {
+    expect(
+      cardCarriedFromPointer({ pointerType: 'mouse', at: { x: 640, y: 380 }, last: null }),
+    ).toBe(false)
+  })
+
   test('is never a finger: lifting it leaves without a move', () => {
-    expect(cardCarriedFromPointer({ pointerType: 'touch', leftAt: 5000, lastMoveAt: 1200 })).toBe(
+    expect(cardCarriedFromPointer({ pointerType: 'touch', at: { x: 640, y: 380 }, last })).toBe(
       false,
     )
   })

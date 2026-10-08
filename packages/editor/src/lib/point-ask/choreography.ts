@@ -40,6 +40,8 @@ export const SIDE_HYSTERESIS_MS = 150
 export const TAP_LATCH_MS = 200
 export const CARD_AUTO_MS = 4000
 export const CARD_CLOSE_DELAY_MS = 400
+// A card the camera carried from under a still pointer stays this long, for the pointer to reach it.
+export const CARD_CARRIED_MS = 6000
 export const PIN_RETIRE_MS = 8000
 // A press on a done pin that stays down this long shows the scene as it was before the turn.
 export const PIN_HOLD_MS = 220
