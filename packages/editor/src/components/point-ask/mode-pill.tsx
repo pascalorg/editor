@@ -64,7 +64,8 @@ export function BeforeTag() {
     const view = freeViewport()
     if (view) {
       node.style.left = `${view.x0}px`
-      node.style.top = `${view.y0 + 8}px`
+      // Below the level selector and the view switch, which sit over the canvas's top-left corner.
+      node.style.top = `${view.y0 + 64}px`
     }
     node.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 120, easing: EASE_OUT })
   }, [comparing])

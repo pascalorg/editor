@@ -281,7 +281,10 @@ function openBubble(
   changesAsk?: PointBubble['changesAsk'],
 ) {
   const state = usePointAsk.getState()
-  const draft = state.bubble?.draft ?? state.drafts[targets[0]?.id ?? area?.ids.join() ?? ''] ?? ''
+  // Asking for more starts from an empty field; the words just sent are not a draft to come back to.
+  const draft = changesAsk
+    ? ''
+    : (state.bubble?.draft ?? state.drafts[targets[0]?.id ?? area?.ids.join() ?? ''] ?? '')
   const frame = canvasRect()
   const crop = down?.crop
   const bubble: PointBubble = {
@@ -335,7 +338,8 @@ export function closeBubble(kind: 'send' | 'dismiss' = 'dismiss') {
   const state = usePointAsk.getState()
   const bubble = state.bubble
   if (!bubble) return
-  state.rememberDraft(bubble.targets[0]?.id ?? '', bubble.draft)
+  // Words that were not sent are kept for the next time the same element is pointed at.
+  if (kind === 'dismiss') state.rememberDraft(bubble.targets[0]?.id ?? '', bubble.draft)
   downCrops.delete(bubble.capturedAt)
   if (bubble.area) state.setRegion(null)
   state.closeBubble(kind)
