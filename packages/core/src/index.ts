@@ -722,6 +722,7 @@ export {
 } from './systems/stair/stair-layout'
 export {
   getStairMirrorUpdates,
+  hasStairMirrorUpdates,
   type StairMirrorResult,
 } from './systems/stair/stair-mirror'
 export { createSurfaceOpeningPreviewController } from './systems/stair/stair-opening-preview'

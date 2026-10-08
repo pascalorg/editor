@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { StairNode, StairSegmentNode } from '../../schema'
-import { getStairMirrorUpdates } from './stair-mirror'
+import { getStairMirrorUpdates, hasStairMirrorUpdates } from './stair-mirror'
 
 describe('getStairMirrorUpdates', () => {
   test('mirrors Cut Back / switchback stair turns in place and inverts railing', () => {
@@ -154,5 +154,61 @@ describe('getStairMirrorUpdates', () => {
 
     expect(result.stairUpdates).toEqual({ railingMode: 'right' })
     expect(result.segmentUpdates).toHaveLength(0)
+  })
+
+  test('mirrors winder turns and keeps the other winder settings', () => {
+    const entry = StairSegmentNode.parse({ id: 'sseg_entry', attachmentSide: 'front' })
+    const winder = StairSegmentNode.parse({
+      id: 'sseg_winder',
+      attachmentSide: 'front',
+      winder: { turn: 'left', innerGap: 0.1, walkingLineOffset: 0.4, division: 'equal-angle' },
+    })
+    const exit = StairSegmentNode.parse({ id: 'sseg_exit', attachmentSide: 'front' })
+    const stair = StairNode.parse({
+      id: 'stair_winder',
+      stairType: 'straight',
+      children: [entry.id, winder.id, exit.id],
+    })
+    const nodes = { [stair.id]: stair, [entry.id]: entry, [winder.id]: winder, [exit.id]: exit }
+
+    const result = getStairMirrorUpdates(stair, nodes)
+    expect(result.stairUpdates).toEqual({})
+    expect(result.segmentUpdates).toEqual([
+      {
+        id: winder.id,
+        updates: {
+          winder: { turn: 'right', innerGap: 0.1, walkingLineOffset: 0.4, division: 'equal-angle' },
+        },
+      },
+    ])
+
+    const mirroredWinder = { ...winder, ...result.segmentUpdates[0]!.updates }
+    const back = getStairMirrorUpdates(stair, { ...nodes, [winder.id]: mirroredWinder })
+    expect(back.segmentUpdates[0]!.updates.winder?.turn).toBe('left')
+  })
+
+  test('mirrors a one-sided handrail and keeps its other settings', () => {
+    const stair = StairNode.parse({
+      id: 'stair_handrail',
+      stairType: 'straight',
+      railingMode: 'both',
+      handrail: { mode: 'right', height: 0.95, top: { extension: 0.3 } },
+    })
+    const result = getStairMirrorUpdates(stair, { [stair.id]: stair })
+
+    expect(result.stairUpdates).toEqual({ handrail: { ...stair.handrail!, mode: 'left' } })
+  })
+
+  test('leaves a two-sided handrail untouched and reports nothing to mirror', () => {
+    const stair = StairNode.parse({
+      id: 'stair_handrail_both',
+      stairType: 'straight',
+      railingMode: 'none',
+      handrail: { mode: 'both' },
+    })
+    const result = getStairMirrorUpdates(stair, { [stair.id]: stair })
+
+    expect(result).toEqual({ stairUpdates: {}, segmentUpdates: [] })
+    expect(hasStairMirrorUpdates(result)).toBe(false)
   })
 })
