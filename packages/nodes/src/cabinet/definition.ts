@@ -16,6 +16,7 @@ import type {
 } from '@pascal-app/core'
 import {
   CABINET_METRIC_DEFAULTS,
+  cabinetSlots,
   findLevelAncestorId,
   selectionProxyIdFromMetadata,
 } from '@pascal-app/core'
@@ -71,7 +72,6 @@ import {
 } from './run-ops'
 import { cabinetSceneAction } from './scene-action'
 import { CabinetModuleNode, CabinetNode } from './schema'
-import { cabinetSlots } from './slots'
 import {
   backAnchoredModuleZ,
   isHoodCompartmentType,

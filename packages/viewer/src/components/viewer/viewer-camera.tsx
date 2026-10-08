@@ -34,7 +34,7 @@ function ImmersiveXRViewLayers({ enabled }: { enabled: boolean }) {
 }
 
 export function viewerCameraClipping(immersiveXR: boolean) {
-  return immersiveXR ? { far: 10_000, near: 0.001 } : { far: 1000, near: 0.1 }
+  return immersiveXR ? { far: 10_000, near: 0.001 } : { far: 1000, near: 0.3 }
 }
 
 export function applyViewerCameraClipping(
@@ -45,6 +45,20 @@ export function applyViewerCameraClipping(
   camera.far = clipping.far
   camera.near = clipping.near
   camera.updateProjectionMatrix()
+}
+
+export function applyWalkthroughCameraClipping(camera: {
+  near: number
+  updateProjectionMatrix(): void
+}) {
+  const previousNear = camera.near
+  // The eye can approach a wall to the capsule's 0.25 m radius.
+  camera.near = Math.min(previousNear, 0.1)
+  camera.updateProjectionMatrix()
+  return () => {
+    camera.near = previousNear
+    camera.updateProjectionMatrix()
+  }
 }
 
 export function viewerUsesPerspectiveCamera(cameraMode: string, immersiveXR: boolean) {

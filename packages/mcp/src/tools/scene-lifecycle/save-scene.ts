@@ -15,16 +15,24 @@ export const saveSceneInput = {
   name: z.string().min(1).max(200),
   projectId: z.string().optional(),
   expectedVersion: z.number().int().positive().optional(),
+  replace: z
+    .boolean()
+    .optional()
+    .describe(
+      "Write this session's scene over a project or scene it was not loaded from, replacing what that one holds.",
+    ),
   saveMode: z
     .enum(['draft', 'checkpoint'])
     .default('draft')
     .describe(
-      '`draft` updates the browser-visible working model without polluting version history. `checkpoint` creates a meaningful saved version.',
+      '`draft` updates the browser-visible working model without polluting version history. `checkpoint` creates a meaningful saved version; it does not publish.',
     ),
   publish: z
     .boolean()
     .optional()
-    .describe('For checkpoint saves, publish the checkpoint as the browser-visible version.'),
+    .describe(
+      "Hosted Pascal: also publish this checkpoint, making it the version the project's viewers see. Only when the user asks to publish.",
+    ),
   thumbnail: z.string().url().optional(),
   includeCurrentScene: z
     .boolean()
@@ -59,13 +67,43 @@ export const saveSceneOutput = {
   defaultLevelId: z.string().nullable(),
 }
 
+/** A saved scene that is more than the default site, building and level. */
+const HOLDS_CONTENT = 3
+
+/**
+ * The session's scene goes over a project or scene only when it was loaded from it (or created
+ * for it). After a server reload a session starts over on a blank scene, and saving it by id wrote
+ * it over the project's draft (2026-10-03: 8 levels and 10 imported plans lost).
+ */
+async function requireSceneLoadedFrom(
+  bridge: SceneOperations,
+  target: { id?: string; projectId?: string },
+) {
+  if (target.id === undefined && target.projectId === undefined) return
+  const active = bridge.getActiveScene()
+  if (target.id !== undefined ? active?.id === target.id : active?.projectId === target.projectId)
+    return
+  const nodeCount =
+    target.projectId !== undefined && bridge.canGetProjectStatus
+      ? ((await bridge.getProjectStatus(target.projectId))?.nodeCount ?? 0)
+      : target.id !== undefined
+        ? Object.keys((await bridge.loadStoredScene(target.id))?.graph.nodes ?? {}).length
+        : 0
+  if (nodeCount <= HOLDS_CONTENT) return
+  throwMcpError(
+    ErrorCode.InvalidRequest,
+    `scene_not_loaded: this session's scene was not loaded from ${target.projectId ?? target.id}, which holds ${nodeCount} nodes — the server may have reloaded and this session started over. Call load_scene with it first, or pass replace: true to write this scene over it.`,
+    { ...target, nodeCount },
+  )
+}
+
 export function registerSaveScene(server: McpServer, bridge: SceneOperations): void {
   server.registerTool(
     'save_scene',
     {
       title: 'Save scene',
       description:
-        'Save the current scene (or a provided graph) to the SceneStore. Defaults to a browser-visible draft save so agents can iterate without creating many project versions. Use saveMode: "checkpoint" for meaningful version history.',
+        'Save the current scene (or a provided graph) to the SceneStore. Without id or projectId it saves to the project this session is bound to (create_project or load_scene). Defaults to a browser-visible draft save so agents can iterate without creating many project versions. Use saveMode: "checkpoint" for meaningful version history.',
       inputSchema: saveSceneInput,
       outputSchema: saveSceneOutput,
       annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
@@ -80,8 +118,21 @@ export function registerSaveScene(server: McpServer, bridge: SceneOperations): v
       thumbnail,
       includeCurrentScene,
       graph,
+      replace,
     }) => {
+      // Without a target, the session's scene goes where it came from (create_project, load_scene,
+      // an earlier save). An agent was refused "Call create_project first" on its first save, right
+      // after create_project bound the session to its project.
+      const bound =
+        includeCurrentScene && id === undefined && projectId === undefined
+          ? bridge.getActiveScene()
+          : null
+      if (bound) {
+        id = bound.id
+        projectId = bound.projectId ?? undefined
+      }
       let sceneGraph: SceneGraph
+      if (includeCurrentScene && !replace) await requireSceneLoadedFrom(bridge, { id, projectId })
       if (includeCurrentScene) {
         const validation = bridge.validateScene()
         if (!validation.valid) {

@@ -5,13 +5,13 @@ import {
   type AnyNodeId,
   getActiveRoofHeight,
   type RoofSegmentNode,
-  TurbineVentNode as TurbineVentSchema,
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
+  duplicateNodeAndPickUp,
   PanelSection,
   PanelWrapper,
   SegmentedControl,
@@ -95,28 +95,8 @@ export default function TurbineVentPanel() {
   }, [node, setMovingNode, setSelection])
 
   const handleDuplicate = useCallback(() => {
-    if (!node) return
-    triggerSFX('sfx:item-pick')
-    const parentId = node.roofSegmentId as AnyNodeId | undefined
-    if (!parentId) return
-
-    const state = useScene.getState()
-    const meta =
-      typeof node.metadata === 'object' && node.metadata !== null
-        ? (node.metadata as Record<string, unknown>)
-        : {}
-    const cloneInput = {
-      ...node,
-      id: undefined,
-      metadata: { ...meta, isNew: true },
-    } as Record<string, unknown>
-    const cloned = TurbineVentSchema.parse(cloneInput) as TurbineVentNode
-
-    state.createNode(cloned, parentId)
-    state.dirtyNodes.add(parentId)
-    setMovingNode(cloned as never)
-    setSelection({ selectedIds: [] })
-  }, [node, setMovingNode, setSelection])
+    if (node) duplicateNodeAndPickUp(node)
+  }, [node])
 
   const handleDelete = useCallback(() => {
     if (!(selectedId && node)) return

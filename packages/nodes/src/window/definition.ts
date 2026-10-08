@@ -11,6 +11,7 @@ import type {
 import {
   getDormerWallHorizontalBoundsAtHeight,
   getDormerWallOpeningVerticalBounds,
+  windowSlots,
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { curtainOpeningResizeMax } from '../shared/curtain-opening-limits'
@@ -34,8 +35,8 @@ import { windowFloorplanMoveTarget } from './floorplan-move'
 import { windowMechanism } from './mechanism'
 import { windowPaint } from './paint'
 import { windowParametrics } from './parametrics'
+import { WINDOW_PLACEMENT_HINTS } from './placement'
 import { WindowNode } from './schema'
-import { windowSlots } from './slots'
 
 const SIDE_HANDLE_OFFSET = 0.24
 const HEIGHT_HANDLE_OFFSET = 0.24
@@ -358,6 +359,7 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
 
   toolHints: [
     { key: 'Left click', label: 'Place window on wall' },
+    ...WINDOW_PLACEMENT_HINTS,
     { key: 'R', label: 'Flip side' },
     { key: 'Alt', label: 'Force place' },
     { key: 'Esc', label: 'Cancel' },

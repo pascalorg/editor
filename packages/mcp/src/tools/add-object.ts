@@ -1,16 +1,24 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { isScriptedNode, scriptedObjectMeta } from '@pascal-app/core'
 import {
   type AddObjectInput,
+  achievedChanges,
   addObject,
   authoredObject,
+  editedScriptParams,
   readSourceResult,
+  requireAddObjectReason,
+  type SceneNodes,
 } from '@pascal-app/core/agent-operations'
 import { addObjectTool, getSourceTool, isAgentRefusal, refuse } from '@pascal-app/core/agent-tools'
 import {
   type AnyNode,
   type CompiledGeometryScript,
   GEOMETRY_SCRIPT_MIME_TYPE,
+  GeometryArtifactMetadata,
+  GeometryReuseFields,
   type GeometryScriptParamValue,
+  generateId,
 } from '@pascal-app/core/schema'
 import type { SceneOperations } from '../operations'
 import { DESTRUCTIVE_TOOL_ANNOTATIONS, READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
@@ -33,10 +41,27 @@ export type GeometryScriptHost = {
     sha256: string
     bytes: Uint8Array
     mimeType: string
-  }): Promise<void>
+    nodeId?: string
+    metadata?: GeometryArtifactMetadata
+  }): Promise<string>
   /** A stored artifact's bytes (an object's script), or null when missing; only for principals who may edit the scene. */
   readArtifact(input: { sceneId: string; sha256: string }): Promise<Uint8Array | null>
+  /**
+   * Compiles and stores in one step, for a host whose compiler keeps the artifacts itself (the
+   * hosted MCP's user editor tab); preferred over `compile` + `storeArtifact` when present.
+   */
+  build?(input: {
+    sceneId: string
+    code: string
+    params?: Record<string, GeometryScriptParamValue>
+    /** What the script builds, for the host to name it to the user. */
+    kind: ScriptedKind
+    nodeId?: string
+    metadata?: GeometryArtifactMetadata
+  }): Promise<CompiledGeometryScript>
 }
+
+export type ScriptedKind = 'object' | 'window' | 'door' | 'column'
 
 /** Compiles a module on the host and stores its GLB and text for the scene: the step every scripted tool shares. */
 export async function compileAndStore(
@@ -44,23 +69,37 @@ export async function compileAndStore(
   sceneId: string,
   code: string,
   params: Record<string, GeometryScriptParamValue> | undefined,
+  kind: ScriptedKind,
+  context: { nodeId?: string; metadata?: GeometryArtifactMetadata } = {},
 ): Promise<CompiledGeometryScript> {
+  const nodeId = context.nodeId ?? generateId(kind === 'object' ? 'item' : kind)
+  const metadata = GeometryArtifactMetadata.parse({
+    ...context.metadata,
+    kind: kind === 'object' ? 'item' : kind,
+  })
+  if (host.build)
+    return { ...(await host.build({ sceneId, code, params, kind, nodeId, metadata })), nodeId }
   const { glb, ...compiled } = await host.compile({ code, params })
-  await Promise.all([
+  metadata.mount = compiled.mount
+  const [sha256] = await Promise.all([
     host.storeArtifact({
       sceneId,
+      nodeId,
+      metadata,
       sha256: compiled.sha256,
       bytes: glb,
       mimeType: 'model/gltf-binary',
     }),
     host.storeArtifact({
       sceneId,
+      nodeId,
+      metadata,
       sha256: compiled.script,
       bytes: new TextEncoder().encode(code),
       mimeType: GEOMETRY_SCRIPT_MIME_TYPE,
     }),
   ])
-  return compiled
+  return { ...compiled, sha256, nodeId }
 }
 
 export async function readScript(
@@ -104,25 +143,34 @@ export function registerAddObject(
       const args = input as Omit<AddObjectInput, 'compiled'>
       let compiled: CompiledGeometryScript
       try {
+        requireAddObjectReason(args)
         const code =
           args.code ??
           (args.nodeId
             ? await readScript(host, scene.id, bridge, args.nodeId)
             : refuseMissingCode())
-        compiled = await compileAndStore(host, scene.id, code, args.params)
+        const nodes = bridge.getNodes() as Record<string, AnyNode>
+        const previous = args.nodeId ? nodes[args.nodeId] : undefined
+        const params = editedScriptParams(previous, args.params)
+        compiled = await compileAndStore(host, scene.id, code, params, 'object', {
+          nodeId: args.nodeId,
+          metadata: {
+            ...(isScriptedNode(previous) ? scriptedObjectMeta(previous) : {}),
+            ...GeometryReuseFields.parse(args),
+          },
+        })
       } catch (error) {
         if (isAgentRefusal(error)) return refusalResult(error)
         return toolError(error instanceof Error ? error.message : String(error), {
           code: 'script_failed',
         })
       }
+      // A copy: the hosted bridge writes its map in place, and a "before" that grows with the call
+      // reads every creation as unchanged.
+      const before = { ...(bridge.getNodes() as Record<string, AnyNode>) }
       let outcome: ReturnType<typeof addObject>
       try {
-        outcome = addObject(
-          bridge.getNodes() as Record<string, AnyNode>,
-          { ...args, compiled },
-          { activeLevelId: null },
-        )
+        outcome = addObject(before, { ...args, compiled }, { activeLevelId: null })
       } catch (error) {
         return refusalResult(error)
       }
@@ -130,6 +178,8 @@ export function registerAddObject(
       if (patches.length) bridge.applyPatch(patches)
       const payload = {
         ...outcome.result,
+        // What the scene holds now, as every write answers.
+        achieved: achievedChanges(before as SceneNodes, outcome.changes ?? {}),
         ...persistencePayload(await publishLiveSceneSnapshot(bridge, addObjectTool.name)),
       }
       return {

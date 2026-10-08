@@ -110,7 +110,7 @@ operate on it without reloading:
 > **User:** add a door on the south wall between Living and Kitchen.
 
 The agent calls `find_nodes({ type: "wall" })`, picks the appropriate
-wall, and issues `cut_opening` — no extra wiring needed.
+wall, and issues `add_door` — no extra wiring needed.
 
 ## Takeaways
 

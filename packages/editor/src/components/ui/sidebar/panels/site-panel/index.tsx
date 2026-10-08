@@ -76,6 +76,7 @@ import useEditor from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'
 import { MetricControl } from '../../../controls/metric-control'
 import { LevelDuplicateDialog } from '../../../level-duplicate-dialog'
+import { CollectionsSection } from './collection-tree-node'
 import { InlineRenameInput } from './inline-rename-input'
 import { ZoneMembershipCheckbox } from './zone-membership-checkbox'
 import { focusTreeNode, TreeNode, TreeNodeWrapper } from './tree-node'
@@ -736,8 +737,7 @@ const LevelItem = memo(function LevelItem({
   const [cameraPopoverOpen, setCameraPopoverOpen] = useState(false)
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
-  const createNodes = useScene((s) => s.createNodes)
-  const updateNodes = useScene((s) => s.updateNodes)
+  const applyNodeChanges = useScene((s) => s.applyNodeChanges)
   const itemRef = useRef<HTMLDivElement>(null)
   const isSelected = selectedLevelId === level.id
   const canDeleteLevel = level.level !== 0
@@ -771,22 +771,14 @@ const LevelItem = memo(function LevelItem({
   }
 
   const handleDuplicateLevel = (preset: LevelDuplicatePreset = 'everything') => {
-    const { createOps, newLevelId, shiftedLevels } = buildLevelDuplicateCreateOps({
+    const { createOps, newLevelId, updateOps } = buildLevelDuplicateCreateOps({
       nodes: useScene.getState().nodes,
       level,
       levels,
       preset,
     })
 
-    if (shiftedLevels.length > 0) {
-      updateNodes(
-        shiftedLevels.map((shiftedLevel) => ({
-          id: shiftedLevel.id as AnyNodeId,
-          data: { level: shiftedLevel.level } as Partial<AnyNode>,
-        })),
-      )
-    }
-    createNodes(createOps)
+    applyNodeChanges({ create: createOps, update: updateOps })
     selectLevel(newLevelId as LevelNode['id'], false)
     setDuplicateDialogOpen(false)
   }
@@ -1749,6 +1741,7 @@ const BuildingItem = memo(function BuildingItem({
                   projectId={projectId}
                 />
                 <UnitsSection buildingId={building.id} />
+                <CollectionsSection />
                 <LayerToggle />
               </div>
               <div className="subtle-scrollbar relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">

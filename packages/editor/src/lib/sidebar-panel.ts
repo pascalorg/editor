@@ -5,8 +5,8 @@ import useEditor from '../store/use-editor'
 export const SIDEBAR_MIN_WIDTH = 300
 
 // The desktop layout's rail tabs, published while it is mounted. Hosts pick
-// their own tabs (the standalone editor has no Paint tab), so a shortcut names
-// the panels it would like, in order, and gets the first one the host has.
+// their own tabs, so a shortcut names the panels it would like, in order, and
+// gets the first one the host has.
 let sidebarTabIds: readonly string[] = []
 
 export function setSidebarTabIds(ids: readonly string[]): void {
@@ -14,7 +14,7 @@ export function setSidebarTabIds(ids: readonly string[]): void {
 }
 
 /**
- * Show a sidebar panel from a keyboard shortcut: expands a collapsed sidebar
+ * Show a sidebar panel: expands a collapsed sidebar
  * and switches to the first of `preferred` the host provides. Returns the
  * panel shown, or null when the host has none of them (e.g. on mobile).
  */

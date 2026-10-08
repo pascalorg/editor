@@ -2,7 +2,7 @@
 
 import { type ReactNode, useCallback, useEffect, useRef } from 'react'
 import { useIsMobile } from '../../hooks/use-mobile'
-import { SIDEBAR_MIN_WIDTH, setSidebarTabIds } from '../../lib/sidebar-panel'
+import { openSidebarPanel, SIDEBAR_MIN_WIDTH, setSidebarTabIds } from '../../lib/sidebar-panel'
 import useEditor from '../../store/use-editor'
 
 import { useSidebarStore } from '../ui/primitives/sidebar'
@@ -57,6 +57,18 @@ function LeftColumn({
       setMode('select')
     }
   }, [activePanel])
+
+  // Paint mode entered without the panel (command palette, a material's "paint
+  // with") brings the host's Paint panel along, so the rail reflects the mode.
+  useEffect(
+    () =>
+      useEditor.subscribe((state, prev) => {
+        if (state.mode !== prev.mode && state.mode === 'material-paint') {
+          openSidebarPanel(['paint'])
+        }
+      }),
+    [],
+  )
 
   // Closing (collapsing) the sidebar disarms any build tool back to select
   useEffect(() => {

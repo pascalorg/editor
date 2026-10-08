@@ -1,16 +1,22 @@
 import {
   AnyNode,
   type AnyNodeId,
+  collectionIdsOf,
   generateId,
   generateSceneMaterialId,
+  getArtifactStore,
+  isDerivedNode,
   type LevelNode,
   nodeRegistry,
+  type ParsedBuildJson,
   remapMeasurementReferences,
   SceneMaterial,
   type SceneMaterialId,
   type StairNode,
+  scriptedSize,
   useScene,
 } from '@pascal-app/core'
+import { clampDoorToWall, clampWindowToWall } from '@pascal-app/core/building'
 import { useViewer } from '@pascal-app/viewer'
 import { referencedSceneMaterialIds, remapSceneMaterialRefs } from './scene-material-refs'
 
@@ -18,14 +24,30 @@ type ClipboardPayload = {
   copiedAt: number
   materials: SceneMaterial[]
   nodes: AnyNode[]
+  /** The project copied from, where the scripted nodes' artifacts live. */
+  projectId: string | null
   rootIds: AnyNodeId[]
 }
 
 export type PasteResult = {
   createdMaterialIds: SceneMaterialId[]
   pastedIds: AnyNodeId[]
+  /** Scripted nodes left out (with what they host): their artifacts could not come from the project they were copied from. */
+  refusedIds: AnyNodeId[]
+  /** Why they were left out, when any were. */
+  refusal: PasteRefusal | null
   skippedIds: AnyNodeId[]
 }
+
+/**
+ * `no-access`: the source project cannot be read any more (removed from it,
+ * deleted, made private, another account). `no-copies`: its geometry is
+ * readable but this script version cannot be copied. `failed`: the copy itself failed.
+ */
+export type PasteRefusal = 'no-access' | 'no-copies' | 'failed'
+
+type Refused = { ids: ReadonlySet<AnyNodeId>; reason: PasteRefusal | null }
+const NONE_REFUSED: Refused = { ids: new Set(), reason: null }
 
 const SYSTEM_CLIPBOARD_KIND = 'pascal.scene-nodes'
 const SYSTEM_CLIPBOARD_VERSION = 1
@@ -85,7 +107,7 @@ function collectSubtreeIds(
 ) {
   if (ids.has(rootId)) return
   const node = nodes[rootId]
-  if (!node) return
+  if (!node || isDerivedNode(node)) return
   ids.add(rootId)
 
   if ('children' in node && Array.isArray(node.children)) {
@@ -130,6 +152,7 @@ function isClipboardRoot(
 }
 
 function isCopyableRootType(node: AnyNode) {
+  if (isDerivedNode(node)) return false
   if (COPYABLE_ROOT_TYPES.has(node.type)) return true
   const definition = nodeRegistry.get(node.type)
   return !!definition && definition.capabilities?.duplicable !== false
@@ -296,6 +319,7 @@ function buildClipboardPayload(ids: AnyNodeId[]): ClipboardPayload | null {
       .filter((material): material is SceneMaterial => !!material)
       .map((material) => JSON.parse(JSON.stringify(material)) as SceneMaterial),
     nodes: copiedNodes,
+    projectId: useViewer.getState().projectId,
     rootIds,
   }
 }
@@ -328,6 +352,7 @@ function parseClipboardPayload(text: string): ClipboardPayload | null {
       copiedAt?: unknown
       materials?: unknown
       nodes?: unknown
+      projectId?: unknown
       rootIds?: unknown
     }
     if (
@@ -355,6 +380,7 @@ function parseClipboardPayload(text: string): ClipboardPayload | null {
       copiedAt: candidate.copiedAt,
       materials: materials.filter((result) => result.success).map((result) => result.data),
       nodes: parsedNodes,
+      projectId: typeof candidate.projectId === 'string' ? candidate.projectId : null,
       rootIds,
     }
   } catch {
@@ -435,16 +461,130 @@ export function pasteEditorClipboardToLevel(targetLevelId?: AnyNodeId): PasteRes
 export async function pasteSystemEditorClipboardToLevel(
   targetLevelId?: AnyNodeId,
 ): Promise<PasteResult | null> {
-  if (!(await readEditorClipboardFromSystem())) return null
-  return pasteEditorClipboardToLevel(targetLevelId)
+  const projectId = useViewer.getState().projectId
+  const store = getArtifactStore()
+  if (!(await readEditorClipboardFromSystem()) || !clipboardPayload) return null
+  if (projectId !== useViewer.getState().projectId || store !== getArtifactStore()) return null
+  const payload = clipboardPayload
+  const targetLevel = getPasteTargetLevel(targetLevelId)
+  if (!targetLevel) return null
+  const refused =
+    payload.projectId && payload.projectId === projectId
+      ? NONE_REFUSED
+      : await copyArtifactsHere(payload)
+  // Navigation can replace the scene while the server copies its artifacts.
+  if (projectId !== useViewer.getState().projectId || store !== getArtifactStore()) return null
+  return applyClipboardPayloadToLevel(payload, targetLevel.id, refused)
+}
+
+function artifactHashes(node: AnyNode): string[] {
+  const source = 'source' in node ? node.source : undefined
+  return typeof source === 'object' && source.kind === 'script'
+    ? [source.script, source.artifact]
+    : []
+}
+
+/**
+ * A paste from another project first brings the artifacts its scripted nodes
+ * reference into this one. Returns the nodes whose artifacts could not come,
+ * which the paste leaves out with everything they host, and why.
+ */
+async function copyArtifactsHere(
+  payload: Pick<ClipboardPayload, 'nodes' | 'projectId'>,
+): Promise<Refused> {
+  const store = getArtifactStore()
+  const hashes = [...new Set(payload.nodes.flatMap(artifactHashes))]
+  if (hashes.length === 0) return NONE_REFUSED
+
+  let failed = false
+  const missing = new Set(
+    store.copyFrom
+      ? payload.projectId
+        ? await store.copyFrom(payload.projectId, hashes).catch(() => {
+            failed = true
+            return hashes
+          })
+        : hashes
+      : hashes.filter((sha) => !store.url(sha)),
+  )
+  const ids = new Set<AnyNodeId>()
+  let geometryMissing = false
+  for (const node of payload.nodes) {
+    const [script, artifact] = artifactHashes(node)
+    if (!script || !artifact || !(missing.has(script) || missing.has(artifact))) continue
+    ids.add(node.id as AnyNodeId)
+    geometryMissing ||= missing.has(artifact)
+  }
+  if (ids.size === 0) return NONE_REFUSED
+  return { ids, reason: failed ? 'failed' : geometryMissing ? 'no-access' : 'no-copies' }
+}
+
+/**
+ * A build file loaded into another project first brings the artifacts its
+ * scripted nodes reference from the project it was saved in, as a paste does.
+ * Answers the build without the nodes whose artifacts could not come, nor
+ * anything they host.
+ */
+export async function bringBuildArtifacts(build: ParsedBuildJson): Promise<{
+  build: ParsedBuildJson
+  refusedIds: AnyNodeId[]
+  refusal: PasteRefusal | null
+}> {
+  const nodes = Object.values(build.nodes) as AnyNode[]
+  // A file's origin is untrusted, even when it names this project. Older files can
+  // still use artifacts already registered here, but cannot introduce missing ones.
+  const refused = await copyArtifactsHere({
+    nodes,
+    projectId: build.projectId ?? useViewer.getState().projectId,
+  })
+  if (refused.ids.size === 0) return { build, refusedIds: [], refusal: null }
+
+  const excluded = new Set<string>(refused.ids)
+  for (let grew = true; grew; ) {
+    grew = false
+    for (const node of nodes) {
+      if (node.parentId && excluded.has(node.parentId) && !excluded.has(node.id)) {
+        excluded.add(node.id)
+        grew = true
+      }
+    }
+  }
+  const kept: Record<string, unknown> = {}
+  for (const node of nodes) {
+    if (excluded.has(node.id)) continue
+    const children = (node as { children?: unknown }).children
+    kept[node.id] = Array.isArray(children)
+      ? { ...node, children: children.filter((id) => !excluded.has(id as string)) }
+      : node
+  }
+  const collections =
+    build.collections &&
+    Object.fromEntries(
+      Object.entries(build.collections).map(([id, collection]) => [
+        id,
+        { ...collection, nodeIds: collection.nodeIds.filter((nodeId) => !excluded.has(nodeId)) },
+      ]),
+    )
+  return {
+    build: {
+      ...build,
+      nodes: kept,
+      rootNodeIds: build.rootNodeIds.filter((id) => !excluded.has(id)),
+      ...(collections ? { collections } : {}),
+    },
+    refusedIds: [...refused.ids],
+    refusal: refused.reason,
+  }
 }
 
 function applyClipboardPayloadToLevel(
-  payload: ClipboardPayload,
+  copied: ClipboardPayload,
   targetLevelId?: AnyNodeId,
+  { ids: refused, reason: refusal }: Refused = NONE_REFUSED,
 ): PasteResult | null {
   const targetLevel = getPasteTargetLevel(targetLevelId)
   if (!targetLevel) return null
+  const payload = refused.size > 0 ? withoutRefusedSubtrees(copied, refused) : copied
 
   const scene = useScene.getState()
   const idMap = new Map<AnyNodeId, AnyNodeId>()
@@ -452,6 +592,7 @@ function applyClipboardPayloadToLevel(
   const materialsToCreate: SceneMaterial[] = []
 
   for (const node of payload.nodes) {
+    if (isDerivedNode(node)) continue
     idMap.set(node.id as AnyNodeId, generateId(extractIdPrefix(node.id)) as AnyNodeId)
   }
   for (const material of payload.materials) {
@@ -471,6 +612,10 @@ function applyClipboardPayloadToLevel(
   const skippedIds: AnyNodeId[] = []
 
   for (const node of payload.nodes) {
+    if (isDerivedNode(node)) {
+      skippedIds.push(node.id as AnyNodeId)
+      continue
+    }
     try {
       pastedNodes.push(
         remapNodeReferences(
@@ -489,17 +634,30 @@ function applyClipboardPayloadToLevel(
     }
   }
 
+  fitOpeningsToPastedWalls(pastedNodes, scene.nodes)
+
   if (pastedNodes.length === 0) {
-    return { createdMaterialIds: [], pastedIds: [], skippedIds }
+    return {
+      createdMaterialIds: [],
+      pastedIds: [],
+      refusedIds: [...refused],
+      refusal,
+      skippedIds,
+    }
   }
 
   for (const material of materialsToCreate) {
     scene.addSceneMaterial(material)
   }
+  const sourceIds = new Map([...idMap].map(([source, copy]) => [copy, source]))
   scene.createNodes(
     pastedNodes.map((node) => ({
       node,
       parentId: (node.parentId as AnyNodeId | null) ?? undefined,
+      // A copy is in its source's collections; an item brings them in its own `collectionIds`.
+      ...(node.type !== 'item' && {
+        collectionIds: collectionIdsOf(scene.collections, sourceIds.get(node.id as AnyNodeId)!),
+      }),
     })),
   )
 
@@ -516,6 +674,64 @@ function applyClipboardPayloadToLevel(
   return {
     createdMaterialIds: materialsToCreate.map((material) => material.id as SceneMaterialId),
     pastedIds: pastedRootIds,
+    refusedIds: [...refused],
+    refusal,
     skippedIds,
+  }
+}
+
+/**
+ * A door or window pasted with its wall is held inside it the way the door and window tools place
+ * one: a wall pasted under a lower storey would otherwise leave a tall window poking above it.
+ */
+function fitOpeningsToPastedWalls(pasted: AnyNode[], sceneNodes: Record<AnyNodeId, AnyNode>) {
+  const byId = Object.fromEntries(pasted.map((node) => [node.id, node])) as Record<
+    AnyNodeId,
+    AnyNode
+  >
+  let nodes: Record<AnyNodeId, AnyNode> | undefined
+  pasted.forEach((node, index) => {
+    if (node.type !== 'door' && node.type !== 'window') return
+    const wall = node.parentId ? byId[node.parentId as AnyNodeId] : undefined
+    if (wall?.type !== 'wall') return
+    // A scripted opening is as tall as what its script built, as the wall cuts it.
+    const [width, height] = node.source
+      ? scriptedSize(node.source.manifest)
+      : [node.width, node.height]
+    nodes ??= { ...sceneNodes, ...byId }
+    const [x, y, z] = node.position
+    const { clampedY } =
+      node.type === 'door'
+        ? clampDoorToWall(wall, x, width, height)
+        : clampWindowToWall(wall, x, y, width, height, nodes)
+    if (clampedY !== y) pasted[index] = { ...node, position: [x, clampedY, z] }
+  })
+}
+
+function withoutRefusedSubtrees(
+  payload: ClipboardPayload,
+  refused: ReadonlySet<AnyNodeId>,
+): ClipboardPayload {
+  const children = new Map<string, AnyNodeId[]>()
+  for (const node of payload.nodes) {
+    if (!node.parentId) continue
+    const siblings = children.get(node.parentId) ?? []
+    siblings.push(node.id as AnyNodeId)
+    children.set(node.parentId, siblings)
+  }
+  const excluded = new Set(refused)
+  for (const id of excluded) {
+    for (const childId of children.get(id) ?? []) excluded.add(childId)
+  }
+  const nodes = payload.nodes.filter((node) => !excluded.has(node.id as AnyNodeId))
+  const kept = new Set(nodes.map((node) => node.id))
+  const materialIds = referencedSceneMaterialIds(nodes)
+  return {
+    ...payload,
+    materials: payload.materials.filter((material) =>
+      materialIds.has(material.id as SceneMaterialId),
+    ),
+    nodes,
+    rootIds: payload.rootIds.filter((id) => kept.has(id)),
   }
 }

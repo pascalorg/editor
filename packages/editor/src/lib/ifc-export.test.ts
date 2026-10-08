@@ -139,3 +139,36 @@ describe('ifcFileName', () => {
     expect(ifcFileName(undefined, 'model')).toBe('model.ifc')
   })
 })
+
+test('material groups retain their surface owner and semantic subpart', () => {
+  const owner = node('item_owner', 'item')
+  const child = node('item_child', 'item', owner.id)
+  const root = identity(new THREE.Group(), owner.id)
+  const geometry = new THREE.BoxGeometry()
+  const material = new THREE.MeshStandardMaterial()
+  const mesh = new THREE.Mesh(
+    geometry,
+    Array.from({ length: 6 }, () => material),
+  )
+  mesh.userData = {
+    surfaceNodeIds: [child.id, child.id, owner.id, owner.id, owner.id, owner.id],
+    pascalIfcRole: 'railing',
+    pascalIfcParts: [
+      { start: 0, count: 6, role: 'railing' },
+      { start: 6, count: 30, role: 'handrail' },
+    ],
+  }
+  root.add(mesh)
+  const { meshes, renderedNodeIds } = collectIfcMeshes(root, {
+    [owner.id]: owner,
+    [child.id]: child,
+  })
+  expect(meshes.get(child.id)).toHaveLength(2)
+  expect(meshes.get(owner.id)).toHaveLength(4)
+  expect(meshes.get(child.id)![0]!.role).toBe('railing')
+  expect(meshes.get(child.id)![1]!.role).toBe('handrail')
+  expect(meshes.get(owner.id)!.every((part) => part.role === 'handrail')).toBe(true)
+  expect(renderedNodeIds.has(child.id)).toBe(true)
+  geometry.dispose()
+  material.dispose()
+})

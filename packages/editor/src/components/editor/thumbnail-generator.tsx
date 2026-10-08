@@ -38,6 +38,7 @@ import {
   applySnapshotCapturePose,
   captureSnapshotScene,
   createSnapshotQueue,
+  deliverSnapshot,
   enqueueSnapshotCapture,
   runSnapshotCapture,
 } from './snapshot-capture'
@@ -970,7 +971,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               }
               trace('callback', { bytes: blob.size })
               await within(
-                Promise.resolve(onCapture(blob, cameraData)),
+                Promise.resolve(deliverSnapshot(event, blob, cameraData, onCapture)),
                 CAPTURE_SETTLE_MS,
                 'The snapshot host never took the frame.',
               )
@@ -1107,7 +1108,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             }
             trace('callback', { bytes: blob.size })
             await within(
-              Promise.resolve(onCapture(blob, cameraData)),
+              Promise.resolve(deliverSnapshot(event, blob, cameraData, onCapture)),
               CAPTURE_SETTLE_MS,
               'The snapshot host never took the frame.',
             )

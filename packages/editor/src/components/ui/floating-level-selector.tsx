@@ -452,7 +452,7 @@ export function FloatingLevelSelector() {
   const levelId = useViewer((s) => s.selection.levelId)
   const setSelection = useViewer((s) => s.setSelection)
   const createNode = useScene((s) => s.createNode)
-  const createNodes = useScene((s) => s.createNodes)
+  const applyNodeChanges = useScene((s) => s.applyNodeChanges)
   const updateNodes = useScene((s) => s.updateNodes)
 
   const [deletingLevel, setDeletingLevel] = useState<LevelNode | null>(null)
@@ -560,29 +560,21 @@ export function FloatingLevelSelector() {
 
   const handleDuplicateLevel = useCallback(
     (level: LevelNode, preset: LevelDuplicatePreset = 'everything') => {
-      const { createOps, newLevelId, shiftedLevels } = buildLevelDuplicateCreateOps({
+      const { createOps, newLevelId, updateOps } = buildLevelDuplicateCreateOps({
         nodes: useScene.getState().nodes,
         level,
         levels,
         preset,
       })
 
-      if (shiftedLevels.length > 0) {
-        updateNodes(
-          shiftedLevels.map((shiftedLevel) => ({
-            id: shiftedLevel.id as AnyNodeId,
-            data: { level: shiftedLevel.level } as Partial<AnyNode>,
-          })),
-        )
-      }
-      createNodes(createOps)
+      applyNodeChanges({ create: createOps, update: updateOps })
 
       setSelection({
         buildingId: resolvedBuildingId ?? undefined,
         levelId: newLevelId as LevelNode['id'],
       })
     },
-    [createNodes, levels, resolvedBuildingId, setSelection, updateNodes],
+    [applyNodeChanges, levels, resolvedBuildingId, setSelection],
   )
 
   const handlePasteToLevel = useCallback((level: LevelNode) => {

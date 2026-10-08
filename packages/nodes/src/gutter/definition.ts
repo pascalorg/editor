@@ -1,6 +1,7 @@
 import {
   GutterNode as GutterNodeSchema,
   type GutterNode as GutterNodeType,
+  gutterSlots,
   type HandleDescriptor,
   type NodeDefinition,
 } from '@pascal-app/core'
@@ -157,7 +158,7 @@ export const gutterDefinition: NodeDefinition<typeof GutterNode> = {
   },
 
   capabilities: {
-    slots: () => [{ slotId: 'gutter', label: 'Gutter', default: 'library:preset-softwhite' }],
+    slots: gutterSlots,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,

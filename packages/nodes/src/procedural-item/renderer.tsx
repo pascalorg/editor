@@ -20,6 +20,7 @@ import { usePlacementPreview } from '@pascal-app/editor'
 import {
   cloneWithProceduralEmission,
   createSurfaceRoleMaterial,
+  materialCastsShadow,
   NodeRenderer,
   proceduralSlotMeshes,
   resolveMaterialRef,
@@ -328,7 +329,7 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
       const mesh = new Mesh(geometry, materials.get(batch.slot))
       mesh.name = `slot_${batch.slot}`
       mesh.userData = { slotId: batch.slot, proceduralRanges: batch.ranges }
-      mesh.castShadow = true
+      mesh.castShadow = materialCastsShadow(mesh.material)
       mesh.receiveShadow = true
       return { mesh, motionGroup: batch.motionGroup }
     }

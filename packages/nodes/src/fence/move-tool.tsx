@@ -23,12 +23,12 @@ import {
   isGridSnapActive,
   isMagneticSnapActive,
   markToolCancelConsumed,
-  snapFenceDraftPoint,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { snapFenceDraftPoint } from './drafting'
 
 /**
  * Phase 5 Stage D — fence whole-move tool.

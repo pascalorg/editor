@@ -95,6 +95,27 @@ function sceneWithVisibleAndHiddenBoxes(): {
 }
 
 describe('prepareSceneForExport', () => {
+  test('skips a refused subtree and reports its warning while exporting other objects', () => {
+    const root = new THREE.Group()
+    const refused = new THREE.Group()
+    refused.name = 'Oversized stair'
+    refused.userData.pascalExportRefusal = 'Detailed stair geometry exceeds the computation budget.'
+    refused.add(meshWithNodeMaterial(nodeMaterial()))
+    const accepted = meshWithNodeMaterial(nodeMaterial())
+    accepted.name = 'Retained object'
+    root.add(refused, accepted)
+    const result = prepareSceneForExport(root, {})
+    expect(result.scene.getObjectByName(refused.name)).toBeUndefined()
+    expect(result.scene.getObjectByName(accepted.name)).toBeDefined()
+    expect(
+      result.warnings.some(
+        (warning) => warning.includes(refused.name) && warning.includes('computation budget'),
+      ),
+    ).toBe(true)
+    expect(root.children).toContain(refused)
+    result.dispose()
+  })
+
   test('exports procedural bulb emission on detached materials regardless of live state', async () => {
     const definitionModule = '../../../nodes/src/procedural-item/definition'
     const { proceduralItemDefinition } = await import(definitionModule)
@@ -2374,4 +2395,28 @@ describe('plugin bake policies through export', () => {
       }
     })
   })
+})
+
+test('prepared exports preserve surface identities and IFC subpart roles on registered meshes', () => {
+  const root = new THREE.Group()
+  root.name = 'scene-renderer'
+  const owner = { ...BaseNode.parse({ id: 'item_surface_owner' }), type: 'item' } as AnyNode
+  const child = {
+    ...BaseNode.parse({ id: 'item_surface_child', parentId: owner.id }),
+    type: 'item',
+  } as AnyNode
+  const mesh = meshWithNodeMaterial(nodeMaterial())
+  mesh.userData = {
+    surfaceNodeIds: [child.id],
+    pascalIfcRole: 'railing',
+    pascalIfcParts: [{ start: 0, count: 3, role: 'handrail' }],
+  }
+  root.add(mesh)
+  sceneRegistry.nodes.set(owner.id, mesh)
+  const { scene } = prepareSceneForExport(root, { [owner.id]: owner, [child.id]: child })
+  const exported = scene.getObjectByName(owner.id)!
+  expect(exported.userData.pascalId).toBe(owner.id)
+  expect(exported.userData.surfaceNodeIds).toEqual([child.id])
+  expect(exported.userData.pascalIfcRole).toBe('railing')
+  expect(exported.userData.pascalIfcParts).toEqual([{ start: 0, count: 3, role: 'handrail' }])
 })

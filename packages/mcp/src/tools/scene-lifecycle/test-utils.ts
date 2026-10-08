@@ -3,6 +3,7 @@ import { createSceneOperations, type SceneOperations } from '../../operations'
 import {
   type ProjectCreateOptions,
   type ProjectStatus,
+  type SceneDeleteResult,
   type SceneEvent,
   type SceneEventAppendOptions,
   type SceneEventListOptions,
@@ -167,7 +168,7 @@ export class InMemorySceneStore implements SceneStore {
     return scenes
   }
 
-  async delete(id: string, opts?: SceneMutateOptions): Promise<boolean> {
+  async delete(id: string, opts?: SceneMutateOptions): Promise<SceneDeleteResult> {
     const rec = this.data.get(id)
     if (!rec) throw new SceneNotFoundError(`Scene ${id} not found`)
     if (opts?.expectedVersion !== undefined && rec.version !== opts.expectedVersion) {
@@ -175,7 +176,8 @@ export class InMemorySceneStore implements SceneStore {
         `Expected version ${opts.expectedVersion}, have ${rec.version}`,
       )
     }
-    return this.data.delete(id)
+    this.data.delete(id)
+    return { deleted: true, hidden: false }
   }
 
   async rename(id: string, newName: string, opts?: SceneMutateOptions): Promise<SceneMeta> {

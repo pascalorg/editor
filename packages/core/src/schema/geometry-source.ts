@@ -1,6 +1,7 @@
 import { z } from 'zod'
+import { GeometrySourceMeta } from './geometry-metadata'
 
-/** A script source is persisted inline; this caps one node's share of a scene operation. */
+/** Source code is stored separately from the scene; bound its upload size. */
 export const GEOMETRY_SCRIPT_MAX_BYTES = 48 * 1024
 /** The manifest rides inline in the node; the compiler keeps it under this. */
 export const GEOMETRY_MANIFEST_MAX_BYTES = 24 * 1024
@@ -56,7 +57,19 @@ export const GeometryArtifactManifest = z.object({
       }),
     )
     .default([]),
-  slots: z.array(z.object({ id: z.string(), label: z.string().optional() })).default([]),
+  slots: z
+    .array(
+      z.object({
+        id: z.string(),
+        label: z.string().optional(),
+        color: z.string().optional(),
+        roughness: finite.optional(),
+        metalness: finite.optional(),
+        transparent: z.boolean().optional(),
+        emissive: z.boolean().optional(),
+      }),
+    )
+    .default([]),
   anchors: z
     .array(z.object({ id: z.string(), position: vec3, normal: vec3.optional() }))
     .default([]),
@@ -87,6 +100,17 @@ export const GeometryArtifactManifest = z.object({
     .default([]),
   /** The module's AnimationClips; `open`, `close` and `loop` drive the object's controls. */
   animations: z.array(z.object({ name: z.string(), duration: finite })).default([]),
+  /** Vertical cutter footprints in the normalized artifact frame. Absent in older artifacts. */
+  cutters: z
+    .array(
+      z.object({
+        host: z.enum(['mounted', 'wall', 'ceiling', 'slab']),
+        polygon: z.array(z.array(finite).length(2)).min(3),
+        minY: finite,
+        maxY: finite,
+      }),
+    )
+    .optional(),
   cutout: z.boolean().default(false),
   collider: z.boolean().default(false),
   triangles: z.number().int().nonnegative(),
@@ -98,6 +122,8 @@ export type GeometryScriptMount = z.infer<typeof GeometryScriptMount>
 
 /** What a compile hands the scene: the artifact's hash, how it mounts, the resolved params and the manifest. */
 export type CompiledGeometryScript = {
+  /** The destination identity reserved before artifact uploads. */
+  nodeId?: string
   /** sha256 of the GLB. */
   sha256: string
   /** sha256 of the module text that produced it. */
@@ -107,6 +133,8 @@ export type CompiledGeometryScript = {
   manifest: GeometryArtifactManifest
 }
 
+const sha256 = z.string().regex(/^[0-9a-f]{64}$/)
+
 /**
  * Geometry authored as a plain three.js module (`export const params`,
  * `export default function build({ params, inputs, THREE, lib })`). The
@@ -114,12 +142,19 @@ export type CompiledGeometryScript = {
  */
 export const GeometryScriptSource = z.object({
   kind: z.literal('script'),
+  meta: GeometrySourceMeta.optional(),
   language: z.literal('three').default('three'),
   /** sha256 of the module's UTF-8 text, a `text/javascript` artifact: the code never rides in the scene. */
-  script: z.string().regex(/^[0-9a-f]{64}$/),
+  script: sha256,
   params: z.record(z.string(), GeometryScriptParamValue).default({}),
   /** sha256 of the GLB the current code + params compiled to. */
-  artifact: z.string().regex(/^[0-9a-f]{64}$/),
+  artifact: sha256,
   manifest: GeometryArtifactManifest,
+  /**
+   * The thumbnail and the top-down floor-plan image an editor took of a GLB,
+   * as image artifacts. They describe the node only while `artifact` is still
+   * the GLB they were taken of.
+   */
+  images: z.object({ artifact: sha256, thumbnail: sha256, floorPlan: sha256 }).optional(),
 })
 export type GeometryScriptSource = z.infer<typeof GeometryScriptSource>

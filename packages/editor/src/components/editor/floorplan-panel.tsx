@@ -9,6 +9,7 @@ import {
   CeilingNode as CeilingNodeSchema,
   type ColumnNode,
   calculateLevelMiters,
+  createSizedStairFlight,
   DEFAULT_ANGLE_STEP,
   type DoorNode,
   DoorNode as DoorNodeSchema,
@@ -40,7 +41,6 @@ import {
   SlabNode as SlabNodeSchema,
   type StairNode,
   StairNode as StairNodeSchema,
-  StairSegmentNode as StairSegmentNodeSchema,
   sampleWallCenterline,
   sceneRegistry,
   snapPointAlongAngleRay,
@@ -86,7 +86,6 @@ import { resolveCeilingPlanPointSnap } from '../../lib/ceiling-plan-snap'
 import {
   alignFloorplanDraftPoint,
   buildFloorplanItemEntry,
-  buildFloorplanStairEntry as buildSharedFloorplanStairEntry,
   collectLevelDescendants,
   FLOORPLAN_VIEW_ROTATION_DEG,
   floorplanLocalToWorldPoint,
@@ -95,6 +94,7 @@ import {
   type FloorplanNodeTransform as SharedFloorplanNodeTransform,
   worldToFloorplanLocalPoint,
 } from '../../lib/floorplan'
+import { buildFloorplanContext } from '../../lib/floorplan/floorplan-readonly'
 // Site-plan view. Owned under `lib/floorplan/site-plan/**`; this panel
 // only chooses between it and the registry layer, and mounts the switch.
 import {
@@ -108,15 +108,19 @@ import { groundHeightAt } from '../../lib/ground-surface'
 import { guideEmitter } from '../../lib/guide-events'
 import {
   acceptsKeyboardPan,
+  advanceKeyboardPanMotion,
   clearKeyboardPanKeys,
+  createKeyboardPanMotion,
   isKeyboardPanKey,
   type KeyboardPanState,
-  keyboardPanDirection,
   keyboardPanSpeed,
+  resetKeyboardPanMotion,
   setKeyboardPanKey,
+  syncKeyboardPanMotion,
 } from '../../lib/keyboard-pan'
 import { measurementHint, parseMeasurement } from '../../lib/measurement-parser'
 import { formatLinearMeasurement, linearUnitToMeters } from '../../lib/measurements'
+import { snapRegisteredDraftPoint } from '../../lib/registered-draft-snap'
 import { selectRoomFromHit } from '../../lib/room-selection-commands'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { SITE_BOUNDARY_DRAG_LABEL, siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
@@ -164,6 +168,7 @@ import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOver
 import { FloorplanGroupActionMenu } from '../editor-2d/floorplan-group-action-menu'
 import { FloorplanSiteKeyHandler } from '../editor-2d/floorplan-hotkey-handlers'
 import { FloorplanMeasurementToolLayer } from '../editor-2d/floorplan-measurement-tool-layer'
+import { FloorplanOpenWallEndsLayer } from '../editor-2d/floorplan-open-wall-ends-layer'
 import { FloorplanRegisteredToolLayer } from '../editor-2d/floorplan-registered-tool-layer'
 import { FloorplanRegistryActionMenu } from '../editor-2d/floorplan-registry-action-menu'
 import { FloorplanRegistryMoveOverlay } from '../editor-2d/floorplan-registry-move-overlay'
@@ -174,7 +179,7 @@ import {
 import { FloorplanSnapBeaconLayer } from '../editor-2d/floorplan-snap-beacon-layer'
 import { FloorplanWallMoveGhostLayer } from '../editor-2d/floorplan-wall-move-ghost-layer'
 import { FloorplanDraftLayer } from '../editor-2d/renderers/floorplan-draft-layer'
-import { FloorplanDraftWallMeasurement } from '../editor-2d/renderers/floorplan-draft-wall-measurement'
+import { FloorplanDraftMeasurement } from '../editor-2d/renderers/floorplan-draft-measurement'
 import { FloorplanGeometryRenderer } from '../editor-2d/renderers/floorplan-geometry-renderer'
 import { FloorplanMarqueeLayer } from '../editor-2d/renderers/floorplan-marquee-layer'
 import { FloorplanPlacementPreviewLayer } from '../editor-2d/renderers/floorplan-placement-preview-layer'
@@ -182,10 +187,8 @@ import {
   FloorplanRegistryLayer,
   RotationAngleOverlay,
 } from '../editor-2d/renderers/floorplan-registry-layer'
-import { FloorplanStairLayer } from '../editor-2d/renderers/floorplan-stair-layer'
 import { FloorplanVoronoiLayer } from '../editor-2d/renderers/floorplan-voronoi-layer'
 import { buildSvgPolylinePath, formatPolygonPath, getArcPlanPoint } from '../editor-2d/svg-paths'
-import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
 import { snapToHalf } from '../tools/item/placement-math'
 import {
   isBoxSelectPointerSuppressed,
@@ -215,15 +218,6 @@ import {
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
 } from '../tools/shared/segment-angle'
-import {
-  DEFAULT_STAIR_ATTACHMENT_SIDE,
-  DEFAULT_STAIR_FILL_TO_FLOOR,
-  DEFAULT_STAIR_HEIGHT,
-  DEFAULT_STAIR_LENGTH,
-  DEFAULT_STAIR_STEP_COUNT,
-  DEFAULT_STAIR_THICKNESS,
-  DEFAULT_STAIR_WIDTH,
-} from '../tools/stair/stair-defaults'
 import {
   chainEndJoinsExistingWall,
   createWallOnCurrentLevel,
@@ -309,7 +303,6 @@ const FLOORPLAN_HOVER_TRANSITION = 'opacity 180ms cubic-bezier(0.2, 0, 0, 1)'
 const FLOORPLAN_WALL_HIT_STROKE_WIDTH = 18
 const FLOORPLAN_WALL_STROKE_WIDTH = '1'
 const FLOORPLAN_OPENING_HIT_STROKE_WIDTH = 16
-const noopFloorplanStairHandler = () => {}
 const FLOORPLAN_OPENING_STROKE_WIDTH = 0.05
 const FLOORPLAN_ENDPOINT_HIT_STROKE_WIDTH = 18
 const FLOORPLAN_ENDPOINT_HOVER_GLOW_STROKE_WIDTH = 16
@@ -2149,68 +2142,6 @@ function movePlanPointTowards(start: Point2D, end: Point2D, distance: number): P
   }
 
   return interpolatePlanPoint(start, end, Math.min(1, distance / totalDistance))
-}
-
-function getNormalizedFloorplanStairSweepAngle(stair: StairNode) {
-  const stairType = stair.stairType ?? 'straight'
-  const baseSweepAngle = stair.sweepAngle ?? (stairType === 'spiral' ? Math.PI * 2 : Math.PI / 2)
-
-  if (Math.abs(baseSweepAngle) >= Math.PI * 2) {
-    return Math.sign(baseSweepAngle || 1) * (Math.PI * 2 - 0.001)
-  }
-
-  return baseSweepAngle
-}
-
-function getFloorplanSpiralLandingSweep(stair: StairNode, sweepAngle: number) {
-  if (
-    (stair.stairType ?? 'straight') !== 'spiral' ||
-    (stair.topLandingMode ?? 'none') !== 'integrated'
-  ) {
-    return 0
-  }
-
-  const innerRadius = Math.max(0.05, stair.innerRadius ?? 0.9)
-  const width = Math.max(stair.width ?? 1, 0.4)
-  const landingDepth = Math.max(0.3, stair.topLandingDepth ?? Math.max(width * 0.9, 0.8))
-
-  return (
-    Math.min(Math.PI * 0.75, landingDepth / Math.max(innerRadius + width / 2, 0.1)) *
-    Math.sign(sweepAngle || 1)
-  )
-}
-
-function getFloorplanCurvedStairHitPolygon(stair: StairNode): Point2D[] {
-  const stairType = stair.stairType ?? 'straight'
-  const sweepAngle = getNormalizedFloorplanStairSweepAngle(stair)
-  const startAngle = -stair.rotation - sweepAngle / 2
-  const endAngle = startAngle + sweepAngle + getFloorplanSpiralLandingSweep(stair, sweepAngle)
-  const center = {
-    x: stair.position[0],
-    y: stair.position[2],
-  }
-  const innerRadius = Math.max(
-    stairType === 'spiral' ? 0.05 : 0.2,
-    stair.innerRadius ?? (stairType === 'spiral' ? 0.2 : 0.9),
-  )
-  const outerRadius = innerRadius + stair.width
-  const outerArcLength = Math.abs(sweepAngle) * outerRadius
-  const segmentCount = Math.max(
-    24,
-    Math.ceil(Math.abs(sweepAngle) / (Math.PI / 24)),
-    Math.ceil(outerArcLength / 0.14),
-  )
-  const outerPoints: Point2D[] = []
-  const innerPoints: Point2D[] = []
-
-  for (let index = 0; index <= segmentCount; index += 1) {
-    const t = index / segmentCount
-    const angle = startAngle + (endAngle - startAngle) * t
-    outerPoints.push(getArcPlanPoint(center, outerRadius, angle))
-    innerPoints.push(getArcPlanPoint(center, innerRadius, angle))
-  }
-
-  return [...outerPoints, ...innerPoints.reverse()]
 }
 
 function isPointInsidePolygonWithHoles(
@@ -4253,107 +4184,54 @@ const FloorplanPolygonHandleLayer = memo(function FloorplanPolygonHandleLayer({
   )
 })
 
-// Static segment for the in-flight stair build preview. No per-render
-// dependency (the geometry only moves / rotates), so it lives at module scope
-// instead of a `useMemo`.
-const FLOORPLAN_PREVIEW_STAIR_SEGMENT = StairSegmentNodeSchema.parse({
-  id: 'sseg_floorplan_preview',
-  segmentType: 'stair',
-  width: DEFAULT_STAIR_WIDTH,
-  length: DEFAULT_STAIR_LENGTH,
-  height: DEFAULT_STAIR_HEIGHT,
-  stepCount: DEFAULT_STAIR_STEP_COUNT,
-  attachmentSide: DEFAULT_STAIR_ATTACHMENT_SIDE,
-  fillToFloor: DEFAULT_STAIR_FILL_TO_FLOOR,
-  thickness: DEFAULT_STAIR_THICKNESS,
-  position: [0, 0, 0],
-  metadata: { isTransient: true, isFloorplanPreview: true },
-})
-
-const EMPTY_FLOORPLAN_ID_SET: ReadonlySet<string> = new Set()
-
-type FloorplanStairLayerPalette = ComponentProps<typeof FloorplanStairLayer>['palette']
-
-// Leaf layer for the stair tool's in-flight 2D build preview. Subscribes to the
-// `useStairBuildPreview` store directly so a per-`grid:move` point update (or an
-// R/T rotation) re-renders ONLY this tiny layer — never the ~120-220ms
-// `FloorplanPanel`. This mirrors how column / elevator placement stays smooth by
-// routing preview state through a store + leaf. Committed stairs render through
-// `FloorplanRegistryLayer`; this layer is non-interactive (noop handlers, empty
-// hit sets), so it never participates in hover / select.
 function FloorplanStairBuildPreviewLayer({
   palette,
-  isDeleteMode,
 }: {
-  palette: FloorplanStairLayerPalette
-  isDeleteMode: boolean
+  palette: FloorplanRenderContextValue['palette']
 }) {
   const phase = useEditor((s) => s.phase)
   const mode = useEditor((s) => s.mode)
   const tool = useEditor((s) => s.tool)
   const point = useStairBuildPreview((s) => s.point)
   const rotation = useStairBuildPreview((s) => s.rotation)
+  const rise = useStairBuildPreview((s) => s.rise)
   const isActive = phase === 'structure' && mode === 'build' && tool === 'stair'
 
-  const previewEntry = useMemo(() => {
-    if (!(isActive && point)) {
+  const previewGeometry = useMemo(() => {
+    if (!(isActive && point && rise && rise > 0)) {
       return null
+    }
+    const previewSegment = {
+      ...createSizedStairFlight(rise),
+      id: 'sseg_floorplan_preview' as const,
+      parentId: 'stair_floorplan_preview' as const,
     }
     const previewStair = StairNodeSchema.parse({
       id: 'stair_floorplan_preview',
       name: 'Staircase preview',
       position: [point[0], 0, point[1]],
       rotation,
-      children: [FLOORPLAN_PREVIEW_STAIR_SEGMENT.id],
+      children: [previewSegment.id],
       metadata: { isTransient: true, isFloorplanPreview: true },
     })
-    const entry = buildSharedFloorplanStairEntry(previewStair, [FLOORPLAN_PREVIEW_STAIR_SEGMENT])
-    if (!entry) {
-      return null
-    }
-    const hitPolygons =
-      (previewStair.stairType ?? 'straight') === 'straight'
-        ? entry.segments.map((segmentEntry) => segmentEntry.polygon)
-        : [getFloorplanCurvedStairHitPolygon(previewStair)]
+    const nodes = { [previewStair.id]: previewStair, [previewSegment.id]: previewSegment }
+    return (
+      nodeRegistry.get(previewStair.type)?.floorplan?.(
+        previewStair,
+        buildFloorplanContext(previewStair, nodes, {
+          selected: false,
+          highlighted: false,
+          hovered: false,
+          moving: true,
+          unit: 'metric',
+          palette,
+        }),
+      ) ?? null
+    )
+  }, [isActive, point, rotation, rise, palette])
 
-    return {
-      ...entry,
-      hitPolygons,
-      segments: entry.segments.map((segmentEntry) => ({
-        ...segmentEntry,
-        innerPoints: formatPolygonPoints(segmentEntry.innerPolygon),
-        points: formatPolygonPoints(segmentEntry.polygon),
-        treadBars: segmentEntry.treadBars.map((polygon) => ({
-          points: formatPolygonPoints(polygon),
-          polygon,
-        })),
-      })),
-    }
-  }, [isActive, point, rotation])
-
-  if (!previewEntry) {
-    return null
-  }
-
-  return (
-    <FloorplanStairLayer
-      canFocusStairs={false}
-      canSelectStairs={false}
-      cursor={EDITOR_CURSOR}
-      highlightedIdSet={EMPTY_FLOORPLAN_ID_SET}
-      hitStrokeWidth={FLOORPLAN_OPENING_HIT_STROKE_WIDTH}
-      hoveredStairId={null}
-      isDeleteMode={isDeleteMode}
-      onStairDoubleClick={noopFloorplanStairHandler}
-      onStairHoverChange={noopFloorplanStairHandler}
-      onStairHoverEnter={noopFloorplanStairHandler}
-      onStairPointerDown={noopFloorplanStairHandler}
-      onStairSelect={noopFloorplanStairHandler}
-      palette={palette}
-      selectedIdSet={EMPTY_FLOORPLAN_ID_SET}
-      stairEntries={[previewEntry]}
-    />
-  )
+  if (!previewGeometry) return null
+  return <FloorplanGeometryRenderer geometry={previewGeometry} pointerEventsOverride="none" />
 }
 
 // Leaf overlay for the cursor-following draft preview: the cursor crosshair plus
@@ -4873,7 +4751,7 @@ function FloorplanLinearDraftLayer({
       )}
 
       {draftWallMeasurement && (
-        <FloorplanDraftWallMeasurement
+        <FloorplanDraftMeasurement
           labelBackground={isDark ? '#0f172a' : '#ffffff'}
           labelText={isDark ? '#e2e8f0' : '#171717'}
           measurement={draftWallMeasurement}
@@ -4916,7 +4794,7 @@ function FloorplanLinearDraftLayer({
       ))}
 
       {rectangleDraft?.measurements.map((measurement, index) => (
-        <FloorplanDraftWallMeasurement
+        <FloorplanDraftMeasurement
           key={index}
           labelBackground={isDark ? '#0f172a' : '#ffffff'}
           labelText={isDark ? '#e2e8f0' : '#171717'}
@@ -7789,26 +7667,22 @@ export function FloorplanPanel({
   useEffect(() => {
     if (viewMode !== '2d') return
     const keys = keyboardPanKeysRef.current
+    const motion = createKeyboardPanMotion()
     let frame: number | null = null
-    let lastTime: number | null = null
     const sceneRotationDeg = (userRotationDeg: number) =>
       FLOORPLAN_VIEW_ROTATION_DEG + userRotationDeg - buildingRotationDeg
-    const step = (time: number) => {
-      const { horizontal, vertical } = keyboardPanDirection(keys)
+    const step = () => {
       const viewport = latestViewportRef.current ?? latestFittedViewportRef.current
-      if ((horizontal === 0 && vertical === 0) || !viewport) {
+      if (!(viewport && advanceKeyboardPanMotion(motion, keys, performance.now()))) {
         frame = null
-        lastTime = null
+        resetKeyboardPanMotion(motion)
         commitFloorplanPan()
         return
       }
-      const elapsed = lastTime === null ? 0 : Math.min((time - lastTime) / 1000, 0.05)
-      lastTime = time
-      const distance =
-        (keyboardPanSpeed(viewport.width) * elapsed) / Math.hypot(horizontal, vertical)
+      const speed = keyboardPanSpeed(viewport.width)
       const next = {
-        centerX: viewport.centerX + horizontal * distance,
-        centerY: viewport.centerY - vertical * distance,
+        centerX: viewport.centerX + motion.stepX * speed,
+        centerY: viewport.centerY - motion.stepY * speed,
         width: viewport.width,
       }
       const userRotationDeg = latestFloorplanUserRotationDegRef.current
@@ -7829,12 +7703,15 @@ export function FloorplanPanel({
     }
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(isKeyboardPanKey(event.code) && acceptsKeyboardPan(event))) return
+      syncKeyboardPanMotion(motion, keys, performance.now())
       if (setKeyboardPanKey(keys, event.code, true)) start()
       event.preventDefault()
       event.stopPropagation()
     }
     const onKeyUp = (event: KeyboardEvent) => {
-      if (isKeyboardPanKey(event.code) && setKeyboardPanKey(keys, event.code, false)) {
+      if (!isKeyboardPanKey(event.code)) return
+      syncKeyboardPanMotion(motion, keys, performance.now())
+      if (setKeyboardPanKey(keys, event.code, false)) {
         event.preventDefault()
         event.stopPropagation()
       }
@@ -9063,7 +8940,7 @@ export function FloorplanPanel({
   // tools that subscribe to these grid events.
   const emitFloorplanGridEvent = useCallback(
     (
-      eventType: 'move' | 'click' | 'double-click',
+      eventType: 'move' | 'click' | 'double-click' | 'pointerdown' | 'pointerup',
       planPoint: WallPlanPoint,
       nativeEvent: ReactMouseEvent<SVGSVGElement> | ReactPointerEvent<SVGSVGElement>,
     ) => {
@@ -9398,6 +9275,14 @@ export function FloorplanPanel({
       }
 
       if (isFenceBuildActive) {
+        if (useEditor.getState().getContinuation('fence') === 'freehand') {
+          useAlignmentGuides.getState().clear()
+          emitFloorplanGridEvent('move', planPoint, event)
+          setCursorPoint((previousPoint) =>
+            previousPoint && pointsEqual(previousPoint, planPoint) ? previousPoint : planPoint,
+          )
+          return
+        }
         // Fence draft: grid snap (+ existing-wall/fence endpoint snap), then
         // Figma alignment — same endpoint-wins precedence as the wall branch.
         // While a draft is open the segment locks to 15° rays from its start.
@@ -9405,14 +9290,18 @@ export function FloorplanPanel({
         // there is no Shift hold-to-bypass. Alignment follows the magnetic snap
         // mode, not Alt (continuation is cycled through the HUD / C).
         const fenceAngleSnap = fenceDraftStart !== null && isAngleSnapActive()
-        const fenceSnapped = snapFenceDraftPoint({
-          point: planPoint,
-          walls,
-          fences,
-          start: fenceDraftStart ?? undefined,
-          angleSnap: fenceAngleSnap,
-          magnetic: isMagneticSnapActive(),
-        })
+        const fenceSnapped = snapRegisteredDraftPoint(
+          'fence',
+          {
+            point: planPoint,
+            walls,
+            fences,
+            start: fenceDraftStart ?? undefined,
+            angleSnap: fenceAngleSnap,
+            magnetic: isMagneticSnapActive(),
+          },
+          planPoint,
+        )
         const fenceGridBase = snapWallPointToGrid(planPoint)
         const fenceLocked =
           fenceSnapped[0] !== fenceGridBase[0] || fenceSnapped[1] !== fenceGridBase[1]
@@ -10236,6 +10125,49 @@ export function FloorplanPanel({
       handleBackgroundClick(event)
     },
     [handleBackgroundClick],
+  )
+  const handleSvgPointerDown = useCallback(
+    (event: ReactPointerEvent<SVGSVGElement>) => {
+      if (
+        isFenceBuildActive &&
+        useEditor.getState().getContinuation('fence') === 'freehand' &&
+        event.button === 0
+      ) {
+        const point = getPlanPointFromClientPoint(event.clientX, event.clientY)
+        if (point) {
+          clearFencePlacementDraft()
+          event.currentTarget.setPointerCapture(event.pointerId)
+          emitFloorplanGridEvent('pointerdown', point, event)
+        }
+      }
+      handlePointerDown(event)
+    },
+    [
+      clearFencePlacementDraft,
+      emitFloorplanGridEvent,
+      getPlanPointFromClientPoint,
+      handlePointerDown,
+      isFenceBuildActive,
+    ],
+  )
+  const handleSvgPointerUp = useCallback(
+    (event: ReactPointerEvent<SVGSVGElement>) => {
+      if (
+        isFenceBuildActive &&
+        useEditor.getState().getContinuation('fence') === 'freehand' &&
+        event.button === 0
+      ) {
+        const point = getPlanPointFromClientPoint(event.clientX, event.clientY)
+        if (point) emitFloorplanGridEvent('pointerup', point, event)
+      }
+      endFloorplanNavigation(event)
+    },
+    [
+      emitFloorplanGridEvent,
+      endFloorplanNavigation,
+      getPlanPointFromClientPoint,
+      isFenceBuildActive,
+    ],
   )
   const handleBackgroundDoubleClick = useCallback(
     (event: ReactMouseEvent<SVGSVGElement>) => {
@@ -11481,11 +11413,11 @@ export function FloorplanPanel({
             onContextMenu={(event) => event.preventDefault()}
             onDoubleClick={isMarqueeSelectionToolActive ? undefined : handleBackgroundDoubleClick}
             onPointerCancel={endFloorplanNavigation}
-            onPointerDown={handlePointerDown}
+            onPointerDown={handleSvgPointerDown}
             onPointerDownCapture={handleNavigationPointerDown}
             onPointerLeave={handleSvgPointerLeave}
             onPointerMove={handleSvgPointerMove}
-            onPointerUp={endFloorplanNavigation}
+            onPointerUp={handleSvgPointerUp}
             ref={svgRef}
             style={{
               cursor:
@@ -11582,7 +11514,7 @@ export function FloorplanPanel({
                   subscribes to the `useStairBuildPreview` store directly, so a
                   per-`grid:move` cursor update re-renders only that tiny layer
                   rather than this whole panel. */}
-              <FloorplanStairBuildPreviewLayer isDeleteMode={isDeleteMode} palette={palette} />
+              <FloorplanStairBuildPreviewLayer palette={floorplanRegistryPalette} />
 
               <FloorplanReferenceScaleLayer
                 draft={referenceScaleDraft}
@@ -11653,6 +11585,7 @@ export function FloorplanPanel({
                       `floorplan-wall-move-ghost-layer.tsx`. */}
                   <FloorplanWallMoveGhostLayer />
                 </g>
+                {activeDrawingType !== 'site-plan' && <FloorplanOpenWallEndsLayer />}
                 <FloorplanMeasurementToolLayer />
                 <FloorplanRegisteredToolLayer />
                 {floorplanSceneSlot}

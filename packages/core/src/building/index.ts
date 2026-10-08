@@ -1,3 +1,6 @@
+export * from './door-types'
+export * from './floor-item-fit'
 export * from './level-duplication'
 export * from './opening-style-presets'
 export * from './wall-openings'
+export * from './window-types'
