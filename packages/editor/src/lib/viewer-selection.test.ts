@@ -22,6 +22,7 @@ import { CameraControlsImpl } from '@react-three/drei'
 import { createElement } from 'react'
 import * as THREE from 'three'
 import { Group, Vector3 } from 'three'
+import { viewerHoverLabel } from '../components/viewer/viewer-hover-label'
 import { ViewerSelectionManager } from '../components/viewer/viewer-selection-manager'
 import { publishCameraPose } from '../store/camera-pose-store'
 import useEditor, { takePreviewCameraRestore } from '../store/use-editor'
@@ -30,6 +31,7 @@ import {
   frameViewerCamera,
   resolveViewerClick,
   resolveViewerHover,
+  selectViewerRoom,
   type ViewerSelection,
   viewerBreadcrumb,
   viewerPickFromNodeEvent,
@@ -217,6 +219,42 @@ describe('viewer hit sources', () => {
     expect(pick?.point?.[1]).toBeCloseTo(2)
     level.visible = false
     expect(viewerPickFromNodeEvent(event, nodes)).toBeNull()
+  })
+})
+
+describe('viewer rooms by name', () => {
+  test('a room picked from its pill, the bar or the sidebar is selected and framed', () => {
+    const { nodes, kitchen } = scene()
+    const level = new Group()
+    level.position.set(0, 3, 0)
+    level.updateWorldMatrix(true, false)
+    const frames: unknown[] = []
+    const onFrame = (event: unknown) => frames.push(event)
+    emitter.on('camera-controls:frame', onFrame)
+    try {
+      selectViewerRoom(kitchen, { nodes, objectFor: (id) => (id === levelId ? level : undefined) })
+    } finally {
+      emitter.off('camera-controls:frame', onFrame)
+    }
+    expect(useViewer.getState().selection).toMatchObject({
+      levelId,
+      zoneId: kitchen,
+      selectedIds: [],
+    })
+    expect(frames).toHaveLength(1)
+    const { bounds } = frames[0] as { bounds: { min: number[]; max: number[] } }
+    // The kitchen's footprint, on its floor three metres up.
+    expect(bounds.min[0]).toBeLessThanOrEqual(0.2)
+    expect(bounds.max[0]).toBeGreaterThanOrEqual(3.8)
+    expect(bounds.min[1]).toBeGreaterThanOrEqual(3)
+  })
+
+  test('the hover pill names what a click would select', () => {
+    const { nodes, kitchen } = scene()
+    expect(viewerHoverLabel(sofa.id, nodes)).toBe('Sofa')
+    expect(viewerHoverLabel(kitchen, nodes)).toBe('Kitchen')
+    expect(viewerHoverLabel('wall_shared', nodes)).toBe('Wall')
+    expect(viewerHoverLabel(null, nodes)).toBeNull()
   })
 })
 

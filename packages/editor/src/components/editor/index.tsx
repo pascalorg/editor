@@ -86,6 +86,7 @@ import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/set
 import { SitePanel, type SitePanelProps } from '../ui/sidebar/panels/site-panel'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
+import { ViewerHoverLabel } from '../viewer/viewer-hover-label'
 import { ParametricViewerRooms } from '../viewer/viewer-rooms'
 import { ViewerSelectionManager } from '../viewer/viewer-selection-manager'
 import { ViewerStage } from '../viewer/viewer-stage'
@@ -1284,6 +1285,7 @@ function PreviewStage({
         />
       )}
 
+      {stageMode === '3d' && !isFirstPersonMode ? <ViewerHoverLabel /> : null}
       <ViewerStage
         className="absolute inset-0"
         mode={stageMode}

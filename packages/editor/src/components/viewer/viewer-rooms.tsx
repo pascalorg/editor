@@ -14,7 +14,7 @@ import { resolveRoomAssemblyHeights } from '../../lib/room-assembly-overlay'
 import { roomFloorElevation } from '../../lib/room-handle-drag'
 import { describeZoneOutline, type RoomSelectionRecord } from '../../lib/room-selection'
 import {
-  selectViewerRoomInPlace,
+  selectViewerRoom,
   type ViewerSource,
   viewerRooms,
   zoneLabel,
@@ -26,6 +26,7 @@ import {
   RoomPillsLayer3D,
   roomLabelEntries,
   roomLabelsVisible,
+  useFadePresence,
 } from '../editor/room-labels'
 
 /**
@@ -68,6 +69,9 @@ export function ViewerRooms({ source }: { source: ViewerSource }) {
       selectedTypes: selectedIds.map((id) => nodes[id]?.type),
     })
 
+  // The layer stays mounted through its fade-out, like the editor's.
+  const pillsPresent = useFadePresence(pillsShown)
+
   const rooms = useMemo(() => (levelId ? viewerRooms(levelId, nodes) : []), [levelId, nodes])
   const entries = useMemo(() => {
     if (!levelId) return []
@@ -101,7 +105,7 @@ export function ViewerRooms({ source }: { source: ViewerSource }) {
 
   return (
     <>
-      {pillsShown && levelId ? (
+      {pillsPresent && levelId ? (
         <RoomPillsLayer3D
           entries={entries}
           levelObject={() => source.objectFor(levelId)}
@@ -119,7 +123,7 @@ export function ViewerRooms({ source }: { source: ViewerSource }) {
                   color={zone.color}
                   elements={elements}
                   name={zoneLabel(zone)}
-                  onClick={() => selectViewerRoomInPlace(zone.id, nodes)}
+                  onClick={() => selectViewerRoom(zone.id, source)}
                   onHover={() => useViewer.getState().setHoveredId(zone.id)}
                   onLeave={() => {
                     if (useViewer.getState().hoveredId === zone.id)
@@ -131,6 +135,7 @@ export function ViewerRooms({ source }: { source: ViewerSource }) {
               </RoomLabelAnchor3D>
             )
           }}
+          shown={pillsShown}
         />
       ) : null}
       {highlighted.map((room) => (

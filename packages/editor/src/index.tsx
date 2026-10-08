@@ -326,6 +326,7 @@ export {
   ViewerControlsBar,
   type ViewerControlsBarProps,
 } from './components/viewer/viewer-controls-bar'
+export { ViewerHoverLabel } from './components/viewer/viewer-hover-label'
 export { ParametricViewerRooms, ViewerRooms } from './components/viewer/viewer-rooms'
 export {
   ViewerSceneHeader,

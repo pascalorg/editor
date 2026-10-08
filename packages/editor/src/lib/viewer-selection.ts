@@ -279,23 +279,18 @@ export function selectViewerBuilding(source: ViewerSource) {
   if (buildingId) frameViewerNode(buildingId, source)
 }
 
-/** A room or zone picked by its pill: selected on its floor, the camera stays. */
-export function selectViewerRoomInPlace(zoneId: string, nodes: ViewerNodes): boolean {
-  const zone = nodes[zoneId]
-  if (zone?.type !== 'zone' || !zone.parentId) return false
+/** A room or zone from its pill, the bar or the sidebar: selected on its floor, framed. */
+export function selectViewerRoom(zoneId: string, source: ViewerSource) {
+  const zone = source.nodes[zoneId]
+  if (zone?.type !== 'zone' || !zone.parentId) return
   const levelId = zone.parentId as LevelNode['id']
   writeSelection({
-    buildingId: buildingOfLevel(levelId, nodes),
+    buildingId: buildingOfLevel(levelId, source.nodes),
     levelId,
     zoneId: zone.id,
     selectedIds: [],
   })
-  return true
-}
-
-/** A room or zone from the bar or the sidebar: selected on its floor, framed. */
-export function selectViewerRoom(zoneId: string, source: ViewerSource) {
-  if (selectViewerRoomInPlace(zoneId, source.nodes)) frameViewerNode(zoneId, source)
+  frameViewerNode(zone.id, source)
 }
 
 /**

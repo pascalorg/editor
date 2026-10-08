@@ -30,7 +30,7 @@ export type ViewerSceneHeaderProps = {
    *  sanitized by the caller. `null` shows no back arrow (an embedded viewer with
    *  nowhere to go back to). */
   backHref?: string | null
-  /** Extra row under the project info (e.g. likes/fork actions). */
+  /** Extra row under the project info (e.g. like and duplicate actions). */
   stats?: ReactNode
   /** The scene the header navigates; the parametric scene store by default. */
   source?: ViewerSource
