@@ -132,6 +132,24 @@ export function runWithSceneCommitNodeIds<TResult>(
     }
   }
 }
+const sceneWriteGuards = new Set<() => void>()
+
+/**
+ * Registers something that must let go of the scene before anything writes it: a preview that
+ * shows another state (`scene-preview.ts`) would otherwise swallow the write or have it land on
+ * the wrong state. Returns the unregister.
+ */
+export function registerSceneWriteGuard(guard: () => void): () => void {
+  sceneWriteGuards.add(guard)
+  return () => {
+    sceneWriteGuards.delete(guard)
+  }
+}
+
+export function runSceneWriteGuards(): void {
+  for (const guard of [...sceneWriteGuards]) guard()
+}
+
 const sceneCommitAuthorScopes: SceneCommitAuthor[] = []
 const sceneCommitAuthorLeases = new Map<symbol, SceneCommitAuthor>()
 
@@ -147,6 +165,7 @@ export function runAsSceneCommitAuthor<TResult>(
   author: SceneCommitAuthor,
   run: () => TResult,
 ): TResult {
+  runSceneWriteGuards()
   sceneCommitAuthorScopes.push(author)
   try {
     return run()
@@ -162,6 +181,7 @@ export function runAsSceneCommitAuthor<TResult>(
  * author's own work. Release is idempotent.
  */
 export function acquireSceneCommitAuthor(author: SceneCommitAuthor): () => void {
+  runSceneWriteGuards()
   const lease = Symbol('scene-commit-author')
   sceneCommitAuthorLeases.set(lease, author)
   return () => {

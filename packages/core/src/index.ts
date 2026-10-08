@@ -596,6 +596,13 @@ export {
   writeSceneNodeField,
 } from './store/scene-annotations'
 export {
+  beginScenePreview,
+  endScenePreview,
+  isScenePreviewing,
+  type ScenePreview,
+  subscribeScenePreview,
+} from './store/scene-preview'
+export {
   CORNER_BLOCK_NOTES,
   type CornerHintRow,
   type CornerSnapHint,
