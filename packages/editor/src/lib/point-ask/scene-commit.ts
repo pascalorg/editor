@@ -6,7 +6,9 @@ import { pointTargetScope } from './target-scope'
 export function pointCommitEvent(
   commit: SceneCommit,
   targetIds: readonly string[],
-): Extract<PinEvent, { type: 'commit' }> {
+): Extract<PinEvent, { type: 'commit' }> | null {
+  // Host/load snapshots do not belong to the local turn or its Undo history.
+  if (commit.origin !== 'local') return null
   let changedNodeIds = [...(commit.changedNodeIds ?? [])]
   if (changedNodeIds.length === 0 && commit.before.nodes !== commit.current.nodes) {
     const ids = new Set<AnyNodeId>([

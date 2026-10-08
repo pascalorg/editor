@@ -2,6 +2,7 @@ import {
   type AnyNode,
   containsPoint,
   detectSpacesForLevel,
+  getBlockFaceFrame,
   getFloorPlacedFootprints,
   getWallBodyCenterOffset,
   getWallCurveFrameAt,
@@ -71,6 +72,21 @@ function snapshotScope(nodes: Nodes, targetIds: readonly string[]) {
   }
   const frames = new Map<string, Frame | null>()
   const resolving = new Set<string>()
+  const attachmentFrame = (node: AnyNode, host: Frame): Frame => {
+    const hostNode = nodes[host.nodeId]
+    if (node.type !== 'item' || hostNode?.type !== 'block' || !node.blockFaceId) return host
+    const face = getBlockFaceFrame(hostNode.topology, node.blockFaceId)
+    if (!face) return host
+    // Stored item coordinates are in the face basis, as in BlockFaceHostFrame.
+    const local = new Matrix4()
+      .makeBasis(
+        new Vector3(...face.xAxis),
+        new Vector3(...face.yAxis),
+        new Vector3(...face.normal),
+      )
+      .setPosition(...face.origin)
+    return { ...host, matrix: host.matrix.clone().multiply(local) }
+  }
   const wallPose = (wall: WallNode, position: [number, number, number]) => {
     const curve = getWallCurveFrameAt(wall, position[0] / (getWallCurveLength(wall) || 1))
     const across = getWallBodyCenterOffset(wall) + position[2]
@@ -109,8 +125,10 @@ function snapshotScope(nodes: Nodes, targetIds: readonly string[]) {
         position = [node.start[0], 0, node.start[1]]
         rotation = [0, -Math.atan2(dz, dx), 0]
       }
-      const scale: [number, number, number] = vector(data.scale) ?? [1, 1, 1]
-      let basis = host.matrix
+      // Item scale belongs to its model, not the group that hosts its children.
+      const scale: [number, number, number] =
+        node.type === 'item' ? [1, 1, 1] : (vector(data.scale) ?? [1, 1, 1])
+      let basis = attachmentFrame(node, host).matrix
       const hostNode = nodes[host.nodeId]
       let orientation = new Quaternion().setFromEuler(new Euler(...rotation))
       if (hostNode?.type === 'wall') {
@@ -158,6 +176,7 @@ function snapshotScope(nodes: Nodes, targetIds: readonly string[]) {
     }
   }
   const centres = (node: AnyNode, host: Frame): Point[] => {
+    host = attachmentFrame(node, host)
     const data = fields(node)
     const position = vector(data.position)
     const floorPlaced = nodeRegistry.get(node.type)?.capabilities?.floorPlaced

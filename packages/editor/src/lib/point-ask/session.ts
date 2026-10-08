@@ -1141,7 +1141,8 @@ function onCommit(commit: SceneCommit) {
   for (const askId of state.pinOrder) {
     const pin = state.pins[askId]
     if (pin?.model.state !== 'working') continue
-    state.dispatchPin(askId, pointCommitEvent(commit, pin.model.targetIds))
+    const event = pointCommitEvent(commit, pin.model.targetIds)
+    if (event) state.dispatchPin(askId, event)
   }
 }
 
