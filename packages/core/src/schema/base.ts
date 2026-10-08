@@ -12,6 +12,15 @@ const customId = customAlphabet('0123456789abcdefghijklmnopqrstuvwxyz', 16)
 export const Material = z.string().optional()
 export const generateId = <T extends string>(prefix: T): `${T}_${string}` =>
   `${prefix}_${customId()}` as `${T}_${string}`
+/**
+ * The prefix `generateId` was called with: everything before the LAST
+ * underscore, since its suffix alphabet has none while a plugin kind's prefix
+ * may (`pallet_rack_<suffix>` -> `pallet_rack`). `'node'` when there is none.
+ */
+export const nodeIdPrefix = (id: string): string => {
+  const underscoreIndex = id.lastIndexOf('_')
+  return underscoreIndex === -1 ? 'node' : id.slice(0, underscoreIndex)
+}
 export const objectId = <T extends string>(prefix: T) => {
   const schema = z.templateLiteral([`${prefix}_`, z.string()])
 

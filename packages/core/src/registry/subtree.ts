@@ -3,7 +3,7 @@ import {
   remapConstructionDimensionReferences,
   remapMeasurementReferences,
 } from '../lib/measurement-geometry'
-import { generateId } from '../schema/base'
+import { generateId, nodeIdPrefix } from '../schema/base'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 
 // Generic, opinion-free primitives the host app composes to implement
@@ -29,11 +29,6 @@ export type Subtree = {
   root: AnyNode
   /** Every descendant reachable from `root` via the data-model `children` array, in BFS order. */
   descendants: AnyNode[]
-}
-
-function extractIdPrefix(id: string): string {
-  const i = id.indexOf('_')
-  return i === -1 ? 'node' : id.slice(0, i)
 }
 
 function getChildIds(node: AnyNode): AnyNodeId[] {
@@ -132,8 +127,7 @@ export function cloneNodesInto(
   // Phase 1 — mint fresh ids for every node, preserving the prefix.
   const idMap = new Map<AnyNodeId, AnyNodeId>()
   for (const node of nodes) {
-    const prefix = extractIdPrefix(node.id)
-    idMap.set(node.id, generateId(prefix) as AnyNodeId)
+    idMap.set(node.id, generateId(nodeIdPrefix(node.id)) as AnyNodeId)
   }
 
   const rootFreshId = idMap.get(opts.rootId)

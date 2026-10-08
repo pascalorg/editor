@@ -9,6 +9,7 @@ import {
   findLevelAncestorId,
   getSceneHistoryPauseDepth,
   nodeRegistry,
+  objectId,
   pauseSceneHistory,
   registerNode,
   resumeSceneHistory,
@@ -278,6 +279,54 @@ describe('commitFreshPlacementSubtree', () => {
     expect(duplicate.children).toEqual([])
     expect(duplicate.metadata).toEqual({ isNew: true, label: 'source' })
     expect((source as AnyNode & { children: AnyNodeId[] }).children).toEqual(['item_original'])
+  })
+
+  test('duplicates a plugin kind whose id prefix contains an underscore under that prefix', () => {
+    const PalletRackNode = z.object({
+      object: z.literal('node').default('node'),
+      id: objectId('pallet_rack'),
+      type: z.literal('warehouse:pallet-rack').default('warehouse:pallet-rack'),
+      parentId: z.string().nullable().default(null),
+      visible: z.boolean().optional().default(true),
+      metadata: z.json().optional().default({}),
+      children: z.array(z.string()).default([]),
+      position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
+    })
+    const restoreRegistry = nodeRegistry._snapshot()
+    registerNode({
+      kind: 'warehouse:pallet-rack',
+      schemaVersion: 1,
+      schema: PalletRackNode,
+      category: 'furnish',
+      defaults: () => ({}),
+      capabilities: { duplicable: { subtree: true } },
+      renderer: { kind: 'parametric', module: async () => ({ default: () => null }) },
+    } as unknown as AnyNodeDefinition)
+    try {
+      const rack = PalletRackNode.parse({ parentId: LEVEL_ID }) as unknown as AnyNode
+      useScene.setState({
+        nodes: { [LEVEL_ID]: level([rack.id]), [rack.id]: rack },
+        rootNodeIds: [LEVEL_ID],
+      } as never)
+
+      const draftId = createFreshPlacementSubtree(rack.id)
+      const finalId = commitFreshPlacementSubtree(
+        draftId as AnyNodeId,
+        {
+          visible: true,
+        } as Partial<AnyNode>,
+      )
+
+      for (const id of [draftId, finalId]) {
+        expect(id).toMatch(/^pallet_rack_[0-9a-z]{16}$/)
+        expect(id).not.toBe(rack.id)
+      }
+      expect(
+        PalletRackNode.safeParse(useScene.getState().nodes[finalId as AnyNodeId]).success,
+      ).toBe(true)
+    } finally {
+      restoreRegistry()
+    }
   })
 
   test('commits a duplicated cabinet draft without deleting the original modules', () => {

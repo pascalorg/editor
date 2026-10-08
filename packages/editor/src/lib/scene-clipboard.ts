@@ -7,6 +7,7 @@ import {
   getArtifactStore,
   isDerivedNode,
   type LevelNode,
+  nodeIdPrefix,
   nodeRegistry,
   type ParsedBuildJson,
   remapMeasurementReferences,
@@ -93,11 +94,6 @@ export function getEditorClipboardSnapshot() {
 
 export function hasEditorClipboard() {
   return !!clipboardPayload && clipboardPayload.rootIds.length > 0
-}
-
-function extractIdPrefix(id: string) {
-  const underscoreIndex = id.indexOf('_')
-  return underscoreIndex === -1 ? 'node' : id.slice(0, underscoreIndex)
 }
 
 function collectSubtreeIds(
@@ -593,7 +589,7 @@ function applyClipboardPayloadToLevel(
 
   for (const node of payload.nodes) {
     if (isDerivedNode(node)) continue
-    idMap.set(node.id as AnyNodeId, generateId(extractIdPrefix(node.id)) as AnyNodeId)
+    idMap.set(node.id as AnyNodeId, generateId(nodeIdPrefix(node.id)) as AnyNodeId)
   }
   for (const material of payload.materials) {
     const oldId = material.id as SceneMaterialId

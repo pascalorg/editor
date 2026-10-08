@@ -11,7 +11,7 @@ export {
 export { Assembly, AssemblyLayer, AssemblyLayerId, LayerRole } from './assembly'
 // Asset URL allowlist
 export { ALLOWED_ORIGINS_ENV, ALLOWED_SCHEMES, AssetUrl } from './asset-url'
-export { BaseNode, generateId, Material, nodeType, objectId } from './base'
+export { BaseNode, generateId, Material, nodeIdPrefix, nodeType, objectId } from './base'
 // Camera
 export { CameraSchema } from './camera'
 // Collections

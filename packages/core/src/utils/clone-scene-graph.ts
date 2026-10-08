@@ -6,7 +6,7 @@ import {
   remapMeasurementReferences,
 } from '../lib/measurement-geometry'
 import type { AnyNode, AnyNodeId } from '../schema'
-import { generateId } from '../schema/base'
+import { generateId, nodeIdPrefix } from '../schema/base'
 import type { Collection, CollectionId } from '../schema/collections'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 
@@ -16,14 +16,6 @@ export type SceneGraph = {
   collections?: Record<CollectionId, Collection>
   materials?: Record<SceneMaterialId, SceneMaterial>
   installedPlugins?: string[]
-}
-
-/**
- * Extracts the type prefix from a node ID (e.g., "wall_abc123" -> "wall")
- */
-function extractIdPrefix(id: string): string {
-  const underscoreIndex = id.indexOf('_')
-  return underscoreIndex === -1 ? 'node' : id.slice(0, underscoreIndex)
 }
 
 function remapFloorOpeningReferences(node: AnyNode, ids: Map<string, string>) {
@@ -154,8 +146,7 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
 
   // Pass 1: Generate new IDs for all nodes
   for (const nodeId of Object.keys(nodes)) {
-    const prefix = extractIdPrefix(nodeId)
-    idMap.set(nodeId, generateId(prefix))
+    idMap.set(nodeId, generateId(nodeIdPrefix(nodeId)))
   }
 
   const copyFloor = copiedFloorKeys(nodes, idMap)
@@ -350,8 +341,7 @@ export function cloneLevelSubtree(
   // Build ID mapping: old → new
   const idMap = new Map<string, string>()
   for (const oldId of subtreeIds) {
-    const prefix = extractIdPrefix(oldId)
-    idMap.set(oldId, generateId(prefix))
+    idMap.set(oldId, generateId(nodeIdPrefix(oldId)))
   }
 
   const copyFloor = copiedFloorKeys(nodes, idMap)
