@@ -1,9 +1,17 @@
 // @ts-expect-error — bun:test is provided by the Bun runtime; viewer does not
 // depend on @types/bun so the import type is unresolved at compile time.
 import { describe, expect, test } from 'bun:test'
-import type { MaterialSchema } from '@pascal-app/core'
+import { MaterialProperties, type MaterialSchema } from '@pascal-app/core'
+import { MeshPhysicalMaterial, MeshStandardMaterial } from 'three'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
-import { getTextureKey, resolveSlotDefaultMaterial, resolveTextureRepeat } from './materials'
+import { materialCastsShadow } from '../index'
+import {
+  createMaterial,
+  getTextureKey,
+  resolveMaterialRef,
+  resolveSlotDefaultMaterial,
+  resolveTextureRepeat,
+} from './materials'
 
 function materialWithRepeat(repeat: unknown): MaterialSchema {
   return {
@@ -47,5 +55,45 @@ describe('shared flat slot defaults', () => {
     expect(solid).toBeInstanceOf(MeshLambertNodeMaterial)
     expect(solid).toBe(resolveSlotDefaultMaterial('#abcdef', 'solid', 0.75))
     expect(solid.userData.__pascalCachedMaterial).toBe(true)
+  })
+})
+
+describe('material shadow policy', () => {
+  test('library glass does not cast in either shading mode, independent of its name', () => {
+    for (const shading of ['solid', 'rendered'] as const) {
+      const glass = resolveMaterialRef('library:preset-glass', undefined, shading)!
+      expect(glass.name).not.toBe('glass')
+      expect(materialCastsShadow(glass)).toBe(false)
+      const opaque = resolveSlotDefaultMaterial('#cccccc', shading)
+      expect(materialCastsShadow(opaque)).toBe(true)
+      expect(materialCastsShadow([opaque, glass])).toBe(false)
+    }
+  })
+
+  test('transmission and glass opacity suppress casting, while tinted and opaque materials cast', () => {
+    const transmitting = new MeshPhysicalMaterial({ transmission: 0.9 })
+    const transparent = new MeshStandardMaterial({ transparent: true, opacity: 0.3 })
+    const tinted = new MeshStandardMaterial({ transparent: true, opacity: 0.8 })
+    const opaque = new MeshStandardMaterial()
+    opaque.name = 'glass'
+    expect(materialCastsShadow(transmitting)).toBe(false)
+    expect(materialCastsShadow(transparent)).toBe(false)
+    expect(materialCastsShadow(tinted)).toBe(true)
+    expect(materialCastsShadow(opaque)).toBe(true)
+  })
+})
+
+describe('plain colour material refs', () => {
+  test('a #rrggbb slot value paints that colour, as material.properties.color does', () => {
+    const material = resolveMaterialRef(
+      '#2F5585',
+      undefined,
+      'rendered',
+    ) as MeshStandardNodeMaterial
+    expect(material).toBeInstanceOf(MeshStandardNodeMaterial)
+    expect(material.color.getHexString()).toBe('2f5585')
+    expect(material).toBe(
+      createMaterial({ properties: MaterialProperties.parse({ color: '#2f5585' }) }, 'rendered'),
+    )
   })
 })

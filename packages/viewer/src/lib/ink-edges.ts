@@ -1,6 +1,35 @@
-import { abs, float, max, min, mix, screenSize, screenUV, smoothstep, vec2 } from 'three/tsl'
+import type { Camera, PerspectiveCamera } from 'three'
+import {
+  abs,
+  float,
+  max,
+  min,
+  mix,
+  perspectiveDepthToViewZ,
+  screenSize,
+  screenUV,
+  smoothstep,
+  uniform,
+  vec2,
+  viewZToPerspectiveDepth,
+} from 'three/tsl'
 
 import { unpackRGBToNormal } from './tsl-compat'
+
+export function createEdgeDepthSampler(depthTex: any, camera: Camera) {
+  if (!('isPerspectiveCamera' in camera)) return (uv: any) => depthTex.sample(uv).r
+  const perspective = camera as PerspectiveCamera
+  const near = uniform(perspective.near).onRenderUpdate(() => perspective.near)
+  const far = uniform(perspective.far).onRenderUpdate(() => perspective.far)
+  // Ink and AO thresholds were calibrated at near 0.1 / far 1000. Keep
+  // their world distances when orbit, walkthrough or capture clipping changes.
+  return (uv: any) =>
+    viewZToPerspectiveDepth(
+      perspectiveDepthToViewZ(depthTex.sample(uv).r, near, far),
+      float(0.1),
+      float(1000),
+    )
+}
 
 // Screen-space ink outline (SketchUp / Moebius look). Reads the scene-pass
 // depth + normal MRT and inks two signals:
@@ -19,14 +48,14 @@ import { unpackRGBToNormal } from './tsl-compat'
 // only sees the rendered buffers. `intensity` scales the final mask; `inkColor`
 // should track the background luminance (dark lines on light scenes).
 export function inkedEdges({
-  depthTex,
+  sampleDepth,
   normalTex,
   inkColor,
   radius,
   opacity,
   sceneRgb,
 }: {
-  depthTex: any
+  sampleDepth: (uv: any) => any
   normalTex: any
   inkColor: any
   // Line thickness in px (the detected band is ~2×radius) and final line
@@ -40,11 +69,11 @@ export function inkedEdges({
   const px = vec2(1, 1).div(screenSize).mul(radius)
   const uvN = screenUV
 
-  const dC = depthTex.sample(uvN).r
-  const dR = depthTex.sample(uvN.add(vec2(px.x, 0))).r
-  const dL = depthTex.sample(uvN.sub(vec2(px.x, 0))).r
-  const dU = depthTex.sample(uvN.add(vec2(0, px.y))).r
-  const dD = depthTex.sample(uvN.sub(vec2(0, px.y))).r
+  const dC = sampleDepth(uvN)
+  const dR = sampleDepth(uvN.add(vec2(px.x, 0)))
+  const dL = sampleDepth(uvN.sub(vec2(px.x, 0)))
+  const dU = sampleDepth(uvN.add(vec2(0, px.y)))
+  const dD = sampleDepth(uvN.sub(vec2(0, px.y)))
 
   const depthLap = abs(dR.add(dL).add(dU).add(dD).sub(dC.mul(4)))
   const invDepth = float(1).sub(dC)

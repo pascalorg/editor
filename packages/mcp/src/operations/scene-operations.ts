@@ -1,10 +1,17 @@
 import type { NodeDeletionPlan, NodeDeletionScene } from '@pascal-app/core'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
-import type { AnyNode, AnyNodeId, AnyNodeType } from '@pascal-app/core/schema'
+import type {
+  AnyNode,
+  AnyNodeId,
+  AnyNodeType,
+  Collection,
+  CollectionId,
+} from '@pascal-app/core/schema'
 import type { ActiveSceneMeta, Patch, SceneBridge, ValidationResult } from '../bridge/scene-bridge'
 import type {
   ProjectCreateOptions,
   ProjectStatus,
+  SceneDeleteResult,
   SceneEvent,
   SceneEventAppendOptions,
   SceneEventListOptions,
@@ -41,6 +48,9 @@ export interface SceneOperations {
   loadJSON(json: string | SceneGraph): void
   getNode(id: AnyNodeId): AnyNode | null
   getNodes(): Record<AnyNodeId, AnyNode>
+  getCollections(): Record<CollectionId, Collection>
+  /** Replace the scene's collections (one undo step, like any edit). */
+  setCollections(collections: Record<CollectionId, Collection>): void
   getRootNodeIds(): AnyNodeId[]
   getChildren(parentId: AnyNodeId): AnyNode[]
   getAncestry(id: AnyNodeId): AnyNode[]
@@ -77,7 +87,7 @@ export interface SceneOperations {
   saveScene(options: SceneSaveOptions): Promise<SceneMeta>
   loadStoredScene(id: string): Promise<SceneWithGraph | null>
   listScenes(options?: SceneListOptions): Promise<SceneMeta[]>
-  deleteStoredScene(id: string, options?: SceneMutateOptions): Promise<boolean>
+  deleteStoredScene(id: string, options?: SceneMutateOptions): Promise<SceneDeleteResult>
   renameStoredScene(id: string, newName: string, options?: SceneMutateOptions): Promise<SceneMeta>
   appendSceneEvent(options: SceneEventAppendOptions): Promise<SceneEvent | null>
   listSceneEvents(id: string, options?: SceneEventListOptions): Promise<SceneEvent[]>
@@ -172,7 +182,9 @@ class SceneOperationsFacade implements SceneOperations {
   }
 
   loadJSON(json: string | SceneGraph): void {
-    this.requireBridge().loadJSON(json)
+    const bridge = this.requireBridge()
+    bridge.loadJSON(json)
+    bridge.clearHistory()
   }
 
   getNode(id: AnyNodeId): AnyNode | null {
@@ -181,6 +193,14 @@ class SceneOperationsFacade implements SceneOperations {
 
   getNodes(): Record<AnyNodeId, AnyNode> {
     return this.requireBridge().getNodes()
+  }
+
+  getCollections(): Record<CollectionId, Collection> {
+    return this.requireBridge().getCollections()
+  }
+
+  setCollections(collections: Record<CollectionId, Collection>): void {
+    this.requireBridge().setCollections(collections)
   }
 
   getRootNodeIds(): AnyNodeId[] {
@@ -314,7 +334,7 @@ class SceneOperationsFacade implements SceneOperations {
     return this.requireStore().list(options)
   }
 
-  async deleteStoredScene(id: string, options?: SceneMutateOptions): Promise<boolean> {
+  async deleteStoredScene(id: string, options?: SceneMutateOptions): Promise<SceneDeleteResult> {
     return this.requireStore().delete(id, options)
   }
 

@@ -47,14 +47,14 @@ async function main(): Promise<void> {
     }
     console.log('[smoke] get_scene: OK')
 
-    // create_level — buildingId may not match a real node depending on the
+    // add_level — buildingId may not match a real node depending on the
     // default scene; we just verify the tool returns a structured response
     // rather than crash.
-    const createLevel = await client.callTool({
-      name: 'create_level',
-      arguments: { buildingId: 'tbd', elevation: 1, height: 3 },
+    const addLevel = await client.callTool({
+      name: 'add_level',
+      arguments: { buildingId: 'tbd', height: 3 },
     })
-    console.log('[smoke] create_level:', createLevel.isError ? 'structured error (ok)' : 'OK')
+    console.log('[smoke] add_level:', addLevel.isError ? 'structured error (ok)' : 'OK')
 
     const validate = await client.callTool({
       name: 'validate_scene',

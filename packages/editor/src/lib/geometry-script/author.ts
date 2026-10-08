@@ -2,32 +2,66 @@ import {
   type AnyNodeId,
   type CompiledGeometryScript,
   GEOMETRY_SCRIPT_MIME_TYPE,
+  GeometryArtifactMetadata,
+  GeometryReuseFields,
   type GeometryScriptParamValue,
+  generateId,
   getArtifactStore,
+  isScriptedNode,
+  runAsSingleSceneHistoryStep,
+  scriptedObjectMeta,
   useScene,
 } from '@pascal-app/core'
-import { addObject, authoredObject, rescriptOpening } from '@pascal-app/core/agent-operations'
+import {
+  addColumn,
+  addObject,
+  authoredObject,
+  editedScriptParams,
+  rescriptOpening,
+} from '@pascal-app/core/agent-operations'
 import { compileGeometryScriptInWorker } from './client'
 
 /**
  * The editor's compile step for `add_object`: runs the module in the
  * worker and stores the GLB and the module text, so the core operation can
- * reference both by hash. Without `code`, the node's stored script is rebuilt
- * with the new params.
+ * reference both by hash. Without `code`, the node's stored script is rebuilt;
+ * either way an edit keeps the node's param values it does not override.
  */
 export async function compileAndStoreGeometryScript(input: {
   code?: string
   nodeId?: string
   params?: Record<string, GeometryScriptParamValue>
+  kind?: 'item' | 'door' | 'window' | 'column'
+  name?: string
+  description?: string
+  category?: string
+  tags?: string[]
+  provenance?: GeometryArtifactMetadata
 }): Promise<CompiledGeometryScript> {
   const code = input.code ?? (await storedScript(input.nodeId))
-  const { glb, ...compiled } = await compileGeometryScriptInWorker({ code, params: input.params })
+  const node = input.nodeId ? useScene.getState().nodes[input.nodeId as AnyNodeId] : undefined
+  const params = editedScriptParams(node, input.params)
+  const { glb, ...compiled } = await compileGeometryScriptInWorker({ code, params })
+  const kind =
+    input.kind ??
+    (node?.type === 'door' || node?.type === 'window' || node?.type === 'column'
+      ? node.type
+      : 'item')
+  const nodeId = input.nodeId ?? generateId(kind)
+  const metadata = GeometryArtifactMetadata.parse({
+    ...(isScriptedNode(node) ? scriptedObjectMeta(node) : {}),
+    ...input.provenance,
+    ...GeometryReuseFields.parse(input),
+    kind,
+    mount: compiled.mount,
+  })
+  const context = { nodeId, metadata }
   const store = getArtifactStore()
-  await Promise.all([
-    store.put(compiled.sha256, glb, 'model/gltf-binary'),
-    store.put(compiled.script, new TextEncoder().encode(code), GEOMETRY_SCRIPT_MIME_TYPE),
+  const [sha256] = await Promise.all([
+    store.put(compiled.sha256, glb, 'model/gltf-binary', context),
+    store.put(compiled.script, new TextEncoder().encode(code), GEOMETRY_SCRIPT_MIME_TYPE, context),
   ])
-  return compiled
+  return { ...compiled, sha256, nodeId }
 }
 
 /** The module text of an authored object, read back from the artifact store. */
@@ -56,12 +90,32 @@ export async function rebuildAuthoredObject(
   rebuildGeneration.set(nodeId, generation)
   const compiled = await compileAndStoreGeometryScript({ nodeId, params })
   if (rebuildGeneration.get(nodeId) !== generation) return
+  const changes = rebuildChanges(nodeId, compiled, params, position)
+  runAsSingleSceneHistoryStep(useScene, () => {
+    for (const { id, data } of changes?.update ?? []) {
+      useScene.getState().updateNode(id as AnyNodeId, data)
+    }
+  })
+}
+
+/** What a rebuild changes, through the operation of the node's kind. */
+function rebuildChanges(
+  nodeId: string,
+  compiled: CompiledGeometryScript,
+  params: Record<string, GeometryScriptParamValue>,
+  position: [number, number, number] | undefined,
+) {
   const nodes = useScene.getState().nodes
-  const opening = nodes[nodeId as AnyNodeId]?.type !== 'item'
-  const { changes } = opening
-    ? rescriptOpening(nodes, { nodeId, compiled, position }, { activeLevelId: null })
-    : addObject(nodes, { params, nodeId, compiled, position }, { activeLevelId: null })
-  for (const { id, data } of changes?.update ?? []) {
-    useScene.getState().updateNode(id as AnyNodeId, data)
+  const context = { activeLevelId: null }
+  switch (nodes[nodeId as AnyNodeId]?.type) {
+    case 'column': {
+      const at = position && { x: position[0], y: position[1], z: position[2] }
+      return addColumn(nodes, { nodeId, compiled, ...at }, context).changes
+    }
+    case 'window':
+    case 'door':
+      return rescriptOpening(nodes, { nodeId, compiled, position }, context).changes
+    default:
+      return addObject(nodes, { params, nodeId, compiled, position }, context).changes
   }
 }

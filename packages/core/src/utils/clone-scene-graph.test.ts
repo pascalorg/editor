@@ -116,6 +116,34 @@ describe('forkSceneGraph', () => {
     ).toHaveLength(2)
     expect(forked.installedPlugins).toEqual(['pascal:trees'])
   })
+
+  test('an item in several collections keeps every membership on both sides', () => {
+    const level = makeNode('level_1', 'level', { children: ['item_1'] })
+    const item = makeNode('item_1', 'item', {
+      parentId: 'level_1',
+      collectionIds: ['collection_a', 'collection_b'],
+    })
+    const collection = (id: string) => ({
+      id: id as CollectionId,
+      name: id,
+      nodeIds: ['item_1' as AnyNodeId],
+    })
+    const forked = forkSceneGraph({
+      nodes: { ['level_1' as AnyNodeId]: level, ['item_1' as AnyNodeId]: item },
+      rootNodeIds: ['level_1' as AnyNodeId],
+      collections: {
+        ['collection_a' as CollectionId]: collection('collection_a'),
+        ['collection_b' as CollectionId]: collection('collection_b'),
+      },
+    })
+    const forkedItem = Object.values(forked.nodes).find((node) => node.type === 'item')!
+    const collections = Object.values(forked.collections ?? {})
+
+    expect('collectionIds' in forkedItem && forkedItem.collectionIds).toEqual(
+      collections.map((entry) => entry.id),
+    )
+    expect(collections.map((entry) => entry.nodeIds)).toEqual([[forkedItem.id], [forkedItem.id]])
+  })
 })
 
 describe('construction-dimension clone references', () => {

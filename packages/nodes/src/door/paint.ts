@@ -13,4 +13,8 @@ import {
 export const doorPaint = createSlotPaintCapability({
   resolveRole: resolveSlotByReRaycast,
   applyPreview: previewSlotByUserData,
+  legacyEffective: (node, role) =>
+    node.type === 'door' && !node.source && node.material && (role === 'panel' || role === 'frame')
+      ? { material: node.material, materialPreset: undefined }
+      : null,
 })

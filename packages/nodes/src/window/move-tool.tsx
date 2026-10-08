@@ -1,5 +1,6 @@
 import {
   type AnyNodeId,
+  collectionIdsOf,
   type DormerEvent,
   dormerWallFacePointToDormer,
   emitter,
@@ -620,6 +621,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         // Duplicate mode: delete the transient draft while history is still
         // paused, then create the real node as the gesture's ONE tracked
         // write — undo removes the new window entirely.
+        // Read before the delete: the copy joins the collections its draft is in.
+        const collectionIds = collectionIdsOf(useScene.getState().collections, movingWindowNode.id)
         useScene.getState().deleteNode(movingWindowNode.id)
 
         const cloned = structuredClone(movingWindowNode) as any
@@ -639,7 +642,9 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           visible: true,
         })
         history.commitStep(() => {
-          useScene.getState().createNode(node, target.wallId as AnyNodeId)
+          useScene
+            .getState()
+            .createNodes([{ node, parentId: target.wallId as AnyNodeId, collectionIds }])
         })
         placedId = node.id
       } else {
@@ -874,6 +879,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       let placedId: string
 
       if (isNew) {
+        // Read before the delete: the copy joins the collections its draft is in.
+        const collectionIds = collectionIdsOf(useScene.getState().collections, movingWindowNode.id)
         useScene.getState().deleteNode(movingWindowNode.id)
         const cloned = structuredClone(movingWindowNode) as any
         delete cloned.id
@@ -892,7 +899,11 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           visible: true,
         })
         history.commitStep(() => {
-          useScene.getState().createNode(committedNode, target.dormer.id as AnyNodeId)
+          useScene
+            .getState()
+            .createNodes([
+              { node: committedNode, parentId: target.dormer.id as AnyNodeId, collectionIds },
+            ])
         })
         placedId = committedNode.id
       } else {
@@ -1080,6 +1091,8 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       if (isNew) {
         // See commitToWall — delete the draft paused, create as the ONE
         // tracked write.
+        // Read before the delete: the copy joins the collections its draft is in.
+        const collectionIds = collectionIdsOf(useScene.getState().collections, movingWindowNode.id)
         useScene.getState().deleteNode(movingWindowNode.id)
 
         const cloned = structuredClone(movingWindowNode) as any
@@ -1098,7 +1111,9 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
           visible: true,
         })
         history.commitStep(() => {
-          useScene.getState().createNode(node, segmentId as AnyNodeId)
+          useScene
+            .getState()
+            .createNodes([{ node, parentId: segmentId as AnyNodeId, collectionIds }])
         })
         placedId = node.id
       } else {

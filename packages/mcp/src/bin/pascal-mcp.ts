@@ -7,7 +7,8 @@ import { parseArgs } from 'node:util'
 import { SceneBridge } from '../bridge/scene-bridge'
 import { version } from '../index'
 import { createPascalMcpServer } from '../server'
-import { createSceneStore } from '../storage'
+import { createSceneStore, resolveDefaultDatabasePath } from '../storage'
+import { localGeometryScripts } from '../tools/local-geometry-scripts'
 import { connectHttp } from '../transports/http'
 import { connectStdio } from '../transports/stdio'
 
@@ -58,7 +59,12 @@ async function main(): Promise<void> {
     const bridge = new SceneBridge()
     if (values.scene) bridge.loadJSON(readFileSync(values.scene, 'utf8'))
     else bridge.loadDefault()
-    return createPascalMcpServer({ bridge, store })
+    bridge.clearHistory()
+    return createPascalMcpServer({
+      bridge,
+      store,
+      geometryScripts: localGeometryScripts(resolveDefaultDatabasePath()),
+    })
   }
 
   if (values.http) {

@@ -21,6 +21,7 @@ import {
   type WindowEvent,
   WindowNode,
 } from '@pascal-app/core'
+import { windowTakesStyle } from '@pascal-app/core/building'
 import {
   calculateItemRotation,
   clearPlacementSurface,
@@ -68,6 +69,7 @@ import {
   resolveWallSlideAlignment,
 } from '../shared/wall-opening-alignment'
 import { WindowFloorProjection } from './floor-projection'
+import { placedWindowFields, useWindowPlacement } from './placement'
 import WindowPreview from './preview'
 import {
   clampToWall,
@@ -125,15 +127,20 @@ const WindowTool: React.FC = () => {
     side: WindowNode['side']
   } | null>(null)
 
-  // Ghost preview node — zeroed transform + the live facing side (rebuilds on R).
+  const placedType = useWindowPlacement((state) => state.type)
+  const placedStyle = useWindowPlacement((state) => state.style)
+  // Ghost preview node — zeroed transform + the live facing side (rebuilds on R) and the
+  // chips' type and style (rebuilds on O / L).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: placedWindowFields reads the chips' store
   const ghostStub = useMemo(
     () =>
       WindowNode.parse({
+        ...placedWindowFields(),
         position: [0, 0, 0],
         rotation: [0, 0, 0],
         side: fallbackPose?.side ?? 'front',
       }),
-    [fallbackPose?.side],
+    [fallbackPose?.side, placedType, placedStyle],
   )
   // The frame depth is a fixed parse default (the `side` flip doesn't change
   // it); a ref lets the facing-pose publish inside the setup effect read it
@@ -144,11 +151,13 @@ const WindowTool: React.FC = () => {
     useScene.temporal.getState().pause()
 
     const ownedPreviewIds = new Set<string>()
-    const fallbackPreview = WindowNode.parse({
-      position: [0, 0, 0],
-      rotation: [0, 0, 0],
-      side: 'front',
-    })
+    const fallbackPreview = () =>
+      WindowNode.parse({
+        ...placedWindowFields(),
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        side: 'front',
+      })
     const fallbackWallId = WallNodeSchema.parse({
       end: [1, 0],
       start: [0, 0],
@@ -276,7 +285,8 @@ const WindowTool: React.FC = () => {
         floorY,
         side: sideFlip ? 'back' : 'front',
       })
-      const halfWidth = fallbackPreview.width / 2 + 0.5
+      const preview = fallbackPreview()
+      const halfWidth = preview.width / 2 + 0.5
       const wall = WallNodeSchema.parse({
         end: [position[0] + halfWidth, position[2]],
         id: fallbackWallId,
@@ -284,10 +294,10 @@ const WindowTool: React.FC = () => {
         thickness: 0.1,
       })
       const ghost = WindowNode.parse({
-        ...fallbackPreview,
+        ...preview,
         metadata: { isTransient: true },
         parentId: wall.id,
-        position: [halfWidth, FALLBACK_SILL_LIFT + fallbackPreview.height / 2, 0],
+        position: [halfWidth, FALLBACK_SILL_LIFT + preview.height / 2, 0],
         rotation: [0, sideFlip ? Math.PI : 0, 0],
         side: sideFlip ? 'back' : 'front',
         wallId: wall.id,
@@ -342,6 +352,7 @@ const WindowTool: React.FC = () => {
         })
       } else {
         const node = WindowNode.parse({
+          ...placedWindowFields(),
           position: target.position,
           rotation: [0, itemRotation, 0],
           side,
@@ -459,6 +470,7 @@ const WindowTool: React.FC = () => {
 
       if (!draftRef.current) {
         const node = WindowNode.parse({
+          ...placedWindowFields(),
           position: [0, DEFAULT_SILL_CENTER_Y, 0],
           rotation: [0, itemRotation, 0],
           side,
@@ -921,6 +933,7 @@ const WindowTool: React.FC = () => {
         })
       } else {
         const node = WindowNode.parse({
+          ...placedWindowFields(),
           position,
           rotation: [0, 0, 0],
           side: 'front',
@@ -1020,11 +1033,21 @@ const WindowTool: React.FC = () => {
     // guard dropped R off-wall / before the first hover). Then re-renders the
     // current preview so the flip shows live and matches commit.
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'r' && e.key !== 'R') return
+      const key = e.key.toLowerCase()
+      if (key !== 'r' && key !== 'o' && key !== 'l') return
+      if (key === 'l' && !windowTakesStyle(useWindowPlacement.getState().type)) return
       if (e.repeat) return
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      if (key !== 'r' && (e.metaKey || e.ctrlKey || e.altKey)) return
       e.preventDefault()
+      if (key !== 'r') {
+        // O / L cycle the chips; the store subscription re-previews.
+        if (key === 'o') useWindowPlacement.getState().cycleType()
+        else useWindowPlacement.getState().cycleStyle()
+        triggerSFX('sfx:item-rotate')
+        return
+      }
       sideFlip = !sideFlip
       triggerSFX('sfx:item-rotate')
       if (lastWallEvent) {
@@ -1058,6 +1081,20 @@ const WindowTool: React.FC = () => {
     emitter.on('grid:pointerup', onGridPointerUp)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('keydown', onKeyDown)
+    // A chip changed (key or click): the draft takes the new type and style, then re-previews.
+    const unsubscribePlacement = useWindowPlacement.subscribe(() => {
+      const draft = draftRef.current
+      if (draft) {
+        useScene.getState().updateNode(draft.id, placedWindowFields())
+        const live = useScene.getState().nodes[draft.id as AnyNodeId]
+        if (live?.type === 'window') draftRef.current = live
+      }
+      const parent = draft?.parentId ? useScene.getState().nodes[draft.parentId as AnyNodeId] : null
+      if (lastWallEvent) onWallHover(lastWallEvent)
+      else if (lastDormerEvent) onDormerHover(lastDormerEvent)
+      else if (parent) publishDraftPreview(parent)
+      else if (lastFloorPoint) showGhostAt(lastFloorPoint.pos, lastFloorPoint.floorY)
+    })
     // Placement tracks the cursor through wall events; keep walls hidden by
     // the wall-mode pass (X-ray 'down' mode) pointer-targetable while the
     // tool is active so a new window still snaps onto them (see the wall
@@ -1093,6 +1130,7 @@ const WindowTool: React.FC = () => {
       emitter.off('grid:pointerup', onGridPointerUp)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown)
+      unsubscribePlacement()
     }
   }, [activeLevelId, isCameraDragging, selectNode])
 

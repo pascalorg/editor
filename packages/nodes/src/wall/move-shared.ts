@@ -1,6 +1,7 @@
 import {
   type AnyNodeId,
   getMaterialPresetByRef,
+  parseMaterialColor,
   parseMaterialRef,
   resolveMaterial,
   type SceneMaterialId,
@@ -113,9 +114,11 @@ function wallSegmentExists(
   )
 }
 
-// Resolve a wall slot ref (`library:`/`scene:`) to a swatch colour, or
-// undefined when the ref is absent / dangling / colourless.
+// Resolve a wall slot ref (`library:`/`scene:`) or colour to a swatch colour,
+// or undefined when the ref is absent / dangling / colourless.
 function resolveWallSlotRefColor(ref: string | undefined): string | undefined {
+  const color = parseMaterialColor(ref)
+  if (color) return color
   const parsed = parseMaterialRef(ref)
   if (!parsed) return undefined
   if (parsed.kind === 'library') {

@@ -3,6 +3,7 @@ import {
   type AnyNodeId,
   type BuildingNode,
   type CeilingNode,
+  type Collection,
   type ColumnNode,
   calculateLevelMiters,
   DEFAULT_WALL_THICKNESS,
@@ -23,10 +24,13 @@ import {
   isCurvedWall,
   type LevelNode,
   liftedManualSlab,
+  measureStair,
   prepareSlabPolygonContext,
   resolveCeilingHeight,
   resolveWallTop,
   type SlabNode,
+  type StairNode,
+  type StairSegmentNode,
   sampleWallCenterline,
   type UnitNode,
   union,
@@ -55,7 +59,7 @@ import {
   type Vec2,
   type Vec3,
 } from './ifc-model'
-import type { StepRef, StepValue } from './step'
+import { type StepRef, type StepValue, typed } from './step'
 import { wallBaseCells, wallCellBand } from './wall-base'
 
 /** Triangle geometry for one node, in the rendered scene's world frame (metres, Y-up). */
@@ -65,10 +69,13 @@ export interface IfcMeshPart {
   /** sRGB components in 0..1. */
   color?: [number, number, number]
   opacity?: number
+  /** Semantic subpart supplied by the renderer. */
+  role?: string
 }
 
 export interface IfcExportInput {
   nodes: Record<string, AnyNode>
+  collections?: Readonly<Record<string, Collection>>
   /** Rendered geometry keyed by node id; required for everything that is not a native IFC element. */
   meshes?: ReadonlyMap<string, IfcMeshPart[]>
   projectName?: string
@@ -448,7 +455,11 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
     units,
   )
 
-  const pascalIdentity = (node: AnyNode, refs: StepRef[]) =>
+  const productsByNodeId = new Map<string, StepRef[]>()
+  const pascalIdentity = (node: AnyNode, refs: StepRef[]) => {
+    if (node.type !== 'unit') {
+      for (const ref of refs) pushTo(productsByNodeId, node.id, ref)
+    }
     model.propertySet(
       node.id,
       'Pascal',
@@ -458,6 +469,7 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
       ],
       refs,
     )
+  }
 
   const nodeName = (node: AnyNode, fallback: string) => {
     const name = (node as { name?: unknown }).name
@@ -757,6 +769,7 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
     node: AnyNode,
     sets: TriangleSet[],
     relativeTo: StepRef,
+    seed = node.id as string,
   ): StepRef | null => {
     if (sets.length === 0) return null
     const { frame, sets: local } = recentre(sets)
@@ -764,8 +777,8 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
     if (!shape) return null
     return emitElement(
       cls,
-      node.id,
-      node,
+      seed,
+      seed === node.id ? node : { ...node, metadata: { ...node.metadata, globalId: undefined } },
       nodeName(node, cls.entity),
       model.localPlacement(relativeTo, frame),
       shape,
@@ -1247,7 +1260,11 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
     const context = contextFor(column)
     const sets = partsFor(column, context)
     const cls = meshClassFor(column)
-    if (!isPlainColumn(column) && sets.length > 0) {
+    if (column.source && sets.length === 0) {
+      skipped.push({ nodeId: column.id, type: column.type, reason: 'no-geometry' })
+      continue
+    }
+    if ((column.source || !isPlainColumn(column)) && sets.length > 0) {
       const ref = emitMeshElement(cls, column, sets, context.placement)
       if (ref) context.contained.push(ref)
       continue
@@ -1356,15 +1373,143 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
       ROOF_SLAB,
     )
   }
-  for (const stair of ofType('stair')) {
-    if (isExcluded(stair)) continue
+  for (const stairNode of ofType('stair')) {
+    if (isExcluded(stairNode)) continue
+    const stair = stairNode as StairNode
     handled.add(stair.id)
-    aggregateParts(
-      stair,
-      { entity: 'IFCSTAIR', tail: (tag) => [tag, enumValue('NOTDEFINED')] },
-      'stair-segment',
-      STAIR_FLIGHT,
+    const context = contextFor(stair)
+    const placement = model.localPlacement(context.placement, IDENTITY_FRAME)
+    const children = ofType('stair-segment').filter(
+      (child) => ancestorOfType(child, 'stair')?.id === stair.id,
     )
+    const measurement =
+      Array.isArray(stair.position) && Array.isArray(stair.children)
+        ? measureStair(stair, nodes)
+        : null
+    const refs: StepRef[] = []
+    for (const member of [stair, ...children]) {
+      handled.add(member.id)
+      if (isExcluded(member)) continue
+      const groups = new Map<string, IfcMeshPart[]>()
+      for (const part of meshes.get(member.id) ?? []) {
+        const role =
+          part.role === 'railing' || part.role === 'handrail'
+            ? part.role
+            : part.role === 'landing' ||
+                (member.type === 'stair-segment' &&
+                  (member as StairSegmentNode).segmentType === 'landing')
+              ? 'landing'
+              : 'flight'
+        pushTo(groups, role, part)
+      }
+      for (const [role, parts] of groups) {
+        const cls =
+          role === 'landing'
+            ? { entity: 'IFCSLAB', tail: (tag: string) => [tag, enumValue('LANDING')] }
+            : role === 'railing' || role === 'handrail'
+              ? {
+                  entity: 'IFCRAILING',
+                  tail: (tag: string) => [
+                    tag,
+                    enumValue(role === 'handrail' ? 'HANDRAIL' : 'GUARDRAIL'),
+                  ],
+                }
+              : {
+                  ...STAIR_FLIGHT,
+                  tail: (tag: string) => [
+                    tag,
+                    null,
+                    null,
+                    null,
+                    null,
+                    enumValue(
+                      member.type === 'stair-segment' && (member as StairSegmentNode).winder
+                        ? 'WINDER'
+                        : stair.stairType === 'straight'
+                          ? 'STRAIGHT'
+                          : stair.stairType === 'spiral'
+                            ? 'SPIRAL'
+                            : 'CURVED',
+                    ),
+                  ],
+                }
+        const seed =
+          member !== stair && (role === 'flight' || role === 'landing')
+            ? member.id
+            : `${member.id}:${role}`
+        const ref = emitMeshElement(
+          cls,
+          member,
+          localTriangleSets(parts, context.worldToLocal),
+          placement,
+          seed,
+        )
+        if (!ref) continue
+        refs.push(ref)
+        if (role !== 'flight') continue
+        const flight = measurement?.flights.find((entry) => entry.nodeId === member.id)
+        if (!flight || flight.riserHeight === null || flight.going === null) continue
+        const properties: Array<[string, StepValue]> = [
+          ['NumberOfRiser', typed('IFCCOUNTMEASURE', flight.count)],
+          ['NumberOfTreads', typed('IFCCOUNTMEASURE', flight.count)],
+          ['RiserHeight', typed('IFCPOSITIVELENGTHMEASURE', flight.riserHeight)],
+          ['TreadLength', typed('IFCPOSITIVELENGTHMEASURE', flight.going)],
+          ['NosingLength', typed('IFCLENGTHMEASURE', flight.construction?.nosing ?? 0)],
+          [
+            'WalkingLineOffset',
+            typed(
+              'IFCPOSITIVELENGTHMEASURE',
+              member.type === 'stair-segment'
+                ? ((member as StairSegmentNode).winder?.walkingLineOffset ?? flight.width / 2)
+                : flight.width / 2,
+            ),
+          ],
+        ]
+        if (flight.innerGoing !== null && flight.innerGoing > 0)
+          properties.push([
+            'TreadLengthAtInnerSide',
+            typed('IFCPOSITIVELENGTHMEASURE', flight.innerGoing),
+          ])
+        if (flight.construction?.mode === 'waist' && stair.stairType === 'straight')
+          properties.push([
+            'WaistThickness',
+            typed('IFCPOSITIVELENGTHMEASURE', flight.construction.waistThickness),
+          ])
+        const headroom = measurement?.headroom.flightMinimum[member.id]
+        if (measurement?.headroom.status === 'evaluated' && headroom !== undefined && headroom > 0)
+          properties.push(['Headroom', typed('IFCPOSITIVELENGTHMEASURE', headroom)])
+        model.propertySet(seed, 'Pset_StairFlightCommon', properties, [ref])
+      }
+    }
+    if (!refs.length) {
+      skipped.push({ nodeId: stair.id, type: stair.type, reason: 'no-geometry' })
+      continue
+    }
+    const winders = children.filter(
+      (child) => (child as StairSegmentNode).winder,
+    ) as StairSegmentNode[]
+    const windingType = children.some(
+      (child) => (child as StairSegmentNode).segmentType === 'landing',
+    )
+      ? 'NOTDEFINED'
+      : winders.length === 1
+        ? 'QUARTER_WINDING_STAIR'
+        : winders.length === 2 && winders[0]!.winder!.turn === winders[1]!.winder!.turn
+          ? 'TWO_QUARTER_WINDING_STAIR'
+          : 'NOTDEFINED'
+    const ref = emitElement(
+      {
+        entity: 'IFCSTAIR',
+        tail: (tag) => [tag, enumValue(windingType)],
+      },
+      `${stair.id}:assembly`,
+      stair,
+      nodeName(stair, 'IFCSTAIR'),
+      placement,
+      null,
+    )
+    model.rel('IFCRELAGGREGATES', `${stair.id}:parts`, ref, refs)
+    context.contained.push(ref)
   }
 
   for (const node of sortedNodes) {
@@ -1413,6 +1558,33 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
       null,
       zone,
     )
+  }
+
+  for (const collection of Object.values(input.collections ?? {}).sort((a, b) =>
+    a.id.localeCompare(b.id),
+  )) {
+    const group = step.add(
+      'IFCGROUP',
+      model.guid(collection.id),
+      ownerHistory,
+      collection.name,
+      null,
+      null,
+    )
+    model.propertySet(
+      collection.id,
+      'PascalCollection',
+      [
+        ['CollectionId', identifier(collection.id)],
+        ['Template', collection.template ? identifier(collection.template) : null],
+        ['Color', collection.color ? label(collection.color) : null],
+      ],
+      [group],
+    )
+    const members = [...new Set(collection.nodeIds)].flatMap((id) => productsByNodeId.get(id) ?? [])
+    if (members.length > 0) {
+      model.rel('IFCRELASSIGNSTOGROUP', `${collection.id}:members`, members, null, group)
+    }
   }
 
   // ── Spatial containment ──────────────────────────────────────────────

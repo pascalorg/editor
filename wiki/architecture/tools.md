@@ -135,6 +135,7 @@ Concretely, door/window placement/move keeps these in lockstep across `{door,win
 - **Snap target**: nearest wall to the true cursor (shared `findClosestWallInPlan` / wall raycast), free-follow off-wall, commit only on a host.
 - **Move SFX**: a soft `sfx:grid-snap` click per grid step while sliding (free-follow plan XZ or on-wall along-X, quantized + deduped so it isn't a machine-gun) and a soft `sfx:item-pick` cue on the floor→wall snap. Both tools carry an identical `tickGridStep` / `tickWallSnap` pair — keep them in sync.
 - **R-flip** facing mid-placement, **Alt (hold)** to force-place past snapping and collisions (guides stay visible) and **Shift (tap)** to cycle the snapping mode — the rule above, never a held-Shift bypass — faithful ghost/symbol, deterministic single-undo commit.
+- **O / L** cycle the door and window tools' Type and Style chips (`ToolHint.chip`, by key or click): the choices of the panel's Type and Style rows, written from the same core fields (`doorTypeFields`, `DOOR_TYPE_SIZES` and `doorStyleLook` for a door; `windowTypeFields` and the window style presets for a window), so a door placed by hand matches one changed in the panel. A window placed as Bay or Bow has no sill; every other type has one. A window style shapes a Fixed window's panes, which only a Fixed window draws, so the panel's Style row and the tool's L chip show for a Fixed window only (cycling O away from Fixed hides L), and `add_window` refuses a style on another type (`style_needs_fixed_window`). The Style row and the L chip offer one entry per look (`WINDOW_STYLE_CHOICES`); `picture`, which draws what `single` draws, stays an accepted alias for agents.
 
 Tells that you've broken parity: a sound/guide/snap that fires in 3D but is silent in 2D (or vice-versa), or a fix landed in one move file but not its sibling. The two move files are deliberately near-mirrors; diff them when in doubt.
 
@@ -331,6 +332,17 @@ When emitting a `FloorplanGeometry` polygon that should remain interactive but v
 
 Procedural recipes declare `mounting: { attachTo: 'ceiling', reference }` with a named, non-repeated +Y top surface. The shared procedural mounted move session handles wall and ceiling previews, snapping, collision checks, Alt force-place for collisions, fresh subtree commits and single-step undo. Ceiling enter/move/click events use ceiling-local XZ; grid fallback shows an unhosted red ghost and cannot commit. The parent is the ceiling, stored Y is zero at the reference, and only yaw rotates (R/T); the rendered pose subtracts the rotated reference so the design hangs flush below the ceiling underside. Core validation enforces polygon containment, holes and level height even with Alt. The 2D move target finds ceiling polygons and uses the same session; glyphs resolve the ceiling frame, while parameter arrows portal through the ceiling frame and floor elevation never applies.
 
+
+## Placement notices
+
+A kind can tell the person why the node in hand doesn't fit where it stands. It declares `placementNotice(node, { nodes, live })` on its `NodeDefinition`: a pure function that returns `{ line, detail? }` or null, with `live` the in-flight drag pose, which the kind merges in its own frame.
+- The editor reads it through one generic hook, `usePlacementNotice(nodeId)`. HelperManager shows `line` in the HUD's `!` row for the moving node or the active tool's transient draft. A panel shows `line` and `detail` for the selected node.
+- The framework names no kind. HelperManager scans for a transient draft only while the active tool's kind declares a notice, and the hook subscribes to the scene only while it has a node.
+- It is a warning, never a block: the node still places.
+
+The item kind uses it for floor fit (`nodes/src/item/placement-notice.ts`): a floor item standing in a door's clearance ("Blocks the door to Bath"), or one its room cannot hold in any turn ("Too large for Bath", with both sizes in the panel).
+- The check is core's `floorItemFit` (`@pascal-app/core/building`), the same one `place_items` refuses with (`blocks_door`, naming the door and a spot that clears every door; `too_large_for_room`). The person-facing wording lives in the kind.
+- Only items standing on a level are checked: not an item on a table, a shelf or a wall. Items overlapping each other (a chair under its table) are not a misfit.
 
 ## Surface fit policy
 

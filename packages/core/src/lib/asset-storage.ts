@@ -1,5 +1,6 @@
 import { get, set } from 'idb-keyval'
 import { customAlphabet } from 'nanoid'
+import { ARTIFACT_URL_PREFIX, resolveArtifactUrl } from './artifact-store'
 
 export const ASSET_PREFIX = 'asset_data:'
 
@@ -29,6 +30,8 @@ export async function loadAssetUrl(url: string): Promise<string | null> {
   if (url.startsWith('blob:') || url.startsWith('http')) {
     return url
   }
+
+  if (url.startsWith(ARTIFACT_URL_PREFIX)) return resolveArtifactUrl(url)
 
   // Handle our custom asset protocol
   if (url.startsWith('asset://')) {

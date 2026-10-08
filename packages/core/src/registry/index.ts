@@ -156,6 +156,7 @@ export type {
   ParentFrameSnapMatch,
   PascalBakeExtras,
   PascalPartTag,
+  PlacementNotice,
   Plugin,
   PortRef,
   Presentation,
