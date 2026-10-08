@@ -151,7 +151,6 @@ export function writePersistedSelection(selection: {
 }
 
 function getEditorUiStateForRestoredSelection(
-  sceneNodes: Record<string, any>,
   selection: PersistedSelectionPath,
   fallbackUiState: PersistedEditorUiState,
 ): PersistedEditorUiState {
@@ -168,43 +167,16 @@ function getEditorUiStateForRestoredSelection(
             : { mode: 'select' },
       mode,
       tool: mode === 'build' ? 'property-line' : null,
-      structureLayer: 'elements',
       catalogCategory: null,
     }
   }
-
-  if (selection.zoneId) {
-    return {
-      ...fallbackUiState,
-      phase: 'structure',
-      toolMode: { mode: 'select' },
-      mode: 'select',
-      tool: null,
-      structureLayer: 'zones',
-      catalogCategory: null,
-    }
-  }
-
-  const selectedNodes = selection.selectedIds
-    .map((id) => sceneNodes[id])
-    .filter((node): node is Record<string, any> => Boolean(node))
-
-  const shouldRestoreFurnishPhase =
-    selectedNodes.length > 0 &&
-    selectedNodes.every(
-      (node) =>
-        node.type === 'item' &&
-        node.asset?.category !== 'door' &&
-        node.asset?.category !== 'window',
-    )
 
   return {
     ...fallbackUiState,
-    phase: shouldRestoreFurnishPhase ? 'furnish' : 'structure',
+    phase: 'building',
     toolMode: { mode: 'select' },
     mode: 'select',
     tool: null,
-    structureLayer: 'elements',
     catalogCategory: null,
   }
 }
@@ -292,7 +264,7 @@ export function syncEditorSelectionFromCurrentScene() {
   const shouldRestoreEditorUiState = hasCustomPersistedEditorUiState(restoredEditorUiState)
   const restoredSelection = getRestoredSelectionForScene(sceneNodes)
   const selectionDrivenEditorUiState = restoredSelection
-    ? getEditorUiStateForRestoredSelection(sceneNodes, restoredSelection, restoredEditorUiState)
+    ? getEditorUiStateForRestoredSelection(restoredSelection, restoredEditorUiState)
     : null
 
   if (firstBuilding && firstLevel) {
@@ -307,8 +279,7 @@ export function syncEditorSelectionFromCurrentScene() {
         selectedIds: [],
         zoneId: null,
       })
-      useEditor.getState().setPhase('structure')
-      useEditor.getState().setStructureLayer('elements')
+      useEditor.getState().setPhase('building')
       useEditor.getState().setMode('build')
       useEditor.getState().setTool('wall')
       return
@@ -355,8 +326,7 @@ export function syncEditorSelectionFromCurrentScene() {
       selectedIds: [],
       zoneId: null,
     })
-    useEditor.getState().setPhase('structure')
-    useEditor.getState().setStructureLayer('elements')
+    useEditor.getState().setPhase('building')
   } else {
     useEditor.getState().setPhase('site')
     useViewer.getState().setSelection({
@@ -385,7 +355,6 @@ function resetEditorInteractionState() {
   sceneRegistry.clear()
   useEditor.setState({
     phase: 'site',
-    structureLayer: 'elements',
     catalogCategory: null,
     selectedItem: null,
     selectedReferenceId: null,

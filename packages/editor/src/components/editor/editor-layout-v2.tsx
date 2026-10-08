@@ -49,11 +49,11 @@ function LeftColumn({
     }
   }, [tabs, activePanel, setActivePanel])
 
-  // Leaving the items tab while furnishing should drop back to select mode
+  // Leaving the items tab with the item tool in hand drops back to select mode
   useEffect(() => {
     if (activePanel === 'items') return
-    const { phase, mode, setMode } = useEditor.getState()
-    if (phase === 'furnish' && mode === 'build') {
+    const { mode, tool, setMode } = useEditor.getState()
+    if (mode === 'build' && tool === 'item') {
       setMode('select')
     }
   }, [activePanel])

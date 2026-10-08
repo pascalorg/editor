@@ -41,6 +41,7 @@ import {
 import { createExportTextureUtils, type ExportTextureUtils } from './export-texture-utils'
 import { cloneExportUserData } from './export-user-data'
 import { isIfcRolePart } from './ifc-parts'
+import { nodeDisplayLabel } from './node-display-label'
 import {
   type CompressedTextureDecompressor,
   decompressCanonicalNormalMaps,
@@ -1769,42 +1770,6 @@ function bakeWindowClip(
  * (e.g. `pascalSwingLeaf`, cached-material flags) leaks into glTF extras — the
  * file describes itself with exactly the fields a consumer needs.
  */
-/**
- * Human-readable label for a baked node, mirroring the viewer's `getNodeName`:
- * an explicit name wins, items fall back to their catalog asset name, other
- * kinds to a capitalized type. Levels override this with their display name.
- */
-function nodeDisplayLabel(node: AnyNode): string {
-  if (node.name) return node.name
-  switch (node.type) {
-    case 'item':
-      return (node as { asset?: { name?: string } }).asset?.name || 'Item'
-    case 'wall':
-      return 'Wall'
-    case 'door':
-      return 'Door'
-    case 'window':
-      return 'Window'
-    case 'cabinet':
-    case 'cabinet-module':
-      return 'Cabinet'
-    case 'slab':
-      return 'Slab'
-    case 'ceiling':
-      return 'Ceiling'
-    case 'roof':
-      return 'Roof'
-    case 'fence':
-      return 'Fence'
-    case 'column':
-      return 'Column'
-    case 'stair':
-      return 'Stairs'
-    default:
-      return node.type
-  }
-}
-
 function stampIdentity(
   scene: THREE.Object3D,
   cloneByOriginal: Map<THREE.Object3D, THREE.Object3D>,

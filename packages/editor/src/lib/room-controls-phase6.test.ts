@@ -105,7 +105,7 @@ beforeEach(() => {
   ])
   useViewer.getState().setSelection({ buildingId: building.id, levelId: LEVEL, selectedIds: [] })
   useEditor.setState({
-    phase: 'structure',
+    phase: 'building',
     mode: 'select',
     room: { zoneId, levelId: LEVEL },
     gridSnapStep: 0.5,
@@ -488,9 +488,9 @@ describe('room gesture ownership', () => {
       expect(useRoomTransform.getState().session).toBeNull()
       useViewer.getState().setSelection({ levelId: LEVEL })
       begin()
-      useEditor.setState({ phase: 'furnish' })
+      useEditor.setState({ phase: 'site' })
       expect(useRoomTransform.getState().session).toBeNull()
-      useEditor.setState({ phase: 'structure' })
+      useEditor.setState({ phase: 'building' })
       begin()
       useInteractionScope.getState().begin({ kind: 'box-select' })
       expect(useRoomTransform.getState().session).toBeNull()

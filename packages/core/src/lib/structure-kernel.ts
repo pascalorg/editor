@@ -2,7 +2,7 @@ import type { AnyNode, AnyNodeId, SeparatorNode, WallNode } from '../schema'
 import { CeilingNode } from '../schema/nodes/ceiling'
 import { SlabNode } from '../schema/nodes/slab'
 import type { SurfacePaintRegion } from '../schema/nodes/surface-paint-region'
-import { ZoneNode } from '../schema/nodes/zone'
+import type { ZoneNode } from '../schema/nodes/zone'
 import {
   CEILING_CLAMP_MARGIN,
   getCeilingClampBound,
@@ -18,6 +18,7 @@ import { floorPlateId } from './floor-plate-id'
 import { buildFloorPlates, warnPlateFailure } from './floor-plates'
 import { floorRoomFaces } from './floor-room-faces'
 import { type FloorStepOverride, remapFloorStepOverrideKeys } from './floor-step-finish'
+import { newZone } from './new-zone'
 import { replacementPlateFor } from './plate-reference'
 import {
   area,
@@ -333,7 +334,7 @@ function planLevelStructure({
     if (source) sourceByFace.set(index, source)
     const zone =
       survivor ??
-      ZoneNode.parse({
+      newZone({
         id: mintId('zone'),
         parentId: levelId,
         name: nextRoomName(),

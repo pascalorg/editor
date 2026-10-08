@@ -25,8 +25,9 @@ export function showsWholeBuilding(state: {
  * Solo choice while editing; a mode left over from the viewer (or persisted
  * by an older build) is set back to stacked, and kept there.
  *
- * Preview and the walkthrough show the whole building the viewer's way, so
- * the upper levels come back while either is on.
+ * The walkthrough shows the whole building, so the upper levels come back
+ * while it is on; Preview hands the display to the viewer's own floor rule
+ * (`useViewerFloorDisplay`).
  */
 export function useEditorLevelDisplay(showWholeBuilding: boolean) {
   useEffect(() => {

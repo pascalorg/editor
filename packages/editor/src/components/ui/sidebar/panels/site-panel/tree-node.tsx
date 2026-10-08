@@ -3,8 +3,6 @@ import { useViewer } from '@pascal-app/viewer'
 import { ChevronRight } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
 import { forwardRef, memo, useEffect, useRef } from 'react'
-import { resolveNodeSelectionTarget } from '../../../../../lib/selection-routing'
-import useEditor from '../../../../../store/use-editor'
 import { expandSessionSelectionForNode } from '../../../../../store/use-session-groups'
 
 export function handleTreeSelection(
@@ -61,31 +59,6 @@ export function handleTreeSelection(
 
 export function focusTreeNode(nodeId: AnyNodeId) {
   emitter.emit('camera-controls:focus', { nodeId })
-}
-
-export function routeTreeSelectionToNode(node: AnyNode | null | undefined) {
-  const target = node ? resolveNodeSelectionTarget(node) : null
-  if (!target) return
-
-  const selectedIdsAfterClick = useViewer.getState().selection.selectedIds
-  const editor = useEditor.getState()
-  let didRoute = false
-
-  if (target.phase !== editor.phase) {
-    editor.setPhase(target.phase)
-    didRoute = true
-  }
-  if (
-    target.phase === 'structure' &&
-    target.structureLayer &&
-    target.structureLayer !== useEditor.getState().structureLayer
-  ) {
-    useEditor.getState().setStructureLayer(target.structureLayer)
-    didRoute = true
-  }
-  if (didRoute) {
-    useViewer.getState().setSelection({ selectedIds: selectedIdsAfterClick })
-  }
 }
 
 import { cn } from '../../../../../lib/utils'

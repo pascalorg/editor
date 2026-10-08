@@ -2,7 +2,6 @@ import { type AnyNodeId, type FenceNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useEffect, useState } from 'react'
-import useEditor from '../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
@@ -38,10 +37,7 @@ export const FenceTreeNode = memo(function FenceTreeNode({
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation()
-    const handled = handleTreeSelection(e, nodeId, selectedIds, setSelection)
-    if (!handled && useEditor.getState().phase === 'furnish') {
-      useEditor.getState().setPhase('structure')
-    }
+    handleTreeSelection(e, nodeId, selectedIds, setSelection)
   }
 
   return (

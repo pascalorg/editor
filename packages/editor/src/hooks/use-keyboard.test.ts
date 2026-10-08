@@ -29,8 +29,10 @@ import {
   isToolOwnedCanopyForm,
   isToolOwnedRotation,
   markToolCancelConsumed,
+  openItemCatalogFromShortcut,
   runHistoryShortcut,
   runNodeInteraction,
+  switchPhaseFromShortcut,
 } from './use-keyboard'
 
 type RafFn = (callback: (time: number) => void) => number
@@ -315,6 +317,56 @@ describe('B and P open their panel', () => {
     useSidebarStore.getState().setIsCollapsed(false)
     useEditor.getState().setContinuation('wall', 'room')
     useEditor.getState().armToolMode({ mode: 'select' })
+  })
+
+  test('1 goes to site and 2 into the building; 3 is no longer a shortcut', () => {
+    useEditor.getState().armToolMode({ mode: 'build', tool: 'wall' })
+    expect(switchPhaseFromShortcut('1')).toBe(true)
+    expect(useEditor.getState().phase).toBe('site')
+    expect(useEditor.getState().mode).toBe('select')
+    expect(switchPhaseFromShortcut('2')).toBe(true)
+    expect(useEditor.getState().phase).toBe('building')
+    expect(switchPhaseFromShortcut('3')).toBe(false)
+    expect(useEditor.getState().phase).toBe('building')
+  })
+
+  test('F, B and P arm their tool and keep the building', () => {
+    setSidebarTabIds(['site', 'build', 'paint', 'items'])
+    useEditor.getState().setPhase('building')
+    for (const [arm, mode, tool] of [
+      [openItemCatalogFromShortcut, 'build', 'item'],
+      [armWallToolFromShortcut, 'build', 'wall'],
+      [armPaintFromShortcut, 'material-paint', null],
+    ] as const) {
+      arm()
+      expect(useEditor.getState().phase).toBe('building')
+      expect(useEditor.getState().mode).toBe(mode)
+      expect(useEditor.getState().tool).toBe(tool)
+    }
+    openItemCatalogFromShortcut()
+    expect(useEditor.getState().activeSidebarPanel).toBe('items')
+  })
+
+  test('F, B and P also keep Site when arming their tool', () => {
+    setSidebarTabIds(['site', 'build', 'paint', 'items'])
+    for (const arm of [
+      openItemCatalogFromShortcut,
+      armWallToolFromShortcut,
+      armPaintFromShortcut,
+    ]) {
+      useEditor.getState().setPhase('site')
+      useEditor.getState().armToolMode({ mode: 'select' })
+      arm()
+      expect(useEditor.getState().phase).toBe('site')
+    }
+  })
+
+  test('F opens a collapsed catalog sidebar', () => {
+    setSidebarTabIds(['site', 'build', 'items'])
+    useSidebarStore.getState().setIsCollapsed(true)
+    openItemCatalogFromShortcut()
+    expect(useEditor.getState().activeSidebarPanel).toBe('items')
+    expect(useSidebarStore.getState().isCollapsed).toBe(false)
   })
 
   test('B arms the wall tool on Rectangle and shows the Build panel', () => {

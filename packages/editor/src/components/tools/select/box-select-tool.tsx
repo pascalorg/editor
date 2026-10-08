@@ -264,7 +264,7 @@ export const BoxSelectTool: React.FC = () => {
   const phase = useEditor((s) => s.phase)
   const mode = useEditor((s) => s.mode)
   const selectionTool = useEditor((s) => s.floorplanSelectionTool)
-  const isActive = mode === 'select' && (phase === 'structure' || phase === 'furnish')
+  const isActive = mode === 'select' && phase === 'building'
 
   if (!isActive) return null
 

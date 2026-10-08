@@ -120,9 +120,6 @@ const exitToSelectAfterUnconsumedCancel = () => {
     popRoomSelection()
   )
     return
-  const currentPhase = useEditor.getState().phase
-  const currentStructureLayer = useEditor.getState().structureLayer
-
   useInteractionScope
     .getState()
     .endIf(
@@ -131,14 +128,8 @@ const exitToSelectAfterUnconsumedCancel = () => {
         (sc.kind === 'reshaping' && sc.reshape === 'hole'),
     )
 
-  // From zone mode, return to structure select
-  if (currentPhase === 'structure' && currentStructureLayer === 'zones') {
-    useEditor.getState().setStructureLayer('elements')
-    useEditor.getState().armToolMode({ mode: 'select' })
-  } else {
-    // Return to the default select tool while keeping the active building/level context.
-    useEditor.getState().armToolMode({ mode: 'select' })
-  }
+  // Back to the select tool, keeping the active building/level context.
+  useEditor.getState().armToolMode({ mode: 'select' })
 
   useEditor.getState().setFloorplanSelectionTool('click')
 
@@ -215,19 +206,29 @@ export const runHistoryShortcut = (direction: 'undo' | 'redo') => {
  */
 export const armWallToolFromShortcut = () => {
   selectWallDrawVariant('rectangle')
-  const editor = useEditor.getState()
-  editor.setPhase('structure')
-  editor.setStructureLayer('elements')
-  editor.armToolMode({ mode: 'build', tool: 'wall' })
+  useEditor.getState().armToolMode({ mode: 'build', tool: 'wall' })
   openSidebarPanel(['build'])
+}
+
+/** 1: site, 2: the building — each back on the select tool. Returns whether `key` was one. */
+export const switchPhaseFromShortcut = (key: string): boolean => {
+  const phase = key === '1' ? 'site' : key === '2' ? 'building' : null
+  if (!phase) return false
+  useEditor.getState().setPhase(phase)
+  useEditor.getState().armToolMode({ mode: 'select' })
+  return true
+}
+
+/** F: the item tool with the items catalog showing. */
+export const openItemCatalogFromShortcut = () => {
+  useEditor.getState().armToolMode({ mode: 'build', tool: 'item' })
+  openSidebarPanel(['items'])
+  useEditor.getState().setActiveSidebarPanel('items')
 }
 
 /** P: paint mode, with the Paint panel showing (the Build panel where a host has no Paint tab). */
 export const armPaintFromShortcut = () => {
-  const editor = useEditor.getState()
-  editor.setPhase('structure')
-  editor.setStructureLayer('elements')
-  editor.armMaterialPaint()
+  useEditor.getState().armMaterialPaint()
   openSidebarPanel(['paint', 'build'])
 }
 
@@ -463,37 +464,21 @@ export const useKeyboard = ({
         // Only switch to select mode if no tool had an active mid-action to cancel.
         // (e.g. mid-wall draw or mid-slab polygon should only cancel the action, not exit the tool)
         cancelActiveTool()
-      } else if (e.key === '1' && !e.metaKey && !e.ctrlKey) {
+      } else if (!e.metaKey && !e.ctrlKey && switchPhaseFromShortcut(e.key)) {
         e.preventDefault()
-        useEditor.getState().setPhase('site')
-        useEditor.getState().armToolMode({ mode: 'select' })
-      } else if (e.key === '2' && !e.metaKey && !e.ctrlKey) {
-        e.preventDefault()
-        useEditor.getState().setPhase('structure')
-        useEditor.getState().armToolMode({ mode: 'select' })
-      } else if (e.key === '3' && !e.metaKey && !e.ctrlKey) {
-        e.preventDefault()
-        useEditor.getState().setPhase('furnish')
-        useEditor.getState().armToolMode({ mode: 'select' })
       } else if (e.key === 'f' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         if (isToolOwnedCanopyForm()) return
         e.preventDefault()
-        useEditor.getState().setPhase('furnish')
-        useEditor.getState().armToolMode({ mode: 'build', tool: 'item' })
-        useEditor.getState().setActiveSidebarPanel('items')
+        openItemCatalogFromShortcut()
       } else if (e.key === 'z' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
-        useEditor.getState().setPhase('structure')
-        useEditor.getState().setStructureLayer('zones')
         useEditor.getState().armToolMode({ mode: 'build', tool: 'zone' })
       } else if (e.key === 'm' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
         const editor = useEditor.getState()
-        editor.setPhase('structure')
-        editor.setStructureLayer('elements')
         editor.setToolDefaults('measurement', { kind: editor.lastMeasurementKind })
         editor.armToolMode({ mode: 'build', tool: 'measurement' })
       }

@@ -6,6 +6,7 @@ import {
   type AnyNodeId,
   type BrushSettings,
   type BuildingNode,
+  type CameraPose,
   type ChimneyMaterialRole,
   DEFAULT_BRUSH_SETTINGS,
   type DormerSurfaceMaterialRole,
@@ -63,6 +64,7 @@ import {
   snapContextOf,
   snappingModesFor,
 } from '../lib/snapping-mode'
+import { cameraPoseStore } from './camera-pose-store'
 import { publishNavigationSyncPoseToStore } from './navigation-sync-pose-store'
 import useInteractionScope from './use-interaction-scope'
 
@@ -128,7 +130,11 @@ function clampCaptureFov(fov: number): number {
   return Math.min(Math.max(Math.round(fov), CAPTURE_FOV_MIN), CAPTURE_FOV_MAX)
 }
 
-export type Phase = 'site' | 'structure' | 'furnish'
+/**
+ * `site` is the outside (property line, terrain, the site panel); `building` is
+ * everything on the active level — walls, openings, stairs, items, rooms.
+ */
+export type Phase = 'site' | 'building'
 
 /**
  * `terrain-sculpt` is a mode, not a build tool, and that is the whole answer to
@@ -146,7 +152,7 @@ export type Phase = 'site' | 'structure' | 'furnish'
  */
 export type Mode = 'select' | 'edit' | 'delete' | 'build' | 'material-paint' | 'terrain-sculpt'
 
-// Structure mode tools (building elements)
+// Building tools
 type BuiltInStructureTool =
   | 'wall'
   | 'fence'
@@ -189,13 +195,13 @@ type BuiltInStructureTool =
 /** Registry node kinds are valid build tools without central union edits. */
 export type StructureTool = BuiltInStructureTool | (string & {})
 
-// Furnish mode tools (items and decoration)
+// Item tools (items and decoration)
 export type FurnishTool = 'item' | 'cabinet'
 
 // Site mode tools
 export type SiteTool = 'property-line'
 
-// Catalog categories for furnish mode items
+// Catalog categories for the item tool
 export type CatalogCategory =
   | 'furniture'
   | 'appliance'
@@ -204,8 +210,6 @@ export type CatalogCategory =
   | 'outdoor'
   | 'window'
   | 'door'
-
-export type StructureLayer = 'zones' | 'elements'
 
 export type FloorplanSelectionTool = 'click' | 'marquee'
 export type GridSnapStep = 0.5 | 0.25 | 0.1 | 0.05
@@ -304,8 +308,6 @@ type EditorState = {
   setToolDefaults: (tool: Tool, defaults: ToolDefaults | null) => void
   lastMeasurementKind: CreatableMeasurementKind
   setLastMeasurementKind: (kind: CreatableMeasurementKind) => void
-  structureLayer: StructureLayer
-  setStructureLayer: (layer: StructureLayer) => void
   catalogCategory: CatalogCategory | null
   setCatalogCategory: (category: CatalogCategory | null) => void
   selectedItem: AssetInput | null
@@ -541,14 +543,7 @@ type EditorState = {
 
 export type PersistedEditorUiState = Pick<
   EditorState,
-  | 'phase'
-  | 'toolMode'
-  | 'mode'
-  | 'tool'
-  | 'structureLayer'
-  | 'catalogCategory'
-  | 'isFloorplanOpen'
-  | 'viewMode'
+  'phase' | 'toolMode' | 'mode' | 'tool' | 'catalogCategory' | 'isFloorplanOpen' | 'viewMode'
 >
 
 type PersistedEditorLayoutState = Pick<
@@ -573,7 +568,6 @@ export const DEFAULT_PERSISTED_EDITOR_UI_STATE: PersistedEditorUiState = {
   toolMode: { mode: 'select' },
   mode: 'select',
   tool: null,
-  structureLayer: 'elements',
   catalogCategory: null,
   isFloorplanOpen: false,
   viewMode: '3d',
@@ -611,25 +605,18 @@ type SelectDefaultBuildingAndLevelOptions = {
   forceGroundLevel?: boolean
 }
 
-function defaultBuildTool(phase: Phase, structureLayer: StructureLayer): StructureTool {
-  if (phase === 'site') return 'property-line'
-  if (phase === 'furnish') return 'item'
-  return structureLayer === 'zones' ? 'zone' : 'wall'
+function defaultBuildTool(phase: Phase): StructureTool {
+  return phase === 'site' ? 'property-line' : 'wall'
 }
 
-function materializeToolMode(
-  mode: Mode,
-  tool: unknown,
-  phase: Phase,
-  structureLayer: StructureLayer,
-): ToolMode {
+function materializeToolMode(mode: Mode, tool: unknown, phase: Phase): ToolMode {
   if (mode === 'build') {
     return {
       mode,
       tool:
         typeof tool === 'string' && tool.length > 0
           ? (tool as StructureTool)
-          : defaultBuildTool(phase, structureLayer),
+          : defaultBuildTool(phase),
     }
   }
 
@@ -663,7 +650,7 @@ function withMaterializedToolMode(
 ): PersistedEditorUiState {
   return {
     ...state,
-    toolMode: materializeToolMode(state.mode, state.tool, state.phase, state.structureLayer),
+    toolMode: materializeToolMode(state.mode, state.tool, state.phase),
   }
 }
 
@@ -688,7 +675,12 @@ function normalizeFloorplanPaneRatio(value: unknown): number {
 export function normalizePersistedEditorUiState(
   state: Partial<PersistedEditorUiState> | null | undefined,
 ): PersistedEditorUiState {
-  const phase = state?.phase === 'structure' || state?.phase === 'furnish' ? state.phase : 'site'
+  // Before Structure and Furnish merged, `phase` stored either of them.
+  const storedPhase: unknown = state?.phase
+  const phase: Phase =
+    storedPhase === 'building' || storedPhase === 'structure' || storedPhase === 'furnish'
+      ? 'building'
+      : 'site'
   const persistedToolMode = readPersistedToolMode(state)
   let mode = normalizeModeForPhase(phase, persistedToolMode.mode)
 
@@ -713,45 +705,17 @@ export function normalizePersistedEditorUiState(
       phase,
       mode,
       tool: mode === 'build' ? 'property-line' : null,
-      structureLayer: 'elements',
       catalogCategory: null,
       viewMode,
       isFloorplanOpen,
     })
   }
-
-  if (phase === 'furnish') {
-    return withMaterializedToolMode({
-      phase,
-      mode,
-      tool: mode === 'build' ? 'item' : null,
-      structureLayer: 'elements',
-      catalogCategory: mode === 'build' ? (state?.catalogCategory ?? 'furniture') : null,
-      viewMode,
-      isFloorplanOpen,
-    })
-  }
-
-  const structureLayer = state?.structureLayer === 'zones' ? 'zones' : 'elements'
 
   if (mode !== 'build') {
     return withMaterializedToolMode({
       phase,
       mode,
       tool: null,
-      structureLayer,
-      catalogCategory: null,
-      viewMode,
-      isFloorplanOpen,
-    })
-  }
-
-  if (structureLayer === 'zones') {
-    return withMaterializedToolMode({
-      phase,
-      mode,
-      tool: 'zone',
-      structureLayer,
       catalogCategory: null,
       viewMode,
       isFloorplanOpen,
@@ -759,9 +723,7 @@ export function normalizePersistedEditorUiState(
   }
 
   const tool =
-    persistedToolMode.tool &&
-    persistedToolMode.tool !== 'property-line' &&
-    persistedToolMode.tool !== 'zone'
+    persistedToolMode.tool && persistedToolMode.tool !== 'property-line'
       ? (persistedToolMode.tool as Tool)
       : 'wall'
 
@@ -769,7 +731,6 @@ export function normalizePersistedEditorUiState(
     phase,
     mode,
     tool,
-    structureLayer,
     catalogCategory: tool === 'item' ? (state?.catalogCategory ?? null) : null,
     viewMode,
     isFloorplanOpen,
@@ -896,7 +857,6 @@ export function hasCustomPersistedEditorUiState(
     normalizedState.phase !== DEFAULT_PERSISTED_EDITOR_UI_STATE.phase ||
     normalizedState.mode !== DEFAULT_PERSISTED_EDITOR_UI_STATE.mode ||
     normalizedState.tool !== DEFAULT_PERSISTED_EDITOR_UI_STATE.tool ||
-    normalizedState.structureLayer !== DEFAULT_PERSISTED_EDITOR_UI_STATE.structureLayer ||
     normalizedState.catalogCategory !== DEFAULT_PERSISTED_EDITOR_UI_STATE.catalogCategory ||
     normalizedState.isFloorplanOpen !== DEFAULT_PERSISTED_EDITOR_UI_STATE.isFloorplanOpen ||
     normalizedState.viewMode !== DEFAULT_PERSISTED_EDITOR_UI_STATE.viewMode
@@ -999,6 +959,29 @@ export function selectSiteFloorplanContext() {
 let viewModeBeforeCapture: ViewMode | null = null
 // The editor's active level when capture began (undefined: not in capture).
 let levelBeforeCapture: LevelNode['id'] | null | undefined
+// The editor's viewer selection while Preview borrows the shared viewer store.
+let viewerBeforePreview: {
+  selection: ReturnType<typeof useViewer.getState>['selection']
+  focusedUnitId: ReturnType<typeof useViewer.getState>['focusedUnitId']
+  room: RoomKey | null
+  toolMode: ToolMode
+  viewMode: ViewMode
+  isFloorplanOpen: boolean
+  cameraPose: CameraPose | null
+  cameraMode: ReturnType<typeof useViewer.getState>['cameraMode']
+  levelMode: ReturnType<typeof useViewer.getState>['levelMode']
+  wallMode: ReturnType<typeof useViewer.getState>['wallMode']
+  hideLevelsAboveSelection: boolean
+  showZones: boolean
+} | null = null
+let previewCameraRestore: CameraPose | null = null
+
+// Preview replaces the canvas; the returning controls consume this after mounting.
+export function takePreviewCameraRestore(): CameraPose | null {
+  const pose = previewCameraRestore
+  previewCameraRestore = null
+  return pose
+}
 
 /**
  * Hold the interaction scope that belongs to a sustained brush mode.
@@ -1072,70 +1055,40 @@ const useEditor = create<EditorState>()(
         const currentPhase = get().phase
         if (currentPhase === phase) return
         const wasBuilding = get().toolMode.mode === 'build'
-        const structureLayer = phase === 'furnish' ? 'elements' : get().structureLayer
         set({
           phase,
-          // A room is picked from structure and furnish alike; only site drops it.
+          // Site has no rooms.
           ...(phase === 'site' ? { room: null } : {}),
           hoveredRoom: null,
-          structureLayer,
-          catalogCategory: wasBuilding && phase === 'furnish' ? 'furniture' : null,
+          catalogCategory: null,
         })
         get().armToolMode(
-          wasBuilding
-            ? { mode: 'build', tool: defaultBuildTool(phase, structureLayer) }
-            : { mode: 'select' },
+          wasBuilding ? { mode: 'build', tool: defaultBuildTool(phase) } : { mode: 'select' },
         )
 
-        switch (phase) {
-          case 'site':
-            selectSiteFloorplanContext()
-            break
-
-          case 'structure':
-            selectDefaultBuildingAndLevel()
-            break
-
-          case 'furnish':
-            selectDefaultBuildingAndLevel()
-            break
-        }
+        if (phase === 'site') selectSiteFloorplanContext()
+        else selectDefaultBuildingAndLevel()
       },
       toolMode: DEFAULT_PERSISTED_EDITOR_UI_STATE.toolMode,
       armToolMode: (requested) => {
         const current = get()
         let phase = current.phase
-        let structureLayer = current.structureLayer
         let viewMode = current.viewMode
         let isFloorplanOpen = current.isFloorplanOpen
         const next = materializeToolMode(
           requested.mode,
           requested.mode === 'build' ? requested.tool : null,
           phase,
-          structureLayer,
         )
 
         if (next.mode === 'terrain-sculpt') {
           phase = 'site'
-          structureLayer = 'elements'
           if (viewMode === '2d') {
             viewMode = 'split'
             isFloorplanOpen = true
           }
         } else if (next.mode === 'build' && next.tool === 'property-line') {
           phase = 'site'
-          structureLayer = 'elements'
-        } else if (next.mode === 'build' && next.tool === 'zone') {
-          phase = 'structure'
-          structureLayer = 'zones'
-        } else if (next.mode === 'build' && phase === 'site') {
-          phase = 'structure'
-          structureLayer = 'elements'
-        } else if (next.mode === 'material-paint' && phase === 'site') {
-          phase = 'structure'
-          structureLayer = 'elements'
-        } else if (phase !== 'structure') {
-          structureLayer = 'elements'
         }
 
         const phaseChanged = phase !== current.phase
@@ -1149,12 +1102,8 @@ const useEditor = create<EditorState>()(
           tool: nextTool,
           ...(endsSelection ? { room: null, hoveredRoom: null, selectedReferenceId: null } : {}),
           ...(phaseChanged ? { phase } : {}),
-          ...(structureLayer !== current.structureLayer ? { structureLayer } : {}),
           ...(viewMode !== current.viewMode ? { viewMode } : {}),
           ...(isFloorplanOpen !== current.isFloorplanOpen ? { isFloorplanOpen } : {}),
-          ...(next.mode === 'build' && phase === 'furnish' && !current.catalogCategory
-            ? { catalogCategory: 'furniture' }
-            : {}),
         })
 
         if (phaseChanged) {
@@ -1173,11 +1122,10 @@ const useEditor = create<EditorState>()(
       mode: DEFAULT_PERSISTED_EDITOR_UI_STATE.mode,
       setMode: (mode) => {
         if (mode === 'build') {
-          const { phase, structureLayer, toolMode } = get()
+          const { phase, toolMode } = get()
           get().armToolMode({
             mode,
-            tool:
-              toolMode.mode === 'build' ? toolMode.tool : defaultBuildTool(phase, structureLayer),
+            tool: toolMode.mode === 'build' ? toolMode.tool : defaultBuildTool(phase),
           })
           return
         }
@@ -1193,7 +1141,7 @@ const useEditor = create<EditorState>()(
           get().armToolMode({ mode: 'select' })
           return
         }
-        get().armToolMode(materializeToolMode(get().mode, null, get().phase, get().structureLayer))
+        get().armToolMode(materializeToolMode(get().mode, null, get().phase))
       },
       toolDefaults: {},
       setToolDefaults: (tool, defaults) =>
@@ -1208,22 +1156,6 @@ const useEditor = create<EditorState>()(
         }),
       lastMeasurementKind: DEFAULT_PERSISTED_EDITOR_LAYOUT_STATE.lastMeasurementKind,
       setLastMeasurementKind: (kind) => set({ lastMeasurementKind: kind }),
-      structureLayer: DEFAULT_PERSISTED_EDITOR_UI_STATE.structureLayer,
-      setStructureLayer: (layer) => {
-        const wasBuilding = get().toolMode.mode === 'build'
-        set({ structureLayer: layer })
-        get().armToolMode(
-          wasBuilding
-            ? { mode: 'build', tool: layer === 'zones' ? 'zone' : 'wall' }
-            : { mode: 'select' },
-        )
-
-        const viewer = useViewer.getState()
-        viewer.setSelection({
-          selectedIds: [],
-          zoneId: null,
-        })
-      },
       catalogCategory: DEFAULT_PERSISTED_EDITOR_UI_STATE.catalogCategory,
       setCatalogCategory: (category) => set({ catalogCategory: category }),
       selectedItem: null,
@@ -1404,13 +1336,67 @@ const useEditor = create<EditorState>()(
         ),
       isPreviewMode: false,
       setPreviewMode: (preview) => {
+        if (preview === get().isPreviewMode) return
         if (preview) {
+          const viewer = useViewer.getState()
+          viewerBeforePreview = {
+            selection: viewer.selection,
+            focusedUnitId: viewer.focusedUnitId,
+            room: get().room,
+            toolMode: get().toolMode,
+            viewMode: get().viewMode,
+            isFloorplanOpen: get().isFloorplanOpen,
+            cameraPose: cameraPoseStore.getState().pose,
+            cameraMode: viewer.cameraMode,
+            levelMode: viewer.levelMode,
+            wallMode: viewer.wallMode,
+            hideLevelsAboveSelection: viewer.hideLevelsAboveSelection,
+            showZones: viewer.showZones,
+          }
+          previewCameraRestore = null
           set({ isPreviewMode: true, catalogCategory: null })
           get().armToolMode({ mode: 'select' })
-          // Clear zone/item selection for clean viewer drill-down hierarchy
-          useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
+          // Preview starts on the editor's floor with nothing else picked; what
+          // the visitor selects there is its own and is dropped on the way out.
+          viewer.setSelection({ selectedIds: [], zoneId: null })
+          viewer.setFocusedUnit(null)
+          viewer.setHoveredId(null)
         } else {
+          if (get().isFirstPersonMode) get().setFirstPersonMode(false)
+          useViewer.getState().setWalkthroughMode(false)
           set({ isPreviewMode: false })
+          const before = viewerBeforePreview
+          viewerBeforePreview = null
+          if (!before) return
+          const viewer = useViewer.getState()
+          const nodes = useScene.getState().nodes
+          const exists = (id: string | null) => id !== null && !!nodes[id as AnyNodeId]
+          get().armToolMode(before.toolMode)
+          set({
+            room:
+              before.room && exists(before.room.zoneId) && exists(before.room.levelId)
+                ? before.room
+                : null,
+            hoveredRoom: null,
+            viewMode: before.viewMode,
+            isFloorplanOpen: before.isFloorplanOpen,
+          })
+          viewer.setSelection({
+            buildingId: exists(before.selection.buildingId) ? before.selection.buildingId : null,
+            levelId: exists(before.selection.levelId) ? before.selection.levelId : null,
+            zoneId: exists(before.selection.zoneId) ? before.selection.zoneId : null,
+            selectedIds: before.selection.selectedIds.filter(exists),
+          })
+          viewer.setFocusedUnit(exists(before.focusedUnitId) ? before.focusedUnitId : null)
+          viewer.setHoveredId(null)
+          viewer.setCameraMode(before.cameraMode)
+          viewer.setLevelMode(before.levelMode)
+          viewer.setWallMode(before.wallMode)
+          useViewer.setState({
+            hideLevelsAboveSelection: before.hideLevelsAboveSelection,
+            showZones: before.showZones,
+          })
+          previewCameraRestore = before.cameraPose
         }
       },
       captureMode: { mode: 'idle' } as CaptureMode,
@@ -1670,7 +1656,6 @@ const useEditor = create<EditorState>()(
       // arm a tool nobody asked for on the next load.
       partialize: (state) => ({
         phase: state.phase,
-        structureLayer: state.structureLayer,
         isFloorplanOpen: state.isFloorplanOpen,
         viewMode: state.viewMode,
         activeSidebarPanel: state.activeSidebarPanel,

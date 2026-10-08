@@ -70,8 +70,8 @@ let stopLifecycle: (() => void) | null = null
 
 /**
  * Starts editing the ceiling `target` names: a ceiling id, or a room zone id
- * (its linked ceiling). Selects the ceiling on its level, switching to the
- * structure phase first. Returns false when there is no such ceiling.
+ * (its linked ceiling). Selects the ceiling on its level, going inside the
+ * building first. Returns false when there is no such ceiling.
  */
 export function startCeilingEdit(target: string): boolean {
   const nodes = useScene.getState().nodes as Nodes
@@ -82,7 +82,7 @@ export function startCeilingEdit(target: string): boolean {
   const levelId = resolveLevelId(ceiling, nodes)
   const zone = ceiling.zoneId ? nodes[ceiling.zoneId] : nodes[target]
   const zoneId = zone?.type === 'zone' ? zone.id : null
-  if (useEditor.getState().phase !== 'structure') useEditor.getState().setPhase('structure')
+  if (useEditor.getState().phase === 'site') useEditor.getState().setPhase('building')
 
   useCeilingEditSession.setState({ session: { ceilingId: ceiling.id, zoneId, levelId } })
   const level = nodes[levelId]

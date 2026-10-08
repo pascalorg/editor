@@ -11,7 +11,6 @@ import useInteractionScope from '../store/use-interaction-scope'
 export const ViewerZoneSystem = () => {
   useFrame(() => {
     const { levelId, zoneId } = useViewer.getState().selection
-    const structureLayer = useEditor.getState().structureLayer
     const nodes = useScene.getState().nodes
     // Snapshot capture is a clean, camera-only surface — zone geometry and
     // tags stay out of the framed shot (mirrors the editor ZoneSystem's gate).
@@ -29,17 +28,13 @@ export const ViewerZoneSystem = () => {
 
       const isOnSelectedLevel = zone.parentId === levelId
 
-      // Keep group visible (so <Html> labels stay active), hide/show meshes only.
-      // Zone geometry: visible in zone mode on the right level, OR when this zone is selected.
-      // The editor ZoneSystem handles the selected zone's opacity animation.
+      // Keep group visible (so <Html> labels stay active), hide/show meshes only:
+      // only the selected zone shows its volume.
       const isSelected = id === zoneId
       // A zone the author hid (sidebar eye) takes the group with it — this
       // per-frame write would otherwise undo the renderer's `visible` prop.
       const nodeVisible = zone.visible !== false
-      const shouldShowGeometry =
-        nodeVisible &&
-        !isCaptureMode &&
-        ((structureLayer === 'zones' && !!levelId && isOnSelectedLevel) || isSelected)
+      const shouldShowGeometry = nodeVisible && !isCaptureMode && isSelected
       if (obj.visible !== nodeVisible) obj.visible = nodeVisible
       obj.traverse((child) => {
         if ((child as Mesh).isMesh) {

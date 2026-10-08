@@ -168,7 +168,7 @@ export function startTerraceDraft(levelId = useViewer.getState().selection.level
   cancelTerraceDraft()
   cancelFloorRegion()
   const editor = useEditor.getState()
-  if (editor.phase !== 'structure') editor.setPhase('structure')
+  if (editor.phase === 'site') editor.setPhase('building')
   if (editor.mode !== 'select') editor.setMode('select')
   if (editor.room) editor.clearRoom()
   useViewer.getState().setSelection({ selectedIds: [] })

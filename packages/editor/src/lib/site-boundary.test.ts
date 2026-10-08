@@ -9,7 +9,7 @@ import { siteBoundaryHandlesEnabled } from './site-boundary'
  */
 
 const MODES: Mode[] = ['select', 'edit', 'delete', 'build', 'material-paint', 'terrain-sculpt']
-const PHASES: Phase[] = ['site', 'structure', 'furnish']
+const PHASES: Phase[] = ['site', 'building']
 
 describe('siteBoundaryHandlesEnabled', () => {
   test('sculpt hides the handles in every phase', () => {
@@ -29,15 +29,13 @@ describe('siteBoundaryHandlesEnabled', () => {
 
   test('select mode offers them outside the site phase', () => {
     // The flags double as the affordance that *enters* site editing, so select mode
-    // has to show them from structure/furnish or the lot becomes unreachable.
-    expect(siteBoundaryHandlesEnabled({ mode: 'select', phase: 'structure' })).toBe(true)
-    expect(siteBoundaryHandlesEnabled({ mode: 'select', phase: 'furnish' })).toBe(true)
+    // has to show them from the building or the lot becomes unreachable.
+    expect(siteBoundaryHandlesEnabled({ mode: 'select', phase: 'building' })).toBe(true)
   })
 
   test('a drafting or painting mode outside the site phase hides them', () => {
     for (const mode of ['edit', 'delete', 'build', 'material-paint'] as Mode[]) {
-      expect(siteBoundaryHandlesEnabled({ mode, phase: 'structure' })).toBe(false)
-      expect(siteBoundaryHandlesEnabled({ mode, phase: 'furnish' })).toBe(false)
+      expect(siteBoundaryHandlesEnabled({ mode, phase: 'building' })).toBe(false)
     }
   })
 

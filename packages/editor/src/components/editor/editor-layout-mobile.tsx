@@ -77,23 +77,22 @@ export function EditorLayoutMobile({
     }
   }, [sidebarTabs, activePanel, setActivePanel])
 
-  // Sync editor phase / mode with the active tab:
+  // Sync the editor mode with the active tab:
   // - Entering Chat always drops to Select (chat is a composing context).
-  // - Entering Items snaps the editor into furnish-build (matches the
-  //   desktop "Furnish" action which itself opens the Items panel).
-  // - Leaving Items while still furnishing exits the build mode.
+  // - Entering Items arms the item tool (matches the desktop F shortcut,
+  //   which itself opens the Items panel).
+  // - Leaving Items with the item tool still armed exits the build mode.
   useEffect(() => {
-    const { armToolMode, phase, mode, setPhase } = useEditor.getState()
+    const { armToolMode, mode, tool } = useEditor.getState()
     if (activePanel === 'ai' && mode === 'build') {
       armToolMode({ mode: 'select' })
       return
     }
     if (activePanel === 'items') {
-      if (phase !== 'furnish') setPhase('furnish')
       if (mode !== 'build') armToolMode({ mode: 'build', tool: 'item' })
       return
     }
-    if (phase === 'furnish' && mode === 'build') {
+    if (mode === 'build' && tool === 'item') {
       armToolMode({ mode: 'select' })
     }
   }, [activePanel])

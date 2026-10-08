@@ -28,11 +28,10 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
   {
     title: 'Editor Navigation',
     shortcuts: [
-      { keys: ['1'], action: 'Switch to Site phase' },
-      { keys: ['2'], action: 'Switch to Structure phase' },
-      { keys: ['3'], action: 'Switch to Furnish phase' },
-      { keys: ['F'], action: 'Switch to Furnish layer' },
-      { keys: ['Z'], action: 'Switch to Rooms layer' },
+      { keys: ['1'], action: 'Switch to Site' },
+      { keys: ['2'], action: 'Switch to Building' },
+      { keys: ['F'], action: 'Open the items catalog with the item tool' },
+      { keys: ['Z'], action: 'Draw a zone' },
       {
         keys: ['Cmd/Ctrl', 'Arrow Up'],
         action: 'Select next level in the active building',

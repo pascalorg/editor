@@ -326,10 +326,13 @@ export {
   ViewerControlsBar,
   type ViewerControlsBarProps,
 } from './components/viewer/viewer-controls-bar'
+export { ViewerHoverLabel } from './components/viewer/viewer-hover-label'
+export { ParametricViewerRooms, ViewerRooms } from './components/viewer/viewer-rooms'
 export {
   ViewerSceneHeader,
   type ViewerSceneHeaderProps,
 } from './components/viewer/viewer-scene-header'
+export { ViewerSelectionManager } from './components/viewer/viewer-selection-manager'
 export { ViewerStage, type ViewerStageProps } from './components/viewer/viewer-stage'
 export {
   normalizeViewerStageModes,
@@ -343,7 +346,6 @@ export {
   ViewerStageSwitcher,
   type ViewerStageSwitcherProps,
 } from './components/viewer/viewer-stage-switcher'
-export { ViewerUnitsPanel } from './components/viewer/viewer-units-panel'
 export {
   WalkthroughHud,
   type WalkthroughHudProps,
@@ -816,6 +818,15 @@ export { useLinearDisplay } from './lib/use-linear-display'
 // nodes` so they don't need their own copy / their own tailwind-merge
 // dependency.
 export { cn } from './lib/utils'
+export {
+  applyViewerClick,
+  applyViewerHover,
+  framedLookAt,
+  frameViewerCamera,
+  useViewerFloorDisplay,
+  type ViewerPick,
+  type ViewerSource,
+} from './lib/viewer-selection'
 export {
   getWallDrawVariant,
   selectWallDrawVariant,

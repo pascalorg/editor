@@ -7,6 +7,7 @@ export type {
   CabinetModuleEvent,
   CameraControlEvent,
   CameraControlFitSceneEvent,
+  CameraControlFrameEvent,
   CameraPose,
   CeilingEvent,
   ChimneyEvent,
@@ -219,6 +220,7 @@ export {
   remapMeasurementAnchors,
   remapMeasurementReferences,
 } from './lib/measurement-geometry'
+export { newZone } from './lib/new-zone'
 export { HIDDEN_SITE_NOTE, hidesDescendants } from './lib/node-visibility'
 export {
   cutterContextNodes,
@@ -449,6 +451,7 @@ export {
   type WallSegment,
   type WallSegmentClosest,
 } from './lib/wall-distance'
+export { ZONE_COLOR_PALETTE, zoneColorForSeed } from './lib/zone-colors'
 export {
   deriveZoneQuantityReport,
   type ZoneQuantityReport,

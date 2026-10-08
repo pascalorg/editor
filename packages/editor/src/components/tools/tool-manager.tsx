@@ -9,6 +9,7 @@ import {
   type SlabNode,
   useScene,
   type WallNode,
+  type ZoneNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, lazy, Suspense, useMemo } from 'react'
@@ -17,7 +18,7 @@ import { useCeilingEditCeilingId } from '../../lib/ceiling-edit-session'
 import type { ReshapeKind } from '../../lib/interaction/scope'
 import { paintRegionTargets, usePaintRegionMode } from '../../lib/paint-region-mode'
 import { siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
-import useEditor, { type Phase, type Tool } from '../../store/use-editor'
+import useEditor, { type Tool } from '../../store/use-editor'
 import useInteractionScope, {
   useControlPointReshape,
   useEditingHole,
@@ -106,15 +107,10 @@ function getRegistryTool(tool: Tool | null): ComponentType | null {
 // Legacy tool fallbacks — kinds whose placement tools haven't migrated
 // to `def.tool` yet. Wall / fence / slab / ceiling / door / window /
 // item / shelf / spawn now go through the registry path above.
-const tools: Record<Phase, Partial<Record<Tool, React.FC>>> = {
-  site: {
-    'property-line': SiteBoundaryEditor,
-  },
-  structure: {
-    stair: StairTool,
-    zone: ZoneTool,
-  },
-  furnish: {},
+const tools: Partial<Record<Tool, React.FC>> = {
+  'property-line': SiteBoundaryEditor,
+  stair: StairTool,
+  zone: ZoneTool,
 }
 
 export const ToolManager: React.FC = () => {
@@ -165,7 +161,17 @@ export const ToolManager: React.FC = () => {
   }, [reshapingNode, tangentReshape])
   const editingHole = useEditingHole()
   const editCeilingId = useCeilingEditCeilingId()
-  const selectedZoneId = useViewer((state) => state.selection.zoneId)
+  // A zone picked as a zone, from the Scene list (zoneId) or its area or pill (sole selection).
+  const zoneSelectionId = useViewer((state) => state.selection.zoneId)
+  const soleSelectedId = useViewer((state) =>
+    state.selection.selectedIds.length === 1 ? state.selection.selectedIds[0] : undefined,
+  )
+  const soleSelectedZone = useScene((state) =>
+    soleSelectedId && state.nodes[soleSelectedId as AnyNodeId]?.type === 'zone'
+      ? (soleSelectedId as ZoneNode['id'])
+      : null,
+  )
+  const selectedZoneId = zoneSelectionId ?? soleSelectedZone
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const buildingId = useViewer((state) => state.selection.buildingId)
   const activeLevelId = useViewer((state) => state.selection.levelId)
@@ -221,9 +227,8 @@ export const ToolManager: React.FC = () => {
   // edge handles — mounts only for a sole selection.
   const isSoleSelection = selectedIds.length === 1
 
-  // Show slab boundary editor when in structure/select mode with a slab selected (but not editing a hole)
+  // Show slab boundary editor in select mode with a slab selected (but not editing a hole)
   const showSlabBoundaryEditor =
-    phase === 'structure' &&
     mode === 'select' &&
     isSoleSelection &&
     selectedSlabId !== undefined &&
@@ -243,7 +248,6 @@ export const ToolManager: React.FC = () => {
 
   // Show ceiling boundary editor only inside the ceiling's Edit ceiling session (not while editing a hole)
   const showCeilingBoundaryEditor =
-    phase === 'structure' &&
     mode === 'select' &&
     isSoleSelection &&
     selectedCeilingId !== undefined &&
@@ -261,10 +265,9 @@ export const ToolManager: React.FC = () => {
       ?.source ?? 'manual') === 'manual' &&
     !isFloorplanDrivenReshape
 
-  // Show zone boundary editor when in structure/select mode with a zone selected
+  // Show zone boundary editor in select mode with a zone selected
   // Hide when editing a slab or ceiling to avoid overlapping handles
   const showZoneBoundaryEditor =
-    phase === 'structure' &&
     mode === 'select' &&
     selectedZoneId !== null &&
     !isFloorplanDrivenReshape &&
@@ -289,7 +292,7 @@ export const ToolManager: React.FC = () => {
   const RegistryToolComponent = showBuildTool ? getRegistryTool(tool) : null
   const useRegistryTool = RegistryToolComponent != null
 
-  const BuildToolComponent = showBuildTool && !useRegistryTool ? tools[phase]?.[tool] : null
+  const BuildToolComponent = showBuildTool && !useRegistryTool ? tools[tool] : null
   const handlePlacedNodeSelected = (nodeId: AnyNodeId) => {
     setSelection({ selectedIds: [nodeId] })
   }
@@ -313,7 +316,7 @@ export const ToolManager: React.FC = () => {
     <RegistryToolProvider value={registryToolContext}>
       {/* World-space tools: site boundary and building movement operate in world coordinates */}
       {showSiteBoundaryEditor && <SiteBoundaryEditor />}
-      {/* Terrain sculpting is a mode rather than a `tools[phase][tool]` entry —
+      {/* Terrain sculpting is a mode rather than a `tools[tool]` entry —
           it places no node — so it gets its own gate here. World-space, because
           the ground is not building-local. */}
       {sculpting && <TerrainSculptTool />}

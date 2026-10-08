@@ -1,5 +1,6 @@
 import { describe, expect, spyOn, test } from 'bun:test'
 import clipping from 'polygon-clipping'
+import { zoneColorForSeed } from '../index'
 import type { AnyNode } from '../schema'
 import {
   BuildingNode,
@@ -116,6 +117,7 @@ describe('structure kernel', () => {
     initial[zone.id] = {
       ...zone,
       name: 'Kitchen',
+      color: '#3b82f6',
       seed: [1, 2],
       floor: { elevation: 0.3, finish: 'oak' },
       wallMaterial: 'white',
@@ -123,7 +125,13 @@ describe('structure kernel', () => {
     }
     const divided = split(initial)
     expect(zones(divided.nodes)).toHaveLength(2)
-    expect(divided.nodes[zone.id]).toMatchObject({ name: 'Kitchen', seed: [1, 2] })
+    expect(divided.nodes[zone.id]).toMatchObject({
+      name: 'Kitchen',
+      seed: [1, 2],
+      color: '#3b82f6',
+    })
+    const child = zones(divided.nodes).find((room) => room.id !== zone.id)!
+    expect(child.color).toBe(zoneColorForSeed(child.id))
     for (const room of zones(divided.nodes))
       expect(room).toMatchObject({
         floor: { elevation: 0.3, finish: 'oak' },
@@ -134,6 +142,7 @@ describe('structure kernel', () => {
     const result = run(merged)
     const larger = zones(divided.nodes).find((room) => room.id !== zone.id)!
     expect(zones(result.nodes).map((room) => room.id)).toEqual([larger.id])
+    expect((result.nodes[larger.id] as ZoneNode).color).toBe(larger.color)
     expect(result.events).toContainEqual({
       type: 'retired',
       zoneId: zone.id,
@@ -145,12 +154,19 @@ describe('structure kernel', () => {
   test('open retains room data, removes its ceiling and quantities; reclose re-adopts', () => {
     const initial = run(fixture()).nodes
     const zone = zones(initial)[0]!
-    initial[zone.id] = { ...zone, name: 'Office', roomNumber: '42', floor: { finish: 'oak' } }
+    initial[zone.id] = {
+      ...zone,
+      name: 'Office',
+      roomNumber: '42',
+      color: '#3b82f6',
+      floor: { finish: 'oak' },
+    }
     const { wall_3: closing, ...open } = initial
     const opened = run(open)
     expect(opened.nodes[zone.id]).toMatchObject({
       name: 'Office',
       roomNumber: '42',
+      color: '#3b82f6',
       floor: { finish: 'oak' },
       enclosureStatus: 'open',
       polygon: zone.polygon,
@@ -162,6 +178,7 @@ describe('structure kernel', () => {
     expect(report.volume.status).toBe('unavailable')
     const reclosed = run({ ...opened.nodes, [closing!.id]: closing! })
     expect(zones(reclosed.nodes).map((room) => room.id)).toEqual([zone.id])
+    expect((reclosed.nodes[zone.id] as ZoneNode).color).toBe('#3b82f6')
     expect(reclosed.events).toContainEqual({ type: 'reopened', zoneId: zone.id })
     assertIdempotent(opened.nodes)
     assertIdempotent(reclosed.nodes)

@@ -5,7 +5,6 @@ import { memo, useCallback, useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { startCeilingEditFromTreeSelection } from './../../../../../lib/ceiling-edit-session'
 import { formatAreaLabel } from './../../../../../lib/measurements'
-import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
@@ -66,9 +65,7 @@ export const CeilingTreeNode = memo(function CeilingTreeNode({
       )
       if (handled) return
       // Selecting a ceiling in the scene graph opens its Edit ceiling session.
-      if (!startCeilingEditFromTreeSelection(nodeId) && useEditor.getState().phase === 'furnish') {
-        useEditor.getState().setPhase('structure')
-      }
+      startCeilingEditFromTreeSelection(nodeId)
     },
     [nodeId, setSelection],
   )

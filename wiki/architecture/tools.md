@@ -19,18 +19,21 @@ See `apps/editor/components/tools/tool-manager.tsx`.
 **Site**
 - `site-boundary-editor` — draw/edit property boundary polygon
 
-**Structure**
+**Building**
 - `wall-tool` — draw walls segment by segment
 - `slab-tool` + `slab-boundary-editor` + `slab-hole-editor`
 - `ceiling-tool` + `ceiling-boundary-editor` + `ceiling-hole-editor`
 - `roof-tool`
 - `door-tool` + `door-move-tool`
 - `window-tool` + `window-move-tool`
-- `item-tool` + `item-move-tool`
+- `item-tool` + `item-move-tool` — furniture and catalog items
 - `zone-tool` + `zone-boundary-editor`
 
-**Furnish**
-- `item-tool` — place furniture
+Arming a building tool keeps the active phase and Scene tab. The `1` and `2`
+shortcuts switch Site and Building; a canvas hit on a house enters Building
+from Site. `F` arms the item tool and opens the catalog, and `B`, `P`, `M`, and
+`Z` arm their tools. Reshape editors (slab, ceiling, zone outlines) follow the
+selection in select mode, whatever was armed before.
 
 **Shared utilities**
 - `polygon-editor` — reusable boundary/hole editing logic
@@ -122,7 +125,7 @@ export function MyTool() {
 ## Adding a New Tool
 
 1. Create `apps/editor/components/tools/<name>/index.tsx`.
-2. Register the tool in `ToolManager` under the correct phase and mode.
+2. Register the tool in `ToolManager` under its tool id (or in its node definition).
 3. Add the tool identifier to the `useEditor` tool union type.
 4. If the tool requires new node types, add schema + renderer + system first.
 
