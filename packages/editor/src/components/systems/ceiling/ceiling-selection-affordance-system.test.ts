@@ -89,7 +89,7 @@ async function withMountedBrackets(
       hoveredId: null,
       selection: { buildingId: building.id, levelId: level.id, zoneId: null, selectedIds: [] },
     })
-    useEditor.setState({ phase: 'building', mode: 'select', structureLayer: 'elements' })
+    useEditor.setState({ phase: 'building', mode: 'select' })
     useInteractionScope.setState({ scope: { kind: 'idle' } })
     if (session) startCeilingEdit(ceiling.id)
     const camera = Object.assign(new OrthographicCamera(-1, 5, 5, -1, 0.1, 100), { manual: true })

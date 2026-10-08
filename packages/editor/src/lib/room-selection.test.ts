@@ -520,7 +520,7 @@ describe('room drill-down state through the mounted selection manager', () => {
         id: 'stair-segment_hover',
         type: 'stair-segment',
         parentId: stair.id,
-      } as AnyNode
+      } as unknown as AnyNode
       await act(async () =>
         useScene.setState({
           nodes: { ...useScene.getState().nodes, [stair.id]: stair, [segment.id]: segment },
@@ -579,12 +579,9 @@ describe('room drill-down state through the mounted selection manager', () => {
       expect(useEditor.getState().room).toEqual(right)
     })
   })
-  test('the Elements and Rooms tabs keep the room; site drops it', async () => {
+  test('going to site drops the room', async () => {
     await withRooms(async ({ click, left }) => {
       await click('wall_south', [2, 0.1])
-      await act(async () => useEditor.getState().setStructureLayer('zones'))
-      expect(useEditor.getState().room).toEqual(left)
-      await act(async () => useEditor.getState().setStructureLayer('elements'))
       expect(useEditor.getState().room).toEqual(left)
       await act(async () => useEditor.getState().setPhase('site'))
       expect(useEditor.getState().room).toBeNull()
@@ -858,19 +855,15 @@ describe('room drill-down state through the mounted selection manager', () => {
       }
     })
   })
-  test('Escape climbs from element to room to nothing in either layer', async () => {
+  test('Escape climbs from element to room to nothing', async () => {
     await withRooms(async ({ click, left }) => {
-      for (const structureLayer of ['elements', 'zones'] as const) {
-        await act(async () => useEditor.setState({ structureLayer }))
-        await click('wall_south', [2, 0.1])
-        await click('wall_south', [2, 0.1])
-        await act(async () => cancelActiveTool())
-        expect(useViewer.getState().selection.selectedIds).toEqual([])
-        expect(useEditor.getState().room).toEqual(left)
-        expect(useEditor.getState().structureLayer).toBe(structureLayer)
-        await act(async () => cancelActiveTool())
-        expect(useEditor.getState().room).toBeNull()
-      }
+      await click('wall_south', [2, 0.1])
+      await click('wall_south', [2, 0.1])
+      await act(async () => cancelActiveTool())
+      expect(useViewer.getState().selection.selectedIds).toEqual([])
+      expect(useEditor.getState().room).toEqual(left)
+      await act(async () => cancelActiveTool())
+      expect(useEditor.getState().room).toBeNull()
     })
   })
   test('Alt bypass and toggles select elements while preserving room context', async () => {

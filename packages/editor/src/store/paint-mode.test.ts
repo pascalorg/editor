@@ -16,7 +16,6 @@ const editorMode = () => useEditor.getState().mode
 
 function reset() {
   useEditor.getState().setPhase('building')
-  useEditor.getState().setStructureLayer('elements')
   useEditor.getState().armToolMode({ mode: 'select' })
   useEditor.getState().setActivePaintMaterial(null)
   resetPaintMode()

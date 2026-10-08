@@ -117,7 +117,6 @@ export function startZoneRoomTransform(node: AnyNode, kind: RoomTransformKind): 
     .update(useScene.getState().nodes)
     .find((room) => room.zoneId === node.id)
   if (!record) return false
-  useEditor.getState().setStructureLayer('elements')
   useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
   useEditor.getState().selectRoom(record.key)
   return startRoomTransform(kind, roomTransformSource(record))

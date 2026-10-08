@@ -122,6 +122,7 @@ import { measurementHint, parseMeasurement } from '../../lib/measurement-parser'
 import { formatLinearMeasurement, linearUnitToMeters } from '../../lib/measurements'
 import { snapRegisteredDraftPoint } from '../../lib/registered-draft-snap'
 import { selectRoomFromHit } from '../../lib/room-selection-commands'
+import { enterBuildingFromPlanHit } from '../../lib/selection-routing'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import { SITE_BOUNDARY_DRAG_LABEL, siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
@@ -4931,8 +4932,6 @@ export function FloorplanPanel({
   const activeHandleDrag = useActiveHandleDrag()
   const setPhase = useEditor((state) => state.setPhase)
   const setMovingNode = useEditor((state) => state.setMovingNode)
-  const structureLayer = useEditor((state) => state.structureLayer)
-  const setStructureLayer = useEditor((state) => state.setStructureLayer)
   const setTool = useEditor((state) => state.setTool)
   const tool = useEditor((state) => state.tool)
   const deleteNode = useScene((state) => state.deleteNode)
@@ -5893,9 +5892,7 @@ export function FloorplanPanel({
     mode === 'select' &&
     floorplanSelectionTool === 'click' &&
     !movingNode &&
-    !isFenceEndpointMoveActive &&
-    structureLayer === 'zones'
-  const canInteractFloorplanZones = isDeleteMode || canSelectFloorplanZones
+    !isFenceEndpointMoveActive
   const visibleSitePolygon = displaySitePolygon
   const canUseSiteBoundaryVertexHandles =
     visibleSitePolygon !== null && siteBoundaryHandlesEnabled({ mode, phase })
@@ -7840,9 +7837,8 @@ export function FloorplanPanel({
   }, [clearSiteBoundaryLivePreview])
   const exitSiteEditingToSelect = useCallback(() => {
     setPhase('building')
-    setStructureLayer('elements')
     setMode('select')
-  }, [setMode, setPhase, setStructureLayer])
+  }, [setMode, setPhase])
 
   const clearDraft = useCallback(() => {
     clearWallPlacementDraft()
@@ -9984,6 +9980,7 @@ export function FloorplanPanel({
       if (useInteractionScope.getState().scope.kind !== 'idle') return
       const modifierKeys = getSelectionModifierKeys(event)
 
+      if (enterBuildingFromPlanHit(getFloorplanHitIdAtPoint(planPoint))) return
       if (roomPickingEnabled()) {
         const hitId = getFloorplanHitIdAtPoint(planPoint)
         if (selectRoomFromHit(resolvePlanRoomHit(hitId, planPoint), modifierKeys, hitId)) return
@@ -9999,7 +9996,6 @@ export function FloorplanPanel({
         isWallBuildActive,
         modifierKeys,
         planPoint,
-        structureLayer,
       })
 
       if (backgroundSelection.handled) {
@@ -10072,7 +10068,6 @@ export function FloorplanPanel({
       referenceScaleDraft,
       setSelectedReferenceId,
       setSelection,
-      structureLayer,
       getFloorplanHitIdAtPoint,
       unit,
       emitFloorplanGridEvent,
@@ -11113,7 +11108,6 @@ export function FloorplanPanel({
           })()
 
     setPhase('building')
-    setStructureLayer('elements')
     setMode('select')
 
     const nextSelection: Parameters<typeof setSelection>[0] = {
@@ -11130,16 +11124,7 @@ export function FloorplanPanel({
     }
 
     setSelection(nextSelection)
-  }, [
-    currentBuildingId,
-    floorplanLevels,
-    levelNode,
-    setMode,
-    setPhase,
-    setSelection,
-    setStructureLayer,
-    site,
-  ])
+  }, [currentBuildingId, floorplanLevels, levelNode, setMode, setPhase, setSelection, site])
   const activeDraftAnchorPoint =
     referenceScaleDraft?.start ??
     draftStart ??

@@ -167,7 +167,6 @@ function getEditorUiStateForRestoredSelection(
             : { mode: 'select' },
       mode,
       tool: mode === 'build' ? 'property-line' : null,
-      structureLayer: 'elements',
       catalogCategory: null,
     }
   }
@@ -178,7 +177,6 @@ function getEditorUiStateForRestoredSelection(
     toolMode: { mode: 'select' },
     mode: 'select',
     tool: null,
-    structureLayer: selection.zoneId ? 'zones' : 'elements',
     catalogCategory: null,
   }
 }
@@ -282,7 +280,6 @@ export function syncEditorSelectionFromCurrentScene() {
         zoneId: null,
       })
       useEditor.getState().setPhase('building')
-      useEditor.getState().setStructureLayer('elements')
       useEditor.getState().setMode('build')
       useEditor.getState().setTool('wall')
       return
@@ -330,7 +327,6 @@ export function syncEditorSelectionFromCurrentScene() {
       zoneId: null,
     })
     useEditor.getState().setPhase('building')
-    useEditor.getState().setStructureLayer('elements')
   } else {
     useEditor.getState().setPhase('site')
     useViewer.getState().setSelection({
@@ -359,7 +355,6 @@ function resetEditorInteractionState() {
   sceneRegistry.clear()
   useEditor.setState({
     phase: 'site',
-    structureLayer: 'elements',
     catalogCategory: null,
     selectedItem: null,
     selectedReferenceId: null,

@@ -47,10 +47,7 @@ describe('selectable candidates', () => {
       },
       previewSelectedIds: [],
     })
-    useEditor.setState({
-      phase: 'building',
-      structureLayer: 'elements',
-    })
+    useEditor.setState({ phase: 'building' })
   })
 
   test('includes building-scoped elevators for the active level building', () => {
@@ -140,9 +137,6 @@ describe('selectable candidates', () => {
         item_other: { id: 'item_other', type: 'box-select-test-furnish', parentId: 'level_other' },
       } as unknown as Record<string, AnyNode>,
     })
-    for (const structureLayer of ['elements', 'zones'] as const) {
-      useEditor.setState({ structureLayer })
-      expect(collectSelectableCandidateIds().sort()).toEqual(['item_pick', 'wall_pick'])
-    }
+    expect(collectSelectableCandidateIds().sort()).toEqual(['item_pick', 'wall_pick'])
   })
 })

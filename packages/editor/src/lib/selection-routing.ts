@@ -33,6 +33,15 @@ export function enterBuildingFromCanvas(node: AnyNode): boolean {
   return true
 }
 
+/**
+ * A floor-plan click from site, entry or background hit alike: a hit on any of
+ * a building's elements picks that building and goes inside, as in 3D.
+ */
+export function enterBuildingFromPlanHit(hitId: string | null): boolean {
+  const node = hitId ? useScene.getState().nodes[hitId as AnyNodeId] : undefined
+  return node ? enterBuildingFromCanvas(node) : false
+}
+
 export type SelectionModifierKeys = {
   meta: boolean
   ctrl: boolean

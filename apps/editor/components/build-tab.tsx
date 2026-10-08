@@ -142,7 +142,6 @@ export function BuildTab() {
       } else if (type.id === 'mep') {
         const ed = useEditor.getState()
         ed.setPhase('building')
-        ed.setStructureLayer('elements')
         ed.setCatalogCategory(null)
         ed.setMode('build')
         ed.setTool(null)

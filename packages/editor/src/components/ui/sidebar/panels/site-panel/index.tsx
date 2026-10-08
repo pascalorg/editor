@@ -19,7 +19,9 @@ import {
   Copy,
   Eye,
   EyeOff,
+  Boxes,
   Group,
+  LayoutGrid,
   Loader2,
   MoreHorizontal,
   Pencil,
@@ -72,7 +74,7 @@ import {
 } from './../../../../../lib/room-zone-routing'
 import { createUnitInBuilding, toggleZoneMembership } from './../../../../../lib/units'
 import { cn } from './../../../../../lib/utils'
-import useEditor, { type StructureLayer } from './../../../../../store/use-editor'
+import useEditor from './../../../../../store/use-editor'
 import { useUploadStore } from '../../../../../store/use-upload'
 import { MetricControl } from '../../../controls/metric-control'
 import { LevelDuplicateDialog } from '../../../level-duplicate-dialog'
@@ -1159,87 +1161,15 @@ const UnitsSection = memo(function UnitsSection({
   )
 })
 
-const LayerToggle = memo(function LayerToggle() {
-  const structureLayer = useEditor((state) => state.structureLayer)
-  const setStructureLayer = useEditor((state) => state.setStructureLayer)
-  const phase = useEditor((state) => state.phase)
-  const setPhase = useEditor((state) => state.setPhase)
-
-  const activeTab = phase === 'building' ? structureLayer : 'none'
-  const selectLayer = (layer: StructureLayer) => {
-    setPhase('building')
-    setStructureLayer(layer)
-  }
-
-  return (
-    <div className="relative flex items-center gap-1 border-border/50 border-b bg-[#2C2C2E] p-1">
-      <button
-        className={cn(
-          'relative flex flex-1 cursor-pointer flex-col items-center justify-center rounded-md py-2 font-medium text-[10px] transition-all duration-200',
-          activeTab === 'elements'
-            ? 'text-foreground'
-            : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
-        )}
-        onClick={() => selectLayer('elements')}
-      >
-        {activeTab === 'elements' && (
-          <motion.div
-            className="absolute inset-0 rounded-md bg-[#3e3e3e] shadow-sm ring-1 ring-border/50"
-            layoutId="layerToggleActiveBg"
-            transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
-          />
-        )}
-        <div className="relative z-10 flex flex-col items-center">
-          <img
-            alt="Elements"
-            className={cn(
-              'mb-1 h-6 w-6 transition-all',
-              activeTab !== 'elements' && 'opacity-50 grayscale',
-            )}
-            src="/icons/room.webp"
-          />
-          Elements
-        </div>
-      </button>
-
-      <button
-        className={cn(
-          'relative flex flex-1 cursor-pointer flex-col items-center justify-center rounded-md py-2 font-medium text-[10px] transition-all duration-200',
-          activeTab === 'zones'
-            ? 'text-foreground'
-            : 'text-muted-foreground hover:bg-white/5 hover:text-foreground',
-        )}
-        onClick={() => selectLayer('zones')}
-      >
-        {activeTab === 'zones' && (
-          <motion.div
-            className="absolute inset-0 rounded-md bg-[#3e3e3e] shadow-sm ring-1 ring-border/50"
-            layoutId="layerToggleActiveBg"
-            transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
-          />
-        )}
-        <div className="relative z-10 flex flex-col items-center">
-          <img
-            alt="Rooms"
-            className={cn(
-              'mb-1 h-6 w-6 transition-all',
-              activeTab !== 'zones' && 'opacity-50 grayscale',
-            )}
-            src="/icons/kitchen.webp"
-          />
-          Rooms
-        </div>
-        <div className="absolute right-1.5 bottom-1 z-10 rounded border border-border/40 bg-background/40 px-1 py-[2px] backdrop-blur-md">
-          <span className="block font-medium font-mono text-[9px] text-muted-foreground/70 leading-none">
-            Z
-          </span>
-        </div>
-      </button>
-    </div>
-  )
-})
-
-const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLast?: boolean }) {
+const ZoneItem = memo(function ZoneItem({
+  zone,
+  depth,
+  isLast,
+}: {
+  zone: ZoneNode
+  depth: number
+  isLast?: boolean
+}) {
   const [isEditing, setIsEditing] = useState(false)
   const [cameraPopoverOpen, setCameraPopoverOpen] = useState(false)
   const deleteNode = useScene((state) => state.deleteNode)
@@ -1295,7 +1225,7 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
   return (
     <div
       className={cn(
-        'group/row relative flex h-8 cursor-pointer select-none items-center border-border/50 border-b px-3 text-sm transition-all duration-200',
+        'group/row relative flex h-8 cursor-pointer select-none items-center border-border/50 border-b text-sm transition-all duration-200',
         isSelected
           ? 'bg-accent/50 text-foreground'
           : isHovered
@@ -1307,6 +1237,7 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
       onMouseEnter={() => setHoveredId(zone.id)}
       onMouseLeave={() => setHoveredId(null)}
       ref={itemRef}
+      style={{ paddingLeft: depth * 12 + 28, paddingRight: 12 }}
     >
       {/* Vertical tree line */}
       <div
@@ -1314,12 +1245,12 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
           'pointer-events-none absolute w-px bg-border/50',
           isLast ? 'top-0 bottom-1/2' : 'top-0 bottom-0',
         )}
-        style={{ left: 8 }}
+        style={{ left: (depth - 1) * 12 + 20 }}
       />
       {/* Horizontal branch line */}
       <div
         className="pointer-events-none absolute top-1/2 h-px bg-border/50"
-        style={{ left: 8, width: 4 }}
+        style={{ left: (depth - 1) * 12 + 20, width: 4 }}
       />
 
       {focusedUnit && (
@@ -1436,15 +1367,9 @@ const MultiSelectionBadge = memo(function MultiSelectionBadge() {
   )
 })
 
-const ContentSection = memo(function ContentSection() {
+const RoomsSection = memo(function RoomsSection() {
   const selectedLevelId = useViewer((state) => state.selection.levelId)
-  const structureLayer = useEditor((state) => state.structureLayer)
-  const setMode = useEditor((state) => state.setMode)
-  const setTool = useEditor((state) => state.setTool)
-
-  const level = useScene((s) =>
-    selectedLevelId ? ((s.nodes[selectedLevelId] as LevelNode | undefined) ?? null) : null,
-  )
+  const armToolMode = useEditor((state) => state.armToolMode)
   const levelZones = useScene(
     useShallow((s) => {
       if (!selectedLevelId) return []
@@ -1452,6 +1377,82 @@ const ContentSection = memo(function ContentSection() {
         (node): node is ZoneNode => node.type === 'zone' && node.parentId === selectedLevelId,
       )
     }),
+  )
+  const [expanded, setExpanded] = useState(true)
+
+  if (!selectedLevelId) return null
+
+  const handleDrawZone = (event: React.MouseEvent) => {
+    event.stopPropagation()
+    armToolMode({ mode: 'build', tool: 'zone' })
+  }
+
+  const rooms = levelZones.filter((zone) => zone.spaceRole === 'room')
+  const others = levelZones.filter((zone) => zone.spaceRole !== 'room')
+
+  return (
+    <div className="subtle-scrollbar max-h-72 shrink-0 overflow-y-auto overflow-x-hidden">
+      <TreeNodeWrapper
+        actions={
+          <button
+            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground dark:hover:bg-white/10"
+            onClick={handleDrawZone}
+            title="Draw a zone"
+            type="button"
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+        }
+        depth={1}
+        expanded={expanded}
+        hasChildren
+        icon={<LayoutGrid className="h-3.5 w-3.5" />}
+        label={
+          <span className="flex items-center gap-1.5">
+            Rooms
+            {rooms.length > 0 && (
+              <span className="text-muted-foreground text-xs">{rooms.length}</span>
+            )}
+          </span>
+        }
+        onClick={() => setExpanded((value) => !value)}
+        onToggle={() => setExpanded((value) => !value)}
+      >
+        {levelZones.length === 0 && (
+          <div className="border-border/50 border-b py-2 pr-3 pl-[52px] text-muted-foreground text-xs">
+            Close walls around a space to make a room.
+          </div>
+        )}
+        {rooms.map((zone, index) => (
+          <ZoneItem
+            depth={2}
+            isLast={others.length === 0 && index === rooms.length - 1}
+            key={zone.id}
+            zone={zone}
+          />
+        ))}
+        {others.length > 0 && (
+          <>
+            <div
+              className="pt-3 pb-1 pl-[52px] font-medium text-[11px] text-muted-foreground"
+              data-other-zones
+            >
+              Other zones
+            </div>
+            {others.map((zone, index) => (
+              <ZoneItem depth={2} isLast={index === others.length - 1} key={zone.id} zone={zone} />
+            ))}
+          </>
+        )}
+      </TreeNodeWrapper>
+    </div>
+  )
+})
+
+const ContentSection = memo(function ContentSection() {
+  const selectedLevelId = useViewer((state) => state.selection.levelId)
+  const level = useScene((s) =>
+    selectedLevelId ? ((s.nodes[selectedLevelId] as LevelNode | undefined) ?? null) : null,
   )
   const elementChildren = useScene(
     useShallow((s) => {
@@ -1464,6 +1465,7 @@ const ContentSection = memo(function ContentSection() {
       })
     }),
   )
+  const [expanded, setExpanded] = useState(true)
 
   if (!level) {
     return (
@@ -1471,64 +1473,40 @@ const ContentSection = memo(function ContentSection() {
     )
   }
 
-  if (structureLayer === 'zones') {
-    const handleAddZone = () => {
-      setMode('build')
-      setTool('zone')
-    }
-
-    if (levelZones.length === 0) {
-      return (
-        <div className="px-3 py-4 text-muted-foreground text-sm">
-          No rooms on this level. Close walls around a space to make one, or{' '}
-          <button className="cursor-pointer text-primary hover:underline" onClick={handleAddZone}>
-            draw a zone
-          </button>
-          .
-        </div>
-      )
-    }
-
-    const rooms = levelZones.filter((zone) => zone.spaceRole === 'room')
-    const others = levelZones.filter((zone) => zone.spaceRole !== 'room')
-    return (
-      <div className="flex flex-col">
-        {rooms.map((zone, index) => (
-          <ZoneItem isLast={index === rooms.length - 1} key={zone.id} zone={zone} />
-        ))}
-        {others.length > 0 && (
-          <>
-            <div
-              className="px-3 pt-3 pb-1 font-medium text-[11px] text-muted-foreground"
-              data-other-zones
-            >
-              Other zones
-            </div>
-            {others.map((zone, index) => (
-              <ZoneItem isLast={index === others.length - 1} key={zone.id} zone={zone} />
-            ))}
-          </>
-        )}
-      </div>
-    )
-  }
-
-  if (elementChildren.length === 0) {
-    return <div className="px-3 py-4 text-muted-foreground text-sm">No elements on this level</div>
-  }
   return (
-    <TreeNodeDragProvider>
-      <div className="flex flex-col">
-        {elementChildren.map((childId, index) => (
-          <TreeNode
-            depth={0}
-            isLast={index === elementChildren.length - 1}
-            key={childId}
-            nodeId={childId}
-          />
-        ))}
-      </div>
-    </TreeNodeDragProvider>
+    <TreeNodeWrapper
+      depth={1}
+      expanded={expanded}
+      hasChildren
+      icon={<Boxes className="h-3.5 w-3.5" />}
+      label={
+        <span className="flex items-center gap-1.5">
+          Elements
+          {elementChildren.length > 0 && (
+            <span className="text-muted-foreground text-xs">{elementChildren.length}</span>
+          )}
+        </span>
+      }
+      onClick={() => setExpanded((value) => !value)}
+      onToggle={() => setExpanded((value) => !value)}
+    >
+      {elementChildren.length === 0 ? (
+        <div className="border-border/50 border-b py-2 pr-3 pl-[52px] text-muted-foreground text-xs">
+          No elements on this level
+        </div>
+      ) : (
+        <TreeNodeDragProvider>
+          {elementChildren.map((childId, index) => (
+            <TreeNode
+              depth={2}
+              isLast={index === elementChildren.length - 1}
+              key={childId}
+              nodeId={childId}
+            />
+          ))}
+        </TreeNodeDragProvider>
+      )}
+    </TreeNodeWrapper>
   )
 })
 
@@ -1686,8 +1664,8 @@ const BuildingItem = memo(function BuildingItem({
                   projectId={projectId}
                 />
                 <UnitsSection buildingId={building.id} />
+                <RoomsSection />
                 <CollectionsSection />
-                <LayerToggle />
               </div>
               <div className="subtle-scrollbar relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
                 <MultiSelectionBadge />

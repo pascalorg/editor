@@ -15,7 +15,6 @@ describe('opening a project', () => {
   test('a persisted wall tool is not armed, and the preferences beside it survive', () => {
     const state = editorUiStateOnOpen({
       phase: 'building',
-      structureLayer: 'elements',
       toolMode: { mode: 'build', tool: 'wall' },
       mode: 'build',
       tool: 'wall',
@@ -26,7 +25,6 @@ describe('opening a project', () => {
     expect(state.mode).toBe('select')
     expect(state.tool).toBeNull()
     expect(state.phase).toBe('building')
-    expect(state.structureLayer).toBe('elements')
     expect(state.viewMode).toBe('3d')
   })
 
@@ -63,9 +61,7 @@ describe('opening a project', () => {
   test('a phase stored before Structure and Furnish merged opens inside the building', () => {
     // Browsers still hold `structure` / `furnish` from before the merge.
     for (const stored of ['structure', 'furnish']) {
-      const state = editorUiStateOnOpen({ phase: stored as never, structureLayer: 'zones' })
-      expect(state.phase).toBe('building')
-      expect(state.structureLayer).toBe('zones')
+      expect(editorUiStateOnOpen({ phase: stored as never }).phase).toBe('building')
     }
     expect(editorUiStateOnOpen({ phase: 'site' }).phase).toBe('site')
     expect(editorUiStateOnOpen({ phase: 'garden' as never }).phase).toBe('site')
@@ -78,16 +74,16 @@ describe('opening a project', () => {
     expect(editorUiStateOnOpen({ phase: 'building', mode: 'material-paint' }).mode).toBe('select')
   })
 
-  test('the zones layer is a preference — it comes back without arming the zone tool', () => {
+  test('a blob from the Elements/Rooms layer days opens in select mode, its layer dropped', () => {
     const state = editorUiStateOnOpen({
       phase: 'building',
       structureLayer: 'zones',
       toolMode: { mode: 'build', tool: 'zone' },
       mode: 'build',
       tool: 'zone',
-    })
+    } as never)
 
-    expect(state.structureLayer).toBe('zones')
+    expect(state).not.toHaveProperty('structureLayer')
     expect(state.mode).toBe('select')
     expect(state.tool).toBeNull()
   })

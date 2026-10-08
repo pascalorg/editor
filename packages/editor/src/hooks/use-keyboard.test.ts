@@ -317,7 +317,6 @@ describe('B and P open their panel', () => {
     useSidebarStore.getState().setIsCollapsed(false)
     useEditor.getState().setContinuation('wall', 'room')
     useEditor.getState().armToolMode({ mode: 'select' })
-    useEditor.getState().setStructureLayer('elements')
   })
 
   test('1 goes to site and 2 into the building; 3 is no longer a shortcut', () => {
@@ -331,10 +330,9 @@ describe('B and P open their panel', () => {
     expect(useEditor.getState().phase).toBe('building')
   })
 
-  test('F, B and P arm their tool and keep the building and its tab', () => {
+  test('F, B and P arm their tool and keep the building', () => {
     setSidebarTabIds(['site', 'build', 'paint', 'items'])
     useEditor.getState().setPhase('building')
-    useEditor.getState().setStructureLayer('zones')
     for (const [arm, mode, tool] of [
       [openItemCatalogFromShortcut, 'build', 'item'],
       [armWallToolFromShortcut, 'build', 'wall'],
@@ -342,7 +340,6 @@ describe('B and P open their panel', () => {
     ] as const) {
       arm()
       expect(useEditor.getState().phase).toBe('building')
-      expect(useEditor.getState().structureLayer).toBe('zones')
       expect(useEditor.getState().mode).toBe(mode)
       expect(useEditor.getState().tool).toBe(tool)
     }

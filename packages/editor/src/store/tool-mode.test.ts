@@ -9,7 +9,6 @@ function resetToolMode() {
   useEditor.getState().clearRoom()
   useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
   useEditor.getState().setPhase('building')
-  useEditor.getState().setStructureLayer('elements')
   useEditor.getState().armToolMode({ mode: 'select' })
   useEditor.getState().setActivePaintMaterial(null)
 }
@@ -18,14 +17,13 @@ beforeEach(resetToolMode)
 afterEach(resetToolMode)
 
 describe('ToolMode transition', () => {
-  test('arming building tools preserves the current phase and Scene tab', () => {
+  test('arming building tools preserves the current phase', () => {
     for (const phase of ['site', 'building'] as const) {
       useEditor.getState().setPhase(phase)
       useEditor.getState().armToolMode({ mode: 'select' })
       for (const tool of ['item', 'wall', 'measurement', 'zone'] as const) {
         useEditor.getState().armToolMode({ mode: 'build', tool })
         expect(useEditor.getState().phase).toBe(phase)
-        expect(useEditor.getState().structureLayer).toBe('elements')
         expect(useEditor.getState().tool).toBe(tool)
       }
     }
@@ -198,7 +196,6 @@ describe('persisted ToolMode normalization', () => {
       toolMode: { mode: 'build', tool: null as never },
       mode: 'select',
       tool: 'slab',
-      structureLayer: 'elements',
     })
 
     expect(state.toolMode).toEqual({ mode: 'build', tool: 'wall' })
@@ -212,7 +209,6 @@ describe('persisted ToolMode normalization', () => {
       toolMode: { mode: 'select' },
       mode: 'build',
       tool: 'wall',
-      structureLayer: 'elements',
     })
 
     expect(state.toolMode).toEqual({ mode: 'select' })

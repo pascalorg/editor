@@ -102,7 +102,7 @@ import { selectRoom, selectRoomFromHit } from '../../../lib/room-selection-comma
 import { roomKeyForZone } from '../../../lib/room-zone-routing'
 import {
   deleteNodeFromCanvas,
-  enterBuildingFromCanvas,
+  enterBuildingFromPlanHit,
   resolveCanvasBuildingId,
 } from '../../../lib/selection-routing'
 import { createSessionWrites, type SessionWrites } from '../../../lib/session-writes'
@@ -1033,8 +1033,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       // React paints the next frame; a render-time `undefined` handler leaves
       // a short dead zone where the first post-placement selection is lost.
       if (floorplanEntryYieldsToToolNow() || !isIdle(useInteractionScope.getState().scope)) return
-      const node = useScene.getState().nodes[id]
-      if (event.button === 0 && node && enterBuildingFromCanvas(node)) {
+      if (event.button === 0 && enterBuildingFromPlanHit(id)) {
         event.stopPropagation()
         swallowNextClick(200)
         return

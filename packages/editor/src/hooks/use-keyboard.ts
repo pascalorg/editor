@@ -120,8 +120,6 @@ const exitToSelectAfterUnconsumedCancel = () => {
     popRoomSelection()
   )
     return
-  const fromRooms = useEditor.getState().structureLayer === 'zones'
-
   useInteractionScope
     .getState()
     .endIf(
@@ -130,9 +128,7 @@ const exitToSelectAfterUnconsumedCancel = () => {
         (sc.kind === 'reshaping' && sc.reshape === 'hole'),
     )
 
-  // From Rooms, return to Elements; either way back to the select tool,
-  // keeping the active building/level context.
-  if (fromRooms) useEditor.getState().setStructureLayer('elements')
+  // Back to the select tool, keeping the active building/level context.
   useEditor.getState().armToolMode({ mode: 'select' })
 
   useEditor.getState().setFloorplanSelectionTool('click')

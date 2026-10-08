@@ -31,7 +31,7 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
       { keys: ['1'], action: 'Switch to Site' },
       { keys: ['2'], action: 'Switch to Building' },
       { keys: ['F'], action: 'Open the items catalog with the item tool' },
-      { keys: ['Z'], action: 'Draw a zone on the Rooms tab' },
+      { keys: ['Z'], action: 'Draw a zone' },
       {
         keys: ['Cmd/Ctrl', 'Arrow Up'],
         action: 'Select next level in the active building',

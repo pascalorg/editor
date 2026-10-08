@@ -73,13 +73,12 @@ Extends selection with the editor's `phase` from `useEditor`. The viewer's `Sele
 phase: 'site'      → any hit on a house hovers its building; the click selects it and goes inside
 phase: 'building'  → everything on the active level: walls, slabs, ceilings, roofs,
                      openings, stairs, elevators, spawn, items, plugin kinds
-  either structureLayer     → room-first walls, slabs and ceilings
-  structureLayer: 'zones'    → also zone labels and zone editing (the Scene panel's Rooms tab)
+  room-first walls, slabs and ceilings; room label pills (`RoomLabels3D`) appear
+  while nothing else is selected and let pointer events reach the scene
 ```
 
 Inside the building no click changes the phase. Site is entered from the Scene panel's site header
-or `1`, and left by a click on the house or on empty ground, the building row, the Elements/Rooms
-tabs or `2`. Arming a building tool keeps the phase. Double-click on a roof or stair selects the segment
+or `1`, and left by a click on the house or on empty ground, the building row or `2`. Arming a building tool keeps the phase. Double-click on a roof or stair selects the segment
 under the cursor.
 Persisted `structure` / `furnish` values from before the merge read back as `building`.
 
@@ -96,7 +95,7 @@ Room commands orchestrate viewer selection; editor room actions are plain setter
 Clicking the room clears `selectedIds`. Its own elements then select individually;
 a hit in another room changes the room context. Escape clears the element first,
 then the room. Empty clicks clear both. Alt bypasses room and session-group picking;
-Shift/Ctrl/Meta and marquee select elements in either layer. Selecting a furnishing (a
+Shift/Ctrl/Meta and marquee select elements. Selecting a furnishing (a
 non-opening catalog item or a `furnish`-category kind) ends the room context. Free elements
 retain direct selection. Room highlights and the read-only inspector follow
 `resolveOverlayPolicy` and hide during active interaction scopes. Zone-label selection

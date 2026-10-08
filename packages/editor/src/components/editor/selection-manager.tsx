@@ -746,7 +746,6 @@ const SELECTION_STRATEGIES: Record<Phase, SelectionStrategy> = {
     },
     isValid: (node) => {
       if (!isNodeInCurrentLevel(node)) return false
-      if (node.type === 'zone') return useEditor.getState().structureLayer === 'zones'
       return (
         node.type === 'wall' ||
         node.type === 'fence' ||
@@ -2061,7 +2060,8 @@ export const SelectionManager = () => {
       }
 
       if (node.type === 'building' || node.type === 'site') return
-      if (node.type === 'zone' && useEditor.getState().structureLayer !== 'zones') return
+      // Rooms hover through their walls and floors; a zone's own volume never does.
+      if (node.type === 'zone') return
       if (!isNodeInCurrentLevel(node)) return
 
       event.stopPropagation()

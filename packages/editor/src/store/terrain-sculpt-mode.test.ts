@@ -172,15 +172,6 @@ describe('the modes that hide the editing canvas release the brush', () => {
     useEditor.getState().setWorkspaceMode('studio')
     expect(useInteractionScope.getState().scope.kind).toBe('idle')
   })
-
-  test('a structure-layer switch releases it', () => {
-    useEditor.getState().setMode('terrain-sculpt')
-    // Reachable from the layer toggle while sculpt is armed, and it takes the
-    // same raw-`set` path — the mode resets, so the scope has to follow.
-    useEditor.getState().setStructureLayer('zones')
-    expect(useEditor.getState().mode).toBe('select')
-    expect(useInteractionScope.getState().scope.kind).toBe('idle')
-  })
 })
 
 describe('entering sculpt mode stands other affordances down', () => {

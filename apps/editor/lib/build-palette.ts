@@ -159,7 +159,6 @@ export function activateBuildTool(kind: string): void {
   if (extension?.preferredView) editor.setViewMode(extension.preferredView)
   useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
   editor.setPhase('building')
-  editor.setStructureLayer('elements')
   editor.setCatalogCategory(null)
   editor.setToolDefaults(kind, null)
   editor.setMode('build')
@@ -180,7 +179,6 @@ export function activateModularCabinetTool(): void {
   useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
   if (MODULAR_CABINET_CATALOG_ITEM) editor.setSelectedItem(MODULAR_CABINET_CATALOG_ITEM)
   editor.setPhase('building')
-  editor.setStructureLayer('elements')
   editor.setCatalogCategory(null)
   editor.setMode('build')
   editor.setTool('cabinet')
@@ -190,7 +188,6 @@ export function activatePaintMode(): void {
   const editor = useEditor.getState()
   if (editor.mode === 'material-paint') return
   editor.setPhase('building')
-  editor.setStructureLayer('elements')
   editor.armMaterialPaint()
 }
 
@@ -222,7 +219,6 @@ export function activateRoofFeatureTool(feature: RoofFeature): void {
   const editor = useEditor.getState()
   useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
   editor.setPhase('building')
-  editor.setStructureLayer('elements')
   editor.setCatalogCategory(null)
   editor.setMode('build')
   if (feature.kind) editor.setTool(feature.kind)

@@ -6,6 +6,7 @@ import useEditor from '../store/use-editor'
 import {
   deleteNodeFromCanvas,
   enterBuildingFromCanvas,
+  enterBuildingFromPlanHit,
   resolveCanvasBuildingId,
   resolveCanvasSelectionNode,
   resolveSelectedIdsForNodeClick,
@@ -38,7 +39,7 @@ describe('building entry from either canvas', () => {
         useEditor.getState().setPhase('site')
         useEditor.getState().armToolMode({ mode: 'select' })
         const node = nodes[hit.id]!
-        expect(resolveCanvasBuildingId(node, nodes)).toBe(building.id)
+        expect(resolveCanvasBuildingId(node, nodes)).toBe(building.id as never)
         expect(enterBuildingFromCanvas(node)).toBe(true)
         expect(useEditor.getState().phase).toBe('building')
         expect(useViewer.getState().selection).toMatchObject({
@@ -54,6 +55,49 @@ describe('building entry from either canvas', () => {
       useEditor.getState().armToolMode({ mode: 'build', tool: 'item' })
       expect(enterBuildingFromCanvas(nodes[wall.id]!)).toBe(false)
       expect(useEditor.getState().phase).toBe('site')
+    } finally {
+      useScene.setState(previousScene)
+      useViewer.setState({ selection: previousSelection })
+      useEditor.setState(previousEditor)
+    }
+  })
+
+  test('a 2D plan click from Site on a wall picks the whole building; bare ground stays in Site', () => {
+    const previousScene = useScene.getState()
+    const previousSelection = useViewer.getState().selection
+    const previousEditor = useEditor.getState()
+    const building = { id: 'building_plan', type: 'building', children: ['level_plan'] }
+    const level = { id: 'level_plan', type: 'level', level: 0, parentId: building.id, children: [] }
+    const wall = { id: 'wall_plan', type: 'wall', parentId: level.id }
+    const spawn = { id: 'spawn_plan', type: 'spawn', parentId: level.id }
+    const ground = { id: 'surface-material_plan', type: 'surface-material', parentId: 'site_plan' }
+    const siteFence = { id: 'fence_plan', type: 'fence', parentId: 'site_plan' }
+    const nodes = Object.fromEntries(
+      [building, level, wall, spawn, ground, siteFence].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+    try {
+      useScene.setState({ nodes: nodes as never, rootNodeIds: [building.id as never] })
+      useViewer.getState().setSelection({ buildingId: null })
+      useEditor.getState().setPhase('site')
+      useEditor.getState().armToolMode({ mode: 'select' })
+      for (const hit of [null, 'missing_plan', ground.id, siteFence.id]) {
+        expect(enterBuildingFromPlanHit(hit)).toBe(false)
+        expect(useEditor.getState().phase).toBe('site')
+      }
+      expect(enterBuildingFromPlanHit(wall.id)).toBe(true)
+      expect(useEditor.getState().phase).toBe('building')
+      expect(useViewer.getState().selection).toMatchObject({
+        buildingId: building.id,
+        selectedIds: [],
+      })
+      // Inside the building the same hit is an ordinary selection again.
+      expect(enterBuildingFromPlanHit(wall.id)).toBe(false)
+      useEditor.getState().setPhase('site')
+      expect(enterBuildingFromPlanHit(spawn.id)).toBe(true)
+      expect(useViewer.getState().selection).toMatchObject({
+        buildingId: building.id,
+        selectedIds: [],
+      })
     } finally {
       useScene.setState(previousScene)
       useViewer.setState({ selection: previousSelection })
