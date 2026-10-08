@@ -18,6 +18,7 @@ import { floorPlateId } from './floor-plate-id'
 import { buildFloorPlates, warnPlateFailure } from './floor-plates'
 import { floorRoomFaces } from './floor-room-faces'
 import { type FloorStepOverride, remapFloorStepOverrideKeys } from './floor-step-finish'
+import { newZone } from './new-zone'
 import { replacementPlateFor } from './plate-reference'
 import {
   area,
@@ -40,7 +41,6 @@ import {
   type ZoneFaceFit,
   zoneFaceFits,
 } from './room-zone-adoption'
-import { newZone } from './new-zone'
 
 export const ORPHAN_MERGE_COVERAGE_THRESHOLD = 0.6
 
