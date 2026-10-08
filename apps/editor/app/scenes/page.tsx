@@ -1,47 +1,11 @@
 import { headers } from 'next/headers'
 import Link from 'next/link'
+import { notFound } from 'next/navigation'
 import { CreateSceneButton } from '@/components/save-button'
-import type { SceneMeta } from '@/components/scene-loader'
+import { guardScenePage } from '@/lib/scene-page-guard'
 import { getSceneOperations } from '@/lib/scene-store-server'
 
 export const dynamic = 'force-dynamic'
-
-async function resolveBaseUrl(): Promise<string> {
-  if (process.env.NEXT_PUBLIC_APP_URL) {
-    return process.env.NEXT_PUBLIC_APP_URL
-  }
-  const h = await headers()
-  const host = h.get('x-forwarded-host') ?? h.get('host')
-  const proto = h.get('x-forwarded-proto') ?? 'http'
-  if (!host) {
-    return 'http://localhost:3000'
-  }
-  const [hostname, port] = host.split(':')
-  if (hostname && (hostname === 'localhost' || hostname.endsWith('.localhost'))) {
-    return `${proto}://127.0.0.1${port ? `:${port}` : ''}`
-  }
-  return `${proto}://${host}`
-}
-
-async function fetchScenes(): Promise<SceneMeta[]> {
-  try {
-    const operations = await getSceneOperations()
-    return await operations.listScenes({ limit: 50 })
-  } catch {
-    const base = await resolveBaseUrl()
-    const response = await fetch(`${base}/api/scenes?limit=50`, {
-      cache: 'no-store',
-    })
-    if (!response.ok) {
-      return []
-    }
-    const payload = (await response.json()) as { scenes?: SceneMeta[] } | SceneMeta[]
-    if (Array.isArray(payload)) {
-      return payload
-    }
-    return payload.scenes ?? []
-  }
-}
 
 function formatDate(iso: string): string {
   try {
@@ -52,7 +16,10 @@ function formatDate(iso: string): string {
 }
 
 export default async function ScenesPage() {
-  const scenes = await fetchScenes()
+  if (guardScenePage(await headers(), '/scenes') !== null) notFound()
+
+  const operations = await getSceneOperations()
+  const scenes = await operations.listScenes({ limit: 50 })
 
   return (
     <div className="min-h-screen bg-background">

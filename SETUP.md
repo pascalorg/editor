@@ -49,10 +49,10 @@ it when hosting Pascal at another origin:
 MINT_PASCAL_HOST_ORIGIN=https://pascal.example.com docker compose up -d
 ```
 
-Keep the container port at 3000: the `/scenes` page fetches its own API through
-a base URL that only `NEXT_PUBLIC_APP_URL` can override, and Next inlines that
-value at build time, so remapping the port to something else makes the page
-return 500.
+The `/scenes` and `/scene/<id>` pages apply the same guard as `/api/scenes`:
+without `PASCAL_SCENE_API_TOKEN` they only answer loopback hosts (`localhost`,
+`*.localhost`, `127.0.0.1`, `::1`); once it is set, every request must send it as
+`Authorization: Bearer <token>` or `x-pascal-scene-token`. Denied requests get a 404.
 
 ## CLI-managed editor
 
