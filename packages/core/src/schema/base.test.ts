@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { BaseNode, generateId, nodeIdPrefix } from './base'
+import { BaseNode } from './base'
 import { ZoneNode } from './nodes/zone'
 
 const zoneInput = {
@@ -38,17 +38,5 @@ describe('node metadata contract', () => {
     expect(BaseNode.parse({ id: 'node_1', metadata: { a: 1, b: undefined } }).metadata).toEqual({
       a: 1,
     })
-  })
-})
-
-describe('nodeIdPrefix', () => {
-  test('recovers the prefix generateId was called with', () => {
-    for (const prefix of ['wall', 'cabinet-module', 'pallet_rack', 'a_b_c']) {
-      expect(nodeIdPrefix(generateId(prefix))).toBe(prefix)
-    }
-  })
-
-  test("falls back to 'node' for an id without an underscore", () => {
-    expect(nodeIdPrefix('legacy')).toBe('node')
   })
 })

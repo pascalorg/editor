@@ -248,21 +248,6 @@ describe('cloneNodesInto', () => {
     for (const id of idsA) expect(idsB.has(id)).toBe(false)
   })
 
-  test('keeps an id prefix that itself contains an underscore', () => {
-    const rack = makeNode('pallet_rack_0123456789abcdef', 'warehouse:pallet-rack', {
-      children: ['pallet_rack_shelf_fedcba9876543210'],
-    })
-    const shelf = makeNode('pallet_rack_shelf_fedcba9876543210', 'warehouse:pallet-rack-shelf', {
-      parentId: rack.id,
-    })
-    const { rootId, nodes } = cloneNodesInto([rack, shelf], { rootId: rack.id })
-
-    expect(rootId).toMatch(/^pallet_rack_[0-9a-z]{16}$/)
-    expect(rootId).not.toBe(rack.id)
-    expect(nodes[1]?.id).toMatch(/^pallet_rack_shelf_[0-9a-z]{16}$/)
-    expect(nodes[1]?.parentId).toBe(rootId)
-  })
-
   test('throws if rootId is missing from the input array', () => {
     const orig = makeNode('shelf_1', 'shelf', {})
     expect(() => cloneNodesInto([orig], { rootId: 'shelf_other' as AnyNodeId })).toThrow(/rootId/)

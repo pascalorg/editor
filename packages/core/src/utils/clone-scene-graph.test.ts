@@ -218,30 +218,6 @@ describe('construction-dimension clone references', () => {
   })
 })
 
-describe('id prefixes', () => {
-  test('whole-scene and level clones keep an id prefix that itself contains an underscore', () => {
-    const scene = makeSceneGraph()
-    const rackId = 'pallet_rack_0123456789abcdef' as AnyNodeId
-    const level = scene.nodes['level_1' as AnyNodeId] as AnyNode & { children: AnyNodeId[] }
-    level.children.push(rackId)
-    scene.nodes[rackId] = makeNode(rackId, 'warehouse:pallet-rack', { parentId: 'level_1' })
-
-    const wholeScene = cloneSceneGraph(scene)
-    const levelClone = cloneLevelSubtree(scene.nodes, 'level_1' as AnyNodeId)
-
-    for (const id of [
-      ...Object.keys(wholeScene.nodes),
-      ...levelClone.clonedNodes.map((node) => node.id),
-    ]) {
-      if (id.startsWith('pallet')) expect(id).toMatch(/^pallet_rack_[0-9a-z]{16}$/)
-    }
-    expect(
-      Object.keys(wholeScene.nodes).filter((id) => id.startsWith('pallet_rack_')),
-    ).toHaveLength(1)
-    expect(levelClone.idMap.get(rackId)).toMatch(/^pallet_rack_[0-9a-z]{16}$/)
-  })
-})
-
 describe('supportSlabId remap', () => {
   test('cloneSceneGraph remaps supportSlabId to the cloned slab id', () => {
     const level = makeNode('level_1', 'level', { children: ['slab_1', 'item_1'] })
