@@ -1,6 +1,6 @@
 'use client'
 
-import { prefersReducedMotion } from '@pascal-app/core'
+import { prefersReducedMotion, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
@@ -27,6 +27,7 @@ import {
   placeholderFor,
   suggestionsFor,
 } from '../../lib/point-ask/suggestions'
+import { pointRoomHasContents } from '../../lib/point-ask/target-scope'
 import { type PointBubble, usePointAsk } from '../../store/use-point-ask'
 
 const ARROW = (
@@ -337,10 +338,12 @@ function BubbleView({
 
   const targets = bubble.targets
   const kind = kindForTargets(targets, bubble.gesture === 'region')
+  const roomId = kind === 'room' && !bubble.changesAsk ? targets[0]?.id : undefined
+  const roomEmpty = useScene((s) => (roomId ? !pointRoomHasContents(roomId, s.nodes) : false))
   // Asking again on what a turn just changed offers the next things to try, not the first ones.
   const suggestions = bubble.changesAsk
     ? followUpSuggestionsFor(kind, bubble.changesAsk.after)
-    : suggestionsFor(kind, {})
+    : suggestionsFor(kind, { empty: roomEmpty })
   const empty = bubble.draft.trim() === ''
 
   return (

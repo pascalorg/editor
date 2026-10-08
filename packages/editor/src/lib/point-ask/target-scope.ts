@@ -48,7 +48,7 @@ function covers(shape: Shape, point: Point): boolean {
   return containsPoint([{ outer: shape.polygon, holes: shape.holes }], point)
 }
 
-function snapshotScope(nodes: Nodes, targetIds: readonly string[]) {
+function snapshotScope(nodes: Nodes, targetIds: readonly string[], roomContentsOnly = false) {
   const children = new Map<string, Set<string>>()
   const listedParents = new Map<string, string>()
   const addChild = (parent: string, child: string) => {
@@ -233,7 +233,7 @@ function snapshotScope(nodes: Nodes, targetIds: readonly string[]) {
     }
     return result
   }
-  const seeds = new Set<string>(targetIds)
+  const seeds = new Set<string>(roomContentsOnly ? [] : targetIds)
   const roomExcluded = (node: AnyNode) =>
     node.type === 'zone' ||
     node.type === 'level' ||
@@ -246,7 +246,7 @@ function snapshotScope(nodes: Nodes, targetIds: readonly string[]) {
     const data = fields(zone)
     const host = parentFrame(zone)
     if (!host) continue
-    for (const key of ['boundaryWallIds', 'boundarySeparatorIds']) {
+    for (const key of roomContentsOnly ? [] : ['boundaryWallIds', 'boundarySeparatorIds']) {
       const ids = data[key]
       if (Array.isArray(ids))
         for (const boundaryId of ids) {
@@ -264,6 +264,16 @@ function snapshotScope(nodes: Nodes, targetIds: readonly string[]) {
     const outline = shape(zone, host)
     if (outline.polygon.length < 3) continue
     const levelNodes = nodesByLevel.get(host.levelId) ?? []
+    const inRoom = (node: AnyNode) => {
+      const nodeHost = parentFrame(node)
+      return nodeHost && centres(node, nodeHost).some((point) => covers(outline, point))
+    }
+    if (roomContentsOnly) {
+      for (const node of levelNodes) {
+        if (nodeRegistry.get(node.type)?.category === 'furnish' && inRoom(node)) seeds.add(node.id)
+      }
+      continue
+    }
     const needsWalls = !Array.isArray(data.boundaryWallIds) || data.boundaryWallIds.length === 0
     const needsSeparators =
       !Array.isArray(data.boundarySeparatorIds) || data.boundarySeparatorIds.length === 0
@@ -293,14 +303,15 @@ function snapshotScope(nodes: Nodes, targetIds: readonly string[]) {
     }
     for (const node of levelNodes) {
       if (roomExcluded(node)) continue
-      const nodeHost = parentFrame(node)
-      if (!nodeHost || !centres(node, nodeHost).some((point) => covers(outline, point))) continue
+      if (!inRoom(node)) continue
       seeds.add(node.id)
       // A member hosted on a wall brings the geometry host, not its level ancestors.
       const geometryHost = nodes[parentId(node) ?? '']
       if (geometryHost?.type === 'wall') seeds.add(geometryHost.id)
     }
   }
+  // Contents are spatial members, not every descendant of a room or shared boundary wall.
+  if (roomContentsOnly) return seeds
   const scope = new Set<string>()
   const pending = [...seeds]
   while (pending.length) {
@@ -310,6 +321,11 @@ function snapshotScope(nodes: Nodes, targetIds: readonly string[]) {
     for (const child of children.get(id) ?? []) pending.push(child)
   }
   return scope
+}
+
+/** Current furnishings use the same footprint centres and hosting frames as the pin's scope. */
+export function pointRoomHasContents(roomId: string, nodes: Nodes): boolean {
+  return snapshotScope(nodes, [roomId], true).size > 0
 }
 
 /** Target ancestry and room membership are evaluated independently in each snapshot. */
