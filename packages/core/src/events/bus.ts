@@ -218,6 +218,14 @@ export interface SnapshotCaptureFailedEvent {
   error: string
 }
 
+/** An ephemeral capture's frame, handed back to the caller that asked for it. */
+export interface SnapshotCapturedEvent {
+  requestId: string
+  blob: Blob
+  width: number
+  height: number
+}
+
 export interface ThumbnailGenerateEvent {
   projectId: string
   requestId?: string
@@ -263,6 +271,11 @@ export interface ThumbnailGenerateEvent {
   }
   /** Re-aim the sun at the face the pose looks at, for this frame. */
   lightFace?: boolean
+  /**
+   * The frame is the caller's alone: it comes back on `snapshot:captured` (matched by `requestId`)
+   * and the host stores nothing — no snapshot, no thumbnail. An agent looking at the scene.
+   */
+  ephemeral?: boolean
   /** World clipping planes for this frame (a section's cut). */
   clip?: readonly { normal: [number, number, number]; constant: number }[]
   /** Render the canvas at this multiple of its size for the frame (print-scale pictures). */
@@ -339,6 +352,7 @@ type ThumbnailEvents = {
 type SnapshotEvents = {
   'snapshot:saved': undefined | SnapshotSavedEvent
   'snapshot:capture-failed': SnapshotCaptureFailedEvent
+  'snapshot:captured': SnapshotCapturedEvent
   'camera:go-to-position': { position: [number, number, number]; target: [number, number, number] }
 }
 

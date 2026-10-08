@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  BLOCK_BODY_SLOT_ID,
   type BlockFace,
   type BlockNode,
   type BlockTopology,
@@ -99,7 +100,7 @@ import {
   replaceCommittedBlockOperation,
 } from './last-operation'
 import { resolveLoopCutPointerAction, resolveLoopCutSlideFactor } from './loop-cut-interaction'
-import { BLOCK_BODY_SLOT_ID, unpaintedBlockMaterialSlotIds } from './material-slots'
+import { unpaintedBlockMaterialSlotIds } from './material-slots'
 import {
   type BlockExtrudeAxis,
   type BlockModalFaceOperation,

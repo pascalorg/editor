@@ -6,7 +6,10 @@ import {
   type CeilingSurfaceCell,
   ceilingPaintRegions,
   computeCeilingSurfaceCells,
+  getEffectiveCutterNode,
   getEffectiveNode,
+  hostedCutterHoles,
+  isScriptedNode,
   type MultiPolygon,
   nodeRegistry,
   resolveCeilingHeight,
@@ -86,11 +89,18 @@ function collectCeilingHoles(
   ceiling: CeilingNode,
   nodes: SceneNodes,
 ): Array<Array<[number, number]>> {
-  const holes: Array<Array<[number, number]>> = []
+  // Only the ceiling's own children can bind to it.
+  const hosted: SceneNodes = { [ceiling.id]: ceiling }
+  for (const childId of ceiling.children ?? []) {
+    const child = nodes[childId as AnyNodeId]
+    if (child) hosted[child.id] = getEffectiveCutterNode(child)
+  }
+  const holes = hostedCutterHoles(ceiling, hosted)
 
   for (const childId of ceiling.children ?? []) {
     const child = nodes[childId as AnyNodeId]
     if (!child) continue
+    if (isScriptedNode(child) && child.source.manifest.cutters?.length) continue
     const def = nodeRegistry.get(child.type)
     const hole = def?.capabilities?.ceilingCut?.buildCeilingHole(child)
     if (hole) holes.push(hole)

@@ -218,6 +218,12 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
     note: "'ground' pins the node to the level base; deleting the slab strips the field.",
   }),
   row({
+    kind: 'fence',
+    path: 'supportSurfaceNodeId',
+    ...policy('node', 'host', 'drop', 'strip'),
+    remaps: ['clone-scene-graph'],
+  }),
+  row({
     kind: 'stair',
     path: 'deckSlabId',
     ...policy('node', 'host', 'drop', 'strip'),
@@ -383,7 +389,7 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
     path: 'zoneIds[]',
     ...policy('node', 'membership', 'drop', 'strip'),
     targetKinds: ['zone'],
-    remaps: ['clone-scene-graph'],
+    remaps: ['clone-scene-graph', 'clone-level-subtree'],
     note: 'Rooms a derived plate carries; rewritten by the structure reconciler.',
   }),
   row({
@@ -399,7 +405,7 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
     path: 'zoneId',
     ...policy('node', 'membership', 'drop', 'strip'),
     targetKinds: ['zone'],
-    remaps: ['clone-scene-graph'],
+    remaps: ['clone-scene-graph', 'clone-level-subtree'],
     note: 'The room a derived ceiling covers; rewritten by the structure reconciler.',
   }),
   row({
@@ -414,6 +420,7 @@ export const EXISTING_REFERENCES: readonly ExistingReference[] = [
     path: 'collectionIds[]',
     ...policy('collection', 'membership', 'drop', 'strip'),
     remaps: ['clone-scene-graph'],
+    note: 'Node creation (`joinCollections`) adds a copy to the collections it names that exist and drops the rest.',
   }),
   row({
     kind: '#scene',
@@ -722,7 +729,7 @@ export const NON_REFERENCES: readonly { kind: string; path: string; reason: stri
   },
   { kind: 'procedural-item', path: 'parameters.@key', reason: 'Recipe parameter name.' },
   // Scripted nodes (an authored item, or a window or door built from code) share one `source`.
-  ...(['item', 'window', 'door'] as const).flatMap((kind) => [
+  ...(['item', 'window', 'door', 'column'] as const).flatMap((kind) => [
     ...(
       [
         'source.manifest.anchors[].id',
@@ -738,6 +745,11 @@ export const NON_REFERENCES: readonly { kind: string; path: string; reason: stri
     })),
     { kind, path: 'source.params.@key', reason: 'Script parameter name.' },
     { kind, path: 'source.params.*', reason: 'Script parameter value.' },
+    {
+      kind,
+      path: 'source.images.thumbnail',
+      reason: 'Content hash of a project artifact, like source.artifact; forks carry it.',
+    },
   ]),
   { kind: 'scan', path: 'layers.@key', reason: 'Layer visibility flag name.' },
   { kind: 'site', path: 'frontEdge', reason: "Index of the lot polygon's street-facing edge." },
@@ -925,7 +937,6 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'locked',
     'openingManaged',
     'ownerOpeningTarget',
-    'placementAdjusted',
     'plateMigration',
     'plateMigration.demoted',
     'porch',
@@ -947,13 +958,7 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'ownerPose.runLength',
     'ownerPose.width',
   ]),
-  ...described('Display or authoring label written by the MCP tools.', [
-    'label',
-    'name',
-    'roomName',
-    'roomType',
-    'mcpTool',
-  ]),
+  ...described('Display or authoring label written by the MCP tools.', ['label', 'name']),
   ...described('IFC attribute copy: a value or IFC label, not an id.', [
     'elevation',
     'height',
@@ -979,6 +984,7 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
     'flatMap',
   ]),
   ...described('Print-export artifact metadata, not scene-node metadata.', ['status']),
+  ...described('Script build provenance metadata, not scene-node metadata.', ['mount']),
   ...described('Derived floorplan drawing metadata, not scene-node metadata.', [
     'at',
     'buildingId',
@@ -995,6 +1001,7 @@ export const METADATA_NON_REFERENCES: readonly { path: string; reason: string }[
   ]),
   ...described('Registry extension key, not scene-node metadata.', ['pascal:editor/floorplan']),
   ...described('Next.js page metadata export, not scene-node metadata.', ['title']),
+  ...described('An authored object: what it stands in for, as add_object was told.', ['reason']),
 ]
 
 const bare = (path: string) => path.replace(/^metadata\./, '').replace(/\[\]/g, '')

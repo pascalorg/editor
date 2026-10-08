@@ -1,5 +1,7 @@
 import {
   type MaterialPresetPayload,
+  MaterialProperties,
+  type MaterialSchema,
   type MaterialTarget,
   MaterialTarget as MaterialTargetSchema,
 } from './schema/material'
@@ -4788,6 +4790,22 @@ export function parseMaterialRef(ref?: string | null): ParsedMaterialRef | null 
   const scene = getSceneMaterialIdFromRef(ref)
   if (scene) return { kind: 'scene', id: scene }
   return null
+}
+
+const MATERIAL_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i
+
+/**
+ * A plain CSS hex colour (`#rgb` / `#rrggbb`) stored where a `MaterialRef`
+ * goes, e.g. a slot value: it paints that flat colour, as
+ * `material: { properties: { color } }` does. Lowercased, or null.
+ */
+export function parseMaterialColor(value?: string | null): string | null {
+  return typeof value === 'string' && MATERIAL_COLOR.test(value) ? value.toLowerCase() : null
+}
+
+/** The flat material a plain colour stored as a material ref paints. */
+export function materialColorPaint(color: string): MaterialSchema {
+  return { properties: MaterialProperties.parse({ color }) }
 }
 
 export function getMaterialPresetByRef(materialRef?: string | null): MaterialPresetPayload | null {

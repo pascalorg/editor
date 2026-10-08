@@ -2,10 +2,10 @@
 
 import { X } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
-import Image from 'next/image'
 import { type ReactNode, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import useEditor from '../../../store/use-editor'
+import { NodeIconImage } from '../node-icon-image'
 
 interface MobilePanelSheetProps {
   open: boolean
@@ -75,7 +75,7 @@ export function MobilePanelSheet({ open, onClose, icon, title, children }: Mobil
           <div className="flex shrink-0 items-center justify-between border-border/50 border-b px-3 pt-1 pb-3">
             <div className="flex min-w-0 items-center gap-2">
               {icon && (
-                <Image
+                <NodeIconImage
                   alt=""
                   className="shrink-0 object-contain"
                   height={18}

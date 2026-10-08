@@ -2,6 +2,7 @@ import { refuse } from '../agent-tools/refusal'
 import { artifactUrl } from '../lib/artifact-store'
 import {
   isScriptedNode,
+  matchScriptSlotsToLibrary,
   type ScriptedNode,
   scriptedSize,
   scriptInteractive,
@@ -32,7 +33,11 @@ export type AddObjectInput = {
   rotation?: number
   side?: 'front' | 'back'
   name?: string
+  description?: string
+  tags?: string[]
   category?: string
+  /** What the object stands in for; kept in `metadata.reason`, listed by verify_scene. */
+  reason?: string
   /** What the surface's compile produced from `code` (compiled before the operation runs). */
   compiled: CompiledGeometryScript
 }
@@ -58,6 +63,8 @@ function scriptAsset(
 ): ItemNode['asset'] {
   const { min, max } = compiled.manifest.bounds
   const restingHeight = geometryRestingHeight(compiled.manifest)
+  const attachTo = ATTACH[compiled.mount]
+  const interactive = scriptInteractive(compiled.manifest)
   return {
     id: `script_${compiled.sha256.slice(0, 16)}`,
     category: input.category ?? previous?.category ?? 'object',
@@ -66,14 +73,97 @@ function scriptAsset(
     source: 'mine',
     src: artifactUrl(compiled.sha256),
     dimensions: [max[0] - min[0], max[1] - min[1], max[2] - min[2]],
-    attachTo: ATTACH[compiled.mount],
-    surface: restingHeight === null ? undefined : { height: restingHeight },
+    ...(attachTo ? { attachTo } : {}),
+    ...(restingHeight === null ? {} : { surface: { height: restingHeight } }),
     offset: [0, 0, 0],
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
-    interactive: scriptInteractive(compiled.manifest),
+    ...(interactive ? { interactive } : {}),
   }
 }
+
+/**
+ * Words that name what Pascal already builds, with the tool that builds it. An object named so is
+ * built with a hint naming that tool: authored objects are for what has no type.
+ */
+export const PASCAL_TYPES: [RegExp, string][] = [
+  [/\bwalls?\b/i, 'walls: add_wall'],
+  [
+    /\b(slabs?|floor plates?|floors?)\b/i,
+    'a floor: rooms make their floor plates (create_room), shaped by set_room_floor_construction or set_floor_foundation',
+  ],
+  [
+    /\b(doors?|windows?|sills?|glazing)\b/i,
+    'add_door / add_window (with code for a design their fields cannot express)',
+  ],
+  [/\b(stairs?|staircases?)\b/i, 'create_stair'],
+  [/\broofs?\b/i, 'create_roof'],
+  [/\b(rooms?|zones?|apartments?)\b/i, 'rooms: create_room'],
+]
+
+/**
+ * What a label names: the last word of its main phrase. "entry door pull handle (brass)" is a
+ * handle; "door" only says which one (it was once refused as a door).
+ */
+function headWord(label: string) {
+  const phrase = label.split(/\(|,|\s[-–—]\s|\sof\s/i)[0]!.trim()
+  return phrase.split(/\s+/).at(-1) ?? phrase
+}
+
+/**
+ * The tool for an object named after something Pascal builds: an invitation, not a gate. A word
+ * gate taught evasion: refused "entry door pull handle (brass)", the agent relabelled it "brass
+ * pull bars", and the label stopped naming the gap.
+ */
+function typeHint(input: AddObjectInput): string | undefined {
+  for (const label of [input.name, input.category]) {
+    const named = label && PASCAL_TYPES.find(([word]) => word.test(headWord(label)))
+    if (named) return `"${label}" is something Pascal builds: ${named[1]}.`
+  }
+  return undefined
+}
+
+/** A wall's box: thin, a metre long or more, two metres high or more. */
+function wallSized(compiled: CompiledGeometryScript) {
+  const [width, height, depth] = scriptedSize(compiled.manifest)
+  return Math.min(width, depth) <= 0.45 && Math.max(width, depth) >= 1 && height >= 2
+}
+
+/** A plain box: one cuboid, as a wall is. A bookcase or a screen has shelves or holes. */
+const PLAIN_BOX = 12
+
+/**
+ * A floor object that is a plain box with a wall's size, or a floor plate, is refused: Pascal builds
+ * those, and rooms, openings and facades only work with its own. Production saw whole houses of
+ * plain custom solids, nothing editable as walls, rooms or doors.
+ */
+function refuseWallOrSlabShape(compiled: CompiledGeometryScript, input: AddObjectInput) {
+  const [width, height, depth] = scriptedSize(compiled.manifest)
+  const long = Math.max(width, depth)
+  const short = Math.min(width, depth)
+  const label = input.name ?? input.category ?? 'The object'
+  if (wallSized(compiled) && compiled.manifest.triangles <= PLAIN_BOX)
+    refuse(
+      'use_walls',
+      `"${label}" (${long.toFixed(2)} × ${short.toFixed(2)} m, ${height.toFixed(2)} m high) is a plain box with a wall's size: build it with add_wall so rooms, openings and facades work with it.`,
+      { label },
+    )
+  const base = input.position?.[1] ?? 0
+  if (height <= 0.35 && short >= 2 && base <= 0.05) {
+    // Its extent along x and z as it stands, so the numbers match the outline the agent drew.
+    const turn = ((input.rotation ?? 0) * Math.PI) / 180
+    const [c, s] = [Math.abs(Math.cos(turn)), Math.abs(Math.sin(turn))]
+    const [x, z] = [width * c + depth * s, width * s + depth * c]
+    refuse(
+      'use_slab',
+      `"${label}" (${x.toFixed(2)} × ${z.toFixed(2)} m in x and z, ${height.toFixed(2)} m thick, on the floor) is a floor plate: build it as a slab.`,
+      { label },
+    )
+  }
+}
+
+/** An item's category lives on its asset, so its source meta leaves it out. */
+const itemSourceMeta = ({ category: _, ...input }: AddObjectInput) => input
 
 const round = (value: number) => Math.round(value * 1000) / 1000
 
@@ -104,14 +194,32 @@ function summary(node: { id: string }, compiled: CompiledGeometryScript, orphane
  * AGENT_OPERATIONS: each surface compiles `code` first (the chat in its
  * worker, the MCP on the server) and passes the result as `compiled`.
  * The artifact is referenced by hash and its bounds become the item's dimensions; editing
- * keeps the item's identity, placement, children and paint.
+ * keeps the item's identity, placement, children, paint and reason. Only a new object is judged
+ * by its shape and must give a reason: the editor's inspector rebuilds through the edit path.
  */
+/**
+ * A new object says what it stands in for. Hosts check it before running the script: a missing
+ * reason refused after the compile has run it and stored its artifacts for nothing.
+ */
+export function requireAddObjectReason(input: { nodeId?: string; reason?: string }) {
+  if (!input.nodeId && !input.reason?.trim())
+    refuse(
+      'reason_required',
+      'Say what this object stands in for (reason): why no Pascal tool or catalog item builds it. The scene check lists every authored object with its reason.',
+    )
+}
+
 export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context) => {
   const { compiled } = input
   const rotation: Vec3 | undefined =
     input.rotation === undefined ? undefined : [0, (input.rotation * Math.PI) / 180, 0]
 
   if (input.nodeId) {
+    if (nodes[input.nodeId]?.type === 'column')
+      refuse('use_column_tool', `Rebuild ${input.nodeId} with add_column and nodeId.`, {
+        id: input.nodeId,
+        type: 'column',
+      })
     const previous = authoredObject(nodes, input.nodeId)
     if (previous.type !== 'item')
       refuse(
@@ -126,9 +234,15 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
       name: input.name ?? previous.name,
       position: (input.position as Vec3 | undefined) ?? previous.position,
       rotation: rotation ?? previous.rotation,
-      side: input.side ?? previous.side,
-      source: scriptSource(compiled),
+      ...(input.side === undefined ? {} : { side: input.side }),
+      source: scriptSource(compiled, itemSourceMeta(input), previous.source),
+      slots: matchScriptSlotsToLibrary(
+        compiled.manifest,
+        previous.slots,
+        previous.source?.manifest,
+      ),
       asset: scriptAsset(compiled, input, previous.asset),
+      ...(input.reason ? { metadata: { ...previous.metadata, reason: input.reason } } : {}),
     })
     // Children resting on or hanging from the object follow its new geometry.
     const resettled: { id: string; position: Vec3 }[] = []
@@ -164,26 +278,41 @@ export const addObject: AgentOperation<AddObjectInput> = (nodes, input, context)
       { mount: compiled.mount, parentType: parent.type },
     )
   }
+  if (compiled.mount === 'floor' && parent.type === 'level') refuseWallOrSlabShape(compiled, input)
+  requireAddObjectReason(input)
   const asset = scriptAsset(compiled, input, undefined)
   const node = ItemNode.parse({
     object: 'node',
-    id: generateId('item'),
+    id: compiled.nodeId ?? generateId('item'),
     type: 'item',
     name: input.name ?? asset.name,
     parentId: parent.id,
     ...(parent.type === 'wall' ? { wallId: parent.id, side: input.side ?? 'front' } : {}),
     position: (input.position as Vec3 | undefined) ?? [0, 0, 0],
     rotation: rotation ?? [0, 0, 0],
-    source: scriptSource(compiled),
+    source: scriptSource(compiled, itemSourceMeta(input)),
+    slots: matchScriptSlotsToLibrary(compiled.manifest),
     asset,
+    metadata: { reason: input.reason },
   })
+  const hint = [
+    typeHint(input),
+    compiled.mount === 'floor' &&
+      wallSized(compiled) &&
+      `It has a wall's size: if it is a wall, add_wall builds it so rooms, openings and facades work with it.`,
+  ]
+    .filter(Boolean)
+    .join(' ')
   return {
-    result: summary(node, compiled, []),
+    result: { ...summary(node, compiled, []), ...(hint ? { hint } : {}) },
     changes: { create: [{ node, parentId: parent.id }] },
   }
 }
 
 export type RescriptOpeningInput = {
+  description?: string
+  category?: string
+  tags?: string[]
   nodeId: string
   /** Where it goes; without one its bottom edge stays put. */
   position?: number[]
@@ -237,7 +366,12 @@ export const rescriptOpening: AgentOperation<RescriptOpeningInput> = (nodes, inp
           id: previous.id,
           data: {
             name: input.name ?? previous.name,
-            source: scriptSource(compiled),
+            source: scriptSource(compiled, input, previous.source),
+            slots: matchScriptSlotsToLibrary(
+              compiled.manifest,
+              previous.slots,
+              previous.source?.manifest,
+            ),
             width,
             height,
             position,
@@ -248,6 +382,19 @@ export const rescriptOpening: AgentOperation<RescriptOpeningInput> = (nodes, inp
   }
 }
 
+/**
+ * The param values a rebuild of `node` compiles with: its current ones under the
+ * edit's. The compile then keeps only what the module declares, clamps numbers to
+ * their new range and gives a param new to the code, or one whose type changed,
+ * its default. A node without a script just takes the edit's.
+ */
+export function editedScriptParams(
+  node: AnyNode | undefined,
+  params: Record<string, GeometryScriptParamValue> | undefined,
+): Record<string, GeometryScriptParamValue> | undefined {
+  return isScriptedNode(node) ? { ...node.source.params, ...params } : params
+}
+
 /** The scripted node `get_source` and a params-only rebuild act on, or a refusal. */
 export function authoredObject(nodes: Record<string, AnyNode>, nodeId: string): ScriptedNode {
   const node = nodes[nodeId]
@@ -255,10 +402,48 @@ export function authoredObject(nodes: Record<string, AnyNode>, nodeId: string): 
   if (!isScriptedNode(node))
     refuse(
       'not_authored',
-      `${nodeId} is a ${node.type} without a script; only objects, windows and doors built from code have one.`,
+      `${nodeId} is a ${node.type} without a script; only objects, windows, doors and columns built from code have one.`,
       { id: nodeId, type: node.type },
     )
   return node
+}
+
+/**
+ * Params are a script's values: without code, only a node already built from a
+ * script has one to rerun, so a new node, or one without a script, is refused.
+ */
+export function refuseParamsWithoutScript(
+  nodes: Record<string, AnyNode>,
+  input: { code?: string; params?: unknown; nodeId?: string },
+): void {
+  if (!input.params || input.code) return
+  if (!input.nodeId)
+    refuse('not_authored', 'Pass code with params: they are values for its script.')
+  authoredObject(nodes, input.nodeId)
+}
+
+/** The native size a scripted window, door or column takes from what its script built. */
+const SCRIPTED_SIZE: Partial<Record<ScriptedNode['type'], readonly string[]>> = {
+  window: ['width', 'height'],
+  door: ['width', 'height'],
+  column: ['width', 'height', 'depth'],
+}
+
+/**
+ * Why a raw update (chat `update_node`, MCP `apply_patch`) may not write what a
+ * node's script owns, its `source` or the size it built, or null: the stored
+ * fields would no longer match the geometry. Restating the current value passes.
+ */
+export function scriptedFieldRefusal(node: AnyNode, data: Record<string, unknown>): string | null {
+  if (!isScriptedNode(node)) return null
+  const owned = ['source', ...(SCRIPTED_SIZE[node.type] ?? [])]
+  const current = node as unknown as Record<string, unknown>
+  const fields = owned.filter(
+    (key) => key in data && JSON.stringify(data[key]) !== JSON.stringify(current[key]),
+  )
+  if (fields.length === 0) return null
+  const tool = node.type === 'item' ? 'add_object' : `add_${node.type}`
+  return `${node.id} is built from a script, so ${fields.join(', ')} ${fields.length === 1 ? 'comes' : 'come'} from it: rebuild it with ${tool} with nodeId and params (get_source shows them); nothing was changed.`
 }
 
 /** What `get_source` answers once the host has the module's text. */

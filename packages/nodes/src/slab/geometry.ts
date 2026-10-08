@@ -4,7 +4,9 @@ import {
   area,
   type BuildingNode,
   computePlateSurfacePartition,
+  cutterContextNodes,
   FenceNode,
+  FOUNDATION_SLOT_DEFAULT,
   type GeometryContext,
   getLevelElevations,
   getMaterialPresetByRef,
@@ -22,11 +24,15 @@ import {
   plateLevelContext,
   resolveFloorStepFinish,
   type SiteNode,
+  SLAB_SIDE_SLOT_DEFAULT,
+  SLAB_TOP_SLOT_DEFAULT,
   type SlabNode,
+  type SlabSlotId,
   slabPolygonContextFromGeometry,
   surfaceHeightAt,
   terrainFieldOf,
   useScene,
+  withHostedCutterHoles,
 } from '@pascal-app/core'
 import {
   applyMaterialPresetToMaterials,
@@ -35,7 +41,6 @@ import {
   createDefaultMaterial,
   createMaterial,
   createSurfaceRoleMaterial,
-  generateFenceSlotGeometries,
   generateSlabGeometry,
   type RenderShading,
   registerMaterialCacheCleanup,
@@ -43,13 +48,8 @@ import {
   resolveSlotDefaultMaterial,
 } from '@pascal-app/viewer'
 import { type BufferGeometry, FrontSide, Group, type Material, Mesh, type Texture } from 'three'
+import { generateFenceSlotGeometries } from '../fence/geometry-parts'
 import { creaseCrossings } from '../site/terrain-drape'
-import {
-  FOUNDATION_SLOT_DEFAULT,
-  SLAB_SIDE_SLOT_DEFAULT,
-  SLAB_TOP_SLOT_DEFAULT,
-  type SlabSlotId,
-} from './slots'
 import { clipPlateTerrainFill, splitPlateFaces, splitSlabFacesByFacing } from './surface-split'
 
 /**
@@ -312,6 +312,7 @@ export function buildSlabGeometry(
   colorPreset: ColorPreset = 'clay',
   sceneTheme?: string,
 ): Group {
+  if (ctx) node = withHostedCutterHoles(node, cutterContextNodes(node, ctx))
   if (ctx && !node.plateRole && !node.autoFromWalls)
     node = liftedManualSlab(plateLevelContext(ctx.parent, ctx.resolve).nodes ?? {}, node)
   const group = new Group()

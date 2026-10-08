@@ -1,6 +1,8 @@
 import {
+  CUPOLA_LOUVERS_DEFAULT,
   CupolaNode as CupolaNodeSchema,
   type CupolaNode as CupolaNodeType,
+  cupolaSlots,
   type HandleDescriptor,
   type NodeDefinition,
 } from '@pascal-app/core'
@@ -15,7 +17,6 @@ const HEIGHT_HANDLE_OFFSET = 0.25
 const ROTATE_CORNER_OFFSET = 0.12
 const MIN_DIM = 0.3
 const MIN_HEIGHT = 0.4
-const CUPOLA_LOUVERS_DEFAULT = 'library:preset-metal'
 
 function getBodyMidY(n: CupolaNodeType): number {
   return Math.max(0.001, n.height) / 2
@@ -124,12 +125,7 @@ export const cupolaDefinition: NodeDefinition<typeof CupolaNode> = {
   },
 
   capabilities: {
-    slots: () => [
-      { slotId: 'base', label: 'Base', default: 'library:preset-softwhite' },
-      { slotId: 'body', label: 'Body', default: 'library:preset-softwhite' },
-      { slotId: 'roof', label: 'Roof', default: 'library:preset-softwhite' },
-      { slotId: 'louvers', label: 'Louvers', default: CUPOLA_LOUVERS_DEFAULT },
-    ],
+    slots: cupolaSlots,
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,

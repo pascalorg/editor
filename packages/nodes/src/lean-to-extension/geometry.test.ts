@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { LeanToExtensionNode } from '@pascal-app/core'
+import { LeanToExtensionNode, leanToSlots } from '@pascal-app/core'
 import { generateRoofSegmentGeometry, resolveSurfaceColor } from '@pascal-app/viewer'
 import {
   Box3,
@@ -15,7 +15,6 @@ import { createLeanToAssembly } from './assembly'
 import { buildLeanToExtensionGeometry } from './geometry'
 import { resolveLeanToLayout } from './layout'
 import { resolveLeanToFreestandingRunPlacement } from './placement'
-import { leanToSlots } from './slots'
 
 describe('lean-to extension geometry', () => {
   test('defaults structural framing to the untextured wall role color', () => {

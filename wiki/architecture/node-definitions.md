@@ -66,6 +66,12 @@ to retain the actual child ID in `children`; renderability alone is insufficient
 hosted child; it does not prevent the kind from hosting other objects. Cabinets,
 columns, stairs, elevators and fences use this child-placement restriction.
 
+`capabilities.surfaces.top` opts a kind into support-height sampling. The viewer
+samples its registered mesh by default. A top surface with a data-defined footprint
+can supply `supportHeight(node, x, z, { nodes })`; return its height where it
+supports a point and `null` elsewhere. Keep footprint and hole rules in the
+kind's definition so viewer code can discover support through the registry.
+
 ### `surfaceRole`
 
 A kind may declare `surfaceRole?: SurfaceRole` on its definition. It is a colour token only (`core` stores no material), used to resolve the per-role clay/theme colour for untextured surfaces. See [materials-and-themes](materials-and-themes.md).
@@ -347,6 +353,8 @@ scope the HUD shows those hints instead of the generic reshape rows (the wall sp
 cut-count chip lives there). Select
 mode is not owned by a node definition, so its helper is derived separately from
 selection state, selected-node move/rotate capabilities, and held modifiers.
+
+`placementNotice?(node, { nodes, live })` is a kind's warning about where the node stands, such as an item in a door's way, shown in the same HUD row and in the node's panel through the editor's generic `usePlacementNotice`. It is pure; `live` is the in-flight drag pose, merged in the kind's own frame. See `tools.md` § "Placement notices".
 
 ## Pitfalls
 

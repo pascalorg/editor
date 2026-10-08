@@ -1,4 +1,6 @@
 import {
+  type AnyNode,
+  type AssetInput,
   BuildingNode,
   CeilingNode,
   DoorNode,
@@ -15,6 +17,12 @@ import {
   WindowNode,
   ZoneNode,
 } from '../../schema'
+import { CREATE_ROOM_CASES, FURNISH_ROOM_CASES } from './build-room-cases'
+import { PLACE_ITEMS_CASES } from './place-items-cases'
+import { FIND_BY_TYPE_CASES } from './find-by-type-cases'
+import { ROOM_CASES } from './room-cases'
+import { SEARCH_ASSETS_CASES } from './search-assets-cases'
+import { ADD_LEVEL_CASES, ADD_WALL_CASES, CREATE_STAIR_CASES } from './structure-cases'
 import { VERIFY_SCENE_CASES } from './verify-scene-cases'
 
 /**
@@ -33,7 +41,8 @@ export type AgentToolCase = {
   tool: string
   scene: () => SceneGraph
   input: Record<string, unknown>
-  context?: { activeLevelId?: string | null }
+  /** `catalog`: the item library the host hands search_assets. */
+  context?: { activeLevelId?: string | null; catalog?: AssetInput[] }
   surfaces?: AgentSurface[]
   expect:
     | { refusal: string; mentions?: string[] }
@@ -47,6 +56,8 @@ export type AgentToolCase = {
         lacks?: Record<string, Record<string, unknown>[]>
         /** Text the result must include. */
         mentions?: string[]
+        /** What the table cannot state (minted ids, derived construction): the problems, if any. */
+        check?: (result: Record<string, unknown>, nodes: Readonly<Record<string, AnyNode>>) => string[]
       }
 }
 
@@ -581,7 +592,7 @@ export const DUPLICATE_LEVEL_CASES: AgentToolCase[] = [
     expect: {
       result: {
         floorIndex: 1,
-        name: 'Ground',
+        name: 'Floor 1',
         shiftedLevelIds: ['level_upper', 'level_roof'],
         copied: HOUSE_COPY,
         skipped: { guide: 1 },
@@ -604,6 +615,25 @@ export const DUPLICATE_LEVEL_CASES: AgentToolCase[] = [
       result: { floorIndex: 1, shiftedLevelIds: ['level_upper', 'level_roof'] },
       after: { level_ground: { level: 0 }, level_upper: { level: 2 }, level_roof: { level: 3 } },
     },
+  },
+  // The build guide deletes a family's plan-only floors, then copies its first floor up. Each copy pushed every floor above, gap included, and floor 8 went from index 7 to 10.
+  {
+    name: 'a copy fills a free floor above and moves nothing past the gap',
+    tool: 'duplicate_level',
+    scene: () => {
+      const graph = houseScene()
+      const roof = graph.nodes.level_roof as { level: number }
+      graph.nodes.level_roof = { ...roof, level: 4 }
+      return graph
+    },
+    input: { levelId: 'level_upper' },
+    expect: {
+      result: { floorIndex: 2, shiftedLevelIds: [] },
+      after: { level_upper: { level: 1 }, level_roof: { level: 4 } },
+    },
+    // The live stores (chat and MCP) close level gaps when a scene loads; the gap lives inside a
+    // batch, as in run 10 (duplicate-level.test.ts runs that sequence).
+    surfaces: ['core'],
   },
   {
     name: 'a name names the copy',
@@ -674,6 +704,15 @@ export const DELETE_NODE_CASES: AgentToolCase[] = [
       present: ['level_ground', 'item_lamp'],
     },
   },
+  // The surfaces add what the scene really lost (classcad-ai's delta check).
+  {
+    name: 'the result says what the scene lost',
+    tool: 'delete_node',
+    scene: houseScene,
+    input: { id: 'wall_ground' },
+    surfaces: ['mcp', 'chat'],
+    expect: { result: { achieved: { deleted: { wall: 1, door: 1, window: 1 } } } },
+  },
   {
     name: 'a wall goes with its doors and windows',
     tool: 'delete_node',
@@ -731,4 +770,13 @@ export const AGENT_TOOL_CASES: readonly AgentToolCase[] = [
   ...DUPLICATE_LEVEL_CASES,
   ...VERIFY_SCENE_CASES,
   ...DELETE_NODE_CASES,
+  ...ROOM_CASES,
+  ...CREATE_ROOM_CASES,
+  ...FURNISH_ROOM_CASES,
+  ...SEARCH_ASSETS_CASES,
+  ...ADD_WALL_CASES,
+  ...ADD_LEVEL_CASES,
+  ...CREATE_STAIR_CASES,
+  ...PLACE_ITEMS_CASES,
+  ...FIND_BY_TYPE_CASES,
 ]

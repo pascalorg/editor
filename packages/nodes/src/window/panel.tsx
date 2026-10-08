@@ -3,14 +3,26 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  scriptImages,
   useInteractive,
   useScene,
-  WindowNode,
+  type WindowNode,
 } from '@pascal-app/core'
+import {
+  getWindowStyleOverrides,
+  SHAPED_WINDOW_TYPES,
+  SILLLESS_WINDOW_TYPES,
+  WINDOW_STYLE_CHOICES,
+  WINDOW_STYLE_LABELS,
+  windowStylesOf,
+  windowTakesStyle,
+  windowTypeChange,
+} from '@pascal-app/core/building'
 import {
   ActionButton,
   ActionGroup,
   cn,
+  duplicateNodeAndPickUp,
   PanelSection,
   PanelWrapper,
   SegmentedControl,
@@ -26,6 +38,7 @@ import { AuthoredParams } from '../item/authored-params'
 import { constrainCurtainOpening, curtainOpeningLimits } from '../shared/curtain-opening-limits'
 import { createOpeningPropertyPreview } from '../shared/opening-property-preview'
 import { openingPropertyPreviewHost } from '../shared/opening-property-preview-host'
+import { windowTypeOptions } from './placement'
 
 function isSameWindowValue(current: unknown, next: unknown): boolean {
   if (typeof current === 'number' && typeof next === 'number') {
@@ -64,28 +77,6 @@ function normalizeWindowCornerRadii(
 
   return next.map((radius) => radius * scale) as [number, number, number, number]
 }
-
-const windowTypeOptions: Array<{ label: string; value: WindowNode['windowType'] }> = [
-  { label: 'Fixed', value: 'fixed' },
-  { label: 'Sliding', value: 'sliding' },
-  { label: 'Casement', value: 'casement' },
-  { label: 'Awning', value: 'awning' },
-  { label: 'Single Hung', value: 'single-hung' },
-  { label: 'Double Hung', value: 'double-hung' },
-  { label: 'Bay', value: 'bay' },
-  { label: 'Bow', value: 'bow' },
-  { label: 'Louvered', value: 'louvered' },
-]
-
-const shapedWindowTypes = new Set<WindowNode['windowType']>([
-  'fixed',
-  'casement',
-  'awning',
-  'hopper',
-  'louvered',
-])
-
-const silllessWindowTypes = new Set<WindowNode['windowType']>(['bay', 'bow'])
 
 export default function WindowPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
@@ -164,50 +155,8 @@ export default function WindowPanel() {
   }, [selectedId, node, deleteNode, setSelection])
 
   const handleDuplicate = useCallback(() => {
-    if (!node?.parentId) return
-    triggerSFX('sfx:item-pick')
-    useScene.temporal.getState().pause()
-    const duplicate = WindowNode.parse({
-      position: [...node.position] as [number, number, number],
-      rotation: [...node.rotation] as [number, number, number],
-      side: node.side,
-      wallId: node.wallId,
-      dormerId: node.dormerId,
-      dormerFace: node.dormerFace,
-      roofSegmentId: node.roofSegmentId,
-      roofFace: node.roofFace,
-      parentId: node.parentId,
-      width: node.width,
-      height: node.height,
-      roughOpeningWidth: node.roughOpeningWidth,
-      roughOpeningHeight: node.roughOpeningHeight,
-      windowType: node.windowType,
-      operationState: node.operationState,
-      awningDirection: node.awningDirection,
-      casementStyle: node.casementStyle,
-      hingesSide: node.hingesSide,
-      frameThickness: node.frameThickness,
-      frameDepth: node.frameDepth,
-      openingKind: node.openingKind,
-      openingShape: node.openingShape,
-      openingRadiusMode: node.openingRadiusMode ?? 'all',
-      openingCornerRadii: [...(node.openingCornerRadii ?? [0.15, 0.15, 0.15, 0.15])],
-      cornerRadius: node.cornerRadius,
-      archHeight: node.archHeight,
-      openingRevealRadius: node.openingRevealRadius,
-      columnRatios: [...node.columnRatios],
-      rowRatios: [...node.rowRatios],
-      columnDividerThickness: node.columnDividerThickness,
-      rowDividerThickness: node.rowDividerThickness,
-      sill: node.sill,
-      sillDepth: node.sillDepth,
-      sillThickness: node.sillThickness,
-      metadata: { isNew: true },
-    })
-    useScene.getState().createNode(duplicate, node.parentId as AnyNodeId)
-    setMovingNode(duplicate)
-    setSelection({ selectedIds: [] })
-  }, [node, setMovingNode, setSelection])
+    if (node) duplicateNodeAndPickUp(node)
+  }, [node])
 
   if (!(node && node.type === 'window' && selectedId)) return null
 
@@ -243,14 +192,16 @@ export default function WindowPanel() {
     windowType === 'hopper' ||
     windowType === 'louvered'
   const isOperableWindow = isTrackSashWindow || isOperableSashWindow
-  const supportsWindowShape = shapedWindowTypes.has(node.windowType ?? 'fixed')
+  const supportsWindowShape = SHAPED_WINDOW_TYPES.has(node.windowType ?? 'fixed')
   const supportsGrid = isFixedWindow
-  const supportsSill = !silllessWindowTypes.has(node.windowType)
+  const supportsSill = !SILLLESS_WINDOW_TYPES.has(node.windowType)
   const showWindowTypeSection = !scripted && !isOpening
+  const windowStyles = windowStylesOf(node)
   const showWindowShapeSection = !scripted && !isOpening && supportsWindowShape
   const showOpeningShapeSection = !scripted && isOpening
   const showFrameSection = !scripted && !isOpening
   const showGridSection = !scripted && !isOpening && supportsGrid
+  const showStyleSection = !scripted && !isOpening && windowTakesStyle(node.windowType)
   const showSillSection = !scripted && !isOpening && supportsSill
   const showOperationSection = !scripted && !isOpening && isOperableWindow
   const showAwningDirectionSection = !scripted && !isOpening && displayedWindowType === 'awning'
@@ -340,7 +291,7 @@ export default function WindowPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/window.webp"
+      icon={scriptImages(node)?.thumbnail ?? '/icons/window.webp'}
       onClose={handleClose}
       title={node.name || 'Window'}
       width={320}
@@ -388,12 +339,8 @@ export default function WindowPanel() {
                   key={option.value}
                   onClick={() =>
                     handleUpdate({
-                      windowType: option.value,
+                      ...windowTypeChange(node, option.value),
                       ...(option.value === 'awning' ? { awningDirection } : {}),
-                      ...(!shapedWindowTypes.has(option.value)
-                        ? { openingShape: 'rectangle' }
-                        : {}),
-                      ...(silllessWindowTypes.has(option.value) ? { sill: false } : {}),
                     })
                   }
                   type="button"
@@ -459,6 +406,34 @@ export default function WindowPanel() {
                 value={Math.round((node.operationState ?? 0) * 100) / 100}
               />
             </div>
+          )}
+        </PanelSection>
+      )}
+
+      {showStyleSection && (
+        <PanelSection title="Style">
+          <div className="grid grid-cols-2 gap-2 px-1 pt-1">
+            {WINDOW_STYLE_CHOICES.map((style) => (
+              <button
+                aria-pressed={windowStyles.includes(style)}
+                className={cn(
+                  'flex min-h-10 items-center rounded-lg border px-3 py-2 text-left text-xs transition-colors',
+                  windowStyles.includes(style)
+                    ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
+                    : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
+                )}
+                key={style}
+                onClick={() => handleUpdate(getWindowStyleOverrides(style))}
+                type="button"
+              >
+                <span className="truncate font-medium">{WINDOW_STYLE_LABELS[style]}</span>
+              </button>
+            ))}
+          </div>
+          {!windowStyles.length && (
+            <p className="px-1 pt-2 text-muted-foreground text-xs">
+              Custom: the panes match no style.
+            </p>
           )}
         </PanelSection>
       )}
