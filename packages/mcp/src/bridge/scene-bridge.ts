@@ -4,6 +4,7 @@ import {
   adjacentLevelId,
   applyStructureReconciliation,
   assertDerivedNodeWrites,
+  changedStairOpeningOwners,
   floorOpeningTargets,
   HIDDEN_SITE_NOTE,
   type NodeDeletionPlan,
@@ -20,7 +21,7 @@ import {
   structureChangeBatch,
 } from '@pascal-app/core'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
-import type { AnyNode } from '@pascal-app/core/schema'
+import type { AnyNode, Collection, CollectionId } from '@pascal-app/core/schema'
 import {
   type AnyNodeId,
   AnyNode as AnyNodeSchema,
@@ -46,7 +47,7 @@ export type DeletePatch = { op: 'delete'; id: AnyNodeId; cascade?: boolean }
 export type Patch = CreatePatch | UpdatePatch | DeletePatch
 export type ActiveSceneMeta = Pick<
   SceneMeta,
-  'id' | 'name' | 'projectId' | 'ownerId' | 'thumbnailUrl' | 'version'
+  'id' | 'name' | 'projectId' | 'ownerId' | 'thumbnailUrl' | 'version' | 'graphHash'
 >
 
 /** The `extra` bag `setScene` accepts — collections, materials, plugin state. */
@@ -74,6 +75,7 @@ export class SceneBridge {
       ownerId: meta.ownerId,
       thumbnailUrl: meta.thumbnailUrl,
       version: meta.version,
+      ...(meta.graphHash === undefined ? {} : { graphHash: meta.graphHash }),
     }
   }
 
@@ -186,6 +188,15 @@ export class SceneBridge {
   /** All nodes (live reference into the store — do NOT mutate). */
   getNodes(): Record<AnyNodeId, AnyNode> {
     return useScene.getState().nodes
+  }
+
+  getCollections(): Record<CollectionId, Collection> {
+    return useScene.getState().collections
+  }
+
+  setCollections(collections: Record<CollectionId, Collection>): void {
+    if (useScene.getState().readOnly) return
+    useScene.setState({ collections })
   }
 
   /** Root node IDs. */
@@ -644,10 +655,29 @@ export class SceneBridge {
     ].some((id) => {
       if (before[id] === currentNodes[id]) return false
       const type = (currentNodes[id] ?? before[id])?.type
-      return type === 'stair' || type === 'stair-segment' || type === 'elevator' || type === 'level'
+      return (
+        type === 'stair' ||
+        type === 'stair-segment' ||
+        type === 'elevator' ||
+        type === 'level' ||
+        type === 'building' ||
+        type === 'slab' ||
+        type === 'ceiling'
+      )
     })
     if (authoredInputChanged) {
-      const owned = planOwnedFloorOpenings(this.getNodes())
+      const ownerIds = changedStairOpeningOwners(before, currentNodes)
+      for (const node of [...Object.values(before), ...Object.values(currentNodes)]) {
+        if (
+          node.type === 'elevator' &&
+          (before[node.id] !== currentNodes[node.id] ||
+            Object.values(currentNodes).some(
+              (level) => level.type === 'level' && before[level.id] !== level,
+            ))
+        )
+          ownerIds.add(node.id)
+      }
+      const owned = planOwnedFloorOpenings(currentNodes, { ownerIds })
       if (owned.length) {
         pauseSpaceDetection()
         try {

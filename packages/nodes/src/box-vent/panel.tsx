@@ -3,7 +3,6 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  BoxVentNode as BoxVentSchema,
   getActiveRoofHeight,
   type RoofSegmentNode,
   useLiveNodeOverrides,
@@ -12,6 +11,7 @@ import {
 import {
   ActionButton,
   ActionGroup,
+  duplicateNodeAndPickUp,
   PanelSection,
   PanelWrapper,
   SegmentedControl,
@@ -110,33 +110,8 @@ export default function BoxVentPanel() {
   }, [node, setMovingNode, setSelection])
 
   const handleDuplicate = useCallback(() => {
-    if (!node) return
-    triggerSFX('sfx:item-pick')
-    const parentId = node.roofSegmentId as AnyNodeId | undefined
-    if (!parentId) return
-
-    // Clone via the schema parser so the new node gets a fresh ID and
-    // valid defaults. Keep position/rotation/dimensions identical to the
-    // source — the user will drag it to its real destination next.
-    const state = useScene.getState()
-    const meta =
-      typeof node.metadata === 'object' && node.metadata !== null
-        ? (node.metadata as Record<string, unknown>)
-        : {}
-    const cloneInput = {
-      ...node,
-      id: undefined,
-      metadata: { ...meta, isNew: true },
-    } as Record<string, unknown>
-    // Use the schema parser so the new node gets a fresh ID and stays
-    // in sync with the placement-tool defaults.
-    const cloned = BoxVentSchema.parse(cloneInput) as BoxVentNode
-
-    state.createNode(cloned, parentId)
-    state.dirtyNodes.add(parentId)
-    setMovingNode(cloned as never)
-    setSelection({ selectedIds: [] })
-  }, [node, setMovingNode, setSelection])
+    if (node) duplicateNodeAndPickUp(node)
+  }, [node])
 
   const handleDelete = useCallback(() => {
     if (!(selectedId && node)) return

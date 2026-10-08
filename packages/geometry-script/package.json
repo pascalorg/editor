@@ -27,7 +27,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc --build && bun scripts/build-sandbox.ts",
+    "build": "tsc --build && bun ../../scripts/fix-node-esm-imports.ts dist && bun scripts/build-sandbox.ts",
     "dev": "tsgo --build --watch",
     "check-types": "tsgo --noEmit",
     "prepublishOnly": "npm run build",

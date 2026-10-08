@@ -54,6 +54,11 @@ The core `Plugin` manifest owns semantic node definitions (and registry-backed i
 
 See [`node-definitions.md`](node-definitions.md) for the three-checkbox composition model that ties these together.
 
+A kind whose top support has a data-defined footprint can implement
+`capabilities.surfaces.top.supportHeight(node, x, z, { nodes })`. Return the
+support height at that point or `null` outside the footprint. Otherwise the host
+samples the registered rendered surface.
+
 ## Hosting children
 
 A custom parametric renderer is assumed to mount arbitrary children unless its

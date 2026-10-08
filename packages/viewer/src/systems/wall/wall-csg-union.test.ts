@@ -514,7 +514,7 @@ describe('wall cutter union', () => {
       width: 1,
       height: 2,
     })
-    const item = { id: 'item_union-test', type: 'item' } as AnyNode
+    const item = { id: 'item_union-test', type: 'item', parentId: wall.id } as AnyNode
     const itemMesh = new THREE.Group()
     const proxy = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 0.5))
     proxy.name = 'cutout'

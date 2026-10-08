@@ -266,47 +266,52 @@ function FenceContinuationChips() {
   const curveStarted = useFenceCurveDraft((s) => s.pointCount > 0)
 
   const isCurved = mode === 'curved'
+  const isFreehand = mode === 'freehand'
   const straightMode = isCurved ? 'continuous' : mode
-  const straightLabel = straightMode === 'single' ? 'Straight: Single' : 'Straight: Continuous'
-  const straightIcon = straightMode === 'single' ? 'lucide:minus' : 'lucide:waypoints'
-  const typeLabel = isCurved ? 'Type: Curved' : 'Type: Straight'
-  const typeIcon = isCurved ? 'lucide:spline' : 'lucide:minus'
+  const typeLabel = isFreehand ? 'Type: Freehand' : isCurved ? 'Type: Curved' : 'Type: Straight'
+  const typeIcon = isFreehand ? 'lucide:scribble' : isCurved ? 'lucide:spline' : 'lucide:minus'
+  const nextType =
+    mode === 'continuous' || mode === 'single'
+      ? 'curved'
+      : mode === 'curved'
+        ? 'freehand'
+        : 'continuous'
 
   return (
     <>
       <ChipRow
-        ariaLabel={`Fence type: ${isCurved ? 'Curved' : 'Straight'}`}
+        ariaLabel={`Fence type: ${typeLabel.replace('Type: ', '')}`}
         icon={typeIcon}
         label={typeLabel}
-        onClick={() => setContinuation('fence', isCurved ? 'continuous' : 'curved')}
+        onClick={() => setContinuation('fence', nextType)}
         shortcut="T"
-        tooltip="Fence type — click or press T to switch between straight and curved"
+        tooltip="Fence type — click or press T to switch between straight, curved and freehand"
       />
       <ChipRow
-        ariaLabel={`Fence continuation: ${straightLabel}`}
-        disabled={isCurved}
-        icon={straightIcon}
-        label={straightLabel}
+        ariaLabel={`Fence continuation: ${straightMode === 'single' ? 'Single' : 'Continuous'}`}
+        disabled={isCurved || isFreehand}
+        icon={straightMode === 'single' ? 'lucide:minus' : 'lucide:waypoints'}
+        label={straightMode === 'single' ? 'Straight: Single' : 'Straight: Continuous'}
         onClick={
-          isCurved
+          isCurved || isFreehand
             ? undefined
             : () => setContinuation('fence', straightMode === 'single' ? 'continuous' : 'single')
         }
         shortcut="C"
         tooltip={
-          isCurved
-            ? 'Straight continuation is unavailable while curved fence type is active'
+          isCurved || isFreehand
+            ? 'Straight continuation is unavailable for curved or freehand fences'
             : 'Straight fence continuation — click or press C to toggle'
         }
       />
       {/* Curved fences are committed by a closing gesture rather than per-click,
           so the finish keys aren't discoverable on their own — surface them, but
           only once the user has placed a point and a curve is actually in flight. */}
-      {isCurved && curveStarted ? (
+      {(isCurved || isFreehand) && curveStarted ? (
         <ChipRow
           icon="lucide:circle-check"
-          label="Finish curve (or double-click)"
-          shortcut="Enter"
+          label={isFreehand ? 'Drag to draw fence' : 'Finish curve (or double-click)'}
+          shortcut={isFreehand ? 'Release' : 'Enter'}
         />
       ) : null}
     </>
@@ -448,6 +453,7 @@ export function ContextualHelperPanel({
   showPaintScope = false,
   continuationContext = null,
   title = null,
+  notice = null,
 }: {
   hints: ContextualShortcutHint[]
   // Kind-owned live mode chips (`ToolHint.chip`), rendered alongside the
@@ -460,11 +466,23 @@ export function ContextualHelperPanel({
   continuationContext?: ContinuationContext | null
   // The tool or gesture in hand, shown as the panel's header.
   title?: HudTitle | null
+  // A warning about what is in hand (a floor item in a door's way), in the "!" row.
+  notice?: string | null
 }) {
   const inStack = useInRightStack()
   const modeChips = chipHints.filter((hint) => hint.chip)
   const hasChips = !!snapContext || !!continuationContext || modeChips.length > 0 || showPaintScope
-  if (hints.length === 0 && !hasChips) return null
+  const fenceFeature = useEditor((state) =>
+    state.mode === 'build' && state.tool === 'fence' ? state.toolDefaults.fence?.featurePlacement : null,
+  )
+  if (fenceFeature === 'gate' || fenceFeature === 'opening') return (
+    <div className={cn(CARD_CLASS, !inStack && FLOATING_CLASS)} data-hud-card>
+      {title ? <HudHeader title={title} /> : null}
+      <ChipRow shortcut="Left click" label={fenceFeature === 'gate' ? 'Place gate on a fence' : 'Place passage on a fence'} />
+      <ChipRow shortcut="Esc" label="Cancel placement" />
+    </div>
+  )
+  if (hints.length === 0 && !hasChips && !notice) return null
 
   const actionHints = hints.filter((hint) => !isEscHint(hint))
   const escHints = hints.filter(isEscHint)
@@ -478,6 +496,7 @@ export function ContextualHelperPanel({
       {actionHints.map((hint) => (
         <HintRow hint={hint} key={hintKey(hint)} />
       ))}
+      {notice ? <HintRow hint={{ keys: ['!'], label: notice, active: true }} /> : null}
       {actionHints.length > 0 && (hasChips || escHints.length > 0) ? (
         <div className="col-span-2 my-0.5 h-px bg-border" />
       ) : null}

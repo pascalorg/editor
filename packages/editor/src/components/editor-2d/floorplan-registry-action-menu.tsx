@@ -4,6 +4,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type CeilingNode,
+  collectionIdsOf,
   createSceneApi,
   getWallMidpointHandlePoint,
   type NodeQuickAction,
@@ -346,7 +347,13 @@ export function FloorplanRegistryActionMenu() {
         const cloned = prepareFreshPlacementRootDuplicate(node as AnyNode)
         const parsed = def.schema.parse(cloned) as AnyNode
         draftId = parsed.id as AnyNodeId
-        useScene.getState().createNode(parsed, node.parentId as AnyNodeId)
+        useScene.getState().createNodes([
+          {
+            node: parsed,
+            parentId: node.parentId as AnyNodeId,
+            collectionIds: collectionIdsOf(useScene.getState().collections, node.id),
+          },
+        ])
         setMovingNode(parsed as never)
       }
       setMovingNodeOrigin('2d')

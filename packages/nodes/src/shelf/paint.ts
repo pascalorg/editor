@@ -4,10 +4,10 @@ import {
   generateSceneMaterialId,
   type MaterialSchema,
   type PaintCapability,
-  parseMaterialRef,
   type SceneMaterial,
   type SceneMaterialId,
   type ShelfNode,
+  slotPaintMaterial,
   toSceneMaterialRef,
   useScene,
 } from '@pascal-app/core'
@@ -200,14 +200,8 @@ export const shelfPaint: PaintCapability = {
     applyShelfPreview(role, root, material, materialPreset),
   getEffectiveMaterial: ({ node, role }) => {
     const shelf = node as ShelfNode
-    const parsed = parseMaterialRef(shelf.slots?.[role])
-    if (parsed) {
-      if (parsed.kind === 'library') {
-        return { material: undefined, materialPreset: shelf.slots?.[role] }
-      }
-      const sceneMaterial = useScene.getState().materials[parsed.id as SceneMaterialId]
-      if (sceneMaterial) return { material: sceneMaterial.material, materialPreset: undefined }
-    }
+    const painted = slotPaintMaterial(shelf.slots?.[role], useScene.getState().materials)
+    if (painted) return painted
     // No (or dangling) slot ref — surface the legacy whole-shelf paint the
     // geometry builder still falls back to, so the picker matches what renders.
     if (shelf.materialPreset || shelf.material) {

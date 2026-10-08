@@ -31,7 +31,7 @@ export function commitParametricNodeFields(
   ]
   if (parametrics?.reconcile) {
     const next = { ...node, ...patch } as AnyNode
-    updates.push(...parametrics.reconcile(node, next))
+    updates.push(...parametrics.reconcile(node, next, { ...scene.nodes, [nodeId]: next }))
   }
   scene.updateNodes(updates)
 }

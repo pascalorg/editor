@@ -1,5 +1,6 @@
 import {
   type BlockNode as BlockNodeType,
+  blockSlots,
   createBoxBlockTopology,
   type NodeDefinition,
 } from '@pascal-app/core'
@@ -12,7 +13,6 @@ import { buildBlockGeometry } from './geometry'
 import { blockPaint } from './paint'
 import { blockParametrics } from './parametrics'
 import { BlockNode } from './schema'
-import { blockSlots } from './slots'
 import { blockSurfaceProvider } from './surface'
 
 /** Bottom within this of the floor (and top above it): the block stands on the floor. */

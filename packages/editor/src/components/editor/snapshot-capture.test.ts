@@ -1,14 +1,17 @@
 import { describe, expect, test } from 'bun:test'
-import type {
-  SnapshotCaptureFailedEvent,
-  SnapshotCapturePose,
-  ThumbnailGenerateEvent,
+import {
+  emitter,
+  type SnapshotCapturedEvent,
+  type SnapshotCaptureFailedEvent,
+  type SnapshotCapturePose,
+  type ThumbnailGenerateEvent,
 } from '@pascal-app/core'
 import { Euler, PerspectiveCamera, Quaternion, Vector3 } from 'three'
 import {
   applySnapshotCapturePose,
   captureSnapshotScene,
   createSnapshotQueue,
+  deliverSnapshot,
   enqueueSnapshotCapture,
   isOverlaySnapshotSave,
   runSnapshotCapture,
@@ -418,5 +421,50 @@ describe('snapshot request correlation', () => {
     )
     expect(captured).toBe(true)
     expect(failures).toEqual([])
+  })
+})
+
+// An agent looks at the scene from a viewpoint of its own (`view_scene` in the hosted chat): the
+// frame is for the agent only, never a project snapshot or the project's thumbnail.
+describe('an ephemeral capture', () => {
+  const cameraData = { position: [0, 0, 0] as [number, number, number], target: null }
+
+  test('comes back to its caller on snapshot:captured and never reaches the host storage', async () => {
+    const stored: Blob[] = []
+    const received: SnapshotCapturedEvent[] = []
+    const onCaptured = (event: SnapshotCapturedEvent) => received.push(event)
+    emitter.on('snapshot:captured', onCaptured)
+    try {
+      const blob = new Blob(['frame'], { type: 'image/webp' })
+      await deliverSnapshot(
+        { requestId: 'view-1', ephemeral: true },
+        blob,
+        { ...cameraData, resolution: { w: 1280, h: 800 } },
+        (frame) => {
+          stored.push(frame)
+        },
+      )
+      expect(stored).toEqual([])
+      expect(received).toEqual([{ requestId: 'view-1', blob, width: 1280, height: 800 }])
+    } finally {
+      emitter.off('snapshot:captured', onCaptured)
+    }
+  })
+
+  test('an ephemeral frame with no caller to answer is stored nowhere', async () => {
+    const stored: Blob[] = []
+    await deliverSnapshot({ ephemeral: true }, new Blob(['frame']), cameraData, (frame) => {
+      stored.push(frame)
+    })
+    expect(stored).toEqual([])
+  })
+
+  test('any other capture goes to the host as before', async () => {
+    const stored: Blob[] = []
+    const blob = new Blob(['frame'])
+    await deliverSnapshot({ requestId: 'shot-1' }, blob, cameraData, (frame) => {
+      stored.push(frame)
+    })
+    expect(stored).toEqual([blob])
   })
 })

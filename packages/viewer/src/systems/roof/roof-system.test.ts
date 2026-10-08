@@ -4,7 +4,11 @@ import { describe, expect, test } from 'bun:test'
 import { type AnyNode, RoofNode, RoofSegmentNode } from '@pascal-app/core'
 import * as THREE from 'three'
 import { Evaluator, SUBTRACTION } from 'three-bvh-csg'
-import { generateRoofSegmentGeometry, getRoofSegmentBrushes } from './roof-system'
+import {
+  countPendingRoofShells,
+  generateRoofSegmentGeometry,
+  getRoofSegmentBrushes,
+} from './roof-system'
 
 describe('roof system gable geometry', () => {
   test('keeps a zero-height gable wall shell exactly on its base', () => {
@@ -772,5 +776,23 @@ describe('roof system conical sector geometry', () => {
       ),
     ).toBe(true)
     geometry.dispose()
+  })
+})
+
+// A capture waits for each roof on screen whose merged shell is still to build: a first merge too,
+// whose group has no shell yet. A roof never mounted is not on screen and would hold every capture.
+describe('roofs a capture waits for', () => {
+  test('counts every mounted roof still queued for its shell, and no unmounted one', () => {
+    const merged = new THREE.Group()
+    merged.add(Object.assign(new THREE.Mesh(), { name: 'merged-roof' }))
+    const groups = new Map<string, THREE.Object3D>([
+      ['roof_rebuilt', merged],
+      ['roof_first', new THREE.Group()],
+    ])
+    expect(
+      countPendingRoofShells(['roof_rebuilt', 'roof_first', 'roof_unmounted'], (id) =>
+        groups.get(id),
+      ),
+    ).toBe(2)
   })
 })

@@ -1,14 +1,21 @@
 import type { AnyNode, StairNode } from '../../schema'
-import { StairSegmentNode } from '../../schema'
-import { resolveStairTotalRise } from './stair-rise'
+import { StairSegmentNode } from '../../schema/nodes/stair-segment'
+import { resolveStairTotalRise } from './stair-rise-query'
 
-const MIN_STAIR_FLIGHT_RISE = 0.1
+const MIN_STAIR_FLIGHT_RISE = 0.001
 const MIN_STAIR_FLIGHT_STEP_COUNT = 2
 
 export type StairFlightOverrides = Partial<
   Pick<
     StairSegmentNode,
-    'width' | 'length' | 'height' | 'stepCount' | 'attachmentSide' | 'fillToFloor' | 'thickness'
+    | 'width'
+    | 'length'
+    | 'height'
+    | 'stepCount'
+    | 'attachmentSide'
+    | 'fillToFloor'
+    | 'thickness'
+    | 'construction'
   >
 >
 
@@ -37,5 +44,6 @@ export function createStairFlightFromStair(
     stepCount: Math.max(MIN_STAIR_FLIGHT_STEP_COUNT, Math.round(stair.stepCount ?? 10)),
     thickness: stair.thickness,
     fillToFloor: stair.fillToFloor,
+    construction: stair.construction,
   })
 }

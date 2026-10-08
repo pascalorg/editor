@@ -213,6 +213,7 @@ describe('slab paint effective material', () => {
   test('reads a room finish back for the picker', () => {
     expect(
       slabPaint.getEffectiveMaterial?.({
+        materials: useScene.getState().materials,
         nodes: useScene.getState().nodes,
         node: plate,
         role: 'room:zone_a',
@@ -223,6 +224,7 @@ describe('slab paint effective material', () => {
     })
     expect(
       slabPaint.getEffectiveMaterial?.({
+        materials: useScene.getState().materials,
         nodes: useScene.getState().nodes,
         node: plate,
         role: 'room:zone_a/region_1',
@@ -230,6 +232,7 @@ describe('slab paint effective material', () => {
     ).toEqual({ material: undefined, materialPreset: TILE })
     expect(
       slabPaint.getEffectiveMaterial?.({
+        materials: useScene.getState().materials,
         nodes: useScene.getState().nodes,
         node: plate,
         role: 'surface',
@@ -307,6 +310,7 @@ test('foundation paint changes only its own material and erases to concrete', ()
   expect(slabNow(plate.id).foundation).toEqual({ type: 'solid', material: undefined })
   expect(
     slabPaint.getEffectiveMaterial?.({
+      materials: useScene.getState().materials,
       nodes: useScene.getState().nodes,
       node: slabNow(plate.id),
       role: 'foundation',

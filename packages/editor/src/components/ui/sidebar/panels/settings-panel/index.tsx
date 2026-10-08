@@ -2,6 +2,7 @@ import {
   clearSceneHistory,
   DEFAULT_LEVEL_HEIGHT,
   emitter,
+  getArtifactStore,
   getLevelDisplayName,
   LevelNode,
   type AnyNodeId,
@@ -64,7 +65,9 @@ import {
 import { Input } from './../../../../../components/ui/primitives/input'
 import { Switch } from './../../../../../components/ui/primitives/switch'
 import { cn } from './../../../../../lib/utils'
+import { refusedObjectsNotice } from './../../../../../components/editor/group-actions'
 import { deleteLevelWithFallbackSelection } from './../../../../../lib/level-selection'
+import { bringBuildArtifacts } from './../../../../../lib/scene-clipboard'
 import useEditor, { selectDefaultBuildingAndLevel } from './../../../../../store/use-editor'
 import useFloorplanMode from './../../../../../store/use-floorplan-mode'
 import { type SendToAppStep, useSendToApp } from './../../../../../store/use-send-to-app'
@@ -541,7 +544,16 @@ export function SettingsPanel({
     // Materials ride along: nodes reference them by `scene:<id>` slot
     // refs, so a save without the table produces a file whose custom
     // finishes revert to defaults on the very Load Build path below.
-    const sceneData = { nodes, rootNodeIds, installedPlugins, materials, collections }
+    // The project rides along too: a scripted object's artifacts live there, and
+    // loading the file into another project copies them over as a paste does.
+    const sceneData = {
+      nodes,
+      rootNodeIds,
+      installedPlugins,
+      materials,
+      collections,
+      projectId: useViewer.getState().projectId,
+    }
     const json = JSON.stringify(sceneData, null, 2)
     const blob = new Blob([json], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -597,7 +609,20 @@ export function SettingsPanel({
     e.target.value = ''
   }
 
-  const handleConfirmImport = (parsed: ParsedBuildJson) => {
+  const handleConfirmImport = async (file: ParsedBuildJson) => {
+    const targetProjectId = useViewer.getState().projectId
+    const artifactStore = getArtifactStore()
+    const { build: parsed, refusedIds, refusal } = await bringBuildArtifacts(file)
+    if (
+      targetProjectId !== useViewer.getState().projectId ||
+      artifactStore !== getArtifactStore()
+    )
+      return
+    if (refusal) {
+      useFloorplanMode
+        .getState()
+        .showNotice(refusedObjectsNotice(refusedIds.length, refusal, 'loaded'))
+    }
     const currentScene = useScene.getState()
     setScene(
       parsed.nodes as Parameters<typeof setScene>[0],

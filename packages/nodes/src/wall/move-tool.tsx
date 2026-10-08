@@ -9,6 +9,7 @@ import {
   type GridEvent,
   getPerpendicularWallMoveAxis,
   getPlannedLinkedWallUpdates,
+  planWallEndRejoins,
   planWallMoveJunctions,
   resolveMovedWallSupportSlabPatch,
   useLiveNodeOverrides,
@@ -27,6 +28,7 @@ import {
   snapScalarToGrid,
   triggerSFX,
   useEditor,
+  WALL_CONNECT_SNAP_RADIUS,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -561,15 +563,19 @@ export const MoveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       // The drag writes nothing to the store (the preview is live overrides), so history is
       // paused only for this drop. Keyed by the moving wall: in split view the 2D move overlay
       // co-owns the gesture, and commitStep lifts its pause too.
+      const changes = planWallEndRejoins(
+        sceneState.nodes,
+        commitUpdates.map(({ id }) => id),
+        WALL_CONNECT_SNAP_RADIUS,
+        {
+          update: wallUpdates,
+          create: wallCreates,
+          delete: Array.from(collapsedLinkedWallIds),
+        },
+      )
       const drop = beginSceneHistoryPauseSession(useScene, { gesture: nodeId })
       try {
-        drop.commitStep(() =>
-          useScene.getState().applyNodeChanges({
-            update: wallUpdates,
-            create: wallCreates,
-            delete: Array.from(collapsedLinkedWallIds),
-          }),
-        )
+        drop.commitStep(() => useScene.getState().applyNodeChanges(changes))
       } finally {
         drop.end()
       }

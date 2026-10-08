@@ -153,9 +153,9 @@ export function MoveItemTool({ node: source }: { node: ItemNode }) {
   const cursor = usePlacementCoordinator({
     asset: node.asset,
     draftNode,
-    // Carry painted slot overrides onto the duplicate's draft (wall/ceiling
-    // items create their draft lazily inside the coordinator).
-    slots: node.slots,
+    // The duplicate's draft keeps the item's painted slots and collections
+    // (wall/ceiling items create their draft lazily inside the coordinator).
+    copied: node,
     // Duplicates start fresh in floor mode; wall/ceiling draft is created lazily by ensureDraft.
     initialState:
       isNew && !isSceneDraft
@@ -177,7 +177,7 @@ export function MoveItemTool({ node: source }: { node: ItemNode }) {
         // items are created lazily on surface entry.
         gridPosition.copy(new Vector3(...node.position))
         if (!node.asset.attachTo) {
-          draftNode.create(gridPosition, node.asset, node.rotation, node.scale, node.slots)
+          draftNode.create(gridPosition, node.asset, node.rotation, node.scale, node)
         }
       } else {
         draftNode.adopt(node)

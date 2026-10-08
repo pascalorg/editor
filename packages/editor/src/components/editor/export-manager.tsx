@@ -216,6 +216,7 @@ export function ExportManager() {
 
           if (format === 'ifc') {
             const { data, warnings } = exportPreparedSceneToIfc(exportScene, nodes, {
+              collections: useScene.getState().collections,
               projectName: options.projectName,
               onlyVisible: options.onlyVisible,
               excludedNodeTypes: options.excludedNodeTypes,
