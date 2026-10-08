@@ -35,6 +35,7 @@ import { ADDITION, Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
 import { applyWorldScaleBoxUVs } from '../../lib/box-uv'
 import { ensureRenderableGeometryAttributes, subtractCsgBrush } from '../../lib/csg-utils'
+import { runRoofClipFrame } from './roof-clip'
 
 function csgGeometry(brush: Brush): THREE.BufferGeometry {
   return brush.geometry as unknown as THREE.BufferGeometry
@@ -257,6 +258,7 @@ export const RoofSystem = () => {
   useLiveNodeOverrides((s) => s.overrides)
 
   useFrame(() => {
+    runRoofClipFrame()
     // Clear stale pending updates when the scene is unloaded
     if (rootNodeIds.length === 0) {
       pendingRoofUpdates.clear()
@@ -1495,6 +1497,220 @@ function wearsFascia(node: RoofSegmentNode, parentRoof?: RoofNode): boolean {
  * `fascia`: build the segment's fascia boards into its deck. Only the roof
  * renderer asks; a dormer, a chimney or a sibling's clip takes the bare shell.
  */
+type RoofSegmentVolumeOptions = {
+  /** Outward extension of the footprint on every side. */
+  wExt: number
+  /** Vertical lift of the whole volume (the deck top rides `verticalRt` above the deck bottom). */
+  vOffset: number
+  baseY: number
+  /** A void volume (the deck bottom) uses the deck-inset dutch waist. */
+  isVoid: boolean
+  /** A plate-seated wall shell keeps its floored eave; see `getRoofSegmentBrushes`. */
+  onPlate?: boolean
+}
+
+/**
+ * Faces of one roof-segment prism in segment-local space: the wall shell, the
+ * deck top or the deck bottom, depending on `wExt` / `vOffset` / `isVoid`.
+ * Single source for the brush builder and for consumers that need the roof
+ * planes as data (walls fitted to the roof underside).
+ */
+export function getRoofSegmentVolumeFaces(
+  node: RoofSegmentNode,
+  options: RoofSegmentVolumeOptions,
+): THREE.Vector3[][] {
+  const { roofType, width, depth, wallHeight, deckThickness } = node
+  const { wExt, vOffset, baseY, isVoid, onPlate = false } = options
+  const conicalCoverage = getConicalRoofCoverage(node)
+  const { activeRh, tanTheta } = getSegmentSlopeFrame(node)
+  const shapeRatios = getRoofShapeRatios({
+    gambrelLowerWidthRatio: node.gambrelLowerWidthRatio,
+    mansardSteepWidthRatio: node.mansardSteepWidthRatio,
+    dutchHipWidthRatio: node.dutchHipWidthRatio,
+    dutchHipHeightRatio: node.dutchHipHeightRatio,
+    dutchWaistLengthRatio: node.dutchWaistLengthRatio,
+    dutchGabletRake: node.dutchGabletRake,
+  })
+  // Gablet inset must track dutchHipWidthRatio so the 3D waist matches both
+  // the 2D floorplan and the slope frame (which derives activeRh from the
+  // same ratio). A hardcoded 0.25 desyncs the gablet from the parameter.
+  const baseI = Math.min(width, depth) * node.dutchHipWidthRatio
+  const plateSeated = wallHeight <= 0
+
+  const wV = Math.max(0.01, width + 2 * wExt)
+  const dV = Math.max(0.01, depth + 2 * wExt)
+
+  const autoDrop = wExt * tanTheta
+  // Floor every prism at 5 cm so CSG never sees a degenerate volume — by
+  // raising the top, never by sinking the base (the base is the wall top).
+  // One floor for all volumes keeps each cutter level with the shell it carves.
+  // A plate-seated roof (wallHeight 0) is the exception for its sloped deck
+  // volumes: their eave hangs below the plate, and raising it lifted the
+  // whole roof off its walls, so their base sinks instead.
+  const eaveY = wallHeight - autoDrop + vOffset
+  const sinkBase = plateSeated && !onPlate && autoDrop !== 0
+  const whV = sinkBase ? eaveY : Math.max(0.05, eaveY)
+
+  let rhV = activeRh
+  if (activeRh > 0) {
+    rhV = activeRh + autoDrop
+    if (roofType === 'shed') rhV = activeRh + 2 * autoDrop
+  }
+
+  const safeBaseY = sinkBase ? Math.min(baseY, whV - 0.05) : baseY
+
+  let structuralI = baseI
+  if (isVoid) {
+    structuralI += deckThickness
+  }
+
+  return getRoofModuleFaces({
+    type: roofType,
+    w: wV,
+    d: dV,
+    wh: whV,
+    rh: rhV,
+    baseY: safeBaseY,
+    insets: { dutchI: structuralI },
+    baseW: width,
+    baseD: depth,
+    tanTheta,
+    shapeRatios,
+    dutchTopRakeThickness: node.dutchTopRakeThickness,
+    conicalStartAngle: conicalCoverage.startAngle,
+    conicalSweepAngle: conicalCoverage.sweepAngle,
+  }).map((face) => face.map((point) => new THREE.Vector3(point.x, point.y, point.z)))
+}
+
+/**
+ * Keeps the part of a planar polygon where `side(point) >= 0`. The roof faces
+ * are planar, so a straight plan cut interpolates their height exactly.
+ */
+function clipPlanarPolygon(
+  polygon: THREE.Vector3[],
+  side: (point: THREE.Vector3) => number,
+): THREE.Vector3[] {
+  const result: THREE.Vector3[] = []
+  for (let index = 0; index < polygon.length; index++) {
+    const current = polygon[index]!
+    const next = polygon[(index + 1) % polygon.length]!
+    const currentSide = side(current)
+    const nextSide = side(next)
+    if (currentSide >= 0) result.push(current)
+    if (currentSide >= 0 !== nextSide >= 0) {
+      result.push(current.clone().lerp(next, currentSide / (currentSide - nextSide)))
+    }
+  }
+  return result
+}
+
+function getSegmentTrimHalfPlanes(
+  segment: RoofSegmentNode,
+): Array<(point: THREE.Vector3) => number> {
+  const trim = normalizeRoofSegmentTrim(segment)
+  const leftX = -segment.width / 2 + trim.left
+  const rightX = segment.width / 2 - trim.right
+  const frontZ = segment.depth / 2 - trim.front
+  const backZ = -segment.depth / 2 + trim.back
+  const planes: Array<(point: THREE.Vector3) => number> = []
+  if (trim.left > 0) planes.push((point) => point.x - leftX)
+  if (trim.right > 0) planes.push((point) => rightX - point.x)
+  if (trim.front > 0) planes.push((point) => frontZ - point.z)
+  if (trim.back > 0) planes.push((point) => point.z - backZ)
+  // The same corner lines as `buildSegmentTrimCutBrushes`, kept on the side
+  // away from the trimmed corner.
+  const diagonal = (a: TrimPlanPoint, b: TrimPlanPoint, outside: TrimPlanPoint) => {
+    const cross = (x: number, z: number) => (b[0] - a[0]) * (z - a[1]) - (b[1] - a[1]) * (x - a[0])
+    const outsideSign = Math.sign(cross(outside[0], outside[1])) || 1
+    planes.push((point) => -outsideSign * cross(point.x, point.z))
+  }
+  if (trim.frontLeftX > 0 && trim.frontLeftZ > 0) {
+    diagonal([leftX + trim.frontLeftX, frontZ], [leftX, frontZ - trim.frontLeftZ], [-1e6, 1e6])
+  }
+  if (trim.frontRightX > 0 && trim.frontRightZ > 0) {
+    diagonal([rightX, frontZ - trim.frontRightZ], [rightX - trim.frontRightX, frontZ], [1e6, 1e6])
+  }
+  if (trim.backLeftX > 0 && trim.backLeftZ > 0) {
+    diagonal([leftX, backZ + trim.backLeftZ], [leftX + trim.backLeftX, backZ], [-1e6, -1e6])
+  }
+  if (trim.backRightX > 0 && trim.backRightZ > 0) {
+    diagonal([rightX - trim.backRightX, backZ], [rightX, backZ + trim.backRightZ], [1e6, -1e6])
+  }
+  return planes
+}
+
+/**
+ * The underside of a segment's deck — the surface a wall beneath the roof
+ * meets — as planar polygons in segment-local space: the upward faces of the
+ * deck-bottom void the brush builder subtracts (`deckBotGeo`), clipped by the
+ * segment trim. A shed built from footprint pieces uses those pieces under its
+ * slope plane. Null when the deck has no planar data here (a banded shed
+ * following an arc, an open conical sector).
+ */
+export function getRoofSegmentUndersidePolygons(node: RoofSegmentNode): THREE.Vector3[][] | null {
+  if (node.roofType === 'shed') {
+    if (isBandedShedSegment(node)) return null
+    const storedPieces = readShedFootprintPieces(node)
+    const pieces =
+      storedPieces.length > 0
+        ? storedPieces
+        : node.managedByParent
+          ? [managedShedFootprint(node)]
+          : []
+    if (pieces.length > 0) {
+      return pieces
+        .map((piece) =>
+          sanitizeRoofPlanPolygon(piece).map(
+            ([x, z]) => new THREE.Vector3(x, getRoofSegmentSurfaceY(node, x, z), z),
+          ),
+        )
+        .filter((polygon) => polygon.length >= 3)
+    }
+  }
+  if (
+    node.roofType === 'conical' &&
+    !hasSegmentTrim(node) &&
+    !getConicalRoofCoverage(node).fullCircle
+  ) {
+    return null
+  }
+
+  const { cosTheta } = getSegmentSlopeFrame(node)
+  const deckExt = node.wallThickness / 2 + node.overhang * cosTheta
+  const faces = getRoofSegmentVolumeFaces(node, {
+    wExt: deckExt,
+    vOffset: 0,
+    baseY: -5,
+    isVoid: true,
+  })
+  let minY = Number.POSITIVE_INFINITY
+  for (const face of faces) for (const point of face) minY = Math.min(minY, point.y)
+  const halfPlanes = getSegmentTrimHalfPlanes(node)
+  const polygons: THREE.Vector3[][] = []
+  const normal = new THREE.Vector3()
+  for (const face of faces) {
+    if (face.length < 3 || face.every((point) => Math.abs(point.y - minY) <= 1e-6)) continue
+    // Newell normal: robust for the planar quads and triangles of a module.
+    normal.set(0, 0, 0)
+    for (let index = 0; index < face.length; index++) {
+      const current = face[index]!
+      const next = face[(index + 1) % face.length]!
+      normal.x += (current.y - next.y) * (current.z + next.z)
+      normal.y += (current.z - next.z) * (current.x + next.x)
+      normal.z += (current.x - next.x) * (current.y + next.y)
+    }
+    const length = normal.length()
+    if (!(length > 1e-9) || Math.abs(normal.y) / length < 0.05) continue
+    let polygon = face
+    for (const side of halfPlanes) {
+      if (polygon.length < 3) break
+      polygon = clipPlanarPolygon(polygon, side)
+    }
+    if (polygon.length >= 3) polygons.push(polygon)
+  }
+  return polygons
+}
+
 export function getRoofSegmentBrushes(
   node: RoofSegmentNode,
   options: { fascia?: boolean } = {},
@@ -1522,11 +1738,6 @@ export function getRoofSegmentBrushes(
   })
 
   const verticalRt = activeRh > 0 ? deckThickness / cosTheta : deckThickness
-  // Gablet inset must track dutchHipWidthRatio so the 3D waist matches both
-  // the 2D floorplan and the slope frame (which derives activeRh from the
-  // same ratio). A hardcoded 0.25 desyncs the gablet from the parameter.
-  const baseI = Math.min(width, depth) * node.dutchHipWidthRatio
-
   const plateSeated = wallHeight <= 0
   const getVol = (
     wExt: number,
@@ -1536,52 +1747,11 @@ export function getRoofSegmentBrushes(
     isVoid: boolean,
     materialRule?: (normal: THREE.Vector3) => number,
     onPlate = false,
-  ) => {
-    const wV = Math.max(0.01, width + 2 * wExt)
-    const dV = Math.max(0.01, depth + 2 * wExt)
-
-    const autoDrop = wExt * tanTheta
-    // Floor every prism at 5 cm so CSG never sees a degenerate volume — by
-    // raising the top, never by sinking the base (the base is the wall top).
-    // One floor for all volumes keeps each cutter level with the shell it carves.
-    // A plate-seated roof (wallHeight 0) is the exception for its sloped deck
-    // volumes: their eave hangs below the plate, and raising it lifted the
-    // whole roof off its walls, so their base sinks instead.
-    const eaveY = wallHeight - autoDrop + vOffset
-    const sinkBase = plateSeated && !onPlate && autoDrop !== 0
-    const whV = sinkBase ? eaveY : Math.max(0.05, eaveY)
-
-    let rhV = activeRh
-    if (activeRh > 0) {
-      rhV = activeRh + autoDrop
-      if (roofType === 'shed') rhV = activeRh + 2 * autoDrop
-    }
-
-    const safeBaseY = sinkBase ? Math.min(baseY, whV - 0.05) : baseY
-
-    let structuralI = baseI
-    if (isVoid) {
-      structuralI += deckThickness
-    }
-
-    const faces = getRoofModuleFaces({
-      type: roofType,
-      w: wV,
-      d: dV,
-      wh: whV,
-      rh: rhV,
-      baseY: safeBaseY,
-      insets: { dutchI: structuralI },
-      baseW: width,
-      baseD: depth,
-      tanTheta,
-      shapeRatios,
-      dutchTopRakeThickness: node.dutchTopRakeThickness,
-      conicalStartAngle: conicalCoverage.startAngle,
-      conicalSweepAngle: conicalCoverage.sweepAngle,
-    }).map((face) => face.map((point) => new THREE.Vector3(point.x, point.y, point.z)))
-    return createGeometryFromFaces(faces, materialRule ?? matIndex)
-  }
+  ) =>
+    createGeometryFromFaces(
+      getRoofSegmentVolumeFaces(node, { wExt, vOffset, baseY, isVoid, onPlate }),
+      materialRule ?? matIndex,
+    )
 
   const wallGeo = getVol(wallThickness / 2, 0, 0, 0, false, undefined, true)
   const innerGeo = getVol(-wallThickness / 2, 0, -5, 2, false, undefined, true)
