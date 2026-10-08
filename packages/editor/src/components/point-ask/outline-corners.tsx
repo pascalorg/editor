@@ -1,12 +1,12 @@
 'use client'
 
-import { prefersReducedMotion } from '@pascal-app/core'
 import { useEffect, useRef } from 'react'
 import { CORNER_SPRING } from '../../lib/point-ask/choreography'
 import { subscribeFrame } from '../../lib/point-ask/frame-loop'
 import { projectBox, unionRect } from '../../lib/point-ask/projector'
 import { SpringPair } from '../../lib/point-ask/spring'
 import { usePointAsk } from '../../store/use-point-ask'
+import { pointMotionCalm } from './optional-motion'
 
 const CORNERS = ['tl', 'tr', 'bl', 'br'] as const
 /** How far outside its place a corner starts when the outline first draws itself. */
@@ -47,7 +47,7 @@ export function OutlineCorners() {
         }
         return
       }
-      const calm = prefersReducedMotion()
+      const calm = pointMotionCalm()
       const first = !shown.current
       shown.current = true
       const points = {

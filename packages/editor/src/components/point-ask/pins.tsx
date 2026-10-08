@@ -1,6 +1,6 @@
 'use client'
 
-import { emitter, prefersReducedMotion, sceneRegistry } from '@pascal-app/core'
+import { emitter, sceneRegistry } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { type PointerEvent, useEffect, useRef, useState } from 'react'
 import { Vector3 } from 'three'
@@ -37,6 +37,7 @@ import {
   undoAsk,
 } from '../../lib/point-ask/session'
 import { type PinRecord, usePointAsk } from '../../store/use-point-ask'
+import { finishOptionalAnimations, pointMotionCalm, usePointMotionCalm } from './optional-motion'
 
 const SETTLED = new Set(['done', 'answered', 'no-change', 'undone'])
 const scratch = new Vector3()
@@ -114,6 +115,22 @@ function PinView({ askId }: { askId: string }) {
   const retire = useRef<ReturnType<typeof setTimeout> | null>(null)
   const prev = useRef<string | null>(null)
   const model = pin?.model
+  const optional = useRef<Animation[]>([])
+  const calm = usePointMotionCalm()
+
+  useEffect(() => {
+    if (!calm) return
+    finishOptionalAnimations(optional.current)
+    state.current.boost = 0
+    state.current.angle = 0
+    arcs.current?.setAttribute('transform', 'rotate(0 12 12)')
+  }, [calm])
+
+  useEffect(() => {
+    return () => {
+      for (const animation of optional.current) animation.cancel()
+    }
+  }, [])
 
   // Follows its element every frame; the arcs speed up with the agent's real progress, not a timer.
   useEffect(() => {
@@ -153,8 +170,13 @@ function PinView({ askId }: { askId: string }) {
       node.style.visibility = levelHidden || away !== null ? 'hidden' : ''
       node.style.transform = `translate3d(${at.x}px,${at.y}px,0)`
       const s = state.current
-      s.boost = Math.max(0, s.boost - 520 * dt)
-      s.angle = (s.angle + (110 + s.boost) * dt) % 360
+      if (pointMotionCalm()) {
+        s.boost = 0
+        s.angle = 0
+      } else {
+        s.boost = Math.max(0, s.boost - 520 * dt)
+        s.angle = (s.angle + (110 + s.boost) * dt) % 360
+      }
       if (
         arcs.current &&
         (record.model.state === 'working' || record.model.state === 'needs-input')
@@ -169,7 +191,7 @@ function PinView({ askId }: { askId: string }) {
     if (!model) return
     const s = state.current
     if (model.landed !== s.landed || (model.sentence ?? '') !== s.sentence) {
-      s.boost = Math.min(420, s.boost + 260)
+      if (!pointMotionCalm()) s.boost = Math.min(420, s.boost + 260)
       s.landed = model.landed
       s.sentence = model.sentence ?? ''
     }
@@ -180,25 +202,29 @@ function PinView({ askId }: { askId: string }) {
     const disc = el.current?.querySelector<HTMLElement>('.pa-pdisc')
     const ring = el.current?.querySelector<HTMLElement>('.pa-ring')
     if (!disc) return
-    if (prefersReducedMotion()) {
+    if (pointMotionCalm()) {
       disc.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180 })
       return
     }
-    disc.animate(
-      [
-        { transform: `translateY(-${PIN_DROP_PX}px)`, opacity: 0 },
-        { transform: 'translateY(0) scale(1.14, .82)', opacity: 1, offset: 0.55 },
-        { transform: 'none', opacity: 1 },
-      ],
-      { duration: PIN_DROP_MS, easing: EASE_OUT },
-    )
-    if (usePointAsk.getState().playful)
-      ring?.animate(
+    optional.current.push(
+      disc.animate(
         [
-          { transform: 'scale(.6)', opacity: 0.7 },
-          { transform: 'scale(2.4)', opacity: 0 },
+          { transform: `translateY(-${PIN_DROP_PX}px)`, opacity: 0 },
+          { transform: 'translateY(0) scale(1.14, .82)', opacity: 1, offset: 0.55 },
+          { transform: 'none', opacity: 1 },
         ],
-        { duration: PIN_RING_MS, delay: PIN_RING_DELAY_MS, easing: EASE_OUT, fill: 'backwards' },
+        { duration: PIN_DROP_MS, easing: EASE_OUT },
+      ),
+    )
+    if (ring)
+      optional.current.push(
+        ring.animate(
+          [
+            { transform: 'scale(.6)', opacity: 0.7 },
+            { transform: 'scale(2.4)', opacity: 0 },
+          ],
+          { duration: PIN_RING_MS, delay: PIN_RING_DELAY_MS, easing: EASE_OUT, fill: 'backwards' },
+        ),
       )
   }, [])
 
@@ -213,36 +239,40 @@ function PinView({ askId }: { askId: string }) {
     prev.current = state2
     const disc = el.current?.querySelector<HTMLElement>('.pa-pdisc')
     if (!disc || before === null) return
-    const calm = prefersReducedMotion()
-    if (state2 === 'done' && !calm) {
-      disc.animate(
-        [
-          { transform: 'scale(1)' },
-          { transform: 'scale(1.18)', offset: 0.4 },
-          { transform: 'scale(1)' },
-        ],
-        {
-          duration: CHECK_PULSE_MS,
-          delay: 100,
-          easing: EASE_OUT,
-        },
+    const quiet = pointMotionCalm()
+    if (state2 === 'done' && !quiet) {
+      optional.current.push(
+        disc.animate(
+          [
+            { transform: 'scale(1)' },
+            { transform: 'scale(1.18)', offset: 0.4 },
+            { transform: 'scale(1)' },
+          ],
+          {
+            duration: CHECK_PULSE_MS,
+            delay: 100,
+            easing: EASE_OUT,
+          },
+        ),
       )
       // One outline flash on the element: 180 ms in, 220 ms out.
       const viewer = useViewer.getState()
       viewer.setPointedIds(model?.targetIds as never)
       setTimeout(() => useViewer.getState().setPointedIds(null), 400)
     }
-    if (state2 === 'error' && !calm) {
-      el.current?.animate(
-        [
-          { translate: '0 0' },
-          { translate: '-6px 0' },
-          { translate: '6px 0' },
-          { translate: '-6px 0' },
-          { translate: '6px 0' },
-          { translate: '0 0' },
-        ],
-        { duration: 360, easing: 'ease-in-out' },
+    if (state2 === 'error' && !quiet && el.current) {
+      optional.current.push(
+        el.current.animate(
+          [
+            { translate: '0 0' },
+            { translate: '-6px 0' },
+            { translate: '6px 0' },
+            { translate: '-6px 0' },
+            { translate: '6px 0' },
+            { translate: '0 0' },
+          ],
+          { duration: 360, easing: 'ease-in-out' },
+        ),
       )
     }
     // The card opens by itself once, for 4 s, when a result lands and the person is idle.
@@ -415,6 +445,11 @@ function PinCard() {
   const comparing = usePointAsk((s) => s.comparing === askId)
   const lastMove = useRef<{ x: number; y: number } | null>(null)
   const carriedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const optional = useRef<Animation[]>([])
+  const calm = usePointMotionCalm()
+  useEffect(() => {
+    if (calm) finishOptionalAnimations(optional.current)
+  }, [calm])
   useEffect(() => {
     const note = (event: globalThis.PointerEvent) => {
       lastMove.current = { x: event.clientX, y: event.clientY }
@@ -459,8 +494,9 @@ function PinCard() {
   useEffect(() => {
     const el = card.current
     if (!(askId && el)) return
-    el.animate(
-      prefersReducedMotion()
+    const quiet = pointMotionCalm()
+    const animation = el.animate(
+      quiet
         ? [{ opacity: 0 }, { opacity: 1 }]
         : [
             { opacity: 0, transform: 'translateY(6px) scale(.96)' },
@@ -468,6 +504,11 @@ function PinCard() {
           ],
       { duration: CARD_MS, easing: EASE_OUT },
     )
+    if (!quiet) optional.current.push(animation)
+    return () => {
+      animation.cancel()
+      optional.current = []
+    }
   }, [askId])
 
   if (!(askId && pin)) return null

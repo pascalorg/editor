@@ -1,14 +1,15 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { CHIP_OFFSET } from '../../lib/point-ask/choreography'
+import { CHIP_OFFSET, DWELL_MS } from '../../lib/point-ask/choreography'
+import { subscribeFrame } from '../../lib/point-ask/frame-loop'
 import { getPointer, subscribePointer } from '../../lib/point-ask/pointer-tracker'
 import { usePointAsk } from '../../store/use-point-ask'
 
 /**
  * The label chip at the cursor: what the click will send, named before the click (the hover is
- * feedforward). It follows the pointer on the frame of the pointer event; the first appearance
- * after entering fades in over 120 ms, later ones are instant (the tooltip rule).
+ * feedforward). It follows the pointer on the frame of the pointer event; the first eligible
+ * appearance waits 120 ms then fades in, and target substitutions are instant (the tooltip rule).
  */
 export function HoverChip() {
   const wrap = useRef<HTMLDivElement>(null)
@@ -17,6 +18,7 @@ export function HoverChip() {
   const active = usePointAsk((s) => s.active)
   const shift = usePointAsk((s) => s.shift)
   const bubbleOpen = usePointAsk((s) => s.bubble !== null)
+  const draggingRegion = usePointAsk((s) => s.region !== null && !s.region.settled)
   const busy = usePointAsk((s) =>
     hover
       ? s.pinOrder.some((id) => {
@@ -42,7 +44,7 @@ export function HoverChip() {
     return subscribePointer(place)
   }, [active])
 
-  const visible = active && hover !== null
+  const visible = active && hover !== null && !draggingRegion
   useEffect(() => {
     const el = label.current
     if (!el) return
@@ -51,10 +53,20 @@ export function HoverChip() {
       el.classList.remove('show')
       return
     }
-    // Instant after the first one; the first fades in with its rise.
-    el.style.transitionDuration = seen.current ? '0ms' : ''
-    el.classList.add('show')
-    seen.current = true
+    if (seen.current) {
+      el.style.transitionDuration = '0ms'
+      el.classList.add('show')
+      return
+    }
+    el.style.transitionDuration = ''
+    const since = performance.now()
+    const stop = subscribeFrame((_dt, now) => {
+      if (now - since < DWELL_MS) return
+      el.classList.add('show')
+      seen.current = true
+      stop()
+    })
+    return stop
   }, [visible])
 
   const plus = shift && bubbleOpen ? '+ ' : ''

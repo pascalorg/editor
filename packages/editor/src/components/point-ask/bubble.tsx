@@ -1,6 +1,6 @@
 'use client'
 
-import { prefersReducedMotion, useScene } from '@pascal-app/core'
+import { useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
@@ -29,6 +29,7 @@ import {
 } from '../../lib/point-ask/suggestions'
 import { pointRoomHasContents } from '../../lib/point-ask/target-scope'
 import { type PointBubble, usePointAsk } from '../../store/use-point-ask'
+import { finishOptionalAnimations, pointMotionCalm, usePointMotionCalm } from './optional-motion'
 
 const ARROW = (
   <svg
@@ -150,6 +151,9 @@ function BubbleView({
   const [listening, setListening] = useState(false)
   const dictation = useRef<Dictation | null>(null)
   const dictationBase = useRef('')
+  const optionalEntrance = useRef<Animation[]>([])
+  const optionalExit = useRef<Animation | null>(null)
+  const calm = usePointMotionCalm()
 
   // Position: beside the target, tracked 1:1 each frame, a side switch gliding on the default spring.
   useEffect(() => {
@@ -183,7 +187,7 @@ function BubbleView({
       )
       p.state = result.state
       if (result.glide) p.glide = true
-      if (p.first || !p.glide || prefersReducedMotion()) {
+      if (p.first || !p.glide || pointMotionCalm()) {
         p.pair.snap(result.pos.x, result.pos.y)
         p.glide = false
       } else {
@@ -226,36 +230,47 @@ function BubbleView({
   useEffect(() => {
     const el = bub.current
     if (!el) return
-    if (prefersReducedMotion()) {
-      el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: ENTER_MS, easing: EASE_OUT })
-      return
+    if (pointMotionCalm()) {
+      const fade = el.animate([{ opacity: 0 }, { opacity: 1 }], {
+        duration: ENTER_MS,
+        easing: EASE_OUT,
+      })
+      return () => fade.cancel()
     }
-    el.animate(
-      springKeyframes(
-        { scale: BUBBLE_OPEN_SCALE, opacity: 0, blur: BUBBLE_OPEN_BLUR_PX },
-        { scale: 1, opacity: 1, blur: 0 },
-        420,
-        {
-          damping: SPRING.damping,
-          response: SPRING.response,
-        },
+    optionalEntrance.current.push(
+      el.animate(
+        springKeyframes(
+          { scale: BUBBLE_OPEN_SCALE, opacity: 0, blur: BUBBLE_OPEN_BLUR_PX },
+          { scale: 1, opacity: 1, blur: 0 },
+          420,
+          {
+            damping: SPRING.damping,
+            response: SPRING.response,
+          },
+        ),
+        { duration: 420, easing: 'linear', fill: 'backwards' },
       ),
-      { duration: 420, easing: 'linear', fill: 'backwards' },
     )
     el.querySelectorAll<HTMLElement>('.pa-sugs .pa-btn').forEach((chip, index) => {
-      chip.animate(
-        [
-          { opacity: 0, transform: 'translateY(4px)' },
-          { opacity: 1, transform: 'none' },
-        ],
-        {
-          duration: ENTER_MS,
-          delay: SUGGESTION_DELAY_MS + index * SUGGESTION_STAGGER_MS,
-          easing: EASE_OUT,
-          fill: 'backwards',
-        },
+      optionalEntrance.current.push(
+        chip.animate(
+          [
+            { opacity: 0, transform: 'translateY(4px)' },
+            { opacity: 1, transform: 'none' },
+          ],
+          {
+            duration: ENTER_MS,
+            delay: SUGGESTION_DELAY_MS + index * SUGGESTION_STAGGER_MS,
+            easing: EASE_OUT,
+            fill: 'backwards',
+          },
+        ),
       )
     })
+    return () => {
+      for (const animation of optionalEntrance.current) animation.cancel()
+      optionalEntrance.current = []
+    }
   }, [])
 
   // Closes back into the tail, faster than it opened; sending folds it toward the pin.
@@ -272,7 +287,8 @@ function BubbleView({
       opacity: 1,
       filter: 'blur(0px)',
     }
-    const keys: Keyframe[] = prefersReducedMotion()
+    const quiet = pointMotionCalm()
+    const keys: Keyframe[] = quiet
       ? [{ opacity: 1 }, { opacity: 0 }]
       : [
           from,
@@ -282,13 +298,31 @@ function BubbleView({
             filter: `blur(${BUBBLE_OPEN_BLUR_PX}px)`,
           },
         ]
-    el.animate(keys, {
+    const animation = el.animate(keys, {
       duration: fold ? ENTER_MS : BUBBLE_CLOSE_MS,
       easing: EASE_OUT,
       fill: 'forwards',
     })
+    optionalExit.current = quiet ? null : animation
     if (wrap.current) wrap.current.style.pointerEvents = 'none'
+    return () => {
+      animation.cancel()
+      optionalExit.current = null
+    }
   }, [exiting, fold])
+
+  useEffect(() => {
+    if (!calm) return
+    finishOptionalAnimations(optionalEntrance.current)
+    if (optionalExit.current && bub.current) {
+      optionalExit.current.cancel()
+      optionalExit.current = null
+      // Keep the existing presence deadline and closed state, not a second exit or a visible reset.
+      bub.current.style.opacity = '0'
+      bub.current.style.transform = 'none'
+      bub.current.style.filter = 'none'
+    }
+  }, [calm])
 
   useEffect(() => {
     return () => dictation.current?.stop()

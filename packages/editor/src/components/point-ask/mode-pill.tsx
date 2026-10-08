@@ -1,10 +1,10 @@
 'use client'
 
-import { prefersReducedMotion } from '@pascal-app/core'
 import { useEffect, useRef } from 'react'
 import { EASE_OUT, ENTER_MS } from '../../lib/point-ask/choreography'
 import { canvasRect, freeViewport } from '../../lib/point-ask/projector'
 import { usePointAsk } from '../../store/use-point-ask'
+import { finishOptionalAnimations, pointMotionCalm, usePointMotionCalm } from './optional-motion'
 
 /** The mode's presence in the viewport: a faint edge tint while it is on. */
 export function ModeVignette() {
@@ -20,7 +20,13 @@ export function ModePill() {
   const active = usePointAsk((s) => s.active)
   const latched = usePointAsk((s) => s.latched)
   const el = useRef<HTMLDivElement>(null)
+  const optional = useRef<Animation[]>([])
+  const calm = usePointMotionCalm()
   const shown = active && latched
+
+  useEffect(() => {
+    if (calm) finishOptionalAnimations(optional.current)
+  }, [calm])
 
   useEffect(() => {
     if (!shown) return
@@ -32,8 +38,9 @@ export function ModePill() {
     }
     place()
     window.addEventListener('resize', place)
-    node.animate(
-      prefersReducedMotion()
+    const quiet = pointMotionCalm()
+    const animation = node.animate(
+      quiet
         ? [{ opacity: 0 }, { opacity: 1 }]
         : [
             { opacity: 0, transform: 'translate(-50%, -8px)' },
@@ -41,7 +48,12 @@ export function ModePill() {
           ],
       { duration: ENTER_MS, easing: EASE_OUT },
     )
-    return () => window.removeEventListener('resize', place)
+    if (!quiet) optional.current.push(animation)
+    return () => {
+      window.removeEventListener('resize', place)
+      animation.cancel()
+      optional.current = []
+    }
   }, [shown])
 
   if (!shown) return null
