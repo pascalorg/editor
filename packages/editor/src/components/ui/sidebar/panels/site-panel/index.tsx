@@ -62,7 +62,11 @@ import {
   metersToLinearUnit,
   squareMetersToAreaUnit,
 } from './../../../../../lib/measurements'
-import { createLocalGuideImage, createLocalScan } from './../../../../../lib/local-guide-image'
+import {
+  createLocalGuideImage,
+  createLocalScan,
+  guideImageErrorMessage,
+} from './../../../../../lib/local-guide-image'
 import { editorHostTreeChildrenRegistry } from './../../../../../lib/host-tree-children'
 import { requestRoomDeletion } from './../../../../../lib/room-structure-commands'
 import {
@@ -583,15 +587,7 @@ const LevelReferences = memo(function LevelReferences({
         useUploadStore.getState().setResult(levelId, guide.url)
         window.setTimeout(() => useUploadStore.getState().clearUpload(levelId), 600)
       } catch (error) {
-        console.error('[guide-image]', error)
-        useUploadStore
-          .getState()
-          .setError(
-            levelId,
-            error instanceof Error && error.message
-              ? `Could not add that guide image: ${error.message}`
-              : 'Could not add that guide image.',
-          )
+        useUploadStore.getState().setError(levelId, guideImageErrorMessage(error))
       }
       return
     }

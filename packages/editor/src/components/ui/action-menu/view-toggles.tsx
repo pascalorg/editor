@@ -13,7 +13,7 @@ import { Check, ChevronDown, Eye, EyeOff, Layers2, Plus, Trash2, Waypoints } fro
 import { useCallback, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { getLevelDisplayName } from '@pascal-app/core'
-import { createLocalGuideImage } from '../../../lib/local-guide-image'
+import { createLocalGuideImage, guideImageErrorMessage } from '../../../lib/local-guide-image'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
 import { useUploadStore } from '../../../store/use-upload'
@@ -120,14 +120,7 @@ function UploadButton({ onError }: { onError: (message: string | null) => void }
           setSelectedReferenceId(guide.id)
           setSelection({ selectedIds: [], zoneId: null })
         } catch (error) {
-          // The reason must survive: this path swallowed a secure-context
-          // TypeError for a whole debugging session.
-          console.error('[guide-image]', error)
-          onError(
-            error instanceof Error && error.message
-              ? `Could not add that guide image: ${error.message}`
-              : 'Could not add that guide image.',
-          )
+          onError(guideImageErrorMessage(error))
         } finally {
           setIsAddingGuide(false)
         }
