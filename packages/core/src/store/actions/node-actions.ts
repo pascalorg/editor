@@ -1,6 +1,7 @@
 import { planWallDeletion } from '../../commands/structure/plan-wall-deletion'
 import type { StructurePlan } from '../../commands/structure/shared'
 import { withoutFloorStepOverrideKeys } from '../../lib/floor-step-finish'
+import { wouldCreateHierarchyCycle } from '../../lib/node-ancestry'
 import { isSpaceDetectionPaused } from '../../lib/space-detection'
 import { nodeRegistry } from '../../registry/registry'
 import { validateNodeRelations } from '../../registry/validate-relations'
@@ -1325,7 +1326,20 @@ const applyNodeChangesActionImpl = (
       const updatedNode = parseUpdatedNode(currentNode, data)
       addLeanToHostRoofId(updatedNode, nextNodes, roofsToRefresh)
 
-      if (data.parentId !== undefined && data.parentId !== currentNode.parentId) {
+      // A move that would make the node its own ancestor is dropped: the rest
+      // of the update still applies. The graph has to stay a tree — a cycle
+      // makes every parent-chain walk non-terminating. Callers that can report
+      // a refusal (apply_patch) check first and never reach this.
+      const cyclicReparent =
+        data.parentId !== undefined &&
+        data.parentId !== currentNode.parentId &&
+        wouldCreateHierarchyCycle(id, data.parentId as AnyNodeId | null, nextNodes)
+
+      if (
+        data.parentId !== undefined &&
+        data.parentId !== currentNode.parentId &&
+        !cyclicReparent
+      ) {
         const oldParentId = currentNode.parentId as AnyNodeId | null
         if (oldParentId && nextNodes[oldParentId]) {
           const oldParent = nextNodes[oldParentId] as AnyContainerNode
@@ -1347,7 +1361,9 @@ const applyNodeChangesActionImpl = (
         }
       }
 
-      nextNodes[id] = updatedNode
+      nextNodes[id] = cyclicReparent
+        ? ({ ...updatedNode, parentId: currentNode.parentId } as AnyNode)
+        : updatedNode
       if (updatedNode.type === 'roof-segment' && shouldRefreshDefaultRidgeVents(data)) {
         for (const ventId of refreshDefaultRidgeVentsForSegment(nextNodes, updatedNode)) {
           nodesToMarkDirty.add(ventId)
@@ -1511,8 +1527,18 @@ const updateNodesActionImpl = (
       const updatedNode = parseUpdatedNode(currentNode, constrainedData)
       addLeanToHostRoofId(updatedNode, nextNodes, roofsToRefresh)
 
-      // Handle Reparenting Logic
-      if (data.parentId !== undefined && data.parentId !== currentNode.parentId) {
+      // Handle Reparenting Logic. A move that would make the node its own
+      // ancestor is dropped (see updateNode): the rest of the update applies.
+      const cyclicReparent =
+        data.parentId !== undefined &&
+        data.parentId !== currentNode.parentId &&
+        wouldCreateHierarchyCycle(id, data.parentId as AnyNodeId | null, nextNodes)
+
+      if (
+        data.parentId !== undefined &&
+        data.parentId !== currentNode.parentId &&
+        !cyclicReparent
+      ) {
         // 1. Remove from old parent
         const oldParentId = currentNode.parentId as AnyNodeId | null
         if (oldParentId && nextNodes[oldParentId]) {
@@ -1548,7 +1574,9 @@ const updateNodesActionImpl = (
       }
 
       // Apply the update
-      nextNodes[id] = updatedNode
+      nextNodes[id] = cyclicReparent
+        ? ({ ...updatedNode, parentId: currentNode.parentId } as AnyNode)
+        : updatedNode
       if (updatedNode.type === 'roof-segment' && shouldRefreshDefaultRidgeVents(data)) {
         for (const ventId of refreshDefaultRidgeVentsForSegment(nextNodes, updatedNode)) {
           extraNodesToUpdate.add(ventId)

@@ -1,21 +1,54 @@
 import type { AnyNode, AnyNodeId } from '../schema'
 
+/**
+ * True when making `newParentId` the parent of `nodeId` would close a loop in
+ * the hierarchy — either because the proposed parent *is* the node, or because
+ * the node is already one of its ancestors.
+ *
+ * The scene graph is a tree: every `parentId` walk has to terminate. Node
+ * schemas cannot prove that (each one only sees itself), so every mutation
+ * that moves a node has to check it here. A cycle is not a cosmetic problem —
+ * `resolveLevelId` is run over every node by `initSpatialGridSync`, so a
+ * persisted cycle hangs the tab on scene load.
+ *
+ * An already-corrupt parent chain above the proposed parent counts as a cycle
+ * too: the `seen` set stops the walk and refuses the move rather than hanging
+ * on the way to deciding.
+ */
+export function wouldCreateHierarchyCycle(
+  nodeId: AnyNodeId,
+  newParentId: AnyNodeId | null | undefined,
+  nodes: Record<string, AnyNode>,
+): boolean {
+  if (!newParentId) return false
+  if (newParentId === nodeId) return true
+  const seen = new Set<string>()
+  let currentId: string | null = newParentId
+  while (currentId) {
+    if (currentId === nodeId) return true
+    if (seen.has(currentId)) return true
+    seen.add(currentId)
+    currentId = (nodes[currentId]?.parentId as string | null | undefined) ?? null
+  }
+  return false
+}
+
 export function resolveLevelId(node: AnyNode, nodes: Record<string, AnyNode>): string {
   // If the node itself is a level
   if (node.type === 'level') return node.id
 
-  // Walk up parent chain to find level
-  // This assumes you track parentId or can derive it
+  // Walk up the parent chain to find the level. Scenes saved before
+  // hierarchy mutations rejected cycles (and imports, migrations and
+  // plugins) can still carry a corrupt chain, so stop on a repeated id
+  // instead of looping forever: this runs for every node on scene load.
   let current: AnyNode | undefined = node
+  const seen = new Set<string>()
 
   while (current) {
     if (current.type === 'level') return current.id
-    // Find parent (you might need to add parentId to your schema or derive it)
-    if (current.parentId) {
-      current = nodes[current.parentId]
-    } else {
-      current = undefined
-    }
+    if (seen.has(current.id)) break
+    seen.add(current.id)
+    current = current.parentId ? nodes[current.parentId] : undefined
   }
 
   return 'default' // fallback for orphaned items

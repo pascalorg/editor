@@ -5,6 +5,7 @@ import {
   planNodeDeletion,
   previewDefaultGutterRefresh,
   validateNodeRelations,
+  wouldCreateHierarchyCycle,
 } from '@pascal-app/core'
 import {
   scriptedFieldRefusal,
@@ -228,6 +229,16 @@ export function assertPatchKeepsIdentity(
           `invalid patch: patches[${index}] create parentId "${patch.parentId}" not found`,
         )
       }
+      if (
+        wouldCreateHierarchyCycle(node.id as AnyNodeId, parentId as AnyNodeId | null, scene.nodes)
+      ) {
+        throw new PatchRefusedError(
+          'invalid_parent',
+          index,
+          node.id,
+          `create cannot put "${node.id}" under ${JSON.stringify(parentId)}: it would make the node its own ancestor.`,
+        )
+      }
       put({ ...node, parentId } as AnyNode)
       const parent = parentId ? at(parentId) : undefined
       if (parent) put(withChild(parent, node.id))
@@ -288,6 +299,16 @@ export function assertPatchKeepsIdentity(
             index,
             patch.id,
             `update cannot move "${patch.id}" under ${JSON.stringify(data.parentId)}: ${newParent ? `a ${newParent.type} holds no children` : 'no such node'}.`,
+          )
+        }
+        if (
+          wouldCreateHierarchyCycle(patch.id as AnyNodeId, newParent.id as AnyNodeId, scene.nodes)
+        ) {
+          throw new PatchRefusedError(
+            'invalid_parent',
+            index,
+            patch.id,
+            `update cannot move "${patch.id}" under "${newParent.id}": "${newParent.id}" is "${patch.id}" itself or one of its descendants, so the move would create a hierarchy cycle.`,
           )
         }
         const before = { ...scene.nodes }

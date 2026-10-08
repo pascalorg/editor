@@ -219,6 +219,7 @@ export {
   remapMeasurementAnchors,
   remapMeasurementReferences,
 } from './lib/measurement-geometry'
+export { wouldCreateHierarchyCycle } from './lib/node-ancestry'
 export { HIDDEN_SITE_NOTE, hidesDescendants } from './lib/node-visibility'
 export {
   cutterContextNodes,
