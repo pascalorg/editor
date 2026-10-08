@@ -8,6 +8,7 @@ import {
   type PointAskStatus,
   type PointCamera,
   resolveLevelId,
+  type SceneCommit,
   type SceneSnapshot,
   sceneRegistry,
   submitPointAsk,
@@ -67,6 +68,7 @@ import {
   regionLabel,
   regionSizeMetres,
 } from './region'
+import { pointCommitEvent } from './scene-commit'
 import type { Rect } from './types'
 
 // Point and ask's session (the owner, 8 October): the mode's entry and exit, what the pointer
@@ -811,18 +813,6 @@ const askMarks = new Map<
   { start: HistoryMark | null; end: HistoryMark | null; undoneSteps: number; undone: boolean }
 >()
 
-function isInTargets(targetIds: readonly string[]) {
-  const nodes = useScene.getState().nodes as Record<string, AnyNode>
-  return (id: string) => {
-    let node: AnyNode | undefined = nodes[id]
-    for (let hops = 0; node && hops < 12; hops++) {
-      if (targetIds.includes(node.id)) return true
-      node = node.parentId ? nodes[node.parentId] : undefined
-    }
-    return false
-  }
-}
-
 /**
  * Sends the bubble's ask: the pin plants on the frame of Enter and the bubble folds into it; the
  * handoff to the chat follows (after the crop, up to 1.5 s), and a refusal brings the bubble back
@@ -1146,18 +1136,12 @@ function onStatus(status: PointAskStatus) {
   }
 }
 
-function onCommit(commit: { changedNodeIds?: ReadonlySet<AnyNodeId> }) {
+function onCommit(commit: SceneCommit) {
   const state = usePointAsk.getState()
-  const changed = commit.changedNodeIds ? [...commit.changedNodeIds] : []
-  if (changed.length === 0) return
   for (const askId of state.pinOrder) {
     const pin = state.pins[askId]
     if (pin?.model.state !== 'working') continue
-    state.dispatchPin(askId, {
-      type: 'commit',
-      changedNodeIds: changed,
-      isInTargets: isInTargets(pin.model.targetIds),
-    })
+    state.dispatchPin(askId, pointCommitEvent(commit, pin.model.targetIds))
   }
 }
 

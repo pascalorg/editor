@@ -25,8 +25,14 @@ export type PinStatus =
 export type PinEvent =
   | { type: 'sent' }
   | { type: 'status'; status: PinStatus }
-  /** A scene commit while the ask works; `isInTargets` says whether a node is a target or inside one. */
-  | { type: 'commit'; changedNodeIds: readonly string[]; isInTargets?: (id: string) => boolean }
+  /** A scene commit while the ask works; `isInTargets` supplies subtree or room membership. */
+  | {
+      type: 'commit'
+      changedNodeIds: readonly string[]
+      isInTargets?: (id: string) => boolean
+      /** A real semantic commit can write materials or collections without changing any node. */
+      committed?: boolean
+    }
   | { type: 'undo' }
   | { type: 'undone'; ok: boolean }
   /** The person brought the undone ask back (Redo, while nothing else was done). */
@@ -52,6 +58,8 @@ export type PinModel = {
   landed: number
   changedTargetIds: string[]
   alsoChangedIds: string[]
+  /** An observed durable scene change, not merely a scene-writing tool being called. */
+  committed: boolean
   ended: boolean
   undone: boolean
   kept: boolean
@@ -66,6 +74,7 @@ export function createPin(init: { askId: string; text: string; targetIds: string
     landed: 0,
     changedTargetIds: [],
     alsoChangedIds: [],
+    committed: false,
     ended: false,
     undone: false,
     kept: false,
@@ -99,10 +108,9 @@ function reduceStatus(pin: PinModel, status: PinStatus): PinModel {
     return { ...rest, state: 'working', turnId, sentence: status.sentence ?? pin.sentence }
   }
   if (!OPEN.includes(pin.state)) return pin
-  const changed = pin.changedTargetIds.length > 0
   let state: PinState
   if (status.outcome === 'errored') state = 'error'
-  else if (changed) state = 'done'
+  else if (pin.committed) state = 'done'
   else if (status.asked) state = 'needs-input'
   else if (status.outcome === 'cancelled') state = 'no-change'
   else if (!status.wroteScene && status.answer) state = 'answered'
@@ -127,19 +135,26 @@ export function reducePin(pin: PinModel, event: PinEvent): PinModel {
     case 'status':
       return reduceStatus(pin, event.status)
     case 'commit': {
-      if (pin.state !== 'working' || event.changedNodeIds.length === 0) return pin
+      if (pin.state !== 'working' || (event.changedNodeIds.length === 0 && !event.committed))
+        return pin
       const isTarget = (id: string) =>
-        pin.targetIds.includes(id) || event.isInTargets?.(id) === true
+        pin.targetIds.includes(id) ||
+        pin.changedTargetIds.includes(id) ||
+        event.isInTargets?.(id) === true
       const hits = event.changedNodeIds.filter(isTarget)
       const others = event.changedNodeIds.filter((id) => !isTarget(id))
       const changedTargetIds = union(pin.changedTargetIds, hits)
-      const alsoChangedIds = union(pin.alsoChangedIds, others)
-      if (hits.length === 0 && alsoChangedIds === pin.alsoChangedIds) return pin
+      const also = union(pin.alsoChangedIds, others)
+      const alsoChangedIds = also.some((id) => changedTargetIds.includes(id))
+        ? also.filter((id) => !changedTargetIds.includes(id))
+        : also
+      if (hits.length === 0 && alsoChangedIds === pin.alsoChangedIds && pin.committed) return pin
       return {
         ...pin,
         landed: hits.length > 0 ? pin.landed + 1 : pin.landed,
         changedTargetIds,
         alsoChangedIds,
+        committed: true,
       }
     }
     case 'undo':
@@ -163,7 +178,14 @@ export function cardTitle(pin: PinModel, fallback = 'Done'): string {
   if (pin.state === 'error' && pin.error) return pin.error
   if (pin.state === 'answered' && pin.answer) return firstLines(pin.answer, 2)
   if (pin.state === 'undone') return 'Undone'
-  return pin.title || fallback
+  if (pin.title) return pin.title
+  if (pin.state === 'done' && pin.committed) {
+    const count = new Set([...pin.changedTargetIds, ...pin.alsoChangedIds]).size
+    return count
+      ? `Pascal changed ${count} element${count === 1 ? '' : 's'}`
+      : 'Pascal updated the scene'
+  }
+  return fallback
 }
 
 /** "Also changed 2 other elements": the objects a prompt names can differ from the ones it changes. */

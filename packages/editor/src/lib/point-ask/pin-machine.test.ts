@@ -10,7 +10,7 @@ import {
 } from './pin-machine'
 
 // The pin keeps the ask's promise in place (spec 2.6-2.8). Written first: a pin that turns to a
-// check for a step that touched nothing it points at; commits counted before the turn started;
+// check for a step that wrote nothing; commits counted before the turn started;
 // a question shown as "no change"; Undo from a state with nothing to undo; a late event undoing a
 // finished pin.
 
@@ -148,6 +148,19 @@ describe('commits while it works', () => {
     expect(pin.alsoChangedIds).toEqual(['wall_9'])
   })
 
+  test('a member moving into scope stops being an also-changed element', () => {
+    const pin = play(
+      working(),
+      commit(['item_3']),
+      commit(['item_3'], () => true),
+      commit(['item_3']),
+    )
+
+    expect(pin.changedTargetIds).toEqual(['item_3'])
+    expect(pin.alsoChangedIds).toEqual([])
+    expect(pin.landed).toBe(2)
+  })
+
   test('an empty commit is nothing', () => {
     expect(play(working(), commit([]))).toEqual(working())
   })
@@ -240,11 +253,30 @@ describe('the turn ends', () => {
     expect(pin.answer).toBe('It is 14.2 m².')
   })
 
-  test('completed that wrote the scene but changed no target is no change', () => {
+  test('completed that changed only other elements is done, with Undo and an honest count', () => {
     const pin = play(working(), commit(['wall_9']), ended({}))
 
-    expect(pin.state).toBe('no-change')
+    expect(pin.state).toBe('done')
+    expect(pin.landed).toBe(0)
     expect(pin.alsoChangedIds).toEqual(['wall_9'])
+    expect(cardTitle(pin)).toBe('Pascal changed 1 element')
+    expect(play(pin, { type: 'undo' }).state).toBe('undone')
+    expect(play(pin, { type: 'undo' }, { type: 'redo' }).state).toBe('done')
+  })
+
+  test('a real material or collection commit is done even without node changes', () => {
+    const pin = play(working(), { type: 'commit', changedNodeIds: [], committed: true }, ended({}))
+
+    expect(pin.state).toBe('done')
+    expect(pin.landed).toBe(0)
+    expect(pin.changedTargetIds).toEqual([])
+    expect(pin.alsoChangedIds).toEqual([])
+    expect(cardTitle(pin)).toBe('Pascal updated the scene')
+    expect(play(pin, { type: 'undo' }).state).toBe('undone')
+  })
+
+  test('calling a writing tool without a durable commit still means no change', () => {
+    expect(play(working(), ended({})).state).toBe('no-change')
   })
 
   test('completed with nothing to say and nothing written is no change', () => {
@@ -282,6 +314,7 @@ describe('the turn ends', () => {
     })
 
     expect(play(working(), commit(['window_1']), cancelled).state).toBe('done')
+    expect(play(working(), commit(['wall_9']), cancelled).state).toBe('done')
     expect(play(working(), cancelled).state).toBe('no-change')
   })
 

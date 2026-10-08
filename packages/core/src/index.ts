@@ -969,6 +969,7 @@ export {
 } from './systems/wall/wall-topology'
 export type { SceneGraph } from './utils/clone-scene-graph'
 export { cloneLevelSubtree, cloneSceneGraph, forkSceneGraph } from './utils/clone-scene-graph'
+export { areSemanticValuesEqual } from './utils/semantic-equal'
 export { isObject } from './utils/types'
 export {
   checkOpeningWithinWall,
