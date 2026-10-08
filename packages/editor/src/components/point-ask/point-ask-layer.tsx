@@ -13,7 +13,7 @@ import { startPointAskSession } from '../../lib/point-ask/session'
 import { usePointAsk } from '../../store/use-point-ask'
 import { PointAskBubble } from './bubble'
 import { HoverChip } from './hover-chip'
-import { ModePill, ModeVignette } from './mode-pill'
+import { BeforeTag, ModePill, ModeVignette } from './mode-pill'
 import { OutlineCorners } from './outline-corners'
 import { PointAskPins } from './pins'
 import { POINT_ASK_CSS } from './point-ask-styles'
@@ -69,6 +69,7 @@ export function PointAskLayer() {
       <PointAskBubble />
       <HoverChip />
       <ModePill />
+      <BeforeTag />
     </div>
   )
 }

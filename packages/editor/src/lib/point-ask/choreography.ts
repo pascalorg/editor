@@ -41,6 +41,10 @@ export const TAP_LATCH_MS = 200
 export const CARD_AUTO_MS = 4000
 export const CARD_CLOSE_DELAY_MS = 400
 export const PIN_RETIRE_MS = 8000
+// A press on a done pin that stays down this long shows the scene as it was before the turn.
+export const PIN_HOLD_MS = 220
+// While held, the pointer may drift this far from where it pressed before the hold ends.
+export const PIN_HOLD_SLOP_PX = 36
 export const THIN_TARGET_PX = 6
 
 // Layout (px).

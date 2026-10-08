@@ -13,6 +13,8 @@ import {
   EASE_OUT,
   PIN_DROP_MS,
   PIN_DROP_PX,
+  PIN_HOLD_MS,
+  PIN_HOLD_SLOP_PX,
   PIN_RETIRE_FADE_MS,
   PIN_RETIRE_MS,
   PIN_RING_DELAY_MS,
@@ -22,7 +24,17 @@ import { edgeMarker } from '../../lib/point-ask/edge-marker'
 import { subscribeFrame } from '../../lib/point-ask/frame-loop'
 import { alsoChangedLine, cardCarriedFromPointer, cardTitle } from '../../lib/point-ask/pin-machine'
 import { canvasRect, freeViewport, projectWorld } from '../../lib/point-ask/projector'
-import { handEditsSince, lookAtAsk, redoAsk, retryAsk, undoAsk } from '../../lib/point-ask/session'
+import {
+  changeMore,
+  endCompare,
+  endCompareWhenPointerDrifts,
+  handEditsSince,
+  lookAtAsk,
+  redoAsk,
+  retryAsk,
+  startCompare,
+  undoAsk,
+} from '../../lib/point-ask/session'
 import { type PinRecord, usePointAsk } from '../../store/use-point-ask'
 
 const SETTLED = new Set(['done', 'answered', 'no-change', 'undone'])
@@ -88,6 +100,12 @@ export function PointAskPins() {
 
 function PinView({ askId }: { askId: string }) {
   const pin = usePointAsk((s) => s.pins[askId])
+  // "Change more" in flight: this pin gives way to the ask that will stand where it stood.
+  const gaveWay = usePointAsk(
+    (s) => Boolean(s.pins[askId]?.supersededBy) || s.bubble?.changesAsk?.askId === askId,
+  )
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const held = useRef(false)
   const el = useRef<HTMLDivElement>(null)
   const marker = useRef<HTMLButtonElement>(null)
   const arcs = useRef<SVGGElement | null>(null)
@@ -269,7 +287,7 @@ function PinView({ askId }: { askId: string }) {
     }
   }, [model?.state, askId, model])
 
-  if (!(pin && model)) return null
+  if (!(pin && model) || gaveWay) return null
   const changes = model.changedTargetIds.length
   const overHere =
     model.state === 'needs-input'
@@ -306,8 +324,40 @@ function PinView({ askId }: { askId: string }) {
       <div
         className={`pa-pin ${model.state === 'sent' ? 'queued' : model.state}`}
         onClick={() => {
+          // The click that ends a hold is not a click on the pin.
+          if (held.current) {
+            held.current = false
+            return
+          }
           emitter.emit('point-ask:pin', { askId, action: 'open' })
           usePointAsk.getState().openCard(askId)
+        }}
+        onLostPointerCapture={() => endCompare()}
+        onPointerCancel={() => {
+          if (holdTimer.current) clearTimeout(holdTimer.current)
+          holdTimer.current = null
+          endCompare()
+        }}
+        onPointerDown={(event) => {
+          held.current = false
+          if (event.button !== 0 || model.state !== 'done') return
+          const target = event.currentTarget
+          const pointerId = event.pointerId
+          const origin = { x: event.clientX, y: event.clientY }
+          // A press that stays down shows the scene as it was before the turn; a click opens the card.
+          holdTimer.current = setTimeout(() => {
+            holdTimer.current = null
+            if (!startCompare(askId)) return
+            held.current = true
+            target.setPointerCapture?.(pointerId)
+            // Capture keeps the release, so leaving the pin is a drift away from where it was pressed.
+            endCompareWhenPointerDrifts(origin, PIN_HOLD_SLOP_PX)
+          }, PIN_HOLD_MS)
+        }}
+        onPointerUp={() => {
+          if (holdTimer.current) clearTimeout(holdTimer.current)
+          holdTimer.current = null
+          endCompare()
         }}
         onPointerEnter={() => {
           hovering.current = true
@@ -316,6 +366,8 @@ function PinView({ askId }: { askId: string }) {
         }}
         onPointerLeave={() => {
           hovering.current = false
+          if (holdTimer.current) clearTimeout(holdTimer.current)
+          holdTimer.current = null
           emitter.emit('point-ask:pin', { askId, action: 'leave' })
           window.setTimeout(() => {
             const s = usePointAsk.getState()
@@ -344,7 +396,7 @@ function PinCard() {
   const card = useRef<HTMLDivElement>(null)
   const [warn, setWarn] = useState(false)
   const [note, setNote] = useState<string | null>(null)
-  const [comparing, setComparing] = useState(false)
+  const comparing = usePointAsk((s) => s.comparing === askId)
   const lastMove = useRef(0)
   useEffect(() => {
     const note = (event: globalThis.PointerEvent) => {
@@ -433,23 +485,21 @@ function PinCard() {
   return (
     <div className="pa-cardwrap" ref={wrap}>
       <div className="pa-card" onPointerEnter={keepOpen} onPointerLeave={leave} ref={card}>
-        <div className="pa-card-t">{title}</div>
+        {model.state === 'done' ? (
+          <div className="pa-card-head">
+            <div className="pa-card-t">{title}</div>
+            {pin.after?.dataUrl || pin.before?.dataUrl ? (
+              <div className="pa-card-thumb" title="After">
+                {/* biome-ignore lint/performance/noImgElement: data URLs the capture just made */}
+                <img alt="After" src={pin.after?.dataUrl ?? pin.before?.dataUrl} />
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="pa-card-t">{title}</div>
+        )}
         {model.state === 'working' || model.state === 'queued' || model.state === 'sent' ? (
           <div className="pa-card-s">“{model.text}”</div>
-        ) : null}
-        {model.state === 'done' && (pin.after?.dataUrl || pin.before?.dataUrl) ? (
-          <div className="pa-card-img">
-            {/* biome-ignore lint/performance/noImgElement: data URLs the capture just made */}
-            <img
-              alt={comparing ? 'Before' : 'After'}
-              src={
-                (comparing ? pin.before?.dataUrl : pin.after?.dataUrl) ??
-                pin.before?.dataUrl ??
-                pin.after?.dataUrl
-              }
-            />
-            <span>{comparing || !pin.after?.dataUrl ? 'Before' : 'After'}</span>
-          </div>
         ) : null}
         {also ? (
           <div
@@ -466,6 +516,30 @@ function PinCard() {
             You've changed the scene since. Undoing also removes those changes.
           </div>
         ) : null}
+        {model.state === 'done' ? (
+          <button
+            aria-pressed={comparing}
+            className={`pa-hold${comparing ? ' on' : ''}`}
+            onKeyDown={(event) => {
+              if (event.repeat || (event.key !== ' ' && event.key !== 'Enter')) return
+              event.preventDefault()
+              startCompare(askId)
+            }}
+            onKeyUp={(event) => {
+              if (event.key === ' ' || event.key === 'Enter') endCompare()
+            }}
+            onPointerCancel={() => endCompare()}
+            onPointerDown={(event) => {
+              if (event.button !== 0) return
+              startCompare(askId)
+            }}
+            onPointerLeave={() => endCompare()}
+            onPointerUp={() => endCompare()}
+            type="button"
+          >
+            {comparing ? 'Showing before' : 'Hold to see before'}
+          </button>
+        ) : null}
         <div className="pa-card-row">
           {model.state === 'done' ? (
             <>
@@ -479,18 +553,15 @@ function PinCard() {
               >
                 Keep
               </button>
-              {pin.before?.dataUrl && pin.after?.dataUrl ? (
-                <button
-                  className="pa-btn ghost"
-                  onPointerCancel={() => setComparing(false)}
-                  onPointerDown={() => setComparing(true)}
-                  onPointerLeave={() => setComparing(false)}
-                  onPointerUp={() => setComparing(false)}
-                  type="button"
-                >
-                  Hold to compare
-                </button>
-              ) : null}
+              <button
+                className="pa-btn"
+                onClick={() => {
+                  changeMore(askId)
+                }}
+                type="button"
+              >
+                Change more
+              </button>
               <button
                 className="pa-btn"
                 onClick={async () => {

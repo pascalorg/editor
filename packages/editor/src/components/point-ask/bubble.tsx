@@ -21,7 +21,12 @@ import { regionLabel } from '../../lib/point-ask/region'
 import { closeBubble, sendBubble } from '../../lib/point-ask/session'
 import { SpringPair } from '../../lib/point-ask/spring'
 import { springKeyframes } from '../../lib/point-ask/spring-keyframes'
-import { kindForTargets, placeholderFor, suggestionsFor } from '../../lib/point-ask/suggestions'
+import {
+  followUpSuggestionsFor,
+  kindForTargets,
+  placeholderFor,
+  suggestionsFor,
+} from '../../lib/point-ask/suggestions'
 import { type PointBubble, usePointAsk } from '../../store/use-point-ask'
 
 const ARROW = (
@@ -332,7 +337,10 @@ function BubbleView({
 
   const targets = bubble.targets
   const kind = kindForTargets(targets, bubble.gesture === 'region')
-  const suggestions = suggestionsFor(kind, {})
+  // Asking again on what a turn just changed offers the next things to try, not the first ones.
+  const suggestions = bubble.changesAsk
+    ? followUpSuggestionsFor(kind, bubble.changesAsk.after)
+    : suggestionsFor(kind, {})
   const empty = bubble.draft.trim() === ''
 
   return (

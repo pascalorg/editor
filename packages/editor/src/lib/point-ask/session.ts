@@ -1,15 +1,18 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  beginScenePreview,
   emitter,
   hasPointAskHandler,
   type NodeEvent,
   type PointAskStatus,
   type PointCamera,
   resolveLevelId,
+  type SceneSnapshot,
   sceneRegistry,
   submitPointAsk,
   subscribeSceneCommits,
+  subscribeScenePreview,
   useScene,
 } from '@pascal-app/core'
 import { sceneViewBounds, sceneViewPose } from '@pascal-app/core/agent-operations'
@@ -41,6 +44,7 @@ import { triggerSFX } from '../sfx-bus'
 import { buildPointContext } from './build-context'
 import { type CapturedCrop, captureViewCrop } from './capture-crop'
 import { CLICK_SLOP_PX, MAX_TARGETS, TAP_LATCH_MS } from './choreography'
+import { createCompare } from './compare'
 import { describeTarget } from './describe-target'
 import {
   createdSince,
@@ -235,6 +239,7 @@ export function enterPointMode(latched: boolean): boolean {
 export function leavePointMode() {
   const state = usePointAsk.getState()
   if (!state.active) return
+  endCompare()
   // Off first: ending the scope below must not find the mode still on and leave it again.
   state.setActive(false)
   cDown = null
@@ -271,8 +276,9 @@ function openBubble(
   targets: BubbleTarget[],
   hit: PointHit,
   gesture: PointBubble['gesture'],
-  down: Down | null,
+  down: Pick<Down, 'crop' | 'capturedAt' | 'camera'> | null,
   area?: PointBubble['area'],
+  changesAsk?: PointBubble['changesAsk'],
 ) {
   const state = usePointAsk.getState()
   const draft = state.bubble?.draft ?? state.drafts[targets[0]?.id ?? area?.ids.join() ?? ''] ?? ''
@@ -289,6 +295,7 @@ function openBubble(
     draft,
     error: null,
     ...(area && frame ? { area, region: regionFractions(area.rect, frame) } : {}),
+    ...(changesAsk ? { changesAsk } : {}),
   }
   state.openBubble(bubble)
   // The bubble's targets keep the point outline while the pointer goes on naming the next pick.
@@ -859,6 +866,9 @@ export async function sendBubble(
   })
   askMarks.set(askId, { start: null, end: null, undoneSteps: 0, undone: false })
   const restore = bubble
+  // "Change more": the earlier pin gives way to this ask's, which now stands where it stood.
+  const changes = bubble.changesAsk?.askId
+  if (changes) state.patchPin(changes, { supersededBy: askId })
   closeBubble('send')
   state.dispatchPin(askId, { type: 'sent' })
 
@@ -917,9 +927,17 @@ export async function sendBubble(
   const submit = { askId, text: words, context, from }
   usePointAsk.getState().patchPin(askId, { submit })
   const result = await submitPointAsk(submit)
-  if (result.ok) return
+  if (result.ok) {
+    if (changes) {
+      usePointAsk.getState().dispatchPin(changes, { type: 'keep' })
+      usePointAsk.getState().removePin(changes)
+      askMarks.delete(changes)
+    }
+    return
+  }
   // The chat did not take it: the pin goes, and the bubble returns with the reason and the words.
   usePointAsk.getState().removePin(askId)
+  if (changes) usePointAsk.getState().patchPin(changes, { supersededBy: undefined })
   askMarks.delete(askId)
   usePointAsk.getState().openBubble({ ...restore, draft: words, error: result.message })
   if (restore.area)
@@ -1020,9 +1038,96 @@ export async function retryAsk(askId: string) {
   }
 }
 
+// ─── the card: change more, and the scene as it was ─────────────────────────
+
+/**
+ * "Change more": the done pin's bubble opens again on the same elements (a fresh view and picture
+ * of them, the field focused, chips that move on) and sends as its own ask. The pin gives way while
+ * the bubble is open, and goes when the new ask is taken.
+ */
+export function changeMore(askId: string): boolean {
+  const state = usePointAsk.getState()
+  const pin = state.pins[askId]
+  if (!pin) return false
+  const targets = pin.model.targetIds
+    .map((id) => targetFor(id))
+    .filter((target): target is BubbleTarget => target !== null)
+    .slice(0, MAX_TARGETS)
+  if (targets.length === 0) return false
+  if (!state.active && !enterPointMode(true)) return false
+  endCompare()
+  if (usePointAsk.getState().bubble) closeBubble('dismiss')
+  state.openCard(null)
+  const rect = unionRect(
+    targets.flatMap((target) => {
+      const projected = target.box ? projectBox(target.box) : null
+      return projected ? [projected] : []
+    }),
+  )
+  const crop = rect
+    ? captureViewCrop(rect).then(
+        (value) => value,
+        () => null,
+      )
+    : Promise.resolve(null)
+  openBubble(
+    targets,
+    { point: pin.anchor, normal: [0, 1, 0] },
+    targets.length > 1 ? 'multi' : 'click',
+    { crop, capturedAt: new Date().toISOString(), camera: currentCamera() },
+    undefined,
+    { askId, after: pin.model.text },
+  )
+  return true
+}
+
+/** The scene as it was before the ask's turn: the state Undo would restore, null once it cannot. */
+function beforeAsk(askId: string): SceneSnapshot | null {
+  const marks = askMarks.get(askId)
+  if (!(marks?.start && usePointAsk.getState().pins[askId]) || marks.undone) return null
+  const past = useScene.temporal.getState().pastStates as unknown as SceneSnapshot[]
+  return stateAfterMark(past, marks.start)
+}
+
+const TURN_IN_FLIGHT = new Set(['sent', 'queued', 'working', 'needs-input'])
+
+const compare = createCompare({
+  before: beforeAsk,
+  turnsWorking: () =>
+    Object.values(usePointAsk.getState().pins).some((pin) => TURN_IN_FLIGHT.has(pin.model.state)),
+  begin: beginScenePreview,
+  onChange: (askId) => usePointAsk.getState().setComparing(askId),
+})
+
+/** Shows the scene as it was before that ask's turn, until `endCompare`. False when it may not. */
+export const startCompare = (askId: string) => compare.start(askId)
+
+/** Lets go: the live scene is back. Idempotent, so every way out can call it. */
+export const endCompare = () => compare.end()
+
+/**
+ * A hold that keeps its release by pointer capture (the pin) cannot see the pointer leave: it ends
+ * when the pointer has drifted `radius` px from where it pressed.
+ */
+export function endCompareWhenPointerDrifts(origin: { x: number; y: number }, radius: number) {
+  const watch = (event: PointerEvent) => {
+    if (Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > radius) endCompare()
+  }
+  const stop = () => {
+    window.removeEventListener('pointermove', watch, true)
+    off()
+  }
+  window.addEventListener('pointermove', watch, true)
+  const off = usePointAsk.subscribe((state) => {
+    if (state.comparing === null) stop()
+  })
+}
+
 // ─── the chat's word on a turn, and the scene's commits ─────────────────────
 
 function onStatus(status: PointAskStatus) {
+  // A turn starting to write while the before is held would be swallowed by it.
+  if (status.status === 'working' || status.status === 'queued') endCompare()
   const state = usePointAsk.getState()
   const pin = state.pins[status.askId]
   if (!pin) return
@@ -1136,6 +1241,26 @@ export function startPointAskSession(): () => void {
   listen('keydown', onKeyDown)
   listen('keyup', onKeyUp)
   listen('blur', onBlur, false)
+  // A hold on the "before" ends on any way out: a key (Cmd+S, Cmd+Z, Delete are not for a preview),
+  // the window or tab losing focus, the page going away.
+  listen('keydown', (event) => {
+    if (!event.repeat) endCompare()
+  })
+  listen('pointerup', endCompare)
+  listen('blur', endCompare, false)
+  listen('pagehide', endCompare, false)
+  listen('pointercancel', endCompare)
+  const onHidden = () => {
+    if (document.hidden) endCompare()
+  }
+  document.addEventListener('visibilitychange', onHidden)
+  offs.push(() => document.removeEventListener('visibilitychange', onHidden))
+  // The scene lets go of a preview itself when something is about to write: the tag follows.
+  offs.push(
+    subscribeScenePreview((previewing) => {
+      if (!previewing) compare.released()
+    }),
+  )
   listen('pointerdown', onPointerDown)
   listen('pointermove', onPointerMove)
   listen('pointerup', onPointerUp)
@@ -1176,6 +1301,7 @@ export function startPointAskSession(): () => void {
     }),
   )
   stopSession = () => {
+    endCompare()
     for (const off of offs) off()
     leavePointMode()
     stopSession = null

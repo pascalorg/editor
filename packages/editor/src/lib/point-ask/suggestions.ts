@@ -90,3 +90,36 @@ export function kindForTargets(targets: readonly PointTarget[], isRegion = false
   if (targets.length > 1) return 'several'
   return (targets[0] as PointTarget).kind
 }
+
+const FOLLOW_UP_CHIPS: Record<PointKind, string[]> = {
+  room: ['Add a rug', 'Change the wall colour', 'Hang something on the walls', 'Add more light'],
+  wall: ['Add a door here', 'Paint this wall', 'Hang something on it', 'Make it thicker'],
+  window: [
+    'Make it taller',
+    'Move it 30 cm along the wall',
+    'Change the sill height',
+    'Add a matching window',
+  ],
+  door: ['Make it wider', 'Move it along the wall', 'Change the colour', 'Add a window beside it'],
+  item: ['Turn it 90°', 'Make it bigger', 'Change its colour', 'Add another one'],
+  roof: ['Add a skylight', 'Make the eaves longer', 'Change the colour', 'Add a chimney'],
+  stair: ['Add a landing', 'Change the treads', 'Move it 50 cm', 'Make the rise lower'],
+  several: ['Make them bigger', 'Change their colour', 'Group them', 'Remove the second one'],
+  area: ['Add something here', 'Clear this space', 'Make it brighter', 'Change the floor here'],
+  other: ['Make it bigger', 'Change the colour', 'Move it 50 cm', 'Duplicate it'],
+}
+
+const plain = (words: string) =>
+  words
+    .trim()
+    .toLowerCase()
+    .replace(/[.!?…]+$/u, '')
+
+/**
+ * Three chips for asking again on what a turn just changed ("Change more"): the next things to
+ * try, never the words that were just sent.
+ */
+export function followUpSuggestionsFor(kind: PointKind, justAsked: string): string[] {
+  const sent = plain(justAsked)
+  return FOLLOW_UP_CHIPS[kind].filter((chip) => plain(chip) !== sent).slice(0, 3)
+}

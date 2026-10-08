@@ -3,7 +3,7 @@
 import { prefersReducedMotion } from '@pascal-app/core'
 import { useEffect, useRef } from 'react'
 import { EASE_OUT, ENTER_MS } from '../../lib/point-ask/choreography'
-import { canvasRect } from '../../lib/point-ask/projector'
+import { canvasRect, freeViewport } from '../../lib/point-ask/projector'
 import { usePointAsk } from '../../store/use-point-ask'
 
 /** The mode's presence in the viewport: a faint edge tint while it is on. */
@@ -48,6 +48,32 @@ export function ModePill() {
   return (
     <div className="pa-pill" ref={el} role="status">
       <b>Point at anything to ask Pascal</b> · Esc to leave
+    </div>
+  )
+}
+
+/** While a compare control is held and the scene shows what it was before the turn: a small tag says so. */
+export function BeforeTag() {
+  const comparing = usePointAsk((s) => s.comparing)
+  const el = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!comparing) return
+    const node = el.current
+    if (!node) return
+    const view = freeViewport()
+    if (view) {
+      node.style.left = `${view.x0}px`
+      node.style.top = `${view.y0 + 8}px`
+    }
+    node.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 120, easing: EASE_OUT })
+  }, [comparing])
+
+  if (!comparing) return null
+  return (
+    <div className="pa-before" ref={el} role="status">
+      <i />
+      Before
     </div>
   )
 }

@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { kindForTargets, kindOf, placeholderFor, suggestionsFor } from './suggestions'
+import {
+  followUpSuggestionsFor,
+  kindForTargets,
+  kindOf,
+  placeholderFor,
+  suggestionsFor,
+} from './suggestions'
 import type { PointTarget } from './types'
 
 // Chosen locally from the kind and the element's state, with no model call, so they are there on
@@ -140,5 +146,41 @@ describe('kindForTargets', () => {
     expect(kindForTargets([target(), target({ id: 'b' })])).toBe('several')
     expect(kindForTargets([])).toBe('area')
     expect(kindForTargets([target()], true)).toBe('area')
+  })
+})
+
+describe('followUpSuggestionsFor', () => {
+  const kinds = [
+    'room',
+    'wall',
+    'window',
+    'door',
+    'item',
+    'roof',
+    'stair',
+    'several',
+    'area',
+    'other',
+  ] as const
+
+  for (const kind of kinds) {
+    test(`${kind}: three fresh chips, none of them what was just asked`, () => {
+      const first = suggestionsFor(kind, {})
+      const chips = followUpSuggestionsFor(kind, first[0] as string)
+
+      expect(chips).toHaveLength(3)
+      expect(new Set(chips).size).toBe(3)
+      expect(chips.map((c) => c.toLowerCase())).not.toContain((first[0] as string).toLowerCase())
+      // "Change more" is not the first bubble again: at most one chip is one it already offered.
+      expect(chips.filter((chip) => first.includes(chip)).length).toBeLessThanOrEqual(1)
+    })
+  }
+
+  test('skips the words just sent, whatever the case or the full stop', () => {
+    const [firstOffered] = followUpSuggestionsFor('window', '')
+    const chips = followUpSuggestionsFor('window', ` ${(firstOffered as string).toUpperCase()}. `)
+
+    expect(chips).toHaveLength(3)
+    expect(chips).not.toContain(firstOffered)
   })
 })

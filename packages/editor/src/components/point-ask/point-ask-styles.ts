@@ -88,10 +88,17 @@ export const POINT_ASK_CSS = `
 .pa-card-t{font-weight:600;font-size:13.5px;line-height:1.3}
 .pa-card-s{margin-top:2px;font-size:12px;color:var(--pa-tx2)}
 .pa-card-a{margin-top:6px;font-size:12px;color:var(--pa-tx2);text-decoration:underline;text-decoration-color:rgba(255,255,255,.2);text-underline-offset:2px;cursor:default}
-.pa-card-img{position:relative;margin:8px 0;height:120px;border-radius:10px;overflow:hidden;background:#0f1013}
-.pa-card-img img{width:100%;height:100%;object-fit:cover;display:block}
-.pa-card-img span{position:absolute;left:8px;bottom:6px;font-weight:600;font-size:11px;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.7)}
 .pa-card-row{display:flex;gap:6px;margin-top:8px}
+.pa-card-head{display:flex;align-items:center;gap:10px}
+.pa-card-head .pa-card-t{flex:1;min-width:0}
+.pa-card-thumb{flex:none;width:64px;height:48px;border-radius:8px;overflow:hidden;background:#0f1013;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.pa-card-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.pa-hold{display:flex;align-items:center;justify-content:center;width:100%;height:28px;margin-top:8px;border-radius:999px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);color:var(--pa-tx2);font-weight:500;font-size:12.5px;touch-action:none;user-select:none;-webkit-user-select:none;transition:background 160ms ease,color 160ms ease,transform 120ms var(--pa-ease)}
+.pa-hold:hover{background:rgba(255,255,255,.06);color:var(--pa-tx)}
+.pa-hold:active,.pa-hold.on{transform:scale(.98)}
+.pa-hold.on{background:var(--pa-accent);color:var(--pa-ink);box-shadow:none}
+.pa-before{position:fixed;display:flex;align-items:center;gap:7px;padding:5px 12px 5px 10px;border-radius:999px;background:rgba(19,20,24,.82);backdrop-filter:blur(14px) saturate(160%);-webkit-backdrop-filter:blur(14px) saturate(160%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.09),0 10px 28px -12px rgba(0,0,0,.7);font-weight:600;color:var(--pa-tx);pointer-events:none}
+.pa-before i{width:7px;height:7px;border-radius:50%;background:var(--pa-warm)}
 .pa-edge{position:absolute;pointer-events:auto}
 @media (prefers-reduced-transparency:reduce){.pa-bub,.pa-card,.pa-pill{background:#1c1d22;backdrop-filter:none;-webkit-backdrop-filter:none}.pa-tail{background:#1c1d22}}
 @media (prefers-contrast:more){.pa-bub,.pa-card{box-shadow:inset 0 0 0 1px rgba(255,255,255,.5)}}

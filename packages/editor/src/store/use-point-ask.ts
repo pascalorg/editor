@@ -69,6 +69,11 @@ export type PointBubble = {
   region?: [number, number, number, number]
   /** Set when the bubble is about a region: it is a view, not a selection, so it has no targets. */
   area?: BubbleArea
+  /**
+   * Set when the bubble asks for more on what a done pin changed ("Change more"): that pin gives
+   * way while the bubble is open and goes when this ask is sent. The chips offer something else.
+   */
+  changesAsk?: { askId: string; after: string }
 }
 
 export type PinRecord = {
@@ -86,6 +91,8 @@ export type PinRecord = {
   retireAt: number | null
   /** What was handed to the chat, kept for "Try again". */
   submit?: PointAskSubmit
+  /** "Change more" was sent from this pin's card: the new ask's pin stands in for it. */
+  supersededBy?: string
   createdAt: number
 }
 
@@ -109,12 +116,15 @@ type PointAskState = {
   cardFor: string | null
   /** The rectangle being dragged or just released. */
   region: RegionState | null
+  /** The ask whose "before" is on screen while a compare control is held, or null. */
+  comparing: string | null
   /** How the last bubble left, so the exit can fold into a pin (send) or just shrink (dismiss). */
   closeKind: 'send' | 'dismiss'
 
   setActive: (active: boolean, latched?: boolean) => void
   setLatched: (latched: boolean) => void
   setRegion: (region: RegionState | null) => void
+  setComparing: (askId: string | null) => void
   setModifiers: (alt: boolean, shift: boolean) => void
   setHover: (hover: PointHover | null) => void
   openBubble: (bubble: PointBubble) => void
@@ -145,6 +155,7 @@ export const usePointAsk = create<PointAskState>((set) => ({
   cardFor: null,
   closeKind: 'dismiss',
   region: null,
+  comparing: null,
 
   setActive: (active, latched = false) =>
     set((state) =>
@@ -156,6 +167,8 @@ export const usePointAsk = create<PointAskState>((set) => ({
     ),
   setLatched: (latched) => set((state) => (state.latched === latched ? state : { latched })),
   setRegion: (region) => set((state) => (state.region === region ? state : { region })),
+  setComparing: (comparing) =>
+    set((state) => (state.comparing === comparing ? state : { comparing })),
   setModifiers: (alt, shift) =>
     set((state) => (state.alt === alt && state.shift === shift ? state : { alt, shift })),
   setHover: (hover) =>
