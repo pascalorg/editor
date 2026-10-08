@@ -9,6 +9,7 @@ import { ItemNode } from '../schema/nodes/item'
 import { LevelNode } from '../schema/nodes/level'
 import { SlabNode } from '../schema/nodes/slab'
 import { WallNode } from '../schema/nodes/wall'
+import { WindowNode } from '../schema/nodes/window'
 import { SceneMaterial, type SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { migrateCeilingRoomLinks, migrateRoomZones } from '../utils/room-zone-migration'
@@ -28,7 +29,9 @@ import useScene, {
   applySceneOperationPatch,
   applyScenePatch,
   applySceneSnapshot,
+  beginSceneHistoryDraft,
   clearSceneHistory,
+  getSceneDocument,
   type SceneOperationPatch,
 } from './use-scene'
 
@@ -232,6 +235,52 @@ describe('scene commit boundary', () => {
     useScene.temporal.getState().redo()
     expect(useScene.getState().nodes[draftLevel.id]).toBeDefined()
     expect(useScene.getState().nodes[draftWall.id]).toBeDefined()
+  })
+
+  test('saves leave out only the drafts an interaction owns, never a node by its metadata', () => {
+    expect(getSceneDocument().nodes).toBe(useScene.getState().nodes)
+    // A preset tile clones its subtree into the level before any click (place-preset).
+    const presetDraft = WindowNode.parse({
+      id: 'window_preset_draft',
+      parentId: LEVEL_ID,
+      metadata: { isNew: true, presetId: 'item_window_preset' },
+    })
+    // A draw tool's draft is registered as a created carry draft instead.
+    const toolDraft = ItemNode.parse({
+      id: 'item_tool_draft',
+      parentId: LEVEL_ID,
+      metadata: { isTransient: true },
+      asset: { id: 'chair', name: 'Chair', category: 'seating', thumbnail: '', src: '/chair.glb' },
+    })
+    // Some movers commit a duplicate in place and leave its `isNew` flag on: it is the user's.
+    const placedDuplicate = WallNode.parse({
+      id: 'wall_placed_duplicate',
+      parentId: LEVEL_ID,
+      start: [0, 0],
+      end: [4, 0],
+      metadata: { isNew: true },
+    })
+    useScene.getState().createNode(placedDuplicate, LEVEL_ID)
+    useScene.getState().createNode(presetDraft, LEVEL_ID)
+    pauseSceneHistory(useScene)
+    useScene.getState().createNode(toolDraft, LEVEL_ID)
+    const endToolDraft = beginSceneHistoryDraft(toolDraft.id, null)
+
+    const armed = getSceneDocument([presetDraft.id])
+    expect(armed.nodes[presetDraft.id]).toBeUndefined()
+    expect(armed.nodes[toolDraft.id]).toBeUndefined()
+    expect(armed.nodes[placedDuplicate.id]).toBeDefined()
+    expect((armed.nodes[LEVEL_ID] as { children: string[] }).children).toEqual([placedDuplicate.id])
+    expect(useScene.getState().nodes[presetDraft.id]).toBeDefined()
+
+    useScene.getState().deleteNode(toolDraft.id)
+    endToolDraft()
+    resumeSceneHistory(useScene)
+    useScene.getState().updateNode(presetDraft.id, { metadata: { presetId: 'item_window_preset' } })
+
+    const placed = Object.values(getSceneDocument().nodes).filter((node) => node.type === 'window')
+    expect(placed.map((node) => node.id)).toEqual([presetDraft.id])
+    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
   })
 
   test('coalesces a compound transaction into one commit and one undo step', () => {

@@ -95,6 +95,22 @@ function sceneWithVisibleAndHiddenBoxes(): {
 }
 
 describe('prepareSceneForExport', () => {
+  test.each([
+    true,
+    false,
+  ])('omits registered draft geometry absent from the saved document (onlyVisible=%s)', (onlyVisible) => {
+    const { root, nodes } = sceneWithVisibleAndHiddenBoxes()
+    const draft = sceneRegistry.nodes.get('item_hidden')!
+    draft.name = 'Unplaced preview'
+    nodes.item_hidden!.visible = true
+    delete nodes.item_hidden
+
+    const result = prepareSceneForExport(root, nodes, { onlyVisible })
+    expect(result.scene.getObjectByName('Unplaced preview')).toBeUndefined()
+    expect(result.scene.children).toHaveLength(1)
+    expect(root.getObjectByName('Unplaced preview')).toBe(draft)
+  })
+
   test('skips a refused subtree and reports its warning while exporting other objects', () => {
     const root = new THREE.Group()
     const refused = new THREE.Group()

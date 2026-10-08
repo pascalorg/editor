@@ -2,7 +2,7 @@
 
 import { useScene } from '@pascal-app/core'
 import { useCallback, useEffect, useRef } from 'react'
-import { type SceneGraph, saveSceneToLocalStorage } from '../lib/scene'
+import { getSavedSceneDocument, type SceneGraph, saveSceneToLocalStorage } from '../lib/scene'
 
 const AUTOSAVE_DEBOUNCE_MS = 1000
 const STRUCTURAL_NODE_COUNT = 4
@@ -170,7 +170,8 @@ export function useAutoSave({
         return
       }
 
-      const { nodes, rootNodeIds, collections, materials, installedPlugins } = useScene.getState()
+      const { nodes, rootNodeIds, collections, materials, installedPlugins } =
+        getSavedSceneDocument()
       const sceneGraph = {
         nodes,
         rootNodeIds,
@@ -278,7 +279,8 @@ export function useAutoSave({
     // would otherwise drop the change entirely. `pagehide` fires in cases
     // (mobile Safari, bfcache) where `beforeunload` does not.
     function flushOnExit() {
-      const { nodes, rootNodeIds, collections, materials, installedPlugins } = useScene.getState()
+      const { nodes, rootNodeIds, collections, materials, installedPlugins } =
+        getSavedSceneDocument()
       const currentNodeCount = Object.keys(nodes).length
       const previousNodeCount = storedNodeCount.count
       const decision = decideExitFlush({

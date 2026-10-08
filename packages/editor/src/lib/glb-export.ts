@@ -482,7 +482,10 @@ function startSceneExportPreparation(
 
   for (const [id, original] of registryEntries) {
     const node = nodes[id]
-    if (!node) continue
+    if (!node) {
+      excludedObjects.add(original)
+      continue
+    }
     const installedPlugins = sceneState.hasExplicitPluginInstallState
       ? sceneState.installedPlugins
       : undefined
