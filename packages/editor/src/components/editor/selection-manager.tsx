@@ -113,6 +113,7 @@ import { sameRoom } from '../../lib/room-selection'
 import { selectRoom, shouldInterceptRoom } from '../../lib/room-selection-commands'
 import { roomKeyForZone } from '../../lib/room-zone-routing'
 import {
+  emitCanvasNodeSelection,
   enterBuildingFromCanvas,
   resolveCanvasBuildingId,
   resolveCanvasSelectionNode,
@@ -1891,6 +1892,7 @@ export const SelectionManager = () => {
           modifierKeysRef.current,
           selectedIdsBeforeRouting,
         )
+        emitCanvasNodeSelection(nodeToSelect)
 
         let nextMaterialTargetHandled = false
 

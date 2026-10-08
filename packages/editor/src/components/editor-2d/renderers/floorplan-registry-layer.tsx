@@ -100,7 +100,7 @@ import { runFloorplanWallPush, WALL_PUSH_AFFORDANCE } from '../../../lib/room-ha
 import { selectRoom, selectRoomFromHit } from '../../../lib/room-selection-commands'
 import { clickZoneArea, hoverZoneArea } from '../../../lib/room-zone-routing'
 import {
-  deleteNodeFromCanvas,
+  emitCanvasNodeSelection,
   enterBuildingFromPlanHit,
   resolveCanvasBuildingId,
 } from '../../../lib/selection-routing'
@@ -736,13 +736,9 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         nextSelectedIds = expanded && expanded.length > 1 ? expanded : [id]
       }
       setSelection({ selectedIds: nextSelectedIds })
-      if (
-        useEditor.getState().mode === 'delete' &&
-        nextSelectedIds.length === 1 &&
-        nextSelectedIds[0] === id
-      ) {
+      if (nextSelectedIds.length === 1 && nextSelectedIds[0] === id) {
         const node = useScene.getState().nodes[id]
-        if (node) deleteNodeFromCanvas(node)
+        if (node) emitCanvasNodeSelection(node)
       }
       // Setting selection re-renders the entry — the overlay pass mounts
       // (endpoint handles, etc.), reshuffling DOM under the cursor between

@@ -2,6 +2,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   type BuildingNode,
+  emitter,
   nodeRegistry,
   resolveSelectionProxyId,
   useScene,
@@ -51,6 +52,19 @@ export type SelectionModifierKeys = {
 }
 
 /** A Delete-mode click on a plan entry: the sledgehammer, not a selection. */
+/**
+ * A canvas click (2D or 3D) selected `node`: publish it on
+ * `selection:canvas-node-click`, which plugins listen for. In Delete mode the
+ * click deletes the node instead.
+ */
+export function emitCanvasNodeSelection(node: AnyNode): void {
+  if (useEditor.getState().mode === 'delete') {
+    deleteNodeFromCanvas(node)
+    return
+  }
+  emitter.emit('selection:canvas-node-click', node)
+}
+
 export function deleteNodeFromCanvas(node: AnyNode): void {
   const scene = useScene.getState()
   if (scene.readOnly) return

@@ -1,10 +1,18 @@
 import { describe, expect, test } from 'bun:test'
-import { type AnyNode, BlockNode, nodeRegistry, registerNode, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  BlockNode,
+  emitter,
+  nodeRegistry,
+  registerNode,
+  useScene,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { z } from 'zod'
 import useEditor from '../store/use-editor'
 import {
   deleteNodeFromCanvas,
+  emitCanvasNodeSelection,
   enterBuildingFromCanvas,
   enterBuildingFromPlanHit,
   resolveCanvasBuildingId,
@@ -152,6 +160,44 @@ describe('resolveSelectedIdsForNodeClick', () => {
         expandIdsForNode: () => ['item_2', 'item_1'],
       }),
     ).toEqual(['item_2', 'item_1'])
+  })
+})
+
+describe('emitCanvasNodeSelection', () => {
+  // Plugins (the WebXR plugin) listen for canvas selections on this event.
+  test('a canvas node click publishes the node once', () => {
+    const node = { id: 'wall_1', type: 'wall' } as unknown as AnyNode
+    const received: AnyNode[] = []
+    const onSelection = (selectedNode: AnyNode) => received.push(selectedNode)
+    emitter.on('selection:canvas-node-click', onSelection)
+    try {
+      emitCanvasNodeSelection(node)
+    } finally {
+      emitter.off('selection:canvas-node-click', onSelection)
+    }
+    expect(received).toEqual([node])
+  })
+
+  test('in Delete mode the click deletes the node and publishes nothing', () => {
+    const node = BlockNode.parse({ id: 'block_canvas-delete-target' })
+    const previousToolMode = useEditor.getState().toolMode
+    const previousScene = useScene.getState()
+    const previousSelection = useViewer.getState().selection
+    const received: AnyNode[] = []
+    const onSelection = (selectedNode: AnyNode) => received.push(selectedNode)
+    emitter.on('selection:canvas-node-click', onSelection)
+    try {
+      useEditor.getState().armToolMode({ mode: 'delete' })
+      useScene.setState({ nodes: { [node.id]: node }, rootNodeIds: [node.id], readOnly: false })
+      emitCanvasNodeSelection(node)
+      expect(useScene.getState().nodes[node.id]).toBeUndefined()
+      expect(received).toEqual([])
+    } finally {
+      emitter.off('selection:canvas-node-click', onSelection)
+      useEditor.getState().armToolMode(previousToolMode)
+      useScene.setState(previousScene)
+      useViewer.setState({ selection: previousSelection })
+    }
   })
 })
 
