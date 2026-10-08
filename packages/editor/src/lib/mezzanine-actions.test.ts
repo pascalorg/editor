@@ -10,6 +10,8 @@ import {
   initSpaceDetectionSync,
   LevelNode,
   type Point,
+  type StairNode,
+  syncAutoStairOpenings,
   useScene,
   type ZoneNode,
 } from '@pascal-app/core'
@@ -291,7 +293,7 @@ describe('pushing a mezzanine edge', () => {
 
 describe('adding stairs', () => {
   test('places one stair up to the mezzanine and selects it, in one step', () => {
-    const result = addMezzanineStairs(mezzanineId)
+    const result = addMezzanineStairs(mezzanineId, 'outside')
     expect(result.ok).toBe(true)
     const stairId = (result as { stairId: string }).stairId
     expect(nodes()[stairId as AnyNodeId]?.type).toBe('stair')
@@ -334,9 +336,42 @@ describe('adding stairs', () => {
       } as never,
     )
     clearSceneHistory()
-    const result = addMezzanineStairs(mezzanineId)
-    expect(result).toEqual({ ok: false, message: MEZZANINE_NO_STAIR_MESSAGE })
+    for (const placement of ['outside', 'inside'] as const) {
+      const result = addMezzanineStairs(mezzanineId, placement)
+      expect(result).toEqual({ ok: false, message: MEZZANINE_NO_STAIR_MESSAGE })
+    }
     expect(Object.values(nodes()).some((node) => node.type === 'stair')).toBe(false)
     expect(history()).toBe(0)
+  })
+
+  test('inside, the flight climbs through its own deck in one step, keeping the host ceiling whole', () => {
+    // Deep enough for a flight plus a landing, with free floor west of it.
+    useScene.getState().updateNode(
+      mezzanineId as AnyNodeId,
+      {
+        polygon: [
+          [1.5, 1],
+          [7, 1],
+          [7, 4],
+          [1.5, 4],
+        ],
+      } as never,
+    )
+    clearSceneHistory()
+    const result = addMezzanineStairs(mezzanineId, 'inside')
+    expect(result.ok).toBe(true)
+    const stairId = (result as { stairId: string }).stairId
+    const stair = nodes()[stairId as AnyNodeId] as StairNode
+    const deck = Object.values(nodes()).find(
+      (node) => node.type === 'slab' && node.support === 'open',
+    )!
+    expect(stair).toMatchObject({ deckSlabId: deck.id, slabOpeningMode: 'destination' })
+    expect(stair.position[0]).toBeCloseTo(1.5)
+    expect(useViewer.getState().selection.selectedIds).toEqual([stairId])
+    expect(history()).toBe(1)
+    const cut = syncAutoStairOpenings(nodes()).map((update) => update.id)
+    expect(cut).toEqual([deck.id])
+    expect(runHistoryShortcut('undo')).toBe(true)
+    expect(nodes()[stairId as AnyNodeId]).toBeUndefined()
   })
 })
