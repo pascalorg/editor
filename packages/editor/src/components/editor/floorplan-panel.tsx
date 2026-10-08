@@ -10,6 +10,7 @@ import {
   type ColumnNode,
   calculateLevelMiters,
   columnIBeamOutline,
+  columnPlanLeanOffset,
   createSizedStairFlight,
   DEFAULT_ANGLE_STEP,
   type DoorNode,
@@ -46,6 +47,7 @@ import {
   sceneRegistry,
   snapPointAlongAngleRay,
   spatialGridManager,
+  sweptPlanFootprint,
   terrainSupportLift,
   useInteractive,
   useLiveNodeOverrides,
@@ -5637,7 +5639,10 @@ export function FloorplanPanel({
     })
 
     const columnEntries = referenceColumns.flatMap((column) => {
-      const polygon = getColumnPlanFootprint(column)
+      const polygon = sweptPlanFootprint(
+        getColumnPlanFootprint(column).map(({ x, y }): [number, number] => [x, y]),
+        columnPlanLeanOffset(column, column.height),
+      ).map(([x, y]) => ({ x, y }))
       if (polygon.length < 3) {
         return []
       }

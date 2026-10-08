@@ -2,6 +2,7 @@
 
 import {
   type AnyNode,
+  COLUMN_MAX_TILT,
   COLUMN_PRESETS,
   type ColumnNode,
   type ColumnPresetId,
@@ -40,6 +41,8 @@ const MANAGED_LEAN_TO_LAYOUT_FIELDS = new Set<keyof ColumnNode>([
   'baseWidthScale',
   'baseDepthScale',
   'slots',
+  'tiltX',
+  'tiltZ',
 ])
 
 const COLUMN_PRESET_OPTIONS = Object.entries(COLUMN_PRESETS).map(([value, preset]) => ({
@@ -1173,6 +1176,20 @@ export default function ColumnPanel() {
           unit="°"
           value={Math.round((node.rotation * 180) / Math.PI)}
         />
+        {!managedByLeanTo &&
+          (['tiltX', 'tiltZ'] as const).map((key) => (
+            <SliderControl
+              key={key}
+              label={key === 'tiltX' ? 'Tilt X' : 'Tilt Z'}
+              max={Math.round((COLUMN_MAX_TILT * 180) / Math.PI)}
+              min={-Math.round((COLUMN_MAX_TILT * 180) / Math.PI)}
+              onChange={(value) => handleUpdate({ [key]: (value * Math.PI) / 180 })}
+              precision={0}
+              step={1}
+              unit="°"
+              value={Math.round(((node[key] ?? 0) * 180) / Math.PI)}
+            />
+          ))}
       </PanelSection>
 
       <PanelSection title="Actions">

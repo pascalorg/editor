@@ -4,6 +4,7 @@ import {
   BlockNode,
   BuildingNode,
   CeilingNode,
+  COLUMN_MAX_TILT,
   type Collection,
   ColumnNode,
   containsPoint,
@@ -2350,6 +2351,7 @@ export async function convertIfcToPascal(
       let height: number | undefined
       let profileShape: 'round' | 'rectangular' | 'i-beam' | null = null
       let profileRadius: number | undefined
+      let tilt: { tiltX: number; tiltZ: number } | undefined
 
       try {
         const worldMat = col.ObjectPlacement?.value
@@ -2360,6 +2362,14 @@ export async function convertIfcToPascal(
 
         const body = getBodyExtrusionData(ifcApi, modelID, col)
         if (body.depth) height = body.depth * unitFactor
+        // An oblique extrusion is a leaning column: its depth runs along the lean.
+        const [dx = 0, dy = 0, dz = 1] = body.direction ?? []
+        if (height !== undefined && dz > 0 && (dx || dy)) {
+          height *= dz / Math.hypot(dx, dy, dz)
+          const lean = (ratio: number) =>
+            Math.max(-COLUMN_MAX_TILT, Math.min(COLUMN_MAX_TILT, Math.atan(ratio)))
+          tilt = { tiltX: lean(-dy / dz), tiltZ: lean(-dx / dz) }
+        }
         if (opts.swapProfileDimensions) {
           if (body.yDim) width = body.yDim * unitFactor
           if (body.xDim) depth = body.xDim * unitFactor
@@ -2400,6 +2410,7 @@ export async function convertIfcToPascal(
         depth,
         height,
         crossSection: profileShape === 'i-beam' ? 'i-beam' : isRect ? 'rectangular' : 'round',
+        ...tilt,
         radius: profileRadius ?? Math.max(width ?? 0.44, depth ?? 0.44) / 2,
         style: 'plain',
         shaftProfile: 'straight',

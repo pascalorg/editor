@@ -26,3 +26,15 @@ test('add_column creates an i-beam column', () => {
   expect(column.depth).toBe(0.4)
   expect(column.position).toEqual([1, 0, 2])
 })
+
+test('add_column takes tilt in degrees and stores radians', () => {
+  const column = created(
+    addColumn(nodes, input.parse({ x: 0, z: 0, tiltX: 10, tiltZ: '-5°' }), context),
+  )
+  expect(column.tiltX).toBeCloseTo((10 * Math.PI) / 180, 12)
+  expect(column.tiltZ).toBeCloseTo((-5 * Math.PI) / 180, 12)
+  expect(() => input.parse({ x: 0, z: 0, tiltX: 50 })).toThrow()
+
+  const upright = created(addColumn(nodes, input.parse({ x: 0, z: 0 }), context))
+  expect('tiltX' in upright || 'tiltZ' in upright).toBe(false)
+})

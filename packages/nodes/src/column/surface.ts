@@ -1,6 +1,7 @@
 import {
   type ColumnNode,
   columnIBeamOutline,
+  columnLean,
   type DeclaredHostSurface,
   hitDerivedSurfaceProvider,
   type SurfaceProvider,
@@ -26,10 +27,11 @@ function roundRegion(radius: number, segments: number, yaw = 0): SurfaceRegion {
 }
 
 export function columnTopSurfaces(node: ColumnNode): DeclaredHostSurface[] {
+  const [leanX, leanZ] = columnLean(node)
   if (node.source)
     return node.source.manifest.surfaces.map((surface, i) => ({
       id: `top:${i}`,
-      position: [0, surface.y, 0],
+      position: [leanX * surface.y, surface.y, leanZ * surface.y],
       normal: [0, 1, 0],
       region: { kind: 'polygon', points: surface.polygon },
     }))
@@ -83,7 +85,8 @@ export function columnTopSurfaces(node: ColumnNode): DeclaredHostSurface[] {
       }
     } else region = roundRegion(node.radius * scale, getSegments(node), yaw)
   }
-  return [{ id: 'top', position: [0, y, 0], normal: [0, 1, 0], region }]
+  // The lean shears the column, so its top stays level and only slides over.
+  return [{ id: 'top', position: [leanX * y, y, leanZ * y], normal: [0, 1, 0], region }]
 }
 
 export const columnSurfaceProvider: SurfaceProvider = {

@@ -178,13 +178,22 @@ export class IfcModel {
     return this.step.add('IFCCIRCLEPROFILEDEF', enumValue('AREA'), null, position, radius)
   }
 
-  /** Vertical prism of `profile`, from local z = `bottom` upwards by `depth`. */
-  extrusion(profile: StepRef, bottom: number, depth: number, color?: IfcColor): StepRef {
+  /**
+   * Prism of `profile` from local z = `bottom`, `depth` along `direction`:
+   * upright by default, oblique for a leaning element.
+   */
+  extrusion(
+    profile: StepRef,
+    bottom: number,
+    depth: number,
+    color?: IfcColor,
+    direction: Vec3 = [0, 0, 1],
+  ): StepRef {
     const solid = this.step.add(
       'IFCEXTRUDEDAREASOLID',
       profile,
       this.axis2Placement3D({ origin: [0, 0, bottom], angle: 0 }),
-      this.direction([0, 0, 1]),
+      this.direction(direction),
       depth,
     )
     if (color) this.styleItem(solid, color)

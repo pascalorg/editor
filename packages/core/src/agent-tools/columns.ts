@@ -33,6 +33,18 @@ export const addColumnTool = {
     rotation: measurement('angle', 'deg', {
       description: 'Y-axis rotation (default: 0).',
     }).optional(),
+    tiltX: measurement('angle', 'deg', {
+      min: -45,
+      max: 45,
+      description:
+        'Lean about the column X axis, tipping the top toward its +Z (default: 0). The base stays planted and the top stays level.',
+    }).optional(),
+    tiltZ: measurement('angle', 'deg', {
+      min: -45,
+      max: 45,
+      description:
+        'Lean about the column Z axis, tipping the top toward its -X (default: 0). The base stays planted and the top stays level.',
+    }).optional(),
     style: z
       .enum(['plain', 'faceted', 'fluted', 'lathe-turned', 'dravidian-carved', 'cluster'])
       .optional()

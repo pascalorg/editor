@@ -443,6 +443,38 @@ describe('IFC export — i-beam columns', () => {
   })
 })
 
+describe('IFC export — leaning columns', () => {
+  const level = LevelNode.parse({ id: 'level_lean', name: 'Lean', height: 3 })
+  const leaning = ColumnNode.parse({
+    id: 'column_lean',
+    name: 'Leaning column',
+    parentId: level.id,
+    position: [0, 0, 0],
+    crossSection: 'rectangular',
+    width: 0.3,
+    depth: 0.3,
+    height: 2.5,
+    tiltX: 0.2,
+    tiltZ: -0.1,
+    style: 'plain',
+    baseStyle: 'none',
+    capitalStyle: 'none',
+    shaftProfile: 'straight',
+  })
+  const ifc = exportSceneToIfc({
+    nodes: { [level.id]: { ...level, children: [leaning.id] } as AnyNode, [leaning.id]: leaning },
+    timestamp: EPOCH,
+  })
+
+  test('exports the lean as an oblique extrusion and reads it back', async () => {
+    expectWellFormedStep(ifc)
+    const [column] = nodesOf<ColumnNode>(await reimport(ifc), 'column')
+    expect(column?.height).toBeCloseTo(2.5, MM)
+    expect(column?.tiltX).toBeCloseTo(0.2, MM)
+    expect(column?.tiltZ).toBeCloseTo(-0.1, MM)
+  })
+})
+
 describe('IFC export — sample house round trip', () => {
   let first: PascalSceneGraph
   let second: PascalSceneGraph

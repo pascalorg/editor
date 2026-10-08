@@ -129,7 +129,13 @@ export {
   computeCeilingSurfaceCells,
   parseCeilingRegionRole,
 } from './lib/ceiling-surface'
-export { columnIBeamOutline, columnIBeamSection } from './lib/column-geometry'
+export {
+  columnIBeamOutline,
+  columnIBeamSection,
+  columnLean,
+  columnPlanLeanOffset,
+  sweptPlanFootprint,
+} from './lib/column-geometry'
 export { isCutterName, resolveCutterHost } from './lib/cutter-host'
 export {
   clampDoorOperationState,

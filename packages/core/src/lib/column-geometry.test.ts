@@ -1,5 +1,11 @@
 import { expect, test } from 'bun:test'
-import { columnIBeamOutline, columnIBeamSection } from './column-geometry'
+import {
+  columnIBeamOutline,
+  columnIBeamSection,
+  columnLean,
+  columnPlanLeanOffset,
+  sweptPlanFootprint,
+} from './column-geometry'
 
 test('i-beam plates scale with the section and keep a minimum thickness', () => {
   expect(columnIBeamSection(0.3, 0.4)).toEqual({
@@ -29,4 +35,32 @@ test('i-beam outline spans the section with a web narrower than the flanges', ()
       }, 0),
     ) / 2
   expect(area).toBeCloseTo(2 * 0.3 * 0.04 + 0.03 * 0.32, 9)
+})
+
+test('a leaning column shears its section by height, in the yawed plan frame', () => {
+  const tilt = Math.PI / 8
+  expect(columnLean({ tiltX: tilt })).toEqual([0, expect.closeTo(Math.tan(tilt), 12)])
+  expect(columnLean({ tiltZ: tilt })).toEqual([expect.closeTo(-Math.tan(tilt), 12), 0])
+  expect(columnPlanLeanOffset({ tiltX: tilt, rotation: 0 }, 0)).toEqual([0, 0])
+  const [x, z] = columnPlanLeanOffset({ tiltX: tilt, rotation: Math.PI / 2 }, 2)
+  // Local +Z turns to plan +X under a quarter turn of yaw.
+  expect(x).toBeCloseTo(2 * Math.tan(tilt), 12)
+  expect(z).toBeCloseTo(0, 12)
+})
+
+test('a swept footprint covers the base, the top and the band between', () => {
+  const square: [number, number][] = [
+    [-0.5, -0.5],
+    [0.5, -0.5],
+    [0.5, 0.5],
+    [-0.5, 0.5],
+  ]
+  expect(sweptPlanFootprint(square, [0, 0])).toEqual(square)
+  const swept = sweptPlanFootprint(square, [2, 0])
+  const xs = swept.map(([px]) => px)
+  expect(Math.min(...xs)).toBeCloseTo(-0.5)
+  expect(Math.max(...xs)).toBeCloseTo(2.5)
+  const diagonal = sweptPlanFootprint(square, [1, 1])
+  // A square swept along its diagonal is a hexagon.
+  expect(diagonal).toHaveLength(6)
 })
