@@ -1,5 +1,6 @@
 import {
   type ColumnNode,
+  columnIBeamOutline,
   type DeclaredHostSurface,
   hitDerivedSurfaceProvider,
   type SurfaceProvider,
@@ -51,6 +52,10 @@ export function columnTopSurfaces(node: ColumnNode): DeclaredHostSurface[] {
       )
       region = { kind: 'rect', size: [cap.width! / 2 - bevel, cap.depth! / 2 - bevel] }
     }
+  } else if (node.crossSection === 'i-beam') {
+    // The i-beam shaft is a straight prism: no taper, twist or segment overlap.
+    y = layout.shaftY + layout.shaftHeight
+    region = { kind: 'polygon', points: columnIBeamOutline(node.width, node.depth) }
   } else {
     const segments = getShaftSegmentCount(node)
     const scale = getShaftScaleAt(node, (segments - 0.5) / segments)

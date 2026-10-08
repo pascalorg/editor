@@ -22,11 +22,13 @@ export const addColumnTool = {
     }).optional(),
     width: measurement('length', 'm', {
       positive: true,
-      description: 'Width when crossSection is "square" / "rectangular" (default: 0.44).',
+      description:
+        'Width when crossSection is "square" / "rectangular" / "i-beam" (default: 0.44).',
     }).optional(),
     depth: measurement('length', 'm', {
       positive: true,
-      description: 'Depth when crossSection is "square" / "rectangular" (default: 0.44).',
+      description:
+        'Depth when crossSection is "square" / "rectangular" / "i-beam" (default: 0.44).',
     }).optional(),
     rotation: measurement('angle', 'deg', {
       description: 'Y-axis rotation (default: 0).',
@@ -38,10 +40,10 @@ export const addColumnTool = {
         "Visual style: 'plain' (default smooth pillar), 'faceted' (sharp prism faces), 'fluted' (vertical channels — classical), 'lathe-turned' (turned bands — porch / interior), 'dravidian-carved' (heavy carving — temple), 'cluster' (bundled colonnette — gothic).",
       ),
     crossSection: z
-      .enum(['round', 'square', 'rectangular', 'octagonal', 'sixteen-sided'])
+      .enum(['round', 'square', 'rectangular', 'octagonal', 'sixteen-sided', 'i-beam'])
       .optional()
       .describe(
-        "Plan shape: 'round' (default), 'square' (equal width/depth), 'rectangular' (independent width/depth), 'octagonal', 'sixteen-sided'.",
+        "Plan shape: 'round' (default), 'square' (equal width/depth), 'rectangular' (independent width/depth), 'octagonal', 'sixteen-sided', 'i-beam' (steel H/I section: flanges span width, web runs along depth).",
       ),
     level: z
       .string()

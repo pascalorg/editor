@@ -1,4 +1,14 @@
 import type { ColumnNode } from '@pascal-app/core'
+
+/** Sections whose capitals, bands and plates are boxes rather than drums. */
+export function hasBoxSection(node: Pick<ColumnNode, 'crossSection'>) {
+  return (
+    node.crossSection === 'square' ||
+    node.crossSection === 'rectangular' ||
+    node.crossSection === 'i-beam'
+  )
+}
+
 export function getSegments(node: ColumnNode) {
   if (node.crossSection === 'octagonal') return 8
   if (node.crossSection === 'sixteen-sided') return 16
@@ -132,7 +142,7 @@ export function columnCapitalBlocks(node: ColumnNode, y: number, height: number)
   }
   const widthScale = node.capitalWidthScale ?? (style === 'simple-slab' ? 1.28 : 1.18),
     depthScale = node.capitalDepthScale ?? widthScale
-  return node.crossSection === 'square' || node.crossSection === 'rectangular'
+  return hasBoxSection(node)
     ? [{ kind: 'box', y, height, width: node.width * widthScale, depth: node.depth * depthScale }]
     : [
         {

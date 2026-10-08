@@ -151,6 +151,28 @@ export class IfcModel {
     return this.step.add('IFCRECTANGLEPROFILEDEF', enumValue('AREA'), null, position, xDim, yDim)
   }
 
+  iShapeProfile(
+    overallWidth: number,
+    overallDepth: number,
+    webThickness: number,
+    flangeThickness: number,
+  ): StepRef {
+    const position = this.step.add('IFCAXIS2PLACEMENT2D', this.point2([0, 0]), null)
+    return this.step.add(
+      'IFCISHAPEPROFILEDEF',
+      enumValue('AREA'),
+      null,
+      position,
+      overallWidth,
+      overallDepth,
+      webThickness,
+      flangeThickness,
+      null,
+      null,
+      null,
+    )
+  }
+
   circleProfile(radius: number): StepRef {
     const position = this.step.add('IFCAXIS2PLACEMENT2D', this.point2([0, 0]), null)
     return this.step.add('IFCCIRCLEPROFILEDEF', enumValue('AREA'), null, position, radius)

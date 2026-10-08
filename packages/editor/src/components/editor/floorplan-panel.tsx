@@ -9,6 +9,7 @@ import {
   CeilingNode as CeilingNodeSchema,
   type ColumnNode,
   calculateLevelMiters,
+  columnIBeamOutline,
   createSizedStairFlight,
   DEFAULT_ANGLE_STEP,
   type DoorNode,
@@ -2023,6 +2024,17 @@ function getColumnPlanFootprint(column: ColumnNode): Point2D[] {
     return getRotatedRectanglePolygon(center, width, depth, column.rotation)
   }
 
+  if (
+    column.crossSection === 'i-beam' &&
+    column.baseStyle === 'none' &&
+    column.capitalStyle === 'none'
+  ) {
+    return columnIBeamOutline(column.width, column.depth).map(([localX, localY]) => {
+      const [offsetX, offsetY] = rotatePlanVector(localX, localY, column.rotation)
+      return { x: center.x + offsetX, y: center.y + offsetY }
+    })
+  }
+
   const shaftWidth =
     column.crossSection === 'round' ||
     column.crossSection === 'octagonal' ||
@@ -2046,7 +2058,11 @@ function getColumnPlanFootprint(column: ColumnNode): Point2D[] {
     column.depth * column.capitalDepthScale,
   )
 
-  if (column.crossSection === 'square' || column.crossSection === 'rectangular') {
+  if (
+    column.crossSection === 'square' ||
+    column.crossSection === 'rectangular' ||
+    column.crossSection === 'i-beam'
+  ) {
     return getRotatedRectanglePolygon(center, width, depth, column.rotation)
   }
 

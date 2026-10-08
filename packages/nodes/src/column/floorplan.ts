@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type ColumnNode,
+  columnIBeamOutline,
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
@@ -411,6 +412,18 @@ function getColumnPlanFootprint(column: ColumnNode): PlanPoint[] {
     return getRotatedRectanglePolygon(center, width, depth, -column.rotation)
   }
 
+  // A bare i-beam (no base or capital plates) reads as its true section.
+  if (
+    column.crossSection === 'i-beam' &&
+    column.baseStyle === 'none' &&
+    column.capitalStyle === 'none'
+  ) {
+    return columnIBeamOutline(column.width, column.depth).map(([x, z]) => {
+      const [offsetX, offsetY] = rotatePlanVector(x, z, -column.rotation)
+      return { x: center.x + offsetX, y: center.y + offsetY }
+    })
+  }
+
   // Standalone column: shaft profile expanded for base + capital.
   const isRound =
     column.crossSection === 'round' ||
@@ -429,7 +442,11 @@ function getColumnPlanFootprint(column: ColumnNode): PlanPoint[] {
     column.depth * column.capitalDepthScale,
   )
 
-  if (column.crossSection === 'square' || column.crossSection === 'rectangular') {
+  if (
+    column.crossSection === 'square' ||
+    column.crossSection === 'rectangular' ||
+    column.crossSection === 'i-beam'
+  ) {
     return getRotatedRectanglePolygon(center, width, depth, -column.rotation)
   }
 

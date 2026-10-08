@@ -19,6 +19,7 @@ export const ColumnCrossSection = z.enum([
   'rectangular',
   'octagonal',
   'sixteen-sided',
+  'i-beam',
 ])
 
 export const ColumnShaftProfile = z.enum(['straight', 'tapered', 'bulged', 'baluster', 'hourglass'])
@@ -172,7 +173,7 @@ export const ColumnNode = BaseNode.extend({
 }).describe(dedent`
   Column node - used to represent structural or decorative pillars/columns.
   - style: visual approach such as plain, lathe-turned, carved, or cluster
-  - crossSection: plan shape used by the procedural renderer
+  - crossSection: plan shape used by the procedural renderer; 'i-beam' is a steel H/I section whose flanges span the width at the front and back faces
   - height/radius/width/depth: primary dimensions in meters
   - edgeSoftness: bevel radius for square/plinth/block edges
   - shaftProfile/shaftDetail: profile and surface treatment of the shaft

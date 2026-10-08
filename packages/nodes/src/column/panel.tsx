@@ -443,7 +443,7 @@ export default function ColumnPanel() {
               </>
             ) : (
               <>
-                <div className="grid grid-cols-3 gap-2 px-1 pt-1">
+                <div className="grid grid-cols-2 gap-2 px-1 pt-1">
                   {(
                     [
                       {
@@ -509,6 +509,26 @@ export default function ColumnPanel() {
                               width="16"
                               x="3"
                               y="5.5"
+                            />
+                          </svg>
+                        ),
+                      },
+                      {
+                        value: 'i-beam',
+                        label: 'I-Beam',
+                        icon: (
+                          <svg
+                            aria-hidden="true"
+                            fill="none"
+                            height="22"
+                            viewBox="0 0 22 22"
+                            width="22"
+                          >
+                            <path
+                              d="M4 4h14v2.5h-5.75v9h5.75V18H4v-2.5h5.75v-9H4z"
+                              stroke="currentColor"
+                              strokeLinejoin="round"
+                              strokeWidth="1.5"
                             />
                           </svg>
                         ),
@@ -690,7 +710,9 @@ export default function ColumnPanel() {
                     handleUpdate({
                       width: value,
                       radius: value / 2,
-                      ...(node.crossSection === 'rectangular' ? {} : { depth: value }),
+                      ...(node.crossSection === 'rectangular' || node.crossSection === 'i-beam'
+                        ? {}
+                        : { depth: value }),
                     })
                   }
                   precision={2}
@@ -698,7 +720,7 @@ export default function ColumnPanel() {
                   unit="m"
                   value={node.width}
                 />
-                {node.crossSection === 'rectangular' && (
+                {(node.crossSection === 'rectangular' || node.crossSection === 'i-beam') && (
                   <SliderControl
                     label="Depth"
                     max={1000}
@@ -714,7 +736,7 @@ export default function ColumnPanel() {
             ) : null}
           </PanelSection>
 
-          {!isBraceSupport && (
+          {!isBraceSupport && node.crossSection !== 'i-beam' && (
             <PanelSection title="Shaft">
               <select
                 className={SELECT_CLASS}

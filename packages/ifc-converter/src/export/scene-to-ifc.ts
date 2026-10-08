@@ -6,6 +6,7 @@ import {
   type Collection,
   type ColumnNode,
   calculateLevelMiters,
+  columnIBeamSection,
   DEFAULT_WALL_THICKNESS,
   type DoorNode,
   difference,
@@ -1279,8 +1280,10 @@ export function buildIfcExport(input: IfcExportInput): IfcExportResult {
       }
     }
     const [x, y] = planToIfc(column.position[0], column.position[2])
-    const profile =
-      column.crossSection === 'rectangular' || column.crossSection === 'square'
+    const iBeam = column.crossSection === 'i-beam' && columnIBeamSection(column.width, column.depth)
+    const profile = iBeam
+      ? model.iShapeProfile(column.width, column.depth, iBeam.webThickness, iBeam.flangeThickness)
+      : column.crossSection === 'rectangular' || column.crossSection === 'square'
         ? model.rectangleProfile(
             column.width,
             column.crossSection === 'square' ? column.width : column.depth,
@@ -1644,7 +1647,7 @@ function isPlainColumn(column: ColumnNode): boolean {
     column.baseStyle === 'none' &&
     column.capitalStyle === 'none' &&
     (column.supportStyle ?? 'vertical') === 'vertical' &&
-    ['round', 'square', 'rectangular'].includes(column.crossSection)
+    ['round', 'square', 'rectangular', 'i-beam'].includes(column.crossSection)
   )
 }
 

@@ -9,6 +9,7 @@ import {
   type ColumnNode,
   type ColumnSlotId,
   collectDescendants,
+  columnIBeamSection,
   createSceneApi,
   useLiveNodeOverrides,
   useLiveTransforms,
@@ -42,6 +43,7 @@ import {
   getShaftScaleAt,
   getShaftSegmentCount,
   getShaftTwistRadians,
+  hasBoxSection,
 } from './shape'
 
 type ColumnSlotMaterials = Record<ColumnSlotId, Material>
@@ -1029,6 +1031,39 @@ function SquareBlock({
   )
 }
 
+function IBeamBlock({
+  y,
+  height,
+  width,
+  depth,
+}: {
+  y: number
+  height: number
+  width: number
+  depth: number
+}) {
+  const { flangeThickness, webThickness } = columnIBeamSection(width, depth)
+  const webDepth = Math.max(0, depth - flangeThickness * 2)
+
+  return (
+    <group position={[0, y + height / 2, 0]}>
+      <MappedBox
+        depth={flangeThickness}
+        height={height}
+        position={[0, 0, depth / 2 - flangeThickness / 2]}
+        width={width}
+      />
+      <MappedBox
+        depth={flangeThickness}
+        height={height}
+        position={[0, 0, -depth / 2 + flangeThickness / 2]}
+        width={width}
+      />
+      <MappedBox depth={webDepth} height={height} position={[0, 0, 0]} width={webThickness} />
+    </group>
+  )
+}
+
 function RoundBlock({
   x = 0,
   y,
@@ -1143,7 +1178,7 @@ function ColumnBlock({
   const depth = node.depth * scale
   const radius = node.radius * scale
 
-  if (node.crossSection === 'square' || node.crossSection === 'rectangular') {
+  if (hasBoxSection(node)) {
     return <SquareBlock depth={depth} height={height} width={width} y={y} />
   }
 
@@ -1236,6 +1271,10 @@ function Shaft({ node, y, height }: { node: ColumnNode; y: number; height: numbe
     node.crossSection === 'sixteen-sided'
   ) {
     return <TaperedRoundShaft height={height} node={node} y={y} />
+  }
+
+  if (node.crossSection === 'i-beam') {
+    return <IBeamBlock depth={node.depth} height={height} width={node.width} y={y} />
   }
 
   return <TaperedSquareShaft height={height} node={node} y={y} />
@@ -1836,7 +1875,7 @@ function CapitalCarvings({
     return capitalY + capitalHeight * t - bandHeight / 2
   })
 
-  if (node.crossSection === 'square' || node.crossSection === 'rectangular') {
+  if (hasBoxSection(node)) {
     const dentilCount = Math.max(node.dentilCount ?? 0, level * 4, 4)
     const dentilHeight = Math.min(0.08, capitalHeight * 0.28)
     const dentilDepth = Math.min(0.08, Math.min(node.width, node.depth) * 0.16)
