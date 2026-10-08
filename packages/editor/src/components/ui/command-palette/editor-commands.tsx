@@ -39,6 +39,7 @@ import {
 import { useEffect } from 'react'
 import { getHistoryCommandState, runRedo, runUndo } from '../../../lib/history'
 import { deleteLevelWithFallbackSelection } from '../../../lib/level-selection'
+import { getSavedSceneDocument } from '../../../lib/scene'
 import { createUnitInBuilding, enterUnitFocus, leaveUnitFocus } from '../../../lib/units'
 import { useCommandRegistry } from '../../../store/use-command-registry'
 import type { StructureTool } from '../../../store/use-editor'
@@ -397,7 +398,7 @@ export function EditorCommands() {
         keywords: ['export', 'download', 'json', 'save', 'data'],
         execute: () =>
           run(() => {
-            const { nodes, rootNodeIds } = useScene.getState()
+            const { nodes, rootNodeIds } = getSavedSceneDocument()
             const blob = new Blob([JSON.stringify({ nodes, rootNodeIds }, null, 2)], {
               type: 'application/json',
             })

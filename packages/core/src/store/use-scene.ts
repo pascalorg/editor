@@ -1215,53 +1215,19 @@ type UseSceneStore = UseBoundStore<StoreApi<SceneState>> & {
   temporal: StoreApi<TemporalState<SceneSnapshot>>
 }
 
-function sceneHistorySnapshotFromState(
-  state: Pick<
-    SceneState,
-    | 'nodes'
-    | 'rootNodeIds'
-    | 'collections'
-    | 'materials'
-    | 'installedPlugins'
-    | 'hasExplicitPluginInstallState'
-  >,
-): SceneSnapshot {
-  const {
-    nodes,
-    rootNodeIds,
-    collections,
-    materials,
-    installedPlugins,
-    hasExplicitPluginInstallState,
-  } = state
-  // Fresh placement nodes are renderable drafts, not document history. Excluding their
-  // entire subtree here protects both local undo and external commit subscribers. Carried
-  // drafts (history-drafts.ts) are kept out the same way.
-  const transientNodeIds = new Set<AnyNodeId>(
-    createdSceneHistoryDraftIds().filter((id) => Boolean(nodes[id])),
-  )
-  for (const node of Object.values(nodes)) {
-    const metadata = node.metadata
-    if (
-      metadata &&
-      typeof metadata === 'object' &&
-      !Array.isArray(metadata) &&
-      (metadata as Record<string, unknown>).isNew === true
-    ) {
-      transientNodeIds.add(node.id)
-    }
-  }
+type SceneDocumentParts = Pick<SceneState, 'nodes' | 'rootNodeIds' | 'collections'>
 
-  if (transientNodeIds.size === 0) {
-    return {
-      nodes: withAdoptedDraftsAsOriginal(nodes, nodes),
-      rootNodeIds,
-      collections,
-      materials,
-      installedPlugins,
-      hasExplicitPluginInstallState,
-    }
-  }
+/**
+ * `parts` without the subtrees of `draftIds`, and without the references to them (children,
+ * procedural attachments, collections, roots). Returns `parts` itself when there is nothing to drop.
+ */
+function withoutDraftSubtrees(
+  parts: SceneDocumentParts,
+  draftIds: Iterable<AnyNodeId>,
+): SceneDocumentParts {
+  const { nodes, rootNodeIds, collections } = parts
+  const transientNodeIds = new Set<AnyNodeId>([...draftIds].filter((id) => Boolean(nodes[id])))
+  if (transientNodeIds.size === 0) return parts
 
   const childIdsByParentId = new Map<AnyNodeId, Set<AnyNodeId>>()
   const addChild = (parentId: AnyNodeId, childId: AnyNodeId) => {
@@ -1285,7 +1251,7 @@ function sceneHistorySnapshotFromState(
     }
   }
 
-  const historyNodes = {} as Record<AnyNodeId, AnyNode>
+  const documentNodes = {} as Record<AnyNodeId, AnyNode>
   for (const [id, sourceNode] of Object.entries(nodes) as [AnyNodeId, AnyNode][]) {
     if (transientNodeIds.has(id)) continue
     let node = sourceNode
@@ -1299,35 +1265,94 @@ function sceneHistorySnapshotFromState(
       if (attachments) node = { ...node, attachments }
     }
     if (!('children' in node && Array.isArray(node.children))) {
-      historyNodes[id] = node
+      documentNodes[id] = node
       continue
     }
     const children = (node.children as AnyNodeId[]).filter(
       (childId) => !transientNodeIds.has(childId as AnyNodeId),
     )
-    historyNodes[id] =
+    documentNodes[id] =
       children.length === node.children.length ? node : ({ ...node, children } as AnyNode)
   }
 
-  const historyCollections = {} as Record<CollectionId, Collection>
+  const documentCollections = {} as Record<CollectionId, Collection>
   for (const [id, collection] of Object.entries(collections) as [CollectionId, Collection][]) {
     const nodeIds = collection.nodeIds.filter((nodeId) => !transientNodeIds.has(nodeId))
     if (collection.controlNodeId && transientNodeIds.has(collection.controlNodeId)) {
       const { controlNodeId: _controlNodeId, ...rest } = collection
-      historyCollections[id] = { ...rest, nodeIds }
+      documentCollections[id] = { ...rest, nodeIds }
     } else {
-      historyCollections[id] =
+      documentCollections[id] =
         nodeIds.length === collection.nodeIds.length ? collection : { ...collection, nodeIds }
     }
   }
 
   return {
-    nodes: withAdoptedDraftsAsOriginal(nodes, historyNodes),
+    nodes: documentNodes,
     rootNodeIds: rootNodeIds.filter((id) => !transientNodeIds.has(id)),
-    collections: historyCollections,
+    collections: documentCollections,
+  }
+}
+
+function isFreshPlacementNode(node: AnyNode): boolean {
+  const metadata = node.metadata
+  return (
+    !!metadata &&
+    typeof metadata === 'object' &&
+    !Array.isArray(metadata) &&
+    (metadata as Record<string, unknown>).isNew === true
+  )
+}
+
+/**
+ * Fresh placement nodes are renderable drafts, not document history. Excluding their entire
+ * subtree here protects both local undo and external commit subscribers. Carried drafts
+ * (history-drafts.ts) are kept out the same way.
+ */
+function sceneHistorySnapshotFromState(
+  state: Pick<
+    SceneState,
+    | 'nodes'
+    | 'rootNodeIds'
+    | 'collections'
+    | 'materials'
+    | 'installedPlugins'
+    | 'hasExplicitPluginInstallState'
+  >,
+): SceneSnapshot {
+  const { nodes, materials, installedPlugins, hasExplicitPluginInstallState } = state
+  const kept = withoutDraftSubtrees(state, [
+    ...createdSceneHistoryDraftIds(),
+    ...Object.values(nodes)
+      .filter(isFreshPlacementNode)
+      .map((node) => node.id),
+  ])
+  return {
+    nodes: withAdoptedDraftsAsOriginal(nodes, kept.nodes),
+    rootNodeIds: kept.rootNodeIds,
+    collections: kept.collections,
     materials,
     installedPlugins,
     hasExplicitPluginInstallState,
+  }
+}
+
+/**
+ * The current scene as every save writes it: without the drafts an interaction is carrying —
+ * created carry drafts (history-drafts.ts) and the `drafts` the caller owns — and with adopted
+ * carry drafts as they were before the carry. Never inferred from metadata: committed nodes can
+ * still carry `metadata.isNew`, so only explicitly owned drafts are left out.
+ */
+export function getSceneDocument(drafts: Iterable<AnyNodeId> = []): SceneSnapshot {
+  const state = useScene.getState()
+  const kept = withoutDraftSubtrees(state, [...createdSceneHistoryDraftIds(), ...drafts])
+  return {
+    nodes: withAdoptedDraftsAsOriginal(state.nodes, kept.nodes),
+    rootNodeIds: kept.rootNodeIds,
+    collections: kept.collections,
+    materials: state.materials,
+    installedPlugins: state.installedPlugins,
+    hasExplicitPluginInstallState: state.hasExplicitPluginInstallState,
   }
 }
 

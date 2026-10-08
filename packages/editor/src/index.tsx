@@ -748,7 +748,7 @@ export {
   type ElementActionOrigin,
 } from './lib/room-zone-routing'
 export type { SceneGraph } from './lib/scene'
-export { applySceneGraphToEditor } from './lib/scene'
+export { applySceneGraphToEditor, getSavedSceneDocument } from './lib/scene'
 export {
   forEachSceneMaterialRef,
   referencedSceneMaterialIds,
