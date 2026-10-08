@@ -49,11 +49,6 @@ it when hosting Pascal at another origin:
 MINT_PASCAL_HOST_ORIGIN=https://pascal.example.com docker compose up -d
 ```
 
-Keep the container port at 3000: the `/scenes` page fetches its own API through
-a base URL that only `NEXT_PUBLIC_APP_URL` can override, and Next inlines that
-value at build time, so remapping the port to something else makes the page
-return 500.
-
 ## CLI-managed editor
 
 Node.js 22.13 or newer can install a persistent local runtime, start it in the
