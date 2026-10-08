@@ -1,11 +1,13 @@
 'use client'
 
 import {
+  type AnyNodeId,
   polygonInteriorPoint,
   useLiveNodeOverrides,
   useRegistry,
   useScene,
   type ZoneNode,
+  zoneDisplayColor,
 } from '@pascal-app/core'
 import {
   createZoneShape,
@@ -91,7 +93,8 @@ function ZoneVisuals({ node }: { node: ZoneNode }) {
   // The selector returns the unit node itself, so only edits to that unit
   // or its membership re-render this zone.
   const unit = useScene((s) => owningUnitForZone(node, (id) => s.nodes[id]))
-  const tintColor = unit?.color ?? node.color
+  const color = useScene((s) => zoneDisplayColor(node, (id) => s.nodes[id as AnyNodeId]))
+  const tintColor = unit?.color ?? color
 
   const floorShape = useMemo(
     () => (polygon.length >= 3 ? createZoneShape({ polygon, holes }) : null),
@@ -109,10 +112,7 @@ function ZoneVisuals({ node }: { node: ZoneNode }) {
     return createFloorMaterial(tintColor)
   }, [tintColor])
 
-  const wallMaterial = useMemo(() => {
-    if (!node.color) return null
-    return createWallGradientMaterial(node.color)
-  }, [node.color])
+  const wallMaterial = useMemo(() => createWallGradientMaterial(color), [color])
 
   useEffect(() => () => wallGeometry?.dispose(), [wallGeometry])
   useEffect(() => () => floorMaterial?.dispose(), [floorMaterial])
@@ -146,7 +146,7 @@ function ZoneVisuals({ node }: { node: ZoneNode }) {
             style={{
               width: 'max-content',
               color: 'white',
-              textShadow: `-1px -1px 0 ${node.color}, 1px -1px 0 ${node.color}, -1px 1px 0 ${node.color}, 1px 1px 0 ${node.color}`,
+              textShadow: `-1px -1px 0 ${color}, 1px -1px 0 ${color}, -1px 1px 0 ${color}, 1px 1px 0 ${color}`,
               textAlign: 'center',
             }}
           >
@@ -183,7 +183,7 @@ function ZoneVisuals({ node }: { node: ZoneNode }) {
               style={{
                 width: '2px',
                 height: '40px',
-                backgroundColor: node.color,
+                backgroundColor: color,
               }}
             />
             <div
@@ -191,7 +191,7 @@ function ZoneVisuals({ node }: { node: ZoneNode }) {
                 width: '10px',
                 height: '10px',
                 borderRadius: '50%',
-                backgroundColor: node.color,
+                backgroundColor: color,
                 border: '1px solid white',
               }}
             />

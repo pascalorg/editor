@@ -9,6 +9,7 @@ import {
   type SlabNode,
   useScene,
   type WallNode,
+  type ZoneNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, lazy, Suspense, useMemo } from 'react'
@@ -160,7 +161,17 @@ export const ToolManager: React.FC = () => {
   }, [reshapingNode, tangentReshape])
   const editingHole = useEditingHole()
   const editCeilingId = useCeilingEditCeilingId()
-  const selectedZoneId = useViewer((state) => state.selection.zoneId)
+  // A zone picked as a zone, from the Scene list (zoneId) or its area or pill (sole selection).
+  const zoneSelectionId = useViewer((state) => state.selection.zoneId)
+  const soleSelectedId = useViewer((state) =>
+    state.selection.selectedIds.length === 1 ? state.selection.selectedIds[0] : undefined,
+  )
+  const soleSelectedZone = useScene((state) =>
+    soleSelectedId && state.nodes[soleSelectedId as AnyNodeId]?.type === 'zone'
+      ? (soleSelectedId as ZoneNode['id'])
+      : null,
+  )
+  const selectedZoneId = zoneSelectionId ?? soleSelectedZone
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const buildingId = useViewer((state) => state.selection.buildingId)
   const activeLevelId = useViewer((state) => state.selection.levelId)

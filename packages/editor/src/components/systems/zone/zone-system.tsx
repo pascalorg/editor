@@ -12,26 +12,17 @@ import useInteractionScope from '../../../store/use-interaction-scope'
 const noopRaycast = () => {}
 
 /**
- * Zone volumes are working views, not the everyday look: they mount only while
- * a unit is focused (painting its membership needs every zone in view) or a
- * free-drawn zone is selected. Rooms show as light label pills instead
- * (`RoomLabels3D`). Mounting is the viewer's `showZones` flag: unmounting skips
- * the meshes and drei labels entirely, and the cleanup restores the default so
- * preview / first-person surfaces keep their labels.
+ * Zone volumes are a working view for one job only: painting a unit's
+ * membership, where every zone on the level has to be in view. Otherwise every
+ * zone, drawn or detected, shows as a room: a light label pill (`RoomLabels3D`)
+ * and the room outline when selected. Mounting is the viewer's `showZones`
+ * flag: unmounting skips the meshes and drei labels entirely, and the cleanup
+ * restores the default so preview / first-person surfaces keep their labels.
  */
 export const ZoneSystem = () => {
   const focusedUnitId = useViewer((s) => s.focusedUnitId)
-  const zoneId = useViewer((s) => s.selection.zoneId)
-  const selectedId = useViewer((s) =>
-    s.selection.selectedIds.length === 1 ? s.selection.selectedIds[0] : undefined,
-  )
-  const selectedZoneId = useScene(
-    (s) =>
-      zoneId ??
-      (selectedId && s.nodes[selectedId as ZoneNode['id']]?.type === 'zone' ? selectedId : null),
-  )
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
-  const active = (!!focusedUnitId || !!selectedZoneId) && !isCaptureMode
+  const active = !!focusedUnitId && !isCaptureMode
   useEffect(() => {
     useViewer.getState().setShowZones(active)
     return () => useViewer.getState().setShowZones(true)
@@ -41,7 +32,6 @@ export const ZoneSystem = () => {
     if (!useViewer.getState().showZones) return
 
     const { levelId: selectedLevelId } = useViewer.getState().selection
-    const unitFocused = !!useViewer.getState().focusedUnitId
     // During any active interaction zone labels step back entirely.
     const zoneLabelsHidden =
       resolveOverlayPolicy(useInteractionScope.getState().scope).zoneLabels === 'hidden'
@@ -59,7 +49,7 @@ export const ZoneSystem = () => {
       // this per-frame write would undo the renderer's `visible` prop.
       const nodeVisible = zone?.visible !== false
       if (obj.visible !== nodeVisible) obj.visible = nodeVisible
-      const shown = nodeVisible && (zoneId === selectedZoneId || (unitFocused && isOnSelectedLevel))
+      const shown = nodeVisible && isOnSelectedLevel
 
       // Raycast is re-disabled per frame: the meshes remount whenever zones
       // mount again, so a one-shot flag on the persistent group would leave

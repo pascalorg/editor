@@ -29,7 +29,12 @@ export const createRoomTool = {
     ...levelTarget,
     name: z.string().min(1).describe('Room name, e.g. "Bedroom", "Kitchen".'),
     polygon: z.array(point).min(3).describe('The corners in order, as [x, z] in metres.'),
-    color: z.string().optional().describe('Hex colour of the room zone, e.g. "#3b82f6".'),
+    color: z
+      .string()
+      .optional()
+      .describe(
+        'Hex colour of the room zone, e.g. "#22c55e"; omit it to get one that differs from the neighbouring rooms.',
+      ),
     wallHeight: measurement('length', 'm', {
       positive: true,
       description: "Height of the walls it builds (default: the storey's).",

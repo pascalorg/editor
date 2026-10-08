@@ -33,6 +33,7 @@ import {
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react'
 import { type ComponentType, lazy, memo, Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { nodeRegistry } from '@pascal-app/core'
+import { useZoneDisplayColor } from './../../../../../hooks/use-zone-display-color'
 
 /** The site kind's inspector (`parametrics.customPanel`), mounted under the Site header. */
 const SiteKindPanel = lazy(async () => {
@@ -1186,6 +1187,7 @@ const ZoneItem = memo(function ZoneItem({
   const unit = useViewer((state) => state.unit)
 
   const isSelected = useZoneSelected(zone.id)
+  const displayColor = useZoneDisplayColor(zone.id)
   const isRoom = zone.spaceRole === 'room'
   const isHovered = hoveredId === zone.id
 
@@ -1261,7 +1263,7 @@ const ZoneItem = memo(function ZoneItem({
         />
       )}
       <span className={cn('mr-2', !isSelected && 'opacity-40')}>
-        <ColorDot color={zone.color} onChange={handleColorChange} />
+        <ColorDot color={displayColor ?? zone.color} onChange={handleColorChange} />
       </span>
       <div className="min-w-0 flex-1 pr-1">
         <InlineRenameInput

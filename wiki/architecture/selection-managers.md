@@ -73,9 +73,16 @@ Extends selection with the editor's `phase` from `useEditor`. The viewer's `Sele
 phase: 'site'      → any hit on a house hovers its building; the click selects it and goes inside
 phase: 'building'  → everything on the active level: walls, slabs, ceilings, roofs,
                      openings, stairs, elevators, spawn, items, plugin kinds
-  room-first walls, slabs and ceilings; room label pills (`RoomLabels3D`) appear
-  while nothing else is selected and let pointer events reach the scene
+  room-first walls, slabs and ceilings
 ```
+
+Room label pills (`RoomLabels3D`, `RoomLabels2D`, one `RoomPill`) show while nothing but the
+site, building or level is selected. Only the pill itself takes the pointer, and it goes through
+the same zone-area rule as a zone's fill or label in the plan (`hoverZoneArea` / `clickZoneArea`
+in `lib/room-zone-routing.ts`): a room room-first, a modifier or a zone that bounds no room as the
+zone (its outline, its panel and outline editor). Zones show tinted volumes only while a unit's
+membership is painted; otherwise a zone looks like a room. Unpicked zone colours are derived for
+display only (`zoneDisplayColor` in core), never written.
 
 Inside the building no click changes the phase. Site is entered from the Scene panel's site header
 or `1`, and left by a click on the house or on empty ground, the building row or `2`. Arming a building tool keeps the phase. Double-click on a roof or stair selects the segment

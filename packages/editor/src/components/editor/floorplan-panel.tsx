@@ -189,7 +189,7 @@ import {
   RotationAngleOverlay,
 } from '../editor-2d/renderers/floorplan-registry-layer'
 import { FloorplanVoronoiLayer } from '../editor-2d/renderers/floorplan-voronoi-layer'
-import { buildSvgPolylinePath, formatPolygonPath, getArcPlanPoint } from '../editor-2d/svg-paths'
+import { buildSvgPolylinePath, formatPolygonPath } from '../editor-2d/svg-paths'
 import { snapToHalf } from '../tools/item/placement-math'
 import {
   isBoxSelectPointerSuppressed,
@@ -231,7 +231,6 @@ import {
   type WallPlanPoint,
 } from '../tools/wall/wall-drafting'
 
-import { PALETTE_COLORS } from '../ui/primitives/color-dot'
 import { FloorplanCompassButton } from '../viewer/floorplan-compass-button'
 import { resolveFloorplanBackgroundSelection } from './floorplan-background-selection'
 import {
@@ -7900,9 +7899,8 @@ export function FloorplanPanel({
       }
 
       const { createNode, updateNode, nodes } = useScene.getState()
-      const zoneCount = Object.values(nodes).filter((node) => node.type === 'zone').length
+      // No colour: an unpicked zone shows one derived from its neighbours.
       const zone = ZoneNodeSchema.parse({
-        color: PALETTE_COLORS[zoneCount % PALETTE_COLORS.length],
         name: nextZoneName(nodes),
         polygon: points.map(([x, z]) => [x, z] as [number, number]),
       })

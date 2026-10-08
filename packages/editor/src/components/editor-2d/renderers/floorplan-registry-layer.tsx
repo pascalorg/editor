@@ -97,9 +97,8 @@ import {
   tangentReshapeScope,
 } from '../../../lib/interaction/scope'
 import { runFloorplanWallPush, WALL_PUSH_AFFORDANCE } from '../../../lib/room-handle-drag'
-import { sameRoom } from '../../../lib/room-selection'
 import { selectRoom, selectRoomFromHit } from '../../../lib/room-selection-commands'
-import { roomKeyForZone } from '../../../lib/room-zone-routing'
+import { clickZoneArea, hoverZoneArea } from '../../../lib/room-zone-routing'
 import {
   deleteNodeFromCanvas,
   enterBuildingFromPlanHit,
@@ -125,6 +124,7 @@ import { startGroupPickUp } from '../../editor/group-actions'
 import { classifyParticipant } from '../../editor/group-transform-shared'
 import { RoomHandleDragPreview2D, RoomHandles2D } from '../../editor/room-handles-2d'
 import { RoomHighlight2D } from '../../editor/room-highlight'
+import { RoomLabels2D } from '../../editor/room-labels'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
 import {
   FloorplanGroupSelectionBox,
@@ -698,18 +698,17 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         swallowNextClick(200)
         return
       }
-      // A room's fill or label is the room (the same panel, pill and Escape
-      // ladder as a click on its floor); clicking the room already selected
-      // keeps it. Other zones stay zones.
-      if (clickedNode?.type === 'zone' && !options.shouldToggle) {
-        const room = roomKeyForZone(clickedNode.id)
-        if (room) {
-          if (!sameRoom(useEditor.getState().room, room)) selectRoom(room)
-          swallowNextClick(200)
-          return
-        }
+      // A zone's fill or label takes the same rule as its pill (`clickZoneArea`).
+      if (clickedNode?.type === 'zone') {
+        clickZoneArea(clickedNode.id, {
+          meta: false,
+          ctrl: false,
+          shift: options.shouldToggle,
+          alt: options.isolateMember,
+        })
+        swallowNextClick(200)
+        return
       }
-      if (clickedNode?.type === 'zone') useEditor.getState().clearRoom()
       const currentSelectedIds = useViewer.getState().selection.selectedIds
       let nextSelectedIds: string[]
       if (options.shouldToggle) {
@@ -1650,6 +1649,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           on top in the expected document-order z-stack. */}
       <g className="floorplan-registry-base">{renderEntries('base')}</g>
       <RoomHighlight2D levelId={levelId} />
+      <RoomLabels2D levelId={levelId} />
       <FloorRegionControls2D levelId={levelId} />
       {/* Overlay pass — interactive handles (vertex / midpoint / edge /
           move) and labels (text / dimensions). Painted after every base
@@ -2094,6 +2094,10 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
           return
         }
       }
+      if (currentNode?.type === 'zone' && roomPickingEnabled()) {
+        hoverZoneArea(nodeId, selectionModifiersFromEvent(event))
+        return
+      }
       const point = clientToPlan(event.clientX, event.clientY)
       if (
         point &&
@@ -2445,6 +2449,7 @@ export function buildFloorplanEntryGeometry({
     selected,
     unit,
     metricNotation,
+    roomLabelOverlay: true,
     wallDimensionReference,
     highlighted,
     hovered,
@@ -2470,6 +2475,7 @@ export function buildFloorplanEntryGeometry({
           automaticDimensions,
           metricNotation,
           purpose: 'edit',
+          roomLabelOverlay: true,
           wallDimensionReference,
         }),
         viewState: palette

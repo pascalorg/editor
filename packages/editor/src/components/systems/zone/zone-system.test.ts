@@ -6,7 +6,7 @@ import { createElement } from 'react'
 import useEditor from '../../../store/use-editor'
 import { ZoneSystem } from './zone-system'
 
-test('a free-drawn zone selected in the plan shows its volume in 3D', async () => {
+test('zone volumes mount only while a unit is painted, never for a selected zone', async () => {
   const previousScene = useScene.getState()
   const previousViewer = useViewer.getState()
   const previousEditor = useEditor.getState()
@@ -28,12 +28,15 @@ test('a free-drawn zone selected in the plan shows its volume in 3D', async () =
   useEditor.setState({ isCaptureMode: false })
   const renderer = await create(createElement(ZoneSystem))
   try {
+    // A selected drawn zone looks like a room: outline, no tinted volume.
+    expect(useViewer.getState().showZones).toBe(false)
+    await act(async () => useViewer.setState({ focusedUnitId: 'unit_paint' as never }))
     expect(useViewer.getState().showZones).toBe(true)
     await act(async () => useEditor.getState().setCaptureMode(true))
     expect(useViewer.getState().showZones).toBe(false)
     await act(async () => useEditor.getState().setCaptureMode(false))
     expect(useViewer.getState().showZones).toBe(true)
-    await act(async () => useViewer.getState().setSelection({ selectedIds: [] }))
+    await act(async () => useViewer.setState({ focusedUnitId: null }))
     expect(useViewer.getState().showZones).toBe(false)
   } finally {
     await renderer.unmount()

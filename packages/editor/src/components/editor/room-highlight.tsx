@@ -1,6 +1,7 @@
 'use client'
 
-import { sceneRegistry, useScene } from '@pascal-app/core'
+import { type AnyNodeId, sceneRegistry, useScene } from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { BufferGeometry, DoubleSide, Float32BufferAttribute, type Group } from 'three'
@@ -10,19 +11,45 @@ import { useHighlightedRoom } from '../../hooks/use-selected-room'
 import { EDITOR_LAYER } from '../../lib/constants'
 import { resolveOverlayPolicy } from '../../lib/interaction/overlay-policy'
 import { getRoomAssembly, resolveRoomAssemblyHeights } from '../../lib/room-assembly-overlay'
-import type { RoomSelectionRecord } from '../../lib/room-selection'
+import { describeZoneOutline, type RoomSelectionRecord } from '../../lib/room-selection'
 import useEditor from '../../store/use-editor'
 import useInteractionScope from '../../store/use-interaction-scope'
 import { RoomControls2D, RoomControls3D } from './room-controls'
 
+/**
+ * A zone reached as a zone (hovered or selected through its area or pill, not
+ * as a room) shows the room's outline, never a tinted volume.
+ */
+function useZoneOutline() {
+  const hoveredId = useViewer((state) => state.hoveredId)
+  const selectedId = useViewer(
+    (state) =>
+      state.selection.zoneId ??
+      (state.selection.selectedIds.length === 1 ? state.selection.selectedIds[0] : null),
+  )
+  const unitFocused = useViewer((state) => !!state.focusedUnitId)
+  const zone = useScene((state) => {
+    for (const id of [hoveredId, selectedId]) {
+      const node = id ? state.nodes[id as AnyNodeId] : undefined
+      if (node?.type === 'zone') return node
+    }
+    return null
+  })
+  return useMemo(
+    () => (zone?.parentId && !unitFocused ? describeZoneOutline(zone.parentId, zone) : null),
+    [zone, unitFocused],
+  )
+}
+
 function useRoomHighlight() {
   const room = useHighlightedRoom()
+  const zoneOutline = useZoneOutline()
   const visible = useInteractionScope(
     (state) => resolveOverlayPolicy(state.scope).conflictingControls === 'shown',
   )
   // No phase gate: site never hovers or keeps a room (`roomPickingEnabled`).
   const enabled = useEditor((state) => state.mode === 'select')
-  return enabled && visible ? room : null
+  return enabled && visible ? (room ?? zoneOutline) : null
 }
 
 const noRaycast = () => {}

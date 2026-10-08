@@ -1,4 +1,4 @@
-import { type NodeDefinition, ZoneNode as ZoneNodeSchema } from '@pascal-app/core'
+import { type AnyNodeId, type NodeDefinition, ZoneNode as ZoneNodeSchema } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
 import { buildZoneContextualDimensions } from './contextual-dimensions'
@@ -79,6 +79,16 @@ export const zoneDefinition: NodeDefinition<typeof ZoneNode> = {
   floorplanDependencies: (node, nodes) => [
     ...(node.autoFromWalls ? node.boundaryWallIds : []),
     ...buildingUnitsForZone(node, (id) => nodes[id]).map((unit) => unit.id),
+    // Derived colours change when a sibling is recoloured, moved, added or removed.
+    ...(node.parentId
+      ? [
+          node.parentId as AnyNodeId,
+          ...(
+            (nodes[node.parentId as AnyNodeId] as { children?: AnyNodeId[] } | undefined)
+              ?.children ?? []
+          ).filter((id) => nodes[id]?.type === 'zone'),
+        ]
+      : []),
   ],
   // 2D body move — centroid-pivot polygon mover (same as slab / ceiling).
   // Without this, zone fell through to the overlay's generic free-translate

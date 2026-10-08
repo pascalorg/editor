@@ -450,6 +450,13 @@ export {
   type WallSegmentClosest,
 } from './lib/wall-distance'
 export {
+  DEFAULT_ZONE_COLOR,
+  deriveZoneColors,
+  isUnpickedZoneColor,
+  ZONE_COLOR_PALETTE,
+  zoneDisplayColor,
+} from './lib/zone-colors'
+export {
   deriveZoneQuantityReport,
   type ZoneQuantityReport,
   type ZoneQuantityValue,

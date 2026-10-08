@@ -34,14 +34,8 @@ const commitZoneDrawing = (levelId: LevelNode['id'], points: Array<[number, numb
 
   const name = nextZoneName(nodes)
 
-  // Default to blue, cycle through palette for subsequent zones
-  const color = '#3b82f6'
-
-  const zone = ZoneNode.parse({
-    name,
-    polygon: points,
-    color,
-  })
+  // No colour: an unpicked zone shows one derived from its neighbours.
+  const zone = ZoneNode.parse({ name, polygon: points })
 
   const focusedUnit = focusedUnitNode()
 
