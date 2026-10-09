@@ -187,6 +187,7 @@ export function wallPolygonDraftWalls(): WallNode[] {
     visible: true,
     metadata: {},
     children: [],
+    tilt: 0,
     start: corners[index]!,
     end,
     frontSide: 'unknown',

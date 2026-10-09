@@ -130,6 +130,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     visible: true,
     metadata: {},
     children: [],
+    tilt: 0,
     start: [0, 0],
     end: [3, 0],
     frontSide: 'unknown',

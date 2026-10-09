@@ -210,17 +210,39 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
         {...handlers}
       />
 
-      {node.wallType !== 'curtain' && hasWallTreatments(treatmentNode) && (
-        <WallTreatmentSubscription
-          childrenNodes={childNodes}
-          materials={extraMaterials}
-          node={treatmentNode}
-        />
+      {treatmentNode.tilt ? (
+        <group
+          matrixAutoUpdate={false}
+          onUpdate={(self) => {
+            self.matrix.makeShear(0, 0, 0, 0, 0, Math.tan(treatmentNode.tilt!))
+            self.matrixWorldNeedsUpdate = true
+          }}
+        >
+          {node.wallType !== 'curtain' && hasWallTreatments(treatmentNode) && (
+            <WallTreatmentSubscription
+              childrenNodes={childNodes}
+              materials={extraMaterials}
+              node={treatmentNode}
+            />
+          )}
+          {(node.children ?? []).map((childId) => (
+            <NodeRenderer key={`${node.id}:${childId}`} nodeId={childId} />
+          ))}
+        </group>
+      ) : (
+        <>
+          {node.wallType !== 'curtain' && hasWallTreatments(treatmentNode) && (
+            <WallTreatmentSubscription
+              childrenNodes={childNodes}
+              materials={extraMaterials}
+              node={treatmentNode}
+            />
+          )}
+          {(node.children ?? []).map((childId) => (
+            <NodeRenderer key={`${node.id}:${childId}`} nodeId={childId} />
+          ))}
+        </>
       )}
-
-      {(node.children ?? []).map((childId) => (
-        <NodeRenderer key={`${node.id}:${childId}`} nodeId={childId} />
-      ))}
     </mesh>
   )
 }

@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import {
   type AnyNode,
@@ -22,8 +22,8 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
-
 import { AuthoredParams } from '../item/authored-params'
+
 import { planColumnEdit } from './hosted-resize'
 
 const SELECT_CLASS =
@@ -443,7 +443,7 @@ export default function ColumnPanel() {
               </>
             ) : (
               <>
-                <div className="grid grid-cols-3 gap-2 px-1 pt-1">
+                <div className="grid grid-cols-4 gap-2 px-1 pt-1">
                   {(
                     [
                       {
@@ -492,7 +492,7 @@ export default function ColumnPanel() {
                       },
                       {
                         value: 'rectangular',
-                        label: 'Rectangular',
+                        label: 'Rect.',
                         icon: (
                           <svg
                             aria-hidden="true"
@@ -510,6 +510,21 @@ export default function ColumnPanel() {
                               x="3"
                               y="5.5"
                             />
+                          </svg>
+                        ),
+                      },
+                      {
+                        value: 'i-beam',
+                        label: 'I-Beam',
+                        icon: (
+                          <svg
+                            aria-hidden="true"
+                            fill="none"
+                            height="22"
+                            viewBox="0 0 22 22"
+                            width="22"
+                          >
+                            <path d="M5 4h12v2h-4.5v10h4.5v2H5v-2h4.5V6H5V4z" fill="currentColor" />
                           </svg>
                         ),
                       },
@@ -571,6 +586,29 @@ export default function ColumnPanel() {
                 )}
               </>
             )}
+          </PanelSection>
+
+          <PanelSection title="Tilt (Eğim)">
+            <SliderControl
+              label="Tilt X"
+              max={Math.PI / 4}
+              min={-Math.PI / 4}
+              onChange={(value) => handleUpdate({ tiltX: value })}
+              precision={3}
+              step={0.01}
+              unit="rad"
+              value={node.tiltX ?? 0}
+            />
+            <SliderControl
+              label="Tilt Z"
+              max={Math.PI / 4}
+              min={-Math.PI / 4}
+              onChange={(value) => handleUpdate({ tiltZ: value })}
+              precision={3}
+              step={0.01}
+              unit="rad"
+              value={node.tiltZ ?? 0}
+            />
           </PanelSection>
 
           <PanelSection title="Dimensions">
@@ -1138,32 +1176,33 @@ export default function ColumnPanel() {
               )}
             </PanelSection>
           )}
+
+          <PanelSection title="Transform">
+            <SliderControl
+              label="Yaw"
+              max={180}
+              min={-180}
+              onChange={(value) => handleUpdate({ rotation: (value * Math.PI) / 180 })}
+              precision={0}
+              step={1}
+              unit="°"
+              value={Math.round((node.rotation * 180) / Math.PI)}
+            />
+          </PanelSection>
+
+          <PanelSection title="Actions">
+            <ActionGroup>
+              <ActionButton icon={<Move className="h-4 w-4" />} label="Move" onClick={handleMove} />
+              <ActionButton
+                className="border-red-500/40 text-red-200 hover:bg-red-500/15"
+                icon={<Trash2 className="h-4 w-4" />}
+                label="Delete"
+                onClick={handleDelete}
+              />
+            </ActionGroup>
+          </PanelSection>
         </>
       )}
-      <PanelSection title="Transform">
-        <SliderControl
-          label="Yaw"
-          max={180}
-          min={-180}
-          onChange={(value) => handleUpdate({ rotation: (value * Math.PI) / 180 })}
-          precision={0}
-          step={1}
-          unit="°"
-          value={Math.round((node.rotation * 180) / Math.PI)}
-        />
-      </PanelSection>
-
-      <PanelSection title="Actions">
-        <ActionGroup>
-          <ActionButton icon={<Move className="h-4 w-4" />} label="Move" onClick={handleMove} />
-          <ActionButton
-            className="border-red-500/40 text-red-200 hover:bg-red-500/15"
-            icon={<Trash2 className="h-4 w-4" />}
-            label="Delete"
-            onClick={handleDelete}
-          />
-        </ActionGroup>
-      </PanelSection>
     </PanelWrapper>
   )
 }
