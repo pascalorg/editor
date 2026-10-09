@@ -18,23 +18,6 @@ plugins. Open **+ → Plugins → Environment** to manage its installation for t
 current project, then open **Environment** in the sidebar. No separate plugin
 checkout, local tarball, or synchronization script is needed.
 
-## Develop local Pascal cluster plugins
-
-The committed dependencies use pinned package revisions so a clean checkout and
-CI can install without a sibling repository. To edit the plugins locally, add
-this setting to the editor repository's ignored `.env.local`:
-
-```dotenv
-PASCAL_LOCAL_PLUGINS_ROOT=/absolute/path/to/pascal-cluster
-```
-
-Run `bun install` to link the Bath Space, Landscape, Pool, Streetscape and WebXR
-package directories and share the editor's peer dependencies. Restart the dev
-server after changing the setting. CI and portable builds use the pinned
-packages in clean installs. Before a portable build from a locally linked
-checkout, remove the setting and run `bun install --force` to restore the pinned
-dependencies.
-
 ## Environment Variables (optional)
 
 Copy `.env.example` to `.env` if you need:
