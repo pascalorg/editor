@@ -4,6 +4,9 @@ import { BaseNode, nodeType, objectId } from '../base'
 import { GeometryScriptSource } from '../geometry-source'
 import { MaterialSchema } from '../material'
 
+/** Steepest lean a column takes about either plan axis (45°). */
+export const COLUMN_MAX_TILT = Math.PI / 4
+
 export const ColumnStyle = z.enum([
   'plain',
   'faceted',
@@ -19,6 +22,7 @@ export const ColumnCrossSection = z.enum([
   'rectangular',
   'octagonal',
   'sixteen-sided',
+  'i-beam',
 ])
 
 export const ColumnShaftProfile = z.enum(['straight', 'tapered', 'bulged', 'baluster', 'hourglass'])
@@ -88,6 +92,9 @@ export const ColumnNode = BaseNode.extend({
   children: z.array(z.string()).default([]),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.number().default(0),
+  // Lean from vertical in radians, about the column's local X and Z axes. Absent = upright.
+  tiltX: z.number().min(-COLUMN_MAX_TILT).max(COLUMN_MAX_TILT).optional(),
+  tiltZ: z.number().min(-COLUMN_MAX_TILT).max(COLUMN_MAX_TILT).optional(),
   // Persisted slab-support host — see ItemNode.supportSlabId for the rules.
   supportSlabId: z.string().optional(),
   source: GeometryScriptSource.optional().describe(
@@ -172,8 +179,10 @@ export const ColumnNode = BaseNode.extend({
 }).describe(dedent`
   Column node - used to represent structural or decorative pillars/columns.
   - style: visual approach such as plain, lathe-turned, carved, or cluster
-  - crossSection: plan shape used by the procedural renderer
+  - crossSection: plan shape used by the procedural renderer; 'i-beam' is a steel H/I section whose flanges span the width at the front and back faces
   - height/radius/width/depth: primary dimensions in meters
+  - tiltX/tiltZ: lean in radians (±π/4) — tiltX tips the top toward local +Z, tiltZ toward local −X;
+    the column shears, so its base stays planted and its top stays level
   - edgeSoftness: bevel radius for square/plinth/block edges
   - shaftProfile/shaftDetail: profile and surface treatment of the shaft
   - shaftTwistStep: per-segment shaft rotation in degrees

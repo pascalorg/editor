@@ -22,14 +22,28 @@ export const addColumnTool = {
     }).optional(),
     width: measurement('length', 'm', {
       positive: true,
-      description: 'Width when crossSection is "square" / "rectangular" (default: 0.44).',
+      description:
+        'Width when crossSection is "square" / "rectangular" / "i-beam" (default: 0.44).',
     }).optional(),
     depth: measurement('length', 'm', {
       positive: true,
-      description: 'Depth when crossSection is "square" / "rectangular" (default: 0.44).',
+      description:
+        'Depth when crossSection is "square" / "rectangular" / "i-beam" (default: 0.44).',
     }).optional(),
     rotation: measurement('angle', 'deg', {
       description: 'Y-axis rotation (default: 0).',
+    }).optional(),
+    tiltX: measurement('angle', 'deg', {
+      min: -45,
+      max: 45,
+      description:
+        'Lean about the column X axis, tipping the top toward its +Z (default: 0). The base stays planted and the top stays level.',
+    }).optional(),
+    tiltZ: measurement('angle', 'deg', {
+      min: -45,
+      max: 45,
+      description:
+        'Lean about the column Z axis, tipping the top toward its -X (default: 0). The base stays planted and the top stays level.',
     }).optional(),
     style: z
       .enum(['plain', 'faceted', 'fluted', 'lathe-turned', 'dravidian-carved', 'cluster'])
@@ -38,10 +52,10 @@ export const addColumnTool = {
         "Visual style: 'plain' (default smooth pillar), 'faceted' (sharp prism faces), 'fluted' (vertical channels — classical), 'lathe-turned' (turned bands — porch / interior), 'dravidian-carved' (heavy carving — temple), 'cluster' (bundled colonnette — gothic).",
       ),
     crossSection: z
-      .enum(['round', 'square', 'rectangular', 'octagonal', 'sixteen-sided'])
+      .enum(['round', 'square', 'rectangular', 'octagonal', 'sixteen-sided', 'i-beam'])
       .optional()
       .describe(
-        "Plan shape: 'round' (default), 'square' (equal width/depth), 'rectangular' (independent width/depth), 'octagonal', 'sixteen-sided'.",
+        "Plan shape: 'round' (default), 'square' (equal width/depth), 'rectangular' (independent width/depth), 'octagonal', 'sixteen-sided', 'i-beam' (steel H/I section: flanges span width, web runs along depth).",
       ),
     level: z
       .string()

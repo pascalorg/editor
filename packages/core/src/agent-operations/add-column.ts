@@ -73,6 +73,8 @@ export const addColumn: AgentOperation<AddColumnInput> = (nodes, input, context)
     y,
     z,
     rotation,
+    tiltX,
+    tiltZ,
     ...fields
   } = input
   const node = ColumnNode.parse({
@@ -90,6 +92,8 @@ export const addColumn: AgentOperation<AddColumnInput> = (nodes, input, context)
       z ?? previous?.position[2] ?? 0,
     ],
     rotation: rotation === undefined ? previous?.rotation : (rotation * Math.PI) / 180,
+    ...(tiltX === undefined ? {} : { tiltX: (tiltX * Math.PI) / 180 }),
+    ...(tiltZ === undefined ? {} : { tiltZ: (tiltZ * Math.PI) / 180 }),
     ...(previous?.source && !compiled ? { source: withSourceMeta(previous.source, input) } : {}),
     ...(compiled && dimensions
       ? {

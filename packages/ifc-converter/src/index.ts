@@ -4,6 +4,7 @@ import {
   BlockNode,
   BuildingNode,
   CeilingNode,
+  COLUMN_MAX_TILT,
   type Collection,
   ColumnNode,
   containsPoint,
@@ -369,8 +370,8 @@ type ExtrusionData = {
   yDim: number | null
   profilePoints: number[][] | null
   // Detected swept-area profile shape (model units, pre-unitFactor).
-  // 'round' carries `radius`; 'rectangular' carries xDim/yDim.
-  profileShape: 'round' | 'rectangular' | null
+  // 'round' carries `radius`; 'rectangular' and 'i-beam' carry xDim/yDim.
+  profileShape: 'round' | 'rectangular' | 'i-beam' | null
   radius: number | null
   // IfcArbitraryProfileDefWithVoids inner rings, same frame as profilePoints.
   innerCurves: number[][][]
@@ -461,6 +462,13 @@ function extractFromExtrusionItem(
       result.xDim = profile.XDim.value
       result.yDim = profile.YDim?.value ?? null
       if (result.profileShape === null) result.profileShape = 'rectangular'
+    }
+
+    // IfcIShapeProfileDef: OverallWidth spans the flanges, OverallDepth the web.
+    if (profile.OverallWidth?.value && profile.WebThickness?.value) {
+      result.xDim = profile.OverallWidth.value
+      result.yDim = profile.OverallDepth?.value ?? null
+      result.profileShape = 'i-beam'
     }
 
     // Extract profile points — OuterCurve for ArbitraryClosedProfileDef
@@ -2342,8 +2350,9 @@ export async function convertIfcToPascal(
       let width: number | undefined
       let depth: number | undefined
       let height: number | undefined
-      let profileShape: 'round' | 'rectangular' | null = null
+      let profileShape: 'round' | 'rectangular' | 'i-beam' | null = null
       let profileRadius: number | undefined
+      let tilt: { tiltX: number; tiltZ: number } | undefined
 
       try {
         const worldMat = col.ObjectPlacement?.value
@@ -2354,6 +2363,14 @@ export async function convertIfcToPascal(
 
         const body = getBodyExtrusionData(ifcApi, modelID, col)
         if (body.depth) height = body.depth * unitFactor
+        // An oblique extrusion is a leaning column: its depth runs along the lean.
+        const [dx = 0, dy = 0, dz = 1] = body.direction ?? []
+        if (height !== undefined && dz > 0 && (dx || dy)) {
+          height *= dz / Math.hypot(dx, dy, dz)
+          const lean = (ratio: number) =>
+            Math.max(-COLUMN_MAX_TILT, Math.min(COLUMN_MAX_TILT, Math.atan(ratio)))
+          tilt = { tiltX: lean(-dy / dz), tiltZ: lean(-dx / dz) }
+        }
         if (opts.swapProfileDimensions) {
           if (body.yDim) width = body.yDim * unitFactor
           if (body.xDim) depth = body.xDim * unitFactor
@@ -2393,7 +2410,8 @@ export async function convertIfcToPascal(
         width,
         depth,
         height,
-        crossSection: isRect ? 'rectangular' : 'round',
+        crossSection: profileShape === 'i-beam' ? 'i-beam' : isRect ? 'rectangular' : 'round',
+        ...tilt,
         radius: profileRadius ?? Math.max(width ?? 0.44, depth ?? 0.44) / 2,
         style: 'plain',
         shaftProfile: 'straight',

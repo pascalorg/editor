@@ -1,11 +1,14 @@
 import {
   type AnyNode,
   type ColumnNode,
+  columnIBeamOutline,
+  columnPlanLeanOffset,
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
   type StructuralGridNode,
   scriptImages,
+  sweptPlanFootprint,
 } from '@pascal-app/core'
 import { floorplanGeometryMetadata } from '@pascal-app/editor'
 import {
@@ -60,7 +63,9 @@ export function buildColumnFloorplan(
   node: ColumnNode,
   ctx: GeometryContext,
 ): FloorplanGeometry | null {
-  const points = getColumnFloorplanFootprint(node)
+  const base = getColumnBaseFootprint(node)
+  const lean = columnPlanLeanOffset(node, node.height)
+  const points = sweptPlanFootprint(base, lean)
   if (points.length < 3) return null
 
   const view = ctx.viewState
@@ -100,7 +105,7 @@ export function buildColumnFloorplan(
     : [body]
   if (floorPlanUrl && node.source) {
     const { min, max } = node.source.manifest.bounds
-    const [cx, cz] = points
+    const [cx, cz] = base
       .reduce((sum, [x, z]) => [sum[0] + x, sum[1] + z], [0, 0])
       .map((total) => total / points.length) as [number, number]
     children.push({
@@ -115,6 +120,19 @@ export function buildColumnFloorplan(
     // The selection ring goes back on top of the image.
     if (showSelectedChrome)
       children.push({ ...body, fill: 'none', pointerEvents: 'none', metadata: undefined })
+  }
+  // A leaning column's top, drawn overhead (dashed) where it ends up.
+  if (lean[0] !== 0 || lean[1] !== 0) {
+    children.push({
+      kind: 'polygon',
+      points: base.map(([x, z]) => [x + lean[0], z + lean[1]]),
+      fill: 'none',
+      stroke,
+      strokeWidth: 1,
+      strokeDasharray: '4 3',
+      vectorEffect: 'non-scaling-stroke',
+      pointerEvents: 'none',
+    })
   }
   const { halfX, halfZ } = columnPlanHalfExtents(node)
   const centerMarkHalf = Math.min(0.09, Math.max(0.035, Math.min(halfX, halfZ) * 0.45))
@@ -275,7 +293,12 @@ export function buildColumnFloorplan(
   return { kind: 'group', children }
 }
 
+/** Plan area the column covers: its base swept along its lean up to the top. */
 export function getColumnFloorplanFootprint(node: ColumnNode): FloorplanPoint[] {
+  return sweptPlanFootprint(getColumnBaseFootprint(node), columnPlanLeanOffset(node, node.height))
+}
+
+function getColumnBaseFootprint(node: ColumnNode): [number, number][] {
   if (node.source) {
     const cos = Math.cos(node.rotation),
       sin = Math.sin(node.rotation)
@@ -411,6 +434,18 @@ function getColumnPlanFootprint(column: ColumnNode): PlanPoint[] {
     return getRotatedRectanglePolygon(center, width, depth, -column.rotation)
   }
 
+  // A bare i-beam (no base or capital plates) reads as its true section.
+  if (
+    column.crossSection === 'i-beam' &&
+    column.baseStyle === 'none' &&
+    column.capitalStyle === 'none'
+  ) {
+    return columnIBeamOutline(column.width, column.depth).map(([x, z]) => {
+      const [offsetX, offsetY] = rotatePlanVector(x, z, -column.rotation)
+      return { x: center.x + offsetX, y: center.y + offsetY }
+    })
+  }
+
   // Standalone column: shaft profile expanded for base + capital.
   const isRound =
     column.crossSection === 'round' ||
@@ -429,7 +464,11 @@ function getColumnPlanFootprint(column: ColumnNode): PlanPoint[] {
     column.depth * column.capitalDepthScale,
   )
 
-  if (column.crossSection === 'square' || column.crossSection === 'rectangular') {
+  if (
+    column.crossSection === 'square' ||
+    column.crossSection === 'rectangular' ||
+    column.crossSection === 'i-beam'
+  ) {
     return getRotatedRectanglePolygon(center, width, depth, -column.rotation)
   }
 
