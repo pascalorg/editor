@@ -26,9 +26,12 @@ import {
   pluginDirectoryContext,
   pluginInstallLocks,
 } from '../../../lib/plugin-panels'
+import { openSidebarPanel } from '../../../lib/sidebar-panel'
 import { cn } from '../../../lib/utils'
+import useEditor from '../../../store/use-editor'
 import { IconRefGlyph } from '../../ui/icon-ref'
 import { Button } from '../../ui/primitives/button'
+import { PLUGINS_VIEW_ID } from './use-editor-views'
 
 const PLUGIN_AUTHORING_URL = 'https://editor.pascal.app/docs/developers/plugins'
 const OTHER_CATEGORY = 'Other'
@@ -228,6 +231,7 @@ function PluginDetail({
   floating,
   onClose,
   onToggle,
+  onOpen,
 }: {
   entry: PluginEntry
   context: PluginDirectoryContext
@@ -236,6 +240,8 @@ function PluginDetail({
   floating: boolean
   onClose: () => void
   onToggle: () => void
+  /** Opens the plugin's panel; absent when it has none in this workspace. */
+  onOpen?: () => void
 }) {
   const { panel } = entry
   const credits = creditsLabel(context.credits)
@@ -276,21 +282,26 @@ function PluginDetail({
             {lock.actionLabel}
           </Button>
         </div>
-      ) : (
-        <Button
-          className="h-10 rounded-full"
-          disabled={readOnly}
-          onClick={onToggle}
-          variant={entry.installed ? 'outline' : 'default'}
-        >
-          {entry.installed ? (
-            'Uninstall'
-          ) : (
-            <>
-              <Check />
-              {context.projectName ? `Install in ${context.projectName}` : 'Install'}
-            </>
+      ) : entry.installed ? (
+        <div className="flex gap-2">
+          {onOpen && (
+            <Button className="h-10 flex-1 rounded-full" onClick={onOpen}>
+              Open {panel.label}
+            </Button>
           )}
+          <Button
+            className="h-10 flex-1 rounded-full"
+            disabled={readOnly}
+            onClick={onToggle}
+            variant="outline"
+          >
+            Uninstall
+          </Button>
+        </div>
+      ) : (
+        <Button className="h-10 rounded-full" disabled={readOnly} onClick={onToggle}>
+          <Check />
+          {context.projectName ? `Install in ${context.projectName}` : 'Install'}
         </Button>
       )}
 
@@ -338,14 +349,8 @@ function PluginDetail({
         </h4>
         <div className="flex items-center gap-2.5 rounded-xl bg-accent/60 px-3.5 py-3 text-sm">
           <Coins className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <span>
-            {usesCredits(panel)
-              ? context.projectName
-                ? `Spends ${context.projectName} credits`
-                : "Spends this project's credits"
-              : "Doesn't spend credits"}
-          </span>
-          {credits && (
+          <span>{usesCredits(panel) ? "Uses this project's credits" : "Doesn't use credits"}</span>
+          {credits && usesCredits(panel) && (
             <span className="ml-auto font-mono text-muted-foreground text-xs tabular-nums">
               {credits}
             </span>
@@ -443,6 +448,24 @@ export function PluginsView() {
   const installed = shown.filter((entry) => entry.installed)
   const available = shown.filter((entry) => !entry.installed)
   const selected = entries.find((entry) => entry.id === selectedId)
+  // A category is a new list: the detail of a plugin from the last one closes.
+  const pickCategory = (name: string | null) => {
+    setCategory(name)
+    setSelectedId(null)
+  }
+  const workspaceMode = useEditor((state) => state.workspaceMode)
+  const panelIdsOf = (pluginId: string) =>
+    panels
+      .filter(
+        (panel) =>
+          panel.pluginId === pluginId && (panel.workspaces ?? ['edit']).includes(workspaceMode),
+      )
+      .map((panel) => panel.id)
+  /** Hands the stage back to the scene and shows the plugin's panel in the sidebar. */
+  const openPlugin = (pluginId: string) => {
+    if (!openSidebarPanel(panelIdsOf(pluginId))) return
+    useEditor.getState().closeView(PLUGINS_VIEW_ID)
+  }
 
   const setInstalled = (id: string, next: boolean, remember = true) => {
     const current = useScene.getState().installedPlugins
@@ -518,7 +541,7 @@ export function PluginsView() {
                     : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
                 )}
                 key={name ?? 'all'}
-                onClick={() => setCategory(name)}
+                onClick={() => pickCategory(name)}
                 type="button"
               >
                 <span className="flex-1 truncate">{name ?? 'All plugins'}</span>
@@ -555,7 +578,7 @@ export function PluginsView() {
             <select
               aria-label="Category"
               className="h-9 rounded-lg border border-border bg-accent/40 px-2.5 text-sm"
-              onChange={(event) => setCategory(event.target.value || null)}
+              onChange={(event) => pickCategory(event.target.value || null)}
               value={category ?? ''}
             >
               <option value="">All plugins</option>
@@ -619,6 +642,7 @@ export function PluginsView() {
           floating={!wide}
           lock={installLocks[selected.id]}
           onClose={() => setSelectedId(null)}
+          onOpen={panelIdsOf(selected.id).length > 0 ? () => openPlugin(selected.id) : undefined}
           onToggle={() => setInstalled(selected.id, !selected.installed)}
           readOnly={readOnly}
         />
