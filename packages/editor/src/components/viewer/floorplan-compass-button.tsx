@@ -1,25 +1,33 @@
 'use client'
 
 import type React from 'react'
+import { cn } from '../../lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/tooltip'
 
 export type FloorplanCompassButtonProps = {
   northRotationDeg: number
   onAlignNorth: () => void
   needleRef?: React.RefObject<SVGSVGElement | null>
+  /** Horizontal anchor; defaults to the bottom-left corner. */
+  style?: React.CSSProperties
 }
 
 export function FloorplanCompassButton({
   northRotationDeg,
   onAlignNorth,
   needleRef,
+  style,
 }: FloorplanCompassButtonProps) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <button
           aria-label="Align view to north"
-          className="group pointer-events-auto absolute bottom-3 left-3 z-30 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white/85 shadow-sm backdrop-blur-md transition hover:bg-white hover:shadow-md dark:border-white/10 dark:bg-neutral-900/85 dark:hover:bg-neutral-900"
+          className={cn(
+            'group pointer-events-auto absolute bottom-3 z-30 flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white/85 shadow-sm backdrop-blur-md transition hover:bg-white hover:shadow-md dark:border-white/10 dark:bg-neutral-900/85 dark:hover:bg-neutral-900',
+            !style && 'left-3',
+          )}
+          style={style}
           onClick={(event) => {
             event.preventDefault()
             event.stopPropagation()

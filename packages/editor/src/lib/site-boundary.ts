@@ -11,7 +11,7 @@ export const SITE_BOUNDARY_DRAG_LABEL = 'site-boundary'
  * clause was added to only one of them.
  *
  * The disagreement was reachable in exactly one configuration, which is why it was
- * easy to miss: arming sculpt from the 2D view promotes `viewMode` to `split` *and*
+ * easy to miss: arming sculpt from the 2D view opens 3D beside the plan *and*
  * the phase to `site`, so the floorplan's `phase === 'site'` term went true at the
  * same moment the 3D editor's `!sculpting` term went false — handles gone in one
  * pane, live in the other. Grabbing one then calls `begin({kind: 'handle-drag'})`,

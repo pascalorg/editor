@@ -30,6 +30,7 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
     shortcuts: [
       { keys: ['1'], action: 'Switch to Site' },
       { keys: ['2'], action: 'Switch to Building' },
+      { keys: ['\\'], action: 'Open or close the split view' },
       { keys: ['F'], action: 'Open the items catalog with the item tool' },
       { keys: ['Z'], action: 'Draw a zone' },
       {

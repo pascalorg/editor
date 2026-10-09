@@ -12,6 +12,7 @@ import {
 import { openWallEndKey, openWallEndLabel } from '../../lib/floorplan/open-wall-ends'
 import { MEASUREMENT_DANGLING_COLOR } from '../../lib/measurements'
 import useEditor from '../../store/use-editor'
+import { isViewVisible, VIEW_2D } from '../../store/view-layout'
 import { JoinWallsPill } from '../editor/join-walls-pill'
 import { OpenWallEndsHint } from '../editor/open-wall-ends-hint'
 import { useFloorplanRender } from './floorplan-render-context'
@@ -36,7 +37,7 @@ function sceneScreenPoint(point: [number, number]): { left: number; top: number 
  * otherwise only when a wall that bounds no room has a near miss.
  */
 export const FloorplanOpenWallEndsLayer = memo(function FloorplanOpenWallEndsLayer() {
-  const visible = useEditor((state) => state.viewMode !== '3d')
+  const visible = useEditor((state) => isViewVisible(state, VIEW_2D))
   const suppressed = useOpenWallEndsSuppressed()
   return visible && !suppressed ? <ActiveOpenWallEndsLayer /> : null
 })

@@ -6,11 +6,12 @@ import {
   selectQuickMeasurementHudEntry,
   useQuickMeasurementHud,
 } from '../../store/use-quick-measurement-hud'
+import { visibleScene } from '../../store/view-layout'
 import { QuickMeasurementCard } from './quick-measurement-card'
 
 export function QuickMeasurementHud() {
-  const viewMode = useEditor((state) => state.viewMode)
-  const entry = useQuickMeasurementHud((state) => selectQuickMeasurementHudEntry(state, viewMode))
+  const scene = useEditor(visibleScene)
+  const entry = useQuickMeasurementHud((state) => selectQuickMeasurementHudEntry(state, scene))
   const unit = useViewer((state) => state.unit)
   const metricNotation = useViewer((state) => state.metricNotation)
 

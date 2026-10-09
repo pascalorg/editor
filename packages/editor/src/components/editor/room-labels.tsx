@@ -44,6 +44,7 @@ import {
 import { selectionModifiersFromEvent } from '../../lib/selection-routing'
 import useEditor from '../../store/use-editor'
 import useInteractionScope from '../../store/use-interaction-scope'
+import { isViewVisible, VIEW_2D, VIEW_3D } from '../../store/view-layout'
 
 const CONTEXT_TYPES = new Set(['site', 'building', 'level'])
 
@@ -654,7 +655,7 @@ function RoomPill({
 /** Light name-and-area pills over each room and drawn zone of the active level. */
 export function RoomLabels3D() {
   const levelId = useViewer((s) => s.selection.levelId)
-  const sceneShown = useEditor((s) => s.viewMode !== '2d')
+  const sceneShown = useEditor((s) => isViewVisible(s, VIEW_3D))
   const visible = useRoomLabelsVisible() && sceneShown
   const { levels, drop } = useFadingLevels(levelId, visible)
   return levels.map((id) => (
@@ -844,7 +845,7 @@ export function RoomLabelAnchor3D({
  * plan's own stacking layer, under the UI over it.
  */
 export function RoomLabels2D({ levelId }: { levelId: string | null }) {
-  const planShown = useEditor((s) => s.viewMode !== '3d')
+  const planShown = useEditor((s) => isViewVisible(s, VIEW_2D))
   const visible = useRoomLabelsVisible() && planShown
   const { levels, drop } = useFadingLevels(levelId, visible)
   return levels.map((id) => (

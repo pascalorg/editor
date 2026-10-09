@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import useEditor, { isBrushMode, type Mode, normalizePersistedEditorUiState } from './use-editor'
 import useInteractionScope from './use-interaction-scope'
+import { isViewVisible, sceneLayout, VIEW_2D, visibleScene } from './view-layout'
 
 /**
  * The mode-lifecycle contract for terrain sculpting.
@@ -17,9 +18,9 @@ function reset() {
   useEditor.getState().setPreviewMode(false)
   useEditor.getState().setFirstPersonMode(false)
   useEditor.getState().setWorkspaceMode('edit')
-  // Before the mode: `setViewMode('2d')` disarms sculpt, and leaving a stale view
+  // Before the mode: hiding 3D disarms sculpt, and leaving a stale layout
   // behind would silently change what the next test's `setMode` does.
-  useEditor.getState().setViewMode('3d')
+  useEditor.getState().setViewLayout(sceneLayout('3d'))
   useEditor.getState().setMode('select')
   useEditor.getState().setTerrainVerb('flatten')
   useEditor.getState().setTerrainSampling(false)
@@ -106,17 +107,17 @@ describe('the brush and the 3D canvas travel together', () => {
   // moves), while choosing the floorplan asks for the floorplan (so the mode
   // yields).
   test('arming from the 2D floorplan opens a 3D pane beside it', () => {
-    useEditor.getState().setViewMode('2d')
+    useEditor.getState().setViewLayout(sceneLayout('2d'))
     useEditor.getState().setMode('terrain-sculpt')
     // `split`, not `3d`: the floorplan was a deliberate choice, so keep it.
-    expect(useEditor.getState().viewMode).toBe('split')
-    expect(useEditor.getState().isFloorplanOpen).toBe(true)
+    expect(visibleScene(useEditor.getState())).toBe('split')
+    expect(isViewVisible(useEditor.getState(), VIEW_2D)).toBe(true)
     expect(useEditor.getState().mode).toBe('terrain-sculpt')
   })
 
   test('switching to the 2D floorplan disarms the brush', () => {
     useEditor.getState().setMode('terrain-sculpt')
-    useEditor.getState().setViewMode('2d')
+    useEditor.getState().setViewLayout(sceneLayout('2d'))
     expect(useEditor.getState().mode).toBe('select')
     // And the scope goes with it — otherwise selection stays suppressed in the
     // floorplan the user just asked for, with no visible way out.
@@ -125,8 +126,14 @@ describe('the brush and the 3D canvas travel together', () => {
 
   test('split keeps it armed — the canvas is right there', () => {
     useEditor.getState().setMode('terrain-sculpt')
-    useEditor.getState().setViewMode('split')
+    useEditor.getState().setViewLayout(sceneLayout('split'))
     expect(useEditor.getState().mode).toBe('terrain-sculpt')
+  })
+
+  test('another view in the 3D pane disarms it, as the plan does', () => {
+    useEditor.getState().setMode('terrain-sculpt')
+    useEditor.getState().showView('gallery')
+    expect(useEditor.getState().mode).toBe('select')
   })
 
   test('rehydrating the pair resolves it to select', () => {

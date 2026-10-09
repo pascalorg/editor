@@ -257,7 +257,7 @@ function seedColumn(mover: Mover, shape: string, mode: string) {
     tool: 'item',
     movingNodeOrigin: '3d',
     placementDragMode: false,
-    viewMode: '3d',
+    viewLayouts: {},
   })
   useEditor.getState().setSnappingMode('item', 'off')
   useViewer.setState({
