@@ -4,12 +4,11 @@ import { Icon } from '@iconify/react'
 import { type IconRef, useScene } from '@pascal-app/core'
 import { ChevronLeft, ChevronRight, ExternalLink, Lock, Puzzle } from 'lucide-react'
 import { lazy, type ReactNode, Suspense, useState, useSyncExternalStore } from 'react'
-import { editorHostPanelRegistry, pluginInstallLocks } from '../../../../lib/plugin-panels'
-import { IconRefImage } from '../../icon-ref'
-import { Button } from '../../primitives/button'
+import { editorHostPanelRegistry, pluginInstallLocks } from '../../../lib/plugin-panels'
+import { IconRefImage } from '../../ui/icon-ref'
+import { Button } from '../../ui/primitives/button'
 
-const PLUGIN_AUTHORING_URL =
-  'https://editor.pascal.app/docs/developers/plugins'
+const PLUGIN_AUTHORING_URL = 'https://editor.pascal.app/docs/developers/plugins'
 
 function PluginBadge({ label }: { label: string }) {
   return (
@@ -41,7 +40,8 @@ function renderPluginIcon(ref: IconRef): ReactNode {
   )
 }
 
-export function PluginsPanel() {
+/** The plugin directory, a view of its own so it has the room to read like one. */
+export function PluginsView() {
   const [selectedPluginId, setSelectedPluginId] = useState<string | null>(null)
   const panels = useSyncExternalStore(
     editorHostPanelRegistry.subscribe,
@@ -58,9 +58,7 @@ export function PluginsPanel() {
   )
   const plugins = Array.from(
     new Map(
-      panels
-        .filter((panel) => panel.pluginId)
-        .map((panel) => [panel.pluginId as string, panel]),
+      panels.filter((panel) => panel.pluginId).map((panel) => [panel.pluginId as string, panel]),
     ).entries(),
   )
   const selectedPlugin = selectedPluginId
@@ -73,8 +71,8 @@ export function PluginsPanel() {
     const lock = installed ? undefined : installLocks[pluginId]
 
     return (
-      <div className="flex h-full flex-col overflow-y-auto p-4">
-        <div>
+      <div className="flex h-full flex-col overflow-y-auto bg-sidebar px-6 pt-16 pb-6">
+        <div className="mx-auto w-full max-w-2xl">
           <Button
             className="rounded-full"
             onClick={() => setSelectedPluginId(null)}
@@ -174,7 +172,7 @@ export function PluginsPanel() {
           )}
         </div>
 
-        <div className="mt-auto pt-6">
+        <div className="mx-auto mt-auto w-full max-w-2xl pt-6">
           <a
             className="inline-flex items-center gap-1.5 text-sidebar-foreground/70 text-sm underline-offset-4 hover:text-sidebar-foreground hover:underline"
             href={PLUGIN_AUTHORING_URL}
@@ -190,15 +188,15 @@ export function PluginsPanel() {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto p-4">
-      <div className="mb-5">
+    <div className="flex h-full flex-col overflow-y-auto bg-sidebar px-6 pt-16 pb-6">
+      <div className="mx-auto mb-5 w-full max-w-5xl">
         <h2 className="font-semibold text-lg text-sidebar-foreground">Plugins</h2>
         <p className="mt-1 text-sidebar-foreground/60 text-sm">
           Add focused tools and content to this project.
         </p>
       </div>
 
-      <div className="flex flex-col gap-3">
+      <div className="mx-auto grid w-full max-w-5xl grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
         {plugins.map(([pluginId, panel]) => {
           const installed = installedPlugins.includes(pluginId)
           return (
@@ -235,7 +233,7 @@ export function PluginsPanel() {
         })}
       </div>
 
-      <div className="mt-auto pt-6">
+      <div className="mx-auto mt-auto w-full max-w-5xl pt-6">
         <a
           className="inline-flex items-center gap-1.5 text-sidebar-foreground/70 text-sm underline-offset-4 hover:text-sidebar-foreground hover:underline"
           href={PLUGIN_AUTHORING_URL}

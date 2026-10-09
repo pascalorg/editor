@@ -413,6 +413,12 @@ export {
 } from './lib/door-interaction'
 export { createEditorApi } from './lib/editor-api'
 export {
+  type EditorHostView,
+  editorHostViewRegistry,
+  openEditorView,
+  registerEditorHostView,
+} from './lib/editor-views'
+export {
   clearStructuralElevationGuide,
   collectElevationSnapTargets,
   ELEVATION_ALIGNMENT_THRESHOLD_M,
@@ -871,12 +877,10 @@ export type {
   Mode,
   SnapshotCropMode,
   SnapshotStandardAspect,
-  SplitOrientation,
   StructureTool,
   Tool,
   ToolDefaults,
   ToolMode,
-  ViewMode,
   WorkspaceMode,
 } from './store/use-editor'
 export {
@@ -968,3 +972,14 @@ export {
   type WallSnapKind,
   type WallSnapPoint,
 } from './store/use-wall-snap-indicator'
+export {
+  activeViewLayout,
+  isViewVisible,
+  sceneLayout,
+  VIEW_2D,
+  VIEW_3D,
+  type ViewLayout,
+  type ViewPaneIndex,
+  type VisibleScene,
+  visibleScene,
+} from './store/view-layout'

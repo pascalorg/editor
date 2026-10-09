@@ -12,6 +12,8 @@ import {
   useSyncExternalStore,
 } from 'react'
 import useEditor from '../../../store/use-editor'
+import { PluginsView } from '../../editor/views/plugins-view'
+import { PLUGINS_VIEW_ID } from '../../editor/views/use-editor-views'
 import {
   editorHostPanelRegistry,
   type EditorHostPanel,
@@ -21,13 +23,15 @@ import {
 import { IconRefImage } from '../icon-ref'
 import { ErrorBoundary } from '../primitives/error-boundary'
 import type { ExtraPanel } from './icon-rail'
-import { PluginsPanel } from './panels/plugins-panel'
 
+// The rail's "+" opens the plugin directory as a view in the focused pane.
+// `component` remains for the v1 sidebar, which has no stage views.
 const pluginsManagerPanel: ExtraPanel = {
   id: 'plugins',
   label: 'Plugins',
   icon: <Plus className="h-5 w-5" />,
-  component: PluginsPanel,
+  component: PluginsView,
+  onSelect: () => useEditor.getState().showView(PLUGINS_VIEW_ID),
 }
 
 /** Resolve a plugin's {@link IconRef} into a rail-sized React node. Mirrors the

@@ -19,6 +19,8 @@ export type SidebarTab = {
    * keeps the icon highlighted regardless of collapse.
    */
   noPanel?: boolean
+  /** Rail entry that runs an action instead of opening a panel; the active panel is left as it is. */
+  onSelect?: () => void
 }
 
 interface TabBarProps {

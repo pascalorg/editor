@@ -22,6 +22,7 @@ import { useState } from 'react'
 import type { CreatableMeasurementKind } from '../../../lib/measurement-kind'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
+import { VIEW_2D } from '../../../store/view-layout'
 import useFloorplanMode from '../../../store/use-floorplan-mode'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
 import { ActionButton } from './action-button'
@@ -77,7 +78,7 @@ export function MeasurementControl() {
   const setLastMeasurementKind = useEditor((state) => state.setLastMeasurementKind)
   const setTool = useEditor((state) => state.setTool)
   const setToolDefaults = useEditor((state) => state.setToolDefaults)
-  const setViewMode = useEditor((state) => state.setViewMode)
+  const showView = useEditor((state) => state.showView)
 
   const selectedOption =
     measurementOptions.find((option) => option.kind === selectedKind) ?? measurementOptions[0]
@@ -130,7 +131,7 @@ export function MeasurementControl() {
       useFloorplanMode.getState().showExpertModeNotice('Construction Dimension')
       return
     }
-    setViewMode('2d')
+    showView(VIEW_2D)
     setToolDefaults('construction-dimension', { chainMode, mode: dimensionMode })
     setMode('build')
     setTool('construction-dimension')

@@ -17,6 +17,8 @@ export type ExtraPanel = {
   label: string
   component: ComponentType
   pluginId?: string
+  /** A rail entry that runs an action (opening a view) instead of showing `component`. */
+  onSelect?: () => void
 }
 
 interface IconRailProps {

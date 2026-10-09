@@ -156,7 +156,7 @@ export function activateBuildTool(kind: string): void {
     useFloorplanMode.getState().showExpertModeNotice(definition?.presentation?.label ?? kind)
     return
   }
-  if (extension?.preferredView) editor.setViewMode(extension.preferredView)
+  if (extension?.preferredView) editor.showView(extension.preferredView)
   useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
   editor.setPhase('building')
   editor.setCatalogCategory(null)

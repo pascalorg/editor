@@ -164,6 +164,7 @@ import useInteractionScope, {
 import usePlacementPreview from '../../store/use-placement-preview'
 import { expandSessionSelectionForNode } from '../../store/use-session-groups'
 import { useStairBuildPreview } from '../../store/use-stair-build-preview'
+import { isViewVisible, VIEW_2D, visibleScene } from '../../store/view-layout'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
 import { FloorplanGroupActionMenu } from '../editor-2d/floorplan-group-action-menu'
@@ -4912,8 +4913,8 @@ export function FloorplanPanel({
   // editor/index.tsx — subscribing here lets us re-fit the viewport when
   // the user closes and re-opens the 2D editor instead of restoring the
   // stale viewport from before they closed it.
-  const isFloorplanOpen = useEditor((state) => state.isFloorplanOpen)
-  const viewMode = useEditor((state) => state.viewMode)
+  const isFloorplanOpen = useEditor((state) => isViewVisible(state, VIEW_2D))
+  const shownScene = useEditor(visibleScene)
   // Mirror for callbacks that fire outside React's render (the per-frame
   // navigation-pose subscriber): when the 2D panel is hidden (`display:none` in
   // 3D mode) it must NOT re-render on every camera-zoom frame.
@@ -7544,7 +7545,7 @@ export function FloorplanPanel({
       scheduleFloorplanZoomCommit()
       const userRotationDeg = latestFloorplanUserRotationDegRef.current
       floorplanZoomPoseRef.current = { localCenter, userRotationDeg, viewWidth: nextWidth }
-      if (useEditor.getState().viewMode === 'split') {
+      if (visibleScene(useEditor.getState()) === 'split') {
         publishFloorplanNavigationPose(localCenter, userRotationDeg, nextWidth)
       }
     },
@@ -7627,7 +7628,7 @@ export function FloorplanPanel({
     right: false,
   })
   useEffect(() => {
-    if (viewMode !== '2d') return
+    if (shownScene !== '2d') return
     const keys = keyboardPanKeysRef.current
     const motion = createKeyboardPanMotion()
     let frame: number | null = null
@@ -7723,7 +7724,7 @@ export function FloorplanPanel({
     commitFloorplanPan,
     publishFloorplanNavigationPose,
     smoothFloorplanNavigationView,
-    viewMode,
+    shownScene,
   ])
 
   useLayoutEffect(() => {
@@ -8182,13 +8183,13 @@ export function FloorplanPanel({
 
       if (
         isStairBuildActive &&
-        useEditor.getState().viewMode === '2d' &&
+        visibleScene(useEditor.getState()) === '2d' &&
         (event.key === 'r' || event.key === 'R')
       ) {
         useStairBuildPreview.getState().rotateBy(Math.PI / 4)
       } else if (
         isStairBuildActive &&
-        useEditor.getState().viewMode === '2d' &&
+        visibleScene(useEditor.getState()) === '2d' &&
         (event.key === 't' || event.key === 'T')
       ) {
         useStairBuildPreview.getState().rotateBy(-Math.PI / 4)
@@ -9100,7 +9101,7 @@ export function FloorplanPanel({
         const nextUserRotationDeg = rotationState.initialUserRotationDeg + angleDeltaDeg
 
         applyFloorplanRotationImperatively(rotationState, nextUserRotationDeg)
-        if (useEditor.getState().viewMode === 'split') {
+        if (visibleScene(useEditor.getState()) === 'split') {
           publishFloorplanNavigationPose(
             rotationState.viewportCenterLocal,
             nextUserRotationDeg,
@@ -9142,7 +9143,7 @@ export function FloorplanPanel({
           userRotationDeg: currentUserRotationDeg,
           viewWidth: currentViewport.width,
         }
-        if (useEditor.getState().viewMode === 'split') {
+        if (visibleScene(useEditor.getState()) === 'split') {
           publishFloorplanNavigationPose(localCenter, currentUserRotationDeg, currentViewport.width)
         }
 
@@ -9556,7 +9557,7 @@ export function FloorplanPanel({
       const firstPoint = slabDraftPoints[0]
       if (firstPoint && slabDraftPoints.length >= 3 && isPointNearPlanPoint(point, firstPoint)) {
         // 2D-only view: the 3D tool can't commit, so close the polygon here.
-        if (useEditor.getState().viewMode === '2d') {
+        if (visibleScene(useEditor.getState()) === '2d') {
           createSlabOnCurrentLevel(slabDraftPoints, slabPlacementBaseRef.current)
         }
         clearDraft()
@@ -9606,7 +9607,7 @@ export function FloorplanPanel({
       }
 
       // 2D-only view: the 3D tool can't commit, so create the slab here.
-      if (useEditor.getState().viewMode === '2d') {
+      if (visibleScene(useEditor.getState()) === '2d') {
         createSlabOnCurrentLevel(nextPoints, slabPlacementBaseRef.current)
       }
       clearDraft()
@@ -9622,7 +9623,7 @@ export function FloorplanPanel({
 
       const firstPoint = ceilingDraftPoints[0]
       if (firstPoint && ceilingDraftPoints.length >= 3 && isPointNearPlanPoint(point, firstPoint)) {
-        if (useEditor.getState().viewMode === '2d') {
+        if (visibleScene(useEditor.getState()) === '2d') {
           createCeilingOnCurrentLevel(ceilingDraftPoints)
         }
         clearCeilingPlacementDraft()
@@ -9655,7 +9656,7 @@ export function FloorplanPanel({
         return
       }
 
-      if (useEditor.getState().viewMode === '2d') {
+      if (visibleScene(useEditor.getState()) === '2d') {
         createCeilingOnCurrentLevel(nextPoints)
       }
       clearCeilingPlacementDraft()
@@ -9725,7 +9726,7 @@ export function FloorplanPanel({
         // 2D-only owns a Polygon room's draft; split view leaves it to the 3D tool.
         if (
           levelId &&
-          useEditor.getState().viewMode === '2d' &&
+          visibleScene(useEditor.getState()) === '2d' &&
           getWallDrawVariant() === 'polygon'
         ) {
           startWallPolygonDraft(levelId as AnyNodeId, point, wallConstructionOptionsRef.current)
@@ -9755,7 +9756,7 @@ export function FloorplanPanel({
       // `display:none`, so the tool never commits. Mirror the slab /
       // ceiling 2D-only committers: create locally here, gated on the
       // view, so split / 3D keep their single-owner tool commit.
-      const viewIs2DOnly = useEditor.getState().viewMode === '2d'
+      const viewIs2DOnly = visibleScene(useEditor.getState()) === '2d'
       let createdWall: WallNode | null = null
       // 2D-only Polygon room: the corner joins the draft; nothing is written
       // until it closes, seals or tees (then every wall at once).
@@ -11351,7 +11352,7 @@ export function FloorplanPanel({
           // renderer, handle layers) must NOT render/reconcile while hidden —
           // otherwise every scene/selection change in pure 3D re-rendered the
           // whole floorplan tree (profiler: 150–200ms on a wall-endpoint drag).
-          // `isFloorplanOpen` is `viewMode !== '3d'`, so this still renders fully
+          // `isFloorplanOpen` is "the plan is in a pane", so this still renders fully
           // in both 2D and split. Viewport state lives on the still-mounted
           // panel, so pan/zoom is preserved across the toggle.
           <svg

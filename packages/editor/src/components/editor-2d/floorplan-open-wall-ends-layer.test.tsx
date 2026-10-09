@@ -4,6 +4,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { act } from '@react-three/fiber'
 import useEditor from '../../store/use-editor'
 import useInteractionScope from '../../store/use-interaction-scope'
+import { sceneLayout } from '../../store/view-layout'
 import { withSelectionHarness } from '../../test-utils/selection-harness'
 import { OpenWallEnds3DLayer } from '../editor/open-wall-ends-3d-layer'
 import { FloorplanOpenWallEndsLayer } from './floorplan-open-wall-ends-layer'
@@ -35,7 +36,7 @@ test('hidden open-end overlays do not read 2,000 walls during moves, handles, an
     useViewer.setState({
       selection: { buildingId: null, levelId: level.id, zoneId: null, selectedIds: [] },
     })
-    useEditor.setState({ viewMode: 'split', mode: 'build', tool: 'wall' })
+    useEditor.setState({ viewLayouts: { edit: sceneLayout('split') }, mode: 'build', tool: 'wall' })
     const scopes: ReturnType<typeof useInteractionScope.getState>['scope'][] = [
       { kind: 'moving', node: wall, nodeId: wall.id, nodeType: 'wall', view: '2d' },
       {
@@ -70,14 +71,14 @@ test('hidden open-end overlays do not read 2,000 walls during moves, handles, an
     }
     await render(null)
     await act(async () => {
-      useEditor.setState({ viewMode: '3d' })
+      useEditor.setState({ viewLayouts: { edit: sceneLayout('3d') } })
       useInteractionScope.setState({ scope: { kind: 'idle' } })
     })
     reads = 0
     await render(<FloorplanOpenWallEndsLayer />)
     expect(reads).toBe(0)
     await render(null)
-    await act(async () => useEditor.setState({ viewMode: '2d' }))
+    await act(async () => useEditor.setState({ viewLayouts: { edit: sceneLayout('2d') } }))
     reads = 0
     await render(<OpenWallEnds3DLayer />)
     expect(reads).toBe(0)

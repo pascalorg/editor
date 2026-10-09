@@ -17,6 +17,7 @@ import { openWallEndKey, openWallEndLabel } from '../../lib/floorplan/open-wall-
 import { MEASUREMENT_DANGLING_COLOR } from '../../lib/measurements'
 import { cn } from '../../lib/utils'
 import useEditor from '../../store/use-editor'
+import { isViewVisible, VIEW_3D, visibleScene } from '../../store/view-layout'
 import { JoinWallsPill } from './join-walls-pill'
 import { OpenWallEndsHint } from './open-wall-ends-hint'
 
@@ -66,7 +67,7 @@ type MarkerResources = ReturnType<typeof createMarkerResources>
 type Vec3 = [number, number, number]
 
 export const OpenWallEnds3DLayer = memo(function OpenWallEnds3DLayer() {
-  const visible = useEditor((state) => state.viewMode !== '2d')
+  const visible = useEditor((state) => isViewVisible(state, VIEW_3D))
   const suppressed = useOpenWallEndsSuppressed()
   return visible && !suppressed ? <ActiveOpenWallEnds3DLayer /> : null
 })
@@ -76,7 +77,7 @@ const ActiveOpenWallEnds3DLayer = memo(function ActiveOpenWallEnds3DLayer() {
   const unit = useViewer((state) => state.unit)
   const { drafting, ends } = useOpenWallEnds()
   // Split view shows the hint once, over the floor plan.
-  const hintHere = useEditor((state) => state.viewMode === '3d')
+  const hintHere = useEditor((state) => visibleScene(state) === '3d')
   const focus = useOpenWallEndFocus(ends, drafting)
   const groupRef = useRef<Group>(null)
   const hasEnds = ends.length > 0

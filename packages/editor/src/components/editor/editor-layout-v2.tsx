@@ -8,6 +8,9 @@ import useEditor from '../../store/use-editor'
 import { useSidebarStore } from '../ui/primitives/sidebar'
 import { IconRail, type SidebarTab } from '../ui/sidebar/tab-bar'
 import { EditorLayoutMobile } from './editor-layout-mobile'
+import { useSceneSpan } from './views/scene-region'
+import { useActiveViewLayout } from './views/use-editor-views'
+import { useSplitShortcut, ViewBar } from './views/view-bar'
 
 const SIDEBAR_MAX_WIDTH = 800
 const SIDEBAR_COLLAPSE_THRESHOLD = 220
@@ -42,9 +45,10 @@ function LeftColumn({
     return () => setSidebarTabIds([])
   }, [tabs])
 
-  // Ensure active panel is a valid tab
+  // Ensure active panel is a valid tab. An action entry is never one: a stored
+  // 'plugins' from when the directory was a panel lands back on the first tab.
   useEffect(() => {
-    if (tabs.length > 0 && !tabs.some((t) => t.id === activePanel)) {
+    if (tabs.length > 0 && !tabs.some((t) => t.id === activePanel && !t.onSelect)) {
       setActivePanel(tabs[0]!.id)
     }
   }, [tabs, activePanel, setActivePanel])
@@ -95,8 +99,13 @@ function LeftColumn({
   // up to the minimum so the panel always returns to a usable size.
   const handleRailClick = useCallback(
     (id: string) => {
+      const tab = tabs.find((t) => t.id === id)
+      if (tab?.onSelect) {
+        tab.onSelect()
+        return
+      }
       // noPanel tabs drive the stage, not the panel — leave collapse state alone.
-      if (tabs.find((t) => t.id === id)?.noPanel) {
+      if (tab?.noPanel) {
         setActivePanel(id)
         return
       }
@@ -177,15 +186,59 @@ function LeftColumn({
 
 // ── Right column: viewer area with toolbar ───────────────────────────────────
 
+/**
+ * The stage's top band: each pane's view bar at the pane's left edge, the
+ * host's left toolbar after the first, and the host's right toolbar — scene
+ * controls (wall mode, display) — at the right edge of the scene panes.
+ */
+function StageToolbar({
+  toolbarLeft,
+  toolbarRight,
+  viewBar,
+}: {
+  toolbarLeft?: ReactNode
+  toolbarRight?: ReactNode
+  viewBar: boolean
+}) {
+  const layout = useActiveViewLayout()
+  const scene = useSceneSpan()
+  useSplitShortcut(viewBar)
+  return (
+    <div className="pointer-events-none absolute top-3 right-0 left-0 z-20 h-8">
+      <div className="absolute top-0 left-3 flex items-center gap-2">
+        {viewBar && <ViewBar pane={0} />}
+        {toolbarLeft && (
+          <div className="pointer-events-auto flex items-center gap-2">{toolbarLeft}</div>
+        )}
+      </div>
+      {viewBar && layout.split && (
+        <div className="absolute top-0" style={{ left: `calc(${layout.ratio * 100}% + 12px)` }}>
+          <ViewBar pane={1} />
+        </div>
+      )}
+      {toolbarRight && scene && (
+        <div
+          className="pointer-events-auto absolute top-0 flex items-center gap-2"
+          style={{ right: `calc(${(1 - scene.right) * 100}% + 12px)` }}
+        >
+          {toolbarRight}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function RightColumn({
   toolbarLeft,
   toolbarRight,
+  viewBar,
   children,
   overlays,
   stageOverlay,
 }: {
   toolbarLeft?: ReactNode
   toolbarRight?: ReactNode
+  viewBar: boolean
   children: ReactNode
   overlays?: ReactNode
   stageOverlay?: ReactNode
@@ -199,12 +252,8 @@ function RightColumn({
         boxShadow: '-4px -2px 16px rgba(0, 0, 0, 0.08), -1px 0 4px rgba(0, 0, 0, 0.04)',
       }}
     >
-      {/* Viewer toolbar */}
-      {(toolbarLeft || toolbarRight) && (
-        <div className="pointer-events-none absolute top-3 right-3 left-3 z-20 flex items-center justify-between gap-2">
-          <div className="pointer-events-auto flex items-center gap-2">{toolbarLeft}</div>
-          <div className="pointer-events-auto flex items-center gap-2">{toolbarRight}</div>
-        </div>
+      {(viewBar || toolbarLeft || toolbarRight) && (
+        <StageToolbar toolbarLeft={toolbarLeft} toolbarRight={toolbarRight} viewBar={viewBar} />
       )}
       {/* Canvas area. `isolate` matters: drei's `<Html>` computes a z-index
           from camera distance and defaults to a range topping out at
@@ -215,9 +264,9 @@ function RightColumn({
           where it belongs, and leaves their order relative to each other
           untouched. */}
       <div className="relative isolate flex-1 overflow-hidden">{children}</div>
-      {/* Stage overlay — replaces the canvas visually (e.g. studio gallery)
-          while keeping it mounted. Sits below the viewer toolbar (z-20) so
-          the stage switch stays reachable. */}
+      {/* Stage overlay — replaces the whole stage visually (e.g. the item
+          builder) while keeping the canvas mounted. The view bar steps aside
+          for it (see `EditorLayoutV2`); the host's toolbars stay above it. */}
       {stageOverlay && <div className="absolute inset-0 z-10">{stageOverlay}</div>}
       {/* Overlays scoped to the viewer column. `data-viewer-bounds` marks the
           draggable region the floating inspector clamps itself to. */}
@@ -246,6 +295,8 @@ export interface EditorLayoutV2Props {
   viewerContent: ReactNode
   overlays?: ReactNode
   stageOverlay?: ReactNode
+  /** Show each pane's view bar. Off for hosts that present one fixed view. */
+  viewBar?: boolean
 }
 
 export function EditorLayoutV2({
@@ -258,6 +309,7 @@ export function EditorLayoutV2({
   viewerContent,
   overlays,
   stageOverlay,
+  viewBar = true,
 }: EditorLayoutV2Props) {
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
   const isMobile = useIsMobile()
@@ -271,6 +323,7 @@ export function EditorLayoutV2({
         sidebarOverlay={sidebarOverlay}
         sidebarTabs={sidebarTabs.filter((t) => !t.noPanel)}
         viewerContent={viewerContent}
+        viewBar={viewBar}
         viewerToolbarLeft={viewerToolbarLeft}
         viewerToolbarRight={viewerToolbarRight}
       />
@@ -296,6 +349,7 @@ export function EditorLayoutV2({
           stageOverlay={stageOverlay}
           toolbarLeft={isCaptureMode ? undefined : viewerToolbarLeft}
           toolbarRight={isCaptureMode ? undefined : viewerToolbarRight}
+          viewBar={viewBar && !isCaptureMode && !stageOverlay}
         >
           {viewerContent}
         </RightColumn>

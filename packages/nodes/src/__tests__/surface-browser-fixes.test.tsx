@@ -171,7 +171,7 @@ function seed(entries: AnyNode[], slab = false) {
     movingNodeOrigin: '3d',
     placementDragMode: false,
     isFloorplanHovered: false,
-    viewMode: '3d',
+    viewLayouts: {},
   })
   useEditor.getState().setSnappingMode('item', 'off')
   useEditor.getState().setContinuation('point', 'single')

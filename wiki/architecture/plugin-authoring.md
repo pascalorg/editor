@@ -206,13 +206,40 @@ export const myHostPanel: EditorHostPanel = {
 }
 ```
 
-The host registers that panel with `registerEditorHostPanel`. Registered plugins appear in the Plugins sidebar, while the scene graph's `installedPlugins: string[]` controls which plugin panels appear in that project's icon rail. `defaultInstalled: true` opts a first-party plugin into legacy and newly created projects; Nature uses this today.
+The host registers that panel with `registerEditorHostPanel`. Registered plugins appear in the Plugins view (the rail's "+"), while the scene graph's `installedPlugins: string[]` controls which plugin panels appear in that project's icon rail. `defaultInstalled: true` opts a first-party plugin into legacy and newly created projects; Nature uses this today.
 
 Install/uninstall is a project-level visibility operation. Plugin code and node definitions stay loaded for the browser session because `loadPlugin` is add-only, but an uninstalled plugin's panel, placement UI, renderers, systems, and floor-plan output are disabled. Existing plugin nodes remain serialized in the scene graph and become visible again when the plugin is reinstalled; uninstall never deletes project data.
 
-`creator` and `pluginUrl` are optional manager metadata. Selecting a plugin in the Plugins sidebar opens its detail page, where the host shows this metadata and the project install/uninstall control.
+`creator` and `pluginUrl` are optional manager metadata. Selecting a plugin in the Plugins view opens its detail page, where the host shows this metadata and the project install/uninstall control.
 
 Host panels mount lazily inside an error boundary. Use host CSS variables, keep CSS scoped to the plugin, and do not write global styles.
+
+## Host views
+
+The stage is one or two panes, and each pane shows a *view*: the 3D scene, the 2D plan, or a view a host or plugin registered. A view is the place for a surface that wants the room of the canvas — a schedule, a directory, a gallery — rather than the width of the rail. A plugin can ship panels, views or both, and as many of each as it needs; each view carries the plugin's `pluginId`:
+
+```ts
+import type { EditorHostView } from '@pascal-app/editor'
+
+export const scheduleView: EditorHostView = {
+  id: 'acme:schedules:rooms',
+  pluginId: 'acme:schedules',
+  label: 'Room schedule',
+  icon: { kind: 'iconify', name: 'lucide:table' },
+  component: () => import('./room-schedule-view'),
+  workspaces: ['edit'], // default; 'studio' to offer it in Studio
+}
+```
+
+The host registers each with `registerEditorHostView`, in the same bootstrap pass as the panels. The view is offered only in its workspaces and only while its plugin is in the project's `installedPlugins`; registration is session-add-only, like panels.
+
+- **The view bar.** Each pane has a bar: its pinned views, the view it shows, and a "More views" menu with the rest. A registered view starts unpinned unless it sets `defaultPinned: true`; people pin and unpin per browser. The last pane's bar carries Split (`\`) and, split, the swap.
+- **Opening a view.** `openEditorView(id)` shows it — focusing it if it is on screen, else in the focused pane; `openEditorView(id, { beside: true })` splits and opens it next to what is there. A panel's "Open beside the scene" button is this call.
+- **One pane per view.** A view sits in at most one pane: picking the other pane's view swaps the two. The 3D canvas and the plan stay mounted across every layout change; a registered view mounts lazily while it is in a pane, inside an error boundary, and unmounts when it leaves.
+- **Scene chrome.** The level selector, the tool dock and the host's scene controls belong to the 3D and 2D views: side by side they span both panes, beside another view they sit over the scene pane, and with no scene view on screen they are hidden. A view draws its own chrome inside its pane, below the view bar.
+- **Reading the layout.** Code that hands input between the canvas and the plan reads `visibleScene(state)` (`'3d' | '2d' | 'split' | null`) or `isViewVisible(state, id)` — never a stored pane — so capture and first person, which show 3D alone, are accounted for.
+
+Each workspace keeps its own layout, so Studio can sit on 3D beside its gallery while Edit stays on the plan beside 3D. A layout naming a view that is not available — its plugin uninstalled, or not registered yet — keeps the choice and the pane says so, so the view comes back with its plugin.
 
 ## Viewer presentation contributions
 
@@ -269,7 +296,7 @@ A plugin's own data versioning is `schemaVersion` on each `NodeDefinition`. The 
 
 - **Materials** — there's no `plugin.materials` slot. Use `createMaterial` from `@pascal-app/viewer` inside your `def.renderer` / `def.system`.
 - **Floor-plan primitives** — the `FloorplanGeometry` union is host-owned. To draw something the union can't express, fall back to `def.renderer` and render through a different 2D mount (or open an issue).
-- **Panels / sidebar UI in the core manifest** — host-specific. Export an `EditorHostPanel` separately for hosts that use `@pascal-app/editor`.
+- **Panels, views and other UI in the core manifest** — host-specific. Export an `EditorHostPanel` / `EditorHostView` separately for hosts that use `@pascal-app/editor`.
 - **Clone remapping for plugin-owned references** — project clone (`cloneSceneGraph`) and subtree duplicate (`cloneNodesInto`) remap `id`, `parentId` and `children` only. A plugin field that stores other node ids (an ordered camera list, a target list) is copied verbatim and keeps pointing at the source scene. Keep hosted ids in `children` where you can.
 - **Stores** — plugins create their own Zustand stores; they don't extend `useScene`, `useEditor`, or `useViewer`. A renderer may subscribe read-only to exported host presentation state such as `useViewer` appearance axes, but must not treat host stores as plugin-owned state.
 - **Routes / pages** — plugins are visualisation + interaction code, not full app surfaces. Hosting a settings page belongs to the app.
