@@ -126,7 +126,7 @@ export const StairNode = BaseNode.extend({
   - stairType: straight (segment-based), curved (arc-based), or spiral
   - fromLevelId / toLevelId: source and destination levels used for auto slab cutouts
   - deckSlabId: destination deck (slab) — the rise derives from its elevation while set
-  - slabOpeningMode: whether a destination-level slab opening is generated for this stair
+  - slabOpeningMode: 'destination' cuts the stair's headroom clearance out of the surfaces it climbs through: the floors of the levels it climbs into and open mezzanine decks on its source level, or, for a deck stair (deckSlabId), only its own deck. 'none' cuts nothing
   - openingOffset: extra opening expansion applied after the cutout polygon is computed
   - width: stair width
   - totalRise: total stair height

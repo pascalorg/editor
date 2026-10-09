@@ -336,17 +336,23 @@ function MezzanineRows({ room }: { room: RoomSelectionRecord }) {
         </ConstructionPart>
         <ConstructionPart
           control={
-            <button
-              className={pill}
-              data-add-mezzanine-stairs
-              onClick={() => {
-                const result = addMezzanineStairs(zoneId)
-                setStairMessage(result.ok ? null : result.message)
-              }}
-              type="button"
-            >
-              Add stairs
-            </button>
+            <div className="flex items-center gap-1.5">
+              {(['outside', 'inside'] as const).map((placement) => (
+                <button
+                  className={pill}
+                  data-add-mezzanine-stairs={placement}
+                  key={placement}
+                  onClick={() => {
+                    const result = addMezzanineStairs(zoneId, placement)
+                    setStairMessage(result.ok ? null : result.message)
+                  }}
+                  title={`Add stairs ${placement} the mezzanine`}
+                  type="button"
+                >
+                  {placement === 'outside' ? 'Outside' : 'Inside'}
+                </button>
+              ))}
+            </div>
           }
           expanded={false}
           icon="/icons/stairs.webp"

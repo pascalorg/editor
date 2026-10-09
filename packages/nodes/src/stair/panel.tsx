@@ -169,6 +169,10 @@ export default function StairPanel() {
       const updates: Partial<StairNode> = {
         slabOpeningMode: checked ? 'destination' : 'none',
       }
+      if (node.deckSlabId) {
+        handleUpdate(updates)
+        return
+      }
       const sceneNodes = useScene.getState().nodes
       const fromLevelId = resolveStairFromLevelId(sceneNodes, node)
       if (checked && fromLevelId) updates.fromLevelId = fromLevelId
@@ -579,13 +583,11 @@ export default function StairPanel() {
 
       <PanelSection title="Opening">
         <div className="space-y-3">
-          {attachedDeck ? null : (
-            <ToggleControl
-              checked={(node.slabOpeningMode ?? 'none') === 'destination'}
-              label="Auto Cutout"
-              onChange={handleAutoCutoutChange}
-            />
-          )}
+          <ToggleControl
+            checked={(node.slabOpeningMode ?? 'none') === 'destination'}
+            label={attachedDeck ? 'Cut Through Deck' : 'Auto Cutout'}
+            onChange={handleAutoCutoutChange}
+          />
 
           <div className="space-y-1.5">
             <div className="px-1 text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
@@ -666,26 +668,24 @@ export default function StairPanel() {
           ) : null}
 
           {attachedDeck ? null : (
-            <>
-              <SegmentedControl
-                onChange={(value) => handleAutoCutoutChange(value === 'destination')}
-                options={STAIR_SLAB_OPENING_OPTIONS}
-                value={node.slabOpeningMode ?? 'none'}
-              />
-
-              {(node.slabOpeningMode ?? 'none') === 'destination' ? (
-                <MetricControl
-                  label="Opening Offset"
-                  min={0}
-                  onChange={(value) => handleUpdate({ openingOffset: value })}
-                  precision={2}
-                  step={0.01}
-                  unit="m"
-                  value={node.openingOffset ?? 0}
-                />
-              ) : null}
-            </>
+            <SegmentedControl
+              onChange={(value) => handleAutoCutoutChange(value === 'destination')}
+              options={STAIR_SLAB_OPENING_OPTIONS}
+              value={node.slabOpeningMode ?? 'none'}
+            />
           )}
+
+          {(node.slabOpeningMode ?? 'none') === 'destination' ? (
+            <MetricControl
+              label="Opening Offset"
+              min={0}
+              onChange={(value) => handleUpdate({ openingOffset: value })}
+              precision={2}
+              step={0.01}
+              unit="m"
+              value={node.openingOffset ?? 0}
+            />
+          ) : null}
 
           {node.stairType === 'spiral' && (
             <>

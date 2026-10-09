@@ -24,7 +24,11 @@ export {
 } from './floor-opening'
 export { type LockOutsideFacesInput, lockOutsideFaces } from './lock-outside-faces'
 export { mergeZones } from './merge-zones'
-export { type MezzanineStairPlan, planMezzanineStair } from './plan-mezzanine-stair'
+export {
+  type MezzanineStairPlacement,
+  type MezzanineStairPlan,
+  planMezzanineStair,
+} from './plan-mezzanine-stair'
 export { planWallDeletion } from './plan-wall-deletion'
 export { rebaseFloorReference } from './rebase-floor-reference'
 export type { MezzanineEdgeInput } from './resize-mezzanine'
