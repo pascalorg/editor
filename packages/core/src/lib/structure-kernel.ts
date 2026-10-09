@@ -172,6 +172,7 @@ export function classifyWallSides(
   spans: readonly BoundarySpan[],
   outdoor: ReadonlySet<string> = new Set(),
 ): Pick<WallNode, 'frontSide' | 'backSide'> {
+  if (wall.metadata?.roomBoundary === false) return { frontSide: 'unknown', backSide: 'unknown' }
   const boundary = spans.filter((span) => span.boundaryId === wall.id)
   if (!boundary.length) return { frontSide: wall.frontSide, backSide: wall.backSide }
   const indoor = (face: BoundarySpan['face']) =>

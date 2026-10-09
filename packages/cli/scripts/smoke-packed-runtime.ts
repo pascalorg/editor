@@ -277,7 +277,9 @@ async function verifyStagedWebRuntime(): Promise<{ file: string; size: number; u
   if (size !== source.size) {
     throw new Error(`${archiveName} is ${size} bytes; runtime-source.json records ${source.size}`)
   }
-  const maximumArchiveSize = 70 * 1024 * 1024
+  // The integrated plugin catalogs include 57 MB of models and 93 MB of WebP assets.
+  // The portable archive is ~183 MB; leave bounded room for catalog updates.
+  const maximumArchiveSize = 220 * 1024 * 1024
   if (size > maximumArchiveSize) {
     throw new Error(
       `the web runtime archive exceeds its release budget: ${formatMb(size)} MB > ${formatMb(maximumArchiveSize)} MB`,

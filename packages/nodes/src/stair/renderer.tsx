@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  type AnyNodeId,
   computeSegmentTransforms,
   measureStairDetail,
   resolveArcStairConstruction,
@@ -41,6 +42,7 @@ import {
   type GuardBox,
   type GuardRail,
 } from './guard-path'
+import { landscapeTransitionProfile } from './landscape-transition'
 import {
   resolveStairBodySlotMaterials,
   resolveStairSegmentMaterials,
@@ -174,8 +176,7 @@ export const StairRenderer = ({ node: rawNode }: { node: StairNode }) => {
 
   return (
     <group
-      position-x={node.position[0]}
-      position-z={node.position[2]}
+      position={node.position}
       ref={ref}
       rotation-y={node.rotation}
       visible={node.visible}
@@ -213,6 +214,9 @@ export const StairRenderer = ({ node: rawNode }: { node: StairNode }) => {
           ) : null}
         </>
       )}
+      {isSegmentBasedStair && node.landscapeSurfaceId && !detail.error ? (
+        <StairLandscapeTransition stair={node} materials={bodyMaterials} />
+      ) : null}
       <StairWalkingLine stair={node} segments={segments} totalRise={totalRise} />
       {isSegmentBasedStair && !detail.error ? (
         <group name="segments-wrapper" visible={false}>
@@ -223,6 +227,169 @@ export const StairRenderer = ({ node: rawNode }: { node: StairNode }) => {
       ) : null}
     </group>
   )
+}
+
+function StairLandscapeTransition({
+  stair,
+  materials,
+}: {
+  stair: StairNode
+  materials: StairBodyMaterials
+}) {
+  const rawSurface = useScene((state) => state.nodes[stair.landscapeSurfaceId as AnyNodeId])
+  const surfaceOverride = useLiveNodeOverrides((state) =>
+    state.overrides.get(stair.landscapeSurfaceId as AnyNodeId),
+  )
+  const surface = useMemo(
+    () => (rawSurface && surfaceOverride ? { ...rawSurface, ...surfaceOverride } : rawSurface),
+    [rawSurface, surfaceOverride],
+  )
+  const flightId = stair.children[0]
+  const flight = useScene((state) => (flightId ? state.nodes[flightId] : undefined))
+  const flightOverride = useLiveNodeOverrides((state) =>
+    flightId ? state.overrides.get(flightId) : undefined,
+  )
+  const length =
+    (flightOverride?.length as number | undefined) ??
+    (flight as StairSegmentNode | undefined)?.length ??
+    0
+  const segment = flight as StairSegmentNode | undefined
+  const fillToFloor =
+    (flightOverride?.fillToFloor as boolean | undefined) ??
+    segment?.fillToFloor ??
+    stair.fillToFloor ??
+    true
+  const thickness =
+    (flightOverride?.thickness as number | undefined) ??
+    segment?.thickness ??
+    stair.thickness ??
+    0.25
+  const segmentHeight = (flightOverride?.height as number | undefined) ?? segment?.height ?? 0
+  const profile = useMemo(
+    () =>
+      surface
+        ? landscapeTransitionProfile(
+            stair,
+            surface as Parameters<typeof landscapeTransitionProfile>[1],
+            length,
+          )
+        : null,
+    [stair, surface, length],
+  )
+  const geometry = useMemo(() => {
+    if (!profile) return null
+    const vertices: number[] = []
+    const indices: number[] = []
+    const top = stair.totalRise ?? 0
+    const undersideOffset =
+      segment?.segmentType === 'landing'
+        ? thickness
+        : thickness / Math.cos(Math.atan2(segmentHeight, length || 1))
+    const bottom = fillToFloor ? 0 : top - undersideOffset
+    for (const [x, boundary] of profile.samples) {
+      vertices.push(
+        x,
+        top,
+        length + profile.frontZ,
+        x,
+        top,
+        length + boundary,
+        x,
+        bottom,
+        length + profile.frontZ,
+        x,
+        bottom,
+        length + boundary,
+      )
+    }
+    for (let i = 0; i < profile.samples.length - 1; i++) {
+      const a = i * 4,
+        b = (i + 1) * 4
+      indices.push(
+        a,
+        a + 1,
+        b,
+        b,
+        a + 1,
+        b + 1,
+        a + 2,
+        b + 2,
+        a + 3,
+        b + 2,
+        b + 3,
+        a + 3,
+        a,
+        b,
+        a + 2,
+        b,
+        b + 2,
+        a + 2,
+        a + 1,
+        a + 3,
+        b + 1,
+        b + 1,
+        a + 3,
+        b + 3,
+      )
+    }
+    const last = (profile.samples.length - 1) * 4
+    indices.push(0, 2, 1, 1, 2, 3, last, last + 1, last + 2, last + 1, last + 3, last + 2)
+    const indexed = new THREE.BufferGeometry()
+    indexed.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3))
+    indexed.setIndex(indices)
+    const result = indexed.toNonIndexed()
+    indexed.dispose()
+    result.computeVertexNormals()
+    const position = result.getAttribute('position')
+    const normals = result.getAttribute('normal')
+    const uvs: number[] = []
+    let currentMaterial = -1
+    let groupStart = 0
+    for (let i = 0; i < position.count; i += 3) {
+      const nx = Math.abs(normals.getX(i))
+      const ny = Math.abs(normals.getY(i))
+      const nz = Math.abs(normals.getZ(i))
+      const materialIndex =
+        normals.getY(i) > 0.75 ? STAIR_TREAD_MATERIAL_INDEX : STAIR_SIDE_MATERIAL_INDEX
+      if (materialIndex !== currentMaterial) {
+        if (i > groupStart) result.addGroup(groupStart, i - groupStart, currentMaterial)
+        groupStart = i
+        currentMaterial = materialIndex
+      }
+      for (let vertex = i; vertex < i + 3; vertex++) {
+        const x = position.getX(vertex),
+          y = position.getY(vertex),
+          z = position.getZ(vertex)
+        if (ny >= nx && ny >= nz) uvs.push(x, z)
+        else if (nx >= nz) uvs.push(z, y)
+        else uvs.push(x, y)
+      }
+    }
+    if (position.count > groupStart)
+      result.addGroup(groupStart, position.count - groupStart, currentMaterial)
+    result.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+    result.setAttribute('uv2', new THREE.Float32BufferAttribute(uvs.slice(), 2))
+    return result
+  }, [
+    profile,
+    length,
+    stair.totalRise,
+    fillToFloor,
+    thickness,
+    segmentHeight,
+    segment?.segmentType,
+  ])
+  useEffect(() => () => geometry?.dispose(), [geometry])
+  return geometry ? (
+    <mesh
+      castShadow
+      geometry={geometry}
+      material={materials}
+      name="landscape-stair-transition"
+      receiveShadow
+      userData={STAIR_BODY_SLOT_USER_DATA}
+    />
+  ) : null
 }
 
 function StairWalkingLine({
@@ -299,7 +466,7 @@ function StairRailings({
   // reads as one coherent guard across straight, chained, winder, curved and
   // spiral layouts.
 
-  if ((stair.railingMode ?? 'none') === 'none') {
+  if (stair.landscapeSurfaceId || (stair.railingMode ?? 'none') === 'none') {
     return null
   }
 

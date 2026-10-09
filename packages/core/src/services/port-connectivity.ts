@@ -84,6 +84,7 @@ type GraphNode = {
 type Adjacency = Record<string, Record<string, Array<{ nodeId: AnyNodeId; portId: string }>>>
 
 export type PortConnectivity = {
+  customResolver?: (preview: AnyNode) => { id: AnyNodeId; data: Partial<AnyNode> }[]
   movedNodeId: AnyNodeId
   /** The moved node's port world positions at edit-start, keyed by port id —
    *  the reference each frame's delta is measured from. */
@@ -144,6 +145,39 @@ export function analyzePortConnectivity(
   movedNode: AnyNode,
   nodes: Record<string, AnyNode>,
 ): PortConnectivity {
+  const custom = nodeRegistry.get(movedNode.type)?.connectedMove
+  if (custom) {
+    const resolve = (preview: AnyNode) => custom(movedNode, preview, nodes)
+    const initial = resolve(movedNode)
+    return {
+      movedNodeId: movedNode.id as AnyNodeId,
+      customResolver: resolve,
+      startMovedPorts: {},
+      graph: {},
+      adjacency: {},
+      connections: initial.flatMap((update) => {
+        const path = (nodes[update.id] as unknown as { path?: Point[] })?.path
+        if (path)
+          return [
+            {
+              kind: 'run' as const,
+              nodeId: update.id,
+              startPath: path.map((p) => [...p] as Point),
+            },
+          ] as PortConnection[]
+        const position = (nodes[update.id] as unknown as { position?: Point })?.position
+        return position
+          ? [
+              {
+                kind: 'rigid-node' as const,
+                nodeId: update.id,
+                startPosition: [...position] as Point,
+              },
+            ]
+          : []
+      }),
+    }
+  }
   const epsSq = COINCIDENT_EPS_M * COINCIDENT_EPS_M
 
   const movedPorts = portsOf(movedNode) ?? []
@@ -353,6 +387,7 @@ export function resolveConnectivityUpdates(
   connectivity: PortConnectivity,
   previewNode: AnyNode,
 ): { id: AnyNodeId; data: Partial<AnyNode> }[] {
+  if (connectivity.customResolver) return connectivity.customResolver(previewNode)
   const { graph, adjacency, startMovedPorts, movedNodeId } = connectivity
   if (Object.keys(graph).length === 0) return []
 

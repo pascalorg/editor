@@ -10,9 +10,11 @@ import {
   type RoofNode,
   type RoofSegmentNode,
   resolveAlignment,
+  resolveStairSurfaceSnap,
   resolveSupportSlabPatch,
   type StairNode,
   type StairSegmentNode,
+  type StairSurfaceSnap,
   sceneRegistry,
   useLiveNodeOverrides,
   useLiveTransforms,
@@ -25,6 +27,7 @@ import {
   consumePlacementDragRelease,
   DragBoundingBox,
   getFloorStackPreviewPosition,
+  getMovingNode,
   isMagneticSnapActive,
   resolvePlanarCursorPosition,
   stripPlacementMetadataFlags,
@@ -38,6 +41,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { snapFenceDraftPoint } from '../fence/drafting'
+import { clearStairMovePreview, publishStairMovePreview } from '../stair/landscape-move-preview'
 
 /** Figma-style alignment-snap threshold (meters), matching the other tools. */
 const ALIGNMENT_THRESHOLD_M = 0.08
@@ -76,7 +80,12 @@ function resolvePreviewRotationY(
 
 export const MoveRoofTool: React.FC<{
   node: RoofNode | RoofSegmentNode | StairNode | StairSegmentNode
-}> = ({ node: movingNode }) => {
+}> = ({ node: sourceNode }) => {
+  const currentNode = useScene((state) =>
+    sourceNode.type === 'stair' ? state.nodes[sourceNode.id] : undefined,
+  )
+  const movingNode =
+    sourceNode.type === 'stair' && currentNode?.type === 'stair' ? currentNode : sourceNode
   const {
     isFreshPlacement,
     previewVisible: cursorVisible,
@@ -152,9 +161,24 @@ export const MoveRoofTool: React.FC<{
     let wasCommitted = false
     let wasCancelled = false
     let hasMoved = false
+    let landscapeSnap: StairSurfaceSnap | null = null
+    const flightId =
+      movingNode.type === 'stair'
+        ? movingNode.children
+            .map((id) => useScene.getState().nodes[id])
+            .find(
+              (child): child is StairSegmentNode =>
+                child?.type === 'stair-segment' && child.segmentType === 'stair',
+            )?.id
+        : undefined
+    const clearLandscapePreview = () => {
+      if (movingNode.type !== 'stair') return
+      clearStairMovePreview(movingNode.id, flightId)
+    }
 
     // Track pending rotation — no store updates during drag
     let pendingRotation: number = movingNode.rotation as number
+    let freeRotation = pendingRotation
     let lastLocalPosition: [number, number, number] = [
       movingNode.position[0],
       movingNode.position[1],
@@ -322,7 +346,7 @@ export const MoveRoofTool: React.FC<{
 
       const y = event.position[1]
 
-      const roofBypassSnap = event.nativeEvent?.shiftKey === true
+      const roofBypassSnap = event.nativeEvent?.altKey === true
       const snappedLocal = snapFenceDraftPoint({
         point: [event.localPosition[0], event.localPosition[2]],
         walls: levelWalls,
@@ -348,17 +372,13 @@ export const MoveRoofTool: React.FC<{
       let [localX, localZ] = resolved.point
 
       if (alignTopLevel) {
-        const aligned = alignLocalPoint(
-          localX,
-          localZ,
-          event.nativeEvent?.altKey === true || event.nativeEvent?.shiftKey === true,
-        )
+        const aligned = alignLocalPoint(localX, localZ, event.nativeEvent?.altKey === true)
         localX = aligned[0]
         localZ = aligned[1]
       }
 
       if (
-        event.nativeEvent?.shiftKey !== true &&
+        event.nativeEvent?.altKey !== true &&
         previousGridPosRef.current &&
         (localX !== previousGridPosRef.current[0] || localZ !== previousGridPosRef.current[1])
       ) {
@@ -368,6 +388,48 @@ export const MoveRoofTool: React.FC<{
       previousGridPosRef.current = [localX, localZ]
 
       lastLocalPosition = [localX, movingNode.position[1], localZ]
+      const wasLandscapeSnapped = landscapeSnap !== null
+      if (
+        movingNode.type === 'stair' &&
+        event.nativeEvent?.altKey !== true &&
+        isMagneticSnapActive()
+      ) {
+        const sceneNodes = useScene.getState().nodes
+        const segment = movingNode.children
+          .map((id) => sceneNodes[id])
+          .find(
+            (child): child is StairSegmentNode =>
+              child?.type === 'stair-segment' && child.segmentType === 'stair',
+          )
+        const baseElevation = getPreviewPosition(lastLocalPosition)[1]
+        landscapeSnap = resolveStairSurfaceSnap(
+          { ...movingNode, rotation: freeRotation },
+          sceneNodes,
+          lastLocalPosition,
+          segment?.length ?? 3,
+          baseElevation,
+          useScene.getState().installedPlugins,
+        )
+        if (landscapeSnap) {
+          if (!wasLandscapeSnapped) freeRotation = pendingRotation
+          lastLocalPosition = landscapeSnap.position
+          pendingRotation = landscapeSnap.rotation
+          setPreviewRotation(landscapeSnap.rotation)
+        }
+      } else landscapeSnap = null
+      if (wasLandscapeSnapped && !landscapeSnap) {
+        pendingRotation = freeRotation
+        setPreviewRotation(resolvePreviewRotationY(movingNode, freeRotation))
+      }
+      if (movingNode.type === 'stair') {
+        publishStairMovePreview(
+          movingNode.id,
+          flightId,
+          lastLocalPosition,
+          pendingRotation,
+          landscapeSnap,
+        )
+      }
       const previewPosition = getPreviewPosition(lastLocalPosition)
       setCursorWorldPos(
         isFloorPlaced ? previewPosition : localPositionToToolLocal(lastLocalPosition),
@@ -382,6 +444,8 @@ export const MoveRoofTool: React.FC<{
           mesh.position.x = localX
           mesh.position.z = localZ
         }
+        if (movingNode.type === 'stair')
+          mesh.rotation.y = resolvePreviewRotationY(movingNode, pendingRotation)
       }
 
       // Publish canonical position so the 2D floorplan can track the drag.
@@ -411,15 +475,23 @@ export const MoveRoofTool: React.FC<{
         position,
         rotation: pendingRotation,
       } as typeof movingNode
-      const supportPatch = isFloorPlaced
-        ? resolveSupportSlabPatch(effectiveNode, {
-            ...useScene.getState().nodes,
-            [movingNode.id]: effectiveNode,
-          })
-        : {}
+      const supportPatch = landscapeSnap
+        ? {}
+        : isFloorPlaced
+          ? resolveSupportSlabPatch(effectiveNode, {
+              ...useScene.getState().nodes,
+              [movingNode.id]: effectiveNode,
+            })
+          : {}
 
       let committedId = movingNode.id as AnyNodeId
       if (isNew) {
+        if (landscapeSnap && flightId)
+          useScene.getState().updateNode(flightId, {
+            height: landscapeSnap.totalRise,
+            length: landscapeSnap.length,
+            stepCount: landscapeSnap.stepCount,
+          })
         committedId =
           commitFreshPlacementSubtree(movingNode.id as AnyNodeId, {
             position,
@@ -427,23 +499,63 @@ export const MoveRoofTool: React.FC<{
             metadata: committedMeta,
             visible: true,
             ...supportPatch,
+            ...(landscapeSnap
+              ? {
+                  totalRise: landscapeSnap.totalRise,
+                  stepCount: landscapeSnap.stepCount,
+                  slabOpeningMode: 'none' as const,
+                  landscapeSurfaceId: landscapeSnap.surfaceId,
+                  railingMode: 'none' as const,
+                }
+              : movingNode.type === 'stair' && movingNode.landscapeSurfaceId
+                ? { landscapeSurfaceId: undefined }
+                : {}),
           }) ?? committedId
       } else {
         // The store still holds the original values (we didn't update during drag).
         // Resume temporal and apply the final state as a single undoable step.
         useScene.temporal.getState().resume()
-        useScene.getState().updateNode(movingNode.id, {
-          position,
-          rotation: pendingRotation,
-          metadata: committedMeta,
-          ...supportPatch,
-        })
+        useScene.getState().updateNodes([
+          {
+            id: movingNode.id,
+            data: {
+              ...(landscapeSnap
+                ? {
+                    totalRise: landscapeSnap.totalRise,
+                    stepCount: landscapeSnap.stepCount,
+                    slabOpeningMode: 'none' as const,
+                    landscapeSurfaceId: landscapeSnap.surfaceId,
+                    railingMode: 'none' as const,
+                  }
+                : movingNode.type === 'stair' && movingNode.landscapeSurfaceId
+                  ? { landscapeSurfaceId: undefined }
+                  : {}),
+              position,
+              rotation: pendingRotation,
+              metadata: committedMeta,
+              ...supportPatch,
+            },
+          },
+          ...(landscapeSnap && flightId
+            ? [
+                {
+                  id: flightId,
+                  data: {
+                    height: landscapeSnap.totalRise,
+                    length: landscapeSnap.length,
+                    stepCount: landscapeSnap.stepCount,
+                  },
+                },
+              ]
+            : []),
+        ])
         useScene.temporal.getState().pause()
       }
 
       triggerSFX('sfx:item-place')
       useViewer.getState().setSelection({ selectedIds: [committedId] })
       clearHostedPreview()
+      clearLandscapePreview()
       useLiveTransforms.getState().clear(movingNode.id)
       useEditor.getState().setMovingNodeOrigin('3d')
       exitMoveMode()
@@ -458,6 +570,7 @@ export const MoveRoofTool: React.FC<{
     const onCancel = () => {
       wasCancelled = true
       clearHostedPreview()
+      clearLandscapePreview()
       useLiveTransforms.getState().clear(movingNode.id)
       useAlignmentGuides.getState().clear()
       if (isNew) {
@@ -488,7 +601,16 @@ export const MoveRoofTool: React.FC<{
         triggerSFX('sfx:item-rotate')
 
         pendingRotation += rotationDelta
+        freeRotation += rotationDelta
         setPreviewRotation(resolvePreviewRotationY(movingNode, pendingRotation))
+        if (movingNode.type === 'stair')
+          publishStairMovePreview(
+            movingNode.id,
+            flightId,
+            lastLocalPosition,
+            pendingRotation,
+            landscapeSnap,
+          )
 
         // Directly update the Three.js mesh — no store update during drag
         const mesh = sceneRegistry.nodes.get(movingNode.id)
@@ -527,6 +649,7 @@ export const MoveRoofTool: React.FC<{
 
       // Clear ephemeral live transform + any alignment guides
       clearHostedPreview()
+      clearLandscapePreview()
       useLiveTransforms.getState().clear(movingNode.id)
       useAlignmentGuides.getState().clear()
 
@@ -539,7 +662,12 @@ export const MoveRoofTool: React.FC<{
       // position back to the snapshot.
       const finalisedBy2D = useEditor.getState().movingNodeOrigin === '2d'
 
-      if (!(wasCommitted || wasCancelled || isNew || finalisedBy2D)) {
+      // Reparenting an attached stair at move start replaces its scene node.
+      // That restarts this effect while the same move remains active; restoring
+      // the old surface-local pose here would start a scene-update loop.
+      const sameStairMoveStillActive =
+        movingNode.type === 'stair' && getMovingNode()?.id === movingNode.id
+      if (!(wasCommitted || wasCancelled || isNew || finalisedBy2D || sameStairMoveStillActive)) {
         useScene.getState().updateNode(movingNode.id, {
           position: original.position,
           rotation: original.rotation,

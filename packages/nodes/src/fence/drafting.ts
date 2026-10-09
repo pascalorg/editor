@@ -1,14 +1,18 @@
 import {
+  type AnyNode,
   type AnyNodeId,
   DEFAULT_ANGLE_STEP,
   type FenceConstructionOptions as FenceCommitOptions,
   FenceNode,
+  floorConstructionLift,
   getFenceCenterlineLength,
   getFenceSplineLength,
+  nodeRegistry,
   resolveFenceConstructionSupport,
   type SceneApi,
   sampleFenceCenterline,
   snapPointAlongAngleRay,
+  useScene,
   type WallNode,
 } from '@pascal-app/core'
 import {
@@ -20,6 +24,7 @@ import {
   useEditor,
   type WallPlanPoint,
 } from '@pascal-app/editor'
+import { getLevelPresentationY, useViewer } from '@pascal-app/viewer'
 
 export type FencePlanPoint = WallPlanPoint
 
@@ -90,6 +95,55 @@ export function getFenceInheritedDefaults(
 
 const FENCE_CORNER_SNAP_RADIUS = 0.28
 const FENCE_SPAN_SNAP_RADIUS = 0.16
+
+export function getFenceDrawingSurface(
+  nodes: Record<string, AnyNode> = useScene.getState().nodes,
+  id = useEditor.getState().toolDefaults.fence?.supportSurfaceNodeId,
+  levelId = useViewer.getState().selection.levelId,
+  levelMode = useViewer.getState().levelMode,
+) {
+  if (typeof id !== 'string') return null
+  const node = nodes[id as AnyNodeId]
+  if (!node?.parentId || node.parentId !== levelId || node.visible === false) return null
+  const top = nodeRegistry.get(node.type)?.capabilities?.surfaces?.top
+  if (!top?.boundary) return null
+  const position = (node as unknown as { position: number[] }).position
+  const height = typeof top.height === 'function' ? top.height(node, { nodes }) : top.height
+  return {
+    id,
+    boundary: top.boundary(node, 0.08),
+    levelElevation: getLevelPresentationY(node.parentId, nodes, levelMode),
+    elevation: (position?.[1] ?? 0) + height + floorConstructionLift(nodes, node),
+  }
+}
+
+function findSurfaceSnapTarget(point: FencePlanPoint): FencePlanPoint | null {
+  const surface = getFenceDrawingSurface()
+  if (!surface) return null
+  let corner: FencePlanPoint | null = null
+  let edge: FencePlanPoint | null = null
+  let cornerDistance = FENCE_CORNER_SNAP_RADIUS ** 2
+  let edgeDistance = FENCE_SPAN_SNAP_RADIUS ** 2
+  for (let index = 0; index < surface.boundary.length; index++) {
+    const a = surface.boundary[index]!
+    const b = surface.boundary[(index + 1) % surface.boundary.length]!
+    const candidate: FencePlanPoint = [a[0], a[1]]
+    const distance = distanceSquared(point, candidate)
+    if (distance <= cornerDistance) {
+      corner = candidate
+      cornerDistance = distance
+    }
+    const projection = projectPointOntoSegment(point, { start: candidate, end: [b[0], b[1]] })
+    if (projection) {
+      const distance = distanceSquared(point, projection)
+      if (distance <= edgeDistance) {
+        edge = projection
+        edgeDistance = distance
+      }
+    }
+  }
+  return corner ?? edge
+}
 
 type SegmentNode = {
   start: FencePlanPoint
@@ -220,7 +274,9 @@ export function snapFenceDraftPoint(args: {
   if (start && angleSnap) {
     const rawTarget =
       magnetic &&
-      (findFenceSnapTarget(point, fences, ignoreFenceIds) ?? findWallSnapTarget(point, walls))
+      (findSurfaceSnapTarget(point) ??
+        findFenceSnapTarget(point, fences, ignoreFenceIds) ??
+        findWallSnapTarget(point, walls))
     if (rawTarget) return rawTarget
   }
 
@@ -235,8 +291,17 @@ export function snapFenceDraftPoint(args: {
         : snapPointToGrid(point, gridStep)
   if (!magnetic) return basePoint
 
+  const surfaceSnapTarget = findSurfaceSnapTarget(basePoint)
+  if (surfaceSnapTarget) return surfaceSnapTarget
   const fenceSnapTarget = findFenceSnapTarget(basePoint, fences, ignoreFenceIds)
   return fenceSnapTarget ?? findWallSnapTarget(basePoint, walls) ?? basePoint
+}
+
+function getFenceDefaultsForCurrentLevel() {
+  const defaults = useEditor.getState().toolDefaults.fence ?? {}
+  if (typeof defaults.supportSurfaceNodeId !== 'string' || getFenceDrawingSurface()) return defaults
+  const { supportSurfaceNodeId: _supportSurfaceNodeId, ...unhostedDefaults } = defaults
+  return unhostedDefaults
 }
 
 export function createFenceOnCurrentLevel(
@@ -257,7 +322,7 @@ export function createFenceOnCurrentLevel(
   // spacing, …) merge in first; `name`/`start`/`end` always win. The
   // schema parse validates and drops anything unexpected.
   const defaults = {
-    ...useEditor.getState().toolDefaults.fence,
+    ...getFenceDefaultsForCurrentLevel(),
     ...getFenceInheritedDefaults(start, context),
   }
   const authoredFence = FenceNode.parse({
@@ -303,7 +368,7 @@ export function createSplineFenceOnCurrentLevel(
 
   const fenceCount = Object.values(nodes).filter((node) => node.type === 'fence').length
   const defaults = {
-    ...useEditor.getState().toolDefaults.fence,
+    ...getFenceDefaultsForCurrentLevel(),
     ...getFenceInheritedDefaults(start, context),
   }
   const authoredFence = FenceNode.parse({

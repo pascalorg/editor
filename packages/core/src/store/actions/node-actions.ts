@@ -2,6 +2,7 @@ import { planWallDeletion } from '../../commands/structure/plan-wall-deletion'
 import type { StructurePlan } from '../../commands/structure/shared'
 import { withoutFloorStepOverrideKeys } from '../../lib/floor-step-finish'
 import { isSpaceDetectionPaused } from '../../lib/space-detection'
+import { deletedSurfaceSupportPatch } from '../../lib/surface-support-references'
 import { nodeRegistry } from '../../registry/registry'
 import { validateNodeRelations } from '../../registry/validate-relations'
 import {
@@ -1813,6 +1814,14 @@ export function planNodeDeletion(
         nodesToMarkDirty.add(nodeId as AnyNodeId)
       }
     }
+  }
+
+  for (const node of Object.values(nextNodes)) {
+    if (allIds.has(node.id)) continue
+    const patch = deletedSurfaceSupportPatch(node, allIds)
+    if (!patch) continue
+    nextNodes[node.id] = { ...node, ...patch } as AnyNode
+    nodesToMarkDirty.add(node.id)
   }
 
   // A deleted door takes its step paint with it, in the same undo step; every

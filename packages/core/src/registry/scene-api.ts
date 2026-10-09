@@ -22,6 +22,7 @@ import type { SceneApi } from './types'
 export type SceneStoreLike = {
   getState: () => {
     nodes: Record<AnyNodeId, AnyNode>
+    installedPlugins?: string[]
     rootNodeIds: AnyNodeId[]
     dirtyNodes: Set<AnyNodeId>
     createNode: (node: AnyNode, parentId?: AnyNodeId) => void
@@ -96,6 +97,10 @@ export function createSceneApi(store: SceneStoreLike): SceneApi {
 
     nodes() {
       return store.getState().nodes
+    },
+
+    installedPlugins() {
+      return store.getState().installedPlugins
     },
 
     update(id, patch) {

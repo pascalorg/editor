@@ -5,8 +5,13 @@
 @source "../../../packages/nodes/src";
 @source "../../../node_modules/@pascal-app/plugin-trees/src";
 @source "../../../node_modules/@mint/pascal-plugin/src";
-@source "../../../node_modules/@pascal-app/plugin-streetscape/src";
+@source "../node_modules/@pascal-app/plugin-streetscape-lab/src";
 @source "../../../node_modules/@pascal-app/plugin-environment/src";
+
+@source "../node_modules/@pascal-app/plugin-landscape/src";
+@source "../node_modules/@pascal-app/plugin-bath-space/src";
+@source "../node_modules/@pascal-app/plugin-pool/src";
+@source "../node_modules/@webxr/plugin/src";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -169,6 +174,27 @@
 .no-scrollbar {
   -ms-overflow-style: none; /* IE and Edge */
   scrollbar-width: none; /* Firefox */
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: gray transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+  background: transparent;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track-piece,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: gray;
 }
 
 @media (prefers-reduced-motion: reduce) {

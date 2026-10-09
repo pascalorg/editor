@@ -4,7 +4,6 @@ import type { NextConfig } from 'next'
 
 const appDirectory = path.dirname(fileURLToPath(import.meta.url))
 const portableBuild = process.env.PASCAL_PORTABLE_BUILD === '1'
-
 const nextConfig: NextConfig = {
   ...(portableBuild
     ? { output: 'standalone' as const, outputFileTracingRoot: path.join(appDirectory, '../..') }
@@ -33,7 +32,9 @@ const nextConfig: NextConfig = {
     '@pascal-app/editor',
     '@pascal-app/mcp',
     '@pascal-app/plugin-pool',
-    '@pascal-app/plugin-streetscape',
+    '@pascal-app/plugin-bath-space',
+    '@pascal-app/plugin-landscape',
+    '@pascal-app/plugin-streetscape-lab',
     '@pascal-app/plugin-trees',
     '@mint/pascal-plugin',
     '@pascal-app/plugin-bones',
@@ -42,6 +43,7 @@ const nextConfig: NextConfig = {
     '@dgreenheck/ez-tree',
   ],
   turbopack: {
+    root: path.resolve(appDirectory, '../..'),
     resolveAlias: {
       react: './node_modules/react',
       three: './node_modules/three',

@@ -48,7 +48,6 @@ import {
 import { FacingPoseIndicator } from './shared/facing-pose-indicator'
 import { SiteBoundaryEditor } from './site/site-boundary-editor'
 import { TerrainSculptTool } from './site/terrain-sculpt-tool'
-import { StairTool } from './stair/stair-tool'
 import { ZoneBoundaryEditor } from './zone/zone-boundary-editor'
 import { ZoneTool } from './zone/zone-tool'
 
@@ -109,7 +108,6 @@ function getRegistryTool(tool: Tool | null): ComponentType | null {
 // item / shelf / spawn now go through the registry path above.
 const tools: Partial<Record<Tool, React.FC>> = {
   'property-line': SiteBoundaryEditor,
-  stair: StairTool,
   zone: ZoneTool,
 }
 

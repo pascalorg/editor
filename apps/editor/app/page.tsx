@@ -7,6 +7,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { BuildTab } from '@/components/build-tab'
 import { PaintPanel } from '@/components/paint-panel'
+import { PoolSectionBanner } from '@/components/pool-section-banner'
 import {
   CommunityViewerToolbarLeft,
   CommunityViewerToolbarRight,
@@ -117,26 +118,22 @@ export default function Home() {
         <WebXRFeatureConsumer>
           {(vr) => (
             <>
-              {PROJECT_ID === 'local-editor' && (
-                <div className="pointer-events-none absolute top-14 left-1/2 z-40 -translate-x-1/2">
-                  <div className="pointer-events-none flex max-w-[min(92vw,42rem)] flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs shadow-sm backdrop-blur">
-                    <span className="text-muted-foreground">
-                      Blank canvas — saved scenes are under Scenes (not this page).
-                    </span>
-                    <Link
-                      className="pointer-events-auto font-medium text-foreground hover:underline"
-                      href="/scenes"
-                    >
-                      Open saved scenes
-                    </Link>
-                  </div>
-                </div>
-              )}
               <Editor
                 immersive={vr?.session ? vr.immersive : undefined}
                 layoutVersion="v2"
                 projectId={PROJECT_ID}
                 sidebarTabs={SIDEBAR_TABS}
+                viewerBanner={
+                  <>
+                    <Link
+                      className="pointer-events-auto absolute top-14 left-1/2 flex h-8 -translate-x-1/2 items-center rounded-xl border border-border bg-background/90 px-3 font-medium text-foreground text-xs shadow-2xl backdrop-blur-md hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2 lg:top-3"
+                      href="/scenes"
+                    >
+                      Saved scenes
+                    </Link>
+                    <PoolSectionBanner />
+                  </>
+                }
                 viewerToolbarLeft={<CommunityViewerToolbarLeft />}
                 viewerToolbarRight={
                   <CommunityViewerToolbarRight

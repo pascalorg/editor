@@ -30,17 +30,14 @@ import {
   getAngleArcToSegmentReference,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
-  getSegmentGridStep,
   isAlignmentGuideActive,
   isAngleSnapActive,
-  isGridSnapActive,
   isMagneticSnapActive,
   markToolCancelConsumed,
   type PointerSupportSurface,
   publishPlacementSurface,
   resolvePointerSupportSurface,
   type SegmentAngleReference,
-  snapScalarToGrid,
   triggerSFX,
   useAlignmentGuides,
   useEditor,
@@ -51,10 +48,25 @@ import {
   useSegmentDraftChain,
 } from '@pascal-app/editor'
 
-import { createSceneSupportHeightSampler, getSceneTheme, useViewer } from '@pascal-app/viewer'
+import {
+  createSceneSupportHeightSampler,
+  getLevelPresentationY,
+  getSceneTheme,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { BufferGeometry, type Camera, DoubleSide, type Group, type Mesh, Vector3 } from 'three'
+import {
+  BufferGeometry,
+  type Camera,
+  DoubleSide,
+  type Group,
+  type Mesh,
+  Plane,
+  Raycaster,
+  Vector2,
+  Vector3,
+} from 'three'
 import {
   DraftAngleArc,
   type DraftAngleLabel,
@@ -66,6 +78,7 @@ import {
   createFenceOnCurrentLevel,
   createSplineFenceOnCurrentLevel,
   type FencePlanPoint,
+  getFenceDrawingSurface,
   getFenceInheritedDefaults,
   snapFenceDraftPoint,
 } from './drafting'
@@ -74,12 +87,74 @@ import { createFenceRailHeightSampler, generateFenceGeometry } from './geometry-
 
 const FENCE_PREVIEW_HEIGHT = 1.8
 const FENCE_PREVIEW_THICKNESS = 0.08
+
+function FenceSurfaceSnapPoints() {
+  const hostId = useEditor((state) => state.toolDefaults.fence?.supportSurfaceNodeId)
+  const levelId = useViewer((state) => state.selection.levelId)
+  const levelMode = useViewer((state) => state.levelMode)
+  useScene((state) => (typeof hostId === 'string' ? state.nodes[hostId as AnyNodeId] : undefined))
+  useScene((state) => {
+    const surface = getFenceDrawingSurface(state.nodes, hostId, levelId, levelMode)
+    return surface ? surface.levelElevation + surface.elevation : null
+  })
+  const surface = getFenceDrawingSurface()
+  if (!surface) return null
+  return (
+    <group>
+      {surface.boundary.map((point, index) => (
+        <mesh
+          key={index}
+          layers={EDITOR_LAYER}
+          position={[point[0], surface.levelElevation + surface.elevation + 0.025, point[1]]}
+          renderOrder={2}
+        >
+          <sphereGeometry args={[0.045, 12, 8]} />
+          <meshBasicMaterial color="#f97316" depthTest={false} transparent opacity={0.8} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
 // Grid-plane surface publish (pointer-decided): scratch + constant normal so
 // per-move publishes don't allocate.
 const SURFACE_UP = new Vector3(0, 1, 0)
 const surfacePointScratch = new Vector3()
 
 function pointedSurfaceFor(camera: Camera, event: GridEvent): PointerSupportSurface | null {
+  const surface = getFenceDrawingSurface()
+  if (surface) {
+    const buildingId = useViewer.getState().selection.buildingId
+    const buildingMesh = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : null
+    const point = new Vector3(
+      event.localPosition[0],
+      surface.levelElevation + surface.elevation,
+      event.localPosition[2],
+    )
+    if (buildingMesh) buildingMesh.localToWorld(point)
+    const worldY = point.y
+    if (event.nativeEvent?.target instanceof HTMLCanvasElement) {
+      const bounds = event.nativeEvent.target.getBoundingClientRect()
+      const raycaster = new Raycaster()
+      raycaster.setFromCamera(
+        new Vector2(
+          ((event.nativeEvent.clientX - bounds.left) / bounds.width) * 2 - 1,
+          -((event.nativeEvent.clientY - bounds.top) / bounds.height) * 2 + 1,
+        ),
+        camera,
+      )
+      if (!raycaster.ray.intersectPlane(new Plane(SURFACE_UP, -worldY), point)) return null
+    }
+    const worldPoint: [number, number, number] = [point.x, point.y, point.z]
+    if (buildingMesh) buildingMesh.worldToLocal(point)
+    return {
+      elevation: surface.elevation,
+      sourceNodeId: surface.id as PointerSupportSurface['sourceNodeId'],
+      supportSlabId: null,
+      localPoint: [point.x, point.y, point.z],
+      worldY,
+      worldPoint,
+    }
+  }
   if (event.localRay) {
     return resolvePointerSupportSurface(camera, event.position, { includeNodeTopSurfaces: true })
   }
@@ -481,14 +556,39 @@ function getCurrentLevelElements(): { walls: WallNode[]; fences: FenceNode[] } {
 }
 
 export const FenceTool: React.FC = () => {
+  const levelId = useViewer((state) => state.selection.levelId)
+  const levelMode = useViewer((state) => state.levelMode)
+  const hostId = useEditor((state) => state.toolDefaults.fence?.supportSurfaceNodeId)
+  const hostParentId = useScene((state) =>
+    typeof hostId === 'string' ? state.nodes[hostId as AnyNodeId]?.parentId : undefined,
+  )
+  const floorY = useScene((state) =>
+    levelId ? getLevelPresentationY(levelId, state.nodes, levelMode) : 0,
+  )
+  const draftKey = `${levelId}:${floorY}`
+  useEffect(() => {
+    if (typeof hostId === 'string' && hostParentId !== levelId) {
+      useEditor.getState().setTool(null)
+    }
+  }, [hostId, levelId, hostParentId])
   const fenceMode = useEditor((s) => s.continuationByContext.fence)
   const feature = useEditor((s) => s.toolDefaults.fence?.featurePlacement)
   if (feature === 'gate' || feature === 'opening') return <FenceFeatureTool kind={feature} />
   if (fenceMode === 'curved') {
-    return <SplineFenceDraft />
+    return (
+      <>
+        <FenceSurfaceSnapPoints />
+        <SplineFenceDraft key={draftKey} />
+      </>
+    )
   }
-  if (fenceMode === 'freehand') return <SplineFenceDraft freehand />
-  return <StraightFenceTool />
+  if (fenceMode === 'freehand') return <SplineFenceDraft key={draftKey} freehand />
+  return (
+    <>
+      <FenceSurfaceSnapPoints />
+      <StraightFenceTool key={draftKey} />
+    </>
+  )
 }
 
 const StraightFenceTool: React.FC = () => {
@@ -563,6 +663,10 @@ const StraightFenceTool: React.FC = () => {
       point: FencePlanPoint,
       options?: { applySnap?: boolean },
     ): FencePlanPoint => {
+      if (getFenceDrawingSurface()) {
+        useAlignmentGuides.getState().clear()
+        return point
+      }
       // Figma alignment lines onto existing corners / edges are DISPLAYED in
       // every mode except Off (isAlignmentGuideActive); the magnetic pull onto
       // them is applied only in 'lines' mode (isMagneticSnapActive).
@@ -700,7 +804,10 @@ const StraightFenceTool: React.FC = () => {
 
       const { walls, fences } = getCurrentLevelElements()
       const pointed = pointedSurfaceFor(cameraRef.current, event)
-      const localClick: FencePlanPoint = [event.localPosition[0], event.localPosition[2]]
+      const localClick: FencePlanPoint = [
+        pointed?.localPoint?.[0] ?? event.localPosition[0],
+        pointed?.localPoint?.[2] ?? event.localPosition[2],
+      ]
 
       if (buildingState.current === 0) {
         const snappedStart = alignPoint(
@@ -980,9 +1087,13 @@ const SplineFenceDraft: React.FC<{ freehand?: boolean }> = ({ freehand = false }
   useEffect(() => {
     const snapPoint = (local: FencePlanPoint): FencePlanPoint => {
       if (freehand) return local
-      const step = isGridSnapActive() ? getSegmentGridStep() : 0
-      if (step <= 0) return local
-      return [snapScalarToGrid(local[0], step), snapScalarToGrid(local[1], step)]
+      const { walls, fences } = getCurrentLevelElements()
+      return snapFenceDraftPoint({
+        point: local,
+        walls,
+        fences,
+        magnetic: isMagneticSnapActive(),
+      })
     }
 
     const commit = (points = draftRef.current) => {
