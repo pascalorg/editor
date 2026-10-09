@@ -724,9 +724,12 @@ export {
   type EditorHostPanel,
   type EditorHostPanelWorkspace,
   editorHostPanelRegistry,
+  type PluginAccess,
+  type PluginDirectoryContext,
   type PluginInstallLock,
   pluginInstallLocks,
   registerEditorHostPanel,
+  setPluginDirectoryContext,
   setPluginInstallLocks,
 } from './lib/plugin-panels'
 export { configureManifoldRuntime } from './lib/print-shell-compiler-manifold-worker'

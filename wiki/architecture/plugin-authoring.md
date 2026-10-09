@@ -210,7 +210,13 @@ The host registers that panel with `registerEditorHostPanel`. Registered plugins
 
 Install/uninstall is a project-level visibility operation. Plugin code and node definitions stay loaded for the browser session because `loadPlugin` is add-only, but an uninstalled plugin's panel, placement UI, renderers, systems, and floor-plan output are disabled. Existing plugin nodes remain serialized in the scene graph and become visible again when the plugin is reinstalled; uninstall never deletes project data.
 
-`creator` and `pluginUrl` are optional manager metadata. Selecting a plugin in the Plugins view opens its detail page, where the host shows this metadata and the project install/uninstall control.
+`creator` and `pluginUrl` are optional manager metadata. The Plugins view is a directory: categories, search and an installed / available filter over every registered plugin, one card per plugin, and a detail with the install control. Three more optional fields feed it:
+
+- `category` — the directory group, e.g. `'Outdoor & site'` (uncategorised plugins list under *Other*).
+- `summary` — one line for the card; `description` is the full text on the detail.
+- `access: PluginAccess[]` — what the plugin reaches once installed (`kind: 'ai' | 'media' | 'data' | 'account' | 'sharing'`, `label`, `detail`, `usesCredits`, `chip`). This is the host's policy, so a host usually sets it when it registers the panel rather than trusting the manifest.
+
+The host tells the directory about the open project with `setPluginDirectoryContext({ projectName, credits, notes })`: the project shown on "Install in …", the credits plugin calls spend, and the house rules under the categories.
 
 Host panels mount lazily inside an error boundary. Use host CSS variables, keep CSS scoped to the plugin, and do not write global styles.
 
