@@ -4,6 +4,8 @@ import {
   type AnyNode,
   type AnyNodeId,
   getLevelDisplayName,
+  getStairMirrorUpdates,
+  hasStairMirrorUpdates,
   type LevelNode,
   measureStair,
   planStairPreset,
@@ -45,7 +47,7 @@ import {
   useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Copy, Move, Plus, Trash2 } from 'lucide-react'
+import { Copy, FlipHorizontal2, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { StairConstructionControls } from './construction-controls'
@@ -298,6 +300,21 @@ export default function StairPanel() {
     setSelection({ selectedIds: [] })
   }, [selectedId, node, setSelection])
 
+  const handleMirror = useCallback(() => {
+    if (!node) return
+    const mirror = getStairMirrorUpdates(node, useScene.getState().nodes)
+    if (!hasStairMirrorUpdates(mirror)) return
+    triggerSFX('sfx:item-rotate')
+    runAsSingleSceneHistoryStep(useScene, () => {
+      if (Object.keys(mirror.stairUpdates).length > 0) {
+        updateNode(node.id as AnyNode['id'], mirror.stairUpdates)
+      }
+      for (const seg of mirror.segmentUpdates) {
+        updateNode(seg.id, seg.updates)
+      }
+    })
+  }, [node, updateNode])
+
   if (!(node && node.type === 'stair' && selectedId && selectedCount === 1)) return null
 
   const resolvedFromLevelId = resolveStairFromLevelId(nodes, node, levels)
@@ -306,6 +323,7 @@ export default function StairPanel() {
   const attachedDeck = deckNode?.type === 'slab' ? deckNode : undefined
   const resolvedRise = resolveStairTotalRise(node, nodes)
   const measurements = measureStair(node, nodes)
+  const canMirror = hasStairMirrorUpdates(getStairMirrorUpdates(node, nodes))
   const applySizing = (fitRun: boolean) => {
     const scene = useScene.getState()
     const current = scene.nodes[node.id]
@@ -942,12 +960,19 @@ export default function StairPanel() {
       </PanelSection>
 
       <PanelSection title="Actions">
-        <ActionGroup>
+        <ActionGroup className="grid grid-cols-2">
           <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
           <ActionButton
             icon={<Copy className="h-3.5 w-3.5" />}
             label="Duplicate"
             onClick={handleDuplicate}
+          />
+          <ActionButton
+            className="disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={!canMirror}
+            icon={<FlipHorizontal2 className="h-3.5 w-3.5" />}
+            label="Mirror"
+            onClick={handleMirror}
           />
           <ActionButton
             className="hover:bg-red-500/20"
