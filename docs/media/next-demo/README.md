@@ -6,7 +6,7 @@ result in monetized content. No separate permission is needed: follow the
 [CC BY 4.0 terms](LICENSE.md), credit Pascal, link the license, and note your edits.
 
 [Try the live demo](https://editor.pascal.app/next) ·
-[Join the discussion on X](https://x.com/pascal_app/status/2102097655031558496) ·
+[Join the discussion on X](https://x.com/pascal/status/2102097655031558496) ·
 [Download all release assets](https://github.com/pascalorg/editor/releases/tag/pascal-next-media-2026-09-21)
 
 ## Original recordings
