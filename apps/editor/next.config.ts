@@ -1,27 +1,9 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { NextConfig } from 'next'
-import { getLocalPluginPackages } from './local-plugins'
 
 const appDirectory = path.dirname(fileURLToPath(import.meta.url))
 const portableBuild = process.env.PASCAL_PORTABLE_BUILD === '1'
-const localPluginPaths = getLocalPluginPackages().map((plugin) => plugin.directory)
-const turbopackRoot = [path.resolve(appDirectory, '../..'), ...localPluginPaths].reduce(
-  (commonRoot, candidate) => {
-    const commonParts = commonRoot.split(path.sep)
-    const candidateParts = candidate.split(path.sep)
-    let sharedParts = 0
-    while (
-      sharedParts < commonParts.length &&
-      sharedParts < candidateParts.length &&
-      commonParts[sharedParts] === candidateParts[sharedParts]
-    ) {
-      sharedParts += 1
-    }
-    return commonParts.slice(0, sharedParts).join(path.sep) || path.parse(commonRoot).root
-  },
-)
-
 const nextConfig: NextConfig = {
   ...(portableBuild
     ? { output: 'standalone' as const, outputFileTracingRoot: path.join(appDirectory, '../..') }
@@ -61,7 +43,7 @@ const nextConfig: NextConfig = {
     '@dgreenheck/ez-tree',
   ],
   turbopack: {
-    root: turbopackRoot,
+    root: path.resolve(appDirectory, '../..'),
     resolveAlias: {
       react: './node_modules/react',
       three: './node_modules/three',
