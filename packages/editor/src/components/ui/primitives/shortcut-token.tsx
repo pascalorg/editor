@@ -62,9 +62,16 @@ function shortcutDisplayValue(value: string): string {
 type ShortcutTokenProps = React.ComponentProps<'kbd'> & {
   value: string
   displayValue?: string
+  localizedLabel?: string
 }
 
-function ShortcutToken({ className, displayValue, value, ...props }: ShortcutTokenProps) {
+function ShortcutToken({
+  className,
+  displayValue,
+  localizedLabel,
+  value,
+  ...props
+}: ShortcutTokenProps) {
   const mouseShortcut =
     value in MOUSE_SHORTCUTS ? MOUSE_SHORTCUTS[value as keyof typeof MOUSE_SHORTCUTS] : null
   const isCommand = COMMAND_VALUES.has(value)
@@ -75,6 +82,7 @@ function ShortcutToken({ className, displayValue, value, ...props }: ShortcutTok
   return (
     <kbd
       aria-label={
+        localizedLabel ??
         mouseShortcut?.label ??
         (isCommand ? commandLabel : isShift ? 'Shift' : (displayValue ?? value))
       }
@@ -83,7 +91,7 @@ function ShortcutToken({ className, displayValue, value, ...props }: ShortcutTok
         (mouseShortcut || isShift) && 'justify-center px-1.5',
         className,
       )}
-      title={mouseShortcut?.label ?? (isCommand ? commandLabel : isShift ? 'Shift' : value)}
+      title={localizedLabel ?? mouseShortcut?.label ?? (isCommand ? commandLabel : isShift ? 'Shift' : value)}
       {...props}
     >
       {mouseShortcut ? (
@@ -96,7 +104,7 @@ function ShortcutToken({ className, displayValue, value, ...props }: ShortcutTok
             icon={mouseShortcut.icon}
             width={14}
           />
-          <span className="sr-only">{mouseShortcut.label}</span>
+          <span className="sr-only">{localizedLabel ?? mouseShortcut.label}</span>
         </>
       ) : isShift ? (
         // Icon rather than the ⇧ text glyph — the font renders the glyph's

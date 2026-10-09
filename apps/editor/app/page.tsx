@@ -16,6 +16,7 @@ import {
   WebXRFeatureConsumer,
   WebXRFeatureRuntime,
 } from '@/components/webxr-feature-gate'
+import { useI18n } from '@/lib/i18n'
 
 // The open-source editor only ships the built-in catalog (no uploaded items),
 // so the Library/Community/Mine source chips and tag filters add nothing —
@@ -111,6 +112,11 @@ const PROJECT_ID = 'local-editor'
 
 export default function Home() {
   const webXRInstalled = useWebXRInstalled()
+  const { t, translateDisplayText } = useI18n()
+  const sidebarTabs = SIDEBAR_TABS.map((tab) => ({
+    ...tab,
+    label: translateDisplayText(tab.label),
+  }))
   return (
     <div className="relative h-screen w-screen">
       <WebXRFeatureRuntime enabled={webXRInstalled}>
@@ -120,14 +126,12 @@ export default function Home() {
               {PROJECT_ID === 'local-editor' && (
                 <div className="pointer-events-none absolute top-14 left-1/2 z-40 -translate-x-1/2">
                   <div className="pointer-events-none flex max-w-[min(92vw,42rem)] flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs shadow-sm backdrop-blur">
-                    <span className="text-muted-foreground">
-                      Blank canvas — saved scenes are under Scenes (not this page).
-                    </span>
+                    <span className="text-muted-foreground">{t('app.blankCanvas')}</span>
                     <Link
                       className="pointer-events-auto font-medium text-foreground hover:underline"
                       href="/scenes"
                     >
-                      Open saved scenes
+                      {t('app.openScenes')}
                     </Link>
                   </div>
                 </div>
@@ -136,7 +140,8 @@ export default function Home() {
                 immersive={vr?.session ? vr.immersive : undefined}
                 layoutVersion="v2"
                 projectId={PROJECT_ID}
-                sidebarTabs={SIDEBAR_TABS}
+                sidebarTabs={sidebarTabs}
+                translateDisplayText={translateDisplayText}
                 viewerToolbarLeft={<CommunityViewerToolbarLeft />}
                 viewerToolbarRight={
                   <CommunityViewerToolbarRight
@@ -148,7 +153,7 @@ export default function Home() {
                         />
                       ) : null
                     }
-                    vrLabel="Enter VR"
+                    vrLabel={translateDisplayText('Enter VR')}
                   />
                 }
               />

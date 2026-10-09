@@ -19,7 +19,13 @@ interface SaveButtonProps {
 /**
  * Creates a new empty scene and navigates the user to it.
  */
-export function CreateSceneButton({ label = 'Create new scene' }: { label?: string } = {}) {
+export function CreateSceneButton({
+  label = 'Create new scene',
+  locale = 'en',
+}: {
+  label?: string
+  locale?: 'en' | 'zh-CN'
+} = {}) {
   const router = useRouter()
   const [isCreating, setIsCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -55,7 +61,7 @@ export function CreateSceneButton({ label = 'Create new scene' }: { label?: stri
         onClick={handleCreate}
         type="button"
       >
-        {isCreating ? 'Creating…' : label}
+        {isCreating ? (locale === 'zh-CN' ? '正在创建…' : 'Creating…') : label}
       </button>
     </div>
   )

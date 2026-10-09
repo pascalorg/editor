@@ -3,6 +3,7 @@
 import type { AssetInput } from '@pascal-app/core'
 import { resolveCdnUrl } from '@pascal-app/viewer'
 import { useEffect } from 'react'
+import { useDisplayText } from './../../../lib/display-text'
 import { triggerSFX } from './../../../lib/sfx-bus'
 import { cn } from './../../../lib/utils'
 import useEditor, { type CatalogCategory } from './../../../store/use-editor'
@@ -31,6 +32,7 @@ export function ItemCatalog({
   /** Rendered when there are no items to show. Replaces the empty grid. */
   emptyState?: React.ReactNode
 }) {
+  const t = useDisplayText()
   const selectedItem = useEditor((state) => state.selectedItem)
   const filteredItems = filterCatalogItems({ category, items: itemsOverride, overrideItems, search, activePlacementTag, activeFunctionalTag })
 
@@ -63,7 +65,7 @@ export function ItemCatalog({
           >
             <div className="relative aspect-square w-full overflow-hidden rounded-lg">
               <img
-                alt={item.name}
+                alt={t(item.name)}
                 className="h-full w-full object-cover"
                 loading="eager"
                 src={resolveCdnUrl(item.thumbnail) || ''}
@@ -73,7 +75,7 @@ export function ItemCatalog({
               )}
             </div>
             <span className="truncate px-0.5 text-left font-medium text-[11px] text-muted-foreground group-hover:text-foreground">
-              {item.name}
+              {t(item.name)}
             </span>
           </button>
         )

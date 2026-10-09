@@ -406,6 +406,7 @@ export {
   nextContinuation,
 } from './lib/continuation'
 export { canDirectMoveNode } from './lib/direct-manipulation'
+export { DisplayTextProvider, useDisplayText } from './lib/display-text'
 export {
   closeDoorOpenState,
   getDisplayedDoorValue,

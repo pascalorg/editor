@@ -1,4 +1,5 @@
 import type { RoofType } from '@pascal-app/core'
+import type { MessageKey } from '@/lib/i18n'
 
 export type RoofFeatureIdentity = {
   id: string
@@ -30,15 +31,19 @@ export function getRoofFootprintSource(roofType: RoofType, value: unknown): Roof
     : sources[0].value
 }
 
-export const ROOF_TYPE_OPTIONS: ReadonlyArray<{ label: string; value: RoofType }> = [
-  { label: 'Hip', value: 'hip' },
-  { label: 'Gable', value: 'gable' },
-  { label: 'Shed', value: 'shed' },
-  { label: 'Flat', value: 'flat' },
-  { label: 'Gambrel', value: 'gambrel' },
-  { label: 'Dutch', value: 'dutch' },
-  { label: 'Mansard', value: 'mansard' },
-  { label: 'Conical', value: 'conical' },
+export const ROOF_TYPE_OPTIONS: ReadonlyArray<{
+  label: string
+  labelKey: MessageKey
+  value: RoofType
+}> = [
+  { label: 'Hip', labelKey: 'roof.hip', value: 'hip' },
+  { label: 'Gable', labelKey: 'roof.gable', value: 'gable' },
+  { label: 'Shed', labelKey: 'roof.shed', value: 'shed' },
+  { label: 'Flat', labelKey: 'roof.flat', value: 'flat' },
+  { label: 'Gambrel', labelKey: 'roof.gambrel', value: 'gambrel' },
+  { label: 'Dutch', labelKey: 'roof.dutch', value: 'dutch' },
+  { label: 'Mansard', labelKey: 'roof.mansard', value: 'mansard' },
+  { label: 'Conical', labelKey: 'roof.conical', value: 'conical' },
 ]
 
 export function getActiveRoofFeatureId(

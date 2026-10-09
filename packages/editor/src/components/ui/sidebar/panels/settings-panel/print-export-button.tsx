@@ -15,6 +15,7 @@ import {
   type PrintExportReport,
 } from '../../../../../lib/print-export'
 import useEditor from '../../../../../store/use-editor'
+import { useDisplayText } from '../../../../../lib/display-text'
 
 type PreparedPrintExport = {
   artifact: ModelExportArtifact
@@ -74,6 +75,7 @@ export async function preparePrintExport(
 }
 
 export function PrintExportButton({ onlyVisible }: { onlyVisible: boolean }) {
+  const t = useDisplayText()
   const modelExport = useEditor((state) => state.modelExport)
   const [exportingFormat, setExportingFormat] = useState<PrintModelExportFormat | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -105,7 +107,7 @@ export function PrintExportButton({ onlyVisible }: { onlyVisible: boolean }) {
         variant="outline"
       >
         <Printer className="size-4" />
-        Export 3D print 3MF
+        {t('Export 3D print 3MF')}
       </Button>
       <Button
         aria-busy={exportingFormat === 'print-stl'}
@@ -115,7 +117,7 @@ export function PrintExportButton({ onlyVisible }: { onlyVisible: boolean }) {
         variant="outline"
       >
         <Printer className="size-4" />
-        Export 3D print STL
+        {t('Export 3D print STL')}
       </Button>
       {error && (
         <div className="col-span-full flex gap-2 text-destructive text-xs">
