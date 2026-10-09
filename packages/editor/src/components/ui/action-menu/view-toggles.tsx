@@ -13,7 +13,7 @@ import { Check, ChevronDown, Eye, EyeOff, Layers2, Plus, Trash2, Waypoints } fro
 import { useCallback, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { getLevelDisplayName } from '@pascal-app/core'
-import { createLocalGuideImage } from '../../../lib/local-guide-image'
+import { createLocalGuideImage, guideImageErrorMessage } from '../../../lib/local-guide-image'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
 import { useUploadStore } from '../../../store/use-upload'
@@ -119,8 +119,8 @@ function UploadButton({ onError }: { onError: (message: string | null) => void }
           setShowGuides(true)
           setSelectedReferenceId(guide.id)
           setSelection({ selectedIds: [], zoneId: null })
-        } catch {
-          onError('Could not add that guide image.')
+        } catch (error) {
+          onError(guideImageErrorMessage(error))
         } finally {
           setIsAddingGuide(false)
         }
