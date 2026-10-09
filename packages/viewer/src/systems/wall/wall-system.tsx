@@ -74,6 +74,15 @@ import {
 } from './wall-finish-data'
 import { sweepUnbuiltWalls, WALL_PLACEHOLDER_SWEEP_INTERVAL } from './wall-placeholder-sweep'
 import { notifyWallRebuilt } from './wall-rebuild-notifications'
+import {
+  buildWallRoofCutterGeometry,
+  buildWallRoofProfile,
+  rememberWallRoofSignature,
+  resolveWallRoofCover,
+  syncWallRoofFit,
+  type WallRoofCover,
+  wallRoofCoverSignature,
+} from './wall-roof-fit'
 
 export { isWallInitialBuildActive } from './wall-build-lifecycle'
 export { drainRebuiltWalls } from './wall-rebuild-notifications'
@@ -733,6 +742,13 @@ export const WallSystem = ({ geometryAdapter }: { geometryAdapter?: WallGeometry
     },
     [],
   )
+  useEffect(
+    () =>
+      useScene.subscribe((state, previous) =>
+        syncWallRoofFit(state.nodes, previous.nodes, (id) => state.markDirty(id as AnyNodeId)),
+      ),
+    [],
+  )
   useFrame(() => runWallBuildFrame(geometryAdapter), 4)
   return null
 }
@@ -1177,6 +1193,7 @@ function updateWallGeometry(
         containsPoint(fillMasks, [x, z]) ? slabElevation : terrainSupportLift(nodes, levelId, x, z)
     : undefined
 
+  rememberWallRoofSignature(wallId, wallRoofCoverSignature(resolveWallRoofCover(node, nodes)))
   const builtGeo = generateExtrudedWall(
     node,
     prepared.envelopeChildren,
@@ -1535,6 +1552,44 @@ function buildWallFinishContext(
   return { layout, faceBase: { a: runs(faceBase.a), b: runs(faceBase.b) }, refs, foundation }
 }
 
+/**
+ * The roof cap profile of a wall in its own local frame (see `wall-roof-fit`),
+ * or null when no roof cuts the wall.
+ */
+function getWallRoofProfile(
+  wallNode: WallNode,
+  miterData: WallMiterData,
+  slabElevation: number,
+  storeyHeight: number,
+  roofCover: WallRoofCover | null,
+) {
+  if (!roofCover) return null
+  const dx = wallNode.end[0] - wallNode.start[0]
+  const dz = wallNode.end[1] - wallNode.start[1]
+  const length = Math.hypot(dx, dz)
+  if (length < 1e-9) return null
+  const footprint = isCurvedWall(wallNode)
+    ? getWallSurfacePolygon(wallNode, 24)
+    : getWallPlanFootprint(wallNode, miterData)
+  if (footprint.length < 3) return null
+  const ux = dx / length
+  const uz = dz / length
+  // Same frame as the extruded prism: x along the wall, z = perp (start → end).
+  const local = footprint.map((point) => {
+    const px = point.x - wallNode.start[0]
+    const pz = point.y - wallNode.start[1]
+    return { x: px * ux + pz * uz, z: -px * uz + pz * ux }
+  })
+  return buildWallRoofProfile({
+    cover: roofCover,
+    toPlan: (x, z) => [wallNode.start[0] + x * ux - z * uz, wallNode.start[1] + x * uz + z * ux],
+    xRange: [Math.min(...local.map((p) => p.x)), Math.max(...local.map((p) => p.x))],
+    zRange: [Math.min(...local.map((p) => p.z)), Math.max(...local.map((p) => p.z))],
+    normalTop: resolveWallTop(wallNode, storeyHeight, slabElevation),
+    base: slabElevation,
+  })
+}
+
 export function generateExtrudedWall(
   wallNode: WallNode,
   childrenNodes: AnyNode[],
@@ -1553,6 +1608,13 @@ export function generateExtrudedWall(
   const wallStart: Point2D = { x: wallNode.start[0], y: wallNode.start[1] }
   const wallEnd: Point2D = { x: wallNode.end[0], y: wallNode.end[1] }
   const topElevation = resolveWallTop(wallNode, storeyHeight, slabElevation)
+  const roofProfile = getWallRoofProfile(
+    wallNode,
+    miterData,
+    slabElevation,
+    storeyHeight,
+    resolveWallRoofCover(wallNode, sceneNodes),
+  )
   const faceDatum = faceBase
   if (faceBase)
     faceBase = {
@@ -1802,7 +1864,7 @@ export function generateExtrudedWall(
       baseSegments,
     ),
   ]
-  if (cutoutBrushes.length === 0) {
+  if (cutoutBrushes.length === 0 && !roofProfile) {
     const splitGeometry = splitGeometryAtPlanes(geometry, finishPlanes.y, finishPlanes.x)
     splitGeometry.computeVertexNormals()
     assignWallMaterialGroups(splitGeometry, wallNode, boundaryEdges, finish)
@@ -1822,6 +1884,7 @@ export function generateExtrudedWall(
   wallBrush.updateMatrixWorld()
 
   let mergedCutter: Brush | null = null
+  let roofCutter: Brush | null = null
   let resultBrush = wallBrush
   try {
     const properties: Array<[string, string]> = []
@@ -1845,12 +1908,28 @@ export function generateExtrudedWall(
         resultBrush = next
       }
     })
+    if (roofProfile) {
+      // Separate from the opening union: the cutter spans the whole wall, so
+      // grouping it with openings would fold every opening into one union.
+      const cutterGeometry = buildWallRoofCutterGeometry(roofProfile, -slabElevation)
+      ensureRenderableGeometryAttributes(cutterGeometry)
+      computeGeometryBoundsTree(cutterGeometry)
+      roofCutter = new Brush(cutterGeometry)
+      prepareBrushForCSG(roofCutter)
+      const cutter = roofCutter
+      timeSpan('wall-roof-csg', () => {
+        const next = csgEvaluator.evaluate(resultBrush, cutter, SUBTRACTION)
+        if (resultBrush !== wallBrush) csgGeometry(resultBrush).dispose()
+        resultBrush = next
+      })
+    }
   } catch (error) {
     if (resultBrush !== wallBrush) csgGeometry(resultBrush).dispose()
     throw error
   } finally {
     csgGeometry(wallBrush).dispose()
     if (mergedCutter) csgGeometry(mergedCutter).dispose()
+    if (roofCutter) csgGeometry(roofCutter).dispose()
     for (const brush of cutoutBrushes) csgGeometry(brush).dispose()
   }
 

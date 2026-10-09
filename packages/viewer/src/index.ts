@@ -291,6 +291,7 @@ export {
   roofCsgDummyMats,
   type SurfaceFrame,
 } from './systems/roof/roof-system'
+export { resolveColumnRoofHeight } from './systems/roof/roof-underside'
 export { ScanSystem } from './systems/scan/scan-system'
 // Pure slab geometry generator — composed into the registry-driven slab
 // definition's `def.geometry` in `@pascal-app/nodes`.

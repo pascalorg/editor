@@ -10,6 +10,7 @@ import {
   type ColumnSlotId,
   collectDescendants,
   createSceneApi,
+  getFloorStackedPosition,
   useLiveNodeOverrides,
   useLiveTransforms,
   useRegistry,
@@ -27,6 +28,7 @@ import {
   createSurfaceRoleMaterial,
   NodeRenderer,
   type RenderShading,
+  resolveColumnRoofHeight,
   resolveMaterialRef,
   resolveSlotDefaultMaterial,
   useNodeEvents,
@@ -2246,10 +2248,19 @@ export const ColumnRenderer = ({ node: rawNode }: { node: ColumnNode }) => {
   // hearing the commit on release. Subscribes narrowly to this node's
   // override entry; unrelated writes don't re-render.
   const liveOverride = useLiveNodeOverrides((s) => s.overrides.get(rawNode.id))
-  const node = useMemo<ColumnNode>(
-    () => (liveOverride ? ({ ...rawNode, ...liveOverride } as ColumnNode) : rawNode),
-    [rawNode, liveOverride],
+  // A post under a roof meets its underside (see `resolveColumnRoofHeight`).
+  const roofHeight = useScene((s) =>
+    resolveColumnRoofHeight(
+      rawNode,
+      s.nodes,
+      // The floor-elevation system lifts the column onto its slab; measure from there.
+      getFloorStackedPosition({ node: rawNode, nodes: s.nodes, position: rawNode.position })[1],
+    ),
   )
+  const node = useMemo<ColumnNode>(() => {
+    const merged = liveOverride ? ({ ...rawNode, ...liveOverride } as ColumnNode) : rawNode
+    return roofHeight != null && roofHeight > 0 ? { ...merged, height: roofHeight } : merged
+  }, [rawNode, liveOverride, roofHeight])
   const scriptedColumn = Boolean(node.source)
   const modelData = useMemo(() => ({ scriptedColumn }), [scriptedColumn])
   const handlers = useNodeEvents(node, 'column')
