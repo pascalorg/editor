@@ -119,7 +119,13 @@ export {
   type ResolvedAssemblyLayer,
   resolveAssemblyStack,
 } from './lib/assembly-stack'
-export { loadAssetUrl, saveAsset } from './lib/asset-storage'
+export {
+  deleteAsset,
+  listLocalAssetUrls,
+  loadAssetUrl,
+  saveAsset,
+  sweepLocalAssetsExcept,
+} from './lib/asset-storage'
 export {
   CEILING_SURFACE_ROLE,
   type CeilingSurfaceCell,
@@ -201,6 +207,11 @@ export {
   roomClearPolygon,
 } from './lib/level-footprints'
 export { getDefaultLevelName, getLevelDisplayName } from './lib/level-name'
+export {
+  collectGraphAssetUrlsFromParts,
+  collectNodeAssetUrls,
+  collectSceneAssetUrls,
+} from './lib/local-asset-lifecycle'
 export {
   areMeasurementPointsCoplanar,
   closestMeasurementFeatureBinding,
