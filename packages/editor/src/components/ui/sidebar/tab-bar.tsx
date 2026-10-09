@@ -19,8 +19,16 @@ export type SidebarTab = {
    * keeps the icon highlighted regardless of collapse.
    */
   noPanel?: boolean
-  /** Rail entry that runs an action instead of opening a panel; the active panel is left as it is. */
+  /** Runs when the entry is picked — with `noPanel`, to put its surface on the stage. */
   onSelect?: () => void
+  /**
+   * For a `noPanel` entry whose surface can leave the stage on its own (a view
+   * closed from the view bar): false once it has, and the rail goes back to
+   * the panel that was open before it.
+   */
+  stageActive?: boolean
+  /** Runs when the rail moves from this entry to another: a stage entry takes its surface down. */
+  onDeselect?: () => void
 }
 
 interface TabBarProps {

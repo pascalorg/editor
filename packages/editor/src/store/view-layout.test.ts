@@ -55,6 +55,16 @@ describe('the stage layout', () => {
     expect(layout()).toMatchObject({ split: false, panes: [VIEW_3D, VIEW_2D] })
   })
 
+  test('closing a view collapses its split, or brings a lone pane back to 3D', () => {
+    useEditor.getState().showView('gallery', { beside: true })
+    useEditor.getState().closeView('gallery')
+    expect(layout()).toMatchObject({ split: false, panes: [VIEW_3D, VIEW_2D] })
+    useEditor.getState().setViewLayout(sceneLayout('2d'))
+    useEditor.getState().showView('gallery')
+    useEditor.getState().closeView('gallery')
+    expect(visibleScene(useEditor.getState())).toBe('3d')
+  })
+
   test('a plan beside another view owns the scene like a plan alone', () => {
     useEditor.getState().setViewLayout(sceneLayout('2d'))
     useEditor.getState().showView('gallery', { beside: true })

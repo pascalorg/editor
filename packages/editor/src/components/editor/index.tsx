@@ -1726,7 +1726,10 @@ function EditorContent({
         mobileDefaultSnap: 0.5,
         mobileIcon: p.icon,
         icon: p.icon,
+        noPanel: p.noPanel,
         onSelect: p.onSelect,
+        stageActive: p.stageActive,
+        onDeselect: p.onDeselect,
       })),
     ]
 

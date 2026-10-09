@@ -107,6 +107,17 @@ export function withSplitToggled(layout: ViewLayout): ViewLayout {
   return { ...kept, split: false, focus: 0 }
 }
 
+/**
+ * Close a view: a split collapses to the other pane; a single pane goes back to
+ * the scene.
+ */
+export function withoutView(layout: ViewLayout, viewId: string): ViewLayout {
+  const pane = paneOfView(layout, viewId)
+  if (pane === null) return layout
+  const kept = layout.split ? layout.panes[pane === 0 ? 1 : 0] : VIEW_3D
+  return { ...layout, split: false, panes: [kept, kept === VIEW_3D ? VIEW_2D : VIEW_3D], focus: 0 }
+}
+
 export function swapped(layout: ViewLayout): ViewLayout {
   return {
     ...layout,

@@ -12,6 +12,7 @@ import {
   useSyncExternalStore,
 } from 'react'
 import useEditor from '../../../store/use-editor'
+import { isViewVisible } from '../../../store/view-layout'
 import { PluginsView } from '../../editor/views/plugins-view'
 import { PLUGINS_VIEW_ID } from '../../editor/views/use-editor-views'
 import {
@@ -24,14 +25,17 @@ import { IconRefImage } from '../icon-ref'
 import { ErrorBoundary } from '../primitives/error-boundary'
 import type { ExtraPanel } from './icon-rail'
 
-// The rail's "+" opens the plugin directory as a view in the focused pane.
-// `component` remains for the v1 sidebar, which has no stage views.
+// The rail's "+" puts the plugin directory on the stage, as a view in the
+// focused pane, and stays lit while it is there instead of leaving an
+// unrelated panel open beside it. `component` serves the v1 sidebar.
 const pluginsManagerPanel: ExtraPanel = {
   id: 'plugins',
   label: 'Plugins',
-  icon: <Plus className="h-5 w-5" />,
+  icon: <img alt="" className="size-8 object-contain" src="/icons/plugins.webp" />,
   component: PluginsView,
+  noPanel: true,
   onSelect: () => useEditor.getState().showView(PLUGINS_VIEW_ID),
+  onDeselect: () => useEditor.getState().closeView(PLUGINS_VIEW_ID),
 }
 
 /** Resolve a plugin's {@link IconRef} into a rail-sized React node. Mirrors the
@@ -111,6 +115,7 @@ export function useHostPanels(hostPanels?: ExtraPanel[]): ExtraPanel[] {
   const workspaceMode = useEditor((s) => s.workspaceMode)
   const installedPlugins = useScene((s) => s.installedPlugins)
   const readOnly = useScene((s) => s.readOnly)
+  const pluginsViewShown = useEditor((s) => isViewVisible(s, PLUGINS_VIEW_ID))
   const hostIds = new Set(hostPanels?.map((p) => p.id))
 
   useEffect(() => {
@@ -146,7 +151,7 @@ export function useHostPanels(hostPanels?: ExtraPanel[]): ExtraPanel[] {
       readOnly,
       workspaceMode,
     })
-      ? [pluginsManagerPanel]
+      ? [{ ...pluginsManagerPanel, stageActive: pluginsViewShown }]
       : []
   return [...(hostPanels ?? []), ...fromRegistry, ...manager]
 }

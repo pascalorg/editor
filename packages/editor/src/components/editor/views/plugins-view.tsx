@@ -71,7 +71,7 @@ export function PluginsView() {
     const lock = installed ? undefined : installLocks[pluginId]
 
     return (
-      <div className="flex h-full flex-col overflow-y-auto bg-sidebar px-6 pt-16 pb-6">
+      <div className="flex h-full flex-col overflow-y-auto bg-sidebar px-6 py-6">
         <div className="mx-auto w-full max-w-2xl">
           <Button
             className="rounded-full"
@@ -188,7 +188,7 @@ export function PluginsView() {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto bg-sidebar px-6 pt-16 pb-6">
+    <div className="flex h-full flex-col overflow-y-auto bg-sidebar px-6 py-6">
       <div className="mx-auto mb-5 w-full max-w-5xl">
         <h2 className="font-semibold text-lg text-sidebar-foreground">Plugins</h2>
         <p className="mt-1 text-sidebar-foreground/60 text-sm">

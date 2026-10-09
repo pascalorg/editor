@@ -1,7 +1,7 @@
 'use client'
 
-import { ArrowLeftRight, Check, Columns2, MoreHorizontal, Pin, PinOff, Plus } from 'lucide-react'
-import { useEffect } from 'react'
+import { ArrowLeftRight, Check, Columns2, MoreHorizontal, Pin, PinOff } from 'lucide-react'
+import { type ReactNode, useEffect } from 'react'
 import { useIsMobile } from '../../../hooks/use-mobile'
 import { type EditorViewDescriptor, isSceneView, isViewPinned } from '../../../lib/editor-views'
 import { cn } from '../../../lib/utils'
@@ -18,30 +18,25 @@ import {
 } from '../../ui/primitives/dropdown-menu'
 import { PLUGINS_VIEW_ID, useActiveViewLayout, useEditorViews } from './use-editor-views'
 
-const BAR = cn(
-  'pointer-events-auto inline-flex h-8 items-stretch overflow-hidden rounded-[10px]',
-  'border border-border bg-background/90 shadow-elevation-4',
+const GROUP = cn(
+  'pointer-events-auto inline-flex h-8 shrink-0 items-stretch overflow-hidden rounded-[10px]',
+  'border border-border bg-background/90',
 )
 const SEGMENT =
   'flex items-center justify-center gap-1.5 px-2.5 font-medium text-xs transition-colors'
 const ACTIVE = 'bg-white/10 text-foreground'
 const IDLE = 'text-muted-foreground/70 hover:bg-white/8 hover:text-muted-foreground'
 
-/**
- * The views of one pane: its pinned views, the one it shows, and a menu with
- * the rest. The last pane also carries the split toggle (and, split, the swap).
- */
-export function ViewBar({ pane }: { pane: ViewPaneIndex }) {
+/** The views of one pane: its pinned views, the one it shows, and a menu with the rest. */
+export function ViewTabs({ pane, className }: { pane: ViewPaneIndex; className?: string }) {
   const layout = useActiveViewLayout()
   const views = useEditorViews()
   const pinnedViews = useEditor((s) => s.pinnedViews)
-  const isMobile = useIsMobile()
   const current = layout.panes[pane]
-  const isLastPane = !layout.split || pane === 1
   const tabs = views.filter((view) => view.id === current || isViewPinned(view, pinnedViews))
 
   return (
-    <div className={BAR} data-view-bar={pane} role="tablist">
+    <div className={cn(GROUP, className)} role="tablist">
       {tabs.map((view) => (
         <button
           aria-selected={view.id === current}
@@ -56,32 +51,70 @@ export function ViewBar({ pane }: { pane: ViewPaneIndex }) {
         </button>
       ))}
       <MoreViewsMenu current={current} pane={pane} views={views} />
-      {isLastPane && !isMobile && (
-        <>
-          <div className="my-1.5 w-px bg-border/50" />
-          {layout.split && (
-            <button
-              aria-label="Swap panes"
-              className={cn(SEGMENT, IDLE, 'px-2')}
-              onClick={() => useEditor.getState().swapPanes()}
-              title="Swap panes"
-              type="button"
-            >
-              <ArrowLeftRight className="h-3 w-3" />
-            </button>
-          )}
-          <button
-            aria-pressed={layout.split}
-            className={cn(SEGMENT, layout.split ? ACTIVE : IDLE)}
-            onClick={() => useEditor.getState().toggleSplit()}
-            title={layout.split ? 'Close split (\\)' : 'Split (\\)'}
-            type="button"
-          >
-            <Columns2 className="h-3 w-3" />
-            <span>Split</span>
-          </button>
-        </>
+    </div>
+  )
+}
+
+/** Split toggle and, split, the swap — at the right end of the last pane's bar. */
+function SplitControls() {
+  const split = useActiveViewLayout().split
+  return (
+    <div className={GROUP}>
+      {split && (
+        <button
+          aria-label="Swap panes"
+          className={cn(SEGMENT, IDLE, 'px-2')}
+          onClick={() => useEditor.getState().swapPanes()}
+          title="Swap panes"
+          type="button"
+        >
+          <ArrowLeftRight className="h-3 w-3" />
+        </button>
       )}
+      <button
+        aria-pressed={split}
+        className={cn(SEGMENT, split ? ACTIVE : IDLE)}
+        onClick={() => useEditor.getState().toggleSplit()}
+        title={split ? 'Close split (\\)' : 'Split (\\)'}
+        type="button"
+      >
+        <Columns2 className="h-3 w-3" />
+        <span>Split</span>
+      </button>
+    </div>
+  )
+}
+
+/**
+ * The bar row above the stage: one bar per pane, aligned with it — the pane's
+ * views on the left (the first pane followed by the host's `leading` content),
+ * the split controls at the right end of the last pane.
+ */
+export function ViewBarRow({ leading }: { leading?: ReactNode }) {
+  const layout = useActiveViewLayout()
+  const isMobile = useIsMobile()
+  useSplitShortcut(!isMobile)
+  const panes = layout.split ? ([0, 1] as const) : ([0] as const)
+  return (
+    <div className="relative h-12 shrink-0">
+      {panes.map((pane) => {
+        const left = pane === 0 ? 0 : layout.ratio
+        const right = pane === 0 && layout.split ? layout.ratio : 1
+        const isLast = pane === panes.length - 1
+        return (
+          <div
+            className="absolute inset-y-0 flex min-w-0 items-center gap-2 px-3"
+            data-view-bar={pane}
+            key={pane}
+            style={{ left: `${left * 100}%`, width: `${(right - left) * 100}%` }}
+          >
+            <ViewTabs pane={pane} />
+            {pane === 0 && leading}
+            <span className="flex-1" />
+            {isLast && !isMobile && <SplitControls />}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -176,7 +209,7 @@ function MoreViewsMenu({
               className="gap-2.5"
               onSelect={() => setPaneView(pane, PLUGINS_VIEW_ID)}
             >
-              <Plus className="h-4 w-4 text-muted-foreground" />
+              <img alt="" className="h-4 w-4 object-contain" src="/icons/plugins.webp" />
               <span>Browse plugins</span>
             </DropdownMenuItem>
           </>

@@ -17,8 +17,11 @@ export type ExtraPanel = {
   label: string
   component: ComponentType
   pluginId?: string
-  /** A rail entry that runs an action (opening a view) instead of showing `component`. */
+  /** Rail entry that drives the stage (see `SidebarTab.noPanel`); `component` serves the v1 sidebar. */
+  noPanel?: boolean
   onSelect?: () => void
+  stageActive?: boolean
+  onDeselect?: () => void
 }
 
 interface IconRailProps {

@@ -9,8 +9,7 @@ import { useSidebarStore } from '../ui/primitives/sidebar'
 import { IconRail, type SidebarTab } from '../ui/sidebar/tab-bar'
 import { EditorLayoutMobile } from './editor-layout-mobile'
 import { useSceneSpan } from './views/scene-region'
-import { useActiveViewLayout } from './views/use-editor-views'
-import { useSplitShortcut, ViewBar } from './views/view-bar'
+import { ViewBarRow } from './views/view-bar'
 
 const SIDEBAR_MAX_WIDTH = 800
 const SIDEBAR_COLLAPSE_THRESHOLD = 220
@@ -45,13 +44,23 @@ function LeftColumn({
     return () => setSidebarTabIds([])
   }, [tabs])
 
-  // Ensure active panel is a valid tab. An action entry is never one: a stored
-  // 'plugins' from when the directory was a panel lands back on the first tab.
+  // Ensure active panel is a valid tab
   useEffect(() => {
-    if (tabs.length > 0 && !tabs.some((t) => t.id === activePanel && !t.onSelect)) {
+    if (tabs.length > 0 && !tabs.some((t) => t.id === activePanel)) {
       setActivePanel(tabs[0]!.id)
     }
   }, [tabs, activePanel, setActivePanel])
+
+  // A stage entry whose surface has left the stage (its view closed from the
+  // view bar) hands the rail back to the panel that was open before it.
+  const lastPanelTab = useRef<string | null>(null)
+  const activeTab = tabs.find((t) => t.id === activePanel)
+  if (activeTab && !activeTab.noPanel) lastPanelTab.current = activeTab.id
+  useEffect(() => {
+    if (activeTab?.stageActive !== false) return
+    const fallback = tabs.find((t) => t.id === lastPanelTab.current) ?? tabs.find((t) => !t.noPanel)
+    if (fallback) setActivePanel(fallback.id)
+  }, [activeTab, tabs, setActivePanel])
 
   // Leaving the items tab with the item tool in hand drops back to select mode
   useEffect(() => {
@@ -100,10 +109,8 @@ function LeftColumn({
   const handleRailClick = useCallback(
     (id: string) => {
       const tab = tabs.find((t) => t.id === id)
-      if (tab?.onSelect) {
-        tab.onSelect()
-        return
-      }
+      if (id !== activePanel) tabs.find((t) => t.id === activePanel)?.onDeselect?.()
+      tab?.onSelect?.()
       // noPanel tabs drive the stage, not the panel — leave collapse state alone.
       if (tab?.noPanel) {
         setActivePanel(id)
@@ -187,33 +194,23 @@ function LeftColumn({
 // ── Right column: viewer area with toolbar ───────────────────────────────────
 
 /**
- * The stage's top band: each pane's view bar at the pane's left edge, the
- * host's left toolbar after the first, and the host's right toolbar — scene
- * controls (wall mode, display) — at the right edge of the scene panes.
+ * Host toolbars floating over the stage. The right one carries scene controls
+ * (wall mode, display), so it sits at the right edge of the scene panes; the
+ * left one floats only when there is no view bar row to carry it.
  */
 function StageToolbar({
   toolbarLeft,
   toolbarRight,
-  viewBar,
 }: {
   toolbarLeft?: ReactNode
   toolbarRight?: ReactNode
-  viewBar: boolean
 }) {
-  const layout = useActiveViewLayout()
   const scene = useSceneSpan()
-  useSplitShortcut(viewBar)
   return (
     <div className="pointer-events-none absolute top-3 right-0 left-0 z-20 h-8">
-      <div className="absolute top-0 left-3 flex items-center gap-2">
-        {viewBar && <ViewBar pane={0} />}
-        {toolbarLeft && (
-          <div className="pointer-events-auto flex items-center gap-2">{toolbarLeft}</div>
-        )}
-      </div>
-      {viewBar && layout.split && (
-        <div className="absolute top-0" style={{ left: `calc(${layout.ratio * 100}% + 12px)` }}>
-          <ViewBar pane={1} />
+      {toolbarLeft && (
+        <div className="pointer-events-auto absolute top-0 left-3 flex items-center gap-2">
+          {toolbarLeft}
         </div>
       )}
       {toolbarRight && scene && (
@@ -244,41 +241,49 @@ function RightColumn({
   stageOverlay?: ReactNode
 }) {
   return (
-    <div
-      className="relative flex min-w-0 flex-1 flex-col overflow-hidden"
-      style={{
-        borderTopLeftRadius: 16,
-        clipPath: 'inset(0 0 0 0 round 16px 0 0 0)',
-        boxShadow: '-4px -2px 16px rgba(0, 0, 0, 0.08), -1px 0 4px rgba(0, 0, 0, 0.04)',
-      }}
-    >
-      {(viewBar || toolbarLeft || toolbarRight) && (
-        <StageToolbar toolbarLeft={toolbarLeft} toolbarRight={toolbarRight} viewBar={viewBar} />
-      )}
-      {/* Canvas area. `isolate` matters: drei's `<Html>` computes a z-index
-          from camera distance and defaults to a range topping out at
-          16,777,271, and without a stacking context here those values compete
-          directly with the viewer toolbar (z-20), the stage overlay (z-10) and
-          the overlay band (z-30) — so an in-scene tool badge painted over all
-          three. Isolating pins every in-scene HTML layer inside the canvas,
-          where it belongs, and leaves their order relative to each other
-          untouched. */}
-      <div className="relative isolate flex-1 overflow-hidden">{children}</div>
-      {/* Stage overlay — replaces the whole stage visually (e.g. the item
-          builder) while keeping the canvas mounted. The view bar steps aside
-          for it (see `EditorLayoutV2`); the host's toolbars stay above it. */}
-      {stageOverlay && <div className="absolute inset-0 z-10">{stageOverlay}</div>}
-      {/* Overlays scoped to the viewer column. `data-viewer-bounds` marks the
-          draggable region the floating inspector clamps itself to. */}
-      {overlays && (
-        <div
-          className="pointer-events-none absolute inset-0 z-30"
-          data-viewer-bounds
-          style={{ transform: 'translateZ(0)' }}
-        >
-          {overlays}
-        </div>
-      )}
+    <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+      {/* The view bar row sits above the stage, one bar per pane; the host's
+          left toolbar rides after the first pane's views. */}
+      {viewBar && <ViewBarRow leading={toolbarLeft} />}
+      <div
+        className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
+        style={{
+          borderTopLeftRadius: 16,
+          clipPath: 'inset(0 0 0 0 round 16px 0 0 0)',
+          boxShadow: '-4px -2px 16px rgba(0, 0, 0, 0.08), -1px 0 4px rgba(0, 0, 0, 0.04)',
+        }}
+      >
+        {((!viewBar && toolbarLeft) || toolbarRight) && (
+          <StageToolbar
+            toolbarLeft={viewBar ? undefined : toolbarLeft}
+            toolbarRight={toolbarRight}
+          />
+        )}
+        {/* Canvas area. `isolate` matters: drei's `<Html>` computes a z-index
+            from camera distance and defaults to a range topping out at
+            16,777,271, and without a stacking context here those values compete
+            directly with the viewer toolbar (z-20), the stage overlay (z-10) and
+            the overlay band (z-30) — so an in-scene tool badge painted over all
+            three. Isolating pins every in-scene HTML layer inside the canvas,
+            where it belongs, and leaves their order relative to each other
+            untouched. */}
+        <div className="relative isolate flex-1 overflow-hidden">{children}</div>
+        {/* Stage overlay — replaces the whole stage visually (e.g. the item
+            builder) while keeping the canvas mounted. The view bar row steps
+            aside for it (see `EditorLayoutV2`); the host's toolbars stay above. */}
+        {stageOverlay && <div className="absolute inset-0 z-10">{stageOverlay}</div>}
+        {/* Overlays scoped to the stage. `data-viewer-bounds` marks the
+            draggable region the floating inspector clamps itself to. */}
+        {overlays && (
+          <div
+            className="pointer-events-none absolute inset-0 z-30"
+            data-viewer-bounds
+            style={{ transform: 'translateZ(0)' }}
+          >
+            {overlays}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -321,7 +326,7 @@ export function EditorLayoutV2({
         overlays={overlays}
         renderTabContent={renderTabContent}
         sidebarOverlay={sidebarOverlay}
-        sidebarTabs={sidebarTabs.filter((t) => !t.noPanel)}
+        sidebarTabs={sidebarTabs.filter((t) => !t.noPanel || t.onSelect)}
         viewerContent={viewerContent}
         viewBar={viewBar}
         viewerToolbarLeft={viewerToolbarLeft}

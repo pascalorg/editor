@@ -63,6 +63,7 @@ import { getSceneTheme, useViewer } from '@pascal-app/viewer'
 import { Command, Ruler } from 'lucide-react'
 import {
   type ComponentProps,
+  type CSSProperties,
   memo,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
@@ -164,7 +165,7 @@ import useInteractionScope, {
 import usePlacementPreview from '../../store/use-placement-preview'
 import { expandSessionSelectionForNode } from '../../store/use-session-groups'
 import { useStairBuildPreview } from '../../store/use-stair-build-preview'
-import { isViewVisible, VIEW_2D, visibleScene } from '../../store/view-layout'
+import { activeViewLayout, isViewVisible, VIEW_2D, visibleScene } from '../../store/view-layout'
 import { FloorplanAlignmentGuideLayer } from '../editor-2d/floorplan-alignment-guide-layer'
 import { FloorplanCursorIndicatorOverlay as Editor2dFloorplanCursorIndicatorOverlay } from '../editor-2d/floorplan-cursor-indicator-overlay'
 import { FloorplanGroupActionMenu } from '../editor-2d/floorplan-group-action-menu'
@@ -231,7 +232,6 @@ import {
   WALL_JOIN_SNAP_RADIUS,
   type WallPlanPoint,
 } from '../tools/wall/wall-drafting'
-
 import { FloorplanCompassButton } from '../viewer/floorplan-compass-button'
 import { resolveFloorplanBackgroundSelection } from './floorplan-background-selection'
 import {
@@ -254,6 +254,7 @@ import {
 import { useFloorplanBackgroundPlacement } from './use-floorplan-background-placement'
 import { useFloorplanHitTesting } from './use-floorplan-hit-testing'
 import { useFloorplanSceneData } from './use-floorplan-scene-data'
+import { sceneSpan } from './views/scene-region'
 
 const FALLBACK_VIEW_SIZE = 12
 const FLOORPLAN_PADDING = 2
@@ -4914,6 +4915,19 @@ export function FloorplanPanel({
   // the user closes and re-opens the 2D editor instead of restoring the
   // stale viewport from before they closed it.
   const isFloorplanOpen = useEditor((state) => isViewVisible(state, VIEW_2D))
+  // The compass sits at the scene's bottom-left corner, the drawing switch
+  // beside it. With the plan in the right pane both move to its bottom-right
+  // corner (compass outermost), clear of the dock centred over the scene.
+  const planOnRight = useEditor((state) => {
+    const layout = activeViewLayout(state)
+    return layout.split && layout.panes[1] === VIEW_2D
+  })
+  // `null` while no scene view is on screen: the compass has nothing to orient.
+  const sceneLeft = useEditor((state) => sceneSpan(activeViewLayout(state))?.left ?? null)
+  // Mirrored, the pair stays left of the helper toggle in the stage's corner.
+  const compassStyle: CSSProperties = planOnRight
+    ? { right: 56 }
+    : { left: `calc(${(sceneLeft ?? 0) * 100}% + 12px)` }
   const shownScene = useEditor(visibleScene)
   // Mirror for callbacks that fire outside React's render (the per-frame
   // navigation-pose subscriber): when the 2D panel is hidden (`display:none` in
@@ -11202,9 +11216,10 @@ export function FloorplanPanel({
             pill, plus the group pill for multi-selections. */}
         <FloorplanRegistryActionMenu />
         <FloorplanGroupActionMenu />
-        <FloorplanDrawingTypeSwitch />
+        <FloorplanDrawingTypeSwitch className={planOnRight ? 'right-24 left-auto' : undefined} />
 
         {!isStudioWorkspace &&
+          sceneLeft !== null &&
           (levelNode?.type === 'level' || hasAmbientBuildingLevel) &&
           (compassHost ? (
             createPortal(
@@ -11212,6 +11227,7 @@ export function FloorplanPanel({
                 needleRef={compassNeedleRef}
                 northRotationDeg={floorplanUserRotationDeg}
                 onAlignNorth={alignFloorplanViewToNorth}
+                style={compassStyle}
               />,
               compassHost,
             )

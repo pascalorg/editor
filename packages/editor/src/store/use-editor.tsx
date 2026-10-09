@@ -79,6 +79,7 @@ import {
   type ViewLayout,
   type ViewPaneIndex,
   viewLayoutFromLegacy,
+  withoutView,
   withPaneView,
   withSplitToggled,
   withView,
@@ -458,6 +459,8 @@ type EditorState = {
   /** Show a view: focus it if visible, else in the focused pane, or `beside` it. */
   showView: (viewId: string, options?: { beside?: boolean }) => void
   setPaneView: (pane: ViewPaneIndex, viewId: string) => void
+  /** Take a view off the stage: a split keeps the other pane, a single pane returns to 3D. */
+  closeView: (viewId: string) => void
   /** Replace the current workspace's layout (following a collaborator, tests). */
   setViewLayout: (layout: ViewLayout) => void
   toggleSplit: () => void
@@ -1448,6 +1451,7 @@ const useEditor = create<EditorState>()(
         commitViewLayout(withView(storedViewLayout(get()), viewId, options)),
       setPaneView: (pane, viewId) =>
         commitViewLayout(withPaneView(storedViewLayout(get()), pane, viewId)),
+      closeView: (viewId) => commitViewLayout(withoutView(storedViewLayout(get()), viewId)),
       setViewLayout: (layout) => commitViewLayout(normalizeViewLayout(layout)),
       toggleSplit: () => commitViewLayout(withSplitToggled(storedViewLayout(get()))),
       swapPanes: () => commitViewLayout(swapped(storedViewLayout(get()))),

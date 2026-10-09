@@ -7,7 +7,7 @@ import { MobileTabBar } from '../ui/sidebar/mobile-tab-bar'
 import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { BottomSheet, type BottomSheetHandle } from './bottom-sheet'
 import { useSceneSpan } from './views/scene-region'
-import { ViewBar } from './views/view-bar'
+import { ViewTabs } from './views/view-bar'
 
 const MIN_SNAP = 0
 const MAX_SNAP = 1
@@ -234,7 +234,11 @@ export function EditorLayoutMobile({
             {(viewBar || viewerToolbarLeft || viewerToolbarRight) && !isCaptureMode && (
               <div className="pointer-events-none absolute top-3 right-3 left-3 z-20 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  {viewBar && <ViewBar pane={0} />}
+                  {viewBar && (
+                    <div data-view-bar={0}>
+                      <ViewTabs className="shadow-elevation-4" pane={0} />
+                    </div>
+                  )}
                   <div className="pointer-events-auto flex items-center gap-2">
                     {viewerToolbarLeft}
                   </div>
