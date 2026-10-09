@@ -26,6 +26,7 @@ import {
   Square,
   SwatchBook,
 } from 'lucide-react'
+import { useDisplayText } from '../../lib/display-text'
 import { cn } from '../../lib/utils'
 import { ActionButton } from '../ui/action-menu/action-button'
 import {
@@ -48,20 +49,18 @@ const levelModeLabels: Record<'stacked' | 'exploded' | 'solo', string> = {
 
 const wallModeConfig = {
   up: {
-    icon: (props: any) => (
-      <img alt="Full height" height={28} src="/icons/room.webp" width={28} {...props} />
-    ),
+    icon: (props: any) => <img alt="" height={28} src="/icons/room.webp" width={28} {...props} />,
     label: 'Full height',
   },
   cutaway: {
     icon: (props: any) => (
-      <img alt="Cutaway" height={28} src="/icons/wallcut.webp" width={28} {...props} />
+      <img alt="" height={28} src="/icons/wallcut.webp" width={28} {...props} />
     ),
     label: 'Cutaway',
   },
   down: {
     icon: (props: any) => (
-      <img alt="Low" height={28} src="/icons/walllow.webp" width={28} {...props} />
+      <img alt="" height={28} src="/icons/walllow.webp" width={28} {...props} />
     ),
     label: 'Low',
   },
@@ -94,6 +93,7 @@ function VisibilityMenu({
   canShowScans: boolean
   canShowGuides: boolean
 }) {
+  const t = useDisplayText()
   const showScans = useViewer((s) => s.showScans)
   const showGuides = useViewer((s) => s.showGuides)
   return (
@@ -101,7 +101,7 @@ function VisibilityMenu({
       <DropdownMenuTrigger asChild>
         <ActionButton
           className="hover:bg-white/5 hover:text-foreground"
-          label="Visibility"
+          label={t('Visibility')}
           size="icon"
           tooltipSide="top"
           variant="ghost"
@@ -115,7 +115,7 @@ function VisibilityMenu({
             onSelect={(e) => keepOpen(e, () => useViewer.getState().setShowScans(!showScans))}
           >
             <img alt="" className="h-4 w-4 object-contain" src="/icons/mesh.webp" />
-            <span>Scans</span>
+            <span>{t('Scans')}</span>
             {showScans ? (
               <Eye className="ml-auto h-4 w-4 text-foreground" />
             ) : (
@@ -128,7 +128,7 @@ function VisibilityMenu({
             onSelect={(e) => keepOpen(e, () => useViewer.getState().setShowGuides(!showGuides))}
           >
             <img alt="" className="h-4 w-4 object-contain" src="/icons/floorplan.webp" />
-            <span>Guides</span>
+            <span>{t('Guides')}</span>
             {showGuides ? (
               <Eye className="ml-auto h-4 w-4 text-foreground" />
             ) : (
@@ -144,6 +144,7 @@ function VisibilityMenu({
 // One "Display" button gathering shadows, camera projection, colors, render
 // mode, scene theme and edges.
 function DisplayMenu() {
+  const t = useDisplayText()
   const cameraMode = useViewer((s) => s.cameraMode)
   const shading = useViewer((s) => s.shading)
   const textures = useViewer((s) => s.textures)
@@ -158,7 +159,7 @@ function DisplayMenu() {
       <DropdownMenuTrigger asChild>
         <ActionButton
           className="hover:bg-white/5 hover:text-foreground"
-          label="Display settings"
+          label={t('Display settings')}
           size="icon"
           tooltipSide="top"
           variant="ghost"
@@ -171,8 +172,8 @@ function DisplayMenu() {
           onSelect={(e) => keepOpen(e, () => useViewer.getState().setShadows(!shadows))}
         >
           <Contrast className="h-4 w-4" />
-          <span>Shadows</span>
-          <span className="ml-auto text-muted-foreground text-xs">{shadows ? 'On' : 'Off'}</span>
+          <span>{t('Shadows')}</span>
+          <span className="ml-auto text-muted-foreground text-xs">{t(shadows ? 'On' : 'Off')}</span>
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={(e) =>
@@ -184,18 +185,18 @@ function DisplayMenu() {
           }
         >
           <Camera className="h-4 w-4" />
-          <span>Camera</span>
+          <span>{t('Camera')}</span>
           <span className="ml-auto text-muted-foreground text-xs">
-            {cameraMode === 'perspective' ? 'Perspective' : 'Orthographic'}
+            {t(cameraMode === 'perspective' ? 'Perspective' : 'Orthographic')}
           </span>
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={(e) => keepOpen(e, () => useViewer.getState().setTextures(!textures))}
         >
           {textures ? <Palette className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-          <span>Colors</span>
+          <span>{t('Colors')}</span>
           <span className="ml-auto text-muted-foreground text-xs">
-            {textures ? 'Colored' : 'Monochrome'}
+            {t(textures ? 'Colored' : 'Monochrome')}
           </span>
         </DropdownMenuItem>
 
@@ -204,8 +205,8 @@ function DisplayMenu() {
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <activeShading.icon className="h-4 w-4" />
-            <span>Render</span>
-            <span className="ml-auto text-muted-foreground text-xs">{activeShading.name}</span>
+            <span>{t('Render')}</span>
+            <span className="ml-auto text-muted-foreground text-xs">{t(activeShading.name)}</span>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="min-w-56">
             {SHADING_OPTIONS.map((option) => {
@@ -217,8 +218,8 @@ function DisplayMenu() {
                 >
                   <OptionIcon className="h-4 w-4" />
                   <div className="flex flex-col">
-                    <span className="text-foreground">{option.name}</span>
-                    <span className="text-muted-foreground text-xs">{option.detail}</span>
+                    <span className="text-foreground">{t(option.name)}</span>
+                    <span className="text-muted-foreground text-xs">{t(option.detail)}</span>
                   </div>
                   {shading === option.id ? (
                     <Check className="ml-auto h-4 w-4 text-foreground" />
@@ -232,32 +233,32 @@ function DisplayMenu() {
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <SwatchBook className="h-4 w-4" />
-            <span>Theme</span>
+            <span>{t('Theme')}</span>
             <span className="ml-auto truncate text-muted-foreground text-xs">
-              {activeTheme.name}
+              {t(activeTheme.name)}
             </span>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="min-w-48">
-            {SCENE_THEMES.map((t) => {
+            {SCENE_THEMES.map((theme) => {
               const swatches = (['wall', 'roof', 'floor', 'glazing'] as const).map(
-                (role) => t.clayTints?.[role] ?? CLAY_PALETTE[role],
+                (role) => theme.clayTints?.[role] ?? CLAY_PALETTE[role],
               )
               return (
                 <DropdownMenuItem
                   className="gap-2"
-                  key={t.id}
-                  onSelect={() => useViewer.getState().setSceneTheme(t.id)}
+                  key={theme.id}
+                  onSelect={() => useViewer.getState().setSceneTheme(theme.id)}
                 >
                   <span
                     className="grid h-5 w-5 shrink-0 grid-cols-2 overflow-hidden rounded-sm border border-black/10"
-                    style={{ backgroundColor: t.background }}
+                    style={{ backgroundColor: theme.background }}
                   >
                     {swatches.map((color, index) => (
-                      <span key={`${t.id}-${index}`} style={{ backgroundColor: color }} />
+                      <span key={`${theme.id}-${index}`} style={{ backgroundColor: color }} />
                     ))}
                   </span>
-                  <span>{t.name}</span>
-                  {sceneTheme === t.id ? <Check className="ml-auto h-4 w-4" /> : null}
+                  <span>{t(theme.name)}</span>
+                  {sceneTheme === theme.id ? <Check className="ml-auto h-4 w-4" /> : null}
                 </DropdownMenuItem>
               )
             })}
@@ -267,8 +268,8 @@ function DisplayMenu() {
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <PenLine className="h-4 w-4" />
-            <span>Edges</span>
-            <span className="ml-auto text-muted-foreground text-xs">{activeEdges.name}</span>
+            <span>{t('Edges')}</span>
+            <span className="ml-auto text-muted-foreground text-xs">{t(activeEdges.name)}</span>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="min-w-56">
             {EDGE_OPTIONS.map((option) => (
@@ -277,8 +278,8 @@ function DisplayMenu() {
                 onSelect={() => useViewer.getState().setEdges(option.id)}
               >
                 <div className="flex flex-col">
-                  <span className="text-foreground">{option.name}</span>
-                  <span className="text-muted-foreground text-xs">{option.detail}</span>
+                  <span className="text-foreground">{t(option.name)}</span>
+                  <span className="text-muted-foreground text-xs">{t(option.detail)}</span>
                 </div>
                 {edges === option.id ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
               </DropdownMenuItem>
@@ -316,6 +317,7 @@ export const ViewerControlsBar = ({
   onWalkthroughToggle,
   className,
 }: ViewerControlsBarProps) => {
+  const t = useDisplayText()
   const levelMode = useViewer((s) => s.levelMode)
   const wallMode = useViewer((s) => s.wallMode)
   // Sessions may carry a stale mode outside the cycle (e.g. the retired
@@ -352,7 +354,7 @@ export const ViewerControlsBar = ({
                 ? 'hover:bg-white/5 hover:text-amber-400'
                 : 'bg-amber-500/20 text-amber-400'
             }
-            label={`Levels: ${levelMode === 'manual' ? 'Manual' : levelModeLabels[levelMode as keyof typeof levelModeLabels]}`}
+            label={`${t('Levels')}: ${t(levelMode === 'manual' ? 'Manual' : levelModeLabels[levelMode as keyof typeof levelModeLabels])}`}
             onClick={() => {
               if (levelMode === 'manual') return useViewer.getState().setLevelMode('stacked')
               const modes: ('stacked' | 'exploded' | 'solo')[] = ['stacked', 'exploded', 'solo']
@@ -376,7 +378,7 @@ export const ViewerControlsBar = ({
                   ? 'opacity-60 grayscale hover:bg-white/5 hover:opacity-100 hover:grayscale-0'
                   : 'bg-white/10'
               }
-              label={`Walls: ${wallModeConfig[safeWallMode].label}`}
+              label={`${t('Walls')}: ${t(wallModeConfig[safeWallMode].label)}`}
               onClick={() => {
                 const modes: ('cutaway' | 'up' | 'down')[] = ['cutaway', 'up', 'down']
                 const nextIndex = (modes.indexOf(safeWallMode) + 1) % modes.length
@@ -403,7 +405,7 @@ export const ViewerControlsBar = ({
                 ? 'bg-emerald-500/20 text-emerald-400'
                 : 'hover:bg-white/5 hover:text-emerald-400'
             }
-            label={`Walkthrough: ${walkthroughActive ? 'On' : 'Off'}`}
+            label={`${t('Walkthrough')}: ${t(walkthroughActive ? 'On' : 'Off')}`}
             onClick={onWalkthroughToggle}
             size="icon"
             tooltipSide="top"
@@ -417,14 +419,14 @@ export const ViewerControlsBar = ({
           {/* Camera actions */}
           <ActionButton
             className="group hidden hover:bg-white/5 sm:inline-flex"
-            label="Orbit left"
+            label={t('Orbit left')}
             onClick={() => emitter.emit('camera-controls:orbit-ccw')}
             size="icon"
             tooltipSide="top"
             variant="ghost"
           >
             <img
-              alt="Orbit left"
+              alt={t('Orbit left')}
               className="h-[28px] w-[28px] -scale-x-100 object-contain opacity-70 transition-opacity group-hover:opacity-100"
               src="/icons/rotate.webp"
             />
@@ -432,14 +434,14 @@ export const ViewerControlsBar = ({
 
           <ActionButton
             className="group hidden hover:bg-white/5 sm:inline-flex"
-            label="Orbit right"
+            label={t('Orbit right')}
             onClick={() => emitter.emit('camera-controls:orbit-cw')}
             size="icon"
             tooltipSide="top"
             variant="ghost"
           >
             <img
-              alt="Orbit right"
+              alt={t('Orbit right')}
               className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
               src="/icons/rotate.webp"
             />
@@ -447,14 +449,14 @@ export const ViewerControlsBar = ({
 
           <ActionButton
             className="group hover:bg-white/5"
-            label="Top view"
+            label={t('Top view')}
             onClick={() => emitter.emit('camera-controls:top-view')}
             size="icon"
             tooltipSide="top"
             variant="ghost"
           >
             <img
-              alt="Top view"
+              alt={t('Top view')}
               className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
               src="/icons/topview.webp"
             />

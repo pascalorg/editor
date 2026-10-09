@@ -47,6 +47,7 @@ import {
 } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { pasteSelectionAndPickUp } from '../editor/group-actions'
+import { useDisplayText } from '../../lib/display-text'
 import {
   buildLevelDuplicateCreateOps,
   type LevelDuplicatePreset,
@@ -154,6 +155,7 @@ function LevelRow({
   onPaste?: () => void
   onRequestDelete: () => void
 }) {
+  const t = useDisplayText()
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const updateNode = useScene((s) => s.updateNode)
@@ -168,6 +170,7 @@ function LevelRow({
   // Same rule as the site panel and command palette: the ordinal-0 ground
   // floor is the vertical model's zero anchor and must never be deletable.
   const canDeleteLevel = level.level !== 0
+  const levelDisplayName = t(getLevelDisplayName(level))
 
   // Clean preset values per display system; imperial stores exact meters
   // for whole-foot storey heights.
@@ -203,7 +206,7 @@ function LevelRow({
         >
           <button
             {...dragHandleProps}
-            aria-label={`Reorder ${getLevelDisplayName(level)}`}
+            aria-label={`${t('Drag to reorder')}: ${levelDisplayName}`}
             className={cn(
               'ml-0.5 flex h-6 w-4 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/35 opacity-0 transition-colors hover:bg-white/5 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 group-hover/level:opacity-100',
               isDragging && 'cursor-grabbing opacity-100',
@@ -213,7 +216,7 @@ function LevelRow({
               dragHandleProps?.onClick?.(e)
             }}
             ref={dragHandleRef}
-            title="Drag to reorder"
+            title={t('Drag to reorder')}
             type="button"
           >
             <GripVertical className="h-3.5 w-3.5" />
@@ -226,10 +229,10 @@ function LevelRow({
               e.stopPropagation()
               setIsEditing(true)
             }}
-            title={getLevelDisplayName(level)}
+            title={levelDisplayName}
             type="button"
           >
-            <span className="truncate">{getLevelDisplayName(level)}</span>
+            <span className="truncate">{levelDisplayName}</span>
             {unitDotColor && (
               <span
                 className="ml-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
@@ -245,7 +248,7 @@ function LevelRow({
               <button
                 className="mr-0.5 shrink-0 whitespace-nowrap rounded px-1 py-0.5 font-mono text-[10px] text-muted-foreground/50 tabular-nums transition-colors hover:bg-white/5 hover:text-foreground"
                 onClick={(e) => e.stopPropagation()}
-                title="Level height"
+                title={t('Level height')}
                 type="button"
               >
                 {storeyHeightLabel}
@@ -259,7 +262,7 @@ function LevelRow({
               sideOffset={8}
             >
               <SliderControl
-                label="Level height"
+                label={t('Level height')}
                 max={20}
                 min={1}
                 onChange={(v) => updateNode(level.id, { height: v })}
@@ -448,6 +451,7 @@ function UnitFocusChip() {
 // ── Main component ──────────────────────────────────────────────────────────
 
 export function FloatingLevelSelector() {
+  const t = useDisplayText()
   const selectedBuildingId = useViewer((s) => s.selection.buildingId)
   const levelId = useViewer((s) => s.selection.levelId)
   const setSelection = useViewer((s) => s.setSelection)
@@ -643,7 +647,7 @@ export function FloatingLevelSelector() {
               // read only from outside: nothing here depends on it.
               data-guide-target="level-add"
               onClick={handleAddAbove}
-              title="Add level above"
+              title={t('Add level above')}
               type="button"
             >
               <Plus className="h-2.5 w-2.5" />
@@ -655,7 +659,7 @@ export function FloatingLevelSelector() {
             <button
               className={cn(addButtonClass, 'bottom-0 translate-y-1/2')}
               onClick={handleAddBelow}
-              title="Add level below"
+              title={t('Add level below')}
               type="button"
             >
               <Plus className="h-2.5 w-2.5" />
@@ -712,7 +716,7 @@ export function FloatingLevelSelector() {
                         <button
                           className={cn(addButtonClass, 'bottom-0 translate-y-1/2')}
                           onClick={() => handleInsertBetween(sortedIndex - 1)}
-                          title="Insert level here"
+                          title={t('Insert level here')}
                           type="button"
                         >
                           <Plus className="h-2.5 w-2.5" />

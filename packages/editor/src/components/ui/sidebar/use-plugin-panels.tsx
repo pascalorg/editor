@@ -12,6 +12,7 @@ import {
   useSyncExternalStore,
 } from 'react'
 import useEditor from '../../../store/use-editor'
+import { useDisplayText } from '../../../lib/display-text'
 import {
   editorHostPanelRegistry,
   type EditorHostPanel,
@@ -75,13 +76,18 @@ function resolvePanelComponent(panel: EditorHostPanel): ComponentType {
   const cached = wrappedPanelCache.get(panel.component)
   if (cached) return cached
   const Lazy = lazy(panel.component)
-  const Wrapped: ComponentType = () => (
-    <ErrorBoundary fallback={<PluginPanelCrashed label={panel.label} />}>
-      <Suspense fallback={<div className="p-4 text-sidebar-foreground/50 text-sm">Loading…</div>}>
-        <Lazy />
-      </Suspense>
-    </ErrorBoundary>
-  )
+  const Wrapped: ComponentType = () => {
+    const t = useDisplayText()
+    return (
+      <ErrorBoundary fallback={<PluginPanelCrashed label={panel.label} />}>
+        <Suspense
+          fallback={<div className="p-4 text-sidebar-foreground/50 text-sm">{t('Loading…')}</div>}
+        >
+          <Lazy />
+        </Suspense>
+      </ErrorBoundary>
+    )
+  }
   Wrapped.displayName = `PluginPanel(${panel.id})`
   wrappedPanelCache.set(panel.component, Wrapped)
   return Wrapped
@@ -99,6 +105,7 @@ function resolvePanelComponent(panel: EditorHostPanel): ComponentType {
  * authoring panel like Nature doesn't ride into the studio rail.
  */
 export function useHostPanels(hostPanels?: ExtraPanel[]): ExtraPanel[] {
+  const t = useDisplayText()
   const registered = useSyncExternalStore(
     editorHostPanelRegistry.subscribe,
     editorHostPanelRegistry.getSnapshot,
@@ -127,7 +134,7 @@ export function useHostPanels(hostPanels?: ExtraPanel[]): ExtraPanel[] {
     .map(
       (p): ExtraPanel => ({
         id: p.id,
-        label: p.label,
+        label: t(p.label),
         icon: renderIconRef(p.icon),
         component: resolvePanelComponent(p),
         pluginId: p.pluginId,
@@ -142,7 +149,7 @@ export function useHostPanels(hostPanels?: ExtraPanel[]): ExtraPanel[] {
       readOnly,
       workspaceMode,
     })
-      ? [pluginsManagerPanel]
+      ? [{ ...pluginsManagerPanel, label: t(pluginsManagerPanel.label) }]
       : []
   return [...(hostPanels ?? []), ...fromRegistry, ...manager]
 }

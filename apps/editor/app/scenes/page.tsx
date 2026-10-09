@@ -1,4 +1,4 @@
-import { headers } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import Link from 'next/link'
 import { CreateSceneButton } from '@/components/save-button'
 import type { SceneMeta } from '@/components/scene-loader'
@@ -43,6 +43,8 @@ function formatDate(iso: string): string {
 
 export default async function ScenesPage() {
   const scenes = await fetchScenes()
+  const locale = (await cookies()).get('pascal.locale')?.value === 'zh-CN' ? 'zh-CN' : 'en'
+  const zh = locale === 'zh-CN'
 
   return (
     <div className="min-h-screen bg-background">
@@ -53,28 +55,34 @@ export default async function ScenesPage() {
               className="text-muted-foreground transition-colors hover:text-foreground"
               href="/"
             >
-              Home
+              {zh ? '首页' : 'Home'}
             </Link>
             <span className="text-muted-foreground">/</span>
-            <span className="font-medium text-foreground">Scenes</span>
+            <span className="font-medium text-foreground">{zh ? '场景' : 'Scenes'}</span>
           </nav>
-          <CreateSceneButton />
+          <CreateSceneButton label={zh ? '新建场景' : 'Create new scene'} locale={locale} />
         </div>
       </header>
 
       <main className="container mx-auto max-w-5xl px-6 py-12">
-        <h1 className="mb-2 font-bold text-3xl">Your scenes</h1>
+        <h1 className="mb-2 font-bold text-3xl">{zh ? '我的场景' : 'Your scenes'}</h1>
         <p className="mb-8 text-muted-foreground text-sm">
           {scenes.length === 0
-            ? 'No scenes yet. Create one to get started.'
-            : `${scenes.length} scene${scenes.length === 1 ? '' : 's'}.`}
+            ? zh
+              ? '还没有场景，可以先新建一个。'
+              : 'No scenes yet. Create one to get started.'
+            : zh
+              ? `共 ${scenes.length} 个场景。`
+              : `${scenes.length} scene${scenes.length === 1 ? '' : 's'}.`}
         </p>
 
         {scenes.length === 0 ? (
           <div className="rounded-xl border border-border/60 border-dashed bg-background p-12 text-center">
-            <p className="text-muted-foreground text-sm">You haven&apos;t saved any scenes yet.</p>
+            <p className="text-muted-foreground text-sm">
+              {zh ? '尚未保存任何场景。' : "You haven't saved any scenes yet."}
+            </p>
             <div className="mt-4 flex justify-center">
-              <CreateSceneButton />
+              <CreateSceneButton label={zh ? '新建场景' : 'Create new scene'} locale={locale} />
             </div>
           </div>
         ) : (
@@ -94,7 +102,9 @@ export default async function ScenesPage() {
                         src={scene.thumbnailUrl}
                       />
                     ) : (
-                      <span className="text-muted-foreground text-xs">No thumbnail</span>
+                      <span className="text-muted-foreground text-xs">
+                        {zh ? '暂无缩略图' : 'No thumbnail'}
+                      </span>
                     )}
                   </div>
                   <div className="mt-3">
@@ -102,8 +112,12 @@ export default async function ScenesPage() {
                       {scene.name}
                     </h2>
                     <div className="mt-1 flex items-center justify-between text-muted-foreground text-xs">
-                      <span>{scene.nodeCount} nodes</span>
-                      <time dateTime={scene.updatedAt}>{formatDate(scene.updatedAt)}</time>
+                      <span>{zh ? `${scene.nodeCount} 个节点` : `${scene.nodeCount} nodes`}</span>
+                      <time dateTime={scene.updatedAt}>
+                        {zh
+                          ? new Date(scene.updatedAt).toLocaleString('zh-CN')
+                          : formatDate(scene.updatedAt)}
+                      </time>
                     </div>
                   </div>
                 </Link>

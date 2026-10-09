@@ -4,6 +4,7 @@ import type { AssetInput } from '@pascal-app/core'
 import NextImage from 'next/image'
 import { useEffect, useState } from 'react'
 import { triggerSFX } from '../../../../../lib/sfx-bus'
+import { useDisplayText } from '../../../../../lib/display-text'
 import { cn } from '../../../../../lib/utils'
 import type { CatalogCategory } from '../../../../../store/use-editor'
 import useEditor from '../../../../../store/use-editor'
@@ -98,6 +99,7 @@ function LegacyItemsPanel({
   showSourceFilter?: boolean
   showTagFilters?: boolean
 }) {
+  const t = useDisplayText()
   const mode = useEditor((s) => s.mode)
   const catalogCategory = useEditor((s) => s.catalogCategory)
   const setMode = useEditor((s) => s.setMode)
@@ -215,13 +217,13 @@ function LegacyItemsPanel({
               type="button"
             >
               <NextImage
-                alt={cat.label}
+                alt={t(cat.label)}
                 className={cn('size-7 object-contain', !isActive && 'opacity-60 grayscale')}
                 height={28}
                 src={cat.iconSrc}
                 width={28}
               />
-              <span className="font-medium text-[10px] leading-none">{cat.label}</span>
+              <span className="font-medium text-[10px] leading-none">{t(cat.label)}</span>
             </button>
           )
         })}
@@ -242,7 +244,7 @@ function LegacyItemsPanel({
               setSearch(e.target.value)
               onSearchChange?.(e.target.value)
             }}
-            placeholder="Search..."
+            placeholder={t('Search...')}
             type="text"
             value={search}
           />
@@ -262,7 +264,7 @@ function LegacyItemsPanel({
                     onClick={() => setActiveSource(isActive ? null : chip.id)}
                     type="button"
                   >
-                    {chip.label}
+                    {t(chip.label)}
                   </button>
                 )
               })}

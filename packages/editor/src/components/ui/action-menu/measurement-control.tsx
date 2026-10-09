@@ -19,6 +19,7 @@ import {
   Waypoints,
 } from 'lucide-react'
 import { useState } from 'react'
+import { useDisplayText } from '../../../lib/display-text'
 import type { CreatableMeasurementKind } from '../../../lib/measurement-kind'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
@@ -61,6 +62,7 @@ const constructionDimensionOptions = [
 }[]
 
 export function MeasurementControl() {
+  const t = useDisplayText()
   const [isOpen, setIsOpen] = useState(false)
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
@@ -100,6 +102,7 @@ export function MeasurementControl() {
     : isSmartActive
       ? 'Smart'
       : selectedOption.label
+  const measureLabel = `${t('Measure')}: ${t(selectedLabel)}`
 
   const activateMeasurement = (kind: CreatableMeasurementKind) => {
     setLastMeasurementKind(kind)
@@ -140,7 +143,7 @@ export function MeasurementControl() {
     <Popover onOpenChange={setIsOpen} open={isOpen}>
       <div className="flex items-center">
         <ActionButton
-          aria-label={`Measure: ${selectedLabel}`}
+          aria-label={measureLabel}
           aria-pressed={isControlActive}
           className={cn(
             'rounded-r-none p-0 text-muted-foreground',
@@ -148,7 +151,7 @@ export function MeasurementControl() {
               ? 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/20'
               : 'hover:bg-cyan-500/15 hover:text-cyan-400',
           )}
-          label={`Measure: ${selectedLabel}`}
+          label={measureLabel}
           onClick={handlePrimaryClick}
           shortcut="M"
           size="icon"
@@ -161,7 +164,7 @@ export function MeasurementControl() {
           <button
             aria-expanded={isOpen}
             aria-haspopup="menu"
-            aria-label="Measurement options"
+            aria-label={t('Measurement options')}
             className={cn(
               'flex h-11 w-6 items-center justify-center rounded-r-lg text-muted-foreground transition-colors',
               isOpen
@@ -184,7 +187,7 @@ export function MeasurementControl() {
         side="top"
         sideOffset={14}
       >
-        <div aria-label="Measurement type" className="space-y-1" role="menu">
+        <div aria-label={t('Measurement type')} className="space-y-1" role="menu">
           {measurementMenuOptions.map((option) => {
             const OptionIcon = option.icon
             const isSmart = option.kind === 'smart'
@@ -210,7 +213,7 @@ export function MeasurementControl() {
                 type="button"
               >
                 <OptionIcon aria-hidden="true" className="h-4 w-4" />
-                <span>{option.label}</span>
+                <span>{t(option.label)}</span>
                 {isSelected ? <Check aria-hidden="true" className="ml-auto h-4 w-4" /> : null}
               </button>
             )
@@ -220,7 +223,7 @@ export function MeasurementControl() {
             <>
               <div className="my-1.5 h-px bg-border/60" />
               <div className="px-2.5 pt-1 pb-0.5 font-semibold text-[10px] text-muted-foreground uppercase tracking-wider">
-                Floor plan
+                {t('Floor plan')}
               </div>
 
               {constructionDimensionOptions.map((option) => {
@@ -245,7 +248,7 @@ export function MeasurementControl() {
                     type="button"
                   >
                     <OptionIcon aria-hidden="true" className="h-4 w-4" />
-                    <span>{option.label}</span>
+                    <span>{t(option.label)}</span>
                     {isSelected ? <Check aria-hidden="true" className="ml-auto h-4 w-4" /> : null}
                   </button>
                 )

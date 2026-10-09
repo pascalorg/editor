@@ -5,6 +5,7 @@ import { XIcon } from 'lucide-react'
 import type * as React from 'react'
 
 import { cn } from '../../../lib/utils'
+import { useDisplayText } from '../../../lib/display-text'
 
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
@@ -46,6 +47,7 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
+  const t = useDisplayText()
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
@@ -64,7 +66,7 @@ function DialogContent({
             data-slot="dialog-close"
           >
             <XIcon />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{t('Close')}</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>

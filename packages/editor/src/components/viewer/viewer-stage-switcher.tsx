@@ -2,6 +2,7 @@
 
 import { Box, Columns2, Map as MapIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { useDisplayText } from '../../lib/display-text'
 import { cn } from '../../lib/utils'
 import { normalizeViewerStageModes, type ViewerStageMode } from './viewer-stage-modes'
 
@@ -22,11 +23,12 @@ export function ViewerStageSwitcher({
   modes,
   onChange,
 }: ViewerStageSwitcherProps) {
+  const t = useDisplayText()
   const enabledModes = normalizeViewerStageModes(modes)
 
   return (
     <div
-      aria-label="Viewer layout"
+      aria-label={t('Viewer layout')}
       className={cn(
         'dark absolute top-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-full border border-white/10 bg-neutral-950/82 p-1 text-white shadow-elevation-4 backdrop-blur-xl',
         className,
@@ -54,7 +56,7 @@ export function ViewerStageSwitcher({
           active={mode === 'split'}
           className={hideSplitOnMobile && enabledModes.length > 1 ? 'hidden md:flex' : undefined}
           icon={<Columns2 />}
-          label="Split"
+          label={t('Split')}
           onClick={() => onChange('split')}
         />
       ) : null}

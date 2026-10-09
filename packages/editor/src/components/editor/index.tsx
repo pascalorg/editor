@@ -39,6 +39,7 @@ import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
 import { useSaveShortcut } from '../../hooks/use-save-shortcut'
 import { useCeilingEditSessionOwner } from '../../lib/ceiling-edit-session'
+import { DisplayTextProvider, useDisplayText } from '../../lib/display-text'
 import { showsWholeBuilding, useEditorLevelDisplay } from '../../lib/editor-level-display'
 import { useGestureLifecycleOwner } from '../../lib/gesture-lifecycle'
 import {
@@ -196,6 +197,8 @@ export interface EditorProps {
   sidebarTabs?: (SidebarTab & { component: React.ComponentType })[]
   viewerToolbarLeft?: ReactNode
   viewerToolbarRight?: ReactNode
+  /** Translates display-only labels without changing scene or registry values. */
+  translateDisplayText?: (text: string) => string
   /**
    * Full-bleed surface swapped in over the 3D canvas (v2) — e.g. the studio
    * gallery. The canvas stays mounted underneath (no WebGL re-init) and the
@@ -506,18 +509,20 @@ function writeCameraControlsHintDismissed(dismissed: boolean) {
 }
 
 function InlineShortcutKey({ shortcutKey }: { shortcutKey: ShortcutKey }) {
+  const t = useDisplayText()
   const meta = CAMERA_SHORTCUT_KEY_META[shortcutKey.value]
+  const label = t(meta?.label ?? shortcutKey.value)
 
   if (meta?.icon) {
     return (
       <span
-        aria-label={meta.label}
+        aria-label={label}
         className="inline-flex items-center text-foreground/90"
         role="img"
-        title={meta.label}
+        title={label}
       >
         <Icon aria-hidden="true" color="currentColor" height={16} icon={meta.icon} width={16} />
-        <span className="sr-only">{meta.label}</span>
+        <span className="sr-only">{label}</span>
       </span>
     )
   }
@@ -543,10 +548,11 @@ function ShortcutSequence({ keys }: { keys: ShortcutKey[] }) {
 }
 
 function CameraControlHintItem({ hint }: { hint: CameraControlHint }) {
+  const t = useDisplayText()
   return (
     <div className="flex min-w-0 flex-col items-center gap-1.5 px-4 text-center first:pl-0 last:pr-0">
       <span className="font-medium text-[10px] text-muted-foreground/60 tracking-[0.03em]">
-        {hint.action}
+        {t(hint.action)}
       </span>
       <div className="flex flex-wrap items-center justify-center gap-1.5">
         <ShortcutSequence keys={hint.keys} />
@@ -562,6 +568,7 @@ function CameraControlHintItem({ hint }: { hint: CameraControlHint }) {
 }
 
 function ViewerCanvasControlsHint({ onDismiss }: { onDismiss: () => void }) {
+  const t = useDisplayText()
   const all = CAMERA_CONTROL_HINTS
   // A host teaching one gesture at a time narrows this to the one it is asking
   // for, and to nothing once it is done. Null — the default — is all of them.
@@ -575,7 +582,7 @@ function ViewerCanvasControlsHint({ onDismiss }: { onDismiss: () => void }) {
   return (
     <div className="pointer-events-none absolute top-14 left-1/2 z-40 max-w-[calc(100%-2rem)] -translate-x-1/2">
       <section
-        aria-label="Camera controls hint"
+        aria-label={t('Camera controls hint')}
         className="pointer-events-auto flex items-start gap-3 rounded-2xl border border-border/35 bg-background/90 px-3.5 py-2.5 shadow-elevation-4 backdrop-blur-xl"
       >
         <div
@@ -589,7 +596,7 @@ function ViewerCanvasControlsHint({ onDismiss }: { onDismiss: () => void }) {
         <Tooltip>
           <TooltipTrigger asChild>
             <button
-              aria-label="Dismiss camera controls hint"
+              aria-label={t('Dismiss camera controls hint')}
               className="flex h-5 shrink-0 items-center justify-center self-center border-border/18 border-l pl-3 text-muted-foreground/70 transition-colors hover:text-foreground"
               onClick={onDismiss}
               type="button"
@@ -604,7 +611,7 @@ function ViewerCanvasControlsHint({ onDismiss }: { onDismiss: () => void }) {
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={8}>
-            Dismiss
+            {t('Dismiss')}
           </TooltipContent>
         </Tooltip>
       </section>
@@ -1812,7 +1819,9 @@ function EditorContent({
 export default function Editor(props: EditorProps) {
   return (
     <Profiler id="editor" onRender={recordEditorRender}>
-      <EditorContent {...props} />
+      <DisplayTextProvider translate={props.translateDisplayText}>
+        <EditorContent {...props} />
+      </DisplayTextProvider>
     </Profiler>
   )
 }

@@ -50,6 +50,7 @@ import {
   MODULAR_CABINET_ICON,
 } from '@/lib/build-palette'
 import { getActiveRoofFeatureId, ROOF_TYPE_OPTIONS } from '@/lib/build-tab-state'
+import { useI18n } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
 const subscribeToClientMount = () => () => {}
@@ -60,6 +61,7 @@ const subscribeToClientMount = () => () => {}
  * with the kind's own `def.defaults()`. Painting has its own rail panel.
  */
 export function BuildTab() {
+  const { translateDisplayText } = useI18n()
   const [mepOpen, setMepOpen] = useState(false)
   const activeTool = useEditor((s) => s.tool)
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
@@ -178,13 +180,13 @@ export function BuildTab() {
       data-build-tool={type.id}
       iconSrc={type.iconSrc}
       key={type.id}
-      label={type.label}
+      label={translateDisplayText(type.label)}
       onClick={() => {
         triggerSFX('sfx:menu-click')
         handleTypeClick(type)
       }}
       onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-      title={type.label}
+      title={translateDisplayText(type.label)}
     />
   )
   const typesIn = (section: NonNullable<BuildType['section']>) =>

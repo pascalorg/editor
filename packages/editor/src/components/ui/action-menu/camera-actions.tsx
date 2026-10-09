@@ -2,10 +2,12 @@
 
 import { emitter } from '@pascal-app/core'
 import Image from 'next/image'
+import { useDisplayText } from '../../../lib/display-text'
 import useEditor from '../../../store/use-editor'
 import { ActionButton } from './action-button'
 
 export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
+  const t = useDisplayText()
   // Orbit stays useful in 2D-only (it spins the synced floorplan view), but
   // top view only tilts the hidden 3D camera — pointless without the canvas.
   const is2dOnly = useEditor((s) => s.viewMode === '2d')
@@ -29,13 +31,13 @@ export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
           {/* Orbit CCW */}
           <ActionButton
             className="group hover:bg-white/5"
-            label="Orbit Left"
+            label={t('Orbit Left')}
             onClick={orbitCCW}
             size="icon"
             variant="ghost"
           >
             <Image
-              alt="Orbit Left"
+              alt={t('Orbit Left')}
               className="h-[28px] w-[28px] -scale-x-100 object-contain opacity-70 transition-opacity group-hover:opacity-100"
               height={28}
               src="/icons/rotate.webp"
@@ -46,13 +48,13 @@ export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
           {/* Orbit CW */}
           <ActionButton
             className="group hover:bg-white/5"
-            label="Orbit Right"
+            label={t('Orbit Right')}
             onClick={orbitCW}
             size="icon"
             variant="ghost"
           >
             <Image
-              alt="Orbit Right"
+              alt={t('Orbit Right')}
               className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
               height={28}
               src="/icons/rotate.webp"
@@ -66,13 +68,13 @@ export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
       {!is2dOnly && (
         <ActionButton
           className="group hover:bg-white/5"
-          label="Top View"
+          label={t('Top View')}
           onClick={goToTopView}
           size="icon"
           variant="ghost"
         >
           <Image
-            alt="Top View"
+            alt={t('Top View')}
             className="h-[28px] w-[28px] object-contain opacity-70 transition-opacity group-hover:opacity-100"
             height={28}
             src="/icons/topview.webp"
